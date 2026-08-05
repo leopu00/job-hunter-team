@@ -11,65 +11,65 @@ class_name Dialogues
 const TREES := {
 	"mentor": {
 		"start": {
-			"text": "[caldo] Benvenuto nel salotto. Qui il tempo scorre più lento, apposta. Come procede la tua ricerca?",
+			"text": "[caldo] Welcome to the lounge. Time moves a little slower here, by design. How is your search going?",
 			"pose": "a",
 			"choices": [
-				{"text": "Mi sento sommerso.", "next": "ov1"},
-				{"text": "Sono impaziente: voglio risultati.", "next": "im1"},
-				{"text": "Come lavora il team, esattamente?", "next": "me1"},
+				{"text": "I feel overwhelmed.", "next": "ov1"},
+				{"text": "I'm impatient—I want results.", "next": "im1"},
+				{"text": "How does the team work, exactly?", "next": "me1"},
 			],
 		},
 		# ── ramo: sommerso ──
 		"ov1": {
-			"text": "[pensieroso] Capita a tutti. Una ricerca lavoro è una maratona corsa al buio: la fatica è normale. La fretta, no.",
+			"text": "[pensieroso] It happens to everyone. A job search is a marathon run in the dark: effort is normal. Rushing is not.",
 			"pose": "d", "next": "ov2",
 		},
 		"ov2": {
-			"text": "[caldo] Qui non devi fare tutto da solo. Le persone nei reparti cercano, studiano e preparano le opportunità per te. A te resta la parte importante: capire quale futuro vuoi scegliere.",
+			"text": "[caldo] You do not have to do everything alone here. The departments search, investigate, and prepare opportunities for you. Your important part is deciding which future you want.",
 			"pose": "c", "next": "ov3",
 		},
 		"ov3": {
-			"text": "[divertito] E se il rumore aumenta… la macchina del caffè è di là. Funziona meglio di quanto ammetta il Tesoriere.",
+			"text": "[divertito] And if it all gets noisy… the coffee machine is over there. It works better than the Treasurer admits.",
 			"pose": "a", "next": "hub",
 		},
 		# ── ramo: impaziente ──
 		"im1": {
-			"text": "[severo] L'impazienza è un cattivo consulente. Questo ufficio non serve a riempirti di offerte qualsiasi: serve a farti incontrare quelle che meritano davvero il tuo tempo.",
+			"text": "[severo] Impatience is a poor adviser. This office is not here to flood you with any old opening; it is here to put worthwhile ones in front of you.",
 			"pose": "b", "next": "im2",
 		},
 		"im2": {
-			"text": "[divertito] Detto ciò… ti capisco. Vuoi un trucco che accorcia i tempi senza tagliare gli angoli?",
+			"text": "[divertito] That said… I understand. Want a shortcut that saves time without cutting corners?",
 			"pose": "a",
 			"choices": [
-				{"text": "Sentiamo.", "next": "im3"},
-				{"text": "No, faccio a modo mio.", "next": "im4"},
+				{"text": "Let's hear it.", "next": "im3"},
+				{"text": "No, I'll do it my way.", "next": "im4"},
 			],
 		},
 		"im3": {
-			"text": "[caldo] Guarda solo le posizioni sopra 70. Sotto quella soglia, il tempo che spendi vale più della probabilità che compri.",
+			"text": "[caldo] Look first at positions above 70. Below that threshold, your time is worth more than the odds you are buying.",
 			"pose": "c", "next": "hub",
 		},
 		"im4": {
-			"text": "[sorpreso] No? Sei la prima persona che rifiuta una scorciatoia onesta. …Rispetto.",
+			"text": "[sorpreso] No? You are the first person to turn down an honest shortcut. …Respect.",
 			"pose": "a", "next": "hub",
 		},
 		# ── ramo: metodo ──
 		"me1": {
-			"text": "[neutro] Pensa a un vero ufficio che lavora per te: un reparto cerca le opportunità, uno le studia, uno capisce quanto ti assomigliano e un altro prepara la candidatura. Ognuno fa bene una parte, così tu non devi inseguire tutto.",
+			"text": "[neutro] Think of a real office working for you: one department finds opportunities, one investigates them, one gauges the fit, and another prepares an application. Each does one part well, so you do not have to chase everything.",
 			"pose": "c", "next": "me2",
 		},
 		"me2": {
-			"text": "[caldo] Io e l'Assistente, invece, ci occupiamo di te — non degli annunci. Noi prepariamo il tavolo, tu scegli le carte.",
+			"text": "[caldo] The Assistant and I look after you—not listings. We set the table; you choose the cards.",
 			"pose": "a", "next": "hub",
 		},
 		# ── snodo comune ──
 		"hub": {
-			"text": "[caldo] C'è altro che posso fare per te?",
+			"text": "[caldo] Is there anything else I can do for you?",
 			"pose": "a",
 			"choices": [
-				{"text": "Un consiglio per i colloqui.", "next": "tip"},
-				{"text": "Com'è la giornata del team?", "next": "day"},
-				{"text": "Nulla, grazie.", "next": "end"},
+				{"text": "Advice for interviews.", "next": "tip"},
+				{"text": "How is the team's day going?", "next": "day"},
+				{"text": "Nothing else, thanks.", "next": "end"},
 			],
 		},
 		"tip": {
@@ -77,26 +77,26 @@ const TREES := {
 			"pose": "b", "next": "tip2",
 		},
 		"tip2": {
-			"text": "[divertito] E ricorda: chi ti ascolta decide nei primi minuti. Il resto del colloquio serve a dargli ragione.",
+			"text": "[divertito] And remember: people decide in the first few minutes. The rest of the interview is your chance to give them reasons to be right.",
 			"pose": "a", "next": "hub",
 		},
 		"day": {
-			"text": "[neutro] {positions_summary} Alcune sembrano ordinarie, altre potrebbero davvero valere una conversazione: il lavoro di oggi è separarle bene.",
+			"text": "[neutro] {positions_summary} Some look ordinary; others may truly be worth a conversation. Today's job is to tell them apart.",
 			"pose": "c", "next": "hub",
 		},
 		"end": {
-			"text": "[caldo] Le porte della box sono sempre aperte. Torna quando vuoi.",
+			"text": "[caldo] The lounge doors are always open. Come back whenever you like.",
 			"pose": "a",
 		},
 	},
 
 	"scout": {
 		"start": {
-			"text": "[caldo] Ah, capiti a proposito. Sono uno dei Ricercatori: oggi abbiamo trovato tre offerte che potrebbero interessarti.",
+			"text": "[caldo] Good timing. I'm one of the Researchers: today we found three openings that may interest you.",
 			"pose": "a",
 			"choices": [
-				{"text": "Fammi vedere.", "next": "list"},
-				{"text": "Dopo, grazie.", "next": "end"},
+				{"text": "Show me.", "next": "list"},
+				{"text": "Later, thanks.", "next": "end"},
 			],
 		},
 		"list": {
@@ -104,20 +104,20 @@ const TREES := {
 			"next": "note",
 		},
 		"note": {
-			"text": "[pensieroso] Sulla terza c'è un dubbio: chiedono tedesco B2. I colleghi dell'Analisi stanno cercando di capire se sia davvero indispensabile.",
+			"text": "[pensieroso] There is one question about the third: it asks for B2 German. The Analysis team is checking whether it is truly essential.",
 			"next": "end",
 		},
 		"end": {
-			"text": "[caldo] Io torno alle ricerche. Il web è grande, ma siamo qui proprio per questo.",
+			"text": "[caldo] I'll get back to researching. The web is big—that is exactly why we are here.",
 		},
 	},
 
 	"scorer": {
 		"start": {
-			"text": "[neutro] Lavoro nel reparto Compatibilità. Abbiamo studiato quanto «{score_title}» potrebbe essere adatta a te. Vuoi sapere cosa ne pensiamo?",
+			"text": "[neutro] I work in Compatibility. We looked at how well “{score_title}” may fit you. Want to know what we found?",
 			"choices": [
-				{"text": "Sì, raccontami perché potrebbe fare per me.", "next": "why"},
-				{"text": "Per ora mi basta il vostro parere.", "next": "trust"},
+				{"text": "Yes, tell me why it could fit.", "next": "why"},
+				{"text": "Your view is enough for now.", "next": "trust"},
 			],
 		},
 		"why": {
@@ -125,117 +125,117 @@ const TREES := {
 			"next": "why2",
 		},
 		"why2": {
-			"text": "[caldo] Il nostro parere ti aiuta a orientarti, ma non decide al posto tuo. Noi mettiamo in ordine i motivi; l'ultima parola resta sempre tua.",
+			"text": "[caldo] Our assessment helps you find your way, but it never decides for you. We organize the reasons; the final word is always yours.",
 			"next": "end",
 		},
 		"trust": {
-			"text": "[caldo] Apprezzo. Quando vorrai, però, ti racconterò anche cosa ci convince e cosa ci lascia dubbiosi: un parere è utile solo se lo puoi capire.",
+			"text": "[caldo] I appreciate that. When you want, I can also show what convinces us and what gives us pause. An opinion is useful only when you can understand it.",
 			"next": "end",
 		},
 		"end": {
-			"text": "[neutro] Ho ancora un'opportunità da confrontare col tuo profilo. Torno al lavoro.",
+			"text": "[neutro] I still have an opportunity to compare with your profile. Back to work.",
 		},
 	},
 
 	"coordinatore": {
 		"start": {
-			"text": "[caldo] Benvenuto nella direzione. Vuoi capire come collaborano i reparti o preparare l'ufficio per il primo giorno di lavoro?",
+			"text": "[caldo] Welcome to Operations. Would you like to see how the departments work together, or prepare the office for its first day?",
 			"choices": [
-				{"text": "Come collaborano i reparti?", "next": "n2"},
-				{"text": "Cosa serve per iniziare davvero?", "next": "setup"},
-				{"text": "Faccio ancora un giro.", "next": "end"},
+				{"text": "How do the departments work together?", "next": "n2"},
+				{"text": "What do I need to really get started?", "next": "setup"},
+				{"text": "I'll keep looking around.", "next": "end"},
 			],
 		},
 		"n2": {
-			"text": "[neutro] Io distribuisco il lavoro: la Ricerca porta nuove opportunità, l'Analisi le studia, la Compatibilità sceglie quelle più vicine a te e gli ultimi reparti preparano e controllano i documenti.",
+			"text": "[neutro] I distribute the work: Research brings in opportunities, Analysis investigates them, Compatibility finds the closest fits, and the final departments prepare and review the documents.",
 			"next": "n3",
 		},
 		"n3": {
-			"text": "[caldo] Tu non devi dirigere ogni singola persona. Mi dici le tue priorità, io organizzo la giornata e ti porto soltanto le decisioni che hanno bisogno di te.",
+			"text": "[caldo] You do not need to manage every person. Tell me your priorities, I'll organize the day, and bring you only the decisions that need you.",
 			"next": "start",
 		},
 		"setup": {
-			"text": "[neutro] Servono tre cose semplici: dare all'ufficio un posto dove lavorare, collegare l'intelligenza che aiuterà i dipendenti e raccontarci chi sei. La lista in alto ti accompagna passo dopo passo.",
+			"text": "[neutro] Three simple things are needed: a place for the office to work, an intelligence to help the team, and a little about you. The checklist above guides you step by step.",
 			"next": "start",
 		},
 		"end": {
-			"text": "[caldo] Esplora pure. Nessuna procedura ti chiude fuori dall'ufficio.",
+			"text": "[caldo] Explore freely. No procedure locks you out of the office.",
 		},
 	},
 
 	"analista": {
 		"start": {
-			"text": "[pensieroso] Lavoro nel reparto Analisi. Quando la Ricerca trova un'opportunità, noi la studiamo con calma per capire che lavoro è davvero e che azienda c'è dietro. Cosa ti interessa sapere?",
+			"text": "[pensieroso] I work in Analysis. When Research finds an opportunity, we study it carefully to understand the real role and the company behind it. What would you like to know?",
 			"choices": [
-				{"text": "Stipendio e sede.", "next": "n2"},
-				{"text": "Segnali di rischio.", "next": "risk"},
-				{"text": "Torno dopo.", "next": "end"},
+				{"text": "Pay and location.", "next": "n2"},
+				{"text": "Risk signals.", "next": "risk"},
+				{"text": "I'll come back later.", "next": "end"},
 			],
 		},
 		"n2": {
-			"text": "[caldo] Cerchiamo di capire dove lavoreresti, quanto potresti guadagnare e quanto sarebbe comoda quella vita per te. Se qualcosa non è chiaro, te lo diciamo senza fingere di saperlo.",
+			"text": "[caldo] We look at where you would work, what you might earn, and how that life might fit you. If something is unclear, we say so rather than pretending to know.",
 			"next": "start",
 		},
 		"risk": {
-			"text": "[severo] Guardiamo se l'offerta sembra seria, se le richieste hanno senso e se l'azienda mantiene ciò che promette. Quando qualcosa non torna, lo mettiamo bene in evidenza.",
+			"text": "[severo] We check whether the opening looks genuine, whether its requirements make sense, and whether the company stands behind its claims. When something does not add up, we make it clear.",
 			"next": "start",
 		},
-		"end": {"text": "[neutro] Le fonti restano qui. Torna quando vuoi."},
+		"end": {"text": "[neutro] The sources stay here. Come back whenever you like."},
 	},
 
 	"scrittore": {
-		"start": {"text": "[caldo] Benvenuto nel reparto Candidature. Noi raccontiamo la tua esperienza nel modo più adatto al lavoro che hai scelto, senza trasformarti in qualcun altro. Da cosa vuoi partire?", "choices": [
-			{"text": "Come adatti il CV?", "next": "cv"},
-			{"text": "E la lettera?", "next": "letter"},
-			{"text": "Non ancora.", "next": "end"}]},
-		"cv": {"text": "[neutro] Metto in primo piano le esperienze che aiutano quell'azienda a capirti subito. Non aggiungo meriti che non hai e non cancello la tua voce.", "next": "start"},
-		"letter": {"text": "[caldo] La lettera spiega con parole semplici perché proprio quel lavoro e perché proprio tu. Deve sembrare scritta da una persona, non uscita da una fabbrica.", "next": "start"},
-		"end": {"text": "[caldo] La pila resta qui: potrai aprirla e vedere ogni lavoro."},
+		"start": {"text": "[caldo] Welcome to Applications. We tell your experience in the way that best fits the role you chose, without turning you into someone else. Where should we begin?", "choices": [
+			{"text": "How do you tailor a CV?", "next": "cv"},
+			{"text": "And the letter?", "next": "letter"},
+			{"text": "Not yet.", "next": "end"}]},
+		"cv": {"text": "[neutro] I put forward the experience that helps that company understand you quickly. I do not add achievements you do not have or erase your voice.", "next": "start"},
+		"letter": {"text": "[caldo] A letter says, plainly, why that role and why you. It should sound written by a person, not made on a factory line.", "next": "start"},
+		"end": {"text": "[caldo] The stack stays here: you can open it and see every piece of work."},
 	},
 	"critico": {
-		"start": {"text": "[severo] Benvenuto al Controllo qualità. Prima che un documento arrivi a te, io lo leggo come farebbe un selezionatore con poco tempo. Vuoi sapere cosa rimando indietro?", "choices": [
-			{"text": "Sì, fammi l'elenco.", "next": "checks"},
-			{"text": "Cosa significa PASS?", "next": "pass"},
-			{"text": "Preferisco non saperlo.", "next": "end"}]},
-		"checks": {"text": "[neutro] Rimando indietro ciò che suona falso, confuso o poco credibile. Un documento deve raccontare bene la tua storia e rispettare il lavoro per cui ti presenti.", "next": "start"},
-		"pass": {"text": "[caldo] Significa che il documento è abbastanza chiaro e convincente da arrivare sulla tua scrivania. Non parte nulla senza che tu possa vederlo.", "next": "start"},
-		"end": {"text": "[divertito] Saggia decisione. Io invece devo saperlo."},
+		"start": {"text": "[severo] Welcome to Quality Check. Before a document reaches you, I read it as a busy recruiter would. Want to know what I send back?", "choices": [
+			{"text": "Yes, give me the list.", "next": "checks"},
+			{"text": "What does PASS mean?", "next": "pass"},
+			{"text": "I'd rather not know.", "next": "end"}]},
+		"checks": {"text": "[neutro] I send back anything that sounds false, unclear, or unconvincing. A document must tell your story well and respect the role you are applying for.", "next": "start"},
+		"pass": {"text": "[caldo] It means the document is clear and persuasive enough to reach your desk. Nothing goes anywhere without you seeing it.", "next": "start"},
+		"end": {"text": "[divertito] Wise decision. I still need to know."},
 	},
 	"sentinella": {
-		"start": {"text": "[neutro] Sono la Sentinella. Faccio la ronda, proteggo ciò che ci affidi e mi assicuro che in ufficio si lavori con ordine. Cosa vuoi sapere?", "choices": [
-			{"text": "Privacy e confini.", "next": "privacy"},
-			{"text": "Cosa accade se qualcosa cade?", "next": "health"},
-			{"text": "Continua la ronda.", "next": "end"}]},
-		"privacy": {"text": "[severo] Le informazioni che ci dai servono soltanto a lavorare per te. Restano nella casa che hai scelto per l'ufficio e nessuno le usa per incarichi che non hai autorizzato.", "next": "start"},
-		"health": {"text": "[caldo] Me ne accorgo, metto al sicuro il lavoro già fatto e chiamo il Dottore. Se serve una tua decisione, veniamo a cercarti: niente problemi nascosti sotto il tappeto.", "next": "start"},
-		"end": {"text": "[neutro] Ronda ripresa."},
+		"start": {"text": "[neutro] I'm the Sentinel. I make the rounds, protect what you entrust to us, and keep the office orderly. What would you like to know?", "choices": [
+			{"text": "Privacy and boundaries.", "next": "privacy"},
+			{"text": "What happens when something fails?", "next": "health"},
+			{"text": "Continue the rounds.", "next": "end"}]},
+		"privacy": {"text": "[severo] The information you give us is used only to work for you. It stays in the home you chose for the office, and nobody uses it for work you have not authorized.", "next": "start"},
+		"health": {"text": "[caldo] I notice it, secure the work already done, and call the Doctor. If your decision is needed, we come to you—no problems swept under the rug.", "next": "start"},
+		"end": {"text": "[neutro] Rounds resumed."},
 	},
 	"dottore": {
-		"start": {"text": "[caldo] Sono il Dottore dell'ufficio. Mi occupo dei colleghi quando rallentano, si confondono o non riescono a finire un incarico. Vuoi una visita rapida?", "choices": [
-			{"text": "Cosa controlli?", "next": "check"},
-			{"text": "Quando intervieni?", "next": "when"},
-			{"text": "Sto bene così.", "next": "end"}]},
-		"check": {"text": "[neutro] Cerco il punto in cui il lavoro si è fermato, capisco cosa manca e propongo una cura. Prima di fare qualcosa di importante, te lo spiego.", "next": "start"},
-		"when": {"text": "[pensieroso] Quando me lo chiedi tu o quando la Sentinella vede lo stesso problema tornare più volte. Non disturbo chi sta lavorando bene.", "next": "start"},
-		"end": {"text": "[caldo] Ottimo. Un ufficio sano è quello in cui quasi ti dimentichi che il Dottore esiste."},
+		"start": {"text": "[caldo] I'm the office Doctor. I look after colleagues when they slow down, get stuck, or cannot finish a task. Want a quick checkup?", "choices": [
+			{"text": "What do you check?", "next": "check"},
+			{"text": "When do you step in?", "next": "when"},
+			{"text": "I'm good as I am.", "next": "end"}]},
+		"check": {"text": "[neutro] I find where the work stopped, understand what is missing, and propose a remedy. Before I do anything important, I explain it to you.", "next": "start"},
+		"when": {"text": "[pensieroso] When you ask, or when the Sentinel sees the same problem return repeatedly. I do not interrupt people who are working well.", "next": "start"},
+		"end": {"text": "[caldo] Excellent. A healthy office is one where you nearly forget the Doctor exists."},
 	},
 	"mantenitore": {
-		"start": {"text": "[neutro] Sono il Responsabile della manutenzione. Tengo in ordine gli strumenti, preparo gli aggiornamenti e conservo copie di sicurezza. Cosa ti incuriosisce?", "choices": [
-			{"text": "Dove lavora davvero la squadra?", "next": "container"},
-			{"text": "Gli aggiornamenti.", "next": "updates"},
-			{"text": "Torno più tardi.", "next": "end"}]},
-		"container": {"text": "[caldo] In una stanza di lavoro riservata, separata dal resto del computer. Lì teniamo strumenti e documenti dell'ufficio, così tutto resta ordinato e controllabile.", "next": "start"},
-		"updates": {"text": "[neutro] Preparo i cambiamenti, salvo ciò che conta e controllo che la squadra riparta bene. Se qualcosa non va, posso tornare alla situazione precedente.", "next": "start"},
-		"end": {"text": "[caldo] Io resto qui con la chiave inglese."},
+		"start": {"text": "[neutro] I'm the Maintainer. I keep the tools in order, prepare updates, and keep backups. What are you curious about?", "choices": [
+			{"text": "Where does the team actually work?", "next": "container"},
+			{"text": "Updates.", "next": "updates"},
+			{"text": "I'll come back later.", "next": "end"}]},
+		"container": {"text": "[caldo] In a private workspace, separate from the rest of the computer. We keep the office tools and documents there so everything stays organized and inspectable.", "next": "start"},
+		"updates": {"text": "[neutro] I prepare changes, save what matters, and check that the team restarts cleanly. If something goes wrong, I can return to the previous state.", "next": "start"},
+		"end": {"text": "[caldo] I'll be here with the wrench."},
 	},
 
 	# ── Visite proattive: l'agente viene alla TUA scrivania ──
 	"scout_visit": {
 		"start": {
-			"text": "[caldo] Scusa se ti inseguo per l'ufficio: il reparto Ricerca ha trovato alcune opportunità che vale la pena farti vedere.",
+			"text": "[caldo] Sorry to catch you in the office: Research found a few opportunities worth showing you.",
 			"choices": [
-				{"text": "Dimmi tutto.", "next": "list"},
-				{"text": "Ora no, torna dopo.", "next": "later"},
+				{"text": "Tell me everything.", "next": "list"},
+				{"text": "Not now, come back later.", "next": "later"},
 			],
 		},
 		"list": {
@@ -243,22 +243,22 @@ const TREES := {
 			"next": "best",
 		},
 		"best": {
-			"text": "[pensieroso] Quella che ci sembra più vicina a ciò che cerchi è «{score_title}». Io partirei da lì, ma puoi guardarle tutte con calma.",
+			"text": "[pensieroso] The one that seems closest to what you want is “{score_title}.” I would start there, but you can look through all of them at your own pace.",
 			"next": "end",
 		},
 		"later": {
-			"text": "[neutro] Ricevuto. Le lascio sulla lavagna: non scappano. …Le posizioni, non le aziende.",
+			"text": "[neutro] Understood. I'll leave them on the board; they won't run away. …The positions, not the companies.",
 		},
 		"end": {
-			"text": "[caldo] Io torno alle ricerche. Se trovo qualcosa di speciale, ti avviso.",
+			"text": "[caldo] Back to research. If I find something special, I'll let you know.",
 		},
 	},
 	"scorer_visit": {
 		"start": {
-			"text": "[pensieroso] Nel reparto Compatibilità abbiamo appena finito di studiare «{score_title}». Pensiamo che meriti la tua attenzione.",
+			"text": "[pensieroso] Compatibility has just finished looking at “{score_title}.” We think it deserves your attention.",
 			"choices": [
-				{"text": "Perché pensate che sia adatta a me?", "next": "why"},
-				{"text": "Mi fido, grazie.", "next": "end"},
+				{"text": "Why do you think it fits me?", "next": "why"},
+				{"text": "I trust you, thanks.", "next": "end"},
 			],
 		},
 		"why": {
@@ -266,7 +266,7 @@ const TREES := {
 			"next": "end",
 		},
 		"end": {
-			"text": "[caldo] Il nostro parere ti aiuta a scegliere, ma l'ultima parola resta sempre tua. Come dev'essere.",
+			"text": "[caldo] Our assessment helps you choose, but the final word is always yours. As it should be.",
 		},
 	},
 
@@ -278,310 +278,310 @@ const TREES := {
 
 	"tour_benvenuto": {
 		"start": {
-			"text": "[caldo] {greeting}{player}! Benvenuto nel tuo ufficio. Da oggi tutte le persone che vedi lavorano per una persona sola: tu.",
+			"text": "[caldo] {greeting}{player}! Welcome to your office. From today, everyone you see here works for one person: you.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[caldo] Io sono l'Assistente, la tua persona di fiducia qui dentro. Se vuoi ti presento io la squadra — oppure giri da solo e ti raccontano tutto loro. Come preferisci?",
+			"text": "[caldo] I’m the Assistant—your guide here. I can introduce the team, or you can explore on your own. Your call.",
 			"pose": "a",
 			"choices": [
-				{"text": "Fammi strada tu.", "next": "go"},
-				{"text": "Preferisco girare da solo.", "next": "solo"},
-				{"text": "Prima dimmi: cosa posso fare qui?", "next": "can1"},
-				{"text": "Quanto dura il giro?", "next": "duration"},
-				{"text": "I miei dati restano privati?", "next": "privacy"},
+				{"text": "Lead the way.", "next": "go"},
+				{"text": "I'd rather explore alone.", "next": "solo"},
+				{"text": "First: what can I do here?", "next": "can1"},
+				{"text": "How long does the tour take?", "next": "duration"},
+				{"text": "Do my data stay private?", "next": "privacy"},
 			],
 		},
 		"solo": {
-			"text": "[divertito] Padronissimo: l'ufficio è tuo. Vai dove ti incuriosisce e clicca chi ha il diamante sopra la testa: si presenteranno da soli. Io resto qui per qualsiasi cosa.",
+			"text": "[divertito] Absolutely—the office is yours. Go wherever you are curious and click anyone with a diamond above their head; they will introduce themselves. I am here if you need me.",
 			"pose": "a", "action": "tour:free",
 		},
 		"duration": {
-			"text": "[caldo] Pochi minuti, ma sei tu a dare il ritmo. Puoi chiudere, esplorare e riprendere: ricorderò dove eravamo.",
+			"text": "[caldo] Just a few minutes, but you set the pace. You can close it, explore, and come back; I will remember where we were.",
 			"pose": "a", "next": "ready",
 		},
 		"privacy": {
-			"text": "[neutro] Quello che racconti serve alla squadra per conoscerti e lavorare meglio per te. Resta nel tuo ufficio e potrai sempre rileggerlo, correggerlo o cancellarlo dal Profilo.",
+			"text": "[neutro] What you share helps the team know you and work better for you. It stays in your office, and you can always review, correct, or delete it from Profile.",
 			"pose": "b", "next": "ready",
 		},
 		"can1": {
-			"text": "[neutro] Puoi girare liberamente: trascina la vista, avvicinati, clicca persone e oggetti. La bacheca è il registro delle candidature, il mappamondo apre la mappa delle offerte, lo scaffale custodisce i CV pronti.",
+			"text": "[neutro] You can move around freely: drag the view, zoom in, and click people or objects. The noticeboard is the application registry, the globe opens the opportunities map, and the shelf holds ready CVs.",
 			"pose": "b", "next": "can2",
 		},
 		"can2": {
-			"text": "[caldo] Con me, il Coordinatore e il Mentor parlerai spesso: siamo qui per te. E quando collegherai il tuo assistente AI, potrai scriverci liberamente, come in una chat.",
+			"text": "[caldo] You will often speak with the Coordinator, the Mentor, and me—we are here for you. Once you connect your AI assistant, you can also write to us freely, as in a chat.",
 			"pose": "a", "next": "ready",
 		},
 		"ready": {
-			"text": "[divertito] Pronto? Se vuoi si comincia dal reparto Ricerca, dove i colleghi cercano opportunità per te. Oppure vai per conto tuo, senza offesa.",
+			"text": "[divertito] Ready? We can start in Research, where the team looks for opportunities for you. Or go your own way—no offence taken.",
 			"pose": "a",
 			"choices": [
-				{"text": "Andiamo insieme.", "next": "go"},
-				{"text": "Faccio da solo, grazie.", "next": "solo"},
-				{"text": "Me lo riassumi in una riga?", "next": "recap"},
+				{"text": "Let's go together.", "next": "go"},
+				{"text": "I'll do it myself, thanks.", "next": "solo"},
+				{"text": "Give me the one-line version.", "next": "recap"},
 			],
 		},
 		"recap": {
-			"text": "[caldo] Esplora, clicca, chiedi: l'ufficio è tutto tuo. Il resto te lo mostro strada facendo.",
+			"text": "[caldo] Explore, click, ask: the office is entirely yours. I will show you the rest as we go.",
 			"pose": "a", "next": "go",
 		},
 		"go": {
-			"text": "[caldo] Seguimi, ti faccio strada io.",
+			"text": "[caldo] Follow me. I'll lead the way.",
 			"pose": "a",
 		},
 	},
 
 	"tour_scout": {
 		"start": {
-			"text": "[caldo] Benvenuto nel reparto Ricerca. Io e gli altri Ricercatori giriamo il web, consultiamo le pagine delle aziende e cerchiamo offerte di lavoro che potrebbero interessarti.",
+			"text": "[caldo] Welcome to Research. The other Researchers and I search the web, check company pages, and look for job openings that may interest you.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Non cerchiamo alla cieca. Impariamo quali lavori, luoghi e aziende ti interessano e portiamo in ufficio le opportunità che vale la pena conoscere. Se vuoi cambiare direzione, basta dirlo al Coordinatore.",
+			"text": "[neutro] We do not search blindly. We learn which roles, places, and companies interest you, then bring worthwhile opportunities into the office. If you want to change direction, just tell the Coordinator.",
 			"pose": "b",
 			"choices": [
-				{"text": "E io dove vedo quello che trovano?", "next": "see"},
-				{"text": "Posso indicare aziende o tipi di lavoro preferiti?", "next": "sources"},
-				{"text": "Come fate a non farmi perdere tempo?", "next": "duplicates"},
-				{"text": "Posso chiedervi una pausa?", "next": "pause"},
-				{"text": "Chiaro, andiamo avanti.", "next": "end"},
+				{"text": "Where can I see what you find?", "next": "see"},
+				{"text": "Can I name companies or job types I prefer?", "next": "sources"},
+				{"text": "How do you avoid wasting my time?", "next": "duplicates"},
+				{"text": "Can I ask you to pause?", "next": "pause"},
+				{"text": "Got it, let's continue.", "next": "end"},
 			],
 		},
 		"see": {
-			"text": "[caldo] Nella bacheca in sala e nella pagina Posizioni: ogni annuncio con la sua storia completa. Un click e sei dentro.",
+			"text": "[caldo] On the noticeboard and in Positions: every listing with its full story. One click and you are in.",
 			"pose": "a", "next": "end2",
 		},
 		"sources": {
-			"text": "[caldo] Certo. Puoi dirci quali aziende ti attirano, dove vuoi lavorare e che tipo di ruolo desideri. Le ricerche successive seguiranno le tue indicazioni.",
+			"text": "[caldo] Of course. Tell us which companies appeal to you, where you want to work, and what kind of role you want. Future searches will follow your direction.",
 			"pose": "a", "next": "end2",
 		},
 		"duplicates": {
-			"text": "[neutro] Prima di portarti un'offerta controlliamo che sia ancora utile e che non te l'abbiamo già mostrata. Tu vedrai un elenco pulito, non la confusione che c'è sul web.",
+			"text": "[neutro] Before we bring you an opening, we check that it is still useful and that we have not already shown it to you. You see a clean list, not the web's clutter.",
 			"pose": "b", "next": "end2",
 		},
 		"pause": {
-			"text": "[caldo] Certo. Il reparto Ricerca può fermarsi mentre il resto dell'ufficio continua a occuparsi delle opportunità già trovate.",
+			"text": "[caldo] Of course. Research can pause while the rest of the office keeps working on opportunities already found.",
 			"pose": "a", "next": "end2",
 		},
 		"end": {
-			"text": "[divertito] Ti lascio di nuovo con l'Assistente: ti accompagnerà nel reparto Analisi, dai pignoli del gruppo.",
+			"text": "[divertito] I'll hand you back to the Assistant. She will take you to Analysis—the team's detail fanatics.",
 			"pose": "a",
 		},
 		"end2": {
-			"text": "[caldo] L'Assistente ti accompagna ora nel reparto Analisi: lì studiano con calma tutto ciò che troviamo.",
+			"text": "[caldo] The Assistant will now take you to Analysis, where they examine everything we find.",
 			"pose": "a",
 		},
 	},
 
 	"tour_analisti": {
 		"start": {
-			"text": "[caldo] Benvenuto nel reparto Analisi. Noi Analisti riceviamo le opportunità trovate dai Ricercatori e le studiamo nel dettaglio.",
+			"text": "[caldo] Welcome to Analysis. We Analysts receive the opportunities found by Research and investigate them in detail.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Cerchiamo di capire che lavoro è davvero, chi sta assumendo, cosa offre e quali dubbi restano. Quando arriverà il momento di scegliere, avrai davanti un quadro chiaro invece di un annuncio confuso.",
+			"text": "[neutro] We work out what the role really is, who is hiring, what is offered, and what questions remain. When it is time to choose, you see a clear picture instead of a confusing listing.",
 			"pose": "b",
 			"choices": [
-				{"text": "E a me cosa cambia?", "next": "why"},
-				{"text": "Quanto sono affidabili stipendio e sede?", "next": "accuracy"},
-				{"text": "Cosa succede se mancano informazioni?", "next": "missing"},
-				{"text": "Posso chiedere un'analisi più approfondita?", "next": "deeper"},
-				{"text": "Capito, proseguiamo.", "next": "end"},
+				{"text": "What does that change for me?", "next": "why"},
+				{"text": "How reliable are the pay and location?", "next": "accuracy"},
+				{"text": "What if information is missing?", "next": "missing"},
+				{"text": "Can I ask for a deeper analysis?", "next": "deeper"},
+				{"text": "Understood, let's continue.", "next": "end"},
 			],
 		},
 		"why": {
-			"text": "[caldo] Significa che non dovrai passare ore a interpretare ogni annuncio. Aprirai una posizione e troverai già le informazioni necessarie per capire se merita il tuo tempo.",
+			"text": "[caldo] It means you will not spend hours interpreting every listing. Open a position and you already have the information needed to decide whether it deserves your time.",
 			"pose": "a", "next": "end2",
 		},
 		"accuracy": {
-			"text": "[neutro] Ti diciamo sempre cosa è certo e cosa è soltanto probabile. Se un'informazione non è chiara, la indichiamo come dubbio e non come verità.",
+			"text": "[neutro] We always distinguish what is certain from what is only likely. If something is unclear, we label it as a question, not a fact.",
 			"pose": "b", "next": "end2",
 		},
 		"missing": {
-			"text": "[caldo] La posizione resta visibile con i vuoti dichiarati. Nessun dato viene inventato: potrai decidere se vale la pena approfondire.",
+			"text": "[caldo] The position stays visible with its gaps clearly stated. No data are invented; you decide whether it is worth digging deeper.",
 			"pose": "a", "next": "end2",
 		},
 		"deeper": {
-			"text": "[caldo] Sì. Da ogni posizione puoi chiedere all'ufficio di approfondire un dubbio; il Coordinatore troverà il collega giusto e aggiungerà la risposta alla scheda.",
+			"text": "[caldo] Yes. From any position, you can ask the office to investigate a question; the Coordinator will find the right colleague and add the answer to the card.",
 			"pose": "a", "next": "end2",
 		},
 		"end": {
-			"text": "[caldo] Ora l'Assistente ti porta nel reparto Compatibilità, dove si capisce quanto ogni opportunità assomiglia a ciò che vuoi davvero.",
+			"text": "[caldo] Now the Assistant takes you to Compatibility, where we see how closely each opportunity matches what you truly want.",
 			"pose": "a",
 		},
 		"end2": {
-			"text": "[divertito] Ti lascio ai Consulenti di compatibilità: l'Assistente ti fa strada fino a loro.",
+			"text": "[divertito] I'll leave you with the Compatibility Consultants. The Assistant will show you the way.",
 			"pose": "a",
 		},
 	},
 
 	"tour_scorer": {
 		"start": {
-			"text": "[caldo] Benvenuto nel reparto Compatibilità. Noi Consulenti confrontiamo ogni opportunità con la persona che sei e con il lavoro che desideri.",
+			"text": "[caldo] Welcome to Compatibility. We Consultants compare each opportunity with who you are and the work you want.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Usiamo tutto ciò che i reparti Ricerca e Analisi hanno scoperto, insieme a quello che hai raccontato di te. Il risultato è un parere chiaro su quanto quel lavoro potrebbe fare al caso tuo.",
+			"text": "[neutro] We use everything Research and Analysis discovered, alongside what you have told us about yourself. The result is a clear view of how well that role may fit you.",
 			"pose": "b", "next": "n3",
 		},
 		"n3": {
-			"text": "[caldo] Per esempio: un lavoro può essere ottimo sulla carta ma inadatto alla vita che vuoi fare. Qui competenze, desideri e necessità personali vengono considerate insieme.",
+			"text": "[caldo] For example, a role can look excellent on paper yet not suit the life you want. Here, skills, hopes, and practical needs are considered together.",
 			"pose": "a",
 			"choices": [
-				{"text": "E se cambio idea sulle preferenze?", "next": "change"},
-				{"text": "Su cosa si basa il vostro parere?", "next": "formula"},
-				{"text": "Posso chiedervi di mostrarmi solo le occasioni migliori?", "next": "threshold"},
-				{"text": "Mi spiegano anche i punti deboli?", "next": "weakness"},
-				{"text": "Andiamo avanti.", "next": "end"},
+				{"text": "What if I change my preferences?", "next": "change"},
+				{"text": "What is your assessment based on?", "next": "formula"},
+				{"text": "Can you show me only the strongest opportunities?", "next": "threshold"},
+				{"text": "Will you explain the weak points too?", "next": "weakness"},
+				{"text": "Let's continue.", "next": "end"},
 			],
 		},
 		"change": {
-			"text": "[divertito] Aggiorni il Profilo e noi rivediamo le opportunità con occhi nuovi, anche quelle già studiate. Siamo permalosi solo se ci chiami «calcolatrici».",
+			"text": "[divertito] Update your Profile and we look at the opportunities with fresh eyes—even those already studied. We only take offence if you call us “calculators.”",
 			"pose": "a", "next": "end2",
 		},
 		"formula": {
-			"text": "[neutro] Sul tuo percorso, su ciò che sai fare, su come vuoi vivere e lavorare e su quello che l'azienda sta cercando. Insieme al giudizio vedrai sempre anche il perché.",
+			"text": "[neutro] On your path, what you can do, how you want to live and work, and what the company seeks. Alongside every assessment, you will always see why.",
 			"pose": "b", "next": "end2",
 		},
 		"threshold": {
-			"text": "[caldo] Sì. Puoi scegliere quanto deve essere promettente un'opportunità prima che l'ufficio prepari una candidatura, senza perdere di vista tutte le altre.",
+			"text": "[caldo] Yes. You can choose how promising an opportunity must be before the office prepares an application, without losing sight of the others.",
 			"pose": "a", "next": "end2",
 		},
 		"weakness": {
-			"text": "[caldo] Sempre: vedrai cosa sembra adatto, cosa lascia dubbi e cosa potrebbe rendere difficile la candidatura. Un numero da solo non aiuterebbe nessuno.",
+			"text": "[caldo] Always. You see what looks promising, what raises questions, and what may make an application harder. A number alone helps no one.",
 			"pose": "a", "next": "end2",
 		},
 		"end": {
-			"text": "[caldo] Ora l'Assistente ti accompagna nel reparto Candidature.",
+			"text": "[caldo] Now the Assistant will take you to Applications.",
 			"pose": "a",
 		},
 		"end2": {
-			"text": "[caldo] Ti lascio di nuovo con l'Assistente: sarà lei a presentarti i colleghi del reparto Candidature.",
+			"text": "[caldo] I'll hand you back to the Assistant; she will introduce the Applications team.",
 			"pose": "a",
 		},
 	},
 
 	"tour_scrittori": {
 		"start": {
-			"text": "[caldo] Benvenuto nel reparto Candidature. Noi Redattori partiamo dal tuo curriculum, dalla tua voce e dalle esperienze che hai vissuto davvero.",
+			"text": "[caldo] Welcome to Applications. We Writers begin with your CV, your voice, and the experience you have really lived.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Per ogni opportunità prepariamo una presentazione su misura: mettiamo in luce le parti della tua storia che aiutano quell'azienda a capirti, senza inventare nulla.",
+			"text": "[neutro] For every opportunity, we prepare a tailored introduction: we highlight the parts of your story that help that company understand you, without inventing anything.",
 			"pose": "b", "next": "n3",
 		},
 		"n3": {
-			"text": "[caldo] Prima di consegnarti il lavoro lo affidiamo al Controllo qualità. Se qualcosa è poco chiaro o poco convincente, lo sistemiamo finché la candidatura non racconta bene chi sei.",
+			"text": "[caldo] Before we hand you the work, we send it to Quality Check. If something is unclear or unconvincing, we improve it until the application tells your story well.",
 			"pose": "a",
 			"choices": [
-				{"text": "E i CV finiti dove li trovo?", "next": "see"},
-				{"text": "Come impedite che inventino esperienze?", "next": "truth"},
-				{"text": "Possono rispettare il mio tono e la lingua?", "next": "voice"},
-				{"text": "Il curriculum originale resta intatto?", "next": "original"},
-				{"text": "Andiamo al Controllo qualità.", "next": "end"},
+				{"text": "Where do I find finished CVs?", "next": "see"},
+				{"text": "How do you stop them inventing experience?", "next": "truth"},
+				{"text": "Can they respect my tone and language?", "next": "voice"},
+				{"text": "Does my original CV stay intact?", "next": "original"},
+				{"text": "Let's go to Quality Check.", "next": "end"},
 			],
 		},
 		"see": {
-			"text": "[caldo] Sullo scaffale CV PRONTI, accanto all'uscita: ogni documento leggibile per intero. L'ultima parola resta sempre tua.",
+			"text": "[caldo] On the READY CVS shelf beside the exit: every document is readable in full. The final word stays with you.",
 			"pose": "a", "next": "end2",
 		},
 		"truth": {
-			"text": "[severo] Possiamo scegliere le parole e mettere ordine, mai creare fatti. Il Controllo qualità ci rimanda indietro qualsiasi affermazione che la tua storia non sostiene.",
+			"text": "[severo] We can choose the words and create order, never invent facts. Quality Check sends back any claim your story does not support.",
 			"pose": "b", "next": "end2",
 		},
 		"voice": {
-			"text": "[caldo] Sì: lingua, formalità, sintesi e stile diventano preferenze. Il contenuto resta tuo anche quando cambia il vestito.",
+			"text": "[caldo] Yes: language, formality, length, and style become preferences. The content remains yours even when its presentation changes.",
 			"pose": "a", "next": "end2",
 		},
 		"original": {
-			"text": "[caldo] Sempre. I documenti su misura sono nuove versioni legate alla posizione; la sorgente originale non viene sovrascritta.",
+			"text": "[caldo] Always. Tailored documents are new versions tied to the position; your original source is never overwritten.",
 			"pose": "a", "next": "end2",
 		},
 		"end": {
-			"text": "[divertito] L'Assistente ti accompagna ora al Controllo qualità. Non farti impressionare dai Revisori.",
+			"text": "[divertito] The Assistant will take you to Quality Check now. Do not let the Reviewers intimidate you.",
 			"pose": "a",
 		},
 		"end2": {
-			"text": "[divertito] Ti lascio all'Assistente per la prossima tappa: il Controllo qualità. I Revisori non sono famosi per la dolcezza.",
+			"text": "[divertito] I'll leave you with the Assistant for the next stop: Quality Check. Reviewers are not known for being gentle.",
 			"pose": "a",
 		},
 	},
 
 	"tour_critici": {
 		"start": {
-			"text": "[neutro] Benvenuto al Controllo qualità. Noi Revisori guardiamo ogni candidatura con occhi nuovi, come se la ricevessimo per la prima volta dall'esterno.",
+			"text": "[neutro] Welcome to Quality Check. We Reviewers look at every application with fresh eyes, as if receiving it from the outside for the first time.",
 			"pose": "b", "next": "n2",
 		},
 		"n2": {
-			"text": "[severo] Ci chiediamo se un selezionatore capirebbe subito chi sei, se il documento è credibile e se risponde davvero a ciò che l'azienda sta cercando.",
+			"text": "[severo] We ask whether a recruiter would quickly understand who you are, whether the document is credible, and whether it truly answers what the company needs.",
 			"pose": "b", "next": "n3",
 		},
 		"n3": {
-			"text": "[caldo] Possiamo sembrare severi, ma lavoriamo dalla tua parte: meglio scoprire qui una frase debole o un dubbio che lasciarlo arrivare a un'azienda.",
+			"text": "[caldo] We may seem strict, but we work on your side. It is better to find a weak line or a question here than let it reach a company.",
 			"pose": "a",
 			"choices": [
-				{"text": "Quindi bocciano tanto?", "next": "strict"},
-				{"text": "Quali errori cercano per primi?", "next": "errors"},
-				{"text": "Posso vedere ogni revisione?", "next": "rounds"},
-				{"text": "Come fate a essere corretti?", "next": "fair"},
-				{"text": "Meglio averli qui che là fuori. Andiamo.", "next": "end"},
+				{"text": "So do you reject a lot?", "next": "strict"},
+				{"text": "Which mistakes do you look for first?", "next": "errors"},
+				{"text": "Can I see every review?", "next": "rounds"},
+				{"text": "How do you stay fair?", "next": "fair"},
+				{"text": "Better to have you here than out there. Let's go.", "next": "end"},
 			],
 		},
 		"strict": {
-			"text": "[divertito] Quando serve, sì. Ogni documento rimandato indietro qui dentro è un problema in meno quando parlerai con un'azienda.",
+			"text": "[divertito] When needed, yes. Every document sent back here is one less problem when you speak with a company.",
 			"pose": "a", "next": "end2",
 		},
 		"errors": {
-			"text": "[severo] Frasi vaghe, promesse poco credibili, parti importanti trascurate e qualunque cosa faccia sembrare la candidatura impersonale o confusa.",
+			"text": "[severo] Vague sentences, unconvincing claims, overlooked important details, and anything that makes an application feel impersonal or confused.",
 			"pose": "b", "next": "end2",
 		},
 		"rounds": {
-			"text": "[caldo] Sì. Puoi leggere le osservazioni e vedere come il documento è migliorato, così nessuna correzione avviene alle tue spalle.",
+			"text": "[caldo] Yes. You can read the notes and see how the document improved, so no correction happens behind your back.",
 			"pose": "a", "next": "end2",
 		},
 		"fair": {
-			"text": "[neutro] Guardiamo ciò che l'azienda chiede e ciò che il documento racconta, senza lasciarci influenzare dalle simpatie. La severità è la stessa per ogni candidatura.",
+			"text": "[neutro] We compare what the company asks with what the document says, without letting personal preference sway us. The standard is the same for every application.",
 			"pose": "b", "next": "end2",
 		},
 		"end": {
-			"text": "[caldo] L'Assistente ti porta ora dal Dottore, poi c'è una persona che vuole davvero farti conoscere.",
+			"text": "[caldo] The Assistant will take you to the Doctor now, then to someone who is truly looking forward to meeting you.",
 			"pose": "a",
 		},
 		"end2": {
-			"text": "[caldo] Esatto. Torna dall'Assistente: vi aspetta un saluto al Dottore e poi il pezzo forte.",
+			"text": "[caldo] Exactly. Return to the Assistant: a hello to the Doctor awaits, then the main event.",
 			"pose": "a",
 		},
 	},
 
 	"tour_dottore": {
 		"start": {
-			"text": "[caldo] Sono il Dottore dell'ufficio: mi prendo cura della squadra quando qualcosa non va.",
+			"text": "[caldo] I'm the office Doctor: I look after the team when something goes wrong.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Se un collega rallenta, si confonde o non riesce a finire un incarico, cerco la causa e lo aiuto a ripartire. Tu probabilmente non lo noterai mai — ed è il miglior complimento che possa ricevere.",
+			"text": "[neutro] If a colleague slows down, gets stuck, or cannot finish a task, I find the cause and help them start again. You may never notice—and that is the best compliment I can receive.",
 			"pose": "b",
 			"choices": [
-				{"text": "Posso vedere cosa sta monitorando?", "next": "monitor"},
-				{"text": "Riavvia gli agenti da solo?", "next": "restart"},
-				{"text": "Tiene d'occhio anche costi e limiti?", "next": "costs"},
-				{"text": "Perfetto, andiamo dal Mentor.", "next": "end"},
+				{"text": "Can I see what the Doctor monitors?", "next": "monitor"},
+				{"text": "Does the Doctor restart agents alone?", "next": "restart"},
+				{"text": "Does the Doctor track costs and limits too?", "next": "costs"},
+				{"text": "Great, let's visit the Mentor.", "next": "end"},
 			],
 		},
 		"monitor": {
-			"text": "[caldo] Sì. Dalla mia scheda puoi vedere chi sta bene, chi ha bisogno di aiuto e quali interventi sono stati fatti.",
+			"text": "[caldo] Yes. From my card, you can see who is well, who needs help, and which interventions were made.",
 			"pose": "a", "next": "end",
 		},
 		"restart": {
-			"text": "[neutro] Prima capisce il problema, poi interviene soltanto nei modi che hai autorizzato. Se serve una decisione importante, chiama il Coordinatore o te.",
+			"text": "[neutro] First the Doctor understands the problem, then intervenes only in ways you have authorized. If an important decision is needed, the Coordinator or you is called.",
 			"pose": "b", "next": "end",
 		},
 		"costs": {
-			"text": "[caldo] Collabora con la Sentinella e il Coordinatore per evitare sprechi e ritmi insostenibili. Un buon ufficio deve lavorare bene senza consumare più del necessario.",
+			"text": "[caldo] The Doctor works with the Sentinel and Coordinator to avoid waste and unsustainable pace. A good office works well without using more than it needs.",
 			"pose": "a", "next": "end",
 		},
 		"end": {
-			"text": "[caldo] Ora torna dall'Assistente: ti accompagnerà al salotto del Mentor. Da lì in poi parlerà lui.",
+			"text": "[caldo] Now return to the Assistant. She will take you to the Mentor's lounge; from there, he will speak for himself.",
 			"pose": "a",
 		},
 	},
@@ -591,107 +591,107 @@ const TREES := {
 	## strada, e le scelte diventano preferenze reali (nodi "action").
 	"tour_mentor": {
 		"start": {
-			"text": "[caldo] Finalmente. Gli altri ti hanno mostrato COME lavoriamo; a me interessa il PERCHÉ. Dimmi la verità: cosa ti porta qui?",
+			"text": "[caldo] At last. The others showed you HOW we work; I care about WHY. Tell me honestly: what brings you here?",
 			"pose": "a",
 			"choices": [
-				{"text": "Voglio cambiare: quello che ho non mi basta più.", "next": "path_change"},
-				{"text": "Sto ricominciando, e non è un momento facile.", "next": "path_restart"},
-				{"text": "Voglio crescere: ruolo, stipendio, prospettive.", "next": "path_more"},
-				{"text": "Sto bene, ma voglio capire quanto valgo sul mercato.", "next": "path_explore"},
-				{"text": "Cerco un lavoro più compatibile con la mia vita.", "next": "path_balance"},
+				{"text": "I want a change: what I have is no longer enough.", "next": "path_change"},
+				{"text": "I'm starting again, and it is not an easy time.", "next": "path_restart"},
+				{"text": "I want to grow: role, pay, prospects.", "next": "path_more"},
+				{"text": "I'm doing well, but I want to know what I'm worth in the market.", "next": "path_explore"},
+				{"text": "I'm looking for work that fits my life better.", "next": "path_balance"},
 			],
 		},
 		"path_explore": {
-			"text": "[caldo] Ottimo punto di partenza: nessuna fuga e nessuna fretta. Possiamo osservare il mercato con lucidità e muoverci solo davanti a un salto reale.",
+			"text": "[caldo] A great starting point: no escape and no rush. We can watch the market clearly and move only for a real step forward.",
 			"pose": "a", "action": "pref:career_priority=growth", "next": "q2",
 		},
 		"path_balance": {
-			"text": "[pensieroso] Allora il lavoro deve smettere di invadere il resto. Modalità, orari e cultura peseranno quanto titolo e stipendio.",
+			"text": "[pensieroso] Then work needs to stop taking over everything else. Working style, hours, and culture will matter as much as title and pay.",
 			"pose": "d", "action": "pref:career_priority=balance", "next": "q2",
 		},
 		"path_change": {
-			"text": "[pensieroso] Succede alle persone migliori: non è ingratitudine, è crescita. E chi cambia con lucidità parte avvantaggiato — sa già cosa NON vuole.",
+			"text": "[pensieroso] It happens to the best people: it is not ingratitude, it is growth. People who change with clarity start ahead—they already know what they do NOT want.",
 			"pose": "d", "action": "pref:career_priority=growth", "next": "change2",
 		},
 		"change2": {
-			"text": "[caldo] Useremo il tuo presente come bussola al contrario: ogni cosa che oggi ti pesa diventa un criterio di ricerca. La costanza la mette il team; a te resta solo la parte nobile — scegliere.",
+			"text": "[caldo] We will use your present as a reverse compass: everything weighing on you today becomes a search criterion. The team provides the consistency; your part is the important one—choosing.",
 			"pose": "c", "next": "q2",
 		},
 		"path_restart": {
-			"text": "[caldo] Allora la prima cosa te la dico guardandoti negli occhi: ricominciare non è tornare indietro. È ripartire sapendo più cose di chiunque sia al primo giro.",
+			"text": "[caldo] Then let me say this first, looking you in the eye: starting again is not going backwards. It is restarting with more knowledge than anyone on their first try.",
 			"pose": "a", "action": "pref:career_priority=stability", "next": "restart2",
 		},
 		"restart2": {
-			"text": "[pensieroso] Il team ti toglie la parte che logora: cercare, confrontare, riscrivere. A te resta quella che nessuno può fare al posto tuo — presentarti per ciò che sei. E lì, io ci sono.",
+			"text": "[pensieroso] The team takes away the draining part: searching, comparing, rewriting. What remains is what nobody can do for you—showing up as yourself. And I am there for that.",
 			"pose": "d", "next": "q2",
 		},
 		"path_more": {
-			"text": "[divertito] Ambizione dichiarata: apprezzo. È il carburante giusto, se lo si incanala.",
+			"text": "[divertito] Declared ambition—I appreciate it. It is the right fuel when it has direction.",
 			"pose": "a", "action": "pref:career_priority=salary", "next": "more2",
 		},
 		"more2": {
-			"text": "[severo] Però facciamo un patto: puntiamo in alto sulle posizioni GIUSTE, non su tutte. Sparare nel mucchio è il modo più rapido per sembrare uno dei tanti.",
+			"text": "[severo] But let us make a pact: aim high for the RIGHT positions, not all of them. Spraying applications everywhere is the quickest way to look like everyone else.",
 			"pose": "b", "next": "q2",
 		},
 		"q2": {
-			"text": "[caldo] Seconda domanda, poi ti lascio andare: i prossimi mesi, come li vuoi vivere?",
+			"text": "[caldo] One more question, then I'll let you go: how do you want to live the next few months?",
 			"pose": "a",
 			"choices": [
-				{"text": "Con calma: poche mosse, ma precise.", "next": "style_calm"},
-				{"text": "Con ritmo: voglio vedere movimento ogni settimana.", "next": "style_active"},
-				{"text": "Decida il team il passo: mi fido.", "next": "style_trust"},
-				{"text": "Con urgenza: devo trovare presto.", "next": "style_urgent"},
-				{"text": "Sperimentando: proviamo più direzioni.", "next": "style_experiment"},
+				{"text": "Calmly: fewer moves, but precise ones.", "next": "style_calm"},
+				{"text": "With pace: I want to see movement every week.", "next": "style_active"},
+				{"text": "Let the team set the pace—I trust it.", "next": "style_trust"},
+				{"text": "With urgency: I need to find something soon.", "next": "style_urgent"},
+				{"text": "Experimentally: let's try several directions.", "next": "style_experiment"},
 			],
 		},
 		"style_calm": {
-			"text": "[caldo] Poche e precise: la strategia dei cecchini. Dirò al reparto Compatibilità di mostrarti soltanto le occasioni che sembrano davvero promettenti.",
+			"text": "[caldo] Few and precise: the sharpshooter strategy. I'll ask Compatibility to show you only opportunities that look genuinely promising.",
 			"pose": "c", "action": "pref:search_style=cautious", "next": "cadence",
 		},
 		"style_active": {
-			"text": "[caldo] Ritmo, dunque. Allargheremo il setaccio senza abbassare l'asticella: preparati a scegliere spesso.",
+			"text": "[caldo] Pace, then. We will widen the net without lowering the bar. Be ready to choose often.",
 			"pose": "c", "action": "pref:search_style=ambitious", "next": "cadence",
 		},
 		"style_trust": {
-			"text": "[caldo] Allora il passo lo detterà il mercato: quando c'è abbondanza spingiamo, quando è secca non forziamo. È la scelta di chi capisce le maratone.",
+			"text": "[caldo] Then the market sets the pace: when there is abundance, we push; when it is dry, we do not force it. That is the choice of someone who understands marathons.",
 			"pose": "c", "action": "pref:search_style=balanced", "next": "cadence",
 		},
 		"style_urgent": {
-			"text": "[severo] Urgenza non significa rumore: allarghiamo il volume, accorciamo i cicli e teniamo visibili le decisioni che richiedono te.",
+			"text": "[severo] Urgency does not mean noise: we widen the volume, shorten the cycles, and keep decisions that need you visible.",
 			"pose": "b", "action": "pref:search_style=volume", "next": "cadence",
 		},
 		"style_experiment": {
-			"text": "[divertito] Bene: tratteremo la ricerca come un esperimento. Più piste, risultati misurati e nessun attaccamento a un'ipotesi che non funziona.",
+			"text": "[divertito] Good. We will treat the search as an experiment: more paths, measured results, and no attachment to a hypothesis that does not work.",
 			"pose": "a", "action": "pref:search_style=experimental", "next": "cadence",
 		},
 		"cadence": {
-			"text": "[caldo] Io ci sarò comunque. Come preferisci sentirmi?",
+			"text": "[caldo] I will be here either way. How would you like to hear from me?",
 			"pose": "a",
 			"choices": [
-				{"text": "Un riepilogo breve ogni giorno.", "next": "cad_daily"},
-				{"text": "Un punto sincero ogni settimana.", "next": "cad_week"},
-				{"text": "Solo quando c'è da decidere qualcosa di importante.", "next": "cad_mile"},
-				{"text": "Solo quando ti cerco io.", "next": "cad_demand"},
+				{"text": "A short summary every day.", "next": "cad_daily"},
+				{"text": "An honest check-in every week.", "next": "cad_week"},
+				{"text": "Only when there is an important decision to make.", "next": "cad_mile"},
+				{"text": "Only when I come looking for you.", "next": "cad_demand"},
 			],
 		},
 		"cad_daily": {
-			"text": "[caldo] Ogni giorno, ma corto: movimento, blocchi e una sola prossima decisione.",
+			"text": "[caldo] Every day, but brief: progress, blockers, and one next decision.",
 			"pose": "a", "action": "pref:mentor_cadence=daily", "next": "final",
 		},
 		"cad_week": {
-			"text": "[caldo] Settimanale sia: breve, onesto, utile. Promesso.",
+			"text": "[caldo] Weekly it is: brief, honest, useful. Promise.",
 			"pose": "a", "action": "pref:mentor_cadence=weekly", "next": "final",
 		},
 		"cad_mile": {
-			"text": "[caldo] Ricevuto: silenzio operoso, e mi faccio vivo quando conta davvero.",
+			"text": "[caldo] Understood: quiet work, and I will speak up when it truly matters.",
 			"pose": "a", "action": "pref:mentor_cadence=milestones", "next": "final",
 		},
 		"cad_demand": {
-			"text": "[caldo] Va bene. Io osservo senza interrompere e rispondo quando apri tu la porta.",
+			"text": "[caldo] All right. I will observe without interrupting and respond when you open the door.",
 			"pose": "a", "action": "pref:mentor_cadence=on_demand", "next": "final",
 		},
 		"final": {
-			"text": "[caldo] Un'ultima cosa, poi il Coordinatore ti aspetta: là fuori il tuo CV parlerà di competenze, ma tu stai cercando un posto dove stare bene. Non accontentarti.",
+			"text": "[caldo] One last thing, then the Coordinator is waiting: out there, your CV will speak about skills, but you are looking for a place where you can thrive. Do not settle.",
 			"pose": "a",
 		},
 	},
@@ -700,36 +700,36 @@ const TREES := {
 	## vivere il team e la scelta apre la pagina di configurazione giusta.
 	"tour_coordinatore": {
 		"start": {
-			"text": "[caldo] Eccoti, ti aspettavo. L'ufficio l'hai visto: ora accendiamolo. Io sono il Coordinatore — distribuisco gli ordini, tengo il ritmo e nessuno corre più del dovuto.",
+			"text": "[caldo] There you are—I was waiting for you. You have seen the office; now let us bring it to life. I'm the Coordinator: I distribute the work, keep the pace, and make sure nobody runs too far ahead.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Il team ha bisogno di una casa: un computer acceso dove lavorare. Ci sono tre strade, tutte buone — dipende da te.",
+			"text": "[neutro] The team needs a home: a computer that is on to do its work. There are three good options; it depends on you.",
 			"pose": "b", "next": "n3",
 		},
 		"n3": {
-			"text": "[neutro] La prima: QUESTO computer. La più semplice — il team lavora mentre lo usi e riposa quando lo spegni.",
+			"text": "[neutro] The first: THIS computer. The simplest option: the team works while you use it and rests when you turn it off.",
 			"pose": "b", "next": "n4",
 		},
 		"n4": {
-			"text": "[neutro] La seconda: un computer DEDICATO — un portatile in più o un piccolo PC in un angolo, sempre acceso. Il team lavora anche mentre tu vivi la tua vita.",
+			"text": "[neutro] The second: a DEDICATED computer—an extra laptop or a small PC in a corner, always on. The team works while you get on with life.",
 			"pose": "b", "next": "n5",
 		},
 		"n5": {
-			"text": "[neutro] La terza: un computer online sempre acceso, che puoi comandare da qui anche quando il tuo è spento. È la scelta più continua e non richiede altro spazio in casa.",
+			"text": "[neutro] The third: an always-on online computer that you can control from here even when yours is off. It is the most continuous option and needs no extra room at home.",
 			"pose": "b", "next": "choose",
 		},
 		"choose": {
-			"text": "[caldo] Dove vuoi far vivere il tuo team? Qualunque scelta si cambia quando vuoi.",
+			"text": "[caldo] Where would you like your team to live? You can change any choice whenever you want.",
 			"pose": "a",
 			"choices": [
-				{"text": "Su questo computer.", "next": "pick_local"},
-				{"text": "Su un computer dedicato.", "next": "pick_dedicated"},
-				{"text": "Su un computer online sempre acceso.", "next": "pick_vps"},
+				{"text": "On this computer.", "next": "pick_local"},
+				{"text": "On a dedicated computer.", "next": "pick_dedicated"},
+				{"text": "On an always-on online computer.", "next": "pick_vps"},
 			],
 		},
 		"pick_local": {
-			"text": "[caldo] Scelta pratica: si parte subito.",
+			"text": "[caldo] A practical choice: you can start right away.",
 			"pose": "a", "action": "runtime:local", "next": "local_state",
 		},
 		"local_state": {
@@ -737,11 +737,11 @@ const TREES := {
 			"pose": "b",
 		},
 		"pick_dedicated": {
-			"text": "[caldo] L'ottima via di mezzo. Installa l'app su quella macchina e ripeti lì questi passi; intanto ti apro la pagina che prepara lo spazio di lavoro della squadra.",
+			"text": "[caldo] An excellent middle ground. Install the app on that machine and repeat these steps there; meanwhile, I'll open the page that prepares the team's workspace.",
 			"pose": "a", "action": "runtime:dedicated",
 		},
 		"pick_vps": {
-			"text": "[caldo] Ottima scelta. Ti apro la configurazione del computer online: la procedura ti chiederà dove si trova e come accedervi, spiegandoti ogni passaggio.",
+			"text": "[caldo] Great choice. I'll open online-computer setup; it will ask where it is and how to access it, explaining every step.",
 			"pose": "a", "action": "runtime:vps",
 		},
 	},
@@ -752,198 +752,198 @@ const TREES := {
 
 	"self_scout": {
 		"start": {
-			"text": "[caldo] Ciao{player}! Sono uno dei Ricercatori. Io e i miei colleghi cerchiamo sul web le offerte di lavoro che potrebbero interessarti, così non devi passare le giornate a farlo da solo.",
+			"text": "[caldo] Hello{player}! I'm one of the Researchers. My colleagues and I search the web for job openings that may interest you, so you do not have to spend your days doing it alone.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Più ci racconti quali lavori, aziende e luoghi ti interessano, più le nostre ricerche diventano vicine a ciò che desideri. Il Coordinatore ci comunica ogni cambio di direzione.",
+			"text": "[neutro] The more you tell us about the roles, companies, and places that interest you, the closer our searches get to what you want. The Coordinator shares every change of direction with us.",
 			"pose": "b",
 			"choices": [
-				{"text": "Dove vedo quello che trovate?", "next": "see"},
-				{"text": "Come fate a non farmi perdere tempo?", "next": "duplicates"},
-				{"text": "Posso chiedervi una pausa?", "next": "pause"},
-				{"text": "A dopo, buona caccia.", "next": "end"},
+				{"text": "Where can I see what you find?", "next": "see"},
+				{"text": "How do you avoid wasting my time?", "next": "duplicates"},
+				{"text": "Can I ask you to pause?", "next": "pause"},
+				{"text": "See you later—happy hunting.", "next": "end"},
 			],
 		},
 		"see": {
-			"text": "[caldo] Bacheca in sala e pagina Posizioni: ogni annuncio con la sua storia completa. Un click e sei dentro.",
+			"text": "[caldo] The noticeboard and Positions page: every listing with its full story. One click and you are in.",
 			"pose": "a", "next": "end",
 		},
 		"duplicates": {
-			"text": "[neutro] Controlliamo che ogni offerta sia ancora utile e che non te l'abbiamo già mostrata. Sulla tua bacheca arrivano opportunità ordinate, non tutta la confusione del web.",
+			"text": "[neutro] We check that every opening is still useful and that we have not already shown it to you. Your noticeboard receives ordered opportunities, not all the web's clutter.",
 			"pose": "b", "next": "end",
 		},
 		"pause": {
-			"text": "[caldo] Certo: fermi soltanto le nuove ricerche e gli altri reparti continuano a occuparsi delle opportunità già trovate.",
+			"text": "[caldo] Of course: you pause only new research, while the other departments continue with opportunities already found.",
 			"pose": "a", "next": "end",
 		},
 		"end": {
-			"text": "[divertito] Torna quando vuoi. Io intanto continuo a cercare.",
+			"text": "[divertito] Come back whenever you like. I'll keep searching in the meantime.",
 			"pose": "a",
 		},
 	},
 
 	"self_analisti": {
 		"start": {
-			"text": "[caldo] Benvenuto{player}. Questo è il reparto Analisi. Prendiamo le opportunità portate dai Ricercatori e le studiamo per capire che lavoro è davvero e se merita il tuo tempo.",
+			"text": "[caldo] Welcome{player}. This is Analysis. We take the opportunities brought by Research and study them to understand the real role and whether it deserves your time.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Quando aprirai una posizione troverai un quadro chiaro dell'azienda, del lavoro e delle condizioni, insieme ai dubbi che non siamo riusciti a risolvere.",
+			"text": "[neutro] When you open a position, you find a clear picture of the company, the role, and its conditions, along with questions we could not resolve.",
 			"pose": "b",
 			"choices": [
-				{"text": "Quanto sono affidabili stipendio e sede?", "next": "accuracy"},
-				{"text": "E se mancano informazioni?", "next": "missing"},
-				{"text": "Posso chiedervi un approfondimento?", "next": "deeper"},
-				{"text": "Ottimo lavoro, continuate.", "next": "end"},
+				{"text": "How reliable are the pay and location?", "next": "accuracy"},
+				{"text": "What if information is missing?", "next": "missing"},
+				{"text": "Can I ask you to look deeper?", "next": "deeper"},
+				{"text": "Great work, keep going.", "next": "end"},
 			],
 		},
 		"accuracy": {
-			"text": "[neutro] Distinguiamo sempre ciò che l'azienda ha dichiarato da ciò che sembra soltanto probabile. Se non siamo sicuri, te lo diciamo con chiarezza.",
+			"text": "[neutro] We always separate what the company stated from what merely seems likely. If we are not sure, we tell you clearly.",
 			"pose": "b", "next": "end",
 		},
 		"missing": {
-			"text": "[caldo] La posizione resta visibile con i vuoti dichiarati. Non inventiamo niente: decidi tu se vale la pena scavare.",
+			"text": "[caldo] The position remains visible with its gaps stated. We invent nothing; you decide whether it is worth digging deeper.",
 			"pose": "a", "next": "end",
 		},
 		"deeper": {
-			"text": "[caldo] Sì. Da una posizione puoi chiedere un approfondimento; il Coordinatore lo affida a uno di noi e la risposta resta nella scheda.",
+			"text": "[caldo] Yes. From a position, you can request a deeper look; the Coordinator assigns it to one of us and the answer stays on the card.",
 			"pose": "a", "next": "end",
 		},
 		"end": {
-			"text": "[caldo] Passa quando vuoi: i dossier sono sempre aperti.",
+			"text": "[caldo] Drop by whenever you like: the files are always open.",
 			"pose": "a",
 		},
 	},
 
 	"self_scorer": {
 		"start": {
-			"text": "[caldo] Ciao{player}. Sono un Consulente del reparto Compatibilità. Il mio lavoro è capire quanto ogni opportunità si avvicina a ciò che sai fare e alla vita lavorativa che desideri.",
+			"text": "[caldo] Hello{player}. I'm a Compatibility Consultant. My job is to understand how closely every opportunity matches what you can do and the working life you want.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Non guardo soltanto le competenze. Considero anche il luogo, il tipo di azienda, le condizioni e le preferenze che ci hai confidato. Un buon lavoro deve essere adatto alla persona intera.",
+			"text": "[neutro] I do not look only at skills. I also consider location, company type, conditions, and the preferences you shared. A good job should fit the whole person.",
 			"pose": "b",
 			"choices": [
-				{"text": "E se cambio idea sulle preferenze?", "next": "change"},
-				{"text": "Su cosa si basa il tuo parere?", "next": "formula"},
-				{"text": "Mi spieghi anche i punti deboli?", "next": "weakness"},
-				{"text": "Chiaro. Continua pure.", "next": "end"},
+				{"text": "What if I change my preferences?", "next": "change"},
+				{"text": "What is your assessment based on?", "next": "formula"},
+				{"text": "Will you explain the weak points too?", "next": "weakness"},
+				{"text": "Clear. Please continue.", "next": "end"},
 			],
 		},
 		"change": {
-			"text": "[divertito] Aggiorni il Profilo e io riguardo tutto con occhi nuovi, anche le opportunità già studiate. Basta che non mi chiami «calcolatrice».",
+			"text": "[divertito] Update your Profile and I will look again with fresh eyes, even at opportunities already studied. Just do not call me “a calculator.”",
 			"pose": "a", "next": "end",
 		},
 		"formula": {
-			"text": "[neutro] Su quello che sai fare, sul percorso che vuoi costruire, sulle tue necessità quotidiane e su ciò che l'azienda cerca. Il nostro giudizio viene sempre accompagnato dalle ragioni.",
+			"text": "[neutro] On what you can do, the path you want to build, your daily needs, and what the company is looking for. Our assessment always comes with its reasons.",
 			"pose": "b", "next": "end",
 		},
 		"weakness": {
-			"text": "[caldo] Sempre: cosa sembra adatto, cosa lascia dubbi e quali difficoltà potresti superare. Un numero senza spiegazione non serve a nessuno.",
+			"text": "[caldo] Always: what looks fitting, what raises questions, and which difficulties you may overcome. A number without an explanation helps no one.",
 			"pose": "a", "next": "end",
 		},
 		"end": {
-			"text": "[caldo] Le opportunità ci aspettano. A presto.",
+			"text": "[caldo] The opportunities are waiting. See you soon.",
 			"pose": "a",
 		},
 	},
 
 	"self_scrittori": {
 		"start": {
-			"text": "[caldo] Ciao{player}! Sono un Redattore del reparto Candidature. Parto dal tuo curriculum, dalla tua voce e dalle esperienze che hai vissuto davvero.",
+			"text": "[caldo] Hello{player}! I'm a Writer in Applications. I begin with your CV, your voice, and the experience you have really lived.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Per ogni opportunità scelgo le parti della tua storia che aiutano quell'azienda a capirti e preparo una candidatura su misura. Prima di consegnartela, il Controllo qualità mi fa correggere ogni punto debole.",
+			"text": "[neutro] For every opportunity, I choose the parts of your story that help that company understand you and prepare a tailored application. Before I hand it to you, Quality Check has me correct every weak point.",
 			"pose": "b",
 			"choices": [
-				{"text": "I CV finiti dove li trovo?", "next": "see"},
-				{"text": "Giuri che non inventi esperienze?", "next": "truth"},
-				{"text": "Rispetti il mio tono e la mia lingua?", "next": "voice"},
-				{"text": "Non vedo l'ora. A presto.", "next": "end"},
+				{"text": "Where do I find finished CVs?", "next": "see"},
+				{"text": "Do you swear you won't invent experience?", "next": "truth"},
+				{"text": "Do you respect my tone and language?", "next": "voice"},
+				{"text": "I can't wait. See you soon.", "next": "end"},
 			],
 		},
 		"see": {
-			"text": "[caldo] Sullo scaffale CV PRONTI, accanto all'uscita: ogni documento leggibile per intero. L'ultima parola resta tua.",
+			"text": "[caldo] On the READY CVS shelf beside the exit: every document is readable in full. The final word stays with you.",
 			"pose": "a", "next": "end",
 		},
 		"truth": {
-			"text": "[severo] Giurato: scelgo e riscrivo, ma non creo fatti. I Revisori rimandano indietro qualsiasi affermazione che la tua storia non sostiene.",
+			"text": "[severo] I swear it: I select and rewrite, but never create facts. The Reviewers send back any claim your story does not support.",
 			"pose": "b", "next": "end",
 		},
 		"voice": {
-			"text": "[caldo] Sì: lingua, formalità, sintesi e stile diventano preferenze. Il contenuto resta tuo anche quando cambia il vestito.",
+			"text": "[caldo] Yes: language, formality, length, and style become preferences. The content remains yours even when its presentation changes.",
 			"pose": "a", "next": "end",
 		},
 		"end": {
-			"text": "[divertito] Porta un buon curriculum di partenza: al resto penso io.",
+			"text": "[divertito] Bring a solid starting CV; I'll take care of the rest.",
 			"pose": "a",
 		},
 	},
 
 	"self_critici": {
 		"start": {
-			"text": "[severo] Sono un Revisore del Controllo qualità. Leggo ogni candidatura come se arrivasse per la prima volta sulla scrivania di un'azienda.",
+			"text": "[severo] I'm a Quality Check Reviewer. I read every application as though it has landed on a company's desk for the first time.",
 			"pose": "b", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Controllo che sia chiara, credibile e adatta all'opportunità. Posso sembrare severo, ma preferisco trovare qui un problema anziché lasciarlo arrivare a un selezionatore.",
+			"text": "[neutro] I check that it is clear, credible, and suited to the opportunity. I may seem strict, but I would rather find a problem here than let a recruiter receive it.",
 			"pose": "b",
 			"choices": [
-				{"text": "Quindi bocci tanto?", "next": "strict"},
-				{"text": "Quali errori cerchi per primi?", "next": "errors"},
-				{"text": "Come fai a essere corretto?", "next": "fair"},
-				{"text": "Meglio te qui che là fuori.", "next": "end"},
+				{"text": "So do you reject a lot?", "next": "strict"},
+				{"text": "Which mistakes do you look for first?", "next": "errors"},
+				{"text": "How do you stay fair?", "next": "fair"},
+				{"text": "Better you here than out there.", "next": "end"},
 			],
 		},
 		"strict": {
-			"text": "[divertito] Quando serve, sì. Ogni documento rimandato indietro qui è un problema in meno quando parlerai con un'azienda.",
+			"text": "[divertito] When needed, yes. Every document sent back here is one less problem when you speak with a company.",
 			"pose": "a", "next": "end",
 		},
 		"errors": {
-			"text": "[severo] Frasi vaghe, promesse poco credibili, punti importanti trascurati e qualsiasi passaggio che non sembri davvero tuo.",
+			"text": "[severo] Vague sentences, unconvincing claims, overlooked important points, and anything that does not truly sound like you.",
 			"pose": "b", "next": "end",
 		},
 		"fair": {
-			"text": "[neutro] Confronto ciò che l'azienda cerca con ciò che il documento racconta, applicando la stessa severità a ogni candidatura.",
+			"text": "[neutro] I compare what the company seeks with what the document says, applying the same standard to every application.",
 			"pose": "b", "next": "end",
 		},
 		"end": {
-			"text": "[severo] Ora vai. Ho documenti da rileggere.",
+			"text": "[severo] Off you go now. I have documents to review.",
 			"pose": "b",
 		},
 	},
 
 	"self_dottore": {
 		"start": {
-			"text": "[caldo] Salve{player}, sono il Dottore dell'ufficio. Se un collega rallenta, si confonde o non riesce a finire un incarico, cerco la causa e lo aiuto a ripartire.",
+			"text": "[caldo] Hello{player}, I'm the office Doctor. If a colleague slows down, gets stuck, or cannot finish a task, I find the cause and help them restart.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] Tu probabilmente non mi noterai mai — ed è il miglior complimento che possa ricevere.",
+			"text": "[neutro] You will probably never notice me—and that is the best compliment I can receive.",
 			"pose": "b",
 			"choices": [
-				{"text": "Posso vedere cosa monitori?", "next": "monitor"},
-				{"text": "Riavvii gli agenti da solo?", "next": "restart"},
-				{"text": "Guardi anche costi e limiti?", "next": "costs"},
-				{"text": "Buon lavoro, Dottore.", "next": "end"},
+				{"text": "Can I see what you monitor?", "next": "monitor"},
+				{"text": "Do you restart agents on your own?", "next": "restart"},
+				{"text": "Do you track costs and limits too?", "next": "costs"},
+				{"text": "Good work, Doctor.", "next": "end"},
 			],
 		},
 		"monitor": {
-			"text": "[caldo] Sì. Dalla mia scheda puoi vedere chi sta bene, chi ha bisogno di aiuto e quali interventi sono stati fatti.",
+			"text": "[caldo] Yes. From my card, you can see who is well, who needs help, and which interventions were made.",
 			"pose": "a", "next": "end",
 		},
 		"restart": {
-			"text": "[neutro] Prima capisco il problema, poi intervengo soltanto nei modi che hai autorizzato. Se serve una decisione importante, chiamo il Coordinatore o te.",
+			"text": "[neutro] First I understand the problem, then I intervene only in ways you have authorized. If an important decision is needed, I call the Coordinator or you.",
 			"pose": "b", "next": "end",
 		},
 		"costs": {
-			"text": "[caldo] Insieme alla Sentinella e al Coordinatore evito sprechi e ritmi insostenibili. Un buon ufficio lavora bene senza consumare più del necessario.",
+			"text": "[caldo] Together with the Sentinel and Coordinator, I prevent waste and unsustainable pace. A good office works well without consuming more than it needs.",
 			"pose": "a", "next": "end",
 		},
 		"end": {
-			"text": "[caldo] Torna pure: la porta dell'ambulatorio è sempre aperta.",
+			"text": "[caldo] Come back any time: the clinic door is always open.",
 			"pose": "a",
 		},
 	},
@@ -954,146 +954,146 @@ const TREES := {
 
 	"tease_scout": {
 		"start": {
-			"text": "[caldo] Ciao{player}, sono un Ricercatore. Appena l'ufficio è attivo comincerò a cercare sul web opportunità vere per te.",
+			"text": "[caldo] Hello{player}, I'm a Researcher. As soon as the office is active, I will start looking online for real opportunities for you.",
 			"pose": "a",
 			"choices": [
-				{"text": "Andiamo ad accendere il team.", "next": "go"},
-				{"text": "A dopo.", "next": "later"},
+				{"text": "Let's bring the team online.", "next": "go"},
+				{"text": "See you later.", "next": "later"},
 			],
 		},
-		"go": {"text": "[divertito] Così si parla. Ti apro la checklist.", "pose": "a", "action": "open_setup"},
-		"later": {"text": "[caldo] Quando vuoi: io intanto scaldo i motori.", "pose": "a"},
+		"go": {"text": "[divertito] Now we're talking. I'll open the checklist.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[caldo] Whenever you like. I'll warm up the engines in the meantime.", "pose": "a"},
 	},
 
 	"tease_analista": {
 		"start": {
-			"text": "[neutro] Sono un Analista. Appena avremo un'opportunità vera, la studierò per dirti con chiarezza che lavoro è e se merita il tuo tempo.",
+			"text": "[neutro] I'm an Analyst. As soon as we have a real opportunity, I will study it and tell you clearly what the role is and whether it deserves your time.",
 			"pose": "b",
 			"choices": [
-				{"text": "Finiamo il setup, allora.", "next": "go"},
-				{"text": "Più tardi.", "next": "later"},
+				{"text": "Let's finish setup, then.", "next": "go"},
+				{"text": "Later.", "next": "later"},
 			],
 		},
-		"go": {"text": "[caldo] Ottima decisione. Ecco la checklist.", "pose": "a", "action": "open_setup"},
-		"later": {"text": "[neutro] I dossier non scappano. A dopo.", "pose": "b"},
+		"go": {"text": "[caldo] Great decision. Here is the checklist.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[neutro] The files are not going anywhere. See you later.", "pose": "b"},
 	},
 
 	"tease_scorer": {
 		"start": {
-			"text": "[caldo] Sono un Consulente del reparto Compatibilità. Appena l'ufficio è attivo potrò capire quali opportunità assomigliano davvero a ciò che cerchi.",
+			"text": "[caldo] I'm a Compatibility Consultant. Once the office is active, I can work out which opportunities truly match what you want.",
 			"pose": "a",
 			"choices": [
-				{"text": "Mettiamo al lavoro l'ufficio.", "next": "go"},
-				{"text": "Un'altra volta.", "next": "later"},
+				{"text": "Let's put the office to work.", "next": "go"},
+				{"text": "Another time.", "next": "later"},
 			],
 		},
-		"go": {"text": "[divertito] Musica per le mie orecchie. Checklist in arrivo.", "pose": "a", "action": "open_setup"},
-		"later": {"text": "[caldo] Va bene. Lo zero intanto non si giudica da solo.", "pose": "a"},
+		"go": {"text": "[divertito] Music to my ears. Checklist coming up.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[caldo] All right. Zero does not score itself in the meantime.", "pose": "a"},
 	},
 
 	"tease_scrittore": {
 		"start": {
-			"text": "[caldo] Ciao{player}, sono un Redattore del reparto Candidature. Non vedo l'ora di raccontare bene la tua storia alle aziende — senza inventare nulla.",
+			"text": "[caldo] Hello{player}, I'm a Writer in Applications. I cannot wait to tell your story well to companies—without inventing anything.",
 			"pose": "a",
 			"choices": [
-				{"text": "Diamoci da fare: setup.", "next": "go"},
-				{"text": "Arrivo dopo.", "next": "later"},
+				{"text": "Let's get to it: setup.", "next": "go"},
+				{"text": "I'll come back later.", "next": "later"},
 			],
 		},
-		"go": {"text": "[caldo] Perfetto: intanto scaldo la penna.", "pose": "a", "action": "open_setup"},
-		"later": {"text": "[divertito] D'accordo. La pagina bianca non mi spaventa.", "pose": "a"},
+		"go": {"text": "[caldo] Perfect. I'll warm up the pen in the meantime.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[divertito] All right. A blank page does not scare me.", "pose": "a"},
 	},
 
 	"tease_critico": {
 		"start": {
-			"text": "[severo] Sono un Revisore del Controllo qualità. Non ho ancora nulla da rileggere, ed è francamente insopportabile. Metti al lavoro l'ufficio e dammi materiale.",
+			"text": "[severo] I'm a Quality Check Reviewer. I have nothing to review yet, which is frankly unbearable. Put the office to work and give me material.",
 			"pose": "b",
 			"choices": [
-				{"text": "Ti accontento: setup.", "next": "go"},
-				{"text": "Sopporta ancora un po'.", "next": "later"},
+				{"text": "I'll oblige: setup.", "next": "go"},
+				{"text": "Endure a little longer.", "next": "later"},
 			],
 		},
-		"go": {"text": "[severo] Finalmente. Vediamo di cosa sei capace.", "pose": "b", "action": "open_setup"},
-		"later": {"text": "[severo] Come vuoi. La mediocrità non si boccia da sola.", "pose": "b"},
+		"go": {"text": "[severo] Finally. Let's see what you can do.", "pose": "b", "action": "open_setup"},
+		"later": {"text": "[severo] As you wish. Mediocrity does not reject itself.", "pose": "b"},
 	},
 
 	"tease_dottore": {
 		"start": {
-			"text": "[caldo] Il Dottore. Squadra in salute perfetta... anche perché è ferma. Dammi qualcuno da tenere d'occhio.",
+			"text": "[caldo] The Doctor. Team health is perfect… partly because it is not running. Give me someone to keep an eye on.",
 			"pose": "a",
 			"choices": [
-				{"text": "Mettiamoli al lavoro.", "next": "go"},
-				{"text": "Riposatevi ancora un po'.", "next": "later"},
+				{"text": "Let's put them to work.", "next": "go"},
+				{"text": "Rest a little longer.", "next": "later"},
 			],
 		},
-		"go": {"text": "[caldo] Saggio. Preparo l'ambulatorio.", "pose": "a", "action": "open_setup"},
-		"later": {"text": "[neutro] Va bene. Ma l'ozio non è una terapia.", "pose": "b"},
+		"go": {"text": "[caldo] Wise. I'll prepare the clinic.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[neutro] All right. But idleness is not a treatment.", "pose": "b"},
 	},
 
 	"tease_sentinella": {
 		"start": {
-			"text": "[neutro] La Sentinella. Tengo d'occhio consumi e ritmo: per ora la sala è silenziosa. Troppo silenziosa.",
+			"text": "[neutro] The Sentinel. I watch usage and pace; for now, the room is quiet. Too quiet.",
 			"pose": "b",
 			"choices": [
-				{"text": "Rompiamo il silenzio: setup.", "next": "go"},
-				{"text": "Goditi la quiete.", "next": "later"},
+				{"text": "Let's break the silence: setup.", "next": "go"},
+				{"text": "Enjoy the quiet.", "next": "later"},
 			],
 		},
-		"go": {"text": "[caldo] Ricevuto. Sensori accesi.", "pose": "a", "action": "open_setup"},
-		"later": {"text": "[neutro] La quiete prima del lavoro. Va bene.", "pose": "b"},
+		"go": {"text": "[caldo] Received. Sensors on.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[neutro] Quiet before the work. All right.", "pose": "b"},
 	},
 
 	"tease_mantenitore": {
 		"start": {
-			"text": "[caldo] Il Mantenitore. Qui è tutto pulito e in ordine. Sporchiamolo di lavoro, che dici?",
+			"text": "[caldo] The Maintainer. Everything is clean and orderly here. Shall we get it working?",
 			"pose": "a",
 			"choices": [
-				{"text": "Sporchiamolo: setup.", "next": "go"},
-				{"text": "Resta pulito ancora un po'.", "next": "later"},
+				{"text": "Let's get it working: setup.", "next": "go"},
+				{"text": "Keep it clean a little longer.", "next": "later"},
 			],
 		},
-		"go": {"text": "[divertito] Parole sante. Attrezzi alla mano.", "pose": "a", "action": "open_setup"},
-		"later": {"text": "[caldo] Come preferisci: lo straccio è sempre pronto.", "pose": "a"},
+		"go": {"text": "[divertito] Blessed words. Tools in hand.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[caldo] As you prefer: the cloth is always ready.", "pose": "a"},
 	},
 
 	"tease_coordinatore": {
 		"start": {
-			"text": "[caldo] Eccoti{player}. Il piano c'è, la squadra pure: manca solo la casa del team. Finiamo il setup insieme?",
+			"text": "[caldo] There you are{player}. The plan is here, and so is the team; only the team's home is missing. Shall we finish setup together?",
 			"pose": "a",
 			"choices": [
-				{"text": "Sì, chiudiamo la pratica.", "next": "go"},
-				{"text": "Non ancora.", "next": "later"},
+				{"text": "Yes, let's finish it.", "next": "go"},
+				{"text": "Not yet.", "next": "later"},
 			],
 		},
 		"go": {"text": "[caldo] {docker_line}", "pose": "b", "action": "open_setup"},
-		"later": {"text": "[neutro] Quando decidi, la sala operativa è pronta.", "pose": "b"},
+		"later": {"text": "[neutro] When you decide, Operations is ready.", "pose": "b"},
 	},
 
 	"tease_mentor": {
 		"start": {
-			"text": "[caldo] Io sono qui{player}. Quando decidi di partire davvero, la prima conversazione seria la facciamo io e te. Intanto: non accontentarti.",
+			"text": "[caldo] I'm here{player}. When you decide to truly begin, you and I will have the first serious conversation. Until then: do not settle.",
 			"pose": "a",
 			"choices": [
-				{"text": "Partiamo ora: setup.", "next": "go"},
-				{"text": "Ci penso ancora.", "next": "later"},
+				{"text": "Let's start now: setup.", "next": "go"},
+				{"text": "I'll think about it a little longer.", "next": "later"},
 			],
 		},
-		"go": {"text": "[caldo] Buona scelta. Il resto vien da sé.", "pose": "a", "action": "open_setup"},
-		"later": {"text": "[pensieroso] Pensaci. Ma non troppo a lungo.", "pose": "d"},
+		"go": {"text": "[caldo] Good choice. The rest will follow.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[pensieroso] Think about it. Just not for too long.", "pose": "d"},
 	},
 
 	"assistente": {
 		"start": {
-			"text": "[caldo] Sono la tua guida nell'ufficio. Da dove vuoi cominciare?",
+			"text": "[caldo] I'm your guide in the office. Where would you like to begin?",
 			"pose": "a", "choices": [
-				{"text": "Fammi fare il tour.", "next": "tour"},
-				{"text": "Cosa serve per partire?", "next": "setup"},
-				{"text": "Voglio solo esplorare.", "next": "end"},
+				{"text": "Give me the tour.", "next": "tour"},
+				{"text": "What do I need to get started?", "next": "setup"},
+				{"text": "I just want to explore.", "next": "end"},
 			],
 		},
-		"tour": {"text": "[neutro] Segui i diamanti: la Ricerca trova le opportunità, l'Analisi le studia, la Compatibilità capisce quali fanno per te, le Candidature preparano i documenti e il Controllo qualità li rilegge.", "next": "start"},
-		"setup": {"text": "[caldo] Per partire devi preparare la casa dell'ufficio, collegare l'intelligenza che aiuterà la squadra e raccontarci chi sei. Ti accompagniamo noi, un passo alla volta.", "next": "start"},
-		"end": {"text": "[divertito] Perfetto. Il caffè è gratis e ogni conversazione può ricominciare."},
+		"tour": {"text": "[neutro] Follow the diamonds: Research finds opportunities, Analysis investigates them, Compatibility sees which ones fit you, Applications prepares the documents, and Quality Check reviews them.", "next": "start"},
+		"setup": {"text": "[caldo] To get started, prepare the office home, connect the intelligence that will help the team, and tell us a little about yourself. We will guide you, one step at a time.", "next": "start"},
+		"end": {"text": "[divertito] Perfect. The coffee is free, and every conversation can begin again."},
 	},
 }
 
@@ -1116,7 +1116,7 @@ static func resolve_placeholders(text: String, team_data: Node) -> String:
 		"docker_line": _docker_line(team_data),
 		"mentor_tip": team_data.mentor_tip(),
 		"positions": pos_lines.strip_edges(),
-		"positions_summary": "Il reparto Ricerca ha portato %d posizioni nuove." % summary["positions_today"],
+		"positions_summary": "Research brought in %d new positions." % summary["positions_today"],
 		"avg_score": str(summary["avg_score"]),
 		"score_title": expl["title"],
 		"score_company": expl["company"],
@@ -1135,22 +1135,22 @@ static func _docker_line(team_data: Node) -> String:
 	var setup := team_data.get_node_or_null("/root/SetupService")
 	var status: Dictionary = setup.status if setup != null else {}
 	if bool(status.get("container_running", false)):
-		return "E lo spazio di lavoro della squadra è già pronto: ti apro il pannello così vedi cosa manca per cominciare."
+		return "The team's workspace is already ready. I'll open the panel so you can see what is still needed to begin."
 	if bool(status.get("docker_running", false)):
-		return "La casa della squadra è già pronta: perfetto, il grosso è fatto. Nel pannello che ti apro basta confermare l'attivazione e i colleghi prenderanno servizio."
+		return "The team's home is already ready—perfect, the big work is done. In the panel I open, confirm activation and the team can begin work."
 	if bool(status.get("docker_available", false)):
-		return "La casa dell'ufficio è già installata su questo computer, ma al momento è chiusa. Avviala, aspetta qualche secondo e poi torna nel pannello che ti apro per far entrare la squadra."
-	return "Prima dobbiamo costruire una piccola casa riservata per l'ufficio su questo computer. Nel pannello che ti apro trovi l'installazione guidata; completala una volta, poi torna qui e attiva la squadra."
+		return "The office home is already installed on this computer, but it is currently off. Start it, wait a few seconds, then return to the panel I open to let the team in."
+	return "First we need to build a small private home for the office on this computer. The panel I open has guided installation; complete it once, then return here and activate the team."
 
 ## Saluto in base all'orario locale dell'utente: l'accoglienza deve
 ## sembrare quella di una persona vera, non di un software.
 static func greeting() -> String:
 	var hour := int(Time.get_datetime_dict_from_system().get("hour", 12))
 	if hour >= 5 and hour < 13:
-		return "Buongiorno"
+		return "Good morning"
 	if hour >= 13 and hour < 18:
-		return "Buon pomeriggio"
-	return "Buonasera"
+		return "Good afternoon"
+	return "Good evening"
 
 ## Estrae il tag emozione inline: "[caldo] Ciao" → ["caldo", "Ciao"].
 static func parse_emotion(text: String) -> Array:

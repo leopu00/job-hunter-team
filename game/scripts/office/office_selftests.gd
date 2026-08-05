@@ -924,8 +924,32 @@ func _tour_selftest() -> void:
 			check.call(str(scene.get("name", ""))
 							!= CharacterDefs.role_name("assistente"),
 					"il reparto parla ancora con la voce dell'Assistente: " + stop)
-	check.call(Dialogues.greeting() in ["Buongiorno", "Buon pomeriggio", "Buonasera"],
+	check.call(Dialogues.greeting() in ["Good morning", "Good afternoon", "Good evening"],
 			"saluto orario fuori catalogo")
+	# P0 English release surface: every authored dialogue node and choice must
+	# be English, and the two lines approved for the launch tutorial must stay
+	# exact. Dynamic placeholders are checked separately below.
+	var italian_markers := ["Benvenuto", "Ciao", "Questo è", "Questa è",
+			"l'ufficio", "la squadra", "opportunità", "candidatura",
+			"Ricerca", "Analisi", "Compatibilità", "Candidature",
+			"Controllo qualità", "Posso ", "Puoi ", "Andiamo", "Torna"]
+	for tree_id in Dialogues.TREES:
+		var dialogue_tree: Dictionary = Dialogues.TREES[tree_id]
+		for node_id in dialogue_tree:
+			var node: Dictionary = dialogue_tree[node_id]
+			var authored: Array[String] = [str(node.get("text", ""))]
+			for choice in node.get("choices", []):
+				authored.append(str(choice.get("text", "")))
+			for line in authored:
+				for marker in italian_markers:
+					check.call(not line.contains(marker),
+							"testo italiano in %s/%s: %s" % [tree_id, node_id, line])
+	check.call(str(Dialogues.TREES["tour_benvenuto"]["start"]["text"])
+			== "[caldo] {greeting}{player}! Welcome to your office. From today, everyone you see here works for one person: you.",
+			"apertura tour non coincide col copy approvato VIDEO")
+	check.call(str(Dialogues.TREES["tour_benvenuto"]["n2"]["text"])
+			== "[caldo] I’m the Assistant—your guide here. I can introduce the team, or you can explore on your own. Your call.",
+			"presentazione Assistente non coincide col copy approvato VIDEO")
 	var count_markers := func() -> Array:
 		var visible_count := 0
 		var marked_slugs := {}
@@ -1068,8 +1092,8 @@ func _tour_selftest() -> void:
 	SetupService.status["docker_available"] = true
 	SetupService.status["docker_running"] = true
 	var docker_on := Dialogues.resolve_placeholders("{docker_line}", TeamData)
-	check.call(no_docker.contains("installazione guidata") \
-			and docker_on.contains("squadra") and no_docker != docker_on,
+	check.call(no_docker.contains("guided installation") \
+			and docker_on.contains("team") and no_docker != docker_on,
 			"la battuta del Coordinatore non segue lo stato Docker")
 
 	# ── Giro libero: ordine sparso, alberi in prima persona ───────────
