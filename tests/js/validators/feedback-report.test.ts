@@ -270,6 +270,15 @@ describe("privacy del contratto", () => {
     expect(delivered).not.toContain("Mario Rossi");
     expect(delivered).not.toContain("mario@example.com");
   });
+
+  it("conserva il solo contesto anonimo che il modulo pubblico mostra", () => {
+    const report = parseReport({
+      ...VALID,
+      client: "web-contact",
+      doing: "Public web report: /contact",
+    })!;
+    expect(report.doing).toBe("Public web report: /contact");
+  });
 });
 
 describe("modulo di contatto del sito", () => {

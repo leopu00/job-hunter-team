@@ -56,6 +56,7 @@ const PLATFORM_ALIASES: Record<string, string> = {
   web: "Web",
   unknown: "unknown",
 };
+const WEB_CONTACT_CONTEXTS = new Set(["Public web report: /contact"]);
 
 /**
  * La redazione deve accadere prima di qualunque canale di consegna. Questa è
@@ -90,6 +91,15 @@ function safeLocale(value: unknown): string {
 
 function safePlatform(value: unknown): string {
   return PLATFORM_ALIASES[field(value, 40).toLowerCase()] ?? "unknown";
+}
+
+function safeDoing(client: string, value: unknown): string {
+  if (client !== "web-contact") return safeNarrative(value, MAX_STORY_CHARS);
+  // L'unico contesto tecnico pubblico mostrato dal modulo corrente. Lasciarlo
+  // passare rende fedele l'anteprima; qualsiasi altra frase (in particolare il
+  // vecchio "Modulo di contatto — <nome>") torna al valore anonimo.
+  const context = field(value, MAX_STORY_CHARS);
+  return WEB_CONTACT_CONTEXTS.has(context) ? context : "Modulo di contatto web";
 }
 
 /**
@@ -131,10 +141,7 @@ export function parseReport(raw: unknown): Report | null {
     // sono riconoscibili con una regex affidabile, quindi questo client ha un
     // contesto fisso: nessuna versione vecchia puo' trasformare il canale
     // tecnico anonimo in un inoltro di dati personali.
-    doing:
-      client === "web-contact"
-        ? "Modulo di contatto web"
-        : safeNarrative(body.doing, MAX_STORY_CHARS),
+    doing: safeDoing(client, body.doing),
     happened: redact(happened),
     expected: safeNarrative(body.expected, MAX_STORY_CHARS),
     // Client aggiornati non lo inviano; in un client vecchio resta nel JSON
