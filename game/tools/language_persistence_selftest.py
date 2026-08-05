@@ -13,8 +13,9 @@ def run_phase(phase: str, marker: str) -> None:
     for override in ("JHT_LANG", "JHT_LANGUAGE_PICKER_TEST", "JHT_LANGUAGE_SETTINGS_TEST"):
         env.pop(override, None)
     env.update({"JHT_NOVPS": "1", "JHT_LANGUAGE_PERSIST_TEST": phase})
+    godot_bin = env.get("JHT_GODOT_BIN") or env.get("GODOT") or "godot"
     result = subprocess.run(
-        ["godot", "--headless", "."],
+        [godot_bin, "--headless", "."],
         cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)),),
         env=env,
         capture_output=True,
