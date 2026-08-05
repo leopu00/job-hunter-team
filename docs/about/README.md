@@ -17,5 +17,6 @@ Public-facing documentation for anyone evaluating Job Hunter Team. Two clusters:
 | [💳 PROVIDERS](PROVIDERS.md) | Which subscription to pick (Claude Max / Kimi €40 / Codex €100) |
 | [📡 MONITORING](MONITORING.md) | The engineering proof: how Bridge + Sentinel keep spend within the window (+ work-hours config) |
 | [📊 RESULTS](RESULTS.md) | Real case studies — what the pipeline actually produced |
+| [🖼️ TUTORIAL GAME SCREENSHOTS](TUTORIAL-GAME-SCREENSHOTS.md) | Provenance, privacy attestation, and hashes for public game tutorial frames |
 
 > 💡 The two clusters answer different questions. **Narrative** = "what is this and why should I care?". **Evidence & economics** = "does it work, and what will it cost me?". `PROVIDERS → MONITORING → RESULTS` form a coherent trust chain: what to buy, proof the budget holds, real outcomes.
