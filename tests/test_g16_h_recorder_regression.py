@@ -72,6 +72,7 @@ def valid_recorder_sidecar(harness, reference: Path, video: Path):
             "reference_pts_ns": 5_000_000_000,
         },
         "recorder": {
+            "implementation": "xdg-desktop-portal window + PipeWire/GStreamer",
             "codec": "H.264 High/Matroska",
             "source_type": "window",
             "cursor_mode": "hidden",
@@ -88,6 +89,10 @@ def valid_recorder_sidecar(harness, reference: Path, video: Path):
             "min_keyframe_distance": 60,
             "scene_cut": 0,
             "container": "Matroska",
+            "portal_stream": {
+                "node_id": 68,
+                "properties": {"id": "0", "source_type": 2, "size": [1920, 1080]},
+            },
         },
     }
 
@@ -151,11 +156,26 @@ def test_window_i420_sidecar_fails_when_the_surface_or_reference_stage_drifts(
     checks = harness.sidecar_contract(sidecar, video, reference)
 
     assert checks["recorder"]
+    assert checks["portal_provenance"]
     assert checks["reference"]
     assert checks["source_buffers"] == 10
     wrong_surface = copy.deepcopy(sidecar)
     wrong_surface["recorder"]["source_type"] = "display"
     assert not harness.sidecar_contract(wrong_surface, video, reference)["recorder"]
+    mutter_metadata = copy.deepcopy(sidecar)
+    mutter_metadata["recorder"][
+        "implementation"
+    ] = "Mutter ScreenCast RecordArea + PipeWire/GStreamer"
+    mutter_metadata["recorder"]["provider"] = "pipewire-node"
+    mutter_metadata["recorder"]["mutter_stream"] = {"node_id": 68}
+    assert not harness.sidecar_contract(mutter_metadata, video, reference)[
+        "portal_provenance"
+    ]
+    missing_portal_stream = copy.deepcopy(sidecar)
+    del missing_portal_stream["recorder"]["portal_stream"]
+    assert not harness.sidecar_contract(missing_portal_stream, video, reference)[
+        "portal_provenance"
+    ]
     wrong_stage = copy.deepcopy(sidecar)
     wrong_stage["reference"]["stage"] = "post-x264"
     assert not harness.sidecar_contract(wrong_stage, video, reference)["reference"]
