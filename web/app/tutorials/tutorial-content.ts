@@ -11,6 +11,9 @@ export type TutorialGuide = {
   intro: string;
   beforeYouBeginLabel: string;
   beforeYouBegin: string;
+  setupHeading?: string;
+  setupSteps?: TutorialStep[];
+  exploreHeading?: string;
   steps: TutorialStep[];
   preferVideo: string;
   videoAvailable: string;
@@ -24,14 +27,316 @@ type TutorialPageCopy = {
 // Le versioni sono trascritte da docs/guides/TUTORIALS.md e
 // docs/guides/TUTORIALS-LOCALIZATIONS.md. Il testo è il tutorial: il video
 // rimane sempre un'alternativa al termine di ciascun percorso.
-export const TUTORIAL_GUIDES = {
+type GameSetup = Required<
+  Pick<
+    TutorialGuide,
+    | "beforeYouBeginLabel"
+    | "beforeYouBegin"
+    | "setupHeading"
+    | "setupSteps"
+    | "exploreHeading"
+  >
+>;
+
+const GAME_SETUP = {
+  en: {
+    beforeYouBeginLabel: "Plan the setup",
+    beforeYouBegin:
+      "This path starts at the website download and ends when the team is active; it does not assume that the desktop app or Docker is already configured. In an observed Linux + Docker end-to-end run, the time from double-clicking the downloaded app to the first onboarding panel was 32 minutes 58 seconds. The full route had already exceeded 54 minutes before provider login. Hardware, download speed, and Docker setup change the result, but this is not a five-minute task.",
+    setupHeading: "Set up the team",
+    setupSteps: [
+      {
+        title: "Download the native desktop app",
+        body: "Open the Download page at jobhunterteam.ai/download, choose Desktop, then select macOS, Windows, or Linux. It always links to the current release for that platform.",
+      },
+      {
+        title: "Open the download",
+        body: "On Windows run job-hunter-team.exe; on macOS unzip job-hunter-team.zip and open the app; on Linux extract job-hunter-team-linux-x64.tar.gz and run job-hunter-team.x86_64. Continue through a Windows or Linux warning only when the download came from the official site or its linked release.",
+      },
+      {
+        title: "Enter the office",
+        body: "From the title screen, add your name if you want and enter the office. It is explorable before setup: preview conversations and example positions do not start a live team or use a provider.",
+      },
+      {
+        title: "Open the setup checklist",
+        body: "Select Activate team. Choose a local runtime or connect a VPS. A local runtime needs Docker; on Windows, Docker Desktop may need its own consent and first-run flow.",
+      },
+      {
+        title: "Connect a provider",
+        body: "In the Coordinator setup, select a supported subscription provider and plan, then complete authorization in the embedded terminal. An authorization link can open in your browser, while codes and choices stay in the office terminal.",
+      },
+      {
+        title: "Complete the profile",
+        body: "Fill in the native profile. The ready gate needs your name, email, target role, location, experience, seniority, at least two skills, and at least one language.",
+      },
+      {
+        title: "Set working hours",
+        body: "Choose when the team may work. The checklist stays incomplete until the runtime, provider, profile, and working-hours gates are all ready.",
+      },
+      {
+        title: "Activate the team",
+        body: "Return to Activate team and complete the four gates. The Coordinator then starts the agents; live replies and positions become available in the office.",
+      },
+    ],
+    exploreHeading: "Explore a running team",
+  },
+  it: {
+    beforeYouBeginLabel: "Pianifica il setup",
+    beforeYouBegin:
+      "Questo percorso parte dal download sul sito e termina con il team attivo: non presuppone che l'app desktop o Docker siano già configurati. In una prova end-to-end Linux + Docker misurata, dal doppio clic sull'app scaricata al primo pannello di onboarding sono trascorsi 32 minuti e 58 secondi. Il percorso completo aveva già superato 54 minuti prima dell'accesso al provider. Hardware, velocità di download e Docker fanno variare il risultato, ma non è un'operazione da cinque minuti.",
+    setupHeading: "Configura il team",
+    setupSteps: [
+      {
+        title: "Scarica l'app desktop nativa",
+        body: "Vai su jobhunterteam.ai/download, scegli Desktop, poi macOS, Windows o Linux. La pagina punta sempre alla release corrente per quella piattaforma.",
+      },
+      {
+        title: "Apri il download",
+        body: "Su Windows avvia job-hunter-team.exe; su macOS estrai job-hunter-team.zip e apri l'app; su Linux estrai job-hunter-team-linux-x64.tar.gz e avvia job-hunter-team.x86_64. Prosegui oltre un avviso di Windows o Linux solo se il download viene dal sito ufficiale o dalla release collegata.",
+      },
+      {
+        title: "Entra nell'ufficio",
+        body: "Dalla schermata iniziale inserisci il nome se vuoi ed entra nell'ufficio. Puoi esplorarlo prima del setup: conversazioni e posizioni di esempio non avviano un team dal vivo né usano un provider.",
+      },
+      {
+        title: "Apri la checklist",
+        body: "Seleziona Attiva team. Scegli un runtime locale o collega una VPS. Il runtime locale richiede Docker; su Windows Docker Desktop può richiedere consenso e primo avvio.",
+      },
+      {
+        title: "Collega un provider",
+        body: "Nel setup del Coordinatore scegli un provider in abbonamento e il piano, poi completa l'autorizzazione nel terminale integrato. Un link può aprirsi nel browser, ma codici e scelte restano nel terminale dell'ufficio.",
+      },
+      {
+        title: "Completa il profilo",
+        body: "Compila il profilo nativo: servono nome, email, ruolo desiderato, località, esperienza, seniority, almeno due competenze e almeno una lingua.",
+      },
+      {
+        title: "Imposta gli orari di lavoro",
+        body: "Scegli quando il team può lavorare. La checklist resta incompleta finché runtime, provider, profilo e orari non sono tutti pronti.",
+      },
+      {
+        title: "Attiva il team",
+        body: "Torna a Attiva team e completa le quattro porte. Il Coordinatore avvia gli agenti e nell'ufficio arrivano risposte e posizioni dal vivo.",
+      },
+    ],
+    exploreHeading: "Esplora un team attivo",
+  },
+  es: {
+    beforeYouBeginLabel: "Planifica la configuración",
+    beforeYouBegin:
+      "Este recorrido comienza con la descarga del sitio y termina con el equipo activo; no presupone que la aplicación de escritorio ni Docker estén configurados. En una ejecución end-to-end medida con Linux + Docker, desde el doble clic en la aplicación descargada hasta el primer panel de onboarding transcurrieron 32 minutos y 58 segundos. El recorrido completo ya había superado 54 minutos antes del inicio de sesión con el proveedor. El hardware, la descarga y Docker cambian el resultado, pero no es una tarea de cinco minutos.",
+    setupHeading: "Configura el equipo",
+    setupSteps: [
+      {
+        title: "Descarga la aplicación de escritorio nativa",
+        body: "Ve a jobhunterteam.ai/download, elige Desktop y luego macOS, Windows o Linux. La página siempre enlaza la versión actual para esa plataforma.",
+      },
+      {
+        title: "Abre la descarga",
+        body: "En Windows ejecuta job-hunter-team.exe; en macOS descomprime job-hunter-team.zip y abre la aplicación; en Linux extrae job-hunter-team-linux-x64.tar.gz y ejecuta job-hunter-team.x86_64. Continúa tras un aviso de Windows o Linux solo si descargaste desde el sitio oficial o la versión enlazada.",
+      },
+      {
+        title: "Entra en la oficina",
+        body: "Desde la pantalla inicial añade tu nombre si quieres y entra en la oficina. Puedes explorarla antes de configurarla: las conversaciones y posiciones de ejemplo no inician un equipo real ni usan un proveedor.",
+      },
+      {
+        title: "Abre la lista de configuración",
+        body: "Selecciona Activar equipo. Elige un runtime local o conecta una VPS. El runtime local necesita Docker; en Windows Docker Desktop puede requerir consentimiento y su primer inicio.",
+      },
+      {
+        title: "Conecta un proveedor",
+        body: "En la configuración del Coordinador selecciona un proveedor de suscripción y su plan, y completa la autorización en el terminal integrado. Un enlace puede abrirse en el navegador, pero los códigos y las opciones quedan en el terminal de la oficina.",
+      },
+      {
+        title: "Completa el perfil",
+        body: "Rellena el perfil nativo: se necesitan nombre, correo, puesto objetivo, ubicación, experiencia, seniority, al menos dos habilidades y un idioma.",
+      },
+      {
+        title: "Define el horario de trabajo",
+        body: "Elige cuándo puede trabajar el equipo. La lista no queda completa hasta que runtime, proveedor, perfil y horario estén listos.",
+      },
+      {
+        title: "Activa el equipo",
+        body: "Vuelve a Activar equipo y completa las cuatro puertas. El Coordinador inicia a los agentes y la oficina recibe respuestas y posiciones en vivo.",
+      },
+    ],
+    exploreHeading: "Explora un equipo activo",
+  },
+  fr: {
+    beforeYouBeginLabel: "Planifiez la configuration",
+    beforeYouBegin:
+      "Ce parcours commence par le téléchargement sur le site et se termine avec l'équipe active : il ne suppose pas que l'application de bureau ou Docker sont déjà configurés. Lors d'un parcours end-to-end Linux + Docker mesuré, 32 minutes et 58 secondes se sont écoulées entre le double-clic sur l'application téléchargée et le premier panneau d'onboarding. Le parcours complet avait déjà dépassé 54 minutes avant la connexion au fournisseur. Le matériel, le téléchargement et Docker font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.",
+    setupHeading: "Configurez l'équipe",
+    setupSteps: [
+      {
+        title: "Téléchargez l'application de bureau native",
+        body: "Allez sur jobhunterteam.ai/download, choisissez Desktop, puis macOS, Windows ou Linux. La page renvoie toujours vers la version actuelle pour cette plateforme.",
+      },
+      {
+        title: "Ouvrez le téléchargement",
+        body: "Sous Windows, lancez job-hunter-team.exe ; sous macOS, décompressez job-hunter-team.zip et ouvrez l'application ; sous Linux, extrayez job-hunter-team-linux-x64.tar.gz puis lancez job-hunter-team.x86_64. Continuez après un avertissement Windows ou Linux uniquement si le téléchargement vient du site officiel ou de la version liée.",
+      },
+      {
+        title: "Entrez dans le bureau",
+        body: "Depuis l'écran de départ, ajoutez votre nom si vous le souhaitez puis entrez dans le bureau. Vous pouvez l'explorer avant la configuration : les conversations et positions d'exemple ne lancent pas une équipe en direct et n'utilisent pas de fournisseur.",
+      },
+      {
+        title: "Ouvrez la liste de configuration",
+        body: "Sélectionnez Activer l'équipe. Choisissez un runtime local ou connectez un VPS. Le runtime local nécessite Docker ; sous Windows, Docker Desktop peut demander son consentement et son premier démarrage.",
+      },
+      {
+        title: "Connectez un fournisseur",
+        body: "Dans la configuration du Coordinateur, sélectionnez un fournisseur par abonnement et son forfait, puis terminez l'autorisation dans le terminal intégré. Un lien peut s'ouvrir dans le navigateur, mais les codes et choix restent dans le terminal du bureau.",
+      },
+      {
+        title: "Complétez le profil",
+        body: "Renseignez le profil natif : nom, e-mail, poste visé, lieu, expérience, niveau, au moins deux compétences et une langue sont requis.",
+      },
+      {
+        title: "Définissez les heures de travail",
+        body: "Choisissez quand l'équipe peut travailler. La liste reste incomplète tant que runtime, fournisseur, profil et horaires ne sont pas tous prêts.",
+      },
+      {
+        title: "Activez l'équipe",
+        body: "Revenez à Activer l'équipe et terminez les quatre conditions. Le Coordinateur démarre les agents et le bureau reçoit les réponses et positions en direct.",
+      },
+    ],
+    exploreHeading: "Explorez une équipe active",
+  },
+  de: {
+    beforeYouBeginLabel: "Plane die Einrichtung",
+    beforeYouBegin:
+      "Dieser Weg beginnt mit dem Download auf der Website und endet mit dem aktiven Team; er setzt weder eine eingerichtete Desktop-App noch Docker voraus. In einem gemessenen Linux- und Docker-End-to-End-Lauf lagen zwischen dem Doppelklick auf die heruntergeladene App und dem ersten Onboarding-Panel 32 Minuten und 58 Sekunden. Der vollständige Weg hatte vor der Provider-Anmeldung bereits 54 Minuten überschritten. Hardware, Download und Docker verändern das Ergebnis, aber dies ist keine Fünf-Minuten-Aufgabe.",
+    setupHeading: "Richte das Team ein",
+    setupSteps: [
+      {
+        title: "Lade die native Desktop-App herunter",
+        body: "Gehe zu jobhunterteam.ai/download, wähle Desktop und dann macOS, Windows oder Linux. Die Seite verweist stets auf die aktuelle Version für diese Plattform.",
+      },
+      {
+        title: "Öffne den Download",
+        body: "Starte unter Windows job-hunter-team.exe; entpacke unter macOS job-hunter-team.zip und öffne die App; entpacke unter Linux job-hunter-team-linux-x64.tar.gz und starte job-hunter-team.x86_64. Fahre nach einer Windows- oder Linux-Warnung nur fort, wenn der Download von der offiziellen Website oder der verlinkten Version stammt.",
+      },
+      {
+        title: "Betritt das Büro",
+        body: "Gib auf dem Startbildschirm deinen Namen ein, wenn du möchtest, und betritt das Büro. Du kannst es vor der Einrichtung erkunden: Beispielgespräche und -positionen starten kein Live-Team und nutzen keinen Provider.",
+      },
+      {
+        title: "Öffne die Einrichtungs-Checkliste",
+        body: "Wähle Team aktivieren. Wähle eine lokale Runtime oder verbinde einen VPS. Die lokale Runtime benötigt Docker; unter Windows kann Docker Desktop Zustimmung und seinen ersten Start verlangen.",
+      },
+      {
+        title: "Verbinde einen Provider",
+        body: "Wähle in der Koordinator-Einrichtung einen Abonnement-Provider und Tarif und schließe die Autorisierung im integrierten Terminal ab. Ein Link kann sich im Browser öffnen, Codes und Auswahl bleiben jedoch im Büro-Terminal.",
+      },
+      {
+        title: "Vervollständige das Profil",
+        body: "Fülle das native Profil aus: erforderlich sind Name, E-Mail, Zielrolle, Ort, Erfahrung, Senioritätsstufe, mindestens zwei Fähigkeiten und eine Sprache.",
+      },
+      {
+        title: "Lege Arbeitszeiten fest",
+        body: "Wähle, wann das Team arbeiten darf. Die Checkliste bleibt unvollständig, bis Runtime, Provider, Profil und Arbeitszeiten bereit sind.",
+      },
+      {
+        title: "Aktiviere das Team",
+        body: "Kehre zu Team aktivieren zurück und erfülle die vier Bedingungen. Der Koordinator startet die Agenten; im Büro erscheinen Live-Antworten und Positionen.",
+      },
+    ],
+    exploreHeading: "Erkunde ein aktives Team",
+  },
+  pt: {
+    beforeYouBeginLabel: "Planeia a configuração",
+    beforeYouBegin:
+      "Este percurso começa no download do site e termina com a equipa ativa; não pressupõe que a aplicação de ambiente de trabalho ou o Docker já estejam configurados. Numa execução end-to-end medida em Linux + Docker, passaram 32 minutos e 58 segundos entre o duplo clique na aplicação descarregada e o primeiro painel de onboarding. O percurso completo já tinha ultrapassado 54 minutos antes do início de sessão no fornecedor. O hardware, o download e o Docker alteram o resultado, mas esta não é uma tarefa de cinco minutos.",
+    setupHeading: "Configura a equipa",
+    setupSteps: [
+      {
+        title: "Descarrega a aplicação de ambiente de trabalho nativa",
+        body: "Vai a jobhunterteam.ai/download, escolhe Desktop e depois macOS, Windows ou Linux. A página aponta sempre para a versão atual dessa plataforma.",
+      },
+      {
+        title: "Abre o download",
+        body: "No Windows executa job-hunter-team.exe; no macOS descomprime job-hunter-team.zip e abre a aplicação; no Linux extrai job-hunter-team-linux-x64.tar.gz e executa job-hunter-team.x86_64. Avança após um aviso de Windows ou Linux apenas se o download vier do site oficial ou da versão ligada.",
+      },
+      {
+        title: "Entra no escritório",
+        body: "No ecrã inicial, acrescenta o teu nome se quiseres e entra no escritório. Podes explorá-lo antes da configuração: as conversas e posições de exemplo não iniciam uma equipa real nem usam um fornecedor.",
+      },
+      {
+        title: "Abre a lista de configuração",
+        body: "Seleciona Ativar equipa. Escolhe um runtime local ou liga uma VPS. O runtime local precisa de Docker; no Windows o Docker Desktop pode exigir consentimento e o primeiro arranque.",
+      },
+      {
+        title: "Liga um fornecedor",
+        body: "Na configuração do Coordenador, escolhe um fornecedor por subscrição e o plano e conclui a autorização no terminal integrado. Uma ligação pode abrir no navegador, mas os códigos e as escolhas ficam no terminal do escritório.",
+      },
+      {
+        title: "Completa o perfil",
+        body: "Preenche o perfil nativo: são necessários nome, e-mail, função pretendida, localização, experiência, senioridade, pelo menos duas competências e uma língua.",
+      },
+      {
+        title: "Define o horário de trabalho",
+        body: "Escolhe quando a equipa pode trabalhar. A lista fica incompleta até runtime, fornecedor, perfil e horário estarem prontos.",
+      },
+      {
+        title: "Ativa a equipa",
+        body: "Volta a Ativar equipa e completa as quatro condições. O Coordenador inicia os agentes e o escritório recebe respostas e posições ao vivo.",
+      },
+    ],
+    exploreHeading: "Explora uma equipa ativa",
+  },
+  hu: {
+    beforeYouBeginLabel: "Tervezd meg a beállítást",
+    beforeYouBegin:
+      "Ez az útvonal a webhelyről való letöltéssel kezdődik, és az aktív csapatnál ér véget; nem feltételezi, hogy az asztali alkalmazás vagy a Docker már be van állítva. Egy mért Linux + Docker end-to-end futásban a letöltött alkalmazásra kattintástól az első onboarding panelig 32 perc 58 másodperc telt el. A teljes útvonal a szolgáltatói bejelentkezés előtt már meghaladta az 54 percet. A hardver, a letöltés és a Docker módosítja az eredményt, de ez nem ötperces feladat.",
+    setupHeading: "Állítsd be a csapatot",
+    setupSteps: [
+      {
+        title: "Töltsd le a natív asztali alkalmazást",
+        body: "Nyisd meg a jobhunterteam.ai/download oldalt, válaszd a Desktop, majd a macOS, Windows vagy Linux lehetőséget. Az oldal mindig az adott platform aktuális kiadására mutat.",
+      },
+      {
+        title: "Nyisd meg a letöltést",
+        body: "Windowson futtasd a job-hunter-team.exe fájlt; macOS-en csomagold ki a job-hunter-team.zip fájlt és nyisd meg az alkalmazást; Linuxon csomagold ki a job-hunter-team-linux-x64.tar.gz fájlt, majd indítsd el a job-hunter-team.x86_64 fájlt. Windows- vagy Linux-figyelmeztetés után csak akkor folytasd, ha a letöltés a hivatalos oldalról vagy a hivatkozott kiadásból származik.",
+      },
+      {
+        title: "Lépj be az irodába",
+        body: "A kezdőképernyőn add meg a nevedet, ha szeretnéd, majd lépj be az irodába. A beállítás előtt is felfedezheted: a példa beszélgetések és pozíciók nem indítanak élő csapatot és nem használnak szolgáltatót.",
+      },
+      {
+        title: "Nyisd meg a beállítási ellenőrzőlistát",
+        body: "Válaszd a Csapat aktiválása lehetőséget. Válassz helyi runtime-ot vagy kapcsolj VPS-t. A helyi runtime Docker-t igényel; Windowson a Docker Desktop hozzájárulást és első indítást kérhet.",
+      },
+      {
+        title: "Kapcsolj szolgáltatót",
+        body: "A Koordinátor beállításában válassz előfizetéses AI-szolgáltatót és csomagot, majd fejezd be az engedélyezést a beépített terminálban. A hivatkozás megnyílhat a böngészőben, de a kódok és választások az iroda termináljában maradnak.",
+      },
+      {
+        title: "Töltsd ki a profilt",
+        body: "Töltsd ki a natív profilt: név, e-mail, célpozíció, hely, tapasztalat, senioritás, legalább két készség és egy nyelv szükséges.",
+      },
+      {
+        title: "Állítsd be a munkaidőt",
+        body: "Válaszd ki, mikor dolgozhat a csapat. Az ellenőrzőlista addig hiányos, amíg a runtime, a szolgáltató, a profil és a munkaidő nincs kész.",
+      },
+      {
+        title: "Aktiváld a csapatot",
+        body: "Térj vissza a Csapat aktiválása ponthoz és teljesítsd a négy feltételt. A Koordinátor elindítja az ügynököket, és az irodában élő válaszok és pozíciók jelennek meg.",
+      },
+    ],
+    exploreHeading: "Fedezd fel az aktív csapatot",
+  },
+} satisfies Record<Lang, GameSetup>;
+
+export const TUTORIAL_GUIDES: Record<
+  Lang,
+  Record<TutorialId, TutorialGuide>
+> = {
   en: {
     game: {
       intro:
         "The game tutorial helps you explore the native office, understand how work moves through the team, and inspect a result before you decide what to do.",
-      beforeYouBeginLabel: "Before you begin",
-      beforeYouBegin:
-        "Use the native desktop app. To follow every live step, complete Activate team first: the runtime must be running, a provider authenticated, your profile complete, and working hours set. The office remains explorable before activation, but live replies and positions need the active team. See Quickstart if you still need to activate it.",
+      ...GAME_SETUP.en,
       steps: [
         {
           title: "Meet the office",
@@ -115,9 +420,7 @@ export const TUTORIAL_GUIDES = {
     game: {
       intro:
         "Il tutorial di gioco ti aiuta a esplorare l'ufficio nativo, a capire come il lavoro attraversa il team e a controllare un risultato prima di decidere cosa fare.",
-      beforeYouBeginLabel: "Prima di iniziare",
-      beforeYouBegin:
-        "Usa l'app desktop nativa. Per seguire tutti i passaggi dal vivo, completa prima Attiva il team: il runtime deve essere in esecuzione, un provider deve essere autenticato, il tuo profilo deve essere completo e gli orari di lavoro devono essere impostati. Puoi esplorare l'ufficio anche prima dell'attivazione, ma risposte e posizioni dal vivo richiedono un team attivo.",
+      ...GAME_SETUP.it,
       steps: [
         {
           title: "Conosci l'ufficio",
@@ -201,9 +504,7 @@ export const TUTORIAL_GUIDES = {
     game: {
       intro:
         "El tutorial de juego te ayuda a explorar la oficina nativa, entender cómo el trabajo avanza por el equipo e inspeccionar un resultado antes de decidir qué hacer.",
-      beforeYouBeginLabel: "Antes de empezar",
-      beforeYouBegin:
-        "Usa la aplicación de escritorio nativa. Para seguir todos los pasos en vivo, completa antes Activar equipo: el runtime debe estar en ejecución, debe haber un proveedor autenticado, tu perfil debe estar completo y el horario de trabajo debe estar definido. Puedes explorar la oficina antes de activarla, pero las respuestas y posiciones en vivo necesitan el equipo activo.",
+      ...GAME_SETUP.es,
       steps: [
         {
           title: "Conoce la oficina",
@@ -287,9 +588,7 @@ export const TUTORIAL_GUIDES = {
     game: {
       intro:
         "Le tutoriel de jeu vous aide à explorer le bureau natif, à comprendre comment le travail circule dans l'équipe et à examiner un résultat avant de décider de la suite.",
-      beforeYouBeginLabel: "Avant de commencer",
-      beforeYouBegin:
-        "Utilisez l'application de bureau native. Pour suivre chaque étape en direct, terminez d'abord Activer l'équipe : le runtime doit être en cours d'exécution, un fournisseur doit être authentifié, votre profil doit être complet et les heures de travail doivent être définies. Vous pouvez explorer le bureau avant l'activation, mais les réponses et les positions en direct exigent une équipe active.",
+      ...GAME_SETUP.fr,
       steps: [
         {
           title: "Découvrez le bureau",
@@ -373,9 +672,7 @@ export const TUTORIAL_GUIDES = {
     game: {
       intro:
         "Das Spiel-Tutorial hilft dir, das native Büro zu erkunden, den Ablauf der Arbeit im Team zu verstehen und ein Ergebnis zu prüfen, bevor du entscheidest, was als Nächstes geschieht.",
-      beforeYouBeginLabel: "Bevor du beginnst",
-      beforeYouBegin:
-        "Verwende die native Desktop-App. Um alle Schritte live zu verfolgen, schließe zuerst Team aktivieren ab: Die Runtime muss laufen, ein Anbieter muss angemeldet sein, dein Profil muss vollständig sein und die Arbeitszeiten müssen festgelegt sein. Du kannst das Büro vor der Aktivierung erkunden, aber LiveAntworten und Positionen brauchen ein aktives Team.",
+      ...GAME_SETUP.de,
       steps: [
         {
           title: "Lerne das Büro kennen",
@@ -459,9 +756,7 @@ export const TUTORIAL_GUIDES = {
     game: {
       intro:
         "O tutorial de jogo ajuda-te a explorar o escritório nativo, a compreender como o trabalho avança pela equipa e a inspecionar um resultado antes de decidires o que fazer.",
-      beforeYouBeginLabel: "Antes de começares",
-      beforeYouBegin:
-        "Usa a aplicação de ambiente de trabalho nativa. Para seguires todos os passos ao vivo, conclui primeiro Ativar equipa: o runtime tem de estar em execução, um fornecedor tem de estar autenticado, o teu perfil tem de estar completo e o horário de trabalho tem de estar definido. Podes explorar o escritório antes da ativação, mas as respostas e posições ao vivo exigem uma equipa ativa.",
+      ...GAME_SETUP.pt,
       steps: [
         {
           title: "Conhece o escritório",
@@ -545,9 +840,7 @@ export const TUTORIAL_GUIDES = {
     game: {
       intro:
         "A játék oktatóanyaga segít felfedezni a natív irodát, megérteni, hogyan halad át a munka a csapaton, és ellenőrizni egy eredményt, mielőtt eldöntenéd, mi legyen a következő lépés.",
-      beforeYouBeginLabel: "Mielőtt elkezded",
-      beforeYouBegin:
-        "Használd a natív asztali alkalmazást. Az összes élő lépés követéséhez előbb fejezd be a Csapat aktiválása lépést: a runtime-nak futnia kell, egy szolgáltatónak hitelesítve kell lennie, a profilodnak teljesnek kell lennie, és a munkaidőt be kell állítani. Aktiválás előtt is felfedezheted az irodát, de az élő válaszokhoz és pozíciókhoz aktív csapat szükséges.",
+      ...GAME_SETUP.hu,
       steps: [
         {
           title: "Ismerd meg az irodát",
@@ -627,7 +920,7 @@ export const TUTORIAL_GUIDES = {
         "Amikor a videó elérhető lesz, alternatívaként megnézheted.",
     },
   },
-} satisfies Record<Lang, Record<TutorialId, TutorialGuide>>;
+};
 
 export const TUTORIAL_PAGE_COPY = {
   it: {

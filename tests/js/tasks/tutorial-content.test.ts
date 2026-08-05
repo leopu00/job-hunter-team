@@ -43,6 +43,11 @@ describe("cataloghi dei tutorial pubblici", () => {
       expect(game.intro).toBeTruthy();
       expect(game.beforeYouBeginLabel).toBeTruthy();
       expect(game.beforeYouBegin).toBeTruthy();
+      expect(game.beforeYouBegin).toMatch(/32.*58/);
+      expect(game.beforeYouBegin).toContain("54");
+      expect(game.setupHeading).toBeTruthy();
+      expect(game.setupSteps).toHaveLength(8);
+      expect(game.exploreHeading).toBeTruthy();
       expect(game.steps).toHaveLength(8);
       expect(game.steps[0]?.title).toBe(firstGameStepByLanguage[language]);
       expect(game.preferVideo).toBeTruthy();
@@ -54,7 +59,11 @@ describe("cataloghi dei tutorial pubblici", () => {
       expect(web.preferVideo).toBeTruthy();
       expect(web.videoAvailable).toBeTruthy();
 
-      for (const step of [...game.steps, ...web.steps]) {
+      for (const step of [
+        ...(game.setupSteps ?? []),
+        ...game.steps,
+        ...web.steps,
+      ]) {
         expect(step.title).toBeTruthy();
         expect(step.body).toBeTruthy();
       }
