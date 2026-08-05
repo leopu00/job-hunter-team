@@ -7,6 +7,8 @@
  * (payload malformati, campi vuoti, testi smisurati).
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   sembraSpam,
   emailSubject,
@@ -16,7 +18,6 @@ import {
   neutralize,
   newTicket,
   parseReport,
-  replyToSicuro,
   MAX_STORY_CHARS,
 } from "../../../web/lib/feedback-report";
 
@@ -28,16 +29,19 @@ const VALID = {
   doing: "attivavo il team",
   happened: "la schermata è rimasta ferma su collegamento",
   expected: "che partisse",
-  contact: "mario@rossi.it",
   diagnostics: "### App\n\n- versione: 0.2.1\n",
 };
+const FEEDBACK_ROUTE = readFileSync(
+  path.resolve(__dirname, "../../../web/app/api/feedback/route.ts"),
+  "utf8",
+);
 
 describe("parseReport — cosa entra", () => {
   it("accetta un payload completo", () => {
     const report = parseReport(VALID);
     expect(report).not.toBeNull();
     expect(report!.platform).toBe("macOS");
-    expect(report!.contact).toBe("mario@rossi.it");
+    expect(report!.client).toBe("godot-desktop");
   });
 
   it("rifiuta payload non oggetto", () => {
@@ -92,7 +96,7 @@ describe("neutralize — la issue non deve spammare estranei", () => {
   it("lascia stare le email, che non sono menzioni", () => {
     // La chiocciola di un'email non notifica nessuno su GitHub: qui serve
     // solo che il testo resti leggibile.
-    expect(neutralize("scritto da mario@rossi.it")).toContain("rossi.it");
+    expect(neutralize("scritto da mario@example.com")).toContain("example.com");
   });
 });
 
@@ -107,37 +111,38 @@ describe("issueBody — cosa esce", () => {
     expect(body).toContain("### Cosa mi aspettavo");
   });
 
-  it("NON contiene il contatto dell'utente", () => {
-    // Finirebbe su una pagina pubblica indicizzabile: il contatto viaggia
-    // sul canale privato, la issue dice solo che esiste.
-    expect(body).not.toContain("mario@rossi.it");
-    expect(body).toContain("contatto allegato");
+  it("NON contiene un contatto ricevuto da un client vecchio", () => {
+    const legacy = parseReport({ ...VALID, contact: "mario@example.com" })!;
+    const legacyBody = issueBody(legacy, "JHT-TEST");
+    // Finirebbe su una pagina pubblica indicizzabile: il server lo ignora.
+    expect(legacyBody).not.toContain("mario@example.com");
+    expect(legacyBody).toContain("non include contatti");
   });
 
-  it("dice esplicitamente quando non c'è modo di rispondere", () => {
-    const anon = issueBody(parseReport({ ...VALID, contact: "" })!, "JHT-X");
-    expect(anon).toContain("nessun contatto lasciato");
+  it("dichiara che non trasporta contatti", () => {
+    expect(body).toContain("non include contatti");
   });
 
-  it("redige le credenziali incollate nel racconto", () => {
+  it("redige credenziali e dati personali incollati nel racconto", () => {
     const token = "ghp" + "_ABCdefGHIjklMNOpqrSTUvwxYZ0123456789";
     const dirty = parseReport({
       ...VALID,
-      happened: `ho usato ${token} e non va`,
+      happened: `ho usato ${token}, scrivetemi a mario@example.com e non va`,
     })!;
     const out = issueBody(dirty, "JHT-X");
     expect(out).not.toContain(token);
     expect(out).toContain("[github-token]");
+    expect(out).not.toContain("mario@example.com");
   });
 
   it("redige i dati personali della diagnostica", () => {
     const dirty = parseReport({
       ...VALID,
-      diagnostics: "log in /Users/mariorossi/.jht · ssh 192.0.2.44",
+      diagnostics: "log in /Users/testuser/.jht · ssh 203.0.113.42",
     })!;
     const out = issueBody(dirty, "JHT-X");
-    expect(out).not.toContain("mariorossi");
-    expect(out).not.toContain("192.0.2.44");
+    expect(out).not.toContain("testuser");
+    expect(out).not.toContain("203.0.113.42");
   });
 
   it("piega la diagnostica in un blocco richiudibile", () => {
@@ -170,7 +175,7 @@ describe("titolo e riferimento", () => {
   });
 });
 
-describe("email — la segnalazione che arriva in casella", () => {
+describe("email — la segnalazione anonima che arriva in casella", () => {
   const report = parseReport(VALID)!;
 
   it("mette il riferimento nell'oggetto, per ritrovarla", () => {
@@ -183,15 +188,9 @@ describe("email — la segnalazione che arriva in casella", () => {
     expect(emailSubject(lungo, "JHT-9Z").length).toBeLessThanOrEqual(95);
   });
 
-  it("il contatto QUI c'e': la casella e' privata, la issue no", () => {
-    const testo = emailText(report, "JHT-9Z");
-    expect(testo).toContain("mario@rossi.it");
-    expect(testo).toContain("RISPONDI A");
-  });
-
-  it("dice chiaramente quando non si puo' rispondere", () => {
-    const anon = parseReport({ ...VALID, contact: "" })!;
-    expect(emailText(anon, "JHT-9Z")).toContain("nessun contatto lasciato");
+  it("non include il contatto ricevuto da un client vecchio", () => {
+    const legacy = parseReport({ ...VALID, contact: "mario@example.com" })!;
+    expect(emailText(legacy, "JHT-9Z")).not.toContain("mario@example.com");
   });
 
   it("redige comunque i segreti e i dati personali della diagnostica", () => {
@@ -199,38 +198,86 @@ describe("email — la segnalazione che arriva in casella", () => {
     const sporco = parseReport({
       ...VALID,
       happened: `ho incollato ${token}`,
-      diagnostics: "path /Users/mariorossi/.jht · ssh 192.0.2.44",
+      diagnostics: "path /Users/testuser/.jht · ssh 203.0.113.42",
     })!;
     const testo = emailText(sporco, "JHT-9Z");
     expect(testo).not.toContain(token);
-    expect(testo).not.toContain("mariorossi");
-    expect(testo).not.toContain("192.0.2.44");
+    expect(testo).not.toContain("testuser");
+    expect(testo).not.toContain("203.0.113.42");
   });
 });
 
-describe("replyToSicuro — header injection", () => {
-  it("accetta un indirizzo normale", () => {
-    expect(replyToSicuro(" mario@rossi.it ")).toBe("mario@rossi.it");
+describe("privacy del contratto", () => {
+  it("ignora contact e normalizza metadata non in allowlist", () => {
+    const report = parseReport({
+      ...VALID,
+      contact: "mario@example.com",
+      client: "Mario Laptop",
+      app_version: "Mario 1.0",
+      platform: "MarioOS",
+      locale: "mario",
+      kind: "Mario",
+    })!;
+    expect(JSON.stringify(report)).not.toContain("mario@example.com");
+    expect(report).toMatchObject({
+      client: "unknown",
+      appVersion: "unknown",
+      platform: "unknown",
+      locale: "it",
+      kind: "",
+    });
   });
 
-  it("rifiuta gli a-capo, che inietterebbero header nella mail", () => {
-    // Il contatto arriva da un campo libero di un client pubblico: un \r\n
-    // dentro il valore permetterebbe di aggiungere Bcc arbitrari.
-    expect(replyToSicuro("a@b.it\r\nBcc: vittima@x.it")).toBe("");
-    expect(replyToSicuro("a@b.it\nBcc: vittima@x.it")).toBe("");
+  it("non ha alcun ramo di delivery che reintroduce contact", () => {
+    expect(FEEDBACK_ROUTE).not.toContain("reply_to");
+    expect(FEEDBACK_ROUTE).not.toMatch(/\bcontact\s*:/);
+    expect(FEEDBACK_ROUTE).toContain("redact(");
   });
 
-  it("rifiuta le forme che non sono un indirizzo", () => {
-    for (const brutto of [
-      "",
-      "non-una-mail",
-      "a@b",
-      "<a@b.it>",
-      "a b@c.it",
-      "a@b.it, c@d.it",
-    ]) {
-      expect(replyToSicuro(brutto)).toBe("");
-    }
+  it("esclude le sonde honeypot prima del rate limit", () => {
+    expect(FEEDBACK_ROUTE.indexOf("if (sembraSpam(parsed))")).toBeLessThan(
+      FEEDBACK_ROUTE.indexOf("const rl = await checkRateLimit"),
+    );
+  });
+
+  it("conserva soltanto le categorie web previste", () => {
+    const report = parseReport({
+      ...VALID,
+      kind: "supporto",
+      platform: "web",
+    })!;
+    expect(report).toMatchObject({ kind: "supporto", platform: "Web" });
+  });
+
+  it("redige anche la diagnostica di un client non aggiornato", () => {
+    const report = parseReport({
+      ...VALID,
+      diagnostics: "profilo /Users/testuser/CV.pdf, mail mario@example.com",
+    })!;
+    expect(report.diagnostics).not.toContain("testuser");
+    expect(report.diagnostics).not.toContain("mario@example.com");
+  });
+
+  it("non inoltra il nome che un vecchio modulo pubblico metteva in doing", () => {
+    const report = parseReport({
+      ...VALID,
+      client: "web-contact",
+      doing: "Modulo di contatto — Mario Rossi",
+      contact: "mario@example.com",
+    })!;
+    const delivered = `${emailText(report, "JHT-9Z")}\n${issueBody(report, "JHT-9Z")}`;
+    expect(report.doing).toBe("Modulo di contatto web");
+    expect(delivered).not.toContain("Mario Rossi");
+    expect(delivered).not.toContain("mario@example.com");
+  });
+
+  it("conserva il solo contesto anonimo che il modulo pubblico mostra", () => {
+    const report = parseReport({
+      ...VALID,
+      client: "web-contact",
+      doing: "Public web report: /contact",
+    })!;
+    expect(report.doing).toBe("Public web report: /contact");
   });
 });
 
