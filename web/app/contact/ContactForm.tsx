@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { feedbackDeliveryOutcome } from "@/lib/feedback-delivery";
 
 /**
  * Segnalazione tecnica pubblica, intenzionalmente separata dai contatti via
@@ -92,21 +93,25 @@ export default function ContactForm({
       const data = (await res.json().catch(() => null)) as {
         ticket?: unknown;
       } | null;
-      if (res.status === 429) {
+      const outcome = feedbackDeliveryOutcome(res, data?.ticket);
+      if (outcome.kind === "offline") {
+        setErrore(t.error_offline);
+        setStato("idle");
+        return;
+      }
+      if (outcome.kind === "rate-limited") {
         setErrore(t.error_rate);
         setStato("idle");
         return;
       }
-      const reference =
-        data && typeof data.ticket === "string" ? data.ticket.trim() : "";
       // Nessuna conferma senza riferimento: è la prova leggibile che il
       // server ha consegnato la segnalazione ad almeno un canale di supporto.
-      if (!res.ok || !reference) {
+      if (outcome.kind === "not-delivered") {
         setErrore(t.error_send);
         setStato("idle");
         return;
       }
-      setTicket(reference);
+      setTicket(outcome.ticket);
       setStato("ok");
     } catch {
       setErrore(t.error_offline);

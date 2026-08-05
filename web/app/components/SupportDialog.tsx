@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import { useFocusTrap } from "@/app/components/use-focus-trap";
+import { feedbackDeliveryOutcome } from "@/lib/feedback-delivery";
 import type { Locale } from "@/i18n/config";
 
 /**
@@ -278,21 +279,25 @@ export default function SupportDialog({ onClose }: { onClose: () => void }) {
       const data = (await res.json().catch(() => null)) as {
         ticket?: unknown;
       } | null;
-      if (res.status === 429) {
+      const outcome = feedbackDeliveryOutcome(res, data?.ticket);
+      if (outcome.kind === "offline") {
+        setErrore(t.error_offline);
+        setStato("idle");
+        return;
+      }
+      if (outcome.kind === "rate-limited") {
         setErrore(t.error_rate);
         setStato("idle");
         return;
       }
-      const reference =
-        data && typeof data.ticket === "string" ? data.ticket.trim() : "";
       // Una risposta 2xx senza riferimento non attesta la consegna: il
       // contratto del canale restituisce il ticket solo dopo almeno un invio.
-      if (!res.ok || !reference) {
+      if (outcome.kind === "not-delivered") {
         setErrore(t.error_send);
         setStato("idle");
         return;
       }
-      setTicket(reference);
+      setTicket(outcome.ticket);
       setStato("ok");
     } catch {
       setErrore(t.error_offline);

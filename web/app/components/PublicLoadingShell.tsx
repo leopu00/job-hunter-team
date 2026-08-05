@@ -11,7 +11,7 @@ export function PublicLoadingShell({ locale }: { locale: Locale }) {
       aria-live="polite"
       aria-busy="true"
       aria-label={copy.status}
-      className="relative isolate flex min-h-screen flex-col overflow-hidden px-5 py-7 sm:px-8 sm:py-10"
+      className="public-loading-shell relative isolate flex min-h-screen flex-col overflow-hidden px-5 py-7 sm:px-8 sm:py-10"
       style={{ minHeight: "calc(100vh / var(--zoom, 1))" }}
     >
       <div

@@ -271,6 +271,33 @@ test.describe("pagina pubblica /contact", () => {
     );
   });
 
+  test("503: non scambia un canale indisponibile per offline", async ({
+    page,
+  }) => {
+    await apriModulo(page);
+    await page.route("**/api/feedback", (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false }),
+      }),
+    );
+    await page
+      .locator("#c-msg")
+      .fill("Segnalazione di prova per un canale temporaneamente indisponibile.");
+    await page
+      .getByRole("button", { name: /invia|send|enviar|envoyer|senden|küldés/i })
+      .click();
+
+    const alert = page.locator("form").getByRole("alert");
+    await expect(alert).toHaveText(
+      /non.{0,20}inviat|not sent|no se ha enviado|pas envoyé|nicht gesendet|nem lett elküldve|não foi enviada/i,
+    );
+    await expect(alert).not.toHaveText(
+      /offline|connessione|connection|niente|nothing|nada|rien/i,
+    );
+  });
+
   test("invia solo il contesto dichiarato e conferma con il ticket", async ({
     page,
   }) => {
