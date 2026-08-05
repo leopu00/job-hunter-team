@@ -14,10 +14,11 @@ moves through the team, and inspect a result before you decide what to do.
 This path starts at the website download and ends when the team is active; it
 does not assume that the desktop app or Docker is already configured. Allow
 time before you start. In an observed Linux + Docker end-to-end run, the time
-from double-clicking the downloaded app to the first onboarding panel was
-**32 minutes 58 seconds**. The full route had already exceeded **54 minutes**
-before provider login. Hardware, download speed, and Docker setup change the
-result, but this is not a five-minute task.
+from double-clicking the downloaded app to completing onboarding and reaching
+the Docker setup panel was **32 minutes 58 seconds**. That observed run then
+reached a provider-authorization block at **54 minutes 40 seconds**
+(`T0 + 54:40`). Hardware, download speed, and Docker setup change the result,
+but this is not a five-minute task.
 
 ### Set up the team
 
@@ -31,8 +32,10 @@ result, but this is not a five-minute task.
    `job-hunter-team.x86_64`. Windows and Linux can display a platform warning:
    continue only when the download came from the official site or its linked
    release.
-3. **Enter the office.** Start from the title screen, add your name if you
-   want, and enter the office. It is explorable before setup: its preview
+3. **Enter the office.** On first launch, choose and confirm the interface
+   language before the title screen: confirming a choice is required, English
+   is preselected, and the app saves it for later openings. Then add your name
+   if you want and enter the office. It is explorable before setup: its preview
    conversations and example positions do not start a live team or use a
    provider.
 4. **Open the setup checklist.** Select **Activate team**. Choose a local

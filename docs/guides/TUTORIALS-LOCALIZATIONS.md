@@ -19,9 +19,10 @@ fare.
 Questo percorso parte dal download sul sito e termina con il team attivo: non
 presuppone che l'app desktop o Docker siano già configurati. Prevedi tempo
 prima di iniziare. In una prova end-to-end Linux + Docker misurata, dal doppio
-clic sull'app scaricata al primo pannello di onboarding sono trascorsi **32
-minuti e 58 secondi**. Il percorso completo aveva già superato **54 minuti**
-prima dell'accesso al provider. Hardware, velocità di download e Docker fanno
+clic sull'app scaricata al completamento dell'onboarding e al pannello Docker
+post-onboarding sono trascorsi **32 minuti e 58 secondi**. La prova misurata
+ha poi raggiunto un blocco durante l'autorizzazione del provider a **54 minuti
+e 40 secondi** (`T0 + 54:40`). Hardware, velocità di download e Docker fanno
 variare il risultato, ma non è un'operazione da cinque minuti.
 
 #### Configura il team
@@ -36,9 +37,12 @@ variare il risultato, ma non è un'operazione da cinque minuti.
    `job-hunter-team.x86_64`. Windows e Linux possono mostrare un avviso:
    prosegui solo se il download viene dal sito ufficiale o dalla release
    collegata.
-3. **Entra nell'ufficio.** Dalla schermata iniziale inserisci il nome se vuoi
-   ed entra nell'ufficio. Puoi esplorarlo prima del setup: conversazioni e
-   posizioni di esempio non avviano un team dal vivo né usano un provider.
+3. **Entra nell'ufficio.** Al primo avvio, scegli e conferma la lingua
+   dell'interfaccia prima della schermata iniziale: devi confermare la scelta,
+   English è preselezionato e l'app la salva per le aperture successive. Poi
+   inserisci il nome se vuoi ed entra nell'ufficio. Puoi esplorarlo prima del
+   setup: conversazioni e posizioni di esempio non avviano un team dal vivo né
+   usano un provider.
 4. **Apri la checklist.** Seleziona **Attiva team**. Scegli un runtime locale o
    collega una VPS. Il runtime locale richiede Docker; su Windows Docker
    Desktop può richiedere consenso e primo avvio.
@@ -189,10 +193,11 @@ Este recorrido comienza con la descarga del sitio y termina con el equipo
 activo; no presupone que la aplicación de escritorio ni Docker estén
 configurados. Reserva tiempo antes de empezar. En una ejecución end-to-end
 medida con Linux + Docker, desde el doble clic en la aplicación descargada
-hasta el primer panel de onboarding transcurrieron **32 minutos y 58
-segundos**. El recorrido completo ya había superado **54 minutos** antes del
-inicio de sesión con el proveedor. El hardware, la descarga y Docker cambian
-el resultado, pero no es una tarea de cinco minutos.
+hasta completar el onboarding y llegar al panel de configuración de Docker
+transcurrieron **32 minutos y 58 segundos**. La ejecución medida llegó después
+a un bloqueo de autorización del proveedor a los **54 minutos y 40 segundos**
+(`T0 + 54:40`). El hardware, la descarga y Docker cambian el resultado, pero
+no es una tarea de cinco minutos.
 
 #### Configura el equipo
 
@@ -205,10 +210,12 @@ el resultado, pero no es una tarea de cinco minutos.
    aplicación; en Linux extrae `job-hunter-team-linux-x64.tar.gz` y ejecuta
    `job-hunter-team.x86_64`. Windows y Linux pueden mostrar un aviso: continúa
    solo si descargaste desde el sitio oficial o desde la versión enlazada.
-3. **Entra en la oficina.** Desde la pantalla inicial añade tu nombre si
-   quieres y entra en la oficina. Puedes explorarla antes de configurarla: las
-   conversaciones y posiciones de ejemplo no inician un equipo real ni usan un
-   proveedor.
+3. **Entra en la oficina.** En el primer inicio, elige y confirma el idioma de
+   la interfaz antes de la pantalla inicial: debes confirmar la elección,
+   English está preseleccionado y la aplicación la guarda para las siguientes
+   aperturas. Después añade tu nombre si quieres y entra en la oficina. Puedes
+   explorarla antes de configurarla: las conversaciones y posiciones de ejemplo
+   no inician un equipo real ni usan un proveedor.
 4. **Abre la lista de configuración.** Selecciona **Activar equipo**. Elige un
    runtime local o conecta una VPS. El runtime local necesita Docker; en
    Windows Docker Desktop puede requerir consentimiento y su primer inicio.
@@ -363,10 +370,11 @@ Ce parcours commence par le téléchargement sur le site et se termine avec
 l'équipe active : il ne suppose pas que l'application de bureau ou Docker sont
 déjà configurés. Prévoyez du temps avant de commencer. Lors d'un parcours
 end-to-end Linux + Docker mesuré, **32 minutes et 58 secondes** se sont
-écoulées entre le double-clic sur l'application téléchargée et le premier
-panneau d'onboarding. Le parcours complet avait déjà dépassé **54 minutes**
-avant la connexion au fournisseur. Le matériel, le téléchargement et Docker
-font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.
+écoulées entre le double-clic sur l'application téléchargée, la fin de
+l'onboarding et l'arrivée au panneau de configuration Docker. Ce parcours
+mesuré a ensuite atteint un blocage d'autorisation du fournisseur à **54
+minutes et 40 secondes** (`T0 + 54:40`). Le matériel, le téléchargement et
+Docker font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.
 
 #### Configurez l'équipe
 
@@ -381,10 +389,13 @@ font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.
    `job-hunter-team.x86_64`. Windows et Linux peuvent afficher un avertissement
    : continuez uniquement si le téléchargement vient du site officiel ou de la
    version liée.
-3. **Entrez dans le bureau.** Depuis l'écran de départ, ajoutez votre nom si
-   vous le souhaitez puis entrez dans le bureau. Vous pouvez l'explorer avant
-   la configuration : les conversations et positions d'exemple ne lancent pas
-   une équipe en direct et n'utilisent pas de fournisseur.
+3. **Entrez dans le bureau.** Lors du premier lancement, choisissez et
+   confirmez la langue de l'interface avant l'écran de départ : vous devez
+   confirmer ce choix, English est présélectionné et l'application le mémorise
+   pour les ouvertures suivantes. Ajoutez ensuite votre nom si vous le souhaitez
+   puis entrez dans le bureau. Vous pouvez l'explorer avant la configuration :
+   les conversations et positions d'exemple ne lancent pas une équipe en direct
+   et n'utilisent pas de fournisseur.
 4. **Ouvrez la liste de configuration.** Sélectionnez **Activer l'équipe**.
    Choisissez un runtime local ou connectez un VPS. Le runtime local nécessite
    Docker ; sous Windows, Docker Desktop peut demander son consentement et son
@@ -543,10 +554,11 @@ was als Nächstes geschieht.
 Dieser Weg beginnt mit dem Download auf der Website und endet mit dem aktiven
 Team; er setzt weder eine eingerichtete Desktop-App noch Docker voraus. Plane
 vorher Zeit ein. In einem gemessenen Linux- und Docker-End-to-End-Lauf lagen
-zwischen dem Doppelklick auf die heruntergeladene App und dem ersten
-Onboarding-Panel **32 Minuten und 58 Sekunden**. Der vollständige Weg hatte
-vor der Provider-Anmeldung bereits **54 Minuten** überschritten. Hardware,
-Download und Docker verändern das Ergebnis, aber dies ist keine
+zwischen dem Doppelklick auf die heruntergeladene App, dem Abschluss des
+Onboardings und dem Erreichen des Docker-Einrichtungspanels **32 Minuten und
+58 Sekunden**. Der gemessene Lauf erreichte dann nach **54 Minuten und 40
+Sekunden** (`T0 + 54:40`) eine Blockierung bei der Provider-Autorisierung.
+Hardware, Download und Docker verändern das Ergebnis, aber dies ist keine
 Fünf-Minuten-Aufgabe.
 
 #### Richte das Team ein
@@ -561,10 +573,12 @@ Fünf-Minuten-Aufgabe.
    `job-hunter-team.x86_64`. Windows und Linux können eine Warnung anzeigen:
    fahre nur fort, wenn der Download von der offiziellen Website oder der
    verlinkten Version stammt.
-3. **Betritt das Büro.** Gib auf dem Startbildschirm deinen Namen ein, wenn du
-   möchtest, und betritt das Büro. Du kannst es vor der Einrichtung erkunden:
-   Beispielgespräche und -positionen starten kein Live-Team und nutzen keinen
-   Provider.
+3. **Betritt das Büro.** Wähle und bestätige beim ersten Start vor dem
+   Startbildschirm die Oberflächensprache: Du musst die Auswahl bestätigen,
+   English ist vorausgewählt und die App speichert sie für spätere Starts. Gib
+   danach deinen Namen ein, wenn du möchtest, und betritt das Büro. Du kannst
+   es vor der Einrichtung erkunden: Beispielgespräche und -positionen starten
+   kein Live-Team und nutzen keinen Provider.
 4. **Öffne die Einrichtungs-Checkliste.** Wähle **Team aktivieren**. Wähle eine
    lokale Runtime oder verbinde einen VPS. Die lokale Runtime benötigt Docker;
    unter Windows kann Docker Desktop Zustimmung und seinen ersten Start
@@ -726,10 +740,11 @@ Este percurso começa no download do site e termina com a equipa ativa; não
 pressupõe que a aplicação de ambiente de trabalho ou o Docker já estejam
 configurados. Reserva tempo antes de começar. Numa execução end-to-end medida
 em Linux + Docker, passaram **32 minutos e 58 segundos** entre o duplo clique
-na aplicação descarregada e o primeiro painel de onboarding. O percurso
-completo já tinha ultrapassado **54 minutos** antes do início de sessão no
-fornecedor. O hardware, o download e o Docker alteram o resultado, mas esta
-não é uma tarefa de cinco minutos.
+na aplicação descarregada, a conclusão do onboarding e a chegada ao painel de
+configuração do Docker. A execução medida chegou depois a um bloqueio da
+autorização do fornecedor aos **54 minutos e 40 segundos** (`T0 + 54:40`). O
+hardware, o download e o Docker alteram o resultado, mas esta não é uma tarefa
+de cinco minutos.
 
 #### Configura a equipa
 
@@ -742,9 +757,12 @@ não é uma tarefa de cinco minutos.
    aplicação; no Linux extrai `job-hunter-team-linux-x64.tar.gz` e executa
    `job-hunter-team.x86_64`. Windows e Linux podem mostrar um aviso: avança
    apenas se o download vier do site oficial ou da versão ligada.
-3. **Entra no escritório.** No ecrã inicial, acrescenta o teu nome se quiseres
-   e entra no escritório. Podes explorá-lo antes da configuração: as conversas
-   e posições de exemplo não iniciam uma equipa real nem usam um fornecedor.
+3. **Entra no escritório.** No primeiro arranque, escolhe e confirma o idioma
+   da interface antes do ecrã inicial: tens de confirmar a escolha, English
+   vem pré-selecionado e a aplicação guarda-a para aberturas posteriores.
+   Depois acrescenta o teu nome se quiseres e entra no escritório. Podes
+   explorá-lo antes da configuração: as conversas e posições de exemplo não
+   iniciam uma equipa real nem usam um fornecedor.
 4. **Abre a lista de configuração.** Seleciona **Ativar equipa**. Escolhe um
    runtime local ou liga uma VPS. O runtime local precisa de Docker; no Windows
    o Docker Desktop pode exigir consentimento e o primeiro arranque.
@@ -898,9 +916,10 @@ legyen a következő lépés.
 Ez az útvonal a webhelyről való letöltéssel kezdődik, és az aktív csapatnál
 ér véget; nem feltételezi, hogy az asztali alkalmazás vagy a Docker már be van
 állítva. Kezdés előtt szánj rá időt. Egy mért Linux + Docker end-to-end futásban
-a letöltött alkalmazásra kattintástól az első onboarding panelig **32 perc 58
-másodperc** telt el. A teljes útvonal a szolgáltatói bejelentkezés előtt már
-meghaladta az **54 percet**. A hardver, a letöltés és a Docker módosítja az
+a letöltött alkalmazásra kattintástól az onboarding befejezéséig és a Docker
+beállítási panel eléréséig **32 perc 58 másodperc** telt el. A mért futás
+ezután a szolgáltatói engedélyezésnél **54 perc 40 másodpercnél**
+(`T0 + 54:40`) blokkolódott. A hardver, a letöltés és a Docker módosítja az
 eredményt, de ez nem ötperces feladat.
 
 #### Állítsd be a csapatot
@@ -916,10 +935,12 @@ eredményt, de ez nem ötperces feladat.
    `job-hunter-team.x86_64` fájlt. Windows és Linux figyelmeztetést jeleníthet
    meg: csak akkor folytasd, ha a letöltés a hivatalos oldalról vagy a hivatkozott
    kiadásból származik.
-3. **Lépj be az irodába.** A kezdőképernyőn add meg a nevedet, ha szeretnéd,
-   majd lépj be az irodába. A beállítás előtt is felfedezheted: a példa
-   beszélgetések és pozíciók nem indítanak élő csapatot és nem használnak
-   szolgáltatót.
+3. **Lépj be az irodába.** Első indításkor a kezdőképernyő előtt válaszd ki és
+   erősítsd meg a felület nyelvét: meg kell erősítened a választást, az English
+   van előre kijelölve, és az alkalmazás a következő megnyitásokhoz elmenti.
+   Ezután add meg a nevedet, ha szeretnéd, majd lépj be az irodába. A beállítás
+   előtt is felfedezheted: a példa beszélgetések és pozíciók nem indítanak élő
+   csapatot és nem használnak szolgáltatót.
 4. **Nyisd meg a beállítási ellenőrzőlistát.** Válaszd a **Csapat aktiválása**
    lehetőséget. Válassz helyi runtime-ot vagy kapcsolj VPS-t. A helyi runtime
    Docker-t igényel; Windowson a Docker Desktop hozzájárulást és első indítást
