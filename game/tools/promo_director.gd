@@ -51,6 +51,12 @@ extends Node
 ##   JHT_PROMO=v5-reveal             raw DEV portrait: la camera arretra
 ##                                   dall'Assistente e rivela tre AgentNPC in
 ##                                   movimento reale, senza UI o balloon.
+##   JHT_PROMO=v6-dev-reveal         take V6 portrait: 1 s di maniglia, 10 s
+##                                   di reveal con uscita a destra, 1 s di
+##                                   maniglia finale.
+##   JHT_PROMO=v6-dev-work           take V6 portrait: 1 s di maniglia, 6 s
+##                                   di lavoro vivo con raccordo verso destra,
+##                                   1 s di maniglia finale.
 ## I viaggi fisici riusano le tappe VERE della pipeline (stampante,
 ## pile_take/pile_drop, scaffale output) ma con PAUSE FISSE: il ciak deve
 ## essere ripetibile, non un lancio di dadi. Il HUD «JHT TEAM» (numeri
@@ -283,6 +289,27 @@ const V5_REVEAL_DESTINATIONS := {
 	"assistente": Vector2(1790.0, 780.0),
 }
 
+## V6 — i due raw sono tagliati esattamente sulla misura editoriale. Le
+## maniglie vengono marcate nello stdout: il bootstrap precedente a HANDLE_IN
+## non fa parte del take e non deve mai essere consegnato (puo' contenere UI
+## non ancora ripulita). Il primo raw chiude con uno Scout che esce a destra;
+## il secondo riparte con lo stesso agente e la stessa direzione.
+const V6_HANDLE_SECONDS := 1.0
+const V6_REVEAL_PROGRAM_SECONDS := 10.0
+const V6_WORK_PROGRAM_SECONDS := 6.0
+const V6_REVEAL_CLOSE_CAMERA := Vector2(1570.0, 760.0)
+const V6_REVEAL_CLOSE_ZOOM := 1.65
+const V6_REVEAL_WIDE_CAMERA := Vector2(1650.0, 1020.0)
+const V6_REVEAL_WIDE_ZOOM := 1.2
+const V6_REVEAL_EXIT := Vector2(2300.0, 780.0)
+const V6_REVEAL_EXIT_DELAY := 0.5
+const V6_WORK_CAMERA_FROM := Vector2(1450.0, 1000.0)
+const V6_WORK_CAMERA_TO := Vector2(1950.0, 1000.0)
+const V6_WORK_ZOOM := 1.85
+const V6_WORK_ZOOM_TO := 2.15
+const V6_WORK_ENTRY := Vector2(1250.0, 780.0)
+const V6_WORK_EXIT := Vector2(2400.0, 780.0)
+
 ## Corridoio centrale libero, gia' percorso dal loop QA delle quattro
 ## direzioni. Le tre colonne producono una composizione cortese ma non
 ## teatrale: un passo in avanti reale, poi la posa `down` frontale.
@@ -341,7 +368,8 @@ const TRACK_LERP := 0.08
 func _ready() -> void:
 	_office = get_parent()
 	var mode := OS.get_environment("JHT_PROMO")
-	_v3_active = mode in ["team-welcome", "assistant-intro", "assistant-walk-right", "v5-reveal"]
+	_v3_active = mode in ["team-welcome", "assistant-intro", "assistant-walk-right",
+			"v5-reveal", "v6-dev-reveal", "v6-dev-work"]
 	# Movie Maker registra dal bootstrap. Sul profilo live teniamo chiusa una
 	# semplice tendina nera finche' il data-plane non e' pronto: nel raw non
 	# entra mai un frame intermedio col warning, che resta comunque intatto e
@@ -375,6 +403,10 @@ func _ready() -> void:
 			_assistant_walk_right_clip.call_deferred()
 		"v5-reveal":
 			_v5_reveal_clip.call_deferred()
+		"v6-dev-reveal":
+			_v6_dev_reveal_clip.call_deferred()
+		"v6-dev-work":
+			_v6_dev_work_clip.call_deferred()
 
 
 func _process(_delta: float) -> void:
@@ -809,6 +841,98 @@ func _v5_reveal_clip() -> void:
 	_v5_pass_and_quit("v5-reveal", cam)
 
 
+## Dieci secondi programmati, circondati da una maniglia pulita per lato.
+## Lo Scout attraversa davvero la NavGrid e completa l'uscita a destra negli
+## ultimi secondi del programma; camera e altri due AgentNPC si muovono in
+## parallelo, quindi il reveal non puo' degradare in un pan su immagine ferma.
+func _v6_dev_reveal_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	var cast: Array[AgentNPC] = []
+	for ref in V5_REVEAL_STAGES:
+		var agent := _find(str(ref))
+		if agent == null:
+			push_error("promo V6 reveal: agente assente '%s'" % ref)
+			get_tree().quit(17)
+			return
+		_v3_stage(agent, V5_REVEAL_STAGES[ref])
+		cast.append(agent)
+	var scout: AgentNPC = _find("scout-1")
+	var analyst: AgentNPC = _find("analista-1")
+	var assistant: AgentNPC = _find("assistente")
+	var cam := _mount_camera(V6_REVEAL_CLOSE_CAMERA, V6_REVEAL_CLOSE_ZOOM)
+	# Lascia due frame per applicare i queue_free del cleanup prima della
+	# prima maniglia dichiarata nel log.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_v6_marker("v6-dev-reveal", "handle_in")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_force_legs(scout, [
+		scout._leg_to(Vector2(1450.0, 780.0), "walk", V6_REVEAL_EXIT_DELAY, "idle"),
+		scout._leg_to(V6_REVEAL_EXIT, "carry", V3_STILL_HOLD, "idle"),
+	])
+	_force_legs(analyst, [
+		analyst._leg_to(Vector2(1570.0, 780.0), "walk", 0.0, "idle"),
+		analyst._leg_to(Vector2(1700.0, 780.0), "carry", V3_STILL_HOLD, "idle"),
+	])
+	_force_legs(assistant, [
+		assistant._leg_to(Vector2(1690.0, 780.0), "walk", 0.0, "idle"),
+		assistant._leg_to(Vector2(1790.0, 780.0), "carry", V3_STILL_HOLD, "idle"),
+	])
+	var reveal := create_tween().set_parallel(true) \
+			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	reveal.tween_property(cam, "position", V6_REVEAL_WIDE_CAMERA, 8.2)
+	reveal.tween_property(cam, "zoom", Vector2(V6_REVEAL_WIDE_ZOOM,
+			V6_REVEAL_WIDE_ZOOM), 8.2)
+	_v3_animate_background(cast)
+	_v6_marker("v6-dev-reveal", "program_start")
+	await get_tree().create_timer(V6_REVEAL_PROGRAM_SECONDS).timeout
+	_v6_marker("v6-dev-reveal", "program_end")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v6-dev-reveal", "handle_out")
+	_v6_pass_and_quit("v6-dev-reveal", cam)
+
+
+## Sei secondi programmati sul reparto Scorer gia' al lavoro. Lo Scout
+## riprende la corsa verso destra del reveal precedente; gli agenti alle
+## scrivanie reagiscono al lavoro mentre la camera compie un drift reale.
+func _v6_dev_work_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	var scout: AgentNPC = _find("scout-1")
+	if scout == null:
+		push_error("promo V6 work: Scout assente")
+		get_tree().quit(18)
+		return
+	_v3_stage(scout, V6_WORK_ENTRY)
+	var cam := _mount_camera(V6_WORK_CAMERA_FROM, V6_WORK_ZOOM)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_v6_marker("v6-dev-work", "handle_in")
+	_force_legs(scout, [scout._leg_to(V6_WORK_EXIT, "carry",
+			V3_STILL_HOLD, "idle")])
+	var drift := create_tween().set_parallel(true) \
+			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	var full_take_seconds := V6_WORK_PROGRAM_SECONDS + 2.0 * V6_HANDLE_SECONDS
+	drift.tween_property(cam, "position", V6_WORK_CAMERA_TO, full_take_seconds)
+	drift.tween_property(cam, "zoom", Vector2(V6_WORK_ZOOM_TO, V6_WORK_ZOOM_TO),
+			full_take_seconds)
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	for ref in ["scorer-1", "scorer-2", "coordinatore"]:
+		var worker := _find(ref)
+		if worker != null:
+			_pulse_at(0.8 + 1.3 * float(["scorer-1", "scorer-2", "coordinatore"].find(ref)),
+					worker)
+	_v6_marker("v6-dev-work", "program_start")
+	await get_tree().create_timer(V6_WORK_PROGRAM_SECONDS).timeout
+	_v6_marker("v6-dev-work", "program_end")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v6-dev-work", "handle_out")
+	_v6_pass_and_quit("v6-dev-work", cam)
+
+
 ## Blocca i viaggi casuali: la vita sullo sfondo e' data da pulsazioni di
 ## lavoro reali (rig o composito desk), non da agenti che invadono il quadro
 ## in momenti non deterministici. Rimuove anche tutti gli overlay promo.
@@ -881,6 +1005,49 @@ func _v5_pass_and_quit(clip: String, cam: Camera2D) -> void:
 			get_tree().quit(16)
 			return
 	print("PROMO-V5 PASS %s" % clip)
+	get_tree().quit(0)
+
+
+func _v6_marker(clip: String, event: String) -> void:
+	var frame := Engine.get_process_frames()
+	print("PROMO-V6-MARKER\t%s\t%s\t%d\t%.3f" % [
+		clip, event, frame, float(frame) / 30.0])
+
+
+## Fail closed: il take e' valido solo nel viewport portrait nativo e dopo
+## che ogni superficie di servizio e' stata rimossa. Questo controllo gira
+## prima dell'EOS e rende impossibile promuovere per sbaglio un 16:9.
+func _v6_pass_and_quit(clip: String, cam: Camera2D) -> void:
+	var failures: Array[String] = []
+	if cam == null:
+		failures.append("camera assente")
+	# `get_visible_rect()` e' espresso nello spazio logico dopo lo stretch
+	# `expand`; `Window.size` puo' invece essere cambiata dal profilo quiet.
+	# Movie Maker prende la geometria dai due valori base del progetto, gli
+	# stessi confermati poi sui pixel del probe e da ffprobe sul raw.
+	var movie_size := Vector2i(
+			int(ProjectSettings.get_setting("display/window/size/viewport_width")),
+			int(ProjectSettings.get_setting("display/window/size/viewport_height")))
+	if movie_size != Vector2i(1080, 1920):
+		failures.append("movie viewport non 1080x1920: %s" % movie_size)
+	if UIStrings.lang != "en":
+		failures.append("lingua non inglese: %s" % UIStrings.lang)
+	if _office.find_child("GameSidebar", true, false) != null:
+		failures.append("sidebar visibile")
+	for agent in _office.agents:
+		if agent.state_tag != null:
+			failures.append("state tag %s" % agent.slug)
+		if agent.quest_marker != null and agent.quest_marker.visible:
+			failures.append("marker %s" % agent.slug)
+	for dressing in _office._stage.get_children():
+		if dressing is DepartmentDressing and dressing.visible:
+			failures.append("targa reparto visibile")
+	if not failures.is_empty():
+		push_error("promo V6 %s: %s" % [clip, failures])
+		get_tree().quit(19)
+		return
+	print("PROMO-V6 PASS %s movie_viewport=%s lang=%s" % [clip,
+			movie_size, UIStrings.lang])
 	get_tree().quit(0)
 
 
@@ -1169,7 +1336,7 @@ func _dress_promo_set() -> void:
 	# La targa della mensola output («CV PRONTI») non è localizzata: per il
 	# ciak inglese la si copre con una targa gemella in inglese, contatore
 	# vero incluso — il Critico della Scena 4 consegna proprio lì.
-	if OutputShelf.instance:
+	if OutputShelf.instance and not OS.get_environment("JHT_PROMO").begins_with("v6-"):
 		var dub := ShelfDub.new()
 		dub.position = OutputShelf.instance.position
 		OutputShelf.instance.get_parent().add_child(dub)
