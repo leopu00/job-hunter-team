@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SUPPORTED_LANGS } from "../../../web/app/components/landing/LandingI18n";
 import {
@@ -349,6 +351,43 @@ describe("cataloghi dei tutorial pubblici", () => {
 
       for (const status of statuses.slice(1)) {
         expect(game.steps[5]?.body).toContain(status);
+      }
+    }
+  });
+
+  it("collega screenshot verificabili ai primi due passi dell'ufficio in tutte le lingue", () => {
+    const screenshotPaths = [
+      "/tutorials/game/office-overview.png",
+      "/tutorials/game/departments.png",
+    ];
+
+    for (const language of SUPPORTED_LANGS) {
+      const steps = TUTORIAL_GUIDES[language].game.steps;
+      const screenshots = steps.slice(0, 2).map((step) => step.image);
+
+      expect(screenshots).toHaveLength(2);
+      expect(screenshots).not.toContain(undefined);
+      expect(screenshots.map((image) => image?.src)).toEqual(screenshotPaths);
+      expect(steps.slice(2).every((step) => step.image === undefined)).toBe(
+        true,
+      );
+
+      for (const image of screenshots) {
+        expect(image).toBeDefined();
+        expect(image.width).toBe(1600);
+        expect(image.height).toBe(900);
+        expect(image.alt).toBeTruthy();
+        expect(image.caption).toBeTruthy();
+        expect(
+          existsSync(
+            resolve(
+              import.meta.dirname,
+              "../../../web/public",
+              image.src.replace(/^\//, ""),
+            ),
+          ),
+          `${language}: asset ${image.src} assente`,
+        ).toBe(true);
       }
     }
   });

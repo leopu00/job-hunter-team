@@ -1,0 +1,42 @@
+{
+  "schema": "jht-motion-asset-v1",
+  "asset": "control-ellipsis",
+  "revision": "r01",
+  "status": "immutable-release",
+  "files": {
+    "svg": {
+      "path": "control-ellipsis-r01.svg",
+      "sha256": "2bebb3a8315c9176f0563f6a3f77633bfeba15ebf87249c2d3830110e13bd91b"
+    },
+    "png": {
+      "path": "control-ellipsis-r01.png",
+      "sha256": "77e6ae4aafa73d55685cfdd5dd9c5e78f926a1efe134ce0efabb12820a01e9e4"
+    }
+  },
+  "canvas": {"width": 1080, "height": 1920, "color_space": "sRGB"},
+  "alpha_mode": "straight-unpremultiplied",
+  "anchor": {"x": 0, "y": 0},
+  "pivot": {"x": 0.0, "y": 0.0},
+  "z_index": 30,
+  "safe_area": {"x": [108, 972], "y": [220, 1580]},
+  "timing": {
+    "global_start": 13.55,
+    "global_end": 14.1,
+    "enter_frames": 4,
+    "exit_frames": 4,
+    "hold": 0.28
+  },
+  "easing": {"in": "easeOutCubic", "out": "easeInQuad"},
+  "pulse": {
+    "frame_offsets": [0, 5, 10],
+    "order": "left-to-right",
+    "animation": "opacity-and-scale-only",
+    "bounce": false
+  },
+  "watermark_policy": "excluded",
+  "content_policy": "three pulse dots only; no text, panels, cards, icons, characters, CTA or watermark",
+  "editorial_source": {
+    "scaletta_commit": "1999890b4756",
+    "reference_cut_sha256_prefix": "ee8649536788"
+  }
+}

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="510" height="36" viewBox="0 0 510 36" role="img" aria-labelledby="title desc">
+  <title id="title">Preview watermark</title>
+  <desc id="desc">Mandatory non-final-footage watermark for production previews.</desc>
+  <text x="255" y="25" text-anchor="middle" fill="#F6F7F4" fill-opacity="0.88" font-family="JetBrains Mono, monospace" font-size="25" font-weight="800" letter-spacing="0.1">PREVIEW - NOT FINAL FOOTAGE</text>
+</svg>

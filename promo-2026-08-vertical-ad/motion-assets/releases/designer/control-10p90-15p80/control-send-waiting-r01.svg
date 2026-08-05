@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520" role="img" aria-labelledby="title desc">
+  <title id="title">Sent order and waiting state</title>
+  <desc id="desc">Isolated user message and waiting indicator for a declared motion collage, not a gameplay mockup.</desc>
+  <defs>
+    <filter id="shadow" x="-8%" y="-12%" width="116%" height="135%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#111116" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="8" y="8" width="904" height="504" rx="22" fill="#F6F7F4" stroke="#111116" stroke-width="2"/>
+    <rect x="34" y="44" width="58" height="6" rx="3" fill="#00E87A"/>
+    <text x="112" y="59" fill="#111116" font-family="JetBrains Mono" font-size="28" font-weight="800" letter-spacing="1.4">YOU / ORDER</text>
+    <rect x="718" y="30" width="168" height="54" rx="27" fill="#F6F7F4" stroke="#111116" stroke-width="2"/>
+    <rect x="718" y="76" width="168" height="8" fill="#00E87A"/>
+    <text x="802" y="68" text-anchor="middle" fill="#111116" font-family="JetBrains Mono" font-size="30" font-weight="800">SEND</text>
+    <path d="M62 112H844Q866 112 866 134V264Q866 286 844 286H110L62 320V286H54Q34 286 34 266V132Q34 112 54 112Z" fill="#FFFFFF" stroke="#111116" stroke-width="2"/>
+    <text x="76" y="190" fill="#111116" font-family="JetBrains Mono" font-size="58" font-weight="700">Show me the best</text>
+    <text x="76" y="254" fill="#111116" font-family="JetBrains Mono" font-size="58" font-weight="700">one first.</text>
+    <circle cx="54" cy="386" r="7" fill="#00E87A"/>
+    <circle cx="82" cy="386" r="7" fill="#00E87A" fill-opacity="0.62"/>
+    <circle cx="110" cy="386" r="7" fill="#00E87A" fill-opacity="0.28"/>
+    <text x="142" y="408" fill="#111116" font-family="JetBrains Mono" font-size="58" font-weight="600">waiting for</text>
+    <text x="142" y="474" fill="#111116" font-family="JetBrains Mono" font-size="58" font-weight="600">the reply…</text>
+  </g>
+</svg>

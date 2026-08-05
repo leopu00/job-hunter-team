@@ -64,6 +64,23 @@ test.describe("shell pubblico tutorial e trailer", () => {
     await expect(
       page.locator("#game").getByText("Meet the office"),
     ).toBeVisible();
+    const tutorialScreenshots = page.locator(
+      "#game [data-tutorial-step-image]",
+    );
+    await expect(tutorialScreenshots).toHaveCount(2);
+    await expect(
+      tutorialScreenshots
+        .first()
+        .getByRole("img", { name: "Overview of the native office" }),
+    ).toHaveAttribute("src", /office-overview\.png/);
+    await expect(
+      tutorialScreenshots
+        .nth(1)
+        .getByRole("img", { name: "A department work area" }),
+    ).toHaveAttribute("src", /departments\.png/);
+    await expect(tutorialScreenshots.first()).toContainText(
+      "The native office is the workspace",
+    );
     await expect(
       page.locator("#web").getByText("Start from the dashboard"),
     ).toBeVisible();
@@ -107,6 +124,34 @@ test.describe("shell pubblico tutorial e trailer", () => {
     expect(response?.status(), "/trailer non risponde").toBe(200);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     expect(await page.locator("[data-video-pending=trailer]").count()).toBe(1);
+    const musicCredit = page.locator('section[aria-label="Music credit"]');
+    await expect(musicCredit).toBeVisible();
+    expect(await musicCredit.locator(":scope > p").allTextContents()).toEqual([
+      "Covert Affair Kevin MacLeod (incompetech.com)",
+      "Licensed under Creative Commons: By Attribution 4.0",
+      "https://creativecommons.org/licenses/by/4.0/",
+      "Edited for timing and mixed with a CC0 cymbal-roll intro.",
+    ]);
+    await expect(
+      musicCredit.locator(
+        'a[href="https://creativecommons.org/licenses/by/4.0/"]',
+      ),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(() => {
+        const video = document.querySelector("[data-video-pending=trailer]");
+        const credit = document.querySelector(
+          'section[aria-label="Music credit"]',
+        );
+        return Boolean(
+          video &&
+          credit &&
+          video.compareDocumentPosition(credit) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        );
+      }),
+      "credit non montato sotto il video differito",
+    ).toBe(true);
     expect(await page.locator("video").count()).toBe(0);
     expect(mediaRequests, "media trailer richiesti prima di un click").toEqual(
       [],
