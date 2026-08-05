@@ -1,0 +1,102 @@
+{
+  "canvas": {
+    "width": 1080,
+    "height": 1920,
+    "alpha": true,
+    "fps_reference": 30
+  },
+  "safe_area": {
+    "x_min": 108,
+    "x_max": 972,
+    "y_min": 220,
+    "y_max": 1580
+  },
+  "font": {
+    "family": "JetBrains Mono",
+    "files": {
+      "Regular": "game/assets/fonts/JetBrainsMono-Regular.ttf",
+      "Medium": "game/assets/fonts/JetBrainsMono-Medium.ttf",
+      "Bold": "game/assets/fonts/JetBrainsMono-Bold.ttf",
+      "ExtraBold": "game/assets/fonts/JetBrainsMono-ExtraBold.ttf"
+    },
+    "minimum_size_px": 58
+  },
+  "colors": {
+    "void": "#060608",
+    "white": "#F0F0FA",
+    "base": "#B8B8D0",
+    "muted": "#7A7A96",
+    "border": "#2E2E3D",
+    "green": "#00E87A"
+  },
+  "band": {
+    "color": "#060608",
+    "opacity": 0.76,
+    "end_card_opacity": 0.8
+  },
+  "motion": {
+    "default_enter": {
+      "duration_frames": 5,
+      "opacity": [
+        0,
+        100
+      ],
+      "translate_y_px": [
+        18,
+        0
+      ],
+      "easing": "easeOutCubic"
+    },
+    "hook_enter": {
+      "duration_frames": 4,
+      "opacity": [
+        0,
+        100
+      ],
+      "translate_y_px": [
+        14,
+        0
+      ],
+      "easing": "easeOutCubic",
+      "note": "Fully readable by 00:00:00.133; meets the 0.2 s hook gate."
+    },
+    "default_exit": {
+      "duration_frames": 4,
+      "opacity": [
+        100,
+        0
+      ],
+      "translate_y_px": [
+        0,
+        -8
+      ],
+      "easing": "easeInQuad"
+    },
+    "verb_transition": "Straight cut or 3-frame opacity dissolve; no scale, bounce, glow, or glitch.",
+    "end_card": {
+      "start_seconds": 15.8,
+      "duration_seconds": 4.2,
+      "enter_frames": 8,
+      "hold_note": "Keep URL continuously readable for the full hold after entry."
+    }
+  },
+  "usage": {
+    "watermark": "Every numbered overlay already contains the watermark. Use 00_watermark only when the editor keeps one persistent global layer instead.",
+    "png": "Production-ready raster reference with the bundled repo font rendered exactly.",
+    "svg": "Editable source. Install/load JetBrains Mono before rendering.",
+    "safe_area_reference": "Guide only; never composite 99_safe_area_reference_DO_NOT_COMPOSITE into the video."
+  },
+  "overlays": [
+    "00_watermark",
+    "01_hook",
+    "02_reveal",
+    "03_find",
+    "04_check",
+    "05_score",
+    "06_tailor",
+    "07_review",
+    "08_user_control",
+    "09_end_card",
+    "99_safe_area_reference_DO_NOT_COMPOSITE"
+  ]
+}
