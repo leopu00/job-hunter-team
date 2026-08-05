@@ -162,8 +162,10 @@ func _ready() -> void:
 	# Critici va invece nello scaffale CV PRONTI accanto all'uscita.
 	PaperPile.inbox = {}
 	var handoff_to := {
-		"scout": "Analisi", "analisti": "Compatibilità", "scorer": "Candidature",
-		"scrittori": "Controllo qualità",
+		"scout": DepartmentDefs.display_name("analisti"),
+		"analisti": DepartmentDefs.display_name("scorer"),
+		"scorer": DepartmentDefs.display_name("scrittori"),
+		"scrittori": DepartmentDefs.display_name("critici"),
 	}
 	for dept_id in handoff_to:
 		var inbox_pos: Vector2 = DepartmentDefs.DEPARTMENTS[dept_id]["inbox"]

@@ -82,6 +82,19 @@ def _load_catalog(lang: str) -> dict:
 def t(key: str) -> str:
     """Lookup a translated string by key. Falls back to en, then to the key."""
     lang = _resolve_lang()
+    # T0-T1 launch copy is English-only in phase 1. Do not let an old
+    # JHT_LANG=it in host.env leak Italian into the recorded onboarding path.
+    if (
+        key.startswith(("host_setup.", "welcome.", "wizard.checks.", "wizard.cloud.",
+                        "wizard.step.", "wizard.provider.", "wizard.oauth.", "wizard.cli."))
+        or key in {
+            "wizard.welcome_subtitle", "wizard.aborted_prereqs",
+            "wizard.profile.intro", "wizard.team.starting",
+            "wizard.team.start_failed", "wizard.outro_done",
+            "wizard.outro_aborted", "wizard.start.ready", "wizard.start.done",
+        }
+    ):
+        lang = "en"
     cat = _load_catalog(lang)
     v = cat.get(key)
     if isinstance(v, str):

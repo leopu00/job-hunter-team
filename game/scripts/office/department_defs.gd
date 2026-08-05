@@ -33,8 +33,8 @@ const HANDOFF_SIZE := Vector2(190, 60)
 
 const DEPARTMENTS := {
 	"scout": {
-		"name": "Ricerca",
-		"tagline": "Cercano sul web opportunità per te",
+		"name": "Research",
+		"tagline": "Finds relevant opportunities for you.",
 		"color": Color("#00e87a"),
 		"zone": Rect2(320, 348, 880, 520),
 		# Tavolo Scout → Analisti: più vicino all'ologramma e appena più in
@@ -59,8 +59,8 @@ const DEPARTMENTS := {
 		],
 	},
 	"analisti": {
-		"name": "Analisi",
-		"tagline": "Studiano ogni opportunità nel dettaglio",
+		"name": "Analysis",
+		"tagline": "Turns listings into clear decisions.",
 		"color": Color("#4d9fff"),
 		"zone": Rect2(2232, 150, 848, 580),  # lab rientrato dal bordo est
 		# Più vicino alle scrivanie, ma spostato a destra del varco centrale:
@@ -82,8 +82,8 @@ const DEPARTMENTS := {
 		],
 	},
 	"scorer": {
-		"name": "Compatibilità",
-		"tagline": "Capiscono quanto ogni lavoro fa per te",
+		"name": "Compatibility",
+		"tagline": "Gauges how well each role fits you.",
 		"color": Color("#f5c518"),
 		"zone": Rect2(1140, 840, 1120, 640),
 		# Tavolo Scorer → Scrittori al centro esatto del nuovo tappeto. Gli
@@ -104,8 +104,8 @@ const DEPARTMENTS := {
 		],
 	},
 	"scrittori": {
-		"name": "Candidature",
-		"tagline": "Preparano CV e lettere su misura",
+		"name": "Applications",
+		"tagline": "Tailors each application to you and the role.",
 		"color": Color("#a855f7"),
 		"zone": Rect2(320, 1520, 860, 440),
 		# Tavolo Scrittori → Critici riportato verso il reparto Scrittori,
@@ -134,8 +134,8 @@ const DEPARTMENTS := {
 		],
 	},
 	"critici": {
-		"name": "Controllo qualità",
-		"tagline": "Rileggono tutto prima della consegna",
+		"name": "Quality check",
+		"tagline": "Reviews every detail before you decide.",
 		"color": Color("#ff4560"),
 		"zone": Rect2(2075, 1520, 1010, 440),
 		"inbox": Vector2(3025, 1820),  # deposito sul bordo est, fuori dall'anello
@@ -194,6 +194,23 @@ const FETCH_FROM := {
 	"scrittori": "scorer",
 	"critici": "scrittori",
 }
+
+## Il layout cade in inglese quando manca una chiave: e' la lingua di default
+## del gioco e impedisce che una targa italiana riaffiori in una ripresa. Ogni
+## superficie visibile passa comunque da UIStrings quando esiste una scelta.
+static func display_name(dept_id: String) -> String:
+	return _localized(dept_id, "name")
+
+
+static func display_tagline(dept_id: String) -> String:
+	return _localized(dept_id, "tagline")
+
+
+static func _localized(dept_id: String, field: String) -> String:
+	var fallback := str(DEPARTMENTS.get(dept_id, {}).get(field, dept_id))
+	var key := "dept.%s.%s" % [dept_id, field]
+	var translated := UIStrings.t(key)
+	return fallback if translated == key else translated
 
 ## Punto camminabile davanti alla pila. La pila resta ferma e leggibile:
 ## l'agente si affianca alla vaschetta invece di attraversarla o coprirla.

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="360" viewBox="0 0 920 360" role="img" aria-labelledby="title desc">
+  <title id="title">Scout reply</title>
+  <desc id="desc">Isolated agent reply bubble for a declared motion collage, not a gameplay mockup.</desc>
+  <defs>
+    <filter id="shadow" x="-8%" y="-16%" width="116%" height="145%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#111116" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="8" y="8" width="904" height="344" rx="22" fill="#F6F7F4" stroke="#111116" stroke-width="2"/>
+    <rect x="34" y="44" width="58" height="6" rx="3" fill="#00E87A"/>
+    <text x="112" y="59" fill="#111116" font-family="JetBrains Mono" font-size="28" font-weight="800" letter-spacing="1.4">SCOUT 01 / REPLY</text>
+    <circle cx="852" cy="48" r="9" fill="#00E87A"/>
+    <path d="M76 106H810Q834 106 834 130V278H846L886 312V278H888Q894 278 894 272V130Q894 106 870 106Z" fill="#FFFFFF" stroke="#111116" stroke-width="2" stroke-linejoin="round"/>
+    <text x="76" y="194" fill="#111116" font-family="JetBrains Mono" font-size="58" font-weight="700">On it — pulling</text>
+    <text x="76" y="260" fill="#111116" font-family="JetBrains Mono" font-size="58" font-weight="700">the file now.</text>
+  </g>
+</svg>

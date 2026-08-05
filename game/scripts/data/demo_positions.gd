@@ -109,13 +109,12 @@ static func build() -> Array:
 			"stack_match": roundi(score * 0.40), "remote_fit": roundi(score * 0.25),
 			"salary_fit": roundi(score * 0.20), "experience_fit": roundi(score * 0.10),
 			"strategic_fit": roundi(score * 0.15), "scored_by": "showroom",
-			"score_notes": "Valutazione fittizia per mostrare la composizione dello score.",
-			"jd_summary": "%s cerca una persona per il ruolo di %s a %s. " % [company, title, city]
-					+ "Questa scheda è un esempio fittizio: mostra responsabilità, requisiti, modalità di lavoro e fascia retributiva senza utilizzare dati reali.",
+			"score_notes": UIStrings.t("dept.demo.score_notes"),
+			"jd_summary": UIStrings.t("dept.demo.jd_summary") % [company, title, city],
 			"highlights": [
-				{"type": "pro", "text": "Collaborazione con un team multidisciplinare"},
-				{"type": "match", "text": "Obiettivi chiari e percorso di crescita verificabile"},
-				{"type": "info", "text": "Modalità %s con orari sostenibili" % mode},
+				{"type": "pro", "text": UIStrings.t("dept.demo.highlight.collaboration")},
+				{"type": "match", "text": UIStrings.t("dept.demo.highlight.growth")},
+				{"type": "info", "text": UIStrings.t("dept.demo.highlight.work_mode") % mode},
 			],
 			"tickets": [], "demo": true,
 		})
