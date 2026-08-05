@@ -40,7 +40,7 @@ function fixNextOwnership() {
   const r = spawnSync('docker', [
     'run', '--rm', '--user', 'root', '--entrypoint', '/bin/sh',
     '--volumes-from', CONTAINER_NAME,
-    'ghcr.io/leopu00/jht:0.3.4',
+    'ghcr.io/leopu00/jht:0.3.5',
     '-c', 'chown -R 1001:1001 /app/web/.next 2>/dev/null || true',
   ], {
     stdio: 'ignore',

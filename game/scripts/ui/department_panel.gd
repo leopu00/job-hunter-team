@@ -49,8 +49,8 @@ func _ready() -> void:
 	box.add_child(title_row)
 	title_row.add_child(TerminalTheme.label("▮", 26, accent, "xbold"))
 	title_row.add_child(TerminalTheme.label(
-			(dept["name"] as String).to_upper(), 26, Palette.WHITE, "xbold"))
-	box.add_child(TerminalTheme.label(dept["tagline"], 16, Palette.MUTED))
+			DepartmentDefs.display_name(dept_id).to_upper(), 26, Palette.WHITE, "xbold"))
+	box.add_child(TerminalTheme.label(DepartmentDefs.display_tagline(dept_id), 16, Palette.MUTED))
 	# l'inbox com'è ADESSO (pila condivisa della simulazione)
 	if PaperPile.inbox.has(dept_id):
 		box.add_child(TerminalTheme.label(
@@ -67,7 +67,7 @@ func _ready() -> void:
 	# l'andamento temporale reale delle posizioni trovate sulla VPS.
 	if dept_id == "scout":
 		box.add_child(HSeparator.new())
-		box.add_child(TerminalTheme.label("POSIZIONI TROVATE · ULTIMI 7 GIORNI",
+		box.add_child(TerminalTheme.label(UIStrings.t("dept.scout.positions_timeline"),
 				15, Palette.MUTED, "medium"))
 		var timeline := PositionsTimeline.new(accent)
 		box.add_child(timeline)

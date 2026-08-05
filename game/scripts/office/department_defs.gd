@@ -195,6 +195,24 @@ const FETCH_FROM := {
 	"critici": "scrittori",
 }
 
+## I dati di layout restano con il loro italiano di riferimento: sono anche la
+## rete di sicurezza se una chiave manca durante lo sviluppo. Ogni superficie
+## visibile, però, passa qui per UIStrings così il cambio lingua non mescola
+## una targa italiana a un pannello inglese.
+static func display_name(dept_id: String) -> String:
+	return _localized(dept_id, "name")
+
+
+static func display_tagline(dept_id: String) -> String:
+	return _localized(dept_id, "tagline")
+
+
+static func _localized(dept_id: String, field: String) -> String:
+	var fallback := str(DEPARTMENTS.get(dept_id, {}).get(field, dept_id))
+	var key := "dept.%s.%s" % [dept_id, field]
+	var translated := UIStrings.t(key)
+	return fallback if translated == key else translated
+
 ## Punto camminabile davanti alla pila. La pila resta ferma e leggibile:
 ## l'agente si affianca alla vaschetta invece di attraversarla o coprirla.
 static func handoff_spot(dept_id: String, pickup := false) -> Vector2:
