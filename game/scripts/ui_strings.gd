@@ -19,8 +19,14 @@ static var lang := DEFAULT_LANG
 ## Solo l'oracolo di persistenza sostituisce il file utente: le sue due
 ## esecuzioni sono processi distinti e condividono un ConfigFile vuoto dedicato.
 static func language_config_path() -> String:
-	return "user://language_persistence_selftest.cfg" \
-			if OS.get_environment("JHT_LANGUAGE_PERSIST_TEST") != "" else LANG_CFG
+	var persistence_test := OS.get_environment("JHT_LANGUAGE_PERSIST_TEST")
+	if persistence_test in ["cleanup", "write", "verify"]:
+		return "user://language_persistence_selftest.cfg"
+	# ConfigFile non crea gerarchie: questo percorso deliberatamente senza padre
+	# verifica che un save KO non faccia avanzare la UI come se avesse salvato.
+	if persistence_test == "save_failure":
+		return "user://language_persistence_missing/lang.cfg"
+	return LANG_CFG
 
 static func _static_init() -> void:
 	# Il selftest della title deve simulare una macchina senza file user://,
