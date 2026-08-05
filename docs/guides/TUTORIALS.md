@@ -23,15 +23,16 @@ but this is not a five-minute task.
 ### Set up the team
 
 1. **Download the native desktop app.** Go to
-   [jobhunterteam.ai/download](https://jobhunterteam.ai/download), choose
-   **Desktop**, then select macOS, Windows, or Linux. The page always links to
-   the current release for that platform.
+   [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
+   is already selected: click macOS, Windows, or Linux once to start the
+   current release download for that platform.
 2. **Open the download for your system.** On Windows, run
    `job-hunter-team.exe`; on macOS, unzip `job-hunter-team.zip` and open the
-   app; on Linux, extract `job-hunter-team-linux-x64.tar.gz` and run
-   `job-hunter-team.x86_64`. Windows and Linux can display a platform warning:
-   continue only when the download came from the official site or its linked
-   release.
+   app; on Linux, extract `job-hunter-team-linux-x64.tar.gz`, verify that
+   `job-hunter-team.x86_64` is allowed to run, and enable its executable
+   permission before running it if needed. Windows and Linux can display a
+   platform warning: continue only when the download came from the official
+   site or its linked release.
 3. **Enter the office.** On first launch, choose and confirm the interface
    language before the title screen: confirming a choice is required, English
    is preselected, and the app saves it for later openings. Then add your name
