@@ -14,6 +14,17 @@ const COLS := 6
 const CELL := Vector2(256, 384)
 const FEET := Vector2(128, 360)
 
+## I fogli da sei pose hanno un passo completo di circa 45 px di mondo alla
+## scala del rig. Gli AgentNPC percorrono invece corsie a 150/185 px/s:
+## lasciare la cadenza fissa a 10 fps creava un forte disallineamento fra
+## traslazione e lettura dei cel. La frequenza e' percio' proporzionale alla
+## velocita' fisica, con un tetto sotto il refresh del girato a 30 fps. Non
+## cambia disegni, ordine dei cel o coordinate dei piedi: corregge solo il
+## tempo con cui i cel sono letti. La qualita' delle pose resta verificata dal
+## gate grafico dedicato.
+const WALK_REFERENCE_SPEED := 75.0
+const WALK_MAX_FPS := 24.0
+
 ## riga nel foglio, frame usati e fps per ogni traccia mode+facing.
 const TRACKS := {
 	"idle_down": [0, 2, 2.0], "idle_up": [1, 2, 2.0], "idle_side": [2, 2, 2.0],
@@ -51,6 +62,11 @@ var _sit_sheet: Texture2D
 var _row := 0
 var _frames := 2
 var _fps := 2.0
+var _base_fps := 2.0
+## Ultima velocita' fisica ricevuta da AgentNPC. La tratteniamo anche mentre
+## il facing cambia: _apply_track puo' cosi' scegliere subito il cel della
+## fase corrente, senza un frame transitorio letto alla vecchia cadenza 10.
+var _walk_speed := WALK_REFERENCE_SPEED
 var _t := 0.0
 ## Cache di visual_top_y per (texture, frame): get_image() è un readback
 ## GPU→CPU con scan dei pixel — a regime NON deve mai ripetersi.
@@ -67,12 +83,13 @@ func setup(sheet: Texture2D, sit_sheet: Texture2D = null) -> void:
 	_sprite.vframes = 12
 	_sprite.position = -FEET
 	add_child(_sprite)
-	_t = randf() * 10.0  # fase casuale: gli agenti non marciano in sincrono
+	_t = randf() * 10.0  # idle casuale; ogni viaggio parte invece da un contatto
 	_apply_track()
 
 func set_motion(p_facing: String, p_flipped: bool, p_mode: String) -> void:
 	if p_facing == facing and p_flipped == flipped and p_mode == mode:
 		return
+	var starts_gait := mode not in ["walk", "carry"] and p_mode in ["walk", "carry"]
 	facing = p_facing
 	flipped = p_flipped
 	# "sit" senza foglio seduto degrada a work (si digita in piedi finché
@@ -81,8 +98,34 @@ func set_motion(p_facing: String, p_flipped: bool, p_mode: String) -> void:
 		mode = p_mode if _sit_sheet != null else ("work" if p_mode == "sit" else "still")
 	else:
 		mode = p_mode if TRACKS.has(p_mode + "_down") else "idle"
-	_apply_track()
+		# Una tratta nuova inizia sempre dal primo contatto del ciclo. La fase
+		# non viene invece azzerata quando il path cambia verso: cosi' non ci
+		# sono scatti ne' inversioni di piedi in mezzo al passo.
+		if starts_gait:
+			_t = 0.0
+		_apply_track()
 	queue_redraw()  # l'anello dell'ombra segue il modo (walk/carry)
+
+## Collega la cadenza del foglio al movimento reale del CharacterBody2D.
+## L'API resta opzionale per il vecchio CharacterRig: AgentNPC la chiama solo
+## quando il rig la espone. Con 150 px/s il ciclo diventa 20 fps; a 185 px/s
+## arriva al tetto 24, quindi il video a 30 fps non salta pose intermedie.
+func set_walk_speed(world_speed: float) -> void:
+	if mode not in ["walk", "carry"]:
+		return
+	_walk_speed = maxf(0.0, world_speed)
+	_fps = walk_fps_for_speed(_base_fps, _walk_speed)
+	# Il cambio di velocita' puo' attraversare una soglia di fase: aggiorna
+	# subito il cel, non al _process successivo, perche' Movie Maker puo'
+	# disegnare proprio fra un cambio facing e il frame seguente.
+	_update_frame()
+	set_process(true)
+
+static func walk_fps_for_speed(base_fps: float, world_speed: float) -> float:
+	if base_fps <= 0.0:
+		return 0.0
+	var proportional := base_fps * maxf(world_speed, WALK_REFERENCE_SPEED) / WALK_REFERENCE_SPEED
+	return clampf(proportional, base_fps, WALK_MAX_FPS)
 
 ## Limite superiore realmente occupato dal frame corrente, in coordinate del
 ## nodo AgentNPC (origine ai piedi). I fogli non hanno tutti lo stesso margine
@@ -133,7 +176,8 @@ func _apply_track() -> void:
 	var track: Array = table[key]
 	_row = track[0]
 	_frames = track[1]
-	_fps = track[2]
+	_base_fps = track[2]
+	_fps = walk_fps_for_speed(_base_fps, _walk_speed) if mode in ["walk", "carry"] else _base_fps
 	scale.x = -RIG_SCALE if (facing == "side" and flipped) else RIG_SCALE
 	_update_frame()
 	# Tracce a frame fisso (still/sit_idle) senza bob: il rig dorme del tutto.

@@ -1166,6 +1166,11 @@ func _follow_path(speed: float, mode := "walk") -> bool:
 	velocity = to_target.normalized() * speed
 	_face_point(global_position + velocity)
 	_set_rig_motion(rig.facing, rig.flipped, mode)
+	# SpriteSheetRig usa questo dato per far avanzare il ciclo dei piedi alla
+	# stessa cadenza del corpo. CharacterRig legacy non espone il metodo: il
+	# controllo mantiene compatibili preview e fogli vecchi.
+	if rig.has_method("set_walk_speed"):
+		rig.set_walk_speed(velocity.length())
 	return false
 
 func _path_target(index: int) -> Vector2:
