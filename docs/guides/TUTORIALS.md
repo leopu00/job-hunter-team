@@ -26,12 +26,13 @@ open a card and return to the office without losing your place.
 
 ### 2. Know who does what
 
-The team includes **coordinators, support advisers, career advisers,
-researchers, analysts, match assessors, application writers, and reviewers**.
-Coordinators keep work moving; support advisers help with the product and your
-profile; career advisers help with direction. Researchers find opportunities,
-analysts verify them, match assessors explain fit, application writers prepare
-requested documents, and reviewers check the work before it reaches you.
+The office and conversations use these plural department names:
+**coordinators** keep priorities moving; **support advisers** help with the
+product and your profile; **career advisers** help with direction;
+**researchers** find opportunities; **analysts** verify them; **match
+assessors** explain fit; **application writers** prepare requested documents;
+and **reviewers** check that work before it reaches you. These names are the
+stable map from a visible department to its responsibility.
 
 You are ready to continue when you can read the pipeline as one sequence,
 rather than as unrelated conversations.
@@ -61,11 +62,15 @@ the opportunity deserves attention.
 
 ### 6. See the whole pipeline
 
-A position moves in order: researchers find it, analysts verify it, match
-assessors rank it, application writers tailor documents when you request them,
-and reviewers check those documents. Its status shows where it is in that
-path. The step worked when a status tells you both what has happened and what
-may happen next.
+Open **Positions**, select any result, and read its status. **`new`** means the
+researchers found it and the analysts verify it next; **`checked`** means the
+analysts finished and the match assessors score it next; **`scored`** means the
+match assessors finished, so you can decide or request documents. After your
+request, **`writing`** means the application writers are preparing them,
+**`review`** means the reviewers are checking them, and **`ready`** means the
+documents are ready for you. **`applied`** and **`response`** record your action
+and its outcome. The step worked when you can name the responsible department
+and the next event for the status you see.
 
 ### 7. Inspect positions
 
@@ -92,8 +97,14 @@ a position, give feedback, and keep conversations separate.
 
 ### Before you begin
 
-Sign in to the web app with an account connected to a team that is running in
-the native app and has account sync configured. To practise every step, wait
+Set up sync before signing in: in the native desktop app, open **Settings**,
+then **Account**, select **Sign in with Google**, then in the terminal that
+opens, open the link, enter the code and approve this device. Next select
+**Sync now**. The **Cloud account** row must say **connected** and the
+**Device** row must say **paired**. If the sign-in
+control is unavailable, start the team first; if the account still says
+**local / guest mode** after approval, repeat **Sign in with Google**. Then
+sign in to the web app with the same account. To practise every step, wait
 until at least one position has a score. An empty dashboard simply means the
 team has not yet produced a scored result.
 
