@@ -339,7 +339,14 @@ export default function LandingGlobe() {
         width={1672}
         height={941}
         fetchPriority="high"
-        className="jht-globe-still absolute inset-0 w-full h-full object-cover"
+        // Il canvas MapLibre non è opaco fuori dalla sua sfera. Lasciare
+        // sotto il fallback una volta pronto farebbe quindi apparire due
+        // globi di scala diversa, soprattutto sulle viewport molto larghe.
+        // Lo sfumiamo via solo quando JobsGlobe ha finito il primo idle e
+        // l'autopilota può davvero iniziare; fino ad allora resta l'LCP.
+        className={`jht-globe-still absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+          mode === "live" && began ? "opacity-0" : "opacity-100"
+        }`}
       />
 
       {/* Credito basemap per l'immagine statica (obbligo licenza
