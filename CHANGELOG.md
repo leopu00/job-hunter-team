@@ -9,6 +9,35 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.3.5] — 2026-08-05
+
+**Choose English at first launch and keep the complete release path in one
+language.** The desktop app now starts with an explicit language choice,
+defaults to English, and applies that choice consistently through setup and the
+first guided tour.
+
+### Desktop setup
+
+- First launch presents a blocking seven-language picker before the title
+  screen, with English preselected and the saved choice reused on later runs.
+- Setup, provider and profile guidance, department labels, activity text and
+  the guided office tour now use the selected locale instead of mixing Italian
+  copy into an English session.
+- The public setup path points to the official Download page and the packaged
+  Linux, macOS and Windows applications carry the same `0.3.5` version and
+  runtime pin.
+
+### Reliability and privacy
+
+- Feedback sent from the desktop or website is anonymous by contract, redacts
+  personal data and secrets before delivery, and reports offline or failed
+  delivery without presenting a false ticket.
+- Upgrades from older installations detect legacy wrappers before running a
+  check, preserve host state, and fail closed when the safe protocol is not
+  available.
+
+---
+
 ## [0.3.4] — 2026-08-04
 
 **A release you can trust at the moment it says “ready”** — the web, game,
