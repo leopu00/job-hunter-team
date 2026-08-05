@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import struct
+import zlib
 
 import pytest
 
@@ -20,13 +22,30 @@ from scripts.vertical_motion import (
 )
 
 
+def _write_png(path, width: int, height: int) -> None:
+    row = b"\x00" + b"\x00\x00\x00\xff" * width
+    raw = row * height
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(
+            ">I", zlib.crc32(kind + payload) & 0xFFFFFFFF
+        )
+
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
+
+
 def _designer_release(tmp_path, *, asset: str = "pipeline-rail-state-03", revision: str = "r02",
                       canvas_width: int = 1080, canvas_height: int = 1920):
     root = tmp_path / "motion-assets" / "releases" / "designer" / "central-6p00-10p90"
     root.mkdir(parents=True)
     png_name = f"{asset}-{revision}.png"
     png = root / png_name
-    png.write_bytes(b"test release PNG bytes")
+    _write_png(png, canvas_width, canvas_height)
     png_sha256 = hashlib.sha256(png.read_bytes()).hexdigest()
     manifest = root / f"{asset}-{revision}.manifest.json"
     manifest.write_text(json.dumps({
@@ -102,6 +121,11 @@ def test_v020_collage_rejects_banned_legacy_inputs(path: str) -> None:
         validate_collage_inputs([path])
 
 
+def test_collage_rejects_unknown_input_even_when_not_on_denylist() -> None:
+    with pytest.raises(VerticalMotionError, match="unapproved collage input"):
+        validate_collage_inputs(["incoming/game/motion-04-open-day-v1.mp4"])
+
+
 def test_designer_release_requires_immutable_manifest_and_both_png_hashes(tmp_path) -> None:
     manifest, png = _designer_release(tmp_path)
 
@@ -150,6 +174,42 @@ def test_designer_release_rejects_a_replaced_png_even_with_the_same_filename(tmp
             z_index=10,
             start=6.0,
             end=7.64,
+        )
+
+
+def test_designer_release_rejects_corrupt_png_even_when_hashes_match(tmp_path) -> None:
+    manifest, png = _designer_release(tmp_path)
+    png.write_bytes(b"not a PNG")
+    updated_sha = hashlib.sha256(png.read_bytes()).hexdigest()
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["files"]["png"]["sha256"] = updated_sha
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+    manifest.with_name("pipeline-rail-state-03-r02.sha256").write_text(
+        f"{updated_sha}  pipeline-rail-state-03-r02.png\n", encoding="utf-8"
+    )
+
+    with pytest.raises(VerticalMotionError, match="valid PNG"):
+        verify_designer_release(
+            manifest, asset="pipeline-rail-state-03", revision="r02",
+            z_index=10, start=6.0, end=7.64,
+        )
+
+
+def test_designer_release_rejects_wrong_decoded_png_dimensions(tmp_path) -> None:
+    manifest, png = _designer_release(tmp_path)
+    _write_png(png, 1080, 1919)
+    updated_sha = hashlib.sha256(png.read_bytes()).hexdigest()
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["files"]["png"]["sha256"] = updated_sha
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+    manifest.with_name("pipeline-rail-state-03-r02.sha256").write_text(
+        f"{updated_sha}  pipeline-rail-state-03-r02.png\n", encoding="utf-8"
+    )
+
+    with pytest.raises(VerticalMotionError, match="dimensions must be"):
+        verify_designer_release(
+            manifest, asset="pipeline-rail-state-03", revision="r02",
+            z_index=10, start=6.0, end=7.64,
         )
 
 
