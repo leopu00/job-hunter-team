@@ -5,6 +5,9 @@ import {
   ALLOWED_RECORDING_ROUTES,
   createGetOnlyRequestPolicy,
   recordingTarget,
+  SYNTHETIC_POSITION_SEEN_BODY,
+  SYNTHETIC_POSITION_RECORDING_ROUTE,
+  SYNTHETIC_POSITION_SEEN_URL,
 } from "../../../e2e/scripts/recording-browser-policy.mjs";
 
 const repo = path.resolve(__dirname, "../../..");
@@ -15,6 +18,40 @@ const launcher = fs.readFileSync(
 const e2ePackage = JSON.parse(
   fs.readFileSync(path.join(repo, "e2e/package.json"), "utf8"),
 ) as { scripts: Record<string, string> };
+
+function interceptedRoute({
+  method,
+  url = "http://localhost:3008/asset.js",
+  body = null,
+}: {
+  method: string;
+  url?: string;
+  body?: string | null;
+}) {
+  let continued = false;
+  let aborted = false;
+  return {
+    route: {
+      request: () => ({
+        method: () => method,
+        url: () => url,
+        postData: () => body,
+      }),
+      continue: async () => {
+        continued = true;
+      },
+      abort: async () => {
+        aborted = true;
+      },
+    },
+    get continued() {
+      return continued;
+    },
+    get aborted() {
+      return aborted;
+    },
+  };
+}
 
 describe("launcher Playwright per riprese web", () => {
   it("espone un comando dedicato per il browser visible", () => {
@@ -41,11 +78,15 @@ describe("launcher Playwright per riprese web", () => {
     expect(setup).toContain('name: "jht_demo_persona"');
     expect(setup).toContain('localStorage.setItem("jht-theme", "light")');
     expect(setup).toContain('localStorage.setItem("jht-tour-done", "1")');
-    expect(setup).not.toMatch(/(?:createElement\("style"|querySelector|locator)/);
+    expect(setup).not.toMatch(
+      /(?:createElement\("style"|querySelector|locator)/,
+    );
     expect(launcher).toContain('await context.route("**/*", getOnly.handle)');
     expect(launcher.match(/page\.goto\(/g)).toHaveLength(1);
     expect(launcher).not.toContain("BASE_URL");
     expect(launcher).toContain("if (page.url() !== target)");
+    expect(launcher).toContain("getOnly.allowedSeenPost");
+    expect(launcher).toContain("getOnly.seenPostCount !== 1");
     expect(launcher.indexOf("target = recordingTarget()")).toBeLessThan(
       launcher.indexOf("browser = await chromium.launch"),
     );
@@ -54,13 +95,18 @@ describe("launcher Playwright per riprese web", () => {
     );
   });
 
-  it("accetta solo le due route recording esatte sull'origin fisso", () => {
-    expect([...ALLOWED_RECORDING_ROUTES]).toEqual(["/dashboard", "/messages"]);
+  it("accetta solo le route recording esatte sull'origin fisso", () => {
+    expect([...ALLOWED_RECORDING_ROUTES]).toEqual([
+      "/dashboard",
+      "/messages",
+      "/positions/9001",
+    ]);
     expect(recordingTarget("/dashboard")).toBe(
       "http://localhost:3008/dashboard",
     );
-    expect(recordingTarget("/messages")).toBe(
-      "http://localhost:3008/messages",
+    expect(recordingTarget("/messages")).toBe("http://localhost:3008/messages");
+    expect(recordingTarget("/positions/9001")).toBe(
+      "http://localhost:3008/positions/9001",
     );
   });
 
@@ -74,6 +120,11 @@ describe("launcher Playwright per riprese web", () => {
       "/dashboard/",
       "/messages/../dashboard",
       "/positions",
+      "/positions/9002",
+      "/positions/9001/",
+      "/positions/9001?take=1",
+      "/positions/9001#overview",
+      "/positions/%39%30%30%31",
     ]) {
       expect(() => recordingTarget(route)).toThrow(
         "JHT_RECORDING_PATH deve essere esattamente",
@@ -97,30 +148,143 @@ describe("launcher Playwright per riprese web", () => {
   it("lascia passare GET e blocca una POST facendo fallire il take", async () => {
     const logs: string[] = [];
     const policy = createGetOnlyRequestPolicy((message) => logs.push(message));
-    const get = {
-      request: () => ({ method: () => "GET" }),
-      continue: async () => undefined,
-      abort: async () => undefined,
-    };
-    await policy.handle(get);
+    const get = interceptedRoute({ method: "GET" });
+    await policy.handle(get.route);
 
-    let aborted = false;
-    const post = {
-      request: () => ({ method: () => "POST" }),
-      continue: async () => undefined,
-      abort: async () => {
-        aborted = true;
-      },
-    };
+    const post = interceptedRoute({ method: "POST" });
+    let abortedBeforeFailure = false;
+    void policy.violation.catch(() => {
+      abortedBeforeFailure = post.aborted;
+    });
     const failedTake = expect(policy.violation).rejects.toThrow(
       "policy GET-only violata: richiesta POST bloccata",
     );
-    await policy.handle(post);
+    await policy.handle(post.route);
     await failedTake;
 
-    expect(aborted).toBe(true);
+    expect(get.continued).toBe(true);
+    expect(post.aborted).toBe(true);
+    expect(abortedBeforeFailure).toBe(true);
     expect(logs).toEqual([
       "✗ policy GET-only violata: richiesta POST bloccata; take fallito.",
     ]);
   });
+
+  it("aborta una sola POST seen sintetica esatta senza far fallire il take", async () => {
+    const logs: string[] = [];
+    const policy = createGetOnlyRequestPolicy(
+      (message) => logs.push(message),
+      SYNTHETIC_POSITION_RECORDING_ROUTE,
+    );
+    const seen = interceptedRoute({
+      method: "POST",
+      url: SYNTHETIC_POSITION_SEEN_URL,
+      body: SYNTHETIC_POSITION_SEEN_BODY,
+    });
+
+    await policy.handle(seen.route);
+    await policy.allowedSeenPost;
+
+    expect(seen.aborted).toBe(true);
+    expect(seen.continued).toBe(false);
+    expect(policy.seenPostCount).toBe(1);
+    expect(logs).toEqual(["✓ marker seen sintetico abortito; take prosegue."]);
+
+    const get = interceptedRoute({ method: "GET" });
+    await policy.handle(get.route);
+    expect(get.continued).toBe(true);
+  });
+
+  it("rende fatale una seconda POST seen esatta, perche' il contatore sarebbe due", async () => {
+    const policy = createGetOnlyRequestPolicy(
+      console.error,
+      SYNTHETIC_POSITION_RECORDING_ROUTE,
+    );
+    const first = interceptedRoute({
+      method: "POST",
+      url: SYNTHETIC_POSITION_SEEN_URL,
+      body: SYNTHETIC_POSITION_SEEN_BODY,
+    });
+    await policy.handle(first.route);
+
+    const second = interceptedRoute({
+      method: "POST",
+      url: SYNTHETIC_POSITION_SEEN_URL,
+      body: SYNTHETIC_POSITION_SEEN_BODY,
+    });
+    const failedTake = expect(policy.violation).rejects.toThrow(
+      "policy GET-only violata: richiesta POST bloccata",
+    );
+    await policy.handle(second.route);
+    await failedTake;
+
+    expect(first.aborted).toBe(true);
+    expect(second.aborted).toBe(true);
+    expect(policy.seenPostCount).toBe(2);
+  });
+
+  it("rende fatale la POST seen esatta se il target recording e' dashboard", async () => {
+    const policy = createGetOnlyRequestPolicy();
+    const seen = interceptedRoute({
+      method: "POST",
+      url: SYNTHETIC_POSITION_SEEN_URL,
+      body: SYNTHETIC_POSITION_SEEN_BODY,
+    });
+    const failedTake = expect(policy.violation).rejects.toThrow(
+      "policy GET-only violata: richiesta POST bloccata",
+    );
+
+    await policy.handle(seen.route);
+    await failedTake;
+
+    expect(seen.aborted).toBe(true);
+    expect(policy.seenPostCount).toBe(0);
+  });
+
+  it.each([
+    [
+      "position_id diverso",
+      "POST",
+      SYNTHETIC_POSITION_SEEN_URL,
+      '{"position_id":"9002"}',
+    ],
+    [
+      "corpo JSON diverso",
+      "POST",
+      SYNTHETIC_POSITION_SEEN_URL,
+      '{"position_id":"9001","counter":1}',
+    ],
+    [
+      "route diversa",
+      "POST",
+      "http://localhost:3008/api/positions/other",
+      SYNTHETIC_POSITION_SEEN_BODY,
+    ],
+    ["PUT", "PUT", SYNTHETIC_POSITION_SEEN_URL, SYNTHETIC_POSITION_SEEN_BODY],
+    [
+      "DELETE",
+      "DELETE",
+      SYNTHETIC_POSITION_SEEN_URL,
+      SYNTHETIC_POSITION_SEEN_BODY,
+    ],
+  ])(
+    "rende fatale una richiesta %s",
+    async (_description, method, url, body) => {
+      const policy = createGetOnlyRequestPolicy(
+        console.error,
+        SYNTHETIC_POSITION_RECORDING_ROUTE,
+      );
+      const request = interceptedRoute({ method, url, body });
+      const failedTake = expect(policy.violation).rejects.toThrow(
+        `policy GET-only violata: richiesta ${method} bloccata`,
+      );
+
+      await policy.handle(request.route);
+      await failedTake;
+
+      expect(request.aborted).toBe(true);
+      expect(request.continued).toBe(false);
+      expect(policy.seenPostCount).toBe(0);
+    },
+  );
 });
