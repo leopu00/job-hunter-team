@@ -76,6 +76,18 @@ terminal_selection|script|gate|posix|-|tools/terminal_selection_selftest.gd|-
 # duplicate in ui_en.gd passavano in verde e rompevano l'avvio in tutte le
 # lingue tranne una.
 i18n_parity|script|gate|any|-|tools/i18n_parity_selftest.gd|-
+# Primo avvio: nessun locale di sistema, default inglese e una scelta che
+# espone davvero tutte le sette lingue prima della title screen.
+language_picker|script|gate|any|-|tools/language_picker_selftest.gd|LANGUAGE-PICKER-TEST PASS
+# La componente da sola non basta: entra dalla vera main scene e prova che il
+# picker preceda la title, mostri inglese e costruisca la title dopo la scelta.
+language_picker_title|run|gate|any|JHT_LANG= JHT_LANGUAGE_PICKER_TEST=1|-|LANGUAGE-PICKER-TITLE-TEST PASS
+# Conferma una lingua non-default nel picker, chiude Godot e riapre un processo
+# senza override: legge il ConfigFile, salta il picker e ricostruisce la title.
+language_persistence|python|gate|any|-|tools/language_persistence_selftest.py|LANGUAGE-PERSISTENCE-TEST PASS
+# Da Impostazioni il gioco ricostruisce la scena, così non restano etichette
+# della lingua precedente fuori dal pannello che ha ricevuto il click.
+language_settings|run|gate|any|JHT_SCENE=office JHT_LANG=it JHT_LANGUAGE_SETTINGS_TEST=1|-|LANGUAGE-SETTINGS-TEST PASS
 # Il patto del riordino della sidebar: le voci raccolte in schede o dietro
 # "Impostazioni" restano raggiungibili e tradotte. Una sezione caduta da tutti
 # gli elenchi non fa rumore, semplicemente sparisce.
