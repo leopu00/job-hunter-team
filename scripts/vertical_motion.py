@@ -19,7 +19,12 @@ CANVAS_HEIGHT = 1920
 FPS = 30
 SOURCE_WIDTH = 1600
 SOURCE_HEIGHT = 900
-FORBIDDEN_COLLAGE_INPUTS = ("g16", "g17", "designer/lot-01", "web/")
+# The current v0.2 gate has promoted only motion-01 (the walking Scout).  A
+# later VIDEO promotion must update this explicit list together with its test;
+# a silent fallback to another Game clip would defeat the review gate.
+FORBIDDEN_COLLAGE_INPUTS = (
+    "g16", "g17", "motion-02", "motion-03", "characters/", "designer/lot-01", "web/"
+)
 
 
 class VerticalMotionError(ValueError):

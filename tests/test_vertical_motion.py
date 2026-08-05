@@ -51,7 +51,6 @@ def test_transparent_sprite_enters_and_exits_without_a_static_pop() -> None:
 
 @pytest.mark.parametrize("paths", [
     ["incoming/game/motion-01-open-day-v1.mp4"],
-    ["incoming/game/motion-02-department-zoom-v1.mp4", "incoming/game/motion-03-chat-v1.mp4"],
 ])
 def test_v020_collage_accepts_only_permitted_motion_inputs(paths: list[str]) -> None:
     validate_collage_inputs(paths)
@@ -60,6 +59,9 @@ def test_v020_collage_accepts_only_permitted_motion_inputs(paths: list[str]) -> 
 @pytest.mark.parametrize("path", [
     "incoming/linux/G16-H/attempt-05/take.mkv",
     "incoming/linux/G17-H/attempt-01/take.mkv",
+    "incoming/game/motion-02-department-zoom-v1.mp4",
+    "incoming/game/motion-03-chat-v1.mp4",
+    "motion-assets/incoming/designer/characters/scout.png",
     "incoming/designer/lot-01/sprite.png",
     "incoming/web/capture.mp4",
 ])
