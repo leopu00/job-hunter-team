@@ -40,7 +40,7 @@
 # ║    JHT_BIN_DIR             Where to put the jht wrapper (default:        ║
 # ║                            $HOME/.local/bin)                             ║
 # ║    JHT_IMAGE               Container image override (default:            ║
-# ║                            ghcr.io/leopu00/jht:0.3.4)                    ║
+# ║                            ghcr.io/leopu00/jht:0.3.5)                    ║
 # ║    JHT_RAW_BASE            Base URL override for downloads               ║
 # ║                            (default: https://raw.githubusercontent.com/  ║
 # ║                                      leopu00/job-hunter-team/<BRANCH>)   ║
@@ -73,7 +73,7 @@ else
 fi
 
 RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
-IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.4}"
+IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.5}"
 # Il compose scaricato può evolvere sul canale production; l'installer di
 # questa release deve comunque avviare l'immagine dichiarata qui.
 export JHT_IMAGE="$IMAGE"

@@ -1,13 +1,13 @@
 ; Job Hunter Team — installer Windows per l'export Godot.
 ; Build (dal Mac, da game/):
-;   makensis -DVERSION=0.3.4 installer/windows.nsi
+;   makensis -DVERSION=0.3.5 installer/windows.nsi
 ; Richiede: builds/windows/job-hunter-team.exe (export "Windows Desktop")
 ; e installer/icon.ico. Output stabile per releases/latest/download/:
 ; builds/windows/job-hunter-team-windows-x64-setup.exe
 ; Install per-utente (no admin), come il vecchio installer Electron. /S = silenzioso.
 
 !ifndef VERSION
-  !define VERSION "0.3.4"
+  !define VERSION "0.3.5"
 !endif
 !ifndef VERSION_NUMERIC
   !define VERSION_NUMERIC "${VERSION}.0"

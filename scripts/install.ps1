@@ -56,7 +56,7 @@ $ErrorActionPreference = 'Stop'
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $env:USERPROFILE '.jht\runtime' }
 $BinDir     = if ($env:JHT_BIN_DIR)     { $env:JHT_BIN_DIR }     else { Join-Path $env:USERPROFILE '.local\bin' }
 $JhtHome    = Join-Path $env:USERPROFILE '.jht'
-$Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht:0.3.4' }
+$Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht:0.3.5' }
 $env:JHT_IMAGE = $Image
 $RawBase    = if ($env:JHT_RAW_BASE)    { $env:JHT_RAW_BASE }    else { "https://raw.githubusercontent.com/leopu00/job-hunter-team/$Branch" }
 
