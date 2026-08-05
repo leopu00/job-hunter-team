@@ -39,7 +39,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Know who does what",
-          body: "The team includes coordinators, support advisers, career advisers, researchers, analysts, match assessors, application writers, and reviewers. Coordinators keep work moving; support advisers help with the product and your profile; career advisers help with direction. Researchers find opportunities, analysts verify them, match assessors explain fit, application writers prepare requested documents, and reviewers check the work before it reaches you. You are ready to continue when you can read the pipeline as one sequence, rather than as unrelated conversations.",
+          body: "The office and conversations use these plural department names: coordinators keep priorities moving; support advisers help with the product and your profile; career advisers help with direction; researchers find opportunities; analysts verify them; match assessors explain fit; application writers prepare requested documents; and reviewers check that work before it reaches you. These names are the stable map from a visible department to its responsibility.",
         },
         {
           title: "Ask the researchers",
@@ -55,7 +55,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "See the whole pipeline",
-          body: "A position moves in order: researchers find it, analysts verify it, match assessors rank it, application writers tailor documents when you request them, and reviewers check those documents. Its status shows where it is in that path. The step worked when a status tells you both what has happened and what may happen next.",
+          body: "Open Positions, select any result, and read its status. `new` means researchers found it and analysts verify it next; `checked` means analysts finished and match assessors score it next; `scored` means match assessors have finished, so you can decide or request documents. After your request, `writing` means application writers are preparing them, `review` means reviewers are checking them, and `ready` means the documents are ready for you. `applied` and `response` record your action and its outcome. The step worked when you can name the responsible department and the next event for the status you see.",
         },
         {
           title: "Inspect positions",
@@ -75,7 +75,7 @@ export const TUTORIAL_GUIDES = {
         "The web tutorial helps you follow the work from any signed-in browser, inspect a position, give feedback, and keep conversations separate.",
       beforeYouBeginLabel: "Before you begin",
       beforeYouBegin:
-        "Sign in to the web app with an account connected to a team that is running in the native app and has account sync configured. To practise every step, wait until at least one position has a score. An empty dashboard simply means the team has not yet produced a scored result.",
+        "Set up sync before signing in: in the native desktop app, open Settings, then Account, select Sign in with Google, then in the terminal that opens, open the link, enter the code and approve this device. Next select Sync now. The Cloud account row must say connected and the Device row must say paired. If the sign-in control is unavailable, start the team first; if the account still says local / guest mode after approval, repeat Sign in with Google. Then sign in to the web app with the same account. To practise every step, wait until at least one position has a score. An empty dashboard simply means the team has not yet produced a scored result.",
       steps: [
         {
           title: "Start from the dashboard",
@@ -125,7 +125,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Capisci chi fa cosa",
-          body: "Il team comprende coordinatori, consulenti di supporto, consulenti di carriera, ricercatori, analisti, valutatori della compatibilità, redattori delle candidature e revisori. I coordinatori mantengono il lavoro in movimento; i consulenti di supporto aiutano con il prodotto e il profilo; quelli di carriera aiutano a definire la direzione. I ricercatori trovano opportunità, gli analisti le verificano, i valutatori ne spiegano la compatibilità, i redattori preparano i documenti richiesti e i revisori controllano il lavoro prima che arrivi a te. Puoi continuare quando leggi la pipeline come una sequenza, non come conversazioni scollegate.",
+          body: "I nomi dei reparti, sempre al plurale, che vedi in ufficio e nelle conversazioni sono: coordinatori per le priorità; consulenti di supporto per prodotto e profilo; consulenti di carriera per la direzione; ricercatori per le opportunità; analisti per la verifica; valutatori della compatibilità per spiegare l'affinità; redattori delle candidature per i documenti richiesti; revisori per controllarli prima che arrivino a te. Questi nomi sono la mappa stabile tra reparto visibile e responsabilità.",
         },
         {
           title: "Chiedi ai ricercatori",
@@ -141,7 +141,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Vedi l'intera pipeline",
-          body: "Una posizione procede in ordine: i ricercatori la trovano, gli analisti la verificano, i valutatori della compatibilità la classificano, i redattori delle candidature personalizzano i documenti su tua richiesta e i revisori li controllano. Lo stato indica il punto del percorso. Il passo funziona quando uno stato ti dice sia che cosa è accaduto sia che cosa può accadere dopo.",
+          body: "Apri Posizioni, seleziona un risultato e leggi lo stato. `new` significa che i ricercatori l'hanno trovata e gli analisti la verificano dopo; `checked` significa che gli analisti hanno finito e i valutatori della compatibilità la valutano dopo; `scored` significa che hanno finito i valutatori, quindi puoi decidere o richiedere i documenti. Dopo la richiesta, `writing` significa che i redattori delle candidature li preparano, `review` che i revisori li controllano e `ready` che sono pronti per te. `applied` e `response` registrano la tua azione e il suo esito. Il passo funziona quando sai dire quale reparto è responsabile e qual è il prossimo evento per lo stato visibile.",
         },
         {
           title: "Esamina le posizioni",
@@ -161,7 +161,7 @@ export const TUTORIAL_GUIDES = {
         "Il tutorial web ti aiuta a seguire il lavoro da qualunque browser autenticato, a esaminare una posizione, a lasciare un riscontro e a mantenere separate le conversazioni.",
       beforeYouBeginLabel: "Prima di iniziare",
       beforeYouBegin:
-        "Accedi all'app web con un account collegato a un team in esecuzione nell'app nativa e con la sincronizzazione dell'account configurata. Per provare tutti i passaggi, aspetta che almeno una posizione abbia un punteggio. Una dashboard vuota significa semplicemente che il team non ha ancora prodotto un risultato valutato.",
+        "Configura la sincronizzazione prima di accedere: nell'app desktop nativa apri Impostazioni, poi Account, scegli Accedi con Google; nel terminale che si apre, apri il link, inserisci il codice e approva questo dispositivo, quindi scegli Sincronizza ora. La riga Account cloud deve indicare collegato e la riga Dispositivo deve indicare associato. Se il controllo di accesso non è disponibile, avvia prima il team; se dopo l'approvazione l'account indica ancora modalità locale / ospite, ripeti Accedi con Google. Poi accedi all'app web con lo stesso account. Per provare tutti i passaggi, aspetta che almeno una posizione abbia un punteggio. Una dashboard vuota significa semplicemente che il team non ha ancora prodotto un risultato valutato.",
       steps: [
         {
           title: "Parti dalla dashboard",
@@ -211,7 +211,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Entiende quién hace qué",
-          body: "El equipo incluye coordinadores, asesores de asistencia, asesores profesionales, investigadores, analistas, evaluadores de compatibilidad, redactores de candidaturas y revisores. Los coordinadores hacen que el trabajo avance; los asesores de asistencia ayudan con el producto y tu perfil; los asesores profesionales ayudan con la dirección. Los investigadores encuentran oportunidades, los analistas las verifican, los evaluadores explican la compatibilidad, los redactores preparan los documentos solicitados y los revisores comprueban el trabajo antes de que llegue a ti. Continúa cuando puedas leer la canalización como una secuencia y no como conversaciones sin relación.",
+          body: "Los nombres de los departamentos, siempre en plural, que ves en la oficina y las conversaciones son: coordinadores para prioridades; asesores de asistencia para producto y perfil; asesores profesionales para dirección; investigadores para oportunidades; analistas para verificación; evaluadores de compatibilidad para explicar el encaje; redactores de candidaturas para los documentos solicitados; revisores para comprobarlos antes de que lleguen a ti. Estos nombres son el mapa estable entre un departamento visible y su responsabilidad.",
         },
         {
           title: "Pregunta a los investigadores",
@@ -227,7 +227,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Ve toda la canalización",
-          body: "Una posición avanza en orden: los investigadores la encuentran, los analistas la verifican, los evaluadores de compatibilidad la clasifican, los redactores de candidaturas adaptan los documentos cuando los solicitas y los revisores los comprueban. Su estado muestra dónde está en ese camino. El paso funciona cuando un estado te dice qué ha pasado y qué puede ocurrir después.",
+          body: "Abre Posiciones, selecciona un resultado y lee su estado. `new` significa que los investigadores lo encontraron y los analistas lo verifican después; `checked` significa que los analistas terminaron y los evaluadores de compatibilidad lo puntúan después; `scored` significa que los evaluadores terminaron, así que puedes decidir o solicitar documentos. Tras tu solicitud, `writing` significa que los redactores de candidaturas los preparan, `review` que los revisores los comprueban y `ready` que están listos para ti. `applied` y `response` registran tu acción y su resultado. El paso funciona cuando puedes nombrar el departamento responsable y el siguiente evento del estado visible.",
         },
         {
           title: "Inspecciona posiciones",
@@ -247,7 +247,7 @@ export const TUTORIAL_GUIDES = {
         "El tutorial web te ayuda a seguir el trabajo desde cualquier navegador con la sesión iniciada, inspeccionar una posición, dar tu opinión y mantener separadas las conversaciones.",
       beforeYouBeginLabel: "Antes de empezar",
       beforeYouBegin:
-        "Inicia sesión en la aplicación web con una cuenta conectada a un equipo que se ejecuta en la aplicación nativa y tiene configurada la sincronización de la cuenta. Para practicar todos los pasos, espera a que al menos una posición tenga una puntuación. Un panel vacío simplemente significa que el equipo aún no ha producido un resultado puntuado.",
+        "Configura la sincronización antes de iniciar sesión: en la aplicación de escritorio nativa abre Ajustes y luego Cuenta, elige Entrar con Google; en el terminal que se abre, abre el enlace, introduce el código y aprueba este dispositivo, y después elige Sincronizar ahora. La fila Cuenta cloud debe indicar conectada y la fila Dispositivo, asociado. Si el control de acceso no está disponible, inicia primero el equipo; si tras aprobarlo la cuenta sigue indicando modo local / invitado, repite Entrar con Google. Después inicia sesión en la aplicación web con la misma cuenta. Para practicar todos los pasos, espera a que al menos una posición tenga una puntuación. Un panel vacío simplemente significa que el equipo aún no ha producido un resultado puntuado.",
       steps: [
         {
           title: "Empieza en el panel",
@@ -297,7 +297,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Comprenez qui fait quoi",
-          body: "L'équipe comprend des coordinateurs, conseillers d'assistance, conseillers de carrière, chercheurs, analystes, évaluateurs de compatibilité, rédacteurs de candidatures et réviseurs. Les coordinateurs font avancer le travail ; les conseillers d'assistance aident avec le produit et votre profil ; les conseillers de carrière aident à fixer la direction. Les chercheurs trouvent les opportunités, les analystes les vérifient, les évaluateurs expliquent la compatibilité, les rédacteurs préparent les documents demandés et les réviseurs contrôlent le travail avant qu'il ne vous arrive. Vous pouvez continuer lorsque vous lisez le pipeline comme une séquence plutôt que comme des conversations isolées.",
+          body: "Les noms de départements, toujours au pluriel, que vous voyez dans le bureau et les conversations sont : coordinateurs pour les priorités ; conseillers d'assistance pour le produit et votre profil ; conseillers de carrière pour la direction ; chercheurs pour les opportunités ; analystes pour la vérification ; évaluateurs de compatibilité pour expliquer l'adéquation ; rédacteurs de candidatures pour les documents demandés ; réviseurs pour les contrôler avant qu'ils ne vous arrivent. Ces noms sont la carte stable entre un département visible et sa responsabilité.",
         },
         {
           title: "Demandez aux chercheurs",
@@ -313,7 +313,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Voyez tout le pipeline",
-          body: "Une position avance dans cet ordre : les chercheurs la trouvent, les analystes la vérifient, les évaluateurs de compatibilité la classent, les rédacteurs de candidatures adaptent les documents lorsque vous les demandez et les réviseurs les contrôlent. Son état indique où elle se situe. L'étape fonctionne lorsqu'un état vous dit ce qui s'est passé et ce qui peut arriver ensuite.",
+          body: "Ouvrez Positions, sélectionnez un résultat et lisez son état. `new` signifie que les chercheurs l'ont trouvé et que les analystes le vérifient ensuite ; `checked` signifie que les analystes ont fini et que les évaluateurs de compatibilité le notent ensuite ; `scored` signifie que les évaluateurs ont fini : vous pouvez décider ou demander des documents. Après votre demande, `writing` signifie que les rédacteurs de candidatures les préparent, `review` que les réviseurs les contrôlent et `ready` qu'ils sont prêts pour vous. `applied` et `response` enregistrent votre action et son résultat. L'étape fonctionne lorsque vous pouvez nommer le département responsable et l'événement suivant pour l'état visible.",
         },
         {
           title: "Examinez les positions",
@@ -333,7 +333,7 @@ export const TUTORIAL_GUIDES = {
         "Le tutoriel web vous aide à suivre le travail depuis tout navigateur connecté, à examiner une position, à donner votre avis et à garder les conversations séparées.",
       beforeYouBeginLabel: "Avant de commencer",
       beforeYouBegin:
-        "Connectez-vous à l'application web avec un compte relié à une équipe en cours d'exécution dans l'application native et dont la synchronisation de compte est configurée. Pour pratiquer toutes les étapes, attendez qu'au moins une position ait une note. Un tableau de bord vide signifie simplement que l'équipe n'a pas encore produit de résultat noté.",
+        "Configurez la synchronisation avant de vous connecter : dans l'application de bureau native, ouvrez Paramètres, puis Compte, choisissez Se connecter avec Google ; dans le terminal qui s'ouvre, ouvrez le lien, saisissez le code et approuvez cet appareil, puis choisissez Synchroniser maintenant. La ligne Compte cloud doit indiquer connecté et la ligne Appareil, associé. Si le contrôle de connexion est indisponible, démarrez d'abord l'équipe ; si le compte indique encore mode local / invité après l'approbation, recommencez Se connecter avec Google. Connectez-vous ensuite à l'application web avec le même compte. Pour pratiquer toutes les étapes, attendez qu'au moins une position ait une note. Un tableau de bord vide signifie simplement que l'équipe n'a pas encore produit de résultat noté.",
       steps: [
         {
           title: "Commencez par le tableau de bord",
@@ -383,7 +383,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Verstehe, wer was macht",
-          body: "Zum Team gehören Koordinatoren, Support-Berater, Karriereberater, Rechercheure, Analysten, Passungsbewerter, Bewerbungsautoren und Prüfer. Koordinatoren halten die Arbeit in Bewegung; Support-Berater helfen mit dem Produkt und deinem Profil; Karriereberater helfen bei der Orientierung. Rechercheure finden Chancen, Analysten prüfen sie, Passungsbewerter erklären die Passung, Bewerbungsautoren bereiten angeforderte Unterlagen vor und Prüfer kontrollieren die Arbeit, bevor sie dich erreicht. Du kannst weitermachen, wenn du die Pipeline als eine Reihenfolge statt als getrennte Gespräche lesen kannst.",
+          body: "Die Abteilungsnamen, die du im Büro und in Gesprächen siehst, stehen immer im Plural: Koordinatoren für Prioritäten; Support-Berater für Produkt und Profil; Karriereberater für Orientierung; Rechercheure für Chancen; Analysten für die Prüfung; Passungsbewerter für die Erklärung der Passung; Bewerbungsautoren für angeforderte Unterlagen; Prüfer für die Kontrolle, bevor sie dich erreichen. Diese Namen sind die stabile Zuordnung zwischen sichtbarer Abteilung und Verantwortung.",
         },
         {
           title: "Frage die Rechercheure",
@@ -399,7 +399,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Sieh die ganze Pipeline",
-          body: "Eine Position bewegt sich der Reihe nach: Die Rechercheure finden sie, die Analysten prüfen sie, die Passungsbewerter ordnen sie ein, die Bewerbungsautoren passen Unterlagen auf deinen Wunsch an und die Prüfer kontrollieren sie. Ihr Status zeigt, wo sie sich befindet. Der Schritt hat funktioniert, wenn dir ein Status sagt, was geschehen ist und was als Nächstes passieren kann.",
+          body: "Öffne Positions, wähle ein Ergebnis und lies seinen Status. `new` bedeutet: Rechercheure haben es gefunden und Analysten prüfen es als Nächstes. `checked` bedeutet: Analysten sind fertig und Passungsbewerter bewerten es als Nächstes. `scored` bedeutet: Passungsbewerter sind fertig; du kannst entscheiden oder Unterlagen anfordern. Nach deiner Anforderung bedeutet `writing`, dass Bewerbungsautoren sie vorbereiten, `review`, dass Prüfer sie kontrollieren, und `ready`, dass sie für dich bereit sind. `applied` und `response` zeichnen deine Handlung und ihr Ergebnis auf. Der Schritt hat funktioniert, wenn du für den sichtbaren Status die zuständige Abteilung und das nächste Ereignis nennen kannst.",
         },
         {
           title: "Untersuche Positionen",
@@ -419,7 +419,7 @@ export const TUTORIAL_GUIDES = {
         "Das Web-Tutorial hilft dir, die Arbeit von jedem angemeldeten Browser aus zu verfolgen, eine Position zu prüfen, Rückmeldung zu geben und Gespräche getrennt zu halten.",
       beforeYouBeginLabel: "Bevor du beginnst",
       beforeYouBegin:
-        "Melde dich in der Web-App mit einem Konto an, das mit einem Team verbunden ist, das in der nativen App läuft und für das die Kontosynchronisierung eingerichtet ist. Um jeden Schritt zu üben, warte, bis mindestens eine Position eine Bewertung hat. Ein leeres Dashboard bedeutet nur, dass das Team noch kein bewertetes Ergebnis erzeugt hat.",
+        "Richte die Synchronisierung vor der Anmeldung ein: Öffne in der nativen Desktop-App Einstellungen, dann Account, wähle Mit Google anmelden; öffne im angezeigten Terminal den Link, gib den Code ein und bestätige dieses Gerät. Wähle dann Jetzt synchronisieren. Die Zeile Cloud-Konto muss verbunden und die Zeile Gerät zugeordnet anzeigen. Falls die Anmeldung nicht verfügbar ist, starte zuerst das Team; zeigt der Account nach der Bestätigung weiter lokaler Modus / Gast, wiederhole Mit Google anmelden. Melde dich dann mit demselben Konto in der Web-App an. Um jeden Schritt zu üben, warte, bis mindestens eine Position eine Bewertung hat. Ein leeres Dashboard bedeutet nur, dass das Team noch kein bewertetes Ergebnis erzeugt hat.",
       steps: [
         {
           title: "Starte im Dashboard",
@@ -469,7 +469,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Percebe quem faz o quê",
-          body: "A equipa inclui coordenadores, consultores de apoio, consultores de carreira, investigadores, analistas, avaliadores de compatibilidade, redatores de candidaturas e revisores. Os coordenadores mantêm o trabalho em movimento; os consultores de apoio ajudam com o produto e o teu perfil; os consultores de carreira ajudam a definir a direção. Os investigadores encontram oportunidades, os analistas verificam-nas, os avaliadores explicam a compatibilidade, os redatores preparam os documentos solicitados e os revisores conferem o trabalho antes de este chegar até ti. Podes continuar quando lês o pipeline como uma sequência, e não como conversas sem relação.",
+          body: "Os nomes dos departamentos que vês no escritório e nas conversas estão sempre no plural: coordenadores para prioridades; consultores de apoio para produto e perfil; consultores de carreira para direção; investigadores para oportunidades; analistas para verificação; avaliadores de compatibilidade para explicar a adequação; redatores de candidaturas para documentos solicitados; revisores para os conferir antes de chegarem até ti. Estes nomes são o mapa estável entre um departamento visível e a sua responsabilidade.",
         },
         {
           title: "Pergunta aos investigadores",
@@ -485,7 +485,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Vê todo o pipeline",
-          body: "Uma posição avança por ordem: os investigadores encontram-na, os analistas verificam-na, os avaliadores de compatibilidade classificam-na, os redatores de candidaturas adaptam documentos quando os pedes e os revisores conferem-nos. O estado mostra onde ela está no percurso. O passo resulta quando um estado te diz o que aconteceu e o que poderá acontecer a seguir.",
+          body: "Abre Posições, seleciona um resultado e lê o estado. `new` significa que os investigadores o encontraram e os analistas o verificam a seguir; `checked` significa que os analistas terminaram e os avaliadores de compatibilidade o pontuam a seguir; `scored` significa que os avaliadores terminaram, pelo que podes decidir ou pedir documentos. Depois do teu pedido, `writing` significa que os redatores de candidaturas os preparam, `review` que os revisores os conferem e `ready` que estão prontos para ti. `applied` e `response` registam a tua ação e o respetivo resultado. O passo resulta quando consegues indicar o departamento responsável e o próximo evento do estado visível.",
         },
         {
           title: "Inspeciona posições",
@@ -505,7 +505,7 @@ export const TUTORIAL_GUIDES = {
         "O tutorial web ajuda-te a acompanhar o trabalho a partir de qualquer navegador com sessão iniciada, a inspecionar uma posição, a dar opinião e a manter as conversas separadas.",
       beforeYouBeginLabel: "Antes de começares",
       beforeYouBegin:
-        "Inicia sessão na aplicação web com uma conta ligada a uma equipa em execução na aplicação nativa e com a sincronização de conta configurada. Para praticares todos os passos, espera que pelo menos uma posição tenha uma pontuação. Um dashboard vazio significa apenas que a equipa ainda não produziu um resultado pontuado.",
+        "Configura a sincronização antes de iniciares sessão: na aplicação de ambiente de trabalho nativa abre Configurações, depois Conta, escolhe Entrar com o Google; no terminal que se abre, abre a ligação, introduz o código e aprova este dispositivo; depois escolhe Sincronizar agora. A linha Conta cloud deve indicar ligada e a linha Dispositivo, associado. Se o controlo de início de sessão não estiver disponível, inicia primeiro a equipa; se, depois da aprovação, a conta ainda indicar modo local / convidado, repete Entrar com o Google. Depois inicia sessão na aplicação web com a mesma conta. Para praticares todos os passos, espera que pelo menos uma posição tenha uma pontuação. Um dashboard vazio significa apenas que a equipa ainda não produziu um resultado pontuado.",
       steps: [
         {
           title: "Começa no painel",
@@ -555,7 +555,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Értsd meg, ki mit csinál",
-          body: "A csapatban koordinátorok, támogatási tanácsadók, karrier-tanácsadók, kutatók, elemzők, illeszkedés-értékelők, pályázatírók és ellenőrök dolgoznak. A koordinátorok mozgásban tartják a munkát; a támogatási tanácsadók a termékkel és a profiloddal segítenek; a karrier-tanácsadók az irány megtalálásában segítenek. A kutatók lehetőségeket keresnek, az elemzők ellenőrzik azokat, az illeszkedés-értékelők elmagyarázzák az egyezést, a pályázatírók elkészítik a kért dokumentumokat, az ellenőrök pedig átnézik a munkát, mielőtt az hozzád ér. Akkor folytathatod, amikor a folyamatot egyetlen sorrendként, nem egymástól független beszélgetésekként tudod olvasni.",
+          body: "Az irodában és a beszélgetésekben látható részlegnevek mindig többes számban vannak: koordinátorok a prioritásokért; támogatási tanácsadók a termékért és a profilodért; karrier-tanácsadók az irányért; kutatók a lehetőségekért; elemzők az ellenőrzésért; illeszkedés-értékelők az egyezés magyarázatáért; pályázatírók a kért dokumentumokért; ellenőrök azok átnézéséért, mielőtt hozzád érnek. Ezek a nevek jelentik a stabil térképet a látható részleg és felelőssége között.",
         },
         {
           title: "Kérdezd meg a kutatókat",
@@ -571,7 +571,7 @@ export const TUTORIAL_GUIDES = {
         },
         {
           title: "Lásd az egész folyamatot",
-          body: "Egy pozíció sorrendben halad: a kutatók megtalálják, az elemzők ellenőrzik, az illeszkedés-értékelők rangsorolják, a pályázatírók kérésedre személyre szabják a dokumentumokat, az ellenőrök pedig átnézik azokat. Az állapota mutatja, hol tart ezen az úton. A lépés akkor sikerült, amikor egy állapotból látod, mi történt, és mi történhet ezután.",
+          body: "Nyisd meg a Pozíciók nézetet, válassz egy eredményt, és olvasd el az állapotát. A `new` azt jelenti, hogy a kutatók megtalálták, az elemzők következnek; a `checked` azt, hogy az elemzők végeztek, az illeszkedés-értékelők pontoznak ezután; a `scored` azt, hogy az értékelők végeztek, így dönthetsz vagy kérhetsz dokumentumokat. A kérésed után a `writing` azt jelenti, hogy a pályázatírók készítik őket, a `review`, hogy az ellenőrök átnézik, a `ready`, hogy készen állnak neked. Az `applied` és a `response` a te lépésedet és annak eredményét rögzíti. A lépés akkor sikerült, amikor a látható állapothoz meg tudod nevezni a felelős részleget és a következő eseményt.",
         },
         {
           title: "Vizsgáld meg a pozíciókat",
@@ -591,7 +591,7 @@ export const TUTORIAL_GUIDES = {
         "A webes oktatóanyag segít a munkát bármely bejelentkezett böngészőből követni, egy pozíciót megvizsgálni, visszajelzést adni és a beszélgetéseket elkülönítve tartani.",
       beforeYouBeginLabel: "Mielőtt elkezded",
       beforeYouBegin:
-        "Jelentkezz be a webalkalmazásba olyan fiókkal, amely a natív alkalmazásban futó csapathoz kapcsolódik, és amelyhez be van állítva a fiókszinkronizálás. Minden lépés gyakorlásához várd meg, amíg legalább egy pozíciónak lesz pontszáma. Az üres irányítópult egyszerűen azt jelenti, hogy a csapat még nem hozott létre pontozott eredményt.",
+        "Bejelentkezés előtt állítsd be a szinkronizálást: a natív asztali alkalmazásban nyisd meg a Beállítások, majd a Fiók nézetet, válaszd a Belépés Google-lel lehetőséget; a megnyíló terminálban nyisd meg a linket, írd be a kódot és hagyd jóvá ezt az eszközt, majd válaszd a Szinkronizálás most lehetőséget. A Felhőfiók sorának csatlakoztatva, az Eszköz sorának társítva állapotot kell mutatnia. Ha a belépési vezérlő nem elérhető, előbb indítsd el a csapatot; ha a jóváhagyás után a fiók még mindig helyi / vendég módban van, ismételd meg a Belépés Google-lel lépést. Ezután ugyanazzal a fiókkal jelentkezz be a webalkalmazásba. Minden lépés gyakorlásához várd meg, amíg legalább egy pozíciónak lesz pontszáma. Az üres irányítópult egyszerűen azt jelenti, hogy a csapat még nem hozott létre pontozott eredményt.",
       steps: [
         {
           title: "Kezdd az irányítópulttal",
