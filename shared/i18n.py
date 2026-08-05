@@ -85,8 +85,8 @@ def t(key: str) -> str:
     # T0-T1 launch copy is English-only in phase 1. Do not let an old
     # JHT_LANG=it in host.env leak Italian into the recorded onboarding path.
     if (
-        key.startswith(("host_setup.", "welcome.", "wizard.cloud.", "wizard.step.",
-                        "wizard.provider.", "wizard.oauth.", "wizard.cli."))
+        key.startswith(("host_setup.", "welcome.", "wizard.checks.", "wizard.cloud.",
+                        "wizard.step.", "wizard.provider.", "wizard.oauth.", "wizard.cli."))
         or key in {
             "wizard.welcome_subtitle", "wizard.aborted_prereqs",
             "wizard.profile.intro", "wizard.team.starting",

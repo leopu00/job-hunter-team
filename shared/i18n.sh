@@ -41,7 +41,7 @@ _i18n_resolve_lang() {
 _i18n_phase1_english() {
   case "$1" in
     host_setup.*|welcome.*|wizard.welcome_subtitle|wizard.aborted_prereqs|\
-    wizard.cloud.*|wizard.step.*|wizard.profile.intro|wizard.provider.*|wizard.cli.*|\
+    wizard.checks.*|wizard.cloud.*|wizard.step.*|wizard.profile.intro|wizard.provider.*|wizard.cli.*|\
     wizard.oauth.*|wizard.team.starting|wizard.team.start_failed|\
     wizard.outro_done|wizard.outro_aborted|wizard.start.ready|wizard.start.done)
       return 0 ;;
