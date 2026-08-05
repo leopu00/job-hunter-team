@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Check action card</title>
+  <desc id="desc">Linear document check icon and label for the Analyst action in the Job Hunter Team motion collage.</desc>
+  <rect x="9" y="9" width="494" height="494" rx="24" fill="#F6F7F4" stroke="#111116" stroke-width="2"/>
+  <rect x="38" y="42" width="54" height="6" rx="3" fill="#00E87A"/>
+  <text x="112" y="57" fill="#111116" font-family="JetBrains Mono" font-size="24" font-weight="800" letter-spacing="1.2">02 / ANALYST</text>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M158 116H300L360 176V340H158Z" stroke="#111116" stroke-width="2"/>
+    <path d="M300 116V176H360" stroke="#111116" stroke-width="2"/>
+    <path d="M196 218H288M196 258H264" stroke="#111116" stroke-width="2"/>
+    <path d="M250 308L282 338L348 264" stroke="#00E87A" stroke-width="2"/>
+  </g>
+  <text x="38" y="438" fill="#111116" font-family="JetBrains Mono" font-size="72" font-weight="800" letter-spacing="1">CHECK</text>
+  <text x="40" y="476" fill="#6D706B" font-family="JetBrains Mono" font-size="24" font-weight="600" letter-spacing="1.2">VERIFY / FILTER</text>
+</svg>
