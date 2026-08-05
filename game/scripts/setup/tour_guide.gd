@@ -232,12 +232,20 @@ func scene_for(slug: String) -> Dictionary:
 		return scene
 	var localized := scene.duplicate(true)
 	localized["name"] = CharacterDefs.role_name(slug)
+	# Le battute in scena appartengono al tour, non alla targa del ruolo:
+	# la const conserva l'italiano come ripiego se un dizionario è incompleto.
+	for line in ["greet", "reply"]:
+		if localized.has(line):
+			var key := "tour.guide.%s.%s" % [slug, line]
+			var translated := UIStrings.t(key)
+			if translated != key:
+				localized[line] = translated
 	return localized
 
 ## Invito iniziale sopra l'Assistente: saluto legato all'orario reale
 ## (e al nome, se l'utente l'ha già lasciato all'ingresso).
 func invite_line() -> String:
-	return "%s%s! Vieni, ti presento il tuo nuovo team." % [
+	return UIStrings.t("tour.invite") % [
 		Dialogues.greeting(), ScriptedOnboarding.player_suffix()]
 
 ## Un dialogo-tappa si è concluso. In guidato avanza solo il bersaglio

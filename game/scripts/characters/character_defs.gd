@@ -23,6 +23,10 @@ const AGENTS := {
 			"il lavoro di oggi procede bene",
 			"nessun reparto ha bisogno di aiuto",
 		],
+		"chatter_keys": [
+			"dept.chatter.coordinatore.1", "dept.chatter.coordinatore.2",
+			"dept.chatter.coordinatore.3",
+		],
 	},
 	"scout": {
 		"name": "Il Ricercatore",
@@ -32,6 +36,9 @@ const AGENTS := {
 			"sto cercando nuove opportunità…",
 			"ho trovato tre aziende interessanti",
 			"questa azienda ha appena pubblicato un'offerta…",
+		],
+		"chatter_keys": [
+			"dept.chatter.scout.1", "dept.chatter.scout.2", "dept.chatter.scout.3",
 		],
 	},
 	"analista": {
@@ -43,6 +50,10 @@ const AGENTS := {
 			"qui mancano alcune informazioni",
 			"controllo dove si trova davvero la sede…",
 		],
+		"chatter_keys": [
+			"dept.chatter.analista.1", "dept.chatter.analista.2",
+			"dept.chatter.analista.3",
+		],
 	},
 	"scorer": {
 		"name": "Il Consulente",
@@ -52,6 +63,9 @@ const AGENTS := {
 			"confronto questa offerta con i suoi desideri…",
 			"questa opportunità sembra promettente",
 			"qui competenze e condizioni combaciano bene",
+		],
+		"chatter_keys": [
+			"dept.chatter.scorer.1", "dept.chatter.scorer.2", "dept.chatter.scorer.3",
 		],
 	},
 	"scrittore": {
@@ -63,6 +77,10 @@ const AGENTS := {
 			"due righe in meno, il doppio del peso",
 			"su misura, mai fotocopie",
 		],
+		"chatter_keys": [
+			"dept.chatter.scrittore.1", "dept.chatter.scrittore.2",
+			"dept.chatter.scrittore.3",
+		],
 	},
 	"critico": {
 		"name": "Il Revisore",
@@ -72,6 +90,10 @@ const AGENTS := {
 			"questa frase non è abbastanza chiara: riscrivila",
 			"un refuso qui costa un colloquio",
 			"approvato. sorprendentemente.",
+		],
+		"chatter_keys": [
+			"dept.chatter.critico.1", "dept.chatter.critico.2",
+			"dept.chatter.critico.3",
 		],
 	},
 	"mentor": {
@@ -92,6 +114,9 @@ const AGENTS := {
 			"i numeri raccontano i risultati",
 			"respira: la ricerca è una maratona",
 		],
+		"chatter_keys": [
+			"dept.chatter.mentor.1", "dept.chatter.mentor.2", "dept.chatter.mentor.3",
+		],
 	},
 	"assistente": {
 		"name": "L'Assistente",
@@ -104,6 +129,10 @@ const AGENTS := {
 			"la presentazione dell'ufficio è completa",
 			"se hai dubbi, chiedi pure a me",
 			"tengo io il registro del team",
+		],
+		"chatter_keys": [
+			"dept.chatter.assistente.1", "dept.chatter.assistente.2",
+			"dept.chatter.assistente.3",
 		],
 	},
 	# one-shot/on-demand del sistema reale (roster barto li pubblica:
@@ -121,6 +150,10 @@ const AGENTS := {
 			"preparo gli aggiornamenti…",
 			"backup verificato, tutto al suo posto",
 		],
+		"chatter_keys": [
+			"dept.chatter.mantenitore.1", "dept.chatter.mantenitore.2",
+			"dept.chatter.mantenitore.3",
+		],
 	},
 	"dottore": {
 		"name": "Il Dottore",
@@ -133,6 +166,9 @@ const AGENTS := {
 			"visita di controllo agli agenti…",
 			"la squadra è in salute",
 			"prescrivo una breve pausa e poi si riparte",
+		],
+		"chatter_keys": [
+			"dept.chatter.dottore.1", "dept.chatter.dottore.2", "dept.chatter.dottore.3",
 		],
 	},
 	"sentinella": {
@@ -148,6 +184,10 @@ const AGENTS := {
 			"ronda completata: tutto in ordine",
 			"l'ufficio lavora regolarmente",
 			"nessun problema durante il turno",
+		],
+		"chatter_keys": [
+			"dept.chatter.sentinella.1", "dept.chatter.sentinella.2",
+			"dept.chatter.sentinella.3",
 		],
 	},
 }
@@ -203,6 +243,22 @@ static func _localized(key: String, fallback: String) -> String:
 	return fallback if translated == key else translated
 
 
+## I fumetti ambientali condividono il roster statico con nomi e scrivanie,
+## ma arrivano a schermo solo dopo questa risoluzione. Tenere l'italiano
+## accanto alle chiavi dà un fallback leggibile durante lo sviluppo; per ogni
+## build l'inglese e le altre lingue arrivano da UIStrings, mai dal dizionario.
+static func localized_chatter(slug: String) -> Array:
+	var def: Dictionary = AGENTS.get(slug, {})
+	var fallback: Array = def.get("chatter", [])
+	var keys: Array = def.get("chatter_keys", [])
+	var out: Array = []
+	for i in fallback.size():
+		var key := str(keys[i]) if i < keys.size() else ""
+		var translated := UIStrings.t(key) if key != "" else key
+		out.append(fallback[i] if translated == key else translated)
+	return out
+
+
 static var _spawn_cache: Array = []
 ## Lingua con cui la cache è stata costruita: i nomi ci sono dentro, e il
 ## cambio lingua da Impostazioni non riavvia il gioco.
@@ -220,6 +276,7 @@ static func spawn_list() -> Array:
 		var def: Dictionary = AGENTS[slug].duplicate(true)
 		def["slug"] = slug
 		def["name"] = role_name(slug)
+		def["chatter"] = localized_chatter(slug)
 		def["lead"] = true
 		if def.has("dept"):
 			def["variant"] = VARIANT_BY_DESK[def["dept"]][def["desk"]]
@@ -237,7 +294,7 @@ static func spawn_list() -> Array:
 				"desk": desk_i,
 				"lead": false,
 				"spot": _desk_spot_of(dept_id, desk_i),
-				"chatter": AGENTS[role["slug"]]["chatter"],
+				"chatter": localized_chatter(str(role["slug"])),
 			})
 			n += 1
 	return _spawn_cache
