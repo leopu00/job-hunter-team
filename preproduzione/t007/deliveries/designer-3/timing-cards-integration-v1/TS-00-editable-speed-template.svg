@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <title>T-007 timing card</title>
+  <desc>Editable Job Hunter Team timing disclosure graphic.</desc>
+  <defs>
+    <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#F0F0FA" stroke-opacity="0.024" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1920" height="1080" fill="#060608"/>
+  <rect width="1920" height="1080" fill="url(#grid)"/>
+  <rect x="128" y="94" width="1664" height="892" rx="28" fill="#0C0C10" fill-opacity="0.965" stroke="#2E2E3D" stroke-width="2"/>
+  <rect x="128" y="94" width="12" height="892" rx="6" fill="#00E87A"/>
+  <text id="line-1" x="960" y="404" font-family="JetBrains Mono, monospace" font-size="76" font-weight="800" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA">WAIT SHOWN AT</text>
+  <text id="line-2" data-editable="true" x="960" y="590" font-family="JetBrains Mono, monospace" font-size="154" font-weight="800" text-anchor="middle" dominant-baseline="middle" fill="#00E87A">{{SPEED}}×</text>
+</svg>
