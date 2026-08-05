@@ -18,6 +18,7 @@ const EN := {
 
 
 func _init() -> void:
+	super()
 	# DepartmentDressing riceve questo valore da Office._ready(). Durante il
 	# doppiaggio promo nasce invece un Node2D nuovo: senza ripristinarlo, le
 	# scritte inglesi finiscono a z=0 e possono coprire un agente in cammino.
