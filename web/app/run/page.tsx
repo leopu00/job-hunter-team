@@ -346,10 +346,7 @@ function SetupContent() {
   return (
     <>
       <LandingNav />
-      <main
-        className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto"
-        style={{ animation: "fade-in 0.4s ease both" }}
-      >
+      <main className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto">
         <div className="text-center mb-14">
           <h1 className="text-2xl md:text-4xl font-bold text-[var(--color-white)] tracking-tight mb-3">
             {p.title}

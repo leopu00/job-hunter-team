@@ -158,10 +158,7 @@ function DownloadContent() {
         style={{ position: "relative", zIndex: 1 }}
         className="min-h-screen flex flex-col items-center px-5 py-12 pt-24"
       >
-        <div
-          className="w-full max-w-2xl"
-          style={{ animation: "fade-in 0.5s ease both" }}
-        >
+        <div className="w-full max-w-2xl">
           <div className="mb-12 text-center">
             <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
               {t("dl_title_1")}{" "}
