@@ -23,6 +23,17 @@ const INTRO_STEP := [Vector2(1790.0, 1390.0), Vector2(1790.0, 1450.0)]
 const WALK_FROM := Vector2(1260.0, 780.0)
 const WALK_TO := Vector2(2600.0, 780.0)
 const MIN_WALK_DISTANCE := 150.0 * 8.5
+const V5_STEPS := [
+	[Vector2(1450.0, 650.0), Vector2(1450.0, 780.0)],
+	[Vector2(1450.0, 780.0), Vector2(1350.0, 780.0)],
+	[Vector2(1570.0, 650.0), Vector2(1570.0, 780.0)],
+	[Vector2(1570.0, 780.0), Vector2(1700.0, 780.0)],
+	[Vector2(1690.0, 650.0), Vector2(1690.0, 780.0)],
+	[Vector2(1690.0, 780.0), Vector2(1790.0, 780.0)],
+]
+const V5_CLOSE_CAMERA := Vector2(1570.0, 760.0)
+const V5_CLOSE_ZOOM := 1.65
+const V5_AGENT_SIDE_CLEARANCE := 110.0
 
 var _fails: Array[String] = []
 
@@ -78,6 +89,21 @@ func _test_real_routes() -> void:
 	_check(top_screen >= 40.0 and feet_screen <= 1040.0,
 			"team-welcome mantiene il cast intero nel frame 16:9",
 			"top=%.1f feet=%.1f" % [top_screen, feet_screen])
+	for step in V5_STEPS:
+		_check_route(nav, step[0], step[1], "V5 reveal usa NavGrid reale")
+	# Il close portrait (h=1920) concede più aria del 16:9: testa e piedi
+	# dell'Assistente devono restare lontani dai bordi già nel primo handle.
+	var v5_top := _portrait_screen_y(600.0, V5_CLOSE_CAMERA.y, V5_CLOSE_ZOOM)
+	var v5_feet := _portrait_screen_y(780.0, V5_CLOSE_CAMERA.y, V5_CLOSE_ZOOM)
+	_check(v5_top >= 80.0 and v5_feet <= 1840.0,
+			"V5 reveal mantiene testa e piedi nel portrait",
+			"top=%.1f feet=%.1f" % [v5_top, v5_feet])
+	for step in V5_STEPS:
+		for point: Vector2 in step:
+			var x := _portrait_screen_x(point.x, V5_CLOSE_CAMERA.x, V5_CLOSE_ZOOM)
+			_check(x >= V5_AGENT_SIDE_CLEARANCE and x <= 1080.0 - V5_AGENT_SIDE_CLEARANCE,
+					"V5 reveal mantiene intera la silhouette sul lato",
+					"x=%.1f point=%s" % [x, point])
 
 
 func _check_route(nav, from: Vector2, to: Vector2, label: String) -> void:
@@ -95,6 +121,14 @@ func _route_distance(route: PackedVector2Array) -> float:
 
 func _screen_y(world_y: float, camera_y: float, zoom: float) -> float:
 	return 540.0 + (world_y - camera_y) * zoom
+
+
+func _portrait_screen_y(world_y: float, camera_y: float, zoom: float) -> float:
+	return 960.0 + (world_y - camera_y) * zoom
+
+
+func _portrait_screen_x(world_x: float, camera_x: float, zoom: float) -> float:
+	return 540.0 + (world_x - camera_x) * zoom
 
 
 func _test_v3_director_contract() -> void:
@@ -127,6 +161,18 @@ func _test_v3_director_contract() -> void:
 			"le clip V3 usano gambe AgentNPC invece di animazioni separate")
 	_check(not source.contains("BackendBus.publish_chat({\"ts\": Time.get_datetime_string_from_system(),\n\t\t\"from\": \"assistente\""),
 			"la nuova regia Assistant non inietta dialoghi baked-in")
+	_check(source.contains('"v5-reveal":')
+			and source.contains("func _v5_reveal_clip")
+			and source.contains("V5_REVEAL_SECONDS := 14.2"),
+			"V5 reveal è una ripresa distinta con durata superiore a 14 s")
+	_check(source.contains("V5_REVEAL_CLOSE_CAMERA")
+			and source.contains("V5_REVEAL_WIDE_CAMERA")
+			and source.contains("_force_legs(agent")
+			and source.contains("_v5_hide_world_copy()")
+			and source.contains("station is PaperPile")
+			and source.contains("if dressing is DepartmentDressing")
+			and source.contains("agent.aura.visible = false"),
+			"V5 reveal muove Camera2D e AgentNPC reali, non una panoramica statica")
 
 
 func _check(ok: bool, what: String, detail := "") -> void:

@@ -48,6 +48,9 @@ extends Node
 ##                                   calma, sul lato destro del quadro.
 ##   JHT_PROMO=assistant-walk-right  l'Assistente percorre una tratta NavGrid
 ##                                   continua verso destra, camera al seguito.
+##   JHT_PROMO=v5-reveal             raw DEV portrait: la camera arretra
+##                                   dall'Assistente e rivela tre AgentNPC in
+##                                   movimento reale, senza UI o balloon.
 ## I viaggi fisici riusano le tappe VERE della pipeline (stampante,
 ## pile_take/pile_drop, scaffale output) ma con PAUSE FISSE: il ciak deve
 ## essere ripetibile, non un lancio di dadi. Il HUD «JHT TEAM» (numeri
@@ -260,6 +263,26 @@ const V3_ASSISTANT_INTRO_SECONDS := 7.2
 const V3_ASSISTANT_WALK_SECONDS := 8.6
 const V3_STILL_HOLD := 900.0
 
+## V5 — il raw verticale non contiene testo: il suo valore è mostrare che
+## l'ufficio è un gioco vivo, con persone intere e una camera che scopre la
+## squadra. Il frame portrait ha più aria verticale, ma il close iniziale
+## mantiene comunque testa e piedi dell'Assistente lontani dai bordi.
+const V5_REVEAL_SECONDS := 14.2
+const V5_REVEAL_CLOSE_CAMERA := Vector2(1570.0, 760.0)
+const V5_REVEAL_CLOSE_ZOOM := 1.65
+const V5_REVEAL_WIDE_CAMERA := Vector2(1650.0, 1020.0)
+const V5_REVEAL_WIDE_ZOOM := 1.2
+const V5_REVEAL_STAGES := {
+	"scout-1": Vector2(1450.0, 650.0),
+	"analista-1": Vector2(1570.0, 650.0),
+	"assistente": Vector2(1690.0, 650.0),
+}
+const V5_REVEAL_DESTINATIONS := {
+	"scout-1": Vector2(1350.0, 780.0),
+	"analista-1": Vector2(1700.0, 780.0),
+	"assistente": Vector2(1790.0, 780.0),
+}
+
 ## Corridoio centrale libero, gia' percorso dal loop QA delle quattro
 ## direzioni. Le tre colonne producono una composizione cortese ma non
 ## teatrale: un passo in avanti reale, poi la posa `down` frontale.
@@ -318,7 +341,7 @@ const TRACK_LERP := 0.08
 func _ready() -> void:
 	_office = get_parent()
 	var mode := OS.get_environment("JHT_PROMO")
-	_v3_active = mode in ["team-welcome", "assistant-intro", "assistant-walk-right"]
+	_v3_active = mode in ["team-welcome", "assistant-intro", "assistant-walk-right", "v5-reveal"]
 	# Movie Maker registra dal bootstrap. Sul profilo live teniamo chiusa una
 	# semplice tendina nera finche' il data-plane non e' pronto: nel raw non
 	# entra mai un frame intermedio col warning, che resta comunque intatto e
@@ -350,6 +373,8 @@ func _ready() -> void:
 			_assistant_intro_clip.call_deferred()
 		"assistant-walk-right":
 			_assistant_walk_right_clip.call_deferred()
+		"v5-reveal":
+			_v5_reveal_clip.call_deferred()
 
 
 func _process(_delta: float) -> void:
@@ -743,6 +768,47 @@ func _assistant_walk_right_clip() -> void:
 	_v3_pass_and_quit("assistant-walk-right", _track_cam)
 
 
+## Raw DEV per V5-04. Il movimento è tutto nel prodotto: Camera2D, NavGrid e
+## AgentNPC. Non c'è un pan editoriale sopra un fermo immagine e non vengono
+## creati pannelli o balloon che potrebbero sovrapporsi al compositing V5.
+func _v5_reveal_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	var cast: Array = []
+	var moves: Array = []
+	for ref in V5_REVEAL_STAGES:
+		var agent := _find(str(ref))
+		if agent == null:
+			push_error("promo V5 reveal: agente assente '%s'" % ref)
+			get_tree().quit(14)
+			return
+		_v3_stage(agent, V5_REVEAL_STAGES[ref])
+		cast.append(agent)
+		moves.append({"agent": agent, "destination": V5_REVEAL_DESTINATIONS[ref]})
+	var cam := _mount_camera(V5_REVEAL_CLOSE_CAMERA, V5_REVEAL_CLOSE_ZOOM)
+	for move in moves:
+		var agent: AgentNPC = move["agent"]
+		var mid := Vector2(agent.global_position.x, 780.0)
+		var destination: Vector2 = move["destination"]
+		_force_legs(agent, [
+			agent._leg_to(mid, "walk", 0.0, "idle"),
+			agent._leg_to(destination, "carry", V3_STILL_HOLD, "idle"),
+		])
+	# Il close lascia una maniglia pulita sull'Assistente; poi la camera
+	# arretra DAVVERO dentro la scena e rende leggibile l'intera squadra.
+	var tw := create_tween().set_parallel(true) \
+			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(cam, "position", V5_REVEAL_WIDE_CAMERA, 8.2)
+	tw.tween_property(cam, "zoom", Vector2(V5_REVEAL_WIDE_ZOOM, V5_REVEAL_WIDE_ZOOM), 8.2)
+	_v3_animate_background(cast)
+	await get_tree().physics_frame
+	_v3_marker("v5-reveal", "start")
+	await get_tree().create_timer(V5_REVEAL_SECONDS).timeout
+	_v3_marker("v5-reveal", "end")
+	_v5_pass_and_quit("v5-reveal", cam)
+
+
 ## Blocca i viaggi casuali: la vita sullo sfondo e' data da pulsazioni di
 ## lavoro reali (rig o composito desk), non da agenti che invadono il quadro
 ## in momenti non deterministici. Rimuove anche tutti gli overlay promo.
@@ -802,6 +868,46 @@ func _v3_pass_and_quit(clip: String, cam: Camera2D) -> void:
 		return
 	print("PROMO-V3 PASS %s" % clip)
 	get_tree().quit(0)
+
+
+func _v5_pass_and_quit(clip: String, cam: Camera2D) -> void:
+	if cam == null or _office.find_child("GameSidebar", true, false) != null:
+		push_error("promo V5 %s: superficie non pulita" % clip)
+		get_tree().quit(15)
+		return
+	for agent in _office.agents:
+		if agent.quest_marker != null and agent.quest_marker.visible:
+			push_error("promo V5 %s: marker tour visibile" % clip)
+			get_tree().quit(16)
+			return
+	print("PROMO-V5 PASS %s" % clip)
+	get_tree().quit(0)
+
+
+## Il V5 deve poter accostare i suoi blocchi testuali senza testo nativo in
+## sovrimpressione. La scenografia resta l'ufficio vero, ma togliamo solo le
+## targhe dinamiche di handoff e output (una delle quali esiste ancora in IT).
+func _v5_hide_world_copy() -> void:
+	# Il V5 è un take di gioco, non una mappa di debug: le zone e le loro
+	# targhe sono utili durante il tour, ma in un portrait finiscono spezzate
+	# sui bordi. Le nascondiamo solo in questo profilo, prima del marker.
+	for dressing in _office._stage.get_children():
+		if dressing is DepartmentDressing:
+			dressing.visible = false
+	# Gli anelli sono affordance di selezione dell'interfaccia. Non devono
+	# sembrare marker di quest sotto i camminatori nel raw senza HUD.
+	for agent in _office.agents:
+		if agent.aura != null:
+			agent.aura.visible = false
+	if OutputShelf.instance != null:
+		OutputShelf.instance.visible = false
+	for station in _office.world.get_children():
+		if station is HandoffStation:
+			station.visible = false
+		if station is PaperPile:
+			station.visible = false
+	for dub in _office.find_children("*", "ShelfDub", true, false):
+		dub.visible = false
 
 
 ## Ciak uniforme per la recensione degli undici fogli personaggio. Tutte le
