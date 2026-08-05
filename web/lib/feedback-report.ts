@@ -119,14 +119,22 @@ export function parseReport(raw: unknown): Report | null {
   const body = raw as Record<string, unknown>;
   const happened = field(body.happened, MAX_STORY_CHARS);
   if (happened.length < 5) return null;
+  const client = safeClient(body.client);
   return {
-    client: safeClient(body.client),
+    client,
     subject: safeNarrative(body.subject, 120),
     kind: safeKind(body.kind),
     appVersion: safeVersion(body.app_version),
     locale: safeLocale(body.locale),
     platform: safePlatform(body.platform),
-    doing: safeNarrative(body.doing, MAX_STORY_CHARS),
+    // Il vecchio modulo pubblico inseriva il nome nel contesto. I nomi non
+    // sono riconoscibili con una regex affidabile, quindi questo client ha un
+    // contesto fisso: nessuna versione vecchia puo' trasformare il canale
+    // tecnico anonimo in un inoltro di dati personali.
+    doing:
+      client === "web-contact"
+        ? "Modulo di contatto web"
+        : safeNarrative(body.doing, MAX_STORY_CHARS),
     happened: redact(happened),
     expected: safeNarrative(body.expected, MAX_STORY_CHARS),
     // Client aggiornati non lo inviano; in un client vecchio resta nel JSON

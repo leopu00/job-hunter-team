@@ -13,7 +13,46 @@ import path from "node:path";
 
 const REPO = path.resolve(__dirname, "../../..");
 const WRAPPER = path.join(REPO, "scripts", "jht-wrapper.sh");
+const POWERSHELL_WRAPPER = path.join(REPO, "scripts", "jht-wrapper.ps1");
 const posixOnly = process.platform === "win32" ? describe.skip : describe;
+
+// Regressione reale che il desktop deve riconoscere prima di invocare il
+// check: il wrapper pubblicato in v0.3.3 interpreta qualunque flag dopo
+// `upgrade` come un normale apply (compose pull + up), senza frame JSON.
+// E' una fixture comportamentale ridotta dal dispatcher del tag, non una
+// copia del wrapper corrente travestita da runtime vecchio.
+const LEGACY_V033_UPGRADE_BEHAVIOR = [
+  "#!/usr/bin/env bash",
+  "# behavioral snapshot: scripts/jht-wrapper.sh at tag v0.3.3",
+  "set -euo pipefail",
+  'CONTAINER="${JHT_CONTAINER_NAME:-jht}"',
+  'RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"',
+  'COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"',
+  "compose() { docker compose -f \"$COMPOSE_FILE\" --project-directory \"$RUNTIME_DIR\" \"$@\"; }",
+  'case "${1:-}" in',
+  "  upgrade)",
+  "    docker info >/dev/null",
+  '    test -f "$COMPOSE_FILE"',
+  "    compose pull",
+  "    compose up -d",
+  "    ;;",
+  "  *) exit 2 ;;",
+  "esac",
+  "",
+].join("\n");
+
+function historicV033Wrapper(): string {
+  // In una checkout completa si esercita il blob esatto pubblicato. Le CI
+  // shallow non hanno necessariamente il tag: la fixture comportamentale
+  // mantiene comunque il confine critico senza dipendere dalla storia Git.
+  const historical = spawnSync("git", [
+    "show",
+    "v0.3.3:scripts/jht-wrapper.sh",
+  ], { encoding: "utf8" });
+  return historical.status === 0 && historical.stdout
+    ? historical.stdout
+    : LEGACY_V033_UPGRADE_BEHAVIOR;
+}
 
 function writeExec(file: string, body: string) {
   writeFileSync(file, `#!/bin/sh\nset -eu\n${body}\n`, "utf8");
@@ -124,6 +163,9 @@ function run(sb: Sandbox, extra: Record<string, string> = {}, args = ["upgrade",
     env: {
       ...process.env,
       PATH: `${path.join(sb.root, "bin")}:${process.env.PATH}`,
+      HOME: sb.root,
+      JHT_HOME_HOST: path.join(sb.root, ".jht"),
+      JHT_USER_DIR_HOST: path.join(sb.root, "Documents", "Job Hunter Team"),
       JHT_RUNTIME_DIR: sb.runtime,
       JHT_COMPOSE_FILE: path.join(sb.runtime, "docker-compose.yml"),
       JHT_WRAPPER_PATH: sb.wrapper,
@@ -138,6 +180,29 @@ function run(sb: Sandbox, extra: Record<string, string> = {}, args = ["upgrade",
 }
 
 posixOnly("jht upgrade — runtime image atomico", () => {
+  it("distingue il contratto atomico dal dispatcher legacy v0.3.3", () => {
+    // Il client desktop deve poter riconoscere il wrapper capace prima di
+    // passargli --check: sul legacy quel flag era ignorato e mutava il deploy.
+    expect(readFileSync(WRAPPER, "utf8")).toContain("JHT_UPGRADE_PROTOCOL=1");
+    expect(readFileSync(POWERSHELL_WRAPPER, "utf8")).toContain(
+      "$JHT_UPGRADE_PROTOCOL = 1",
+    );
+    const legacy = historicV033Wrapper();
+    expect(legacy).not.toContain("JHT_UPGRADE_PROTOCOL=1");
+
+    const sb = makeSandbox();
+    writeFileSync(sb.wrapper, legacy, "utf8");
+    chmodSync(sb.wrapper, 0o755);
+    const result = run(sb, {}, ["upgrade", "--check", "--json"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe("");
+    // Questa e' la regressione da evitare con il bootstrap nel desktop: non
+    // basta dichiarare una versione vecchia nell'immagine, va usato il
+    // comportamento del vecchio wrapper host.
+    expect(sb.state()).toBe("sha256:new");
+  });
+
   it("aggiorna runtime metadata e immagine, poi riferisce le versioni in JSON", () => {
     const sb = makeSandbox();
     const result = run(sb);

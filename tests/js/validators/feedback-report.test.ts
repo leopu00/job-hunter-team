@@ -257,6 +257,19 @@ describe("privacy del contratto", () => {
     expect(report.diagnostics).not.toContain("testuser");
     expect(report.diagnostics).not.toContain("mario@example.com");
   });
+
+  it("non inoltra il nome che un vecchio modulo pubblico metteva in doing", () => {
+    const report = parseReport({
+      ...VALID,
+      client: "web-contact",
+      doing: "Modulo di contatto — Mario Rossi",
+      contact: "mario@example.com",
+    })!;
+    const delivered = `${emailText(report, "JHT-9Z")}\n${issueBody(report, "JHT-9Z")}`;
+    expect(report.doing).toBe("Modulo di contatto web");
+    expect(delivered).not.toContain("Mario Rossi");
+    expect(delivered).not.toContain("mario@example.com");
+  });
 });
 
 describe("modulo di contatto del sito", () => {
