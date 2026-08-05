@@ -68,18 +68,17 @@ rebuilt from scratch.
 
 Most reports will not arrive through the issue templates. The desktop app has
 a **Segnala un problema** section (own sidebar group, second entrance from
-Advanced) that posts to `POST /api/feedback` on jobhunterteam.ai, which opens
-the issue for the user. Three consequences for whoever is on triage:
+Advanced) that posts an anonymous, redacted report to `POST /api/feedback` on
+jobhunterteam.ai. Three consequences for whoever is on triage:
 
 - **They come in labelled `in-app`** on top of `bug` + `triage`, and the title
   is prefixed `[in-app]`. That label means "written by someone who did not
   choose to be on GitHub" — the environment section is already filled in by
   the app, so do not ask for it.
-- **The reporter's contact is not in the issue.** It travels on the webhook
-  (`JHT_FEEDBACK_WEBHOOK_URL`), because an email address in a public issue
-  body gets indexed. The issue only records whether a reply is possible; the
-  body says `nessun contatto lasciato` when it is not. Answering an anonymous
-  in-app report means fixing it and shipping, nothing else.
+- **No reporter contact reaches any destination.** The endpoint drops the
+  legacy `contact` field; mail, a public issue and a webhook all receive the
+  same anonymous report. Answering an in-app report means fixing it and
+  shipping, nothing else.
 - **The attached diagnostic is already redacted**, on both sides — client and
   server. If you see `[email]`, `[ip]`, `/Users/[user]` or `[secret]` in a
   report, that is the system working, not a corrupted upload. Never ask a

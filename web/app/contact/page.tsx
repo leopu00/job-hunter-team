@@ -13,9 +13,9 @@ import ContactForm, { type ContactStrings } from "./ContactForm";
 /**
  * Pagina di contatto pubblica.
  *
- * Categoria e oggetto fanno due lavori diversi e stanno bene insieme: la
- * categoria smista (un click, e in casella diventa un filtro), l'oggetto
- * descrive. Entrambi finiscono nell'intestazione della mail che riceviamo.
+ * Le conversazioni che hanno bisogno di risposta restano sui link mailto.
+ * Il modulo è invece un report tecnico anonimo: deve funzionare anche quando
+ * un utente non può o non vuole lasciare dati personali.
  */
 
 type Testi = ContactStrings & {
@@ -29,11 +29,11 @@ const T: Record<string, Testi> = {
   it: {
     title: "Contatti",
     intro:
-      "Per domande, problemi o proposte scrivi a {MAIL} o usa il modulo qui sotto. Per le segnalazioni di sicurezza: {SEC}.",
+      "Per domande o proposte scrivi a {MAIL}. Per le segnalazioni di sicurezza: {SEC}.",
     intro_app:
       "Hai già installato JHT? Per i problemi tecnici usa «Segnala un problema» dentro l'app: allega in automatico una diagnostica anonimizzata.",
     privacy_note:
-      "Usiamo il tuo indirizzo solo per rispondere a questo messaggio.",
+      "Il report tecnico qui sotto è anonimo: prima dell'invio mostra esattamente quali dati tecnici raccoglie.",
     kind_label: "Argomento",
     kind_support: "Supporto tecnico",
     kind_question: "Domanda generale",
@@ -45,27 +45,38 @@ const T: Record<string, Testi> = {
     email_ph: "nome@esempio.it",
     subject: "Oggetto",
     subject_ph: "Di cosa vuoi parlarci",
+    report_intro:
+      "Hai trovato un bug o un malfunzionamento? Descrivilo qui: non chiediamo nome o email.",
     message: "Messaggio",
-    message_ph: "Scrivi qui il tuo messaggio",
+    message_ph: "Cosa è successo e cosa ti aspettavi",
+    data_title: "Dati inviati",
+    data_body:
+      "Inviamo il testo che scrivi, questa pagina e la lingua dell'interfaccia. Non inviamo nome, email, CV, contatti, file o log.",
+    data_page: "Pagina",
+    data_language: "Lingua",
+    data_client: "Sito web",
     send: "Invia",
     sending: "Invio…",
-    sent_title: "Messaggio inviato",
-    sent_body: "Ti risponderemo all'indirizzo che hai indicato.",
-    sent_again: "Scrivi un altro messaggio",
+    sent_title: "Segnalazione inviata",
+    sent_body: "La segnalazione è arrivata al supporto.",
+    sent_ticket: "Riferimento: %s",
+    sent_again: "Invia un'altra segnalazione",
     error_subject: "Aggiungi un oggetto.",
     error_short: "Il messaggio è troppo corto.",
     error_email: "Indirizzo email non valido.",
-    error_send:
-      "Invio non riuscito. Riprova o scrivi a support@jobhunterteam.ai.",
-    error_rate: "Hai inviato troppi messaggi. Riprova fra qualche minuto.",
+    error_send: "La segnalazione non è stata inviata. Riprova tra poco.",
+    error_offline:
+      "Sembri offline: non abbiamo inviato nulla. Ricollegati e riprova.",
+    error_rate: "Hai inviato troppe segnalazioni. Riprova fra qualche minuto.",
   },
   en: {
     title: "Contact",
     intro:
-      "For questions, issues or proposals write to {MAIL} or use the form below. For security reports: {SEC}.",
+      "For questions or proposals, write to {MAIL}. For security reports: {SEC}.",
     intro_app:
       "Already using JHT? For technical issues use «Report a problem» inside the app: it automatically attaches an anonymised diagnostic.",
-    privacy_note: "We use your address only to reply to this message.",
+    privacy_note:
+      "The technical report below is anonymous: it shows exactly which technical data it collects before sending.",
     kind_label: "Topic",
     kind_support: "Technical support",
     kind_question: "General question",
@@ -77,27 +88,38 @@ const T: Record<string, Testi> = {
     email_ph: "name@example.com",
     subject: "Subject",
     subject_ph: "What is it about",
+    report_intro:
+      "Found a bug or something not working? Describe it here — we do not ask for your name or email.",
     message: "Message",
-    message_ph: "Write your message here",
+    message_ph: "What happened and what you expected",
+    data_title: "Data being sent",
+    data_body:
+      "We send the text you write, this page and the interface language. We do not send your name, email, CV, contacts, files or logs.",
+    data_page: "Page",
+    data_language: "Language",
+    data_client: "Website",
     send: "Send",
     sending: "Sending…",
-    sent_title: "Message sent",
-    sent_body: "We'll reply to the address you provided.",
-    sent_again: "Write another message",
+    sent_title: "Report sent",
+    sent_body: "Your report reached support.",
+    sent_ticket: "Reference: %s",
+    sent_again: "Send another report",
     error_subject: "Add a subject.",
     error_short: "The message is too short.",
     error_email: "Invalid email address.",
-    error_send:
-      "Sending failed. Try again or write to support@jobhunterteam.ai.",
-    error_rate: "Too many messages sent. Try again in a few minutes.",
+    error_send: "Your report was not sent. Please try again shortly.",
+    error_offline:
+      "You appear to be offline: nothing was sent. Reconnect and try again.",
+    error_rate: "Too many reports sent. Try again in a few minutes.",
   },
   es: {
     title: "Contacto",
     intro:
-      "Para dudas, problemas o propuestas escribe a {MAIL} o usa el formulario. Para avisos de seguridad: {SEC}.",
+      "Para dudas o propuestas escribe a {MAIL}. Para avisos de seguridad: {SEC}.",
     intro_app:
       "¿Ya usas JHT? Para problemas técnicos usa «Informar de un problema» dentro de la app: adjunta automáticamente un diagnóstico anonimizado.",
-    privacy_note: "Usamos tu dirección solo para responder a este mensaje.",
+    privacy_note:
+      "El informe técnico de abajo es anónimo: antes de enviarlo muestra exactamente qué datos técnicos recoge.",
     kind_label: "Asunto",
     kind_support: "Soporte técnico",
     kind_question: "Consulta general",
@@ -109,28 +131,39 @@ const T: Record<string, Testi> = {
     email_ph: "nombre@ejemplo.com",
     subject: "Asunto",
     subject_ph: "De qué quieres hablarnos",
+    report_intro:
+      "¿Has encontrado un error o algo que no funciona? Descríbelo aquí: no pedimos nombre ni correo.",
     message: "Mensaje",
-    message_ph: "Escribe aquí tu mensaje",
+    message_ph: "Qué ha pasado y qué esperabas",
+    data_title: "Datos enviados",
+    data_body:
+      "Enviamos el texto que escribes, esta página y el idioma de la interfaz. No enviamos nombre, correo, CV, contactos, archivos ni registros.",
+    data_page: "Página",
+    data_language: "Idioma",
+    data_client: "Sitio web",
     send: "Enviar",
     sending: "Enviando…",
-    sent_title: "Mensaje enviado",
-    sent_body: "Te responderemos a la dirección indicada.",
-    sent_again: "Escribir otro mensaje",
+    sent_title: "Informe enviado",
+    sent_body: "Tu informe ha llegado al soporte.",
+    sent_ticket: "Referencia: %s",
+    sent_again: "Enviar otro informe",
     error_subject: "Añade un asunto.",
     error_short: "El mensaje es demasiado corto.",
     error_email: "Dirección de correo no válida.",
     error_send:
-      "Error al enviar. Inténtalo o escribe a support@jobhunterteam.ai.",
-    error_rate: "Has enviado demasiados mensajes. Inténtalo en unos minutos.",
+      "El informe no se ha enviado. Inténtalo de nuevo dentro de poco.",
+    error_offline:
+      "Parece que no tienes conexión: no hemos enviado nada. Vuelve a conectarte e inténtalo de nuevo.",
+    error_rate: "Has enviado demasiados informes. Inténtalo en unos minutos.",
   },
   fr: {
     title: "Contact",
     intro:
-      "Pour toute question, problème ou proposition, écris à {MAIL} ou utilise le formulaire. Pour les signalements de sécurité : {SEC}.",
+      "Pour toute question ou proposition, écris à {MAIL}. Pour les signalements de sécurité : {SEC}.",
     intro_app:
       "Tu utilises déjà JHT ? Pour les problèmes techniques, utilise « Signaler un problème » dans l'app : elle joint automatiquement un diagnostic anonymisé.",
     privacy_note:
-      "Nous utilisons ton adresse uniquement pour répondre à ce message.",
+      "Le signalement technique ci-dessous est anonyme : il montre exactement quelles données techniques il collecte avant l'envoi.",
     kind_label: "Sujet",
     kind_support: "Support technique",
     kind_question: "Question générale",
@@ -142,28 +175,38 @@ const T: Record<string, Testi> = {
     email_ph: "nom@exemple.com",
     subject: "Objet",
     subject_ph: "De quoi veux-tu nous parler",
+    report_intro:
+      "Tu as trouvé un bug ou quelque chose qui ne marche pas ? Décris-le ici : nous ne demandons ni nom ni email.",
     message: "Message",
-    message_ph: "Écris ton message ici",
+    message_ph: "Ce qui s'est passé et ce que tu attendais",
+    data_title: "Données envoyées",
+    data_body:
+      "Nous envoyons le texte que tu écris, cette page et la langue de l'interface. Nous n'envoyons ni nom, ni email, ni CV, ni contacts, ni fichiers, ni journaux.",
+    data_page: "Page",
+    data_language: "Langue",
+    data_client: "Site web",
     send: "Envoyer",
     sending: "Envoi…",
-    sent_title: "Message envoyé",
-    sent_body: "Nous répondrons à l'adresse indiquée.",
-    sent_again: "Écrire un autre message",
+    sent_title: "Signalement envoyé",
+    sent_body: "Ton signalement est arrivé au support.",
+    sent_ticket: "Référence : %s",
+    sent_again: "Envoyer un autre signalement",
     error_subject: "Ajoute un objet.",
     error_short: "Le message est trop court.",
     error_email: "Adresse email invalide.",
-    error_send:
-      "Échec de l'envoi. Réessaie ou écris à support@jobhunterteam.ai.",
-    error_rate: "Trop de messages envoyés. Réessaie dans quelques minutes.",
+    error_send: "Le signalement n'a pas été envoyé. Réessaie dans un instant.",
+    error_offline:
+      "Tu sembles hors ligne : rien n'a été envoyé. Reconnecte-toi et réessaie.",
+    error_rate: "Trop de signalements envoyés. Réessaie dans quelques minutes.",
   },
   de: {
     title: "Kontakt",
     intro:
-      "Bei Fragen, Problemen oder Vorschlägen schreib an {MAIL} oder nutze das Formular. Für Sicherheitsmeldungen: {SEC}.",
+      "Bei Fragen oder Vorschlägen schreib an {MAIL}. Für Sicherheitsmeldungen: {SEC}.",
     intro_app:
       "Du nutzt JHT bereits? Für technische Probleme nimm «Problem melden» in der App: sie hängt automatisch eine anonymisierte Diagnose an.",
     privacy_note:
-      "Wir verwenden deine Adresse nur für die Antwort auf diese Nachricht.",
+      "Die technische Meldung unten ist anonym: Vor dem Senden zeigt sie genau, welche technischen Daten sie erfasst.",
     kind_label: "Thema",
     kind_support: "Technischer Support",
     kind_question: "Allgemeine Frage",
@@ -175,29 +218,39 @@ const T: Record<string, Testi> = {
     email_ph: "name@beispiel.de",
     subject: "Betreff",
     subject_ph: "Worum geht es",
+    report_intro:
+      "Du hast einen Fehler oder etwas entdeckt, das nicht funktioniert? Beschreibe es hier: Wir fragen weder Namen noch E-Mail-Adresse ab.",
     message: "Nachricht",
-    message_ph: "Schreib hier deine Nachricht",
+    message_ph: "Was passiert ist und was du erwartet hast",
+    data_title: "Gesendete Daten",
+    data_body:
+      "Wir senden deinen Text, diese Seite und die Sprache der Oberfläche. Wir senden keinen Namen, keine E-Mail-Adresse, keinen Lebenslauf, Kontakte, Dateien oder Logs.",
+    data_page: "Seite",
+    data_language: "Sprache",
+    data_client: "Website",
     send: "Senden",
     sending: "Wird gesendet…",
-    sent_title: "Nachricht gesendet",
-    sent_body: "Wir antworten an die angegebene Adresse.",
-    sent_again: "Weitere Nachricht schreiben",
+    sent_title: "Meldung gesendet",
+    sent_body: "Deine Meldung ist beim Support angekommen.",
+    sent_ticket: "Referenz: %s",
+    sent_again: "Weitere Meldung senden",
     error_subject: "Bitte einen Betreff angeben.",
     error_short: "Die Nachricht ist zu kurz.",
     error_email: "Ungültige E-Mail-Adresse.",
     error_send:
-      "Senden fehlgeschlagen. Versuch es erneut oder schreib an support@jobhunterteam.ai.",
-    error_rate:
-      "Zu viele Nachrichten gesendet. Versuch es in ein paar Minuten.",
+      "Deine Meldung wurde nicht gesendet. Versuch es gleich noch einmal.",
+    error_offline:
+      "Du scheinst offline zu sein: Es wurde nichts gesendet. Verbinde dich und versuche es erneut.",
+    error_rate: "Zu viele Meldungen gesendet. Versuch es in ein paar Minuten.",
   },
   pt: {
     title: "Contacto",
     intro:
-      "Para dúvidas, problemas ou propostas escreve para {MAIL} ou usa o formulário. Para comunicações de segurança: {SEC}.",
+      "Para dúvidas ou propostas escreve para {MAIL}. Para comunicações de segurança: {SEC}.",
     intro_app:
       "Já usas o JHT? Para problemas técnicos usa «Comunicar um problema» dentro da app: anexa automaticamente um diagnóstico anonimizado.",
     privacy_note:
-      "Usamos o teu endereço apenas para responder a esta mensagem.",
+      "A comunicação técnica abaixo é anónima: mostra exatamente que dados técnicos recolhe antes de enviar.",
     kind_label: "Assunto",
     kind_support: "Suporte técnico",
     kind_question: "Questão geral",
@@ -209,28 +262,40 @@ const T: Record<string, Testi> = {
     email_ph: "nome@exemplo.com",
     subject: "Assunto",
     subject_ph: "Sobre o que nos queres falar",
+    report_intro:
+      "Encontraste um erro ou algo que não funciona? Descreve-o aqui: não pedimos nome nem email.",
     message: "Mensagem",
-    message_ph: "Escreve aqui a tua mensagem",
+    message_ph: "O que aconteceu e o que esperavas",
+    data_title: "Dados enviados",
+    data_body:
+      "Enviamos o texto que escreves, esta página e o idioma da interface. Não enviamos nome, email, CV, contactos, ficheiros ou registos.",
+    data_page: "Página",
+    data_language: "Idioma",
+    data_client: "Site web",
     send: "Enviar",
     sending: "A enviar…",
-    sent_title: "Mensagem enviada",
-    sent_body: "Responderemos ao endereço indicado.",
-    sent_again: "Escrever outra mensagem",
+    sent_title: "Comunicação enviada",
+    sent_body: "A tua comunicação chegou ao suporte.",
+    sent_ticket: "Referência: %s",
+    sent_again: "Enviar outra comunicação",
     error_subject: "Adiciona um assunto.",
     error_short: "A mensagem é demasiado curta.",
     error_email: "Endereço de email inválido.",
     error_send:
-      "Falha no envio. Tenta de novo ou escreve para support@jobhunterteam.ai.",
-    error_rate: "Enviaste demasiadas mensagens. Tenta daqui a alguns minutos.",
+      "A comunicação não foi enviada. Tenta novamente dentro de instantes.",
+    error_offline:
+      "Parece que estás sem ligação: não enviámos nada. Volta a ligar-te e tenta de novo.",
+    error_rate:
+      "Enviaste demasiadas comunicações. Tenta daqui a alguns minutos.",
   },
   hu: {
     title: "Kapcsolat",
     intro:
-      "Kérdés, probléma vagy javaslat esetén írj a {MAIL} címre, vagy használd az űrlapot. Biztonsági bejelentés: {SEC}.",
+      "Kérdés vagy javaslat esetén írj a {MAIL} címre. Biztonsági bejelentés: {SEC}.",
     intro_app:
       "Már használod a JHT-t? Technikai problémához használd az app «Hiba jelentése» gombját: automatikusan csatol egy anonimizált diagnosztikát.",
     privacy_note:
-      "A címedet kizárólag erre az üzenetre adott válaszhoz használjuk.",
+      "Az alábbi technikai bejelentés névtelen: küldés előtt pontosan megmutatja, milyen technikai adatokat gyűjt.",
     kind_label: "Téma",
     kind_support: "Technikai támogatás",
     kind_question: "Általános kérdés",
@@ -242,19 +307,29 @@ const T: Record<string, Testi> = {
     email_ph: "nev@pelda.hu",
     subject: "Tárgy",
     subject_ph: "Miről szeretnél írni",
+    report_intro:
+      "Hibát vagy nem működő funkciót találtál? Írd le itt: nem kérünk nevet vagy e-mail-címet.",
     message: "Üzenet",
-    message_ph: "Írd ide az üzeneted",
+    message_ph: "Mi történt és mire számítottál",
+    data_title: "Elküldött adatok",
+    data_body:
+      "Az általad írt szöveget, ezt az oldalt és a felület nyelvét küldjük el. Nem küldünk nevet, e-mail-címet, CV-t, kapcsolatokat, fájlokat vagy naplókat.",
+    data_page: "Oldal",
+    data_language: "Nyelv",
+    data_client: "Webhely",
     send: "Küldés",
     sending: "Küldés…",
-    sent_title: "Üzenet elküldve",
-    sent_body: "A megadott címre válaszolunk.",
-    sent_again: "Új üzenet írása",
+    sent_title: "Bejelentés elküldve",
+    sent_body: "A bejelentésed megérkezett az ügyfélszolgálathoz.",
+    sent_ticket: "Hivatkozás: %s",
+    sent_again: "Másik bejelentés küldése",
     error_subject: "Adj meg egy tárgyat.",
     error_short: "Az üzenet túl rövid.",
     error_email: "Érvénytelen e-mail cím.",
-    error_send:
-      "A küldés nem sikerült. Próbáld újra, vagy írj a support@jobhunterteam.ai címre.",
-    error_rate: "Túl sok üzenetet küldtél. Próbáld pár perc múlva.",
+    error_send: "A bejelentés nem lett elküldve. Próbáld újra hamarosan.",
+    error_offline:
+      "Úgy tűnik, nincs kapcsolatod: semmit nem küldtünk el. Csatlakozz újra, majd próbáld meg ismét.",
+    error_rate: "Túl sok bejelentést küldtél. Próbáld pár perc múlva.",
   },
 };
 

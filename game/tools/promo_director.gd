@@ -856,28 +856,6 @@ func _review_role_label() -> String:
 ## vignette scaccerebbero quelle di regia. Parlano solo le battute dirette.
 func _dress_promo_set() -> void:
 	_dress_set_english()
-	_silence_state_tags()
-	if "_team_hud" in _office and is_instance_valid(_office._team_hud):
-		_office._team_hud.queue_free()
-	# Pulizia alla fonte richiesta dal gate trailer: nessun crop o bonifica in
-	# post. Il ciak mostra solo mondo e meccaniche, senza marker showroom.
-	for child in _office.get_children():
-		if child is GameSidebar:
-			child.queue_free()
-		if child is CanvasLayer:
-			for root in child.get_children():
-				if root is Control:
-					for overlay in root.get_children():
-						if overlay is TeamHud or overlay is BudgetNotice \
-								or overlay is HeadlessNotice \
-								or overlay is UpdateNotice:
-							overlay.queue_free()
-	for agent in _office.agents:
-		agent._chatter = []
-		agent._bubble_timer = 100000.0
-		if agent.quest_marker:
-			agent.quest_marker.queue_free()
-			agent.quest_marker = null
 	# La targa della mensola output («CV PRONTI») non è localizzata: per il
 	# ciak inglese la si copre con una targa gemella in inglese, contatore
 	# vero incluso — il Critico della Scena 4 consegna proprio lì.
@@ -952,6 +930,9 @@ func _silence_state_tags() -> void:
 ## reparto, insegne di passaggio) e spegne il CTA del setup: il ciak mostra
 ## un ufficio già configurato. Tutto avviene solo su questa run.
 func _dress_set_english() -> void:
+	_hide_simulation_badge()
+	_hide_promo_hud()
+	_prepare_promo_agents()
 	var stage: Node = _office._stage
 	for child in stage.get_children():
 		if child is DepartmentDressing:
@@ -973,6 +954,46 @@ func _dress_set_english() -> void:
 			# asincrono e _on_setup_status lo riaccenderebbe a metà ripresa
 			# (il guard is_instance_valid lì dentro copre il nodo rimosso).
 			child._setup_cta.queue_free()
+
+
+## Il badge è obbligatorio nel prodotto quando i dati sono demo. Il set promo
+## è invece una scenografia sintetica dichiarata dal suo manifest: lasciarlo
+## nel frame lo farebbe sembrare un dato di prodotto, non un asset animatic.
+## Non tocca mai la normale UI, perché questa funzione esiste solo per JHT_PROMO.
+func _hide_simulation_badge() -> void:
+	for badge in _office.find_children("*", "SimBadge", true, false):
+		badge.queue_free()
+
+
+## Tutte le scene promo, incluse office/dept/chat, devono avere la stessa
+## superficie prodotto-only. Il vecchio cleanup viveva solo nei clip nuovi e
+## lasciava HUD aggregato e sidebar nei tre ciak storici.
+func _hide_promo_hud() -> void:
+	if "_team_hud" in _office and is_instance_valid(_office._team_hud):
+		_office._team_hud.queue_free()
+	for child in _office.get_children():
+		if child is GameSidebar:
+			child.queue_free()
+		if child is CanvasLayer:
+			for root in child.get_children():
+				if root is Control:
+					for overlay in root.get_children():
+						if overlay is TeamHud or overlay is BudgetNotice \
+								or overlay is HeadlessNotice \
+								or overlay is UpdateNotice:
+							overlay.queue_free()
+
+
+## Nessuna targhetta showroom o battuta ambientale può entrare in un frame
+## promo. Tenerlo qui rende identici i clip storici e quelli aggiunti dopo.
+func _prepare_promo_agents() -> void:
+	_silence_state_tags()
+	for agent in _office.agents:
+		agent._chatter = []
+		agent._bubble_timer = 100000.0
+		if agent.quest_marker:
+			agent.quest_marker.queue_free()
+			agent.quest_marker = null
 
 
 ## Targa inglese sopra lo scaffale output: copre la targa «CV PRONTI»

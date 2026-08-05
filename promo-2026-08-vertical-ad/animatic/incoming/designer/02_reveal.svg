@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <title>Job Hunter Team vertical animatic overlay</title>
+  <desc>Transparent 1080 by 1920 overlay; JetBrains Mono typography.</desc>
+  <style>text { font-family: 'JetBrains Mono', monospace; }</style>
+  <rect x="108" y="220" width="864" height="162" rx="18" fill="#060608" fill-opacity="0.722"/>
+  <rect x="108" y="220" width="8" height="162" rx="4" fill="#00E87A" fill-opacity="1.000"/>
+  <text x="540" y="274" font-size="58" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA" fill-opacity="0.886">PREVIEW -</text>
+  <text x="540" y="338" font-size="58" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA" fill-opacity="0.886">NOT FINAL FOOTAGE</text>
+  <rect x="108" y="1240" width="864" height="340" rx="24" fill="#060608" fill-opacity="0.761"/>
+  <rect x="108" y="1240" width="10" height="340" rx="5" fill="#00E87A" fill-opacity="1.000"/>
+  <text x="540" y="1342" font-size="104" font-weight="800" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA" fill-opacity="1.000">AI AGENTS.</text>
+  <text x="540" y="1472" font-size="104" font-weight="800" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA" fill-opacity="1.000">YOUR CASE.</text>
+</svg>

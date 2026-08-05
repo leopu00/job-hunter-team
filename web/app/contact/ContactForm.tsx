@@ -1,21 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { feedbackDeliveryOutcome } from "@/lib/feedback-delivery";
 
 /**
- * Modulo di contatto pubblico.
- *
- * Parla con `/api/feedback`, lo stesso endpoint del pulsante "Segnala un
- * problema" dell'app desktop: una sola porta, una sola casella, un solo posto
- * dove le cose non si perdono.
- *
- * Differenza importante rispetto all'app: da qui NON arriva nessuna
- * diagnostica — il browser non vede i log del container. Per questo, a chi
- * segnala un bug avendo già l'app installata, la pagina suggerisce il pulsante
- * in-app: là il report arriva con dentro la fotografia della macchina, qui no.
+ * Segnalazione tecnica pubblica, intenzionalmente separata dai contatti via
+ * email sopra il modulo. Non raccoglie un'identità e non manda allegati: una
+ * persona deve poter dire che qualcosa è rotto anche prima di aver creato un
+ * account, senza rischiare CV o recapiti.
  */
-
 export interface ContactStrings {
+  // Legacy labels retained in the page catalogue while the public contact
+  // page offers both mail links and the anonymous technical-report flow.
   kind_label: string;
   kind_support: string;
   kind_question: string;
@@ -27,17 +23,25 @@ export interface ContactStrings {
   email_ph: string;
   subject: string;
   subject_ph: string;
+  report_intro: string;
   message: string;
   message_ph: string;
+  data_title: string;
+  data_body: string;
+  data_page: string;
+  data_language: string;
+  data_client: string;
   send: string;
   sending: string;
   sent_title: string;
   sent_body: string;
+  sent_ticket: string;
   sent_again: string;
   error_subject: string;
-  error_short: string;
   error_email: string;
+  error_short: string;
   error_send: string;
+  error_offline: string;
   error_rate: string;
 }
 
@@ -56,12 +60,9 @@ export default function ContactForm({
   t: ContactStrings;
   locale: string;
 }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [kind, setKind] = useState("supporto");
-  const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
-  // Campo trappola: invisibile a un umano, irresistibile per un bot.
+  // Campo trappola: fuori dalla vista e dall'albero accessibile. Non è un
+  // dato dell'utente: un valore compilato segnala un bot al server.
   const [website, setWebsite] = useState("");
   const [stato, setStato] = useState<"idle" | "invio" | "ok">("idle");
   const [errore, setErrore] = useState("");
@@ -70,16 +71,8 @@ export default function ContactForm({
   async function invia(e: React.FormEvent) {
     e.preventDefault();
     setErrore("");
-    if (subject.trim().length < 3) {
-      setErrore(t.error_subject);
-      return;
-    }
     if (message.trim().length < 10) {
       setErrore(t.error_short);
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setErrore(t.error_email);
       return;
     }
     setStato("invio");
@@ -89,33 +82,39 @@ export default function ContactForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           client: "web-contact",
-          kind,
-          subject,
-          locale,
-          platform: "web",
-          // Il messaggio dell'utente va nel campo che l'endpoint considera
-          // obbligatorio: è il racconto, qualunque forma abbia.
+          kind: "bug",
           happened: message,
-          doing: name ? `Modulo di contatto — ${name}` : "Modulo di contatto",
-          contact: email,
+          doing: "Public web report: /contact",
+          platform: "web",
+          locale,
           website,
         }),
       });
-      const dati = await res.json().catch(() => ({}));
-      if (res.status === 429) {
+      const data = (await res.json().catch(() => null)) as {
+        ticket?: unknown;
+      } | null;
+      const outcome = feedbackDeliveryOutcome(res, data?.ticket);
+      if (outcome.kind === "offline") {
+        setErrore(t.error_offline);
+        setStato("idle");
+        return;
+      }
+      if (outcome.kind === "rate-limited") {
         setErrore(t.error_rate);
         setStato("idle");
         return;
       }
-      if (!res.ok) {
+      // Nessuna conferma senza riferimento: è la prova leggibile che il
+      // server ha consegnato la segnalazione ad almeno un canale di supporto.
+      if (outcome.kind === "not-delivered") {
         setErrore(t.error_send);
         setStato("idle");
         return;
       }
-      setTicket(String(dati.ticket || ""));
+      setTicket(outcome.ticket);
       setStato("ok");
     } catch {
-      setErrore(t.error_send);
+      setErrore(t.error_offline);
       setStato("idle");
     }
   }
@@ -125,16 +124,13 @@ export default function ContactForm({
       <div className="border border-[var(--color-green)] p-8 text-center">
         <p className="text-lg font-semibold mb-2">{t.sent_title}</p>
         <p className="text-sm text-[var(--color-muted)] mb-4">{t.sent_body}</p>
-        {ticket && (
-          <p className="text-xs text-[var(--color-dim)] mb-6 font-mono">
-            {ticket}
-          </p>
-        )}
+        <p className="text-xs text-[var(--color-dim)] mb-6 font-mono">
+          {t.sent_ticket.replace("%s", ticket)}
+        </p>
         <button
           type="button"
           onClick={() => {
             setStato("idle");
-            setSubject("");
             setMessage("");
             setTicket("");
           }}
@@ -148,80 +144,9 @@ export default function ContactForm({
 
   return (
     <form onSubmit={invia} className="space-y-5" noValidate>
-      <fieldset>
-        <legend className={LABEL}>{t.kind_label}</legend>
-        <div className="flex gap-2 flex-wrap">
-          {[
-            // Gli id restano in italiano: finiscono nell'oggetto della mail
-            // che leggiamo noi, non nella pagina che legge chi scrive.
-            { id: "supporto", testo: t.kind_support },
-            { id: "domanda", testo: t.kind_question },
-            { id: "collaborazione", testo: t.kind_partnership },
-            { id: "privacy", testo: t.kind_privacy },
-          ].map((o) => (
-            <button
-              key={o.id}
-              type="button"
-              onClick={() => setKind(o.id)}
-              aria-pressed={kind === o.id}
-              className={`px-4 py-2 text-[11px] tracking-wide border transition-colors ${
-                kind === o.id
-                  ? "border-[var(--color-green)] text-[var(--color-green)]"
-                  : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)]"
-              }`}
-            >
-              {o.testo}
-            </button>
-          ))}
-        </div>
-      </fieldset>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        <div>
-          <label className={LABEL} htmlFor="c-nome">
-            {t.name}
-          </label>
-          <input
-            id="c-nome"
-            className={INPUT}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t.name_ph}
-            maxLength={80}
-            autoComplete="name"
-          />
-        </div>
-        <div>
-          <label className={LABEL} htmlFor="c-email">
-            {t.email}
-          </label>
-          <input
-            id="c-email"
-            type="email"
-            className={INPUT}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder={t.email_ph}
-            maxLength={180}
-            autoComplete="email"
-            required
-          />
-        </div>
-      </div>
-      <div>
-        <label className={LABEL} htmlFor="c-oggetto">
-          {t.subject}
-        </label>
-        <input
-          id="c-oggetto"
-          className={INPUT}
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          placeholder={t.subject_ph}
-          maxLength={120}
-          required
-        />
-      </div>
+      <p className="text-[13px] text-[var(--color-muted)] leading-relaxed">
+        {t.report_intro}
+      </p>
 
       <div>
         <label className={LABEL} htmlFor="c-msg">
@@ -238,8 +163,25 @@ export default function ContactForm({
         />
       </div>
 
-      {/* Trappola anti-bot: fuori dallo schermo e invisibile agli screen
-          reader, così nessun umano può compilarla per sbaglio. */}
+      <section
+        aria-label={t.data_title}
+        className="border border-[var(--color-border)] p-3 text-[11px] text-[var(--color-dim)] space-y-2"
+      >
+        <p className="font-semibold text-[var(--color-muted)]">
+          {t.data_title}
+        </p>
+        <p>{t.data_body}</p>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+          <dt>{t.data_client}</dt>
+          <dd className="text-[var(--color-muted)]">web-contact</dd>
+          <dt>{t.data_page}</dt>
+          <dd className="text-[var(--color-muted)]">/contact</dd>
+          <dt>{t.data_language}</dt>
+          <dd className="text-[var(--color-muted)]">{locale}</dd>
+        </dl>
+      </section>
+
+      {/* Trappola anti-bot: non richiede né raccoglie informazioni umane. */}
       <div aria-hidden="true" className="absolute left-[-9999px] opacity-0">
         <label htmlFor="c-website">Website</label>
         <input
@@ -251,7 +193,11 @@ export default function ContactForm({
         />
       </div>
 
-      {errore && <p className="text-xs text-[#f85149]">{errore}</p>}
+      {errore && (
+        <p role="alert" className="text-xs text-[#f85149]">
+          {errore}
+        </p>
+      )}
 
       <button
         type="submit"

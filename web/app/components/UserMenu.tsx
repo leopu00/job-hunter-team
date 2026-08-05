@@ -277,7 +277,7 @@ export default function UserMenu({
 
       {supporto && (
         <Suspense fallback={null}>
-          <SupportDialog email={email} onClose={() => setSupporto(false)} />
+          <SupportDialog onClose={() => setSupporto(false)} />
         </Suspense>
       )}
     </div>

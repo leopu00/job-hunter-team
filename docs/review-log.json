@@ -1449,6 +1449,11 @@
       "path": "docs/guides/TUTORIALS-LOCALIZATIONS.md",
       "description": "Localized source copy for the public text-first game and web tutorials in Italian, Spanish, French, German, Portuguese and Hungarian",
       "last_review": null
+    },
+    {
+      "path": "promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md",
+      "description": "Specifica tipografica e motion del pack overlay 9:16 per l'animatic pubblicitario: safe area, palette JHT, font, CTA e uso editoriale",
+      "last_review": null
     }
   ]
 }

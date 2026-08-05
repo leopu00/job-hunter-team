@@ -15,16 +15,16 @@ playwright.config.ts
 
 ## State of the suite (triaged 2026-07-26, counts checked 2026-07-30)
 
-**What runs: 48 tests in 5 files** — `npx playwright test --list` is the source
+**What runs: 50 tests in 5 files** — `npx playwright test --list` is the source
 of this number, not this paragraph:
 
-| Spec | Tests | What it covers |
-|---|---|---|
-| `39-og-twitter-image` | 21 | social/PWA metadata: OG and Twitter images, icons, manifest |
-| `80-welcome-wizard` | 10 | `/welcome`, the new cloud user's first run |
-| `81-demo-mode` | 6 | the protected area serving the demo dataset |
-| `82-support-report` | 10 | reporting a problem: `/contact` and the dashboard dialog |
-| `83-recording-profile` | 1 | private opt-in gate: real seeded account, no demo banner |
+| Spec                   | Tests | What it covers                                                                                                 |
+| ---------------------- | ----- | -------------------------------------------------------------------------------------------------------------- |
+| `39-og-twitter-image`  | 21    | social/PWA metadata: OG and Twitter images, icons, manifest                                                    |
+| `80-welcome-wizard`    | 10    | `/welcome`, the new cloud user's first run                                                                     |
+| `81-demo-mode`         | 6     | the protected area serving the demo dataset                                                                    |
+| `82-support-report`    | 12    | reporting a problem: `/contact` and the dashboard dialog, including privacy, delivery and offline truthfulness |
+| `83-recording-profile` | 1     | private opt-in gate: real seeded account, no demo banner                                                       |
 
 They run on every push and PR (`.github/workflows/test.yml`, job `e2e`) against
 `next start` in cloud mode with a real session.
@@ -95,7 +95,7 @@ E2E_INCLUDE_QUARANTINE=1 BASE_URL=http://localhost:3008 npx playwright test quar
 There used to be a second recipe here, `local` deploy mode without
 `NEXT_PUBLIC_JHT_DEPLOY=cloud`, in which the protected-area gate is off
 (`isLocalDeploy()`) and every page renders. It is gone with the specs that
-needed it: it renders the *local* plane, which the product no longer ships, so a
+needed it: it renders the _local_ plane, which the product no longer ships, so a
 green run there proved something nobody uses.
 
 > 🚨 **Use `localhost`, never `127.0.0.1`, against `next dev`.** Next refuses the
@@ -147,11 +147,11 @@ checkout finds them:
 
 The script looks in three places, in order:
 
-| Order | Source | For |
-|---|---|---|
-| 1 | env `E2E_EMAIL` / `E2E_PASSWORD` | CI, from the repository secrets |
-| 2 | `e2e/.auth-credentials` in the current worktree | overriding with a different account, just here |
-| 3 | `~/.config/jht/e2e-credentials` | everyday use, every worktree |
+| Order | Source                                          | For                                            |
+| ----- | ----------------------------------------------- | ---------------------------------------------- |
+| 1     | env `E2E_EMAIL` / `E2E_PASSWORD`                | CI, from the repository secrets                |
+| 2     | `e2e/.auth-credentials` in the current worktree | overriding with a different account, just here |
+| 3     | `~/.config/jht/e2e-credentials`                 | everyday use, every worktree                   |
 
 Not `~/.jht/`: that directory is bind-mounted into the agents' container, and a
 test secret has no business being under their nose. Both files are `chmod 600`,
@@ -180,12 +180,12 @@ pipe it from stdin.
 Some things read like e2e material but are verified without a browser, where the
 assertions are real rather than skipped:
 
-| Area | Where |
-|---|---|
-| Demo dataset contract (4 personas × 56 positions × 7 locales) | `tests/js/tasks/demo-seeds.test.ts` |
-| Queries that feed the pages in demo mode | `tests/js/tasks/demo-queries.test.ts` |
-| Retractable verdict stored in the demo cookie | `tests/js/tasks/demo-feedback-cookie.test.ts` |
-| Public installers kept in sync with their mirror | `tests/test_public_installers_sync.py` |
+| Area                                                           | Where                                            |
+| -------------------------------------------------------------- | ------------------------------------------------ |
+| Demo dataset contract (4 personas × 56 positions × 7 locales)  | `tests/js/tasks/demo-seeds.test.ts`              |
+| Queries that feed the pages in demo mode                       | `tests/js/tasks/demo-queries.test.ts`            |
+| Retractable verdict stored in the demo cookie                  | `tests/js/tasks/demo-feedback-cookie.test.ts`    |
+| Public installers kept in sync with their mirror               | `tests/test_public_installers_sync.py`           |
 | Native app: scene import, nav grid, terminal, pipeline, doctor | Godot self-tests in `.github/workflows/game.yml` |
 
 ## See also
