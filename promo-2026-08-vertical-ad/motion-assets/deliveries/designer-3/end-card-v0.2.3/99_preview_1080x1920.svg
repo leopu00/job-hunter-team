@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920" role="img" aria-labelledby="title desc">
+  <title id="title">Job Hunter Team vertical end-card preview</title>
+  <desc id="desc">A 1080 by 1920 preview of the vertical end-card with all production copy inside the declared safe area.</desc>
+  <rect width="1080" height="1920" fill="#111116"/>
+  <rect x="108" y="488" width="98" height="8" rx="4" fill="#00E87A"/>
+  <text x="108" y="612" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="96" font-weight="800" letter-spacing="-5">JOB HUNTER TEAM</text>
+  <text x="108" y="742" fill="#B8B8D0" font-family="JetBrains Mono, monospace" font-size="47" font-weight="600" letter-spacing="-2.3">Your job hunt, now playable.</text>
+  <rect x="108" y="810" width="864" height="2" fill="#00E87A"/>
+  <text x="108" y="884" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="58" font-weight="800" letter-spacing="-2.5">jobhunterteam.ai</text>
+  <rect x="108" y="976" width="226" height="82" rx="41" fill="none" stroke="#00E87A" stroke-width="2"/>
+  <text x="141" y="1034" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="58" font-weight="700" letter-spacing="-3">Free</text>
+  <rect x="108" y="1078" width="490" height="82" rx="41" fill="none" stroke="#565666" stroke-width="2"/>
+  <text x="141" y="1136" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="58" font-weight="700" letter-spacing="-3">Open source</text>
+  <rect x="108" y="1180" width="226" height="82" rx="41" fill="none" stroke="#565666" stroke-width="2"/>
+  <text x="141" y="1238" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="58" font-weight="700" letter-spacing="-3">Beta</text>
+  <text x="540" y="83" text-anchor="middle" fill="#F6F7F4" fill-opacity="0.88" font-family="JetBrains Mono, monospace" font-size="25" font-weight="800" letter-spacing="0.1">PREVIEW - NOT FINAL FOOTAGE</text>
+</svg>
