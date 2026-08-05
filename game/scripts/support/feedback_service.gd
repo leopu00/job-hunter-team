@@ -3,9 +3,10 @@ extends Node
 ##
 ## Tre invarianti, in ordine di importanza.
 ##
-## 1. NIENTE ESCE SENZA REDAZIONE. Il bundle passa da Diagnostics (che sanifica
-##    ricorsivamente) e i campi liberi da Redactor.redact_secrets. Non esiste un
-##    percorso in questo file che spedisca testo grezzo.
+## 1. NIENTE ESCE SENZA REDAZIONE. Il bundle e ogni campo libero passano da
+##    Redactor con le regole per dati personali e segreti. Un recapito è un
+##    dato personale: non esiste nel payload desktop, neppure se un client
+##    vecchio prova a inserirlo nel dizionario del modulo.
 ## 2. LA COPIA LOCALE SI SCRIVE SEMPRE, prima del tentativo di invio. Se la rete
 ##    manca, se l'endpoint è giù, se l'utente è dietro un proxy ostile, il report
 ##    esiste comunque su disco e si può allegare a mano. Un canale che perde il
@@ -67,7 +68,7 @@ func build_preview(include_logs := true, include_container := true) -> void:
 	_start_collect({"logs": include_logs, "container": include_container}, {})
 
 
-## Invia. `form` = {"doing":…, "happened":…, "expected":…, "contact":…}.
+## Invia. `form` = {"doing":…, "happened":…, "expected":…}.
 ##
 ## Non viene MAI ignorato in silenzio. Se una raccolta di anteprima è ancora in
 ## volo — succede se l'utente scrive in fretta e preme invia subito — la
@@ -93,11 +94,12 @@ func submit(form: Dictionary, include_logs := true, include_container := true) -
 
 func _start_collect(opts: Dictionary, form: Dictionary) -> void:
 	_collecting = true
+	var context := Diagnostics.capture_context()
 	if form.is_empty():
 		preview_changed.emit(true, "", {})
 	_thread = Thread.new()
 	_thread.start(_collect.bind(
-			bool(opts["logs"]), bool(opts["container"]), form, opts))
+			bool(opts["logs"]), bool(opts["container"]), form, opts, context))
 
 
 func reports_path() -> String:
@@ -112,8 +114,8 @@ func open_reports_folder() -> void:
 # ── Raccolta (thread) ────────────────────────────────────────────────
 
 func _collect(include_logs: bool, include_container: bool, form: Dictionary,
-		opts: Dictionary) -> void:
-	var bundle := Diagnostics.collect(include_logs, include_container)
+		opts: Dictionary, context: Dictionary) -> void:
+	var bundle := Diagnostics.collect(include_logs, include_container, context)
 	var markdown := Diagnostics.to_markdown(bundle)
 	call_deferred("_on_collected", bundle, markdown, form, opts)
 
@@ -163,27 +165,59 @@ func _deliver(form: Dictionary, bundle: Dictionary, markdown: String) -> void:
 
 
 func _payload(form: Dictionary, bundle: Dictionary, markdown: String) -> Dictionary:
+	var terms := Diagnostics.sensitive_terms(Diagnostics.capture_context())
+	var doing := _clean_field(form.get("doing", ""), terms)
+	var happened := _clean_field(form.get("happened", ""), terms)
+	var expected := _clean_field(form.get("expected", ""), terms)
+	var counts := _merged_redaction_counts(bundle.get("redaction", {}), [
+		doing.get("counts", {}), happened.get("counts", {}), expected.get("counts", {}),
+	])
 	return {
 		"client": "godot-desktop",
 		"app_version": ProjectSettings.get_setting("application/config/version", "dev"),
 		"locale": UIStrings.lang,
 		"platform": OS.get_name(),
-		# I racconti dell'utente: ripuliti dalle credenziali, non dal senso.
-		"doing": _clean_field(form.get("doing", "")),
-		"happened": _clean_field(form.get("happened", "")),
-		"expected": _clean_field(form.get("expected", "")),
-		# Il contatto è il solo campo che NON viene toccato: è il dato che
-		# l'utente ci dà apposta perché gli si possa rispondere. Redigerlo
-		# significherebbe rompere il ciclo — e un report senza risposta è un
-		# tester che non scrive mai più.
-		"contact": str(form.get("contact", "")).strip_edges().substr(0, 200),
+		# I racconti sono trattati come la diagnostica: nessun nome, contatto,
+		# percorso CV o segreto esce perché l'utente lo ha incollato per errore.
+		"doing": str(doing.get("text", "")),
+		"happened": str(happened.get("text", "")),
+		"expected": str(expected.get("text", "")),
 		"diagnostics": markdown,
-		"redaction": bundle.get("redaction", {}),
+		"redaction": counts,
 	}
 
 
-func _clean_field(value: Variant) -> String:
-	return Redactor.redact_secrets(str(value).strip_edges().substr(0, MAX_FIELD_CHARS))
+func _clean_field(value: Variant,
+		sensitive_terms: PackedStringArray = PackedStringArray()) -> Dictionary:
+	return Redactor.redact_with_report(
+		str(value).strip_edges().substr(0, MAX_FIELD_CHARS), sensitive_terms)
+
+
+func _merged_redaction_counts(initial: Dictionary, groups: Array) -> Dictionary:
+	var counts := initial.duplicate(true)
+	for group: Dictionary in groups:
+		for key in group:
+			counts[key] = int(counts.get(key, 0)) + int(group[key])
+	return counts
+
+
+## Il consenso è reale solo se l'anteprima coincide byte per byte con la
+## copia locale e il payload POST. Il modulo chiama questo metodo al click,
+## così include anche il testo digitato dopo la raccolta diagnostica.
+func preview_report(form: Dictionary) -> String:
+	if not preview_is_ready():
+		return ""
+	return _to_markdown(_payload(form, preview_bundle, preview_markdown))
+
+
+func preview_redaction_counts(form: Dictionary) -> Dictionary:
+	if not preview_is_ready():
+		return preview_counts
+	return _payload(form, preview_bundle, preview_markdown).get("redaction", {})
+
+
+func preview_is_ready() -> bool:
+	return not _collecting and not preview_bundle.is_empty() and preview_markdown != ""
 
 
 ## Copia su disco in Markdown: apribile con un doppio clic e allegabile a una
@@ -211,9 +245,13 @@ func _to_markdown(payload: Dictionary) -> String:
 	for pair in [["Cosa stavo facendo", "doing"], ["Cosa è successo", "happened"],
 			["Cosa mi aspettavo", "expected"]]:
 		out += "## %s\n\n%s\n\n" % [pair[0], str(payload[pair[1]])]
-	if str(payload.get("contact", "")) != "":
-		out += "## Contatto\n\n%s\n\n" % payload["contact"]
 	out += "## Diagnostica\n\n" + str(payload.get("diagnostics", ""))
+	var redaction: Dictionary = payload.get("redaction", {})
+	if not redaction.is_empty():
+		var removed := PackedStringArray()
+		for key in redaction:
+			removed.append("%s×%d" % [key, int(redaction[key])])
+		out += "\n## Dati rimossi prima dell'invio\n\n" + ", ".join(removed) + "\n"
 	return out
 
 
