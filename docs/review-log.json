@@ -1449,6 +1449,11 @@
       "path": "docs/guides/TUTORIALS-LOCALIZATIONS.md",
       "description": "Localized source copy for the public text-first game and web tutorials in Italian, Spanish, French, German, Portuguese and Hungarian",
       "last_review": null
+    },
+    {
+      "path": "docs/about/TUTORIAL-GAME-SCREENSHOTS.md",
+      "description": "Provenance, privacy attestation, and hashes for the public game tutorial screenshots",
+      "last_review": null
     }
   ]
 }

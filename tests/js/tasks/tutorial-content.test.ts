@@ -362,14 +362,18 @@ describe("cataloghi dei tutorial pubblici", () => {
     ];
 
     for (const language of SUPPORTED_LANGS) {
-      const screenshots = TUTORIAL_GUIDES[language].game.steps
-        .map((step) => step.image)
-        .filter((image) => image !== undefined);
+      const steps = TUTORIAL_GUIDES[language].game.steps;
+      const screenshots = steps.slice(0, 2).map((step) => step.image);
 
       expect(screenshots).toHaveLength(2);
-      expect(screenshots.map((image) => image.src)).toEqual(screenshotPaths);
+      expect(screenshots).not.toContain(undefined);
+      expect(screenshots.map((image) => image?.src)).toEqual(screenshotPaths);
+      expect(steps.slice(2).every((step) => step.image === undefined)).toBe(
+        true,
+      );
 
       for (const image of screenshots) {
+        expect(image).toBeDefined();
         expect(image.width).toBe(1600);
         expect(image.height).toBe(900);
         expect(image.alt).toBeTruthy();
