@@ -121,6 +121,7 @@ func _posix_bootstrap_e2e_contract() -> void:
 	var bin := root.path_join("bin")
 	var fixture := root.path_join("production-wrapper.sh")
 	var without_marker := root.path_join("without-marker.sh")
+	var stale_execution_sentinel := root.path_join("stale-wrapper-was-executed")
 	var legacy_target := root.path_join("jht-v0.3.3")
 	DirAccess.make_dir_recursive_absolute(bin)
 	_write_file(fixture, "\n".join(PackedStringArray([
@@ -129,7 +130,12 @@ func _posix_bootstrap_e2e_contract() -> void:
 		"JHT_UPGRADE_PROTOCOL=1",
 		"printf '%s\\n' '" + JSON_FRAME + "'",
 	])) + "\n")
-	_write_file(without_marker, "#!/usr/bin/env bash\nprintf '%s\\n' '" + JSON_FRAME + "'\n")
+	# Se il gate marker venisse spostato dopo l'esecuzione, questa fixture
+	# lascerebbe una prova sul disco anche se il parser rigettasse poi il suo
+	# JSON. Il test sotto controlla quindi l'ORDINE, non solo il codice finale.
+	_write_file(without_marker, "#!/usr/bin/env bash\ntouch "
+			+ str(_service._shell_quote(stale_execution_sentinel))
+			+ "\nprintf '%s\\n' '" + JSON_FRAME + "'\n")
 	var good_curl := bin.path_join("curl-good")
 	var stale_curl := bin.path_join("curl-without-marker")
 	_write_file(good_curl, _curl_fixture_body(fixture))
@@ -156,6 +162,8 @@ func _posix_bootstrap_e2e_contract() -> void:
 	_check("posix e2e: wrapper without marker fails before execution",
 			not bool(rejected.get("ok", true))
 			and bool(rejected.get("protocol_error", false)), str(rejected))
+	_check("posix e2e: wrapper without marker never ran",
+			not FileAccess.file_exists(stale_execution_sentinel), stale_execution_sentinel)
 
 
 func _write_file(path: String, body: String) -> void:
