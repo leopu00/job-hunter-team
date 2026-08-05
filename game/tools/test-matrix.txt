@@ -73,6 +73,9 @@ update_check|script|gate|any|-|tools/update_check_selftest.gd|-
 # sempre bootstrapparne uno production temporaneo, verificato e con target
 # atomico reale, prima di qualunque check o apply locale/VPS.
 upgrade_bootstrap|script|gate|any|-|tools/upgrade_bootstrap_selftest.gd|UPGRADE-BOOTSTRAP-TEST PASS
+# La veste inglese delle riprese sostituisce un Node2D: deve conservare il
+# layer di fondale, altrimenti COMPATIBILITY passa davanti alla testa agente.
+promo_sign_layer|script|gate|any|-|tools/promo_sign_layer_selftest.gd|PROMO-SIGN-LAYER-TEST PASS
 # /bin/sh: apre la shell senza il ramo Windows che ha embedded_terminal.
 terminal_selection|script|gate|posix|-|tools/terminal_selection_selftest.gd|-
 # Il guard delle 7 lingue. UIStrings.t() fa fallback SILENZIOSO sull'italiano e
