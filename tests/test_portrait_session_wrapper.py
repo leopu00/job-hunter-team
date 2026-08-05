@@ -158,7 +158,9 @@ def test_wrapper_allows_only_the_two_headless_session_names(tmp_path):
 
 
 def test_live_source_pid_is_unavailable_outside_a_fake_proc_tree():
-    for live_proc_root in ("/proc", "/proc/", "/proc/../proc", "//proc"):
+    for live_proc_root in (
+        "/proc", "/proc/", "/proc/../proc", "//proc", "/proc/self",
+    ):
         result = subprocess.run(
             [
                 "bash", str(WRAPPER), "--source-pid", "4242",
