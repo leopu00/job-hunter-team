@@ -39,6 +39,15 @@ extends Node
 ##   JHT_PROMO=agent-review  Un ciak QA/B-roll per il ruolo indicato da
 ##                         JHT_PROMO_AGENT: seduta, alzata, quattro direzioni,
 ##                         ritiro documento, lavoro reale e ritorno a sedere.
+##
+## V3 verticale (OK operatore 05/08) — tre clip orizzontali puliti, destinati
+## al compositing e quindi SENZA copy o pannelli nel frame:
+##   JHT_PROMO=team-welcome          tre agenti: passo breve, posa frontale,
+##                                   poi idle vivo nell'ufficio.
+##   JHT_PROMO=assistant-intro       l'Assistente fa un passo frontale e resta
+##                                   calma, sul lato destro del quadro.
+##   JHT_PROMO=assistant-walk-right  l'Assistente percorre una tratta NavGrid
+##                                   continua verso destra, camera al seguito.
 ## I viaggi fisici riusano le tappe VERE della pipeline (stampante,
 ## pile_take/pile_drop, scaffale output) ma con PAUSE FISSE: il ciak deve
 ## essere ripetibile, non un lancio di dadi. Il HUD «JHT TEAM» (numeri
@@ -242,6 +251,43 @@ const REVIEW_PICKUP_HOLD := 1.0
 const REVIEW_WORK_HOLD := 2.6
 const REVIEW_FINAL_HOLD := 2.0
 
+## ── Clip V3 «Your AI job-search team» ───────────────────────────────
+## Le durate sono intenzionalmente appena superiori al contratto regia:
+## 9.5 s / 7.0 s / 8.5 s. Il writer Movie Maker taglia dal marker `start`,
+## non dall'avvio del processo, cosi' il primo frame consegnato e' gia' vivo.
+const V3_TEAM_WELCOME_SECONDS := 9.6
+const V3_ASSISTANT_INTRO_SECONDS := 7.2
+const V3_ASSISTANT_WALK_SECONDS := 8.6
+const V3_STILL_HOLD := 900.0
+
+## Corridoio centrale libero, gia' percorso dal loop QA delle quattro
+## direzioni. Le tre colonne producono una composizione cortese ma non
+## teatrale: un passo in avanti reale, poi la posa `down` frontale.
+const V3_TEAM_STARTS := {
+	"scout-1": Vector2(1450.0, 650.0),
+	"analista-1": Vector2(1570.0, 650.0),
+	"assistente": Vector2(1690.0, 650.0),
+}
+const V3_TEAM_STEP := Vector2(0.0, 130.0)
+const V3_TEAM_CAMERA := Vector2(1570.0, 960.0)
+const V3_TEAM_ZOOM := 1.82
+
+## La reception e' dietro al quadro: l'Assistente viene preparata nella porta
+## libera tra Scorer e reparti sud, fa un piccolo passo verso il pubblico e
+## lascia libera la meta' sinistra per il pannello composto da VIDEO.
+const V3_ASSISTANT_INTRO_FROM := Vector2(1790.0, 1390.0)
+const V3_ASSISTANT_INTRO_TO := Vector2(1790.0, 1450.0)
+const V3_ASSISTANT_INTRO_CAMERA := Vector2(1600.0, 1390.0)
+const V3_ASSISTANT_INTRO_ZOOM := 2.8
+
+## Fascia nord del reparto centrale: 1340 px diritti a 150 px/s. Il test
+## controlla sia navigabilita' sia distanza >= 8.5 s; l'offset porta il corpo
+## da sinistra-centro nel quadro mentre il tracking lo segue senza scatti.
+const V3_ASSISTANT_WALK_FROM := Vector2(1260.0, 780.0)
+const V3_ASSISTANT_WALK_TO := Vector2(2600.0, 780.0)
+const V3_ASSISTANT_WALK_CAMERA_OFFSET := Vector2(170.0, -40.0)
+const V3_ASSISTANT_WALK_ZOOM := 2.2
+
 ## I core non appartengono alla catena delle pile, ma il loro lavoro ha
 ## comunque una meta reale della ronda dichiarata in CharacterDefs.
 const REVIEW_CORE_WORK := {
@@ -293,6 +339,12 @@ func _ready() -> void:
 			_dusk_night_clip.call_deferred()
 		"agent-review":
 			_agent_review_clip.call_deferred()
+		"team-welcome":
+			_team_welcome_clip.call_deferred()
+		"assistant-intro":
+			_assistant_intro_clip.call_deferred()
+		"assistant-walk-right":
+			_assistant_walk_right_clip.call_deferred()
 
 
 func _process(_delta: float) -> void:
@@ -598,6 +650,140 @@ func _dusk_night_clip() -> void:
 			Vector2(NIGHT_ZOOM_TO, NIGHT_ZOOM_TO), NIGHT_SECONDS)
 	_pulse_at(2.5, scout)
 	_pulse_at(5.5, scout)
+
+
+## ── V3: tre take senza UI ───────────────────────────────────────────
+
+## Il set showroom resta esplicitamente sintetico nel manifest di consegna,
+## ma il movimento e' quello del prodotto: AgentNPC, NavGrid, rig e Camera2D
+## sono gli stessi della scena normale. Nessun badge/demo/sidebar/dialogo
+## entra nell'immagine: _dress_promo_set() li rimuove solo per JHT_PROMO.
+func _team_welcome_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	var cast: Array = []
+	for ref in V3_TEAM_STARTS:
+		var agent := _find(str(ref))
+		if agent == null:
+			push_error("promo V3 team-welcome: agente assente '%s'" % ref)
+			get_tree().quit(10)
+			return
+		_v3_stage(agent, V3_TEAM_STARTS[ref])
+		cast.append(agent)
+	var cam := _mount_camera(V3_TEAM_CAMERA, V3_TEAM_ZOOM)
+	for agent in cast:
+		var from: Vector2 = agent.global_position
+		_force_legs(agent, [agent._leg_to(from + V3_TEAM_STEP, "walk",
+				V3_STILL_HOLD, "idle")])
+	_v3_animate_background(cast)
+	# Aspetta il primo tick fisico: il marker start cade gia' sul walk, mai su
+	# una posa di bootstrap o una scrivania appena liberata.
+	await get_tree().physics_frame
+	_v3_marker("team-welcome", "start")
+	await get_tree().create_timer(V3_TEAM_WELCOME_SECONDS).timeout
+	_v3_marker("team-welcome", "end")
+	_v3_pass_and_quit("team-welcome", cam)
+
+
+func _assistant_intro_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	var assistant := _find("assistente")
+	if assistant == null:
+		push_error("promo V3 assistant-intro: Assistente assente")
+		get_tree().quit(11)
+		return
+	_v3_stage(assistant, V3_ASSISTANT_INTRO_FROM)
+	var cam := _mount_camera(V3_ASSISTANT_INTRO_CAMERA, V3_ASSISTANT_INTRO_ZOOM)
+	# Il solo gesto approvato usa cel esistenti: passo reale + arrivo frontale
+	# + idle. Non inventa un gesto di mano e non modifica gli sprite.
+	_force_legs(assistant, [assistant._leg_to(V3_ASSISTANT_INTRO_TO, "walk",
+			V3_STILL_HOLD, "idle")])
+	_v3_animate_background([assistant])
+	await get_tree().physics_frame
+	_v3_marker("assistant-intro", "start")
+	await get_tree().create_timer(V3_ASSISTANT_INTRO_SECONDS).timeout
+	_v3_marker("assistant-intro", "end")
+	_v3_pass_and_quit("assistant-intro", cam)
+
+
+func _assistant_walk_right_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	var assistant := _find("assistente")
+	if assistant == null:
+		push_error("promo V3 assistant-walk-right: Assistente assente")
+		get_tree().quit(12)
+		return
+	_v3_stage(assistant, V3_ASSISTANT_WALK_FROM)
+	_track_target = assistant
+	_track_offset = V3_ASSISTANT_WALK_CAMERA_OFFSET
+	_track_cam = _mount_camera(assistant.global_position + _track_offset,
+			V3_ASSISTANT_WALK_ZOOM)
+	# La tratta eccede la durata consegnata: il taglio termina mentre l'agente
+	# e' ancora in walk verso destra, mai sul ritorno o su un freeze finale.
+	_force_legs(assistant, [assistant._leg_to(V3_ASSISTANT_WALK_TO, "walk",
+			V3_STILL_HOLD, "idle")])
+	_v3_animate_background([assistant])
+	await get_tree().physics_frame
+	_v3_marker("assistant-walk-right", "start")
+	await get_tree().create_timer(V3_ASSISTANT_WALK_SECONDS).timeout
+	_v3_marker("assistant-walk-right", "end")
+	_v3_pass_and_quit("assistant-walk-right", _track_cam)
+
+
+## Blocca i viaggi casuali: la vita sullo sfondo e' data da pulsazioni di
+## lavoro reali (rig o composito desk), non da agenti che invadono il quadro
+## in momenti non deterministici. Rimuove anche tutti gli overlay promo.
+func _v3_prepare_office() -> void:
+	_dress_promo_set()
+	for agent in _office.agents:
+		agent._state_timer = 100000.0
+		agent._bubble_timer = 100000.0
+
+
+## La preparazione avviene prima del marker start. L'agente resta un vero
+## AgentNPC e riparte attraverso NavGrid, ma il ciak non registra il lungo
+## trasferimento dalla sua scrivania al punto di partenza.
+func _v3_stage(agent: AgentNPC, at: Vector2) -> void:
+	agent._legs = []
+	agent._leg = {}
+	agent._path = PackedVector2Array()
+	agent._pi = 0
+	agent._pause = 0.0
+	agent._forced_trip = true
+	agent._pipeline_trip_active = false
+	agent.velocity = Vector2.ZERO
+	agent._set_desk_occupied(false)
+	agent.global_position = at
+	agent.state = AgentNPC.S.WORK
+	agent._set_rig_motion("down", false, "idle")
+
+
+## Tre micro-eventi visibili nel set: chi lavora sullo sfondo non parla e non
+## apre UI. I timer diversi evitano un flash sincrono da demo.
+func _v3_animate_background(foreground: Array) -> void:
+	var seconds := [1.1, 4.2, 7.1]
+	var refs := ["scorer-1", "scrittore-1", "critico-1"]
+	for i in refs.size():
+		var agent := _find(str(refs[i]))
+		if agent != null and not foreground.has(agent):
+			_pulse_at(float(seconds[i]), agent)
+
+
+func _v3_marker(clip: String, event: String) -> void:
+	var frame := Engine.get_process_frames()
+	print("PROMO-V3-MARKER\t%s\t%s\t%d\t%.3f" % [
+		clip, event, frame, float(frame) / 30.0])
+
+
+func _v3_pass_and_quit(clip: String, cam: Camera2D) -> void:
+	if cam == null or _office.find_child("GameSidebar", true, false) != null:
+		push_error("promo V3 %s: superficie non pulita" % clip)
+		get_tree().quit(13)
+		return
+	print("PROMO-V3 PASS %s" % clip)
+	get_tree().quit(0)
 
 
 ## Ciak uniforme per la recensione degli undici fogli personaggio. Tutte le

@@ -76,6 +76,9 @@ upgrade_bootstrap|script|gate|any|-|tools/upgrade_bootstrap_selftest.gd|UPGRADE-
 # La veste inglese delle riprese sostituisce un Node2D: deve conservare il
 # layer di fondale, altrimenti COMPATIBILITY passa davanti alla testa agente.
 promo_sign_layer|script|gate|any|-|tools/promo_sign_layer_selftest.gd|PROMO-SIGN-LAYER-TEST PASS
+# V3: le tre take approvate devono partire su una route reale, superare le
+# durate minime e montare la stessa superficie promo pulita (nessun HUD/UI).
+promo_v3_regia|script|gate|any|-|tools/promo_v3_selftest.gd|PROMO-V3-REGIA-TEST PASS
 # La fascia frontale delle scrivanie non puo' restare un overlay assoluto:
 # altrimenti un agente in cammino viene coperto anche quando il suo piede lo
 # y-sorta davanti al desk. Deve attivarsi soltanto per un rig seduto dinamico.
