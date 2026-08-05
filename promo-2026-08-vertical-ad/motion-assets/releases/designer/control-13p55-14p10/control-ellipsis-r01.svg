@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920" role="img" aria-labelledby="title desc">
+  <title id="title">Control waiting ellipsis</title>
+  <desc id="desc">Three restrained pulse dots on a transparent canvas.</desc>
+  <g fill="#00E87A" stroke="#00E87A" stroke-width="2">
+    <circle cx="486" cy="1040" r="18" fill="none" stroke-opacity="0.18"/>
+    <circle cx="486" cy="1040" r="9" stroke="none" fill-opacity="0.38"/>
+
+    <circle cx="540" cy="1040" r="18" fill="none" stroke-opacity="0.34"/>
+    <circle cx="540" cy="1040" r="9" stroke="none" fill-opacity="0.68"/>
+
+    <circle cx="594" cy="1040" r="18" fill="none" stroke-opacity="0.52"/>
+    <circle cx="594" cy="1040" r="9" stroke="none"/>
+  </g>
+</svg>
