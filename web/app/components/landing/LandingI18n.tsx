@@ -175,6 +175,16 @@ const translations = {
     en: "Beta",
     hu: "Béta",
   },
+  dl_windows_portable_label: {
+    it: "Windows: l'installer è la scelta consigliata.",
+    en: "Windows: the installer is the recommended choice.",
+    hu: "Windows: a telepítő az ajánlott választás.",
+  },
+  dl_windows_portable_link: {
+    it: "Scarica invece la versione portabile",
+    en: "Download the portable build instead",
+    hu: "Helyette a hordozható verzió letöltése",
+  },
   dl_desktop_unsigned_note: {
     it: "Su macOS l'app è firmata e notarizzata: si apre con un doppio clic. Su Windows non è firmata, quindi SmartScreen mostra «Windows ha protetto il PC»: clicca «Ulteriori informazioni» e poi «Esegui comunque». Su Linux l'archivio va estratto e reso eseguibile.",
     en: "On macOS the app is signed and notarized: it opens with a double click. On Windows it is not signed, so SmartScreen shows “Windows protected your PC”: click “More info”, then “Run anyway”. On Linux, extract the archive and make it executable.",
@@ -329,9 +339,9 @@ const translations = {
 } as const;
 
 type StringKeys = {
-  [K in keyof typeof translations]: (typeof translations)[K]["it"] extends string
-    ? K
-    : never;
+  [
+    K in keyof typeof translations
+  ]: (typeof translations)[K]["it"] extends string ? K : never;
 }[keyof typeof translations];
 interface I18nCtx {
   lang: Lang;

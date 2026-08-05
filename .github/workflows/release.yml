@@ -31,19 +31,22 @@ jobs:
             preset: Windows Desktop
             output: builds/windows/job-hunter-team.exe
             artifact_name: app-windows-release
-            artifact_path: game/builds/windows/job-hunter-team.exe
+            artifact_path: game/builds/windows/job-hunter-team-windows-x64-setup.exe
+            additional_artifact_path: game/builds/windows/job-hunter-team-windows-x64-portable.exe
           - os: macos-14
             label: macOS Universal 2
             preset: macOS
             output: builds/macos/job-hunter-team.zip
             artifact_name: app-macos-release
             artifact_path: game/builds/macos/job-hunter-team.zip
+            additional_artifact_path: ""
           - os: ubuntu-22.04
             label: Linux x64
             preset: Linux
             output: builds/linux/job-hunter-team.x86_64
             artifact_name: app-linux-release
             artifact_path: game/builds/linux/job-hunter-team-linux-x64.tar.gz
+            additional_artifact_path: ""
     defaults:
       run:
         shell: bash
@@ -313,6 +316,14 @@ jobs:
           tar -C builds/linux -czf builds/linux/job-hunter-team-linux-x64.tar.gz \
             job-hunter-team.x86_64
 
+      - name: Build and smoke-test Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          ./scripts/build-windows-installer.ps1 -Version $version -Smoke
+          Copy-Item game/builds/windows/job-hunter-team.exe game/builds/windows/job-hunter-team-windows-x64-portable.exe
+
       # Il sidecar nasce sullo stesso runner e DOPO firma/notarizzazione e
       # packaging. Il job release ricalcola l'hash dei byte scaricati e rifiuta
       # un asset se tag, commit, dimensione o SHA-256 non coincidono: un file
@@ -320,22 +331,37 @@ jobs:
       - name: Record immutable build identity
         env:
           RELEASE_ASSET: ${{ matrix.artifact_path }}
+          ADDITIONAL_RELEASE_ASSET: ${{ matrix.additional_artifact_path }}
         run: |
           TAG_SHA="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
-          python scripts/release_artifacts.py record \
-            --asset "$RELEASE_ASSET" \
-            --output "${RELEASE_ASSET}.provenance.json" \
-            --tag "$GITHUB_REF_NAME" \
-            --commit "$TAG_SHA" \
-            --repository "$GITHUB_REPOSITORY" \
-            --source-root .
+          for asset in "$RELEASE_ASSET" "$ADDITIONAL_RELEASE_ASSET"; do
+            [ -n "$asset" ] || continue
+            python scripts/release_artifacts.py record \
+              --asset "$asset" \
+              --output "${asset}.provenance.json" \
+              --tag "$GITHUB_REF_NAME" \
+              --commit "$TAG_SHA" \
+              --repository "$GITHUB_REPOSITORY" \
+              --source-root .
+          done
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: runner.os != 'Windows'
         with:
           name: ${{ matrix.artifact_name }}
           path: |
             ${{ matrix.artifact_path }}
             ${{ matrix.artifact_path }}.provenance.json
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: runner.os == 'Windows'
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            ${{ matrix.artifact_path }}
+            ${{ matrix.artifact_path }}.provenance.json
+            ${{ matrix.additional_artifact_path }}
+            ${{ matrix.additional_artifact_path }}.provenance.json
 
   release:
     name: GitHub Release
@@ -443,7 +469,8 @@ jobs:
         run: |
           python scripts/release_artifacts.py verify \
             --directory release-assets \
-            --expected-asset job-hunter-team.exe \
+            --expected-asset job-hunter-team-windows-x64-setup.exe \
+            --expected-asset job-hunter-team-windows-x64-portable.exe \
             --expected-asset job-hunter-team.zip \
             --expected-asset job-hunter-team-linux-x64.tar.gz \
             --tag "$GITHUB_REF_NAME" \
@@ -456,8 +483,8 @@ jobs:
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: "Job Hunter Team ${{ github.ref_name }}"
-          # La nota Windows sta QUI perche' questa e' l'unica pagina da cui si
-          # scarica `job-hunter-team.exe`: il sito non serve i binari desktop e
+          # La nota Windows sta QUI perche' questa e' la pagina da cui si
+          # scaricano installer e portable: il sito non serve i binari desktop e
           # nessun doc pubblico linka le Release. Tre fatti, niente scuse: cosa
           # vede, cosa clicca, perche' succede.
           body: |
@@ -467,7 +494,7 @@ jobs:
 
             ### Windows
 
-            `job-hunter-team.exe` is not code-signed, so Windows shows a **"Windows protected your PC"** screen on first launch: click **More info** → **Run anyway**. The macOS `.zip` is signed and notarized by Apple; the Linux `.tar.gz` is unsigned as well.
+            Use `job-hunter-team-windows-x64-setup.exe` for the normal per-user installation. `job-hunter-team-windows-x64-portable.exe` is the optional standalone build. Neither Windows file is code-signed, so Windows may show **"Windows protected your PC"**: click **More info** → **Run anyway** only for files downloaded from this release and matching `SHA256SUMS`. The macOS `.zip` is signed and notarized by Apple; the Linux `.tar.gz` is unsigned as well.
 
             `SHA256SUMS` verifies the downloaded bytes. `RELEASE-PROVENANCE.json` records the exact tagged commit from which every attached asset was built.
 

@@ -65,6 +65,9 @@ export const fr: Record<string, string> = {
   dl_desktop_beta_desc:
     "L'application de bureau est le bureau où vous voyez l'équipe travailler. Elle est en bêta : nous l'utilisons chaque jour, mais elle change souvent. Si vous préférez une voie plus éprouvée, la CLI reste disponible.",
   dl_desktop_beta_badge: "Bêta",
+  dl_windows_portable_label:
+    "Windows : l'installateur est le choix recommandé.",
+  dl_windows_portable_link: "Télécharger plutôt la version portable",
   dl_desktop_unsigned_note:
     "Sur macOS l'application est signée et notariée : elle s'ouvre d'un double clic. Sur Windows elle n'est pas signée, donc SmartScreen affiche « Windows a protégé votre ordinateur » : cliquez sur « Informations complémentaires » puis « Exécuter quand même ». Sur Linux, extrayez l'archive et rendez-la exécutable.",
   dl_help_text: "Vous ne savez pas où l'installer ?",
