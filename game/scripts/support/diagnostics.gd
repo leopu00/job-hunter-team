@@ -22,11 +22,12 @@ const CONTAINER_LOG_LINES := 200
 
 ## Il bundle completo, già ripulito.
 ## `{"app":…, "system":…, "runtime":…, "logs":…, "redaction":{regola: quante}}`
-static func collect(include_game_log := true, include_container_log := true) -> Dictionary:
+static func collect(include_game_log := true, include_container_log := true,
+		context: Dictionary = {}) -> Dictionary:
 	var bundle := {
 		"app": _app_section(),
-		"system": _system_section(),
-		"runtime": _runtime_section(),
+		"system": _system_section(context),
+		"runtime": _runtime_section(context),
 		"logs": {},
 	}
 	if include_game_log:
@@ -38,22 +39,41 @@ static func collect(include_game_log := true, include_container_log := true) -> 
 			bundle["logs"]["game_previous"] = prev
 	if include_container_log:
 		bundle["logs"]["container"] = _container_log()
-	return _sanitize(bundle)
+	return _sanitize(bundle, context)
+
+
+## Legge gli autoload solo dal main thread. `collect()` gira normalmente nel
+## thread della segnalazione: interrogare lo SceneTree da lì fa fallire proprio
+## il pannello che deve restare disponibile quando l'app ha un problema.
+static func capture_context() -> Dictionary:
+	var context := {"sensitive_terms": PackedStringArray()}
+	var game := _autoload("Game")
+	if game != null:
+		context["low_gfx"] = bool(game.get("low_gfx"))
+	var setup := _autoload("SetupService")
+	if setup != null:
+		context["setup_status"] = (setup.get("status") as Dictionary).duplicate(true)
+	var bus := _autoload("BackendBus")
+	if bus != null:
+		context["backend_live"] = bool(bus.call("is_live"))
+	var onboarding := _autoload("ScriptedOnboarding")
+	if onboarding != null:
+		var full := str(onboarding.call("player_full_name"))
+		for part in full.split(" ", false):
+			var clean := str(part).strip_edges()
+			if clean.length() >= 3:
+				context["sensitive_terms"].append(clean)
+	return context
 
 
 ## I termini che identificano l'utente e vanno tolti dai log oltre alle regole
 ## strutturali: come si è presentato all'ingresso dell'ufficio.
-static func sensitive_terms() -> PackedStringArray:
-	var terms := PackedStringArray()
-	var onboarding := _autoload("ScriptedOnboarding")
-	if onboarding == null:
-		return terms
-	var full := str(onboarding.call("player_full_name"))
-	for part in full.split(" ", false):
-		var clean := str(part).strip_edges()
-		if clean.length() >= 3:
-			terms.append(clean)
-	return terms
+static func sensitive_terms(context: Dictionary = {}) -> PackedStringArray:
+	if context.has("sensitive_terms"):
+		return context["sensitive_terms"]
+	# I tool headless chiamano collect dal main thread e non costruiscono gli
+	# autoload: nessun termine aggiuntivo è comunque un risultato sicuro.
+	return PackedStringArray()
 
 
 ## Rendering leggibile del bundle: è sia l'anteprima che l'utente ispeziona
@@ -96,7 +116,7 @@ static func _app_section() -> Dictionary:
 	}
 
 
-static func _system_section() -> Dictionary:
+static func _system_section(context: Dictionary) -> Dictionary:
 	var mem := OS.get_memory_info()
 	var data := {
 		"sistema": "%s %s" % [OS.get_name(), OS.get_version()],
@@ -114,19 +134,17 @@ static func _system_section() -> Dictionary:
 	if DisplayServer.get_name() != "headless":
 		data["schermo"] = "%s (finestra %s)" % [
 				DisplayServer.screen_get_size(), DisplayServer.window_get_size()]
-	var game := _autoload("Game")
-	if game != null:
-		data["grafica ridotta"] = bool(game.get("low_gfx"))
+	if context.has("low_gfx"):
+		data["grafica ridotta"] = bool(context["low_gfx"])
 	return data
 
 
 ## Stato del runtime JHT visto dal lato host: quello che il gioco sa senza
 ## dover parlare col container.
-static func _runtime_section() -> Dictionary:
+static func _runtime_section(context: Dictionary) -> Dictionary:
 	var data := {}
-	var setup := _autoload("SetupService")
-	if setup != null:
-		var status: Dictionary = setup.get("status")
+	if context.has("setup_status"):
+		var status: Dictionary = context["setup_status"]
 		for key in ["docker_available", "docker_running", "container_exists",
 				"container_state", "container_running", "team_running",
 				"active_provider", "provider_authenticated", "runtime_stale"]:
@@ -145,11 +163,10 @@ static func _runtime_section() -> Dictionary:
 		var code := int(version.get("code", -1))
 		data["docker_available"] = code != -1 and code != 126 and code != 127
 		data["docker_running"] = code == 0
-	var bus := _autoload("BackendBus")
-	if bus != null:
+	if context.has("backend_live"):
 		# MAI l'IP della VPS: identifica l'infrastruttura dell'utente. Il modo
 		# di connessione basta a inquadrare il problema.
-		data["backend"] = "VPS" if bool(bus.call("is_live")) else "locale"
+		data["backend"] = "VPS" if bool(context["backend_live"]) else "locale"
 	data["cartella dati presente"] = DirAccess.dir_exists_absolute(_jht_home())
 	var docker_version := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Client.Version}} / server {{.Server.Version}}"]))
@@ -177,8 +194,8 @@ static func _container_log() -> String:
 
 ## Ripulisce OGNI stringa del bundle e allega il rendiconto. Ricorsiva: nessun
 ## campo aggiunto in futuro può sfuggire alla redazione per dimenticanza.
-static func _sanitize(bundle: Dictionary) -> Dictionary:
-	var terms := sensitive_terms()
+static func _sanitize(bundle: Dictionary, context: Dictionary = {}) -> Dictionary:
+	var terms := sensitive_terms(context)
 	var counts := {}
 	var clean: Dictionary = _sanitize_value(bundle, terms, counts)
 	clean["redaction"] = counts
