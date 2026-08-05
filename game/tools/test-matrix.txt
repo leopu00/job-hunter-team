@@ -82,6 +82,9 @@ language_picker|script|gate|any|-|tools/language_picker_selftest.gd|LANGUAGE-PIC
 # La componente da sola non basta: entra dalla vera main scene e prova che il
 # picker preceda la title, mostri inglese e costruisca la title dopo la scelta.
 language_picker_title|run|gate|any|JHT_LANG= JHT_LANGUAGE_PICKER_TEST=1|-|LANGUAGE-PICKER-TITLE-TEST PASS
+# Conferma una lingua non-default nel picker, chiude Godot e riapre un processo
+# senza override: legge il ConfigFile, salta il picker e ricostruisce la title.
+language_persistence|python|gate|any|-|tools/language_persistence_selftest.py|LANGUAGE-PERSISTENCE-TEST PASS
 # Da Impostazioni il gioco ricostruisce la scena, così non restano etichette
 # della lingua precedente fuori dal pannello che ha ricevuto il click.
 language_settings|run|gate|any|JHT_SCENE=office JHT_LANG=it JHT_LANGUAGE_SETTINGS_TEST=1|-|LANGUAGE-SETTINGS-TEST PASS

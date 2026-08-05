@@ -5,11 +5,13 @@ extends SceneTree
 
 const LanguagePicker := preload("res://scripts/ui/language_picker.gd")
 const EXPECTED_LANGS := ["it", "en", "hu", "es", "de", "fr", "pt"]
+const TEST_LANG_CFG := "user://language_picker_selftest.cfg"
 
 var _failures: Array[String] = []
 var _confirmed := ""
 
 func _init() -> void:
+	_remove_test_config()
 	_check("fallback inglese", UIStrings.DEFAULT_LANG == "en")
 	_check("sette lingue", UIStrings.LANGS.size() == EXPECTED_LANGS.size())
 	for language: String in EXPECTED_LANGS:
@@ -22,6 +24,12 @@ func _init() -> void:
 			not UIStrings.language_choice_required(false, "fr"))
 	_check("override non valido non salta il picker",
 			UIStrings.language_choice_required(false, "xx"))
+	_check("scrive la scelta su preferenza isolata",
+			UIStrings.set_lang("de", true, TEST_LANG_CFG))
+	var saved_after_restart := UIStrings.saved_language(TEST_LANG_CFG)
+	_check("riavvio rilegge la scelta salvata", saved_after_restart == "de")
+	_check("scelta salvata salta il picker dopo riavvio",
+			not UIStrings.language_choice_required(saved_after_restart != ""))
 
 	UIStrings.set_lang(UIStrings.DEFAULT_LANG, false)
 	var picker := LanguagePicker.new()
@@ -36,6 +44,7 @@ func _init() -> void:
 	picker.confirm()
 	_check("picker conferma la lingua selezionata", _confirmed == "de")
 	UIStrings.set_lang(UIStrings.DEFAULT_LANG, false)
+	_remove_test_config()
 
 	if _failures.is_empty():
 		print("LANGUAGE-PICKER-TEST PASS")
@@ -50,3 +59,7 @@ func _init() -> void:
 func _check(name: String, condition: bool) -> void:
 	if not condition:
 		_failures.append(name)
+
+
+func _remove_test_config() -> void:
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_LANG_CFG))

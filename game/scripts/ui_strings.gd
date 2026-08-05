@@ -16,6 +16,12 @@ const DEFAULT_LANG := "en"
 
 static var lang := DEFAULT_LANG
 
+## Solo l'oracolo di persistenza sostituisce il file utente: le sue due
+## esecuzioni sono processi distinti e condividono un ConfigFile vuoto dedicato.
+static func language_config_path() -> String:
+	return "user://language_persistence_selftest.cfg" \
+			if OS.get_environment("JHT_LANGUAGE_PERSIST_TEST") != "" else LANG_CFG
+
 static func _static_init() -> void:
 	# Il selftest della title deve simulare una macchina senza file user://,
 	# senza leggere o sovrascrivere la preferenza reale dello sviluppatore.
@@ -27,11 +33,9 @@ static func _static_init() -> void:
 	if LANGS.has(forced):
 		lang = forced
 		return
-	var cfg := ConfigFile.new()
-	if cfg.load(LANG_CFG) == OK:
-		var saved := str(cfg.get_value("ui", "lang", DEFAULT_LANG))
-		if LANGS.has(saved):
-			lang = saved
+	var saved := saved_language()
+	if saved != "":
+		lang = saved
 
 ## Il primo avvio ha una schermata dedicata; un override valido serve soltanto
 ## ai test e agli screenshot, che devono poter atterrare direttamente nella
@@ -43,21 +47,34 @@ static func language_choice_required(has_saved_preference: bool,
 static func needs_initial_language_choice() -> bool:
 	if OS.get_environment("JHT_LANGUAGE_PICKER_TEST") == "1":
 		return true
-	var cfg := ConfigFile.new()
-	var has_saved_preference := cfg.load(LANG_CFG) == OK \
-			and LANGS.has(str(cfg.get_value("ui", "lang", "")))
-	return language_choice_required(has_saved_preference, OS.get_environment("JHT_LANG"))
+	return language_choice_required(saved_language() != "", OS.get_environment("JHT_LANG"))
 
-static func set_lang(l: String, persist := true) -> bool:
-	if not LANGS.has(l):
-		return false
-	lang = l
-	if not persist or OS.get_environment("JHT_LANGUAGE_PICKER_TEST") == "1" \
-			or OS.get_environment("JHT_LANGUAGE_SETTINGS_TEST") == "1":
-		return true
+## La lettura è separata dal bootstrap per poter verificare il round-trip
+## scrittura → riapertura senza mai toccare le preferenze di chi sviluppa.
+static func saved_language(config_path := "") -> String:
+	var path := config_path if config_path != "" else language_config_path()
+	var cfg := ConfigFile.new()
+	if cfg.load(path) != OK:
+		return ""
+	var saved := str(cfg.get_value("ui", "lang", ""))
+	return saved if LANGS.has(saved) else ""
+
+static func _save_language(l: String, config_path := "") -> bool:
+	var path := config_path if config_path != "" else language_config_path()
 	var cfg := ConfigFile.new()
 	cfg.set_value("ui", "lang", l)
-	cfg.save(LANG_CFG)
+	return cfg.save(path) == OK
+
+static func set_lang(l: String, persist := true, config_path := "") -> bool:
+	if not LANGS.has(l):
+		return false
+	if not persist or OS.get_environment("JHT_LANGUAGE_PICKER_TEST") == "1" \
+			or OS.get_environment("JHT_LANGUAGE_SETTINGS_TEST") == "1":
+		lang = l
+		return true
+	if not _save_language(l, config_path):
+		return false
+	lang = l
 	return true
 
 static func t(key: String) -> String:
