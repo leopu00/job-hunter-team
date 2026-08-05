@@ -59,27 +59,28 @@ func _ready() -> void:
 	if _agent.dept != "":
 		var dept: Dictionary = DepartmentDefs.DEPARTMENTS[_agent.dept]
 		title_row.add_child(TerminalTheme.label(
-				"▮ " + (dept["name"] as String).to_upper(), 16, dept["color"], "bold"))
+				"▮ " + DepartmentDefs.display_name(_agent.dept).to_upper(),
+				16, dept["color"], "bold"))
 
 	# Stato dell'ISTANZA reale, non il mock per ruolo. Corpo, badge e
 	# scheda devono leggere lo stesso snapshot BackendBus.
 	var status: Dictionary = {}
 	if _agent.uid != "":
-		var label := "IN ATTESA"
+		var label := UIStrings.t("dept.agent_status.waiting")
 		var color := Palette.MUTED
 		match _agent.backend_status:
 			"working":
-				label = "AL LAVORO"
+				label = UIStrings.t("dept.agent_status.working")
 				color = Palette.GREEN
 			"paused":
-				label = "IN PAUSA"
+				label = UIStrings.t("dept.agent_status.paused")
 				color = Color("#ff7a65")
 			"throttled":
 				var total := int(ceil(_agent.throttle_secs))
 				label = "THROTTLE %d:%02d" % [total / 60, total % 60]
 				color = Color("#f5c518")
 			"resting":
-				label = "RIPOSO"
+				label = UIStrings.t("dept.agent_status.resting")
 				color = Color("#a855f7")
 		status = {"status": label, "detail": _agent.activity_detail, "color": color}
 	else:
