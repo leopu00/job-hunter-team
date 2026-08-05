@@ -54,7 +54,7 @@ const translations = {
   // Nav
   nav_home: { it: "Home", en: "Home", hu: "Home" },
   nav_github: { it: "GitHub", en: "GitHub", hu: "GitHub" },
-  nav_download: { it: "Installa", en: "Install", hu: "Telepítés" },
+  nav_download: { it: "Installa", en: "Download", hu: "Telepítés" },
   nav_run: { it: "Come si avvia", en: "How to run it", hu: "Hogyan indítható" },
   nav_team: { it: "Team", en: "Team", hu: "Csapat" },
   nav_pricing: { it: "Prezzi", en: "Pricing", hu: "Árak" },
@@ -339,9 +339,9 @@ const translations = {
 } as const;
 
 type StringKeys = {
-  [K in keyof typeof translations]: (typeof translations)[K]["it"] extends string
-    ? K
-    : never;
+  [
+    K in keyof typeof translations
+  ]: (typeof translations)[K]["it"] extends string ? K : never;
 }[keyof typeof translations];
 interface I18nCtx {
   lang: Lang;
