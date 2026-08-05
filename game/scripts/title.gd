@@ -14,6 +14,11 @@ var _language_test_choice := ""
 func _ready() -> void:
 	theme = TerminalTheme.get_theme()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	if TutorialHarness.cleanup_test():
+		TutorialHarness.clear_storage()
+		print("TUTORIAL-HARNESS-CLEANUP PASS")
+		get_tree().quit()
+		return
 	var persistence_test := OS.get_environment("JHT_LANGUAGE_PERSIST_TEST")
 	if persistence_test == "cleanup":
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(UIStrings.language_config_path()))
@@ -31,16 +36,28 @@ func _ready() -> void:
 			_language_persistence_write_selftest.call_deferred()
 		elif persistence_test == "save_failure":
 			_language_persistence_save_failure_selftest.call_deferred()
+		elif TutorialHarness.auto_test():
+			_tutorial_harness_autotest.call_deferred()
+		elif TutorialHarness.persistence_test():
+			_tutorial_harness_persistence_test.call_deferred()
 		return
 	_build_title()
 	if persistence_test == "verify":
 		_language_persistence_verify_selftest.call_deferred()
+	if TutorialHarness.auto_test():
+		_tutorial_harness_autotest.call_deferred()
+	elif TutorialHarness.persistence_test():
+		_tutorial_harness_persistence_test.call_deferred()
 
 
 func _show_language_picker() -> void:
 	_language_picker = LanguagePicker.new()
 	_language_picker.language_confirmed.connect(_on_language_confirmed)
 	add_child(_language_picker)
+	TutorialHarness.mark("LANGUAGE_DEFAULT_VISIBLE", {
+		"language": UIStrings.DEFAULT_LANG,
+		"selected": _language_picker.selected_language,
+	})
 
 
 func _on_language_confirmed(language: String) -> void:
@@ -54,6 +71,7 @@ func _on_language_confirmed(language: String) -> void:
 		_language_picker.queue_free()
 	_language_picker = null
 	_build_title()
+	TutorialHarness.mark("LANGUAGE_CONFIRMED", {"language": language})
 
 
 ## Verifica la scena vera in uno user:// isolato: prima viene il picker in
@@ -264,17 +282,20 @@ func _show_name_entry() -> void:
 	box.add_child(sub)
 
 	var first := LineEdit.new()
+	first.name = "TutorialNameFirst"
 	first.placeholder_text = UIStrings.t("title.name_first")
 	first.custom_minimum_size = Vector2(420, 0)
 	first.max_length = 40
 	box.add_child(first)
 	var last := LineEdit.new()
+	last.name = "TutorialNameLast"
 	last.placeholder_text = UIStrings.t("title.name_last")
 	last.custom_minimum_size = Vector2(420, 0)
 	last.max_length = 60
 	box.add_child(last)
 
 	var enter := Button.new()
+	enter.name = "TutorialEnterOffice"
 	enter.text = UIStrings.t("title.name_enter")
 	enter.disabled = true
 	box.add_child(enter)
@@ -294,13 +315,62 @@ func _show_name_entry() -> void:
 		_fade_out()
 	first.text_changed.connect(func(value: String) -> void:
 		enter.disabled = value.strip_edges().is_empty())
-	first.text_submitted.connect(func(_v: String) -> void: last.grab_focus())
+	# Il cognome è facoltativo: il primo nome sintetico e INVIO devono poter
+	# entrare davvero nell'ufficio, senza una seconda azione nascosta.
+	first.text_submitted.connect(func(_v: String) -> void: confirm.call())
 	last.text_submitted.connect(func(_v: String) -> void: confirm.call())
 	enter.pressed.connect(confirm)
 	skip.pressed.connect(func() -> void:
 		Sfx.play_back()
 		_fade_out())
 	first.grab_focus()
+
+
+## Oracolo end-to-end del harness: percorre gli stessi signal dei controlli
+## nativi (picker, Enter title, submit LineEdit), poi l'Office verifica
+## assistant/offline/16:9 prima di stampare il PASS.
+func _tutorial_harness_autotest() -> void:
+	await get_tree().process_frame
+	var ok: bool = is_instance_valid(_language_picker) \
+			and _language_picker.selected_language == "en" \
+			and TutorialHarness.saw("LANGUAGE_DEFAULT_VISIBLE")
+	if not ok:
+		_tutorial_harness_fail("picker inglese non visibile")
+		return
+	_language_picker.confirm()
+	await get_tree().process_frame
+	ok = is_instance_valid(_blink) and UIStrings.lang == "en" \
+			and UIStrings.saved_language() == "en" \
+			and TutorialHarness.saw("LANGUAGE_CONFIRMED")
+	if not ok:
+		_tutorial_harness_fail("continue inglese non persiste title")
+		return
+	var accept := InputEventAction.new()
+	accept.action = "ui_accept"
+	accept.pressed = true
+	_unhandled_input(accept)
+	await get_tree().process_frame
+	var first := find_child("TutorialNameFirst", true, false) as LineEdit
+	ok = first != null and first.text.is_empty()
+	if not ok:
+		_tutorial_harness_fail("form nome vuoto non raggiungibile")
+		return
+	first.text = "Sample"
+	first.text_submitted.emit(first.text)
+
+
+func _tutorial_harness_fail(reason: String) -> void:
+	push_error("TUTORIAL-16-9-HARNESS-TEST FAIL: " + reason)
+	get_tree().quit(1)
+
+
+func _tutorial_harness_persistence_test() -> void:
+	await get_tree().process_frame
+	var ok: bool = not is_instance_valid(_language_picker) \
+			and is_instance_valid(_blink) and UIStrings.lang == "en" \
+			and UIStrings.saved_language() == "en"
+	print("TUTORIAL-EN-PERSISTENCE-TEST %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
 
 ## Dissolvenza a nero sopra tutto, poi sempre nell'ufficio. Il setup non è
 ## più un tunnel prima del prodotto: container, provider e profilo si

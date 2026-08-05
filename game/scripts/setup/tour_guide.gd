@@ -105,8 +105,9 @@ func _ready() -> void:
 			or OS.get_environment("JHT_TOUR_PREVIEW") == "1"
 	if _test_mode:
 		return
+	TutorialHarness.reset_file_if_requested(_state_path())
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) == OK:
+	if cfg.load(_state_path()) == OK:
 		_index = clampi(int(cfg.get_value("tour", "index", 0)), 0, TALK_STEPS.size())
 		_done = bool(cfg.get_value("tour", "done", false))
 		_mode = str(cfg.get_value("tour", "mode", "guided"))
@@ -307,4 +308,8 @@ func _save() -> void:
 	cfg.set_value("tour", "done", _done)
 	cfg.set_value("tour", "mode", _mode)
 	cfg.set_value("tour", "visited", _visited.keys())
-	cfg.save(SAVE_PATH)
+	cfg.save(_state_path())
+
+
+func _state_path() -> String:
+	return TutorialHarness.TOUR_CFG if TutorialHarness.enabled() else SAVE_PATH

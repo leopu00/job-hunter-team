@@ -159,7 +159,11 @@ var _backend: BackendAdapter
 ## JHT_VPS_IP/JHT_VPS_KEY forzano una config, JHT_NOVPS=1 spegne tutto
 ## (per gli shot grafici che non devono toccare la rete).
 func _ready() -> void:
-	_fetch_fx_rates()
+	# Il harness tutorial deve essere integralmente locale: nessun fetch FX,
+	# lettura VPS o container può far dipendere il take dallo stato della rete.
+	var offline_only := OS.get_environment("JHT_NOVPS") == "1" or TutorialHarness.enabled()
+	if not offline_only:
+		_fetch_fx_rates()
 	# TEST-AUTO: JHT_THROTTLE_TEST=1 valida il parse throttle→status con
 	# eventi sintetici (la modalità godot -s non compila gli autoload,
 	# quindi il test vive qui dentro al boot).
@@ -169,7 +173,8 @@ func _ready() -> void:
 		_self_test_vps_contract()
 	if OS.get_environment("JHT_CHAT_NOTIFICATION_TEST") == "1":
 		_self_test_chat_notifications.call_deferred()
-	if OS.get_environment("JHT_NOVPS") == "1":
+	if offline_only:
+		TutorialHarness.mark("OFFLINE", {"backend": "disabled"})
 		return
 	# Gate riprese/test locale: non leggere vps.cfg e non tentare mai la rete.
 	# Il profilo REL-004 deve collegarsi esclusivamente al container sintetico

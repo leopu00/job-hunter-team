@@ -19,6 +19,8 @@ static var lang := DEFAULT_LANG
 ## Solo l'oracolo di persistenza sostituisce il file utente: le sue due
 ## esecuzioni sono processi distinti e condividono un ConfigFile vuoto dedicato.
 static func language_config_path() -> String:
+	if TutorialHarness.enabled():
+		return TutorialHarness.LANGUAGE_CFG
 	var persistence_test := OS.get_environment("JHT_LANGUAGE_PERSIST_TEST")
 	if persistence_test in ["cleanup", "write", "verify"]:
 		return "user://language_persistence_selftest.cfg"
@@ -29,6 +31,14 @@ static func language_config_path() -> String:
 	return LANG_CFG
 
 static func _static_init() -> void:
+	# Il harness registrabile deve partire come prima installazione ma non può
+	# leggere né sovrascrivere la scelta lingua della macchina reale. Ignora
+	# anche JHT_LANG: il suo scopo è proprio mostrare il picker nativo.
+	if TutorialHarness.enabled():
+		TutorialHarness.reset_file_if_requested(TutorialHarness.LANGUAGE_CFG)
+		var tutorial_saved := saved_language()
+		lang = tutorial_saved if tutorial_saved != "" else DEFAULT_LANG
+		return
 	# Il selftest della title deve simulare una macchina senza file user://,
 	# senza leggere o sovrascrivere la preferenza reale dello sviluppatore.
 	if OS.get_environment("JHT_LANGUAGE_PICKER_TEST") == "1":
@@ -51,6 +61,8 @@ static func language_choice_required(has_saved_preference: bool,
 	return not has_saved_preference and not LANGS.has(forced_language)
 
 static func needs_initial_language_choice() -> bool:
+	if TutorialHarness.enabled():
+		return saved_language() == ""
 	if OS.get_environment("JHT_LANGUAGE_PICKER_TEST") == "1":
 		return true
 	return language_choice_required(saved_language() != "", OS.get_environment("JHT_LANG"))
