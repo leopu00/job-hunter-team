@@ -20,6 +20,10 @@ import {
   recordingTarget,
   SYNTHETIC_POSITION_RECORDING_ROUTE,
 } from "./recording-browser-policy.mjs";
+import {
+  assertPortraitGeometry,
+  recordingFormatFromEnvironment,
+} from "./recording-browser-format.mjs";
 
 const ALIASES = new Set(["software", "marketing", "finance", "design"]);
 
@@ -41,6 +45,14 @@ function recordingStatePath(alias) {
 }
 
 async function main() {
+  let format;
+  try {
+    format = recordingFormatFromEnvironment();
+  } catch (error) {
+    fail(error.message);
+    return;
+  }
+
   const alias = process.env.JHT_RECORDING_PROFILE;
   if (!alias || !ALIASES.has(alias)) {
     fail(
@@ -68,14 +80,33 @@ async function main() {
 
   let browser;
   try {
-    browser = await chromium.launch({
-      headless: false,
-      args: ["--kiosk"],
-    });
-    const context = await browser.newContext({
-      storageState,
-      viewport: null,
-    });
+    browser = await chromium.launch(
+      format === "portrait"
+        ? {
+            headless: false,
+            args: [
+              "--kiosk",
+              "--ozone-platform=wayland",
+              "--force-device-scale-factor=2",
+            ],
+          }
+        : {
+            headless: false,
+            args: ["--kiosk"],
+          },
+    );
+    const context = await browser.newContext(
+      format === "portrait"
+        ? {
+            storageState,
+            viewport: { width: 540, height: 960 },
+            deviceScaleFactor: 2,
+          }
+        : {
+            storageState,
+            viewport: null,
+          },
+    );
     const getOnly = createGetOnlyRequestPolicy(
       console.error,
       new URL(target).pathname,
@@ -91,6 +122,7 @@ async function main() {
     });
 
     const page = await context.newPage();
+    if (format === "portrait") await assertPortraitGeometry(page);
     const response = await page.goto(target, {
       waitUntil: "domcontentloaded",
     });
@@ -100,6 +132,7 @@ async function main() {
     if (page.url() !== target) {
       throw new Error("recording route redirected");
     }
+    if (format === "portrait") await assertPortraitGeometry(page);
     await page.waitForFunction(
       () => document.documentElement.getAttribute("data-theme") === "light",
     );
