@@ -26,6 +26,22 @@ Stato 2026-05-13:
 
 I 3 tier **coesistono**: la VPS provisionata da uno qualsiasi resta identica (stesso `install.sh`, stesso wizard, stesso pairing).
 
+### T-002 endpoint controller — preflight 2026-08-05
+
+Esito read-only: **NO-GO**. Il motore Docker del controller risponde, ma al
+momento della sonda non erano attivi né il listener SSH standard né il
+container `jht`. Non sono stati letti o scritti endpoint, chiavi, file di
+configurazione o host key.
+
+Per il canale desktop → controller usato dal backend SSH servono tutti questi
+prerequisiti prima del canary: listener SSH limitato alla rete privata sulla
+porta standard, chiave dedicata leggibile dal client, fingerprint ed25519
+pinning con `StrictHostKeyChecking=yes`, e container `jht` in stato `running`.
+Un endpoint controller non-VPS è supportato dal contratto di trasporto; non
+richiede una patch al gioco. La verifica ThinkPad → controller va rieseguita
+solo dopo il provisioning riservato da ops e non può esporre coordinate o
+materiale crittografico.
+
 ---
 
 ## 🏗️ Architettura
