@@ -1086,6 +1086,12 @@ func _set_desk_occupied(on: bool) -> void:
 			and desk_node.has_seated_art()
 	if desk_node and desk_node.has_seated_art():
 		desk_node.set_occupied(on and use_composite)
+	if desk_node:
+		# La maschera della fascia bassa e' necessaria soltanto per un rig
+		# dinamico seduto, non per il composito seated (che la disegna gia') e
+		# mai per un agente in cammino. Lasciarla globale sopra al World aveva
+		# il risultato opposto allo y-sort: la scrivania gli tagliava la testa.
+		desk_node.set_front_occlusion(on and _seated() and not use_composite)
 	if rig:
 		rig.visible = not (on and use_composite)
 	_desk_pose_active = on and _seated()
