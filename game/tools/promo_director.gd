@@ -857,21 +857,6 @@ func _review_role_label() -> String:
 func _dress_promo_set() -> void:
 	_dress_set_english()
 	_silence_state_tags()
-	if "_team_hud" in _office and is_instance_valid(_office._team_hud):
-		_office._team_hud.queue_free()
-	# Pulizia alla fonte richiesta dal gate trailer: nessun crop o bonifica in
-	# post. Il ciak mostra solo mondo e meccaniche, senza marker showroom.
-	for child in _office.get_children():
-		if child is GameSidebar:
-			child.queue_free()
-		if child is CanvasLayer:
-			for root in child.get_children():
-				if root is Control:
-					for overlay in root.get_children():
-						if overlay is TeamHud or overlay is BudgetNotice \
-								or overlay is HeadlessNotice \
-								or overlay is UpdateNotice:
-							overlay.queue_free()
 	for agent in _office.agents:
 		agent._chatter = []
 		agent._bubble_timer = 100000.0
@@ -953,6 +938,7 @@ func _silence_state_tags() -> void:
 ## un ufficio già configurato. Tutto avviene solo su questa run.
 func _dress_set_english() -> void:
 	_hide_simulation_badge()
+	_hide_promo_hud()
 	var stage: Node = _office._stage
 	for child in stage.get_children():
 		if child is DepartmentDressing:
@@ -983,6 +969,25 @@ func _dress_set_english() -> void:
 func _hide_simulation_badge() -> void:
 	for badge in _office.find_children("*", "SimBadge", true, false):
 		badge.queue_free()
+
+
+## Tutte le scene promo, incluse office/dept/chat, devono avere la stessa
+## superficie prodotto-only. Il vecchio cleanup viveva solo nei clip nuovi e
+## lasciava HUD aggregato e sidebar nei tre ciak storici.
+func _hide_promo_hud() -> void:
+	if "_team_hud" in _office and is_instance_valid(_office._team_hud):
+		_office._team_hud.queue_free()
+	for child in _office.get_children():
+		if child is GameSidebar:
+			child.queue_free()
+		if child is CanvasLayer:
+			for root in child.get_children():
+				if root is Control:
+					for overlay in root.get_children():
+						if overlay is TeamHud or overlay is BudgetNotice \
+								or overlay is HeadlessNotice \
+								or overlay is UpdateNotice:
+							overlay.queue_free()
 
 
 ## Targa inglese sopra lo scaffale output: copre la targa «CV PRONTI»
