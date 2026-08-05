@@ -7,54 +7,25 @@ Operational runbook for the `/api/feedback` endpoint and the surfaces that post 
 
 ## 🚪 Where users actually report
 
-There is **no `/feedback` page**: it was removed on 2026-05-12 (`4242dd6dd`). Three surfaces post to `POST /api/feedback`, and they are the only ones:
+There is **no `/feedback` page**: three surfaces post to `POST /api/feedback`:
 
-- **Signed-in web app** — the avatar button at the right end of the navbar opens the account menu; **"Report a problem"**, just above Log out, opens a dialog: [`web/app/components/SupportDialog.tsx`](../../web/app/components/SupportDialog.tsx), mounted by [`UserMenu.tsx`](../../web/app/components/UserMenu.tsx). It asks for **subject and message only** — the account email and the page the user is writing from are attached automatically, and the dialog shows both before sending, because "nothing loads" from `/positions` and from `/dashboard` are two different bugs. Sends `client: "web-dashboard"`.
-- **Public contact form** — [`/contact`](../../web/app/contact/ContactForm.tsx), for people who are not signed in (or not installed yet). Sends `client: "web-contact"`. Reports from `web-*` clients never open a GitHub issue: they only go to the inbox.
-- **Godot office** — the `FeedbackService` autoload ([`game/scripts/support/feedback_service.gd`](../../game/scripts/support/feedback_service.gd)), behind the sidebar's **System → "Report a problem"** entry (and a second button on the diagnostics screen). It is the only surface that attaches redacted diagnostics, and it always writes a local copy under `user://reports` before trying the network. `JHT_FEEDBACK_URL` overrides the endpoint.
+- **Signed-in web app** — the avatar menu opens **"Report a problem"**. It sends only the subject, account-free description and the current route previewed to the user; `client: "web-dashboard"`.
+- **Public web form** — `/contact`, for people who are not signed in or have not installed the app; `client: "web-contact"`.
+- **Godot office** — the `FeedbackService` autoload ([`game/scripts/support/feedback_service.gd`](../../game/scripts/support/feedback_service.gd)), behind **System → "Report a problem"** and a second diagnostics entry. It is the only surface that attaches diagnostics and it writes a local copy under `user://reports` before attempting the network. `JHT_FEEDBACK_URL` overrides the endpoint.
 
 Browser-side coverage of the two web surfaces: [`e2e/tests/82-support-report.spec.ts`](../../e2e/tests/82-support-report.spec.ts).
 
-## 📊 Current state
+## 🔒 What is collected — and what is not
 
-- In the cloud the API tries Supabase first (`feedback_tickets`).
-- If Supabase isn't configured or the table doesn't exist yet, it falls back to `/tmp/jht/feedback.json`.
+The endpoint accepts only known client, platform, locale and message-category values. It re-runs the full personal-data and secret redactor over every free-text field, including diagnostics, before mail, issue or webhook delivery. It drops `contact` even when a pre-release client still sends it.
 
-## 🔀 Modes
+The report may contain the app version, platform, UI locale, a user-written problem description, the user-approved diagnostic preview, and a ticket reference. It does **not** transmit email addresses, phone numbers, names from known local onboarding data, document/CV names, home paths, public IPs, tokens, API keys, passwords, SSH keys or arbitrary metadata. The UI must show the exact outgoing preview and its redaction count before send.
 
-### 💾 Persistent mode
+## 📬 Delivery and truthfulness
 
-Requires:
+`RESEND_API_KEY` plus `JHT_FEEDBACK_TO` (or `JHT_SUPPORT_EMAIL`) configure the primary private inbox. GitHub issues and a webhook are optional secondary channels. `web-*` reports never create public GitHub issues.
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- migration `supabase/migrations/005_feedback_tickets.sql` applied
-
-In this mode:
-
-- `GET /api/feedback` reads from `feedback_tickets`
-- `POST /api/feedback` inserts into `feedback_tickets`
-- data survives redeploys
-
-### 🪣 Fallback mode
-
-Kicks in when Supabase isn't configured or doesn't respond.
-
-In this mode:
-
-- the API reads/writes `/tmp/jht/feedback.json`
-- the ticketing endpoint doesn't return `500`
-- data is not guaranteed long-term
-
-## 🗄️ Required migration
-
-File: [`supabase/migrations/005_feedback_tickets.sql`](../../supabase/migrations/005_feedback_tickets.sql)
-
-Creates:
-
-- `feedback_tickets` table
-- indexes on `created_at` and `status`
-- RLS `SELECT` and `INSERT` policies for `anon` and `authenticated`
+`200 {"ok":true,"ticket":"JHT-…"}` means at least one configured destination accepted the report. `400`, `413`, `429`, `503` or a network error mean it was **not** delivered; the desktop client keeps its local copy and must say so. Never display a success confirmation before this response.
 
 ## 🚢 Deploy
 
@@ -78,9 +49,8 @@ Quick smoke test:
 
 ```bash
 curl -i https://jobhunterteam.ai/api/feedback
-# Harmless probe: the `website` honeypot field makes the endpoint answer as if
-# it had accepted the report, without delivering anything. Same trick the e2e
-# suite uses to check the channel without burning the 5-per-hour budget.
+# Harmless reachability probe: the `website` honeypot answers without delivery
+# and does not consume one of the five real reports allowed per hour.
 curl -i -X POST https://jobhunterteam.ai/api/feedback \
   -H 'content-type: application/json' \
   --data '{"client":"probe","happened":"probe report","website":"bot"}'
@@ -88,15 +58,15 @@ curl -i -X POST https://jobhunterteam.ai/api/feedback \
 
 Expected:
 
-- `/api/feedback` must not return `500`
 - the probe must return `200` with `{"ok":true,"ticket":"JHT-…"}`
+- this proves the public route is reachable, **not** that the inbox is configured
 
-Two things to know before probing by hand: a **real** `POST` (no `website` field) delivers an actual email to the project inbox, and the endpoint accepts **5 submissions per hour per IP** — beyond that it answers `429` with `Retry-After`. A body without `happened` (min 5 chars) is a `400`, not a channel failure.
+For a delivery E2E, send exactly one synthetic `web-contact` report with no personal data and confirm `200`; this client never opens a public issue. The endpoint accepts **5 real submissions per hour per IP** — beyond that it answers `429` with `Retry-After`. A body without `happened` (min 5 chars) is a `400`, not a channel failure.
 
 ## 📝 Operational notes
 
-- If Vercel doesn't have the Supabase env vars configured, the system still works but is non-persistent.
-- For real persistence, apply the migration and configure the Supabase env vars in the connected Vercel project.
+- A missing delivery configuration deliberately returns `503`: a false "sent" confirmation is worse than an honest local failure.
+- The release checklist must verify a monitored private inbox before release; source code and a honeypot probe cannot prove mailbox configuration.
 
 ## 📚 Related
 

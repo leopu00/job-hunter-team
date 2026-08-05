@@ -5,7 +5,7 @@
  * Next, quindi si può testare davvero — con input veri e asserzioni sul
  * risultato — invece che a colpi di grep sul sorgente della route.
  */
-import { redact, redactSecrets } from "./redact";
+import { redact } from "./redact";
 
 /** Oltre questa soglia non è una segnalazione: il bundle del client sta sotto
  *  i 200 KB con i log al massimo della coda. */
@@ -27,12 +27,69 @@ export interface Report {
   doing: string;
   happened: string;
   expected: string;
-  contact: string;
   diagnostics: string;
 }
 
 function field(value: unknown, max: number): string {
   return typeof value === "string" ? value.slice(0, max).trim() : "";
+}
+
+const KNOWN_CLIENTS = new Set([
+  "godot-desktop",
+  "web-dashboard",
+  "web-contact",
+]);
+const KNOWN_KINDS = new Set([
+  "bug",
+  "supporto",
+  "domanda",
+  "collaborazione",
+  "privacy",
+  "altro",
+]);
+const PLATFORM_ALIASES: Record<string, string> = {
+  windows: "Windows",
+  macos: "macOS",
+  linux: "Linux",
+  android: "Android",
+  ios: "iOS",
+  web: "Web",
+  unknown: "unknown",
+};
+
+/**
+ * La redazione deve accadere prima di qualunque canale di consegna. Questa è
+ * la seconda linea per client vecchi o costruiti da terzi: nessuno di loro può
+ * trasformare l'endpoint in un inoltro di dati personali.
+ */
+function safeNarrative(value: unknown, max: number): string {
+  return redact(field(value, max));
+}
+
+function safeClient(value: unknown): string {
+  const client = field(value, 60);
+  return KNOWN_CLIENTS.has(client) ? client : "unknown";
+}
+
+function safeKind(value: unknown): string {
+  const kind = field(value, 40).toLowerCase();
+  return KNOWN_KINDS.has(kind) ? kind : "";
+}
+
+function safeVersion(value: unknown): string {
+  const version = field(value, 40);
+  return /^(?:dev|v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$/.test(version)
+    ? version
+    : "unknown";
+}
+
+function safeLocale(value: unknown): string {
+  const locale = field(value, 10);
+  return /^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(locale) ? locale : "it";
+}
+
+function safePlatform(value: unknown): string {
+  return PLATFORM_ALIASES[field(value, 40).toLowerCase()] ?? "unknown";
 }
 
 /**
@@ -63,17 +120,18 @@ export function parseReport(raw: unknown): Report | null {
   const happened = field(body.happened, MAX_STORY_CHARS);
   if (happened.length < 5) return null;
   return {
-    client: field(body.client, 60) || "unknown",
-    subject: field(body.subject, 120),
-    kind: field(body.kind, 40),
-    appVersion: field(body.app_version, 40) || "unknown",
-    locale: field(body.locale, 10) || "it",
-    platform: field(body.platform, 40) || "unknown",
-    doing: field(body.doing, MAX_STORY_CHARS),
-    happened,
-    expected: field(body.expected, MAX_STORY_CHARS),
-    contact: field(body.contact, 200),
-    diagnostics: field(body.diagnostics, MAX_DIAGNOSTICS_CHARS),
+    client: safeClient(body.client),
+    subject: safeNarrative(body.subject, 120),
+    kind: safeKind(body.kind),
+    appVersion: safeVersion(body.app_version),
+    locale: safeLocale(body.locale),
+    platform: safePlatform(body.platform),
+    doing: safeNarrative(body.doing, MAX_STORY_CHARS),
+    happened: redact(happened),
+    expected: safeNarrative(body.expected, MAX_STORY_CHARS),
+    // Client aggiornati non lo inviano; in un client vecchio resta nel JSON
+    // ricevuto, ma non entra mai nel Report e quindi non lascia l'endpoint.
+    diagnostics: safeNarrative(body.diagnostics, MAX_DIAGNOSTICS_CHARS),
   };
 }
 
@@ -101,22 +159,6 @@ export function issueTitle(report: Report): string {
   return `[in-app] ${summary || "segnalazione senza titolo"}`;
 }
 
-/**
- * Indirizzo utilizzabile come Reply-To, oppure stringa vuota.
- *
- * Il contatto arriva da un campo libero di un client pubblico e finisce in un
- * header SMTP: un a-capo dentro il valore permetterebbe di iniettare header
- * arbitrari nel messaggio (header injection). Qui si accetta solo la forma
- * di un indirizzo, su una riga sola, o niente.
- */
-export function replyToSicuro(contatto: string): string {
-  const pulito = contatto.trim();
-  if (!/^[^\s@<>,;:"'\\]+@[^\s@<>,;:"'\\]+\.[A-Za-z]{2,}$/.test(pulito)) {
-    return "";
-  }
-  return pulito;
-}
-
 /** Oggetto della mail che arriva in casella. */
 export function emailSubject(report: Report, ticket: string): string {
   // Quello che ha scritto chi invia batte sempre il troncamento automatico
@@ -139,7 +181,7 @@ export function emailSubject(report: Report, ticket: string): string {
  */
 export function emailText(report: Report, ticket: string): string {
   const story = (text: string) =>
-    text ? neutralize(redactSecrets(text)) : "(non indicato)";
+    text ? neutralize(redact(text)) : "(non indicato)";
   const righe = [
     `Segnalazione ${ticket}`,
     "",
@@ -159,14 +201,6 @@ export function emailText(report: Report, ticket: string): string {
     `  lingua:      ${report.locale}`,
     "",
   ];
-  // Il contatto QUI c'è, al contrario della issue pubblica: questa mail
-  // arriva in una casella privata, ed è il dato che permette di rispondere.
-  righe.push(
-    report.contact
-      ? `RISPONDI A: ${report.contact}  (è già nel Reply-To)`
-      : "RISPONDI A: nessun contatto lasciato — non è possibile rispondere",
-    "",
-  );
   if (report.diagnostics) {
     righe.push(
       "DIAGNOSTICA (già ripulita dai dati personali)",
@@ -179,10 +213,11 @@ export function emailText(report: Report, ticket: string): string {
 
 export function issueBody(report: Report, ticket: string): string {
   // Seconda passata di redazione: il client sanifica già, questa copre le
-  // versioni vecchie e i client non nostri. I racconti perdono solo le
-  // credenziali, la diagnostica passa da tutte le regole.
+  // versioni vecchie e i client non nostri. Tutti i campi testuali passano
+  // dalla redazione completa: una issue pubblica non è mai una destinazione
+  // lecita per PII.
   const story = (text: string) =>
-    text ? neutralize(redactSecrets(text)) : "_non indicato_";
+    text ? neutralize(redact(text)) : "_non indicato_";
   const lines = [
     `**Riferimento**: \`${ticket}\``,
     "",
@@ -204,7 +239,6 @@ export function issueBody(report: Report, ticket: string): string {
     `- **versione**: ${report.appVersion}`,
     `- **piattaforma**: ${report.platform}`,
     `- **lingua**: ${report.locale}`,
-    `- **risposta a**: ${report.contact ? "sì, contatto allegato" : "nessun contatto lasciato"}`,
     "",
   ];
   if (report.diagnostics) {
@@ -217,11 +251,9 @@ export function issueBody(report: Report, ticket: string): string {
       "",
     );
   }
-  // Il contatto resta fuori dalla issue: è l'unico dato che l'utente ci dà
-  // apposta, e finirebbe su una pagina pubblica indicizzabile.
   lines.push(
     "> Inviata dalla sezione «Segnala un problema» dell'app desktop.",
-    "> Il contatto dell'utente NON è in questa issue: viaggia sul canale privato.",
+    "> Il report non include contatti o altri dati personali dell'utente.",
   );
   return lines.join("\n");
 }

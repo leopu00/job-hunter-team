@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { redactSecrets } from "@/lib/redact";
+import { redact } from "@/lib/redact";
 import {
   MAX_BODY_BYTES,
   emailSubject,
@@ -10,7 +10,6 @@ import {
   newTicket,
   parseReport,
   sembraSpam,
-  replyToSicuro,
   type Report,
 } from "@/lib/feedback-report";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
@@ -52,17 +51,14 @@ const MAIL_FROM =
  * Recapita la segnalazione nella casella del progetto.
  *
  * È la destinazione che conta: la persona che segnala un crash non ha un
- * account GitHub e non ne aprirà uno: qui la sua segnalazione diventa una mail
- * come tutte le altre, in una casella dove qualcuno la legge.
+ * account GitHub e non ne aprirà uno: qui la sua segnalazione anonima e già
+ * redatta diventa una mail come tutte le altre, in una casella monitorata.
  *
  * Si usa l'API HTTP di Resend e non l'SMTP: le funzioni serverless hanno le
  * porte SMTP in uscita bloccate o inaffidabili, mentre una POST parte sempre.
  */
 async function sendEmail(report: Report, ticket: string): Promise<boolean> {
   if (!RESEND_KEY || !MAIL_TO) return false;
-  // Il Reply-To fa sì che rispondere sia un solo click: la risposta parte
-  // verso chi ha segnalato, non verso di noi.
-  const replyTo = replyToSicuro(report.contact);
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -75,7 +71,6 @@ async function sendEmail(report: Report, ticket: string): Promise<boolean> {
         to: [MAIL_TO],
         subject: emailSubject(report, ticket),
         text: emailText(report, ticket),
-        ...(replyTo ? { reply_to: replyTo } : {}),
       }),
     });
     if (!res.ok) {
@@ -128,8 +123,9 @@ async function openIssue(
 }
 
 /**
- * Canale secondario (Slack, Discord, un automatismo qualsiasi). Porta anche
- * il contatto dell'utente, che nella issue pubblica non deve comparire.
+ * Canale secondario (Slack, Discord, un automatismo qualsiasi). Riceve solo
+ * un riassunto già redatto: non è una destinazione autorizzata per contatti o
+ * altri identificativi dell'utente.
  */
 async function notifyWebhook(report: Report, ticket: string): Promise<boolean> {
   if (!WEBHOOK_URL) return false;
@@ -138,11 +134,10 @@ async function notifyWebhook(report: Report, ticket: string): Promise<boolean> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        text: `Segnalazione ${ticket} — ${report.platform} · v${report.appVersion}\n${redactSecrets(
+        text: `Segnalazione ${ticket} — ${report.platform} · v${report.appVersion}\n${redact(
           report.happened,
         ).slice(0, 500)}`,
         ticket,
-        contact: report.contact,
       }),
     });
     return res.ok;
@@ -153,20 +148,6 @@ async function notifyWebhook(report: Report, ticket: string): Promise<boolean> {
 }
 
 export async function POST(req: NextRequest) {
-  const rl = await checkRateLimit(
-    "feedback",
-    "submit",
-    clientIp(req),
-    MAX_PER_HOUR,
-    3_600_000,
-  );
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Troppe segnalazioni ravvicinate. Riprova tra poco." },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
-    );
-  }
-
   const raw = await req.text();
   if (raw.length > MAX_BODY_BYTES) {
     return NextResponse.json(
@@ -184,6 +165,22 @@ export async function POST(req: NextRequest) {
   // direbbe come aggirare la trappola al tentativo successivo.
   if (sembraSpam(parsed)) {
     return NextResponse.json({ ok: true, ticket: newTicket() });
+  }
+  // Le sonde con honeypot non devono consumare il budget di cinque invii
+  // reali all'ora. Il limit viene applicato soltanto dopo aver escluso bot e
+  // probe, prima di qualsiasi destinazione esterna.
+  const rl = await checkRateLimit(
+    "feedback",
+    "submit",
+    clientIp(req),
+    MAX_PER_HOUR,
+    3_600_000,
+  );
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Troppe segnalazioni ravvicinate. Riprova tra poco." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
+    );
   }
   const report = parseReport(parsed);
   if (!report) {
