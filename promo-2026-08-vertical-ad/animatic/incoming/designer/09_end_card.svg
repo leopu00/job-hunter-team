@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <title>Job Hunter Team vertical animatic overlay</title>
+  <desc>Transparent 1080 by 1920 overlay; JetBrains Mono typography.</desc>
+  <style>text { font-family: 'JetBrains Mono', monospace; }</style>
+  <rect x="108" y="220" width="864" height="162" rx="18" fill="#060608" fill-opacity="0.722"/>
+  <rect x="108" y="220" width="8" height="162" rx="4" fill="#00E87A" fill-opacity="1.000"/>
+  <text x="540" y="274" font-size="58" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA" fill-opacity="0.886">PREVIEW -</text>
+  <text x="540" y="338" font-size="58" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA" fill-opacity="0.886">NOT FINAL FOOTAGE</text>
+  <rect x="108" y="690" width="864" height="890" rx="28" fill="#060608" fill-opacity="0.800"/>
+  <rect x="108" y="690" width="10" height="890" rx="5" fill="#00E87A" fill-opacity="1.000"/>
+  <text x="540" y="824" font-size="92" font-weight="800" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA" fill-opacity="1.000">JOB HUNTER</text>
+  <text x="540" y="938" font-size="92" font-weight="800" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA" fill-opacity="1.000">TEAM</text>
+  <rect x="438" y="1018" width="204" height="8" rx="4" fill="#00E87A" fill-opacity="1.000"/>
+  <text x="540" y="1110" font-size="60" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA" fill-opacity="1.000">Your job hunt,</text>
+  <text x="540" y="1188" font-size="60" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA" fill-opacity="1.000">now playable.</text>
+  <text x="540" y="1316" font-size="68" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#F0F0FA" fill-opacity="1.000">jobhunterteam.ai</text>
+  <text x="210" y="1468" font-size="58" font-weight="500" text-anchor="middle" dominant-baseline="middle" fill="#B8B8D0" fill-opacity="1.000">Free</text>
+  <text x="318" y="1468" font-size="58" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#00E87A" fill-opacity="1.000">·</text>
+  <text x="530" y="1468" font-size="58" font-weight="500" text-anchor="middle" dominant-baseline="middle" fill="#B8B8D0" fill-opacity="1.000">Open source</text>
+  <text x="748" y="1468" font-size="58" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#00E87A" fill-opacity="1.000">·</text>
+  <text x="850" y="1468" font-size="58" font-weight="500" text-anchor="middle" dominant-baseline="middle" fill="#B8B8D0" fill-opacity="1.000">Beta</text>
+</svg>
