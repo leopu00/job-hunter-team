@@ -26,7 +26,8 @@ ma risposte e posizioni dal vivo richiedono un team attivo.
    scheda mostra nome, stato corrente e responsabilità. Hai completato il passo
    quando riesci ad aprire una scheda e a tornare all'ufficio senza perdere il
    punto in cui eri.
-2. **Capisci chi fa cosa.** Il team comprende **coordinatori, consulenti di
+2. **Capisci chi fa cosa.** I nomi dei reparti, sempre al plurale, che vedi in
+   ufficio e nelle conversazioni sono **coordinatori, consulenti di
    supporto, consulenti di carriera, ricercatori, analisti, valutatori della
    compatibilità, redattori delle candidature e revisori**. I coordinatori
    mantengono il lavoro in movimento; i consulenti di supporto aiutano con il
@@ -50,12 +51,16 @@ ma risposte e posizioni dal vivo richiedono un team attivo.
    con il tuo profilo e spiegano il punteggio. Il punteggio è una stima di
    compatibilità, non una decisione presa al posto tuo. Il passo funziona quando
    riconosci punteggio e spiegazione e puoi decidere se merita attenzione.
-6. **Vedi l'intera pipeline.** Una posizione procede in ordine: i ricercatori
-   la trovano, gli analisti la verificano, i valutatori della compatibilità la
-   classificano, i redattori delle candidature personalizzano i documenti su
-   tua richiesta e i revisori li controllano. Lo stato indica il punto del
-   percorso. Il passo funziona quando uno stato ti dice sia che cosa è accaduto
-   sia che cosa può accadere dopo.
+6. **Vedi l'intera pipeline.** Apri **Posizioni**, seleziona un risultato e
+   leggi lo stato. **`new`** significa che i ricercatori l'hanno trovata e gli
+   analisti la verificano dopo; **`checked`** significa che gli analisti hanno
+   finito e i valutatori della compatibilità la valutano dopo; **`scored`**
+   significa che hanno finito i valutatori, quindi puoi decidere o richiedere i
+   documenti. Dopo la richiesta, **`writing`** significa che i redattori delle
+   candidature li preparano, **`review`** che i revisori li controllano e
+   **`ready`** che sono pronti per te. **`applied`** e **`response`**
+   registrano la tua azione e il suo esito. Il passo funziona quando sai dire
+   quale reparto è responsabile e qual è il prossimo evento per lo stato visibile.
 7. **Esamina le posizioni.** Apri **Posizioni** e seleziona una buona
    corrispondenza. La scheda e il dettaglio mostrano ruolo, organizzazione,
    località, modalità di lavoro, punteggio e stato. Quando disponibili,
@@ -79,11 +84,17 @@ conversazioni.
 
 #### Prima di iniziare
 
-Accedi all'app web con un account collegato a un team in esecuzione nell'app
-nativa e con la sincronizzazione dell'account configurata. Per provare tutti i
-passaggi, aspetta che almeno una posizione abbia un punteggio. Una dashboard
-vuota significa semplicemente che il team non ha ancora prodotto un risultato
-valutato.
+Configura la sincronizzazione prima di accedere: nell'app desktop nativa apri
+**Impostazioni**, poi **Account**, scegli **Accedi con Google**; nel terminale
+che si apre, apri il link, inserisci il codice e approva questo dispositivo,
+quindi scegli
+**Sincronizza ora**. La riga **Account cloud** deve indicare **collegato** e la
+riga **Dispositivo** deve indicare **associato**. Se il controllo di accesso non
+è disponibile, avvia prima il team; se dopo l'approvazione l'account indica
+ancora **modalità locale / ospite**, ripeti **Accedi con Google**. Poi accedi
+all'app web con lo stesso account. Per provare tutti i passaggi, aspetta che
+almeno una posizione abbia un punteggio. Una dashboard vuota significa
+semplicemente che il team non ha ancora prodotto un risultato valutato.
 
 1. **Parti dalla dashboard.** Apri **Dashboard**. Inizia dalle posizioni
    valutate più di recente, così i nuovi risultati non si perdono in un flusso
@@ -148,7 +159,8 @@ pero las respuestas y posiciones en vivo necesitan el equipo activo.
    colega. Su tarjeta muestra un nombre, el estado actual y su responsabilidad.
    Has completado este paso cuando puedes abrir una tarjeta y volver a la
    oficina sin perder tu lugar.
-2. **Entiende quién hace qué.** El equipo incluye **coordinadores, asesores de
+2. **Entiende quién hace qué.** Los nombres de los departamentos, siempre en
+   plural, que ves en la oficina y las conversaciones son **coordinadores, asesores de
    asistencia, asesores profesionales, investigadores, analistas, evaluadores
    de compatibilidad, redactores de candidaturas y revisores**. Los
    coordinadores hacen que el trabajo avance; los asesores de asistencia ayudan
@@ -173,12 +185,16 @@ pero las respuestas y posiciones en vivo necesitan el equipo activo.
    perfil y explican la puntuación. Una puntuación es una estimación de
    compatibilidad, no una decisión tomada por ti. El paso funciona cuando
    identificas la puntuación y su explicación y decides si merece atención.
-6. **Ve toda la canalización.** Una posición avanza en orden: los
-   investigadores la encuentran, los analistas la verifican, los evaluadores de
-   compatibilidad la clasifican, los redactores de candidaturas adaptan los
-   documentos cuando los solicitas y los revisores los comprueban. Su estado
-   muestra dónde está en ese camino. El paso funciona cuando un estado te dice
-   qué ha pasado y qué puede ocurrir después.
+6. **Ve toda la canalización.** Abre **Posiciones**, selecciona un resultado y
+   lee su estado. **`new`** significa que los investigadores lo encontraron y
+   los analistas lo verifican después; **`checked`** significa que los analistas
+   terminaron y los evaluadores de compatibilidad lo puntúan después; **`scored`**
+   significa que los evaluadores terminaron, así que puedes decidir o solicitar
+   documentos. Tras tu solicitud, **`writing`** significa que los redactores de
+   candidaturas los preparan, **`review`** que los revisores los comprueban y
+   **`ready`** que están listos para ti. **`applied`** y **`response`** registran
+   tu acción y su resultado. El paso funciona cuando puedes nombrar el
+   departamento responsable y el siguiente evento del estado visible.
 7. **Inspecciona posiciones.** Abre **Posiciones** y selecciona una buena
    coincidencia. La tarjeta y el detalle muestran puesto, organización,
    ubicación, modalidad de trabajo, puntuación y estado. Cuando están
@@ -203,11 +219,17 @@ las conversaciones.
 
 #### Antes de empezar
 
-Inicia sesión en la aplicación web con una cuenta conectada a un equipo que se
-ejecuta en la aplicación nativa y tiene configurada la sincronización de la
-cuenta. Para practicar todos los pasos, espera a que al menos una posición tenga
-una puntuación. Un panel vacío simplemente significa que el equipo aún no ha
-producido un resultado puntuado.
+Configura la sincronización antes de iniciar sesión: en la aplicación de
+escritorio nativa abre **Ajustes** y luego **Cuenta**, elige **Entrar con
+Google**; en el terminal que se abre, abre el enlace, introduce el código y
+aprueba este dispositivo, y después elige **Sincronizar ahora**. La fila
+**Cuenta cloud** debe indicar
+**conectada** y la fila **Dispositivo**, **asociado**. Si el control de acceso
+no está disponible, inicia primero el equipo; si tras aprobarlo la cuenta sigue
+indicando **modo local / invitado**, repite **Entrar con Google**. Después inicia
+sesión en la aplicación web con la misma cuenta. Para practicar todos los
+pasos, espera a que al menos una posición tenga una puntuación. Un panel vacío
+simplemente significa que el equipo aún no ha producido un resultado puntuado.
 
 1. **Empieza en el panel.** Abre **Panel**. Empieza con las posiciones
    puntuadas más recientes, para que los resultados nuevos no se oculten en un
@@ -275,7 +297,8 @@ une équipe active.
    quel collègue. Sa fiche affiche un nom, son état actuel et sa
    responsabilité. Cette étape est terminée lorsque vous pouvez ouvrir une
    fiche puis revenir au bureau sans perdre votre place.
-2. **Comprenez qui fait quoi.** L'équipe comprend des **coordinateurs,
+2. **Comprenez qui fait quoi.** Les noms de départements, toujours au pluriel,
+   que vous voyez dans le bureau et les conversations sont **coordinateurs,
    conseillers d'assistance, conseillers de carrière, chercheurs, analystes,
    évaluateurs de compatibilité, rédacteurs de candidatures et réviseurs**. Les
    coordinateurs font avancer le travail ; les conseillers d'assistance aident
@@ -301,12 +324,17 @@ une équipe active.
    pas une décision prise à votre place. L'étape fonctionne lorsque vous
    repérez la note et son explication, puis décidez si l'opportunité mérite
    votre attention.
-6. **Voyez tout le pipeline.** Une position avance dans cet ordre : les
-   chercheurs la trouvent, les analystes la vérifient, les évaluateurs de
-   compatibilité la classent, les rédacteurs de candidatures adaptent les
-   documents lorsque vous les demandez et les réviseurs les contrôlent. Son
-   état indique où elle se situe. L'étape fonctionne lorsqu'un état vous dit ce
-   qui s'est passé et ce qui peut arriver ensuite.
+6. **Voyez tout le pipeline.** Ouvrez **Positions**, sélectionnez un résultat
+   et lisez son état. **`new`** signifie que les chercheurs l'ont trouvé et que
+   les analystes le vérifient ensuite ; **`checked`** signifie que les analystes
+   ont fini et que les évaluateurs de compatibilité le notent ensuite ;
+   **`scored`** signifie que les évaluateurs ont fini : vous pouvez décider ou
+   demander des documents. Après votre demande, **`writing`** signifie que les
+   rédacteurs de candidatures les préparent, **`review`** que les réviseurs les
+   contrôlent et **`ready`** qu'ils sont prêts pour vous. **`applied`** et
+   **`response`** enregistrent votre action et son résultat. L'étape fonctionne
+   lorsque vous pouvez nommer le département responsable et l'événement suivant
+   pour l'état visible.
 7. **Examinez les positions.** Ouvrez **Positions** et sélectionnez une bonne
    correspondance. Sa fiche et son détail affichent le poste, l'organisation,
    le lieu, le mode de travail, la note et l'état. Lorsqu'ils sont disponibles,
@@ -331,11 +359,18 @@ séparées.
 
 #### Avant de commencer
 
-Connectez-vous à l'application web avec un compte relié à une équipe en cours
-d'exécution dans l'application native et dont la synchronisation de compte est
-configurée. Pour pratiquer toutes les étapes, attendez qu'au moins une position
-ait une note. Un tableau de bord vide signifie simplement que l'équipe n'a pas
-encore produit de résultat noté.
+Configurez la synchronisation avant de vous connecter : dans l'application de
+bureau native, ouvrez **Paramètres**, puis **Compte**, choisissez **Se connecter
+avec Google** ; dans le terminal qui s'ouvre, ouvrez le lien, saisissez le
+code et approuvez cet appareil, puis choisissez **Synchroniser maintenant**.
+La ligne **Compte cloud** doit
+indiquer **connecté** et la ligne **Appareil**, **associé**. Si le contrôle de
+connexion est indisponible, démarrez d'abord l'équipe ; si le compte indique
+encore **mode local / invité** après l'approbation, recommencez **Se connecter
+avec Google**. Connectez-vous ensuite à l'application web avec le même compte.
+Pour pratiquer toutes les étapes, attendez qu'au moins une position ait une
+note. Un tableau de bord vide signifie simplement que l'équipe n'a pas encore
+produit de résultat noté.
 
 1. **Commencez par le tableau de bord.** Ouvrez **Dashboard**. Il commence par
    les positions les plus récemment notées, afin que les nouveaux résultats ne
@@ -403,7 +438,8 @@ Antworten und Positionen brauchen ein aktives Team.
    Kollegen aus. Seine Karte zeigt einen Namen, den aktuellen Status und die
    Aufgabe. Dieser Schritt ist abgeschlossen, wenn du eine Karte öffnen und
    zum Büro zurückkehren kannst, ohne deinen Platz zu verlieren.
-2. **Verstehe, wer was macht.** Zum Team gehören **Koordinatoren,
+2. **Verstehe, wer was macht.** Die Abteilungsnamen, die du im Büro und in
+   Gesprächen siehst, stehen immer im Plural: **Koordinatoren,
    Support-Berater, Karriereberater, Rechercheure, Analysten,
    Passungsbewerter, Bewerbungsautoren und Prüfer**. Koordinatoren halten die
    Arbeit in Bewegung; Support-Berater helfen mit dem Produkt und deinem
@@ -429,12 +465,17 @@ Antworten und Positionen brauchen ein aktives Team.
    Entscheidung an deiner Stelle. Der Schritt hat funktioniert, wenn du
    Bewertung und Erklärung erkennst und entscheidest, ob die Chance deine
    Aufmerksamkeit verdient.
-6. **Sieh die ganze Pipeline.** Eine Position bewegt sich der Reihe nach: Die
-   Rechercheure finden sie, die Analysten prüfen sie, die Passungsbewerter
-   ordnen sie ein, die Bewerbungsautoren passen Unterlagen auf deinen Wunsch an
-   und die Prüfer kontrollieren sie. Ihr Status zeigt, wo sie sich befindet.
-   Der Schritt hat funktioniert, wenn dir ein Status sagt, was geschehen ist
-   und was als Nächstes passieren kann.
+6. **Sieh die ganze Pipeline.** Öffne **Positions**, wähle ein Ergebnis und
+   lies seinen Status. **`new`** bedeutet: Rechercheure haben es gefunden und
+   Analysten prüfen es als Nächstes. **`checked`** bedeutet: Analysten sind
+   fertig und Passungsbewerter bewerten es als Nächstes. **`scored`** bedeutet:
+   Passungsbewerter sind fertig; du kannst entscheiden oder Unterlagen anfordern.
+   Nach deiner Anforderung bedeutet **`writing`**, dass Bewerbungsautoren sie
+   vorbereiten, **`review`**, dass Prüfer sie kontrollieren, und **`ready`**,
+   dass sie für dich bereit sind. **`applied`** und **`response`** zeichnen
+   deine Handlung und ihr Ergebnis auf. Der Schritt hat funktioniert, wenn du
+   für den sichtbaren Status die zuständige Abteilung und das nächste Ereignis
+   nennen kannst.
 7. **Untersuche Positionen.** Öffne **Positions** und wähle eine gute
    Übereinstimmung. Karte und Detail zeigen Rolle, Organisation, Ort,
    Arbeitsmodell, Bewertung und Status. Falls vorhanden, zeigen sie auch
@@ -460,11 +501,17 @@ zu halten.
 
 #### Bevor du beginnst
 
-Melde dich in der Web-App mit einem Konto an, das mit einem Team verbunden ist,
-das in der nativen App läuft und für das die Kontosynchronisierung eingerichtet
-ist. Um jeden Schritt zu üben, warte, bis mindestens eine Position eine
-Bewertung hat. Ein leeres Dashboard bedeutet nur, dass das Team noch kein
-bewertetes Ergebnis erzeugt hat.
+Richte die Synchronisierung vor der Anmeldung ein: Öffne in der nativen
+Desktop-App **Einstellungen**, dann **Account**, wähle **Mit Google anmelden**;
+öffne im angezeigten Terminal den Link, gib den Code ein und bestätige dieses
+Gerät. Wähle dann
+**Jetzt synchronisieren**. Die Zeile **Cloud-Konto** muss **verbunden** und die
+Zeile **Gerät** **zugeordnet** anzeigen. Falls die Anmeldung nicht verfügbar
+ist, starte zuerst das Team; zeigt der Account nach der Bestätigung weiter
+**lokaler Modus / Gast**, wiederhole **Mit Google anmelden**. Melde dich dann
+mit demselben Konto in der Web-App an. Um jeden Schritt zu üben, warte, bis
+mindestens eine Position eine Bewertung hat. Ein leeres Dashboard bedeutet nur,
+dass das Team noch kein bewertetes Ergebnis erzeugt hat.
 
 1. **Starte im Dashboard.** Öffne **Dashboard**. Es beginnt mit den zuletzt
    bewerteten Positionen, damit neue Ergebnisse nicht in einem Aktivitätenstrom
@@ -534,7 +581,8 @@ ativação, mas as respostas e posições ao vivo exigem uma equipa ativa.
    colega. O cartão mostra um nome, o estado atual e a responsabilidade. Este
    passo está concluído quando consegues abrir um cartão e voltar ao escritório
    sem perderes o ponto onde estavas.
-2. **Percebe quem faz o quê.** A equipa inclui **coordenadores, consultores de
+2. **Percebe quem faz o quê.** Os nomes dos departamentos que vês no escritório
+   e nas conversas estão sempre no plural: **coordenadores, consultores de
    apoio, consultores de carreira, investigadores, analistas, avaliadores de
    compatibilidade, redatores de candidaturas e revisores**. Os coordenadores
    mantêm o trabalho em movimento; os consultores de apoio ajudam com o produto
@@ -560,12 +608,16 @@ ativação, mas as respostas e posições ao vivo exigem uma equipa ativa.
    compatibilidade, não uma decisão tomada por ti. O passo resulta quando
    identificas a pontuação e a explicação e decides se a oportunidade merece
    atenção.
-6. **Vê todo o pipeline.** Uma posição avança por ordem: os investigadores
-   encontram-na, os analistas verificam-na, os avaliadores de compatibilidade
-   classificam-na, os redatores de candidaturas adaptam documentos quando os
-   pedes e os revisores conferem-nos. O estado mostra onde ela está no percurso.
-   O passo resulta quando um estado te diz o que aconteceu e o que poderá
-   acontecer a seguir.
+6. **Vê todo o pipeline.** Abre **Posições**, seleciona um resultado e lê o
+   estado. **`new`** significa que os investigadores o encontraram e os
+   analistas o verificam a seguir; **`checked`** significa que os analistas
+   terminaram e os avaliadores de compatibilidade o pontuam a seguir; **`scored`**
+   significa que os avaliadores terminaram, pelo que podes decidir ou pedir
+   documentos. Depois do teu pedido, **`writing`** significa que os redatores
+   de candidaturas os preparam, **`review`** que os revisores os conferem e
+   **`ready`** que estão prontos para ti. **`applied`** e **`response`**
+   registam a tua ação e o respetivo resultado. O passo resulta quando consegues
+   indicar o departamento responsável e o próximo evento do estado visível.
 7. **Inspeciona posições.** Abre **Posições** e seleciona uma boa
    correspondência. O cartão e o detalhe mostram função, organização,
    localização, modelo de trabalho, pontuação e estado. Quando disponíveis,
@@ -590,11 +642,17 @@ conversas separadas.
 
 #### Antes de começares
 
-Inicia sessão na aplicação web com uma conta ligada a uma equipa em execução na
-aplicação nativa e com a sincronização de conta configurada. Para praticares
-todos os passos, espera que pelo menos uma posição tenha uma pontuação. Um
-dashboard vazio significa apenas que a equipa ainda não produziu um resultado
-pontuado.
+Configura a sincronização antes de iniciares sessão: na aplicação de ambiente
+de trabalho nativa abre **Configurações**, depois **Conta**, escolhe **Entrar com o
+Google**; no terminal que se abre, abre a ligação, introduz o código e aprova
+este dispositivo; depois escolhe **Sincronizar agora**. A linha **Conta cloud**
+deve indicar **ligada** e
+a linha **Dispositivo**, **associado**. Se o controlo de início de sessão não
+estiver disponível, inicia primeiro a equipa; se, depois da aprovação, a conta
+ainda indicar **modo local / convidado**, repete **Entrar com o Google**. Depois
+inicia sessão na aplicação web com a mesma conta. Para praticares todos os
+passos, espera que pelo menos uma posição tenha uma pontuação. Um dashboard
+vazio significa apenas que a equipa ainda não produziu um resultado pontuado.
 
 1. **Começa no painel.** Abre **Dashboard**. Começa pelas posições pontuadas
    mais recentemente, para que os novos resultados não se percam num fluxo de
@@ -660,7 +718,8 @@ a munkaidőt be kell állítani. Aktiválás előtt is felfedezheted az irodát,
    kollégát. A kártyája megmutatja a nevét, aktuális állapotát és feladatát. A
    lépést akkor teljesítetted, amikor meg tudsz nyitni egy kártyát, majd anélkül
    térsz vissza az irodába, hogy elveszítenéd, hol tartottál.
-2. **Értsd meg, ki mit csinál.** A csapatban **koordinátorok, támogatási
+2. **Értsd meg, ki mit csinál.** Az irodában és a beszélgetésekben látható
+   részlegnevek mindig többes számban vannak: **koordinátorok, támogatási
    tanácsadók, karrier-tanácsadók, kutatók, elemzők, illeszkedés-értékelők,
    pályázatírók és ellenőrök** dolgoznak. A koordinátorok mozgásban tartják a
    munkát; a támogatási tanácsadók a termékkel és a profiloddal segítenek; a
@@ -686,11 +745,16 @@ a munkaidőt be kell állítani. Aktiválás előtt is felfedezheted az irodát,
    illeszkedés becslése, nem helyetted meghozott döntés. A lépés akkor sikerült,
    amikor felismered a pontszámot és a magyarázatát, majd eldöntöd, megérdemli-e
    a lehetőség a figyelmedet.
-6. **Lásd az egész folyamatot.** Egy pozíció sorrendben halad: a kutatók
-   megtalálják, az elemzők ellenőrzik, az illeszkedés-értékelők rangsorolják, a
-   pályázatírók kérésedre személyre szabják a dokumentumokat, az ellenőrök pedig
-   átnézik azokat. Az állapota mutatja, hol tart ezen az úton. A lépés akkor
-   sikerült, amikor egy állapotból látod, mi történt, és mi történhet ezután.
+6. **Lásd az egész folyamatot.** Nyisd meg a **Pozíciók** nézetet, válassz egy
+   eredményt, és olvasd el az állapotát. A **`new`** azt jelenti, hogy a
+   kutatók megtalálták, az elemzők következnek; a **`checked`** azt, hogy az
+   elemzők végeztek, az illeszkedés-értékelők pontoznak ezután; a **`scored`**
+   azt, hogy az értékelők végeztek, így dönthetsz vagy kérhetsz dokumentumokat.
+   A kérésed után a **`writing`** azt jelenti, hogy a pályázatírók készítik
+   őket, a **`review`**, hogy az ellenőrök átnézik, a **`ready`**, hogy készen
+   állnak neked. Az **`applied`** és a **`response`** a te lépésedet és annak
+   eredményét rögzíti. A lépés akkor sikerült, amikor a látható állapothoz meg
+   tudod nevezni a felelős részleget és a következő eseményt.
 7. **Vizsgáld meg a pozíciókat.** Nyisd meg a **Pozíciók** nézetet, és válassz
    egy jó egyezést. A kártya és a részletek mutatják a szerepet, szervezetet,
    helyet, munkamódot, pontszámot és állapotot. Ha rendelkezésre állnak, az
@@ -715,11 +779,18 @@ tartani.
 
 #### Mielőtt elkezded
 
-Jelentkezz be a webalkalmazásba olyan fiókkal, amely a natív alkalmazásban futó
-csapathoz kapcsolódik, és amelyhez be van állítva a fiókszinkronizálás. Minden
-lépés gyakorlásához várd meg, amíg legalább egy pozíciónak lesz pontszáma. Az
-üres irányítópult egyszerűen azt jelenti, hogy a csapat még nem hozott létre
-pontozott eredményt.
+Bejelentkezés előtt állítsd be a szinkronizálást: a natív asztali alkalmazásban
+nyisd meg a **Beállítások**, majd a **Fiók** nézetet, válaszd a **Belépés
+Google-lel** lehetőséget; a megnyíló terminálban nyisd meg a linket, írd be a
+kódot és hagyd jóvá ezt az eszközt, majd válaszd a **Szinkronizálás most**
+lehetőséget. A **Felhőfiók**
+sorának **csatlakoztatva**, az **Eszköz** sorának **társítva** állapotot kell
+mutatnia. Ha a belépési vezérlő nem elérhető, előbb indítsd el a csapatot; ha a
+jóváhagyás után a fiók még mindig **helyi / vendég módban** van, ismételd meg a
+**Belépés Google-lel** lépést. Ezután ugyanazzal a fiókkal jelentkezz be a
+webalkalmazásba. Minden lépés gyakorlásához várd meg, amíg legalább egy
+pozíciónak lesz pontszáma. Az üres irányítópult egyszerűen azt jelenti, hogy a
+csapat még nem hozott létre pontozott eredményt.
 
 1. **Kezdd az irányítópulttal.** Nyisd meg a **Dashboard** nézetet. A
    legutóbb pontozott pozíciókkal kezdődik, így az új eredmények nem vesznek el
