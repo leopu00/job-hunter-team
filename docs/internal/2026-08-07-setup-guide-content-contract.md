@@ -33,11 +33,24 @@ move the non-setup product tour under `/docs`. Keep `/setup-guide` unlinked and
 and start a working team. Choose your operating system; each chapter shows the
 exact screen you should see.
 
-**Before you begin:** Keep about 3–4 GB of RAM available while Job Hunter Team
-runs, and check Docker's current requirements for your operating system. Allow
-time for the first container image download; its duration depends on your
-computer and connection. Job Hunter Team does not ask for an API key: use a
-supported provider subscription.
+**Before you begin:** For a local team, keep about 3–4 GB of RAM free in
+addition to the memory used by your operating system and other apps. This is an
+operational estimate, not a guaranteed minimum; memory can spike when all eight
+agents are active. Also check Docker's current requirements for your operating
+system. A dedicated VPS has a separate validated baseline: Ubuntu 24.04, 4 GB
+of total RAM, 2 vCPU, 80 GB SSD, and 2 GB of preventive swap. See
+**Run 24/7 on a VPS**. Allow time for the first container image download; its
+duration depends on your computer and connection. Job Hunter Team does not ask
+for an API key: use a supported provider subscription.
+
+Editorial provenance: the local 3–4 GB value is an operational estimate carried
+by the [root README](../../README.md),
+[Quickstart](../guides/QUICKSTART.md), and
+[AI agent integration guide](../guides/AI-AGENT-INTEGRATION.md). No benchmark
+report or enforced minimum was found, so the public guide must not describe it
+as one. The dedicated-server figures come from the separately validated
+[VPS page](../../web/app/docs/guides/run-on-a-vps/page.tsx); the preventive swap
+behavior is documented in [VPS setup](../guides/VPS-SETUP.md).
 
 ### Setup screen
 
@@ -118,10 +131,13 @@ export const SETUP_GUIDE = {
     {
       id: "check-requirements",
       title: "Check the requirements",
-      body: "Keep about 3–4 GB of RAM available while Job Hunter Team runs. You also need internet access, a supported provider subscription, and a computer that meets Docker's current requirements for your operating system.",
+      body: "For a local team, keep about 3–4 GB of RAM free beyond what your operating system and other apps use. This is an operational estimate, not a guaranteed minimum; memory can spike when all eight agents are active. You also need internet access, a supported provider subscription, and a computer that meets Docker's current requirements for your operating system. A dedicated VPS uses a separate validated baseline: Ubuntu 24.04, 4 GB total RAM, 2 vCPU, 80 GB SSD, and 2 GB preventive swap.",
       os: "all",
       screen: "S01-prerequisites",
-      links: [{ label: "Compare supported providers", href: "/pricing" }],
+      links: [
+        { label: "Compare supported providers", href: "/pricing" },
+        { label: "Run 24/7 on a VPS", href: "/docs/guides/run-on-a-vps" },
+      ],
     },
     {
       id: "install-docker-macos",
@@ -329,10 +345,15 @@ OS state plus `G00-guide-index-mobile.png` at a 390 px viewport.
 is the first clean-launch screen. `W04` deliberately uses two source images
 rather than placing an app window and a signed-in browser in one raw frame.
 
-`S01-prerequisites` is the guide requirement card: it shows about 3–4 GB of
-RAM available for Job Hunter Team, internet access, a provider subscription,
-and a prompt to check the selected platform's Docker requirements. It must not
-repeat the unverified universal CPU/disk figures from the old Download card.
+`S01-prerequisites` is the guide requirement card. Its local-computer row shows
+about 3–4 GB of RAM **free beyond the operating system and other apps**, marks
+that value as an operational estimate rather than a guaranteed minimum, and
+warns that all eight active agents can cause memory spikes. Its separate VPS
+note shows the validated Ubuntu 24.04 baseline of 4 GB total RAM, 2 vCPU,
+80 GB SSD, and 2 GB preventive swap, with a link to **Run 24/7 on a VPS**. The
+card also shows internet access, a provider subscription, and a prompt to check
+the selected platform's Docker requirements. It must not present CPU or disk
+figures as universal local-computer requirements.
 `S02-docker-download` is the official Docker installation page for the target
 OS: Docker Desktop on macOS/Windows, Docker Engine on Linux. It is not an app
 screen, because the desktop app has not been downloaded at that point.
