@@ -57,7 +57,7 @@ def test_cli_started_team_is_not_labeled_inactive_while_setup_is_incomplete():
     """
     panel = _src("game/scripts/ui/section_panel.gd")
     team = panel[panel.index("func _build_team()") : panel.index("func _build_agents()")]
-    assert 'var running := not BackendBus.agents.is_empty() or bool(' in team
+    assert 'var running := SetupService._agents_have_operational_team(BackendBus.agents) or bool(' in team
     assert 'var banner_key := "setup.cta" if running else "setup.team_locked"' in team
     assert team.index("var running :=") < team.index('if not bool(SetupService.status.get("ready"')
 
