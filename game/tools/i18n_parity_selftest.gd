@@ -2,10 +2,11 @@ extends SceneTree
 ## Self-test headless della parità fra le 7 lingue dell'interfaccia.
 ## Esecuzione: godot --headless --path game --script res://tools/i18n_parity_selftest.gd
 ##
-## UIStrings.t() fa fallback SILENZIOSO sull'italiano: una chiave mancante in
-## ui_de.gd non è un errore a runtime, è una riga italiana in mezzo a un
-## pannello tedesco. È il modo peggiore di rompersi — nessun log, nessun crash,
-## solo un utente che smette di fidarsi. Il drift si era già formato una volta
+## UIStrings.t() deve fare fallback SILENZIOSO sull'inglese: una chiave mancante
+## in ui_de.gd non è un errore a runtime e non deve diventare una riga italiana
+## in mezzo a un pannello tedesco. È il modo peggiore di rompersi — nessun log,
+## nessun crash, solo un utente che smette di fidarsi. Il drift si era già
+## formato una volta
 ## (EN a 471 chiavi su 624, le altre cinque a 327): questo test è il gate che
 ## impedisce che si riformi.
 ##
@@ -54,6 +55,7 @@ const ROLE_NAME_SURFACES := {
 ## che contiene parole. Simboli e separatori ("✕", "↑", "· ") restano leciti —
 ## non si traducono e obbligarli a passare dal dizionario sarebbe rumore.
 const LITERAL_FREE_SURFACES := [
+	"res://scripts/game.gd",
 	"res://scripts/setup/scripted_onboarding.gd",
 	"res://scripts/ui/embedded_terminal.gd",
 ]
@@ -68,6 +70,7 @@ func _init() -> void:
 	_check("dizionario italiano non vuoto", not it.is_empty(), "UIStrings.S è vuoto")
 	for lang in LANGS:
 		_check_lang(lang, it)
+	_check_english_fallback()
 	_check_keys_used_in_sources(it)
 	_check_role_names(it)
 	_check_no_hardcoded_labels()
@@ -123,6 +126,16 @@ func _check_lang(lang: String, it: Dictionary) -> void:
 			"%d vuoti: %s" % [empty.size(), _head(empty)])
 	_check("%s: segnaposto printf" % lang, bad_format.is_empty(),
 			"%d incompatibili: %s" % [bad_format.size(), _head(bad_format)])
+
+
+## Il gate di parità rende rara una chiave mancante, ma il fallback è una rete
+## di sicurezza runtime. Le costanti dei cataloghi sono read-only, quindi il
+## lookup puro viene provato con un catalogo DE sintetico privo della chiave.
+func _check_english_fallback() -> void:
+	var key := "common.loading"
+	_check("fallback runtime inglese",
+			UIStrings._translated(key, "de", {
+				"de": {}, "en": {key: "LOADING…"}}) == "LOADING…")
 
 
 ## La sequenza dei segnaposto printf, nell'ordine in cui compaiono: "%s" e "%d"
