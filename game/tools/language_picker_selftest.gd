@@ -32,11 +32,22 @@ func _init() -> void:
 			not UIStrings.language_choice_required(saved_after_restart != ""))
 
 	UIStrings.set_lang(UIStrings.DEFAULT_LANG, false)
+	var host := Control.new()
+	host.size = Vector2(1512, 949)
+	root.add_child(host)
 	var picker := LanguagePicker.new()
-	root.add_child(picker)
+	host.add_child(picker)
 	await process_frame
 	_check("picker elenca sette lingue", picker.supported_language_count() == 7)
 	_check("picker preseleziona inglese", picker.selected_language == "en")
+	_check("picker copre il viewport macOS",
+			picker.position.is_equal_approx(Vector2.ZERO)
+			and picker.size.is_equal_approx(host.size))
+	var center := picker.get_child(1) as CenterContainer
+	var panel := center.get_child(0) as Control if center != null else null
+	_check("pannello centrato nel viewport macOS",
+			panel != null and (panel.position + panel.size * 0.5)
+					.is_equal_approx(host.size * 0.5))
 	picker.language_confirmed.connect(func(language: String) -> void:
 		_confirmed = language)
 	picker.choose_language("de")
