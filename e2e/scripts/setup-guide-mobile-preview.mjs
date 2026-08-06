@@ -18,6 +18,14 @@ const OUT = process.argv[3] ?? "docs/previews/setup-guide-mobile";
 const OS_LIST = ["macos", "windows", "linux"];
 const PHONE = { width: 390, height: 844 };
 
+// Lingua e tema si passano da fuori. Il tedesco serve come prova del nove
+// del layout: è la lingua più lunga del catalogo, e se una riga sfonda lo
+// fa lì per prima. Il tema scuro è quello di default del sito.
+//   LANG=de SCHEME=dark node e2e/scripts/setup-guide-mobile-preview.mjs
+const LANG = process.env.LANG_CODE ?? "en";
+const SCHEME = process.env.SCHEME === "dark" ? "dark" : "light";
+const SUFFIX = LANG === "en" && SCHEME === "light" ? "" : `-${LANG}-${SCHEME}`;
+
 async function main() {
   await fs.mkdir(OUT, { recursive: true });
   const browser = await chromium.launch();
@@ -30,7 +38,14 @@ async function main() {
       deviceScaleFactor: 2,
       isMobile: true,
       hasTouch: true,
+      colorScheme: SCHEME,
     });
+    // La lingua del sito vive in localStorage: va scritta prima del primo
+    // render, altrimenti la pagina monta in inglese e si vede il cambio.
+    await context.addInitScript(
+      (lang) => window.localStorage.setItem("jht-lang", lang),
+      LANG,
+    );
     const page = await context.newPage();
     await page.goto(`${BASE}/setup-guide?os=${os}`, {
       waitUntil: "domcontentloaded",
@@ -39,7 +54,7 @@ async function main() {
     await page.waitForSelector("h1");
     await page.waitForTimeout(1200);
 
-    const full = path.join(OUT, `${os}-00-full-page.png`);
+    const full = path.join(OUT, `${os}${SUFFIX}-00-full-page.png`);
     await page.screenshot({ path: full, fullPage: true });
     written.push(full);
 
@@ -52,7 +67,7 @@ async function main() {
       await page.waitForTimeout(400);
       const file = path.join(
         OUT,
-        `${os}-${String(index + 1).padStart(2, "0")}-${id.replace("chapter-", "")}.png`,
+        `${os}${SUFFIX}-${String(index + 1).padStart(2, "0")}-${id.replace("chapter-", "")}.png`,
       );
       await section.screenshot({ path: file });
       written.push(file);
