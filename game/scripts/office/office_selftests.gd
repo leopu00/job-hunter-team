@@ -892,6 +892,9 @@ func _camera_lock_selftest() -> void:
 ## montare tutte le 36 postazioni reali, senza una regia/crop da screenshot.
 func _agent_frame_selftest() -> void:
 	await get_tree().process_frame
+	# La matrice generale avvia i test in italiano per la retrocompatibilita'
+	# delle altre asserzioni. Qui si prova deliberatamente il primo avvio: EN.
+	UIStrings.set_lang(UIStrings.DEFAULT_LANG, false)
 	var camera: FreeCamera = office._camera
 	var half_view: Vector2 = office.get_viewport_rect().size / (2.0 * camera.zoom.x)
 	var frame := Rect2(camera.position - half_view, half_view * 2.0)
