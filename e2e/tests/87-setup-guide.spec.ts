@@ -69,8 +69,8 @@ test("il selettore OS cambia le fasi mostrate", async ({
     // dell'idratazione un click si perde e il test fallirebbe per un
     // motivo che non c'entra con la guida.
     await expect(page.locator("[data-guide-ready='true']")).toBeAttached();
-    await expect(page.locator("#phase-open-macos")).toBeVisible();
-    await expect(page.locator("#phase-open-windows")).toHaveCount(0);
+    await expect(page.locator("#phase-install-macos")).toBeVisible();
+    await expect(page.locator("#phase-install-windows")).toHaveCount(0);
 
     // Il click va aspettato sullo stato del bottone, non solo sulle fasi:
     // se arriva prima che React abbia idratato, il selettore non ha ancora
@@ -78,8 +78,8 @@ test("il selettore OS cambia le fasi mostrate", async ({
     const windows = page.getByRole("button", { name: "Windows" });
     await windows.click();
     await expect(windows).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator("#phase-open-windows")).toBeVisible();
-    await expect(page.locator("#phase-open-macos")).toHaveCount(0);
+    await expect(page.locator("#phase-install-windows")).toBeVisible();
+    await expect(page.locator("#phase-install-macos")).toHaveCount(0);
 
     // La scelta finisce nell'URL: un link a una fase resta valido se lo si
     // passa a qualcuno che sta su un altro sistema.
@@ -110,6 +110,31 @@ test("nessuna chiave di traduzione grezza a schermo", async ({
     for (const key of ["page_title", "os_selector_label", "step_label"]) {
       expect(body, `chiave grezza «${key}» a schermo`).not.toContain(key);
     }
+  } finally {
+    await context.close();
+  }
+});
+
+test("il titolo della scheda segue la lingua scelta, non il server", async ({
+  browser,
+}, testInfo) => {
+  // La pagina Download ha oggi questo difetto: il titolo esce dal locale
+  // dedotto lato server, che senza cookie ricade su italiano, mentre il
+  // contenuto parte in inglese — tab e pagina in due lingue diverse. Qui
+  // il titolo deve seguire il selettore.
+  const context = await browser.newContext({
+    baseURL: testInfo.project.use.baseURL,
+    viewport: PHONE,
+  });
+  await context.addInitScript(() =>
+    window.localStorage.setItem("jht-lang", "de"),
+  );
+  const page = await context.newPage();
+
+  try {
+    await page.goto("/setup-guide", { waitUntil: "domcontentloaded" });
+    const heading = await page.locator("h1").innerText();
+    await expect(page).toHaveTitle(new RegExp(heading.trim(), "i"));
   } finally {
     await context.close();
   }

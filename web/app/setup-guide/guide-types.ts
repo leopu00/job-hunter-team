@@ -19,6 +19,28 @@ import type { Lang } from "../components/landing/LandingI18n";
 /** Un testo visibile. Tutte e sette le lingue, garantite dal compilatore. */
 export type GuideText = Record<Lang, string>;
 
+/**
+ * Un testo canonico inglese che **non è ancora tradotto**.
+ *
+ * Il copy delle fasi è di HQ-DOCS e arriva in inglese; la traduzione nelle
+ * altre sei lingue è un lavoro a parte (HQ-FULLSTACK-1). Nel frattempo il
+ * tipo pretende comunque sette valori, e riempirli a mano di inglese
+ * renderebbe indistinguibile «tradotto» da «ancora da tradurre».
+ *
+ * Questo helper rende la lacuna esplicita e cercabile: chi traduce cerca
+ * `untranslated(` e sostituisce la voce con le sette lingue vere. Il
+ * comportamento a schermo è lo stesso fallback all'inglese che il sito usa
+ * già ovunque — quello che cambia è che ora si sa quante ne mancano.
+ */
+export function untranslated(en: string): GuideText {
+  return { en, it: en, es: en, fr: en, de: en, pt: en, hu: en };
+}
+
+/** Vero se il testo è ancora quello inglese in tutte e sette le lingue. */
+export function isUntranslated(text: GuideText): boolean {
+  return (Object.keys(text) as Lang[]).every((lang) => text[lang] === text.en);
+}
+
 /** I tre sistemi operativi supportati dalla guida. */
 export type OsId = "macos" | "windows" | "linux";
 
@@ -69,22 +91,36 @@ export interface ScreenRef {
   caption?: GuideText;
 }
 
+/** Quello che ogni link ha in comune. `os` limita il link a certi sistemi:
+ *  su Windows ci sono due download ufficiali (installer e portable) che non
+ *  esistono altrove, e mostrarli a chi sta su Linux confonde e basta. */
+interface LinkBase {
+  label: GuideText;
+  os?: OsId[];
+}
+
 /** Un link operativo dentro una fase. */
 export type GuideLink =
   /** Scarica l'app per l'OS selezionato: l'href lo risolve `guide-config`. */
-  | { kind: "download"; label: GuideText }
+  | (LinkBase & { kind: "download"; asset?: string })
   /** Risorsa esterna (Docker, provider…). L'href può variare per OS. */
-  | {
+  | (LinkBase & {
       kind: "external";
-      label: GuideText;
       href: string | Partial<Record<OsId, string>>;
-    }
+    })
   /** Un'altra pagina del sito. */
-  | { kind: "internal"; label: GuideText; href: string }
+  | (LinkBase & { kind: "internal"; href: string })
   /** Un comando da copiare. `label` descrive cosa fa. */
-  | { kind: "command"; label: GuideText; command: string };
+  | (LinkBase & { kind: "command"; command: string });
 
-/** Una fase: un passo con la sua schermata. */
+/** Vero se il link va mostrato per il sistema selezionato. */
+export function linkAppliesTo(link: GuideLink, os: OsId): boolean {
+  return !link.os || link.os.includes(os);
+}
+
+/** Una fase: un passo con la sua schermata (o due, quando una sola
+ *  inquadratura non può provare lo stato — l'app collegata *e* la dashboard
+ *  che mostra gli stessi dati). */
 export interface GuidePhase {
   id: string;
   /** `"all"` oppure l'elenco dei sistemi in cui la fase compare. */
@@ -93,8 +129,14 @@ export interface GuidePhase {
   body: GuideText;
   /** Avvertenza breve, evidenziata: il punto dove ci si blocca. */
   warning?: GuideText;
-  screen?: ScreenRef;
+  screen?: ScreenRef | ScreenRef[];
   links?: GuideLink[];
+}
+
+/** Le schermate di una fase, sempre come elenco. */
+export function screensOf(phase: GuidePhase): ScreenRef[] {
+  if (!phase.screen) return [];
+  return Array.isArray(phase.screen) ? phase.screen : [phase.screen];
 }
 
 /** Un capitolo: un gruppo di fasi con un esito dichiarato. */

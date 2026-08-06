@@ -31,18 +31,27 @@ const DESKTOP_ASSET: Record<OsId, string> = {
   linux: "job-hunter-team-linux-x64.tar.gz",
 };
 
-/** URL di download diretto per il sistema selezionato. */
-export function downloadUrlFor(os: OsId): string {
-  return `${RELEASE_BASE}/${DESKTOP_ASSET[os]}`;
+/** Asset alternativi, che esistono solo su certi sistemi. Su Windows i
+ *  percorsi ufficiali sono due — l'installer (principale) e il portable —
+ *  e il contratto vuole che la guida li presenti entrambi. */
+export const ALT_ASSET = {
+  windowsPortable: "job-hunter-team-windows-x64-portable.exe",
+} as const;
+
+/** URL di download diretto. Senza `asset` prende quello predefinito del
+ *  sistema; con `asset` scarica quel file preciso dalla stessa release. */
+export function downloadUrlFor(os: OsId, asset?: string): string {
+  return `${RELEASE_BASE}/${asset ?? DESKTOP_ASSET[os]}`;
 }
 
 /** La pagina Download del sito, per chi arriva qui da un link diretto. */
 export const DOWNLOAD_PAGE = "/download";
 
-/** «Se non hai Docker, scaricalo da qui» — pagina ufficiale per sistema. */
+/** «Se non hai Docker, scaricalo da qui» — pagina ufficiale per sistema.
+ *  Indirizzi presi dal contratto di HQ-DOCS. */
 export const DOCKER_URL: Record<OsId, string> = {
-  macos: "https://docs.docker.com/desktop/install/mac-install/",
-  windows: "https://docs.docker.com/desktop/install/windows-install/",
+  macos: "https://docs.docker.com/desktop/setup/install/mac-install/",
+  windows: "https://docs.docker.com/desktop/setup/install/windows-install/",
   linux: "https://docs.docker.com/engine/install/",
 };
 
@@ -55,6 +64,15 @@ export const DOCS_PROVIDER = "/docs/guides/connect-ai-provider";
 export const DOCS_PRIVACY = "/docs/guides/privacy-and-security";
 export const DOCS_DASHBOARD = "/docs/guides/dashboard-and-results";
 export const DOCS_FAQ = "/docs/guides/faq";
+export const PRICING = "/pricing";
+export const CLOUD_SYNC_SETTINGS = "/settings/cloud-sync";
+export const DASHBOARD = "/dashboard";
+
+/** La guida sui VPS. Citata di proposito dai requisiti: quella pagina
+ *  dichiara una baseline validata (4 GB, 2 vCPU) che vale per un server
+ *  dedicato e NON è il requisito del computer di casa. Linkarla evita che
+ *  le due sembrino in disaccordo. */
+export const DOCS_VPS = "/docs/guides/run-on-a-vps";
 
 /** Risolve l'href di un link `external` che può variare per sistema. */
 export function resolveExternalHref(

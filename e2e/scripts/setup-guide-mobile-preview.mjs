@@ -42,10 +42,13 @@ async function main() {
     });
     // La lingua del sito vive in localStorage: va scritta prima del primo
     // render, altrimenti la pagina monta in inglese e si vede il cambio.
-    await context.addInitScript(
-      (lang) => window.localStorage.setItem("jht-lang", lang),
-      LANG,
-    );
+    // Insieme si segna il consenso ai cookie: il suo banner è fisso in
+    // basso e finirebbe in mezzo a ogni inquadratura di capitolo,
+    // coprendo proprio ciò che la preview deve mostrare.
+    await context.addInitScript((lang) => {
+      window.localStorage.setItem("jht-lang", lang);
+      window.localStorage.setItem("jht:cookie-consent", "necessary");
+    }, LANG);
     const page = await context.newPage();
     await page.goto(`${BASE}/setup-guide?os=${os}`, {
       waitUntil: "domcontentloaded",
