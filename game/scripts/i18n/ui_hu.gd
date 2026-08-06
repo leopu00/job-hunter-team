@@ -1,6 +1,7 @@
 extends RefCounted
-## Traduzioni HU — stesse chiavi di UIStrings.S (fallback: italiano).
+## Traduzioni HU — stesse chiavi di UIStrings.S (fallback: inglese).
 const S := {
+	"common.loading": "BETÖLTÉS…",
 	"language_picker.eyebrow": "ELSŐ INDÍTÁS",
 	"language_picker.title": "Válassz nyelvet",
 	"language_picker.subtitle": "Bármikor módosíthatod a Beállításokban.",

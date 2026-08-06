@@ -1,6 +1,7 @@
 extends RefCounted
-## Traduzioni PT — stesse chiavi di UIStrings.S (fallback: italiano).
+## Traduzioni PT — stesse chiavi di UIStrings.S (fallback: inglese).
 const S := {
+	"common.loading": "A CARREGAR…",
 	"language_picker.eyebrow": "PRIMEIRO INÍCIO",
 	"language_picker.title": "Escolha o seu idioma",
 	"language_picker.subtitle": "Pode alterá-lo a qualquer momento nas Definições.",

@@ -586,7 +586,7 @@ func _change_scene_with_veil(path: String) -> void:
 	_hide_loading()
 	_scene_change_busy = false
 
-func _show_loading(message := "CARICAMENTO…") -> void:
+func _show_loading(message := "") -> void:
 	if _loading_veil:
 		return
 	_loading_veil = CanvasLayer.new()
@@ -603,7 +603,7 @@ func _show_loading(message := "CARICAMENTO…") -> void:
 	box.add_theme_constant_override("separation", 14)
 	center.add_child(box)
 	var label := Label.new()
-	label.text = message
+	label.text = message if message != "" else UIStrings.t("common.loading")
 	label.add_theme_font_size_override("font_size", 26)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(label)

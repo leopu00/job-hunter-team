@@ -89,11 +89,14 @@ furniture_occlusion|script|gate|any|-|tools/furniture_occlusion_selftest.gd|FURN
 walk_cycle|script|gate|any|-|tools/walk_cycle_selftest.gd|WALK-CYCLE-TEST PASS
 # /bin/sh: apre la shell senza il ramo Windows che ha embedded_terminal.
 terminal_selection|script|gate|posix|-|tools/terminal_selection_selftest.gd|-
-# Il guard delle 7 lingue. UIStrings.t() fa fallback SILENZIOSO sull'italiano e
+# Il guard delle 7 lingue. UIStrings.t() fa fallback SILENZIOSO sull'inglese e
 # i dizionari tradotti si caricano pigramente: senza questa riga sedici chiavi
 # duplicate in ui_en.gd passavano in verde e rompevano l'avvio in tutte le
 # lingue tranne una.
 i18n_parity|script|gate|any|-|tools/i18n_parity_selftest.gd|-
+# Il velo fra title/wizard/office dura pochi frame ma finisce nelle riprese:
+# costruisce il vero overlay di Game e ne blocca lingua e fallback sull'inglese.
+loading_english|script|gate|any|-|tools/loading_english_selftest.gd|LOADING-ENGLISH-TEST PASS
 # Primo avvio: nessun locale di sistema, default inglese e una scelta che
 # espone davvero tutte le sette lingue prima della title screen.
 language_picker|script|gate|any|-|tools/language_picker_selftest.gd|LANGUAGE-PICKER-TEST PASS
