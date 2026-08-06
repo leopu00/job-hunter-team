@@ -220,6 +220,12 @@ func _cli_started_team_contract() -> void:
 	]) + "\n")
 	_set_path(PackedStringArray([active]))
 	var probe: Dictionary = _svc_script._probe_host(home)
+	_check("CLI→client: Assistente di onboarding non è un team operativo",
+			not bool(_svc_script._agents_have_operational_team([
+				{"role": "assistente", "active": true}])))
+	_check("CLI→client: Capitano nel roster è un team operativo",
+			bool(_svc_script._agents_have_operational_team([
+				{"role": "capitano", "active": true}])))
 	_check("CLI→client: agents.list vuota non nasconde il roster tmux",
 			bool(probe.get("team_running", false)), JSON.stringify(probe))
 	_check("CLI→client: provider del config v4 condiviso riconosciuto",
