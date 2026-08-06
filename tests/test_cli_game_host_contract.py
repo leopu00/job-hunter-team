@@ -7,6 +7,8 @@ import subprocess
 import time
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 JHT = ROOT / "cli" / "bin" / "jht.js"
@@ -80,7 +82,7 @@ def test_node_cli_documents_game_and_gui_commands():
     gui = subprocess.run(["node", str(JHT), "gui", "--help"], capture_output=True, text=True)
     assert game.returncode == 0
     assert gui.returncode == 0
-    for action in ("start", "stop", "status"):
+    for action in ("start", "stop", "status", "restart", "background"):
         assert action in game.stdout
     assert "open" in gui.stdout
 
@@ -97,6 +99,8 @@ def test_windows_wrapper_uses_nonce_control_plane_without_forced_kill():
         "Write-GameJsonAtomic",
         "Invoke-GameRequest 'stop'",
         "Invoke-GameRequest 'foreground'",
+        "Invoke-GameRequest 'background'",
+        "Invoke-GameRestart",
         "timeout richiesta",
         "TASK_LOGON_INTERACTIVE_TOKEN",
         "Remove-GameRequestIfOwned",
@@ -124,10 +128,13 @@ def test_bash_lifecycle_is_idempotent_foregrounds_and_stops_cleanly(tmp_path):
         assert started.returncode == 0, started.stderr
         pid = int(re.search(r"pid=(\d+)", started.stdout).group(1))
 
+        background = run_bash_game(env, "game", "background")
         status = run_bash_game(env, "game", "status")
         repeated = run_bash_game(env, "game", "start")
         foreground = run_bash_game(env, "gui", "open")
-        assert status.returncode == repeated.returncode == foreground.returncode == 0
+        assert background.returncode == status.returncode == repeated.returncode == foreground.returncode == 0
+        assert f"pid={pid}" in background.stdout
+        assert "client and team still running" in background.stdout
         assert f"pid={pid}" in status.stdout
         assert f"pid={pid}" in repeated.stdout
         assert f"pid={pid}" in foreground.stdout
@@ -162,6 +169,30 @@ def test_bash_concurrent_start_claims_one_process(tmp_path):
         run_bash_game(env, "game", "stop")
 
 
+def test_bash_restart_replaces_only_client_and_keeps_control_plane_clean(tmp_path):
+    _, control, env = make_fake_game(tmp_path)
+    try:
+        started = run_bash_game(env, "game", "start")
+        assert started.returncode == 0, started.stderr
+        old_pid = int(re.search(r"pid=(\d+)", started.stdout).group(1))
+
+        restarted = run_bash_game(env, "game", "restart")
+        assert restarted.returncode == 0, restarted.stderr
+        new_pid = int(re.search(r"game restarted old_pid=\d+ pid=(\d+)", restarted.stdout).group(1))
+        assert new_pid != old_pid
+        assert f"old_pid={old_pid}" in restarted.stdout
+        assert "team still running" in restarted.stdout
+        assert not (control / "request.json").exists()
+        with pytest.raises(ProcessLookupError):
+            os.kill(old_pid, 0)
+
+        status = run_bash_game(env, "game", "status")
+        assert status.returncode == 0
+        assert f"pid={new_pid}" in status.stdout
+    finally:
+        run_bash_game(env, "game", "stop")
+
+
 def test_bash_rejects_same_pid_and_executable_with_stale_started_at(tmp_path):
     _, control, env = make_fake_game(tmp_path)
     started = run_bash_game(env, "game", "start")
@@ -185,9 +216,22 @@ def test_bash_rejects_same_pid_and_executable_with_stale_started_at(tmp_path):
 def test_host_subcommand_help_and_invalid_options_have_honest_exit_codes(tmp_path):
     _, _, env = make_fake_game(tmp_path)
     for args in (("game", "start", "--help"), ("game", "stop", "--help"),
-                 ("game", "status", "--help"), ("gui", "open", "--help")):
+                 ("game", "status", "--help"), ("game", "restart", "--help"),
+                 ("game", "background", "--help"), ("gui", "open", "--help")):
         result = run_bash_game(env, *args)
         assert result.returncode == 0, (args, result.stderr)
         assert "Usage:" in result.stdout
     invalid = run_bash_game(env, "game", "explode")
     assert invalid.returncode == 2
+
+
+def test_background_and_restart_fail_honestly_when_client_cannot_run(tmp_path):
+    _, _, env = make_fake_game(tmp_path)
+    background = run_bash_game(env, "game", "background")
+    assert background.returncode == 1
+    assert "client non attivo" in background.stderr
+
+    env["JHT_GAME_EXECUTABLE"] = str(tmp_path / "missing-client")
+    restart = run_bash_game(env, "game", "restart")
+    assert restart.returncode == 1
+    assert "client non trovato" in restart.stderr

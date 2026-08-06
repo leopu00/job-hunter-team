@@ -291,11 +291,13 @@ function Stop-NewGameProcessCooperatively {
 }
 
 function Show-GameHelp {
-  Write-Host 'Usage: jht game <start|stop|status>'
+  Write-Host 'Usage: jht game <start|stop|status|restart|background>'
   Write-Host ''
   Write-Host '  start    Avvia il client; se e gia attivo conserva lo stesso PID'
   Write-Host '  stop     Chiude il client in modo cooperativo; il team continua'
   Write-Host '  status   Mostra running/stopped, PID e instance_id'
+  Write-Host '  restart  Riavvia il client in modo cooperativo; il team continua'
+  Write-Host '  background  Minimizza un client attivo senza fermarlo'
 }
 
 function Show-GuiHelp {
@@ -415,10 +417,11 @@ function Invoke-GameStart {
 }
 
 function Invoke-GameRequest {
-  param([ValidateSet('stop','foreground')] [string]$Action)
+  param([ValidateSet('stop','foreground','background')] [string]$Action)
   $state = Get-LiveGameState
   if (-not $state) {
     if ($Action -eq 'stop') { Write-Host 'game already stopped'; return 0 }
+    if ($Action -eq 'background') { Write-Err "client non attivo; usa 'jht game start'"; return 1 }
     $startCode = Invoke-GameStart
     if ($startCode -ne 0) { return $startCode }
     $state = Get-LiveGameState
@@ -446,10 +449,18 @@ function Invoke-GameRequest {
         $ack = Read-GameJson $ackPath
         if ($ack -and $ack.request_id -eq $requestId -and $ack.instance_id -eq $state.instance_id) {
           if ($ack.ok -eq $true) {
-            Write-Host "gui opened pid=$($state.pid)"
+            if ($Action -eq 'background') {
+              Write-Host "game background pid=$($state.pid); client and team still running"
+            } else {
+              Write-Host "gui opened pid=$($state.pid)"
+            }
             return 0
           }
-          Write-Err 'il sistema operativo ha rifiutato il foreground della finestra'
+          if ($Action -eq 'background') {
+            Write-Err 'il sistema operativo ha rifiutato la minimizzazione della finestra'
+          } else {
+            Write-Err 'il sistema operativo ha rifiutato il foreground della finestra'
+          }
           return 1
         }
       }
@@ -462,6 +473,23 @@ function Invoke-GameRequest {
   }
 }
 
+function Invoke-GameRestart {
+  $previous = Get-LiveGameState
+  $stopCode = Invoke-GameRequest 'stop'
+  if ($stopCode -ne 0) { return $stopCode }
+  $startCode = Invoke-GameStart
+  if ($startCode -ne 0) { return $startCode }
+  $current = Get-LiveGameState
+  if (-not $current) { Write-Err 'client riavviato senza stato controllabile'; return 1 }
+  if ($previous -and $current.instance_id -eq $previous.instance_id) {
+    Write-Err 'il riavvio non ha sostituito l istanza precedente'
+    return 1
+  }
+  $oldPid = if ($previous) { [string]$previous.pid } else { 'none' }
+  Write-Host "game restarted old_pid=$oldPid pid=$($current.pid) instance=$($current.instance_id); team still running"
+  return 0
+}
+
 function Invoke-GameCommand {
   param([string[]]$GameArgs)
   if ($GameArgs.Count -eq 0 -or ($GameArgs.Count -eq 1 -and $GameArgs[0] -in @('--help','-h'))) { Show-GameHelp; return 0 }
@@ -470,12 +498,16 @@ function Invoke-GameCommand {
       'start' { Write-Host 'Usage: jht game start'; Write-Host 'Avvia il client in modo idempotente.'; return 0 }
       'stop' { Write-Host 'Usage: jht game stop'; Write-Host 'Chiude il client e lascia il team al lavoro.'; return 0 }
       'status' { Write-Host 'Usage: jht game status'; Write-Host 'Mostra lo stato del client desktop.'; return 0 }
+      'restart' { Write-Host 'Usage: jht game restart'; Write-Host 'Riavvia il client in modo cooperativo; il team continua.'; return 0 }
+      'background' { Write-Host 'Usage: jht game background'; Write-Host 'Minimizza un client attivo senza fermarlo.'; return 0 }
     }
   }
   if ($GameArgs.Count -ne 1) { Write-Err 'opzioni game non riconosciute'; return 2 }
   switch ($GameArgs[0]) {
     'start' { return Invoke-GameStart }
     'stop' { return Invoke-GameRequest 'stop' }
+    'restart' { return Invoke-GameRestart }
+    'background' { return Invoke-GameRequest 'background' }
     'status' {
       $state = Get-LiveGameState
       if ($state) { Write-Host "game running pid=$($state.pid) instance=$($state.instance_id)" }
