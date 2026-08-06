@@ -157,6 +157,102 @@ ensure_up() {
   fi
 }
 
+# `download --output` indica un path dell'HOST, mentre il CLI Node gira nel
+# container. Inoltrarlo alla cieca (soprattutto `C:\\...` su Windows) crea il
+# file nel filesystem Linux del container e mente sul risultato. Il download
+# resta implementato e verificato una sola volta dal CLI canonico; il wrapper
+# gli assegna un path temporaneo interno, poi pubblica i byte sul path host con
+# docker cp + rename nello stesso filesystem della destinazione.
+handle_host_download() {
+  local host_output="" container_tmp="" host_tmp="" arg next
+  local -a rewritten=()
+
+  while [ "$#" -gt 0 ]; do
+    arg="$1"
+    case "$arg" in
+      --output)
+        if [ -n "$host_output" ]; then
+          err "--output specificato piu di una volta"
+          return 2
+        fi
+        if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+          err "--output richiede un path"
+          return 2
+        fi
+        next="$2"
+        host_output="$next"
+        shift 2
+        ;;
+      --output=*)
+        if [ -n "$host_output" ]; then
+          err "--output specificato piu di una volta"
+          return 2
+        fi
+        host_output="${arg#--output=}"
+        if [ -z "$host_output" ]; then
+          err "--output richiede un path"
+          return 2
+        fi
+        shift
+        ;;
+      *)
+        rewritten+=("$arg")
+        shift
+        ;;
+    esac
+  done
+
+  # Senza output esplicito il default `/jht_user/downloads` e' gia un bind
+  # mount visibile sul computer host: nessuna copia aggiuntiva necessaria.
+  if [ -z "$host_output" ]; then
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" \
+      "$CONTAINER" node "$NODE_ENTRY" download "${rewritten[@]}"
+    return $?
+  fi
+
+  if [ -e "$host_output" ] || [ -L "$host_output" ]; then
+    err "il file di destinazione esiste gia: $host_output"
+    return 1
+  fi
+
+  container_tmp="/tmp/jht-download-$$-${RANDOM:-0}"
+  rewritten+=(--output "$container_tmp")
+  local code
+  if docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" \
+      "$CONTAINER" node "$NODE_ENTRY" download "${rewritten[@]}"; then
+    code=0
+  else
+    code=$?
+    docker exec "$CONTAINER" rm -f "$container_tmp" >/dev/null 2>&1 || true
+    return "$code"
+  fi
+
+  local parent
+  parent="$(dirname -- "$host_output")"
+  if ! mkdir -p -- "$parent"; then
+    err "impossibile creare la directory di destinazione: $parent"
+    docker exec "$CONTAINER" rm -f "$container_tmp" >/dev/null 2>&1 || true
+    return 1
+  fi
+  host_tmp="${host_output}.part-$$-${RANDOM:-0}"
+  if ! docker cp "$CONTAINER:$container_tmp" "$host_tmp"; then
+    err "copia del download verificato verso l'host non riuscita"
+    rm -f -- "$host_tmp"
+    docker exec "$CONTAINER" rm -f "$container_tmp" >/dev/null 2>&1 || true
+    return 1
+  fi
+  docker exec "$CONTAINER" rm -f "$container_tmp" >/dev/null 2>&1 || true
+
+  # `mv -n` non sostituisce un file comparso durante il download. Se il temp
+  # esiste ancora dopo il comando, la pubblicazione non e' avvenuta.
+  if ! mv -n -- "$host_tmp" "$host_output" || [ -e "$host_tmp" ]; then
+    err "la destinazione e' comparsa durante il download; non e' stata sovrascritta"
+    rm -f -- "$host_tmp"
+    return 1
+  fi
+  printf "  Salvato sul computer host in: %s\n" "$host_output"
+}
+
 # ── Upgrade runtime, transazionale e host-side ────────────────────────────
 #
 # L'immagine del prodotto e' l'unita' di deploy: dentro /app non c'e' un
@@ -666,6 +762,15 @@ case "$SUB" in
     JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
     ensure_up
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
+    ;;
+
+  # Download verificato dal CLI nel container, pubblicato atomically sul path
+  # host quando l'utente passa --output.
+  download)
+    require_docker
+    require_compose_file
+    ensure_up
+    handle_host_download "${@:2}"
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
