@@ -98,7 +98,10 @@ email address and verification status, and **profile** to read basic profile
 information such as display name and profile picture. Job Hunter Team adds no
 Google Drive, Gmail, Calendar, Contacts, or other Google product scope. These
 permissions create or authenticate the Job Hunter Team web account; they do not
-let the local team use those Google products.
+let the local team use those Google products. The optional
+[Team Gmail](/docs/guides/team-gmail) setup is separate: you explicitly connect
+a dedicated inbox later with its own app password, stored locally, and that
+does not add Gmail access to this Google sign-in.
 
 **Device authorization:** After Google sign-in, **Connect the CLI** asks for
 the one-time code from the embedded console and an optional token name. Select
@@ -354,12 +357,13 @@ export const SETUP_GUIDE = {
     {
       id: "review-permissions",
       title: "Review access and approve this device",
-      body: "Before continuing, review two separate grants. Google sign-in uses only OpenID to authenticate you, email to read your primary email address and verification status, and profile to read basic information such as your display name and profile picture. Job Hunter Team requests no Google Drive, Gmail, Calendar, Contacts, or other Google product access. Next, Connect the CLI asks for the one-time code and an optional token name. Confirm pairing issues this installation a revocable Job Hunter Team device token: it may sync positions and profile data to your private dashboard and receive dashboard commands for the local team. It never contains or stores your Google password or browser cookies. Continue only if the Google account and these uses are correct.",
+      body: "Before continuing, review two separate grants. Google sign-in uses only OpenID to authenticate you, email to read your primary email address and verification status, and profile to read basic information such as your display name and profile picture. Job Hunter Team requests no Google Drive, Gmail, Calendar, Contacts, or other Google product access. The optional Team Gmail setup is separate: you explicitly connect a dedicated inbox later with its own app password, stored locally, and it does not add Gmail access to this sign-in. Next, Connect the CLI asks for the one-time code and an optional token name. Confirm pairing issues this installation a revocable Job Hunter Team device token: it may sync positions and profile data to your private dashboard and receive dashboard commands for the local team. It never contains or stores your Google password or browser cookies. Continue only if the Google account and these uses are correct.",
       os: "all",
       screen: "W03-permissions",
       screenFallback: GOOGLE_SCREEN_PLACEHOLDER,
       links: [
         { label: "Privacy policy", href: "/privacy" },
+        { label: "Set up a separate team inbox", href: "/docs/guides/team-gmail" },
         { label: "Manage devices and revoke access", href: "/settings/cloud-sync" },
       ],
     },
