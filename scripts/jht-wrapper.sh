@@ -208,8 +208,20 @@ game_process_matches() {
   esac
 }
 
+game_process_started_epoch() {
+  local pid="$1" raw=""
+  raw="$(LC_ALL=C ps -p "$pid" -o lstart= 2>/dev/null \
+    | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)"
+  [ -n "$raw" ] || return 1
+  if [ "$(uname -s)" = "Darwin" ]; then
+    LC_ALL=C date -j -f '%a %b %e %T %Y' "$raw" '+%s' 2>/dev/null
+  else
+    LC_ALL=C date -d "$raw" '+%s' 2>/dev/null
+  fi
+}
+
 game_load_live_state() {
-  local state="$GAME_CONTROL_DIR/state.json" current=""
+  local state="$GAME_CONTROL_DIR/state.json" current="" state_started="" process_started="" delta=0
   GAME_STATE_PID=""
   GAME_STATE_INSTANCE=""
   GAME_STATE_EXECUTABLE=""
@@ -217,10 +229,20 @@ game_load_live_state() {
   GAME_STATE_PID="$(game_json_number "$state" pid || true)"
   GAME_STATE_INSTANCE="$(game_json_string "$state" instance_id || true)"
   GAME_STATE_EXECUTABLE="$(game_json_string "$state" executable || true)"
+  state_started="$(game_json_number "$state" started_at || true)"
   case "$GAME_STATE_PID" in ''|*[!0-9]*) return 1 ;; esac
+  case "$state_started" in ''|*[!0-9]*) return 1 ;; esac
   [ -n "$GAME_STATE_INSTANCE" ] || return 1
   if game_process_matches "$GAME_STATE_PID" "$GAME_STATE_EXECUTABLE"; then
-    return 0
+    process_started="$(game_process_started_epoch "$GAME_STATE_PID" || true)"
+    case "$process_started" in ''|*[!0-9]*) process_started=0 ;; esac
+    delta=$((process_started - state_started))
+    [ "$delta" -ge 0 ] || delta=$((-delta))
+    # Come PowerShell: l'EXE embedded puo pubblicare state.json diversi
+    # secondi dopo il process start, ma non minuti/ore dopo un PID riciclato.
+    if [ "$process_started" -gt 0 ] && [ "$delta" -le 30 ]; then
+      return 0
+    fi
   fi
   # Rimuove soltanto lo snapshot letto: se un nuovo processo lo ha sostituito
   # nel frattempo, il suo nonce resta intatto.

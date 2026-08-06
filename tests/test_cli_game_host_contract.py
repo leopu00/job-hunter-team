@@ -2,6 +2,7 @@
 
 import os
 import re
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -159,6 +160,26 @@ def test_bash_concurrent_start_claims_one_process(tmp_path):
         assert len(pids) == 1
     finally:
         run_bash_game(env, "game", "stop")
+
+
+def test_bash_rejects_same_pid_and_executable_with_stale_started_at(tmp_path):
+    _, control, env = make_fake_game(tmp_path)
+    started = run_bash_game(env, "game", "start")
+    assert started.returncode == 0, started.stderr
+    pid = int(re.search(r"pid=(\d+)", started.stdout).group(1))
+    state = control / "state.json"
+    original = state.read_text(encoding="utf-8")
+    state.write_text(re.sub(r'"started_at":\d+', '"started_at":1', original), encoding="utf-8")
+    try:
+        status = run_bash_game(env, "game", "status")
+        assert status.returncode == 0
+        assert status.stdout.strip() == "game stopped"
+        assert not state.exists()
+    finally:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
 
 
 def test_host_subcommand_help_and_invalid_options_have_honest_exit_codes(tmp_path):
