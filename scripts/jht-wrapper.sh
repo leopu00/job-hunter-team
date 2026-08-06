@@ -42,6 +42,14 @@ HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
 # prova una release di branch puo' fissarla esplicitamente con JHT_RAW_BASE.
 RAW_BASE="${JHT_RAW_BASE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/${JHT_BRANCH:-production}}"
 WRAPPER_PATH="${JHT_WRAPPER_PATH:-$0}"
+GAME_EXECUTABLE_OVERRIDE="${JHT_GAME_EXECUTABLE:-}"
+if [ -n "${JHT_GAME_CONTROL_DIR:-}" ]; then
+  GAME_CONTROL_DIR="$JHT_GAME_CONTROL_DIR"
+elif [ "$(uname -s)" = "Darwin" ]; then
+  GAME_CONTROL_DIR="$HOME/Library/Application Support/Godot/app_userdata/Job Hunter Team/client"
+else
+  GAME_CONTROL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/Job Hunter Team/client"
+fi
 
 # Carica la host env (scritta da host-setup.sh: JHT_HOST_TYPE=vps|local).
 # Il wizard Node usa JHT_HOST_TYPE per attivare step obbligatori (cloud
@@ -155,6 +163,332 @@ ensure_up() {
       sleep 0.5
     done
   fi
+}
+
+# ── Client desktop nativo (mai Docker) ───────────────────────────────────
+# Il wrapper host possiede claim, process discovery e timeout. Il gioco
+# possiede invece le azioni UI e l'uscita cooperativa sul main thread.
+game_json_string() {
+  local path="$1" key="$2"
+  [ -f "$path" ] || return 1
+  tr -d '\r\n' < "$path" \
+    | sed -n "s/.*\"$key\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"
+}
+
+game_json_number() {
+  local path="$1" key="$2"
+  [ -f "$path" ] || return 1
+  tr -d '\r\n' < "$path" \
+    | sed -n "s/.*\"$key\"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p"
+}
+
+game_json_bool() {
+  local path="$1" key="$2"
+  [ -f "$path" ] || return 1
+  tr -d '\r\n' < "$path" \
+    | sed -n "s/.*\"$key\"[[:space:]]*:[[:space:]]*\([a-z][a-z]*\).*/\1/p"
+}
+
+game_process_matches() {
+  local pid="$1" expected="$2" actual=""
+  kill -0 "$pid" 2>/dev/null || return 1
+  [ -n "$expected" ] || return 1
+  case "$(uname -s)" in
+    Linux)
+      actual="$(readlink "/proc/$pid/exe" 2>/dev/null || true)"
+      [ -n "$actual" ] || return 1
+      [ "$(readlink -f -- "$actual" 2>/dev/null || printf '%s' "$actual")" = \
+        "$(readlink -f -- "$expected" 2>/dev/null || printf '%s' "$expected")" ]
+      ;;
+    Darwin)
+      actual="$(ps -p "$pid" -o comm= 2>/dev/null | sed 's/^[[:space:]]*//' || true)"
+      [ -n "$actual" ] && [ "$actual" = "$expected" ]
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+game_load_live_state() {
+  local state="$GAME_CONTROL_DIR/state.json" current=""
+  GAME_STATE_PID=""
+  GAME_STATE_INSTANCE=""
+  GAME_STATE_EXECUTABLE=""
+  [ -f "$state" ] || return 1
+  GAME_STATE_PID="$(game_json_number "$state" pid || true)"
+  GAME_STATE_INSTANCE="$(game_json_string "$state" instance_id || true)"
+  GAME_STATE_EXECUTABLE="$(game_json_string "$state" executable || true)"
+  case "$GAME_STATE_PID" in ''|*[!0-9]*) return 1 ;; esac
+  [ -n "$GAME_STATE_INSTANCE" ] || return 1
+  if game_process_matches "$GAME_STATE_PID" "$GAME_STATE_EXECUTABLE"; then
+    return 0
+  fi
+  # Rimuove soltanto lo snapshot letto: se un nuovo processo lo ha sostituito
+  # nel frattempo, il suo nonce resta intatto.
+  current="$(game_json_string "$state" instance_id || true)"
+  if [ "$current" = "$GAME_STATE_INSTANCE" ]; then
+    rm -f -- "$state"
+  fi
+  return 1
+}
+
+game_resolve_executable() {
+  local remembered="" candidate=""
+  if [ -n "$GAME_EXECUTABLE_OVERRIDE" ]; then
+    printf '%s\n' "$GAME_EXECUTABLE_OVERRIDE"
+    return 0
+  fi
+  remembered="$(game_json_string "$GAME_CONTROL_DIR/launcher.json" executable || true)"
+  if [ -n "$remembered" ] && [ -x "$remembered" ]; then
+    printf '%s\n' "$remembered"
+    return 0
+  fi
+  if [ "$(uname -s)" = "Darwin" ]; then
+    for candidate in \
+      "/Applications/Job Hunter Team.app/Contents/MacOS/Job Hunter Team" \
+      "$HOME/Applications/Job Hunter Team.app/Contents/MacOS/Job Hunter Team"; do
+      if [ -x "$candidate" ]; then printf '%s\n' "$candidate"; return 0; fi
+    done
+  else
+    candidate="$(command -v job-hunter-team.x86_64 2>/dev/null || true)"
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    for candidate in "$HOME/Applications/job-hunter-team.x86_64" \
+      "$HOME/.local/bin/job-hunter-team.x86_64" \
+      "$HOME/Downloads/job-hunter-team.x86_64"; do
+      if [ -x "$candidate" ]; then printf '%s\n' "$candidate"; return 0; fi
+    done
+  fi
+  return 1
+}
+
+game_lock_mtime() {
+  stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1" 2>/dev/null || printf '0'
+}
+
+game_remove_start_lock_if_owned() {
+  local lock="$1" owner="$2" current=""
+  current="$(cat "$lock/owner.pid" 2>/dev/null || true)"
+  if [ "$current" = "$owner" ]; then
+    rm -f -- "$lock/owner.pid"
+    rmdir -- "$lock" 2>/dev/null || true
+  fi
+}
+
+game_new_nonce() {
+  if command -v uuidgen >/dev/null 2>&1; then
+    uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]'
+  else
+    printf '%s-%s-%s\n' "$(date +%s)" "$$" "${RANDOM:-0}"
+  fi
+}
+
+game_start_locked() {
+  local executable="" nonce="" pid="" deadline=""
+  if game_load_live_state; then
+    printf 'game running pid=%s instance=%s\n' "$GAME_STATE_PID" "$GAME_STATE_INSTANCE"
+    return 0
+  fi
+  executable="$(game_resolve_executable || true)"
+  if [ -z "$executable" ] || [ ! -x "$executable" ]; then
+    err "client non trovato; aprilo una volta manualmente oppure imposta JHT_GAME_EXECUTABLE"
+    return 1
+  fi
+  nonce="$(game_new_nonce)"
+  JHT_GAME_INSTANCE_ID="$nonce" JHT_GAME_CONTROL_DIR="$GAME_CONTROL_DIR" \
+    nohup "$executable" >/dev/null 2>&1 &
+  pid=$!
+  deadline=$(( $(date +%s) + 15 ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    sleep 0.2
+    if game_load_live_state \
+      && [ "$GAME_STATE_INSTANCE" = "$nonce" ] \
+      && [ "$GAME_STATE_PID" = "$pid" ]; then
+      printf 'game started pid=%s instance=%s\n' "$pid" "$nonce"
+      return 0
+    fi
+    if ! kill -0 "$pid" 2>/dev/null; then
+      err "client terminato durante l'avvio"
+      return 1
+    fi
+  done
+  err "client avviato ma non pronto entro 15 secondi"
+  game_cleanup_started_process "$pid" "$nonce"
+  return 1
+}
+
+game_cleanup_started_process() {
+  local pid="$1" nonce="$2" deadline=""
+  if game_load_live_state && [ "$GAME_STATE_INSTANCE" = "$nonce" ]; then
+    game_request stop >/dev/null 2>&1 || true
+    return
+  fi
+  # Il control plane non e' mai diventato pronto: TERM e' l'unica uscita
+  # recuperabile disponibile, limitata al PID appena creato da questo claim.
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -TERM "$pid" 2>/dev/null || true
+    deadline=$(( $(date +%s) + 5 ))
+    while kill -0 "$pid" 2>/dev/null && [ "$(date +%s)" -lt "$deadline" ]; do sleep 0.1; done
+  fi
+}
+
+game_start() {
+  local lock="$GAME_CONTROL_DIR/start.lock" deadline="" acquired=0 mtime=0 now=0 code=1 owner=""
+  if game_load_live_state; then
+    printf 'game running pid=%s instance=%s\n' "$GAME_STATE_PID" "$GAME_STATE_INSTANCE"
+    return 0
+  fi
+  mkdir -p -- "$GAME_CONTROL_DIR" || { err "directory client non scrivibile: $GAME_CONTROL_DIR"; return 1; }
+  deadline=$(( $(date +%s) + 15 ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if mkdir -- "$lock" 2>/dev/null; then
+      printf '%s\n' "$$" > "$lock/owner.pid"
+      acquired=1
+      break
+    fi
+    if game_load_live_state; then
+      printf 'game running pid=%s instance=%s\n' "$GAME_STATE_PID" "$GAME_STATE_INSTANCE"
+      return 0
+    fi
+    owner="$(cat "$lock/owner.pid" 2>/dev/null || true)"
+    case "$owner" in
+      ''|*[!0-9]*) ;;
+      *)
+        if ! kill -0 "$owner" 2>/dev/null; then
+          rm -f -- "$lock/owner.pid"
+          rmdir -- "$lock" 2>/dev/null || true
+          continue
+        fi
+        ;;
+    esac
+    now="$(date +%s)"; mtime="$(game_lock_mtime "$lock")"
+    case "$mtime" in ''|*[!0-9]*) mtime=0 ;; esac
+    if [ -z "$owner" ] && [ $((now - mtime)) -gt 2 ]; then
+      rmdir -- "$lock" 2>/dev/null || true
+    fi
+    sleep 0.2
+  done
+  if [ "$acquired" -ne 1 ]; then err "timeout acquisizione lock di avvio del client"; return 1; fi
+  if game_start_locked; then code=0; else code=$?; fi
+  game_remove_start_lock_if_owned "$lock" "$$"
+  return "$code"
+}
+
+game_write_request() {
+  local action="$1" request_id="$2" target="$3"
+  local path="$GAME_CONTROL_DIR/request.json" temp="$GAME_CONTROL_DIR/.request.tmp-$$-${RANDOM:-0}"
+  if ! printf '{"schema":1,"action":"%s","request_id":"%s","target_instance_id":"%s"}\n' \
+      "$action" "$request_id" "$target" > "$temp"; then
+    rm -f -- "$temp"
+    return 1
+  fi
+  mv -f -- "$temp" "$path"
+}
+
+game_remove_request_if_owned() {
+  local path="$1" request_id="$2" target="$3"
+  [ -f "$path" ] || return 0
+  if [ "$(game_json_string "$path" request_id || true)" = "$request_id" ] \
+    && [ "$(game_json_string "$path" target_instance_id || true)" = "$target" ]; then
+    rm -f -- "$path"
+  fi
+}
+
+game_request() {
+  local action="$1" request_id="" ack="" deadline="" target_pid="" target_instance="" code=1
+  if ! game_load_live_state; then
+    if [ "$action" = "stop" ]; then printf 'game already stopped\n'; return 0; fi
+    game_start || return $?
+    game_load_live_state || { err "client avviato senza stato controllabile"; return 1; }
+  fi
+  target_pid="$GAME_STATE_PID"; target_instance="$GAME_STATE_INSTANCE"
+  request_id="$(game_new_nonce)"
+  ack="$GAME_CONTROL_DIR/ack-$request_id.json"
+  rm -f -- "$ack"
+  if ! game_write_request "$action" "$request_id" "$target_instance"; then
+    err "impossibile pubblicare la richiesta al client"
+    return 1
+  fi
+  if [ "$action" = "stop" ]; then deadline=$(( $(date +%s) + 15 )); else deadline=$(( $(date +%s) + 10 )); fi
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    sleep 0.2
+    if [ "$action" = "stop" ]; then
+      if ! kill -0 "$target_pid" 2>/dev/null; then
+        printf 'game stopped pid=%s; team still running\n' "$target_pid"
+        code=0
+        break
+      fi
+    elif [ -f "$ack" ] \
+      && [ "$(game_json_string "$ack" request_id || true)" = "$request_id" ] \
+      && [ "$(game_json_string "$ack" instance_id || true)" = "$target_instance" ]; then
+      if [ "$(game_json_bool "$ack" ok || true)" = "true" ]; then
+        printf 'gui opened pid=%s\n' "$target_pid"
+        code=0
+      else
+        err "il sistema operativo ha rifiutato il foreground della finestra"
+        code=1
+      fi
+      break
+    fi
+  done
+  if [ "$code" -ne 0 ] && [ "$(date +%s)" -ge "$deadline" ]; then
+    err "timeout richiesta $action al client"
+  fi
+  game_remove_request_if_owned "$GAME_CONTROL_DIR/request.json" "$request_id" "$target_instance"
+  rm -f -- "$ack"
+  return "$code"
+}
+
+game_help() {
+  printf '%s\n' 'Usage: jht game <start|stop|status>' '' \
+    '  start    Avvia il client in modo idempotente' \
+    '  stop     Chiude il client e lascia il team al lavoro' \
+    '  status   Mostra running/stopped, PID e instance_id'
+}
+
+gui_help() {
+  printf '%s\n' 'Usage: jht gui open' '' \
+    '  open     Avvia il client se necessario e porta la finestra in primo piano'
+}
+
+handle_game_command() {
+  if [ "$#" -eq 0 ] || { [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; }; then
+    game_help; return 0
+  fi
+  if [ "$#" -eq 2 ] && { [ "$2" = "--help" ] || [ "$2" = "-h" ]; }; then
+    case "$1" in
+      start) printf '%s\n' 'Usage: jht game start' 'Avvia il client in modo idempotente.'; return 0 ;;
+      stop) printf '%s\n' 'Usage: jht game stop' 'Chiude il client e lascia il team al lavoro.'; return 0 ;;
+      status) printf '%s\n' 'Usage: jht game status' 'Mostra lo stato del client desktop.'; return 0 ;;
+    esac
+  fi
+  if [ "$#" -ne 1 ]; then err "opzioni game non riconosciute"; return 2; fi
+  case "$1" in
+    start) game_start ;;
+    stop) game_request stop ;;
+    status)
+      if game_load_live_state; then
+        printf 'game running pid=%s instance=%s\n' "$GAME_STATE_PID" "$GAME_STATE_INSTANCE"
+      else
+        printf 'game stopped\n'
+      fi
+      ;;
+    *) err "azione game non riconosciuta: $1"; return 2 ;;
+  esac
+}
+
+handle_gui_command() {
+  if [ "$#" -eq 0 ] || { [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; }; then
+    gui_help; return 0
+  fi
+  if [ "$#" -eq 2 ] && [ "$1" = "open" ] \
+    && { [ "$2" = "--help" ] || [ "$2" = "-h" ]; }; then
+    printf '%s\n' 'Usage: jht gui open' 'Avvia il client se necessario e porta la finestra in primo piano.'
+    return 0
+  fi
+  if [ "$#" -ne 1 ] || [ "$1" != "open" ]; then err "uso: jht gui open"; return 2; fi
+  game_request foreground
 }
 
 # `download --output` indica un path dell'HOST, mentre il CLI Node gira nel
@@ -660,6 +994,14 @@ fi
 SUB="${1:-}"
 
 case "$SUB" in
+  game)
+    handle_game_command "${@:2}"
+    ;;
+
+  gui)
+    handle_gui_command "${@:2}"
+    ;;
+
   # ── Lifecycle: parlano direttamente al daemon Docker ───────────────────
   up|start-container)
     require_docker

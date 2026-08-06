@@ -41,6 +41,7 @@ import { registerTicketCommand, registerDirectivesCommand } from './commands/dec
 import { registerProfileCommand } from './commands/profile.js';
 import { registerPid1Command } from './commands/pid1.js';
 import { registerDownloadCommand } from './commands/download.js';
+import { registerGameCommand } from './commands/game.js';
 
 // Help "essenziale" mostrato di default da `jht`, `jht --help`, `jht -h`.
 // Per la lista completa di tutti i sotto-comandi (export/import/cron/
@@ -132,6 +133,7 @@ export function buildProgram() {
   registerProfileCommand(program);
   registerPid1Command(program);
   registerDownloadCommand(program);
+  registerGameCommand(program);
 
   // Salviamo il riferimento all'help "lungo" autogenerato da commander
   // PRIMA di sovrascrivere helpInformation. `jht help` lo invoca per
