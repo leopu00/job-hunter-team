@@ -50,8 +50,9 @@ func _run() -> void:
 	_which_contract()
 	_exec_present_contract()
 	if OS.get_name() != "Windows":
-		expected += 1
+		expected += 2
 		_probe_three_states()
+		_cli_started_team_contract()
 	OS.set_environment("PATH", _old_path)
 	_check("tutte le sezioni arrivate in fondo", _sections == expected,
 			"%d/%d" % [_sections, expected])
@@ -186,4 +187,46 @@ func _probe_three_states() -> void:
 			bool(probe.get("docker_available", false)))
 	_check("ambiguo: ma il daemon non risulta attivo",
 			not bool(probe.get("docker_running", true)))
+	_sections += 1
+
+
+## Regressione T-012: un setup fatto dalla CLI può avere il config migrato v4
+## con `agents.list=[]` e, separatamente, sessioni tmux già vive. Il client non
+## usa quella lista storica per il roster: come `jht team status`, osserva tmux.
+## La checklist resta incompleta (piano/profilo/orari sono fatti distinti), ma
+## il team non può per questo tornare falso o sparire dall'ufficio.
+func _cli_started_team_contract() -> void:
+	var home := _stub_dir("cli-started-home")
+	_write_stub(home.path_join("jht.config.json"), JSON.stringify({
+		"version": 4,
+		"active_provider": "kimi",
+		"providers": {"kimi": {"auth_method": "subscription"}},
+		"agents": {"list": []},
+		"notifications": {"enabled": true, "channels": []},
+		"analytics": {"enabled": true, "retention_days": 30},
+	}) + "\n", false)
+	var active := _stub_dir("cli-started-docker")
+	_write_stub(active.path_join("docker"), "\n".join([
+		"#!/bin/sh",
+		"case \"$1:$4\" in",
+		"version:*) echo '29.6.0|29.6.0'; exit 0 ;;",
+		"inspect:*State.Status*) echo running; exit 0 ;;",
+		"inspect:*State.Running*) echo true; exit 0 ;;",
+		"inspect:*Image*) echo sha256:runtime; exit 0 ;;",
+		"image:*) exit 1 ;;",
+		"exec:*) printf 'ASSISTENTE\\nCAPITANO\\nMENTOR\\nSENTINELLA\\n'; exit 0 ;;",
+		"*) exit 1 ;;",
+		"esac",
+	]) + "\n")
+	_set_path(PackedStringArray([active]))
+	var probe: Dictionary = _svc_script._probe_host(home)
+	_check("CLI→client: agents.list vuota non nasconde il roster tmux",
+			bool(probe.get("team_running", false)), JSON.stringify(probe))
+	_check("CLI→client: provider del config v4 condiviso riconosciuto",
+			str(probe.get("active_provider", "")) == "kimi",
+			str(probe.get("active_provider", "")))
+	_check("CLI→client: checklist non inventata dal solo roster",
+			not bool(probe.get("plan_ready", true))
+			and not bool(probe.get("profile_ready", true))
+			and not bool(probe.get("hours_ready", true)), JSON.stringify(probe))
 	_sections += 1
