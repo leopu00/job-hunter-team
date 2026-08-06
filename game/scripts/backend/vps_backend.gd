@@ -332,7 +332,7 @@ func _run() -> void:
 		_deferred_state(BackendBus.ERROR, _short_error(probe))
 		return
 	if not probe["out"].contains("running"):
-		_deferred_state(BackendBus.ERROR, "container jht non in esecuzione")
+		_deferred_state_key(BackendBus.ERROR, "backend.container_not_running")
 		return
 	_deferred_state(BackendBus.CONNECTED, _ip)
 
@@ -1426,6 +1426,10 @@ static func _parse_roster(raw: String, throttles: Dictionary = {}, activity: Dic
 
 func _deferred_state(state: int, detail: String) -> void:
 	bus.call_deferred("publish_state", state, detail)
+
+
+func _deferred_state_key(state: int, key: String, args: Array = []) -> void:
+	bus.call_deferred("publish_state_key", state, key, args)
 
 
 ## La riga utile dell'errore ssh, senza sommergere la UI.

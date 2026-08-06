@@ -60,6 +60,24 @@ const LITERAL_FREE_SURFACES := [
 	"res://scripts/ui/embedded_terminal.gd",
 ]
 
+## Frasi che erano visibili solo per pochi frame o in una vignetta live e non
+## passavano da `.text =`, quindi lo scanner generico non poteva intercettarle.
+## Restano qui come regressione negativa: nei sorgenti runtime non devono più
+## ricomparire, nemmeno come fallback del tour.
+const P0_FORBIDDEN_ITALIAN := {
+	"res://scripts/backend/local_backend.gd": ["collegamento al container locale"],
+	"res://scripts/backend/backend_bus.gd": ["container locale non disponibile"],
+	"res://scripts/backend/vps_backend.gd": ["container jht non in esecuzione"],
+	"res://scripts/characters/agent_npc.gd": ["MESSAGGIO DA "],
+	"res://scripts/office/office.gd": [
+		"MESSAGGIO PER TE", "Nuova posizione:", "CV in scrittura:",
+		"posizione #%s", "Per domande libere e personali collega un provider",
+	],
+	"res://scripts/setup/tour_guide.gd": [
+		"Questo è il reparto", "Il Ricercatore", "L'Analista", "Il Coordinatore",
+	],
+}
+
 var _failures: Array[String] = []
 ## I dizionari tradotti già caricati da _check_lang, per non rileggerli.
 var _dicts := {}
@@ -74,6 +92,7 @@ func _init() -> void:
 	_check_keys_used_in_sources(it)
 	_check_role_names(it)
 	_check_no_hardcoded_labels()
+	_check_p0_english_surfaces()
 	if _failures.is_empty():
 		print("I18N-PARITY-TEST PASS (%d chiavi × %d lingue)" % [it.size(), LANGS.size() + 1])
 		quit(0)
@@ -304,6 +323,20 @@ func _check_no_hardcoded_labels() -> void:
 		_check("%s senza etichette scritte a mano" % path.get_file(), found.is_empty(),
 				"%d letterali assegnati a .text/.tooltip_text/.placeholder_text: %s"
 				% [found.size(), _head(found)])
+
+
+func _check_p0_english_surfaces() -> void:
+	for path: String in P0_FORBIDDEN_ITALIAN:
+		var src := FileAccess.get_file_as_string(path)
+		_check("%s leggibile per audit P0" % path.get_file(), src != "")
+		var runtime_lines: PackedStringArray = []
+		for line in src.split("\n"):
+			if not line.strip_edges().begins_with("#"):
+				runtime_lines.append(line)
+		var runtime_src := "\n".join(runtime_lines)
+		for forbidden: String in P0_FORBIDDEN_ITALIAN[path]:
+			_check("%s senza fallback italiano P0" % path.get_file(),
+					not runtime_src.contains(forbidden), forbidden)
 
 
 func _gd_files(dir_path: String) -> PackedStringArray:
