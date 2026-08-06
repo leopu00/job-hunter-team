@@ -1,80 +1,91 @@
 %PDF-1.7
-%“Œ‹ž ReportLab Generated PDF document (opensource)
+%“Œ‹ž
 1 0 obj
-<<
-/F1 2 0 R /F2 3 0 R /F3 4 0 R
->>
+<< /Type /Catalog /Pages 2 0 R >>
 endobj
 2 0 obj
-<<
-/BaseFont /Helvetica /Encoding /WinAnsiEncoding /Name /F1 /Subtype /Type1 /Type /Font
->>
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
 endobj
 3 0 obj
-<<
-/BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding /Name /F2 /Subtype /Type1 /Type /Font
->>
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.276 841.89] /Resources << /Font << /F1 5 0 R /F2 6 0 R /F3 7 0 R >> >> /Contents 4 0 R >>
 endobj
 4 0 obj
-<<
-/BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding /Name /F3 /Subtype /Type1 /Type /Font
->>
+<< /Length 4024 >>
+stream
+q 0.078 0.129 0.239 rg 0 690.89 595.276 151 re f Q
+q 0.059 0.545 0.553 rg 0 690.89 13 151 re f Q
+BT /F2 27 Tf 1 1 1 rg 1 0 0 1 48 780.89 Tm (AVERY EXAMPLE) Tj ET
+BT /F1 14 Tf 1 1 1 rg 1 0 0 1 49 757.89 Tm (Software Engineer) Tj ET
+q 0.91 0.949 0.949 rg 48 725.89 208 18 re f Q
+BT /F2 7.4 Tf 0.078 0.129 0.239 rg 1 0 0 1 57 731.89 Tm (SYNTHETIC SAMPLE CV - PRODUCT TESTING ONLY) Tj ET
+BT /F1 9.2 Tf 1 1 1 rg 1 0 0 1 420 779.89 Tm (avery.example@example.com) Tj ET
+BT /F1 9.2 Tf 1 1 1 rg 1 0 0 1 385 762.89 Tm (Remote - Example Region \(fictional\)) Tj ET
+BT /F1 9.2 Tf 1 1 1 rg 1 0 0 1 471 745.89 Tm (English / Italian) Tj ET
+BT /F2 10.5 Tf 0.059 0.545 0.553 rg 1 0 0 1 48 662 Tm (PROFILE) Tj ET
+q 0.847 0.871 0.91 RG 0.7 w 48 657 m 547 657 l S Q
+BT /F1 9.5 Tf 0.125 0.153 0.208 rg 1 0 0 1 48 638 Tm (Software engineer with four years of experience building reliable Python services, automation, and) Tj ET
+BT /F1 9.5 Tf 0.125 0.153 0.208 rg 1 0 0 1 48 625 Tm (containerized workflows. Turns ambiguous problems into maintainable systems, practical documentation,) Tj ET
+BT /F1 9.5 Tf 0.125 0.153 0.208 rg 1 0 0 1 48 612 Tm (and clear test coverage.) Tj ET
+BT /F2 10.5 Tf 0.059 0.545 0.553 rg 1 0 0 1 48 588 Tm (CORE SKILLS) Tj ET
+q 0.847 0.871 0.91 RG 0.7 w 48 583 m 547 583 l S Q
+BT /F2 9.2 Tf 0.078 0.129 0.239 rg 1 0 0 1 48 564 Tm (Languages) Tj ET
+BT /F1 9.2 Tf 0.125 0.153 0.208 rg 1 0 0 1 117 564 Tm (Python, TypeScript, SQL, Bash) Tj ET
+BT /F2 9.2 Tf 0.078 0.129 0.239 rg 1 0 0 1 48 549 Tm (Platforms) Tj ET
+BT /F1 9.2 Tf 0.125 0.153 0.208 rg 1 0 0 1 117 549 Tm (Linux, Docker, GitHub Actions, REST APIs) Tj ET
+BT /F2 9.2 Tf 0.078 0.129 0.239 rg 1 0 0 1 48 534 Tm (Quality) Tj ET
+BT /F1 9.2 Tf 0.125 0.153 0.208 rg 1 0 0 1 117 534 Tm (Automated testing, integration testing, code review, observability) Tj ET
+BT /F2 10.5 Tf 0.059 0.545 0.553 rg 1 0 0 1 48 505 Tm (EXPERIENCE) Tj ET
+q 0.847 0.871 0.91 RG 0.7 w 48 500 m 547 500 l S Q
+BT /F2 10.2 Tf 0.078 0.129 0.239 rg 1 0 0 1 48 479 Tm (Software Engineer) Tj ET
+BT /F1 9 Tf 0.373 0.42 0.478 rg 1 0 0 1 487 479 Tm (2023 - 2026) Tj ET
+BT /F1 9 Tf 0.373 0.42 0.478 rg 1 0 0 1 48 465 Tm (Example Works Studio \(fictional organisation\)) Tj ET
+q 0.059 0.545 0.553 rg 52 443 3.2 3.2 re f Q
+BT /F1 9.2 Tf 0.125 0.153 0.208 rg 1 0 0 1 63 441 Tm (Built and maintained Python services that process structured data and expose stable APIs.) Tj ET
+q 0.059 0.545 0.553 rg 52 427 3.2 3.2 re f Q
+BT /F1 9.2 Tf 0.125 0.153 0.208 rg 1 0 0 1 63 425 Tm (Containerized development workflows and reduced environment setup from hours to minutes.) Tj ET
+q 0.059 0.545 0.553 rg 52 411 3.2 3.2 re f Q
+BT /F1 9.2 Tf 0.125 0.153 0.208 rg 1 0 0 1 63 409 Tm (Added integration tests and operational dashboards for faster, safer releases.) Tj ET
+BT /F2 10.2 Tf 0.078 0.129 0.239 rg 1 0 0 1 48 373 Tm (QA Automation Developer) Tj ET
+BT /F1 9 Tf 0.373 0.42 0.478 rg 1 0 0 1 487 373 Tm (2021 - 2023) Tj ET
+BT /F1 9 Tf 0.373 0.42 0.478 rg 1 0 0 1 48 359 Tm (Sample Systems Lab \(fictional organisation\)) Tj ET
+q 0.059 0.545 0.553 rg 52 337 3.2 3.2 re f Q
+BT /F1 9.2 Tf 0.125 0.153 0.208 rg 1 0 0 1 63 335 Tm (Designed browser and API test suites for multi-platform product workflows.) Tj ET
+q 0.059 0.545 0.553 rg 52 321 3.2 3.2 re f Q
+BT /F1 9.2 Tf 0.125 0.153 0.208 rg 1 0 0 1 63 319 Tm (Worked with engineers to turn production defects into focused regression tests.) Tj ET
+BT /F2 10.5 Tf 0.059 0.545 0.553 rg 1 0 0 1 48 283 Tm (EDUCATION) Tj ET
+q 0.847 0.871 0.91 RG 0.7 w 48 278 m 547 278 l S Q
+BT /F2 9.8 Tf 0.078 0.129 0.239 rg 1 0 0 1 48 257 Tm (BSc in Software Engineering) Tj ET
+BT /F1 9 Tf 0.373 0.42 0.478 rg 1 0 0 1 48 243 Tm (Example Institute of Technology \(fictional institution\), 2021) Tj ET
+q 0.847 0.871 0.91 RG 0.7 w 48 44 m 547 44 l S Q
+BT /F3 7.5 Tf 0.373 0.42 0.478 rg 1 0 0 1 48 30 Tm (Synthetic fixture: no real person, company, school, address, or contact details.) Tj ET
+BT /F1 7.5 Tf 0.373 0.42 0.478 rg 1 0 0 1 391 30 Tm (example.com is a reserved example domain) Tj ET
+endstream
 endobj
 5 0 obj
-<<
-/Contents 9 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 8 0 R /Resources <<
-/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
->> /Rotate 0 /Trans <<
-
->> 
-  /Type /Page
->>
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 endobj
 6 0 obj
-<<
-/PageMode /UseNone /Pages 8 0 R /Type /Catalog
->>
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
 endobj
 7 0 obj
-<<
-/Author (Job Hunter Team synthetic fixture) /CreationDate (D:20000101000000+00'00') /Creator (Job Hunter Team fixture generator) /Keywords (synthetic, sample, cv, test fixture) /ModDate (D:20000101000000+00'00') /Producer (ReportLab PDF Library - \(opensource\)) 
-  /Subject (Privacy-safe onboarding and setup-guide test document) /Title (Synthetic Sample CV) /Trapped /False
->>
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>
 endobj
 8 0 obj
-<<
-/Count 1 /Kids [ 5 0 R ] /Type /Pages
->>
-endobj
-9 0 obj
-<<
-/Filter [ /ASCII85Decode /FlateDecode ] /Length 2220
->>
-stream
-Gatm<gN)%,&:N/3lsl2U&/#+aIB$d-M5I<?84o>pjFnd$M%)meGd4B"I2;l:THi'3Xmq>R#f,k;cX%)lK8"f`qB,/+hCmjD#9.Idb;Iq20NcV.Z5aJ"&"$i/Z"_9uPu&j([Kjc`PiGUoZq(a]!P"grW:,%?]/C?Ceo1&V)[)B+ELCV$(?2o'`\0i!a#J`!JD-_+U-O-@O@)*^n9_dPSH[pVNKE63?CcM8beM'VgY&4NZcQubrXI%0bn5(WVXET/i/"<CI+RgU/]>63NR4Im^.ECk$UYm?nMV0>.qG>BgCJS1O\<NgXqn>_;((S*fn_DA:tmn::aRPRnbg1<-D=b&7r%=BrF)3O8o2\*?4_/r5uLWCM3StG//tjUpd&;(OFCt5ae@2JPV_$m<3sTS:.B$1H..#F*@\WC%$_#jT-ssH4SC9.Y)fI4"pEg:Q_,VJkrC:/TQ'lFhSSs`lJg"_&sea#EdINnXtFAE%;^dX@m`e/5hj4<(-p@m2T$9e%su:C%5/3EhaP/*`d_nj8M#&&OD9J/+Y&Vgnn9[dc?H#BB^\>2LH47f,)78DenJCJ.*@"O4t_m"N-MeJaR'.?*+ioqKm,5QU+D:E1E[c7[)VXE79npZ9"^pEjEZLCdDm?+K+&q)o.;m(')5?@Zmd^/3$LQA@QmF&Y1H'*\BOE>)(\5o'/&DaZ*e.rW`U,=jYf@E:NXnhO(9VVZ4h-)C("fS(NA;0;1_mP^YA?(ja#'Y<Mru_jr:BVkdhMGEIFdo#Y3!pRl'9h(o"SS]1=,uj#hlpjAgl=MtA*_49Q@CeEa6J'ueLA->lHXbIYbfLj#h@;iA5?I3DGQY(SX8"RJsh'Wru9%qUGFA)%`+AAh=LM2:I<a"<$+).!\#?<1_W`b2[;jMVX<)%gh:24q\DO6LJhG]"5*i?/K=WJZ9t/&W\.MW2lSSON@O7TYhOOcN#dJ#TYhJ#G_)ar$G"4^Z,r]!',XpcKM5ql&9[+F*_<4D*g%U1u9;h5TjTlBnDnI5clg&c^q2(d=hIVg8MZW^'u\cEYC+g%D^7nMQ`nhTn&[Zg)Mh9:?dEFCt,4V%6UXZ-5PK.9(Wd?cF;K=<MKZIQIb=P,0=*V>#srH(qk!i#._sf9?#PEd@ZNC?nbYaKp'dZog]+Bk&H;!%#fO;K.]E+ii2b0g#"Y[$GFf#%1&eFd.(n)[VM@e$dH7Ya1TZW9PWCB%$l[Cna$D'm:+2cnHT9k7=a]/a?_.`XhNPGTrVek\fP[/Y?h@87*cC,1e!3,<6@REoAKCjRcqR_MI;FQI`7o`%fR'RGX,b4nhL'Q@Nu/,BbHJ)<:-kHb6G_CX3N-Ntjm+=^lYS^JR,M@oKL/F)(RiVV&Sr$Iq&7AG<u]$"[,dEE*gb08Z]"S]*359'h.pC50%H4L))tn0%&f9R&[TGXH_[i]4+CgT_&\\#o_pcKeUX]nH]*P!=W?ZUi_?DoO+dh7C%t4[61L<:IDkQD[or8RN\"2`qb#aXWtD.1-&CUQ0=!cYq5ujD%3,X*P<B6L8*<S-i[mdXo.6CZRA"@7^2gFBCf\&03=P?$Nhg':j#Hq7f"pB8uO!*Tj%%"*BVkqjm@kCnfC\C[9^G"5?V*%V&\6C._'L5/6!11a3!HCXeT\"A-U*6q'ut].ID2+^)`Y>t/TT]uXf2<8P[VjeX%,3MB`25(g2%)oIAiUXM+$/CU0$Ks(F`c&,pFXo<P?+'\p6^9,Sno;i4@YWG],K$g'@%O,#(doM!:Cd`6W/n;7QY@ije-A%f8,0h<_YqgIHV&L?cgokMZg@GF$:DCXDY]o:70@Pn3q5XQi#tCZu?*)r[O]'aZI]AdkeQJ0Oh)BFV2?PKi7MU5U7<,QJ=XG3BiiF:Epe@7Lh:TZ@>?;m7cKeUX]u@m5d9cu<r4\YB@hXo@?!GpP+4u#l4FBZBPB]X<KP7<>E;M1eKc:tKhKiJ)E5L3hY*u9P)P<HEQX*ut@#OF[d>8s3%Pp-6`L$2&jn.j/\Wk]S"3T@mTDGo')L)#g(eG1JpjNgMLYs!.Mbf$?Q9N>Q_L8=B^.9_i[dmLY-',OGaMd3pW.Sfj8!Uoq/8Ot.]Vumm=Q;^f.-Ea6%0q7iE-V9rQ7h!K]\;p+NFAC78XfAmj8pP6c,GE7b"$P)G5E[P?iu=r6=aS^P!m;15.CsuP7(EGKHkKY"sI[FZ`no_DQD:^Gn*a=T;YPK:J#4<G:#ZI;aVC\rWUhRJq!~>endstream
+<< /Title (Synthetic Sample CV) /Author (Job Hunter Team synthetic fixture) /Subject (Privacy-safe onboarding and setup-guide test document) /Creator (Job Hunter Team fixture generator) >>
 endobj
 xref
-0 10
+0 9
 0000000000 65535 f 
-0000000061 00000 n 
-0000000112 00000 n 
-0000000219 00000 n 
-0000000331 00000 n 
-0000000446 00000 n 
-0000000649 00000 n 
-0000000717 00000 n 
-0000001114 00000 n 
-0000001173 00000 n 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000274 00000 n 
+0000004349 00000 n 
+0000004419 00000 n 
+0000004494 00000 n 
+0000004572 00000 n 
 trailer
-<<
-/ID 
-[<a9941875f59ebe802cc9580c7c2be03e><a9941875f59ebe802cc9580c7c2be03e>]
-% ReportLab generated PDF document -- digest (opensource)
-
-/Info 7 0 R
-/Root 6 0 R
-/Size 10
->>
+<< /Size 9 /Root 1 0 R /Info 8 0 R /ID [<83FCBD2722D443F36BAC3F8719789A9D><83FCBD2722D443F36BAC3F8719789A9D>] >>
 startxref
-3484
+4776
 %%EOF
