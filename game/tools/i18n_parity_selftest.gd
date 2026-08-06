@@ -76,6 +76,10 @@ const P0_FORBIDDEN_ITALIAN := {
 	"res://scripts/setup/tour_guide.gd": [
 		"Questo è il reparto", "Il Ricercatore", "L'Analista", "Il Coordinatore",
 	],
+	"res://scripts/setup/setup_service.gd": [
+		"Account e cloud", "Apri il link, scegli ACCEDI CON GOOGLE",
+		"Apri il link, accedi all'account",
+	],
 }
 
 var _failures: Array[String] = []
