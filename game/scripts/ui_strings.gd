@@ -743,6 +743,20 @@ const S := {
 	"common.backend_unsupported": "Il backend collegato non offre questa funzione.",
 
 	# ── Badge simulazione / dati reali ────────────────────────────────
+	"backend.this_computer": "questo computer",
+	"backend.local_connecting": "collegamento al container locale…",
+	"backend.local_unavailable": "container locale non disponibile",
+	"backend.container_not_running": "il container jht non è in esecuzione",
+	"office.message_for_you": "MESSAGGIO PER TE",
+	"office.message_from": "MESSAGGIO DA %s",
+	"office.transition.new": "Nuova posizione: %s",
+	"office.transition.checked": "Verificata: %s",
+	"office.transition.scored": "Valutata: %s",
+	"office.transition.writing": "CV in scrittura: %s",
+	"office.transition.ready": "CV pronto: %s",
+	"office.transition.excluded": "Esclusa: %s",
+	"office.position_fallback": "posizione #%s",
+	"office.demo_provider_required": "Per domande libere e personali collega un provider dal setup. L'ufficio demo resta sempre esplorabile.",
 	"sim.live_vps": "● DATI REALI — VPS",
 	"sim.live_local": "● DATI REALI — QUESTO COMPUTER",
 	# ── Finestra di lavoro esaurita ───────────────────────────────────

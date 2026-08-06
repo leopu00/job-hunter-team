@@ -8,9 +8,9 @@ extends VpsBackend
 
 func start(_config: Dictionary) -> void:
 	live = true
-	_ip = "questo computer"
+	_ip = UIStrings.t("backend.this_computer")
 	_stop = false
-	bus.publish_state(BackendBus.CONNECTING, "collegamento al container locale…")
+	bus.publish_state(BackendBus.CONNECTING, UIStrings.t("backend.local_connecting"))
 	_thread = Thread.new()
 	_thread.start(_run)
 
