@@ -22,7 +22,9 @@ import {
 } from "./recording-browser-policy.mjs";
 import {
   assertPortraitGeometry,
+  assertPortraitMobileDocument,
   recordingFormatFromEnvironment,
+  PORTRAIT_RECORDING_MOBILE_EMULATION,
 } from "./recording-browser-format.mjs";
 
 const ALIASES = new Set(["software", "marketing", "finance", "design"]);
@@ -101,6 +103,7 @@ async function main() {
             storageState,
             viewport: { width: 540, height: 960 },
             deviceScaleFactor: 2,
+            ...PORTRAIT_RECORDING_MOBILE_EMULATION,
           }
         : {
             storageState,
@@ -132,7 +135,10 @@ async function main() {
     if (page.url() !== target) {
       throw new Error("recording route redirected");
     }
-    if (format === "portrait") await assertPortraitGeometry(page);
+    if (format === "portrait") {
+      await assertPortraitGeometry(page);
+      await assertPortraitMobileDocument(page);
+    }
     await page.waitForFunction(
       () => document.documentElement.getAttribute("data-theme") === "light",
     );
