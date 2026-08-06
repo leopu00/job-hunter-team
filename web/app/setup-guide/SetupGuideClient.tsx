@@ -7,6 +7,7 @@
 // colonna laterale che resta ferma mentre si scorre — la stessa struttura,
 // non un secondo layout.
 
+import { useEffect } from "react";
 import Link from "next/link";
 
 import GuidePhaseBlock from "./GuidePhaseBlock";
@@ -26,6 +27,18 @@ import LandingNav from "../components/landing/LandingNav";
 function GuideContent() {
   const { lang } = useLandingI18n();
   const { os, setOs, detected } = useGuideOs();
+
+  // Il titolo della scheda segue la lingua SCELTA, non quella dedotta dal
+  // server. Il metadata statico di `page.tsx` è inglese e serve a chi legge
+  // senza JavaScript e ai crawler; qui lo si riallinea al selettore.
+  //
+  // È il modo per non ereditare il difetto che la pagina Download ha oggi:
+  // là il titolo esce da `getRequestLocale()`, che senza cookie ricade su
+  // italiano, mentre il contenuto parte in inglese — tab e pagina in due
+  // lingue diverse alla prima visita.
+  useEffect(() => {
+    document.title = `${GUIDE_UI.page_title[lang]} | Job Hunter Team`;
+  }, [lang]);
 
   const chapters = GUIDE_CHAPTERS.map((chapter) => ({
     chapter,

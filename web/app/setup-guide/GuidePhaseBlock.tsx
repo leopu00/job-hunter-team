@@ -9,7 +9,7 @@
 import GuideLinks from "./GuideLinks";
 import GuideScreenFigure from "./GuideScreenFigure";
 import { GUIDE_UI } from "./guide-ui.i18n";
-import type { GuidePhase, OsId } from "./guide-types";
+import { screensOf, type GuidePhase, type OsId } from "./guide-types";
 import type { Lang } from "../components/landing/LandingI18n";
 
 export default function GuidePhaseBlock({
@@ -52,9 +52,14 @@ export default function GuidePhaseBlock({
           </p>
         )}
 
-        {phase.screen && (
-          <GuideScreenFigure screenRef={phase.screen} os={os} lang={lang} />
-        )}
+        {screensOf(phase).map((screenRef) => (
+          <GuideScreenFigure
+            key={screenRef.screenId}
+            screenRef={screenRef}
+            os={os}
+            lang={lang}
+          />
+        ))}
 
         {phase.links && <GuideLinks links={phase.links} os={os} lang={lang} />}
       </div>
