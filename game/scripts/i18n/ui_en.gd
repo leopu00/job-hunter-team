@@ -1,6 +1,7 @@
 extends RefCounted
-## Traduzioni EN — stesse chiavi di UIStrings.S (fallback: italiano).
+## Catalogo EN — lingua predefinita e fallback delle altre traduzioni.
 const S := {
+	"common.loading": "LOADING…",
 	"language_picker.eyebrow": "FIRST START",
 	"language_picker.title": "Choose your language",
 	"language_picker.subtitle": "You can change it at any time in Settings.",

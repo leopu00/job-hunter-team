@@ -1,8 +1,9 @@
 class_name UIStrings
 ## Tutte le stringhe UI del gioco, centralizzate. L'italiano (S, sotto)
-## è la lingua di riferimento; le altre 6 lingue del web (en, hu, es,
-## de, fr, pt) vivono in scripts/i18n/ui_<lang>.gd con le STESSE chiavi
-## e fanno fallback sull'italiano se una chiave manca.
+## resta il catalogo strutturale; le altre 6 lingue del web (en, hu, es,
+## de, fr, pt) vivono in scripts/i18n/ui_<lang>.gd con le STESSE chiavi.
+## A runtime una traduzione mancante ricade sull'inglese: è la lingua di
+## default e nessuna ripresa deve mostrare italiano per un buco nel catalogo.
 
 const LANGS := {
 	"it": "Italiano", "en": "English", "hu": "Magyar", "es": "Español",
@@ -96,10 +97,20 @@ static func set_lang(l: String, persist := true, config_path := "") -> bool:
 	return true
 
 static func t(key: String) -> String:
-	if lang != "it":
-		var d: Dictionary = _translations().get(lang, {})
+	return _translated(key, lang, _translations() if lang != "it" else {})
+
+
+## Lookup puro tenuto separato per provare il fallback con cataloghi sintetici:
+## le Dictionary ottenute dalle costanti degli script sono read-only in Godot.
+static func _translated(key: String, requested_lang: String,
+		translations: Dictionary) -> String:
+	if requested_lang != "it":
+		var d: Dictionary = translations.get(requested_lang, {})
 		if d.has(key):
 			return d[key]
+		var english: Dictionary = translations.get(DEFAULT_LANG, {})
+		if english.has(key):
+			return english[key]
 	return S.get(key, key)
 
 ## I dizionari tradotti, caricati pigramente (i preload in const
@@ -118,6 +129,7 @@ static func _translations() -> Dictionary:
 	return _tr_cache
 
 const S := {
+	"common.loading": "CARICAMENTO…",
 	# ── Title screen ──────────────────────────────────────────────
 	"language_picker.eyebrow": "PRIMO AVVIO",
 	"language_picker.title": "Scegli la lingua",
