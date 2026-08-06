@@ -4017,7 +4017,7 @@ func _build_team() -> void:
 	# completare: in quel caso il vecchio banner "TEAM NON ATTIVO" contraddiceva
 	# sia `jht team status` sia il roster che compariva subito sotto. Continuiamo
 	# a mostrare il richiamo alla checklist, ma senza negare un team osservato.
-	var running := not BackendBus.agents.is_empty() or bool(
+	var running := SetupService._agents_have_operational_team(BackendBus.agents) or bool(
 			SetupService.status.get("team_running", false))
 	if not bool(SetupService.status.get("ready", false)):
 		var banner := Button.new()
