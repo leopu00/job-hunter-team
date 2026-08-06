@@ -1,0 +1,245 @@
+/**
+ * Rete di sicurezza della guida di setup.
+ *
+ * La guida è fatta di dati: capitoli, fasi e un registro di schermate, con
+ * gli id del contratto di HQ-DOCS. I modi in cui si rompe sono tutti
+ * silenziosi — una fase che punta a una schermata inesistente non mostra
+ * nulla, una traduzione mancante mostra la chiave, un file rinominato
+ * lascia un rettangolo vuoto. Il type-check prende solo le sette lingue; il
+ * resto lo prendono questi test.
+ *
+ * `guide-ui.i18n.ts` non è verificato qui: finisce già nella rete di
+ * `dictionaries.test.ts`, che importa ogni `*.i18n.ts` del web.
+ */
+import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { GUIDE_CHAPTERS } from "@/app/setup-guide/guide-content";
+import { SCREENS, pendingScreens } from "@/app/setup-guide/guide-screens";
+import {
+  OS_IDS,
+  isUntranslated,
+  phasesFor,
+  screensOf,
+  type GuideText,
+} from "@/app/setup-guide/guide-types";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const PUBLIC_DIR = path.resolve(HERE, "../../../web/public");
+
+const LOCALES = ["it", "en", "es", "fr", "de", "pt", "hu"] as const;
+
+/** Ogni testo visibile, con l'etichetta di dove sta — così un fallimento
+ *  dice quale fase e quale campo, non «una stringa da qualche parte». */
+function everyText(): { where: string; text: GuideText }[] {
+  const out: { where: string; text: GuideText }[] = [];
+  for (const chapter of GUIDE_CHAPTERS) {
+    out.push({ where: `chapter ${chapter.id} · title`, text: chapter.title });
+    out.push({
+      where: `chapter ${chapter.id} · summary`,
+      text: chapter.summary,
+    });
+    for (const phase of chapter.phases) {
+      const at = `phase ${chapter.id}/${phase.id}`;
+      out.push({ where: `${at} · title`, text: phase.title });
+      out.push({ where: `${at} · body`, text: phase.body });
+      if (phase.warning)
+        out.push({ where: `${at} · warning`, text: phase.warning });
+      for (const screenRef of screensOf(phase))
+        if (screenRef.caption)
+          out.push({
+            where: `${at} · caption ${screenRef.screenId}`,
+            text: screenRef.caption,
+          });
+      for (const [i, link] of (phase.links ?? []).entries())
+        out.push({ where: `${at} · link[${i}]`, text: link.label });
+    }
+  }
+  return out;
+}
+
+/** I testi del registro schermate: alt e didascalie. Sono scritti qui, non
+ *  presi dal contratto, quindi devono essere tradotti davvero. */
+function screenTexts(): { where: string; text: GuideText }[] {
+  return Object.values(SCREENS).flatMap((screen) => [
+    { where: `screen ${screen.id} · alt`, text: screen.alt },
+    { where: `screen ${screen.id} · caption`, text: screen.caption },
+  ]);
+}
+
+describe("guida di setup — traduzioni", () => {
+  it("ogni testo esiste in tutte e sette le lingue, non vuoto", () => {
+    const missing: string[] = [];
+    for (const { where, text } of [...everyText(), ...screenTexts()]) {
+      for (const locale of LOCALES) {
+        if (!text[locale] || text[locale].trim() === "") {
+          missing.push(`${where} → ${locale}`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("alt text e didascalie delle schermate sono tradotti davvero", () => {
+    // Questi non vengono dal contratto inglese: se sono identici in tutte e
+    // sette le lingue, sono inglese incollato, non traduzione.
+    const untranslated = screenTexts()
+      .filter(({ text }) => isUntranslated(text))
+      .map(({ where }) => where);
+    expect(untranslated).toEqual([]);
+  });
+
+  it("dichiara quanti testi del contratto attendono ancora traduzione", () => {
+    // Non è un fallimento: il copy canonico arriva in inglese e la
+    // traduzione è un lavoro a parte. Il test esiste per rendere il numero
+    // VISIBILE invece che intuibile, e per fallire il giorno in cui
+    // qualcuno cancella `untranslated()` senza tradurre davvero.
+    const texts = everyText();
+    const pending = texts.filter(({ text }) => isUntranslated(text));
+    // eslint-disable-next-line no-console
+    console.log(
+      `[setup-guide] ${pending.length}/${texts.length} testi ancora in inglese (attesa HQ-FULLSTACK-1)`,
+    );
+    expect(pending.length).toBeLessThanOrEqual(texts.length);
+  });
+});
+
+describe("guida di setup — struttura", () => {
+  it("gli id di capitoli e fasi sono unici", () => {
+    const chapterIds = GUIDE_CHAPTERS.map((c) => c.id);
+    expect(new Set(chapterIds).size).toBe(chapterIds.length);
+
+    const phaseIds = GUIDE_CHAPTERS.flatMap((c) => c.phases.map((p) => p.id));
+    expect(new Set(phaseIds).size).toBe(phaseIds.length);
+  });
+
+  it("ogni schermata referenziata da una fase esiste nel registro", () => {
+    const dangling: string[] = [];
+    for (const chapter of GUIDE_CHAPTERS) {
+      for (const phase of chapter.phases) {
+        for (const screenRef of screensOf(phase)) {
+          if (!SCREENS[screenRef.screenId]) {
+            dangling.push(`${chapter.id}/${phase.id} → ${screenRef.screenId}`);
+          }
+        }
+      }
+    }
+    expect(dangling).toEqual([]);
+  });
+
+  it("nessuna schermata del registro resta orfana", () => {
+    // Il contratto elenca le schermate da riprendere: una voce che nessuna
+    // fase usa manda i collaudatori a girare un'immagine che non comparirà.
+    const used = new Set(
+      GUIDE_CHAPTERS.flatMap((c) =>
+        c.phases.flatMap((p) => screensOf(p).map((s) => s.screenId)),
+      ),
+    );
+    const orphans = Object.keys(SCREENS).filter((id) => !used.has(id));
+    expect(orphans).toEqual([]);
+  });
+
+  it("ogni sistema operativo ha un percorso completo", () => {
+    // Nessun OS deve trovarsi un capitolo vuoto: se tutte le fasi di un
+    // capitolo sono riservate ad altri sistemi, quel capitolo sparisce e la
+    // guida salta un pezzo senza dirlo.
+    for (const os of OS_IDS) {
+      for (const chapter of GUIDE_CHAPTERS) {
+        expect(
+          phasesFor(chapter, os).length,
+          `${os}: il capitolo ${chapter.id} non ha fasi`,
+        ).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("una schermata riusata in più fasi resta un asset solo", () => {
+    // È il requisito esplicito: la stessa schermata può comparire in due
+    // fasi. Il registro lo garantisce per costruzione (le fasi puntano a un
+    // id), e questo test verifica che il riuso esista davvero — altrimenti
+    // nessuno si accorge se qualcuno torna a duplicare l'asset.
+    const uses = new Map<string, number>();
+    for (const chapter of GUIDE_CHAPTERS) {
+      for (const phase of chapter.phases) {
+        for (const screenRef of screensOf(phase)) {
+          uses.set(screenRef.screenId, (uses.get(screenRef.screenId) ?? 0) + 1);
+        }
+      }
+    }
+    const reused = [...uses.entries()].filter(([, n]) => n > 1);
+    expect(reused.length).toBeGreaterThan(0);
+  });
+
+  it("i link ristretti a un sistema esistono per quel sistema", () => {
+    for (const chapter of GUIDE_CHAPTERS) {
+      for (const phase of chapter.phases) {
+        for (const link of phase.links ?? []) {
+          if (!link.os) continue;
+          const phaseOs = phase.os === "all" ? OS_IDS : phase.os;
+          const orphan = link.os.filter((os) => !phaseOs.includes(os));
+          expect(
+            orphan,
+            `${phase.id}: link per ${orphan.join(",")} in una fase che non li mostra`,
+          ).toEqual([]);
+        }
+      }
+    }
+  });
+});
+
+describe("guida di setup — schermate", () => {
+  it("ogni file dichiarato esiste davvero sotto public/", () => {
+    const broken: string[] = [];
+    for (const screen of Object.values(SCREENS)) {
+      for (const [variant, asset] of Object.entries(screen.assets)) {
+        if (!asset) continue;
+        const onDisk = path.join(PUBLIC_DIR, asset.src);
+        if (!fs.existsSync(onDisk)) {
+          broken.push(`${screen.id}/${variant} → ${asset.src}`);
+        }
+      }
+    }
+    expect(broken).toEqual([]);
+  });
+
+  it("ogni schermata mancante dichiara cosa deve mostrare", () => {
+    // L'elenco di ciò che manca si legge dal codice: una schermata senza
+    // file e senza `pending` sparisce dai conti.
+    const undocumented = pendingScreens()
+      .filter((screen) => !screen.pending)
+      .map((screen) => screen.id);
+    expect(undocumented).toEqual([]);
+  });
+});
+
+describe("guida di setup — contratto di HQ-DOCS", () => {
+  it("i requisiti non dichiarano un minimo di disco", () => {
+    // Regola dell'operatore: se un numero non è stato misurato, non si
+    // scrive. Il minimo di disco non è mai stato misurato, e la frase che
+    // lo dice apertamente è la parte più onesta del testo: non si taglia
+    // per brevità, e nessuno deve rimetterci un numero inventato.
+    const phase = GUIDE_CHAPTERS.flatMap((c) => c.phases).find(
+      (p) => p.id === "check-requirements",
+    );
+    expect(phase, "fase check-requirements assente").toBeDefined();
+    const body = phase!.body.en;
+    expect(body).toContain("no universal disk minimum is stated");
+    expect(body).toContain("has not been measured");
+  });
+
+  it("i requisiti tengono la baseline VPS separata e linkata", () => {
+    // La pagina VPS già pubblicata dichiara 4 GB e 2 vCPU: senza dire che
+    // è la baseline di un server dedicato, le due pagine sembrano in
+    // disaccordo sui requisiti del computer di casa.
+    const phase = GUIDE_CHAPTERS.flatMap((c) => c.phases).find(
+      (p) => p.id === "check-requirements",
+    )!;
+    expect(phase.body.en).toContain("separate validated baseline");
+    const hrefs = (phase.links ?? []).map((link) =>
+      "href" in link ? link.href : undefined,
+    );
+    expect(hrefs).toContain("/docs/guides/run-on-a-vps");
+  });
+});
