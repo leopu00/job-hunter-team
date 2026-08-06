@@ -115,6 +115,25 @@ def test_runtime_installer_keeps_tty_and_reports_command_failure():
     assert '"term.done_plain": "CHIUDI CONSOLE"' in strings
 
 
+def test_cloud_login_terminal_copy_uses_the_selected_ui_language():
+    setup = _src("game/scripts/setup/setup_service.gd")
+    cloud_login = setup[
+        setup.index("func open_cloud_login") : setup.index("func open_cloud_command")
+    ]
+    for key in (
+        "setup.cloud_login_title",
+        "setup.cloud_login_google_hint",
+        "setup.cloud_login_hint",
+    ):
+        assert f'UIStrings.t("{key}")' in cloud_login
+    for italian_literal in (
+        "Account e cloud",
+        "Apri il link, scegli ACCEDI CON GOOGLE",
+        "Apri il link, accedi all'account",
+    ):
+        assert italian_literal not in cloud_login
+
+
 def test_runtime_upgrade_uses_only_the_host_json_contract():
     setup = _src("game/scripts/setup/setup_service.gd")
     panel = _src("game/scripts/ui/section_panel.gd")
