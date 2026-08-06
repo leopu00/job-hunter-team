@@ -133,6 +133,16 @@ if [[ "$OUTPUT_DIR" != /* ]]; then
 fi
 mkdir -p "$OUTPUT_DIR"
 
+# Un bundle deve descrivere soltanto QUESTO run. Non cancelliamo mai materiale
+# precedente: una directory con PNG o manifest già presenti è un errore e va
+# sostituita esplicitamente dall'operatore con una directory vuota/nuova.
+shopt -s nullglob
+EXISTING_PNGS=("$OUTPUT_DIR"/*.png)
+shopt -u nullglob
+if [[ ${#EXISTING_PNGS[@]} -gt 0 || -e "$OUTPUT_DIR/manifest.txt" ]]; then
+    fail "output directory contains an earlier bundle; use an empty/new directory: $OUTPUT_DIR"
+fi
+
 if [[ -z "$BASE_URL" ]]; then
     BASE_URL="http://127.0.0.1:$PORT"
 fi
