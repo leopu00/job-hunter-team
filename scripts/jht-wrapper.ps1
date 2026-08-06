@@ -118,6 +118,79 @@ function Ensure-Up {
   }
 }
 
+# Il CLI Node vive nel container, ma `--output` e' un path del computer host.
+# Il core continua a possedere download e verifica SHA-256: qui assegniamo un
+# path temporaneo Linux e pubblichiamo i byte verificati con docker cp + move
+# atomico sullo stesso filesystem della destinazione Windows.
+function Invoke-HostDownload {
+  param([string[]]$DownloadArgs)
+
+  $hostOutput = ''
+  $rewritten = [System.Collections.Generic.List[string]]::new()
+  for ($i = 0; $i -lt $DownloadArgs.Count; $i++) {
+    $arg = $DownloadArgs[$i]
+    if ($arg -eq '--output') {
+      if ($hostOutput) { Write-Err '--output specificato piu di una volta'; return 2 }
+      if ($i + 1 -ge $DownloadArgs.Count -or -not $DownloadArgs[$i + 1]) {
+        Write-Err '--output richiede un path'
+        return 2
+      }
+      $i += 1
+      $hostOutput = $DownloadArgs[$i]
+    } elseif ($arg.StartsWith('--output=')) {
+      if ($hostOutput) { Write-Err '--output specificato piu di una volta'; return 2 }
+      $hostOutput = $arg.Substring('--output='.Length)
+      if (-not $hostOutput) { Write-Err '--output richiede un path'; return 2 }
+    } else {
+      $rewritten.Add($arg)
+    }
+  }
+
+  # Il default `/jht_user/downloads` e' gia bind-mountato sul Documents host.
+  if (-not $hostOutput) {
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry download @rewritten
+    return $LASTEXITCODE
+  }
+
+  $hostOutput = [IO.Path]::GetFullPath($hostOutput)
+  if (Test-Path -LiteralPath $hostOutput) {
+    Write-Err "il file di destinazione esiste gia: $hostOutput"
+    return 1
+  }
+
+  $containerTemp = '/tmp/jht-download-' + $PID + '-' + [guid]::NewGuid().ToString('N')
+  $parent = Split-Path -Parent $hostOutput
+  $hostTemp = Join-Path $parent ('.' + (Split-Path -Leaf $hostOutput) + '.part-' + [guid]::NewGuid().ToString('N'))
+  $rewritten.Add('--output')
+  $rewritten.Add($containerTemp)
+
+  try {
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry download @rewritten
+    $innerCode = $LASTEXITCODE
+    if ($innerCode -ne 0) { return $innerCode }
+
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    & docker cp "${Container}:$containerTemp" $hostTemp
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $hostTemp -PathType Leaf)) {
+      Write-Err 'copia del download verificato verso l host non riuscita'
+      return 1
+    }
+    # File.Move a due argomenti e' no-clobber anche su Windows PowerShell 5.1:
+    # se il target compare durante il download l'operazione fallisce.
+    [IO.File]::Move($hostTemp, $hostOutput)
+    Write-Host "  Salvato sul computer host in: $hostOutput"
+    return 0
+  } catch {
+    Write-Err "pubblicazione del download sull host non riuscita: $($_.Exception.Message)"
+    return 1
+  } finally {
+    & docker exec $Container rm -f $containerTemp *> $null
+    if (Test-Path -LiteralPath $hostTemp) {
+      Remove-Item -LiteralPath $hostTemp -Force -ErrorAction SilentlyContinue
+    }
+  }
+}
+
 # ── Upgrade runtime, transazionale e host-side ────────────────────────────
 # L'installazione utente e' image-only. Git/NPM nel container non puo'
 # aggiornare il prodotto e lascerebbe meta' deploy; il wrapper host prepara il
@@ -474,6 +547,14 @@ switch ($Sub) {
     Ensure-Up
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @Rest
     break
+  }
+
+  'download' {
+    Require-Docker
+    Require-ComposeFile
+    Ensure-Up
+    $code = Invoke-HostDownload $Rest
+    exit $code
   }
 
   # Default: nessun arg = help.
