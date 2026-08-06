@@ -126,6 +126,10 @@ function Invoke-HostDownload {
   param([string[]]$DownloadArgs)
 
   $hostOutput = ''
+  $downloadEnv = @()
+  if ($env:JHT_RELEASE_BASE_URL) {
+    $downloadEnv = @('-e', "JHT_RELEASE_BASE_URL=$env:JHT_RELEASE_BASE_URL")
+  }
   $rewritten = [System.Collections.Generic.List[string]]::new()
   for ($i = 0; $i -lt $DownloadArgs.Count; $i++) {
     $arg = $DownloadArgs[$i]
@@ -148,7 +152,7 @@ function Invoke-HostDownload {
 
   # Il default `/jht_user/downloads` e' gia bind-mountato sul Documents host.
   if (-not $hostOutput) {
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry download @rewritten
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" @downloadEnv $Container node $NodeEntry download @rewritten
     return $LASTEXITCODE
   }
 
@@ -165,7 +169,7 @@ function Invoke-HostDownload {
   $rewritten.Add($containerTemp)
 
   try {
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry download @rewritten
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" @downloadEnv $Container node $NodeEntry download @rewritten
     $innerCode = $LASTEXITCODE
     if ($innerCode -ne 0) { return $innerCode }
 
