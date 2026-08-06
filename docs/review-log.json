@@ -1459,6 +1459,11 @@
       "path": "docs/about/TUTORIAL-GAME-SCREENSHOTS.md",
       "description": "Provenance, privacy attestation, and hashes for the public game tutorial screenshots",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-07-setup-guide-content-contract.md",
+      "description": "Contratto P0 della guida setup non pubblicata: naming, copy EN, fasi e requisiti screenshot per tre OS, local-web e censimento riuso",
+      "last_review": "2026-08-07"
     }
   ]
 }
