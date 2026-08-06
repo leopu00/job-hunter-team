@@ -14,7 +14,6 @@ const S := {
 	"title.name_enter": "ENTRAR NO ESCRITÓRIO",
 	"title.name_skip": "Prefiro não dizer, vamos entrar",
 	"title.press_enter": "▶ PRESSIONA ENTER",
-	"title.footer": "protótipo — dados mock, sem backend",
 	"title.hint_pause": "ESC menu",
 
 	"pause.title": "PAUSA",
