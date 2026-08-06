@@ -52,7 +52,10 @@ fi
 # repo lo stesso giorno di questo hook (2026-04-27) e da allora nessuno poteva
 # più aggiornarla — l'hook bloccava proprio il file che detect-secrets è fatto
 # per rigenerare. Una baseline che non si può aggiornare invecchia e basta.
-ALLOWED_EXTENSIONS="ts|tsx|gd|uid|tscn|tres|godot|cfg|ttf|import|js|jsx|json|geojson|css|scss|md|py|sh|sql|yml|yaml|toml|lock|svg|png|txt|example|gitkeep|gitignore|gitattributes|gdignore|dockerignore|vercelignore|mjs|cjs|html|bat|ps1|icns|ico|rs|plist|list|jpg|jpeg|nsi|baseline|sha256"
+# `pdf` serve per fixture sintetiche versionate: il controllo dati privati resta
+# attivo sulla sorgente/generatore, mentre `.gitattributes` tratta il binario
+# come tale e impedisce conversioni EOL.
+ALLOWED_EXTENSIONS="ts|tsx|gd|uid|tscn|tres|godot|cfg|ttf|import|js|jsx|json|geojson|css|scss|md|py|sh|sql|yml|yaml|toml|lock|svg|png|pdf|txt|example|gitkeep|gitignore|gitattributes|gdignore|dockerignore|vercelignore|mjs|cjs|html|bat|ps1|icns|ico|rs|plist|list|jpg|jpeg|nsi|baseline|sha256"
 
 BLOCKED_FILES=""
 while IFS= read -r file; do
