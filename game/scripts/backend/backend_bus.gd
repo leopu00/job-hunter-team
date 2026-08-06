@@ -184,7 +184,7 @@ func _ready() -> void:
 		if _local_container_running():
 			set_backend(LocalBackend.new())
 		else:
-			publish_state(ERROR, "container locale non disponibile")
+			publish_state(ERROR, UIStrings.t("backend.local_unavailable"))
 		return
 	var cfg := load_vps_config()
 	if OS.get_environment("JHT_VPS_IP") != "":
@@ -548,8 +548,8 @@ func _self_test_chat_notifications() -> void:
 	var tag := AgentStateTag.new()
 	add_child(tag)
 	tag.set_state("working", 0.0)
-	tag.show_message("messaggio da mentor", 0.1)
-	var message_label := tag.debug_label() == "MESSAGGIO DA MENTOR"
+	tag.show_message(UIStrings.t("office.message_from") % "Mentor", 0.1)
+	var message_label := tag.debug_label() == (UIStrings.t("office.message_from") % "MENTOR")
 	tag.set_suppressed(true)
 	tag.set_state("idle", 0.0)
 	var suppressed := tag.debug_suppressed() and not tag.visible
@@ -879,6 +879,15 @@ func publish_state(new_state: int, detail := "") -> void:
 	state_detail = detail
 	Log.info("backend", "stato connessione → %d (%s)" % [state, detail])
 	connection_changed.emit(state, detail)
+
+
+## Gli adapter in worker thread accodano la CHIAVE, non una traduzione già
+## risolta: ResourceLoader e il catalogo restano confinati sul main thread.
+func publish_state_key(new_state: int, key: String, args: Array = []) -> void:
+	var detail := UIStrings.t(key)
+	if not args.is_empty():
+		detail = detail % args
+	publish_state(new_state, detail)
 
 func publish_agents(list: Array) -> void:
 	agents = list

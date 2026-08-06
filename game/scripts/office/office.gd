@@ -726,7 +726,7 @@ func _start_talk(agent: AgentNPC) -> void:
 		if _tour_visits == 3 and not tour_running:
 			var helper := _find_agent("assistente")
 			if helper:
-				helper.say("Per domande libere e personali collega un provider dal setup. L'ufficio demo resta sempre esplorabile.")
+				helper.say(UIStrings.t("office.demo_provider_required"))
 	agent.start_talk()
 	var ui := DialogueUI.new()
 	add_child(ui)
@@ -1113,7 +1113,7 @@ func deliver_chat(from_uid: String, to_uid: String, text: String) -> void:
 			"all":
 				to_label = ""
 			"user":
-				to_label = "MESSAGGIO PER TE"
+				to_label = UIStrings.t("office.message_for_you")
 			_:
 				to_label = _name_of(to_uid)
 		speaker.say(text, to_label)
@@ -1175,12 +1175,12 @@ const TR_REACT_GAP := 2.4     # secondi fra due reazioni (non un coro)
 ## Gli stati VERI del jobs.db (SELECT DISTINCT to_state sulla VPS) come
 ## frase parlata; uno stato nuovo cade sul generico "%s → stato".
 const TR_PHRASES := {
-	"new": "Nuova posizione: %s",
-	"checked": "Verificata: %s",
-	"scored": "Valutata: %s",
-	"writing": "CV in scrittura: %s",
-	"ready": "CV pronto: %s",
-	"excluded": "Esclusa: %s",
+	"new": "office.transition.new",
+	"checked": "office.transition.checked",
+	"scored": "office.transition.scored",
+	"writing": "office.transition.writing",
+	"ready": "office.transition.ready",
+	"excluded": "office.transition.excluded",
 }
 ## Stati che accendono la stampante dell'ufficio (lavoro sul CV).
 const TR_PRINT := ["writing", "ready"]
@@ -1294,9 +1294,10 @@ func _react_to_transition(t: Dictionary) -> void:
 	if what != "" and company != "":
 		what += " · " + company
 	elif what == "":
-		what = company if company != "" else "posizione #%s" % str(t.get("position_id", "?"))
+		what = company if company != "" else UIStrings.t("office.position_fallback") \
+				% str(t.get("position_id", "?"))
 	if TR_PHRASES.has(to_st):
-		actor.say(TR_PHRASES[to_st] % what)
+		actor.say(UIStrings.t(TR_PHRASES[to_st]) % what)
 	else:
 		actor.say("%s → %s" % [what, to_st])
 	actor.react_to_work(to_st in TR_PRINT)

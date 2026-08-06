@@ -258,7 +258,7 @@ func say(text: String, to_label := "") -> void:
 ## stato diventa per pochi secondi "MESSAGGIO DA …", poi torna allo stato.
 func show_received_message(from_label: String) -> void:
 	if state_tag:
-		state_tag.show_message("MESSAGGIO DA " + from_label, 6.0)
+		state_tag.show_message(UIStrings.t("office.message_from") % from_label, 6.0)
 
 ## Entrata fisica in scena: ogni nuovo processo appare oltre la soglia,
 ## attraversa la porta e raggiunge a piedi la propria postazione. Funziona

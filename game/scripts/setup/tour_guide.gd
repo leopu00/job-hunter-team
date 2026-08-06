@@ -30,43 +30,43 @@ const PRESENTED_STOPS := [
 ## battuta della guida all'arrivo e risposta dell'ospite (fumetti in scena).
 ## L'Assistente introduce la tappa in scena; il dialogo lungo appartiene al
 ## collega del reparto, con il suo nome e il suo ritratto.
-## I "name" sono l'italiano di riferimento: a schermo arriva quello che
-## restituisce scene_for(), tradotto nelle 7 lingue.
+## I fallback sono inglesi: a schermo arriva normalmente quello che restituisce
+## scene_for(), tradotto nelle 7 lingue, ma un buco non deve contaminare i video.
 const SCENES := {
 	"assistente": {"tree": "tour_benvenuto", "portrait": "assistente",
-		"name": "L'Assistente"},
+		"name": "The Assistant"},
 	"scout": {"tree": "tour_scout", "portrait": "scout",
-		"name": "Il Ricercatore",
-		"greet": "Questo è il reparto Ricerca. Ti presento uno dei nostri Ricercatori.",
-		"reply": "Piacere. Ti racconto come cerchiamo le opportunità per te."},
+		"name": "The Researcher",
+		"greet": "This is Research. Meet one of our Researchers.",
+		"reply": "Nice to meet you. I'll show you how we look for opportunities that suit you."},
 	"analista": {"tree": "tour_analisti", "portrait": "analista",
-		"name": "L'Analista",
-		"greet": "Questo è il reparto Analisi. Una collega ti spiega che cosa succede qui.",
-		"reply": "Benvenuto. Qui trasformiamo gli annunci confusi in informazioni chiare."},
+		"name": "The Analyst",
+		"greet": "This is Analysis. One of our Analysts will show you what happens here.",
+		"reply": "Welcome. We turn cluttered listings into clear information."},
 	"scorer": {"tree": "tour_scorer", "portrait": "scorer",
-		"name": "Il Consulente",
-		"greet": "Siamo nel reparto Compatibilità. Ti presento uno dei Consulenti.",
-		"reply": "Piacere. Qui capiamo quali occasioni sono davvero adatte a te."},
+		"name": "The Consultant",
+		"greet": "This is Compatibility. Meet one of our Consultants.",
+		"reply": "Nice to meet you. Here, we work out which opportunities could truly fit you."},
 	"scrittore": {"tree": "tour_scrittori", "portrait": "scrittore",
-		"name": "Il Redattore",
-		"greet": "Questo è il reparto Candidature. Lascio la parola a un Redattore.",
-		"reply": "Benvenuto. Ti mostro come prepariamo ogni candidatura su misura."},
+		"name": "The Writer",
+		"greet": "This is Applications. I'll hand you over to one of our Writers.",
+		"reply": "Welcome. I'll show you how we tailor each application."},
 	"critico": {"tree": "tour_critici", "portrait": "critico",
-		"name": "Il Revisore",
-		"greet": "Qui c'è il Controllo qualità. Un Revisore ti racconta il suo lavoro.",
-		"reply": "Piacere. Il nostro compito è non lasciare passare candidature deboli."},
+		"name": "The Reviewer",
+		"greet": "This is Quality Check. One of our Reviewers will tell you about their work.",
+		"reply": "Nice to meet you. Our job is to catch weak applications before they reach you."},
 	"dottore": {"tree": "tour_dottore", "portrait": "dottore",
-		"name": "Il Dottore",
-		"greet": "Prima degli ultimi incontri ti presento il Dottore dell'ufficio.",
-		"reply": "Benvenuto. Io mi assicuro che la squadra continui a lavorare bene."},
+		"name": "The Doctor",
+		"greet": "Before our last two stops, meet the office Doctor.",
+		"reply": "Welcome. I help the team keep working well."},
 	"mentor": {"tree": "tour_mentor", "portrait": "mentor",
-		"name": "Il Mentor",
-		"greet": "E qui ti lascio in ottime mani. Io sono alla mia scrivania.",
-		"reply": "Accomodati. Ti aspettavo."},
+		"name": "The Mentor",
+		"greet": "And now I'll leave you in very good hands. I'll be at my desk.",
+		"reply": "Come in. I've been expecting you."},
 	"coordinatore": {"tree": "tour_coordinatore", "portrait": "coordinatore",
-		"name": "Il Coordinatore",
-		"greet": "Ultima tappa: la sala operativa.",
-		"reply": "Vi stavo aspettando."},
+		"name": "The Coordinator",
+		"greet": "Final stop: the operations room.",
+		"reply": "I've been expecting you."},
 }
 
 func requires_staged_colleague(slug: String) -> bool:
@@ -76,17 +76,17 @@ func requires_staged_colleague(slug: String) -> bool:
 ## persona. Il ritratto è quello del ruolo quando esiste (per gli altri il
 ## riquadro si nasconde con eleganza — gap d'arte tracciato in gen-art/LOG.md).
 const FREE_SCENES := {
-	"scout": {"tree": "self_scout", "portrait": "scout", "name": "Il Ricercatore"},
+	"scout": {"tree": "self_scout", "portrait": "scout", "name": "The Researcher"},
 	"analista": {"tree": "self_analisti", "portrait": "analista",
-		"name": "L'Analista"},
-	"scorer": {"tree": "self_scorer", "portrait": "scorer", "name": "Il Consulente"},
+		"name": "The Analyst"},
+	"scorer": {"tree": "self_scorer", "portrait": "scorer", "name": "The Consultant"},
 	"scrittore": {"tree": "self_scrittori", "portrait": "scrittore",
-		"name": "Il Redattore"},
-	"critico": {"tree": "self_critici", "portrait": "critico", "name": "Il Revisore"},
-	"dottore": {"tree": "self_dottore", "portrait": "dottore", "name": "Il Dottore"},
-	"mentor": {"tree": "tour_mentor", "portrait": "mentor", "name": "Il Mentor"},
+		"name": "The Writer"},
+	"critico": {"tree": "self_critici", "portrait": "critico", "name": "The Reviewer"},
+	"dottore": {"tree": "self_dottore", "portrait": "dottore", "name": "The Doctor"},
+	"mentor": {"tree": "tour_mentor", "portrait": "mentor", "name": "The Mentor"},
 	"coordinatore": {"tree": "tour_coordinatore", "portrait": "coordinatore",
-		"name": "Il Coordinatore"},
+		"name": "The Coordinator"},
 }
 
 var _index := 0
@@ -222,7 +222,7 @@ static func _range_state(idx: int, first: int, last: int) -> String:
 ## l'agente in prima persona: albero self_*, ritratto e nome del ruolo.
 ##
 ## Il nome esce di qui già nella lingua dell'interfaccia: nelle costanti resta
-## l'italiano di riferimento (una const non può chiamare t()), è
+## l'inglese di fallback (una const non può chiamare t()), è
 ## CharacterDefs.role_name a cercarlo nei dizionari. Così la targa del dialogo
 ## e la colonna delle chat dicono la stessa cosa nella stessa lingua.
 func scene_for(slug: String) -> Dictionary:
@@ -234,7 +234,7 @@ func scene_for(slug: String) -> Dictionary:
 	var localized := scene.duplicate(true)
 	localized["name"] = CharacterDefs.role_name(slug)
 	# Le battute in scena appartengono al tour, non alla targa del ruolo:
-	# la const conserva l'italiano come ripiego se un dizionario è incompleto.
+	# la const conserva l'inglese come ripiego se un dizionario è incompleto.
 	for line in ["greet", "reply"]:
 		if localized.has(line):
 			var key := "tour.guide.%s.%s" % [slug, line]
