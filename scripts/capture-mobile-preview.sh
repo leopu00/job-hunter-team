@@ -214,7 +214,12 @@ fs.writeFileSync(path, JSON.stringify({
   cookies: [],
   origins: [{
     origin,
-    localStorage: [{ name: "jht-lang", value: language }],
+    localStorage: [
+      { name: "jht-lang", value: language },
+      // The fixed cookie banner would cover the bottom of every chapter.
+      // Record a necessary-only choice in this isolated preview context.
+      { name: "jht:cookie-consent", value: "necessary" },
+    ],
   }],
 }));
 NODE
