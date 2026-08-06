@@ -1,0 +1,114 @@
+{
+  "gate": "sprite-frame-gate phase 0",
+  "role": "scout",
+  "semantic_reference": {
+    "path": "agents/scout/scout.it.md",
+    "sha256": "a5b0f7970179335a1d15e6ec5a2772219f40257e7530bb13aaae937a2e3c02e4"
+  },
+  "visual_reference": {
+    "path": "game/assets/characters/sheets/scout_a.png",
+    "sha256": "8b616df3438ac98b1a17385ca9be02d76cf17ee6fb58e18775563273be26a9fc",
+    "git_revision": "866d704c69aa2930cf6e2ecba122b1af2741b648",
+    "stable_native_crops": {
+      "idle_down": "idle_down.png",
+      "idle_up": "idle_up.png",
+      "idle_side": "idle_side.png"
+    }
+  },
+  "canvas": {
+    "width": 256,
+    "height": 384,
+    "alpha": true,
+    "pivot_feet": [
+      128,
+      360
+    ],
+    "baseline_y": 360
+  },
+  "view": {
+    "projection": "top-down 3/4",
+    "native_facing": "screen-right",
+    "runtime_scale": 0.425
+  },
+  "invariants": {
+    "face_and_head": "one profile, dark oval sunglasses, swept dark hair, warm medium complexion",
+    "wardrobe": "beige trench coat, charcoal trousers, brown oxford shoes",
+    "anatomy": "one head, one torso, two arms, two hands, two legs, two feet; no detached components",
+    "edge_and_padding": "painterly opaque source edges; full 256x384 canvas retained; max opaque y=359"
+  },
+  "landmarks_native_px": {
+    "head_center": {
+      "x": 126,
+      "y": 78,
+      "tolerance": 2
+    },
+    "glasses_center": {
+      "x": 151,
+      "y": 90,
+      "tolerance": 2
+    },
+    "shoulder_center": {
+      "x": 130,
+      "y": 126,
+      "tolerance": 3
+    },
+    "hip_center": {
+      "x": 130,
+      "y": 235,
+      "tolerance": 3
+    },
+    "support_contact": {
+      "x": 128,
+      "y": 359,
+      "tolerance": 1
+    }
+  },
+  "phase_map": [
+    {
+      "frame": "F00",
+      "phase": "contact A",
+      "support": "lead/right heel",
+      "counterphase": "left arm forward"
+    },
+    {
+      "frame": "F01",
+      "phase": "load A",
+      "support": "right",
+      "counterphase": "root lowest"
+    },
+    {
+      "frame": "F02",
+      "phase": "passing",
+      "support": "right",
+      "counterphase": "left knee forward"
+    },
+    {
+      "frame": "F03",
+      "phase": "contact B",
+      "support": "lead/left heel",
+      "counterphase": "right arm forward"
+    },
+    {
+      "frame": "F04",
+      "phase": "load B",
+      "support": "left",
+      "counterphase": "root lowest"
+    },
+    {
+      "frame": "F05",
+      "phase": "passing",
+      "support": "left",
+      "counterphase": "right knee forward"
+    }
+  ],
+  "palette": {
+    "path": "palette-rgba.json",
+    "sha256": "81cf7567bba75ca0590a721c43053d1a10a1ee412853bce29b608ea9e4cb8a95"
+  },
+  "evidence": {
+    "card": "reference-card.png",
+    "sha256": "32f92782ef8b22a1d1c5835da850c1bb46dde2eb3abdd9990a517019a0630752"
+  },
+  "source_policy": "Existing canonical runtime pixels only. No image generation, redrawing, retouching, scaling, or trimming.",
+  "next_submission": "F00 only, after written REFERENCE PASS."
+}
