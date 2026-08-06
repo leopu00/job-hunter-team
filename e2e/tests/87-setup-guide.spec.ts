@@ -105,3 +105,35 @@ test("nessuna chiave di traduzione grezza a schermo", async ({
     await context.close();
   }
 });
+
+test("il tedesco non sfonda il layout del telefono", async ({
+  browser,
+}, testInfo) => {
+  // Prova del nove di W03: il tedesco è la lingua più lunga del catalogo,
+  // e una riga che sfonda lo fa lì per prima. Su un telefono da 390 px non
+  // c'è margine da sprecare.
+  const context = await browser.newContext({
+    baseURL: testInfo.project.use.baseURL,
+    viewport: PHONE,
+  });
+  await context.addInitScript(() =>
+    window.localStorage.setItem("jht-lang", "de"),
+  );
+  const page = await context.newPage();
+
+  try {
+    await page.goto("/setup-guide", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("h1")).toBeVisible();
+
+    const overflowing = await page.evaluate(() => {
+      const limit = window.innerWidth + 1;
+      return [...document.querySelectorAll("[data-setup-guide] *")]
+        .filter((el) => el.getBoundingClientRect().right > limit)
+        .slice(0, 5)
+        .map((el) => el.tagName + "." + String(el.className).slice(0, 40));
+    });
+    expect(overflowing, "elementi oltre il bordo destro").toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
