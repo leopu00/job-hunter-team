@@ -32,7 +32,8 @@ def test_mobile_preview_route_is_required_and_not_hardcoded():
     assert '00-index-full.png' in source
     assert 'id="chapter-' in source
     assert "/setup-guide" not in source
-    assert 'localStorage: [{ name: "jht-lang", value: language }]' in source
+    assert '{ name: "jht-lang", value: language }' in source
+    assert '{ name: "jht:cookie-consent", value: "necessary" }' in source
     assert '--load-storage "$STORAGE_STATE"' in source
 
 
@@ -148,7 +149,10 @@ printf 'synthetic-png' >"$destination"
         "origins": [
             {
                 "origin": "http://preview.test",
-                "localStorage": [{"name": "jht-lang", "value": "fr"}],
+                "localStorage": [
+                    {"name": "jht-lang", "value": "fr"},
+                    {"name": "jht:cookie-consent", "value": "necessary"},
+                ],
             }
         ],
     }
