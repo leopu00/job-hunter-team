@@ -89,6 +89,8 @@ func _poll_request() -> void:
 	match action:
 		"foreground":
 			_foreground_and_ack.call_deferred(request_id)
+		"background":
+			_background_and_ack.call_deferred(request_id)
 		"stop":
 			_write_json(_path("ack-%s.json" % request_id), {
 				"schema": 1, "request_id": request_id,
@@ -118,6 +120,21 @@ func _foreground_and_ack(request_id: String) -> void:
 		"schema": 1, "request_id": request_id,
 		"instance_id": instance_id,
 		"ok": visible and DisplayServer.window_is_focused(),
+	})
+
+
+func _background_and_ack(request_id: String) -> void:
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MINIMIZED)
+	# Come il foreground, anche la minimizzazione e' best-effort del window
+	# manager: l'exit code CLI deve riflettere lo stato osservato.
+	var minimize_deadline := Time.get_ticks_msec() + 1500
+	while DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_MINIMIZED \
+			and Time.get_ticks_msec() < minimize_deadline:
+		await get_tree().process_frame
+	_write_json(_path("ack-%s.json" % request_id), {
+		"schema": 1, "request_id": request_id,
+		"instance_id": instance_id,
+		"ok": DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_MINIMIZED,
 	})
 
 

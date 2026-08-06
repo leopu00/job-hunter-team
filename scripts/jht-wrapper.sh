@@ -420,9 +420,14 @@ game_remove_request_if_owned() {
 game_request() {
   local action="$1" request_id="" ack="" deadline="" target_pid="" target_instance="" code=1
   if ! game_load_live_state; then
-    if [ "$action" = "stop" ]; then printf 'game already stopped\n'; return 0; fi
-    game_start || return $?
-    game_load_live_state || { err "client avviato senza stato controllabile"; return 1; }
+    case "$action" in
+      stop) printf 'game already stopped\n'; return 0 ;;
+      background) err "client non attivo; usa 'jht game start'"; return 1 ;;
+      *)
+        game_start || return $?
+        game_load_live_state || { err "client avviato senza stato controllabile"; return 1; }
+        ;;
+    esac
   fi
   target_pid="$GAME_STATE_PID"; target_instance="$GAME_STATE_INSTANCE"
   request_id="$(game_new_nonce)"
@@ -445,10 +450,18 @@ game_request() {
       && [ "$(game_json_string "$ack" request_id || true)" = "$request_id" ] \
       && [ "$(game_json_string "$ack" instance_id || true)" = "$target_instance" ]; then
       if [ "$(game_json_bool "$ack" ok || true)" = "true" ]; then
-        printf 'gui opened pid=%s\n' "$target_pid"
+        if [ "$action" = "background" ]; then
+          printf 'game background pid=%s; client and team still running\n' "$target_pid"
+        else
+          printf 'gui opened pid=%s\n' "$target_pid"
+        fi
         code=0
       else
-        err "il sistema operativo ha rifiutato il foreground della finestra"
+        if [ "$action" = "background" ]; then
+          err "il sistema operativo ha rifiutato la minimizzazione della finestra"
+        else
+          err "il sistema operativo ha rifiutato il foreground della finestra"
+        fi
         code=1
       fi
       break
@@ -462,11 +475,30 @@ game_request() {
   return "$code"
 }
 
+game_restart() {
+  local previous_instance="" previous_pid=""
+  if game_load_live_state; then
+    previous_instance="$GAME_STATE_INSTANCE"
+    previous_pid="$GAME_STATE_PID"
+  fi
+  game_request stop || return $?
+  game_start || return $?
+  game_load_live_state || { err "client riavviato senza stato controllabile"; return 1; }
+  if [ -n "$previous_instance" ] && [ "$GAME_STATE_INSTANCE" = "$previous_instance" ]; then
+    err "il riavvio non ha sostituito l'istanza precedente"
+    return 1
+  fi
+  printf 'game restarted old_pid=%s pid=%s instance=%s; team still running\n' \
+    "${previous_pid:-none}" "$GAME_STATE_PID" "$GAME_STATE_INSTANCE"
+}
+
 game_help() {
-  printf '%s\n' 'Usage: jht game <start|stop|status>' '' \
+  printf '%s\n' 'Usage: jht game <start|stop|status|restart|background>' '' \
     '  start    Avvia il client in modo idempotente' \
     '  stop     Chiude il client e lascia il team al lavoro' \
-    '  status   Mostra running/stopped, PID e instance_id'
+    '  status   Mostra running/stopped, PID e instance_id' \
+    '  restart  Riavvia il client in modo cooperativo; il team continua' \
+    '  background  Minimizza un client attivo senza fermarlo'
 }
 
 gui_help() {
@@ -483,12 +515,16 @@ handle_game_command() {
       start) printf '%s\n' 'Usage: jht game start' 'Avvia il client in modo idempotente.'; return 0 ;;
       stop) printf '%s\n' 'Usage: jht game stop' 'Chiude il client e lascia il team al lavoro.'; return 0 ;;
       status) printf '%s\n' 'Usage: jht game status' 'Mostra lo stato del client desktop.'; return 0 ;;
+      restart) printf '%s\n' 'Usage: jht game restart' 'Riavvia il client in modo cooperativo; il team continua.'; return 0 ;;
+      background) printf '%s\n' 'Usage: jht game background' 'Minimizza un client attivo senza fermarlo.'; return 0 ;;
     esac
   fi
   if [ "$#" -ne 1 ]; then err "opzioni game non riconosciute"; return 2; fi
   case "$1" in
     start) game_start ;;
     stop) game_request stop ;;
+    restart) game_restart ;;
+    background) game_request background ;;
     status)
       if game_load_live_state; then
         printf 'game running pid=%s instance=%s\n' "$GAME_STATE_PID" "$GAME_STATE_INSTANCE"

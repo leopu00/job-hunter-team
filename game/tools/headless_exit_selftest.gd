@@ -323,6 +323,7 @@ func _check_cli_detach_contract() -> void:
 			"i self-test non devono pubblicare stato o consumare request")
 	for seam in ["target_instance_id", "instance_id", "request_id",
 			"window_move_to_foreground", "window_request_attention",
-			"window_is_focused", "JHT_GAME_CONTROL_DIR",
+			"window_is_focused", "WINDOW_MODE_MINIMIZED",
+			'"background"', "_background_and_ack", "JHT_GAME_CONTROL_DIR",
 			"get_cmdline_user_args"]:
 		_check("control plane: " + seam, control.contains(seam), "seam assente")
