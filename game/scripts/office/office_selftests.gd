@@ -2414,7 +2414,8 @@ func _chat_ui_selftest() -> void:
 	if coordinator and assistant:
 		office.deliver_chat("coordinatore", "assistente", "Passaggio completato")
 	var received_ok := assistant != null \
-			and assistant.state_tag.debug_label().begins_with("MESSAGGIO DA")
+			and assistant.state_tag.debug_label().begins_with(
+					UIStrings.t("office.message_from").split("%s")[0])
 	var ok: bool = badge_ok and menu_ok and read_ok and close_ok and reopen_ok \
 			and toggle_close_ok and overlap_ok and received_ok
 	print("CHAT-UI-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify({
