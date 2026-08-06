@@ -4012,9 +4012,17 @@ func _build_team() -> void:
 	if not BackendBus.agents_updated.is_connected(_on_team_refresh):
 		BackendBus.agents_updated.connect(_on_team_refresh)
 	_listen_setup()
+	# Setup e liveness sono due verità distinte. Un avvio esplicito dalla CLI può
+	# avere sessioni tmux vive mentre piano, profilo o orari sono ancora da
+	# completare: in quel caso il vecchio banner "TEAM NON ATTIVO" contraddiceva
+	# sia `jht team status` sia il roster che compariva subito sotto. Continuiamo
+	# a mostrare il richiamo alla checklist, ma senza negare un team osservato.
+	var running := SetupService._agents_have_operational_team(BackendBus.agents) or bool(
+			SetupService.status.get("team_running", false))
 	if not bool(SetupService.status.get("ready", false)):
 		var banner := Button.new()
-		banner.text = UIStrings.t("setup.team_locked") % int(
+		var banner_key := "setup.cta" if running else "setup.team_locked"
+		banner.text = UIStrings.t(banner_key) % int(
 				SetupService.status.get("completed", 0))
 		banner.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		banner.add_theme_font_size_override("font_size", 15)
@@ -4025,8 +4033,6 @@ func _build_team() -> void:
 	var controls := HBoxContainer.new()
 	controls.add_theme_constant_override("separation", 10)
 	_content.add_child(controls)
-	var running := not BackendBus.agents.is_empty() or bool(
-			SetupService.status.get("team_running", false))
 	var team_busy := SetupService.busy() and SetupService.current_action == "team"
 	var primary := Button.new()
 	# Mentre il comando gira l'etichetta dice COSA sta succedendo (avvio o
