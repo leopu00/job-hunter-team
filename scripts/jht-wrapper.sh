@@ -166,6 +166,13 @@ ensure_up() {
 handle_host_download() {
   local host_output="" container_tmp="" host_tmp="" arg next
   local -a rewritten=()
+  local -a download_env=()
+
+  # Seam esplicita per mirror/test di integrita': resta confinata al download
+  # e permette al comando HOST di esercitare anche un manifest corrotto.
+  if [ -n "${JHT_RELEASE_BASE_URL:-}" ]; then
+    download_env=(-e "JHT_RELEASE_BASE_URL=$JHT_RELEASE_BASE_URL")
+  fi
 
   while [ "$#" -gt 0 ]; do
     arg="$1"
@@ -205,7 +212,7 @@ handle_host_download() {
   # Senza output esplicito il default `/jht_user/downloads` e' gia un bind
   # mount visibile sul computer host: nessuna copia aggiuntiva necessaria.
   if [ -z "$host_output" ]; then
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" \
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "${download_env[@]}" \
       "$CONTAINER" node "$NODE_ENTRY" download "${rewritten[@]}"
     return $?
   fi
@@ -218,7 +225,7 @@ handle_host_download() {
   container_tmp="/tmp/jht-download-$$-${RANDOM:-0}"
   rewritten+=(--output "$container_tmp")
   local code
-  if docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" \
+  if docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "${download_env[@]}" \
       "$CONTAINER" node "$NODE_ENTRY" download "${rewritten[@]}"; then
     code=0
   else

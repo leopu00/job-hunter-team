@@ -121,5 +121,15 @@ def test_powershell_wrapper_has_same_no_clobber_bridge_contract():
         "[IO.File]::Move($hostTemp, $hostOutput)",
         "Remove-Item -LiteralPath $hostTemp",
         "'download' {",
+        'JHT_RELEASE_BASE_URL=$env:JHT_RELEASE_BASE_URL',
     ):
         assert seam in source
+
+
+def test_bash_wrapper_forwards_release_base_url_only_for_download():
+    source = BASH_WRAPPER.read_text()
+    function = source[source.index("handle_host_download()") : source.index(
+        "# ── Upgrade runtime", source.index("handle_host_download()")
+    )]
+    assert 'download_env=(-e "JHT_RELEASE_BASE_URL=$JHT_RELEASE_BASE_URL")' in function
+    assert function.count('"${download_env[@]}"') == 2
