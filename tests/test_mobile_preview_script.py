@@ -29,3 +29,31 @@ def test_mobile_preview_route_is_required_and_not_hardcoded():
     assert '00-index-full.png' in source
     assert 'id="chapter-' in source
     assert "/setup-guide" not in source
+
+
+def test_stale_bundle_fails_before_network_and_is_preserved(tmp_path):
+    output = tmp_path / "preview"
+    output.mkdir()
+    stale = output / "stale.png"
+    stale.write_bytes(b"previous-run-evidence")
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(SCRIPT),
+            "--route",
+            "/unreachable",
+            "--base-url",
+            "http://127.0.0.1:1",
+            "--output-dir",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=2,
+    )
+
+    assert result.returncode != 0
+    assert "output directory contains an earlier bundle" in result.stderr
+    assert "no dev server responded" not in result.stderr
+    assert stale.read_bytes() == b"previous-run-evidence"
