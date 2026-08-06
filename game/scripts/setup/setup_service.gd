@@ -1836,10 +1836,9 @@ static func _local_container_exec(posix_command: String) -> String:
 
 
 func open_cloud_login(prefer_google := false) -> void:
-	open_technical_terminal("cloud", "Account e cloud",
-			("Apri il link, scegli ACCEDI CON GOOGLE, inserisci il codice e approva questo dispositivo. " \
-			+ "Il pairing prosegue automaticamente.") if prefer_google else \
-			"Apri il link, accedi all'account, inserisci il codice e approva questo dispositivo. Il pairing prosegue automaticamente.",
+	open_technical_terminal("cloud", UIStrings.t("setup.cloud_login_title"),
+			UIStrings.t("setup.cloud_login_google_hint") if prefer_google else \
+			UIStrings.t("setup.cloud_login_hint"),
 			PackedStringArray(["node", "/app/cli/bin/jht.js", "cloud", "login"]))
 
 
