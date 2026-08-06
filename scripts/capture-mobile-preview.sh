@@ -18,12 +18,14 @@ BASE_URL=""
 BASE_URL_EXPLICIT=0
 OUTPUT_DIR="$REPO_ROOT/screenshots/mobile-preview"
 LANGUAGE="en-US"
+SITE_LANG="en"
 WIDTH=390
 HEIGHT=844
 WAIT_MS=1200
 MAX_CHAPTERS=8
 CHAPTERS=()
 SERVER_PID=""
+TEMP_DIR=""
 
 usage() {
     cat <<'EOF'
@@ -40,7 +42,7 @@ Capture:
   --output-dir DIR         Stable output directory (default: screenshots/mobile-preview)
   --chapter ID             Capture this chapter anchor; repeatable
   --max-chapters N         Auto-capture at most N discovered chapters (default: 8)
-  --lang LOCALE            Browser language (default: en-US)
+  --lang LOCALE            Browser and site language (default: en-US)
   --width PX               Viewport width (default: 390)
   --height PX              Viewport height (default: 844)
   --wait-ms MS             Settle time after navigation (default: 1200)
@@ -127,6 +129,11 @@ done
     || fail "--width and --height must be numeric"
 [[ "$WAIT_MS" =~ ^[0-9]+$ && "$MAX_CHAPTERS" =~ ^[0-9]+$ ]] \
     || fail "--wait-ms and --max-chapters must be numeric"
+SITE_LANG=$(printf '%s' "$LANGUAGE" | sed -E 's/[-_].*$//' | tr '[:upper:]' '[:lower:]')
+case "$SITE_LANG" in
+    en|it|hu|es|de|fr|pt) ;;
+    *) fail "unsupported site language: $LANGUAGE (use en, it, hu, es, de, fr or pt)" ;;
+esac
 
 if [[ "$OUTPUT_DIR" != /* ]]; then
     OUTPUT_DIR="$REPO_ROOT/$OUTPUT_DIR"
@@ -152,6 +159,9 @@ cleanup() {
     if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
         kill "$SERVER_PID" 2>/dev/null || true
         wait "$SERVER_PID" 2>/dev/null || true
+    fi
+    if [[ -n "$TEMP_DIR" && -d "$TEMP_DIR" ]]; then
+        find "$TEMP_DIR" -depth -delete
     fi
 }
 trap cleanup EXIT INT TERM
@@ -184,12 +194,35 @@ else
     server_ready || fail "next dev did not become ready in 60 seconds"
 fi
 
-curl -fsS --max-time 10 "$PAGE_URL" >/dev/null \
+# La prima visita può compilare la route su un Next dev appena avviato. Il
+# processo è già vivo, ma 10 secondi non bastano sempre su una cache fredda.
+curl -fsS --max-time 30 "$PAGE_URL" >/dev/null \
     || fail "route did not return success: $PAGE_URL"
+
+# LandingI18n intentionally defaults to English and reads `jht-lang` from
+# localStorage; browser locale alone does not switch the site's catalog. Seed
+# an isolated Playwright storage state so `--lang it-IT` (and the other six
+# locales) changes both navigator.language and the actual rendered copy.
+command -v node >/dev/null 2>&1 || fail "node is required to prepare browser language state"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/jht-mobile-preview.XXXXXX")
+STORAGE_STATE="$TEMP_DIR/storage.json"
+node - "$STORAGE_STATE" "$BASE_URL" "$SITE_LANG" <<'NODE'
+const fs = require("node:fs");
+const [path, baseUrl, language] = process.argv.slice(2);
+const origin = new URL(baseUrl).origin;
+fs.writeFileSync(path, JSON.stringify({
+  cookies: [],
+  origins: [{
+    origin,
+    localStorage: [{ name: "jht-lang", value: language }],
+  }],
+}));
+NODE
 
 PW=(npx --yes playwright@1.61.0 screenshot
     --browser chromium
     --lang "$LANGUAGE"
+    --load-storage "$STORAGE_STATE"
     --color-scheme dark
     --viewport-size "$WIDTH,$HEIGHT"
     --wait-for-selector main
@@ -209,7 +242,9 @@ capture() {
 capture "$PAGE_URL" "$OUTPUT_DIR/00-index-full.png" --full-page
 
 if [[ ${#CHAPTERS[@]} -eq 0 ]]; then
-    HTML=$(curl -fsS --max-time 10 "$PAGE_URL")
+    if ! HTML=$(curl -fsS --max-time 30 "$PAGE_URL"); then
+        fail "could not read route HTML to discover chapters: $PAGE_URL"
+    fi
     while IFS= read -r chapter_id; do
         [[ -n "$chapter_id" && "$chapter_id" != *-title ]] || continue
         CHAPTERS+=("$chapter_id")
@@ -241,7 +276,8 @@ fi
     echo "route=$ROUTE"
     echo "base_url=$BASE_URL"
     echo "viewport=${WIDTH}x${HEIGHT}"
-    echo "language=$LANGUAGE"
+    echo "browser_language=$LANGUAGE"
+    echo "site_language=$SITE_LANG"
     find "$OUTPUT_DIR" -maxdepth 1 -type f -name '*.png' -print \
         | sed "s#^$OUTPUT_DIR/##" \
         | sort
