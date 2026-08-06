@@ -6,6 +6,7 @@ extends SceneTree
 const LanguagePicker := preload("res://scripts/ui/language_picker.gd")
 const EXPECTED_LANGS := ["it", "en", "hu", "es", "de", "fr", "pt"]
 const TEST_LANG_CFG := "user://language_picker_selftest.cfg"
+const TITLE_SOURCE := "res://scripts/title.gd"
 
 var _failures: Array[String] = []
 var _confirmed := ""
@@ -24,6 +25,9 @@ func _init() -> void:
 			not UIStrings.language_choice_required(false, "fr"))
 	_check("override non valido non salta il picker",
 			UIStrings.language_choice_required(false, "xx"))
+	var title_source := FileAccess.get_file_as_string(TITLE_SOURCE)
+	_check("titolo senza claim prototipo/backend incondizionato",
+			not title_source.contains("title.footer"))
 	_check("scrive la scelta su preferenza isolata",
 			UIStrings.set_lang("de", true, TEST_LANG_CFG))
 	var saved_after_restart := UIStrings.saved_language(TEST_LANG_CFG)

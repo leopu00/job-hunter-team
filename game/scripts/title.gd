@@ -213,12 +213,6 @@ func _build_title() -> void:
 	_blink.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_blink)
 
-	var footer := TerminalTheme.label(UIStrings.t("title.footer"), 15, Palette.DIM)
-	footer.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	footer.position = Vector2(28, -40)
-	footer.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	add_child(footer)
-
 func _process(delta: float) -> void:
 	_time += delta
 	if not is_instance_valid(_blink):
