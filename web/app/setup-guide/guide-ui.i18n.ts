@@ -116,15 +116,6 @@ export const GUIDE_UI: Record<string, GuideText> = {
     pt: "Voltar aos capítulos",
     hu: "Vissza a fejezetekhez",
   },
-  step_of_chapter: {
-    en: "in this chapter",
-    it: "in questo capitolo",
-    es: "en este capítulo",
-    fr: "dans ce chapitre",
-    de: "in diesem Kapitel",
-    pt: "neste capítulo",
-    hu: "ebben a fejezetben",
-  },
   heads_up: {
     en: "Heads-up",
     it: "Attenzione",

@@ -65,10 +65,19 @@ test("il selettore OS cambia le fasi mostrate", async ({
     await page.goto("/setup-guide?os=macos", {
       waitUntil: "domcontentloaded",
     });
+    // La pagina dichiara da sé quando il selettore è vivo: prima
+    // dell'idratazione un click si perde e il test fallirebbe per un
+    // motivo che non c'entra con la guida.
+    await expect(page.locator("[data-guide-ready='true']")).toBeAttached();
     await expect(page.locator("#phase-open-macos")).toBeVisible();
     await expect(page.locator("#phase-open-windows")).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Windows" }).click();
+    // Il click va aspettato sullo stato del bottone, non solo sulle fasi:
+    // se arriva prima che React abbia idratato, il selettore non ha ancora
+    // il suo handler e il test fallisce per un motivo che non c'entra.
+    const windows = page.getByRole("button", { name: "Windows" });
+    await windows.click();
+    await expect(windows).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("#phase-open-windows")).toBeVisible();
     await expect(page.locator("#phase-open-macos")).toHaveCount(0);
 
