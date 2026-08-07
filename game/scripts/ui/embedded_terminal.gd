@@ -927,7 +927,10 @@ static func _cloud_pairing_events(raw: String) -> Array[Dictionary]:
 		var ending := raw.find("\n", start)
 		if ending < 0:
 			break  # frame ancora parziale: arriverà al prossimo giro
-		var parsed: Variant = JSON.parse_string(raw.substr(start, ending - start).strip_edges())
+		var parser := JSON.new()
+		var parse_error := parser.parse(
+				raw.substr(start, ending - start).strip_edges())
+		var parsed: Variant = parser.data if parse_error == OK else null
 		if parsed is Dictionary and str(parsed.get("event", "")) != "":
 			events.append(parsed)
 		cursor = ending + 1
