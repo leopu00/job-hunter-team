@@ -70,6 +70,13 @@ while IFS= read -r file; do
         continue
     fi
 
+    # Unici media pubblici binari approvati per la home. L'eccezione resta sui
+    # path esatti: qualunque altro MP4/VTT continua a essere bloccato. Hash,
+    # peso e provenienza di questi file sono verificati dal test del manifest.
+    if [[ "$file" == "web/public/media/home-video-r4-web.mp4" || "$file" == "web/public/media/home-video-r4-music.vtt" ]]; then
+        continue
+    fi
+
     # Sorgente D2 già tracciata del diagramma d'architettura: è testo
     # rigenerabile da D2, non un asset binario arbitrario.
     if [[ "$file" == "docs/assets/infra.d2" ]]; then
