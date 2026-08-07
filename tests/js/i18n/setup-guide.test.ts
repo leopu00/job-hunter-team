@@ -294,6 +294,64 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
     }
   });
 
+  it("W02-W04 e il segnaposto privacy-safe sono tradotti davvero", () => {
+    const phases = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).filter(
+      (phase) =>
+        [
+          "sign-in-with-google",
+          "review-permissions",
+          "verify-dashboard-sync",
+        ].includes(phase.id),
+    );
+    expect(phases.map((phase) => phase.id)).toEqual([
+      "sign-in-with-google",
+      "review-permissions",
+      "verify-dashboard-sync",
+    ]);
+
+    const texts = phases.flatMap((phase) => [
+      phase.title,
+      phase.body,
+      ...(phase.links ?? []).map((link) => link.label),
+      ...(phase.screenFallback
+        ? [phase.screenFallback.title, phase.screenFallback.body]
+        : []),
+    ]);
+    for (const text of texts) {
+      for (const locale of LOCALES.filter((locale) => locale !== "en")) {
+        expect(text[locale], locale).not.toBe(text.en);
+      }
+    }
+  });
+
+  it("W03 distingue login Google e Team Gmail in tutte le lingue", () => {
+    const phase = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).find(
+      (candidate) => candidate.id === "review-permissions",
+    )!;
+    const separateGrant = {
+      en: "two separate grants",
+      it: "due autorizzazioni distinte",
+      es: "dos autorizaciones independientes",
+      fr: "deux autorisations distinctes",
+      de: "zwei getrennte Berechtigungen",
+      pt: "duas autorizações distintas",
+      hu: "két külön engedélyt",
+    } as const;
+    for (const locale of LOCALES) {
+      const body = phase.body[locale];
+      for (const exactScope of ["OpenID", "email", "profile"]) {
+        expect(body, `${locale}: scope ${exactScope}`).toContain(exactScope);
+      }
+      expect(body, `${locale}: Team Gmail`).toContain("Team Gmail");
+      expect(body, `${locale}: grant separati`).toContain(
+        separateGrant[locale],
+      );
+    }
+    expect((phase.links ?? []).map((link) => link.href)).toContain(
+      "/docs/guides/team-gmail",
+    );
+  });
+
   it("i requisiti tengono la baseline VPS separata e linkata", () => {
     // La pagina VPS già pubblicata dichiara 4 GB e 2 vCPU: senza dire che
     // è la baseline di un server dedicato, le due pagine sembrano in
