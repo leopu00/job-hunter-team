@@ -157,6 +157,9 @@ idle_pace|script|gate|any|-|tools/idle_pace_selftest.gd|-
 # Windows, cioe' un bug introdotto da chi sviluppa su macOS o Linux passava il
 # semaforo di due OS su tre.
 payload_syntax|python|gate|any|-|tools/python_payload_syntax_test.py|-
+# Il tag non basta: i tre asset impacchettati devono avviare la title vera con
+# versione attesa derivata dal tag, ed esporre nei log versione e PASS.
+title_artifact_contract|python|gate|any|-|tools/title_artifact_contract_selftest.py|TITLE-ARTIFACT-CONTRACT-TEST PASS
 # Il path artifact arriva dal DB, quindi dal container: soltanto le quattro
 # root documenti canoniche, nessuna traversal/symlink, tipo dichiarato e PDF
 # attestato prima che un byte possa raggiungere cache o viewer dell'host.
