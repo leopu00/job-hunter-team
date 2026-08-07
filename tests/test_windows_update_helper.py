@@ -172,6 +172,19 @@ function Get-LockSnapshot {
   } | ConvertTo-Json -Compress)
 }
 
+function Get-StateSnapshot {
+  param([string]$StateRoot)
+  $sections = [Security.AccessControl.AccessControlSections]::All
+  $directory = [IO.DirectoryInfo]::new($StateRoot)
+  $children = @(Get-ChildItem -LiteralPath $StateRoot -Force |
+    Sort-Object { $_.Name } |
+    ForEach-Object { $_.Name + '|' + ([int]$_.Attributes).ToString() })
+  return ([ordered]@{
+    directory_sddl = $directory.GetAccessControl($sections).GetSecurityDescriptorSddlForm($sections)
+    children = $children
+  } | ConvertTo-Json -Compress)
+}
+
 function Invoke-LockCase {
   param([ValidateSet('clean','active','stale')][string]$Case)
   $script:StateRoot = Join-Path $root $Case
@@ -226,10 +239,109 @@ function Invoke-LockCase {
   }
 }
 
+function Invoke-LockFailureCase {
+  param([ValidateSet('init','write','promote')][string]$Case)
+  $script:StateRoot = Join-Path $root ('failure-' + $Case)
+  $script:LockPath = Join-Path $script:StateRoot '.update.lock'
+  $script:Nonce = 'e' * 32
+  Initialize-ProtectedDirectory $script:StateRoot
+  $beforeFailure = Get-StateSnapshot $script:StateRoot
+  $productionInitialize = ${function:Initialize-ProtectedDirectory}
+  $productionWrite = ${function:Write-AtomicJson}
+  try {
+    if ($Case -ceq 'init') {
+      Set-Item -Path Function:\Initialize-ProtectedDirectory -Value {
+        param(
+          [string]$Path,
+          [switch]$RequireNew,
+          [ref]$CreatedByInvocation = $null)
+        if (-not $RequireNew) { throw 'unexpected injected init call' }
+        New-Item -ItemType Directory -Path $Path -ErrorAction Stop | Out-Null
+        if ($null -ne $CreatedByInvocation) { $CreatedByInvocation.Value = $true }
+        throw 'injected lock claim init failure'
+      }
+    } elseif ($Case -ceq 'write') {
+      Set-Item -Path Function:\Write-AtomicJson -Value {
+        param([string]$Path, [hashtable]$Value)
+        throw 'injected lock claim write failure'
+      }
+    } else {
+      $script:LockPath = Join-Path $script:StateRoot 'missing-parent\.update.lock'
+    }
+    try {
+      Acquire-Lock
+      throw 'injected production lock failure was accepted'
+    } catch {
+      $expected = if ($Case -ceq 'init') { 'lock_claim_init' } `
+        elseif ($Case -ceq 'write') { 'lock_claim_write' } `
+        else { 'lock_exhausted' }
+      if ($script:FailureCode -cne $expected) { throw }
+    }
+    if ((Get-StateSnapshot $script:StateRoot) -cne $beforeFailure) {
+      throw 'failed production claimant mutated state authority'
+    }
+    Assert-NoLockResidue $script:StateRoot
+    [Console]::Out.WriteLine(
+      'WINDOWS-LOCK-SEAM PASS mode=failure-' + $Case +
+      ' code=' + $script:FailureCode)
+  } catch {
+    [Console]::Error.WriteLine(
+      'WINDOWS-LOCK-SEAM ERROR mode=failure-' + $Case +
+      ' code=' + $script:FailureCode)
+    exit 31
+  } finally {
+    Set-Item -Path Function:\Initialize-ProtectedDirectory -Value $productionInitialize
+    Set-Item -Path Function:\Write-AtomicJson -Value $productionWrite
+    Remove-Item -LiteralPath $script:StateRoot -Recurse -Force `
+      -ErrorAction SilentlyContinue
+  }
+}
+
 try {
   foreach ($case in @('clean','active','stale')) { Invoke-LockCase $case }
+  foreach ($case in @('init','write','promote')) { Invoke-LockFailureCase $case }
 } finally {
   Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+}
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
+INITIALIZE_COLLISION_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @(
+  'Get-FileSystemParent', 'Assert-NoReparseAncestors',
+  'Assert-NoForeignWriteAcl', 'Assert-OwnerAndAcl', 'Assert-CurrentOwner',
+  'Initialize-ProtectedDirectory')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) {
+  throw 'production initialize functions are missing'
+}
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$script:FailureCode = 'lock_claim_init'
+$created = $false
+try {
+  Initialize-ProtectedDirectory $env:JHT_TEST_COLLISION_PATH `
+    -RequireNew -CreatedByInvocation ([ref]$created)
+  throw 'preexisting protected node was adopted'
+} catch {
+  if ($script:FailureCode -cne 'lock_claim_init' -or $created) { throw }
+  [Console]::Error.WriteLine(
+    'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=lock ' +
+    'code=' + $script:FailureCode)
+  exit 23
 }
 '@
 & ([ScriptBlock]::Create($body + "`n" + $probe))
@@ -291,6 +403,18 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
     assert "if ($Node -is [IO.FileInfo]) { return $Node.Directory }" in source
     assert "if ($Node -is [IO.DirectoryInfo]) { return $Node.Parent }" in source
     assert "$parent = $probe.Parent" not in source
+    initialize = source[
+        source.index("function Initialize-ProtectedDirectory") : source.index(
+            "function Protect-File"
+        )
+    ]
+    assert "New-Item -ItemType Directory -Path $Path -Force" not in initialize
+    assert "-CreatedByInvocation ([ref]$claimCreated)" in source
+    assert initialize.index("Assert-CurrentOwner $Path") < initialize.index(
+        "if (-not $preexisting) { $acl.SetOwner("
+    ) < initialize.index(
+        "$acl.SetAccessRuleProtection("
+    ) < initialize.index("Assert-OwnerAndAcl $Path -Directory")
     assert "Get-Process -ErrorAction SilentlyContinue" not in source
     assert source.index("Write-AtomicJson $FloorPath") < source.index(
         "Install-CandidateHelper $bundle"
@@ -1423,9 +1547,78 @@ def test_production_lock_clean_active_and_stale_seams_leave_no_residue(
         "WINDOWS-LOCK-SEAM PASS mode=clean code=lock_claim_promote",
         "WINDOWS-LOCK-SEAM PASS mode=active code=lock_existing_validate",
         "WINDOWS-LOCK-SEAM PASS mode=stale code=lock_claim_promote",
+        "WINDOWS-LOCK-SEAM PASS mode=failure-init code=lock_claim_init",
+        "WINDOWS-LOCK-SEAM PASS mode=failure-write code=lock_claim_write",
+        "WINDOWS-LOCK-SEAM PASS mode=failure-promote code=lock_exhausted",
     ]
     assert _authority_snapshot(tmp_path) == before
     assert not lock_root.exists()
+
+
+@pytest.mark.parametrize("collision_kind", ["foreign-owner", "foreign-ace", "reparse"])
+def test_production_initialize_rejects_preexisting_collision_without_mutation(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    collision_kind: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    collision = tmp_path / "claim-collision"
+    if collision_kind == "reparse":
+        target = tmp_path / "junction-target"
+        target.mkdir()
+        _run_powershell_command(
+            "New-Item -ItemType Junction -Path $env:JHT_TEST_JUNCTION_PATH "
+            "-Target $env:JHT_TEST_JUNCTION_TARGET | Out-Null",
+            env_values={
+                "JHT_TEST_JUNCTION_PATH": str(collision),
+                "JHT_TEST_JUNCTION_TARGET": str(target),
+            },
+        )
+    else:
+        collision.mkdir()
+        _set_current_owner(collision)
+        if collision_kind == "foreign-owner":
+            _run_powershell_command(
+                "$item=[IO.DirectoryInfo]::new($env:JHT_TEST_COLLISION_PATH);"
+                "$acl=$item.GetAccessControl("
+                "[Security.AccessControl.AccessControlSections]::All);"
+                "$acl.SetOwner([Security.Principal.SecurityIdentifier]::new("
+                "'S-1-5-32-544'));$item.SetAccessControl($acl)",
+                env_values={"JHT_TEST_COLLISION_PATH": str(collision)},
+            )
+        else:
+            _run_powershell_command(
+                "$item=[IO.DirectoryInfo]::new($env:JHT_TEST_COLLISION_PATH);"
+                "$acl=$item.GetAccessControl("
+                "[Security.AccessControl.AccessControlSections]::All);"
+                "$sid=[Security.Principal.SecurityIdentifier]::new("
+                "'S-1-5-32-545');"
+                "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
+                "$sid,'WriteData','ContainerInherit,ObjectInherit','None','Allow');"
+                "$acl.AddAccessRule($rule);$item.SetAccessControl($acl)",
+                env_values={"JHT_TEST_COLLISION_PATH": str(collision)},
+            )
+    before = _authority_snapshot(tmp_path)
+    result = _run_powershell_command(
+        INITIALIZE_COLLISION_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_COLLISION_PATH": str(collision),
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 23
+    assert result.stdout == ""
+    assert result.stderr.strip() == (
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=lock code=lock_claim_init"
+    )
+    assert str(tmp_path) not in result.stderr
+    assert _authority_snapshot(tmp_path) == before
+    assert not tuple(tmp_path.glob("**/.update-claim-*"))
+    assert not tuple(tmp_path.glob("**/.update-stale-*"))
 
 
 def test_windows_prelock_internal_error_is_not_reported_as_reparse(

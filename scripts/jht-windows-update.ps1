@@ -630,11 +630,28 @@ function Assert-CurrentOwner {
 }
 
 function Initialize-ProtectedDirectory {
-  param([string]$Path)
-  if (Test-Path -LiteralPath $Path) { Assert-CurrentOwner $Path; Assert-NoForeignWriteAcl $Path } else { New-Item -ItemType Directory -Path $Path -Force | Out-Null }
+  param(
+    [string]$Path,
+    [switch]$RequireNew,
+    [ref]$CreatedByInvocation = $null)
+  if ($null -ne $CreatedByInvocation) { $CreatedByInvocation.Value = $false }
+  $preexisting = Test-Path -LiteralPath $Path
+  if ($RequireNew -and $preexisting) { throw 'protected directory collision' }
+  if ($preexisting) {
+    Assert-NoReparseAncestors $Path
+    $existing = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if (($existing -isnot [IO.DirectoryInfo]) -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected directory expected' }
+    Assert-CurrentOwner $Path
+    Assert-NoForeignWriteAcl $Path
+  } else {
+    New-Item -ItemType Directory -Path $Path -ErrorAction Stop | Out-Null
+    if ($null -ne $CreatedByInvocation) { $CreatedByInvocation.Value = $true }
+  }
   Assert-NoReparseAncestors $Path
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  if (($item -isnot [IO.DirectoryInfo]) -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected directory expected' }
   $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
+  if (-not $preexisting) { $acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User) }
   $acl.SetAccessRuleProtection($true, $false)
   $rule = New-Object Security.AccessControl.FileSystemAccessRule([Security.Principal.WindowsIdentity]::GetCurrent().User, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
   $acl.SetAccessRule($rule)
@@ -714,30 +731,38 @@ function Get-ObservedProcess {
 function Acquire-Lock {
   for ($attempt = 0; $attempt -lt 3; $attempt++) {
     $claim = Join-Path $StateRoot ('.update-claim-' + [guid]::NewGuid().ToString('N'))
-    $script:FailureCode = 'lock_claim_init'
-    Initialize-ProtectedDirectory $claim
-    $script:FailureCode = 'lock_claim_write'
-    Write-AtomicJson (Join-Path $claim 'owner.json') @{ schema = 1; nonce = $Nonce; pid = $PID; started = $script:LockOwnerStarted }
-    $script:FailureCode = 'lock_claim_promote'
+    $claimCreated = $false
     try {
-      [IO.Directory]::Move($claim, $LockPath)
-      return
-    } catch {
-      Remove-Item -LiteralPath $claim -Recurse -Force -ErrorAction SilentlyContinue
-      if (-not (Test-Path -LiteralPath $LockPath -PathType Container)) { continue }
-      $script:FailureCode = 'lock_existing_validate'
-      Assert-NoReparseAncestors $LockPath
-      Assert-OwnerAndAcl $LockPath -Directory
-      $owner = Read-JsonFile (Join-Path $LockPath 'owner.json')
-      if ($owner -and (Test-ExactProperties $owner @('nonce','pid','schema','started')) -and (Test-JsonInteger $owner.schema) -and [int64]$owner.schema -eq 1) {
-        $active = Get-ExactProcess ([int]$owner.pid) ([string]$owner.started)
-        if ($active) { throw 'another Windows update transaction is active' }
+      $script:FailureCode = 'lock_claim_init'
+      Initialize-ProtectedDirectory $claim -RequireNew -CreatedByInvocation ([ref]$claimCreated)
+      $script:FailureCode = 'lock_claim_write'
+      Write-AtomicJson (Join-Path $claim 'owner.json') @{ schema = 1; nonce = $Nonce; pid = $PID; started = $script:LockOwnerStarted }
+      $script:FailureCode = 'lock_claim_promote'
+      try {
+        [IO.Directory]::Move($claim, $LockPath)
+        $claimCreated = $false
+        return
+      } catch {
+        if ($claimCreated -and (Test-Path -LiteralPath $claim)) { Remove-Item -LiteralPath $claim -Recurse -Force -ErrorAction Stop }
+        $claimCreated = $false
+        if (-not (Test-Path -LiteralPath $LockPath -PathType Container)) { continue }
+        $script:FailureCode = 'lock_existing_validate'
+        Assert-NoReparseAncestors $LockPath
+        Assert-OwnerAndAcl $LockPath -Directory
+        $owner = Read-JsonFile (Join-Path $LockPath 'owner.json')
+        if ($owner -and (Test-ExactProperties $owner @('nonce','pid','schema','started')) -and (Test-JsonInteger $owner.schema) -and [int64]$owner.schema -eq 1) {
+          $active = Get-ExactProcess ([int]$owner.pid) ([string]$owner.started)
+          if ($active) { throw 'another Windows update transaction is active' }
+        }
+        $stale = Join-Path $StateRoot ('.update-stale-' + [guid]::NewGuid().ToString('N'))
+        $script:FailureCode = 'lock_stale_promote'
+        try { [IO.Directory]::Move($LockPath, $stale) } catch { continue }
+        $script:FailureCode = 'lock_stale_remove'
+        Remove-Item -LiteralPath $stale -Recurse -Force -ErrorAction Stop
       }
-      $stale = Join-Path $StateRoot ('.update-stale-' + [guid]::NewGuid().ToString('N'))
-      $script:FailureCode = 'lock_stale_promote'
-      try { [IO.Directory]::Move($LockPath, $stale) } catch { continue }
-      $script:FailureCode = 'lock_stale_remove'
-      Remove-Item -LiteralPath $stale -Recurse -Force -ErrorAction Stop
+    } catch {
+      if ($claimCreated -and (Test-Path -LiteralPath $claim)) { Remove-Item -LiteralPath $claim -Recurse -Force -ErrorAction Stop }
+      throw
     }
   }
   $script:FailureCode = 'lock_exhausted'
