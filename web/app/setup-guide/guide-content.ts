@@ -10,11 +10,10 @@
 // guida (dal download al primo avvio), la schermata di setup, la schermata
 // di avvio, e il collegamento fra team locale e web.
 //
-// TRADUZIONI: i testi che arrivano dal contratto sono inglesi e passano da
-// `untranslated()` finché HQ-FULLSTACK-1 non li traduce — la lacuna è
-// esplicita e cercabile, invece di sembrare già fatta. Alt text e didascalie
-// delle schermate (`guide-screens.ts`) e il microcopy della pagina
-// (`guide-ui.i18n.ts`) sono invece tradotti davvero in tutte e sette.
+// TRADUZIONI: l'inglese del contratto è la fonte; ogni testo visibile è
+// derivato nelle altre sei lingue. Alt text e didascalie delle schermate
+// (`guide-screens.ts`) e il microcopy della pagina (`guide-ui.i18n.ts`)
+// seguono la stessa forma completa a sette lingue.
 //
 // ⚠️ I requisiti di `check-requirements` sono NUMERI MISURATI. La regola
 // dell'operatore: se un numero non è stato misurato, non si scrive. Per
@@ -30,7 +29,7 @@ import {
   PRICING,
 } from "./guide-config";
 import { DOCS_TEAM_GMAIL, PRIVACY } from "./guide-config";
-import { untranslated, type GuideChapter } from "./guide-types";
+import type { GuideChapter } from "./guide-types";
 
 /** Segnaposto delle fasi `W02`–`W04`, dal contratto. Dice una cosa diversa
  *  dallo slot generico: non «la stiamo rigirando», ma «arriverà quando ci
@@ -598,91 +597,231 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
       {
         id: "authorize-provider",
         os: "all",
-        title: untranslated("Authorize your subscription"),
-        body: untranslated(
-          "Open the embedded console and follow the provider login. A browser may open for authorization. Return when the provider screen shows Login detected.",
-        ),
+        title: {
+          en: "Authorize your subscription",
+          it: "Autorizza il tuo abbonamento",
+          es: "Autoriza tu suscripción",
+          fr: "Autorisez votre abonnement",
+          de: "Autorisiere dein Abonnement",
+          pt: "Autoriza a tua subscrição",
+          hu: "Engedélyezd az előfizetésedet",
+        },
+        body: {
+          en: "Open the embedded console and follow the provider login. A browser may open for authorization. Return when the provider screen shows Login detected.",
+          it: "Apri la console incorporata e segui l’accesso del provider. Potrebbe aprirsi un browser per l’autorizzazione. Torna quando la schermata del provider mostra Login detected.",
+          es: "Abre la consola integrada y sigue el inicio de sesión del proveedor. Puede abrirse un navegador para la autorización. Vuelve cuando la pantalla del proveedor muestre Login detected.",
+          fr: "Ouvrez la console intégrée et suivez la connexion du fournisseur. Un navigateur peut s’ouvrir pour l’autorisation. Revenez lorsque l’écran du fournisseur affiche Login detected.",
+          de: "Öffne die eingebettete Konsole und folge der Anmeldung beim Anbieter. Zur Autorisierung kann sich ein Browser öffnen. Kehre zurück, wenn der Anbieterbildschirm Login detected anzeigt.",
+          pt: "Abre a consola incorporada e segue o início de sessão do fornecedor. Pode abrir-se um navegador para a autorização. Volta quando o ecrã do fornecedor mostrar Login detected.",
+          hu: "Nyisd meg a beágyazott konzolt, és kövesd a szolgáltatói bejelentkezést. Az engedélyezéshez megnyílhat egy böngésző. Térj vissza, amikor a szolgáltató képernyőjén megjelenik a Login detected állapot.",
+        },
         screen: { screenId: "S11-authorize-provider" },
       },
       {
         id: "upload-cv",
         os: "all",
-        title: untranslated("Upload your CV"),
-        body: untranslated(
-          "Open Profile and CV, talk to the Assistant, and upload your CV. The profile badge shows which required fields are still missing.",
-        ),
+        title: {
+          en: "Upload your CV",
+          it: "Carica il tuo CV",
+          es: "Sube tu CV",
+          fr: "Importez votre CV",
+          de: "Lebenslauf hochladen",
+          pt: "Carrega o teu CV",
+          hu: "Töltsd fel az önéletrajzodat",
+        },
+        body: {
+          en: "Open Profile and CV, talk to the Assistant, and upload your CV. The profile badge shows which required fields are still missing.",
+          it: "Apri Profile and CV, parla con l’Assistant e carica il tuo CV. Il badge del profilo mostra quali campi obbligatori mancano ancora.",
+          es: "Abre Profile and CV, habla con el Assistant y sube tu CV. La insignia del perfil muestra qué campos obligatorios siguen incompletos.",
+          fr: "Ouvrez Profile and CV, parlez à l’Assistant et importez votre CV. Le badge du profil indique les champs obligatoires qui manquent encore.",
+          de: "Öffne Profile and CV, sprich mit dem Assistant und lade deinen Lebenslauf hoch. Das Profilabzeichen zeigt, welche Pflichtfelder noch fehlen.",
+          pt: "Abre Profile and CV, fala com o Assistant e carrega o teu CV. O emblema do perfil mostra os campos obrigatórios que ainda faltam.",
+          hu: "Nyisd meg a Profile and CV részt, beszélj az Assistanttal, és töltsd fel az önéletrajzodat. A profiljelvény megmutatja, mely kötelező mezők hiányoznak még.",
+        },
         screen: { screenId: "S12-upload-cv" },
       },
       {
         id: "complete-profile",
         os: "all",
-        title: untranslated("Complete your profile"),
-        body: untranslated(
-          "Confirm name, email, target role, location, experience, seniority, at least two skills, and at least one language. Continue when the badge shows 8/8 fields.",
-        ),
+        title: {
+          en: "Complete your profile",
+          it: "Completa il tuo profilo",
+          es: "Completa tu perfil",
+          fr: "Complétez votre profil",
+          de: "Profil vervollständigen",
+          pt: "Completa o teu perfil",
+          hu: "Töltsd ki a profilodat",
+        },
+        body: {
+          en: "Confirm name, email, target role, location, experience, seniority, at least two skills, and at least one language. Continue when the badge shows 8/8 fields.",
+          it: "Conferma nome, email, ruolo desiderato, località, esperienza, seniority, almeno due competenze e almeno una lingua. Continua quando il badge mostra 8/8 fields.",
+          es: "Confirma el nombre, el correo electrónico, el puesto objetivo, la ubicación, la experiencia, el nivel de seniority, al menos dos competencias y un idioma como mínimo. Continúa cuando la insignia muestre 8/8 fields.",
+          fr: "Confirmez le nom, l’adresse e-mail, le poste visé, le lieu, l’expérience, le niveau de seniority, au moins deux compétences et au moins une langue. Continuez lorsque le badge affiche 8/8 fields.",
+          de: "Bestätige Name, E-Mail-Adresse, Zielrolle, Standort, Erfahrung, Senioritätsstufe, mindestens zwei Fähigkeiten und mindestens eine Sprache. Fahre fort, wenn das Abzeichen 8/8 fields anzeigt.",
+          pt: "Confirma o nome, o email, a função pretendida, a localização, a experiência, o nível de seniority, pelo menos duas competências e pelo menos um idioma. Continua quando o emblema mostrar 8/8 fields.",
+          hu: "Erősítsd meg a nevet, az e-mail-címet, a célpozíciót, a helyszínt, a tapasztalatot, a seniority szintet, legalább két készséget és legalább egy nyelvet. Akkor folytasd, amikor a jelvényen 8/8 fields látható.",
+        },
         screen: { screenId: "S13-profile-ready" },
       },
       {
         id: "set-working-hours",
         os: "all",
-        title: untranslated("Set working hours"),
-        body: untranslated(
-          "Choose when the team may work and save the schedule. Without working hours the team can run at any time and use your subscription.",
-        ),
+        title: {
+          en: "Set working hours",
+          it: "Imposta l’orario di lavoro",
+          es: "Configura el horario de trabajo",
+          fr: "Définissez les horaires de travail",
+          de: "Arbeitszeiten festlegen",
+          pt: "Define o horário de trabalho",
+          hu: "Állítsd be a munkaidőt",
+        },
+        body: {
+          en: "Choose when the team may work and save the schedule. Without working hours the team can run at any time and use your subscription.",
+          it: "Scegli quando il team può lavorare e salva la pianificazione. Senza un orario di lavoro, il team può essere eseguito in qualsiasi momento e usare il tuo abbonamento.",
+          es: "Elige cuándo puede trabajar el equipo y guarda el horario. Sin un horario de trabajo, el equipo puede ejecutarse en cualquier momento y usar tu suscripción.",
+          fr: "Choisissez quand l’équipe peut travailler et enregistrez le planning. Sans horaires de travail, l’équipe peut fonctionner à tout moment et utiliser votre abonnement.",
+          de: "Lege fest, wann das Team arbeiten darf, und speichere den Zeitplan. Ohne Arbeitszeiten kann das Team jederzeit laufen und dein Abonnement nutzen.",
+          pt: "Escolhe quando a equipa pode trabalhar e guarda o horário. Sem horário de trabalho, a equipa pode funcionar a qualquer momento e utilizar a tua subscrição.",
+          hu: "Válaszd ki, mikor dolgozhat a csapat, és mentsd az időbeosztást. Munkaidő nélkül a csapat bármikor futhat és használhatja az előfizetésedet.",
+        },
         screen: { screenId: "S14-working-hours" },
       },
       {
         id: "review-setup",
         os: "all",
-        title: untranslated("Review the four checks"),
-        body: untranslated(
-          "Return to Activate team. Container, AI provider, Profile and CV, and Working hours must all be ready before the team can start.",
-        ),
+        title: {
+          en: "Review the four checks",
+          it: "Controlla le quattro verifiche",
+          es: "Revisa las cuatro comprobaciones",
+          fr: "Vérifiez les quatre contrôles",
+          de: "Die vier Prüfungen kontrollieren",
+          pt: "Revê as quatro verificações",
+          hu: "Ellenőrizd a négy feltételt",
+        },
+        body: {
+          en: "Return to Activate team. Container, AI provider, Profile and CV, and Working hours must all be ready before the team can start.",
+          it: "Torna a Activate team. Container, AI provider, Profile and CV e Working hours devono essere tutti pronti prima che il team possa partire.",
+          es: "Vuelve a Activate team. Container, AI provider, Profile and CV y Working hours deben estar listos antes de que el equipo pueda iniciarse.",
+          fr: "Revenez à Activate team. Container, AI provider, Profile and CV et Working hours doivent tous être prêts avant le démarrage de l’équipe.",
+          de: "Kehre zu Activate team zurück. Container, AI provider, Profile and CV und Working hours müssen alle bereit sein, bevor das Team starten kann.",
+          pt: "Volta a Activate team. Container, AI provider, Profile and CV e Working hours têm de estar todos prontos antes de a equipa poder iniciar.",
+          hu: "Térj vissza az Activate team részhez. A csapat indítása előtt a Container, AI provider, Profile and CV és Working hours ellenőrzéseknek egyaránt készen kell állniuk.",
+        },
         screen: { screenId: "S15-setup-complete" },
       },
     ],
   },
   {
     id: "start-screen",
-    title: untranslated("Activate the team"),
-    summary: untranslated(
-      "Select Activate the team and keep Job Hunter Team Desktop open while the agents start. Setup is complete only when Team active and an operational agent beyond the Assistant are visible with real, non-demo data.",
-    ),
+    title: {
+      en: "Activate the team",
+      it: "Attiva il team",
+      es: "Activa el equipo",
+      fr: "Activez l’équipe",
+      de: "Team aktivieren",
+      pt: "Ativa a equipa",
+      hu: "Aktiváld a csapatot",
+    },
+    summary: {
+      en: "Select Activate the team and keep Job Hunter Team Desktop open while the agents start. Setup is complete only when Team active and an operational agent beyond the Assistant are visible with real, non-demo data.",
+      it: "Seleziona Activate the team e tieni aperto Job Hunter Team Desktop mentre gli agenti si avviano. La configurazione è completa solo quando Team active e un agente operativo oltre all’Assistant sono visibili con dati reali, non dimostrativi.",
+      es: "Selecciona Activate the team y mantén abierto Job Hunter Team Desktop mientras se inician los agentes. La configuración solo está completa cuando Team active y un agente operativo además del Assistant aparecen con datos reales, no de demostración.",
+      fr: "Sélectionnez Activate the team et gardez Job Hunter Team Desktop ouvert pendant le démarrage des agents. La configuration n’est terminée que lorsque Team active et un agent opérationnel en plus de l’Assistant sont visibles avec des données réelles, et non de démonstration.",
+      de: "Wähle Activate the team und lass Job Hunter Team Desktop geöffnet, während die Agenten starten. Die Einrichtung ist erst abgeschlossen, wenn Team active und neben dem Assistant mindestens ein einsatzbereiter Agent mit echten Daten statt Demodaten sichtbar sind.",
+      pt: "Seleciona Activate the team e mantém o Job Hunter Team Desktop aberto enquanto os agentes iniciam. A configuração só está concluída quando Team active e um agente operacional para além do Assistant aparecem com dados reais, não de demonstração.",
+      hu: "Válaszd az Activate the team lehetőséget, és hagyd nyitva a Job Hunter Team Desktopot, amíg az ügynökök elindulnak. A beállítás csak akkor kész, ha a Team active állapot és az Assistant mellett legalább egy működő ügynök valódi, nem demóadatokkal látható.",
+    },
     phases: [
       {
         id: "activate-team",
         os: "all",
-        title: untranslated("Activate the team"),
-        body: untranslated(
-          "Select Activate the team. Job Hunter Team Desktop reports the real startup phase and elapsed time; wait until startup finishes.",
-        ),
+        title: {
+          en: "Activate the team",
+          it: "Attiva il team",
+          es: "Activa el equipo",
+          fr: "Activez l’équipe",
+          de: "Team aktivieren",
+          pt: "Ativa a equipa",
+          hu: "Aktiváld a csapatot",
+        },
+        body: {
+          en: "Select Activate the team. Job Hunter Team Desktop reports the real startup phase and elapsed time; wait until startup finishes.",
+          it: "Seleziona Activate the team. Job Hunter Team Desktop indica la fase di avvio reale e il tempo trascorso; attendi che l’avvio termini.",
+          es: "Selecciona Activate the team. Job Hunter Team Desktop indica la fase de inicio real y el tiempo transcurrido; espera hasta que termine el inicio.",
+          fr: "Sélectionnez Activate the team. Job Hunter Team Desktop indique la phase réelle du démarrage et le temps écoulé ; attendez la fin du démarrage.",
+          de: "Wähle Activate the team. Job Hunter Team Desktop zeigt die tatsächliche Startphase und die verstrichene Zeit an; warte, bis der Start abgeschlossen ist.",
+          pt: "Seleciona Activate the team. O Job Hunter Team Desktop indica a fase real do arranque e o tempo decorrido; aguarda até o arranque terminar.",
+          hu: "Válaszd az Activate the team lehetőséget. A Job Hunter Team Desktop kijelzi a tényleges indítási szakaszt és az eltelt időt; várj az indítás befejezéséig.",
+        },
         screen: { screenId: "S16-team-starting" },
       },
       {
         id: "verify-team-working",
         os: "all",
-        title: untranslated("Verify that the team is working"),
-        body: untranslated(
-          "Confirm Team active, real data, and at least one operational agent beyond the Assistant. Open a live activity or result; a running container alone is not enough.",
-        ),
+        title: {
+          en: "Verify that the team is working",
+          it: "Verifica che il team stia lavorando",
+          es: "Comprueba que el equipo esté funcionando",
+          fr: "Vérifiez que l’équipe fonctionne",
+          de: "Prüfen, ob das Team arbeitet",
+          pt: "Verifica se a equipa está a trabalhar",
+          hu: "Ellenőrizd, hogy működik-e a csapat",
+        },
+        body: {
+          en: "Confirm Team active, real data, and at least one operational agent beyond the Assistant. Open a live activity or result; a running container alone is not enough.",
+          it: "Conferma Team active, dati reali e almeno un agente operativo oltre all’Assistant. Apri un’attività o un risultato live: il solo container in esecuzione non è sufficiente.",
+          es: "Confirma Team active, datos reales y al menos un agente operativo además del Assistant. Abre una actividad o un resultado en vivo; un contenedor en ejecución no es suficiente por sí solo.",
+          fr: "Confirmez Team active, des données réelles et au moins un agent opérationnel en plus de l’Assistant. Ouvrez une activité ou un résultat en direct ; un conteneur en cours d’exécution ne suffit pas.",
+          de: "Bestätige Team active, echte Daten und neben dem Assistant mindestens einen einsatzbereiten Agenten. Öffne eine Live-Aktivität oder ein Ergebnis; ein laufender Container allein reicht nicht aus.",
+          pt: "Confirma Team active, dados reais e pelo menos um agente operacional para além do Assistant. Abre uma atividade ou um resultado em direto; um contentor em execução não é suficiente por si só.",
+          hu: "Ellenőrizd a Team active állapotot, a valódi adatokat és az Assistant mellett legalább egy működő ügynököt. Nyiss meg egy élő tevékenységet vagy eredményt; önmagában egy futó konténer nem elegendő.",
+        },
         screen: { screenId: "S17-team-working" },
       },
     ],
   },
   {
     id: "local-web",
-    title: untranslated("See your local team on the web"),
-    summary: untranslated(
-      "Optionally sync positions, profile, and commands with your private dashboard. The team can remain fully local.",
-    ),
+    title: {
+      en: "See your local team on the web",
+      it: "Visualizza il team locale sul web",
+      es: "Consulta tu equipo local en la web",
+      fr: "Consultez votre équipe locale sur le web",
+      de: "Lokales Team im Web anzeigen",
+      pt: "Vê a tua equipa local na web",
+      hu: "Nézd meg a helyi csapatodat a weben",
+    },
+    summary: {
+      en: "Optionally sync positions, profile, and commands with your private dashboard. The team can remain fully local.",
+      it: "Puoi sincronizzare facoltativamente posizioni, profilo e comandi con la tua dashboard privata. Il team può restare completamente locale.",
+      es: "Opcionalmente, sincroniza posiciones, perfil y comandos con tu panel privado. El equipo puede permanecer completamente local.",
+      fr: "Vous pouvez synchroniser les postes, le profil et les commandes avec votre tableau de bord privé. L’équipe peut rester entièrement locale.",
+      de: "Synchronisiere optional Positionen, Profil und Befehle mit deinem privaten Dashboard. Das Team kann vollständig lokal bleiben.",
+      pt: "Opcionalmente, sincroniza posições, perfil e comandos com o teu painel privado. A equipa pode permanecer totalmente local.",
+      hu: "Igény szerint szinkronizáld a pozíciókat, a profilt és a parancsokat a privát irányítópultoddal. A csapat teljesen helyi maradhat.",
+    },
     phases: [
       {
         id: "open-account-link",
         os: "all",
-        title: untranslated("Open the optional web connection"),
-        body: untranslated(
-          "With the container running, open Settings, then select Account under Account and channels. CLOUD ACCOUNT — local / guest mode means the team is not linked yet. The sign-in control remains unavailable until the container is running.",
-        ),
+        title: {
+          en: "Open the optional web connection",
+          it: "Apri il collegamento web facoltativo",
+          es: "Abre la conexión web opcional",
+          fr: "Ouvrez la connexion web facultative",
+          de: "Optionale Web-Verbindung öffnen",
+          pt: "Abre a ligação web opcional",
+          hu: "Nyisd meg az opcionális webkapcsolatot",
+        },
+        body: {
+          en: "With the container running, open Settings, then select Account under Account and channels. CLOUD ACCOUNT — local / guest mode means the team is not linked yet. The sign-in control remains unavailable until the container is running.",
+          it: "Con il container in esecuzione, apri Settings, quindi seleziona Account sotto Account and channels. CLOUD ACCOUNT — local / guest mode indica che il team non è ancora collegato. Il controllo di accesso resta indisponibile finché il container non è in esecuzione.",
+          es: "Con el contenedor en ejecución, abre Settings y selecciona Account en Account and channels. CLOUD ACCOUNT — local / guest mode significa que el equipo todavía no está vinculado. El control de inicio de sesión permanece deshabilitado hasta que el contenedor esté en ejecución.",
+          fr: "Lorsque le conteneur fonctionne, ouvrez Settings, puis sélectionnez Account sous Account and channels. CLOUD ACCOUNT — local / guest mode signifie que l’équipe n’est pas encore liée. La commande de connexion reste indisponible tant que le conteneur ne fonctionne pas.",
+          de: "Öffne bei laufendem Container Settings und wähle dann unter Account and channels den Eintrag Account. CLOUD ACCOUNT — local / guest mode bedeutet, dass das Team noch nicht verbunden ist. Die Anmeldesteuerung bleibt deaktiviert, bis der Container läuft.",
+          pt: "Com o contentor em execução, abre Settings e seleciona Account em Account and channels. CLOUD ACCOUNT — local / guest mode significa que a equipa ainda não está ligada. O controlo de início de sessão permanece indisponível até o contentor estar em execução.",
+          hu: "Futó konténer mellett nyisd meg a Settings részt, majd válaszd az Account and channels alatt az Account lehetőséget. A CLOUD ACCOUNT — local / guest mode azt jelenti, hogy a csapat még nincs összekapcsolva. A bejelentkezési vezérlő a konténer elindulásáig nem érhető el.",
+        },
         screen: { screenId: "W01-local-account-entry" },
       },
       {
