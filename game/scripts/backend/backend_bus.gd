@@ -805,13 +805,16 @@ func publish_agent_history(query: Dictionary, data: Dictionary) -> void:
 
 ## ── Documenti prodotti (anteprima CV in-game) ────────────────────────
 
-## Chiede al backend i bytes di un documento registrato in cv_path/
-## cl_path (lettura pura, come il resto dell'osservazione). Esito su
-## artifact_fetched; il path fa da chiave di correlazione per la UI.
-func fetch_artifact(path: String) -> void:
+## Chiede al backend i bytes di un documento registrato in cv_path/cl_path.
+## Il chiamante dichiara il tipo: il path DB non e' un'attestazione. Esito su
+## artifact_fetched; il path resta la chiave di correlazione per la UI.
+func fetch_artifact(path: String, kind: String) -> void:
 	var clean := path.strip_edges()
-	if _backend and _backend.has_method("fetch_artifact") and clean != "":
-		_backend.fetch_artifact(clean)
+	if clean != path or not ArtifactPolicy.is_allowed_request(clean, kind):
+		artifact_fetched.emit(path, false, PackedByteArray(),
+				UIStrings.t("vps.artifact.invalid"))
+	elif _backend and _backend.has_method("fetch_artifact"):
+		_backend.fetch_artifact(clean, kind)
 	else:
 		artifact_fetched.emit(clean, false, PackedByteArray(),
 				UIStrings.t("common.backend_not_connected"))

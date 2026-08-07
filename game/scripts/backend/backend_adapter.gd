@@ -206,7 +206,7 @@ func fetch_agent_history(agent: String, from_ts: float, to_ts: float,
 
 ## Bytes di un documento registrato in cv_path/cl_path: lettura pura, il path
 ## fa da chiave di correlazione. Esito su bus.publish_artifact().
-func fetch_artifact(path: String) -> void:
+func fetch_artifact(path: String, _kind: String) -> void:
 	var msg := _unsupported("fetch_artifact")
 	if bus:
 		bus.artifact_fetched.emit(path, false, PackedByteArray(), msg)

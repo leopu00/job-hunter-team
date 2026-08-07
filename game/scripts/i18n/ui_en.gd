@@ -1586,6 +1586,7 @@ const S := {
 	"vps.response_unreadable": "unreadable response from the VPS",
 	"vps.artifact.path_outside": "path is outside the data areas",
 	"vps.artifact.file_missing": "file not found in the container",
+	"vps.artifact.invalid": "document rejected: invalid path, type or content",
 	"vps.ticket.position_missing": "position does not exist",
 	"vps.ssh.failed": "SSH failed (exit %s)",
 	"vps.ssh.key_missing": "SSH key not found: %s",

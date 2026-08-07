@@ -165,7 +165,7 @@ func _ready() -> void:
 	BackendBus.artifact_fetched.connect(_on_artifact)
 	if _md_path != "":
 		_set_status(UIStrings.t("cv.doc_loading"), Palette.DIM)
-		BackendBus.fetch_artifact(_md_path)
+		BackendBus.fetch_artifact(_md_path, ArtifactPolicy.KIND_MARKDOWN)
 	else:
 		# solo pdf: l'anteprima rasterizzata è l'unica vista utile
 		_request_pdf("preview")
@@ -231,7 +231,7 @@ func _request_pdf(action: String) -> void:
 	_pdf_action = action
 	_set_buttons_busy(true)
 	_set_status(UIStrings.t("cv.doc_loading"), Palette.DIM)
-	BackendBus.fetch_artifact(_pdf_path)
+	BackendBus.fetch_artifact(_pdf_path, ArtifactPolicy.KIND_PDF)
 
 func _on_artifact(path: String, ok: bool, data: PackedByteArray, error: String) -> void:
 	if not is_instance_valid(_body):
@@ -249,6 +249,12 @@ func _on_artifact(path: String, ok: bool, data: PackedByteArray, error: String) 
 		_set_buttons_busy(false)
 		if not ok:
 			_set_status(UIStrings.t("cv.doc_error") + error, Palette.RED)
+			return
+		# Ultimo confine prima del filesystem host: anche una risposta backend
+		# ok non puo' trasformare byte generici in un PDF.
+		if not ArtifactPolicy.is_pdf_bytes(data):
+			_set_status(UIStrings.t("cv.doc_error") \
+					+ UIStrings.t("vps.artifact.invalid"), Palette.RED)
 			return
 		_pdf_bytes = data
 		_set_status("", Palette.DIM)
@@ -275,7 +281,7 @@ func _build_pdf_preview() -> void:
 	if _pdf_pages_built:
 		return
 	_set_status(UIStrings.t("cv.pdf_rendering"), Palette.DIM)
-	var pdf_local := _save_to(OS.get_cache_dir(), _pdf_path, _pdf_bytes)
+	var pdf_local := _save_pdf_to(OS.get_cache_dir(), _pdf_bytes)
 	if pdf_local == "":
 		_set_status(UIStrings.t("cv.error_cache_unwritable"),
 				Palette.RED)
@@ -316,12 +322,12 @@ func _build_pdf_preview() -> void:
 ## ── Apertura esterna e reveal nella cartella ─────────────────────────
 
 func _open_pdf_external() -> void:
-	var local := _save_to(OS.get_cache_dir(), _pdf_path, _pdf_bytes)
+	var local := _save_pdf_to(OS.get_cache_dir(), _pdf_bytes)
 	if local == "":
 		_set_status(UIStrings.t("cv.error_cache_unwritable"),
 				Palette.RED)
 		return
-	if not DocRender.open_externally(local):
+	if not DocRender.open_pdf(local):
 		_set_status(UIStrings.t("cv.open_failed") + local, Palette.RED)
 
 func _on_reveal_pressed() -> void:
@@ -344,9 +350,9 @@ func _reveal_in_folder() -> void:
 	DirAccess.make_dir_recursive_absolute(folder)
 	var target := ""
 	if not _md_bytes.is_empty():
-		target = _save_to(folder, _md_path, _md_bytes)
+		target = _save_markdown_to(folder, _md_path, _md_bytes)
 	if not _pdf_bytes.is_empty():
-		var pdf_target := _save_to(folder, _pdf_path, _pdf_bytes)
+		var pdf_target := _save_pdf_to(folder, _pdf_bytes)
 		if pdf_target != "":
 			target = pdf_target
 	if target == "":
@@ -357,10 +363,25 @@ func _reveal_in_folder() -> void:
 	if not DocRender.reveal_file(target):
 		_set_status(UIStrings.t("cv.open_failed") + folder, Palette.RED)
 
-func _save_to(folder: String, remote_path: String, data: PackedByteArray) -> String:
+func _save_markdown_to(folder: String, remote_path: String,
+		data: PackedByteArray) -> String:
 	if data.is_empty():
 		return ""
-	var local := folder.path_join(DocRender.safe_filename(remote_path.get_file()))
+	var name := ArtifactPolicy.client_filename(remote_path,
+			ArtifactPolicy.KIND_MARKDOWN)
+	return _write_client_file(folder, name, data)
+
+func _save_pdf_to(folder: String, data: PackedByteArray) -> String:
+	if not ArtifactPolicy.is_pdf_bytes(data):
+		return ""
+	var name := ArtifactPolicy.client_filename(_pdf_path, ArtifactPolicy.KIND_PDF)
+	return _write_client_file(folder, name, data)
+
+func _write_client_file(folder: String, filename: String,
+		data: PackedByteArray) -> String:
+	if filename == "" or data.is_empty():
+		return ""
+	var local := folder.path_join(filename)
 	var f := FileAccess.open(local, FileAccess.WRITE)
 	if f == null:
 		return ""
