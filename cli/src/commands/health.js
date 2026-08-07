@@ -53,7 +53,7 @@ async function checkCredentials() {
 
 async function checkPlugins() {
   const entries = await dirEntries(join(JHT_DIR, 'plugins'));
-  return { name: 'Plugin', status: 'ok', detail: `${entries.length} installati` };
+  return { name: 'Plugins', status: 'ok', detail: `${entries.length} installed` };
 }
 
 async function checkMemory() {

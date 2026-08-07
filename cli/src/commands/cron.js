@@ -54,7 +54,7 @@ async function handleList(opts) {
 
 async function handleAdd(name, opts) {
   if (!opts.schedule) {
-    console.error('--schedule mandatory (cron expr or "every:Xm/h/s")');
+    console.error('--schedule is required (cron expression or "every:Xm/h/s")');
     process.exitCode = 1;
     return;
   }
@@ -78,7 +78,7 @@ async function handleAdd(name, opts) {
   svc.stop();
 
   console.log(`Job created: "${job.name}" (${job.id})`);
-  console.log(`  Next performance: ${formatMs(job.state.nextRunAtMs)}`);
+  console.log(`  Next run: ${formatMs(job.state.nextRunAtMs)}`);
 }
 
 function parseScheduleOption(raw) {
@@ -153,7 +153,7 @@ export function registerCronCommand(program) {
 
   cron.command('list')
     .description('Show all jobs')
-    .option('-a, --all', 'Includi job disabilitati')
+    .option('-a, --all', 'Include disabled jobs')
     .action(handleList);
 
   cron.command('add <name>')

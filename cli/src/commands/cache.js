@@ -156,10 +156,10 @@ async function pruneUvCache() {
 
   if (r.error) {
     if (r.error.code === 'ENOENT') {
-      console.error('  . uv not found in PATH. Skip prune.');
+      console.error('  ✗ uv was not found in PATH; cache pruning skipped.');
       console.error('    (Install uv: https://docs.astral.sh/uv/getting-started/installation/)');
     } else {
-      console.error(`  to uv cache prune failed: ${r.error.message}`);
+      console.error(`  ✗ uv cache prune failed: ${r.error.message}`);
     }
     process.exitCode = 1;
     return;
@@ -271,7 +271,7 @@ async function pruneNpmCache() {
 
   if (r.error) {
     if (r.error.code === 'ENOENT') {
-      console.error('  . npm not found in the PATH. Skip prune.');
+      console.error('  ✗ npm was not found in PATH; cache pruning skipped.');
     } else {
       console.error(`  : npm cache verification failed: ${r.error.message}`);
     }
@@ -303,7 +303,7 @@ async function pruneCodexLogs(idleSecondsArg) {
 
   const s = await stat(CODEX_LOGS_DB);
   if (s.size < CODEX_LOGS_THRESHOLD_BYTES) {
-    console.log(`  codex logs: ${fmtSize(s.size)} ( threshold ${fmtSize(CODEX_LOGS_THRESHOLD_BYTES)}) — skip.`);
+    console.log(`  codex logs: ${fmtSize(s.size)} (threshold ${fmtSize(CODEX_LOGS_THRESHOLD_BYTES)}) — skipped.`);
     return;
   }
 
@@ -328,7 +328,7 @@ async function pruneCodexLogs(idleSecondsArg) {
 
   if (r.error) {
     if (r.error.code === 'ENOENT') {
-      console.error('  . sqlite3 not found in the PATH. Skip codex logs prune.');
+      console.error('  ✗ sqlite3 was not found in PATH; Codex log pruning skipped.');
     } else {
       console.error(`  : codex logs prune failed: ${r.error.message}`);
     }

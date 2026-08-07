@@ -112,7 +112,7 @@ async function listSecrets() {
 
 async function setSecret(options) {
   if (!options.name || !options.value) {
-    console.error('  --name and --value mandatory');
+    console.error('  --name and --value are required');
     process.exitCode = 1;
     return;
   }
@@ -137,7 +137,7 @@ async function setSecret(options) {
 }
 
 async function getSecret(options) {
-  if (!options.name) { console.error('  --name mandatory'); process.exitCode = 1; return; }
+  if (!options.name) { console.error('  --name is required'); process.exitCode = 1; return; }
 
   const encPath = join(CREDS_DIR, `${options.name}.enc`);
   const jsonPath = join(CREDS_DIR, `${options.name}.json`);
@@ -188,7 +188,7 @@ async function getSecret(options) {
 }
 
 async function deleteSecret(options) {
-  if (!options.name) { console.error('  --name mandatory'); process.exitCode = 1; return; }
+  if (!options.name) { console.error('  --name is required'); process.exitCode = 1; return; }
   let deleted = false;
   for (const ext of ['.enc', '.json']) {
     const p = join(CREDS_DIR, `${options.name}${ext}`);

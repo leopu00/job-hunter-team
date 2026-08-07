@@ -105,7 +105,7 @@ function capturePane(session, lines = 30) {
 // pipe la console e' asincrona. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
 export function sendAction(agentArg, message) {
   if (!usingContainer() && !tmuxAvailable()) {
-    console.error(c.red('Error: not found tmux and unactive jht container.'));
+    console.error(c.red('Error: tmux was not found and the jht container is not active.'));
     process.exitCode = 1;
     return;
   }
@@ -146,7 +146,7 @@ export function sendAction(agentArg, message) {
 
 export async function chatAction(agentArg, options = {}) {
   if (!usingContainer() && !tmuxAvailable()) {
-    console.error(c.red('Error: not found tmux and unactive jht container.'));
+    console.error(c.red('Error: tmux was not found and the jht container is not active.'));
     process.exitCode = 1;
     return;
   }

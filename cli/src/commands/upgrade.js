@@ -15,7 +15,7 @@ function handleUpgrade(options) {
     previous: { version: '', image: '' },
     current: { version: '', image: '' },
     restartRequired: false,
-    message: 'The update of the runtime must be performed by the host with jht upgrade.',
+    message: 'Run jht upgrade on the host to update the runtime.',
     rolledBack: false,
   };
 

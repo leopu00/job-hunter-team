@@ -39,7 +39,7 @@ export function statusAction() {
   // 1, ma le due righe di stderr — fra cui quella che dice come rimediare —
   // fanno in tempo a uscire. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
   if (!usingContainer() && !tmuxAvailable()) {
-    console.error(c.red('Error: tmux not found on the host and unactive jht container.'));
+    console.error(c.red('Error: tmux was not found on the host and the jht container is not active.'));
     console.error(c.dim('  Start the container with: docker compose up -d jht'));
     process.exitCode = 1;
     return;

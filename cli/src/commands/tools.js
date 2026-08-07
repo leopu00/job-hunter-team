@@ -47,7 +47,7 @@ function parseJsonSafe(stdout) {
 
 function ensureContainer() {
   if (!containerRunning()) {
-    console.error('  The `jht` container is not active. Start with `jht up`.');
+    console.error('  The `jht` container is not active. Start it with `jht container up`.');
     process.exitCode = 1;
     return false;
   }

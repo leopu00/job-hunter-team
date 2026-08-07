@@ -238,6 +238,6 @@ export function registerWorkingHoursCommand(program) {
     .action(handleClear);
 
   wh.command('simulate')
-    .description('Simula target current (requires container running)')
+    .description('Simulate the current target (requires a running container)')
     .action(handleSimulate);
 }

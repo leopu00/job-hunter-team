@@ -256,7 +256,7 @@ function probeCandidate(spec, configText, alias, log) {
   const probeCfg = join(dir, 'config.toml');
   writeFileSync(probeCfg, configText, 'utf-8');
   const args = spec.probeArgs(probeCfg, alias);
-  const shown = `${spec.bin} ${args.map((a) => (a === probeCfg ? '<copia-del-config>' : a)).join(' ')}`;
+  const shown = `${spec.bin} ${args.map((a) => (a === probeCfg ? '<config-copy>' : a)).join(' ')}`;
   log(`${MP} probe: ${shown}`);
 
   let r;

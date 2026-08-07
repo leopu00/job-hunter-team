@@ -444,10 +444,10 @@ async function handleRestore(options) {
   });
 
   console.log('');
-  console.log(pc.green('✓ Completed Restore'));
-  console.log(pc.dim(`  Positions:    ${inserted.positions} upsert (${skipped.positions} skip for missing legacy_id)`));
-  console.log(pc.dim(`  Scores:       ${inserted.scores} upsert (${skipped.scores} skip for position_id orphan)`));
-  console.log(pc.dim(`  Applications: ${inserted.applications} upsert (${skipped.applications} skip for position_id orphan)`));
+  console.log(pc.green('✓ Restore completed'));
+  console.log(pc.dim(`  Positions:    ${inserted.positions} upserted (${skipped.positions} skipped: missing legacy_id)`));
+  console.log(pc.dim(`  Scores:       ${inserted.scores} upserted (${skipped.scores} skipped: orphaned position_id)`));
+  console.log(pc.dim(`  Applications: ${inserted.applications} upserted (${skipped.applications} skipped: orphaned position_id)`));
   console.log(pc.dim(`  Cursor sync reset a ${nowIso}`));
   console.log('');
   void confirmed;
@@ -1439,7 +1439,7 @@ async function handlePush(options) {
   if (outcome.skipped > 0) {
     // Segnale forte: righe scartate = una riga singola supera il limite server.
     // L'health-check del Mantenitore (Parte B) lo intercetta.
-    console.error(pc.red(`⚠ ${outcome.skipped} SCARTATE rows (single row > server limit): require attention.`));
+    console.error(pc.red(`⚠ ${outcome.skipped} rows skipped (a single row exceeds the server limit); attention required.`));
   }
 
   // Cursore SICURO per-tabella: max sul prefisso confermato che precede la
@@ -1541,7 +1541,7 @@ async function handlePair(options) {
   } catch (err) {
     if (err.code === 'ENOENT') {
       console.error(pc.red(`No pairing token found at ${tokenPath}.`));
-      console.error(pc.dim('Expected scenario: install.sh must have been launched with --pairing-token.'));
+      console.error(pc.dim('The installer must have been run with --pairing-token.'));
       console.error(pc.dim('For manual pairing, run: jht cloud login'));
     } else {
       console.error(pc.red(`Reading error pairing-token: ${err.message}`));
@@ -3094,7 +3094,7 @@ async function maybeBootstrapPush(options = {}) {
   await saveBootstrapState(nextBootstrapState({ state, now, signature, result }));
 
   if (!silent && result && result.authFailed === true) {
-    console.error(pc.yellow('  bootstrap-push closed (auth) — invalid token, stop pushing without browser.'));
+    console.error(pc.yellow('  bootstrap-push disabled (auth): invalid token; open the browser before retrying.'));
   }
   return { ...decision, result };
 }
@@ -3475,7 +3475,7 @@ async function handlePullProfile(options = {}) {
   const log = (msg) => { if (!options.silent) console.log(msg); };
   const config = await loadCloudConfig();
   if (!config || config.enabled === false) {
-    log(pc.dim('unenabled cloud — skip pull-profile'));
+    log(pc.dim('cloud sync disabled — pull-profile skipped'));
     return;
   }
   const baseUrl = (config.base_url || '').replace(/\/+$/, '');

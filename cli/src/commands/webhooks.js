@@ -64,8 +64,8 @@ async function listWebhooks() {
 }
 
 async function createWebhook(options) {
-  if (!options.url) { console.error('  --url mandatory'); process.exitCode = 1; return; }
-  if (!options.event) { console.error('  --event mandatory (e.g. task.completed, agent.started, session.ended)'); process.exitCode = 1; return; }
+  if (!options.url) { console.error('  --url is required'); process.exitCode = 1; return; }
+  if (!options.event) { console.error('  --event is required (e.g. task.completed, agent.started, session.ended)'); process.exitCode = 1; return; }
 
   const store = await loadStore();
   const webhook = {
@@ -90,7 +90,7 @@ async function createWebhook(options) {
 }
 
 async function deleteWebhook(options) {
-  if (!options.id) { console.error('  --id mandatory'); process.exitCode = 1; return; }
+  if (!options.id) { console.error('  --id is required'); process.exitCode = 1; return; }
   const store = await loadStore();
   const before = (store.webhooks ?? []).length;
   store.webhooks = (store.webhooks ?? []).filter(w => w.id !== options.id);
@@ -100,7 +100,7 @@ async function deleteWebhook(options) {
 }
 
 async function testWebhook(options) {
-  if (!options.id) { console.error('  --id mandatory'); process.exitCode = 1; return; }
+  if (!options.id) { console.error('  --id is required'); process.exitCode = 1; return; }
   const store = await loadStore();
   const webhook = (store.webhooks ?? []).find(w => w.id === options.id);
   if (!webhook) { console.error(`  Webhook not found: ${options.id}`); process.exitCode = 1; return; }

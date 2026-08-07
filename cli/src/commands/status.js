@@ -51,7 +51,7 @@ async function handleStatus() {
       console.log('  Telegram: 3 bots configured');
     } else if (tgBots) {
       const n = ['assistente', 'capitano', 'mentor'].filter((r) => tgBots?.[r]?.bot_token).length;
-      console.log(`  Telegram: incomplete (${n}/3 bot)`);
+      console.log(`  Telegram: incomplete (${n}/3 bots)`);
     }
   } else {
     console.log('  Config: not found (run: jht setup)');
