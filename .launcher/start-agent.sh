@@ -29,23 +29,23 @@ source "$DEV_TEAM_DIR/daemon-lib.sh"
 source "$DEV_TEAM_DIR/spawn-lib.sh"
 
 if [ -z "${1:-}" ]; then
-  echo "Uso: $0 <ruolo> [istanza] [mode]"
+  echo "Usage: $0 <role> [instance] [mode]"
   echo ""
-  echo "Ruoli disponibili:"
-  echo "  capitano        → CAPITANO         (Coordinatore pipeline Job Hunter)"
-  echo "  scout       → SCOUT-N      (Cerca posizioni lavorative)"
-  echo "  analista    → ANALISTA-N   (Analizza job description e aziende)"
-  echo "  scorer      → SCORER-N     (Calcola punteggio match)"
-  echo "  scrittore   → SCRITTORE-N  (Scrive CV e cover letter)"
-  echo "  critico     → CRITICO      (Revisione qualità CV)"
-  echo "  sentinella  → SENTINELLA   (Monitora token usage e rate limit)"
-  echo "  assistente  → ASSISTENTE   (Aiuta l'utente a navigare la piattaforma)"
+  echo "Available roles:"
+  echo "  capitano        → CAPITANO         (Job Hunter pipeline coordinator)"
+  echo "  scout       → SCOUT-N      (Finds job openings)"
+  echo "  analista    → ANALISTA-N   (Analyzes job descriptions and companies)"
+  echo "  scorer      → SCORER-N     (Calculates match scores)"
+  echo "  scrittore   → SCRITTORE-N  (Writes CVs and cover letters)"
+  echo "  critico     → CRITICO      (CV quality review)"
+  echo "  sentinella  → SENTINELLA   (Monitors token usage and rate limits)"
+  echo "  assistente  → ASSISTENTE   (Helps the user navigate the platform)"
   echo ""
-  echo "Esempi:"
-  echo "  $0 capitano              → avvia CAPITANO"
-  echo "  $0 scout 1           → avvia SCOUT-1"
-  echo "  $0 scrittore 2 fast  → avvia SCRITTORE-2 in modalità fast"
-  echo "  $0 assistente        → avvia ASSISTENTE"
+  echo "Examples:"
+  echo "  $0 capitano              → start CAPITANO"
+  echo "  $0 scout 1           → start SCOUT-1"
+  echo "  $0 scrittore 2 fast  → start SCRITTORE-2 in fast mode"
+  echo "  $0 assistente        → start ASSISTENTE"
   exit 1
 fi
 
@@ -85,7 +85,7 @@ PY
 if [ "$ROLE" = "worker" ]; then
   WORKER_SESSION="${JHT_SENTINEL_WORKER:-SENTINELLA-WORKER}"
   if tmux has-session -t "$WORKER_SESSION" 2>/dev/null; then
-    echo "✓ $WORKER_SESSION gia' attivo"
+    echo "✓ $WORKER_SESSION is already active"
     exit 0
   fi
   : "${JHT_HOME:=/jht_home}"
@@ -144,11 +144,11 @@ if [ "$ROLE" = "worker" ]; then
     esac
   done
   if [ "$_w_up" -ne 1 ]; then
-    echo "✗ $WORKER_SESSION: REPL non partito (pane resta una shell) — sessione rimossa" >&2
+    echo "✗ $WORKER_SESSION: REPL did not start (pane remains a shell) — session removed" >&2
     tmux kill-session -t "$WORKER_SESSION" 2>/dev/null || true
     exit 1
   fi
-  echo "✓ $WORKER_SESSION avviato (fallback /usage TUI per bridge)"
+  echo "✓ $WORKER_SESSION started (TUI /usage fallback for the bridge)"
   exit 0
 fi
 
@@ -163,7 +163,7 @@ fi
 if [ "$ROLE" = "bridge" ]; then
   BRIDGE_SCRIPT="/app/.launcher/sentinel-bridge.py"
   if [ ! -f "$BRIDGE_SCRIPT" ]; then
-    echo "✗ $BRIDGE_SCRIPT non trovato — bridge NON partito"
+    echo "✗ $BRIDGE_SCRIPT not found — bridge did NOT start"
     exit 1
   fi
   # Kill bridge preesistenti (pkill non è installato nell'immagine slim).
@@ -181,7 +181,7 @@ if [ "$ROLE" = "bridge" ]; then
     JHT_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
       python3 -u $BRIDGE_SCRIPT >> '$BRIDGE_LOG' 2>&1
   " >/dev/null 2>&1 < /dev/null &
-  echo "✓ sentinel-bridge partito (target=${JHT_TARGET_SESSION:-CAPITANO}, log $BRIDGE_LOG)"
+  echo "✓ sentinel-bridge started (target=${JHT_TARGET_SESSION:-CAPITANO}, log $BRIDGE_LOG)"
 
   # Pacing bridge — tick alla SENTINELLA (analista del pacing) sul ritmo del
   # team (2026-06-25 push→pull: NON più al Capitano, vedi bridge-to-sentinella
@@ -203,9 +203,9 @@ if [ "$ROLE" = "bridge" ]; then
       JHT_PACING_TARGET_SESSION='${JHT_PACING_TARGET_SESSION:-SENTINELLA}' \
         python3 -u $PACING_SCRIPT >> '$PACING_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ pacing-bridge partito (target=${JHT_PACING_TARGET_SESSION:-SENTINELLA}, log $PACING_LOG)"
+    echo "✓ pacing-bridge started (target=${JHT_PACING_TARGET_SESSION:-SENTINELLA}, log $PACING_LOG)"
   else
-    echo "⚠ $PACING_SCRIPT non trovato — pacing NON partito (sentinel ok)"
+    echo "⚠ $PACING_SCRIPT not found — pacing did NOT start (sentinel is OK)"
   fi
 
   # Capitano heartbeat bridge — battito ORARIO al Capitano (2026-06-26). Col
@@ -220,9 +220,9 @@ if [ "$ROLE" = "bridge" ]; then
       JHT_HEARTBEAT_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
         python3 -u $HEARTBEAT_SCRIPT >> '$HEARTBEAT_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ heartbeat-bridge (nudge orario al Capitano) partito (log $HEARTBEAT_LOG)"
+    echo "✓ heartbeat-bridge (hourly nudge to Capitano) started (log $HEARTBEAT_LOG)"
   else
-    echo "⚠ $HEARTBEAT_SCRIPT non trovato — heartbeat NON partito"
+    echo "⚠ $HEARTBEAT_SCRIPT not found — heartbeat did NOT start"
   fi
 
   # Window ratio meter — calibrazione auto del rapporto cap-5h/cap-weekly.
@@ -237,9 +237,9 @@ if [ "$ROLE" = "bridge" ]; then
     setsid sh -c "
       python3 -u $WRM_SCRIPT --watch >> '$WRM_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ window-ratio-meter partito (log $WRM_LOG)"
+    echo "✓ window-ratio-meter started (log $WRM_LOG)"
   else
-    echo "⚠ $WRM_SCRIPT non trovato — calibrazione auto N/D (seed only)"
+    echo "⚠ $WRM_SCRIPT not found — automatic calibration unavailable (seed only)"
   fi
 
   # Token-meter — nella suite dal 19/07: prima partiva SOLO a mano
@@ -253,9 +253,9 @@ if [ "$ROLE" = "bridge" ]; then
       JHT_HOME='${JHT_HOME:-/jht_home}' \
         python3 -u $METER_SCRIPT >> '$METER_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ token-meter partito (log $METER_LOG)"
+    echo "✓ token-meter started (log $METER_LOG)"
   else
-    echo "⚠ $METER_SCRIPT non trovato — token-meter N/D"
+    echo "⚠ $METER_SCRIPT not found — token-meter unavailable"
   fi
 
   # Agent-vitals — CPU%/RSS PER-AGENTE nel tempo (richiesta Leone 19/07:
@@ -270,9 +270,9 @@ if [ "$ROLE" = "bridge" ]; then
       JHT_HOME='${JHT_HOME:-/jht_home}' \
         python3 -u $AV_SCRIPT >> '$AV_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ agent-vitals partito (cpu/rss per-agente, log $AV_LOG)"
+    echo "✓ agent-vitals started (per-agent CPU/RSS, log $AV_LOG)"
   else
-    echo "⚠ $AV_SCRIPT non trovato — vitals per-agente N/D"
+    echo "⚠ $AV_SCRIPT not found — per-agent vitals unavailable"
   fi
 
   # Codex auth-healer (#6) — rileva "session has ended"/refresh-fail nei pane
@@ -287,7 +287,7 @@ if [ "$ROLE" = "bridge" ]; then
     setsid sh -c "
       JHT_HOME='${JHT_HOME:-/jht_home}' bash $HEALER_SCRIPT >> '$HEALER_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ codex-auth-healer partito (#6, log $HEALER_LOG)"
+    echo "✓ codex-auth-healer started (#6, log $HEALER_LOG)"
   fi
 
   exit 0
@@ -302,7 +302,7 @@ fi
 if [ "$ROLE" = "tg-bridge" ]; then
   TG_SCRIPT="/app/.launcher/tg-bridge.py"
   if [ ! -f "$TG_SCRIPT" ]; then
-    echo "✗ $TG_SCRIPT non trovato — tg-bridge NON partito"
+    echo "✗ $TG_SCRIPT not found — tg-bridge did NOT start"
     exit 1
   fi
   # Kill TUTTE le istanze esistenti (di qualsiasi ruolo): rispawnamo 3 fresche.
@@ -318,7 +318,7 @@ if [ "$ROLE" = "tg-bridge" ]; then
       JHT_TG_OFFSET_RESET='${JHT_TG_OFFSET_RESET:-}' \
         python3 -u $TG_SCRIPT >> '$_log' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ tg-bridge[$_role] partito (target=$_target, log $_log)"
+    echo "✓ tg-bridge[$_role] started (target=$_target, log $_log)"
   done
   exit 0
 fi
@@ -334,7 +334,7 @@ fi
 if [ "$ROLE" = "token-meter" ]; then
   METER_SCRIPT="/app/shared/skills/token-meter.py"
   if [ ! -f "$METER_SCRIPT" ]; then
-    echo "✗ $METER_SCRIPT non trovato — token-meter NON partito"
+    echo "✗ $METER_SCRIPT not found — token-meter did NOT start"
     exit 1
   fi
   # Kill istanze preesistenti.
@@ -344,7 +344,7 @@ if [ "$ROLE" = "token-meter" ]; then
     JHT_HOME='${JHT_HOME:-/jht_home}' \
       python3 -u $METER_SCRIPT >> '$METER_LOG' 2>&1
   " >/dev/null 2>&1 < /dev/null &
-  echo "✓ token-meter partito (log $METER_LOG)"
+  echo "✓ token-meter started (log $METER_LOG)"
   exit 0
 fi
 
@@ -355,7 +355,7 @@ fi
 if [ "$ROLE" = "agent-vitals" ]; then
   AV_SCRIPT="/app/shared/skills/agent_vitals.py"
   if [ ! -f "$AV_SCRIPT" ]; then
-    echo "✗ $AV_SCRIPT non trovato — agent-vitals NON partito"
+    echo "✗ $AV_SCRIPT not found — agent-vitals did NOT start"
     exit 1
   fi
   jht_kill_by_marker agent_vitals.py 0 1
@@ -364,7 +364,7 @@ if [ "$ROLE" = "agent-vitals" ]; then
     JHT_HOME='${JHT_HOME:-/jht_home}' \
       python3 -u $AV_SCRIPT >> '$AV_LOG' 2>&1
   " >/dev/null 2>&1 < /dev/null &
-  echo "✓ agent-vitals partito (log $AV_LOG)"
+  echo "✓ agent-vitals started (log $AV_LOG)"
   exit 0
 fi
 
@@ -414,8 +414,8 @@ get_agent_info() {
 AGENT_INFO=$(get_agent_info "$ROLE")
 
 if [ -z "$AGENT_INFO" ]; then
-  echo "Errore: ruolo '$ROLE' non riconosciuto."
-  echo "Ruoli validi: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente, mentor"
+  echo "Error: unrecognized role '$ROLE'."
+  echo "Valid roles: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente, mentor"
   exit 1
 fi
 
@@ -433,7 +433,7 @@ case "$ROLE" in
     # Agenti multipli — richiede istanza
     if [ -z "$INSTANCE" ]; then
       INSTANCE="1"
-      echo "Nota: istanza non specificata, uso $ROLE $INSTANCE"
+      echo "Note: no instance specified; using $ROLE $INSTANCE"
     fi
     SESSION="${session_prefix}-${INSTANCE}"
     ;;
@@ -450,13 +450,13 @@ if command -v flock >/dev/null 2>&1; then
   mkdir -p "${JHT_HOME:-/jht_home}/locks"
   exec 9>"${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"
   if ! flock -w 30 9; then
-    echo "Errore: timeout attendendo lo spawn concorrente di '$SESSION'." >&2
+    echo "Error: timed out waiting for the concurrent spawn of '$SESSION'." >&2
     exit 1
   fi
 fi
 if tmux has-session -t "$SESSION" 2>/dev/null; then
-  echo "Sessione '$SESSION' già attiva."
-  echo "Connettiti con: tmux attach -t \"$SESSION\""
+  echo "Session '$SESSION' is already active."
+  echo "Connect with: tmux attach -t \"$SESSION\""
   exit 0
 fi
 
@@ -599,7 +599,7 @@ case "$PROVIDER" in
     fi
     ;;
   *)
-    echo "Warning: provider '$PROVIDER' non riconosciuto in jht.config.json, fallback a claude."
+    echo "Warning: provider '$PROVIDER' is not recognized in jht.config.json; falling back to claude."
     ;;
 esac
 
@@ -630,17 +630,17 @@ fi
 
 # Verifica prerequisiti della CLI scelta
 if ! command -v "$CLI_BIN" &>/dev/null; then
-  echo "Errore: comando '$CLI_BIN' non trovato (provider configurato: ${PROVIDER:-claude})."
+  echo "Error: command '$CLI_BIN' not found (configured provider: ${PROVIDER:-claude})."
   case "$CLI_BIN" in
     claude) echo "Installa Claude CLI: https://claude.ai/download" ;;
     codex)  echo "Installa Codex CLI: https://github.com/openai/codex" ;;
-    kimi)   echo "Installa Kimi CLI del provider Moonshot." ;;
+    kimi)   echo "Install the Kimi CLI from provider Moonshot." ;;
   esac
-  echo "In alternativa, modifica ~/.jht/jht.config.json per usare un altro provider."
+  echo "Alternatively, edit ~/.jht/jht.config.json to use another provider."
   exit 1
 fi
 if ! command -v tmux &>/dev/null; then
-  echo "Errore: tmux non trovato. Installalo con: sudo apt install tmux"
+  echo "Error: tmux not found. Install it with: sudo apt install tmux"
   exit 1
 fi
 
@@ -783,7 +783,7 @@ else
 fi
 
 if [ ! -f "$TEMPLATE" ] && [ ! -f "$IDENTITY_DEST" ]; then
-  echo "Errore: template $TEMPLATE non trovato e $IDENTITY_FILE non esiste in $AGENT_DIR."
+  echo "Error: template $TEMPLATE not found and $IDENTITY_FILE does not exist in $AGENT_DIR."
   echo "Crea agents/$ROLE/$ROLE.md (baseline) o agents/$ROLE/$ROLE.$USER_LOCALE.md, oppure $IDENTITY_DEST manualmente."
   exit 1
 fi
@@ -906,13 +906,13 @@ if [ "$CLI_BIN" = "claude" ] && [ -n "${JHT_HOME:-}" ]; then
   CLI_ENV_PREFIX="IS_SANDBOX=1 ${CLI_ENV_PREFIX}"
   _claude_json="$JHT_HOME/.claude.json"
   if [ ! -s "$_claude_json" ] && [ -s "$JHT_HOME/.claude/.credentials.json" ]; then
-    echo "  → warmup ~/.claude.json (mancante, popolo via claude -p)"
+    echo "  → warming up ~/.claude.json (missing; populating via claude -p)"
     HOME="$JHT_HOME" timeout 30 claude --dangerously-skip-permissions -p "ok" \
       >/dev/null 2>&1 || true
     if [ -s "$_claude_json" ]; then
       echo "  ✓ .claude.json popolato ($(wc -c <"$_claude_json") byte)"
     else
-      echo "  ⚠ warmup non ha popolato .claude.json — l'agente potrebbe cadere su Select login method"
+      echo "  ⚠ warmup did not populate .claude.json — the agent may fall back to Select login method"
     fi
   fi
 fi
@@ -1076,7 +1076,7 @@ case "$STAGGER_SEC" in
   ''|*[!0-9]*) STAGGER_SEC=0 ;;
 esac
 
-echo "✓ $SESSION avviato (cli: $CLI_BIN, provider: ${PROVIDER:-claude}, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
+echo "✓ $SESSION started (cli: $CLI_BIN, provider: ${PROVIDER:-claude}, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
 
 # ── Roster atteso ───────────────────────────────────────────────────────────
 # Registra lo spawn nello STATO CONDIVISO letto da agent-watchdog.sh per
@@ -1094,11 +1094,11 @@ fi
 echo "  Agent dir:    $AGENT_DIR"
 echo "  JHT_USER_DIR: $JHT_USER_DIR"
 if [ "$STAGGER_SEC" -gt 0 ]; then
-  echo "  Stagger:      ${STAGGER_SEC}s prima del primo ciclo (throttle pre-armato, gradino condiviso)"
+  echo "  Stagger:      ${STAGGER_SEC}s before the first cycle (pre-armed throttle, shared rung)"
 else
-  echo "  Stagger:      nessuno (primo worker del gradino, o ruolo senza periodo)"
+  echo "  Stagger:      none (first worker on the rung, or role without a period)"
 fi
-echo "  Connettiti con: tmux attach -t \"$SESSION\""
+echo "  Connect with: tmux attach -t \"$SESSION\""
 
 # ── Kick-off Capitano / Assistente ──────────────────────────────────────────
 # Dopo start-agent.sh il CLI e' bootato ma l'agente sta fermo in attesa di
@@ -1165,20 +1165,20 @@ _welcome_kickoff() {
   msg=$(printf '%s\n' \
     "[@system -> @${role}] [WELCOME-USER]" \
     "" \
-    "Protocollo welcome utente — idempotente:" \
+    "User welcome protocol — idempotent:" \
     "" \
-    "1. Se ${welcome_flag} esiste: NON inviare nulla. Sei gia' stato presentato in un boot precedente. Ack al system e resta in attesa di [CHAT] / [TG] reali." \
+    "1. If ${welcome_flag} exists: DO NOT send anything. You were already introduced on a previous boot. Acknowledge the system and wait for actual [CHAT] / [TG] messages." \
     "" \
-    "2. Altrimenti, Telegram e' OPZIONALE (web-first). Verifica se c'e' un bot Telegram configurato: python3 -c \"import json;b=(json.load(open('\${JHT_HOME:-/jht_home}/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))\"." \
-    "   - Se True: invia il messaggio di welcome sotto via jht-telegram-send --from ${role} (skill telegram-send). UN SOLO messaggio, nella lingua dell'utente (il testo sotto e' gia' localizzato — invialo ESATTAMENTE com'e'), righe vuote vere (\\n\\n)." \
-    "   - Se False (nessun Telegram): NON inviare nulla — il welcome non e' bloccante, compare sulla dashboard. Reagisci a [WELCOME-USER] e SOLO a questo, mai welcome su [CHAT]/[TG]." \
+    "2. Otherwise, Telegram is OPTIONAL (web-first). Check whether a Telegram bot is configured: python3 -c \"import json;b=(json.load(open('\${JHT_HOME:-/jht_home}/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))\"." \
+    "   - If True: send the welcome message below via jht-telegram-send --from ${role} (telegram-send skill). Send ONE message in the user's language (the text below is already localized — send it EXACTLY as written), with real blank lines (\\n\\n)." \
+    "   - If False (no Telegram): DO NOT send anything — the welcome is non-blocking and appears on the dashboard. React to [WELCOME-USER] and ONLY to this event; never welcome in response to [CHAT]/[TG]." \
     "" \
-    "Contenuto del welcome da inviare (solo se Telegram configurato):" \
+    "Welcome content to send (only when Telegram is configured):" \
     "${body}" \
     "" \
-    "3. Tocca SEMPRE il flag (sia inviato via Telegram, sia saltato in web-first): mkdir -p ${welcome_dir} && touch ${welcome_flag}. Il welcome e' one-shot, NON un gate per iniziare a lavorare." \
+    "3. ALWAYS create the flag (whether sent via Telegram or skipped in web-first mode): mkdir -p ${welcome_dir} && touch ${welcome_flag}. The welcome is one-shot, NOT a gate for starting work." \
     "" \
-    "4. Ack al system con riga unica '[@${role} -> @system] [WELCOME-ACK] inviato/saltato + flag creato', POI inizia subito a lavorare (apri pipeline-triage / leggi il budget e agisci). NON restare idle 'in attesa di un segnale Telegram'."
+    "4. Acknowledge the system with one line: '[@${role} -> @system] [WELCOME-ACK] sent/skipped + flag created'. THEN start working immediately (open pipeline-triage, read the budget, and act). DO NOT remain idle waiting for a Telegram signal."
   )
   _kickoff "$SESSION" "$msg"
 
@@ -1191,15 +1191,15 @@ _welcome_kickoff() {
     for retry in 1 2 3; do
       sleep 90
       if [ -f "$JHT_WELCOME_FLAG" ]; then
-        echo "[$(date +%H:%M:%S)] flag presente dopo retry=$retry-1, exit"
+        echo "[$(date +%H:%M:%S)] flag present after retry=$retry-1, exiting"
         exit 0
       fi
-      echo "[$(date +%H:%M:%S)] flag mancante (retry $retry/3): re-injection"
+      echo "[$(date +%H:%M:%S)] flag missing (retry $retry/3): reinjecting"
       tui_send_verified "$JHT_WELCOME_SESS" "$JHT_WELCOME_MSG" || \
-        echo "[$(date +%H:%M:%S)] tui_send_verified fallito"
+        echo "[$(date +%H:%M:%S)] tui_send_verified failed"
     done
     if [ ! -f "$JHT_WELCOME_FLAG" ]; then
-      echo "[$(date +%H:%M:%S)] watchdog give up: welcome non confermato"
+      echo "[$(date +%H:%M:%S)] watchdog giving up: welcome not confirmed"
     fi
   ' </dev/null &
 }
@@ -1236,6 +1236,6 @@ fi
 if [ "$ROLE" = "sentinella" ]; then
   # La Sentinella e' un watchdog LLM: senza kick-off resta idle nel CLI.
   # Tutto il protocollo sta nel suo prompt (agents/sentinella/sentinella.md).
-  _msg="[@utente -> @sentinella] [MSG] Avvio. Aspetta il primo [BRIDGE TICK]."
+  _msg="[@utente -> @sentinella] [MSG] Startup. Wait for the first [BRIDGE TICK]."
   _kickoff "$SESSION" "$_msg"
 fi

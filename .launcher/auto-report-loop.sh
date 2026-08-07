@@ -29,13 +29,13 @@ log "auto-report-loop starting · check interval=${LOOP_INTERVAL_SEC}s · skill=
 
 while true; do
   if [ ! -f "$SKILL" ]; then
-    log "ERROR: skill non trovata a $SKILL — riprovo fra $LOOP_INTERVAL_SEC s"
+    log "ERROR: skill not found at $SKILL — retrying in $LOOP_INTERVAL_SEC s"
   else
     out=$(python3 "$SKILL" send 2>&1) && rc=0 || rc=$?
     if [ "$rc" -eq 0 ]; then
       # Non logga ogni 5 min "skip" per non riempire il file. Logga
       # solo quando ha effettivamente inviato.
-      if echo "$out" | grep -q "auto-report inviato"; then
+      if echo "$out" | grep -Eq "auto-report (sent|inviato)"; then
         log "$out"
       fi
     else

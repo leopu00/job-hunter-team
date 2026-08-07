@@ -33,10 +33,10 @@ function loadKeyringModule() {
 }
 
 function printInstallHint() {
-  console.error(`\n  ${RED}✗${RESET}  ${BOLD}@napi-rs/keyring non installato.${RESET}`);
-  console.error(`  ${DIM}Per usare il keyring OS:${RESET}`);
+  console.error(`\n  ${RED}✗${RESET}  ${BOLD}@napi-rs/keyring not installed.${RESET}`);
+  console.error(`  ${DIM}To use the OS keyring:${RESET}`);
   console.error(`    ${BOLD}npm install -g @napi-rs/keyring${RESET}`);
-  console.error(`  ${DIM}Oppure usa la env var come fallback:${RESET}`);
+  console.error(`  ${DIM}Or use env var as fallback:${RESET}`);
   console.error(`    ${BOLD}export JHT_CREDENTIALS_KEY="<passphrase>"${RESET}\n`);
 }
 
@@ -84,15 +84,15 @@ async function setEntry(options) {
   if (!mod) { printInstallHint(); process.exitCode = 1; return; }
   const account = options.service?.trim() || ACCOUNT_DEFAULT;
   const passphrase = process.env.JHT_KEYRING_PASSPHRASE?.trim()
-    ?? await promptHidden(`  Passphrase per ${BOLD}${account}${RESET}: `);
+    ?? await promptHidden(`  Passphrase for ${BOLD}${account}${RESET}: `);
   if (!passphrase) {
-    console.error(`  ${RED}✗${RESET}  Passphrase vuota — annullato.`);
+    console.error(`  ${RED}✗${RESET}  Empty passphrase — cancelled.`);
     process.exitCode = 1;
     return;
   }
   const entry = new mod.Entry(SERVICE, account);
   entry.setPassword(passphrase);
-  console.log(`\n  ${GREEN}✓${RESET}  Passphrase salvata in keyring (${SERVICE}/${account}).\n`);
+  console.log(`\n  ${GREEN}✓${RESET}  Passphrase saved in keyring (${SERVICE}/${account}).\n`);
 }
 
 async function getEntry(options) {
@@ -102,7 +102,7 @@ async function getEntry(options) {
   const entry = new mod.Entry(SERVICE, account);
   const value = entry.getPassword();
   if (!value) {
-    console.error(`  ${RED}✗${RESET}  Nessuna passphrase salvata per ${SERVICE}/${account}.`);
+    console.error(`  ${RED}✗${RESET}  No passphrase saved for ${SERVICE}/${account}.`);
     process.exitCode = 1;
     return;
   }
@@ -116,9 +116,9 @@ async function deleteEntry(options) {
   const entry = new mod.Entry(SERVICE, account);
   const deleted = entry.deletePassword();
   if (deleted) {
-    console.log(`\n  ${GREEN}✓${RESET}  Entry ${SERVICE}/${account} rimossa.\n`);
+    console.log(`\n  ${GREEN}✓${RESET}  Entry ${SERVICE}/${account} removed.\n`);
   } else {
-    console.error(`  ${YELLOW}!${RESET}  Nessuna entry da rimuovere per ${SERVICE}/${account}.`);
+    console.error(`  ${YELLOW}!${RESET}  No entry to remove ${SERVICE}/${account}.`);
     process.exitCode = 1;
   }
 }
@@ -129,17 +129,17 @@ async function statusEntry(options) {
   console.log(`\n  ${BOLD}JHT — Keyring status${RESET}\n`);
   console.log(`  Service:        ${SERVICE}`);
   console.log(`  Account:        ${account}`);
-  console.log(`  @napi-rs/keyring installato: ${mod ? `${GREEN}sì${RESET}` : `${RED}no${RESET}`}`);
+  console.log(`  @napi-rs/keyring installed: ${mod ? `${GREEN}yes${RESET}` : `${RED}no${RESET}`}`);
   if (!mod) {
-    console.log(`  ${DIM}Fallback attivo: env var JHT_CREDENTIALS_KEY (se settata).${RESET}\n`);
+    console.log(`  ${DIM}Active fallback: env var JHT_CREDENTIALS_KEY (if set).${RESET}\n`);
     return;
   }
   try {
     const entry = new mod.Entry(SERVICE, account);
     const has = !!entry.getPassword();
-    console.log(`  Entry presente: ${has ? `${GREEN}sì${RESET}` : `${RED}no${RESET}`}`);
+    console.log(`  Entry present: ${has ? `${GREEN}yes${RESET}` : `${RED}no${RESET}`}`);
   } catch (err) {
-    console.log(`  ${RED}Errore lettura keyring:${RESET} ${err.message ?? err}`);
+    console.log(`  ${RED}Keyring reading error:${RESET} ${err.message ?? err}`);
   }
   console.log('');
 }
@@ -151,15 +151,15 @@ async function handleKeyring(action, options) {
    || action === 'rm')           return await deleteEntry(options);
   if (!action || action === 'status') return await statusEntry(options);
 
-  console.error(`  Azione non valida: ${action}`);
-  console.error('  Azioni: status (default), set, get, delete');
+  console.error(`  Invalid action: ${action}`);
+  console.error('  Actions: status (default), set, get, delete');
   process.exitCode = 1;
 }
 
 export function registerKeyringCommand(program) {
   program
     .command('keyring [action]')
-    .description('Gestione passphrase JHT_CREDENTIALS_KEY nel keyring OS (richiede @napi-rs/keyring)')
+    .description('Manage the JHT_CREDENTIALS_KEY passphrase in the OS keyring (requires @napi-rs/keyring)')
     .option('-s, --service <name>', `account name (default: ${ACCOUNT_DEFAULT})`)
     .action(handleKeyring);
 }

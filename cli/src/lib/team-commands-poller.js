@@ -179,7 +179,7 @@ async function processCommand(baseUrl, token, command) {
   if (target === 'bridge' && action === 'restart') {
     await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
       status: 'error',
-      error: 'bridge non supporta restart; usa stop+start',
+      error: 'bridge does not support restart; use stop+start',
     }).catch(() => {});
     return;
   }

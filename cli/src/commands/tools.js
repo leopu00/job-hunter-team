@@ -47,7 +47,7 @@ function parseJsonSafe(stdout) {
 
 function ensureContainer() {
   if (!containerRunning()) {
-    console.error('  Il container `jht` non è attivo. Avvialo con `jht up`.');
+    console.error('  The `jht` container is not active. Start with `jht up`.');
     process.exitCode = 1;
     return false;
   }
@@ -60,7 +60,7 @@ async function handleTools(action) {
   if (action === 'outdated') return await toolsOutdated();
   if (action === 'dups')     return await toolsDups();
 
-  console.error(`  Azione non valida: ${action}`);
+  console.error(`  Invalid action: ${action}`);
   console.error('  Azioni: stats, list, outdated, dups');
   process.exitCode = 1;
 }
@@ -75,8 +75,8 @@ async function toolsStats() {
   const pkgs = parseJsonSafe(list.stdout) || [];
   const bytes = parseInt((du.stdout || '0').trim(), 10);
 
-  console.log(`  Pacchetti installati: ${pkgs.length}`);
-  console.log(`  Spazio occupato:      ${fmtSize(bytes)}`);
+  console.log(`  Packages installed: ${pkgs.length}`);
+  console.log(`  Space occupied:      ${fmtSize(bytes)}`);
 
   // Mini-summary overlap (senza dettaglio — usa `jht tools dups` per quello)
   const overlapHits = KNOWN_OVERLAPS
@@ -87,9 +87,9 @@ async function toolsStats() {
     .filter(g => g.hits.length > 1);
 
   if (overlapHits.length === 0) {
-    console.log('  Overlap funzionali:   nessuno rilevato ✓');
+    console.log('  Functional Overlap: no detected ✓');
   } else {
-    console.log(`  Overlap funzionali:   ${overlapHits.length} gruppi con duplicati (vedi \`jht tools dups\`)`);
+    console.log(`  Functional Overlap:   ${overlapHits.length} groups with duplicates (see \`jht tools dups\`)`);
   }
   console.log('');
 }
@@ -101,13 +101,13 @@ async function toolsList() {
   const r = execInContainer(PIP_LIST_CMD, { timeoutMs: 30_000 });
   const pkgs = parseJsonSafe(r.stdout);
   if (!pkgs) {
-    console.error('  Errore lettura `pip list`. stderr:');
+    console.error('  `pip list` reading error. stderr:');
     console.error(r.stderr);
     process.exitCode = 1;
     return;
   }
   if (pkgs.length === 0) {
-    console.log('  (nessun pacchetto installato in PYTHONUSERBASE)\n');
+    console.log('  (No package installed in PYTHONUSERBASE)\n');
     return;
   }
 
@@ -126,13 +126,13 @@ async function toolsOutdated() {
   const r = execInContainer(PIP_OUTDATED_CMD, { timeoutMs: 60_000 });
   const pkgs = parseJsonSafe(r.stdout);
   if (!pkgs) {
-    console.error('  Errore lettura `pip list --outdated`. stderr:');
+    console.error('  `pip list --outdated` reading error. stderr:');
     console.error(r.stderr);
     process.exitCode = 1;
     return;
   }
   if (pkgs.length === 0) {
-    console.log('  Tutti i pacchetti sono aggiornati ✓\n');
+    console.log('  All packages are up to date ✓\n');
     return;
   }
 
@@ -146,17 +146,17 @@ async function toolsOutdated() {
     const lat = p.latest_version || '?';
     console.log(`  ${(p.name || '').padEnd(nameW)}  ${cur.padEnd(curW)}  ${lat}`);
   }
-  console.log(`\n  ${pkgs.length} pacchetti con update disponibile\n`);
+  console.log(`\n  ${pkgs.length} packages with updates available\n`);
 }
 
 async function toolsDups() {
   if (!ensureContainer()) return;
-  console.log('\n  JHT — Overlap Funzionali nel User-Base\n');
+  console.log('\n  JHT — Functional Overlap in User-Base\n');
 
   const r = execInContainer(PIP_LIST_CMD, { timeoutMs: 30_000 });
   const pkgs = parseJsonSafe(r.stdout);
   if (!pkgs) {
-    console.error('  Errore lettura `pip list`. stderr:');
+    console.error('  `pip list` reading error. stderr:');
     console.error(r.stderr);
     process.exitCode = 1;
     return;
@@ -168,7 +168,7 @@ async function toolsDups() {
     .filter(g => g.hits.length > 1);
 
   if (overlapHits.length === 0) {
-    console.log('  Nessun overlap funzionale rilevato ✓\n');
+    console.log('  No functional overlap detected ✓\n');
     return;
   }
 
@@ -180,12 +180,12 @@ async function toolsDups() {
     }
     console.log('');
   }
-  console.log(`  ${overlapHits.length} gruppi con duplicati. Consolidare e \`pip uninstall\` le lib non scelte.\n`);
+  console.log(`  ${overlapHits.length} groups with duplicates. Consolidate and \`pip uninstall\` unchosen libs.\n`);
 }
 
 export function registerToolsCommand(program) {
   program
     .command('tools [action]')
-    .description('Audit Python user-base condiviso (azioni: stats, list, outdated, dups)')
+    .description('Audit the shared Python user base (actions: stats, list, outdated, dups)')
     .action(handleTools);
 }

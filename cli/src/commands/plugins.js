@@ -49,7 +49,7 @@ async function handlePlugins(action, options) {
   if (action === 'enable') return await togglePlugin(options.id, true);
   if (action === 'disable') return await togglePlugin(options.id, false);
 
-  console.error(`  Azione non valida: ${action}`);
+  console.error(`  Invalid action: ${action}`);
   console.error('  Azioni: list, enable --id <id>, disable --id <id>');
   process.exitCode = 1;
 }
@@ -60,7 +60,7 @@ async function listPlugins() {
   const deny = new Set(config.deny ?? []);
 
   if (plugins.length === 0) {
-    console.log('\n  Nessun plugin installato.\n');
+    console.log('\n  No plugins installed.\n');
     console.log(`  ${DIM}Directory plugin: ${PLUGINS_DIR}${RESET}\n`);
     return;
   }
@@ -69,7 +69,7 @@ async function listPlugins() {
   for (const p of plugins) {
     const enabled = !deny.has(p.id);
     const icon = enabled ? OK : OFF;
-    const status = enabled ? `${GREEN}attivo${RESET}` : `${DIM}disabilitato${RESET}`;
+    const status = enabled ? `${GREEN}enabled${RESET}` : `${DIM}disabled${RESET}`;
     console.log(`  ${icon}  ${p.name} ${DIM}v${p.version}${RESET}  [${YELLOW}${p.kind}${RESET}]  ${status}`);
     if (p.description) console.log(`     ${DIM}${p.description}${RESET}`);
   }
@@ -78,15 +78,15 @@ async function listPlugins() {
 
 async function togglePlugin(id, enable) {
   if (!id) {
-    console.error('  Opzione --id obbligatoria');
+    console.error('  Option --id mandatory');
     process.exitCode = 1;
     return;
   }
 
   const plugins = await discoverPlugins();
   if (!plugins.find(p => p.id === id)) {
-    console.error(`  Plugin non trovato: ${id}`);
-    console.error(`  Plugin disponibili: ${plugins.map(p => p.id).join(', ') || 'nessuno'}`);
+    console.error(`  Plugin not found: ${id}`);
+    console.error(`  Plugins available: ${plugins.map(p => p.id).join(', ') || 'Nobody.'}`);
     process.exitCode = 1;
     return;
   }
@@ -99,13 +99,13 @@ async function togglePlugin(id, enable) {
 
   config.deny = [...deny];
   await saveConfig(config);
-  console.log(`\n  Plugin "${id}" ${enable ? 'attivato' : 'disattivato'}.\n`);
+  console.log(`\n  Plugin "${id}" ${enable ? 'enabled' : 'disabled'}.\n`);
 }
 
 export function registerPluginsCommand(program) {
   program
     .command('plugins [action]')
-    .description('[non implementato] Gestione plugin — nessun loader: i plugin non vengono mai caricati (azioni: list, enable, disable)')
-    .option('--id <id>', 'ID del plugin da attivare/disattivare')
+    .description('[not implemented] Plugin management — no loaders: plugins are never loaded (actions: list, enable, disable)')
+    .option('--id <id>', 'Plugin ID to activate/disable')
     .action(handlePlugins);
 }

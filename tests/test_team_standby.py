@@ -406,7 +406,7 @@ def test_sentinel_removes_an_invalid_flag(bridge, sb):
     bridge._standby_step({"weekly_usage": 100})
     assert not sb.STANDBY_FLAG.exists()
     exits = [e for e in _events(sb) if e["event"] == "exit"]
-    assert exits and "invalido" in exits[-1]["reason"]
+    assert exits and "invalid" in exits[-1]["reason"]
 
 
 def test_sentinel_sampling_is_not_gated_by_standby():

@@ -112,7 +112,7 @@ def _acquire_singleton():
     except SystemExit:
         raise
     except Exception as e:  # noqa: BLE001
-        _log(f"WARN singleton_lock non caricabile ({e}) — proseguo senza lock")
+        _log(f"WARN singleton_lock not loadable ({e}) — continuing without a lock")
 
 
 def _db_count(cmd):
@@ -319,7 +319,7 @@ def _mode_section():
     """
     mod = _mode_banner_mod()
     if mod is None:
-        _log("WARN mode_banner non caricabile: [MODALITÀ CORRENTE] NON iniettata")
+        _log("WARN mode_banner not loadable: [CURRENT MODE] was NOT injected")
         return ("", False, False)
     try:
         snap = mod.snapshot()
@@ -327,7 +327,7 @@ def _mode_section():
                 bool(mod.has_standing_orders(snap)),
                 bool(mod.sourcing_stopped(snap)))
     except Exception as e:  # noqa: BLE001
-        _log(f"WARN [MODALITÀ CORRENTE] non composta: {e}")
+        _log(f"WARN [CURRENT MODE] could not be composed: {e}")
         return ("", False, False)
 
 
@@ -383,11 +383,11 @@ def choose_nudge(state, now, last_theme):
     tk = state.get("tickets_open")
     if tk and tk > 0:
         return ("ticket-utente",
-                f"[HEARTBEAT] {tk} ticket utente APERTO/I in coda (richieste dirette "
-                f"sulla pagina posizione). ORDINE (C-15): `ticket.py list-open`, assegna "
-                f"ORA l'agente adatto (Analista per verifica offerta/azienda/requisiti; "
-                f"Scrittore per un CV) — le richieste utente PRECEDONO il lavoro autonomo. "
-                f"L'agente risponde con `ticket.py resolve <id> --response \"…\"`.")
+                f"[HEARTBEAT] {tk} OPEN user ticket(s) are queued (direct requests "
+                f"from a position page). ORDER (C-15): run `ticket.py list-open` and assign "
+                f"the appropriate agent NOW (Analista to verify the offer/company/requirements; "
+                f"Scrittore for a CV). User requests TAKE PRIORITY over autonomous work. "
+                f"Resolve with `ticket.py resolve <id> --response \"…\"`.")
 
     # 1) SOURCING FERMO — priorità massima (fix #1/#2, 2026-07-01).
     #    Trigger: NESSUNO Scout attivo = nessuno sorge, a prescindere da 1-2 residui
@@ -411,25 +411,25 @@ def choose_nudge(state, now, last_theme):
             and not state.get("sourcing_stopped")
             and not _scout_exhausted_recently(now)):
         return ("sourcing-fermo",
-                f"[HEARTBEAT] Nessuno Scout attivo e nessun [SCOUT-ESAUSTO] oggi "
-                f"(analista={qa}, scorer={qs}, weekly={wk}%) → il sourcing è FERMO. "
-                f"ORDINE (C-05): apri `pipeline-triage` e spawna 1 Scout ORA, poi scala "
-                f"a squadra coordinata (C-21). NON chiudere la finestra di lavoro senza "
-                f"aver fatto girare gli Scout fino al loro [SCOUT-ESAUSTO].")
+                f"[HEARTBEAT] No Scout is active and no [SCOUT-ESAUSTO] marker exists today "
+                f"(analista={qa}, scorer={qs}, weekly={wk}%) → sourcing is STOPPED. "
+                f"ORDER (C-05): open `pipeline-triage` and spawn one Scout NOW, then scale "
+                f"to a coordinated team (C-21). Do NOT close the work window before the "
+                f"Scouts have run through their [SCOUT-ESAUSTO] markers.")
 
     # 2) WORKER CALDO: top-consumer con share alto e cadenza ~0 = sospetto
     #    rabbit-hole/stuck → un segnale, non un ordine: il Capitano non killa al buio.
     if top and top[1] >= 50 and (top[2] is None or top[2] < 0.05):
         return ("worker-caldo",
-                f"[HEARTBEAT] {top[0]} brucia ~{top[1]:.0f}% del team con cadenza ~0 "
-                f"nell'ultima finestra → possibile task lungo o stuck. (segnale: "
-                f"worker caldo)")
+                f"[HEARTBEAT] {top[0]} consumed ~{top[1]:.0f}% of the team budget with "
+                f"near-zero cadence in the last window → possible long task or stall. "
+                f"(signal: hot worker)")
 
     # 3) BACKLOG: code profonde → forse servono più worker.
     if (qa or 0) >= 15 or (qs or 0) >= 15:
         return ("backlog",
-                f"[HEARTBEAT] Coda profonda (analista={qa}, scorer={qs}). (segnale: "
-                f"collo di bottiglia; più worker se il budget regge)")
+                f"[HEARTBEAT] Deep queue (analista={qa}, scorer={qs}). "
+                f"(signal: bottleneck; add workers if the budget allows)")
 
     # 4) Rotazione leggera per non ripetere lo stesso tema; a volte SILENZIO.
     # NB (#3): nessun "(decidi tu)" né "fai pipeline-triage". Il nudge consegna
@@ -437,9 +437,9 @@ def choose_nudge(state, now, last_theme):
     # costava un turno di deliberazione (spesso uno spawn di subagente) a vuoto.
     rota = [
         ("pacing-check",
-         f"[HEARTBEAT] weekly={wk}% status={state.get('status')}. (segnale di pace orario)"),
+         f"[HEARTBEAT] weekly={wk}% status={state.get('status')}. (hourly pacing signal)"),
         ("code-check",
-         f"[HEARTBEAT] code analista={qa}, scorer={qs}. (segnale pipeline orario)"),
+         f"[HEARTBEAT] queues: analista={qa}, scorer={qs}. (hourly pipeline signal)"),
         (None, None),   # un'ora su tre: silenzio
     ]
     theme, msg = rota[hour % len(rota)]
@@ -490,7 +490,7 @@ def tick(now, send):
     # Standby a spesa zero: PRIMA di ogni altro gate e SENZA deroghe — il
     # battito tace finché il sentinel-bridge non risveglia il team.
     if _standby_active():
-        _log(f"{now:%H:%M} standby: heartbeat soppresso (team a spesa zero)")
+        _log(f"{now:%H:%M} standby: heartbeat suppressed (zero-spend team state)")
         return
     # Intento dell'utente letto PRIMA dei due gate: sopprimere il battito è già
     # applicare l'halt, e un Capitano senza battito è un Capitano che non sa che
@@ -499,18 +499,18 @@ def tick(now, send):
     # Daily hard-stop (#2): a team in standby (cap giornaliero sforato) anche il
     # battito orario tace — niente nudge "(decidi tu)" mentre il team è in pausa.
     if DAILY_HALT_FLAG.exists() and not burn_intent_on:
-        _log(f"{now:%H:%M} daily-halt: heartbeat soppresso (team in standby)")
+        _log(f"{now:%H:%M} daily-halt: heartbeat suppressed (team in standby)")
         return
     # Off-hours gate (#4): fuori dall'orario di lavoro il team riposa → niente
     # battito. (work_phase=None = nessun orario configurato, team 24/7 → si batte.)
     # Il gate orario è un automatismo di spesa: con BURN-INTENT attivo l'utente
     # ha deciso di lavorare adesso, e il battito continua.
     if _work_phase() == "OFF" and not burn_intent_on:
-        _log(f"{now:%H:%M} off-hours (work_phase=OFF): heartbeat soppresso")
+        _log(f"{now:%H:%M} off-hours (work_phase=OFF): heartbeat suppressed")
         return
     if burn_intent_on:
-        _log(f"{now:%H:%M} BURN-INTENT attivo: battito mantenuto "
-             f"(daily-halt/off-hours derogati dall'utente)")
+        _log(f"{now:%H:%M} BURN-INTENT active: heartbeat retained "
+             f"(daily-halt/off-hours overridden by the user)")
     st = gather_state()
     persisted = _read_state()
     # DA DISCO, adesso: mai da `persisted`, mai da una variabile del giro prima.
@@ -528,8 +528,8 @@ def tick(now, send):
             _log(f"{now:%H:%M} silent (theme={theme}) state={st}")
             return
         theme = "modalita-corrente"
-        msg = ("[HEARTBEAT] Nessuna anomalia da segnalare. Promemoria "
-               "deterministico degli ordini in vigore:")
+        msg = ("[HEARTBEAT] No anomalies to report. Deterministic reminder "
+               "of current orders:")
     if mode_section:
         msg = f"{msg} {mode_section}"
     _log(f"{now:%H:%M} nudge[{theme}]: {msg}")

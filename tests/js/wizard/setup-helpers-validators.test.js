@@ -71,7 +71,7 @@ describe('validateTelegramToken', () => {
   });
 
   it('rifiuta formato non valido', () => {
-    expect(validateTelegramToken('invalidtoken')).toMatch(/Formato/);
+    expect(validateTelegramToken('invalidtoken')).toMatch(/Invalid token format/);
   });
 
   it('accetta token nel formato corretto', () => {
@@ -87,7 +87,7 @@ describe('validateChatId', () => {
   });
 
   it('rifiuta chat ID non numerico', () => {
-    expect(validateChatId('not-a-number')).toMatch(/numero/);
+    expect(validateChatId('not-a-number')).toMatch(/must be a number/);
   });
 
   it('accetta ID positivo', () => {

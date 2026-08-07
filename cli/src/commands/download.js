@@ -27,7 +27,7 @@ function normalizePlatform(value) {
   const platform = aliases[String(value ?? '').trim().toLowerCase()];
   if (!platform) {
     throw new Error(
-      `Sistema operativo non supportato: ${value}. Usa windows, macos oppure linux.`,
+      `Unsupported operating system: ${value}. Use windows, macos, or linux.`,
     );
   }
   return platform;
@@ -37,7 +37,7 @@ function normalizePlatform(value) {
 function normalizeVersion(value) {
   const version = String(value ?? '').trim().replace(/^v/, '');
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
-    throw new Error(`Versione non valida: ${value}. Esempio: 0.3.5.`);
+    throw new Error(`Invalid version: ${value}. Example: 0.3.5.`);
   }
   return version;
 }
@@ -63,10 +63,10 @@ async function fetchReleaseFile(url) {
       headers: { 'User-Agent': 'job-hunter-team-cli' },
     });
   } catch (error) {
-    throw new Error(`Download non riuscito: ${error.message}`);
+    throw new Error(`Download failed: ${error.message}`);
   }
   if (!response.ok) {
-    throw new Error(`Download non riuscito: HTTP ${response.status} per ${basename(url)}.`);
+    throw new Error(`Download failed: HTTP ${response.status} for ${basename(url)}.`);
   }
   return response;
 }
@@ -77,7 +77,7 @@ function checksumFor(checksums, asset) {
     const match = rawLine.match(/^([a-fA-F0-9]{64})\s+\*?(.+)$/);
     if (match && match[2] === asset) return match[1].toLowerCase();
   }
-  throw new Error(`SHA-256 dichiarato non trovato per ${asset}.`);
+  throw new Error(`Declared SHA-256 not found for ${asset}.`);
 }
 
 
@@ -90,7 +90,7 @@ async function fileSha256(path) {
 
 
 function formatBytes(value) {
-  if (!Number.isFinite(value) || value <= 0) return 'dimensione sconosciuta';
+  if (!Number.isFinite(value) || value <= 0) return 'unknown size';
   const units = ['B', 'KB', 'MB', 'GB'];
   let amount = value;
   let unit = 0;
@@ -112,7 +112,7 @@ function progressTransform(total, digest) {
       if (process.stderr.isTTY && total > 0) {
         const percent = Math.min(100, Math.floor((downloaded / total) * 100));
         if (percent !== lastPercent) {
-          process.stderr.write(`\r  Progresso: ${String(percent).padStart(3)}% (${formatBytes(downloaded)})`);
+          process.stderr.write(`\r  Progress: ${String(percent).padStart(3)}% (${formatBytes(downloaded)})`);
           lastPercent = percent;
         }
       }
@@ -140,7 +140,7 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
   const platform = normalizePlatform(requestedPlatform);
   const version = normalizeVersion(requestedVersion);
   if (portable && platform !== 'windows') {
-    throw new Error("L'opzione --portable e' disponibile solo per Windows.");
+    throw new Error('The --portable option is available only for Windows.');
   }
 
   const asset = portable ? WINDOWS_PORTABLE_ASSET : ASSETS[platform];
@@ -154,20 +154,20 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
   if (await destinationExists(destination)) {
     const existingSha256 = await fileSha256(destination);
     if (existingSha256 === expectedSha256) {
-      console.log(`\n  File gia presente e verificato: ${destination}`);
-      console.log(`  SHA-256 verificato: ${expectedSha256}\n`);
+      console.log(`\n  File already present and verified: ${destination}`);
+      console.log(`  SHA-256 verified: ${expectedSha256}\n`);
       return destination;
     }
-    throw new Error(`Il file ${destination} esiste gia ma lo SHA-256 non coincide; non e' stato sovrascritto.`);
+    throw new Error(`The file ${destination} already exists but its SHA-256 does not match; it was not overwritten.`);
   }
 
   const response = await fetchReleaseFile(`${base}/${encodeURIComponent(asset)}`);
-  if (!response.body) throw new Error(`Download non riuscito: risposta vuota per ${asset}.`);
+  if (!response.body) throw new Error(`Download failed: empty response for ${asset}.`);
 
   const total = Number(response.headers.get('content-length')) || 0;
   const temporary = `${destination}.part-${process.pid}-${Date.now()}`;
   const digest = createHash('sha256');
-  console.log(`\n  Scarico ${asset} (${formatBytes(total)})...`);
+  console.log(`\n  Downloading ${asset} (${formatBytes(total)})...`);
 
   try {
     await pipeline(
@@ -175,17 +175,17 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
       progressTransform(total, digest),
       createWriteStream(temporary, { flags: 'wx' }),
     );
-    if (!process.stderr.isTTY) console.error(`  Progresso: 100% (${formatBytes(total)})`);
+    if (!process.stderr.isTTY) console.error(`  Progress: 100% (${formatBytes(total)})`);
 
     const actualSha256 = digest.digest('hex');
     if (actualSha256 !== expectedSha256) {
       throw new Error(
-        `SHA-256 non valido per ${asset}: atteso ${expectedSha256}, ottenuto ${actualSha256}.`,
+        `Invalid SHA-256 for ${asset}: expected ${expectedSha256}, got ${actualSha256}.`,
       );
     }
     await rename(temporary, destination);
-    console.log(`  SHA-256 verificato: ${actualSha256}`);
-    console.log(`  Salvato in: ${destination}\n`);
+    console.log(`  SHA-256 verified: ${actualSha256}`);
+    console.log(`  Saved to: ${destination}\n`);
     return destination;
   } catch (error) {
     await unlink(temporary).catch((unlinkError) => {
@@ -205,7 +205,7 @@ async function downloadAction(options) {
       portable: options.portable,
     });
   } catch (error) {
-    console.error(`\n  Errore: ${error.message}\n`);
+    console.error(`\n  Error: ${error.message}\n`);
     process.exitCode = 1;
   }
 }
@@ -214,10 +214,10 @@ async function downloadAction(options) {
 export function registerDownloadCommand(program) {
   program
     .command('download')
-    .description('Scarica e verifica un client desktop da GitHub Releases')
-    .requiredOption('--os <platform>', 'sistema operativo: windows, macos o linux')
-    .requiredOption('--version <release>', 'versione della release (es. 0.3.5)')
-    .option('-o, --output <file>', 'file di destinazione (default: Documents/Job Hunter Team/downloads)')
-    .option('--portable', 'scarica il portable invece dell installer Windows')
+    .description('Download and verify a desktop client from GitHub Releases')
+    .requiredOption('--os <platform>', 'operating system: windows, macos, or linux')
+    .requiredOption('--version <release>', 'release version (for example, 0.3.5)')
+    .option('-o, --output <file>', 'destination file (default: Documents/Job Hunter Team/downloads)')
+    .option('--portable', 'download the portable app instead of the Windows installer')
     .action(downloadAction);
 }

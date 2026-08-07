@@ -53,7 +53,7 @@ function unreachable(container) {
 }
 
 function notRunning(container) {
-  return { ok: false, stdout: '', stderr: `container '${container}' non attivo`, code: -1 };
+  return { ok: false, stdout: '', stderr: `container '${container}' is not running`, code: -1 };
 }
 
 function toResult(r) {

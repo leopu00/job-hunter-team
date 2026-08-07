@@ -35,7 +35,7 @@ export function retiredStoreFile(store) {
  * Riga singola, per gli elenchi a una voce per riga (health, backup).
  */
 export function retiredStoreDetail(store) {
-  return `${retiredStoreFile(store)} — nessun componente lo scrive più dal ${RETIRED_SINCE}`;
+  return `${retiredStoreFile(store)} — no component has written it since ${RETIRED_SINCE}`;
 }
 
 /**
@@ -47,14 +47,14 @@ export function retiredStoreNotice(stores, indent = '  ') {
   const plural = stores.length > 1;
   const files = stores.map(retiredStoreFile).join(', ');
   return [
-    `${indent}Fonte dati assente — ${files}`,
+    `${indent}Data source unavailable — ${files}`,
     '',
-    `${indent}${plural ? 'Questi file non vengono' : 'Questo file non viene'} più ${plural ? 'scritti' : 'scritto'} da nessuno: ${plural ? 'li' : 'lo'} produceva la`,
-    `${indent}vecchia interfaccia testuale, rimossa il ${RETIRED_SINCE}. Non è un`,
-    `${indent}elenco vuoto né un totale a zero: è una fonte che non esiste più,`,
-    `${indent}e non c'è niente da sistemare per farla tornare.`,
+    `${indent}${plural ? 'These files are' : 'This file is'} no longer written by any component.`,
+    `${indent}${plural ? 'They belonged' : 'It belonged'} to the retired text interface (${RETIRED_SINCE}).`,
+    `${indent}This is not an empty list or a zero total: the data source no longer exists,`,
+    `${indent}and there is nothing to repair to restore it.`,
     '',
-    `${indent}Il lavoro reale del team resta visibile in positions, agents e status,`,
-    `${indent}che leggono il database vivo.`,
+    `${indent}The team's live work remains visible in positions, agents, and status,`,
+    `${indent}which read the live database.`,
   ].join('\n');
 }

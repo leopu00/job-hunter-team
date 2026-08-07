@@ -60,15 +60,15 @@ function fmtTick(t) {
 function statusAction() {
   const ticks = readAllTicks();
   if (!ticks.length) {
-    console.log(col.yellow('Nessun tick nel JSONL (' + JSONL_PATH + ').'));
-    console.log(col.dim('  La Sentinella deve essere avviata (jht team start sentinella).'));
+    console.log(col.yellow('No tick in the JSONL (' + JSONL_PATH + ').'));
+    console.log(col.dim('  The Sentinella must be started (jht team start sentinella).'));
     return;
   }
   const last = ticks[ticks.length - 1];
   const age = Date.now() - new Date(last.ts).getTime();
   const ageStr = age < 60_000 ? `${Math.round(age / 1000)}s fa` : `${Math.round(age / 60_000)}m fa`;
   console.log('');
-  console.log(`${col.bold('Ultimo tick Sentinella:')} ${col.dim(ageStr)}`);
+  console.log(`${col.bold('Latest Sentinella tick:')} ${col.dim(ageStr)}`);
   console.log('  ' + fmtTick(last));
   console.log('');
 }
@@ -78,7 +78,7 @@ function tailAction(options = {}) {
   const n = parseInt(options.n ?? 20, 10);
   const ticks = readAllTicks();
   if (!ticks.length) {
-    console.log(col.yellow('Nessun tick nel JSONL.'));
+    console.log(col.yellow('No tick in the JSONL.'));
     return;
   }
   const tail = ticks.slice(-n);
@@ -88,7 +88,7 @@ function tailAction(options = {}) {
   console.log('');
 
   if (options.follow) {
-    console.log(col.dim('(follow) in attesa di nuovi tick… Ctrl-C per uscire'));
+    console.log(col.dim('(follow) waiting for new tick... Ctrl-C to exit'));
     let lastSize = existsSync(JSONL_PATH) ? statSync(JSONL_PATH).size : 0;
     watchFile(JSONL_PATH, { interval: 2000 }, () => {
       try {
@@ -110,7 +110,7 @@ function graphAction(options = {}) {
   const n = parseInt(options.n ?? 40, 10);
   const ticks = readAllTicks().slice(-n);
   if (!ticks.length) {
-    console.log(col.yellow('Nessun tick nel JSONL.'));
+    console.log(col.yellow('No tick in the JSONL.'));
     return;
   }
   const usages = ticks.map((t) => Number(t.usage) || 0);
@@ -137,24 +137,24 @@ function graphAction(options = {}) {
 }
 
 export function registerSentinellaCommand(program) {
-  const sent = new Command('sentinella').description('Monitoraggio Sentinella (rate-limit + risorse host)');
+  const sent = new Command('sentinella').description('Sentinella monitoring (rate-limit + host resources)');
 
   sent
     .command('status')
-    .description('Mostra l\'ultimo tick della Sentinella')
+    .description('Show the latest Sentinella tick')
     .action(statusAction);
 
   sent
     .command('tail')
-    .description('Mostra gli ultimi N tick')
-    .option('-n, --n <num>', 'numero di tick', '20')
-    .option('-f, --follow', 'segui in tempo reale i nuovi tick', false)
+    .description('Show the latest N tick')
+    .option('-n, --n <num>', 'number of ticks', '20')
+    .option('-f, --follow', 'follow new ticks in real time', false)
     .action(tailAction);
 
   sent
     .command('graph')
     .description('Sparkline ASCII dell\'usage')
-    .option('-n, --n <num>', 'numero di tick da plottare', '40')
+    .option('-n, --n <num>', 'number of ticks to plot', '40')
     .action(graphAction);
 
   program.addCommand(sent);

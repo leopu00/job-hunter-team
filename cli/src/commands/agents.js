@@ -52,14 +52,14 @@ async function handleAgents(options) {
   const running = AGENTS.filter(a => sessions.includes(a.session));
   const stopped = AGENTS.filter(a => !sessions.includes(a.session));
 
-  console.log(`\n  ${BOLD}JHT — Agenti${RESET} (${running.length}/${AGENTS.length} attivi)\n`);
-  console.log(`  ${'Agente'.padEnd(14)} ${'Sessione'.padEnd(16)} ${'Stato'.padEnd(10)} ${'Task'.padEnd(20)}`);
+  console.log(`\n  ${BOLD}JHT — Agents${RESET} (${running.length}/${AGENTS.length} active)\n`);
+  console.log(`  ${'Agent'.padEnd(14)} ${'Session'.padEnd(16)} ${'State'.padEnd(10)} ${'Task'.padEnd(20)}`);
   console.log(`  ${'─'.repeat(14)} ${'─'.repeat(16)} ${'─'.repeat(10)} ${'─'.repeat(20)}`);
 
   for (const a of AGENTS) {
     const isRunning = sessions.includes(a.session);
     const icon = isRunning ? `${GREEN}●${RESET}` : `${DIM}○${RESET}`;
-    const status = isRunning ? `${GREEN}attivo${RESET}` : `${DIM}fermo${RESET}`;
+    const status = isRunning ? `${GREEN}active${RESET}` : `${DIM}stopped${RESET}`;
     const t = tasksByAgent[a.id];
     let taskInfo = `${DIM}—${RESET}`;
     if (t) {
@@ -67,13 +67,13 @@ async function handleAgents(options) {
       if (t.succeeded) parts.push(`${GREEN}${t.succeeded}✓${RESET}`);
       if (t.failed) parts.push(`${RED}${t.failed}✗${RESET}`);
       if (t.running) parts.push(`${YELLOW}${t.running}⟳${RESET}`);
-      taskInfo = `${t.total} tot ${parts.join(' ')}`;
+      taskInfo = `${t.total} total ${parts.join(' ')}`;
     }
     console.log(`  ${icon} ${a.name.padEnd(12)} ${a.session.padEnd(16)} ${status.padEnd(19)} ${taskInfo}`);
   }
 
   if (options.verbose && running.length > 0) {
-    console.log(`\n  ${DIM}Sessioni tmux JHT attive:${RESET}`);
+    console.log(`\n  ${DIM}Active JHT tmux sessions:${RESET}`);
     for (const s of sessions.filter(s => AGENTS.some(a => a.session === s))) {
       console.log(`    ${s}`);
     }
@@ -85,7 +85,7 @@ async function handleAgents(options) {
 export function registerAgentsCommand(program) {
   program
     .command('agents')
-    .description('Mostra lista agenti con stato tmux e task')
-    .option('-v, --verbose', 'mostra dettagli sessioni tmux')
+    .description('List agents with tmux status and current tasks')
+    .option('-v, --verbose', 'show tmux session details')
     .action(handleAgents);
 }

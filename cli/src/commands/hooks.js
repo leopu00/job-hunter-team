@@ -68,7 +68,7 @@ async function handleHooks(action, options) {
   if (action === 'disable') return await toggleHook(options.id, false);
   if (action === 'show') return await showHook(options.id);
 
-  console.error(`  Azione non valida: ${action}`);
+  console.error(`  Invalid action: ${action}`);
   console.error('  Azioni: list, enable --id <id>, disable --id <id>, show --id <id>');
   process.exitCode = 1;
 }
@@ -81,7 +81,7 @@ async function listHooks() {
   console.log(`\n  ${BOLD}JHT — Hooks${RESET} (${hooks.length})\n`);
 
   if (hooks.length === 0) {
-    console.log(`  ${DIM}Nessun hook trovato.${RESET}`);
+    console.log(`  ${DIM}No hooks found.${RESET}`);
     console.log(`  ${DIM}Directory: ${HOOKS_DIR}${RESET}\n`);
     return;
   }
@@ -98,7 +98,7 @@ async function listHooks() {
     for (const h of list) {
       const enabled = !disabled.has(h.id);
       const icon = enabled ? `${GREEN}●${RESET}` : `${DIM}○${RESET}`;
-      const status = enabled ? '' : ` ${DIM}(disabilitato)${RESET}`;
+      const status = enabled ? '' : ` ${DIM}(disabled)${RESET}`;
       console.log(`    ${icon}  ${h.name}${status}  ${DIM}[${h.source}, p${h.priority}]${RESET}`);
       if (h.description) console.log(`       ${DIM}${h.description}${RESET}`);
     }
@@ -107,12 +107,12 @@ async function listHooks() {
 }
 
 async function toggleHook(id, enable) {
-  if (!id) { console.error('  --id obbligatorio'); process.exitCode = 1; return; }
+  if (!id) { console.error('  --id mandatory'); process.exitCode = 1; return; }
 
   const hooks = await discoverHooks();
   if (!hooks.find(h => h.id === id)) {
-    console.error(`  Hook non trovato: ${id}`);
-    console.error(`  Hook disponibili: ${hooks.map(h => h.id).join(', ') || 'nessuno'}`);
+    console.error(`  Hook not found: ${id}`);
+    console.error(`  Hook available: ${hooks.map(h => h.id).join(', ') || 'Nobody.'}`);
     process.exitCode = 1;
     return;
   }
@@ -123,30 +123,30 @@ async function toggleHook(id, enable) {
   else disabled.add(id);
   config.disabled = [...disabled];
   await saveConfig(config);
-  console.log(`\n  ${GREEN}✓${RESET}  Hook "${id}" ${enable ? 'attivato' : 'disattivato'}.\n`);
+  console.log(`\n  ${GREEN}✓${RESET}  Hook "${id}" ${enable ? 'enabled' : 'disabled'}.\n`);
 }
 
 async function showHook(id) {
-  if (!id) { console.error('  --id obbligatorio'); process.exitCode = 1; return; }
+  if (!id) { console.error('  --id mandatory'); process.exitCode = 1; return; }
   const hooks = await discoverHooks();
   const h = hooks.find(h => h.id === id);
-  if (!h) { console.error(`  Hook non trovato: ${id}`); process.exitCode = 1; return; }
+  if (!h) { console.error(`  Hook not found: ${id}`); process.exitCode = 1; return; }
 
   const content = await readFile(join(HOOKS_DIR, h.file), 'utf-8');
   console.log(`\n  ${BOLD}${h.name}${RESET}  ${DIM}(${h.file})${RESET}`);
-  console.log(`  ${DIM}Evento: ${h.event} · Priorità: ${h.priority} · Sorgente: ${h.source}${RESET}`);
+  console.log(`  ${DIM}Event: ${h.event} · Priority: ${h.priority} · Source: ${h.source}${RESET}`);
   if (h.description) console.log(`  ${DIM}${h.description}${RESET}`);
   console.log(`\n  ${'─'.repeat(50)}\n`);
   const lines = content.split('\n').slice(0, 30);
   for (const l of lines) console.log(`  ${l}`);
-  if (content.split('\n').length > 30) console.log(`\n  ${DIM}... (${content.split('\n').length - 30} righe rimanenti)${RESET}`);
+  if (content.split('\n').length > 30) console.log(`\n  ${DIM}... (${content.split('\n').length - 30} remaining lines)${RESET}`);
   console.log('');
 }
 
 export function registerHooksCommand(program) {
   program
     .command('hooks [action]')
-    .description('[non implementato] Gestione hooks — nessun esecutore: gli hook non vengono mai eseguiti (azioni: list, enable, disable, show)')
+    .description('[not implemented] Hooks management — no performer: hooks are never executed (actions: list, enable, disable, show)')
     .option('--id <id>', 'ID hook')
     .action(handleHooks);
 }

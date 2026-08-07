@@ -36,7 +36,7 @@ async function handleWebhooks(action, options) {
   if (action === 'delete' || action === 'rm') return await deleteWebhook(options);
   if (action === 'test') return await testWebhook(options);
 
-  console.error(`  Azione non valida: ${action}`);
+  console.error(`  Invalid action: ${action}`);
   console.error('  Azioni: list, create --url <url> --event <event>, delete --id <id>, test --id <id>');
   process.exitCode = 1;
 }
@@ -48,7 +48,7 @@ async function listWebhooks() {
   console.log(`\n  ${BOLD}JHT — Webhooks${RESET} (${webhooks.length})\n`);
 
   if (webhooks.length === 0) {
-    console.log(`  ${DIM}Nessun webhook configurato.${RESET}\n`);
+    console.log(`  ${DIM}No webhook configured.${RESET}\n`);
     return;
   }
 
@@ -58,14 +58,14 @@ async function listWebhooks() {
     const status = w.lastStatus ? (w.lastStatus < 300 ? `${GREEN}${w.lastStatus}${RESET}` : `${RED}${w.lastStatus}${RESET}`) : `${DIM}—${RESET}`;
     console.log(`  ${icon}  ${w.name ?? w.id.slice(0, 8)}`);
     console.log(`     ${DIM}URL:${RESET}    ${w.url}`);
-    console.log(`     ${DIM}Evento:${RESET} ${YELLOW}${w.event}${RESET}  ${DIM}Ultimo:${RESET} ${fmtDate(w.lastTriggeredAt)}  ${DIM}Status:${RESET} ${status}`);
+    console.log(`     ${DIM}Event:${RESET} ${YELLOW}${w.event}${RESET}  ${DIM}Last:${RESET} ${fmtDate(w.lastTriggeredAt)}  ${DIM}Status:${RESET} ${status}`);
     console.log(`     ${DIM}ID:${RESET} ${w.id}\n`);
   }
 }
 
 async function createWebhook(options) {
-  if (!options.url) { console.error('  --url obbligatorio'); process.exitCode = 1; return; }
-  if (!options.event) { console.error('  --event obbligatorio (es: task.completed, agent.started, session.ended)'); process.exitCode = 1; return; }
+  if (!options.url) { console.error('  --url mandatory'); process.exitCode = 1; return; }
+  if (!options.event) { console.error('  --event mandatory (e.g. task.completed, agent.started, session.ended)'); process.exitCode = 1; return; }
 
   const store = await loadStore();
   const webhook = {
@@ -83,27 +83,27 @@ async function createWebhook(options) {
   store.webhooks.push(webhook);
   await saveStore(store);
 
-  console.log(`\n  ${GREEN}✓${RESET}  Webhook creato`);
+  console.log(`\n  ${GREEN}✓${RESET}  Webhook created`);
   console.log(`     ${DIM}ID:${RESET}     ${webhook.id}`);
   console.log(`     ${DIM}URL:${RESET}    ${webhook.url}`);
-  console.log(`     ${DIM}Evento:${RESET} ${webhook.event}\n`);
+  console.log(`     ${DIM}Event:${RESET} ${webhook.event}\n`);
 }
 
 async function deleteWebhook(options) {
-  if (!options.id) { console.error('  --id obbligatorio'); process.exitCode = 1; return; }
+  if (!options.id) { console.error('  --id mandatory'); process.exitCode = 1; return; }
   const store = await loadStore();
   const before = (store.webhooks ?? []).length;
   store.webhooks = (store.webhooks ?? []).filter(w => w.id !== options.id);
-  if (store.webhooks.length === before) { console.error(`  Webhook non trovato: ${options.id}`); process.exitCode = 1; return; }
+  if (store.webhooks.length === before) { console.error(`  Webhook not found: ${options.id}`); process.exitCode = 1; return; }
   await saveStore(store);
-  console.log(`\n  ${GREEN}✓${RESET}  Webhook eliminato: ${options.id}\n`);
+  console.log(`\n  ${GREEN}✓${RESET}  Webhook deleted: ${options.id}\n`);
 }
 
 async function testWebhook(options) {
-  if (!options.id) { console.error('  --id obbligatorio'); process.exitCode = 1; return; }
+  if (!options.id) { console.error('  --id mandatory'); process.exitCode = 1; return; }
   const store = await loadStore();
   const webhook = (store.webhooks ?? []).find(w => w.id === options.id);
-  if (!webhook) { console.error(`  Webhook non trovato: ${options.id}`); process.exitCode = 1; return; }
+  if (!webhook) { console.error(`  Webhook not found: ${options.id}`); process.exitCode = 1; return; }
 
   console.log(`\n  ${DIM}Test webhook → ${webhook.url}${RESET}`);
   const payload = JSON.stringify({ event: webhook.event, test: true, timestamp: new Date().toISOString() });
@@ -120,20 +120,20 @@ async function testWebhook(options) {
     webhook.lastStatus = res.status;
     await saveStore(store);
 
-    if (res.ok) console.log(`  ${GREEN}✓${RESET}  Risposta: ${res.status} ${res.statusText}\n`);
-    else console.log(`  ${RED}✗${RESET}  Risposta: ${res.status} ${res.statusText}\n`);
+    if (res.ok) console.log(`  ${GREEN}✓${RESET}  Response: ${res.status} ${res.statusText}\n`);
+    else console.log(`  ${RED}✗${RESET}  Response: ${res.status} ${res.statusText}\n`);
   } catch (e) {
     webhook.lastTriggeredAt = Date.now();
     webhook.lastStatus = 0;
     await saveStore(store);
-    console.error(`  ${RED}✗${RESET}  Errore: ${e.message}\n`);
+    console.error(`  ${RED}✗${RESET}  Error: ${e.message}\n`);
   }
 }
 
 export function registerWebhooksCommand(program) {
   program
     .command('webhooks [action]')
-    .description('[non implementato] Gestione webhooks — nessun dispatcher: gli eventi non vengono mai consegnati (azioni: list, create, delete, test)')
+    .description('[not implemented] Webhook management — no dispatcher is connected (actions: list, create, delete, test)')
     .option('--url <url>', 'URL endpoint webhook')
     .option('--event <event>', 'evento trigger (es: task.completed)')
     .option('--name <name>', 'nome webhook (opzionale)')

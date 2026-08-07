@@ -92,7 +92,7 @@ def _burn_intent():
             _BURN_INTENT_MOD = _path_import(
                 _shared_skills_dir() / "burn_intent.py", "_burn_intent")
         except Exception as e:  # noqa: BLE001 — fail-closed: il freno resta
-            print(f"[pacing-bridge] WARN burn_intent.py non caricabile: {e}",
+            print(f"[pacing-bridge] WARN burn_intent.py not loadable: {e}",
                   file=sys.stderr, flush=True)
             return None
     return _BURN_INTENT_MOD
@@ -126,7 +126,7 @@ def _standby():
             _STANDBY_MOD = _path_import(
                 _shared_skills_dir() / "standby.py", "_standby")
         except Exception as e:  # noqa: BLE001 — fail-closed: si continua a parlare
-            print(f"[pacing-bridge] WARN standby.py non caricabile: {e}",
+            print(f"[pacing-bridge] WARN standby.py not loadable: {e}",
                   file=sys.stderr, flush=True)
             return None
     return _STANDBY_MOD
@@ -384,7 +384,7 @@ def _load_working_hours():
     try:
         return _path_import(_shared_skills_dir() / "working_hours.py", "_wh")
     except Exception as e:
-        print(f"[pacing-bridge] WARN working_hours.py non caricabile: {e} — assumo 24/7",
+        print(f"[pacing-bridge] WARN working_hours.py not loadable: {e} — assuming 24/7",
               file=sys.stderr, flush=True)
         return None
 
@@ -404,7 +404,7 @@ def _load_target_helpers():
         pcap = _path_import(_shared_skills_dir() / "provider_capacity.py", "_pcap")
         return wht, pcap
     except Exception as e:
-        print(f"[pacing-bridge] WARN target helpers non caricabili: {e} — uso target_band fisso",
+        print(f"[pacing-bridge] WARN target helpers not loadable: {e} — using fixed target_band",
               file=sys.stderr, flush=True)
         return None, None
 
@@ -653,8 +653,8 @@ def compute_tick(ast, tba, rb, now: datetime,
             "now": now,
             "error": "insufficient_samples",
             "n_samples_window": len(window),
-            "hint": "il bridge non ha pollato abbastanza nella finestra "
-                    "(o reset Kimi appena avvenuto)",
+            "hint": "the bridge did not collect enough samples in the window "
+                    "(or Kimi has just reset)",
         }
 
     effective_since_ts = window[0][0]
@@ -666,7 +666,7 @@ def compute_tick(ast, tba, rb, now: datetime,
             "error": "effective_window_too_short",
             "effective_min": effective_window_h * 60.0,
             "min_required": MIN_EFFECTIVE_MIN,
-            "hint": "reset Kimi recente: aspetta il prossimo tick",
+            "hint": "recent Kimi reset: wait for the next tick",
         }
 
     u_first = window[0][1]
@@ -764,11 +764,11 @@ def compute_tick(ast, tba, rb, now: datetime,
                 "sustainable_burn_pct_h": sustainable_burn,
                 "weekly_coast": weekly_coast,
                 "hint": (
-                    "PIPELINE STALLED + WEEKLY-AWARE → COAST: target weekly di "
-                    "finestra già raggiunto, coda vuota = coast, non spawnare."
+                    "PIPELINE STALLED + WEEKLY-AWARE → COAST: the window's weekly "
+                    "target is already reached and the queue is empty; do not spawn."
                     if weekly_coast else
-                    "PIPELINE STALLED — pochi token consumati e proj sotto "
-                    "target, weekly ha margine. Riaccendere pipeline da monte."
+                    "PIPELINE STALLED — few tokens consumed, projection below target, "
+                    "and weekly budget available. Restart the pipeline upstream."
                 ),
             }
         return {
@@ -779,8 +779,8 @@ def compute_tick(ast, tba, rb, now: datetime,
             "team_kt": team_kt,
             "u_first": u_first,
             "u_last": u_last,
-            "hint": "ratio non calcolabile — il team non ha bruciato "
-                    "budget misurabile, oppure usage piatto",
+            "hint": "ratio unavailable — the team did not consume measurable "
+                    "budget, or usage is flat",
         }
 
     ratio = team_kt / delta_usage              # kT per 1% di budget
@@ -947,25 +947,24 @@ def format_message(d: dict) -> str:
                 return (
                     f"[BRIDGE PACING] PIPELINE STALLED + WEEKLY-BIND → COAST — "
                     f"usage={usage_now}% proj={proj_str} reset_in={h_str} "
-                    f"team_kt={d.get('team_kt', 0):.1f} {weekly_line}. Coda vuota MA "
-                    f"weekly quasi esaurito: a coda vuota la mossa è COAST, non spawn. "
-                    f"NON spawnare worker per 'riempire la coda' — è esattamente "
-                    f"l'overspawn del 2026-06-07. Lascia scorrere la coda residua col "
-                    f"team attuale, tieni il throttle; se un worker è zombie al dialog "
-                    f"rate-limit fai kill+respawn (C-12), non spawn. Riapri la pipeline "
-                    f"piena solo dopo il reset weekly o quando weekly_remaining risale."
+                    f"team_kt={d.get('team_kt', 0):.1f} {weekly_line}. The queue is empty BUT "
+                    f"the weekly budget is nearly exhausted: COAST instead of spawning. "
+                    f"Do NOT spawn workers just to fill the queue; that repeats the 2026-06-07 "
+                    f"overspawn. Let the current team drain the remaining queue and keep the "
+                    f"throttle. If a worker is stuck at a rate-limit dialog, kill and respawn "
+                    f"it (C-12), but do not add workers. Reopen the full pipeline only after "
+                    f"the weekly reset or when weekly_remaining rises."
                 )
             return (
                 f"[BRIDGE PACING] PIPELINE STALLED — usage={usage_now}% "
                 f"proj={proj_str} reset_in={h_str} team_kt={d.get('team_kt', 0):.1f} "
-                f"{weekly_line} (praticamente zero consumo nei 15m, weekly ha margine). "
-                f"Applica regola PIPELINE VUOTA + UNDERSHOOT ORA: (1) db_query.py "
-                f"next-for-scrittore per coda residua e promozioni 40-49; (2) spawna "
-                f"SCOUT se range vuoto; (3) ANALISTA per companies non analizzate; "
-                f"(4) SCORER per unscored; (5) SCRITTORE quando coda scored>=50 si "
-                f"riempie. NON aspettare prossimo tick valido — bridge non puo' "
-                f"calcolare ratio senza consumo, e tu non puoi aspettare tick senza "
-                f"pipeline."
+                f"{weekly_line} (almost no consumption in 15m; weekly budget is available). "
+                f"Apply EMPTY PIPELINE + UNDERSHOOT NOW: (1) run db_query.py "
+                f"next-for-scrittore for the residual queue and 40–49 promotions; (2) spawn "
+                f"SCOUT when the range is empty; (3) run ANALISTA for unanalyzed companies; "
+                f"(4) run SCORER for unscored positions; (5) run SCRITTORE when the scored>=50 "
+                f"queue fills. Do NOT wait for the next valid tick: the bridge cannot calculate "
+                f"a ratio without consumption, and you cannot wait without a pipeline."
             )
         extra = ""
         if "delta_usage" in d:
@@ -983,13 +982,13 @@ def format_message(d: dict) -> str:
     eff_str = (
         f"{d['window_min']}m"
         if abs(eff - d["window_min"]) < 0.5
-        else f"{d['window_min']}m (effettivi {eff:.1f}m, post-reset session)"
+        else f"{d['window_min']}m ({eff:.1f}m effective, post-reset session)"
     )
     parts = [
         f"[BRIDGE PACING] {ts} window={eff_str} samples={d['n_samples']}",
         f"usage={usage_now}% reset_in={h_str} reset_at={reset_at} "
-        f"(proj={proj}% — INFO, segnale secondario volatile: NON guida le "
-        f"decisioni, usa vel_team vs vel_target)",
+        f"(proj={proj}% — INFO, volatile secondary signal: do NOT use it "
+        f"for decisions; compare vel_team with vel_target)",
         f"vel_team={d['vel_team']:.2f}%/h",
     ]
 
@@ -1008,7 +1007,7 @@ def format_message(d: dict) -> str:
         )
         parts.append(
             f"vel_target={d['vel_target']:.2f}%/h "
-            f"(per chiudere a {target_pct:.0f}% al reset){src_tag}"
+            f"(to finish at {target_pct:.0f}% at reset){src_tag}"
         )
     else:
         parts.append("vel_target=N/D")
@@ -1027,11 +1026,11 @@ def format_message(d: dict) -> str:
             if isinstance(wah, (int, float)) and wah > 0
             else None
         )
-        sb_str = f"{sb:.2f}%/h attivo" if isinstance(sb, (int, float)) else "?"
+        sb_str = f"{sb:.2f}%/active-hour" if isinstance(sb, (int, float)) else "?"
         parts.append(
             f"weekly_remaining={wrem:.0f}% weekly_active_hours={wah_str} "
-            f"(burn sostenibile {sb_str}) — vincolo WEEKLY parallelo, "
-            f"binda anche in Phase 1 (S-06/C-09)"
+            f"(sustainable burn {sb_str}) — parallel WEEKLY constraint, "
+            f"binding in Phase 1 too (S-06/C-09)"
         )
 
     # NB: il dato weekly_pace (rate weekly reale vs sostenibile + lockout
@@ -1058,16 +1057,16 @@ def format_message(d: dict) -> str:
                 f"[{a['kt']:.2f}kT/{eff_min_str} → {a['kt_per_h']:.1f}kT/h "
                 f"÷ {d['ratio']:.1f}kT/% = {a['pct_per_h']:.2f}%/h, "
                 f"share {a['share']:.0f}%, "
-                f"cadenza {cad:.2f}/min ({a.get('events', 0)} chk in {eff_min_str})]"
+                f"cadence {cad:.2f}/min ({a.get('events', 0)} checks in {eff_min_str})]"
             )
-        parts.append("agenti: " + " ; ".join(agent_strs))
+        parts.append("agents: " + " ; ".join(agent_strs))
     else:
-        parts.append("agenti: nessuno sopra soglia "
+        parts.append("agents: none above threshold "
                      f"({MIN_PCT_H}%/h)")
 
     if d["skipped"]:
         skipped_names = ", ".join(s["name"] for s in d["skipped"])
-        parts.append(f"sotto_soglia: {skipped_names}")
+        parts.append(f"below_threshold: {skipped_names}")
 
     v = d["verdict"]
     # Damping anti-oscillazione: il capitano risponde con interventi binari
@@ -1120,17 +1119,17 @@ def format_message(d: dict) -> str:
             # primo rilevamento: KILL solo se persiste (ancora cadenza~0 al tick
             # successivo) = davvero stuck. Evita il falso positivo del KILL+respawn.
             cmd = (
-                f"VERIFICA {top_consumer}: brucia {top_agent.get('share', 0):.0f}% "
-                f"con cadenza ~0. Se e' su UN task lungo (enrichment) lascialo "
-                f"finire; se al PROSSIMO tick e' ANCORA cadenza~0 = stuck → "
-                f"KILL+respawn (C-12, il throttle non lo ferma)"
+                f"CHECK {top_consumer}: it consumes {top_agent.get('share', 0):.0f}% "
+                f"with near-zero cadence. If it is handling ONE long enrichment task, let it "
+                f"finish. If cadence is still near zero on the NEXT tick, it is stuck: "
+                f"KILL and respawn it (C-12; throttling will not fix it)"
             )
         elif top_consumer:
             cmd = f"throttle-config.py set {top_consumer} {thr}"
         else:
             cmd = f"throttle-config.py set <top-consumer-produttivo> {thr}"
         parts.append(
-            f"VERDETTO: SFORO +{v['delta']:.2f}%/h → -{cap_pct:.0f}%"
+            f"VERDICT: OVERSHOOT +{v['delta']:.2f}%/h → -{cap_pct:.0f}%"
             f"{top_hint} | CMD: {cmd} | NO global reset, NO throttle a tutti"
         )
     elif v["kind"] == "MARGINE":
@@ -1145,18 +1144,18 @@ def format_message(d: dict) -> str:
             "throttle-config.py set <top-consumer-produttivo> 0"
         )
         parts.append(
-            f"VERDETTO: MARGINE -{v['delta']:.2f}%/h → +{cap_pct:.0f}%"
-            f"{top_hint} | CMD: {cmd} (oppure spawna 1 agente) | "
+            f"VERDICT: HEADROOM -{v['delta']:.2f}%/h → +{cap_pct:.0f}%"
+            f"{top_hint} | CMD: {cmd} (or spawn one agent) | "
             f"NO global reset"
         )
     elif v["kind"] == "ALLINEATO":
         parts.append(
-            f"VERDETTO: ALLINEATO (Δ {v['delta']:+.2f}%/h, tolleranza ±{ALIGN_TOL}). "
-            f"Mantieni il ritmo."
+            f"VERDICT: ALIGNED (Δ {v['delta']:+.2f}%/h, tolerance ±{ALIGN_TOL}). "
+            f"Maintain the current pace."
         )
     else:
         parts.append(
-            "VERDETTO: N/D — manca reset_at o usage_now nel sample del bridge."
+            "VERDICT: N/A — reset_at or usage_now is missing from the bridge sample."
         )
 
     return " | ".join(parts)
@@ -1201,8 +1200,8 @@ def send_to_capitano(msg: str) -> int:
     cmd_path = _resolve_tmux_send()
     if cmd_path is None:
         print(
-            "[pacing-bridge] jht-tmux-send non trovato in PATH né nei fallback "
-            f"({_JHT_TMUX_SEND_FALLBACKS}), skip send",
+            "[pacing-bridge] jht-tmux-send not found in PATH or fallback locations "
+            f"({_JHT_TMUX_SEND_FALLBACKS}); skipping send",
             file=sys.stderr,
         )
         return -1
@@ -1214,11 +1213,11 @@ def send_to_capitano(msg: str) -> int:
             timeout=30,
         )
     except FileNotFoundError:
-        print(f"[pacing-bridge] {cmd_path} sparito tra resolve e exec",
+        print(f"[pacing-bridge] {cmd_path} disappeared between resolution and execution",
               file=sys.stderr)
         return -1
     except subprocess.TimeoutExpired:
-        print("[pacing-bridge] jht-tmux-send timeout dopo 30s", file=sys.stderr)
+        print("[pacing-bridge] jht-tmux-send timed out after 30s", file=sys.stderr)
         return -1
     if r.returncode != 0:
         print(
@@ -1243,14 +1242,13 @@ def escalate_mute_to_capitano(streak: int) -> bool:
     if cmd_path is None:
         return False
     msg = (
-        f"[BRIDGE] {TARGET_SESSION} VIVA MA MUTA da {streak} tick consecutivi "
-        f"(jht-tmux-send rc=5: testo accettato nel composer, Enter mai "
-        f"processato) → i tick di pacing NON le arrivano e la condizione NON si "
-        f"risolve da sola. NON respawnare: il pane è vivo e il lavoro in corso "
-        f"andrebbe perso. Sbloccala — leggi il pane "
-        f"(tmux capture-pane -t {TARGET_SESSION} -p | tail -8), poi liberale il "
-        f"prompt e falle ripartire il loop con un messaggio vero; considera "
-        f"risolto solo dopo aver visto 'esc to interrupt' nel pane. "
+        f"[BRIDGE] {TARGET_SESSION} has been ALIVE BUT SILENT for {streak} consecutive ticks "
+        f"(jht-tmux-send rc=5: text entered in the composer, but Enter was never processed). "
+        f"Pacing ticks are NOT reaching it and the condition will NOT clear itself. Do NOT "
+        f"respawn it: the pane is alive and in-progress work would be lost. Inspect the pane "
+        f"(tmux capture-pane -t {TARGET_SESSION} -p | tail -8), clear its prompt, and restart "
+        f"the loop with a real message. Consider it resolved only after seeing "
+        f"'esc to interrupt' in the pane. "
         f"Log: {LOGS_DIR}/pacing-bridge.log"
     )
     try:
@@ -1262,14 +1260,14 @@ def escalate_mute_to_capitano(streak: int) -> bool:
         return False
     if r.returncode != 0:
         print(
-            f"[pacing-bridge] escalation MUTA a {ESCALATION_SESSION} fallita "
+            f"[pacing-bridge] SILENT escalation to {ESCALATION_SESSION} failed "
             f"rc={r.returncode} stderr={r.stderr.strip()}",
             file=sys.stderr,
         )
         return False
     print(
-        f"[pacing-bridge] ESCALATION MUTA → {ESCALATION_SESSION}: "
-        f"{TARGET_SESSION} muta da {streak} tick",
+        f"[pacing-bridge] SILENT ESCALATION → {ESCALATION_SESSION}: "
+        f"{TARGET_SESSION} silent for {streak} ticks",
         file=sys.stderr,
     )
     return True
@@ -1286,13 +1284,12 @@ def escalate_unreceptive_to_capitano(streak: int) -> bool:
     if cmd_path is None:
         return False
     msg = (
-        f"[BRIDGE] {TARGET_SESSION} irricettiva da {streak} tick consecutivi "
-        f"(jht-tmux-send rc=3: testo mai echeggiato, pane non occupato) → i tick "
-        f"di pacing NON le arrivano, la pipeline è ferma e nessun worker viene "
-        f"orchestrato. Applica C-08: liveness-check via Dottore e, se confermata "
-        f"morta/wedged, respawn (bash /app/.launcher/start-agent.sh "
-        f"{TARGET_SESSION.lower()}). Non è rc=4 (viva-occupata): è pane non "
-        f"ricettiva. Log: {LOGS_DIR}/pacing-bridge.log"
+        f"[BRIDGE] {TARGET_SESSION} has rejected input for {streak} consecutive ticks "
+        f"(jht-tmux-send rc=3: text was never echoed and the pane was not busy). Pacing ticks "
+        f"are NOT reaching it, the pipeline is stopped, and no workers are being orchestrated. "
+        f"Apply C-08: run a Dottore liveness check and, if it is dead or wedged, respawn it "
+        f"(bash /app/.launcher/start-agent.sh {TARGET_SESSION.lower()}). This is not rc=4 "
+        f"(alive and busy); the pane is not accepting input. Log: {LOGS_DIR}/pacing-bridge.log"
     )
     try:
         r = subprocess.run(
@@ -1303,14 +1300,14 @@ def escalate_unreceptive_to_capitano(streak: int) -> bool:
         return False
     if r.returncode != 0:
         print(
-            f"[pacing-bridge] escalation a {ESCALATION_SESSION} fallita "
+            f"[pacing-bridge] escalation to {ESCALATION_SESSION} failed "
             f"rc={r.returncode} stderr={r.stderr.strip()}",
             file=sys.stderr,
         )
         return False
     print(
         f"[pacing-bridge] ESCALATION → {ESCALATION_SESSION}: {TARGET_SESSION} "
-        f"irricettiva da {streak} tick (richiesto liveness-check + respawn)",
+        f"unreceptive for {streak} ticks (liveness check and respawn requested)",
         flush=True,
     )
     return True
@@ -1354,7 +1351,7 @@ def acquire_singleton_lock():
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
         fh = open(LOCK_FILE, "a+", encoding="utf-8")
     except OSError as e:
-        print(f"[pacing-bridge] WARN lockfile: {e} — proseguo senza lock", file=sys.stderr)
+        print(f"[pacing-bridge] WARN lockfile: {e} — continuing without a lock", file=sys.stderr)
         return
     try:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -1566,7 +1563,7 @@ def loop():
         if _standby_active():
             print(f"[pacing-bridge] standby skip tick {now.isoformat()}", flush=True)
             write_state(None, next_quarter(now + timedelta(seconds=1)),
-                        "standby (team a spesa zero)", wht=wht, pcap=pcap)
+                        "standby (zero-spend team)", wht=wht, pcap=pcap)
             continue
         # Intento dell'utente letto UNA volta, in testa al tick: sotto, i due
         # gate di spesa lo consultano prima di decidere di tacere.
@@ -1592,11 +1589,11 @@ def loop():
         if _daily_halt_active() and not burn_intent_on:
             print(f"[pacing-bridge] daily-halt skip tick {now.isoformat()}", flush=True)
             write_state(None, next_quarter(now + timedelta(seconds=1)),
-                        "daily-halt (cap giornaliero sforato)", wht=wht, pcap=pcap)
+                        "daily-halt (daily cap exceeded)", wht=wht, pcap=pcap)
             continue
         if burn_intent_on and _daily_halt_active():
-            print(f"[pacing-bridge] BURN-INTENT: daily-halt presente ma derogato "
-                  f"dall'utente → tick regolare {now.isoformat()}", flush=True)
+            print(f"[pacing-bridge] BURN-INTENT: daily-halt present but overridden "
+                  f"by the user → regular tick {now.isoformat()}", flush=True)
         try:
             d = compute_tick(ast, tba, rb, now, wht=wht, pcap=pcap)
             msg = format_message(d)
@@ -1647,11 +1644,11 @@ def loop():
                 mute_streak = 0
         except Exception as e:
             # Non vogliamo che un errore di un tick affossi il loop.
-            print(f"[pacing-bridge] errore tick {now.isoformat()}: {e}",
+            print(f"[pacing-bridge] tick error {now.isoformat()}: {e}",
                   file=sys.stderr, flush=True)
             try:
                 write_state(None, next_quarter(now + timedelta(seconds=1)),
-                            f"errore: {e}", wht=wht, pcap=pcap)
+                            f"error: {e}", wht=wht, pcap=pcap)
             except Exception:
                 pass
 
@@ -1729,7 +1726,7 @@ if __name__ == "__main__":
             main()
             break
         except KeyboardInterrupt:
-            print("\n[pacing-bridge] interrotto.", file=sys.stderr)
+            print("\n[pacing-bridge] interrupted.", file=sys.stderr)
             break
         except Exception as _e:  # noqa: BLE001 — catch-all VOLUTO
             print(f"[pacing-bridge] FATAL nel loop: {_e} — riavvio in 5s",

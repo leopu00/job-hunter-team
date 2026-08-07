@@ -37,7 +37,7 @@ async function handleContext(action) {
   if (action === 'sources') return await contextSources();
   if (action === 'clear') return await contextClear();
 
-  console.error(`  Azione non valida: ${action}`);
+  console.error(`  Invalid action: ${action}`);
   console.error('  Azioni: status, sources, clear');
   process.exitCode = 1;
 }
@@ -58,8 +58,8 @@ async function contextStatus() {
   const strategy = contextCfg.strategy ?? 'priority';
   const enabled = contextCfg.enabled !== false;
 
-  console.log(`  ${DIM}Stato:${RESET}     ${enabled ? `${GREEN}attivo${RESET}` : `${YELLOW}disattivato${RESET}`}`);
-  console.log(`  ${DIM}Strategia:${RESET} ${strategy}`);
+  console.log(`  ${DIM}State:${RESET}     ${enabled ? `${GREEN}active${RESET}` : `${YELLOW}disabled${RESET}`}`);
+  console.log(`  ${DIM}Strategy:${RESET}  ${strategy}`);
   console.log(`  ${DIM}Max token:${RESET} ${maxTokens}`);
 
   // Context cache
@@ -67,7 +67,7 @@ async function contextStatus() {
     const { bytes, files } = await dirSize(CONTEXT_DIR);
     console.log(`  ${DIM}Cache:${RESET}     ${files} file, ${fmtSize(bytes)}`);
   } else {
-    console.log(`  ${DIM}Cache:${RESET}     nessuna`);
+    console.log(`  ${DIM}Cache:${RESET}     No.`);
   }
 
   // Sorgenti bootstrap
@@ -76,12 +76,12 @@ async function contextStatus() {
   for (const f of bootstrapFiles) {
     if (await fileExists(join(JHT_DIR, f))) found.push(f.replace('.md', ''));
   }
-  console.log(`  ${DIM}Bootstrap:${RESET} ${found.length > 0 ? found.join(', ') : 'nessuno'}`);
+  console.log(`  ${DIM}Bootstrap:${RESET} ${found.length > 0 ? found.join(', ') : 'Nobody.'}`);
   console.log('');
 }
 
 async function contextSources() {
-  console.log(`\n  ${BOLD}Sorgenti contesto${RESET}\n`);
+  console.log(`\n  ${BOLD}Reliable context${RESET}\n`);
 
   const sources = [
     { name: 'Bootstrap', dir: JHT_DIR, pattern: ['SOUL.md', 'IDENTITY.md', 'MEMORY.md', 'AGENTS.md', 'USER.md', 'TOOLS.md'] },
@@ -93,7 +93,7 @@ async function contextSources() {
   for (const s of sources) {
     const exists = await fileExists(s.dir);
     if (!exists) {
-      console.log(`  ${DIM}○${RESET}  ${s.name}: ${DIM}non trovato${RESET}`);
+      console.log(`  ${DIM}○${RESET}  ${s.name}: ${DIM}not found${RESET}`);
       continue;
     }
     if (s.pattern) {
@@ -110,18 +110,18 @@ async function contextSources() {
 
 async function contextClear() {
   if (!(await fileExists(CONTEXT_DIR))) {
-    console.log(`\n  ${DIM}Nessuna cache contesto da pulire.${RESET}\n`);
+    console.log(`\n  ${DIM}No context cache to clean.${RESET}\n`);
     return;
   }
   const { files } = await dirSize(CONTEXT_DIR);
   const { rm } = await import('node:fs/promises');
   await rm(CONTEXT_DIR, { recursive: true, force: true });
-  console.log(`\n  ${GREEN}✓${RESET}  Cache contesto pulita (${files} file rimossi).\n`);
+  console.log(`\n  ${GREEN}✓${RESET}  Cache context clean (${files} files removed).\n`);
 }
 
 export function registerContextCommand(program) {
   program
     .command('context [action]')
-    .description('[non implementato] Context engine — nessun consumatore: le sorgenti non alimentano gli agenti (azioni: status, sources, clear)')
+    .description('[not implemented] Context engine — no consumer: sources do not feed agents (actions: status, sources, clear)')
     .action(handleContext);
 }

@@ -49,8 +49,8 @@ function toCsv(rows) {
 async function handleExport(source, options) {
   const src = SOURCES[source];
   if (!src) {
-    console.error(`  Sorgente non valida: ${source}`);
-    console.error(`  Sorgenti disponibili: ${Object.keys(SOURCES).join(', ')}`);
+    console.error(`  Invalid source: ${source}`);
+    console.error(`  Sources available: ${Object.keys(SOURCES).join(', ')}`);
     process.exitCode = 1;
     return;
   }
@@ -64,13 +64,13 @@ async function handleExport(source, options) {
       console.error(retiredStoreNotice([source]));
       console.error('');
     } else {
-      console.error(`  File non trovato: ${found.path}`);
+      console.error(`  File not found: ${found.path}`);
     }
     process.exitCode = 1;
     return;
   }
   if (found.legacy) {
-    console.log(`  Letto da una posizione lasciata da una versione precedente: ${found.path}`);
+    console.log(`  Bed from a position left by a previous version: ${found.path}`);
   }
 
   const raw = await readFile(found.path, 'utf-8');
@@ -85,7 +85,7 @@ async function handleExport(source, options) {
     if (Array.isArray(items)) {
       const before = items.length;
       const filtered = items.filter(r => { const t = r[tsField] ?? 0; return t >= since && t <= until; });
-      console.log(`  Filtro date: ${filtered.length}/${before} record`);
+      console.log(`  Date filter: ${filtered.length}/${before} records`);
       return await writeOutput(filtered, source, options);
     }
   }
@@ -107,10 +107,10 @@ async function writeOutput(items, source, options) {
 export function registerExportCommand(program) {
   program
     .command('export <source>')
-    .description('Esporta dati in JSON o CSV (source: sessions, tasks, config, analytics)')
-    .option('-o, --output <path>', 'percorso file di output')
-    .option('--csv', 'esporta in formato CSV')
-    .option('--from <date>', 'data inizio filtro (YYYY-MM-DD)')
-    .option('--to <date>', 'data fine filtro (YYYY-MM-DD)')
+    .description('Export data to JSON or CSV (source: sessions, tasks, config, analytics)')
+    .option('-o, --output <path>', 'output file path')
+    .option('--csv', 'export to CSV format')
+    .option('--from <date>', 'filter start date (YYYY-MM-DD)')
+    .option('--to <date>', 'filter end date (YYYY-MM-DD)')
     .action(handleExport);
 }

@@ -542,9 +542,9 @@ def _standby_step(parsed):
             return
         weekly = parsed.get("weekly_usage") if isinstance(parsed, dict) else None
         if state == "invalid":
-            print("[bridge V6] standby: flag SENZA condizione di uscita — "
-                  "rimosso (fail-closed, vedi standby.py)")
-            mod.wake("flag standby invalido (senza condizione di uscita): rimosso",
+            print("[bridge V6] standby: flag has NO exit condition — "
+                  "removed (fail-closed; see standby.py)")
+            mod.wake("invalid standby flag (no exit condition): removed",
                      weekly_usage=weekly)
             return
         do_wake, why = mod.should_wake(weekly_usage=weekly)
@@ -552,10 +552,10 @@ def _standby_step(parsed):
                       reason=(why if do_wake else st.get("reason")))
         if do_wake:
             res = mod.wake(why, weekly_usage=weekly)
-            print(f"[bridge V6] standby: SVEGLIA ({why}) → flag rimosso, "
-                  f"[RIPRENDI] a {res.get('resumed', 0)} sessioni"
-                  + (" — SOPPRESSO: .team-halted.flag presente (lo stop "
-                     "dell'utente vince)" if res.get("halted") else ""))
+            print(f"[bridge V6] standby: WAKE ({why}) → flag removed, "
+                  f"[RESUME] sent to {res.get('resumed', 0)} sessions"
+                  + (" — SUPPRESSED: .team-halted.flag is present (the user's "
+                     "stop takes precedence)" if res.get("halted") else ""))
     except Exception as e:                                  # noqa: BLE001
         print(f"[bridge V6] WARN standby step: {e}", file=sys.stderr)
 
@@ -568,7 +568,7 @@ def jht_tmux_send(session, text):
     # standby.wake() DOPO la rimozione del flag (ordine obbligato), quando
     # questo guard è già aperto.
     if _standby_active():
-        print(f"[bridge V6] standby: send a {session} soppresso", file=sys.stderr)
+        print(f"[bridge V6] standby: send to {session} suppressed", file=sys.stderr)
         return False
     # Difesa: un tmux-send che si blocca (pane occupato) NON deve mai abbattere il
     # bridge. Senza questa guardia, TimeoutExpired propagava fuori dal while-loop di
@@ -585,11 +585,11 @@ def jht_tmux_send(session, text):
         # risolve da solo al prossimo tick, rc=5 (vivo ma muto) NO — resta
         # finché qualcuno non sblocca il composer. Senza distinguerli nel log,
         # ore di messaggi persi sono indistinguibili da un turno lungo.
-        why = {3: "irricettiva (forse morta/wedged)",
-               4: "occupata (turno in corso) → si risolve da sé",
-               5: "VIVA MA MUTA (Enter mai processato) → NON si risolve da sé, va sbloccata"}
+        why = {3: "unresponsive (possibly dead/wedged)",
+               4: "busy (turn in progress) → resolves on its own",
+               5: "ALIVE BUT SILENT (Enter was never processed) → requires manual recovery"}
         print(f"[bridge V6] WARN jht_tmux_send({session}) rc={rc}: "
-              f"{why.get(rc, 'errore')}", file=sys.stderr)
+              f"{why.get(rc, 'error')}", file=sys.stderr)
     return rc == 0
 
 
@@ -670,14 +670,14 @@ def _burn_intent_announce(state, bi):
     state["burn_intent_on"] = now_on
     if now_on:
         msg = ("[BRIDGE INFO] 🔥 " + (_BURN_INTENT_MOD.banner() if _BURN_INTENT_MOD else "") +
-               " Gli automatismi di spesa (daily-halt, gate orario, WORKER_FLOOR, "
-               "ladder) NON ti fermeranno finché dura: la responsabilità di non "
-               "sprecare passa a TE (C-23). Alla scadenza tornano da soli.")
+               " Spending controls (daily-halt, schedule gate, WORKER_FLOOR, "
+               "ladder) will NOT stop you while it lasts: YOU are responsible for "
+               "preventing waste (C-23). They resume automatically when it expires.")
     else:
-        msg = ("[BRIDGE INFO] ⏱️ BURN-INTENT SCADUTO/REVOCATO — gli automatismi di "
-               "spesa sono di nuovo attivi: daily-halt, gate orario, WORKER_FLOOR "
-               "5min e ladder tornano a valere. Riporta il team al pacing normale "
-               "(C-02/C-07).")
+        msg = ("[BRIDGE INFO] ⏱️ BURN-INTENT EXPIRED/REVOKED — spending controls "
+               "are active again: daily-halt, schedule gate, the 5-minute "
+               "WORKER_FLOOR, and the ladder now apply. Return the team to normal "
+               "pacing (C-02/C-07).")
     for _s in (CAPITANO_SESSION, SENTINELLA_SESSION):
         if session_exists(_s):
             jht_tmux_send(_s, msg)
@@ -836,7 +836,7 @@ def _enforce_daily_halt():
         payload["reesc_count"] = (
             int(payload.get("reesc_count") or 0) + len(escaped)
         )
-        print("[bridge V6] DAILY-HALT cintura: nuova attivita' in %s -> ESC"
+        print("[bridge V6] DAILY-HALT guard: new activity in %s -> ESC"
               % ",".join(escaped))
     _write_daily_halt_payload(payload)
     return escaped
@@ -1655,7 +1655,7 @@ def acquire_singleton_lock():
     """
     mod = _load_skill_module("singleton_lock", "singleton_lock.py")
     if mod is None:
-        print("[bridge V5] WARN singleton_lock non caricabile — proseguo senza lock")
+        print("[bridge V5] WARN singleton_lock not loadable — continuing without a lock")
         try:
             PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
         except OSError:
@@ -1812,7 +1812,7 @@ def _pace_verdict_line(weekly_pace, wk_remaining_pct):
         leash = f" (resta {wk_remaining_pct:.0f}% in {reset_h:.0f}h-lavoro)"
     # Priorità: burst in uscita > frena (binding/sopra-pace) > accelera (burn) > mantieni.
     if burst:
-        return " WEEKLY-PACE→RIPRESA-CONTROLLATA: picco in uscita, NON frenare duro"
+        return " WEEKLY-PACE→CONTROLLED-RECOVERY: exit spike, do NOT brake hard"
     if binding or kind == "SOPRA-PACE":
         cut = None
         if isinstance(vel, (int, float)) and vel > 0 and isinstance(sust, (int, float)):
@@ -1829,7 +1829,7 @@ def _pace_verdict_line(weekly_pace, wk_remaining_pct):
         return (f" WEEKLY-PACE→ACCELERA-SATURA: a ritmo attuale chiudi ~{proj:.0f}%,"
                 f" spreco ~{wasted:.0f}% del weekly prima del reset"
                 if isinstance(proj, (int, float)) and isinstance(wasted, (int, float))
-                else " WEEKLY-PACE→ACCELERA-SATURA: budget a rischio spreco")
+                else " WEEKLY-PACE→ACCELERATE-SATURATE: budget at risk of waste")
     goal = (f" (~{sust:.2f}%/h)" if isinstance(sust, (int, float)) else "")
     return f" WEEKLY-PACE→MANTIENI{goal}{leash}"
 
@@ -1854,11 +1854,11 @@ def _maybe_offhours_stop(state, now_ts, vel_team):
     if not session_exists(CAPITANO_SESSION):
         return
     msg = (
-        "[BRIDGE] work_phase=OFF — fuori orario di lavoro. Applica la regola 11: "
-        "NON spawnare nuovi agenti, NON dare nuove assegnazioni, NON rilanciare i "
-        "worker (niente 'Continua'). I worker in corso finiscono il task corrente e "
-        "poi restano IDLE. Le risposte Telegram all'utente restano attive. Riprendi "
-        "normalmente all'apertura della finestra (prossimo tick con work_phase=ON)."
+        "[BRIDGE] work_phase=OFF — outside working hours. Apply rule 11: "
+        "do NOT spawn new agents, do NOT assign new work, and do NOT relaunch "
+        "workers (no 'Continue'). Active workers finish their current task and "
+        "then remain IDLE. Telegram replies to the user remain active. Resume "
+        "normally when the window opens (next tick with work_phase=ON)."
     )
     if jht_tmux_send(CAPITANO_SESSION, msg):
         state["offhours_stop_ts"] = now_ts
@@ -2204,8 +2204,8 @@ def main():
             # ore attive), non un freno di sicurezza: l'utente può decidere di
             # lavorare stanotte. Il resto del tick prosegue come in orario.
             within_hours = True
-            print(f"[bridge V6] {now_h} BURN-INTENT: gate orario derogato "
-                  f"(work_phase={work_phase}, scade fra {_bi.get('remaining_min')} min)")
+            print(f"[bridge V6] {now_h} BURN-INTENT: working-hours gate overridden "
+                  f"(work_phase={work_phase}, expires in {_bi.get('remaining_min')} min)")
 
         # ── Standby a spesa zero: la SVEGLIA si valuta a OGNI tick ─────────
         # Prima di qualunque invio: se la condizione di uscita è soddisfatta,
@@ -2383,16 +2383,16 @@ def main():
                         DAILY_HALT_FLAG.unlink()
                     except OSError:
                         pass
-                    _why = "BURN-INTENT (deroga utente)" if _bi_on else "DAILY-HARDSTOP disabilitato"
-                    print(f"[bridge V6] {now_h} {_why} → daily-halt flag rimosso")
+                    _why = "BURN-INTENT (user override)" if _bi_on else "DAILY-HARDSTOP disabled"
+                    print(f"[bridge V6] {now_h} {_why} → daily-halt flag removed")
                 elif _bi_on and isinstance(_hc, (int, float)) and isinstance(_hb, (int, float)) \
                         and _hc > _hb + 5.0:
                     # Il cap SAREBBE stato sforato: lo diciamo, non lo subiamo.
                     # Con i freni tolti la responsabilità di non sprecare passa al
                     # coordinatore, e deve restarne traccia scritta.
-                    print(f"[bridge V6] {now_h} BURN-INTENT: cap giornaliero sforato "
-                          f"(oggi={_hc:.1f}% > cap={_hb + 5.0:.1f}%) ma NON fermo il team "
-                          f"— deroga utente in corso, scade fra {_bi.get('remaining_min')} min")
+                    print(f"[bridge V6] {now_h} BURN-INTENT: daily cap exceeded "
+                          f"(today={_hc:.1f}% > cap={_hb + 5.0:.1f}%), but the team remains active "
+                          f"— user override expires in {_bi.get('remaining_min')} min")
             elif isinstance(_hb, (int, float)) and isinstance(_hc, (int, float)):
                 _hcap = _hb + 5.0
                 _over_cap = _hc > _hcap
@@ -2408,25 +2408,25 @@ def main():
                         if within_hours:
                             for _s in (SENTINELLA_SESSION, CAPITANO_SESSION):
                                 if session_exists(_s):
-                                    jht_tmux_send(_s, f"[BRIDGE INFO] ▶️ Budget giornaliero rientrato (oggi={_hc:.1f}% ≤ cap={_hcap:.1f}%): team riattivabile, riprendo i tick.")
-                        print(f"[bridge V6] {now_h} DAILY-HALT rientrato (oggi={_hc:.1f}% ≤ cap={_hcap:.1f}%)")
+                                    jht_tmux_send(_s, f"[BRIDGE INFO] ▶️ Daily usage is back within budget (today={_hc:.1f}% ≤ cap={_hcap:.1f}%): the team can resume; ticks are restarting.")
+                        print(f"[bridge V6] {now_h} DAILY-HALT cleared (today={_hc:.1f}% ≤ cap={_hcap:.1f}%)")
                     else:
                         daily_halted = True  # resta in pausa → questo tick non sveglia nessuno
                 elif within_hours and _over_cap:
                     # Primo sforo: ultimo messaggio ai coordinatori, 30s per
                     # elaborarlo, poi ESC a tutte le sessioni (standby, NO kill).
                     daily_halted = True
-                    _alert = (f"⛔ DAILY-CAP SFORATO: oggi={_hc:.1f}% > cap={_hcap:.1f}% "
-                              f"(budget={_hb:.1f}%). ULTIMO messaggio prima dello stop: "
-                              f"METTO IL TEAM IN STANDBY tra 30s — ESC a tutte le sessioni, "
-                              f"NESSUN kill. Riprendo alla finestra di lavoro del giorno dopo.")
+                    _alert = (f"⛔ DAILY CAP EXCEEDED: today={_hc:.1f}% > cap={_hcap:.1f}% "
+                              f"(budget={_hb:.1f}%). FINAL message before standby: "
+                              f"THE TEAM WILL ENTER STANDBY in 30s — ESC to every session, "
+                              f"NO forced kill. Work resumes in the next working-hours window.")
                     for _s in (SENTINELLA_SESSION, CAPITANO_SESSION):
                         if session_exists(_s):
                             jht_tmux_send(_s, f"[BRIDGE ALERT] {_alert}")
-                    print(f"[bridge V6] {now_h} DAILY-CAP HIT oggi={_hc:.1f}% cap={_hcap:.1f}% → ESC a tutto il team tra 30s")
+                    print(f"[bridge V6] {now_h} DAILY-CAP HIT today={_hc:.1f}% cap={_hcap:.1f}% → ESC to the entire team in 30s")
                     time.sleep(30)
                     _paused = _activate_daily_halt(_hc, _hcap, _hb)
-                    print(f"[bridge V6] {now_h} DAILY-HALT attivo: ESC a {len(_paused)} sessioni; bridge in silenzio fino al giorno dopo")
+                    print(f"[bridge V6] {now_h} DAILY-HALT active: ESC sent to {len(_paused)} sessions; bridge silent until the next day")
 
             if not within_hours:
                 # GATE ORARIO ASSOLUTO (lean-comms): fuori finestra NESSUNA LLM
@@ -2505,7 +2505,7 @@ def main():
                 if within_hours and session_exists(CAPITANO_SESSION):
                     jht_tmux_send(
                         CAPITANO_SESSION,
-                        "[BRIDGE INFO] sorgente usage tornata responsiva, monitoraggio normale."
+                        "[BRIDGE INFO] usage source is responsive again; monitoring is normal."
                     )
                 capitano_alerted = False
             fail_streak = 0
@@ -2519,7 +2519,7 @@ def main():
             if fail_streak == 1 and within_hours and session_exists(SENTINELLA_SESSION):
                 jht_tmux_send(
                     SENTINELLA_SESSION,
-                    f"[BRIDGE FAILURE] ts={now_h} fetch fallito (reason={fail_reason}). Esegui fallback come da prompt."
+                    f"[BRIDGE FAILURE] ts={now_h} fetch failed (reason={fail_reason}). Follow the fallback in your prompt."
                 )
 
             # Alert al Capitano al N° fail consecutivo (gate orario)
@@ -2528,9 +2528,9 @@ def main():
                     eff_min = ANCHOR_TICK_MIN if override_min is None else override_min
                     jht_tmux_send(
                         CAPITANO_SESSION,
-                        f"[BRIDGE ALERT] sorgente usage degraded da {FETCH_FAIL_THRESHOLD} tick "
+                        f"[BRIDGE ALERT] usage source degraded for {FETCH_FAIL_THRESHOLD} ticks "
                         f"(~{FETCH_FAIL_THRESHOLD * eff_min:.0f} min, reason={fail_reason}). "
-                        "La Sentinella sta coprendo con fallback. Opera prudente."
+                        "The Sentinella is using fallback data. Proceed cautiously."
                     )
                 capitano_alerted = True
 
@@ -2582,7 +2582,7 @@ if __name__ == "__main__":
             main()
             break  # uscita normale (main() è un loop infinito → non dovrebbe capitare)
         except KeyboardInterrupt:
-            print("\n[bridge V6] interrotto.")
+            print("\n[bridge V6] interrupted.")
             break
         except Exception as _e:  # noqa: BLE001 — catch-all VOLUTO: niente morte silenziosa
             print(f"[bridge V6] FATAL nel loop: {_e} — riavvio in 5s", file=sys.stderr)

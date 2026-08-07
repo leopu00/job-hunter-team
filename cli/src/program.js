@@ -60,14 +60,14 @@ const ESSENTIAL_HELP = `Usage: jht [command]
 
 Job Hunter Team — CLI
 
-Comandi essenziali:
-  setup        Configurazione iniziale (lancia il wizard)
-  team         Avvia e ferma gli agenti (jht team start)
-  status       Stato del sistema (container, agenti, db)
-  agents       Lista agenti e task in corso
-  doctor       Diagnostica setup e dipendenze
+Essential commands:
+  setup        Initial configuration (starts the wizard)
+  team         Start and stop agents (jht team start)
+  status       System status (container, agents, database)
+  agents       List agents and current tasks
+  doctor       Diagnose setup and dependencies
 
-Per la lista completa di tutti i comandi:
+For the complete command list:
   jht help
 `;
 
@@ -146,7 +146,7 @@ export function buildProgram() {
 
   program
     .command('help')
-    .description('Mostra TUTTI i comandi disponibili (versione lunga)')
+    .description('Show all available commands (long form)')
     .action(() => {
       process.stdout.write(fullHelp());
     });

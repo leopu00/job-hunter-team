@@ -42,7 +42,7 @@ async function handleCache(action) {
   if (action === 'prune') return await cachePrune();
   if (action === 'clear') return await cacheClear();
 
-  console.error(`  Azione non valida: ${action}`);
+  console.error(`  Invalid action: ${action}`);
   console.error('  Azioni: stats, prune, clear');
   process.exitCode = 1;
 }
@@ -56,7 +56,7 @@ async function cacheStats() {
   for (const d of CACHE_DIRS) {
     const exists = await fileExists(d.path);
     if (!exists) {
-      console.log(`  ${d.name.padEnd(10)} —  (non trovata)`);
+      console.log(`  ${d.name.padEnd(10)} — (not found)`);
       continue;
     }
     const { bytes, files } = await dirSize(d.path);
@@ -66,11 +66,11 @@ async function cacheStats() {
   }
 
   console.log(`  ${'─'.repeat(35)}`);
-  console.log(`  ${'totale'.padEnd(10)} ${String(totalFiles).padStart(5)} file   ${fmtSize(totalBytes).padStart(10)}\n`);
+  console.log(`  ${'total'.padEnd(10)} ${String(totalFiles).padStart(5)} files  ${fmtSize(totalBytes).padStart(10)}\n`);
 }
 
 async function cacheClear() {
-  console.log('\n  Pulizia cache…\n');
+  console.log('\n  Cache cleaning...\n');
 
   let cleared = 0;
   for (const d of CACHE_DIRS) {
@@ -79,13 +79,13 @@ async function cacheClear() {
       const { files } = await dirSize(d.path);
       await rm(d.path, { recursive: true, force: true });
       cleared += files;
-      console.log(`  ✓ ${d.name}: ${files} file rimossi`);
+      console.log(`  ✓ ${d.name}: ${files} files removed`);
     } catch (e) {
       console.error(`  ✗ ${d.name}: ${e.message}`);
     }
   }
 
-  console.log(`\n  ${cleared} file rimossi in totale.\n`);
+  console.log(`\n  ${cleared} files removed in total.\n`);
 }
 
 // Soglie e safety per il prune dei log Codex SQLite. Codex ha già una
@@ -142,12 +142,12 @@ async function codexIdleSeconds() {
 async function pruneUvCache() {
   const uvCacheDir = join(JHT_CACHE_DIR, 'uv');
   if (!(await fileExists(uvCacheDir))) {
-    console.log(`  uv cache: ${uvCacheDir} non esiste — niente da fare.`);
+    console.log(`  uv cache: ${uvCacheDir} does not exist — nothing to do.`);
     return;
   }
 
   const before = await dirSize(uvCacheDir);
-  console.log(`  uv cache: ${fmtSize(before.bytes)} (${before.files} file) prima del prune`);
+  console.log(`  uv cache: ${fmtSize(before.bytes)} (${before.files} files) before pruning`);
 
   const r = spawnSync('uv', ['cache', 'prune'], {
     env: { ...process.env, UV_CACHE_DIR: uvCacheDir },
@@ -156,10 +156,10 @@ async function pruneUvCache() {
 
   if (r.error) {
     if (r.error.code === 'ENOENT') {
-      console.error('  ✗ uv non trovato nel PATH. Skip prune.');
+      console.error('  . uv not found in PATH. Skip prune.');
       console.error('    (Installa uv: https://docs.astral.sh/uv/getting-started/installation/)');
     } else {
-      console.error(`  ✗ uv cache prune fallito: ${r.error.message}`);
+      console.error(`  to uv cache prune failed: ${r.error.message}`);
     }
     process.exitCode = 1;
     return;
@@ -175,7 +175,7 @@ async function pruneUvCache() {
 
   const after = await dirSize(uvCacheDir);
   const freed = before.bytes - after.bytes;
-  console.log(`  uv cache: ${fmtSize(after.bytes)} (${after.files} file) dopo il prune`);
+  console.log(`  uv cache: ${fmtSize(after.bytes)} (${after.files} files) after pruning`);
   console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
 }
 
@@ -197,13 +197,13 @@ const UV_TOOL_SUFFIX_RE = /-(old|bak|backup|prev|previous|v?\d+(\.\d+)*)$/i;
 
 async function pruneUvTools() {
   if (!(await fileExists(UV_TOOLS_DIR))) {
-    console.log(`  uv tools: ${UV_TOOLS_DIR} non esiste — niente da fare.`);
+    console.log(`  uv tools: ${UV_TOOLS_DIR} does not exist — nothing to do.`);
     return;
   }
   const entries = await readdir(UV_TOOLS_DIR, { withFileTypes: true });
   const dirs = entries.filter(e => e.isDirectory());
   if (dirs.length === 0) {
-    console.log('  uv tools: nessun tool installato.');
+    console.log('  uv tools: no tools installed.');
     return;
   }
 
@@ -227,7 +227,7 @@ async function pruneUvTools() {
     members.sort((a, b) => b.mtimeMs - a.mtimeMs);
     const keep = members[0];
     const drop = members.slice(1);
-    console.log(`  ${base}: ${members.length} versioni — tengo "${keep.name}", rimuovo: ${drop.map(d => d.name).join(', ')}`);
+    console.log(`  ${base}: ${members.length} versions — I keep "${keep.name}", I remove: ${drop.map(d => d.name).join(', ')}`);
     for (const d of drop) {
       const sz = await dirSize(d.path);
       try {
@@ -242,9 +242,9 @@ async function pruneUvTools() {
   }
 
   if (removed === 0) {
-    console.log(`  uv tools: ${kept} tool, nessuna versione duplicata — niente da fare.`);
+    console.log(`  uv tools: ${kept} tool, no duplicate version — nothing to do.`);
   } else {
-    console.log(`  uv tools: ${kept} tool tenuti, ${removed} fossili rimossi, ${fmtSize(freed)} liberati.`);
+    console.log(`  uv tools: ${kept} tool required, ${removed} fossils removed, ${fmtSize(freed)} liberati.`);
   }
 }
 
@@ -256,12 +256,12 @@ async function pruneUvTools() {
 async function pruneNpmCache() {
   const npmCacheDir = join(JHT_HOME, '.npm');
   if (!(await fileExists(npmCacheDir))) {
-    console.log(`  npm cache: ${npmCacheDir} non esiste — niente da fare.`);
+    console.log(`  npm cache: ${npmCacheDir} does not exist — nothing to do.`);
     return;
   }
 
   const before = await dirSize(npmCacheDir);
-  console.log(`  npm cache: ${fmtSize(before.bytes)} (${before.files} file) prima del verify`);
+  console.log(`  npm cache: ${fmtSize(before.bytes)} (${before.files} files) before verification`);
 
   const r = spawnSync('npm', ['cache', 'verify'], {
     env: { ...process.env, npm_config_cache: npmCacheDir },
@@ -271,9 +271,9 @@ async function pruneNpmCache() {
 
   if (r.error) {
     if (r.error.code === 'ENOENT') {
-      console.error('  ✗ npm non trovato nel PATH. Skip prune.');
+      console.error('  . npm not found in the PATH. Skip prune.');
     } else {
-      console.error(`  ✗ npm cache verify fallito: ${r.error.message}`);
+      console.error(`  : npm cache verification failed: ${r.error.message}`);
     }
     process.exitCode = 1;
     return;
@@ -286,7 +286,7 @@ async function pruneNpmCache() {
 
   const after = await dirSize(npmCacheDir);
   const freed = before.bytes - after.bytes;
-  console.log(`  npm cache: ${fmtSize(after.bytes)} (${after.files} file) dopo il verify`);
+  console.log(`  npm cache: ${fmtSize(after.bytes)} (${after.files} files) after verification`);
   console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
 }
 
@@ -297,25 +297,25 @@ async function pruneNpmCache() {
 // readers che vedono stato incoerente — la mtime check è la safety.
 async function pruneCodexLogs(idleSecondsArg) {
   if (!(await fileExists(CODEX_LOGS_DB))) {
-    console.log('  codex logs: file non presente, skip.');
+    console.log('  codex logs: file not present, skip.');
     return;
   }
 
   const s = await stat(CODEX_LOGS_DB);
   if (s.size < CODEX_LOGS_THRESHOLD_BYTES) {
-    console.log(`  codex logs: ${fmtSize(s.size)} (< soglia ${fmtSize(CODEX_LOGS_THRESHOLD_BYTES)}) — skip.`);
+    console.log(`  codex logs: ${fmtSize(s.size)} ( threshold ${fmtSize(CODEX_LOGS_THRESHOLD_BYTES)}) — skip.`);
     return;
   }
 
   const idleSeconds = idleSecondsArg ?? (Date.now() - s.mtimeMs) / 1000;
   if (idleSeconds < CODEX_LOGS_IDLE_SECONDS) {
     const idleMin = Math.round(idleSeconds / 60);
-    console.log(`  codex logs: ${fmtSize(s.size)} ma scritto ${idleMin}min fa (Codex potrebbe essere attivo) — skip per safety.`);
+    console.log(`  codex logs: ${fmtSize(s.size)} but written ${idleMin}min ago (Codex could be active) — skip for safety.`);
     return;
   }
 
   const idleHours = Math.round(idleSeconds / 3600);
-  console.log(`  codex logs: ${fmtSize(s.size)} prima del prune (idle ${idleHours}h)`);
+  console.log(`  Codex logs: ${fmtSize(s.size)} before pruning (idle ${idleHours}h)`);
 
   // DELETE + VACUUM in una sola invocazione sqlite3. VACUUM rilascia le
   // free pages al filesystem; senza, il file resta della stessa
@@ -328,9 +328,9 @@ async function pruneCodexLogs(idleSecondsArg) {
 
   if (r.error) {
     if (r.error.code === 'ENOENT') {
-      console.error('  ✗ sqlite3 non trovato nel PATH. Skip codex logs prune.');
+      console.error('  . sqlite3 not found in the PATH. Skip codex logs prune.');
     } else {
-      console.error(`  ✗ codex logs prune fallito: ${r.error.message}`);
+      console.error(`  : codex logs prune failed: ${r.error.message}`);
     }
     process.exitCode = 1;
     return;
@@ -343,7 +343,7 @@ async function pruneCodexLogs(idleSecondsArg) {
 
   const after = await stat(CODEX_LOGS_DB);
   const freed = s.size - after.size;
-  console.log(`  codex logs: ${fmtSize(after.size)} dopo il prune`);
+  console.log(`  Codex logs: ${fmtSize(after.size)} after pruning`);
   console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
 }
 
@@ -355,7 +355,7 @@ async function pruneCodexEphemeral(idleSecondsArg) {
   const idleSeconds = idleSecondsArg ?? (await codexIdleSeconds());
   if (idleSeconds < CODEX_LOGS_IDLE_SECONDS) {
     const idleMin = Math.round(idleSeconds / 60);
-    console.log(`  codex ephemeral: skip per safety (Codex toccato ${idleMin}min fa)`);
+    console.log(`  Codex ephemeral cache: skipped for safety (Codex was active ${idleMin} min ago)`);
     return;
   }
 
@@ -369,22 +369,22 @@ async function pruneCodexEphemeral(idleSecondsArg) {
       await rm(e.path, { recursive: true, force: true });
       totalFreed += size;
       touched++;
-      console.log(`  ✓ ${e.name}: ${fmtSize(size)} rimosso`);
+      console.log(`  ✓ ${e.name}: ${fmtSize(size)} Removed`);
     } catch (err) {
       console.error(`  ✗ ${e.name}: ${err.message}`);
     }
   }
 
   if (touched === 0) {
-    console.log('  codex ephemeral: niente da pulire.');
+    console.log('  codex ephemeral: nothing to clean.');
   } else {
-    console.log(`  codex ephemeral: ${fmtSize(totalFreed)} liberati totali`);
+    console.log(`  codex ephemeral: ${fmtSize(totalFreed)} Total releases`);
   }
 }
 
 export function registerCacheCommand(program) {
   program
     .command('cache [action]')
-    .description('Gestione cache JHT (azioni: stats, prune, clear)')
+    .description('Manage JHT caches (actions: stats, prune, clear)')
     .action(handleCache);
 }

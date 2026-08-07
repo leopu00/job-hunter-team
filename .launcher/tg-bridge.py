@@ -67,7 +67,7 @@ INBOX_DIR = JHT_HOME / "profile" / "inbox"
 
 BOT_ROLE = (os.environ.get("JHT_TG_BOT_ROLE", "") or "").strip().lower()
 if BOT_ROLE not in VALID_ROLES:
-    print(f"FATAL: JHT_TG_BOT_ROLE deve essere uno di {VALID_ROLES} (ricevuto: '{BOT_ROLE}')",
+    print(f"FATAL: JHT_TG_BOT_ROLE must be one of {VALID_ROLES} (received: '{BOT_ROLE}')",
           flush=True)
     sys.exit(2)
 
@@ -169,7 +169,7 @@ def setup_bot_commands(token: str) -> None:
         else:
             log(f"setMyCommands: {body}")
     except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, TimeoutError, OSError) as e:
-        log(f"setMyCommands: failed ({e}) — riprovo al prossimo boot")
+        log(f"setMyCommands: failed ({e}) — retrying at the next boot")
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
@@ -189,20 +189,20 @@ def read_config() -> tuple[str, int]:
         chat_id_raw = bot.get("chat_id", "")
         chat_id = int(chat_id_raw) if str(chat_id_raw).strip() else 0
         if not token or not chat_id:
-            log(f"FATAL: token o chat_id mancante per ruolo '{BOT_ROLE}' in {CONFIG_PATH}")
+            log(f"FATAL: token or chat_id missing for role '{BOT_ROLE}' in {CONFIG_PATH}")
             sys.exit(2)
         return token, chat_id
     except FileNotFoundError:
-        log(f"FATAL: {CONFIG_PATH} non trovato — il wizard non e' completato")
+        log(f"FATAL: {CONFIG_PATH} not found — the wizard is incomplete")
         sys.exit(2)
     except Exception as e:
-        log(f"FATAL: errore lettura config: {e}")
+        log(f"FATAL: failed to read config: {e}")
         sys.exit(2)
 
 
 def load_offset() -> int:
     if os.environ.get("JHT_TG_OFFSET_RESET") == "1":
-        log("offset reset richiesto via env — skip backlog")
+        log("offset reset requested through the environment — skipping backlog")
         return -1  # sentinella per "ricalcola dal max attuale al primo poll"
     try:
         return int(json.loads(STATE_PATH.read_text()).get("last_offset", 0))
@@ -290,7 +290,7 @@ def fetch_file(token: str, file_id: str, dest_name: str) -> Path | None:
         # il file e' suo. Niente chown necessario.
         return local
     except DocumentTooLarge as e:
-        log(f"fetch_file: oltre il limite ({e}) — download interrotto")
+        log(f"fetch_file: size limit exceeded ({e}) — download stopped")
         _discard_partial(local)
         raise
     except Exception as e:
@@ -306,7 +306,7 @@ def _discard_partial(local: Path | None) -> None:
     try:
         local.unlink(missing_ok=True)
     except Exception as e:
-        log(f"warn: cleanup parziale fallito: {e}")
+        log(f"warn: partial cleanup failed: {e}")
 
 
 # ── Dispatch messaggi ───────────────────────────────────────────────────
@@ -333,12 +333,12 @@ def declared_size(payload: dict) -> int | None:
 
 
 def reject_too_large(name: str, size_bytes: int | None) -> None:
-    quanto = f"{size_bytes // 1024 // 1024} MB" if size_bytes is not None else "oltre il limite"
-    log(f"doc {name} oltre limite ({size_bytes}B) — skip")
+    quanto = f"{size_bytes // 1024 // 1024} MB" if size_bytes is not None else "over the limit"
+    log(f"doc {name} exceeds the limit ({size_bytes}B) — skipping")
     tmux_send(
         f"[@system -> @{TARGET_SESSION.lower()}] [TG-DOC-REJECT] "
         f"file '{name}' oltre 20 MB ({quanto}). "
-        f"Chiedi all'utente di rimandarlo in formato piu' piccolo."
+        f"Ask the user to send it again in a smaller format."
     )
 
 
@@ -351,7 +351,7 @@ def handle_document(token: str, msg: dict) -> None:
         reject_too_large(name, size)
         return
     if size is None:
-        log(f"doc {name}: file_size assente — il limite sara' applicato sullo stream")
+        log(f"doc {name}: file_size missing — the limit will be enforced on the stream")
     try:
         local = fetch_file(token, doc["file_id"], name)
     except DocumentTooLarge as e:
@@ -360,7 +360,7 @@ def handle_document(token: str, msg: dict) -> None:
     if not local:
         tmux_send(
             f"[@system -> @{TARGET_SESSION.lower()}] [TG-DOC-ERROR] "
-            f"download di '{name}' fallito — chiedi all'utente di riprovare."
+            f"download of '{name}' failed — ask the user to try again."
         )
         return
     if size is None:
@@ -477,12 +477,12 @@ def dead_letter(u: dict, err: BaseException, attempts: int) -> None:
         with open(DEADLETTER_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
     except Exception as e:
-        log(f"warn: scrittura dead-letter fallita: {e}")
-    log(f"DEAD-LETTER uid={uid} dopo {attempts} tentativi ({reason}) — la coda riparte")
+        log(f"warning: failed to write dead letter: {e}")
+    log(f"DEAD-LETTER uid={uid} after {attempts} attempts ({reason}) — resuming the queue")
     tmux_send(
         f"[@system -> @{TARGET_SESSION.lower()}] [TG-UNDELIVERED] "
         f"update_id={uid} attempts={attempts} error={reason} file={DEADLETTER_PATH} — "
-        f"un messaggio dell'utente non e' stato consegnato: avvisalo e chiedigli di rimandarlo."
+        f"a user message was not delivered: notify the user and ask them to send it again."
     )
 
 
@@ -509,7 +509,7 @@ def main() -> None:
             d = json.loads(r)
             updates = d.get("result", [])
             offset = max((u["update_id"] for u in updates), default=0)
-            log(f"reset: skip backlog, partendo da offset={offset}")
+            log(f"reset: skipping backlog, starting at offset={offset}")
             save_offset(offset)
         except Exception as e:
             log(f"reset failed, partiamo da 0: {e}")
@@ -527,7 +527,7 @@ def main() -> None:
             for u in d.get("result", []):
                 uid = u.get("update_id")
                 if not isinstance(uid, int):
-                    log(f"update senza update_id valido, skip: {str(u)[:120]}")
+                    log(f"update has no valid update_id; skipping: {str(u)[:120]}")
                     continue
                 try:
                     dispatch_update(token, allowed_chat, u)
@@ -538,8 +538,8 @@ def main() -> None:
                         # Fermiamo anche il resto del batch per non consegnare
                         # fuori ordine i messaggi che stanno dietro.
                         attempts[uid] = tentativi
-                        log(f"dispatch uid={uid} fallito ({e}) — tentativo "
-                            f"{tentativi}/{MAX_UPDATE_ATTEMPTS}, ritento al prossimo poll")
+                        log(f"dispatch uid={uid} failed ({e}) — attempt "
+                            f"{tentativi}/{MAX_UPDATE_ATTEMPTS}; retrying on the next poll")
                         ritenta = True
                         break
                     # Veleno: tentativi esauriti. Si scarta, si avvisa, si va

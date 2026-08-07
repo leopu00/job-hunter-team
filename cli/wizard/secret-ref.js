@@ -68,5 +68,5 @@ export function describeSecret(secret) {
     if (secret.source === 'file') return `file:${secret.path}`;
     if (secret.source === 'exec') return `exec:${secret.command.slice(0, 30)}`;
   }
-  return 'sconosciuto';
+  return 'unknown';
 }

@@ -50,7 +50,7 @@ async function handleTemplates(action, options) {
   if (!action || action === 'list' || action === 'ls') return await listTemplates();
   if (action === 'preview' || action === 'show') return await previewTemplate(options);
 
-  console.error(`  Azione non valida: ${action}`);
+  console.error(`  Invalid action: ${action}`);
   console.error('  Azioni: list, preview --name <name>');
   process.exitCode = 1;
 }
@@ -59,7 +59,7 @@ async function listTemplates() {
   const templates = await discoverTemplates();
 
   if (templates.length === 0) {
-    console.log(`\n  ${DIM}Nessun template trovato.${RESET}`);
+    console.log(`\n  ${DIM}No templates found.${RESET}`);
     console.log(`  ${DIM}Directory: ${TEMPLATES_DIR}${RESET}\n`);
     return;
   }
@@ -77,7 +77,7 @@ async function listTemplates() {
     console.log(`  ${YELLOW}${cat}${RESET}`);
     for (const t of list) {
       const vars = t.vars.length > 0 ? `${DIM}vars: ${t.vars.join(', ')}${RESET}` : '';
-      console.log(`    ${GREEN}${t.name}${RESET}  ${DIM}(${t.lines} righe)${RESET}  ${vars}`);
+      console.log(`    ${GREEN}${t.name}${RESET}  ${DIM}(${t.lines} lines)${RESET}  ${vars}`);
       if (t.description) console.log(`    ${DIM}${t.description}${RESET}`);
     }
     console.log('');
@@ -86,7 +86,7 @@ async function listTemplates() {
 
 async function previewTemplate(options) {
   if (!options.name) {
-    console.error('  Opzione --name obbligatoria');
+    console.error('  Option --name mandatory');
     process.exitCode = 1;
     return;
   }
@@ -94,8 +94,8 @@ async function previewTemplate(options) {
   const templates = await discoverTemplates();
   const t = templates.find(t => t.name === options.name || t.file === options.name);
   if (!t) {
-    console.error(`  Template non trovato: ${options.name}`);
-    console.error(`  Disponibili: ${templates.map(t => t.name).join(', ') || 'nessuno'}`);
+    console.error(`  Template not found: ${options.name}`);
+    console.error(`  Disponibili: ${templates.map(t => t.name).join(', ') || 'Nobody.'}`);
     process.exitCode = 1;
     return;
   }
@@ -116,7 +116,7 @@ async function previewTemplate(options) {
   }
 
   if (body.split('\n').length > lines.length) {
-    console.log(`\n  ${DIM}... (${body.split('\n').length - lines.length} righe rimanenti)${RESET}`);
+    console.log(`\n  ${DIM}... (${body.split('\n').length - lines.length} remaining lines)${RESET}`);
   }
   console.log('');
 }
@@ -124,8 +124,8 @@ async function previewTemplate(options) {
 export function registerTemplatesCommand(program) {
   program
     .command('templates [action]')
-    .description('[non implementato] Gestione template — nessun renderer collegato alla pipeline (azioni: list, preview)')
-    .option('-n, --name <name>', 'nome template per preview')
-    .option('-l, --lines <n>', 'righe da mostrare nel preview (default 40)', '40')
+    .description('[not implemented] Template management — no renderer is connected to the pipeline (actions: list, preview)')
+    .option('-n, --name <name>', 'template name to preview')
+    .option('-l, --lines <n>', 'rows to show in preview (default 40)', '40')
     .action(handleTemplates);
 }

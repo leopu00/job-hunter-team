@@ -161,7 +161,7 @@ async function processRequest(baseUrl, token, request) {
   if (!realPath) {
     await apiSend('PATCH', baseUrl, token, `/api/cloud-sync/file-bridge/${id}`, {
       status: 'error',
-      error: 'file non trovato sul container',
+      error: 'file not found in the container',
     }).catch(() => {});
     log('error', 'request.file-missing', { id, fileName });
     return;

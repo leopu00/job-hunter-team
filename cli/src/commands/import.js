@@ -54,18 +54,18 @@ async function writeJsonSafe(p, data) {
 
 function validate(target, data) {
   const errors = [];
-  if (!data || typeof data !== 'object') return { ok: false, errors: ['JSON non valido'], count: 0 };
+  if (!data || typeof data !== 'object') return { ok: false, errors: ['Invalid JSON'], count: 0 };
 
   if (target === 'config') return { ok: true, errors: [], count: 1 };
 
   const cfg = TARGETS[target];
   const items = data[cfg.key] ?? data.data;
   if (!Array.isArray(items)) {
-    errors.push(`Campo "${cfg.key}" o "data" mancante o non array`);
+    errors.push(`Missing "${cfg.key}" or "data" field, or value is not an array`);
     return { ok: false, errors, count: 0 };
   }
   for (let i = 0; i < Math.min(items.length, 3); i++) {
-    if (!items[i][cfg.idField]) errors.push(`[${i}]: campo "${cfg.idField}" mancante`);
+    if (!items[i][cfg.idField]) errors.push(`[${i}]: missing "${cfg.idField}" field`);
   }
   return { ok: errors.length === 0, errors, count: items.length };
 }
@@ -73,31 +73,31 @@ function validate(target, data) {
 async function handleImport(file, options) {
   const target = options.target;
   if (!target || !TARGETS[target]) {
-    console.error(`  Target non valido: ${target ?? '(mancante)'}`);
-    console.error(`  Target disponibili: ${Object.keys(TARGETS).join(', ')}`);
+    console.error(`  Invalid target: ${target ?? '(missing)'}`);
+    console.error(`  Targets available: ${Object.keys(TARGETS).join(', ')}`);
     process.exitCode = 1;
     return;
   }
 
   if (!(await fileExists(file))) {
-    console.error(`  File non trovato: ${file}`);
+    console.error(`  File not found: ${file}`);
     process.exitCode = 1;
     return;
   }
 
   let data;
   try { data = JSON.parse(await readFile(file, 'utf-8')); }
-  catch { console.error('  File non è un JSON valido'); process.exitCode = 1; return; }
+  catch { console.error('  File is not a valid JSON'); process.exitCode = 1; return; }
 
   const v = validate(target, data);
   if (!v.ok) {
-    console.error('  Validazione fallita:');
+    console.error('  Failed validation:');
     v.errors.forEach(e => console.error(`    - ${e}`));
     process.exitCode = 1;
     return;
   }
 
-  console.log(`  Trovati ${v.count} record da importare`);
+  console.log(`  Trovati ${v.count} records to import`);
 
   // Scrivere nel posto giusto non basta se in quel posto non guarda più
   // nessuno: `sessions.json` e `tasks.json` li leggeva la vecchia interfaccia
@@ -105,13 +105,13 @@ async function handleImport(file, options) {
   // non li rimette in circolo da nessuna parte.
   if (isRetiredStore(target)) {
     console.log('');
-    console.log(`  Nota: ${retiredStoreFile(target)} non ha più un lettore nel prodotto.`);
-    console.log(`  Il file viene scritto e conservato, ma nessuna schermata lo mostra —`);
-    console.log(`  lo leggeva la vecchia interfaccia testuale, rimossa il ${RETIRED_SINCE}.`);
+    console.log(`  Note: ${retiredStoreFile(target)} is no longer read by the product.`);
+    console.log(`  The file is written and preserved, but no screen shows it —`);
+    console.log(`  read the old text interface, remove the ${RETIRED_SINCE}.`);
   }
 
   if (options.dryRun) {
-    console.log('  (dry-run — nessuna modifica applicata)');
+    console.log('  (dry-run — no modification applied)');
     return;
   }
 
@@ -121,7 +121,7 @@ async function handleImport(file, options) {
 
   if (target === 'config') {
     await writeJsonSafe(dest, data);
-    console.log(`\n  Config importata (${mode}) → ${dest}`);
+    console.log(`\n  Configuration imported (${mode}) → ${dest}`);
     return;
   }
 
@@ -138,7 +138,7 @@ async function handleImport(file, options) {
   // Merge
   const base = await readCurrent(cfg);
   if (base.legacy) {
-    console.log(`  Base del merge letta da una posizione lasciata da una versione precedente: ${base.from}`);
+    console.log(`  Base of the merge read from a position left by a previous version: ${base.from}`);
   }
   const existing = base.data ?? {};
   const current = existing[cfg.key] ?? [];
@@ -153,9 +153,9 @@ async function handleImport(file, options) {
 export function registerImportCommand(program) {
   program
     .command('import <file>')
-    .description('Importa dati da file JSON (target: sessions, tasks, config)')
-    .requiredOption('-t, --target <target>', 'destinazione: sessions | tasks | config')
-    .option('--replace', 'sostituisci tutti i dati (default: merge)')
-    .option('--dry-run', 'valida senza importare')
+    .description('Import data from JSON file (target: sessions, tasks, config)')
+    .requiredOption('-t, --target <target>', 'destination: sessions | tasks | config')
+    .option('--replace', 'replace all data (default: merge)')
+    .option('--dry-run', 'validate without importing')
     .action(handleImport);
 }

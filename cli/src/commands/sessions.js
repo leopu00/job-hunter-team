@@ -8,9 +8,9 @@ const JHT_DIR       = JHT_HOME;
 const SESSIONS_PATH = join(JHT_DIR, 'sessions', 'sessions.json');
 
 const STATE_CFG = {
-  active: { icon: `${GREEN}●${RESET}`, label: `${GREEN}attiva${RESET}` },
-  paused: { icon: `${YELLOW}◐${RESET}`, label: `${YELLOW}pausa${RESET}` },
-  ended:  { icon: `${DIM}○${RESET}`,    label: `${DIM}terminata${RESET}` },
+  active: { icon: `${GREEN}●${RESET}`, label: `${GREEN}active${RESET}` },
+  paused: { icon: `${YELLOW}◐${RESET}`, label: `${YELLOW}paused${RESET}` },
+  ended:  { icon: `${DIM}○${RESET}`,    label: `${DIM}ended${RESET}` },
 };
 
 async function fileExists(p) {
@@ -19,7 +19,7 @@ async function fileExists(p) {
 
 function fmtDate(ms) {
   if (!ms) return '—';
-  return new Date(ms).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(ms).toLocaleString('en-US', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function fmtDuration(start, end) {
@@ -33,7 +33,7 @@ async function handleSessions(options) {
   // "Nessuna sessione trovata" suonava come un elenco vuoto. Il file non
   // esiste perché nessuno lo scrive più dal 2026-07-25, ed è un'altra cosa.
   if (!(await fileExists(SESSIONS_PATH))) {
-    console.log(`\n  ${BOLD}JHT — Sessioni${RESET}\n`);
+    console.log(`\n  ${BOLD}JHT — Sessions${RESET}\n`);
     console.log(retiredStoreNotice(['sessions']));
     console.log('');
     process.exitCode = 1;
@@ -42,7 +42,7 @@ async function handleSessions(options) {
 
   let store;
   try { store = JSON.parse(await readFile(SESSIONS_PATH, 'utf-8')); }
-  catch { console.error('  Errore lettura sessioni'); process.exitCode = 1; return; }
+  catch { console.error('  Error reading sessions'); process.exitCode = 1; return; }
 
   let sessions = store.sessions ?? [];
 
@@ -60,14 +60,14 @@ async function handleSessions(options) {
   const active = (store.sessions ?? []).filter(s => s.state === 'active').length;
   const paused = (store.sessions ?? []).filter(s => s.state === 'paused').length;
 
-  console.log(`\n  ${BOLD}JHT — Sessioni${RESET} (${total} totali, ${active} attive, ${paused} in pausa)\n`);
+  console.log(`\n  ${BOLD}JHT — Sessions${RESET} (${total} total, ${active} active, ${paused} paused)\n`);
 
   if (sessions.length === 0) {
-    console.log(`  ${DIM}Nessuna sessione${filter ? ` con stato "${filter}"` : ''}.${RESET}\n`);
+    console.log(`  ${DIM}No session${filter ? ` with state "${filter}"` : ''}.${RESET}\n`);
     return;
   }
 
-  console.log(`  ${'ID'.padEnd(14)} ${'Stato'.padEnd(14)} ${'Canale'.padEnd(10)} ${'Msg'.padEnd(6)} ${'Durata'.padEnd(8)} ${'Data'}`);
+  console.log(`  ${'ID'.padEnd(14)} ${'State'.padEnd(14)} ${'Channel'.padEnd(10)} ${'Msg'.padEnd(6)} ${'Duration'.padEnd(8)} ${'Date'}`);
   console.log(`  ${'─'.repeat(14)} ${'─'.repeat(14)} ${'─'.repeat(10)} ${'─'.repeat(6)} ${'─'.repeat(8)} ${'─'.repeat(16)}`);
 
   for (const s of sessions) {
@@ -81,7 +81,7 @@ async function handleSessions(options) {
   }
 
   if (options.verbose) {
-    console.log(`\n  ${DIM}Provider usati:${RESET}`);
+    console.log(`\n  ${DIM}Providers used:${RESET}`);
     const providers = new Set((store.sessions ?? []).map(s => s.provider).filter(Boolean));
     for (const p of providers) console.log(`    ${p}`);
   }
@@ -92,11 +92,11 @@ async function handleSessions(options) {
 export function registerSessionsCommand(program) {
   program
     .command('sessions')
-    .description('Lista sessioni con stato e statistiche')
-    .option('--active', 'mostra solo attive')
-    .option('--ended', 'mostra solo terminate')
-    .option('--paused', 'mostra solo in pausa')
-    .option('-t, --tail <n>', 'numero sessioni (default 30)', '30')
-    .option('-v, --verbose', 'mostra dettagli provider')
+    .description('List of sessions with status and statistics')
+    .option('--active', 'show only active')
+    .option('--ended', 'show only finished')
+    .option('--paused', 'show only paused sessions')
+    .option('-t, --tail <n>', 'number of sessions (default 30)', '30')
+    .option('-v, --verbose', 'show provider details')
     .action(handleSessions);
 }

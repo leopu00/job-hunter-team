@@ -72,7 +72,7 @@ load_roles() {
   # cieco che tace è il guasto invisibile che il ticket documenta.
   KNOWN_ROLES="$(JHT_HOME="$JHT_HOME" python3 "$ROSTER_PY" roles 2>/dev/null | tr '\n' ' ')"
   if [ -z "${KNOWN_ROLES// /}" ]; then
-    log "WARN ruoli non leggibili da $ROSTER_PY — nessun agente curabile questo giro"
+    log "WARN roles cannot be read from $ROSTER_PY — no agents can be healed this cycle"
     return 1
   fi
   EPHEMERAL_ROLES="$(JHT_HOME="$JHT_HOME" python3 "$ROSTER_PY" roles --kind ephemeral 2>/dev/null | tr '\n' ' ')"
@@ -124,12 +124,12 @@ role_of() {
 # healer senza lock che nessun healer — il kill-by-marker dello spawner resta.
 LOCK_FILE="$JHT_HOME/logs/codex-auth-healer.lock"
 if ! command -v flock >/dev/null 2>&1; then
-  log "WARN flock non disponibile — proseguo senza lock singleton"
+  log "WARN flock unavailable — continuing without singleton lock"
 elif ! : >>"$LOCK_FILE" 2>/dev/null; then
   # Verificata PRIMA di `exec`: un errore di redirezione su `exec` fa uscire
   # una shell non interattiva, e un lockfile non scrivibile ucciderebbe il
   # healer invece di degradarlo.
-  log "WARN lockfile non scrivibile ($LOCK_FILE) — proseguo senza lock singleton"
+  log "WARN lockfile is not writable ($LOCK_FILE) — continuing without singleton lock"
 else
   exec 9>>"$LOCK_FILE"
   if ! flock -n 9; then
@@ -139,7 +139,7 @@ else
 fi
 
 load_roles
-log "codex-auth-healer avviato (interval=${INTERVAL}s cooldown=${COOLDOWN}s ruoli='${KNOWN_ROLES}')"
+log "codex-auth-healer started (interval=${INTERVAL}s cooldown=${COOLDOWN}s roles='${KNOWN_ROLES}')"
 
 while true; do
   # Rispetta lo Stop utente, il weekly-halt e lo standby a spesa zero: un
@@ -181,12 +181,12 @@ while true; do
     # aspettando — un doppione, non una cura. Qui il kill È la cura: il
     # proprietario la ricrea col nome giusto e ri-legge auth.json fresca.
     if is_ephemeral "$role" && [ "$sess" != "$(upper_of "$role")" ]; then
-      log "$sess: sessione effimera ($role) — kill senza restart, la ricrea il suo proprietario"
+      log "$sess: ephemeral session ($role) — killing without restart; its owner will recreate it"
       continue
     fi
 
     node "$JHT_ENTRY" team start "$role" >>"$LOG" 2>&1
-    log "$sess: restart ($role) inviato"
+    log "$sess: restart ($role) sent"
   done
 
   sleep "$INTERVAL"

@@ -76,26 +76,26 @@ export function validateConfigBeforeWrite(config) {
   const validProviders = ['claude', 'anthropic', 'openai', 'codex', 'kimi'];
 
   if (typeof config.version !== 'number' || config.version < 1) {
-    errors.push('version deve essere un numero positivo');
+    errors.push('version must be a positive number');
   }
   if (!validProviders.includes(config.active_provider)) {
-    errors.push(`active_provider deve essere uno di: ${validProviders.join(', ')}`);
+    errors.push(`active_provider must be one of: ${validProviders.join(', ')}`);
   }
   if (!config.providers || typeof config.providers !== 'object') {
-    errors.push('providers e\' obbligatorio');
+    errors.push('providers is required');
   }
   if (config.active_provider && !config.providers?.[config.active_provider]) {
-    errors.push('Il provider attivo deve avere una configurazione in providers');
+    errors.push('The active provider must have an entry in providers');
   }
   // Valida ogni provider configurato
   for (const key of validProviders) {
     const prov = config.providers?.[key];
     if (!prov) continue;
     if (!validProviders.includes(prov.name)) {
-      errors.push(`providers.${key}.name non valido`);
+      errors.push(`providers.${key}.name is invalid`);
     }
     if (prov.auth_method === 'api_key' && !prov.api_key) {
-      errors.push(`providers.${key}: api_key obbligatoria quando auth_method = 'api_key'`);
+      errors.push(`providers.${key}: api_key is required when auth_method = 'api_key'`);
     }
     // Per auth_method = 'subscription' non imponiamo piu' un blocco
     // 'subscription' nel config: l'autenticazione vera e' OAuth device-flow
@@ -115,7 +115,7 @@ export function validateConfigBeforeWrite(config) {
 export function writeConfigFile(config) {
   const validation = validateConfigBeforeWrite(config);
   if (!validation.success) {
-    throw new Error(`Config non valida:\n${validation.errors.join('\n')}`);
+    throw new Error(`Invalid configuration:\n${validation.errors.join('\n')}`);
   }
   fs.mkdirSync(JHT_CONFIG_DIR, { recursive: true });
   fs.writeFileSync(JHT_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
@@ -132,7 +132,7 @@ export function validateApiKey(provider, value) {
     return 'La API key sembra troppo corta';
   }
   if (provider.keyPrefix && !trimmed.startsWith(provider.keyPrefix)) {
-    return `La key per ${provider.label} dovrebbe iniziare con "${provider.keyPrefix}"`;
+    return `The key for ${provider.label} should start with "${provider.keyPrefix}"`;
   }
   return undefined;
 }
@@ -152,14 +152,14 @@ export function validateTelegramToken(value) {
     return 'Il token non puo\' essere vuoto';
   }
   if (!/^\d+:[A-Za-z0-9_-]+$/.test(value.trim())) {
-    return 'Formato token non valido (atteso: 123456:ABC...)';
+    return 'Invalid token format (expected: 123456:ABC...)';
   }
   return undefined;
 }
 
 export function validateChatId(value) {
   if (value && value.trim().length > 0 && !/^-?\d+$/.test(value.trim())) {
-    return 'Il chat ID deve essere un numero';
+    return 'The chat ID must be a number';
   }
   return undefined;
 }
