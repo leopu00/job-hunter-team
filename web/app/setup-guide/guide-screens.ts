@@ -103,9 +103,18 @@ const SCREEN_LIST: GuideScreen[] = [
         width: 1920,
         height: 1080,
       },
+      macos: {
+        src: "/setup-guide/S02-docker-download-macos.png",
+        width: 1512,
+        height: 828,
+      },
+      windows: {
+        src: "/setup-guide/S02-docker-download-windows.png",
+        width: 1366,
+        height: 768,
+      },
     },
-    pending:
-      "Consegnata per Linux. Restano macOS e Windows: pagina Docker Desktop ufficiale. Non è una schermata dell'app — qui l'app non è ancora stata scaricata.",
+    pending: "Completa sui tre sistemi.",
   },
   {
     id: "S03-artifact-download",
@@ -127,8 +136,20 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "No Windows o instalador é o caminho principal; a versão portátil é a alternativa.",
       hu: "Windowson a telepítő az elsődleges út; a hordozható változat az alternatíva.",
     },
-    assets: {},
-    pending: "Download della release ufficiale, uno per OS.",
+    assets: {
+      macos: {
+        src: "/setup-guide/S03-artifact-download-macos.png",
+        width: 1506,
+        height: 825,
+      },
+      windows: {
+        src: "/setup-guide/S03-artifact-download-windows.png",
+        width: 1366,
+        height: 768,
+      },
+    },
+    pending:
+      "Consegnate macOS e Windows. Linux revocata dall'audit; la ripresa macOS va rifatta dopo il rename della voce di menu.",
   },
   {
     id: "S04-installation-macos",
@@ -150,8 +171,13 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "A versão macOS está assinada e notarizada: basta um duplo clique.",
       hu: "A macOS-változat aláírt és hitelesített: elég egy dupla kattintás.",
     },
-    assets: {},
-    pending: "App estratta su macOS, pronta all'apertura.",
+    assets: {
+      macos: {
+        src: "/setup-guide/S04-installation-macos.png",
+        width: 2064,
+        height: 1096,
+      },
+    },
   },
   {
     id: "S04-installation-windows",
@@ -173,9 +199,13 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Um aviso do SmartScreen é esperado: verifica a origem do ficheiro.",
       hu: "A SmartScreen-figyelmeztetés várható: ellenőrizd a fájl forrását.",
     },
-    assets: {},
-    pending:
-      "Portable scaricato e pronto, oppure la finestra inglese subito dopo l'apertura. Mai la UI localizzata dell'installer.",
+    assets: {
+      windows: {
+        src: "/setup-guide/S04-installation-windows.png",
+        width: 1366,
+        height: 768,
+      },
+    },
   },
   {
     id: "S04-installation-linux",
@@ -235,9 +265,14 @@ const SCREEN_LIST: GuideScreen[] = [
         width: 624,
         height: 486,
       },
+      macos: {
+        src: "/setup-guide/S06-choose-language-macos.png",
+        width: 3024,
+        height: 1898,
+      },
     },
     pending:
-      "Consegnata per Linux (riusa l'asset di S06). Restano macOS e Windows.",
+      "Consegnate Linux e macOS, entrambe riusando l'asset di S06. Resta Windows.",
   },
   {
     id: "S06-choose-language",
@@ -265,8 +300,13 @@ const SCREEN_LIST: GuideScreen[] = [
         width: 624,
         height: 486,
       },
+      macos: {
+        src: "/setup-guide/S06-choose-language-macos.png",
+        width: 3024,
+        height: 1898,
+      },
     },
-    pending: "Consegnata per Linux. Restano macOS e Windows.",
+    pending: "Consegnate Linux e macOS. Resta Windows.",
   },
   {
     id: "S07-enter-office",
@@ -294,8 +334,13 @@ const SCREEN_LIST: GuideScreen[] = [
         width: 1920,
         height: 1080,
       },
+      macos: {
+        src: "/setup-guide/S07-enter-office-macos.png",
+        width: 3024,
+        height: 1898,
+      },
     },
-    pending: "Consegnata per Linux. Restano macOS e Windows.",
+    pending: "Consegnate Linux e macOS. Resta Windows.",
   },
   {
     id: "S08-setup-overview-empty",
@@ -317,8 +362,14 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Contentor, provedor de AI, perfil e CV, horário: quatro verificações, por ordem.",
       hu: "Konténer, AI-szolgáltató, profil és önéletrajz, munkaidő: négy ellenőrzés, sorban.",
     },
-    assets: {},
-    pending: "Pannello «Attiva il team» pulito, quattro controlli incompleti.",
+    assets: {
+      macos: {
+        src: "/setup-guide/S08-setup-overview-empty-macos.png",
+        width: 3024,
+        height: 1898,
+      },
+    },
+    pending: "Consegnata macOS. Restano Linux e Windows.",
   },
   {
     id: "S09-start-container",
@@ -346,8 +397,13 @@ const SCREEN_LIST: GuideScreen[] = [
         width: 1920,
         height: 1080,
       },
+      macos: {
+        src: "/setup-guide/S09-start-container-macos.png",
+        width: 3024,
+        height: 1898,
+      },
     },
-    pending: "Consegnata per Linux. Restano macOS e Windows.",
+    pending: "Consegnate Linux e macOS. Resta Windows.",
   },
   {
     id: "S10-choose-provider",
@@ -568,8 +624,15 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "O comando de início de sessão fica indisponível até o contentor estar a correr.",
       hu: "A bejelentkezés gombja addig nem elérhető, amíg a konténer nem fut.",
     },
-    assets: {},
-    pending: "Pannello account non collegato, con il container avviato.",
+    assets: {
+      macos: {
+        src: "/setup-guide/W01-local-account-entry-macos.png",
+        width: 3024,
+        height: 1898,
+      },
+    },
+    pending:
+      "Consegnata macOS. Restano Linux (revocata dall'audit per etichette italiane sullo sfondo) e Windows.",
   },
   {
     id: "W02-google-login",
@@ -591,9 +654,15 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "O link abre no navegador; o código de uso único fica aqui.",
       hu: "A hivatkozás a böngészőben nyílik; az egyszer használatos kód itt marad.",
     },
-    assets: {},
+    assets: {
+      windows: {
+        src: "/setup-guide/W02-google-login-windows.png",
+        width: 1366,
+        height: 768,
+      },
+    },
     pending:
-      "BLOCCATA dal contratto: titolo e suggerimento del terminale sono hardcoded in italiano anche con prodotto in inglese. Non pubblicare il frame italiano, non fabbricarne uno inglese. Serve prima il fix di prodotto.",
+      "Consegnata Windows: pagina di accesso del sito PRIMA dell'autenticazione, senza alcun account. Restano macOS e Linux, bloccate finche' il terminale integrato non e' inglese in una release pubblicata.",
   },
   {
     id: "W03-permissions",

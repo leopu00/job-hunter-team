@@ -30,10 +30,28 @@ test("la guida si legge a larghezza telefono senza scorrere di lato", async ({
     const chapters = page.locator("section[id^='chapter-']");
     expect(await chapters.count(), "nessun capitolo").toBeGreaterThan(0);
 
-    const hasOverflow = await page.evaluate(
-      () => document.documentElement.scrollWidth > window.innerWidth,
-    );
-    expect(hasOverflow, "la guida scorre di lato su mobile").toBe(false);
+    // Il confronto NON può essere con `window.innerWidth`: il body ha
+    // `zoom: 1.15` (globals.css) e, quando un elemento sfonda, il viewport
+    // stesso si allarga e `innerWidth` cresce insieme a lui — il gate
+    // passava mentre la pagina era larga 417 CSS invece di 339. Il
+    // riferimento giusto è la larghezza attesa, viewport diviso lo zoom.
+    // Trovato da HQ-FULLSTACK-1 misurando i pixel della preview tedesca.
+    const width = await page.evaluate(() => {
+      const zoom =
+        Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--zoom"),
+        ) || 1;
+      return {
+        actual: document.body.scrollWidth,
+        expected: window.visualViewport
+          ? window.visualViewport.width / zoom
+          : 390 / zoom,
+      };
+    });
+    expect(
+      width.actual,
+      `la guida è larga ${width.actual} CSS px invece di ${Math.round(width.expected)}`,
+    ).toBeLessThanOrEqual(Math.ceil(width.expected) + 1);
 
     // I bersagli si devono poter toccare: 40 px è il minimo sotto cui un
     // pollice sbaglia bottone.
@@ -128,9 +146,10 @@ test("nessuna chiave di traduzione grezza a schermo", async ({
       "controlla gli accessi",
       "screenshot in attesa",
     ]) {
-      expect(body, `residuo italiano «${italian}» nel default EN`).not.toContain(
-        italian,
-      );
+      expect(
+        body,
+        `residuo italiano «${italian}» nel default EN`,
+      ).not.toContain(italian);
     }
   } finally {
     await context.close();
@@ -187,14 +206,25 @@ test("il tedesco non sfonda il layout del telefono", async ({
     ).toBeVisible();
     await expect(page.getByText("Screenshot ausstehend").first()).toBeVisible();
 
-    const overflowing = await page.evaluate(() => {
-      const limit = window.innerWidth + 1;
-      return [...document.querySelectorAll("[data-setup-guide] *")]
-        .filter((el) => el.getBoundingClientRect().right > limit)
-        .slice(0, 5)
-        .map((el) => el.tagName + "." + String(el.className).slice(0, 40));
+    // Stesso gate del test inglese, e per lo stesso motivo: confrontare con
+    // `innerWidth` non funziona, perché quando un elemento sfonda il
+    // viewport si allarga e il confronto diventa sempre vero. Il tedesco è
+    // il caso che lo ha rivelato — «Einrichtungsanleitung» è una parola
+    // sola più larga della colonna.
+    const width = await page.evaluate(() => {
+      const zoom =
+        Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--zoom"),
+        ) || 1;
+      return {
+        actual: document.body.scrollWidth,
+        expected: (window.visualViewport?.width ?? 390) / zoom,
+      };
     });
-    expect(overflowing, "elementi oltre il bordo destro").toEqual([]);
+    expect(
+      width.actual,
+      `in tedesco la pagina è larga ${width.actual} CSS px invece di ${Math.round(width.expected)}`,
+    ).toBeLessThanOrEqual(Math.ceil(width.expected) + 1);
   } finally {
     await context.close();
   }
