@@ -465,3 +465,25 @@ These are checks, not missing product decisions:
    private support inbox is the required delivery destination.
 5. Verify all seven translations carry version `2026-08-07.1` and the same
    material meaning.
+
+## Residual operator and legal-review questions
+
+The seven product decisions requested on 7 August are incorporated above.
+These remaining choices were not answered and must not be invented in the
+published documents:
+
+1. Which legal basis applies to authentication, cloud synchronization,
+   security and rate limiting, support, and optional analytics in each target
+   jurisdiction?
+2. What retention period or objective deletion criterion applies to support
+   mail, private webhook summaries, hosting and security logs, analytics,
+   backups, and the minimal deletion audit entry?
+3. Which governing law, courts or dispute process, mandatory consumer-law
+   protections, and liability terms apply?
+4. Which production regions, subprocessors, data-processing agreements, and
+   international-transfer mechanisms apply to the final vendor inventory?
+5. Which future changes require explicit acceptance of a new Terms version or
+   acknowledgement of a new Privacy version?
+
+These questions require the operator and, where appropriate, qualified legal
+review. They are not technical implementation choices.
