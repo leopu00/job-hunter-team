@@ -189,6 +189,8 @@ func _localized_rows(source: Array, kind: String) -> Array:
 	for i in source.size():
 		var row: Dictionary = source[i].duplicate()
 		row["text"] = _t("dept.mock.%s.%d" % [kind, i + 1], str(row["text"]))
+		if row.has("when"):
+			row["when"] = _localized_relative_time(str(row["when"]))
 		out.append(row)
 	return out
 
@@ -199,6 +201,8 @@ func _t(key: String, fallback: String) -> String:
 
 
 func _localized_relative_time(raw: String) -> String:
+	if raw == "ieri":
+		return _t("time.yesterday", "yesterday")
 	var parts := raw.split(" ", false)
 	if parts.size() == 3 and parts[0].is_valid_int() and parts[2] == "fa":
 		var key := "time.minutes_ago" if parts[1] == "min" else \

@@ -116,7 +116,8 @@ func open_reports_folder() -> void:
 func _collect(include_logs: bool, include_container: bool, form: Dictionary,
 		opts: Dictionary, context: Dictionary) -> void:
 	var bundle := Diagnostics.collect(include_logs, include_container, context)
-	var markdown := Diagnostics.to_markdown(bundle)
+	var markdown := Diagnostics.to_markdown(bundle,
+			context.get("diagnostic_labels", {}))
 	call_deferred("_on_collected", bundle, markdown, form, opts)
 
 

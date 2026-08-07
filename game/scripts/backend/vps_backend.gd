@@ -1028,20 +1028,20 @@ func upload_document(local_path: String) -> void:
 
 func _do_upload_document(local_path: String) -> void:
 	if not FileAccess.file_exists(local_path):
-		_doc_uploaded(false, "", "file non trovato: " + local_path)
+		_doc_uploaded(false, "", UIStrings.t("vps.upload.file_missing") % local_path)
 		return
 	var ext := local_path.get_extension().to_lower()
 	if not UPLOAD_EXTS.has(ext):
-		_doc_uploaded(false, "", "estensione non ammessa: ." + ext)
+		_doc_uploaded(false, "", UIStrings.t("vps.upload.extension_denied") % ext)
 		return
 	var f := FileAccess.open(local_path, FileAccess.READ)
 	if f == null:
-		_doc_uploaded(false, "", "file non leggibile")
+		_doc_uploaded(false, "", UIStrings.t("vps.upload.file_unreadable"))
 		return
 	var size := f.get_length()
 	f.close()
 	if size > UPLOAD_MAX_BYTES:
-		_doc_uploaded(false, "", "file oltre i 10 MB")
+		_doc_uploaded(false, "", UIStrings.t("vps.upload.file_too_large"))
 		return
 	var safe := _safe_filename(local_path.get_file())
 	var remote := UPLOAD_DIR + "/" + safe
@@ -1073,7 +1073,9 @@ static func _safe_filename(name: String) -> String:
 				or c == "." or c == "_" or c == "-"
 		out += c if is_ok else "_"
 	out = out.lstrip(".")
-	return out if out != "" else UIStrings.t("common.document")
+	# Questo valore entra nel path remoto e nel payload dell'agente: deve essere
+	# stabile e indipendente dalla lingua. Solo la presentazione viene tradotta.
+	return out if out != "" else "document"
 
 
 ## ── Documenti prodotti (anteprima CV in-game) ────────────────────────
@@ -1101,14 +1103,14 @@ func _do_fetch_artifact(path: String) -> void:
 	if res["code"] != 0:
 		err = _short_error(res)
 	else:
-		err = "risposta illeggibile dalla VPS"
+		err = UIStrings.t("vps.response_unreadable")
 		for line in str(res["out"]).split("\n"):
 			if not line.begins_with("{"):
 				continue
 			var d: Variant = JSON.parse_string(line)
 			if d is Dictionary:
 				ok = bool(d.get("ok", false))
-				err = str(d.get("error", ""))
+				err = _present_error(str(d.get("error", "")))
 				if ok:
 					data = Marshalls.base64_to_raw(str(d.get("b64", "")))
 			break
@@ -1160,13 +1162,13 @@ func _do_create_ticket(position_id: int, text: String) -> void:
 	if res["code"] != 0:
 		err = _short_error(res)
 	else:
-		err = "risposta illeggibile dalla VPS"
+		err = UIStrings.t("vps.response_unreadable")
 		for line in str(res["out"]).split("\n"):
 			if line.begins_with("{"):
 				var d: Variant = JSON.parse_string(line)
 				if d is Dictionary:
 					ok = bool(d.get("ok", false))
-					err = str(d.get("error", ""))
+					err = _present_error(str(d.get("error", "")))
 				break
 	bus.call_deferred("emit_signal", "ticket_created", position_id, ok, err)
 	if ok:
@@ -1439,6 +1441,10 @@ static func _short_error(res: Dictionary) -> String:
 		if l != "" and not l.begins_with("Warning:"):
 			return l.left(120)
 	return "ssh fallita (exit %s)" % res["code"]
+
+
+static func _present_error(raw: String) -> String:
+	return UIStrings.present_vps_error(raw)
 
 
 ## Sonno interrompibile: reagisce a stop() entro ~0.2s.
