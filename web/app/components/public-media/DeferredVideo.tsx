@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   orientationForViewport,
   playableVariant,
@@ -28,7 +28,17 @@ function currentOrientation(): VideoOrientation {
 export default function DeferredVideo({ video, label }: DeferredVideoProps) {
   const [orientation, setOrientation] = useState<VideoOrientation>("landscape");
   const [activated, setActivated] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const variant = activated ? playableVariant(video, orientation) : null;
+
+  useEffect(() => {
+    if (!activated || !variant) return;
+
+    // Questa non è riproduzione automatica: il video esiste solo dopo il click
+    // esplicito sul poster. Se il browser nega play(), i controlli restano
+    // comunque visibili e permettono all'utente di avviarlo manualmente.
+    void videoRef.current?.play().catch(() => undefined);
+  }, [activated, variant]);
 
   if (!video.published) {
     return (
@@ -80,6 +90,7 @@ export default function DeferredVideo({ video, label }: DeferredVideoProps) {
 
   return (
     <video
+      ref={videoRef}
       controls
       playsInline
       preload="none"

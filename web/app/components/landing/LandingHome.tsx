@@ -5,7 +5,7 @@ import { LandingI18nProvider, useLandingI18n } from "./LandingI18n";
 import LandingCTA, { LandingFooter } from "./LandingCTA";
 import LandingNav from "./LandingNav";
 import LandingGlobe from "./LandingGlobe";
-import TrailerTeaser from "../public-media/TrailerTeaser";
+import HomeTrailer from "../public-media/HomeTrailer";
 
 // Landing pubblica — nuova struttura.
 // Header (nav) + hero (titolo + immagine + intro) + sezioni di anteprima
@@ -64,7 +64,7 @@ function Hero() {
         <LandingGlobe />
       </div>
 
-      <TrailerTeaser />
+      <HomeTrailer />
 
       {/* Paragrafo introduttivo — descrive la piattaforma, sotto l'hero. */}
       <p className="mt-10 max-w-2xl mx-auto px-6 text-[14px] md:text-[16px] text-[var(--color-bright)] leading-relaxed">
