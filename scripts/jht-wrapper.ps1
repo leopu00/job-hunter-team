@@ -537,6 +537,12 @@ function Invoke-GuiCommand {
 function Invoke-HostDownload {
   param([string[]]$DownloadArgs)
 
+  # Un numero restituito da una funzione PowerShell viaggia sullo stesso
+  # success stream di stdout. Se `docker exec` ha gia stampato progresso, una
+  # assegnazione come `$code = Invoke-HostDownload` produce quindi un array e
+  # `exit $code` puo degradare a 0. Il codice vive in un canale scalare dedicato
+  # e parte fail-closed; stdout/stderr restano liberi di arrivare al terminale.
+  $script:HostDownloadExitCode = 1
   $hostOutput = ''
   $downloadEnv = @()
   if ($env:JHT_RELEASE_BASE_URL) {
@@ -546,17 +552,18 @@ function Invoke-HostDownload {
   for ($i = 0; $i -lt $DownloadArgs.Count; $i++) {
     $arg = $DownloadArgs[$i]
     if ($arg -eq '--output') {
-      if ($hostOutput) { Write-Err '--output specificato piu di una volta'; return 2 }
+      if ($hostOutput) { Write-Err '--output specificato piu di una volta'; $script:HostDownloadExitCode = 2; return }
       if ($i + 1 -ge $DownloadArgs.Count -or -not $DownloadArgs[$i + 1]) {
         Write-Err '--output richiede un path'
-        return 2
+        $script:HostDownloadExitCode = 2
+        return
       }
       $i += 1
       $hostOutput = $DownloadArgs[$i]
     } elseif ($arg.StartsWith('--output=')) {
-      if ($hostOutput) { Write-Err '--output specificato piu di una volta'; return 2 }
+      if ($hostOutput) { Write-Err '--output specificato piu di una volta'; $script:HostDownloadExitCode = 2; return }
       $hostOutput = $arg.Substring('--output='.Length)
-      if (-not $hostOutput) { Write-Err '--output richiede un path'; return 2 }
+      if (-not $hostOutput) { Write-Err '--output richiede un path'; $script:HostDownloadExitCode = 2; return }
     } else {
       $rewritten.Add($arg)
     }
@@ -564,14 +571,24 @@ function Invoke-HostDownload {
 
   # Il default `/jht_user/downloads` e' gia bind-mountato sul Documents host.
   if (-not $hostOutput) {
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" @downloadEnv $Container node $NodeEntry download @rewritten
-    return $LASTEXITCODE
+    # Windows PowerShell 5.1 converte lo stderr dei processi nativi in record
+    # Error. Con la preference globale Stop, la normale riga di progresso del
+    # downloader diventava una terminating exception prima della copia host.
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+      & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" @downloadEnv $Container node $NodeEntry download @rewritten
+      $script:HostDownloadExitCode = $LASTEXITCODE
+    } finally {
+      $ErrorActionPreference = $previousErrorActionPreference
+    }
+    return
   }
 
   $hostOutput = [IO.Path]::GetFullPath($hostOutput)
   if (Test-Path -LiteralPath $hostOutput) {
     Write-Err "il file di destinazione esiste gia: $hostOutput"
-    return 1
+    return
   }
 
   $containerTemp = '/tmp/jht-download-' + $PID + '-' + [guid]::NewGuid().ToString('N')
@@ -580,30 +597,33 @@ function Invoke-HostDownload {
   $rewritten.Add('--output')
   $rewritten.Add($containerTemp)
 
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
   try {
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" @downloadEnv $Container node $NodeEntry download @rewritten
     $innerCode = $LASTEXITCODE
-    if ($innerCode -ne 0) { return $innerCode }
+    if ($innerCode -ne 0) { $script:HostDownloadExitCode = $innerCode; return }
 
-    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    New-Item -ItemType Directory -Force -Path $parent -ErrorAction Stop | Out-Null
     & docker cp "${Container}:$containerTemp" $hostTemp
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $hostTemp -PathType Leaf)) {
       Write-Err 'copia del download verificato verso l host non riuscita'
-      return 1
+      return
     }
     # File.Move a due argomenti e' no-clobber anche su Windows PowerShell 5.1:
     # se il target compare durante il download l'operazione fallisce.
     [IO.File]::Move($hostTemp, $hostOutput)
     Write-Host "  Salvato sul computer host in: $hostOutput"
-    return 0
+    $script:HostDownloadExitCode = 0
+    return
   } catch {
     Write-Err "pubblicazione del download sull host non riuscita: $($_.Exception.Message)"
-    return 1
   } finally {
     & docker exec $Container rm -f $containerTemp *> $null
     if (Test-Path -LiteralPath $hostTemp) {
       Remove-Item -LiteralPath $hostTemp -Force -ErrorAction SilentlyContinue
     }
+    $ErrorActionPreference = $previousErrorActionPreference
   }
 }
 
@@ -979,8 +999,8 @@ switch ($Sub) {
     Require-Docker
     Require-ComposeFile
     Ensure-Up
-    $code = Invoke-HostDownload $Rest
-    exit $code
+    Invoke-HostDownload $Rest
+    exit $script:HostDownloadExitCode
   }
 
   # Default: nessun arg = help.

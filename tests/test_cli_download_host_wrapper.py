@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASH_WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
+WINDOWS_INSTALLER = ROOT / "scripts" / "install.ps1"
 
 
 def make_fake_docker(tmp_path: Path) -> tuple[Path, Path]:
@@ -124,6 +125,37 @@ def test_powershell_wrapper_has_same_no_clobber_bridge_contract():
         'JHT_RELEASE_BASE_URL=$env:JHT_RELEASE_BASE_URL',
     ):
         assert seam in source
+
+
+def test_powershell_download_progress_cannot_turn_failure_into_exit_zero():
+    source = POWERSHELL_WRAPPER.read_text()
+    function = source[source.index("function Invoke-HostDownload") : source.index(
+        "# ── Upgrade runtime", source.index("function Invoke-HostDownload")
+    )]
+    dispatcher = source[source.index("# ── Dispatcher") :]
+
+    # Windows PowerShell 5.1 maps native stderr (including a progress line) to
+    # its Error stream. It must not throw before docker cp, while real failures
+    # remain represented by the native exit code.
+    assert "$previousErrorActionPreference = $ErrorActionPreference" in function
+    assert "$ErrorActionPreference = 'Continue'" in function
+    assert "$ErrorActionPreference = $previousErrorActionPreference" in function
+
+    # Function stdout and numeric return share one PowerShell stream. The
+    # dispatcher therefore consumes a dedicated scalar, initialized nonzero,
+    # instead of assigning progress output plus the return value to `$code`.
+    assert "$script:HostDownloadExitCode = 1" in function
+    assert "$script:HostDownloadExitCode = 0" in function
+    assert "Invoke-HostDownload $Rest\n    exit $script:HostDownloadExitCode" in dispatcher
+    assert "$code = Invoke-HostDownload" not in dispatcher
+
+
+def test_windows_cmd_shim_propagates_powershell_exit_code_on_both_paths():
+    source = WINDOWS_INSTALLER.read_text()
+    shim = source[source.index('$shimContent = @"') : source.index('"@', source.index('$shimContent = @"'))]
+    assert "if errorlevel 1 goto jht_windows_powershell" in shim
+    assert ":jht_windows_powershell" in shim
+    assert shim.count("exit /b %errorlevel%") == 2
 
 
 def test_bash_wrapper_forwards_release_base_url_only_for_download():

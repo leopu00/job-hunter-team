@@ -194,11 +194,11 @@ function Get-RuntimeFiles {
     $shimContent = @"
 @echo off
 where pwsh.exe >nul 2>&1
-if %errorlevel%==0 (
-  pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
-) else (
-  powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
-)
+if errorlevel 1 goto jht_windows_powershell
+pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
+exit /b %errorlevel%
+:jht_windows_powershell
+powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 exit /b %errorlevel%
 "@
     Set-Content -Path $shimDest -Value $shimContent -Encoding ASCII
