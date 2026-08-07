@@ -158,7 +158,7 @@ export const SETUP_GUIDE = {
       title: "Choose your setup path",
       body: "Choose macOS, Windows, or Linux, then use the chapter index to move through Setup, Start, and Connect to web. The selected operating system stays active across every chapter.",
       os: "all",
-      screen: ["G00-guide-index", "G00-guide-index-mobile"],
+      nativeSurface: "G00-guide-index",
       links: [],
     },
     {
@@ -166,7 +166,7 @@ export const SETUP_GUIDE = {
       title: "Check the requirements",
       body: "Docker is required. For comfortable local use, keep about 8 GB of RAM available before starting the team. In a measured 30-minute Windows run, a 12 GB machine retained more than 4 GB free with the team and Job Hunter Team Desktop active; its 2013 2-core, 4-thread CPU completed the run without saturation. Make sure Docker has room for the team image; no universal disk minimum is stated because one has not been measured. You also need internet access and a supported provider subscription. A dedicated VPS uses a separate validated baseline: Ubuntu 24.04, 4 GB total RAM, 2 vCPU, 80 GB SSD, and 2 GB preventive swap.",
       os: "all",
-      screen: "S01-prerequisites",
+      nativeSurface: "S01-prerequisites",
       links: [
         { label: "Compare supported providers", href: "/pricing" },
         { label: "Run 24/7 on a VPS", href: "/docs/guides/run-on-a-vps" },
@@ -385,15 +385,25 @@ export const SETUP_GUIDE = {
 
 ## Screenshot rules
 
-Each logical screen ID maps to `<ID>-<slug>-<os>.png`, where `os` is
-`linux`, `macos`, or `windows`. Capture the complete product window or browser
-viewport in English at native resolution. `G00-guide-index` needs each selected
-OS state plus `G00-guide-index-mobile.png` at a 390 px viewport.
+Each capture screen ID maps to `<ID>-<slug>-<os>.png`, where `os` is `linux`,
+`macos`, or `windows`. Capture the complete product window or browser viewport
+in English at native resolution. `G00-guide-index` and `S01-prerequisites` are
+logical visual IDs, not capture requests: the page renders them as native,
+translated surfaces. Keep the IDs in the implementation audit, but do not ask
+E2E to produce PNGs for them.
 `S05-first-launch` may reuse `S06-choose-language` because the language picker
 is the first clean-launch screen. `W04` deliberately uses two source images
 rather than placing an app window and a signed-in browser in one raw frame.
 
-`S01-prerequisites` is the guide requirement card. Its local-computer row shows
+`G00-guide-index` is the live chapter index and operating-system selector at the
+top of the page. Embedding a screenshot of that same page inside itself adds no
+instructional state and makes the interactive control look static, so no G00
+image or mobile duplicate is published.
+
+`S01-prerequisites` is a native requirement card rather than a screenshot. A
+PNG table would be unreadable at 390 px, would require seven language-specific
+captures, and would make corrected figures depend on a new recording. Its
+local-computer row shows
 Docker as required and recommends keeping about 8 GB of RAM available before
 starting the team. The evidence note says that a measured 30-minute Windows
 run on a 12 GB machine retained more than 4 GB free with the complete product
@@ -449,10 +459,10 @@ recapture. A mock/simulation frame cannot prove `S17-team-working`.
 | --- | --- | --- |
 | `web/public/tutorials/game/` | `office-overview.png` and `departments.png`, 1600×900, synthetic, English, privacy-attested in `docs/about/TUTORIAL-GAME-SCREENSHOTS.md` | Reusable only for a later product-exploration section. They do not prove setup or a live working team. |
 | `docs/about/TUTORIAL-GAME-SCREENSHOTS.md` | Provenance, hashes, and privacy attestation for the two public images | Reuse the attestation process, not the images for `S17`. |
-| Linux E2E runs | Setup plans and blocked attempts; landscape public-site/install baselines; later 1920×1080 office/dashboard/activity candidates under local regia | No accepted setup-guide frame. Prior attempts were blocked by privacy or do not attest the new logical state. Linux reports `G00`, `S01–S17`, and `W01–W04` missing. The existing office and positions candidates do not prove `TEAM ACTIVE`. |
-| Windows E2E runs | 83 PNGs from the 2026-08-03 runs and later setup protocols; 58 files are malformed | No reuse. `S02–S11`, `S13–S17`, `W01`, and `W02` can be recaptured. `G00`/`S01` wait for the new page; `S12` waits for a canonical neutral `sample-cv.pdf`; `W03` and `W04` wait for an attested non-personal Google test account and paired sync fixture. Old candidates were Italian, obsolete/portable artifacts, mock data, a stopped team, or the wrong state. A remote authentication raw is not clean and must not be distributed. |
-| macOS E2E runs | Finder/first-window/language/onboarding evidence; setup busy states; live profile/roster evidence | No reuse. Old candidates show an obsolete artifact, Italian simulation/mock states, or an idle roster backed by zero jobs; they do not prove the required English real state. Every phase needs a new capture. `S13` and `W02–W04` remain missing without explicitly safe fixtures/account access. |
-| `regia/tutorial-2026-08-rel008/incoming/` | Linux G16-H department-zoom reference, gate reports, analysis frames, and OCR crops; no macOS or Windows material | Not reusable for `G00`, `S01–S17`, or `W01–W04`: it is an exploration/department shot, not a setup or working-team state. |
+| Linux E2E runs | Setup plans and blocked attempts; landscape public-site/install baselines; later 1920×1080 office/dashboard/activity candidates under local regia | No accepted setup-guide frame. Prior attempts were blocked by privacy or do not attest the new logical state. Linux reported `G00`, `S01–S17`, and `W01–W04` missing during the initial census; `G00` and `S01` are now native surfaces and no longer capture requests. The existing office and positions candidates do not prove `TEAM ACTIVE`. |
+| Windows E2E runs | 83 PNGs from the 2026-08-03 runs and later setup protocols; 58 files are malformed | No reuse. `S02–S11`, `S13–S17`, `W01`, and `W02` can be recaptured. The initial census listed `G00`/`S01` as waiting for the page; they are now native surfaces and no longer capture requests. `S12` waits for a canonical neutral `sample-cv.pdf`; `W03` and `W04` wait for an attested non-personal Google test account and paired sync fixture. Old candidates were Italian, obsolete/portable artifacts, mock data, a stopped team, or the wrong state. A remote authentication raw is not clean and must not be distributed. |
+| macOS E2E runs | Finder/first-window/language/onboarding evidence; setup busy states; live profile/roster evidence | No reuse. Old candidates show an obsolete artifact, Italian simulation/mock states, or an idle roster backed by zero jobs; they do not prove the required English real state. Every remaining capture phase needs a new image; `G00` and `S01` are native surfaces instead. `S13` and `W02–W04` remain missing without explicitly safe fixtures/account access. |
+| `regia/tutorial-2026-08-rel008/incoming/` | Linux G16-H department-zoom reference, gate reports, analysis frames, and OCR crops; no macOS or Windows material | Not reusable for the remaining `S02–S17` or `W01–W04` capture IDs: it is an exploration/department shot, not a setup or working-team state. `G00` and `S01` do not require captures. |
 
 The current public screenshots therefore reduce no required capture count yet.
 Reuse is allowed only after the E2E owner returns an `ID → asset → privacy →
