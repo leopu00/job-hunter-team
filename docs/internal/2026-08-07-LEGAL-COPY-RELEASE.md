@@ -213,8 +213,8 @@ Under **Delete your account**, choose **Show me what will be deleted**, review
 the preview, enter your account email, and choose **Delete permanently**. This
 deletes your authentication account and all user-owned active cloud data,
 including the categories listed above, pairing sessions, synchronization
-tokens, pending transfers, and cloud storage objects. Deletion is immediate
-and irreversible. Export first if you want a copy.
+tokens, pending transfer records, and files uploaded for temporary transfer.
+Deletion is immediate and irreversible. Export first if you want a copy.
 
 After a successful deletion, Job Hunter Team writes a technical audit entry
 containing the deletion time, a non-reversible hashed account reference, and
@@ -433,8 +433,8 @@ Privacy questions and data requests:
   token secret, hash, provider credential, or other security secret.
 - Make cloud account deletion a strongly confirmed, immediate, irreversible
   action. Delete the auth user, every user-owned database row, pairing and sync
-  tokens, pending file-transfer records, and cloud storage objects. Do not
-  touch the user's local or VPS workspace.
+  tokens, pending file-transfer records, and files uploaded for temporary
+  transfer. Do not touch the user's local or VPS workspace.
 - Retain at most the technical deletion audit entry described in the Privacy
   Policy; it must contain no deleted content or reversible account identifier.
 - Use the same document versions in web acceptance records and any desktop
