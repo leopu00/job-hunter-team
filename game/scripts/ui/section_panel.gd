@@ -426,8 +426,8 @@ func _build_account() -> void:
 		button.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		button.pressed.connect(SetupService.open_cloud_command.bind(str(entry[1])))
 		actions.add_child(button)
-	# Login spento senza spiegazione = login rotto: il pairing si svolge nella
-	# console del container, e se il container è giù va detto qui (stesso
+	# Login spento senza spiegazione = login rotto: il pairing parte dal CLI
+	# nel container, e se il container è giù va detto qui (stesso
 	# trattamento dell'hint sotto il login del provider).
 	if not bool(SetupService.status.get("container_running", false)):
 		var why := TerminalTheme.label(

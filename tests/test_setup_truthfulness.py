@@ -135,6 +135,7 @@ def test_cloud_login_uses_native_browser_pairing_without_terminal_copy():
     ):
         assert italian_literal not in cloud_login
     assert '"--ui-json"' in cloud_login
+    assert '"--no-push"' in cloud_login
     assert '"cloud_pairing": true' in cloud_login
     assert '"prefer_google": prefer_google' in cloud_login
     assert 'section in ["activation", "provider", "docker", "account"]' in panel

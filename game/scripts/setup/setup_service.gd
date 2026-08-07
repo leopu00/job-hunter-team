@@ -1837,11 +1837,14 @@ static func _local_container_exec(posix_command: String) -> String:
 
 
 func open_cloud_login(prefer_google := false) -> void:
+	# La modale può chiudersi appena riceve `paired`: un auto-push ancora in
+	# corso verrebbe ucciso insieme al processo nascosto. Il normale sync del
+	# team riparte dalla config appena salvata; questa corsia termina al pairing.
 	open_technical_terminal("cloud", UIStrings.t("setup.cloud_login_title"),
 			UIStrings.t("setup.cloud_login_google_hint") if prefer_google else \
 			UIStrings.t("setup.cloud_login_hint"),
 			PackedStringArray(["node", "/app/cli/bin/jht.js", "cloud", "login",
-					"--ui-json"]),
+					"--ui-json", "--no-push"]),
 			{"cloud_pairing": true, "prefer_google": prefer_google})
 
 
