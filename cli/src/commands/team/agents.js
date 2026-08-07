@@ -20,12 +20,12 @@ export { JHT_HOME, JHT_CONFIG_PATH, JHT_DB_PATH, JHT_AGENTS_DIR, JHT_USER_DIR };
 
 export const AGENTS = [
   { role: 'capitano',       prefix: 'CAPITANO',       multi: false, effort: 'high',   desc: 'Coordinatore pipeline Job Hunter' },
-  { role: 'scout',      prefix: 'SCOUT',      multi: true,  effort: 'high',   desc: 'Cerca posizioni lavorative' },
-  { role: 'analista',   prefix: 'ANALISTA',    multi: true,  effort: 'high',   desc: 'Analizza job description e aziende' },
+  { role: 'scout',      prefix: 'SCOUT',      multi: true,  effort: 'high',   desc: 'Finds job opportunities' },
+  { role: 'analista',   prefix: 'ANALISTA',    multi: true,  effort: 'high',   desc: 'Analyzes job descriptions and companies' },
   { role: 'scorer',     prefix: 'SCORER',      multi: true,  effort: 'medium', desc: 'Calcola punteggio match' },
   { role: 'scrittore',  prefix: 'SCRITTORE',   multi: true,  effort: 'high',   desc: 'Scrive CV e cover letter' },
   { role: 'critico',    prefix: 'CRITICO',     multi: false, effort: 'high',   desc: 'Revisione qualita CV' },
-  { role: 'assistente', prefix: 'ASSISTENTE',  multi: false, effort: 'medium', desc: 'Aiuta utente a navigare la piattaforma' },
+  { role: 'assistente', prefix: 'ASSISTENTE',  multi: false, effort: 'medium', desc: 'Helps the user navigate the platform' },
   { role: 'mentor',     prefix: 'MENTOR',      multi: false, effort: 'medium', desc: 'Nudge strategici settimanali user-facing' },
   { role: 'sentinella', prefix: 'SENTINELLA',  multi: false, effort: 'medium', desc: 'Monitoraggio salute rate-limit + bridge' },
 ];

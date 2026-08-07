@@ -15,17 +15,17 @@ function handleUpgrade(options) {
     previous: { version: '', image: '' },
     current: { version: '', image: '' },
     restartRequired: false,
-    message: 'L aggiornamento del runtime deve essere eseguito dall host con jht upgrade.',
+    message: 'The update of the runtime must be performed by the host with jht upgrade.',
     rolledBack: false,
   };
 
   if (options.json) {
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } else {
-    console.log(`\n  ${YELLOW}Aggiornamento runtime host richiesto.${RESET}`);
+    console.log(`\n  ${YELLOW}Host runtime update required.${RESET}`);
     console.log(`  ${DIM}Esegui sul computer/VPS che ospita Docker:${RESET} ${GREEN}jht upgrade${RESET}`);
-    console.log(`  ${DIM}Il comando host scarica, verifica e rende attiva la nuova immagine;${RESET}`);
-    console.log(`  ${DIM}se il controllo fallisce ripristina l ultima versione funzionante.${RESET}\n`);
+    console.log(`  ${DIM}The host command downloads, checks and activates the new image;${RESET}`);
+    console.log(`  ${DIM}If verification fails, the latest working version is restored.${RESET}\n`);
   }
   process.exitCode = 2;
 }
@@ -33,9 +33,9 @@ function handleUpgrade(options) {
 export function registerUpgradeCommand(program) {
   program
     .command('upgrade')
-    .description('Aggiorna il runtime dal wrapper host Docker')
-    .option('-c, --check', 'compatibile con il wrapper host; qui non modifica nulla')
-    .option('-a, --apply', 'compatibile con il wrapper host; qui non modifica nulla')
-    .option('--json', 'emette il contratto JSON per un chiamante GUI')
+    .description('Update runtime from the Docker host wrapper')
+    .option('-c, --check', 'accepted by the host wrapper; no changes are made here')
+    .option('-a, --apply', 'accepted by the host wrapper; no changes are made here')
+    .option('--json', 'emit the JSON contract for a GUI caller')
     .action(handleUpgrade);
 }

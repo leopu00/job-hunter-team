@@ -58,32 +58,32 @@ const MIGRATIONS = [
 
 async function handleMigrate(options) {
   if (!(await fileExists(CONFIG_PATH))) {
-    console.error('  Config non trovata. Esegui: jht setup');
+    console.error('  Config not found. Run: jht setup');
     process.exitCode = 1;
     return;
   }
 
   let config;
   try { config = JSON.parse(await readFile(CONFIG_PATH, 'utf-8')); }
-  catch { console.error('  Config JSON non valido'); process.exitCode = 1; return; }
+  catch { console.error('  Config JSON invalid'); process.exitCode = 1; return; }
 
   const current = config.version || 1;
   const pending = MIGRATIONS.filter(m => m.version > current);
 
   if (pending.length === 0) {
-    console.log(`\n  Config già aggiornata (versione ${current}). Nessuna migrazione necessaria.\n`);
+    console.log(`\n  Config already updated (version ${current}). No migration needed.\n`);
     return;
   }
 
-  console.log(`\n  Versione attuale: ${current}`);
-  console.log(`  Migrazioni disponibili: ${pending.length}\n`);
+  console.log(`\n  Current version: ${current}`);
+  console.log(`  Migration available: ${pending.length}\n`);
 
   for (const m of pending) {
     console.log(`  → v${m.version}: ${m.name}`);
   }
 
   if (options.dryRun) {
-    console.log('\n  (dry-run — nessuna modifica applicata)\n');
+    console.log('\n  (dry-run — no modification applied)\n');
     return;
   }
 
@@ -93,13 +93,13 @@ async function handleMigrate(options) {
   }
 
   await writeJsonSafe(CONFIG_PATH, config);
-  console.log(`\n  Config aggiornata a versione ${config.version}\n`);
+  console.log(`\n  Config updated to version ${config.version}\n`);
 }
 
 export function registerMigrateCommand(program) {
   program
     .command('migrate')
-    .description('Esegui migrazioni config verso la versione corrente')
-    .option('--dry-run', 'mostra migrazioni senza applicarle')
+    .description('Perform config migrations to the current version')
+    .option('--dry-run', 'show migrations without applying them')
     .action(handleMigrate);
 }

@@ -70,7 +70,7 @@ async function persistRefreshToken(newToken) {
 export async function createRealtimeSync({ config, log = () => {} } = {}) {
   const creds = getRealtimeCreds(config);
   if (!creds) {
-    throw new Error('cloud-realtime: credenziali mancanti (supabase_url / supabase_refresh_token / anon key)');
+    throw new Error('cloud-realtime: missing credentials (supabase_url / supabase_refresh_token / anon key)');
   }
 
   const { createClient } = await import('@supabase/supabase-js');
@@ -83,7 +83,7 @@ export async function createRealtimeSync({ config, log = () => {} } = {}) {
   // l'access token al Realtime (RLS). autoRefreshToken lo tiene fresco.
   const { data, error } = await client.auth.refreshSession({ refresh_token: creds.refreshToken });
   if (error || !data?.session?.access_token) {
-    throw new Error(`cloud-realtime auth: ${error?.message || 'nessuna session dal refresh_token'}`);
+    throw new Error(`cloud-realtime auth: ${error?.message || 'no session from refresh_token'}`);
   }
   await persistRefreshToken(data.session.refresh_token);
 
@@ -93,7 +93,7 @@ export async function createRealtimeSync({ config, log = () => {} } = {}) {
   // zero eventi). L'auto-wiring di supabase-js è asincrono e può arrivare dopo la
   // subscribe → lo forziamo qui.
   try { await client.realtime.setAuth(data.session.access_token); }
-  catch (e) { log('warn', `setAuth iniziale: ${e.message}`); }
+  catch (e) { log('warn', `initial setAuth: ${e.message}`); }
 
   // Ad ogni rotazione del token (TOKEN_REFRESHED) → ripersisti + riallinea il
   // Realtime al nuovo access token.

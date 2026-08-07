@@ -522,7 +522,7 @@ describe("diagnosi della corsia chat", () => {
     });
     expect(stall?.reason).toBe("no-inbound-channel");
     expect(stall?.message).toContain("6h 0m");
-    expect(stall?.message).toContain("non può arrivare");
+    expect(stall?.message).toContain("cannot arrive");
   });
 
   it("lettura dal cloud fallita: il motivo arriva fino al log", () => {
@@ -563,7 +563,7 @@ describe("diagnosi della corsia chat", () => {
     });
     expect(stall?.reason).toBe("delivery-stuck");
     expect(stall?.count).toBe(3);
-    expect(stall?.summary).toContain("3 turni");
+    expect(stall?.summary).toContain("3 user turns");
     expect(stall?.message).toContain("30m");
   });
 
@@ -842,7 +842,7 @@ describe("canale della chat senza lettore diretto", () => {
     const openAt = worker.indexOf("new DatabaseSync(dbPath");
     expect(importAt).toBeGreaterThan(0);
     expect(openAt).toBeGreaterThan(importAt);
-    expect(worker).toContain("log('error', `chat-sync: giro fallito");
+    expect(worker).toContain("log('error', `chat-sync: cycle failed");
   });
 
   it("la chat resta nel giro veloce del daemon (~5s), non in quello pesante", () => {

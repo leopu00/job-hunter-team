@@ -52,7 +52,7 @@ function encryptGCM(text, passphrase) {
 function decryptGCM(payloadJson, passphrase) {
   const payload = JSON.parse(payloadJson);
   if (payload.version !== 1 || payload.algorithm !== ALGORITHM) {
-    throw new Error(`Formato non supportato: v${payload.version} ${payload.algorithm}`);
+    throw new Error(`Unsupported format: v${payload.version} ${payload.algorithm}`);
   }
   const salt = Buffer.from(payload.salt, 'hex');
   const iv = Buffer.from(payload.iv, 'hex');
@@ -85,8 +85,8 @@ async function handleSecrets(action, options) {
   if (action === 'get') return await getSecret(options);
   if (action === 'delete' || action === 'rm') return await deleteSecret(options);
 
-  console.error(`  Azione non valida: ${action}`);
-  console.error('  Azioni: list, set --name <n> --value <v>, get --name <n>, delete --name <n>');
+  console.error(`  Invalid action: ${action}`);
+  console.error('  Shares: list, set --name <n> --value <v>, get --name <n>, delete --name <n>');
   process.exitCode = 1;
 }
 
@@ -98,7 +98,7 @@ async function listSecrets() {
   console.log(`\n  ${BOLD}JHT — Secrets${RESET} (${secrets.length})\n`);
 
   if (secrets.length === 0) {
-    console.log(`  ${DIM}Nessun secret salvato.${RESET}\n`);
+    console.log(`  ${DIM}No secret saved.${RESET}\n`);
     return;
   }
 
@@ -112,7 +112,7 @@ async function listSecrets() {
 
 async function setSecret(options) {
   if (!options.name || !options.value) {
-    console.error('  --name e --value obbligatori');
+    console.error('  --name and --value mandatory');
     process.exitCode = 1;
     return;
   }
@@ -121,23 +121,23 @@ async function setSecret(options) {
   const passphrase = getPassphrase();
 
   if (!passphrase) {
-    console.error(`\n  ${RED}✗${RESET}  ${BOLD}${KEY_ENV} non impostata.${RESET}`);
-    console.error(`  ${DIM}I secret devono essere cifrati a riposo. Imposta una passphrase:${RESET}`);
+    console.error(`\n  ${RED}✗${RESET}  ${BOLD}${KEY_ENV} not set.${RESET}`);
+    console.error(`  ${DIM}Secrets must be encrypted at rest. Set a passphrase:${RESET}`);
     console.error(`    ${BOLD}export ${KEY_ENV}="<passphrase robusta>"${RESET}`);
-    console.error(`  ${DIM}(${LEGACY_KEY_ENV} resta accettata solo come fallback legacy.)${RESET}`);
-    console.error(`  ${DIM}Salvala anche nel tuo shell rc (~/.bashrc, ~/.zshrc) per persistenza,${RESET}`);
-    console.error(`  ${DIM}o in un OS keyring (Keychain/Credential Manager/SecretService).${RESET}\n`);
+    console.error(`  ${DIM}(${LEGACY_KEY_ENV} remains accepted only as a legacy fallback. )${RESET}`);
+    console.error(`  ${DIM}Save it also in your rc shell (~/.bashrc, ~/.zshrc) for persistence,${RESET}`);
+    console.error(`  ${DIM}or in an OS keyring (Keychain/Credential Manager/SecretService).${RESET}\n`);
     process.exitCode = 1;
     return;
   }
 
   const encrypted = encryptGCM(options.value, passphrase);
   await writeFile(join(CREDS_DIR, `${options.name}.enc`), encrypted, { encoding: 'utf-8', mode: 0o600 });
-  console.log(`\n  ${GREEN}✓${RESET}  Secret "${options.name}" salvato (AES-256-GCM).\n`);
+  console.log(`\n  ${GREEN}✓${RESET}  Secret "${options.name}" saved (AES-256-GCM).\n`);
 }
 
 async function getSecret(options) {
-  if (!options.name) { console.error('  --name obbligatorio'); process.exitCode = 1; return; }
+  if (!options.name) { console.error('  --name mandatory'); process.exitCode = 1; return; }
 
   const encPath = join(CREDS_DIR, `${options.name}.enc`);
   const jsonPath = join(CREDS_DIR, `${options.name}.json`);
@@ -145,7 +145,7 @@ async function getSecret(options) {
   if (await fileExists(encPath)) {
     const passphrase = getPassphrase();
     if (!passphrase) {
-      console.error(`  Secret cifrato — imposta ${KEY_ENV} per decifrare.`);
+      console.error(`  Secret cipher — tax ${KEY_ENV} to decipher.`);
       process.exitCode = 1;
       return;
     }
@@ -162,7 +162,7 @@ async function getSecret(options) {
         value = decryptLegacyCBC(raw, passphrase);
         migrated = true;
       } catch {
-        console.error('  Errore decifratura — chiave errata?');
+        console.error('  Decryption error — wrong key?');
         process.exitCode = 1;
         return;
       }
@@ -182,27 +182,27 @@ async function getSecret(options) {
     const data = JSON.parse(await readFile(jsonPath, 'utf-8'));
     console.log(data.value ?? JSON.stringify(data));
   } else {
-    console.error(`  Secret "${options.name}" non trovato.`);
+    console.error(`  Secret "${options.name}" not found.`);
     process.exitCode = 1;
   }
 }
 
 async function deleteSecret(options) {
-  if (!options.name) { console.error('  --name obbligatorio'); process.exitCode = 1; return; }
+  if (!options.name) { console.error('  --name mandatory'); process.exitCode = 1; return; }
   let deleted = false;
   for (const ext of ['.enc', '.json']) {
     const p = join(CREDS_DIR, `${options.name}${ext}`);
     if (await fileExists(p)) { await unlink(p); deleted = true; }
   }
-  if (deleted) console.log(`\n  ${GREEN}✓${RESET}  Secret "${options.name}" eliminato.\n`);
-  else { console.error(`  Secret "${options.name}" non trovato.`); process.exitCode = 1; }
+  if (deleted) console.log(`\n  ${GREEN}✓${RESET}  Secret "${options.name}" deleted.\n`);
+  else { console.error(`  Secret "${options.name}" not found.`); process.exitCode = 1; }
 }
 
 export function registerSecretsCommand(program) {
   program
     .command('secrets [action]')
-    .description('Gestione secrets cifrati (azioni: list, set, get, delete)')
-    .option('-n, --name <name>', 'nome del secret')
-    .option('-v, --value <value>', 'valore del secret (per set)')
+    .description('Manage encrypted secrets (actions: list, set, get, delete)')
+    .option('-n, --name <name>', 'name of secret')
+    .option('-v, --value <value>', 'secret value (for set)')
     .action(handleSecrets);
 }

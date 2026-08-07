@@ -60,17 +60,17 @@ async function statusAction() {
   } catch (e) {
     const local = readFlagLocally();
     if (local === null) {
-      console.log('STANDBY off — il team opera normalmente.');
-      console.error(`  (container non raggiungibile: ${e.message})`);
+      console.log('STANDBY off — the team operates normally.');
+      console.error(`  (container not reachable: ${e.message})`);
       return;
     }
     const cond = local.until
-      ? `fino a ${local.until}`
+      ? `until ${local.until}`
       : (local.wake_on?.weekly_below != null
-        ? `sveglia a weekly < ${local.wake_on.weekly_below}%`
-        : 'SENZA condizione di uscita (flag invalido)');
-    console.log(`STANDBY ATTIVO — ${cond} (motivo: ${local.reason || 'non indicato'}).`);
-    console.error('  (letto dal file locale: container non raggiungibile)');
+        ? `wake when weekly usage is below ${local.wake_on.weekly_below}%`
+        : 'NO exit condition (invalid flag)');
+    console.log(`STANDBY ACTIVE — ${cond} (reason: ${local.reason || 'not specified'}).`);
+    console.error('  (read from the local file: container unreachable)');
   }
 }
 
@@ -79,9 +79,9 @@ async function onAction(opts) {
   // condizione di uscita non si scrive. `--wake-on-weekly` senza valore usa la
   // soglia 100 (= riaccenditi al reset del provider), il caso dell'incidente.
   if (!opts.until && opts.wakeOnWeekly === undefined) {
-    console.error('✗ Uno standby senza condizione di uscita non si scrive.');
-    console.error('  Indica --until <iso> (standby a tempo) oppure --wake-on-weekly [pct]');
-    console.error('  (riaccenditi quando il weekly scende sotto pct, default 100 = al reset).');
+    console.error('✗ A standby without exit condition is not written.');
+    console.error('  Specify --until <iso> for timed standby or --wake-on-weekly [pct].');
+    console.error('  (Wake when weekly usage falls below pct; default 100 means after reset.)');
     process.exitCode = 1;
     return;
   }
@@ -94,10 +94,10 @@ async function onAction(opts) {
   }
   try {
     process.stdout.write(await runSkill(args));
-    console.log('I bridge campionano e tacciono; il sentinel-bridge farà da sveglia.');
+    console.log('Bridge monitoring remains active; sentinel-bridge will wake the team.');
   } catch (e) {
     console.error(`✗ ${e.message}`);
-    console.error('Il container "jht" deve essere in esecuzione (jht team start).');
+    console.error('The container "jht" must be running (jht team start).');
     process.exitCode = 1;
   }
 }
@@ -109,32 +109,32 @@ async function offAction(opts) {
     process.stdout.write(await runSkill(args));
   } catch (e) {
     console.error(`✗ ${e.message}`);
-    console.error('Il container "jht" deve essere in esecuzione (jht team start).');
+    console.error('The container "jht" must be running (jht team start).');
     process.exitCode = 1;
   }
 }
 
 export function registerStandbyCommand(program) {
   const standby = new Command('standby')
-    .description('Standby a spesa zero: ferma anche i ruoli core, la sveglia resta nei bridge');
+    .description('Zero-spend standby: stop core roles while bridge monitoring remains active');
 
   standby
     .command('status')
-    .description('Mostra se lo standby è attivo e con quale condizione di uscita')
+    .description('Show if standby is active and with what exit condition')
     .action(statusAction);
 
   standby
     .command('on')
-    .description('Entra in standby (OBBLIGATORIA una condizione di uscita)')
-    .option('--reason <text>', 'perché — finisce nei log e nei messaggi agli agenti')
-    .option('--until <iso>', 'standby a tempo: risveglio a questo istante (ISO 8601)')
-    .option('--wake-on-weekly [pct]', 'standby condizionato: risveglio quando il weekly scende sotto pct (default 100 = al reset)')
+    .description('Enter standby (an exit condition is required)')
+    .option('--reason <text>', 'reason recorded in logs and agent messages')
+    .option('--until <iso>', 'timed standby: wake at this ISO-8601 time')
+    .option('--wake-on-weekly [pct]', 'wake when weekly usage falls below pct (default: 100, at reset)')
     .action(onAction);
 
   standby
     .command('off')
-    .description('Esce subito dallo standby: flag via, poi [RIPRENDI] a tutti (halted vince)')
-    .option('--reason <text>', 'perché (finisce nei log)')
+    .description('He comes out immediately from standby: flag away, then [RIPRENDI] to all (halted wins)')
+    .option('--reason <text>', 'reason recorded in logs')
     .action(offAction);
 
   program.addCommand(standby);

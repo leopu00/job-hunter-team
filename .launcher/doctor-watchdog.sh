@@ -93,7 +93,7 @@ halt_log_tick=0
 offhours_log_tick=0
 config_log_tick=0
 
-log "watchdog starting · Dottore 2×/finestra (+30min, metà) + Mantenitore 1x/giorno · poll=${POLL_SEC}s · sched=$SCHED"
+log "watchdog starting · Dottore twice/window (+30 min, halfway) + Mantenitore once/day · poll=${POLL_SEC}s · sched=$SCHED"
 
 last_fallback=0
 while true; do
@@ -102,14 +102,14 @@ while true; do
   # fallback storico a Claude. Il loop resta vivo e ricontrolla normalmente.
   if ! config_ready; then
     if [ $((config_log_tick % 8)) -eq 0 ]; then
-      log "provider non ancora autenticato — scheduling dottore/mantenitore sospeso"
+      log "provider not authenticated yet — Dottore/Mantenitore scheduling suspended"
     fi
     config_log_tick=$((config_log_tick + 1))
     sleep "$POLL_SEC"
     continue
   fi
   if [ "$config_log_tick" -gt 0 ]; then
-    log "provider autenticato — attivo scheduling dottore/mantenitore"
+    log "provider authenticated — enabling Dottore/Mantenitore scheduling"
     config_log_tick=0
   fi
 
@@ -118,9 +118,9 @@ while true; do
   if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || standby_active; then
     if [ $((halt_log_tick % 8)) -eq 0 ]; then
       if standby_active; then
-        log "standby ATTIVO — spawn dottore/mantenitore disabilitato"
+        log "standby ACTIVE — Dottore/Mantenitore spawn disabled"
       else
-        log "halt flag presente — spawn dottore disabilitato"
+        log "halt flag present — Dottore spawn disabled"
       fi
     fi
     halt_log_tick=$((halt_log_tick + 1))
@@ -128,7 +128,7 @@ while true; do
     continue
   fi
   if [ "$halt_log_tick" -gt 0 ]; then
-    log "halt flag rimosso — riprendo scheduling dottore"
+    log "halt flag removed — resuming Dottore scheduling"
     halt_log_tick=0
   fi
 
@@ -139,7 +139,7 @@ while true; do
   mslot=$(python3 "$SCHED" check-maintainer 2>/dev/null) || mslot=WAIT
   if [ "$mslot" = "MAINT" ]; then
     if [ ! -f "$MAINT_SPAWNER" ]; then
-      log "ERROR: spawner mantenitore non trovato a $MAINT_SPAWNER"
+      log "ERROR: Mantenitore spawner not found at $MAINT_SPAWNER"
     else
       mout=$(bash "$MAINT_SPAWNER" 2>&1) && mrc=0 || mrc=$?
       if [ "$mrc" -eq 0 ]; then
@@ -159,7 +159,7 @@ while true; do
   case "$slot" in
     T30|MID)
       if [ ! -f "$SPAWNER" ]; then
-        log "ERROR: spawner non trovato a $SPAWNER"
+        log "ERROR: spawner not found at $SPAWNER"
       else
         out=$(bash "$SPAWNER" 2>&1) && rc=0 || rc=$?
         if [ "$rc" -eq 0 ]; then
@@ -174,7 +174,7 @@ while true; do
       ;;
     OFF)
       if [ $((offhours_log_tick % 8)) -eq 0 ]; then
-        log "fuori working hours — scheduling sospeso (pausa OFF reale)"
+        log "outside working hours — scheduling suspended (actual OFF interval)"
       fi
       offhours_log_tick=$((offhours_log_tick + 1))
       sleep "$OFF_RECHECK_SEC"

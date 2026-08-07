@@ -25,7 +25,7 @@ function isStopAllInfrastructure(session) {
 // Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
 export function stopAction(agentArg, options = {}) {
   if (!usingContainer() && !tmuxAvailable()) {
-    console.error(c.red('Errore: tmux non trovato sull\'host e container jht non attivo.'));
+    console.error(c.red('Error: tmux was not found on the host and the jht container is not running.'));
     process.exitCode = 1;
     return;
   }
@@ -42,7 +42,7 @@ export function stopAction(agentArg, options = {}) {
       const halted = execArgvInContainer(['touch', '/jht_home/.team-halted.flag']);
       if (halted.code !== 0) {
         console.error(c.red(
-          `Impossibile applicare lo stop persistente: ${halted.stderr || halted.stdout || 'errore sconosciuto'}`
+          `Unable to apply persistent stop: ${halted.stderr || halted.stdout || 'unknown error'}`
         ));
         process.exitCode = 1;
         return;
@@ -53,20 +53,20 @@ export function stopAction(agentArg, options = {}) {
       || isStopAllInfrastructure(s)
     );
     if (targets.length === 0) {
-      console.log(c.yellow('Nessun agente attivo da fermare.'));
+      console.log(c.yellow('No active agents to stop.'));
       return;
     }
   } else {
     const parsed = parseAgentArg(agentArg);
     if (!parsed) {
-      console.error(c.red(`Ruolo "${agentArg}" non riconosciuto.`));
-      console.error('Ruoli validi: ' + AGENTS.map((a) => a.role).join(', '));
+      console.error(c.red(`Role "${agentArg}" is not recognized.`));
+      console.error('Valid roles: ' + AGENTS.map((a) => a.role).join(', '));
       process.exitCode = 1;
       return;
     }
     const sName = sessionName(parsed.role, parsed.instance);
     if (!isSessionActive(sName)) {
-      console.log(c.yellow(`${sName} non e attivo.`));
+      console.log(c.yellow(`${sName} is not active.`));
       return;
     }
     targets = [sName];
@@ -74,7 +74,7 @@ export function stopAction(agentArg, options = {}) {
 
   console.log('');
   const where = usingContainer() ? c.dim('(container jht)') : c.dim('(host)');
-  console.log(`${c.bold('Fermo agenti...')} ${where}`);
+  console.log(`${c.bold('Stopping agents...')} ${where}`);
   console.log('');
 
   let stopped = 0;
@@ -82,10 +82,10 @@ export function stopAction(agentArg, options = {}) {
     if (usingContainer()) {
       const r = execArgvInContainer(['tmux', 'kill-session', '-t', s]);
       if (r.code === 0) {
-        console.log(`  ${c.green('✓')} ${s} fermato`);
+        console.log(`  ${c.green('✓')} ${s} stopped`);
         stopped++;
       } else {
-        console.log(`  ${c.yellow('⚠')} ${s} — ${(r.stderr || r.stdout || 'non trovato').split('\n')[0]}`);
+        console.log(`  ${c.yellow('⚠')} ${s} — ${(r.stderr || r.stdout || 'not found').split('\n')[0]}`);
       }
     } else {
       // Host legacy: prova un /exit pulito, poi kill-session
@@ -94,18 +94,18 @@ export function stopAction(agentArg, options = {}) {
       } catch { /* gia chiusa */ }
       try {
         execSync(`sleep 1 && tmux kill-session -t "${s}"`, { stdio: 'ignore' });
-        console.log(`  ${c.green('✓')} ${s} fermato`);
+        console.log(`  ${c.green('✓')} ${s} stopped`);
         stopped++;
       } catch {
-        console.log(`  ${c.yellow('⚠')} ${s} — non trovato (gia chiuso?)`);
+        console.log(`  ${c.yellow('⚠')} ${s} — not found (already closed?)`);
       }
     }
   }
 
   console.log('');
-  console.log(`${c.green(stopped + ' agenti fermati')}`);
+  console.log(c.green(`${stopped} agents stopped`));
   if (options.all && sessions.some((s) => KEEP_ALIVE_ON_STOP_ALL.has(s))) {
-    console.log(c.dim('  ASSISTENTE preservato (usa: jht team stop assistente per chiuderlo)'));
+    console.log(c.dim('  ASSISTENTE preserved (use jht team stop assistente to close it)'));
   }
   console.log('');
 }

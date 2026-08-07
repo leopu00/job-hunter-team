@@ -55,7 +55,7 @@ function runJhtSubcommand(args, label) {
     env: process.env,
   });
   if (result.status !== 0) {
-    console.error(`[setup] ${label} fallito (exit ${result.status})`);
+    console.error(`[setup] ${label} failed (exit ${result.status})`);
     return false;
   }
   return true;

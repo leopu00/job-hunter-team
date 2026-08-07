@@ -136,7 +136,7 @@ jht_spawn_sync_prompt() {
   if [ -n "$src" ]; then
     cp "$src" "$workdir/AGENTS.md"
   else
-    echo "[$label] WARN: prompt sorgente non trovato — partirà senza AGENTS.md fresh"
+    echo "[$label] WARN: source prompt not found — starting without a fresh AGENTS.md"
   fi
 }
 
@@ -258,14 +258,14 @@ jht_spawn_wait_repl() {
     [ "$repl_up" -eq 1 ] && return 0
     if [ "$attempt" -ge 2 ]; then
       last_cmd=$(tmux display-message -p -t "$session" '#{pane_current_command}' 2>/dev/null || echo "?")
-      echo "[$label] ERROR: REPL ($(jht_spawn_active_provider)) non partito dopo 2 tentativi (pane=$last_cmd) — spawn fallito" >&2
+      echo "[$label] ERROR: REPL ($(jht_spawn_active_provider)) did not start after 2 attempts (pane=$last_cmd) — spawn failed" >&2
       ts_fail="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       printf '{"ts":"%s","session":"%s","role":"%s","event":"spawn_failed","reason":"repl_not_up","pane_cmd":"%s","src":"%s"}\n' \
         "$ts_fail" "$session" "$role" "$last_cmd" "$src" >> "$logs_dir/$role-actions.jsonl"
       tmux kill-session -t "$session" 2>/dev/null || true
       return 1
     fi
-    echo "[$label] REPL non salito (tentativo $attempt) — retry" >&2
+    echo "[$label] REPL did not start (attempt $attempt) — retrying" >&2
     tmux send-keys -t "$session" C-c 2>/dev/null || true
     sleep 1
     tmux send-keys -t "$session" "$cmd" C-m

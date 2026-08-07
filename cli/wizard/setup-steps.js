@@ -123,14 +123,14 @@ export async function promptTelegramRequired(prompter, baseChannels) {
   // random suffix. Risultato: `<role>_<username>_<random>_bot`. Pattern
   // brand-meno-guessable + suffix random = privacy in pratica.
   const userTag = await prompter.text({
-    message: 'Tag/nome utente per personalizzare i bot Telegram',
-    placeholder: 'marco',
+    message: 'Tag/username to customize Telegram bots',
+    placeholder: 'alex',
     initialValue: existing?.userTag,
     validate: (v) => {
       const trimmed = (v || '').trim().toLowerCase();
-      if (!trimmed) return 'Obbligatorio (sara\' nello username dei bot)';
+      if (!trimmed) return 'Required (it will be part of the bot usernames)';
       if (!/^[a-z0-9]{2,20}$/.test(trimmed)) {
-        return 'Solo a-z e 0-9, 2-20 caratteri (no spazi, no underscore)';
+        return 'Only a-z and 0-9, 2-20 characters (no spaces, no underscores)';
       }
       return undefined;
     },
@@ -148,34 +148,34 @@ export async function promptTelegramRequired(prompter, baseChannels) {
   };
 
   await prompter.note(
-    'Telegram e\' obbligatorio: ogni agente user-facing ha il suo bot dedicato\n' +
-    '(notifiche separate, mute selettivo, contesto pulito).\n\n' +
-    'Devi creare 3 bot su @BotFather, uno per ogni agente:\n' +
-    '  1. Assistente — onboarding profilo, drop-zone documenti\n' +
-    '  2. Capitano   — direzione team, notifiche posizioni ready\n' +
-    '  3. Mentor     — mentore di crescita, posizionamento strategico\n\n' +
-    '🔐 PRIVACY: i bot Telegram hanno username PUBBLICI. Chiunque conosca\n' +
-    '   il nome puo\' trovarli (anche se i messaggi non-whitelist vengono\n' +
-    '   scartati dal nostro filtro chat_id). Per renderli "privati in\n' +
-    '   pratica" usiamo username con nome utente + suffix random:\n\n' +
+    'Telegram is mandatory: each user-facing agent has a dedicated bot\n' +
+    '(separate notifications, targeted conversations, clean context).\n\n' +
+    'You need to create 3 bots on @BotFather, one for each agent:\n' +
+    '  1. Assistente — profile onboarding and document drop zone\n' +
+    '  2. Capitano — team management and ready-position notifications\n' +
+    '  3. Mentor — growth mentoring and strategic positioning\n\n' +
+    'PRIVACY: Telegram bot usernames are public. Anyone who knows\n' +
+    '   a username can find its bot, although messages from chats outside\n' +
+    '   the allowlist are discarded by our chat_id filter. To make the bots\n' +
+    '   difficult to guess, use your tag plus a random suffix:\n\n' +
     `      ${suggestedUsernames.assistente}\n` +
     `      ${suggestedUsernames.capitano}\n` +
     `      ${suggestedUsernames.mentor}\n\n` +
-    '   Se BotFather ti dice "username already taken" su uno dei tre,\n' +
-    '   nel prossimo step puoi rigenerare il suffix per quel bot.\n\n' +
-    'Per ogni bot ripeti su @BotFather:\n' +
+    '   If BotFather says "username already taken" for one of the three,\n' +
+    '   in the next step you can regenerate the suffix for that bot.\n\n' +
+    'Repeat these steps for each bot in @BotFather:\n' +
     '  • /newbot\n' +
-    '  • Nome libero (es. "Assistente JHT")\n' +
-    '  • Username con il pattern sopra (deve finire in "bot")\n' +
-    '  • BotFather ti risponde con un token "123456789:ABC..."\n\n' +
-    'Tieni i 3 token a portata di mano: te li chiedo uno a uno.',
-    'Setup Telegram (3 bot obbligatori)',
+    '  • Any display name (for example, "Assistente JHT")\n' +
+    '  • Username with the pattern above (it must end in "bot")\n' +
+    '  • BotFather answers with a token "123456789:ABC... "\n\n' +
+    'Keep the 3 tokens at your fingertips: I\'ll ask you one by one.',
+    'Setup Telegram (3 mandatory bots)',
   );
 
   const roles = [
-    { key: 'assistente', label: 'Assistente', hint: 'onboarding profilo + documenti' },
-    { key: 'capitano',   label: 'Capitano',   hint: 'direzione team + notifiche batch' },
-    { key: 'mentor',     label: 'Mentor',     hint: 'mentore di crescita' },
+    { key: 'assistente', label: 'Assistente', hint: 'profile onboarding and documents' },
+    { key: 'capitano',   label: 'Capitano',   hint: 'team management and batch notifications' },
+    { key: 'mentor',     label: 'Mentor',     hint: 'growth mentor' },
   ];
 
   const bots = {};
@@ -209,16 +209,16 @@ export async function promptTelegramRequired(prompter, baseChannels) {
 export async function promptTelegramOptional(prompter, baseChannels) {
   const wants = await prompter.confirm({
     message:
-      'Configurare i bot Telegram adesso? Consigliato (notifiche + chat da ' +
-      'lontano dal desktop), ma puoi saltare e farlo dopo con `jht config`.',
+      'Configure Telegram bots now? Recommended (notifications + chat from ' +
+      'away from the desktop), but you can skip and do it later with `jht config`.',
     initialValue: true,
   });
   if (!wants) {
     await prompter.note(
-      'Telegram saltato. Il team parte lo stesso: lo gestisci dal desktop ' +
-      '(dashboard + chat). Per aggiungerlo dopo: `jht config` o rilancia ' +
-      '`jht setup`.',
-      'Telegram opzionale — saltato',
+      'Telegram skipped. The team remains available from the desktop ' +
+      '(dashboard and chat). To add Telegram later, run `jht config` or ' +
+      '`jht setup` again.',
+      'Optional Telegram — skipped',
     );
     return null;
   }
@@ -239,16 +239,16 @@ async function promptSingleTelegramBot(prompter, role, existing, suggestedUserna
 
   while (regenCount < MAX_REGEN) {
     await prompter.note(
-      `Adesso configuriamo il bot ${role.label} (${role.hint}).\n\n` +
-      `Su @BotFather: /newbot → segui le istruzioni → copia il token.\n\n` +
-      `🔐 Username suggerito (privacy): ${suggestedUsername}\n`,
+      `Now configure the ${role.label} bot (${role.hint}).\n\n` +
+      `On @BotFather: /newbot → follow the instructions → copy the token.\n\n` +
+      `Suggested privacy-friendly username: ${suggestedUsername}\n`,
       `Bot ${role.label} (${role.key})`,
     );
 
     // Se BotFather ha accettato lo username → vai avanti.
     // Se preso → regen il suffix e ripresenta.
     const accepted = await prompter.confirm({
-      message: `BotFather ha accettato lo username ${suggestedUsername}?`,
+      message: `BotFather accepted the username ${suggestedUsername}?`,
       initialValue: true,
     });
 
@@ -258,7 +258,7 @@ async function promptSingleTelegramBot(prompter, role, existing, suggestedUserna
       suggestedUsername = `${role.key}_${userTag}_${generatePrivacySuffix(6)}_bot`;
       regenCount++;
       await prompter.note(
-        `Provo con un nuovo suffix random: ${suggestedUsername}`,
+        `Try this new random suffix: ${suggestedUsername}`,
         `Regen ${regenCount}/${MAX_REGEN}`,
       );
     } else {
@@ -268,24 +268,24 @@ async function promptSingleTelegramBot(prompter, role, existing, suggestedUserna
   }
 
   const botToken = await prompter.text({
-    message: `Token del bot ${role.label}`,
+    message: `Token for the ${role.label} bot`,
     placeholder: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
     initialValue: existing?.bot_token,
     validate: (v) => {
-      if (!v || v.trim().length === 0) return 'Token obbligatorio';
+      if (!v || v.trim().length === 0) return 'Token is required';
       return validateTelegramToken(v);
     },
   });
   const token = botToken.trim();
 
   let botUsername = null;
-  const probe = prompter.progress(`Verifico il bot ${role.label}...`);
+  const probe = prompter.progress(`Verifying the ${role.label} bot...`);
   try {
     botUsername = await tgGetBotUsername(token);
-    probe.stop(`Bot ${role.label} riconosciuto: @${botUsername}`);
+    probe.stop(`Bot ${role.label} recognized: @${botUsername}`);
   } catch (e) {
-    probe.stop(`Errore su ${role.label}: ${e.message}`);
-    throw new Error(`Token Telegram (${role.key}) non valido o rete irraggiungibile: ${e.message}`);
+    probe.stop(`Error ${role.label}: ${e.message}`);
+    throw new Error(`Invalid Telegram token for ${role.key}, or network unavailable: ${e.message}`);
   }
 
   // Privacy warning: username NON contiene il userTag → bot probabilmente
@@ -293,36 +293,36 @@ async function promptSingleTelegramBot(prompter, role, existing, suggestedUserna
   // ma lo informiamo. Puo' sempre rinominarlo via @BotFather (/setusername).
   if (userTag && !botUsername.toLowerCase().includes(userTag.toLowerCase())) {
     await prompter.note(
-      `⚠️  Il bot @${botUsername} NON contiene il tuo tag utente (${userTag}).\n\n` +
-      `   Lo username e\' piu\' facilmente indovinabile da terzi. I messaggi\n` +
-      `   spam vengono comunque scartati dalla whitelist chat_id, quindi\n` +
-      `   NON c\'e\' rischio funzionale — solo meno privacy.\n\n` +
-      `   Se vuoi rifare: @BotFather → /deletebot → /newbot e usa pattern\n` +
-      `   "${role.key}_${userTag}_<random>_bot". Oppure prosegui cosi'.`,
+      `⚠️ The bot @${botUsername} does not contain your user tag (${userTag}).\n\n` +
+      `   This username is easier for third parties to guess. Spam messages\n` +
+      `   are still discarded by the chat_id allowlist, so functionality is\n` +
+      `   unaffected; only privacy is reduced.\n\n` +
+      `   To recreate it, use @BotFather → /deletebot → /newbot and the pattern\n` +
+      `   "${role.key}_${userTag}_<random>_bot". You can also continue as is.`,
       `Privacy warning (${role.label})`,
     );
   }
 
   const deepLink = `https://t.me/${botUsername}?start=jht`;
   await prompter.note(
-    `Apri il bot ${role.label} e premi Start:\n\n` +
+    `Open the bot ${role.label} and press Start:\n\n` +
     `  ${deepLink}\n\n` +
-    `(Tap sul link dal telefono, o cerca @${botUsername} su Telegram e\n` +
-    `premi "Start" / scrivi /start.)\n\n` +
-    `Sto monitorando: appena vedo il tuo /start proseguo col prossimo bot.`,
-    `Avvia la chat con @${botUsername}`,
+    `(Open the link on your phone, or search for @${botUsername} on Telegram and\n` +
+    `press "Start" or send /start.)\n\n` +
+    `I am monitoring the chat. As soon as /start arrives, setup continues with the next bot.`,
+    `Start chat with @${botUsername}`,
   );
 
-  const waitSpinner = prompter.progress(`In attesa del /start su ${role.label}...`);
+  const waitSpinner = prompter.progress(`Waiting for /start in ${role.label}...`);
   const deadline = Date.now() + 15 * 60 * 1000; // 15 min
   const chatId = await tgWaitForFirstChat(token, deadline);
   if (!chatId) {
-    waitSpinner.stop(`Timeout (15 min) su ${role.label}: nessun messaggio.`);
+    waitSpinner.stop(`Timeout (15 min) for ${role.label}: no message received.`);
     throw new Error(
-      `Non ho ricevuto un /start dal bot ${role.label}. Rilancia: jht setup`,
+      `No /start was received from the ${role.label} bot. Run jht setup again.`,
     );
   }
-  waitSpinner.stop(`${role.label}: chat rilevata (${chatId})`);
+  waitSpinner.stop(`${role.label}: detected chat (${chatId})`);
 
   return { bot_token: token, chat_id: String(chatId) };
 }
@@ -396,7 +396,7 @@ export async function assembleAndSaveConfig(prompter, params) {
   const { providerChoice, authMethod, apiKey, subscriptionConfig, model,
           telegramChannel, baseProviders, workingHours } = params;
 
-  const progress = prompter.progress('Salvataggio configurazione...');
+  const progress = prompter.progress('Saving configuration...');
 
   const providerConfig = { name: providerChoice, auth_method: authMethod };
   if (authMethod === 'api_key' && apiKey) {
@@ -432,7 +432,7 @@ export async function assembleAndSaveConfig(prompter, params) {
   }
 
   writeConfigFile(config);
-  progress.stop('Configurazione salvata!');
+  progress.stop('Configuration saved!');
   return config;
 }
 
@@ -447,13 +447,13 @@ export async function showSummary(prompter, params) {
   // (modello per-agente, autenticazione tramite OAuth CLI) e' implicito.
   const summary = [
     `Provider:   ${selectedProvider.label}`,
-    `Auth:       OAuth (lo fai nel prossimo step)`,
+    `Auth:       OAuth (completed in the next step)`,
     '',
     `Config:     ${JHT_CONFIG_PATH}`,
     `JHT home:   ${JHT_CONFIG_DIR}`,
   ].join('\n');
 
-  await prompter.note(summary, 'Riepilogo');
+  await prompter.note(summary, 'Summary');
   // L'outro finale viene emesso dal wizard chiamante (setup.js) DOPO gli step
   // post-config (providers update / OAuth / team start). Qui non chiudiamo il
   // flow perche' c'e' altro da chiedere.
@@ -481,16 +481,16 @@ export async function promptSubscription(prompter, selectedProvider, flow) {
  * Prompt manuale per subscription: email + session token opzionale.
  */
 async function promptManualSubscription(prompter, flow) {
-  await prompter.note('Inserisci l\'email del tuo account.', 'Subscription manuale');
+  await prompter.note('Enter your account\'s email.', 'Manual subscription');
   const email = await prompter.text({
-    message: 'Email account', placeholder: 'utente@esempio.com', validate: validateEmail,
+    message: 'Email account', placeholder: 'user@example.com', validate: validateEmail,
   });
   const wantsToken = flow === 'advanced'
-    ? await prompter.confirm({ message: 'Hai un session token?', initialValue: false })
+    ? await prompter.confirm({ message: 'Do you have a session token?', initialValue: false })
     : false;
   let sessionToken;
   if (wantsToken) {
-    sessionToken = await prompter.text({ message: 'Session token', placeholder: 'incolla il token...' });
+    sessionToken = await prompter.text({ message: 'Session token', placeholder: 'glue the token...' });
     sessionToken = sessionToken?.trim() || undefined;
   }
   const config = { email: email.trim() };

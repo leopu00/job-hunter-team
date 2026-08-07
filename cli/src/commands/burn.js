@@ -62,16 +62,16 @@ async function statusAction() {
   } catch (e) {
     const local = readFlagLocally();
     if (local === null) {
-      console.log('BURN-INTENT off — gli automatismi di spesa sono attivi.');
-      console.error(`  (container non raggiungibile: ${e.message})`);
+      console.log('BURN-INTENT off — automated spending controls are active.');
+      console.error(`  (container not reachable: ${e.message})`);
       return;
     }
     const expires = new Date(local.expires_at);
     const active = Number.isFinite(expires.valueOf()) && expires > new Date();
     console.log(active
-      ? `BURN-INTENT ATTIVO — scade ${local.expires_at} (motivo: ${local.reason || 'non indicato'})`
-      : `BURN-INTENT scaduto il ${local.expires_at} — gli automatismi sono di nuovo attivi.`);
-    console.error('  (letto dal file locale: container non raggiungibile)');
+      ? `BURN-INTENT ACTIVE — expires ${local.expires_at} (reason: ${local.reason || 'not specified'})`
+      : `BURN-INTENT expired at ${local.expires_at} — spending controls are active again.`);
+    console.error('  (read from the local file: container unreachable)');
   }
 }
 
@@ -80,10 +80,10 @@ async function onAction(opts) {
   if (opts.reason) args.push('--reason', opts.reason);
   try {
     process.stdout.write(await runSkill(args));
-    console.log('I bridge lo leggono al prossimo tick (≤5 min) e avvisano il Capitano.');
+    console.log('Bridges will read it on the next tick (≤5 min) and notify the Capitano.');
   } catch (e) {
     console.error(`✗ ${e.message}`);
-    console.error('Il container "jht" deve essere in esecuzione (jht team start).');
+    console.error('The container "jht" must be running (jht team start).');
     process.exitCode = 1;
   }
 }
@@ -95,7 +95,7 @@ async function offAction(opts) {
     process.stdout.write(await runSkill(args));
   } catch (e) {
     console.error(`✗ ${e.message}`);
-    console.error('Il container "jht" deve essere in esecuzione (jht team start).');
+    console.error('The container "jht" must be running (jht team start).');
     process.exitCode = 1;
   }
 }
@@ -103,24 +103,24 @@ async function offAction(opts) {
 export function registerBurnCommand(program) {
   const burn = new Command('burn')
     .alias('burn-intent')
-    .description('Deroga a termine agli automatismi di spesa (il budget non è un vincolo, per N ore)');
+    .description('Temporarily override automated spending controls');
 
   burn
     .command('status')
-    .description('Mostra se la deroga è attiva e quanto le resta')
+    .description('Show whether the override is active and how much time remains')
     .action(statusAction);
 
   burn
     .command('on')
-    .description('Concede la deroga (default 5h = una finestra, max 12h)')
-    .option('--hours <n>', 'durata in ore (max 12)', '5')
-    .option('--reason <text>', 'perché — finisce nei log e nel messaggio al Capitano')
+    .description('Enable the override (default 5h, maximum 12h)')
+    .option('--hours <n>', 'duration in hours (max 12)', '5')
+    .option('--reason <text>', 'reason recorded in logs and sent to the Capitano')
     .action(onAction);
 
   burn
     .command('off')
-    .description('Revoca subito la deroga: gli automatismi tornano attivi')
-    .option('--reason <text>', 'perché (finisce nei log)')
+    .description('Revoke the override immediately and restore spending controls')
+    .option('--reason <text>', 'reason recorded in logs')
     .action(offAction);
 
   program.addCommand(burn);

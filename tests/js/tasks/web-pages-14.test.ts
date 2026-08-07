@@ -74,7 +74,7 @@ describe("jht doctor CLI", () => {
       expect(src).toContain(`function ${fn}`);
   });
   it("5 sezioni diagnostica: Ambiente, Config, Provider LLM, Database, Workers", () => {
-    for (const sec of ["Ambiente", "Config", "Provider LLM", "Database", "Workers"])
+    for (const sec of ["Environment", "Config", "Provider LLM", "Database", "Workers"])
       expect(src).toContain(sec);
     expect(src).toContain("printCheck"); expect(src).toContain("spinner");
   });
@@ -96,7 +96,7 @@ describe("jht reset CLI", () => {
   it("buildDeleteList + executeReset + pathExists + countFiles + confirm", () => {
     expect(src).toContain("function buildDeleteList"); expect(src).toContain("function executeReset");
     expect(src).toContain("function pathExists"); expect(src).toContain("function countFiles");
-    expect(src).toContain("Confermi eliminazione");
+    expect(src).toContain("Confirm deletion");
   });
 });
 

@@ -285,7 +285,7 @@ export async function runUserMessagesPoller() {
         });
         if (consecutiveAuthFails >= MAX_CONSECUTIVE_AUTH_FAILS) {
           log('error', 'shutdown.auth-killswitch', {
-            reason: 'token revocato o pairing rotto, richiede intervento utente',
+            reason: 'token revoked or broken pairing, requires user intervention',
           });
           process.exit(2);
         }

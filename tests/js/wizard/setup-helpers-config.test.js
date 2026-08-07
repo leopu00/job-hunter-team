@@ -101,7 +101,7 @@ describe('writeConfigFile', () => {
   });
 
   it('lancia eccezione per config non valida', () => {
-    expect(() => writeConfigFile({ active_provider: 'invalid' })).toThrow(/Config non valida/);
+    expect(() => writeConfigFile({ active_provider: 'invalid' })).toThrow(/Invalid configuration/);
   });
 });
 

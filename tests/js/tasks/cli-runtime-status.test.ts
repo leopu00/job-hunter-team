@@ -53,7 +53,7 @@ describe("CLI — nomi sessione del runtime container", () => {
   it("jht status conta i nomi moderni e ignora tmux estranei", () => {
     const r = run("status");
     expect(r.code).toBe(0);
-    expect(r.out).toContain("Sessioni tmux JHT: 5");
+    expect(r.out).toContain("Tmux Sessions JHT: 5");
     expect(r.out).toContain("SCOUT-1");
     expect(r.out).not.toContain("    - unrelated");
   });
@@ -62,8 +62,8 @@ describe("CLI — nomi sessione del runtime container", () => {
     const r = run("doctor");
     expect(r.code).toBe(0);
     for (const name of ["ASSISTENTE", "CAPITANO", "MENTOR", "SENTINELLA"]) {
-      expect(r.out).toContain(`${name}: attivo`);
-      expect(r.out).not.toContain(`${name}: non trovato`);
+      expect(r.out).toContain(`${name}: active`);
+      expect(r.out).not.toContain(`${name}: not found`);
     }
   }, 15_000);
 });
@@ -78,7 +78,7 @@ describe("team start — retry reattivo", () => {
     const firstCloudSync = source.indexOf("cloud pull-desired-state");
     expect(earlyNoop).toBeGreaterThan(0);
     expect(earlyNoop).toBeLessThan(firstCloudSync);
-    expect(source).toContain("Team gia operativo: nessun bridge o sync riavviato.");
+    expect(source).toContain("Team already running: no bridge or sync process restarted.");
   });
 
   it("applica lo stagger solo quando la voce precedente è stata avviata", () => {

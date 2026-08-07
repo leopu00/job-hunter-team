@@ -266,9 +266,9 @@ def test_3_un_ack_che_non_arriva_diventa_unescalation(watchdog, home):
     assert stuck[0]["agent"] == "analista-1"
     assert stuck[0]["waiting_sec"] >= limit
     assert stuck[0]["threshold_sec"] == int(limit)
-    assert any("non ha ancora firmato l'ack" in m for m in CAPTAIN_MSGS), \
+    assert any("still has not acknowledged" in m for m in CAPTAIN_MSGS), \
         "l'escalation deve arrivare al Capitano, non solo al log"
-    assert any("bloccato" in m for m in CAPTAIN_MSGS), \
+    assert any("blocked" in m for m in CAPTAIN_MSGS), \
         "il senso del segnale è distinguere bloccato da idle: va detto"
 
 
