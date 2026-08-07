@@ -133,7 +133,7 @@ I testi del contratto passano da `untranslated()`: la lacuna è esplicita e
 cercabile invece di sembrare già fatta, e chi traduce cerca `untranslated(`
 e sostituisce la voce con le sette lingue vere. A schermo il comportamento è
 il fallback all'inglese che il sito usa già ovunque. Il conteggio esatto lo
-stampa il test: **33 testi su 85** al momento. Indice, G00–S05, la scheda
+stampa il test: **20 testi su 85** al momento. Indice, G00–S10, la scheda
 requisiti nativa e W02–W04 sono tradotti; il totale include i sette valori
 misurati della scheda e titolo e corpo del segnaposto privacy-safe visibile
 di W02–W04, che prima sfuggivano al censimento.
