@@ -33,7 +33,7 @@ export default function GuidePhaseBlock({
         >
           {index + 1}
         </span>
-        <h3 className="text-[16px] font-bold tracking-tight text-[var(--color-white)] sm:text-[17px]">
+        <h3 className="hyphens-auto break-words text-[16px] font-bold tracking-tight text-[var(--color-white)] sm:text-[17px]">
           <span className="sr-only">
             {`${GUIDE_UI.step_label[lang]} ${index + 1}: `}
           </span>
