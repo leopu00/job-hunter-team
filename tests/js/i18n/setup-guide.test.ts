@@ -118,18 +118,17 @@ describe("guida di setup — traduzioni", () => {
     expect(untranslated).toEqual([]);
   });
 
-  it("dichiara quanti testi del contratto attendono ancora traduzione", () => {
-    // Non è un fallimento: il copy canonico arriva in inglese e la
-    // traduzione è un lavoro a parte. Il test esiste per rendere il numero
-    // VISIBILE invece che intuibile, e per fallire il giorno in cui
-    // qualcuno cancella `untranslated()` senza tradurre davvero.
+  it("nessun testo del contratto ricade più sull'inglese", () => {
+    // Il census è partito come misura del lavoro incompleto. Ora che tutte
+    // le derivate sono chiuse diventa un gate: una nuova `untranslated()`
+    // non può arrivare sul percorso pubblico senza una traduzione 7/7.
     const texts = everyText();
     const pending = texts.filter(({ text }) => isUntranslated(text));
     // eslint-disable-next-line no-console
     console.log(
-      `[setup-guide] ${pending.length}/${texts.length} testi ancora in inglese (attesa HQ-FULLSTACK-1)`,
+      `[setup-guide] ${pending.length}/${texts.length} testi ancora in inglese come fallback`,
     );
-    expect(pending.length).toBeLessThanOrEqual(texts.length);
+    expect(pending.map(({ where }) => where)).toEqual([]);
   });
 });
 
@@ -442,6 +441,75 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
         "Working hours",
       ]) {
         expect(phase.body[locale], `${locale}: ${label}`).toContain(label);
+      }
+    }
+  });
+
+  it("blocchi finali e S11-S17/W01 sono tradotti davvero", () => {
+    const chapters = GUIDE_CHAPTERS.filter((chapter) =>
+      ["start-screen", "local-web"].includes(chapter.id),
+    );
+    const phaseIds = new Set([
+      "authorize-provider",
+      "upload-cv",
+      "complete-profile",
+      "set-working-hours",
+      "review-setup",
+      "activate-team",
+      "verify-team-working",
+      "open-account-link",
+    ]);
+    const phases = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).filter(
+      (phase) => phaseIds.has(phase.id),
+    );
+    expect(chapters).toHaveLength(2);
+    expect(phases).toHaveLength(phaseIds.size);
+
+    const texts = [
+      ...chapters.flatMap((chapter) => [chapter.title, chapter.summary]),
+      ...phases.flatMap((phase) => [phase.title, phase.body]),
+    ];
+    for (const text of texts) {
+      for (const locale of LOCALES.filter((locale) => locale !== "en")) {
+        expect(text[locale], locale).not.toBe(text.en);
+      }
+    }
+  });
+
+  it("S11-S17/W01 mantengono gli stati e le etichette UI esatte", () => {
+    const phases = Object.fromEntries(
+      GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).map((phase) => [
+        phase.id,
+        phase,
+      ]),
+    );
+    const exactByPhase: Record<string, string[]> = {
+      "authorize-provider": ["Login detected"],
+      "upload-cv": ["Profile and CV", "Assistant"],
+      "complete-profile": ["8/8 fields"],
+      "review-setup": [
+        "Activate team",
+        "Container",
+        "AI provider",
+        "Profile and CV",
+        "Working hours",
+      ],
+      "activate-team": ["Activate the team"],
+      "verify-team-working": ["Team active", "Assistant"],
+      "open-account-link": [
+        "Settings",
+        "Account and channels",
+        "CLOUD ACCOUNT — local / guest mode",
+      ],
+    };
+    for (const [phaseId, labels] of Object.entries(exactByPhase)) {
+      for (const locale of LOCALES) {
+        for (const label of labels) {
+          expect(
+            phases[phaseId].body[locale],
+            `${phaseId}/${locale}: ${label}`,
+          ).toContain(label);
+        }
       }
     }
   });
