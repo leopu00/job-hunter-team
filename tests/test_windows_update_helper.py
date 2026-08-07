@@ -59,6 +59,12 @@ EXTRA_ARTIFACTS = {
         "protocol": "jht-macos-desktop-v1",
     },
 }
+FOREIGN_ACL_MUTATIONS = {
+    "foreign-write-ace": "WriteData",
+    "foreign-delete-ace": "Delete",
+    "foreign-permissions-ace": "ChangePermissions",
+    "foreign-owner-right-ace": "TakeOwnership",
+}
 
 
 def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
@@ -239,6 +245,7 @@ def _protect_directory(path: Path) -> None:
     _run_powershell_command(
         "$p=$env:JHT_TEST_ACL_PATH;$item=[IO.DirectoryInfo]::new($p);"
         "$acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::All);"
+        "$acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User);"
         "$acl.SetAccessRuleProtection($true,$false);"
         "$rule=New-Object System.Security.AccessControl.FileSystemAccessRule("
         "[System.Security.Principal.WindowsIdentity]::GetCurrent().User,"
@@ -448,8 +455,12 @@ def _run_verify(
             ],
             check=True,
         )
-    elif mutation in {"foreign-read-ace", "foreign-write-ace"}:
-        rights = "ReadAndExecute" if mutation == "foreign-read-ace" else "Modify"
+    elif mutation == "foreign-read-ace" or mutation in FOREIGN_ACL_MUTATIONS:
+        rights = (
+            "ReadAndExecute"
+            if mutation == "foreign-read-ace"
+            else FOREIGN_ACL_MUTATIONS[mutation]
+        )
         _run_powershell_command(
             "$item=[IO.DirectoryInfo]::new($env:JHT_TEST_ACL_PATH);"
             "$acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::All);"
@@ -556,9 +567,12 @@ def _write_compact_json(path: Path, value: dict[str, object]) -> None:
     )
 
 
-def _helper_result_diagnostic(transaction: Path) -> str:
+def _helper_result_diagnostic(transaction: Path, stderr: str = "") -> str:
     result_path = transaction / "result.json"
     if not result_path.is_file():
+        for line in stderr.splitlines():
+            if line.startswith("JHT-WINDOWS-UPDATE-ERROR schema=1 phase="):
+                return line
         return "helper result=missing"
     try:
         frame = json.loads(result_path.read_text(encoding="utf-8"))
@@ -598,7 +612,9 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
         rsa_keys,
         candidate_helper_suffix=b"\n# independently signed next helper\n",
     )
-    assert verified.returncode == 0, _helper_result_diagnostic(transaction)
+    assert verified.returncode == 0, _helper_result_diagnostic(
+        transaction, verified.stderr
+    )
     nonce = transaction.name
     state = transaction.parent
     candidate = target.parent / f".jht-update-{nonce}.candidate.exe"
@@ -687,7 +703,9 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
         )
         result = json.loads((transaction / "result.json").read_text())
         if commit_floor:
-            assert recovered.returncode == 0, _helper_result_diagnostic(transaction)
+            assert recovered.returncode == 0, _helper_result_diagnostic(
+                transaction, recovered.stderr
+            )
             assert result["phase"] == "committed"
             assert target.read_bytes() == candidate_bytes
             assert installed_helper.read_bytes() == candidate_helper_bytes
@@ -707,7 +725,9 @@ def test_windows_powershell51_verifies_signed_bundle(
     tmp_path: Path, rsa_keys: tuple[Path, Path]
 ) -> None:
     result, target, transaction = _run_verify(tmp_path, rsa_keys)
-    assert result.returncode == 0, _helper_result_diagnostic(transaction)
+    assert result.returncode == 0, _helper_result_diagnostic(
+        transaction, result.stderr
+    )
     assert (transaction / "ready.json").is_file()
     ready = json.loads((transaction / "ready.json").read_text())
     assert ready["old_pid"] > 0
@@ -724,7 +744,9 @@ def test_windows_powershell51_rotation_overlap_accepts_new_signed_new_only_helpe
     result, target, transaction = _run_verify(
         tmp_path, rsa_keys, rotation_keys=next_keys
     )
-    assert result.returncode == 0, _helper_result_diagnostic(transaction)
+    assert result.returncode == 0, _helper_result_diagnostic(
+        transaction, result.stderr
+    )
     assert (transaction / "ready.json").is_file()
     installed_helper = target.parent / HELPER
     candidate_helper = transaction / HELPER
@@ -739,7 +761,9 @@ def test_windows_powershell51_accepts_foreign_read_only_acl(
     result, _target, transaction = _run_verify(
         tmp_path, rsa_keys, mutation="foreign-read-ace"
     )
-    assert result.returncode == 0, _helper_result_diagnostic(transaction)
+    assert result.returncode == 0, _helper_result_diagnostic(
+        transaction, result.stderr
+    )
 
 
 @pytest.mark.parametrize(
@@ -753,6 +777,9 @@ def test_windows_powershell51_accepts_foreign_read_only_acl(
         ("0.3.7", "extra-linux-desktop"),
         ("0.3.7", "extra-macos-desktop"),
         ("0.3.7", "foreign-write-ace"),
+        ("0.3.7", "foreign-delete-ace"),
+        ("0.3.7", "foreign-permissions-ace"),
+        ("0.3.7", "foreign-owner-right-ace"),
         ("0.3.7", "state-junction"),
         ("0.3.7", "bind-root"),
         ("0.3.7", "bind-descendant"),
@@ -776,6 +803,20 @@ def test_windows_powershell51_rejects_untrusted_or_replayed_candidate(
     assert not (transaction.parent / "committed-floor.json").exists()
     assert not (transaction.parent / ".update.lock").exists()
     assert b"candidate" not in target.read_bytes()
+
+
+def test_windows_prelock_error_is_sanitized(
+    tmp_path: Path, rsa_keys: tuple[Path, Path]
+) -> None:
+    result, _target, transaction = _run_verify(
+        tmp_path, rsa_keys, mutation="state-junction"
+    )
+    assert result.returncode != 0
+    diagnostic = _helper_result_diagnostic(transaction, result.stderr)
+    assert diagnostic == (
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=location code=pre_lock_failed"
+    )
+    assert str(tmp_path) not in result.stderr
 
 
 def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
@@ -875,7 +916,9 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         deadline = time.monotonic() + 15
         while not ready.exists() and time.monotonic() < deadline:
             time.sleep(0.05)
-        assert ready.exists(), _helper_result_diagnostic(transaction)
+        if not ready.exists():
+            _stdout, stderr = updater.communicate(timeout=2)
+            pytest.fail(_helper_result_diagnostic(transaction, stderr))
         old.terminate()
         old.wait(timeout=5)
 

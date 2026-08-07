@@ -52,6 +52,7 @@ $OldHelperBackupPath = Join-Path $AuthorityBackupDir $AllowedHelperName
 $OldManifestBackupPath = Join-Path $AuthorityBackupDir 'RELEASE-MANIFEST.json'
 $OldSignatureBackupPath = Join-Path $AuthorityBackupDir 'RELEASE-MANIFEST.json.sig'
 $script:LockOwnerStarted = [Diagnostics.Process]::GetCurrentProcess().StartTime.ToUniversalTime().Ticks.ToString()
+$script:FailurePhase = 'location'
 
 if (-not ('JhtUpdateFileIdentity' -as [type])) {
   Add-Type -TypeDefinition @'
@@ -1159,9 +1160,12 @@ $exitCode = 1
 $lockHeld = $false
 try {
   Assert-SafeLocationPlan
+  $script:FailurePhase = 'trust'
   Assert-PreMutationTrust
+  $script:FailurePhase = 'state'
   Initialize-ProtectedDirectory $StateRoot
   Initialize-ProtectedDirectory $TxnDir
+  $script:FailurePhase = 'lock'
   Acquire-Lock; $lockHeld = $true
   Remove-Item -LiteralPath $ResultPath -Force -ErrorAction SilentlyContinue
   if ($Mode -eq 'Recover') { Invoke-Recover } else { Invoke-Apply }
@@ -1177,6 +1181,9 @@ try {
     $result = Read-JsonFile $ResultPath
     $exitCode = if ($result -and $result.ok -eq $true -and $result.phase -ceq 'committed') { 0 } else { 1 }
   } else {
+    [Console]::Error.WriteLine(
+      'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=' + $script:FailurePhase +
+      ' code=pre_lock_failed')
     $exitCode = 1
   }
 } finally {

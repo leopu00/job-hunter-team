@@ -1,5 +1,6 @@
 """The staged Windows installer must stay safe before publication is enabled."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -108,8 +109,68 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     environment = os.environ.copy()
     environment["LOCALAPPDATA"] = str(local)
 
+    local_acl = tmp_path / "protect-localappdata.ps1"
+    local_acl.write_text(
+        "$item=[IO.DirectoryInfo]::new($env:JHT_LOCALAPPDATA);"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "$current=[Security.Principal.WindowsIdentity]::GetCurrent().User;"
+        "$acl.SetOwner($current);$acl.SetAccessRuleProtection($true,$false);"
+        "foreach($sid in @($current,"
+        "[Security.Principal.SecurityIdentifier]::new('S-1-5-18'),"
+        "[Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))){"
+        "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
+        "$sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow');"
+        "$acl.SetAccessRule($rule)};$item.SetAccessControl($acl)\n",
+        encoding="utf-8",
+    )
+    local_acl_env = environment.copy()
+    local_acl_env["JHT_LOCALAPPDATA"] = str(local)
+    subprocess.run(
+        [
+            _windows_powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(local_acl),
+        ],
+        env=local_acl_env,
+        check=True,
+    )
     install.mkdir(parents=True)
     (install / "job-hunter-team.exe").write_bytes(b"legacy-v0.3.5\n")
+    fixture_owner = tmp_path / "set-fixture-owner.ps1"
+    fixture_owner.write_text(
+        "foreach($path in @($env:JHT_OWNER_PATHS | ConvertFrom-Json)){"
+        "$item=Get-Item -LiteralPath $path -Force;"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "$acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User);"
+        "$item.SetAccessControl($acl)}\n",
+        encoding="utf-8",
+    )
+    fixture_owner_env = environment.copy()
+    fixture_owner_env["JHT_OWNER_PATHS"] = json.dumps(
+        [
+            str(local),
+            str(local / "Programs"),
+            str(install),
+            str(install / "job-hunter-team.exe"),
+        ]
+    )
+    subprocess.run(
+        [
+            _windows_powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(fixture_owner),
+        ],
+        env=fixture_owner_env,
+        check=True,
+    )
     read_acl = tmp_path / "add-read-only-ace.ps1"
     read_acl.write_text(
         "$item=[IO.DirectoryInfo]::new($env:JHT_ACL_PATH);"
@@ -277,37 +338,40 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         check=True,
     )
 
-    foreign_acl = tmp_path / "add-foreign-ace.ps1"
+    foreign_acl = tmp_path / "set-foreign-ace.ps1"
     foreign_acl.write_text(
         "$item=[IO.DirectoryInfo]::new($env:JHT_ACL_PATH);"
         "$acl=$item.GetAccessControl("
         "[Security.AccessControl.AccessControlSections]::All);"
         "$sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-545');"
         "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
-        "$sid,'Modify','ContainerInherit,ObjectInherit','None','Allow');"
-        "$acl.AddAccessRule($rule);"
+        "$sid,$env:JHT_ACL_RIGHTS,'ContainerInherit,ObjectInherit','None','Allow');"
+        "if($env:JHT_ACL_MODE -ceq 'add'){$acl.AddAccessRule($rule)}"
+        "else{$acl.RemoveAccessRuleSpecific($rule)};"
         "$item.SetAccessControl($acl)\n",
         encoding="utf-8",
     )
     acl_env = environment.copy()
     acl_env["JHT_ACL_PATH"] = str(install)
-    subprocess.run(
-        [
-            _windows_powershell(),
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-File",
-            str(foreign_acl),
-        ],
-        env=acl_env,
-        check=True,
-    )
-    rejected = _run_preflight(install, "Prepare", environment)
-    assert rejected.returncode != 0
-    assert (install / "job-hunter-team.exe").read_bytes() == (
-        b"job-hunter-team.exe\n"
-    )
+    acl_argv = [
+        _windows_powershell(),
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-File",
+        str(foreign_acl),
+    ]
+    for rights in ("WriteData", "Delete", "ChangePermissions", "TakeOwnership"):
+        acl_env.update(JHT_ACL_MODE="add", JHT_ACL_RIGHTS=rights)
+        subprocess.run(acl_argv, env=acl_env, check=True)
+        rejected = _run_preflight(install, "Prepare", environment)
+        assert rejected.returncode != 0
+        assert "installer node grants write to another principal" in rejected.stderr
+        assert (install / "job-hunter-team.exe").read_bytes() == (
+            b"job-hunter-team.exe\n"
+        )
+        acl_env["JHT_ACL_MODE"] = "remove"
+        subprocess.run(acl_argv, env=acl_env, check=True)
 
 
 def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
