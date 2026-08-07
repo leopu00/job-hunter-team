@@ -8,6 +8,7 @@
 
 import GuideLinks from "./GuideLinks";
 import GuideScreenFigure from "./GuideScreenFigure";
+import RequirementsCard from "./RequirementsCard";
 import { GUIDE_UI } from "./guide-ui.i18n";
 import { screensOf, type GuidePhase, type OsId } from "./guide-types";
 import type { Lang } from "../components/landing/LandingI18n";
@@ -51,6 +52,8 @@ export default function GuidePhaseBlock({
             {phase.warning[lang]}
           </p>
         )}
+
+        {phase.card === "requirements" && <RequirementsCard lang={lang} />}
 
         {screensOf(phase).map((screenRef) => (
           <GuideScreenFigure
