@@ -104,7 +104,7 @@ const SCREEN_LIST: GuideScreen[] = [
         height: 1080,
       },
       macos: {
-        src: "/setup-guide/S02-docker-download-macos.png",
+        src: "/setup-guide/S02-docker-download-macos.jpg",
         width: 1512,
         height: 828,
       },
@@ -138,7 +138,7 @@ const SCREEN_LIST: GuideScreen[] = [
     },
     assets: {
       macos: {
-        src: "/setup-guide/S03-artifact-download-macos.png",
+        src: "/setup-guide/S03-artifact-download-macos.jpg",
         width: 1506,
         height: 825,
       },
