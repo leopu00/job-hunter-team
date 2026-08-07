@@ -48,7 +48,7 @@ export default function HomeTrailer() {
                 </Link>
               ) : line === MUSIC_LICENSE_URL ? (
                 <a
-                  className="underline underline-offset-2 hover:text-[var(--color-white)]"
+                  className="break-all underline underline-offset-2 hover:text-[var(--color-white)]"
                   href={line}
                 >
                   {line}
