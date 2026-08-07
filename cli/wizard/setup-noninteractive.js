@@ -85,7 +85,7 @@ export async function runNonInteractiveSetup(opts) {
     if (!opts.subscriptionEmail) {
       console.error(pc.red('--subscription-email is required with --auth-method subscription'));
       console.error(pc.dim('  Example: jht setup --non-interactive --provider claude \\'));
-      console.error(pc.dim('             --auth-method subscription --subscription-email tu@example.com'));
+      console.error(pc.dim('             --auth-method subscription --subscription-email you@example.com'));
       process.exitCode = 1;
       return;
     }
