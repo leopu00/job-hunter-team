@@ -4,6 +4,10 @@ extends Control
 ## Key art pittorica (gen-art); se assente, griglia terminale.
 const KEY_ART := "res://assets/gen-art/environment/title_screen.png"
 const LanguagePicker := preload("res://scripts/ui/language_picker.gd")
+const FORBIDDEN_TITLE_FOOTER_FRAGMENTS := [
+	"dati mock", "mock data", "mock adatok", "datos mock", "mock-daten",
+	"données mock", "dados mock",
+]
 
 var _blink: Label
 var _version_label: Label
@@ -99,11 +103,22 @@ func _language_picker_selftest() -> void:
 			and is_instance_valid(_version_label) \
 			and _version_label.is_visible_in_tree() \
 			and _version_label.text == "v%s" % project_version \
-			and (expected_version == "" or project_version == expected_version)
+			and (expected_version == "" or project_version == expected_version) \
+			and not _title_has_forbidden_footer()
 	print("LANGUAGE-PICKER-TITLE-VERSION %s" % (
 			_version_label.text if is_instance_valid(_version_label) else "MISSING"))
 	print("LANGUAGE-PICKER-TITLE-TEST %s" % ("PASS" if ok else "FAIL"))
 	get_tree().quit(0 if ok else 1)
+
+
+func _title_has_forbidden_footer() -> bool:
+	for node: Node in find_children("*", "Label", true, false):
+		var label := node as Label
+		var rendered_text := label.text.to_lower()
+		for fragment: String in FORBIDDEN_TITLE_FOOTER_FRAGMENTS:
+			if rendered_text.contains(fragment):
+				return true
+	return false
 
 
 ## Fase 1 dell'oracolo: il click attraversa il vero picker e deve arrivare
