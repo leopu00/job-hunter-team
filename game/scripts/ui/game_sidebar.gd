@@ -178,7 +178,7 @@ func _ready() -> void:
 	var close_btn := Button.new()
 	close_btn.flat = true
 	close_btn.text = "‹"
-	close_btn.tooltip_text = "Chiudi il menu"
+	close_btn.tooltip_text = UIStrings.t("side.close_menu")
 	close_btn.add_theme_font_size_override("font_size", 22)
 	close_btn.add_theme_color_override("font_color", Palette.DIM)
 	close_btn.add_theme_color_override("font_hover_color", Palette.WHITE)

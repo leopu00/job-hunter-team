@@ -115,7 +115,8 @@ func _ready() -> void:
 			if company != "":
 				what += (" · " if what != "" else "") + company
 			activity.append({"when": str(transition.get("ts", "")).replace("T", " ").left(16),
-					"text": "%s → %s" % [what if what != "" else "posizione",
+					"text": "%s → %s" % [what if what != "" \
+							else UIStrings.t("agent.activity_position"),
 							str(transition.get("to_state", "?"))]})
 			if activity.size() >= 5:
 				break

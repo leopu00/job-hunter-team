@@ -31,7 +31,7 @@ func _ready() -> void:
 	BackendBus.usage_history_updated.connect(_on_history)
 	if not BackendBus.is_live():
 		add_child(TerminalTheme.label(
-				"◆ SHOWROOM · consumi agenti simulati", 13, Palette.YELLOW, "medium"))
+				UIStrings.t("usage.showroom"), 13, Palette.YELLOW, "medium"))
 
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 14)
