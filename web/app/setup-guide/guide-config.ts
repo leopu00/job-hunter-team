@@ -65,6 +65,12 @@ export const DOCS_PRIVACY = "/docs/guides/privacy-and-security";
 export const DOCS_DASHBOARD = "/docs/guides/dashboard-and-results";
 export const DOCS_FAQ = "/docs/guides/faq";
 export const PRICING = "/pricing";
+export const PRIVACY = "/privacy";
+/** La casella dedicata del team: accesso SEPARATO dall'accesso Google alla
+ *  dashboard, con una app-password propria salvata in locale. Il contratto
+ *  vuole che la distinzione sia esplicita e linkata, perché «Google» in due
+ *  punti diversi della guida non significa la stessa cosa. */
+export const DOCS_TEAM_GMAIL = "/docs/guides/team-gmail";
 export const CLOUD_SYNC_SETTINGS = "/settings/cloud-sync";
 export const DASHBOARD = "/dashboard";
 

@@ -26,7 +26,7 @@
 // schermata che li contiene si rifà in ambiente pulito — mai sfocature, mai
 // ricostruzioni (regola del contratto, § Screenshot rules).
 
-import type { GuideScreen } from "./guide-types";
+import type { GuideScreen, OsId } from "./guide-types";
 
 const SCREEN_LIST: GuideScreen[] = [
   {
@@ -97,9 +97,15 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Docker Desktop no macOS e Windows, Docker Engine no Linux.",
       hu: "Docker Desktop macOS-en és Windowson, Docker Engine Linuxon.",
     },
-    assets: {},
+    assets: {
+      linux: {
+        src: "/setup-guide/S02-docker-missing-linux.png",
+        width: 1920,
+        height: 1080,
+      },
+    },
     pending:
-      "Pagina Docker ufficiale per OS. Non è una schermata dell'app: qui l'app non è ancora stata scaricata.",
+      "Consegnata per Linux. Restano macOS e Windows: pagina Docker Desktop ufficiale. Non è una schermata dell'app — qui l'app non è ancora stata scaricata.",
   },
   {
     id: "S03-artifact-download",
@@ -191,8 +197,13 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Permite a execução: pode ser preciso ativar antes a permissão de execução.",
       hu: "Engedélyezd a futtatást: előbb szükség lehet a futtatási jog beállítására.",
     },
-    assets: {},
-    pending: "Archivio estratto su Linux con il binario pronto.",
+    assets: {
+      linux: {
+        src: "/setup-guide/S04-installation-linux.png",
+        width: 1920,
+        height: 1080,
+      },
+    },
   },
   {
     id: "S05-first-launch",
@@ -214,9 +225,19 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "O seletor de idioma aparece antes do ecrã de título.",
       hu: "A nyelvválasztó a címképernyő előtt jelenik meg.",
     },
-    assets: {},
+    assets: {
+      // Stesso file di S06, non una copia: il contratto ammette il riuso
+      // perché il selettore lingua È la prima schermata di un avvio
+      // pulito. Una voce in più nel registro, non un file in più sul
+      // disco — che è esattamente a cosa serve il registro.
+      linux: {
+        src: "/setup-guide/S06-choose-language-linux.png",
+        width: 624,
+        height: 486,
+      },
+    },
     pending:
-      "Primo avvio pulito. Il contratto ammette di riusare S06: il selettore lingua È la prima schermata.",
+      "Consegnata per Linux (riusa l'asset di S06). Restano macOS e Windows.",
   },
   {
     id: "S06-choose-language",
@@ -238,8 +259,14 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Sete idiomas; confirmar guarda a escolha neste dispositivo.",
       hu: "Hét nyelv; a megerősítés elmenti a választást ezen az eszközön.",
     },
-    assets: {},
-    pending: "Selettore lingua al primo avvio, inglese preselezionato.",
+    assets: {
+      linux: {
+        src: "/setup-guide/S06-choose-language-linux.png",
+        width: 624,
+        height: 486,
+      },
+    },
+    pending: "Consegnata per Linux. Restano macOS e Windows.",
   },
   {
     id: "S07-enter-office",
@@ -261,9 +288,14 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Andar pelo escritório não arranca nenhuma equipa real.",
       hu: "Az irodában való körbenézés nem indít valódi csapatot.",
     },
-    assets: {},
-    pending:
-      "Schermata del titolo con campo nome vuoto o con un nome fittizio neutro.",
+    assets: {
+      linux: {
+        src: "/setup-guide/S07-enter-office-linux.png",
+        width: 1920,
+        height: 1080,
+      },
+    },
+    pending: "Consegnata per Linux. Restano macOS e Windows.",
   },
   {
     id: "S08-setup-overview-empty",
@@ -622,10 +654,33 @@ export const SCREENS: Record<string, GuideScreen> = Object.fromEntries(
   SCREEN_LIST.map((screen) => [screen.id, screen]),
 );
 
-/** Elenco delle schermate ancora da riprendere — usato dal test che tiene
- *  onesto il conto di ciò che manca. */
+/** Schermate senza nemmeno un file. */
 export function pendingScreens(): GuideScreen[] {
   return SCREEN_LIST.filter(
     (screen) => Object.keys(screen.assets).length === 0,
   );
+}
+
+/**
+ * Le riprese che mancano, come coppie `schermata → sistema`.
+ *
+ * Contare le schermate senza alcun file non basta più: da quando Linux
+ * consegna, `S02` ha il suo file e sparirebbe dal conto pur mancando su
+ * macOS e Windows. Qui una schermata è coperta per un sistema se ha la sua
+ * variante oppure una `shared`; il chiamante passa, per ciascuna, i sistemi
+ * in cui compare davvero — una fase riservata a Linux non deve far
+ * risultare mancanti riprese macOS e Windows che nessuno vedrà mai.
+ */
+export function missingCaptures(
+  usage: Map<string, OsId[]>,
+): { screenId: string; os: OsId }[] {
+  const out: { screenId: string; os: OsId }[] = [];
+  for (const [screenId, systems] of usage) {
+    const screen = SCREENS[screenId];
+    if (!screen || screen.assets.shared) continue;
+    for (const os of systems) {
+      if (!screen.assets[os]) out.push({ screenId, os });
+    }
+  }
+  return out;
 }

@@ -73,6 +73,39 @@ referenziano. Da qui:
 **Il titolo della scheda segue la lingua scelta**, non quella dedotta dal
 server — vedi la sezione sul difetto della pagina Download.
 
+### Il capitolo del collegamento web sta in piedi senza immagini
+
+Il copy aggiornato (`1ae241492`, `c6007f546`) rende le fasi `W02`–`W04`
+leggibili anche senza schermate autenticate: nomina i soli scope che Google
+riceve — OpenID, email, profile — dice che **la casella Gmail del team è un
+consenso separato**, con app-password propria salvata in locale, e la linka;
+e descrive il token di dispositivo come revocabile e distinto da qualunque
+credenziale Google.
+
+Le tre fasi usano un segnaposto proprio (`screenFallback`) invece di quello
+generico: non stanno per essere rigirate, sono **bloccate** finché non esiste
+un account Google di prova approvato. Dirlo con la frase generica sarebbe
+falso.
+
+## Schermate: le prime cinque sono arrivate
+
+Linux ha consegnato `S02`, `S04`, `S05`, `S06`, `S07`. Le ho aperte una per
+una prima di pubblicarle: interfaccia inglese, nessun dato personale,
+cartella neutra, Docker in navigazione privata.
+
+`S03` e `W01` sono **escluse**: la sessione E2E le ha revocate per un titolo
+di scheda italiano e per etichette italiane nello sfondo dell'ufficio.
+
+`S05` e `S06` erano lo stesso file byte per byte, e il contratto ammette il
+riuso perché il selettore lingua *è* la prima schermata di un avvio pulito:
+due voci del registro puntano a un file solo invece di spedire due volte lo
+stesso 1,3 MB. È il caso d'uso per cui il registro esiste.
+
+Il conteggio ora è per coppia **schermata × sistema**, limitato ai sistemi in
+cui la fase compare davvero: **5 riprese su 69**. Contare le schermate senza
+alcun file avrebbe dichiarato `S02` fatta nel momento in cui Linux ha
+consegnato, mentre macOS e Windows non hanno nulla.
+
 ## Traduzioni: cosa è tradotto e cosa no
 
 | Cosa | Stato |
@@ -85,7 +118,7 @@ I testi del contratto passano da `untranslated()`: la lacuna è esplicita e
 cercabile invece di sembrare già fatta, e chi traduce cerca `untranslated(`
 e sostituisce la voce con le sette lingue vere. A schermo il comportamento è
 il fallback all'inglese che il sito usa già ovunque. Il conteggio esatto lo
-stampa il test: **72 testi su 72** al momento.
+stampa il test: **76 testi su 76** al momento.
 
 ## Il difetto del titolo, e perché la guida non lo eredita
 
@@ -118,15 +151,16 @@ test e2e lo verifica in tedesco.
 
 ## Cosa manca, senza abbellimenti
 
-- **Tutte e 23 le schermate.** Le due immagini già in repo
-  (`office-overview`, `departments`) sono state **tolte** dalla guida: il
-  contratto stabilisce che non provano né il setup né un team vivo, e
-  valgono semmai per una futura sezione di esplorazione del prodotto.
+- **64 riprese su 69.** Linux ha consegnato le prime cinque; macOS e
+  Windows non hanno ancora nulla. Le due immagini già in repo
+  (`office-overview`, `departments`) restano **fuori** dalla guida: il
+  contratto stabilisce che non provano né il setup né un team vivo.
 - **Le traduzioni** dei testi del contratto (HQ-FULLSTACK-1).
-- **`W02-google-login` è bloccata dal contratto**: titolo e suggerimento del
-  terminale integrato sono hardcoded in italiano anche con prodotto in
-  inglese. Non si pubblica il frame italiano e non se ne fabbrica uno
-  inglese: serve prima un fix di prodotto.
+- **`W02`–`W04` restano senza immagine**: servono un account Google di prova
+  isolato e approvato. La localizzazione inglese del terminale è entrata in
+  `master` (`13c9e7902`), ma un merge non è una release pubblicata: finché
+  non esce, non si descrive il terminale localizzato come comportamento
+  dell'artefatto pubblico.
 - **La vecchia `/tutorials`**: ancora al suo posto, ancora nel menu. Il
   contratto chiede di ritirarla come porta d'ingresso al setup, con redirect
   permanente a `/setup-guide`, e di spostare il solo contenuto esplorativo
@@ -150,6 +184,7 @@ tocco sul selettore si perdeva in silenzio. La pagina ora dichiara
 
 **Preview telefono**: 30 screenshot a 390 px — pagina intera più
 un'inquadratura per ciascuno dei quattro capitoli, per i tre sistemi, in
-inglese chiaro e in tedesco scuro — in `docs/previews/setup-guide-mobile/`.
+inglese chiaro e in tedesco scuro, senza il banner dei cookie che copriva le
+inquadrature — in `docs/previews/setup-guide-mobile/`.
 Fuori da git per peso: le immagini di `docs/previews/` ricadono nella regola
 `*.png` di `.gitignore`.

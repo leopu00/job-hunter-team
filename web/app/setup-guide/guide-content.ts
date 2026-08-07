@@ -29,7 +29,18 @@ import {
   DOCS_VPS,
   PRICING,
 } from "./guide-config";
+import { DOCS_TEAM_GMAIL, PRIVACY } from "./guide-config";
 import { untranslated, type GuideChapter } from "./guide-types";
+
+/** Segnaposto delle fasi `W02`–`W04`, dal contratto. Dice una cosa diversa
+ *  dallo slot generico: non «la stiamo rigirando», ma «arriverà quando ci
+ *  sarà un account di prova approvato». */
+const GOOGLE_SCREEN_PLACEHOLDER = {
+  title: untranslated("Screenshot pending"),
+  body: untranslated(
+    "This step is fully described below. A privacy-safe image will be added after an isolated Google test account is authorized.",
+  ),
+};
 
 export const GUIDE_CHAPTERS: GuideChapter[] = [
   {
@@ -341,9 +352,10 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
         os: "all",
         title: untranslated("Sign in with Google"),
         body: untranslated(
-          "Select SIGN IN WITH GOOGLE. The embedded console shows a one-time link and code. Open the link, sign in to the web with Google if asked, and enter the code on Connect the CLI. The OAuth call requests no explicit additional scopes; review the Google screen shown to you instead of relying on a fixed permission list.",
+          "With the container running, open Settings → Account, select Account under Account and channels, then select SIGN IN WITH GOOGLE. The embedded console shows a temporary verification link and one-time code. Open the link. The browser may show the Job Hunter Team sign-in page, Google's account chooser, and a consent screen. Select the Google account that should own your private dashboard. Do not enter the one-time code on any page whose address is not the expected Job Hunter Team site.",
         ),
         screen: { screenId: "W02-google-login" },
+        screenFallback: GOOGLE_SCREEN_PLACEHOLDER,
         links: [
           {
             kind: "internal",
@@ -355,18 +367,36 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
       {
         id: "review-permissions",
         os: "all",
-        title: untranslated("Approve this device"),
+        title: untranslated("Review access and approve this device"),
         body: untranslated(
-          "On Connect the CLI, add an optional token name and select Confirm pairing. Pairing complete authorizes this device to sync positions, profile, and commands. Return to Settings → Account and select SYNC NOW. The local team receives a revocable device token, never your Google password or browser cookies.",
+          "Before continuing, review two separate grants. Google sign-in uses only OpenID to authenticate you, email to read your primary email address and verification status, and profile to read basic information such as your display name and profile picture. Job Hunter Team requests no Google Drive, Gmail, Calendar, Contacts, or other Google product access. The optional Team Gmail setup is separate: you explicitly connect a dedicated inbox later with its own app password, stored locally, and it does not add Gmail access to this sign-in. Next, Connect the CLI asks for the one-time code and an optional token name. Confirm pairing issues this installation a revocable Job Hunter Team device token: it may sync positions and profile data to your private dashboard and receive dashboard commands for the local team. It never contains or stores your Google password or browser cookies. Continue only if the Google account and these uses are correct.",
         ),
         screen: { screenId: "W03-permissions" },
+        screenFallback: GOOGLE_SCREEN_PLACEHOLDER,
+        links: [
+          {
+            kind: "internal",
+            href: PRIVACY,
+            label: untranslated("Privacy policy"),
+          },
+          {
+            kind: "internal",
+            href: DOCS_TEAM_GMAIL,
+            label: untranslated("Set up a separate team inbox"),
+          },
+          {
+            kind: "internal",
+            href: CLOUD_SYNC_SETTINGS,
+            label: untranslated("Manage devices and revoke access"),
+          },
+        ],
       },
       {
         id: "verify-dashboard-sync",
         os: "all",
         title: untranslated("Verify the dashboard sync"),
         body: untranslated(
-          "Confirm CLOUD ACCOUNT — connected and DEVICE — paired in Job Hunter Team Desktop. In the web dashboard, confirm ✓ Cloud sync, a recent Last: time, and the same positions and profile.",
+          "After Pairing complete, return to Settings → Account in Job Hunter Team Desktop. Confirm CLOUD ACCOUNT — connected and DEVICE — paired, or the safe token name you chose, then select SYNC NOW. Open the dashboard with the same Google account. ✓ Cloud sync means the local and cloud counts match; ◐ To sync means changes are still pending. Last: shows when the most recent successful sync completed. Confirm that the dashboard shows the same profile and positions as the local team. If it is empty, wait until the team has produced a scored position, select SYNC NOW again, and refresh the dashboard. If the app still says local / guest mode, repeat sign-in and pairing. You can stop future sync at any time by revoking the device under Cloud sync settings; local data is not deleted.",
         ),
         // Due immagini di proposito: il contratto vieta di mettere finestra
         // dell'app e browser collegato in un unico frame.
@@ -374,11 +404,17 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
           { screenId: "W04a-local-linked" },
           { screenId: "W04b-dashboard-synced" },
         ],
+        screenFallback: GOOGLE_SCREEN_PLACEHOLDER,
         links: [
           {
             kind: "internal",
             href: DASHBOARD,
             label: untranslated("Open the dashboard"),
+          },
+          {
+            kind: "internal",
+            href: CLOUD_SYNC_SETTINGS,
+            label: untranslated("Manage devices and revoke access"),
           },
         ],
       },
