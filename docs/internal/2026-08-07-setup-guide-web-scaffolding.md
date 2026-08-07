@@ -127,16 +127,14 @@ se un domani una fase tornasse a referenziarli.
 | --- | --- |
 | Microcopy della pagina (`guide-ui.i18n.ts`) | tradotto, 7 lingue |
 | Alt text e didascalie delle schermate | tradotti, 7 lingue |
-| Titoli e corpi delle fasi, dal contratto | **inglese**, in attesa di HQ-FULLSTACK-1 |
+| Titoli e corpi delle fasi, dal contratto | tradotto, 7 lingue |
 
-I testi del contratto passano da `untranslated()`: la lacuna è esplicita e
-cercabile invece di sembrare già fatta, e chi traduce cerca `untranslated(`
-e sostituisce la voce con le sette lingue vere. A schermo il comportamento è
-il fallback all'inglese che il sito usa già ovunque. Il conteggio esatto lo
-stampa il test: **20 testi su 85** al momento. Indice, G00–S10, la scheda
-requisiti nativa e W02–W04 sono tradotti; il totale include i sette valori
-misurati della scheda e titolo e corpo del segnaposto privacy-safe visibile
-di W02–W04, che prima sfuggivano al censimento.
+Durante l'innesto, `untranslated()` ha reso ogni lacuna esplicita e
+cercabile. Ora il test importa tutti i contenuti visibili e stampa il
+conteggio definitivo: **0 testi su 85** ancora in inglese come fallback.
+Il totale include anche i sette valori misurati della scheda requisiti e
+titolo e corpo del segnaposto privacy-safe visibile di W02–W04, che prima
+sfuggivano al censimento.
 
 ## Il difetto del titolo, e perché la guida non lo eredita
 
