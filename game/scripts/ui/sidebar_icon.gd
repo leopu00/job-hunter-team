@@ -12,6 +12,9 @@ extends Control
 ## del Control: cambiare `size` cambia solo la scala, mai le proporzioni.
 
 const BASE_SIZE := 18.0
+const DOCKER_MARK_DARK: Texture2D = preload("res://assets/icons/docker-mark-white.svg")
+const DOCKER_MARK_LIGHT: Texture2D = preload("res://assets/icons/docker-mark-ocean-blue.svg")
+const TELEGRAM_LOGO: Texture2D = preload("res://assets/icons/telegram.svg")
 
 var icon_id: String = "":
 	set(value):
@@ -29,7 +32,8 @@ func _init(id: String = "", col: Color = Color.WHITE) -> void:
 	color = col
 	# l'icona sta dentro il Button della voce: non deve mangiarne i click
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	custom_minimum_size = Vector2(BASE_SIZE, BASE_SIZE)
+	# Il marchio Docker ha un minimo di 24 px previsto dal media kit ufficiale.
+	custom_minimum_size = Vector2(24.0, 24.0) if id in ["container", "plane"] else Vector2(BASE_SIZE, BASE_SIZE)
 
 
 func _draw() -> void:
@@ -145,14 +149,9 @@ func _draw() -> void:
 				_line(Vector2(0.28, t), Vector2(0.12, t), s, w)
 				_line(Vector2(0.72, t), Vector2(0.88, t), s, w)
 		"container":
-			_rect(Vector2(0.08, 0.52), Vector2(0.92, 0.86), s, w)
-			_rect(Vector2(0.22, 0.30), Vector2(0.44, 0.50), s, w)
-			_rect(Vector2(0.48, 0.30), Vector2(0.70, 0.50), s, w)
-			_rect(Vector2(0.48, 0.08), Vector2(0.70, 0.28), s, w)
+			_draw_docker_mark(s)
 		"plane":
-			_poly([Vector2(0.94, 0.10), Vector2(0.06, 0.48), Vector2(0.40, 0.62),
-					Vector2(0.60, 0.92)], s, w, true)
-			_line(Vector2(0.40, 0.62), Vector2(0.94, 0.10), s, w)
+			_draw_square_brand(TELEGRAM_LOGO, s)
 		"user":
 			_circle(Vector2(0.50, 0.32), 0.20, s, w)
 			_arc(Vector2(0.50, 0.94), 0.32, PI, TAU, s, w)
@@ -243,6 +242,19 @@ func _draw() -> void:
 
 func _line(a: Vector2, b: Vector2, s: float, w: float) -> void:
 	draw_line(a * s, b * s, color, w, true)
+
+
+func _draw_docker_mark(s: float) -> void:
+	# Le due varianti sono file ufficiali invariati del media kit. Il rect usa
+	# un solo fattore di scala, quindi preserva sempre le proporzioni del marchio.
+	var mark := DOCKER_MARK_LIGHT if Palette.is_light() else DOCKER_MARK_DARK
+	var mark_height := s * float(mark.get_height()) / float(mark.get_width())
+	draw_texture_rect(mark, Rect2(0.0, (s - mark_height) * 0.5, s, mark_height), false)
+
+
+func _draw_square_brand(brand: Texture2D, s: float) -> void:
+	# Il file SVG ufficiale resta invariato: nessuna tinta, filtro o effetto.
+	draw_texture_rect(brand, Rect2(0.0, 0.0, s, s), false)
 
 
 func _poly(pts: Array, s: float, w: float, closed: bool = false) -> void:
