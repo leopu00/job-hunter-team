@@ -212,6 +212,13 @@ function Assert-TrustedRuntime {
   if (-not (Test-RuntimeBundleTrusted)) { throw 'untrusted host runtime path, owner, reparse point or SHA-256' }
 }
 
+# Deterministic, side-effect-free seam for the Windows security regression.
+# It exits before Docker, network, manifests or filesystem mutation.
+if ($env:JHT_RUNTIME_AUTHORITY_SELFTEST -eq '1') {
+  if (Test-RuntimePathAuthority) { exit 0 }
+  exit 1
+}
+
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
 function Require-Docker {
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {

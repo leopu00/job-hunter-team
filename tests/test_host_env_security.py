@@ -7,6 +7,7 @@ Host-side scripts must parse that file as data and must never execute it.
 import os
 import hashlib
 import re
+import shutil
 import shlex
 import subprocess
 from pathlib import Path
@@ -428,3 +429,71 @@ def test_release_bytes_must_advertise_the_protected_runtime_protocol():
         assert "jht-runtime-mask:/jht_home/runtime" in consumer
         assert "$JHT_HOST_RUNTIME_PROTOCOL = 1" in consumer
     assert "$binFull.Equals($userDataFull" in windows_installer
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell is unavailable")
+@pytest.mark.parametrize(
+    ("protected_node", "relative_path"),
+    [
+        ("runtime", ".jht"),
+        ("runtime", ".jht/runtime-child"),
+        ("runtime", "Documents/Job Hunter Team"),
+        ("runtime", "Documents/Job Hunter Team/runtime-child"),
+        ("wrapper", ".jht"),
+        ("wrapper", ".jht/bin/jht.ps1"),
+        ("wrapper", "Documents/Job Hunter Team"),
+        ("wrapper", "Documents/Job Hunter Team/bin/jht.ps1"),
+    ],
+)
+def test_windows_rejects_bind_root_equality_and_descendants(
+    tmp_path, protected_node, relative_path
+):
+    profile = tmp_path / "profile"
+    safe_runtime = tmp_path / "local-app-data" / "Job Hunter Team" / "host-runtime"
+    safe_wrapper = tmp_path / "bin" / "jht.ps1"
+    rejected = profile / Path(relative_path)
+    runtime = rejected if protected_node == "runtime" else safe_runtime
+    wrapper = rejected if protected_node == "wrapper" else safe_wrapper
+    env = {
+        **os.environ,
+        "USERPROFILE": str(profile),
+        "LOCALAPPDATA": str(tmp_path / "local-app-data"),
+        "JHT_RUNTIME_DIR": str(runtime),
+        "JHT_COMPOSE_FILE": str(runtime / "docker-compose.yml"),
+        "JHT_WRAPPER_PATH": str(wrapper),
+        "JHT_RUNTIME_AUTHORITY_SELFTEST": "1",
+    }
+
+    result = subprocess.run(
+        [shutil.which("pwsh"), "-NoProfile", "-File", str(POWERSHELL_WRAPPER)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 1, result.stderr
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell is unavailable")
+def test_windows_accepts_runtime_and_wrapper_outside_binds(tmp_path):
+    profile = tmp_path / "profile"
+    runtime = tmp_path / "local-app-data" / "Job Hunter Team" / "host-runtime"
+    wrapper = profile / ".local" / "bin" / "jht.ps1"
+    result = subprocess.run(
+        [shutil.which("pwsh"), "-NoProfile", "-File", str(POWERSHELL_WRAPPER)],
+        env={
+            **os.environ,
+            "USERPROFILE": str(profile),
+            "LOCALAPPDATA": str(tmp_path / "local-app-data"),
+            "JHT_RUNTIME_DIR": str(runtime),
+            "JHT_COMPOSE_FILE": str(runtime / "docker-compose.yml"),
+            "JHT_WRAPPER_PATH": str(wrapper),
+            "JHT_RUNTIME_AUTHORITY_SELFTEST": "1",
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
