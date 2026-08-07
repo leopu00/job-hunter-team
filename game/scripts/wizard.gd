@@ -387,8 +387,7 @@ func _browse_cv() -> void:
 		_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 		_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 		_file_dialog.use_native_dialog = true
-		_file_dialog.filters = PackedStringArray([
-			"*.pdf, *.doc, *.docx, *.txt, *.md ; CV / documenti"])
+		_file_dialog.filters = PackedStringArray([UIStrings.t("wizard.file_filter")])
 		_file_dialog.file_selected.connect(_on_cv_selected)
 		add_child(_file_dialog)
 	_file_dialog.popup_centered()

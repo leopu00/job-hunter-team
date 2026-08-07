@@ -259,9 +259,9 @@ func _build_detail() -> void:
 	var verdict := _text(p.get("critic_verdict"))
 	var critic_score := "—" if p.get("critic_score") == null \
 			else ("%.1f/10" % float(p["critic_score"]))
-	_add_detail_row("VERDETTO", verdict if verdict != "" else "—",
+	_add_detail_row(UIStrings.t("cv.verdict"), verdict if verdict != "" else "—",
 			_verdict_color(verdict))
-	_add_detail_row("VOTO CRITICO", critic_score, Palette.BRIGHT)
+	_add_detail_row(UIStrings.t("cv.critic_score"), critic_score, Palette.BRIGHT)
 	_add_detail_row(UIStrings.t("cv.written_by"), "%s · %s" % [
 			_text_or(p.get("written_by"), "—"), _date(_text(p.get("written_at")))],
 			Palette.BASE)

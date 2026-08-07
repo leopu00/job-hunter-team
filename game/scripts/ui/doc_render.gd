@@ -143,4 +143,4 @@ static func safe_filename(name: String) -> String:
 				or c == "." or c == "_" or c == "-"
 		out += c if is_ok else "_"
 	out = out.lstrip(".")
-	return out if out != "" else "documento"
+	return out if out != "" else UIStrings.t("common.document")

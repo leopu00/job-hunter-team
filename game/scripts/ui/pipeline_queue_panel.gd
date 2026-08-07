@@ -103,7 +103,7 @@ func _build_header() -> void:
 	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(titles)
 	titles.add_child(TerminalTheme.label(UIStrings.t("queue.title") %
-			str(cfg.get("consumer", "?")), 24, Palette.WHITE, "xbold"))
+			UIStrings.t(str(cfg.get("consumer", "?"))), 24, Palette.WHITE, "xbold"))
 	titles.add_child(TerminalTheme.label(UIStrings.t("queue.subtitle"), 12, Palette.MUTED))
 	var badge := VBoxContainer.new()
 	row.add_child(badge)
@@ -225,18 +225,18 @@ func _build_detail() -> void:
 	if not meta.is_empty():
 		_detail.add_child(TerminalTheme.label(" · ".join(meta), 12, Palette.MUTED))
 	_detail.add_child(HSeparator.new())
-	_add_row("STATO", _value(p, "status"), Palette.MINT)
+	_add_row(UIStrings.t("pos.f_status"), _value(p, "status"), Palette.MINT)
 	_add_row("SCORE", "—" if p.get("total_score") == null \
 			else "%d/100" % int(p["total_score"]), Palette.YELLOW)
-	_add_row("TROVATA DA", "%s · %s" % [_value(p, "found_by"),
+	_add_row(UIStrings.t("queue.found_by"), "%s · %s" % [_value(p, "found_by"),
 			_date(_text(p.get("found_at")))], Palette.BASE)
 	var writer := _text(p.get("written_by"))
 	if writer != "":
-		_add_row("SCRITTA DA", "%s · %s" % [writer,
+		_add_row(UIStrings.t("cv.written_by"), "%s · %s" % [writer,
 				_date(_text(p.get("written_at")))], Palette.BASE)
 	var verdict := _text(p.get("critic_verdict"))
 	if verdict != "":
-		_add_row("VERDETTO", verdict, {"PASS": Palette.GREEN,
+		_add_row(UIStrings.t("queue.verdict"), verdict, {"PASS": Palette.GREEN,
 				"NEEDS_WORK": Palette.YELLOW, "REJECT": Palette.RED}.get(verdict, Palette.DIM))
 	var summary := _text(p.get("jd_summary"))
 	if summary != "":
