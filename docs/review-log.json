@@ -1469,6 +1469,16 @@
       "path": "docs/internal/2026-08-07-setup-guide-web-scaffolding.md",
       "description": "Handoff web della guida setup non pubblicata: route noindex, contratto canonico, registro schermate, test e stato traduzioni",
       "last_review": "2026-08-07"
+    },
+    {
+      "path": "docs/assets/icons/SOURCES.md",
+      "description": "Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale",
+      "last_review": null
+    },
+    {
+      "path": "game/assets/icons/SOURCES.md",
+      "description": "Provenienza ufficiale, condizioni d'uso e varianti Docker/Telegram immutate impiegate dalle icone della sidebar Godot",
+      "last_review": null
     }
   ]
 }
