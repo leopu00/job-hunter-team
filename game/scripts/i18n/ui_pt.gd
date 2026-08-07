@@ -1573,6 +1573,7 @@ const S := {
 	"vps.artifact.path_outside": "o caminho está fora das áreas de dados",
 	"vps.artifact.file_missing": "arquivo não encontrado no container",
 	"vps.ticket.position_missing": "a vaga não existe",
+	"vps.ssh.failed": "falha no SSH (código de saída %s)",
 	"diagnostics.section.app": "Aplicação", "diagnostics.section.system": "Sistema",
 	"diagnostics.section.runtime": "Ambiente de execução", "diagnostics.field.version": "versão",
 	"diagnostics.field.engine": "motor", "diagnostics.field.ui_language": "idioma da interface",
