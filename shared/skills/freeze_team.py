@@ -60,7 +60,7 @@ def send_esc(session):
 def main():
     sessions = list_sessions()
     if not sessions:
-        print("nessuna sessione tmux trovata")
+        print("no tmux sessions found")
         sys.exit(0)
 
     frozen = []

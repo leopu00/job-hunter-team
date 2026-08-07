@@ -80,7 +80,7 @@ def main():
         for a in totals
     }
 
-    print(f"\n{'AGENTE':<14} {'EVENTS':>7} {'kT total':>10} "
+    print(f"\n{'AGENT':<14} {'EVENTS':>7} {'kT total':>10} "
           f"{'span min':>9} {'avg kT/min':>11}")
     print("─" * 56)
     for a in sorted(totals, key=lambda x: -avg_rate[x]):
@@ -92,8 +92,8 @@ def main():
     fig, axes = plt.subplots(2, 1, figsize=(14, 9),
                              gridspec_kw={"height_ratios": [2.5, 1]})
     fig.suptitle(
-        f"JHT Token rate per agente — rolling {int(ROLL_WIN_S)}s — "
-        f"da {TEAM_START.strftime('%H:%M UTC')}",
+        f"JHT token rate by agent — {int(ROLL_WIN_S)}s rolling window — "
+        f"since {TEAM_START.strftime('%H:%M UTC')}",
         fontsize=14, fontweight="bold"
     )
 
@@ -117,7 +117,7 @@ def main():
     ax.legend(loc="upper right", fontsize=9, framealpha=0.92, ncol=1)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=timezone.utc))
     ax.set_title(
-        f"Velocità di consumo: weighted token per minuto, finestra mobile {int(ROLL_WIN_S)}s",
+        f"Consumption rate: weighted tokens per minute, {int(ROLL_WIN_S)}s rolling window",
         fontsize=12,
     )
 
@@ -129,10 +129,10 @@ def main():
                    edgecolor="black", linewidth=0.5)
     ax.set_yticks(range(len(labels))[::-1])
     ax.set_yticklabels(labels[::-1], fontsize=11)
-    ax.set_xlabel("kT/min  (media sull'intero periodo dell'agente)")
+    ax.set_xlabel("kT/min  (average over the agent's full period)")
     team_avg = sum(totals.values()) / 1000 / max(spans.values()) if spans else 0
     ax.set_title(
-        f"Velocità media per agente (team avg: {team_avg:.1f} kT/min nel periodo più lungo)",
+        f"Average rate by agent (team avg: {team_avg:.1f} kT/min over the longest period)",
         fontsize=12,
     )
     ax.grid(alpha=0.3, axis="x")

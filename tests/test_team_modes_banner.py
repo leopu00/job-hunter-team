@@ -110,7 +110,7 @@ def test_assenza_del_file_e_search(mb):
     snap = mb.snapshot()
     assert snap["mode"] == mb.MODE_SEARCH
     text = mb.banner(snap=snap)
-    assert "MODE: search" in text and "è il default" in text
+    assert "MODE: search" in text and "the default" in text
 
 
 def test_i_cinque_valori_dell_enum_sono_riconosciuti(mb):
@@ -128,7 +128,7 @@ def test_i_valori_legacy_vengono_canonicalizzati_ma_restano_visibili(mb):
     snap = mb.snapshot()
     assert snap["mode"] == mb.MODE_CARE and snap["mode_raw"] == "maintenance"
     text = mb.banner(snap=snap)
-    assert "MODE: care" in text and '"maintenance", valore legacy' in text
+    assert "MODE: care" in text and '"maintenance", legacy value' in text
 
     set_mode(mb._home(), "normal")
     snap = mb.snapshot()
@@ -142,7 +142,7 @@ def test_un_valore_fuori_enum_resta_un_ordine_attivo(mb):
     snap = mb.snapshot()
     assert snap["mode"] == "strano"
     text = mb.banner(snap=snap)
-    assert "FUORI dall'enum" in text and "ORDINE ATTIVO" in text
+    assert "OUTSIDE the enum" in text and "ACTIVE ORDER" in text
     assert mb.sourcing_stopped(snap) is True
     assert mb.has_standing_orders(snap) is True
 
@@ -154,7 +154,7 @@ def test_un_file_illeggibile_resta_sconosciuto_e_non_valutabile(mb):
     assert snap["mode"] == mb.MODE_UNKNOWN
     assert snap["exit"]["kind"] == mb.EXIT_UNAVAILABLE
     assert mb.has_standing_orders(snap) is True
-    assert "MODE: sconosciuto" in mb.banner(snap=snap)
+    assert "MODE: unknown" in mb.banner(snap=snap)
 
 
 # ── La specifica nel banner (le 4 dichiarazioni + rimando al manuale) ─────
@@ -166,7 +166,7 @@ def test_ogni_modalita_porta_le_quattro_dichiarazioni(mb):
     for mode in mb.MODES:
         set_mode(mb._home(), mode)
         text = mb.banner()
-        for marker in ("CODE ATTIVE:", "SOSPESO:", "BUDGET:", "USCITA:"):
+        for marker in ("ACTIVE QUEUES:", "SUSPENDED:", "BUDGET:", "EXIT:"):
             assert marker in text, f"{mode}: manca {marker}"
         assert "team-modes" in text, f"{mode}: manca il rimando al manuale"
 
@@ -175,7 +175,7 @@ def test_la_specifica_c_e_anche_a_modalita_search_default(mb):
     """`search` senza file è comunque una modalità con una specifica: il
     Capitano deve sapere cosa implica anche il default."""
     text = mb.banner()
-    assert "CODE ATTIVE:" in text and "USCITA:" in text
+    assert "ACTIVE QUEUES:" in text and "EXIT:" in text
 
 
 def test_la_riga_singola_resta_una_riga_con_la_specifica(mb):
@@ -193,9 +193,9 @@ def test_gli_ordini_di_care_in_produzione_si_compongono_con_la_specifica(mb):
         "stop_search": True, "discard_expired_rotating": True,
         "cv_min_score": 90, "pre_check_liveness_for_cv": True})
     text = mb.banner()
-    assert "stop_search: true — NIENTE Scout" in text
+    assert "stop_search: true — NO Scouts" in text
     assert "cv_min_score: 90" in text
-    assert "CODE ATTIVE: recheck cadenzato" in text
+    assert "ACTIVE QUEUES: scheduled recheck" in text
 
 
 # ── sourcing_stopped per modalità ─────────────────────────────────────────
@@ -227,8 +227,8 @@ def test_harvest_pending_poi_done_quando_le_candidate_finiscono(mb):
     set_mode(mb._home(), "harvest")
     snap = mb.snapshot()
     assert snap["exit"]["kind"] == mb.EXIT_PENDING
-    assert "restano 1" in snap["exit"]["detail"]
-    assert "USCITA:" in mb.banner(snap=snap)
+    assert "1 live positions" in snap["exit"]["detail"]
+    assert "EXIT:" in mb.banner(snap=snap)
 
     # La candidata riceve il CV → il raccolto è finito, e il banner lo DICE.
     conn = sqlite3.connect(mb._home() / "jobs.db")
@@ -238,8 +238,8 @@ def test_harvest_pending_poi_done_quando_le_candidate_finiscono(mb):
     snap = mb.snapshot()
     assert snap["exit"]["kind"] == mb.EXIT_DONE
     text = mb.banner(snap=snap)
-    assert "LAVORO ESAURITO" in text
-    assert "SEGNALALO all'utente" in text
+    assert "WORK EXHAUSTED" in text
+    assert "REPORT IT to the user" in text
 
 
 def test_harvest_rispetta_la_soglia_negli_orders(mb):
@@ -258,8 +258,8 @@ def test_harvest_senza_db_degrada_mai_un_falso_finito(mb):
     snap = mb.snapshot()
     assert snap["exit"]["kind"] == mb.EXIT_UNAVAILABLE
     text = mb.banner(snap=snap)
-    assert "NON VALUTABILE" in text
-    assert "LAVORO ESAURITO" not in text
+    assert "UNAVAILABLE" in text
+    assert "WORK EXHAUSTED" not in text
 
 
 def test_harvest_con_schema_rotto_degrada(mb):
@@ -294,7 +294,7 @@ def test_care_pending_con_lavoro_residuo_e_done_a_code_vuote(mb):
     conn.close()
     snap = mb.snapshot()
     assert snap["exit"]["kind"] == mb.EXIT_DONE
-    assert "CURA COMPLETA" in snap["exit"]["detail"]
+    assert "CARE COMPLETE" in snap["exit"]["detail"]
 
 
 def test_care_conta_le_scadute(mb):
@@ -304,7 +304,7 @@ def test_care_conta_le_scadute(mb):
     set_mode(mb._home(), "care")
     snap = mb.snapshot()
     assert snap["exit"]["kind"] == mb.EXIT_PENDING
-    assert "scadute=1" in snap["exit"]["detail"]
+    assert "expired=1" in snap["exit"]["detail"]
 
 
 def test_care_con_policy_economy_le_code_spente_sono_stato_voluto(mb):
@@ -319,14 +319,14 @@ def test_care_con_policy_economy_le_code_spente_sono_stato_voluto(mb):
     set_mode(mb._home(), "care")
     snap = mb.snapshot()
     assert snap["exit"]["kind"] == mb.EXIT_DONE
-    assert "OFF da policy" in snap["exit"]["detail"]
+    assert "OFF by policy" in snap["exit"]["detail"]
 
 
 def test_care_senza_db_degrada(mb):
     set_mode(mb._home(), "care")
     snap = mb.snapshot()
     assert snap["exit"]["kind"] == mb.EXIT_UNAVAILABLE
-    assert "NON dedurre" in snap["exit"]["detail"]
+    assert "DO NOT infer" in snap["exit"]["detail"]
 
 
 # ── Condizione di uscita: calibration/search/saving ───────────────────────
@@ -339,7 +339,7 @@ def test_calibration_dichiara_il_limite_il_feedback_vive_sul_cloud(mb):
     snap = mb.snapshot()
     assert snap["exit"]["kind"] == mb.EXIT_UNAVAILABLE
     assert "cloud" in snap["exit"]["detail"]
-    assert "NON VALUTABILE" in mb.banner(snap=snap)
+    assert "UNAVAILABLE" in mb.banner(snap=snap)
 
 
 def test_search_e_saving_sono_continue_mai_finite(mb):
@@ -347,7 +347,7 @@ def test_search_e_saving_sono_continue_mai_finite(mb):
         set_mode(mb._home(), mode)
         snap = mb.snapshot()
         assert snap["exit"]["kind"] == mb.EXIT_CONTINUOUS, mode
-        assert "LAVORO ESAURITO" not in mb.banner(snap=snap), mode
+        assert "WORK EXHAUSTED" not in mb.banner(snap=snap), mode
 
 
 def test_saving_non_invita_a_spendere_il_surplus(mb):
@@ -355,7 +355,7 @@ def test_saving_non_invita_a_spendere_il_surplus(mb):
     La specifica del banner deve dirlo, non lasciarlo dedurre."""
     set_mode(mb._home(), "saving")
     text = mb.banner()
-    assert "NON sblocca" in text
+    assert "does NOT unlock" in text
 
 
 # ── Il manuale e il cablaggio (skills.list + identità) ────────────────────

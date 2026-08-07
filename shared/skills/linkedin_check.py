@@ -66,19 +66,19 @@ def batch_check(position_ids):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Uso: python3 linkedin_check.py <URL> [output.png]")
+        print("Usage: python3 linkedin_check.py <URL> [output.png]")
         print("     python3 linkedin_check.py --batch ID1 ID2 ID3 ...")
         sys.exit(1)
 
     if sys.argv[1] == "--batch":
         ids = [int(x) for x in sys.argv[2:]]
-        print(f"Verifica batch: {len(ids)} posizioni")
+        print(f"Batch check: {len(ids)} positions")
         results = batch_check(ids)
-        print(f"\nRiepilogo:")
+        print(f"\nSummary:")
         for pid, status, title, company, url in results:
             print(f"  {pid}: {status} — {company} — {title}")
         closed = [r for r in results if r[1] == "CLOSED"]
-        print(f"\nChiusi: {len(closed)} / {len(results)}")
+        print(f"\nClosed: {len(closed)} / {len(results)}")
     else:
         url = sys.argv[1]
         out = sys.argv[2] if len(sys.argv) > 2 else "/tmp/linkedin-check.png"

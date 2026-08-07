@@ -46,7 +46,7 @@ def _file_for(day_str: str) -> Path:
 
 def add(note: str) -> int:
     if not note.strip():
-        print("captain_diary: nota vuota", file=sys.stderr)
+        print("captain_diary: empty note", file=sys.stderr)
         return 2
     now = _now_local()
     day = now.strftime("%Y-%m-%d")
@@ -56,14 +56,14 @@ def add(note: str) -> int:
         new_file = not path.exists()
         with path.open("a", encoding="utf-8") as f:
             if new_file:
-                f.write(f"# 🧭 Diario Capitano — {now.strftime('%A %d %B %Y')}\n\n")
+                f.write(f"# 🧭 Captain diary — {now.strftime('%A %d %B %Y')}\n\n")
             # nota su una riga (newline interni → spazi), con orario locale
             flat = " ".join(note.split())
             f.write(f"- **{now.strftime('%H:%M')}** — {flat}\n")
     except OSError as e:
-        print(f"captain_diary: scrittura fallita: {e}", file=sys.stderr)
+        print(f"captain_diary: write failed: {e}", file=sys.stderr)
         return 1
-    print(f"annotato su {path.name}")
+    print(f"saved to {path.name}")
     return 0
 
 
@@ -90,23 +90,23 @@ def handoff() -> int:
     today = now.strftime("%Y-%m-%d")
     prior = _latest_prior(today)
     if prior is None:
-        print("📭 Nessun diario di un giorno precedente — sei il primo Capitano "
-              "o i giorni prima erano off. Inizia ad annotare con `captain_diary.py add`.")
+        print("📭 No previous-day diary — you are the first Captain, or the "
+              "previous days were off. Start recording notes with `captain_diary.py add`.")
     else:
-        print("📓 PASSAGGIO DEL TESTIMONE — note del Capitano precedente "
+        print("📓 PREVIOUS CAPTAIN HANDOFF — notes from the previous Captain "
               f"({prior.stem.replace('captain-diary-', '')}):\n")
         print(_read(prior))
-        print("\n— Leggi, eredita le lezioni, NON ripetere gli stessi errori. —")
+        print("\n— Read and inherit these lessons. Do NOT repeat the same mistakes. —")
     today_txt = _read(_file_for(today))
     if today_txt:
-        print("\n🗒️  Già annotato OGGI:\n")
+        print("\n🗒️  Already recorded TODAY:\n")
         print(today_txt)
     return 0
 
 
 def today() -> int:
     txt = _read(_file_for(_now_local().strftime("%Y-%m-%d")))
-    print(txt if txt else "🗒️  Nessuna nota oggi (ancora).")
+    print(txt if txt else "🗒️  No notes today yet.")
     return 0
 
 
@@ -118,7 +118,7 @@ def main(argv) -> int:
         return handoff()
     if cmd == "today":
         return today()
-    print(f"captain_diary: comando '{cmd}' sconosciuto. Usa: add | handoff | today",
+    print(f"captain_diary: unknown command '{cmd}'. Use: add | handoff | today",
           file=sys.stderr)
     return 2
 

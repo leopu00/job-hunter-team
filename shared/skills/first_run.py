@@ -142,7 +142,7 @@ def status() -> dict:
             "created_at": _now(),
             "burst_started_at": None,
             "completed_at": None,
-            "completed_reason": "installazione già avviata" if scored > 0 else None,
+            "completed_reason": "existing installation already initialized" if scored > 0 else None,
             "scored_at_start": scored,
         }
         _write(state)
@@ -153,7 +153,7 @@ def plan_info() -> dict:
     """Roster e obiettivi derivati dall'abbonamento dichiarato dall'utente."""
     mod = _load_module("plan_registry", "plan_registry.py")
     if mod is None:
-        return {"ok": False, "reason": "plan_registry non disponibile"}
+        return {"ok": False, "reason": "plan_registry is unavailable"}
     return mod.burst_roster()
 
 
@@ -166,15 +166,15 @@ def begin_burst() -> dict:
     """
     state = status()
     if state["phase"] == PHASE_STEADY:
-        return dict(state, note="il primo avvio è già stato completato")
+        return dict(state, note="first run has already been completed")
     if state["phase"] == PHASE_BURST:
-        return dict(state, note="burst già in corso")
+        return dict(state, note="burst already in progress")
 
     info = plan_info()
     if not info.get("ok"):
         return {"ok": False, "phase": state["phase"],
-                "reason": info.get("reason", "piano non dichiarato"),
-                "hint": "chiedi all'utente di completare il passo abbonamento nel setup"}
+                "reason": info.get("reason", "plan not declared"),
+                "hint": "ask the user to complete the subscription step in setup"}
 
     state.update({
         "phase": PHASE_BURST,
@@ -220,7 +220,7 @@ def check() -> dict:
     produced = (scored - baseline) if scored is not None else 0
 
     if target and produced >= target:
-        out = complete(f"obiettivo raggiunto: {produced} posizioni con punteggio")
+        out = complete(f"goal reached: {produced} scored positions")
         return dict(out, action="completato", produced=produced, target=target)
 
     started = _parse(state.get("burst_started_at"))
@@ -228,7 +228,7 @@ def check() -> dict:
         elapsed_h = (datetime.now(timezone.utc) - started).total_seconds() / 3600.0
         if elapsed_h >= BURST_MAX_HOURS:
             out = complete(
-                f"finestra esaurita: {produced}/{target} posizioni con punteggio")
+                f"window exhausted: {produced}/{target} scored positions")
             return dict(out, action="completato", produced=produced, target=target)
 
     return dict(state, action="in corso", produced=produced, target=target)
@@ -243,11 +243,11 @@ def reset() -> dict:
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="Stato del primo avvio")
+    ap = argparse.ArgumentParser(description="First-run status")
     ap.add_argument("command", nargs="?", default="status",
                     choices=["status", "begin-burst", "check", "complete", "reset",
                              "plan"])
-    ap.add_argument("--reason", default="chiuso manualmente")
+    ap.add_argument("--reason", default="closed manually")
     args = ap.parse_args(argv)
 
     if args.command == "status":

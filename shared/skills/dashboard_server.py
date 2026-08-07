@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Server localhost per la dashboard Job Hunter.
+"""Localhost server for the Job Hunter dashboard.
 
-Serve la dashboard + API JSON + terminale tmux agenti.
+Serves the dashboard, JSON API, and agent tmux terminals.
 
-Uso:
-  python3 dashboard_server.py              # porta 8080
-  python3 dashboard_server.py --port 3000  # porta custom
+Usage:
+  python3 dashboard_server.py              # port 8080
+  python3 dashboard_server.py --port 3000  # custom port
 """
 
 import http.server
@@ -97,13 +97,13 @@ def discover_agents():
 def create_agent(role_key, number):
     """Crea un nuovo agente: worktree + branch + CLAUDE.md."""
     if role_key not in ROLE_CONFIG:
-        return {'ok': False, 'error': f'Ruolo sconosciuto: {role_key}'}
+        return {'ok': False, 'error': f'Unknown role: {role_key}'}
 
     agent_name = f"{role_key}-{number}"
     wt_path = os.path.join(REPO_ROOT, agent_name)
 
     if os.path.exists(wt_path):
-        return {'ok': False, 'error': f'Worktree {agent_name} esiste già'}
+        return {'ok': False, 'error': f'Worktree {agent_name} already exists'}
 
     emoji, model = ROLE_CONFIG[role_key]
 
@@ -164,7 +164,7 @@ def remove_agent(role_key, number):
     wt_path = os.path.join(REPO_ROOT, agent_name)
 
     if not os.path.exists(wt_path):
-        return {'ok': False, 'error': f'Worktree {agent_name} non esiste'}
+        return {'ok': False, 'error': f'Worktree {agent_name} does not exist'}
 
     try:
         # Kill sessione tmux se attiva
@@ -352,30 +352,37 @@ def _parse_scout_output(output, session_name):
             continue
 
         # Fermato
-        if any(w in line_s.lower() for w in ['fermo', 'fermati', 'mi fermo', 'pausa', 'stop']):
+        if any(w in line_s.lower() for w in [
+                'fermo', 'fermati', 'mi fermo', 'pausa',
+                'stop', 'stopped', 'stopping', 'pause', 'paused']):
             if info['action'] is None:
                 info['action'] = 'stopped'
-                info['detail'] = 'In pausa'
+                info['detail'] = 'Paused'
 
         # Fase 0
-        if 'FASE 0' in line_s or 'email LinkedIn' in line_s or 'imap_reader' in line_s:
+        if ('FASE 0' in line_s or 'PHASE 0' in line_s
+                or 'email LinkedIn' in line_s or 'imap_reader' in line_s):
             if info['phase'] is None:
                 info['phase'] = 'fase0'
 
         # Cerchi
-        m = re_mod.search(r'[Cc]erchio\s*(\d)', line_s)
+        m = re_mod.search(r'(?:[Cc]erchio|[Cc]ircle)\s*(\d)', line_s)
         if m and info['phase'] is None:
             info['phase'] = f'cerchio{m.group(1)}'
 
         # Inserimento
-        m = re_mod.search(r'ID:\s*(\d+)|#(\d{2,4})\b.*?inserit', line_s, re_mod.IGNORECASE)
+        m = re_mod.search(
+            r'ID:\s*(\d+)|#(\d{2,4})\b.*?(?:inserit|inserted)',
+            line_s, re_mod.IGNORECASE)
         if m:
             pid = m.group(1) or m.group(2)
             info['positions_found'] += 1
             if info['last_insert'] is None:
                 info['last_insert'] = f'#{pid}'
 
-        m = re_mod.search(r'Posizione inserita con ID:\s*(\d+)', line_s)
+        m = re_mod.search(
+            r'(?:Posizione inserita con|Position inserted with) ID:\s*(\d+)',
+            line_s, re_mod.IGNORECASE)
         if m:
             info['positions_found'] += 1
             if info['last_insert'] is None:
@@ -411,16 +418,16 @@ def _parse_scout_output(output, session_name):
 
         if 'db_insert' in line_s and info['action'] is None:
             info['action'] = 'inserting'
-            info['detail'] = 'Inserimento nel DB'
+            info['detail'] = 'Adding to database'
 
         if 'check-url' in line_s and info['action'] is None:
             info['action'] = 'checking'
-            info['detail'] = 'Check duplicati'
+            info['detail'] = 'Checking duplicates'
 
         # Thinking/working indicator
         if ('esc to interrupt' in line_s or 'thinking' in line_s) and info['action'] is None:
             info['action'] = 'thinking'
-            info['detail'] = 'Elaborazione...'
+            info['detail'] = 'Processing...'
 
     # Default
     if info['action'] is None:
@@ -717,14 +724,16 @@ def _parse_scorer_output(output):
         if not line_s:
             continue
 
-        if any(w in line_s.lower() for w in ['fermo', 'fermati', 'mi fermo', 'pausa', 'stop']):
+        if any(w in line_s.lower() for w in [
+                'fermo', 'fermati', 'mi fermo', 'pausa',
+                'stop', 'stopped', 'stopping', 'pause', 'paused']):
             if info['action'] is None:
                 info['action'] = 'stopped'
-                info['detail'] = 'In pausa'
+                info['detail'] = 'Paused'
 
         if 'db_update' in line_s and info['action'] is None:
             info['action'] = 'updating'
-            info['detail'] = 'Aggiornamento DB'
+            info['detail'] = 'Updating database'
 
         if 'db_query' in line_s and info['action'] is None:
             info['action'] = 'querying'
@@ -736,7 +745,7 @@ def _parse_scorer_output(output):
 
         if ('curl' in line_s or 'fetch' in line_s.lower()) and info['action'] is None:
             info['action'] = 'verifying'
-            info['detail'] = 'Verifica link'
+            info['detail'] = 'Verifying link'
 
         m = re_mod.search(r'#(\d{2,4})\b', line_s)
         if m and info['current_position'] is None:
@@ -754,29 +763,45 @@ def _categorize_exclusion(notes):
     first_line = n.split('\n')[0]
     # Tag esplicito ESCLUSA: [CAT] (formato nuovo obbligatorio)
     import re as _re
-    m = _re.search(r'esclus[ao]:\s*\[(\w+)\]', n)
+    m = _re.search(r'(?:esclus[ao]|excluded):\s*\[(\w+)\]', n)
     if m:
         return m.group(1).upper()
     # Parsing legacy
-    if any(k in n for k in ['link scaduto', 'link morto', '404', 'redirect', 'lavoro occupato', 'pagina rimossa', 'url morto']):
+    if any(k in n for k in [
+            'link scaduto', 'link morto', 'lavoro occupato', 'pagina rimossa',
+            'url morto', 'expired link', 'dead link', 'position filled',
+            'job filled', 'page removed', 'dead url', '404', 'redirect']):
         return 'LINK_MORTO'
-    if any(k in n for k in ['score < 40', 'score <40', 'score basso']):
+    if any(k in n for k in ['score < 40', 'score <40', 'score basso', 'low score']):
         return 'SCORE_BASSO'
-    if any(k in n for k in ['duplicat', 'già presente', 'stessa posizione']):
+    if any(k in n for k in [
+            'duplicat', 'già presente', 'stessa posizione',
+            'already present', 'same position']):
         return 'DUPLICATA'
-    if any(k in n for k in ['us-only', 'uk-only', 'americas', 'restrizione geografica', 'work authorization uk', 'post-brexit']):
+    if any(k in n for k in [
+            'us-only', 'uk-only', 'americas', 'restrizione geografica',
+            'geographic restriction', 'work authorization uk', 'post-brexit']):
         return 'GEO'
-    if any(k in n for k in ['lingua croata', 'tedesco obbligat', 'polacco', 'ungherese', 'français', 'dutch']):
+    if any(k in n for k in [
+            'lingua croata', 'tedesco obbligat', 'polacco', 'ungherese',
+            'croatian language', 'german required', 'polish required',
+            'hungarian required', 'français', 'dutch']):
         return 'LINGUA'
-    if any(k in n for k in ['senior con 5+', '5+ anni obbligatori', 'seniority troppo']):
+    if any(k in n for k in [
+            'senior con 5+', '5+ anni obbligatori', 'seniority troppo',
+            '5+ years required', 'too senior']):
         return 'SENIORITY'
-    if any(k in n for k in ['senza python', 'no python', 'solo java', 'solo node', 'stack incomp']):
+    if any(k in n for k in [
+            'senza python', 'solo java', 'solo node',
+            'no python', 'java only', 'node only', 'stack incomp']):
         return 'STACK'
-    if any(k in n for k in ['zero sviluppo', 'mismatch', 'ruolo non-dev', 'iam analyst', 'no coding']):
+    if any(k in n for k in [
+            'zero sviluppo', 'ruolo non-dev', 'no development',
+            'non-dev role', 'mismatch', 'iam analyst', 'no coding']):
         return 'RUOLO'
     if any(k in n for k in ['scam', 'fantasma', 'red flag']):
         return 'SCAM'
-    if any(k in n for k in ['voto critico', 'critic']):
+    if any(k in n for k in ['voto critico', 'critic score', 'critic']):
         return 'CRITICO'
     return 'NON_CATEGORIZZATA'
 
@@ -876,7 +901,7 @@ def get_scrittore_activity():
         # Se il critico è attivo → scrittore è in attesa
         if crit_info.get('action') and crit_info['action'] not in ('stopped', 'idle', None):
             info['action'] = 'critic_review'
-            info['detail'] = 'Attesa critico'
+            info['detail'] = 'Awaiting critic'
         # Eredita voto dal critico se lo scrittore non ce l'ha
         if not info.get('tmux_critic_score') and crit_info.get('tmux_critic_score'):
             info['tmux_critic_score'] = crit_info['tmux_critic_score']
@@ -1102,26 +1127,28 @@ def _parse_scrittore_output(output, is_critico=False):
         if not line_s:
             continue
 
-        if any(w in line_s.lower() for w in ['fermo', 'fermati', 'mi fermo', 'pausa', 'stop']):
+        if any(w in line_s.lower() for w in [
+                'fermo', 'fermati', 'mi fermo', 'pausa',
+                'stop', 'stopped', 'stopping', 'pause', 'paused']):
             if info['action'] is None:
                 info['action'] = 'stopped'
-                info['detail'] = 'In pausa'
+                info['detail'] = 'Paused'
 
         if 'pandoc' in line_s.lower() and info['action'] is None:
             info['action'] = 'generating_pdf'
-            info['detail'] = 'Generazione PDF'
+            info['detail'] = 'Generating PDF'
 
         if not is_critico and ('critico' in line_s.lower() or 'critic' in line_s.lower() or 'capture-pane' in line_s.lower()) and 'kill' not in line_s.lower() and info['action'] is None:
             info['action'] = 'critic_review'
-            info['detail'] = 'Attesa critico'
+            info['detail'] = 'Awaiting critic'
 
         if not is_critico and 'sleep' in line_s.lower() and info['action'] is None:
             info['action'] = 'critic_review'
-            info['detail'] = 'Attesa critico'
+            info['detail'] = 'Awaiting critic'
 
         if 'db_update' in line_s and info['action'] is None:
             info['action'] = 'updating'
-            info['detail'] = 'Aggiornamento DB'
+            info['detail'] = 'Updating database'
 
         if 'db_query' in line_s and info['action'] is None:
             info['action'] = 'querying'
@@ -1130,13 +1157,13 @@ def _parse_scrittore_output(output, is_critico=False):
         if ('esc to interrupt' in line_s or 'thinking' in line_s) and info['action'] is None:
             info['action'] = 'writing'
             if is_critico:
-                info['detail'] = 'Review in corso...'
+                info['detail'] = 'Reviewing...'
             else:
-                info['detail'] = 'Scrittura CV...'
+                info['detail'] = 'Writing CV...'
 
         if ('curl' in line_s or 'fetch' in line_s.lower()) and info['action'] is None:
             info['action'] = 'verifying'
-            info['detail'] = 'Verifica link'
+            info['detail'] = 'Verifying link'
 
         m = re_mod.search(r'#(\d{2,4})\b', line_s)
         if m and info['current_position'] is None:
@@ -1170,15 +1197,17 @@ def _parse_analista_output(output, session_name):
             continue
 
         # Fermato
-        if any(w in line_s.lower() for w in ['fermo', 'fermati', 'mi fermo', 'pausa', 'stop']):
+        if any(w in line_s.lower() for w in [
+                'fermo', 'fermati', 'mi fermo', 'pausa',
+                'stop', 'stopped', 'stopping', 'pause', 'paused']):
             if info['action'] is None:
                 info['action'] = 'stopped'
-                info['detail'] = 'In pausa'
+                info['detail'] = 'Paused'
 
         # Verifica link
         if ('curl' in line_s or 'linkedin_check' in line_s) and info['action'] is None:
             info['action'] = 'verifying'
-            info['detail'] = 'Verifica link'
+            info['detail'] = 'Verifying link'
 
         # Fetch JD
         if ('fetch' in line_s.lower() and 'MCP' in line_s) and info['action'] is None:
@@ -1188,7 +1217,7 @@ def _parse_analista_output(output, session_name):
         # DB update
         if 'db_update' in line_s and info['action'] is None:
             info['action'] = 'updating'
-            info['detail'] = 'Aggiornamento DB'
+            info['detail'] = 'Updating database'
 
         # DB query
         if 'db_query' in line_s and info['action'] is None:
@@ -1198,7 +1227,7 @@ def _parse_analista_output(output, session_name):
         # Working/thinking
         if ('esc to interrupt' in line_s or 'thinking' in line_s) and info['action'] is None:
             info['action'] = 'analyzing'
-            info['detail'] = 'Analizzando...'
+            info['detail'] = 'Analyzing...'
 
         # Position ID
         m = re_mod.search(r'#(\d{2,4})\b', line_s)
@@ -1483,9 +1512,9 @@ def get_api_data():
             elif any(x in loc_lower for x in ['milano', 'milan', 'napoli', 'torino', 'cagliari', 'bari', 'cosenza']):
                 norm = loc  # multi-city
             else:
-                norm = 'Roma, Italia'
+                norm = 'Rome, Italy'
         elif _re.search(r'\bmilan[o]?\b', loc_lower) and 'rom' not in loc_lower:
-            norm = 'Milano, Italia'
+            norm = 'Milan, Italy'
         elif loc_lower in ('remote', 'remote eu', 'full remote', 'remote europe'):
             norm = 'Remote EU'
         else:
@@ -1725,7 +1754,7 @@ def get_position_detail(pos_id):
 
     if not pos:
         conn.close()
-        return {'error': 'Posizione non trovata'}
+        return {'error': 'Position not found'}
 
     # Highlights (da position_highlights legacy + scores.pros/cons nuovo)
     highlights = {'pro': [], 'con': []}
@@ -1752,7 +1781,7 @@ def send_tmux_message(session_name, message):
             capture_output=True, timeout=3
         )
         if result.returncode != 0:
-            return {'ok': False, 'error': f'Sessione {session_name} non trovata'}
+            return {'ok': False, 'error': f'Session {session_name} not found'}
 
         # Comando 1: testo senza Enter
         subprocess.run(
@@ -1796,7 +1825,7 @@ def get_tmux_output(session_name, scroll='bottom'):
         result = subprocess.run(cap_args, capture_output=True, text=True, timeout=5)
         return {'online': True, 'output': result.stdout, 'pane_width': pane_width}
     except Exception as e:
-        return {'online': False, 'output': f'Errore: {e}', 'pane_width': 80}
+        return {'online': False, 'output': f'Error: {e}', 'pane_width': 80}
 
 
 def agent_control(session_name, action):
@@ -1844,7 +1873,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 pos_id = int(path[len('/api/position/'):])
             except ValueError:
-                self._json_response({'error': 'ID non valido'})
+                self._json_response({'error': 'Invalid ID'})
                 return
             data = get_position_detail(pos_id)
             self._json_response(data)
@@ -2018,7 +2047,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 message = body
 
             if not message:
-                self._json_response({'ok': False, 'error': 'Messaggio vuoto'})
+                self._json_response({'ok': False, 'error': 'Empty message'})
                 return
 
             result = send_tmux_message(session_name, message)
@@ -2041,12 +2070,13 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         if '/api/' in path:
             return  # Silenzio per API calls
         if 'dashboard.html' in path:
-            sys.stderr.write(f"[dashboard] Rigenerata e servita\n")
+            sys.stderr.write("[dashboard] Regenerated and served\n")
 
 
 def main():
     parser = argparse.ArgumentParser(description='Dashboard server')
-    parser.add_argument('--port', type=int, default=8080)
+    parser.add_argument('--port', type=int, default=8080,
+                        help='Port to listen on (default: 8080)')
     args = parser.parse_args()
 
     # Prima generazione dashboard classica
@@ -2054,15 +2084,15 @@ def main():
 
     server = http.server.HTTPServer(('0.0.0.0', args.port), DashboardHandler)
     print(f"\n  Job Hunter Dashboard Server")
-    print(f"  Dashboard classica: http://localhost:{args.port}")
-    print(f"  App interattiva:    http://localhost:{args.port}/app.html")
-    print(f"  API dati:           http://localhost:{args.port}/api/data")
-    print(f"  Ctrl+C per fermare\n")
+    print(f"  Classic dashboard: http://localhost:{args.port}")
+    print(f"  Interactive app:   http://localhost:{args.port}/app.html")
+    print(f"  Data API:          http://localhost:{args.port}/api/data")
+    print("  Ctrl+C to stop\n")
 
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nServer fermato.")
+        print("\nServer stopped.")
         server.server_close()
 
 

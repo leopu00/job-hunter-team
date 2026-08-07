@@ -25,9 +25,9 @@ def _fmt(t) -> str:
     head = f"#{t['id']} [pos {t['position_id']}] {t['status']}"
     if t['assigned_agent']:
         head += f" → {t['assigned_agent']}"
-    lines = [head, f"   richiesta: {t['request_text']}"]
+    lines = [head, f"   request : {t['request_text']}"]
     if t['response_text']:
-        lines.append(f"   risposta : {t['response_text']}")
+        lines.append(f"   response: {t['response_text']}")
     return "\n".join(lines)
 
 
@@ -44,12 +44,12 @@ def open_ticket(conn, position_id: int, text: str, kind: str = "custom") -> int:
     creava una riga cloud scollegata che il pull ri-importava come duplicato.
     """
     if not (text or "").strip():
-        raise ValueError("il testo della richiesta non può essere vuoto")
+        raise ValueError("request text cannot be empty")
     row = conn.execute(
         "SELECT id FROM positions WHERE id = ?", (position_id,)
     ).fetchone()
     if not row:
-        raise LookupError(f"posizione #{position_id} non trovata")
+        raise LookupError(f"position #{position_id} not found")
     cur = conn.execute(
         "INSERT INTO position_tickets (position_id, request_text, kind, status) "
         "VALUES (?, ?, ?, 'open')",
@@ -65,9 +65,9 @@ def list_open(conn) -> None:
         "ORDER BY created_at ASC"
     ).fetchall()
     if not rows:
-        print("Nessun ticket aperto.")
+        print("No open tickets.")
         return
-    print(f"Ticket APERTI ({len(rows)}) — assegnali con: ticket.py assign <id> <agente>")
+    print(f"OPEN tickets ({len(rows)}) — assign them with: ticket.py assign <id> <agent>")
     for t in rows:
         print(_fmt(t))
 
@@ -91,15 +91,15 @@ def assign(conn, ticket_id: int, agent: str) -> None:
     )
     conn.commit()
     if cur.rowcount == 0:
-        print(f"Ticket #{ticket_id} non trovato o già risolto.", file=sys.stderr)
+        print(f"Ticket #{ticket_id} not found or already resolved.", file=sys.stderr)
         sys.exit(1)
-    print(f"Ticket #{ticket_id} assegnato a {agent}.")
+    print(f"Ticket #{ticket_id} assigned to {agent}.")
 
 
 def resolve(conn, ticket_id: int, response: str) -> None:
     response = (response or "").strip()
     if not response:
-        print("La risposta non può essere vuota.", file=sys.stderr)
+        print("Response cannot be empty.", file=sys.stderr)
         sys.exit(1)
     cur = conn.execute(
         "UPDATE position_tickets SET status = 'resolved', response_text = ?, "
@@ -110,9 +110,9 @@ def resolve(conn, ticket_id: int, response: str) -> None:
     )
     conn.commit()
     if cur.rowcount == 0:
-        print(f"Ticket #{ticket_id} non trovato.", file=sys.stderr)
+        print(f"Ticket #{ticket_id} not found.", file=sys.stderr)
         sys.exit(1)
-    print(f"Ticket #{ticket_id} risolto (risposta visibile all'utente).")
+    print(f"Ticket #{ticket_id} resolved (response visible to the user).")
 
 
 def show(conn, ticket_id: int) -> None:
@@ -120,7 +120,7 @@ def show(conn, ticket_id: int) -> None:
         "SELECT * FROM position_tickets WHERE id = ?", (ticket_id,)
     ).fetchone()
     if not t:
-        print(f"Ticket #{ticket_id} non trovato.", file=sys.stderr)
+        print(f"Ticket #{ticket_id} not found.", file=sys.stderr)
         sys.exit(1)
     print(_fmt(t))
 
@@ -132,18 +132,18 @@ def for_position(conn, position_id: int) -> None:
         (position_id,),
     ).fetchall()
     if not rows:
-        print(f"Nessun ticket per la posizione {position_id}.")
+        print(f"No tickets for position {position_id}.")
         return
     for t in rows:
         print(_fmt(t))
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Gestione ticket utente→team")
+    ap = argparse.ArgumentParser(description="Manage user-to-team tickets")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    o = sub.add_parser("open", help="l'utente apre un ticket su una posizione")
+    o = sub.add_parser("open", help="open a user ticket for a position")
     o.add_argument("position_id", type=int)
-    o.add_argument("text", help="cosa chiedi al team")
+    o.add_argument("text", help="what you are asking the team")
     o.add_argument("--kind", default="custom")
     sub.add_parser("list-open")
     sub.add_parser("count-open")
@@ -168,8 +168,8 @@ def main() -> None:
             except (ValueError, LookupError) as e:
                 print(f"✗ {e}", file=sys.stderr)
                 sys.exit(1)
-            print(f"✓ ticket #{new_id} aperto su posizione #{args.position_id} "
-                  f"(status 'open', in coda al Capitano)")
+            print(f"✓ ticket #{new_id} opened for position #{args.position_id} "
+                  f"(status 'open', queued for the Captain)")
         elif args.cmd == "list-open":
             list_open(conn)
         elif args.cmd == "count-open":

@@ -1,30 +1,23 @@
 #!/usr/bin/env python3
-"""scout_workspace — claim/release SOURCE per multi-Scout (F-2.D, S-08).
+"""scout_workspace — claim or release sources for multiple Scouts (F-2.D).
 
-Diverso da `scout_coord.py` (che fa claim per `position_id` SQLite).
-Qui gestiamo claim a livello **sorgente** ("linkedin:python:IT",
-"glassdoor:python:remote") — strumento per evitare che 2 Scout
-attacchino la stessa fonte e producano 100% duplicati (causa storica
-14× Canonical, bug #25).
+Unlike `scout_coord.py`, which claims a SQLite `position_id`, this module
+claims an entire source such as "linkedin:python:IT". It prevents two Scouts
+from searching the same source and producing only duplicates.
 
-Decisione utente F-2.D:
-> "Devi attivare più scout possibili (4), incentivare la coordinazione
->  tra di loro, loro si parlano tra di loro in modo tale che lavorando
->  di squadra inizino a trovare alternative."
-
-Stato condiviso in `$JHT_HOME/agents/_team/scout_workspace.json`:
+Shared state lives in `$JHT_HOME/agents/_team/scout_workspace.json`:
 
 {
   "claims": [
     {"agent":"scout-1", "source":"linkedin:python:IT",
      "claimed_at":1779648000, "ttl_s":1800}
   ],
-  "history": [...]   // ultimi 50 eventi
+  "history": [...]   // last 50 events
 }
 
-TTL default 30 min: se uno Scout muore, dopo 30 min la sua claim scade
-e altri Scout possono prenderla. Niente lock distribuito complicato —
-JSON con clock host + cleanup retroattivo a ogni read.
+The default TTL is 30 minutes. If a Scout stops, its claim expires and another
+Scout can take it. The implementation uses host-clock timestamps and cleans up
+expired claims on every read rather than adding a distributed lock.
 
 API:
     scout_workspace.py claim <agent> <source> [--ttl-s 1800]

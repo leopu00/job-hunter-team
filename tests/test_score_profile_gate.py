@@ -92,13 +92,13 @@ class TestCheckMinimumViableProfile:
         ok, reason = profile_gate.check_minimum_viable_profile(
             str(tmp_path / 'profile' / 'candidate_profile.yml'))
         assert not ok
-        assert 'assente' in reason
+        assert 'is missing' in reason
 
     def test_empty_file_rejected(self, tmp_path):
         path = _write_profile(tmp_path, '')
         ok, reason = profile_gate.check_minimum_viable_profile(path)
         assert not ok
-        assert 'vuoto' in reason
+        assert 'is empty' in reason
 
     def test_yaml_not_dict_rejected(self, tmp_path):
         path = _write_profile(tmp_path, '- solo\n- una\n- lista\n')
@@ -109,7 +109,7 @@ class TestCheckMinimumViableProfile:
         path = _write_profile(tmp_path, 'name: "unclosed\n  {{{')
         ok, reason = profile_gate.check_minimum_viable_profile(path)
         assert not ok
-        assert 'parsabile' in reason
+        assert 'could not be parsed' in reason
 
     def test_no_target_role_rejected(self, tmp_path):
         path = _write_profile(tmp_path, 'name: "Test User"\nlocation: "Milano"\n')
@@ -121,7 +121,7 @@ class TestCheckMinimumViableProfile:
         path = _write_profile(tmp_path, ONLY_TARGET_PROFILE)
         ok, reason = profile_gate.check_minimum_viable_profile(path)
         assert not ok
-        assert 'solo target_role' in reason
+        assert 'only target_role' in reason
 
     def test_placeholder_template_rejected(self, tmp_path):
         path = _write_profile(tmp_path, PLACEHOLDER_PROFILE)
@@ -222,7 +222,7 @@ class TestInsertScoreGate:
         with pytest.raises(SystemExit) as exc:
             db_insert.insert_score(_score_args())
         assert exc.value.code == 1
-        assert 'SCORE RIFIUTATO' in capsys.readouterr().out
+        assert 'SCORE REJECTED' in capsys.readouterr().out
         assert _count_scores(score_db) == 0
 
     def test_allowed_with_minimal_profile(self, score_db, tmp_path, monkeypatch):

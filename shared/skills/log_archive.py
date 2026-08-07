@@ -172,7 +172,7 @@ def main() -> None:
 
     # lock anti-concorrenza (due sweep sovrapposti = taglio doppio)
     if LOCK.exists() and time.time() - LOCK.stat().st_mtime < 3600:
-        print(json.dumps({"ok": False, "error": "lock attivo (altro giro in corso)"}))
+        print(json.dumps({"ok": False, "error": "lock active (another run is in progress)"}))
         sys.exit(1)
     LOCK.parent.mkdir(parents=True, exist_ok=True)
     LOCK.write_text(str(os.getpid()))

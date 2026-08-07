@@ -545,7 +545,7 @@ def main():
     ap.add_argument("--provider", default="openai")
     ap.add_argument("--weekly", type=int, default=None)
     ap.add_argument("--last-jsonl", default=None,
-                    help="legge gli ultimi sample da questo path per history")
+                    help="read the latest samples from this path as history")
     args = ap.parse_args()
 
     parsed = {
@@ -566,7 +566,7 @@ def main():
                 last = same_provider[-1]
             history = same_provider[-30:]
         except (OSError, json.JSONDecodeError) as e:
-            print(f"warn: impossibile leggere history: {e}", file=sys.stderr)
+            print(f"warn: unable to read history: {e}", file=sys.stderr)
 
     out = compute_metrics(parsed, last, history)
     print(json.dumps(out, indent=2))

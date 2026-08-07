@@ -234,15 +234,15 @@ def disabled_reason(kind: str, policy: dict | None = None) -> str:
     """Motivo leggibile per code/log ("" se abilitato)."""
     mode = current_mode()
     if mode == "saving":
-        return "modalità RISPARMIO attiva (mode=saving)"
+        return "SAVING mode is active (mode=saving)"
     if mode == MODE_UNKNOWN:
-        return ("capitano-maintenance.json presente ma non interpretabile: "
-                "enrichment autonomo sospeso finché un umano non lo guarda")
+        return ("capitano-maintenance.json exists but cannot be interpreted: "
+                "autonomous enrichment is suspended until a person reviews it")
     p = policy or load_policy()
     if p.get("economy"):
-        return "policy RISPARMIO attiva (economy=true)"
+        return "SAVING policy is active (economy=true)"
     if not p.get(kind, {}).get("enabled", True):
-        return f"disabilitato dalla policy ({kind}.enabled=false)"
+        return f"disabled by policy ({kind}.enabled=false)"
     return ""
 
 
@@ -263,22 +263,22 @@ def _parse_value(raw: str, how: str):
             return True
         if low in ("false", "0", "off", "no"):
             return False
-        raise ValueError(f"valore booleano non valido: {raw!r}")
+        raise ValueError(f"invalid boolean value: {raw!r}")
     # int_or_null / interi con range applicativo
     low = raw.strip().lower()
     if how == "int_or_null" and low in ("", "null", "none", "off"):
         return None
     value = int(raw)
     if how == "score" and not 0 <= value <= 100:
-        raise ValueError("lo score deve essere fra 0 e 100")
+        raise ValueError("score must be between 0 and 100")
     if how == "days" and not 1 <= value <= 365:
-        raise ValueError("i giorni devono essere fra 1 e 365")
+        raise ValueError("days must be between 1 and 365")
     return value
 
 
 def main() -> None:
     p = argparse.ArgumentParser(
-        description="Policy di risparmio per l'enrichment autonomo"
+        description="Savings policy for autonomous enrichment"
     )
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("show")

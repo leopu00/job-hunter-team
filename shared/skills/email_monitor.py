@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
-"""email_monitor — poll inbox IMAP, estrae link job dagli alert email (F-2.C).
+"""email_monitor — poll IMAP and extract job links from email alerts (F-2.C).
 
-Strategia utente (decisione 2026-05-17, generalizzata 2026-06-20): l'utente crea
-un'email DEDICATA (es. nome.jht@gmail.com) + setta forward rules sul client
-primario per inoltrarci gli alert di lavoro — non solo LinkedIn/Glassdoor/Indeed
-ma QUALSIASI piattaforma che notifica via mail (board nazionali, portali di
-città, community di nicchia). Lo Scout monta questa skill a inizio giornata:
-legge le nuove email, estrae i link job, push in `positions` via db_insert.
+The user creates a DEDICATED inbox and forwards job alerts to it from any
+platform, not only LinkedIn, Glassdoor, or Indeed. At the start of the day the
+Scout reads new messages, extracts job links, and adds positions through
+db_insert.
 
-Vantaggi:
-- Aggira il cookie wall di LinkedIn (bug #2 della doc F-2): l'email è già
-  "pre-filtrata sul target" dall'utente.
-- Sorgente passiva: i job arrivano, lo Scout non deve indovinare keyword.
-- Cross-provider: funziona uguale su Claude/Codex/Kimi (zero Playwright).
-- Any-platform: la casella è dedicata → di default processiamo TUTTI i mittenti
-  (non solo i 3 noti). Estrazione precisa per i provider conosciuti, generica
-  (filtrata + cappata) per gli sconosciuti — lo Scout, intelligente, valida.
+Benefits:
+- Bypasses LinkedIn's cookie wall because alerts are already filtered by the
+  user.
+- Passive source: jobs arrive without the Scout guessing keywords.
+- Cross-provider: identical behavior on Claude, Codex, and Kimi.
+- Any platform: the dedicated inbox processes every sender by default. Known
+  providers use precise extraction; unknown providers use bounded generic
+  extraction that the Scout validates.
 
 Config (`$JHT_HOME/credentials/email_monitor.json`):
 {
@@ -24,28 +22,27 @@ Config (`$JHT_HOME/credentials/email_monitor.json`):
   "user": "nome.jht@gmail.com",
   "password": "<app-password>",
   "folder": "INBOX",
-  "from_filters": []   # OPZIONALE: vuoto/assente = processa TUTTA la casella
-                       # (inbox dedicata). Valorizzato = allow-list di mittenti.
+  "from_filters": []   # optional: empty/missing processes the whole dedicated
+                       # inbox; otherwise it is a sender allowlist
 }
 
-State idempotency in `$JHT_HOME/state/email_monitor_seen.json` con set di
-Message-ID già processati — re-run safe ogni 30 min senza duplicati.
+Idempotency state lives in `$JHT_HOME/state/email_monitor_seen.json` as a set
+of processed Message-IDs, so a rerun does not create duplicates.
 
 CLI:
     python3 /app/shared/skills/email_monitor.py poll
-    → stdout JSONL: 1 riga per nuovo job link estratto
+    → stdout JSONL: one row per newly extracted job link
       {"url": "...", "source": "linkedin-email|email:<domain>", "subject": "...",
        "sender": "...", "received_at": "..."}
 
     python3 /app/shared/skills/email_monitor.py poll --since-days 1
-    → restringe ricerca a email degli ultimi N giorni
+    → restrict the search to messages from the last N days
 
     python3 /app/shared/skills/email_monitor.py count
-    → conta le nuove email per mittente SENZA scaricarne il body (aiuta il
-      Capitano a stimare il VOLUME e bilanciare quante elaborarne)
+    → count new messages by sender WITHOUT downloading their bodies
 
     python3 /app/shared/skills/email_monitor.py status
-    → mostra config + quante email già processate
+    → show configuration and the processed-message count
 """
 from __future__ import annotations
 

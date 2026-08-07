@@ -1,31 +1,30 @@
 #!/usr/bin/env python3
-"""linkedin_access — search + fetch LinkedIn jobs SENZA login (F-2.A).
+"""linkedin_access — search and fetch LinkedIn jobs WITHOUT login (F-2.A).
 
-**Metodo documentato dal repo legacy job-hunter/scout-3/** (febbraio 2026,
-ri-confermato 2026-05-17):
+Method retained from the legacy job-hunter/scout-3 repository:
 
-  Link `/comm/jobs/view/ID`  (dalle email LinkedIn, richiede login)
-    → conversione → `/jobs/view/ID`
-    → endpoint **PUBBLICO**, HTML 200, JD leggibile via parser BS4
+  `/comm/jobs/view/ID` link from a LinkedIn email (login required)
+    → convert to `/jobs/view/ID`
+    → PUBLIC endpoint, HTML 200, job description readable with BeautifulSoup
 
   Search:  `linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search`
-    → endpoint guest, no auth, HTML con `data-entity-urn="urn:li:jobPosting:<ID>"`
+    → guest endpoint, no authentication, HTML containing the job-posting ID
 
-**Niente Playwright per LinkedIn**: requests + UA realistico sono
-sufficienti. Niente cookies, niente persistent context, niente login.
+LinkedIn does not need Playwright here: requests with a realistic user agent
+are sufficient. No cookies, persistent browser context, or login are used.
 
 CLI:
     python3 linkedin_access.py search \\
         --keywords "python junior" --location "Italy" --limit 25 \\
         --posted-within-days 7
-    → stdout JSONL: 1 job per riga {job_id, url, title, company, location, source}
+    → stdout JSONL: one job per row
 
     python3 linkedin_access.py fetch-job <URL_o_ID>
     → stdout JSON: {url, title, company, location, jd_text, deadline,
                     seniority, employment_type, posted_at, ...}
 
     python3 linkedin_access.py convert-url <URL_o_ID>
-    → normalizza /comm/jobs/view/<ID> in /jobs/view/<ID>
+    → normalize /comm/jobs/view/<ID> to /jobs/view/<ID>
 """
 from __future__ import annotations
 
@@ -177,7 +176,7 @@ def fetch_job(url_or_id: str) -> dict:
 
     jid = extract_job_id(url_or_id)
     if not jid:
-        return {"error": f"job_id non estraibile da: {url_or_id}"}
+        return {"error": f"could not extract job_id from: {url_or_id}"}
     url = public_url(jid)
 
     try:
@@ -212,7 +211,7 @@ def fetch_job(url_or_id: str) -> dict:
         # Job scaduto → page_title è cose tipo "476 Python jobs in Italy"
         if "jobs in" in page_title.lower() or "offerte di lavoro" in page_title.lower():
             return {"job_id": jid, "url": final_url, "status": 200,
-                    "expired": True, "note": "redirect a SERP — job scaduto"}
+                    "expired": True, "note": "redirected to a SERP — expired job"}
 
     # JD body
     jd_text = ""
@@ -293,7 +292,7 @@ def main(argv):
             print(public_url(jid))
             return 0
         else:
-            print(f"job_id non estraibile da: {args.url_or_id}", file=sys.stderr)
+            print(f"could not extract job_id from: {args.url_or_id}", file=sys.stderr)
             return 1
 
 
