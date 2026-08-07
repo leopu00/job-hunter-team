@@ -32,13 +32,13 @@ export default function HomeTrailer() {
 
         <section
           aria-label="Music credit"
-          className="mt-4 border border-[var(--color-border)] bg-[var(--color-bg-muted)] p-4 text-xs leading-5 text-[var(--color-text-muted)]"
+          className="mt-4 border border-[var(--color-border)] bg-[var(--color-card)] p-4 text-xs leading-5 text-[var(--color-muted)]"
         >
           <p>Covert Affair Kevin MacLeod (incompetech.com)</p>
           <p>Licensed under Creative Commons: By Attribution 4.0</p>
           <p>
             <a
-              className="underline underline-offset-2 hover:text-[var(--color-text)]"
+              className="underline underline-offset-2 hover:text-[var(--color-white)]"
               href="https://creativecommons.org/licenses/by/4.0/"
             >
               https://creativecommons.org/licenses/by/4.0/
