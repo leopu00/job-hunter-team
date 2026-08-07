@@ -80,24 +80,24 @@ def check_minimum_viable_profile(path=None):
         path = _default_profile_path()
 
     if not os.path.isfile(path):
-        return False, f"profilo candidato assente: file non trovato ({path})"
+        return False, f"candidate profile is missing: file not found ({path})"
 
     try:
         import yaml
     except ImportError:
-        return False, ("pyyaml non disponibile: impossibile verificare il "
-                       "profilo (uv pip install --user pyyaml)")
+        return False, ("pyyaml is not available: the profile cannot be checked "
+                       "(uv pip install --user pyyaml)")
 
     try:
         with open(path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
     except yaml.YAMLError as e:
-        return False, f"profilo candidato non parsabile (YAML invalido): {e}"
+        return False, f"candidate profile could not be parsed (invalid YAML): {e}"
     except OSError as e:
-        return False, f"profilo candidato non leggibile: {e}"
+        return False, f"candidate profile could not be read: {e}"
 
     if not isinstance(data, dict) or not data:
-        return False, "profilo candidato vuoto (nessun campo compilato)"
+        return False, "candidate profile is empty (no fields completed)"
 
     candidate = data.get('candidate') if isinstance(data.get('candidate'), dict) else {}
     personal = data.get('personal') if isinstance(data.get('personal'), dict) else {}
@@ -109,12 +109,12 @@ def check_minimum_viable_profile(path=None):
         target_roles[0] if target_roles else None,
     )
     if not target_role:
-        return False, ("profilo candidato senza titolo/target professionale "
-                       "(target_role): uno score senza nemmeno il target non ha senso")
+        return False, ("candidate profile has no job title or professional target "
+                       "(target_role): a score without a target is not meaningful")
 
     name = _first_str(data.get('name'), candidate.get('name'), personal.get('name'))
     if name and name.lower() == _PLACEHOLDER_NAME:
-        return False, ("profilo candidato = template non compilato "
+        return False, ("candidate profile is an unedited template "
                        "(name placeholder 'Nome Cognome')")
 
     # Secondo segnale minimo: senza NIENTE oltre al target_role ogni
@@ -128,8 +128,8 @@ def check_minimum_viable_profile(path=None):
         _has_items(data.get('experience')) or _has_items(candidate.get('experience')),
     ))
     if not has_second_signal:
-        return False, ("profilo candidato con il solo target_role: nessun altro "
-                       "segnale (nome, skills, esperienza, location o lingue)")
+        return False, ("candidate profile contains only target_role: no other "
+                       "signal (name, skills, experience, location, or languages)")
 
     return True, ""
 

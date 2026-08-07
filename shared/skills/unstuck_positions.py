@@ -96,20 +96,20 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='Reset positions stuck in writing/checked')
     parser.add_argument(
         '--stale-hours', type=float, default=2.0,
-        help='Soglia ore di inattivita per considerare una row stuck (default 2.0)'
+        help='Hours of inactivity before a row is considered stuck (default: 2.0)'
     )
     parser.add_argument(
         '--apply', action='store_true',
-        help='Esegue il reset. Senza, solo lista (dry-run).'
+        help='Apply the reset; without this flag, only list rows (dry run).'
     )
     parser.add_argument(
         '--include-checked', action='store_true',
-        help='Include anche positions in status=checked (Scorer killed mid-run).'
+        help='Also include positions with status=checked (Scorer terminated mid-run).'
     )
     parser.add_argument(
         '--audit-note',
-        default='auto-reset at boot (Scrittore/Scorer killed mid-run)',
-        help='Stringa che finisce in positions.notes per audit trail.'
+        default='automatic reset at boot (Scrittore/Scorer terminated mid-run)',
+        help='Text appended to positions.notes for the audit trail.'
     )
     args = parser.parse_args(argv)
 

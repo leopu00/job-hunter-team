@@ -346,14 +346,14 @@ def _log(payload: dict) -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="spawn_stagger",
-        description="Sfasamento iniziale di un worker, derivato dal suo periodo.")
-    ap.add_argument("agent", help="nome agente (es. scout-3)")
+        description="Initial worker offset derived from its period.")
+    ap.add_argument("agent", help="agent name (for example, scout-3)")
     ap.add_argument("--arm", action="store_true",
-                    help="pre-arma il throttle del worker e aggiorna il ledger")
+                    help="pre-arm the worker throttle and update the ledger")
     ap.add_argument("--json", action="store_true",
-                    help="stampa la decisione completa invece dei soli secondi")
+                    help="print the full decision instead of seconds only")
     ap.add_argument("--peers", default=None,
-                    help="lista agenti separata da virgola, al posto di tmux")
+                    help="comma-separated agent list instead of tmux discovery")
     args = ap.parse_args(argv)
 
     candidates = None

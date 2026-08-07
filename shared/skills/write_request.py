@@ -47,7 +47,7 @@ def request_cv(position_id: int, mode: str) -> dict:
     if not row:
         return {
             "ok": False,
-            "error": f"Posizione #{position_id} non trovata",
+            "error": f"Position #{position_id} not found",
             "status_code": "NOT_FOUND",
         }
 
@@ -56,8 +56,8 @@ def request_cv(position_id: int, mode: str) -> dict:
             return {
                 "ok": False,
                 "error": (
-                    f"Posizione in stato '{row['status']}': richiesta CV "
-                    f"ammessa solo da 'scored'"
+                    f"Position has status '{row['status']}': a CV request "
+                    f"is allowed only from 'scored'"
                 ),
                 "status_code": "BAD_STATUS",
                 "id": row["id"],
@@ -68,8 +68,8 @@ def request_cv(position_id: int, mode: str) -> dict:
             return {
                 "ok": False,
                 "error": (
-                    f"Application gia' in lavorazione (o consegnata) per "
-                    f"#{position_id}"
+                    f"An application is already being processed (or was "
+                    f"delivered) for #{position_id}"
                 ),
                 "status_code": "ALREADY_APPLIED",
                 "id": row["id"],
@@ -103,14 +103,14 @@ def request_cv(position_id: int, mode: str) -> dict:
 
 def main() -> None:
     p = argparse.ArgumentParser(
-        description="Richiesta CV user-driven (Writer-on-demand, V6)"
+        description="User-driven CV request (Writer-on-demand, V6)"
     )
     p.add_argument("position_id", type=int)
     p.add_argument(
         "--mode",
         choices=["on", "off"],
         default="on",
-        help="'on' = setta write_requested=1, 'off' = annulla (toggle).",
+        help="'on' sets write_requested=1; 'off' cancels the request.",
     )
     args = p.parse_args()
 

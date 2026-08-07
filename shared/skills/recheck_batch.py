@@ -68,19 +68,19 @@ def _expired_by_date(conn, row):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Pre-filtro meccanico del recheck cadenzato (modalità cura)")
+        description="Mechanical pre-filter for scheduled care-mode rechecks")
     ap.add_argument("--limit", type=int, default=10,
-                    help="Dimensione del batch dalla coda (default 10; bounded per design)")
+                    help="Queue batch size (default 10; bounded by design)")
     ap.add_argument("--ids", type=int, nargs="+", default=None,
-                    help="Posizioni specifiche invece della coda")
+                    help="Specific positions instead of the queue")
     ap.add_argument("--min-score", type=int, default=None,
-                    help="Override soglia score (default: enrichment policy)")
+                    help="Score threshold override (default: enrichment policy)")
     ap.add_argument("--older-than-days", type=int, default=None,
-                    help="Override anzianità (default: enrichment policy, 14gg)")
+                    help="Age override (default: enrichment policy, 14 days)")
     ap.add_argument("--dry-run", action="store_true",
-                    help="Solo verifica e report, nessuna scrittura su DB")
+                    help="Check and report only; do not write to the database")
     ap.add_argument("--json", action="store_true",
-                    help="Report JSON su una riga (il default resta umano)")
+                    help="Single-line JSON report (default is human-readable)")
     args = ap.parse_args()
 
     conn = get_db()
@@ -91,8 +91,8 @@ def main():
     else:
         due = recheck_due_rows(conn, args.min_score, args.older_than_days)
         if due is None:
-            print("Recheck cadenzato: OFF per enrichment-policy "
-                  "(stato voluto, non un bug). Nessun batch.")
+            print("Scheduled recheck: OFF by enrichment policy "
+                  "(intentional state, not a bug). No batch.")
             conn.close()
             sys.exit(1)
         all_rows, _, _ = due
@@ -106,7 +106,7 @@ def main():
             results.append({"id": row["id"], "company": row["company"],
                             "title": row["title"], "score": row["total_score"],
                             "outcome": "REVIEW", "state": "NO_URL",
-                            "evidence": "posizione senza URL — serve giudizio"})
+                            "evidence": "position has no URL — judgment required"})
             continue
         res = recheck(url, row["title"])
         state = res.get("state")
@@ -133,7 +133,7 @@ def main():
                                 else "UNVERIFIED")
             if expired_date:
                 entry["evidence"] = ((entry.get("evidence") or "") +
-                                     " | expires_at già passata")
+                                     " | expires_at has already passed")
         results.append(entry)
 
     conn.close()
@@ -151,25 +151,25 @@ def main():
                          ensure_ascii=False, default=str))
         return
 
-    print(f"\nRecheck batch — {len(results)} posizioni verificate "
+    print(f"\nRecheck batch — {len(results)} positions checked "
           f"(score DESC{', DRY-RUN' if args.dry_run else ''}):")
-    print(f"  OK aperte e aggiornate ({len(refreshed)}): "
+    print(f"  OK open and refreshed ({len(refreshed)}): "
           + (", ".join(f"#{r['id']}" for r in refreshed) or "—"))
     if review:
-        print(f"\n  DA GIUDICARE — evidenza di chiusura ({len(review)}), "
-              "l'esclusione la decidi TU (mai lo script):")
+        print(f"\n  NEEDS REVIEW — closure evidence ({len(review)}); "
+              "YOU decide whether to exclude it (never the script):")
         for r in review:
             print(f"    #{r['id']} [{r['score']}] {r['company']} — {r['title']}")
             print(f"       {r['state']} ({r.get('method')}, http={r.get('http')}): "
                   f"{r['evidence']}")
     if unverified:
-        print(f"\n  NON VERIFICABILI ({len(unverified)}) — one-shot browser "
-              "tuo, poi decidi (is_open resta invariato):")
+        print(f"\n  UNVERIFIABLE ({len(unverified)}) — run your own one-shot "
+              "browser check, then decide (is_open stays unchanged):")
         for r in unverified:
             print(f"    #{r['id']} [{r['score']}] {r['company']} — {r['title']}: "
                   f"{r['evidence']}")
     if not args.ids and remaining > 0:
-        print(f"\n  In coda restano {remaining} posizioni (prossimi batch).")
+        print(f"\n  {remaining} positions remain queued for later batches.")
 
 
 if __name__ == "__main__":

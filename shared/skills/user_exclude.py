@@ -1,31 +1,23 @@
 #!/usr/bin/env python3
-"""user_exclude.py — l'utente esclude (o ripristina) una posizione.
+"""user_exclude.py — let the user exclude or restore a position.
 
-L'esclusione è una DECISIONE dell'utente, non un esito del team: "questa non
-mi interessa, non spenderci altri token". Effetto: `status = 'excluded'`, che
-fa uscire la posizione dalle code agenti (`next-for-recheck`,
-`next-for-categorize` e compagnia filtrano già sullo stato) — così nessuno
-ri-verifica la liveness di un annuncio che l'utente ha già scartato.
+Exclusion is a USER decision, not a team outcome. It sets
+`status = 'excluded'`, which removes the position from agent queues so no one
+spends more tokens rechecking a job the user has rejected.
 
-Reversibile per costruzione: `user_excluded_prev_status` conserva lo stato
-precedente, e `restore` lo rimette dov'era.
+The action is reversible: `user_excluded_prev_status` stores the previous
+state and `restore` puts it back.
 
     python3 user_exclude.py exclude 42 --reason not_interested
-    python3 user_exclude.py exclude 42 --reason other --note "sede sbagliata"
+    python3 user_exclude.py exclude 42 --reason other --note "wrong location"
     python3 user_exclude.py restore 42
 
-Perché questo file esiste, dato che l'API web fa già la stessa cosa: la logica
-viveva SOLO dentro `web/app/api/positions/[legacyId]/user-exclude/route.ts`,
-quindi era raggiungibile solo da un browser. Il CLI — e gli agenti LLM che lo
-guidano — non avevano modo di escludere una posizione. Lo stesso pattern di
-`write_request.py`, che è la fonte per `/cv <id>` di Telegram mentre il web ne
-tiene una copia TS inline.
+This file exposes the same capability as the web API to the CLI and agents.
+It follows the `write_request.py` pattern used for Telegram's `/cv <id>`.
 
-⚠️ Le due implementazioni vanno tenute allineate a mano: se cambi le regole
-qui, cambia anche la route TS (e viceversa). Nessun test le confronta ancora —
-vedi [JHT-CLI-AGENT-PARITY] nel BACKLOG.
+Keep the Python and TypeScript implementations aligned when changing rules.
 
-Output: una riga JSON su stdout, exit 0 se ok / 1 se no.
+Output: one JSON row on stdout; exit 0 on success or 1 on failure.
   {"ok": true, "id": 42, "action": "exclude", "status": "excluded",
    "previous_status": "scored", "reason": "not_interested", "note": null}
 """
@@ -55,12 +47,12 @@ VALID_REASONS = (
 
 def exclude(position_id: int, reason: str, note: str | None = None) -> dict:
     if reason not in VALID_REASONS:
-        return {"ok": False, "error": f"causa non valida: {reason}",
+        return {"ok": False, "error": f"invalid reason: {reason}",
                 "valid_reasons": list(VALID_REASONS)}
     # 'other' senza spiegazione è un'esclusione che fra un mese non saprai
     # rileggere. La UI lo impone già; qui vale lo stesso.
     if reason == "other" and not (note or "").strip():
-        return {"ok": False, "error": "la causa 'other' richiede --note"}
+        return {"ok": False, "error": "reason 'other' requires --note"}
 
     conn = get_db()
     ensure_schema(conn)
@@ -70,7 +62,7 @@ def exclude(position_id: int, reason: str, note: str | None = None) -> dict:
             (position_id,),
         ).fetchone()
         if not row:
-            return {"ok": False, "error": f"posizione #{position_id} non trovata"}
+            return {"ok": False, "error": f"position #{position_id} not found"}
 
         # Se è GIÀ esclusa, non sovrascrivere prev_status con 'excluded':
         # perderebbe per sempre lo stato reale da cui ripristinare.
@@ -114,7 +106,7 @@ def restore(position_id: int) -> dict:
             (position_id,),
         ).fetchone()
         if not row:
-            return {"ok": False, "error": f"posizione #{position_id} non trovata"}
+            return {"ok": False, "error": f"position #{position_id} not found"}
 
         target = row["user_excluded_prev_status"] or "scored"
         conn.execute(
@@ -146,12 +138,12 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    ex = sub.add_parser("exclude", help="escludi una posizione")
+    ex = sub.add_parser("exclude", help="exclude a position")
     ex.add_argument("position_id", type=int)
     ex.add_argument("--reason", required=True, choices=list(VALID_REASONS))
-    ex.add_argument("--note", help="obbligatoria con --reason other")
+    ex.add_argument("--note", help="required with --reason other")
 
-    re_ = sub.add_parser("restore", help="riporta la posizione allo stato precedente")
+    re_ = sub.add_parser("restore", help="restore the position to its previous status")
     re_.add_argument("position_id", type=int)
 
     args = p.parse_args()

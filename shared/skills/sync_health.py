@@ -231,30 +231,30 @@ def scan():
                 lag_h = (dbm - pcur) / 3600
             if lag_h is not None and lag_h > STALE_HOURS:
                 add("push_behind", "HIGH",
-                    f"positions.updated_at max={db_max} ma cursore push={push_val} "
+                    f"positions.updated_at max={db_max}, but push cursor={push_val} "
                     f"(lag ~{lag_h if lag_h != float('inf') else '∞'}h > {STALE_HOURS}h)",
-                    "Il push non converge. Controlla logs/daemon.log per 413 / "
-                    "'Push interrotto'. Con il fix chunking il backlog si drena da "
-                    "solo; se resta indietro forza un ciclo: `jht cloud push` e "
-                    "riduci i chunk via JHT_PUSH_POS_CHUNK=40 se ancora 413.")
+                    "Push is not converging. Check logs/daemon.log for 413 or "
+                    "'Push interrupted'. Chunking should drain the backlog; if it "
+                    "still lags, force a cycle with `jht cloud push` and reduce "
+                    "chunks via JHT_PUSH_POS_CHUNK=40 if 413 persists.")
 
     # 2) PUSH ERRORS dal log (evidenza diretta di 413 / interruzioni).
     if working and logs["push_fail_hits"] > 0:
         add("push_errors", "HIGH",
-            f"{logs['push_fail_hits']} occorrenze di push-fail/413 nella coda "
-            f"({LOG_TAIL} righe) di daemon.log",
-            "Push in errore. Se sono 413: il chunking deve drenare; se 'riga "
-            "singola SCARTATA' → una posizione anomala supera il limite server, "
-            "va investigata. Escala al Capitano col conteggio.")
+            f"{logs['push_fail_hits']} push-fail/413 occurrences in the last "
+            f"{LOG_TAIL} lines of daemon.log",
+            "Push is failing. For 413 errors, chunking should drain the backlog; "
+            "if a single row is discarded, one unusual position exceeds the "
+            "server limit and must be investigated. Escalate the count to the Captain.")
 
     # 3) PULL CHURN — il pull riapplica troppe righe per tick, ripetutamente.
     if working and logs["pull_churn_ticks"] >= CHURN_TICKS:
         add("pull_churn", "MEDIUM",
-            f"{logs['pull_churn_ticks']} tick con >= {CHURN_ROWS} positions "
-            f"applicate (max {logs['pull_max_applied']}) nella coda daemon.log",
-            "Sintomo del loop pull incantato (cursore non converge). Verifica "
-            "che il fix cursore (Date-compare + ORDER) sia deployato; il pull a "
-            "regime deve applicare ~0 righe a riposo.")
+            f"{logs['pull_churn_ticks']} ticks with >= {CHURN_ROWS} positions "
+            f"applied (max {logs['pull_max_applied']}) in the daemon.log tail",
+            "This suggests a stuck pull loop whose cursor is not converging. "
+            "Verify the Date-compare + ORDER cursor fix is deployed; an idle "
+            "steady-state pull should apply about 0 rows.")
 
     # 4) CURSOR STALE — evidenza secondaria (i file cursore avanzano solo su
     #    lavoro reale; da soli non provano un guasto, ma a team attivo + DB
@@ -268,10 +268,11 @@ def scan():
             fresh_db = dbm is not None and (time.time() - dbm) / 3600 < STALE_HOURS
             if fresh_db:
                 add("cursor_stale", "MEDIUM",
-                    f"cursore {label} ({cur['file']}) fermo da {age}h ma il DB "
-                    f"ha attività < {STALE_HOURS}h fa (updated_at max={db_max})",
-                    "La sync non sta avanzando il cursore mentre il team produce. "
-                    "Correla con push_behind/push_errors/pull_churn.")
+                    f"{label} cursor ({cur['file']}) has not moved for {age}h, "
+                    f"but the database was active < {STALE_HOURS}h ago "
+                    f"(updated_at max={db_max})",
+                    "Sync is not advancing its cursor while the team produces data. "
+                    "Correlate with push_behind, push_errors, and pull_churn.")
 
     high = [p for p in problems if p["severity"] == "HIGH"]
     return {
@@ -293,30 +294,30 @@ def main():
     if "--json" in sys.argv:
         print(json.dumps(res, indent=2))
     else:
-        state = "SANO" if res["healthy"] else "PROBLEMI"
+        state = "HEALTHY" if res["healthy"] else "PROBLEMS"
         print(f"sync-health: {state}  (cloud_enabled={res['cloud_enabled']}, "
               f"team_working={res['team_working']})")
         pc = res["push_cursor"]
         plc = res["pull_cursor"]
         print(f"  push cursor : positions={pc.get('positions')} "
-              f"(file {'ok' if pc.get('exists') else 'ASSENTE'}, "
+              f"(file {'ok' if pc.get('exists') else 'MISSING'}, "
               f"age {pc.get('mtime_age_h')}h)")
         print(f"  pull cursor : since={plc.get('since')} "
-              f"(file {'ok' if plc.get('exists') else 'ASSENTE'}, "
+              f"(file {'ok' if plc.get('exists') else 'MISSING'}, "
               f"age {plc.get('mtime_age_h')}h)")
         print(f"  db max upd  : {res['db_positions_max_updated']}")
         lg = res["log"]
         print(f"  daemon.log  : push_fail={lg['push_fail_hits']} "
               f"churn_ticks={lg['pull_churn_ticks']} "
               f"max_applied={lg['pull_max_applied']} "
-              f"(coda {LOG_TAIL} righe, log_present={lg['log_present']})")
+              f"(last {LOG_TAIL} lines, log_present={lg['log_present']})")
         if res["problems"]:
-            print("  PROBLEMI:")
+            print("  PROBLEMS:")
             for p in res["problems"]:
                 print(f"   [{p['severity']}] {p['kind']}: {p['detail']}")
                 print(f"          → {p['suggest']}")
         else:
-            print("  -> nessun problema di sync rilevato")
+            print("  -> no sync problems detected")
     sys.exit(0 if res["healthy"] else 1)
 
 

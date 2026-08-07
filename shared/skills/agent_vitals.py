@@ -148,8 +148,8 @@ def _acquire_singleton() -> None:
     except SystemExit:
         raise
     except Exception as e:  # noqa: BLE001
-        print(f"[agent-vitals] WARN singleton_lock non caricabile ({e}) — "
-              f"proseguo senza lock", flush=True)
+        print(f"[agent-vitals] WARN singleton_lock could not be loaded ({e}) — "
+              f"continuing without a lock", flush=True)
     try:
         PID_FILE.parent.mkdir(parents=True, exist_ok=True)
         PID_FILE.write_text(str(os.getpid()))

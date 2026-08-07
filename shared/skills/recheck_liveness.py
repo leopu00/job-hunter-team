@@ -102,28 +102,28 @@ def recheck(url, title=None):
                 "evidence": "HTTP %s" % code}
     if _has_closed_marker(html):
         return {"state": "CLOSED", "method": "curl", "http": code,
-                "evidence": "closed-marker nell'HTML grezzo"}
+                "evidence": "closed marker in raw HTML"}
     # Aperto SOLO se NON è un ATS-JS/LinkedIn (curl basta) e HTTP 200.
     if not is_js_ats and code == "200":
         return {"state": "OPEN", "method": "curl", "http": code,
-                "evidence": "200, nessun closed-marker (host non-JS)"}
+                "evidence": "200, no closed marker (non-JS host)"}
     # Ambiguo (ATS-JS / LinkedIn / code strano) → ESCALA al browser.
     rendered = _render(url)
     if rendered is None:
         return {"state": "OPEN_UNVERIFIED", "method": "curl-only", "http": code,
-                "evidence": "host JS/authwall ma browser non disponibile — "
-                            "NON marcare aperto"}
+                "evidence": "JS host or auth wall, but browser unavailable — "
+                            "do NOT mark as open"}
     if _has_closed_marker(rendered):
         return {"state": "CLOSED", "method": "browser", "http": code,
-                "evidence": "closed-marker nell'HTML RENDERIZZATO"}
+                "evidence": "closed marker in rendered HTML"}
     return {"state": "OPEN", "method": "browser", "http": code,
-            "evidence": "renderizzato, nessun closed-marker"}
+            "evidence": "rendered, no closed marker"}
 
 
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"state": "OPEN_UNVERIFIED",
-                          "evidence": "uso: recheck_liveness.py <url> [title]"}))
+                          "evidence": "usage: recheck_liveness.py <url> [title]"}))
         sys.exit(3)
     res = recheck(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None)
     print(json.dumps(res, ensure_ascii=False))

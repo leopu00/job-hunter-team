@@ -176,7 +176,7 @@ def save(state: dict, path: Path | None = None) -> None:
         tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2))
         tmp.replace(p)
     except OSError as e:  # fail-open: il roster non deve mai bloccare uno spawn
-        print(f"[team_roster] WARN scrittura fallita: {e}", file=sys.stderr)
+        print(f"[team_roster] WARN write failed: {e}", file=sys.stderr)
 
 
 def record(role: str, instance=None, src: str = "", path: Path | None = None) -> dict:
@@ -461,7 +461,10 @@ def next_respawn(path: Path | None = None):
             if e:
                 e["status"] = "retired"
                 e["retired_at"] = _iso(now)
-                e["retire_reason"] = "respawn gia' tentato e sessione sparita di nuovo — la tratto come rimozione voluta"
+                e["retire_reason"] = (
+                    "respawn already attempted and session disappeared again — "
+                    "treating it as an intentional removal"
+                )
         save(state, path)
     return entry, reason
 
@@ -481,29 +484,29 @@ def mark_respawn(session: str, path: Path | None = None) -> bool:
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description="Roster atteso del team JHT")
+    p = argparse.ArgumentParser(description="Expected JHT team roster")
     sub = p.add_subparsers(dest="cmd")
 
-    pr = sub.add_parser("record", help="registra uno spawn riuscito")
+    pr = sub.add_parser("record", help="record a successful spawn")
     pr.add_argument("role")
     pr.add_argument("instance", nargs="?", default=None)
     pr.add_argument("--src", default="")
 
-    pt = sub.add_parser("retire", help="dichiara una rimozione VOLUTA")
+    pt = sub.add_parser("retire", help="declare an INTENTIONAL removal")
     pt.add_argument("session")
     pt.add_argument("--reason", default="")
 
     pl = sub.add_parser(
-        "roles", help="ruoli con una sessione tmux propria, uno per riga "
-                      "(fonte unica per gli script shell)")
+        "roles", help="roles with their own tmux session, one per line "
+                      "(single source for shell scripts)")
     pl.add_argument("--kind", choices=("all", "worker", "core", "ephemeral"),
-                    default="all", help="sottoinsieme (default: all)")
+                    default="all", help="subset (default: all)")
 
-    sub.add_parser("missing", help="attesi ma senza sessione viva (JSON)")
-    sub.add_parser("next-respawn", help="al massimo un worker da ricreare")
-    sub.add_parser("list", help="dump del roster (JSON)")
+    sub.add_parser("missing", help="expected entries without a live session (JSON)")
+    sub.add_parser("next-respawn", help="return at most one worker to recreate")
+    sub.add_parser("list", help="dump the roster (JSON)")
 
-    pm = sub.add_parser("mark-respawn", help="segna un tentativo di respawn")
+    pm = sub.add_parser("mark-respawn", help="record a respawn attempt")
     pm.add_argument("session")
 
     args = p.parse_args(argv)

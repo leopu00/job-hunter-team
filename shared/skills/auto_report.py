@@ -1,40 +1,36 @@
 #!/usr/bin/env python3
-"""auto_report — panoramica grafica periodica via Telegram (F-1.D / bug #16).
+"""auto_report — periodic graphical overview through Telegram (F-1.D).
 
-Decisione utente: il Capitano deve mandare panoramiche grafiche (PNG +
-emoji) ogni N ore senza dover essere "spronato" dall'utente. In sessioni
-precedenti questo era stato implementato in modo informale; ora è uno
-script deterministico che gira nel `auto-report-loop.sh` (no LLM nel
-loop, niente token sprecati per generazione contenuto regolare).
+The Captain sends a graphical overview every N hours without requiring a user
+prompt. A deterministic script in `auto-report-loop.sh` produces it without
+using an LLM turn for routine content.
 
-Genera 2 artefatti:
+It creates two artifacts:
 
-  1. PNG pipeline_overview — barre orizzontali per status positions +
-     riassunto applications. Stessa famiglia visiva dei grafici già
-     amati in docs/sessions/2026-05-17-team-dashboard/.
+  1. A pipeline_overview PNG with position-status bars and an application
+     summary.
 
-  2. Testo Markdown-friendly con KPI + emoji:
+  2. Markdown-friendly text with KPIs and emoji:
        📊 Pipeline @ 21:30 CEST
-       📥 Trovate     118
-       🔬 In analisi   11 scored / 6 writing
-       ✅ Pronte CV    16 ⭐
-       📤 Inviate       0
-       🩺 Team         5/5 sessioni vive
-       ⏱️ Budget       49% (proj 79% — Fase 1 SOTTOUTIL.)
+       📥 Found        118
+       🔬 In analysis   11 scored / 6 writing
+       ✅ CV ready      16 ⭐
+       📤 Sent           0
+       🩺 Team          5/5 live sessions
+       ⏱️ Budget        49% (projection 79% — Phase 1 UNDERUTILIZED)
 
-Output finale: invia caption + PNG via `jht-telegram-send --from capitano
+The final output sends the caption and PNG through `jht-telegram-send --from capitano
 --keyboard capitano --photo <path>`.
 
-Idempotency: ultima notifica timestamp in
-`$JHT_HOME/state/auto_report_last.json`. Lo script si comporta come
-"se è passato MIN_INTERVAL_MIN dall'ultima, manda; altrimenti exit 0".
-Il loop bash può chiamarlo ogni 5 min, lo script regola il throttle.
+The timestamp of the latest notification is stored in
+`$JHT_HOME/state/auto_report_last.json`. The script sends only when
+MIN_INTERVAL_MIN has elapsed; otherwise it exits successfully.
 
 CLI:
-    python3 /app/shared/skills/auto_report.py send   # rispetta intervalli
-    python3 /app/shared/skills/auto_report.py send --force  # ignora intervallo
-    python3 /app/shared/skills/auto_report.py status  # info ultima notifica
-    python3 /app/shared/skills/auto_report.py dry-run  # solo stampa, no Telegram
+    python3 /app/shared/skills/auto_report.py send       # honor the interval
+    python3 /app/shared/skills/auto_report.py send --force
+    python3 /app/shared/skills/auto_report.py status
+    python3 /app/shared/skills/auto_report.py dry-run    # print only
 """
 from __future__ import annotations
 
@@ -196,6 +192,18 @@ def _emoji_status(name: str) -> str:
     return e.get(name, "·")
 
 
+def _display_status(value):
+    """English label for stable bridge status identifiers."""
+    return {
+        "ATTENZIONE": "WARNING",
+        "SOTTOUTILIZZO": "UNDERUTILIZED",
+        "SOPRA-PACE-WEEKLY": "ABOVE-PACE-WEEKLY",
+        "SOPRA-PACE": "ABOVE-PACE",
+        "SOTTO-PACE": "BELOW-PACE",
+        "ALLINEATO": "ON-PACE",
+    }.get(value, value)
+
+
 def _html_escape(s: str) -> str:
     """Telegram HTML mode supporta solo &lt; &gt; &amp; — niente altro escape.
     Parentesi e tutto il resto passano puliti."""
@@ -246,7 +254,7 @@ def build_panorama_text(pipeline: dict, bridge: dict, tmux_n: int,
         phase_s = f"{phase_label.title()} {phase}" if phase else "?"
         budget_label = _i18n_t("auto_report.budget_label")
         proj_label = _i18n_t("auto_report.proj_label")
-        lines.append(f"⏱️ {budget_label}     {usage}% ({proj_label} {proj_s} · {phase_s} · {_html_escape(str(status))})")
+        lines.append(f"⏱️ {budget_label}     {usage}% ({proj_label} {proj_s} · {phase_s} · {_html_escape(str(_display_status(status)))})")
         # Reset con DATA completa nel fuso utente (mai ora-nuda), epoch-ancorato.
         reset_user = _html_escape(_fmt_reset_user(reset_at_unix, reset_at))
         lines.append(f"📅 {_i18n_t('auto_report.reset_window')} {reset_user}")
@@ -315,7 +323,7 @@ def build_png(pipeline: dict, bridge: dict, out_path: Path) -> bool:
         if v > 0:
             ax.text(v + max(pos_vals) * 0.01, b.get_y() + b.get_height() / 2,
                     str(v), color="#eee", va="center", fontweight="bold")
-    ax.set_title(f"positions ({sum(pos_vals)} totali)", color="#bbb", loc="left")
+    ax.set_title(f"positions ({sum(pos_vals)} total)", color="#bbb", loc="left")
     ax.tick_params(colors="#ccc")
     for s in ax.spines.values():
         s.set_color("#333")
@@ -328,7 +336,7 @@ def build_png(pipeline: dict, bridge: dict, out_path: Path) -> bool:
         if v > 0:
             ax2.text(v + max(apps_vals + [1]) * 0.01, b.get_y() + b.get_height() / 2,
                      str(v), color="#eee", va="center", fontweight="bold")
-    ax2.set_title(f"applications ({sum(apps_vals)} totali)", color="#bbb", loc="left")
+    ax2.set_title(f"applications ({sum(apps_vals)} total)", color="#bbb", loc="left")
     ax2.tick_params(colors="#ccc")
     for s in ax2.spines.values():
         s.set_color("#333")
@@ -338,9 +346,9 @@ def build_png(pipeline: dict, bridge: dict, out_path: Path) -> bool:
     proj = bridge.get("projection")
     if usage is not None:
         proj_s = f"{proj:.0f}%" if isinstance(proj, (int, float)) else "?"
-        phase_s = f"Fase {bridge.get('phase', '?')}"
+        phase_s = f"Phase {bridge.get('phase', '?')}"
         fig.text(0.5, 0.02,
-                 f"Budget {usage}% · proj {proj_s} · {phase_s} · {bridge.get('status', '?')}",
+                 f"Budget {usage}% · proj {proj_s} · {phase_s} · {_display_status(bridge.get('status', '?'))}",
                  ha="center", color="#aaa", fontsize=10)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -379,7 +387,7 @@ def send(force: bool = False, dry_run: bool = False) -> int:
     now_ts = time.time()
     if not force and (now_ts - last_ts) < MIN_INTERVAL_MIN * 60:
         mins_left = int((MIN_INTERVAL_MIN * 60 - (now_ts - last_ts)) / 60)
-        print(f"skip: ultima notifica {int((now_ts - last_ts)/60)}m fa, prossima fra {mins_left}m")
+        print(f"skip: last notification {int((now_ts - last_ts)/60)}m ago, next in {mins_left}m")
         return 0
 
     pipeline = _read_pipeline()
@@ -395,7 +403,7 @@ def send(force: bool = False, dry_run: bool = False) -> int:
         _save_last({"ts": now_ts, "text_chars": len(text),
                     "png_path": str(PNG_OUT) if png_ok else "",
                     "iso": _now().isoformat()})
-        print(f"auto-report inviato (text {len(text)} chars + photo={'yes' if photo else 'no'})")
+        print(f"auto-report sent (text {len(text)} chars + photo={'yes' if photo else 'no'})")
     return 0 if sent else 4
 
 

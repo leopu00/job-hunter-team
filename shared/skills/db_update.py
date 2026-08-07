@@ -201,7 +201,7 @@ def update_position(args):
             maintenance_log.check_closing_write(
                 "status", getattr(args, 'status', None), m_outcome)
         except maintenance_log.MaintenanceError as e:
-            print(f"⚠️  CHIUSURA RIFIUTATA: {e}")
+            print(f"⚠️  CLOSE REJECTED: {e}")
             conn.close()
             sys.exit(1)
     before_snapshot = (_snapshot(conn, "positions", args.id,
@@ -429,7 +429,7 @@ def update_position(args):
         changed.append(f"last_open_check={args.last_open_check}")
 
     if not updates:
-        print("Nessun campo da aggiornare.")
+        print("No fields to update.")
         return
 
     # Auto-popola `last_actor` con il nome dell'istanza dell'agente
@@ -443,7 +443,7 @@ def update_position(args):
     params.append(args.id)
     cursor = conn.execute(f"UPDATE positions SET {', '.join(updates)} WHERE id = ?", params)
     if cursor.rowcount == 0:
-        print(f"⚠️  ERRORE: nessuna posizione trovata con id={args.id}!")
+        print(f"⚠️  ERROR: no position found with id={args.id}!")
         conn.close()
         sys.exit(1)
 
@@ -478,13 +478,13 @@ def update_position(args):
             # argomenti, questo guarda il diff reale. Se una chiusura passa
             # comunque, la si annulla invece di lasciarla a metà.
             conn.rollback()
-            print(f"⚠️  SCRITTURA ANNULLATA: {e}")
+            print(f"⚠️  WRITE ABORTED: {e}")
             conn.close()
             sys.exit(1)
-        changed.append(f"[{m_action}] {n} evento/i")
+        changed.append(f"[{m_action}] {n} event(s)")
 
     conn.commit()
-    print(f"Posizione {args.id} aggiornata: {', '.join(changed)}")
+    print(f"Position {args.id} updated: {', '.join(changed)}")
     conn.close()
 
 
@@ -533,7 +533,7 @@ def update_company(args):
         params.append(args.website)
 
     if not updates:
-        print("Nessun campo da aggiornare.")
+        print("No fields to update.")
         return
 
     params.append(args.name)
@@ -550,7 +550,7 @@ def update_company(args):
             duration_ms=getattr(args, 'duration_ms', None))
 
     conn.commit()
-    print(f"Azienda '{args.name}' aggiornata: {', '.join(updates)}")
+    print(f"Company '{args.name}' updated: {', '.join(updates)}")
     conn.close()
 
 
@@ -649,7 +649,7 @@ def update_application(args):
         params.append(args.interview_round)
 
     if not updates:
-        print("Nessun campo da aggiornare.")
+        print("No fields to update.")
         return
 
     params.append(args.position_id)
@@ -662,7 +662,7 @@ def update_application(args):
         # written_at='now' letterale (vedi audit 2026-05-02).
         # Verifica che la position esista (FK guard).
         if not conn.execute("SELECT 1 FROM positions WHERE id = ?", (args.position_id,)).fetchone():
-            print(f"⚠️  position_id={args.position_id} non esiste in positions. Abort INSERT.")
+            print(f"⚠️  position_id={args.position_id} does not exist in positions. Aborting INSERT.")
             conn.close()
             return
         # Default: written_at=now se non specificato. `written_by`, quando
@@ -690,11 +690,11 @@ def update_application(args):
         sql = f"INSERT INTO applications ({', '.join(ins_cols)}) VALUES ({', '.join(ins_placeholders)})"
         conn.execute(sql, ins_vals)
         conn.commit()
-        print(f"Application per posizione {args.position_id} CREATA (INSERT iniziale).")
+        print(f"Application for position {args.position_id} CREATED (initial INSERT).")
         conn.close()
         return
     conn.commit()
-    print(f"Application per posizione {args.position_id} aggiornata ({cursor.rowcount} riga)")
+    print(f"Application for position {args.position_id} updated ({cursor.rowcount} row)")
     conn.close()
 
 
@@ -715,7 +715,7 @@ def _zip_set_clauses(set_clauses, params):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Aggiorna dati in jobs.db')
+    parser = argparse.ArgumentParser(description='Update data in jobs.db')
     sub = parser.add_subparsers(dest='entity', required=True)
 
     # position
@@ -724,12 +724,12 @@ def main():
     p.add_argument('--status', choices=['new', 'checked', 'excluded', 'scored', 'writing', 'review', 'ready', 'applied', 'response'])
     p.add_argument('--notes')
     p.add_argument('--jd-text')
-    p.add_argument('--jd-summary', help="Sintesi JD per l'utente (markdown leggero, lingua utente) — scritta dall'Analista, mostrata nella pagina posizione al posto del testo grezzo")
+    p.add_argument('--jd-summary', help="User-facing JD summary (lightweight Markdown, user's language) — written by the Analyst and shown on the position page instead of raw text")
     p.add_argument('--requirements')
     p.add_argument('--location')
     p.add_argument('--remote-type', choices=['full_remote', 'hybrid', 'onsite'])
     p.add_argument('--url')
-    p.add_argument('--deadline', help='Data scadenza YYYY-MM-DD o "non presente"')
+    p.add_argument('--deadline', help='Deadline date YYYY-MM-DD or "not present"')
     p.add_argument('--title')
     p.add_argument('--company')
     p.add_argument('--salary-declared-min', type=int)
@@ -738,35 +738,35 @@ def main():
     p.add_argument('--salary-estimated-min', type=int)
     p.add_argument('--salary-estimated-max', type=int)
     p.add_argument('--salary-estimated-currency')
-    p.add_argument('--salary-estimated-source', help='Fonte stima: glassdoor, levels.fyi, manual')
+    p.add_argument('--salary-estimated-source', help='Estimate source: glassdoor, levels.fyi, manual')
     p.add_argument('--source')
-    p.add_argument('--last-checked', help='Data/ora ultima verifica link (YYYY-MM-DD HH:MM o "now")')
-    p.add_argument('--expires-at', help='Scadenza candidature ISO YYYY-MM-DD (da deadline_extract); "" => NULL')
-    p.add_argument('--is-open', choices=['true', 'false'], help='Posizione ancora aperta (RULE-12 richeck): false se link morto o expires_at passata')
-    p.add_argument('--last-open-check', help='Data/ora ultimo richeck apertura (YYYY-MM-DD HH:MM o "now")')
+    p.add_argument('--last-checked', help='Date/time of the last link check (YYYY-MM-DD HH:MM or "now")')
+    p.add_argument('--expires-at', help='Application deadline ISO YYYY-MM-DD (from deadline_extract); "" => NULL')
+    p.add_argument('--is-open', choices=['true', 'false'], help='Whether the position is still open (RULE-12 recheck): false if the link is dead or expires_at has passed')
+    p.add_argument('--last-open-check', help='Date/time of the last opening recheck (YYYY-MM-DD HH:MM or "now")')
     # Role family (categoria semantica del ruolo) — tassonomia EMERGENTE.
     # L'analista scrive la categoria ATTIVA che meglio combacia (vedi
     # `db_query active-categories`) o, se nessuna calza, un'etichetta concisa: il
     # write-guard accetta il match (anche di superficie) o coerce a 'Other' +
     # role_family_proposed. Nessuna lista fissa, nessun --role-family-proposed.
-    p.add_argument('--role-family', help='Categoria del ruolo (analista): nome ATTIVO del registro se l\'offerta vi appartiene, altrimenti etichetta concisa → il guard la incanala (match o Other+proposta)')
+    p.add_argument('--role-family', help='Role category (Analyst): ACTIVE registry name if the offer belongs there, otherwise a concise label → the guard routes it (match or Other+proposal)')
     # Location strutturata (popolata dall'analista). Vedi playbook 2026-05-23.
-    p.add_argument('--loc-city', help='Città di ufficio (es. "Dublin"). NULL se solo paese/continente.')
-    p.add_argument('--loc-region', help='Regione/stato (es. "Friuli-Venezia Giulia"). Opzionale.')
-    p.add_argument('--loc-country', help='Paese di ufficio (es. "Italy"). NULL se solo continente.')
-    p.add_argument('--loc-country-code', help='ISO-3166 alpha-2 (es. "IT").')
+    p.add_argument('--loc-city', help='Office city (e.g. "Dublin"). NULL if only the country/continent is known.')
+    p.add_argument('--loc-region', help='Region/state (e.g. "Friuli-Venezia Giulia"). Optional.')
+    p.add_argument('--loc-country', help='Office country (e.g. "Italy"). NULL if only the continent is known.')
+    p.add_argument('--loc-country-code', help='ISO-3166 alpha-2 (e.g. "IT").')
     p.add_argument('--loc-continent', choices=['Europe', 'Asia', 'Americas', 'Africa', 'Oceania'])
-    p.add_argument('--work-mode', choices=['onsite', 'hybrid', 'remote'], help='Modalità di lavoro. Rimpiazza is_remote/remote_type.')
-    p.add_argument('--work-country', help='Paese contrattuale (entity che firma). Determina stipendio/CCNL.')
-    p.add_argument('--work-country-code', help='ISO-2 del paese contrattuale.')
-    p.add_argument('--is-multi-location', choices=['true', 'false'], help='true se JD elenca più città/paesi (pin singolo su centroide).')
-    p.add_argument('--location-notes', help='Note libere analista (es. "EU multi-country: NL+DE+GB")')
+    p.add_argument('--work-mode', choices=['onsite', 'hybrid', 'remote'], help='Work mode. Replaces is_remote/remote_type.')
+    p.add_argument('--work-country', help='Contracting country (signing entity). Determines salary/CBA.')
+    p.add_argument('--work-country-code', help='ISO-2 code of the contracting country.')
+    p.add_argument('--is-multi-location', choices=['true', 'false'], help='true if the JD lists multiple cities/countries (single centroid pin).')
+    p.add_argument('--location-notes', help='Free-form Analyst notes (e.g. "EU multi-country: NL+DE+GB")')
     # Office geocoding precise (skill office-geocoding)
-    p.add_argument('--office-lat', type=float, help='Latitudine WGS84 ufficio (es. 41.8933203)')
-    p.add_argument('--office-lon', type=float, help='Longitudine WGS84 ufficio (es. 12.4829321)')
-    p.add_argument('--office-address', help='Indirizzo completo ufficio (display_name del geocoder)')
-    p.add_argument('--office-geocoded', choices=['true', 'false'], help='true se è stato fatto geocoding (anche se fallito)')
-    p.add_argument('--office-verified', choices=['true', 'false'], help='true se SEI SICURO sia l\'ufficio giusto; false se city-level/multi-ambiguo')
+    p.add_argument('--office-lat', type=float, help='Office WGS84 latitude (e.g. 41.8933203)')
+    p.add_argument('--office-lon', type=float, help='Office WGS84 longitude (e.g. 12.4829321)')
+    p.add_argument('--office-address', help='Full office address (geocoder display_name)')
+    p.add_argument('--office-geocoded', choices=['true', 'false'], help='true if geocoding was attempted (even if it failed)')
+    p.add_argument('--office-verified', choices=['true', 'false'], help='true if you are CERTAIN this is the correct office; false if city-level/multi-ambiguous')
     # Storico dei controlli: --action registra il giro, --outcome ne dice l'esito.
     maintenance_log.add_cli_args(p)
 
@@ -776,12 +776,12 @@ def main():
     c.add_argument('--verdict', choices=['GO', 'CAUTIOUS', 'NO_GO'])
     c.add_argument('--red-flags')
     c.add_argument('--culture-notes')
-    c.add_argument('--hq-country', help='Paese sede principale')
+    c.add_argument('--hq-country', help='Headquarters country')
     c.add_argument('--sector')
     c.add_argument('--size')
     c.add_argument('--glassdoor-rating', type=float)
     c.add_argument('--analyzed-by')
-    c.add_argument('--website', help='Sito ufficiale (usato da logo-extraction)')
+    c.add_argument('--website', help='Official website (used by logo-extraction)')
     maintenance_log.add_cli_args(c)
 
     # application
@@ -791,20 +791,20 @@ def main():
     a.add_argument('--critic-verdict', choices=['PASS', 'NEEDS_WORK', 'REJECT'])
     a.add_argument('--critic-score', type=float)
     a.add_argument('--critic-notes')
-    a.add_argument('--critic-round', type=int, help='Numero round critico (1 o 2)')
+    a.add_argument('--critic-round', type=int, help='Critic round number (1 or 2)')
     a.add_argument('--reviewed-by')
-    a.add_argument('--written-by', help='Identità dello Scrittore; fallback a JHT_AGENT_NAME quando si salvano artefatti CV/CL')
-    a.add_argument('--written-at', help='Quando il CV è stato creato (YYYY-MM-DD HH:MM o "now")')
-    a.add_argument('--applied-at', help='Quando la candidatura è stata inviata')
+    a.add_argument('--written-by', help='Writer identity; falls back to JHT_AGENT_NAME when saving CV/CL artifacts')
+    a.add_argument('--written-at', help='When the CV was created (YYYY-MM-DD HH:MM or "now")')
+    a.add_argument('--applied-at', help='When the application was submitted')
     a.add_argument('--applied-via')
-    a.add_argument('--response', help='Risposta ricevuta')
-    a.add_argument('--response-at', help='Quando è arrivata la risposta (YYYY-MM-DD HH:MM o "now")')
+    a.add_argument('--response', help='Response received')
+    a.add_argument('--response-at', help='When the response arrived (YYYY-MM-DD HH:MM or "now")')
     a.add_argument('--cv-path')
     a.add_argument('--cl-path')
     a.add_argument('--cv-pdf-path')
     a.add_argument('--cl-pdf-path')
-    a.add_argument('--applied', help='true/false — se l\'utente ha inviato la candidatura')
-    a.add_argument('--interview-round', type=int, help='Fase colloquio (1, 2, 3...)')
+    a.add_argument('--applied', help='true/false — whether the user submitted the application')
+    a.add_argument('--interview-round', type=int, help='Interview stage (1, 2, 3...)')
 
     args = parser.parse_args()
 

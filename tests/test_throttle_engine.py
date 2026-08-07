@@ -402,10 +402,10 @@ def test_5a2_il_testo_della_sveglia_chiede_lack_come_primo_comando(home):
     msg = eng.wake_message("scout-3")
     assert msg.startswith("[DA @SISTEMA A @SCOUT-3]")
     assert "throttle-ack scout-3" in msg
-    assert "PRIMO comando" in msg
+    assert "FIRST command" in msg
     # Senza la seconda metà il risveglio finisce in un ACK e poi in attesa di
     # ordini: un falso «coda vuota» che inganna il coordinatore.
-    assert "riprendi dal punto in cui eri" in msg
+    assert "resume where you left off" in msg
 
 
 @pytest.mark.skipif(os.name != "posix", reason="lo sender è uno script bash")
@@ -503,7 +503,7 @@ def test_5d_una_sveglia_non_consegnabile_finisce_al_capitano_non_nel_silenzio(
     assert len(events("notify_failed")) == eng.MAX_NOTIFY_ATTEMPTS
     gave_up = events("notify_gave_up")
     assert len(gave_up) == 1 and gave_up[0]["rc"] == 5
-    assert any("Non riesco a svegliare scout-1" in m for m in CAPTAIN_MSGS)
+    assert any("I cannot wake scout-1" in m for m in CAPTAIN_MSGS)
     assert flag("scout-1")["state"] == eng.IN_THROTTLE, \
         "non si dichiara notificato un agente che non è stato raggiunto"
     # Rallenta ma non abbandona: al ricontrollo successivo riprova.
@@ -768,7 +768,7 @@ def test_health_distingue_motore_vivo_da_motore_fermo(home, monkeypatch):
 
     stale = eng.health(now=T0 + 4000)
     assert stale["ok"] is False
-    assert "processo vivo ma funzione ferma" in stale["reason"]
+    assert "process alive but function stalled" in stale["reason"]
 
 
 def test_health_cli_esce_1_quando_il_log_e_stantio(home, capsys):

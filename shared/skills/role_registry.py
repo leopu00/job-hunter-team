@@ -258,12 +258,13 @@ def promote_family(conn, user_id, name, ids, apply=True):
     """
     name = (name or "").strip()
     if not name:
-        raise ValueError("nome categoria vuoto")
+        raise ValueError("category name is empty")
     if name == SENTINEL:
-        raise ValueError(f"'{SENTINEL}' è il parcheggio, non una famiglia: scegli un nome reale")
+        raise ValueError(f"'{SENTINEL}' is the holding category, not a family: "
+                         "choose a real name")
     ids = [int(i) for i in ids]
     if not ids:
-        raise ValueError("nessun id membro: una famiglia nasce da un grappolo, non dal nulla")
+        raise ValueError("no member IDs: a family must come from a cluster")
     if apply:
         conn.execute(
             "INSERT INTO role_family_registry "
@@ -293,10 +294,10 @@ def merge_families(conn, user_id, sources, into, apply=True):
     """
     into = (into or "").strip()
     if not into:
-        raise ValueError("merge: destinazione 'into' vuota")
+        raise ValueError("merge: destination 'into' is empty")
     sources = [s.strip() for s in sources if s and s.strip() and s.strip() != into]
     if not sources:
-        raise ValueError("merge: serve almeno una source diversa da 'into'")
+        raise ValueError("merge: at least one source different from 'into' is required")
     if apply:
         conn.execute(
             "INSERT INTO role_family_registry "
@@ -359,36 +360,40 @@ def _parse_ids(raw):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Tassonomia emergente — promozione/merge BRAIN-DRIVEN (l'agente "
-                    "decide nome e membri; il codice esegue).")
+        description="Emergent taxonomy — BRAIN-DRIVEN promotion/merge (the agent "
+                    "chooses names and members; the code executes).")
     ap.add_argument("--user-id", default=None,
-                    help="omesso → candidato locale (default VPS single-candidate)")
-    ap.add_argument("--dry-run", action="store_true", help="non scrive, mostra l'effetto")
+                    help="omit for the local candidate (single-candidate VPS default)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="do not write; show the result")
     sub = ap.add_subparsers(dest="cmd")
 
     # promote: crea/attiva una famiglia decisa dall'agente e tagga i membri SCELTI da lui
     p_promote = sub.add_parser("promote",
-        help="crea/attiva una categoria (NOME a tua scelta) e tagga le posizioni che TU "
-             "hai giudicato appartenervi (un grappolo da Other / micro-varianti).")
-    p_promote.add_argument("--name", required=True, help="nome famiglia (giudizio dell'agente)")
+        help="create/activate a category (NAME chosen by you) and tag the "
+             "positions YOU judged to belong to it (a cluster from Other or "
+             "micro-variants).")
+    p_promote.add_argument("--name", required=True,
+                           help="family name (agent judgment)")
     p_promote.add_argument("--ids", required=True,
-                           help="id posizioni membri, separati da virgola/spazio")
+                           help="member position IDs, separated by commas/spaces")
 
     # merge: verdetto del Capitano per fondere near-duplicate
     p_merge = sub.add_parser("merge",
-        help="fonde categorie near-duplicate in una sola (verdetto Capitano).")
-    p_merge.add_argument("--into", required=True, help="categoria destinazione")
+        help="merge near-duplicate categories into one (Capitano verdict).")
+    p_merge.add_argument("--into", required=True, help="destination category")
     p_merge.add_argument("--sources", required=True, nargs="+",
-                         help="una o più categorie da fondere in --into")
+                         help="one or more categories to merge into --into")
 
     # pass: LEGACY string-clustering — SOLO diagnostica manuale, NON più auto-schedulato
     p_pass = sub.add_parser("pass",
-        help="[LEGACY/diagnostica] vecchio pass a stringhe (normalize_key+soglia). "
-             "NON è più nel percorso decisionale: usa promote/merge. Default --dry-run.")
+        help="[LEGACY/diagnostics] old string pass (normalize_key+threshold). "
+             "It is NO longer in the decision path: use promote/merge. "
+             "Defaults to --dry-run.")
     p_pass.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD)
     p_pass.add_argument("--cap", type=int, default=DEFAULT_CAP)
     p_pass.add_argument("--apply", action="store_true",
-                        help="applica davvero (default: solo dry-run, è legacy)")
+                        help="apply changes (default: dry-run only; this is legacy)")
 
     args = ap.parse_args()
     conn = get_db()
@@ -399,18 +404,18 @@ def main():
 
     if args.cmd == "promote":
         name, n = promote_family(conn, uid, args.name, _parse_ids(args.ids), apply=apply)
-        print(f"{tag}promote '{name}' ← {n} posizioni")
-        print(f"attive: {active_categories(conn, uid, with_support=True)}")
+        print(f"{tag}promote '{name}' ← {n} positions")
+        print(f"active: {active_categories(conn, uid, with_support=True)}")
     elif args.cmd == "merge":
         into, srcs = merge_families(conn, uid, args.sources, args.into, apply=apply)
         print(f"{tag}merge {srcs} → '{into}'")
-        print(f"attive: {active_categories(conn, uid, with_support=True)}")
+        print(f"active: {active_categories(conn, uid, with_support=True)}")
     elif args.cmd == "pass":
         res = run_pass(conn, uid, args.threshold, args.cap, apply=args.apply)
         ptag = "" if args.apply else "[DRY-RUN] "
-        print(f"{ptag}[LEGACY] promosse: {res['promoted'] or 'nessuna'}")
-        print(f"{ptag}[LEGACY] demote:   {res['demoted'] or 'nessuna'}")
-        print(f"{ptag}attive ({len(res['active'])}): {res['active']}")
+        print(f"{ptag}[LEGACY] promoted: {res['promoted'] or 'none'}")
+        print(f"{ptag}[LEGACY] demoted:  {res['demoted'] or 'none'}")
+        print(f"{ptag}active ({len(res['active'])}): {res['active']}")
     else:
         ap.print_help()
     conn.close()

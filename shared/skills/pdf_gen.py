@@ -1,36 +1,31 @@
 #!/usr/bin/env python3
-"""Generatore PDF FALLBACK MINIMALE per doc rapidi/tecnici (NON per CV).
+"""Minimal fallback PDF generator for quick technical documents (NOT CVs).
 
-⚠️  **NON usare per CV professionali user-facing**: produce layout
-spartano 1 pagina, no CSS, font core / DejaVu, niente spacing fine.
-Per CV usa `wkhtmltopdf` via pandoc (vedi skill `cv-structure`):
+⚠️  Do NOT use this for professional user-facing CVs. It produces a plain
+one-page layout without CSS or fine spacing. For CVs, use `wkhtmltopdf`
+through pandoc (see the `cv-structure` skill):
    pandoc input.md -o out.pdf --pdf-engine=wkhtmltopdf
-   → output ~30 KB / 2 pag con HTML+CSS pieno, "look CV vero".
+   → approximately 30 KB / 2 pages with full HTML and CSS.
 
-Casi legittimi (markdown → PDF via `fpdf2` pure Python, zero deps native):
-  - Cover letter veloci quando design non conta
-  - Report tecnici / appunti / output debug
-  - Allegati doc-style senza branding
+Appropriate uses (Markdown to PDF through pure-Python `fpdf2`):
+  - Quick cover letters when design does not matter
+  - Technical reports, notes, and debug output
+  - Document-style attachments without branding
 
-Storia: era doc come "skill livello 1 caso 80%" pensando ad allegati
-generici. Il post-mortem 2026-05-18 "CV estetica semplificata" ha
-mostrato che gli Scrittori cadevano qui per fallback (cv-structure
-citava typst non disponibile in pandoc 2.17) e producevano CV brutti.
-Da 2026-05-18 cv-structure punta esplicitamente a wkhtmltopdf, e
-questo file resta come fallback per casi non-CV.
+This module remains only as a fallback for non-CV documents.
 
-Uso:
+Usage:
   python3 pdf_gen.py <input.md> <output.pdf>
 
-Subset markdown supportato (volutamente piccolo per essere predicibile):
-  # Title       (H1, large header — usato per il nome candidato)
-  ## Section    (H2, sezione con linea sotto)
-  ### Subsection(H3, ruolo/azienda)
+Supported Markdown subset (intentionally small and predictable):
+  # Title       (H1, large header)
+  ## Section    (H2 with underline)
+  ### Subsection(H3)
   - bullet
   **bold**, *italic*, `code` inline
-  ---           (regola orizzontale)
+  ---           (horizontal rule)
 
-Output: scrive il PDF, exit 0 se ok, exit 1 con stderr in caso di errore.
+Output: writes the PDF; exits 0 on success or 1 with an error on stderr.
 """
 
 import argparse
@@ -155,13 +150,13 @@ def main():
     ap.add_argument('input_md')
     ap.add_argument('output_pdf')
     ap.add_argument('--force-cv', action='store_true',
-                    help='Bypass del guard "CV path refused". Solo per uso '
-                         'consapevole / test. In produzione NON usare per CV.')
+                    help='Bypass the "CV path refused" guard. Intended only '
+                         'for deliberate use or tests; do NOT use for production CVs.')
     args = ap.parse_args()
 
     md_path = Path(args.input_md)
     if not md_path.exists():
-        print(f'ERRORE: input md non trovato: {md_path}', file=sys.stderr)
+        print(f'ERROR: input Markdown file not found: {md_path}', file=sys.stderr)
         return 1
 
     pdf_path = Path(args.output_pdf)
@@ -177,22 +172,22 @@ def main():
     looks_like_cv = name.startswith('cv_') or '/cv/' in parent or parent.endswith('/cv')
     if looks_like_cv and not args.force_cv:
         print('━' * 60, file=sys.stderr)
-        print('ERRORE: pdf_gen.py REFUSED — output path sembra un CV.',
+        print('ERROR: pdf_gen.py REFUSED — output path looks like a CV.',
               file=sys.stderr)
         print(f'  path: {pdf_path}', file=sys.stderr)
         print('', file=sys.stderr)
-        print('pdf_gen.py (fpdf2) produce layout spartano 1 pagina senza CSS,',
+        print('pdf_gen.py (fpdf2) produces a basic one-page layout without CSS,',
               file=sys.stderr)
-        print('NON adatto a CV professionali user-facing.', file=sys.stderr)
+        print('which is NOT suitable for a user-facing professional CV.', file=sys.stderr)
         print('', file=sys.stderr)
-        print('Comando giusto per CV (skill cv-structure):', file=sys.stderr)
+        print('Use this command for CVs (cv-structure skill):', file=sys.stderr)
         print(f'  pandoc "{md_path}" -o "{pdf_path}" \\', file=sys.stderr)
         print('         --pdf-engine=wkhtmltopdf \\', file=sys.stderr)
         print('         --metadata title="CV ..."', file=sys.stderr)
         print('', file=sys.stderr)
-        print('Output atteso: ≥20 KB, 2 pagine, Producer="Qt 5.x.x".',
+        print('Expected output: ≥20 KB, 2 pages, Producer="Qt 5.x.x".',
               file=sys.stderr)
-        print('Se devi davvero usare fpdf2 per un CV: --force-cv (sconsigliato).',
+        print('If you must use fpdf2 for a CV: --force-cv (not recommended).',
               file=sys.stderr)
         print('━' * 60, file=sys.stderr)
         return 2
@@ -200,7 +195,7 @@ def main():
     try:
         from fpdf import FPDF  # noqa: F401
     except ImportError:
-        print('ERRORE: fpdf2 mancante. Installa con:', file=sys.stderr)
+        print('ERROR: fpdf2 is missing. Install it with:', file=sys.stderr)
         print('  uv pip install --user fpdf2', file=sys.stderr)
         return 1
 
