@@ -69,7 +69,7 @@ function Assert-ProtectedDirectory {
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
   $ownerSid = ([Security.Principal.NTAccount]$verified.Owner).Translate([Security.Principal.SecurityIdentifier]).Value
   if ($ownerSid -ne $currentSid) { throw 'Installer authority directory has a foreign owner.' }
-  $writeMask = [Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Modify -bor [Security.AccessControl.FileSystemRights]::FullControl -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
+  $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor [Security.AccessControl.FileSystemRights]::AppendData -bor [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor [Security.AccessControl.FileSystemRights]::WriteAttributes -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership
   foreach ($rule in $verified.Access) {
     if ($rule.AccessControlType -ne 'Allow' -or (([Security.AccessControl.FileSystemRights]$rule.FileSystemRights -band $writeMask) -eq 0)) { continue }
     $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value

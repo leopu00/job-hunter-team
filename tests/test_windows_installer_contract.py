@@ -64,6 +64,8 @@ def test_installer_preflight_is_handle_and_acl_fail_closed() -> None:
         assert seam in source
     assert "Invoke-Expression" not in source
     assert "ExecutionPolicy" not in source
+    assert "FileSystemRights]::Modify -bor" not in source
+    assert "FileSystemRights]::FullControl -bor" not in source
 
 
 def _windows_powershell() -> str:
@@ -108,6 +110,31 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
 
     install.mkdir(parents=True)
     (install / "job-hunter-team.exe").write_bytes(b"legacy-v0.3.5\n")
+    read_acl = tmp_path / "add-read-only-ace.ps1"
+    read_acl.write_text(
+        "$item=[IO.DirectoryInfo]::new($env:JHT_ACL_PATH);"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "$sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-545');"
+        "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
+        "$sid,'ReadAndExecute','ContainerInherit,ObjectInherit','None','Allow');"
+        "$acl.AddAccessRule($rule);$item.SetAccessControl($acl)\n",
+        encoding="utf-8",
+    )
+    read_acl_env = environment.copy()
+    read_acl_env["JHT_ACL_PATH"] = str(install)
+    subprocess.run(
+        [
+            _windows_powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(read_acl),
+        ],
+        env=read_acl_env,
+        check=True,
+    )
     first = _run_preflight(install, "Prepare", environment)
     assert first.returncode == 0, first.stderr
     second = _run_preflight(install, "Prepare", environment)

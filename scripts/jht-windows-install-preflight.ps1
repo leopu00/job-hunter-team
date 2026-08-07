@@ -122,10 +122,14 @@ function Assert-OwnerAndAcl {
   if ($RequireProtected -and -not $acl.AreAccessRulesProtected) {
     throw 'installer directory inherits its DACL'
   }
-  $writeMask = [Security.AccessControl.FileSystemRights]::Write -bor
-    [Security.AccessControl.FileSystemRights]::Modify -bor
-    [Security.AccessControl.FileSystemRights]::FullControl -bor
-    [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
+  $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor
+    [Security.AccessControl.FileSystemRights]::AppendData -bor
+    [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+    [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+    [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+    [Security.AccessControl.FileSystemRights]::Delete -bor
+    [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+    [Security.AccessControl.FileSystemRights]::TakeOwnership
   foreach ($rule in $acl.Access) {
     if ($rule.AccessControlType -ne 'Allow') { continue }
     $rights = [Security.AccessControl.FileSystemRights]$rule.FileSystemRights

@@ -587,7 +587,7 @@ function Assert-NoForeignWriteAcl {
   foreach ($rule in $acl.Access) {
     if ($rule.AccessControlType -ne 'Allow') { continue }
     $rights = [Security.AccessControl.FileSystemRights]$rule.FileSystemRights
-    $writeMask = [Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Modify -bor [Security.AccessControl.FileSystemRights]::FullControl -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
+    $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor [Security.AccessControl.FileSystemRights]::AppendData -bor [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor [Security.AccessControl.FileSystemRights]::WriteAttributes -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership
     if (($rights -band $writeMask) -eq 0) { continue }
     $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
     if ($sid -notin @($currentSid, 'S-1-5-18', 'S-1-5-32-544')) { throw 'protected node grants write to another principal' }

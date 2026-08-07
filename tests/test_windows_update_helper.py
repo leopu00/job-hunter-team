@@ -102,6 +102,18 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
     )
     assert "Get-Acl" not in source
     assert "Set-Acl" not in source
+    assert "FileSystemRights]::Modify -bor" not in source
+    assert "FileSystemRights]::FullControl -bor" not in source
+    for mutating_right in (
+        "WriteData",
+        "AppendData",
+        "WriteExtendedAttributes",
+        "WriteAttributes",
+        "DeleteSubdirectoriesAndFiles",
+        "ChangePermissions",
+        "TakeOwnership",
+    ):
+        assert mutating_right in source
     assert (
         "Assert-FileMatchesArtifact $PSCommandPath "
         "(Get-ArtifactByRole $installed.Value $HelperRole)"
@@ -436,13 +448,14 @@ def _run_verify(
             ],
             check=True,
         )
-    elif mutation == "foreign-write-ace":
+    elif mutation in {"foreign-read-ace", "foreign-write-ace"}:
+        rights = "ReadAndExecute" if mutation == "foreign-read-ace" else "Modify"
         _run_powershell_command(
             "$item=[IO.DirectoryInfo]::new($env:JHT_TEST_ACL_PATH);"
             "$acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::All);"
             "$sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-545');"
             "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
-            "$sid,'Modify','ContainerInherit,ObjectInherit','None','Allow');"
+            f"$sid,'{rights}','ContainerInherit,ObjectInherit','None','Allow');"
             "$acl.AddAccessRule($rule);$item.SetAccessControl($acl)",
             env_values={"JHT_TEST_ACL_PATH": str(transaction)},
         )
@@ -718,6 +731,15 @@ def test_windows_powershell51_rotation_overlap_accepts_new_signed_new_only_helpe
     assert installed_helper.read_text().count("-----BEGIN PUBLIC KEY-----") == (
         candidate_helper.read_text().count("-----BEGIN PUBLIC KEY-----") + 1
     )
+
+
+def test_windows_powershell51_accepts_foreign_read_only_acl(
+    tmp_path: Path, rsa_keys: tuple[Path, Path]
+) -> None:
+    result, _target, transaction = _run_verify(
+        tmp_path, rsa_keys, mutation="foreign-read-ace"
+    )
+    assert result.returncode == 0, _helper_result_diagnostic(transaction)
 
 
 @pytest.mark.parametrize(
