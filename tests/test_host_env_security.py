@@ -402,6 +402,8 @@ def test_windows_runtime_contract_checks_path_acl_reparse_owner_and_digest():
         "Get-FileHash -Algorithm SHA256",
         "Get-AttestedRawBase",
         "^[0-9a-fA-F]{40}$",
+        "$wrapper.Equals($userData",
+        "Test-RuntimeAncestorsWithoutReparsePoint $WrapperPath",
     ):
         assert seam in source
     assert source.index("Require-ComposeFile", source.index("switch ($Sub)")) < source.index(
@@ -425,3 +427,4 @@ def test_release_bytes_must_advertise_the_protected_runtime_protocol():
     for consumer in (powershell, windows_installer):
         assert "jht-runtime-mask:/jht_home/runtime" in consumer
         assert "$JHT_HOST_RUNTIME_PROTOCOL = 1" in consumer
+    assert "$binFull.Equals($userDataFull" in windows_installer
