@@ -360,14 +360,20 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "A escolha do provedor: Claude, Codex ou Kimi, com o plano de subscrição.",
       hu: "A szolgáltató kiválasztása: Claude, Codex vagy Kimi, az előfizetési csomaggal.",
     },
+    // La didascalia dichiara ciò che l'inquadratura NON mostra. Su Linux il
+    // provider è scelto ma non ancora autenticato, quindi al posto
+    // dell'elenco dei piani si vede solo il link che porta a vederli: senza
+    // dirlo, chi legge non capisce se è incompleta la guida o il prodotto.
+    // Stesso principio del segnaposto di W02-W04, dove «bloccata» non è
+    // «in corso di ripresa».
     caption: {
-      en: "Subscription login only: no API key is ever requested.",
-      it: "Solo accesso con abbonamento: nessuna chiave API viene mai richiesta.",
-      es: "Solo inicio de sesión con suscripción: nunca se pide una clave de API.",
-      fr: "Connexion par abonnement uniquement : aucune clé API n'est jamais demandée.",
-      de: "Nur Anmeldung per Abo: Es wird nie ein API-Schlüssel verlangt.",
-      pt: "Apenas início de sessão por subscrição: nunca é pedida uma chave de API.",
-      hu: "Csak előfizetéses bejelentkezés: API-kulcsot soha nem kérünk.",
+      en: "Subscription login only: no API key is ever requested. Here the provider is chosen but not yet signed in, so the plan list appears later, after you log in.",
+      it: "Solo accesso con abbonamento: nessuna chiave API viene mai richiesta. Qui il provider è scelto ma non ancora autenticato, quindi l'elenco dei piani compare dopo, una volta fatto l'accesso.",
+      es: "Solo inicio de sesión con suscripción: nunca se pide una clave de API. Aquí el proveedor está elegido pero aún no autenticado, así que la lista de planes aparece después, al iniciar sesión.",
+      fr: "Connexion par abonnement uniquement : aucune clé API n'est jamais demandée. Ici le fournisseur est choisi mais pas encore authentifié, la liste des offres apparaît donc plus tard, après la connexion.",
+      de: "Nur Anmeldung per Abo: Es wird nie ein API-Schlüssel verlangt. Hier ist der Anbieter gewählt, aber noch nicht angemeldet — die Tarifliste erscheint erst nach dem Login.",
+      pt: "Apenas início de sessão por subscrição: nunca é pedida uma chave de API. Aqui o fornecedor está escolhido mas ainda não autenticado, por isso a lista de planos aparece depois, ao iniciar sessão.",
+      hu: "Csak előfizetéses bejelentkezés: API-kulcsot soha nem kérünk. Itt a szolgáltató ki van választva, de még nincs bejelentkezve, így a csomagok listája később, a belépés után jelenik meg.",
     },
     assets: {
       linux: {
