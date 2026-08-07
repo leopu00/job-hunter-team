@@ -118,12 +118,18 @@ test("download e how-to-run portano alla guida nel punto operativo", async ({
   page,
 }) => {
   await page.goto("/download", { waitUntil: "domcontentloaded" });
-  const downloadGuide = page.locator('main a[href="/setup-guide"]');
+  const downloadGuide = page.getByRole("link", {
+    name: "Follow the step-by-step setup",
+    exact: true,
+  });
   await expect(downloadGuide).toBeVisible();
   await expect(downloadGuide).toContainText("step-by-step setup");
 
   await page.goto("/run", { waitUntil: "domcontentloaded" });
-  const runGuide = page.locator('main a[href="/setup-guide"]');
+  const runGuide = page.getByRole("link", {
+    name: "Get started →",
+    exact: true,
+  });
   await expect(runGuide).toBeVisible();
   await expect(runGuide).toHaveText("Get started →");
 });
