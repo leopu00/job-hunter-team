@@ -105,7 +105,7 @@ type AutopilotHandle = {
 // volta → salta alla prossima; al cambio di continente la transizione
 // si allarga. Vive fuori dal componente React: parla solo con
 // l'istanza mappa e con due callback.
-function startAutopilot(
+export function startAutopilot(
   map: MaplibreMap,
   tour: LandingTourStop[],
   opts: {
@@ -127,6 +127,7 @@ function startAutopilot(
         totalMs: number;
         stopSeq: number;
         from: CameraPoint;
+        descentOnly: boolean;
       }
     | {
         phase: "dwell";
@@ -148,6 +149,9 @@ function startAutopilot(
   let timer: number | null = null;
   let timerDueAt: number | null = null;
   let travelDueAt: number | null = null;
+  let currentTravelTotalMs = 0;
+  let currentTravelFrom: CameraPoint | null = null;
+  let currentTravelDescentOnly = false;
   let currentStopSeq = -1;
   let currentCardIndex = 0;
   let resumeStage: null | "ramp" | "recenter" = null;
@@ -308,6 +312,7 @@ function startAutopilot(
     opts.onCardChange(null);
     const stop = stopAt(stopSeq);
     const crossing = crossingAt(stopSeq);
+    const from = cameraPoint();
     // Cambio continente (o primissimo volo, o rientro dal fondo del
     // tour): transizione ampia — durata maggiore e curva più alta, così
     // il volo si allontana abbastanza da far LEGGERE lo spostamento sul
@@ -323,6 +328,9 @@ function startAutopilot(
     const seq = travelSeq;
     currentStopSeq = stopSeq;
     currentCardIndex = 0;
+    currentTravelTotalMs = duration;
+    currentTravelFrom = from;
+    currentTravelDescentOnly = resumeDescent;
     travelDueAt = Date.now() + duration;
 
     const onTravelEnd = () => {
@@ -388,9 +396,10 @@ function startAutopilot(
       return {
         phase: "travel",
         remainingMs,
-        totalMs: remainingMs,
+        totalMs: Math.max(remainingMs, currentTravelTotalMs),
         stopSeq: currentStopSeq,
-        from: cameraPoint(),
+        from: currentTravelFrom ?? cameraPoint(),
+        descentOnly: currentTravelDescentOnly,
       };
     }
     if (phase === "dwell" && currentStopSeq >= 0) {
@@ -420,6 +429,7 @@ function startAutopilot(
       totalMs: duration,
       stopSeq,
       from,
+      descentOnly: false,
     };
   };
 
@@ -540,19 +550,24 @@ function startAutopilot(
     const curve = crossingAt(cursor.stopSeq)
       ? CONTINENT_FLY_CURVE
       : HOP_FLY_CURVE;
-    const apexZoom = Math.min(
-      cursor.from.zoom,
-      OVERVIEW_ZOOM - (curve - 1.42) * 1.5,
-    );
-    const leg =
-      progress < 0.5
-        ? progress * 2
-        : (progress - 0.5) * 2;
-    const legEase = leg * leg * (3 - 2 * leg);
-    const zoom =
-      progress < 0.5
-        ? cursor.from.zoom + (apexZoom - cursor.from.zoom) * legEase
-        : apexZoom + (CITY_ZOOM - apexZoom) * legEase;
+    let zoom: number;
+    if (cursor.descentOnly) {
+      zoom = cursor.from.zoom + (CITY_ZOOM - cursor.from.zoom) * eased;
+    } else {
+      const apexZoom = Math.min(
+        cursor.from.zoom,
+        OVERVIEW_ZOOM - (curve - 1.42) * 1.5,
+      );
+      const leg =
+        progress < 0.5
+          ? progress * 2
+          : (progress - 0.5) * 2;
+      const legEase = leg * leg * (3 - 2 * leg);
+      zoom =
+        progress < 0.5
+          ? cursor.from.zoom + (apexZoom - cursor.from.zoom) * legEase
+          : apexZoom + (CITY_ZOOM - apexZoom) * legEase;
+    }
     try {
       map.jumpTo({
         center: [
@@ -564,7 +579,11 @@ function startAutopilot(
     } catch {
       /* startTravel riparte dal frame disponibile */
     }
-    startTravel(cursor.stopSeq, cursor.remainingMs, progress >= 0.5);
+    startTravel(
+      cursor.stopSeq,
+      cursor.remainingMs,
+      cursor.descentOnly || progress >= 0.5,
+    );
   };
 
   const begin = () => {
@@ -600,7 +619,13 @@ function startAutopilot(
       if (disposed || paused.has(reason)) return;
       const wasRunning = !suspended();
       if (reason === "offscreen") {
-        offscreenCursor = captureTourCursor();
+        // Un primo intervallo offscreen può essere già concluso ma ancora
+        // pendente perché la pausa utente tiene il rendering congelato. Un
+        // secondo toggle deve partire da QUEL cursore avanzato, non dal
+        // frame fisico vecchio rimasto sul canvas.
+        offscreenCursor = offscreenCursor
+          ? advanceTourCursor(offscreenCursor, offscreenElapsedMs)
+          : captureTourCursor();
         offscreenStartedAt = Date.now();
         offscreenElapsedMs = 0;
       }

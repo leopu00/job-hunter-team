@@ -241,7 +241,7 @@ describe("globo della home pubblica", () => {
     // produrre frame invisibili, mentre il tempo trascorso resta nel
     // cursore virtuale e al rientro ricostruisce fase, città e card.
     expect(landingGlobeSource).toContain(
-      "offscreenCursor = captureTourCursor()",
+      ": captureTourCursor()",
     );
     expect(landingGlobeSource).toContain(
       "offscreenElapsedMs = Date.now() - offscreenStartedAt",
