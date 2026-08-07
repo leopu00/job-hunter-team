@@ -699,7 +699,10 @@ func _toggle_chat_access() -> void:
 ## traduce nel nome del sistema reale (coordinatore → capitano).
 func _open_chat(agent: AgentNPC) -> void:
 	Log.info("chat", "pannello chat aperto con " + agent.slug)
-	_chat_panel = ChatPanel.new(agent.slug, agent.display_name, _chat_roster())
+	# La chat viva indirizza l'uid e mostra il suo ritratto per istanza. Lo
+	# showroom senza uid continua invece sul canale authored del ruolo.
+	var chat_ref := agent.uid if agent.uid != "" else agent.slug
+	_chat_panel = ChatPanel.new(chat_ref, agent.display_name, _chat_roster())
 	add_child(_chat_panel)
 	_chat_panel.closed.connect(func() -> void:
 		_chat_panel = null
@@ -716,7 +719,7 @@ func _start_talk(agent: AgentNPC) -> void:
 	# l'agente del reparto (prima persona), senza regia dell'Assistente.
 	if tour_running and TourGuide.mode() == "free" and TourGuide.stop_open(slug):
 		_camera.focus_on(agent.global_position + Vector2(0, -40), 1.05)
-		_tour_open_stop_dialogue(slug)
+		_tour_open_stop_dialogue(slug, agent)
 		return
 	if ScriptedOnboarding.story_mode():
 		_story_seen[agent.slug] = true
@@ -744,8 +747,10 @@ func _start_talk(agent: AgentNPC) -> void:
 		# Tour chiuso ma team ancora spento: l'agente si presenta in breve
 		# e riporta con garbo alla checklist (mai le stesse risposte esaurite).
 		tree_id = "tease_" + slug
+	if tree_id == "":
+		tree_id = slug
 	ui.action_triggered.connect(_on_tour_dialogue_action)
-	ui.open(agent.slug, agent.display_name, tree_id)
+	ui.open(agent.dialogue_portrait_slug(), agent.display_name, tree_id)
 	ui.closed.connect(func() -> void:
 		if is_instance_valid(agent) and not agent.is_dissolving():
 			agent.end_talk()
@@ -936,7 +941,7 @@ func _tour_begin_presentation(stop: String, guide: AgentNPC,
 		host: AgentNPC) -> void:
 	var scene := TourGuide.scene_for(stop)
 	if OS.get_environment("JHT_TOUR_TEST") == "1":
-		_tour_open_stop_dialogue(stop)
+		_tour_open_stop_dialogue(stop, host)
 		return
 	if guide and scene.has("greet"):
 		guide.say(str(scene["greet"]))
@@ -945,21 +950,25 @@ func _tour_begin_presentation(stop: String, guide: AgentNPC,
 			if is_instance_valid(host) and TourGuide.current_slug() == stop:
 				host.say(str(scene["reply"])))
 	get_tree().create_timer(3.0).timeout.connect(func() -> void:
-		_tour_open_stop_dialogue(stop))
+		_tour_open_stop_dialogue(stop, host))
 
 ## Apre il dialogo della tappa appena la scena è libera (ritenta finché
 ## un pannello o un altro dialogo occupano lo schermo).
-func _tour_open_stop_dialogue(stop: String) -> void:
+func _tour_open_stop_dialogue(stop: String, preferred_host: AgentNPC = null) -> void:
 	if not _tour_enabled or not TourGuide.stop_open(stop):
 		return
 	if Game.dialogue_active or _registry or _dept_panel or _agent_card \
 			or _chat_panel or _cv_shelf_panel or _queue_panel \
 			or _thinking_panel or _coordinator_panel:
 		get_tree().create_timer(0.8).timeout.connect(func() -> void:
-			_tour_open_stop_dialogue(stop))
+			_tour_open_stop_dialogue(stop, preferred_host))
 		return
 	var scene := TourGuide.scene_for(stop)
-	var host := _tour_host_npc(stop)
+	var host := preferred_host
+	if not is_instance_valid(host) \
+			or ScriptedOnboarding.normalize_agent(host.slug) != stop \
+			or host.is_dissolving():
+		host = _tour_host_npc(stop)
 	var guide := _tour_guide_npc()
 	if guide:
 		guide.tour_face_audience()
@@ -968,8 +977,10 @@ func _tour_open_stop_dialogue(stop: String) -> void:
 	var ui := DialogueUI.new()
 	add_child(ui)
 	ui.action_triggered.connect(_on_tour_dialogue_action)
-	ui.open(str(scene.get("portrait", "assistente")),
-			str(scene.get("name", CharacterDefs.role_name("assistente"))),
+	ui.open(host.dialogue_portrait_slug() if host else ComicChat.portrait_slug(
+			str(scene.get("portrait", "assistente"))),
+			host.display_name if host else str(scene.get(
+					"name", CharacterDefs.role_name("assistente"))),
 			str(scene.get("tree", "")))
 	ui.closed.connect(func() -> void:
 		if host == _tour_staged_host:
