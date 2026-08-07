@@ -1489,6 +1489,11 @@
       "path": "docs/internal/2026-08-07-LEGAL-COPY-DRAFT.md",
       "description": "Audit pre-release e bozze EN versionate di Privacy e Termini, con flussi reali, copy condiviso web/desktop e decisioni legali esplicitamente aperte",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-07-LEGAL-COPY-RELEASE.md",
+      "description": "Fonte EN di pubblicazione per Privacy e Termini v2026-08-07.1: titolare individuale, età 16, Google/cloud, analytics opt-in, CARTO, feedback privato, export e cancellazione cloud immediata",
+      "last_review": null
     }
   ]
 }
