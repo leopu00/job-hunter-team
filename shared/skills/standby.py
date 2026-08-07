@@ -139,9 +139,9 @@ STATE_EXPIRED = "expired"  # `until` passato: sveglia pendente, ma NON più muti
 STATE_INVALID = "invalid"  # flag illeggibile o senza condizione di uscita
 
 RESUME_TEXT = (
-    "[STANDBY] [RIPRENDI] Standby a spesa zero terminato ({why}). "
-    "Riprendi il lavoro normale: bridge e automatismi di pacing sono di nuovo "
-    "attivi. Riparti dalla tua coda, senza attendere altri ordini."
+    "[STANDBY] [RIPRENDI] Zero-spend standby ended ({why}). Resume normal "
+    "work: bridges and pacing automation are active again. Continue from "
+    "your queue without waiting for more instructions."
 )
 
 
@@ -258,7 +258,7 @@ def should_wake(weekly_usage=None, now: Optional[datetime] = None):
     """
     st = status(now)
     if st["state"] == STATE_EXPIRED:
-        return True, "scadenza --until raggiunta"
+        return True, "--until deadline reached"
     if st["state"] != STATE_ACTIVE:
         return False, None
     wake_on = st.get("wake_on") or {}
@@ -266,7 +266,7 @@ def should_wake(weekly_usage=None, now: Optional[datetime] = None):
     if (isinstance(threshold, (int, float))
             and isinstance(weekly_usage, (int, float))
             and float(weekly_usage) < float(threshold)):
-        return True, f"weekly {weekly_usage:.0f}% sotto la soglia {threshold:.0f}%"
+        return True, f"weekly {weekly_usage:.0f}% below the {threshold:.0f}% threshold"
     return False, None
 
 
@@ -341,11 +341,11 @@ def enter(reason: str = "", until=None, wake_on_weekly=None,
             wake_on = None
     if until_dt is None and wake_on is None:
         raise ValueError(
-            "uno standby senza condizione di uscita non si scrive: "
-            "serve --until <iso> oppure --wake-on-weekly [pct]")
+            "standby requires an exit condition: use --until <iso> or "
+            "--wake-on-weekly [pct]")
     if until_dt is not None and until_dt <= nowdt:
-        raise ValueError(f"--until è nel passato ({until_dt.isoformat()}): "
-                         "sarebbe uno standby già scaduto")
+        raise ValueError(f"--until is in the past ({until_dt.isoformat()}): "
+                         "standby would already be expired")
     payload = {
         "since": int(nowdt.timestamp()),
         "until": until_dt.isoformat(timespec="seconds") if until_dt else None,
@@ -391,10 +391,10 @@ def activate(reason: str = "", until=None, wake_on_weekly=None,
         try:
             paused, _skipped = sp.pause_all(include_core=True, reason=reason)
         except Exception as e:                                  # noqa: BLE001
-            print(f"[standby] WARN soft-pause fallita: {e}", file=sys.stderr)
+            print(f"[standby] WARN soft pause failed: {e}", file=sys.stderr)
     else:
-        print("[standby] WARN soft_pause_team non caricabile: flag scritto ma "
-              "agenti NON avvisati — mettili in pausa a mano", file=sys.stderr)
+        print("[standby] WARN soft_pause_team could not be loaded: flag written "
+              "but agents were NOT notified — pause them manually", file=sys.stderr)
     log_event("enter", reason=payload["reason"],
               weekly_usage=last_weekly_usage(),
               agents_paused=(len(paused) if paused is not None else None),
@@ -453,7 +453,7 @@ def wake(why: str = "", weekly_usage=None, now: Optional[datetime] = None) -> di
     halted = HALTED_FLAG.exists()
     resumed = 0
     if not halted:
-        msg = RESUME_TEXT.format(why=(why or "uscita manuale"))
+        msg = RESUME_TEXT.format(why=(why or "manual exit"))
         for s in _list_sessions():
             if s in NEVER_MESSAGE:
                 continue
@@ -463,7 +463,7 @@ def wake(why: str = "", weekly_usage=None, now: Optional[datetime] = None) -> di
     standby_s = None
     if isinstance(since, (int, float)):
         standby_s = max(0, int(_now(now).timestamp() - since))
-    log_event("exit", reason=(why or "uscita manuale"),
+    log_event("exit", reason=(why or "manual exit"),
               weekly_usage=(weekly_usage if weekly_usage is not None
                             else last_weekly_usage()),
               agents_resumed=resumed, halted=halted, standby_s=standby_s)
@@ -473,32 +473,32 @@ def wake(why: str = "", weekly_usage=None, now: Optional[datetime] = None) -> di
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         prog="standby",
-        description="Standby a spesa zero del team (ferma anche i core; "
-                    "la sveglia resta nei bridge)")
+        description="Zero-spend team standby (also pauses core roles; bridges "
+                    "retain the wake-up mechanism)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p_st = sub.add_parser("status", help="stato corrente dello standby")
+    p_st = sub.add_parser("status", help="current standby status")
     p_st.add_argument("--json", action="store_true", help="output machine-readable")
 
     p_ac = sub.add_parser(
         "active",
-        help="predicato per gli script shell: exit 0 se lo standby è ATTIVO, "
-             "1 se non lo è (off/scaduto/invalido), 3 su errore interno")
+        help="predicate for shell scripts: exit 0 when standby is ACTIVE, 1 "
+             "when it is not (off/expired/invalid), 3 on internal error")
     p_ac.add_argument("-q", "--quiet", action="store_true",
-                      help="niente stdout: conta solo l'exit code")
+                      help="no stdout; only the exit code matters")
 
-    p_on = sub.add_parser("on", help="entra in standby (serve una condizione di uscita)")
-    p_on.add_argument("--reason", default="", help="perché (finisce nei log)")
+    p_on = sub.add_parser("on", help="enter standby (requires an exit condition)")
+    p_on.add_argument("--reason", default="", help="reason (recorded in logs)")
     p_on.add_argument("--until", default=None,
-                      help="uscita a tempo: ISO 8601 (es. 2026-08-03T09:00:00Z)")
+                      help="timed exit: ISO 8601 (for example 2026-08-03T09:00:00Z)")
     p_on.add_argument("--wake-on-weekly", nargs="?", const=DEFAULT_WEEKLY_BELOW,
                       type=float, default=None, metavar="PCT",
-                      help=f"uscita condizionata: risvegliati quando il weekly "
-                           f"scende sotto PCT (default {DEFAULT_WEEKLY_BELOW:.0f})")
-    p_on.add_argument("--by", default="user", help="chi lo chiede (default: user)")
+                      help=f"conditional exit: wake when weekly usage falls "
+                           f"below PCT (default {DEFAULT_WEEKLY_BELOW:.0f})")
+    p_on.add_argument("--by", default="user", help="requester (default: user)")
 
-    p_off = sub.add_parser("off", help="esce subito dallo standby (flag via, poi [RIPRENDI])")
-    p_off.add_argument("--reason", default="", help="perché (finisce nei log)")
+    p_off = sub.add_parser("off", help="leave standby now (remove flag, then [RIPRENDI])")
+    p_off.add_argument("--reason", default="", help="reason (recorded in logs)")
 
     args = ap.parse_args(argv)
 
@@ -519,21 +519,21 @@ def main(argv: list[str]) -> int:
         elif st["state"] == STATE_ACTIVE:
             cond = []
             if st.get("until"):
-                cond.append(f"fino a {st['until']}")
+                cond.append(f"until {st['until']}")
             wo = st.get("wake_on") or {}
             if wo.get("weekly_below") is not None:
-                cond.append(f"sveglia a weekly < {wo['weekly_below']:.0f}%")
-            print(f"STANDBY ATTIVO — {'; '.join(cond)}"
-                  f" (motivo: {st.get('reason') or 'non indicato'}).")
-            print("I bridge campionano e tacciono; la sveglia è del sentinel-bridge.")
+                cond.append(f"wake at weekly < {wo['weekly_below']:.0f}%")
+            print(f"STANDBY ACTIVE — {'; '.join(cond)}"
+                  f" (reason: {st.get('reason') or 'not provided'}).")
+            print("Bridges sample silently; sentinel-bridge handles wake-up.")
         elif st["state"] == STATE_EXPIRED:
-            print("STANDBY SCADUTO — sveglia pendente: il sentinel-bridge la "
-                  "esegue al prossimo tick (flag via, poi [RIPRENDI]).")
+            print("STANDBY EXPIRED — wake-up pending: sentinel-bridge will "
+                  "perform it on the next tick (remove flag, then [RIPRENDI]).")
         elif st["state"] == STATE_INVALID:
-            print("Flag di standby INVALIDO (senza condizione di uscita): non "
-                  "vale come standby, il sentinel-bridge lo rimuoverà.")
+            print("INVALID standby flag (no exit condition): it does not count "
+                  "as standby and sentinel-bridge will remove it.")
         else:
-            print("STANDBY off — il team opera normalmente.")
+            print("STANDBY off — the team is operating normally.")
         return 0
 
     if args.cmd == "on":
@@ -548,22 +548,22 @@ def main(argv: list[str]) -> int:
         cond = payload.get("until") or (
             f"weekly < {payload['wake_on']['weekly_below']:.0f}%"
             if payload.get("wake_on") else "?")
-        print(f"STANDBY attivo (uscita: {cond}).")
-        print(f"Agenti in pausa: "
-              f"{len(paused) if paused is not None else 'ND (pausa fallita)'}."
-              f" I bridge continuano a campionare e faranno da sveglia.")
+        print(f"STANDBY active (exit: {cond}).")
+        print(f"Paused agents: "
+              f"{len(paused) if paused is not None else 'N/A (pause failed)'}."
+              f" Bridges continue sampling and will handle wake-up.")
         return 0
 
     if args.cmd == "off":
         res = wake(why=(args.reason or "jht standby off"))
         if not res["removed"]:
-            print("STANDBY non era attivo.")
+            print("STANDBY was not active.")
         elif res["halted"]:
-            print("Flag di standby rimosso. Team NON riavviato: "
-                  ".team-halted.flag presente (lo stop dell'utente vince). "
-                  "Riparti con `jht team start` quando vuoi.")
+            print("Standby flag removed. Team was NOT restarted: "
+                  ".team-halted.flag is present (the user's stop takes "
+                  "precedence). Run `jht team start` when ready.")
         else:
-            print(f"STANDBY terminato: [RIPRENDI] inviato a {res['resumed']} sessioni.")
+            print(f"STANDBY ended: [RIPRENDI] sent to {res['resumed']} sessions.")
         return 0
 
     return 1
@@ -577,5 +577,5 @@ if __name__ == "__main__":
     except Exception as _e:      # noqa: BLE001
         # MAI exit 1 per un guasto: 1 significa «non in standby» per i
         # chiamanti shell. 3 = «non lo so», e loro ricadono sul fallback.
-        print(f"[standby] ERRORE interno: {_e}", file=sys.stderr)
+        print(f"[standby] internal ERROR: {_e}", file=sys.stderr)
         sys.exit(3)

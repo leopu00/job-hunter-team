@@ -34,6 +34,41 @@ const RULES: Rule[] = [
     replace: "[private-key]",
   },
   {
+    // Il contesto HTTP evita falsi positivi sulla prosa "Bearer
+    // authentication" senza perdere gli header Authorization reali.
+    key: "bearer_token",
+    family: "secret",
+    pattern:
+      /\b((?:Proxy-)?Authorization\s*:?\s*Bearer)\s+[A-Za-z0-9._~+/=-]{6,}/gi,
+    replace: "$1 [secret]",
+  },
+  {
+    // Anche una Basic credential di quattro caratteri e' valida (`YTo=`).
+    key: "basic_auth",
+    family: "secret",
+    pattern:
+      /\b((?:Proxy-)?Authorization\s*:?\s*Basic)\s+(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)/gi,
+    replace: "$1 [secret]",
+  },
+  {
+    key: "aws_access_key",
+    family: "secret",
+    pattern: /\bAKIA[A-Z0-9]{16}\b/g,
+    replace: "[aws-access-key]",
+  },
+  {
+    key: "slack_token",
+    family: "secret",
+    pattern: /\bxoxb-[A-Za-z0-9-]{10,}\b/g,
+    replace: "[slack-token]",
+  },
+  {
+    key: "gemini_key",
+    family: "secret",
+    pattern: /\bAIza[A-Za-z0-9_-]{20,}\b/g,
+    replace: "[gemini-key]",
+  },
+  {
     key: "assigned_secret",
     family: "secret",
     pattern:
@@ -126,9 +161,17 @@ const RULES: Rule[] = [
     replace: "[ip]",
   },
   {
-    key: "home_path",
+    // Windows ammette spazi nel componente utente; drive/backslash tengono
+    // questa regola separata dai path POSIX e dalla prosa che li segue.
+    key: "home_path_windows",
     family: "personal",
-    pattern: /([/\\](?:Users|home)[/\\])([^/\\\s"':;,)\]]+)/gi,
+    pattern: /((?:[A-Z]:[/\\]|\\)Users[/\\])([^/\\\r\n\t"':;,)\]]+)/gi,
+    replace: "$1[user]",
+  },
+  {
+    key: "home_path_posix",
+    family: "personal",
+    pattern: /((?:\/Users|\/home)\/)([^/\s"':;,)\]]+)/gi,
     replace: "$1[user]",
   },
   {

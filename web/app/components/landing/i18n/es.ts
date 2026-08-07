@@ -21,7 +21,7 @@ export const es: Record<string, string> = {
   nav_github: "GitHub",
   nav_download: "Instalar",
   nav_project: "Proyecto",
-  nav_tutorials: "Tutoriales",
+  nav_get_started: "Primeros pasos",
   nav_pricing: "Precios",
   nav_login: "Iniciar sesión",
 
@@ -41,16 +41,15 @@ export const es: Record<string, string> = {
   footer_product: "Producto",
   footer_stats: "Proyecto",
   footer_resources: "Recursos",
-  footer_tutorials: "Tutoriales",
+  footer_credits: "Créditos",
   footer_contacts: "Contacto",
+  footer_instagram_aria: "Job Hunter Team en Instagram",
+  footer_tiktok_aria: "Job Hunter Team en TikTok",
   nav_contact: "Contacto",
   footer_bug: "Reportar un error",
   footer_privacy: "Política de privacidad",
   footer_terms: "Términos del servicio",
   footer_copyright: "Open Source bajo licencia MIT",
-  tutorials_title: "Tutoriales",
-  tutorial_game_title: "Juego",
-  tutorial_web_title: "Web",
   trailer_title: "Tráiler",
 
   // Download page
@@ -69,8 +68,8 @@ export const es: Record<string, string> = {
   dl_windows_portable_link: "Descarga en su lugar la versión portátil",
   dl_desktop_unsigned_note:
     "En macOS la app está firmada y notarizada: se abre con doble clic. En Windows no está firmada, así que SmartScreen muestra «Windows protegió su PC»: pulsa «Más información» y luego «Ejecutar de todas formas». En Linux, extrae el archivo y hazlo ejecutable.",
-  dl_help_text: "¿No sabes dónde instalarlo?",
-  dl_help_link: "Lee la guía",
+  dl_help_text: "¿Has descargado la app?",
+  dl_help_link: "Sigue la configuración paso a paso",
 
   // Login page (LandingClient)
   login_save_progress: "Inicia sesión para guardar tu progreso",

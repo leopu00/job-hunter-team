@@ -39,6 +39,32 @@ extends Node
 ##   JHT_PROMO=agent-review  Un ciak QA/B-roll per il ruolo indicato da
 ##                         JHT_PROMO_AGENT: seduta, alzata, quattro direzioni,
 ##                         ritiro documento, lavoro reale e ritorno a sedere.
+##
+## V3 verticale (OK operatore 05/08) — tre clip orizzontali puliti, destinati
+## al compositing e quindi SENZA copy o pannelli nel frame:
+##   JHT_PROMO=team-welcome          tre agenti: passo breve, posa frontale,
+##                                   poi idle vivo nell'ufficio.
+##   JHT_PROMO=assistant-intro       l'Assistente fa un passo frontale e resta
+##                                   calma, sul lato destro del quadro.
+##   JHT_PROMO=assistant-walk-right  l'Assistente percorre una tratta NavGrid
+##                                   continua verso destra, camera al seguito.
+##   JHT_PROMO=v5-reveal             raw DEV portrait: la camera arretra
+##                                   dall'Assistente e rivela tre AgentNPC in
+##                                   movimento reale, senza UI o balloon.
+##   JHT_PROMO=v6-dev-reveal         take V6 portrait: 1 s di maniglia, 10 s
+##                                   di reveal con uscita a destra, 1 s di
+##                                   maniglia finale.
+##   JHT_PROMO=v6-dev-work           take V6 portrait: 1 s di maniglia, 6 s
+##                                   di lavoro vivo con raccordo verso destra,
+##                                   1 s di maniglia finale.
+##   JHT_PROMO=v6-office-life        take portrait di vita d'ufficio reale:
+##                                   Scout dalla scrivania alla stampante e
+##                                   ritorno seduto, senza coreografia.
+##   JHT_PROMO=v8-map                take portrait della WorldMap reale: zoom
+##                                   e pan continui fanno emergere i pin.
+##   JHT_PROMO=v8-office-handoff     take portrait di vita d'ufficio reale:
+##                                   uno Scrittore consegna il fascicolo alla
+##                                   vaschetta e torna alla scrivania.
 ## I viaggi fisici riusano le tappe VERE della pipeline (stampante,
 ## pile_take/pile_drop, scaffale output) ma con PAUSE FISSE: il ciak deve
 ## essere ripetibile, non un lancio di dadi. Il HUD «JHT TEAM» (numeri
@@ -242,6 +268,106 @@ const REVIEW_PICKUP_HOLD := 1.0
 const REVIEW_WORK_HOLD := 2.6
 const REVIEW_FINAL_HOLD := 2.0
 
+## ── Clip V3 «Your AI job-search team» ───────────────────────────────
+## Le durate sono intenzionalmente appena superiori al contratto regia:
+## 9.5 s / 7.0 s / 8.5 s. Il writer Movie Maker taglia dal marker `start`,
+## non dall'avvio del processo, cosi' il primo frame consegnato e' gia' vivo.
+const V3_TEAM_WELCOME_SECONDS := 9.6
+const V3_ASSISTANT_INTRO_SECONDS := 7.2
+const V3_ASSISTANT_WALK_SECONDS := 8.6
+const V3_STILL_HOLD := 900.0
+
+## V5 — il raw verticale non contiene testo: il suo valore è mostrare che
+## l'ufficio è un gioco vivo, con persone intere e una camera che scopre la
+## squadra. Il frame portrait ha più aria verticale, ma il close iniziale
+## mantiene comunque testa e piedi dell'Assistente lontani dai bordi.
+const V5_REVEAL_SECONDS := 14.2
+const V5_REVEAL_CLOSE_CAMERA := Vector2(1570.0, 760.0)
+const V5_REVEAL_CLOSE_ZOOM := 1.65
+const V5_REVEAL_WIDE_CAMERA := Vector2(1650.0, 1020.0)
+const V5_REVEAL_WIDE_ZOOM := 1.2
+const V5_REVEAL_STAGES := {
+	"scout-1": Vector2(1450.0, 650.0),
+	"analista-1": Vector2(1570.0, 650.0),
+	"assistente": Vector2(1690.0, 650.0),
+}
+const V5_REVEAL_DESTINATIONS := {
+	"scout-1": Vector2(1350.0, 780.0),
+	"analista-1": Vector2(1700.0, 780.0),
+	"assistente": Vector2(1790.0, 780.0),
+}
+
+## V6 — i due raw sono tagliati esattamente sulla misura editoriale. Le
+## maniglie vengono marcate nello stdout: il bootstrap precedente a HANDLE_IN
+## non fa parte del take e non deve mai essere consegnato (puo' contenere UI
+## non ancora ripulita). Il primo raw chiude con uno Scout che esce a destra;
+## il secondo riparte con lo stesso agente e la stessa direzione.
+const V6_HANDLE_SECONDS := 1.0
+const V6_REVEAL_PROGRAM_SECONDS := 10.0
+const V6_WORK_PROGRAM_SECONDS := 6.0
+const V6_LIFE_AGENT := "scout-5"
+const V6_LIFE_PICKUP_HOLD := 0.35
+const V6_LIFE_PLAYBACK_RATE := 1.2
+const V6_LIFE_MIN_PROGRAM_SECONDS := 3.0
+const V6_LIFE_MAX_PROGRAM_SECONDS := 5.0
+const V6_LIFE_CAMERA_OFFSET := Vector2(0.0, -40.0)
+const V6_LIFE_ZOOM := 3.2
+const V8_MAP_PROGRAM_SECONDS := 8.0
+const V8_MAP_ZOOM_FROM := 4.8
+const V8_MAP_ZOOM_TO := 5.8
+const V8_MAP_SWEEPS := 3.0
+const V8_MAP_FROM := Vector2(-90.0, 42.0)
+const V8_MAP_TO := Vector2(150.0, 36.0)
+const V8_OFFICE_AGENT := "scrittore-2"
+const V8_OFFICE_DROP_HOLD := 0.8
+const V8_OFFICE_MIN_PROGRAM_SECONDS := 4.0
+const V8_OFFICE_MAX_PROGRAM_SECONDS := 8.5
+const V8_OFFICE_CAMERA_OFFSET := Vector2(30.0, -40.0)
+const V8_OFFICE_ZOOM := 3.8
+const V6_REVEAL_CLOSE_CAMERA := Vector2(1570.0, 760.0)
+const V6_REVEAL_CLOSE_ZOOM := 1.65
+const V6_REVEAL_WIDE_CAMERA := Vector2(1650.0, 1020.0)
+const V6_REVEAL_WIDE_ZOOM := 1.2
+const V6_REVEAL_EXIT := Vector2(2300.0, 780.0)
+const V6_REVEAL_EXIT_DELAY := 0.5
+const V6_WORK_CAMERA_FROM := Vector2(1450.0, 1000.0)
+const V6_WORK_CAMERA_TO := Vector2(1950.0, 1000.0)
+const V6_WORK_ZOOM := 1.85
+const V6_WORK_ZOOM_TO := 2.15
+const V6_WORK_ENTRY := Vector2(1250.0, 780.0)
+const V6_WORK_EXIT := Vector2(2400.0, 780.0)
+
+## Corridoio centrale libero, gia' percorso dal loop QA delle quattro
+## direzioni. Le tre colonne producono una composizione cortese ma non
+## teatrale: un passo in avanti reale, poi la posa `down` frontale.
+const V3_TEAM_STARTS := {
+	"scout-1": Vector2(1450.0, 650.0),
+	"analista-1": Vector2(1570.0, 650.0),
+	"assistente": Vector2(1690.0, 650.0),
+}
+const V3_TEAM_STEP := Vector2(0.0, 130.0)
+## Il cast cammina a y=650→780: tenere la camera a 960 lo spingeva contro il
+## bordo alto del frame 16:9 e decapitava i tre volti. A y=650 l'intera figura
+## resta nel terzo centrale, con scrivanie vive dietro e aria sopra la testa.
+const V3_TEAM_CAMERA := Vector2(1570.0, 650.0)
+const V3_TEAM_ZOOM := 1.82
+
+## La reception e' dietro al quadro: l'Assistente viene preparata nella porta
+## libera tra Scorer e reparti sud, fa un piccolo passo verso il pubblico e
+## lascia libera la meta' sinistra per il pannello composto da VIDEO.
+const V3_ASSISTANT_INTRO_FROM := Vector2(1790.0, 1390.0)
+const V3_ASSISTANT_INTRO_TO := Vector2(1790.0, 1450.0)
+const V3_ASSISTANT_INTRO_CAMERA := Vector2(1600.0, 1390.0)
+const V3_ASSISTANT_INTRO_ZOOM := 2.8
+
+## Fascia nord del reparto centrale: 1340 px diritti a 150 px/s. Il test
+## controlla sia navigabilita' sia distanza >= 8.5 s; l'offset porta il corpo
+## da sinistra-centro nel quadro mentre il tracking lo segue senza scatti.
+const V3_ASSISTANT_WALK_FROM := Vector2(1260.0, 780.0)
+const V3_ASSISTANT_WALK_TO := Vector2(2600.0, 780.0)
+const V3_ASSISTANT_WALK_CAMERA_OFFSET := Vector2(170.0, -40.0)
+const V3_ASSISTANT_WALK_ZOOM := 2.2
+
 ## I core non appartengono alla catena delle pile, ma il loro lavoro ha
 ## comunque una meta reale della ronda dichiarata in CharacterDefs.
 const REVIEW_CORE_WORK := {
@@ -260,6 +386,7 @@ var _track_offset := Vector2.ZERO
 var _review_role := ""
 var _review_frame_zero := 0
 var _review_shutter: CanvasLayer
+var _v3_active := false
 ## Inseguimento morbido: a 30 fps un lerp 0.08 tiene il soggetto centrato
 ## senza scatti quando cambia direzione (carrellata, non ping-pong).
 const TRACK_LERP := 0.08
@@ -268,6 +395,9 @@ const TRACK_LERP := 0.08
 func _ready() -> void:
 	_office = get_parent()
 	var mode := OS.get_environment("JHT_PROMO")
+	_v3_active = mode in ["team-welcome", "assistant-intro", "assistant-walk-right",
+			"v5-reveal", "v6-dev-reveal", "v6-dev-work", "v6-office-life",
+			"v8-map", "v8-office-handoff"]
 	# Movie Maker registra dal bootstrap. Sul profilo live teniamo chiusa una
 	# semplice tendina nera finche' il data-plane non e' pronto: nel raw non
 	# entra mai un frame intermedio col warning, che resta comunque intatto e
@@ -293,9 +423,33 @@ func _ready() -> void:
 			_dusk_night_clip.call_deferred()
 		"agent-review":
 			_agent_review_clip.call_deferred()
+		"team-welcome":
+			_team_welcome_clip.call_deferred()
+		"assistant-intro":
+			_assistant_intro_clip.call_deferred()
+		"assistant-walk-right":
+			_assistant_walk_right_clip.call_deferred()
+		"v5-reveal":
+			_v5_reveal_clip.call_deferred()
+		"v6-dev-reveal":
+			_v6_dev_reveal_clip.call_deferred()
+		"v6-dev-work":
+			_v6_dev_work_clip.call_deferred()
+		"v6-office-life":
+			_v6_office_life_clip.call_deferred()
+		"v8-map":
+			_v8_map_clip.call_deferred()
+		"v8-office-handoff":
+			_v8_office_handoff_clip.call_deferred()
 
 
 func _process(_delta: float) -> void:
+	if _v3_active:
+		# SetupService puo' pubblicare il suo primo stato dopo _dress_promo_set:
+		# l'handler normale riaccende allora i diamanti del tour showroom. Nel
+		# V3 non sono UI del prodotto da comporre, quindi li si spegne a ogni
+		# frame della sola regia e non nella scena Office generale.
+		_v3_silence_quest_markers()
 	if _track_cam and is_instance_valid(_track_target):
 		var goal: Vector2 = _track_target.global_position + _track_offset
 		_track_cam.position = _track_cam.position.lerp(goal, TRACK_LERP)
@@ -600,6 +754,554 @@ func _dusk_night_clip() -> void:
 	_pulse_at(5.5, scout)
 
 
+## ── V3: tre take senza UI ───────────────────────────────────────────
+
+## Il set showroom resta esplicitamente sintetico nel manifest di consegna,
+## ma il movimento e' quello del prodotto: AgentNPC, NavGrid, rig e Camera2D
+## sono gli stessi della scena normale. Nessun badge/demo/sidebar/dialogo
+## entra nell'immagine: _dress_promo_set() li rimuove solo per JHT_PROMO.
+func _team_welcome_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	var cast: Array = []
+	for ref in V3_TEAM_STARTS:
+		var agent := _find(str(ref))
+		if agent == null:
+			push_error("promo V3 team-welcome: agente assente '%s'" % ref)
+			get_tree().quit(10)
+			return
+		_v3_stage(agent, V3_TEAM_STARTS[ref])
+		cast.append(agent)
+	var cam := _mount_camera(V3_TEAM_CAMERA, V3_TEAM_ZOOM)
+	for agent in cast:
+		var from: Vector2 = agent.global_position
+		_force_legs(agent, [agent._leg_to(from + V3_TEAM_STEP, "walk",
+				V3_STILL_HOLD, "idle")])
+	_v3_animate_background(cast)
+	# Aspetta il primo tick fisico: il marker start cade gia' sul walk, mai su
+	# una posa di bootstrap o una scrivania appena liberata.
+	await get_tree().physics_frame
+	_v3_marker("team-welcome", "start")
+	await get_tree().create_timer(V3_TEAM_WELCOME_SECONDS).timeout
+	_v3_marker("team-welcome", "end")
+	_v3_pass_and_quit("team-welcome", cam)
+
+
+func _assistant_intro_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	var assistant := _find("assistente")
+	if assistant == null:
+		push_error("promo V3 assistant-intro: Assistente assente")
+		get_tree().quit(11)
+		return
+	_v3_stage(assistant, V3_ASSISTANT_INTRO_FROM)
+	var cam := _mount_camera(V3_ASSISTANT_INTRO_CAMERA, V3_ASSISTANT_INTRO_ZOOM)
+	# Il solo gesto approvato usa cel esistenti: passo reale + arrivo frontale
+	# + idle. Non inventa un gesto di mano e non modifica gli sprite.
+	_force_legs(assistant, [assistant._leg_to(V3_ASSISTANT_INTRO_TO, "walk",
+			V3_STILL_HOLD, "idle")])
+	_v3_animate_background([assistant])
+	await get_tree().physics_frame
+	_v3_marker("assistant-intro", "start")
+	await get_tree().create_timer(V3_ASSISTANT_INTRO_SECONDS).timeout
+	_v3_marker("assistant-intro", "end")
+	_v3_pass_and_quit("assistant-intro", cam)
+
+
+func _assistant_walk_right_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	var assistant := _find("assistente")
+	if assistant == null:
+		push_error("promo V3 assistant-walk-right: Assistente assente")
+		get_tree().quit(12)
+		return
+	_v3_stage(assistant, V3_ASSISTANT_WALK_FROM)
+	_track_target = assistant
+	_track_offset = V3_ASSISTANT_WALK_CAMERA_OFFSET
+	_track_cam = _mount_camera(assistant.global_position + _track_offset,
+			V3_ASSISTANT_WALK_ZOOM)
+	# La tratta eccede la durata consegnata: il taglio termina mentre l'agente
+	# e' ancora in walk verso destra, mai sul ritorno o su un freeze finale.
+	_force_legs(assistant, [assistant._leg_to(V3_ASSISTANT_WALK_TO, "walk",
+			V3_STILL_HOLD, "idle")])
+	_v3_animate_background([assistant])
+	await get_tree().physics_frame
+	_v3_marker("assistant-walk-right", "start")
+	await get_tree().create_timer(V3_ASSISTANT_WALK_SECONDS).timeout
+	_v3_marker("assistant-walk-right", "end")
+	_v3_pass_and_quit("assistant-walk-right", _track_cam)
+
+
+## Raw DEV per V5-04. Il movimento è tutto nel prodotto: Camera2D, NavGrid e
+## AgentNPC. Non c'è un pan editoriale sopra un fermo immagine e non vengono
+## creati pannelli o balloon che potrebbero sovrapporsi al compositing V5.
+func _v5_reveal_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	var cast: Array = []
+	var moves: Array = []
+	for ref in V5_REVEAL_STAGES:
+		var agent := _find(str(ref))
+		if agent == null:
+			push_error("promo V5 reveal: agente assente '%s'" % ref)
+			get_tree().quit(14)
+			return
+		_v3_stage(agent, V5_REVEAL_STAGES[ref])
+		cast.append(agent)
+		moves.append({"agent": agent, "destination": V5_REVEAL_DESTINATIONS[ref]})
+	var cam := _mount_camera(V5_REVEAL_CLOSE_CAMERA, V5_REVEAL_CLOSE_ZOOM)
+	for move in moves:
+		var agent: AgentNPC = move["agent"]
+		var mid := Vector2(agent.global_position.x, 780.0)
+		var destination: Vector2 = move["destination"]
+		_force_legs(agent, [
+			agent._leg_to(mid, "walk", 0.0, "idle"),
+			agent._leg_to(destination, "carry", V3_STILL_HOLD, "idle"),
+		])
+	# Il close lascia una maniglia pulita sull'Assistente; poi la camera
+	# arretra DAVVERO dentro la scena e rende leggibile l'intera squadra.
+	var tw := create_tween().set_parallel(true) \
+			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(cam, "position", V5_REVEAL_WIDE_CAMERA, 8.2)
+	tw.tween_property(cam, "zoom", Vector2(V5_REVEAL_WIDE_ZOOM, V5_REVEAL_WIDE_ZOOM), 8.2)
+	_v3_animate_background(cast)
+	await get_tree().physics_frame
+	_v3_marker("v5-reveal", "start")
+	await get_tree().create_timer(V5_REVEAL_SECONDS).timeout
+	_v3_marker("v5-reveal", "end")
+	_v5_pass_and_quit("v5-reveal", cam)
+
+
+## Dieci secondi programmati, circondati da una maniglia pulita per lato.
+## Lo Scout attraversa davvero la NavGrid e completa l'uscita a destra negli
+## ultimi secondi del programma; camera e altri due AgentNPC si muovono in
+## parallelo, quindi il reveal non puo' degradare in un pan su immagine ferma.
+func _v6_dev_reveal_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	var cast: Array[AgentNPC] = []
+	for ref in V5_REVEAL_STAGES:
+		var agent := _find(str(ref))
+		if agent == null:
+			push_error("promo V6 reveal: agente assente '%s'" % ref)
+			get_tree().quit(17)
+			return
+		_v3_stage(agent, V5_REVEAL_STAGES[ref])
+		cast.append(agent)
+	var scout: AgentNPC = _find("scout-1")
+	var analyst: AgentNPC = _find("analista-1")
+	var assistant: AgentNPC = _find("assistente")
+	var cam := _mount_camera(V6_REVEAL_CLOSE_CAMERA, V6_REVEAL_CLOSE_ZOOM)
+	# Lascia due frame per applicare i queue_free del cleanup prima della
+	# prima maniglia dichiarata nel log.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_v6_marker("v6-dev-reveal", "handle_in")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_force_legs(scout, [
+		scout._leg_to(Vector2(1450.0, 780.0), "walk", V6_REVEAL_EXIT_DELAY, "idle"),
+		scout._leg_to(V6_REVEAL_EXIT, "carry", V3_STILL_HOLD, "idle"),
+	])
+	_force_legs(analyst, [
+		analyst._leg_to(Vector2(1570.0, 780.0), "walk", 0.0, "idle"),
+		analyst._leg_to(Vector2(1700.0, 780.0), "carry", V3_STILL_HOLD, "idle"),
+	])
+	_force_legs(assistant, [
+		assistant._leg_to(Vector2(1690.0, 780.0), "walk", 0.0, "idle"),
+		assistant._leg_to(Vector2(1790.0, 780.0), "carry", V3_STILL_HOLD, "idle"),
+	])
+	var reveal := create_tween().set_parallel(true) \
+			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	reveal.tween_property(cam, "position", V6_REVEAL_WIDE_CAMERA, 8.2)
+	reveal.tween_property(cam, "zoom", Vector2(V6_REVEAL_WIDE_ZOOM,
+			V6_REVEAL_WIDE_ZOOM), 8.2)
+	_v3_animate_background(cast)
+	_v6_marker("v6-dev-reveal", "program_start")
+	await get_tree().create_timer(V6_REVEAL_PROGRAM_SECONDS).timeout
+	_v6_marker("v6-dev-reveal", "program_end")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v6-dev-reveal", "handle_out")
+	_v6_pass_and_quit("v6-dev-reveal", cam)
+
+
+## Sei secondi programmati sul reparto Scorer gia' al lavoro. Lo Scout
+## riprende la corsa verso destra del reveal precedente; gli agenti alle
+## scrivanie reagiscono al lavoro mentre la camera compie un drift reale.
+func _v6_dev_work_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	var scout: AgentNPC = _find("scout-1")
+	if scout == null:
+		push_error("promo V6 work: Scout assente")
+		get_tree().quit(18)
+		return
+	_v3_stage(scout, V6_WORK_ENTRY)
+	var cam := _mount_camera(V6_WORK_CAMERA_FROM, V6_WORK_ZOOM)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_v6_marker("v6-dev-work", "handle_in")
+	_force_legs(scout, [scout._leg_to(V6_WORK_EXIT, "carry",
+			V3_STILL_HOLD, "idle")])
+	var drift := create_tween().set_parallel(true) \
+			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	var full_take_seconds := V6_WORK_PROGRAM_SECONDS + 2.0 * V6_HANDLE_SECONDS
+	drift.tween_property(cam, "position", V6_WORK_CAMERA_TO, full_take_seconds)
+	drift.tween_property(cam, "zoom", Vector2(V6_WORK_ZOOM_TO, V6_WORK_ZOOM_TO),
+			full_take_seconds)
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	for ref in ["scorer-1", "scorer-2", "coordinatore"]:
+		var worker := _find(ref)
+		if worker != null:
+			_pulse_at(0.8 + 1.3 * float(["scorer-1", "scorer-2", "coordinatore"].find(ref)),
+					worker)
+	_v6_marker("v6-dev-work", "program_start")
+	await get_tree().create_timer(V6_WORK_PROGRAM_SECONDS).timeout
+	_v6_marker("v6-dev-work", "program_end")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v6-dev-work", "handle_out")
+	_v6_pass_and_quit("v6-dev-work", cam)
+
+
+## Un solo comportamento di prodotto, senza staging teatrale: lo Scout più
+## vicino alla stampante lascia la sua scrivania vera, stampa, torna portando
+## il foglio e riattiva la posa desk. Sono gli stessi flag di `open-day` e
+## della routine NPC; il ciak cambia solo soggetto e framing portrait.
+func _v6_office_life_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	var scout: AgentNPC = _find(V6_LIFE_AGENT)
+	if scout == null:
+		push_error("promo V6 office-life: %s assente" % V6_LIFE_AGENT)
+		get_tree().quit(21)
+		return
+	await _wait_desk_stable(scout)
+	_track_target = scout
+	_track_offset = V6_LIFE_CAMERA_OFFSET
+	_track_cam = _mount_camera(scout.global_position + _track_offset, V6_LIFE_ZOOM)
+	_v6_marker("v6-office-life", "handle_in")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v6-office-life", "program_start")
+	var program_start_frame := Engine.get_process_frames()
+	var print_leg: Dictionary = scout._leg_to(
+			DepartmentDefs.POIS["printer"]["spot"], "walk",
+			V6_LIFE_PICKUP_HOLD, "idle")
+	print_leg["fx_printer"] = true
+	var return_leg: Dictionary = scout._leg_to(scout._spot, "carry", 0.0, "work")
+	return_leg["desk_work"] = true
+	Engine.time_scale = V6_LIFE_PLAYBACK_RATE
+	_force_legs(scout, [print_leg, return_leg])
+	while is_instance_valid(scout) and scout._desk_pose_active:
+		await get_tree().process_frame
+	while is_instance_valid(scout) and (scout._forced_trip or not scout._desk_pose_active):
+		await get_tree().process_frame
+	Engine.time_scale = 1.0
+	var program_seconds := float(Engine.get_process_frames() - program_start_frame) / 30.0
+	print("PROMO-V6-LIFE-DURATION\t%.3f" % program_seconds)
+	_v6_marker("v6-office-life", "program_end")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v6-office-life", "handle_out")
+	if program_seconds < V6_LIFE_MIN_PROGRAM_SECONDS \
+			or program_seconds > V6_LIFE_MAX_PROGRAM_SECONDS:
+		push_error("promo V6 office-life: programma %.3fs fuori 3-5s" % program_seconds)
+		get_tree().quit(22)
+		return
+	_v6_pass_and_quit("v6-office-life", _track_cam)
+
+
+## La stessa WorldMap che apre il globo scenografico dell'ufficio, isolata
+## dal guscio SectionPanel per non registrare sidebar o badge showroom. Lo
+## zoom attraversa i livelli di clustering reali di OsmMap: durante il volo
+## i pin si separano e diventano localita' distinte, senza animazioni finte.
+func _v8_map_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	BackendBus.positions_are_demo = false
+	BackendBus.positions = _v8_map_positions()
+	var cam := _mount_camera(Vector2(1700.0, 950.0), 1.0)
+	var layer := CanvasLayer.new()
+	layer.layer = 120
+	_office.add_child(layer)
+	var background := ColorRect.new()
+	background.color = Color(0.045, 0.05, 0.075)
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(background)
+	var world := WorldMap.new()
+	world.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(world)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var flat := world._flat
+	var start_norm := OsmMap.lonlat_to_norm(V8_MAP_FROM)
+	var end_norm := OsmMap.lonlat_to_norm(V8_MAP_TO)
+	flat.center = start_norm
+	flat._target_center = start_norm
+	flat.zoom_f = V8_MAP_ZOOM_FROM
+	flat._target_zoom = V8_MAP_ZOOM_FROM
+	flat.queue_redraw()
+	# Lascia alla cache tile un breve bootstrap fuori dal raw consegnato.
+	await get_tree().create_timer(1.0).timeout
+	_v6_marker("v8-map", "handle_in")
+	var full_take_seconds := V8_MAP_PROGRAM_SECONDS + 2.0 * V6_HANDLE_SECONDS
+	var travel := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	travel.tween_method(func(progress: float) -> void:
+		var scan := 1.0 - absf(fmod(progress * V8_MAP_SWEEPS, 2.0) - 1.0)
+		var center := start_norm.lerp(end_norm, scan)
+		var zoom := lerpf(V8_MAP_ZOOM_FROM, V8_MAP_ZOOM_TO, progress)
+		flat.center = center
+		flat._target_center = center
+		flat.zoom_f = zoom
+		flat._target_zoom = zoom
+		flat.queue_redraw(), 0.0, 1.0, full_take_seconds)
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v8-map", "program_start")
+	await get_tree().create_timer(V8_MAP_PROGRAM_SECONDS).timeout
+	_v6_marker("v8-map", "program_end")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v8-map", "handle_out")
+	if world.find_children("*", "MapGlobe", true, false).size() != 0:
+		push_error("promo V8 map: globo inatteso nella vista flat-only")
+		get_tree().quit(23)
+		return
+	_v6_pass_and_quit("v8-map", cam)
+
+
+## Dataset scenografico senza PII: un pin per localita', nessuna scheda viene
+## aperta nel ciak e nessun banner DEMO entra nel frame.
+func _v8_map_positions() -> Array:
+	var places := [
+		["London", "United Kingdom", -0.1276, 51.5072],
+		["Paris", "France", 2.3522, 48.8566],
+		["Berlin", "Germany", 13.4050, 52.5200],
+		["Stockholm", "Sweden", 18.0686, 59.3293],
+		["Lisbon", "Portugal", -9.1393, 38.7223],
+		["Rome", "Italy", 12.4964, 41.9028],
+		["New York", "United States", -74.0060, 40.7128],
+		["Toronto", "Canada", -79.3832, 43.6532],
+		["Tokyo", "Japan", 139.6503, 35.6762],
+		["Sydney", "Australia", 151.2093, -33.8688],
+	]
+	var rows: Array = []
+	for i in places.size():
+		var place: Array = places[i]
+		rows.append({
+			"id": i + 1, "title": "Open role", "company": "Team",
+			"status": "scored", "total_score": null,
+			"role_family": "Technology", "work_mode": "flexible",
+			"loc_city": place[0], "loc_country": place[1],
+			"office_lon": place[2], "office_lat": place[3],
+		})
+	return rows
+
+
+## Ciclo `review/ready` già usato dagli Scrittori: il fascicolo finito viene
+## portato alla vaschetta del reparto e l'NPC torna al proprio desk. La regia
+## sceglie soltanto l'istanza showroom e nasconde la didascalia del mobile;
+## percorso, carry, pile_drop e seduta restano quelli di AgentNPC.
+func _v8_office_handoff_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	var writer: AgentNPC = _find(V8_OFFICE_AGENT)
+	if writer == null or writer.dept != "scrittori":
+		push_error("promo V8 office: %s assente o reparto errato" % V8_OFFICE_AGENT)
+		get_tree().quit(24)
+		return
+	# Riaccende soltanto il mobile usato nel gesto; la sua label di reparto
+	# resta nascosta, quindi il take mostra l'azione e non un catalogo ruoli.
+	for station in _office.world.get_children():
+		if station is HandoffStation and station.dept == writer.dept:
+			station.visible = true
+			station._font = null
+			station.queue_redraw()
+	if PaperPile.inbox.has(writer.dept):
+		var pile: PaperPile = PaperPile.inbox[writer.dept]
+		# PaperPile disegna sul nodo il conteggio numerico. Nel raw i fogli
+		# restano sul tavolo, mentre il badge quantitativo di servizio no.
+		for sheet in pile._sheets.duplicate():
+			sheet.reparent(_office.world, true)
+		pile.visible = false
+	await _wait_desk_stable(writer)
+	_track_target = writer
+	_track_offset = V8_OFFICE_CAMERA_OFFSET
+	_track_cam = _mount_camera(writer.global_position + _track_offset, V8_OFFICE_ZOOM)
+	_v6_marker("v8-office-handoff", "handle_in")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v8-office-handoff", "program_start")
+	var program_start_frame := Engine.get_process_frames()
+	var drop := writer._leg_to(DepartmentDefs.handoff_spot(writer.dept), "carry",
+			V8_OFFICE_DROP_HOLD, "idle")
+	drop["pile_drop"] = writer.dept
+	var return_to_desk := writer._leg_to(writer._spot, "walk", 0.0, "work")
+	_force_legs(writer, [drop, return_to_desk])
+	while is_instance_valid(writer) and writer._desk_pose_active:
+		await get_tree().process_frame
+	while is_instance_valid(writer) and (writer._forced_trip or not writer._desk_pose_active):
+		await get_tree().process_frame
+	var program_seconds := float(Engine.get_process_frames() - program_start_frame) / 30.0
+	print("PROMO-V8-OFFICE-DURATION\t%.3f" % program_seconds)
+	_v6_marker("v8-office-handoff", "program_end")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v8-office-handoff", "handle_out")
+	if program_seconds < V8_OFFICE_MIN_PROGRAM_SECONDS \
+			or program_seconds > V8_OFFICE_MAX_PROGRAM_SECONDS:
+		push_error("promo V8 office: programma %.3fs fuori 4-8.5s" % program_seconds)
+		get_tree().quit(25)
+		return
+	_v6_pass_and_quit("v8-office-handoff", _track_cam)
+
+
+## Blocca i viaggi casuali: la vita sullo sfondo e' data da pulsazioni di
+## lavoro reali (rig o composito desk), non da agenti che invadono il quadro
+## in momenti non deterministici. Rimuove anche tutti gli overlay promo.
+func _v3_prepare_office() -> void:
+	_dress_promo_set()
+	_v3_silence_quest_markers()
+	for agent in _office.agents:
+		agent._state_timer = 100000.0
+		agent._bubble_timer = 100000.0
+
+
+func _v3_silence_quest_markers() -> void:
+	for agent in _office.agents:
+		if agent.quest_marker != null:
+			agent.set_story_marker(false)
+
+
+## La preparazione avviene prima del marker start. L'agente resta un vero
+## AgentNPC e riparte attraverso NavGrid, ma il ciak non registra il lungo
+## trasferimento dalla sua scrivania al punto di partenza.
+func _v3_stage(agent: AgentNPC, at: Vector2) -> void:
+	agent._legs = []
+	agent._leg = {}
+	agent._path = PackedVector2Array()
+	agent._pi = 0
+	agent._pause = 0.0
+	agent._forced_trip = true
+	agent._pipeline_trip_active = false
+	agent.velocity = Vector2.ZERO
+	agent._set_desk_occupied(false)
+	agent.global_position = at
+	agent.state = AgentNPC.S.WORK
+	agent._set_rig_motion("down", false, "idle")
+
+
+## Tre micro-eventi visibili nel set: chi lavora sullo sfondo non parla e non
+## apre UI. I timer diversi evitano un flash sincrono da demo.
+func _v3_animate_background(foreground: Array) -> void:
+	var seconds := [1.1, 4.2, 7.1]
+	var refs := ["scorer-1", "scrittore-1", "critico-1"]
+	for i in refs.size():
+		var agent := _find(str(refs[i]))
+		if agent != null and not foreground.has(agent):
+			_pulse_at(float(seconds[i]), agent)
+
+
+func _v3_marker(clip: String, event: String) -> void:
+	var frame := Engine.get_process_frames()
+	print("PROMO-V3-MARKER\t%s\t%s\t%d\t%.3f" % [
+		clip, event, frame, float(frame) / 30.0])
+
+
+func _v3_pass_and_quit(clip: String, cam: Camera2D) -> void:
+	if cam == null or _office.find_child("GameSidebar", true, false) != null:
+		push_error("promo V3 %s: superficie non pulita" % clip)
+		get_tree().quit(13)
+		return
+	print("PROMO-V3 PASS %s" % clip)
+	get_tree().quit(0)
+
+
+func _v5_pass_and_quit(clip: String, cam: Camera2D) -> void:
+	if cam == null or _office.find_child("GameSidebar", true, false) != null:
+		push_error("promo V5 %s: superficie non pulita" % clip)
+		get_tree().quit(15)
+		return
+	for agent in _office.agents:
+		if agent.quest_marker != null and agent.quest_marker.visible:
+			push_error("promo V5 %s: marker tour visibile" % clip)
+			get_tree().quit(16)
+			return
+	print("PROMO-V5 PASS %s" % clip)
+	get_tree().quit(0)
+
+
+func _v6_marker(clip: String, event: String) -> void:
+	var frame := Engine.get_process_frames()
+	print("PROMO-V6-MARKER\t%s\t%s\t%d\t%.3f" % [
+		clip, event, frame, float(frame) / 30.0])
+
+
+## Fail closed: il take e' valido solo nel viewport portrait nativo e dopo
+## che ogni superficie di servizio e' stata rimossa. Questo controllo gira
+## prima dell'EOS e rende impossibile promuovere per sbaglio un 16:9.
+func _v6_pass_and_quit(clip: String, cam: Camera2D) -> void:
+	var failures: Array[String] = []
+	if cam == null:
+		failures.append("camera assente")
+	# `get_visible_rect()` e' espresso nello spazio logico dopo lo stretch
+	# `expand`; `Window.size` puo' invece essere cambiata dal profilo quiet.
+	# Movie Maker prende la geometria dai due valori base del progetto, gli
+	# stessi confermati poi sui pixel del probe e da ffprobe sul raw.
+	var movie_size := Vector2i(
+			int(ProjectSettings.get_setting("display/window/size/viewport_width")),
+			int(ProjectSettings.get_setting("display/window/size/viewport_height")))
+	if movie_size != Vector2i(1080, 1920):
+		failures.append("movie viewport non 1080x1920: %s" % movie_size)
+	if UIStrings.lang != "en":
+		failures.append("lingua non inglese: %s" % UIStrings.lang)
+	if _office.find_child("GameSidebar", true, false) != null:
+		failures.append("sidebar visibile")
+	for agent in _office.agents:
+		if agent.state_tag != null:
+			failures.append("state tag %s" % agent.slug)
+		if agent.quest_marker != null and agent.quest_marker.visible:
+			failures.append("marker %s" % agent.slug)
+	for dressing in _office._stage.get_children():
+		if dressing is DepartmentDressing and dressing.visible:
+			failures.append("targa reparto visibile")
+	if not failures.is_empty():
+		push_error("promo V6 %s: %s" % [clip, failures])
+		get_tree().quit(19)
+		return
+	print("PROMO-V6 PASS %s movie_viewport=%s lang=%s" % [clip,
+			movie_size, UIStrings.lang])
+	get_tree().quit(0)
+
+
+## Il V5 deve poter accostare i suoi blocchi testuali senza testo nativo in
+## sovrimpressione. La scenografia resta l'ufficio vero, ma togliamo solo le
+## targhe dinamiche di handoff e output (una delle quali esiste ancora in IT).
+func _v5_hide_world_copy() -> void:
+	# Il V5 è un take di gioco, non una mappa di debug: le zone e le loro
+	# targhe sono utili durante il tour, ma in un portrait finiscono spezzate
+	# sui bordi. Le nascondiamo solo in questo profilo, prima del marker.
+	for dressing in _office._stage.get_children():
+		if dressing is DepartmentDressing:
+			dressing.visible = false
+	# Gli anelli sono affordance di selezione dell'interfaccia. Non devono
+	# sembrare marker di quest sotto i camminatori nel raw senza HUD.
+	for agent in _office.agents:
+		if agent.aura != null:
+			agent.aura.visible = false
+	if OutputShelf.instance != null:
+		OutputShelf.instance.visible = false
+	for station in _office.world.get_children():
+		if station is HandoffStation:
+			station.visible = false
+		if station is PaperPile:
+			station.visible = false
+	for dub in _office.find_children("*", "ShelfDub", true, false):
+		dub.visible = false
+
+
 ## Ciak uniforme per la recensione degli undici fogli personaggio. Tutte le
 ## tappe usano AgentNPC._leg_to + NavGrid: il filmato controlla il gioco vero,
 ## non un'animazione dimostrativa separata.
@@ -859,7 +1561,7 @@ func _dress_promo_set() -> void:
 	# La targa della mensola output («CV PRONTI») non è localizzata: per il
 	# ciak inglese la si copre con una targa gemella in inglese, contatore
 	# vero incluso — il Critico della Scena 4 consegna proprio lì.
-	if OutputShelf.instance:
+	if OutputShelf.instance and not OS.get_environment("JHT_PROMO").begins_with("v6-"):
 		var dub := ShelfDub.new()
 		dub.position = OutputShelf.instance.position
 		OutputShelf.instance.get_parent().add_child(dub)

@@ -168,11 +168,11 @@ ensure_agent() {
   if is_session_alive "$session"; then
     return 0
   fi
-  log "agent $role: session $session non attiva — relancio via jht team start"
+  log "agent $role: session $session is inactive — relaunching via jht team start"
   if /usr/local/bin/node "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
     log "agent $role: start OK"
   else
-    log "agent $role: start FAIL (rc=$?) — riprovo al prossimo tick"
+    log "agent $role: start FAILED (rc=$?) — retrying at the next tick"
   fi
 }
 
@@ -199,7 +199,7 @@ maybe_refresh_sentinella() {
   local age
   age=$(session_age_h SENTINELLA) || return 0
   if [ "$age" -ge "$SENTINELLA_MAX_CTX_AGE_H" ]; then
-    log "sentinella: context age ${age}h ≥ ${SENTINELLA_MAX_CTX_AGE_H}h — refresh (kill+recreate) per ripulire il contesto"
+    log "sentinella: context age ${age}h ≥ ${SENTINELLA_MAX_CTX_AGE_H}h — refreshing (kill+recreate) to clear the context"
     tmux kill-session -t SENTINELLA 2>/dev/null || true
   fi
 }
@@ -235,14 +235,14 @@ worker_kickoff() {
   # completo sta nel prompt che start-agent.sh ha già installato.
   local session="$1" role="$2" body
   case "$role" in
-    scout)     body="Riprendi il loop principale: parti dal CIRCLE 1 del profilo candidato e notifica gli Analisti a lotti di 3-5 posizioni." ;;
-    analista)  body="Riprendi il loop principale: coda da db_query.py next-for-analista." ;;
-    scorer)    body="Riprendi il loop principale: coda da db_query.py next-for-scorer." ;;
-    scrittore) body="Riprendi il loop principale: coda da db_query.py next-for-scrittore." ;;
-    *)         body="Riprendi il loop principale come da prompt." ;;
+    scout)     body="Resume the main loop: start from CIRCLE 1 of the candidate profile and notify the Analysts in batches of 3–5 positions." ;;
+    analista)  body="Resume the main loop using the db_query.py next-for-analista queue." ;;
+    scorer)    body="Resume the main loop using the db_query.py next-for-scorer queue." ;;
+    scrittore) body="Resume the main loop using the db_query.py next-for-scrittore queue." ;;
+    *)         body="Resume the main loop as instructed by your prompt." ;;
   esac
   ( sleep 12
-    jht-tmux-send "$session" "[@watchdog -> @$(echo "$session" | tr '[:upper:]' '[:lower:]')] [MSG] Sessione ricreata dal watchdog. $body" >/dev/null 2>&1 || true
+    jht-tmux-send "$session" "[@watchdog -> @$(echo "$session" | tr '[:upper:]' '[:lower:]')] [MSG] Session recreated by the watchdog. $body" >/dev/null 2>&1 || true
   ) >/dev/null 2>&1 &
 }
 
@@ -255,7 +255,7 @@ respawn_worker() {
     worker_kickoff "$session" "$role"
     return 0
   fi
-  log "worker $session: start FAIL — riprovo al prossimo tick"
+  log "worker $session: start FAILED — retrying at the next tick"
   return 1
 }
 
@@ -282,7 +282,7 @@ EOF
   read -r role inst <<EOF
 $(session_role "$oldest")
 EOF
-  log "ttl: $oldest ha ${oldest_age}h ≥ ${AGENT_MAX_SESSION_AGE_H}h — kill+recreate (solo età: contesto/PARKED/attività NON contano)"
+  log "ttl: $oldest is ${oldest_age}h old ≥ ${AGENT_MAX_SESSION_AGE_H}h — kill+recreate (age only: context/PARKED/activity do NOT matter)"
   tmux kill-session -t "$oldest" 2>/dev/null || true
   # I core li ricrea ensure_agent nello stesso tick (subito sotto nel loop);
   # i worker numerati non passano di lì e vanno ricreati qui.
@@ -311,7 +311,7 @@ maybe_respawn_workers() {
 $plan
 EOF
   [ -z "${session:-}" ] && return 0
-  log "roster: $session atteso ma assente (attivo di recente) — respawn via start-agent.sh $role $inst"
+  log "roster: expected session $session is missing (recently active) — respawning via start-agent.sh $role $inst"
   JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" mark-respawn "$session" >/dev/null 2>&1 || true
   respawn_worker "$role" "$inst" "$session"
 }
@@ -343,8 +343,8 @@ bridge_escalate() {
     [ $((now - last)) -lt "$BRIDGE_ESCALATE_COOLDOWN_SEC" ] && return 0
   fi
   echo "$now" > "$ef" 2>/dev/null || true
-  log "bridge-watchdog: FLAP CAP superato ($what) — STOP respawn, escalo al Capitano"
-  jht-tmux-send CAPITANO "[WATCHDOG] $what continua a morire (>${BRIDGE_FLAP_CAP} respawn in $((BRIDGE_FLAP_WINDOW_SEC/60))min). Ho FERMATO il respawn automatico per evitare un crash-loop. Serve diagnosi manuale: controlla \$JHT_HOME/logs/*-bridge.log. Il Mantenitore farà comunque un canary completo al prossimo sweep." >/dev/null 2>&1 || true
+  log "bridge-watchdog: FLAP CAP exceeded ($what) — STOPPING respawn and escalating to Capitano"
+  jht-tmux-send CAPITANO "[WATCHDOG] $what keeps dying (>${BRIDGE_FLAP_CAP} respawns in $((BRIDGE_FLAP_WINDOW_SEC/60)) min). Automatic respawn has been STOPPED to prevent a crash loop. Manual diagnosis is required: check \$JHT_HOME/logs/*-bridge.log. The Mantenitore will still run a complete canary on the next sweep." >/dev/null 2>&1 || true
 }
 
 tg_bots_configured() {
@@ -379,7 +379,7 @@ maybe_respawn_bridges() {
   #     (idempotente kill+respawn). Anti-flap: oltre il cap, escala invece di loopare.
   if [ -n "$PROC_DEAD_BRIDGE_SUITE" ]; then
     if bridge_flap_ok bridge; then
-      log "bridge-watchdog: suite incompleta (morti: $PROC_DEAD_BRIDGE_SUITE) — respawn via start-agent.sh bridge"
+      log "bridge-watchdog: incomplete suite (dead: $PROC_DEAD_BRIDGE_SUITE) — respawning via start-agent.sh bridge"
       JHT_HOME="$JHT_HOME" bash /app/.launcher/start-agent.sh bridge >>"$LOG" 2>&1 \
         || log "bridge-watchdog: respawn bridge FAIL (rc=$?)"
       bridge_flap_record bridge
@@ -392,7 +392,7 @@ maybe_respawn_bridges() {
   #     configurati e mancano istanze (attese >=3 process: wrapper+python ×3).
   if tg_bots_configured && [ "${PROC_TG_ALIVE:-0}" -lt 3 ]; then
     if bridge_flap_ok tg-bridge; then
-      log "bridge-watchdog: tg-bridge incompleto (${PROC_TG_ALIVE}/3 process) — respawn via start-agent.sh tg-bridge"
+      log "bridge-watchdog: tg-bridge incomplete (${PROC_TG_ALIVE}/3 processes) — respawning via start-agent.sh tg-bridge"
       JHT_HOME="$JHT_HOME" bash /app/.launcher/start-agent.sh tg-bridge >>"$LOG" 2>&1 \
         || log "bridge-watchdog: respawn tg-bridge FAIL (rc=$?)"
       bridge_flap_record tg-bridge
@@ -410,7 +410,7 @@ maybe_respawn_bridges() {
   fi
 }
 
-log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no gate orario, 1/tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min)"
+log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no schedule gate, one per tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min)"
 
 # Loop principale: gate sulla config (può non essere ancora pronta al
 # primo boot del container — il wizard la scrive post-pairing). Sleep
@@ -464,9 +464,9 @@ while true; do
   if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ]; then
     if [ $((halt_log_tick % 20)) -eq 0 ]; then
       if [ -e "$TEAM_HALTED_FLAG" ]; then
-        log "halt: .team-halted.flag presente — respawn agenti disabilitato"
+        log "halt: .team-halted.flag present — agent respawn disabled"
       else
-        log "halt: .weekly-halt.flag presente — respawn agenti disabilitato"
+        log "halt: .weekly-halt.flag present — agent respawn disabled"
       fi
     fi
     halt_log_tick=$((halt_log_tick + 1))
@@ -474,7 +474,7 @@ while true; do
     continue
   fi
   if [ "$halt_log_tick" -gt 0 ]; then
-    log "halt: flag rimosso — riprendo respawn watchdog"
+    log "halt: flag removed — resuming watchdog respawn"
     halt_log_tick=0
   fi
 
@@ -486,7 +486,7 @@ while true; do
   # differenza rispetto al gate halted qui sopra, ed è deliberata.
   if standby_active; then
     if [ $((standby_log_tick % 20)) -eq 0 ]; then
-      log "standby: standby ATTIVO — respawn/refresh agenti sospesi; bridge supervision ATTIVA (la sveglia)"
+      log "standby: ACTIVE — agent respawn/refresh suspended; bridge supervision remains ACTIVE"
     fi
     standby_log_tick=$((standby_log_tick + 1))
     if config_ready; then
@@ -496,13 +496,13 @@ while true; do
     continue
   fi
   if [ "$standby_log_tick" -gt 0 ]; then
-    log "standby: non più attivo (flag rimosso o scaduto) — riprendo respawn/refresh agenti"
+    log "standby: no longer active (flag removed or expired) — resuming agent respawn/refresh"
     standby_log_tick=0
   fi
 
   if config_ready; then
     if [ "$config_not_ready_tick" -gt 0 ]; then
-      log "config: tornata pronta dopo ${config_not_ready_tick} tick — riprendo respawn agenti"
+      log "config: ready again after ${config_not_ready_tick} ticks — resuming agent respawn"
       config_not_ready_tick=0
     fi
     # Refresh-per-età della Sentinella PRIMA del giro di ensure: se è troppo
@@ -530,9 +530,9 @@ while true; do
     # ashley morta ~44h il 2026-07-18 senza una riga di log. Escaliamo a log loud.
     if [ "$config_not_ready_tick" -eq "$CONFIG_NOT_READY_GRACE_TICKS" ]; then
       _prov="$(python3 -c "import json,sys; print((json.load(open(sys.argv[1])).get('active_provider') or '?').strip() or '?')" "$CONFIG" 2>/dev/null || echo '?')"
-      log "config NON pronta da ${CONFIG_NOT_READY_GRACE_TICKS} tick (~$((CONFIG_NOT_READY_GRACE_TICKS*INTERVAL_SEC/60))min): active_provider='${_prov}' senza marker credenziali valido — respawn CAPITANO/MENTOR SOSPESO. Se non è il wizard iniziale, verifica active_provider vs mappa in config_ready()."
+      log "config NOT ready for ${CONFIG_NOT_READY_GRACE_TICKS} ticks (~$((CONFIG_NOT_READY_GRACE_TICKS*INTERVAL_SEC/60)) min): active_provider='${_prov}' has no valid credential marker — CAPITANO/MENTOR respawn SUSPENDED. If this is not the initial wizard, check active_provider against the map in config_ready()."
     elif [ "$config_not_ready_tick" -gt "$CONFIG_NOT_READY_GRACE_TICKS" ] && [ $((config_not_ready_tick % 60)) -eq 0 ]; then
-      log "config ancora NON pronta (tick=${config_not_ready_tick}) — respawn agenti tuttora sospeso"
+      log "config still NOT ready (tick=${config_not_ready_tick}) — agent respawn remains suspended"
     fi
     config_not_ready_tick=$((config_not_ready_tick + 1))
   fi

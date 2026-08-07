@@ -34,6 +34,7 @@ const FLAG_HOOKS := {
 	"JHT_GRAPHICS_PANEL_TEST": "_graphics_panel_selftest",
 	"JHT_LANGUAGE_SETTINGS_TEST": "_language_settings_selftest",
 	"JHT_CAMERA_LOCK_TEST": "_camera_lock_selftest",
+	"JHT_AGENT_FRAME_TEST": "_agent_frame_selftest",
 	"JHT_POSITIONS_PANEL_TEST": "_positions_panel_selftest",
 	"JHT_MAP_PANEL_TEST": "_map_panel_selftest",
 	"JHT_USAGE_PANEL_TEST": "_usage_panel_selftest",
@@ -886,6 +887,53 @@ func _camera_lock_selftest() -> void:
 	get_tree().quit(0 if ok else 1)
 
 
+## Regressione G-03: il primo frame della FreeCamera deve contenere teste e
+## piedi del roster completo. Si esegue con JHT_ALL_SEATED_PREVIEW=1 per
+## montare tutte le 36 postazioni reali, senza una regia/crop da screenshot.
+func _agent_frame_selftest() -> void:
+	await get_tree().process_frame
+	# La matrice generale avvia i test in italiano per la retrocompatibilita'
+	# delle altre asserzioni. Qui si prova deliberatamente il primo avvio: EN.
+	UIStrings.set_lang(UIStrings.DEFAULT_LANG, false)
+	var camera: FreeCamera = office._camera
+	var half_view: Vector2 = office.get_viewport_rect().size / (2.0 * camera.zoom.x)
+	var frame := Rect2(camera.position - half_view, half_view * 2.0)
+	var safe_frame := frame.grow(-12.0)
+	var failures: Array[String] = []
+	if not camera.position.is_equal_approx(FurnitureDefs.FLOOR.get_center()):
+		failures.append("camera non centrata sul pavimento operativo")
+	if safe_frame.position.y > FurnitureDefs.FLOOR.position.y \
+			or safe_frame.end.y < FurnitureDefs.FLOOR.end.y:
+		failures.append("il pavimento operativo esce verticalmente dal frame iniziale")
+	var expected_roster := CharacterDefs.spawn_list().size()
+	if office.agents.size() != expected_roster:
+		failures.append("roster %d invece di %d" % [office.agents.size(), expected_roster])
+	for agent: AgentNPC in office.agents:
+		var head_y := agent.global_position.y - 165.0
+		if agent.rig != null and agent.rig.visible and agent.rig.has_method("visual_top_y"):
+			head_y = agent.global_position.y + float(agent.rig.visual_top_y())
+		if not safe_frame.has_point(Vector2(agent.global_position.x, head_y)) \
+				or not safe_frame.has_point(agent.global_position):
+			failures.append(str(agent.slug))
+	var state_tag := AgentStateTag.new()
+	var labels := {
+		"idle": UIStrings.t("dept.agent_status.waiting"),
+		"working": UIStrings.t("dept.agent_status.working"),
+		"throttled": "THROTTLED  3:00",
+		"paused": UIStrings.t("dept.agent_status.paused"),
+		"resting": UIStrings.t("dept.agent_status.resting"),
+	}
+	for status: String in labels:
+		state_tag.set_state(status, 180.0)
+		if state_tag.debug_label() != labels[status]:
+			failures.append("targa stato " + status)
+	var ok := failures.is_empty()
+	print("AGENT-FRAME-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify({"frame": frame, "agents": office.agents.size(),
+			"failures": failures})])
+	get_tree().quit(0 if ok else 1)
+
+
 ## First-run E2E senza rete: attraversa gli alberi scripted e monta il
 ## pannello chat reale: prima offline choice-only, poi live col mock e scelte
 ## contestuali prodotte dall'agente (mai sovrapposte al copione authored).
@@ -1186,6 +1234,7 @@ func _guided_onboarding_selftest() -> void:
 	ScriptedOnboarding.set_provider_test_override(0)
 	SetupService.status["provider_authenticated"] = false
 	SetupService.status["container_running"] = false
+	SetupService.status["ready"] = false
 	office._on_setup_status_changed(SetupService.status)
 	var check := func(ok: bool, message: String) -> void:
 		if not ok:
@@ -1228,6 +1277,51 @@ func _guided_onboarding_selftest() -> void:
 					"dialogo showroom non rende le scelte")
 			dialogue_ui._close()
 			await get_tree().process_frame
+
+	# P0 07/08 — setup incompleto, due persone dello stesso reparto. Il click
+	# deve aprire comunque il dialogo authored con opzioni, ma il ritratto
+	# segue l'istanza/postazione (scout-1 != scout-2) e resta identico quando
+	# si torna sulla stessa persona. Prima office.gd passava sempre "scout".
+	var original_tour_done := TourGuide._done
+	TourGuide._done = true  # forza il ramo post-tour senza persistere stato
+	var scouts: Array[AgentNPC] = []
+	for candidate in office.agents:
+		if candidate.slug == "scout":
+			scouts.append(candidate)
+	check.call(scouts.size() >= 2,
+			"showroom senza setup non contiene due Scout cliccabili")
+	var shown_portraits: Array[String] = []
+	for i in mini(2, scouts.size()):
+		var scout: AgentNPC = scouts[i]
+		var expected_portrait := scout.dialogue_portrait_slug()
+		check.call(expected_portrait == scout.dialogue_portrait_slug(),
+				"lo stesso Scout cambia ritratto fra due risoluzioni")
+		office._start_talk(scout)
+		await get_tree().process_frame
+		var scout_dialogue: DialogueUI = null
+		for child in office.get_children():
+			if child is DialogueUI:
+				scout_dialogue = child
+				break
+		check.call(scout_dialogue != null,
+				"click su %s non apre DialogueUI a setup incompleto" % scout.display_name)
+		if scout_dialogue:
+			shown_portraits.append(scout_dialogue._portrait._slug)
+			check.call(scout_dialogue._portrait._slug == expected_portrait,
+					"%s mostra %s invece del proprio %s" % [scout.display_name,
+						scout_dialogue._portrait._slug, expected_portrait])
+			check.call(scout_dialogue._tree_id == "tease_scout",
+					"setup incompleto non usa il dialogo teaser dello Scout")
+			scout_dialogue._finish_typing()
+			check.call(scout_dialogue._choices_box.get_child_count() > 0,
+					"%s parla ma non offre opzioni di risposta" % scout.display_name)
+			scout_dialogue._close()
+			await get_tree().process_frame
+	TourGuide._done = original_tour_done
+	shown_portraits.sort()
+	check.call(shown_portraits == ["scout-1", "scout-2"],
+			"due Scout dello showroom condividono il ritratto: %s" \
+			% JSON.stringify(shown_portraits))
 	ScriptedOnboarding.reset_for_test()
 	check.call(ScriptedOnboarding.messages("assistente").size() == 1,
 			"welcome Assistente assente")
@@ -1655,7 +1749,8 @@ func _guided_onboarding_selftest() -> void:
 	var ok := failures.is_empty()
 	print("GUIDED-ONBOARDING-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"failures": failures, "draft": draft,
-					"mentor": ScriptedOnboarding.preferences()}))
+					"mentor": ScriptedOnboarding.preferences(),
+					"instance_portraits": shown_portraits}))
 	panel.close(false)
 	profile_panel.queue_free()
 	BackendBus.disconnect_backend()
@@ -2029,7 +2124,7 @@ func _feedback_panel_selftest() -> void:
 	var exact_preview := FeedbackService._to_markdown(payload)
 	var preview_matches_payload := exact_preview.contains("[email]") \
 			and exact_preview.contains("[document].pdf") \
-			and exact_preview.contains("Dati rimossi prima dell'invio") \
+			and exact_preview.contains(UIStrings.t("feedback.report.redacted")) \
 			and not exact_preview.contains("user@example.com") \
 			and not exact_preview.contains(fake_token)
 	var counts_include_story: bool = int(payload_redaction.get("email", 0)) > 0 \
@@ -2366,7 +2461,8 @@ func _chat_ui_selftest() -> void:
 	if coordinator and assistant:
 		office.deliver_chat("coordinatore", "assistente", "Passaggio completato")
 	var received_ok := assistant != null \
-			and assistant.state_tag.debug_label().begins_with("MESSAGGIO DA")
+			and assistant.state_tag.debug_label().begins_with(
+					UIStrings.t("office.message_from").split("%s")[0])
 	var ok: bool = badge_ok and menu_ok and read_ok and close_ok and reopen_ok \
 			and toggle_close_ok and overlap_ok and received_ok
 	print("CHAT-UI-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify({

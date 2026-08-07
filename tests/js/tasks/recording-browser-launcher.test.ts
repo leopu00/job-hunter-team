@@ -3,7 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   assertPortraitGeometry,
+  assertPortraitMobileDocument,
   PORTRAIT_RECORDING_GEOMETRY,
+  PORTRAIT_RECORDING_MOBILE_EMULATION,
   recordingFormatFromEnvironment,
 } from "../../../e2e/scripts/recording-browser-format.mjs";
 import {
@@ -92,6 +94,13 @@ describe("launcher Playwright per riprese web", () => {
     expect(launcher).toContain('"--force-device-scale-factor=2"');
     expect(launcher).toContain("viewport: { width: 540, height: 960 }");
     expect(launcher).toContain("deviceScaleFactor: 2");
+    expect(launcher).toContain("...PORTRAIT_RECORDING_MOBILE_EMULATION");
+    expect(PORTRAIT_RECORDING_MOBILE_EMULATION).toEqual({
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      isMobile: true,
+      hasTouch: true,
+    });
   });
 
   it.each(["", "landscape", "9x16", "Portrait", "PORTRAIT"])(
@@ -139,7 +148,12 @@ describe("launcher Playwright per riprese web", () => {
         screenWidth: expected.width,
         screenHeight: expected.height,
         devicePixelRatio: expected.deviceScaleFactor,
+        visualViewportWidth: expected.width,
+        visualViewportHeight: expected.height,
         mobileBreakpoint: true,
+        coarsePointer: true,
+        touchCapable: true,
+        userAgent: PORTRAIT_RECORDING_MOBILE_EMULATION.userAgent,
         physicalWidth: expected.physicalWidth,
         physicalHeight: expected.physicalHeight,
       }),
@@ -152,12 +166,37 @@ describe("launcher Playwright per riprese web", () => {
     ["width", { innerWidth: 539 }, "innerWidth=539"],
     ["height", { innerHeight: 959 }, "innerHeight=959"],
     ["DPR", { devicePixelRatio: 1 }, "devicePixelRatio=1"],
+    [
+      "visual viewport width",
+      { visualViewportWidth: 539 },
+      "visualViewport.width=539",
+    ],
+    [
+      "visual viewport height",
+      { visualViewportHeight: 959 },
+      "visualViewport.height=959",
+    ],
     ["screen width", { screenWidth: 539 }, "screen.width=539"],
     ["screen height", { screenHeight: 959 }, "screen.height=959"],
     [
       "mobile breakpoint",
       { mobileBreakpoint: false },
       "matchMedia(max-width: 767px)=false",
+    ],
+    [
+      "coarse pointer",
+      { coarsePointer: false },
+      "matchMedia(pointer: coarse)=false",
+    ],
+    [
+      "touch capability",
+      { touchCapable: false },
+      "navigator.maxTouchPoints > 0=false",
+    ],
+    [
+      "iPhone user agent",
+      { userAgent: "desktop-browser" },
+      "navigator.userAgent=desktop-browser",
     ],
     ["backing width", { physicalWidth: 1078 }, "innerWidth * DPR=1078"],
     ["backing height", { physicalHeight: 1918 }, "innerHeight * DPR=1918"],
@@ -172,7 +211,12 @@ describe("launcher Playwright per riprese web", () => {
           screenWidth: expected.width,
           screenHeight: expected.height,
           devicePixelRatio: expected.deviceScaleFactor,
+          visualViewportWidth: expected.width,
+          visualViewportHeight: expected.height,
           mobileBreakpoint: true,
+          coarsePointer: true,
+          touchCapable: true,
+          userAgent: PORTRAIT_RECORDING_MOBILE_EMULATION.userAgent,
           physicalWidth: expected.physicalWidth,
           physicalHeight: expected.physicalHeight,
           ...changed,
@@ -182,6 +226,32 @@ describe("launcher Playwright per riprese web", () => {
       await expect(assertPortraitGeometry(page)).rejects.toThrow(message);
     },
   );
+
+  it("richiede documento portrait con viewport mobile e senza crop orizzontale", async () => {
+    const page = {
+      evaluate: async () => ({
+        viewportMeta: "width=device-width, initial-scale=1",
+        horizontalOverflow: false,
+      }),
+    };
+
+    await expect(assertPortraitMobileDocument(page)).resolves.toBeUndefined();
+  });
+
+  it.each([
+    [
+      { viewportMeta: "initial-scale=1", horizontalOverflow: false },
+      "meta viewport",
+    ],
+    [
+      { viewportMeta: "width=device-width", horizontalOverflow: true },
+      "overflow orizzontale",
+    ],
+  ])("rifiuta documento portrait non mobile", async (actual, message) => {
+    const page = { evaluate: async () => actual };
+
+    await expect(assertPortraitMobileDocument(page)).rejects.toThrow(message);
+  });
 
   it("prepara il frame prima della navigazione senza mutare il server", () => {
     const setup = launcher.slice(
@@ -226,6 +296,9 @@ describe("launcher Playwright per riprese web", () => {
     expect(launcher.match(/page\.goto\(/g)).toHaveLength(1);
     expect(post).toBeGreaterThan(goto);
     expect(post).toBeLessThan(light);
+    expect(
+      launcher.indexOf("await assertPortraitMobileDocument(page)"),
+    ).toBeGreaterThan(post);
     expect(launcher).not.toMatch(
       /(?:setViewportSize|--window-size|screenshot.*scale|createElement\("style")/,
     );

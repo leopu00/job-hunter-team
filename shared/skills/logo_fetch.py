@@ -255,8 +255,8 @@ def run(args: argparse.Namespace) -> dict:
     if not row:
         return {
             "ok": False,
-            "error": f"Azienda {args.company!r} non in companies "
-                     "(prima: db_insert.py company --name ...)",
+            "error": f"Company {args.company!r} is not in companies "
+                     "(first run: db_insert.py company --name ...)",
             "status_code": "NOT_FOUND",
         }
 
@@ -265,7 +265,7 @@ def run(args: argparse.Namespace) -> dict:
             "ok": True,
             "company": row["name"],
             "written": False,
-            "note": "logo già presente (usa --force per rifetch)",
+            "note": "logo already present (use --force to fetch it again)",
         }
 
     # Enrichment-policy (risparmio): enforcement A CODICE, prima di ogni
@@ -274,7 +274,7 @@ def run(args: argparse.Namespace) -> dict:
         if not is_enabled("logo"):
             return {
                 "ok": False,
-                "error": f"Fetch logo bloccato: {disabled_reason('logo')}",
+                "error": f"Logo fetch blocked: {disabled_reason('logo')}",
                 "status_code": "POLICY_DISABLED",
             }
         ms = logo_min_score()
@@ -292,8 +292,8 @@ def run(args: argparse.Namespace) -> dict:
                 # soglia, l'azienda rientra nella coda logo-missing.
                 return {
                     "ok": False,
-                    "error": (f"Sotto soglia policy (logo.min_score={ms}, "
-                              f"best score azienda={best}): non estrarre ora"),
+                    "error": (f"Below policy threshold (logo.min_score={ms}, "
+                              f"best company score={best}): do not fetch now"),
                     "status_code": "POLICY_SCORE_GATE",
                 }
 
@@ -307,8 +307,8 @@ def run(args: argparse.Namespace) -> dict:
         if not website:
             return {
                 "ok": False,
-                "error": "Nessun website noto per l'azienda: passa "
-                         "--website o --from-url, o aggiorna companies",
+                "error": "No known website for the company: pass --website "
+                         "or --from-url, or update companies",
                 "status_code": "NO_WEBSITE",
             }
         picked = pick_logo(website)
@@ -322,7 +322,7 @@ def run(args: argparse.Namespace) -> dict:
             conn.commit()
         return {
             "ok": False,
-            "error": "Nessun candidato valido (formato/peso/dimensioni)",
+            "error": "No valid candidate (format, size, or dimensions)",
             "status_code": "NO_CANDIDATE",
             "marked_attempted": bool(args.mark_attempted and not args.dry_run),
         }
@@ -351,18 +351,18 @@ def run(args: argparse.Namespace) -> dict:
 
 def main() -> None:
     p = argparse.ArgumentParser(
-        description="Fetch + valida + salva il logo aziendale (mig 056)"
+        description="Fetch, validate, and save a company logo (mig 056)"
     )
-    p.add_argument("company", help="Nome ESATTO della riga companies")
-    p.add_argument("--website", help="Override del sito (default: colonna website)")
-    p.add_argument("--from-url", help="URL immagine diretto (salta la ricerca)")
+    p.add_argument("company", help="EXACT name from the companies row")
+    p.add_argument("--website", help="Website override (default: website column)")
+    p.add_argument("--from-url", help="Direct image URL (skips discovery)")
     p.add_argument("--force", action="store_true",
-                   help="Rifetch anche se già presente / scavalca la "
-                        "enrichment-policy (intervento manuale)")
+                   help="Fetch again even when present; bypass the enrichment "
+                        "policy as an explicit manual action")
     p.add_argument("--mark-attempted", action="store_true",
-                   help="Su fallimento marca logo_fetched=1 (esce dalla coda)")
+                   help="On failure, set logo_fetched=1 to leave the queue")
     p.add_argument("--dry-run", action="store_true",
-                   help="Valuta e riporta senza scrivere sul DB")
+                   help="Evaluate and report without writing to the database")
     args = p.parse_args()
 
     try:

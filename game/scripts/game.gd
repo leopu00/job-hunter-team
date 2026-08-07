@@ -18,6 +18,7 @@ var state: State = State.TITLE
 var dialogue_active := false
 
 var _pause_menu: Node = null
+var _client_control: ClientControl = null
 
 func _enter_tree() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -43,6 +44,8 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Palette.VOID)
+	_client_control = ClientControl.new()
+	add_child(_client_control)
 	load_gfx_profile()
 	# Il costo a riposo: dopo load_gfx_profile, così il tetto fps che si
 	# ripristina al ritorno del focus è già quello del profilo scelto.
@@ -131,6 +134,20 @@ func _on_shutdown_choice(mode: String) -> void:
 	# lavoro, come quando li avvia la CLI e il comando esce.
 	HeadlessSession.record_exit(mode == HeadlessSession.MODE_DETACH)
 	_do_quit(HeadlessSession.stops_team(mode))
+
+
+## Uscita richiesta dalla CLI: equivale ESATTAMENTE alla scelta "lascia il
+## team al lavoro" del dialogo. Non passa da quit_game(), che puo decidere di
+## fermare agenti e Docker. Il marcatore rende veritiero il saluto al ritorno.
+func detach_from_cli() -> void:
+	if _quitting:
+		return
+	close_pause()
+	if is_instance_valid(_shutdown_dialog):
+		_shutdown_dialog.queue_free()
+	_shutdown_dialog = null
+	HeadlessSession.record_exit(true)
+	_do_quit(false)
 
 
 func _do_quit(stop_team := true) -> void:
@@ -266,6 +283,8 @@ static func graphics_choice() -> String:
 ## dentro il mondo si ingrandisce per compensare (WorldText).
 ## Precedenza: JHT_PIXEL (test) → scelta dell'utente → ultima calibrazione.
 static func render_scale() -> float:
+	if TutorialHarness.enabled():
+		return 1.0
 	var forced := OS.get_environment("JHT_PIXEL").strip_edges()
 	if forced.is_valid_float():
 		return _as_scale(forced.to_float())
@@ -304,6 +323,12 @@ static func set_render_scale(value: float) -> void:
 ## Il profilo scelto la prima volta vale anche ai riavvii successivi: senza
 ## memoria l'utente si rivedrebbe i primi 15 secondi di lag ogni volta.
 func load_gfx_profile() -> void:
+	# Il harness è ripetibile: non eredita né modifica preferenze grafiche
+	# della macchina che lo sta eseguendo.
+	if TutorialHarness.enabled():
+		_applied_scale = 1.0
+		_gfx_done = true
+		return
 	# La scala di partenza è quella che la scena applicherà davvero (scelta
 	# dell'utente, o l'ultima misurata): tenerne conto qui è ciò che permette
 	# alla sorveglianza di sapere da dove si sta muovendo. Senza, si crede a
@@ -536,6 +561,7 @@ func goto_wizard() -> void:
 
 func goto_office() -> void:
 	Log.info("scene", "→ OFFICE")
+	TutorialHarness.mark("OFFICE_LOAD_START")
 	state = State.OFFICE
 	_change_scene_with_veil(SCENE_OFFICE)
 
@@ -577,7 +603,7 @@ func _change_scene_with_veil(path: String) -> void:
 	_hide_loading()
 	_scene_change_busy = false
 
-func _show_loading(message := "CARICAMENTO…") -> void:
+func _show_loading(message := "") -> void:
 	if _loading_veil:
 		return
 	_loading_veil = CanvasLayer.new()
@@ -594,7 +620,7 @@ func _show_loading(message := "CARICAMENTO…") -> void:
 	box.add_theme_constant_override("separation", 14)
 	center.add_child(box)
 	var label := Label.new()
-	label.text = message
+	label.text = message if message != "" else UIStrings.t("common.loading")
 	label.add_theme_font_size_override("font_size", 26)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(label)

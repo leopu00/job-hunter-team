@@ -132,14 +132,15 @@ func _ready() -> void:
 	_docker_button = Button.new()
 	_docker_button.flat = true
 	_docker_button.tooltip_text = UIStrings.t("side.docker")
-	_docker_button.custom_minimum_size = Vector2(26, 26)
+	# 24 px di marchio ufficiale + 4 px di area libera su ciascun lato.
+	_docker_button.custom_minimum_size = Vector2(32, 32)
 	_docker_button.pressed.connect(func() -> void: _select("docker"))
 	_docker_icon = SidebarIcon.new("container", Palette.DIM)
 	_docker_icon.set_anchors_preset(Control.PRESET_CENTER)
-	_docker_icon.offset_left = -9
-	_docker_icon.offset_right = 9
-	_docker_icon.offset_top = -9
-	_docker_icon.offset_bottom = 9
+	_docker_icon.offset_left = -12
+	_docker_icon.offset_right = 12
+	_docker_icon.offset_top = -12
+	_docker_icon.offset_bottom = 12
 	_docker_button.add_child(_docker_icon)
 	_docker_badge = Label.new()
 	_docker_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -177,7 +178,7 @@ func _ready() -> void:
 	var close_btn := Button.new()
 	close_btn.flat = true
 	close_btn.text = "‹"
-	close_btn.tooltip_text = "Chiudi il menu"
+	close_btn.tooltip_text = UIStrings.t("side.close_menu")
 	close_btn.add_theme_font_size_override("font_size", 22)
 	close_btn.add_theme_color_override("font_color", Palette.DIM)
 	close_btn.add_theme_color_override("font_hover_color", Palette.WHITE)

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const MEDIA_REQUEST = /\.(?:m3u8|mp4|vtt|webm)(?:[?#]|$)/i;
 
 test.describe("shell pubblico tutorial e trailer", () => {
-  test("la home monta il teaser dopo il globo, come link senza player", async ({
+  test("la home monta il player differito dopo il globo senza link legacy", async ({
     page,
   }) => {
     const mediaRequests: string[] = [];
@@ -14,10 +14,13 @@ test.describe("shell pubblico tutorial e trailer", () => {
     const response = await page.goto("/", { waitUntil: "domcontentloaded" });
     expect(response?.status(), "home non risponde").toBe(200);
 
-    const teaser = page.locator("[data-trailer-teaser]");
-    await expect(teaser).toBeVisible();
-    await expect(teaser.locator('a[href="/trailer"]')).toBeVisible();
-    expect(await teaser.locator("video").count()).toBe(0);
+    const trailer = page.locator("[data-trailer-inline]");
+    await expect(trailer).toBeVisible();
+    await expect(trailer.locator("[data-video-pending=trailer]")).toBeVisible();
+    expect(await page.locator('a[href="/trailer"]').count()).toBe(0);
+    expect(await trailer.locator("video").count()).toBe(0);
+    await expect(trailer.locator("[data-music-credit]")).toHaveCount(0);
+    await expect(page.locator('footer a[href="/credits"]')).toBeVisible();
     expect(mediaRequests, "home ha richiesto media prima di un click").toEqual(
       [],
     );
@@ -25,7 +28,7 @@ test.describe("shell pubblico tutorial e trailer", () => {
     expect(
       await page.evaluate(() => {
         const globe = document.querySelector("[data-landing-globe]");
-        const trailer = document.querySelector("[data-trailer-teaser]");
+        const trailer = document.querySelector("[data-trailer-inline]");
         return Boolean(
           globe &&
           trailer &&
@@ -33,11 +36,11 @@ test.describe("shell pubblico tutorial e trailer", () => {
             Node.DOCUMENT_POSITION_FOLLOWING,
         );
       }),
-      "teaser non e' montato sotto il globo",
+      "player trailer non montato sotto il globo",
     ).toBe(true);
   });
 
-  test("/tutorials mette il testo prima del video e non scarica media", async ({
+  test("/tutorials reindirizza alla guida e sparisce dalla navigazione", async ({
     page,
   }) => {
     const mediaRequests: string[] = [];
@@ -48,69 +51,29 @@ test.describe("shell pubblico tutorial e trailer", () => {
     const response = await page.goto("/tutorials", {
       waitUntil: "domcontentloaded",
     });
-    expect(response?.status(), "/tutorials non risponde").toBe(200);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.locator("#game")).toBeVisible();
-    await expect(page.locator("#web")).toBeVisible();
-    await expect(
-      page.locator("#game").getByText("Plan the setup"),
-    ).toBeVisible();
-    await expect(
-      page.locator("#game").getByText("Set up the team"),
-    ).toBeVisible();
-    await expect(
-      page.locator("#game").getByText("Download the native desktop app"),
-    ).toBeVisible();
-    await expect(
-      page.locator("#game").getByText("Meet the office"),
-    ).toBeVisible();
-    const tutorialScreenshots = page.locator(
-      "#game [data-tutorial-step-image]",
-    );
-    await expect(tutorialScreenshots).toHaveCount(2);
-    await expect(
-      tutorialScreenshots
-        .first()
-        .getByRole("img", { name: "Overview of the native office" }),
-    ).toHaveAttribute("src", /office-overview\.png/);
-    await expect(
-      tutorialScreenshots
-        .nth(1)
-        .getByRole("img", { name: "A department work area" }),
-    ).toHaveAttribute("src", /departments\.png/);
-    await expect(tutorialScreenshots.first()).toContainText(
-      "The native office is the workspace",
-    );
-    await expect(
-      page.locator("#web").getByText("Start from the dashboard"),
-    ).toBeVisible();
-    await expect(
-      page.locator("#game").getByText("Prefer to watch instead?"),
-    ).toBeVisible();
     expect(
-      await page.locator("#game").evaluate((section) => {
-        const text = section.querySelector("ol");
-        const video = section.querySelector("[data-video-pending]");
-        return Boolean(
-          text &&
-          video &&
-          text.compareDocumentPosition(video) &
-            Node.DOCUMENT_POSITION_FOLLOWING,
-        );
-      }),
-      "video montato prima dei passi testuali",
-    ).toBe(true);
-    expect(await page.locator("[data-video-pending]").count()).toBe(2);
-    expect(await page.locator("video").count()).toBe(0);
-    expect(mediaRequests, "media richiesti prima di un click").toEqual([]);
-
+      response?.status(),
+      "redirect /tutorials non arriva alla guida",
+    ).toBe(200);
+    expect(response?.request().redirectedFrom()?.url()).toMatch(/\/tutorials$/);
+    expect(new URL(page.url()).pathname).toBe("/setup-guide");
+    await expect(page.locator("[data-setup-guide]")).toBeVisible();
+    expect(await page.locator("#game, #web").count()).toBe(0);
+    expect(await page.locator('a[href="/tutorials"]').count()).toBe(0);
     await expect(
-      page.locator('nav a[href="/tutorials"]').first(),
+      page.locator('nav a[href="/setup-guide"]').first(),
     ).toBeVisible();
-    await expect(page.locator('footer a[href="/tutorials"]')).toBeVisible();
+    await expect(page.locator('footer a[href="/setup-guide"]')).toBeVisible();
+    expect(mediaRequests, "media richiesti durante il redirect").toEqual([]);
+
+    const sitemap = await page.request.get("/sitemap.xml");
+    expect(sitemap.status()).toBe(200);
+    const sitemapBody = await sitemap.text();
+    expect(sitemapBody).not.toContain("/tutorials");
+    expect(sitemapBody).toContain("/setup-guide");
   });
 
-  test("/trailer resta una pagina dedicata senza player o media remoti", async ({
+  test("/trailer reindirizza al player sulla home e non resta nella sitemap", async ({
     page,
   }) => {
     const mediaRequests: string[] = [];
@@ -121,41 +84,22 @@ test.describe("shell pubblico tutorial e trailer", () => {
     const response = await page.goto("/trailer", {
       waitUntil: "domcontentloaded",
     });
-    expect(response?.status(), "/trailer non risponde").toBe(200);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    expect(response?.status(), "redirect /trailer non arriva alla home").toBe(
+      200,
+    );
+    expect(response?.request().redirectedFrom()?.url()).toMatch(/\/trailer$/);
+    expect(new URL(page.url()).pathname).toBe("/");
+    expect(new URL(page.url()).hash).toBe("#trailer");
     expect(await page.locator("[data-video-pending=trailer]").count()).toBe(1);
-    const musicCredit = page.locator('section[aria-label="Music credit"]');
-    await expect(musicCredit).toBeVisible();
-    expect(await musicCredit.locator(":scope > p").allTextContents()).toEqual([
-      "Covert Affair Kevin MacLeod (incompetech.com)",
-      "Licensed under Creative Commons: By Attribution 4.0",
-      "https://creativecommons.org/licenses/by/4.0/",
-      "Edited for timing and mixed with a CC0 cymbal-roll intro.",
-    ]);
-    await expect(
-      musicCredit.locator(
-        'a[href="https://creativecommons.org/licenses/by/4.0/"]',
-      ),
-    ).toBeVisible();
-    expect(
-      await page.evaluate(() => {
-        const video = document.querySelector("[data-video-pending=trailer]");
-        const credit = document.querySelector(
-          'section[aria-label="Music credit"]',
-        );
-        return Boolean(
-          video &&
-          credit &&
-          video.compareDocumentPosition(credit) &
-            Node.DOCUMENT_POSITION_FOLLOWING,
-        );
-      }),
-      "credit non montato sotto il video differito",
-    ).toBe(true);
+    await expect(page.locator("#trailer [data-music-credit]")).toHaveCount(0);
     expect(await page.locator("video").count()).toBe(0);
     expect(mediaRequests, "media trailer richiesti prima di un click").toEqual(
       [],
     );
+
+    const sitemap = await page.request.get("/sitemap.xml");
+    expect(sitemap.status()).toBe(200);
+    expect(await sitemap.text()).not.toContain("/trailer");
   });
 
   test("le card restano responsive sul viewport stretto", async ({
@@ -166,8 +110,8 @@ test.describe("shell pubblico tutorial e trailer", () => {
       viewport: { width: 375, height: 812 },
     });
     const page = await context.newPage();
-    await page.goto("/tutorials", { waitUntil: "domcontentloaded" });
-    await expect(page.locator("#game")).toBeVisible();
+    await page.goto("/setup-guide", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("[data-setup-guide]")).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,

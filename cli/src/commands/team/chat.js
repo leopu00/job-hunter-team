@@ -47,10 +47,10 @@ function resolveSession(agentArg) {
 // deve sapere se riprovare fra un minuto (occupato), se l'agente va sbloccato
 // (muto) o se e' davvero giu'. Vedi agents/_skills/tmux-send/SKILL.md.
 const SEND_ERRORS = {
-  2: 'sessione non attiva',
-  3: 'agente non ricettivo (pane bloccato o TUI giu\')',
-  4: 'agente occupato su un turno lungo — riprova fra poco',
-  5: 'agente bloccato: il messaggio e\' nel prompt ma non e\' partito — va sbloccato',
+  2: 'session is not active',
+  3: 'agent is not accepting input (blocked pane or TUI unavailable)',
+  4: 'agent is busy with a long turn — try again shortly',
+  5: 'agent is stuck: the message reached the prompt but was not processed',
 };
 
 /** Invia un messaggio testuale all'agente e ne VERIFICA la consegna. */
@@ -105,37 +105,37 @@ function capturePane(session, lines = 30) {
 // pipe la console e' asincrona. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
 export function sendAction(agentArg, message) {
   if (!usingContainer() && !tmuxAvailable()) {
-    console.error(c.red('Errore: tmux non trovato e container jht non attivo.'));
+    console.error(c.red('Error: tmux was not found and the jht container is not active.'));
     process.exitCode = 1;
     return;
   }
   if (!agentArg) {
-    console.error(c.red('Uso: jht team send <agente> "<messaggio>"'));
+    console.error(c.red('Usage: jht team send <agent> "<message>"'));
     process.exitCode = 1;
     return;
   }
   if (!message || typeof message !== 'string') {
-    console.error(c.red('Messaggio mancante. Uso: jht team send capitano "ciao"'));
+    console.error(c.red('Missing message. Usage: jht team send capitano "hello"'));
     process.exitCode = 1;
     return;
   }
   if (message.length > 1000) {
-    console.error(c.red('Messaggio troppo lungo (max 1000 caratteri).'));
+    console.error(c.red('Message too long (max 1000 characters).'));
     process.exitCode = 1;
     return;
   }
 
   const session = resolveSession(agentArg);
   if (!session) {
-    console.error(c.red(`Nessuna sessione attiva per '${agentArg}'.`));
-    console.error(c.dim('  Controlla con: jht team status'));
+    console.error(c.red(`No active session for '${agentArg}'.`));
+    console.error(c.dim('  Check with: jht team status'));
     process.exitCode = 1;
     return;
   }
 
   const r = sendMessage(session, message);
   if (!r.ok) {
-    console.error(c.red(`Invio fallito: ${(r.error || '').split('\n')[0]}`));
+    console.error(c.red(`Failed sending: ${(r.error || '').split('\n')[0]}`));
     process.exitCode = 1;
     return;
   }
@@ -146,21 +146,21 @@ export function sendAction(agentArg, message) {
 
 export async function chatAction(agentArg, options = {}) {
   if (!usingContainer() && !tmuxAvailable()) {
-    console.error(c.red('Errore: tmux non trovato e container jht non attivo.'));
+    console.error(c.red('Error: tmux was not found and the jht container is not active.'));
     process.exitCode = 1;
     return;
   }
   if (!agentArg) {
-    console.error(c.red('Uso: jht team chat <agente>'));
-    console.error(c.dim('  Esempio: jht team chat capitano'));
+    console.error(c.red('Usage: jht team chat < agent'));
+    console.error(c.dim('  Example: jht team chat capitano'));
     process.exitCode = 1;
     return;
   }
 
   const session = resolveSession(agentArg);
   if (!session) {
-    console.error(c.red(`Nessuna sessione attiva per '${agentArg}'.`));
-    console.error(c.dim('  Agenti disponibili: ' + getActiveSessions().filter((s) =>
+    console.error(c.red(`No active session for '${agentArg}'.`));
+    console.error(c.dim('  Agents available: ' + getActiveSessions().filter((s) =>
       AGENTS.some((a) => isAgentSession(s, a))
     ).join(', ')));
     process.exitCode = 1;
@@ -169,15 +169,15 @@ export async function chatAction(agentArg, options = {}) {
 
   const rl = createInterface({ input, output, terminal: true });
   console.log('');
-  console.log(c.bold(`Chat con ${session}`) + c.dim(`  (${usingContainer() ? 'container jht' : 'tmux host'})`));
-  console.log(c.dim('  /exit per uscire · /pane per vedere l\'ultimo output · /clear per pulire'));
+  console.log(c.bold(`Chat with ${session}`) + c.dim(`  (${usingContainer() ? 'container jht' : 'tmux host'})`));
+  console.log(c.dim('  /exit to exit · /pane to see the latest output · /clear to clean'));
   console.log('');
 
   const showPane = (lines = 20) => {
     const pane = capturePane(session, lines);
     const nonEmpty = pane.split('\n').filter((l) => l.trim()).slice(-lines).join('\n');
     console.log(c.dim('─── pane ─────────────────────────────────────────'));
-    console.log(nonEmpty || c.dim('(vuoto)'));
+    console.log(nonEmpty || c.dim('(empty)'));
     console.log(c.dim('──────────────────────────────────────────────────'));
   };
 
@@ -190,12 +190,12 @@ export async function chatAction(agentArg, options = {}) {
       if (msg === '/pane') { showPane(30); continue; }
       if (msg === '/clear') { console.clear(); continue; }
       if (msg.length > 1000) {
-        console.log(c.red('  Messaggio troppo lungo (max 1000 caratteri)'));
+        console.log(c.red('  Message too long (max 1000 characters)'));
         continue;
       }
       const r = sendMessage(session, msg);
       if (!r.ok) {
-        console.log(c.red(`  ✗ invio fallito: ${(r.error || '').split('\n')[0]}`));
+        console.log(c.red(`  : Failed sending: ${(r.error || '').split('\n')[0]}`));
         continue;
       }
       // Mostra breve peek del pane dopo 3s per vedere l'inizio della risposta
@@ -206,6 +206,6 @@ export async function chatAction(agentArg, options = {}) {
     }
   } finally {
     rl.close();
-    console.log(c.dim('  Chat chiusa.'));
+    console.log(c.dim('  Closed chat.'));
   }
 }

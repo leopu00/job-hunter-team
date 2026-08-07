@@ -12,6 +12,7 @@
     "@grammyjs/auto-retry": "^2.0.2",
     "@grammyjs/runner": "^2.0.3",
     "grammy": "^1.45.1",
+    "jsdom": "^29.1.1",
     "vitest": "^4.1.8",
     "zod": "^4.3.6"
   }

@@ -18,6 +18,7 @@ import {
 } from './setup-helpers.js';
 import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-ref.js';
 import { runHealthCheck } from './setup-checks.js';
+import { t } from './i18n.js';
 
 /**
  * Crea un prompter finto per passare a runHealthCheck (serve solo progress).
@@ -47,7 +48,7 @@ export async function runNonInteractiveSetup(opts) {
   const providerName = opts.provider || 'claude';
   const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerName);
   if (!selectedProvider) {
-    console.error(pc.red(`Provider "${providerName}" non valido. Usa: claude, openai, kimi`));
+    console.error(pc.red(`Invalid provider "${providerName}". Use: claude, openai, kimi`));
     process.exitCode = 1;
     return;
   }
@@ -65,14 +66,14 @@ export async function runNonInteractiveSetup(opts) {
       apiKeySecret = formatSecretForConfig('env', envName);
     } else if (secretMode === 'file') {
       if (!opts.secretFile) {
-        console.error(pc.red('--secret-file obbligatorio con --secret-mode file'));
+        console.error(pc.red('--secret-file is required with --secret-mode file'));
         process.exitCode = 1;
         return;
       }
       apiKeySecret = formatSecretForConfig('file', opts.secretFile);
     } else {
       if (!opts.apiKey) {
-        console.error(pc.red('--api-key obbligatorio (oppure usa --secret-mode env/file)'));
+        console.error(pc.red('--api-key is required (or use --secret-mode env/file)'));
         process.exitCode = 1;
         return;
       }
@@ -82,9 +83,9 @@ export async function runNonInteractiveSetup(opts) {
     }
   } else if (authMethod === 'subscription') {
     if (!opts.subscriptionEmail) {
-      console.error(pc.red('--subscription-email obbligatorio con --auth-method subscription'));
-      console.error(pc.dim('  Esempio: jht setup --non-interactive --provider claude \\'));
-      console.error(pc.dim('             --auth-method subscription --subscription-email tu@example.com'));
+      console.error(pc.red('--subscription-email is required with --auth-method subscription'));
+      console.error(pc.dim('  Example: jht setup --non-interactive --provider claude \\'));
+      console.error(pc.dim('             --auth-method subscription --subscription-email you@example.com'));
       process.exitCode = 1;
       return;
     }
@@ -95,7 +96,7 @@ export async function runNonInteractiveSetup(opts) {
       subscriptionConfig.session_token = opts.subscriptionToken.trim();
     }
   } else {
-    console.error(pc.red(`--auth-method "${authMethod}" non valido. Usa: api_key, subscription`));
+    console.error(pc.red(`Invalid --auth-method "${authMethod}". Use: api_key, subscription`));
     process.exitCode = 1;
     return;
   }
@@ -104,7 +105,7 @@ export async function runNonInteractiveSetup(opts) {
   if (!opts.skipHealth && authMethod === 'api_key') {
     const prompter = silentPrompter();
     const ok = await runHealthCheck(prompter, selectedProvider, apiKeySecret);
-    if (!ok) console.log(pc.yellow('  Health check fallito — la config viene salvata comunque.'));
+    if (!ok) console.log(pc.yellow(`  ${t('wizard.checks.health.failed_save_anyway')}`));
   }
 
   // --- Assembla e salva config ---
@@ -127,25 +128,25 @@ export async function runNonInteractiveSetup(opts) {
   try {
     writeConfigFile(config);
   } catch (err) {
-    console.error(pc.red(`Errore salvataggio: ${err.message}`));
+    console.error(pc.red(`Save Error: ${err.message}`));
     process.exitCode = 1;
     return;
   }
 
   // --- Riepilogo ---
-  console.log(pc.green('\n  Config salvata!\n'));
+  console.log(pc.green('\n  Config saved!\n'));
   console.log(`  Provider:   ${selectedProvider.label}`);
   if (authMethod === 'api_key') {
     console.log(`  Auth:       ${describeSecret(apiKeySecret)}`);
   } else {
-    console.log(`  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ', token preset' : ''})`);
+    console.log(`  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ' · token preset' : ''})`);
   }
-  console.log(`  Modello:    ${model}`);
+  console.log(`  Model:      ${model}`);
   console.log(`  JHT home:   ${JHT_CONFIG_DIR}`);
   console.log('');
   if (authMethod === 'subscription') {
     const updateId = providerName === 'openai' ? 'codex' : providerName; // claude/kimi mantengono il nome
-    console.log(pc.dim(`  Prossimo passo: jht providers update ${updateId}`));
-    console.log(pc.dim('  Poi avvia il CLI provider per il login OAuth (device flow).\n'));
+    console.log(pc.dim(`  Next step: jht providers update ${updateId}`));
+    console.log(pc.dim('  Then start the CLI OAuth login provider (device flow).\n'));
   }
 }

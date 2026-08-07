@@ -426,8 +426,8 @@ func _build_account() -> void:
 		button.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		button.pressed.connect(SetupService.open_cloud_command.bind(str(entry[1])))
 		actions.add_child(button)
-	# Login spento senza spiegazione = login rotto: il pairing si svolge nella
-	# console del container, e se il container è giù va detto qui (stesso
+	# Login spento senza spiegazione = login rotto: il pairing parte dal CLI
+	# nel container, e se il container è giù va detto qui (stesso
 	# trattamento dell'hint sotto il login del provider).
 	if not bool(SetupService.status.get("container_running", false)):
 		var why := TerminalTheme.label(
@@ -506,7 +506,7 @@ func _build_email() -> void:
 	grid.add_child(TerminalTheme.label(UIStrings.t("email.address"), 13, Palette.MUTED, "medium"))
 	var email := LineEdit.new()
 	email.text = str(state.get("email", ""))
-	email.placeholder_text = "nome.jht@gmail.com"
+	email.placeholder_text = UIStrings.t("email.address_ph")
 	email.custom_minimum_size = Vector2(560, 0)
 	grid.add_child(email)
 	grid.add_child(TerminalTheme.label(UIStrings.t("email.app_password"), 13, Palette.MUTED, "medium"))
@@ -1608,7 +1608,8 @@ func _plan_picker(col: VBoxContainer, provider: String, s: Dictionary) -> void:
 
 
 func _on_setup_refresh(_status: Dictionary) -> void:
-	if is_instance_valid(_content) and section in ["activation", "provider", "docker"]:
+	if is_instance_valid(_content) \
+			and section in ["activation", "provider", "docker", "account"]:
 		_build()
 
 
@@ -1911,10 +1912,12 @@ var _hours_status: Label
 var _hours_save_btn: Button
 var _hours_loaded := false
 
-## Giorni della settimana: chiave che va nel config (mon…sun) ed etichetta
-## di una lettera per i sette pulsanti.
-const HOURS_DAYS := [["mon", "L"], ["tue", "M"], ["wed", "M"], ["thu", "G"],
-		["fri", "V"], ["sat", "S"], ["sun", "D"]]
+## Giorni della settimana: chiave stabile che va nel config (mon…sun) e chiave
+## i18n dell'etichetta di una lettera mostrata sui sette pulsanti.
+const HOURS_DAYS := [["mon", "hours.day_mon"], ["tue", "hours.day_tue"],
+		["wed", "hours.day_wed"], ["thu", "hours.day_thu"],
+		["fri", "hours.day_fri"], ["sat", "hours.day_sat"],
+		["sun", "hours.day_sun"]]
 
 ## Punti di partenza in un click. Chi apre questa pagina la prima volta non
 ## ha un'opinione sugli orari: ne ha una sul MODO in cui vuole lavorare.
@@ -2007,7 +2010,7 @@ func _build_hours() -> void:
 		for day_def in HOURS_DAYS:
 			var key := str(day_def[0])
 			var toggle := Button.new()
-			toggle.text = str(day_def[1])
+			toggle.text = UIStrings.t(str(day_def[1]))
 			toggle.toggle_mode = true
 			toggle.custom_minimum_size = Vector2(34, 0)
 			toggle.button_pressed = _hours_has_day(win_for_days, key)
@@ -3451,7 +3454,8 @@ func _build_pos_detail() -> void:
 			var wrow := HBoxContainer.new()
 			wrow.add_theme_constant_override("separation", 12)
 			score_box.add_child(wrow)
-			var wl := TerminalTheme.label("%s (su %d)" % [w[1], w[2]], 13, Palette.MUTED)
+			var wl := TerminalTheme.label(UIStrings.t("pos.score_out_of") % [w[1], w[2]],
+					13, Palette.MUTED)
 			wl.custom_minimum_size = Vector2(220, 0)
 			wrow.add_child(wl)
 			var bar := ProgressBar.new()
@@ -4012,9 +4016,17 @@ func _build_team() -> void:
 	if not BackendBus.agents_updated.is_connected(_on_team_refresh):
 		BackendBus.agents_updated.connect(_on_team_refresh)
 	_listen_setup()
+	# Setup e liveness sono due verità distinte. Un avvio esplicito dalla CLI può
+	# avere sessioni tmux vive mentre piano, profilo o orari sono ancora da
+	# completare: in quel caso il vecchio banner "TEAM NON ATTIVO" contraddiceva
+	# sia `jht team status` sia il roster che compariva subito sotto. Continuiamo
+	# a mostrare il richiamo alla checklist, ma senza negare un team osservato.
+	var running := SetupService._agents_have_operational_team(BackendBus.agents) or bool(
+			SetupService.status.get("team_running", false))
 	if not bool(SetupService.status.get("ready", false)):
 		var banner := Button.new()
-		banner.text = UIStrings.t("setup.team_locked") % int(
+		var banner_key := "setup.cta" if running else "setup.team_locked"
+		banner.text = UIStrings.t(banner_key) % int(
 				SetupService.status.get("completed", 0))
 		banner.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		banner.add_theme_font_size_override("font_size", 15)
@@ -4025,8 +4037,6 @@ func _build_team() -> void:
 	var controls := HBoxContainer.new()
 	controls.add_theme_constant_override("separation", 10)
 	_content.add_child(controls)
-	var running := not BackendBus.agents.is_empty() or bool(
-			SetupService.status.get("team_running", false))
 	var team_busy := SetupService.busy() and SetupService.current_action == "team"
 	var primary := Button.new()
 	# Mentre il comando gira l'etichetta dice COSA sta succedendo (avvio o

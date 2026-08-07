@@ -48,6 +48,10 @@ nav_grid|script|gate|any|-|tools/nav_grid_selftest.gd|-
 speech_bubble|script|gate|any|-|tools/speech_bubble_selftest.gd|-
 pipeline_queue|script|gate|any|-|tools/pipeline_queue_selftest.gd|-
 embedded_terminal|script|gate|any|-|tools/embedded_terminal_selftest.gd|-
+# Il pairing cloud non è più una console: il processo emette eventi sicuri,
+# il browser apre sul link completo e un errore rende visibile COPIA LINK.
+# Il seam fake evita di aprire davvero browser nei runner dei tre sistemi.
+cloud_pairing|script|gate|any|-|tools/cloud_pairing_selftest.gd|CLOUD-PAIRING-TEST PASS
 redactor|script|gate|any|-|tools/redactor_selftest.gd|-
 diagnostics|script|gate|any|-|tools/diagnostics_selftest.gd|-
 theme|script|gate|any|-|tools/theme_selftest.gd|-
@@ -76,6 +80,9 @@ upgrade_bootstrap|script|gate|any|-|tools/upgrade_bootstrap_selftest.gd|UPGRADE-
 # La veste inglese delle riprese sostituisce un Node2D: deve conservare il
 # layer di fondale, altrimenti COMPATIBILITY passa davanti alla testa agente.
 promo_sign_layer|script|gate|any|-|tools/promo_sign_layer_selftest.gd|PROMO-SIGN-LAYER-TEST PASS
+# V3: le tre take approvate devono partire su una route reale, superare le
+# durate minime e montare la stessa superficie promo pulita (nessun HUD/UI).
+promo_v3_regia|script|gate|any|-|tools/promo_v3_selftest.gd|PROMO-V3-REGIA-TEST PASS
 # La fascia frontale delle scrivanie non puo' restare un overlay assoluto:
 # altrimenti un agente in cammino viene coperto anche quando il suo piede lo
 # y-sorta davanti al desk. Deve attivarsi soltanto per un rig seduto dinamico.
@@ -86,17 +93,29 @@ furniture_occlusion|script|gate|any|-|tools/furniture_occlusion_selftest.gd|FURN
 walk_cycle|script|gate|any|-|tools/walk_cycle_selftest.gd|WALK-CYCLE-TEST PASS
 # /bin/sh: apre la shell senza il ramo Windows che ha embedded_terminal.
 terminal_selection|script|gate|posix|-|tools/terminal_selection_selftest.gd|-
-# Il guard delle 7 lingue. UIStrings.t() fa fallback SILENZIOSO sull'italiano e
+# Il guard delle 7 lingue. UIStrings.t() fa fallback SILENZIOSO sull'inglese e
 # i dizionari tradotti si caricano pigramente: senza questa riga sedici chiavi
 # duplicate in ui_en.gd passavano in verde e rompevano l'avvio in tutte le
 # lingue tranne una.
 i18n_parity|script|gate|any|-|tools/i18n_parity_selftest.gd|-
+# Il velo fra title/wizard/office dura pochi frame ma finisce nelle riprese:
+# costruisce il vero overlay di Game e ne blocca lingua e fallback sull'inglese.
+loading_english|script|gate|any|-|tools/loading_english_selftest.gd|LOADING-ENGLISH-TEST PASS
 # Primo avvio: nessun locale di sistema, default inglese e una scelta che
 # espone davvero tutte le sette lingue prima della title screen.
 language_picker|script|gate|any|-|tools/language_picker_selftest.gd|LANGUAGE-PICKER-TEST PASS
 # La componente da sola non basta: entra dalla vera main scene e prova che il
 # picker preceda la title, mostri inglese e costruisca la title dopo la scelta.
-language_picker_title|run|gate|any|JHT_LANG= JHT_LANGUAGE_PICKER_TEST=1|-|LANGUAGE-PICKER-TITLE-TEST PASS
+# Nel gate dell'artifact, JHT_EXPECTED_GAME_VERSION riceve il tag senza `v`:
+# l'eseguibile deve stampare versione effettiva e PASS, altrimenti esce 1.
+language_picker_title|run|gate|any|JHT_LANG= JHT_LANGUAGE_PICKER_TEST=1 JHT_EXPECTED_GAME_VERSION=|-|LANGUAGE-PICKER-TITLE-TEST PASS
+# Percorso P09 reale e cliccabile: non salta il picker con JHT_LANG, isola
+# user://, conferma English, salva un nome sintetico ed entra nell'Office
+# offline con Assistant disponibile e viewport nativo 16:9.
+tutorial_16_9|run|gate|any|JHT_TUTORIAL_HARNESS=1 JHT_TUTORIAL_RESET=1 JHT_TUTORIAL_HARNESS_TEST=1|-|TUTORIAL-16-9-HARNESS-TEST PASS
+# Secondo processo: l'inglese deve saltare il picker grazie al ConfigFile
+# isolato del harness, non a JHT_LANG; chiude poi solo i file sintetici.
+tutorial_16_9_persistence|python|gate|any|-|tools/tutorial_16_9_selftest.py|-
 # Conferma una lingua non-default nel picker, chiude Godot e riapre un processo
 # senza override: legge il ConfigFile, salta il picker e ricostruisce la title.
 language_persistence|python|gate|any|-|tools/language_persistence_selftest.py|LANGUAGE-PERSISTENCE-TEST PASS
@@ -138,6 +157,13 @@ idle_pace|script|gate|any|-|tools/idle_pace_selftest.gd|-
 # Windows, cioe' un bug introdotto da chi sviluppa su macOS o Linux passava il
 # semaforo di due OS su tre.
 payload_syntax|python|gate|any|-|tools/python_payload_syntax_test.py|-
+# Il tag non basta: i tre asset impacchettati devono avviare la title vera con
+# versione attesa derivata dal tag, ed esporre nei log versione e PASS.
+title_artifact_contract|python|gate|any|-|tools/title_artifact_contract_selftest.py|TITLE-ARTIFACT-CONTRACT-TEST PASS
+# Il path artifact arriva dal DB, quindi dal container: soltanto le quattro
+# root documenti canoniche, nessuna traversal/symlink, tipo dichiarato e PDF
+# attestato prima che un byte possa raggiungere cache o viewer dell'host.
+artifact_fetch|python|gate|posix|-|tools/artifact_fetch_selftest.py|ARTIFACT-FETCH-SECURITY-TEST PASS
 character_sheets|python|gate|any|-|tools/audit_character_sheets.py|-
 instance_portraits|python|gate|any|-|tools/audit_instance_portraits.py|-
 
@@ -156,6 +182,9 @@ guided|run|gate|any|JHT_SCENE=office JHT_GUIDED_TEST=1|-|GUIDED-ONBOARDING-TEST 
 # rileggere indietro non venga interrotto dal messaggio successivo.
 comic_chat|run|gate|any|JHT_SCENE=office JHT_COMIC_CHAT_TEST=1|-|COMIC-CHAT-TEST PASS
 gfx_profile|run|gate|any|JHT_SCENE=office JHT_GFX_TEST=1|-|GFX-PROFILE-TEST PASS
+# Il frame iniziale della FreeCamera deve comprendere le 36 postazioni: il
+# bordo sud del primo panorama non puo' tagliare piedi o teste del roster.
+agent_frame|run|gate|any|JHT_SCENE=office JHT_ALL_SEATED_PREVIEW=1 JHT_AGENT_FRAME_TEST=1|-|AGENT-FRAME-TEST PASS
 world_text|run|gate|any|JHT_SCENE=office JHT_WORLD_TEXT_TEST=1|-|WORLD-TEXT-TEST PASS
 graphics_panel|run|gate|any|JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1|-|GRAPHICS-PANEL-TEST PASS
 setup_busy|run|gate|any|JHT_SCENE=office JHT_SETUP_BUSY_TEST=1|-|SETUP-BUSY-TEST PASS

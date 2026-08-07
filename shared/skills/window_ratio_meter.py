@@ -295,8 +295,8 @@ def _acquire_singleton() -> None:
     except SystemExit:
         raise
     except Exception as e:  # noqa: BLE001
-        print(f"[window-ratio-meter] WARN singleton_lock non caricabile ({e}) "
-              f"— proseguo senza lock", flush=True)
+        print(f"[window-ratio-meter] WARN singleton_lock could not be loaded ({e}) "
+              f"— continuing without a lock", flush=True)
 
 
 def run_watch(tick_sec: int = WATCH_TICK_SEC) -> None:
@@ -370,20 +370,20 @@ def _self_test() -> int:
         if not cond:
             fails += 1
 
-    ok("provider rilevato", state["provider"] == "openai")
+    ok("provider detected", state["provider"] == "openai")
     # Con l'accumulo Δu≥10pp si emette ~1 ratio ogni ~12 tick → molti meno
     # sample del per-tick, ma molto meno rumorosi.
-    ok(f"samples_count accumulati >= 3 (got {state['samples_count']})",
+    ok(f"accumulated samples_count >= 3 (got {state['samples_count']})",
        state["samples_count"] >= 3)
     ok(
-        f"ema vicino a 14.7 (got {state['ema_ratio_pct']})",
+        f"EMA close to 14.7 (got {state['ema_ratio_pct']})",
         abs(state["ema_ratio_pct"] - 14.7) < 1.5,
     )
 
     # Re-run: dev'essere idempotente, nessun nuovo sample
     before_count = state["samples_count"]
     state2 = run_once()
-    ok("idempotente (no nuovi sample)", state2["samples_count"] == before_count)
+    ok("idempotent (no new samples)", state2["samples_count"] == before_count)
 
     # ── Test QUANTIZZAZIONE (il bug reale) ───────────────────────────────
     # Bridge reale: usage=int(round(...)) e weekly interi. Ratio vero 15%.
@@ -410,17 +410,17 @@ def _self_test() -> int:
             }) + "\n")
     qstate = run_once()
     qema = qstate["ema_ratio_pct"]
-    ok(f"quantizz: ema ~15 vero (got {qema})",
+    ok(f"quantization: EMA near the true value of 15 (got {qema})",
        qema is not None and 11.0 <= qema <= 19.0)
-    ok(f"quantizz: NIENTE overshoot >40 (col bug era 25-100, got {qema})",
+    ok(f"quantization: no overshoot above 40 (the bug produced 25-100, got {qema})",
        qema is not None and qema < 40.0)
 
     # Provider change: reset
     CONFIG_FILE.write_text(json.dumps({"active_provider": "claude"}))
     state3 = run_once()
-    ok("provider change → reset", state3["provider"] == "claude")
+    ok("provider change resets state", state3["provider"] == "claude")
     ok(
-        "ema rebuilt nuovo provider",
+        "EMA rebuilt for the new provider",
         state3["samples_count"] > 0,
     )
 
@@ -428,7 +428,9 @@ def _self_test() -> int:
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__)
+    ap = argparse.ArgumentParser(
+        description="Measure the observed ratio between primary and weekly usage windows."
+    )
     ap.add_argument("--watch", action="store_true", help="daemon mode")
     ap.add_argument("--tick", type=int, default=WATCH_TICK_SEC,
                     help=f"daemon tick (default {WATCH_TICK_SEC}s)")

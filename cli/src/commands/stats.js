@@ -28,7 +28,7 @@ async function handleStats(options) {
   const days = parseInt(options.days ?? '30', 10) || 30;
   const since = Date.now() - days * 86_400_000;
 
-  console.log(`\n  JHT — Statistiche (ultimi ${days} giorni)\n`);
+  console.log(`\n  JHT — Statistics (last ${days} days)\n`);
 
   // Le tre sezioni leggono tre store che nessuno scrive più. Quando mancano
   // tutte e tre non c'è nessuna statistica da dare: dirlo una volta vale più
@@ -61,11 +61,11 @@ async function handleStats(options) {
   if (!has.tasks) {
     console.log(`  ${DIM}${retiredStoreDetail('tasks')}${RESET}`);
   } else {
-    console.log(`  ${DIM}Totali:${RESET}    ${tasks.length}`);
-    console.log(`  ${GREEN}Successo:${RESET}  ${succeeded}   ${RED}Falliti:${RESET} ${failed}   ${YELLOW}In corso:${RESET} ${running}`);
+    console.log(`  ${DIM}Total:${RESET}     ${tasks.length}`);
+    console.log(`  ${GREEN}Succeeded:${RESET} ${succeeded}   ${RED}Failed:${RESET} ${failed}   ${YELLOW}In progress:${RESET} ${running}`);
     if (tasks.length > 0) {
       const rate = Math.round((succeeded / tasks.length) * 100);
-      console.log(`  ${DIM}Success rate:${RESET} ${rate}%   ${DIM}Durata media:${RESET} ${fmtDuration(avgDur)}`);
+      console.log(`  ${DIM}Success rate:${RESET} ${rate}%   ${DIM}Average duration:${RESET} ${fmtDuration(avgDur)}`);
     }
   }
 
@@ -82,9 +82,9 @@ async function handleStats(options) {
   if (!has.analytics) {
     console.log(`  ${DIM}${retiredStoreDetail('analytics')}${RESET}`);
   } else {
-    console.log(`  ${DIM}Chiamate:${RESET}  ${entries.length}   ${RED}Errori:${RESET} ${errors}`);
+    console.log(`  ${DIM}Calls:${RESET}     ${entries.length}   ${RED}Errors:${RESET} ${errors}`);
     console.log(`  ${DIM}Token:${RESET}     ${totalTokens > 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens}`);
-    console.log(`  ${DIM}Costo:${RESET}     $${totalCost.toFixed(4)}   ${DIM}Latenza media:${RESET} ${avgLat}ms`);
+    console.log(`  ${DIM}Cost:${RESET}      $${totalCost.toFixed(4)}   ${DIM}Average latency:${RESET} ${avgLat}ms`);
   }
 
   // Per provider
@@ -96,9 +96,9 @@ async function handleStats(options) {
     byProvider.set(p, cur);
   }
   if (byProvider.size > 0) {
-    console.log(`  ${DIM}Per provider:${RESET}`);
+    console.log(`  ${DIM}By provider:${RESET}`);
     for (const [p, d] of byProvider) {
-      console.log(`    ${p}: ${d.calls} chiamate, ${d.tokens > 1000 ? `${(d.tokens / 1000).toFixed(1)}k` : d.tokens} token, $${d.cost.toFixed(4)}`);
+      console.log(`    ${p}: ${d.calls} calls, ${d.tokens > 1000 ? `${(d.tokens / 1000).toFixed(1)}k` : d.tokens} tokens, $${d.cost.toFixed(4)}`);
     }
   }
 
@@ -108,12 +108,12 @@ async function handleStats(options) {
   const active = sessions.filter(s => s.state === 'active').length;
   const totalMsgs = sessions.reduce((s, sess) => s + (sess.messageCount ?? 0), 0);
 
-  console.log(`\n  ${BOLD}Sessioni${RESET}`);
+  console.log(`\n  ${BOLD}Sessions${RESET}`);
   if (!has.sessions) {
     console.log(`  ${DIM}${retiredStoreDetail('sessions')}${RESET}`);
   } else {
-    console.log(`  ${DIM}Totali:${RESET}    ${sessions.length}   ${GREEN}Attive:${RESET} ${active}`);
-    console.log(`  ${DIM}Messaggi:${RESET}  ${totalMsgs}`);
+    console.log(`  ${DIM}Total:${RESET}     ${sessions.length}   ${GREEN}Active:${RESET} ${active}`);
+    console.log(`  ${DIM}Messages:${RESET}  ${totalMsgs}`);
   }
 
   console.log('');
@@ -122,7 +122,7 @@ async function handleStats(options) {
 export function registerStatsCommand(program) {
   program
     .command('stats')
-    .description('Mostra statistiche aggregate (task, API, sessioni)')
-    .option('-d, --days <n>', 'periodo in giorni (default 30)', '30')
+    .description('Show aggregate statistics (task, API, sessions)')
+    .option('-d, --days <n>', 'period in days (default 30)', '30')
     .action(handleStats);
 }

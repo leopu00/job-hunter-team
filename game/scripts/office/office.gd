@@ -327,6 +327,15 @@ func _ready() -> void:
 		SetupService.status_changed.connect(_on_setup_status_changed)
 		_on_setup_status_changed(SetupService.status)
 
+	if TutorialHarness.enabled():
+		var guide := _tour_guide_npc()
+		TutorialHarness.mark("OFFICE_LOAD_END", {
+			"assistant_clickable": guide != null and guide.visible,
+			"roster": "showroom_inactive" if BackendBus.agents.is_empty() else "backend",
+		})
+		if TutorialHarness.auto_test():
+			_tutorial_harness_finish_test.call_deferred()
+
 	# ── Modalità test/preview ────────────────────────────────────────────
 	# I selftest e i ganci JHT_* vivono in un nodo a parte, che nasce solo se
 	# almeno una di quelle variabili è valorizzata: in una build normale il
@@ -341,6 +350,40 @@ func _ready() -> void:
 	# e chat con testi inventati in inglese, per --write-movie. Nessun dato reale.
 	if OS.get_environment("JHT_PROMO") != "":
 		add_child(load("res://tools/promo_director.gd").new())
+
+
+func _tutorial_harness_finish_test() -> void:
+	await get_tree().process_frame
+	var guide := _tour_guide_npc()
+	# Attraversa lo stesso dispatch della FreeCamera: non basta che il nodo
+	# esista, il primo click dell'utente deve aprire davvero il benvenuto.
+	if guide != null:
+		_on_world_click(guide.global_position + Vector2(0, -20))
+	await get_tree().process_frame
+	var assistant_clickable := Game.dialogue_active
+	var all_inactive := BackendBus.agents.is_empty()
+	for agent in agents:
+		all_inactive = all_inactive and agent.uid == "" and agent.backend_status == "idle"
+	# Headless crea un framebuffer quadrato anche quando il progetto è 16:9;
+	# il take GUI usa invece queste dimensioni native dichiarate dal progetto.
+	var configured_size := Vector2(
+		float(ProjectSettings.get_setting("display/window/size/viewport_width", 0)),
+		float(ProjectSettings.get_setting("display/window/size/viewport_height", 0)))
+	var ratio_ok := configured_size.y > 0.0 \
+			and absf(configured_size.x / configured_size.y - 16.0 / 9.0) < 0.01
+	var markers_ok := TutorialHarness.saw("LANGUAGE_DEFAULT_VISIBLE") \
+			and TutorialHarness.saw("LANGUAGE_CONFIRMED") \
+			and TutorialHarness.saw("NAME_SAVED") \
+			and TutorialHarness.saw("OFFICE_LOAD_START") \
+			and TutorialHarness.saw("OFFICE_LOAD_END")
+	var ok: bool = guide != null and guide.visible and assistant_clickable \
+			and all_inactive and ratio_ok and markers_ok
+	if not ok:
+		print("TUTORIAL-16-9-HARNESS-STATE guide=%s click=%s inactive=%s ratio=%s configured=%s markers=%s" % [
+			guide != null and guide.visible, assistant_clickable, all_inactive, ratio_ok,
+			configured_size, markers_ok])
+	print("TUTORIAL-16-9-HARNESS-TEST %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
 
 func _on_chat_message(msg: Dictionary) -> void:
 	deliver_chat(msg.get("from", ""), msg.get("to", "all"), msg.get("text", ""))
@@ -656,7 +699,10 @@ func _toggle_chat_access() -> void:
 ## traduce nel nome del sistema reale (coordinatore → capitano).
 func _open_chat(agent: AgentNPC) -> void:
 	Log.info("chat", "pannello chat aperto con " + agent.slug)
-	_chat_panel = ChatPanel.new(agent.slug, agent.display_name, _chat_roster())
+	# La chat viva indirizza l'uid e mostra il suo ritratto per istanza. Lo
+	# showroom senza uid continua invece sul canale authored del ruolo.
+	var chat_ref := agent.uid if agent.uid != "" else agent.slug
+	_chat_panel = ChatPanel.new(chat_ref, agent.display_name, _chat_roster())
 	add_child(_chat_panel)
 	_chat_panel.closed.connect(func() -> void:
 		_chat_panel = null
@@ -673,7 +719,7 @@ func _start_talk(agent: AgentNPC) -> void:
 	# l'agente del reparto (prima persona), senza regia dell'Assistente.
 	if tour_running and TourGuide.mode() == "free" and TourGuide.stop_open(slug):
 		_camera.focus_on(agent.global_position + Vector2(0, -40), 1.05)
-		_tour_open_stop_dialogue(slug)
+		_tour_open_stop_dialogue(slug, agent)
 		return
 	if ScriptedOnboarding.story_mode():
 		_story_seen[agent.slug] = true
@@ -683,7 +729,7 @@ func _start_talk(agent: AgentNPC) -> void:
 		if _tour_visits == 3 and not tour_running:
 			var helper := _find_agent("assistente")
 			if helper:
-				helper.say("Per domande libere e personali collega un provider dal setup. L'ufficio demo resta sempre esplorabile.")
+				helper.say(UIStrings.t("office.demo_provider_required"))
 	agent.start_talk()
 	var ui := DialogueUI.new()
 	add_child(ui)
@@ -701,8 +747,10 @@ func _start_talk(agent: AgentNPC) -> void:
 		# Tour chiuso ma team ancora spento: l'agente si presenta in breve
 		# e riporta con garbo alla checklist (mai le stesse risposte esaurite).
 		tree_id = "tease_" + slug
+	if tree_id == "":
+		tree_id = slug
 	ui.action_triggered.connect(_on_tour_dialogue_action)
-	ui.open(agent.slug, agent.display_name, tree_id)
+	ui.open(agent.dialogue_portrait_slug(), agent.display_name, tree_id)
 	ui.closed.connect(func() -> void:
 		if is_instance_valid(agent) and not agent.is_dissolving():
 			agent.end_talk()
@@ -893,7 +941,7 @@ func _tour_begin_presentation(stop: String, guide: AgentNPC,
 		host: AgentNPC) -> void:
 	var scene := TourGuide.scene_for(stop)
 	if OS.get_environment("JHT_TOUR_TEST") == "1":
-		_tour_open_stop_dialogue(stop)
+		_tour_open_stop_dialogue(stop, host)
 		return
 	if guide and scene.has("greet"):
 		guide.say(str(scene["greet"]))
@@ -902,21 +950,25 @@ func _tour_begin_presentation(stop: String, guide: AgentNPC,
 			if is_instance_valid(host) and TourGuide.current_slug() == stop:
 				host.say(str(scene["reply"])))
 	get_tree().create_timer(3.0).timeout.connect(func() -> void:
-		_tour_open_stop_dialogue(stop))
+		_tour_open_stop_dialogue(stop, host))
 
 ## Apre il dialogo della tappa appena la scena è libera (ritenta finché
 ## un pannello o un altro dialogo occupano lo schermo).
-func _tour_open_stop_dialogue(stop: String) -> void:
+func _tour_open_stop_dialogue(stop: String, preferred_host: AgentNPC = null) -> void:
 	if not _tour_enabled or not TourGuide.stop_open(stop):
 		return
 	if Game.dialogue_active or _registry or _dept_panel or _agent_card \
 			or _chat_panel or _cv_shelf_panel or _queue_panel \
 			or _thinking_panel or _coordinator_panel:
 		get_tree().create_timer(0.8).timeout.connect(func() -> void:
-			_tour_open_stop_dialogue(stop))
+			_tour_open_stop_dialogue(stop, preferred_host))
 		return
 	var scene := TourGuide.scene_for(stop)
-	var host := _tour_host_npc(stop)
+	var host := preferred_host
+	if not is_instance_valid(host) \
+			or ScriptedOnboarding.normalize_agent(host.slug) != stop \
+			or host.is_dissolving():
+		host = _tour_host_npc(stop)
 	var guide := _tour_guide_npc()
 	if guide:
 		guide.tour_face_audience()
@@ -925,8 +977,10 @@ func _tour_open_stop_dialogue(stop: String) -> void:
 	var ui := DialogueUI.new()
 	add_child(ui)
 	ui.action_triggered.connect(_on_tour_dialogue_action)
-	ui.open(str(scene.get("portrait", "assistente")),
-			str(scene.get("name", CharacterDefs.role_name("assistente"))),
+	ui.open(host.dialogue_portrait_slug() if host else ComicChat.portrait_slug(
+			str(scene.get("portrait", "assistente"))),
+			host.display_name if host else str(scene.get(
+					"name", CharacterDefs.role_name("assistente"))),
 			str(scene.get("tree", "")))
 	ui.closed.connect(func() -> void:
 		if host == _tour_staged_host:
@@ -1070,7 +1124,7 @@ func deliver_chat(from_uid: String, to_uid: String, text: String) -> void:
 			"all":
 				to_label = ""
 			"user":
-				to_label = "MESSAGGIO PER TE"
+				to_label = UIStrings.t("office.message_for_you")
 			_:
 				to_label = _name_of(to_uid)
 		speaker.say(text, to_label)
@@ -1132,12 +1186,12 @@ const TR_REACT_GAP := 2.4     # secondi fra due reazioni (non un coro)
 ## Gli stati VERI del jobs.db (SELECT DISTINCT to_state sulla VPS) come
 ## frase parlata; uno stato nuovo cade sul generico "%s → stato".
 const TR_PHRASES := {
-	"new": "Nuova posizione: %s",
-	"checked": "Verificata: %s",
-	"scored": "Valutata: %s",
-	"writing": "CV in scrittura: %s",
-	"ready": "CV pronto: %s",
-	"excluded": "Esclusa: %s",
+	"new": "office.transition.new",
+	"checked": "office.transition.checked",
+	"scored": "office.transition.scored",
+	"writing": "office.transition.writing",
+	"ready": "office.transition.ready",
+	"excluded": "office.transition.excluded",
 }
 ## Stati che accendono la stampante dell'ufficio (lavoro sul CV).
 const TR_PRINT := ["writing", "ready"]
@@ -1251,9 +1305,10 @@ func _react_to_transition(t: Dictionary) -> void:
 	if what != "" and company != "":
 		what += " · " + company
 	elif what == "":
-		what = company if company != "" else "posizione #%s" % str(t.get("position_id", "?"))
+		what = company if company != "" else UIStrings.t("office.position_fallback") \
+				% str(t.get("position_id", "?"))
 	if TR_PHRASES.has(to_st):
-		actor.say(TR_PHRASES[to_st] % what)
+		actor.say(UIStrings.t(TR_PHRASES[to_st]) % what)
 	else:
 		actor.say("%s → %s" % [what, to_st])
 	actor.react_to_work(to_st in TR_PRINT)
@@ -1341,8 +1396,11 @@ func _spawn_showroom() -> void:
 		_refresh_tour_markers()
 
 func _on_setup_status_changed(status: Dictionary) -> void:
-	var authenticated := bool(status.get("provider_authenticated", false))
-	var team_running := bool(status.get("team_running", false))
+	# Il take tutorial non può ereditare l'autenticazione o un container della
+	# macchina ospite: lo showroom resta esplicitamente inattivo e cliccabile.
+	var harness_offline := TutorialHarness.enabled()
+	var authenticated := false if harness_offline else bool(status.get("provider_authenticated", false))
+	var team_running := false if harness_offline else bool(status.get("team_running", false))
 	for agent in agents:
 		if agent.uid == "":
 			# Gli NPC senza uid sono guide di showroom, non processi LLM. Prima

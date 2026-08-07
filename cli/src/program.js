@@ -40,6 +40,8 @@ import { registerPositionsCommand } from './commands/positions.js';
 import { registerTicketCommand, registerDirectivesCommand } from './commands/decisions.js';
 import { registerProfileCommand } from './commands/profile.js';
 import { registerPid1Command } from './commands/pid1.js';
+import { registerDownloadCommand } from './commands/download.js';
+import { registerGameCommand } from './commands/game.js';
 
 // Help "essenziale" mostrato di default da `jht`, `jht --help`, `jht -h`.
 // Per la lista completa di tutti i sotto-comandi (export/import/cron/
@@ -58,19 +60,26 @@ const ESSENTIAL_HELP = `Usage: jht [command]
 
 Job Hunter Team — CLI
 
-Comandi essenziali:
-  setup        Configurazione iniziale (lancia il wizard)
-  team         Avvia e ferma gli agenti (jht team start)
-  status       Stato del sistema (container, agenti, db)
-  agents       Lista agenti e task in corso
-  doctor       Diagnostica setup e dipendenze
+Essential commands:
+  setup        Initial configuration (starts the wizard)
+  team         Start and stop agents (jht team start)
+  status       System status (container, agents, database)
+  agents       List agents and current tasks
+  doctor       Diagnose setup and dependencies
 
-Per la lista completa di tutti i comandi:
+For the complete command list:
   jht help
 `;
 
 export function buildProgram() {
   const program = new Command();
+
+  // I flag dopo il nome di un sottocomando appartengono a quel sottocomando.
+  // Senza questo gate Commander intercetta anche `jht download --version X`
+  // come versione globale della CLI, stampa il numero ed esce 0 senza
+  // scaricare nulla. I globali restano disponibili prima del comando
+  // (`jht --version`), che e' il contratto non ambiguo.
+  program.enablePositionalOptions();
 
   program
     .name('jht')
@@ -123,6 +132,8 @@ export function buildProgram() {
   registerDirectivesCommand(program);
   registerProfileCommand(program);
   registerPid1Command(program);
+  registerDownloadCommand(program);
+  registerGameCommand(program);
 
   // Salviamo il riferimento all'help "lungo" autogenerato da commander
   // PRIMA di sovrascrivere helpInformation. `jht help` lo invoca per
@@ -135,7 +146,7 @@ export function buildProgram() {
 
   program
     .command('help')
-    .description('Mostra TUTTI i comandi disponibili (versione lunga)')
+    .description('Show all available commands (long form)')
     .action(() => {
       process.stdout.write(fullHelp());
     });

@@ -138,10 +138,10 @@ CAPTAIN_SESSION = os.environ.get("JHT_THROTTLE_ENGINE_CAPTAIN", "CAPITANO")
 # e il rientro nel loop è immediato — un risveglio che finisce in un ACK e poi
 # in attesa di ordini produce un falso `new=0` (vedi SC-08 nei prompt Scout).
 WAKE_TEXT = (
-    "[DA @SISTEMA A @{AGENT}] [RIPRENDI] La tua pausa è finita. "
-    "PRIMO comando, prima di qualunque altra cosa: `throttle-ack {agent}`. "
-    "Poi torna SUBITO al tuo loop e riprendi dal punto in cui eri: "
-    "non aspettare altri ordini."
+    "[DA @SISTEMA A @{AGENT}] [RIPRENDI] Your pause is over. FIRST command, "
+    "before anything else: `throttle-ack {agent}`. Then return IMMEDIATELY "
+    "to your loop and resume where you left off; do not wait for more "
+    "instructions."
 )
 
 
@@ -217,7 +217,7 @@ def _load_shared(name: str, filename: str):
             spec.loader.exec_module(mod)
             break
         except Exception as exc:  # noqa: BLE001 — un import rotto non ferma il motore
-            _log("import %s fallito: %s" % (filename, exc))
+            _log("import %s failed: %s" % (filename, exc))
             mod = None
     _MODULE_CACHE[name] = mod
     return mod
@@ -246,7 +246,7 @@ def effective_seconds(agent: str, requested=None) -> int:
             return int(mod.get_agent(agent))
         return int(mod.effective(agent, int(requested)))
     except Exception as exc:  # noqa: BLE001
-        _log("durata non risolvibile per %s: %s" % (agent, exc))
+        _log("could not resolve duration for %s: %s" % (agent, exc))
         return 300
 
 
@@ -316,7 +316,7 @@ def emit(event: str, agent=None, ts=None, **fields) -> dict:
         with path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
     except OSError as exc:
-        _log("scrittura %s fallita: %s" % (path, exc))
+        _log("write to %s failed: %s" % (path, exc))
     _log("%s %s" % (event, json.dumps({k: v for k, v in record.items()
                                        if k not in ("ts", "ts_iso")},
                                       ensure_ascii=False)))
@@ -340,7 +340,7 @@ def emit_pause(event: str, agent: str, ts, **fields) -> None:
         with path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, separators=(",", ":")) + "\n")
     except OSError as exc:
-        _log("scrittura %s fallita: %s" % (path, exc))
+        _log("write to %s failed: %s" % (path, exc))
 
 
 # ── Stato su disco ────────────────────────────────────────────────────────
@@ -373,7 +373,7 @@ def write_flags(state: dict) -> None:
                        encoding="utf-8")
         os.replace(tmp, path)
     except OSError as exc:
-        _log("scrittura flag fallita: %s" % exc)
+        _log("flag write failed: %s" % exc)
 
 
 def get_flag(agent: str) -> dict:
@@ -411,7 +411,7 @@ def register(agent: str, seconds=None, reason=None, session=None,
     """
     agent = str(agent or "").strip().lower()
     if not agent:
-        raise ValueError("agent richiesto")
+        raise ValueError("agent is required")
     now = time.time() if now is None else float(now)
     applied = effective_seconds(agent, seconds)
 
@@ -683,13 +683,13 @@ def send_wakeup(session: str, agent: str, message: str) -> int:
         except FileNotFoundError:
             continue
         except (OSError, subprocess.SubprocessError) as exc:
-            _log("sender %s fallito: %s" % (cand, exc))
+            _log("sender %s failed: %s" % (cand, exc))
             return -1
         if res.returncode != 0:
             _log("sender rc=%d: %s" % (res.returncode,
                                        (res.stderr or "").strip()[:300]))
         return res.returncode
-    _log("nessun jht-tmux-send trovato: sveglia non consegnabile")
+    _log("no jht-tmux-send found: wake-up cannot be delivered")
     return last
 
 
@@ -740,7 +740,7 @@ def _handle_entry(agent, entry, now, sessions) -> bool:
         # Un flag IN_THROTTLE senza scadenza non è un throttle: è un file
         # toccato a mano o troncato. Meglio liberare l'agente che tenerlo
         # fermo per sempre su un timer che non esiste.
-        emit("flag_repaired", agent=agent, ts=now, reason="until assente")
+        emit("flag_repaired", agent=agent, ts=now, reason="missing until")
         entry.update({"state": ACTIVE, "since": int(now), "until": None})
         return False
 
@@ -787,12 +787,11 @@ def _handle_entry(agent, entry, now, sessions) -> bool:
         emit("notify_gave_up", agent=agent, ts=now, session=session, rc=rc,
              attempts=attempts)
         notify_captain(
-            "[DA @SISTEMA A @CAPITANO] Non riesco a svegliare %s: la sua "
-            "pausa è scaduta e %d tentativi di consegna sono falliti "
-            "(jht-tmux-send rc=%d). Il pane potrebbe avere del testo appeso "
-            "nel prompt (caso da Dottore, kill+recreate) o essere una shell "
-            "nuda dopo un crash. Continuo a riprovare ogni %d min. "
-            "Storico: logs/throttle-engine.jsonl."
+            "[DA @SISTEMA A @CAPITANO] I cannot wake %s: its pause expired "
+            "and %d delivery attempts failed (jht-tmux-send rc=%d). The pane "
+            "may have text stuck in its prompt (a Doctor case: kill+recreate) "
+            "or may be a bare shell after a crash. I will keep retrying every "
+            "%d min. History: logs/throttle-engine.jsonl."
             % (agent, attempts, rc, max(1, int(GATE_RETRY_SEC // 60))))
     else:
         entry["until"] = int(now + NOTIFY_RETRY_SEC)
@@ -819,7 +818,7 @@ def tick(now=None) -> dict:
             if _handle_entry(agent, entry, now, sessions):
                 agents.pop(agent, None)
         except Exception as exc:  # noqa: BLE001 — un agente rotto non ferma il giro
-            _log("errore su %s: %s" % (agent, exc))
+            _log("error on %s: %s" % (agent, exc))
 
     last_hb = state.get("last_heartbeat")
     if last_hb is None or (now - float(last_hb)) >= HEARTBEAT_SEC:
@@ -860,11 +859,12 @@ def health(now=None) -> dict:
                     last, event = float(rec["ts"]), rec.get("event")
     except OSError:
         out.update(ok=False, exists=False,
-                   reason="%s non esiste: il motore non ha mai scritto" % path.name)
+                   reason="%s does not exist: the engine has never written"
+                          % path.name)
         return out
     out["exists"] = True
     if last is None:
-        out.update(ok=False, reason="nessun record leggibile")
+        out.update(ok=False, reason="no readable records")
         return out
     age = now - last
     out.update(age_sec=round(age, 1), last_event=event,
@@ -872,8 +872,8 @@ def health(now=None) -> dict:
                .isoformat().replace("+00:00", "Z"))
     out["ok"] = age <= MAX_LOG_AGE_SEC
     if not out["ok"]:
-        out["reason"] = ("ultimo record %.0f min fa (atteso un heartbeat ogni "
-                         "%.0f min): processo vivo ma funzione ferma?"
+        out["reason"] = ("last record was %.0f min ago (expected a heartbeat "
+                         "every %.0f min): process alive but function stalled?"
                          % (age / 60.0, HEARTBEAT_SEC / 60.0))
     return out
 
@@ -895,35 +895,35 @@ def _print_register(res: dict, fmt: str) -> None:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="throttle-engine",
-        description="Motore dei throttle: possiede i timer, sveglia gli agenti.")
-    parser.add_argument("--once", action="store_true", help="un solo giro")
+        description="Throttle engine: owns timers and wakes agents.")
+    parser.add_argument("--once", action="store_true", help="run one cycle")
     parser.add_argument("--health", action="store_true",
-                        help="freschezza di logs/throttle-engine.jsonl (exit 1 se stantio)")
+                        help="freshness of logs/throttle-engine.jsonl (exit 1 if stale)")
     sub = parser.add_subparsers(dest="cmd")
 
-    p_reg = sub.add_parser("register", help="arma il timer e ritorna subito")
+    p_reg = sub.add_parser("register", help="arm the timer and return immediately")
     p_reg.add_argument("agent")
     p_reg.add_argument("seconds", nargs="?", type=int, default=None,
-                       help="durata richiesta (passa comunque da effective())")
+                       help="requested duration (still passes through effective())")
     p_reg.add_argument("--reason", default=None)
     p_reg.add_argument("--session", default=None)
     p_reg.add_argument("--print", dest="fmt", default="line",
                        choices=("line", "json", "until"))
 
-    p_ack = sub.add_parser("ack", help="NOTIFIED → ACTIVE (lo fa l'agente)")
+    p_ack = sub.add_parser("ack", help="NOTIFIED → ACTIVE (performed by the agent)")
     p_ack.add_argument("agent")
     p_ack.add_argument("--json", action="store_true")
 
-    p_chk = sub.add_parser("check", help="exit 1 se l'agente è ancora in attesa")
+    p_chk = sub.add_parser("check", help="exit 1 if the agent is still waiting")
     p_chk.add_argument("agent")
 
-    p_st = sub.add_parser("status", help="i flag correnti")
+    p_st = sub.add_parser("status", help="current flags")
     p_st.add_argument("agent", nargs="?", default=None)
     p_st.add_argument("--json", action="store_true")
     p_st.add_argument("--print", dest="fmt", default=None,
                       choices=("until",))
 
-    sub.add_parser("daemon", help="loop (default se non passi un comando)")
+    sub.add_parser("daemon", help="loop (default when no command is provided)")
 
     args = parser.parse_args(argv)
 
@@ -951,14 +951,14 @@ def main(argv=None) -> int:
                   % (res["agent"], res.get("previous") or "none"))
         else:
             if res.get("reason") == "daily-halt":
-                print("DAILY_HALT_ACTIVE agent=%s retry=%ss — NON lavorare, "
-                      "NON scrivere al Capitano: chiudi il turno; il motore "
-                      "ti svegliera' dopo la rimozione del flag"
+                print("DAILY_HALT_ACTIVE agent=%s retry=%ss — DO NOT work or "
+                      "message Capitano: end your turn; the engine will wake "
+                      "you after the flag is removed"
                       % (res["agent"], res.get("remaining_sec")),
                       file=sys.stderr)
             else:
-                print("ACK_REFUSED agent=%s remaining=%ss — sei ancora in pausa, "
-                      "ti sveglio io: chiudi il turno"
+                print("ACK_REFUSED agent=%s remaining=%ss — you are still "
+                      "paused; the engine will wake you: end your turn"
                       % (res["agent"], res.get("remaining_sec")), file=sys.stderr)
         return 0 if res.get("ok") else 1
 
@@ -980,7 +980,7 @@ def main(argv=None) -> int:
             print(json.dumps(res, ensure_ascii=False, indent=2))
             return 0
         if not res["agents"]:
-            print("nessun flag")
+            print("no flags")
             return 0
         for name in sorted(res["agents"]):
             row = res["agents"][name]
@@ -988,7 +988,7 @@ def main(argv=None) -> int:
             if row.get("remaining_sec") is not None:
                 extra = " remaining=%ss" % row["remaining_sec"]
             elif row.get("age_sec") is not None:
-                extra = " da %ss" % row["age_sec"]
+                extra = " age=%ss" % row["age_sec"]
             print("%-16s %-12s%s" % (name, row.get("state"), extra))
         return 0
 

@@ -40,9 +40,9 @@ const REFRESH_SKEW_MS = 60_000; // rinnova 60s prima della scadenza
  * @param {(level: 'warn'|'info', msg: string) => void} [o.log]
  */
 export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userId, onRefreshToken, log } = {}) {
-  if (!supabaseUrl) throw new Error('supabase-direct: manca supabaseUrl');
-  if (!anonKey) throw new Error('supabase-direct: manca anonKey (env JHT_SUPABASE_ANON_KEY o cloud.json.supabase_anon_key)');
-  if (!refreshToken) throw new Error('supabase-direct: manca refreshToken (cloud.json.supabase_refresh_token)');
+  if (!supabaseUrl) throw new Error('supabase-direct: missing supabaseUrl');
+  if (!anonKey) throw new Error('supabase-direct: missing anonKey (env JHT_SUPABASE_ANON_KEY or cloud.json.supabase_anon_key)');
+  if (!refreshToken) throw new Error('supabase-direct: missing refreshToken (cloud.json.supabase_refresh_token)');
 
   const base = supabaseUrl.replace(/\/+$/, '');
   const authUrl = `${base}/auth/v1/token?grant_type=refresh_token`;
@@ -72,7 +72,7 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
       // 400/401 = refresh_token scaduto o revocato → serve re-pairing.
       if (res.status === 400 || res.status === 401) {
         throw new SupabaseAuthError(
-          `refresh_token rifiutato (HTTP ${res.status}${body.error_description ? `: ${body.error_description}` : ''}). Re-genera il pairing dal desktop.`,
+          `refresh_token rejected (HTTP ${res.status}${body.error_description ? `: ${body.error_description}` : ''}). Pair the device again from the desktop app.`,
         );
       }
       throw new Error(`supabase-direct refresh HTTP ${res.status}`);
@@ -80,14 +80,14 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
     accessToken = body.access_token || null;
     const expiresIn = Number(body.expires_in) || 3600;
     expiresAtMs = Date.now() + expiresIn * 1000;
-    if (!accessToken) throw new Error('supabase-direct refresh: access_token assente nella risposta');
+    if (!accessToken) throw new Error('supabase-direct refresh: access_token missing from response');
     // GoTrue ruota il refresh_token → persistilo SUBITO.
     if (body.refresh_token && body.refresh_token !== currentRefresh) {
       currentRefresh = body.refresh_token;
       try {
         await onRefreshToken?.(currentRefresh);
       } catch (err) {
-        logFn('warn', `persistenza refresh_token fallita: ${err.message}`);
+        logFn('warn', `failed to persist refresh_token: ${err.message}`);
       }
     }
   }
@@ -131,7 +131,7 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
       res = await doFetch();
     }
     if (res.status === 401) {
-      throw new SupabaseAuthError('PostgREST 401 dopo refresh: sessione non valida.');
+      throw new SupabaseAuthError('PostgREST returned 401 after refresh: invalid session.');
     }
     if (!res.ok) {
       const txt = await res.text().catch(() => '');

@@ -41,8 +41,25 @@ def test_live_empty_database_never_falls_back_to_mock_kpis():
 
 def test_showroom_agents_wait_until_operational_team_exists():
     office = _src("game/scripts/office/office.gd")
-    assert 'var team_running := bool(status.get("team_running", false))' in office
+    assert "var harness_offline := TutorialHarness.enabled()" in office
+    assert (
+        'var team_running := false if harness_offline else bool(status.get("team_running", false))'
+        in office
+    )
     assert 'agent.set_backend_status("working" if team_running else "idle")' in office
+
+
+def test_cli_started_team_is_not_labeled_inactive_while_setup_is_incomplete():
+    """Roster live e checklist sono fatti distinti, non stati mutuamente esclusivi.
+
+    Un config CLI migrato può restare 1/4 mentre tmux contiene già CAPITANO. Il
+    pannello deve continuare a offrire il setup senza chiamare inattivo quel team.
+    """
+    panel = _src("game/scripts/ui/section_panel.gd")
+    team = panel[panel.index("func _build_team()") : panel.index("func _build_agents()")]
+    assert 'var running := SetupService._agents_have_operational_team(BackendBus.agents) or bool(' in team
+    assert 'var banner_key := "setup.cta" if running else "setup.team_locked"' in team
+    assert team.index("var running :=") < team.index('if not bool(SetupService.status.get("ready"')
 
 
 def test_runtime_installer_keeps_tty_and_reports_command_failure():
@@ -96,6 +113,37 @@ def test_runtime_installer_keeps_tty_and_reports_command_failure():
     assert 'UIStrings.t("term.status_cmd_failed") % code' in terminal
     assert 'UIStrings.t("term.close_retry")' in terminal
     assert '"term.done_plain": "CHIUDI CONSOLE"' in strings
+
+
+def test_cloud_login_uses_native_browser_pairing_without_terminal_copy():
+    setup = _src("game/scripts/setup/setup_service.gd")
+    panel = _src("game/scripts/ui/section_panel.gd")
+    terminal = _src("game/scripts/ui/embedded_terminal.gd")
+    cloud_login = setup[
+        setup.index("func open_cloud_login") : setup.index("func open_cloud_command")
+    ]
+    for key in (
+        "setup.cloud_login_title",
+        "setup.cloud_login_google_hint",
+        "setup.cloud_login_hint",
+    ):
+        assert f'UIStrings.t("{key}")' in cloud_login
+    for italian_literal in (
+        "Account e cloud",
+        "Apri il link, scegli ACCEDI CON GOOGLE",
+        "Apri il link, accedi all'account",
+    ):
+        assert italian_literal not in cloud_login
+    assert '"--ui-json"' in cloud_login
+    assert '"--no-push"' in cloud_login
+    assert '"cloud_pairing": true' in cloud_login
+    assert '"prefer_google": prefer_google' in cloud_login
+    assert 'section in ["activation", "provider", "docker", "account"]' in panel
+    assert "return OS.shell_open(uri)" in terminal
+    assert 'UIStrings.t("cloud_pairing.fallback")' in terminal
+    assert 'UIStrings.t("term.copy_link")' in terminal
+    assert '"already_used"' in terminal
+    assert '"expired", "timeout"' in terminal
 
 
 def test_runtime_upgrade_uses_only_the_host_json_contract():

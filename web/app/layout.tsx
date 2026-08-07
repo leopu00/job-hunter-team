@@ -7,8 +7,7 @@ import { ToastProvider } from "./components/Toast";
 import { KeyboardShortcutsProvider } from "./components/KeyboardShortcuts";
 import { DashboardI18nProvider } from "./components/DashboardI18n";
 import dynamic from "next/dynamic";
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
+import ConsentedAnalytics from "./components/ConsentedAnalytics";
 import { getNonce } from "@/lib/csp";
 import { cookies } from "next/headers";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
@@ -202,8 +201,11 @@ export default async function RootLayout({
             </ToastProvider>
           </DashboardI18nProvider>
         </ThemeProvider>
-        <Analytics />
-        <SpeedInsights />
+        {/* Misurazione solo dopo consenso esplicito: vedi
+            `components/ConsentedAnalytics.tsx`. Prima erano montati qui
+            senza condizioni e partivano prima del banner, rendendo
+            «Solo necessari» una scelta senza effetto. */}
+        <ConsentedAnalytics />
       </body>
     </html>
   );

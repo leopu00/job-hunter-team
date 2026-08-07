@@ -32,7 +32,7 @@ def test_pid1_creates_first_setup_halt_before_watchdogs():
     src = _src(PID1)
     assert "async function ensureInitialTeamHalt()" in src
     assert "await writeFile(TEAM_HALTED_FLAG, 'initial-setup\\n'" in src
-    assert "initial setup: impossibile creare team-halted gate" in src
+    assert "initial setup: unable to create team-halted gate" in src
     assert "throw err;" in src
     assert src.index("await ensureInitialTeamHalt();") < src.index("startAgentWatchdog();")
     assert src.index("await ensureInitialTeamHalt();") < src.index("startDoctorWatchdog();")
@@ -132,7 +132,7 @@ Path(os.environ["JHT_HOME"], ".team-halted.flag").touch()
     assert run.returncode == 0, run.stderr
     assert (home / ".team-halted.flag").exists()
     assert json.loads(state_path.read_text()) == ["ASSISTENTE"]
-    assert "CAPITANO fermato" in run.stdout
-    assert "DOTTORE fermato" in run.stdout
-    assert "MANTENITORE fermato" in run.stdout
-    assert "ASSISTENTE preservato" in run.stdout
+    assert "CAPITANO stopped" in run.stdout
+    assert "DOTTORE stopped" in run.stdout
+    assert "MANTENITORE stopped" in run.stdout
+    assert "ASSISTENTE preserved" in run.stdout

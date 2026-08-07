@@ -13,7 +13,7 @@
 # ║  download it for you — it needs user consent + WSL2 + a reboot).         ║
 # ║                                                                          ║
 # ║  Downloads:                                                              ║
-# ║    - $env:USERPROFILE\.jht\runtime\docker-compose.yml                    ║
+# ║    - $env:LOCALAPPDATA\Job Hunter Team\host-runtime\docker-compose.yml   ║
 # ║    - $env:USERPROFILE\.local\bin\jht.ps1 (PowerShell wrapper)            ║
 # ║    - $env:USERPROFILE\.local\bin\jht.cmd (shim for CMD)                  ║
 # ║                                                                          ║
@@ -53,12 +53,14 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # ── Config ────────────────────────────────────────────────────────────────
-$RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $env:USERPROFILE '.jht\runtime' }
+$LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
+if (-not $LocalAppData) { throw 'LOCALAPPDATA is unavailable: refusing an unprotected runtime fallback' }
+$RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir     = if ($env:JHT_BIN_DIR)     { $env:JHT_BIN_DIR }     else { Join-Path $env:USERPROFILE '.local\bin' }
 $JhtHome    = Join-Path $env:USERPROFILE '.jht'
 $Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht:0.3.5' }
 $env:JHT_IMAGE = $Image
-$RawBase    = if ($env:JHT_RAW_BASE)    { $env:JHT_RAW_BASE }    else { "https://raw.githubusercontent.com/leopu00/job-hunter-team/$Branch" }
+$RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 
 $TotalSteps = 5
 
@@ -166,11 +168,42 @@ function Get-File {
 function Get-RuntimeFiles {
   Write-Step 3 $TotalSteps "Downloading wrapper + docker-compose.yml"
 
-  $composeUrl  = "$RawBase/docker-compose.yml"
-  $wrapperUrl  = "$RawBase/scripts/jht-wrapper.ps1"
+  if ($RawBaseOverride) {
+    $releaseBase = $RawBaseOverride
+  } elseif ($DryRun) {
+    $releaseBase = "https://raw.githubusercontent.com/leopu00/job-hunter-team/$Branch"
+  } else {
+    try {
+      $metadata = Invoke-RestMethod -UseBasicParsing -Uri "https://api.github.com/repos/leopu00/job-hunter-team/commits/$Branch"
+      $sha = [string]$metadata.sha
+      if ($sha -notmatch '^[0-9a-fA-F]{40}$') { throw 'invalid release commit' }
+      $releaseBase = "https://raw.githubusercontent.com/leopu00/job-hunter-team/$sha"
+    } catch { Write-Fail "Cannot resolve branch '$Branch' to an immutable release commit." }
+  }
+  $composeUrl  = "$releaseBase/docker-compose.yml"
+  $wrapperUrl  = "$releaseBase/scripts/jht-wrapper.ps1"
   $composeDest = Join-Path $RuntimeDir 'docker-compose.yml'
   $wrapperDest = Join-Path $BinDir 'jht.ps1'
   $shimDest    = Join-Path $BinDir 'jht.cmd'
+  $manifestDest = Join-Path $RuntimeDir '.runtime-integrity'
+
+  $runtimeFull = [IO.Path]::GetFullPath($RuntimeDir).TrimEnd('\', '/')
+  $legacyFull = [IO.Path]::GetFullPath($JhtHome).TrimEnd('\', '/')
+  $userDataHost = if ($env:JHT_USER_DIR_HOST) { $env:JHT_USER_DIR_HOST } else { Join-Path $env:USERPROFILE 'Documents\Job Hunter Team' }
+  $userDataFull = [IO.Path]::GetFullPath($userDataHost).TrimEnd('\', '/')
+  if ($runtimeFull.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $runtimeFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Fail "Host runtime must be outside the container-writable .jht tree: $RuntimeDir"
+  }
+  if ($runtimeFull.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $runtimeFull.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Fail "Host runtime must be outside the container-writable user data tree: $RuntimeDir"
+  }
+  $binFull = [IO.Path]::GetFullPath($BinDir).TrimEnd('\', '/')
+  if ($binFull.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $binFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Fail "Host wrapper must be outside the container-writable .jht tree: $BinDir"
+  }
+  if ($binFull.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $binFull.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Fail "Host wrapper must be outside the container-writable user data tree: $BinDir"
+  }
 
   Invoke-Action -Description "mkdir $RuntimeDir, $BinDir, $JhtHome" -Block {
     New-Item -ItemType Directory -Force -Path $RuntimeDir | Out-Null
@@ -178,12 +211,46 @@ function Get-RuntimeFiles {
     New-Item -ItemType Directory -Force -Path $JhtHome    | Out-Null
   } | Out-Null
 
+  if (-not $DryRun) {
+    foreach ($protectedPath in @($RuntimeDir, $BinDir)) {
+      $current = Get-Item -LiteralPath $protectedPath -Force -ErrorAction Stop
+      while ($current) {
+        if (($current.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+          Write-Fail "Protected host path has a reparse-point ancestor: $protectedPath"
+        }
+        $parent = $current.Parent
+        if (-not $parent -or $parent.FullName -eq $current.FullName) { break }
+        $current = $parent
+      }
+    }
+    $acl = Get-Acl -LiteralPath $RuntimeDir
+    $acl.SetAccessRuleProtection($true, $false)
+    $rule = New-Object Security.AccessControl.FileSystemAccessRule(
+      [Security.Principal.WindowsIdentity]::GetCurrent().User,
+      'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+    $acl.SetAccessRule($rule)
+    Set-Acl -LiteralPath $RuntimeDir -AclObject $acl
+  }
+
   Write-Info "Downloading docker-compose.yml..."
-  Get-File -Url $composeUrl -Dest $composeDest
+  $composeTemp = Join-Path $RuntimeDir ('.compose-' + [guid]::NewGuid().ToString('N'))
+  Get-File -Url $composeUrl -Dest $composeTemp
+  if (-not $DryRun -and -not (Select-String -LiteralPath $composeTemp -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) {
+    Write-Fail 'Downloaded compose does not enforce the protected runtime boundary.'
+  }
+  if (-not $DryRun) { Move-Item -LiteralPath $composeTemp -Destination $composeDest -Force }
   Write-Ok "compose: $composeDest"
 
   Write-Info "Downloading jht-wrapper.ps1..."
-  Get-File -Url $wrapperUrl -Dest $wrapperDest
+  $wrapperTemp = Join-Path $BinDir ('.jht-' + [guid]::NewGuid().ToString('N') + '.ps1')
+  Get-File -Url $wrapperUrl -Dest $wrapperTemp
+  if (-not $DryRun) {
+    [scriptblock]::Create((Get-Content -LiteralPath $wrapperTemp -Raw)) | Out-Null
+    if (-not (Select-String -LiteralPath $wrapperTemp -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) {
+      Write-Fail 'Downloaded wrapper does not implement the protected runtime protocol.'
+    }
+    Move-Item -LiteralPath $wrapperTemp -Destination $wrapperDest -Force
+  }
   Write-Ok "wrapper: $wrapperDest"
 
   # CMD shim for people using cmd.exe instead of pwsh. It allows `jht <args>`
@@ -191,14 +258,20 @@ function Get-RuntimeFiles {
   # ExecutionPolicy. Falls back to powershell.exe (PS 5.1, ships with Windows)
   # when pwsh (PS 7+) is not installed — feedback master#28, cross-review d87890f8.
   if (-not $DryRun) {
+    $composeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $composeDest).Hash.ToLowerInvariant()
+    $wrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $wrapperDest).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText(
+      $manifestDest,
+      "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`n",
+      [Text.UTF8Encoding]::new($false))
     $shimContent = @"
 @echo off
 where pwsh.exe >nul 2>&1
-if %errorlevel%==0 (
-  pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
-) else (
-  powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
-)
+if errorlevel 1 goto jht_windows_powershell
+pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
+exit /b %errorlevel%
+:jht_windows_powershell
+powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 exit /b %errorlevel%
 "@
     Set-Content -Path $shimDest -Value $shimContent -Encoding ASCII

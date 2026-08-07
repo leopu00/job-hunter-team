@@ -18,8 +18,7 @@ const PUBLIC_PAGES = [
   })),
   { path: "/agents", priority: 0.7, changeFrequency: "monthly" as const },
   { path: "/project", priority: 0.7, changeFrequency: "weekly" as const },
-  { path: "/tutorials", priority: 0.6, changeFrequency: "weekly" as const },
-  { path: "/trailer", priority: 0.5, changeFrequency: "weekly" as const },
+  { path: "/setup-guide", priority: 0.8, changeFrequency: "weekly" as const },
   { path: "/docs", priority: 0.6, changeFrequency: "weekly" as const },
   ...DOC_HREFS.map((path) => ({
     path,
@@ -28,6 +27,7 @@ const PUBLIC_PAGES = [
   })),
   { path: "/privacy", priority: 0.3, changeFrequency: "yearly" as const },
   { path: "/terms", priority: 0.3, changeFrequency: "yearly" as const },
+  { path: "/credits", priority: 0.2, changeFrequency: "yearly" as const },
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

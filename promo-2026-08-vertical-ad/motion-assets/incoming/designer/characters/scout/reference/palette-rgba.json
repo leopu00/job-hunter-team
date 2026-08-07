@@ -1,0 +1,24 @@
+{
+  "role": "scout",
+  "source": "game/assets/characters/sheets/scout_a.png",
+  "source_sha256": "8b616df3438ac98b1a17385ca9be02d76cf17ee6fb58e18775563273be26a9fc",
+  "method": "most frequent 4-bit RGB bins among source pixels with alpha >= 250; swatches are source-derived reference colours, not a redraw palette",
+  "rgba_hex": [
+    "#D8A878FF",
+    "#282818FF",
+    "#C89868FF",
+    "#181818FF",
+    "#383828FF",
+    "#E8B888FF",
+    "#181808FF",
+    "#886848FF",
+    "#785838FF",
+    "#B88858FF",
+    "#483828FF",
+    "#A88858FF",
+    "#B89868FF",
+    "#382818FF",
+    "#C8A878FF",
+    "#080808FF"
+  ]
+}

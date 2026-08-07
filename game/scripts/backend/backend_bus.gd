@@ -159,7 +159,11 @@ var _backend: BackendAdapter
 ## JHT_VPS_IP/JHT_VPS_KEY forzano una config, JHT_NOVPS=1 spegne tutto
 ## (per gli shot grafici che non devono toccare la rete).
 func _ready() -> void:
-	_fetch_fx_rates()
+	# Il harness tutorial deve essere integralmente locale: nessun fetch FX,
+	# lettura VPS o container può far dipendere il take dallo stato della rete.
+	var offline_only := OS.get_environment("JHT_NOVPS") == "1" or TutorialHarness.enabled()
+	if not offline_only:
+		_fetch_fx_rates()
 	# TEST-AUTO: JHT_THROTTLE_TEST=1 valida il parse throttle→status con
 	# eventi sintetici (la modalità godot -s non compila gli autoload,
 	# quindi il test vive qui dentro al boot).
@@ -169,7 +173,8 @@ func _ready() -> void:
 		_self_test_vps_contract()
 	if OS.get_environment("JHT_CHAT_NOTIFICATION_TEST") == "1":
 		_self_test_chat_notifications.call_deferred()
-	if OS.get_environment("JHT_NOVPS") == "1":
+	if offline_only:
+		TutorialHarness.mark("OFFLINE", {"backend": "disabled"})
 		return
 	# Gate riprese/test locale: non leggere vps.cfg e non tentare mai la rete.
 	# Il profilo REL-004 deve collegarsi esclusivamente al container sintetico
@@ -179,7 +184,7 @@ func _ready() -> void:
 		if _local_container_running():
 			set_backend(LocalBackend.new())
 		else:
-			publish_state(ERROR, "container locale non disponibile")
+			publish_state(ERROR, UIStrings.t("backend.local_unavailable"))
 		return
 	var cfg := load_vps_config()
 	if OS.get_environment("JHT_VPS_IP") != "":
@@ -543,14 +548,14 @@ func _self_test_chat_notifications() -> void:
 	var tag := AgentStateTag.new()
 	add_child(tag)
 	tag.set_state("working", 0.0)
-	tag.show_message("messaggio da mentor", 0.1)
-	var message_label := tag.debug_label() == "MESSAGGIO DA MENTOR"
+	tag.show_message(UIStrings.t("office.message_from") % "Mentor", 0.1)
+	var message_label := tag.debug_label() == (UIStrings.t("office.message_from") % "MENTOR")
 	tag.set_suppressed(true)
 	tag.set_state("idle", 0.0)
 	var suppressed := tag.debug_suppressed() and not tag.visible
 	tag.set_suppressed(false)
 	tag._process(0.2)
-	var restored := tag.debug_label() == "IN ATTESA"
+	var restored := tag.debug_label() == UIStrings.t("dept.agent_status.waiting")
 	var ok := filtered and canonical and selective and message_label \
 			and suppressed and restored
 	print("CHAT-NOTIFICATION-TEST ", "PASS" if ok else "FAIL", " ",
@@ -604,25 +609,25 @@ func request_coordinator_state() -> void:
 	if _backend:
 		_backend.fetch_coordinator_state()
 	else:
-		coordinator_action_done.emit("load", false, "backend non collegato")
+		coordinator_action_done.emit("load", false, UIStrings.t("common.backend_not_connected"))
 
 func save_coordinator_settings(settings: Dictionary) -> void:
 	if _backend:
 		_backend.save_coordinator_settings(settings)
 	else:
-		coordinator_action_done.emit("save", false, "backend non collegato")
+		coordinator_action_done.emit("save", false, UIStrings.t("common.backend_not_connected"))
 
 func add_team_directive(body: String, kind := "order") -> void:
 	if _backend:
 		_backend.add_team_directive(body, kind)
 	else:
-		coordinator_action_done.emit("directive_add", false, "backend non collegato")
+		coordinator_action_done.emit("directive_add", false, UIStrings.t("common.backend_not_connected"))
 
 func archive_team_directive(directive_id: int) -> void:
 	if _backend:
 		_backend.archive_team_directive(directive_id)
 	else:
-		coordinator_action_done.emit("directive_archive", false, "backend non collegato")
+		coordinator_action_done.emit("directive_archive", false, UIStrings.t("common.backend_not_connected"))
 
 func publish_coordinator_state(next: Dictionary) -> void:
 	coordinator_state = next
@@ -652,13 +657,14 @@ func request_burn_intent(force := false) -> void:
 		# Senza backend NON si dice "spenta": si dice "non leggibile". Il
 		# freno potrebbe essere sospeso su una macchina che non stiamo
 		# guardando, e mostrarlo come off sarebbe la bugia peggiore.
-		publish_burn_intent({"readable": false, "error": "backend non collegato"})
+		publish_burn_intent({"readable": false,
+				"error": UIStrings.t("common.backend_not_connected")})
 
 func set_burn_intent(active: bool, hours: float) -> void:
 	if _backend:
 		_backend.set_burn_intent(active, hours)
 	else:
-		burn_intent_action_done.emit(active, false, "backend non collegato")
+		burn_intent_action_done.emit(active, false, UIStrings.t("common.backend_not_connected"))
 
 func publish_burn_intent(state: Dictionary) -> void:
 	var next := state.duplicate(true)
@@ -738,7 +744,7 @@ func upload_user_document(local_path: String) -> void:
 	if _backend and _backend.has_method("upload_document"):
 		_backend.upload_document(local_path)
 	else:
-		document_uploaded.emit(false, "", "backend non collegato")
+		document_uploaded.emit(false, "", UIStrings.t("common.backend_not_connected"))
 
 ## Il backend pubblica lo stato profilo da qui (thread → call_deferred).
 func publish_profile_status(status: Dictionary) -> void:
@@ -753,13 +759,13 @@ func save_user_profile(fields: Dictionary) -> void:
 	if _backend and _backend.has_method("save_profile"):
 		_backend.save_profile(fields)
 	else:
-		profile_saved.emit(false, "backend non collegato")
+		profile_saved.emit(false, UIStrings.t("common.backend_not_connected"))
 
 func save_working_hours(wh: Dictionary) -> void:
 	if _backend and _backend.has_method("save_working_hours"):
 		_backend.save_working_hours(wh)
 	else:
-		hours_saved.emit(false, "backend non collegato")
+		hours_saved.emit(false, UIStrings.t("common.backend_not_connected"))
 
 
 ## ── Storico usage (finestre di monitoraggio risorse) ─────────────────
@@ -773,7 +779,7 @@ func request_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> voi
 		_backend.fetch_usage_history(from_ts, to_ts, bucket_sec)
 	else:
 		usage_history_updated.emit(query,
-				{"ok": false, "error": "backend non collegato"})
+				{"ok": false, "error": UIStrings.t("common.backend_not_connected")})
 
 ## Il backend risponde da qui (thread → call_deferred).
 func publish_usage_history(query: Dictionary, data: Dictionary) -> void:
@@ -791,7 +797,7 @@ func request_agent_history(agent: String, from_ts: float, to_ts: float,
 		_backend.fetch_agent_history(agent, from_ts, to_ts, bucket_sec)
 	else:
 		agent_history_updated.emit(query,
-				{"ok": false, "error": "backend non collegato"})
+				{"ok": false, "error": UIStrings.t("common.backend_not_connected")})
 
 func publish_agent_history(query: Dictionary, data: Dictionary) -> void:
 	agent_history_updated.emit(query, data)
@@ -799,16 +805,19 @@ func publish_agent_history(query: Dictionary, data: Dictionary) -> void:
 
 ## ── Documenti prodotti (anteprima CV in-game) ────────────────────────
 
-## Chiede al backend i bytes di un documento registrato in cv_path/
-## cl_path (lettura pura, come il resto dell'osservazione). Esito su
-## artifact_fetched; il path fa da chiave di correlazione per la UI.
-func fetch_artifact(path: String) -> void:
+## Chiede al backend i bytes di un documento registrato in cv_path/cl_path.
+## Il chiamante dichiara il tipo: il path DB non e' un'attestazione. Esito su
+## artifact_fetched; il path resta la chiave di correlazione per la UI.
+func fetch_artifact(path: String, kind: String) -> void:
 	var clean := path.strip_edges()
-	if _backend and _backend.has_method("fetch_artifact") and clean != "":
-		_backend.fetch_artifact(clean)
+	if clean != path or not ArtifactPolicy.is_allowed_request(clean, kind):
+		artifact_fetched.emit(path, false, PackedByteArray(),
+				UIStrings.t("vps.artifact.invalid"))
+	elif _backend and _backend.has_method("fetch_artifact"):
+		_backend.fetch_artifact(clean, kind)
 	else:
 		artifact_fetched.emit(clean, false, PackedByteArray(),
-				"backend non collegato")
+				UIStrings.t("common.backend_not_connected"))
 
 ## Il backend pubblica il documento da qui (thread → call_deferred).
 func publish_artifact(path: String, ok: bool, data: PackedByteArray,
@@ -874,6 +883,15 @@ func publish_state(new_state: int, detail := "") -> void:
 	state_detail = detail
 	Log.info("backend", "stato connessione → %d (%s)" % [state, detail])
 	connection_changed.emit(state, detail)
+
+
+## Gli adapter in worker thread accodano la CHIAVE, non una traduzione già
+## risolta: ResourceLoader e il catalogo restano confinati sul main thread.
+func publish_state_key(new_state: int, key: String, args: Array = []) -> void:
+	var detail := UIStrings.t(key)
+	if not args.is_empty():
+		detail = detail % args
+	publish_state(new_state, detail)
 
 func publish_agents(list: Array) -> void:
 	agents = list

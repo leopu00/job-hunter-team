@@ -182,7 +182,7 @@ def test_la_sezione_non_e_mai_vuota_e_chiude_dichiarando_chi_vince(mb):
         text = mb.banner()
         assert text.startswith(mb.HEADER)
         assert text.endswith(mb.FOOTER)
-        assert "VINCE QUESTA" in text
+        assert "THIS SECTION WINS" in text
         assert "MODE:" in text
 
 
@@ -206,7 +206,7 @@ def test_un_file_illeggibile_non_diventa_modalita_normale(mb):
     assert snap["mode"] == mb.MODE_UNKNOWN
     assert snap["maintenance_exists"] and not snap["maintenance_readable"]
     text = mb.banner(snap=snap)
-    assert "MODE: sconosciuto" in text and "ORDINE ATTIVO" in text
+    assert "MODE: unknown" in text and "ACTIVE ORDER" in text
     assert mb.has_standing_orders(snap) is True
 
 
@@ -225,7 +225,7 @@ def test_gli_ordini_scritti_a_mano_arrivano_comunque(mb):
     assert "geocoding uffici" in text
     assert "esclusioni: solo se la posizione è certamente morta" in text
     # Le chiavi note portano la loro CONSEGUENZA, non solo il valore.
-    assert "stop_search: false" in text and "budget che avanza" in text
+    assert "stop_search: false" in text and "remaining budget" in text
 
 
 def test_una_bacheca_non_leggibile_non_e_una_bacheca_vuota(mb):
@@ -234,14 +234,14 @@ def test_una_bacheca_non_leggibile_non_e_una_bacheca_vuota(mb):
     assert not (mb._home() / "jobs.db").exists()
     snap = mb.snapshot()
     assert snap["directives_readable"] is False
-    assert "non leggibili" in mb.banner(snap=snap)
+    assert "unreadable" in mb.banner(snap=snap)
 
 
 def test_i_freni_attivi_finiscono_nella_sezione(mb):
     (mb._home() / "logs" / "daily-halt.flag").write_text("x", encoding="utf-8")
     (mb._home() / ".team-halted.flag").write_text("x", encoding="utf-8")
     text = mb.banner()
-    assert "FRENI ATTIVI:" in text
+    assert "ACTIVE BRAKES:" in text
     assert "daily-halt" in text and "team-halted" in text
     # Un freno NON è un ordine dell'utente: non basta a rompere il silenzio.
     assert mb.has_standing_orders() is False
@@ -270,7 +270,7 @@ def test_1_un_bridge_appena_nato_rimette_l_ordine_nel_primo_battito(home):
     msg = b.tick(T0 + timedelta(days=2, hours=3))
     assert msg is not None, "il primo battito dopo il refresh non ha detto nulla"
     assert "MODE: care" in msg
-    assert "VINCE QUESTA" in msg
+    assert "THIS SECTION WINS" in msg
 
 
 def test_1b_il_resume_del_dottore_porta_la_stessa_sezione_in_7_lingue():
@@ -307,11 +307,11 @@ def test_2_il_file_vince_e_lo_dice(home):
     b = Bridge(home, sessions=["CAPITANO", "ANALISTA-1"])
     msg = b.tick(T0)
     assert "MODE: care" in msg
-    assert "NIENTE Scout" in msg
+    assert "NO Scouts" in msg
     assert "cv_min_score: 90" in msg
     assert msg.rstrip().endswith(
-        "il file su disco è la fonte di verità e il tuo contesto può essere "
-        "stato azzerato da un refresh.")
+        "files are the source of truth, and a context refresh may have cleared "
+        "your context.")
 
 
 def test_2b_senza_modalita_il_bridge_ordina_lo_spawn_scout(home):
@@ -319,7 +319,7 @@ def test_2b_senza_modalita_il_bridge_ordina_lo_spawn_scout(home):
     fermo → ORDINE di spawn (C-05). È il ramo che il test 2c deve spegnere."""
     b = Bridge(home, sessions=["CAPITANO", "ANALISTA-1"])
     msg = b.tick(T0)
-    assert "il sourcing è FERMO" in msg and "spawna 1 Scout ORA" in msg
+    assert "sourcing is STOPPED" in msg and "spawn one Scout NOW" in msg
     assert "MODE: search" in msg
 
 
@@ -345,7 +345,7 @@ def test_2d_un_file_illeggibile_non_autorizza_lo_spawn(home):
     b = Bridge(home, sessions=["CAPITANO"])
     msg = b.tick(T0)
     assert "spawna 1 Scout" not in msg
-    assert "MODE: sconosciuto" in msg
+    assert "MODE: unknown" in msg
 
 
 def test_2e_con_stop_search_false_il_sourcing_resta_governato(home):
@@ -354,7 +354,7 @@ def test_2e_con_stop_search_false_il_sourcing_resta_governato(home):
     set_mode(home, {"stop_search": False, "search_priority": "secondary"})
     b = Bridge(home, sessions=["CAPITANO"])
     msg = b.tick(T0)
-    assert "spawna 1 Scout ORA" in msg
+    assert "spawn one Scout NOW" in msg
     assert "search_priority: secondary" in msg
 
 
@@ -402,7 +402,7 @@ def test_4_normal_si_inietta_uguale(home):
     b = Bridge(home, sessions=["CAPITANO", "SCOUT-1"])
     msg = b.tick(T0)
     assert msg is not None
-    assert "MODE: search" in msg and "VINCE QUESTA" in msg
+    assert "MODE: search" in msg and "THIS SECTION WINS" in msg
 
 
 def test_4b_la_sezione_e_in_coda_a_ogni_ramo_del_nudge(home):
@@ -421,7 +421,7 @@ def test_4b_la_sezione_e_in_coda_a_ogni_ramo_del_nudge(home):
         msg = b.tick(T0)          # 09:00 → hour%3 == 0, la rotazione parla
         assert msg is not None, f"caso {i}: nessun messaggio"
         assert "MODE: search" in msg, f"caso {i}: sezione assente"
-        assert msg.rstrip().endswith("azzerato da un refresh."), f"caso {i}"
+        assert msg.rstrip().endswith("cleared your context."), f"caso {i}"
 
 
 def test_4c_a_modalita_normale_l_ora_di_silenzio_resta_silenzio(home):
@@ -466,7 +466,7 @@ def test_4f_un_mode_banner_non_caricabile_e_un_guasto_scritto(home, capsys):
     b.mod._mode_banner_mod = lambda: None
     msg = b.tick(T0)
     assert "MODALITÀ CORRENTE" not in msg
-    assert "mode_banner non caricabile" in capsys.readouterr().out
+    assert "mode_banner not loadable" in capsys.readouterr().out
 
 
 # ── Accettazione 5 — la bacheca entra nell'iniezione ────────────────────
@@ -476,7 +476,7 @@ def test_5_una_direttiva_in_bacheca_compare_nell_iniezione_successiva(home):
     Ora la legge un processo."""
     b = Bridge(home, sessions=["CAPITANO", "SCOUT-1"])
     first = b.tick(T0)
-    assert "DIRETTIVE ATTIVE" in first
+    assert "ACTIVE DIRECTIVES" in first
 
     add_directive(home, "CV solo per posizioni 90+", kind="order")
     add_directive(home, "modalità mantenimento finché non dico il contrario",
@@ -484,7 +484,7 @@ def test_5_una_direttiva_in_bacheca_compare_nell_iniezione_successiva(home):
     second = b.tick(T0 + timedelta(hours=1))
     assert "CV solo per posizioni 90+" in second
     assert "modalità mantenimento" in second
-    assert "DIRETTIVE ATTIVE (2)" in second
+    assert "ACTIVE DIRECTIVES (2)" in second
 
 
 def test_5b_una_direttiva_archiviata_esce_dall_iniezione(home, mb):
@@ -498,7 +498,7 @@ def test_5b_una_direttiva_archiviata_esce_dall_iniezione(home, mb):
                        text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     assert "vecchio ordine da ritirare" not in mb.banner()
-    assert "DIRETTIVE ATTIVE: nessuna" in mb.banner()
+    assert "ACTIVE DIRECTIVES: none" in mb.banner()
 
 
 def test_5c_una_bacheca_da_ordini_basta_a_rompere_il_silenzio(home):
@@ -517,7 +517,7 @@ def test_5d_la_bacheca_non_fa_crescere_il_messaggio_senza_limite(home, mb):
     for i in range(mb.MAX_DIRECTIVES + 3):
         add_directive(home, f"direttiva numero {i} " + "x" * 400)
     text = mb.banner()
-    assert "(+3 in bacheca)" in text
+    assert "(+3 on the board)" in text
     assert text.count("direttiva numero") == mb.MAX_DIRECTIVES
     assert "…" in text          # i corpi lunghi sono troncati
 
@@ -553,7 +553,7 @@ def test_6_diciotto_giorni_di_battiti_non_perdono_l_ordine(home):
         f"lo spawn Scout è stato ordinato {len(ordered_scout)} volte in "
         f"manutenzione: è così che sono nate le 183 posizioni")
     # E ogni singolo messaggio porta l'ordine di precedenza, non solo il primo.
-    assert all(m.rstrip().endswith("azzerato da un refresh.") for _, m in rounds)
+    assert all(m.rstrip().endswith("cleared your context.") for _, m in rounds)
 
 
 def test_6b_revocare_l_ordine_a_giorni_di_distanza_vale_subito(home):

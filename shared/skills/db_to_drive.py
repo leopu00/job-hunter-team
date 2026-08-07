@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Upload PDF delle candidature su Google Drive.
+"""Upload application PDFs to Google Drive.
 
-Uso:
-  python3 db_to_drive.py auth            # autorizza con Google (una volta sola, apre browser)
-  python3 db_to_drive.py upload          # carica tutti i PDF mancanti su Drive
-  python3 db_to_drive.py upload --force  # ricarica tutti, anche quelli gia' su Drive
-  python3 db_to_drive.py upload --id 42  # carica solo application ID 42
-  python3 db_to_drive.py status          # mostra stato upload (quanti su Drive, quanti mancanti)
-  python3 db_to_drive.py list            # lista file nella cartella Drive
+Usage:
+  python3 db_to_drive.py auth            # authorize with Google (once; opens a browser)
+  python3 db_to_drive.py upload          # upload all missing PDFs to Drive
+  python3 db_to_drive.py upload --force  # re-upload all PDFs, including ones already on Drive
+  python3 db_to_drive.py upload --id 42  # upload application ID 42 only
+  python3 db_to_drive.py status          # show upload status (on Drive vs missing)
+  python3 db_to_drive.py list            # list files in the Drive folder
 
-Setup iniziale:
-  1. Vai su https://console.cloud.google.com/apis/credentials
-  2. Crea "ID client OAuth 2.0" → Tipo "App desktop"
-  3. Scarica JSON → salva come shared/secrets/google-oauth-client.json
+Initial setup:
+  1. Go to https://console.cloud.google.com/apis/credentials
+  2. Create an "OAuth 2.0 Client ID" → type "Desktop app"
+  3. Download the JSON → save it as shared/secrets/google-oauth-client.json
   4. python3 db_to_drive.py auth
 """
 
@@ -30,7 +30,7 @@ DRIVE_FOLDER_ID = os.environ.get("JH_DRIVE_FOLDER_ID", "")
 def _require_drive_folder():
     """Verifica che JH_DRIVE_FOLDER_ID sia configurato."""
     if not DRIVE_FOLDER_ID:
-        print("Errore: JH_DRIVE_FOLDER_ID non configurato. Aggiungi al tuo .env.")
+        print("Error: JH_DRIVE_FOLDER_ID is not configured. Add it to your .env.")
         sys.exit(1)
 
 SECRETS_DIR = os.path.join(os.path.dirname(__file__), '..', 'secrets')
@@ -60,7 +60,7 @@ def get_oauth_creds():
     from google.auth.transport.requests import Request
 
     if not os.path.exists(OAUTH_TOKEN_PATH):
-        print("Token non trovato. Esegui prima: python3 db_to_drive.py auth")
+        print("Token not found. Run this first: python3 db_to_drive.py auth")
         sys.exit(1)
 
     creds = Credentials.from_authorized_user_file(OAUTH_TOKEN_PATH, SCOPES)
@@ -86,12 +86,12 @@ def cmd_auth():
     from google_auth_oauthlib.flow import InstalledAppFlow
 
     if not os.path.exists(OAUTH_CLIENT_PATH):
-        print(f"File client OAuth non trovato: {OAUTH_CLIENT_PATH}")
+        print(f"OAuth client file not found: {OAUTH_CLIENT_PATH}")
         print()
         print("Setup:")
-        print("  1. Vai su https://console.cloud.google.com/apis/credentials")
-        print("  2. Crea 'ID client OAuth 2.0' -> Tipo 'App desktop'")
-        print("  3. Scarica JSON -> salva come shared/secrets/google-oauth-client.json")
+        print("  1. Go to https://console.cloud.google.com/apis/credentials")
+        print("  2. Create an 'OAuth 2.0 Client ID' -> type 'Desktop app'")
+        print("  3. Download the JSON -> save it as shared/secrets/google-oauth-client.json")
         sys.exit(1)
 
     flow = InstalledAppFlow.from_client_secrets_file(OAUTH_CLIENT_PATH, SCOPES)
@@ -100,7 +100,7 @@ def cmd_auth():
     with open(OAUTH_TOKEN_PATH, 'w') as f:
         f.write(creds.to_json())
 
-    print("Autorizzazione completata! Token salvato.")
+    print("Authorization complete! Token saved.")
     print(f"Token: {OAUTH_TOKEN_PATH}")
 
 
@@ -208,11 +208,11 @@ def cmd_upload(force=False, app_id=None):
             ).fetchall()
 
     if not rows:
-        print("Nessun PDF da caricare.")
+        print("No PDFs to upload.")
         conn.close()
         return
 
-    print(f"Application da processare: {len(rows)}")
+    print(f"Applications to process: {len(rows)}")
 
     service = get_drive_service()
     uploaded = 0
@@ -239,10 +239,10 @@ def cmd_upload(force=False, app_id=None):
                     print(f"  CV: {drive_link(cv_drive_id)}")
                     uploaded += 1
                 except Exception as e:
-                    print(f"  CV ERRORE: {e}")
+                    print(f"  CV ERROR: {e}")
                     errors += 1
             else:
-                print(f"  CV non trovato: {r['cv_pdf_path']}")
+                print(f"  CV not found: {r['cv_pdf_path']}")
                 errors += 1
 
         # Upload CL
@@ -254,10 +254,10 @@ def cmd_upload(force=False, app_id=None):
                     print(f"  CL: {drive_link(cl_drive_id)}")
                     uploaded += 1
                 except Exception as e:
-                    print(f"  CL ERRORE: {e}")
+                    print(f"  CL ERROR: {e}")
                     errors += 1
             else:
-                print(f"  CL non trovato: {r['cl_pdf_path']}")
+                print(f"  CL not found: {r['cl_pdf_path']}")
                 errors += 1
 
         # Aggiorna DB
@@ -268,8 +268,8 @@ def cmd_upload(force=False, app_id=None):
         conn.commit()
 
     conn.close()
-    print(f"\nCompletato: {uploaded} file caricati, {errors} errori")
-    print(f"Cartella Drive: https://drive.google.com/drive/folders/{DRIVE_FOLDER_ID}")
+    print(f"\nComplete: {uploaded} files uploaded, {errors} errors")
+    print(f"Drive folder: https://drive.google.com/drive/folders/{DRIVE_FOLDER_ID}")
 
 
 def cmd_status():
@@ -281,9 +281,9 @@ def cmd_status():
     on_drive = conn.execute("SELECT COUNT(*) FROM applications WHERE cv_drive_id IS NOT NULL").fetchone()[0]
     missing = total - on_drive
 
-    print(f"Totale application con PDF: {total}")
-    print(f"Gia' su Drive: {on_drive}")
-    print(f"Da caricare: {missing}")
+    print(f"Total applications with PDFs: {total}")
+    print(f"Already on Drive: {on_drive}")
+    print(f"To upload: {missing}")
 
     conn.close()
 
@@ -302,7 +302,7 @@ def cmd_list():
         q=query, fields='files(id, name)', orderBy='name'
     ).execute().get('files', [])
 
-    print(f"Sottocartelle: {len(folders)}")
+    print(f"Subfolders: {len(folders)}")
     for f in folders:
         q2 = f"'{f['id']}' in parents and trashed = false"
         count = len(service.files().list(q=q2, fields='files(id)').execute().get('files', []))
@@ -331,6 +331,6 @@ if __name__ == "__main__":
     elif cmd == "list":
         cmd_list()
     else:
-        print(f"Comando sconosciuto: {cmd}")
+        print(f"Unknown command: {cmd}")
         print(__doc__)
         sys.exit(1)

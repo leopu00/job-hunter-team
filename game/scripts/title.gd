@@ -4,8 +4,13 @@ extends Control
 ## Key art pittorica (gen-art); se assente, griglia terminale.
 const KEY_ART := "res://assets/gen-art/environment/title_screen.png"
 const LanguagePicker := preload("res://scripts/ui/language_picker.gd")
+const FORBIDDEN_TITLE_FOOTER_FRAGMENTS := [
+	"dati mock", "mock data", "mock adatok", "datos mock", "mock-daten",
+	"données mock", "dados mock",
+]
 
 var _blink: Label
+var _version_label: Label
 var _time := 0.0
 var _leaving := false
 var _language_picker: Control
@@ -14,6 +19,11 @@ var _language_test_choice := ""
 func _ready() -> void:
 	theme = TerminalTheme.get_theme()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	if TutorialHarness.cleanup_test():
+		TutorialHarness.clear_storage()
+		print("TUTORIAL-HARNESS-CLEANUP PASS")
+		get_tree().quit()
+		return
 	var persistence_test := OS.get_environment("JHT_LANGUAGE_PERSIST_TEST")
 	if persistence_test == "cleanup":
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(UIStrings.language_config_path()))
@@ -31,16 +41,28 @@ func _ready() -> void:
 			_language_persistence_write_selftest.call_deferred()
 		elif persistence_test == "save_failure":
 			_language_persistence_save_failure_selftest.call_deferred()
+		elif TutorialHarness.auto_test():
+			_tutorial_harness_autotest.call_deferred()
+		elif TutorialHarness.persistence_test():
+			_tutorial_harness_persistence_test.call_deferred()
 		return
 	_build_title()
 	if persistence_test == "verify":
 		_language_persistence_verify_selftest.call_deferred()
+	if TutorialHarness.auto_test():
+		_tutorial_harness_autotest.call_deferred()
+	elif TutorialHarness.persistence_test():
+		_tutorial_harness_persistence_test.call_deferred()
 
 
 func _show_language_picker() -> void:
 	_language_picker = LanguagePicker.new()
 	_language_picker.language_confirmed.connect(_on_language_confirmed)
 	add_child(_language_picker)
+	TutorialHarness.mark("LANGUAGE_DEFAULT_VISIBLE", {
+		"language": UIStrings.DEFAULT_LANG,
+		"selected": _language_picker.selected_language,
+	})
 
 
 func _on_language_confirmed(language: String) -> void:
@@ -54,12 +76,17 @@ func _on_language_confirmed(language: String) -> void:
 		_language_picker.queue_free()
 	_language_picker = null
 	_build_title()
+	TutorialHarness.mark("LANGUAGE_CONFIRMED", {"language": language})
 
 
 ## Verifica la scena vera in uno user:// isolato: prima viene il picker in
 ## inglese, poi una scelta costruisce DAVVERO la title nella lingua richiesta.
 func _language_picker_selftest() -> void:
 	await get_tree().process_frame
+	var project_version := str(ProjectSettings.get_setting("application/config/version"))
+	# Il job artifact imposta questo valore dal tag (senza `v`): il marker sotto
+	# rende visibile nel log sia il testo del Label sia l'identita' attesa.
+	var expected_version := OS.get_environment("JHT_EXPECTED_GAME_VERSION")
 	var ok: bool = is_instance_valid(_language_picker) \
 			and not is_instance_valid(_blink) \
 			and UIStrings.lang == UIStrings.DEFAULT_LANG \
@@ -72,9 +99,26 @@ func _language_picker_selftest() -> void:
 		_language_picker.confirm()
 	await get_tree().process_frame
 	ok = ok and _language_test_choice == "de" \
-			and UIStrings.lang == "de" and is_instance_valid(_blink)
+			and UIStrings.lang == "de" and is_instance_valid(_blink) \
+			and is_instance_valid(_version_label) \
+			and _version_label.is_visible_in_tree() \
+			and _version_label.text == "v%s" % project_version \
+			and (expected_version == "" or project_version == expected_version) \
+			and not _title_has_forbidden_footer()
+	print("LANGUAGE-PICKER-TITLE-VERSION %s" % (
+			_version_label.text if is_instance_valid(_version_label) else "MISSING"))
 	print("LANGUAGE-PICKER-TITLE-TEST %s" % ("PASS" if ok else "FAIL"))
 	get_tree().quit(0 if ok else 1)
+
+
+func _title_has_forbidden_footer() -> bool:
+	for node: Node in find_children("*", "Label", true, false):
+		var label := node as Label
+		var rendered_text := label.text.to_lower()
+		for fragment: String in FORBIDDEN_TITLE_FOOTER_FRAGMENTS:
+			if rendered_text.contains(fragment):
+				return true
+	return false
 
 
 ## Fase 1 dell'oracolo: il click attraversa il vero picker e deve arrivare
@@ -195,11 +239,17 @@ func _build_title() -> void:
 	_blink.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_blink)
 
-	var footer := TerminalTheme.label(UIStrings.t("title.footer"), 15, Palette.DIM)
-	footer.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	footer.position = Vector2(28, -40)
-	footer.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	add_child(footer)
+	_version_label = TerminalTheme.label(
+			"v%s" % str(ProjectSettings.get_setting("application/config/version")),
+			15, Palette.DIM)
+	add_child(_version_label)
+	_version_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	var version_size := _version_label.get_combined_minimum_size()
+	_version_label.offset_left = 28
+	_version_label.offset_top = -40
+	_version_label.offset_right = 28 + version_size.x
+	_version_label.offset_bottom = -40 + version_size.y
+	_version_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 func _process(delta: float) -> void:
 	_time += delta
@@ -264,17 +314,20 @@ func _show_name_entry() -> void:
 	box.add_child(sub)
 
 	var first := LineEdit.new()
+	first.name = "TutorialNameFirst"
 	first.placeholder_text = UIStrings.t("title.name_first")
 	first.custom_minimum_size = Vector2(420, 0)
 	first.max_length = 40
 	box.add_child(first)
 	var last := LineEdit.new()
+	last.name = "TutorialNameLast"
 	last.placeholder_text = UIStrings.t("title.name_last")
 	last.custom_minimum_size = Vector2(420, 0)
 	last.max_length = 60
 	box.add_child(last)
 
 	var enter := Button.new()
+	enter.name = "TutorialEnterOffice"
 	enter.text = UIStrings.t("title.name_enter")
 	enter.disabled = true
 	box.add_child(enter)
@@ -294,13 +347,62 @@ func _show_name_entry() -> void:
 		_fade_out()
 	first.text_changed.connect(func(value: String) -> void:
 		enter.disabled = value.strip_edges().is_empty())
-	first.text_submitted.connect(func(_v: String) -> void: last.grab_focus())
+	# Il cognome è facoltativo: il primo nome sintetico e INVIO devono poter
+	# entrare davvero nell'ufficio, senza una seconda azione nascosta.
+	first.text_submitted.connect(func(_v: String) -> void: confirm.call())
 	last.text_submitted.connect(func(_v: String) -> void: confirm.call())
 	enter.pressed.connect(confirm)
 	skip.pressed.connect(func() -> void:
 		Sfx.play_back()
 		_fade_out())
 	first.grab_focus()
+
+
+## Oracolo end-to-end del harness: percorre gli stessi signal dei controlli
+## nativi (picker, Enter title, submit LineEdit), poi l'Office verifica
+## assistant/offline/16:9 prima di stampare il PASS.
+func _tutorial_harness_autotest() -> void:
+	await get_tree().process_frame
+	var ok: bool = is_instance_valid(_language_picker) \
+			and _language_picker.selected_language == "en" \
+			and TutorialHarness.saw("LANGUAGE_DEFAULT_VISIBLE")
+	if not ok:
+		_tutorial_harness_fail("picker inglese non visibile")
+		return
+	_language_picker.confirm()
+	await get_tree().process_frame
+	ok = is_instance_valid(_blink) and UIStrings.lang == "en" \
+			and UIStrings.saved_language() == "en" \
+			and TutorialHarness.saw("LANGUAGE_CONFIRMED")
+	if not ok:
+		_tutorial_harness_fail("continue inglese non persiste title")
+		return
+	var accept := InputEventAction.new()
+	accept.action = "ui_accept"
+	accept.pressed = true
+	_unhandled_input(accept)
+	await get_tree().process_frame
+	var first := find_child("TutorialNameFirst", true, false) as LineEdit
+	ok = first != null and first.text.is_empty()
+	if not ok:
+		_tutorial_harness_fail("form nome vuoto non raggiungibile")
+		return
+	first.text = "Sample"
+	first.text_submitted.emit(first.text)
+
+
+func _tutorial_harness_fail(reason: String) -> void:
+	push_error("TUTORIAL-16-9-HARNESS-TEST FAIL: " + reason)
+	get_tree().quit(1)
+
+
+func _tutorial_harness_persistence_test() -> void:
+	await get_tree().process_frame
+	var ok: bool = not is_instance_valid(_language_picker) \
+			and is_instance_valid(_blink) and UIStrings.lang == "en" \
+			and UIStrings.saved_language() == "en"
+	print("TUTORIAL-EN-PERSISTENCE-TEST %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
 
 ## Dissolvenza a nero sopra tutto, poi sempre nell'ufficio. Il setup non è
 ## più un tunnel prima del prodotto: container, provider e profilo si

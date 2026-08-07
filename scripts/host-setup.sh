@@ -17,6 +17,7 @@
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 set -euo pipefail
+JHT_HOST_SETUP_PROTOCOL=1
 
 # ── Colori ───────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
@@ -46,13 +47,13 @@ while [ $# -gt 0 ]; do
     --host-type=*) FORCED_HOST_TYPE="${1#*=}" ;;
     --host-type)   FORCED_HOST_TYPE="$2"; shift ;;
     --non-interactive) NON_INTERACTIVE=1 ;;
-    *) warn "Argomento ignorato: $1" ;;
+    *) warn "Ignoring argument: $1" ;;
   esac
   shift
 done
 case "$FORCED_HOST_TYPE" in
   ""|vps|local) : ;;
-  *) warn "--host-type non valido ($FORCED_HOST_TYPE) — ignorato"; FORCED_HOST_TYPE="" ;;
+  *) warn "Invalid --host-type ($FORCED_HOST_TYPE) — ignoring it"; FORCED_HOST_TYPE="" ;;
 esac
 [ -n "$FORCED_HOST_TYPE" ] && NON_INTERACTIVE=1
 
@@ -65,6 +66,53 @@ esac
 # evita di richiedere la scelta a ogni invocazione.
 JHT_HOME_HOST="${JHT_HOME_HOST:-$HOME/.jht}"
 HOST_ENV_PATH="$JHT_HOME_HOST/host.env"
+
+# host.env vive in una directory bind-mountata read-write nel container. Va
+# quindi trattato come input non fidato: leggerne coppie note e validate, mai
+# eseguirlo con `source`/`.`. Questa copia locale rende host-setup.sh ancora
+# distribuibile come singolo file, come fa oggi l'installer.
+jht_host_env_value_valid() {
+  local key="$1" value="$2"
+  case "$key" in
+    JHT_HOST_TYPE)
+      case "$value" in local|vps) return 0 ;; esac
+      ;;
+    JHT_LANG)
+      case "$value" in en|it|hu|es|de|fr|pt) return 0 ;; esac
+      ;;
+    JHT_USER_TZ)
+      case "$value" in
+        ''|*[!A-Za-z0-9_+./-]*) return 1 ;;
+        *) return 0 ;;
+      esac
+      ;;
+  esac
+  return 1
+}
+
+jht_read_host_env_value() {
+  local file="$1" requested="$2" line key value result=""
+  local found=1
+  [ -f "$file" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    if [[ "$line" =~ ^[[:space:]]*(JHT_HOST_TYPE|JHT_LANG|JHT_USER_TZ)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+      case "$value" in
+        \"*\") value="${value#\"}"; value="${value%\"}" ;;
+        \'*\') value="${value#\'}"; value="${value%\'}" ;;
+      esac
+      if [ "$key" = "$requested" ] && jht_host_env_value_valid "$key" "$value"; then
+        result="$value"
+        found=0
+      fi
+    fi
+  done < "$file"
+  [ "$found" -eq 0 ] || return 1
+  printf '%s' "$result"
+}
+
 JHT_LANG_DEFAULT=en
 # Priorità lookup: env JHT_LANG > host.env > default 'en'. L'env vince
 # perché il setup in-game la passa esplicitamente quando rilancia
@@ -72,9 +120,7 @@ JHT_LANG_DEFAULT=en
 if [ -n "${JHT_LANG:-}" ]; then
   JHT_LANG_DEFAULT="$JHT_LANG"
 elif [ -f "$HOST_ENV_PATH" ]; then
-  # shellcheck disable=SC1090
-  EXISTING_LANG=$(. "$HOST_ENV_PATH" 2>/dev/null; printf %s "${JHT_LANG:-}")
-  if [ -n "$EXISTING_LANG" ]; then
+  if EXISTING_LANG="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_LANG)"; then
     JHT_LANG_DEFAULT="$EXISTING_LANG"
   fi
 fi
@@ -122,20 +168,12 @@ ok "Language / Lingua / Nyelv / Idioma / Sprache / Langue / Idioma: $JHT_LANG"
 mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
 printf 'JHT_LANG=%s\n' "$JHT_LANG" > "$HOST_ENV_PATH"
 
-# ── i18n: source catalogo locales dopo scelta lingua ────────────────────
-# Da qui in poi tutti i prompt utente passano per t()/tf() che leggono
-# shared/locales/<JHT_LANG>.json. Se il catalogo non c'è (es. checkout
-# parziale), fallback a IT hardcoded inline.
-_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-_REPO_ROOT="$(cd "$_SCRIPT_DIR/.." && pwd)"
-if [ -f "$_REPO_ROOT/shared/i18n.sh" ]; then
-  export JHT_LANG
-  # shellcheck disable=SC1091
-  source "$_REPO_ROOT/shared/i18n.sh"
-fi
-# Helper safe: usa t() se disponibile, altrimenti ritorna il default IT inline.
+# ── i18n: soltanto dati, mai helper shell dal filesystem ─────────────────
+# Questo script gira sull'host. Non importa codice da directory che il
+# container puo' scrivere; i fallback inglesi inline restano l'autorita'
+# sicura finche' i cataloghi non sono distribuiti nel bundle host attestato.
 ts() {
-  if declare -F t >/dev/null 2>&1; then t "$1"; else printf '%s' "$2"; fi
+  printf '%s' "$2"
 }
 
 # ── Detect VPS ───────────────────────────────────────────────────────────
@@ -168,14 +206,14 @@ detect_vps() {
 
 if detect_vps; then
   DETECTED="vps"
-  DETECTED_LABEL="${BOLD}$(ts host_setup.host.vps 'server remoto / VPS')${RESET}"
+  DETECTED_LABEL="${BOLD}$(ts host_setup.host.vps 'remote server / VPS')${RESET}"
 else
   DETECTED="local"
-  DETECTED_LABEL="${BOLD}$(ts host_setup.host.local 'computer locale')${RESET}"
+  DETECTED_LABEL="${BOLD}$(ts host_setup.host.local 'local computer')${RESET}"
 fi
 
 printf "\n${CYAN}━━━ %s ━━━${RESET}\n\n" "$(ts host_setup.section_header 'Setup host (preflight)')"
-printf "%s %b\n" "$(ts host_setup.detected 'Rilevato:')" "$DETECTED_LABEL"
+printf "%s %b\n" "$(ts host_setup.detected 'Detected:')" "$DETECTED_LABEL"
 
 # ── Conferma utente ──────────────────────────────────────────────────────
 # Bash read; se stdin non e' TTY (es. curl|bash) usa il default detected.
@@ -193,20 +231,20 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
   else
     DEFAULT_NUM=1
   fi
-  printf "\n%s\n\n" "$(ts host_setup.where_running 'Dove stai eseguendo JHT?')"
-  printf "  1) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.local.title 'Computer locale')"
-  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.local.line1 'Stai usando JHT sul tuo PC, accessibile solo da te in rete locale.')"
-  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.local.line2 'La dashboard web si apre automaticamente.')"
-  printf "  2) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.vps.title 'Server remoto / VPS')"
-  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.vps.line1 'JHT gira su un server cloud raggiungibile via IP pubblico.')"
-  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.vps.line2 'Servono passi extra per esporre la dashboard in sicurezza.')"
-  printf "%s [%d]: " "$(ts host_setup.choice_prompt 'Scelta')" "$DEFAULT_NUM"
+  printf "\n%s\n\n" "$(ts host_setup.where_running 'Where are you running JHT?')"
+  printf "  1) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.local.title 'Local computer')"
+  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.local.line1 'You are using JHT on your own PC, accessible only to you on the local network.')"
+  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.local.line2 'The web dashboard opens automatically.')"
+  printf "  2) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.vps.title 'Remote server / VPS')"
+  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.vps.line1 'JHT runs on a cloud server reachable via public IP.')"
+  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.vps.line2 'Extra steps are needed to expose the dashboard securely.')"
+  printf "%s [%d]: " "$(ts host_setup.choice_prompt 'Choice')" "$DEFAULT_NUM"
   read -r CHOICE
   case "$CHOICE" in
     1) HOST_TYPE="local" ;;
     2) HOST_TYPE="vps" ;;
     "") HOST_TYPE="$DETECTED" ;;
-    *) warn "$(ts error.invalid_input 'Scelta non valida') — default ($DETECTED)"; HOST_TYPE="$DETECTED" ;;
+    *) warn "$(ts error.invalid_input 'Invalid choice') — using default ($DETECTED)"; HOST_TYPE="$DETECTED" ;;
   esac
 fi
 
@@ -240,17 +278,16 @@ fi
 # 3. Esiste già in host.env? Skip prompt, riusa (scelta confermata in un
 #    install precedente — priorità massima).
 if [ -f "$HOST_ENV_PATH" ]; then
-  EXISTING_TZ=$(. "$HOST_ENV_PATH" 2>/dev/null; printf %s "${JHT_USER_TZ:-}")
-  if [ -n "$EXISTING_TZ" ]; then
+  if EXISTING_TZ="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_USER_TZ)"; then
     JHT_USER_TZ_DEFAULT="$EXISTING_TZ"
   fi
 fi
 
 JHT_USER_TZ="$JHT_USER_TZ_DEFAULT"
 if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
-  printf "\n${CYAN}━━━ %s ━━━${RESET}\n\n" "$(ts host_setup.timezone_header 'Timezone utente')"
-  printf "%s\n" "$(ts host_setup.timezone_prompt 'Dove ti trovi (timezone IANA, es. Europe/Rome, America/New_York, Asia/Shanghai)?')"
-  printf "%s\n\n" "$(ts host_setup.timezone_explain 'Il Capitano la usa per convertire gli orari nei messaggi Telegram e nei grafici.')"
+  printf "\n${CYAN}━━━ %s ━━━${RESET}\n\n" "$(ts host_setup.timezone_header 'User timezone')"
+  printf "%s\n" "$(ts host_setup.timezone_prompt 'Where are you (IANA timezone, e.g. Europe/Rome, America/New_York, Asia/Shanghai)?')"
+  printf "%s\n\n" "$(ts host_setup.timezone_explain 'The Captain uses it to convert times in Telegram messages and charts.')"
   printf "Timezone [%s]: " "$JHT_USER_TZ_DEFAULT"
   read -r TZ_CHOICE
   if [ -n "$TZ_CHOICE" ]; then
@@ -258,7 +295,7 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
     if python3 -c "from zoneinfo import ZoneInfo; ZoneInfo('$TZ_CHOICE')" 2>/dev/null; then
       JHT_USER_TZ="$TZ_CHOICE"
     else
-      warn "$(ts host_setup.timezone_invalid "Timezone non valida — uso default") ($JHT_USER_TZ_DEFAULT)"
+      warn "$(ts host_setup.timezone_invalid 'Invalid timezone, falling back to UTC.') ($JHT_USER_TZ_DEFAULT)"
     fi
   fi
 fi
@@ -270,7 +307,7 @@ ok "Timezone: $JHT_USER_TZ"
 # valgono in UTC invece che nelle ore locali dell'utente (sul beta VPS si è
 # dovuto passare --tz Europe/Rome a mano). Avvisa esplicitamente come correggere.
 if { [ ! -t 0 ] || [ "$NON_INTERACTIVE" -eq 1 ]; } && [ "$JHT_USER_TZ" = "UTC" ]; then
-  warn "$(ts host_setup.timezone_vps_utc 'Timezone non rilevata: il team userà UTC. Imposta la tua con  jht wh --tz Europe/Rome  (o dalla dashboard), sennò orari Telegram e working-hours saranno in UTC.')"
+  warn "$(ts host_setup.timezone_vps_utc 'Timezone was not detected: the team will use UTC. Set yours with jht wh --tz Europe/Rome (or in the dashboard), otherwise Telegram times and working hours will be in UTC.')"
 fi
 
 # Persisti la scelta in ~/.jht/host.env cosi' il wrapper bash + il wizard
@@ -286,11 +323,11 @@ mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
 } > "$HOST_ENV_PATH"
 
 if [ "$HOST_TYPE" = "local" ]; then
-  ok "Host: $(ts host_setup.host.local 'computer locale') — $(ts host_setup.swap_not_needed 'nessuna configurazione swap richiesta')"
+  ok "Host: $(ts host_setup.host.local 'local computer') — $(ts host_setup.swap_not_needed 'no swap configuration needed')"
   exit 0
 fi
 
-ok "Host: $(ts host_setup.host.vps 'server remoto / VPS')"
+ok "Host: $(ts host_setup.host.vps 'remote server / VPS')"
 
 # ── Check RAM e swap esistente ───────────────────────────────────────────
 RAM_KB=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
@@ -298,19 +335,19 @@ RAM_GB=$(( (RAM_KB + 524288) / 1048576 ))   # round to GB
 SWAP_KB=$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
 SWAP_MB=$(( SWAP_KB / 1024 ))
 
-info "RAM: ${RAM_GB} GB  |  Swap attivo: ${SWAP_MB} MB"
+info "RAM: ${RAM_GB} GB  |  Swap active: ${SWAP_MB} MB"
 
 # Swap policy:
 # - se gia' >= 1024 MB: ok, skip
 # - se RAM >= 8 GB: skip (non serve)
 # - altrimenti: chiedi
 if [ "$SWAP_MB" -ge 1024 ]; then
-  ok "Swap gia' configurato (${SWAP_MB} MB) — skip"
+  ok "Swap already configured (${SWAP_MB} MB) — skip"
   exit 0
 fi
 
 if [ "$RAM_GB" -ge 8 ]; then
-  ok "RAM sufficiente (${RAM_GB} GB) — swap non necessaria, skip"
+  ok "RAM sufficient (${RAM_GB} GB) — swap not needed, skip"
   exit 0
 fi
 
@@ -319,8 +356,8 @@ SWAP_SIZE_GB=2
 SWAP_FILE=/swapfile
 
 # Versione sintetica: 1 riga di motivo (era 4 — l'utente accetta sempre).
-printf "\n${DIM}Con %d GB di RAM il team puo' andare in OOM sotto carico.${RESET}\n" "$RAM_GB"
-printf "Configuro %d GB di swap in %s? [Y/n]: " "$SWAP_SIZE_GB" "$SWAP_FILE"
+printf "\n${DIM}With %d GB of RAM the team may OOM under load.${RESET}\n" "$RAM_GB"
+printf "Configure %d GB of swap in %s? [Y/n]: " "$SWAP_SIZE_GB" "$SWAP_FILE"
 
 DO_SWAP=1
 if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
@@ -330,29 +367,29 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
     *)         DO_SWAP=1 ;;
   esac
 else
-  printf "${DIM}(stdin non interattivo, applico default Y)${RESET}\n"
+  printf "${DIM}(non-interactive stdin; applying default Y)${RESET}\n"
 fi
 
 if [ "$DO_SWAP" = "0" ]; then
-  warn "Swap non configurata — il team potrebbe crashare sotto carico"
+  warn "Swap not configured — the team may crash under load"
   exit 0
 fi
 
 # ── Configura swap (richiede root) ───────────────────────────────────────
 if [ "$(id -u)" -ne 0 ]; then
-  warn "Servono privilegi root per configurare la swap"
+  warn "Root privileges are required to configure swap"
   if command -v sudo >/dev/null 2>&1; then
-    info "Provo con sudo..."
+    info "Trying sudo..."
     SUDO=sudo
   else
-    warn "sudo non disponibile — skip swap. Configura manualmente piu' tardi."
+    warn "sudo is unavailable — skipping swap. Configure it manually later."
     exit 0
   fi
 else
   SUDO=""
 fi
 
-info "Creo $SWAP_FILE da ${SWAP_SIZE_GB} GB..."
+info "Creating $SWAP_FILE with ${SWAP_SIZE_GB} GB..."
 $SUDO fallocate -l "${SWAP_SIZE_GB}G" "$SWAP_FILE" 2>/dev/null \
   || $SUDO dd if=/dev/zero of="$SWAP_FILE" bs=1M count=$((SWAP_SIZE_GB * 1024)) status=none
 $SUDO chmod 600 "$SWAP_FILE"
@@ -365,6 +402,6 @@ if ! grep -q "^${SWAP_FILE} " /etc/fstab 2>/dev/null; then
 fi
 
 NEW_SWAP_MB=$(awk '/^SwapTotal:/ {print int($2/1024)}' /proc/meminfo)
-ok "Swap attiva: ${NEW_SWAP_MB} MB (persiste a reboot via /etc/fstab)"
+ok "Swap active: ${NEW_SWAP_MB} MB (persists across reboot via /etc/fstab)"
 
 exit 0

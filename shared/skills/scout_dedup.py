@@ -75,10 +75,10 @@ def dedup_check(url, company=None, title=None, location=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Dedup gerarchica pre-INSERT (SC-05)")
+    parser = argparse.ArgumentParser(description="Hierarchical pre-INSERT deduplication (SC-05)")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("check", help="Verifica se una posizione è duplicata")
-    c.add_argument("--url", default="", help="URL della posizione")
+    c = sub.add_parser("check", help="Check whether a position is a duplicate")
+    c.add_argument("--url", default="", help="Position URL")
     c.add_argument("--company", default=None)
     c.add_argument("--title", default=None)
     c.add_argument("--location", default=None)
@@ -86,7 +86,7 @@ def main():
 
     if not (args.url or (args.company and args.title)):
         print(json.dumps({"action": "error",
-                          "reason": "serve almeno --url, oppure --company e --title"}))
+                          "reason": "provide --url, or both --company and --title"}))
         sys.exit(2)
 
     result = dedup_check(args.url, args.company, args.title, args.location)

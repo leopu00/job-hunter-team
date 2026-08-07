@@ -30,7 +30,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-08-04 | ✅ |
 | [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-08-04 | ✅ |
-| [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-08-04 | ✅ |
+| [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-08-05 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `support@jobhunterteam.ai` | — | 2026-07-26 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Policy di disclosure, trust model corrente, copertura e stato hardening | — | 2026-08-04 | ✅ |
 
@@ -173,6 +173,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [game/docs/ROADMAP.md](../game/docs/ROADMAP.md) | Native application roadmap — The Electron-to-Godot migration, live data views, embedded console and | — | 2026-07-19 | ✅ |
 | [game/docs/SPRITES.md](../game/docs/SPRITES.md) | Sprite agenti — contratto spritesheet (v1, 2026-07-11) — Gli agenti in-world passano dagli SVG a parti (CharacterRig) a spritesheet | — | 2026-07-30 | ✅ |
 | [game/assets/_attic/README.md](../game/assets/_attic/README.md) | Perche' questi asset sono archiviati invece che cancellati, e come rientrerebbero | — | 2026-08-03 | ✅ |
+| [game/assets/icons/SOURCES.md](../game/assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e varianti Docker/Telegram immutate impiegate dalle icone della sidebar Godot | — | 2026-08-07 | ✅ |
 
 
 ## 📖 docs/about
@@ -185,8 +186,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/about/PROVIDERS.md](./about/PROVIDERS.md) | Matrice provider Claude/Codex/Kimi con costi e tier | — | 2026-07-03 | ✅ |
 | [docs/about/MONITORING.md](./about/MONITORING.md) | Stack monitoring V5 (Bridge + Sentinella event-driven) | — | 2026-08-04 | ✅ |
 | [docs/about/RESULTS.md](./about/RESULTS.md) | Risultati reali utenti beta (matrice persona × provider) | — | 2026-07-03 | ✅ |
-| [docs/about/README.md](./about/README.md) | 🎯 docs/about — what JHT is, and whether it works — Public-facing documentation for anyone evaluating Job Hunter Team. | — | 2026-06-13 | ✅ |
-| [docs/about/TUTORIAL-GAME-SCREENSHOTS.md](./about/TUTORIAL-GAME-SCREENSHOTS.md) | Provenance, privacy attestation, and hashes for the public game tutorial screenshots | — | — | ✅ |
+| [docs/about/README.md](./about/README.md) | 🎯 docs/about — what JHT is, and whether it works — Public-facing documentation for anyone evaluating Job Hunter Team. | — | 2026-08-05 | ✅ |
+| [docs/about/TUTORIAL-GAME-SCREENSHOTS.md](./about/TUTORIAL-GAME-SCREENSHOTS.md) | Provenance, privacy attestation, and hashes for the public game tutorial screenshots | — | 2026-08-05 | ✅ |
 
 
 ## 📜 docs/adr (Architecture Decision Records)
@@ -209,7 +210,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI | — | 2026-08-04 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali | — | 2026-08-04 | ✅ |
 | [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-08-04 | ✅ |
-| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-08-04 | ✅ |
+| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-08-05 | ✅ |
 | [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-08-04 | ✅ |
 | [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-07-25 | ✅ |
 | [docs/guides/FEEDBACK-TICKETING.md](./guides/FEEDBACK-TICKETING.md) | Runbook delle superfici correnti e dell'endpoint /api/feedback | — | 2026-08-05 | ✅ |
@@ -227,7 +228,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-08-04 | ✅ |
+| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-08-07 | ✅ |
 | [docs/internal/architecture/2026-05-19-dashboard-routing-cases.md](./internal/architecture/2026-05-19-dashboard-routing-cases.md) | 🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-20-world-globe-feature.md](./internal/architecture/2026-05-20-world-globe-feature.md) | 🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-25-work-hours-design.md](./internal/architecture/2026-05-25-work-hours-design.md) | 🗓️ Work hours UI — design + monitoring settimanale — Sessione di design 2026-05-25. | — | 2026-06-13 | ✅ |
@@ -341,6 +342,12 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/architecture/2026-08-03-local-vault-design.md](./internal/architecture/2026-08-03-local-vault-design.md) | [JHT-LOCAL-VAULT]: envelope encryption, broker runtime, migrazione senza plaintext persistente e decisioni ADR prima della crypto | — | 2026-08-03 | ✅ |
 | [docs/internal/architecture/provider-touchpoint-inventory.md](./internal/architecture/provider-touchpoint-inventory.md) | Machine-checked inventory of provider-specific seams and the narrow M5 Local Scorer architecture boundary | 2026-08-03 | 2026-08-03 | 🟢 |
 | [docs/internal/ops/recording-profiles.md](./internal/ops/recording-profiles.md) | Procedura interna per generare e verificare profili sintetici deterministici destinati alle registrazioni web e gioco | — | 2026-08-04 | ✅ |
+| [docs/internal/2026-08-07-setup-guide-content-contract.md](./internal/2026-08-07-setup-guide-content-contract.md) | Contratto P0 della guida setup non pubblicata: naming, copy EN, fasi e requisiti screenshot per tre OS, local-web e censimento riuso | 2026-08-07 | 2026-08-07 | 🟢 |
+| [docs/internal/2026-08-07-setup-guide-web-scaffolding.md](./internal/2026-08-07-setup-guide-web-scaffolding.md) | Handoff web della guida setup non pubblicata: route noindex, contratto canonico, registro schermate, test e stato traduzioni | 2026-08-07 | 2026-08-07 | 🟢 |
+| [docs/internal/2026-08-07-web-compliance-audit.md](./internal/2026-08-07-web-compliance-audit.md) | Audit tecnico di conformità del sito web: consenso analytics, accesso a privacy e termini, inventario dei dati e decisioni aperte su export e cancellazione | — | 2026-08-07 | ✅ |
+| [docs/internal/2026-08-07-LEGAL-COPY-DRAFT.md](./internal/2026-08-07-LEGAL-COPY-DRAFT.md) | Audit pre-release e bozze EN versionate di Privacy e Termini, con flussi reali, copy condiviso web/desktop e decisioni legali esplicitamente aperte | — | 2026-08-07 | ✅ |
+| [docs/internal/2026-08-07-LEGAL-COPY-RELEASE.md](./internal/2026-08-07-LEGAL-COPY-RELEASE.md) | Fonte EN di pubblicazione per Privacy e Termini v2026-08-07.1: titolare individuale, età 16, Google/cloud, analytics opt-in, CARTO, feedback privato, export e cancellazione cloud immediata | — | 2026-08-07 | ✅ |
+| [docs/internal/ops/download-funnel.md](./internal/ops/download-funnel.md) | Query operativa delle ultime 72 ore per i click download aggregati e vincoli di accesso service-role al contatore anonimo | 2026-08-07 | — | 🟢 |
 
 
 ## 🔒 docs/security
@@ -404,6 +411,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [e2e/tests/quarantine/README.md](../e2e/tests/quarantine/README.md) | Le 75 spec E2E in quarantena: escluse da ogni run via `testIgnore`, conservate per le asserzioni recuperabili | — | 2026-07-26 | ✅ |
 | [tests/fixtures/e2e_linux_cv.md](../tests/fixtures/e2e_linux_cv.md) | Synthetic candidate CV consumed by the Linux onboarding E2E: no real personal data, only the profile fields the first-run checklist has to parse | — | 2026-08-04 | ✅ |
 | [promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md](../promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md) | Specifica tipografica e motion del pack overlay 9:16 per l'animatic pubblicitario: safe area, palette JHT, font, CTA e uso editoriale | — | 2026-08-05 | ✅ |
+| [docs/assets/icons/SOURCES.md](./assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale | — | 2026-08-07 | ✅ |
+| [web/public/brand/README.md](../web/public/brand/README.md) | Provenienza, integrità e vincoli d'uso degli asset social ufficiali nel footer pubblico, con Instagram attivo e TikTok mantenuto non pubblicato | — | 2026-08-07 | ✅ |
 
 
 ---

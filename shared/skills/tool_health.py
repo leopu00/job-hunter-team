@@ -48,7 +48,7 @@ def _run(cmd, timeout=TIMEOUT):
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return p.returncode, (p.stdout + p.stderr)[-600:]
     except subprocess.TimeoutExpired:
-        return -1, "timeout dopo %ds" % timeout
+        return -1, "timeout after %ds" % timeout
     except (OSError, ValueError) as e:
         return -1, "exec error: %s" % e
 
@@ -57,7 +57,7 @@ def check_chromium_libs():
     """Le .so di sistema del browser ci sono? (il bug libatk). ldconfig non
     richiede root. Assenza di libatk → il browser NON parte (exit 127)."""
     if not shutil.which("ldconfig"):
-        return "UNKNOWN", "ldconfig assente, impossibile verificare le lib"
+        return "UNKNOWN", "ldconfig is missing; unable to verify system libraries"
     # NB: NON passare per _run() — tronca agli ultimi 600 char e `ldconfig -p`
     # elenca centinaia di lib ordinate: libatk/libnss3/libgbm/libasound stanno
     # in testa all'alfabeto e venivano tagliate via → falsi "mancanti" anche a
@@ -65,14 +65,14 @@ def check_chromium_libs():
     try:
         p = subprocess.run(["ldconfig", "-p"], capture_output=True, text=True, timeout=10)
     except (subprocess.TimeoutExpired, OSError, ValueError) as e:
-        return "UNKNOWN", "ldconfig non eseguibile: %s" % e
+        return "UNKNOWN", "unable to run ldconfig: %s" % e
     if p.returncode != 0:
         return "UNKNOWN", "ldconfig rc=%d" % p.returncode
     out = p.stdout + p.stderr
     missing = [lib for lib in ("libatk-1.0", "libnss3", "libgbm", "libasound") if lib not in out]
     if missing:
-        return "BROKEN", "lib di sistema mancanti: %s (browser non parte)" % ", ".join(missing)
-    return "OK", "lib browser presenti"
+        return "BROKEN", "missing system libraries: %s (browser cannot start)" % ", ".join(missing)
+    return "OK", "browser libraries are present"
 
 
 def check_playwright_browser():
@@ -101,7 +101,7 @@ def check_playwright_browser():
     rc, out = _run([sys.executable, "-c", snippet])
     if rc == 0 and "LAUNCH_OK" in out:
         return "OK", "chromium headless launch ok (python)"
-    return "BROKEN", "launch fallito (rc=%d): %s" % (rc, out.strip()[:200])
+    return "BROKEN", "launch failed (rc=%d): %s" % (rc, out.strip()[:200])
 
 
 def check_linkedin_check():
@@ -115,14 +115,14 @@ def check_linkedin_check():
     avvii e carichi le sue dipendenze."""
     path = os.path.join(APP, "shared", "skills", "linkedin_check.py")
     if not os.path.exists(path):
-        return "UNKNOWN", "linkedin_check.py non trovato in %s" % path
+        return "UNKNOWN", "linkedin_check.py not found at %s" % path
     rc, out = _run([sys.executable, path, "--batch"], timeout=20)
     # batch vuoto → exit 0 ("Verifica batch: 0 posizioni"); se playwright non
     # importa o manca una .so → rc!=0 con traccia dell'import.
     if rc == 0:
-        return "OK", "linkedin_check avviabile (playwright caricato, batch vuoto ok)"
+        return "OK", "linkedin_check starts successfully (Playwright loaded, empty batch OK)"
     if "libatk" in out or "playwright" in out.lower() or rc == 127:
-        return "BROKEN", "linkedin_check non parte (dep browser): %s" % out.strip()[:160]
+        return "BROKEN", "linkedin_check cannot start (browser dependency): %s" % out.strip()[:160]
     return "UNKNOWN", "linkedin_check --batch rc=%d: %s" % (rc, out.strip()[:120])
 
 
@@ -141,7 +141,7 @@ def collect(only=None):
         try:
             status, evidence = fn()
         except Exception as e:  # difensivo: un check rotto non rompe lo sweep
-            status, evidence = "UNKNOWN", "check error: %s" % e
+            status, evidence = "UNKNOWN", "check failed: %s" % e
         tools[name] = {"status": status, "evidence": evidence}
     broken = [n for n, t in tools.items() if t["status"] == "BROKEN"]
     return {
@@ -153,9 +153,9 @@ def collect(only=None):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="Smoke-test tool mission-critical → tools_health")
-    p.add_argument("--json", action="store_true", help="stampa JSON (default)")
-    p.add_argument("--only", default=None, help="lista CSV di tool da controllare")
+    p = argparse.ArgumentParser(description="Smoke-test mission-critical tools → tools_health")
+    p.add_argument("--json", action="store_true", help="print JSON (default)")
+    p.add_argument("--only", default=None, help="CSV list of tools to check")
     args = p.parse_args(argv)
     only = set(args.only.split(",")) if args.only else None
     out = collect(only)

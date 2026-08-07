@@ -9,6 +9,9 @@ signal closed
 const MAX_RAW_CHARS := 100000
 const MAX_VISIBLE_CHARS := 50000
 const EXIT_REPORT_PATTERN := "\u001b\\]1337;JHTExit=([0-9a-f]+):([0-9]+)\u0007"
+## Eventi prodotti da `jht cloud login --ui-json`. Non sono JSON nudo:
+## docker, ssh e le pseudo-TTY possono aggiungere banner sulla stessa pipe.
+const CLOUD_UI_PREFIX := "JHT_CLOUD_UI "
 
 
 ## Modello di schermo minimale (griglia + scrollback) per i TUI raw-mode.
@@ -227,6 +230,17 @@ var _undecoded := PackedByteArray()
 var _result_note := ""
 ## Mouse premuto dentro l'output: selezione in corso, testo congelato.
 var _dragging_selection := false
+## Il pairing cloud riusa il motore di processo della console ma non la sua
+## superficie: URL/codici e output tecnico restano fuori dalla vista utente.
+var _cloud_state: Label
+var _cloud_fallback: VBoxContainer
+var _cloud_link: LineEdit
+var _cloud_check: Button
+var _cloud_retry: Button
+var _cloud_events_handled := 0
+var _cloud_browser_attempts := 0
+var _cloud_paired := false
+var _cloud_terminal_event := false
 
 
 func _init(p_provider: String, p_spec: Dictionary) -> void:
@@ -242,6 +256,10 @@ func _init(p_provider: String, p_spec: Dictionary) -> void:
 ## tutto il resto (compose, install, doctor…) è un comando tecnico generico.
 func _is_login_flow() -> bool:
 	return provider.begins_with("provider:") or provider == "cloud"
+
+
+func _is_cloud_pairing() -> bool:
+	return provider == "cloud" and bool(spec.get("cloud_pairing", false))
 
 
 func _ready() -> void:
@@ -273,6 +291,9 @@ func _process(_delta: float) -> void:
 	if cut > 0:
 		_screen.feed(_undecoded.slice(0, cut).get_string_from_utf8())
 		_undecoded = _undecoded.slice(cut)
+	if _is_cloud_pairing():
+		_consume_cloud_pairing_events()
+		return
 	var visible := _screen.text()
 	if visible.length() > MAX_VISIBLE_CHARS:
 		visible = UIStrings.t("term.truncated") + "\n" + visible.right(MAX_VISIBLE_CHARS)
@@ -347,6 +368,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _build_ui() -> void:
+	if _is_cloud_pairing():
+		_build_cloud_pairing_ui()
+		return
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.theme = TerminalTheme.get_theme()
@@ -488,6 +512,117 @@ func _build_ui() -> void:
 	col.add_child(_done)
 
 
+## Il login cloud non è un terminale: il CLI lavora dietro le quinte e questa
+## modale mostra un solo compito alla volta. Il link compare soltanto nel
+## fallback, mai insieme al percorso primario browser-first.
+func _build_cloud_pairing_ui() -> void:
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.theme = TerminalTheme.get_theme()
+	add_child(root)
+	var dim := ColorRect.new()
+	dim.color = Color(Palette.VOID.r, Palette.VOID.g, Palette.VOID.b, 0.88)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.add_child(center)
+	var panel := BracketPanel.new()
+	panel.custom_minimum_size = Vector2(860, 500)
+	center.add_child(panel)
+	var pad := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 28)
+	panel.add_child(pad)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 16)
+	pad.add_child(col)
+
+	var header := HBoxContainer.new()
+	col.add_child(header)
+	var title := TerminalTheme.label(
+			UIStrings.t("setup.cloud_login_title").to_upper(),
+			24, Palette.WHITE, "xbold")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var close_button := Button.new()
+	close_button.flat = true
+	close_button.text = "✕"
+	close_button.pressed.connect(close)
+	header.add_child(close_button)
+	col.add_child(HSeparator.new())
+
+	var intro := TerminalTheme.label(
+			UIStrings.t("cloud_pairing.intro"), 15, Palette.MUTED)
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(intro)
+	_cloud_state = TerminalTheme.label(
+			UIStrings.t("cloud_pairing.preparing"), 17, Palette.YELLOW, "bold")
+	_cloud_state.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_cloud_state.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_cloud_state.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	col.add_child(_cloud_state)
+
+	var primary := HBoxContainer.new()
+	primary.add_theme_constant_override("separation", 10)
+	col.add_child(primary)
+	_open_url = Button.new()
+	_open_url.text = UIStrings.t("term.open_browser")
+	_open_url.disabled = true
+	_open_url.add_theme_color_override("font_color", Palette.GREEN)
+	_open_url.add_theme_color_override("font_disabled_color", Palette.MUTED)
+	_open_url.pressed.connect(_open_cloud_pairing_url)
+	primary.add_child(_open_url)
+	_cloud_check = Button.new()
+	_cloud_check.text = UIStrings.t("cloud_pairing.check")
+	_cloud_check.disabled = true
+	_cloud_check.pressed.connect(_check_cloud_pairing)
+	primary.add_child(_cloud_check)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	primary.add_child(spacer)
+	_cloud_retry = Button.new()
+	_cloud_retry.text = UIStrings.t("cloud_pairing.retry")
+	_cloud_retry.visible = false
+	_cloud_retry.add_theme_color_override("font_color", Palette.YELLOW)
+	_cloud_retry.pressed.connect(_retry_cloud_pairing)
+	primary.add_child(_cloud_retry)
+
+	var fallback_toggle := Button.new()
+	fallback_toggle.flat = true
+	fallback_toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	fallback_toggle.text = UIStrings.t("cloud_pairing.fallback")
+	fallback_toggle.add_theme_color_override("font_color", Palette.MUTED)
+	fallback_toggle.pressed.connect(func() -> void:
+		_cloud_fallback.visible = not _cloud_fallback.visible)
+	col.add_child(fallback_toggle)
+	_cloud_fallback = VBoxContainer.new()
+	_cloud_fallback.visible = false
+	_cloud_fallback.add_theme_constant_override("separation", 8)
+	col.add_child(_cloud_fallback)
+	var fallback_note := TerminalTheme.label(
+			UIStrings.t("cloud_pairing.fallback_note"), 12, Palette.YELLOW)
+	fallback_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_cloud_fallback.add_child(fallback_note)
+	var link_row := HBoxContainer.new()
+	link_row.add_theme_constant_override("separation", 8)
+	_cloud_fallback.add_child(link_row)
+	_cloud_link = LineEdit.new()
+	_cloud_link.editable = false
+	_cloud_link.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	link_row.add_child(_cloud_link)
+	_copy_url = Button.new()
+	_copy_url.text = UIStrings.t("term.copy_link")
+	_copy_url.disabled = true
+	_copy_url.pressed.connect(_copy_cloud_pairing_url)
+	link_row.add_child(_copy_url)
+
+	_done = Button.new()
+	_done.text = UIStrings.t("cloud_pairing.close")
+	_done.pressed.connect(close)
+	col.add_child(_done)
+
+
 func _spawn_process() -> Dictionary:
 	return OS.execute_with_pipe(str(spec.get("path", "")),
 			PackedStringArray(spec.get("args", PackedStringArray())), false)
@@ -578,6 +713,9 @@ func _process_started() -> void:
 	# deferred venga eseguito. Non riscrivere mai un esito finale in INTERATTIVO.
 	if _closing or _finished:
 		return
+	if _is_cloud_pairing():
+		_cloud_set_status(UIStrings.t("cloud_pairing.preparing"), Palette.YELLOW)
+		return
 	_status.text = UIStrings.t("term.status_interactive")
 	_status.add_theme_color_override("font_color", Palette.GREEN)
 	_input.grab_focus()
@@ -602,6 +740,11 @@ func _report_finished(report: PackedByteArray, code: int) -> void:
 
 func _process_failed(message: String) -> void:
 	_finished = true
+	if _is_cloud_pairing():
+		_cloud_terminal_event = true
+		_cloud_set_status(UIStrings.t("cloud_pairing.failed"), Palette.RED)
+		_cloud_retry.visible = true
+		return
 	_status.text = UIStrings.t("term.status_error")
 	_status.add_theme_color_override("font_color", Palette.RED)
 	_output.text = message
@@ -623,6 +766,15 @@ func _process_finished(code: int) -> void:
 		# sconosciuto a successo.
 		code = _captured_exit_code()
 	_finished = true
+	if _is_cloud_pairing():
+		# L'evento semantico precede il report di uscita. Se manca, il processo
+		# non ha rispettato il protocollo e non può diventare un falso successo.
+		_consume_cloud_pairing_events()
+		if not _cloud_paired and not _cloud_terminal_event:
+			_cloud_set_status(UIStrings.t("cloud_pairing.failed"), Palette.RED)
+			_cloud_retry.visible = true
+		_refresh_setup()
+		return
 	if code == 0:
 		_status.text = UIStrings.t("term.status_login_done") if _is_login_flow() \
 				else UIStrings.t("term.status_cmd_done")
@@ -695,6 +847,9 @@ const AUTH_WAIT_MS := 30000
 const AUTH_POLL_S := 0.7
 
 func _complete() -> void:
+	if _is_cloud_pairing():
+		_check_cloud_pairing()
+		return
 	if not _is_login_flow():
 		_refresh_setup()
 		close()
@@ -756,6 +911,141 @@ func _refresh_setup() -> void:
 	var setup := get_node_or_null("/root/SetupService")
 	if setup != null and setup.has_method("refresh"):
 		setup.call("refresh")
+
+
+## Estrae soltanto frame completi. Il raw pipe non inserisce a capo quando la
+## pseudo-TTY manda a capo VISIVAMENTE un URL lungo, perciò è più affidabile
+## dello screen renderer a 120 colonne e non rischia link ricomposti male.
+static func _cloud_pairing_events(raw: String) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	var cursor := 0
+	while cursor < raw.length():
+		var marker := raw.find(CLOUD_UI_PREFIX, cursor)
+		if marker < 0:
+			break
+		var start := marker + CLOUD_UI_PREFIX.length()
+		var ending := raw.find("\n", start)
+		if ending < 0:
+			break  # frame ancora parziale: arriverà al prossimo giro
+		var parser := JSON.new()
+		var parse_error := parser.parse(
+				raw.substr(start, ending - start).strip_edges())
+		var parsed: Variant = parser.data if parse_error == OK else null
+		if parsed is Dictionary and str(parsed.get("event", "")) != "":
+			events.append(parsed)
+		cursor = ending + 1
+	return events
+
+
+func _consume_cloud_pairing_events() -> void:
+	var events := _cloud_pairing_events(_raw_bytes.get_string_from_utf8())
+	while _cloud_events_handled < events.size():
+		_handle_cloud_pairing_event(events[_cloud_events_handled])
+		_cloud_events_handled += 1
+
+
+func _handle_cloud_pairing_event(event: Dictionary) -> void:
+	match str(event.get("event", "")):
+		"ready":
+			var url := str(event.get("url", "")).strip_edges()
+			if not url.begins_with("https://") and not url.begins_with("http://"):
+				_cloud_terminal_event = true
+				_cloud_pairing_failed("cloud_pairing.failed")
+				return
+			_last_url = url
+			_cloud_link.text = url
+			_open_url.disabled = false
+			_copy_url.disabled = false
+			_cloud_check.disabled = false
+			_cloud_fallback.visible = false
+			_open_cloud_pairing_url()  # il browser è il percorso principale
+		"paired":
+			_cloud_paired = true
+			_cloud_terminal_event = true
+			_cloud_set_status(UIStrings.t("cloud_pairing.paired"), Palette.GREEN)
+			_cloud_check.disabled = true
+			_cloud_retry.visible = false
+			_refresh_setup()
+		"expired", "timeout":
+			_cloud_terminal_event = true
+			_cloud_pairing_failed("cloud_pairing.expired")
+		"already_used":
+			_cloud_terminal_event = true
+			_cloud_pairing_failed("cloud_pairing.already_used")
+		"network_retry":
+			_cloud_set_status(UIStrings.t("cloud_pairing.network_retry"), Palette.YELLOW)
+		"init_failed", "network_error", "invalid_response", "not_found", \
+				"poll_failed":
+			_cloud_terminal_event = true
+			_cloud_pairing_failed("cloud_pairing.failed")
+
+
+func _cloud_pairing_failed(key: String) -> void:
+	_cloud_set_status(UIStrings.t(key), Palette.RED)
+	_open_url.disabled = true
+	_cloud_check.disabled = true
+	_cloud_retry.visible = true
+	_cloud_fallback.visible = false
+
+
+func _cloud_set_status(message: String, color: Color) -> void:
+	if not is_instance_valid(_cloud_state):
+		return
+	_cloud_state.text = message
+	_cloud_state.add_theme_color_override("font_color", color)
+
+
+## Seam minuscolo per il selftest: in produzione è esattamente OS.shell_open,
+## che delega al browser predefinito su macOS, Windows e Linux.
+func _shell_open(uri: String) -> Error:
+	return OS.shell_open(uri)
+
+
+func _clipboard_set(text: String) -> void:
+	DisplayServer.clipboard_set(text)
+
+
+func _open_cloud_pairing_url() -> void:
+	if _last_url == "" or _open_url.disabled:
+		return
+	_cloud_browser_attempts += 1
+	var result := _shell_open(_last_url)
+	_open_url.text = UIStrings.t("cloud_pairing.open_again")
+	if result == OK:
+		_cloud_set_status(UIStrings.t("cloud_pairing.waiting"), Palette.YELLOW)
+		return
+	# OS.shell_open può dichiarare subito che nessuna app ha accettato l'URL.
+	# Dove il dispatch è asincrono (Linux/macOS), il toggle fallback resta
+	# comunque sempre visibile: un fallimento tardivo non intrappola l'utente.
+	_cloud_set_status(UIStrings.t("cloud_pairing.browser_failed"), Palette.RED)
+	_cloud_fallback.visible = true
+
+
+func _copy_cloud_pairing_url() -> void:
+	if _last_url == "":
+		return
+	_clipboard_set(_last_url)
+	_copy_url.text = UIStrings.t("term.copied")
+	await get_tree().create_timer(1.5).timeout
+	if is_instance_valid(_copy_url):
+		_copy_url.text = UIStrings.t("term.copy_link")
+
+
+func _check_cloud_pairing() -> void:
+	_consume_cloud_pairing_events()
+	_refresh_setup()
+	if _cloud_paired:
+		_cloud_set_status(UIStrings.t("cloud_pairing.paired"), Palette.GREEN)
+	elif not _cloud_terminal_event:
+		_cloud_set_status(UIStrings.t("cloud_pairing.waiting"), Palette.YELLOW)
+
+
+func _retry_cloud_pairing() -> void:
+	var prefer_google := bool(spec.get("prefer_google", true))
+	var setup := get_node_or_null("/root/SetupService")
+	close()
+	if setup != null and setup.has_method("open_cloud_login"):
+		setup.call_deferred("open_cloud_login", prefer_google)
 
 
 func _claim_process_for_close() -> int:

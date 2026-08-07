@@ -27,12 +27,12 @@ const RETIRED_ENTRIES = {
   'analytics/analytics.json': 'analytics',
 };
 
-function reportRetired(mancanti, verbo) {
+function reportRetired(mancanti) {
   if (mancanti.length === 0) return;
   const files = mancanti.map(rel => retiredStoreFile(RETIRED_ENTRIES[rel])).join(', ');
-  console.log(`  Non ${mancanti.length > 1 ? 'presenti' : 'presente'}: ${files}`);
-  console.log(`  ${mancanti.length > 1 ? 'Non vengono' : 'Non viene'} più ${mancanti.length > 1 ? 'prodotti' : 'prodotto'} da nessuno — ${mancanti.length > 1 ? 'li scriveva' : 'lo scriveva'} la vecchia`);
-  console.log(`  interfaccia testuale, rimossa il ${RETIRED_SINCE}. Non è un backup ${verbo}.`);
+  console.log(`  Missing: ${files}`);
+  console.log(`  ${mancanti.length > 1 ? 'These files are' : 'This file is'} no longer produced by any component.`);
+  console.log(`  ${mancanti.length > 1 ? 'They belonged' : 'It belonged'} to the retired text interface (${RETIRED_SINCE}), so this backup is complete.`);
 }
 
 async function fileExists(p) {
@@ -46,8 +46,8 @@ async function handleBackup(action, options) {
   if (action === 'list' || action === 'ls') return await listBackups();
   if (action === 'restore') return await restoreBackup(options);
 
-  console.error(`  Azione non valida: ${action}`);
-  console.error('  Azioni: create, list, restore');
+  console.error(`  Invalid action: ${action}`);
+  console.error('  Actions: create, list, restore');
   process.exitCode = 1;
 }
 
@@ -76,10 +76,10 @@ async function createBackup(options) {
   const manifest = { name, createdAt: new Date().toISOString(), files: count };
   await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8');
 
-  console.log(`\n  Backup creato: ${name}`);
-  console.log(`  File salvati: ${count}`);
-  console.log(`  Percorso: ${dir}\n`);
-  reportRetired(retiredMancanti, 'incompleto');
+  console.log(`\n  Backup created: ${name}`);
+  console.log(`  Files saved: ${count}`);
+  console.log(`  Path: ${dir}\n`);
+  reportRetired(retiredMancanti);
   if (retiredMancanti.length > 0) console.log('');
 }
 
@@ -88,11 +88,11 @@ async function listBackups() {
   const backups = entries.filter(e => e.startsWith('backup-')).sort().reverse();
 
   if (backups.length === 0) {
-    console.log('\n  Nessun backup trovato.\n');
+    console.log('\n  No backup found.\n');
     return;
   }
 
-  console.log(`\n  ${backups.length} backup disponibili:\n`);
+  console.log(`\n  ${backups.length} backups available:\n`);
   for (const b of backups) {
     const mPath = join(BACKUP_DIR, b, 'manifest.json');
     let detail = '';
@@ -110,15 +110,15 @@ async function listBackups() {
 async function restoreBackup(options) {
   const name = options.name;
   if (!name) {
-    console.error('  Opzione --name obbligatoria per restore');
-    console.error('  Esempio: jht backup restore --name backup-2026-04-04T12-00-00');
+    console.error('  Required --name option for restore');
+    console.error('  Example: jht backup restore --name backup-2026-04-04T12-00-00');
     process.exitCode = 1;
     return;
   }
 
   const dir = join(BACKUP_DIR, name);
   if (!(await fileExists(dir))) {
-    console.error(`  Backup non trovato: ${name}`);
+    console.error(`  Backup not found: ${name}`);
     process.exitCode = 1;
     return;
   }
@@ -135,24 +135,23 @@ async function restoreBackup(options) {
     count++;
   }
 
-  console.log(`\n  Backup ripristinato: ${name}`);
-  console.log(`  File ripristinati: ${count}\n`);
+  console.log(`\n  Backup restored: ${name}`);
+  console.log(`  Files restored: ${count}\n`);
 
   // Rimessi al loro posto, ma non rimessi in circolo: dirlo qui evita che
   // l'utente aspetti di rivederli comparire da qualche parte.
   if (retiredRipristinati.length > 0) {
     const files = retiredRipristinati.map(rel => retiredStoreFile(RETIRED_ENTRIES[rel])).join(', ');
-    console.log(`  Nota: ${files} ${retiredRipristinati.length > 1 ? 'sono stati riscritti' : 'è stato riscritto'} al loro posto, ma`);
-    console.log(`  nessuna schermata ${retiredRipristinati.length > 1 ? 'li' : 'lo'} legge più — ${retiredRipristinati.length > 1 ? 'li' : 'lo'} mostrava la vecchia interfaccia`);
-    console.log(`  testuale, rimossa il ${RETIRED_SINCE}.\n`);
+    console.log(`  Note: ${files} ${retiredRipristinati.length > 1 ? 'were' : 'was'} restored, but no screen reads ${retiredRipristinati.length > 1 ? 'them' : 'it'} anymore.`);
+    console.log(`  The retired text interface was removed on ${RETIRED_SINCE}.\n`);
   }
 }
 
 export function registerBackupCommand(program) {
   program
     .command('backup [action]')
-    .description('Gestione backup (azioni: create, list, restore)')
-    .option('-l, --label <label>', 'etichetta per il backup')
-    .option('-n, --name <name>', 'nome backup da ripristinare')
+    .description('Manage backups (actions: create, list, restore)')
+    .option('-l, --label <label>', 'label for backup')
+    .option('-n, --name <name>', 'backup name to restore')
     .action(handleBackup);
 }

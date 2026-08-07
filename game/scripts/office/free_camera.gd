@@ -34,7 +34,10 @@ func _ready() -> void:
 	var vp := get_viewport_rect().size
 	_zoom_min = maxf(vp.x / world.size.x, vp.y / world.size.y)
 	zoom = Vector2(_zoom_min, _zoom_min)
-	position = world.get_center()
+	# La box include molto vuoto decorativo a nord; centrarla tagliava le
+	# postazioni meridionali nel primo frame normale. Il pavimento e' invece
+	# il perimetro operativo: il suo centro conserva tutto il roster visibile.
+	position = FurnitureDefs.FLOOR.get_center()
 	make_current()
 	# TEST-AUTO: JHT_ZOOM_TEST=<factor> spara un pinch sintetico al boot,
 	# così lo screenshot dimostra che la magnify gesture zooma davvero.

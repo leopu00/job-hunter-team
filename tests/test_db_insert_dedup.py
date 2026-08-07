@@ -522,7 +522,7 @@ class TestMigrazioneConDuplicatiPreesistenti:
 
         perdente = conn.execute("SELECT url, notes FROM positions WHERE id = ?", (secondo,)).fetchone()
         assert perdente['url'].split('#', 1)[0] == url
-        assert 'duplicato' in (perdente['notes'] or '').lower(), perdente['notes']
+        assert 'duplicate' in (perdente['notes'] or '').lower(), perdente['notes']
 
     def test_lo_spostamento_finisce_nel_log(self, tmp_path, monkeypatch):
         """Su un DB di un utente vero deve restare una traccia leggibile."""
@@ -707,7 +707,7 @@ def test_check_url_non_confonde_un_id_col_suo_prolungamento(tmp_path, monkeypatc
         [("Altro annuncio", "ACME",
           "https://www.linkedin.com/jobs/view/43814702861", "new")],
         "4381470286")
-    assert "NON TROVATA" in out, (
+    assert "NOT FOUND" in out, (
         "4381470286 non e' 43814702861: un TROVATA qui fa saltare allo Scout "
         "un annuncio nuovo")
 
@@ -718,7 +718,7 @@ def test_check_url_trova_ancora_lid_giusto(tmp_path, monkeypatch):
         [("Annuncio", "ACME",
           "https://www.linkedin.com/jobs/view/43814702861", "new")],
         "43814702861")
-    assert "TROVATA" in out and "NON TROVATA" not in out
+    assert "FOUND" in out and "NOT FOUND" not in out
 
 
 def test_check_url_ignora_un_id_altrui_in_query_string(tmp_path, monkeypatch):
@@ -728,5 +728,5 @@ def test_check_url_ignora_un_id_altrui_in_query_string(tmp_path, monkeypatch):
           "https://www.linkedin.com/jobs/view/1111111111?currentJobId=4381470286",
           "new")],
         "4381470286")
-    assert "NON TROVATA" in out, (
+    assert "NOT FOUND" in out, (
         "l'id sta nella query string, non nel path: non e' quell'annuncio")

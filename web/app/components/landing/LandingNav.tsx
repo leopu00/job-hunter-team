@@ -194,12 +194,12 @@ export default function LandingNav() {
             {t("nav_project")}
           </Link>
           <Link
-            href="/tutorials"
-            aria-current={currentPage("/tutorials")}
+            href="/setup-guide"
+            aria-current={currentPage("/setup-guide")}
             className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/tutorials")}
+            style={navLinkStyle("/setup-guide")}
           >
-            {t("nav_tutorials")}
+            {t("nav_get_started")}
           </Link>
           <Link
             href="/case-studies"
@@ -349,13 +349,13 @@ export default function LandingNav() {
             {t("nav_project")}
           </Link>
           <Link
-            href="/tutorials"
-            aria-current={currentPage("/tutorials")}
+            href="/setup-guide"
+            aria-current={currentPage("/setup-guide")}
             onClick={() => setMobileOpen(false)}
             className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/tutorials")}
+            style={navLinkStyle("/setup-guide")}
           >
-            {t("nav_tutorials")}
+            {t("nav_get_started")}
           </Link>
           <Link
             href="/case-studies"

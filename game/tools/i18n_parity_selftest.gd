@@ -2,10 +2,11 @@ extends SceneTree
 ## Self-test headless della parità fra le 7 lingue dell'interfaccia.
 ## Esecuzione: godot --headless --path game --script res://tools/i18n_parity_selftest.gd
 ##
-## UIStrings.t() fa fallback SILENZIOSO sull'italiano: una chiave mancante in
-## ui_de.gd non è un errore a runtime, è una riga italiana in mezzo a un
-## pannello tedesco. È il modo peggiore di rompersi — nessun log, nessun crash,
-## solo un utente che smette di fidarsi. Il drift si era già formato una volta
+## UIStrings.t() deve fare fallback SILENZIOSO sull'inglese: una chiave mancante
+## in ui_de.gd non è un errore a runtime e non deve diventare una riga italiana
+## in mezzo a un pannello tedesco. È il modo peggiore di rompersi — nessun log,
+## nessun crash, solo un utente che smette di fidarsi. Il drift si era già
+## formato una volta
 ## (EN a 471 chiavi su 624, le altre cinque a 327): questo test è il gate che
 ## impedisce che si riformi.
 ##
@@ -54,9 +55,49 @@ const ROLE_NAME_SURFACES := {
 ## che contiene parole. Simboli e separatori ("✕", "↑", "· ") restano leciti —
 ## non si traducono e obbligarli a passare dal dizionario sarebbe rumore.
 const LITERAL_FREE_SURFACES := [
+	"res://scripts/game.gd",
 	"res://scripts/setup/scripted_onboarding.gd",
 	"res://scripts/ui/embedded_terminal.gd",
 ]
+
+## Frasi che erano visibili solo per pochi frame o in una vignetta live e non
+## passavano da `.text =`, quindi lo scanner generico non poteva intercettarle.
+## Restano qui come regressione negativa: nei sorgenti runtime non devono più
+## ricomparire, nemmeno come fallback del tour.
+const P0_FORBIDDEN_ITALIAN := {
+	"res://scripts/backend/local_backend.gd": ["collegamento al container locale"],
+	"res://scripts/backend/backend_bus.gd": ["container locale non disponibile"],
+	"res://scripts/backend/vps_backend.gd": ["container jht non in esecuzione"],
+	"res://scripts/characters/agent_npc.gd": ["MESSAGGIO DA "],
+	"res://scripts/office/office.gd": [
+		"MESSAGGIO PER TE", "Nuova posizione:", "CV in scrittura:",
+		"posizione #%s", "Per domande libere e personali collega un provider",
+	],
+	"res://scripts/setup/tour_guide.gd": [
+		"Questo è il reparto", "Il Ricercatore", "L'Analista", "Il Coordinatore",
+	],
+	"res://scripts/setup/setup_service.gd": [
+		"Account e cloud", "Apri il link, scegli ACCEDI CON GOOGLE",
+		"Apri il link, accedi all'account", "Provider selezionato: ",
+		"Abbonamento registrato", '_progress("container", "Avvio di Docker in corso',
+		"Controllo aggiornamenti del team", "Scarico l'immagine del team",
+		"MB scaricati", "Container JHT attivo",
+		"Docker Desktop avviato: attendo il motore",
+		"Colima avviato: attendo il motore",
+		"Console di login aperta dentro Job Hunter Team",
+		"Apri il link mostrato, accedi a ChatGPT",
+		"Nel prompt Kimi digita /login", "Nel menu Claude scegli",
+		"Team avviato: gli agenti arriveranno in ufficio",
+		"operazione in corso…",
+		"Chiave pubblica assente: genera prima", "Setup VPS fallito:",
+		"Snapshot sorgente fallito:", "Token BotFather non valido per",
+		"Salvataggio email fallito:",
+	],
+	"res://scripts/ui/game_sidebar.gd": ["Chiudi il menu"],
+	"res://scripts/ui/agent_usage_view.gd": ["uso agenti simulato"],
+	"res://scripts/ui/pipeline_queue_panel.gd": ["TROVATA DA", "VERDETTO"],
+	"res://scripts/ui/output_archive_panel.gd": ["VOTO CRITICO"],
+}
 
 var _failures: Array[String] = []
 ## I dizionari tradotti già caricati da _check_lang, per non rileggerli.
@@ -68,9 +109,15 @@ func _init() -> void:
 	_check("dizionario italiano non vuoto", not it.is_empty(), "UIStrings.S è vuoto")
 	for lang in LANGS:
 		_check_lang(lang, it)
+	_check_english_fallback()
 	_check_keys_used_in_sources(it)
 	_check_role_names(it)
+	_check_hours_day_labels(it)
+	_check_demo_position_titles(it)
+	_check_mock_data_localization(it)
+	_check_runtime_english_presentation()
 	_check_no_hardcoded_labels()
+	_check_p0_english_surfaces()
 	if _failures.is_empty():
 		print("I18N-PARITY-TEST PASS (%d chiavi × %d lingue)" % [it.size(), LANGS.size() + 1])
 		quit(0)
@@ -79,6 +126,130 @@ func _init() -> void:
 		push_error("[i18n-test] " + failure)
 	print("I18N-PARITY-TEST FAIL (%d problemi)" % _failures.size())
 	quit(1)
+
+
+## Il registro applicazioni offline è una superficie pubblica: conserva gli
+## indici del dataset sintetico, ma risolve il titolo soltanto in presentazione.
+## Due titoli italiani sono già finiti in uno screenshot inglese reale; questo
+## controllo impedisce sia il ritorno dei literal sia un catalogo EN copiato.
+func _check_demo_position_titles(it: Dictionary) -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/data/demo_positions.gd")
+	_check("titoli demo risolti via i18n",
+			source.contains('var title_key := "dept.demo.role.%d.title"')
+			and source.contains("UIStrings.t(title_key)"),
+			"DemoPositions.build() non risolve più i titoli dal catalogo")
+	var english: Dictionary = _dicts.get("en", {})
+	for n in [1, 2, 3, 4, 6, 7, 8, 9, 23, 25, 38, 39]:
+		var key := "dept.demo.role.%d.title" % n
+		_check("titolo demo presente: " + key, it.has(key) and english.has(key), key)
+		if it.has(key) and english.has(key):
+			_check("titolo demo inglese reale: " + key,
+					str(it[key]) != str(english[key]), str(english[key]))
+
+
+## La sorgente offline è il default di TeamData prima del collegamento live:
+## candidature, attività e impostazioni devono localizzare copie, senza mutare
+## le costanti che fissano ID e ordine del dataset sintetico.
+func _check_mock_data_localization(it: Dictionary) -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/data/mock_data_source.gd")
+	for seam in ["APPLICATION_TITLE_KEYS", 'row["title"] = _t(',
+			'row["text"] = _t("dept.mock.activity.', "SETTINGS_LABEL_KEYS",
+			"SETTINGS_VALUE_KEYS", 'var pair: Array = source[i].duplicate()']:
+		_check("MockDataSource localizza copie: " + seam,
+				source.contains(seam), "seam assente")
+	var english: Dictionary = _dicts.get("en", {})
+	for key in ["dept.mock.application.1.title", "dept.mock.activity.scout.1.text",
+			"dept.mock.setting.profile.candidate", "dept.mock.setting.language.interface_value"]:
+		_check("mock key presente: " + key, it.has(key) and english.has(key), key)
+		if it.has(key) and english.has(key):
+			_check("mock inglese reale: " + key,
+					str(it[key]) != str(english[key]), str(english[key]))
+
+
+func _check_runtime_english_presentation() -> void:
+	var previous := UIStrings.lang
+	UIStrings.lang = "en"
+	var mock := MockDataSource.new()
+	var notifications: Array = mock.get_notifications()
+	_check("notification when localizzato a runtime", notifications.size() == 4
+			and notifications[0]["when"] == "5 min ago"
+			and notifications[1]["when"] == "1 h ago"
+			and notifications[3]["when"] == "yesterday", str(notifications))
+	var snapshot := UIStrings.vps_presentation_snapshot()
+	for key in ["vps.upload.file_missing", "vps.upload.file_too_large",
+			"vps.response_unreadable", "vps.artifact.path_outside",
+			"vps.ticket.position_missing", "vps.ssh.failed",
+			"vps.terminal.invalid_session", "vps.terminal.history_heading",
+			"vps.coordinator.unreadable", "vps.burn.unreadable",
+			"vps.chat.agent_busy", "vps.activity.working",
+			"vps.activity.session_unobserved", "vps.activity.throttled",
+			"vps.transport.temp_unwritable", "vps.transport.temp_unreadable",
+			"vps.transport.ssh_unavailable", "vps.transport.docker_timeout"]:
+		_check("snapshot VPS inglese: " + key,
+				snapshot.has(key) and str(snapshot[key]) != key, str(snapshot))
+	var vps_source := FileAccess.get_file_as_string("res://scripts/backend/vps_backend.gd")
+	var bus_source := FileAccess.get_file_as_string("res://scripts/backend/backend_bus.gd")
+	_check("fallback worker SSH inglese",
+			vps_source.contains('"vps.ssh.failed": "SSH failed (exit %s)"')
+			and vps_source.contains('_ui_text(labels, "vps.ssh.failed") % res["code"]'),
+			"fallback statico EN mancante")
+	_check("filename payload stabile e non localizzato",
+			vps_source.contains('return out if out != "" else "document"')
+			and not vps_source.contains('else UIStrings.t("common.document")'),
+			"_safe_filename deve restare indipendente dalla lingua")
+	for seam in ["UIStrings.vps_presentation_snapshot()",
+			'_ui_text(labels, "vps.upload.file_missing")',
+			'_ui_text(labels, "vps.upload.file_too_large")',
+			'err = _present_error(str(d.get("error", "")), labels)',
+			'_ui_text(labels, "vps.ssh.failed")']:
+		_check("propagazione VPS localizzata: " + seam, vps_source.contains(seam), seam)
+	_check("worker VPS non carica cataloghi lazy",
+			not vps_source.contains('UIStrings.t("vps.upload.')
+			and not vps_source.contains('UIStrings.t("vps.response_unreadable")'),
+			"UIStrings.t non deve essere chiamato dal worker")
+	var upload_worker := vps_source.get_slice("func _do_upload_document", 1).get_slice("\nfunc ", 0)
+	_check("upload worker usa solo snapshot già risolto",
+			not upload_worker.contains("UIStrings."), upload_worker.left(240))
+	for literal in ["chiave SSH non trovata", "client OpenSSH non installato",
+			"chiave host SSH non disponibile", "known-hosts non scrivibile",
+			"errore fingerprint SSH", "handshake ssh con"]:
+		_check("connessione VPS senza leak italiano: " + literal,
+				not vps_source.contains('"' + literal), literal)
+	_check("fallback BackendBus localizzato",
+			not bus_source.contains('"backend non collegato"')
+			and bus_source.contains('UIStrings.t("common.backend_not_connected")'),
+			"i segnali visibili non devono propagare il literal italiano")
+	var local_source := FileAccess.get_file_as_string("res://scripts/backend/local_backend.gd")
+	_check("snapshot runtime risolto sul main thread",
+			vps_source.contains("_runtime_labels = UIStrings.vps_presentation_snapshot()")
+			and local_source.contains("_runtime_labels = UIStrings.vps_presentation_snapshot()"),
+			"entrambi i backend devono catturare le etichette prima del thread")
+	for seam in ['_terminal_result(agent, "", "nome sessione tmux non valido")',
+			'content = "… output precedente omesso',
+			'else "stato coordinatore non leggibile"',
+			'false, "direttiva non valida")', 'false, "id non valido")',
+			'else "stato della deroga non leggibile"',
+			'_chat_sent(agent, false, "file temporaneo non scrivibile")',
+			'var reason := "l\'agente è occupato',
+			'{"ok": false, "error": "ruolo non valido"}',
+			'detail = "pacing: pausa temporizzata"']:
+		_check("sink VPS senza literal italiano: " + seam.left(36),
+				not vps_source.contains(seam), seam)
+	_check("activity detail localizzato al confine UI",
+			vps_source.contains("var detail := _activity_detail(")
+			and vps_source.contains('detail = _activity_detail("pacing: pausa temporizzata"'),
+			"lo stato interno deve restare stabile ma la presentazione va tradotta")
+	var short_without_labels := RegEx.create_from_string(
+			"_short_error\\([^,\\n\\)]*\\)")
+	_check("tutti i worker propagano lo snapshot a _short_error",
+			short_without_labels.search(vps_source) == null,
+			"nessun call site worker deve ricadere sul fallback senza catalogo")
+	for sentinel in ["file temporaneo non scrivibile", "file temporaneo non leggibile",
+			"client OpenSSH non avviabile", "processo docker non avviabile",
+			"processo locale non avviabile"]:
+		_check("sentinella trasporto mappata: " + sentinel,
+				vps_source.contains('"' + sentinel + '": "vps.transport.'), sentinel)
+	UIStrings.lang = previous
 
 
 func _check(name: String, condition: bool, detail: String = "") -> void:
@@ -123,6 +294,16 @@ func _check_lang(lang: String, it: Dictionary) -> void:
 			"%d vuoti: %s" % [empty.size(), _head(empty)])
 	_check("%s: segnaposto printf" % lang, bad_format.is_empty(),
 			"%d incompatibili: %s" % [bad_format.size(), _head(bad_format)])
+
+
+## Il gate di parità rende rara una chiave mancante, ma il fallback è una rete
+## di sicurezza runtime. Le costanti dei cataloghi sono read-only, quindi il
+## lookup puro viene provato con un catalogo DE sintetico privo della chiave.
+func _check_english_fallback() -> void:
+	var key := "common.loading"
+	_check("fallback runtime inglese",
+			UIStrings._translated(key, "de", {
+				"de": {}, "en": {key: "LOADING…"}}) == "LOADING…")
 
 
 ## La sequenza dei segnaposto printf, nell'ordine in cui compaiono: "%s" e "%d"
@@ -252,6 +433,24 @@ func _check_role_names(it: Dictionary) -> void:
 				% ROLE_NAME_SURFACES[path])
 
 
+## Le chiavi mon…sun sono il contratto persistito e non vanno tradotte; soltanto
+## le sette etichette dei pulsanti dipendono dalla lingua. Questa verifica evita
+## sia il ritorno delle iniziali italiane in inglese sia un refactor accidentale
+## del formato salvato per correggere un difetto puramente visivo.
+func _check_hours_day_labels(it: Dictionary) -> void:
+	var path := "res://scripts/ui/section_panel.gd"
+	var src := FileAccess.get_file_as_string(path)
+	_check("section_panel.gd leggibile per audit giorni", src != "")
+	for day: String in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+		var key: String = "hours.day_" + day
+		_check("etichetta %s presente" % day, it.has(key), key)
+		_check("giorno %s usa una chiave i18n" % day,
+				src.contains('["%s", "%s"]' % [day, key]), key)
+	_check("pulsanti giorni tradotti a runtime",
+			src.contains("toggle.text = UIStrings.t(str(day_def[1]))"),
+			"toggle.text non passa più da UIStrings.t")
+
+
 ## Nessuna frase scritta a mano nelle superfici dichiarate sopra.
 ##
 ## Si legge la riga intera dopo `.text =` (o `+=`), non solo il primo letterale:
@@ -291,6 +490,20 @@ func _check_no_hardcoded_labels() -> void:
 		_check("%s senza etichette scritte a mano" % path.get_file(), found.is_empty(),
 				"%d letterali assegnati a .text/.tooltip_text/.placeholder_text: %s"
 				% [found.size(), _head(found)])
+
+
+func _check_p0_english_surfaces() -> void:
+	for path: String in P0_FORBIDDEN_ITALIAN:
+		var src := FileAccess.get_file_as_string(path)
+		_check("%s leggibile per audit P0" % path.get_file(), src != "")
+		var runtime_lines: PackedStringArray = []
+		for line in src.split("\n"):
+			if not line.strip_edges().begins_with("#"):
+				runtime_lines.append(line)
+		var runtime_src := "\n".join(runtime_lines)
+		for forbidden: String in P0_FORBIDDEN_ITALIAN[path]:
+			_check("%s senza fallback italiano P0" % path.get_file(),
+					not runtime_src.contains(forbidden), forbidden)
 
 
 func _gd_files(dir_path: String) -> PackedStringArray:

@@ -84,9 +84,9 @@ describe("jht cloud claim", () => {
     const claim = cloud?.commands.find((command) => command.name() === "claim");
 
     expect(claim).toBeDefined();
-    expect(claim?.description()).toContain("claim del team");
+    expect(claim?.description()).toContain("team claim");
     expect(claim?.helpInformation()).toContain("--force");
-    expect(claim?.helpInformation()).toContain("invalida i cursor");
+    expect(claim?.helpInformation()).toContain("invalidate previous local cursors");
   });
 
   it("senza --force lascia intatto un claim fresco e spiega il takeover", async () => {
@@ -145,8 +145,8 @@ describe("jht cloud claim", () => {
     expect(CURSOR_FILES.every((file) => !existsSync(join(home, file)))).toBe(true);
     expect(process.exitCode).toBeUndefined();
     expect(outputOf(stdout)).toContain("device-nuovo");
-    expect(outputOf(stdout)).toContain("Device precedente evicted: device-vecchio");
-    expect(outputOf(stdout)).toContain("Cursor locali invalidati: 4");
-    expect(outputOf(stdout)).toContain("prossimo sync ripartira' senza cursor precedenti");
+    expect(outputOf(stdout)).toContain("Previous device evicted: device-vecchio");
+    expect(outputOf(stdout)).toContain("Local cursors invalidated: 4");
+    expect(outputOf(stdout)).toContain("next sync will start without previous cursors");
   });
 });

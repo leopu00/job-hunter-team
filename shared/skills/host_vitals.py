@@ -192,7 +192,7 @@ def summarize(path=None, hours=24):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Vitals RAM/CPU del container")
+    ap = argparse.ArgumentParser(description="Container RAM/CPU vitals")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sp = sub.add_parser("sample"); sp.add_argument("--file", default=None)
     sub.add_parser("current")
@@ -213,11 +213,11 @@ def main():
         print("OK")
     elif args.cmd == "summary":
         s = summarize(args.file, args.hours)
-        print(f"VITALS ultime {s['window_h']}h ({s['samples']} campioni):")
-        print(f"  CPU: media {s['cpu_avg']}%  picco {s['cpu_max']}% @ {s['cpu_peak_ts']}")
-        print(f"  RAM: media {s['mem_avg']}%  picco {s['mem_max']}% @ {s['mem_peak_ts']}")
+        print(f"VITALS last {s['window_h']}h ({s['samples']} samples):")
+        print(f"  CPU: average {s['cpu_avg']}%  peak {s['cpu_max']}% @ {s['cpu_peak_ts']}")
+        print(f"  RAM: average {s['mem_avg']}%  peak {s['mem_max']}% @ {s['mem_peak_ts']}")
         if s["swap_max"] is not None:
-            print(f"  SWAP picco {s['swap_max']}%")
+            print(f"  SWAP peak {s['swap_max']}%")
         print(json.dumps(s))
 
 

@@ -118,7 +118,7 @@ def cmd_status():
 
 def cmd_reset():
     write_cursor(0)
-    print("[bridge_mailbox] cursor reset to 0 (next drain rileggerà tutto)")
+    print("[bridge_mailbox] cursor reset to 0 (the next drain will read everything again)")
 
 
 def main():
@@ -133,7 +133,7 @@ def main():
     elif cmd == "reset":
         cmd_reset()
     else:
-        print(__doc__)
+        print("usage: bridge_mailbox.py [drain|peek|status|reset]")
         sys.exit(2)
 
 

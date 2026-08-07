@@ -233,14 +233,14 @@ def test_verdict_sotto_75_e_ok(cu, usage):
 def test_verdict_fra_75_e_87_e_attenzione(cu, usage):
     v = cu.compute_verdict(usage)
     assert v.startswith("🟠")
-    assert "niente spawn extra" in v
+    assert "no extra spawning" in v
 
 
 @pytest.mark.parametrize("usage", [88, 95, 100, 140])
 def test_verdict_da_88_in_su_e_critico(cu, usage):
     v = cu.compute_verdict(usage)
     assert v.startswith("🔴")
-    assert "freeza" in v
+    assert "freeze" in v
 
 
 @pytest.mark.parametrize("usage", [None, "42", [], {}])

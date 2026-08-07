@@ -552,7 +552,7 @@ export function sendToPane(agent, text, { spawnFn = spawn, timeoutMs = DELIVER_T
     };
     const timer = setTimeout(() => {
       try { child.kill('SIGKILL'); } catch { /* già morto */ }
-      done(-1, `timeout dopo ${timeoutMs}ms`);
+      done(-1, `timed out after ${timeoutMs}ms`);
     }, timeoutMs);
     child.stderr?.on('data', (d) => { stderr += d.toString(); });
     child.on('error', (err) => { clearTimeout(timer); done(-1, err.message); });
@@ -703,7 +703,7 @@ export async function deliverPendingUserTurns(
       failed += 1;
       log(
         'warn',
-        `chat: consegna a ${tmuxSessionFor(row.agent)} fallita (exit ${res.code}): ${res.error} — ritento al prossimo giro`,
+        `chat: delivery to ${tmuxSessionFor(row.agent)} failed (exit ${res.code}): ${res.error} — the next round`,
       );
       // Un pane morto blocca solo la SUA coda: gli altri agenti proseguono.
       continue;
@@ -797,7 +797,7 @@ export function diagnoseChatLane({
   };
   // La stessa frase in coda a ogni segnalazione: dice PERCHÉ importa, che
   // è l'informazione che mancava a chi guardava i log del 24/07.
-  const tail = "l'utente vede il messaggio come inviato e aspetta una risposta che non può arrivare";
+  const tail = 'the user sees the message as sent and waits for a reply that cannot arrive';
 
   if (pending && !canRead) {
     const waitingMs = waitedSince(requestedAt);
@@ -805,10 +805,10 @@ export function diagnoseChatLane({
       reason: 'no-inbound-channel',
       count: 0,
       waitingMs,
-      summary: 'chat: turni scritti dal web non ritirabili (nessun canale di lettura verso il cloud)',
+      summary: 'chat: web turns cannot be retrieved (no cloud read channel)',
       message:
-        `chat: il web ha turni in attesa da ${formatWaited(waitingMs)} e questo box non ha modo di ritirarli ` +
-        `(nessun canale di lettura verso il cloud) — ${tail}`,
+        `chat: web turns have been waiting for ${formatWaited(waitingMs)} and this machine cannot retrieve them ` +
+        `(no cloud read channel) — ${tail}`,
     };
   }
 
@@ -818,10 +818,10 @@ export function diagnoseChatLane({
       reason: 'inbound-read-failed',
       count: 0,
       waitingMs,
-      summary: `chat: lettura dei turni dal cloud fallita (${String(readError).slice(0, 160)})`,
+      summary: `chat: failed to read user turns from the cloud (${String(readError).slice(0, 160)})`,
       message:
-        `chat: lettura dei turni dal cloud fallita (${String(readError).slice(0, 160)}), ` +
-        `in attesa da ${formatWaited(waitingMs)} — ${tail}`,
+        `chat: failed to read user turns from the cloud (${String(readError).slice(0, 160)}), ` +
+        `waiting for ${formatWaited(waitingMs)} — ${tail}`,
     };
   }
 
@@ -829,15 +829,15 @@ export function diagnoseChatLane({
     const waitingMs = waitedSince(oldestQueuedAt);
     if (waitingMs >= graceMs) {
       const why = deliverFailed > 0
-        ? `${deliverFailed} consegne al pane fallite in questo giro`
-        : 'nessuna consegna riuscita';
+        ? `${deliverFailed} failed pane deliveries in this cycle`
+        : 'no successful deliveries';
       return {
         reason: 'delivery-stuck',
         count: queued,
         waitingMs,
-        summary: `chat: ${queued} turni dell'utente non consegnati all'agente`,
+        summary: `chat: ${queued} user turns not delivered to the agent`,
         message:
-          `chat: ${queued} turni dell'utente fermi da ${formatWaited(waitingMs)} senza arrivare al pane ` +
+          `chat: ${queued} user turns have been stuck for ${formatWaited(waitingMs)} without reaching the pane ` +
           `(${why}) — ${tail}`,
       };
     }

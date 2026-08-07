@@ -76,8 +76,18 @@ const APPLICATIONS := [
 	{"title": "Account Manager", "company": "Chiaroscuro Media", "score": 61, "stage": 0},
 ]
 
+const APPLICATION_TITLE_KEYS := [
+	"dept.mock.application.1.title", "dept.mock.application.2.title",
+	"dept.mock.application.3.title", "dept.mock.application.4.title",
+]
+
 func get_applications() -> Array:
-	return APPLICATIONS
+	var out: Array = []
+	for i in APPLICATIONS.size():
+		var row: Dictionary = APPLICATIONS[i].duplicate(true)
+		row["title"] = _t(APPLICATION_TITLE_KEYS[i], str(row["title"]))
+		out.append(row)
+	return out
 
 func get_streak() -> Dictionary:
 	return {"days": 5, "freezes": 1}
@@ -119,7 +129,15 @@ const ACTIVITY := {
 }
 
 func get_agent_activity(slug: String) -> Array:
-	return ACTIVITY.get(slug, [])
+	var source: Array = ACTIVITY.get(slug, [])
+	var out: Array = []
+	for i in source.size():
+		var row: Dictionary = source[i].duplicate(true)
+		row["text"] = _t("dept.mock.activity.%s.%d.text" % [slug, i + 1],
+				str(row["text"]))
+		row["when"] = _localized_relative_time(str(row["when"]))
+		out.append(row)
+	return out
 
 func get_usage() -> Dictionary:
 	return {
@@ -171,6 +189,8 @@ func _localized_rows(source: Array, kind: String) -> Array:
 	for i in source.size():
 		var row: Dictionary = source[i].duplicate()
 		row["text"] = _t("dept.mock.%s.%d" % [kind, i + 1], str(row["text"]))
+		if row.has("when"):
+			row["when"] = _localized_relative_time(str(row["when"]))
 		out.append(row)
 	return out
 
@@ -178,6 +198,18 @@ func _localized_rows(source: Array, kind: String) -> Array:
 func _t(key: String, fallback: String) -> String:
 	var translated := UIStrings.t(key)
 	return fallback if translated == key else translated
+
+
+func _localized_relative_time(raw: String) -> String:
+	if raw == "ieri":
+		return _t("time.yesterday", "yesterday")
+	var parts := raw.split(" ", false)
+	if parts.size() == 3 and parts[0].is_valid_int() and parts[2] == "fa":
+		var key := "time.minutes_ago" if parts[1] == "min" else \
+				"time.hours_ago" if parts[1] == "h" else ""
+		if key != "":
+			return _t(key, raw) % int(parts[0])
+	return raw
 
 const SETTINGS := {
 	"profile": [
@@ -232,5 +264,60 @@ const SETTINGS := {
 	],
 }
 
+const SETTINGS_LABEL_KEYS := {
+	"profile": ["dept.mock.setting.profile.candidate", "prof.target_role",
+		"dept.mock.setting.profile.priority_city", "dept.mock.setting.profile.seniority",
+		"dept.mock.setting.profile.languages", "dept.mock.setting.profile.work_authorization"],
+	"hours": ["dept.mock.setting.hours.activity", "dept.mock.setting.hours.days",
+		"dept.mock.setting.hours.pacing", "dept.mock.setting.hours.hard_stop"],
+	"provider": ["side.provider", "dept.mock.setting.provider.api_key",
+		"dept.mock.setting.provider.tier", "dept.mock.setting.provider.fallback"],
+	"docker": ["setup.container", "dept.mock.setting.docker.image", "account.status",
+		"dept.mock.setting.docker.uptime", "dept.mock.setting.docker.health"],
+	"account": ["prof.email", "dept.mock.setting.account.plan",
+		"dept.mock.setting.account.cloud_sync", "dept.mock.setting.account.last_sync"],
+	"email": ["dept.mock.setting.email.team_inbox", "dept.mock.setting.email.monitor",
+		"dept.mock.setting.email.processed_today", "dept.mock.setting.email.last_email"],
+	"language": ["dept.mock.setting.language.interface", "dept.mock.setting.language.cv",
+		"dept.mock.setting.language.available"],
+	"advanced": ["dept.mock.setting.advanced.log_level",
+		"dept.mock.setting.advanced.telemetry",
+		"dept.mock.setting.advanced.experimental_flags",
+		"dept.mock.setting.advanced.data_folder"],
+}
+
+const SETTINGS_VALUE_KEYS := {
+	"profile": {0: "dept.mock.setting.profile.candidate_value",
+		2: "dept.mock.setting.profile.priority_city_value",
+		3: "dept.mock.setting.profile.seniority_value",
+		5: "dept.mock.setting.profile.work_authorization_value"},
+	"hours": {1: "dept.mock.setting.hours.days_value",
+		2: "dept.mock.setting.hours.pacing_value", 3: "common.enabled"},
+	"provider": {1: "common.configured", 2: "common.standard"},
+	"docker": {2: "common.running", 3: "dept.mock.setting.docker.uptime_value",
+		4: "common.healthy"},
+	"account": {2: "common.enabled"},
+	"email": {1: "common.enabled"},
+	"language": {0: "dept.mock.setting.language.interface_value",
+		1: "dept.mock.setting.language.cv_value"},
+	"advanced": {1: "common.off"},
+}
+
 func get_settings() -> Dictionary:
-	return SETTINGS
+	var out := {}
+	for section: String in SETTINGS:
+		var source: Array = SETTINGS[section]
+		var labels: Array = SETTINGS_LABEL_KEYS[section]
+		var value_keys: Dictionary = SETTINGS_VALUE_KEYS.get(section, {})
+		var rows: Array = []
+		for i in source.size():
+			var pair: Array = source[i].duplicate()
+			pair[0] = _t(str(labels[i]), str(pair[0]))
+			var raw_value := str(pair[1])
+			if value_keys.has(i):
+				pair[1] = _t(str(value_keys[i]), raw_value)
+			else:
+				pair[1] = _localized_relative_time(raw_value)
+			rows.append(pair)
+		out[section] = rows
+	return out

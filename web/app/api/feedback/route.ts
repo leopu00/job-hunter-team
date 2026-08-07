@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { dispatchFeedback } from "@/lib/feedback-dispatch";
 import { redact } from "@/lib/redact";
 import {
   MAX_BODY_BYTES,
   emailSubject,
   emailText,
-  issueBody,
-  issueTitle,
   newTicket,
   parseReport,
   sembraSpam,
@@ -37,8 +36,6 @@ export const runtime = "nodejs";
  *  più, e un abuso automatico si ferma qui invece che sull'issue tracker. */
 const MAX_PER_HOUR = 5;
 
-const REPO = process.env.JHT_FEEDBACK_REPO || "leopu00/job-hunter-team";
-const GITHUB_TOKEN = process.env.JHT_FEEDBACK_GITHUB_TOKEN || "";
 const WEBHOOK_URL = process.env.JHT_FEEDBACK_WEBHOOK_URL || "";
 const SUPPORT_EMAIL = process.env.JHT_SUPPORT_EMAIL || "";
 const RESEND_KEY = process.env.RESEND_API_KEY || "";
@@ -88,38 +85,6 @@ function clientIp(req: NextRequest): string {
   const forwarded = req.headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0].trim();
   return req.headers.get("x-real-ip")?.trim() || "unknown";
-}
-
-async function openIssue(
-  report: Report,
-  ticket: string,
-): Promise<string | null> {
-  if (!GITHUB_TOKEN) return null;
-  try {
-    const res = await fetch(`https://api.github.com/repos/${REPO}/issues`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${GITHUB_TOKEN}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        title: issueTitle(report),
-        body: issueBody(report, ticket),
-        labels: ["bug", "triage", "in-app"],
-      }),
-    });
-    if (!res.ok) {
-      console.error("[feedback] GitHub ha risposto", res.status);
-      return null;
-    }
-    const data = (await res.json()) as { number?: number };
-    return data.number ? `#${data.number}` : null;
-  } catch (err) {
-    console.error("[feedback] issue non creata:", err);
-    return null;
-  }
 }
 
 /**
@@ -193,21 +158,35 @@ export async function POST(req: NextRequest) {
   const ticket = newTicket();
   // La casella è la destinazione principale: è quella che regge anche quando
   // il token GitHub scade o il repo cambia nome. Le altre due si aggiungono.
-  // Il modulo di contatto del sito NON apre issue: una domanda commerciale o
-  // un messaggio con dentro i dati di chi scrive non deve diventare una
-  // pagina pubblica indicizzabile. Da lì si passa solo dalla casella.
-  const dalSito = report.client.startsWith("web-");
-  const [mail, issue, webhook] = await Promise.all([
-    sendEmail(report, ticket),
-    dalSito ? Promise.resolve(null) : openIssue(report, ticket),
-    notifyWebhook(report, ticket),
-  ]);
+  // ── Le issue non si aprono più in automatico ──────────────────────
+  // Ordine dell'operatore del 7 agosto 2026: «se un utente segnala un bug
+  // mi arriva notifica su mail e basta, poi casomai apro io la issue».
+  //
+  // Prima i client non-web (l'app desktop) aprivano una issue pubblica
+  // via API. Il difetto non era tecnico ma di sostanza: una segnalazione
+  // diventava una pagina pubblica indicizzabile senza che chi scriveva lo
+  // decidesse, e una issue pubblica non si cancella davvero — restava un
+  // problema aperto anche per la richiesta di cancellazione dati.
+  //
+  // Ora ogni segnalazione, da qualunque client, esce solo per posta (più
+  // il webhook interno se configurato). La funzione che apriva la issue è
+  // stata rimossa insieme al token: lasciarla morta nel file sarebbe
+  // l'invito a riaccenderla per sbaglio. Se un giorno la si rivuole, va
+  // rifatta dietro una scelta esplicita dell'utente — ed è nella storia
+  // di git, non serve riscriverla a memoria.
+  // Posta prima, webhook solo dopo: vedi `lib/feedback-dispatch.ts` per
+  // il perché. In breve: il copy promette la casella di supporto, quindi
+  // è la posta a decidere se la promessa è mantenuta.
+  const outcome = await dispatchFeedback(
+    () => sendEmail(report, ticket),
+    () => notifyWebhook(report, ticket),
+  );
 
-  if (!mail && !issue && !webhook) {
-    // Nessun canale configurato, o entrambi giù. Si risponde con la verità:
-    // il client tiene la copia locale e lo dice all'utente, invece di far
-    // credere che la segnalazione sia arrivata da qualche parte.
-    console.error("[feedback] nessuna destinazione disponibile per", ticket);
+  if (!outcome.delivered) {
+    // La posta non ha accettato: si dice la verità e non si è tentato
+    // nessun altro canale. Il client tiene la copia locale e lo comunica,
+    // invece di far credere che la segnalazione sia arrivata.
+    console.error("[feedback] posta non disponibile per", ticket);
     return NextResponse.json(
       {
         error: "Canale di assistenza non disponibile",
@@ -218,7 +197,7 @@ export async function POST(req: NextRequest) {
   }
 
   console.log(
-    `[feedback] ${ticket} · ${report.platform} · v${report.appVersion} · mail=${mail} issue=${issue ?? "no"} webhook=${webhook}`,
+    `[feedback] ${ticket} · ${report.platform} · v${report.appVersion} · mail=ok webhook=${outcome.webhook}`,
   );
-  return NextResponse.json({ ok: true, ticket: issue ?? ticket });
+  return NextResponse.json({ ok: true, ticket });
 }

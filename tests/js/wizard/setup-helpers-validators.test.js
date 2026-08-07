@@ -19,11 +19,11 @@ describe('validateApiKey', () => {
   const kimi = AI_PROVIDERS.find((p) => p.value === 'kimi');
 
   it('rifiuta valore vuoto', () => {
-    expect(validateApiKey(claude, '')).toMatch(/vuota/);
+    expect(validateApiKey(claude, '')).toMatch(/cannot be empty/);
   });
 
   it('rifiuta chiave troppo corta', () => {
-    expect(validateApiKey(claude, 'sk-ant')).toMatch(/corta/);
+    expect(validateApiKey(claude, 'sk-ant')).toMatch(/too short/);
   });
 
   it('rifiuta chiave con prefisso errato per Claude', () => {
@@ -47,15 +47,15 @@ describe('validateApiKey', () => {
 
 describe('validateEmail', () => {
   it('rifiuta stringa vuota', () => {
-    expect(validateEmail('')).toMatch(/vuota/);
+    expect(validateEmail('')).toMatch(/cannot be empty/);
   });
 
   it('rifiuta email senza @', () => {
-    expect(validateEmail('notanemail')).toMatch(/non valida/i);
+    expect(validateEmail('notanemail')).toMatch(/Invalid email/i);
   });
 
   it('rifiuta email senza dominio', () => {
-    expect(validateEmail('user@')).toMatch(/non valida/i);
+    expect(validateEmail('user@')).toMatch(/Invalid email/i);
   });
 
   it('accetta email valida', () => {
@@ -67,11 +67,11 @@ describe('validateEmail', () => {
 
 describe('validateTelegramToken', () => {
   it('rifiuta token vuoto', () => {
-    expect(validateTelegramToken('')).toMatch(/vuoto/);
+    expect(validateTelegramToken('')).toMatch(/cannot be empty/);
   });
 
   it('rifiuta formato non valido', () => {
-    expect(validateTelegramToken('invalidtoken')).toMatch(/Formato/);
+    expect(validateTelegramToken('invalidtoken')).toMatch(/Invalid token format/);
   });
 
   it('accetta token nel formato corretto', () => {
@@ -87,7 +87,7 @@ describe('validateChatId', () => {
   });
 
   it('rifiuta chat ID non numerico', () => {
-    expect(validateChatId('not-a-number')).toMatch(/numero/);
+    expect(validateChatId('not-a-number')).toMatch(/must be a number/);
   });
 
   it('accetta ID positivo', () => {

@@ -21,7 +21,7 @@ async function readJsonSafe(p) {
 
 function fmtDate(ms) {
   if (!ms) return '—';
-  return new Date(ms).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(ms).toLocaleString('en-US', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 async function handleReport(options) {
@@ -29,9 +29,9 @@ async function handleReport(options) {
   const since = Date.now() - days * 86_400_000;
 
   console.log(`\n  ${BOLD}═══════════════════════════════════════${RESET}`);
-  console.log(`  ${BOLD}  JHT — Report Progetto${RESET}`);
-  console.log(`  ${BOLD}  Periodo: ultimi ${days} giorni${RESET}`);
-  console.log(`  ${BOLD}  Generato: ${new Date().toLocaleString('it-IT')}${RESET}`);
+  console.log(`  ${BOLD}  JHT — Project Report${RESET}`);
+  console.log(`  ${BOLD}  Period: last ${days} days${RESET}`);
+  console.log(`  ${BOLD}  Generated: ${new Date().toLocaleString('en-US')}${RESET}`);
   console.log(`  ${BOLD}═══════════════════════════════════════${RESET}\n`);
 
   // Task / API / Sessioni leggono tre store che nessuno scrive più dal
@@ -56,10 +56,10 @@ async function handleReport(options) {
   if (!has.tasks) {
     console.log(`    ${DIM}${retiredStoreDetail('tasks')}${RESET}\n`);
   } else {
-    console.log(`    Totali:       ${tasks.length}`);
-    console.log(`    ${GREEN}Completati:${RESET}   ${succeeded}`);
-    console.log(`    ${RED}Falliti:${RESET}      ${failed}`);
-    console.log(`    In corso:     ${running}`);
+    console.log(`    Total:        ${tasks.length}`);
+    console.log(`    ${GREEN}Completed:${RESET}    ${succeeded}`);
+    console.log(`    ${RED}Failed:${RESET}       ${failed}`);
+    console.log(`    In progress:     ${running}`);
     console.log(`    Success rate: ${rate}%\n`);
   }
 
@@ -74,10 +74,10 @@ async function handleReport(options) {
   if (!has.analytics) {
     console.log(`    ${DIM}${retiredStoreDetail('analytics')}${RESET}\n`);
   } else {
-    console.log(`    Chiamate:     ${entries.length}`);
+    console.log(`    Calls:        ${entries.length}`);
     console.log(`    Token:        ${tokens > 1000 ? `${(tokens / 1000).toFixed(1)}k` : tokens}`);
-    console.log(`    Costo:        $${cost.toFixed(4)}`);
-    console.log(`    Errori:       ${errors}\n`);
+    console.log(`    Cost: $${cost.toFixed(4)}`);
+    console.log(`    Errors:       ${errors}\n`);
   }
 
   // Sessioni
@@ -86,13 +86,13 @@ async function handleReport(options) {
   const active = sessions.filter(s => s.state === 'active').length;
   const totalMsgs = sessions.reduce((s, sess) => s + (sess.messageCount ?? 0), 0);
 
-  console.log(`  ${BOLD}Sessioni${RESET}`);
+  console.log(`  ${BOLD}Sessions${RESET}`);
   if (!has.sessions) {
     console.log(`    ${DIM}${retiredStoreDetail('sessions')}${RESET}\n`);
   } else {
-    console.log(`    Totali:       ${sessions.length}`);
-    console.log(`    Attive:       ${active}`);
-    console.log(`    Messaggi:     ${totalMsgs}\n`);
+    console.log(`    Total:        ${sessions.length}`);
+    console.log(`    Active:       ${active}`);
+    console.log(`    Messages:     ${totalMsgs}\n`);
   }
 
   // Moduli attivi
@@ -114,9 +114,9 @@ async function handleReport(options) {
     const latest = deployFiles.filter(f => f.endsWith('.json')).sort().pop();
     if (latest) {
       const d = await readJsonSafe(join(DEPLOY_DIR, latest));
-      console.log(`  ${BOLD}Ultimo deploy${RESET}`);
-      console.log(`    Data:    ${fmtDate(d?.timestamp ?? d?.deployedAt)}`);
-      console.log(`    Stato:   ${d?.status ?? '—'}`);
+      console.log(`  ${BOLD}Latest deployment${RESET}`);
+      console.log(`    Date:    ${fmtDate(d?.timestamp ?? d?.deployedAt)}`);
+      console.log(`    State:   ${d?.status ?? '—'}`);
       if (d?.version) console.log(`    Version: ${d.version}`);
       console.log('');
     }
@@ -128,7 +128,7 @@ async function handleReport(options) {
     const commits = execSync(`git rev-list --count --since="${new Date(since).toISOString()}" HEAD 2>/dev/null`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
     console.log(`  ${BOLD}Git${RESET}`);
     console.log(`    Branch:  ${branch}`);
-    console.log(`    Commit:  ${commits} (ultimi ${days}g)\n`);
+    console.log(`    Commits: ${commits} (last ${days} days)\n`);
   } catch { /* skip */ }
 
   console.log(`  ${DIM}─────────────────────────────────────${RESET}\n`);
@@ -137,7 +137,7 @@ async function handleReport(options) {
 export function registerReportCommand(program) {
   program
     .command('report')
-    .description('Genera report testuale stato progetto')
-    .option('-d, --days <n>', 'periodo in giorni (default 30)', '30')
+    .description('Generate a text project-status report')
+    .option('-d, --days <n>', 'period in days (default 30)', '30')
     .action(handleReport);
 }

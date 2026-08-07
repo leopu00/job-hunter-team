@@ -6,39 +6,39 @@ import { stopAction } from './stop.js';
 import { sendAction, chatAction } from './chat.js';
 
 export function registerTeamCommand(program) {
-  const team = new Command('team').description('Gestione team agenti Job Hunter');
+  const team = new Command('team').description('Manage the Job Hunter Team agents');
 
   team
     .command('list')
-    .description('Mostra agenti disponibili e il loro stato')
+    .description('Show available agents and their status')
     .action(listAction);
 
   team
     .command('status')
-    .description('Mostra agenti attualmente attivi')
+    .description('Show currently active agents')
     .action(statusAction);
 
   team
-    .command('start [agente]')
-    .description('Avvia un agente o il team default (es: jht team start scout:1)')
-    .option('-m, --mode <mode>', 'Modalita: default o fast', 'default')
+    .command('start [agent]')
+    .description('Start an agent or default team (e.g. jht team start scout:1)')
+    .option('-m, --mode <mode>', 'mode: default or fast', 'default')
     .action(startAction);
 
   team
-    .command('stop [agente]')
-    .description('Ferma un agente o tutti gli agenti')
-    .option('-a, --all', 'Ferma tutti gli agenti')
+    .command('stop [agent]')
+    .description('Stop an agent or all agents')
+    .option('-a, --all', 'Stop all agents')
     .action(stopAction);
 
   team
-    .command('send <agente> <messaggio>')
-    .description('Manda un singolo messaggio a un agente (es: jht team send capitano "stato pipeline")')
+    .command('send <agent> <message>')
+    .description('Send one message to an agent (for example, jht team send capitano "pipeline status")')
     .action(sendAction);
 
   team
-    .command('chat <agente>')
-    .description('Chat interattiva con un agente (REPL)')
-    .option('-q, --quiet', 'Non mostrare peek del pane dopo ogni invio')
+    .command('chat <agent>')
+    .description('Interactive chat with an agent (REPL)')
+    .option('-q, --quiet', 'do not show pane previews after each send')
     .action(chatAction);
 
   program.addCommand(team);

@@ -173,6 +173,7 @@ const PAGE = {
       "Il team lavora per te giorno e notte, perciò ha bisogno di un computer sempre acceso: il tuo, uno dedicato, oppure un server in cloud.",
     setupNote:
       "Tutto parte dall'app desktop: è da lì che configuri e comandi il team. La installi su un computer a portata di mano e da lì gestisci tutto, che la squadra giri su quella stessa macchina o su una VPS remota.",
+    setupGuideLink: "Inizia la configurazione →",
     ctrlTitle: "Come la controlli",
     ctrlIntro:
       "Non sei legato a un solo strumento: gestisci la squadra dall'app desktop, dal terminale, o da entrambi insieme, con lo stesso runtime e le stesse funzioni. E se fai il login e sincronizzi i dati sul cloud, la ritrovi anche dal web: apri la dashboard e la consulti dal telefono o da qualsiasi browser, senza dover restare al computer su cui gira.",
@@ -196,6 +197,7 @@ const PAGE = {
       "The team works for you day and night, so it needs a computer that's always on: yours, a dedicated one, or a cloud server.",
     setupNote:
       "It all starts from the desktop app: that's where you configure and command the team. You install it on a computer within reach and manage everything from there, whether the team runs on that same machine or on a remote VPS.",
+    setupGuideLink: "Get started →",
     ctrlTitle: "How you control it",
     ctrlIntro:
       "You're not tied to one tool: manage the team from the desktop app, the terminal, or both together — same runtime, same features. And if you log in and sync your data to the cloud, you'll find it on the web too: open the dashboard and check it from your phone or any browser, without staying at the computer it runs on.",
@@ -219,6 +221,7 @@ const PAGE = {
       "El equipo trabaja para ti día y noche, por eso necesita un ordenador siempre encendido: el tuyo, uno dedicado, o un servidor en la nube.",
     setupNote:
       "Todo parte de la app de escritorio: desde ahí configuras y comandas el equipo. La instalas en un ordenador a mano y desde ahí gestionas todo, tanto si el equipo corre en esa misma máquina como en una VPS remota.",
+    setupGuideLink: "Primeros pasos →",
     ctrlTitle: "Cómo lo controlas",
     ctrlIntro:
       "No estás atado a una sola herramienta: gestionas el equipo desde la app de escritorio, el terminal, o ambos a la vez, con el mismo runtime y las mismas funciones. Y si inicias sesión y sincronizas los datos en la nube, lo tienes también en la web: abres la dashboard y la consultas desde el móvil o cualquier navegador, sin tener que quedarte en el ordenador donde corre.",
@@ -242,6 +245,7 @@ const PAGE = {
       "L'équipe travaille pour vous jour et nuit, elle a donc besoin d'un ordinateur toujours allumé : le vôtre, un dédié, ou un serveur dans le cloud.",
     setupNote:
       "Tout part de l'app de bureau : c'est là que vous configurez et pilotez l'équipe. Vous l'installez sur un ordinateur à portée de main et gérez tout depuis là, que l'équipe tourne sur cette même machine ou sur un VPS distant.",
+    setupGuideLink: "Bien démarrer →",
     ctrlTitle: "Comment vous le contrôlez",
     ctrlIntro:
       "Vous n'êtes lié à aucun outil unique : vous gérez l'équipe depuis l'app de bureau, le terminal, ou les deux ensemble, avec le même runtime et les mêmes fonctions. Et si vous vous connectez et synchronisez vos données dans le cloud, vous la retrouvez aussi sur le web : ouvrez la dashboard et consultez-la depuis votre téléphone ou n'importe quel navigateur, sans rester à l'ordinateur où elle tourne.",
@@ -265,6 +269,7 @@ const PAGE = {
       "Das Team arbeitet Tag und Nacht für dich, also braucht es einen Computer, der immer läuft: deinen, einen eigenen oder einen Cloud-Server.",
     setupNote:
       "Alles beginnt mit der Desktop-App: Von dort aus konfigurierst und steuerst du das Team. Du installierst sie auf einem Computer in Reichweite und verwaltest von dort aus alles — egal, ob das Team auf derselben Maschine oder auf einem entfernten VPS läuft.",
+    setupGuideLink: "Erste Schritte →",
     ctrlTitle: "So steuerst du es",
     ctrlIntro:
       "Du bist an kein einzelnes Werkzeug gebunden: Du verwaltest das Team über die Desktop-App, das Terminal oder beides zusammen — gleiche Laufzeitumgebung, gleiche Funktionen. Und wenn du dich anmeldest und deine Daten in die Cloud synchronisierst, findest du es auch im Web: Öffne die Dashboard und sieh sie dir vom Handy oder jedem Browser aus an, ohne am Computer bleiben zu müssen, auf dem es läuft.",
@@ -288,6 +293,7 @@ const PAGE = {
       "A csapat éjjel-nappal dolgozik érted, ezért egy mindig bekapcsolt számítógépre van szüksége: a tiédre, egy dedikáltra, vagy egy felhőszerverre.",
     setupNote:
       "Minden az asztali appból indul: onnan állítod be és irányítod a csapatot. Egy kéznél lévő számítógépre telepíted, és onnan kezelsz mindent, akár ugyanazon a gépen fut a csapat, akár egy távoli VPS-en.",
+    setupGuideLink: "Első lépések →",
     ctrlTitle: "Hogyan vezérled",
     ctrlIntro:
       "Nem vagy egyetlen eszközhöz kötve: az asztali appból, a terminálból, vagy a kettőből együtt kezeled a csapatot, ugyanazzal a futtatókörnyezettel és ugyanazokkal a funkciókkal. És ha bejelentkezel és a felhőbe szinkronizálod az adatokat, a weben is megtalálod: megnyitod a dashboardot, és a telefonodról vagy bármelyik böngészőből megnézed, anélkül hogy annál a gépnél kellene maradnod, amelyen fut.",
@@ -311,6 +317,7 @@ const PAGE = {
       "A equipa trabalha para ti dia e noite, por isso precisa de um computador sempre ligado: o teu, um dedicado, ou um servidor na nuvem.",
     setupNote:
       "Tudo parte da app de ambiente de trabalho: é dali que configuras e comandas a equipa. Instala-la num computador à mão e geres tudo a partir daí, quer a equipa corra nessa mesma máquina, quer num VPS remoto.",
+    setupGuideLink: "Começar →",
     ctrlTitle: "Como a controlas",
     ctrlIntro:
       "Não estás preso a uma só ferramenta: geres a equipa a partir da app de ambiente de trabalho, do terminal, ou de ambos juntos, com o mesmo runtime e as mesmas funções. E se iniciares sessão e sincronizares os dados na nuvem, encontra-la também na web: abres a dashboard e consulta-la a partir do telemóvel ou de qualquer navegador, sem teres de ficar no computador onde corre.",
@@ -397,6 +404,12 @@ function SetupContent() {
             <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
               {p.setupNote}
             </p>
+            <Link
+              href="/setup-guide"
+              className="mt-3 inline-flex min-h-11 items-center text-[12px] font-semibold text-[var(--color-green)] no-underline"
+            >
+              {p.setupGuideLink}
+            </Link>
           </div>
         )}
 

@@ -65,17 +65,17 @@ def add_cli_args(parser):
     """Aggiunge i flag dello storico a un subparser di db_update/db_insert."""
     parser.add_argument(
         "--action", choices=list(ACTIONS),
-        help="Operazione di manutenzione in corso (registra il controllo nello storico)")
+        help="Maintenance action in progress (records the check in history)")
     parser.add_argument(
         "--outcome", choices=list(OUTCOMES),
-        help="Esito del controllo. Usa 'inconclusive' se non sei riuscito a "
-             "stabilire se l'offerta è aperta: la posizione resta viva.")
+        help="Check outcome. Use 'inconclusive' when you could not establish "
+             "whether the listing is open; the position stays active.")
     parser.add_argument("--evidence-kind", choices=list(EVIDENCE_KINDS),
-                        help="Natura della fonte consultata (opzionale)")
-    parser.add_argument("--evidence-url", help="URL interrogato (opzionale)")
-    parser.add_argument("--evidence-code", type=int, help="Status HTTP (opzionale)")
-    parser.add_argument("--evidence-hash", help="Hash del contenuto (opzionale)")
-    parser.add_argument("--duration-ms", type=int, help="Durata dell'operazione")
+                        help="Type of evidence source consulted (optional)")
+    parser.add_argument("--evidence-url", help="URL queried (optional)")
+    parser.add_argument("--evidence-code", type=int, help="HTTP status (optional)")
+    parser.add_argument("--evidence-hash", help="Content hash (optional)")
+    parser.add_argument("--duration-ms", type=int, help="Operation duration")
     return parser
 
 
@@ -114,21 +114,21 @@ def check_closing_write(field, value, outcome):
     if not closing or value not in closing:
         return
     raise MaintenanceError(
-        f"outcome '{outcome}' significa che NON hai potuto verificare, e "
-        f"'{field}={value}' chiuderebbe la posizione. Non sapere non è sapere "
-        "che è scaduta: una posizione chiusa per dubbio è un'occasione persa "
-        "senza motivo. Lasciala viva — il controllo resta a storico e verrà "
-        "ritentata. Chiudila solo con outcome 'confirmed_closed'."
+        f"outcome '{outcome}' means you could NOT verify the result, while "
+        f"'{field}={value}' would close the position. Not knowing does not "
+        "prove it expired: closing on doubt can silently lose an opportunity. "
+        "Keep it active — the check remains in history and will be retried. "
+        "Close it only with outcome 'confirmed_closed'."
     )
 
 
 def validate(action, outcome):
     if action not in ACTIONS:
         raise MaintenanceError(
-            f"action '{action}' non valida. Ammesse: {', '.join(ACTIONS)}")
+            f"invalid action '{action}'. Allowed: {', '.join(ACTIONS)}")
     if outcome not in OUTCOMES:
         raise MaintenanceError(
-            f"outcome '{outcome}' non valido. Ammessi: {', '.join(OUTCOMES)}")
+            f"invalid outcome '{outcome}'. Allowed: {', '.join(OUTCOMES)}")
 
 
 def derive_outcome(diffs):

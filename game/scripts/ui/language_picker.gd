@@ -11,7 +11,12 @@ var _continue: Button
 
 func _ready() -> void:
 	theme = TerminalTheme.get_theme()
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Il picker nasce da codice durante Title._ready(): le sole ancore lasciano
+	# gli offset derivati dalla minimum size finche il parent non completa il
+	# primo layout. In fullscreen macOS il risultato era un rettangolo grande
+	# quanto il pannello, ancorato in alto a sinistra. Ancore E offset fissano
+	# invece subito il layer all'intero viewport e continuano a seguirne i resize.
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build()
 
@@ -33,13 +38,13 @@ func supported_language_count() -> int:
 
 func _build() -> void:
 	var bg := GridBackground.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var panel := BracketPanel.new()
 	panel.bracket_len = 22
 	center.add_child(panel)

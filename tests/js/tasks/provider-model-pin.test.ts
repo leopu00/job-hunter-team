@@ -202,7 +202,7 @@ posixOnly("model pin — il modello si SOSTITUISCE, non si cancella", () => {
     // k3 (1048576) batte k3-256k / kimi-for-coding / -highspeed (262144 tutti).
     // Il criterio è la finestra dichiarata, non il nome.
     expect(defaultModelOf(sb.config())).toBe("kimi-code/k3");
-    expect(r.out).toContain("PROMOSSO");
+    expect(r.out).toContain("PROMOTED");
   });
 
   it("il catalogo resta intatto: si riscrive UNA riga, non si cancella niente", () => {
@@ -261,7 +261,7 @@ posixOnly("model pin — il modello si SOSTITUISCE, non si cancella", () => {
     expect(msg).toContain(".bak-model-pin-");
     // Senza questa riga chi lancia il comando a mano crede che non abbia
     // funzionato: gli agenti leggono il modello all'avvio della sessione.
-    expect(msg).toContain("AVVIO della sessione");
+    expect(msg).toContain("session STARTS");
     expect(inbox[0].delivered_via_tmux).toBe(false);
   });
 
@@ -304,9 +304,9 @@ posixOnly("model pin — se il candidato non risponde, il file non si tocca", ()
     expect(sb.backups()).toHaveLength(0);
 
     const msg = String(sb.mailbox()[0].msg);
-    expect(msg).toContain("NON promosso");
-    expect(msg).toContain("non ha risposto");
-    expect(msg).toContain("meglio di un team fermo");
+    expect(msg).toContain("NOT promoted");
+    expect(msg).toContain("did not respond");
+    expect(msg).toContain("far better than a stopped team");
   });
 
   it("un candidato bocciato non ferma la lista: si passa al successivo", () => {
@@ -341,8 +341,8 @@ posixOnly("model pin — se il candidato non risponde, il file non si tocca", ()
     runAutoUpdate(sb);
     expect(sb.config()).toBe(FIELD_CONFIG);
     const msg = String(sb.mailbox()[0].msg);
-    expect(msg).toContain("uscita 0 senza stampare niente");
-    expect(msg).toContain("NON una bocciatura del modello");
+    expect(msg).toContain("exited 0 without output");
+    expect(msg).toContain("NOT a model rejection");
   });
 
   it("`To resume this session` non è un errore: non finisce mai nel motivo del fallimento", () => {
@@ -367,7 +367,7 @@ posixOnly("model pin — se il candidato non risponde, il file non si tocca", ()
   it("senza credenziali non prova nemmeno: la CLI non potrebbe rispondere", () => {
     const sb = makeSandbox({ probe: "answers", credentials: false });
     const r = runAutoUpdate(sb);
-    expect(r.out).toContain("credenziali assenti");
+    expect(r.out).toContain("missing credentials");
     expect(sb.probes()).toHaveLength(0);
     expect(sb.config()).toBe(FIELD_CONFIG);
     expect(sb.mailbox()).toHaveLength(0);
@@ -390,7 +390,7 @@ posixOnly("model pin — quando non c'è niente da promuovere", () => {
       config: FIELD_CONFIG.replace('default_model = "kimi-code/kimi-for-coding"', 'default_model = "kimi-code/k3"'),
     });
     const r = runAutoUpdate(sb);
-    expect(r.out).toContain("nessun alias con finestra piu' ampia");
+    expect(r.out).toContain("no alias with a wider window");
     expect(sb.probes()).toHaveLength(0);
     expect(sb.backups()).toHaveLength(0);
     expect(sb.mailbox()).toHaveLength(0);
@@ -433,7 +433,7 @@ posixOnly("model pin — quando non c'è niente da promuovere", () => {
   it("config senza catalogo: non si inventa un alias", () => {
     const sb = makeSandbox({ probe: "answers", config: 'default_model = "kimi-code/kimi-for-coding"\n' });
     const r = runAutoUpdate(sb);
-    expect(r.out).toContain("non elenca nessun");
+    expect(r.out).toContain("does not list any");
     expect(sb.probes()).toHaveLength(0);
     expect(sb.mailbox()).toHaveLength(0);
   });
@@ -443,7 +443,7 @@ posixOnly("model pin — chi lo ferma, e i provider che non si toccano", () => {
   it("JHT_MODEL_PIN: il modello è fissato dall'utente, non si prova e non si scrive", () => {
     const sb = makeSandbox({ probe: "answers" });
     const r = runAutoUpdate(sb, { JHT_MODEL_PIN: "kimi-code/kimi-for-coding" });
-    expect(r.out).toContain("fissato dall'utente");
+    expect(r.out).toContain("fixed by the user");
     expect(sb.probes()).toHaveLength(0);
     expect(sb.config()).toBe(FIELD_CONFIG);
     // Scelta esplicita dell'utente: non è una scoperta da riportare.
@@ -462,7 +462,7 @@ posixOnly("model pin — chi lo ferma, e i provider che non si toccano", () => {
   it("fuori dal container non tocca il config del provider (è dell'utente del container)", () => {
     const sb = makeSandbox({ probe: "answers" });
     const r = runAutoUpdate(sb, { IS_CONTAINER: "0" });
-    expect(r.out).toContain("fuori dal container");
+    expect(r.out).toContain("outside the container");
     expect(sb.probes()).toHaveLength(0);
     expect(sb.config()).toBe(FIELD_CONFIG);
   });
@@ -471,7 +471,7 @@ posixOnly("model pin — chi lo ferma, e i provider che non si toccano", () => {
     const sb = makeSandbox({ probe: "answers", config: null });
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
-    expect(r.out).toContain("nessun config");
+    expect(r.out).toContain("no config");
     expect(sb.mailbox()).toHaveLength(0);
   });
 
@@ -480,20 +480,20 @@ posixOnly("model pin — chi lo ferma, e i provider che non si toccano", () => {
     const sb = makeSandbox({ provider: "openai", codexConfig: codex });
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
-    expect(r.out).toContain("NON modificabile");
+    expect(r.out).toContain("detected but not modified");
     expect(readFileSync(path.join(sb.home, ".codex", "config.toml"), "utf-8")).toBe(codex);
 
     const msg = String(sb.mailbox()[0].msg);
     expect(msg).toContain("gpt-5.4");
-    expect(msg).toContain("decisione dell'utente");
-    expect(msg).toContain("AVVIO della sessione");
+    expect(msg).toContain("user decision");
+    expect(msg).toContain("session STARTS");
   });
 
   it("claude: nessun pin da rivedere, start-agent.sh passa --model a ogni spawn", () => {
     const sb = makeSandbox({ provider: "claude" });
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
-    expect(r.out).toContain("non applicabile");
+    expect(r.out).toContain("not applicable");
     expect(sb.mailbox()).toHaveLength(0);
   });
 });

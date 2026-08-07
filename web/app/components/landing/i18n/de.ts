@@ -21,7 +21,7 @@ export const de: Record<string, string> = {
   nav_github: "GitHub",
   nav_download: "Installieren",
   nav_project: "Projekt",
-  nav_tutorials: "Anleitungen",
+  nav_get_started: "Erste Schritte",
   nav_pricing: "Preise",
   nav_login: "Anmelden",
 
@@ -40,16 +40,15 @@ export const de: Record<string, string> = {
   footer_product: "Produkt",
   footer_stats: "Projekt",
   footer_resources: "Ressourcen",
-  footer_tutorials: "Anleitungen",
+  footer_credits: "Credits",
   footer_contacts: "Kontakt",
+  footer_instagram_aria: "Job Hunter Team auf Instagram",
+  footer_tiktok_aria: "Job Hunter Team auf TikTok",
   nav_contact: "Kontakt",
   footer_bug: "Fehler melden",
   footer_privacy: "Datenschutz",
   footer_terms: "Nutzungsbedingungen",
   footer_copyright: "Open Source unter MIT-Lizenz",
-  tutorials_title: "Anleitungen",
-  tutorial_game_title: "Spiel",
-  tutorial_web_title: "Web",
   trailer_title: "Trailer",
 
   // Download page
@@ -69,8 +68,8 @@ export const de: Record<string, string> = {
   dl_windows_portable_link: "Stattdessen die portable Version herunterladen",
   dl_desktop_unsigned_note:
     "Unter macOS ist die App signiert und notarisiert: ein Doppelklick genügt. Unter Windows ist sie nicht signiert, deshalb meldet SmartScreen „Der Computer wurde durch Windows geschützt“: auf „Weitere Informationen“ und dann „Trotzdem ausführen“ klicken. Unter Linux das Archiv entpacken und ausführbar machen.",
-  dl_help_text: "Du weißt nicht, wo du es installieren sollst?",
-  dl_help_link: "Lies die Anleitung",
+  dl_help_text: "Hast du die App heruntergeladen?",
+  dl_help_link: "Folge der Einrichtung Schritt für Schritt",
 
   // Login page (LandingClient)
   login_save_progress: "Melde dich an, um deinen Fortschritt zu speichern",

@@ -56,7 +56,9 @@ const DEFAULT_RUNTIME_IMAGE := "ghcr.io/leopu00/jht:0.3.5"
 ## avvia una copia temporanea del dispatcher production che conosce il
 ## protocollo JSON e gli indica il wrapper reale da aggiornare atomically.
 const UPGRADE_BOOTSTRAP_RAW_BASE := "https://raw.githubusercontent.com/leopu00/job-hunter-team/production"
+const UPGRADE_BOOTSTRAP_COMMIT_API := "https://api.github.com/repos/leopu00/job-hunter-team/commits/production"
 const UPGRADE_BOOTSTRAP_PROTOCOL := "1"
+const UPGRADE_BOOTSTRAP_HOST_RUNTIME_PROTOCOL := "1"
 
 var status := {
 	"docker_available": false, "docker_running": false,
@@ -155,8 +157,42 @@ func _self_test_vps_setup() -> void:
 		failures.append("IPv4 e chiave valide rifiutate")
 	var runtime_command := _vps_prepare_runtime_command()
 	if not runtime_command.contains("command -v jht") \
-			or not runtime_command.contains("$HOME/.local/bin/jht"):
+			or not runtime_command.contains("$HOME/.local/bin/jht") \
+			or not runtime_command.contains("JHT_HOST_RUNTIME_PROTOCOL=1") \
+			or not runtime_command.contains("JHT_UPGRADE_PROTOCOL=1") \
+			or runtime_command.contains("\"$JHT_BIN\" up") \
+			or not runtime_command.contains("JHT_WRAPPER_PATH=\"$JHT_BIN\" bash \"$JHT_BOOTSTRAP\""):
 		failures.append("rilevamento wrapper VPS incompleto")
+	# Un wrapper legacy con il solo protocollo upgrade non deve essere mai
+	# eseguito: migrazione e rollback condividono esattamente questo gate.
+	var legacy_bin := test_root.path_join("bin")
+	var legacy_jht := legacy_bin.path_join("jht")
+	var legacy_sentinel := test_root.path_join("legacy-vps-wrapper-ran")
+	DirAccess.make_dir_recursive_absolute(legacy_bin)
+	_test_write(legacy_jht, "#!/usr/bin/env bash\nJHT_UPGRADE_PROTOCOL=1\ntouch " \
+			+ _shell_quote(legacy_sentinel) + "\n")
+	var secure_fixture := legacy_bin.path_join("secure-bootstrap")
+	_test_write(secure_fixture, "#!/usr/bin/env bash\nJHT_UPGRADE_PROTOCOL=1\n" \
+			+ "JHT_HOST_RUNTIME_PROTOCOL=1\nexit 0\n")
+	var fake_curl := legacy_bin.path_join("curl")
+	_test_write(fake_curl, "#!/usr/bin/env bash\nset -eu\nurl='' out=''\n" \
+			+ "while [ \"$#\" -gt 0 ]; do case \"$1\" in -o) out=$2; shift 2;; -*) shift;; *) url=$1; shift;; esac; done\n" \
+			+ "case \"$url\" in */commits/production) printf '{\\n  \"sha\": \"cccccccccccccccccccccccccccccccccccccccc\"\\n}\\n' > \"$out\";; " \
+			+ "*) cp " + _shell_quote(secure_fixture) + " \"$out\";; esac\n")
+	_run("chmod", PackedStringArray(["700", legacy_jht]))
+	_run("chmod", PackedStringArray(["700", fake_curl, secure_fixture]))
+	# OS.execute ricompone gli argomenti di `bash -c` tramite la shell su macOS:
+	# un comando ricco di virgolette perderebbe il confine del singolo argv.
+	# Uno script sintetico mantiene il test fedele a ciò che riceve SSH.
+	var probe_script := test_root.path_join("probe-vps-runtime.sh")
+	_test_write(probe_script, "#!/usr/bin/env bash\nPATH=" \
+			+ _shell_quote(legacy_bin) + ":/usr/bin:/bin\n" + runtime_command + "\n")
+	_run("chmod", PackedStringArray(["700", probe_script]))
+	var legacy_probe := _run("bash", PackedStringArray([probe_script]))
+	if legacy_probe.get("code", 1) != 0 \
+			or FileAccess.file_exists(legacy_sentinel):
+		failures.append("bootstrap VPS non isola il wrapper legacy: " \
+				+ str(legacy_probe.get("out", "")).strip_edges().right(400))
 
 	var archive := test_root.path_join("migration.tar.gz")
 	var packed := _create_local_migration_archive(archive)
@@ -188,6 +224,14 @@ func _self_test_vps_setup() -> void:
 			failures.append("transazione remota senza garanzia: " + required)
 	if apply_script.contains("tar czf \"$BACKUP\" \"$@\" || true"):
 		failures.append("errore backup destinazione ignorato")
+	if apply_script.contains("cp -a /root/.jht/runtime"):
+		failures.append("runtime legacy copiato nella migrazione VPS")
+	if not apply_script.contains("JHT_HOST_RUNTIME_PROTOCOL=1"):
+		failures.append("migrazione VPS puo invocare wrapper legacy")
+	var rollback_script := _rollback_vps_destination_script("12345")
+	if not rollback_script.contains("JHT_HOST_RUNTIME_PROTOCOL=1") \
+			or rollback_script.contains("cp -a /root/.jht/runtime"):
+		failures.append("rollback VPS puo consumare runtime o wrapper legacy")
 	var local_env := _local_host_env(test_root.path_join(".jht/host.env"))
 	if not local_env.begins_with("JHT_HOST_TYPE=local\n") \
 			or local_env.count("JHT_HOST_TYPE=") != 1:
@@ -819,9 +863,10 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 		var remote := _run_ssh(vps, "docker exec jht node /app/cli/bin/jht.js " \
 				+ "providers use " + str(PROVIDERS[provider]["install_id"]))
 		return {"ok": remote["code"] == 0,
-				"message": "Provider selezionato sulla VPS: " \
-				+ str(PROVIDERS[provider]["name"]) if remote["code"] == 0 \
-				else "Selezione provider fallita: " + str(remote["out"]).right(240)}
+				"message": UIStrings.t("setup.action.provider_selected_vps") \
+				% str(PROVIDERS[provider]["name"]) if remote["code"] == 0 \
+				else UIStrings.t("setup.action.provider_select_failed") \
+				% str(remote["out"]).right(240)}
 	# Quando il container c'è, la configurazione la scrive LUI: è il proprietario
 	# dei dati in /jht_home, esattamente come nel ramo VPS qui sopra. Su Linux i
 	# bind mount non rimappano gli uid: l'entrypoint trova /jht_home non
@@ -835,8 +880,8 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 		var used := _run("docker", PackedStringArray(["exec", "jht", "node",
 				"/app/cli/bin/jht.js", "providers", "use", install_id]))
 		if used["code"] == 0:
-			return {"ok": true, "message": "Provider selezionato: "
-					+ str(PROVIDERS[provider]["name"])}
+			return {"ok": true, "message": UIStrings.t("setup.action.provider_selected")
+					% str(PROVIDERS[provider]["name"])}
 		Log.warn("setup", "providers use nel container fallito (%d): %s"
 				% [used["code"], str(used["out"]).strip_edges().right(200)])
 
@@ -851,12 +896,11 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 	providers[config_id] = provider_config
 	config["providers"] = providers
 	if JhtFs.write_json("jht.config.json", config):
-		return {"ok": true, "message": "Provider selezionato: "
-				+ str(PROVIDERS[provider]["name"])}
+		return {"ok": true, "message": UIStrings.t("setup.action.provider_selected")
+				% str(PROVIDERS[provider]["name"])}
 	if JhtFs.host_home_blocked():
-		return {"ok": false, "message": "la cartella dati appartiene al team e "
-				+ "il container è spento: accendilo dal passo 01 e riprova"}
-	return {"ok": false, "message": "impossibile salvare il provider"}
+		return {"ok": false, "message": UIStrings.t("setup.action.provider_data_locked")}
+	return {"ok": false, "message": UIStrings.t("setup.action.provider_save_failed")}
 
 
 ## ── Abbonamento ────────────────────────────────────────────────────────
@@ -896,9 +940,8 @@ func _do_select_plan(provider: String, plan_id: String,
 	var config_id := str(PROVIDERS[provider]["config_id"])
 	var out := _plan_registry(["set", config_id + ":" + plan_id], vps)
 	if out == "":
-		return {"ok": false, "message": "abbonamento non salvato — "
-				+ "il container deve essere acceso (passo 01)"}
-	return {"ok": true, "message": "Abbonamento registrato"}
+		return {"ok": false, "message": UIStrings.t("setup.action.plan_save_failed")}
+	return {"ok": true, "message": UIStrings.t("setup.action.plan_saved")}
 
 
 ## Esegue plan_registry.py dentro il container (locale o VPS). Stringa vuota
@@ -934,8 +977,9 @@ static func _do_stop_container(vps: Dictionary) -> Dictionary:
 	var result := _run_ssh(vps, "docker stop jht") if not vps.is_empty() \
 			else _run("docker", PackedStringArray(["stop", "jht"]))
 	return {"ok": result["code"] == 0,
-			"message": "Container JHT fermato" if result["code"] == 0 \
-			else "Arresto container fallito: " + str(result.get("out", "")).right(220)}
+			"message": UIStrings.t("setup.action.container_stopped") \
+			if result["code"] == 0 else UIStrings.t("setup.action.container_stop_failed") \
+			% str(result.get("out", "")).right(220)}
 
 
 ## Flusso "ATTIVA CONTAINER" (porting della logica desktop Electron,
@@ -961,11 +1005,10 @@ func _do_start_container() -> Dictionary:
 					"{{.Server.Version}}"] ))
 			if daemon["code"] == 0:
 				break
-			_progress("container", "Avvio di Docker in corso… (%ds)" % waited)
+			_progress("container", UIStrings.t("setup.action.docker_starting") % waited)
 		if daemon["code"] != 0:
 			Log.call_deferred("warn", "setup", "docker non risponde dopo 120s")
-			return {"ok": false, "message": "Docker non risponde dopo 2 minuti. " \
-					+ "Aprilo manualmente (al primo avvio chiede di accettare i termini), poi riprova."}
+			return {"ok": false, "message": UIStrings.t("setup.action.docker_timeout")}
 		Log.call_deferred("info", "setup", "daemon Docker pronto (%ds)" % waited)
 	# Attivazione via compose SEMPRE, anche quando il container esiste già: è
 	# l'unico percorso che aggiorna il runtime. `docker start` da solo lascia
@@ -978,18 +1021,18 @@ func _do_start_container() -> Dictionary:
 		var fallback := _run("docker", PackedStringArray(["start", "jht"] ))
 		if fallback["code"] == 0:
 			Log.call_deferred("info", "setup", "container jht avviato (senza compose)")
-			return {"ok": true, "message": "Container JHT attivo"}
-		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
+			return {"ok": true, "message": UIStrings.t("setup.action.container_running")}
+		return {"ok": false, "message": UIStrings.t("setup.action.runtime_prepare_failed")}
 	_ensure_host_dirs()
 	Log.call_deferred("info", "setup", "attivazione: pull + compose up da " + compose)
 	_set_phase("image")
 	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
-			"Controllo aggiornamenti del team…")
+			UIStrings.t("setup.action.checking_updates"))
 	if not bool(pull["ok"]):
 		Log.call_deferred("warn", "setup",
 				"pull immagine fallito, proseguo con la copia locale: "
 				+ str(pull.get("tail", "")).right(200))
-		_progress("container", "Aggiornamento non riuscito: uso l'immagine già scaricata…")
+		_progress("container", UIStrings.t("setup.action.pull_fallback"))
 	_set_phase("container")
 	return _compose_up_with_progress(compose)
 
@@ -1145,15 +1188,22 @@ static func _posix_upgrade_bootstrap_command(wrapper_path: String,
 
 static func _posix_upgrade_bootstrap_with_target(wrapper_target: String,
 		check_only: bool) -> String:
-	var wrapper_url := UPGRADE_BOOTSTRAP_RAW_BASE + "/scripts/jht-wrapper.sh"
 	return "set -e; JHT_BOOTSTRAP=\"$(mktemp \"${TMPDIR:-/tmp}/jht-wrapper.XXXXXX\")\"; " \
-			+ "cleanup() { rm -f \"$JHT_BOOTSTRAP\"; }; trap cleanup EXIT HUP INT TERM; " \
-			+ "curl -fsSL " + _shell_quote(wrapper_url) + " -o \"$JHT_BOOTSTRAP\"; " \
+			+ "JHT_RELEASE_META=\"$(mktemp \"${TMPDIR:-/tmp}/jht-release.XXXXXX\")\"; " \
+			+ "cleanup() { rm -f \"$JHT_BOOTSTRAP\" \"$JHT_RELEASE_META\"; }; trap cleanup EXIT HUP INT TERM; " \
+			+ "curl -fsSL " + _shell_quote(UPGRADE_BOOTSTRAP_COMMIT_API) + " -o \"$JHT_RELEASE_META\"; " \
+			+ "JHT_RELEASE_SHA=\"$(sed -n 's/^[[:space:]]*\"sha\": \"\\([0-9a-fA-F]\\{40\\}\\)\".*/\\1/p' \"$JHT_RELEASE_META\" | head -n 1)\"; " \
+			+ "printf '%s' \"$JHT_RELEASE_SHA\" | grep -Eq '^[0-9a-fA-F]{40}$'; " \
+			+ "JHT_ATTESTED_RAW_BASE=\"https://raw.githubusercontent.com/leopu00/job-hunter-team/$JHT_RELEASE_SHA\"; " \
+			+ "curl -fsSL \"$JHT_ATTESTED_RAW_BASE/scripts/jht-wrapper.sh\" -o \"$JHT_BOOTSTRAP\"; " \
 			+ "bash -n \"$JHT_BOOTSTRAP\"; " \
 			+ "grep -Eq " + _shell_quote("^[[:space:]]*JHT_UPGRADE_PROTOCOL=" \
 					+ UPGRADE_BOOTSTRAP_PROTOCOL + "([[:space:]]|$)") \
 			+ " \"$JHT_BOOTSTRAP\"; " \
-			+ "JHT_RAW_BASE=" + _shell_quote(UPGRADE_BOOTSTRAP_RAW_BASE) + " " \
+			+ "grep -Eq " + _shell_quote("^[[:space:]]*JHT_HOST_RUNTIME_PROTOCOL=" \
+					+ UPGRADE_BOOTSTRAP_HOST_RUNTIME_PROTOCOL + "([[:space:]]|$)") \
+			+ " \"$JHT_BOOTSTRAP\"; " \
+			+ "JHT_RAW_BASE=\"$JHT_ATTESTED_RAW_BASE\" JHT_ALLOW_LEGACY_WRAPPER_MIGRATION=1 " \
 			+ wrapper_target + " bash \"$JHT_BOOTSTRAP\" " + _upgrade_arguments(check_only)
 
 
@@ -1192,18 +1242,21 @@ static func _powershell_quote(value: String) -> String:
 ## contaminato né il bootstrap resta in %TEMP%.
 static func _windows_upgrade_bootstrap_command(wrapper_path: String,
 		check_only: bool) -> String:
-	var wrapper_url := UPGRADE_BOOTSTRAP_RAW_BASE + "/scripts/jht-wrapper.ps1"
 	var target := _powershell_quote(wrapper_path)
-	var raw_base := _powershell_quote(UPGRADE_BOOTSTRAP_RAW_BASE)
-	var url := _powershell_quote(wrapper_url)
+	var commit_api := _powershell_quote(UPGRADE_BOOTSTRAP_COMMIT_API)
 	return "$ErrorActionPreference='Stop'; $code=1; " \
 			+ "$base=Join-Path ([IO.Path]::GetTempPath()) ('jht-upgrade-'+[guid]::NewGuid().ToString('N')); " \
 			+ "$tmp=$base+'.ps1'; $out=$base+'.out'; $err=$base+'.err'; " \
-			+ "try { Invoke-WebRequest -UseBasicParsing -Uri " + url + " -OutFile $tmp; " \
+			+ "try { $meta=Invoke-RestMethod -UseBasicParsing -Uri " + commit_api + "; " \
+			+ "$sha=[string]$meta.sha; if ($sha -notmatch '^[0-9a-fA-F]{40}$') { throw 'Release host non attestabile' }; " \
+			+ "$rawBase='https://raw.githubusercontent.com/leopu00/job-hunter-team/'+$sha; " \
+			+ "Invoke-WebRequest -UseBasicParsing -Uri ($rawBase+'/scripts/jht-wrapper.ps1') -OutFile $tmp; " \
 			+ "[scriptblock]::Create((Get-Content -LiteralPath $tmp -Raw)) | Out-Null; " \
 			+ "if (-not (Select-String -Path $tmp -Pattern '^\\s*\\$JHT_UPGRADE_PROTOCOL\\s*=\\s*" \
 			+ UPGRADE_BOOTSTRAP_PROTOCOL + "\\s*$' -Quiet)) { throw 'Wrapper upgrade senza protocollo atomico' }; " \
-			+ "$env:JHT_RAW_BASE=" + raw_base + "; " \
+			+ "if (-not (Select-String -Path $tmp -Pattern '^\\s*\\$JHT_HOST_RUNTIME_PROTOCOL\\s*=\\s*" \
+			+ UPGRADE_BOOTSTRAP_HOST_RUNTIME_PROTOCOL + "\\s*$' -Quiet)) { throw 'Wrapper upgrade senza runtime host protetto' }; " \
+			+ "$env:JHT_RAW_BASE=$rawBase; $env:JHT_ALLOW_LEGACY_WRAPPER_MIGRATION='1'; " \
 			+ "$env:JHT_WRAPPER_PATH=" + target + "; " \
 			+ "$engine=Join-Path $PSHOME 'pwsh.exe'; " \
 			+ "if (-not (Test-Path -LiteralPath $engine)) { $engine=Join-Path $PSHOME 'powershell.exe' }; " \
@@ -1284,8 +1337,8 @@ static func _run_upgrade_json(path: String, args: PackedStringArray) -> Dictiona
 ## preparare il runtime" — il muro contro cui è finito il primo avvio pulito
 ## del 26/07. Vive nella cartella dell'applicazione, che è nostra per
 ## definizione; i volumi dentro al file sono path assoluti, quindi la sua
-## posizione non cambia nulla per docker. Il vecchio percorso resta letto
-## per chi ce l'ha già.
+## posizione non cambia nulla per docker. Il vecchio percorso sotto ~/.jht
+## non e' mai letto: il container puo' scriverlo tramite /jht_home.
 static func compose_home_path() -> String:
 	return ProjectSettings.globalize_path("user://runtime/docker-compose.yml")
 
@@ -1293,7 +1346,6 @@ static func compose_home_path() -> String:
 static func _find_compose_file() -> String:
 	var candidates := [
 		compose_home_path(),
-		_jht_home().path_join("runtime/docker-compose.yml"),
 		ProjectSettings.globalize_path("res://../docker-compose.yml"),
 	]
 	var user_data := OS.get_user_data_dir().get_base_dir()
@@ -1340,17 +1392,17 @@ static func _ensure_host_dirs() -> void:
 ## dell'azione: i delay non toccano il main thread.
 func _compose_up_with_progress(compose: String) -> Dictionary:
 	var run := _compose_stream(compose, PackedStringArray(["up", "-d", "jht"]),
-			"Scarico l'immagine del team (qualche GB, dipende dalla rete)…")
+			UIStrings.t("setup.action.image_downloading"))
 	if not bool(run.get("spawned", false)):
-		return {"ok": false, "message": "Impossibile avviare docker compose"}
+		return {"ok": false, "message": UIStrings.t("setup.action.compose_start_failed")}
 	var state := _run("docker", PackedStringArray(["inspect", "jht",
 			"--format", "{{.State.Status}}"]))
 	if state["code"] == 0 and str(state["out"]).contains("running"):
 		Log.call_deferred("info", "setup", "attivazione completata: container attivo")
-		return {"ok": true, "message": "Container JHT attivo"}
+		return {"ok": true, "message": UIStrings.t("setup.action.container_running")}
 	Log.call_deferred("warn", "setup", "compose fallito: " + str(run.get("tail", "")).right(400))
-	return {"ok": false, "message": "Attivazione del container fallita: " \
-			+ str(run.get("tail", "")).strip_edges().right(260)}
+	return {"ok": false, "message": UIStrings.t("setup.action.container_start_failed") \
+			% str(run.get("tail", "")).strip_edges().right(260)}
 
 
 ## Esegue un sottocomando compose in background riportando il progresso del
@@ -1391,7 +1443,8 @@ func _compose_stream(compose: String, args: PackedStringArray,
 func _stream_compose(argv: PackedStringArray, json_mode: bool) -> Dictionary:
 	var process := OS.execute_with_pipe("docker", argv, false)
 	if process.is_empty():
-		return {"ok": false, "spawned": false, "tail": "docker compose non eseguibile"}
+		return {"ok": false, "spawned": false,
+				"tail": UIStrings.t("setup.action.compose_unavailable")}
 	var stdio: FileAccess = process["stdio"]
 	var stderr: FileAccess = process["stderr"]
 	var pid := int(process["pid"])
@@ -1450,9 +1503,7 @@ func _stream_compose(argv: PackedStringArray, json_mode: bool) -> Dictionary:
 				OS.kill(pid)
 				Log.call_deferred("warn", "setup", "compose fermo da 3 minuti, interrotto")
 				return {"ok": false, "spawned": true, "timeout": true,
-						"tail": "Il download non procede da 3 minuti. " \
-						+ "Controlla la connessione e riprova; se persiste apri Docker Desktop " \
-						+ "e verifica che il motore sia attivo."}
+						"tail": UIStrings.t("setup.action.download_timeout")}
 			OS.delay_msec(80)
 		if Time.get_ticks_msec() - last_ui_ms > 1500 and not layers.is_empty():
 			last_ui_ms = Time.get_ticks_msec()
@@ -1567,11 +1618,11 @@ static func _pull_progress_text(layers: Dictionary, layer_bytes: Dictionary) -> 
 		if status.contains("complete") or status.contains("exists"):
 			done += 1
 	var info := _pull_progress_info(layers, layer_bytes)
-	var text := "Scarico l'immagine del team: %d/%d parti" % [done, layers.size()]
+	var text := UIStrings.t("setup.action.image_progress") % [done, layers.size()]
 	if float(info["fraction"]) >= 0.0:
 		text += " · %.0f/%.0f MB" % [float(info["got_mb"]), float(info["total_mb"])]
 	elif float(info["got_mb"]) > 0.0:
-		text += " · %.0f MB scaricati" % float(info["got_mb"])
+		text += UIStrings.t("setup.action.mb_downloaded") % float(info["got_mb"])
 	return text + "…"
 
 
@@ -1619,10 +1670,9 @@ static func _launch_docker_runtime() -> Dictionary:
 	match OS.get_name():
 		"Windows":
 			if not FileAccess.file_exists(DOCKER_DESKTOP_WIN):
-				return {"ok": false, "message": "Docker Desktop non è installato. " \
-						+ "Usa INSTALLA / RIPARA RUNTIME qui sotto."}
+				return {"ok": false, "message": UIStrings.t("setup.runtime.desktop_missing")}
 			OS.create_process(DOCKER_DESKTOP_WIN, PackedStringArray())
-			return {"ok": true, "message": "Docker Desktop avviato: attendo il motore…"}
+			return {"ok": true, "message": UIStrings.t("setup.runtime.desktop_starting")}
 		"macOS":
 			# Stesso criterio del probe: su POSIX un comando assente esce 127,
 			# mai -1 — col vecchio confronto questo ramo partiva anche senza
@@ -1631,15 +1681,14 @@ static func _launch_docker_runtime() -> Dictionary:
 			if _exec_present("colima",
 					int(_run("colima", PackedStringArray(["version"]))["code"])):
 				OS.create_process("colima", PackedStringArray(["start"]))
-				return {"ok": true, "message": "Colima avviato: attendo il motore…"}
+				return {"ok": true, "message": UIStrings.t("setup.runtime.colima_starting")}
 			if DirAccess.dir_exists_absolute("/Applications/Docker.app"):
 				OS.create_process("open", PackedStringArray(["-a", "Docker"]))
-				return {"ok": true, "message": "Docker Desktop avviato: attendo il motore…"}
-			return {"ok": false, "message": "Nessun runtime Docker trovato. " \
-					+ "Usa INSTALLA / RIPARA RUNTIME qui sotto."}
+				return {"ok": true, "message": UIStrings.t("setup.runtime.desktop_starting")}
+			return {"ok": false, "message": UIStrings.t("setup.runtime.missing")}
 		_:
-			return {"ok": false, "message": "Il servizio Docker è spento. " \
-					+ "Avvialo con: sudo systemctl start docker"}
+			return {"ok": false, "message": UIStrings.t("setup.runtime.service_stopped") \
+					% "sudo systemctl start docker"}
 
 
 ## Progresso intermedio di un'azione, emesso dal worker thread.
@@ -1661,8 +1710,9 @@ func _do_install_provider(provider: String, vps: Dictionary) -> Dictionary:
 					"exec", "-e", "IS_CONTAINER=1", "jht", "node",
 					"/app/cli/bin/jht.js", "providers", "update", install_id]))
 	return {"ok": res["code"] == 0,
-			"message": "%s installato" % PROVIDERS[provider]["name"] \
-			if res["code"] == 0 else "Installazione fallita: " + str(res["out"]).right(240)}
+			"message": UIStrings.t("setup.action.provider_installed") \
+			% PROVIDERS[provider]["name"] if res["code"] == 0 \
+			else UIStrings.t("setup.action.provider_install_failed") % str(res["out"]).right(240)}
 
 
 func open_provider_login(provider: String) -> void:
@@ -1671,7 +1721,7 @@ func open_provider_login(provider: String) -> void:
 	terminal_requested.emit("provider:" + provider,
 			provider_login_spec(provider, _vps_config()))
 	action_changed.emit("login", false,
-			"Console di login aperta dentro Job Hunter Team", true)
+			UIStrings.t("setup.action.login_console_opened"), true)
 
 
 func logout_provider(provider: String) -> void:
@@ -1686,15 +1736,17 @@ static func _do_logout_provider(provider: String, vps: Dictionary) -> Dictionary
 	if vps.is_empty():
 		for rel in paths:
 			if not JhtFs.remove(str(rel)):
-				result = {"code": -1, "out": "impossibile rimuovere " + str(rel)}
+				result = {"code": -1, "out": UIStrings.t("common.remove_failed") % str(rel)}
 	else:
 		var remote_paths := PackedStringArray()
 		for rel in paths:
 			remote_paths.append("/jht_home/" + str(rel))
 		result = _run_ssh(vps, "docker exec jht rm -f " + " ".join(remote_paths))
 	return {"ok": result["code"] == 0,
-			"message": "Sessione %s rimossa" % PROVIDERS[provider]["name"] \
-			if result["code"] == 0 else "Logout fallito: " + str(result.get("out", "")).right(220)}
+			"message": UIStrings.t("setup.action.provider_removed") \
+			% PROVIDERS[provider]["name"] if result["code"] == 0 \
+			else UIStrings.t("setup.action.provider_remove_failed") \
+			% str(result.get("out", "")).right(220)}
 
 
 ## Specifica argv per la console incorporata. `script` crea una PTY vera su
@@ -1795,7 +1847,7 @@ static func embedded_terminal_spec(title: String, hint: String, command: String)
 
 
 func open_technical_terminal(context: String, title: String, hint: String,
-		container_args: PackedStringArray) -> void:
+		container_args: PackedStringArray, spec_overrides: Dictionary = {}) -> void:
 	var vps := _vps_config()
 	var command := ""
 	if vps.is_empty():
@@ -1808,7 +1860,9 @@ func open_technical_terminal(context: String, title: String, hint: String,
 		var target := _ssh_target(vps)
 		command = "ssh -tt -i " + _local_quote(key) + " " \
 				+ _local_quote(target) + " " + _local_quote(inner)
-	terminal_requested.emit(context, embedded_terminal_spec(title, hint, command))
+	var terminal_spec := embedded_terminal_spec(title, hint, command)
+	terminal_spec.merge(spec_overrides, true)
+	terminal_requested.emit(context, terminal_spec)
 
 
 static func _posix_quoted(args: PackedStringArray) -> PackedStringArray:
@@ -1836,11 +1890,15 @@ static func _local_container_exec(posix_command: String) -> String:
 
 
 func open_cloud_login(prefer_google := false) -> void:
-	open_technical_terminal("cloud", "Account e cloud",
-			("Apri il link, scegli ACCEDI CON GOOGLE, inserisci il codice e approva questo dispositivo. " \
-			+ "Il pairing prosegue automaticamente.") if prefer_google else \
-			"Apri il link, accedi all'account, inserisci il codice e approva questo dispositivo. Il pairing prosegue automaticamente.",
-			PackedStringArray(["node", "/app/cli/bin/jht.js", "cloud", "login"]))
+	# La modale può chiudersi appena riceve `paired`: un auto-push ancora in
+	# corso verrebbe ucciso insieme al processo nascosto. Il normale sync del
+	# team riparte dalla config appena salvata; questa corsia termina al pairing.
+	open_technical_terminal("cloud", UIStrings.t("setup.cloud_login_title"),
+			UIStrings.t("setup.cloud_login_google_hint") if prefer_google else \
+			UIStrings.t("setup.cloud_login_hint"),
+			PackedStringArray(["node", "/app/cli/bin/jht.js", "cloud", "login",
+					"--ui-json", "--no-push"]),
+			{"cloud_pairing": true, "prefer_google": prefer_google})
 
 
 func open_cloud_command(command: String) -> void:
@@ -1848,13 +1906,13 @@ func open_cloud_command(command: String) -> void:
 	if not supported.has(command):
 		return
 	open_technical_terminal("cloud:" + command, "Cloud · " + command,
-			"Il comando gira nel container del team; puoi chiudere la console quando termina.",
+			UIStrings.t("setup.term.cloud_command_hint"),
 			PackedStringArray(["node", "/app/cli/bin/jht.js", "cloud", command]))
 
 
 func open_doctor() -> void:
-	open_technical_terminal("doctor", "Diagnostica JHT",
-			"Controllo completo di configurazione, dipendenze, provider e agenti.",
+	open_technical_terminal("doctor", UIStrings.t("setup.term.doctor_title"),
+			UIStrings.t("setup.term.doctor_hint"),
 			PackedStringArray(["node", "/app/cli/bin/jht.js", "doctor"]))
 
 
@@ -1866,20 +1924,19 @@ func open_runtime_install() -> void:
 		# `if` separa davvero assenza e fallimento: un errore di winget non deve
 		# cadere nel fallback browser e trasformarsi in un falso exit 0.
 		var command := "where winget >nul 2>&1 & if errorlevel 1 " \
-				+ "(echo winget non disponibile: apro la pagina di download di Docker Desktop... " \
+				+ "(echo " + UIStrings.t("setup.term.winget_missing") + " " \
 				+ "& start \"\" https://www.docker.com/products/docker-desktop/) else " \
 				+ "(winget install -e --id Docker.DockerDesktop " \
 				+ "--accept-package-agreements --accept-source-agreements)"
 		terminal_requested.emit("runtime-install", embedded_terminal_spec(
-				"Installazione Docker Desktop",
-				"Conferma l'autorizzazione di Windows se appare. Al termine avvia Docker Desktop " \
-				+ "una prima volta (accetta i termini), poi torna qui e premi ATTIVA CONTAINER.",
+				UIStrings.t("setup.term.runtime_windows_title"),
+				UIStrings.t("setup.term.runtime_windows_hint"),
 				command))
 		return
 	var command := _posix_runtime_install_command()
 	terminal_requested.emit("runtime-install", embedded_terminal_spec(
-			"Installazione runtime JHT",
-			"L'installazione resta dentro il gioco. Se richiesta, inserisci qui la password amministratore del computer.",
+			UIStrings.t("setup.term.runtime_title"),
+			UIStrings.t("setup.term.runtime_hint"),
 			command))
 
 
@@ -1929,11 +1986,11 @@ func copy_vps_public_key(key_path := "") -> void:
 	var info := vps_key_info(key_path)
 	if str(info.get("public_key", "")) == "":
 		action_changed.emit("vps-key", false,
-				"Chiave pubblica assente: genera prima la chiave SSH", false)
+				UIStrings.t("vps.action.public_key_missing"), false)
 		return
 	DisplayServer.clipboard_set(str(info["public_key"]))
 	action_changed.emit("vps-key", false,
-			"Chiave pubblica copiata: incollala nella sezione SSH Keys di Hetzner", true)
+			UIStrings.t("vps.action.public_key_copied"), true)
 
 
 func reveal_vps_key(key_path := "") -> void:
@@ -1941,7 +1998,7 @@ func reveal_vps_key(key_path := "") -> void:
 	DirAccess.make_dir_recursive_absolute(str(info["directory"]))
 	OS.shell_show_in_file_manager(str(info["public_path"]), true)
 	action_changed.emit("vps-key", false,
-			"Cartella della chiave aperta: " + str(info["directory"]), true)
+			UIStrings.t("vps.action.key_folder_opened") % str(info["directory"]), true)
 
 
 func generate_vps_key() -> void:
@@ -1954,8 +2011,8 @@ static func _do_generate_vps_key() -> Dictionary:
 	var path := default_vps_key_path()
 	if FileAccess.file_exists(path) and FileAccess.file_exists(path + ".pub"):
 		var existing := vps_key_info(path)
-		return {"ok": true, "message": "Chiave SSH già disponibile · " \
-				+ str(existing.get("fingerprint", path))}
+		return {"ok": true, "message": UIStrings.t("vps.action.key_available") \
+				% str(existing.get("fingerprint", path))}
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var result := {"code": 0, "out": ""}
 	if FileAccess.file_exists(path):
@@ -1964,7 +2021,8 @@ static func _do_generate_vps_key() -> Dictionary:
 		if result["code"] == 0:
 			var public_file := FileAccess.open(path + ".pub", FileAccess.WRITE)
 			if public_file == null:
-				return {"ok": false, "message": "Impossibile scrivere " + path + ".pub"}
+				return {"ok": false, "message": UIStrings.t("vps.action.write_failed") \
+						% (path + ".pub")}
 			public_file.store_string(str(result["out"]).strip_edges() \
 					+ " job-hunter-team\n")
 			public_file.close()
@@ -1975,9 +2033,10 @@ static func _do_generate_vps_key() -> Dictionary:
 		_run("chmod", PackedStringArray(["600", path]))
 	var info := vps_key_info(path)
 	return {"ok": result["code"] == 0,
-			"message": "Chiave SSH creata · " + str(info.get("fingerprint", path)) \
+			"message": UIStrings.t("vps.action.key_created") \
+			% str(info.get("fingerprint", path)) \
 			if result["code"] == 0 \
-			else "Creazione chiave fallita: " + str(result["out"]).right(220)}
+			else UIStrings.t("vps.action.key_create_failed") % str(result["out"]).right(220)}
 
 
 ## L'utente SSH dipende dal provider: Hetzner consegna root, OVH e AWS
@@ -2022,7 +2081,7 @@ func test_vps_connection(ip: String, key_path: String, user := "") -> void:
 	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-test", false,
-				"IP/hostname o utente SSH non valido, o chiave privata non trovata", false)
+				UIStrings.t("vps.action.invalid_credentials"), false)
 		return
 	_start_action("vps-test", _do_test_vps_connection.bind(target))
 
@@ -2039,10 +2098,11 @@ static func _do_test_vps_connection(target: Dictionary) -> Dictionary:
 			+ "|| sudo -n true 2>/dev/null || docker info >/dev/null 2>&1")
 	var fingerprint := str(pinned.get("fingerprint", ""))
 	return {"ok": result["code"] == 0,
-			"message": "SSH verificato · " + str(result["out"]).strip_edges() \
+			"message": UIStrings.t("vps.action.ssh_verified") \
+			% str(result["out"]).strip_edges() \
 			+ ((" · HOST " + fingerprint) if fingerprint != "" else "") \
-			if result["code"] == 0 else "SSH non disponibile: " \
-			+ str(result.get("out", "")).strip_edges().right(260)}
+			if result["code"] == 0 else UIStrings.t("vps.action.ssh_unavailable") \
+			% str(result.get("out", "")).strip_edges().right(260)}
 
 
 static func _vps_host_fingerprint(host: String) -> String:
@@ -2072,16 +2132,16 @@ static func _pin_vps_host(host: String) -> Dictionary:
 	var scan := _vps_host_scan(host)
 	var material := _host_key_material(str(scan.get("out", "")))
 	if scan["code"] != 0 or material == "":
-		return {"ok": false, "message": "Impossibile leggere la chiave host SSH"}
+		return {"ok": false, "message": UIStrings.t("vps.action.host_key_read_failed")}
 	var path := VpsBackend.known_hosts_path(host)
 	if FileAccess.file_exists(path):
 		var previous := _host_key_material(FileAccess.get_file_as_string(path))
 		if previous != material:
-			return {"ok": false, "message": "CHIAVE HOST SSH CAMBIATA: collegamento rifiutato"}
+			return {"ok": false, "message": UIStrings.t("vps.action.host_key_changed")}
 	else:
 		DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 		if not _write_text(path, str(scan.get("out", "")).strip_edges() + "\n"):
-			return {"ok": false, "message": "Impossibile salvare il fingerprint SSH"}
+			return {"ok": false, "message": UIStrings.t("vps.action.fingerprint_save_failed")}
 		if OS.get_name() != "Windows":
 			_run("chmod", PackedStringArray(["600", path]))
 	return {"ok": true, "fingerprint": _fingerprint_for_known_host(path)}
@@ -2111,7 +2171,7 @@ func provision_vps(ip: String, key_path: String, user := "") -> void:
 	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-provision", false,
-				"Inserisci un IP valido e genera/seleziona la chiave SSH", false)
+				UIStrings.t("vps.action.destination_invalid"), false)
 		return
 	_start_action("vps-provision", _do_provision_vps.bind(target))
 
@@ -2120,30 +2180,34 @@ static func _vps_prepare_runtime_command() -> String:
 	# L'installer mette il wrapper in /usr/local/bin quando gira come root e in
 	# ~/.local/bin per utenti normali. Non assumere uno dei due percorsi: una VPS
 	# Hetzner nuova usa root e il vecchio hardcoding faceva fallire il primo up.
-	return "export JHT_SKIP_ONBOARD=1; " \
+	return "set -e; export JHT_SKIP_ONBOARD=1; " \
 			+ "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
 			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; " \
 			+ "if [ ! -x \"$JHT_BIN\" ]; then " \
 			+ "curl -fsSL https://jobhunterteam.ai/install.sh | bash; " \
 			+ "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
 			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; fi; " \
-			+ "[ -x \"$JHT_BIN\" ] && \"$JHT_BIN\" up"
+			+ "[ -x \"$JHT_BIN\" ] && [ ! -L \"$JHT_BIN\" ]; " \
+			+ "JHT_BIN_REAL=\"$(cd -P \"$(dirname \"$JHT_BIN\")\" && printf '%s/%s' \"$(pwd -P)\" \"$(basename \"$JHT_BIN\")\")\"; " \
+			+ "[ \"$JHT_BIN\" = \"$JHT_BIN_REAL\" ]; " \
+			+ "case \"$JHT_BIN_REAL\" in \"$HOME/.jht\"|\"$HOME/.jht/\"*|\"$HOME/Documents/Job Hunter Team\"|\"$HOME/Documents/Job Hunter Team/\"*) exit 1;; esac; " \
+			+ _posix_upgrade_bootstrap_with_target("JHT_WRAPPER_PATH=\"$JHT_BIN\"", false)
 
 
 func _do_provision_vps(target: Dictionary) -> Dictionary:
-	_progress("vps-provision", "Verifico accesso SSH e privilegi amministrativi…")
+	_progress("vps-provision", UIStrings.t("vps.action.verifying_access"))
 	var check := _do_test_vps_connection(target)
 	if not bool(check["ok"]):
 		return check
-	_progress("vps-provision", "Installo il runtime e preparo il container sulla VPS…")
+	_progress("vps-provision", UIStrings.t("vps.action.installing_runtime"))
 	var command := _vps_prepare_runtime_command() + " && " \
 			+ "test \"$(docker inspect jht --format '{{.State.Running}}')\" = true && " \
 			+ "grep -q '^JHT_HOST_TYPE=vps' \"$HOME/.jht/host.env\""
 	var result := _run_ssh(target, command)
 	if result["code"] != 0:
-		return {"ok": false, "message": "Setup VPS fallito: " \
-				+ str(result.get("out", "")).strip_edges().right(300)}
-	return {"ok": true, "message": "VPS pronta e collegamento salvato",
+		return {"ok": false, "message": UIStrings.t("vps.action.setup_failed") \
+				% str(result.get("out", "")).strip_edges().right(300)}
+	return {"ok": true, "message": UIStrings.t("vps.action.ready"),
 			"activate_vps": target}
 
 
@@ -2154,7 +2218,7 @@ func migrate_to_vps(ip: String, key_path: String, source_mode: String,
 	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-migrate", false,
-				"Destinazione non valida: controlla IP, utente e chiave SSH", false)
+				UIStrings.t("vps.action.migration_destination_invalid"), false)
 		return
 	var source := BackendBus.load_vps_config() if source_mode == "vps" else {}
 	if source_mode == "vps":
@@ -2162,11 +2226,11 @@ func migrate_to_vps(ip: String, key_path: String, source_mode: String,
 				str(source.get("key_path", "")), str(source.get("user", "")))
 		if source.is_empty():
 			action_changed.emit("vps-migrate", false,
-					"Nessuna VPS sorgente salvata da cui migrare", false)
+					UIStrings.t("vps.action.source_missing"), false)
 			return
 		if str(source["ip"]) == str(target["ip"]):
 			action_changed.emit("vps-migrate", false,
-					"Sorgente e destinazione coincidono", false)
+					UIStrings.t("vps.action.same_source_destination"), false)
 			return
 	_start_action("vps-migrate", _do_migrate_to_vps.bind(target, source_mode, source))
 
@@ -2181,7 +2245,7 @@ func migrate_to_local() -> void:
 			str(source.get("key_path", "")), str(source.get("user", "")))
 	if source.is_empty():
 		action_changed.emit("vps-migrate", false,
-				"Nessuna VPS sorgente salvata da cui migrare", false)
+				UIStrings.t("vps.action.source_missing"), false)
 		return
 	_start_action("vps-migrate", _do_migrate_to_local.bind(source))
 
@@ -2191,13 +2255,13 @@ func _do_migrate_to_vps(target: Dictionary, source_mode: String,
 	var check := _do_test_vps_connection(target)
 	if not bool(check["ok"]):
 		return check
-	_progress("vps-migrate", "Preparo il runtime sulla nuova VPS…")
+	_progress("vps-migrate", UIStrings.t("vps.action.preparing_destination"))
 	var provision := _run_ssh(target,
 			_vps_prepare_runtime_command() + " && " \
 			+ "test \"$(docker inspect jht --format '{{.State.Running}}')\" = true")
 	if provision["code"] != 0:
-		return {"ok": false, "message": "Preparazione destinazione fallita: " \
-				+ str(provision.get("out", "")).right(280)}
+		return {"ok": false, "message": UIStrings.t("vps.action.destination_prepare_failed") \
+				% str(provision.get("out", "")).right(280)}
 	var target_team_probe := _run_ssh(target,
 			"docker exec jht tmux list-sessions -F '#{session_name}' 2>/dev/null")
 	var target_team_was_running: bool = target_team_probe["code"] == 0 \
@@ -2206,23 +2270,23 @@ func _do_migrate_to_vps(target: Dictionary, source_mode: String,
 	var stamp := str(int(Time.get_unix_time_from_system()))
 	var archive_name := "jht-migration-" + stamp + ".tar.gz"
 	var local_archive := OS.get_cache_dir().path_join(archive_name)
-	_progress("vps-migrate", "Fermo la sorgente e creo uno snapshot coerente…")
+	_progress("vps-migrate", UIStrings.t("vps.action.snapshot_source"))
 	var captured := _capture_migration_source(source_mode, source,
 			archive_name, local_archive)
 	if not bool(captured.get("ok", false)):
 		return captured
 
-	_progress("vps-migrate", "Trasferisco dati, profilo, configurazione e login…")
+	_progress("vps-migrate", UIStrings.t("vps.action.transferring"))
 	var upload := _scp_upload(target, local_archive, "/tmp/" + archive_name)
 	if upload["code"] != 0:
 		DirAccess.remove_absolute(local_archive)
 		_restore_migration_source(source_mode, source,
 				bool(captured.get("container_was_running", false)),
 				bool(captured.get("team_was_running", false)))
-		return {"ok": false, "message": "Trasferimento fallito: " \
-				+ str(upload.get("out", "")).strip_edges().right(280)}
+		return {"ok": false, "message": UIStrings.t("vps.action.transfer_failed") \
+				% str(upload.get("out", "")).strip_edges().right(280)}
 
-	_progress("vps-migrate", "Verifico il trasferimento e applico in modo atomico…")
+	_progress("vps-migrate", UIStrings.t("vps.action.verifying_transfer"))
 	var remote_backup := "/root/jht-before-migration-" + stamp + ".tar.gz"
 	var apply := _run_ssh(target, "bash -lc " + _shell_quote(
 			_remote_apply_script(archive_name, stamp,
@@ -2233,11 +2297,11 @@ func _do_migrate_to_vps(target: Dictionary, source_mode: String,
 		_restore_migration_source(source_mode, source,
 				bool(captured.get("container_was_running", false)),
 				bool(captured.get("team_was_running", false)))
-		return {"ok": false, "message": "Applicazione migrazione fallita. Backup: " \
-				+ remote_backup + " · " + str(apply.get("out", "")).right(220)}
+		return {"ok": false, "message": UIStrings.t("vps.action.apply_failed") \
+				% [remote_backup, str(apply.get("out", "")).right(220)]}
 
 	if bool(captured.get("team_was_running", false)):
-		_progress("vps-migrate", "Riavvio il team sulla nuova VPS…")
+		_progress("vps-migrate", UIStrings.t("vps.action.restarting_team"))
 		var team_start := _run_ssh(target,
 				"docker exec jht node /app/cli/bin/jht.js team start >/dev/null 2>&1 && " \
 				+ "for i in $(seq 1 15); do docker exec jht tmux list-sessions " \
@@ -2247,8 +2311,8 @@ func _do_migrate_to_vps(target: Dictionary, source_mode: String,
 			_restore_migration_source(source_mode, source,
 					bool(captured.get("container_was_running", false)),
 					bool(captured.get("team_was_running", false)))
-			return {"ok": false, "message": "Dati trasferiti, ma avvio agenti fallito. " \
-					+ "La sorgente è stata ripristinata; backup destinazione: " + remote_backup}
+			return {"ok": false, "message": UIStrings.t("vps.action.team_start_failed") \
+					% remote_backup}
 
 	# Commit del single-source handoff: se non riusciamo a disarmare la vecchia
 	# origine, ripristiniamo davvero la destinazione invece di dichiarare un
@@ -2259,11 +2323,11 @@ func _do_migrate_to_vps(target: Dictionary, source_mode: String,
 		_restore_migration_source(source_mode, source,
 				bool(captured.get("container_was_running", false)),
 				bool(captured.get("team_was_running", false)))
-		return {"ok": false, "message": "Handoff cloud non completato: " \
-				+ str(handoff.get("message", "errore sconosciuto"))}
+		return {"ok": false, "message": UIStrings.t("vps.action.handoff_failed") \
+				% str(handoff.get("message", UIStrings.t("common.unknown_error")))}
 	_cleanup_vps_transaction(target, stamp)
 	return {"ok": true,
-			"message": "Migrazione completata · backup destinazione: " + remote_backup,
+			"message": UIStrings.t("vps.action.migration_complete") % remote_backup,
 			"activate_vps": target}
 
 
@@ -2277,12 +2341,12 @@ func _do_migrate_to_local(source: Dictionary) -> Dictionary:
 	var stamp := str(int(Time.get_unix_time_from_system()))
 	var archive_name := "jht-migration-" + stamp + ".tar.gz"
 	var local_archive := OS.get_cache_dir().path_join(archive_name)
-	_progress("vps-migrate", "Fermo la VPS e scarico uno snapshot coerente…")
+	_progress("vps-migrate", UIStrings.t("vps.action.downloading_snapshot"))
 	var captured := _capture_migration_source("vps", source,
 			archive_name, local_archive)
 	if not bool(captured.get("ok", false)):
 		return captured
-	_progress("vps-migrate", "Creo il backup locale e applico in modo atomico…")
+	_progress("vps-migrate", UIStrings.t("vps.action.applying_local"))
 	var applied := _apply_archive_to_local(local_archive, stamp,
 			bool(captured.get("team_was_running", false)))
 	DirAccess.remove_absolute(local_archive)
@@ -2297,12 +2361,12 @@ func _do_migrate_to_local(source: Dictionary) -> Dictionary:
 		_restore_migration_source("vps", source,
 				bool(captured.get("container_was_running", false)),
 				bool(captured.get("team_was_running", false)))
-		return {"ok": false, "message": "Handoff cloud non completato: " \
-				+ str(handoff.get("message", "errore sconosciuto"))}
+		return {"ok": false, "message": UIStrings.t("vps.action.handoff_failed") \
+				% str(handoff.get("message", UIStrings.t("common.unknown_error")))}
 	_commit_local_destination(applied)
 	return {"ok": true,
-			"message": "Migrazione sul computer completata · backup: " \
-				+ str(applied.get("backup", "")), "activate_local": true}
+			"message": UIStrings.t("vps.action.local_migration_complete") \
+				% str(applied.get("backup", "")), "activate_local": true}
 
 
 ## Cattura un'unica fotografia della sorgente, la valida e ne conserva il
@@ -2354,8 +2418,8 @@ static func _capture_migration_source(source_mode: String, source: Dictionary,
 			DirAccess.remove_absolute(local_archive)
 		_restore_migration_source(source_mode, source, container_was_running,
 				team_was_running)
-		return {"ok": false, "message": "Snapshot sorgente fallito: " \
-				+ str(created.get("out", "")).strip_edges().right(280)}
+		return {"ok": false, "message": UIStrings.t("vps.action.snapshot_failed") \
+				% str(created.get("out", "")).strip_edges().right(280)}
 	var valid := _validate_migration_archive(local_archive)
 	if not bool(valid.get("ok", false)):
 		DirAccess.remove_absolute(local_archive)
@@ -2367,7 +2431,7 @@ static func _capture_migration_source(source_mode: String, source: Dictionary,
 		DirAccess.remove_absolute(local_archive)
 		_restore_migration_source(source_mode, source, container_was_running,
 				team_was_running)
-		return {"ok": false, "message": "Checksum snapshot non valido"}
+		return {"ok": false, "message": UIStrings.t("vps.action.snapshot_checksum_invalid")}
 	return {"ok": true, "sha256": actual_sha,
 			"container_was_running": container_was_running,
 			"team_was_running": team_was_running}
@@ -2375,11 +2439,11 @@ static func _capture_migration_source(source_mode: String, source: Dictionary,
 
 static func _validate_migration_archive(path: String) -> Dictionary:
 	if not _file_nonempty(path):
-		return {"ok": false, "message": "Snapshot vuoto o non leggibile"}
+		return {"ok": false, "message": UIStrings.t("vps.action.snapshot_unreadable")}
 	var listing := _run("tar", PackedStringArray(["-tzf", path]))
 	if listing["code"] != 0:
-		return {"ok": false, "message": "Snapshot corrotto: " \
-				+ str(listing.get("out", "")).right(220)}
+		return {"ok": false, "message": UIStrings.t("vps.action.snapshot_corrupt") \
+				% str(listing.get("out", "")).right(220)}
 	var has_jht := false
 	var has_payload := false
 	for raw: String in str(listing.get("out", "")).split("\n"):
@@ -2387,7 +2451,7 @@ static func _validate_migration_archive(path: String) -> Dictionary:
 		if name == "":
 			continue
 		if name.begins_with("/") or name.split("/").has(".."):
-			return {"ok": false, "message": "Snapshot contiene un percorso non sicuro"}
+			return {"ok": false, "message": UIStrings.t("vps.action.snapshot_unsafe_path")}
 		if name == ".jht" or name.begins_with(".jht/"):
 			has_jht = true
 		if name in [".jht/jobs.db", ".jht/jht.config.json"] \
@@ -2395,9 +2459,9 @@ static func _validate_migration_archive(path: String) -> Dictionary:
 			has_payload = true
 		if name == ".jht/host.env" or name.begins_with(".jht/ssh/") \
 				or name.begins_with(".jht/runtime/"):
-			return {"ok": false, "message": "Snapshot include file host riservati"}
+			return {"ok": false, "message": UIStrings.t("vps.action.snapshot_reserved_files")}
 	if not has_jht or not has_payload:
-		return {"ok": false, "message": "Snapshot non contiene un team JHT valido"}
+		return {"ok": false, "message": UIStrings.t("vps.action.snapshot_invalid_team")}
 	return {"ok": true}
 
 
@@ -2417,7 +2481,6 @@ static func _remote_apply_script(archive_name: String, stamp: String,
 			+ "-o -d \"$STAGE/.jht/profile\"; " \
 			+ "mkdir -p \"$STAGE/Documents/Job Hunter Team\"; " \
 			+ "[ ! -d /root/.jht/ssh ] || cp -a /root/.jht/ssh \"$STAGE/.jht/ssh\"; " \
-			+ "[ ! -d /root/.jht/runtime ] || cp -a /root/.jht/runtime \"$STAGE/.jht/runtime\"; " \
 			+ "printf 'JHT_HOST_TYPE=vps\\n' > \"$STAGE/.jht/host.env\"; " \
 			+ "cd /root; set --; [ -d .jht ] && set -- \"$@\" .jht; " \
 			+ "[ -d \"Documents/Job Hunter Team\" ] && set -- \"$@\" \"Documents/Job Hunter Team\"; " \
@@ -2441,10 +2504,18 @@ static func _remote_apply_script(archive_name: String, stamp: String,
 
 static func _rollback_vps_destination(target: Dictionary, stamp: String,
 		team_was_running: bool = false) -> void:
+	var script := _rollback_vps_destination_script(stamp)
+	_run_ssh(target, "bash -lc " + _shell_quote(script))
+	if team_was_running:
+		_run_ssh(target,
+				"docker exec jht node /app/cli/bin/jht.js team start >/dev/null 2>&1 || true")
+
+
+static func _rollback_vps_destination_script(stamp: String) -> String:
 	var old_jht := "/root/.jht.migration-old-" + stamp
 	var old_docs := "/root/Documents/Job Hunter Team.migration-old-" + stamp
 	var stage := "/root/.jht-migration-stage-" + stamp
-	var script := "set -u; if [ -d " + _shell_quote(old_jht) + " ]; then " \
+	return "set -u; if [ -d " + _shell_quote(old_jht) + " ]; then " \
 			+ "docker stop jht >/dev/null 2>&1 || true; rm -rf -- /root/.jht; " \
 			+ "mv " + _shell_quote(old_jht) + " /root/.jht; " \
 			+ "if [ -d " + _shell_quote(old_docs) + " ]; then rm -rf -- " \
@@ -2452,10 +2523,6 @@ static func _rollback_vps_destination(target: Dictionary, stamp: String,
 			+ " \"/root/Documents/Job Hunter Team\"; fi; " \
 			+ _vps_prepare_runtime_command() + " >/dev/null 2>&1 || true; fi; " \
 			+ "rm -rf -- " + _shell_quote(stage)
-	_run_ssh(target, "bash -lc " + _shell_quote(script))
-	if team_was_running:
-		_run_ssh(target,
-				"docker exec jht node /app/cli/bin/jht.js team start >/dev/null 2>&1 || true")
 
 
 static func _cleanup_vps_transaction(target: Dictionary, stamp: String) -> void:
@@ -2472,25 +2539,26 @@ func _prepare_local_migration_target() -> Dictionary:
 		var launch := _launch_docker_runtime()
 		if not bool(launch.get("ok", false)):
 			return launch
-		_progress("vps-migrate", str(launch.get("message", "Avvio Docker…")))
+		_progress("vps-migrate", str(launch.get("message",
+				UIStrings.t("setup.action.docker_starting") % 0)))
 		for waited in range(2, 122, 2):
 			OS.delay_msec(2000)
 			daemon = _run("docker", PackedStringArray(["version", "--format",
 					"{{.Server.Version}}"] ))
 			if daemon["code"] == 0:
 				break
-			_progress("vps-migrate", "Avvio di Docker in corso… (%ds)" % waited)
+			_progress("vps-migrate", UIStrings.t("setup.action.docker_starting") % waited)
 	if daemon["code"] != 0:
-		return {"ok": false, "message": "Docker locale non risponde"}
+		return {"ok": false, "message": UIStrings.t("vps.action.local_docker_unavailable")}
 	var compose := _ensure_compose_file()
 	if compose == "":
-		return {"ok": false, "message": "Impossibile preparare il runtime locale"}
+		return {"ok": false, "message": UIStrings.t("vps.action.local_runtime_prepare_failed")}
 	_ensure_host_dirs()
 	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
-			"Preparo l'immagine del team sul computer…")
+			UIStrings.t("vps.action.preparing_local_image"))
 	if not bool(pull.get("ok", false)) and _local_runtime_image_id() == "":
-		return {"ok": false, "message": "Immagine runtime non disponibile: " \
-				+ str(pull.get("tail", "")).right(220)}
+		return {"ok": false, "message": UIStrings.t("vps.action.runtime_image_unavailable") \
+				% str(pull.get("tail", "")).right(220)}
 	return {"ok": true}
 
 
@@ -2513,27 +2581,29 @@ func _apply_archive_to_local(archive: String, stamp: String,
 	var extracted := _run("tar", PackedStringArray(["-xzf", archive, "-C", stage]))
 	if extracted["code"] != 0 or not DirAccess.dir_exists_absolute(staged_jht):
 		_remove_tree(stage)
-		return {"ok": false, "message": "Estrazione locale fallita: " \
-				+ str(extracted.get("out", "")).right(220)}
+		return {"ok": false, "message": UIStrings.t("vps.action.local_extract_failed") \
+				% str(extracted.get("out", "")).right(220)}
 	if not FileAccess.file_exists(staged_jht.path_join("jobs.db")) \
 			and not FileAccess.file_exists(staged_jht.path_join("jht.config.json")) \
 			and not DirAccess.dir_exists_absolute(staged_jht.path_join("profile")):
 		_remove_tree(stage)
-		return {"ok": false, "message": "Lo snapshot estratto non contiene un team valido"}
+		return {"ok": false, "message": UIStrings.t("vps.action.extracted_team_invalid")}
 	DirAccess.make_dir_recursive_absolute(staged_docs)
-	# Il runtime e le chiavi appartengono alla macchina destinazione, non alla
-	# sorgente. Si preservano fuori dallo snapshot prima dello swap atomico.
-	for rel in ["ssh", "runtime"]:
+	# Le chiavi appartengono alla macchina destinazione. Il vecchio runtime
+	# sotto .jht e invece input container-writable: non viene mai copiato; il
+	# compose host autorevole vive fuori dal bind in user://runtime.
+	for rel in ["ssh"]:
 		var src := home.path_join(".jht/" + rel)
 		if DirAccess.dir_exists_absolute(src):
 			var copied := _copy_tree(src, staged_jht.path_join(rel))
 			if copied != OK:
 				_remove_tree(stage)
-				return {"ok": false, "message": "Impossibile preservare .jht/" + rel}
+				return {"ok": false, "message": UIStrings.t("vps.action.preserve_failed") \
+						% (".jht/" + rel)}
 	var host_env := _local_host_env(home.path_join(".jht/host.env"))
 	if not _write_text(staged_jht.path_join("host.env"), host_env):
 		_remove_tree(stage)
-		return {"ok": false, "message": "Impossibile impostare la modalità locale"}
+		return {"ok": false, "message": UIStrings.t("vps.action.local_mode_failed")}
 
 	var backup_dir := home.path_join(".jht-migration-backups")
 	DirAccess.make_dir_recursive_absolute(backup_dir)
@@ -2541,8 +2611,8 @@ func _apply_archive_to_local(archive: String, stamp: String,
 	var backed_up := _create_local_destination_backup(backup)
 	if backed_up["code"] != 0 or not _file_nonempty(backup):
 		_remove_tree(stage)
-		return {"ok": false, "message": "Backup locale fallito: " \
-				+ str(backed_up.get("out", "")).right(220)}
+		return {"ok": false, "message": UIStrings.t("vps.action.local_backup_failed") \
+				% str(backed_up.get("out", "")).right(220)}
 	if OS.get_name() != "Windows":
 		_run("chmod", PackedStringArray(["600", backup]))
 
@@ -2567,28 +2637,28 @@ func _apply_archive_to_local(archive: String, stamp: String,
 			"docs_moved": false, "jht_activated": false, "docs_activated": false}
 	if DirAccess.rename_absolute(current_jht, old_jht) != OK:
 		_remove_tree(stage)
-		return {"ok": false, "message": "Impossibile mettere al sicuro ~/.jht"}
+		return {"ok": false, "message": UIStrings.t("vps.action.protect_data_failed")}
 	tx["jht_moved"] = true
 	if DirAccess.dir_exists_absolute(current_docs) \
 			and DirAccess.rename_absolute(current_docs, old_docs) != OK:
 		_rollback_local_destination(tx, true)
-		return {"ok": false, "message": "Impossibile mettere al sicuro i documenti"}
+		return {"ok": false, "message": UIStrings.t("vps.action.protect_documents_failed")}
 	tx["docs_moved"] = DirAccess.dir_exists_absolute(old_docs)
 	if DirAccess.rename_absolute(staged_jht, current_jht) != OK:
 		_rollback_local_destination(tx, true)
-		return {"ok": false, "message": "Impossibile attivare i dati migrati"}
+		return {"ok": false, "message": UIStrings.t("vps.action.activate_data_failed")}
 	tx["jht_activated"] = true
 	DirAccess.make_dir_recursive_absolute(current_docs.get_base_dir())
 	if DirAccess.rename_absolute(staged_docs, current_docs) != OK:
 		_rollback_local_destination(tx, true)
-		return {"ok": false, "message": "Impossibile attivare i documenti migrati"}
+		return {"ok": false, "message": UIStrings.t("vps.action.activate_documents_failed")}
 	tx["docs_activated"] = true
 
 	var started := _do_start_container()
 	if not bool(started.get("ok", false)):
 		_rollback_local_destination(tx, true)
-		return {"ok": false, "message": "Avvio del runtime migrato fallito: " \
-				+ str(started.get("message", ""))}
+		return {"ok": false, "message": UIStrings.t("vps.action.migrated_runtime_start_failed") \
+				% str(started.get("message", ""))}
 	var checked := _validate_local_migration_target()
 	if not bool(checked.get("ok", false)):
 		_rollback_local_destination(tx, true)
@@ -2597,7 +2667,7 @@ func _apply_archive_to_local(archive: String, stamp: String,
 		var team := _do_start_team({})
 		if not bool(team.get("ok", false)):
 			_rollback_local_destination(tx, true)
-			return {"ok": false, "message": "Dati integri, ma riavvio team locale fallito"}
+			return {"ok": false, "message": UIStrings.t("vps.action.local_team_restart_failed")}
 	tx["ok"] = true
 	return tx
 
@@ -2606,17 +2676,17 @@ static func _validate_local_migration_target() -> Dictionary:
 	var running := _run("docker", PackedStringArray([
 			"inspect", "jht", "--format", "{{.State.Running}}"] ))
 	if running["code"] != 0 or str(running.get("out", "")).strip_edges() != "true":
-		return {"ok": false, "message": "Il container locale migrato non è attivo"}
+		return {"ok": false, "message": UIStrings.t("vps.action.migrated_container_inactive")}
 	if FileAccess.file_exists(_jht_home().path_join("jobs.db")):
 		var py := "import sqlite3,sys; c=sqlite3.connect('/jht_home/jobs.db'); " \
 				+ "sys.exit(0 if c.execute('pragma integrity_check').fetchone()[0]=='ok' else 1)"
 		var integrity := _run("docker", PackedStringArray([
 				"exec", "jht", "python3", "-c", py]))
 		if integrity["code"] != 0:
-			return {"ok": false, "message": "Il database migrato non supera integrity_check"}
+			return {"ok": false, "message": UIStrings.t("vps.action.migrated_database_invalid")}
 	var host_env := FileAccess.get_file_as_string(_jht_home().path_join("host.env"))
 	if not host_env.contains("JHT_HOST_TYPE=local"):
-		return {"ok": false, "message": "Il runtime migrato non è in modalità locale"}
+		return {"ok": false, "message": UIStrings.t("vps.action.migrated_runtime_not_local")}
 	return {"ok": true}
 
 
@@ -2650,7 +2720,7 @@ static func _archive_source_cloud(source_mode: String, source: Dictionary,
 	var err := DirAccess.rename_absolute(cloud, archived)
 	return {"ok": err == OK and FileAccess.file_exists(archived) \
 			and not FileAccess.file_exists(cloud),
-			"message": "impossibile archiviare " + cloud if err != OK else ""}
+			"message": UIStrings.t("vps.action.archive_failed") % cloud if err != OK else ""}
 
 
 static func _rollback_local_destination(tx: Dictionary, restore_container: bool) -> void:
@@ -2789,7 +2859,7 @@ static func _create_local_migration_archive(path: String) -> Dictionary:
 	if DirAccess.dir_exists_absolute(home.path_join("Documents/Job Hunter Team")):
 		args.append("Documents/Job Hunter Team")
 	if args.size() == 7:
-		return {"code": -1, "out": "nessun dato JHT trovato sul computer"}
+		return {"code": -1, "out": UIStrings.t("vps.action.no_local_data")}
 	return _run("tar", args)
 
 
@@ -2831,7 +2901,7 @@ func open_vps_install(ip: String, key_path: String, user := "") -> void:
 	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-install", false,
-				"Inserisci l'IP e genera/seleziona una chiave SSH prima di installare", false)
+				UIStrings.t("vps.action.install_destination_missing"), false)
 		return
 	var remote := _vps_prepare_runtime_command()
 	var key := str(target["key_path"])
@@ -2842,8 +2912,8 @@ func open_vps_install(ip: String, key_path: String, user := "") -> void:
 			+ _local_quote(known) + " " + _local_quote(_ssh_target(target)) \
 			+ " " + _local_quote(remote)
 	terminal_requested.emit("vps-install", embedded_terminal_spec(
-			"Installa JHT sulla VPS",
-			"Installazione remota completa, incluso l'avvio del container. Al termine chiudi la console e premi Collega.",
+			UIStrings.t("vps.action.install_title"),
+			UIStrings.t("vps.action.install_hint"),
 			command))
 
 
@@ -2895,7 +2965,7 @@ func save_telegram_bot(role: String, token: String, chat_id: String) -> void:
 	re.compile("^[0-9]+:[A-Za-z0-9_-]{20,}$")
 	if re.search(clean_token) == null:
 		action_changed.emit("telegram", false,
-				"Token BotFather non valido per " + role.capitalize(), false)
+				UIStrings.t("tg.action.invalid_token") % CharacterDefs.role_name(role), false)
 		return
 	_start_action("telegram", _do_save_telegram_bot.bind(
 			role, clean_token, chat_id.strip_edges(), _vps_config()))
@@ -2925,9 +2995,9 @@ static func _do_save_telegram_bot(role: String, token: String, chat_id: String,
 	if result["code"] != 0 or not parsed is Dictionary or not bool(parsed.get("ok", false)):
 		var reason := str(parsed.get("error", "")) if parsed is Dictionary \
 				else str(result.get("out", "")).right(240)
-		return {"ok": false, "message": "Telegram: " + reason}
-	return {"ok": true, "message": "@%s collegato a %s · chat %s" % [
-			str(parsed.get("username", "bot")), role.capitalize(),
+		return {"ok": false, "message": UIStrings.t("tg.action.failed") % reason}
+	return {"ok": true, "message": UIStrings.t("tg.action.connected") % [
+			str(parsed.get("username", "bot")), CharacterDefs.role_name(role),
 			str(parsed.get("chat_id", ""))]}
 
 
@@ -2939,8 +3009,9 @@ static func _do_delete_telegram_bot(role: String, vps: Dictionary) -> Dictionary
 					"exec", "-i", "jht", "python3", "-c", TELEGRAM_DELETE_PY]),
 					payload.to_utf8_buffer())
 	return {"ok": result["code"] == 0,
-			"message": "Bot %s rimosso" % role.capitalize() if result["code"] == 0 \
-			else "Rimozione bot fallita: " + str(result.get("out", "")).right(220)}
+			"message": UIStrings.t("tg.action.removed") % CharacterDefs.role_name(role) \
+			if result["code"] == 0 else UIStrings.t("tg.action.remove_failed") \
+			% str(result.get("out", "")).right(220)}
 
 
 func save_email(email: String, password: String) -> void:
@@ -2950,7 +3021,7 @@ func save_email(email: String, password: String) -> void:
 	var clean_password := password.replace(" ", "").strip_edges()
 	if not _valid_email(clean_email) or clean_password.length() < 8:
 		action_changed.emit("email", false,
-				"Inserisci un indirizzo valido e una app password di almeno 8 caratteri", false)
+				UIStrings.t("email.action.invalid_credentials"), false)
 		return
 	_start_action("email", _do_save_email.bind(clean_email, clean_password, _vps_config()))
 
@@ -2995,7 +3066,7 @@ static func _do_save_email(email: String, password: String, vps: Dictionary) -> 
 			JhtFs.chmod(EMAIL_CRED, "600")  # è una password: non resta leggibile a tutti
 			saved = {"code": 0, "out": ""}
 		else:
-			saved = {"code": -1, "out": "cartella dati non scrivibile"}
+			saved = {"code": -1, "out": UIStrings.t("email.action.data_folder_unwritable")}
 	else:
 		var python := "import sys,json,os;d=json.load(sys.stdin);" \
 				+ "p='/jht_home/credentials/email_monitor.json';" \
@@ -3005,15 +3076,17 @@ static func _do_save_email(email: String, password: String, vps: Dictionary) -> 
 		var remote := "docker exec -i jht python3 -c " + _shell_quote(python)
 		saved = _run_ssh_stdin(vps, remote, payload.to_utf8_buffer())
 	if saved["code"] != 0:
-		return {"ok": false, "message": "Salvataggio email fallito: " + str(saved["out"]).right(220)}
+		return {"ok": false, "message": UIStrings.t("email.action.save_failed") \
+				% str(saved["out"]).right(220)}
 	# Verifica reale IMAP attraverso la stessa skill usata dallo Scout.
 	var check_cmd := "docker exec jht python3 /app/shared/skills/email_monitor.py count"
 	var checked := _run_ssh(vps, check_cmd) if not vps.is_empty() else _run(
 			"docker", PackedStringArray(["exec", "jht", "python3",
 			"/app/shared/skills/email_monitor.py", "count"]))
 	return {"ok": checked["code"] == 0,
-			"message": "Casella verificata e salvata: " + email if checked["code"] == 0 \
-			else "Credenziali salvate, ma la verifica IMAP è fallita: " + str(checked["out"]).right(220)}
+			"message": UIStrings.t("email.action.saved") % email \
+			if checked["code"] == 0 else UIStrings.t("email.action.verify_failed") \
+			% str(checked["out"]).right(220)}
 
 
 static func _do_delete_email(vps: Dictionary) -> Dictionary:
@@ -3024,15 +3097,15 @@ static func _do_delete_email(vps: Dictionary) -> Dictionary:
 		result = _run_ssh(vps,
 				"docker exec jht rm -f /jht_home/credentials/email_monitor.json")
 	return {"ok": result["code"] == 0,
-			"message": "Casella email rimossa" if result["code"] == 0 \
-			else "Rimozione email fallita: " + str(result["out"]).right(220)}
+			"message": UIStrings.t("email.action.removed") if result["code"] == 0 \
+			else UIStrings.t("email.action.remove_failed") % str(result["out"]).right(220)}
 
 
 static func _run_stdin_stderr(path: String, args: PackedStringArray,
 		payload: PackedByteArray) -> Dictionary:
 	var process := OS.execute_with_pipe(path, args, true)
 	if process.is_empty():
-		return {"code": -1, "out": path + " non avviabile"}
+		return {"code": -1, "out": UIStrings.t("common.command_unavailable") % path}
 	var stdio: FileAccess = process["stdio"]
 	var stderr: FileAccess = process["stderr"]
 	stdio.store_buffer(payload)
@@ -3062,7 +3135,7 @@ static func _run_ssh_stdin(vps: Dictionary, command: String,
 		"-o", "UserKnownHostsFile=" + known,
 		target, command + " 1>&2"]), true)
 	if process.is_empty():
-		return {"code": -1, "out": "ssh non avviabile"}
+		return {"code": -1, "out": UIStrings.t("common.command_unavailable") % "ssh"}
 	var stdio: FileAccess = process["stdio"]
 	var stderr: FileAccess = process["stderr"]
 	stdio.store_buffer(payload)
@@ -3104,7 +3177,7 @@ static func _provider_login_command(provider: String, vps: Dictionary = {}) -> S
 		if OS.get_name() == "Windows":
 			# cmd.exe non ha printf: niente banner, dritto al comando.
 			return _local_container_exec(tool)
-		return "printf '\\nJHT — login con abbonamento (console interna)\\n\\n'; " \
+		return "printf '\\n%s\\n\\n'; " % UIStrings.t("setup.term.subscription_banner") \
 				+ _local_container_exec(tool)
 	var inner := "docker exec -it jht " + tool
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
@@ -3112,7 +3185,7 @@ static func _provider_login_command(provider: String, vps: Dictionary = {}) -> S
 	var command := "ssh -tt -i " + _local_quote(key) + " " \
 			+ _local_quote(target) + " " + _local_quote(inner)
 	if OS.get_name() != "Windows":
-		command = "printf '\\nJHT — login con abbonamento (console interna)\\n\\n'; " \
+		command = "printf '\\n%s\\n\\n'; " % UIStrings.t("setup.term.subscription_banner") \
 				+ command
 	return command
 
@@ -3120,13 +3193,11 @@ static func _provider_login_command(provider: String, vps: Dictionary = {}) -> S
 static func _provider_terminal_hint(provider: String) -> String:
 	match provider:
 		"codex":
-			return "Apri il link mostrato, accedi a ChatGPT e inserisci il codice dispositivo."
+			return UIStrings.t("setup.login_hint_codex")
 		"kimi":
-			return "Nel prompt Kimi digita /login, scegli Kimi Code e completa il login nel browser."
+			return UIStrings.t("setup.login_hint_kimi")
 		_:
-			return "Nel menu Claude scegli Login with subscription. Se il browser non si apre: " \
-					+ "COPIA LINK qui sotto e incollalo nel browser. Poi copia il codice dal browser, " \
-					+ "premi INCOLLA e Invio; se non risponde, premi INVIO una seconda volta."
+			return UIStrings.t("setup.login_hint_claude")
 
 
 static func _shell_quote(value: String) -> String:
@@ -3154,7 +3225,7 @@ func start_team() -> void:
 		return
 	if not bool(status.get("ready", false)):
 		action_changed.emit("team", false,
-				"Completa container, provider e profilo prima di attivare il team", false)
+				UIStrings.t("team.action.not_ready"), false)
 		return
 	_start_action("team", _do_start_team.bind(_vps_config()))
 
@@ -3179,15 +3250,15 @@ func _do_start_team(vps: Dictionary) -> Dictionary:
 			if not vps.is_empty() else _run("docker", PackedStringArray([
 					"exec", "jht", "node", "/app/cli/bin/jht.js", "team", "start"] ))
 	return {"ok": res["code"] == 0,
-			"message": "Team avviato: gli agenti arriveranno in ufficio" \
-			if res["code"] == 0 else "Avvio team fallito: " + str(res["out"]).right(240)}
+			"message": UIStrings.t("team.action.started") if res["code"] == 0 \
+			else UIStrings.t("team.action.start_failed") % str(res["out"]).right(240)}
 
 
 static func _do_stop_team(vps: Dictionary) -> Dictionary:
 	var result := _run_cli(vps, PackedStringArray(["team", "stop", "--all"]))
 	return {"ok": result["code"] == 0,
-			"message": "Team fermato (Assistente mantenuto disponibile)" \
-			if result["code"] == 0 else "Arresto team fallito: " + str(result.get("out", "")).right(240)}
+			"message": UIStrings.t("team.action.stopped") if result["code"] == 0 \
+			else UIStrings.t("team.action.stop_failed") % str(result.get("out", "")).right(240)}
 
 
 static func _do_control_agent(role: String, restart: bool, vps: Dictionary) -> Dictionary:
@@ -3195,12 +3266,16 @@ static func _do_control_agent(role: String, restart: bool, vps: Dictionary) -> D
 	# Fermare un ruolo già inattivo non deve impedire un riavvio esplicito.
 	if not restart:
 		return {"ok": stopped["code"] == 0,
-				"message": "%s fermato" % role.capitalize() if stopped["code"] == 0 \
-				else "Arresto agente fallito: " + str(stopped.get("out", "")).right(220)}
+				"message": UIStrings.t("agents.action.stopped") \
+				% CharacterDefs.role_name(role) if stopped["code"] == 0 \
+				else UIStrings.t("agents.action.stop_failed") \
+				% str(stopped.get("out", "")).right(220)}
 	var started := _run_cli(vps, PackedStringArray(["team", "start", role]))
 	return {"ok": started["code"] == 0,
-			"message": "%s riavviato" % role.capitalize() if started["code"] == 0 \
-			else "Riavvio agente fallito: " + str(started.get("out", "")).right(220)}
+			"message": UIStrings.t("agents.action.restarted") \
+			% CharacterDefs.role_name(role) if started["code"] == 0 \
+			else UIStrings.t("agents.action.restart_failed") \
+			% str(started.get("out", "")).right(220)}
 
 
 static func _run_cli(vps: Dictionary, args: PackedStringArray) -> Dictionary:
@@ -3214,8 +3289,7 @@ static func _run_cli(vps: Dictionary, args: PackedStringArray) -> Dictionary:
 	return _run_ssh(vps, command)
 
 
-func _start_action(action: String, callable: Callable,
-		start_message := "operazione in corso…") -> void:
+func _start_action(action: String, callable: Callable, start_message := "") -> void:
 	_action_running = true
 	current_action = action
 	action_phase = ""
@@ -3223,7 +3297,8 @@ func _start_action(action: String, callable: Callable,
 	phase_started_ms = action_started_ms
 	last_pull = {}
 	Log.info("setup", "azione avviata: " + action)
-	action_changed.emit(action, true, start_message, true)
+	action_changed.emit(action, true, UIStrings.t("setup.action.in_progress") \
+			if str(start_message) == "" else start_message, true)
 	WorkerThreadPool.add_task(_run_action.bind(action, callable))
 
 

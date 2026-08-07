@@ -217,22 +217,22 @@ def estimate(
 
 
 def main(argv):
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--stack", help='es. "python", "go", "react"')
+    p = argparse.ArgumentParser(description="Estimate salary from declared ranges, local cache, and fallback data.")
+    p.add_argument("--stack", help='for example "python", "go", or "react"')
     p.add_argument("--seniority", help='"junior" | "mid" | "senior"')
-    p.add_argument("--country", help='ISO2 country, es. "IT", "DE"')
+    p.add_argument("--country", help='ISO2 country, for example "IT" or "DE"')
     p.add_argument("--mode", default="remote", help='"remote" | "hybrid" | "onsite"')
     p.add_argument("--declared-min", type=int)
     p.add_argument("--declared-max", type=int)
     p.add_argument("--position-id", type=int,
-                   help="Legge salary_declared_* dalla DB della posizione")
+                   help="read salary_declared_* from the position database row")
     p.add_argument("--seed-cache", action="store_true",
-                   help="Dev-only: scrive una entry di cache mock per i test")
+                   help="development only: write a mock cache entry for tests")
     args = p.parse_args(argv)
 
     if args.seed_cache:
         if not (args.stack and args.seniority and args.country and args.declared_min and args.declared_max):
-            print("--seed-cache richiede --stack --seniority --country --declared-min --declared-max", file=sys.stderr)
+            print("--seed-cache requires --stack --seniority --country --declared-min --declared-max", file=sys.stderr)
             return 2
         entry = store_cache(args.stack, args.seniority, args.country, args.mode,
                             min_eur=args.declared_min, max_eur=args.declared_max, source="seed")

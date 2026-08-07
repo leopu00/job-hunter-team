@@ -38,9 +38,9 @@ with tempfile.TemporaryDirectory(prefix="jht-coordinator-") as home:
     recheck = run(QUERY, "next-for-recheck-due", env=env)
     # L'alias legacy resta valido (prompt/sessioni vive pre-rinomina).
     recheck_legacy = run(QUERY, "next-for-recheck-weekly", env=env)
-    assert "score >= 65, non remote" in geo
-    assert "score>=72" in recheck and ">14gg" in recheck
-    assert "score>=72" in recheck_legacy and ">14gg" in recheck_legacy
+    assert "score >= 65, non-remote" in geo
+    assert "score>=72" in recheck and ">14 days" in recheck
+    assert "score>=72" in recheck_legacy and ">14 days" in recheck_legacy
 
     # Modalità RISPARMIO (mode=saving nel file dei mode, scritto dalla
     # Console): spegne l'enrichment autonomo SENZA toccare
@@ -53,13 +53,13 @@ with tempfile.TemporaryDirectory(prefix="jht-coordinator-") as home:
     assert "OFF" in run(QUERY, "next-for-logo-missing", env=env)
     # Le code di lettura delle altre modalità restano interrogabili: sono
     # liste, non spesa.
-    assert "Raccolto" in run(QUERY, "next-for-harvest", env=env)
-    assert "Calibrazione" in run(QUERY, "next-for-calibration", env=env)
+    assert "Harvest" in run(QUERY, "next-for-harvest", env=env)
+    assert "Calibration" in run(QUERY, "next-for-calibration", env=env)
     # File mode presente ma illeggibile = enrichment sospeso (mai "search").
     mode_file.write_text("garbage", encoding="utf-8")
     assert "OFF" in run(QUERY, "next-for-geocode-missing", env=env)
     mode_file.unlink()
-    assert "score >= 65, non remote" in run(
+    assert "score >= 65, non-remote" in run(
         QUERY, "next-for-geocode-missing", env=env)
 
 print("COORDINATOR-POLICY-TEST PASS")

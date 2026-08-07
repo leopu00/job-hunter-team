@@ -3,7 +3,7 @@
 # Questo compose e' il default per chi installa JHT via:
 #   curl -fsSL https://jobhunterteam.ai/install.sh | bash
 #
-# install.sh scarica questo file in ~/.jht/runtime/docker-compose.yml.
+# install.sh scarica questo file nel runtime host protetto fuori da ~/.jht.
 # Il wrapper bash ~/.local/bin/jht lo usa per docker compose up/down/exec.
 #
 # Image-only: nessun bind dei sorgenti, nessun `build:`. Tutto cio' che
@@ -91,6 +91,10 @@ services:
       - PATH=/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/jht_home/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games
     volumes:
       - ${HOME}/.jht:/jht_home
+      # Mask the legacy host runtime below the broad data bind. The
+      # authoritative compose/helpers live outside ~/.jht and are never
+      # exposed to the container.
+      - jht-runtime-mask:/jht_home/runtime
       - ${HOME}/Documents/Job Hunter Team:/jht_user
       # Volume Docker (dentro la VM su Windows/macOS: veloce), non bind.
       - jht-deps:/opt/jht-deps
@@ -107,6 +111,7 @@ services:
 
 volumes:
   jht-deps:
+  jht-runtime-mask:
 
 # ── Dev mode ────────────────────────────────────────────────────────────
 #

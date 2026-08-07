@@ -21,7 +21,10 @@ Organizzate per **categoria** in sotto-cartelle. Come scrivere una nuova nota: v
 | [`_archive/`](_archive/) | Note superate, conservate per git-blame |
 
 File di root: [`landing-image-prompts.md`](landing-image-prompts.md) (prompt immagini del sito + rifiniture aperte) ·
-[`2026-07-25-audit-doc-code-drift.md`](2026-07-25-audit-doc-code-drift.md) (audit doc↔codice del ciclo native: cosa era slittato, cosa è stato riallineato, che debito resta e sotto quale tag cercarlo).
+[`2026-07-25-audit-doc-code-drift.md`](2026-07-25-audit-doc-code-drift.md) (audit doc↔codice del ciclo native: cosa era slittato, cosa è stato riallineato, che debito resta e sotto quale tag cercarlo) ·
+[`2026-08-07-setup-guide-content-contract.md`](2026-08-07-setup-guide-content-contract.md) (contratto P0 per struttura, copy EN, naming, screenshot e riuso della guida setup non pubblicata) ·
+[`2026-08-07-LEGAL-COPY-DRAFT.md`](2026-08-07-LEGAL-COPY-DRAFT.md) (audit pre-release e prima bozza EN di Privacy e Termini, conservata come percorso decisionale) ·
+[`2026-08-07-LEGAL-COPY-RELEASE.md`](2026-08-07-LEGAL-COPY-RELEASE.md) (fonte EN approvata dall'operatore per Privacy e Termini, contratto di implementazione e verifiche obbligatorie pre-pubblicazione).
 Il log review è in [`../REVIEW-LOG.md`](../REVIEW-LOG.md).
 
 > Il canone narrativo delle Cronache è **archiviato con la pagina** (tolta dal sito
@@ -173,6 +176,7 @@ Infra, deploy, lifecycle, accessi.
 | [`release.md`](ops/release.md) | Processo release (tag → CI → GitHub Release) |
 | [`triage.md`](ops/triage.md) | Triage feedback / bug report (tabella `feedback_tickets`) |
 | [`recording-profiles.md`](ops/recording-profiles.md) | Profili sintetici deterministici e gate di isolamento per registrazioni web e gioco |
+| [`download-funnel.md`](ops/download-funnel.md) | Report aggregato dei click download: query 72 ore, accesso service-role e limiti anonimi fail-closed |
 | [`access-and-credentials.md`](ops/access-and-credentials.md) | Accessi e credenziali |
 | [`MAINTAINERS.md`](ops/MAINTAINERS.md) | Coordinamento maintainer: Supabase, Vercel, OAuth, code signing |
 

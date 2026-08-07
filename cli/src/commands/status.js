@@ -30,31 +30,31 @@ function getTmuxSessions() {
 }
 
 async function handleStatus() {
-  console.log('\n  JHT — Stato Sistema\n');
+  console.log('\n  JHT — System Status\n');
 
   // Config
   const hasConfig = await fileExists(CONFIG_FILE);
   if (hasConfig) {
     const raw = await readFile(CONFIG_FILE, 'utf-8');
     const config = JSON.parse(raw);
-    const activeProvider = config.active_provider || 'non impostato';
+    const activeProvider = config.active_provider || 'not set';
     const provConfig = config.providers?.[config.active_provider];
-    const model = provConfig?.model || 'non impostato';
-    const auth = provConfig?.auth_method || 'non impostato';
+    const model = provConfig?.model || 'not set';
+    const auth = provConfig?.auth_method || 'not set';
     console.log(`  Config:    ${CONFIG_FILE}`);
     console.log(`  Provider:  ${activeProvider}`);
-    console.log(`  Modello:   ${model}`);
+    console.log(`  Model:     ${model}`);
     console.log(`  Auth:      ${auth}`);
     if (config.workspace) console.log(`  Workspace: ${config.workspace}`);
     const tgBots = config.channels?.telegram?.bots;
     if (tgBots?.assistente?.bot_token && tgBots?.capitano?.bot_token && tgBots?.mentor?.bot_token) {
-      console.log('  Telegram:  3 bot configurati');
+      console.log('  Telegram: 3 bots configured');
     } else if (tgBots) {
       const n = ['assistente', 'capitano', 'mentor'].filter((r) => tgBots?.[r]?.bot_token).length;
-      console.log(`  Telegram:  incompleto (${n}/3 bot)`);
+      console.log(`  Telegram: incomplete (${n}/3 bots)`);
     }
   } else {
-    console.log('  Config:    non trovata (esegui: jht setup)');
+    console.log('  Config: not found (run: jht setup)');
   }
 
   // Tmux sessions
@@ -65,7 +65,7 @@ async function handleStatus() {
   const jhtSessions = sessions.filter(s =>
     s.startsWith('lab-') || AGENTS.some(agent => isAgentSession(s, agent))
   );
-  console.log(`\n  Sessioni tmux JHT: ${jhtSessions.length}`);
+  console.log(`\n  Tmux Sessions JHT: ${jhtSessions.length}`);
   for (const s of jhtSessions) {
     console.log(`    - ${s}`);
   }
@@ -82,7 +82,7 @@ async function handleStatus() {
     }).trim();
     console.log(`\n  Git:       ${branch} (${shortSha})`);
   } catch {
-    console.log('\n  Git:       non disponibile');
+    console.log('\n  Git: not available');
   }
 
   console.log('');
@@ -91,6 +91,6 @@ async function handleStatus() {
 export function registerStatusCommand(program) {
   program
     .command('status')
-    .description('Mostra lo stato del sistema JHT')
+    .description('Show system status JHT')
     .action(handleStatus);
 }

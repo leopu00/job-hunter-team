@@ -64,6 +64,17 @@ while IFS= read -r file; do
     if [[ "$file" == .githooks/* ]]; then
         continue
     fi
+    # Unica fixture PDF ammessa: il test dedicato la rigenera byte-per-byte,
+    # ne estrae il testo e applica il contratto privacy al contenuto binario.
+    if [[ "$file" == "tests/fixtures/sample-cv.pdf" ]]; then
+        continue
+    fi
+
+    # Sorgente D2 già tracciata del diagramma d'architettura: è testo
+    # rigenerabile da D2, non un asset binario arbitrario.
+    if [[ "$file" == "docs/assets/infra.d2" ]]; then
+        continue
+    fi
 
     # Estrai estensione
     ext="${basename##*.}"

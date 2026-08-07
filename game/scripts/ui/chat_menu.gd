@@ -66,7 +66,7 @@ func _ready() -> void:
 	head.add_child(title)
 	var close_btn := Button.new()
 	close_btn.text = "✕"
-	close_btn.tooltip_text = "Chiudi [Esc]"
+	close_btn.tooltip_text = UIStrings.t("chat.close")
 	close_btn.add_theme_color_override("font_color", Palette.MUTED)
 	close_btn.pressed.connect(close)
 	head.add_child(close_btn)
