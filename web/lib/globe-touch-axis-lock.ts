@@ -39,6 +39,10 @@ export type TouchAxisLockTarget = {
   el: HTMLElement;
   /** Accende/spegne il trascinamento della mappa. */
   setDragPanEnabled: (enabled: boolean) => void;
+  /** Il gesto ha scelto l'asse orizzontale e ora controlla il globo. */
+  onHorizontalStart?: () => void;
+  /** L'ultimo dito del gesto orizzontale è stato sollevato/cancellato. */
+  onHorizontalEnd?: () => void;
 };
 
 /**
@@ -54,7 +58,12 @@ type LockedEvent = Pick<
 >;
 
 export function attachTouchAxisLock(target: TouchAxisLockTarget): () => void {
-  const { el, setDragPanEnabled } = target;
+  const {
+    el,
+    setDragPanEnabled,
+    onHorizontalStart,
+    onHorizontalEnd,
+  } = target;
   let startX = 0;
   let startY = 0;
   // null = ancora indeciso. "x" = il gesto è del globo. "y" = della pagina.
@@ -62,6 +71,13 @@ export function attachTouchAxisLock(target: TouchAxisLockTarget): () => void {
   // Ricordiamo se siamo stati noi a spegnere il pan: riaccenderlo a caso
   // riattiverebbe un trascinamento che il chiamante aveva disabilitato.
   let dragPanSuspended = false;
+  let horizontalActive = false;
+
+  const finishHorizontal = () => {
+    if (!horizontalActive) return;
+    horizontalActive = false;
+    onHorizontalEnd?.();
+  };
 
   const restoreDragPan = () => {
     if (!dragPanSuspended) return;
@@ -103,7 +119,10 @@ export function attachTouchAxisLock(target: TouchAxisLockTarget): () => void {
       return;
     }
     axis = dx > dy ? "x" : "y";
-    if (axis === "y") {
+    if (axis === "x") {
+      horizontalActive = true;
+      onHorizontalStart?.();
+    } else {
       withhold(e);
       // Seconda garanzia, indipendente dall'ordine dei listener.
       dragPanSuspended = true;
@@ -111,9 +130,12 @@ export function attachTouchAxisLock(target: TouchAxisLockTarget): () => void {
     }
   };
 
-  const onEnd = () => {
+  const onEnd = (e: TouchEvent) => {
+    // Multi-touch: la fine di un solo dito non conclude il gesto.
+    if (e.touches.length > 0) return;
     axis = null;
     restoreDragPan();
+    finishHorizontal();
   };
 
   // In cattura: i listener di MapLibre stanno sullo stesso elemento ma in
@@ -131,5 +153,8 @@ export function attachTouchAxisLock(target: TouchAxisLockTarget): () => void {
     el.removeEventListener("touchend", onEnd, opts);
     el.removeEventListener("touchcancel", onEnd, opts);
     restoreDragPan();
+    // Detach significa teardown, non fine volontaria del gesto: non deve
+    // armare un nuovo timer nel componente che si sta smontando.
+    horizontalActive = false;
   };
 }

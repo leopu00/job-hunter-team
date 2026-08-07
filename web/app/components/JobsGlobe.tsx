@@ -543,10 +543,10 @@ export type GlobeShowcase = {
   cardId?: string | null;
   // L'utente ha cliccato un pin (id) o il vuoto (null).
   onPinSelect?: (id: string | null) => void;
-  // Prima traccia di una mano umana sul globo (pointerdown/touch/wheel):
-  // la landing la usa per fermare l'autopilota e farlo ripartire dopo un
-  // po' di immobilità.
-  onUserInteract?: () => void;
+  // Inizio/fine reali del gesto: la landing sospende al pointerdown, ma
+  // arma la ripresa soltanto quando anche l'ultimo dito è stato sollevato.
+  onUserInteractStart?: () => void;
+  onUserInteractEnd?: () => void;
 };
 
 // Handler di interazione in modalità vetrina.
@@ -572,13 +572,19 @@ function tuneShowcaseHandlers(map: MaplibreMap) {
 // Il blocco d'asse per il dito vive in lib/globe-touch-axis-lock.ts: è
 // logica di eventi pura, e da lì si prova con touch veri in un DOM vero
 // invece che cercando stringhe in questo sorgente.
-function attachShowcaseTouchLock(map: MaplibreMap): () => void {
+function attachShowcaseTouchLock(
+  map: MaplibreMap,
+  onHorizontalStart: () => void,
+  onHorizontalEnd: () => void,
+): () => void {
   return attachTouchAxisLock({
     el: map.getCanvasContainer(),
     setDragPanEnabled: (on) => {
       if (on) map.dragPan.enable();
       else map.dragPan.disable();
     },
+    onHorizontalStart,
+    onHorizontalEnd,
   });
 }
 
@@ -910,20 +916,47 @@ export default function JobsGlobe({
     if (isShowcase) {
       tuneShowcaseHandlers(map);
       makeShowcaseCanvasUnfocusable(map);
-      detachAxisLock = attachShowcaseTouchLock(map);
+      detachAxisLock = attachShowcaseTouchLock(
+        map,
+        () => showcaseRef.current?.onUserInteractStart?.(),
+        () => showcaseRef.current?.onUserInteractEnd?.(),
+      );
     }
 
-    // Vetrina: qualunque tocco umano sul globo — trascinamento, rotella,
-    // dito — sospende l'autopilota del chiamante. Si ascolta il DOM e non
-    // gli eventi camera di MapLibre proprio perché quelli li emette anche
-    // l'autopilota stesso, e si fermerebbe da solo al primo volo.
-    const onHumanTouch = () => showcaseRef.current?.onUserInteract?.();
+    // Vetrina: il timer di ripresa parte al rilascio reale, non al primo
+    // contatto. Il set copre anche il multi-touch: finché resta almeno un
+    // pointer attivo l'autopilota non può ripartire. Gli eventi stanno sul
+    // DOM (non sulla camera), perché anche l'autopilota emette move events.
+    const activeHumanPointers = new Set<number>();
+    const maybeFinishHumanGesture = () => {
+      if (activeHumanPointers.size === 0)
+        showcaseRef.current?.onUserInteractEnd?.();
+    };
+    const onHumanStart = (e: PointerEvent) => {
+      // Il touch ha il proprio ciclo start/end: sui browser mobile il
+      // pointer può essere cancellato appena pan-y passa lo scroll alla
+      // pagina, mentre il dito è ancora fisicamente sullo schermo.
+      if (e.pointerType === "touch") return;
+      activeHumanPointers.add(e.pointerId);
+      showcaseRef.current?.onUserInteractStart?.();
+    };
+    const onHumanEnd = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
+      if (!activeHumanPointers.delete(e.pointerId)) return;
+      maybeFinishHumanGesture();
+    };
+    const onHumanBlur = () => {
+      if (activeHumanPointers.size === 0) return;
+      activeHumanPointers.clear();
+      showcaseRef.current?.onUserInteractEnd?.();
+    };
     if (isShowcase) {
-      container.addEventListener("pointerdown", onHumanTouch, {
+      container.addEventListener("pointerdown", onHumanStart, {
         passive: true,
       });
-      container.addEventListener("touchstart", onHumanTouch, { passive: true });
-      container.addEventListener("wheel", onHumanTouch, { passive: true });
+      window.addEventListener("pointerup", onHumanEnd, { passive: true });
+      window.addEventListener("pointercancel", onHumanEnd, { passive: true });
+      window.addEventListener("blur", onHumanBlur);
     }
 
     const onStyleLoad = () => {
@@ -1252,9 +1285,10 @@ export default function JobsGlobe({
 
     return () => {
       ro.disconnect();
-      container.removeEventListener("pointerdown", onHumanTouch);
-      container.removeEventListener("touchstart", onHumanTouch);
-      container.removeEventListener("wheel", onHumanTouch);
+      container.removeEventListener("pointerdown", onHumanStart);
+      window.removeEventListener("pointerup", onHumanEnd);
+      window.removeEventListener("pointercancel", onHumanEnd);
+      window.removeEventListener("blur", onHumanBlur);
       detachAxisLock?.();
       fpsMonitorRef.current?.stop();
       fpsMonitorRef.current = null;
