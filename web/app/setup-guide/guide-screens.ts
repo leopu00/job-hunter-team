@@ -74,8 +74,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "Csak mért számok: ahol nem mértünk, ott nem állítunk semmit.",
     },
     assets: {},
-    pending:
-      "Scheda requisiti: riga computer locale (Docker + ~8 GB liberi consigliati, nota della prova di 30 minuti), riga disco senza numero, riga VPS separata con la baseline validata.",
+    replacedByCard:
+      "La scheda è costruita nella pagina (`RequirementsCard`), non fotografata: un'immagine di tabella è illeggibile a 390 px, andrebbe rigirata per ognuna delle sette lingue e renderebbe i numeri non correggibili senza rifare la ripresa. La voce resta perché il contratto la elenca: se HQ-DOCS conferma che l'immagine non serve, si cancella.",
   },
   {
     id: "S02-docker-download",

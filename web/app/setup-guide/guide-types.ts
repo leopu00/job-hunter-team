@@ -81,6 +81,15 @@ export interface GuideScreen {
   /** Cosa deve mostrare la schermata mancante. Nota di lavoro per chi la
    *  riprende: non viene mai mostrata all'utente finale. */
   pending?: string;
+  /**
+   * La voce resta nel registro ma nessuna fase la usa, perché quel
+   * contenuto è reso da un blocco costruito nella pagina.
+   *
+   * Cancellarla perderebbe il fatto che il contratto la elenca; lasciarla
+   * senza spiegazione la farebbe sembrare una ripresa dimenticata. Chi
+   * decide se serva ancora è HQ-DOCS.
+   */
+  replacedByCard?: string;
 }
 
 /** Riferimento a una schermata dentro una fase. */
@@ -139,6 +148,15 @@ export interface GuidePhase {
    * toglie la fase: il passo resta comprensibile senza immagine.
    */
   screenFallback?: { title: GuideText; body: GuideText };
+  /**
+   * Un blocco costruito nella pagina invece che fotografato.
+   *
+   * Serve dove il contratto descrive una «card»: renderla come immagine
+   * costerebbe una ripresa per lingua, sarebbe illeggibile a 390 px e
+   * renderebbe i numeri non correggibili senza rigirare. Un blocco nativo
+   * si traduce, si adatta e si aggiorna in un punto solo.
+   */
+  card?: "requirements";
   links?: GuideLink[];
 }
 
