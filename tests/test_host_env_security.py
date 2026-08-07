@@ -544,6 +544,7 @@ def test_windows_accepts_runtime_and_wrapper_outside_binds(tmp_path):
         env={
             **os.environ,
             "USERPROFILE": str(profile),
+            "APPDATA": str(tmp_path / "app-data"),
             "LOCALAPPDATA": str(tmp_path / "local-app-data"),
             "JHT_RUNTIME_DIR": str(runtime),
             "JHT_COMPOSE_FILE": str(runtime / "docker-compose.yml"),
