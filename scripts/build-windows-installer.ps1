@@ -26,6 +26,13 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
+function Get-FileSystemParent {
+  param([IO.FileSystemInfo]$Node)
+  if ($Node -is [IO.FileInfo]) { return $Node.Directory }
+  if ($Node -is [IO.DirectoryInfo]) { return $Node.Parent }
+  throw 'Unexpected filesystem node type during installer path traversal.'
+}
+
 function Assert-NoReparseAncestors {
   param([string]$Path)
   $full = [IO.Path]::GetFullPath($Path)
@@ -34,7 +41,7 @@ function Assert-NoReparseAncestors {
     if (($probe.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
       throw "Installer authority path contains a reparse point: $Path"
     }
-    $parent = $probe.Parent
+    $parent = Get-FileSystemParent $probe
     if ($null -eq $parent -or $parent.FullName -eq $probe.FullName) { break }
     $probe = $parent
   }

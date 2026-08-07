@@ -31,5 +31,11 @@ cli/bin/** text eol=lf
 *.godot text eol=lf
 *.svg text eol=lf
 
+# Le trust root PEM entrano byte-per-byte nel progetto Godot/PCK. Un checkout
+# Windows CRLF le rende diverse dalla rappresentazione approvata e il parser
+# crittografico deve continuare a fallire chiuso, quindi e' Git a materializzare
+# sempre la forma canonica LF (sia la copia producer sia quella consumer).
+*.pem text eol=lf
+
 # Fixture e documenti pubblicabili: non applicare conversioni EOL né diff testuali.
 *.pdf binary

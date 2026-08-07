@@ -69,6 +69,40 @@ FOREIGN_ACL_MUTATIONS = {
     "foreign-owner-right-ace": "TakeOwnership",
 }
 
+ANCESTOR_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @('Get-FileSystemParent', 'Assert-NoReparseAncestors')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne 2) { throw 'production traversal functions are missing' }
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$probe = @'
+Set-StrictMode -Version 2.0
+$script:FailureCode = 'location_init'
+try {
+  Assert-NoReparseAncestors $env:JHT_TEST_PROBE_PATH `
+    -ReparseCode 'location_node_reparse' `
+    -InternalCode 'location_node_internal'
+  throw 'reparse ancestor was accepted'
+} catch {
+  if ($script:FailureCode -cne 'location_node_reparse') { throw }
+  [Console]::Error.WriteLine(
+    'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=location ' +
+    'code=' + $script:FailureCode)
+  exit 23
+}
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
 
 def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
     source = HELPER_SOURCE.read_text()
@@ -81,6 +115,7 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         "location_forbidden_root",
         "location_fixed_binding",
         "location_node_reparse",
+        "location_node_internal",
         "location_node_owner",
         "location_state_acl",
         "location_target_acl",
@@ -113,6 +148,10 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         "committed floor forbids rollback",
     ):
         assert required in source
+    assert "function Get-FileSystemParent" in source
+    assert "if ($Node -is [IO.FileInfo]) { return $Node.Directory }" in source
+    assert "if ($Node -is [IO.DirectoryInfo]) { return $Node.Parent }" in source
+    assert "$parent = $probe.Parent" not in source
     assert "Get-Process -ErrorAction SilentlyContinue" not in source
     assert source.index("Write-AtomicJson $FloorPath") < source.index(
         "Install-CandidateHelper $bundle"
@@ -178,7 +217,7 @@ def _run_powershell_command(
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            "$ErrorActionPreference='Stop';" + command,
+            "$ErrorActionPreference='Stop';Set-StrictMode -Version 2.0;" + command,
         ],
         env=environment,
         check=check,
@@ -406,7 +445,10 @@ def _authority_census(path: Path) -> dict[str, object]:
         "else{throw 'authority node missing'};"
         "$reparse=$false;$probe=$item;while($null -ne $probe){"
         "if(($probe.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){"
-        "$reparse=$true;break};$parent=$probe.Parent;"
+        "$reparse=$true;break};"
+        "$parent=if($probe -is [IO.FileInfo]){$probe.Directory}"
+        "elseif($probe -is [IO.DirectoryInfo]){$probe.Parent}"
+        "else{throw 'unexpected census node type'};"
         "if($null -eq $parent -or $parent.FullName -eq $probe.FullName){break};"
         "$probe=$parent};"
         "$acl=$item.GetAccessControl("
@@ -461,6 +503,10 @@ def _assert_authority(
         assert census.get("acl_protected") == protected, (
             f"{label} authority={census}"
         )
+
+
+def _authority_snapshot(root: Path) -> tuple[object, ...]:
+    return (_tree_snapshot(root), _acl_tree_snapshot(root))
 
 
 def _side_effect_snapshot(
@@ -811,17 +857,20 @@ def _run_verify(
             env=helper_env,
         )
         if not expected_success:
-            location_mutations = {
-                "bind-root",
-                "bind-descendant",
-                "state-junction",
-                *FOREIGN_ACL_MUTATIONS,
-            }
-            expected_phase = (
-                "location" if mutation in location_mutations else "trust"
+            expected_phase, expected_code = (
+                ("location", "location_forbidden_root")
+                if mutation in {"bind-root", "bind-descendant"}
+                else ("location", "location_node_reparse")
+                if mutation == "state-junction"
+                else ("location", "location_state_acl")
+                if mutation in FOREIGN_ACL_MUTATIONS
+                else ("trust", "trust_failed")
             )
             diagnostic = _helper_result_diagnostic(transaction, result.stderr)
-            assert f"phase={expected_phase}" in diagnostic, diagnostic
+            assert diagnostic == (
+                "JHT-WINDOWS-UPDATE-ERROR schema=1 "
+                f"phase={expected_phase} code={expected_code}"
+            )
         if before_side_effects is not None:
             assert _side_effect_snapshot(target_dir, state, transaction) == (
                 before_side_effects
@@ -1141,12 +1190,136 @@ def test_windows_prelock_error_is_sanitized(
         tmp_path, rsa_keys, mutation="state-junction"
     )
     assert result.returncode != 0
+    regular_leaf = transaction / HELPER
+    assert regular_leaf.is_file()
+    assert not _is_reparse(regular_leaf)
+    assert _is_reparse(transaction.parent)
     diagnostic = _helper_result_diagnostic(transaction, result.stderr)
     assert diagnostic == (
         "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=location "
         "code=location_node_reparse"
     )
     assert str(tmp_path) not in result.stderr
+
+
+@pytest.mark.parametrize("node_kind", ["file", "directory"])
+def test_production_traversal_rejects_regular_node_below_reparse_ancestor(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    node_kind: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    real = tmp_path / "real"
+    regular_directory = real / "regular"
+    regular_directory.mkdir(parents=True)
+    regular_file = regular_directory / "payload.bin"
+    regular_file.write_bytes(b"regular payload\n")
+    junction = tmp_path / "junction"
+    _run_powershell_command(
+        "New-Item -ItemType Junction -Path $env:JHT_TEST_JUNCTION_PATH "
+        "-Target $env:JHT_TEST_JUNCTION_TARGET | Out-Null",
+        env_values={
+            "JHT_TEST_JUNCTION_PATH": str(junction),
+            "JHT_TEST_JUNCTION_TARGET": str(real),
+        },
+    )
+    probe = (
+        junction / "regular" / "payload.bin"
+        if node_kind == "file"
+        else junction / "regular"
+    )
+    assert probe.is_file() if node_kind == "file" else probe.is_dir()
+    assert not _is_reparse(probe)
+    assert _is_reparse(junction)
+
+    state = tmp_path / "state"
+    transaction = state / ("d" * 32)
+    before = _authority_snapshot(tmp_path)
+    result = _run_powershell_command(
+        ANCESTOR_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_PROBE_PATH": str(probe),
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 23
+    assert result.stdout == ""
+    assert result.stderr.strip() == (
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=location "
+        "code=location_node_reparse"
+    )
+    assert str(tmp_path) not in result.stderr
+    assert _authority_snapshot(tmp_path) == before
+    assert not state.exists()
+    assert not transaction.exists()
+    assert not (state / ".update.lock").exists()
+    assert not (state / "committed-floor.json").exists()
+    assert not (transaction / "ready.json").exists()
+
+
+def test_windows_prelock_internal_error_is_not_reported_as_reparse(
+    tmp_path: Path, rsa_keys: tuple[Path, Path]
+) -> None:
+    _private, public = rsa_keys
+    installed = tmp_path / "installed"
+    installed.mkdir()
+    helper = installed / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    nonce = "c" * 32
+    target = installed / INSTALLED_DESKTOP
+    state = tmp_path / "missing-state-parent" / "state"
+    transaction = state / nonce
+    before = _authority_snapshot(tmp_path)
+    result = subprocess.run(
+        [
+            _powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(helper),
+            "-Mode",
+            "Verify",
+            "-TargetPath",
+            str(target),
+            "-CandidatePath",
+            str(installed / f".jht-update-{nonce}.candidate.exe"),
+            "-CandidateHelperPath",
+            str(transaction / HELPER),
+            "-InstalledManifestPath",
+            str(installed / "RELEASE-MANIFEST.json"),
+            "-InstalledSignaturePath",
+            str(installed / "RELEASE-MANIFEST.json.sig"),
+            "-CandidateManifestPath",
+            str(transaction / "RELEASE-MANIFEST.json"),
+            "-CandidateSignaturePath",
+            str(transaction / "RELEASE-MANIFEST.json.sig"),
+            "-StateRoot",
+            str(state),
+            "-Nonce",
+            nonce,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert _helper_result_diagnostic(transaction, result.stderr) == (
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=location "
+        "code=location_node_internal"
+    )
+    assert "location_node_reparse" not in result.stderr
+    assert str(tmp_path) not in result.stderr
+    assert _authority_snapshot(tmp_path) == before
+    assert not state.exists()
+    assert not transaction.exists()
+    assert not (state / ".update.lock").exists()
+    assert not (state / "committed-floor.json").exists()
+    assert not (transaction / "ready.json").exists()
 
 
 def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(

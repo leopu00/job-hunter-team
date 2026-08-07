@@ -47,10 +47,31 @@ func _ready() -> void:
 	# Gate dell'ARTEFATTO Windows: deve leggere la root dal PCK esportato, non
 	# dal checkout del runner. Un filtro export regressivo fallisce il tag.
 	if OS.get_environment("JHT_WINDOWS_UPDATE_TRUST_TEST") == "1":
+		var source := "editor-checkout" if OS.has_feature("editor") else "exported-pck"
+		var key_path := "res://release-keys/production-spki.pem"
+		var present := FileAccess.file_exists(key_path)
+		var raw := FileAccess.get_file_as_bytes(key_path) if present else PackedByteArray()
+		var cr := 0
+		var lf := 0
+		for byte: int in raw:
+			if byte == 13:
+				cr += 1
+			elif byte == 10:
+				lf += 1
+		var final_lf := raw.size() > 0 and raw[-1] == 10
 		var keys := WindowsVerifier.production_keyring()
-		var ok := keys.size() == 1 and WindowsVerifier.production_ready() \
-				and str(keys[0].get("fingerprint", "")) \
-						== WindowsVerifier.PRODUCTION_FINGERPRINT
+		var fingerprint := str(keys[0].get("fingerprint", "missing")) \
+				if keys.size() == 1 else "missing"
+		print("WINDOWS-UPDATE-TRUST-SOURCE ", source)
+		print("WINDOWS-UPDATE-TRUST-BYTES path=", key_path,
+				" present=", 1 if present else 0, " size=", raw.size(),
+				" cr=", cr, " lf=", lf, " final_lf=", 1 if final_lf else 0)
+		print("WINDOWS-UPDATE-TRUST-KEYRING size=", keys.size())
+		print("WINDOWS-UPDATE-TRUST-FINGERPRINT ", fingerprint)
+		var ok := present and raw.size() == 625 and cr == 0 and lf == 11 \
+				and final_lf and keys.size() == 1 \
+				and WindowsVerifier.production_ready() \
+				and fingerprint == WindowsVerifier.PRODUCTION_FINGERPRINT
 		if ok:
 			print("WINDOWS-UPDATE-TRUST ", WindowsVerifier.PRODUCTION_FINGERPRINT)
 			print("WINDOWS-UPDATE-TRUST-TEST PASS")

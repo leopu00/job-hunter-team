@@ -555,15 +555,37 @@ function Assert-FileMatchesArtifact {
   if ([uint64]$item.Length -ne [uint64]$Artifact.size -or (Get-Sha256 $item.FullName) -cne [string]$Artifact.sha256) { throw 'artifact size/SHA-256 mismatch' }
 }
 
+function Get-FileSystemParent {
+  param([IO.FileSystemInfo]$Node)
+  if ($Node -is [IO.FileInfo]) { return $Node.Directory }
+  if ($Node -is [IO.DirectoryInfo]) { return $Node.Parent }
+  throw 'unexpected filesystem node type during protected path traversal'
+}
+
 function Assert-NoReparseAncestors {
-  param([string]$Path)
-  $full = [IO.Path]::GetFullPath($Path)
-  $probe = if (Test-Path -LiteralPath $full) { Get-Item -LiteralPath $full -Force } else { Get-Item -LiteralPath ([IO.Path]::GetDirectoryName($full)) -Force }
-  while ($probe) {
-    if (($probe.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'reparse point in protected path' }
-    $parent = $probe.Parent
-    if ($null -eq $parent -or $parent.FullName -eq $probe.FullName) { break }
-    $probe = $parent
+  param(
+    [string]$Path,
+    [string]$ReparseCode = '',
+    [string]$InternalCode = '')
+  $reparseDetected = $false
+  try {
+    $full = [IO.Path]::GetFullPath($Path)
+    $probe = if (Test-Path -LiteralPath $full) { Get-Item -LiteralPath $full -Force } else { Get-Item -LiteralPath ([IO.Path]::GetDirectoryName($full)) -Force }
+    while ($null -ne $probe) {
+      if (($probe.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        $reparseDetected = $true
+        if ($ReparseCode) { $script:FailureCode = $ReparseCode }
+        throw 'reparse point in protected path'
+      }
+      $parent = Get-FileSystemParent $probe
+      if ($null -eq $parent -or $parent.FullName -eq $probe.FullName) { break }
+      $probe = $parent
+    }
+  } catch {
+    if (-not $reparseDetected -and $InternalCode) {
+      $script:FailureCode = $InternalCode
+    }
+    throw
   }
 }
 
@@ -741,10 +763,13 @@ function Assert-SafeLocationPlan {
   )
   foreach ($pair in $fixed) { if (-not $pair.Actual.Equals([IO.Path]::GetFullPath($pair.Expected), [StringComparison]::OrdinalIgnoreCase)) { throw 'update path does not match its fixed protected location' } }
   foreach ($path in @($targetDir, $StateRoot, $TxnDir, $TargetPath, $CandidateHelperPath, $InstalledManifestPath, $InstalledSignaturePath, $CandidateManifestPath, $CandidateSignaturePath, $PSCommandPath)) {
-    $script:FailureCode = 'location_node_reparse'
-    Assert-NoReparseAncestors $path
-    $script:FailureCode = 'location_node_owner'
-    Assert-CurrentOwner $path
+    Assert-NoReparseAncestors $path `
+      -ReparseCode 'location_node_reparse' `
+      -InternalCode 'location_node_internal'
+    if (Test-Path -LiteralPath $path) {
+      $script:FailureCode = 'location_node_owner'
+      Assert-CurrentOwner $path
+    }
     if (Test-Path -LiteralPath $path -PathType Leaf) {
       $script:FailureCode = 'location_node_read'
       $null = Get-Sha256 $path
@@ -753,16 +778,19 @@ function Assert-SafeLocationPlan {
   $script:FailureCode = 'location_state_acl'
   foreach ($directory in @($StateRoot, $TxnDir)) { Assert-NoForeignWriteAcl $directory }
   if (Test-Path -LiteralPath $CandidatePath -PathType Leaf) {
-    $script:FailureCode = 'location_candidate_reparse'; Assert-NoReparseAncestors $CandidatePath
+    Assert-NoReparseAncestors $CandidatePath `
+      -ReparseCode 'location_candidate_reparse' `
+      -InternalCode 'location_candidate_internal'
     $script:FailureCode = 'location_candidate_owner'; Assert-CurrentOwner $CandidatePath
     $script:FailureCode = 'location_candidate_read'; $null = Get-Sha256 $CandidatePath
   }
   if (Test-Path -LiteralPath $AuthorityBackupDir -PathType Container) {
-    $script:FailureCode = 'location_backup_reparse'
-    Assert-NoReparseAncestors $AuthorityBackupDir
+    Assert-NoReparseAncestors $AuthorityBackupDir `
+      -ReparseCode 'location_backup_reparse' `
+      -InternalCode 'location_backup_internal'
     $script:FailureCode = 'location_backup_owner'
     Assert-CurrentOwner $AuthorityBackupDir
-    foreach ($path in @($OldHelperBackupPath, $OldManifestBackupPath, $OldSignatureBackupPath)) { if (Test-Path -LiteralPath $path -PathType Leaf) { $script:FailureCode = 'location_backup_child_reparse'; Assert-NoReparseAncestors $path; $script:FailureCode = 'location_backup_child_owner'; Assert-CurrentOwner $path } }
+    foreach ($path in @($OldHelperBackupPath, $OldManifestBackupPath, $OldSignatureBackupPath)) { if (Test-Path -LiteralPath $path -PathType Leaf) { Assert-NoReparseAncestors $path -ReparseCode 'location_backup_child_reparse' -InternalCode 'location_backup_child_internal'; $script:FailureCode = 'location_backup_child_owner'; Assert-CurrentOwner $path } }
   }
   $script:FailureCode = 'location_target_acl'
   Assert-OwnerAndAcl $targetDir -Directory

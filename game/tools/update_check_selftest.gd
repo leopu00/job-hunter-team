@@ -804,6 +804,11 @@ func _source_gate_windows() -> void:
 	_check("artifact gate legge davvero il keyring esportato",
 			"JHT_WINDOWS_UPDATE_TRUST_TEST" in game_source
 			and "WindowsVerifier.production_keyring()" in game_source
+			and '"editor-checkout" if OS.has_feature("editor") else "exported-pck"' \
+					in game_source
+			and "WINDOWS-UPDATE-TRUST-BYTES" in game_source
+			and "WINDOWS-UPDATE-TRUST-KEYRING size=" in game_source
+			and "WINDOWS-UPDATE-TRUST-FINGERPRINT" in game_source
 			and "WINDOWS-UPDATE-TRUST-TEST PASS" in game_source
 			and "WINDOWS-UPDATE-TRUST-TEST FAIL" in game_source
 			and "return []" not in verifier_source

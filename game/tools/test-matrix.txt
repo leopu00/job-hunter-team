@@ -67,6 +67,10 @@ doc_preview|script|gate|any|-|tools/doc_preview_selftest.gd|-
 # si scoprono la mattina dopo, dal lavoro non fatto o dal container rimasto
 # acceso tutta la notte.
 headless_exit|script|gate|any|-|tools/headless_exit_selftest.gd|-
+# La SPKI production e' un artefatto testuale ma firmato byte-per-byte: prova
+# policy Git LF, census delle due copie e fingerprint DER senza dipendere da
+# come il checkout del runner materializza i file.
+windows_trust_root_checkout|python|gate|any|-|tools/windows_trust_root_selftest.py|WINDOWS-UPDATE-TRUST-CHECKOUT-TEST PASS
 # L'aggiornamento automatico. Si sbaglia in tre modi che a schermo si
 # assomigliano tutti a "non succede niente": non avvisare mai, proporre un
 # DECLASSAMENTO (alfabeticamente "0.3.10" viene prima di "0.3.9"), o installare

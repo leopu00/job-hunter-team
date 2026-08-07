@@ -116,6 +116,10 @@ def test_acl_mutation_masks_remain_complete_and_in_sync() -> None:
 def test_acl_authority_uses_typed_clr_accessors_in_all_copies() -> None:
     for path in (PREFLIGHT, UPDATE_HELPER, BUILDER):
         source = path.read_text()
+        assert "function Get-FileSystemParent" in source, path
+        assert "if ($Node -is [IO.FileInfo]) { return $Node.Directory }" in source, path
+        assert "if ($Node -is [IO.DirectoryInfo]) { return $Node.Parent }" in source, path
+        assert "$parent = $probe.Parent" not in source, path
         assert re.search(
             r"\.GetOwner\(\s*\[Security\.Principal\.SecurityIdentifier\]\s*\)",
             source,

@@ -61,6 +61,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Census Windows trust root bytes before Godot import
+        if: runner.os == 'Windows'
+        run: python game/tools/windows_trust_root_selftest.py --source windows-runner-pre-import
+
       - uses: chickensoft-games/setup-godot@f166999204a4f2722c6fe042fbaa3b3ea0d9c789 # v2.4.1
         with:
           version: 4.7.0
@@ -211,9 +215,18 @@ jobs:
           trust_out="$(env JHT_NOVPS=1 JHT_WINDOWS_UPDATE_TRUST_TEST=1 \
             godot --headless --path game --quit-after 120 2>&1)"
           printf '%s\n' "$trust_out"
-          printf '%s\n' "$trust_out" | tr -d '\r' | grep -Fx \
+          clean_out="$(printf '%s\n' "$trust_out" | tr -d '\r')"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-SOURCE editor-checkout"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-BYTES path=res://release-keys/production-spki.pem present=1 size=625 cr=0 lf=11 final_lf=1"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-KEYRING size=1"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-FINGERPRINT 3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
+          printf '%s\n' "$clean_out" | grep -Fx \
             "WINDOWS-UPDATE-TRUST 3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
-          printf '%s\n' "$trust_out" | tr -d '\r' | grep -Fx \
+          printf '%s\n' "$clean_out" | grep -Fx \
             "WINDOWS-UPDATE-TRUST-TEST PASS"
 
       # L'export e' il passo piu' pesante e arriva dopo tutta la lista di test:
@@ -342,9 +355,18 @@ jobs:
           set -e
           printf '%s\n' "$trust_out"
           test "$trust_rc" -eq 0
-          printf '%s\n' "$trust_out" | tr -d '\r' | grep -Fx \
+          clean_out="$(printf '%s\n' "$trust_out" | tr -d '\r')"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-SOURCE exported-pck"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-BYTES path=res://release-keys/production-spki.pem present=1 size=625 cr=0 lf=11 final_lf=1"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-KEYRING size=1"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-FINGERPRINT 3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
+          printf '%s\n' "$clean_out" | grep -Fx \
             "WINDOWS-UPDATE-TRUST 3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
-          printf '%s\n' "$trust_out" | tr -d '\r' | grep -Fx \
+          printf '%s\n' "$clean_out" | grep -Fx \
             "WINDOWS-UPDATE-TRUST-TEST PASS"
 
       - name: Preserve Linux executable permissions

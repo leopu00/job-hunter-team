@@ -221,12 +221,19 @@ function Get-TreeNodes {
   }
 }
 
+function Get-FileSystemParent {
+  param([IO.FileSystemInfo]$Node)
+  if ($Node -is [IO.FileInfo]) { return $Node.Directory }
+  if ($Node -is [IO.DirectoryInfo]) { return $Node.Parent }
+  throw 'unexpected filesystem node type during installer path traversal'
+}
+
 function Assert-Ancestors {
   param([string]$Path)
   $probe = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
   while ($null -ne $probe) {
     [JhtInstallerFileIdentity]::AssertNode($probe.FullName, $true)
-    $parent = $probe.Parent
+    $parent = Get-FileSystemParent $probe
     if ($null -eq $parent -or $parent.FullName -eq $probe.FullName) { break }
     $probe = $parent
   }
