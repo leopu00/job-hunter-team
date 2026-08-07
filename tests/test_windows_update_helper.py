@@ -96,9 +96,17 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
     assert source.index("Write-AtomicJson $FloorPath") < source.index(
         "Install-CandidateHelper $bundle"
     )
-    assert source.index("Remove-Item -LiteralPath $ResultPath") < source.index(
-        "if ($Mode -eq 'Recover')"
+    main_dispatch = "if ($Mode -eq 'Recover') { Invoke-Recover } else { Invoke-Apply }"
+    assert source.index("Remove-Item -LiteralPath $ResultPath") < source.rindex(
+        main_dispatch
     )
+    assert "Get-Acl" not in source
+    assert "Set-Acl" not in source
+    assert (
+        "Assert-FileMatchesArtifact $PSCommandPath "
+        "(Get-ArtifactByRole $installed.Value $HelperRole)"
+    ) in source
+    assert "Assert-FileMatchesArtifact $oldHelperPath" not in source
     for forbidden_role in (
         "windows-installer",
         "linux-desktop",
@@ -198,12 +206,13 @@ def _protect_directory(path: Path) -> None:
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            "$p=$args[0];$acl=Get-Acl -LiteralPath $p;"
+            "$p=$args[0];$item=[IO.DirectoryInfo]::new($p);"
+            "$acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::All);"
             "$acl.SetAccessRuleProtection($true,$false);"
             "$rule=New-Object System.Security.AccessControl.FileSystemAccessRule("
             "[System.Security.Principal.WindowsIdentity]::GetCurrent().User,"
             "'FullControl','ContainerInherit,ObjectInherit','None','Allow');"
-            "$acl.SetAccessRule($rule);Set-Acl -LiteralPath $p -AclObject $acl",
+            "$acl.SetAccessRule($rule);$item.SetAccessControl($acl)",
             str(path),
         ],
         check=True,
@@ -253,6 +262,7 @@ def _run_verify(
     candidate_version: str = "0.3.7",
     mutation: str = "none",
     rotation_keys: tuple[Path, Path] | None = None,
+    candidate_helper_suffix: bytes = b"",
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
     private, public = rsa_keys
     candidate_private, candidate_public = rotation_keys or rsa_keys
@@ -260,7 +270,33 @@ def _run_verify(
     target_dir.mkdir()
     _protect_directory(target_dir)
     nonce = "a" * 32
-    state = tmp_path / "state"
+    helper_env = os.environ.copy()
+    if mutation in {"bind-root", "bind-descendant"}:
+        fake_profile = tmp_path / "profile"
+        fake_profile.mkdir()
+        helper_env["USERPROFILE"] = str(fake_profile)
+        state = fake_profile / ".jht"
+        if mutation == "bind-descendant":
+            state /= "container-visible"
+    elif mutation == "state-junction":
+        state = tmp_path / "state"
+        junction_target = tmp_path / "state-real"
+        junction_target.mkdir()
+        subprocess.run(
+            [
+                _powershell(),
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "New-Item -ItemType Junction -Path $args[0] -Target $args[1] | Out-Null",
+                str(state),
+                str(junction_target),
+            ],
+            check=True,
+        )
+    else:
+        state = tmp_path / "state"
     transaction = state / nonce
     transaction.mkdir(parents=True)
     installed_build = tmp_path / "installed-build"
@@ -300,6 +336,9 @@ def _run_verify(
         )
     else:
         shutil.copy2(helper, candidate_build / HELPER)
+    if candidate_helper_suffix:
+        with (candidate_build / HELPER).open("ab") as stream:
+            stream.write(candidate_helper_suffix)
     _write_signed_manifest(
         directory=candidate_build,
         version=candidate_version,
@@ -367,6 +406,24 @@ def _run_verify(
             ],
             check=True,
         )
+    elif mutation == "foreign-write-ace":
+        subprocess.run(
+            [
+                _powershell(),
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$item=[IO.DirectoryInfo]::new($args[0]);"
+                "$acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::All);"
+                "$sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-545');"
+                "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
+                "$sid,'Modify','ContainerInherit,ObjectInherit','None','Allow');"
+                "$acl.AddAccessRule($rule);$item.SetAccessControl($acl)",
+                str(transaction),
+            ],
+            check=True,
+        )
 
     process = subprocess.Popen(
         [str(target), "-t", "127.0.0.1"],
@@ -404,7 +461,13 @@ def _run_verify(
             "-OldPid",
             str(process.pid),
         ]
-        result = subprocess.run(command, text=True, capture_output=True, timeout=30)
+        result = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            env=helper_env,
+        )
     finally:
         process.terminate()
         try:
@@ -412,6 +475,188 @@ def _run_verify(
         except subprocess.TimeoutExpired:
             process.kill()
     return result, target, transaction
+
+
+def _helper_command(
+    *, target: Path, transaction: Path, mode: str, old_pid: int = 1
+) -> list[str]:
+    state = transaction.parent
+    nonce = transaction.name
+    return [
+        _powershell(),
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-File",
+        str(target.parent / HELPER),
+        "-Mode",
+        mode,
+        "-TargetPath",
+        str(target),
+        "-CandidatePath",
+        str(target.parent / f".jht-update-{nonce}.candidate.exe"),
+        "-CandidateHelperPath",
+        str(transaction / HELPER),
+        "-InstalledManifestPath",
+        str(target.parent / "RELEASE-MANIFEST.json"),
+        "-InstalledSignaturePath",
+        str(target.parent / "RELEASE-MANIFEST.json.sig"),
+        "-CandidateManifestPath",
+        str(transaction / "RELEASE-MANIFEST.json"),
+        "-CandidateSignaturePath",
+        str(transaction / "RELEASE-MANIFEST.json.sig"),
+        "-StateRoot",
+        str(state),
+        "-Nonce",
+        nonce,
+        "-OldPid",
+        str(old_pid),
+    ]
+
+
+def _write_compact_json(path: Path, value: dict[str, object]) -> None:
+    path.write_text(
+        json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize(
+    ("boundary", "install_candidate", "install_metadata", "commit_floor", "promote_helper"),
+    [
+        ("swap_intent", False, False, False, False),
+        ("candidate_installed", True, False, False, False),
+        ("metadata_installed", True, True, False, False),
+        ("floor_intent", True, True, True, False),
+        ("helper_intent", True, True, True, False),
+        ("helper_promoted", True, True, True, True),
+    ],
+)
+def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    boundary: str,
+    install_candidate: bool,
+    install_metadata: bool,
+    commit_floor: bool,
+    promote_helper: bool,
+) -> None:
+    verified, target, transaction = _run_verify(
+        tmp_path,
+        rsa_keys,
+        candidate_helper_suffix=b"\n# independently signed next helper\n",
+    )
+    assert verified.returncode == 0, verified.stderr
+    nonce = transaction.name
+    state = transaction.parent
+    candidate = target.parent / f".jht-update-{nonce}.candidate.exe"
+    backup = target.parent / f".jht-update-{nonce}.backup.exe"
+    authority_backup = target.parent / f".jht-update-{nonce}.authority-backup"
+    installed_helper = target.parent / HELPER
+    installed_manifest = target.parent / "RELEASE-MANIFEST.json"
+    installed_signature = target.parent / "RELEASE-MANIFEST.json.sig"
+    old_bytes = target.read_bytes()
+    old_helper_bytes = installed_helper.read_bytes()
+    candidate_bytes = candidate.read_bytes()
+    candidate_helper_bytes = (transaction / HELPER).read_bytes()
+    journal_path = transaction / "journal.json"
+    journal = json.loads(journal_path.read_text(encoding="utf-8"))
+
+    if install_candidate:
+        shutil.copy2(target, backup)
+        shutil.copy2(candidate, target)
+        candidate.unlink()
+    if install_metadata:
+        authority_backup.mkdir()
+        _protect_directory(authority_backup)
+        shutil.copy2(installed_helper, authority_backup / HELPER)
+        shutil.copy2(installed_manifest, authority_backup / "RELEASE-MANIFEST.json")
+        shutil.copy2(
+            installed_signature,
+            authority_backup / "RELEASE-MANIFEST.json.sig",
+        )
+        shutil.copy2(transaction / "RELEASE-MANIFEST.json", installed_manifest)
+        shutil.copy2(
+            transaction / "RELEASE-MANIFEST.json.sig", installed_signature
+        )
+    if commit_floor:
+        _write_compact_json(
+            state / "committed-floor.json",
+            {
+                "schema": 1,
+                "sequence": int(journal["target_sequence"]),
+                "version": str(journal["target_version"]),
+            },
+        )
+    if promote_helper:
+        shutil.copy2(transaction / HELPER, installed_helper)
+
+    journal["state"] = "helper_intent" if boundary == "helper_promoted" else boundary
+    candidate_process: subprocess.Popen[bytes] | None = None
+    try:
+        if commit_floor:
+            candidate_process = subprocess.Popen(
+                [str(target), "-t", "127.0.0.1"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            started = subprocess.run(
+                [
+                    _powershell(),
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "(Get-Process -Id ([int]$args[0]) -ErrorAction Stop).StartTime.ToUniversalTime().Ticks.ToString()",
+                    str(candidate_process.pid),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            journal["candidate_pid"] = candidate_process.pid
+            journal["candidate_started"] = started
+            _write_compact_json(
+                transaction / "health.json",
+                {
+                    "schema": 1,
+                    "type": "healthy",
+                    "nonce": nonce,
+                    "version": str(journal["target_version"]),
+                    "exe_path": str(target.resolve()),
+                    "exe_sha256": str(journal["candidate_sha256"]),
+                    "pid": candidate_process.pid,
+                    "process_started_utc_ticks": started,
+                },
+            )
+        _write_compact_json(journal_path, journal)
+
+        recovered = subprocess.run(
+            _helper_command(
+                target=target,
+                transaction=transaction,
+                mode="Recover",
+            ),
+            text=True,
+            capture_output=True,
+            timeout=45,
+        )
+        result = json.loads((transaction / "result.json").read_text())
+        if commit_floor:
+            assert recovered.returncode == 0, recovered.stderr
+            assert result["phase"] == "committed"
+            assert target.read_bytes() == candidate_bytes
+            assert installed_helper.read_bytes() == candidate_helper_bytes
+            assert json.loads(journal_path.read_text())["state"] == "committed"
+        else:
+            assert recovered.returncode != 0, recovered.stderr
+            assert result["phase"] in {"rollback", "recovered"}
+            assert target.read_bytes() == old_bytes
+            assert installed_helper.read_bytes() == old_helper_bytes
+            assert json.loads(journal_path.read_text())["state"] == "rolled_back"
+    finally:
+        if candidate_process and candidate_process.poll() is None:
+            candidate_process.kill()
 
 
 def test_windows_powershell51_verifies_signed_bundle(
@@ -454,6 +699,10 @@ def test_windows_powershell51_rotation_overlap_accepts_new_signed_new_only_helpe
         ("0.3.7", "extra-windows-installer"),
         ("0.3.7", "extra-linux-desktop"),
         ("0.3.7", "extra-macos-desktop"),
+        ("0.3.7", "foreign-write-ace"),
+        ("0.3.7", "state-junction"),
+        ("0.3.7", "bind-root"),
+        ("0.3.7", "bind-descendant"),
         ("0.3.6", "none"),
     ],
 )

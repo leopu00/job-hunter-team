@@ -23,36 +23,99 @@ $portable = Join-Path $gameDir 'builds/windows/job-hunter-team.exe'
 $setup = Join-Path $gameDir 'builds/windows/job-hunter-team-windows-x64-setup.exe'
 $nsi = Join-Path $gameDir 'installer/windows.nsi'
 $numericVersion = (($Version -split '-', 2)[0]) + '.0'
-$authority = [IO.Path]::GetFullPath($AuthorityDirectory)
-$authorityFiles = @(
-  (Join-Path $authority 'jht-windows-update.ps1'),
-  (Join-Path $authority 'RELEASE-MANIFEST.json'),
-  (Join-Path $authority 'RELEASE-MANIFEST.json.sig')
-)
+$authoritySource = [IO.Path]::GetFullPath($AuthorityDirectory)
+$stagingRoot = Join-Path $env:LOCALAPPDATA ('Job Hunter Team\installer-authority-' + [guid]::NewGuid().ToString('N'))
+$authority = [IO.Path]::GetFullPath($stagingRoot)
+$authorityFiles = @()
+
+function Assert-NoReparseAncestors {
+  param([string]$Path)
+  $full = [IO.Path]::GetFullPath($Path)
+  $probe = if (Test-Path -LiteralPath $full) { Get-Item -LiteralPath $full -Force } else { Get-Item -LiteralPath ([IO.Path]::GetDirectoryName($full)) -Force }
+  while ($probe) {
+    if (($probe.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw "Installer authority path contains a reparse point: $Path"
+    }
+    $parent = $probe.Parent
+    if ($null -eq $parent -or $parent.FullName -eq $probe.FullName) { break }
+    $probe = $parent
+  }
+}
+
+function Initialize-ProtectedDirectory {
+  param([string]$Path)
+  New-Item -ItemType Directory -Path $Path -Force | Out-Null
+  Assert-NoReparseAncestors $Path
+  $item = [IO.DirectoryInfo]::new([IO.Path]::GetFullPath($Path))
+  $acl = [IO.FileSystemAclExtensions]::GetAccessControl($item, [Security.AccessControl.AccessControlSections]::All)
+  $acl.SetAccessRuleProtection($true, $false)
+  $rule = [Security.AccessControl.FileSystemAccessRule]::new(
+    [Security.Principal.WindowsIdentity]::GetCurrent().User,
+    [Security.AccessControl.FileSystemRights]::FullControl,
+    [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit',
+    [Security.AccessControl.PropagationFlags]::None,
+    [Security.AccessControl.AccessControlType]::Allow)
+  $acl.SetAccessRule($rule)
+  [IO.FileSystemAclExtensions]::SetAccessControl($item, $acl)
+  Assert-ProtectedDirectory $Path
+}
+
+function Assert-ProtectedDirectory {
+  param([string]$Path)
+  Assert-NoReparseAncestors $Path
+  $item = [IO.DirectoryInfo]::new([IO.Path]::GetFullPath($Path))
+  $verified = [IO.FileSystemAclExtensions]::GetAccessControl($item, [Security.AccessControl.AccessControlSections]::All)
+  if (-not $verified.AreAccessRulesProtected) { throw 'Installer authority staging still inherits its DACL.' }
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $ownerSid = ([Security.Principal.NTAccount]$verified.Owner).Translate([Security.Principal.SecurityIdentifier]).Value
+  if ($ownerSid -ne $currentSid) { throw 'Installer authority directory has a foreign owner.' }
+  $writeMask = [Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Modify -bor [Security.AccessControl.FileSystemRights]::FullControl -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
+  foreach ($rule in $verified.Access) {
+    if ($rule.AccessControlType -ne 'Allow' -or (([Security.AccessControl.FileSystemRights]$rule.FileSystemRights -band $writeMask) -eq 0)) { continue }
+    $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+    if ($sid -ne $currentSid) { throw 'Installer authority directory grants write to another principal.' }
+  }
+}
 
 if (-not $IsWindows) {
   throw 'The native installer smoke must run on Windows.'
 }
-if (-not (Test-Path -LiteralPath $portable -PathType Leaf)) {
-  throw "Portable Windows export missing: $portable"
-}
-foreach ($required in $authorityFiles) {
-  if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-    throw "Signed update authority missing: $required"
+try {
+  if (-not (Test-Path -LiteralPath $portable -PathType Leaf)) {
+    throw "Portable Windows export missing: $portable"
   }
-}
-if ((Get-Item -LiteralPath $authorityFiles[2]).Length -ne 384) {
-  throw 'Detached release signature must be exactly 384 raw bytes.'
-}
-$fingerprint = & python scripts/release_signing.py fingerprint `
-  --public-key scripts/release-keys/production-spki.pem
-if ($LASTEXITCODE -ne 0 -or $fingerprint -ne '3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2') {
-  throw 'Production release trust root fingerprint mismatch.'
-}
-& python scripts/release_signing.py verify `
-  --manifest $authorityFiles[1] --signature $authorityFiles[2] `
-  --public-key scripts/release-keys/production-spki.pem
-if ($LASTEXITCODE -ne 0) { throw 'Signed release authority verification failed.' }
+  Assert-NoReparseAncestors $authoritySource
+  Initialize-ProtectedDirectory $authority
+  foreach ($name in @('job-hunter-team-windows-x64-portable.exe', 'jht-windows-update.ps1', 'RELEASE-MANIFEST.json', 'RELEASE-MANIFEST.json.sig')) {
+    $source = Join-Path $authoritySource $name
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Signed update authority missing: $source" }
+    Assert-NoReparseAncestors $source
+    Copy-Item -LiteralPath $source -Destination (Join-Path $authority $name) -ErrorAction Stop
+  }
+  $authorityFiles = @(
+    (Join-Path $authority 'jht-windows-update.ps1'),
+    (Join-Path $authority 'RELEASE-MANIFEST.json'),
+    (Join-Path $authority 'RELEASE-MANIFEST.json.sig'),
+    (Join-Path $authority 'job-hunter-team-windows-x64-portable.exe')
+  )
+  $env:JHT_INSTALLER_AUTHORITY = $authority
+  if ((Get-Item -LiteralPath $authorityFiles[2]).Length -ne 384) {
+    throw 'Detached release signature must be exactly 384 raw bytes.'
+  }
+  $fingerprint = & python scripts/release_signing.py fingerprint `
+    --public-key scripts/release-keys/production-spki.pem
+  if ($LASTEXITCODE -ne 0 -or $fingerprint -ne '3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2') {
+    throw 'Production release trust root fingerprint mismatch.'
+  }
+  & python scripts/release_signing.py verify `
+    --manifest $authorityFiles[1] --signature $authorityFiles[2] `
+    --public-key scripts/release-keys/production-spki.pem
+  if ($LASTEXITCODE -ne 0) { throw 'Signed release authority verification failed.' }
+  & python -c "import os; from pathlib import Path; from scripts.release_manifest import parse_manifest_bytes,verify_artifact_files; p=Path(os.environ['JHT_INSTALLER_AUTHORITY']); verify_artifact_files(directory=p,manifest=parse_manifest_bytes((p/'RELEASE-MANIFEST.json').read_bytes()))"
+  if ($LASTEXITCODE -ne 0) { throw 'Signed release artifact binding failed.' }
+  if ((Get-FileHash -LiteralPath $portable -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $authorityFiles[3] -Algorithm SHA256).Hash) {
+    throw 'Portable input differs from the signed Windows desktop artifact.'
+  }
 
 $makensisCommand = Get-Command makensis.exe -ErrorAction SilentlyContinue
 if ($makensisCommand) {
@@ -67,8 +130,17 @@ if ($makensisCommand) {
 }
 
 Remove-Item -LiteralPath $setup -Force -ErrorAction SilentlyContinue
-& $makensis /V4 "/DVERSION=$Version" "/DVERSION_NUMERIC=$numericVersion" `
-  "/DAUTHORITY_DIR=$authority" $nsi
+  # Reattestazione immediatamente prima che makensis consumi i File: staging
+  # owner-only, nessun reparse e binding firma+size+SHA ancora esatti.
+  foreach ($required in $authorityFiles) { Assert-NoReparseAncestors $required }
+  Assert-ProtectedDirectory $authority
+  & python scripts/release_signing.py verify --manifest $authorityFiles[1] `
+    --signature $authorityFiles[2] --public-key scripts/release-keys/production-spki.pem
+  if ($LASTEXITCODE -ne 0) { throw 'Signed release authority changed before packaging.' }
+  & python -c "import os; from pathlib import Path; from scripts.release_manifest import parse_manifest_bytes,verify_artifact_files; p=Path(os.environ['JHT_INSTALLER_AUTHORITY']); verify_artifact_files(directory=p,manifest=parse_manifest_bytes((p/'RELEASE-MANIFEST.json').read_bytes()))"
+  if ($LASTEXITCODE -ne 0) { throw 'Signed release artifacts changed before packaging.' }
+  & $makensis /V4 "/DVERSION=$Version" "/DVERSION_NUMERIC=$numericVersion" `
+    "/DAUTHORITY_DIR=$authority" $nsi
 if ($LASTEXITCODE -ne 0) {
   throw "makensis failed with exit code $LASTEXITCODE"
 }
@@ -129,10 +201,7 @@ if ($Smoke) {
         throw "Installed signed authority differs: $($pair[1])"
       }
     }
-    $acl = Get-Acl -LiteralPath $installDir
-    if (-not $acl.AreAccessRulesProtected) {
-      throw 'Installed updater directory still inherits its DACL.'
-    }
+    Assert-ProtectedDirectory $installDir
 
     $previousNoVps = $env:JHT_NOVPS
     $env:JHT_NOVPS = '1'
@@ -161,11 +230,18 @@ if ($Smoke) {
   }
 }
 
-$hash = Get-FileHash -LiteralPath $setup -Algorithm SHA256
-[ordered]@{
-  setup = $setup
-  sha256 = $hash.Hash.ToLowerInvariant()
-  version = $Version
-  portable = $portable
-  smoke = [bool]$Smoke
-} | ConvertTo-Json -Compress
+  $hash = Get-FileHash -LiteralPath $setup -Algorithm SHA256
+  $output = [ordered]@{
+    setup = $setup
+    sha256 = $hash.Hash.ToLowerInvariant()
+    version = $Version
+    portable = $portable
+    smoke = [bool]$Smoke
+  }
+} finally {
+  Remove-Item Env:JHT_INSTALLER_AUTHORITY -ErrorAction SilentlyContinue
+  if (Test-Path -LiteralPath $stagingRoot) {
+    Remove-Item -LiteralPath $stagingRoot -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}
+$output | ConvertTo-Json -Compress

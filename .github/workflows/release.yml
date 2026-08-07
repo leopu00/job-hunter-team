@@ -204,7 +204,10 @@ jobs:
           test "$KEY_ID" = "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
           mkdir -p game/release-keys
           cp scripts/release-keys/production-spki.pem game/release-keys/production-spki.pem
-          ! grep -q PRIVATE game/release-keys/production-spki.pem
+          if grep -q PRIVATE game/release-keys/production-spki.pem; then
+            echo "::error::production SPKI contains private key material"
+            exit 1
+          fi
 
       # L'export e' il passo piu' pesante e arriva dopo tutta la lista di test:
       # stessa esposizione dello step precedente, stessa difesa (game.yml la ha
@@ -545,7 +548,10 @@ jobs:
         run: |
           test -s scripts/release-keys/production-spki.pem
           test "$(wc -c < scripts/release-keys/production-spki.pem)" -eq 625
-          ! grep -q PRIVATE scripts/release-keys/production-spki.pem
+          if grep -q PRIVATE scripts/release-keys/production-spki.pem; then
+            echo "::error::production SPKI contains private key material"
+            exit 1
+          fi
           KEY_ID="$(python scripts/release_signing.py fingerprint \
             --public-key scripts/release-keys/production-spki.pem)"
           test "$KEY_ID" = "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"

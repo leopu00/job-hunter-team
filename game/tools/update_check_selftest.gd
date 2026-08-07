@@ -421,6 +421,19 @@ func _protocollo_windows() -> void:
 	_check("helper argv usa -File e rispetta ExecutionPolicy",
 			"-File" in argv and "-ExecutionPolicy" not in argv and "Bypass" not in argv,
 			str(argv))
+	for boundary: String in ["swap_intent", "candidate_installed",
+			"metadata_installed", "floor_intent", "helper_intent"]:
+		_check("reboot entra in Recover al boundary " + boundary,
+				WindowsClient.pending_boot_requires_recovery(
+						"0.3.7", "0.3.7", true, {}, nonce), boundary)
+	_check("READY verificato senza apply si ricostruisce, non fa recovery",
+			not WindowsClient.pending_boot_requires_recovery(
+					"0.3.6", "0.3.7", true, result, nonce), "")
+	_check("download firmato rifiuta short/oversize/zero",
+			WindowsClient.download_size_valid(384, 384, 384)
+			and not WindowsClient.download_size_valid(383, 384, 384)
+			and not WindowsClient.download_size_valid(385, 384, 384)
+			and not WindowsClient.download_size_valid(0, 65536), "")
 
 
 # ── 5. Firma e binding manifest Windows ──────────────────────────────
@@ -587,6 +600,7 @@ func _verifier_windows() -> void:
 					context) == WindowsVerifier.ERR_SELECTION, "")
 
 	var replay_context := context.duplicate(true)
+	replay_context["installed_version"] = "0.3.7"
 	replay_context["highest_committed_version"] = "0.3.7"
 	replay_context["highest_committed_sequence"] = WindowsVerifier.version_sequence("0.3.7")
 	_check("replay versione+sequence committed rifiutato",
@@ -594,14 +608,14 @@ func _verifier_windows() -> void:
 					replay_context).get("error", "")) == WindowsVerifier.ERR_DOWNGRADE, "")
 	var sequence_replay := context.duplicate(true)
 	sequence_replay["highest_committed_sequence"] = WindowsVerifier.version_sequence("0.3.7")
-	_check("sequence replay rifiutato anche con semver avanti",
+	_check("floor sequence senza semver corrispondente rifiutato",
 			str(WindowsVerifier.verify_for_test(raw, signature, public_pem, fingerprint,
-					sequence_replay).get("error", "")) == WindowsVerifier.ERR_DOWNGRADE, "")
+					sequence_replay).get("error", "")) == WindowsVerifier.ERR_BINDING, "")
 	var semver_replay := context.duplicate(true)
 	semver_replay["highest_committed_version"] = "0.3.7"
-	_check("semver replay rifiutato anche con sequence avanti",
+	_check("floor semver senza sequence corrispondente rifiutato",
 			str(WindowsVerifier.verify_for_test(raw, signature, public_pem, fingerprint,
-					semver_replay).get("error", "")) == WindowsVerifier.ERR_DOWNGRADE, "")
+					semver_replay).get("error", "")) == WindowsVerifier.ERR_BINDING, "")
 	var downgrade := manifest.duplicate(true)
 	downgrade["version"] = "0.3.5"
 	downgrade["tag"] = "v0.3.5"
@@ -609,6 +623,25 @@ func _verifier_windows() -> void:
 	_check("downgrade firmato rifiutato",
 			_verified_error(downgrade, private_key, public_pem, fingerprint, context) \
 					== WindowsVerifier.ERR_DOWNGRADE, "")
+	var impossible_time := manifest.duplicate(true)
+	impossible_time["published_at"] = "2026-02-30T19:00:00Z"
+	_check("timestamp canonico ma non reale rifiutato",
+			_verified_error(impossible_time, private_key, public_pem, fingerprint,
+					context) == WindowsVerifier.ERR_BINDING, "")
+	var mismatched_floor := context.duplicate(true)
+	mismatched_floor["highest_committed_version"] = "0.3.6"
+	mismatched_floor["highest_committed_sequence"] = \
+			WindowsVerifier.version_sequence("0.3.5")
+	_check("floor versione/sequence incoerente rifiutato",
+			str(WindowsVerifier.verify_for_test(raw, signature, public_pem, fingerprint,
+					mismatched_floor).get("error", "")) == WindowsVerifier.ERR_BINDING, "")
+	var below_floor := context.duplicate(true)
+	below_floor["highest_committed_version"] = "0.3.7"
+	below_floor["highest_committed_sequence"] = \
+			WindowsVerifier.version_sequence("0.3.7")
+	_check("installed sotto il floor committed rifiutato",
+			str(WindowsVerifier.verify_for_test(raw, signature, public_pem, fingerprint,
+					below_floor).get("error", "")) == WindowsVerifier.ERR_BINDING, "")
 
 	var float_raw := raw.get_string_from_ascii().replace(
 			'"sequence":%d' % WindowsVerifier.version_sequence("0.3.7"),
@@ -733,6 +766,26 @@ func _source_gate_windows() -> void:
 			and "OS.create_process(WindowsClient.powershell_path(), argv, false)" \
 					in service_source
 			and "shell_open" not in client_source, "")
+	_check("recovery boot raggiungibile anche quando target e pending coincidono",
+			"await _recover_windows(plan)" in service_source
+			and "WindowsClient.recovery_authority_ready(plan, pending_version)" \
+					in service_source
+			and "pending_boot_requires_recovery" in service_source, "")
+	_check("download Windows e limitato durante e dopo il trasferimento",
+			"request.body_size_limit = max_bytes" in service_source
+			and "WINDOWS_MANIFEST_MAX_BYTES := 65536" in service_source
+			and "WINDOWS_SIGNATURE_BYTES := 384" in service_source
+			and "WindowsClient.download_size_valid(" in service_source
+			and "DirAccess.remove_absolute(destination)" in service_source, "")
+	_check("helper riattestato immediatamente prima di ogni -File",
+			service_source.count("WindowsClient.installed_authority(") >= 3
+			and service_source.count("WindowsClient.recovery_authority_ready(") >= 2,
+			"")
+	_check("portable o path bind non acquisiscono capability updater",
+			'"Programs/Job Hunter Team"' in client_source
+			and '"job-hunter-team.exe"' in client_source
+			and "target.to_lower() != expected_target.to_lower()" in client_source,
+			"")
 	_check("argv helper rispetta la policy PowerShell",
 			'"-File"' in client_source and "ExecutionPolicy" not in client_source
 			and "Bypass" not in client_source, "")

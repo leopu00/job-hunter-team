@@ -395,6 +395,16 @@ static func _valid_context(context: Dictionary) -> bool:
 	var highest := str(context["highest_committed_version"])
 	if highest != "" and not _stable_version(highest):
 		return false
+	var installed := str(context["installed_version"])
+	var installed_sequence := 0 if installed == "0.0.0" \
+			else version_sequence(installed)
+	var highest_sequence := int(context["highest_committed_sequence"])
+	if installed_sequence < 0 \
+			or (highest == "" and highest_sequence != 0) \
+			or (highest != "" and highest_sequence != version_sequence(highest)) \
+			or highest_sequence > installed_sequence \
+			or (highest != "" and UpdateCheck.compare(installed, highest) < 0):
+		return false
 	var tuples := {}
 	for raw_selection: Variant in context["required_artifacts"]:
 		if not (raw_selection is Dictionary):
@@ -498,10 +508,25 @@ static func version_sequence(version: String) -> int:
 
 static func _utc_timestamp(value: String) -> bool:
 	var regex := RegEx.new()
-	if regex.compile("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") \
+	if regex.compile("^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})Z$") \
 			!= OK:
 		return false
-	return regex.search(value) != null
+	var matched := regex.search(value)
+	if matched == null:
+		return false
+	var year := int(matched.get_string(1))
+	var month := int(matched.get_string(2))
+	var day := int(matched.get_string(3))
+	var hour := int(matched.get_string(4))
+	var minute := int(matched.get_string(5))
+	var second := int(matched.get_string(6))
+	if year < 1 or month < 1 or month > 12 or hour > 23 \
+			or minute > 59 or second > 59:
+		return false
+	var days := [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+	if month == 2 and (year % 400 == 0 or (year % 4 == 0 and year % 100 != 0)):
+		days[1] = 29
+	return day >= 1 and day <= int(days[month - 1])
 
 
 static func _token(value: String) -> bool:

@@ -20,6 +20,17 @@ def test_nsis_uses_stable_per_user_release_name() -> None:
     assert "RequestExecutionLevel user" in source
     assert 'WriteRegStr HKCU "${UNINST_KEY}" "DisplayName"' in source
     assert 'WriteUninstaller "$INSTDIR\\Uninstall.exe"' in source
+    assert "MUI_PAGE_DIRECTORY" not in source
+    assert "Function AssertSafeInstallDir" in source
+    assert "GetFileAttributesW" in source
+    assert source.index("Call AssertSafeInstallDir") < source.index(
+        'File "..\\builds\\windows\\job-hunter-team.exe"'
+    )
+    assert source.index("icacls.exe") < source.index(
+        'File "${AUTHORITY_DIR}\\jht-windows-update.ps1"'
+    )
+    assert '"$INSTDIR" /reset /T /C' in source
+    assert source.count("Call AssertSafeInstallDir") >= 3
 
 
 def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
@@ -34,6 +45,13 @@ def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
         "Silent uninstaller",
         "AuthorityDirectory",
         "Detached release signature must be exactly 384 raw bytes",
+        "installer-authority-",
+        "Assert-NoReparseAncestors",
+        "Initialize-ProtectedDirectory",
+        "Assert-ProtectedDirectory",
+        "FileSystemAclExtensions",
+        "verify_artifact_files",
+        "Signed release artifacts changed before packaging",
     ):
         assert seam in source
 
@@ -49,6 +67,11 @@ def test_release_publishes_setup_primary_and_portable_secondary() -> None:
     assert "-AuthorityDirectory release-assets -Smoke" in publish
     assert "--expected-asset job-hunter-team-windows-x64-setup.exe" in publish
     assert "--expected-asset job-hunter-team-windows-x64-portable.exe" in publish
+    assert "contents: read" in publish
+    assert publish.count("contents: write") == 1
+    assert publish.count("ref: ${{ needs.authorize.outputs.tag_sha }}") == 2
+    assert "uses: actions/checkout@v" not in publish
+    assert "git rev-list -n 1 '${{ inputs.tag }}'" in publish
 
 
 def test_download_page_prefers_installer_and_labels_portable_alternative() -> None:
@@ -78,6 +101,7 @@ def test_native_windows_smoke_is_non_publishing() -> None:
     assert "tests/test_windows_update_helper.py" in workflow
     assert "./scripts/build-windows-installer.ps1" not in workflow
     assert "actions/upload-artifact" not in workflow
+    assert "uses: actions/checkout@v" not in workflow
     publish = PUBLISH_WORKFLOW.read_text()
     assert "build-windows-installer.ps1 -Version $version" in publish
     assert "-AuthorityDirectory release-assets -Smoke" in publish

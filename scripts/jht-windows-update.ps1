@@ -572,7 +572,7 @@ function Assert-OwnerAndAcl {
   if (-not $Directory -and $item.PSIsContainer) { throw 'protected file expected' }
   if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected node is a reparse point' }
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-  $acl = Get-Acl -LiteralPath $item.FullName
+  $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
   $ownerSid = ([Security.Principal.NTAccount]$acl.Owner).Translate([Security.Principal.SecurityIdentifier]).Value
   if ($ownerSid -ne $currentSid) { throw 'protected node has a foreign owner' }
   if ($Directory -and -not $acl.AreAccessRulesProtected) { throw 'protected directory inherits its DACL' }
@@ -582,7 +582,8 @@ function Assert-OwnerAndAcl {
 function Assert-NoForeignWriteAcl {
   param([string]$Path)
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-  $acl = Get-Acl -LiteralPath $Path
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
   foreach ($rule in $acl.Access) {
     if ($rule.AccessControlType -ne 'Allow') { continue }
     $rights = [Security.AccessControl.FileSystemRights]$rule.FileSystemRights
@@ -598,7 +599,7 @@ function Assert-CurrentOwner {
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
   if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected node is a reparse point' }
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-  $acl = Get-Acl -LiteralPath $item.FullName
+  $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
   $ownerSid = ([Security.Principal.NTAccount]$acl.Owner).Translate([Security.Principal.SecurityIdentifier]).Value
   if ($ownerSid -ne $currentSid) { throw 'protected node has a foreign owner' }
 }
@@ -607,11 +608,12 @@ function Initialize-ProtectedDirectory {
   param([string]$Path)
   if (Test-Path -LiteralPath $Path) { Assert-CurrentOwner $Path; Assert-NoForeignWriteAcl $Path } else { New-Item -ItemType Directory -Path $Path -Force | Out-Null }
   Assert-NoReparseAncestors $Path
-  $acl = Get-Acl -LiteralPath $Path
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
   $acl.SetAccessRuleProtection($true, $false)
   $rule = New-Object Security.AccessControl.FileSystemAccessRule([Security.Principal.WindowsIdentity]::GetCurrent().User, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
   $acl.SetAccessRule($rule)
-  Set-Acl -LiteralPath $Path -AclObject $acl
+  $item.SetAccessControl($acl)
   Assert-OwnerAndAcl $Path -Directory
 }
 
@@ -621,11 +623,12 @@ function Protect-File {
   Assert-CurrentOwner $Path
   Assert-NoForeignWriteAcl $Path
   $null = Get-Sha256 $Path
-  $acl = Get-Acl -LiteralPath $Path
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
   $acl.SetAccessRuleProtection($true, $false)
   $rule = New-Object Security.AccessControl.FileSystemAccessRule([Security.Principal.WindowsIdentity]::GetCurrent().User, 'FullControl', 'Allow')
   $acl.SetAccessRule($rule)
-  Set-Acl -LiteralPath $Path -AclObject $acl
+  $item.SetAccessControl($acl)
   Assert-OwnerAndAcl $Path
 }
 
@@ -813,8 +816,10 @@ function Assert-PreMutationTrust {
   $oldManifest = if ($Mode -eq 'Recover' -and (Test-Path -LiteralPath $OldManifestBackupPath -PathType Leaf)) { $OldManifestBackupPath } else { $InstalledManifestPath }
   $oldSignature = if ($Mode -eq 'Recover' -and (Test-Path -LiteralPath $OldSignatureBackupPath -PathType Leaf)) { $OldSignatureBackupPath } else { $InstalledSignaturePath }
   $installed = Read-VerifiedManifest $oldManifest $oldSignature
-  $oldHelperPath = if ($Mode -eq 'Recover' -and (Test-Path -LiteralPath $OldHelperBackupPath -PathType Leaf)) { $OldHelperBackupPath } else { $PSCommandPath }
-  Assert-FileMatchesArtifact $oldHelperPath (Get-ArtifactByRole $installed.Value $HelperRole)
+  # Recovery può usare lo snapshot per autenticare la release old, ma deve
+  # attestare SEMPRE i byte del helper che PowerShell sta eseguendo. Mai
+  # sostituire questa verifica con quella della copia staged/backup.
+  Assert-FileMatchesArtifact $PSCommandPath (Get-ArtifactByRole $installed.Value $HelperRole)
   if ($Mode -ne 'Recover') { Assert-FileMatchesArtifact $TargetPath (Get-ArtifactByRole $installed.Value $DesktopRole) }
 }
 

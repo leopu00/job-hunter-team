@@ -47,6 +47,10 @@ const PHASE_RECOVERED := "recovered"
 const PHASE_CURRENT := "current"
 
 const DOWNLOAD_DIR := "user://updates"
+const WINDOWS_MANIFEST_MAX_BYTES := 65536
+const WINDOWS_SIGNATURE_BYTES := 384
+const WINDOWS_HELPER_MAX_BYTES := 4 * 1024 * 1024
+const WINDOWS_DESKTOP_MAX_BYTES := 1024 * 1024 * 1024
 
 var phase := PHASE_IDLE
 var latest_version := ""
@@ -303,9 +307,10 @@ func _install_windows() -> void:
 		_fail("update.err_helper")
 		return
 	if not await _download_exact(str(asset_bundle.get("manifest", "")),
-			str(plan["candidate_manifest"])) \
+			str(plan["candidate_manifest"]), WINDOWS_MANIFEST_MAX_BYTES) \
 			or not await _download_exact(str(asset_bundle.get("signature", "")),
-					str(plan["candidate_signature"])):
+					str(plan["candidate_signature"]), WINDOWS_SIGNATURE_BYTES,
+					WINDOWS_SIGNATURE_BYTES):
 		WindowsClient.remove_staged(plan)
 		_fail("update.err_download")
 		return
@@ -321,10 +326,20 @@ func _install_windows() -> void:
 		return
 	progress = 10
 	state_changed.emit(state())
+	var artifacts: Dictionary = verified.get("artifacts", {})
+	var helper_size := int(artifacts.get(WindowsVerifier.ROLE_HELPER, {}) \
+			.get("size", 0))
+	var desktop_size := int(artifacts.get(WindowsVerifier.ROLE_DESKTOP, {}) \
+			.get("size", 0))
+	if helper_size <= 0 or helper_size > WINDOWS_HELPER_MAX_BYTES \
+			or desktop_size <= 0 or desktop_size > WINDOWS_DESKTOP_MAX_BYTES:
+		WindowsClient.remove_staged(plan)
+		_fail("update.err_trust")
+		return
 	if not await _download_exact(str(asset_bundle.get("helper", "")),
-			str(plan["candidate_helper"])) \
+			str(plan["candidate_helper"]), helper_size, helper_size) \
 			or not await _download_exact(str(asset_bundle.get("package", "")),
-					str(plan["candidate"])):
+					str(plan["candidate"]), desktop_size, desktop_size):
 		WindowsClient.remove_staged(plan)
 		_fail("update.err_download")
 		return
@@ -354,13 +369,19 @@ func _install_windows() -> void:
 	_set_phase(PHASE_READY)
 
 
-func _download_exact(url: String, destination: String) -> bool:
-	if url.is_empty() or destination.is_empty():
+func _download_exact(url: String, destination: String, max_bytes: int,
+		expected_bytes := 0) -> bool:
+	if url.is_empty() or destination.is_empty() or max_bytes <= 0 \
+			or expected_bytes < 0 or expected_bytes > max_bytes:
 		return false
 	DirAccess.remove_absolute(destination)
 	var request := HTTPRequest.new()
 	request.timeout = 0.0
 	request.use_threads = true
+	# Interrompe il trasferimento durante la ricezione: il controllo a valle non
+	# basta, perche un peer ostile potrebbe altrimenti riempire disco/memoria
+	# prima che firma e size autenticata vengano esaminate.
+	request.body_size_limit = max_bytes
 	request.download_file = destination
 	add_child(request)
 	var start := request.request(url, _headers())
@@ -369,8 +390,19 @@ func _download_exact(url: String, destination: String) -> bool:
 		return false
 	var response: Array = await request.request_completed
 	request.queue_free()
-	return int(response[0]) == HTTPRequest.RESULT_SUCCESS \
-			and int(response[1]) == 200 and FileAccess.file_exists(destination)
+	var actual_size := -1
+	if FileAccess.file_exists(destination):
+		var file := FileAccess.open(destination, FileAccess.READ)
+		if file != null:
+			actual_size = file.get_length()
+			file.close()
+	var ok := int(response[0]) == HTTPRequest.RESULT_SUCCESS \
+			and int(response[1]) == 200 \
+			and WindowsClient.download_size_valid(
+					actual_size, max_bytes, expected_bytes)
+	if not ok:
+		DirAccess.remove_absolute(destination)
+	return ok
 
 
 func _helper_expected(request_id: String) -> Dictionary:
@@ -397,6 +429,11 @@ func _verify_with_windows_helper() -> bool:
 		return false
 	DirAccess.remove_absolute(str(_windows_plan["ready"]))
 	DirAccess.remove_absolute(str(_windows_plan["result"]))
+	# Riattesta immediatamente prima di -File: la verifica iniziale decide il
+	# piano, questa seconda chiude il seam hash→launch sul helper installato.
+	if WindowsClient.installed_authority(
+			_windows_plan, current_version()).is_empty():
+		return false
 	var pid := OS.create_process(WindowsClient.powershell_path(), argv, false)
 	if pid <= 0:
 		return false
@@ -496,6 +533,10 @@ func _commit_windows_exit() -> bool:
 		return false
 	DirAccess.remove_absolute(str(_windows_plan["ready"]))
 	DirAccess.remove_absolute(str(_windows_plan["result"]))
+	if WindowsClient.installed_authority(
+			_windows_plan, current_version()).is_empty():
+		_fail("update.err_trust")
+		return false
 	if OS.create_process(WindowsClient.powershell_path(), argv, false) <= 0:
 		_fail("update.err_helper")
 		return false
@@ -526,14 +567,23 @@ func _resume_windows_pending() -> void:
 	var result := WindowsClient.read_json(str(plan["result"]))
 	if _consume_windows_result(result):
 		return
-	if current_version() == pending_version:
+	var journal_exists := FileAccess.file_exists(str(plan["journal"]))
+	if current_version() == pending_version and journal_exists:
 		# Il nuovo processo ha gia scritto health; il helper sta completando il
-		# commit. Non avviare rete o un secondo helper nella stessa finestra.
+		# commit. Attendi la sua finestra, poi entra esplicitamente in Recover:
+		# dopo un power loss il result puo non arrivare mai da solo.
 		for _attempt in 175:
 			await get_tree().create_timer(0.2).timeout
 			result = WindowsClient.read_json(str(plan["result"]))
 			if _consume_windows_result(result):
 				return
+		await _recover_windows(plan)
+		return
+	if WindowsClient.pending_boot_requires_recovery(current_version(),
+			pending_version, journal_exists, result, pending_nonce):
+		await _recover_windows(plan)
+		return
+	if current_version() == pending_version:
 		_fail("update.err_health")
 		return
 	var raw_manifest := FileAccess.get_file_as_bytes(str(plan["candidate_manifest"]))
@@ -548,21 +598,22 @@ func _resume_windows_pending() -> void:
 		_windows_verified = verified
 		_windows_instance = WindowsClient.request_token("instance")
 		_set_phase(PHASE_READY)
-	elif FileAccess.file_exists(str(plan["journal"])):
+	elif journal_exists:
 		await _recover_windows(plan)
 	else:
 		_fail("update.err_recovery")
 
 
 func _recover_windows(plan: Dictionary) -> void:
-	if not WindowsClient.installed_authority_ready(plan, current_version()):
+	if not WindowsClient.recovery_authority_ready(plan, pending_version):
 		_fail("update.err_recovery")
 		return
 	var request_id := WindowsClient.request_token("recover")
 	var instance_id := WindowsClient.request_token("instance")
 	var argv := WindowsClient.helper_argv("Recover", plan, OS.get_process_id(),
 			request_id, instance_id)
-	if argv.is_empty() or OS.create_process(
+	if argv.is_empty() or not WindowsClient.recovery_authority_ready(
+			plan, pending_version) or OS.create_process(
 			WindowsClient.powershell_path(), argv, false) <= 0:
 		_fail("update.err_recovery")
 		return

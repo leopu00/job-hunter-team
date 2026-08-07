@@ -24,7 +24,6 @@ Unicode true
 Name "Job Hunter Team"
 OutFile "..\builds\windows\job-hunter-team-windows-x64-setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\Job Hunter Team"
-InstallDirRegKey HKCU "Software\Job Hunter Team" "InstallDir"
 RequestExecutionLevel user
 ; zlib e niente pre-scan CRC: LZMA+CRC su un payload da ~340MB tenevano
 ; l'installer "muto" per decine di secondi su hardware vecchio (T440s).
@@ -47,7 +46,6 @@ VIAddVersionKey "CompanyName" "Job Hunter Team"
 !define MUI_FINISHPAGE_RUN_TEXT "Avvia Job Hunter Team"
 
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -57,25 +55,59 @@ VIAddVersionKey "CompanyName" "Job Hunter Team"
 
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\JobHunterTeam"
 
-Section "Install"
-  SetOutPath "$INSTDIR"
-  File "..\builds\windows\job-hunter-team.exe"
-  File "icon.ico"
-  File "${AUTHORITY_DIR}\jht-windows-update.ps1"
-  File "${AUTHORITY_DIR}\RELEASE-MANIFEST.json"
-  File "${AUTHORITY_DIR}\RELEASE-MANIFEST.json.sig"
+Function AssertSafeInstallDir
+  ; L'updater e una capability host: l'installer non accetta un percorso scelto
+  ; dall'utente (in particolare .jht/Documents o un bind del container).
+  StrCpy $0 "$LOCALAPPDATA\Programs\Job Hunter Team"
+  StrCmp $INSTDIR $0 path_exact
+  Abort "Il percorso di installazione non e quello host protetto previsto."
 
-  ; Il helper rifiuta una directory ereditabile o scrivibile da altri utenti.
-  ; Si conserva solo il controllo pieno del proprietario corrente; nessun nome
-  ; di gruppo localizzato entra nel comando.
+  path_exact:
+  CreateDirectory "$INSTDIR"
+  StrCpy $0 "$INSTDIR"
+  ancestor_loop:
+    System::Call 'kernel32::GetFileAttributesW(w r0)i.r1'
+    ${If} $1 != -1
+      IntOp $2 $1 & 0x400
+      ${If} $2 != 0
+        Abort "Il percorso di installazione contiene un reparse point."
+      ${EndIf}
+    ${EndIf}
+    ${GetParent} "$0" $3
+    StrCmp $3 $0 ancestors_done
+    StrCmp $3 "" ancestors_done
+    StrCpy $0 $3
+    Goto ancestor_loop
+  ancestors_done:
+FunctionEnd
+
+Section "Install"
+  Call AssertSafeInstallDir
+  ; Proteggi PRIMA di scrivere EXE/helper/authority: nessuna finestra in cui un
+  ; bind/reparse o un altro principal possa sostituire i byte installati.
   ReadEnvStr $0 "USERNAME"
   ReadEnvStr $1 "USERDOMAIN"
+  nsExec::ExecToStack '"$SYSDIR\icacls.exe" "$INSTDIR" /reset /T /C'
+  Pop $2
+  Pop $3
+  ${If} $2 != 0
+    Abort "Non è stato possibile azzerare ACL estranee nella directory di aggiornamento."
+  ${EndIf}
   nsExec::ExecToStack '"$SYSDIR\icacls.exe" "$INSTDIR" /inheritance:r /grant:r "$1\$0:(OI)(CI)F"'
   Pop $2
   Pop $3
   ${If} $2 != 0
     Abort "Non è stato possibile proteggere la directory di aggiornamento."
   ${EndIf}
+  Call AssertSafeInstallDir
+
+  SetOutPath "$INSTDIR"
+  File "..\builds\windows\job-hunter-team.exe"
+  File "icon.ico"
+  File "${AUTHORITY_DIR}\jht-windows-update.ps1"
+  File "${AUTHORITY_DIR}\RELEASE-MANIFEST.json"
+  File "${AUTHORITY_DIR}\RELEASE-MANIFEST.json.sig"
+  Call AssertSafeInstallDir
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\Job Hunter Team" "InstallDir" "$INSTDIR"

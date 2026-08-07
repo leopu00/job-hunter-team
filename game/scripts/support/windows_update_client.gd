@@ -35,8 +35,18 @@ static func plan(executable: String, transaction_nonce: String) -> Dictionary:
 	if local_app_data.length() < 3 or local_app_data[1] != ":" \
 			or local_app_data[2] != "/" or local_app_data.split("/").has(".."):
 		return {}
+	var expected_install_dir := local_app_data.path_join(
+			"Programs/Job Hunter Team")
+	var expected_target := expected_install_dir.path_join("job-hunter-team.exe")
+	# Solo l'installer manuale v0.3.6 crea questa capability host protetta.
+	# Una copia portable o spostata resta intenzionalmente notify/manual-only.
+	if install_dir.to_lower() != expected_install_dir.to_lower() \
+			or target.to_lower() != expected_target.to_lower():
+		return {}
 	var state_root := local_app_data.path_join("Job Hunter Team/host-runtime")
 	var transaction := state_root.path_join(transaction_nonce)
+	var authority_backup := install_dir.path_join(
+			".jht-update-%s.authority-backup" % transaction_nonce)
 	return {
 		"nonce": transaction_nonce,
 		"target": target,
@@ -54,6 +64,9 @@ static func plan(executable: String, transaction_nonce: String) -> Dictionary:
 		"result": transaction.path_join("result.json"),
 		"journal": transaction.path_join("journal.json"),
 		"health": transaction.path_join("health.json"),
+		"old_helper_backup": authority_backup.path_join(HELPER_NAME),
+		"old_manifest_backup": authority_backup.path_join(MANIFEST_NAME),
+		"old_signature_backup": authority_backup.path_join(SIGNATURE_NAME),
 	}
 
 
@@ -96,6 +109,58 @@ static func installed_authority(update_plan: Dictionary,
 static func installed_authority_ready(update_plan: Dictionary,
 		installed_version: String) -> bool:
 	return not installed_authority(update_plan, installed_version).is_empty()
+
+
+## Recovery attraversa deliberatamente stati in cui EXE, metadata e helper non
+## appartengono ancora tutti alla stessa release. Prima di eseguire l'UNICO
+## helper ammesso (quello installato), lo attesta insieme all'EXE corrente
+## contro autorita firmate production: candidata, attiva oppure snapshot old.
+## Il journal non autorizza nulla e il helper staged non viene mai eseguito.
+static func recovery_authority_ready(update_plan: Dictionary,
+		pending_version: String) -> bool:
+	if not UpdateVerifier.production_ready() or powershell_path().is_empty() \
+			or UpdateCheck.parse_version(pending_version).is_empty() \
+			or not FileAccess.file_exists(str(update_plan.get("journal", ""))):
+		return false
+	var candidate := _verified_authority(
+			str(update_plan.get("candidate_manifest", "")),
+			str(update_plan.get("candidate_signature", "")))
+	if not bool(candidate.get("ok", false)) \
+			or str(candidate.get("version", "")) != pending_version:
+		return false
+	var authorities: Array[Dictionary] = [candidate]
+	for pair: Array in [
+			[str(update_plan.get("installed_manifest", "")),
+					str(update_plan.get("installed_signature", ""))],
+			[str(update_plan.get("old_manifest_backup", "")),
+					str(update_plan.get("old_signature_backup", ""))],
+	]:
+		var verified := _verified_authority(pair[0], pair[1])
+		if bool(verified.get("ok", false)):
+			authorities.append(verified)
+	var helper_ok := false
+	var target_ok := false
+	for authority: Dictionary in authorities:
+		var artifacts: Dictionary = authority.get("artifacts", {})
+		helper_ok = helper_ok or _file_matches(
+				str(update_plan.get("installed_helper", "")),
+				artifacts.get(UpdateVerifier.ROLE_HELPER, {}), HELPER_NAME)
+		target_ok = target_ok or _file_matches(str(update_plan.get("target", "")),
+				artifacts.get(UpdateVerifier.ROLE_DESKTOP, {}),
+				UpdatePolicy.WINDOWS_ASSET)
+	return helper_ok and target_ok
+
+
+static func _verified_authority(manifest_path: String,
+		signature_path: String) -> Dictionary:
+	if manifest_path.is_empty() or signature_path.is_empty() \
+			or not FileAccess.file_exists(manifest_path) \
+			or not FileAccess.file_exists(signature_path):
+		return {}
+	return UpdateVerifier.verify_production(
+			FileAccess.get_file_as_bytes(manifest_path),
+			FileAccess.get_file_as_bytes(signature_path),
+			manifest_context("0.0.0", "", 0))
 
 
 static func manifest_context(installed_version: String,
@@ -166,6 +231,28 @@ static func read_json(path: String) -> Dictionary:
 		return {}
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 	return parsed if parsed is Dictionary else {}
+
+
+## Decide soltanto se un pending al boot appartiene alla recovery. Il result
+## `ready/verified` consente di ricostruire READY dopo una chiusura volontaria;
+## qualunque altro journal, compreso target==pending, richiede il helper Recover.
+static func pending_boot_requires_recovery(current_version: String,
+		pending_version: String, journal_exists: bool, result: Dictionary,
+		nonce_value: String) -> bool:
+	if not journal_exists:
+		return false
+	if current_version == pending_version:
+		return true
+	return not (UpdateProtocol.result_frame_matches(result, nonce_value) \
+			and str(result.get("phase", "")) == "ready" \
+			and str(result.get("code", "")) == "verified")
+
+
+static func download_size_valid(actual_bytes: int, max_bytes: int,
+		expected_bytes := 0) -> bool:
+	return actual_bytes > 0 and max_bytes > 0 and actual_bytes <= max_bytes \
+			and expected_bytes >= 0 and expected_bytes <= max_bytes \
+			and (expected_bytes == 0 or actual_bytes == expected_bytes)
 
 
 static func remove_staged(update_plan: Dictionary) -> void:

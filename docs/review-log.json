@@ -1504,6 +1504,11 @@
       "path": "docs/internal/ops/download-funnel.md",
       "description": "Query operativa delle ultime 72 ore per i click download aggregati e vincoli di accesso service-role al contatore anonimo",
       "last_review": "2026-08-07"
+    },
+    {
+      "path": "scripts/release-keys/README.md",
+      "description": "Contratto di custodia e rotazione delle chiavi pubbliche per i manifest release Windows firmati",
+      "last_review": null
     }
   ]
 }

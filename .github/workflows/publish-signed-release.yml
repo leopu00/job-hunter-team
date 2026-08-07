@@ -18,7 +18,7 @@ on:
 
 permissions:
   actions: read
-  contents: write
+  contents: read
 
 concurrency:
   group: publish-signed-release-${{ inputs.tag }}
@@ -29,6 +29,9 @@ jobs:
     name: Verify offline signature and immutable source
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
     outputs:
       tag_sha: ${{ steps.source.outputs.tag_sha }}
 
@@ -96,7 +99,10 @@ jobs:
         run: |
           test -s scripts/release-keys/production-spki.pem
           test "$(wc -c < scripts/release-keys/production-spki.pem)" -eq 625
-          ! grep -q PRIVATE scripts/release-keys/production-spki.pem
+          if grep -q PRIVATE scripts/release-keys/production-spki.pem; then
+            echo "::error::production SPKI contains private key material"
+            exit 1
+          fi
           test "$(python scripts/release_signing.py fingerprint \
             --public-key scripts/release-keys/production-spki.pem)" = \
             "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
@@ -139,11 +145,14 @@ jobs:
     runs-on: windows-2022
     needs: authorize
     timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.tag }}
-          fetch-depth: 0
+          ref: ${{ needs.authorize.outputs.tag_sha }}
+          fetch-depth: 1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -203,11 +212,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: [authorize, installer]
     timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.tag }}
-          fetch-depth: 0
+          ref: ${{ needs.authorize.outputs.tag_sha }}
+          fetch-depth: 1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -221,6 +233,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
         run: |
+          git fetch origin "refs/tags/${{ inputs.tag }}:refs/tags/${{ inputs.tag }}" --force
+          test "$(git rev-list -n 1 '${{ inputs.tag }}')" = "$TAG_SHA"
           if gh release view "${{ inputs.tag }}" >/dev/null 2>&1; then
             echo "::error::release already exists; refusing to overwrite it"
             exit 1
@@ -282,4 +296,8 @@ jobs:
       - name: Publish only the audited immutable draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ inputs.tag }}" --draft=false
+          TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
+        run: |
+          git fetch origin "refs/tags/${{ inputs.tag }}:refs/tags/${{ inputs.tag }}" --force
+          test "$(git rev-list -n 1 '${{ inputs.tag }}')" = "$TAG_SHA"
+          gh release edit "${{ inputs.tag }}" --draft=false

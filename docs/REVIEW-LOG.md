@@ -29,8 +29,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-08-04 | ✅ |
-| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-08-04 | ✅ |
-| [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-08-05 | ✅ |
+| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-08-07 | ✅ |
+| [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-08-07 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `support@jobhunterteam.ai` | — | 2026-07-26 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Policy di disclosure, trust model corrente, copertura e stato hardening | — | 2026-08-04 | ✅ |
 
@@ -252,7 +252,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/architecture/context-watchdog-spec.md](./internal/architecture/context-watchdog-spec.md) | 🩺 Agent context saturation + reboot periodico via Dottore — Status: MVP SHIPPED 2026-05-31 (daily-restart-wave) — PoC validato 2026-05-20. | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/daemon-sync-redesign.md](./internal/architecture/daemon-sync-redesign.md) | 🔌 Daemon sync — da polling Vercel a Supabase diretto + event-driven — Documento consolidato del redesign del sync daemon↔cloud (tre note datate 24–26/06, qui integrate senza modifiche al contenuto). | — | 2026-07-30 | ✅ |
 | [docs/internal/architecture/dottore-redesign-design.md](./internal/architecture/dottore-redesign-design.md) | 🩺 Design-doc — Ridisegno ruolo DOTTORE (context-refresh) — Stato: DRAFT — schema/flow da lockare prima di codare (design-doc-first). | — | 2026-06-14 | ✅ |
-| [docs/internal/architecture/file-bridge-on-demand.md](./internal/architecture/file-bridge-on-demand.md) | 📎 File bridge on-demand — architettura & stato — Living doc. | — | 2026-06-13 | ✅ |
+| [docs/internal/architecture/file-bridge-on-demand.md](./internal/architecture/file-bridge-on-demand.md) | 📎 File bridge on-demand — architettura & stato — Living doc. | — | 2026-08-07 | ✅ |
 | [docs/internal/architecture/kimi-vs-codex-economics.md](./internal/architecture/kimi-vs-codex-economics.md) | 💰 Economia Kimi vs Codex — budget · coordinatori · prezzo (living doc) — Living doc (non datato): riflette lo stato corrente dell'analisi economica dei | — | 2026-07-03 | ✅ |
 | [docs/internal/architecture/onboarding-flow.md](./internal/architecture/onboarding-flow.md) | 🚪 Onboarding flow JHT — Stato: design lock — sequenza ufficiale di onboarding utente. | — | 2026-07-26 | ✅ |
 | [docs/internal/architecture/skill-distribution.md](./internal/architecture/skill-distribution.md) | 🛠️ Skill distribution — launcher-distributed isolation — Moved verbatim from docs/about/ROADMAP.md in the 2026-07-03 docs restructure (the ROADMAP keeps only the strategic view). | — | 2026-07-03 | ✅ |
@@ -271,7 +271,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/experiments/2026-06-13-kimi-quota-tiers-discovery.md](./internal/experiments/2026-06-13-kimi-quota-tiers-discovery.md) | 🔍 Kimi Code — i tre tier di quota e il buco totalQuota (scoperta 2026-06-13) — Contesto: deploy del team su VPS betaB (Kimi, 203.0.113.20) con l'immagine | — | 2026-06-14 | ✅ |
 | [docs/internal/landing-image-prompts.md](./internal/landing-image-prompts.md) | 🎨 Prompt immagini — Sito pubblico — Raccolta dei prompt per tutte le immagini del sito pubblico (landing + pagine | — | 2026-07-25 | ✅ |
 | [docs/internal/ops/INFRA.md](./internal/ops/INFRA.md) | 🏗️ Infrastructure — Job Hunter Team — 📐 High-level deployment diagram. | — | 2026-08-04 | ✅ |
-| [docs/internal/ops/MAINTAINERS.md](./internal/ops/MAINTAINERS.md) | 👥 Maintainers Reference — 🔒 Internal information for project maintainers. | — | 2026-07-24 | ✅ |
+| [docs/internal/ops/MAINTAINERS.md](./internal/ops/MAINTAINERS.md) | 👥 Maintainers Reference — 🔒 Internal information for project maintainers. | — | 2026-08-07 | ✅ |
 | [docs/internal/ops/access-and-credentials.md](./internal/ops/access-and-credentials.md) | 🔐 Access & Credentials — guida consolidata — Last updated: 2026-05-26. | — | 2026-08-03 | ✅ |
 | [docs/internal/ops/release.md](./internal/ops/release.md) | 🚢 Release — Cutting a release means pushing a vX.Y.Z tag that points at the production HEAD. | — | 2026-08-05 | ✅ |
 | [docs/internal/ops/triage.md](./internal/ops/triage.md) | 🐛 Issue triage workflow — Internal contract for how we handle incoming issues post-launch. | — | 2026-08-05 | ✅ |
@@ -347,7 +347,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/2026-08-07-web-compliance-audit.md](./internal/2026-08-07-web-compliance-audit.md) | Audit tecnico di conformità del sito web: consenso analytics, accesso a privacy e termini, inventario dei dati e decisioni aperte su export e cancellazione | — | 2026-08-07 | ✅ |
 | [docs/internal/2026-08-07-LEGAL-COPY-DRAFT.md](./internal/2026-08-07-LEGAL-COPY-DRAFT.md) | Audit pre-release e bozze EN versionate di Privacy e Termini, con flussi reali, copy condiviso web/desktop e decisioni legali esplicitamente aperte | — | 2026-08-07 | ✅ |
 | [docs/internal/2026-08-07-LEGAL-COPY-RELEASE.md](./internal/2026-08-07-LEGAL-COPY-RELEASE.md) | Fonte EN di pubblicazione per Privacy e Termini v2026-08-07.1: titolare individuale, età 16, Google/cloud, analytics opt-in, CARTO, feedback privato, export e cancellazione cloud immediata | — | 2026-08-07 | ✅ |
-| [docs/internal/ops/download-funnel.md](./internal/ops/download-funnel.md) | Query operativa delle ultime 72 ore per i click download aggregati e vincoli di accesso service-role al contatore anonimo | 2026-08-07 | — | 🟢 |
+| [docs/internal/ops/download-funnel.md](./internal/ops/download-funnel.md) | Query operativa delle ultime 72 ore per i click download aggregati e vincoli di accesso service-role al contatore anonimo | 2026-08-07 | 2026-08-07 | 🟢 |
 
 
 ## 🔒 docs/security
@@ -390,7 +390,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [supabase/README.md](../supabase/README.md) | Schema multi-tenant Postgres + RLS (BYO backend) | — | 2026-07-03 | ✅ |
+| [supabase/README.md](../supabase/README.md) | Schema multi-tenant Postgres + RLS (BYO backend) | — | 2026-08-07 | ✅ |
 
 
 ## ❓ Altri
@@ -413,6 +413,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md](../promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md) | Specifica tipografica e motion del pack overlay 9:16 per l'animatic pubblicitario: safe area, palette JHT, font, CTA e uso editoriale | — | 2026-08-05 | ✅ |
 | [docs/assets/icons/SOURCES.md](./assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale | — | 2026-08-07 | ✅ |
 | [web/public/brand/README.md](../web/public/brand/README.md) | Provenienza, integrità e vincoli d'uso degli asset social ufficiali nel footer pubblico, con Instagram attivo e TikTok mantenuto non pubblicato | — | 2026-08-07 | ✅ |
+| [scripts/release-keys/README.md](../scripts/release-keys/README.md) | Contratto di custodia e rotazione delle chiavi pubbliche per i manifest release Windows firmati | — | 2026-08-07 | ✅ |
 
 
 ---

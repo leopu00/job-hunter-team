@@ -45,7 +45,9 @@ def test_cli_stop_detaches_without_stopping_team_and_targets_instance_nonce():
     assert "HeadlessSession.record_exit(true)" in detach
     assert "_do_quit(false)" in detach
     assert "shutdown_team" not in detach
-    assert game.count("get_tree().quit()") == 1
+    completion = game[game.index("func _quit_now") : game.index("func _unhandled_input")]
+    assert completion.count("get_tree().quit(exit_code)") == 1
+    assert "get_tree().quit()" not in completion
     for seam in (
         "target_instance_id",
         "instance_id",
