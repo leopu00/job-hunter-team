@@ -212,7 +212,9 @@ describe("cancellazione account — non tocca l'account sbagliato", () => {
 
   it("un id vuoto è rifiutato prima di toccare qualsiasi tabella", async () => {
     const { client, calls, deletedUsers } = fakeAdmin();
-    await expect(deleteAccountData(client, "")).rejects.toThrow(/userId/);
+    await expect(deleteAccountData(client, "")).rejects.toThrow(
+      /missing_user_id/,
+    );
     expect(calls).toEqual([]);
     expect(deletedUsers).toEqual([]);
   });
@@ -628,5 +630,82 @@ describe("cancellazione — nessun nome di file esce, né in log né in risposta
     expect(e.code).toBe("table_delete_failed");
     expect(e.stage).toBe("positions");
     expect(e.message).not.toContain("boom");
+  });
+});
+
+describe("cancellazione — l'enumerazione non rivela cartelle né utente", () => {
+  const SENSITIVE_DIR = "user-1/Candidatura-Ospedale-San-Raffaele";
+
+  it("una list fallita in una cartella dal nome parlante non lo rivela", async () => {
+    // `prefix` contiene l'id utente e i nomi delle cartelle, che sono
+    // scelti dall'utente; il messaggio del provider può aggiungere altro.
+    const client = {
+      storage: {
+        from: () => ({
+          list: (prefix: string) =>
+            Promise.resolve(
+              prefix === "user-1"
+                ? {
+                    data: [
+                      {
+                        name: "Candidatura-Ospedale-San-Raffaele",
+                        id: null,
+                      },
+                    ],
+                    error: null,
+                  }
+                : {
+                    data: null,
+                    error: { message: `bucket denied for ${prefix}` },
+                  },
+            ),
+          remove: () => Promise.resolve({ data: [], error: null }),
+        }),
+      },
+      from: () => ({
+        delete: () => ({
+          eq: () => Promise.resolve({ count: 0, error: null }),
+        }),
+      }),
+      auth: { admin: { deleteUser: () => Promise.resolve({ error: null }) } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+
+    let error: unknown;
+    try {
+      await deleteAccountData(client, "user-1");
+    } catch (err) {
+      error = err;
+    }
+    const e = error as InstanceType<typeof DeletionError>;
+    expect(e.code).toBe("storage_list_failed");
+    const out = `${e.message} ${e.code} ${e.stage}`;
+    expect(out).not.toContain(SENSITIVE_DIR);
+    expect(out).not.toContain("Candidatura-Ospedale-San-Raffaele");
+    expect(out, "id utente trapelato").not.toContain("user-1");
+    expect(out, "messaggio del provider trapelato").not.toContain("denied");
+  });
+
+  it("il superamento del budget non rivela percorsi né utente", async () => {
+    const tree: Record<string, true> = {};
+    for (let i = 0; i < 5200; i += 1) {
+      tree[`user-1/Ricerca-lavoro-riservata/f${i}.pdf`] = true;
+    }
+    const { client } = fakeAdmin({ storageTree: tree });
+
+    let error: unknown;
+    try {
+      await deleteAccountData(client, "user-1");
+    } catch (err) {
+      error = err;
+    }
+    const e = error as InstanceType<typeof DeletionError>;
+    expect(e.code).toBe("storage_too_many");
+    const out = `${e.message} ${e.code} ${e.stage}`;
+    expect(out).not.toContain("Ricerca-lavoro-riservata");
+    expect(out, "id utente trapelato").not.toContain("user-1");
+    expect(out).not.toMatch(/\.pdf/);
+    // Resta diagnosticabile: si sa che è il bucket e quale fase.
+    expect(out).toContain("file-transit");
   });
 });

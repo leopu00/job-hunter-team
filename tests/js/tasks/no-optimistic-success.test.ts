@@ -75,7 +75,9 @@ describe("una cancellazione parziale non è una cancellazione", () => {
 
   it("un file rimasto ferma la cancellazione invece di completarla", () => {
     expect(del).toContain("storage.failed.length > 0");
-    expect(del).toContain("throw new Error");
+    // Il tipo dell'errore è cambiato in `DeletionError` per non far
+    // uscire percorsi: qui conta che si INTERROMPA, non come si chiama.
+    expect(del).toMatch(/throw new (Deletion)?Error/);
   });
 
   it("l'enumerazione dei file scende nelle cartelle", () => {
