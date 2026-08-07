@@ -35,11 +35,11 @@ static func ensure_known_host(host: String) -> Dictionary:
 			output, true)
 	var raw := "\n".join(PackedStringArray(output)).strip_edges()
 	if code != 0 or raw == "":
-		return {"ok": false, "message": "chiave host SSH non disponibile"}
+		return {"ok": false, "message": UIStrings.t("vps.ssh.host_key_unavailable")}
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
-		return {"ok": false, "message": "known-hosts non scrivibile"}
+		return {"ok": false, "message": UIStrings.t("vps.ssh.known_hosts_unwritable")}
 	file.store_string(raw + "\n")
 	file.close()
 	if OS.get_name() != "Windows":
@@ -244,18 +244,19 @@ func start(config: Dictionary) -> void:
 		_user = "root"
 	if not FileAccess.file_exists(_key):
 		bus.publish_state(BackendBus.ERROR,
-				"chiave SSH non trovata: %s" % _key)
+				UIStrings.t("vps.ssh.key_missing") % _key)
 		return
 	var ssh_version: Array = []
 	if OS.execute("ssh", ["-V"], ssh_version, true) == -1:
 		bus.publish_state(BackendBus.ERROR,
-				"client OpenSSH non installato o non presente nel PATH")
+				UIStrings.t("vps.ssh.client_missing"))
 		return
 	var pinned := ensure_known_host(_ip)
 	if not bool(pinned.get("ok", false)):
-		bus.publish_state(BackendBus.ERROR, str(pinned.get("message", "errore fingerprint SSH")))
+		bus.publish_state(BackendBus.ERROR, str(pinned.get("message",
+				UIStrings.t("vps.ssh.fingerprint_failed"))))
 		return
-	bus.publish_state(BackendBus.CONNECTING, "handshake ssh con %s…" % _ip)
+	bus.publish_state(BackendBus.CONNECTING, UIStrings.t("vps.ssh.connecting") % _ip)
 	_stop = false
 	_thread = Thread.new()
 	_thread.start(_run)
