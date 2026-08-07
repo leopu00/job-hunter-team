@@ -117,6 +117,7 @@ The replacement must cover these distinct processing paths:
 | Desktop bug report | User-entered description, app version, locale, operating system, optional redacted diagnostics and logs; rate-limiting request data. | A local Markdown copy is written. The submitted redacted report may go to support email, a configured webhook, and a public GitHub issue. |
 | Web contact/support | Message, current page, language, technical request metadata, and rate-limiting data. | Current `web-*` reports go to support email and an optional configured webhook; they do not open GitHub issues. |
 | Hosted website telemetry | Aggregate usage and performance measurements, plus ordinary hosting and security logs. | Vercel Analytics and Speed Insights are mounted globally. The present “Necessary only” choice does not disable them and therefore must be fixed or relabelled before release. |
+| Hosted website utilities | CARTO map resources and Frankfurter exchange rates. | A visitor's browser contacts CARTO when a live public or dashboard map loads. The web server, not the visitor's browser, fetches and caches Frankfurter rates. GitHub Release URLs are ordinary links and contact GitHub only if selected. |
 
 The profile export endpoint currently exports only `candidate_profiles`; it is
 not a complete export of all cloud account data. No self-service account and
@@ -242,6 +243,17 @@ decide whether these tools require opt-in in the markets served. The product
 must either honor “Necessary only” by preventing optional analytics from
 loading, or remove the false choice and use legally reviewed notice text.]`
 
+When a live map loads on the public home page or dashboard, the visitor's
+browser requests map resources from CARTO, which receives ordinary request
+metadata such as IP address and user agent. The web server requests and caches
+public exchange-rate data from Frankfurter; that request does not come directly
+from the visitor's browser. GitHub Release URLs on the website are links, so the
+browser contacts GitHub only if the user selects one.
+
+`[OPERATOR DECISION REQUIRED: decide whether the live CARTO map may load before
+an optional-services choice, must be gated, or should remain a local static
+image until the user opts in.]`
+
 ### 7. Support and bug reports
 
 The desktop app lets you preview a report before sending it. A report can
@@ -300,6 +312,7 @@ We disclose data only as needed for the feature you use:
 | Resend and the project support mailbox | Delivering support and feedback email |
 | GitHub | Public desktop bug issues when that destination is enabled |
 | GitHub, Frankfurter, and CARTO | Desktop update metadata, public exchange rates, and map tiles respectively; each receives ordinary network request metadata |
+| CARTO and Frankfurter | Hosted web map resources requested by the visitor's browser and exchange rates requested server-side, respectively |
 | `[CONFIGURED WEBHOOK RECIPIENT]` | A redacted summary of support reports, if enabled |
 
 These providers process data under their own terms and privacy documents and,
@@ -542,8 +555,9 @@ These are blockers, not editorial polish:
    disable it, or approve different notice and legal-basis treatment. The
    current “Necessary only” control does not change loading behavior.
 8. **Vendor inventory — P0.** Confirm production use and configuration of
-   Supabase, Vercel, Google, Resend, Upstash, GitHub, and the support webhook;
-   identify any other processor, subprocessor, region, and backup system.
+   Supabase, Vercel, Google, Resend, Upstash, GitHub, CARTO, Frankfurter, and
+   the support webhook; identify any other processor, subprocessor, region, and
+   backup system.
 9. **International transfers — P0.** Which transfer mechanisms and provider
    agreements apply to the target users and production regions?
 10. **Jurisdiction and disputes — P0.** Choose governing law, courts or dispute
