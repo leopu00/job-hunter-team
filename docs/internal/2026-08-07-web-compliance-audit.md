@@ -12,9 +12,9 @@
 | --- | --- | --- |
 | 1 | Privacy e termini raggiungibili | ⚠️ pubbliche sì, area riservata no → **corretto** |
 | 2 | Consenso cookie rispettato | ❌ la scelta non aveva effetto → **corretto** |
-| 3 | Accettazione al login Google | ❌ assente → **aperto**, serve testo |
+| 3 | Accettazione al login Google | ❌ assente → **corretto** col testo di DOCS |
 | 4 | Export e cancellazione (GDPR) | ❌ **il buco più grave** → aperto |
-| 5 | Feedback: dove finisce | ⚠️ dice cosa manda, non dove → aperto |
+| 5 | Feedback: dove finisce | ✅ **il mio riscontro era sbagliato** → rettifica |
 | 6 | Minori / età | ❌ assente → aperto, è testo |
 | 7 | Titolare del trattamento | ❌ assente → aperto, è testo |
 
@@ -45,22 +45,38 @@ voce nel menu utente, in tutte e sette le lingue.
 
 ## Aperto — richiede testo di HQ-DOCS
 
-### 3 · Nessuna accettazione al login
+### 3 · Nessuna accettazione al login → aggiunta
 
-Il pulsante dice «Login with Google» sotto «Sign in to save your progress».
-Nessun riferimento a Termini e Privacy, nessuna spunta, nessuna formula.
-Serve almeno la formula con i due link. Chiesta a DOCS in inglese; le sette
-lingue le monto io.
+Il pulsante diceva «Login with Google» senza alcun riferimento ai due
+documenti: l'accettazione era del tutto implicita.
 
-### 5 · Il feedback non dice dove finisce
+Aggiunta la formula di HQ-DOCS sotto i pulsanti, in sette lingue
+(`components/landing/LoginAcceptance.tsx`). Due scelte del testo da
+rispettare anche traducendo: si **accettano** i Termini e si **prende atto**
+della Privacy, verbi diversi di proposito. I link sono raggiungibili prima
+di iniziare l'autenticazione.
 
-`SupportDialog` dichiara bene **cosa** invia — testo, pagina, lingua, e
-dichiara di non inviare email, nome, CV, contatti, file o log. Non dice
-**dove finisce**: `app/api/feedback/route.ts` apre una **issue pubblica su
-GitHub**, visibile a chiunque.
+⚠️ Testo draft in attesa dell'operatore. Implementato perché è microcopy
+d'interfaccia: dice *dove* sono i documenti, non *cosa* contengono.
 
-Il modulo `/contact` invece non apre issue e va a posta: sono due canali
-diversi, la formula serve solo sul primo.
+### 5 · RETTIFICA — il feedback web non pubblica su GitHub
+
+**Il riscontro della prima stesura era sbagliato, e questa è la
+correzione.** Avevo scritto che `SupportDialog` apre una issue pubblica.
+Non è vero.
+
+`app/api/feedback/route.ts` apre issue solo per i client il cui
+identificativo **non** inizia con `web-`. Il dialog web invia
+`client: "web-dashboard"`, `/contact` invia `client: "web-contact"`:
+entrambi vanno **solo a posta**. Su GitHub pubblica `godot-desktop`, cioè
+l'app, non il sito.
+
+L'errore è nato dal fermarmi alla funzione `openIssue` e alla nota su
+`/contact`, senza risalire al valore che il dialog manda davvero. Segnalato
+da HQ-DOCS, verificato nel codice prima di accettarlo.
+
+**Conseguenza pratica**: sul web la frase «apre una issue pubblica» non va
+messa, sarebbe falsa. Serve sulla superficie desktop, che non è mia.
 
 ### 6 · Minori ed età · 7 · Titolare del trattamento
 
@@ -74,6 +90,21 @@ parte.
 Entrambi riportano «Ultimo aggiornamento: Aprile 2026», quattro mesi fa. Da
 allora è cambiato il collegamento cloud con Google: vanno riletti, non solo
 ridatati.
+
+### Terze parti contattate dal browser, prima di ogni consenso
+
+Segnalate dall'audit di HQ-DOCS, verificate nel codice:
+
+- **CARTO** (`basemaps.cartocdn.com`) — le mappe. Caricato dal globo della
+  **home pubblica** e dalla scheda mappa nell'area riservata: il browser di
+  ogni visitatore contatta un CDN terzo col proprio IP, **prima di
+  qualsiasi consenso**.
+- **Frankfurter** (`api.frankfurter.dev`) — cambi valuta.
+- **GitHub releases** — sono `href`, non chiamate: il browser ci va solo se
+  l'utente clicca. Diverso dagli altri due.
+
+Non ho messo il globo dietro consenso: è l'elemento centrale della home, e
+spegnerlo per chi non ha risposto è una scelta di prodotto.
 
 ## 4 · Il buco più grave: cancellazione assente, ed export solo in locale
 
@@ -107,7 +138,11 @@ irreversibile e la decisione su *cosa* si cancella, *in quanto tempo* e
    indirizzo? È l'unico dato che né io né DOCS possiamo dedurre.
 5. **Età minima** — dichiariamo una soglia? Se sì quale, e la verifichiamo
    in qualche modo o resta una clausola?
-6. **Vercel Analytics** — ora è dietro consenso. Confermi che è la
+6. **CARTO sulla home** — il globo contatta un CDN terzo prima del
+   consenso. Tre strade: lasciarlo e dirlo nella privacy, metterlo dietro
+   consenso (la home perde il globo per chi non ha risposto), o servire le
+   tile da noi. È una scelta di prodotto.
+7. **Vercel Analytics** — ora è dietro consenso. Confermi che è la
    posizione che vuoi, o preferisci considerarlo essenziale e cambiare
    invece il testo del banner? Le due strade sono entrambe coerenti, ma
    vanno scelte: oggi il banner prometteva una cosa e il codice ne faceva
