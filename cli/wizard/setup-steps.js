@@ -148,7 +148,7 @@ export async function promptTelegramRequired(prompter, baseChannels) {
   };
 
   await prompter.note(
-    'Telegram is mandatory: each user-facing agent has a dedicated bot\n' +
+    'Telegram is required: each user-facing agent has a dedicated bot\n' +
     '(separate notifications, targeted conversations, clean context).\n\n' +
     'You need to create 3 bots on @BotFather, one for each agent:\n' +
     '  1. Assistente — profile onboarding and document drop zone\n' +
@@ -169,7 +169,7 @@ export async function promptTelegramRequired(prompter, baseChannels) {
     '  • Username with the pattern above (it must end in "bot")\n' +
     '  • BotFather answers with a token "123456789:ABC... "\n\n' +
     'Keep the 3 tokens at your fingertips: I\'ll ask you one by one.',
-    'Setup Telegram (3 mandatory bots)',
+    'Set up Telegram (3 required bots)',
   );
 
   const roles = [
@@ -447,7 +447,7 @@ export async function showSummary(prompter, params) {
   // (modello per-agente, autenticazione tramite OAuth CLI) e' implicito.
   const summary = [
     `Provider:   ${selectedProvider.label}`,
-    `Auth:       OAuth (completed in the next step)`,
+    'Auth:       OAuth (sign-in follows later in this wizard)',
     '',
     `Config:     ${JHT_CONFIG_PATH}`,
     `JHT home:   ${JHT_CONFIG_DIR}`,

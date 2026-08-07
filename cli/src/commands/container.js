@@ -78,11 +78,11 @@ async function ensureDockerDaemon() {
   ].filter(Boolean);
   const exe = candidates.find(p => { try { return existsSync(p); } catch { return false; } });
   if (!exe) {
-    console.error(c.red('Docker Desktop.exe not found in standard pathways. Start it by hand.'));
+    console.error(c.red('Docker Desktop.exe was not found in the standard locations. Start it manually.'));
     return false;
   }
 
-  console.log(c.dim('  Docker daemon giu\', avvio Docker Desktop...'));
+  console.log(c.dim('  Docker daemon is down; starting Docker Desktop...'));
   try {
     spawn(exe, [], { detached: true, stdio: 'ignore', shell: false }).unref();
   } catch (err) {
@@ -93,14 +93,14 @@ async function ensureDockerDaemon() {
   const timeoutMs = 90_000;
   const pollMs = 2000;
   const start = Date.now();
-  process.stdout.write(c.dim('  Attendo daemon'));
+  process.stdout.write(c.dim('  Waiting for the daemon'));
   while (Date.now() - start < timeoutMs) {
     await new Promise(r => setTimeout(r, pollMs));
     process.stdout.write(c.dim('.'));
     if (dockerDaemonReady()) {
       process.stdout.write('\n');
       const elapsed = Math.round((Date.now() - start) / 1000);
-      console.log(c.green(`  ✓ Docker Desktop pronto (${elapsed}s)`));
+      console.log(c.green(`  ✓ Docker Desktop ready (${elapsed}s)`));
       return true;
     }
   }
@@ -124,10 +124,10 @@ async function upAction() {
   }
 
   if (containerRunning()) {
-    console.log(c.yellow(`Container '${CONTAINER_NAME}Already active.`));
+    console.log(c.yellow(`Container '${CONTAINER_NAME}' is already active.`));
     return;
   }
-  console.log(c.bold('Avvio container jht...'));
+  console.log(c.bold('Starting the jht container...'));
   // Passo 1: create (senza avviare) per avere il volume anonimo .next
   if (!dockerCompose(['up', '--no-start', 'jht'])) {
     console.error(c.red('docker compose up failed --no-start'));
@@ -139,7 +139,7 @@ async function upAction() {
   fixNextOwnership();
   // Passo 3: start
   if (!dockerCompose(['start', 'jht'])) {
-    console.error(c.red('docker composes start failed'));
+    console.error(c.red('docker compose start failed'));
     process.exitCode = 1;
     return;
   }
@@ -150,10 +150,10 @@ async function upAction() {
 // ── down ───────────────────────────────────────────────────────────
 function downAction() {
   if (!containerRunning()) {
-    console.log(c.yellow(`Container '${CONTAINER_NAME}Not active.`));
+    console.log(c.yellow(`Container '${CONTAINER_NAME}' is not active.`));
     return;
   }
-  console.log(c.bold('Fermo container jht...'));
+  console.log(c.bold('Stopping the jht container...'));
   // compose stop preserva il container (ripartenza veloce con `up`)
   if (!dockerCompose(['stop', 'jht'])) {
     console.error(c.red('docker compose stop failed'));
@@ -166,7 +166,7 @@ function downAction() {
 
 // ── recreate ───────────────────────────────────────────────────────
 async function recreateAction() {
-  console.log(c.bold('Ricreo container jht (down + up)...'));
+  console.log(c.bold('Recreating the jht container (down + up)...'));
   if (containerRunning()) {
     spawnSync('docker', ['rm', '-f', CONTAINER_NAME], {
       stdio: 'ignore',
@@ -183,7 +183,7 @@ function statusAction() {
   ], { encoding: 'utf8', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
 
   if (inspect.status !== 0) {
-    console.log(c.yellow(`Container '${CONTAINER_NAME}There is no such thing.`));
+    console.log(c.yellow(`Container '${CONTAINER_NAME}' does not exist.`));
     console.log(c.dim('  Create it with: jht container up'));
     return;
   }
@@ -200,7 +200,7 @@ function statusAction() {
   console.log(`  State:     ${running ? c.green(state) : c.red(state)}`);
   console.log(`  Image:     ${c.dim(image)}`);
   if (running) console.log(`  Uptime:    ${c.dim(uptime)}`);
-  console.log(`  Mount:`);
+  console.log('  Mounts:');
   for (const m of mounts.split(',')) {
     console.log('    ' + c.dim(m));
   }
@@ -210,7 +210,7 @@ function statusAction() {
 // ── logs ───────────────────────────────────────────────────────────
 function logsAction(options = {}) {
   if (!containerRunning()) {
-    console.log(c.yellow(`Container '${CONTAINER_NAME}Not active.`));
+    console.log(c.yellow(`Container '${CONTAINER_NAME}' is not active.`));
     return;
   }
   const args = ['logs'];

@@ -78,7 +78,7 @@ async function listPlugins() {
 
 async function togglePlugin(id, enable) {
   if (!id) {
-    console.error('  Option --id mandatory');
+    console.error('  Option --id is required');
     process.exitCode = 1;
     return;
   }
@@ -86,7 +86,7 @@ async function togglePlugin(id, enable) {
   const plugins = await discoverPlugins();
   if (!plugins.find(p => p.id === id)) {
     console.error(`  Plugin not found: ${id}`);
-    console.error(`  Plugins available: ${plugins.map(p => p.id).join(', ') || 'Nobody.'}`);
+    console.error(`  Available plugins: ${plugins.map(p => p.id).join(', ') || 'none'}`);
     process.exitCode = 1;
     return;
   }

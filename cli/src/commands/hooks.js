@@ -107,12 +107,12 @@ async function listHooks() {
 }
 
 async function toggleHook(id, enable) {
-  if (!id) { console.error('  --id mandatory'); process.exitCode = 1; return; }
+  if (!id) { console.error('  --id is required'); process.exitCode = 1; return; }
 
   const hooks = await discoverHooks();
   if (!hooks.find(h => h.id === id)) {
     console.error(`  Hook not found: ${id}`);
-    console.error(`  Hook available: ${hooks.map(h => h.id).join(', ') || 'Nobody.'}`);
+    console.error(`  Available hooks: ${hooks.map(h => h.id).join(', ') || 'none'}`);
     process.exitCode = 1;
     return;
   }
@@ -127,7 +127,7 @@ async function toggleHook(id, enable) {
 }
 
 async function showHook(id) {
-  if (!id) { console.error('  --id mandatory'); process.exitCode = 1; return; }
+  if (!id) { console.error('  --id is required'); process.exitCode = 1; return; }
   const hooks = await discoverHooks();
   const h = hooks.find(h => h.id === id);
   if (!h) { console.error(`  Hook not found: ${id}`); process.exitCode = 1; return; }

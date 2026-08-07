@@ -57,7 +57,7 @@ export function runSkill(skill, args) {
     console.error(c.dim(
       `  Need the container ${CONTAINER_NAME} active (jht team start) or a copy`,
     ));
-    console.error(c.dim('  complete of the repo: this command turns on the skills in shared/skills/.'));
+    console.error(c.dim('  From a complete repository checkout, this command uses the skills in shared/skills/.'));
     return 2;
   }
   const r = spawnSync('python3', [skillPath, ...args], {
@@ -103,7 +103,7 @@ function listAction(options, command) {
 
 function showAction(id, options, command) {
   if (!id) {
-    console.error(c.red('Uso: jht positions show <id|legacy_id>'));
+    console.error(c.red('Usage: jht positions show <id|legacy_id>'));
     process.exitCode = 1;
     return;
   }

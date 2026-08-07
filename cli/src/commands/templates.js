@@ -86,7 +86,7 @@ async function listTemplates() {
 
 async function previewTemplate(options) {
   if (!options.name) {
-    console.error('  Option --name mandatory');
+    console.error('  Option --name is required');
     process.exitCode = 1;
     return;
   }

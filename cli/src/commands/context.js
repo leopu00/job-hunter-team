@@ -76,7 +76,7 @@ async function contextStatus() {
   for (const f of bootstrapFiles) {
     if (await fileExists(join(JHT_DIR, f))) found.push(f.replace('.md', ''));
   }
-  console.log(`  ${DIM}Bootstrap:${RESET} ${found.length > 0 ? found.join(', ') : 'Nobody.'}`);
+  console.log(`  ${DIM}Bootstrap:${RESET} ${found.length > 0 ? found.join(', ') : 'none'}`);
   console.log('');
 }
 
