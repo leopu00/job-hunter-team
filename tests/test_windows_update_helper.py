@@ -542,8 +542,11 @@ def _run_verify(
     _protect_directory(local_authority)
     helper_env = os.environ.copy()
     helper_env["LOCALAPPDATA"] = str(local_authority)
-    target_dir = local_authority / "Programs" / "Job Hunter Team"
-    target_dir.mkdir()
+    programs = local_authority / "Programs"
+    programs.mkdir()
+    _protect_directory(programs)
+    target_dir = programs / "Job Hunter Team"
+    target_dir.mkdir(parents=True)
     _protect_directory(target_dir)
     nonce = "a" * 32
     consumer_inherited_state = False
@@ -1159,8 +1162,11 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
     _protect_directory(local_authority)
     helper_env = os.environ.copy()
     helper_env["LOCALAPPDATA"] = str(local_authority)
-    target_dir = local_authority / "Programs" / "Job Hunter Team"
-    target_dir.mkdir()
+    programs = local_authority / "Programs"
+    programs.mkdir()
+    _protect_directory(programs)
+    target_dir = programs / "Job Hunter Team"
+    target_dir.mkdir(parents=True)
     _protect_directory(target_dir)
     state = local_authority / "Job Hunter Team" / "host-runtime"
     transaction = state / nonce

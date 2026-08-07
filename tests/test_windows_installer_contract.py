@@ -78,17 +78,24 @@ def test_installer_preflight_is_handle_and_acl_fail_closed() -> None:
         "Assert-PostWritePayload",
         "installed payload has an unexpected owner",
         "Collections.Generic.HashSet[string]",
+        "postwrite_root",
+        "postwrite_unexpected_file",
     ):
         assert seam in source
     assert "Invoke-Expression" not in source
     assert "ExecutionPolicy" not in source
     assert "FileSystemRights]::Modify -bor" not in source
     assert "FileSystemRights]::FullControl -bor" not in source
-    census_at = source.index("$nodes = @(Get-TreeNodes $root)")
+    postwrite_at = source.index(
+        "# The installer writes these embedded bytes only after Prepare completed."
+    )
+    census_at = source.index("$nodes = @(Get-TreeNodes $root)", postwrite_at)
     normalize_at = source.index(
-        "if ($payloads.Contains($node.FullName)) { Protect-Node $node }"
+        "if ($payloads.Contains($node.FullName)) { Protect-Node $node }",
+        census_at,
     )
     assert census_at < normalize_at
+    assert "if (-not $created -and $Mode -eq 'Prepare')" in source
 
 
 def test_acl_mutation_masks_remain_complete_and_in_sync() -> None:
@@ -271,7 +278,16 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         "else{throw 'owner fixture path is missing'};"
         "$acl=$item.GetAccessControl("
         "[Security.AccessControl.AccessControlSections]::All);"
-        "$acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User);"
+        "$current=[Security.Principal.WindowsIdentity]::GetCurrent().User;"
+        "$owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]);"
+        "if($env:JHT_OWNER_MODE -ceq 'assert-current'){"
+        "if($owner.Value -ne $current.Value){throw 'owner was not normalized'};"
+        "exit 0};"
+        "$newOwner=if($env:JHT_OWNER_MODE -ceq 'administrators'){"
+        "[Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')"
+        "}elseif($env:JHT_OWNER_MODE -ceq 'current'){$current}"
+        "else{throw 'unknown owner fixture mode'};"
+        "$acl.SetOwner($newOwner);"
         "$item.SetAccessControl($acl)\n",
     )
     fixture_owner_argv = [
@@ -289,7 +305,9 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         install / "job-hunter-team.exe",
     ):
         fixture_owner_env = environment.copy()
-        fixture_owner_env["JHT_OWNER_PATH"] = str(owner_path)
+        fixture_owner_env.update(
+            JHT_OWNER_MODE="current", JHT_OWNER_PATH=str(owner_path)
+        )
         subprocess.run(fixture_owner_argv, env=fixture_owner_env, check=True)
     acl_snapshot = tmp_path / "snapshot-acl.ps1"
     _write_powershell_fixture(
@@ -388,8 +406,59 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         "Uninstall.exe",
     ):
         (install / name).write_bytes((name + "\n").encode())
+
+    # Model the real NSIS write boundary: a known payload may be owned by the
+    # built-in Administrators group and is safe to normalize, while a sibling
+    # with a foreign mutating ACE must make the complete read-only census fail
+    # before any payload ACL or owner is changed.
+    normalizable_payload = install / "job-hunter-team.exe"
+    normalizable_env = environment.copy()
+    normalizable_env.update(
+        JHT_OWNER_MODE="administrators",
+        JHT_OWNER_PATH=str(normalizable_payload),
+    )
+    subprocess.run(fixture_owner_argv, env=normalizable_env, check=True)
+
+    payload_acl = tmp_path / "set-payload-ace.ps1"
+    _write_powershell_fixture(
+        payload_acl,
+        "$item=[IO.FileInfo]::new($env:JHT_ACL_PATH);"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "$sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-545');"
+        "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
+        "$sid,'WriteData','None','None','Allow');"
+        "if($env:JHT_ACL_MODE -ceq 'add'){$acl.AddAccessRule($rule)}"
+        "elseif($env:JHT_ACL_MODE -ceq 'remove'){"
+        "$acl.RemoveAccessRuleSpecific($rule)}"
+        "else{throw 'unknown payload ACL fixture mode'};"
+        "$item.SetAccessControl($acl)\n",
+    )
+    payload_acl_argv = [
+        _windows_powershell(),
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-File",
+        str(payload_acl),
+    ]
+    hostile_payload_env = environment.copy()
+    hostile_payload_env.update(
+        JHT_ACL_MODE="add", JHT_ACL_PATH=str(install / "icon.ico")
+    )
+    subprocess.run(payload_acl_argv, env=hostile_payload_env, check=True)
+    before_security = security_snapshot(install)
+    rejected = _run_preflight(install, "VerifyInstalled", environment)
+    assert rejected.returncode != 0
+    assert "installed payload grants write to another principal" in rejected.stderr
+    assert security_snapshot(install) == before_security
+
+    hostile_payload_env["JHT_ACL_MODE"] = "remove"
+    subprocess.run(payload_acl_argv, env=hostile_payload_env, check=True)
     verified = _run_preflight(install, "VerifyInstalled", environment)
     assert verified.returncode == 0, verified.stderr
+    normalizable_env["JHT_OWNER_MODE"] = "assert-current"
+    subprocess.run(fixture_owner_argv, env=normalizable_env, check=True)
 
     helper = install / "jht-windows-update.ps1"
     helper.unlink()
@@ -508,7 +577,7 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     rejected = _run_preflight(install, "Prepare", environment)
     assert rejected.returncode != 0
     assert security_snapshot(install, owner_sentinel) == before_security
-    assert "installer node has a foreign owner" in rejected.stderr
+    assert "installer node has a foreign owner [child_file]" in rejected.stderr
     assert owner_sentinel.read_bytes() == b"must-not-change"
     owner_env["JHT_OWNER_MODE"] = "current"
     subprocess.run(

@@ -113,12 +113,17 @@ function Set-NodeAcl {
 }
 
 function Assert-OwnerAndAcl {
-  param([IO.FileSystemInfo]$Node, [switch]$RequireProtected)
+  param(
+    [IO.FileSystemInfo]$Node,
+    [switch]$RequireProtected,
+    [string]$Label = 'node')
   $acl = Get-NodeAcl $Node
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
   $ownerSid = $acl.GetOwner(
     [Security.Principal.SecurityIdentifier]).Value
-  if ($ownerSid -ne $currentSid) { throw 'installer node has a foreign owner' }
+  if ($ownerSid -ne $currentSid) {
+    throw "installer node has a foreign owner [$Label]"
+  }
   if ($RequireProtected -and -not $acl.AreAccessRulesProtected) {
     throw 'installer directory inherits its DACL'
   }
@@ -230,10 +235,17 @@ function Assert-Ancestors {
 function Assert-Tree {
   param([IO.DirectoryInfo]$Root, [switch]$RequireProtectedRoot)
   foreach ($node in Get-TreeNodes $Root) {
+    $label = if ($node.FullName -eq $Root.FullName) {
+      'root'
+    } elseif ($node -is [IO.DirectoryInfo]) {
+      'child_directory'
+    } else {
+      'child_file'
+    }
     [JhtInstallerFileIdentity]::AssertNode(
       $node.FullName, ($node -is [IO.DirectoryInfo]))
     Assert-OwnerAndAcl $node -RequireProtected:(
-      $RequireProtectedRoot -and $node.FullName -eq $Root.FullName)
+      $RequireProtectedRoot -and $node.FullName -eq $Root.FullName) -Label $label
   }
 }
 
@@ -248,7 +260,7 @@ if (-not [string]::Equals(
 $local = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
 Assert-Ancestors $local
 $localNode = Get-Item -LiteralPath $local -Force -ErrorAction Stop
-Assert-OwnerAndAcl $localNode
+Assert-OwnerAndAcl $localNode -Label 'localappdata'
 $programs = Join-Path $local 'Programs'
 if (-not (Test-Path -LiteralPath $programs)) {
   if ($Mode -ne 'Prepare') { throw 'installer Programs directory is missing' }
@@ -256,7 +268,7 @@ if (-not (Test-Path -LiteralPath $programs)) {
 }
 [JhtInstallerFileIdentity]::AssertNode($programs, $true)
 $programsNode = Get-Item -LiteralPath $programs -Force -ErrorAction Stop
-Assert-OwnerAndAcl $programsNode
+Assert-OwnerAndAcl $programsNode -Label 'programs'
 
 $created = $false
 if (-not (Test-Path -LiteralPath $requested)) {
@@ -267,7 +279,7 @@ if (-not (Test-Path -LiteralPath $requested)) {
 $root = Get-Item -LiteralPath $requested -Force -ErrorAction Stop
 [JhtInstallerFileIdentity]::AssertNode($root.FullName, $true)
 
-if (-not $created) {
+if (-not $created -and $Mode -eq 'Prepare') {
   # Census completo e read-only della baseline legacy prima di normalizzare ACL.
   Assert-Tree $root
 }
@@ -304,7 +316,14 @@ foreach ($node in $nodes) {
     if ($node -isnot [IO.FileInfo]) { throw 'installed payload is not a file' }
     Assert-PostWritePayload ([IO.FileInfo]$node)
   } else {
-    Assert-OwnerAndAcl $node
+    $label = if ($node.FullName -eq $root.FullName) {
+      'postwrite_root'
+    } elseif ($node -is [IO.DirectoryInfo]) {
+      'postwrite_unexpected_directory'
+    } else {
+      'postwrite_unexpected_file'
+    }
+    Assert-OwnerAndAcl $node -Label $label
   }
 }
 foreach ($node in $nodes) {
