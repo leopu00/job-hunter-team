@@ -93,7 +93,9 @@ export async function deleteAccountData(
   admin: SupabaseClient,
   userId: string,
 ): Promise<DeletionOutcome> {
-  if (!userId) throw new Error("userId mancante: cancellazione rifiutata");
+  // Anche questo come codice stabile: così la route non ha mai un ramo
+  // in cui deve indovinare cosa è successo.
+  if (!userId) throw new DeletionError("missing_user_id", "input");
 
   const removed: Record<string, number> = {};
 
@@ -198,10 +200,11 @@ async function listRecursive(
         out.push(...(await listRecursive(admin, full, budget)));
       } else {
         if (budget.left <= 0) {
-          throw new Error(
-            `troppi file sotto ${prefix}: enumerazione interrotta per non ` +
-              `dichiarare completa una cancellazione parziale`,
-          );
+          // Niente `prefix` nel messaggio: contiene l'id utente e i nomi
+          // delle cartelle, che sono nomi scelti dall'utente. Era l'ultimo
+          // throw rimasto col dato dentro — aggiunto con la paginazione e
+          // sfuggito alla conversione a codici stabili.
+          throw new DeletionError("storage_too_many", STORAGE_BUCKET);
         }
         budget.left -= 1;
         out.push(full);
