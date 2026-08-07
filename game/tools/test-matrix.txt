@@ -106,7 +106,9 @@ loading_english|script|gate|any|-|tools/loading_english_selftest.gd|LOADING-ENGL
 language_picker|script|gate|any|-|tools/language_picker_selftest.gd|LANGUAGE-PICKER-TEST PASS
 # La componente da sola non basta: entra dalla vera main scene e prova che il
 # picker preceda la title, mostri inglese e costruisca la title dopo la scelta.
-language_picker_title|run|gate|any|JHT_LANG= JHT_LANGUAGE_PICKER_TEST=1|-|LANGUAGE-PICKER-TITLE-TEST PASS
+# Nel gate dell'artifact, JHT_EXPECTED_GAME_VERSION riceve il tag senza `v`:
+# l'eseguibile deve stampare versione effettiva e PASS, altrimenti esce 1.
+language_picker_title|run|gate|any|JHT_LANG= JHT_LANGUAGE_PICKER_TEST=1 JHT_EXPECTED_GAME_VERSION=|-|LANGUAGE-PICKER-TITLE-TEST PASS
 # Percorso P09 reale e cliccabile: non salta il picker con JHT_LANG, isola
 # user://, conferma English, salva un nome sintetico ed entra nell'Office
 # offline con Assistant disponibile e viewport nativo 16:9.

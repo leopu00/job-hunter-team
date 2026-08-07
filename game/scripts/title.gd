@@ -79,6 +79,10 @@ func _on_language_confirmed(language: String) -> void:
 ## inglese, poi una scelta costruisce DAVVERO la title nella lingua richiesta.
 func _language_picker_selftest() -> void:
 	await get_tree().process_frame
+	var project_version := str(ProjectSettings.get_setting("application/config/version"))
+	# Il job artifact imposta questo valore dal tag (senza `v`): il marker sotto
+	# rende visibile nel log sia il testo del Label sia l'identita' attesa.
+	var expected_version := OS.get_environment("JHT_EXPECTED_GAME_VERSION")
 	var ok: bool = is_instance_valid(_language_picker) \
 			and not is_instance_valid(_blink) \
 			and UIStrings.lang == UIStrings.DEFAULT_LANG \
@@ -93,8 +97,11 @@ func _language_picker_selftest() -> void:
 	ok = ok and _language_test_choice == "de" \
 			and UIStrings.lang == "de" and is_instance_valid(_blink) \
 			and is_instance_valid(_version_label) \
-			and _version_label.text == "v%s" % str(ProjectSettings.get_setting(
-					"application/config/version"))
+			and _version_label.is_visible_in_tree() \
+			and _version_label.text == "v%s" % project_version \
+			and (expected_version == "" or project_version == expected_version)
+	print("LANGUAGE-PICKER-TITLE-VERSION %s" % (
+			_version_label.text if is_instance_valid(_version_label) else "MISSING"))
 	print("LANGUAGE-PICKER-TITLE-TEST %s" % ("PASS" if ok else "FAIL"))
 	get_tree().quit(0 if ok else 1)
 

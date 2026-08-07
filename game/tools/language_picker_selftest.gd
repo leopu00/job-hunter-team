@@ -16,6 +16,15 @@ const TITLE_TRANSLATION_SOURCES := [
 	"res://scripts/i18n/ui_fr.gd",
 	"res://scripts/i18n/ui_pt.gd",
 ]
+const FORBIDDEN_TITLE_FOOTERS := [
+	"prototipo — dati mock, nessun backend",
+	"prototype — mock data, no backend",
+	"prototípus — mock adatok, nincs backend",
+	"prototipo — datos mock, sin backend",
+	"Prototyp — Mock-Daten, kein Backend",
+	"prototype — données mock, pas de backend",
+	"protótipo — dados mock, sem backend",
+]
 
 var _failures: Array[String] = []
 var _confirmed := ""
@@ -37,10 +46,15 @@ func _init() -> void:
 	var title_source := FileAccess.get_file_as_string(TITLE_SOURCE)
 	_check("titolo senza claim prototipo/backend incondizionato",
 			not title_source.contains("title.footer"))
-	for translation_source: String in TITLE_TRANSLATION_SOURCES:
-		_check("claim prototipo rimosso: " + translation_source,
-				not FileAccess.get_file_as_string(translation_source).contains(
-						'"title.footer"'))
+	var title_sources := [TITLE_SOURCE]
+	title_sources.append_array(TITLE_TRANSLATION_SOURCES)
+	for source_path: String in title_sources:
+		var source := FileAccess.get_file_as_string(source_path)
+		_check("chiave claim prototipo rimossa: " + source_path,
+				not source.contains('"title.footer"'))
+		for forbidden_footer: String in FORBIDDEN_TITLE_FOOTERS:
+			_check("claim prototipo storico assente: " + source_path,
+					not source.contains(forbidden_footer))
 	_check("versione mostrata letta dalla configurazione del progetto",
 			title_source.contains(
 					'"v%s" % str(ProjectSettings.get_setting('
