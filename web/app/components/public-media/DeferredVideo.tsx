@@ -6,6 +6,7 @@ import {
   playableVariant,
   type PublicVideo,
   type VideoOrientation,
+  validatePublicVideo,
 } from "@/lib/public-video-manifest";
 
 type DeferredVideoProps = {
@@ -40,7 +41,7 @@ export default function DeferredVideo({ video, label }: DeferredVideoProps) {
     void videoRef.current?.play().catch(() => undefined);
   }, [activated, variant]);
 
-  if (!video.published) return null;
+  if (!video.published || validatePublicVideo(video).length > 0) return null;
 
   const posterVariant = playableVariant(video, "landscape");
   if (!posterVariant) return null;
