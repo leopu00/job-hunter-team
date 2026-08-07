@@ -8,7 +8,7 @@ extends SceneTree
 ## verificano che la redazione NON mangi le righe diagnostiche, perché un
 ## report ripulito fino all'inutilità non fa arrivare nessuna fix.
 
-const RedactorScript = preload("res://scripts/support/redactor.gd")
+const REDACTOR_PATH := "res://scripts/support/redactor.gd"
 
 ## I finti segreti si compongono a pezzi invece di stare in chiaro: scritti per
 ## esteso li blocca il gate anti-secret del pre-commit, ed è giusto che lo
@@ -28,12 +28,14 @@ const FAKE_LOCAL_TOKEN := "9f8e7d6c5b4a39281706f5e4d3c2b1a0" \
 		+ "9f8e7d6c5b4a39281706f5e4d3c2b1a0"
 
 var _failures: Array[String] = []
+var RedactorScript: GDScript
 
 
 func _init() -> void:
 	# Godot puo' restituire exit 0 e continuare `_init()` anche quando un
-	# `preload()` dipendente non compila. Senza questo guard il vecchio test
-	# chiamava metodi inesistenti, non registrava failure e stampava PASS.
+	# target non compila. Il load deve essere runtime: un `const preload()`
+	# rotto impedirebbe di compilare anche questo guard e tornerebbe exit 0.
+	RedactorScript = load(REDACTOR_PATH)
 	if not _script_is_ready(RedactorScript):
 		push_error("[redact-test] FAIL: redactor.gd non compilabile")
 		quit(1)
