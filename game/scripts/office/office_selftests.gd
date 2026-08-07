@@ -1234,6 +1234,7 @@ func _guided_onboarding_selftest() -> void:
 	ScriptedOnboarding.set_provider_test_override(0)
 	SetupService.status["provider_authenticated"] = false
 	SetupService.status["container_running"] = false
+	SetupService.status["ready"] = false
 	office._on_setup_status_changed(SetupService.status)
 	var check := func(ok: bool, message: String) -> void:
 		if not ok:
@@ -1276,6 +1277,51 @@ func _guided_onboarding_selftest() -> void:
 					"dialogo showroom non rende le scelte")
 			dialogue_ui._close()
 			await get_tree().process_frame
+
+	# P0 07/08 — setup incompleto, due persone dello stesso reparto. Il click
+	# deve aprire comunque il dialogo authored con opzioni, ma il ritratto
+	# segue l'istanza/postazione (scout-1 != scout-2) e resta identico quando
+	# si torna sulla stessa persona. Prima office.gd passava sempre "scout".
+	var original_tour_done := TourGuide._done
+	TourGuide._done = true  # forza il ramo post-tour senza persistere stato
+	var scouts: Array[AgentNPC] = []
+	for candidate in office.agents:
+		if candidate.slug == "scout":
+			scouts.append(candidate)
+	check.call(scouts.size() >= 2,
+			"showroom senza setup non contiene due Scout cliccabili")
+	var shown_portraits: Array[String] = []
+	for i in mini(2, scouts.size()):
+		var scout: AgentNPC = scouts[i]
+		var expected_portrait := scout.dialogue_portrait_slug()
+		check.call(expected_portrait == scout.dialogue_portrait_slug(),
+				"lo stesso Scout cambia ritratto fra due risoluzioni")
+		office._start_talk(scout)
+		await get_tree().process_frame
+		var scout_dialogue: DialogueUI = null
+		for child in office.get_children():
+			if child is DialogueUI:
+				scout_dialogue = child
+				break
+		check.call(scout_dialogue != null,
+				"click su %s non apre DialogueUI a setup incompleto" % scout.display_name)
+		if scout_dialogue:
+			shown_portraits.append(scout_dialogue._portrait._slug)
+			check.call(scout_dialogue._portrait._slug == expected_portrait,
+					"%s mostra %s invece del proprio %s" % [scout.display_name,
+						scout_dialogue._portrait._slug, expected_portrait])
+			check.call(scout_dialogue._tree_id == "tease_scout",
+					"setup incompleto non usa il dialogo teaser dello Scout")
+			scout_dialogue._finish_typing()
+			check.call(scout_dialogue._choices_box.get_child_count() > 0,
+					"%s parla ma non offre opzioni di risposta" % scout.display_name)
+			scout_dialogue._close()
+			await get_tree().process_frame
+	TourGuide._done = original_tour_done
+	shown_portraits.sort()
+	check.call(shown_portraits == ["scout-1", "scout-2"],
+			"due Scout dello showroom condividono il ritratto: %s" \
+			% JSON.stringify(shown_portraits))
 	ScriptedOnboarding.reset_for_test()
 	check.call(ScriptedOnboarding.messages("assistente").size() == 1,
 			"welcome Assistente assente")
@@ -1703,7 +1749,8 @@ func _guided_onboarding_selftest() -> void:
 	var ok := failures.is_empty()
 	print("GUIDED-ONBOARDING-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"failures": failures, "draft": draft,
-					"mentor": ScriptedOnboarding.preferences()}))
+					"mentor": ScriptedOnboarding.preferences(),
+					"instance_portraits": shown_portraits}))
 	panel.close(false)
 	profile_panel.queue_free()
 	BackendBus.disconnect_backend()
