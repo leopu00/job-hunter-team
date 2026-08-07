@@ -48,6 +48,10 @@ nav_grid|script|gate|any|-|tools/nav_grid_selftest.gd|-
 speech_bubble|script|gate|any|-|tools/speech_bubble_selftest.gd|-
 pipeline_queue|script|gate|any|-|tools/pipeline_queue_selftest.gd|-
 embedded_terminal|script|gate|any|-|tools/embedded_terminal_selftest.gd|-
+# Il pairing cloud non è più una console: il processo emette eventi sicuri,
+# il browser apre sul link completo e un errore rende visibile COPIA LINK.
+# Il seam fake evita di aprire davvero browser nei runner dei tre sistemi.
+cloud_pairing|script|gate|any|-|tools/cloud_pairing_selftest.gd|CLOUD-PAIRING-TEST PASS
 redactor|script|gate|any|-|tools/redactor_selftest.gd|-
 diagnostics|script|gate|any|-|tools/diagnostics_selftest.gd|-
 theme|script|gate|any|-|tools/theme_selftest.gd|-
