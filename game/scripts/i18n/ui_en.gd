@@ -1238,7 +1238,7 @@ const S := {
 	"cloud_pairing.fallback": "BROWSER DIDN'T OPEN?",
 	"cloud_pairing.fallback_note": "Open this link manually. COPY LINK is only a fallback; you never need to copy a token or code.",
 	"cloud_pairing.close": "CLOSE",
-	"cloud_pairing.paired": "✓ Account linked. This screen and the Account page updated automatically.",
+	"cloud_pairing.paired": "✓ Account linked. The Account page will update automatically.",
 	"cloud_pairing.expired": "This link expired. Generate a new one to continue.",
 	"cloud_pairing.already_used": "This link was already used. Generate a new one to continue.",
 	"cloud_pairing.network_retry": "The connection was interrupted. Retrying automatically…",
