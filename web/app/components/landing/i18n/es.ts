@@ -43,6 +43,8 @@ export const es: Record<string, string> = {
   footer_resources: "Recursos",
   footer_tutorials: "Tutoriales",
   footer_contacts: "Contacto",
+  footer_instagram_aria: "Job Hunter Team en Instagram",
+  footer_tiktok_aria: "Job Hunter Team en TikTok",
   nav_contact: "Contacto",
   footer_bug: "Reportar un error",
   footer_privacy: "Política de privacidad",

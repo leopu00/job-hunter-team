@@ -108,6 +108,16 @@ const translations = {
   footer_resources: { it: "Risorse", en: "Resources", hu: "Források" },
   footer_tutorials: { it: "Tutorial", en: "Tutorials", hu: "Oktatóanyagok" },
   footer_contacts: { it: "Contatti", en: "Contacts", hu: "Kapcsolat" },
+  footer_instagram_aria: {
+    it: "Job Hunter Team su Instagram",
+    en: "Job Hunter Team on Instagram",
+    hu: "Job Hunter Team az Instagramon",
+  },
+  footer_tiktok_aria: {
+    it: "Job Hunter Team su TikTok",
+    en: "Job Hunter Team on TikTok",
+    hu: "Job Hunter Team a TikTokon",
+  },
   nav_contact: {
     it: "Contatti",
     en: "Contact",
