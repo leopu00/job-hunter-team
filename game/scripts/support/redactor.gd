@@ -33,6 +33,39 @@ const RULES: Array[Dictionary] = [
 		"replace": "[private-key]",
 	},
 	{
+		# Header HTTP: il nome della credenziale non e' assegnato con `=` o
+		# `:`, quindi la regola assigned_secret non puo' intercettarlo.
+		"key": "bearer_token",
+		"family": "secret",
+		"pattern": r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{6,}",
+		"replace": "Bearer [secret]",
+	},
+	{
+		"key": "basic_auth",
+		"family": "secret",
+		"pattern": r"(?i)\bBasic\s+[A-Za-z0-9+/]{8,}={0,2}",
+		"replace": "Basic [secret]",
+	},
+	{
+		# Access key id AWS: 4 caratteri di prefisso + 16 maiuscoli/cifre.
+		"key": "aws_access_key",
+		"family": "secret",
+		"pattern": r"\bAKIA[A-Z0-9]{16}\b",
+		"replace": "[aws-access-key]",
+	},
+	{
+		"key": "slack_token",
+		"family": "secret",
+		"pattern": r"\bxoxb-[A-Za-z0-9-]{10,}\b",
+		"replace": "[slack-token]",
+	},
+	{
+		"key": "gemini_key",
+		"family": "secret",
+		"pattern": r"\bAIza[A-Za-z0-9_-]{20,}\b",
+		"replace": "[gemini-key]",
+	},
+	{
 		# `token: abc123`, `password=hunter2`, `api_key "…"`. Si conserva il
 		# nome della chiave (diagnostico: dice QUALE credenziale era) e si
 		# butta solo il valore.
@@ -137,10 +170,11 @@ const RULES: Array[Dictionary] = [
 	},
 	{
 		# Il nome utente del sistema operativo è un identificativo diretto e
-		# compare in ogni path assoluto dei log.
+		# compare in ogni path assoluto dei log. Gli spazi sono ammessi nel
+		# componente: `C:\Users\Avery Example\...` e' un path Windows valido.
 		"key": "home_path",
 		"family": "personal",
-		"pattern": r"(?i)([/\\](?:Users|home)[/\\])([^/\\\s\x22\x27:;,)\]]+)",
+		"pattern": r"(?i)([/\\](?:Users|home)[/\\])([^/\\\r\n\t\x22\x27:;,)\]]+)",
 		"replace": "$1[user]",
 	},
 	{
@@ -220,8 +254,9 @@ static func redact_with_report(text: String,
 ## Vero se nel testo resta qualcosa che somiglia a un segreto: la usa il
 ## selftest e la può usare chi vuole un'ultima verifica prima di spedire.
 static func has_residual_secret(text: String) -> bool:
-	for key in ["private_key", "telegram_token", "github_token", "provider_key",
-			"jwt", "long_hex", "email"]:
+	for key in ["private_key", "bearer_token", "basic_auth", "aws_access_key",
+			"slack_token", "gemini_key", "telegram_token", "github_token",
+			"provider_key", "jwt", "long_hex", "email"]:
 		for rule in RULES:
 			if rule["key"] != key:
 				continue
@@ -229,17 +264,6 @@ static func has_residual_secret(text: String) -> bool:
 			if re != null and re.search(text) != null:
 				return true
 	return false
-
-
-## Riassunto leggibile del rendiconto, nella lingua della UI.
-static func summary(counts: Dictionary) -> String:
-	if counts.is_empty():
-		return UIStrings.t("feedback.redacted_none")
-	var total := 0
-	for key in counts:
-		total += int(counts[key])
-	return UIStrings.t("feedback.redacted_count") % total
-
 
 static var _cache := {}
 
