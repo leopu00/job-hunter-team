@@ -5,9 +5,9 @@
 CREATE TABLE public.download_clicks (
   ts_hour text NOT NULL CHECK (ts_hour ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}$'),
   slug text NOT NULL CHECK (slug IN ('win-setup', 'win-portable', 'mac', 'linux')),
-  utm_source text NOT NULL DEFAULT 'none' CHECK (utm_source ~ '^[a-z0-9_-]{1,40}$'),
-  utm_medium text NOT NULL DEFAULT 'none' CHECK (utm_medium ~ '^[a-z0-9_-]{1,40}$'),
-  utm_campaign text NOT NULL DEFAULT 'none' CHECK (utm_campaign ~ '^[a-z0-9_-]{1,40}$'),
+  utm_source text NOT NULL DEFAULT 'none' CHECK (utm_source IN ('none', 'reddit')),
+  utm_medium text NOT NULL DEFAULT 'none' CHECK (utm_medium IN ('none', 'paid')),
+  utm_campaign text NOT NULL DEFAULT 'none' CHECK (utm_campaign IN ('none', 'lancio-2026-08')),
   n bigint NOT NULL DEFAULT 0 CHECK (n >= 0),
   PRIMARY KEY (ts_hour, slug, utm_source, utm_medium, utm_campaign)
 );
