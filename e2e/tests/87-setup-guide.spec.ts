@@ -110,6 +110,21 @@ test("nessuna chiave di traduzione grezza a schermo", async ({
     for (const key of ["page_title", "os_selector_label", "step_label"]) {
       expect(body, `chiave grezza «${key}» a schermo`).not.toContain(key);
     }
+
+    // L'inglese è il default della guida. Queste frasi italiane sono
+    // traduzioni reali delle fasi più visibili: se compaiono qui, il frame
+    // della demo ha mescolato due cataloghi anche se nessuna chiave è grezza.
+    expect(body).toContain("check the requirements");
+    for (const italian of [
+      "controlla i requisiti",
+      "accedi con google",
+      "controlla gli accessi",
+      "screenshot in attesa",
+    ]) {
+      expect(body, `residuo italiano «${italian}» nel default EN`).not.toContain(
+        italian,
+      );
+    }
   } finally {
     await context.close();
   }
@@ -158,6 +173,12 @@ test("il tedesco non sfonda il layout del telefono", async ({
   try {
     await page.goto("/setup-guide", { waitUntil: "domcontentloaded" });
     await expect(page.locator("h1")).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Zugriffe prüfen und dieses Gerät autorisieren",
+      }),
+    ).toBeVisible();
+    await expect(page.getByText("Screenshot ausstehend").first()).toBeVisible();
 
     const overflowing = await page.evaluate(() => {
       const limit = window.innerWidth + 1;
