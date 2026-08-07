@@ -19,11 +19,60 @@ const MAX_LOG_LINES := 400
 const MAX_LOG_CHARS := 120_000
 const CONTAINER_LOG_LINES := 200
 
+## Le chiavi del bundle restano stabili per redazione e test; questa tabella
+## riguarda soltanto la loro presentazione nel markdown mostrato all'utente.
+const FIELD_LABEL_KEYS := {
+	"versione": "diagnostics.field.version",
+	"motore": "diagnostics.field.engine",
+	"lingua UI": "diagnostics.field.ui_language",
+	"sessione": "diagnostics.field.session",
+	"debug build": "diagnostics.field.debug_build",
+	"sistema": "diagnostics.field.system",
+	"processore": "diagnostics.field.processor",
+	"locale": "diagnostics.field.locale",
+	"RAM disponibile": "diagnostics.field.available_ram",
+	"distribuzione": "diagnostics.field.distribution",
+	"video": "diagnostics.field.video",
+	"schermo": "diagnostics.field.screen",
+	"grafica ridotta": "diagnostics.field.reduced_graphics",
+	"cartella dati presente": "diagnostics.field.data_folder_present",
+}
+
+const ENGLISH_LABELS := {
+	"diagnostics.section.app": "App",
+	"diagnostics.section.system": "System",
+	"diagnostics.section.runtime": "Runtime",
+	"diagnostics.field.version": "version",
+	"diagnostics.field.engine": "engine",
+	"diagnostics.field.ui_language": "UI language",
+	"diagnostics.field.session": "session",
+	"diagnostics.field.debug_build": "debug build",
+	"diagnostics.field.system": "system",
+	"diagnostics.field.processor": "processor",
+	"diagnostics.field.locale": "locale",
+	"diagnostics.field.available_ram": "available RAM",
+	"diagnostics.field.distribution": "distribution",
+	"diagnostics.field.video": "video",
+	"diagnostics.field.screen": "screen",
+	"diagnostics.field.reduced_graphics": "reduced graphics",
+	"diagnostics.field.data_folder_present": "data folder present",
+	"diagnostics.value.screen_window": "%s (window %s)",
+	"diagnostics.value.backend_local": "local",
+	"diagnostics.value.unavailable": "unavailable",
+	"diagnostics.value.none": "none",
+	"diagnostics.log_title": "Log: %s",
+	"diagnostics.redacted": "Data removed before sending",
+	"diagnostics.container_logs_unavailable": "[container logs unavailable] %s",
+	"diagnostics.truncated": "[…truncated…]\n%s",
+	"diagnostics.lines_omitted": "[…%d earlier lines omitted…]\n%s",
+}
+
 
 ## Il bundle completo, già ripulito.
 ## `{"app":…, "system":…, "runtime":…, "logs":…, "redaction":{regola: quante}}`
 static func collect(include_game_log := true, include_container_log := true,
 		context: Dictionary = {}) -> Dictionary:
+	var labels: Dictionary = context.get("diagnostic_labels", {})
 	var bundle := {
 		"app": _app_section(),
 		"system": _system_section(context),
@@ -31,14 +80,14 @@ static func collect(include_game_log := true, include_container_log := true,
 		"logs": {},
 	}
 	if include_game_log:
-		bundle["logs"]["game"] = _tail_file("user://jht-game.log")
+		bundle["logs"]["game"] = _tail_file("user://jht-game.log", labels)
 		# Dopo un crash il log corrente riparte vuoto: la diagnosi vive nel
 		# .prev.log, ed è proprio il caso in cui serve (vedi log.gd).
-		var prev := _tail_file("user://jht-game.prev.log")
+		var prev := _tail_file("user://jht-game.prev.log", labels)
 		if prev != "":
 			bundle["logs"]["game_previous"] = prev
 	if include_container_log:
-		bundle["logs"]["container"] = _container_log()
+		bundle["logs"]["container"] = _container_log(labels)
 	return _sanitize(bundle, context)
 
 
@@ -46,7 +95,12 @@ static func collect(include_game_log := true, include_container_log := true,
 ## thread della segnalazione: interrogare lo SceneTree da lì fa fallire proprio
 ## il pannello che deve restare disponibile quando l'app ha un problema.
 static func capture_context() -> Dictionary:
-	var context := {"sensitive_terms": PackedStringArray()}
+	var context := {
+		"sensitive_terms": PackedStringArray(),
+		# UIStrings viene letto qui, sul main thread. Il worker riceve una copia
+		# immutabile di sole stringhe e non accede a ResourceLoader né autoload.
+		"diagnostic_labels": _capture_labels(),
+	}
 	var game := _autoload("Game")
 	if game != null:
 		context["low_gfx"] = bool(game.get("low_gfx"))
@@ -79,28 +133,35 @@ static func sensitive_terms(context: Dictionary = {}) -> PackedStringArray:
 ## Rendering leggibile del bundle: è sia l'anteprima che l'utente ispeziona
 ## prima di inviare, sia il corpo dell'issue che arriva a noi. Un solo formato
 ## per entrambi, così quello che vede è letteralmente quello che parte.
-static func to_markdown(bundle: Dictionary) -> String:
+static func to_markdown(bundle: Dictionary, labels: Dictionary = {}) -> String:
 	var out := ""
 	for section in ["app", "system", "runtime"]:
 		var data: Dictionary = bundle.get(section, {})
 		if data.is_empty():
 			continue
-		out += "### %s\n\n" % section.capitalize()
+		out += "### %s\n\n" % _label(labels,
+				"diagnostics.section." + section, section.capitalize())
 		for key in data:
-			out += "- **%s**: %s\n" % [key, str(data[key])]
+			var label_key := str(FIELD_LABEL_KEYS.get(key, ""))
+			var field_label := str(key) if label_key == "" else \
+					_label(labels, label_key, str(ENGLISH_LABELS.get(label_key, key)))
+			out += "- **%s**: %s\n" % [field_label, str(data[key])]
 		out += "\n"
 	var logs: Dictionary = bundle.get("logs", {})
 	for key in logs:
 		var text := str(logs[key])
 		if text.strip_edges() == "":
 			continue
-		out += "### Log: %s\n\n```text\n%s\n```\n\n" % [key, text]
+		out += "### %s\n\n```text\n%s\n```\n\n" % [
+				_label(labels, "diagnostics.log_title", "Log: %s") % key, text]
 	var redaction: Dictionary = bundle.get("redaction", {})
 	if not redaction.is_empty():
 		var parts := PackedStringArray()
 		for key in redaction:
 			parts.append("%s×%d" % [key, int(redaction[key])])
-		out += "### Dati rimossi prima dell'invio\n\n%s\n" % ", ".join(parts)
+		out += "### %s\n\n%s\n" % [
+				_label(labels, "diagnostics.redacted", "Data removed before sending"),
+				", ".join(parts)]
 	return out
 
 
@@ -132,7 +193,8 @@ static func _system_section(context: Dictionary) -> Dictionary:
 	data["video"] = "%s — %s" % [RenderingServer.get_video_adapter_name(),
 			RenderingServer.get_video_adapter_api_version()]
 	if DisplayServer.get_name() != "headless":
-		data["schermo"] = "%s (finestra %s)" % [
+		data["schermo"] = _label(context.get("diagnostic_labels", {}),
+				"diagnostics.value.screen_window", "%s (window %s)") % [
 				DisplayServer.screen_get_size(), DisplayServer.window_get_size()]
 	if context.has("low_gfx"):
 		data["grafica ridotta"] = bool(context["low_gfx"])
@@ -166,28 +228,36 @@ static func _runtime_section(context: Dictionary) -> Dictionary:
 	if context.has("backend_live"):
 		# MAI l'IP della VPS: identifica l'infrastruttura dell'utente. Il modo
 		# di connessione basta a inquadrare il problema.
-		data["backend"] = "VPS" if bool(context["backend_live"]) else "locale"
+		data["backend"] = "VPS" if bool(context["backend_live"]) else _label(
+				context.get("diagnostic_labels", {}),
+				"diagnostics.value.backend_local", "local")
 	data["cartella dati presente"] = DirAccess.dir_exists_absolute(_jht_home())
 	var docker_version := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Client.Version}} / server {{.Server.Version}}"]))
 	data["docker"] = str(docker_version.get("out", "")).strip_edges() \
-			if int(docker_version.get("code", -1)) == 0 else "non disponibile"
+			if int(docker_version.get("code", -1)) == 0 else _label(
+					context.get("diagnostic_labels", {}),
+					"diagnostics.value.unavailable", "unavailable")
 	var containers := _run("docker", PackedStringArray(["ps", "-a", "--filter",
 			"name=jht", "--format", "{{.Names}} {{.Status}} ({{.Image}})"]))
 	if int(containers.get("code", -1)) == 0:
 		var listing := str(containers.get("out", "")).strip_edges()
-		data["container"] = listing if listing != "" else "nessuno"
+		data["container"] = listing if listing != "" else _label(
+				context.get("diagnostic_labels", {}),
+				"diagnostics.value.none", "none")
 	return data
 
 
-static func _container_log() -> String:
+static func _container_log(labels: Dictionary = {}) -> String:
 	var logs := _run("docker", PackedStringArray(["logs", "--tail",
 			str(CONTAINER_LOG_LINES), "jht"]))
 	if int(logs.get("code", -1)) != 0:
 		# Il fallimento è esso stesso diagnostico: dice che il container non
 		# c'è o non risponde, che è metà della risposta su un bug di avvio.
-		return "[log container non disponibili] " + str(logs.get("out", "")).strip_edges()
-	return _tail_text(str(logs.get("out", "")))
+		return _label(labels, "diagnostics.container_logs_unavailable",
+				"[container logs unavailable] %s") % \
+				str(logs.get("out", "")).strip_edges()
+	return _tail_text(str(logs.get("out", "")), labels)
 
 
 # ── Utilità ──────────────────────────────────────────────────────────
@@ -222,16 +292,16 @@ static func _sanitize_value(value: Variant, terms: PackedStringArray,
 	return value
 
 
-static func _tail_file(path: String) -> String:
+static func _tail_file(path: String, labels: Dictionary = {}) -> String:
 	if not FileAccess.file_exists(path):
 		return ""
 	var text := FileAccess.get_file_as_string(path)
 	if text == "":
 		return ""
-	return _tail_text(text)
+	return _tail_text(text, labels)
 
 
-static func _tail_text(text: String) -> String:
+static func _tail_text(text: String, labels: Dictionary = {}) -> String:
 	var lines := text.split("\n", false)
 	var start := maxi(0, lines.size() - MAX_LOG_LINES)
 	var kept := PackedStringArray()
@@ -239,10 +309,25 @@ static func _tail_text(text: String) -> String:
 		kept.append(lines[i])
 	var out := "\n".join(kept)
 	if out.length() > MAX_LOG_CHARS:
-		out = "[…troncato…]\n" + out.substr(out.length() - MAX_LOG_CHARS)
+		out = _label(labels, "diagnostics.truncated", "[…truncated…]\n%s") % \
+				out.substr(out.length() - MAX_LOG_CHARS)
 	if start > 0:
-		out = "[…%d righe precedenti omesse…]\n" % start + out
+		out = _label(labels, "diagnostics.lines_omitted",
+				"[…%d earlier lines omitted…]\n%s") % [start, out]
 	return out
+
+
+## Snapshot di presentazione catturato esclusivamente sul main thread.
+static func _capture_labels() -> Dictionary:
+	var labels := {}
+	for key in ENGLISH_LABELS:
+		labels[key] = UIStrings.t(key)
+	return labels
+
+
+static func _label(labels: Dictionary, key: String, english: String) -> String:
+	var value := str(labels.get(key, ""))
+	return value if value != "" and value != key else english
 
 
 static func _run(path: String, args: PackedStringArray) -> Dictionary:

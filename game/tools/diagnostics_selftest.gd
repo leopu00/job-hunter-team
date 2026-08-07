@@ -22,6 +22,7 @@ func _init() -> void:
 	_test_survives_without_container(bundle)
 	_test_no_identifying_data(markdown)
 	_test_markdown_is_useful(markdown)
+	_test_preview_is_english(bundle)
 	if _failures.is_empty():
 		print("[diag-test] PASS: sezioni, resilienza e redazione del bundle")
 		quit(0)
@@ -75,3 +76,22 @@ func _test_markdown_is_useful(markdown: String) -> void:
 	_check("intestazioni presenti", markdown.contains("### App"), markdown.substr(0, 200))
 	_check("sistema riportato", markdown.contains(OS.get_name()),
 			"il sistema operativo non deve essere redatto")
+
+
+## Il fallback del worker è inglese anche senza autoload/cataloghi caricati.
+## È lo stesso percorso usato dall'anteprima prima dell'invio del feedback.
+func _test_preview_is_english(bundle: Dictionary) -> void:
+	# I log allegati sono dati grezzi e possono legittimamente contenere righe
+	# di versioni precedenti. Qui si isola la cornice generata dal prodotto.
+	var preview_bundle := bundle.duplicate(true)
+	preview_bundle["logs"] = {}
+	preview_bundle["redaction"] = {"email": 1}
+	var markdown: String = DiagnosticsScript.to_markdown(preview_bundle)
+	for forbidden in ["Dati rimossi", "versione", "motore", "lingua UI",
+			"sessione", "sistema", "processore", "RAM disponibile", "schermo",
+			"cartella dati presente", "non disponibile", "nessuno",
+			"log container non disponibili", "troncato", "righe precedenti omesse"]:
+		_check("anteprima diagnostica EN senza " + forbidden,
+				not markdown.contains(forbidden), markdown.substr(0, 600))
+	_check("heading runtime inglese", markdown.contains("### Runtime"), markdown)
+	_check("label versione inglese", markdown.contains("**version**"), markdown)

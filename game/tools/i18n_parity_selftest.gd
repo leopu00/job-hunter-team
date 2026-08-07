@@ -115,6 +115,7 @@ func _init() -> void:
 	_check_hours_day_labels(it)
 	_check_demo_position_titles(it)
 	_check_mock_data_localization(it)
+	_check_runtime_english_presentation()
 	_check_no_hardcoded_labels()
 	_check_p0_english_surfaces()
 	if _failures.is_empty():
@@ -163,6 +164,38 @@ func _check_mock_data_localization(it: Dictionary) -> void:
 		if it.has(key) and english.has(key):
 			_check("mock inglese reale: " + key,
 					str(it[key]) != str(english[key]), str(english[key]))
+
+
+func _check_runtime_english_presentation() -> void:
+	var previous := UIStrings.lang
+	UIStrings.lang = "en"
+	var mock := MockDataSource.new()
+	var notifications: Array = mock.get_notifications()
+	_check("notification when localizzato a runtime", notifications.size() == 4
+			and notifications[0]["when"] == "5 min ago"
+			and notifications[1]["when"] == "1 h ago"
+			and notifications[3]["when"] == "yesterday", str(notifications))
+	for pair in [
+			["percorso fuori dalle aree dati", "path is outside the data areas"],
+			["file non trovato sul container", "file not found in the container"],
+			["file oltre i 10 MB", "file exceeds 10 MB"],
+			["posizione inesistente", "position does not exist"],
+	]:
+		_check("errore VPS presentato in inglese: " + pair[0],
+				UIStrings.present_vps_error(pair[0]) == pair[1],
+				UIStrings.present_vps_error(pair[0]))
+	var vps_source := FileAccess.get_file_as_string("res://scripts/backend/vps_backend.gd")
+	_check("filename payload stabile e non localizzato",
+			vps_source.contains('return out if out != "" else "document"')
+			and not vps_source.contains('else UIStrings.t("common.document")'),
+			"_safe_filename deve restare indipendente dalla lingua")
+	for seam in ['UIStrings.t("vps.upload.file_missing")',
+			'UIStrings.t("vps.upload.extension_denied")',
+			'UIStrings.t("vps.upload.file_unreadable")',
+			'UIStrings.t("vps.upload.file_too_large")',
+			'err = _present_error(str(d.get("error", "")))']:
+		_check("propagazione VPS localizzata: " + seam, vps_source.contains(seam), seam)
+	UIStrings.lang = previous
 
 
 func _check(name: String, condition: bool, detail: String = "") -> void:
