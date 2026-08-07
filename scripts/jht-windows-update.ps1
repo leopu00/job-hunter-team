@@ -445,7 +445,7 @@ function Read-VerifiedManifest {
   param([string]$ManifestPath, [string]$SignaturePath)
   $manifestInfo = Get-Item -LiteralPath $ManifestPath -Force -ErrorAction Stop
   $signatureInfo = Get-Item -LiteralPath $SignaturePath -Force -ErrorAction Stop
-  if ($manifestInfo.PSIsContainer -or $signatureInfo.PSIsContainer -or $manifestInfo.Length -lt 1 -or $manifestInfo.Length -gt $ManifestLimit -or $signatureInfo.Length -ne $SignatureSize) { throw 'signed release metadata size is invalid' }
+  if (($manifestInfo -is [IO.DirectoryInfo]) -or ($signatureInfo -is [IO.DirectoryInfo]) -or $manifestInfo.Length -lt 1 -or $manifestInfo.Length -gt $ManifestLimit -or $signatureInfo.Length -ne $SignatureSize) { throw 'signed release metadata size is invalid' }
   $manifestHash = Get-Sha256 $manifestInfo.FullName
   $signatureHash = Get-Sha256 $signatureInfo.FullName
   [byte[]]$raw = [IO.File]::ReadAllBytes($manifestInfo.FullName)
@@ -550,7 +550,7 @@ function Get-ArtifactByRole {
 function Assert-FileMatchesArtifact {
   param([string]$Path, [object]$Artifact)
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
-  if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'artifact path is not a regular file' }
+  if (($item -is [IO.DirectoryInfo]) -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'artifact path is not a regular file' }
   if ([uint64]$item.Length -ne [uint64]$Artifact.size -or (Get-Sha256 $item.FullName) -cne [string]$Artifact.sha256) { throw 'artifact size/SHA-256 mismatch' }
 }
 
@@ -569,8 +569,9 @@ function Assert-NoReparseAncestors {
 function Assert-OwnerAndAcl {
   param([string]$Path, [switch]$Directory)
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
-  if ($Directory -and -not $item.PSIsContainer) { throw 'protected directory expected' }
-  if (-not $Directory -and $item.PSIsContainer) { throw 'protected file expected' }
+  $isDirectory = $item -is [IO.DirectoryInfo]
+  if ($Directory -and -not $isDirectory) { throw 'protected directory expected' }
+  if (-not $Directory -and $isDirectory) { throw 'protected file expected' }
   if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected node is a reparse point' }
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
   $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)

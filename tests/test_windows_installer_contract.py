@@ -110,7 +110,19 @@ def test_acl_authority_uses_typed_clr_accessors_in_all_copies() -> None:
             r"\[Security\.Principal\.SecurityIdentifier\]\s*\)",
             source,
         ), path
-        assert re.search(r"\$acl\.Owner\b|\$acl\.Access\b", source) is None, path
+        ets_acl = r"\$acl\." + r"(?:Owner|Access)\b"
+        assert re.search(ets_acl, source) is None, path
+
+    security_sources = (
+        PREFLIGHT,
+        UPDATE_HELPER,
+        BUILDER,
+        Path(__file__),
+        ROOT / "tests" / "test_windows_update_helper.py",
+    )
+    ets_type = "PSIs" + "Container"
+    for path in security_sources:
+        assert ets_type not in path.read_text(), path
 
 
 def _windows_powershell() -> str:
@@ -215,7 +227,9 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         "[Security.AccessControl.AccessControlSections]::All);"
         "$current=[Security.Principal.WindowsIdentity]::GetCurrent().User;"
         "$acl.SetOwner($current);$acl.SetAccessRuleProtection($true,$false);"
-        "foreach($identity in @($acl.Access | ForEach-Object {$_.IdentityReference} | "
+        "foreach($identity in @($acl.GetAccessRules($true,$true,"
+        "[Security.Principal.SecurityIdentifier]) | "
+        "ForEach-Object {$_.IdentityReference} | "
         "Select-Object -Unique)){$acl.PurgeAccessRules($identity)};"
         "foreach($sid in @($current,"
         "[Security.Principal.SecurityIdentifier]::new('S-1-5-18'),"
@@ -291,8 +305,23 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     ]
 
     def security_snapshot(*acl_paths: Path) -> tuple[object, ...]:
-        digests: list[str] = []
-        for acl_path in acl_paths:
+        del acl_paths  # Every non-reparse node under LOCALAPPDATA is covered.
+        nodes = [local]
+        pending = [local]
+        while pending:
+            directory = pending.pop()
+            for entry in sorted(os.scandir(directory), key=lambda item: item.name):
+                path = Path(entry.path)
+                is_reparse = entry.is_symlink() or bool(
+                    hasattr(os.path, "isjunction") and os.path.isjunction(path)
+                )
+                if is_reparse:
+                    continue
+                nodes.append(path)
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append(path)
+        digests: list[tuple[str, str, str]] = []
+        for acl_path in sorted(nodes, key=lambda item: item.as_posix()):
             snapshot_env = environment.copy()
             snapshot_env["JHT_ACL_PATH"] = str(acl_path)
             raw = subprocess.run(
@@ -302,8 +331,16 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
                 text=True,
                 check=True,
             ).stdout
-            digests.append(hashlib.sha256(raw.encode()).hexdigest())
-        return (_tree_snapshot(local), *digests)
+            digests.append(
+                (
+                    "."
+                    if acl_path == local
+                    else acl_path.relative_to(local).as_posix(),
+                    "directory" if acl_path.is_dir() else "file",
+                    hashlib.sha256(raw.encode()).hexdigest(),
+                )
+            )
+        return (_tree_snapshot(local), tuple(digests))
     read_acl = tmp_path / "add-read-only-ace.ps1"
     _write_powershell_fixture(
         read_acl,

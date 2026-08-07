@@ -267,7 +267,9 @@ def _protect_directory(path: Path) -> None:
         "$acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::All);"
         "$acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User);"
         "$acl.SetAccessRuleProtection($true,$false);"
-        "foreach($identity in @($acl.Access | ForEach-Object {$_.IdentityReference} | "
+        "foreach($identity in @($acl.GetAccessRules($true,$true,"
+        "[Security.Principal.SecurityIdentifier]) | "
+        "ForEach-Object {$_.IdentityReference} | "
         "Select-Object -Unique)){$acl.PurgeAccessRules($identity)};"
         "$rule=New-Object System.Security.AccessControl.FileSystemAccessRule("
         "[System.Security.Principal.WindowsIdentity]::GetCurrent().User,"
@@ -358,6 +360,31 @@ def _sddl_digest(path: Path) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def _acl_tree_snapshot(root: Path) -> tuple[tuple[str, str, str], ...]:
+    if not root.exists() or _is_reparse(root):
+        return ()
+    nodes = [root]
+    if root.is_dir():
+        pending = [root]
+        while pending:
+            directory = pending.pop()
+            for entry in sorted(os.scandir(directory), key=lambda item: item.name):
+                path = Path(entry.path)
+                if _is_reparse(path):
+                    continue
+                nodes.append(path)
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append(path)
+    return tuple(
+        (
+            "." if path == root else path.relative_to(root).as_posix(),
+            "directory" if path.is_dir() else "file",
+            _sddl_digest(path),
+        )
+        for path in sorted(nodes, key=lambda item: item.as_posix())
+    )
+
+
 def _authority_census(path: Path) -> dict[str, object]:
     raw = _run_powershell_command(
         "$full=[IO.Path]::GetFullPath($env:JHT_TEST_AUTHORITY_PATH);"
@@ -387,7 +414,7 @@ def _authority_census(path: Path) -> dict[str, object]:
         "(([Security.AccessControl.FileSystemRights]$rule.FileSystemRights "
         "-band $mask) -eq 0)){continue};$sid=$rule.IdentityReference.Value;"
         "if($sid -notin @($current,'S-1-5-18','S-1-5-32-544')){$foreign++}};"
-        "[ordered]@{directory=[bool]$item.PSIsContainer;"
+        "[ordered]@{directory=[bool]($item -is [IO.DirectoryInfo]);"
         "owner_current=($owner -eq $current);"
         "acl_protected=[bool]$acl.AreAccessRulesProtected;"
         "reparse_ancestor=$reparse;foreign_mutating=$foreign} | "
@@ -426,16 +453,13 @@ def _assert_authority(
 def _side_effect_snapshot(
     target_dir: Path, state: Path, transaction: Path
 ) -> tuple[object, ...]:
-    acl_digests = tuple(
-        _sddl_digest(path)
-        for path in (target_dir, state, transaction)
-        if path.exists() and not _is_reparse(path)
-    )
     return (
         _tree_snapshot(target_dir),
         _tree_snapshot(state),
         _tree_snapshot(transaction),
-        acl_digests,
+        _acl_tree_snapshot(target_dir),
+        _acl_tree_snapshot(state),
+        _acl_tree_snapshot(transaction),
     )
 
 
@@ -529,7 +553,8 @@ def _run_verify(
         local_authority = tmp_path / "local-app-data"
         local_authority.mkdir()
         _protect_directory(local_authority)
-        state = local_authority / "updates"
+        helper_env["LOCALAPPDATA"] = str(local_authority)
+        state = local_authority / "Job Hunter Team" / "host-runtime"
         consumer_inherited_state = True
     transaction = state / nonce
     transaction.mkdir(parents=True)
@@ -1104,7 +1129,9 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
     local_authority = tmp_path / "local-app-data"
     local_authority.mkdir()
     _protect_directory(local_authority)
-    state = local_authority / "updates"
+    helper_env = os.environ.copy()
+    helper_env["LOCALAPPDATA"] = str(local_authority)
+    state = local_authority / "Job Hunter Team" / "host-runtime"
     transaction = state / nonce
     transaction.mkdir(parents=True)
     _set_current_owner(state)
@@ -1219,6 +1246,7 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            env=helper_env,
         )
         ready = transaction / "ready.json"
         deadline = time.monotonic() + 15
@@ -1255,6 +1283,7 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
             text=True,
             capture_output=True,
             timeout=30,
+            env=helper_env,
         )
         assert recovered.returncode != 0, recovered.stderr
         assert target.read_bytes() == old_bytes

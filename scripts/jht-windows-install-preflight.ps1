@@ -146,7 +146,7 @@ function Protect-Node {
   param([IO.FileSystemInfo]$Node)
   $acl = Get-NodeAcl $Node
   $acl.SetAccessRuleProtection($true, $false)
-  $inheritance = if ($Node.PSIsContainer) {
+  $inheritance = if ($Node -is [IO.DirectoryInfo]) {
     [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
   } else {
     [Security.AccessControl.InheritanceFlags]::None
@@ -169,8 +169,9 @@ function Get-TreeNodes {
     $directory = $pending.Pop()
     Write-Output $directory
     foreach ($child in $directory.EnumerateFileSystemInfos()) {
-      [JhtInstallerFileIdentity]::AssertNode($child.FullName, $child.PSIsContainer)
-      if ($child.PSIsContainer) {
+      $isDirectory = $child -is [IO.DirectoryInfo]
+      [JhtInstallerFileIdentity]::AssertNode($child.FullName, $isDirectory)
+      if ($isDirectory) {
         $pending.Push([IO.DirectoryInfo]$child)
       } else {
         Write-Output $child
@@ -193,7 +194,8 @@ function Assert-Ancestors {
 function Assert-Tree {
   param([IO.DirectoryInfo]$Root, [switch]$RequireProtectedRoot)
   foreach ($node in Get-TreeNodes $Root) {
-    [JhtInstallerFileIdentity]::AssertNode($node.FullName, $node.PSIsContainer)
+    [JhtInstallerFileIdentity]::AssertNode(
+      $node.FullName, ($node -is [IO.DirectoryInfo]))
     Assert-OwnerAndAcl $node -RequireProtected:(
       $RequireProtectedRoot -and $node.FullName -eq $Root.FullName)
   }
