@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
-import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -30,23 +29,24 @@ export async function POST(req: NextRequest) {
     return invalidJsonBody();
   }
   const name = String(body.name || "").trim();
-  if (!name) {
+  if (!name || name.length > 255 || /[\x00-\x1f\x7f]/.test(name)) {
     return NextResponse.json({ error: "nome file richiesto" }, { status: 400 });
   }
 
   // INSERT via sessione utente: la RLS (file_bridge_requests insert own)
-  // garantisce user_id = auth.uid().
+  // garantisce user_id = auth.uid(); i grant di colonna non permettono al
+  // browser di scegliere id, stato, scadenza o percorso Storage.
   const { data, error } = await supabase
     .from("file_bridge_requests")
-    .insert({ user_id: user.id, file_name: name, status: "pending" })
+    .insert({ user_id: user.id, file_name: name })
     .select("id")
     .single();
 
   if (error) {
-    return sanitizedError(error, {
-      status: 500,
-      scope: "profile/files/request",
-    });
+    return NextResponse.json(
+      { error: "request_create_failed" },
+      { status: 500 },
+    );
   }
   return NextResponse.json({ requestId: data.id });
 }

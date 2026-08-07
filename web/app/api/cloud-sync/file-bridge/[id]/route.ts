@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
-import path from "path";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
-import { sanitizedError } from "@/lib/error-response";
+import { canonicalFileBridgeStoragePath } from "@/lib/file-bridge-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -60,13 +59,13 @@ export async function PATCH(
   // Carica la richiesta (e verifica appartenenza al token).
   const { data: row, error: readErr } = await admin
     .from("file_bridge_requests")
-    .select("id, file_name, status")
+    .select("id, status")
     .eq("id", id)
     .eq("user_id", userId)
     .maybeSingle();
   if (readErr) {
     return NextResponse.json(
-      { ok: false, error: readErr.message },
+      { ok: false, error: "request_query_failed" },
       { status: 500 },
     );
   }
@@ -79,14 +78,12 @@ export async function PATCH(
 
   // ── uploading: claim atomico + signed upload URL ───────────────────
   if (status === "uploading") {
-    const safeName = path.basename(row.file_name);
-    const storagePath = `${userId}/${id}/${safeName}`;
+    const storagePath = canonicalFileBridgeStoragePath(userId, id);
 
     const { data: claimed, error: claimErr } = await admin
       .from("file_bridge_requests")
       .update({
         status: "uploading",
-        storage_path: storagePath,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -96,7 +93,7 @@ export async function PATCH(
       .maybeSingle();
     if (claimErr) {
       return NextResponse.json(
-        { ok: false, error: claimErr.message },
+        { ok: false, error: "request_claim_failed" },
         { status: 500 },
       );
     }
@@ -118,10 +115,7 @@ export async function PATCH(
         .eq("id", id)
         .eq("user_id", userId);
       return NextResponse.json(
-        {
-          ok: false,
-          error: `signed upload url failed: ${signErr?.message || "unknown"}`,
-        },
+        { ok: false, error: "signed_upload_failed" },
         { status: 500 },
       );
     }
@@ -147,23 +141,31 @@ export async function PATCH(
     update.error = (body.error || "unknown").slice(0, 2000);
   }
 
-  const { data, error } = await admin
+  let transition = admin
     .from("file_bridge_requests")
     .update(update)
     .eq("id", id)
-    .eq("user_id", userId)
+    .eq("user_id", userId);
+  // A file is ready only after this token successfully claimed an upload.
+  // Error may close either a pending request or an in-progress upload, but
+  // cannot rewrite a served/expired request.
+  transition =
+    status === "ready"
+      ? transition.eq("status", "uploading")
+      : transition.in("status", ["pending", "uploading"]);
+  const { data, error } = await transition
     .select("id, status")
     .maybeSingle();
   if (error) {
-    return sanitizedError(error, {
-      status: 500,
-      scope: "cloud-sync/file-bridge/[id]",
-    });
+    return NextResponse.json(
+      { ok: false, error: "request_transition_failed" },
+      { status: 500 },
+    );
   }
   if (!data) {
     return NextResponse.json(
-      { ok: false, error: "request not found" },
-      { status: 404 },
+      { ok: false, error: "invalid_state_transition" },
+      { status: 409 },
     );
   }
   return NextResponse.json({ ok: true, request: data });
