@@ -15,6 +15,15 @@ const LANG_CFG := "user://lang.cfg"
 ## dalla stessa lingua prevedibile su ogni installazione nuova.
 const DEFAULT_LANG := "en"
 
+## Valori legacy emessi dai payload VPS. Restano invariati sul filo e nei dati;
+## questa mappa è esclusivamente il confine di presentazione della UI Godot.
+const VPS_PRESENTATION_ERROR_KEYS := {
+	"percorso fuori dalle aree dati": "vps.artifact.path_outside",
+	"file non trovato sul container": "vps.artifact.file_missing",
+	"file oltre i 10 MB": "vps.upload.file_too_large",
+	"posizione inesistente": "vps.ticket.position_missing",
+}
+
 static var lang := DEFAULT_LANG
 
 ## Solo l'oracolo di persistenza sostituisce il file utente: le sue due
@@ -98,6 +107,11 @@ static func set_lang(l: String, persist := true, config_path := "") -> bool:
 
 static func t(key: String) -> String:
 	return _translated(key, lang, _translations() if lang != "it" else {})
+
+
+static func present_vps_error(raw: String) -> String:
+	var key := str(VPS_PRESENTATION_ERROR_KEYS.get(raw, ""))
+	return t(key) if key != "" else raw
 
 
 ## Lookup puro tenuto separato per provare il fallback con cataloghi sintetici:
@@ -1761,4 +1775,28 @@ const S := {
 	"feedback.report.doing": "Cosa stavo facendo", "feedback.report.happened": "Cosa è successo",
 	"feedback.report.expected": "Cosa mi aspettavo", "feedback.report.diagnostics": "Diagnostica",
 	"feedback.report.redacted": "Dati rimossi prima dell’invio",
+	"time.yesterday": "ieri",
+	"vps.upload.file_missing": "file non trovato: %s",
+	"vps.upload.extension_denied": "estensione non ammessa: .%s",
+	"vps.upload.file_unreadable": "file non leggibile", "vps.upload.file_too_large": "file oltre i 10 MB",
+	"vps.response_unreadable": "risposta illeggibile dalla VPS",
+	"vps.artifact.path_outside": "percorso fuori dalle aree dati",
+	"vps.artifact.file_missing": "file non trovato nel container",
+	"vps.ticket.position_missing": "posizione inesistente",
+	"diagnostics.section.app": "Applicazione", "diagnostics.section.system": "Sistema",
+	"diagnostics.section.runtime": "Runtime", "diagnostics.field.version": "versione",
+	"diagnostics.field.engine": "motore", "diagnostics.field.ui_language": "lingua UI",
+	"diagnostics.field.session": "sessione", "diagnostics.field.debug_build": "build di debug",
+	"diagnostics.field.system": "sistema", "diagnostics.field.processor": "processore",
+	"diagnostics.field.locale": "locale", "diagnostics.field.available_ram": "RAM disponibile",
+	"diagnostics.field.distribution": "distribuzione", "diagnostics.field.video": "video",
+	"diagnostics.field.screen": "schermo", "diagnostics.field.reduced_graphics": "grafica ridotta",
+	"diagnostics.field.data_folder_present": "cartella dati presente",
+	"diagnostics.value.screen_window": "%s (finestra %s)",
+	"diagnostics.value.backend_local": "locale", "diagnostics.value.unavailable": "non disponibile",
+	"diagnostics.value.none": "nessuno", "diagnostics.log_title": "Log: %s",
+	"diagnostics.redacted": "Dati rimossi prima dell’invio",
+	"diagnostics.container_logs_unavailable": "[log container non disponibili] %s",
+	"diagnostics.truncated": "[…troncato…]\n%s",
+	"diagnostics.lines_omitted": "[…%d righe precedenti omesse…]\n%s",
 }
