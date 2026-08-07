@@ -1479,6 +1479,11 @@
       "path": "game/assets/icons/SOURCES.md",
       "description": "Provenienza ufficiale, condizioni d'uso e varianti Docker/Telegram immutate impiegate dalle icone della sidebar Godot",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-07-LEGAL-COPY-DRAFT.md",
+      "description": "Audit pre-release e bozze EN versionate di Privacy e Termini, con flussi reali, copy condiviso web/desktop e decisioni legali esplicitamente aperte",
+      "last_review": null
     }
   ]
 }

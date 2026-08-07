@@ -22,7 +22,8 @@ Organizzate per **categoria** in sotto-cartelle. Come scrivere una nuova nota: v
 
 File di root: [`landing-image-prompts.md`](landing-image-prompts.md) (prompt immagini del sito + rifiniture aperte) ·
 [`2026-07-25-audit-doc-code-drift.md`](2026-07-25-audit-doc-code-drift.md) (audit doc↔codice del ciclo native: cosa era slittato, cosa è stato riallineato, che debito resta e sotto quale tag cercarlo) ·
-[`2026-08-07-setup-guide-content-contract.md`](2026-08-07-setup-guide-content-contract.md) (contratto P0 per struttura, copy EN, naming, screenshot e riuso della guida setup non pubblicata).
+[`2026-08-07-setup-guide-content-contract.md`](2026-08-07-setup-guide-content-contract.md) (contratto P0 per struttura, copy EN, naming, screenshot e riuso della guida setup non pubblicata) ·
+[`2026-08-07-LEGAL-COPY-DRAFT.md`](2026-08-07-LEGAL-COPY-DRAFT.md) (audit pre-release e bozze EN di Privacy e Termini, con copy condiviso web/desktop e decisioni legali lasciate esplicitamente all'operatore).
 Il log review è in [`../REVIEW-LOG.md`](../REVIEW-LOG.md).
 
 > Il canone narrativo delle Cronache è **archiviato con la pagina** (tolta dal sito
