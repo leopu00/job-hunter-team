@@ -84,6 +84,8 @@ func _test_secrets_are_removed() -> void:
 			FAKE_BEARER, "Bearer [secret]")
 	_scrubbed("basic auth", "Authorization: Basic " + FAKE_BASIC,
 			FAKE_BASIC, "Basic [secret]")
+	_scrubbed("basic auth corta", "Authorization: Basic YTo=",
+			"YTo=", "Basic [secret]")
 	_scrubbed("AWS access key", "aws_access_key_id=" + FAKE_AWS,
 			FAKE_AWS, "[aws-access-key]")
 	_scrubbed("token Slack", "Slack bot token " + FAKE_SLACK,
@@ -143,6 +145,10 @@ func _test_paths_and_documents() -> void:
 			win.contains("C:\\Users\\[user]\\AppData"), win)
 	var linux: String = RedactorScript.redact("home=/home/sample-user/.jht")
 	_check("home Linux", not linux.contains("sample-user"), linux)
+	var linux_line: String = RedactorScript.redact(
+			"open /home/sample-user failed: permission denied")
+	_check("home Linux conserva coda diagnostica",
+			linux_line.contains("failed: permission denied"), linux_line)
 	var doc: String = RedactorScript.redact(
 			"allegato CV_Avery_Example_2026.pdf caricato")
 	_check("nome documento", not doc.contains("Avery_Example"), doc)
@@ -173,6 +179,9 @@ func _test_known_names() -> void:
 ## Il rischio speculare della redazione: se mangia le righe di telemetria, il
 ## report arriva pulito e inutile.
 func _test_diagnostic_lines_survive() -> void:
+	for auth_prose in ["Bearer authentication failed", "Basic authentication enabled"]:
+		_check("prosa auth intatta", RedactorScript.redact(auth_prose) == auth_prose,
+				RedactorScript.redact(auth_prose))
 	var perf := "[perf] fps=42 frame_ms=23.8 draw_calls=1147 nodes=3204 mem_mb=512"
 	_check("riga perf intatta", RedactorScript.redact(perf) == perf,
 			RedactorScript.redact(perf))
@@ -190,7 +199,8 @@ func _test_diagnostic_lines_survive() -> void:
 func _test_residual_check() -> void:
 	var dirty := "mail avery@example.com e token " + FAKE_GH
 	_check("residuo rilevato prima", RedactorScript.has_residual_secret(dirty), dirty)
-	for secret in ["Bearer " + FAKE_BEARER, "Basic " + FAKE_BASIC,
+	for secret in ["Authorization: Bearer " + FAKE_BEARER,
+			"Authorization: Basic " + FAKE_BASIC,
 			FAKE_AWS, FAKE_SLACK, FAKE_GEMINI]:
 		_check("nuovo residuo rilevato", RedactorScript.has_residual_secret(secret),
 				"famiglia non coperta")

@@ -33,18 +33,21 @@ const RULES: Array[Dictionary] = [
 		"replace": "[private-key]",
 	},
 	{
-		# Header HTTP: il nome della credenziale non e' assegnato con `=` o
-		# `:`, quindi la regola assigned_secret non puo' intercettarlo.
+		# Header HTTP: il contesto Authorization e' obbligatorio. La parola
+		# "Bearer" compare anche in prosa diagnostica e da sola non prova che
+		# il token successivo sia una credenziale.
 		"key": "bearer_token",
 		"family": "secret",
-		"pattern": r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{6,}",
-		"replace": "Bearer [secret]",
+		"pattern": r"(?i)\b((?:Proxy-)?Authorization\s*:?\s*Bearer)\s+[A-Za-z0-9._~+/=-]{6,}",
+		"replace": "$1 [secret]",
 	},
 	{
+		# Una Basic credential e' Base64 valida, anche corta (`YTo=`). Il
+		# contesto evita di redigere frasi innocue come "Basic authentication".
 		"key": "basic_auth",
 		"family": "secret",
-		"pattern": r"(?i)\bBasic\s+[A-Za-z0-9+/]{8,}={0,2}",
-		"replace": "Basic [secret]",
+		"pattern": r"(?i)\b((?:Proxy-)?Authorization\s*:?\s*Basic)\s+(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)",
+		"replace": "$1 [secret]",
 	},
 	{
 		# Access key id AWS: 4 caratteri di prefisso + 16 maiuscoli/cifre.
@@ -169,12 +172,18 @@ const RULES: Array[Dictionary] = [
 		"replace": "[ip]",
 	},
 	{
-		# Il nome utente del sistema operativo è un identificativo diretto e
-		# compare in ogni path assoluto dei log. Gli spazi sono ammessi nel
-		# componente: `C:\Users\Avery Example\...` e' un path Windows valido.
-		"key": "home_path",
+		# Windows ammette spazi nel componente utente. Drive e backslash
+		# distinguono questo caso da /Users e /home POSIX, dove estendere il
+		# match agli spazi divorerebbe la prosa diagnostica dopo il path.
+		"key": "home_path_windows",
 		"family": "personal",
-		"pattern": r"(?i)([/\\](?:Users|home)[/\\])([^/\\\r\n\t\x22\x27:;,)\]]+)",
+		"pattern": r"(?i)((?:[A-Z]:[/\\]|\\)Users[/\\])([^/\\\r\n\t\x22\x27:;,)\]]+)",
+		"replace": "$1[user]",
+	},
+	{
+		"key": "home_path_posix",
+		"family": "personal",
+		"pattern": r"(?i)((?:/Users|/home)/)([^/\s\x22\x27:;,)\]]+)",
 		"replace": "$1[user]",
 	},
 	{
