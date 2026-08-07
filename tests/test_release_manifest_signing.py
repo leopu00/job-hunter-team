@@ -605,15 +605,23 @@ def test_release_workflow_stops_before_unsigned_publication() -> None:
     assert public_key_id(ROOT / "scripts/release-keys/production-spki.pem") == (
         "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
     )
-    assert prepare.index("Embed the pinned Windows release trust root") < (
+    assert public_key_id(ROOT / "game/release-keys/production-spki.pem") == (
+        "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
+    )
+    assert (ROOT / "game/release-keys/production-spki.pem").read_bytes() == (
+        ROOT / "scripts/release-keys/production-spki.pem"
+    ).read_bytes()
+    assert "*release-keys/*.pem" in (
+        ROOT / "game/export_presets.cfg"
+    ).read_text()
+    assert "cmp scripts/release-keys/production-spki.pem " in prepare
+    assert "game/release-keys/production-spki.pem" in prepare
+    assert prepare.index(
+        "Attest the pinned Windows release trust root in the project"
+    ) < (
         prepare.index("Export native game")
     )
-    assert prepare.index("Fail closed before the Windows trust root is embedded") < (
-        prepare.index("Embed the pinned Windows release trust root")
-    )
-    assert 'test "$trust_rc" -eq 1' in prepare
-    assert '"WINDOWS-UPDATE-TRUST-TEST FAIL"' in prepare
-    assert 'grep -Fq "SCRIPT ERROR"' in prepare
+    assert '"WINDOWS-UPDATE-TRUST-TEST PASS"' in prepare
     assert publish.index("name: signed-release-candidate") < publish.index(
         "  installer:"
     )

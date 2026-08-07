@@ -145,20 +145,56 @@ function Assert-OwnerAndAcl {
 function Protect-Node {
   param([IO.FileSystemInfo]$Node)
   $acl = Get-NodeAcl $Node
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $acl.SetOwner($currentSid)
   $acl.SetAccessRuleProtection($true, $false)
+  foreach ($identity in @($acl.GetAccessRules(
+      $true, $true, [Security.Principal.SecurityIdentifier]) |
+      ForEach-Object { $_.IdentityReference } | Select-Object -Unique)) {
+    $acl.PurgeAccessRules($identity)
+  }
   $inheritance = if ($Node -is [IO.DirectoryInfo]) {
     [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
   } else {
     [Security.AccessControl.InheritanceFlags]::None
   }
   $rule = [Security.AccessControl.FileSystemAccessRule]::new(
-    [Security.Principal.WindowsIdentity]::GetCurrent().User,
+    $currentSid,
     [Security.AccessControl.FileSystemRights]::FullControl,
     $inheritance,
     [Security.AccessControl.PropagationFlags]::None,
     [Security.AccessControl.AccessControlType]::Allow)
   $acl.SetAccessRule($rule)
   Set-NodeAcl $Node $acl
+}
+
+function Assert-PostWritePayload {
+  param([IO.FileInfo]$Node)
+  $acl = Get-NodeAcl $Node
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $ownerSid = $acl.GetOwner(
+    [Security.Principal.SecurityIdentifier]).Value
+  if ($ownerSid -notin @($currentSid, 'S-1-5-18', 'S-1-5-32-544')) {
+    throw 'installed payload has an unexpected owner'
+  }
+  $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor
+    [Security.AccessControl.FileSystemRights]::AppendData -bor
+    [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+    [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+    [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+    [Security.AccessControl.FileSystemRights]::Delete -bor
+    [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+    [Security.AccessControl.FileSystemRights]::TakeOwnership
+  foreach ($rule in $acl.GetAccessRules(
+      $true, $true, [Security.Principal.SecurityIdentifier])) {
+    if ($rule.AccessControlType -ne 'Allow') { continue }
+    $rights = [Security.AccessControl.FileSystemRights]$rule.FileSystemRights
+    if (($rights -band $writeMask) -eq 0) { continue }
+    if ($rule.IdentityReference.Value -notin @(
+        $currentSid, 'S-1-5-18', 'S-1-5-32-544')) {
+      throw 'installed payload grants write to another principal'
+    }
+  }
 }
 
 function Get-TreeNodes {
@@ -243,16 +279,35 @@ if ($Mode -eq 'Prepare') {
   exit 0
 }
 
-foreach ($required in @(
+$requiredPaths = @(
     'job-hunter-team.exe',
     'icon.ico',
     'jht-windows-update.ps1',
     'RELEASE-MANIFEST.json',
     'RELEASE-MANIFEST.json.sig',
-    'Uninstall.exe')) {
-  $path = Join-Path $requested $required
+    'Uninstall.exe') | ForEach-Object { Join-Path $requested $_ }
+foreach ($path in $requiredPaths) {
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-    throw "installed payload is missing: $required"
+    throw 'installed payload is missing'
   }
+}
+
+# The installer writes these embedded bytes only after Prepare completed. Do a
+# full read-only identity/ACL census first; only then normalize the known
+# payload nodes to the current owner and an owner-only protected DACL.
+$payloads = [Collections.Generic.HashSet[string]]::new(
+  [StringComparer]::OrdinalIgnoreCase)
+foreach ($path in $requiredPaths) { $null = $payloads.Add([IO.Path]::GetFullPath($path)) }
+$nodes = @(Get-TreeNodes $root)
+foreach ($node in $nodes) {
+  if ($payloads.Contains($node.FullName)) {
+    if ($node -isnot [IO.FileInfo]) { throw 'installed payload is not a file' }
+    Assert-PostWritePayload ([IO.FileInfo]$node)
+  } else {
+    Assert-OwnerAndAcl $node
+  }
+}
+foreach ($node in $nodes) {
+  if ($payloads.Contains($node.FullName)) { Protect-Node $node }
 }
 Assert-Tree $root -RequireProtectedRoot

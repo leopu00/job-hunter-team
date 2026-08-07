@@ -53,6 +53,7 @@ $OldManifestBackupPath = Join-Path $AuthorityBackupDir 'RELEASE-MANIFEST.json'
 $OldSignatureBackupPath = Join-Path $AuthorityBackupDir 'RELEASE-MANIFEST.json.sig'
 $script:LockOwnerStarted = [Diagnostics.Process]::GetCurrentProcess().StartTime.ToUniversalTime().Ticks.ToString()
 $script:FailurePhase = 'location'
+$script:FailureCode = 'location_init'
 
 if (-not ('JhtUpdateFileIdentity' -as [type])) {
   Add-Type -TypeDefinition @'
@@ -715,39 +716,55 @@ function Acquire-Lock {
 }
 
 function Assert-SafeLocationPlan {
+  $script:FailureCode = 'location_resolve'
   $target = [IO.Path]::GetFullPath($TargetPath)
   $targetDir = [IO.Path]::GetDirectoryName($target)
   $state = [IO.Path]::GetFullPath($StateRoot).TrimEnd('\','/')
   $transaction = [IO.Path]::GetFullPath($TxnDir)
   $legacy = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE '.jht')).TrimEnd('\','/')
   $documents = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE 'Documents\Job Hunter Team')).TrimEnd('\','/')
+  $script:FailureCode = 'location_forbidden_root'
   foreach ($path in @($targetDir, $state)) {
     foreach ($forbidden in @($legacy, $documents)) {
       if ($path.Equals($forbidden, [StringComparison]::OrdinalIgnoreCase) -or $path.StartsWith($forbidden + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'update authority is inside a container-writable path' }
     }
   }
+  $script:FailureCode = 'location_fixed_binding'
   $fixed = @(
-    @([IO.Path]::GetFullPath($CandidatePath), (Join-Path $targetDir ('.jht-update-' + $Nonce + '.candidate.exe'))),
-    @([IO.Path]::GetFullPath($CandidateHelperPath), (Join-Path $transaction $AllowedHelperName)),
-    @([IO.Path]::GetFullPath($CandidateManifestPath), (Join-Path $transaction 'RELEASE-MANIFEST.json')),
-    @([IO.Path]::GetFullPath($CandidateSignaturePath), (Join-Path $transaction 'RELEASE-MANIFEST.json.sig')),
-    @([IO.Path]::GetFullPath($InstalledManifestPath), (Join-Path $targetDir 'RELEASE-MANIFEST.json')),
-    @([IO.Path]::GetFullPath($InstalledSignaturePath), (Join-Path $targetDir 'RELEASE-MANIFEST.json.sig')),
-    @([IO.Path]::GetFullPath($PSCommandPath), (Join-Path $targetDir $AllowedHelperName))
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($CandidatePath); Expected = Join-Path $targetDir ('.jht-update-' + $Nonce + '.candidate.exe') },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($CandidateHelperPath); Expected = Join-Path $transaction $AllowedHelperName },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($CandidateManifestPath); Expected = Join-Path $transaction 'RELEASE-MANIFEST.json' },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($CandidateSignaturePath); Expected = Join-Path $transaction 'RELEASE-MANIFEST.json.sig' },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($InstalledManifestPath); Expected = Join-Path $targetDir 'RELEASE-MANIFEST.json' },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($InstalledSignaturePath); Expected = Join-Path $targetDir 'RELEASE-MANIFEST.json.sig' },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($PSCommandPath); Expected = Join-Path $targetDir $AllowedHelperName }
   )
-  foreach ($pair in $fixed) { if (-not $pair[0].Equals([IO.Path]::GetFullPath($pair[1]), [StringComparison]::OrdinalIgnoreCase)) { throw 'update path does not match its fixed protected location' } }
+  foreach ($pair in $fixed) { if (-not $pair.Actual.Equals([IO.Path]::GetFullPath($pair.Expected), [StringComparison]::OrdinalIgnoreCase)) { throw 'update path does not match its fixed protected location' } }
   foreach ($path in @($targetDir, $StateRoot, $TxnDir, $TargetPath, $CandidateHelperPath, $InstalledManifestPath, $InstalledSignaturePath, $CandidateManifestPath, $CandidateSignaturePath, $PSCommandPath)) {
+    $script:FailureCode = 'location_node_reparse'
     Assert-NoReparseAncestors $path
+    $script:FailureCode = 'location_node_owner'
     Assert-CurrentOwner $path
-    if (Test-Path -LiteralPath $path -PathType Leaf) { $null = Get-Sha256 $path }
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+      $script:FailureCode = 'location_node_read'
+      $null = Get-Sha256 $path
+    }
   }
+  $script:FailureCode = 'location_state_acl'
   foreach ($directory in @($StateRoot, $TxnDir)) { Assert-NoForeignWriteAcl $directory }
-  if (Test-Path -LiteralPath $CandidatePath -PathType Leaf) { Assert-NoReparseAncestors $CandidatePath; Assert-CurrentOwner $CandidatePath; $null = Get-Sha256 $CandidatePath }
-  if (Test-Path -LiteralPath $AuthorityBackupDir -PathType Container) {
-    Assert-NoReparseAncestors $AuthorityBackupDir
-    Assert-CurrentOwner $AuthorityBackupDir
-    foreach ($path in @($OldHelperBackupPath, $OldManifestBackupPath, $OldSignatureBackupPath)) { if (Test-Path -LiteralPath $path -PathType Leaf) { Assert-NoReparseAncestors $path; Assert-CurrentOwner $path } }
+  if (Test-Path -LiteralPath $CandidatePath -PathType Leaf) {
+    $script:FailureCode = 'location_candidate_reparse'; Assert-NoReparseAncestors $CandidatePath
+    $script:FailureCode = 'location_candidate_owner'; Assert-CurrentOwner $CandidatePath
+    $script:FailureCode = 'location_candidate_read'; $null = Get-Sha256 $CandidatePath
   }
+  if (Test-Path -LiteralPath $AuthorityBackupDir -PathType Container) {
+    $script:FailureCode = 'location_backup_reparse'
+    Assert-NoReparseAncestors $AuthorityBackupDir
+    $script:FailureCode = 'location_backup_owner'
+    Assert-CurrentOwner $AuthorityBackupDir
+    foreach ($path in @($OldHelperBackupPath, $OldManifestBackupPath, $OldSignatureBackupPath)) { if (Test-Path -LiteralPath $path -PathType Leaf) { $script:FailureCode = 'location_backup_child_reparse'; Assert-NoReparseAncestors $path; $script:FailureCode = 'location_backup_child_owner'; Assert-CurrentOwner $path } }
+  }
+  $script:FailureCode = 'location_target_acl'
   Assert-OwnerAndAcl $targetDir -Directory
 }
 
@@ -775,14 +792,14 @@ function Assert-Paths {
     HelperPath = Join-Path $targetDir $AllowedHelperName
   }
   foreach ($pair in @(
-    @($candidate, $expected.CandidatePath),
-    @([IO.Path]::GetFullPath($CandidateHelperPath), $expected.CandidateHelperPath),
-    @([IO.Path]::GetFullPath($CandidateManifestPath), $expected.CandidateManifestPath),
-    @([IO.Path]::GetFullPath($CandidateSignaturePath), $expected.CandidateSignaturePath),
-    @([IO.Path]::GetFullPath($InstalledManifestPath), $expected.InstalledManifestPath),
-    @([IO.Path]::GetFullPath($InstalledSignaturePath), $expected.InstalledSignaturePath),
-    @([IO.Path]::GetFullPath($PSCommandPath), $expected.HelperPath)
-  )) { if (-not $pair[0].Equals([IO.Path]::GetFullPath($pair[1]), [StringComparison]::OrdinalIgnoreCase)) { throw 'update path does not match its fixed protected location' } }
+    [pscustomobject]@{ Actual = $candidate; Expected = $expected.CandidatePath },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($CandidateHelperPath); Expected = $expected.CandidateHelperPath },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($CandidateManifestPath); Expected = $expected.CandidateManifestPath },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($CandidateSignaturePath); Expected = $expected.CandidateSignaturePath },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($InstalledManifestPath); Expected = $expected.InstalledManifestPath },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($InstalledSignaturePath); Expected = $expected.InstalledSignaturePath },
+    [pscustomobject]@{ Actual = [IO.Path]::GetFullPath($PSCommandPath); Expected = $expected.HelperPath }
+  )) { if (-not $pair.Actual.Equals([IO.Path]::GetFullPath($pair.Expected), [StringComparison]::OrdinalIgnoreCase)) { throw 'update path does not match its fixed protected location' } }
   $legacy = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE '.jht')).TrimEnd('\','/')
   $documents = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE 'Documents\Job Hunter Team')).TrimEnd('\','/')
   foreach ($path in @($targetDir, $state)) {
@@ -1162,11 +1179,14 @@ $lockHeld = $false
 try {
   Assert-SafeLocationPlan
   $script:FailurePhase = 'trust'
+  $script:FailureCode = 'trust_failed'
   Assert-PreMutationTrust
   $script:FailurePhase = 'state'
+  $script:FailureCode = 'state_failed'
   Initialize-ProtectedDirectory $StateRoot
   Initialize-ProtectedDirectory $TxnDir
   $script:FailurePhase = 'lock'
+  $script:FailureCode = 'lock_failed'
   Acquire-Lock; $lockHeld = $true
   Remove-Item -LiteralPath $ResultPath -Force -ErrorAction SilentlyContinue
   if ($Mode -eq 'Recover') { Invoke-Recover } else { Invoke-Apply }
@@ -1184,7 +1204,7 @@ try {
   } else {
     [Console]::Error.WriteLine(
       'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=' + $script:FailurePhase +
-      ' code=pre_lock_failed')
+      ' code=' + $script:FailureCode)
     $exitCode = 1
   }
 } finally {

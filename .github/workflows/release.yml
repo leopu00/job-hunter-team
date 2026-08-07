@@ -195,37 +195,26 @@ jobs:
           GFXPANEL_OUT="$(retry_godot JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1 godot --headless --path game)"
           printf '%s\n' "$GFXPANEL_OUT" | grep "GRAPHICS-PANEL-TEST PASS"
 
-      - name: Fail closed before the Windows trust root is embedded
-        if: runner.os == 'Windows'
-        run: |
-          test ! -e game/release-keys/production-spki.pem
-          set +e
-          trust_out="$(env JHT_NOVPS=1 JHT_WINDOWS_UPDATE_TRUST_TEST=1 \
-            godot --headless --path game --quit-after 120 2>&1)"
-          trust_rc=$?
-          set -e
-          printf '%s\n' "$trust_out"
-          test "$trust_rc" -eq 1
-          printf '%s\n' "$trust_out" | tr -d '\r' | grep -Fx \
-            "WINDOWS-UPDATE-TRUST-TEST FAIL"
-          if printf '%s\n' "$trust_out" | grep -Fq "SCRIPT ERROR"; then
-            echo "::error::missing trust root caused a script error instead of a closed failure"
-            exit 1
-          fi
-
-      - name: Embed the pinned Windows release trust root
+      - name: Attest the pinned Windows release trust root in the project
         if: runner.os == 'Windows'
         run: |
           test "$(wc -c < scripts/release-keys/production-spki.pem)" -eq 625
+          test "$(wc -c < game/release-keys/production-spki.pem)" -eq 625
+          cmp scripts/release-keys/production-spki.pem game/release-keys/production-spki.pem
           KEY_ID="$(python scripts/release_signing.py fingerprint \
-            --public-key scripts/release-keys/production-spki.pem)"
+            --public-key game/release-keys/production-spki.pem)"
           test "$KEY_ID" = "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
-          mkdir -p game/release-keys
-          cp scripts/release-keys/production-spki.pem game/release-keys/production-spki.pem
           if grep -q PRIVATE game/release-keys/production-spki.pem; then
             echo "::error::production SPKI contains private key material"
             exit 1
           fi
+          trust_out="$(env JHT_NOVPS=1 JHT_WINDOWS_UPDATE_TRUST_TEST=1 \
+            godot --headless --path game --quit-after 120 2>&1)"
+          printf '%s\n' "$trust_out"
+          printf '%s\n' "$trust_out" | tr -d '\r' | grep -Fx \
+            "WINDOWS-UPDATE-TRUST 3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
+          printf '%s\n' "$trust_out" | tr -d '\r' | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-TEST PASS"
 
       # L'export e' il passo piu' pesante e arriva dopo tutta la lista di test:
       # stessa esposizione dello step precedente, stessa difesa (game.yml la ha

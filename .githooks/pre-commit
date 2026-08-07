@@ -83,9 +83,10 @@ while IFS= read -r file; do
         continue
     fi
 
-    # Unica PEM ammessa: root PUBBLICA RSA dell'updater. Il workflow ne fissa
+    # Uniche PEM ammesse: la stessa root PUBBLICA RSA canonica e la copia nel
+    # progetto Godot esportata nel PCK. I gate impongono byte identici,
     # byte-count e fingerprint DER; tutte le private key restano vietate.
-    if [[ "$file" == "scripts/release-keys/production-spki.pem" ]]; then
+    if [[ "$file" == "scripts/release-keys/production-spki.pem" || "$file" == "game/release-keys/production-spki.pem" ]]; then
         continue
     fi
 

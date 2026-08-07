@@ -21,6 +21,7 @@ from scripts.release_signing import public_key_id, render_helper
 ROOT = Path(__file__).resolve().parents[1]
 HELPER_SOURCE = ROOT / "scripts" / "jht-windows-update.ps1"
 DESKTOP = "job-hunter-team-windows-x64-portable.exe"
+INSTALLED_DESKTOP = "job-hunter-team.exe"
 HELPER = "jht-windows-update.ps1"
 SPECS = [
     (
@@ -73,6 +74,18 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
     source = HELPER_SOURCE.read_text()
     producer = (ROOT / "scripts" / "release_manifest.py").read_text()
     assert "__JHT_RELEASE_PUBLIC_KEYS_SPKI_PEM__" in source
+    assert "$pair.Actual" in source
+    assert "$pair[0]" not in source
+    for diagnostic in (
+        "location_resolve",
+        "location_forbidden_root",
+        "location_fixed_binding",
+        "location_node_reparse",
+        "location_node_owner",
+        "location_state_acl",
+        "location_target_acl",
+    ):
+        assert diagnostic in source
     for forbidden in (
         "Invoke-Expression",
         "DownloadString",
@@ -361,7 +374,7 @@ def _sddl_digest(path: Path) -> str:
 
 
 def _acl_tree_snapshot(root: Path) -> tuple[tuple[str, str, str], ...]:
-    if not root.exists() or _is_reparse(root):
+    if _is_reparse(root) or not root.exists():
         return ()
     nodes = [root]
     if root.is_dir():
@@ -522,11 +535,17 @@ def _run_verify(
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
     private, public = rsa_keys
     candidate_private, candidate_public = rotation_keys or rsa_keys
-    target_dir = tmp_path / "installed"
+    real_local_app_data = Path(os.environ["LOCALAPPDATA"]).resolve()
+    assert tmp_path.resolve().is_relative_to(real_local_app_data)
+    local_authority = tmp_path / "local-app-data"
+    local_authority.mkdir()
+    _protect_directory(local_authority)
+    helper_env = os.environ.copy()
+    helper_env["LOCALAPPDATA"] = str(local_authority)
+    target_dir = local_authority / "Programs" / "Job Hunter Team"
     target_dir.mkdir()
     _protect_directory(target_dir)
     nonce = "a" * 32
-    helper_env = os.environ.copy()
     consumer_inherited_state = False
     if mutation in {"bind-root", "bind-descendant"}:
         fake_profile = tmp_path / "profile"
@@ -548,12 +567,6 @@ def _run_verify(
             },
         )
     else:
-        real_local_app_data = Path(os.environ["LOCALAPPDATA"]).resolve()
-        assert tmp_path.resolve().is_relative_to(real_local_app_data)
-        local_authority = tmp_path / "local-app-data"
-        local_authority.mkdir()
-        _protect_directory(local_authority)
-        helper_env["LOCALAPPDATA"] = str(local_authority)
         state = local_authority / "Job Hunter Team" / "host-runtime"
         consumer_inherited_state = True
     transaction = state / nonce
@@ -591,7 +604,7 @@ def _run_verify(
         private=private,
         public=public,
     )
-    target = target_dir / DESKTOP
+    target = target_dir / INSTALLED_DESKTOP
     shutil.copy2(installed_build / DESKTOP, target)
     shutil.copy2(installed_build / "RELEASE-MANIFEST.json", target_dir)
     shutil.copy2(installed_build / "RELEASE-MANIFEST.json.sig", target_dir)
@@ -735,6 +748,11 @@ def _run_verify(
                     authority_path,
                     directory=False,
                     protected=None,
+                    foreign_mutating=(
+                        expected_foreign
+                        if authority_path.parent == transaction
+                        else 0
+                    ),
                 )
 
     expected_success = (
@@ -789,6 +807,18 @@ def _run_verify(
             timeout=30,
             env=helper_env,
         )
+        if not expected_success:
+            location_mutations = {
+                "bind-root",
+                "bind-descendant",
+                "state-junction",
+                *FOREIGN_ACL_MUTATIONS,
+            }
+            expected_phase = (
+                "location" if mutation in location_mutations else "trust"
+            )
+            diagnostic = _helper_result_diagnostic(transaction, result.stderr)
+            assert f"phase={expected_phase}" in diagnostic, diagnostic
         if before_side_effects is not None:
             assert _side_effect_snapshot(target_dir, state, transaction) == (
                 before_side_effects
@@ -847,11 +877,11 @@ def _write_compact_json(path: Path, value: dict[str, object]) -> None:
 
 
 def _helper_result_diagnostic(transaction: Path, stderr: str = "") -> str:
+    for line in stderr.splitlines():
+        if line.startswith("JHT-WINDOWS-UPDATE-ERROR schema=1 phase="):
+            return line
     result_path = transaction / "result.json"
     if not result_path.is_file():
-        for line in stderr.splitlines():
-            if line.startswith("JHT-WINDOWS-UPDATE-ERROR schema=1 phase="):
-                return line
         return "helper result=missing"
     try:
         frame = json.loads(result_path.read_text(encoding="utf-8"))
@@ -1110,7 +1140,8 @@ def test_windows_prelock_error_is_sanitized(
     assert result.returncode != 0
     diagnostic = _helper_result_diagnostic(transaction, result.stderr)
     assert diagnostic == (
-        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=location code=pre_lock_failed"
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=location "
+        "code=location_node_reparse"
     )
     assert str(tmp_path) not in result.stderr
 
@@ -1120,9 +1151,6 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
 ) -> None:
     private, public = rsa_keys
     nonce = "b" * 32
-    target_dir = tmp_path / "installed"
-    target_dir.mkdir()
-    _protect_directory(target_dir)
     assert tmp_path.resolve().is_relative_to(
         Path(os.environ["LOCALAPPDATA"]).resolve()
     )
@@ -1131,6 +1159,9 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
     _protect_directory(local_authority)
     helper_env = os.environ.copy()
     helper_env["LOCALAPPDATA"] = str(local_authority)
+    target_dir = local_authority / "Programs" / "Job Hunter Team"
+    target_dir.mkdir()
+    _protect_directory(target_dir)
     state = local_authority / "Job Hunter Team" / "host-runtime"
     transaction = state / nonce
     transaction.mkdir(parents=True)
@@ -1156,7 +1187,7 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         private=private,
         public=public,
     )
-    target = target_dir / DESKTOP
+    target = target_dir / INSTALLED_DESKTOP
     old_bytes = (installed_build / DESKTOP).read_bytes()
     target.write_bytes(old_bytes)
     shutil.copy2(installed_build / "RELEASE-MANIFEST.json", target_dir)

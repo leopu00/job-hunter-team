@@ -75,12 +75,20 @@ def test_installer_preflight_is_handle_and_acl_fail_closed() -> None:
         "SetAccessRuleProtection($true, $false)",
         "VerifyInstalled",
         "Uninstall.exe",
+        "Assert-PostWritePayload",
+        "installed payload has an unexpected owner",
+        "Collections.Generic.HashSet[string]",
     ):
         assert seam in source
     assert "Invoke-Expression" not in source
     assert "ExecutionPolicy" not in source
     assert "FileSystemRights]::Modify -bor" not in source
     assert "FileSystemRights]::FullControl -bor" not in source
+    census_at = source.index("$nodes = @(Get-TreeNodes $root)")
+    normalize_at = source.index(
+        "if ($payloads.Contains($node.FullName)) { Protect-Node $node }"
+    )
+    assert census_at < normalize_at
 
 
 def test_acl_mutation_masks_remain_complete_and_in_sync() -> None:
