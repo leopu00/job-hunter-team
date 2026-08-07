@@ -66,7 +66,10 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
         body: untranslated(
           "Docker is required. For comfortable local use, keep about 8 GB of RAM available before starting the team. In a measured 30-minute Windows run, a 12 GB machine retained more than 4 GB free with the team and Job Hunter Team Desktop active; its 2013 2-core, 4-thread CPU completed the run without saturation. Make sure Docker has room for the team image; no universal disk minimum is stated because one has not been measured. You also need internet access and a supported provider subscription. A dedicated VPS uses a separate validated baseline: Ubuntu 24.04, 4 GB total RAM, 2 vCPU, 80 GB SSD, and 2 GB preventive swap.",
         ),
-        screen: { screenId: "S01-prerequisites" },
+        // La scheda dei requisiti è costruita nella pagina, non fotografata:
+        // vedi `RequirementsCard`. Lo slot `S01` resta dichiarato nel
+        // registro finché DOCS non conferma che l'immagine non serve più.
+        card: "requirements",
         links: [
           {
             kind: "internal",

@@ -141,7 +141,12 @@ describe("guida di setup — struttura", () => {
         c.phases.flatMap((p) => screensOf(p).map((s) => s.screenId)),
       ),
     );
-    const orphans = Object.keys(SCREENS).filter((id) => !used.has(id));
+    // Fanno eccezione le voci che dichiarano di essere rese da un blocco
+    // costruito nella pagina: restano perché il contratto le elenca, ma
+    // nessuna fase le usa finché DOCS non decide.
+    const orphans = Object.keys(SCREENS).filter(
+      (id) => !used.has(id) && !SCREENS[id].replacedByCard,
+    );
     expect(orphans).toEqual([]);
   });
 
@@ -236,7 +241,7 @@ describe("guida di setup — schermate", () => {
     // L'elenco di ciò che manca si legge dal codice: una schermata senza
     // file e senza `pending` sparisce dai conti.
     const undocumented = pendingScreens()
-      .filter((screen) => !screen.pending)
+      .filter((screen) => !screen.pending && !screen.replacedByCard)
       .map((screen) => screen.id);
     expect(undocumented).toEqual([]);
   });
