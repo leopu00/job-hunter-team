@@ -510,7 +510,7 @@ describe("cancellazione — un lotto fallito ferma i successivi", () => {
   it("al primo errore non lancia i lotti rimanenti", async () => {
     const tree: Record<string, true> = {};
     for (let i = 0; i < 2500; i += 1) tree[`user-1/req/f${i}.pdf`] = true;
-    const { client, batches, deletedUsers } = fakeAdmin({
+    const { client, batches, deletedUsers, calls } = fakeAdmin({
       storageTree: tree,
       failBatch: 2,
     });
@@ -521,5 +521,50 @@ describe("cancellazione — un lotto fallito ferma i successivi", () => {
     // E soprattutto: l'utente e i suoi dati NON vengono cancellati, o
     // resterebbero file orfani senza più un proprietario.
     expect(deletedUsers).toEqual([]);
+    // Anche le righe devono essere intatte: lo Storage viene PRIMA di
+    // `MANUAL_DELETE_ORDER`, quindi se fallisce non deve essere partita
+    // nemmeno una delete sul database. Asserire solo `deletedUsers`
+    // lasciava scoperta proprio la parte più grossa della promessa.
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("cancellazione — il messaggio d'errore non rivela nomi di file", () => {
+  it("con file dai nomi parlanti, l'errore non ne contiene nessuno", async () => {
+    // I nomi dei file sono dati dell'utente, e questo errore finisce nei
+    // log del server e nel corpo della risposta al client. Una funzione
+    // il cui scopo è cancellare quei file non può farne uscire i nomi
+    // proprio mentre fallisce.
+    const sensibili = [
+      "user-1/req/CV-Mario-Rossi-2026.pdf",
+      "user-1/req/lettera-per-Acme-SpA.pdf",
+      "user-1/req/diagnosi-medica.pdf",
+    ];
+    const tree: Record<string, true> = {};
+    for (const p of sensibili) tree[p] = true;
+
+    const { client } = fakeAdmin({
+      storageTree: tree,
+      storageRemovesNothing: true,
+    });
+
+    let message = "";
+    try {
+      await deleteAccountData(client, "user-1");
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+
+    expect(message).not.toBe("");
+    for (const full of sensibili) {
+      expect(message, `percorso nel messaggio: ${full}`).not.toContain(full);
+      const basename = full.split("/").pop()!;
+      expect(message, `nome file nel messaggio: ${basename}`).not.toContain(
+        basename,
+      );
+    }
+    // Deve però restare diagnosticabile: quanti e dove.
+    expect(message).toContain("3");
+    expect(message).toContain("file-transit");
   });
 });
