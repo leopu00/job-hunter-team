@@ -70,8 +70,9 @@ headless_exit|script|gate|any|-|tools/headless_exit_selftest.gd|-
 # L'aggiornamento automatico. Si sbaglia in tre modi che a schermo si
 # assomigliano tutti a "non succede niente": non avvisare mai, proporre un
 # DECLASSAMENTO (alfabeticamente "0.3.10" viene prima di "0.3.9"), o installare
-# un pacchetto firmato da qualcun altro — perche' la notarizzazione dice che
-# Apple lo ha esaminato, non che e' il nostro.
+# un pacchetto firmato da qualcun altro — perche' notarizzazione o checksum sul
+# canale di download non autenticano da soli il publisher. Copre anche policy
+# Windows forward-only 0.3.6+, defer persistente e ACK/recovery fail-closed.
 update_check|script|gate|any|-|tools/update_check_selftest.gd|-
 # Un wrapper host v0.3.3 ignora `--check --json` e fa pull+up: il gioco deve
 # sempre bootstrapparne uno production temporaneo, verificato e con target
