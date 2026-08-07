@@ -50,7 +50,7 @@ export const es: Record<string, string> = {
   footer_privacy: "Política de privacidad",
   footer_terms: "Términos del servicio",
   footer_copyright: "Open Source bajo licencia MIT",
-  trailer_title: "Tráiler",
+  video_play_label: "Reproducir el vídeo",
 
   // Download page
   dl_desc:

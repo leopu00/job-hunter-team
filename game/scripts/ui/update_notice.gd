@@ -15,9 +15,6 @@ extends PanelContainer
 var _label: Label
 var _act: Button
 var _later: Button
-## Chiusa con "più tardi": per questa sessione non si rifà vedere. Al prossimo
-## avvio il ritmo di un controllo al giorno decide da solo se riproporla.
-var _dismissed := false
 
 
 func _ready() -> void:
@@ -41,8 +38,7 @@ func _ready() -> void:
 	_later.text = UIStrings.t("update.later")
 	_later.add_theme_color_override("font_color", Palette.MUTED)
 	_later.pressed.connect(func() -> void:
-		_dismissed = true
-		visible = false)
+		UpdateService.defer())
 	row.add_child(_later)
 	UpdateService.state_changed.connect(_refresh)
 	_refresh(UpdateService.state())
@@ -57,9 +53,10 @@ func _notification(what: int) -> void:
 
 func _refresh(state: Dictionary) -> void:
 	var phase := str(state.get("phase", ""))
-	# Un aggiornamento appena installato si dice comunque: l'utente lo ha
-	# chiesto lui, e la riga è la risposta alla sua richiesta.
-	if _dismissed and phase != UpdateService.PHASE_DONE:
+	# Il defer appartiene al servizio ed e legato alla versione: sopravvive al
+	# riavvio senza nascondere una release successiva.
+	if bool(state.get("deferred", false)) and phase != UpdateService.PHASE_DONE:
+		visible = false
 		return
 	var latest := str(state.get("latest", ""))
 	var acting := false

@@ -147,7 +147,11 @@ const translations = {
     en: "Open Source under MIT License",
     hu: "Nyílt forráskód MIT licenc alatt",
   },
-  trailer_title: { it: "Trailer", en: "Trailer", hu: "Előzetes" },
+  video_play_label: {
+    it: "Riproduci il video",
+    en: "Play the video",
+    hu: "Videó lejátszása",
+  },
   theme_system: { it: "sistema", en: "system", hu: "rendszer" },
   theme_dark: { it: "notte", en: "night", hu: "éjszaka" },
   theme_light: { it: "giorno", en: "day", hu: "nappal" },
