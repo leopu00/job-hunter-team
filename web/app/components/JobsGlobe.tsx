@@ -515,18 +515,120 @@ function matchScoreColor(s: number | null): string {
 
 // Modalità "vetrina" (landing pubblica): il globo mostra dati
 // dimostrativi forniti dal chiamante invece di chiamare l'API (che sulla
-// landing non è autenticata), non registra alcuna interazione utente
-// (niente drag/zoom/click: la pagina deve poter scorrere sopra al
-// canvas, soprattutto su mobile) e consegna l'istanza mappa al
-// chiamante solo quando i primi pin sono stati renderizzati: il chiamante
-// può così pilotare la camera senza scoprire la mappa durante uno zoom.
+// landing non è autenticata) e consegna l'istanza mappa al chiamante solo
+// quando i primi pin sono stati renderizzati: il chiamante può così
+// pilotare la camera senza scoprire la mappa durante uno zoom.
+//
+// L'interazione c'è ma è potata (vedi tuneShowcaseHandlers): si può
+// trascinare il globo col mouse e aprire la card di un pin, NON si può
+// zoomare con la rotella né trascinare in verticale col dito — su una
+// home la pagina deve continuare a scorrere sotto le dita di chi legge.
+//
+// La card sopra al pin è CONTROLLATA dal chiamante (`cardId`): durante il
+// giro automatico la pilota il tour, al click la chiede l'utente. Una sola
+// sorgente di verità = la card non lampeggia quando le due cose si
+// incrociano.
+//
 // onTierChange espone i degradi del monitor FPS: la landing lo usa per
 // ripiegare su un'immagine statica quando la macchina non regge.
 export type GlobeShowcase = {
   positions: PositionCoord[];
   onMapReady?: (map: MaplibreMap) => void;
   onTierChange?: (tier: MapTier) => void;
+  // Lingua della vetrina: sulla landing la sceglie il selettore della nav
+  // (localStorage), non il cookie di locale dell'area riservata.
+  lang?: string;
+  // Posizione la cui card è aperta sopra al pin. null = nessuna card.
+  cardId?: string | null;
+  // L'utente ha cliccato un pin (id) o il vuoto (null).
+  onPinSelect?: (id: string | null) => void;
+  // Prima traccia di una mano umana sul globo (pointerdown/touch/wheel):
+  // la landing la usa per fermare l'autopilota e farlo ripartire dopo un
+  // po' di immobilità.
+  onUserInteract?: () => void;
 };
+
+// Handler di interazione in modalità vetrina.
+//
+// Il criterio è uno solo: la PAGINA viene prima del globo. Quindi via la
+// rotella (scrollerebbe lo zoom invece della home) e via rotazione/pitch,
+// che su una scena in movimento disorientano e basta. Resta il
+// trascinamento — con mouse è pieno, col dito lo limita `touch-action:
+// pan-y` (vedi il blocco <style>): il browser si tiene lo scorrimento
+// verticale e passa a MapLibre solo i trascinamenti orizzontali, cioè
+// esattamente il gesto con cui si fa girare un mappamondo.
+function tuneShowcaseHandlers(map: MaplibreMap) {
+  map.scrollZoom.disable();
+  map.dragRotate.disable();
+  map.touchZoomRotate.disable();
+  map.touchPitch.disable();
+  map.boxZoom.disable();
+  map.keyboard.disable();
+  map.dragPan.enable();
+  map.doubleClickZoom.enable();
+}
+
+// Blocco d'asse per il dito (solo vetrina): il gesto si assegna al globo
+// o alla pagina, mai a entrambi.
+//
+// `touch-action: pan-y` da solo NON basta, ed è un errore facile da fare:
+// MapLibre chiama preventDefault() sul PRIMO touchmove, e Chrome a quel
+// punto non ha ancora avviato lo scorrimento — quindi lo annulla per
+// tutto il gesto. Misurato: con il solo CSS, uno swipe verticale sopra
+// al globo lasciava la home immobile.
+//
+// Qui i primi millimetri del gesto non arrivano a MapLibre: si guarda
+// dove sta andando il dito e poi si decide una volta per tutte. Verticale
+// → l'evento non passa, il browser scorre la pagina come sopra a
+// qualunque immagine. Orizzontale → passa, e il globo gira. È il
+// funzionamento che ci si aspetta da un mappamondo dentro una pagina.
+function attachTouchAxisLock(map: MaplibreMap): () => void {
+  const el = map.getCanvasContainer();
+  // 8 px: due frame di gesto. Sotto questa soglia non si distingue una
+  // carezza verticale da una orizzontale, e nel dubbio si trattiene.
+  const DECIDE_PX = 8;
+  let startX = 0;
+  let startY = 0;
+  let axis: null | "x" | "y" = null;
+
+  const onStart = (e: TouchEvent) => {
+    // Più dita: non è un trascinamento, non ci mettiamo in mezzo.
+    if (e.touches.length !== 1) {
+      axis = "x";
+      return;
+    }
+    axis = null;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  };
+  const onMove = (e: TouchEvent) => {
+    if (axis === "x") return;
+    if (axis === "y") {
+      e.stopPropagation();
+      return;
+    }
+    const t = e.touches[0];
+    if (!t) return;
+    const dx = Math.abs(t.clientX - startX);
+    const dy = Math.abs(t.clientY - startY);
+    if (Math.max(dx, dy) < DECIDE_PX) {
+      e.stopPropagation();
+      return;
+    }
+    axis = dx > dy ? "x" : "y";
+    if (axis === "y") e.stopPropagation();
+  };
+
+  // In cattura sul contenitore: i listener di MapLibre stanno sullo
+  // stesso elemento ma in risalita, quindi qui si arriva prima di loro.
+  const opts = { capture: true, passive: true } as const;
+  el.addEventListener("touchstart", onStart, opts);
+  el.addEventListener("touchmove", onMove, opts);
+  return () => {
+    el.removeEventListener("touchstart", onStart, opts);
+    el.removeEventListener("touchmove", onMove, opts);
+  };
+}
 
 // Data "trovata il" leggibile (gg/mm/aaaa). Solo client (la vignetta
 // si renderizza on-click), niente rischio di hydration mismatch.
@@ -575,7 +677,10 @@ export default function JobsGlobe({
 } = {}) {
   const { resolvedTheme } = useTheme();
   const locale = useLocale();
-  const tr = makeT(T, locale);
+  // Sulla landing la lingua la sceglie il selettore della nav, non il
+  // cookie: senza questo, cambiando lingua in home la card resterebbe
+  // nella lingua del cookie mentre tutto il resto della pagina cambia.
+  const tr = makeT(T, showcase?.lang ?? locale);
   const [data, setData] = useState<PositionCoord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<PositionCoord | null>(null);
@@ -798,6 +903,16 @@ export default function JobsGlobe({
       .catch(() => setLoaded(true));
   }, []);
 
+  // Vetrina: il chiamante rigenera le posizioni quando cambia lingua
+  // (titoli e settori sono tradotti nel dataset). Gli id restano gli
+  // stessi, quindi la card aperta non si chiude.
+  useEffect(() => {
+    if (!showcase) return;
+    // Stesso array = stesso riferimento: React salta il re-render quando
+    // l'oggetto vetrina cambia per altri motivi (es. la card aperta).
+    setData(showcase.positions);
+  }, [showcase]);
+
   // Inizializza la mappa una volta sola
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -815,9 +930,7 @@ export default function JobsGlobe({
       attributionControl: { compact: true },
       pitch: 0,
       bearing: 0,
-      // Vetrina: nessun handler drag/zoom/rotate — i tocchi passano
-      // attraverso il canvas e la pagina continua a scorrere (mobile).
-      interactive: !isShowcase,
+      interactive: true,
       // Qualità: pixelRatio e fadeDuration si possono dare SOLO qui
       // (fadeDuration non ha setter pubblico), quindi il tier di boot
       // deve essere già quello giusto. Il degrado runtime agisce poi su
@@ -826,6 +939,24 @@ export default function JobsGlobe({
       fadeDuration: boot.fadeDuration,
       maxTileCacheSize: boot.maxTileCacheSize,
     });
+    let detachAxisLock: (() => void) | null = null;
+    if (isShowcase) {
+      tuneShowcaseHandlers(map);
+      detachAxisLock = attachTouchAxisLock(map);
+    }
+
+    // Vetrina: qualunque tocco umano sul globo — trascinamento, rotella,
+    // dito — sospende l'autopilota del chiamante. Si ascolta il DOM e non
+    // gli eventi camera di MapLibre proprio perché quelli li emette anche
+    // l'autopilota stesso, e si fermerebbe da solo al primo volo.
+    const onHumanTouch = () => showcaseRef.current?.onUserInteract?.();
+    if (isShowcase) {
+      container.addEventListener("pointerdown", onHumanTouch, {
+        passive: true,
+      });
+      container.addEventListener("touchstart", onHumanTouch, { passive: true });
+      container.addEventListener("wheel", onHumanTouch, { passive: true });
+    }
 
     const onStyleLoad = () => {
       try {
@@ -1010,9 +1141,6 @@ export default function JobsGlobe({
     //  • gruppo coincidente (più posizioni sulla STESSA coordinata, es.
     //    stesso hotel) → popup-lista dei membri, ancorato al pin.
     map.on("click", LAYER_DOT_ID, (e) => {
-      // Vetrina: niente selezione/zoom da click, la camera è pilotata
-      // dall'autopilota della landing.
-      if (showcaseRef.current) return;
       // I fasci sono icone alte: i loro box di click si sovrappongono,
       // quindi e.features[0] (il top in z-order) NON è quello puntato.
       // Interroghiamo un riquadro attorno al click e scegliamo la
@@ -1047,6 +1175,15 @@ export default function JobsGlobe({
       if (!groupKey) return;
       const g = clusteredRef.current.find((x) => x.groupKey === groupKey);
       if (!g) return;
+
+      if (showcaseRef.current) {
+        // Vetrina: il pin è sempre una singola opportunità (l'aggregazione
+        // è spenta). Si chiede la card al chiamante e basta — nessun volo:
+        // chi sta esplorando il globo con le proprie mani non vuole che la
+        // camera se ne vada per conto suo a ogni click.
+        showcaseRef.current.onPinSelect?.(g.positions[0]?.id ?? null);
+        return;
+      }
 
       if (
         g.count > 1 &&
@@ -1091,9 +1228,23 @@ export default function JobsGlobe({
       });
     });
 
+    // Click nel vuoto (vetrina): chiude la card. Il raggio è lo stesso del
+    // click sui pin, altrimenti "vuoto" e "pin" non coinciderebbero e un
+    // colpo appena fuori centro aprirebbe e richiuderebbe la stessa card.
+    map.on("click", (e) => {
+      if (!showcaseRef.current || !map.getLayer(LAYER_DOT_ID)) return;
+      const R = 44;
+      const near = map.queryRenderedFeatures(
+        [
+          [e.point.x - R, e.point.y - R],
+          [e.point.x + R, e.point.y + R],
+        ],
+        { layers: [LAYER_DOT_ID] },
+      );
+      if (near.length === 0) showcaseRef.current.onPinSelect?.(null);
+    });
+
     map.on("mouseenter", LAYER_DOT_ID, () => {
-      // In vetrina i pin non sono cliccabili: niente cursore "mano".
-      if (showcaseRef.current) return;
       map.getCanvas().style.cursor = "pointer";
     });
     map.on("mouseleave", LAYER_DOT_ID, () => {
@@ -1133,6 +1284,10 @@ export default function JobsGlobe({
 
     return () => {
       ro.disconnect();
+      container.removeEventListener("pointerdown", onHumanTouch);
+      container.removeEventListener("touchstart", onHumanTouch);
+      container.removeEventListener("wheel", onHumanTouch);
+      detachAxisLock?.();
       fpsMonitorRef.current?.stop();
       fpsMonitorRef.current = null;
       layersReadyRef.current = false;
@@ -1140,6 +1295,20 @@ export default function JobsGlobe({
       mapRef.current = null;
     };
   }, []);
+
+  // Vetrina: la card aperta è quella che dice il chiamante. Qui si traduce
+  // l'id in posizione — dopo un cambio lingua l'id è lo stesso ma
+  // l'oggetto è nuovo, e la card si riscrive nella lingua giusta da sola.
+  const showcaseCardId = showcase?.cardId ?? null;
+  useEffect(() => {
+    if (!showcase) return;
+    setSelectedGroup(null);
+    setSelected(
+      showcaseCardId
+        ? (showcase.positions.find((p) => p.id === showcaseCardId) ?? null)
+        : null,
+    );
+  }, [showcase, showcaseCardId]);
 
   // Tre regimi (paese/città/esatto), tutti con coordinate FISSE: il
   // livello cambia solo quando lo zoom snappato attraversa una soglia
@@ -1165,7 +1334,10 @@ export default function JobsGlobe({
     const check = () => {
       const level = viewLevelForZoom(map.getZoom());
       setViewLevel((prev) => {
-        if (level < prev) {
+        // In vetrina l'aggregazione è spenta e la card la decide il
+        // chiamante: chiuderla qui la farebbe solo sfarfallare, perché
+        // l'effetto controllato la riaprirebbe subito.
+        if (level < prev && !showcaseRef.current) {
           // Ri-aggregazione (zoom out): chiudi i popup, il pin ancorato
           // non è più renderizzato (assorbito in un fascio). Verso il
           // dettaglio i popup restano: il pin selezionato esiste alle
@@ -1465,10 +1637,24 @@ export default function JobsGlobe({
         .jht-globe-wrap .maplibregl-ctrl-attrib-inner { display: none; }
         .jht-globe-wrap .maplibregl-ctrl-attrib:hover .maplibregl-ctrl-attrib-inner,
         .jht-globe-wrap .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner { display: block; }
+        /* Vetrina: MapLibre metterebbe touch-action:none o pinch-zoom sul
+           canvas, e il dito che scorre la home resterebbe incollato al
+           globo. Con pan-y lo scorrimento verticale se lo tiene il
+           browser (la pagina scorre come su qualunque immagine) e a
+           MapLibre arrivano solo i trascinamenti orizzontali: il gesto
+           con cui si fa girare un mappamondo.
+           Il selettore ricalca quello di maplibre-gl.css classe per
+           classe: con una specificità più bassa la regola della libreria
+           vincerebbe sul CANVAS (che è l'elemento che riceve davvero i
+           tocchi) e il dito resterebbe incollato — verificato. */
+        .jht-globe-showcase .maplibregl-canvas-container,
+        .jht-globe-showcase .maplibregl-canvas-container .maplibregl-canvas,
+        .jht-globe-showcase .maplibregl-canvas-container.maplibregl-touch-drag-pan,
+        .jht-globe-showcase .maplibregl-canvas-container.maplibregl-touch-drag-pan .maplibregl-canvas { touch-action: pan-y; }
       `}</style>
       <div
         ref={mapWrapRef}
-        className={`jht-globe-wrap relative w-full overflow-hidden ${fullscreen ? "" : "rounded-md"}`}
+        className={`jht-globe-wrap relative w-full overflow-hidden ${showcase ? "jht-globe-showcase " : ""}${fullscreen ? "" : "rounded-md"}`}
         // zoom: 1 neutralizza il body { zoom: var(--zoom) } di JHT
         // che mandava MapLibre a leggere dimensioni canvas sbagliate.
         // In fullscreen (es. /map) il bg è transparent e l'altezza
@@ -1730,6 +1916,10 @@ export default function JobsGlobe({
 
         {selected && popupAnchor && (
           <div
+            // Appiglio per i test end-to-end: la card è posizionata in
+            // pixel calcolati dalla mappa, quindi non ha nessun selettore
+            // stabile a cui aggrapparsi.
+            data-globe-card={selected.id}
             // Vignetta popup ancorata sopra al pin selezionato. La
             // freccia in basso punta esattamente al pin. translate
             // -50% X centra orizzontalmente sul pin; -100% Y la
@@ -1754,7 +1944,13 @@ export default function JobsGlobe({
                 {tr("match_score")}
               </span>
               <button
-                onClick={() => setSelected(null)}
+                onClick={() => {
+                  // In vetrina la card è controllata dal chiamante: si
+                  // chiede a lui di chiuderla, altrimenti il tour la
+                  // riaprirebbe al primo re-render.
+                  if (showcase) showcase.onPinSelect?.(null);
+                  else setSelected(null);
+                }}
                 aria-label={tr("close")}
                 style={{
                   background: "transparent",
@@ -1813,11 +2009,28 @@ export default function JobsGlobe({
               if (!loc) return null;
               return (
                 <div
-                  className="text-[10px] mt-2 flex items-start gap-1"
+                  className="text-[10px] mt-2 flex items-start gap-1.5"
                   style={{ color: "var(--color-base)" }}
                   title={loc}
                 >
-                  <span aria-hidden>📍</span>
+                  {/* Segnaposto disegnato, non emoji: le emoji cambiano
+                      faccia da un sistema all'altro e non ereditano il
+                      colore del testo. */}
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="mt-[1px] flex-shrink-0"
+                    aria-hidden
+                  >
+                    <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" />
+                    <circle cx="12" cy="10" r="2.6" />
+                  </svg>
                   <span className="leading-tight">{loc}</span>
                 </div>
               );
@@ -1861,17 +2074,21 @@ export default function JobsGlobe({
               </div>
             )}
 
-            {/* Azione */}
-            <div className="mt-2 text-right">
-              <Link
-                href={`/positions/${selected.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-green)] hover:underline no-underline"
-              >
-                {tr("open")}
-              </Link>
-            </div>
+            {/* Azione. In vetrina non c'è: la scheda della posizione vive
+                nell'area riservata, e mandarci un visitatore anonimo
+                significherebbe sbatterlo contro una pagina di login. */}
+            {!showcase && (
+              <div className="mt-2 text-right">
+                <Link
+                  href={`/positions/${selected.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-green)] hover:underline no-underline"
+                >
+                  {tr("open")}
+                </Link>
+              </div>
+            )}
 
             {/* Coda della vignetta: triangolo SVG centrato sotto al
                 box, punta verso il basso (verso il pin). Riga top
