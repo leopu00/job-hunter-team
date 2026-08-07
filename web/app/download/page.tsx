@@ -1,10 +1,16 @@
 import DownloadClient from "./DownloadClient";
+import { attributionFromPage } from "@/lib/download-funnel";
 
-// 2026-07-03: l'app desktop non è ancora scaricabile dal web (non ancora promossa —
-// vedi docs/internal/2026-07-03-desktop-app-status-and-vision.md). La pagina non
-// deve più interrogare le GitHub Releases né fare UA-detection per servire gli
-// installer: mostra il percorso CLI (terminale) e un tab Desktop "in arrivo",
-// quindi è una pagina statica senza dati di release.
-export default function DownloadPage() {
-  return <DownloadClient />;
+// La pagina non interroga le GitHub Releases e non usa UA-detection. Riceve
+// solo i tre parametri campagna correnti, li sanifica sul server e li passa ai
+// link `/go/*`; ogni altro parametro viene scartato.
+type DownloadPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function DownloadPage({
+  searchParams,
+}: DownloadPageProps) {
+  const attribution = attributionFromPage(await searchParams);
+  return <DownloadClient attribution={attribution} />;
 }

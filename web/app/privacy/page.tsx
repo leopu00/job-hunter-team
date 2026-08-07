@@ -12,7 +12,7 @@ import ScrollToTop from "../components/landing/ScrollToTop";
 const T = {
   it: {
     title: "Privacy Policy",
-    updated: "Ultimo aggiornamento: Aprile 2026",
+    updated: "Ultimo aggiornamento: Agosto 2026",
     intro:
       "Job Hunter Team (JHT) rispetta la tua privacy. Questa pagina spiega come vengono trattati i tuoi dati.",
     s1_title: "Dati raccolti",
@@ -27,18 +27,21 @@ const T = {
     s4_title: "Modalita locale e cloud",
     s4_body:
       "JHT puo girare solo in locale (nessun account, nessun cookie) oppure in una modalita cloud che usa Supabase per autenticazione e backup dei dati. Le due modalita sono alternative: se attivi il cloud, usa solo cookie tecnici necessari al login.",
-    s5_title: "Open source",
+    s5_title: "Click di download",
     s5_body:
+      "Contiamo i click di download in forma aggregata e anonima, senza cookie né identificativi. Conserviamo solo il totale per ora, sistema operativo e parametri campagna validi.",
+    s6_title: "Open source",
+    s6_body:
       "JHT e completamente open source. Puoi verificare in qualsiasi momento cosa fa il codice esaminando il repository su GitHub.",
-    s6_title: "Contatti",
-    s6_body: "Per domande sulla privacy, scrivi a support@jobhunterteam.ai.",
+    s7_title: "Contatti",
+    s7_body: "Per domande sulla privacy, scrivi a support@jobhunterteam.ai.",
     nav_home: "Home",
     nav_privacy: "Privacy",
     nav_terms: "Termini",
   },
   en: {
     title: "Privacy Policy",
-    updated: "Last updated: April 2026",
+    updated: "Last updated: August 2026",
     intro:
       "Job Hunter Team (JHT) respects your privacy. This page explains how your data is handled.",
     s1_title: "Data collected",
@@ -53,18 +56,21 @@ const T = {
     s4_title: "Local and cloud mode",
     s4_body:
       "JHT can run purely locally (no account, no cookies) or in a cloud mode that uses Supabase for authentication and data backup. The two modes are alternatives: if you enable cloud, it only uses technical cookies strictly needed for login.",
-    s5_title: "Open source",
+    s5_title: "Download clicks",
     s5_body:
+      "We count download clicks in anonymous aggregate form, without cookies or identifiers. We retain only the total by hour, operating system, and valid campaign parameters.",
+    s6_title: "Open source",
+    s6_body:
       "JHT is fully open source. You can verify what the code does at any time by examining the repository on GitHub.",
-    s6_title: "Contact",
-    s6_body: "For privacy questions, write to support@jobhunterteam.ai.",
+    s7_title: "Contact",
+    s7_body: "For privacy questions, write to support@jobhunterteam.ai.",
     nav_home: "Home",
     nav_privacy: "Privacy",
     nav_terms: "Terms",
   },
   hu: {
     title: "Adatvédelmi irányelvek",
-    updated: "Utolsó frissítés: 2026 április",
+    updated: "Utolsó frissítés: 2026 augusztus",
     intro:
       "A Job Hunter Team (JHT) tiszteletben tartja a magánéletedet. Ez az oldal elmagyarázza, hogyan kezeljük az adataidat.",
     s1_title: "Gyűjtött adatok",
@@ -79,11 +85,14 @@ const T = {
     s4_title: "Helyi és felhő mód",
     s4_body:
       "A JHT futhat tisztán helyben (fiók és süti nélkül) vagy felhő módban, amely Supabase-t használ hitelesítésre és adatok biztonsági mentésére. A két mód alternatív: ha a felhő módot választod, csak a bejelentkezéshez feltétlenül szükséges technikai sütiket használja.",
-    s5_title: "Nyílt forráskód",
+    s5_title: "Letöltési kattintások",
     s5_body:
-      "A JHT teljesen nyílt forráskódú. Bármikor ellenőrizheted, hogy mit csinál a kód, a GitHub-on található repository átvizsgálásával.",
-    s6_title: "Kapcsolat",
+      "A letöltési kattintásokat névtelen, összesített formában számoljuk, sütik és azonosítók nélkül. Csak az óránkénti, operációs rendszerenkénti és érvényes kampányparaméterenkénti összeget őrizzük meg.",
+    s6_title: "Nyílt forráskód",
     s6_body:
+      "A JHT teljesen nyílt forráskódú. Bármikor ellenőrizheted, hogy mit csinál a kód, a GitHub-on található repository átvizsgálásával.",
+    s7_title: "Kapcsolat",
+    s7_body:
       "Adatvédelmi kérdések esetén írj az support@jobhunterteam.ai címre.",
     nav_home: "Főoldal",
     nav_privacy: "Adatvédelem",
@@ -91,7 +100,7 @@ const T = {
   },
   es: {
     title: "Política de Privacidad",
-    updated: "Última actualización: Abril de 2026",
+    updated: "Última actualización: Agosto de 2026",
     intro:
       "Job Hunter Team (JHT) respeta tu privacidad. Esta página explica cómo se tratan tus datos.",
     s1_title: "Datos recopilados",
@@ -106,11 +115,14 @@ const T = {
     s4_title: "Modo local y en la nube",
     s4_body:
       "JHT puede ejecutarse de forma puramente local (sin cuenta, sin cookies) o en un modo en la nube que utiliza Supabase para la autenticación y la copia de seguridad de los datos. Los dos modos son alternativos: si activas la nube, solo utiliza cookies técnicas estrictamente necesarias para el inicio de sesión.",
-    s5_title: "Código abierto",
+    s5_title: "Clics de descarga",
     s5_body:
-      "JHT es completamente de código abierto. Puedes verificar en cualquier momento lo que hace el código examinando el repositorio en GitHub.",
-    s6_title: "Contacto",
+      "Contamos los clics de descarga de forma agregada y anónima, sin cookies ni identificadores. Solo conservamos el total por hora, sistema operativo y parámetros de campaña válidos.",
+    s6_title: "Código abierto",
     s6_body:
+      "JHT es completamente de código abierto. Puedes verificar en cualquier momento lo que hace el código examinando el repositorio en GitHub.",
+    s7_title: "Contacto",
+    s7_body:
       "Para cuestiones de privacidad, escribe a support@jobhunterteam.ai.",
     nav_home: "Inicio",
     nav_privacy: "Privacidad",
@@ -118,7 +130,7 @@ const T = {
   },
   de: {
     title: "Datenschutzerklärung",
-    updated: "Letzte Aktualisierung: April 2026",
+    updated: "Letzte Aktualisierung: August 2026",
     intro:
       "Job Hunter Team (JHT) respektiert deine Privatsphäre. Diese Seite erklärt, wie deine Daten verarbeitet werden.",
     s1_title: "Erhobene Daten",
@@ -133,18 +145,21 @@ const T = {
     s4_title: "Lokaler und Cloud-Modus",
     s4_body:
       "JHT kann rein lokal laufen (kein Konto, keine Cookies) oder in einem Cloud-Modus, der Supabase für Authentifizierung und Datensicherung verwendet. Die beiden Modi sind Alternativen: Wenn du die Cloud aktivierst, werden nur technische Cookies verwendet, die für den Login zwingend erforderlich sind.",
-    s5_title: "Open Source",
+    s5_title: "Download-Klicks",
     s5_body:
+      "Wir zählen Download-Klicks anonym und zusammengefasst, ohne Cookies oder Kennungen. Gespeichert werden nur Summen pro Stunde, Betriebssystem und gültigen Kampagnenparametern.",
+    s6_title: "Open Source",
+    s6_body:
       "JHT ist vollständig Open Source. Du kannst jederzeit überprüfen, was der Code tut, indem du das Repository auf GitHub untersuchst.",
-    s6_title: "Kontakt",
-    s6_body: "Bei Fragen zum Datenschutz schreibe an support@jobhunterteam.ai.",
+    s7_title: "Kontakt",
+    s7_body: "Bei Fragen zum Datenschutz schreibe an support@jobhunterteam.ai.",
     nav_home: "Startseite",
     nav_privacy: "Datenschutz",
     nav_terms: "Bedingungen",
   },
   fr: {
     title: "Politique de Confidentialité",
-    updated: "Dernière mise à jour : avril 2026",
+    updated: "Dernière mise à jour : août 2026",
     intro:
       "Job Hunter Team (JHT) respecte votre vie privée. Cette page explique comment vos données sont traitées.",
     s1_title: "Données collectées",
@@ -159,11 +174,14 @@ const T = {
     s4_title: "Mode local et cloud",
     s4_body:
       "JHT peut fonctionner uniquement en local (aucun compte, aucun cookie) ou dans un mode cloud qui utilise Supabase pour l'authentification et la sauvegarde des données. Les deux modes sont des alternatives : si vous activez le cloud, il n'utilise que les cookies techniques strictement nécessaires à la connexion.",
-    s5_title: "Open source",
+    s5_title: "Clics de téléchargement",
     s5_body:
-      "JHT est entièrement open source. Vous pouvez vérifier à tout moment ce que fait le code en examinant le dépôt sur GitHub.",
-    s6_title: "Contact",
+      "Nous comptons les clics de téléchargement sous forme agrégée et anonyme, sans cookies ni identifiants. Nous conservons uniquement le total par heure, système d’exploitation et paramètres de campagne valides.",
+    s6_title: "Open source",
     s6_body:
+      "JHT est entièrement open source. Vous pouvez vérifier à tout moment ce que fait le code en examinant le dépôt sur GitHub.",
+    s7_title: "Contact",
+    s7_body:
       "Pour toute question relative à la confidentialité, écrivez à support@jobhunterteam.ai.",
     nav_home: "Accueil",
     nav_privacy: "Confidentialité",
@@ -171,7 +189,7 @@ const T = {
   },
   pt: {
     title: "Política de Privacidade",
-    updated: "Última atualização: abril de 2026",
+    updated: "Última atualização: agosto de 2026",
     intro:
       "A Job Hunter Team (JHT) respeita a sua privacidade. Esta página explica como os seus dados são tratados.",
     s1_title: "Dados recolhidos",
@@ -186,11 +204,14 @@ const T = {
     s4_title: "Modo local e na nuvem",
     s4_body:
       "O JHT pode funcionar de forma puramente local (sem conta, sem cookies) ou num modo na nuvem que utiliza o Supabase para autenticação e cópia de segurança dos dados. Os dois modos são alternativos: se ativar a nuvem, utiliza apenas cookies técnicos estritamente necessários para o início de sessão.",
-    s5_title: "Código aberto",
+    s5_title: "Cliques de download",
     s5_body:
-      "O JHT é totalmente de código aberto. Pode verificar a qualquer momento o que o código faz examinando o repositório no GitHub.",
-    s6_title: "Contacto",
+      "Contamos os cliques de download de forma agregada e anónima, sem cookies nem identificadores. Conservamos apenas o total por hora, sistema operativo e parâmetros de campanha válidos.",
+    s6_title: "Código aberto",
     s6_body:
+      "O JHT é totalmente de código aberto. Pode verificar a qualquer momento o que o código faz examinando o repositório no GitHub.",
+    s7_title: "Contacto",
+    s7_body:
       "Para questões de privacidade, escreva para support@jobhunterteam.ai.",
     nav_home: "Início",
     nav_privacy: "Privacidade",
@@ -225,6 +246,7 @@ function PrivacyContent() {
     ["s4_title", "s4_body"],
     ["s5_title", "s5_body"],
     ["s6_title", "s6_body"],
+    ["s7_title", "s7_body"],
   ];
 
   return (
