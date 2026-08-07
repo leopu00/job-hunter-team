@@ -9,16 +9,20 @@
 // dentro un PNG non si traduce, quindi servirebbero sette riprese; e i
 // numeri diventerebbero impossibili da correggere senza rigirare tutto.
 //
-// I VALORI vengono dal contratto e restano inglesi finché non sono
-// tradotti; le ETICHETTE di riga sono microcopy della pagina, tradotte in
-// tutte e sette. La riga del VPS è staccata di proposito: sono i requisiti
-// di un server dedicato, non del computer di casa, e confonderli è
-// esattamente l'equivoco che il link alla guida VPS deve evitare.
+// I VALORI vengono dal contratto e vivono nel catalogo i18n accanto al
+// componente; le ETICHETTE di riga sono microcopy della pagina. La riga del
+// VPS è staccata di proposito: sono i requisiti di un server dedicato, non
+// del computer di casa, e confonderli è esattamente l'equivoco che il link
+// alla guida VPS deve evitare.
 
 import Link from "next/link";
 
 import { DOCS_VPS } from "./guide-config";
-import { untranslated, type GuideText } from "./guide-types";
+import {
+  REQUIREMENTS_CARD_EVIDENCE,
+  REQUIREMENTS_CARD_VALUES,
+} from "./requirements-card.i18n";
+import type { GuideText } from "./guide-types";
 import type { Lang } from "../components/landing/LandingI18n";
 
 const LABELS: Record<string, GuideText> = {
@@ -89,23 +93,6 @@ const VPS_TITLE: GuideText = {
   hu: "Dedikált VPS-en — külön alapkonfiguráció",
 };
 
-/** I valori, dal contratto. Inglesi finché non sono tradotti, come il
- *  resto del copy canonico. */
-const VALUES: Record<string, GuideText> = {
-  docker: untranslated("Required"),
-  memory: untranslated("About 8 GB available before starting the team"),
-  disk: untranslated("Room for the team image — no minimum has been measured"),
-  internet: untranslated("Required"),
-  provider: untranslated("A supported subscription — never an API key"),
-  vps: untranslated(
-    "Ubuntu 24.04 · 4 GB RAM · 2 vCPU · 80 GB SSD · 2 GB preventive swap",
-  ),
-};
-
-const EVIDENCE: GuideText = untranslated(
-  "Measured over 30 minutes on Windows: a 12 GB machine kept more than 4 GB free with the team and Job Hunter Team Desktop running, on a 2013 2-core, 4-thread CPU, without saturation.",
-);
-
 const VPS_LINK: GuideText = {
   en: "Run 24/7 on a VPS",
   it: "Esegui 24/7 su un VPS",
@@ -141,13 +128,13 @@ export default function RequirementsCard({ lang }: { lang: Lang }) {
             <Row
               key={key}
               label={LABELS[key][lang]}
-              value={VALUES[key][lang]}
+              value={REQUIREMENTS_CARD_VALUES[key][lang]}
             />
           ),
         )}
       </dl>
       <p className="mt-3 border-l-2 border-[var(--color-border)] pl-3 text-[11.5px] leading-relaxed text-[var(--color-muted)]">
-        {EVIDENCE[lang]}
+        {REQUIREMENTS_CARD_EVIDENCE[lang]}
       </p>
 
       <div className="mt-5 border-t border-[var(--color-border)] pt-4">
@@ -155,7 +142,7 @@ export default function RequirementsCard({ lang }: { lang: Lang }) {
           {VPS_TITLE[lang]}
         </h4>
         <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-bright)]">
-          {VALUES.vps[lang]}
+          {REQUIREMENTS_CARD_VALUES.vps[lang]}
         </p>
         <Link
           href={DOCS_VPS}
