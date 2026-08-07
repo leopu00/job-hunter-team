@@ -9,7 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${REPO:-$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)}"
 
-TEST_RUNTIME=$HOME/.jht/runtime/test-flow
+TEST_RUNTIME=$HOME/.local/share/job-hunter-team/test-flow
 TEST_BIN=$HOME/.local/bin/jht-test
 TEST_CONTAINER=jht-flow-test
 
@@ -24,8 +24,10 @@ rm -rf $TEST_RUNTIME
 echo "=== install simulation: copia file ==="
 mkdir -p $TEST_RUNTIME $(dirname $TEST_BIN)
 cp $REPO/docker-compose.yml $TEST_RUNTIME/docker-compose.yml
+cp $REPO/scripts/host-setup.sh $TEST_RUNTIME/host-setup.sh
 cp $REPO/scripts/jht-wrapper.sh $TEST_BIN
-chmod +x $TEST_BIN
+chmod 700 $TEST_RUNTIME $TEST_RUNTIME/host-setup.sh $TEST_BIN
+chmod 600 $TEST_RUNTIME/docker-compose.yml
 
 # Customizzazioni del compose per test isolato:
 # 1) container_name unique
@@ -46,6 +48,16 @@ content = re.sub(r'(\s+- \$\{HOME\}/Documents/Job Hunter Team:/jht_user\n)', r'\
 with open('$TEST_RUNTIME/docker-compose.yml', 'w') as f:
     f.write(content)
 "
+
+# The real wrapper refuses mutable/unattested host metadata. Build the same
+# local integrity manifest produced by install.sh after test-only compose edits.
+{
+  printf 'version=1\n'
+  printf 'docker-compose.yml=%s\n' "$(sha256sum "$TEST_RUNTIME/docker-compose.yml" | awk '{print $1}')"
+  printf 'host-setup.sh=%s\n' "$(sha256sum "$TEST_RUNTIME/host-setup.sh" | awk '{print $1}')"
+  printf 'jht-wrapper.sh=%s\n' "$(sha256sum "$TEST_BIN" | awk '{print $1}')"
+} > "$TEST_RUNTIME/.runtime-integrity"
+chmod 600 "$TEST_RUNTIME/.runtime-integrity"
 
 echo "=== compose finale ==="
 cat $TEST_RUNTIME/docker-compose.yml

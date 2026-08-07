@@ -16,7 +16,7 @@
 # ║                                                                          ║
 # ║  Override via env:                                                       ║
 # ║    JHT_CONTAINER_NAME=jht                                                ║
-# ║    JHT_RUNTIME_DIR=$env:USERPROFILE\.jht\runtime                         ║
+# ║    JHT_RUNTIME_DIR=$env:LOCALAPPDATA\Job Hunter Team\host-runtime        ║
 # ║    JHT_COMPOSE_FILE=$JHT_RUNTIME_DIR\docker-compose.yml                  ║
 # ║                                                                          ║
 # ║  Differenze vs jht-wrapper.sh (per design Windows-native):               ║
@@ -34,12 +34,17 @@ $ErrorActionPreference = 'Stop'
 # I wrapper storici non la espongono e richiedono il bootstrap temporaneo del
 # wrapper production con WrapperPath ancorato al comando host originale.
 $JHT_UPGRADE_PROTOCOL = 1
+$JHT_HOST_RUNTIME_PROTOCOL = 1
 
 $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { 'jht' }
-$RuntimeDir  = if ($env:JHT_RUNTIME_DIR)    { $env:JHT_RUNTIME_DIR }    else { Join-Path $env:USERPROFILE '.jht\runtime' }
+$LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
+if (-not $LocalAppData) { throw 'LOCALAPPDATA non disponibile: runtime host rifiutato' }
+$RuntimeDir  = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $ComposeFile = if ($env:JHT_COMPOSE_FILE)   { $env:JHT_COMPOSE_FILE }   else { Join-Path $RuntimeDir 'docker-compose.yml' }
+$RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
-$RawBase     = if ($env:JHT_RAW_BASE)       { $env:JHT_RAW_BASE.TrimEnd('/') } else { 'https://raw.githubusercontent.com/leopu00/job-hunter-team/production' }
+$RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
+$ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
 $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
 $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
@@ -47,6 +52,7 @@ $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } els
 # Carica la host env (scritta da install.ps1 / setup wizard: JHT_HOST_TYPE=local|vps).
 # Formato file: VAR=value per riga, ignora # e righe vuote.
 $HostEnvFile = if ($env:JHT_HOST_ENV_FILE) { $env:JHT_HOST_ENV_FILE } else { Join-Path $env:USERPROFILE '.jht\host.env' }
+$AllowedHostEnvNames = @('JHT_HOST_TYPE', 'JHT_LANG', 'JHT_USER_TZ')
 if (Test-Path $HostEnvFile) {
   Get-Content $HostEnvFile | ForEach-Object {
     if ($_ -match '^\s*#') { return }
@@ -54,6 +60,7 @@ if (Test-Path $HostEnvFile) {
     if ($_ -match '^\s*([A-Z_][A-Z0-9_]*)=(.*)$') {
       $name  = $Matches[1]
       $value = $Matches[2].Trim('"').Trim("'")
+      if ($AllowedHostEnvNames -notcontains $name) { return }
       Set-Item -Path "env:$name" -Value $value -ErrorAction SilentlyContinue
     }
   }
@@ -66,6 +73,161 @@ if (-not $env:JHT_USER_TZ)   { $env:JHT_USER_TZ = 'UTC' }
 function Write-Err  { param([string]$Msg) Write-Host "error: $Msg" -ForegroundColor Red }
 function Write-Warn { param([string]$Msg) Write-Host "warn:  $Msg" -ForegroundColor Yellow }
 function Write-Info { param([string]$Msg) Write-Host $Msg -ForegroundColor DarkGray }
+
+function Get-AttestedRawBase {
+  if ($RawBaseOverride) { return $RawBaseOverride }
+  try {
+    $metadata = Invoke-RestMethod -UseBasicParsing -Uri "https://api.github.com/repos/leopu00/job-hunter-team/commits/$ReleaseRef"
+    $sha = [string]$metadata.sha
+    if ($sha -notmatch '^[0-9a-fA-F]{40}$') { throw 'invalid release commit' }
+    return "https://raw.githubusercontent.com/leopu00/job-hunter-team/$sha"
+  } catch { throw 'release ref cannot be resolved to an immutable commit' }
+}
+
+function Test-ProtectedRuntimeNode {
+  param([string]$Path, [switch]$Directory)
+  try {
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if ($Directory -and -not $item.PSIsContainer) { return $false }
+    if (-not $Directory -and $item.PSIsContainer) { return $false }
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
+    $current = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $owner = (Get-Acl -LiteralPath $Path).Owner
+    $ownerSid = ([Security.Principal.NTAccount]$owner).Translate([Security.Principal.SecurityIdentifier]).Value
+    if ($ownerSid -ne $current.User.Value) { return $false }
+    return $true
+  } catch { return $false }
+}
+
+function Test-RuntimeAncestorsWithoutReparsePoint {
+  param([string]$Path)
+  try {
+    $current = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    while ($current) {
+      if (($current.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
+      $parent = $current.Parent
+      if (-not $parent -or $parent.FullName -eq $current.FullName) { break }
+      $current = $parent
+    }
+    return $true
+  } catch { return $false }
+}
+
+function Test-RuntimeDirectoryAcl {
+  try {
+    $acl = Get-Acl -LiteralPath $RuntimeDir -ErrorAction Stop
+    if (-not $acl.AreAccessRulesProtected) { return $false }
+    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    foreach ($rule in $acl.Access) {
+      if ($rule.AccessControlType -ne 'Allow') { continue }
+      $rights = [Security.AccessControl.FileSystemRights]$rule.FileSystemRights
+      $writes = $rights -band ([Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Modify -bor [Security.AccessControl.FileSystemRights]::FullControl)
+      if (-not $writes) { continue }
+      $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+      if ($sid -notin @($currentSid, 'S-1-5-18', 'S-1-5-32-544')) { return $false }
+    }
+    return $true
+  } catch { return $false }
+}
+
+function Test-RuntimePathAuthority {
+  try {
+    $runtime = [IO.Path]::GetFullPath($RuntimeDir).TrimEnd('\', '/')
+    $compose = [IO.Path]::GetFullPath($ComposeFile)
+    $legacy = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE '.jht')).TrimEnd('\', '/')
+    $userData = if ($env:JHT_USER_DIR_HOST) { $env:JHT_USER_DIR_HOST } else { Join-Path $env:USERPROFILE 'Documents\Job Hunter Team' }
+    $userData = [IO.Path]::GetFullPath($userData).TrimEnd('\', '/')
+    if ($runtime.Equals($legacy, [StringComparison]::OrdinalIgnoreCase) -or $runtime.StartsWith($legacy + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if ($runtime.Equals($userData, [StringComparison]::OrdinalIgnoreCase) -or $runtime.StartsWith($userData + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if ($compose -ne [IO.Path]::Combine($runtime, 'docker-compose.yml')) { return $false }
+    $wrapper = [IO.Path]::GetFullPath($WrapperPath)
+    if ($wrapper.Equals($legacy, [StringComparison]::OrdinalIgnoreCase) -or $wrapper.StartsWith($legacy + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if ($wrapper.Equals($userData, [StringComparison]::OrdinalIgnoreCase) -or $wrapper.StartsWith($userData + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    return $true
+  } catch { return $false }
+}
+
+function Write-RuntimeManifest {
+  $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
+  $wrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
+  $temp = "$RuntimeManifest.tmp-$PID-$([guid]::NewGuid().ToString('N'))"
+  [IO.File]::WriteAllText($temp, "version=1`ndocker-compose.yml=$hash`njht-wrapper.ps1=$wrapperHash`n", [Text.UTF8Encoding]::new($false))
+  Move-Item -LiteralPath $temp -Destination $RuntimeManifest -Force
+}
+
+function Test-RuntimeBundleTrusted {
+  if (-not (Test-RuntimePathAuthority)) { return $false }
+  if (-not (Test-RuntimeAncestorsWithoutReparsePoint $RuntimeDir)) { return $false }
+  if (-not (Test-RuntimeAncestorsWithoutReparsePoint $WrapperPath)) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $RuntimeDir -Directory)) { return $false }
+  if (-not (Test-RuntimeDirectoryAcl)) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $ComposeFile)) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $RuntimeManifest)) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $WrapperPath)) { return $false }
+  try {
+    $values = ConvertFrom-StringData (Get-Content -LiteralPath $RuntimeManifest -Raw)
+    if ($values.version -ne '1') { return $false }
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
+    $wrapperActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
+    if ($values.'docker-compose.yml' -ne $actual -or $values.'jht-wrapper.ps1' -ne $wrapperActual) { return $false }
+    if (-not (Select-String -LiteralPath $WrapperPath -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { return $false }
+    if (-not (Select-String -LiteralPath $ComposeFile -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { return $false }
+    return $true
+  } catch { return $false }
+}
+
+function Install-ProtectedRuntimeFromRelease {
+  if (Test-Path -LiteralPath $RuntimeDir) { return $false }
+  if (-not (Test-RuntimePathAuthority)) { return $false }
+  $temp = $null
+  $wrapperTemp = $null
+  try {
+    New-Item -ItemType Directory -Path $RuntimeDir -Force | Out-Null
+    $acl = Get-Acl -LiteralPath $RuntimeDir
+    $acl.SetAccessRuleProtection($true, $false)
+    $rule = New-Object Security.AccessControl.FileSystemAccessRule(
+      [Security.Principal.WindowsIdentity]::GetCurrent().User,
+      'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+    $acl.SetAccessRule($rule)
+    Set-Acl -LiteralPath $RuntimeDir -AclObject $acl
+    $releaseBase = Get-AttestedRawBase
+    $temp = Join-Path $RuntimeDir ('.compose-' + [guid]::NewGuid().ToString('N'))
+    Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/docker-compose.yml" -OutFile $temp
+    if (-not (Select-String -LiteralPath $temp -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { throw 'release compose lacks protected runtime mask' }
+    Move-Item -LiteralPath $temp -Destination $ComposeFile
+    if (-not (Select-String -LiteralPath $WrapperPath -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) {
+      if ($env:JHT_ALLOW_LEGACY_WRAPPER_MIGRATION -ne '1') { throw 'legacy wrapper migration is not authorized' }
+      $wrapperTemp = Join-Path (Split-Path -LiteralPath $WrapperPath -Parent) ('.jht-wrapper-' + [guid]::NewGuid().ToString('N') + '.ps1')
+      Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/scripts/jht-wrapper.ps1" -OutFile $wrapperTemp
+      [scriptblock]::Create((Get-Content -LiteralPath $wrapperTemp -Raw)) | Out-Null
+      if (-not (Select-String -LiteralPath $wrapperTemp -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { throw 'release wrapper lacks protected runtime protocol' }
+      Move-Item -LiteralPath $wrapperTemp -Destination $WrapperPath -Force
+    }
+    Write-RuntimeManifest
+    return (Test-RuntimeBundleTrusted)
+  } catch {
+    if ($temp) { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+    if ($wrapperTemp) { Remove-Item -LiteralPath $wrapperTemp -Force -ErrorAction SilentlyContinue }
+    Remove-Item -LiteralPath $ComposeFile -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $RuntimeManifest -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $RuntimeDir -Force -ErrorAction SilentlyContinue
+    return $false
+  }
+}
+
+function Assert-TrustedRuntime {
+  if (-not (Test-Path -LiteralPath $RuntimeDir)) {
+    if (-not (Install-ProtectedRuntimeFromRelease)) { throw 'protected host runtime bootstrap failed' }
+  }
+  if (-not (Test-RuntimeBundleTrusted)) { throw 'untrusted host runtime path, owner, reparse point or SHA-256' }
+}
+
+# Deterministic, side-effect-free seam for the Windows security regression.
+# It exits before Docker, network, manifests or filesystem mutation.
+if ($env:JHT_RUNTIME_AUTHORITY_SELFTEST -eq '1') {
+  if (Test-RuntimePathAuthority) { exit 0 }
+  exit 1
+}
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
 function Require-Docker {
@@ -81,17 +243,12 @@ function Require-Docker {
 }
 
 function Require-ComposeFile {
-  if (-not (Test-Path $ComposeFile)) {
-    Write-Err "compose file non trovato: $ComposeFile"
-    Write-Info "Esegui di nuovo install.ps1 oppure scarica manualmente:"
-    Write-Info "  New-Item -ItemType Directory -Force '$RuntimeDir' | Out-Null"
-    Write-Info "  iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/production/docker-compose.yml -OutFile '$ComposeFile'"
-    exit 1
-  }
+  try { Assert-TrustedRuntime } catch { Write-Err $_.Exception.Message; exit 1 }
 }
 
 function Invoke-Compose {
   param([Parameter(ValueFromRemainingArguments)] $Args)
+  Assert-TrustedRuntime
   # Docker Desktop Windows accetta forward-slash o backslash. project-directory
   # punta al runtime dir per bind-mount relativi (anche se compose qui e'
   # image-only, lasciamo per simmetria col bash wrapper).
@@ -670,6 +827,17 @@ function Write-UpgradeNote { param([string]$Message) if (-not $script:UpgradeJso
 
 function Invoke-UpgradeCompose {
   param([string]$File, [Parameter(ValueFromRemainingArguments)] [string[]]$ComposeArgs)
+  # Active metadata must always be attested. Candidate files are accepted
+  # only inside the protected, freshly-created upgrade stage.
+  if ([IO.Path]::GetFullPath($File) -eq [IO.Path]::GetFullPath($ComposeFile)) {
+    Assert-TrustedRuntime
+  } else {
+    $stageRoot = if ($script:UpgradeStage) { [IO.Path]::GetFullPath($script:UpgradeStage).TrimEnd('\', '/') } else { '' }
+    $candidate = [IO.Path]::GetFullPath($File)
+    if (-not $stageRoot -or -not $candidate.StartsWith($stageRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+      return $false
+    }
+  }
   $all = @('compose', '-f', $File, '--project-directory', $RuntimeDir) + $ComposeArgs
   if ($script:UpgradeJson) { & docker @all *> $null } else { & docker @all }
   return $LASTEXITCODE -eq 0
@@ -737,12 +905,14 @@ function Remove-UpgradeTransaction {
   if ($script:UpgradeRollbackDir -and (Test-Path $script:UpgradeRollbackDir)) {
     Remove-Item -LiteralPath (Join-Path $script:UpgradeRollbackDir 'docker-compose.yml') -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $script:UpgradeRollbackDir 'jht-wrapper.ps1') -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $script:UpgradeRollbackDir '.runtime-integrity') -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $script:UpgradeRollbackDir -Force -ErrorAction SilentlyContinue
   }
 }
 
 function Restore-UpgradePrevious {
   if (-not (Test-Path $script:UpgradeJournal)) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $script:UpgradeJournal)) { return $false }
   try { $journal = Get-Content -LiteralPath $script:UpgradeJournal -Raw | ConvertFrom-Json } catch { return $false }
   if ([string]$journal.version -ne '1') { return $false }
   if ([string]$journal.phase -notin @('prepared', 'pulled', 'candidate_started', 'metadata_committed')) { return $false }
@@ -758,14 +928,24 @@ function Restore-UpgradePrevious {
   # rende innocuo anche un prefisso seguito da ../, mentre il rifiuto dei link
   # evita che un journal corrotto porti fuori dal runtime fisico.
   if (-not $rollbackInfo.PSIsContainer -or $rollbackInfo.LinkType) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $fullRollback -Directory)) { return $false }
   $rollbackParent = ([IO.Path]::GetFullPath((Split-Path -LiteralPath $fullRollback -Parent))).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
   $rollbackLeaf = Split-Path -LiteralPath $fullRollback -Leaf
   if ($rollbackParent -ne $runtimeRoot -or $rollbackLeaf -notmatch '^\.upgrade-rollback-[A-Za-z0-9_-]+$') { return $false }
   try {
     $composeSnapshot = Get-Item -LiteralPath (Join-Path $fullRollback 'docker-compose.yml') -Force -ErrorAction Stop
     $wrapperSnapshot = Get-Item -LiteralPath (Join-Path $fullRollback 'jht-wrapper.ps1') -Force -ErrorAction Stop
+    $manifestSnapshot = Get-Item -LiteralPath (Join-Path $fullRollback '.runtime-integrity') -Force -ErrorAction Stop
   } catch { return $false }
-  if ($composeSnapshot.PSIsContainer -or $wrapperSnapshot.PSIsContainer -or $composeSnapshot.LinkType -or $wrapperSnapshot.LinkType) { return $false }
+  if ($composeSnapshot.PSIsContainer -or $wrapperSnapshot.PSIsContainer -or $manifestSnapshot.PSIsContainer -or $composeSnapshot.LinkType -or $wrapperSnapshot.LinkType -or $manifestSnapshot.LinkType) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $composeSnapshot.FullName) -or -not (Test-ProtectedRuntimeNode $wrapperSnapshot.FullName) -or -not (Test-ProtectedRuntimeNode $manifestSnapshot.FullName)) { return $false }
+  try {
+    $snapshotValues = ConvertFrom-StringData (Get-Content -LiteralPath $manifestSnapshot.FullName -Raw)
+    $snapshotHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $composeSnapshot.FullName).Hash.ToLowerInvariant()
+    $snapshotWrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $wrapperSnapshot.FullName).Hash.ToLowerInvariant()
+    if ($snapshotValues.'docker-compose.yml' -ne $snapshotHash) { return $false }
+    if ($snapshotValues.'jht-wrapper.ps1' -ne $snapshotWrapperHash) { return $false }
+  } catch { return $false }
   if ([bool]$journal.was_running) {
     if ([string]$journal.old_image -notmatch '^sha256:[A-Za-z0-9]+$') { return $false }
     # Verifica l'immagine immutabile prima della prima sostituzione metadata:
@@ -776,6 +956,7 @@ function Restore-UpgradePrevious {
   } elseif ([string]$journal.old_image -ne 'none') { return $false }
   if (-not (Replace-UpgradeFile $composeSnapshot.FullName $ComposeFile)) { return $false }
   if (-not (Replace-UpgradeFile $wrapperSnapshot.FullName $WrapperPath)) { return $false }
+  if (-not (Replace-UpgradeFile $manifestSnapshot.FullName $RuntimeManifest)) { return $false }
   if ([bool]$journal.was_running) {
     $before = $env:JHT_IMAGE
     $env:JHT_IMAGE = [string]$journal.old_image
@@ -826,11 +1007,19 @@ function Invoke-RuntimeUpgrade {
     elseif ($arg -eq '--check') { $checkOnly = $true }
     elseif ($arg -ne '--apply') { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Opzione upgrade non supportata' $false; return 2 }
   }
+  if (-not (Test-Path -LiteralPath $RuntimeDir)) {
+    if (-not (Install-ProtectedRuntimeFromRelease)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Runtime host protetto non installabile' $false; return 1 }
+  }
+  if (-not (Test-RuntimePathAuthority) -or -not (Test-RuntimeAncestorsWithoutReparsePoint $RuntimeDir) -or -not (Test-ProtectedRuntimeNode $RuntimeDir -Directory) -or -not (Test-RuntimeDirectoryAcl)) {
+    Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Runtime host fuori authority' $false
+    return 1
+  }
   if (-not (Enter-UpgradeLock)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Un aggiornamento e gia in corso' $false; return 1 }
   $script:UpgradeJournal = Join-Path $RuntimeDir '.upgrade-journal'
   try {
-    if (-not (Test-UpgradeDockerReady) -or -not (Test-Path $ComposeFile) -or -not (Test-Path $WrapperPath)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Docker o runtime host non disponibile' $false; return 1 }
     if ((Test-Path $script:UpgradeJournal) -and -not (Restore-UpgradePrevious)) { Write-UpgradeResult $false $false 'recovery' 'unknown' 'none' 'unknown' 'none' $false 'Recovery dell upgrade precedente non riuscita' $false; return 1 }
+    try { Assert-TrustedRuntime } catch { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Runtime host non attendibile' $false; return 1 }
+    if (-not (Test-UpgradeDockerReady) -or -not (Test-Path $ComposeFile) -or -not (Test-Path $WrapperPath)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Docker o runtime host non disponibile' $false; return 1 }
     $wasRunning = Test-ContainerUp
     $oldImage = if ($wasRunning) { Get-UpgradeImage } else { 'none' }
     $oldVersion = if ($wasRunning) { Get-UpgradeVersion } else { 'non-installata' }
@@ -840,9 +1029,12 @@ function Invoke-RuntimeUpgrade {
     $newCompose = Join-Path $script:UpgradeStage 'docker-compose.yml'; $newWrapper = Join-Path $script:UpgradeStage 'jht-wrapper.ps1'
     Write-UpgradeNote 'Scarico runtime aggiornato...'
     try {
-      Invoke-WebRequest -UseBasicParsing -Uri "$RawBase/docker-compose.yml" -OutFile $newCompose
-      Invoke-WebRequest -UseBasicParsing -Uri "$RawBase/scripts/jht-wrapper.ps1" -OutFile $newWrapper
+      $releaseBase = Get-AttestedRawBase
+      Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/docker-compose.yml" -OutFile $newCompose
+      Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/scripts/jht-wrapper.ps1" -OutFile $newWrapper
       [scriptblock]::Create((Get-Content -LiteralPath $newWrapper -Raw)) | Out-Null
+      if (-not (Select-String -LiteralPath $newWrapper -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { throw 'wrapper runtime protocol missing' }
+      if (-not (Select-String -LiteralPath $newCompose -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { throw 'compose runtime mask missing' }
     } catch { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Runtime remoto non valido o non raggiungibile' $false; return 1 }
     if (-not (Invoke-UpgradeCompose $newCompose 'config' '-q')) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Compose remoto non valido' $false; return 1 }
     $metadataChanged = -not ((Get-FileHash $newCompose).Hash -eq (Get-FileHash $ComposeFile).Hash) -or -not ((Get-FileHash $newWrapper).Hash -eq (Get-FileHash $WrapperPath).Hash)
@@ -850,6 +1042,7 @@ function Invoke-RuntimeUpgrade {
     New-Item -ItemType Directory -Path $script:UpgradeRollbackDir -ErrorAction Stop | Out-Null
     Copy-Item -LiteralPath $ComposeFile -Destination (Join-Path $script:UpgradeRollbackDir 'docker-compose.yml')
     Copy-Item -LiteralPath $WrapperPath -Destination (Join-Path $script:UpgradeRollbackDir 'jht-wrapper.ps1')
+    Copy-Item -LiteralPath $RuntimeManifest -Destination (Join-Path $script:UpgradeRollbackDir '.runtime-integrity')
     if (-not (Write-UpgradeJournal 'prepared' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile preparare il rollback' $false; return 1 }
     Write-UpgradeNote 'Scarico l immagine piu recente...'
     if (-not (Invoke-UpgradeCompose $newCompose 'pull' $Container)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Download immagine non riuscito' $false; return 1 }
@@ -864,7 +1057,11 @@ function Invoke-RuntimeUpgrade {
       $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'verify' $oldVersion $oldImage $oldVersion $oldImage $false 'Il nuovo runtime non ha superato la verifica' $rolledBack; return 1
     }
     $newVersion = Get-UpgradeVersion; if (-not $newVersion) { $newVersion = 'sconosciuta' }
-    if (-not (Replace-UpgradeFile $newCompose $ComposeFile) -or -not (Replace-UpgradeFile $newWrapper $WrapperPath) -or -not (Write-UpgradeJournal 'metadata_committed' $oldImage $wasRunning)) {
+    if (-not (Replace-UpgradeFile $newCompose $ComposeFile) -or -not (Replace-UpgradeFile $newWrapper $WrapperPath)) {
+      $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'commit' $oldVersion $oldImage $oldVersion $oldImage $false 'Metadata runtime non persistiti' $rolledBack; return 1
+    }
+    Write-RuntimeManifest
+    if (-not (Write-UpgradeJournal 'metadata_committed' $oldImage $wasRunning)) {
       $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'commit' $oldVersion $oldImage $oldVersion $oldImage $false 'Metadata runtime non persistiti' $rolledBack; return 1
     }
     Remove-UpgradeTransaction
@@ -913,29 +1110,29 @@ switch ($Sub) {
   }
 
   { $_ -in @('up', 'start-container') } {
-    Require-Docker
     Require-ComposeFile
+    Require-Docker
     Invoke-Compose up -d
     break
   }
 
   { $_ -in @('down', 'stop-container') } {
-    Require-Docker
     Require-ComposeFile
+    Require-Docker
     Invoke-Compose down
     break
   }
 
   'restart' {
-    Require-Docker
     Require-ComposeFile
+    Require-Docker
     Invoke-Compose restart $Container
     break
   }
 
   'recreate' {
-    Require-Docker
     Require-ComposeFile
+    Require-Docker
     Invoke-Compose down
     Invoke-Compose up -d
     break
@@ -972,8 +1169,8 @@ switch ($Sub) {
 
   # OAuth login: legge il provider attivo e avvia il suo flusso reale.
   { $_ -in @('oauth-login', 'claude-login') } {
-    Require-Docker
     Require-ComposeFile
+    Require-Docker
     Ensure-Up
     $Provider = (& docker exec $Container node -e "try{const c=require('/jht_home/jht.config.json');process.stdout.write(String(c.active_provider||''))}catch{}" 2>$null)
     switch (($Provider | Out-String).Trim().ToLowerInvariant()) {
@@ -988,16 +1185,16 @@ switch ($Sub) {
   # Setup: skip host-setup (non esiste su Windows), delega tutto al wizard
   # Node nel container che leggera' JHT_HOST_TYPE dall'env passato.
   'setup' {
-    Require-Docker
     Require-ComposeFile
+    Require-Docker
     Ensure-Up
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @Rest
     break
   }
 
   'download' {
-    Require-Docker
     Require-ComposeFile
+    Require-Docker
     Ensure-Up
     Invoke-HostDownload $Rest
     exit $script:HostDownloadExitCode
@@ -1005,8 +1202,8 @@ switch ($Sub) {
 
   # Default: nessun arg = help.
   '' {
-    Require-Docker
     Require-ComposeFile
+    Require-Docker
     Ensure-Up
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry --help
     break
@@ -1014,8 +1211,8 @@ switch ($Sub) {
 
   # Tutto il resto: delegato al CLI Node nel container.
   default {
-    Require-Docker
     Require-ComposeFile
+    Require-Docker
     Ensure-Up
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
     break

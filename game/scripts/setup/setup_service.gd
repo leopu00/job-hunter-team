@@ -56,7 +56,9 @@ const DEFAULT_RUNTIME_IMAGE := "ghcr.io/leopu00/jht:0.3.5"
 ## avvia una copia temporanea del dispatcher production che conosce il
 ## protocollo JSON e gli indica il wrapper reale da aggiornare atomically.
 const UPGRADE_BOOTSTRAP_RAW_BASE := "https://raw.githubusercontent.com/leopu00/job-hunter-team/production"
+const UPGRADE_BOOTSTRAP_COMMIT_API := "https://api.github.com/repos/leopu00/job-hunter-team/commits/production"
 const UPGRADE_BOOTSTRAP_PROTOCOL := "1"
+const UPGRADE_BOOTSTRAP_HOST_RUNTIME_PROTOCOL := "1"
 
 var status := {
 	"docker_available": false, "docker_running": false,
@@ -155,8 +157,42 @@ func _self_test_vps_setup() -> void:
 		failures.append("IPv4 e chiave valide rifiutate")
 	var runtime_command := _vps_prepare_runtime_command()
 	if not runtime_command.contains("command -v jht") \
-			or not runtime_command.contains("$HOME/.local/bin/jht"):
+			or not runtime_command.contains("$HOME/.local/bin/jht") \
+			or not runtime_command.contains("JHT_HOST_RUNTIME_PROTOCOL=1") \
+			or not runtime_command.contains("JHT_UPGRADE_PROTOCOL=1") \
+			or runtime_command.contains("\"$JHT_BIN\" up") \
+			or not runtime_command.contains("JHT_WRAPPER_PATH=\"$JHT_BIN\" bash \"$JHT_BOOTSTRAP\""):
 		failures.append("rilevamento wrapper VPS incompleto")
+	# Un wrapper legacy con il solo protocollo upgrade non deve essere mai
+	# eseguito: migrazione e rollback condividono esattamente questo gate.
+	var legacy_bin := test_root.path_join("bin")
+	var legacy_jht := legacy_bin.path_join("jht")
+	var legacy_sentinel := test_root.path_join("legacy-vps-wrapper-ran")
+	DirAccess.make_dir_recursive_absolute(legacy_bin)
+	_test_write(legacy_jht, "#!/usr/bin/env bash\nJHT_UPGRADE_PROTOCOL=1\ntouch " \
+			+ _shell_quote(legacy_sentinel) + "\n")
+	var secure_fixture := legacy_bin.path_join("secure-bootstrap")
+	_test_write(secure_fixture, "#!/usr/bin/env bash\nJHT_UPGRADE_PROTOCOL=1\n" \
+			+ "JHT_HOST_RUNTIME_PROTOCOL=1\nexit 0\n")
+	var fake_curl := legacy_bin.path_join("curl")
+	_test_write(fake_curl, "#!/usr/bin/env bash\nset -eu\nurl='' out=''\n" \
+			+ "while [ \"$#\" -gt 0 ]; do case \"$1\" in -o) out=$2; shift 2;; -*) shift;; *) url=$1; shift;; esac; done\n" \
+			+ "case \"$url\" in */commits/production) printf '{\\n  \"sha\": \"cccccccccccccccccccccccccccccccccccccccc\"\\n}\\n' > \"$out\";; " \
+			+ "*) cp " + _shell_quote(secure_fixture) + " \"$out\";; esac\n")
+	_run("chmod", PackedStringArray(["700", legacy_jht]))
+	_run("chmod", PackedStringArray(["700", fake_curl, secure_fixture]))
+	# OS.execute ricompone gli argomenti di `bash -c` tramite la shell su macOS:
+	# un comando ricco di virgolette perderebbe il confine del singolo argv.
+	# Uno script sintetico mantiene il test fedele a ciò che riceve SSH.
+	var probe_script := test_root.path_join("probe-vps-runtime.sh")
+	_test_write(probe_script, "#!/usr/bin/env bash\nPATH=" \
+			+ _shell_quote(legacy_bin) + ":/usr/bin:/bin\n" + runtime_command + "\n")
+	_run("chmod", PackedStringArray(["700", probe_script]))
+	var legacy_probe := _run("bash", PackedStringArray([probe_script]))
+	if legacy_probe.get("code", 1) != 0 \
+			or FileAccess.file_exists(legacy_sentinel):
+		failures.append("bootstrap VPS non isola il wrapper legacy: " \
+				+ str(legacy_probe.get("out", "")).strip_edges().right(400))
 
 	var archive := test_root.path_join("migration.tar.gz")
 	var packed := _create_local_migration_archive(archive)
@@ -188,6 +224,14 @@ func _self_test_vps_setup() -> void:
 			failures.append("transazione remota senza garanzia: " + required)
 	if apply_script.contains("tar czf \"$BACKUP\" \"$@\" || true"):
 		failures.append("errore backup destinazione ignorato")
+	if apply_script.contains("cp -a /root/.jht/runtime"):
+		failures.append("runtime legacy copiato nella migrazione VPS")
+	if not apply_script.contains("JHT_HOST_RUNTIME_PROTOCOL=1"):
+		failures.append("migrazione VPS puo invocare wrapper legacy")
+	var rollback_script := _rollback_vps_destination_script("12345")
+	if not rollback_script.contains("JHT_HOST_RUNTIME_PROTOCOL=1") \
+			or rollback_script.contains("cp -a /root/.jht/runtime"):
+		failures.append("rollback VPS puo consumare runtime o wrapper legacy")
 	var local_env := _local_host_env(test_root.path_join(".jht/host.env"))
 	if not local_env.begins_with("JHT_HOST_TYPE=local\n") \
 			or local_env.count("JHT_HOST_TYPE=") != 1:
@@ -1144,15 +1188,22 @@ static func _posix_upgrade_bootstrap_command(wrapper_path: String,
 
 static func _posix_upgrade_bootstrap_with_target(wrapper_target: String,
 		check_only: bool) -> String:
-	var wrapper_url := UPGRADE_BOOTSTRAP_RAW_BASE + "/scripts/jht-wrapper.sh"
 	return "set -e; JHT_BOOTSTRAP=\"$(mktemp \"${TMPDIR:-/tmp}/jht-wrapper.XXXXXX\")\"; " \
-			+ "cleanup() { rm -f \"$JHT_BOOTSTRAP\"; }; trap cleanup EXIT HUP INT TERM; " \
-			+ "curl -fsSL " + _shell_quote(wrapper_url) + " -o \"$JHT_BOOTSTRAP\"; " \
+			+ "JHT_RELEASE_META=\"$(mktemp \"${TMPDIR:-/tmp}/jht-release.XXXXXX\")\"; " \
+			+ "cleanup() { rm -f \"$JHT_BOOTSTRAP\" \"$JHT_RELEASE_META\"; }; trap cleanup EXIT HUP INT TERM; " \
+			+ "curl -fsSL " + _shell_quote(UPGRADE_BOOTSTRAP_COMMIT_API) + " -o \"$JHT_RELEASE_META\"; " \
+			+ "JHT_RELEASE_SHA=\"$(sed -n 's/^[[:space:]]*\"sha\": \"\\([0-9a-fA-F]\\{40\\}\\)\".*/\\1/p' \"$JHT_RELEASE_META\" | head -n 1)\"; " \
+			+ "printf '%s' \"$JHT_RELEASE_SHA\" | grep -Eq '^[0-9a-fA-F]{40}$'; " \
+			+ "JHT_ATTESTED_RAW_BASE=\"https://raw.githubusercontent.com/leopu00/job-hunter-team/$JHT_RELEASE_SHA\"; " \
+			+ "curl -fsSL \"$JHT_ATTESTED_RAW_BASE/scripts/jht-wrapper.sh\" -o \"$JHT_BOOTSTRAP\"; " \
 			+ "bash -n \"$JHT_BOOTSTRAP\"; " \
 			+ "grep -Eq " + _shell_quote("^[[:space:]]*JHT_UPGRADE_PROTOCOL=" \
 					+ UPGRADE_BOOTSTRAP_PROTOCOL + "([[:space:]]|$)") \
 			+ " \"$JHT_BOOTSTRAP\"; " \
-			+ "JHT_RAW_BASE=" + _shell_quote(UPGRADE_BOOTSTRAP_RAW_BASE) + " " \
+			+ "grep -Eq " + _shell_quote("^[[:space:]]*JHT_HOST_RUNTIME_PROTOCOL=" \
+					+ UPGRADE_BOOTSTRAP_HOST_RUNTIME_PROTOCOL + "([[:space:]]|$)") \
+			+ " \"$JHT_BOOTSTRAP\"; " \
+			+ "JHT_RAW_BASE=\"$JHT_ATTESTED_RAW_BASE\" JHT_ALLOW_LEGACY_WRAPPER_MIGRATION=1 " \
 			+ wrapper_target + " bash \"$JHT_BOOTSTRAP\" " + _upgrade_arguments(check_only)
 
 
@@ -1191,18 +1242,21 @@ static func _powershell_quote(value: String) -> String:
 ## contaminato né il bootstrap resta in %TEMP%.
 static func _windows_upgrade_bootstrap_command(wrapper_path: String,
 		check_only: bool) -> String:
-	var wrapper_url := UPGRADE_BOOTSTRAP_RAW_BASE + "/scripts/jht-wrapper.ps1"
 	var target := _powershell_quote(wrapper_path)
-	var raw_base := _powershell_quote(UPGRADE_BOOTSTRAP_RAW_BASE)
-	var url := _powershell_quote(wrapper_url)
+	var commit_api := _powershell_quote(UPGRADE_BOOTSTRAP_COMMIT_API)
 	return "$ErrorActionPreference='Stop'; $code=1; " \
 			+ "$base=Join-Path ([IO.Path]::GetTempPath()) ('jht-upgrade-'+[guid]::NewGuid().ToString('N')); " \
 			+ "$tmp=$base+'.ps1'; $out=$base+'.out'; $err=$base+'.err'; " \
-			+ "try { Invoke-WebRequest -UseBasicParsing -Uri " + url + " -OutFile $tmp; " \
+			+ "try { $meta=Invoke-RestMethod -UseBasicParsing -Uri " + commit_api + "; " \
+			+ "$sha=[string]$meta.sha; if ($sha -notmatch '^[0-9a-fA-F]{40}$') { throw 'Release host non attestabile' }; " \
+			+ "$rawBase='https://raw.githubusercontent.com/leopu00/job-hunter-team/'+$sha; " \
+			+ "Invoke-WebRequest -UseBasicParsing -Uri ($rawBase+'/scripts/jht-wrapper.ps1') -OutFile $tmp; " \
 			+ "[scriptblock]::Create((Get-Content -LiteralPath $tmp -Raw)) | Out-Null; " \
 			+ "if (-not (Select-String -Path $tmp -Pattern '^\\s*\\$JHT_UPGRADE_PROTOCOL\\s*=\\s*" \
 			+ UPGRADE_BOOTSTRAP_PROTOCOL + "\\s*$' -Quiet)) { throw 'Wrapper upgrade senza protocollo atomico' }; " \
-			+ "$env:JHT_RAW_BASE=" + raw_base + "; " \
+			+ "if (-not (Select-String -Path $tmp -Pattern '^\\s*\\$JHT_HOST_RUNTIME_PROTOCOL\\s*=\\s*" \
+			+ UPGRADE_BOOTSTRAP_HOST_RUNTIME_PROTOCOL + "\\s*$' -Quiet)) { throw 'Wrapper upgrade senza runtime host protetto' }; " \
+			+ "$env:JHT_RAW_BASE=$rawBase; $env:JHT_ALLOW_LEGACY_WRAPPER_MIGRATION='1'; " \
 			+ "$env:JHT_WRAPPER_PATH=" + target + "; " \
 			+ "$engine=Join-Path $PSHOME 'pwsh.exe'; " \
 			+ "if (-not (Test-Path -LiteralPath $engine)) { $engine=Join-Path $PSHOME 'powershell.exe' }; " \
@@ -1283,8 +1337,8 @@ static func _run_upgrade_json(path: String, args: PackedStringArray) -> Dictiona
 ## preparare il runtime" — il muro contro cui è finito il primo avvio pulito
 ## del 26/07. Vive nella cartella dell'applicazione, che è nostra per
 ## definizione; i volumi dentro al file sono path assoluti, quindi la sua
-## posizione non cambia nulla per docker. Il vecchio percorso resta letto
-## per chi ce l'ha già.
+## posizione non cambia nulla per docker. Il vecchio percorso sotto ~/.jht
+## non e' mai letto: il container puo' scriverlo tramite /jht_home.
 static func compose_home_path() -> String:
 	return ProjectSettings.globalize_path("user://runtime/docker-compose.yml")
 
@@ -1292,7 +1346,6 @@ static func compose_home_path() -> String:
 static func _find_compose_file() -> String:
 	var candidates := [
 		compose_home_path(),
-		_jht_home().path_join("runtime/docker-compose.yml"),
 		ProjectSettings.globalize_path("res://../docker-compose.yml"),
 	]
 	var user_data := OS.get_user_data_dir().get_base_dir()
@@ -2127,14 +2180,18 @@ static func _vps_prepare_runtime_command() -> String:
 	# L'installer mette il wrapper in /usr/local/bin quando gira come root e in
 	# ~/.local/bin per utenti normali. Non assumere uno dei due percorsi: una VPS
 	# Hetzner nuova usa root e il vecchio hardcoding faceva fallire il primo up.
-	return "export JHT_SKIP_ONBOARD=1; " \
+	return "set -e; export JHT_SKIP_ONBOARD=1; " \
 			+ "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
 			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; " \
 			+ "if [ ! -x \"$JHT_BIN\" ]; then " \
 			+ "curl -fsSL https://jobhunterteam.ai/install.sh | bash; " \
 			+ "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
 			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; fi; " \
-			+ "[ -x \"$JHT_BIN\" ] && \"$JHT_BIN\" up"
+			+ "[ -x \"$JHT_BIN\" ] && [ ! -L \"$JHT_BIN\" ]; " \
+			+ "JHT_BIN_REAL=\"$(cd -P \"$(dirname \"$JHT_BIN\")\" && printf '%s/%s' \"$(pwd -P)\" \"$(basename \"$JHT_BIN\")\")\"; " \
+			+ "[ \"$JHT_BIN\" = \"$JHT_BIN_REAL\" ]; " \
+			+ "case \"$JHT_BIN_REAL\" in \"$HOME/.jht\"|\"$HOME/.jht/\"*|\"$HOME/Documents/Job Hunter Team\"|\"$HOME/Documents/Job Hunter Team/\"*) exit 1;; esac; " \
+			+ _posix_upgrade_bootstrap_with_target("JHT_WRAPPER_PATH=\"$JHT_BIN\"", false)
 
 
 func _do_provision_vps(target: Dictionary) -> Dictionary:
@@ -2424,7 +2481,6 @@ static func _remote_apply_script(archive_name: String, stamp: String,
 			+ "-o -d \"$STAGE/.jht/profile\"; " \
 			+ "mkdir -p \"$STAGE/Documents/Job Hunter Team\"; " \
 			+ "[ ! -d /root/.jht/ssh ] || cp -a /root/.jht/ssh \"$STAGE/.jht/ssh\"; " \
-			+ "[ ! -d /root/.jht/runtime ] || cp -a /root/.jht/runtime \"$STAGE/.jht/runtime\"; " \
 			+ "printf 'JHT_HOST_TYPE=vps\\n' > \"$STAGE/.jht/host.env\"; " \
 			+ "cd /root; set --; [ -d .jht ] && set -- \"$@\" .jht; " \
 			+ "[ -d \"Documents/Job Hunter Team\" ] && set -- \"$@\" \"Documents/Job Hunter Team\"; " \
@@ -2448,10 +2504,18 @@ static func _remote_apply_script(archive_name: String, stamp: String,
 
 static func _rollback_vps_destination(target: Dictionary, stamp: String,
 		team_was_running: bool = false) -> void:
+	var script := _rollback_vps_destination_script(stamp)
+	_run_ssh(target, "bash -lc " + _shell_quote(script))
+	if team_was_running:
+		_run_ssh(target,
+				"docker exec jht node /app/cli/bin/jht.js team start >/dev/null 2>&1 || true")
+
+
+static func _rollback_vps_destination_script(stamp: String) -> String:
 	var old_jht := "/root/.jht.migration-old-" + stamp
 	var old_docs := "/root/Documents/Job Hunter Team.migration-old-" + stamp
 	var stage := "/root/.jht-migration-stage-" + stamp
-	var script := "set -u; if [ -d " + _shell_quote(old_jht) + " ]; then " \
+	return "set -u; if [ -d " + _shell_quote(old_jht) + " ]; then " \
 			+ "docker stop jht >/dev/null 2>&1 || true; rm -rf -- /root/.jht; " \
 			+ "mv " + _shell_quote(old_jht) + " /root/.jht; " \
 			+ "if [ -d " + _shell_quote(old_docs) + " ]; then rm -rf -- " \
@@ -2459,10 +2523,6 @@ static func _rollback_vps_destination(target: Dictionary, stamp: String,
 			+ " \"/root/Documents/Job Hunter Team\"; fi; " \
 			+ _vps_prepare_runtime_command() + " >/dev/null 2>&1 || true; fi; " \
 			+ "rm -rf -- " + _shell_quote(stage)
-	_run_ssh(target, "bash -lc " + _shell_quote(script))
-	if team_was_running:
-		_run_ssh(target,
-				"docker exec jht node /app/cli/bin/jht.js team start >/dev/null 2>&1 || true")
 
 
 static func _cleanup_vps_transaction(target: Dictionary, stamp: String) -> void:
@@ -2529,9 +2589,10 @@ func _apply_archive_to_local(archive: String, stamp: String,
 		_remove_tree(stage)
 		return {"ok": false, "message": UIStrings.t("vps.action.extracted_team_invalid")}
 	DirAccess.make_dir_recursive_absolute(staged_docs)
-	# Il runtime e le chiavi appartengono alla macchina destinazione, non alla
-	# sorgente. Si preservano fuori dallo snapshot prima dello swap atomico.
-	for rel in ["ssh", "runtime"]:
+	# Le chiavi appartengono alla macchina destinazione. Il vecchio runtime
+	# sotto .jht e invece input container-writable: non viene mai copiato; il
+	# compose host autorevole vive fuori dal bind in user://runtime.
+	for rel in ["ssh"]:
 		var src := home.path_join(".jht/" + rel)
 		if DirAccess.dir_exists_absolute(src):
 			var copied := _copy_tree(src, staged_jht.path_join(rel))
