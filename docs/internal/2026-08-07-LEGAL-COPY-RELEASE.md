@@ -209,11 +209,12 @@ settings, and history; and device, synchronization, and file-index metadata. It
 does not include token secrets, provider credentials, files that exist only in
 your local or VPS workspace, or data held independently by an AI provider.
 
-Choose **Delete cloud account and data** and complete the confirmation to
-delete your authentication account and all user-owned active cloud data,
+Under **Delete your account**, choose **Show me what will be deleted**, review
+the preview, enter your account email, and choose **Delete permanently**. This
+deletes your authentication account and all user-owned active cloud data,
 including the categories listed above, pairing sessions, synchronization
-tokens, pending transfers, and cloud storage objects. Deletion is immediate and
-irreversible. Export first if you want a copy.
+tokens, pending transfers, and cloud storage objects. Deletion is immediate
+and irreversible. Export first if you want a copy.
 
 After a successful deletion, Job Hunter Team writes a technical audit entry
 containing the deletion time, a non-reversible hashed account reference, and
