@@ -68,8 +68,14 @@ Non è vero.
 `app/api/feedback/route.ts` apre issue solo per i client il cui
 identificativo **non** inizia con `web-`. Il dialog web invia
 `client: "web-dashboard"`, `/contact` invia `client: "web-contact"`:
-entrambi vanno **solo a posta**. Su GitHub pubblica `godot-desktop`, cioè
-l'app, non il sito.
+per entrambi la pubblicazione su GitHub è esclusa. Su GitHub pubblica
+`godot-desktop`, cioè l'app, non il sito.
+
+**Dove vanno davvero**: posta **e**, se `WEBHOOK_URL` è configurato, un
+webhook — `notifyWebhook` è fuori dal ramo condizionale e vale anche per i
+client web. Una prima versione di questa rettifica diceva «solo a posta» e
+ometteva il webhook: è imprecisa, e il canale in più va detto perché è pur
+sempre una destinazione dei dati.
 
 L'errore è nato dal fermarmi alla funzione `openIssue` e alla nota su
 `/contact`, senza risalire al valore che il dialog manda davvero. Segnalato
@@ -91,17 +97,27 @@ Entrambi riportano «Ultimo aggiornamento: Aprile 2026», quattro mesi fa. Da
 allora è cambiato il collegamento cloud con Google: vanno riletti, non solo
 ridatati.
 
-### Terze parti contattate dal browser, prima di ogni consenso
+### Terze parti: chi contatta chi, davvero
 
 Segnalate dall'audit di HQ-DOCS, verificate nel codice:
 
-- **CARTO** (`basemaps.cartocdn.com`) — le mappe. Caricato dal globo della
-  **home pubblica** e dalla scheda mappa nell'area riservata: il browser di
-  ogni visitatore contatta un CDN terzo col proprio IP, **prima di
-  qualsiasi consenso**.
-- **Frankfurter** (`api.frankfurter.dev`) — cambi valuta.
+- **CARTO** (`basemaps.cartocdn.com`) — le mappe. È l'unico dei tre che il
+  browser contatta davvero, e **non per ogni visitatore**: il globo arriva
+  via dynamic import solo quando il browser è in idle, e sotto c'è
+  un'immagine statica che resta l'unica cosa mostrata su macchine deboli,
+  senza WebGL, con FPS bassi o con `prefers-reduced-motion`. Chi non arriva
+  alla mappa live non contatta CARTO. Per chi ci arriva, però, il contatto
+  avviene prima di qualsiasi consenso.
+- **Frankfurter** (`api.frankfurter.dev`) — cambi valuta. **Non è una terza
+  parte lato browser**: `getExchangeRates()` è chiamata da Server Component
+  con `revalidate: 86400`, quindi la richiesta parte dal nostro server ed è
+  in cache 24 ore. L'IP dell'utente non arriva mai a Frankfurter.
 - **GitHub releases** — sono `href`, non chiamate: il browser ci va solo se
-  l'utente clicca. Diverso dagli altri due.
+  l'utente clicca.
+
+Una prima versione elencava tutti e tre come «contattati dal browser prima
+del consenso». Era sbagliato per due su tre: correzione dopo la review di
+HQ-MASTER, verificata nel codice.
 
 Non ho messo il globo dietro consenso: è l'elemento centrale della home, e
 spegnerlo per chi non ha risposto è una scelta di prodotto.
@@ -138,10 +154,10 @@ irreversibile e la decisione su *cosa* si cancella, *in quanto tempo* e
    indirizzo? È l'unico dato che né io né DOCS possiamo dedurre.
 5. **Età minima** — dichiariamo una soglia? Se sì quale, e la verifichiamo
    in qualche modo o resta una clausola?
-6. **CARTO sulla home** — il globo contatta un CDN terzo prima del
-   consenso. Tre strade: lasciarlo e dirlo nella privacy, metterlo dietro
-   consenso (la home perde il globo per chi non ha risposto), o servire le
-   tile da noi. È una scelta di prodotto.
+6. **CARTO sulla home** — chi arriva alla mappa live contatta un CDN terzo
+   prima del consenso (non ogni visitatore: chi resta sull'immagine statica
+   no). Tre strade: lasciarlo e dirlo nella privacy, metterlo dietro
+   consenso, o servire le tile da noi. È una scelta di prodotto.
 7. **Vercel Analytics** — ora è dietro consenso. Confermi che è la
    posizione che vuoi, o preferisci considerarlo essenziale e cambiare
    invece il testo del banner? Le due strade sono entrambe coerenti, ma
