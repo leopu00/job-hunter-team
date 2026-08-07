@@ -1,0 +1,61 @@
+name: Windows update helper
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/windows-update-helper.yml"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/publish-signed-release.yml"
+      - "scripts/jht-windows-update.ps1"
+      - "scripts/release_artifacts.py"
+      - "scripts/release-keys/**"
+      - "scripts/release_manifest.py"
+      - "scripts/release_signing.py"
+      - "tests/test_release_manifest_signing.py"
+      - "tests/test_windows_update_helper.py"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/windows-update-helper.yml"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/publish-signed-release.yml"
+      - "scripts/jht-windows-update.ps1"
+      - "scripts/release_artifacts.py"
+      - "scripts/release-keys/**"
+      - "scripts/release_manifest.py"
+      - "scripts/release_signing.py"
+      - "tests/test_release_manifest_signing.py"
+      - "tests/test_windows_update_helper.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-update-helper-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  powershell51:
+    name: PowerShell 5.1 signed update seam
+    runs-on: windows-2022
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Run producer and helper trust tests
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\Program Files\Git\usr\bin;$env:PATH"
+          python -m pip install pytest
+          python -m pytest `
+            tests/test_windows_update_helper.py `
+            -q

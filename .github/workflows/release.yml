@@ -411,13 +411,13 @@ jobs:
             ${{ matrix.additional_artifact_path }}.provenance.json
 
   release:
-    name: GitHub Release
+    name: Prepare signed release candidate
     runs-on: ubuntu-latest
     needs:
       - check-version
       - build-game
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -510,6 +510,41 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      # The private signing key never enters GitHub. The public SPKI is normal
+      # source code used here to render the protected helper and identify the
+      # independently-held signing key.
+      # Until custody is selected and the production SPKI is committed, tag
+      # releases stop here rather than silently falling back to same-origin
+      # SHA256SUMS/RELEASE-PROVENANCE.
+      - name: Require the committed production release trust root
+        id: release_key
+        run: |
+          test -s scripts/release-keys/production-spki.pem
+          KEY_ID="$(python scripts/release_signing.py fingerprint \
+            --public-key scripts/release-keys/production-spki.pem)"
+          echo "key_id=$KEY_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Render and attest the protected Windows update helper
+        env:
+          TAG_SHA: ${{ steps.source.outputs.tag_sha }}
+        run: |
+          RENDER_ARGS=(
+            --template scripts/jht-windows-update.ps1
+            --output release-assets/jht-windows-update.ps1
+            --public-key scripts/release-keys/production-spki.pem
+          )
+          if [ -s scripts/release-keys/next-spki.pem ]; then
+            RENDER_ARGS+=(--additional-public-key scripts/release-keys/next-spki.pem)
+          fi
+          python scripts/release_signing.py render-helper "${RENDER_ARGS[@]}"
+          python scripts/release_artifacts.py record \
+            --asset release-assets/jht-windows-update.ps1 \
+            --output release-assets/jht-windows-update.ps1.provenance.json \
+            --tag "$GITHUB_REF_NAME" \
+            --commit "$TAG_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-root .
+
       - name: Verify tagged artifact provenance and write SHA-256 checksums
         env:
           TAG_SHA: ${{ steps.source.outputs.tag_sha }}
@@ -520,42 +555,51 @@ jobs:
             --expected-asset job-hunter-team-windows-x64-portable.exe \
             --expected-asset job-hunter-team.zip \
             --expected-asset job-hunter-team-linux-x64.tar.gz \
+            --expected-asset jht-windows-update.ps1 \
             --tag "$GITHUB_REF_NAME" \
             --commit "$TAG_SHA" \
             --repository "$GITHUB_REPOSITORY" \
             --checksums release-assets/SHA256SUMS \
             --provenance release-assets/RELEASE-PROVENANCE.json
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        with:
-          name: "Job Hunter Team ${{ github.ref_name }}"
-          # La nota Windows sta QUI perche' questa e' la pagina da cui si
-          # scaricano installer e portable: il sito non serve i binari desktop e
-          # nessun doc pubblico linka le Release. Tre fatti, niente scuse: cosa
-          # vede, cosa clicca, perche' succede.
-          body: |
-            ## What's new in ${{ github.ref_name }}
-
-            ${{ steps.changelog.outputs.notes }}
-
-            ### Windows
-
-            Use `job-hunter-team-windows-x64-setup.exe` for the normal per-user installation. `job-hunter-team-windows-x64-portable.exe` is the optional standalone build. Neither Windows file is code-signed, so Windows may show **"Windows protected your PC"**: click **More info** → **Run anyway** only for files downloaded from this release and matching `SHA256SUMS`. The macOS `.zip` is signed and notarized by Apple; the Linux `.tar.gz` is unsigned as well.
-
-            `SHA256SUMS` verifies the downloaded bytes. `RELEASE-PROVENANCE.json` records the exact tagged commit from which every attached asset was built.
-
-            ---
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for the full history.
-          # Gli asset restano invisibili al pubblico finche' HQ-MASTER non li
-          # riscarica dalla draft e passa `release_artifacts.py audit`.
-          draft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          files: |
-            release-assets/*.exe
-            release-assets/*.zip
-            release-assets/*.tar.gz
-            release-assets/SHA256SUMS
-            release-assets/RELEASE-PROVENANCE.json
+      - name: Build the canonical provider-neutral signing request
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEY_ID: ${{ steps.release_key.outputs.key_id }}
+          TAG_SHA: ${{ steps.source.outputs.tag_sha }}
+        run: |
+          PUBLISHED_AT="$(python - "$TAG_SHA" <<'PY'
+          import datetime
+          import subprocess
+          import sys
+
+          timestamp = int(subprocess.check_output(
+              ["git", "show", "-s", "--format=%ct", sys.argv[1]], text=True
+          ).strip())
+          print(datetime.datetime.fromtimestamp(
+              timestamp, datetime.timezone.utc
+          ).strftime("%Y-%m-%dT%H:%M:%SZ"))
+          PY
+          )"
+          VERSION="${GITHUB_REF_NAME#v}"
+          python scripts/release_manifest.py build \
+            --directory release-assets \
+            --artifact windows-desktop,windows,x86_64,job-hunter-team-windows-x64-portable.exe,jht-windows-desktop-v1 \
+            --artifact windows-update-helper,windows,x86_64,jht-windows-update.ps1,jht-windows-update-v1 \
+            --key-id "$KEY_ID" \
+            --version "$VERSION" \
+            --commit "$TAG_SHA" \
+            --published-at "$PUBLISHED_AT" \
+            --output release-assets/RELEASE-MANIFEST.json
+
+      - name: Remove runner-only provenance sidecars
+        run: rm release-assets/*.provenance.json
+
+      # This immutable Actions artifact is the only input accepted by the
+      # separate publish workflow. No GitHub Release, including a draft, is
+      # created before an independently-produced signature verifies.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-candidate
+          path: release-assets
+          if-no-files-found: error
+          retention-days: 14
