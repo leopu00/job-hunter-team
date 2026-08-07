@@ -75,10 +75,7 @@ export async function GET(
     limit: 3,
   });
   if (listErr) {
-    return NextResponse.json(
-      { error: "storage_list_failed" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "storage_list_failed" }, { status: 500 });
   }
   if ((objects || []).some((object) => !object.id)) {
     return NextResponse.json(
@@ -90,7 +87,9 @@ export async function GET(
   const payload = files.find((object) => object.name === "payload");
   if (!payload && files.length !== 1) {
     return NextResponse.json(
-      { error: files.length === 0 ? "file_not_ready" : "storage_layout_invalid" },
+      {
+        error: files.length === 0 ? "file_not_ready" : "storage_layout_invalid",
+      },
       { status: files.length === 0 ? 409 : 500 },
     );
   }
@@ -109,15 +108,15 @@ export async function GET(
     );
   }
   const downloadName = fileBridgeDownloadName(row.file_name);
-  const { data: signed, error: signErr } = await storage
-    .createSignedUrl(storagePath, DOWNLOAD_TTL_SECONDS, {
+  const { data: signed, error: signErr } = await storage.createSignedUrl(
+    storagePath,
+    DOWNLOAD_TTL_SECONDS,
+    {
       download: downloadName,
-    });
+    },
+  );
   if (signErr || !signed) {
-    return NextResponse.json(
-      { error: "signed_url_failed" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "signed_url_failed" }, { status: 500 });
   }
 
   // Marca 'served' (mantiene expires_at): il purge VPS eliminerà l'oggetto.

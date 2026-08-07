@@ -153,9 +153,7 @@ export async function PATCH(
     status === "ready"
       ? transition.eq("status", "uploading")
       : transition.in("status", ["pending", "uploading"]);
-  const { data, error } = await transition
-    .select("id, status")
-    .maybeSingle();
+  const { data, error } = await transition.select("id, status").maybeSingle();
   if (error) {
     return NextResponse.json(
       { ok: false, error: "request_transition_failed" },
