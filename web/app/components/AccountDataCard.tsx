@@ -90,6 +90,10 @@ export default function AccountDataCard() {
         {tr("intro")}
       </p>
 
+      {/* `<a>` e non `<Link>` di proposito: questo è uno scaricamento, non
+          una navigazione. Con `<Link>` Next farebbe una transizione lato
+          client e il file non verrebbe mai salvato. */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
       <a
         href="/api/account/export"
         className="mt-3 inline-flex min-h-11 items-center rounded-md border border-[var(--color-border)] px-3 py-2 text-[11px] font-semibold text-[var(--color-bright)] no-underline transition-colors hover:border-[var(--color-green)] hover:text-[var(--color-green)]"
