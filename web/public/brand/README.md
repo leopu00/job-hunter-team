@@ -24,4 +24,3 @@ while the flag is false:
 
 - Guidelines and asset pack: [TikTok Design Guidelines](https://developers.tiktok.com/doc/getting-started-design-guidelines)
 - Official glyph host: `lf16-tiktok-common.ttwstatic.com`
-
