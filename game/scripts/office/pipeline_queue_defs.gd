@@ -3,11 +3,11 @@ class_name PipelineQueueDefs
 ## può essere testato anche dal runner Godot --script.
 
 const QUEUES := {
-	"scout": {"consumer": "ANALISTI", "phase": "to_analyze"},
-	"analisti": {"consumer": "SCORER", "phase": "analyzed"},
-	"scorer": {"consumer": "SCRITTORI", "phase": "with_score"},
-	"scrittori": {"consumer": "CRITICI", "phase": "written"},
-	"critici": {"consumer": "PRONTI", "phase": "cv_ready"},
+	"scout": {"consumer": "queue.consumer.analysts", "phase": "to_analyze"},
+	"analisti": {"consumer": "queue.consumer.scorers", "phase": "analyzed"},
+	"scorer": {"consumer": "queue.consumer.writers", "phase": "with_score"},
+	"scrittori": {"consumer": "queue.consumer.critics", "phase": "written"},
+	"critici": {"consumer": "queue.consumer.ready", "phase": "cv_ready"},
 }
 
 static func positions_for(dept_id: String, positions: Array) -> Array:

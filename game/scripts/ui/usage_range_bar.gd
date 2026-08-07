@@ -15,9 +15,9 @@ const SPANS := [
 	["5H", 18000.0, 300],
 	["12H", 43200.0, 600],
 	["24H", 86400.0, 900],
-	["3G", 259200.0, 1800],
-	["7G", 604800.0, 3600],
-	["30G", 2592000.0, 14400],
+	["usage.span_3d", 259200.0, 1800],
+	["usage.span_7d", 604800.0, 3600],
+	["usage.span_30d", 2592000.0, 14400],
 ]
 
 static var span_idx := 0       # default: finestra 5 ore
@@ -32,7 +32,9 @@ func _init() -> void:
 
 func _ready() -> void:
 	for i in SPANS.size():
-		var btn := _pill(SPANS[i][0])
+		var raw_label := str(SPANS[i][0])
+		var btn := _pill(UIStrings.t(raw_label) if raw_label.begins_with("usage.") \
+				else raw_label)
 		var idx := i
 		btn.pressed.connect(func() -> void:
 			span_idx = idx
@@ -41,13 +43,13 @@ func _ready() -> void:
 		_span_buttons.append(btn)
 	add_child(_spacer(18))
 	var back := _pill("◀")
-	back.tooltip_text = "indietro di una finestra"
+	back.tooltip_text = UIStrings.t("usage.previous_window")
 	back.pressed.connect(func() -> void:
 		to_ts = _resolved_to() - span_seconds()
 		_emit())
 	add_child(back)
 	var fwd := _pill("▶")
-	fwd.tooltip_text = "avanti di una finestra"
+	fwd.tooltip_text = UIStrings.t("usage.next_window")
 	fwd.pressed.connect(func() -> void:
 		if to_ts == 0.0:
 			return
