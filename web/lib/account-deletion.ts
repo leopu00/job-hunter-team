@@ -92,15 +92,22 @@ export async function deleteAccountData(
     // Un file che resta è una cancellazione incompleta, e va detto invece
     // di dichiarare completato: l'operatore ha scelto la cancellazione
     // immediata proprio perché fosse vera.
-    // Non si elencano tutti i percorsi: con migliaia di file il messaggio
-    // finirebbe nei log e nella risposta al client, e i nomi dei file
-    // sono roba dell'utente. Bastano i primi per capire dove guardare.
-    const sample = storage.failed.slice(0, 5).join(", ");
-    const rest = storage.failed.length - 5;
+    // Nessun percorso nel messaggio, nemmeno a campione.
+    //
+    // La versione precedente ne includeva cinque «per capire dove
+    // guardare», subito sotto un commento che diceva che i nomi dei file
+    // sono dati dell'utente: il commento e il codice si contraddicevano
+    // nello stesso blocco. E quell'errore finisce nei log del server e
+    // nel corpo della risposta al client, quindi cinque nomi di CV sono
+    // cinque nomi di CV usciti da una funzione il cui scopo è cancellarli.
+    //
+    // Per diagnosticare bastano il numero e la fase: il bucket si può
+    // sempre ispezionare a parte, con i permessi giusti. Rilievo di
+    // HQ-DOCS.
     throw new Error(
-      `${storage.failed.length} file su Storage non cancellati: ` +
-        `la cancellazione si ferma qui per non dichiararsi completa. ` +
-        `Esempi: ${sample}${rest > 0 ? ` (e altri ${rest})` : ""}`,
+      `${storage.failed.length} file non cancellati nel bucket ` +
+        `${STORAGE_BUCKET}: la cancellazione si ferma qui per non ` +
+        `dichiararsi completa`,
     );
   }
 
