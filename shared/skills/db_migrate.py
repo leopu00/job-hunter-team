@@ -22,7 +22,7 @@ def parse_tracking_md():
     """Legge tracking.md e restituisce lista di posizioni."""
     tracking_path = os.path.join(BASE, 'tracking.md')
     if not os.path.exists(tracking_path):
-        print("tracking.md non trovato")
+        print("tracking.md not found")
         return []
 
     with open(tracking_path, 'r') as f:
@@ -187,14 +187,14 @@ def migrate(dry_run=False):
     # Check se già migrato
     existing = conn.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
     if existing > 0:
-        print(f"Database contiene già {existing} posizioni. Migrazione saltata.")
-        print("Per ri-migrare, cancella jobs.db e riesegui db_init.py + db_migrate.py")
+        print(f"Database already contains {existing} positions. Migration skipped.")
+        print("To migrate again, delete jobs.db and rerun db_init.py + db_migrate.py")
         conn.close()
         return
 
     # 1. Migra posizioni da tracking.md
     positions = parse_tracking_md()
-    print(f"\nPosizioni trovate in tracking.md: {len(positions)}")
+    print(f"\nPositions found in tracking.md: {len(positions)}")
 
     pos_id_map = {}  # num → db_id
     for p in positions:
@@ -222,7 +222,7 @@ def migrate(dry_run=False):
 
     # 2. Migra aziende
     companies = parse_companies()
-    print(f"Aziende trovate in companies/: {len(companies)}")
+    print(f"Companies found in companies/: {len(companies)}")
 
     for c in companies:
         if dry_run:
@@ -235,7 +235,7 @@ def migrate(dry_run=False):
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (c['name'], c['website'], c['sector'], c['verdict'], c['red_flags'], c['analyzed_by']))
         except Exception as e:
-            print(f"  ERRORE inserimento {c['name']}: {e}")
+            print(f"  ERROR inserting {c['name']}: {e}")
 
     if not dry_run:
         conn.commit()
@@ -245,17 +245,17 @@ def migrate(dry_run=False):
         pos_count = conn.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
         comp_count = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
         score_count = conn.execute("SELECT COUNT(*) FROM scores").fetchone()[0]
-        print(f"\nMigrazione completata!")
-        print(f"  Posizioni: {pos_count}")
-        print(f"  Aziende: {comp_count}")
+        print(f"\nMigration complete!")
+        print(f"  Positions: {pos_count}")
+        print(f"  Companies: {comp_count}")
         print(f"  Score: {score_count}")
 
     conn.close()
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Migra dati markdown → SQLite')
-    parser.add_argument('--dry-run', action='store_true', help='Mostra cosa farebbe senza scrivere')
+    parser = argparse.ArgumentParser(description='Migrate Markdown data to SQLite')
+    parser.add_argument('--dry-run', action='store_true', help='Show what would be done without writing')
     args = parser.parse_args()
     migrate(dry_run=args.dry_run)
 

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Sincronizzazione Supabase ↔ Google Sheets.
+"""Supabase ↔ Google Sheets synchronization.
 
-Uso:
+Usage:
   python3 db_to_sheets.py sync           # sync Supabase → Sheet
-  python3 db_to_sheets.py sync --dry-run # mostra cosa scriverebbe
-  python3 db_to_sheets.py read           # leggi contenuto attuale del foglio
-  python3 db_to_sheets.py pull           # leggi spunte dal foglio → aggiorna Supabase
+  python3 db_to_sheets.py sync --dry-run # show what would be written
+  python3 db_to_sheets.py read           # read the current sheet contents
+  python3 db_to_sheets.py pull           # read checkmarks from the sheet → update Supabase
 
-Variabili d'ambiente richieste:
-  SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (o legge da .env.local)
-  GOOGLE_SERVICE_ACCOUNT_PATH (opzionale, default: shared/secrets)
+Required environment variables:
+  SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (or read from .env.local)
+  GOOGLE_SERVICE_ACCOUNT_PATH (optional, default: shared/secrets)
 """
 
 import sys
@@ -31,9 +31,9 @@ SERVICE_ACCOUNT_PATH = os.environ.get(
 )
 
 HEADERS = [
-    "#", "Status", "Azienda", "Titolo", "Link", "Location",
-    "Remote", "Stipendio", "Score", "Critico", "Verdict",
-    "CV Drive", "CL Drive", "Applicato", "Data Applicazione"
+    "#", "Status", "Company", "Title", "Link", "Location",
+    "Remote", "Salary", "Score", "Critic", "Verdict",
+    "CV Drive", "CL Drive", "Applied", "Application Date"
 ]
 
 
@@ -56,7 +56,7 @@ def load_env():
                             sb_key = sb_key or v
 
     if not sb_url or not sb_key:
-        print("ERRORE: credenziali Supabase non trovate")
+        print("ERROR: Supabase credentials not found")
         sys.exit(1)
 
     return sb_url, sb_key
@@ -90,7 +90,7 @@ def get_sheet():
     try:
         import gspread
     except ImportError:
-        print("ERRORE: gspread non installato. Esegui: pip3 install gspread")
+        print("ERROR: gspread is not installed. Run: pip3 install gspread")
         sys.exit(1)
 
     gc = gspread.service_account(filename=SERVICE_ACCOUNT_PATH)
@@ -129,7 +129,7 @@ def cmd_sync(dry_run=False):
     """Sync Supabase → Google Sheets."""
     sb_url, sb_key = load_env()
 
-    print("Caricando dati da Supabase...")
+    print("Loading data from Supabase...")
     positions = supabase_get(sb_url, sb_key,
         "positions?select=*,scores(*),applications(*)&order=created_at.desc&limit=500")
 
@@ -160,21 +160,21 @@ def cmd_sync(dry_run=False):
             app.get("applied_at", ""),
         ])
 
-    print(f"Preparate {len(rows_data)} righe")
+    print(f"Prepared {len(rows_data)} rows")
 
     if dry_run:
         for row in rows_data[:5]:
             print(f"  {row[2]} | {row[3]} | {row[1]} | Score: {row[8]}")
-        print(f"  ... e altre {len(rows_data) - 5} righe")
+        print(f"  ... and {len(rows_data) - 5} more rows")
         return
 
-    print("Scrivendo su Google Sheets...")
+    print("Writing to Google Sheets...")
     ws = get_sheet()
     ws.clear()
     ws.append_row(HEADERS)
     if rows_data:
         ws.append_rows(rows_data)
-    print(f"Sync completato: {len(rows_data)} righe scritte su '{SHEET_NAME}'")
+    print(f"Sync complete: {len(rows_data)} rows written to '{SHEET_NAME}'")
 
 
 def cmd_read():
@@ -184,28 +184,33 @@ def cmd_read():
     for row in data[:10]:
         print(" | ".join(row[:8]))
     if len(data) > 10:
-        print(f"... e altre {len(data) - 10} righe")
+        print(f"... and {len(data) - 10} more rows")
 
 
 def cmd_pull():
     """Leggi spunte 'Applicato' dal foglio e aggiorna Supabase."""
     sb_url, sb_key = load_env()
 
-    print("Leggendo Google Sheets...")
+    print("Reading Google Sheets...")
     ws = get_sheet()
     data = ws.get_all_values()
 
     if len(data) < 2:
-        print("Foglio vuoto")
+        print("Empty sheet")
         return
 
     headers = data[0]
-    applicato_col = headers.index("Applicato") if "Applicato" in headers else -1
-    azienda_col = headers.index("Azienda") if "Azienda" in headers else -1
-    titolo_col = headers.index("Titolo") if "Titolo" in headers else -1
+    # New sheets use English headers. Accept the old Italian names while
+    # reading so existing user-managed sheets keep working unchanged.
+    def header_index(*names):
+        return next((headers.index(name) for name in names if name in headers), -1)
+
+    applicato_col = header_index("Applied", "Applicato")
+    azienda_col = header_index("Company", "Azienda")
+    titolo_col = header_index("Title", "Titolo")
 
     if applicato_col == -1:
-        print("Colonna 'Applicato' non trovata")
+        print("Column 'Applied' not found")
         return
 
     updates = 0
@@ -234,7 +239,7 @@ def cmd_pull():
                         updates += 1
                         print(f"  ✓ {company} — {title} → applied")
 
-    print(f"\nAggiornati: {updates} record")
+    print(f"\nUpdated: {updates} records")
 
 
 def main():
@@ -252,7 +257,7 @@ def main():
     elif cmd == "pull":
         cmd_pull()
     else:
-        print(f"Comando sconosciuto: {cmd}")
+        print(f"Unknown command: {cmd}")
         print(__doc__)
         sys.exit(1)
 

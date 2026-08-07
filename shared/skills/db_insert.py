@@ -294,7 +294,7 @@ def insert_position(args):
         )
         if existing:
             _rollback_quietly(conn)
-            print(f"⚠️  DUPLICATO ({match_type}): '{args.company} — {args.title}' già presente come #{existing['id']} ({existing['company']} — {existing['title']}). INSERT annullato.")
+            print(f"⚠️  DUPLICATE ({match_type}): '{args.company} — {args.title}' already exists as #{existing['id']} ({existing['company']} — {existing['title']}). INSERT aborted.")
             conn.close()
             sys.exit(1)
 
@@ -345,15 +345,15 @@ def insert_position(args):
         if 'UNIQUE' not in str(exc).upper():
             conn.close()
             raise
-        print(f"⚠️  DUPLICATO (URL già presente, vincolo UNIQUE): '{args.company} — {args.title}' — {args.url}. INSERT annullato.")
+        print(f"⚠️  DUPLICATE (URL already exists, UNIQUE constraint): '{args.company} — {args.title}' — {args.url}. INSERT aborted.")
         conn.close()
         sys.exit(1)
     except BaseException:
         _rollback_quietly(conn)
         raise
 
-    cid_info = f" (company_id={company_id})" if company_id else " (company_id=NULL — azienda non in DB)"
-    print(f"Posizione inserita con ID: {position_id}{cid_info}")
+    cid_info = f" (company_id={company_id})" if company_id else " (company_id=NULL — company not found in DB)"
+    print(f"Position inserted with ID: {position_id}{cid_info}")
     conn.close()
 
 
@@ -369,14 +369,14 @@ def insert_company(args):
           args.glassdoor_rating, args.red_flags, args.culture_notes,
           args.analyzed_by, args.verdict))
     conn.commit()
-    print(f"Azienda inserita/aggiornata: {args.name} (ID: {cur.lastrowid})")
+    print(f"Company inserted/updated: {args.name} (ID: {cur.lastrowid})")
     conn.close()
 
 
 def _validate_score_range(value, name, min_val, max_val):
     """Valida che un sub-score sia nel range ammesso."""
     if value is not None and (value < min_val or value > max_val):
-        print(f"⚠️  ERRORE: {name}={value} fuori range [{min_val}-{max_val}]")
+        print(f"⚠️  ERROR: {name}={value} is outside range [{min_val}-{max_val}]")
         sys.exit(1)
 
 
@@ -390,9 +390,9 @@ def insert_score(args):
     # valutazione qualitativa dello Scorer (RULE-01 punto 0).
     viable, reason = check_minimum_viable_profile()
     if not viable:
-        print(f"⚠️  SCORE RIFIUTATO: {reason}.")
-        print("    Il profilo candidato è sostanzialmente assente: non assegnare lo score.")
-        print("    Lascia la posizione in 'checked' ed escala al Capitano (RULE-T10 — do not invent).")
+        print(f"⚠️  SCORE REJECTED: {reason}.")
+        print("    The candidate profile is substantially empty: do not assign a score.")
+        print("    Leave the position in 'checked' and escalate to the Captain (RULE-T10 — do not invent).")
         sys.exit(1)
 
     _validate_score_range(args.total, 'total', 0, 100)
@@ -436,7 +436,7 @@ def insert_score(args):
                 duration_ms=getattr(args, 'duration_ms', None))
         except maintenance_log.MaintenanceError as e:
             conn.rollback()
-            print(f"⚠️  SCORE ANNULLATO: {e}")
+            print(f"⚠️  SCORE WRITE ABORTED: {e}")
             conn.close()
             sys.exit(1)
 
@@ -444,10 +444,10 @@ def insert_score(args):
     if action and previous and not diffs:
         # Detto a voce: un re-score che non muove nulla è un'informazione,
         # non un errore — ma va vista, non sepolta in un contatore.
-        print(f"Score invariato per posizione {args.position_id}: "
-              f"{args.total}/100 (nessun campo cambiato)")
+        print(f"Score unchanged for position {args.position_id}: "
+              f"{args.total}/100 (no fields changed)")
     else:
-        print(f"Score inserito per posizione {args.position_id}: {args.total}/100")
+        print(f"Score inserted for position {args.position_id}: {args.total}/100")
     conn.close()
 
 
@@ -468,7 +468,7 @@ def insert_application(args):
           args.cv_pdf_path, args.cl_pdf_path, written_by,
           args.written_at))
     conn.commit()
-    print(f"Application inserita per posizione {args.position_id}")
+    print(f"Application inserted for position {args.position_id}")
     conn.close()
 
 
@@ -480,12 +480,12 @@ def insert_highlight(args):
         VALUES (?, ?, ?)
     """, (args.position_id, args.type, args.text))
     conn.commit()
-    print(f"Highlight ({args.type}) inserito per posizione {args.position_id}: {args.text[:50]}")
+    print(f"Highlight ({args.type}) inserted for position {args.position_id}: {args.text[:50]}")
     conn.close()
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Inserisci dati in jobs.db')
+    parser = argparse.ArgumentParser(description='Insert data into jobs.db')
     sub = parser.add_subparsers(dest='entity', required=True)
 
     # position
@@ -494,26 +494,26 @@ def main():
     p.add_argument('--company', required=True)
     p.add_argument('--location', help='Location (Remote, London, Berlin/Remote, etc.)')
     p.add_argument('--remote-type', choices=['full_remote', 'hybrid', 'onsite'])
-    p.add_argument('--salary-declared-min', type=int, help='Stipendio dichiarato min')
-    p.add_argument('--salary-declared-max', type=int, help='Stipendio dichiarato max')
+    p.add_argument('--salary-declared-min', type=int, help='Declared minimum salary')
+    p.add_argument('--salary-declared-max', type=int, help='Declared maximum salary')
     p.add_argument('--salary-declared-currency', default='EUR')
-    p.add_argument('--salary-estimated-min', type=int, help='Stipendio stimato min')
-    p.add_argument('--salary-estimated-max', type=int, help='Stipendio stimato max')
+    p.add_argument('--salary-estimated-min', type=int, help='Estimated minimum salary')
+    p.add_argument('--salary-estimated-max', type=int, help='Estimated maximum salary')
     p.add_argument('--salary-estimated-currency', default='EUR')
-    p.add_argument('--salary-estimated-source', help='Fonte stima: glassdoor, levels.fyi, manual')
+    p.add_argument('--salary-estimated-source', help='Estimate source: glassdoor, levels.fyi, manual')
     p.add_argument('--url', required=True)
     p.add_argument('--source')
     p.add_argument('--jd-text')
     p.add_argument('--requirements')
     p.add_argument('--found-by')
-    p.add_argument('--deadline', help='Data scadenza YYYY-MM-DD o "non presente"')
+    p.add_argument('--deadline', help='Deadline date YYYY-MM-DD or "not present"')
     p.add_argument('--notes')
 
     # company
     c = sub.add_parser('company')
     c.add_argument('--name', required=True)
     c.add_argument('--website')
-    c.add_argument('--hq-country', help='Paese sede principale')
+    c.add_argument('--hq-country', help='Headquarters country')
     c.add_argument('--sector')
     c.add_argument('--size')
     c.add_argument('--glassdoor-rating', type=float)
@@ -526,11 +526,11 @@ def main():
     s = sub.add_parser('score')
     s.add_argument('--position-id', type=int, required=True)
     s.add_argument('--total', type=int, required=True)
-    s.add_argument('--stack-match', type=int, help='Componente stack, range 0-40')
-    s.add_argument('--remote-fit', type=int, help='Componente remote/location, range 0-25')
-    s.add_argument('--salary-fit', type=int, help='Componente stipendio, range 0-20')
-    s.add_argument('--experience-fit', type=int, help='Componente seniority, range 0-10')
-    s.add_argument('--strategic-fit', type=int, help='Componente strategico, range 0-15')
+    s.add_argument('--stack-match', type=int, help='Stack component, range 0-40')
+    s.add_argument('--remote-fit', type=int, help='Remote/location component, range 0-25')
+    s.add_argument('--salary-fit', type=int, help='Salary component, range 0-20')
+    s.add_argument('--experience-fit', type=int, help='Seniority component, range 0-10')
+    s.add_argument('--strategic-fit', type=int, help='Strategic component, range 0-15')
     s.add_argument('--breakdown')
     s.add_argument('--pros')
     s.add_argument('--cons')
@@ -548,7 +548,7 @@ def main():
     a.add_argument('--cv-pdf-path')
     a.add_argument('--cl-pdf-path')
     a.add_argument('--written-by')
-    a.add_argument('--written-at', help='Timestamp creazione CV (YYYY-MM-DD HH:MM o "now")')
+    a.add_argument('--written-at', help='CV creation timestamp (YYYY-MM-DD HH:MM or "now")')
 
     # highlight (pro/con)
     h = sub.add_parser('highlight')

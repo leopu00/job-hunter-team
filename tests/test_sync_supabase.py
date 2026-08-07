@@ -250,7 +250,7 @@ class TestSyncDryRunWithData:
             db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, dry_run=True
         )
         out = capsys.readouterr().out
-        assert "2 inserit" in out, f"Attese 2 companies da inserire, output: {out}"
+        assert "2 inserted" in out, f"Attese 2 companies da inserire, output: {out}"
 
     def test_sync_companies_dry_run_returns_empty_map(self, db_with_data):
         """dry_run=True non chiama sb_post → id_map è vuoto."""
@@ -264,7 +264,7 @@ class TestSyncDryRunWithData:
             db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=True
         )
         out = capsys.readouterr().out
-        assert "1 inserit" in out, f"Attesa 1 position da inserire, output: {out}"
+        assert "1 inserted" in out, f"Attesa 1 position da inserire, output: {out}"
 
     def test_sync_scores_skips_without_position_map(self, db_with_data, capsys):
         """Con position_map vuoto, tutti gli score vengono skippati."""
@@ -272,7 +272,7 @@ class TestSyncDryRunWithData:
             db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=True
         )
         out = capsys.readouterr().out
-        assert "1 skippa" in out, f"Atteso 1 score skippato (no position map), output: {out}"
+        assert "1 skipped" in out, f"Atteso 1 score skippato (no position map), output: {out}"
 
     def test_sync_applications_skips_without_position_map(self, db_with_data, capsys):
         """Con position_map vuoto, tutte le applications vengono skippate."""
@@ -280,7 +280,7 @@ class TestSyncDryRunWithData:
             db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=True
         )
         out = capsys.readouterr().out
-        assert "1 skippa" in out, f"Attesa 1 application skippata, output: {out}"
+        assert "1 skipped" in out, f"Attesa 1 application skippata, output: {out}"
 
     def test_sync_highlights_skips_without_position_map(self, db_with_data, capsys):
         """Con position_map vuoto, tutti gli highlights vengono skippati."""
@@ -288,7 +288,7 @@ class TestSyncDryRunWithData:
             db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=True
         )
         out = capsys.readouterr().out
-        assert "1 skippa" in out, f"Atteso 1 highlight skippato, output: {out}"
+        assert "1 skipped" in out, f"Atteso 1 highlight skippato, output: {out}"
 
     def test_sync_scores_with_position_map(self, db_with_data, capsys):
         """Con position_map corretto, gli score vengono sincronizzati."""
@@ -300,7 +300,7 @@ class TestSyncDryRunWithData:
             position_map, dry_run=True
         )
         out = capsys.readouterr().out
-        assert "1 inserit" in out, f"Atteso 1 score inserito, output: {out}"
+        assert "1 inserted" in out, f"Atteso 1 score inserito, output: {out}"
 
     def test_normalize_status_applied_in_pipeline(self, db_with_data):
         """Verifica che _normalize_status funzioni su dati reali dal DB."""

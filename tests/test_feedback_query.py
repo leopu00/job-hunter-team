@@ -318,6 +318,7 @@ def test_legacy_ids_fallback_all_unreadable_is_still_neutral(monkeypatch):
         'note': 'no-signal (cloud-disabled)'})
     rep = fq.themes_report(days=30, legacy_ids=['7'])
     assert rep['ok'] is True and 'note' in rep
+    assert rep['note'] == 'no-signal (no readable positions)'
 
 
 def test_recent_truncates_long_comments(monkeypatch):
