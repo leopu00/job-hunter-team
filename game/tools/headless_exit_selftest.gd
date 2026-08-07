@@ -33,6 +33,7 @@ extends SceneTree
 ##    `_check_greeting_formats`: costava l'intero processo.
 
 const GAME_GD := "res://scripts/game.gd"
+const CLIENT_CONTROL_GD := "res://scripts/client_control.gd"
 const DIALOG_GD := "res://scripts/ui/shutdown_dialog.gd"
 const SETUP_GD := "res://scripts/setup/setup_service.gd"
 ## L'attesa del thread: senza questa chiamata torna l'abort del 26/07.
@@ -60,6 +61,7 @@ func _run() -> void:
 	_check_greeting_formats()
 	_check_shutdown_still_awaited()
 	_check_shutdown_is_bounded()
+	_check_cli_detach_contract()
 
 	if _fails.is_empty():
 		print("HEADLESS-EXIT-TEST PASS")
@@ -298,3 +300,30 @@ func _check_shutdown_is_bounded() -> void:
 	_check("locale distinto dalla VPS",
 			src.contains("BackendBus.is_remote() else {}"),
 			"is_live() include anche LocalBackend e può saltare lo stop locale")
+
+
+## La CLI deve chiudere soltanto la finestra, conservando lo stesso contratto
+## della scelta detach esistente e senza creare una seconda via a quit().
+func _check_cli_detach_contract() -> void:
+	var game := FileAccess.get_file_as_string(GAME_GD)
+	var control := FileAccess.get_file_as_string(CLIENT_CONTROL_GD)
+	var start := game.find("func detach_from_cli")
+	var end := game.find("func _do_quit", start)
+	var detach := game.substr(start, end - start) if start >= 0 and end > start else ""
+	_check("detach CLI pubblico", detach != "", "func detach_from_cli assente")
+	_check("detach CLI registra il marcatore",
+			detach.contains("HeadlessSession.record_exit(true)"),
+			"il saluto al ritorno mentirebbe")
+	_check("detach CLI non ferma il team", not detach.contains("shutdown_team"),
+			"la CLI deve lasciare agenti e container al lavoro")
+	_check("detach CLI usa il sink unico", detach.contains("_do_quit(false)"),
+			"uscita non delegata al percorso protetto")
+	_check("control plane disabilitato headless",
+			control.contains('DisplayServer.get_name() == "headless"'),
+			"i self-test non devono pubblicare stato o consumare request")
+	for seam in ["target_instance_id", "instance_id", "request_id",
+			"window_move_to_foreground", "window_request_attention",
+			"window_is_focused", "WINDOW_MODE_MINIMIZED",
+			'"background"', "_background_and_ack", "JHT_GAME_CONTROL_DIR",
+			"get_cmdline_user_args"]:
+		_check("control plane: " + seam, control.contains(seam), "seam assente")

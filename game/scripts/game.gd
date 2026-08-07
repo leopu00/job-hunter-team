@@ -18,6 +18,7 @@ var state: State = State.TITLE
 var dialogue_active := false
 
 var _pause_menu: Node = null
+var _client_control: ClientControl = null
 
 func _enter_tree() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -43,6 +44,8 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Palette.VOID)
+	_client_control = ClientControl.new()
+	add_child(_client_control)
 	load_gfx_profile()
 	# Il costo a riposo: dopo load_gfx_profile, così il tetto fps che si
 	# ripristina al ritorno del focus è già quello del profilo scelto.
@@ -131,6 +134,20 @@ func _on_shutdown_choice(mode: String) -> void:
 	# lavoro, come quando li avvia la CLI e il comando esce.
 	HeadlessSession.record_exit(mode == HeadlessSession.MODE_DETACH)
 	_do_quit(HeadlessSession.stops_team(mode))
+
+
+## Uscita richiesta dalla CLI: equivale ESATTAMENTE alla scelta "lascia il
+## team al lavoro" del dialogo. Non passa da quit_game(), che puo decidere di
+## fermare agenti e Docker. Il marcatore rende veritiero il saluto al ritorno.
+func detach_from_cli() -> void:
+	if _quitting:
+		return
+	close_pause()
+	if is_instance_valid(_shutdown_dialog):
+		_shutdown_dialog.queue_free()
+	_shutdown_dialog = null
+	HeadlessSession.record_exit(true)
+	_do_quit(false)
 
 
 func _do_quit(stop_team := true) -> void:

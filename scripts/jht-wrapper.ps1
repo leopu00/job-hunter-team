@@ -41,6 +41,8 @@ $ComposeFile = if ($env:JHT_COMPOSE_FILE)   { $env:JHT_COMPOSE_FILE }   else { J
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBase     = if ($env:JHT_RAW_BASE)       { $env:JHT_RAW_BASE.TrimEnd('/') } else { 'https://raw.githubusercontent.com/leopu00/job-hunter-team/production' }
 $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
+$GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
+$GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
 
 # Carica la host env (scritta da install.ps1 / setup wizard: JHT_HOST_TYPE=local|vps).
 # Formato file: VAR=value per riga, ignora # e righe vuote.
@@ -115,6 +117,513 @@ function Ensure-Up {
       }
       Start-Sleep -Milliseconds 500
     }
+  }
+}
+
+# ── Client desktop nativo (mai Docker) ───────────────────────────────────
+function Read-GameJson {
+  param([string]$Path)
+  try {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json -ErrorAction Stop
+  } catch { return $null }
+}
+
+function Write-GameJsonAtomic {
+  param([string]$Path, [hashtable]$Value)
+  $parent = Split-Path -Parent $Path
+  New-Item -ItemType Directory -Force -Path $parent | Out-Null
+  $temp = Join-Path $parent ('.' + (Split-Path -Leaf $Path) + '.tmp-' + [guid]::NewGuid().ToString('N'))
+  try {
+    [IO.File]::WriteAllText($temp, (($Value | ConvertTo-Json -Compress) + "`n"), [Text.UTF8Encoding]::new($false))
+    if (Test-Path -LiteralPath $Path) {
+      [IO.File]::Replace($temp, $Path, $null)
+    } else {
+      [IO.File]::Move($temp, $Path)
+    }
+    return $true
+  } catch {
+    Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+    return $false
+  }
+}
+
+function Get-LiveGameState {
+  $statePath = Join-Path $GameControlDir 'state.json'
+  $state = Read-GameJson $statePath
+  $statePid = 0
+  if (-not $state -or -not $state.instance_id -or
+      -not [int]::TryParse([string]$state.pid, [ref]$statePid) -or $statePid -le 0) {
+    if (Test-Path -LiteralPath $statePath) { Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue }
+    return $null
+  }
+  try {
+    $process = Get-Process -Id $statePid -ErrorAction Stop
+    if ($process.HasExited) { throw 'stale state' }
+    $stateExecutable = [IO.Path]::GetFullPath([string]$state.executable)
+    $processExecutable = [string]$process.Path
+    if (-not $processExecutable) { $processExecutable = [string]$process.MainModule.FileName }
+    if (-not $processExecutable -or
+        [IO.Path]::GetFullPath($processExecutable) -ine $stateExecutable) {
+      throw 'stale state or recycled pid'
+    }
+    $processStarted = [DateTimeOffset]::new($process.StartTime.ToUniversalTime()).ToUnixTimeSeconds()
+    # L'EXE embedded e grande e su hardware vecchio puo impiegare diversi
+    # secondi prima che l'autoload pubblichi state.json. Trenta secondi resta
+    # molto sotto qualunque riuso credibile dello stesso PID+stesso binario.
+    if ([Math]::Abs($processStarted - [double]$state.started_at) -gt 30) {
+      throw 'stale state or recycled pid'
+    }
+    return $state
+  } catch {
+    # Rimuove soltanto lo snapshot appena letto. Le request sono targettizzate
+    # al nonce e non possono colpire un eventuale nuovo processo.
+    $current = Read-GameJson $statePath
+    if ($current -and $current.instance_id -eq $state.instance_id) {
+      Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue
+    }
+    return $null
+  }
+}
+
+function Remove-GameRequestIfOwned {
+  param([string]$Path, [string]$RequestId, [string]$InstanceId)
+  $request = Read-GameJson $Path
+  if ($request -and $request.request_id -eq $RequestId -and
+      $request.target_instance_id -eq $InstanceId) {
+    Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Resolve-GameExecutable {
+  if ($env:JHT_GAME_EXECUTABLE) { return $env:JHT_GAME_EXECUTABLE }
+  $launcher = Read-GameJson (Join-Path $GameControlDir 'launcher.json')
+  if ($launcher -and $launcher.executable -and
+      (Test-Path -LiteralPath ([string]$launcher.executable) -PathType Leaf)) {
+    return [string]$launcher.executable
+  }
+  $installDir = (Get-ItemProperty -LiteralPath 'HKCU:\Software\Job Hunter Team' -Name InstallDir -ErrorAction SilentlyContinue).InstallDir
+  if ($installDir) {
+    $installed = Join-Path $installDir 'job-hunter-team.exe'
+    if (Test-Path -LiteralPath $installed -PathType Leaf) { return $installed }
+  }
+  return $GameExecutable
+}
+
+function Remove-GameLaunchTask {
+  param([string]$TaskName)
+  if (-not $TaskName) { return }
+  try {
+    $service = New-Object -ComObject 'Schedule.Service'
+    $service.Connect()
+    $service.GetFolder('\').DeleteTask($TaskName, 0)
+  } catch { }
+}
+
+function Start-GameProcess {
+  param([string]$Executable, [string]$Nonce)
+  $controlArg = $GameControlDir.Replace('"', '')
+  $arguments = "-- --jht-instance-id=$Nonce --jht-control-dir=`"$controlArg`""
+  if ([Diagnostics.Process]::GetCurrentProcess().SessionId -gt 0) {
+    $process = Start-Process -FilePath $Executable -ArgumentList $arguments -PassThru -ErrorAction Stop
+    return @{ Pid = $process.Id; TaskName = '' }
+  }
+
+  # OpenSSH/WinRM girano in Session 0: Start-Process li' crea un processo
+  # invisibile. Un task InteractiveToken usa invece la sessione desktop gia'
+  # autenticata dello stesso utente, senza password e senza elevazione.
+  $interactive = Get-Process explorer -ErrorAction SilentlyContinue |
+    Where-Object { $_.SessionId -gt 0 } | Select-Object -First 1
+  if (-not $interactive) { throw 'nessuna sessione desktop interattiva disponibile' }
+  $taskName = 'Job Hunter Team CLI Launch ' + $Nonce
+  $service = New-Object -ComObject 'Schedule.Service'
+  $service.Connect()
+  $root = $service.GetFolder('\')
+  $definition = $service.NewTask(0)
+  $definition.RegistrationInfo.Description = 'One-shot launch bridge for jht game start'
+  $definition.Principal.UserId = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+  $definition.Principal.LogonType = 3 # TASK_LOGON_INTERACTIVE_TOKEN
+  $definition.Principal.RunLevel = 0  # TASK_RUNLEVEL_LUA
+  $definition.Settings.Enabled = $true
+  $definition.Settings.AllowDemandStart = $true
+  $definition.Settings.DisallowStartIfOnBatteries = $false
+  $definition.Settings.StopIfGoingOnBatteries = $false
+  $definition.Settings.ExecutionTimeLimit = 'PT0S'
+  $action = $definition.Actions.Create(0) # TASK_ACTION_EXEC
+  $action.Path = $Executable
+  $action.Arguments = $arguments
+  $action.WorkingDirectory = Split-Path -Parent $Executable
+  try {
+    $registered = $root.RegisterTaskDefinition(
+      $taskName, $definition, 6, $definition.Principal.UserId, $null, 3, $null)
+    $null = $registered.Run($null)
+  } catch {
+    Remove-GameLaunchTask $taskName
+    throw
+  }
+  # EnginePID non e' un contratto sul PID dell'action in tutte le versioni
+  # di Task Scheduler. Il PID autorevole arrivera' da state.json col nonce.
+  return @{ Pid = 0; TaskName = $taskName }
+}
+
+function Remove-GameStartLockIfOwned {
+  param([string]$LockPath, [int]$OwnerPid)
+  $ownerPath = Join-Path $LockPath 'owner.pid'
+  $current = (Get-Content -LiteralPath $ownerPath -Raw -ErrorAction SilentlyContinue)
+  if ($current -and $current.Trim() -eq [string]$OwnerPid) {
+    Remove-Item -LiteralPath $LockPath -Force -Recurse -ErrorAction SilentlyContinue
+  }
+}
+
+function Stop-NewGameProcessCooperatively {
+  param([int]$ProcessId, [string]$Nonce)
+  $state = Get-LiveGameState
+  if ($state -and $state.instance_id -eq $Nonce) {
+    $null = Invoke-GameRequest 'stop'
+    return
+  }
+  if ($ProcessId -le 0) { return }
+  $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+  if ($process) {
+    $null = $process.CloseMainWindow()
+    try { $process.WaitForExit(5000) } catch { }
+  }
+}
+
+function Show-GameHelp {
+  Write-Host 'Usage: jht game <start|stop|status|restart|background>'
+  Write-Host ''
+  Write-Host '  start    Avvia il client; se e gia attivo conserva lo stesso PID'
+  Write-Host '  stop     Chiude il client in modo cooperativo; il team continua'
+  Write-Host '  status   Mostra running/stopped, PID e instance_id'
+  Write-Host '  restart  Riavvia il client in modo cooperativo; il team continua'
+  Write-Host '  background  Minimizza un client attivo senza fermarlo'
+}
+
+function Show-GuiHelp {
+  Write-Host 'Usage: jht gui open'
+  Write-Host ''
+  Write-Host '  open     Avvia il client se necessario e porta la finestra in primo piano'
+}
+
+function Invoke-GameStart {
+  $state = Get-LiveGameState
+  if ($state) {
+    Write-Host "game running pid=$($state.pid) instance=$($state.instance_id)"
+    return 0
+  }
+  $executable = Resolve-GameExecutable
+  if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+    Write-Err "client non trovato: $executable (override: JHT_GAME_EXECUTABLE)"
+    return 1
+  }
+
+  New-Item -ItemType Directory -Force -Path $GameControlDir | Out-Null
+  $lock = Join-Path $GameControlDir 'start.lock'
+  $acquired = $false
+  $deadline = [DateTime]::UtcNow.AddSeconds(15)
+  while ([DateTime]::UtcNow -lt $deadline) {
+    $state = Get-LiveGameState
+    if ($state) {
+      Write-Host "game running pid=$($state.pid) instance=$($state.instance_id)"
+      return 0
+    }
+    try {
+      New-Item -ItemType Directory -Path $lock -ErrorAction Stop | Out-Null
+      [IO.File]::WriteAllText((Join-Path $lock 'owner.pid'), [string]$PID)
+      $acquired = $true
+      break
+    } catch {
+      $item = Get-Item -LiteralPath $lock -ErrorAction SilentlyContinue
+      $ownerPath = Join-Path $lock 'owner.pid'
+      $ownerText = Get-Content -LiteralPath $ownerPath -Raw -ErrorAction SilentlyContinue
+      $ownerPid = 0
+      if ($ownerText -and [int]::TryParse($ownerText.Trim(), [ref]$ownerPid)) {
+        if (-not (Get-Process -Id $ownerPid -ErrorAction SilentlyContinue)) {
+          Remove-GameStartLockIfOwned $lock $ownerPid
+          continue
+        }
+      } elseif ($item -and $item.LastWriteTimeUtc -lt [DateTime]::UtcNow.AddSeconds(-2)) {
+        # Crash fra mkdir e scrittura owner.pid: directory senza proprietario.
+        Remove-Item -LiteralPath $lock -Force -Recurse -ErrorAction SilentlyContinue
+        continue
+      }
+      Start-Sleep -Milliseconds 200
+    }
+  }
+  if (-not $acquired) { Write-Err 'timeout acquisizione lock di avvio del client'; return 1 }
+
+  $launchTaskName = ''
+  $launchedProcessId = 0
+  $launchStartedUtc = [DateTime]::UtcNow
+  $nonce = ''
+  try {
+    $state = Get-LiveGameState
+    if ($state) { Write-Host "game running pid=$($state.pid) instance=$($state.instance_id)"; return 0 }
+    $nonce = [guid]::NewGuid().ToString('N')
+    $previousNonce = $env:JHT_GAME_INSTANCE_ID
+    $env:JHT_GAME_INSTANCE_ID = $nonce
+    try {
+      $launch = Start-GameProcess $executable $nonce
+      $processId = [int]$launch.Pid
+      $launchedProcessId = $processId
+      $launchTaskName = [string]$launch.TaskName
+    } finally {
+      if ($null -eq $previousNonce) { Remove-Item Env:JHT_GAME_INSTANCE_ID -ErrorAction SilentlyContinue }
+      else { $env:JHT_GAME_INSTANCE_ID = $previousNonce }
+    }
+    $readyDeadline = [DateTime]::UtcNow.AddSeconds(15)
+    do {
+      Start-Sleep -Milliseconds 200
+      $state = Get-LiveGameState
+      if ($state -and $state.instance_id -eq $nonce -and
+          ($processId -le 0 -or [int]$state.pid -eq $processId)) {
+        $launchedProcessId = [int]$state.pid
+        $readyProcess = Get-Process -Id $launchedProcessId -ErrorAction SilentlyContinue
+        if (-not $readyProcess -or $readyProcess.SessionId -le 0) {
+          Write-Err 'client avviato fuori dalla sessione desktop interattiva'
+          Stop-NewGameProcessCooperatively $launchedProcessId $nonce
+          return 1
+        }
+        Write-Host "game started pid=$($state.pid) instance=$nonce session=$($readyProcess.SessionId)"
+        return 0
+      }
+      if ($processId -gt 0 -and -not (Get-Process -Id $processId -ErrorAction SilentlyContinue)) {
+        Write-Err 'client terminato durante l avvio'
+        return 1
+      }
+    } while ([DateTime]::UtcNow -lt $readyDeadline)
+    Write-Err 'client avviato ma non pronto entro 15 secondi'
+    if ($launchedProcessId -le 0) {
+      # Il task non espone un PID affidabile: limita la ricerca al binario,
+      # alla sessione interattiva e alla finestra temporale di questo claim.
+      $candidateName = [IO.Path]::GetFileNameWithoutExtension($executable)
+      $candidate = Get-Process -Name $candidateName -ErrorAction SilentlyContinue |
+        Where-Object {
+          $_.SessionId -gt 0 -and $_.StartTime.ToUniversalTime() -ge $launchStartedUtc.AddSeconds(-1) -and
+          $_.Path -and [IO.Path]::GetFullPath($_.Path) -ieq [IO.Path]::GetFullPath($executable)
+        } | Sort-Object StartTime -Descending | Select-Object -First 1
+      if ($candidate) { $launchedProcessId = $candidate.Id }
+    }
+    Stop-NewGameProcessCooperatively $launchedProcessId $nonce
+    return 1
+  } catch {
+    Write-Err "avvio del client non riuscito: $($_.Exception.Message)"
+    return 1
+  } finally {
+    Remove-GameLaunchTask $launchTaskName
+    Remove-GameStartLockIfOwned $lock $PID
+  }
+}
+
+function Invoke-GameRequest {
+  param([ValidateSet('stop','foreground','background')] [string]$Action)
+  $state = Get-LiveGameState
+  if (-not $state) {
+    if ($Action -eq 'stop') { Write-Host 'game already stopped'; return 0 }
+    if ($Action -eq 'background') { Write-Err "client non attivo; usa 'jht game start'"; return 1 }
+    $startCode = Invoke-GameStart
+    if ($startCode -ne 0) { return $startCode }
+    $state = Get-LiveGameState
+    if (-not $state) { Write-Err 'client avviato senza stato controllabile'; return 1 }
+  }
+  $requestId = [guid]::NewGuid().ToString('N')
+  $requestPath = Join-Path $GameControlDir 'request.json'
+  $ackPath = Join-Path $GameControlDir ("ack-$requestId.json")
+  Remove-Item -LiteralPath $ackPath -Force -ErrorAction SilentlyContinue
+  if (-not (Write-GameJsonAtomic $requestPath @{
+    schema = 1; action = $Action; request_id = $requestId
+    target_instance_id = [string]$state.instance_id
+  })) { Write-Err 'impossibile pubblicare la richiesta al client'; return 1 }
+
+  $deadline = [DateTime]::UtcNow.AddSeconds($(if ($Action -eq 'stop') { 15 } else { 10 }))
+  try {
+    do {
+      Start-Sleep -Milliseconds 200
+      if ($Action -eq 'stop') {
+        if (-not (Get-Process -Id ([int]$state.pid) -ErrorAction SilentlyContinue)) {
+          Write-Host "game stopped pid=$($state.pid); team still running"
+          return 0
+        }
+      } else {
+        $ack = Read-GameJson $ackPath
+        if ($ack -and $ack.request_id -eq $requestId -and $ack.instance_id -eq $state.instance_id) {
+          if ($ack.ok -eq $true) {
+            if ($Action -eq 'background') {
+              Write-Host "game background pid=$($state.pid); client and team still running"
+            } else {
+              Write-Host "gui opened pid=$($state.pid)"
+            }
+            return 0
+          }
+          if ($Action -eq 'background') {
+            Write-Err 'il sistema operativo ha rifiutato la minimizzazione della finestra'
+          } else {
+            Write-Err 'il sistema operativo ha rifiutato il foreground della finestra'
+          }
+          return 1
+        }
+      }
+    } while ([DateTime]::UtcNow -lt $deadline)
+    Write-Err "timeout richiesta $Action al client"
+    return 1
+  } finally {
+    Remove-GameRequestIfOwned $requestPath $requestId ([string]$state.instance_id)
+    Remove-Item -LiteralPath $ackPath -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Invoke-GameRestart {
+  $previous = Get-LiveGameState
+  $stopCode = Invoke-GameRequest 'stop'
+  if ($stopCode -ne 0) { return $stopCode }
+  $startCode = Invoke-GameStart
+  if ($startCode -ne 0) { return $startCode }
+  $current = Get-LiveGameState
+  if (-not $current) { Write-Err 'client riavviato senza stato controllabile'; return 1 }
+  if ($previous -and $current.instance_id -eq $previous.instance_id) {
+    Write-Err 'il riavvio non ha sostituito l istanza precedente'
+    return 1
+  }
+  $oldPid = if ($previous) { [string]$previous.pid } else { 'none' }
+  Write-Host "game restarted old_pid=$oldPid pid=$($current.pid) instance=$($current.instance_id); team still running"
+  return 0
+}
+
+function Invoke-GameCommand {
+  param([string[]]$GameArgs)
+  if ($GameArgs.Count -eq 0 -or ($GameArgs.Count -eq 1 -and $GameArgs[0] -in @('--help','-h'))) { Show-GameHelp; return 0 }
+  if ($GameArgs.Count -eq 2 -and $GameArgs[1] -in @('--help','-h')) {
+    switch ($GameArgs[0]) {
+      'start' { Write-Host 'Usage: jht game start'; Write-Host 'Avvia il client in modo idempotente.'; return 0 }
+      'stop' { Write-Host 'Usage: jht game stop'; Write-Host 'Chiude il client e lascia il team al lavoro.'; return 0 }
+      'status' { Write-Host 'Usage: jht game status'; Write-Host 'Mostra lo stato del client desktop.'; return 0 }
+      'restart' { Write-Host 'Usage: jht game restart'; Write-Host 'Riavvia il client in modo cooperativo; il team continua.'; return 0 }
+      'background' { Write-Host 'Usage: jht game background'; Write-Host 'Minimizza un client attivo senza fermarlo.'; return 0 }
+    }
+  }
+  if ($GameArgs.Count -ne 1) { Write-Err 'opzioni game non riconosciute'; return 2 }
+  switch ($GameArgs[0]) {
+    'start' { return Invoke-GameStart }
+    'stop' { return Invoke-GameRequest 'stop' }
+    'restart' { return Invoke-GameRestart }
+    'background' { return Invoke-GameRequest 'background' }
+    'status' {
+      $state = Get-LiveGameState
+      if ($state) { Write-Host "game running pid=$($state.pid) instance=$($state.instance_id)" }
+      else { Write-Host 'game stopped' }
+      return 0
+    }
+    default { Write-Err "azione game non riconosciuta: $($GameArgs[0])"; return 2 }
+  }
+}
+
+function Invoke-GuiCommand {
+  param([string[]]$GuiArgs)
+  if ($GuiArgs.Count -eq 0 -or ($GuiArgs.Count -eq 1 -and $GuiArgs[0] -in @('--help','-h'))) { Show-GuiHelp; return 0 }
+  if ($GuiArgs.Count -eq 2 -and $GuiArgs[0] -eq 'open' -and $GuiArgs[1] -in @('--help','-h')) {
+    Write-Host 'Usage: jht gui open'
+    Write-Host 'Avvia il client se necessario e porta la finestra in primo piano.'
+    return 0
+  }
+  if ($GuiArgs.Count -ne 1 -or $GuiArgs[0] -ne 'open') { Write-Err 'uso: jht gui open'; return 2 }
+  return Invoke-GameRequest 'foreground'
+}
+
+# Il CLI Node vive nel container, ma `--output` e' un path del computer host.
+# Il core continua a possedere download e verifica SHA-256: qui assegniamo un
+# path temporaneo Linux e pubblichiamo i byte verificati con docker cp + move
+# atomico sullo stesso filesystem della destinazione Windows.
+function Invoke-HostDownload {
+  param([string[]]$DownloadArgs)
+
+  # Un numero restituito da una funzione PowerShell viaggia sullo stesso
+  # success stream di stdout. Se `docker exec` ha gia stampato progresso, una
+  # assegnazione come `$code = Invoke-HostDownload` produce quindi un array e
+  # `exit $code` puo degradare a 0. Il codice vive in un canale scalare dedicato
+  # e parte fail-closed; stdout/stderr restano liberi di arrivare al terminale.
+  $script:HostDownloadExitCode = 1
+  $hostOutput = ''
+  $downloadEnv = @()
+  if ($env:JHT_RELEASE_BASE_URL) {
+    $downloadEnv = @('-e', "JHT_RELEASE_BASE_URL=$env:JHT_RELEASE_BASE_URL")
+  }
+  $rewritten = [System.Collections.Generic.List[string]]::new()
+  for ($i = 0; $i -lt $DownloadArgs.Count; $i++) {
+    $arg = $DownloadArgs[$i]
+    if ($arg -eq '--output') {
+      if ($hostOutput) { Write-Err '--output specificato piu di una volta'; $script:HostDownloadExitCode = 2; return }
+      if ($i + 1 -ge $DownloadArgs.Count -or -not $DownloadArgs[$i + 1]) {
+        Write-Err '--output richiede un path'
+        $script:HostDownloadExitCode = 2
+        return
+      }
+      $i += 1
+      $hostOutput = $DownloadArgs[$i]
+    } elseif ($arg.StartsWith('--output=')) {
+      if ($hostOutput) { Write-Err '--output specificato piu di una volta'; $script:HostDownloadExitCode = 2; return }
+      $hostOutput = $arg.Substring('--output='.Length)
+      if (-not $hostOutput) { Write-Err '--output richiede un path'; $script:HostDownloadExitCode = 2; return }
+    } else {
+      $rewritten.Add($arg)
+    }
+  }
+
+  # Il default `/jht_user/downloads` e' gia bind-mountato sul Documents host.
+  if (-not $hostOutput) {
+    # Windows PowerShell 5.1 converte lo stderr dei processi nativi in record
+    # Error. Con la preference globale Stop, la normale riga di progresso del
+    # downloader diventava una terminating exception prima della copia host.
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+      & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" @downloadEnv $Container node $NodeEntry download @rewritten
+      $script:HostDownloadExitCode = $LASTEXITCODE
+    } finally {
+      $ErrorActionPreference = $previousErrorActionPreference
+    }
+    return
+  }
+
+  $hostOutput = [IO.Path]::GetFullPath($hostOutput)
+  if (Test-Path -LiteralPath $hostOutput) {
+    Write-Err "il file di destinazione esiste gia: $hostOutput"
+    return
+  }
+
+  $containerTemp = '/tmp/jht-download-' + $PID + '-' + [guid]::NewGuid().ToString('N')
+  $parent = Split-Path -Parent $hostOutput
+  $hostTemp = Join-Path $parent ('.' + (Split-Path -Leaf $hostOutput) + '.part-' + [guid]::NewGuid().ToString('N'))
+  $rewritten.Add('--output')
+  $rewritten.Add($containerTemp)
+
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" @downloadEnv $Container node $NodeEntry download @rewritten
+    $innerCode = $LASTEXITCODE
+    if ($innerCode -ne 0) { $script:HostDownloadExitCode = $innerCode; return }
+
+    New-Item -ItemType Directory -Force -Path $parent -ErrorAction Stop | Out-Null
+    & docker cp "${Container}:$containerTemp" $hostTemp
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $hostTemp -PathType Leaf)) {
+      Write-Err 'copia del download verificato verso l host non riuscita'
+      return
+    }
+    # File.Move a due argomenti e' no-clobber anche su Windows PowerShell 5.1:
+    # se il target compare durante il download l'operazione fallisce.
+    [IO.File]::Move($hostTemp, $hostOutput)
+    Write-Host "  Salvato sul computer host in: $hostOutput"
+    $script:HostDownloadExitCode = 0
+    return
+  } catch {
+    Write-Err "pubblicazione del download sull host non riuscita: $($_.Exception.Message)"
+  } finally {
+    & docker exec $Container rm -f $containerTemp *> $null
+    if (Test-Path -LiteralPath $hostTemp) {
+      Remove-Item -LiteralPath $hostTemp -Force -ErrorAction SilentlyContinue
+    }
+    $ErrorActionPreference = $previousErrorActionPreference
   }
 }
 
@@ -393,6 +902,16 @@ $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
 $Rest = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
 
 switch ($Sub) {
+  'game' {
+    $code = Invoke-GameCommand $Rest
+    exit $code
+  }
+
+  'gui' {
+    $code = Invoke-GuiCommand $Rest
+    exit $code
+  }
+
   { $_ -in @('up', 'start-container') } {
     Require-Docker
     Require-ComposeFile
@@ -474,6 +993,14 @@ switch ($Sub) {
     Ensure-Up
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @Rest
     break
+  }
+
+  'download' {
+    Require-Docker
+    Require-ComposeFile
+    Ensure-Up
+    Invoke-HostDownload $Rest
+    exit $script:HostDownloadExitCode
   }
 
   # Default: nessun arg = help.
