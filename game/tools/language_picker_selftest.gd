@@ -63,6 +63,8 @@ func _init() -> void:
 	hardcoded_version.compile('"v[0-9]+(?:\\.[0-9]+)+"')
 	_check("versione titolo non scritta a mano",
 			hardcoded_version.search(title_source) == null)
+	_check("selftest artifact verifica footer renderizzato assente",
+			title_source.contains("and not _title_has_forbidden_footer()"))
 	_check("scrive la scelta su preferenza isolata",
 			UIStrings.set_lang("de", true, TEST_LANG_CFG))
 	var saved_after_restart := UIStrings.saved_language(TEST_LANG_CFG)
