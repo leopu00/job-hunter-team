@@ -536,7 +536,7 @@ def _care_queue_counts(conn) -> dict:
 
     # Le scadute non passano dalla policy: sono l'ordine
     # `discard_expired_rotating`, sempre parte della cura.
-    out["expired"] = _count(conn, """
+    out["scadute"] = _count(conn, """
         SELECT COUNT(*)
         FROM positions p
         WHERE p.status != 'excluded'
@@ -634,12 +634,15 @@ def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
                 pass
         broken = sorted(k for k, v in counts.items() if v is None)
         if broken:
+            broken_display = ["expired" if k == "scadute" else k
+                              for k in broken]
             return {"kind": EXIT_UNAVAILABLE,
                     "detail": "queues could not be counted (%s) — DO NOT "
                               "infer that they are empty: check with db_query"
-                              % ", ".join(broken)}
+                              % ", ".join(broken_display)}
         shown = ", ".join(
-            "%s=%s" % (k, "OFF by policy" if v == "off" else v)
+            "%s=%s" % ("expired" if k == "scadute" else k,
+                        "OFF by policy" if v == "off" else v)
             for k, v in counts.items())
         exhausted = all(v == "off" or v == 0 for v in counts.values())
         if exhausted:
