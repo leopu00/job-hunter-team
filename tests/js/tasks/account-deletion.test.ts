@@ -34,11 +34,14 @@ function fakeAdmin(
     storagePaths?: string[];
     storageTree?: Record<string, true>;
     storageRemovesNothing?: boolean;
+    /** Numero del lotto (1-based) che deve fallire. */
+    failBatch?: number;
   } = {},
 ) {
   const calls: Call[] = [];
   const deletedUsers: string[] = [];
   const removedPaths: string[] = [];
+  const batches: number[] = [];
   const client = {
     storage: {
       from() {
@@ -73,8 +76,26 @@ function fakeAdmin(
           // il fake precedente nascondeva, restituendo qualunque path gli
           // venisse passato.
           remove(paths: string[]) {
+            // Supabase rifiuta oltre 1000 percorsi per chiamata. Il doppio
+            // precedente accettava qualunque dimensione, ed è per questo
+            // che il caso da 2500 passava: confermava l'assunzione invece
+            // di controllarla.
+            if (paths.length > 1000) {
+              return Promise.resolve({
+                data: null,
+                error: { message: "too many paths (max 1000)" },
+              });
+            }
+            batches.push(paths.length);
             removedPaths.push(...paths);
             const tree = opts.storageTree ?? {};
+            // Un lotto che deve fallire non tocca l'albero.
+            if (opts.failBatch === batches.length) {
+              return Promise.resolve({
+                data: null,
+                error: { message: "boom" },
+              });
+            }
             const actually = opts.storageRemovesNothing
               ? []
               : paths.filter((p) => tree[p]);
@@ -129,7 +150,7 @@ function fakeAdmin(
     },
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { client: client as any, calls, deletedUsers, removedPaths };
+  return { client: client as any, calls, deletedUsers, removedPaths, batches };
 }
 
 describe("cancellazione account — cancella tutto", () => {
@@ -474,11 +495,31 @@ describe("cancellazione — l'enumerazione non si tronca in silenzio", () => {
     // limite verrebbe troncata e la cancellazione si direbbe completa.
     const tree: Record<string, true> = {};
     for (let i = 0; i < 2500; i += 1) tree[`user-1/req/f${i}.pdf`] = true;
-    const { client, removedPaths } = fakeAdmin({
+    const { client, removedPaths, batches } = fakeAdmin({
       storagePaths: [],
       storageTree: tree,
     });
     await deleteAccountData(client, "user-1");
     expect(removedPaths).toHaveLength(2500);
+    // Tre chiamate, non una da 2500: il limite di Supabase è 1000.
+    expect(batches).toEqual([1000, 1000, 500]);
+  });
+});
+
+describe("cancellazione — un lotto fallito ferma i successivi", () => {
+  it("al primo errore non lancia i lotti rimanenti", async () => {
+    const tree: Record<string, true> = {};
+    for (let i = 0; i < 2500; i += 1) tree[`user-1/req/f${i}.pdf`] = true;
+    const { client, batches, deletedUsers } = fakeAdmin({
+      storageTree: tree,
+      failBatch: 2,
+    });
+    await expect(deleteAccountData(client, "user-1")).rejects.toThrow();
+    // Due lotti tentati, il terzo mai: se il bucket sta rifiutando,
+    // insistere allarga il danno invece di ridurlo.
+    expect(batches).toEqual([1000, 1000]);
+    // E soprattutto: l'utente e i suoi dati NON vengono cancellati, o
+    // resterebbero file orfani senza più un proprietario.
+    expect(deletedUsers).toEqual([]);
   });
 });

@@ -6,9 +6,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  validateConfig,
-  AIProviderSchema,
-  TelegramChannelSchema,
+  validateConfig, AIProviderSchema, TelegramChannelSchema,
 } from "../../../shared/config/schema";
 import { redactConfig } from "../../../shared/config/io";
 
@@ -44,10 +42,8 @@ describe("Schema — defaults e campi opzionali", () => {
 
   it("AIProviderSchema accetta campo model opzionale", () => {
     const r = AIProviderSchema.safeParse({
-      name: "claude",
-      auth_method: "api_key",
-      api_key: "sk-test",
-      model: "claude-opus-4-6",
+      name: "claude", auth_method: "api_key",
+      api_key: "sk-test", model: "claude-opus-4-6",
     });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.model).toBe("claude-opus-4-6");
@@ -57,8 +53,8 @@ describe("Schema — defaults e campi opzionali", () => {
 describe("Schema — TelegramChannelSchema (3 bot dedicati)", () => {
   const validBots = {
     assistente: { bot_token: "111:AAA" },
-    capitano: { bot_token: "222:BBB" },
-    mentor: { bot_token: "333:CCC" },
+    capitano:   { bot_token: "222:BBB" },
+    mentor:     { bot_token: "333:CCC" },
   };
 
   it("accetta 3 bot configurati", () => {
@@ -92,8 +88,7 @@ describe("Schema — TelegramChannelSchema (3 bot dedicati)", () => {
 
   it("rifiuta schema legacy single-bot (no bots wrapper)", () => {
     const r = TelegramChannelSchema.safeParse({
-      bot_token: "123:ABC",
-      chat_id: "100",
+      bot_token: "123:ABC", chat_id: "100",
     });
     expect(r.success).toBe(false);
   });
@@ -161,21 +156,14 @@ describe("validateConfig — tipi errati", () => {
 describe("redactConfig — struttura completa", () => {
   it("maschera tutti i campi sensibili in config reale (3 bot)", () => {
     const full = {
-      version: 1,
-      active_provider: "claude",
-      providers: {
-        claude: {
-          name: "claude",
-          auth_method: "api_key",
-          api_key: "sk-ant-secret123",
-        },
-      },
+      version: 1, active_provider: "claude",
+      providers: { claude: { name: "claude", auth_method: "api_key", api_key: "sk-ant-secret123" } },
       channels: {
         telegram: {
           bots: {
             assistente: { bot_token: "789012:XYZABC", chat_id: "123" },
-            capitano: { bot_token: "555666:CAPTAIN", chat_id: "123" },
-            mentor: { bot_token: "777888:MENTORT", chat_id: "123" },
+            capitano:   { bot_token: "555666:CAPTAIN", chat_id: "123" },
+            mentor:     { bot_token: "777888:MENTORT", chat_id: "123" },
           },
         },
       },
@@ -183,12 +171,8 @@ describe("redactConfig — struttura completa", () => {
     };
     const r = redactConfig(full);
     expect((r.providers as any).claude.api_key).toBe("sk-a****");
-    expect((r.channels as any).telegram.bots.assistente.bot_token).toBe(
-      "7890****",
-    );
-    expect((r.channels as any).telegram.bots.capitano.bot_token).toBe(
-      "5556****",
-    );
+    expect((r.channels as any).telegram.bots.assistente.bot_token).toBe("7890****");
+    expect((r.channels as any).telegram.bots.capitano.bot_token).toBe("5556****");
     expect((r.channels as any).telegram.bots.mentor.bot_token).toBe("7778****");
     expect((r.channels as any).telegram.bots.assistente.chat_id).toBe("123");
     expect(r.workspace).toBe("/tmp/jht");
@@ -198,12 +182,8 @@ describe("redactConfig — struttura completa", () => {
     const cfg = {
       providers: {
         kimi: {
-          name: "kimi",
-          auth_method: "subscription",
-          subscription: {
-            email: "u@example.com",
-            session_token: "tok-supersecret",
-          },
+          name: "kimi", auth_method: "subscription",
+          subscription: { email: "u@example.com", session_token: "tok-supersecret" },
         },
       },
     };

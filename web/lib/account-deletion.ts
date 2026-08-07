@@ -44,6 +44,10 @@ const STORAGE_BUCKET = "file-transit";
 /** Quanti oggetti si chiedono per ogni livello. */
 const STORAGE_PAGE_LIMIT = 1000;
 
+/** Quanti percorsi si passano a `remove` per chiamata. È il massimo che
+ *  Supabase accetta: oltre, la chiamata viene rifiutata. */
+const STORAGE_REMOVE_BATCH = 1000;
+
 /** Quanti oggetti in tutto si accetta di enumerare. Oltre questa soglia la
  *  cancellazione si ferma invece di dichiararsi completa avendone lasciati
  *  fuori: un numero alto ma finito è meglio di una ricorsione che nessuno
@@ -88,10 +92,15 @@ export async function deleteAccountData(
     // Un file che resta è una cancellazione incompleta, e va detto invece
     // di dichiarare completato: l'operatore ha scelto la cancellazione
     // immediata proprio perché fosse vera.
+    // Non si elencano tutti i percorsi: con migliaia di file il messaggio
+    // finirebbe nei log e nella risposta al client, e i nomi dei file
+    // sono roba dell'utente. Bastano i primi per capire dove guardare.
+    const sample = storage.failed.slice(0, 5).join(", ");
+    const rest = storage.failed.length - 5;
     throw new Error(
       `${storage.failed.length} file su Storage non cancellati: ` +
         `la cancellazione si ferma qui per non dichiararsi completa. ` +
-        `Percorsi rimasti: ${storage.failed.join(", ")}`,
+        `Esempi: ${sample}${rest > 0 ? ` (e altri ${rest})` : ""}`,
     );
   }
 
@@ -210,11 +219,25 @@ async function deleteStorageObjects(
   const paths = await listRecursive(admin, userId, budget);
   if (paths.length === 0) return { removed: 0, failed: [] };
 
-  const { error: rmError } = await admin.storage
-    .from(STORAGE_BUCKET)
-    .remove(paths);
-  if (rmError) {
-    return { removed: 0, failed: paths };
+  // ── `remove` accetta al massimo 1000 percorsi per chiamata ──────────
+  // Il limite è di Supabase. La versione precedente ne passava fino a
+  // 5000 in una sola chiamata, e il test da 2500 la dava per buona solo
+  // perché il doppio non rifiutava i lotti troppo grandi: l'ennesimo caso
+  // di un finto client che conferma l'assunzione invece di controllarla.
+  // Segnalato da HQ-DOCS con la fonte, confermato da HQ-BACKEND.
+  //
+  // Al primo errore ci si ferma senza lanciare i lotti successivi: se il
+  // bucket sta rifiutando, insistere allarga il danno invece di ridurlo.
+  for (let i = 0; i < paths.length; i += STORAGE_REMOVE_BATCH) {
+    const batch = paths.slice(i, i + STORAGE_REMOVE_BATCH);
+    const { error: rmError } = await admin.storage
+      .from(STORAGE_BUCKET)
+      .remove(batch);
+    if (rmError) {
+      // Ciò che è stato cancellato prima resta cancellato: la
+      // rienumerazione qui sotto dirà con precisione cosa è rimasto.
+      break;
+    }
   }
 
   // La prova non è la risposta di `remove` ma il bucket stesso: si

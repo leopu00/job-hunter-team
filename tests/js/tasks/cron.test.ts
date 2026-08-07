@@ -6,17 +6,11 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  parseAbsoluteTimeMs,
-  computeNextRunAtMs,
-  computePreviousRunAtMs,
+  parseAbsoluteTimeMs, computeNextRunAtMs, computePreviousRunAtMs,
 } from "../../../shared/cron/schedule.js";
 import {
-  createJob,
-  applyJobPatch,
-  isJobEnabled,
-  isJobDue,
-  recomputeNextRuns,
-  nextWakeAtMs,
+  createJob, applyJobPatch, isJobEnabled, isJobDue,
+  recomputeNextRuns, nextWakeAtMs,
 } from "../../../shared/cron/jobs.js";
 
 const every = (ms: number) => ({ kind: "every" as const, everyMs: ms });
@@ -67,10 +61,7 @@ describe("computeNextRunAtMs — schedule 'every'", () => {
   });
   it("con anchor nel futuro ritorna anchor", () => {
     const anchor = nowMs + 100_000;
-    const next = computeNextRunAtMs(
-      { kind: "every", everyMs: 60_000, anchorMs: anchor },
-      nowMs,
-    );
+    const next = computeNextRunAtMs({ kind: "every", everyMs: 60_000, anchorMs: anchor }, nowMs);
     expect(next).toBe(anchor);
   });
   it("ritorna undefined per everyMs NaN", () => {
@@ -94,9 +85,7 @@ describe("computeNextRunAtMs — schedule 'cron'", () => {
 describe("computePreviousRunAtMs", () => {
   it("ritorna undefined per schedule non-cron", () => {
     expect(computePreviousRunAtMs(every(60000), Date.now())).toBeUndefined();
-    expect(
-      computePreviousRunAtMs(at("2025-01-01"), Date.now()),
-    ).toBeUndefined();
+    expect(computePreviousRunAtMs(at("2025-01-01"), Date.now())).toBeUndefined();
   });
   it("ritorna undefined per espressione cron vuota", () => {
     expect(computePreviousRunAtMs(cron(""), Date.now())).toBeUndefined();
@@ -105,11 +94,7 @@ describe("computePreviousRunAtMs", () => {
 
 describe("createJob", () => {
   it("genera id UUID, timestamp e state", () => {
-    const job = createJob({
-      name: "test",
-      schedule: every(60_000),
-      payload: cmd(),
-    });
+    const job = createJob({ name: "test", schedule: every(60_000), payload: cmd() });
     expect(job.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(job.createdAtMs).toBeGreaterThan(0);
     expect(job.updatedAtMs).toBe(job.createdAtMs);
@@ -117,12 +102,7 @@ describe("createJob", () => {
     expect(job.state.nextRunAtMs).toBeDefined();
   });
   it("enabled false non calcola nextRunAtMs", () => {
-    const job = createJob({
-      name: "off",
-      enabled: false,
-      schedule: every(1000),
-      payload: cmd(),
-    });
+    const job = createJob({ name: "off", enabled: false, schedule: every(1000), payload: cmd() });
     expect(job.enabled).toBe(false);
     expect(job.state.nextRunAtMs).toBeUndefined();
   });
@@ -130,11 +110,7 @@ describe("createJob", () => {
 
 describe("applyJobPatch", () => {
   it("aggiorna nome, descrizione e updatedAtMs", () => {
-    const job = createJob({
-      name: "old",
-      schedule: every(1000),
-      payload: cmd(),
-    });
+    const job = createJob({ name: "old", schedule: every(1000), payload: cmd() });
     const before = job.updatedAtMs;
     applyJobPatch(job, { name: "new", description: "desc" });
     expect(job.name).toBe("new");
@@ -156,47 +132,26 @@ describe("isJobEnabled / isJobDue", () => {
     expect(isJobEnabled({ enabled: false } as any)).toBe(false);
   });
   it("isJobDue true quando abilitato e nextRun <= now", () => {
-    expect(
-      isJobDue({ enabled: true, state: { nextRunAtMs: 100 } } as any, 200),
-    ).toBe(true);
+    expect(isJobDue({ enabled: true, state: { nextRunAtMs: 100 } } as any, 200)).toBe(true);
   });
   it("isJobDue false quando disabilitato o running", () => {
-    expect(
-      isJobDue({ enabled: false, state: { nextRunAtMs: 100 } } as any, 200),
-    ).toBe(false);
-    expect(
-      isJobDue(
-        { enabled: true, state: { nextRunAtMs: 100, runningAtMs: 150 } } as any,
-        200,
-      ),
-    ).toBe(false);
+    expect(isJobDue({ enabled: false, state: { nextRunAtMs: 100 } } as any, 200)).toBe(false);
+    expect(isJobDue({ enabled: true, state: { nextRunAtMs: 100, runningAtMs: 150 } } as any, 200)).toBe(false);
   });
   it("isJobDue true con forced anche se non due", () => {
-    expect(
-      isJobDue({ enabled: true, state: { nextRunAtMs: 999 } } as any, 100, {
-        forced: true,
-      }),
-    ).toBe(true);
+    expect(isJobDue({ enabled: true, state: { nextRunAtMs: 999 } } as any, 100, { forced: true })).toBe(true);
   });
 });
 
 describe("recomputeNextRuns / nextWakeAtMs", () => {
   it("recompute aggiorna nextRunAtMs e ritorna changed", () => {
-    const job = createJob({
-      name: "r",
-      schedule: every(60_000),
-      payload: cmd(),
-    });
+    const job = createJob({ name: "r", schedule: every(60_000), payload: cmd() });
     job.state.nextRunAtMs = undefined;
     expect(recomputeNextRuns([job])).toBe(true);
     expect(job.state.nextRunAtMs).toBeDefined();
   });
   it("nextWakeAtMs trova il timestamp piu' vicino", () => {
-    const jobs = [
-      { state: { nextRunAtMs: 500 } },
-      { state: { nextRunAtMs: 200 } },
-      { state: { nextRunAtMs: 800 } },
-    ];
+    const jobs = [{ state: { nextRunAtMs: 500 } }, { state: { nextRunAtMs: 200 } }, { state: { nextRunAtMs: 800 } }];
     expect(nextWakeAtMs(jobs as any)).toBe(200);
   });
   it("nextWakeAtMs ritorna null per array vuoto", () => {

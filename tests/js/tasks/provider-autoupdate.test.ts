@@ -14,23 +14,13 @@
  */
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  existsSync,
-  chmodSync,
-} from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 const REPO = path.resolve(__dirname, "../../..");
 const JHT_BIN = path.join(REPO, "cli", "bin", "jht.js");
-const PID1_SRC = readFileSync(
-  path.join(REPO, "cli", "src", "commands", "pid1.js"),
-  "utf-8",
-);
+const PID1_SRC = readFileSync(path.join(REPO, "cli", "src", "commands", "pid1.js"), "utf-8");
 
 const posixOnly = process.platform === "win32" ? describe.skip : describe;
 
@@ -73,51 +63,31 @@ function makeSandbox(opts: {
   mkdirSync(home, { recursive: true });
   writeFileSync(path.join(root, "ver"), opts.version ?? "1.0.0", "utf-8");
 
-  const binName =
-    opts.provider === "kimi"
-      ? "kimi"
-      : opts.provider === "openai"
-        ? "codex"
-        : "claude";
-  writeExec(
-    path.join(bin, binName),
-    `echo "${binName} version $(cat "${root}/ver")"`,
-  );
+  const binName = opts.provider === "kimi" ? "kimi" : opts.provider === "openai" ? "codex" : "claude";
+  writeExec(path.join(bin, binName), `echo "${binName} version $(cat "${root}/ver")"`);
 
   const outcome = opts.update ?? "ok";
   const effect =
-    outcome === "bump"
-      ? `echo "${opts.newVersion ?? "9.9.9"}" > "${root}/ver"\nexit 0`
-      : outcome === "ok"
-        ? "exit 0"
-        : outcome === "hang"
-          ? "sleep 60"
-          : 'echo "npm error code ENOTFOUND registry.npmjs.org" >&2\nexit 1';
-  const published =
-    opts.publishedVersion ??
-    (outcome === "bump"
-      ? (opts.newVersion ?? "9.9.9")
-      : outcome === "ok"
-        ? (opts.version ?? "1.0.0")
+    outcome === "bump" ? `echo "${opts.newVersion ?? "9.9.9"}" > "${root}/ver"\nexit 0` :
+    outcome === "ok" ? "exit 0" :
+    outcome === "hang" ? "sleep 60" :
+    'echo "npm error code ENOTFOUND registry.npmjs.org" >&2\nexit 1';
+  const published = opts.publishedVersion
+    ?? (outcome === "bump" ? (opts.newVersion ?? "9.9.9")
+      : outcome === "ok" ? (opts.version ?? "1.0.0")
         : "9.9.9");
-  writeExec(
-    path.join(bin, "npm"),
-    [
-      `echo "$*" >> "${root}/npm.calls"`,
-      'if [ "$1" = "view" ]; then',
-      `  echo "${published}"`,
-      "  exit 0",
-      "fi",
-      effect,
-    ].join("\n"),
-  );
+  writeExec(path.join(bin, "npm"), [
+    `echo "$*" >> "${root}/npm.calls"`,
+    'if [ "$1" = "view" ]; then',
+    `  echo "${published}"`,
+    '  exit 0',
+    'fi',
+    effect,
+  ].join("\n"));
   writeExec(path.join(bin, "sh"), `echo "$*" >> "${root}/sh.calls"\n${effect}`);
 
-  const providers: Record<string, unknown> = {
-    [opts.provider]: { auth_method: "subscription" },
-  };
-  if (opts.model)
-    (providers[opts.provider] as Record<string, unknown>).model = opts.model;
+  const providers: Record<string, unknown> = { [opts.provider]: { auth_method: "subscription" } };
+  if (opts.model) (providers[opts.provider] as Record<string, unknown>).model = opts.model;
   writeFileSync(
     path.join(home, "jht.config.json"),
     JSON.stringify({ active_provider: opts.provider, providers }),
@@ -137,10 +107,7 @@ function makeSandbox(opts: {
     mailbox: () => {
       const f = path.join(home, "logs", "bridge-mailbox.jsonl");
       if (!existsSync(f)) return [];
-      return readFileSync(f, "utf-8")
-        .split("\n")
-        .filter(Boolean)
-        .map((l) => JSON.parse(l));
+      return readFileSync(f, "utf-8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
     },
   };
 }
@@ -150,9 +117,7 @@ function runAutoUpdate(sb: Sandbox, extraEnv: Record<string, string> = {}) {
     encoding: "utf-8",
     timeout: 60_000,
     env: {
-      PATH: [sb.bin, path.dirname(process.execPath), "/usr/bin", "/bin"].join(
-        path.delimiter,
-      ),
+      PATH: [sb.bin, path.dirname(process.execPath), "/usr/bin", "/bin"].join(path.delimiter),
       HOME: sb.root,
       JHT_HOME: sb.home,
       IS_CONTAINER: "1",
@@ -165,12 +130,7 @@ function runAutoUpdate(sb: Sandbox, extraEnv: Record<string, string> = {}) {
 
 posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   it("aggiorna e logga la versione prima → dopo (criterio 2)", () => {
-    const sb = makeSandbox({
-      provider: "claude",
-      version: "2.1.220",
-      update: "bump",
-      newVersion: "2.4.0",
-    });
+    const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "bump", newVersion: "2.4.0" });
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
     expect(r.out).toContain("2.1.220 → 2.4.0");
@@ -178,11 +138,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   });
 
   it("dice ESPLICITAMENTE quando la versione non è cambiata (criterio 2 + 7)", () => {
-    const sb = makeSandbox({
-      provider: "claude",
-      version: "2.4.0",
-      update: "ok",
-    });
+    const sb = makeSandbox({ provider: "claude", version: "2.4.0", update: "ok" });
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
     expect(r.out).toContain("2.4.0 → 2.4.0");
@@ -195,11 +151,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   });
 
   it("update fallito: exit 0, errore loggato, si prosegue con la CLI presente (criterio 3)", () => {
-    const sb = makeSandbox({
-      provider: "claude",
-      version: "2.1.220",
-      update: "fail",
-    });
+    const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "fail" });
     const r = runAutoUpdate(sb);
     // Il boot NON si ferma: è la regola più importante del ticket.
     expect(r.code).toBe(0);
@@ -214,11 +166,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   it("registry che accetta e poi tace: lo step viene ucciso e il boot prosegue (criterio 3)", () => {
     // È la garanzia che regge la scelta SEQUENZIALE in pid1: senza un tetto
     // duro, npm senza timeout globale terrebbe in ostaggio il container intero.
-    const sb = makeSandbox({
-      provider: "claude",
-      version: "2.1.220",
-      update: "hang",
-    });
+    const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "hang" });
     const started = Date.now();
     const r = runAutoUpdate(sb, { JHT_PROVIDER_UPDATE_TIMEOUT_SEC: "1" });
     expect(r.code).toBe(0);
@@ -228,12 +176,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   });
 
   it("provider attivo kimi: tocca SOLO i pacchetti di kimi, mai npm (criterio 4)", () => {
-    const sb = makeSandbox({
-      provider: "kimi",
-      version: "1.36.0",
-      update: "bump",
-      newVersion: "1.42.0",
-    });
+    const sb = makeSandbox({ provider: "kimi", version: "1.36.0", update: "bump", newVersion: "1.42.0" });
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
     expect(sb.calls("npm")).toHaveLength(0);
@@ -244,11 +187,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   });
 
   it("provider attivo claude: non tocca kimi né codex (criterio 4)", () => {
-    const sb = makeSandbox({
-      provider: "claude",
-      version: "2.1.220",
-      update: "ok",
-    });
+    const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "ok" });
     runAutoUpdate(sb);
     const npmCalls = sb.calls("npm").join("\n");
     expect(npmCalls).toContain("@anthropic-ai/claude-code@latest");
@@ -259,11 +198,8 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
 
   it("il modello non viene toccato: la CLI nuova diventa un FINDING per il Capitano (criterio 5)", () => {
     const sb = makeSandbox({
-      provider: "kimi",
-      model: "kimi-k2-0905-preview",
-      version: "1.36.0",
-      update: "bump",
-      newVersion: "1.42.0",
+      provider: "kimi", model: "kimi-k2-0905-preview",
+      version: "1.36.0", update: "bump", newVersion: "1.42.0",
     });
     runAutoUpdate(sb);
 
@@ -280,19 +216,13 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     expect(msg).toContain("MODELLO NON e' stato cambiato");
 
     // E il modello nel config è rimasto quello di prima.
-    const cfg = JSON.parse(
-      readFileSync(path.join(sb.home, "jht.config.json"), "utf-8"),
-    );
+    const cfg = JSON.parse(readFileSync(path.join(sb.home, "jht.config.json"), "utf-8"));
     expect(cfg.providers.kimi.model).toBe("kimi-k2-0905-preview");
     expect(cfg.active_provider).toBe("kimi");
   });
 
   it("JHT_PROVIDER_AUTOUPDATE=0: nessun tentativo di update (criterio 6)", () => {
-    const sb = makeSandbox({
-      provider: "claude",
-      version: "2.1.220",
-      update: "bump",
-    });
+    const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "bump" });
     const r = runAutoUpdate(sb, { JHT_PROVIDER_AUTOUPDATE: "0" });
     expect(r.code).toBe(0);
     expect(r.out).toContain("disabilitato");
@@ -302,12 +232,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   });
 
   it("secondo riavvio consecutivo: riconosce che è già aggiornata (criterio 7)", () => {
-    const sb = makeSandbox({
-      provider: "claude",
-      version: "2.1.220",
-      update: "bump",
-      newVersion: "2.4.0",
-    });
+    const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "bump", newVersion: "2.4.0" });
     const first = runAutoUpdate(sb);
     expect(first.out).toContain("2.1.220 → 2.4.0");
     // Secondo boot: l'install è persistente (prefisso su volume), la versione
@@ -319,16 +244,8 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   });
 
   it("senza active_provider non aggiorna niente", () => {
-    const sb = makeSandbox({
-      provider: "claude",
-      version: "2.1.220",
-      update: "bump",
-    });
-    writeFileSync(
-      path.join(sb.home, "jht.config.json"),
-      JSON.stringify({}),
-      "utf-8",
-    );
+    const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "bump" });
+    writeFileSync(path.join(sb.home, "jht.config.json"), JSON.stringify({}), "utf-8");
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
     expect(r.out).toContain("active_provider non ancora configurato");
@@ -336,11 +253,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   });
 
   it("config illeggibile: non esplode, non aggiorna, esce 0", () => {
-    const sb = makeSandbox({
-      provider: "claude",
-      version: "2.1.220",
-      update: "bump",
-    });
+    const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "bump" });
     writeFileSync(path.join(sb.home, "jht.config.json"), "{ non json", "utf-8");
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
@@ -348,11 +261,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   });
 
   it("fuori dal container non lancia niente (nessun docker compose a sorpresa)", () => {
-    const sb = makeSandbox({
-      provider: "claude",
-      version: "2.1.220",
-      update: "bump",
-    });
+    const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "bump" });
     const r = runAutoUpdate(sb, { IS_CONTAINER: "0" });
     expect(r.code).toBe(0);
     expect(r.out).toContain("fuori dal container");
@@ -384,14 +293,9 @@ describe("pid1 — l'update precede tutto ciò che usa la CLI (criterio 1)", () 
       "startUserFacingAgents().catch(",
     ]) {
       const idx = PID1_SRC.indexOf(later, update);
-      expect(idx, `${later} deve venire dopo l'auto-update`).toBeGreaterThan(
-        update,
-      );
+      expect(idx, `${later} deve venire dopo l'auto-update`).toBeGreaterThan(update);
       // e non deve esistere un'occorrenza PRIMA dell'update
-      expect(
-        PID1_SRC.slice(0, update).includes(later),
-        `${later} non deve girare prima dell'auto-update`,
-      ).toBe(false);
+      expect(PID1_SRC.slice(0, update).includes(later), `${later} non deve girare prima dell'auto-update`).toBe(false);
     }
   });
 

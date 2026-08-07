@@ -21,13 +21,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import {
-  mkdtempSync,
-  rmSync,
-  readFileSync,
-  writeFileSync,
-  mkdirSync,
-} from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -111,9 +105,7 @@ const rowsOf = () =>
 
 describe("parsing di chat.jsonl", () => {
   it("legge una riga scritta da jht-send", () => {
-    expect(
-      parseChatLine('{"role":"assistant","text":"ciao","ts":1753790000.5}'),
-    ).toEqual({
+    expect(parseChatLine('{"role":"assistant","text":"ciao","ts":1753790000.5}')).toEqual({
       role: "assistant",
       text: "ciao",
       ts: 1753790000.5,
@@ -123,13 +115,7 @@ describe("parsing di chat.jsonl", () => {
   it("scarta le righe rotte invece di esplodere", () => {
     // Il quoting a mano produceva JSON invalido: il file non deve diventare
     // veleno per il mirror (era il motivo della skill chat-web).
-    for (const bad of [
-      '{"role":"user","text":',
-      "non json",
-      "",
-      '{"text":"x"}',
-      '{"ts":1}',
-    ]) {
+    for (const bad of ['{"role":"user","text":', "non json", "", '{"text":"x"}', '{"ts":1}']) {
       expect(parseChatLine(bad)).toBeNull();
     }
   });
@@ -158,11 +144,7 @@ describe("parsing di chat.jsonl", () => {
 describe("coda del file", () => {
   it("legge solo l'ultima parte e scarta la riga tagliata a metà", () => {
     const lines = Array.from({ length: 50 }, (_, i) =>
-      jsonlLine({
-        role: "assistant",
-        text: `messaggio numero ${i}`,
-        ts: 1000 + i,
-      }),
+      jsonlLine({ role: "assistant", text: `messaggio numero ${i}`, ts: 1000 + i }),
     );
     const path = writeChat("capitano", lines);
     const tail = readTailLines(path, 200);
@@ -214,9 +196,7 @@ describe("chat.jsonl → SQLite", () => {
   });
 
   it("un secondo giro sullo stesso file non duplica nulla", () => {
-    writeChat("capitano", [
-      jsonlLine({ role: "user", text: "ciao", ts: 1753790000 }),
-    ]);
+    writeChat("capitano", [jsonlLine({ role: "user", text: "ciao", ts: 1753790000 })]);
     ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
     ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
     expect(rowsOf()).toHaveLength(1);
@@ -245,9 +225,7 @@ describe("SQLite → chat.jsonl", () => {
     const res = mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"] });
     expect(res.mirrored).toBe(1);
 
-    const line = parseChatLine(
-      readFileSync(chatFileFor(home, "mentor"), "utf-8").trim(),
-    );
+    const line = parseChatLine(readFileSync(chatFileFor(home, "mentor"), "utf-8").trim());
     expect(line?.role).toBe("assistant");
     expect(line?.text).toBe("Guarda i pattern");
   });
@@ -262,12 +240,8 @@ describe("SQLite → chat.jsonl", () => {
     expect(back.inserted).toBe(0);
     expect(rowsOf()).toHaveLength(1);
     // …e non riscriverla di nuovo nel file.
-    expect(
-      mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"] }).mirrored,
-    ).toBe(0);
-    expect(
-      readFileSync(chatFileFor(home, "mentor"), "utf-8").trim().split("\n"),
-    ).toHaveLength(1);
+    expect(mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"] }).mirrored).toBe(0);
+    expect(readFileSync(chatFileFor(home, "mentor"), "utf-8").trim().split("\n")).toHaveLength(1);
   });
 
   it("due notifiche nello stesso secondo restano due turni distinti", () => {
@@ -315,28 +289,20 @@ describe("SQLite → chat.jsonl", () => {
 
 describe("turni scritti dal web", () => {
   it("il ts deriva dal legacy_id negativo ed è stabile", () => {
-    const row = {
-      legacy_id: -1753790000123,
-      created_at: "2026-07-29T10:00:00Z",
-    };
+    const row = { legacy_id: -1753790000123, created_at: "2026-07-29T10:00:00Z" };
     expect(chatTsOf(row)).toBe(1753790000.123);
     expect(chatTsOf(row)).toBe(chatTsOf(row));
   });
 
   it("senza legacy_id negativo ricade su created_at", () => {
-    expect(
-      chatTsOf({ legacy_id: 42, created_at: "2026-07-29T10:00:00Z" }),
-    ).toBe(Date.parse("2026-07-29T10:00:00Z") / 1000);
+    expect(chatTsOf({ legacy_id: 42, created_at: "2026-07-29T10:00:00Z" })).toBe(
+      Date.parse("2026-07-29T10:00:00Z") / 1000,
+    );
   });
 
   it("entrano in SQLite non consegnati e non da ripushare", () => {
     const ids = importCloudUserTurns(db, [
-      {
-        id: "uuid-1",
-        legacy_id: -1753790000000,
-        agent: "capitano",
-        body: "che ore sono?",
-      },
+      { id: "uuid-1", legacy_id: -1753790000000, agent: "capitano", body: "che ore sono?" },
     ]);
     expect(ids).toEqual(["uuid-1"]);
 
@@ -357,14 +323,7 @@ describe("turni scritti dal web", () => {
     // le due storie tornavano a divergere.
     importCloudUserTurns(
       db,
-      [
-        {
-          id: "uuid-1",
-          legacy_id: -1753790000000,
-          agent: "capitano",
-          body: "e domani?",
-        },
-      ],
+      [{ id: "uuid-1", legacy_id: -1753790000000, agent: "capitano", body: "e domani?" }],
       { jhtHome: home },
     );
     const line = parseChatLine(
@@ -374,12 +333,7 @@ describe("turni scritti dal web", () => {
   });
 
   it("importare due volte lo stesso turno non lo duplica, nemmeno nel file", () => {
-    const turn = {
-      id: "uuid-1",
-      legacy_id: -1753790000000,
-      agent: "capitano",
-      body: "ciao",
-    };
+    const turn = { id: "uuid-1", legacy_id: -1753790000000, agent: "capitano", body: "ciao" };
     importCloudUserTurns(db, [turn], { jhtHome: home });
     const second = importCloudUserTurns(db, [turn], { jhtHome: home });
     expect(rowsOf()).toHaveLength(1);
@@ -393,14 +347,7 @@ describe("turni scritti dal web", () => {
   it("il turno importato non torna indietro al giro dell'ingest", () => {
     importCloudUserTurns(
       db,
-      [
-        {
-          id: "uuid-1",
-          legacy_id: -1753790000000,
-          agent: "capitano",
-          body: "ciao",
-        },
-      ],
+      [{ id: "uuid-1", legacy_id: -1753790000000, agent: "capitano", body: "ciao" }],
       { jhtHome: home },
     );
     const back = ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
@@ -498,10 +445,7 @@ describe("push dei turni nuovi", () => {
     const batch = takeChatRowsToPush(db);
     expect(batch.map((r) => r.body)).toEqual(["nuovo"]);
 
-    markChatRowsPushed(
-      db,
-      batch.map((r) => r.id),
-    );
+    markChatRowsPushed(db, batch.map((r) => r.id));
     expect(takeChatRowsToPush(db)).toHaveLength(0);
   });
 
@@ -527,12 +471,7 @@ describe("push dei turni nuovi", () => {
 
   it("un timestamp già ISO non viene toccato", () => {
     const cloud = toCloudRow(
-      {
-        id: 1,
-        agent: "mentor",
-        body: "x",
-        created_at: "2026-07-29T10:00:00.000Z",
-      },
+      { id: 1, agent: "mentor", body: "x", created_at: "2026-07-29T10:00:00.000Z" },
       "u",
     );
     expect(cloud.created_at).toBe("2026-07-29T10:00:00.000Z");
@@ -546,23 +485,15 @@ describe("rendezvous chat", () => {
   it("pendente finché la consegna non supera la richiesta", () => {
     expect(chatPending(null, null)).toBe(false);
     expect(chatPending("2026-07-29T10:00:00Z", null)).toBe(true);
-    expect(chatPending("2026-07-29T10:00:00Z", "2026-07-29T09:59:00Z")).toBe(
-      true,
-    );
-    expect(chatPending("2026-07-29T10:00:00Z", "2026-07-29T10:00:01Z")).toBe(
-      false,
-    );
+    expect(chatPending("2026-07-29T10:00:00Z", "2026-07-29T09:59:00Z")).toBe(true);
+    expect(chatPending("2026-07-29T10:00:00Z", "2026-07-29T10:00:01Z")).toBe(false);
   });
 
   it("confronta le date, non le stringhe", () => {
     // `+00:00` e `Z` ordinano diversamente da come si datano: è la trappola
     // del cursore congelato del 15/07, e qui costerebbe una chat muta.
-    expect(
-      chatPending("2026-07-29T10:00:00+00:00", "2026-07-29T09:00:00Z"),
-    ).toBe(true);
-    expect(
-      chatPending("2026-07-29T09:00:00+00:00", "2026-07-29T10:00:00Z"),
-    ).toBe(false);
+    expect(chatPending("2026-07-29T10:00:00+00:00", "2026-07-29T09:00:00Z")).toBe(true);
+    expect(chatPending("2026-07-29T09:00:00+00:00", "2026-07-29T10:00:00Z")).toBe(false);
   });
 });
 
@@ -576,9 +507,7 @@ describe("rendezvous chat", () => {
 
 describe("diagnosi della corsia chat", () => {
   it("corsia che lavora: nessun allarme", () => {
-    expect(
-      diagnoseChatLane({ pending: false, canRead: true, queued: 0 }),
-    ).toBeNull();
+    expect(diagnoseChatLane({ pending: false, canRead: true, queued: 0 })).toBeNull();
   });
 
   it("il campanello del web suona e non c'è canale per rispondere", () => {
@@ -646,14 +575,8 @@ describe("diagnosi della corsia chat", () => {
       oldestQueuedAt: "2026-07-24 09:00:00",
       graceMs: 300_000,
     };
-    const a = diagnoseChatLane({
-      ...base,
-      now: Date.parse("2026-07-24T10:00:00Z"),
-    });
-    const b = diagnoseChatLane({
-      ...base,
-      now: Date.parse("2026-07-24T14:00:00Z"),
-    });
+    const a = diagnoseChatLane({ ...base, now: Date.parse("2026-07-24T10:00:00Z") });
+    const b = diagnoseChatLane({ ...base, now: Date.parse("2026-07-24T14:00:00Z") });
     expect(a?.summary).toBe(b?.summary);
     expect(a?.message).not.toBe(b?.message);
   });
@@ -691,28 +614,13 @@ describe("frequenza delle segnalazioni", () => {
     // Il giro è ~5s: senza questo cancello sarebbero ~700 righe identiche
     // all'ora, cioè rumore che nessuno legge — di nuovo un guasto invisibile.
     const prev = { summary: "chat: guasto", at: now };
-    expect(
-      shouldAnnounceStall(prev, "chat: guasto", {
-        now: now + 5_000,
-        everyMs: 900_000,
-      }),
-    ).toBe(false);
-    expect(
-      shouldAnnounceStall(prev, "chat: guasto", {
-        now: now + 900_000,
-        everyMs: 900_000,
-      }),
-    ).toBe(true);
+    expect(shouldAnnounceStall(prev, "chat: guasto", { now: now + 5_000, everyMs: 900_000 })).toBe(false);
+    expect(shouldAnnounceStall(prev, "chat: guasto", { now: now + 900_000, everyMs: 900_000 })).toBe(true);
   });
 
   it("un guasto DIVERSO passa comunque, anche dentro l'intervallo", () => {
     const prev = { summary: "chat: guasto", at: now };
-    expect(
-      shouldAnnounceStall(prev, "chat: altro guasto", {
-        now: now + 1_000,
-        everyMs: 900_000,
-      }),
-    ).toBe(true);
+    expect(shouldAnnounceStall(prev, "chat: altro guasto", { now: now + 1_000, everyMs: 900_000 })).toBe(true);
   });
 });
 
@@ -720,11 +628,7 @@ describe("perimetro delle chat web", () => {
   it("le tre conversazioni sono quelle che il web mostra", () => {
     // Se questa lista divergesse da web/lib/chat-agents.ts, la route
     // accetterebbe un messaggio che nessun pane riceverà mai.
-    expect([...CHAT_AGENTS].sort()).toEqual([
-      "assistente",
-      "capitano",
-      "mentor",
-    ]);
+    expect([...CHAT_AGENTS].sort()).toEqual(["assistente", "capitano", "mentor"]);
   });
 });
 
@@ -761,35 +665,21 @@ function fakeCloud(messages: Record<string, unknown>[]) {
       body: init?.body ? JSON.parse(init.body as string) : undefined,
     });
     if (method === "GET") {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true, messages }),
-      };
+      return { ok: true, status: 200, json: async () => ({ ok: true, messages }) };
     }
-    return {
-      ok: true,
-      status: 200,
-      json: async () => ({ ok: true, delivered: messages.length }),
-    };
+    return { ok: true, status: 200, json: async () => ({ ok: true, delivered: messages.length }) };
   };
   return { fetchFn, calls };
 }
 
 describe("canale della chat senza lettore diretto", () => {
   it("un box senza JHT_SUPABASE_DIRECT ha comunque un canale", () => {
-    const channel = chatChannelFor(BOX_CONFIG, null, {
-      fetchFn: async () => ({}) as any,
-    });
+    const channel = chatChannelFor(BOX_CONFIG, null, { fetchFn: async () => ({}) as any });
     expect(channel?.kind).toBe("vercel");
   });
 
   it("col lettore diretto resta il canale diretto (costa meno)", () => {
-    const reader = {
-      readUndeliveredUserChat: async () => [],
-      markUserChatDelivered: async () => {},
-      patchTeamState: async () => {},
-    };
+    const reader = { readUndeliveredUserChat: async () => [], markUserChatDelivered: async () => {}, patchTeamState: async () => {} };
     expect(chatChannelFor(BOX_CONFIG, reader as any)?.kind).toBe("direct");
   });
 
@@ -799,12 +689,8 @@ describe("canale della chat senza lettore diretto", () => {
     let body: Record<string, unknown> | undefined;
     const reader = {
       readUndeliveredUserChat: async () => [],
-      markUserChatDelivered: async (ids: string[]) => {
-        marked.push(ids);
-      },
-      patchTeamState: async () => {
-        blindPatches += 1;
-      },
+      markUserChatDelivered: async (ids: string[]) => { marked.push(ids); },
+      patchTeamState: async () => { blindPatches += 1; },
     };
     const channel = chatChannelFor(BOX_CONFIG, reader as any, {
       fetchFn: async (_url: string, init?: Record<string, any>) => {
@@ -812,13 +698,10 @@ describe("canale della chat senza lettore diretto", () => {
         return { ok: false, status: 409 } as Response;
       },
     });
-    const result = await channel!.acknowledgeDelivery(
-      ["00000000-0000-4000-8000-000000000001"],
-      {
-        closeRendezvous: true,
-        expectedRequestedAt: "2026-08-04T10:00:00Z",
-      },
-    );
+    const result = await channel!.acknowledgeDelivery(["00000000-0000-4000-8000-000000000001"], {
+      closeRendezvous: true,
+      expectedRequestedAt: "2026-08-04T10:00:00Z",
+    });
     expect(marked).toEqual([["00000000-0000-4000-8000-000000000001"]]);
     expect(blindPatches).toBe(0);
     expect(body).toEqual({
@@ -830,9 +713,7 @@ describe("canale della chat senza lettore diretto", () => {
   });
 
   it("senza token non c'è cloud da cui ritirare nulla", () => {
-    expect(
-      chatChannelFor({ base_url: "https://jobhunterteam.ai" }, null),
-    ).toBeNull();
+    expect(chatChannelFor({ base_url: "https://jobhunterteam.ai" }, null)).toBeNull();
   });
 
   it("il turno scritto dal web arriva al pane anche con reader = null", async () => {
@@ -845,9 +726,7 @@ describe("canale della chat senza lettore diretto", () => {
         created_at: "2026-07-30T10:00:00Z",
       },
     ]);
-    const channel = chatChannelFor(BOX_CONFIG, null, {
-      fetchFn: cloud.fetchFn,
-    });
+    const channel = chatChannelFor(BOX_CONFIG, null, { fetchFn: cloud.fetchFn });
 
     // La condizione in cui gira il pull: il web ha suonato il campanello e
     // il box non ha ancora consegnato.
@@ -869,9 +748,7 @@ describe("canale della chat senza lettore diretto", () => {
     expect(sends).toEqual([["capitano", "ci sei?"]]);
     expect(rowsOf()[0].delivered_at).not.toBeNull();
     // …e visibile anche nella chat del videogioco.
-    expect(readFileSync(chatFileFor(home, "capitano"), "utf-8")).toContain(
-      "ci sei?",
-    );
+    expect(readFileSync(chatFileFor(home, "capitano"), "utf-8")).toContain("ci sei?");
 
     // ── Ack + chiusura del rendezvous ──
     await channel!.closeRendezvous(importedIds);
@@ -896,18 +773,14 @@ describe("canale della chat senza lettore diretto", () => {
     // canale non deve toccare la rete, e il pull parte SOLO col campanello
     // suonato — `chatPending` falso ⇒ zero richieste, come oggi.
     const cloud = fakeCloud([]);
-    const channel = chatChannelFor(BOX_CONFIG, null, {
-      fetchFn: cloud.fetchFn,
-    });
+    const channel = chatChannelFor(BOX_CONFIG, null, { fetchFn: cloud.fetchFn });
     expect(channel).not.toBeNull();
     expect(cloud.calls).toHaveLength(0);
 
     // Nessun messaggio mai scritto, e messaggio già consegnato: i due modi
     // in cui una chat sta ferma.
     expect(chatPending(null, null)).toBe(false);
-    expect(chatPending("2026-07-30T10:00:00Z", "2026-07-30T10:00:01Z")).toBe(
-      false,
-    );
+    expect(chatPending("2026-07-30T10:00:00Z", "2026-07-30T10:00:01Z")).toBe(false);
     expect(cloud.calls).toHaveLength(0);
   });
 
@@ -915,12 +788,9 @@ describe("canale della chat senza lettore diretto", () => {
     // Se il pull ingoiasse l'errore ritornando [], il rendezvous verrebbe
     // chiuso su una coda vuota e il turno dell'utente sarebbe perso.
     const channel = chatChannelFor(BOX_CONFIG, null, {
-      fetchFn: async () =>
-        ({ ok: false, status: 500, json: async () => ({}) }) as any,
+      fetchFn: async () => ({ ok: false, status: 500, json: async () => ({}) }) as any,
     });
-    await expect(
-      channel!.readUndeliveredUserChat({ limit: 10 }),
-    ).rejects.toThrow(/500/);
+    await expect(channel!.readUndeliveredUserChat({ limit: 10 })).rejects.toThrow(/500/);
     await expect(channel!.closeRendezvous(["x"])).rejects.toThrow(/500/);
   });
 
@@ -932,11 +802,7 @@ describe("canale della chat senza lettore diretto", () => {
         signals.push(init?.signal);
         return init?.method === "POST"
           ? ({ ok: true, status: 200 } as Response)
-          : ({
-              ok: true,
-              status: 200,
-              json: async () => ({ messages: [] }),
-            } as any);
+          : ({ ok: true, status: 200, json: async () => ({ messages: [] }) } as any);
       },
     });
     await channel!.readUndeliveredUserChat();
@@ -944,13 +810,9 @@ describe("canale della chat senza lettore diretto", () => {
     expect(signals).toHaveLength(2);
     expect(signals.every((signal) => signal instanceof AbortSignal)).toBe(true);
 
-    const timeout = Object.assign(new Error("host-riservato"), {
-      name: "TimeoutError",
-    });
+    const timeout = Object.assign(new Error("host-riservato"), { name: "TimeoutError" });
     expect(cloudRequestFailure(timeout)).toBe("timeout");
-    expect(cloudRequestFailure(new Error("url-riservato"))).toBe(
-      "request_failed",
-    );
+    expect(cloudRequestFailure(new Error("url-riservato"))).toBe("request_failed");
   });
 
   it("la corsia in cloud.js non è più gatata sul lettore diretto", () => {
