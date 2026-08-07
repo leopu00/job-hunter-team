@@ -238,6 +238,14 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "created_at",
     "updated_at",
   ],
+  candidate_skills: [
+    "id",
+    "name",
+    "category",
+    "ord",
+    "created_at",
+    "updated_at",
+  ],
   candidate_blocks: [
     "id",
     "key",

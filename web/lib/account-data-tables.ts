@@ -23,7 +23,14 @@ export const MANUAL_DELETE_ORDER = [
 
 /** Tabelle che spariscono da sole quando cade `auth.users`. Elencate lo
  *  stesso: l'utente ha diritto di sapere cosa se ne va, e l'export deve
- *  comprenderle. */
+ *  comprenderle.
+ *
+ *  ⚠️ Questo elenco è scritto a mano e per due volte ha perso una tabella
+ *  (`candidate_skills` e `sentinel_ticks`, trovate da HQ-MASTER in
+ *  review). Il test `account-tables-census` lo confronta con le
+ *  MIGRATION, non con l'altro elenco di questo file: un censimento che
+ *  guarda solo sé stesso tace proprio quando entrambe le liste
+ *  dimenticano la stessa cosa. */
 export const CASCADE_TABLES = [
   "candidate_blocks",
   "candidate_contacts",
@@ -32,6 +39,7 @@ export const CASCADE_TABLES = [
   "candidate_files",
   "candidate_languages",
   "candidate_location_preferences",
+  "candidate_skills",
   "candidate_work_authorization",
   "cloud_sync_pairing_sessions",
   "cloud_sync_tokens",
@@ -43,6 +51,7 @@ export const CASCADE_TABLES = [
   "position_tickets",
   "position_transitions",
   "position_views",
+  "sentinel_ticks",
   "team_commands",
   "team_directives",
   "team_state",

@@ -32,6 +32,7 @@ function fakeAdmin(
     failOn?: string;
     deleteUserFails?: boolean;
     storagePaths?: string[];
+    storageOrphans?: string[];
     storageRemovesNothing?: boolean;
   } = {},
 ) {
@@ -42,6 +43,12 @@ function fakeAdmin(
     storage: {
       from() {
         return {
+          list() {
+            return Promise.resolve({
+              data: (opts.storageOrphans ?? []).map((name) => ({ name })),
+              error: null,
+            });
+          },
           remove(paths: string[]) {
             removedPaths.push(...paths);
             return Promise.resolve({
@@ -320,5 +327,41 @@ describe("il messaggio di errore non promette cose false", () => {
       );
     }
     expect(T.error_delete.en.toLowerCase()).toContain("may already");
+  });
+});
+
+describe("cancellazione — i file orfani non sopravvivono", () => {
+  it("cancella un oggetto che non ha piu' la sua riga", async () => {
+    // Il caso reale trovato da HQ-DOCS: un file nel bucket senza riga in
+    // `file_bridge_requests`. Fidarsi delle righe lo avrebbe lasciato lì.
+    const { client, removedPaths } = fakeAdmin({
+      storagePaths: [],
+      storageOrphans: ["orfano.pdf"],
+    });
+    await deleteAccountData(client, "user-1");
+    expect(removedPaths).toContain("user-1/orfano.pdf");
+  });
+
+  it("unisce le due fonti invece di sceglierne una", async () => {
+    // Le righe possono puntare fuori dal prefisso dell'utente (percorsi
+    // storici): vanno aggiunte all'enumerazione, non sostituite.
+    const { client, removedPaths } = fakeAdmin({
+      storagePaths: ["vecchio/percorso.pdf"],
+      storageOrphans: ["nuovo.pdf"],
+    });
+    await deleteAccountData(client, "user-1");
+    expect(removedPaths).toContain("user-1/nuovo.pdf");
+    expect(removedPaths).toContain("vecchio/percorso.pdf");
+  });
+
+  it("non cancella due volte lo stesso percorso", async () => {
+    const { client, removedPaths } = fakeAdmin({
+      storagePaths: ["user-1/uguale.pdf"],
+      storageOrphans: ["uguale.pdf"],
+    });
+    await deleteAccountData(client, "user-1");
+    expect(removedPaths.filter((p) => p === "user-1/uguale.pdf")).toHaveLength(
+      1,
+    );
   });
 });
