@@ -1,6 +1,7 @@
 """Il wrapper deve tradurre --output dal container al filesystem host."""
 
 import os
+import hashlib
 import subprocess
 from pathlib import Path
 
@@ -56,7 +57,17 @@ def run_wrapper(tmp_path: Path, *args: str, extra_env=None):
     fake_bin, container_root = make_fake_docker(tmp_path)
     runtime = tmp_path / "runtime"
     runtime.mkdir()
+    runtime = runtime.resolve()
     (runtime / "docker-compose.yml").write_text("services: {}\n")
+    host_setup = runtime / "host-setup.sh"
+    host_setup.write_text("#!/usr/bin/env bash\nexit 0\n")
+    host_setup.chmod(0o700)
+    compose_sha = hashlib.sha256((runtime / "docker-compose.yml").read_bytes()).hexdigest()
+    setup_sha = hashlib.sha256(host_setup.read_bytes()).hexdigest()
+    (runtime / ".runtime-integrity").write_text(
+        f"version=1\ndocker-compose.yml={compose_sha}\nhost-setup.sh={setup_sha}\n"
+        f"jht-wrapper.sh={hashlib.sha256(BASH_WRAPPER.read_bytes()).hexdigest()}\n"
+    )
     env = {
         **os.environ,
         "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",

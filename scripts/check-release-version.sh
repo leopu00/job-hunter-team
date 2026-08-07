@@ -122,7 +122,7 @@ STABLE_SOURCE_ASSERTIONS=(
   "scripts/install.ps1|else { 'production' }"
   'scripts/install.ps1|$env:JHT_IMAGE = $Image'
   'scripts/jht-wrapper.sh|${JHT_BRANCH:-production}'
-  'scripts/jht-wrapper.ps1|job-hunter-team/production'
+  "scripts/jht-wrapper.ps1|else { 'production' }"
 )
 
 ROOT_VERSION="$(read_version "$ROOT_PKG")"

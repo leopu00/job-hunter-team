@@ -3,7 +3,7 @@
 # Questo compose e' il default per chi installa JHT via:
 #   curl -fsSL https://jobhunterteam.ai/install.sh | bash
 #
-# install.sh scarica questo file in ~/.jht/runtime/docker-compose.yml.
+# install.sh scarica questo file nel runtime host protetto fuori da ~/.jht.
 # Il wrapper bash ~/.local/bin/jht lo usa per docker compose up/down/exec.
 #
 # Image-only: nessun bind dei sorgenti, nessun `build:`. Tutto cio' che
