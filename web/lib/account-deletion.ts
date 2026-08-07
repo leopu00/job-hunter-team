@@ -224,9 +224,10 @@ async function deleteStorageObjects(
   // Le righe di `file_bridge_requests` NON servono a trovare i file, e
   // usarle faceva danno in due modi opposti.
   //
-  // In sicurezza: la migrazione 037 accetta INSERT con il solo controllo
-  // `auth.uid() = user_id`, quindi `storage_path` è input non verificato,
-  // e questa funzione gira con service_role che bypassa RLS.
+  // In security: pre-migration rows accepted INSERT with only
+  // `auth.uid() = user_id`, so `storage_path` was untrusted input while this
+  // function runs with service_role. The current schema generates the path,
+  // but historical rows still must never become an object census.
   //
   // In disponibilità, ed è il caso che ha rotto davvero: il purge
   // ordinario rimuove l'oggetto ma CONSERVA la riga, marcandola

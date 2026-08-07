@@ -293,9 +293,9 @@ describe("cancellazione account — i file su Storage non sopravvivono", () => {
       "user-1/req/lettera.pdf",
     ]);
     // I file si enumerano dal bucket sotto `${userId}/`, che è l'unica
-    // fonte: le righe di `file_bridge_requests` sono storico non
-    // affidabile — accettano `storage_path` non validato e sopravvivono
-    // al purge con percorsi ormai morti. L'enumerazione avviene comunque
+    // source: `file_bridge_requests` rows are non-authoritative history.
+    // Pre-migration rows accepted unvalidated `storage_path`, and rows survive
+    // purge with paths that may be dead. Enumeration still happens
     // PRIMA di qualsiasi delete sul database, così un fallimento dello
     // Storage non lascia righe già cancellate.
     expect(calls.length).toBeGreaterThan(0);
@@ -473,11 +473,10 @@ describe("cancellazione — non si cancellano file di altri", () => {
     // l'enumerazione del bucket sotto l'utente.
     //
     // Il rischio che questo test presidia resta reale e va ricordato:
-    // `file_bridge_requests` accetta INSERT col solo controllo su
-    // `user_id` e non valida `storage_path`, quindi chiunque tornasse a
-    // leggere le righe come fonte riaprirebbe una cancellazione fra
-    // account, girando con service_role che bypassa RLS. Segnalato da
-    // HQ-BACKEND.
+    // Pre-migration `file_bridge_requests` accepted INSERT with only an owner
+    // check and an unvalidated `storage_path`. Reading historical rows as a
+    // source with service_role would reopen cross-account deletion. Reported
+    // by HQ-BACKEND.
     const { client, removedPaths } = fakeAdmin({
       storagePaths: ["vittima-2/req/cv.pdf", "user-1/req/mio.pdf"],
       storageTree: { "user-1/req/mio.pdf": true },
