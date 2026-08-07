@@ -54,14 +54,14 @@ BROWSER (Vercel, sessione utente Supabase)        VPS container (token jht_sync_
                                                      (web set expires_at = now()+10min)
 
 3'. polling vede status=ready
-    └─ web minta createSignedUrl(storagePath, 60s)
+    └─ web enumera solo userId/requestId e minta createSignedUrl(path, 60s)
     ◀─ { status:'ready', url }
     il browser apre la signed URL → l'utente vede il PDF
 
 8. PURGE (effimero):
                                                   il poller chiama periodicamente
                                                   POST /api/cloud-sync/file-bridge/purge
-   └─ il web (service-role) elimina dal bucket gli oggetti con
+   └─ il web (service-role) enumera solo userId/requestId, elimina gli oggetti con
       expires_at < now() e marca le richieste 'expired'.
 ```
 
@@ -69,7 +69,7 @@ BROWSER (Vercel, sessione utente Supabase)        VPS container (token jht_sync_
 dei file presenti sul disco) all'avvio e ogni ~60s, via
 `POST /api/cloud-sync/file-index`.
 
-## 🧱 Schema DB (migration `037_file_bridge.sql`)
+## 🧱 Schema DB (migrations `037_file_bridge.sql` + `062_feedback_and_file_bridge_authority.sql`)
 
 - **`candidate_files`** — indice persistente dei file disponibili per utente.
   Popolato dalla VPS, letto dal web per la lista "Anteprima CV".
@@ -80,13 +80,15 @@ dei file presenti sul disco) all'avvio e ogni ~60s, via
 - **`file_bridge_requests`** — coda effimera delle richieste on-demand.
   - `id uuid pk`, `user_id uuid → auth.users`, `file_name text`,
     `status` (`pending|uploading|ready|served|error|expired`),
-    `storage_path text`, `error text`, `expires_at timestamptz`,
+    `storage_path text generated always as (user_id/id/payload)`, `error text`,
+    `expires_at timestamptz`,
     `created_at`, `updated_at`.
 - **Bucket** `file-transit` (privato) creato nella stessa migration via
   `insert into storage.buckets`.
 - **RLS**:
-  - `candidate_files` / `file_bridge_requests`: l'utente vede/gestisce solo le
-    proprie righe (`user_id = auth.uid()`). Gli endpoint VPS usano il
+  - `candidate_files` / `file_bridge_requests`: l'utente vede solo le proprie
+    righe (`user_id = auth.uid()`). Sul bridge può inserire esclusivamente
+    `user_id` e `file_name`; id, stato e path restano server-side. Gli endpoint VPS usano il
     **service-role** (`admin`) filtrando manualmente per `user_id` ricavato dal
     token (stesso pattern di `team_commands`).
   - `storage.objects` del bucket: nessun accesso anon/authenticated diretto;
@@ -110,7 +112,8 @@ dei file presenti sul disco) all'avvio e ogni ~60s, via
   `candidate_files`.
 - `POST /api/profile/files/request {name}` → crea la richiesta, `{requestId}`.
 - `GET  /api/profile/files/request/:id` → `{status}`, e quando `ready`
-  `{status:'ready', url}` (signed download URL 60s). Purga opportunisticamente
+  `{status:'ready', url}` (signed download URL 60s). Il path viene ricavato dal
+  prefisso autenticato, mai da metadata forniti dal client. Purga opportunisticamente
   le richieste scadute dell'utente.
 
 ## 🖥️ VPS poller — `cli/src/lib/file-bridge-poller.js`

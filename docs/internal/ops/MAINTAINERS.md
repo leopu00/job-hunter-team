@@ -27,7 +27,7 @@ Credentials:  in web/.env.local (NOT in git)
 | `006_cloud_sync_tokens.sql` | Cloud-sync auth tokens (RLS, SHA-256, soft-delete) |
 | `007_positions_legacy_unique.sql` | `UNIQUE (user_id, legacy_id)` for idempotent push |
 
-Tables: `candidate_profiles`, `positions`, `companies`, `scores`, `applications`, `cloud_sync_tokens`, `feedback_tickets`. **RLS** enforces `auth.uid() = user_id` on every row.
+Tables: `candidate_profiles`, `positions`, `companies`, `scores`, `applications`, `cloud_sync_tokens`, `feedback_tickets`. **RLS** enforces `auth.uid() = user_id` on user-owned tables. `feedback_tickets` has no owner column and is write-only for browser roles; reads require service-role authority.
 
 ### Auth config
 

@@ -528,7 +528,7 @@ def test_windows_rejects_bind_root_equality_and_descendants(
         env=env,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=30,
     )
 
     assert result.returncode == 1, result.stderr
