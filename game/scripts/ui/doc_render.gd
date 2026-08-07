@@ -104,20 +104,54 @@ static func has_renderer() -> bool:
 			return true
 	return OS.get_name() == "macOS"
 
-## ── Lanciatori di sistema ────────────────────────────────────────────
+## ── Apertura PDF attestata e reveal ──────────────────────────────────
 
-## OS.shell_open può fallire in silenzio (visto col pdf del 19/07): si
-## passa ai lanciatori nativi come fallback.
-static func open_externally(path: String) -> bool:
-	if OS.shell_open(path) == OK:
-		return true
-	match OS.get_name():
+## OPEN PDF non passa mai dalle associazioni generiche dell'host. Il piano
+## contiene soltanto lettori PDF espliciti; se nessuno e' presente l'azione
+## fallisce chiusa e resta disponibile l'anteprima in-game.
+static func pdf_viewer_candidates(os_name: String) -> Array[Dictionary]:
+	match os_name:
 		"macOS":
-			return OS.execute("open", [path]) == 0
+			return [{"exe": "/usr/bin/open",
+					"args": PackedStringArray(["-b", "com.apple.Preview"])}]
 		"Windows":
-			return OS.execute("cmd.exe", ["/c", "start", "", path]) == 0
+			var candidates: Array[Dictionary] = []
+			var roots := [OS.get_environment("ProgramFiles"),
+					OS.get_environment("ProgramFiles(x86)"),
+					OS.get_environment("LOCALAPPDATA")]
+			for root in roots:
+				if root == "":
+					continue
+				for relative in ["Microsoft/Edge/Application/msedge.exe",
+						"Adobe/Acrobat DC/Acrobat/Acrobat.exe",
+						"Adobe/Acrobat Reader DC/Reader/AcroRd32.exe"]:
+					candidates.append({"exe": root.path_join(relative),
+							"args": PackedStringArray()})
+			return candidates
 		_:
-			return OS.execute("xdg-open", [path]) == 0
+			var candidates: Array[Dictionary] = []
+			for exe in ["/usr/bin/evince", "/usr/bin/okular", "/usr/bin/xreader",
+					"/usr/bin/zathura", "/usr/bin/mupdf"]:
+				candidates.append({"exe": exe, "args": PackedStringArray()})
+			return candidates
+
+
+static func open_pdf(path: String) -> bool:
+	if path.get_extension().to_lower() != "pdf" or not FileAccess.file_exists(path):
+		return false
+	# Riattesta il file appena prima del confine host: anche una cache alterata
+	# fra scrittura e click non raggiunge un viewer.
+	if not ArtifactPolicy.is_pdf_bytes(FileAccess.get_file_as_bytes(path)):
+		return false
+	for candidate in pdf_viewer_candidates(OS.get_name()):
+		var exe := str(candidate["exe"])
+		if not FileAccess.file_exists(exe):
+			continue
+		var args := candidate["args"] as PackedStringArray
+		args.append(path)
+		if OS.create_process(exe, args, false) != -1:
+			return true
+	return false
 
 static func reveal_file(path: String) -> bool:
 	match OS.get_name():
