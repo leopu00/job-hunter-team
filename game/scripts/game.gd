@@ -6,6 +6,7 @@ enum State { TITLE, WIZARD, OFFICE }
 const SCENE_TITLE := "res://scenes/title.tscn"
 const SCENE_WIZARD := "res://scenes/wizard.tscn"
 const SCENE_OFFICE := "res://scenes/office.tscn"
+const WindowsVerifier := preload("res://scripts/support/windows_update_verifier.gd")
 
 ## Flag locale "onboarding completato": deciso dal wizard quando il
 ## backend dichiara il profilo ready (o l'utente entra con profilo già
@@ -43,6 +44,20 @@ func _enter_tree() -> void:
 				usable.position + usable.size - wsize - Vector2i(8, 8))
 
 func _ready() -> void:
+	# Gate dell'ARTEFATTO Windows: deve leggere la root dal PCK esportato, non
+	# dal checkout del runner. Un filtro export regressivo fallisce il tag.
+	if OS.get_environment("JHT_WINDOWS_UPDATE_TRUST_TEST") == "1":
+		var keys := WindowsVerifier.production_keyring()
+		var ok := keys.size() == 1 and WindowsVerifier.production_ready() \
+				and str(keys[0].get("fingerprint", "")) \
+						== WindowsVerifier.PRODUCTION_FINGERPRINT
+		if ok:
+			print("WINDOWS-UPDATE-TRUST ", WindowsVerifier.PRODUCTION_FINGERPRINT)
+			print("WINDOWS-UPDATE-TRUST-TEST PASS")
+		else:
+			push_error("WINDOWS-UPDATE-TRUST-TEST FAIL")
+		_quit_now(0 if ok else 1)
+		return
 	RenderingServer.set_default_clear_color(Palette.VOID)
 	_client_control = ClientControl.new()
 	add_child(_client_control)
@@ -92,6 +107,9 @@ func _notification(what: int) -> void:
 var _quitting := false
 var _quit_done := false
 var _shutdown_task := -1
+var _quit_pending := false
+var _exit_commit_hook := Callable()
+var _exit_cancel_hook := Callable()
 
 ## Chiedere prima di interrompere: se ci sono agenti al lavoro l'utente decide
 ## se farli chiudere in ordine (il Capitano fa annotare a tutti dove erano
@@ -109,12 +127,14 @@ func _open_shutdown_dialog_for_shot() -> void:
 	get_tree().root.add_child(_shutdown_dialog)
 
 
-func quit_game() -> void:
-	if _quitting or _shutdown_dialog != null:
+func quit_game(on_exit_commit := Callable(), on_cancel := Callable()) -> void:
+	if _quitting or _quit_pending or _shutdown_dialog != null:
 		return
+	_exit_commit_hook = on_exit_commit
+	_exit_cancel_hook = on_cancel
 	var agents := SetupService.active_agents()
 	if agents.is_empty():
-		_do_quit()
+		_commit_quit(true, false)
 		return
 	close_pause()
 	_shutdown_dialog = load("res://scripts/ui/shutdown_dialog.gd").new(agents)
@@ -127,13 +147,36 @@ func _on_shutdown_choice(mode: String) -> void:
 		_shutdown_dialog.queue_free()
 	_shutdown_dialog = null
 	if mode == HeadlessSession.MODE_CANCEL:
+		if _exit_cancel_hook.is_valid():
+			_exit_cancel_hook.call()
+		_clear_exit_hooks()
 		return
 	# "graceful": il team si è già fermato da sé, resta da spegnere il container;
 	# "forced": shutdown_team() ferma prima gli agenti e poi il container;
 	# "detach": non si esegue NIENTE — la finestra se ne va e loro restano al
 	# lavoro, come quando li avvia la CLI e il comando esce.
-	HeadlessSession.record_exit(mode == HeadlessSession.MODE_DETACH)
-	_do_quit(HeadlessSession.stops_team(mode))
+	_commit_quit(HeadlessSession.stops_team(mode),
+			mode == HeadlessSession.MODE_DETACH)
+
+
+func _commit_quit(stop_team: bool, detached: bool) -> void:
+	if _quitting or _quit_pending:
+		return
+	_quit_pending = true
+	if _exit_commit_hook.is_valid():
+		var accepted: Variant = await _exit_commit_hook.call()
+		if typeof(accepted) != TYPE_BOOL or not bool(accepted):
+			_quit_pending = false
+			_clear_exit_hooks()
+			return
+	_clear_exit_hooks()
+	HeadlessSession.record_exit(detached)
+	_do_quit(stop_team)
+
+
+func _clear_exit_hooks() -> void:
+	_exit_commit_hook = Callable()
+	_exit_cancel_hook = Callable()
 
 
 ## Uscita richiesta dalla CLI: equivale ESATTAMENTE alla scelta "lascia il
@@ -146,6 +189,7 @@ func detach_from_cli() -> void:
 	if is_instance_valid(_shutdown_dialog):
 		_shutdown_dialog.queue_free()
 	_shutdown_dialog = null
+	_clear_exit_hooks()
 	HeadlessSession.record_exit(true)
 	_do_quit(false)
 
@@ -175,7 +219,7 @@ func _do_quit(stop_team := true) -> void:
 ## 26/07 — il team si fermava correttamente, ma il gioco moriva male invece
 ## di chiudersi). Lo si aspetta sempre, anche quando è la rete di sicurezza
 ## dei 20 secondi a portarci qui.
-func _quit_now() -> void:
+func _quit_now(exit_code := 0) -> void:
 	if _quit_done:
 		return
 	_quit_done = true
@@ -183,7 +227,7 @@ func _quit_now() -> void:
 		WorkerThreadPool.wait_for_task_completion(_shutdown_task)
 		_shutdown_task = -1
 	if is_inside_tree():
-		get_tree().quit()
+		get_tree().quit(exit_code)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -701,7 +745,7 @@ func _reload_ui_language() -> void:
 			and get_tree().current_scene.scene_file_path == SCENE_OFFICE \
 			and not sidebars.is_empty()
 		print("LANGUAGE-SETTINGS-TEST %s" % ("PASS" if ok else "FAIL"))
-		get_tree().quit(0 if ok else 1)
+		_quit_now(0 if ok else 1)
 
 
 func _reload_ui_theme() -> void:

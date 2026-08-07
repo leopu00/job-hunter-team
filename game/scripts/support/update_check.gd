@@ -24,6 +24,7 @@ const MACOS_ASSET := "job-hunter-team.zip"
 ## questi asset non abilita mai l'installazione.
 const WINDOWS_MANIFEST_ASSET := "RELEASE-MANIFEST.json"
 const WINDOWS_SIGNATURE_ASSET := "RELEASE-MANIFEST.json.sig"
+const WINDOWS_HELPER_ASSET := "jht-windows-update.ps1"
 const WINDOWS_AUTO_BASELINE := "0.3.6"
 
 ## Un controllo al giorno. Non è una misura di rete — la richiesta è una sola e
@@ -144,7 +145,8 @@ static func asset_bundle(assets: Array, os_name: String, version: String) -> Dic
 	var package_name := MACOS_ASSET if os_name == "macOS" else WINDOWS_ASSET
 	var required := [package_name]
 	if os_name == "Windows":
-		required.append_array([WINDOWS_MANIFEST_ASSET, WINDOWS_SIGNATURE_ASSET])
+		required.append_array([WINDOWS_MANIFEST_ASSET, WINDOWS_SIGNATURE_ASSET,
+				WINDOWS_HELPER_ASSET])
 	var found := {}
 	var required_casefold := {}
 	var seen_required := {}
@@ -182,6 +184,8 @@ static func asset_bundle(assets: Array, os_name: String, version: String) -> Dic
 				"browser_download_url", ""))
 		out["signature"] = str(found[WINDOWS_SIGNATURE_ASSET].get(
 				"browser_download_url", ""))
+		out["helper"] = str(found[WINDOWS_HELPER_ASSET].get(
+				"browser_download_url", ""))
 	return out
 
 
@@ -192,7 +196,7 @@ static func asset_url(assets: Array, os_name: String, version: String = "") -> S
 ## Stato effettivo, non roadmap. macOS ha gia un'ancora Developer ID. Windows
 ## resta manuale finche root production e helper non sono entrambi distribuiti.
 static func can_self_install(os_name: String) -> bool:
-	return os_name == "macOS"
+	return os_name in ["macOS", "Windows"]
 
 
 ## La 0.3.5 e precedenti non contengono il verifier: il salto alla 0.3.6 resta

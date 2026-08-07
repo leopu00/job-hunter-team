@@ -750,8 +750,14 @@ func _build_update_block() -> void:
 	# Cosa succede quando si accetta, che è diverso a seconda del sistema: su
 	# macOS il pacchetto è firmato e il gioco può sostituirsi da solo, altrove
 	# l'aggiornamento apre la pagina della release e si ferma lì.
-	var how := TerminalTheme.label(UIStrings.t("update.signed"
-			if UpdateCheck.can_self_install(OS.get_name()) else "update.manual_only"),
+	var how_key := "update.manual_only"
+	if OS.get_name() == "Windows":
+		how_key = "update.signed_windows" if UpdateCheck.compare(
+				UpdateService.current_version(), UpdateCheck.WINDOWS_AUTO_BASELINE) >= 0 \
+				else "update.manual_bootstrap"
+	elif UpdateCheck.can_self_install(OS.get_name()):
+		how_key = "update.signed"
+	var how := TerminalTheme.label(UIStrings.t(how_key),
 			12, Palette.DIM)
 	how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_content.add_child(how)
@@ -776,9 +782,18 @@ func _update_line(state: Dictionary) -> String:
 		UpdateService.PHASE_DOWNLOADING:
 			return UIStrings.t("update.downloading") % int(state.get("progress", 0))
 		UpdateService.PHASE_INSTALLING:
-			return UIStrings.t("update.installing")
+			return UIStrings.t("update.verifying" if OS.get_name() == "Windows"
+					else "update.installing")
 		UpdateService.PHASE_DONE:
 			return UIStrings.t("update.installed") % str(state.get("latest", ""))
+		UpdateService.PHASE_DEFERRED:
+			return UIStrings.t("update.deferred") % str(state.get("latest", ""))
+		UpdateService.PHASE_READY:
+			return UIStrings.t("update.ready") % str(state.get("latest", ""))
+		UpdateService.PHASE_EXIT_PREPARING:
+			return UIStrings.t("update.exit_preparing")
+		UpdateService.PHASE_RECOVERED:
+			return UIStrings.t("update.recovered")
 		UpdateService.PHASE_FAILED:
 			return UIStrings.t("update.failed") % UIStrings.t(str(state.get("error", "")))
 		UpdateService.PHASE_CURRENT:

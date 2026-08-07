@@ -20,6 +20,12 @@ const ROLE_DESKTOP := "windows-desktop"
 const ROLE_HELPER := "windows-update-helper"
 const PROTOCOL_DESKTOP := "jht-windows-desktop-v1"
 const PROTOCOL_HELPER := "jht-windows-update-v1"
+const PRODUCTION_FINGERPRINT := \
+		"3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
+const PRODUCTION_KEYS: Array[Dictionary] = [{
+	"path": "res://release-keys/production-spki.pem",
+	"fingerprint": PRODUCTION_FINGERPRINT,
+}]
 
 const ERR_MANIFEST_FORMAT := "manifest_format"
 const ERR_ROOT := "trust_root"
@@ -49,6 +55,45 @@ static func verify_for_test(raw_manifest: PackedByteArray,
 		return _failure(ERR_ROOT)
 	return _verify_with_key(raw_manifest, raw_signature, public_key_pem,
 			expected_fingerprint, context)
+
+
+## Root production incorporate nel PCK. La rete non puo aggiungere chiavi: la
+## rotazione ammessa e soltanto la finestra 1-2 SPKI costruita nell'export.
+static func verify_production(raw_manifest: PackedByteArray,
+		raw_signature: PackedByteArray, context: Dictionary) -> Dictionary:
+	var keys := production_keyring()
+	if keys.is_empty():
+		return _failure(ERR_ROOT)
+	var accepted: Array[Dictionary] = []
+	for entry: Dictionary in keys:
+		var result := _verify_with_key(raw_manifest, raw_signature,
+				str(entry["pem"]), str(entry["fingerprint"]), context)
+		if bool(result.get("ok", false)):
+			accepted.append(result)
+	return accepted[0] if accepted.size() == 1 else _failure(ERR_SIGNATURE)
+
+
+static func production_keyring() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var seen := {}
+	for configured: Dictionary in PRODUCTION_KEYS:
+		var path := str(configured["path"])
+		if not FileAccess.file_exists(path):
+			continue
+		var pem := FileAccess.get_file_as_string(path).strip_edges()
+		var der := _spki_der(pem)
+		if der.is_empty():
+			return []
+		var fingerprint := sha256(der).hex_encode()
+		if fingerprint != str(configured["fingerprint"]) or seen.has(fingerprint):
+			return []
+		seen[fingerprint] = true
+		out.append({"pem": pem, "fingerprint": fingerprint})
+	return out if out.size() in [1, 2] else []
+
+
+static func production_ready() -> bool:
+	return not production_keyring().is_empty()
 
 
 static func _verify_with_key(raw_manifest: PackedByteArray,
@@ -284,6 +329,7 @@ static func _validate_authenticated_manifest(manifest: Dictionary,
 	var sequence := int(manifest["sequence"])
 	var version := str(manifest["version"])
 	if sequence <= 0 or not _stable_version(version) \
+			or sequence != version_sequence(version) \
 			or str(manifest["tag"]) != "v" + version \
 			or not WindowsUpdateProtocol.is_lower_hex(str(manifest["commit"]), 40) \
 			or not _utc_timestamp(str(manifest["published_at"])):
@@ -435,6 +481,19 @@ static func _stable_version(version: String) -> bool:
 		if part.is_empty() or not part.is_valid_int() or str(int(part)) != part:
 			return false
 	return true
+
+
+static func version_sequence(version: String) -> int:
+	if not _stable_version(version):
+		return -1
+	var parts := version.split(".")
+	var major := int(parts[0])
+	var minor := int(parts[1])
+	var patch := int(parts[2])
+	if major > 2097151 or minor > 2097151 or patch > 2097151:
+		return -1
+	var sequence := (major << 42) | (minor << 21) | patch
+	return sequence if sequence > 0 else -1
 
 
 static func _utc_timestamp(value: String) -> bool:

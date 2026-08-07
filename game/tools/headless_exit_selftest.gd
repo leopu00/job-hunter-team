@@ -262,9 +262,9 @@ func _check_shutdown_still_awaited() -> void:
 	# seconda via d'uscita che chiama get_tree().quit() da sé, l'attesa non
 	# varrebbe più per quella. Una sola quit() nel percorso di uscita.
 	_check("una sola uscita dall'albero",
-			src.count("get_tree().quit()") == 1,
-			"in game.gd ci sono %d chiamate a get_tree().quit(): l'attesa del "
-			% src.count("get_tree().quit()")
+			src.count("get_tree().quit(") == 1,
+			"in game.gd ci sono %d chiamate a get_tree().quit(: l'attesa del "
+			% src.count("get_tree().quit(")
 			+ "thread copre solo quella dentro _quit_now")
 	# Che le altre due uscite fermino davvero agenti e container è già sotto
 	# contratto altrove (il banco di prova dentro setup_service.gd controlla
@@ -273,6 +273,26 @@ func _check_shutdown_still_awaited() -> void:
 			src.contains("if stop_team and setup != null"),
 			"in game.gd shutdown_team() non è più sotto stop_team: o si spegne "
 			+ "sempre, o non si spegne mai")
+	_check("exit commit avviene dopo la scelta e prima dello shutdown",
+			src.contains("await _exit_commit_hook.call()")
+			and src.find("func _commit_quit") < src.find("func _do_quit")
+			and src.contains("if typeof(accepted) != TYPE_BOOL or not bool(accepted)"),
+			"manca il gate fail-closed che può fermare l'uscita prima dello switch")
+	var choice_start := src.find("func _on_shutdown_choice")
+	var commit_start := src.find("func _commit_quit", choice_start)
+	var choice := src.substr(choice_start, commit_start - choice_start) \
+			if choice_start >= 0 and commit_start > choice_start else ""
+	_check("cancel disarma senza invocare commit",
+			choice.contains("MODE_CANCEL") and choice.contains("_exit_cancel_hook.call()")
+			and not choice.contains("_exit_commit_hook.call()"),
+			"cancel può armare l'updater o lasciare hook appesi")
+	var detach_start := src.find("func detach_from_cli")
+	var do_quit_start := src.find("func _do_quit", detach_start)
+	var detach := src.substr(detach_start, do_quit_start - detach_start) \
+			if detach_start >= 0 and do_quit_start > detach_start else ""
+	_check("detach CLI non eredita hook update",
+			detach.contains("_clear_exit_hooks()") and not detach.contains("_commit_quit("),
+			"la CLI potrebbe applicare un update preparato da un'altra richiesta")
 
 
 ## Il join del worker evita il crash, ma è sicuro soltanto se il worker ha un

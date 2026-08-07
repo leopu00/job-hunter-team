@@ -22,6 +22,7 @@ extends SceneTree
 
 const ORA := 1785000000.0
 const WindowsProtocol := preload("res://scripts/support/windows_update_protocol.gd")
+const WindowsClient := preload("res://scripts/support/windows_update_client.gd")
 const WindowsVerifier := preload("res://scripts/support/windows_update_verifier.gd")
 
 ## La forma dell'uscita di `codesign -dv --verbose=4` su un bundle firmato
@@ -170,20 +171,27 @@ func _pacchetti() -> void:
 		{"name": UpdateCheck.WINDOWS_SIGNATURE_ASSET,
 			"browser_download_url": UpdateCheck._release_asset_url(
 					"0.4.0", UpdateCheck.WINDOWS_SIGNATURE_ASSET)},
+		{"name": UpdateCheck.WINDOWS_HELPER_ASSET,
+			"browser_download_url": UpdateCheck._release_asset_url(
+					"0.4.0", UpdateCheck.WINDOWS_HELPER_ASSET)},
 	]
 	_check("macOS: si scarica lo zip firmato",
 			UpdateCheck.asset_url(assets, "macOS", "0.4.0").ends_with(
 					UpdateCheck.MACOS_ASSET),
 			UpdateCheck.asset_url(assets, "macOS", "0.4.0"))
 	var windows := UpdateCheck.asset_bundle(assets, "Windows", "0.4.0")
-	_check("Windows: pacchetto, manifest e firma detached obbligatori",
+	_check("Windows: pacchetto, helper, manifest e firma detached obbligatori",
 			str(windows.get("package", "")).ends_with(UpdateCheck.WINDOWS_ASSET)
 			and str(windows.get("manifest", "")).ends_with(
 					UpdateCheck.WINDOWS_MANIFEST_ASSET)
 			and str(windows.get("signature", "")).ends_with(
-					UpdateCheck.WINDOWS_SIGNATURE_ASSET), str(windows))
-	_check("Windows: senza root/helper production resta manuale",
-			not UpdateCheck.can_self_install("Windows"), "")
+					UpdateCheck.WINDOWS_SIGNATURE_ASSET)
+			and str(windows.get("helper", "")).ends_with(
+					UpdateCheck.WINDOWS_HELPER_ASSET), str(windows))
+	_check("Windows: strategia esiste ma senza root/helper resta manuale",
+			UpdateCheck.can_self_install("Windows")
+			and not UpdateCheck.windows_forward_allowed(
+					"0.3.6", "0.3.7", "", false, false), "")
 	_check("0.3.5 -> 0.3.6 resta manuale anche con capability presenti",
 			not UpdateCheck.windows_forward_allowed(
 					"0.3.5", "0.3.6", "", true, true), "")
@@ -224,8 +232,8 @@ func _pacchetti() -> void:
 			UpdateCheck.asset_bundle(ostile, "Windows", "0.4.0").is_empty(), "")
 	_check("Windows: tag URL diverso rifiutato",
 			UpdateCheck.asset_bundle(assets, "Windows", "0.4.1").is_empty(), "")
-	var senza_firma := assets.duplicate(true)
-	senza_firma.pop_back()
+	var senza_firma := assets.filter(func(item: Dictionary) -> bool:
+		return str(item.get("name", "")) != UpdateCheck.WINDOWS_SIGNATURE_ASSET)
 	_check("Windows: firma detached mancante rifiutata",
 			UpdateCheck.asset_bundle(senza_firma, "Windows", "0.4.0").is_empty(), "")
 	var duplicato := assets.duplicate(true)
@@ -240,7 +248,7 @@ func _pacchetti() -> void:
 			UpdateCheck.asset_bundle(primo_ostile, "Windows", "0.4.0").is_empty(), "")
 	var collisione_case := assets.duplicate(true)
 	var quasi_firma: Dictionary = assets[-1].duplicate(true)
-	quasi_firma["name"] = str(quasi_firma["name"]).to_lower()
+	quasi_firma["name"] = str(quasi_firma["name"]).to_upper()
 	collisione_case.append(quasi_firma)
 	_check("Windows: collisione case-insensitive rifiutata",
 			UpdateCheck.asset_bundle(
@@ -250,7 +258,9 @@ func _pacchetti() -> void:
 	# Il triplo confronto same-origin non compare piu nel contratto. La policy
 	# deve restare chiusa anche se API digest, SHA256SUMS e provenance concordano.
 	_check("same-origin non abilita Windows",
-			not UpdateCheck.can_self_install("Windows") and win_sha.length() == 64, "")
+			UpdateCheck.can_self_install("Windows") and win_sha.length() == 64
+			and not UpdateCheck.windows_forward_allowed(
+					"0.3.6", "0.3.7", "", false, false), "")
 
 
 # ── 4. Helper/ACK/recovery Windows ───────────────────────────────────
@@ -265,13 +275,13 @@ func _protocollo_windows() -> void:
 		"request_id": "request-7",
 		"instance_id": "instance-3",
 		"old_pid": 1234,
-		"old_started": "1785000000000",
 		"manifest_sha256": manifest_sha,
 		"candidate_sha256": new_sha,
 	}
 	var ready := expected.duplicate(true)
 	ready.merge({"schema": WindowsProtocol.SCHEMA,
-		"type": WindowsProtocol.FRAME_READY, "ok": true})
+		"type": WindowsProtocol.FRAME_READY, "ok": true,
+		"old_started": "1785000000000"})
 	var ready_wire: Dictionary = JSON.parse_string(JSON.stringify(ready))
 	_check("ready JSON reale lega nonce/processo/manifest/candidato",
 			WindowsProtocol.ready_frame_matches(ready_wire, expected), str(ready_wire))
@@ -282,8 +292,8 @@ func _protocollo_windows() -> void:
 		_check("ready stale rifiutato: " + field,
 				not WindowsProtocol.ready_frame_matches(stale, expected), str(stale))
 	var pid_solo := ready_wire.duplicate(true)
-	pid_solo["old_started"] = "1784999999999"
-	_check("PID riusato senza creation token rifiutato",
+	pid_solo["old_started"] = "non-decimale"
+	_check("creation token helper malformato rifiutato",
 			not WindowsProtocol.ready_frame_matches(pid_solo, expected), "")
 	var ready_extra := ready_wire.duplicate(true)
 	ready_extra["trusted"] = true
@@ -296,10 +306,14 @@ func _protocollo_windows() -> void:
 	_check("tipi JSON ready non vengono coercizzati",
 			not WindowsProtocol.ready_frame_matches(ready_coerced, expected), "")
 
-	var health := WindowsProtocol.health_frame(nonce, "0.3.7", new_sha)
+	var exe_path := "C:/Program Files/Job Hunter Team/job-hunter-team.exe"
+	var started := "638901234567890123"
+	var health := WindowsProtocol.health_frame(
+			nonce, "0.3.7", exe_path, new_sha, 5678, started)
 	var health_wire: Dictionary = JSON.parse_string(JSON.stringify(health))
 	_check("ACK salute lega nonce/versione/hash",
-			WindowsProtocol.health_frame_matches(health_wire, nonce, "0.3.7", new_sha),
+			WindowsProtocol.health_frame_matches(health_wire, nonce, "0.3.7", new_sha,
+					exe_path, 5678, started),
 			str(health_wire))
 	_check("ACK salute di altra versione rifiutato",
 			not WindowsProtocol.health_frame_matches(health_wire, nonce, "0.3.8", new_sha), "")
@@ -309,9 +323,16 @@ func _protocollo_windows() -> void:
 			not WindowsProtocol.health_frame_matches(
 					malformed_health, "bad", "latest", "bad"), "")
 	_check("nonce non canonico non produce ACK",
-			WindowsProtocol.health_frame("../stage", "0.3.7", new_sha).is_empty(), "")
+			WindowsProtocol.health_frame(
+					"../stage", "0.3.7", exe_path, new_sha, 5678, started).is_empty(), "")
+	for field: String in ["exe_path", "pid", "process_started_utc_ticks"]:
+		var mismatch := health_wire.duplicate(true)
+		mismatch[field] = "wrong" if field != "pid" else 9999.0
+		_check("ACK health mismatch rifiutato: " + field,
+				not WindowsProtocol.health_frame_matches(mismatch, nonce, "0.3.7",
+						new_sha, exe_path, 5678, started), "")
 	var capability := "C:/Users/test/AppData/Local/Job Hunter Team/host-runtime" \
-			+ "/updates/%s/health.json" % nonce
+			+ "/%s/health.json" % nonce
 	_check("path ACK e una capability esplicita legata al nonce",
 			WindowsProtocol.health_capability_path(capability, nonce) == capability,
 			capability)
@@ -366,6 +387,41 @@ func _protocollo_windows() -> void:
 			WindowsProtocol.recovery_action(journal, new_sha, old_sha, health_wire)
 					== WindowsProtocol.RECOVERY_CLEANUP_OWNED, "")
 
+	var result := {"schema": 1, "ok": true, "phase": "ready",
+			"code": "verified", "nonce": nonce, "rolled_back": false}
+	_check("result helper exact accettato",
+			WindowsProtocol.result_frame_matches(result, nonce), str(result))
+	for field: String in ["schema", "ok", "phase", "code", "nonce", "rolled_back"]:
+		var invalid := result.duplicate(true)
+		invalid.erase(field)
+		_check("result missing rifiutato: " + field,
+				not WindowsProtocol.result_frame_matches(invalid, nonce), "")
+	var coerced_result := result.duplicate(true)
+	coerced_result["rolled_back"] = "false"
+	_check("result bool non coercizzato",
+			not WindowsProtocol.result_frame_matches(coerced_result, nonce), "")
+	var mismatched_result := result.duplicate(true)
+	mismatched_result["phase"] = "committed"
+	_check("result fase/codice incoerenti rifiutati",
+			not WindowsProtocol.result_frame_matches(mismatched_result, nonce), "")
+
+	var fake_plan := {
+		"installed_helper": "C:\\Program Files\\Job Hunter Team\\jht-windows-update.ps1",
+		"target": "C:\\Program Files\\Job Hunter Team\\job-hunter-team.exe",
+		"candidate": "C:\\Program Files\\Job Hunter Team\\.candidate.exe",
+		"candidate_helper": "C:\\runtime\\jht-windows-update.ps1",
+		"installed_manifest": "C:\\Program Files\\Job Hunter Team\\RELEASE-MANIFEST.json",
+		"installed_signature": "C:\\Program Files\\Job Hunter Team\\RELEASE-MANIFEST.json.sig",
+		"candidate_manifest": "C:\\runtime\\RELEASE-MANIFEST.json",
+		"candidate_signature": "C:\\runtime\\RELEASE-MANIFEST.json.sig",
+		"state_root": "C:\\runtime", "nonce": nonce,
+	}
+	var argv := WindowsClient.helper_argv("Verify", fake_plan, 1234,
+			"request-7", "instance-3")
+	_check("helper argv usa -File e rispetta ExecutionPolicy",
+			"-File" in argv and "-ExecutionPolicy" not in argv and "Bypass" not in argv,
+			str(argv))
+
 
 # ── 5. Firma e binding manifest Windows ──────────────────────────────
 
@@ -390,7 +446,8 @@ func _verifier_windows() -> void:
 	_check("manifest RSA-3072 raw verificato prima del parse",
 			bool(verified.get("ok", false))
 			and str(verified.get("version", "")) == "0.3.7"
-			and int(verified.get("sequence", 0)) == 7,
+			and int(verified.get("sequence", 0)) \
+					== WindowsVerifier.version_sequence("0.3.7"),
 			"%s raw=%s" % [verified, raw.get_string_from_ascii()])
 	var signed_artifacts: Dictionary = verified.get("artifacts", {})
 	var signed_app: Dictionary = signed_artifacts.get(WindowsVerifier.ROLE_DESKTOP, {})
@@ -531,12 +588,12 @@ func _verifier_windows() -> void:
 
 	var replay_context := context.duplicate(true)
 	replay_context["highest_committed_version"] = "0.3.7"
-	replay_context["highest_committed_sequence"] = 7
+	replay_context["highest_committed_sequence"] = WindowsVerifier.version_sequence("0.3.7")
 	_check("replay versione+sequence committed rifiutato",
 			str(WindowsVerifier.verify_for_test(raw, signature, public_pem, fingerprint,
 					replay_context).get("error", "")) == WindowsVerifier.ERR_DOWNGRADE, "")
 	var sequence_replay := context.duplicate(true)
-	sequence_replay["highest_committed_sequence"] = 7
+	sequence_replay["highest_committed_sequence"] = WindowsVerifier.version_sequence("0.3.7")
 	_check("sequence replay rifiutato anche con semver avanti",
 			str(WindowsVerifier.verify_for_test(raw, signature, public_pem, fingerprint,
 					sequence_replay).get("error", "")) == WindowsVerifier.ERR_DOWNGRADE, "")
@@ -548,12 +605,14 @@ func _verifier_windows() -> void:
 	var downgrade := manifest.duplicate(true)
 	downgrade["version"] = "0.3.5"
 	downgrade["tag"] = "v0.3.5"
+	downgrade["sequence"] = WindowsVerifier.version_sequence("0.3.5")
 	_check("downgrade firmato rifiutato",
 			_verified_error(downgrade, private_key, public_pem, fingerprint, context) \
 					== WindowsVerifier.ERR_DOWNGRADE, "")
 
 	var float_raw := raw.get_string_from_ascii().replace(
-			'"sequence":7', '"sequence":7.0').to_ascii_buffer()
+			'"sequence":%d' % WindowsVerifier.version_sequence("0.3.7"),
+			'"sequence":%d.0' % WindowsVerifier.version_sequence("0.3.7")).to_ascii_buffer()
 	_check("numero JSON float rifiutato anche se firmato",
 			str(WindowsVerifier.verify_for_test(float_raw, _test_sign(float_raw, private_key),
 					public_pem, fingerprint, context).get("error", "")) \
@@ -572,7 +631,7 @@ func _test_manifest(fingerprint: String) -> Dictionary:
 				"protocol": WindowsVerifier.PROTOCOL_DESKTOP,
 				"role": WindowsVerifier.ROLE_DESKTOP,
 				"sha256": "b".repeat(64), "size": 222},
-			{"arch": "x86_64", "filename": "jht-update-helper.ps1",
+			{"arch": "x86_64", "filename": UpdateCheck.WINDOWS_HELPER_ASSET,
 				"platform": "windows", "protocol": WindowsVerifier.PROTOCOL_HELPER,
 				"role": WindowsVerifier.ROLE_HELPER,
 				"sha256": "c".repeat(64), "size": 333},
@@ -584,7 +643,7 @@ func _test_manifest(fingerprint: String) -> Dictionary:
 		"published_at": "2026-08-07T19:00:00Z",
 		"repository": WindowsVerifier.REPOSITORY,
 		"schema_version": WindowsVerifier.MANIFEST_SCHEMA,
-		"sequence": 7,
+		"sequence": WindowsVerifier.version_sequence("0.3.7"),
 		"tag": "v0.3.7",
 		"version": "0.3.7",
 	}
@@ -592,7 +651,7 @@ func _test_manifest(fingerprint: String) -> Dictionary:
 
 func _test_manifest_context() -> Dictionary:
 	return {
-		"highest_committed_sequence": 6,
+		"highest_committed_sequence": WindowsVerifier.version_sequence("0.3.6"),
 		"highest_committed_version": "0.3.6",
 		"installed_version": "0.3.6",
 		"required_artifacts": [
@@ -600,7 +659,7 @@ func _test_manifest_context() -> Dictionary:
 				"platform": "windows",
 				"protocol": WindowsVerifier.PROTOCOL_DESKTOP,
 				"role": WindowsVerifier.ROLE_DESKTOP},
-			{"arch": "x86_64", "filename": "jht-update-helper.ps1",
+			{"arch": "x86_64", "filename": UpdateCheck.WINDOWS_HELPER_ASSET,
 				"platform": "windows", "protocol": WindowsVerifier.PROTOCOL_HELPER,
 				"role": WindowsVerifier.ROLE_HELPER},
 		],
@@ -648,6 +707,8 @@ func _source_gate_windows() -> void:
 			"res://scripts/support/windows_update_protocol.gd")
 	var verifier_source := FileAccess.get_file_as_string(
 			"res://scripts/support/windows_update_verifier.gd")
+	var client_source := FileAccess.get_file_as_string(
+			"res://scripts/support/windows_update_client.gd")
 	_check("nessun claim attestazione dal triplo same-origin",
 			"attest_windows_metadata" not in check_source
 			and "PROVENANCE_SCHEMA" not in check_source
@@ -658,13 +719,23 @@ func _source_gate_windows() -> void:
 			"deferred_version" in service_source and "defer_until" in service_source
 			and "UpdateService.defer()" in FileAccess.get_file_as_string(
 					"res://scripts/ui/update_notice.gd"), "")
+	_check("defer fallisce chiuso se la persistenza atomica fallisce",
+			"func _save_cfg() -> bool" in service_source
+			and "deferred_version = old_version" in service_source
+			and "UpdateCheck.CONFIG_PATH + \".tmp\"" in service_source, "")
 	_check("protocollo puro non puo lanciare apply",
 			"OS.execute" not in protocol_source
 			and "OS.create_process" not in protocol_source
 			and "shell_open" not in protocol_source, "")
-	_check("servizio Windows emette soltanto health ACK",
-			"WindowsProtocol.health_frame" in service_source
-			and "windows_update_helper" not in service_source, "")
+	_check("apply Windows passa soltanto dal helper locale verificato",
+			"WindowsClient.verify_staged" in service_source
+			and "WindowsVerifier.verify_production" in service_source
+			and "OS.create_process(WindowsClient.powershell_path(), argv, false)" \
+					in service_source
+			and "shell_open" not in client_source, "")
+	_check("argv helper rispetta la policy PowerShell",
+			'"-File"' in client_source and "ExecutionPolicy" not in client_source
+			and "Bypass" not in client_source, "")
 	_check("schema UNIQUE freeze letterale",
 			UpdateCheck.WINDOWS_MANIFEST_ASSET == "RELEASE-MANIFEST.json"
 			and UpdateCheck.WINDOWS_SIGNATURE_ASSET == "RELEASE-MANIFEST.json.sig"
@@ -672,6 +743,15 @@ func _source_gate_windows() -> void:
 			and WindowsVerifier.SIGNATURE_BYTES == 384
 			and WindowsVerifier.PROTOCOL_DESKTOP == "jht-windows-desktop-v1"
 			and WindowsVerifier.PROTOCOL_HELPER == "jht-windows-update-v1", "")
+	_check("fingerprint production hard-pinned",
+			WindowsVerifier.PRODUCTION_FINGERPRINT \
+					== "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2",
+			WindowsVerifier.PRODUCTION_FINGERPRINT)
+	var game_source := FileAccess.get_file_as_string("res://scripts/game.gd")
+	_check("artifact gate legge davvero il keyring esportato",
+			"JHT_WINDOWS_UPDATE_TRUST_TEST" in game_source
+			and "WindowsVerifier.production_keyring()" in game_source
+			and "WINDOWS-UPDATE-TRUST-TEST PASS" in game_source, "")
 	_check("firma raw verificata prima del JSON parse",
 			verifier_source.find("Crypto.new().verify") >= 0
 			and verifier_source.find("parser.parse") \

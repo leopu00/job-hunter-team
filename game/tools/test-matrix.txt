@@ -110,6 +110,7 @@ language_picker|script|gate|any|-|tools/language_picker_selftest.gd|LANGUAGE-PIC
 # Nel gate dell'artifact, JHT_EXPECTED_GAME_VERSION riceve il tag senza `v`:
 # l'eseguibile deve stampare versione effettiva e PASS, altrimenti esce 1.
 language_picker_title|run|gate|any|JHT_LANG= JHT_LANGUAGE_PICKER_TEST=1 JHT_EXPECTED_GAME_VERSION=|-|LANGUAGE-PICKER-TITLE-TEST PASS
+windows_update_trust_artifact|run|gate|windows|JHT_NOVPS=1 JHT_WINDOWS_UPDATE_TRUST_TEST=1|--headless|WINDOWS-UPDATE-TRUST-TEST PASS
 # Percorso P09 reale e cliccabile: non salta il picker con JHT_LANG, isola
 # user://, conferma English, salva un nome sintetico ed entra nell'Office
 # offline con Assistant disponibile e viewport nativo 16:9.
