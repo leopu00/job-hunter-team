@@ -11,6 +11,7 @@ import {
   CurrencyCard,
   ConnectTeamCard,
 } from "../../components/SettingsCloudSections";
+import AccountDataCard from "../../components/AccountDataCard";
 import WorkHoursPicker from "../../components/WorkHoursPicker";
 import { DarkModeToggle } from "@/app/theme-provider";
 import { AVAILABLE_CURRENCIES, BASE_CURRENCIES } from "@/lib/exchange-rates";
@@ -273,6 +274,11 @@ export default function SettingsPage() {
           <ConnectTeamCard />
 
           <AccountCard />
+
+          {/* Export e cancellazione: stanno accanto all'account perché è
+              lì che l'utente li cerca, e perché la cancellazione deve
+              essere raggiungibile senza doverla domandare a qualcuno. */}
+          <AccountDataCard />
 
           <LanguageCard />
 
