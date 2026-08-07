@@ -16,7 +16,7 @@
 # ║                                                                          ║
 # ║  Override via env:                                                       ║
 # ║    JHT_CONTAINER_NAME=jht                                                ║
-# ║    JHT_RUNTIME_DIR=$env:USERPROFILE\.jht\runtime                         ║
+# ║    JHT_RUNTIME_DIR=$env:LOCALAPPDATA\Job Hunter Team\host-runtime        ║
 # ║    JHT_COMPOSE_FILE=$JHT_RUNTIME_DIR\docker-compose.yml                  ║
 # ║                                                                          ║
 # ║  Differenze vs jht-wrapper.sh (per design Windows-native):               ║
@@ -36,7 +36,9 @@ $ErrorActionPreference = 'Stop'
 $JHT_UPGRADE_PROTOCOL = 1
 
 $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { 'jht' }
-$RuntimeDir  = if ($env:JHT_RUNTIME_DIR)    { $env:JHT_RUNTIME_DIR }    else { Join-Path $env:USERPROFILE '.jht\runtime' }
+$LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
+if (-not $LocalAppData) { throw 'LOCALAPPDATA non disponibile: runtime host rifiutato' }
+$RuntimeDir  = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $ComposeFile = if ($env:JHT_COMPOSE_FILE)   { $env:JHT_COMPOSE_FILE }   else { Join-Path $RuntimeDir 'docker-compose.yml' }
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBase     = if ($env:JHT_RAW_BASE)       { $env:JHT_RAW_BASE.TrimEnd('/') } else { 'https://raw.githubusercontent.com/leopu00/job-hunter-team/production' }

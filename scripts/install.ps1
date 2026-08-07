@@ -13,7 +13,7 @@
 # ║  download it for you — it needs user consent + WSL2 + a reboot).         ║
 # ║                                                                          ║
 # ║  Downloads:                                                              ║
-# ║    - $env:USERPROFILE\.jht\runtime\docker-compose.yml                    ║
+# ║    - $env:LOCALAPPDATA\Job Hunter Team\host-runtime\docker-compose.yml   ║
 # ║    - $env:USERPROFILE\.local\bin\jht.ps1 (PowerShell wrapper)            ║
 # ║    - $env:USERPROFILE\.local\bin\jht.cmd (shim for CMD)                  ║
 # ║                                                                          ║
@@ -53,7 +53,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # ── Config ────────────────────────────────────────────────────────────────
-$RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $env:USERPROFILE '.jht\runtime' }
+$LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
+if (-not $LocalAppData) { throw 'LOCALAPPDATA is unavailable: refusing an unprotected runtime fallback' }
+$RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir     = if ($env:JHT_BIN_DIR)     { $env:JHT_BIN_DIR }     else { Join-Path $env:USERPROFILE '.local\bin' }
 $JhtHome    = Join-Path $env:USERPROFILE '.jht'
 $Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht:0.3.5' }

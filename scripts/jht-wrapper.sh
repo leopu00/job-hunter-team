@@ -17,7 +17,7 @@
 # ║                                                                          ║
 # ║  Override via env:                                                       ║
 # ║    JHT_CONTAINER_NAME=jht                                                ║
-# ║    JHT_RUNTIME_DIR=$HOME/.jht/runtime                                    ║
+# ║    JHT_RUNTIME_DIR=$HOME/.local/share/job-hunter-team/host-runtime       ║
 # ║    JHT_COMPOSE_FILE=$JHT_RUNTIME_DIR/docker-compose.yml                  ║
 # ║                                                                          ║
 # ║  Riferimento design: docs/internal/ops/vps.md    ║
@@ -32,7 +32,13 @@ set -euo pipefail
 JHT_UPGRADE_PROTOCOL=1
 
 CONTAINER="${JHT_CONTAINER_NAME:-jht}"
-RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
+if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
+  RUNTIME_DIR="$JHT_RUNTIME_DIR"
+elif [ "$(uname -s)" = "Darwin" ]; then
+  RUNTIME_DIR="$HOME/Library/Application Support/Job Hunter Team/host-runtime"
+else
+  RUNTIME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
+fi
 COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"
 NODE_ENTRY="${JHT_NODE_ENTRY:-/app/cli/bin/jht.js}"
 HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"

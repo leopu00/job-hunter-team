@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 HOST_SETUP = ROOT / "scripts" / "host-setup.sh"
 POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
+COMPOSE = ROOT / "docker-compose.yml"
+GAME_SETUP = ROOT / "game" / "scripts" / "setup" / "setup_service.gd"
 
 
 def malicious_env(marker: Path, *, host_type: str = "local") -> str:
@@ -146,3 +148,20 @@ def test_powershell_reader_has_the_same_key_allowlist():
     for key in ("JHT_HOST_TYPE", "JHT_LANG", "JHT_USER_TZ"):
         assert key in source
     assert "$AllowedHostEnvNames -notcontains $name" in source
+
+
+def test_host_runtime_is_outside_bind_and_legacy_path_is_masked():
+    bash = WRAPPER.read_text(encoding="utf-8")
+    powershell = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
+    compose = COMPOSE.read_text(encoding="utf-8")
+    game = GAME_SETUP.read_text(encoding="utf-8")
+
+    assert 'RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"' not in bash
+    assert "Join-Path $env:USERPROFILE '.jht\\runtime'" not in powershell
+    assert "jht-runtime-mask:/jht_home/runtime" in compose
+    assert '_jht_home().path_join("runtime/docker-compose.yml")' not in game
+
+
+def test_host_setup_never_imports_shell_i18n_from_disk():
+    source = HOST_SETUP.read_text(encoding="utf-8")
+    assert "shared/i18n.sh" not in source

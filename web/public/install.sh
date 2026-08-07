@@ -72,7 +72,13 @@ else
   BIN_DIR="$HOME/.local/bin"
 fi
 
-RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
+if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
+  RUNTIME_DIR="$JHT_RUNTIME_DIR"
+elif [ "$(uname -s)" = "Darwin" ]; then
+  RUNTIME_DIR="$HOME/Library/Application Support/Job Hunter Team/host-runtime"
+else
+  RUNTIME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
+fi
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.5}"
 # Il compose scaricato può evolvere sul canale production; l'installer di
 # questa release deve comunque avviare l'immagine dichiarata qui.
