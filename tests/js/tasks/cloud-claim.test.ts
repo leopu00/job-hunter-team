@@ -80,7 +80,9 @@ describe("jht cloud claim", () => {
     const program = new Command();
     registerCloudCommand(program);
 
-    const cloud = program.commands.find((command) => command.name() === "cloud");
+    const cloud = program.commands.find(
+      (command) => command.name() === "cloud",
+    );
     const claim = cloud?.commands.find((command) => command.name() === "claim");
 
     expect(claim).toBeDefined();
@@ -142,11 +144,17 @@ describe("jht cloud claim", () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toMatchObject({ force: true });
-    expect(CURSOR_FILES.every((file) => !existsSync(join(home, file)))).toBe(true);
+    expect(CURSOR_FILES.every((file) => !existsSync(join(home, file)))).toBe(
+      true,
+    );
     expect(process.exitCode).toBeUndefined();
     expect(outputOf(stdout)).toContain("device-nuovo");
-    expect(outputOf(stdout)).toContain("Device precedente evicted: device-vecchio");
+    expect(outputOf(stdout)).toContain(
+      "Device precedente evicted: device-vecchio",
+    );
     expect(outputOf(stdout)).toContain("Cursor locali invalidati: 4");
-    expect(outputOf(stdout)).toContain("prossimo sync ripartira' senza cursor precedenti");
+    expect(outputOf(stdout)).toContain(
+      "prossimo sync ripartira' senza cursor precedenti",
+    );
   });
 });

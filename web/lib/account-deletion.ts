@@ -41,11 +41,14 @@ import { MANUAL_DELETE_ORDER } from "./account-data-tables";
 /** L'unico bucket in cui finiscono file dell'utente. */
 const STORAGE_BUCKET = "file-transit";
 
-/** Quanti oggetti si enumerano al massimo. Oltre questa soglia la
+/** Quanti oggetti si chiedono per ogni livello. */
+const STORAGE_PAGE_LIMIT = 1000;
+
+/** Quanti oggetti in tutto si accetta di enumerare. Oltre questa soglia la
  *  cancellazione si ferma invece di dichiararsi completa avendone lasciati
- *  fuori: un numero alto ma finito è meglio di una paginazione che nessuno
+ *  fuori: un numero alto ma finito è meglio di una ricorsione che nessuno
  *  ha mai provato con quei volumi. */
-const STORAGE_LIST_LIMIT = 1000;
+const STORAGE_TOTAL_LIMIT = 5000;
 
 export { MANUAL_DELETE_ORDER };
 
@@ -126,47 +129,69 @@ export async function deleteAccountData(
  * Se il bucket non risponde, o qualche oggetto resta, il chiamante lo
  * tratta come un fallimento — meglio fermarsi che dire «cancellato».
  */
+/**
+ * Elenca RICORSIVAMENTE gli oggetti sotto un prefisso.
+ *
+ * `list(path)` di Supabase restituisce i file **e le cartelle immediate**,
+ * e le cartelle si riconoscono da `id === null`. Non scende da sola.
+ *
+ * La prima versione di questo codice si fermava al primo livello, e il
+ * suo test simulava percorsi a due segmenti: era verde confermando
+ * un'assunzione sbagliata. I file veri stanno in
+ * `${userId}/${requestId}/${nome}` — tre segmenti — quindi al primo
+ * livello si trovavano solo cartelle, e `remove()` su una cartella non
+ * cancella nulla. Segnalato da HQ-DOCS con il percorso reale alla mano.
+ */
+async function listRecursive(
+  admin: SupabaseClient,
+  prefix: string,
+  budget: { left: number },
+): Promise<string[]> {
+  if (budget.left <= 0) {
+    throw new Error(
+      `troppi file sotto ${prefix}: enumerazione interrotta per non ` +
+        `dichiarare completa una cancellazione parziale`,
+    );
+  }
+  const { data, error } = await admin.storage
+    .from(STORAGE_BUCKET)
+    .list(prefix, { limit: STORAGE_PAGE_LIMIT });
+  if (error) {
+    throw new Error(`impossibile elencare ${prefix}: ${error.message}`);
+  }
+
+  const out: string[] = [];
+  for (const entry of data ?? []) {
+    const e = entry as { name?: string; id?: string | null };
+    if (!e.name) continue;
+    const full = prefix ? `${prefix}/${e.name}` : e.name;
+    if (e.id === null || e.id === undefined) {
+      // Cartella: si scende. È il ramo che mancava.
+      out.push(...(await listRecursive(admin, full, budget)));
+    } else {
+      budget.left -= 1;
+      out.push(full);
+    }
+  }
+  return out;
+}
+
 async function deleteStorageObjects(
   admin: SupabaseClient,
   userId: string,
 ): Promise<{ removed: number; failed: string[] }> {
   // ── Perché non basta leggere le righe ────────────────────────────────
-  // La prima versione ricavava i percorsi da `file_bridge_requests`. Non
-  // è sufficiente: HQ-DOCS ha trovato un oggetto reale rimasto nel bucket
-  // senza più la sua riga. Un caricamento interrotto, una riga ripulita da
-  // un job, un errore a metà — e il file resta lì mentre il database dice
-  // che non esiste. Cancellare in base alle righe lascerebbe indietro
-  // proprio i casi che l'utente non può vedere né segnalare.
-  //
-  // Quindi si enumera direttamente il prefisso `${userId}/` nel bucket, e
-  // le righe servono solo ad aggiungere eventuali percorsi fuori da quel
-  // prefisso. L'unione delle due fonti è ciò che si cancella.
+  // Ricavare i percorsi da `file_bridge_requests` non è sufficiente:
+  // HQ-DOCS ha trovato un oggetto reale rimasto nel bucket senza più la
+  // sua riga. Un caricamento interrotto, una riga ripulita da un job, un
+  // errore a metà — e il file resta lì mentre il database dice che non
+  // esiste. Si enumera quindi il bucket, e le righe servono solo ad
+  // aggiungere percorsi eventualmente fuori dal prefisso dell'utente.
   const paths = new Set<string>();
 
-  const { data: listed, error: listError } = await admin.storage
-    .from(STORAGE_BUCKET)
-    .list(userId, { limit: STORAGE_LIST_LIMIT });
-  if (listError) {
-    // Non si può sapere cosa c'è: fermarsi è l'unica risposta onesta.
-    throw new Error(
-      `impossibile elencare i file dell'utente: ${listError.message}`,
-    );
-  }
-  for (const obj of listed ?? []) {
-    const name = (obj as { name?: string }).name;
-    if (name) paths.add(`${userId}/${name}`);
-  }
-  if ((listed?.length ?? 0) >= STORAGE_LIST_LIMIT) {
-    // Con più oggetti del limite ne resterebbero fuori senza dirlo: si
-    // preferisce fallire piuttosto che cancellare a metà in silenzio.
-    throw new Error(
-      `l'utente ha almeno ${STORAGE_LIST_LIMIT} file: enumerazione ` +
-        `incompleta, cancellazione interrotta per non dichiararsi completa`,
-    );
-  }
+  const budget = { left: STORAGE_TOTAL_LIMIT };
+  for (const p of await listRecursive(admin, userId, budget)) paths.add(p);
 
-  // Le righe possono puntare fuori dal prefisso (percorsi storici): si
-  // aggiungono, non si sostituiscono.
   const { data: rows, error } = await admin
     .from("file_bridge_requests")
     .select("storage_path")

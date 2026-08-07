@@ -82,9 +82,9 @@ describe("globo della home pubblica", () => {
   });
 
   it("usa un solo fallback e lo rende light dal tema pre-paint", () => {
-    expect(landingGlobeSource.match(/className="jht-globe-still/g)).toHaveLength(
-      1,
-    );
+    expect(
+      landingGlobeSource.match(/className="jht-globe-still/g),
+    ).toHaveLength(1);
     expect(globalCssSource).toContain(
       'html[data-theme="light"] .jht-globe-still',
     );

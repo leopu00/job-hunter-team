@@ -77,7 +77,10 @@ describe("profile files: demo fixture before the real-data auth gate", () => {
     const response = await getProfileFiles();
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ files: [], mode: "cloud" });
+    await expect(response.json()).resolves.toEqual({
+      files: [],
+      mode: "cloud",
+    });
     expect(auth.requireAuth).not.toHaveBeenCalled();
     expect(filesystem.existsSync).not.toHaveBeenCalled();
     expect(filesystem.readdirSync).not.toHaveBeenCalled();
@@ -97,36 +100,42 @@ describe("user exclusion: demo no-op before every real-data auth gate", () => {
   it.each([
     ["POST", postUserExclusion],
     ["DELETE", deleteUserExclusion],
-  ] as const)("serves the %s demo no-op without auth, SQLite or Supabase", async (method, handler) => {
-    demo.activeDemoPersona.mockResolvedValue(true);
-    demo.isDemoLegacyId.mockReturnValue(true);
+  ] as const)(
+    "serves the %s demo no-op without auth, SQLite or Supabase",
+    async (method, handler) => {
+      demo.activeDemoPersona.mockResolvedValue(true);
+      demo.isDemoLegacyId.mockReturnValue(true);
 
-    const response = await handler(request(method), {
-      params: Promise.resolve({ legacyId: "999999" }),
-    });
+      const response = await handler(request(method), {
+        params: Promise.resolve({ legacyId: "999999" }),
+      });
 
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body).toMatchObject({
-      ok: true,
-      outcome: { id: "demo-999999", source: "cloud" },
-    });
-    expect(auth.requireAuth).not.toHaveBeenCalled();
-    expect(filesystem.existsSync).not.toHaveBeenCalled();
-    expect(teamAuth.resolveUser).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toMatchObject({
+        ok: true,
+        outcome: { id: "demo-999999", source: "cloud" },
+      });
+      expect(auth.requireAuth).not.toHaveBeenCalled();
+      expect(filesystem.existsSync).not.toHaveBeenCalled();
+      expect(teamAuth.resolveUser).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ["POST", postUserExclusion],
     ["DELETE", deleteUserExclusion],
-  ] as const)("denies the %s real lane before SQLite or Supabase", async (method, handler) => {
-    const response = await handler(request(method), {
-      params: Promise.resolve({ legacyId: "42" }),
-    });
+  ] as const)(
+    "denies the %s real lane before SQLite or Supabase",
+    async (method, handler) => {
+      const response = await handler(request(method), {
+        params: Promise.resolve({ legacyId: "42" }),
+      });
 
-    expect(response.status).toBe(401);
-    expect(auth.requireAuth).toHaveBeenCalledOnce();
-    expect(filesystem.existsSync).not.toHaveBeenCalled();
-    expect(teamAuth.resolveUser).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(401);
+      expect(auth.requireAuth).toHaveBeenCalledOnce();
+      expect(filesystem.existsSync).not.toHaveBeenCalled();
+      expect(teamAuth.resolveUser).not.toHaveBeenCalled();
+    },
+  );
 });

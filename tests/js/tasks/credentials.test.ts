@@ -13,19 +13,39 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
-  chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync,
-  rmSync, statSync, writeFileSync,
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  deriveKey, generateSalt, encrypt, decrypt, isValidPayload,
+  deriveKey,
+  generateSalt,
+  encrypt,
+  decrypt,
+  isValidPayload,
 } from "../../../shared/credentials/crypto.js";
 import {
-  resolveJhtPassphrase, MissingPassphraseError,
+  resolveJhtPassphrase,
+  MissingPassphraseError,
 } from "../../../shared/credentials/passphrase.js";
-import type { EncryptedPayload, ApiKeyCredential, OAuthCredential } from "../../../shared/credentials/types.js";
-import { ENV_VAR_MAP, API_KEY_PROVIDERS, OAUTH_PROVIDERS, ALL_PROVIDERS } from "../../../shared/credentials/types.js";
+import type {
+  EncryptedPayload,
+  ApiKeyCredential,
+  OAuthCredential,
+} from "../../../shared/credentials/types.js";
+import {
+  ENV_VAR_MAP,
+  API_KEY_PROVIDERS,
+  OAUTH_PROVIDERS,
+  ALL_PROVIDERS,
+} from "../../../shared/credentials/types.js";
 
 describe("Crypto — deriveKey e generateSalt", () => {
   it("generateSalt produce 32 byte random", () => {
@@ -145,12 +165,30 @@ describe("Crypto — isValidPayload", () => {
 
   it("rifiuta oggetto con campi mancanti", () => {
     expect(isValidPayload({ version: 1 })).toBe(false);
-    expect(isValidPayload({ version: 1, algorithm: "aes-256-gcm" })).toBe(false);
+    expect(isValidPayload({ version: 1, algorithm: "aes-256-gcm" })).toBe(
+      false,
+    );
   });
 
   it("rifiuta versione o algoritmo errati", () => {
-    expect(isValidPayload({ version: 2, algorithm: "aes-256-gcm", iv: "a", authTag: "b", data: "c" })).toBe(false);
-    expect(isValidPayload({ version: 1, algorithm: "aes-128-cbc", iv: "a", authTag: "b", data: "c" })).toBe(false);
+    expect(
+      isValidPayload({
+        version: 2,
+        algorithm: "aes-256-gcm",
+        iv: "a",
+        authTag: "b",
+        data: "c",
+      }),
+    ).toBe(false);
+    expect(
+      isValidPayload({
+        version: 1,
+        algorithm: "aes-128-cbc",
+        iv: "a",
+        authTag: "b",
+        data: "c",
+      }),
+    ).toBe(false);
   });
 });
 
@@ -164,7 +202,9 @@ describe("Types — costanti e set provider", () => {
   it("ALL_PROVIDERS contiene API key + OAuth", () => {
     for (const p of API_KEY_PROVIDERS) expect(ALL_PROVIDERS.has(p)).toBe(true);
     for (const p of OAUTH_PROVIDERS) expect(ALL_PROVIDERS.has(p)).toBe(true);
-    expect(ALL_PROVIDERS.size).toBe(API_KEY_PROVIDERS.size + OAUTH_PROVIDERS.size);
+    expect(ALL_PROVIDERS.size).toBe(
+      API_KEY_PROVIDERS.size + OAUTH_PROVIDERS.size,
+    );
   });
 });
 
@@ -217,7 +257,9 @@ type ManagerModule = typeof import("../../../shared/credentials/manager.js");
  * Crea una JHT_HOME temporanea e ricarica storage+manager legati a quella.
  * `passphrase: null` simula l'utente che non ha impostato nulla.
  */
-async function withIsolatedHome(passphrase: string | null = "passphrase-di-test"): Promise<{
+async function withIsolatedHome(
+  passphrase: string | null = "passphrase-di-test",
+): Promise<{
   home: string;
   credDir: string;
   storage: StorageModule;
@@ -240,7 +282,12 @@ async function withIsolatedHome(passphrase: string | null = "passphrase-di-test"
 }
 
 function apiKeyCred(apiKey: string): ApiKeyCredential {
-  return { type: "api_key", provider: "claude", apiKey, savedAt: 1_700_000_000_000 };
+  return {
+    type: "api_key",
+    provider: "claude",
+    apiKey,
+    savedAt: 1_700_000_000_000,
+  };
 }
 
 describe("Storage — round-trip su disco", () => {
@@ -286,9 +333,15 @@ describe("Storage — round-trip su disco", () => {
     const saltDopoPrima = readFileSync(join(credDir, ".salt"));
 
     storage.writeCredential("openai", apiKeyCred("secondo"));
-    expect(readFileSync(join(credDir, ".salt")).equals(saltDopoPrima)).toBe(true);
-    expect((storage.readCredential("claude") as ApiKeyCredential).apiKey).toBe("primo");
-    expect((storage.readCredential("openai") as ApiKeyCredential).apiKey).toBe("secondo");
+    expect(readFileSync(join(credDir, ".salt")).equals(saltDopoPrima)).toBe(
+      true,
+    );
+    expect((storage.readCredential("claude") as ApiKeyCredential).apiKey).toBe(
+      "primo",
+    );
+    expect((storage.readCredential("openai") as ApiKeyCredential).apiKey).toBe(
+      "secondo",
+    );
   });
 
   it("la credenziale sopravvive a un ricaricamento del modulo (stessa home + passphrase)", async () => {
@@ -300,7 +353,9 @@ describe("Storage — round-trip su disco", () => {
     process.env.JHT_CREDENTIALS_KEY = "segreto-stabile";
     vi.resetModules();
     const reloaded: StorageModule = await importStorage();
-    expect((reloaded.readCredential("kimi") as ApiKeyCredential).apiKey).toBe("sk-kimi-persist");
+    expect((reloaded.readCredential("kimi") as ApiKeyCredential).apiKey).toBe(
+      "sk-kimi-persist",
+    );
   });
 });
 
@@ -367,7 +422,9 @@ describe("Storage — permessi dei file", () => {
         ...actual,
         default: actual,
         chmodSync: () => {
-          const err: NodeJS.ErrnoException = new Error("operation not permitted");
+          const err: NodeJS.ErrnoException = new Error(
+            "operation not permitted",
+          );
           err.code = "EPERM";
           throw err;
         },
@@ -418,7 +475,9 @@ describe("Storage — file corrotto e passphrase sbagliata", () => {
   it("JSON non parsabile → null", async () => {
     const { credDir, storage } = await withIsolatedHome();
     storage.writeCredential("claude", apiKeyCred("sk-x"));
-    writeFileSync(join(credDir, "claude.enc.json"), "{ questo non e' json", { mode: 0o600 });
+    writeFileSync(join(credDir, "claude.enc.json"), "{ questo non e' json", {
+      mode: 0o600,
+    });
     expect(storage.readCredential("claude")).toBeNull();
   });
 
@@ -470,11 +529,17 @@ describe("Storage — delete e listing", () => {
 
     storage.writeCredential("claude", apiKeyCred("a"));
     storage.writeCredential("claude_max", {
-      type: "oauth", provider: "claude_max", accessToken: "t", savedAt: 1,
+      type: "oauth",
+      provider: "claude_max",
+      accessToken: "t",
+      savedAt: 1,
     });
     writeFileSync(join(credDir, "README.txt"), "non sono una credenziale");
 
-    expect([...storage.listStoredProviders()].sort()).toEqual(["claude", "claude_max"]);
+    expect([...storage.listStoredProviders()].sort()).toEqual([
+      "claude",
+      "claude_max",
+    ]);
   });
 });
 
@@ -482,8 +547,9 @@ describe("Storage — passphrase mancante", () => {
   it("writeCredential lancia MissingPassphraseError se nessuna sorgente la fornisce", async () => {
     const { credDir, storage } = await withIsolatedHome(null);
 
-    expect(() => storage.writeCredential("claude", apiKeyCred("sk-no-pass")))
-      .toThrowError(/passphrase non trovata/i);
+    expect(() =>
+      storage.writeCredential("claude", apiKeyCred("sk-no-pass")),
+    ).toThrowError(/passphrase non trovata/i);
     expect(existsSync(join(credDir, "claude.enc.json"))).toBe(false);
   });
 
@@ -514,7 +580,9 @@ describe("Storage — passphrase mancante", () => {
     storage: StorageModule;
     manager: ManagerModule;
   }> {
-    const { home, credDir, storage } = await withIsolatedHome("passphrase-presente");
+    const { home, credDir, storage } = await withIsolatedHome(
+      "passphrase-presente",
+    );
     storage.writeCredential("claude", apiKeyCred("sk-esiste"));
 
     process.env.JHT_HOME = home;
@@ -553,28 +621,43 @@ describe("Storage — passphrase mancante", () => {
   });
 
   it("file illeggibile + passphrase assente → corrotto vince: nessun errore di passphrase", async () => {
-    const { home, credDir, storage } = await withIsolatedHome("passphrase-presente");
+    const { home, credDir, storage } = await withIsolatedHome(
+      "passphrase-presente",
+    );
     storage.writeCredential("claude", apiKeyCred("sk-x"));
-    writeFileSync(join(credDir, "claude.enc.json"), "{ non json", { mode: 0o600 });
+    writeFileSync(join(credDir, "claude.enc.json"), "{ non json", {
+      mode: 0o600,
+    });
 
     process.env.JHT_HOME = home;
     delete process.env.JHT_CREDENTIALS_KEY;
     vi.resetModules();
     const reloaded: StorageModule = await importStorage();
 
-    expect(reloaded.inspectCredential("claude")).toEqual({ status: "corrupted" });
+    expect(reloaded.inspectCredential("claude")).toEqual({
+      status: "corrupted",
+    });
     expect(reloaded.readCredential("claude")).toBeNull();
   });
 
   it("inspectCredential distingue i quattro esiti senza lanciare", async () => {
     const cred = apiKeyCred("sk-inspect");
-    const { home, credDir, storage } = await withIsolatedHome("passphrase-presente");
+    const { home, credDir, storage } = await withIsolatedHome(
+      "passphrase-presente",
+    );
     storage.writeCredential("claude", cred);
 
-    expect(storage.inspectCredential("claude")).toEqual({ status: "ok", credential: cred });
+    expect(storage.inspectCredential("claude")).toEqual({
+      status: "ok",
+      credential: cred,
+    });
     expect(storage.inspectCredential("openai")).toEqual({ status: "absent" });
 
-    writeFileSync(join(credDir, "kimi.enc.json"), JSON.stringify({ apiKey: "x" }), { mode: 0o600 });
+    writeFileSync(
+      join(credDir, "kimi.enc.json"),
+      JSON.stringify({ apiKey: "x" }),
+      { mode: 0o600 },
+    );
     expect(storage.inspectCredential("kimi")).toEqual({ status: "corrupted" });
 
     process.env.JHT_HOME = home;
@@ -584,7 +667,8 @@ describe("Storage — passphrase mancante", () => {
 
     const result = reloaded.inspectCredential("claude");
     expect(result.status).toBe("missing_passphrase");
-    if (result.status !== "missing_passphrase") throw new Error("stato inatteso");
+    if (result.status !== "missing_passphrase")
+      throw new Error("stato inatteso");
     expect(result.envVar).toBe("JHT_CREDENTIALS_KEY");
     expect(result.message).toMatch(/manca la passphrase/i);
     expect(result.message).toContain("claude");
@@ -599,7 +683,9 @@ describe("Storage — passphrase mancante", () => {
     vi.resetModules();
     const reloaded: StorageModule = await importStorage();
 
-    expect(reloaded.inspectCredential("claude")).toEqual({ status: "corrupted" });
+    expect(reloaded.inspectCredential("claude")).toEqual({
+      status: "corrupted",
+    });
     expect(reloaded.readCredential("claude")).toBeNull();
   });
 
@@ -607,14 +693,19 @@ describe("Storage — passphrase mancante", () => {
     const { manager } = await credenzialeSenzaPassphrase();
 
     expectMissingPassphrase(() => manager.resolveApiKey("claude"));
-    expectMissingPassphrase(() => manager.resolveApiKey("claude", "file-first"));
+    expectMissingPassphrase(() =>
+      manager.resolveApiKey("claude", "file-first"),
+    );
     expectMissingPassphrase(() => manager.resolveCredential("claude"));
   });
 
   it("resolveOAuthToken senza passphrase lancia: il token c'è, non è leggibile", async () => {
     const { home, storage } = await withIsolatedHome("passphrase-presente");
     storage.writeCredential("claude_max", {
-      type: "oauth", provider: "claude_max", accessToken: "tok", savedAt: 1,
+      type: "oauth",
+      provider: "claude_max",
+      accessToken: "tok",
+      savedAt: 1,
     });
 
     process.env.JHT_HOME = home;
@@ -636,7 +727,9 @@ describe("Storage — passphrase mancante", () => {
     expect(resolved?.source).toBe("env");
     expect((resolved?.credential as ApiKeyCredential).apiKey).toBe("sk-da-env");
     // In file-first il file serve davvero, quindi lì l'errore deve emergere.
-    expectMissingPassphrase(() => manager.resolveApiKey("claude", "file-first"));
+    expectMissingPassphrase(() =>
+      manager.resolveApiKey("claude", "file-first"),
+    );
   });
 });
 
@@ -647,15 +740,18 @@ describe("Manager — API key e precedenza", () => {
 
     const resolved = manager.resolveApiKey("claude");
     expect(resolved?.source).toBe("file");
-    expect((resolved?.credential as ApiKeyCredential).apiKey).toBe("sk-file-123");
+    expect((resolved?.credential as ApiKeyCredential).apiKey).toBe(
+      "sk-file-123",
+    );
     expect(resolved?.credential.type).toBe("api_key");
   });
 
   it("saveApiKey trimma la chiave e rifiuta quelle vuote", async () => {
     const { manager } = await withIsolatedHome();
     manager.saveApiKey("claude", "  sk-con-spazi  ");
-    expect((manager.resolveApiKey("claude")?.credential as ApiKeyCredential).apiKey)
-      .toBe("sk-con-spazi");
+    expect(
+      (manager.resolveApiKey("claude")?.credential as ApiKeyCredential).apiKey,
+    ).toBe("sk-con-spazi");
 
     expect(() => manager.saveApiKey("claude", "   ")).toThrowError(/vuota/i);
   });
@@ -677,7 +773,9 @@ describe("Manager — API key e precedenza", () => {
 
     const resolved = manager.resolveApiKey("claude", "file-first");
     expect(resolved?.source).toBe("file");
-    expect((resolved?.credential as ApiKeyCredential).apiKey).toBe("sk-da-file");
+    expect((resolved?.credential as ApiKeyCredential).apiKey).toBe(
+      "sk-da-file",
+    );
   });
 
   it("env var di soli spazi conta come assente e si cade sul file", async () => {
@@ -704,8 +802,12 @@ describe("Manager — API key e precedenza", () => {
 
   it("provider non API-key → errore esplicito su save e resolve", async () => {
     const { manager } = await withIsolatedHome();
-    const bogus = "claude_max" as unknown as Parameters<typeof manager.saveApiKey>[0];
-    expect(() => manager.saveApiKey(bogus, "sk-x")).toThrowError(/non supportato/i);
+    const bogus = "claude_max" as unknown as Parameters<
+      typeof manager.saveApiKey
+    >[0];
+    expect(() => manager.saveApiKey(bogus, "sk-x")).toThrowError(
+      /non supportato/i,
+    );
     expect(() => manager.resolveApiKey(bogus)).toThrowError(/non supportato/i);
   });
 
@@ -721,7 +823,12 @@ describe("Manager — API key e precedenza", () => {
 describe("Manager — OAuth", () => {
   it("saveOAuthToken → resolveOAuthToken restituisce i token e isExpired=false se la scadenza è futura", async () => {
     const { manager } = await withIsolatedHome();
-    manager.saveOAuthToken("claude_max", "tok-1", "ref-1", Date.now() + 3_600_000);
+    manager.saveOAuthToken(
+      "claude_max",
+      "tok-1",
+      "ref-1",
+      Date.now() + 3_600_000,
+    );
 
     const resolved = manager.resolveOAuthToken("claude_max");
     expect(resolved?.accessToken).toBe("tok-1");
@@ -731,7 +838,12 @@ describe("Manager — OAuth", () => {
 
   it("scadenza nel passato → isExpired=true (il token resta leggibile)", async () => {
     const { manager } = await withIsolatedHome();
-    manager.saveOAuthToken("chatgpt_pro", "tok-vecchio", undefined, Date.now() - 1_000);
+    manager.saveOAuthToken(
+      "chatgpt_pro",
+      "tok-vecchio",
+      undefined,
+      Date.now() - 1_000,
+    );
 
     const resolved = manager.resolveOAuthToken("chatgpt_pro");
     expect(resolved?.isExpired).toBe(true);
@@ -746,11 +858,19 @@ describe("Manager — OAuth", () => {
 
   it("access token vuoto → errore; provider non OAuth → errore", async () => {
     const { manager } = await withIsolatedHome();
-    expect(() => manager.saveOAuthToken("claude_max", "  ")).toThrowError(/vuoto/i);
+    expect(() => manager.saveOAuthToken("claude_max", "  ")).toThrowError(
+      /vuoto/i,
+    );
 
-    const bogus = "claude" as unknown as Parameters<typeof manager.saveOAuthToken>[0];
-    expect(() => manager.saveOAuthToken(bogus, "tok")).toThrowError(/non supportato/i);
-    expect(() => manager.resolveOAuthToken(bogus)).toThrowError(/non supportato/i);
+    const bogus = "claude" as unknown as Parameters<
+      typeof manager.saveOAuthToken
+    >[0];
+    expect(() => manager.saveOAuthToken(bogus, "tok")).toThrowError(
+      /non supportato/i,
+    );
+    expect(() => manager.resolveOAuthToken(bogus)).toThrowError(
+      /non supportato/i,
+    );
   });
 
   it("nessun token salvato → null, e deleteOAuthToken riflette l'esistenza del file", async () => {
@@ -768,14 +888,26 @@ describe("Manager — validazione provider sulle delete", () => {
   it("deleteApiKey e deleteOAuthToken rifiutano i provider fuori dal loro insieme", async () => {
     const { manager } = await withIsolatedHome();
 
-    const oauthComeApiKey = "claude_max" as unknown as Parameters<typeof manager.deleteApiKey>[0];
-    expect(() => manager.deleteApiKey(oauthComeApiKey)).toThrowError(/non supportato/i);
+    const oauthComeApiKey = "claude_max" as unknown as Parameters<
+      typeof manager.deleteApiKey
+    >[0];
+    expect(() => manager.deleteApiKey(oauthComeApiKey)).toThrowError(
+      /non supportato/i,
+    );
 
-    const apiKeyComeOauth = "claude" as unknown as Parameters<typeof manager.deleteOAuthToken>[0];
-    expect(() => manager.deleteOAuthToken(apiKeyComeOauth)).toThrowError(/non supportato/i);
+    const apiKeyComeOauth = "claude" as unknown as Parameters<
+      typeof manager.deleteOAuthToken
+    >[0];
+    expect(() => manager.deleteOAuthToken(apiKeyComeOauth)).toThrowError(
+      /non supportato/i,
+    );
 
-    const sconosciuto = "gemini" as unknown as Parameters<typeof manager.deleteApiKey>[0];
-    expect(() => manager.deleteApiKey(sconosciuto)).toThrowError(/non supportato/i);
+    const sconosciuto = "gemini" as unknown as Parameters<
+      typeof manager.deleteApiKey
+    >[0];
+    expect(() => manager.deleteApiKey(sconosciuto)).toThrowError(
+      /non supportato/i,
+    );
   });
 
   it("una stringa arbitraria non arriva mai al path del file", async () => {
@@ -786,8 +918,12 @@ describe("Manager — validazione provider sulle delete", () => {
     const fuori = join(home, "altro.enc.json");
     writeFileSync(fuori, "non sono una credenziale", { mode: 0o600 });
 
-    const traversal = "../altro" as unknown as Parameters<typeof manager.deleteApiKey>[0];
-    expect(() => manager.deleteApiKey(traversal)).toThrowError(/non supportato/i);
+    const traversal = "../altro" as unknown as Parameters<
+      typeof manager.deleteApiKey
+    >[0];
+    expect(() => manager.deleteApiKey(traversal)).toThrowError(
+      /non supportato/i,
+    );
     expect(existsSync(fuori)).toBe(true);
   });
 });
@@ -808,7 +944,9 @@ describe("Manager — interfaccia unificata", () => {
     // isExpired è un campo calcolato: non deve finire nella credenziale.
     expect(oauth?.credential).not.toHaveProperty("isExpired");
 
-    const bogus = "gemini" as unknown as Parameters<typeof manager.resolveCredential>[0];
+    const bogus = "gemini" as unknown as Parameters<
+      typeof manager.resolveCredential
+    >[0];
     expect(() => manager.resolveCredential(bogus)).toThrowError(/sconosciuto/i);
   });
 
@@ -818,7 +956,9 @@ describe("Manager — interfaccia unificata", () => {
     process.env[ENV_VAR_MAP.claude] = "sk-env";
 
     expect(manager.resolveCredential("claude")?.source).toBe("env");
-    expect(manager.resolveCredential("claude", "file-first")?.source).toBe("file");
+    expect(manager.resolveCredential("claude", "file-first")?.source).toBe(
+      "file",
+    );
   });
 
   it("listConfiguredProviders distingue env, file e OAuth", async () => {
@@ -830,9 +970,21 @@ describe("Manager — interfaccia unificata", () => {
     manager.saveOAuthToken("chatgpt_pro", "tok");
 
     const configured = manager.listConfiguredProviders();
-    expect(configured).toContainEqual({ provider: "claude", type: "api_key", source: "file" });
-    expect(configured).toContainEqual({ provider: "openai", type: "api_key", source: "env" });
-    expect(configured).toContainEqual({ provider: "chatgpt_pro", type: "oauth", source: "file" });
+    expect(configured).toContainEqual({
+      provider: "claude",
+      type: "api_key",
+      source: "file",
+    });
+    expect(configured).toContainEqual({
+      provider: "openai",
+      type: "api_key",
+      source: "env",
+    });
+    expect(configured).toContainEqual({
+      provider: "chatgpt_pro",
+      type: "oauth",
+      source: "file",
+    });
     expect(configured.find((c) => c.provider === "kimi")).toBeUndefined();
   });
 
@@ -841,8 +993,12 @@ describe("Manager — interfaccia unificata", () => {
     manager.saveApiKey("kimi", "sk-file");
     process.env[ENV_VAR_MAP.kimi] = "sk-env";
 
-    const kimi = manager.listConfiguredProviders().filter((c) => c.provider === "kimi");
-    expect(kimi).toEqual([{ provider: "kimi", type: "api_key", source: "env" }]);
+    const kimi = manager
+      .listConfiguredProviders()
+      .filter((c) => c.provider === "kimi");
+    expect(kimi).toEqual([
+      { provider: "kimi", type: "api_key", source: "env" },
+    ]);
   });
 });
 
@@ -858,31 +1014,47 @@ describe("Passphrase — resolveJhtPassphrase", () => {
 
   it("rispetta un nome di env var custom", () => {
     process.env.JHT_ENCRYPTION_KEY = "segreto-legacy";
-    expect(resolveJhtPassphrase({ ...NO_KEYRING, envVar: "JHT_ENCRYPTION_KEY" }))
-      .toBe("segreto-legacy");
+    expect(
+      resolveJhtPassphrase({ ...NO_KEYRING, envVar: "JHT_ENCRYPTION_KEY" }),
+    ).toBe("segreto-legacy");
   });
 
   it("usa le legacy env var solo se la primaria manca", () => {
     process.env.JHT_ENCRYPTION_KEY = "legacy";
-    expect(resolveJhtPassphrase({ ...NO_KEYRING, legacyEnvVars: ["JHT_ENCRYPTION_KEY"] }))
-      .toBe("legacy");
+    expect(
+      resolveJhtPassphrase({
+        ...NO_KEYRING,
+        legacyEnvVars: ["JHT_ENCRYPTION_KEY"],
+      }),
+    ).toBe("legacy");
 
     process.env.JHT_CREDENTIALS_KEY = "primaria";
-    expect(resolveJhtPassphrase({ ...NO_KEYRING, legacyEnvVars: ["JHT_ENCRYPTION_KEY"] }))
-      .toBe("primaria");
+    expect(
+      resolveJhtPassphrase({
+        ...NO_KEYRING,
+        legacyEnvVars: ["JHT_ENCRYPTION_KEY"],
+      }),
+    ).toBe("primaria");
   });
 
   it("un valore di soli spazi non conta come passphrase", () => {
     process.env.JHT_CREDENTIALS_KEY = "   ";
     process.env.JHT_ENCRYPTION_KEY = "legacy-vero";
-    expect(resolveJhtPassphrase({ ...NO_KEYRING, legacyEnvVars: ["JHT_ENCRYPTION_KEY"] }))
-      .toBe("legacy-vero");
+    expect(
+      resolveJhtPassphrase({
+        ...NO_KEYRING,
+        legacyEnvVars: ["JHT_ENCRYPTION_KEY"],
+      }),
+    ).toBe("legacy-vero");
   });
 
   it("nessuna sorgente → MissingPassphraseError con istruzioni che nominano l'env var", () => {
     let caught: unknown;
     try {
-      resolveJhtPassphrase({ ...NO_KEYRING, envVar: "JHT_TEST_PASSPHRASE_VAR" });
+      resolveJhtPassphrase({
+        ...NO_KEYRING,
+        envVar: "JHT_TEST_PASSPHRASE_VAR",
+      });
     } catch (e) {
       caught = e;
     }

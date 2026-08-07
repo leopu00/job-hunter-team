@@ -335,14 +335,11 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "created_at",
     "updated_at",
   ],
-  team_state_history: [
-    "id",
-    "field",
-    "old_value",
-    "new_value",
-    "changed_at",
-    "changed_by",
-  ],
+  // Senza `old_value` e `new_value`: quella tabella registra il cambio di
+  // un campo qualsiasi, e fra i campi c'è `restart_token` — quindi lo
+  // storico contiene token veri, solo passati. Restano il nome del campo e
+  // quando è cambiato, che è l'informazione utile a chi rilegge.
+  team_state_history: ["id", "field", "changed_at", "changed_by"],
   team_commands: [
     "id",
     "action",
@@ -391,8 +388,9 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "created_at",
   ],
   // Senza `approved_token` e `approved_token_id`.
+  // Senza `device_code`: è il segreto con cui un dispositivo reclama la
+  // sessione, quindi bearer-like anche se il nome dice «code».
   cloud_sync_pairing_sessions: [
-    "device_code",
     "status",
     "approved_at",
     "consumed_at",
@@ -419,8 +417,15 @@ export const FORBIDDEN_EXPORT_FIELDS = [
   "approved_token_id",
   "restart_token",
   "last_restart_token",
-  "ciphertext",
-  "kdf_salt",
-  "cipher_iv",
-  "cipher_auth_tag",
+  // Bearer-like: con questo un dispositivo reclama la sessione di pairing.
+  "device_code",
+  // Lo storico dei cambi di stato può contenere il valore di
+  // `restart_token`: fuori i valori, resta il nome del campo.
+  "old_value",
+  "new_value",
 ] as const;
+
+// NOTA: il materiale crittografico di `encrypted_user_blobs` NON è in
+// questo elenco, ed è voluto. È dato dell'utente cifrato con una chiave
+// che non possediamo: senza l'envelope completo l'export non sarebbe
+// portabile. Escluderlo sarebbe prudenza apparente e danno reale.
