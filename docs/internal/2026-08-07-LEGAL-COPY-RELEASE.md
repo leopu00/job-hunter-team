@@ -205,9 +205,11 @@ owned by your cloud account. The export includes your account and basic profile
 data; structured profile and contact data; experience, education, skills,
 languages, authorizations, and preferences; companies, positions, scores,
 applications, and feedback; team state, messages, directives, commands,
-settings, and history; and device, synchronization, and file-index metadata. It
-does not include token secrets, provider credentials, files that exist only in
-your local or VPS workspace, or data held independently by an AI provider.
+settings, and history; device, synchronization, and file-index metadata; and
+client-encrypted configuration blobs in their portable encrypted envelope. It
+does not include plaintext token secrets or provider credentials, files that
+exist only in your local or VPS workspace, or data held independently by an AI
+provider.
 
 Under **Delete your account**, choose **Show me what will be deleted**, review
 the preview, enter your account email, and choose **Delete permanently**. This
