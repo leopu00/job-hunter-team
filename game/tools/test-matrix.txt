@@ -155,6 +155,10 @@ idle_pace|script|gate|any|-|tools/idle_pace_selftest.gd|-
 # Windows, cioe' un bug introdotto da chi sviluppa su macOS o Linux passava il
 # semaforo di due OS su tre.
 payload_syntax|python|gate|any|-|tools/python_payload_syntax_test.py|-
+# Il path artifact arriva dal DB, quindi dal container: soltanto le quattro
+# root documenti canoniche, nessuna traversal/symlink, tipo dichiarato e PDF
+# attestato prima che un byte possa raggiungere cache o viewer dell'host.
+artifact_fetch|python|gate|posix|-|tools/artifact_fetch_selftest.py|ARTIFACT-FETCH-SECURITY-TEST PASS
 character_sheets|python|gate|any|-|tools/audit_character_sheets.py|-
 instance_portraits|python|gate|any|-|tools/audit_instance_portraits.py|-
 

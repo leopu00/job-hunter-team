@@ -1573,6 +1573,7 @@ const S := {
 	"vps.response_unreadable": "a VPS válasza nem olvasható",
 	"vps.artifact.path_outside": "az elérési út az adatterületeken kívül van",
 	"vps.artifact.file_missing": "a fájl nem található a konténerben",
+	"vps.artifact.invalid": "a dokumentum elutasítva: érvénytelen elérési út, típus vagy tartalom",
 	"vps.ticket.position_missing": "a pozíció nem létezik",
 	"vps.ssh.failed": "az SSH sikertelen (kilépési kód: %s)",
 	"vps.ssh.key_missing": "Az SSH-kulcs nem található: %s",
