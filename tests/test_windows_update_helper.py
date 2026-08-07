@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-import os
+import hashlib
 import json
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -301,6 +303,142 @@ def _directory_acl_is_protected(path: Path) -> bool:
     return observed.stdout == "True"
 
 
+def _is_reparse(path: Path) -> bool:
+    return path.is_symlink() or bool(
+        hasattr(os.path, "isjunction") and os.path.isjunction(path)
+    )
+
+
+def _tree_snapshot(root: Path) -> tuple[tuple[object, ...], ...]:
+    if _is_reparse(root):
+        metadata = root.lstat()
+        return ((".", "reparse", metadata.st_size, metadata.st_nlink),)
+    observed: list[tuple[object, ...]] = []
+
+    def visit(directory: Path) -> None:
+        for entry in sorted(os.scandir(directory), key=lambda item: item.name):
+            path = Path(entry.path)
+            relative = path.relative_to(root).as_posix()
+            metadata = entry.stat(follow_symlinks=False)
+            if _is_reparse(path):
+                observed.append((relative, "reparse", metadata.st_size, metadata.st_nlink))
+            elif stat.S_ISDIR(metadata.st_mode):
+                observed.append((relative, "directory", metadata.st_nlink))
+                visit(path)
+            elif stat.S_ISREG(metadata.st_mode):
+                observed.append(
+                    (
+                        relative,
+                        "file",
+                        metadata.st_size,
+                        metadata.st_nlink,
+                        hashlib.sha256(path.read_bytes()).hexdigest(),
+                    )
+                )
+            else:
+                observed.append((relative, "other", metadata.st_size))
+
+    visit(root)
+    return tuple(observed)
+
+
+def _sddl_digest(path: Path) -> str:
+    raw = _run_powershell_command(
+        "$full=[IO.Path]::GetFullPath($env:JHT_TEST_ACL_PATH);"
+        "$item=if([IO.Directory]::Exists($full)){[IO.DirectoryInfo]::new($full)}"
+        "elseif([IO.File]::Exists($full)){[IO.FileInfo]::new($full)}"
+        "else{throw 'snapshot node missing'};"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "[Console]::Out.Write($acl.GetSecurityDescriptorSddlForm("
+        "[Security.AccessControl.AccessControlSections]::All))",
+        env_values={"JHT_TEST_ACL_PATH": str(path)},
+        capture_output=True,
+    ).stdout
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _authority_census(path: Path) -> dict[str, object]:
+    raw = _run_powershell_command(
+        "$full=[IO.Path]::GetFullPath($env:JHT_TEST_AUTHORITY_PATH);"
+        "$item=if([IO.Directory]::Exists($full)){[IO.DirectoryInfo]::new($full)}"
+        "elseif([IO.File]::Exists($full)){[IO.FileInfo]::new($full)}"
+        "else{throw 'authority node missing'};"
+        "$reparse=$false;$probe=$item;while($null -ne $probe){"
+        "if(($probe.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){"
+        "$reparse=$true;break};$parent=$probe.Parent;"
+        "if($null -eq $parent -or $parent.FullName -eq $probe.FullName){break};"
+        "$probe=$parent};"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "$current=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;"
+        "$owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value;"
+        "$mask=[Security.AccessControl.FileSystemRights]::WriteData -bor "
+        "[Security.AccessControl.FileSystemRights]::AppendData -bor "
+        "[Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor "
+        "[Security.AccessControl.FileSystemRights]::WriteAttributes -bor "
+        "[Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor "
+        "[Security.AccessControl.FileSystemRights]::Delete -bor "
+        "[Security.AccessControl.FileSystemRights]::ChangePermissions -bor "
+        "[Security.AccessControl.FileSystemRights]::TakeOwnership;"
+        "$foreign=0;foreach($rule in $acl.GetAccessRules("
+        "$true,$true,[Security.Principal.SecurityIdentifier])){"
+        "if($rule.AccessControlType -ne 'Allow' -or "
+        "(([Security.AccessControl.FileSystemRights]$rule.FileSystemRights "
+        "-band $mask) -eq 0)){continue};$sid=$rule.IdentityReference.Value;"
+        "if($sid -notin @($current,'S-1-5-18','S-1-5-32-544')){$foreign++}};"
+        "[ordered]@{directory=[bool]$item.PSIsContainer;"
+        "owner_current=($owner -eq $current);"
+        "acl_protected=[bool]$acl.AreAccessRulesProtected;"
+        "reparse_ancestor=$reparse;foreign_mutating=$foreign} | "
+        "ConvertTo-Json -Compress",
+        env_values={"JHT_TEST_AUTHORITY_PATH": str(path)},
+        capture_output=True,
+    ).stdout
+    census = json.loads(raw)
+    assert isinstance(census, dict)
+    return census
+
+
+def _assert_authority(
+    label: str,
+    path: Path,
+    *,
+    directory: bool,
+    protected: bool | None,
+    foreign_mutating: int = 0,
+) -> None:
+    census = _authority_census(path)
+    expected = {
+        "directory": directory,
+        "owner_current": True,
+        "reparse_ancestor": False,
+        "foreign_mutating": foreign_mutating,
+    }
+    for key, value in expected.items():
+        assert census.get(key) == value, f"{label} authority={census}"
+    if protected is not None:
+        assert census.get("acl_protected") == protected, (
+            f"{label} authority={census}"
+        )
+
+
+def _side_effect_snapshot(
+    target_dir: Path, state: Path, transaction: Path
+) -> tuple[object, ...]:
+    acl_digests = tuple(
+        _sddl_digest(path)
+        for path in (target_dir, state, transaction)
+        if path.exists() and not _is_reparse(path)
+    )
+    return (
+        _tree_snapshot(target_dir),
+        _tree_snapshot(state),
+        _tree_snapshot(transaction),
+        acl_digests,
+    )
+
+
 def test_acl_fixture_treats_path_with_spaces_as_data(tmp_path: Path) -> None:
     protected = tmp_path / "protected ';&$() path with spaces"
     protected.mkdir()
@@ -386,6 +524,8 @@ def _run_verify(
             },
         )
     else:
+        real_local_app_data = Path(os.environ["LOCALAPPDATA"]).resolve()
+        assert tmp_path.resolve().is_relative_to(real_local_app_data)
         local_authority = tmp_path / "local-app-data"
         local_authority.mkdir()
         _protect_directory(local_authority)
@@ -538,6 +678,49 @@ def _run_verify(
             env_values={"JHT_TEST_ACL_PATH": str(transaction)},
         )
 
+    if consumer_inherited_state:
+        expected_foreign = 1 if mutation in FOREIGN_ACL_MUTATIONS else 0
+        _assert_authority(
+            "target_dir", target_dir, directory=True, protected=True
+        )
+        _assert_authority(
+            "state", state, directory=True, protected=False
+        )
+        _assert_authority(
+            "transaction",
+            transaction,
+            directory=True,
+            protected=False,
+            foreign_mutating=expected_foreign,
+        )
+        authority_files = {
+            "helper": helper,
+            "target": target,
+            "installed_manifest": target_dir / "RELEASE-MANIFEST.json",
+            "installed_signature": target_dir / "RELEASE-MANIFEST.json.sig",
+            "candidate": candidate,
+            "candidate_helper": transaction / HELPER,
+            "candidate_manifest": transaction / "RELEASE-MANIFEST.json",
+            "candidate_signature": transaction / "RELEASE-MANIFEST.json.sig",
+        }
+        for label, authority_path in authority_files.items():
+            if authority_path.exists():
+                _assert_authority(
+                    label,
+                    authority_path,
+                    directory=False,
+                    protected=None,
+                )
+
+    expected_success = (
+        candidate_version == "0.3.7"
+        and mutation in {"none", "foreign-read-ace"}
+    )
+    before_side_effects = (
+        None
+        if expected_success
+        else _side_effect_snapshot(target_dir, state, transaction)
+    )
     process = subprocess.Popen(
         [str(target), "-t", "127.0.0.1"],
         stdout=subprocess.DEVNULL,
@@ -581,6 +764,10 @@ def _run_verify(
             timeout=30,
             env=helper_env,
         )
+        if before_side_effects is not None:
+            assert _side_effect_snapshot(target_dir, state, transaction) == (
+                before_side_effects
+            )
     finally:
         process.terminate()
         try:
@@ -911,6 +1098,9 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
     target_dir = tmp_path / "installed"
     target_dir.mkdir()
     _protect_directory(target_dir)
+    assert tmp_path.resolve().is_relative_to(
+        Path(os.environ["LOCALAPPDATA"]).resolve()
+    )
     local_authority = tmp_path / "local-app-data"
     local_authority.mkdir()
     _protect_directory(local_authority)
@@ -969,6 +1159,24 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         transaction / "RELEASE-MANIFEST.json.sig",
     ):
         _set_current_owner(owned_path)
+    _assert_authority("target_dir", target_dir, directory=True, protected=True)
+    _assert_authority("state", state, directory=True, protected=False)
+    _assert_authority(
+        "transaction", transaction, directory=True, protected=False
+    )
+    for label, authority_path in (
+        ("helper", helper),
+        ("target", target),
+        ("installed_manifest", target_dir / "RELEASE-MANIFEST.json"),
+        ("installed_signature", target_dir / "RELEASE-MANIFEST.json.sig"),
+        ("candidate", candidate),
+        ("candidate_helper", transaction / HELPER),
+        ("candidate_manifest", transaction / "RELEASE-MANIFEST.json"),
+        ("candidate_signature", transaction / "RELEASE-MANIFEST.json.sig"),
+    ):
+        _assert_authority(
+            label, authority_path, directory=False, protected=None
+        )
 
     old = subprocess.Popen(
         [str(target), "-t", "127.0.0.1"],

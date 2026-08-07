@@ -574,7 +574,7 @@ function Assert-OwnerAndAcl {
   if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected node is a reparse point' }
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
   $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
-  $ownerSid = ([Security.Principal.NTAccount]$acl.Owner).Translate([Security.Principal.SecurityIdentifier]).Value
+  $ownerSid = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
   if ($ownerSid -ne $currentSid) { throw 'protected node has a foreign owner' }
   if ($Directory -and -not $acl.AreAccessRulesProtected) { throw 'protected directory inherits its DACL' }
   Assert-NoForeignWriteAcl $Path
@@ -585,12 +585,12 @@ function Assert-NoForeignWriteAcl {
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
   $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
-  foreach ($rule in $acl.Access) {
+  foreach ($rule in $acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])) {
     if ($rule.AccessControlType -ne 'Allow') { continue }
     $rights = [Security.AccessControl.FileSystemRights]$rule.FileSystemRights
     $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor [Security.AccessControl.FileSystemRights]::AppendData -bor [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor [Security.AccessControl.FileSystemRights]::WriteAttributes -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership
     if (($rights -band $writeMask) -eq 0) { continue }
-    $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+    $sid = $rule.IdentityReference.Value
     if ($sid -notin @($currentSid, 'S-1-5-18', 'S-1-5-32-544')) { throw 'protected node grants write to another principal' }
   }
 }
@@ -601,7 +601,7 @@ function Assert-CurrentOwner {
   if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected node is a reparse point' }
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
   $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
-  $ownerSid = ([Security.Principal.NTAccount]$acl.Owner).Translate([Security.Principal.SecurityIdentifier]).Value
+  $ownerSid = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
   if ($ownerSid -ne $currentSid) { throw 'protected node has a foreign owner' }
 }
 

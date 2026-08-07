@@ -15,22 +15,16 @@ param(
 
   [switch]$Smoke,
 
-  # Read-only CI seam: exercises the exact ACL assertion used immediately
-  # before packaging without requiring an export, signature, or NSIS build.
-  [string]$AssertProtectedDirectoryPath = ''
+  # CI seam: Initialize exercises the real creation/protection path; Assert is
+  # read-only. Neither mode requires an export, signature, or NSIS build.
+  [ValidateSet('', 'Initialize', 'Assert')]
+  [string]$AclSelfTestMode = '',
+
+  [string]$AclSelfTestPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
-$gameDir = Join-Path $root 'game'
-$portable = Join-Path $gameDir 'builds/windows/job-hunter-team.exe'
-$setup = Join-Path $gameDir 'builds/windows/job-hunter-team-windows-x64-setup.exe'
-$nsi = Join-Path $gameDir 'installer/windows.nsi'
-$numericVersion = (($Version -split '-', 2)[0]) + '.0'
-$authoritySource = [IO.Path]::GetFullPath($AuthorityDirectory)
-$stagingRoot = Join-Path $env:LOCALAPPDATA ('Job Hunter Team\installer-authority-' + [guid]::NewGuid().ToString('N'))
-$authority = [IO.Path]::GetFullPath($stagingRoot)
-$authorityFiles = @()
+Set-StrictMode -Version 2.0
 
 function Assert-NoReparseAncestors {
   param([string]$Path)
@@ -52,9 +46,16 @@ function Initialize-ProtectedDirectory {
   Assert-NoReparseAncestors $Path
   $item = [IO.DirectoryInfo]::new([IO.Path]::GetFullPath($Path))
   $acl = [IO.FileSystemAclExtensions]::GetAccessControl($item, [Security.AccessControl.AccessControlSections]::All)
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $acl.SetOwner($currentSid)
   $acl.SetAccessRuleProtection($true, $false)
+  foreach ($identity in @($acl.GetAccessRules(
+      $true, $true, [Security.Principal.SecurityIdentifier]) |
+      ForEach-Object { $_.IdentityReference } | Select-Object -Unique)) {
+    $acl.PurgeAccessRules($identity)
+  }
   $rule = [Security.AccessControl.FileSystemAccessRule]::new(
-    [Security.Principal.WindowsIdentity]::GetCurrent().User,
+    $currentSid,
     [Security.AccessControl.FileSystemRights]::FullControl,
     [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit',
     [Security.AccessControl.PropagationFlags]::None,
@@ -71,12 +72,13 @@ function Assert-ProtectedDirectory {
   $verified = [IO.FileSystemAclExtensions]::GetAccessControl($item, [Security.AccessControl.AccessControlSections]::All)
   if (-not $verified.AreAccessRulesProtected) { throw 'Installer authority staging still inherits its DACL.' }
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-  $ownerSid = ([Security.Principal.NTAccount]$verified.Owner).Translate([Security.Principal.SecurityIdentifier]).Value
+  $ownerSid = $verified.GetOwner([Security.Principal.SecurityIdentifier]).Value
   if ($ownerSid -ne $currentSid) { throw 'Installer authority directory has a foreign owner.' }
   $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor [Security.AccessControl.FileSystemRights]::AppendData -bor [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor [Security.AccessControl.FileSystemRights]::WriteAttributes -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership
-  foreach ($rule in $verified.Access) {
+  foreach ($rule in $verified.GetAccessRules(
+      $true, $true, [Security.Principal.SecurityIdentifier])) {
     if ($rule.AccessControlType -ne 'Allow' -or (([Security.AccessControl.FileSystemRights]$rule.FileSystemRights -band $writeMask) -eq 0)) { continue }
-    $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+    $sid = $rule.IdentityReference.Value
     if ($sid -ne $currentSid) { throw 'Installer authority directory grants write to another principal.' }
   }
 }
@@ -84,11 +86,29 @@ function Assert-ProtectedDirectory {
 if (-not $IsWindows) {
   throw 'The native installer smoke must run on Windows.'
 }
-if ($AssertProtectedDirectoryPath) {
-  Assert-ProtectedDirectory $AssertProtectedDirectoryPath
-  [ordered]@{ acl = 'protected' } | ConvertTo-Json -Compress
+if ($AclSelfTestMode) {
+  if (-not $AclSelfTestPath) { throw 'ACL self-test path is required.' }
+  if ($AclSelfTestMode -eq 'Initialize') {
+    if (Test-Path -LiteralPath $AclSelfTestPath) {
+      throw 'ACL initialize self-test requires an absent directory.'
+    }
+    Initialize-ProtectedDirectory $AclSelfTestPath
+  } else {
+    Assert-ProtectedDirectory $AclSelfTestPath
+  }
+  [ordered]@{ acl = 'protected'; mode = $AclSelfTestMode } | ConvertTo-Json -Compress
   return
 }
+$root = Split-Path -Parent $PSScriptRoot
+$gameDir = Join-Path $root 'game'
+$portable = Join-Path $gameDir 'builds/windows/job-hunter-team.exe'
+$setup = Join-Path $gameDir 'builds/windows/job-hunter-team-windows-x64-setup.exe'
+$nsi = Join-Path $gameDir 'installer/windows.nsi'
+$numericVersion = (($Version -split '-', 2)[0]) + '.0'
+$authoritySource = [IO.Path]::GetFullPath($AuthorityDirectory)
+$stagingRoot = Join-Path $env:LOCALAPPDATA ('Job Hunter Team\installer-authority-' + [guid]::NewGuid().ToString('N'))
+$authority = [IO.Path]::GetFullPath($stagingRoot)
+$authorityFiles = @()
 try {
   if (-not (Test-Path -LiteralPath $portable -PathType Leaf)) {
     throw "Portable Windows export missing: $portable"

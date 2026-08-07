@@ -1,9 +1,11 @@
 """The staged Windows installer must stay safe before publication is enabled."""
 
 import json
+import hashlib
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -96,6 +98,21 @@ def test_acl_mutation_masks_remain_complete_and_in_sync() -> None:
     assert observed[0] == observed[1] == observed[2]
 
 
+def test_acl_authority_uses_typed_clr_accessors_in_all_copies() -> None:
+    for path in (PREFLIGHT, UPDATE_HELPER, BUILDER):
+        source = path.read_text()
+        assert re.search(
+            r"\.GetOwner\(\s*\[Security\.Principal\.SecurityIdentifier\]\s*\)",
+            source,
+        ), path
+        assert re.search(
+            r"\.GetAccessRules\(\s*\$true,\s*\$true,\s*"
+            r"\[Security\.Principal\.SecurityIdentifier\]\s*\)",
+            source,
+        ), path
+        assert re.search(r"\$acl\.Owner\b|\$acl\.Access\b", source) is None, path
+
+
 def _windows_powershell() -> str:
     executable = shutil.which("powershell.exe")
     if not executable:
@@ -122,6 +139,39 @@ def test_powershell_fixture_writer_is_fail_closed_from_first_instruction(
     assert fixture.read_text(encoding="utf-8").startswith(
         "$ErrorActionPreference='Stop';"
     )
+
+
+def _tree_snapshot(root: Path) -> tuple[tuple[object, ...], ...]:
+    observed: list[tuple[object, ...]] = []
+
+    def visit(directory: Path) -> None:
+        for entry in sorted(os.scandir(directory), key=lambda item: item.name):
+            path = Path(entry.path)
+            relative = path.relative_to(root).as_posix()
+            metadata = entry.stat(follow_symlinks=False)
+            is_junction = bool(
+                hasattr(os.path, "isjunction") and os.path.isjunction(path)
+            )
+            if entry.is_symlink() or is_junction:
+                observed.append((relative, "reparse", metadata.st_size, metadata.st_nlink))
+            elif stat.S_ISDIR(metadata.st_mode):
+                observed.append((relative, "directory", metadata.st_nlink))
+                visit(path)
+            elif stat.S_ISREG(metadata.st_mode):
+                observed.append(
+                    (
+                        relative,
+                        "file",
+                        metadata.st_size,
+                        metadata.st_nlink,
+                        hashlib.sha256(path.read_bytes()).hexdigest(),
+                    )
+                )
+            else:
+                observed.append((relative, "other", metadata.st_size))
+
+    visit(root)
+    return tuple(observed)
 
 
 def _run_preflight(
@@ -193,37 +243,67 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     fixture_owner = tmp_path / "set-fixture-owner.ps1"
     _write_powershell_fixture(
         fixture_owner,
-        "foreach($path in @($env:JHT_OWNER_PATHS | ConvertFrom-Json)){"
-        "$full=[IO.Path]::GetFullPath([string]$path);"
+        "$full=[IO.Path]::GetFullPath($env:JHT_OWNER_PATH);"
         "$item=if([IO.Directory]::Exists($full)){[IO.DirectoryInfo]::new($full)}"
         "elseif([IO.File]::Exists($full)){[IO.FileInfo]::new($full)}"
         "else{throw 'owner fixture path is missing'};"
         "$acl=$item.GetAccessControl("
         "[Security.AccessControl.AccessControlSections]::All);"
         "$acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User);"
-        "$item.SetAccessControl($acl)}\n",
+        "$item.SetAccessControl($acl)\n",
     )
-    fixture_owner_env = environment.copy()
-    fixture_owner_env["JHT_OWNER_PATHS"] = json.dumps(
-        [
-            str(local),
-            str(local / "Programs"),
-            str(install),
-            str(install / "job-hunter-team.exe"),
-        ]
+    fixture_owner_argv = [
+        _windows_powershell(),
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-File",
+        str(fixture_owner),
+    ]
+    for owner_path in (
+        local,
+        local / "Programs",
+        install,
+        install / "job-hunter-team.exe",
+    ):
+        fixture_owner_env = environment.copy()
+        fixture_owner_env["JHT_OWNER_PATH"] = str(owner_path)
+        subprocess.run(fixture_owner_argv, env=fixture_owner_env, check=True)
+    acl_snapshot = tmp_path / "snapshot-acl.ps1"
+    _write_powershell_fixture(
+        acl_snapshot,
+        "$full=[IO.Path]::GetFullPath($env:JHT_ACL_PATH);"
+        "$item=if([IO.Directory]::Exists($full)){[IO.DirectoryInfo]::new($full)}"
+        "elseif([IO.File]::Exists($full)){[IO.FileInfo]::new($full)}"
+        "else{throw 'snapshot path is missing'};"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "[Console]::Out.Write($acl.GetSecurityDescriptorSddlForm("
+        "[Security.AccessControl.AccessControlSections]::All))\n",
     )
-    subprocess.run(
-        [
-            _windows_powershell(),
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-File",
-            str(fixture_owner),
-        ],
-        env=fixture_owner_env,
-        check=True,
-    )
+    acl_snapshot_argv = [
+        _windows_powershell(),
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-File",
+        str(acl_snapshot),
+    ]
+
+    def security_snapshot(*acl_paths: Path) -> tuple[object, ...]:
+        digests: list[str] = []
+        for acl_path in acl_paths:
+            snapshot_env = environment.copy()
+            snapshot_env["JHT_ACL_PATH"] = str(acl_path)
+            raw = subprocess.run(
+                acl_snapshot_argv,
+                env=snapshot_env,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            digests.append(hashlib.sha256(raw.encode()).hexdigest())
+        return (_tree_snapshot(local), *digests)
     read_acl = tmp_path / "add-read-only-ace.ps1"
     _write_powershell_fixture(
         read_acl,
@@ -271,8 +351,10 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     sentinel = local / "hardlink-sentinel"
     sentinel.write_bytes(b"must-not-change")
     os.link(sentinel, helper)
+    before_security = security_snapshot(install)
     rejected = _run_preflight(install, "Prepare", environment)
     assert rejected.returncode != 0
+    assert security_snapshot(install) == before_security
     assert sentinel.read_bytes() == b"must-not-change"
     helper.unlink()
     helper.write_bytes(b"restored\n")
@@ -304,8 +386,10 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         env=fixture_env,
         check=True,
     )
+    before_security = security_snapshot(install)
     rejected = _run_preflight(install, "Prepare", environment)
     assert rejected.returncode != 0
+    assert security_snapshot(install) == before_security
     assert marker.read_bytes() == b"must-not-change"
     assert "installer node is a reparse point" in rejected.stderr
     os.rmdir(junction)
@@ -332,8 +416,10 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         check=False,
     )
     if symlink_created.returncode == 0:
+        before_security = security_snapshot(install)
         rejected = _run_preflight(install, "Prepare", environment)
         assert rejected.returncode != 0
+        assert security_snapshot(install) == before_security
         assert "installer node is a reparse point" in rejected.stderr
         assert marker.read_bytes() == b"must-not-change"
         symlink.unlink()
@@ -373,8 +459,10 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         env=owner_env,
         check=True,
     )
+    before_security = security_snapshot(install, owner_sentinel)
     rejected = _run_preflight(install, "Prepare", environment)
     assert rejected.returncode != 0
+    assert security_snapshot(install, owner_sentinel) == before_security
     assert "installer node has a foreign owner" in rejected.stderr
     assert owner_sentinel.read_bytes() == b"must-not-change"
     owner_env["JHT_OWNER_MODE"] = "current"
@@ -417,8 +505,10 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     for rights in ("WriteData", "Delete", "ChangePermissions", "TakeOwnership"):
         acl_env.update(JHT_ACL_MODE="add", JHT_ACL_RIGHTS=rights)
         subprocess.run(acl_argv, env=acl_env, check=True)
+        before_security = security_snapshot(install)
         rejected = _run_preflight(install, "Prepare", environment)
         assert rejected.returncode != 0
+        assert security_snapshot(install) == before_security
         assert "installer node grants write to another principal" in rejected.stderr
         assert (install / "job-hunter-team.exe").read_bytes() == (
             b"job-hunter-team.exe\n"
@@ -432,9 +522,6 @@ def test_builder_acl_seam_accepts_read_only_and_rejects_every_mutating_right(
     tmp_path: Path,
 ) -> None:
     authority = tmp_path / "publish authority ';&$()"
-    authority.mkdir()
-    sentinel = authority / "sentinel"
-    sentinel.write_bytes(b"must-not-change")
     acl_fixture = tmp_path / "builder-acl-fixture.ps1"
     _write_powershell_fixture(
         acl_fixture,
@@ -443,13 +530,6 @@ def test_builder_acl_seam_accepts_read_only_and_rejects_every_mutating_right(
         "[Security.AccessControl.AccessControlSections]::All);"
         "$current=[Security.Principal.WindowsIdentity]::GetCurrent().User;"
         "$foreign=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-545');"
-        "if($env:JHT_ACL_MODE -ceq 'protect'){"
-        "$acl.SetOwner($current);$acl.SetAccessRuleProtection($true,$false);"
-        "foreach($identity in @($acl.Access | ForEach-Object {$_.IdentityReference} | "
-        "Select-Object -Unique)){$acl.PurgeAccessRules($identity)};"
-        "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
-        "$current,'FullControl','ContainerInherit,ObjectInherit','None','Allow');"
-        "$acl.SetAccessRule($rule);$item.SetAccessControl($acl);exit 0};"
         "if($env:JHT_ACL_MODE -ceq 'sddl'){"
         "[Console]::Out.Write($acl.GetSecurityDescriptorSddlForm("
         "[Security.AccessControl.AccessControlSections]::All));exit 0};"
@@ -482,7 +562,7 @@ def test_builder_acl_seam_accepts_read_only_and_rejects_every_mutating_right(
             check=True,
         )
 
-    def assert_acl() -> subprocess.CompletedProcess[str]:
+    def builder_acl(mode: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 _windows_pwsh(),
@@ -495,7 +575,9 @@ def test_builder_acl_seam_accepts_read_only_and_rejects_every_mutating_right(
                 "0.0.0",
                 "-AuthorityDirectory",
                 str(tmp_path),
-                "-AssertProtectedDirectoryPath",
+                "-AclSelfTestMode",
+                mode,
+                "-AclSelfTestPath",
                 str(authority),
             ],
             env=environment,
@@ -504,22 +586,33 @@ def test_builder_acl_seam_accepts_read_only_and_rejects_every_mutating_right(
             check=False,
         )
 
-    fixture("protect")
+    initialized = builder_acl("Initialize")
+    assert initialized.returncode == 0, initialized.stderr
+    assert json.loads(initialized.stdout) == {
+        "acl": "protected",
+        "mode": "Initialize",
+    }
+    sentinel = authority / "sentinel"
+    sentinel.write_bytes(b"must-not-change")
     fixture("add", "ReadAndExecute")
-    before = fixture("sddl").stdout
-    accepted = assert_acl()
+    before = hashlib.sha256(fixture("sddl").stdout.encode()).hexdigest()
+    before_tree = _tree_snapshot(authority)
+    accepted = builder_acl("Assert")
     assert accepted.returncode == 0, accepted.stderr
-    assert json.loads(accepted.stdout)["acl"] == "protected"
-    assert fixture("sddl").stdout == before
+    assert json.loads(accepted.stdout) == {"acl": "protected", "mode": "Assert"}
+    assert hashlib.sha256(fixture("sddl").stdout.encode()).hexdigest() == before
+    assert _tree_snapshot(authority) == before_tree
     assert sentinel.read_bytes() == b"must-not-change"
 
     for right in sorted(MUTATING_ACL_RIGHTS):
         fixture("add", right)
-        before = fixture("sddl").stdout
-        rejected = assert_acl()
+        before = hashlib.sha256(fixture("sddl").stdout.encode()).hexdigest()
+        before_tree = _tree_snapshot(authority)
+        rejected = builder_acl("Assert")
         assert rejected.returncode != 0
         assert "grants write to another principal" in rejected.stderr
-        assert fixture("sddl").stdout == before
+        assert hashlib.sha256(fixture("sddl").stdout.encode()).hexdigest() == before
+        assert _tree_snapshot(authority) == before_tree
         assert sentinel.read_bytes() == b"must-not-change"
         fixture("remove", right)
 
@@ -540,7 +633,8 @@ def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
         "Assert-NoReparseAncestors",
         "Initialize-ProtectedDirectory",
         "Assert-ProtectedDirectory",
-        "AssertProtectedDirectoryPath",
+        "AclSelfTestMode",
+        "AclSelfTestPath",
         "FileSystemAclExtensions",
         "verify_artifact_files",
         "Signed release artifacts changed before packaging",
@@ -550,6 +644,13 @@ def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
         "Installer mutated the hardlink sentinel before failing",
     ):
         assert seam in source
+    assert source.index("if ($AclSelfTestMode)") < source.index(
+        "$root = Split-Path"
+    )
+    assert "Initialize-ProtectedDirectory $AclSelfTestPath" in source
+    assert "$acl.SetOwner($currentSid)" in source
+    assert "$verified.GetOwner([Security.Principal.SecurityIdentifier])" in source
+    assert "$verified.GetAccessRules(" in source
 
 
 def test_release_publishes_setup_primary_and_portable_secondary() -> None:

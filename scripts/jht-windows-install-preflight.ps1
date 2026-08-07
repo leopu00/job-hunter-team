@@ -116,7 +116,7 @@ function Assert-OwnerAndAcl {
   param([IO.FileSystemInfo]$Node, [switch]$RequireProtected)
   $acl = Get-NodeAcl $Node
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-  $ownerSid = ([Security.Principal.NTAccount]$acl.Owner).Translate(
+  $ownerSid = $acl.GetOwner(
     [Security.Principal.SecurityIdentifier]).Value
   if ($ownerSid -ne $currentSid) { throw 'installer node has a foreign owner' }
   if ($RequireProtected -and -not $acl.AreAccessRulesProtected) {
@@ -130,12 +130,12 @@ function Assert-OwnerAndAcl {
     [Security.AccessControl.FileSystemRights]::Delete -bor
     [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
     [Security.AccessControl.FileSystemRights]::TakeOwnership
-  foreach ($rule in $acl.Access) {
+  foreach ($rule in $acl.GetAccessRules(
+      $true, $true, [Security.Principal.SecurityIdentifier])) {
     if ($rule.AccessControlType -ne 'Allow') { continue }
     $rights = [Security.AccessControl.FileSystemRights]$rule.FileSystemRights
     if (($rights -band $writeMask) -eq 0) { continue }
-    $sid = $rule.IdentityReference.Translate(
-      [Security.Principal.SecurityIdentifier]).Value
+    $sid = $rule.IdentityReference.Value
     if ($sid -notin @($currentSid, 'S-1-5-18', 'S-1-5-32-544')) {
       throw 'installer node grants write to another principal'
     }
