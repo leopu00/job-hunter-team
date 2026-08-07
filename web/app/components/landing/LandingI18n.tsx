@@ -64,7 +64,11 @@ const translations = {
     hu: "Studies",
   },
   nav_project: { it: "Il progetto", en: "Project", hu: "Projekt" },
-  nav_tutorials: { it: "Tutorial", en: "Tutorials", hu: "Oktatóanyagok" },
+  nav_get_started: {
+    it: "Inizia",
+    en: "Get started",
+    hu: "Első lépések",
+  },
   nav_login: { it: "Accedi", en: "Sign in", hu: "Bejelentkezés" },
 
   // Hero
@@ -106,7 +110,7 @@ const translations = {
   footer_product: { it: "Prodotto", en: "Product", hu: "Termék" },
   footer_stats: { it: "Progetto", en: "Project", hu: "Projekt" },
   footer_resources: { it: "Risorse", en: "Resources", hu: "Források" },
-  footer_tutorials: { it: "Tutorial", en: "Tutorials", hu: "Oktatóanyagok" },
+  footer_credits: { it: "Crediti", en: "Credits", hu: "Kreditek" },
   footer_contacts: { it: "Contatti", en: "Contacts", hu: "Kapcsolat" },
   footer_instagram_aria: {
     it: "Job Hunter Team su Instagram",
@@ -143,9 +147,6 @@ const translations = {
     en: "Open Source under MIT License",
     hu: "Nyílt forráskód MIT licenc alatt",
   },
-  tutorials_title: { it: "Tutorial", en: "Tutorials", hu: "Oktatóanyagok" },
-  tutorial_game_title: { it: "Gioco", en: "Game", hu: "Játék" },
-  tutorial_web_title: { it: "Web", en: "Web", hu: "Web" },
   trailer_title: { it: "Trailer", en: "Trailer", hu: "Előzetes" },
   theme_system: { it: "sistema", en: "system", hu: "rendszer" },
   theme_dark: { it: "notte", en: "night", hu: "éjszaka" },
@@ -201,14 +202,14 @@ const translations = {
     hu: "macOS-en az app aláírt és notarizált: dupla kattintással megnyílik. Windowson nincs aláírva, ezért a SmartScreen kiírja: „A Windows megvédte a számítógépét” — kattints a „További információk”, majd a „Futtatás mindenképp” gombra. Linuxon csomagold ki az archívumot és tedd futtathatóvá.",
   },
   dl_help_text: {
-    it: "Non sai dove installarlo?",
-    en: "Not sure where to install it?",
-    hu: "Nem tudod, hová telepítsd?",
+    it: "Hai scaricato l'app?",
+    en: "Downloaded the app?",
+    hu: "Letöltötted az appot?",
   },
   dl_help_link: {
-    it: "Leggi la guida",
-    en: "Read the guide",
-    hu: "Olvasd el az útmutatót",
+    it: "Segui la configurazione passo passo",
+    en: "Follow the step-by-step setup",
+    hu: "Kövesd a beállítást lépésről lépésre",
   },
 
   // ─── Login page (LandingClient) ───────────────────────────────────
@@ -349,9 +350,9 @@ const translations = {
 } as const;
 
 type StringKeys = {
-  [K in keyof typeof translations]: (typeof translations)[K]["it"] extends string
-    ? K
-    : never;
+  [
+    K in keyof typeof translations
+  ]: (typeof translations)[K]["it"] extends string ? K : never;
 }[keyof typeof translations];
 interface I18nCtx {
   lang: Lang;

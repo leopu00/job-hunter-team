@@ -114,6 +114,36 @@ test("il selettore OS cambia le fasi mostrate", async ({
   }
 });
 
+test("download e how-to-run portano alla guida nel punto operativo", async ({
+  page,
+}) => {
+  await page.goto("/download", { waitUntil: "domcontentloaded" });
+  const downloadGuide = page.locator('main a[href="/setup-guide"]');
+  await expect(downloadGuide).toBeVisible();
+  await expect(downloadGuide).toContainText("step-by-step setup");
+
+  await page.goto("/run", { waitUntil: "domcontentloaded" });
+  const runGuide = page.locator('main a[href="/setup-guide"]');
+  await expect(runGuide).toBeVisible();
+  await expect(runGuide).toHaveText("Get started →");
+});
+
+test("il footer espone i crediti e la pagina segue la lingua scelta", async ({
+  page,
+}) => {
+  await page.addInitScript(() => window.localStorage.setItem("jht-lang", "it"));
+  await page.goto("/credits", { waitUntil: "domcontentloaded" });
+
+  await expect(page.locator("h1#credits-title")).toHaveText("Crediti");
+  const credit = page.locator("p[data-music-credit]");
+  await expect(credit).toHaveCount(1);
+  await expect(credit).toContainText("adattata alla durata");
+  await expect(
+    credit.locator('a[href="https://creativecommons.org/licenses/by/4.0/"]'),
+  ).toHaveText("CC BY 4.0");
+  await expect(page.locator('footer a[href="/credits"]')).toHaveText("Crediti");
+});
+
 test("nessuna chiave di traduzione grezza a schermo", async ({
   browser,
 }, testInfo) => {
@@ -204,7 +234,21 @@ test("il tedesco non sfonda il layout del telefono", async ({
         name: "Zugriffe prüfen und dieses Gerät autorisieren",
       }),
     ).toBeVisible();
-    await expect(page.getByText("Screenshot ausstehend").first()).toBeVisible();
+    const textOnlyPhase = page.locator("#phase-authorize-provider");
+    await expect(textOnlyPhase).toBeVisible();
+    await expect(textOnlyPhase.locator("figure")).toHaveCount(0);
+    const publicCopy = (await page.locator("[data-setup-guide]").innerText())
+      .toLowerCase()
+      .replaceAll("‑", "-");
+    for (const placeholder of [
+      "screenshot ausstehend",
+      "screenshot folgt",
+      "screenshot pending",
+      "schermata in arrivo",
+      "missing",
+    ]) {
+      expect(publicCopy).not.toContain(placeholder);
+    }
 
     // Stesso gate del test inglese, e per lo stesso motivo: confrontare con
     // `innerWidth` non funziona, perché quando un elemento sfonda il

@@ -43,7 +43,6 @@ const LOCALES = ["it", "en", "es", "fr", "de", "pt", "hu"] as const;
  *  dice quale fase e quale campo, non «una stringa da qualche parte». */
 function everyText(): { where: string; text: GuideText }[] {
   const out: { where: string; text: GuideText }[] = [];
-  const seenFallbacks = new Set<object>();
   for (const chapter of GUIDE_CHAPTERS) {
     out.push({ where: `chapter ${chapter.id} · title`, text: chapter.title });
     out.push({
@@ -54,17 +53,6 @@ function everyText(): { where: string; text: GuideText }[] {
       const at = `phase ${chapter.id}/${phase.id}`;
       out.push({ where: `${at} · title`, text: phase.title });
       out.push({ where: `${at} · body`, text: phase.body });
-      if (phase.screenFallback && !seenFallbacks.has(phase.screenFallback)) {
-        seenFallbacks.add(phase.screenFallback);
-        out.push({
-          where: `${at} · screen fallback title`,
-          text: phase.screenFallback.title,
-        });
-        out.push({
-          where: `${at} · screen fallback body`,
-          text: phase.screenFallback.body,
-        });
-      }
       if (phase.warning)
         out.push({ where: `${at} · warning`, text: phase.warning });
       for (const screenRef of screensOf(phase))
@@ -220,6 +208,19 @@ describe("guida di setup — struttura", () => {
 });
 
 describe("guida di setup — schermate", () => {
+  it("tiene i pending nel registro senza renderizzare placeholder pubblici", () => {
+    const renderer = fs.readFileSync(
+      path.resolve(HERE, "../../../web/app/setup-guide/GuideScreenFigure.tsx"),
+      "utf8",
+    );
+
+    expect(pendingScreens().length).toBeGreaterThan(0);
+    expect(renderer).toContain("if (!asset) return null");
+    expect(renderer).not.toMatch(
+      /screenshot_pending|screenFallback|border-dashed|aspect-video/,
+    );
+  });
+
   it("ogni file dichiarato esiste davvero sotto public/", () => {
     const broken: string[] = [];
     for (const screen of Object.values(SCREENS)) {
@@ -544,7 +545,7 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
     }
   });
 
-  it("W02-W04 e il segnaposto privacy-safe sono tradotti davvero", () => {
+  it("W02-W04 restano completi e tradotti anche senza immagini", () => {
     const phases = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).filter(
       (phase) =>
         [
@@ -563,9 +564,6 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
       phase.title,
       phase.body,
       ...(phase.links ?? []).map((link) => link.label),
-      ...(phase.screenFallback
-        ? [phase.screenFallback.title, phase.screenFallback.body]
-        : []),
     ]);
     for (const text of texts) {
       for (const locale of LOCALES.filter((locale) => locale !== "en")) {

@@ -1,11 +1,25 @@
 export const MUSIC_LICENSE_URL = "https://creativecommons.org/licenses/by/4.0/";
 
-export const CANONICAL_MUSIC_CREDIT = [
-  "Covert Affair Kevin MacLeod (incompetech.com)",
-  "Licensed under Creative Commons: By Attribution 4.0",
-  MUSIC_LICENSE_URL,
-  "Edited for timing and mixed with a CC0 cymbal-roll intro.",
-] as const;
+export type PublicMusicCredit = {
+  work: string;
+  composer: string;
+  source: string;
+  license: string;
+  licenseUrl: string;
+};
+
+/**
+ * Unica attribuzione musicale pubblica. La pagina `/credits` è l'unico
+ * consumer: quando i media useranno soltanto musica CC0, impostare questa
+ * costante a `null` rimuoverà l'intera riga senza cercare copy sparso.
+ */
+export const PUBLIC_MUSIC_CREDIT: PublicMusicCredit | null = {
+  work: "Covert Affair",
+  composer: "Kevin MacLeod",
+  source: "incompetech.com",
+  license: "CC BY 4.0",
+  licenseUrl: MUSIC_LICENSE_URL,
+};
 
 export const MUSIC_PROVENANCE = {
   work: "Covert Affair",
