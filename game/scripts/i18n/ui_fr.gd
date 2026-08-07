@@ -1238,7 +1238,7 @@ const S := {
 	"cloud_pairing.fallback": "LE NAVIGATEUR NE S’EST PAS OUVERT ?",
 	"cloud_pairing.fallback_note": "Ouvre ce lien manuellement. COPIER LE LIEN est seulement une solution de secours ; tu n’as jamais à copier de jeton ni de code.",
 	"cloud_pairing.close": "FERMER",
-	"cloud_pairing.paired": "✓ Compte associé. Cet écran et la page Compte se sont mis à jour automatiquement.",
+	"cloud_pairing.paired": "✓ Compte associé. La page Compte se mettra à jour automatiquement.",
 	"cloud_pairing.expired": "Ce lien a expiré. Génère-en un nouveau pour continuer.",
 	"cloud_pairing.already_used": "Ce lien a déjà été utilisé. Génère-en un nouveau pour continuer.",
 	"cloud_pairing.network_retry": "La connexion a été interrompue. Nouvelle tentative automatique…",

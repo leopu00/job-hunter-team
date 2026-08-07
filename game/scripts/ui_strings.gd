@@ -1432,7 +1432,7 @@ const S := {
 	"cloud_pairing.fallback": "IL BROWSER NON SI È APERTO?",
 	"cloud_pairing.fallback_note": "Apri manualmente questo link. COPIA LINK è solo un'alternativa: non devi copiare token o codici.",
 	"cloud_pairing.close": "CHIUDI",
-	"cloud_pairing.paired": "✓ Account collegato. Questa schermata e la pagina Account si sono aggiornate automaticamente.",
+	"cloud_pairing.paired": "✓ Account collegato. La pagina Account si aggiornerà automaticamente.",
 	"cloud_pairing.expired": "Questo link è scaduto. Generane uno nuovo per continuare.",
 	"cloud_pairing.already_used": "Questo link è già stato usato. Generane uno nuovo per continuare.",
 	"cloud_pairing.network_retry": "La connessione si è interrotta. Nuovo tentativo automatico…",

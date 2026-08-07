@@ -1238,7 +1238,7 @@ const S := {
 	"cloud_pairing.fallback": "NEM NYÍLT MEG A BÖNGÉSZŐ?",
 	"cloud_pairing.fallback_note": "Nyisd meg ezt a hivatkozást kézzel. A LINK MÁSOLÁSA csak tartalék megoldás; soha nem kell tokent vagy kódot másolnod.",
 	"cloud_pairing.close": "BEZÁRÁS",
-	"cloud_pairing.paired": "✓ Fiók összekapcsolva. Ez a képernyő és a Fiók oldal automatikusan frissült.",
+	"cloud_pairing.paired": "✓ Fiók összekapcsolva. A Fiók oldal automatikusan frissülni fog.",
 	"cloud_pairing.expired": "Ez a hivatkozás lejárt. A folytatáshoz hozz létre újat.",
 	"cloud_pairing.already_used": "Ezt a hivatkozást már felhasználták. A folytatáshoz hozz létre újat.",
 	"cloud_pairing.network_retry": "A kapcsolat megszakadt. Automatikus újrapróbálkozás…",
