@@ -25,10 +25,16 @@ export default function GuideScreenFigure({
   screenRef,
   os,
   lang,
+  fallback,
 }: {
   screenRef: ScreenRef;
   os: OsId;
   lang: Lang;
+  /** Testo dello slot, quando la fase ne ha uno suo: le fasi del
+   *  collegamento Google non sono «in attesa di ripresa», sono bloccate
+   *  finché non c'è un account di prova approvato, e dirlo con la frase
+   *  generica sarebbe falso. */
+  fallback?: { title: GuideText; body: GuideText };
 }) {
   const screen = SCREENS[screenRef.screenId];
   if (!screen) return null;
@@ -37,14 +43,16 @@ export default function GuideScreenFigure({
   const caption: GuideText = screenRef.caption ?? screen.caption;
 
   if (!asset) {
+    const title = fallback?.title[lang] ?? GUIDE_UI.screenshot_pending[lang];
+    const body = fallback?.body[lang] ?? GUIDE_UI.screenshot_pending_body[lang];
     return (
       <figure className="mt-4">
         <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-panel)] px-6 text-center">
           <p className="text-[12px] font-semibold text-[var(--color-bright)]">
-            {GUIDE_UI.screenshot_pending[lang]}
+            {title}
           </p>
           <p className="max-w-sm text-[11.5px] leading-relaxed text-[var(--color-muted)]">
-            {GUIDE_UI.screenshot_pending_body[lang]}
+            {body}
           </p>
         </div>
         <figcaption className="mt-2 text-[12px] leading-relaxed text-[var(--color-muted)]">
