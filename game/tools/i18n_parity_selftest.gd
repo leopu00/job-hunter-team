@@ -178,10 +178,21 @@ func _check_runtime_english_presentation() -> void:
 	var snapshot := UIStrings.vps_presentation_snapshot()
 	for key in ["vps.upload.file_missing", "vps.upload.file_too_large",
 			"vps.response_unreadable", "vps.artifact.path_outside",
-			"vps.ticket.position_missing", "vps.ssh.failed"]:
+			"vps.ticket.position_missing", "vps.ssh.failed",
+			"vps.terminal.invalid_session", "vps.terminal.history_heading",
+			"vps.coordinator.unreadable", "vps.burn.unreadable",
+			"vps.chat.agent_busy", "vps.activity.working",
+			"vps.activity.session_unobserved", "vps.activity.throttled",
+			"vps.transport.temp_unwritable", "vps.transport.temp_unreadable",
+			"vps.transport.ssh_unavailable", "vps.transport.docker_timeout"]:
 		_check("snapshot VPS inglese: " + key,
 				snapshot.has(key) and str(snapshot[key]) != key, str(snapshot))
 	var vps_source := FileAccess.get_file_as_string("res://scripts/backend/vps_backend.gd")
+	var bus_source := FileAccess.get_file_as_string("res://scripts/backend/backend_bus.gd")
+	_check("fallback worker SSH inglese",
+			vps_source.contains('"vps.ssh.failed": "SSH failed (exit %s)"')
+			and vps_source.contains('_ui_text(labels, "vps.ssh.failed") % res["code"]'),
+			"fallback statico EN mancante")
 	_check("filename payload stabile e non localizzato",
 			vps_source.contains('return out if out != "" else "document"')
 			and not vps_source.contains('else UIStrings.t("common.document")'),
@@ -196,6 +207,48 @@ func _check_runtime_english_presentation() -> void:
 			not vps_source.contains('UIStrings.t("vps.upload.')
 			and not vps_source.contains('UIStrings.t("vps.response_unreadable")'),
 			"UIStrings.t non deve essere chiamato dal worker")
+	var upload_worker := vps_source.get_slice("func _do_upload_document", 1).get_slice("\nfunc ", 0)
+	_check("upload worker usa solo snapshot già risolto",
+			not upload_worker.contains("UIStrings."), upload_worker.left(240))
+	for literal in ["chiave SSH non trovata", "client OpenSSH non installato",
+			"chiave host SSH non disponibile", "known-hosts non scrivibile",
+			"errore fingerprint SSH", "handshake ssh con"]:
+		_check("connessione VPS senza leak italiano: " + literal,
+				not vps_source.contains('"' + literal), literal)
+	_check("fallback BackendBus localizzato",
+			not bus_source.contains('"backend non collegato"')
+			and bus_source.contains('UIStrings.t("common.backend_not_connected")'),
+			"i segnali visibili non devono propagare il literal italiano")
+	var local_source := FileAccess.get_file_as_string("res://scripts/backend/local_backend.gd")
+	_check("snapshot runtime risolto sul main thread",
+			vps_source.contains("_runtime_labels = UIStrings.vps_presentation_snapshot()")
+			and local_source.contains("_runtime_labels = UIStrings.vps_presentation_snapshot()"),
+			"entrambi i backend devono catturare le etichette prima del thread")
+	for seam in ['_terminal_result(agent, "", "nome sessione tmux non valido")',
+			'content = "… output precedente omesso',
+			'else "stato coordinatore non leggibile"',
+			'false, "direttiva non valida")', 'false, "id non valido")',
+			'else "stato della deroga non leggibile"',
+			'_chat_sent(agent, false, "file temporaneo non scrivibile")',
+			'var reason := "l\'agente è occupato',
+			'{"ok": false, "error": "ruolo non valido"}',
+			'detail = "pacing: pausa temporizzata"']:
+		_check("sink VPS senza literal italiano: " + seam.left(36),
+				not vps_source.contains(seam), seam)
+	_check("activity detail localizzato al confine UI",
+			vps_source.contains("var detail := _activity_detail(")
+			and vps_source.contains('detail = _activity_detail("pacing: pausa temporizzata"'),
+			"lo stato interno deve restare stabile ma la presentazione va tradotta")
+	var short_without_labels := RegEx.create_from_string(
+			"_short_error\\([^,\\n\\)]*\\)")
+	_check("tutti i worker propagano lo snapshot a _short_error",
+			short_without_labels.search(vps_source) == null,
+			"nessun call site worker deve ricadere sul fallback senza catalogo")
+	for sentinel in ["file temporaneo non scrivibile", "file temporaneo non leggibile",
+			"client OpenSSH non avviabile", "processo docker non avviabile",
+			"processo locale non avviabile"]:
+		_check("sentinella trasporto mappata: " + sentinel,
+				vps_source.contains('"' + sentinel + '": "vps.transport.'), sentinel)
 	UIStrings.lang = previous
 
 

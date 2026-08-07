@@ -35,11 +35,11 @@ static func ensure_known_host(host: String) -> Dictionary:
 			output, true)
 	var raw := "\n".join(PackedStringArray(output)).strip_edges()
 	if code != 0 or raw == "":
-		return {"ok": false, "message": "chiave host SSH non disponibile"}
+		return {"ok": false, "message": UIStrings.t("vps.ssh.host_key_unavailable")}
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
-		return {"ok": false, "message": "known-hosts non scrivibile"}
+		return {"ok": false, "message": UIStrings.t("vps.ssh.known_hosts_unwritable")}
 	file.store_string(raw + "\n")
 	file.close()
 	if OS.get_name() != "Windows":
@@ -223,6 +223,9 @@ var _stop := false
 var _last_chat_ts := ""
 var _worker_tasks: Array[int] = []
 var _worker_tasks_mutex := Mutex.new()
+## Risolto sul main thread prima di avviare poll e worker. I thread leggono
+## soltanto questa copia e non inizializzano mai i cataloghi lazy.
+var _runtime_labels: Dictionary = {}
 ## Conversazione utente↔agente aperta ("capitano"/"assistente", "" = no).
 var _convo_agent := ""
 ## Sessione osservata dalla vista attività interna (mai interattiva).
@@ -235,6 +238,7 @@ var _terminal_history_tick := 0
 
 func start(config: Dictionary) -> void:
 	live = true  # dati veri: spegne il badge SIMULAZIONE quando connesso
+	_runtime_labels = UIStrings.vps_presentation_snapshot()
 	_ip = str(config.get("ip", "")).strip_edges()
 	_key = expand_user_path(str(config.get("key_path", "")))
 	# Config salvata prima del campo utente (o campo lasciato vuoto): root,
@@ -244,18 +248,19 @@ func start(config: Dictionary) -> void:
 		_user = "root"
 	if not FileAccess.file_exists(_key):
 		bus.publish_state(BackendBus.ERROR,
-				"chiave SSH non trovata: %s" % _key)
+				UIStrings.t("vps.ssh.key_missing") % _key)
 		return
 	var ssh_version: Array = []
 	if OS.execute("ssh", ["-V"], ssh_version, true) == -1:
 		bus.publish_state(BackendBus.ERROR,
-				"client OpenSSH non installato o non presente nel PATH")
+				UIStrings.t("vps.ssh.client_missing"))
 		return
 	var pinned := ensure_known_host(_ip)
 	if not bool(pinned.get("ok", false)):
-		bus.publish_state(BackendBus.ERROR, str(pinned.get("message", "errore fingerprint SSH")))
+		bus.publish_state(BackendBus.ERROR, str(pinned.get("message",
+				UIStrings.t("vps.ssh.fingerprint_failed"))))
 		return
-	bus.publish_state(BackendBus.CONNECTING, "handshake ssh con %s…" % _ip)
+	bus.publish_state(BackendBus.CONNECTING, UIStrings.t("vps.ssh.connecting") % _ip)
 	_stop = false
 	_thread = Thread.new()
 	_thread.start(_run)
@@ -329,7 +334,7 @@ func _run() -> void:
 	if _stop:
 		return
 	if probe["code"] != 0 or not probe["out"].contains("JHT_OK"):
-		_deferred_state(BackendBus.ERROR, _short_error(probe))
+		_deferred_state(BackendBus.ERROR, _short_error(probe, _runtime_labels))
 		return
 	if not probe["out"].contains("running"):
 		_deferred_state_key(BackendBus.ERROR, "backend.container_not_running")
@@ -362,7 +367,8 @@ func _run() -> void:
 						str(activity_res["out"]).left(2000))
 			if activity_res["code"] == 0:
 				activity = _smooth_activity(_parse_activity(str(activity_res["out"])))
-			var roster := _parse_roster(parts[0], _parse_throttles(throttle_raw), activity)
+			var roster := _parse_roster(parts[0], _parse_throttles(throttle_raw),
+					activity, _runtime_labels)
 			# mappa uid → sessione tmux per la chat (dict nuovo assegnato
 			# in blocco: niente stati intermedi visti dagli altri thread)
 			var sessions := {}
@@ -375,7 +381,7 @@ func _run() -> void:
 		else:
 			failures += 1
 			if failures >= 2:  # un blip singolo non è un guasto
-				_deferred_state(BackendBus.ERROR, _short_error(res))
+				_deferred_state(BackendBus.ERROR, _short_error(res, _runtime_labels))
 		if tick % POSITIONS_EVERY == 0:
 			_fetch_positions()
 		if tick % SETTINGS_EVERY == 0:
@@ -589,7 +595,8 @@ func _fetch_terminal(agent: String) -> void:
 		_terminal_history_tick = 0
 	var session := _agent_session(agent)
 	if not _safe_tmux_session(session):
-		_terminal_result(agent, "", "nome sessione tmux non valido")
+		_terminal_result(agent, "", _ui_text(_runtime_labels,
+				"vps.terminal.invalid_session"))
 		return
 	# `-S -` legge tutto lo scrollback disponibile (lo stesso contratto della
 	# dashboard privata quando l'utente chiede la vista top). Non usiamo -e:
@@ -603,7 +610,7 @@ func _fetch_terminal(agent: String) -> void:
 	if _stop or agent != _terminal_agent:
 		return
 	if res["code"] != 0:
-		_terminal_result(agent, "", _short_error(res))
+		_terminal_result(agent, "", _short_error(res, _runtime_labels))
 		return
 	var encoded := str(res["out"]).replace("\n", "").replace("\r", "")
 	var raw := Marshalls.base64_to_raw(encoded)
@@ -613,12 +620,15 @@ func _fetch_terminal(agent: String) -> void:
 			clean.append(byte)
 	var content := clean.get_string_from_utf8()
 	if content.length() > 500000:
-		content = "… output precedente omesso …\n" + content.right(500000)
+		content = _ui_text(_runtime_labels, "vps.terminal.output_omitted") \
+				+ "\n" + content.right(500000)
 	var combined := content
 	if _terminal_history_agent == agent and _terminal_history_text != "":
-		combined = "── STORICO SESSIONE ─────────────────────────────\n\n" \
+		combined = "── " + _ui_text(_runtime_labels, "vps.terminal.history_heading") \
+				+ " ─────────────────────────────\n\n" \
 				+ _terminal_history_text \
-				+ "\n\n── PANE TMUX LIVE ──────────────────────────────\n\n" \
+				+ "\n\n── " + _ui_text(_runtime_labels, "vps.terminal.live_heading") \
+				+ " ──────────────────────────────\n\n" \
 				+ content
 	_terminal_result(agent, combined, "")
 
@@ -668,7 +678,8 @@ func _do_fetch_coordinator_state() -> void:
 	var parsed := _json_result(res)
 	if parsed.is_empty() or not bool(parsed.get("ok", false)):
 		bus.call_deferred("publish_coordinator_action", "load", false,
-				_short_error(res) if res["code"] != 0 else "stato coordinatore non leggibile")
+				_short_error(res, _runtime_labels) if res["code"] != 0 \
+				else _ui_text(_runtime_labels, "vps.coordinator.unreadable"))
 		return
 	bus.call_deferred("publish_coordinator_state", parsed)
 
@@ -683,7 +694,7 @@ func _do_save_coordinator_settings(settings: Dictionary) -> void:
 	var parsed := _json_result(res)
 	var ok: bool = res["code"] == 0 and bool(parsed.get("ok", false))
 	bus.call_deferred("publish_coordinator_action", "save", ok,
-			"" if ok else _short_error(res))
+			"" if ok else _short_error(res, _runtime_labels))
 	if not ok:
 		return
 	_do_fetch_coordinator_state()
@@ -703,14 +714,16 @@ func _do_save_coordinator_settings(settings: Dictionary) -> void:
 func add_team_directive(body: String, kind: String) -> void:
 	var clean := body.strip_edges()
 	if clean == "" or clean.length() > 2000:
-		bus.publish_coordinator_action("directive_add", false, "direttiva non valida")
+		bus.publish_coordinator_action("directive_add", false,
+				UIStrings.t("vps.directive.invalid"))
 		return
 	_queue_worker(_do_team_directive.bind({"action": "add", "body": clean,
 			"kind": kind}))
 
 func archive_team_directive(directive_id: int) -> void:
 	if directive_id <= 0:
-		bus.publish_coordinator_action("directive_archive", false, "id non valido")
+		bus.publish_coordinator_action("directive_archive", false,
+				UIStrings.t("vps.directive.id_invalid"))
 		return
 	_queue_worker(_do_team_directive.bind({"action": "archive", "id": directive_id}))
 
@@ -724,7 +737,7 @@ func _do_team_directive(action: Dictionary) -> void:
 	var action_name := "directive_add" if str(action.get("action")) == "add" \
 			else "directive_archive"
 	bus.call_deferred("publish_coordinator_action", action_name, ok,
-			"" if ok else _short_error(res))
+			"" if ok else _short_error(res, _runtime_labels))
 	if not ok:
 		return
 	_do_fetch_coordinator_state()
@@ -753,8 +766,8 @@ func _do_fetch_burn_intent() -> void:
 	if parsed.is_empty() or not bool(parsed.get("ok", false)):
 		# Fail-closed di sola lettura: non sapere non è "deroga spenta".
 		bus.call_deferred("publish_burn_intent", {"readable": false,
-				"error": _short_error(res) if res["code"] != 0 \
-						else "stato della deroga non leggibile"})
+				"error": _short_error(res, _runtime_labels) if res["code"] != 0 \
+						else _ui_text(_runtime_labels, "vps.burn.unreadable")})
 		return
 	parsed["readable"] = true
 	bus.call_deferred("publish_burn_intent", parsed)
@@ -771,7 +784,7 @@ func _do_set_burn_intent(active: bool, hours: float) -> void:
 	var parsed := _json_result(res)
 	var ok: bool = res["code"] == 0 and bool(parsed.get("ok", false))
 	bus.call_deferred("publish_burn_intent_action", active, ok,
-			"" if ok else _short_error(res))
+			"" if ok else _short_error(res, _runtime_labels))
 	if not ok:
 		return
 	# Si rilegge SEMPRE il flag appena scritto: l'interruttore deve mostrare
@@ -830,7 +843,8 @@ func _do_send_chat(agent: String, text: String, context := "") -> void:
 	# formato della skill chat-web: la UI lo rilegge come storia)
 	var f := FileAccess.open(buf, FileAccess.WRITE)
 	if f == null:
-		_chat_sent(agent, false, "file temporaneo non scrivibile")
+		_chat_sent(agent, false, _ui_text(_runtime_labels,
+				"vps.chat.temp_unwritable"))
 		return
 	f.store_string(JSON.stringify({"role": "user", "text": text,
 			"ts": Time.get_unix_time_from_system()}) + "\n")
@@ -838,7 +852,7 @@ func _do_send_chat(agent: String, text: String, context := "") -> void:
 	var persist := _ssh_stdin_file(buf, "docker exec -i jht tee -a " + chat_file)
 	if persist["code"] != 0:
 		Log.call_deferred("warn", "backend", "chat: persist fallito (non blocco): "
-				+ _short_error(persist))
+				+ _short_error(persist, _runtime_labels))
 
 	# 2) payload nella tmux dell'agente via jht-tmux-send, il tool di
 	# flotta: le TUI Ink NON registrano l'Enter se arriva mentre il turno è
@@ -868,8 +882,9 @@ func _do_send_chat(agent: String, text: String, context := "") -> void:
 			break
 	DirAccess.remove_absolute(buf)
 	if delivered["code"] != 0:
-		var reason := "l'agente è occupato da diversi minuti: riprova tra poco" \
-				if int(delivered["code"]) == 4 else _short_error(delivered)
+		var reason := _ui_text(_runtime_labels, "vps.chat.agent_busy") \
+				if int(delivered["code"]) == 4 \
+				else _short_error(delivered, _runtime_labels)
 		_chat_sent(agent, false, reason)
 		return
 	_chat_sent(agent, true, "")
@@ -910,7 +925,7 @@ func _do_fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> v
 					bus.call_deferred("publish_usage_history", query, data)
 					return
 	bus.call_deferred("publish_usage_history", query,
-			{"ok": false, "error": _short_error(res)})
+			{"ok": false, "error": _short_error(res, _runtime_labels)})
 
 var _agent_history_busy := false
 ## Richiesta arrivata mentre il worker era occupato: si tiene SOLO
@@ -928,7 +943,7 @@ func fetch_agent_history(agent: String, from_ts: float, to_ts: float,
 	var re := RegEx.create_from_string("^[a-z0-9-]{1,40}$")
 	if re.search(agent) == null:
 		bus.call_deferred("publish_agent_history", query,
-				{"ok": false, "error": "ruolo non valido"})
+				{"ok": false, "error": UIStrings.t("vps.history.role_invalid")})
 		return
 	if _agent_history_busy:
 		_agent_history_next = query
@@ -943,7 +958,8 @@ func _do_fetch_agent_history(query: Dictionary) -> void:
 	_agent_history_busy = false
 	if _stop:
 		return
-	var payload: Dictionary = {"ok": false, "error": _short_error(res)}
+	var payload: Dictionary = {"ok": false,
+			"error": _short_error(res, _runtime_labels)}
 	if res["code"] == 0:
 		for line in str(res["out"]).split("\n"):
 			if line.begins_with("{"):
@@ -966,7 +982,7 @@ func _do_save_profile(fields: Dictionary) -> void:
 	var res := _ssh_python(PROFILE_SAVE_PY % b64)
 	var ok: bool = res["code"] == 0 and str(res["out"]).contains("\"ok\": true")
 	bus.call_deferred("emit_signal", "profile_saved", ok,
-			"" if ok else _short_error(res))
+			"" if ok else _short_error(res, _runtime_labels))
 	if ok:
 		_fetch_settings()  # il profilo aggiornato rientra subito in vista
 
@@ -1028,6 +1044,28 @@ const PRESENTATION_ERROR_KEYS := {
 	"file non trovato sul container": "vps.artifact.file_missing",
 	"file oltre i 10 MB": "vps.upload.file_too_large",
 	"posizione inesistente": "vps.ticket.position_missing",
+	"file temporaneo non scrivibile": "vps.transport.temp_unwritable",
+	"file temporaneo non leggibile": "vps.transport.temp_unreadable",
+	"client OpenSSH non avviabile": "vps.transport.ssh_unavailable",
+	"processo docker non avviabile": "vps.transport.docker_unavailable",
+	"processo locale non avviabile": "vps.transport.local_unavailable",
+}
+
+const PRESENTATION_ERROR_PREFIX_KEYS := {
+	"comando docker senza risposta": "vps.transport.docker_timeout",
+	"comando host non disponibile in locale": "vps.transport.local_command_unavailable",
+}
+
+const ACTIVITY_DETAIL_KEYS := {
+	"tool in esecuzione": "vps.activity.tool",
+	"elaborazione": "vps.activity.thinking",
+	"turno in corso": "vps.activity.working",
+	"in attesa di ripresa": "vps.activity.paused",
+	"sessione attiva, nessun turno in corso": "vps.activity.idle",
+	"pane non osservabile": "vps.activity.pane_unavailable",
+	"stato non osservato": "vps.activity.unobserved",
+	"sessione attiva, stato non osservato": "vps.activity.session_unobserved",
+	"pacing: pausa temporizzata": "vps.activity.throttled",
 }
 
 const PRESENTATION_ENGLISH := {
@@ -1040,6 +1078,30 @@ const PRESENTATION_ENGLISH := {
 	"vps.artifact.file_missing": "file not found in the container",
 	"vps.ticket.position_missing": "position does not exist",
 	"vps.ssh.failed": "SSH failed (exit %s)",
+	"vps.terminal.invalid_session": "invalid tmux session name",
+	"vps.terminal.output_omitted": "… earlier output omitted …",
+	"vps.terminal.history_heading": "SESSION HISTORY",
+	"vps.terminal.live_heading": "LIVE TMUX PANE",
+	"vps.coordinator.unreadable": "coordinator state could not be read",
+	"vps.burn.unreadable": "override state could not be read",
+	"vps.chat.temp_unwritable": "temporary file cannot be written",
+	"vps.chat.agent_busy": "the agent has been busy for several minutes; try again shortly",
+	"vps.activity.unobserved": "state not observed",
+	"vps.activity.working": "turn in progress",
+	"vps.activity.session_unobserved": "active session, state not observed",
+	"vps.activity.throttled": "pacing: timed pause",
+	"vps.activity.tool": "tool running",
+	"vps.activity.thinking": "thinking",
+	"vps.activity.paused": "waiting to resume",
+	"vps.activity.idle": "active session, no turn in progress",
+	"vps.activity.pane_unavailable": "pane unavailable",
+	"vps.transport.temp_unwritable": "temporary file cannot be written",
+	"vps.transport.temp_unreadable": "temporary file cannot be read",
+	"vps.transport.ssh_unavailable": "the OpenSSH client could not be started",
+	"vps.transport.docker_unavailable": "the Docker process could not be started",
+	"vps.transport.local_unavailable": "the local process could not be started",
+	"vps.transport.docker_timeout": "Docker did not respond before the timeout",
+	"vps.transport.local_command_unavailable": "host command unavailable locally",
 }
 
 func upload_document(local_path: String) -> void:
@@ -1152,7 +1214,7 @@ func _do_save_hours(wh: Dictionary) -> void:
 	var res := _ssh_python(HOURS_SAVE_PY % b64)
 	var ok: bool = res["code"] == 0 and str(res["out"]).contains("\"ok\": true")
 	bus.call_deferred("emit_signal", "hours_saved", ok,
-			"" if ok else _short_error(res))
+			"" if ok else _short_error(res, _runtime_labels))
 	if ok:
 		_fetch_settings()
 
@@ -1388,7 +1450,8 @@ static func _parse_activity(raw: String) -> Dictionary:
 ## la scelta seduto-vs-ricreazione è della scena, sulla stima
 ## throttle_secs (secondi RIMANENTI; throttle_total = durata piena).
 ## Un agente killato non compare proprio: despawn = uscita dalla porta.
-static func _parse_roster(raw: String, throttles: Dictionary = {}, activity: Dictionary = {}) -> Array:
+static func _parse_roster(raw: String, throttles: Dictionary = {},
+		activity: Dictionary = {}, labels: Dictionary = {}) -> Array:
 	var agents: Array = []
 	for line in raw.split("\n"):
 		if not line.contains(":"):
@@ -1429,14 +1492,15 @@ static func _parse_roster(raw: String, throttles: Dictionary = {}, activity: Dic
 		var status := str(observed.get("status", "idle"))
 		if status not in ["working", "idle", "paused"]:
 			status = "idle"
-		var detail := str(observed.get("detail", "sessione attiva, stato non osservato"))
+		var detail := _activity_detail(str(observed.get("detail",
+				"sessione attiva, stato non osservato")), labels)
 		var t_left := 0.0
 		var t_total := 0.0
 		if throttles.has(uid):
 			t_left = float(throttles[uid]["left"])
 			t_total = float(throttles[uid]["total"])
 			status = "throttled"
-			detail = "pacing: pausa temporizzata"
+			detail = _activity_detail("pacing: pausa temporizzata", labels)
 		agents.append({
 			"slug": slug, "role": slug, "name": name, "uid": uid,
 			"session": session,  # nome tmux RAW: serve alla chat 1-a-1
@@ -1445,6 +1509,11 @@ static func _parse_roster(raw: String, throttles: Dictionary = {}, activity: Dic
 			"throttle_secs": t_left, "throttle_total": t_total,
 		})
 	return agents
+
+
+static func _activity_detail(raw: String, labels: Dictionary) -> String:
+	var key := str(ACTIVITY_DETAIL_KEYS.get(raw, ""))
+	return _ui_text(labels, key) if key != "" else raw
 
 
 func _deferred_state(state: int, detail: String) -> void:
@@ -1466,6 +1535,11 @@ static func _short_error(res: Dictionary, labels: Dictionary = {}) -> String:
 
 static func _present_error(raw: String, labels: Dictionary = {}) -> String:
 	var key := str(PRESENTATION_ERROR_KEYS.get(raw, ""))
+	if key == "":
+		for prefix in PRESENTATION_ERROR_PREFIX_KEYS:
+			if raw.begins_with(prefix):
+				key = str(PRESENTATION_ERROR_PREFIX_KEYS[prefix])
+				break
 	return _ui_text(labels, key) if key != "" else raw
 
 

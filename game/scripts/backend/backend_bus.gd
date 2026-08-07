@@ -609,25 +609,25 @@ func request_coordinator_state() -> void:
 	if _backend:
 		_backend.fetch_coordinator_state()
 	else:
-		coordinator_action_done.emit("load", false, "backend non collegato")
+		coordinator_action_done.emit("load", false, UIStrings.t("common.backend_not_connected"))
 
 func save_coordinator_settings(settings: Dictionary) -> void:
 	if _backend:
 		_backend.save_coordinator_settings(settings)
 	else:
-		coordinator_action_done.emit("save", false, "backend non collegato")
+		coordinator_action_done.emit("save", false, UIStrings.t("common.backend_not_connected"))
 
 func add_team_directive(body: String, kind := "order") -> void:
 	if _backend:
 		_backend.add_team_directive(body, kind)
 	else:
-		coordinator_action_done.emit("directive_add", false, "backend non collegato")
+		coordinator_action_done.emit("directive_add", false, UIStrings.t("common.backend_not_connected"))
 
 func archive_team_directive(directive_id: int) -> void:
 	if _backend:
 		_backend.archive_team_directive(directive_id)
 	else:
-		coordinator_action_done.emit("directive_archive", false, "backend non collegato")
+		coordinator_action_done.emit("directive_archive", false, UIStrings.t("common.backend_not_connected"))
 
 func publish_coordinator_state(next: Dictionary) -> void:
 	coordinator_state = next
@@ -657,13 +657,14 @@ func request_burn_intent(force := false) -> void:
 		# Senza backend NON si dice "spenta": si dice "non leggibile". Il
 		# freno potrebbe essere sospeso su una macchina che non stiamo
 		# guardando, e mostrarlo come off sarebbe la bugia peggiore.
-		publish_burn_intent({"readable": false, "error": "backend non collegato"})
+		publish_burn_intent({"readable": false,
+				"error": UIStrings.t("common.backend_not_connected")})
 
 func set_burn_intent(active: bool, hours: float) -> void:
 	if _backend:
 		_backend.set_burn_intent(active, hours)
 	else:
-		burn_intent_action_done.emit(active, false, "backend non collegato")
+		burn_intent_action_done.emit(active, false, UIStrings.t("common.backend_not_connected"))
 
 func publish_burn_intent(state: Dictionary) -> void:
 	var next := state.duplicate(true)
@@ -743,7 +744,7 @@ func upload_user_document(local_path: String) -> void:
 	if _backend and _backend.has_method("upload_document"):
 		_backend.upload_document(local_path)
 	else:
-		document_uploaded.emit(false, "", "backend non collegato")
+		document_uploaded.emit(false, "", UIStrings.t("common.backend_not_connected"))
 
 ## Il backend pubblica lo stato profilo da qui (thread → call_deferred).
 func publish_profile_status(status: Dictionary) -> void:
@@ -758,13 +759,13 @@ func save_user_profile(fields: Dictionary) -> void:
 	if _backend and _backend.has_method("save_profile"):
 		_backend.save_profile(fields)
 	else:
-		profile_saved.emit(false, "backend non collegato")
+		profile_saved.emit(false, UIStrings.t("common.backend_not_connected"))
 
 func save_working_hours(wh: Dictionary) -> void:
 	if _backend and _backend.has_method("save_working_hours"):
 		_backend.save_working_hours(wh)
 	else:
-		hours_saved.emit(false, "backend non collegato")
+		hours_saved.emit(false, UIStrings.t("common.backend_not_connected"))
 
 
 ## ── Storico usage (finestre di monitoraggio risorse) ─────────────────
@@ -778,7 +779,7 @@ func request_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> voi
 		_backend.fetch_usage_history(from_ts, to_ts, bucket_sec)
 	else:
 		usage_history_updated.emit(query,
-				{"ok": false, "error": "backend non collegato"})
+				{"ok": false, "error": UIStrings.t("common.backend_not_connected")})
 
 ## Il backend risponde da qui (thread → call_deferred).
 func publish_usage_history(query: Dictionary, data: Dictionary) -> void:
@@ -796,7 +797,7 @@ func request_agent_history(agent: String, from_ts: float, to_ts: float,
 		_backend.fetch_agent_history(agent, from_ts, to_ts, bucket_sec)
 	else:
 		agent_history_updated.emit(query,
-				{"ok": false, "error": "backend non collegato"})
+				{"ok": false, "error": UIStrings.t("common.backend_not_connected")})
 
 func publish_agent_history(query: Dictionary, data: Dictionary) -> void:
 	agent_history_updated.emit(query, data)
@@ -813,7 +814,7 @@ func fetch_artifact(path: String) -> void:
 		_backend.fetch_artifact(clean)
 	else:
 		artifact_fetched.emit(clean, false, PackedByteArray(),
-				"backend non collegato")
+				UIStrings.t("common.backend_not_connected"))
 
 ## Il backend pubblica il documento da qui (thread → call_deferred).
 func publish_artifact(path: String, ok: bool, data: PackedByteArray,
