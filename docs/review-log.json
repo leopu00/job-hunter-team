@@ -1484,6 +1484,11 @@
       "path": "docs/internal/2026-08-07-web-compliance-audit.md",
       "description": "Audit tecnico di conformità del sito web: consenso analytics, accesso a privacy e termini, inventario dei dati e decisioni aperte su export e cancellazione",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-07-LEGAL-COPY-DRAFT.md",
+      "description": "Audit pre-release e bozze EN versionate di Privacy e Termini, con flussi reali, copy condiviso web/desktop e decisioni legali esplicitamente aperte",
+      "last_review": null
     }
   ]
 }
