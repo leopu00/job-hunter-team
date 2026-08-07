@@ -1,11 +1,5 @@
-import type { Metadata } from "next";
-import TutorialsClient from "./TutorialsClient";
-
-export const metadata: Metadata = {
-  title: "Tutorials",
-  alternates: { canonical: "/tutorials" },
-};
+import { permanentRedirect } from "next/navigation";
 
 export default function TutorialsPage() {
-  return <TutorialsClient />;
+  permanentRedirect("/setup-guide");
 }
