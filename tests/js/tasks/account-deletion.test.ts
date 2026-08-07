@@ -45,7 +45,7 @@ function fakeAdmin(
         return {
           // Simula l'API vera: `list(prefix)` torna file (con `id`) e
           // cartelle immediate (con `id: null`), e NON scende da sola.
-          list(prefix: string) {
+          list(prefix: string, o?: { limit?: number; offset?: number }) {
             const tree = opts.storageTree ?? {};
             const children = new Set<string>();
             for (const full of Object.keys(tree)) {
@@ -54,12 +54,16 @@ function fakeAdmin(
               const head = rest.split("/")[0];
               children.add(head + (rest.includes("/") ? "/" : ""));
             }
+            const all = [...children].map((c) =>
+              c.endsWith("/")
+                ? { name: c.slice(0, -1), id: null }
+                : { name: c, id: "obj" },
+            );
+            // Pagina come l'API vera: `limit` + `offset`.
+            const limit = o?.limit ?? all.length;
+            const offset = o?.offset ?? 0;
             return Promise.resolve({
-              data: [...children].map((c) =>
-                c.endsWith("/")
-                  ? { name: c.slice(0, -1), id: null }
-                  : { name: c, id: "obj" },
-              ),
+              data: all.slice(offset, offset + limit),
               error: null,
             });
           },
@@ -246,10 +250,13 @@ describe("export e cancellazione parlano dello stesso insieme", () => {
 describe("cancellazione account — i file su Storage non sopravvivono", () => {
   it("rimuove gli oggetti prima di cancellare le righe che li nominano", async () => {
     const { client, calls, removedPaths } = fakeAdmin({
-      storagePaths: ["u1/cv.pdf", "u1/lettera.pdf"],
+      storagePaths: ["user-1/req/cv.pdf", "user-1/req/lettera.pdf"],
     });
     await deleteAccountData(client, "user-1");
-    expect(removedPaths).toEqual(["u1/cv.pdf", "u1/lettera.pdf"]);
+    expect(removedPaths).toEqual([
+      "user-1/req/cv.pdf",
+      "user-1/req/lettera.pdf",
+    ]);
     // I percorsi vivono solo in `file_bridge_requests`: se quella riga
     // cadesse prima, non sapremmo più quali file cancellare.
     expect(calls.length).toBeGreaterThan(0);
@@ -257,7 +264,7 @@ describe("cancellazione account — i file su Storage non sopravvivono", () => {
 
   it("se un file resta, la cancellazione si ferma invece di dirsi completa", async () => {
     const { client, deletedUsers } = fakeAdmin({
-      storagePaths: ["u1/cv.pdf"],
+      storagePaths: ["user-1/req/cv.pdf"],
       storageRemovesNothing: true,
     });
     await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
@@ -356,16 +363,19 @@ describe("cancellazione — i file orfani non sopravvivono", () => {
     expect(removedPaths).toContain("user-1/req-x/orfano.pdf");
   });
 
-  it("unisce le due fonti invece di sceglierne una", async () => {
-    // Le righe possono puntare fuori dal prefisso dell'utente (percorsi
-    // storici): vanno aggiunte all'enumerazione, non sostituite.
+  it("unisce bucket e righe, restando dentro il namespace", async () => {
+    // Le due fonti si sommano, ma solo entro `${userId}/`. La versione
+    // precedente accettava qualunque percorso dalle righe «per coprire i
+    // percorsi storici»: era un'ipotesi mia non dimostrata, e apriva una
+    // cancellazione fra utenti. Meglio perdere un caso ipotetico che
+    // lasciare cancellare il file di qualcun altro.
     const { client, removedPaths } = fakeAdmin({
-      storagePaths: ["vecchio/percorso.pdf"],
+      storagePaths: ["user-1/vecchio/percorso.pdf"],
       storageTree: { "user-1/req-y/nuovo.pdf": true },
     });
     await deleteAccountData(client, "user-1");
     expect(removedPaths).toContain("user-1/req-y/nuovo.pdf");
-    expect(removedPaths).toContain("vecchio/percorso.pdf");
+    expect(removedPaths).toContain("user-1/vecchio/percorso.pdf");
   });
 
   it("non cancella due volte lo stesso percorso", async () => {
@@ -407,5 +417,51 @@ describe("cancellazione — il percorso reale dei file ha tre segmenti", () => {
     });
     await deleteAccountData(client, "user-1");
     expect(removedPaths).toContain("user-1/a/b/c/file.pdf");
+  });
+});
+
+describe("cancellazione — non si cancellano file di altri", () => {
+  it("ignora un percorso che punta fuori dal namespace dell'utente", async () => {
+    // `file_bridge_requests` accetta INSERT con il solo controllo su
+    // `user_id`: `storage_path` non è verificato. Un utente può inserire
+    // una propria riga che punta al file di un altro e — con service_role
+    // che bypassa RLS — farlo cancellare chiudendo il proprio account.
+    // Segnalato da HQ-BACKEND.
+    const { client, removedPaths } = fakeAdmin({
+      storagePaths: ["vittima-2/req/cv.pdf", "user-1/req/mio.pdf"],
+      storageTree: { "user-1/req/mio.pdf": true },
+    });
+    await deleteAccountData(client, "user-1");
+    expect(removedPaths).toContain("user-1/req/mio.pdf");
+    expect(
+      removedPaths,
+      "ha cancellato il file di un altro utente",
+    ).not.toContain("vittima-2/req/cv.pdf");
+  });
+
+  it("un prefisso che somiglia non basta a passare", async () => {
+    // `user-10/...` non è dentro `user-1/`: il confronto deve essere sul
+    // separatore, non su una semplice somiglianza iniziale.
+    const { client, removedPaths } = fakeAdmin({
+      storagePaths: ["user-10/req/altrui.pdf"],
+      storageTree: {},
+    });
+    await deleteAccountData(client, "user-1");
+    expect(removedPaths).not.toContain("user-10/req/altrui.pdf");
+  });
+});
+
+describe("cancellazione — l'enumerazione non si tronca in silenzio", () => {
+  it("pagina oltre il limite invece di fermarsi alla prima pagina", async () => {
+    // Con una sola `list` a limite fisso, una cartella con più figli del
+    // limite verrebbe troncata e la cancellazione si direbbe completa.
+    const tree: Record<string, true> = {};
+    for (let i = 0; i < 2500; i += 1) tree[`user-1/req/f${i}.pdf`] = true;
+    const { client, removedPaths } = fakeAdmin({
+      storagePaths: [],
+      storageTree: tree,
+    });
+    await deleteAccountData(client, "user-1");
+    expect(removedPaths).toHaveLength(2500);
   });
 });
