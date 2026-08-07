@@ -52,6 +52,49 @@ that routing is intentionally changed.
 Use an unchecked control where explicit acceptance is required. A passive
 footer link is not an acceptance record.
 
+Use one unchecked combined control for this sentence, then write two semantic
+records—Terms agreement and Privacy acknowledgement—with the same timestamp and
+surface. Optional analytics consent remains a separate control.
+
+### CV upload — local runtime
+
+> Your CV will be copied to your local JHT runtime at `/jht_user/allegati` and
+> read by the Assistant. The selected AI provider's client may send its contents
+> to that provider for processing.
+
+### CV upload — VPS runtime
+
+> Your CV will be uploaded to your VPS runtime at `/jht_user/allegati` and read
+> by the Assistant. The selected AI provider's client may send its contents to
+> that provider for processing.
+
+### Google sign-in and device pairing
+
+> Google sign-in shares your account ID, email address, and basic profile
+> details for authentication only; JHT requests no Gmail, Drive, Calendar, or
+> Contacts access. Pairing can synchronize your profile, job and application
+> data, team messages and commands, preferences, and device status with your
+> private dashboard.
+
+### Disconnect, export, and deletion
+
+> Disconnecting or revoking this device stops future synchronization but does
+> not delete data already stored in your cloud account. For a complete export
+> or deletion request, email support@jobhunterteam.ai.
+
+### Desktop network disclosure
+
+> JHT Desktop sends no behavioral telemetry to Job Hunter Team. It checks
+> GitHub Releases for updates at most once a day (you can turn this off),
+> requests Frankfurter exchange rates at startup, and downloads CARTO map tiles
+> when you use the map. These services receive standard network request
+> metadata.
+
+Use these stable surface identifiers for desktop acceptance and acknowledgement
+records: `godot-first-run`, `godot-google`, `godot-cv-upload`, and
+`godot-feedback`. Store timestamps as UTC ISO 8601, for example
+`2026-08-07T12:34:56Z`.
+
 ## Audit result
 
 The pages at `web/app/privacy/page.tsx` and `web/app/terms/page.tsx` are not an
