@@ -56,6 +56,25 @@ const STORAGE_TOTAL_LIMIT = 5000;
 
 export { MANUAL_DELETE_ORDER };
 
+/**
+ * Errore di cancellazione con un codice stabile.
+ *
+ * Il messaggio libero non basta e non è sicuro: quello di Supabase può
+ * riportare frammenti del dato che ha fatto fallire il vincolo, e i
+ * percorsi dei file sono nomi scelti dall'utente. La route propaga il
+ * `code` e lo `stage`, mai il testo grezzo — né al client né nei log.
+ */
+export class DeletionError extends Error {
+  constructor(
+    readonly code: string,
+    readonly stage: string,
+    readonly count?: number,
+  ) {
+    super(`${code} @ ${stage}${count === undefined ? "" : ` (${count})`}`);
+    this.name = "DeletionError";
+  }
+}
+
 export interface DeletionOutcome {
   /** Righe rimosse per tabella. Serve al record tecnico e ai test. */
   removed: Record<string, number>;
@@ -94,20 +113,19 @@ export async function deleteAccountData(
     // immediata proprio perché fosse vera.
     // Nessun percorso nel messaggio, nemmeno a campione.
     //
-    // La versione precedente ne includeva cinque «per capire dove
+    // Una versione precedente ne includeva cinque «per capire dove
     // guardare», subito sotto un commento che diceva che i nomi dei file
-    // sono dati dell'utente: il commento e il codice si contraddicevano
-    // nello stesso blocco. E quell'errore finisce nei log del server e
-    // nel corpo della risposta al client, quindi cinque nomi di CV sono
-    // cinque nomi di CV usciti da una funzione il cui scopo è cancellarli.
+    // sono dati dell'utente: commento e codice si contraddicevano nello
+    // stesso blocco. E l'errore finisce nei log del server e nel corpo
+    // della risposta, quindi cinque nomi di CV erano cinque nomi di CV
+    // usciti da una funzione il cui scopo è cancellarli.
     //
-    // Per diagnosticare bastano il numero e la fase: il bucket si può
-    // sempre ispezionare a parte, con i permessi giusti. Rilievo di
-    // HQ-DOCS.
-    throw new Error(
-      `${storage.failed.length} file non cancellati nel bucket ` +
-        `${STORAGE_BUCKET}: la cancellazione si ferma qui per non ` +
-        `dichiararsi completa`,
+    // Per diagnosticare bastano il codice, la fase e il numero: il bucket
+    // si ispeziona a parte, con i permessi giusti.
+    throw new DeletionError(
+      "storage_incomplete",
+      STORAGE_BUCKET,
+      storage.failed.length,
     );
   }
 
@@ -119,10 +137,10 @@ export async function deleteAccountData(
       .delete({ count: "exact" })
       .eq("user_id", userId);
     if (error) {
-      throw new Error(
-        `cancellazione interrotta su ${table}: ${error.message}. ` +
-          `Le tabelle già svuotate: ${Object.keys(removed).join(", ") || "nessuna"}.`,
-      );
+      // Niente `error.message`: quello di Postgres può riportare il valore
+      // che ha violato il vincolo, cioè dato dell'utente. Il nome della
+      // tabella basta a sapere dove riprendere.
+      throw new DeletionError("table_delete_failed", table);
     }
     removed[table] = count ?? 0;
   }
@@ -130,9 +148,7 @@ export async function deleteAccountData(
   // Ultimo passo: cade l'utente e con lui tutto ciò che ha CASCADE.
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) {
-    throw new Error(
-      `dati cancellati ma utente ancora presente: ${error.message}`,
-    );
+    throw new DeletionError("auth_user_not_deleted", "auth");
   }
 
   return { removed, order: MANUAL_DELETE_ORDER };
@@ -157,10 +173,8 @@ async function listRecursive(
   budget: { left: number },
 ): Promise<string[]> {
   if (budget.left <= 0) {
-    throw new Error(
-      `troppi file sotto ${prefix}: enumerazione interrotta per non ` +
-        `dichiarare completa una cancellazione parziale`,
-    );
+    // Nemmeno il prefisso: contiene l'id utente ed è comunque un percorso.
+    throw new DeletionError("storage_too_many", STORAGE_BUCKET);
   }
   // Si pagina fino a una pagina corta. Con una sola `list` a limite fisso,
   // una cartella con più figli del limite verrebbe troncata in silenzio e
@@ -172,7 +186,7 @@ async function listRecursive(
       .from(STORAGE_BUCKET)
       .list(prefix, { limit: STORAGE_PAGE_LIMIT, offset });
     if (error) {
-      throw new Error(`impossibile elencare ${prefix}: ${error.message}`);
+      throw new DeletionError("storage_list_failed", STORAGE_BUCKET);
     }
     const page = data ?? [];
     for (const entry of page) {

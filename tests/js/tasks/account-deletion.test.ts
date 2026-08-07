@@ -14,6 +14,7 @@
 import { describe, it, expect } from "vitest";
 
 import {
+  DeletionError,
   MANUAL_DELETE_ORDER,
   deleteAccountData,
   deletionAuditLine,
@@ -237,7 +238,7 @@ describe("cancellazione account — fallimenti detti, non mascherati", () => {
   it("un errore a metà interrompe e dice dove", async () => {
     const { client, deletedUsers } = fakeAdmin({ failOn: "positions" });
     await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
-      /positions/,
+      /table_delete_failed/,
     );
     // L'utente NON deve essere cancellato se i suoi dati non lo sono:
     // sarebbe il caso peggiore, dati orfani senza più un proprietario.
@@ -247,7 +248,7 @@ describe("cancellazione account — fallimenti detti, non mascherati", () => {
   it("se l'utente non cade, lo dice invece di rispondere ok", async () => {
     const { client } = fakeAdmin({ deleteUserFails: true });
     await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
-      /utente ancora presente/,
+      /auth_user_not_deleted/,
     );
   });
 });
@@ -300,7 +301,7 @@ describe("cancellazione account — i file su Storage non sopravvivono", () => {
       storageRemovesNothing: true,
     });
     await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
-      /non cancellati/,
+      /storage_incomplete/,
     );
     expect(deletedUsers).toEqual([]);
   });
@@ -529,42 +530,103 @@ describe("cancellazione — un lotto fallito ferma i successivi", () => {
   });
 });
 
-describe("cancellazione — il messaggio d'errore non rivela nomi di file", () => {
-  it("con file dai nomi parlanti, l'errore non ne contiene nessuno", async () => {
-    // I nomi dei file sono dati dell'utente, e questo errore finisce nei
-    // log del server e nel corpo della risposta al client. Una funzione
-    // il cui scopo è cancellare quei file non può farne uscire i nomi
-    // proprio mentre fallisce.
-    const sensibili = [
-      "user-1/req/CV-Mario-Rossi-2026.pdf",
-      "user-1/req/lettera-per-Acme-SpA.pdf",
-      "user-1/req/diagnosi-medica.pdf",
-    ];
-    const tree: Record<string, true> = {};
-    for (const p of sensibili) tree[p] = true;
+describe("cancellazione — nessun nome di file esce, né in log né in risposta", () => {
+  const SENSIBILI = [
+    "user-1/req/CV-Mario-Rossi-2026.pdf",
+    "user-1/req/lettera-per-Acme-SpA.pdf",
+    "user-1/req/diagnosi-medica.pdf",
+  ];
 
+  function treeOf(paths: string[]) {
+    const tree: Record<string, true> = {};
+    for (const p of paths) tree[p] = true;
+    return tree;
+  }
+
+  it("l'errore porta un codice stabile, non i percorsi", async () => {
     const { client } = fakeAdmin({
-      storageTree: tree,
+      storageTree: treeOf(SENSIBILI),
       storageRemovesNothing: true,
     });
 
-    let message = "";
+    let error: unknown;
     try {
       await deleteAccountData(client, "user-1");
     } catch (err) {
-      message = err instanceof Error ? err.message : String(err);
+      error = err;
     }
 
-    expect(message).not.toBe("");
-    for (const full of sensibili) {
-      expect(message, `percorso nel messaggio: ${full}`).not.toContain(full);
+    expect(error).toBeInstanceOf(DeletionError);
+    const e = error as InstanceType<typeof DeletionError>;
+    expect(e.code).toBe("storage_incomplete");
+    expect(e.count).toBe(3);
+
+    // Né il messaggio né alcun campo devono contenere nomi di file.
+    const serialized = `${e.message} ${e.code} ${e.stage} ${e.count}`;
+    for (const full of SENSIBILI) {
+      expect(serialized, `percorso trapelato: ${full}`).not.toContain(full);
       const basename = full.split("/").pop()!;
-      expect(message, `nome file nel messaggio: ${basename}`).not.toContain(
+      expect(serialized, `nome file trapelato: ${basename}`).not.toContain(
         basename,
       );
     }
-    // Deve però restare diagnosticabile: quanti e dove.
-    expect(message).toContain("3");
-    expect(message).toContain("file-transit");
+  });
+
+  it("né i log del server né la risposta al client li contengono", async () => {
+    // Un log è un posto dove i dati restano: la redazione vale lì quanto
+    // nella risposta. Si esercita il ramo di errore della route
+    // riproducendone il catch, e si guarda tutto ciò che esce.
+    const { client } = fakeAdmin({
+      storageTree: treeOf(SENSIBILI),
+      storageRemovesNothing: true,
+    });
+
+    const logged: string[] = [];
+    let responseBody = "";
+    try {
+      await deleteAccountData(client, "user-1");
+    } catch (err) {
+      const known = err instanceof DeletionError;
+      const code = known ? err.code : "unknown_error";
+      const stage = known ? err.stage : "unknown";
+      logged.push(`[account-deletion] fallita: ref ${code} ${stage}`);
+      responseBody = JSON.stringify({
+        error: "deletion_failed",
+        code,
+        stage,
+      });
+    }
+
+    const everything = [...logged, responseBody].join(" ");
+    expect(everything).not.toBe("");
+    for (const full of SENSIBILI) {
+      expect(everything, `percorso in log o risposta: ${full}`).not.toContain(
+        full,
+      );
+      const basename = full.split("/").pop()!;
+      expect(
+        everything,
+        `nome file in log o risposta: ${basename}`,
+      ).not.toContain(basename);
+    }
+    // Ma resta diagnosticabile.
+    expect(everything).toContain("storage_incomplete");
+    expect(everything).toContain("file-transit");
+  });
+
+  it("il fallimento su una tabella non riporta il messaggio del database", async () => {
+    // `error.message` di Postgres può contenere il valore che ha violato
+    // il vincolo, cioè dato dell'utente.
+    const { client } = fakeAdmin({ failOn: "positions" });
+    let error: unknown;
+    try {
+      await deleteAccountData(client, "user-1");
+    } catch (err) {
+      error = err;
+    }
+    const e = error as InstanceType<typeof DeletionError>;
+    expect(e.code).toBe("table_delete_failed");
+    expect(e.stage).toBe("positions");
+    expect(e.message).not.toContain("boom");
   });
 });

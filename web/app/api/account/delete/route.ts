@@ -18,7 +18,11 @@ import { createHash } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
-import { deleteAccountData, deletionAuditLine } from "@/lib/account-deletion";
+import {
+  DeletionError,
+  deleteAccountData,
+  deletionAuditLine,
+} from "@/lib/account-deletion";
 import { USER_DATA_TABLES } from "@/lib/account-data-tables";
 
 // L'elenco è quello condiviso con l'export: «cosa posso esportare» e
@@ -98,12 +102,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, removed: outcome.removed });
   } catch (err) {
     // Un fallimento a metà è lo stato peggiore: va detto com'è, non
-    // mascherato da successo. Il messaggio dice su quale tabella si è
-    // fermato, così il supporto può finire il lavoro a mano.
-    const message = err instanceof Error ? err.message : "unknown";
-    console.error("[account-deletion] fallita:", userRef(user.id), message);
+    // mascherato da successo. Ma ciò che esce è un CODICE STABILE e la
+    // fase, mai un messaggio libero: quello dello storage conterrebbe
+    // nomi di file scelti dall'utente, quello di Postgres può riportare
+    // il valore che ha violato un vincolo. Vale per il client e per i
+    // log allo stesso modo — un log è un posto dove i dati restano.
+    const known = err instanceof DeletionError;
+    const code = known ? err.code : "unknown_error";
+    const stage = known ? err.stage : "unknown";
+    console.error(
+      "[account-deletion] fallita:",
+      userRef(user.id),
+      code,
+      stage,
+      known && err.count !== undefined ? err.count : "",
+    );
     return NextResponse.json(
-      { error: "deletion_failed", detail: message },
+      { error: "deletion_failed", code, stage },
       { status: 500 },
     );
   }
