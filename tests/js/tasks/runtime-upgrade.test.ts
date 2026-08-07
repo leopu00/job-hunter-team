@@ -78,6 +78,7 @@ type Sandbox = {
   state: () => string;
   compose: () => string;
   journal: () => boolean;
+  dockerCalls: () => string[];
 };
 
 function makeSandbox({
@@ -89,6 +90,7 @@ function makeSandbox({
   const release = path.join(root, "release");
   const installed = path.join(root, "installed-jht");
   const state = path.join(root, "container-image");
+  const dockerLog = path.join(root, "docker-calls.log");
   mkdirSync(bin, { recursive: true });
   mkdirSync(runtime, { recursive: true });
   mkdirSync(release, { recursive: true });
@@ -157,6 +159,7 @@ function makeSandbox({
     path.join(bin, "docker"),
     [
       'image_file="$FAKE_STATE"',
+      'printf \'%s\\n\' "$*" >> "$FAKE_DOCKER_LOG"',
       'image="$(cat "$image_file" 2>/dev/null || true)"',
       'cmd="$1"; shift || true',
       'case "$cmd" in',
@@ -201,6 +204,10 @@ function makeSandbox({
     compose: () =>
       readFileSync(path.join(runtime, "docker-compose.yml"), "utf8"),
     journal: () => existsSync(path.join(runtime, ".upgrade-journal")),
+    dockerCalls: () =>
+      existsSync(dockerLog)
+        ? readFileSync(dockerLog, "utf8").trim().split("\n").filter(Boolean)
+        : [],
   };
 }
 
@@ -224,6 +231,7 @@ function run(
       JHT_RAW_BASE: "https://updates.invalid/release",
       FAKE_RELEASE: path.join(sb.root, "release"),
       FAKE_STATE: path.join(sb.root, "container-image"),
+      FAKE_DOCKER_LOG: path.join(sb.root, "docker-calls.log"),
       FAKE_CANDIDATE: "sha256:new",
       ...extra,
     },
@@ -523,5 +531,6 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     });
     expect(sb.state()).toBe("sha256:old");
     expect(sb.journal()).toBe(true);
+    expect(sb.dockerCalls()).toEqual([]);
   });
 });

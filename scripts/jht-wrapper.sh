@@ -1041,11 +1041,6 @@ upgrade_restore_previous() {
   case "$was_running" in 0|1) ;; *) return 1 ;; esac
   if [ "$was_running" = "1" ]; then
     printf '%s' "$old_image" | grep -Eq '^sha256:[A-Za-z0-9]+$' || return 1
-    # `compose pull` puo' aver ritaggato latest: il digest salvato e' utile al
-    # rollback solo se e' ancora presente. Verificalo PRIMA di ripristinare
-    # compose/wrapper, altrimenti un journal corrotto muterebbe metadata per
-    # poi fallire nel tentativo di ricreare l'immagine inesistente.
-    docker image inspect "$old_image" >/dev/null 2>&1 || return 1
   elif [ "$old_image" != "none" ]; then
     return 1
   fi
@@ -1068,6 +1063,11 @@ upgrade_restore_previous() {
   [ "$snapshot_compose_sha" = "$(runtime_sha256 "$rollback_dir/docker-compose.yml")" ] || return 1
   [ "$snapshot_helper_sha" = "$(runtime_sha256 "$HOST_SETUP_SCRIPT")" ] || return 1
   [ "$snapshot_wrapper_sha" = "$(runtime_sha256 "$rollback_dir/jht-wrapper.sh")" ] || return 1
+  if [ "$was_running" = "1" ]; then
+    # Validate every host-consumed byte before the first Docker call. Only
+    # then verify that the immutable rollback image is still locally present.
+    docker image inspect "$old_image" >/dev/null 2>&1 || return 1
+  fi
   upgrade_atomic_replace "$rollback_dir/docker-compose.yml" "$COMPOSE_FILE" || return 1
   upgrade_atomic_replace "$rollback_dir/jht-wrapper.sh" "$WRAPPER_PATH" 755 || return 1
   upgrade_atomic_replace "$rollback_dir/.runtime-integrity" "$RUNTIME_MANIFEST" 600 || return 1
