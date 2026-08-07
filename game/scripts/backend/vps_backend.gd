@@ -334,7 +334,7 @@ func _run() -> void:
 	if _stop:
 		return
 	if probe["code"] != 0 or not probe["out"].contains("JHT_OK"):
-		_deferred_state(BackendBus.ERROR, _short_error(probe))
+		_deferred_state(BackendBus.ERROR, _short_error(probe, _runtime_labels))
 		return
 	if not probe["out"].contains("running"):
 		_deferred_state_key(BackendBus.ERROR, "backend.container_not_running")
@@ -381,7 +381,7 @@ func _run() -> void:
 		else:
 			failures += 1
 			if failures >= 2:  # un blip singolo non è un guasto
-				_deferred_state(BackendBus.ERROR, _short_error(res))
+				_deferred_state(BackendBus.ERROR, _short_error(res, _runtime_labels))
 		if tick % POSITIONS_EVERY == 0:
 			_fetch_positions()
 		if tick % SETTINGS_EVERY == 0:
@@ -610,7 +610,7 @@ func _fetch_terminal(agent: String) -> void:
 	if _stop or agent != _terminal_agent:
 		return
 	if res["code"] != 0:
-		_terminal_result(agent, "", _short_error(res))
+		_terminal_result(agent, "", _short_error(res, _runtime_labels))
 		return
 	var encoded := str(res["out"]).replace("\n", "").replace("\r", "")
 	var raw := Marshalls.base64_to_raw(encoded)
@@ -694,7 +694,7 @@ func _do_save_coordinator_settings(settings: Dictionary) -> void:
 	var parsed := _json_result(res)
 	var ok: bool = res["code"] == 0 and bool(parsed.get("ok", false))
 	bus.call_deferred("publish_coordinator_action", "save", ok,
-			"" if ok else _short_error(res))
+			"" if ok else _short_error(res, _runtime_labels))
 	if not ok:
 		return
 	_do_fetch_coordinator_state()
@@ -737,7 +737,7 @@ func _do_team_directive(action: Dictionary) -> void:
 	var action_name := "directive_add" if str(action.get("action")) == "add" \
 			else "directive_archive"
 	bus.call_deferred("publish_coordinator_action", action_name, ok,
-			"" if ok else _short_error(res))
+			"" if ok else _short_error(res, _runtime_labels))
 	if not ok:
 		return
 	_do_fetch_coordinator_state()
@@ -784,7 +784,7 @@ func _do_set_burn_intent(active: bool, hours: float) -> void:
 	var parsed := _json_result(res)
 	var ok: bool = res["code"] == 0 and bool(parsed.get("ok", false))
 	bus.call_deferred("publish_burn_intent_action", active, ok,
-			"" if ok else _short_error(res))
+			"" if ok else _short_error(res, _runtime_labels))
 	if not ok:
 		return
 	# Si rilegge SEMPRE il flag appena scritto: l'interruttore deve mostrare
@@ -852,7 +852,7 @@ func _do_send_chat(agent: String, text: String, context := "") -> void:
 	var persist := _ssh_stdin_file(buf, "docker exec -i jht tee -a " + chat_file)
 	if persist["code"] != 0:
 		Log.call_deferred("warn", "backend", "chat: persist fallito (non blocco): "
-				+ _short_error(persist))
+				+ _short_error(persist, _runtime_labels))
 
 	# 2) payload nella tmux dell'agente via jht-tmux-send, il tool di
 	# flotta: le TUI Ink NON registrano l'Enter se arriva mentre il turno è
@@ -925,7 +925,7 @@ func _do_fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> v
 					bus.call_deferred("publish_usage_history", query, data)
 					return
 	bus.call_deferred("publish_usage_history", query,
-			{"ok": false, "error": _short_error(res)})
+			{"ok": false, "error": _short_error(res, _runtime_labels)})
 
 var _agent_history_busy := false
 ## Richiesta arrivata mentre il worker era occupato: si tiene SOLO
@@ -958,7 +958,8 @@ func _do_fetch_agent_history(query: Dictionary) -> void:
 	_agent_history_busy = false
 	if _stop:
 		return
-	var payload: Dictionary = {"ok": false, "error": _short_error(res)}
+	var payload: Dictionary = {"ok": false,
+			"error": _short_error(res, _runtime_labels)}
 	if res["code"] == 0:
 		for line in str(res["out"]).split("\n"):
 			if line.begins_with("{"):
@@ -981,7 +982,7 @@ func _do_save_profile(fields: Dictionary) -> void:
 	var res := _ssh_python(PROFILE_SAVE_PY % b64)
 	var ok: bool = res["code"] == 0 and str(res["out"]).contains("\"ok\": true")
 	bus.call_deferred("emit_signal", "profile_saved", ok,
-			"" if ok else _short_error(res))
+			"" if ok else _short_error(res, _runtime_labels))
 	if ok:
 		_fetch_settings()  # il profilo aggiornato rientra subito in vista
 
@@ -1043,6 +1044,16 @@ const PRESENTATION_ERROR_KEYS := {
 	"file non trovato sul container": "vps.artifact.file_missing",
 	"file oltre i 10 MB": "vps.upload.file_too_large",
 	"posizione inesistente": "vps.ticket.position_missing",
+	"file temporaneo non scrivibile": "vps.transport.temp_unwritable",
+	"file temporaneo non leggibile": "vps.transport.temp_unreadable",
+	"client OpenSSH non avviabile": "vps.transport.ssh_unavailable",
+	"processo docker non avviabile": "vps.transport.docker_unavailable",
+	"processo locale non avviabile": "vps.transport.local_unavailable",
+}
+
+const PRESENTATION_ERROR_PREFIX_KEYS := {
+	"comando docker senza risposta": "vps.transport.docker_timeout",
+	"comando host non disponibile in locale": "vps.transport.local_command_unavailable",
 }
 
 const ACTIVITY_DETAIL_KEYS := {
@@ -1084,6 +1095,13 @@ const PRESENTATION_ENGLISH := {
 	"vps.activity.paused": "waiting to resume",
 	"vps.activity.idle": "active session, no turn in progress",
 	"vps.activity.pane_unavailable": "pane unavailable",
+	"vps.transport.temp_unwritable": "temporary file cannot be written",
+	"vps.transport.temp_unreadable": "temporary file cannot be read",
+	"vps.transport.ssh_unavailable": "the OpenSSH client could not be started",
+	"vps.transport.docker_unavailable": "the Docker process could not be started",
+	"vps.transport.local_unavailable": "the local process could not be started",
+	"vps.transport.docker_timeout": "Docker did not respond before the timeout",
+	"vps.transport.local_command_unavailable": "host command unavailable locally",
 }
 
 func upload_document(local_path: String) -> void:
@@ -1196,7 +1214,7 @@ func _do_save_hours(wh: Dictionary) -> void:
 	var res := _ssh_python(HOURS_SAVE_PY % b64)
 	var ok: bool = res["code"] == 0 and str(res["out"]).contains("\"ok\": true")
 	bus.call_deferred("emit_signal", "hours_saved", ok,
-			"" if ok else _short_error(res))
+			"" if ok else _short_error(res, _runtime_labels))
 	if ok:
 		_fetch_settings()
 
@@ -1517,6 +1535,11 @@ static func _short_error(res: Dictionary, labels: Dictionary = {}) -> String:
 
 static func _present_error(raw: String, labels: Dictionary = {}) -> String:
 	var key := str(PRESENTATION_ERROR_KEYS.get(raw, ""))
+	if key == "":
+		for prefix in PRESENTATION_ERROR_PREFIX_KEYS:
+			if raw.begins_with(prefix):
+				key = str(PRESENTATION_ERROR_PREFIX_KEYS[prefix])
+				break
 	return _ui_text(labels, key) if key != "" else raw
 
 
