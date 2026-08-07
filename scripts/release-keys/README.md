@@ -1,11 +1,12 @@
 # Production release trust root
 
-`production-spki.pem` is intentionally absent until the operator provisions an
-independent offline vault or non-exportable HSM/KMS. No provider has been
-selected: repository workflows and tools contain no AWS, GCP or other vendor
-assumption. The file must contain only the RSA-3072 public key in SPKI PEM
-form. Private key bytes are forbidden in GitHub secrets, source, logs and
-artifacts.
+`production-spki.pem` contains only the operator-provisioned RSA-3072 public
+key in SPKI PEM form. Its DER SHA-256 fingerprint is
+`3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2`.
+The independent private key remains offline or in a non-exportable HSM/KMS;
+private key bytes are forbidden in GitHub secrets, source, logs and artifacts.
+No provider has been selected: repository workflows and tools contain no AWS,
+GCP or other vendor assumption.
 
 Tag workflows fail closed while the public key or detached 384-byte signature
 is absent. The public key is committed before the v0.3.6 baseline is built so

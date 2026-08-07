@@ -602,6 +602,17 @@ def test_release_workflow_stops_before_unsigned_publication() -> None:
     assert prepare.index("release_manifest.py build") < prepare.index(
         "name: release-candidate"
     )
+    assert public_key_id(ROOT / "scripts/release-keys/production-spki.pem") == (
+        "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
+    )
+    assert prepare.index("Embed the pinned Windows release trust root") < (
+        prepare.index("Export native game")
+    )
+    assert publish.index("name: signed-release-candidate") < publish.index(
+        "  installer:"
+    )
+    assert publish.index("  installer:") < publish.index("  publish:")
+    assert "-AuthorityDirectory release-assets -Smoke" in publish
     assert publish.index("release_artifacts.py audit") < publish.index(
         "softprops/action-gh-release"
     )

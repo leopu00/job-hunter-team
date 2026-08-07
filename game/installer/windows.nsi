@@ -12,10 +12,14 @@
 !ifndef VERSION_NUMERIC
   !define VERSION_NUMERIC "${VERSION}.0"
 !endif
+!ifndef AUTHORITY_DIR
+  !error "AUTHORITY_DIR with the verified manifest/signature/helper is required"
+!endif
 
 Unicode true
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
+!include "LogicLib.nsh"
 
 Name "Job Hunter Team"
 OutFile "..\builds\windows\job-hunter-team-windows-x64-setup.exe"
@@ -57,6 +61,21 @@ Section "Install"
   SetOutPath "$INSTDIR"
   File "..\builds\windows\job-hunter-team.exe"
   File "icon.ico"
+  File "${AUTHORITY_DIR}\jht-windows-update.ps1"
+  File "${AUTHORITY_DIR}\RELEASE-MANIFEST.json"
+  File "${AUTHORITY_DIR}\RELEASE-MANIFEST.json.sig"
+
+  ; Il helper rifiuta una directory ereditabile o scrivibile da altri utenti.
+  ; Si conserva solo il controllo pieno del proprietario corrente; nessun nome
+  ; di gruppo localizzato entra nel comando.
+  ReadEnvStr $0 "USERNAME"
+  ReadEnvStr $1 "USERDOMAIN"
+  nsExec::ExecToStack '"$SYSDIR\icacls.exe" "$INSTDIR" /inheritance:r /grant:r "$1\$0:(OI)(CI)F"'
+  Pop $2
+  Pop $3
+  ${If} $2 != 0
+    Abort "Non è stato possibile proteggere la directory di aggiornamento."
+  ${EndIf}
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\Job Hunter Team" "InstallDir" "$INSTDIR"
@@ -85,6 +104,9 @@ SectionEnd
 Section "Uninstall"
   Delete "$INSTDIR\job-hunter-team.exe"
   Delete "$INSTDIR\icon.ico"
+  Delete "$INSTDIR\jht-windows-update.ps1"
+  Delete "$INSTDIR\RELEASE-MANIFEST.json"
+  Delete "$INSTDIR\RELEASE-MANIFEST.json.sig"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
   Delete "$DESKTOP\Job Hunter Team.lnk"

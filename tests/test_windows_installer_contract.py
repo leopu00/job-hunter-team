@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NSI = ROOT / "game" / "installer" / "windows.nsi"
 BUILDER = ROOT / "scripts" / "build-windows-installer.ps1"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish-signed-release.yml"
 SMOKE_WORKFLOW = ROOT / ".github" / "workflows" / "windows-installer-smoke.yml"
 DOWNLOAD_CLIENT = ROOT / "web" / "app" / "download" / "DownloadClient.tsx"
 DOWNLOAD_FUNNEL = ROOT / "web" / "lib" / "download-funnel.ts"
@@ -31,17 +32,23 @@ def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
         "Apps & Features DisplayVersion",
         "Installed executable does not match",
         "Silent uninstaller",
+        "AuthorityDirectory",
+        "Detached release signature must be exactly 384 raw bytes",
     ):
         assert seam in source
 
 
 def test_release_publishes_setup_primary_and_portable_secondary() -> None:
-    workflow = RELEASE_WORKFLOW.read_text()
-    assert "build-windows-installer.ps1 -Version $version -Smoke" in workflow
-    assert "job-hunter-team-windows-x64-setup.exe" in workflow
-    assert "job-hunter-team-windows-x64-portable.exe" in workflow
-    assert "--expected-asset job-hunter-team-windows-x64-setup.exe" in workflow
-    assert "--expected-asset job-hunter-team-windows-x64-portable.exe" in workflow
+    prepare = RELEASE_WORKFLOW.read_text()
+    publish = PUBLISH_WORKFLOW.read_text()
+    assert "job-hunter-team-windows-x64-portable.exe" in prepare
+    assert "job-hunter-team-windows-x64-setup.exe" not in prepare
+    assert publish.index("Decode and verify detached signature") < publish.index(
+        "build-windows-installer.ps1 -Version $version"
+    )
+    assert "-AuthorityDirectory release-assets -Smoke" in publish
+    assert "--expected-asset job-hunter-team-windows-x64-setup.exe" in publish
+    assert "--expected-asset job-hunter-team-windows-x64-portable.exe" in publish
 
 
 def test_download_page_prefers_installer_and_labels_portable_alternative() -> None:
@@ -67,6 +74,9 @@ def test_download_page_prefers_installer_and_labels_portable_alternative() -> No
 def test_native_windows_smoke_is_non_publishing() -> None:
     workflow = SMOKE_WORKFLOW.read_text()
     assert "windows-2022" in workflow
-    assert "build-windows-installer.ps1 -Version $version -Smoke" in workflow
+    assert "tests/test_windows_installer_contract.py" in workflow
+    assert "./scripts/build-windows-installer.ps1" not in workflow
     assert "actions/upload-artifact" not in workflow
-    assert "release.yml" in workflow
+    publish = PUBLISH_WORKFLOW.read_text()
+    assert "build-windows-installer.ps1 -Version $version" in publish
+    assert "-AuthorityDirectory release-assets -Smoke" in publish

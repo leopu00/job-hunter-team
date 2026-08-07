@@ -31,8 +31,8 @@ jobs:
             preset: Windows Desktop
             output: builds/windows/job-hunter-team.exe
             artifact_name: app-windows-release
-            artifact_path: game/builds/windows/job-hunter-team-windows-x64-setup.exe
-            additional_artifact_path: game/builds/windows/job-hunter-team-windows-x64-portable.exe
+            artifact_path: game/builds/windows/job-hunter-team-windows-x64-portable.exe
+            additional_artifact_path: ""
           - os: macos-14
             label: macOS Universal 2
             preset: macOS
@@ -195,6 +195,17 @@ jobs:
           GFXPANEL_OUT="$(retry_godot JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1 godot --headless --path game)"
           printf '%s\n' "$GFXPANEL_OUT" | grep "GRAPHICS-PANEL-TEST PASS"
 
+      - name: Embed the pinned Windows release trust root
+        if: runner.os == 'Windows'
+        run: |
+          test "$(wc -c < scripts/release-keys/production-spki.pem)" -eq 625
+          KEY_ID="$(python scripts/release_signing.py fingerprint \
+            --public-key scripts/release-keys/production-spki.pem)"
+          test "$KEY_ID" = "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
+          mkdir -p game/release-keys
+          cp scripts/release-keys/production-spki.pem game/release-keys/production-spki.pem
+          ! grep -q PRIVATE game/release-keys/production-spki.pem
+
       # L'export e' il passo piu' pesante e arriva dopo tutta la lista di test:
       # stessa esposizione dello step precedente, stessa difesa (game.yml la ha
       # dal 2026-07-29). La pausa serve a far chiudere davvero i processi
@@ -310,6 +321,22 @@ jobs:
               ;;
           esac
 
+      - name: Gate production trust root inside exported Windows PCK
+        if: runner.os == 'Windows'
+        working-directory: game
+        run: |
+          set +e
+          trust_out="$(env JHT_NOVPS=1 JHT_WINDOWS_UPDATE_TRUST_TEST=1 \
+            "${{ matrix.output }}" --headless 2>&1)"
+          trust_rc=$?
+          set -e
+          printf '%s\n' "$trust_out"
+          test "$trust_rc" -eq 0
+          printf '%s\n' "$trust_out" | tr -d '\r' | grep -Fx \
+            "WINDOWS-UPDATE-TRUST 3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
+          printf '%s\n' "$trust_out" | tr -d '\r' | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-TEST PASS"
+
       - name: Preserve Linux executable permissions
         if: runner.os == 'Linux'
         working-directory: game
@@ -317,12 +344,10 @@ jobs:
           tar -C builds/linux -czf builds/linux/job-hunter-team-linux-x64.tar.gz \
             job-hunter-team.x86_64
 
-      - name: Build and smoke-test Windows installer
+      - name: Preserve Windows portable artifact
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $version = $env:GITHUB_REF_NAME -replace '^v', ''
-          ./scripts/build-windows-installer.ps1 -Version $version -Smoke
           Copy-Item game/builds/windows/job-hunter-team.exe game/builds/windows/job-hunter-team-windows-x64-portable.exe
 
       # Questo gate gira sui byte che diventeranno gli asset: portable Windows
@@ -513,15 +538,17 @@ jobs:
       # The private signing key never enters GitHub. The public SPKI is normal
       # source code used here to render the protected helper and identify the
       # independently-held signing key.
-      # Until custody is selected and the production SPKI is committed, tag
-      # releases stop here rather than silently falling back to same-origin
-      # SHA256SUMS/RELEASE-PROVENANCE.
+      # Se la root incorporata diverge dal fingerprint approvato, il tag si
+      # ferma invece di ricadere su SHA256SUMS/PROVENANCE same-origin.
       - name: Require the committed production release trust root
         id: release_key
         run: |
           test -s scripts/release-keys/production-spki.pem
+          test "$(wc -c < scripts/release-keys/production-spki.pem)" -eq 625
+          ! grep -q PRIVATE scripts/release-keys/production-spki.pem
           KEY_ID="$(python scripts/release_signing.py fingerprint \
             --public-key scripts/release-keys/production-spki.pem)"
+          test "$KEY_ID" = "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
           echo "key_id=$KEY_ID" >> "$GITHUB_OUTPUT"
 
       - name: Render and attest the protected Windows update helper
@@ -551,7 +578,6 @@ jobs:
         run: |
           python scripts/release_artifacts.py verify \
             --directory release-assets \
-            --expected-asset job-hunter-team-windows-x64-setup.exe \
             --expected-asset job-hunter-team-windows-x64-portable.exe \
             --expected-asset job-hunter-team.zip \
             --expected-asset job-hunter-team-linux-x64.tar.gz \
@@ -590,9 +616,6 @@ jobs:
             --commit "$TAG_SHA" \
             --published-at "$PUBLISHED_AT" \
             --output release-assets/RELEASE-MANIFEST.json
-
-      - name: Remove runner-only provenance sidecars
-        run: rm release-assets/*.provenance.json
 
       # This immutable Actions artifact is the only input accepted by the
       # separate publish workflow. No GitHub Release, including a draft, is

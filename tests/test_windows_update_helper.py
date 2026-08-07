@@ -121,6 +121,40 @@ def _powershell() -> str:
     return executable
 
 
+def test_consumer_uses_file_without_execution_policy_bypass() -> None:
+    source = (ROOT / "game/scripts/support/windows_update_client.gd").read_text()
+    argv = source[source.index("static func helper_argv"):]
+    assert '"-File"' in argv
+    assert "ExecutionPolicy" not in argv
+    assert "Bypass" not in argv
+
+
+def test_restricted_execution_policy_fails_closed(tmp_path: Path) -> None:
+    probe = tmp_path / "must-not-run.ps1"
+    marker = tmp_path / "policy-was-bypassed"
+    probe.write_text(
+        f"[IO.File]::WriteAllText('{str(marker).replace("'", "''")}', 'bad')\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            _powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Restricted",
+            "-File",
+            str(probe),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert not marker.exists()
+
+
 def _generate_rsa_pair(directory: Path, prefix: str) -> tuple[Path, Path]:
     openssl = shutil.which("openssl.exe") or shutil.which("openssl")
     if not openssl:
@@ -345,8 +379,6 @@ def _run_verify(
             "-NoLogo",
             "-NoProfile",
             "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
             "-File",
             str(helper),
             "-Mode",
@@ -506,8 +538,6 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
             "-NoLogo",
             "-NoProfile",
             "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
             "-File",
             str(helper),
             "-TargetPath",

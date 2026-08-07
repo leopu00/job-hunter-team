@@ -10,6 +10,9 @@ param(
   [ValidatePattern('^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$')]
   [string]$Version,
 
+  [Parameter(Mandatory = $true)]
+  [string]$AuthorityDirectory,
+
   [switch]$Smoke
 )
 
@@ -20,6 +23,12 @@ $portable = Join-Path $gameDir 'builds/windows/job-hunter-team.exe'
 $setup = Join-Path $gameDir 'builds/windows/job-hunter-team-windows-x64-setup.exe'
 $nsi = Join-Path $gameDir 'installer/windows.nsi'
 $numericVersion = (($Version -split '-', 2)[0]) + '.0'
+$authority = [IO.Path]::GetFullPath($AuthorityDirectory)
+$authorityFiles = @(
+  (Join-Path $authority 'jht-windows-update.ps1'),
+  (Join-Path $authority 'RELEASE-MANIFEST.json'),
+  (Join-Path $authority 'RELEASE-MANIFEST.json.sig')
+)
 
 if (-not $IsWindows) {
   throw 'The native installer smoke must run on Windows.'
@@ -27,6 +36,23 @@ if (-not $IsWindows) {
 if (-not (Test-Path -LiteralPath $portable -PathType Leaf)) {
   throw "Portable Windows export missing: $portable"
 }
+foreach ($required in $authorityFiles) {
+  if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+    throw "Signed update authority missing: $required"
+  }
+}
+if ((Get-Item -LiteralPath $authorityFiles[2]).Length -ne 384) {
+  throw 'Detached release signature must be exactly 384 raw bytes.'
+}
+$fingerprint = & python scripts/release_signing.py fingerprint `
+  --public-key scripts/release-keys/production-spki.pem
+if ($LASTEXITCODE -ne 0 -or $fingerprint -ne '3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2') {
+  throw 'Production release trust root fingerprint mismatch.'
+}
+& python scripts/release_signing.py verify `
+  --manifest $authorityFiles[1] --signature $authorityFiles[2] `
+  --public-key scripts/release-keys/production-spki.pem
+if ($LASTEXITCODE -ne 0) { throw 'Signed release authority verification failed.' }
 
 $makensisCommand = Get-Command makensis.exe -ErrorAction SilentlyContinue
 if ($makensisCommand) {
@@ -41,7 +67,8 @@ if ($makensisCommand) {
 }
 
 Remove-Item -LiteralPath $setup -Force -ErrorAction SilentlyContinue
-& $makensis /V4 "/DVERSION=$Version" "/DVERSION_NUMERIC=$numericVersion" $nsi
+& $makensis /V4 "/DVERSION=$Version" "/DVERSION_NUMERIC=$numericVersion" `
+  "/DAUTHORITY_DIR=$authority" $nsi
 if ($LASTEXITCODE -ne 0) {
   throw "makensis failed with exit code $LASTEXITCODE"
 }
@@ -64,6 +91,9 @@ if ($Smoke) {
   $installDir = Join-Path $env:LOCALAPPDATA 'Programs/Job Hunter Team'
   $installedExe = Join-Path $installDir 'job-hunter-team.exe'
   $uninstaller = Join-Path $installDir 'Uninstall.exe'
+  $installedHelper = Join-Path $installDir 'jht-windows-update.ps1'
+  $installedManifest = Join-Path $installDir 'RELEASE-MANIFEST.json'
+  $installedSignature = Join-Path $installDir 'RELEASE-MANIFEST.json.sig'
   $desktopShortcut = Join-Path $env:USERPROFILE 'Desktop/Job Hunter Team.lnk'
   $startMenuDir = Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/Job Hunter Team'
   $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\JobHunterTeam'
@@ -77,7 +107,8 @@ if ($Smoke) {
     if ($install.ExitCode -ne 0) {
       throw "Silent installer exited with $($install.ExitCode)"
     }
-    foreach ($required in @($installedExe, $uninstaller, $desktopShortcut, $startMenuDir, $uninstallKey)) {
+    foreach ($required in @($installedExe, $installedHelper, $installedManifest,
+        $installedSignature, $uninstaller, $desktopShortcut, $startMenuDir, $uninstallKey)) {
       if (-not (Test-Path -LiteralPath $required)) {
         throw "Installer did not create expected per-user target: $required"
       }
@@ -88,6 +119,19 @@ if ($Smoke) {
     if ((Get-FileHash -LiteralPath $portable -Algorithm SHA256).Hash -ne
         (Get-FileHash -LiteralPath $installedExe -Algorithm SHA256).Hash) {
       throw 'Installed executable does not match the exported portable executable.'
+    }
+    foreach ($pair in @(
+        @($authorityFiles[0], $installedHelper),
+        @($authorityFiles[1], $installedManifest),
+        @($authorityFiles[2], $installedSignature))) {
+      if ((Get-FileHash -LiteralPath $pair[0] -Algorithm SHA256).Hash -ne
+          (Get-FileHash -LiteralPath $pair[1] -Algorithm SHA256).Hash) {
+        throw "Installed signed authority differs: $($pair[1])"
+      }
+    }
+    $acl = Get-Acl -LiteralPath $installDir
+    if (-not $acl.AreAccessRulesProtected) {
+      throw 'Installed updater directory still inherits its DACL.'
     }
 
     $previousNoVps = $env:JHT_NOVPS
@@ -109,7 +153,8 @@ if ($Smoke) {
     }
   }
 
-  foreach ($removed in @($installedExe, $uninstaller, $desktopShortcut, $startMenuDir, $uninstallKey)) {
+  foreach ($removed in @($installedExe, $installedHelper, $installedManifest,
+      $installedSignature, $uninstaller, $desktopShortcut, $startMenuDir, $uninstallKey)) {
     if (Test-Path -LiteralPath $removed) {
       throw "Uninstaller left a published target behind: $removed"
     }

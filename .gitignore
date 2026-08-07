@@ -71,6 +71,7 @@ docs/internal/private/
 shared/secrets/*
 !shared/secrets/.gitkeep
 *.pem
+!scripts/release-keys/production-spki.pem
 *.key
 *.p12
 *.pfx

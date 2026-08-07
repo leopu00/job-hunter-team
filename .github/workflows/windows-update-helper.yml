@@ -13,6 +13,8 @@ on:
       - "scripts/release-keys/**"
       - "scripts/release_manifest.py"
       - "scripts/release_signing.py"
+      - "game/scripts/support/windows_update_client.gd"
+      - "game/scripts/support/windows_update_protocol.gd"
       - "tests/test_release_manifest_signing.py"
       - "tests/test_windows_update_helper.py"
   pull_request:
@@ -27,6 +29,8 @@ on:
       - "scripts/release-keys/**"
       - "scripts/release_manifest.py"
       - "scripts/release_signing.py"
+      - "game/scripts/support/windows_update_client.gd"
+      - "game/scripts/support/windows_update_protocol.gd"
       - "tests/test_release_manifest_signing.py"
       - "tests/test_windows_update_helper.py"
   workflow_dispatch:

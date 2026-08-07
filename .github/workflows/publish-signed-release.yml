@@ -25,10 +25,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Verify authority and create draft
+  authorize:
+    name: Verify offline signature and immutable source
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      tag_sha: ${{ steps.source.outputs.tag_sha }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -93,6 +95,11 @@ jobs:
           TAG_SHA: ${{ steps.source.outputs.tag_sha }}
         run: |
           test -s scripts/release-keys/production-spki.pem
+          test "$(wc -c < scripts/release-keys/production-spki.pem)" -eq 625
+          ! grep -q PRIVATE scripts/release-keys/production-spki.pem
+          test "$(python scripts/release_signing.py fingerprint \
+            --public-key scripts/release-keys/production-spki.pem)" = \
+            "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
           python - <<'PY'
           import base64
           import binascii
@@ -109,21 +116,119 @@ jobs:
               raise SystemExit("detached signature is not exactly 384 bytes")
           Path("release-assets/RELEASE-MANIFEST.json.sig").write_bytes(signature)
           PY
+          mkdir release-sidecars
+          mv release-assets/*.provenance.json release-sidecars/
           python scripts/release_artifacts.py audit \
             --directory release-assets \
             --tag "${{ inputs.tag }}" \
             --commit "$TAG_SHA" \
             --repository "$GITHUB_REPOSITORY" \
             --release-public-key scripts/release-keys/production-spki.pem
+          mv release-sidecars/*.provenance.json release-assets/
+          rmdir release-sidecars
 
-      - name: Refuse to overwrite any existing release
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: signed-release-candidate
+          path: release-assets
+          if-no-files-found: error
+          retention-days: 3
+
+  installer:
+    name: Build installer from signed authority
+    runs-on: windows-2022
+    needs: authorize
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: signed-release-candidate
+          path: release-assets
+
+      - name: Build and smoke-test installer containing exact signed authority
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force game/builds/windows | Out-Null
+          Copy-Item release-assets/job-hunter-team-windows-x64-portable.exe `
+            game/builds/windows/job-hunter-team.exe
+          $version = '${{ inputs.tag }}' -replace '^v', ''
+          ./scripts/build-windows-installer.ps1 -Version $version `
+            -AuthorityDirectory release-assets -Smoke
+          Copy-Item game/builds/windows/job-hunter-team-windows-x64-setup.exe release-assets/
+
+      - name: Rebuild secondary audit records including the installer
+        shell: bash
+        env:
+          TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
+        run: |
+          python scripts/release_artifacts.py record \
+            --asset release-assets/job-hunter-team-windows-x64-setup.exe \
+            --output release-assets/job-hunter-team-windows-x64-setup.exe.provenance.json \
+            --tag "${{ inputs.tag }}" --commit "$TAG_SHA" \
+            --repository "$GITHUB_REPOSITORY" --source-root .
+          rm -f release-assets/SHA256SUMS release-assets/RELEASE-PROVENANCE.json
+          python scripts/release_artifacts.py verify \
+            --directory release-assets \
+            --expected-asset job-hunter-team-windows-x64-setup.exe \
+            --expected-asset job-hunter-team-windows-x64-portable.exe \
+            --expected-asset job-hunter-team.zip \
+            --expected-asset job-hunter-team-linux-x64.tar.gz \
+            --expected-asset jht-windows-update.ps1 \
+            --tag "${{ inputs.tag }}" --commit "$TAG_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --checksums release-assets/SHA256SUMS \
+            --provenance release-assets/RELEASE-PROVENANCE.json
+          rm release-assets/*.provenance.json
+          python scripts/release_artifacts.py audit \
+            --directory release-assets --tag "${{ inputs.tag }}" \
+            --commit "$TAG_SHA" --repository "$GITHUB_REPOSITORY" \
+            --release-public-key scripts/release-keys/production-spki.pem
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: signed-release-ready
+          path: release-assets
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    name: Publish only audited signed release
+    runs-on: ubuntu-latest
+    needs: [authorize, installer]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: signed-release-ready
+          path: release-assets
+
+      - name: Refuse overwrite and audit final bytes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
         run: |
           if gh release view "${{ inputs.tag }}" >/dev/null 2>&1; then
             echo "::error::release already exists; refusing to overwrite it"
             exit 1
           fi
+          python scripts/release_artifacts.py audit \
+            --directory release-assets --tag "${{ inputs.tag }}" \
+            --commit "$TAG_SHA" --repository "$GITHUB_REPOSITORY" \
+            --release-public-key scripts/release-keys/production-spki.pem
 
       - name: Generate release notes
         id: changelog
@@ -136,14 +241,8 @@ jobs:
             capture && /^## \[/ { exit }
             capture { print }
           ' CHANGELOG.md)"
-          if [ -z "$NOTES" ]; then
-            NOTES="- Release prepared without curated notes."
-          fi
-          {
-            echo "notes<<EOF"
-            echo "$NOTES"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          [ -n "$NOTES" ] || NOTES="- Release prepared without curated notes."
+          { echo "notes<<EOF"; echo "$NOTES"; echo "EOF"; } >> "$GITHUB_OUTPUT"
 
       - name: Create signed GitHub Release draft
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
@@ -152,12 +251,8 @@ jobs:
           name: "Job Hunter Team ${{ inputs.tag }}"
           body: |
             ## What's new in ${{ inputs.tag }}
-
             ${{ steps.changelog.outputs.notes }}
-
-            `RELEASE-MANIFEST.json` and `RELEASE-MANIFEST.json.sig` are the
-            detached-signed update authority. `SHA256SUMS` and
-            `RELEASE-PROVENANCE.json` are secondary audit records.
+            `RELEASE-MANIFEST.json` and its raw detached signature are the update authority.
           draft: true
           prerelease: false
           files: |
@@ -175,15 +270,13 @@ jobs:
       - name: Re-download and audit the exact signed draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_SHA: ${{ steps.source.outputs.tag_sha }}
+          TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
         run: |
           mkdir release-audit
           gh release download "${{ inputs.tag }}" --dir release-audit
           python scripts/release_artifacts.py audit \
-            --directory release-audit \
-            --tag "${{ inputs.tag }}" \
-            --commit "$TAG_SHA" \
-            --repository "$GITHUB_REPOSITORY" \
+            --directory release-audit --tag "${{ inputs.tag }}" \
+            --commit "$TAG_SHA" --repository "$GITHUB_REPOSITORY" \
             --release-public-key scripts/release-keys/production-spki.pem
 
       - name: Publish only the audited immutable draft

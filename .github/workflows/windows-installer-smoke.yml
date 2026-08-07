@@ -6,19 +6,25 @@ on:
       - master
     paths:
       - ".github/workflows/windows-installer-smoke.yml"
+      - ".github/workflows/publish-signed-release.yml"
       - "game/export_presets.cfg"
       - "game/installer/**"
       - "game/project.godot"
       - "scripts/build-windows-installer.ps1"
+      - "scripts/release-keys/**"
+      - "tests/test_windows_installer_contract.py"
   pull_request:
     branches:
       - master
     paths:
       - ".github/workflows/windows-installer-smoke.yml"
+      - ".github/workflows/publish-signed-release.yml"
       - "game/export_presets.cfg"
       - "game/installer/**"
       - "game/project.godot"
       - "scripts/build-windows-installer.ps1"
+      - "scripts/release-keys/**"
+      - "tests/test_windows_installer_contract.py"
   workflow_dispatch:
 
 permissions:
@@ -30,41 +36,22 @@ concurrency:
 
 jobs:
   nsis:
-    name: NSIS per-user install and uninstall
+    name: Signed-authority installer contract
     runs-on: windows-2022
     timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v7
 
-      - uses: chickensoft-games/setup-godot@v2.4.1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          version: 4.7.0
-          use-dotnet: false
-          include-templates: true
+          python-version: "3.12"
 
-      - name: Export portable Windows application
-        # `setup-godot` exposes `godot` as a Bash shim on Windows. Invoking it
-        # from PowerShell does not reliably populate `$LASTEXITCODE` (the first
-        # live run returned an empty value after a successful executable
-        # lookup), so use the same shell and project-relative export contract
-        # already proven by game.yml/release.yml.
-        shell: bash
-        working-directory: game
-        run: |
-          set -euo pipefail
-          mkdir -p builds/windows
-          godot --headless --path . --import
-          godot --headless --path . \
-            --export-release 'Windows Desktop' \
-            builds/windows/job-hunter-team.exe
-          test -s builds/windows/job-hunter-team.exe
-
-      # Questo job collauda il candidato ma non lo carica come artifact e non
-      # modifica release.yml: pubblicare installer + portable resta una scelta
-      # esplicita dell'operatore.
-      - name: Build, install, launch and uninstall NSIS candidate
+      # Senza la firma offline production non si costruisce neppure un installer
+      # di prova. Il vero smoke install/launch/uninstall gira nel workflow
+      # dispatch soltanto DOPO la verifica della firma detached.
+      - name: Verify fail-closed installer and publication wiring
         shell: pwsh
         run: |
-          $version = (Get-Content package.json | ConvertFrom-Json).version
-          ./scripts/build-windows-installer.ps1 -Version $version -Smoke
+          python -m pip install pytest
+          python -m pytest tests/test_windows_installer_contract.py -q
