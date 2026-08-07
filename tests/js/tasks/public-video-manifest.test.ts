@@ -101,6 +101,8 @@ describe("manifest video pubblico", () => {
     expect(source).toContain('loading="lazy"');
     expect(source).toContain('kind="captions"');
     expect(source).toContain("if (!video.published)");
+    expect(source).not.toContain("autoPlay");
+    expect(source).toContain("videoRef.current?.play()");
     expect(source.indexOf("const variant = activated")).toBeLessThan(
       source.indexOf("<video"),
     );
