@@ -18,8 +18,30 @@ import {
 // gate anti-secret del pre-commit, ed è giusto che scatti.
 const FAKE_GH = "ghp" + "_ABCdefGHIjklMNOpqrSTUvwxYZ0123456789";
 const FAKE_PROVIDER = "sk" + "-ant-api03-Zm9vYmFyYmF6cXV1eA_AA";
+const FAKE_BEARER = "synthetic" + ".bearer.token";
+const FAKE_BASIC = "c2FtcGxl" + "OnN5bnRoZXRpYw==";
+const FAKE_AWS = "AK" + "IA" + "A1B2C3D4E5F6G7H8";
+const FAKE_SLACK =
+  "xo" + "xb-111122223333-444455556666-abcdefghijklmnopqrstuvwx";
+const FAKE_GEMINI = "AI" + "zaSyA1B2C3D4E5F6G7H8J9K0L1M2N3P4Q";
 
 describe("redact — credenziali", () => {
+  it("toglie Bearer, Basic e le chiavi dei provider note", () => {
+    const cases = [
+      [`Authorization: Bearer ${FAKE_BEARER}`, FAKE_BEARER],
+      [`Authorization: Basic ${FAKE_BASIC}`, FAKE_BASIC],
+      ["Authorization: Basic YTo=", "YTo="],
+      [`aws_access_key_id=${FAKE_AWS}`, FAKE_AWS],
+      [`Slack bot token ${FAKE_SLACK}`, FAKE_SLACK],
+      [`Gemini key ${FAKE_GEMINI}`, FAKE_GEMINI],
+    ];
+    for (const [raw, secret] of cases) {
+      const out = redact(raw);
+      expect(out).not.toContain(secret);
+      expect(hasResidualSecret(out)).toBe(false);
+    }
+  });
+
   it("toglie il token Telegram", () => {
     const out = redact("bot 7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw0 ok");
     expect(out).not.toContain("AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw0");
@@ -93,6 +115,12 @@ describe("redact — dati personali", () => {
       "/Users/[user]/.jht/profile",
     );
     expect(redact("C:\\Users\\Leone\\AppData")).not.toContain("Leone");
+    expect(redact("C:\\Users\\Avery Example\\AppData")).toBe(
+      "C:\\Users\\[user]\\AppData",
+    );
+    expect(redact("open /home/sample-user failed: permission denied")).toBe(
+      "open /home/[user] failed: permission denied",
+    );
   });
 
   it("conserva l'estensione dei documenti", () => {
@@ -112,6 +140,15 @@ describe("redact — dati personali", () => {
 });
 
 describe("redact — falsi positivi", () => {
+  it("non scambia la prosa Bearer o Basic per una credenziale", () => {
+    for (const line of [
+      "Bearer authentication failed",
+      "Basic authentication enabled",
+    ]) {
+      expect(redact(line)).toBe(line);
+    }
+  });
+
   it("lascia intatte le righe di telemetria", () => {
     const perf = "[perf] fps=42 frame_ms=23.8 draw_calls=1147 nodes=3204";
     expect(redact(perf)).toBe(perf);
