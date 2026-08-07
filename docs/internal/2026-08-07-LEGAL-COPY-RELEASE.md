@@ -170,10 +170,8 @@ review the preview before sending. The desktop also saves a local Markdown
 copy, which remains until you delete it.
 
 Submitted reports and web support messages are sent privately to the Job
-Hunter Team support inbox through Resend. They are **not** published as GitHub
-issues automatically. After reviewing a report, the operator may choose to
-create a public GitHub issue containing a redacted technical summary. The
-original report is not automatically published.
+Hunter Team support inbox through Resend. The submitted report remains in the
+private support channel.
 
 The support endpoint processes an IP address for short-window abuse prevention.
 If a private operations webhook is enabled, it can receive a redacted summary;
@@ -194,7 +192,7 @@ We share data only as needed for a feature you use:
 | Frankfurter | Public exchange rates requested by the hosted server or desktop client |
 | Resend and the project support inbox | Private delivery of support and feedback email |
 | A configured private operations webhook | A redacted support summary, if enabled |
-| GitHub | Release information requested by the desktop or links you select; a manually created, redacted public issue if the operator decides one is needed |
+| GitHub | Release information requested by the desktop or links you select |
 
 These recipients process data under their own terms and privacy documents.
 
@@ -227,9 +225,7 @@ Cloud deletion does not delete:
 - the workspace or files on your computer or VPS;
 - data retained independently by Google, an AI provider, your VPS provider, or
   another third party under its own policy;
-- support email already delivered to the private inbox; or
-- a redacted public GitHub issue that the operator created manually after
-  reviewing a report.
+- support email already delivered to the private inbox.
 
 If you cannot use the controls, request export or deletion from the email
 address associated with your cloud account by writing to
@@ -246,8 +242,7 @@ temporary.
 
 Support reports remain in the private support channel for investigation and
 follow-up, unless you request their deletion. Hosting, security, backup, and
-analytics systems follow the applicable provider lifecycle. A manually created
-public GitHub issue remains public until the operator edits or removes it.
+analytics systems follow the applicable provider lifecycle.
 
 You can use the local product without a cloud account, refuse analytics,
 disconnect or revoke devices, choose your model provider, export cloud data,
@@ -393,10 +388,8 @@ process.
 ### 11. Support reports
 
 Support and bug reports are delivered privately to the Job Hunter Team support
-inbox. They are not published automatically. After review, the operator may
-create a public GitHub issue containing a redacted technical summary. Review
-desktop report previews and do not submit information you do not want to share
-with support.
+inbox. They are not published automatically. Review desktop report previews and
+do not submit information you do not want to share with support.
 
 ### 12. Service changes and availability
 
@@ -434,8 +427,7 @@ Privacy questions and data requests:
 - CARTO is disclosed, not consent-gated: the static home image makes no CARTO
   request; a browser that initializes the live map does.
 - Remove automatic GitHub issue creation for every feedback client. Deliver
-  reports privately to the domain support inbox. A later public issue is a
-  manual operator action and contains only a redacted technical summary.
+  reports privately to the domain support inbox.
 - Provide a complete, authenticated cloud export before deletion. Export no
   token secret, hash, provider credential, or other security secret.
 - Make cloud account deletion a strongly confirmed, immediate, irreversible

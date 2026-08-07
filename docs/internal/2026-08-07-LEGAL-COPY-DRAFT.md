@@ -267,8 +267,7 @@ data. Review the preview and remove anything you do not want to share.
 
 A submitted desktop report is delivered privately to the support mailbox
 through Resend and may be summarized to a configured private support webhook.
-It is not published automatically. After review, the operator may manually
-create a public GitHub issue containing a redacted technical summary.
+It is not published automatically.
 
 The web contact and web dashboard support forms send their limited content to
 the support mailbox and, if configured, a private support webhook. The endpoint
@@ -309,7 +308,7 @@ We disclose data only as needed for the feature you use:
 | Your VPS provider | Hosting and processing the workspace if you choose to run JHT on a VPS |
 | Vercel | Hosting, security, aggregate web analytics, and performance measurements |
 | Resend and the project support mailbox | Delivering support and feedback email |
-| GitHub | Release information and a manually created redacted public issue if the operator decides one is needed |
+| GitHub | Release information requested by the desktop or links selected by the user |
 | GitHub, Frankfurter, and CARTO | Desktop update metadata, public exchange rates, and map tiles respectively; each receives ordinary network request metadata |
 | CARTO and Frankfurter | Hosted web map resources requested by the visitor's browser and exchange rates requested server-side, respectively |
 | `[CONFIGURED WEBHOOK RECIPIENT]` | A redacted summary of support reports, if enabled |
@@ -333,8 +332,8 @@ short-lived; device tokens remain until their configured expiry or revocation.
 On-demand file transfer is designed to be temporary, but its production cleanup
 job must be verified before a precise deletion promise is published.
 
-Support email, manually created public GitHub issues, webhook deliveries, hosting logs,
-analytics, backups, and abuse-prevention records have different retention
+Support email, webhook deliveries, hosting logs, analytics, backups, and
+abuse-prevention records have different retention
 paths. The controller must approve and publish a schedule before release.
 
 `[OPERATOR/LEGAL DECISION REQUIRED: provide a retention period or deletion
@@ -491,8 +490,7 @@ enforcement policy, including warning, suspension, appeal, and termination.]`
 
 The desktop app shows a preview of a redacted bug report before sending it.
 Submitted reports are delivered privately to the support inbox and are not
-published automatically. After review, the operator may manually create a
-public GitHub issue containing a redacted technical summary.
+published automatically.
 
 ### 10. Suspension, termination, export, and deletion
 
@@ -583,8 +581,7 @@ These are blockers, not editorial polish:
 - On desktop first run, show the same current versions and persist the local
   acceptance record. Re-prompt only under the approved versioning policy.
 - Deliver every feedback report privately to the domain support inbox; no
-  client may create a GitHub issue automatically. A later public issue is a
-  manual operator action using a redacted technical summary.
+  client may create a GitHub issue automatically.
 - Make “Necessary only” control actual analytics loading if the operator and
   legal review choose opt-in. A stored label without behavioral effect is not
   consent.
