@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { dispatchFeedback } from "@/lib/feedback-dispatch";
 import { redact } from "@/lib/redact";
 import {
   MAX_BODY_BYTES,
@@ -173,16 +174,19 @@ export async function POST(req: NextRequest) {
   // l'invito a riaccenderla per sbaglio. Se un giorno la si rivuole, va
   // rifatta dietro una scelta esplicita dell'utente — ed è nella storia
   // di git, non serve riscriverla a memoria.
-  const [mail, webhook] = await Promise.all([
-    sendEmail(report, ticket),
-    notifyWebhook(report, ticket),
-  ]);
+  // Posta prima, webhook solo dopo: vedi `lib/feedback-dispatch.ts` per
+  // il perché. In breve: il copy promette la casella di supporto, quindi
+  // è la posta a decidere se la promessa è mantenuta.
+  const outcome = await dispatchFeedback(
+    () => sendEmail(report, ticket),
+    () => notifyWebhook(report, ticket),
+  );
 
-  if (!mail && !webhook) {
-    // Nessun canale configurato, o entrambi giù. Si risponde con la verità:
-    // il client tiene la copia locale e lo dice all'utente, invece di far
-    // credere che la segnalazione sia arrivata da qualche parte.
-    console.error("[feedback] nessuna destinazione disponibile per", ticket);
+  if (!outcome.delivered) {
+    // La posta non ha accettato: si dice la verità e non si è tentato
+    // nessun altro canale. Il client tiene la copia locale e lo comunica,
+    // invece di far credere che la segnalazione sia arrivata.
+    console.error("[feedback] posta non disponibile per", ticket);
     return NextResponse.json(
       {
         error: "Canale di assistenza non disponibile",
@@ -193,7 +197,7 @@ export async function POST(req: NextRequest) {
   }
 
   console.log(
-    `[feedback] ${ticket} · ${report.platform} · v${report.appVersion} · mail=${mail} webhook=${webhook}`,
+    `[feedback] ${ticket} · ${report.platform} · v${report.appVersion} · mail=ok webhook=${outcome.webhook}`,
   );
   return NextResponse.json({ ok: true, ticket });
 }
