@@ -23,9 +23,10 @@
 //     misurati crollano o se l'utente chiede prefers-reduced-motion.
 //     In quel caso non c'è nemmeno l'interazione: meglio un'immagine
 //     ferma e dignitosa di un globo che si trascina a scatti;
-//   • l'autopilota si ferma quando la tab è nascosta o il pannello
-//     esce dal viewport: niente batteria bruciata per una scena che
-//     nessuno guarda.
+//   • MapLibre si ferma quando la tab è nascosta o il pannello esce dal
+//     viewport: niente frame e batteria bruciata per una scena che nessuno
+//     guarda. Il copione però avanza sul solo orologio e al rientro viene
+//     ricostruito nel punto corrente, quindi il loop non ricomincia.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MaplibreMap } from "maplibre-gl";
 import JobsGlobeLazy from "@/app/components/JobsGlobeLazy";
@@ -59,19 +60,29 @@ const ROTATE_BEFORE_FLY_MS = 5500;
 // stesso continente, transizione più ampia (flyTo con curva più alta:
 // si allontana fino a mostrare lo spostamento sul globo, poi
 // riatterra) quando si cambia continente.
-const HOP_FLY_MS = 6500;
-const CONTINENT_FLY_MS = 11000;
+const HOP_FLY_MS = 8500;
+const CONTINENT_FLY_MS = 14000;
 // Anche il primo volo deve mostrare chiaramente zoom-out, viaggio e
 // zoom-in: una discesa rapida sembra un cambio scena e non un globo.
-const FIRST_FLY_MS = 9000;
+const FIRST_FLY_MS = 12000;
+// `curve` controlla quanto flyTo risale durante il viaggio. Anche i salti
+// locali ora lasciano vedere più mondo; i cambi continente salgono ancora
+// un poco di più.
+const HOP_FLY_CURVE = 1.8;
+const CONTINENT_FLY_CURVE = 2;
 // Quanto resta a schermo la card di UNA opportunità. La sosta sulla
 // città è il numero di pin per questo tempo: 7 secondi circa dove i pin
 // sono tre, poco più di undici dove sono cinque.
 const CARD_MS = 2300;
-// Ripresa dopo che l'utente ha smesso di toccare il globo. Sei secondi:
-// abbastanza da poter leggere una card senza vedersela strappare via,
-// abbastanza poco da non lasciare la home ferma per chi si è distratto.
-const RESUME_AFTER_IDLE_MS = 6000;
+// Ripresa dopo che l'utente ha DAVVERO finito il gesto. Il conto non parte
+// al pointerdown: sette decimi dopo il rilascio l'autopilota è già di nuovo
+// in moto.
+const RESUME_AFTER_IDLE_MS = 700;
+// La rotazione non riappare a velocità piena: per 0,8 s accelera da ferma
+// fino agli stessi 3°/s dei passi lineari. Con easing v², 1,2° in 0,8 s
+// raccordano esattamente quella velocità finale.
+const RESUME_RAMP_MS = 800;
+const RESUME_RAMP_DEG = 1.2;
 // Rientro alla vista d'insieme quando il giro riparte: se l'utente ha
 // lasciato il globo zoomato su un quartiere, l'autopilota non riprende
 // da lì — risale prima, poi ricomincia a girare.
@@ -102,6 +113,28 @@ function startAutopilot(
     onBegan: () => void;
   },
 ): AutopilotHandle {
+  type CameraPoint = { lng: number; lat: number; zoom: number };
+  type TourCursor =
+    | {
+        phase: "rotate";
+        remainingMs: number;
+        advancedMs: number;
+        from: CameraPoint;
+      }
+    | {
+        phase: "travel";
+        remainingMs: number;
+        totalMs: number;
+        stopSeq: number;
+        from: CameraPoint;
+      }
+    | {
+        phase: "dwell";
+        remainingMs: number;
+        stopSeq: number;
+        cardIndex: number;
+      };
+
   let disposed = false;
   const paused = new Set<PauseReason>();
   const suspended = () => paused.size > 0;
@@ -113,16 +146,61 @@ function startAutopilot(
   // riapparire.
   let travelSeq = 0;
   let timer: number | null = null;
+  let timerDueAt: number | null = null;
+  let travelDueAt: number | null = null;
+  let currentStopSeq = -1;
+  let currentCardIndex = 0;
+  let resumeStage: null | "ramp" | "recenter" = null;
+  // Uscire dal viewport congela MapLibre (zero frame) ma non il copione:
+  // questo cursore e il tempo a parete permettono di ricostruire al rientro
+  // il punto che il loop avrebbe raggiunto continuando invisibile.
+  let offscreenCursor: TourCursor | null = null;
+  let offscreenStartedAt: number | null = null;
+  let offscreenElapsedMs = 0;
 
   const clearTimer = () => {
     if (timer != null) {
       window.clearTimeout(timer);
       timer = null;
     }
+    timerDueAt = null;
   };
   const schedule = (fn: () => void, ms: number) => {
     clearTimer();
+    timerDueAt = Date.now() + ms;
     timer = window.setTimeout(fn, ms);
+  };
+
+  const stopAt = (stopSeq: number) => tour[stopSeq % tour.length];
+  const crossingAt = (stopSeq: number) => {
+    const stop = stopAt(stopSeq);
+    const prev = stopAt(stopSeq + tour.length - 1);
+    return stopSeq === 0 || prev.continent !== stop.continent;
+  };
+  const travelDurationAt = (stopSeq: number) =>
+    stopSeq === 0
+      ? FIRST_FLY_MS
+      : crossingAt(stopSeq)
+        ? CONTINENT_FLY_MS
+        : HOP_FLY_MS;
+  const rowsAt = (stopSeq: number) =>
+    [...stopAt(stopSeq).positions].sort(
+      (a, b) => (b.score ?? 0) - (a.score ?? 0),
+    );
+  // Dopo il primo volo speciale il copione è perfettamente periodico.
+  // Serve a saltare in O(1) giorni interi fuori viewport invece di
+  // attraversare card per card al rientro.
+  const loopDurationMs = tour.reduce((total, _stop, stopIndex) => {
+    const repeatedStopSeq = tour.length + stopIndex;
+    return (
+      total +
+      travelDurationAt(repeatedStopSeq) +
+      rowsAt(repeatedStopSeq).length * CARD_MS
+    );
+  }, 0);
+  const cameraPoint = (): CameraPoint => {
+    const c = map.getCenter();
+    return { lng: c.lng, lat: c.lat, zoom: map.getZoom() };
   };
 
   const spinStep = () => {
@@ -138,27 +216,103 @@ function startAutopilot(
     });
   };
 
-  // Concatena i passi di rotazione: quando un easeTo finisce e siamo
-  // ancora in fase rotate, se ne accoda un altro.
+  const startResumeRecenter = () => {
+    if (disposed || suspended()) return;
+    resumeStage = null;
+    phase = "dwell";
+    const c = map.getCenter();
+    try {
+      map.easeTo({
+        // Durante il rientro la longitudine continua alla velocità appena
+        // raggiunta dalla rampa: nessun arresto fra accelerazione e giro.
+        center: [
+          c.lng + (ROTATE_STEP_DEG * RECENTER_MS) / ROTATE_STEP_MS,
+          IDLE_LAT,
+        ],
+        zoom: OVERVIEW_ZOOM,
+        duration: RECENTER_MS,
+        easing: (v) => v,
+      });
+      resumeStage = "recenter";
+    } catch {
+      phase = "rotate";
+      spinStep();
+      schedule(flyToNext, ROTATE_BEFORE_FLY_MS);
+    }
+  };
+
+  const startResumeRamp = () => {
+    if (disposed || suspended()) return;
+    resumeStage = null;
+    phase = "dwell";
+    const c = map.getCenter();
+    try {
+      map.easeTo({
+        center: [c.lng + RESUME_RAMP_DEG, c.lat],
+        zoom: map.getZoom(),
+        duration: RESUME_RAMP_MS,
+        easing: (v) => v * v,
+      });
+      resumeStage = "ramp";
+    } catch {
+      startResumeRecenter();
+    }
+  };
+
+  // Concatena passi lineari e le due parti della ripresa morbida. Il
+  // controllo `suspended` impedisce a un moveend generato da map.stop()
+  // di riavviare qualcosa mentre una mano è ancora sul globo.
   const onMoveEnd = () => {
+    if (disposed || suspended()) return;
+    if (resumeStage === "ramp") {
+      startResumeRecenter();
+      return;
+    }
+    if (resumeStage === "recenter") {
+      resumeStage = null;
+      phase = "rotate";
+      spinStep();
+      schedule(flyToNext, ROTATE_BEFORE_FLY_MS);
+      return;
+    }
     if (phase === "rotate") spinStep();
   };
 
-  const flyToNext = () => {
+  let flyToNext = () => {};
+
+  const beginDwell = (
+    stopSeq: number,
+    cardIndex = 0,
+    firstCardMs = CARD_MS,
+  ) => {
+    if (disposed || suspended()) return;
+    const rows = rowsAt(stopSeq);
+    if (cardIndex >= rows.length) {
+      flyToNext();
+      return;
+    }
+    phase = "dwell";
+    travelDueAt = null;
+    currentStopSeq = stopSeq;
+    currentCardIndex = cardIndex;
+    opts.onCardChange(rows[cardIndex].id);
+    schedule(() => beginDwell(stopSeq, cardIndex + 1), firstCardMs);
+  };
+
+  const startTravel = (
+    stopSeq: number,
+    duration = travelDurationAt(stopSeq),
+    resumeDescent = false,
+  ) => {
     if (disposed || suspended()) return;
     opts.onCardChange(null);
-    const stop = tour[idx % tour.length];
-    const prev = tour[(idx + tour.length - 1) % tour.length];
+    const stop = stopAt(stopSeq);
+    const crossing = crossingAt(stopSeq);
     // Cambio continente (o primissimo volo, o rientro dal fondo del
     // tour): transizione ampia — durata maggiore e curva più alta, così
     // il volo si allontana abbastanza da far LEGGERE lo spostamento sul
     // globo prima di riavvicinarsi. Dentro il continente: salto corto,
     // il viaggio resta locale.
-    const crossing = idx === 0 || prev.continent !== stop.continent;
-    const duration =
-      idx === 0 ? FIRST_FLY_MS : crossing ? CONTINENT_FLY_MS : HOP_FLY_MS;
-    idx += 1;
-
     // Ferma l'eventuale passo di rotazione PRIMA di entrare in travel:
     // il moveend generato da stop non deve essere scambiato per la fine
     // del nuovo volo.
@@ -167,23 +321,9 @@ function startAutopilot(
     phase = "travel";
     travelSeq += 1;
     const seq = travelSeq;
-
-    // Le opportunità della città, una alla volta, migliori per prime:
-    // chi guarda per tre secondi vede comunque il meglio di quella
-    // ricerca. Esaurite le card, si riparte per la tappa successiva.
-    const showCard = (i: number) => {
-      if (disposed || suspended() || phase !== "dwell" || seq !== travelSeq)
-        return;
-      const rows = [...stop.positions].sort(
-        (a, b) => (b.score ?? 0) - (a.score ?? 0),
-      );
-      if (i >= rows.length) {
-        flyToNext();
-        return;
-      }
-      opts.onCardChange(rows[i].id);
-      schedule(() => showCard(i + 1), CARD_MS);
-    };
+    currentStopSeq = stopSeq;
+    currentCardIndex = 0;
+    travelDueAt = Date.now() + duration;
 
     const onTravelEnd = () => {
       if (disposed || suspended() || phase !== "travel" || seq !== travelSeq)
@@ -192,8 +332,7 @@ function startAutopilot(
       const settleAtStop = () => {
         if (disposed || suspended() || phase !== "travel" || seq !== travelSeq)
           return;
-        phase = "dwell";
-        showCard(0);
+        beginDwell(stopSeq);
       };
 
       // Anche quando style e source risultano loaded, il frame finale può
@@ -202,17 +341,230 @@ function startAutopilot(
       map.once("idle", settleAtStop);
     };
 
-    map.flyTo({
-      center: [stop.lon, stop.lat],
-      zoom: CITY_ZOOM,
-      duration,
-      curve: crossing ? 1.55 : 1.42,
-      essential: true,
-    });
+    if (resumeDescent) {
+      // La parte già trascorsa del volo è stata ricostruita con jumpTo:
+      // da lì resta solo la discesa morbida verso la città, senza un
+      // secondo zoom-out artificiale.
+      map.easeTo({
+        center: [stop.lon, stop.lat],
+        zoom: CITY_ZOOM,
+        duration,
+        easing: (v) => v * (2 - v),
+      });
+    } else {
+      map.flyTo({
+        center: [stop.lon, stop.lat],
+        zoom: CITY_ZOOM,
+        duration,
+        curve: crossing ? CONTINENT_FLY_CURVE : HOP_FLY_CURVE,
+        essential: true,
+      });
+    }
     // flyTo() chiama stop() internamente e può emettere il moveend della
     // camera precedente in modo sincrono. Registrarsi DOPO il ritorno evita
     // di scambiarlo per il moveend del volo appena avviato.
     map.once("moveend", onTravelEnd);
+  };
+
+  flyToNext = () => {
+    if (disposed || suspended()) return;
+    const stopSeq = idx;
+    idx += 1;
+    startTravel(stopSeq);
+  };
+
+  const captureTourCursor = (): TourCursor => {
+    const now = Date.now();
+    if (resumeStage != null) {
+      return {
+        phase: "rotate",
+        remainingMs: ROTATE_BEFORE_FLY_MS,
+        advancedMs: 0,
+        from: cameraPoint(),
+      };
+    }
+    if (phase === "travel" && currentStopSeq >= 0) {
+      const remainingMs = Math.max(1, (travelDueAt ?? now + 1) - now);
+      return {
+        phase: "travel",
+        remainingMs,
+        totalMs: remainingMs,
+        stopSeq: currentStopSeq,
+        from: cameraPoint(),
+      };
+    }
+    if (phase === "dwell" && currentStopSeq >= 0) {
+      return {
+        phase: "dwell",
+        remainingMs: Math.max(1, (timerDueAt ?? now + CARD_MS) - now),
+        stopSeq: currentStopSeq,
+        cardIndex: currentCardIndex,
+      };
+    }
+    return {
+      phase: "rotate",
+      remainingMs: Math.max(
+        1,
+        (timerDueAt ?? now + ROTATE_BEFORE_FLY_MS) - now,
+      ),
+      advancedMs: 0,
+      from: cameraPoint(),
+    };
+  };
+
+  const travelCursor = (stopSeq: number, from: CameraPoint): TourCursor => {
+    const duration = travelDurationAt(stopSeq);
+    return {
+      phase: "travel",
+      remainingMs: duration,
+      totalMs: duration,
+      stopSeq,
+      from,
+    };
+  };
+
+  const advanceTourCursor = (
+    initial: TourCursor,
+    elapsedMs: number,
+  ): TourCursor => {
+    let cursor = initial;
+    let left = Math.max(0, elapsedMs);
+    const skipWholeLoops = () => {
+      if (
+        cursor.phase === "rotate" ||
+        cursor.stopSeq < tour.length ||
+        loopDurationMs <= 0 ||
+        left < loopDurationMs
+      ) {
+        return;
+      }
+      const loops = Math.floor(left / loopDurationMs);
+      const stopOffset = loops * tour.length;
+      left -= loops * loopDurationMs;
+      idx += stopOffset;
+      cursor = { ...cursor, stopSeq: cursor.stopSeq + stopOffset };
+    };
+    skipWholeLoops();
+    while (left >= cursor.remainingMs) {
+      left -= cursor.remainingMs;
+      if (cursor.phase === "rotate") {
+        const from = {
+          lng:
+            cursor.from.lng +
+            ((cursor.advancedMs + cursor.remainingMs) * ROTATE_STEP_DEG) /
+              ROTATE_STEP_MS,
+          lat: IDLE_LAT,
+          zoom: OVERVIEW_ZOOM,
+        };
+        const stopSeq = idx;
+        idx += 1;
+        cursor = travelCursor(stopSeq, from);
+      } else if (cursor.phase === "travel") {
+        cursor = {
+          phase: "dwell",
+          remainingMs: CARD_MS,
+          stopSeq: cursor.stopSeq,
+          cardIndex: 0,
+        };
+      } else {
+        const rows = rowsAt(cursor.stopSeq);
+        if (cursor.cardIndex + 1 < rows.length) {
+          cursor = {
+            ...cursor,
+            remainingMs: CARD_MS,
+            cardIndex: cursor.cardIndex + 1,
+          };
+        } else {
+          const fromStop = stopAt(cursor.stopSeq);
+          const stopSeq = idx;
+          idx += 1;
+          cursor = travelCursor(stopSeq, {
+            lng: fromStop.lon,
+            lat: fromStop.lat,
+            zoom: CITY_ZOOM,
+          });
+        }
+      }
+      skipWholeLoops();
+    }
+    if (cursor.phase === "rotate") cursor.advancedMs += left;
+    cursor.remainingMs -= left;
+    return cursor;
+  };
+
+  const shortestLng = (from: number, to: number, progress: number) => {
+    const delta = ((to - from + 540) % 360) - 180;
+    return from + delta * progress;
+  };
+
+  const restoreTourCursor = (cursor: TourCursor) => {
+    resumeStage = null;
+    opts.onCardChange(null);
+    phase = "dwell";
+    if (cursor.phase === "rotate") {
+      try {
+        map.jumpTo({
+          center: [
+            cursor.from.lng +
+              (cursor.advancedMs * ROTATE_STEP_DEG) / ROTATE_STEP_MS,
+            IDLE_LAT,
+          ],
+          zoom: OVERVIEW_ZOOM,
+        });
+      } catch {
+        /* la rotazione riparte comunque dal frame disponibile */
+      }
+      phase = "rotate";
+      spinStep();
+      schedule(flyToNext, cursor.remainingMs);
+      return;
+    }
+
+    const stop = stopAt(cursor.stopSeq);
+    if (cursor.phase === "dwell") {
+      try {
+        map.jumpTo({ center: [stop.lon, stop.lat], zoom: CITY_ZOOM });
+      } catch {
+        /* il countdown e la card restano comunque coerenti */
+      }
+      beginDwell(cursor.stopSeq, cursor.cardIndex, cursor.remainingMs);
+      return;
+    }
+
+    // Ricostruzione senza frame: posizione, zoom-out e indice del volo
+    // avanzano in base al tempo trascorso, poi MapLibre anima soltanto la
+    // discesa ancora mancante. È un singolo jump al rientro, mai un loop
+    // di render invisibili.
+    const progress = 1 - cursor.remainingMs / cursor.totalMs;
+    const eased = progress * progress * (3 - 2 * progress);
+    const curve = crossingAt(cursor.stopSeq)
+      ? CONTINENT_FLY_CURVE
+      : HOP_FLY_CURVE;
+    const apexZoom = Math.min(
+      cursor.from.zoom,
+      OVERVIEW_ZOOM - (curve - 1.42) * 1.5,
+    );
+    const leg =
+      progress < 0.5
+        ? progress * 2
+        : (progress - 0.5) * 2;
+    const legEase = leg * leg * (3 - 2 * leg);
+    const zoom =
+      progress < 0.5
+        ? cursor.from.zoom + (apexZoom - cursor.from.zoom) * legEase
+        : apexZoom + (CITY_ZOOM - apexZoom) * legEase;
+    try {
+      map.jumpTo({
+        center: [
+          shortestLng(cursor.from.lng, stop.lon, eased),
+          cursor.from.lat + (stop.lat - cursor.from.lat) * eased,
+        ],
+        zoom,
+      });
+    } catch {
+      /* startTravel riparte dal frame disponibile */
+    }
+    startTravel(cursor.stopSeq, cursor.remainingMs, progress >= 0.5);
   };
 
   const begin = () => {
@@ -245,10 +597,16 @@ function startAutopilot(
 
   return {
     pause: (reason) => {
-      if (disposed) return;
+      if (disposed || paused.has(reason)) return;
       const wasRunning = !suspended();
+      if (reason === "offscreen") {
+        offscreenCursor = captureTourCursor();
+        offscreenStartedAt = Date.now();
+        offscreenElapsedMs = 0;
+      }
       paused.add(reason);
       if (!wasRunning) return;
+      resumeStage = null;
       travelSeq += 1;
       clearTimer();
       // La card la tiene chi ha causato la pausa: se è stato l'utente,
@@ -262,24 +620,27 @@ function startAutopilot(
       }
     },
     unpause: (reason) => {
-      if (disposed) return;
+      if (disposed || !paused.has(reason)) return;
       paused.delete(reason);
-      if (suspended()) return;
-      opts.onCardChange(null);
-      // Rientro: risale alla vista d'insieme (l'utente può aver lasciato
-      // il globo zoomato su una via) e da lì riprende a girare.
-      phase = "rotate";
-      const c = map.getCenter();
-      try {
-        map.easeTo({
-          center: [c.lng, IDLE_LAT],
-          zoom: OVERVIEW_ZOOM,
-          duration: RECENTER_MS,
-        });
-      } catch {
-        /* ignora */
+      if (reason === "offscreen" && offscreenStartedAt != null) {
+        offscreenElapsedMs = Date.now() - offscreenStartedAt;
+        offscreenStartedAt = null;
       }
-      schedule(flyToNext, RECENTER_MS + ROTATE_BEFORE_FLY_MS);
+      if (suspended()) return;
+      if (offscreenCursor) {
+        const cursor = advanceTourCursor(
+          offscreenCursor,
+          offscreenElapsedMs,
+        );
+        offscreenCursor = null;
+        offscreenElapsedMs = 0;
+        restoreTourCursor(cursor);
+        return;
+      }
+      opts.onCardChange(null);
+      // Rientro: prima una breve accelerazione, poi risale alla vista
+      // d'insieme senza interrompere la rotazione appena avviata.
+      startResumeRamp();
     },
     dispose,
   };
@@ -388,11 +749,16 @@ export default function LandingGlobe() {
     [],
   );
 
-  // Mano umana sul globo: si ferma il giro e si riarma il conto alla
-  // rovescia della ripresa. Ogni nuovo tocco lo fa ripartire da capo,
-  // quindi finché si trascina il globo resta dell'utente.
-  const onUserInteract = useCallback(() => {
+  // Mano umana sul globo: il conto della ripresa nasce solo al rilascio.
+  // Un gesto lungo o un multi-touch non può quindi essere interrotto da un
+  // timeout partito quando il dito era ancora giù.
+  const onUserInteractStart = useCallback(() => {
     autopilotRef.current?.pause("user");
+    if (resumeTimerRef.current != null)
+      window.clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = null;
+  }, []);
+  const onUserInteractEnd = useCallback(() => {
     if (resumeTimerRef.current != null)
       window.clearTimeout(resumeTimerRef.current);
     resumeTimerRef.current = window.setTimeout(() => {
@@ -432,12 +798,29 @@ export default function LandingGlobe() {
       positions: show.positions,
       lang,
       cardId,
-      onPinSelect: (id: string | null) => setCardId(id),
-      onUserInteract,
+      onPinSelect: (id: string | null) => {
+        setCardId(id);
+        // Un tap sul pin è deliberato anche senza trascinamento: gli si
+        // concede la stessa breve finestra di un click col mouse.
+        if (id) {
+          onUserInteractStart();
+          onUserInteractEnd();
+        }
+      },
+      onUserInteractStart,
+      onUserInteractEnd,
       onMapReady,
       onTierChange,
     }),
-    [show, lang, cardId, onUserInteract, onMapReady, onTierChange],
+    [
+      show,
+      lang,
+      cardId,
+      onUserInteractStart,
+      onUserInteractEnd,
+      onMapReady,
+      onTierChange,
+    ],
   );
 
   // Il passaggio dev'essere atomico: sfumare due rappresentazioni dello

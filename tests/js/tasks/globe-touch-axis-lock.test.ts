@@ -48,7 +48,13 @@ function banco() {
   el.appendChild(canvas);
   document.body.appendChild(el);
 
-  const spia = { visti: 0, prevenuti: 0, dragPan: true };
+  const spia = {
+    visti: 0,
+    prevenuti: 0,
+    dragPan: true,
+    interazioniIniziate: 0,
+    interazioniFinite: 0,
+  };
 
   // Il vero MapLibre registra così, verificato in maplibre-gl.js:
   //   [canvasContainer, "touchstart", {passive: true}]
@@ -67,6 +73,12 @@ function banco() {
     el,
     setDragPanEnabled: (on) => {
       spia.dragPan = on;
+    },
+    onHorizontalStart: () => {
+      spia.interazioniIniziate += 1;
+    },
+    onHorizontalEnd: () => {
+      spia.interazioniFinite += 1;
     },
   });
   return { el, canvas, spia, detach };
@@ -102,6 +114,8 @@ describe("blocco d'asse del globo in vetrina", () => {
     swipe(canvas, 0, -240);
     expect(spia.visti, "MapLibre ha ricevuto un touchmove verticale").toBe(0);
     expect(spia.prevenuti, "lo scorrimento è stato annullato").toBe(0);
+    expect(spia.interazioniIniziate, "il tour è stato fermato").toBe(0);
+    expect(spia.interazioniFinite).toBe(0);
     detach();
   });
 
@@ -111,6 +125,8 @@ describe("blocco d'asse del globo in vetrina", () => {
     expect(spia.visti).toBeGreaterThan(0);
     expect(spia.prevenuti).toBeGreaterThan(0);
     expect(spia.dragPan, "il pan è rimasto acceso").toBe(true);
+    expect(spia.interazioniIniziate).toBe(1);
+    expect(spia.interazioniFinite).toBe(1);
     detach();
   });
 

@@ -180,12 +180,18 @@ describe("globo della home pubblica", () => {
     // con eventi veri, perché una stringa nel sorgente non dice se
     // funziona.
     expect(jobsGlobeSource).toContain(
-      "detachAxisLock = attachShowcaseTouchLock(map)",
+      "detachAxisLock = attachShowcaseTouchLock(",
     );
     expect(jobsGlobeSource).toContain("detachAxisLock?.()");
     expect(jobsGlobeSource).toContain(
       'attachTouchAxisLock } from "@/lib/globe-touch-axis-lock"',
     );
+    // La rotella e lo swipe verticale appartengono alla pagina: non
+    // devono nemmeno notificare l'autopilota. Il drag touch orizzontale
+    // passa invece dalle callback del blocco d'asse.
+    expect(jobsGlobeSource).not.toContain('addEventListener("wheel"');
+    expect(jobsGlobeSource).toContain("onHorizontalStart,");
+    expect(jobsGlobeSource).toContain("onHorizontalEnd,");
 
     // Click su un pin → card, click nel vuoto → chiusa. Nessun volo:
     // la camera resta dell'utente.
@@ -197,14 +203,28 @@ describe("globo della home pubblica", () => {
     );
   });
 
-  it("riprende a girare da solo dopo qualche secondo di immobilità", () => {
+  it("riprende quasi subito, ma solo dopo la fine del gesto", () => {
     expect(landingGlobeSource).toContain(
-      "const RESUME_AFTER_IDLE_MS = 6000",
+      "const RESUME_AFTER_IDLE_MS = 700",
     );
+    expect(landingGlobeSource).toContain("const RESUME_RAMP_MS = 800");
+    expect(landingGlobeSource).toContain("const RESUME_RAMP_DEG = 1.2");
+    expect(landingGlobeSource).toContain("easing: (v) => v * v");
     expect(landingGlobeSource).toContain('autopilotRef.current?.pause("user")');
     expect(landingGlobeSource).toContain(
       'autopilotRef.current?.unpause("user")',
     );
+    expect(jobsGlobeSource).toContain(
+      "const activeHumanPointers = new Set<number>()",
+    );
+    expect(jobsGlobeSource).toContain(
+      'window.addEventListener("pointerup", onHumanEnd',
+    );
+    expect(jobsGlobeSource).toContain(
+      'window.addEventListener("pointercancel", onHumanEnd',
+    );
+    expect(jobsGlobeSource).toContain('if (e.pointerType === "touch") return');
+    expect(jobsGlobeSource).toContain("activeHumanPointers.size === 0");
     // Le due pause sono indipendenti: uscire dal viewport non deve
     // essere annullato dallo scadere del timer dell'utente.
     expect(landingGlobeSource).toContain(
@@ -214,6 +234,27 @@ describe("globo della home pubblica", () => {
     // La ripresa risale alla vista d'insieme invece di ricominciare a
     // girare da dove l'utente aveva lasciato lo zoom.
     expect(landingGlobeSource).toContain("const RECENTER_MS = 2200");
+  });
+
+  it("fa avanzare il loop mentre il canvas fuori viewport non disegna", () => {
+    // Il componente non viene smontato: MapLibre viene fermato per non
+    // produrre frame invisibili, mentre il tempo trascorso resta nel
+    // cursore virtuale e al rientro ricostruisce fase, città e card.
+    expect(landingGlobeSource).toContain(
+      "offscreenCursor = captureTourCursor()",
+    );
+    expect(landingGlobeSource).toContain(
+      "offscreenElapsedMs = Date.now() - offscreenStartedAt",
+    );
+    expect(landingGlobeSource).toContain("advanceTourCursor(");
+    expect(landingGlobeSource).toContain("restoreTourCursor(cursor)");
+    expect(landingGlobeSource).toContain("map.stop()");
+    expect(landingGlobeSource).toContain("map.jumpTo({");
+    // Un'assenza molto lunga non viene riprodotta card per card.
+    expect(landingGlobeSource).toContain("const skipWholeLoops = () =>");
+    expect(landingGlobeSource).toContain(
+      "const loops = Math.floor(left / loopDurationMs)",
+    );
   });
 
   it("non nasconde ai lettori di schermo una vetrina che ora si tocca", () => {
@@ -249,8 +290,10 @@ describe("globo della home pubblica", () => {
 
   it("mostra le opportunità una alla volta sopra al pin", () => {
     expect(landingGlobeSource).toContain("const CARD_MS = 2300");
-    expect(landingGlobeSource).toContain("const showCard = (i: number)");
-    expect(landingGlobeSource).toContain("schedule(() => showCard(i + 1), CARD_MS)");
+    expect(landingGlobeSource).toContain("const beginDwell = (");
+    expect(landingGlobeSource).toContain(
+      "schedule(() => beginDwell(stopSeq, cardIndex + 1), firstCardMs)",
+    );
     // La card è quella della mappa dell'area riservata, pilotata da fuori.
     expect(landingGlobeSource).toContain("cardId");
     expect(jobsGlobeSource).toContain("const showcaseCardId = showcase?.cardId ?? null");
@@ -285,9 +328,14 @@ describe("globo della home pubblica", () => {
   });
 
   it("rallenta zoom e viaggi e aspetta il caricamento a ogni arrivo", () => {
-    expect(landingGlobeSource).toContain("const HOP_FLY_MS = 6500");
-    expect(landingGlobeSource).toContain("const CONTINENT_FLY_MS = 11000");
-    expect(landingGlobeSource).toContain("const FIRST_FLY_MS = 9000");
+    expect(landingGlobeSource).toContain("const HOP_FLY_MS = 8500");
+    expect(landingGlobeSource).toContain("const CONTINENT_FLY_MS = 14000");
+    expect(landingGlobeSource).toContain("const FIRST_FLY_MS = 12000");
+    expect(landingGlobeSource).toContain("const HOP_FLY_CURVE = 1.8");
+    expect(landingGlobeSource).toContain("const CONTINENT_FLY_CURVE = 2");
+    expect(landingGlobeSource).toContain(
+      "curve: crossing ? CONTINENT_FLY_CURVE : HOP_FLY_CURVE",
+    );
     const flyTo = landingGlobeSource.indexOf("map.flyTo({");
     const travelEnd = landingGlobeSource.indexOf(
       'map.once("moveend", onTravelEnd)',
