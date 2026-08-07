@@ -117,7 +117,7 @@ The replacement must cover these distinct processing paths:
 | Desktop utility requests | App-version requests to GitHub, exchange-rate requests to Frankfurter, and map-tile requests to CARTO. | The update check runs at most daily and can be disabled; exchange rates are requested at normal startup; CARTO tiles are requested when the map needs them. These services receive ordinary network request metadata. |
 | Google sign-in | Google account identifier, email address, and basic profile information used for authentication. | The client asks Supabase for Google OAuth with no added Google-product scopes. Login does not request Gmail, Drive, Calendar, or Contacts access. Team Gmail is separate, optional configuration. |
 | Cloud dashboard | Authentication data and user-selected synchronized profile, job, score, application, message, team-state, preference, device, and file-transfer data. | Supabase is an active authentication, database, realtime, and storage service—not merely a backup. |
-| Desktop bug report | User-entered description, app version, locale, operating system, optional redacted diagnostics and logs; rate-limiting request data. | A local Markdown copy is written. The submitted redacted report may go to support email, a configured webhook, and a public GitHub issue. |
+| Desktop bug report | User-entered description, app version, locale, operating system, optional redacted diagnostics and logs; rate-limiting request data. | A local Markdown copy is written. The submitted report goes privately to support email and may send a redacted summary to a private webhook; it is not published automatically. |
 | Web contact/support | Message, current page, language, technical request metadata, and rate-limiting data. | Current `web-*` reports go to support email and an optional configured webhook; they do not open GitHub issues. |
 | Hosted website telemetry | Aggregate usage and performance measurements, plus ordinary hosting and security logs. | Vercel Analytics and Speed Insights are mounted globally. The present “Necessary only” choice does not disable them and therefore must be fixed or relabelled before release. |
 | Hosted website utilities | CARTO map resources and Frankfurter exchange rates. | A visitor's browser contacts CARTO when a live public or dashboard map loads. The web server, not the visitor's browser, fetches and caches Frankfurter rates. GitHub Release URLs are ordinary links and contact GitHub only if selected. |
@@ -266,17 +266,15 @@ file, and sends the previewed content to the Job Hunter Team support endpoint.
 Redaction reduces risk but cannot guarantee that free text contains no personal
 data. Review the preview and remove anything you do not want to share.
 
-A submitted desktop report may be delivered to our support mailbox through
-Resend, summarized to a configured support webhook, and published in the public
-Job Hunter Team GitHub repository as an issue visible to anyone. Do not include
-information you want to keep private. GitHub processes public issue content
-under its own [privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
+A submitted desktop report is delivered privately to the support mailbox
+through Resend and may be summarized to a configured private support webhook.
+It is not published automatically. After review, the operator may manually
+create a public GitHub issue containing a redacted technical summary.
 
-The web contact and web dashboard support forms currently send their limited
-content to the support mailbox and, if configured, a support webhook. They do
-not publish a GitHub issue. The endpoint also processes an IP address for
-short-window abuse prevention. The desktop retains its local report copy until
-you delete it.
+The web contact and web dashboard support forms send their limited content to
+the support mailbox and, if configured, a private support webhook. The endpoint
+also processes an IP address for short-window abuse prevention. The desktop
+retains its local report copy until you delete it.
 
 `[OPERATOR DECISION REQUIRED: name or remove the configured webhook recipient;
 confirm support-mail, GitHub-issue, webhook, rate-limit, and server-log
@@ -312,7 +310,7 @@ We disclose data only as needed for the feature you use:
 | Your VPS provider | Hosting and processing the workspace if you choose to run JHT on a VPS |
 | Vercel | Hosting, security, aggregate web analytics, and performance measurements |
 | Resend and the project support mailbox | Delivering support and feedback email |
-| GitHub | Public desktop bug issues when that destination is enabled |
+| GitHub | Release information and a manually created redacted public issue if the operator decides one is needed |
 | GitHub, Frankfurter, and CARTO | Desktop update metadata, public exchange rates, and map tiles respectively; each receives ordinary network request metadata |
 | CARTO and Frankfurter | Hosted web map resources requested by the visitor's browser and exchange rates requested server-side, respectively |
 | `[CONFIGURED WEBHOOK RECIPIENT]` | A redacted summary of support reports, if enabled |
@@ -336,7 +334,7 @@ short-lived; device tokens remain until their configured expiry or revocation.
 On-demand file transfer is designed to be temporary, but its production cleanup
 job must be verified before a precise deletion promise is published.
 
-Support email, public GitHub issues, webhook deliveries, hosting logs,
+Support email, manually created public GitHub issues, webhook deliveries, hosting logs,
 analytics, backups, and abuse-prevention records have different retention
 paths. The controller must approve and publish a schedule before release.
 
@@ -490,13 +488,12 @@ approve and the accounts you connect.
 `[OPERATOR/LEGAL DECISION REQUIRED: approve a complete acceptable-use and
 enforcement policy, including warning, suspension, appeal, and termination.]`
 
-### 9. Bug reports and public GitHub issues
+### 9. Support reports
 
-The desktop app shows a preview of a redacted bug report before sending it. If
-you submit that report, it may be published as a public GitHub issue visible to
-anyone. Review the preview and do not submit information you want to keep
-private. Web contact and dashboard support messages are not published to
-GitHub under the current routing.
+The desktop app shows a preview of a redacted bug report before sending it.
+Submitted reports are delivered privately to the support inbox and are not
+published automatically. After review, the operator may manually create a
+public GitHub issue containing a redacted technical summary.
 
 ### 10. Suspension, termination, export, and deletion
 
@@ -536,8 +533,9 @@ Questions about these Terms:
 
 These are blockers, not editorial polish:
 
-1. **Controller and contracting party — P0.** What is the full legal name,
-   legal form, registration or tax details if required, and postal address?
+1. **Controller — resolved.** Leone Emanuele Puglisi acts as an individual
+   maintainer; no physical address, VAT number, company, registered office, or
+   legal form is published.
 2. **Working privacy channel — P0.** Is `support@jobhunterteam.ai` staffed for
    privacy requests, or will `privacy@jobhunterteam.ai` be created and tested?
 3. **Deletion and export — P0.** Who performs a verified request today, by
@@ -585,10 +583,9 @@ These are blockers, not editorial polish:
 - On Google sign-in, expose both legal links before the OAuth redirect.
 - On desktop first run, show the same current versions and persist the local
   acceptance record. Re-prompt only under the approved versioning policy.
-- Show the public-GitHub warning only where the route can publish an issue and
-  immediately before submission, next to the exact report preview.
-- Never describe the web Support dialog as public while `web-*` clients skip
-  `openIssue()`.
+- Deliver every feedback report privately to the domain support inbox; no
+  client may create a GitHub issue automatically. A later public issue is a
+  manual operator action using a redacted technical summary.
 - Make “Necessary only” control actual analytics loading if the operator and
   legal review choose opt-in. A stored label without behavioral effect is not
   consent.
