@@ -7,6 +7,15 @@ const LanguagePicker := preload("res://scripts/ui/language_picker.gd")
 const EXPECTED_LANGS := ["it", "en", "hu", "es", "de", "fr", "pt"]
 const TEST_LANG_CFG := "user://language_picker_selftest.cfg"
 const TITLE_SOURCE := "res://scripts/title.gd"
+const TITLE_TRANSLATION_SOURCES := [
+	"res://scripts/ui_strings.gd",
+	"res://scripts/i18n/ui_en.gd",
+	"res://scripts/i18n/ui_hu.gd",
+	"res://scripts/i18n/ui_es.gd",
+	"res://scripts/i18n/ui_de.gd",
+	"res://scripts/i18n/ui_fr.gd",
+	"res://scripts/i18n/ui_pt.gd",
+]
 
 var _failures: Array[String] = []
 var _confirmed := ""
@@ -28,6 +37,18 @@ func _init() -> void:
 	var title_source := FileAccess.get_file_as_string(TITLE_SOURCE)
 	_check("titolo senza claim prototipo/backend incondizionato",
 			not title_source.contains("title.footer"))
+	for translation_source: String in TITLE_TRANSLATION_SOURCES:
+		_check("claim prototipo rimosso: " + translation_source,
+				not FileAccess.get_file_as_string(translation_source).contains(
+						'"title.footer"'))
+	_check("versione mostrata letta dalla configurazione del progetto",
+			title_source.contains(
+					'"v%s" % str(ProjectSettings.get_setting('
+					+ '"application/config/version"))'))
+	var hardcoded_version := RegEx.new()
+	hardcoded_version.compile('"v[0-9]+(?:\\.[0-9]+)+"')
+	_check("versione titolo non scritta a mano",
+			hardcoded_version.search(title_source) == null)
 	_check("scrive la scelta su preferenza isolata",
 			UIStrings.set_lang("de", true, TEST_LANG_CFG))
 	var saved_after_restart := UIStrings.saved_language(TEST_LANG_CFG)
