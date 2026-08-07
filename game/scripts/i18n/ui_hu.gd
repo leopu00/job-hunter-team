@@ -1574,6 +1574,7 @@ const S := {
 	"vps.artifact.path_outside": "az elérési út az adatterületeken kívül van",
 	"vps.artifact.file_missing": "a fájl nem található a konténerben",
 	"vps.ticket.position_missing": "a pozíció nem létezik",
+	"vps.ssh.failed": "az SSH sikertelen (kilépési kód: %s)",
 	"diagnostics.section.app": "Alkalmazás", "diagnostics.section.system": "Rendszer",
 	"diagnostics.section.runtime": "Futási környezet", "diagnostics.field.version": "verzió",
 	"diagnostics.field.engine": "motor", "diagnostics.field.ui_language": "felület nyelve",

@@ -175,26 +175,27 @@ func _check_runtime_english_presentation() -> void:
 			and notifications[0]["when"] == "5 min ago"
 			and notifications[1]["when"] == "1 h ago"
 			and notifications[3]["when"] == "yesterday", str(notifications))
-	for pair in [
-			["percorso fuori dalle aree dati", "path is outside the data areas"],
-			["file non trovato sul container", "file not found in the container"],
-			["file oltre i 10 MB", "file exceeds 10 MB"],
-			["posizione inesistente", "position does not exist"],
-	]:
-		_check("errore VPS presentato in inglese: " + pair[0],
-				UIStrings.present_vps_error(pair[0]) == pair[1],
-				UIStrings.present_vps_error(pair[0]))
+	var snapshot := UIStrings.vps_presentation_snapshot()
+	for key in ["vps.upload.file_missing", "vps.upload.file_too_large",
+			"vps.response_unreadable", "vps.artifact.path_outside",
+			"vps.ticket.position_missing", "vps.ssh.failed"]:
+		_check("snapshot VPS inglese: " + key,
+				snapshot.has(key) and str(snapshot[key]) != key, str(snapshot))
 	var vps_source := FileAccess.get_file_as_string("res://scripts/backend/vps_backend.gd")
 	_check("filename payload stabile e non localizzato",
 			vps_source.contains('return out if out != "" else "document"')
 			and not vps_source.contains('else UIStrings.t("common.document")'),
 			"_safe_filename deve restare indipendente dalla lingua")
-	for seam in ['UIStrings.t("vps.upload.file_missing")',
-			'UIStrings.t("vps.upload.extension_denied")',
-			'UIStrings.t("vps.upload.file_unreadable")',
-			'UIStrings.t("vps.upload.file_too_large")',
-			'err = _present_error(str(d.get("error", "")))']:
+	for seam in ["UIStrings.vps_presentation_snapshot()",
+			'_ui_text(labels, "vps.upload.file_missing")',
+			'_ui_text(labels, "vps.upload.file_too_large")',
+			'err = _present_error(str(d.get("error", "")), labels)',
+			'_ui_text(labels, "vps.ssh.failed")']:
 		_check("propagazione VPS localizzata: " + seam, vps_source.contains(seam), seam)
+	_check("worker VPS non carica cataloghi lazy",
+			not vps_source.contains('UIStrings.t("vps.upload.')
+			and not vps_source.contains('UIStrings.t("vps.response_unreadable")'),
+			"UIStrings.t non deve essere chiamato dal worker")
 	UIStrings.lang = previous
 
 

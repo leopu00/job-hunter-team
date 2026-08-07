@@ -1023,38 +1023,58 @@ const UPLOAD_MAX_BYTES := 10 * 1024 * 1024
 const UPLOAD_EXTS := ["pdf", "doc", "docx", "txt", "md", "png", "jpg",
 		"jpeg", "csv", "xlsx", "xls", "json", "yaml", "yml"]
 
-func upload_document(local_path: String) -> void:
-	_queue_worker(_do_upload_document.bind(local_path))
+const PRESENTATION_ERROR_KEYS := {
+	"percorso fuori dalle aree dati": "vps.artifact.path_outside",
+	"file non trovato sul container": "vps.artifact.file_missing",
+	"file oltre i 10 MB": "vps.upload.file_too_large",
+	"posizione inesistente": "vps.ticket.position_missing",
+}
 
-func _do_upload_document(local_path: String) -> void:
+const PRESENTATION_ENGLISH := {
+	"vps.upload.file_missing": "file not found: %s",
+	"vps.upload.extension_denied": "extension not allowed: .%s",
+	"vps.upload.file_unreadable": "file cannot be read",
+	"vps.upload.file_too_large": "file exceeds 10 MB",
+	"vps.response_unreadable": "unreadable response from the VPS",
+	"vps.artifact.path_outside": "path is outside the data areas",
+	"vps.artifact.file_missing": "file not found in the container",
+	"vps.ticket.position_missing": "position does not exist",
+	"vps.ssh.failed": "SSH failed (exit %s)",
+}
+
+func upload_document(local_path: String) -> void:
+	_queue_worker(_do_upload_document.bind(local_path,
+			UIStrings.vps_presentation_snapshot()))
+
+func _do_upload_document(local_path: String, labels: Dictionary) -> void:
 	if not FileAccess.file_exists(local_path):
-		_doc_uploaded(false, "", UIStrings.t("vps.upload.file_missing") % local_path)
+		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.file_missing") % local_path)
 		return
 	var ext := local_path.get_extension().to_lower()
 	if not UPLOAD_EXTS.has(ext):
-		_doc_uploaded(false, "", UIStrings.t("vps.upload.extension_denied") % ext)
+		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.extension_denied") % ext)
 		return
 	var f := FileAccess.open(local_path, FileAccess.READ)
 	if f == null:
-		_doc_uploaded(false, "", UIStrings.t("vps.upload.file_unreadable"))
+		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.file_unreadable"))
 		return
 	var size := f.get_length()
 	f.close()
 	if size > UPLOAD_MAX_BYTES:
-		_doc_uploaded(false, "", UIStrings.t("vps.upload.file_too_large"))
+		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.file_too_large"))
 		return
 	var safe := _safe_filename(local_path.get_file())
 	var remote := UPLOAD_DIR + "/" + safe
 	var mk := _ssh("docker exec jht mkdir -p " + UPLOAD_DIR)
 	if mk["code"] != 0:
-		_doc_uploaded(false, "", _short_error(mk))
+		_doc_uploaded(false, "", _short_error(mk, labels))
 		return
 	# >/dev/null dentro la sh del container: al livello host sarebbe un
 	# redirect PowerShell verso il file C:\dev\null (Windows locale).
 	var res := _ssh_stdin_file(local_path,
 			"docker exec -i jht sh -lc 'tee " + remote + " >/dev/null'")
 	if res["code"] != 0:
-		_doc_uploaded(false, "", _short_error(res))
+		_doc_uploaded(false, "", _short_error(res, labels))
 		return
 	_doc_uploaded(true, remote, "")
 
@@ -1092,25 +1112,25 @@ static var ARTIFACT_PY := payload("artifact.py")
 func fetch_artifact(path: String) -> void:
 	# thread one-shot: un pdf da qualche centinaio di KB non deve
 	# congelare né la UI né il giro di poll
-	_queue_worker(_do_fetch_artifact.bind(path))
+	_queue_worker(_do_fetch_artifact.bind(path, UIStrings.vps_presentation_snapshot()))
 
-func _do_fetch_artifact(path: String) -> void:
+func _do_fetch_artifact(path: String, labels: Dictionary) -> void:
 	var res := _ssh_python(ARTIFACT_PY % [Marshalls.utf8_to_base64(path),
 			ARTIFACT_MAX_BYTES])
 	var ok := false
 	var data := PackedByteArray()
 	var err := ""
 	if res["code"] != 0:
-		err = _short_error(res)
+		err = _short_error(res, labels)
 	else:
-		err = UIStrings.t("vps.response_unreadable")
+		err = _ui_text(labels, "vps.response_unreadable")
 		for line in str(res["out"]).split("\n"):
 			if not line.begins_with("{"):
 				continue
 			var d: Variant = JSON.parse_string(line)
 			if d is Dictionary:
 				ok = bool(d.get("ok", false))
-				err = _present_error(str(d.get("error", "")))
+				err = _present_error(str(d.get("error", "")), labels)
 				if ok:
 					data = Marshalls.base64_to_raw(str(d.get("b64", "")))
 			break
@@ -1153,22 +1173,23 @@ func create_ticket(position_id: int, text: String) -> void:
 	if t == "" or position_id <= 0:
 		return
 	# thread one-shot: l'INSERT remoto non deve congelare UI né poll
-	_queue_worker(_do_create_ticket.bind(position_id, t))
+	_queue_worker(_do_create_ticket.bind(position_id, t,
+			UIStrings.vps_presentation_snapshot()))
 
-func _do_create_ticket(position_id: int, text: String) -> void:
+func _do_create_ticket(position_id: int, text: String, labels: Dictionary) -> void:
 	var res := _ssh_python(TICKET_PY % [Marshalls.utf8_to_base64(text), position_id])
 	var ok := false
 	var err := ""
 	if res["code"] != 0:
-		err = _short_error(res)
+		err = _short_error(res, labels)
 	else:
-		err = UIStrings.t("vps.response_unreadable")
+		err = _ui_text(labels, "vps.response_unreadable")
 		for line in str(res["out"]).split("\n"):
 			if line.begins_with("{"):
 				var d: Variant = JSON.parse_string(line)
 				if d is Dictionary:
 					ok = bool(d.get("ok", false))
-					err = _present_error(str(d.get("error", "")))
+					err = _present_error(str(d.get("error", "")), labels)
 				break
 	bus.call_deferred("emit_signal", "ticket_created", position_id, ok, err)
 	if ok:
@@ -1435,16 +1456,22 @@ func _deferred_state_key(state: int, key: String, args: Array = []) -> void:
 
 
 ## La riga utile dell'errore ssh, senza sommergere la UI.
-static func _short_error(res: Dictionary) -> String:
+static func _short_error(res: Dictionary, labels: Dictionary = {}) -> String:
 	for line in str(res["out"]).split("\n"):
 		var l := line.strip_edges()
 		if l != "" and not l.begins_with("Warning:"):
-			return l.left(120)
-	return "ssh fallita (exit %s)" % res["code"]
+			return _present_error(l.left(120), labels)
+	return _ui_text(labels, "vps.ssh.failed") % res["code"]
 
 
-static func _present_error(raw: String) -> String:
-	return UIStrings.present_vps_error(raw)
+static func _present_error(raw: String, labels: Dictionary = {}) -> String:
+	var key := str(PRESENTATION_ERROR_KEYS.get(raw, ""))
+	return _ui_text(labels, key) if key != "" else raw
+
+
+static func _ui_text(labels: Dictionary, key: String) -> String:
+	var value := str(labels.get(key, ""))
+	return value if value != "" and value != key else str(PRESENTATION_ENGLISH[key])
 
 
 ## Sonno interrompibile: reagisce a stop() entro ~0.2s.
