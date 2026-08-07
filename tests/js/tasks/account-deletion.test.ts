@@ -67,12 +67,20 @@ function fakeAdmin(
               error: null,
             });
           },
+          // Come l'API vera: `remove` risponde elencando SOLO i file
+          // davvero cancellati, e li toglie dall'albero. Un percorso che
+          // non esiste non compare nella risposta — è esattamente ciò che
+          // il fake precedente nascondeva, restituendo qualunque path gli
+          // venisse passato.
           remove(paths: string[]) {
             removedPaths.push(...paths);
+            const tree = opts.storageTree ?? {};
+            const actually = opts.storageRemovesNothing
+              ? []
+              : paths.filter((p) => tree[p]);
+            for (const p of actually) delete tree[p];
             return Promise.resolve({
-              data: opts.storageRemovesNothing
-                ? []
-                : paths.map((name) => ({ name })),
+              data: actually.map((name) => ({ name })),
               error: null,
             });
           },
@@ -250,7 +258,10 @@ describe("export e cancellazione parlano dello stesso insieme", () => {
 describe("cancellazione account — i file su Storage non sopravvivono", () => {
   it("rimuove gli oggetti prima di cancellare le righe che li nominano", async () => {
     const { client, calls, removedPaths } = fakeAdmin({
-      storagePaths: ["user-1/req/cv.pdf", "user-1/req/lettera.pdf"],
+      storageTree: {
+        "user-1/req/cv.pdf": true,
+        "user-1/req/lettera.pdf": true,
+      },
     });
     await deleteAccountData(client, "user-1");
     expect(removedPaths).toEqual([
@@ -264,7 +275,7 @@ describe("cancellazione account — i file su Storage non sopravvivono", () => {
 
   it("se un file resta, la cancellazione si ferma invece di dirsi completa", async () => {
     const { client, deletedUsers } = fakeAdmin({
-      storagePaths: ["user-1/req/cv.pdf"],
+      storageTree: { "user-1/req/cv.pdf": true },
       storageRemovesNothing: true,
     });
     await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
@@ -363,30 +374,36 @@ describe("cancellazione — i file orfani non sopravvivono", () => {
     expect(removedPaths).toContain("user-1/req-x/orfano.pdf");
   });
 
-  it("unisce bucket e righe, restando dentro il namespace", async () => {
-    // Le due fonti si sommano, ma solo entro `${userId}/`. La versione
-    // precedente accettava qualunque percorso dalle righe «per coprire i
-    // percorsi storici»: era un'ipotesi mia non dimostrata, e apriva una
-    // cancellazione fra utenti. Meglio perdere un caso ipotetico che
-    // lasciare cancellare il file di qualcun altro.
-    const { client, removedPaths } = fakeAdmin({
-      storagePaths: ["user-1/vecchio/percorso.pdf"],
-      storageTree: { "user-1/req-y/nuovo.pdf": true },
+  it("una riga fossile non blocca la cancellazione", async () => {
+    // Il purge ordinario rimuove l'oggetto ma CONSERVA la riga, marcandola
+    // `expired` col percorso ancora dentro. Se quel percorso finisse nella
+    // `remove`, Supabase non lo elencherebbe fra i cancellati — non
+    // esiste — e il confronto lo direbbe non rimosso, bloccando per sempre
+    // la cancellazione dell'account dopo un purge riuscito. Trovato da
+    // HQ-BACKEND.
+    const { client, removedPaths, deletedUsers } = fakeAdmin({
+      storagePaths: ["user-1/req-vecchio/purgato.pdf"],
+      storageTree: {},
     });
     await deleteAccountData(client, "user-1");
-    expect(removedPaths).toContain("user-1/req-y/nuovo.pdf");
-    expect(removedPaths).toContain("user-1/vecchio/percorso.pdf");
+    expect(deletedUsers, "la cancellazione si è bloccata").toEqual(["user-1"]);
+    expect(removedPaths).not.toContain("user-1/req-vecchio/purgato.pdf");
   });
 
-  it("non cancella due volte lo stesso percorso", async () => {
+  it("nomi uguali in cartelle diverse restano distinti", async () => {
+    // La versione precedente confrontava anche per basename per decidere
+    // se un file era stato rimosso: con lo stesso nome in due cartelle,
+    // la rimozione di uno faceva passare per rimosso anche l'altro. Ora
+    // la prova è la rienumerazione del namespace, che non ha ambiguità.
     const { client, removedPaths } = fakeAdmin({
-      storagePaths: ["user-1/uguale.pdf"],
-      storageOrphans: ["uguale.pdf"],
+      storageTree: {
+        "user-1/req-a/cv.pdf": true,
+        "user-1/req-b/cv.pdf": true,
+      },
     });
     await deleteAccountData(client, "user-1");
-    expect(removedPaths.filter((p) => p === "user-1/uguale.pdf")).toHaveLength(
-      1,
-    );
+    expect(removedPaths).toContain("user-1/req-a/cv.pdf");
+    expect(removedPaths).toContain("user-1/req-b/cv.pdf");
   });
 });
 

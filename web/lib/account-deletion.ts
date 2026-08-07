@@ -74,13 +74,14 @@ export async function deleteAccountData(
 
   const removed: Record<string, number> = {};
 
-  // ── Prima i file su Storage, poi le righe ───────────────────────────
-  // `file_bridge_requests` cade per cascata, ma la riga non è il file: gli
-  // oggetti nel bucket `file-transit` sopravvivrebbero alla cancellazione.
-  // Non ci si può appoggiare a un purge automatico — nel bucket è stato
-  // trovato un oggetto rimasto per otto giorni — quindi si rimuovono qui,
-  // e PRIMA di perdere le righe, che sono l'unico posto dove i percorsi
-  // sono scritti.
+  // ── Prima i file, poi le righe ──────────────────────────────────────
+  // Gli oggetti nel bucket `file-transit` non cadono per cascata: senza
+  // questo passo sopravvivrebbero alla cancellazione. E non ci si può
+  // appoggiare a un purge automatico — nel bucket è stato trovato un
+  // oggetto rimasto per otto giorni.
+  //
+  // I percorsi si leggono dal BUCKET, non dalle righe: vedi
+  // `deleteStorageObjects` per il perché.
   const storage = await deleteStorageObjects(admin, userId);
   removed["storage:file-transit"] = storage.removed;
   if (storage.failed.length > 0) {
@@ -121,14 +122,6 @@ export async function deleteAccountData(
   return { removed, order: MANUAL_DELETE_ORDER };
 }
 
-/**
- * Rimuove gli oggetti dell'utente dal bucket di transito.
- *
- * I percorsi si leggono da `file_bridge_requests`, che è l'unico posto
- * dove sono registrati: per questo va fatto PRIMA di cancellare le righe.
- * Se il bucket non risponde, o qualche oggetto resta, il chiamante lo
- * tratta come un fallimento — meglio fermarsi che dire «cancellato».
- */
 /**
  * Elenca RICORSIVAMENTE gli oggetti sotto un prefisso.
  *
@@ -194,77 +187,44 @@ async function deleteStorageObjects(
   admin: SupabaseClient,
   userId: string,
 ): Promise<{ removed: number; failed: string[] }> {
-  // ── Perché non basta leggere le righe ────────────────────────────────
-  // Ricavare i percorsi da `file_bridge_requests` non è sufficiente:
-  // HQ-DOCS ha trovato un oggetto reale rimasto nel bucket senza più la
-  // sua riga. Un caricamento interrotto, una riga ripulita da un job, un
-  // errore a metà — e il file resta lì mentre il database dice che non
-  // esiste. Si enumera quindi il bucket, e le righe servono solo ad
-  // aggiungere percorsi eventualmente fuori dal prefisso dell'utente.
-  const paths = new Set<string>();
-
-  const budget = { left: STORAGE_TOTAL_LIMIT };
-  for (const p of await listRecursive(admin, userId, budget)) paths.add(p);
-
-  const { data: rows, error } = await admin
-    .from("file_bridge_requests")
-    .select("storage_path")
-    .eq("user_id", userId);
-  if (error) {
-    throw new Error(
-      `impossibile leggere i file da cancellare: ${error.message}`,
-    );
-  }
-  // ── I percorsi delle righe NON sono affidabili ──────────────────────
-  // `file_bridge_requests` accetta INSERT da qualunque utente autenticato
-  // con il solo controllo `auth.uid() = user_id` (migrazione 037): il
-  // campo `storage_path` non è verificato. Un utente può quindi inserire
-  // una propria riga che punta al file di un altro, e questa funzione gira
-  // con service_role, che bypassa RLS — cancellando il proprio account
-  // farebbe sparire un file altrui.
+  // ── L'unica fonte è il bucket ────────────────────────────────────────
+  // Le righe di `file_bridge_requests` NON servono a trovare i file, e
+  // usarle faceva danno in due modi opposti.
   //
-  // Quindi si accettano solo i percorsi dentro il namespace dell'utente.
-  // Un percorso fuori non viene rimosso: se ne esistessero di storici, si
-  // preferisce lasciarli e dirlo, piuttosto che aprire una cancellazione
-  // fra utenti. Segnalato da HQ-BACKEND.
-  const namespace = `${userId}/`;
-  const outsideNamespace: string[] = [];
-  for (const row of rows ?? []) {
-    const p = (row as { storage_path: string | null }).storage_path;
-    if (typeof p !== "string" || p.length === 0) continue;
-    if (p.startsWith(namespace)) {
-      paths.add(p);
-    } else {
-      outsideNamespace.push(p);
-    }
-  }
-  if (outsideNamespace.length > 0) {
-    console.warn(
-      "[account-deletion] percorsi fuori dal namespace ignorati:",
-      outsideNamespace.length,
-    );
-  }
+  // In sicurezza: la migrazione 037 accetta INSERT con il solo controllo
+  // `auth.uid() = user_id`, quindi `storage_path` è input non verificato,
+  // e questa funzione gira con service_role che bypassa RLS.
+  //
+  // In disponibilità, ed è il caso che ha rotto davvero: il purge
+  // ordinario rimuove l'oggetto ma CONSERVA la riga, marcandola
+  // `expired` col percorso ancora dentro. Alla cancellazione dell'account
+  // quel percorso fossile veniva rimesso nella `remove`; Supabase risponde
+  // elencando solo i file davvero cancellati, quindi non compariva, e il
+  // confronto lo dichiarava non rimosso — bloccando per sempre la
+  // cancellazione dell'account dopo un purge riuscito. Trovato da
+  // HQ-BACKEND.
+  //
+  // Le righe cadono comunque per cascata insieme all'utente: non c'è
+  // niente da recuperare da lì.
+  const budget = { left: STORAGE_TOTAL_LIMIT };
+  const paths = await listRecursive(admin, userId, budget);
+  if (paths.length === 0) return { removed: 0, failed: [] };
 
-  const all = [...paths];
-  if (all.length === 0) return { removed: 0, failed: [] };
-
-  const { data: removedList, error: rmError } = await admin.storage
+  const { error: rmError } = await admin.storage
     .from(STORAGE_BUCKET)
-    .remove(all);
+    .remove(paths);
   if (rmError) {
-    return { removed: 0, failed: all };
+    return { removed: 0, failed: paths };
   }
 
-  // `remove` non fallisce per i percorsi inesistenti: si confronta ciò che
-  // dice di aver rimosso con ciò che si è chiesto, così un file rimasto
-  // non passa per cancellato.
-  const done = new Set(
-    (removedList ?? []).map((o) => (o as { name: string }).name),
-  );
-  const failed = all.filter(
-    (p) => !done.has(p) && !done.has(p.split("/").pop() ?? p),
-  );
-  return { removed: all.length - failed.length, failed };
+  // La prova non è la risposta di `remove` ma il bucket stesso: si
+  // rienumera e ciò che resta è ciò che non è stato cancellato. Evita
+  // anche il confronto per basename della versione precedente, ambiguo
+  // quando lo stesso nome esiste in cartelle diverse.
+  const leftover = await listRecursive(admin, userId, {
+    left: STORAGE_TOTAL_LIMIT,
+  });
+  return { removed: paths.length - leftover.length, failed: leftover };
 }
 
 /**
