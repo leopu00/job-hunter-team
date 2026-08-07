@@ -257,10 +257,23 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "created_at",
     "updated_at",
   ],
-  // Solo i metadati: il materiale crittografico resta fuori.
+  // Envelope crittografico COMPLETO, non i soli metadati.
+  //
+  // La prima versione escludeva ciphertext, salt, iv e auth tag «per
+  // prudenza». Era la prudenza sbagliata: quel blob è dato dell'utente,
+  // cifrato con una chiave che noi non abbiamo, e senza l'envelope intero
+  // non è decifrabile nemmeno da lui — l'export gli consegnava la propria
+  // roba inutilizzabile. Portabilità significa poterlo riaprire.
+  // La chiave non c'è e non ci sarà: quella non è nostra da esportare.
   encrypted_user_blobs: [
     "id",
     "blob_type",
+    "kdf_version",
+    "kdf_salt",
+    "kdf_iterations",
+    "cipher_iv",
+    "cipher_auth_tag",
+    "ciphertext",
     "metadata",
     "created_at",
     "updated_at",

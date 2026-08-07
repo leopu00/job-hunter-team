@@ -153,25 +153,39 @@ async function listRecursive(
         `dichiarare completa una cancellazione parziale`,
     );
   }
-  const { data, error } = await admin.storage
-    .from(STORAGE_BUCKET)
-    .list(prefix, { limit: STORAGE_PAGE_LIMIT });
-  if (error) {
-    throw new Error(`impossibile elencare ${prefix}: ${error.message}`);
-  }
-
+  // Si pagina fino a una pagina corta. Con una sola `list` a limite fisso,
+  // una cartella con più figli del limite verrebbe troncata in silenzio e
+  // la cancellazione si dichiarerebbe completa avendone lasciati fuori.
   const out: string[] = [];
-  for (const entry of data ?? []) {
-    const e = entry as { name?: string; id?: string | null };
-    if (!e.name) continue;
-    const full = prefix ? `${prefix}/${e.name}` : e.name;
-    if (e.id === null || e.id === undefined) {
-      // Cartella: si scende. È il ramo che mancava.
-      out.push(...(await listRecursive(admin, full, budget)));
-    } else {
-      budget.left -= 1;
-      out.push(full);
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await admin.storage
+      .from(STORAGE_BUCKET)
+      .list(prefix, { limit: STORAGE_PAGE_LIMIT, offset });
+    if (error) {
+      throw new Error(`impossibile elencare ${prefix}: ${error.message}`);
     }
+    const page = data ?? [];
+    for (const entry of page) {
+      const e = entry as { name?: string; id?: string | null };
+      if (!e.name) continue;
+      const full = prefix ? `${prefix}/${e.name}` : e.name;
+      if (e.id === null || e.id === undefined) {
+        // Cartella: si scende. È il ramo che mancava del tutto.
+        out.push(...(await listRecursive(admin, full, budget)));
+      } else {
+        if (budget.left <= 0) {
+          throw new Error(
+            `troppi file sotto ${prefix}: enumerazione interrotta per non ` +
+              `dichiarare completa una cancellazione parziale`,
+          );
+        }
+        budget.left -= 1;
+        out.push(full);
+      }
+    }
+    if (page.length < STORAGE_PAGE_LIMIT) break;
+    offset += page.length;
   }
   return out;
 }
@@ -201,9 +215,34 @@ async function deleteStorageObjects(
       `impossibile leggere i file da cancellare: ${error.message}`,
     );
   }
+  // ── I percorsi delle righe NON sono affidabili ──────────────────────
+  // `file_bridge_requests` accetta INSERT da qualunque utente autenticato
+  // con il solo controllo `auth.uid() = user_id` (migrazione 037): il
+  // campo `storage_path` non è verificato. Un utente può quindi inserire
+  // una propria riga che punta al file di un altro, e questa funzione gira
+  // con service_role, che bypassa RLS — cancellando il proprio account
+  // farebbe sparire un file altrui.
+  //
+  // Quindi si accettano solo i percorsi dentro il namespace dell'utente.
+  // Un percorso fuori non viene rimosso: se ne esistessero di storici, si
+  // preferisce lasciarli e dirlo, piuttosto che aprire una cancellazione
+  // fra utenti. Segnalato da HQ-BACKEND.
+  const namespace = `${userId}/`;
+  const outsideNamespace: string[] = [];
   for (const row of rows ?? []) {
     const p = (row as { storage_path: string | null }).storage_path;
-    if (typeof p === "string" && p.length > 0) paths.add(p);
+    if (typeof p !== "string" || p.length === 0) continue;
+    if (p.startsWith(namespace)) {
+      paths.add(p);
+    } else {
+      outsideNamespace.push(p);
+    }
+  }
+  if (outsideNamespace.length > 0) {
+    console.warn(
+      "[account-deletion] percorsi fuori dal namespace ignorati:",
+      outsideNamespace.length,
+    );
   }
 
   const all = [...paths];
