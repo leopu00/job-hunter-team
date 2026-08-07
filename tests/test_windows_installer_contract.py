@@ -1,11 +1,18 @@
 """The staged Windows installer must stay safe before publication is enabled."""
 
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 NSI = ROOT / "game" / "installer" / "windows.nsi"
 BUILDER = ROOT / "scripts" / "build-windows-installer.ps1"
+PREFLIGHT = ROOT / "scripts" / "jht-windows-install-preflight.ps1"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish-signed-release.yml"
 SMOKE_WORKFLOW = ROOT / ".github" / "workflows" / "windows-installer-smoke.yml"
@@ -26,11 +33,254 @@ def test_nsis_uses_stable_per_user_release_name() -> None:
     assert source.index("Call AssertSafeInstallDir") < source.index(
         'File "..\\builds\\windows\\job-hunter-team.exe"'
     )
-    assert source.index("icacls.exe") < source.index(
+    assert source.index('StrCpy $9 "Prepare"') < source.index(
         'File "${AUTHORITY_DIR}\\jht-windows-update.ps1"'
     )
-    assert '"$INSTDIR" /reset /T /C' in source
+    assert "icacls.exe" not in source
+    assert "-ExecutionPolicy" not in source
+    assert 'StrCpy $9 "VerifyInstalled"' in source
+    assert source.index('WriteUninstaller "$INSTDIR\\Uninstall.exe"') < source.index(
+        'StrCpy $9 "VerifyInstalled"'
+    )
+    assert source.index('StrCpy $9 "VerifyInstalled"') < source.index(
+        'WriteRegStr HKCU "Software\\Job Hunter Team" "InstallDir"'
+    )
     assert source.count("Call AssertSafeInstallDir") >= 3
+
+
+def test_installer_preflight_is_handle_and_acl_fail_closed() -> None:
+    source = PREFLIGHT.read_text()
+    for seam in (
+        "FILE_FLAG_OPEN_REPARSE_POINT",
+        "GetFileInformationByHandle",
+        "GetFinalPathNameByHandle",
+        "NumberOfLinks != 1",
+        "installer node has a foreign owner",
+        "installer node grants write to another principal",
+        "SetAccessRuleProtection($true, $false)",
+        "VerifyInstalled",
+        "Uninstall.exe",
+    ):
+        assert seam in source
+    assert "Invoke-Expression" not in source
+    assert "ExecutionPolicy" not in source
+
+
+def _windows_powershell() -> str:
+    executable = shutil.which("powershell.exe")
+    if not executable:
+        pytest.skip("Windows PowerShell 5.1 is unavailable")
+    return executable
+
+
+def _run_preflight(
+    install_dir: Path, mode: str, environment: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            _windows_powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(PREFLIGHT),
+            "-Mode",
+            mode,
+            "-InstallDir",
+            str(install_dir),
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows ACL/link gate")
+def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
+    tmp_path: Path,
+) -> None:
+    local = tmp_path / "local app data ';&$() with spaces"
+    local.mkdir()
+    install = local / "Programs" / "Job Hunter Team"
+    environment = os.environ.copy()
+    environment["LOCALAPPDATA"] = str(local)
+
+    install.mkdir(parents=True)
+    (install / "job-hunter-team.exe").write_bytes(b"legacy-v0.3.5\n")
+    first = _run_preflight(install, "Prepare", environment)
+    assert first.returncode == 0, first.stderr
+    second = _run_preflight(install, "Prepare", environment)
+    assert second.returncode == 0, second.stderr
+
+    for name in (
+        "job-hunter-team.exe",
+        "icon.ico",
+        "jht-windows-update.ps1",
+        "RELEASE-MANIFEST.json",
+        "RELEASE-MANIFEST.json.sig",
+        "Uninstall.exe",
+    ):
+        (install / name).write_bytes((name + "\n").encode())
+    verified = _run_preflight(install, "VerifyInstalled", environment)
+    assert verified.returncode == 0, verified.stderr
+
+    helper = install / "jht-windows-update.ps1"
+    helper.unlink()
+    sentinel = local / "hardlink-sentinel"
+    sentinel.write_bytes(b"must-not-change")
+    os.link(sentinel, helper)
+    rejected = _run_preflight(install, "Prepare", environment)
+    assert rejected.returncode != 0
+    assert sentinel.read_bytes() == b"must-not-change"
+    helper.unlink()
+    helper.write_bytes(b"restored\n")
+
+    victim = local / "junction-victim"
+    victim.mkdir()
+    marker = victim / "marker"
+    marker.write_bytes(b"must-not-change")
+    junction = install / "hostile-junction"
+    fixture = tmp_path / "make-junction.ps1"
+    fixture.write_text(
+        "New-Item -ItemType $env:JHT_LINK_TYPE -Path $env:JHT_LINK "
+        "-Target $env:JHT_TARGET | Out-Null\n",
+        encoding="utf-8",
+    )
+    fixture_env = environment.copy()
+    fixture_env.update(
+        JHT_LINK=str(junction), JHT_LINK_TYPE="Junction", JHT_TARGET=str(victim)
+    )
+    subprocess.run(
+        [
+            _windows_powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(fixture),
+        ],
+        env=fixture_env,
+        check=True,
+    )
+    rejected = _run_preflight(install, "Prepare", environment)
+    assert rejected.returncode != 0
+    assert marker.read_bytes() == b"must-not-change"
+    assert "installer node is a reparse point" in rejected.stderr
+    os.rmdir(junction)
+
+    symlink = install / "hostile-symlink"
+    symlink_env = environment.copy()
+    symlink_env.update(
+        JHT_LINK=str(symlink),
+        JHT_LINK_TYPE="SymbolicLink",
+        JHT_TARGET=str(marker),
+    )
+    symlink_created = subprocess.run(
+        [
+            _windows_powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(fixture),
+        ],
+        env=symlink_env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if symlink_created.returncode == 0:
+        rejected = _run_preflight(install, "Prepare", environment)
+        assert rejected.returncode != 0
+        assert "installer node is a reparse point" in rejected.stderr
+        assert marker.read_bytes() == b"must-not-change"
+        symlink.unlink()
+    else:
+        # GitHub-hosted Windows can deny symlink creation without Developer
+        # Mode. Junction above must still have exercised the single shared
+        # FILE_ATTRIBUTE_REPARSE_POINT rejection branch.
+        source = PREFLIGHT.read_text()
+        assert source.count("FILE_ATTRIBUTE_REPARSE_POINT) != 0") == 1
+        assert marker.read_bytes() == b"must-not-change"
+
+    owner_sentinel = install / "foreign-owner-sentinel"
+    owner_sentinel.write_bytes(b"must-not-change")
+    set_owner = tmp_path / "set-owner.ps1"
+    set_owner.write_text(
+        "$item=[IO.FileInfo]::new($env:JHT_OWNER_PATH);"
+        "$acl=[IO.FileSystemAclExtensions]::GetAccessControl("
+        "$item,[Security.AccessControl.AccessControlSections]::All);"
+        "$sid=if($env:JHT_OWNER_MODE -ceq 'current'){"
+        "[Security.Principal.WindowsIdentity]::GetCurrent().User"
+        "}else{[Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')};"
+        "$acl.SetOwner($sid);"
+        "[IO.FileSystemAclExtensions]::SetAccessControl($item,$acl)\n",
+        encoding="utf-8",
+    )
+    owner_env = environment.copy()
+    owner_env.update(JHT_OWNER_MODE="foreign", JHT_OWNER_PATH=str(owner_sentinel))
+    subprocess.run(
+        [
+            _windows_powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(set_owner),
+        ],
+        env=owner_env,
+        check=True,
+    )
+    rejected = _run_preflight(install, "Prepare", environment)
+    assert rejected.returncode != 0
+    assert "installer node has a foreign owner" in rejected.stderr
+    assert owner_sentinel.read_bytes() == b"must-not-change"
+    owner_env["JHT_OWNER_MODE"] = "current"
+    subprocess.run(
+        [
+            _windows_powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(set_owner),
+        ],
+        env=owner_env,
+        check=True,
+    )
+
+    foreign_acl = tmp_path / "add-foreign-ace.ps1"
+    foreign_acl.write_text(
+        "$item=[IO.DirectoryInfo]::new($env:JHT_ACL_PATH);"
+        "$acl=[IO.FileSystemAclExtensions]::GetAccessControl("
+        "$item,[Security.AccessControl.AccessControlSections]::All);"
+        "$sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-545');"
+        "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
+        "$sid,'Modify','ContainerInherit,ObjectInherit','None','Allow');"
+        "$acl.AddAccessRule($rule);"
+        "[IO.FileSystemAclExtensions]::SetAccessControl($item,$acl)\n",
+        encoding="utf-8",
+    )
+    acl_env = environment.copy()
+    acl_env["JHT_ACL_PATH"] = str(install)
+    subprocess.run(
+        [
+            _windows_powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(foreign_acl),
+        ],
+        env=acl_env,
+        check=True,
+    )
+    rejected = _run_preflight(install, "Prepare", environment)
+    assert rejected.returncode != 0
+    assert (install / "job-hunter-team.exe").read_bytes() == (
+        b"job-hunter-team.exe\n"
+    )
 
 
 def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
@@ -52,6 +302,10 @@ def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
         "FileSystemAclExtensions",
         "verify_artifact_files",
         "Signed release artifacts changed before packaging",
+        "Synthetic v0.3.5 baseline unexpectedly has a protected DACL",
+        "Silent reinstall exited",
+        "Installer accepted a hostile hardlink child",
+        "Installer mutated the hardlink sentinel before failing",
     ):
         assert seam in source
 
@@ -71,7 +325,17 @@ def test_release_publishes_setup_primary_and_portable_secondary() -> None:
     assert publish.count("contents: write") == 1
     assert publish.count("ref: ${{ needs.authorize.outputs.tag_sha }}") == 2
     assert "uses: actions/checkout@v" not in publish
-    assert "git rev-list -n 1 '${{ inputs.tag }}'" in publish
+    checkout_blocks = publish.split("uses: actions/checkout@")[1:]
+    assert len(checkout_blocks) == 3
+    for checkout in checkout_blocks:
+        with_block = checkout.split("\n      - ", 1)[0]
+        assert "persist-credentials: false" in with_block
+    assert publish.count("RELEASE_TAG: ${{ inputs.tag }}") >= 6
+    assert 'git rev-list -n 1 "$RELEASE_TAG"' in publish
+    assert '--tag "$RELEASE_TAG"' in publish
+    for run_block in publish.split("run: |")[1:]:
+        run_body = run_block.split("\n      - ", 1)[0]
+        assert "${{" not in run_body
 
 
 def test_download_page_prefers_installer_and_labels_portable_alternative() -> None:
@@ -97,6 +361,7 @@ def test_download_page_prefers_installer_and_labels_portable_alternative() -> No
 def test_native_windows_smoke_is_non_publishing() -> None:
     workflow = SMOKE_WORKFLOW.read_text()
     assert "windows-2022" in workflow
+    assert "scripts/jht-windows-install-preflight.ps1" in workflow
     assert "tests/test_windows_installer_contract.py" in workflow
     assert "tests/test_windows_update_helper.py" in workflow
     assert "./scripts/build-windows-installer.ps1" not in workflow

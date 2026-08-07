@@ -83,13 +83,17 @@ static func production_keyring() -> Array[Dictionary]:
 		var pem := FileAccess.get_file_as_string(path).strip_edges()
 		var der := _spki_der(pem)
 		if der.is_empty():
-			return []
+			out.clear()
+			return out
 		var fingerprint := sha256(der).hex_encode()
 		if fingerprint != str(configured["fingerprint"]) or seen.has(fingerprint):
-			return []
+			out.clear()
+			return out
 		seen[fingerprint] = true
 		out.append({"pem": pem, "fingerprint": fingerprint})
-	return out if out.size() in [1, 2] else []
+	if out.size() not in [1, 2]:
+		out.clear()
+	return out
 
 
 static func production_ready() -> bool:

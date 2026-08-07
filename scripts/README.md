@@ -10,7 +10,7 @@ Job Hunter Team.
 | 📦 **Install** | `install.sh` · `install.ps1` · `host-setup.sh` · `sync-public-installers.sh` |
 | 📜 **Legacy onboarding** | `setup.sh` · `setup.ps1` — from-source onboarding in an already-cloned repo (deprecated in favor of the one-liner installer, see [`docs/guides/CLI-INSTALL.md`](../docs/guides/CLI-INSTALL.md)) |
 | 🐳 **Dev (container)** | `dev-up.sh` · `dev-down.sh` · `dev-up-additional.sh` · `dev-down-additional.sh` |
-| 🏷️ **Release** | `build-release.sh` · `check-release-version.sh` |
+| 🏷️ **Release** | `build-release.sh` · `build-windows-installer.ps1` · `jht-windows-install-preflight.ps1` (guard owner/ACL/link incorporato nel setup) · `check-release-version.sh` |
 | 🧪 **Simulation** | `sim/` — `sim-up.sh` / `sim-down.sh` / `sim-reset.sh`, Supabase seed import/export |
 | 📊 **Analysis** | `analysis/m4_kimi_windows.py` (Kimi window variance/headroom) · `analysis/m4_cost_compare.py` (explicit-unit PAYG/subscription scenarios) · `analysis/m5_score_quality.py` (distribution-only and paired Local Scorer comparisons) |
 | 🧰 **Wrappers / misc** | `jht-wrapper.sh` · `jht-wrapper.ps1` · `migrate-deliverables-to-user-dir.sh` · `review-log.py` · `pre-commit` |

@@ -804,7 +804,10 @@ func _source_gate_windows() -> void:
 	_check("artifact gate legge davvero il keyring esportato",
 			"JHT_WINDOWS_UPDATE_TRUST_TEST" in game_source
 			and "WindowsVerifier.production_keyring()" in game_source
-			and "WINDOWS-UPDATE-TRUST-TEST PASS" in game_source, "")
+			and "WINDOWS-UPDATE-TRUST-TEST PASS" in game_source
+			and "WINDOWS-UPDATE-TRUST-TEST FAIL" in game_source
+			and "return []" not in verifier_source
+			and "out.clear()" in verifier_source, "")
 	_check("firma raw verificata prima del JSON parse",
 			verifier_source.find("Crypto.new().verify") >= 0
 			and verifier_source.find("parser.parse") \

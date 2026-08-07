@@ -129,6 +129,31 @@ def _powershell() -> str:
     return executable
 
 
+def _run_powershell_command(
+    command: str,
+    *,
+    env_values: dict[str, str],
+    check: bool = True,
+    capture_output: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    environment.update(env_values)
+    return subprocess.run(
+        [
+            _powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            command,
+        ],
+        env=environment,
+        check=check,
+        capture_output=capture_output,
+        text=True,
+    )
+
+
 def test_consumer_uses_file_without_execution_policy_bypass() -> None:
     source = (ROOT / "game/scripts/support/windows_update_client.gd").read_text()
     argv = source[source.index("static func helper_argv"):]
@@ -199,24 +224,28 @@ def rsa_keys(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
 
 
 def _protect_directory(path: Path) -> None:
-    subprocess.run(
-        [
-            _powershell(),
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "$p=$args[0];$item=[IO.DirectoryInfo]::new($p);"
-            "$acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::All);"
-            "$acl.SetAccessRuleProtection($true,$false);"
-            "$rule=New-Object System.Security.AccessControl.FileSystemAccessRule("
-            "[System.Security.Principal.WindowsIdentity]::GetCurrent().User,"
-            "'FullControl','ContainerInherit,ObjectInherit','None','Allow');"
-            "$acl.SetAccessRule($rule);$item.SetAccessControl($acl)",
-            str(path),
-        ],
-        check=True,
+    _run_powershell_command(
+        "$p=$env:JHT_TEST_ACL_PATH;$item=[IO.DirectoryInfo]::new($p);"
+        "$acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::All);"
+        "$acl.SetAccessRuleProtection($true,$false);"
+        "$rule=New-Object System.Security.AccessControl.FileSystemAccessRule("
+        "[System.Security.Principal.WindowsIdentity]::GetCurrent().User,"
+        "'FullControl','ContainerInherit,ObjectInherit','None','Allow');"
+        "$acl.SetAccessRule($rule);$item.SetAccessControl($acl)",
+        env_values={"JHT_TEST_ACL_PATH": str(path)},
     )
+
+
+def test_acl_fixture_treats_path_with_spaces_as_data(tmp_path: Path) -> None:
+    protected = tmp_path / "protected ';&$() path with spaces"
+    protected.mkdir()
+    _protect_directory(protected)
+    observed = _run_powershell_command(
+        "[Console]::Out.Write($env:JHT_TEST_ACL_PATH)",
+        env_values={"JHT_TEST_ACL_PATH": str(protected)},
+        capture_output=True,
+    )
+    assert observed.stdout == str(protected)
 
 
 def _write_signed_manifest(
@@ -282,18 +311,13 @@ def _run_verify(
         state = tmp_path / "state"
         junction_target = tmp_path / "state-real"
         junction_target.mkdir()
-        subprocess.run(
-            [
-                _powershell(),
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "New-Item -ItemType Junction -Path $args[0] -Target $args[1] | Out-Null",
-                str(state),
-                str(junction_target),
-            ],
-            check=True,
+        _run_powershell_command(
+            "New-Item -ItemType Junction -Path $env:JHT_TEST_JUNCTION_PATH "
+            "-Target $env:JHT_TEST_JUNCTION_TARGET | Out-Null",
+            env_values={
+                "JHT_TEST_JUNCTION_PATH": str(state),
+                "JHT_TEST_JUNCTION_TARGET": str(junction_target),
+            },
         )
     else:
         state = tmp_path / "state"
@@ -407,22 +431,14 @@ def _run_verify(
             check=True,
         )
     elif mutation == "foreign-write-ace":
-        subprocess.run(
-            [
-                _powershell(),
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "$item=[IO.DirectoryInfo]::new($args[0]);"
-                "$acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::All);"
-                "$sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-545');"
-                "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
-                "$sid,'Modify','ContainerInherit,ObjectInherit','None','Allow');"
-                "$acl.AddAccessRule($rule);$item.SetAccessControl($acl)",
-                str(transaction),
-            ],
-            check=True,
+        _run_powershell_command(
+            "$item=[IO.DirectoryInfo]::new($env:JHT_TEST_ACL_PATH);"
+            "$acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::All);"
+            "$sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-545');"
+            "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
+            "$sid,'Modify','ContainerInherit,ObjectInherit','None','Allow');"
+            "$acl.AddAccessRule($rule);$item.SetAccessControl($acl)",
+            env_values={"JHT_TEST_ACL_PATH": str(transaction)},
         )
 
     process = subprocess.Popen(
@@ -600,19 +616,11 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            started = subprocess.run(
-                [
-                    _powershell(),
-                    "-NoLogo",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-Command",
-                    "(Get-Process -Id ([int]$args[0]) -ErrorAction Stop).StartTime.ToUniversalTime().Ticks.ToString()",
-                    str(candidate_process.pid),
-                ],
-                check=True,
+            started = _run_powershell_command(
+                "(Get-Process -Id ([int]$env:JHT_TEST_PID) -ErrorAction Stop)."
+                "StartTime.ToUniversalTime().Ticks.ToString()",
+                env_values={"JHT_TEST_PID": str(candidate_process.pid)},
                 capture_output=True,
-                text=True,
             ).stdout.strip()
             journal["candidate_pid"] = candidate_process.pid
             journal["candidate_started"] = started
@@ -852,16 +860,10 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         assert target.read_bytes() == old_bytes
         assert json.loads(journal_path.read_text())["state"] == "rolled_back"
         assert not (state / ".update.lock").exists()
-        process_check = subprocess.run(
-            [
-                _powershell(),
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "if (Get-Process -Id ([int]$args[0]) -ErrorAction SilentlyContinue) { exit 1 }",
-                str(candidate_pid),
-            ],
+        process_check = _run_powershell_command(
+            "if (Get-Process -Id ([int]$env:JHT_TEST_PID) "
+            "-ErrorAction SilentlyContinue) { exit 1 }",
+            env_values={"JHT_TEST_PID": str(candidate_pid)},
             check=False,
         )
         assert process_check.returncode == 0

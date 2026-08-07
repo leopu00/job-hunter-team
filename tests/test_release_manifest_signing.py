@@ -608,6 +608,12 @@ def test_release_workflow_stops_before_unsigned_publication() -> None:
     assert prepare.index("Embed the pinned Windows release trust root") < (
         prepare.index("Export native game")
     )
+    assert prepare.index("Fail closed before the Windows trust root is embedded") < (
+        prepare.index("Embed the pinned Windows release trust root")
+    )
+    assert 'test "$trust_rc" -eq 1' in prepare
+    assert '"WINDOWS-UPDATE-TRUST-TEST FAIL"' in prepare
+    assert 'grep -Fq "SCRIPT ERROR"' in prepare
     assert publish.index("name: signed-release-candidate") < publish.index(
         "  installer:"
     )
@@ -620,5 +626,5 @@ def test_release_workflow_stops_before_unsigned_publication() -> None:
         "Re-download and audit"
     )
     assert publish.index("Re-download and audit") < publish.index(
-        'gh release edit "${{ inputs.tag }}" --draft=false'
+        'gh release edit "$RELEASE_TAG" --draft=false'
     )

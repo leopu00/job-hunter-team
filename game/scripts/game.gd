@@ -55,6 +55,7 @@ func _ready() -> void:
 			print("WINDOWS-UPDATE-TRUST ", WindowsVerifier.PRODUCTION_FINGERPRINT)
 			print("WINDOWS-UPDATE-TRUST-TEST PASS")
 		else:
+			print("WINDOWS-UPDATE-TRUST-TEST FAIL")
 			push_error("WINDOWS-UPDATE-TRUST-TEST FAIL")
 		_quit_now(0 if ok else 1)
 		return

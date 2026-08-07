@@ -40,6 +40,7 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
@@ -95,6 +96,7 @@ jobs:
       - name: Decode and verify detached signature before publication
         env:
           RELEASE_SIGNATURE_BASE64: ${{ inputs.signature_base64 }}
+          RELEASE_TAG: ${{ inputs.tag }}
           TAG_SHA: ${{ steps.source.outputs.tag_sha }}
         run: |
           test -s scripts/release-keys/production-spki.pem
@@ -126,7 +128,7 @@ jobs:
           mv release-assets/*.provenance.json release-sidecars/
           python scripts/release_artifacts.py audit \
             --directory release-assets \
-            --tag "${{ inputs.tag }}" \
+            --tag "$RELEASE_TAG" \
             --commit "$TAG_SHA" \
             --repository "$GITHUB_REPOSITORY" \
             --release-public-key scripts/release-keys/production-spki.pem
@@ -153,6 +155,7 @@ jobs:
         with:
           ref: ${{ needs.authorize.outputs.tag_sha }}
           fetch-depth: 1
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -163,11 +166,13 @@ jobs:
 
       - name: Build and smoke-test installer containing exact signed authority
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           New-Item -ItemType Directory -Force game/builds/windows | Out-Null
           Copy-Item release-assets/job-hunter-team-windows-x64-portable.exe `
             game/builds/windows/job-hunter-team.exe
-          $version = '${{ inputs.tag }}' -replace '^v', ''
+          $version = $env:RELEASE_TAG -replace '^v', ''
           ./scripts/build-windows-installer.ps1 -Version $version `
             -AuthorityDirectory release-assets -Smoke
           Copy-Item game/builds/windows/job-hunter-team-windows-x64-setup.exe release-assets/
@@ -175,12 +180,13 @@ jobs:
       - name: Rebuild secondary audit records including the installer
         shell: bash
         env:
+          RELEASE_TAG: ${{ inputs.tag }}
           TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
         run: |
           python scripts/release_artifacts.py record \
             --asset release-assets/job-hunter-team-windows-x64-setup.exe \
             --output release-assets/job-hunter-team-windows-x64-setup.exe.provenance.json \
-            --tag "${{ inputs.tag }}" --commit "$TAG_SHA" \
+            --tag "$RELEASE_TAG" --commit "$TAG_SHA" \
             --repository "$GITHUB_REPOSITORY" --source-root .
           rm -f release-assets/SHA256SUMS release-assets/RELEASE-PROVENANCE.json
           python scripts/release_artifacts.py verify \
@@ -190,13 +196,13 @@ jobs:
             --expected-asset job-hunter-team.zip \
             --expected-asset job-hunter-team-linux-x64.tar.gz \
             --expected-asset jht-windows-update.ps1 \
-            --tag "${{ inputs.tag }}" --commit "$TAG_SHA" \
+            --tag "$RELEASE_TAG" --commit "$TAG_SHA" \
             --repository "$GITHUB_REPOSITORY" \
             --checksums release-assets/SHA256SUMS \
             --provenance release-assets/RELEASE-PROVENANCE.json
           rm release-assets/*.provenance.json
           python scripts/release_artifacts.py audit \
-            --directory release-assets --tag "${{ inputs.tag }}" \
+            --directory release-assets --tag "$RELEASE_TAG" \
             --commit "$TAG_SHA" --repository "$GITHUB_REPOSITORY" \
             --release-public-key scripts/release-keys/production-spki.pem
 
@@ -220,6 +226,7 @@ jobs:
         with:
           ref: ${{ needs.authorize.outputs.tag_sha }}
           fetch-depth: 1
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -231,16 +238,17 @@ jobs:
       - name: Refuse overwrite and audit final bytes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
           TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
         run: |
-          git fetch origin "refs/tags/${{ inputs.tag }}:refs/tags/${{ inputs.tag }}" --force
-          test "$(git rev-list -n 1 '${{ inputs.tag }}')" = "$TAG_SHA"
-          if gh release view "${{ inputs.tag }}" >/dev/null 2>&1; then
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$TAG_SHA"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             echo "::error::release already exists; refusing to overwrite it"
             exit 1
           fi
           python scripts/release_artifacts.py audit \
-            --directory release-assets --tag "${{ inputs.tag }}" \
+            --directory release-assets --tag "$RELEASE_TAG" \
             --commit "$TAG_SHA" --repository "$GITHUB_REPOSITORY" \
             --release-public-key scripts/release-keys/production-spki.pem
 
@@ -284,20 +292,22 @@ jobs:
       - name: Re-download and audit the exact signed draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
           TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
         run: |
           mkdir release-audit
-          gh release download "${{ inputs.tag }}" --dir release-audit
+          gh release download "$RELEASE_TAG" --dir release-audit
           python scripts/release_artifacts.py audit \
-            --directory release-audit --tag "${{ inputs.tag }}" \
+            --directory release-audit --tag "$RELEASE_TAG" \
             --commit "$TAG_SHA" --repository "$GITHUB_REPOSITORY" \
             --release-public-key scripts/release-keys/production-spki.pem
 
       - name: Publish only the audited immutable draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
           TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
         run: |
-          git fetch origin "refs/tags/${{ inputs.tag }}:refs/tags/${{ inputs.tag }}" --force
-          test "$(git rev-list -n 1 '${{ inputs.tag }}')" = "$TAG_SHA"
-          gh release edit "${{ inputs.tag }}" --draft=false
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$TAG_SHA"
+          gh release edit "$RELEASE_TAG" --draft=false

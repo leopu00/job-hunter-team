@@ -63,7 +63,6 @@ Function AssertSafeInstallDir
   Abort "Il percorso di installazione non e quello host protetto previsto."
 
   path_exact:
-  CreateDirectory "$INSTDIR"
   StrCpy $0 "$INSTDIR"
   ancestor_loop:
     System::Call 'kernel32::GetFileAttributesW(w r0)i.r1'
@@ -81,24 +80,28 @@ Function AssertSafeInstallDir
   ancestors_done:
 FunctionEnd
 
+Function RunInstallPreflight
+  ; Il guard viene estratto nel plugin dir privato di NSIS e invocato soltanto
+  ; con -File. La policy PowerShell host resta autorevole, senza override.
+  InitPluginsDir
+  SetOutPath "$PLUGINSDIR"
+  File /oname=jht-windows-install-preflight.ps1 "..\..\scripts\jht-windows-install-preflight.ps1"
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -File "$PLUGINSDIR\jht-windows-install-preflight.ps1" -Mode "$9" -InstallDir "$INSTDIR"'
+  Pop $0
+  Pop $1
+  ${If} $0 != 0
+    DetailPrint "$1"
+    SetErrorLevel 2
+    Abort "La directory di installazione non supera i controlli owner, ACL e link."
+  ${EndIf}
+FunctionEnd
+
 Section "Install"
   Call AssertSafeInstallDir
-  ; Proteggi PRIMA di scrivere EXE/helper/authority: nessuna finestra in cui un
-  ; bind/reparse o un altro principal possa sostituire i byte installati.
-  ReadEnvStr $0 "USERNAME"
-  ReadEnvStr $1 "USERDOMAIN"
-  nsExec::ExecToStack '"$SYSDIR\icacls.exe" "$INSTDIR" /reset /T /C'
-  Pop $2
-  Pop $3
-  ${If} $2 != 0
-    Abort "Non è stato possibile azzerare ACL estranee nella directory di aggiornamento."
-  ${EndIf}
-  nsExec::ExecToStack '"$SYSDIR\icacls.exe" "$INSTDIR" /inheritance:r /grant:r "$1\$0:(OI)(CI)F"'
-  Pop $2
-  Pop $3
-  ${If} $2 != 0
-    Abort "Non è stato possibile proteggere la directory di aggiornamento."
-  ${EndIf}
+  ; Prima mutazione consentita solo dopo preflight su owner/DACL, reparse,
+  ; canonical path e hardlink di ogni child preesistente.
+  StrCpy $9 "Prepare"
+  Call RunInstallPreflight
   Call AssertSafeInstallDir
 
   SetOutPath "$INSTDIR"
@@ -107,9 +110,13 @@ Section "Install"
   File "${AUTHORITY_DIR}\jht-windows-update.ps1"
   File "${AUTHORITY_DIR}\RELEASE-MANIFEST.json"
   File "${AUTHORITY_DIR}\RELEASE-MANIFEST.json.sig"
-  Call AssertSafeInstallDir
-
   WriteUninstaller "$INSTDIR\Uninstall.exe"
+
+  ; Verifica finale prima di shortcut/registry: anche Uninstall.exe deve essere
+  ; regular, single-link, current-owner e senza writer estranei.
+  Call AssertSafeInstallDir
+  StrCpy $9 "VerifyInstalled"
+  Call RunInstallPreflight
   WriteRegStr HKCU "Software\Job Hunter Team" "InstallDir" "$INSTDIR"
 
   ; Collegamenti

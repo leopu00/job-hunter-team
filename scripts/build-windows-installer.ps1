@@ -169,9 +169,24 @@ if ($Smoke) {
   $desktopShortcut = Join-Path $env:USERPROFILE 'Desktop/Job Hunter Team.lnk'
   $startMenuDir = Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/Job Hunter Team'
   $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\JobHunterTeam'
+  $hostileSentinel = Join-Path $env:LOCALAPPDATA ('jht-installer-sentinel-' + [guid]::NewGuid().ToString('N'))
+  $installedHelperBytes = $null
 
   if (Test-Path -LiteralPath $installDir) {
     throw "Refusing to overwrite an existing per-user installation: $installDir"
+  }
+
+  # Baseline realistica v0.3.5: path per-user ereditato, solo vecchio EXE/icona
+  # e nessuna authority updater. Il setup manuale 0.3.6 deve censirla senza
+  # mutare nulla, quindi proteggerla e completare la migrazione forward-only.
+  New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+  [IO.File]::WriteAllText($installedExe, 'legacy-v0.3.5-placeholder')
+  [IO.File]::WriteAllText((Join-Path $installDir 'icon.ico'), 'legacy-icon')
+  $legacyAcl = [IO.FileSystemAclExtensions]::GetAccessControl(
+    [IO.DirectoryInfo]$installDir,
+    [Security.AccessControl.AccessControlSections]::All)
+  if ($legacyAcl.AreAccessRulesProtected) {
+    throw 'Synthetic v0.3.5 baseline unexpectedly has a protected DACL.'
   }
 
   try {
@@ -203,6 +218,48 @@ if ($Smoke) {
     }
     Assert-ProtectedDirectory $installDir
 
+    # Reinstallazione vera sullo stesso path protetto: il preflight deve
+    # accettare soltanto l'autorita che l'installer ha appena materializzato.
+    $reinstall = Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru
+    if ($reinstall.ExitCode -ne 0) {
+      throw "Silent reinstall exited with $($reinstall.ExitCode)"
+    }
+    foreach ($pair in @(
+        @($portable, $installedExe),
+        @($authorityFiles[0], $installedHelper),
+        @($authorityFiles[1], $installedManifest),
+        @($authorityFiles[2], $installedSignature))) {
+      if ((Get-FileHash -LiteralPath $pair[0] -Algorithm SHA256).Hash -ne
+          (Get-FileHash -LiteralPath $pair[1] -Algorithm SHA256).Hash) {
+        throw "Reinstall changed signed authority bytes: $($pair[1])"
+      }
+    }
+    Assert-ProtectedDirectory $installDir
+
+    # Un hardlink preesistente deve abortire PRIMA che NSIS sovrascriva byte,
+    # ACL o registry. Il sentinel esterno sullo stesso volume resta immutato.
+    $installedHelperBytes = [IO.File]::ReadAllBytes($installedHelper)
+    [IO.File]::WriteAllText($hostileSentinel, 'installer-sentinel-do-not-mutate')
+    $sentinelHash = (Get-FileHash -LiteralPath $hostileSentinel -Algorithm SHA256).Hash
+    $exeHash = (Get-FileHash -LiteralPath $installedExe -Algorithm SHA256).Hash
+    Remove-Item -LiteralPath $installedHelper -Force
+    New-Item -ItemType HardLink -Path $installedHelper -Target $hostileSentinel | Out-Null
+    $blocked = Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru
+    if ($blocked.ExitCode -eq 0) { throw 'Installer accepted a hostile hardlink child.' }
+    if ((Get-FileHash -LiteralPath $hostileSentinel -Algorithm SHA256).Hash -ne $sentinelHash) {
+      throw 'Installer mutated the hardlink sentinel before failing.'
+    }
+    if ((Get-FileHash -LiteralPath $installedExe -Algorithm SHA256).Hash -ne $exeHash) {
+      throw 'Installer mutated another payload before rejecting the hardlink.'
+    }
+    if ((Get-ItemPropertyValue -LiteralPath $uninstallKey -Name DisplayVersion) -ne $Version) {
+      throw 'Installer mutated registry state before rejecting the hardlink.'
+    }
+    Remove-Item -LiteralPath $installedHelper -Force
+    [IO.File]::WriteAllBytes($installedHelper, $installedHelperBytes)
+    Remove-Item -LiteralPath $hostileSentinel -Force
+    $installedHelperBytes = $null
+
     $previousNoVps = $env:JHT_NOVPS
     $env:JHT_NOVPS = '1'
     try {
@@ -214,6 +271,15 @@ if ($Smoke) {
       $env:JHT_NOVPS = $previousNoVps
     }
   } finally {
+    if (Test-Path -LiteralPath $hostileSentinel -PathType Leaf) {
+      if (Test-Path -LiteralPath $installedHelper -PathType Leaf) {
+        Remove-Item -LiteralPath $installedHelper -Force
+      }
+      if ($null -ne $installedHelperBytes) {
+        [IO.File]::WriteAllBytes($installedHelper, $installedHelperBytes)
+      }
+      Remove-Item -LiteralPath $hostileSentinel -Force -ErrorAction SilentlyContinue
+    }
     if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {
       $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru
       if ($uninstall.ExitCode -ne 0) {
