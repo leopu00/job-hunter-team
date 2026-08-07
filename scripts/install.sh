@@ -11,7 +11,7 @@
 # ║                                                                          ║
 # ║  Default (Docker mode): installs nothing on the host except Docker.      ║
 # ║  Downloads:                                                              ║
-# ║    - $HOME/.jht/runtime/docker-compose.yml                               ║
+# ║    - host runtime outside $HOME/.jht (compose + preflight)               ║
 # ║    - $HOME/.local/bin/jht         (bash wrapper, ~165 lines)             ║
 # ║  The Node CLI, Python, tmux and the agents ALL run inside the long-      ║
 # ║  running container managed by compose. No Node/Python/tmux on the host.  ║
@@ -36,7 +36,7 @@
 # ║    JHT_INSTALL_DIR         Where to clone the repo (default: $HOME/.jht/src,║
 # ║                            only used by --no-docker)                     ║
 # ║    JHT_RUNTIME_DIR         Where to download docker-compose.yml          ║
-# ║                            (default: $HOME/.jht/runtime)                 ║
+# ║                            (default: XDG/App Support host-runtime)        ║
 # ║    JHT_BIN_DIR             Where to put the jht wrapper (default:        ║
 # ║                            $HOME/.local/bin)                             ║
 # ║    JHT_IMAGE               Container image override (default:            ║
@@ -72,7 +72,13 @@ else
   BIN_DIR="$HOME/.local/bin"
 fi
 
-RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
+if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
+  RUNTIME_DIR="$JHT_RUNTIME_DIR"
+elif [ "$(uname -s)" = "Darwin" ]; then
+  RUNTIME_DIR="$HOME/Library/Application Support/Job Hunter Team/host-runtime"
+else
+  RUNTIME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
+fi
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.5}"
 # Il compose scaricato può evolvere sul canale production; l'installer di
 # questa release deve comunque avviare l'immagine dichiarata qui.
@@ -139,10 +145,25 @@ case "$RUNTIME_CHOICE" in
   *) printf "Invalid --runtime value: %s (use colima|docker-desktop)\n" "$RUNTIME_CHOICE" >&2; exit 2 ;;
 esac
 
-# RAW_BASE must be computed AFTER arg parsing because `--branch` may have
-# overridden $BRANCH. Without this, --branch would have no effect on the
-# downloads of docker-compose.yml and jht-wrapper.sh in download_runtime_files().
-RAW_BASE="${JHT_RAW_BASE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/$BRANCH}"
+# An explicit raw base is a host-authorized private mirror/test seam. Normal
+# installs resolve the selected ref to an immutable commit just before the
+# download, so migration never promotes bytes from the legacy writable tree.
+RAW_BASE_OVERRIDE="${JHT_RAW_BASE:-}"
+
+attested_raw_base() {
+  if [ -n "$RAW_BASE_OVERRIDE" ]; then
+    printf '%s\n' "${RAW_BASE_OVERRIDE%/}"
+    return 0
+  fi
+  local metadata sha
+  metadata="$(curl -fsSL "https://api.github.com/repos/leopu00/job-hunter-team/commits/$BRANCH")" \
+    || return 1
+  sha="$(printf '%s\n' "$metadata" \
+    | sed -n 's/^[[:space:]]*"sha": "\([0-9a-fA-F]\{40\}\)".*/\1/p' \
+    | head -n 1)"
+  printf '%s' "$sha" | grep -Eq '^[0-9a-fA-F]{40}$' || return 1
+  printf 'https://raw.githubusercontent.com/leopu00/job-hunter-team/%s\n' "$sha"
+}
 
 # ── Colors ────────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
@@ -428,12 +449,20 @@ verify_docker_works() {
 download_runtime_files() {
   step 4 "$TOTAL_STEPS_DOCKER" "Download wrapper + docker-compose.yml"
 
-  local compose_url="$RAW_BASE/docker-compose.yml"
-  local wrapper_url="$RAW_BASE/scripts/jht-wrapper.sh"
-  local hostsetup_url="$RAW_BASE/scripts/host-setup.sh"
+  local release_base
+  if [ "$DRY_RUN" -eq 1 ]; then
+    release_base="${RAW_BASE_OVERRIDE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/$BRANCH}"
+  else
+    release_base="$(attested_raw_base)" \
+      || fail "Cannot resolve branch '$BRANCH' to an immutable release commit."
+  fi
+  local compose_url="$release_base/docker-compose.yml"
+  local wrapper_url="$release_base/scripts/jht-wrapper.sh"
+  local hostsetup_url="$release_base/scripts/host-setup.sh"
   local compose_dest="$RUNTIME_DIR/docker-compose.yml"
   local wrapper_dest="$BIN_DIR/jht"
   local hostsetup_dest="$RUNTIME_DIR/host-setup.sh"
+  local manifest_dest="$RUNTIME_DIR/.runtime-integrity"
 
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: mkdir -p %s %s\n" "$RUNTIME_DIR" "$BIN_DIR"
@@ -448,28 +477,84 @@ download_runtime_files() {
     return 0
   fi
 
+  if [ -L "$RUNTIME_DIR" ]; then
+    fail "Host runtime path is a symlink: $RUNTIME_DIR"
+  fi
+  case "$RUNTIME_DIR/" in
+    "$HOME/.jht/"*|"$HOME/Documents/Job Hunter Team/"*)
+      fail "Host runtime must be outside container-writable bind mounts: $RUNTIME_DIR"
+      ;;
+  esac
+  case "$BIN_DIR/" in
+    "$HOME/.jht/"*|"$HOME/Documents/Job Hunter Team/"*)
+      fail "Host wrapper must be outside container-writable bind mounts: $BIN_DIR"
+      ;;
+  esac
+  umask 077
   mkdir -p "$RUNTIME_DIR" "$BIN_DIR"
+  chmod 700 "$RUNTIME_DIR"
+  local runtime_real bin_real
+  runtime_real="$(cd -P "$RUNTIME_DIR" && pwd -P)"
+  bin_real="$(cd -P "$BIN_DIR" && pwd -P)"
+  [ "$runtime_real" = "${RUNTIME_DIR%/}" ] \
+    || fail "Host runtime has a symlinked or non-canonical ancestor: $RUNTIME_DIR"
+  [ "$bin_real" = "${BIN_DIR%/}" ] \
+    || fail "Host wrapper directory has a symlinked or non-canonical ancestor: $BIN_DIR"
+
+  local compose_tmp wrapper_tmp hostsetup_tmp manifest_tmp
+  compose_tmp="$(mktemp "$RUNTIME_DIR/.compose.XXXXXX")"
+  wrapper_tmp="$(mktemp "$BIN_DIR/.jht.XXXXXX")"
+  hostsetup_tmp="$(mktemp "$RUNTIME_DIR/.host-setup.XXXXXX")"
+  manifest_tmp="$(mktemp "$RUNTIME_DIR/.integrity.XXXXXX")"
 
   info "Downloading docker-compose.yml..."
-  if ! curl -fsSL "$compose_url" -o "$compose_dest"; then
+  if ! curl -fsSL "$compose_url" -o "$compose_tmp"; then
     fail "Download failed: $compose_url. Check your connection and branch ($BRANCH)."
   fi
+  grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$compose_tmp" \
+    || fail "Downloaded compose does not enforce the protected runtime boundary."
+  chmod 600 "$compose_tmp"
+  mv -f "$compose_tmp" "$compose_dest"
   ok "compose: $compose_dest"
 
   info "Downloading jht wrapper..."
-  if ! curl -fsSL "$wrapper_url" -o "$wrapper_dest"; then
+  if ! curl -fsSL "$wrapper_url" -o "$wrapper_tmp"; then
     fail "Download failed: $wrapper_url. Check your connection and branch ($BRANCH)."
   fi
-  chmod +x "$wrapper_dest"
+  bash -n "$wrapper_tmp" \
+    && grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$wrapper_tmp" \
+    || fail "Downloaded wrapper does not implement the protected runtime protocol."
+  chmod 700 "$wrapper_tmp"
+  mv -f "$wrapper_tmp" "$wrapper_dest"
   ok "wrapper: $wrapper_dest"
 
   info "Downloading host-setup.sh (VPS/swap preflight)..."
-  if ! curl -fsSL "$hostsetup_url" -o "$hostsetup_dest"; then
-    warn "host-setup.sh download failed ($hostsetup_url) — continuing without preflight"
-  else
-    chmod +x "$hostsetup_dest"
-    ok "host-setup: $hostsetup_dest"
+  if ! curl -fsSL "$hostsetup_url" -o "$hostsetup_tmp" \
+      || ! bash -n "$hostsetup_tmp" \
+      || ! grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$hostsetup_tmp"; then
+    fail "host-setup.sh download or validation failed: $hostsetup_url"
   fi
+  chmod 700 "$hostsetup_tmp"
+  mv -f "$hostsetup_tmp" "$hostsetup_dest"
+  local compose_sha hostsetup_sha wrapper_sha
+  if command -v sha256sum >/dev/null 2>&1; then
+    compose_sha="$(sha256sum "$compose_dest" | awk '{print $1}')"
+    hostsetup_sha="$(sha256sum "$hostsetup_dest" | awk '{print $1}')"
+    wrapper_sha="$(sha256sum "$wrapper_dest" | awk '{print $1}')"
+  else
+    compose_sha="$(shasum -a 256 "$compose_dest" | awk '{print $1}')"
+    hostsetup_sha="$(shasum -a 256 "$hostsetup_dest" | awk '{print $1}')"
+    wrapper_sha="$(shasum -a 256 "$wrapper_dest" | awk '{print $1}')"
+  fi
+  {
+    printf 'version=1\n'
+    printf 'docker-compose.yml=%s\n' "$compose_sha"
+    printf 'host-setup.sh=%s\n' "$hostsetup_sha"
+    printf 'jht-wrapper.sh=%s\n' "$wrapper_sha"
+  } > "$manifest_tmp"
+  chmod 600 "$manifest_tmp"
+  mv -f "$manifest_tmp" "$manifest_dest"
+  ok "host-setup: $hostsetup_dest"
 
   case ":$PATH:" in
     *":$BIN_DIR:"*)

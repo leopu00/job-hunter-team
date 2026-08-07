@@ -17,7 +17,7 @@
 # ║                                                                          ║
 # ║  Override via env:                                                       ║
 # ║    JHT_CONTAINER_NAME=jht                                                ║
-# ║    JHT_RUNTIME_DIR=$HOME/.jht/runtime                                    ║
+# ║    JHT_RUNTIME_DIR=$HOME/.local/share/job-hunter-team/host-runtime       ║
 # ║    JHT_COMPOSE_FILE=$JHT_RUNTIME_DIR/docker-compose.yml                  ║
 # ║                                                                          ║
 # ║  Riferimento design: docs/internal/ops/vps.md    ║
@@ -30,17 +30,26 @@ set -euo pipefail
 # trattare quei flag come un apply: il client deve allora avviare una copia
 # temporanea del wrapper production, con JHT_WRAPPER_PATH ancorato all'host.
 JHT_UPGRADE_PROTOCOL=1
+JHT_HOST_RUNTIME_PROTOCOL=1
 
 CONTAINER="${JHT_CONTAINER_NAME:-jht}"
-RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
+if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
+  RUNTIME_DIR="$JHT_RUNTIME_DIR"
+elif [ "$(uname -s)" = "Darwin" ]; then
+  RUNTIME_DIR="$HOME/Library/Application Support/Job Hunter Team/host-runtime"
+else
+  RUNTIME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
+fi
 COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"
 NODE_ENTRY="${JHT_NODE_ENTRY:-/app/cli/bin/jht.js}"
 HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
+RUNTIME_MANIFEST="$RUNTIME_DIR/.runtime-integrity"
 # `jht upgrade` aggiorna anche i due file host scaricati dall'installer. Il
 # wrapper non puo' fidarsi di un checkout Git (la distribuzione utente e'
 # image-only), quindi la fonte e' la stessa raw release dell'installer. Chi
 # prova una release di branch puo' fissarla esplicitamente con JHT_RAW_BASE.
-RAW_BASE="${JHT_RAW_BASE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/${JHT_BRANCH:-production}}"
+RAW_BASE_OVERRIDE="${JHT_RAW_BASE:-}"
+RELEASE_REF="${JHT_BRANCH:-production}"
 WRAPPER_PATH="${JHT_WRAPPER_PATH:-$0}"
 GAME_EXECUTABLE_OVERRIDE="${JHT_GAME_EXECUTABLE:-}"
 if [ -n "${JHT_GAME_CONTROL_DIR:-}" ]; then
@@ -51,15 +60,73 @@ else
   GAME_CONTROL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/Job Hunter Team/client"
 fi
 
-# Carica la host env (scritta da host-setup.sh: JHT_HOST_TYPE=vps|local).
-# Il wizard Node usa JHT_HOST_TYPE per attivare step obbligatori (cloud
-# pairing, telegram) sul path VPS, e il dispatcher pid1 del container
-# lo usa per scegliere tra dashboard locale e cloud sync daemon.
+# Legge una singola chiave dal file host.env come DATI, mai come shell.
+#
+# ~/.jht e' montata read-write nel container, quindi host.env non attraversa
+# un confine di fiducia: un processo nel container puo' modificarlo. Fare
+# `source` di quel file trasformerebbe la scrittura nel bind mount in
+# esecuzione di comandi sull'host al successivo `jht`. Il parser accetta solo
+# le tre chiavi prodotte da host-setup.sh e valida i rispettivi domini.
+jht_host_env_value_valid() {
+  local key="$1" value="$2"
+  case "$key" in
+    JHT_HOST_TYPE)
+      case "$value" in local|vps) return 0 ;; esac
+      ;;
+    JHT_LANG)
+      case "$value" in en|it|hu|es|de|fr|pt) return 0 ;; esac
+      ;;
+    JHT_USER_TZ)
+      # IANA timezone: UTC oppure segmenti composti da caratteri portabili.
+      # Niente spazi o metacaratteri shell; host-setup fa la validazione
+      # semantica completa con zoneinfo quando riceve il valore dall'utente.
+      case "$value" in
+        ''|*[!A-Za-z0-9_+./-]*) return 1 ;;
+        *) return 0 ;;
+      esac
+      ;;
+  esac
+  return 1
+}
+
+jht_read_host_env_value() {
+  local file="$1" requested="$2" line key value result=""
+  local found=1
+  [ -f "$file" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    if [[ "$line" =~ ^[[:space:]]*(JHT_HOST_TYPE|JHT_LANG|JHT_USER_TZ)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+      case "$value" in
+        \"*\") value="${value#\"}"; value="${value%\"}" ;;
+        \'*\') value="${value#\'}"; value="${value%\'}" ;;
+      esac
+      if [ "$key" = "$requested" ] && jht_host_env_value_valid "$key" "$value"; then
+        result="$value"
+        found=0
+      fi
+    fi
+  done < "$file"
+  [ "$found" -eq 0 ] || return 1
+  printf '%s' "$result"
+}
+
+# Carica la host env scritta da host-setup.sh. Il wizard Node usa
+# JHT_HOST_TYPE per attivare gli step obbligatori sul path VPS, e pid1 lo usa
+# per scegliere il runtime. Le assegnazioni esplicite preservano il contratto
+# storico senza eseguire il contenuto del file.
 HOST_ENV_FILE="${JHT_HOST_ENV_FILE:-$HOME/.jht/host.env}"
-if [ -f "$HOST_ENV_FILE" ]; then
-  # shellcheck disable=SC1090
-  . "$HOST_ENV_FILE"
+if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_HOST_TYPE)"; then
+  JHT_HOST_TYPE="$host_env_value"
 fi
+if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_LANG)"; then
+  JHT_LANG="$host_env_value"
+fi
+if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_USER_TZ)"; then
+  JHT_USER_TZ="$host_env_value"
+fi
+unset host_env_value
 JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
 JHT_LANG="${JHT_LANG:-en}"
 # Bug #15: timezone utente esplicita dal setup wizard. Default UTC se mai
@@ -84,6 +151,184 @@ err()  { printf "${RED}error:${RESET} %s\n" "$*" >&2; }
 warn() { printf "${YELLOW}warn:${RESET}  %s\n" "$*" >&2; }
 info() { printf "${DIM}%s${RESET}\n" "$*" >&2; }
 
+runtime_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+attested_raw_base() {
+  # An explicit override is a host-authorized test/private mirror. The
+  # production path resolves its moving ref to an immutable Git commit before
+  # downloading any byte that Bash or Docker will interpret.
+  if [ -n "$RAW_BASE_OVERRIDE" ]; then
+    printf '%s\n' "${RAW_BASE_OVERRIDE%/}"
+    return 0
+  fi
+  local metadata sha
+  metadata="$(curl -fsSL "https://api.github.com/repos/leopu00/job-hunter-team/commits/$RELEASE_REF")" \
+    || return 1
+  sha="$(printf '%s\n' "$metadata" \
+    | sed -n 's/^[[:space:]]*"sha": "\([0-9a-fA-F]\{40\}\)".*/\1/p' \
+    | head -n 1)"
+  printf '%s' "$sha" | grep -Eq '^[0-9a-fA-F]{40}$' || return 1
+  printf 'https://raw.githubusercontent.com/leopu00/job-hunter-team/%s\n' "$sha"
+}
+
+runtime_stat() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    stat -f '%u %Lp' "$1" 2>/dev/null
+  else
+    stat -c '%u %a' "$1" 2>/dev/null
+  fi
+}
+
+runtime_node_safe() {
+  local path="$1" kind="$2" metadata owner mode mode_num
+  [ ! -L "$path" ] || return 1
+  case "$kind" in dir) [ -d "$path" ] ;; file) [ -f "$path" ] ;; esac || return 1
+  metadata="$(runtime_stat "$path")" || return 1
+  owner="${metadata%% *}"
+  mode="${metadata#* }"
+  [ "$owner" = "$(id -u)" ] || return 1
+  mode_num=$((8#$mode))
+  [ $((mode_num & 0022)) -eq 0 ]
+}
+
+runtime_manifest_value() {
+  local key="$1"
+  sed -n "s/^${key}=//p" "$RUNTIME_MANIFEST" 2>/dev/null | head -n 1
+}
+
+runtime_write_manifest() {
+  local tmp="${RUNTIME_MANIFEST}.tmp.$$"
+  umask 077
+  {
+    printf 'version=1\n'
+    printf 'docker-compose.yml=%s\n' "$(runtime_sha256 "$COMPOSE_FILE")"
+    printf 'host-setup.sh=%s\n' "$(runtime_sha256 "$HOST_SETUP_SCRIPT")"
+    printf 'jht-wrapper.sh=%s\n' "$(runtime_sha256 "$WRAPPER_PATH")"
+  } > "$tmp" || return 1
+  chmod 600 "$tmp" || { rm -f "$tmp"; return 1; }
+  mv -f "$tmp" "$RUNTIME_MANIFEST"
+}
+
+runtime_path_allowed() {
+  local runtime_real runtime_declared wrapper_real bind_real docs_real
+  runtime_real="$(cd -P "$RUNTIME_DIR" 2>/dev/null && pwd -P)" || return 1
+  runtime_declared="${RUNTIME_DIR%/}"
+  # Rifiuta anche symlink in qualunque antenato: il path dichiarato deve gia'
+  # essere il path fisico canonico consumato dal daemon host.
+  [ "$runtime_real" = "$runtime_declared" ] || return 1
+  bind_real="$(cd -P "$HOME/.jht" 2>/dev/null && pwd -P)" || bind_real="$HOME/.jht"
+  docs_real="$(cd -P "$HOME/Documents/Job Hunter Team" 2>/dev/null && pwd -P)" \
+    || docs_real="$HOME/Documents/Job Hunter Team"
+  case "$runtime_real/" in "$bind_real/"*|"$docs_real/"*) return 1 ;; esac
+  [ "$COMPOSE_FILE" = "$RUNTIME_DIR/docker-compose.yml" ] || return 1
+  [ "$HOST_SETUP_SCRIPT" = "$RUNTIME_DIR/host-setup.sh" ] || return 1
+  wrapper_real="$(cd -P "$(dirname "$WRAPPER_PATH")" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$(basename "$WRAPPER_PATH")")" || return 1
+  [ "$wrapper_real" = "$WRAPPER_PATH" ] || return 1
+  case "$wrapper_real" in "$bind_real"/*|"$docs_real"/*) return 1 ;; esac
+}
+
+runtime_bundle_trusted() {
+  runtime_path_allowed || return 1
+  runtime_node_safe "$RUNTIME_DIR" dir || return 1
+  runtime_node_safe "$COMPOSE_FILE" file || return 1
+  runtime_node_safe "$HOST_SETUP_SCRIPT" file || return 1
+  runtime_node_safe "$WRAPPER_PATH" file || return 1
+  runtime_node_safe "$RUNTIME_MANIFEST" file || return 1
+  [ "$(runtime_manifest_value version)" = "1" ] || return 1
+  [ "$(runtime_manifest_value docker-compose.yml)" = "$(runtime_sha256 "$COMPOSE_FILE")" ] || return 1
+  [ "$(runtime_manifest_value host-setup.sh)" = "$(runtime_sha256 "$HOST_SETUP_SCRIPT")" ] || return 1
+  [ "$(runtime_manifest_value jht-wrapper.sh)" = "$(runtime_sha256 "$WRAPPER_PATH")" ] || return 1
+  grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH" || return 1
+  grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$HOST_SETUP_SCRIPT" || return 1
+  grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$COMPOSE_FILE" || return 1
+}
+
+runtime_bootstrap_release() {
+  # Legacy ~/.jht/runtime is deliberately never read or copied. A missing
+  # authority is rebuilt only from the selected release origin into a new
+  # host-owned directory, then atomically published with its digest manifest.
+  local stage release_base migrate_wrapper=0 wrapper_publish
+  [ ! -e "$RUNTIME_DIR" ] && [ ! -L "$RUNTIME_DIR" ] || return 1
+  umask 077
+  mkdir -p "$RUNTIME_DIR" || return 1
+  chmod 700 "$RUNTIME_DIR" || return 1
+  runtime_path_allowed || { rmdir "$RUNTIME_DIR" 2>/dev/null || true; return 1; }
+  stage="$(mktemp -d "$RUNTIME_DIR/.bootstrap.XXXXXX")" || return 1
+  release_base="$(attested_raw_base)" || {
+    rmdir "$stage" 2>/dev/null || true
+    rmdir "$RUNTIME_DIR" 2>/dev/null || true
+    return 1
+  }
+  if ! curl -fsSL "${release_base%/}/docker-compose.yml" -o "$stage/docker-compose.yml" \
+      || ! curl -fsSL "${release_base%/}/scripts/host-setup.sh" -o "$stage/host-setup.sh" \
+      || ! bash -n "$stage/host-setup.sh" \
+      || ! grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$stage/host-setup.sh" \
+      || ! grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$stage/docker-compose.yml"; then
+    rm -f "$stage/docker-compose.yml" "$stage/host-setup.sh"
+    rmdir "$stage" 2>/dev/null || true
+    rmdir "$RUNTIME_DIR" 2>/dev/null || true
+    return 1
+  fi
+  if ! grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH"; then
+    if [ "${JHT_ALLOW_LEGACY_WRAPPER_MIGRATION:-0}" != "1" ] \
+        || ! curl -fsSL "${release_base%/}/scripts/jht-wrapper.sh" -o "$stage/jht-wrapper.sh" \
+        || ! bash -n "$stage/jht-wrapper.sh" \
+        || ! grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$stage/jht-wrapper.sh"; then
+      rm -f "$stage/docker-compose.yml" "$stage/host-setup.sh" "$stage/jht-wrapper.sh"
+      rmdir "$stage" 2>/dev/null || true
+      rmdir "$RUNTIME_DIR" 2>/dev/null || true
+      return 1
+    fi
+    migrate_wrapper=1
+  fi
+  chmod 600 "$stage/docker-compose.yml"
+  chmod 700 "$stage/host-setup.sh"
+  if [ "$migrate_wrapper" -eq 1 ]; then
+    wrapper_publish="$(mktemp "$(dirname "$WRAPPER_PATH")/.jht-wrapper.XXXXXX")" || wrapper_publish=""
+    if [ -z "$wrapper_publish" ] \
+        || ! cp "$stage/jht-wrapper.sh" "$wrapper_publish" \
+        || ! chmod 700 "$wrapper_publish" \
+        || ! mv -f "$wrapper_publish" "$WRAPPER_PATH"; then
+      [ -z "$wrapper_publish" ] || rm -f "$wrapper_publish"
+      rm -f "$stage/docker-compose.yml" "$stage/host-setup.sh" "$stage/jht-wrapper.sh"
+      rmdir "$stage" 2>/dev/null || true
+      rmdir "$RUNTIME_DIR" 2>/dev/null || true
+      return 1
+    fi
+    rm -f "$stage/jht-wrapper.sh"
+  fi
+  if ! { mv "$stage/docker-compose.yml" "$COMPOSE_FILE" \
+      && mv "$stage/host-setup.sh" "$HOST_SETUP_SCRIPT" \
+      && rmdir "$stage" \
+      && runtime_write_manifest \
+      && runtime_bundle_trusted; }; then
+    rm -f "$stage/docker-compose.yml" "$stage/host-setup.sh" "$stage/jht-wrapper.sh" \
+      "$COMPOSE_FILE" "$HOST_SETUP_SCRIPT" "$RUNTIME_MANIFEST"
+    rmdir "$stage" 2>/dev/null || true
+    rmdir "$RUNTIME_DIR" 2>/dev/null || true
+    return 1
+  fi
+}
+
+require_trusted_runtime() {
+  if [ ! -e "$RUNTIME_DIR" ]; then
+    runtime_bootstrap_release || {
+      err "runtime host protetto non installabile; il legacy ~/.jht/runtime non viene usato"
+      return 1
+    }
+  fi
+  runtime_bundle_trusted || {
+    err "runtime host non attendibile (path, owner, permessi o SHA-256)"
+    return 1
+  }
+}
+
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
 require_docker() {
   if ! command -v docker >/dev/null 2>&1; then
@@ -101,15 +346,11 @@ require_docker() {
 }
 
 require_compose_file() {
-  if [ ! -f "$COMPOSE_FILE" ]; then
-    err "compose file non trovato: $COMPOSE_FILE"
-    info "Esegui di nuovo install.sh oppure scarica manualmente:"
-    info "  mkdir -p $RUNTIME_DIR && curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/production/docker-compose.yml -o $COMPOSE_FILE"
-    exit 1
-  fi
+  require_trusted_runtime || exit 1
 }
 
 compose() {
+  require_trusted_runtime || return 1
   # `docker compose` dell'host. MSYS_NO_PATHCONV protegge da git-bash su Windows.
   MSYS_NO_PATHCONV=1 docker compose -f "$COMPOSE_FILE" --project-directory "$RUNTIME_DIR" "$@"
 }
@@ -789,7 +1030,8 @@ upgrade_write_journal() {
 upgrade_remove_transaction() {
   rm -f "$UPGRADE_JOURNAL"
   if [ -n "$UPGRADE_ROLLBACK_DIR" ] && [ -d "$UPGRADE_ROLLBACK_DIR" ]; then
-    rm -f "$UPGRADE_ROLLBACK_DIR/docker-compose.yml" "$UPGRADE_ROLLBACK_DIR/jht-wrapper.sh"
+    rm -f "$UPGRADE_ROLLBACK_DIR/docker-compose.yml" "$UPGRADE_ROLLBACK_DIR/jht-wrapper.sh" \
+      "$UPGRADE_ROLLBACK_DIR/.runtime-integrity"
     rmdir "$UPGRADE_ROLLBACK_DIR" 2>/dev/null || true
   fi
 }
@@ -824,24 +1066,43 @@ upgrade_restore_previous() {
     "$runtime_real"/.upgrade-rollback-*) ;;
     *) return 1 ;;
   esac
+  runtime_node_safe "$UPGRADE_JOURNAL" file || return 1
+  runtime_node_safe "$rollback_dir" dir || return 1
   [ "$version" = "1" ] || return 1
   case "$phase" in prepared|pulled|candidate_started|metadata_committed) ;; *) return 1 ;; esac
   case "$was_running" in 0|1) ;; *) return 1 ;; esac
   if [ "$was_running" = "1" ]; then
     printf '%s' "$old_image" | grep -Eq '^sha256:[A-Za-z0-9]+$' || return 1
-    # `compose pull` puo' aver ritaggato latest: il digest salvato e' utile al
-    # rollback solo se e' ancora presente. Verificalo PRIMA di ripristinare
-    # compose/wrapper, altrimenti un journal corrotto muterebbe metadata per
-    # poi fallire nel tentativo di ricreare l'immagine inesistente.
-    docker image inspect "$old_image" >/dev/null 2>&1 || return 1
   elif [ "$old_image" != "none" ]; then
     return 1
   fi
   [ -n "$rollback_dir" ] && [ -d "$rollback_dir" ] || return 1
   [ -f "$rollback_dir/docker-compose.yml" ] || return 1
   [ -f "$rollback_dir/jht-wrapper.sh" ] || return 1
+  [ -f "$rollback_dir/.runtime-integrity" ] || return 1
+  [ ! -L "$rollback_dir/docker-compose.yml" ] || return 1
+  [ ! -L "$rollback_dir/jht-wrapper.sh" ] || return 1
+  [ ! -L "$rollback_dir/.runtime-integrity" ] || return 1
+  runtime_node_safe "$rollback_dir/docker-compose.yml" file || return 1
+  runtime_node_safe "$rollback_dir/jht-wrapper.sh" file || return 1
+  runtime_node_safe "$rollback_dir/.runtime-integrity" file || return 1
+  runtime_node_safe "$HOST_SETUP_SCRIPT" file || return 1
+  local snapshot_compose_sha snapshot_helper_sha
+  snapshot_compose_sha="$(sed -n 's/^docker-compose.yml=//p' "$rollback_dir/.runtime-integrity" | head -n 1)"
+  snapshot_helper_sha="$(sed -n 's/^host-setup.sh=//p' "$rollback_dir/.runtime-integrity" | head -n 1)"
+  local snapshot_wrapper_sha
+  snapshot_wrapper_sha="$(sed -n 's/^jht-wrapper.sh=//p' "$rollback_dir/.runtime-integrity" | head -n 1)"
+  [ "$snapshot_compose_sha" = "$(runtime_sha256 "$rollback_dir/docker-compose.yml")" ] || return 1
+  [ "$snapshot_helper_sha" = "$(runtime_sha256 "$HOST_SETUP_SCRIPT")" ] || return 1
+  [ "$snapshot_wrapper_sha" = "$(runtime_sha256 "$rollback_dir/jht-wrapper.sh")" ] || return 1
+  if [ "$was_running" = "1" ]; then
+    # Validate every host-consumed byte before the first Docker call. Only
+    # then verify that the immutable rollback image is still locally present.
+    docker image inspect "$old_image" >/dev/null 2>&1 || return 1
+  fi
   upgrade_atomic_replace "$rollback_dir/docker-compose.yml" "$COMPOSE_FILE" || return 1
   upgrade_atomic_replace "$rollback_dir/jht-wrapper.sh" "$WRAPPER_PATH" 755 || return 1
+  upgrade_atomic_replace "$rollback_dir/.runtime-integrity" "$RUNTIME_MANIFEST" 600 || return 1
 
   if [ "$was_running" = "1" ]; then
     [ -n "$old_image" ] || return 1
@@ -887,7 +1148,7 @@ upgrade_acquire_lock() {
 handle_runtime_upgrade() {
   local check_only=0 old_image old_version candidate_image candidate_version candidate_ref
   local was_running=0 changed=false rolled_back=false phase="preflight"
-  local candidate_compose candidate_wrapper metadata_changed=false
+  local candidate_compose candidate_wrapper metadata_changed=false release_base
   for arg in "$@"; do
     case "$arg" in
       --json) UPGRADE_JSON=1 ;;
@@ -900,6 +1161,16 @@ handle_runtime_upgrade() {
     esac
   done
 
+  if [ ! -e "$RUNTIME_DIR" ]; then
+    runtime_bootstrap_release || {
+      upgrade_result false false preflight unknown none unknown none false "Runtime host protetto non installabile" false
+      return 1
+    }
+  fi
+  runtime_path_allowed && runtime_node_safe "$RUNTIME_DIR" dir || {
+    upgrade_result false false preflight unknown none unknown none false "Runtime host fuori authority" false
+    return 1
+  }
   if ! upgrade_acquire_lock; then
     upgrade_result false false preflight unknown none unknown none false "Un aggiornamento e gia in corso" false
     return 1
@@ -907,6 +1178,14 @@ handle_runtime_upgrade() {
   UPGRADE_JOURNAL="$RUNTIME_DIR/.upgrade-journal"
   trap upgrade_cleanup_ephemeral EXIT INT TERM
 
+  if ! upgrade_recover_if_needed; then
+    upgrade_result false false recovery unknown none unknown none false "Recovery dell upgrade precedente non riuscita" false
+    return 1
+  fi
+  if ! runtime_bundle_trusted; then
+    upgrade_result false false preflight unknown none unknown none false "Runtime host non attendibile" false
+    return 1
+  fi
   if ! upgrade_docker_ready; then
     upgrade_result false false preflight unknown none unknown none false "Docker non e disponibile" false
     return 1
@@ -919,10 +1198,6 @@ handle_runtime_upgrade() {
   # deve poter riaprire i bind mount al primo boot, non solo il container che
   # era gia' in vita prima dell'upgrade.
   ensure_bind_owner
-  if ! upgrade_recover_if_needed; then
-    upgrade_result false false recovery unknown none unknown none false "Recovery dell upgrade precedente non riuscita" false
-    return 1
-  fi
   if [ ! -f "$WRAPPER_PATH" ]; then
     upgrade_result false false preflight unknown none unknown none false "Wrapper host non leggibile" false
     return 1
@@ -946,9 +1221,15 @@ handle_runtime_upgrade() {
   candidate_compose="$UPGRADE_STAGE/docker-compose.yml"
   candidate_wrapper="$UPGRADE_STAGE/jht-wrapper.sh"
   upgrade_note "Scarico runtime aggiornato..."
-  if ! upgrade_run curl -fsSL "${RAW_BASE%/}/docker-compose.yml" -o "$candidate_compose" \
-      || ! upgrade_run curl -fsSL "${RAW_BASE%/}/scripts/jht-wrapper.sh" -o "$candidate_wrapper" \
+  release_base="$(attested_raw_base)" || {
+    upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "Release host non attestabile" false
+    return 1
+  }
+  if ! upgrade_run curl -fsSL "${release_base%/}/docker-compose.yml" -o "$candidate_compose" \
+      || ! upgrade_run curl -fsSL "${release_base%/}/scripts/jht-wrapper.sh" -o "$candidate_wrapper" \
       || ! bash -n "$candidate_wrapper" \
+      || ! grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$candidate_wrapper" \
+      || ! grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$candidate_compose" \
       || ! upgrade_run upgrade_compose "$candidate_compose" config -q; then
     upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "Runtime remoto non valido o non raggiungibile" false
     return 1
@@ -961,6 +1242,7 @@ handle_runtime_upgrade() {
   if ! mkdir "$UPGRADE_ROLLBACK_DIR" \
       || ! cp "$COMPOSE_FILE" "$UPGRADE_ROLLBACK_DIR/docker-compose.yml" \
       || ! cp "$WRAPPER_PATH" "$UPGRADE_ROLLBACK_DIR/jht-wrapper.sh" \
+      || ! cp "$RUNTIME_MANIFEST" "$UPGRADE_ROLLBACK_DIR/.runtime-integrity" \
       || ! upgrade_write_journal prepared "$old_image" "$was_running"; then
     upgrade_remove_transaction
     upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "Impossibile preparare il rollback" false
@@ -1021,6 +1303,7 @@ handle_runtime_upgrade() {
   phase="commit"
   if ! upgrade_atomic_replace "$candidate_compose" "$COMPOSE_FILE" \
       || ! upgrade_atomic_replace "$candidate_wrapper" "$WRAPPER_PATH" 755 \
+      || ! runtime_write_manifest \
       || ! upgrade_write_journal metadata_committed "$old_image" "$was_running"; then
     if upgrade_restore_previous; then rolled_back=true; fi
     upgrade_result false false commit "$old_version" "$old_image" "$old_version" "$old_image" false "Metadata runtime non persistiti" "$rolled_back"
@@ -1062,27 +1345,27 @@ case "$SUB" in
 
   # ── Lifecycle: parlano direttamente al daemon Docker ───────────────────
   up|start-container)
-    require_docker
     require_compose_file
+    require_docker
     ensure_bind_owner
     compose up -d
     ;;
 
   down|stop-container)
-    require_docker
     require_compose_file
+    require_docker
     compose down
     ;;
 
   restart)
-    require_docker
     require_compose_file
+    require_docker
     compose restart "$CONTAINER"
     ;;
 
   recreate)
-    require_docker
     require_compose_file
+    require_docker
     ensure_bind_owner
     compose down
     compose up -d
@@ -1120,8 +1403,8 @@ case "$SUB" in
   # device-flow OAuth. Comando dedicato perche' va eseguito in un terminale
   # separato durante il setup wizard (clack non rilascia bene il TTY).
   oauth-login|claude-login)
-    require_docker
     require_compose_file
+    require_docker
     ensure_up
     provider="$(docker exec "$CONTAINER" node -e \
       "try{const c=require('/jht_home/jht.config.json');process.stdout.write(String(c.active_provider||''))}catch{}" \
@@ -1145,8 +1428,8 @@ case "$SUB" in
 
   # ── Setup: host-side preflight (swap, VPS detect) prima del wizard ────
   setup)
-    require_docker
     require_compose_file
+    require_docker
     # Skip host-setup se utente ha passato --non-interactive (i flag CLI
     # del wizard sono espliciti, niente domande possibili) o env esplicita.
     if [ "${JHT_SKIP_HOST_SETUP:-0}" != "1" ] \
@@ -1157,15 +1440,19 @@ case "$SUB" in
         info "host-setup.sh non trovato in $HOST_SETUP_SCRIPT — skip preflight host"
       fi
     fi
-    # Re-source host.env DOPO host-setup.sh: il file viene scritto solo li',
-    # quindi il source iniziale del wrapper (top-level) lo manca al primo
-    # setup. Senza questo, JHT_HOST_TYPE arriverebbe "unknown" al wizard
-    # Node e il branch VPS-only (cloud + telegram obbligatori) non si
-    # attiverebbe. Idempotente nei run successivi.
-    if [ -f "$HOST_ENV_FILE" ]; then
-      # shellcheck disable=SC1090
-      . "$HOST_ENV_FILE"
+    # Rileggi host.env DOPO host-setup.sh: al primo setup il file non esiste
+    # ancora quando parte il wrapper. Anche qui resta input non fidato e passa
+    # esclusivamente dallo stesso parser allowlist, mai dalla shell.
+    if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_HOST_TYPE)"; then
+      JHT_HOST_TYPE="$host_env_value"
     fi
+    if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_LANG)"; then
+      JHT_LANG="$host_env_value"
+    fi
+    if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_USER_TZ)"; then
+      JHT_USER_TZ="$host_env_value"
+    fi
+    unset host_env_value
     JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
     ensure_up
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
@@ -1174,23 +1461,23 @@ case "$SUB" in
   # Download verificato dal CLI nel container, pubblicato atomically sul path
   # host quando l'utente passa --output.
   download)
-    require_docker
     require_compose_file
+    require_docker
     ensure_up
     handle_host_download "${@:2}"
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
   '')
-    require_docker
     require_compose_file
+    require_docker
     ensure_up
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" --help
     ;;
 
   *)
-    require_docker
     require_compose_file
+    require_docker
     ensure_up
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
     ;;

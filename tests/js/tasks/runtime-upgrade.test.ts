@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   copyFileSync,
@@ -14,6 +15,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,6 +23,7 @@ import path from "node:path";
 
 const REPO = path.resolve(__dirname, "../../..");
 const WRAPPER = path.join(REPO, "scripts", "jht-wrapper.sh");
+const HOST_SETUP = path.join(REPO, "scripts", "host-setup.sh");
 const POWERSHELL_WRAPPER = path.join(REPO, "scripts", "jht-wrapper.ps1");
 const posixOnly = process.platform === "win32" ? describe.skip : describe;
 
@@ -75,31 +78,48 @@ type Sandbox = {
   state: () => string;
   compose: () => string;
   journal: () => boolean;
+  dockerCalls: () => string[];
 };
 
 function makeSandbox({
   verifyFails = false,
 }: { verifyFails?: boolean } = {}): Sandbox {
-  const root = mkdtempSync(path.join(tmpdir(), "jht-runtime-upgrade-"));
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), "jht-runtime-upgrade-")));
   const bin = path.join(root, "bin");
   const runtime = path.join(root, "runtime");
   const release = path.join(root, "release");
   const installed = path.join(root, "installed-jht");
   const state = path.join(root, "container-image");
+  const dockerLog = path.join(root, "docker-calls.log");
   mkdirSync(bin, { recursive: true });
   mkdirSync(runtime, { recursive: true });
   mkdirSync(release, { recursive: true });
   writeFileSync(state, "sha256:old", "utf8");
   writeFileSync(
     path.join(runtime, "docker-compose.yml"),
-    "services:\n  jht:\n    image: example/old\n",
+    "services:\n  jht:\n    image: example/old\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\nvolumes:\n  jht-runtime-mask:\n",
     "utf8",
   );
   copyFileSync(WRAPPER, installed);
   chmodSync(installed, 0o755);
+  copyFileSync(HOST_SETUP, path.join(runtime, "host-setup.sh"));
+  chmodSync(path.join(runtime, "host-setup.sh"), 0o700);
+  const digest = (file: string) =>
+    createHash("sha256").update(readFileSync(file)).digest("hex");
+  writeFileSync(
+    path.join(runtime, ".runtime-integrity"),
+    [
+      "version=1",
+      `docker-compose.yml=${digest(path.join(runtime, "docker-compose.yml"))}`,
+      `host-setup.sh=${digest(path.join(runtime, "host-setup.sh"))}`,
+      `jht-wrapper.sh=${digest(installed)}`,
+      "",
+    ].join("\n"),
+    "utf8",
+  );
   writeFileSync(
     path.join(release, "docker-compose.yml"),
-    "services:\n  jht:\n    image: example/new\n",
+    "services:\n  jht:\n    image: example/new\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\nvolumes:\n  jht-runtime-mask:\n",
     "utf8",
   );
   // Basta essere uno script sintatticamente valido: il wrapper in esecuzione
@@ -107,7 +127,7 @@ function makeSandbox({
   // sano, quindi la forma del file e' parte del preflight.
   writeFileSync(
     path.join(release, "jht-wrapper.sh"),
-    "#!/usr/bin/env bash\nexit 0\n",
+    "#!/usr/bin/env bash\nJHT_HOST_RUNTIME_PROTOCOL=1\nexit 0\n",
     "utf8",
   );
 
@@ -139,6 +159,7 @@ function makeSandbox({
     path.join(bin, "docker"),
     [
       'image_file="$FAKE_STATE"',
+      'printf \'%s\\n\' "$*" >> "$FAKE_DOCKER_LOG"',
       'image="$(cat "$image_file" 2>/dev/null || true)"',
       'cmd="$1"; shift || true',
       'case "$cmd" in',
@@ -183,6 +204,10 @@ function makeSandbox({
     compose: () =>
       readFileSync(path.join(runtime, "docker-compose.yml"), "utf8"),
     journal: () => existsSync(path.join(runtime, ".upgrade-journal")),
+    dockerCalls: () =>
+      existsSync(dockerLog)
+        ? readFileSync(dockerLog, "utf8").trim().split("\n").filter(Boolean)
+        : [],
   };
 }
 
@@ -206,6 +231,7 @@ function run(
       JHT_RAW_BASE: "https://updates.invalid/release",
       FAKE_RELEASE: path.join(sb.root, "release"),
       FAKE_STATE: path.join(sb.root, "container-image"),
+      FAKE_DOCKER_LOG: path.join(sb.root, "docker-calls.log"),
       FAKE_CANDIDATE: "sha256:new",
       ...extra,
     },
@@ -295,6 +321,39 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     expect(sb.journal()).toBe(false);
   });
 
+  it.each(["wrapper-protocol", "compose-mask"])(
+    "rifiuta una release che regredisce il confine host: %s",
+    (missing) => {
+      const sb = makeSandbox();
+      if (missing === "wrapper-protocol") {
+        writeFileSync(
+          path.join(sb.root, "release", "jht-wrapper.sh"),
+          "#!/usr/bin/env bash\nexit 0\n",
+          "utf8",
+        );
+      } else {
+        writeFileSync(
+          path.join(sb.root, "release", "docker-compose.yml"),
+          "services:\n  jht:\n    image: example/new\n",
+          "utf8",
+        );
+      }
+
+      const result = run(sb, {}, ["upgrade", "--check", "--json"]);
+
+      expect(result.code).toBe(1);
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        ok: false,
+        phase: "preflight",
+      });
+      expect(sb.state()).toBe("sha256:old");
+      expect(readFileSync(sb.wrapper, "utf8")).toContain(
+        "JHT_HOST_RUNTIME_PROTOCOL=1",
+      );
+      expect(sb.journal()).toBe(false);
+    },
+  );
+
   it("al run seguente sana un journal lasciato da un processo ucciso prima di un nuovo check", () => {
     const sb = makeSandbox();
     const rollback = path.join(sb.runtime, ".upgrade-rollback-interrupted");
@@ -304,6 +363,7 @@ posixOnly("jht upgrade — runtime image atomico", () => {
       path.join(rollback, "docker-compose.yml"),
     );
     copyFileSync(sb.wrapper, path.join(rollback, "jht-wrapper.sh"));
+    copyFileSync(path.join(sb.runtime, ".runtime-integrity"), path.join(rollback, ".runtime-integrity"));
     writeFileSync(
       path.join(sb.runtime, "docker-compose.yml"),
       "services:\n  jht:\n    image: example/broken-candidate\n",
@@ -345,6 +405,7 @@ posixOnly("jht upgrade — runtime image atomico", () => {
       path.join(escaped, "docker-compose.yml"),
     );
     copyFileSync(sb.wrapper, path.join(escaped, "jht-wrapper.sh"));
+    copyFileSync(path.join(sb.runtime, ".runtime-integrity"), path.join(escaped, ".runtime-integrity"));
     writeFileSync(
       path.join(sb.runtime, "docker-compose.yml"),
       "services:\n  jht:\n    image: example/candidate\n",
@@ -392,6 +453,7 @@ posixOnly("jht upgrade — runtime image atomico", () => {
       path.join(rollback, "docker-compose.yml"),
     );
     copyFileSync(sb.wrapper, path.join(rollback, "jht-wrapper.sh"));
+    copyFileSync(path.join(sb.runtime, ".runtime-integrity"), path.join(rollback, ".runtime-integrity"));
     writeFileSync(
       path.join(sb.runtime, "docker-compose.yml"),
       "services:\n  jht:\n    image: example/candidate\n",
@@ -432,6 +494,7 @@ posixOnly("jht upgrade — runtime image atomico", () => {
       path.join(rollback, "docker-compose.yml"),
     );
     copyFileSync(sb.wrapper, path.join(rollback, "jht-wrapper.sh"));
+    copyFileSync(path.join(sb.runtime, ".runtime-integrity"), path.join(rollback, ".runtime-integrity"));
     writeFileSync(
       path.join(sb.runtime, "docker-compose.yml"),
       "services:\n  jht:\n    image: example/candidate\n",
@@ -465,5 +528,42 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     expect(sb.state()).toBe("sha256:new");
     expect(sb.compose()).toContain("example/candidate");
     expect(sb.journal()).toBe(true);
+  });
+
+  it("rifiuta snapshot rollback scrivibili da altri prima del ripristino", () => {
+    const sb = makeSandbox();
+    const rollback = path.join(sb.runtime, ".upgrade-rollback-open-mode");
+    mkdirSync(rollback);
+    const snapshot = path.join(rollback, "docker-compose.yml");
+    copyFileSync(path.join(sb.runtime, "docker-compose.yml"), snapshot);
+    copyFileSync(sb.wrapper, path.join(rollback, "jht-wrapper.sh"));
+    copyFileSync(
+      path.join(sb.runtime, ".runtime-integrity"),
+      path.join(rollback, ".runtime-integrity"),
+    );
+    chmodSync(snapshot, 0o666);
+    writeFileSync(
+      path.join(sb.runtime, ".upgrade-journal"),
+      [
+        "version=1",
+        "phase=prepared",
+        `rollback_dir=${rollback}`,
+        "old_image=none",
+        "was_running=0",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = run(sb, {}, ["upgrade", "--json", "--check"]);
+
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: false,
+      phase: "recovery",
+    });
+    expect(sb.state()).toBe("sha256:old");
+    expect(sb.journal()).toBe(true);
+    expect(sb.dockerCalls()).toEqual([]);
   });
 });
