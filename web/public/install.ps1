@@ -201,6 +201,9 @@ function Get-RuntimeFiles {
   if ($binFull.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $binFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
     Write-Fail "Host wrapper must be outside the container-writable .jht tree: $BinDir"
   }
+  if ($binFull.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $binFull.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Fail "Host wrapper must be outside the container-writable user data tree: $BinDir"
+  }
 
   Invoke-Action -Description "mkdir $RuntimeDir, $BinDir, $JhtHome" -Block {
     New-Item -ItemType Directory -Force -Path $RuntimeDir | Out-Null
@@ -209,6 +212,17 @@ function Get-RuntimeFiles {
   } | Out-Null
 
   if (-not $DryRun) {
+    foreach ($protectedPath in @($RuntimeDir, $BinDir)) {
+      $current = Get-Item -LiteralPath $protectedPath -Force -ErrorAction Stop
+      while ($current) {
+        if (($current.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+          Write-Fail "Protected host path has a reparse-point ancestor: $protectedPath"
+        }
+        $parent = $current.Parent
+        if (-not $parent -or $parent.FullName -eq $current.FullName) { break }
+        $current = $parent
+      }
+    }
     $acl = Get-Acl -LiteralPath $RuntimeDir
     $acl.SetAccessRuleProtection($true, $false)
     $rule = New-Object Security.AccessControl.FileSystemAccessRule(

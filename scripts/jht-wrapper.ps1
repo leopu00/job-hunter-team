@@ -142,6 +142,7 @@ function Test-RuntimePathAuthority {
     if ($compose -ne [IO.Path]::Combine($runtime, 'docker-compose.yml')) { return $false }
     $wrapper = [IO.Path]::GetFullPath($WrapperPath)
     if ($wrapper.Equals($legacy, [StringComparison]::OrdinalIgnoreCase) -or $wrapper.StartsWith($legacy + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if ($wrapper.Equals($userData, [StringComparison]::OrdinalIgnoreCase) -or $wrapper.StartsWith($userData + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { return $false }
     return $true
   } catch { return $false }
 }
@@ -157,6 +158,7 @@ function Write-RuntimeManifest {
 function Test-RuntimeBundleTrusted {
   if (-not (Test-RuntimePathAuthority)) { return $false }
   if (-not (Test-RuntimeAncestorsWithoutReparsePoint $RuntimeDir)) { return $false }
+  if (-not (Test-RuntimeAncestorsWithoutReparsePoint $WrapperPath)) { return $false }
   if (-not (Test-ProtectedRuntimeNode $RuntimeDir -Directory)) { return $false }
   if (-not (Test-RuntimeDirectoryAcl)) { return $false }
   if (-not (Test-ProtectedRuntimeNode $ComposeFile)) { return $false }
