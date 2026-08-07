@@ -182,7 +182,9 @@ func _check_runtime_english_presentation() -> void:
 			"vps.terminal.invalid_session", "vps.terminal.history_heading",
 			"vps.coordinator.unreadable", "vps.burn.unreadable",
 			"vps.chat.agent_busy", "vps.activity.working",
-			"vps.activity.session_unobserved", "vps.activity.throttled"]:
+			"vps.activity.session_unobserved", "vps.activity.throttled",
+			"vps.transport.temp_unwritable", "vps.transport.temp_unreadable",
+			"vps.transport.ssh_unavailable", "vps.transport.docker_timeout"]:
 		_check("snapshot VPS inglese: " + key,
 				snapshot.has(key) and str(snapshot[key]) != key, str(snapshot))
 	var vps_source := FileAccess.get_file_as_string("res://scripts/backend/vps_backend.gd")
@@ -237,6 +239,16 @@ func _check_runtime_english_presentation() -> void:
 			vps_source.contains("var detail := _activity_detail(")
 			and vps_source.contains('detail = _activity_detail("pacing: pausa temporizzata"'),
 			"lo stato interno deve restare stabile ma la presentazione va tradotta")
+	var short_without_labels := RegEx.create_from_string(
+			"_short_error\\([^,\\n\\)]*\\)")
+	_check("tutti i worker propagano lo snapshot a _short_error",
+			short_without_labels.search(vps_source) == null,
+			"nessun call site worker deve ricadere sul fallback senza catalogo")
+	for sentinel in ["file temporaneo non scrivibile", "file temporaneo non leggibile",
+			"client OpenSSH non avviabile", "processo docker non avviabile",
+			"processo locale non avviabile"]:
+		_check("sentinella trasporto mappata: " + sentinel,
+				vps_source.contains('"' + sentinel + '": "vps.transport.'), sentinel)
 	UIStrings.lang = previous
 
 

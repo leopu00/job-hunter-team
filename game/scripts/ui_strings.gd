@@ -116,7 +116,11 @@ static func vps_presentation_snapshot() -> Dictionary:
 			"vps.activity.working", "vps.activity.session_unobserved",
 			"vps.activity.throttled", "vps.activity.tool",
 			"vps.activity.thinking", "vps.activity.paused",
-			"vps.activity.idle", "vps.activity.pane_unavailable"]:
+			"vps.activity.idle", "vps.activity.pane_unavailable",
+			"vps.transport.temp_unwritable", "vps.transport.temp_unreadable",
+			"vps.transport.ssh_unavailable", "vps.transport.docker_unavailable",
+			"vps.transport.local_unavailable", "vps.transport.docker_timeout",
+			"vps.transport.local_command_unavailable"]:
 		out[key] = t(key)
 	return out
 
@@ -1818,6 +1822,13 @@ const S := {
 	"vps.activity.paused": "in attesa di ripresa",
 	"vps.activity.idle": "sessione attiva, nessun turno in corso",
 	"vps.activity.pane_unavailable": "pannello non osservabile",
+	"vps.transport.temp_unwritable": "File temporaneo non scrivibile",
+	"vps.transport.temp_unreadable": "File temporaneo non leggibile",
+	"vps.transport.ssh_unavailable": "Client OpenSSH non avviabile",
+	"vps.transport.docker_unavailable": "Processo Docker non avviabile",
+	"vps.transport.local_unavailable": "Processo locale non avviabile",
+	"vps.transport.docker_timeout": "Docker non risponde entro il limite previsto",
+	"vps.transport.local_command_unavailable": "Comando host non disponibile in locale",
 	"diagnostics.section.app": "Applicazione", "diagnostics.section.system": "Sistema",
 	"diagnostics.section.runtime": "Runtime", "diagnostics.field.version": "versione",
 	"diagnostics.field.engine": "motore", "diagnostics.field.ui_language": "lingua UI",
