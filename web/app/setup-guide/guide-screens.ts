@@ -340,8 +340,14 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "A primeira transferência da imagem demora o que a tua máquina e ligação precisarem.",
       hu: "Az első képfájl-letöltés annyi ideig tart, amennyi a gépednek és a kapcsolatodnak kell.",
     },
-    assets: {},
-    pending: "Avvio del container con lo stato reale a schermo.",
+    assets: {
+      linux: {
+        src: "/setup-guide/S09-start-container-linux.png",
+        width: 1920,
+        height: 1080,
+      },
+    },
+    pending: "Consegnata per Linux. Restano macOS e Windows.",
   },
   {
     id: "S10-choose-provider",
@@ -363,8 +369,14 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Apenas início de sessão por subscrição: nunca é pedida uma chave de API.",
       hu: "Csak előfizetéses bejelentkezés: API-kulcsot soha nem kérünk.",
     },
-    assets: {},
-    pending: "Scelta provider e piano.",
+    assets: {
+      linux: {
+        src: "/setup-guide/S10-choose-provider-linux.png",
+        width: 1920,
+        height: 1080,
+      },
+    },
+    pending: "Consegnata per Linux. Restano macOS e Windows.",
   },
   {
     id: "S11-authorize-provider",
@@ -457,7 +469,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "Beosztás nélkül a csapat bármikor dolgozhat — a te előfizetéseden.",
     },
     assets: {},
-    pending: "Pianificazione orari salvata.",
+    pending:
+      "Pianificazione orari salvata. ⚠️ La candidatura Linux del 7 agosto è stata RESPINTA: le iniziali dei giorni erano quelle italiane — L M M G V S D invece di M T W T F S S. L'audit OCR non poteva prenderla, sono lettere singole. Serve prima il fix di prodotto sui giorni della settimana, poi si rigira.",
   },
   {
     id: "S15-setup-complete",
