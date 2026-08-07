@@ -288,6 +288,17 @@ function DownloadContent({
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4">
                 {t("dl_desktop_unsigned_note")}
               </p>
+              <div className="mt-4 border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-center">
+                <span className="text-[12px] text-[var(--color-muted)]">
+                  {t("dl_help_text")}{" "}
+                </span>
+                <Link
+                  href="/setup-guide"
+                  className="text-[12px] font-semibold text-[var(--color-green)] no-underline"
+                >
+                  {t("dl_help_link")} →
+                </Link>
+              </div>
             </div>
           )}
 
@@ -312,19 +323,6 @@ function DownloadContent({
               ))}
             </div>
           </section>
-
-          {/* Aiuto: dove/come installarlo → guida /run */}
-          <div className="mt-2 border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-center">
-            <span className="text-[12px] text-[var(--color-muted)]">
-              {t("dl_help_text")}{" "}
-            </span>
-            <Link
-              href="/run"
-              className="text-[12px] font-semibold text-[var(--color-green)] no-underline"
-            >
-              {t("dl_help_link")} →
-            </Link>
-          </div>
 
           <div className="mt-8 flex justify-center">
             <BackLink />

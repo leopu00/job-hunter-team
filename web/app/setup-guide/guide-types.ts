@@ -67,9 +67,9 @@ export interface ScreenAsset {
  * `assets.shared` è la variante valida per tutti i sistemi; le chiavi per OS
  * la sovrascrivono quando la schermata è visibilmente diversa (una finestra
  * di Windows non è una finestra di macOS). Se per l'OS corrente non esiste
- * né la variante né `shared`, la pagina mostra uno slot vuoto con la
- * descrizione di `pending`: la guida resta leggibile e si vede a colpo
- * d'occhio cosa manca ancora da riprendere.
+ * né la variante né `shared`, la pagina non rende alcun elemento grafico:
+ * la descrizione `pending` resta disponibile soltanto a chi lavora sulle
+ * riprese.
  */
 export interface GuideScreen {
   id: string;
@@ -142,15 +142,6 @@ export interface GuidePhase {
   /** Avvertenza breve, evidenziata: il punto dove ci si blocca. */
   warning?: GuideText;
   screen?: ScreenRef | ScreenRef[];
-  /**
-   * Testo dello slot quando la schermata non c'è ancora, al posto di quello
-   * generico. Le fasi `W02`–`W04` lo usano perché la loro attesa non è la
-   * stessa delle altre: non stanno per essere rigirate, sono **bloccate**
-   * finché non esiste un account Google di prova approvato. Il contratto è
-   * esplicito — si mostra il segnaposto, non si accorcia il testo e non si
-   * toglie la fase: il passo resta comprensibile senza immagine.
-   */
-  screenFallback?: { title: GuideText; body: GuideText };
   /**
    * Un blocco costruito nella pagina invece che fotografato.
    *

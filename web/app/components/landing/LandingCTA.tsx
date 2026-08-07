@@ -122,8 +122,8 @@ export function LandingFooter() {
             <Link href="/project" className={linkClass}>
               {t("footer_stats")}
             </Link>
-            <Link href="/tutorials" className={linkClass}>
-              {t("footer_tutorials")}
+            <Link href="/setup-guide" className={linkClass}>
+              {t("nav_get_started")}
             </Link>
             <a
               href="https://github.com/leopu00/job-hunter-team/blob/master/CHANGELOG.md"
@@ -177,6 +177,9 @@ export function LandingFooter() {
             </Link>
             <Link href="/terms" className={linkClass}>
               {t("footer_terms")}
+            </Link>
+            <Link href="/credits" className={linkClass}>
+              {t("footer_credits")}
             </Link>
           </div>
         </nav>
