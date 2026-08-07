@@ -41,6 +41,12 @@ import { MANUAL_DELETE_ORDER } from "./account-data-tables";
 /** L'unico bucket in cui finiscono file dell'utente. */
 const STORAGE_BUCKET = "file-transit";
 
+/** Quanti oggetti si enumerano al massimo. Oltre questa soglia la
+ *  cancellazione si ferma invece di dichiararsi completa avendone lasciati
+ *  fuori: un numero alto ma finito è meglio di una paginazione che nessuno
+ *  ha mai provato con quei volumi. */
+const STORAGE_LIST_LIMIT = 1000;
+
 export { MANUAL_DELETE_ORDER };
 
 export interface DeletionOutcome {
@@ -124,6 +130,43 @@ async function deleteStorageObjects(
   admin: SupabaseClient,
   userId: string,
 ): Promise<{ removed: number; failed: string[] }> {
+  // ── Perché non basta leggere le righe ────────────────────────────────
+  // La prima versione ricavava i percorsi da `file_bridge_requests`. Non
+  // è sufficiente: HQ-DOCS ha trovato un oggetto reale rimasto nel bucket
+  // senza più la sua riga. Un caricamento interrotto, una riga ripulita da
+  // un job, un errore a metà — e il file resta lì mentre il database dice
+  // che non esiste. Cancellare in base alle righe lascerebbe indietro
+  // proprio i casi che l'utente non può vedere né segnalare.
+  //
+  // Quindi si enumera direttamente il prefisso `${userId}/` nel bucket, e
+  // le righe servono solo ad aggiungere eventuali percorsi fuori da quel
+  // prefisso. L'unione delle due fonti è ciò che si cancella.
+  const paths = new Set<string>();
+
+  const { data: listed, error: listError } = await admin.storage
+    .from(STORAGE_BUCKET)
+    .list(userId, { limit: STORAGE_LIST_LIMIT });
+  if (listError) {
+    // Non si può sapere cosa c'è: fermarsi è l'unica risposta onesta.
+    throw new Error(
+      `impossibile elencare i file dell'utente: ${listError.message}`,
+    );
+  }
+  for (const obj of listed ?? []) {
+    const name = (obj as { name?: string }).name;
+    if (name) paths.add(`${userId}/${name}`);
+  }
+  if ((listed?.length ?? 0) >= STORAGE_LIST_LIMIT) {
+    // Con più oggetti del limite ne resterebbero fuori senza dirlo: si
+    // preferisce fallire piuttosto che cancellare a metà in silenzio.
+    throw new Error(
+      `l'utente ha almeno ${STORAGE_LIST_LIMIT} file: enumerazione ` +
+        `incompleta, cancellazione interrotta per non dichiararsi completa`,
+    );
+  }
+
+  // Le righe possono puntare fuori dal prefisso (percorsi storici): si
+  // aggiungono, non si sostituiscono.
   const { data: rows, error } = await admin
     .from("file_bridge_requests")
     .select("storage_path")
@@ -133,17 +176,19 @@ async function deleteStorageObjects(
       `impossibile leggere i file da cancellare: ${error.message}`,
     );
   }
+  for (const row of rows ?? []) {
+    const p = (row as { storage_path: string | null }).storage_path;
+    if (typeof p === "string" && p.length > 0) paths.add(p);
+  }
 
-  const paths = (rows ?? [])
-    .map((r) => (r as { storage_path: string | null }).storage_path)
-    .filter((p): p is string => typeof p === "string" && p.length > 0);
-  if (paths.length === 0) return { removed: 0, failed: [] };
+  const all = [...paths];
+  if (all.length === 0) return { removed: 0, failed: [] };
 
   const { data: removedList, error: rmError } = await admin.storage
     .from(STORAGE_BUCKET)
-    .remove(paths);
+    .remove(all);
   if (rmError) {
-    return { removed: 0, failed: paths };
+    return { removed: 0, failed: all };
   }
 
   // `remove` non fallisce per i percorsi inesistenti: si confronta ciò che
@@ -152,10 +197,10 @@ async function deleteStorageObjects(
   const done = new Set(
     (removedList ?? []).map((o) => (o as { name: string }).name),
   );
-  const failed = paths.filter(
+  const failed = all.filter(
     (p) => !done.has(p) && !done.has(p.split("/").pop() ?? p),
   );
-  return { removed: paths.length - failed.length, failed };
+  return { removed: all.length - failed.length, failed };
 }
 
 /**
