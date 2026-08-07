@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 """
-plan_registry.py — quale abbonamento ha l'utente, e cosa ci si può fare.
+plan_registry.py — which subscription plan the user has and what it can do.
 
-Il provider da solo (`kimi`, `claude`, `openai`) NON basta a decidere quanti
-agenti tenere accesi: un Kimi Moderato da 19$ e un Kimi Vivace da 199$ sono
-lo stesso `active_provider` ma hanno capacità 30x diverse. Finché il piano
-non è dichiarato, il team parte con la calibrazione prudente (1 worker →
-osserva 30 min → sali di un gradino) e il primo utente vede *una* posizione
-in dieci minuti: sembra rotto, e disinstalla.
+The provider alone (`kimi`, `claude`, `openai`) is NOT enough to decide how
+many agents to keep active: Kimi Moderato at $19 and Kimi Vivace at $199 use
+the same `active_provider`, but their capacities differ by 30x. Until a plan
+is selected, the team uses cautious calibration (1 worker → observe for 30
+minutes → move up one step), so a new user sees only one position in ten
+minutes and may reasonably think the product is broken.
 
-Questo modulo è la singola fonte di verità su:
-  - quali piani esistono per ogni provider (per la UI di setup)
-  - se il piano ha un tetto SETTIMANALE oltre alla finestra 5h
-  - quanti worker spawnare al primo avvio (`burst roster`)
+This module is the single source of truth for:
+  - which plans each provider offers (for the setup UI)
+  - whether a plan has a WEEKLY cap in addition to the 5-hour window
+  - how many workers to spawn on first run (`burst roster`)
 
-⚠️ I prezzi e i moltiplicatori sono un SEED del 2026-07-26 (ricerca web) e
-invecchiano: servono a dimensionare il roster, non a fatturare. Il pacing
-reale resta guidato dalla misura (`window_ratio_meter` → `provider_capacity`),
-che corregge questi valori appena ha dati veri.
+⚠️ Prices and multipliers are a seed dated 2026-07-26 (web research). They
+age and are used to size the roster, not for billing. Real pacing remains
+measurement-driven (`window_ratio_meter` → `provider_capacity`) and corrects
+these values as soon as actual data is available.
 
-Uso:
-  python3 plan_registry.py list [provider]      # piani, human-readable
-  python3 plan_registry.py list --json          # tutti i piani, per la UI
-  python3 plan_registry.py get                  # piano attivo da jht.config.json
-  python3 plan_registry.py roster               # roster di primo avvio (JSON)
+Usage:
+  python3 plan_registry.py list [provider]      # human-readable plans
+  python3 plan_registry.py list --json          # every plan, for the UI
+  python3 plan_registry.py get                  # active plan from jht.config.json
+  python3 plan_registry.py roster               # first-run roster (JSON)
   python3 plan_registry.py roster --plan kimi:allegretto
 """
 from __future__ import annotations
@@ -33,6 +33,38 @@ import os
 import sys
 from pathlib import Path
 from typing import Optional
+
+
+# The registry is executed directly from /app/shared/skills, so shared/ is not
+# normally importable. Reuse the backend catalog without changing the command
+# contract; legacy images still receive readable English instead of raw keys.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+try:
+    from i18n import t as _t, tf as _tf  # type: ignore
+except ImportError:
+    _FALLBACK = {
+        "plan.free": "free",
+        "plan.price_month": "%s $/month",
+        "plan.unknown": "unknown plan: %s",
+        "plan.not_selected": "subscription plan not selected",
+        "plan.select_hint": "the user must select a subscription plan during setup",
+        "plan.none_known": "no known plans",
+        "plan.weekly_cap": "weekly cap",
+        "plan.no_weekly_cap": "no weekly cap",
+        "plan.window_5h": "5-hour window",
+        "plan.no_window_5h": "no 5-hour window",
+        "plan.usage_pair": "usage: plan_registry.py set <provider>:<plan> | <provider> <plan>",
+        "plan.usage_single": "usage: plan_registry.py set <provider>:<plan>",
+    }
+
+    def _t(key: str) -> str:  # type: ignore
+        return _FALLBACK.get(key, key)
+
+    def _tf(key: str, *args) -> str:  # type: ignore
+        try:
+            return _t(key) % args
+        except (TypeError, ValueError):
+            return _t(key)
 
 
 # ── Provider canonici ───────────────────────────────────────────────────
@@ -72,31 +104,31 @@ def normalize_provider(provider: str | None) -> str:
 # RIMOSSA il 2026-07-12, resta il weekly).
 PLANS: dict[str, list[dict]] = {
     "kimi": [
-        {"id": "adagio",     "label": "Adagio (gratuito)", "price": "0",
+        {"id": "adagio",     "label": "Adagio (free)", "price": "0",
          "tier": 0.2, "weekly_capped": True, "window_5h": True},
-        {"id": "moderato",   "label": "Moderato",          "price": "19 $/mese",
+        {"id": "moderato",   "label": "Moderato",          "price": "19 $/month",
          "tier": 1,   "weekly_capped": True, "window_5h": True},
-        {"id": "allegretto", "label": "Allegretto",        "price": "39 $/mese",
+        {"id": "allegretto", "label": "Allegretto",        "price": "39 $/month",
          "tier": 5,   "weekly_capped": True, "window_5h": True},
-        {"id": "allegro",    "label": "Allegro",           "price": "99 $/mese",
+        {"id": "allegro",    "label": "Allegro",           "price": "99 $/month",
          "tier": 15,  "weekly_capped": True, "window_5h": True},
-        {"id": "vivace",     "label": "Vivace",            "price": "199 $/mese",
+        {"id": "vivace",     "label": "Vivace",            "price": "199 $/month",
          "tier": 30,  "weekly_capped": True, "window_5h": True},
     ],
     "claude": [
-        {"id": "pro",     "label": "Pro",     "price": "20 $/mese",
+        {"id": "pro",     "label": "Pro",     "price": "20 $/month",
          "tier": 1,  "weekly_capped": True, "window_5h": True},
-        {"id": "max5",    "label": "Max 5x",  "price": "100 $/mese",
+        {"id": "max5",    "label": "Max 5x",  "price": "100 $/month",
          "tier": 5,  "weekly_capped": True, "window_5h": True},
-        {"id": "max20",   "label": "Max 20x", "price": "200 $/mese",
+        {"id": "max20",   "label": "Max 20x", "price": "200 $/month",
          "tier": 20, "weekly_capped": True, "window_5h": True},
     ],
     "openai": [
-        {"id": "plus",    "label": "Plus",    "price": "20 $/mese",
+        {"id": "plus",    "label": "Plus",    "price": "20 $/month",
          "tier": 1,  "weekly_capped": True, "window_5h": False},
-        {"id": "pro",     "label": "Pro",     "price": "100 $/mese",
+        {"id": "pro",     "label": "Pro",     "price": "100 $/month",
          "tier": 5,  "weekly_capped": True, "window_5h": False},
-        {"id": "pro-max", "label": "Pro 20x", "price": "200 $/mese",
+        {"id": "pro-max", "label": "Pro 20x", "price": "200 $/month",
          "tier": 20, "weekly_capped": True, "window_5h": False},
     ],
 }
@@ -156,8 +188,20 @@ def list_plans(provider: str | None = None) -> dict[str, list[dict]]:
     """Piani disponibili. Senza `provider`: tutti."""
     if provider:
         prov = normalize_provider(provider)
-        return {prov: PLANS.get(prov, [])}
-    return dict(PLANS)
+        return {prov: [_localized_plan(plan) for plan in PLANS.get(prov, [])]}
+    return {prov: [_localized_plan(plan) for plan in plans]
+            for prov, plans in PLANS.items()}
+
+
+def _localized_plan(plan: dict) -> dict:
+    """Return display-only localized fields without mutating the registry."""
+    localized = dict(plan)
+    if plan["id"] == "adagio":
+        localized["label"] = f"Adagio ({_t('plan.free')})"
+    amount = str(plan["price"]).split(" ", 1)[0]
+    if amount != "0":
+        localized["price"] = _tf("plan.price_month", amount)
+    return localized
 
 
 def find_plan(provider: str, plan_id: str) -> Optional[dict]:
@@ -165,7 +209,7 @@ def find_plan(provider: str, plan_id: str) -> Optional[dict]:
     wanted = (plan_id or "").strip().lower()
     for p in PLANS.get(prov, []):
         if p["id"] == wanted:
-            return dict(p, provider=prov)
+            return dict(_localized_plan(p), provider=prov)
     return None
 
 
@@ -192,7 +236,7 @@ def set_plan(provider: str, plan_id: str) -> dict:
     """Scrive il piano in jht.config.json (providers.<prov>.plan). Idempotente."""
     plan = find_plan(provider, plan_id)
     if plan is None:
-        raise ValueError(f"piano sconosciuto: {provider}:{plan_id}")
+        raise ValueError(_tf("plan.unknown", f"{provider}:{plan_id}"))
     prov = plan["provider"]
     cfg = _read_config()
     providers = cfg.setdefault("providers", {})
@@ -246,8 +290,8 @@ def burst_roster(plan: dict | None = None, host_cap: int | None = None) -> dict:
     plan = plan or active_plan()
     if plan is None:
         return {"ok": False,
-                "reason": "piano non dichiarato",
-                "hint": "l'utente deve selezionare l'abbonamento nel setup"}
+                "reason": _t("plan.not_selected"),
+                "hint": _t("plan.select_hint")}
 
     bucket = _tier_bucket(float(plan.get("tier") or 0))
     scout, analista, scorer = next(
@@ -300,12 +344,14 @@ def _cmd_list(argv: list[str]) -> int:
         return 0
     for prov, plans in data.items():
         if not plans:
-            print(f"{prov}: nessun piano noto")
+            print(f"{prov}: {_t('plan.none_known')}")
             continue
         print(f"{prov}:")
         for p in plans:
-            weekly = "tetto settimanale" if p["weekly_capped"] else "no weekly"
-            win = "finestra 5h" if p["window_5h"] else "no finestra 5h"
+            weekly = _t("plan.weekly_cap") if p["weekly_capped"] \
+                else _t("plan.no_weekly_cap")
+            win = _t("plan.window_5h") if p["window_5h"] \
+                else _t("plan.no_window_5h")
             print(f"  {p['id']:<12} {p['label']:<16} {p['price']:<12} "
                   f"{p['tier']:>4}x  [{weekly}, {win}]")
     return 0
@@ -322,15 +368,14 @@ def _cmd_get() -> int:
 
 def _cmd_set(argv: list[str]) -> int:
     if len(argv) < 1:
-        print("uso: plan_registry.py set <provider>:<plan> | <provider> <plan>",
-              file=sys.stderr)
+        print(_t("plan.usage_pair"), file=sys.stderr)
         return 2
     if ":" in argv[0]:
         provider, plan_id = argv[0].split(":", 1)
     elif len(argv) >= 2:
         provider, plan_id = argv[0], argv[1]
     else:
-        print("uso: plan_registry.py set <provider>:<plan>", file=sys.stderr)
+        print(_t("plan.usage_single"), file=sys.stderr)
         return 2
     try:
         plan = set_plan(provider, plan_id)
@@ -348,7 +393,7 @@ def _cmd_roster(argv: list[str]) -> int:
         provider, _, plan_id = spec.partition(":")
         plan = find_plan(provider, plan_id)
         if plan is None:
-            print(f"piano sconosciuto: {spec}", file=sys.stderr)
+            print(_tf("plan.unknown", spec), file=sys.stderr)
             return 1
     out = burst_roster(plan)
     print(json.dumps(out, ensure_ascii=False, indent=2))
