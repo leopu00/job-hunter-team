@@ -169,9 +169,30 @@ describe("migration 062: feedback reports are not browser-readable", () => {
   const migration = read(
     "supabase/migrations/062_feedback_and_file_bridge_authority.sql",
   );
+  const feedbackGuard = migration.match(
+    /if\s+to_regclass\('public\.feedback_tickets'\)\s+is\s+not\s+null\s+then([\s\S]*?)end\s+if;/i,
+  )?.[1];
   const feedbackRevoke = migration.match(
     /revoke\s+select\s+on\s+table\s+public\.feedback_tickets\s+from\s+([^;]+);/i,
   )?.[1];
+
+  it("continues when feedback_tickets is absent without recreating it", () => {
+    expect(feedbackGuard).toBeTruthy();
+    expect(migration).not.toMatch(
+      /create\s+table(?:\s+if\s+not\s+exists)?\s+public\.feedback_tickets/i,
+    );
+
+    const outsideGuard = migration.replace(feedbackGuard ?? "", "");
+    expect(outsideGuard).not.toMatch(
+      /(?:lock|alter)\s+table\s+public\.feedback_tickets/i,
+    );
+    expect(outsideGuard).not.toMatch(
+      /(?:revoke|grant)\s+[\s\S]*?on\s+table\s+public\.feedback_tickets/i,
+    );
+    expect(outsideGuard).not.toMatch(
+      /drop\s+policy[\s\S]*?on\s+public\.feedback_tickets/i,
+    );
+  });
 
   it.each(["anon", "authenticated"])(
     "%s has no SELECT grant, including a foreign authenticated user",
@@ -187,8 +208,8 @@ describe("migration 062: feedback reports are not browser-readable", () => {
   );
 
   it("removes every SELECT/FOR ALL policy while retaining historical rows", () => {
-    expect(migration).toContain("cmd in ('SELECT', 'ALL')");
-    expect(migration).toMatch(
+    expect(feedbackGuard).toContain("cmd in ('SELECT', 'ALL')");
+    expect(feedbackGuard).toMatch(
       /grant\s+select\s+on\s+table\s+public\.feedback_tickets\s+to\s+service_role/i,
     );
     expect(migration).not.toMatch(
