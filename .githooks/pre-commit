@@ -70,6 +70,12 @@ while IFS= read -r file; do
         continue
     fi
 
+    # Sorgente D2 già tracciata del diagramma d'architettura: è testo
+    # rigenerabile da D2, non un asset binario arbitrario.
+    if [[ "$file" == "docs/assets/infra.d2" ]]; then
+        continue
+    fi
+
     # Estrai estensione
     ext="${basename##*.}"
     if [[ "$ext" == "$basename" ]]; then
