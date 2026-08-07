@@ -273,7 +273,7 @@ async function pruneNpmCache() {
     if (r.error.code === 'ENOENT') {
       console.error('  ✗ npm was not found in PATH; cache pruning skipped.');
     } else {
-      console.error(`  : npm cache verification failed: ${r.error.message}`);
+      console.error(`  ✗ npm cache verification failed: ${r.error.message}`);
     }
     process.exitCode = 1;
     return;
@@ -330,7 +330,7 @@ async function pruneCodexLogs(idleSecondsArg) {
     if (r.error.code === 'ENOENT') {
       console.error('  ✗ sqlite3 was not found in PATH; Codex log pruning skipped.');
     } else {
-      console.error(`  : codex logs prune failed: ${r.error.message}`);
+      console.error(`  ✗ Codex log pruning failed: ${r.error.message}`);
     }
     process.exitCode = 1;
     return;

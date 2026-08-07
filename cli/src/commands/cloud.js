@@ -448,7 +448,7 @@ async function handleRestore(options) {
   console.log(pc.dim(`  Positions:    ${inserted.positions} upserted (${skipped.positions} skipped: missing legacy_id)`));
   console.log(pc.dim(`  Scores:       ${inserted.scores} upserted (${skipped.scores} skipped: orphaned position_id)`));
   console.log(pc.dim(`  Applications: ${inserted.applications} upserted (${skipped.applications} skipped: orphaned position_id)`));
-  console.log(pc.dim(`  Cursor sync reset a ${nowIso}`));
+  console.log(pc.dim(`  Sync cursor reset to ${nowIso}`));
   console.log('');
   void confirmed;
 }
