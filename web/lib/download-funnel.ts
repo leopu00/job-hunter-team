@@ -21,15 +21,31 @@ export type DownloadClick = DownloadAttribution & {
 
 type PageSearchParams = Record<string, string | string[] | undefined>;
 
-const UTM_VALUE = /^[a-z0-9_-]{1,40}$/;
 const ATTRIBUTION_KEYS = ["utm_source", "utm_medium", "utm_campaign"] as const;
+type AttributionKey = (typeof ATTRIBUTION_KEYS)[number];
+
+// Keep cardinality bounded. These are the only launch values currently in
+// use; extending a campaign requires one explicit code change here.
+export const DOWNLOAD_ATTRIBUTION_ALLOWLIST: Record<
+  AttributionKey,
+  readonly string[]
+> = {
+  utm_source: ["reddit"],
+  utm_medium: ["paid"],
+  utm_campaign: ["lancio-2026-08"],
+};
 
 export function isDownloadSlug(value: string): value is DownloadSlug {
   return Object.hasOwn(DOWNLOAD_TARGETS, value);
 }
 
-export function sanitizeUtmValue(value: string | null | undefined): string {
-  return value !== undefined && value !== null && UTM_VALUE.test(value)
+export function sanitizeUtmValue(
+  key: AttributionKey,
+  value: string | null | undefined,
+): string {
+  return value !== undefined &&
+    value !== null &&
+    DOWNLOAD_ATTRIBUTION_ALLOWLIST[key].includes(value)
     ? value
     : "none";
 }
@@ -43,9 +59,9 @@ export function attributionFromUrl(
   };
 
   return {
-    utm_source: sanitizeUtmValue(value("utm_source")),
-    utm_medium: sanitizeUtmValue(value("utm_medium")),
-    utm_campaign: sanitizeUtmValue(value("utm_campaign")),
+    utm_source: sanitizeUtmValue("utm_source", value("utm_source")),
+    utm_medium: sanitizeUtmValue("utm_medium", value("utm_medium")),
+    utm_campaign: sanitizeUtmValue("utm_campaign", value("utm_campaign")),
   };
 }
 
@@ -60,9 +76,9 @@ export function attributionFromPage(
   };
 
   return {
-    utm_source: sanitizeUtmValue(value("utm_source")),
-    utm_medium: sanitizeUtmValue(value("utm_medium")),
-    utm_campaign: sanitizeUtmValue(value("utm_campaign")),
+    utm_source: sanitizeUtmValue("utm_source", value("utm_source")),
+    utm_medium: sanitizeUtmValue("utm_medium", value("utm_medium")),
+    utm_campaign: sanitizeUtmValue("utm_campaign", value("utm_campaign")),
   };
 }
 

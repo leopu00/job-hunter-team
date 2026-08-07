@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   attributionFromPage,
+  DOWNLOAD_ATTRIBUTION_ALLOWLIST,
   DOWNLOAD_TARGETS,
   downloadHref,
   type DownloadClick,
@@ -15,6 +16,10 @@ import {
   POST,
   PUT,
 } from "../../../web/app/go/[slug]/route";
+import {
+  DOWNLOAD_AGGREGATE_RATE_LIMIT,
+  recordDownloadClick,
+} from "../../../web/lib/download-clicks";
 
 const REPO = path.resolve(__dirname, "../../..");
 const MIGRATION = readFileSync(
@@ -325,6 +330,92 @@ describe("B8 download funnel", () => {
     expect(state.record).toHaveBeenCalledWith(
       expect.objectContaining({ utm_source: "none" }),
     );
+  });
+
+  it("bounds anonymous bucket cardinality with matching app and DB allowlists", async () => {
+    expect(DOWNLOAD_ATTRIBUTION_ALLOWLIST).toEqual({
+      utm_source: ["reddit"],
+      utm_medium: ["paid"],
+      utm_campaign: ["lancio-2026-08"],
+    });
+    expect(MIGRATION).toContain("utm_source IN ('none', 'reddit')");
+    expect(MIGRATION).toContain("utm_medium IN ('none', 'paid')");
+    expect(MIGRATION).toContain("utm_campaign IN ('none', 'lancio-2026-08')");
+
+    const recorded: DownloadClick[] = [];
+    const tasks: Array<() => void | Promise<void>> = [];
+    for (let i = 0; i < 100; i += 1) {
+      handleDownloadRedirect(
+        new Request(
+          `https://jobhunterteam.ai/go/mac?utm_source=attacker_${i}&utm_medium=paid_${i}&utm_campaign=unique_${i}`,
+        ),
+        "mac",
+        {
+          schedule: (task) => tasks.push(task),
+          record: async (event) => {
+            recorded.push(event);
+          },
+          now: () => FIXED_NOW,
+          logFailure: vi.fn(),
+        },
+      );
+    }
+    await Promise.all(tasks.map((task) => task()));
+    expect(new Set(recorded.map((event) => JSON.stringify(event))).size).toBe(
+      1,
+    );
+    expect(recorded[0]).toEqual({
+      ts_hour: "2026-08-09T14",
+      slug: "mac",
+      utm_source: "none",
+      utm_medium: "none",
+      utm_campaign: "none",
+    });
+  });
+
+  it("bounds aggregate RPC writes with one shared non-identifying bucket", async () => {
+    expect(DOWNLOAD_AGGREGATE_RATE_LIMIT).toEqual({
+      namespace: "download-funnel",
+      scope: "aggregate",
+      identity: "global",
+      max: 60,
+      windowMs: 60_000,
+    });
+
+    let checks = 0;
+    const increment = vi.fn(async (_event: DownloadClick) => {});
+    const events = Array.from({ length: 100 }, (_, i): DownloadClick => ({
+      ts_hour: "2026-08-09T14",
+      slug: "mac",
+      // Even if diverse values reached this boundary, no event dimension is
+      // used as rate-limit identity and all callers consume the same budget.
+      utm_source: `attacker_${i}`,
+      utm_medium: `medium_${i}`,
+      utm_campaign: `campaign_${i}`,
+    }));
+
+    await Promise.all(
+      events.map((event) =>
+        recordDownloadClick(event, {
+          check: async (namespace, scope, identity, max, windowMs) => {
+            expect({ namespace, scope, identity, max, windowMs }).toEqual(
+              DOWNLOAD_AGGREGATE_RATE_LIMIT,
+            );
+            checks += 1;
+            return { allowed: checks <= DOWNLOAD_AGGREGATE_RATE_LIMIT.max };
+          },
+          increment,
+        }),
+      ),
+    );
+
+    expect(checks).toBe(100);
+    expect(increment).toHaveBeenCalledTimes(60);
+    expect(RECORDER.indexOf("dependencies.check")).toBeLessThan(
+      RECORDER.indexOf("dependencies.increment"),
+    );
+    expect(RECORDER).toContain('identity: "global"');
+    expect(RECORDER).not.toMatch(/headers\.get|cookies\(|user_agent|user_id/);
   });
 
   it("documents anonymous aggregated clicks in every privacy locale", () => {

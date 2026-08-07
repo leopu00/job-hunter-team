@@ -3,7 +3,12 @@
 La rotta pubblica `/go/<slug>` incrementa soltanto bucket orari anonimi. La
 tabella non contiene eventi individuali, timestamp completi, cookie,
 identificativi, IP, user-agent o referrer. È leggibile esclusivamente dal ruolo
-server `service_role`; `anon` e `authenticated` non hanno grant o policy.
+server `service_role`; `anon` e `authenticated` non hanno grant o policy. Le
+dimensioni campagna sono allowlistate nel codice e nello schema, così input
+anonimo arbitrario non può creare un numero illimitato di bucket. Prima della
+RPC, tutte le richieste condividono inoltre un unico limite globale di 60
+incrementi al minuto (distribuito tramite Upstash quando configurato, con
+fallback per istanza): sotto abuso la misura viene campionata, il redirect no.
 
 ## Report delle ultime 72 ore
 
