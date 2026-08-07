@@ -18,6 +18,7 @@ type UserMenuStrings = {
   profile: string;
   settings: string;
   exportData: string;
+  legal: string;
   backup: string;
   logout: string;
   connectTeam: string;
@@ -30,6 +31,7 @@ const T: Record<Locale, UserMenuStrings> = {
     profile: "Profilo",
     settings: "Impostazioni",
     exportData: "Esporta dati",
+    legal: "Privacy e termini",
     backup: "Backup",
     logout: "Esci",
     connectTeam: "Collega il tuo team",
@@ -40,6 +42,7 @@ const T: Record<Locale, UserMenuStrings> = {
     profile: "Profile",
     settings: "Settings",
     exportData: "Export data",
+    legal: "Privacy & terms",
     backup: "Backup",
     logout: "Sign out",
     connectTeam: "Connect your team",
@@ -50,6 +53,7 @@ const T: Record<Locale, UserMenuStrings> = {
     profile: "Perfil",
     settings: "Ajustes",
     exportData: "Exportar datos",
+    legal: "Privacidad y términos",
     backup: "Copia de seguridad",
     logout: "Cerrar sesión",
     connectTeam: "Conecta tu equipo",
@@ -60,6 +64,7 @@ const T: Record<Locale, UserMenuStrings> = {
     profile: "Profil",
     settings: "Paramètres",
     exportData: "Exporter les données",
+    legal: "Confidentialité et conditions",
     backup: "Sauvegarde",
     logout: "Se déconnecter",
     connectTeam: "Connecter votre équipe",
@@ -70,6 +75,7 @@ const T: Record<Locale, UserMenuStrings> = {
     profile: "Profil",
     settings: "Einstellungen",
     exportData: "Daten exportieren",
+    legal: "Datenschutz & Bedingungen",
     backup: "Sicherung",
     logout: "Abmelden",
     connectTeam: "Team verbinden",
@@ -80,6 +86,7 @@ const T: Record<Locale, UserMenuStrings> = {
     profile: "Profil",
     settings: "Beállítások",
     exportData: "Adatok exportálása",
+    legal: "Adatvédelem és feltételek",
     backup: "Biztonsági mentés",
     logout: "Kijelentkezés",
     connectTeam: "Csapat összekapcsolása",
@@ -90,6 +97,7 @@ const T: Record<Locale, UserMenuStrings> = {
     profile: "Perfil",
     settings: "Configurações",
     exportData: "Exportar dados",
+    legal: "Privacidade e termos",
     backup: "Backup",
     logout: "Sair",
     connectTeam: "Liga a tua equipa",
@@ -256,6 +264,17 @@ export default function UserMenu({
               {t.backup}
             </Link>
           )}
+          {/* Privacy e termini sono raggiungibili dal footer di ogni pagina
+              pubblica, ma l'area riservata non ha footer: chi è dentro non
+              aveva alcun percorso verso i due documenti. */}
+          <Link
+            href="/privacy"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline border-t border-[var(--color-border)]"
+          >
+            {t.legal}
+          </Link>
           <button
             role="menuitem"
             onClick={() => {
