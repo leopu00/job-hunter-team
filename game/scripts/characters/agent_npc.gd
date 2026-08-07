@@ -85,6 +85,7 @@ var _seat_sink := 90.0  # baseline appena dietro quella del desk
 var _custom_seat_offset := Vector2.ZERO
 var _has_custom_seat_offset := false
 var _desk_key := ""  # chiave nel registry FurnitureNode.desks
+var _desk_index := -1  # identità visiva locale: banco 0 → ritratto ruolo-1
 var _desk_pose_active := false  # evita ritorni al desk fra due tratte esterne
 var _chatter: Array = []
 var _wander: Array = []  # solo core (mentor/coordinatore/assistente/sentinella)
@@ -128,6 +129,7 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	_wander = def.get("wander", [])
 	_desk_key = str(def.get("workstation_key", ""))
 	if dept != "":
+		_desk_index = int(def["desk"])
 		var desk: Dictionary = DepartmentDefs.DEPARTMENTS[dept]["desks"][def["desk"]]
 		_desk_facing = desk.get("facing", "down")
 		_standing = desk.get("standing", false)
@@ -212,6 +214,20 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	# l'aggancio ora, così l'offset del composito non viene perso al bootstrap.
 	if _seated():
 		_set_desk_occupied(true)
+
+## Cartella del ritratto che appartiene a QUESTA istanza.
+##
+## Il backend fornisce l'identità stabile (scout-1, scout-2, ...). Prima del
+## setup non esiste ancora un uid, quindi la stessa identità discende dalla
+## postazione: il banco 0 usa scout-1, il banco 1 scout-2 e così via. Il
+## resolver condiviso conserva i fallback dichiarati per uid non numerici,
+## istanze oltre le sei varianti e ruoli core con un solo ritratto.
+func dialogue_portrait_slug() -> String:
+	var identity := uid.strip_edges().to_lower()
+	if identity == "":
+		identity = "%s-%d" % [slug, _desk_index + 1] \
+				if _desk_index >= 0 else slug
+	return ComicChat.portrait_slug(identity)
 
 func set_story_marker(visible_now: bool, already_seen := false) -> void:
 	if visible_now and quest_marker == null:
