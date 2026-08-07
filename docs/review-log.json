@@ -1464,6 +1464,11 @@
       "path": "docs/internal/2026-08-07-setup-guide-content-contract.md",
       "description": "Contratto P0 della guida setup non pubblicata: naming, copy EN, fasi e requisiti screenshot per tre OS, local-web e censimento riuso",
       "last_review": "2026-08-07"
+    },
+    {
+      "path": "docs/internal/2026-08-07-setup-guide-web-scaffolding.md",
+      "description": "Handoff web della guida setup non pubblicata: route noindex, contratto canonico, registro schermate, test e stato traduzioni",
+      "last_review": "2026-08-07"
     }
   ]
 }
