@@ -20,17 +20,24 @@ HOST_SETUP = ROOT / "scripts" / "host-setup.sh"
 POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 COMPOSE = ROOT / "docker-compose.yml"
 GAME_SETUP = ROOT / "game" / "scripts" / "setup" / "setup_service.gd"
+SAFE_COMPOSE = (
+    "services:\n  jht:\n    image: example.invalid/jht\n"
+    "    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n"
+    "volumes:\n  jht-runtime-mask:\n"
+)
 
 
 def write_trusted_runtime(runtime: Path, *, helper: str | None = None) -> None:
     runtime.mkdir(parents=True)
     runtime.chmod(0o700)
     compose = runtime / "docker-compose.yml"
-    compose.write_text("services: {}\n", encoding="utf-8")
+    compose.write_text(SAFE_COMPOSE, encoding="utf-8")
     compose.chmod(0o600)
     host_setup = runtime / "host-setup.sh"
     host_setup.write_text(
-        helper or "#!/usr/bin/env bash\nset -eu\nexit 0\n", encoding="utf-8"
+        helper
+        or "#!/usr/bin/env bash\nset -eu\nJHT_HOST_SETUP_PROTOCOL=1\nexit 0\n",
+        encoding="utf-8",
     )
     host_setup.chmod(0o700)
     manifest = runtime / ".runtime-integrity"
@@ -120,11 +127,12 @@ def test_wrapper_setup_reload_does_not_execute_new_host_env(tmp_path):
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     runtime = runtime.resolve()
-    (runtime / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    (runtime / "docker-compose.yml").write_text(SAFE_COMPOSE, encoding="utf-8")
     host_setup = runtime / "host-setup.sh"
     host_setup.write_text(
         "#!/usr/bin/env bash\n"
         "set -eu\n"
+        "JHT_HOST_SETUP_PROTOCOL=1\n"
         f"printf '%s' {shlex.quote(malicious_env(marker, host_type='vps'))} > "
         f"{shlex.quote(str(host_env))}\n",
         encoding="utf-8",
@@ -289,8 +297,8 @@ def test_legacy_runtime_migration_downloads_fresh_release_bytes(tmp_path):
         "printf '%s\\n' \"$url\" >> \"$JHT_TEST_CURL_LOG\"\n"
         "case \"$url\" in\n"
         f"  */commits/production) printf '{{\\n  \"sha\": \"{release_sha}\"\\n}}\\n' ;;\n"
-        "  */docker-compose.yml) printf 'services: {}\\n' > \"$out\" ;;\n"
-        "  */scripts/host-setup.sh) printf '#!/usr/bin/env bash\\n: > \"$JHT_TEST_SAFE_SETUP_MARKER\"\\n' > \"$out\" ;;\n"
+        "  */docker-compose.yml) printf 'services:\\n  jht:\\n    image: example.invalid/jht\\n    volumes:\\n      - jht-runtime-mask:/jht_home/runtime\\nvolumes:\\n  jht-runtime-mask:\\n' > \"$out\" ;;\n"
+        "  */scripts/host-setup.sh) printf '#!/usr/bin/env bash\\nJHT_HOST_SETUP_PROTOCOL=1\\n: > \"$JHT_TEST_SAFE_SETUP_MARKER\"\\n' > \"$out\" ;;\n"
         "  *) exit 22 ;;\n"
         "esac\n",
         encoding="utf-8",
@@ -399,3 +407,21 @@ def test_windows_runtime_contract_checks_path_acl_reparse_owner_and_digest():
     assert source.index("Require-ComposeFile", source.index("switch ($Sub)")) < source.index(
         "Require-Docker", source.index("switch ($Sub)")
     )
+
+
+def test_release_bytes_must_advertise_the_protected_runtime_protocol():
+    bash = WRAPPER.read_text(encoding="utf-8")
+    powershell = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
+    host_setup = HOST_SETUP.read_text(encoding="utf-8")
+    installer = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
+    windows_installer = (ROOT / "scripts" / "install.ps1").read_text(encoding="utf-8")
+
+    assert "JHT_HOST_RUNTIME_PROTOCOL=1" in bash
+    assert "$JHT_HOST_RUNTIME_PROTOCOL = 1" in powershell
+    assert "JHT_HOST_SETUP_PROTOCOL=1" in host_setup
+    for consumer in (bash, installer):
+        assert "jht-runtime-mask:/jht_home/runtime" in consumer
+        assert "JHT_HOST_RUNTIME_PROTOCOL=1" in consumer
+    for consumer in (powershell, windows_installer):
+        assert "jht-runtime-mask:/jht_home/runtime" in consumer
+        assert "$JHT_HOST_RUNTIME_PROTOCOL = 1" in consumer

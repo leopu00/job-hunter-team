@@ -511,6 +511,8 @@ download_runtime_files() {
   if ! curl -fsSL "$compose_url" -o "$compose_tmp"; then
     fail "Download failed: $compose_url. Check your connection and branch ($BRANCH)."
   fi
+  grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$compose_tmp" \
+    || fail "Downloaded compose does not enforce the protected runtime boundary."
   chmod 600 "$compose_tmp"
   mv -f "$compose_tmp" "$compose_dest"
   ok "compose: $compose_dest"
@@ -519,13 +521,17 @@ download_runtime_files() {
   if ! curl -fsSL "$wrapper_url" -o "$wrapper_tmp"; then
     fail "Download failed: $wrapper_url. Check your connection and branch ($BRANCH)."
   fi
+  bash -n "$wrapper_tmp" \
+    && grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$wrapper_tmp" \
+    || fail "Downloaded wrapper does not implement the protected runtime protocol."
   chmod 700 "$wrapper_tmp"
   mv -f "$wrapper_tmp" "$wrapper_dest"
   ok "wrapper: $wrapper_dest"
 
   info "Downloading host-setup.sh (VPS/swap preflight)..."
   if ! curl -fsSL "$hostsetup_url" -o "$hostsetup_tmp" \
-      || ! bash -n "$hostsetup_tmp"; then
+      || ! bash -n "$hostsetup_tmp" \
+      || ! grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$hostsetup_tmp"; then
     fail "host-setup.sh download or validation failed: $hostsetup_url"
   fi
   chmod 700 "$hostsetup_tmp"

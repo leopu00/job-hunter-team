@@ -34,6 +34,7 @@ $ErrorActionPreference = 'Stop'
 # I wrapper storici non la espongono e richiedono il bootstrap temporaneo del
 # wrapper production con WrapperPath ancorato al comando host originale.
 $JHT_UPGRADE_PROTOCOL = 1
+$JHT_HOST_RUNTIME_PROTOCOL = 1
 
 $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { 'jht' }
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
@@ -134,10 +135,13 @@ function Test-RuntimePathAuthority {
     $runtime = [IO.Path]::GetFullPath($RuntimeDir).TrimEnd('\', '/')
     $compose = [IO.Path]::GetFullPath($ComposeFile)
     $legacy = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE '.jht')).TrimEnd('\', '/')
-    if ($runtime.StartsWith($legacy + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    $userData = if ($env:JHT_USER_DIR_HOST) { $env:JHT_USER_DIR_HOST } else { Join-Path $env:USERPROFILE 'Documents\Job Hunter Team' }
+    $userData = [IO.Path]::GetFullPath($userData).TrimEnd('\', '/')
+    if ($runtime.Equals($legacy, [StringComparison]::OrdinalIgnoreCase) -or $runtime.StartsWith($legacy + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if ($runtime.Equals($userData, [StringComparison]::OrdinalIgnoreCase) -or $runtime.StartsWith($userData + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { return $false }
     if ($compose -ne [IO.Path]::Combine($runtime, 'docker-compose.yml')) { return $false }
     $wrapper = [IO.Path]::GetFullPath($WrapperPath)
-    if ($wrapper.StartsWith($legacy + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if ($wrapper.Equals($legacy, [StringComparison]::OrdinalIgnoreCase) -or $wrapper.StartsWith($legacy + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { return $false }
     return $true
   } catch { return $false }
 }
@@ -163,12 +167,16 @@ function Test-RuntimeBundleTrusted {
     if ($values.version -ne '1') { return $false }
     $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
     $wrapperActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
-    return ($values.'docker-compose.yml' -eq $actual -and $values.'jht-wrapper.ps1' -eq $wrapperActual)
+    if ($values.'docker-compose.yml' -ne $actual -or $values.'jht-wrapper.ps1' -ne $wrapperActual) { return $false }
+    if (-not (Select-String -LiteralPath $WrapperPath -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { return $false }
+    if (-not (Select-String -LiteralPath $ComposeFile -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { return $false }
+    return $true
   } catch { return $false }
 }
 
 function Install-ProtectedRuntimeFromRelease {
   if (Test-Path -LiteralPath $RuntimeDir) { return $false }
+  if (-not (Test-RuntimePathAuthority)) { return $false }
   $temp = $null
   try {
     New-Item -ItemType Directory -Path $RuntimeDir -Force | Out-Null
@@ -182,6 +190,7 @@ function Install-ProtectedRuntimeFromRelease {
     $releaseBase = Get-AttestedRawBase
     $temp = Join-Path $RuntimeDir ('.compose-' + [guid]::NewGuid().ToString('N'))
     Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/docker-compose.yml" -OutFile $temp
+    if (-not (Select-String -LiteralPath $temp -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { throw 'release compose lacks protected runtime mask' }
     Move-Item -LiteralPath $temp -Destination $ComposeFile
     Write-RuntimeManifest
     return (Test-RuntimeBundleTrusted)
@@ -1005,6 +1014,8 @@ function Invoke-RuntimeUpgrade {
       Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/docker-compose.yml" -OutFile $newCompose
       Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/scripts/jht-wrapper.ps1" -OutFile $newWrapper
       [scriptblock]::Create((Get-Content -LiteralPath $newWrapper -Raw)) | Out-Null
+      if (-not (Select-String -LiteralPath $newWrapper -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { throw 'wrapper runtime protocol missing' }
+      if (-not (Select-String -LiteralPath $newCompose -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { throw 'compose runtime mask missing' }
     } catch { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Runtime remoto non valido o non raggiungibile' $false; return 1 }
     if (-not (Invoke-UpgradeCompose $newCompose 'config' '-q')) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Compose remoto non valido' $false; return 1 }
     $metadataChanged = -not ((Get-FileHash $newCompose).Hash -eq (Get-FileHash $ComposeFile).Hash) -or -not ((Get-FileHash $newWrapper).Hash -eq (Get-FileHash $WrapperPath).Hash)
