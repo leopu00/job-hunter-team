@@ -277,7 +277,7 @@ func _build_pdf_preview() -> void:
 	_set_status(UIStrings.t("cv.pdf_rendering"), Palette.DIM)
 	var pdf_local := _save_to(OS.get_cache_dir(), _pdf_path, _pdf_bytes)
 	if pdf_local == "":
-		_set_status(UIStrings.t("cv.doc_error") + "cache locale non scrivibile",
+		_set_status(UIStrings.t("cv.error_cache_unwritable"),
 				Palette.RED)
 		return
 	var result := DocRender.rasterize_pdf(pdf_local,
@@ -303,7 +303,7 @@ func _build_pdf_preview() -> void:
 		_pdf_box.add_child(rect)
 	_pdf_pages_built = _pdf_box.get_child_count() > 0
 	if not _pdf_pages_built:
-		_set_status(UIStrings.t("cv.doc_error") + "pagine non caricabili",
+		_set_status(UIStrings.t("cv.error_pages_unreadable"),
 				Palette.RED)
 		return
 	_set_status(UIStrings.t("cv.pdf_first_page_only") \
@@ -318,7 +318,7 @@ func _build_pdf_preview() -> void:
 func _open_pdf_external() -> void:
 	var local := _save_to(OS.get_cache_dir(), _pdf_path, _pdf_bytes)
 	if local == "":
-		_set_status(UIStrings.t("cv.doc_error") + "cache locale non scrivibile",
+		_set_status(UIStrings.t("cv.error_cache_unwritable"),
 				Palette.RED)
 		return
 	if not DocRender.open_externally(local):
@@ -331,7 +331,7 @@ func _on_reveal_pressed() -> void:
 	elif not _md_bytes.is_empty():
 		_reveal_in_folder()
 	else:
-		_set_status(UIStrings.t("cv.doc_error") + "documento non ancora scaricato",
+		_set_status(UIStrings.t("cv.error_not_downloaded"),
 				Palette.RED)
 
 ## Copia visibile in Downloads/JHT-CV (md + pdf quando ci sono), poi
@@ -350,7 +350,7 @@ func _reveal_in_folder() -> void:
 		if pdf_target != "":
 			target = pdf_target
 	if target == "":
-		_set_status(UIStrings.t("cv.doc_error") + "cartella non scrivibile",
+		_set_status(UIStrings.t("cv.error_folder_unwritable"),
 				Palette.RED)
 		return
 	_set_status(UIStrings.t("cv.reveal_done") + folder, Palette.MINT)

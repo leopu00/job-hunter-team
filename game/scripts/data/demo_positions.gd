@@ -92,7 +92,11 @@ static func build() -> Array:
 		var salary_min := 28000 + (i % 10) * 3500
 		var salary_max := salary_min + 12000 + (i % 4) * 2500
 		var status: String = ["new", "checked", "scored", "ready"][i % 4]
-		var title := str(role[0])
+		# Il titolo è solo presentazione: indice, famiglia, ordinamento e payload
+		# demo restano invariati in tutte le lingue.
+		var title_key := "dept.demo.role.%d.title" % (i + 1)
+		var localized_title := UIStrings.t(title_key)
+		var title := str(role[0]) if localized_title == title_key else localized_title
 		var company := str(COMPANIES[i % COMPANIES.size()])
 		var city := str(loc[0])
 		var family := str(role[1])

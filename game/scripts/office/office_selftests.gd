@@ -2077,7 +2077,7 @@ func _feedback_panel_selftest() -> void:
 	var exact_preview := FeedbackService._to_markdown(payload)
 	var preview_matches_payload := exact_preview.contains("[email]") \
 			and exact_preview.contains("[document].pdf") \
-			and exact_preview.contains("Dati rimossi prima dell'invio") \
+			and exact_preview.contains(UIStrings.t("feedback.report.redacted")) \
 			and not exact_preview.contains("user@example.com") \
 			and not exact_preview.contains(fake_token)
 	var counts_include_story: bool = int(payload_redaction.get("email", 0)) > 0 \
