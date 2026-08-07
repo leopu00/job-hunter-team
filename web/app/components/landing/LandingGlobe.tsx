@@ -558,10 +558,7 @@ export function startAutopilot(
         cursor.from.zoom,
         OVERVIEW_ZOOM - (curve - 1.42) * 1.5,
       );
-      const leg =
-        progress < 0.5
-          ? progress * 2
-          : (progress - 0.5) * 2;
+      const leg = progress < 0.5 ? progress * 2 : (progress - 0.5) * 2;
       const legEase = leg * leg * (3 - 2 * leg);
       zoom =
         progress < 0.5
@@ -653,10 +650,7 @@ export function startAutopilot(
       }
       if (suspended()) return;
       if (offscreenCursor) {
-        const cursor = advanceTourCursor(
-          offscreenCursor,
-          offscreenElapsedMs,
-        );
+        const cursor = advanceTourCursor(offscreenCursor, offscreenElapsedMs);
         offscreenCursor = null;
         offscreenElapsedMs = 0;
         restoreTourCursor(cursor);
