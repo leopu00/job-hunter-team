@@ -75,6 +75,7 @@ def test_native_windows_smoke_is_non_publishing() -> None:
     workflow = SMOKE_WORKFLOW.read_text()
     assert "windows-2022" in workflow
     assert "tests/test_windows_installer_contract.py" in workflow
+    assert "tests/test_windows_update_helper.py" in workflow
     assert "./scripts/build-windows-installer.ps1" not in workflow
     assert "actions/upload-artifact" not in workflow
     publish = PUBLISH_WORKFLOW.read_text()

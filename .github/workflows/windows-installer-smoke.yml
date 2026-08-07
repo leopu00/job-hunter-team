@@ -13,6 +13,7 @@ on:
       - "scripts/build-windows-installer.ps1"
       - "scripts/release-keys/**"
       - "tests/test_windows_installer_contract.py"
+      - "tests/test_windows_update_helper.py"
   pull_request:
     branches:
       - master
@@ -25,6 +26,7 @@ on:
       - "scripts/build-windows-installer.ps1"
       - "scripts/release-keys/**"
       - "tests/test_windows_installer_contract.py"
+      - "tests/test_windows_update_helper.py"
   workflow_dispatch:
 
 permissions:
@@ -53,5 +55,9 @@ jobs:
       - name: Verify fail-closed installer and publication wiring
         shell: pwsh
         run: |
+          $env:PATH = "C:\Program Files\Git\usr\bin;$env:PATH"
           python -m pip install pytest
-          python -m pytest tests/test_windows_installer_contract.py -q
+          python -m pytest `
+            tests/test_windows_installer_contract.py `
+            tests/test_windows_update_helper.py `
+            -q
