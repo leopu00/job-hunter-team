@@ -49,12 +49,29 @@ export async function GET() {
       .select(columns.join(","))
       .eq("user_id", user.id);
     if (error) {
-      // Una tabella che non si legge non deve far fallire tutto l'export:
-      // meglio consegnare il resto e dire cosa manca, che negare tutto.
       failed.push(table);
       continue;
     }
     data[table] = rows ?? [];
+  }
+
+  // ── Un export incompleto NON è un successo ──────────────────────────
+  // La prima versione metteva le tabelle fallite in un campo `incomplete`
+  // e restituiva comunque 200 con l'allegato: l'utente si ritrovava un
+  // file che sembrava i suoi dati, con dentro un dettaglio che nessuno
+  // legge. È lo stesso schema del wrapper che esce 0 senza aver copiato e
+  // del banner che offre una scelta che non applica — dichiarare successo
+  // quando il lavoro non è stato fatto.
+  //
+  // Ora: se anche una sola tabella non si legge, niente allegato e niente
+  // 200. Meglio riprovare fra un minuto che portarsi via un export monco
+  // credendolo completo.
+  if (failed.length > 0) {
+    console.error("[account-export] incompleto per", failed.join(", "));
+    return NextResponse.json(
+      { error: "export_incomplete", tables: failed },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
   }
 
   const payload = {
@@ -64,7 +81,6 @@ export async function GET() {
     note:
       "Contiene i dati sincronizzati sul cloud. I dati che restano solo " +
       "sulla tua macchina non sono qui: quelli si esportano dall'app.",
-    incomplete: failed.length > 0 ? failed : undefined,
     data,
   };
 

@@ -59,13 +59,15 @@ describe("handleChatSync — worker completo", () => {
     const channel = {
       async readUndeliveredUserChat() {
         reads += 1;
-        return [{
-          id: "00000000-0000-4000-8000-000000000001",
-          legacy_id: -1785837600000,
-          agent: "capitano",
-          body: "messaggio fixture",
-          created_at: "2026-08-04T10:00:00Z",
-        }];
+        return [
+          {
+            id: "00000000-0000-4000-8000-000000000001",
+            legacy_id: -1785837600000,
+            agent: "capitano",
+            body: "messaggio fixture",
+            created_at: "2026-08-04T10:00:00Z",
+          },
+        ];
       },
       async acknowledgeDelivery(
         ids: string[],
@@ -90,7 +92,10 @@ describe("handleChatSync — worker completo", () => {
       jhtHome: home,
       reader: null,
       channel,
-      state: { chat_requested_at: "2026-08-04T10:00:00Z", chat_delivered_at: null },
+      state: {
+        chat_requested_at: "2026-08-04T10:00:00Z",
+        chat_delivered_at: null,
+      },
       sendFn,
     });
     expect(first).toMatchObject({
@@ -128,16 +133,24 @@ describe("handleChatSync — worker completo", () => {
 
     const db = new DatabaseSync(dbPath, { readOnly: true });
     const counts = db
-      .prepare("SELECT COUNT(*) AS rows, COUNT(delivered_at) AS delivered FROM pending_user_messages")
+      .prepare(
+        "SELECT COUNT(*) AS rows, COUNT(delivered_at) AS delivered FROM pending_user_messages",
+      )
       .get() as { rows: number; delivered: number };
     db.close();
-    const jsonl = readFileSync(join(home, "agents", "capitano", "chat.jsonl"), "utf-8")
+    const jsonl = readFileSync(
+      join(home, "agents", "capitano", "chat.jsonl"),
+      "utf-8",
+    )
       .trim()
       .split("\n");
 
     expect(counts).toEqual({ rows: 1, delivered: 1 });
     expect(jsonl).toHaveLength(1);
-    expect(JSON.parse(jsonl[0])).toMatchObject({ role: "user", text: "messaggio fixture" });
+    expect(JSON.parse(jsonl[0])).toMatchObject({
+      role: "user",
+      text: "messaggio fixture",
+    });
     expect({ reads, sends, acks }).toEqual({ reads: 2, sends: 1, acks: 2 });
   });
 
@@ -145,10 +158,17 @@ describe("handleChatSync — worker completo", () => {
     let directSignal: AbortSignal | undefined;
     let httpSignal: AbortSignal | undefined;
     const reader = {
-      patchTeamState: async (_fields: unknown, options?: { signal?: AbortSignal }) => {
+      patchTeamState: async (
+        _fields: unknown,
+        options?: { signal?: AbortSignal },
+      ) => {
         directSignal = options?.signal;
         await new Promise((_resolve, reject) => {
-          options?.signal?.addEventListener("abort", () => reject(options.signal?.reason), { once: true });
+          options?.signal?.addEventListener(
+            "abort",
+            () => reject(options.signal?.reason),
+            { once: true },
+          );
         });
       },
     };
@@ -177,12 +197,17 @@ describe("handleChatSync — worker completo", () => {
     let reads = 0;
     let httpSignal: AbortSignal | undefined;
     const reader = {
-      async readTeamState(_columns: string[], options?: { signal?: AbortSignal }) {
+      async readTeamState(
+        _columns: string[],
+        options?: { signal?: AbortSignal },
+      ) {
         reads += 1;
         const signal = options?.signal;
         await new Promise((_resolve, reject) => {
           if (signal?.aborted) return reject(signal.reason);
-          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+          signal?.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
         });
       },
     };
@@ -219,13 +244,23 @@ describe("handleChatSync — worker completo", () => {
         const body = JSON.parse(init?.body || "{}");
         bodies.push(body);
         return body.expected_requested_at === currentRequest
-          ? ({ ok: true, status: 200, json: async () => ({ applied: true, status: body.status }) } as any)
+          ? ({
+              ok: true,
+              status: 200,
+              json: async () => ({ applied: true, status: body.status }),
+            } as any)
           : ({ ok: false, status: 409 } as Response);
       },
     });
-    expect(result).toEqual({ status: "superseded", retryable: false, via: "http" });
+    expect(result).toEqual({
+      status: "superseded",
+      retryable: false,
+      via: "http",
+    });
     expect(currentRequest).toBe(requestB);
-    expect(bodies).toEqual([{ expected_requested_at: requestA, status: "completed" }]);
+    expect(bodies).toEqual([
+      { expected_requested_at: requestA, status: "completed" },
+    ]);
   });
 
   it("ACKa soltanto i cloud ID consegnati entro il budget per tick", async () => {
@@ -244,34 +279,51 @@ describe("handleChatSync — worker completo", () => {
       async readUndeliveredUserChat() {
         return rows.filter((row) => !ackedIds.has(row.id));
       },
-      async acknowledgeDelivery(ids: string[], options: { closeRendezvous: boolean }) {
+      async acknowledgeDelivery(
+        ids: string[],
+        options: { closeRendezvous: boolean },
+      ) {
         ids.forEach((id) => ackedIds.add(id));
         acks.push({ ids: [...ids], close: options.closeRendezvous });
         return { closed: options.closeRendezvous, superseded: false };
       },
     };
-    const run = () => handleChatSync({
-      silent: true,
-      config: CONFIG,
-      dbPath,
-      jhtHome: home,
-      reader: null,
-      channel,
-      state: { chat_requested_at: "2026-08-04T10:00:00Z", chat_delivered_at: null },
-      sendFn: async () => {
-        sends += 1;
-        return { ok: true, code: 0, error: "" };
-      },
-    });
+    const run = () =>
+      handleChatSync({
+        silent: true,
+        config: CONFIG,
+        dbPath,
+        jhtHome: home,
+        reader: null,
+        channel,
+        state: {
+          chat_requested_at: "2026-08-04T10:00:00Z",
+          chat_delivered_at: null,
+        },
+        sendFn: async () => {
+          sends += 1;
+          return { ok: true, code: 0, error: "" };
+        },
+      });
 
     const first = await run();
-    expect(first).toMatchObject({ status: "delivery_pending", delivered: 5, acked: false });
-    expect(acks[0]).toEqual({ ids: rows.slice(0, 5).map((row) => row.id), close: false });
+    expect(first).toMatchObject({
+      status: "delivery_pending",
+      delivered: 5,
+      acked: false,
+    });
+    expect(acks[0]).toEqual({
+      ids: rows.slice(0, 5).map((row) => row.id),
+      close: false,
+    });
     expect(ackedIds.size).toBe(5);
 
     const second = await run();
     expect(second).toMatchObject({ delivered: 2, acked: true });
-    expect(acks[1]).toEqual({ ids: rows.slice(5).map((row) => row.id), close: true });
+    expect(acks[1]).toEqual({
+      ids: rows.slice(5).map((row) => row.id),
+      close: true,
+    });
     expect({ sends, acked: ackedIds.size }).toEqual({ sends: 7, acked: 7 });
   });
 
@@ -283,13 +335,15 @@ describe("handleChatSync — worker completo", () => {
     let currentRequest = requestA;
     const channel = {
       async readUndeliveredUserChat() {
-        return [{
-          id: rowId,
-          legacy_id: -1785837600000,
-          agent: "capitano",
-          body: "messaggio A",
-          created_at: requestA,
-        }];
+        return [
+          {
+            id: rowId,
+            legacy_id: -1785837600000,
+            agent: "capitano",
+            body: "messaggio A",
+            created_at: requestA,
+          },
+        ];
       },
       async acknowledgeDelivery(
         ids: string[],
@@ -297,7 +351,10 @@ describe("handleChatSync — worker completo", () => {
       ) {
         acknowledged.push(...ids);
         currentRequest = requestB;
-        expect(options).toEqual({ closeRendezvous: true, expectedRequestedAt: requestA });
+        expect(options).toEqual({
+          closeRendezvous: true,
+          expectedRequestedAt: requestA,
+        });
         return { closed: false, superseded: true };
       },
     };
@@ -311,7 +368,11 @@ describe("handleChatSync — worker completo", () => {
       state: { chat_requested_at: requestA, chat_delivered_at: null },
       sendFn: async () => ({ ok: true, code: 0, error: "" }),
     });
-    expect(result).toMatchObject({ status: "delivery_pending", delivered: 1, acked: false });
+    expect(result).toMatchObject({
+      status: "delivery_pending",
+      delivered: 1,
+      acked: false,
+    });
     expect(acknowledged).toEqual([rowId]);
     expect(currentRequest).toBe(requestB);
   });
@@ -320,13 +381,15 @@ describe("handleChatSync — worker completo", () => {
     let acknowledgements = 0;
     const channel = {
       async readUndeliveredUserChat() {
-        return [{
-          id: "00000000-0000-4000-8000-000000000098",
-          legacy_id: -1785837600000,
-          agent: "agente-sconosciuto",
-          body: "messaggio non instradabile",
-          created_at: "2026-08-04T10:00:00Z",
-        }];
+        return [
+          {
+            id: "00000000-0000-4000-8000-000000000098",
+            legacy_id: -1785837600000,
+            agent: "agente-sconosciuto",
+            body: "messaggio non instradabile",
+            created_at: "2026-08-04T10:00:00Z",
+          },
+        ];
       },
       async acknowledgeDelivery() {
         acknowledgements += 1;
@@ -340,7 +403,10 @@ describe("handleChatSync — worker completo", () => {
       jhtHome: home,
       reader: null,
       channel,
-      state: { chat_requested_at: "2026-08-04T10:00:00Z", chat_delivered_at: null },
+      state: {
+        chat_requested_at: "2026-08-04T10:00:00Z",
+        chat_delivered_at: null,
+      },
       sendFn: async () => ({ ok: true, code: 0, error: "" }),
     });
     expect(result).toMatchObject({

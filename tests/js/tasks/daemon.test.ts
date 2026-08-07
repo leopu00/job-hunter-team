@@ -25,7 +25,11 @@ const BASH = (() => {
 
 function run(cmd: string): { code: number; out: string } {
   try {
-    const out = execSync(cmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], timeout: 5000 });
+    const out = execSync(cmd, {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 5000,
+    });
     return { code: 0, out };
   } catch (e: any) {
     return { code: e.status ?? 1, out: (e.stdout ?? "") + (e.stderr ?? "") };
@@ -81,7 +85,7 @@ describe("install.sh — template plist macOS", () => {
   });
 
   it("plist usa label com.jht.SERVICE_NAME", () => {
-    expect(installSrc).toContain('com.jht.${SERVICE_NAME}');
+    expect(installSrc).toContain("com.jht.${SERVICE_NAME}");
   });
 
   it("plist include EnvironmentVariables se EXTRA_ENV non vuoto", () => {
@@ -114,8 +118,8 @@ describe("install.sh — template systemd Linux", () => {
 
 describe("install.sh — platform detection", () => {
   it("dispatch per Darwin e Linux con fallback errore", () => {
-    expect(installSrc).toContain('Darwin) install_macos');
-    expect(installSrc).toContain('Linux)  install_linux');
+    expect(installSrc).toContain("Darwin) install_macos");
+    expect(installSrc).toContain("Linux)  install_linux");
     expect(installSrc).toContain("Sistema operativo non supportato");
   });
 });
@@ -145,8 +149,8 @@ describe("uninstall.sh — argument parsing", () => {
 
 describe("uninstall.sh — struttura e pulizia", () => {
   it("dispatch per Darwin e Linux con fallback errore", () => {
-    expect(uninstallSrc).toContain('Darwin) uninstall_macos');
-    expect(uninstallSrc).toContain('Linux)  uninstall_linux');
+    expect(uninstallSrc).toContain("Darwin) uninstall_macos");
+    expect(uninstallSrc).toContain("Linux)  uninstall_linux");
     expect(uninstallSrc).toContain("Sistema operativo non supportato");
   });
 

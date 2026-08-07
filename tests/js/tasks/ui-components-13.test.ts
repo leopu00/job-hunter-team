@@ -71,7 +71,9 @@ describe("CopyButton", () => {
     expect(flat).toMatch(/successDuration\?:\s*number/);
     expect(flat).toMatch(/export function useCopy\(successDuration = \d+\)/);
     expect(flat).toContain("useCopy(successDuration)");
-    expect(flat).toContain("setTimeout(() => setState('idle'), successDuration)");
+    expect(flat).toContain(
+      "setTimeout(() => setState('idle'), successDuration)",
+    );
     expect(flat).toContain("clearTimeout(timer.current)");
   });
 
@@ -84,12 +86,16 @@ describe("CopyButton", () => {
     expect(props).toBeTruthy();
 
     const sizes = stringLiterals(props![1].match(/size\?:\s*([^;]+);/)![1]);
-    const variants = stringLiterals(props![1].match(/variant\?:\s*([^;]+);/)![1]);
+    const variants = stringLiterals(
+      props![1].match(/variant\?:\s*([^;]+);/)![1],
+    );
     expect(sizes.length).toBeGreaterThan(0);
     expect(variants.length).toBeGreaterThan(0);
 
     const maps = Array.from(
-      raw.matchAll(/const\s+\w+\s*:\s*Record<\s*string\s*,[^>]*>\s*=\s*\{([^}]*)\}/g),
+      raw.matchAll(
+        /const\s+\w+\s*:\s*Record<\s*string\s*,[^>]*>\s*=\s*\{([^}]*)\}/g,
+      ),
     ).map((m) => Array.from(m[1].matchAll(/(\w+)\s*:/g)).map((k) => k[1]));
     expect(maps.length).toBeGreaterThan(0);
     for (const keys of maps) {
@@ -99,7 +105,8 @@ describe("CopyButton", () => {
     for (const v of variants) {
       // O è il default del prop, o c'è un ramo che lo distingue.
       expect(
-        flat.includes(`variant = '${v}'`) || flat.includes(`variant === '${v}'`),
+        flat.includes(`variant = '${v}'`) ||
+          flat.includes(`variant === '${v}'`),
       ).toBe(true);
     }
   });
@@ -115,9 +122,9 @@ describe("CopyButton", () => {
 
     // `label?: string` è documentato come override dell'aria-label, e il
     // fallback passa dal dizionario: mai una stringa fissa nel markup.
-    const exprs = Array.from(flat.matchAll(/aria-label=\{([^}]*\}?[^}]*)\}/g)).map(
-      (m) => m[1],
-    );
+    const exprs = Array.from(
+      flat.matchAll(/aria-label=\{([^}]*\}?[^}]*)\}/g),
+    ).map((m) => m[1]);
     expect(exprs.length).toBe(buttons.length);
     for (const e of exprs) {
       expect(e).toMatch(/^label \?\?/);
@@ -130,10 +137,14 @@ describe("CopyButton", () => {
     // componente deve seguirla. Il tipo lo pretende già a compile time —
     // questa è la rete che vede anche chi tocca solo config.ts.
     const cfg = flatten(readRaw("i18n/config.ts"));
-    const locales = stringLiterals(cfg.match(/export const locales:[^=]*=\s*\[([^\]]*)\]/)![1]);
+    const locales = stringLiterals(
+      cfg.match(/export const locales:[^=]*=\s*\[([^\]]*)\]/)![1],
+    );
     expect(locales.length).toBeGreaterThanOrEqual(7);
 
-    const tBlock = raw.match(/const T:\s*Record<\s*Locale\s*,[\s\S]*?=\s*\{([\s\S]*?)\n\};/);
+    const tBlock = raw.match(
+      /const T:\s*Record<\s*Locale\s*,[\s\S]*?=\s*\{([\s\S]*?)\n\};/,
+    );
     expect(tBlock).toBeTruthy();
     const entries = new Map(
       Array.from(tBlock![1].matchAll(/(\w+):\s*\{([^}]*)\}/g)).map((m) => [
@@ -144,7 +155,9 @@ describe("CopyButton", () => {
 
     // Ogni voce che il componente legge (t.copied, t.copy, …) esiste in
     // ognuna delle lingue dichiarate.
-    const used = [...new Set(Array.from(raw.matchAll(/\bt\.(\w+)\b/g)).map((m) => m[1]))];
+    const used = [
+      ...new Set(Array.from(raw.matchAll(/\bt\.(\w+)\b/g)).map((m) => m[1])),
+    ];
     expect(used.length).toBeGreaterThan(0);
     for (const loc of locales) {
       expect(entries.has(loc)).toBe(true);

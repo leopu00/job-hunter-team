@@ -53,7 +53,11 @@ const HOST_CASES: Array<[host: string, expected: boolean, why: string]> = [
   ["evil.com:80", false, "dominio altrui con porta"],
   ["notlocalhost", false, "sottostringa, non l'host"],
   ["127.0.0.1.evil.com", false, "IP loopback come etichetta di un dominio"],
-  ["192.168.1.10", false, "IP di LAN: raggiungibile da altri, non è la macchina"],
+  [
+    "192.168.1.10",
+    false,
+    "IP di LAN: raggiungibile da altri, non è la macchina",
+  ],
   ["::1", false, "IPv6 senza parentesi non è una forma valida di Host"],
   ["localhost:abc", false, "porta non numerica"],
 ];

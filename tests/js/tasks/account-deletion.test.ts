@@ -32,7 +32,7 @@ function fakeAdmin(
     failOn?: string;
     deleteUserFails?: boolean;
     storagePaths?: string[];
-    storageOrphans?: string[];
+    storageTree?: Record<string, true>;
     storageRemovesNothing?: boolean;
   } = {},
 ) {
@@ -43,9 +43,23 @@ function fakeAdmin(
     storage: {
       from() {
         return {
-          list() {
+          // Simula l'API vera: `list(prefix)` torna file (con `id`) e
+          // cartelle immediate (con `id: null`), e NON scende da sola.
+          list(prefix: string) {
+            const tree = opts.storageTree ?? {};
+            const children = new Set<string>();
+            for (const full of Object.keys(tree)) {
+              if (!full.startsWith(prefix + "/")) continue;
+              const rest = full.slice(prefix.length + 1);
+              const head = rest.split("/")[0];
+              children.add(head + (rest.includes("/") ? "/" : ""));
+            }
             return Promise.resolve({
-              data: (opts.storageOrphans ?? []).map((name) => ({ name })),
+              data: [...children].map((c) =>
+                c.endsWith("/")
+                  ? { name: c.slice(0, -1), id: null }
+                  : { name: c, id: "obj" },
+              ),
               error: null,
             });
           },
@@ -336,10 +350,10 @@ describe("cancellazione — i file orfani non sopravvivono", () => {
     // `file_bridge_requests`. Fidarsi delle righe lo avrebbe lasciato lì.
     const { client, removedPaths } = fakeAdmin({
       storagePaths: [],
-      storageOrphans: ["orfano.pdf"],
+      storageTree: { "user-1/req-x/orfano.pdf": true },
     });
     await deleteAccountData(client, "user-1");
-    expect(removedPaths).toContain("user-1/orfano.pdf");
+    expect(removedPaths).toContain("user-1/req-x/orfano.pdf");
   });
 
   it("unisce le due fonti invece di sceglierne una", async () => {
@@ -347,10 +361,10 @@ describe("cancellazione — i file orfani non sopravvivono", () => {
     // storici): vanno aggiunte all'enumerazione, non sostituite.
     const { client, removedPaths } = fakeAdmin({
       storagePaths: ["vecchio/percorso.pdf"],
-      storageOrphans: ["nuovo.pdf"],
+      storageTree: { "user-1/req-y/nuovo.pdf": true },
     });
     await deleteAccountData(client, "user-1");
-    expect(removedPaths).toContain("user-1/nuovo.pdf");
+    expect(removedPaths).toContain("user-1/req-y/nuovo.pdf");
     expect(removedPaths).toContain("vecchio/percorso.pdf");
   });
 
@@ -363,5 +377,35 @@ describe("cancellazione — i file orfani non sopravvivono", () => {
     expect(removedPaths.filter((p) => p === "user-1/uguale.pdf")).toHaveLength(
       1,
     );
+  });
+});
+
+describe("cancellazione — il percorso reale dei file ha tre segmenti", () => {
+  it("scende nelle cartelle invece di fermarsi al primo livello", async () => {
+    // Gli upload finiscono in `${userId}/${requestId}/${nome}`: al primo
+    // livello ci sono solo CARTELLE, e `remove()` su una cartella non
+    // cancella niente. Il test precedente simulava due segmenti ed era
+    // verde confermando un'assunzione sbagliata.
+    const { client, removedPaths } = fakeAdmin({
+      storagePaths: [],
+      storageTree: {
+        "user-1/req-a/cv.pdf": true,
+        "user-1/req-b/lettera.pdf": true,
+      },
+    });
+    await deleteAccountData(client, "user-1");
+    expect(removedPaths).toContain("user-1/req-a/cv.pdf");
+    expect(removedPaths).toContain("user-1/req-b/lettera.pdf");
+    // E soprattutto: non deve provare a rimuovere le cartelle.
+    expect(removedPaths).not.toContain("user-1/req-a");
+  });
+
+  it("scende su più di due livelli", async () => {
+    const { client, removedPaths } = fakeAdmin({
+      storagePaths: [],
+      storageTree: { "user-1/a/b/c/file.pdf": true },
+    });
+    await deleteAccountData(client, "user-1");
+    expect(removedPaths).toContain("user-1/a/b/c/file.pdf");
   });
 });

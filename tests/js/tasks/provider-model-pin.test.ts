@@ -23,7 +23,15 @@
  */
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, chmodSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  existsSync,
+  chmodSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -66,11 +74,11 @@ max_steps_per_turn = 20
 
 /** Come risponde il finto `kimi` quando gli si chiede un alias per nome. */
 type Probe =
-  | "answers"        // exit 0 + risposta: l'alias è utilizzabile
-  | "refuses"        // exit 1: l'alias non è disponibile su questo piano
-  | "silent"         // exit 0 ma nessun output: probe non concludente
-  | "hang"           // non torna mai
-  | "only-second";   // il migliore rifiuta, gli altri rispondono
+  | "answers" // exit 0 + risposta: l'alias è utilizzabile
+  | "refuses" // exit 1: l'alias non è disponibile su questo piano
+  | "silent" // exit 0 ma nessun output: probe non concludente
+  | "hang" // non torna mai
+  | "only-second"; // il migliore rifiuta, gli altri rispondono
 
 type Sandbox = {
   root: string;
@@ -110,29 +118,38 @@ function makeSandbox(opts: {
   const resume = 'echo "To resume this session: kimi -r f5c7339d-0000" >&2';
   const refuse = `${resume}\necho "model not available on your plan" >&2\nexit 1`;
   const onProbe =
-    probe === "refuses" ? refuse :
-    probe === "silent" ? `${resume}\nexit 0` :
-    probe === "hang" ? "sleep 60" :
-    probe === "only-second"
-      ? `case "$MODEL" in\n*/k3) ${refuse} ;;\nesac\n${resume}\necho ok\nexit 0`
-      : `${resume}\necho ok\nexit 0`;
+    probe === "refuses"
+      ? refuse
+      : probe === "silent"
+        ? `${resume}\nexit 0`
+        : probe === "hang"
+          ? "sleep 60"
+          : probe === "only-second"
+            ? `case "$MODEL" in\n*/k3) ${refuse} ;;\nesac\n${resume}\necho ok\nexit 0`
+            : `${resume}\necho ok\nexit 0`;
 
-  writeExec(path.join(bin, "kimi"), [
-    `echo "$*" >> "${root}/kimi.calls"`,
-    "MODEL=''",
-    'while [ $# -gt 0 ]; do',
-    '  if [ "$1" = "--model" ]; then MODEL="$2"; fi',
-    "  shift",
-    "done",
-    'if [ -n "$MODEL" ]; then',
-    ...onProbe.split("\n").map((l) => `  ${l}`),
-    "fi",
-    'echo "kimi, version 1.42.0"',
-  ].join("\n"));
+  writeExec(
+    path.join(bin, "kimi"),
+    [
+      `echo "$*" >> "${root}/kimi.calls"`,
+      "MODEL=''",
+      "while [ $# -gt 0 ]; do",
+      '  if [ "$1" = "--model" ]; then MODEL="$2"; fi',
+      "  shift",
+      "done",
+      'if [ -n "$MODEL" ]; then',
+      ...onProbe.split("\n").map((l) => `  ${l}`),
+      "fi",
+      'echo "kimi, version 1.42.0"',
+    ].join("\n"),
+  );
   writeExec(path.join(bin, "codex"), 'echo "codex-cli 0.145.0"');
   writeExec(path.join(bin, "claude"), 'echo "2.4.0 (Claude Code)"');
   for (const tool of ["npm", "sh"]) {
-    writeExec(path.join(bin, tool), `echo "$*" >> "${root}/${tool}.calls"\nexit 0`);
+    writeExec(
+      path.join(bin, tool),
+      `echo "$*" >> "${root}/${tool}.calls"\nexit 0`,
+    );
   }
 
   const kimiDir = path.join(home, ".kimi");
@@ -144,16 +161,27 @@ function makeSandbox(opts: {
   }
   if (opts.credentials !== false) {
     mkdirSync(path.join(kimiDir, "credentials"), { recursive: true });
-    writeFileSync(path.join(kimiDir, "credentials", "kimi-code.json"), '{"access_token":"x"}', "utf-8");
+    writeFileSync(
+      path.join(kimiDir, "credentials", "kimi-code.json"),
+      '{"access_token":"x"}',
+      "utf-8",
+    );
   }
   if (opts.codexConfig) {
     mkdirSync(path.join(home, ".codex"), { recursive: true });
-    writeFileSync(path.join(home, ".codex", "config.toml"), opts.codexConfig, "utf-8");
+    writeFileSync(
+      path.join(home, ".codex", "config.toml"),
+      opts.codexConfig,
+      "utf-8",
+    );
   }
 
   writeFileSync(
     path.join(home, "jht.config.json"),
-    JSON.stringify({ active_provider: provider, providers: { [provider]: { auth_method: "subscription" } } }),
+    JSON.stringify({
+      active_provider: provider,
+      providers: { [provider]: { auth_method: "subscription" } },
+    }),
     "utf-8",
   );
 
@@ -164,14 +192,25 @@ function makeSandbox(opts: {
   };
 
   return {
-    root, home, bin, kimiConfig, calls,
-    config: () => (existsSync(kimiConfig) ? readFileSync(kimiConfig, "utf-8") : ""),
-    backups: () => (existsSync(kimiDir) ? readdirSync(kimiDir).filter((f) => f.includes(".bak-model-pin-")) : []),
+    root,
+    home,
+    bin,
+    kimiConfig,
+    calls,
+    config: () =>
+      existsSync(kimiConfig) ? readFileSync(kimiConfig, "utf-8") : "",
+    backups: () =>
+      existsSync(kimiDir)
+        ? readdirSync(kimiDir).filter((f) => f.includes(".bak-model-pin-"))
+        : [],
     probes: () => calls("kimi").filter((c) => c.includes("--model")),
     mailbox: () => {
       const f = path.join(home, "logs", "bridge-mailbox.jsonl");
       if (!existsSync(f)) return [];
-      return readFileSync(f, "utf-8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+      return readFileSync(f, "utf-8")
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => JSON.parse(l));
     },
   };
 }
@@ -181,7 +220,9 @@ function runAutoUpdate(sb: Sandbox, extraEnv: Record<string, string> = {}) {
     encoding: "utf-8",
     timeout: 60_000,
     env: {
-      PATH: [sb.bin, path.dirname(process.execPath), "/usr/bin", "/bin"].join(path.delimiter),
+      PATH: [sb.bin, path.dirname(process.execPath), "/usr/bin", "/bin"].join(
+        path.delimiter,
+      ),
       HOME: sb.root,
       JHT_HOME: sb.home,
       IS_CONTAINER: "1",
@@ -192,7 +233,8 @@ function runAutoUpdate(sb: Sandbox, extraEnv: Record<string, string> = {}) {
   return { code: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 }
 
-const defaultModelOf = (cfg: string) => /^\s*default_model\s*=\s*"(.+?)"/m.exec(cfg)?.[1] ?? null;
+const defaultModelOf = (cfg: string) =>
+  /^\s*default_model\s*=\s*"(.+?)"/m.exec(cfg)?.[1] ?? null;
 
 posixOnly("model pin — il modello si SOSTITUISCE, non si cancella", () => {
   it("promuove l'alias con la finestra più ampia fra quelli che il config elenca", () => {
@@ -216,7 +258,8 @@ posixOnly("model pin — il modello si SOSTITUISCE, non si cancella", () => {
       "kimi-code/kimi-for-coding-highspeed",
       "kimi-code/k3-256k",
       "kimi-code/k3",
-    ]) expect(after).toContain(`[models."${alias}"]`);
+    ])
+      expect(after).toContain(`[models."${alias}"]`);
     // E il resto del file pure: max_steps_per_turn è stato calibrato a mano
     // (postmortem betaB 2026-06-24). Un round-trip TOML l'avrebbe mangiato.
     expect(after).toContain("[loop_control]");
@@ -244,7 +287,9 @@ posixOnly("model pin — il modello si SOSTITUISCE, non si cancella", () => {
     runAutoUpdate(sb);
     const backups = sb.backups();
     expect(backups).toHaveLength(1);
-    expect(readFileSync(path.join(sb.home, ".kimi", backups[0]), "utf-8")).toBe(FIELD_CONFIG);
+    expect(readFileSync(path.join(sb.home, ".kimi", backups[0]), "utf-8")).toBe(
+      FIELD_CONFIG,
+    );
   });
 
   it("il finding porta i due modelli, le due finestre, il ripristino e il riavvio sessioni", () => {
@@ -266,7 +311,10 @@ posixOnly("model pin — il modello si SOSTITUISCE, non si cancella", () => {
   });
 
   it("config lasciato senza default_model (la vecchia invalidazione): lo riscrive", () => {
-    const sb = makeSandbox({ probe: "answers", config: FIELD_CONFIG.replace(/^default_model.*\n/m, "") });
+    const sb = makeSandbox({
+      probe: "answers",
+      config: FIELD_CONFIG.replace(/^default_model.*\n/m, ""),
+    });
     runAutoUpdate(sb);
     expect(defaultModelOf(sb.config())).toBe("kimi-code/k3");
   });
@@ -294,100 +342,108 @@ posixOnly("model pin — il modello si SOSTITUISCE, non si cancella", () => {
   });
 });
 
-posixOnly("model pin — se il candidato non risponde, il file non si tocca", () => {
-  it("alias rifiutato dal piano: config intatto, boot che prosegue, finding col motivo", () => {
-    const sb = makeSandbox({ probe: "refuses" });
-    const r = runAutoUpdate(sb);
-    // La regola più importante del ticket: il boot non si ferma.
-    expect(r.code).toBe(0);
-    expect(sb.config()).toBe(FIELD_CONFIG);
-    expect(sb.backups()).toHaveLength(0);
+posixOnly(
+  "model pin — se il candidato non risponde, il file non si tocca",
+  () => {
+    it("alias rifiutato dal piano: config intatto, boot che prosegue, finding col motivo", () => {
+      const sb = makeSandbox({ probe: "refuses" });
+      const r = runAutoUpdate(sb);
+      // La regola più importante del ticket: il boot non si ferma.
+      expect(r.code).toBe(0);
+      expect(sb.config()).toBe(FIELD_CONFIG);
+      expect(sb.backups()).toHaveLength(0);
 
-    const msg = String(sb.mailbox()[0].msg);
-    expect(msg).toContain("NON promosso");
-    expect(msg).toContain("non ha risposto");
-    expect(msg).toContain("meglio di un team fermo");
-  });
+      const msg = String(sb.mailbox()[0].msg);
+      expect(msg).toContain("NON promosso");
+      expect(msg).toContain("non ha risposto");
+      expect(msg).toContain("meglio di un team fermo");
+    });
 
-  it("un candidato bocciato non ferma la lista: si passa al successivo", () => {
-    const sb = makeSandbox({ probe: "only-second" });
-    const r = runAutoUpdate(sb);
-    expect(r.code).toBe(0);
-    // Con k3 (1M) bocciato restano solo alias a 262144, cioè NON migliori
-    // dell'attuale: non c'è un secondo candidato legittimo e non si scrive.
-    // Promuovere "il primo che risponde" avrebbe cambiato modello per niente.
-    expect(sb.probes()).toHaveLength(1);
-    expect(sb.probes()[0]).toContain("--model kimi-code/k3");
-    expect(sb.config()).toBe(FIELD_CONFIG);
-  });
+    it("un candidato bocciato non ferma la lista: si passa al successivo", () => {
+      const sb = makeSandbox({ probe: "only-second" });
+      const r = runAutoUpdate(sb);
+      expect(r.code).toBe(0);
+      // Con k3 (1M) bocciato restano solo alias a 262144, cioè NON migliori
+      // dell'attuale: non c'è un secondo candidato legittimo e non si scrive.
+      // Promuovere "il primo che risponde" avrebbe cambiato modello per niente.
+      expect(sb.probes()).toHaveLength(1);
+      expect(sb.probes()[0]).toContain("--model kimi-code/k3");
+      expect(sb.config()).toBe(FIELD_CONFIG);
+    });
 
-  it("più candidati migliori: se il primo rifiuta si prova il secondo e si promuove quello", () => {
-    // Due finestre più ampie dell'attuale: k3 (1M, rifiutato) e k3-mid (512k).
-    const twoBetter = FIELD_CONFIG.replace(
-      '[models."kimi-code/k3-256k"]\n  provider         = "managed:kimi-code"\n  max_context_size = 262144',
-      '[models."kimi-code/k3-mid"]\n  provider         = "managed:kimi-code"\n  max_context_size = 524288',
-    );
-    const sb = makeSandbox({ probe: "only-second", config: twoBetter });
-    runAutoUpdate(sb);
-    const probes = sb.probes();
-    expect(probes).toHaveLength(2);
-    expect(probes[0]).toContain("--model kimi-code/k3");
-    expect(probes[1]).toContain("--model kimi-code/k3-mid");
-    expect(defaultModelOf(sb.config())).toBe("kimi-code/k3-mid");
-  });
+    it("più candidati migliori: se il primo rifiuta si prova il secondo e si promuove quello", () => {
+      // Due finestre più ampie dell'attuale: k3 (1M, rifiutato) e k3-mid (512k).
+      const twoBetter = FIELD_CONFIG.replace(
+        '[models."kimi-code/k3-256k"]\n  provider         = "managed:kimi-code"\n  max_context_size = 262144',
+        '[models."kimi-code/k3-mid"]\n  provider         = "managed:kimi-code"\n  max_context_size = 524288',
+      );
+      const sb = makeSandbox({ probe: "only-second", config: twoBetter });
+      runAutoUpdate(sb);
+      const probes = sb.probes();
+      expect(probes).toHaveLength(2);
+      expect(probes[0]).toContain("--model kimi-code/k3");
+      expect(probes[1]).toContain("--model kimi-code/k3-mid");
+      expect(defaultModelOf(sb.config())).toBe("kimi-code/k3-mid");
+    });
 
-  it("exit 0 senza risposta: probe non concludente, e il finding NON lo chiama bocciatura", () => {
-    const sb = makeSandbox({ probe: "silent" });
-    runAutoUpdate(sb);
-    expect(sb.config()).toBe(FIELD_CONFIG);
-    const msg = String(sb.mailbox()[0].msg);
-    expect(msg).toContain("uscita 0 senza stampare niente");
-    expect(msg).toContain("NON una bocciatura del modello");
-  });
+    it("exit 0 senza risposta: probe non concludente, e il finding NON lo chiama bocciatura", () => {
+      const sb = makeSandbox({ probe: "silent" });
+      runAutoUpdate(sb);
+      expect(sb.config()).toBe(FIELD_CONFIG);
+      const msg = String(sb.mailbox()[0].msg);
+      expect(msg).toContain("uscita 0 senza stampare niente");
+      expect(msg).toContain("NON una bocciatura del modello");
+    });
 
-  it("`To resume this session` non è un errore: non finisce mai nel motivo del fallimento", () => {
-    // La riga compare anche sui successi. La prima versione la citava come
-    // causa, e sul campo si è letto un falso negativo travestito da diagnosi.
-    const sb = makeSandbox({ probe: "refuses" });
-    const r = runAutoUpdate(sb);
-    expect(r.out).toContain("model not available on your plan");
-    expect(String(sb.mailbox()[0].msg)).not.toContain("To resume this session");
-  });
+    it("`To resume this session` non è un errore: non finisce mai nel motivo del fallimento", () => {
+      // La riga compare anche sui successi. La prima versione la citava come
+      // causa, e sul campo si è letto un falso negativo travestito da diagnosi.
+      const sb = makeSandbox({ probe: "refuses" });
+      const r = runAutoUpdate(sb);
+      expect(r.out).toContain("model not available on your plan");
+      expect(String(sb.mailbox()[0].msg)).not.toContain(
+        "To resume this session",
+      );
+    });
 
-  it("CLI che si pianta: il probe viene ucciso e il pin resta com'è", () => {
-    const sb = makeSandbox({ probe: "hang" });
-    const started = Date.now();
-    const r = runAutoUpdate(sb, { JHT_MODEL_PIN_PROBE_TIMEOUT_SEC: "1" });
-    expect(r.code).toBe(0);
-    expect(Date.now() - started).toBeLessThan(30_000);
-    expect(sb.config()).toBe(FIELD_CONFIG);
-    expect(sb.backups()).toHaveLength(0);
-  });
+    it("CLI che si pianta: il probe viene ucciso e il pin resta com'è", () => {
+      const sb = makeSandbox({ probe: "hang" });
+      const started = Date.now();
+      const r = runAutoUpdate(sb, { JHT_MODEL_PIN_PROBE_TIMEOUT_SEC: "1" });
+      expect(r.code).toBe(0);
+      expect(Date.now() - started).toBeLessThan(30_000);
+      expect(sb.config()).toBe(FIELD_CONFIG);
+      expect(sb.backups()).toHaveLength(0);
+    });
 
-  it("senza credenziali non prova nemmeno: la CLI non potrebbe rispondere", () => {
-    const sb = makeSandbox({ probe: "answers", credentials: false });
-    const r = runAutoUpdate(sb);
-    expect(r.out).toContain("credenziali assenti");
-    expect(sb.probes()).toHaveLength(0);
-    expect(sb.config()).toBe(FIELD_CONFIG);
-    expect(sb.mailbox()).toHaveLength(0);
-  });
+    it("senza credenziali non prova nemmeno: la CLI non potrebbe rispondere", () => {
+      const sb = makeSandbox({ probe: "answers", credentials: false });
+      const r = runAutoUpdate(sb);
+      expect(r.out).toContain("credenziali assenti");
+      expect(sb.probes()).toHaveLength(0);
+      expect(sb.config()).toBe(FIELD_CONFIG);
+      expect(sb.mailbox()).toHaveLength(0);
+    });
 
-  it("stessa situazione a ogni riavvio: il finding non si ripete", () => {
-    const sb = makeSandbox({ probe: "refuses" });
-    runAutoUpdate(sb);
-    runAutoUpdate(sb);
-    runAutoUpdate(sb);
-    expect(sb.mailbox()).toHaveLength(1);
-    expect(sb.config()).toBe(FIELD_CONFIG);
-  });
-});
+    it("stessa situazione a ogni riavvio: il finding non si ripete", () => {
+      const sb = makeSandbox({ probe: "refuses" });
+      runAutoUpdate(sb);
+      runAutoUpdate(sb);
+      runAutoUpdate(sb);
+      expect(sb.mailbox()).toHaveLength(1);
+      expect(sb.config()).toBe(FIELD_CONFIG);
+    });
+  },
+);
 
 posixOnly("model pin — quando non c'è niente da promuovere", () => {
   it("il pin è già il migliore: nessun probe, nessuna scrittura, nessun rumore", () => {
     const sb = makeSandbox({
       probe: "answers",
-      config: FIELD_CONFIG.replace('default_model = "kimi-code/kimi-for-coding"', 'default_model = "kimi-code/k3"'),
+      config: FIELD_CONFIG.replace(
+        'default_model = "kimi-code/kimi-for-coding"',
+        'default_model = "kimi-code/k3"',
+      ),
     });
     const r = runAutoUpdate(sb);
     expect(r.out).toContain("nessun alias con finestra piu' ampia");
@@ -431,7 +487,10 @@ posixOnly("model pin — quando non c'è niente da promuovere", () => {
   });
 
   it("config senza catalogo: non si inventa un alias", () => {
-    const sb = makeSandbox({ probe: "answers", config: 'default_model = "kimi-code/kimi-for-coding"\n' });
+    const sb = makeSandbox({
+      probe: "answers",
+      config: 'default_model = "kimi-code/kimi-for-coding"\n',
+    });
     const r = runAutoUpdate(sb);
     expect(r.out).toContain("non elenca nessun");
     expect(sb.probes()).toHaveLength(0);
@@ -481,7 +540,9 @@ posixOnly("model pin — chi lo ferma, e i provider che non si toccano", () => {
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
     expect(r.out).toContain("NON modificabile");
-    expect(readFileSync(path.join(sb.home, ".codex", "config.toml"), "utf-8")).toBe(codex);
+    expect(
+      readFileSync(path.join(sb.home, ".codex", "config.toml"), "utf-8"),
+    ).toBe(codex);
 
     const msg = String(sb.mailbox()[0].msg);
     expect(msg).toContain("gpt-5.4");
