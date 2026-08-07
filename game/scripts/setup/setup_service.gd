@@ -1794,7 +1794,7 @@ static func embedded_terminal_spec(title: String, hint: String, command: String)
 
 
 func open_technical_terminal(context: String, title: String, hint: String,
-		container_args: PackedStringArray) -> void:
+		container_args: PackedStringArray, spec_overrides: Dictionary = {}) -> void:
 	var vps := _vps_config()
 	var command := ""
 	if vps.is_empty():
@@ -1807,7 +1807,9 @@ func open_technical_terminal(context: String, title: String, hint: String,
 		var target := _ssh_target(vps)
 		command = "ssh -tt -i " + _local_quote(key) + " " \
 				+ _local_quote(target) + " " + _local_quote(inner)
-	terminal_requested.emit(context, embedded_terminal_spec(title, hint, command))
+	var terminal_spec := embedded_terminal_spec(title, hint, command)
+	terminal_spec.merge(spec_overrides, true)
+	terminal_requested.emit(context, terminal_spec)
 
 
 static func _posix_quoted(args: PackedStringArray) -> PackedStringArray:
@@ -1838,7 +1840,9 @@ func open_cloud_login(prefer_google := false) -> void:
 	open_technical_terminal("cloud", UIStrings.t("setup.cloud_login_title"),
 			UIStrings.t("setup.cloud_login_google_hint") if prefer_google else \
 			UIStrings.t("setup.cloud_login_hint"),
-			PackedStringArray(["node", "/app/cli/bin/jht.js", "cloud", "login"]))
+			PackedStringArray(["node", "/app/cli/bin/jht.js", "cloud", "login",
+					"--ui-json"]),
+			{"cloud_pairing": true, "prefer_google": prefer_google})
 
 
 func open_cloud_command(command: String) -> void:
