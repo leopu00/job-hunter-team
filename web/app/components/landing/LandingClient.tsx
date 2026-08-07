@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { LandingI18nProvider, useLandingI18n } from "./LandingI18n";
+import LoginAcceptance from "./LoginAcceptance";
 
 type Props = {
   authError: boolean;
@@ -126,6 +127,11 @@ function LoginPage({
             {t("login_with_github")}
           </button>
         </div>
+
+        {/* I due link devono essere raggiungibili PRIMA di iniziare
+            l'autenticazione: prima di questa riga si arrivava su «Login with
+            Google» senza alcun riferimento ai documenti. */}
+        <LoginAcceptance />
 
         {/* Torna indietro */}
         <div className="mt-4 text-center">
