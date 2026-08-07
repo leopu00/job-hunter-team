@@ -506,7 +506,7 @@ func _build_email() -> void:
 	grid.add_child(TerminalTheme.label(UIStrings.t("email.address"), 13, Palette.MUTED, "medium"))
 	var email := LineEdit.new()
 	email.text = str(state.get("email", ""))
-	email.placeholder_text = "nome.jht@gmail.com"
+	email.placeholder_text = UIStrings.t("email.address_ph")
 	email.custom_minimum_size = Vector2(560, 0)
 	grid.add_child(email)
 	grid.add_child(TerminalTheme.label(UIStrings.t("email.app_password"), 13, Palette.MUTED, "medium"))
@@ -3453,7 +3453,8 @@ func _build_pos_detail() -> void:
 			var wrow := HBoxContainer.new()
 			wrow.add_theme_constant_override("separation", 12)
 			score_box.add_child(wrow)
-			var wl := TerminalTheme.label("%s (su %d)" % [w[1], w[2]], 13, Palette.MUTED)
+			var wl := TerminalTheme.label(UIStrings.t("pos.score_out_of") % [w[1], w[2]],
+					13, Palette.MUTED)
 			wl.custom_minimum_size = Vector2(220, 0)
 			wrow.add_child(wl)
 			var bar := ProgressBar.new()

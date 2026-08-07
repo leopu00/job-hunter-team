@@ -16,7 +16,7 @@ class_name SidebarDefs
 ## Gli id delle sezioni NON cambiano: i deep-link (`navigate.emit`, JHT_SECTION,
 ## l'onboarding guidato) continuano a puntare dove puntavano.
 
-## `label` resta il fallback italiano; a schermo passa da UIStrings
+## `label` resta il fallback inglese; a schermo passa da UIStrings
 ## con la chiave "side.<id>" (e "side.<group_key>" per i titoli gruppo).
 ##
 ## `icon` è l'id di una forma vettoriale di SidebarIcon, MAI un'emoji: i glifi
@@ -30,14 +30,14 @@ const GROUPS := [
 	{
 		# Prima il lavoro: sono le viste che si aprono ogni giorno, e la prima
 		# riga della colonna è il posto più economico da raggiungere.
-		"title": "Lavoro",
+		"title": "Work",
 		"key": "group_work",
 		"items": [
 			{"id": "dashboard", "icon": "dashboard", "label": "Dashboard"},
-			{"id": "positions", "icon": "target", "label": "Posizioni"},
-			{"id": "apps", "icon": "inbox", "label": "Candidature"},
-			{"id": "map", "icon": "map", "label": "Mappa"},
-			{"id": "stats", "icon": "chart-up", "label": "Monitoraggio",
+			{"id": "positions", "icon": "target", "label": "Positions"},
+			{"id": "apps", "icon": "inbox", "label": "Applications"},
+			{"id": "map", "icon": "map", "label": "Map"},
+			{"id": "stats", "icon": "chart-up", "label": "Monitoring",
 					"nav_key": "side.monitor"},
 		],
 	},
@@ -45,28 +45,28 @@ const GROUPS := [
 		"title": "Team",
 		"key": "group_team",
 		"items": [
-			{"id": "activation", "icon": "bolt", "label": "Attiva team"},
+			{"id": "activation", "icon": "bolt", "label": "Start team"},
 			{"id": "team", "icon": "users", "label": "Team"},
-			{"id": "agents", "icon": "robot", "label": "Agenti"},
+			{"id": "agents", "icon": "robot", "label": "Agents"},
 			{"id": "chat", "icon": "chat", "label": "Chat"},
-			{"id": "notifs", "icon": "bell", "label": "Notifiche"},
+			{"id": "notifs", "icon": "bell", "label": "Notifications"},
 		],
 	},
 	{
 		# Tre righe sole: la segnalazione problemi non ha più bisogno di un
 		# gruppo tutto suo per non finire sotto il bordo dello schermo.
-		"title": "Sistema",
+		"title": "System",
 		"key": "group_system",
 		"items": [
-			{"id": "profile", "icon": "doc", "label": "Profilo"},
-			{"id": "settings", "icon": "gear", "label": "Impostazioni"},
-			{"id": "feedback", "icon": "bug", "label": "Segnala un problema"},
+			{"id": "profile", "icon": "doc", "label": "Profile"},
+			{"id": "settings", "icon": "gear", "label": "Settings"},
+			{"id": "feedback", "icon": "bug", "label": "Report a problem"},
 			# Uscire dal gioco deve essere possibile COL MOUSE. In fullscreen su
 			# Wayland la finestra non ha decorazioni — niente X — e finché questa
 			# voce non c'è stata l'unica via era il menu ESC: se l'input da
 			# tastiera si perde (sessione remota, 25/07) l'utente resta chiuso
 			# dentro. `label_key` riusa la traduzione già esistente del menu pausa.
-			{"id": "quit", "icon": "power", "label": "Esci dal gioco",
+			{"id": "quit", "icon": "power", "label": "Quit",
 					"label_key": "pause.quit"},
 		],
 	},
@@ -148,7 +148,7 @@ static func nav_host(section: String) -> String:
 ## acceso nella riga sotto al titolo.
 static func title_for(section: String) -> String:
 	if MONITOR_SECTIONS.has(section):
-		return _key_label("side.monitor", "Monitoraggio")
+		return _key_label("side.monitor", "Monitoring")
 	return label_for(section)
 
 
@@ -194,7 +194,7 @@ static func _item_label(item: Dictionary) -> String:
 
 
 ## fallback: se la chiave non esiste t() la restituisce tale e quale — in
-## quel caso vale l'etichetta italiana scritta nella def.
+## quel caso vale l'etichetta inglese scritta nella def.
 static func _key_label(key: String, fallback: String) -> String:
 	var translated: String = UIStrings.t(key)
 	return translated if translated != key else fallback
