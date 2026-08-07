@@ -40,6 +40,8 @@ import { registerPositionsCommand } from './commands/positions.js';
 import { registerTicketCommand, registerDirectivesCommand } from './commands/decisions.js';
 import { registerProfileCommand } from './commands/profile.js';
 import { registerPid1Command } from './commands/pid1.js';
+import { registerDownloadCommand } from './commands/download.js';
+import { registerGameCommand } from './commands/game.js';
 
 // Help "essenziale" mostrato di default da `jht`, `jht --help`, `jht -h`.
 // Per la lista completa di tutti i sotto-comandi (export/import/cron/
@@ -71,6 +73,13 @@ Per la lista completa di tutti i comandi:
 
 export function buildProgram() {
   const program = new Command();
+
+  // I flag dopo il nome di un sottocomando appartengono a quel sottocomando.
+  // Senza questo gate Commander intercetta anche `jht download --version X`
+  // come versione globale della CLI, stampa il numero ed esce 0 senza
+  // scaricare nulla. I globali restano disponibili prima del comando
+  // (`jht --version`), che e' il contratto non ambiguo.
+  program.enablePositionalOptions();
 
   program
     .name('jht')
@@ -123,6 +132,8 @@ export function buildProgram() {
   registerDirectivesCommand(program);
   registerProfileCommand(program);
   registerPid1Command(program);
+  registerDownloadCommand(program);
+  registerGameCommand(program);
 
   // Salviamo il riferimento all'help "lungo" autogenerato da commander
   // PRIMA di sovrascrivere helpInformation. `jht help` lo invoca per
