@@ -447,9 +447,9 @@ def build_series(by_agent, since_ts: float, now_ts: float, bucket_sec: int):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--since-min", type=float, default=180.0,
-                    help="finestra in minuti (default 180 = 3h)")
+                    help="window in minutes (default: 180 = 3h)")
     ap.add_argument("--bucket-sec", type=int, default=60,
-                    help="dimensione bucket in secondi (default 60)")
+                    help="bucket size in seconds (default: 60)")
     args = ap.parse_args()
 
     now = datetime.now(timezone.utc)

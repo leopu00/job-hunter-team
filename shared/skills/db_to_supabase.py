@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""Sincronizzazione SQLite → Supabase.
+"""SQLite → Supabase synchronization.
 
-Carica i dati dal database SQLite locale (usato dagli agenti) nel database
-Supabase PostgreSQL (usato dalla web app). Usa la colonna legacy_id per
-mappare gli ID integer di SQLite agli UUID di Supabase.
+Uploads data from the local SQLite database (used by agents) to the Supabase
+PostgreSQL database (used by the web app). Uses the legacy_id column to map
+SQLite integer IDs to Supabase UUIDs.
 
-Uso:
-  python3 db_to_supabase.py sync              # sync completo SQLite → Supabase
-  python3 db_to_supabase.py sync --dry-run    # mostra cosa sincronizzerebbe
-  python3 db_to_supabase.py status            # mostra conteggi SQLite vs Supabase
-  python3 db_to_supabase.py sync --table positions  # sync solo una tabella
+Usage:
+  python3 db_to_supabase.py sync              # full SQLite → Supabase sync
+  python3 db_to_supabase.py sync --dry-run    # show what would be synchronized
+  python3 db_to_supabase.py status            # show SQLite vs Supabase counts
+  python3 db_to_supabase.py sync --table positions  # sync one table only
 
-Variabili d'ambiente richieste:
-  SUPABASE_URL               — URL del progetto Supabase
-  SUPABASE_SERVICE_ROLE_KEY  — chiave service role (bypassa RLS)
+Required environment variables:
+  SUPABASE_URL               — Supabase project URL
+  SUPABASE_SERVICE_ROLE_KEY  — service-role key (bypasses RLS)
 
-Opzionali:
-  JHT_SUPABASE_USER_ID       — UUID dell'utente Supabase a cui associare i dati
-                                (se omesso, lo rileva dal primo utente in auth.users)
+Optional:
+  JHT_SUPABASE_USER_ID       — Supabase user UUID to associate with the data
+                                (if omitted, uses the first user in auth.users)
 
-Ordine sync: companies → positions → scores → applications → position_highlights
+Sync order: companies → positions → scores → applications → position_highlights
 """
 
 import sys
@@ -63,8 +63,8 @@ def load_env():
                 break
 
     if not sb_url or not sb_key:
-        print("ERRORE: SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY richiesti.")
-        print("Configura in .env o web/.env.local")
+        print("ERROR: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.")
+        print("Configure them in .env or web/.env.local")
         sys.exit(1)
 
     return sb_url, sb_key
@@ -104,7 +104,7 @@ def sb_post(url, key, table, data, upsert_cols=None):
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8") if e.fp else ""
-        print(f"  ERRORE {e.code}: {err_body[:300]}")
+        print(f"  ERROR {e.code}: {err_body[:300]}")
         return None
 
 
@@ -167,8 +167,8 @@ def get_user_id(url, key):
     except Exception:
         pass
 
-    print("ERRORE: impossibile determinare user_id.")
-    print("Configura JHT_SUPABASE_USER_ID nel tuo .env")
+    print("ERROR: unable to determine user_id.")
+    print("Configure JHT_SUPABASE_USER_ID in your .env")
     sys.exit(1)
 
 
@@ -228,7 +228,7 @@ def sync_companies(conn, sb_url, sb_key, user_id, dry_run=False):
             else:
                 inserted += 1
 
-    print(f"  Companies: {inserted} inserite, {updated} aggiornate")
+    print(f"  Companies: {inserted} inserted, {updated} updated")
     return id_map
 
 
@@ -319,7 +319,7 @@ def sync_positions(conn, sb_url, sb_key, user_id, company_map, dry_run=False):
             else:
                 inserted += 1
 
-    print(f"  Positions: {inserted} inserite, {updated} aggiornate")
+    print(f"  Positions: {inserted} inserted, {updated} updated")
     return id_map
 
 
@@ -376,7 +376,7 @@ def sync_scores(conn, sb_url, sb_key, user_id, position_map, dry_run=False):
             else:
                 inserted += 1
 
-    print(f"  Scores: {inserted} inseriti, {updated} aggiornati, {skipped} skippati (no position)")
+    print(f"  Scores: {inserted} inserted, {updated} updated, {skipped} skipped (no position)")
 
 
 def sync_applications(conn, sb_url, sb_key, user_id, position_map, dry_run=False):
@@ -442,7 +442,7 @@ def sync_applications(conn, sb_url, sb_key, user_id, position_map, dry_run=False
             else:
                 inserted += 1
 
-    print(f"  Applications: {inserted} inserite, {updated} aggiornate, {skipped} skippate")
+    print(f"  Applications: {inserted} inserted, {updated} updated, {skipped} skipped")
 
 
 def sync_highlights(conn, sb_url, sb_key, user_id, position_map, dry_run=False):
@@ -492,7 +492,7 @@ def sync_highlights(conn, sb_url, sb_key, user_id, position_map, dry_run=False):
         if result:
             inserted += len(highlights)
 
-    print(f"  Highlights: {inserted} inseriti, {skipped} skippati")
+    print(f"  Highlights: {inserted} inserted, {skipped} skipped")
 
 
 # ── Normalizzazione valori ────────────────────────────────────
@@ -602,7 +602,7 @@ def cmd_sync(dry_run=False, table_filter=None):
         sync_highlights(conn, sb_url, sb_key, user_id, position_map, dry_run)
 
     conn.close()
-    print("\nSync completato.")
+    print("\nSync complete.")
 
 
 def cmd_status():
@@ -614,7 +614,7 @@ def cmd_status():
     ensure_schema(conn)
 
     tables = ["companies", "positions", "scores", "applications", "position_highlights"]
-    print(f"{'Tabella':<25} {'SQLite':>8} {'Supabase':>10}")
+    print(f"{'Table':<25} {'SQLite':>8} {'Supabase':>10}")
     print("-" * 45)
 
     for table in tables:
@@ -644,7 +644,7 @@ def main():
     elif cmd == "status":
         cmd_status()
     else:
-        print(f"Comando sconosciuto: {cmd}")
+        print(f"Unknown command: {cmd}")
         print(__doc__)
         sys.exit(1)
 

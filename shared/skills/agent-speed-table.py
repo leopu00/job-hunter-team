@@ -155,9 +155,9 @@ def _team_delta_usage(since_ts: float, now_ts: float):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--since-min", type=float, default=180.0,
-                    help="finestra in minuti (default 180 = 3h)")
+                    help="window in minutes (default 180 = 3h)")
     ap.add_argument("--min-pct-h", type=float, default=DEFAULT_MIN_PCT_H,
-                    help=f"soglia minima %/h per includere agente "
+                    help=f"minimum %/h threshold for including an agent "
                          f"(default {DEFAULT_MIN_PCT_H})")
     args = ap.parse_args()
 
@@ -242,16 +242,16 @@ def main():
     warnings = []
     if ratio < RATIO_OK_MIN_KT_PER_PCT:
         warnings.append(
-            f"ratio_kt_per_pct={ratio:.1f} sotto soglia "
-            f"{RATIO_OK_MIN_KT_PER_PCT} kT/%: pesi possibilmente "
-            f"fuori taratura. Vedi docs/internal/experiments/2026-05-03-rate-kimi-weights.md"
+            f"ratio_kt_per_pct={ratio:.1f} below threshold "
+            f"{RATIO_OK_MIN_KT_PER_PCT} kT/%: weights may be "
+            f"miscalibrated. See docs/internal/experiments/2026-05-03-rate-kimi-weights.md"
         )
     elif ratio > RATIO_OK_MAX_KT_PER_PCT:
         warnings.append(
-            f"ratio_kt_per_pct={ratio:.1f} sopra soglia "
-            f"{RATIO_OK_MAX_KT_PER_PCT} kT/%: pesi possibilmente "
-            f"fuori taratura (Kimi ha cambiato modello? cache_read sta "
-            f"contando di nuovo?). Vedi docs/internal/experiments/2026-05-03-rate-kimi-weights.md"
+            f"ratio_kt_per_pct={ratio:.1f} above threshold "
+            f"{RATIO_OK_MAX_KT_PER_PCT} kT/%: weights may be "
+            f"miscalibrated (did Kimi change models? is cache_read being "
+            f"counted again?). See docs/internal/experiments/2026-05-03-rate-kimi-weights.md"
         )
 
     out = {
@@ -273,16 +273,16 @@ def main():
         "skipped_agents": skipped,
         "warnings": warnings,
         "caveats": [
-            "speed misurata wall-clock: il throttle si somma alle pause "
-            "naturali, l'effetto reale puo essere < dello stimato per "
-            "agenti con eventi sporadici",
-            f"agenti sotto {args.min_pct_h} %/h non sono throttabili "
-            "utilmente (rumore)",
-            "ratio_kt_per_pct e' valido per la finestra corrente; cambia "
-            "se cambia la composizione degli agenti attivi",
-            f"pesi token (1, 1, 0, 0) hardcoded — range atteso ratio "
+            "speed is measured in wall-clock time: throttling overlaps with "
+            "natural pauses, so the real effect may be lower than estimated "
+            "for agents with sporadic events",
+            f"agents below {args.min_pct_h} %/h cannot be usefully throttled "
+            "(measurement noise)",
+            "ratio_kt_per_pct is valid for the current window and changes "
+            "when the active-agent mix changes",
+            f"token weights (1, 1, 0, 0) are hard-coded — expected ratio range "
             f"{RATIO_OK_MIN_KT_PER_PCT}-{RATIO_OK_MAX_KT_PER_PCT} kT/%, "
-            f"se fuori vedi warnings[]",
+            f"see warnings[] when outside that range",
         ],
     }
     json.dump(out, sys.stdout, separators=(",", ":"))

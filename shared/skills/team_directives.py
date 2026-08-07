@@ -44,9 +44,9 @@ def cmd_active(conn) -> None:
     """Direttive attive, formattate per l'handoff del Capitano al riavvio."""
     rows = _active_rows(conn)
     if not rows:
-        print("📋 BACHECA DEL TEAM — nessuna direttiva attiva.")
+        print("📋 TEAM BOARD — no active directives.")
         return
-    print(f"📋 BACHECA DEL TEAM — direttive ATTIVE ({len(rows)}), valide finché l'utente non le cambia:")
+    print(f"📋 TEAM BOARD — ACTIVE directives ({len(rows)}), valid until the user changes them:")
     for d in rows:
         print(_fmt(d))
 
@@ -59,17 +59,17 @@ def cmd_list(conn, show_all: bool) -> None:
     else:
         rows = _active_rows(conn)
     if not rows:
-        print("Nessuna direttiva." if show_all else "Nessuna direttiva attiva.")
+        print("No directives." if show_all else "No active directives.")
         return
     for d in rows:
-        tag = "" if d["status"] == "active" else " (archiviata)"
+        tag = "" if d["status"] == "active" else " (archived)"
         print(_fmt(d) + f"  by {d['created_by']}{tag}")
 
 
 def cmd_add(conn, body: str, kind: str, by: str) -> None:
     body = (body or "").strip()
     if not body:
-        print("Il testo della direttiva non può essere vuoto.", file=sys.stderr)
+        print("Directive text cannot be empty.", file=sys.stderr)
         sys.exit(1)
     # nuova direttiva in coda: sort_order = max(attive) + 1
     nxt = conn.execute(
@@ -81,13 +81,13 @@ def cmd_add(conn, body: str, kind: str, by: str) -> None:
         (body, kind, by, nxt),
     )
     conn.commit()
-    print(f"Direttiva #{cur.lastrowid} aggiunta [{kind}].")
+    print(f"Directive #{cur.lastrowid} added [{kind}].")
 
 
 def cmd_edit(conn, directive_id: int, body: str) -> None:
     body = (body or "").strip()
     if not body:
-        print("Il testo della direttiva non può essere vuoto.", file=sys.stderr)
+        print("Directive text cannot be empty.", file=sys.stderr)
         sys.exit(1)
     cur = conn.execute(
         "UPDATE team_directives SET body = ?, updated_at = datetime('now','localtime') "
@@ -96,9 +96,9 @@ def cmd_edit(conn, directive_id: int, body: str) -> None:
     )
     conn.commit()
     if cur.rowcount == 0:
-        print(f"Direttiva #{directive_id} non trovata.", file=sys.stderr)
+        print(f"Directive #{directive_id} not found.", file=sys.stderr)
         sys.exit(1)
-    print(f"Direttiva #{directive_id} aggiornata.")
+    print(f"Directive #{directive_id} updated.")
 
 
 def cmd_archive(conn, directive_id: int) -> None:
@@ -111,9 +111,9 @@ def cmd_archive(conn, directive_id: int) -> None:
     )
     conn.commit()
     if cur.rowcount == 0:
-        print(f"Direttiva #{directive_id} non trovata o già archiviata.", file=sys.stderr)
+        print(f"Directive #{directive_id} not found or already archived.", file=sys.stderr)
         sys.exit(1)
-    print(f"Direttiva #{directive_id} archiviata.")
+    print(f"Directive #{directive_id} archived.")
 
 
 def cmd_show(conn, directive_id: int) -> None:
@@ -121,34 +121,34 @@ def cmd_show(conn, directive_id: int) -> None:
         "SELECT * FROM team_directives WHERE id = ?", (directive_id,)
     ).fetchone()
     if not d:
-        print(f"Direttiva #{directive_id} non trovata.", file=sys.stderr)
+        print(f"Directive #{directive_id} not found.", file=sys.stderr)
         sys.exit(1)
     print(_fmt(d, indent=""))
-    print(f"  status={d['status']} by={d['created_by']} creata={d['created_at']} agg={d['updated_at']}")
+    print(f"  status={d['status']} by={d['created_by']} created={d['created_at']} updated={d['updated_at']}")
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Bacheca del team — direttive permanenti dell'utente.")
+    p = argparse.ArgumentParser(description="Team board — permanent user directives.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("active", help="direttive attive (handoff Capitano)")
+    sub.add_parser("active", help="active directives (Captain handoff)")
 
-    pl = sub.add_parser("list", help="elenca le direttive")
-    pl.add_argument("--all", action="store_true", help="includi anche le archiviate")
+    pl = sub.add_parser("list", help="list directives")
+    pl.add_argument("--all", action="store_true", help="include archived directives")
 
-    pa = sub.add_parser("add", help="aggiungi una direttiva")
+    pa = sub.add_parser("add", help="add a directive")
     pa.add_argument("body")
     pa.add_argument("--kind", choices=KINDS, default="order")
     pa.add_argument("--by", choices=AUTHORS, default="user")
 
-    pe = sub.add_parser("edit", help="modifica il testo di una direttiva")
+    pe = sub.add_parser("edit", help="edit directive text")
     pe.add_argument("id", type=int)
     pe.add_argument("body")
 
-    par = sub.add_parser("archive", help="ritira una direttiva")
+    par = sub.add_parser("archive", help="archive a directive")
     par.add_argument("id", type=int)
 
-    ps = sub.add_parser("show", help="ispeziona una direttiva")
+    ps = sub.add_parser("show", help="inspect a directive")
     ps.add_argument("id", type=int)
 
     args = p.parse_args()

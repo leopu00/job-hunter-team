@@ -91,10 +91,10 @@ def _count_produced(conn, role, session, since, notes):
     table, by_col, ts_col, label = spec
     cols = _table_cols(conn, table)
     if not cols:
-        notes.append("tabella %s assente" % table)
+        notes.append("missing table %s" % table)
         return {label: 0}
     if by_col not in cols:
-        notes.append("colonna %s.%s assente" % (table, by_col))
+        notes.append("missing column %s.%s" % (table, by_col))
         return {label: 0}
     where = ["%s LIKE ?" % by_col]
     params = [session.lower() + "%"]
@@ -103,12 +103,12 @@ def _count_produced(conn, role, session, since, notes):
         params.append(since)
     else:
         if ts_col not in cols:
-            notes.append("colonna timestamp %s.%s assente → conteggio non filtrato per finestra" % (table, ts_col))
+            notes.append("missing timestamp column %s.%s → count is not filtered by window" % (table, ts_col))
     q = "SELECT COUNT(*) FROM %s WHERE %s" % (table, " AND ".join(where))
     try:
         n = conn.execute(q, params).fetchone()[0]
     except sqlite3.Error as e:
-        notes.append("query produced fallita: %s" % e)
+        notes.append("produced query failed: %s" % e)
         n = 0
     return {label: n}
 
@@ -122,7 +122,7 @@ def _communications(messages_path, session, since_dt, notes):
     peers = collections.Counter()
     last_captain_msg = None
     if not os.path.exists(messages_path):
-        notes.append("messages.jsonl assente (%s)" % messages_path)
+        notes.append("messages.jsonl is missing (%s)" % messages_path)
         return {"sent": 0, "received": 0, "top_peers": []}, None
     try:
         with open(messages_path) as f:
@@ -152,7 +152,7 @@ def _communications(messages_path, session, since_dt, notes):
                         if last_captain_msg is None or d["ts"] > last_captain_msg:
                             last_captain_msg = d["ts"]
     except OSError as e:
-        notes.append("lettura messages.jsonl fallita: %s" % e)
+        notes.append("failed to read messages.jsonl: %s" % e)
     return {"sent": sent, "received": received, "top_peers": peers.most_common(4)}, last_captain_msg
 
 
@@ -163,7 +163,7 @@ def _throttles(throttle_path, session, since_dt, notes):
     events = 0
     max_sleep = 0
     if not throttle_path or not os.path.exists(throttle_path):
-        notes.append("throttle log assente → intoppi non quantificati")
+        notes.append("throttle log is missing → slowdowns cannot be quantified")
         return {"events": 0, "max_sleep_s": 0}
     try:
         with open(throttle_path) as f:
@@ -188,7 +188,7 @@ def _throttles(throttle_path, session, since_dt, notes):
                 except (ValueError, TypeError):
                     pass
     except OSError as e:
-        notes.append("lettura throttle fallita: %s" % e)
+        notes.append("failed to read throttle log: %s" % e)
     return {"events": events, "max_sleep_s": max_sleep}
 
 
@@ -207,7 +207,7 @@ def collect(session, since_iso, db_path, messages_path, throttle_path, session_c
             created_iso = created.isoformat().replace("+00:00", "Z")
             age_h = round((now - created).total_seconds() / 3600.0, 2)
         except (ValueError, OSError, TypeError):
-            notes.append("session_created non valido")
+            notes.append("invalid session_created value")
 
     # produzione
     produced = None
@@ -217,13 +217,13 @@ def collect(session, since_iso, db_path, messages_path, throttle_path, session_c
             produced = _count_produced(conn, role, session, since_iso, notes)
             conn.close()
         except sqlite3.Error as e:
-            notes.append("apertura db fallita: %s" % e)
+            notes.append("failed to open database: %s" % e)
     else:
-        notes.append("jobs.db assente (%s)" % db_path)
+        notes.append("jobs.db is missing (%s)" % db_path)
     if produced is None:
         produced = {}
         if role not in PRODUCTION:
-            notes.append("ruolo '%s' non produce artefatti tracciati (singleton/monitoring)" % role)
+            notes.append("role '%s' does not produce tracked artifacts (singleton/monitoring)" % role)
 
     comms, last_captain = _communications(messages_path, session, since_dt, notes)
     throttles = _throttles(throttle_path, session, since_dt, notes)
@@ -244,13 +244,13 @@ def collect(session, since_iso, db_path, messages_path, throttle_path, session_c
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="Metriche per-agente per la retrospettiva del Dottore")
-    p.add_argument("session", help="nome sessione tmux (es. SCOUT-1, CAPITANO)")
-    p.add_argument("since_iso", help="inizio finestra ISO-UTC (es. 2026-06-12T20:00:00Z)")
+    p = argparse.ArgumentParser(description="Per-agent metrics for the Doctor retrospective")
+    p.add_argument("session", help="tmux session name (for example SCOUT-1 or CAPITANO)")
+    p.add_argument("since_iso", help="ISO-UTC window start (for example 2026-06-12T20:00:00Z)")
     p.add_argument("--db", default=os.path.join(DEFAULT_HOME, "jobs.db"))
     p.add_argument("--messages", default=os.path.join(DEFAULT_HOME, "logs", "messages.jsonl"))
     p.add_argument("--throttle", default=os.path.join(DEFAULT_HOME, "logs", "throttle-events.jsonl"))
-    p.add_argument("--session-created", default=None, help="epoch creazione sessione (tmux #{session_created})")
+    p.add_argument("--session-created", default=None, help="session creation epoch (tmux #{session_created})")
     args = p.parse_args(argv)
 
     out = collect(args.session, args.since_iso, args.db, args.messages, args.throttle, args.session_created)

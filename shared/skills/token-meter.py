@@ -192,8 +192,8 @@ def acquire_singleton_lock():
     except SystemExit:
         raise
     except Exception as e:  # noqa: BLE001
-        print(f"[token-meter] WARN singleton_lock non caricabile ({e}) — "
-              f"fallback su PID file", flush=True)
+        print(f"[token-meter] WARN singleton_lock could not be loaded ({e}) — "
+              "falling back to the PID file", flush=True)
     try:
         if PID_FILE.exists():
             try:
@@ -201,7 +201,8 @@ def acquire_singleton_lock():
             except ValueError:
                 old_pid = 0
             if old_pid and old_pid != os.getpid() and _pid_is_token_meter(old_pid):
-                print(f"[token-meter] altra istanza viva (pid={old_pid}), exit", flush=True)
+                print(f"[token-meter] another instance is active (pid={old_pid}); exiting",
+                      flush=True)
                 sys.exit(0)
         PID_FILE.parent.mkdir(parents=True, exist_ok=True)
         PID_FILE.write_text(str(os.getpid()), encoding="utf-8")

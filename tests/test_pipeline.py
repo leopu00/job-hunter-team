@@ -112,6 +112,65 @@ class TestDbInit:
         assert 'scores' in result.stdout
         assert 'applications' in result.stdout
 
+    def test_fresh_db_timestamp_trigger_error_is_english(self, tmp_db, tmp_path):
+        """Fresh images must not install the old Italian SQLite error text."""
+        result = run_cli(DB_INIT, [], tmp_db, tmp_path)
+        assert result.returncode == 0, result.stderr
+
+        conn = sqlite3.connect(tmp_db)
+        try:
+            with pytest.raises(sqlite3.IntegrityError, match="INVALID TIMESTAMP"):
+                conn.execute(
+                    "INSERT INTO positions (title, company, found_at) "
+                    "VALUES (?, ?, 'now')",
+                    ("Trigger test", "Acme"),
+                )
+        finally:
+            conn.close()
+
+    def test_existing_db_timestamp_trigger_is_refreshed_in_english(
+        self, tmp_db, tmp_path
+    ):
+        """Upgrading the image replaces old trigger messages without data loss."""
+        result = run_cli(DB_INIT, [], tmp_db, tmp_path)
+        assert result.returncode == 0, result.stderr
+
+        conn = sqlite3.connect(tmp_db)
+        try:
+            conn.executescript("""
+                DROP TRIGGER positions_reject_str_now_insert;
+                CREATE TRIGGER positions_reject_str_now_insert
+                BEFORE INSERT ON positions
+                WHEN NEW.found_at = 'now' OR NEW.last_checked = 'now'
+                BEGIN
+                  SELECT RAISE(ABORT, 'TIMESTAMP NON VALIDO');
+                END;
+            """)
+            conn.execute(
+                "INSERT INTO positions (title, company) VALUES (?, ?)",
+                ("Existing row", "Example Company"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = run_cli(DB_INIT, [], tmp_db, tmp_path)
+        assert result.returncode == 0, result.stderr
+
+        conn = sqlite3.connect(tmp_db)
+        try:
+            assert conn.execute(
+                "SELECT COUNT(*) FROM positions WHERE title = 'Existing row'"
+            ).fetchone()[0] == 1
+            with pytest.raises(sqlite3.IntegrityError, match="INVALID TIMESTAMP"):
+                conn.execute(
+                    "INSERT INTO positions (title, company, found_at) "
+                    "VALUES (?, ?, 'now')",
+                    ("Trigger test", "Example Company"),
+                )
+        finally:
+            conn.close()
+
 
 # ---------------------------------------------------------------------------
 # Test 2: db_insert.py position
@@ -140,7 +199,7 @@ class TestDbInsertPosition:
         ], tmp_db, tmp_path)
 
         assert result.returncode == 0, f"Insert fallito:\n{result.stderr}"
-        assert 'inserita con ID' in result.stdout
+        assert 'inserted with ID' in result.stdout
 
     def test_insert_position_persisted_in_db(self, tmp_db, tmp_path):
         """La posizione inserita deve essere presente nel DB."""
@@ -406,7 +465,7 @@ class TestDbQueryDashboard:
         result = run_cli(DB_QUERY, ['next-for-scorer'], tmp_db, tmp_path)
 
         assert result.returncode == 0
-        assert 'nessuna' in result.stdout.lower()
+        assert 'none' in result.stdout.lower()
 
     def test_dashboard_with_data(self, tmp_db, tmp_path):
         """dashboard deve mostrare la posizione inserita."""
@@ -425,7 +484,7 @@ class TestDbQueryDashboard:
         result = run_cli(DB_QUERY, ['dashboard'], tmp_db, tmp_path)
 
         assert result.returncode == 0
-        assert 'Posizioni totali: 1' in result.stdout
+        assert 'Total positions: 1' in result.stdout
 
 
 # ---------------------------------------------------------------------------

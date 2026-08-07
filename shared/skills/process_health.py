@@ -216,17 +216,17 @@ def main():
         for r in res["rows"]:
             mark = "OK  " if r["alive"] else "DEAD"
             cnt = f" x{r['count']}" if r.get("count", 0) > 1 else ""
-            opt = "  [opzionale]" if r.get("optional") else ""
-            exp = f" (attesi {r['expected']})" if r.get("expected") and r["count"] != r["expected"] else ""
+            opt = "  [optional]" if r.get("optional") else ""
+            exp = f" (expected {r['expected']})" if r.get("expected") and r["count"] != r["expected"] else ""
             print(f"  [{mark}] {r['name']:<20} {r['group']}{cnt}{exp}{opt}")
         if res["all_ok"]:
-            print("\n  -> TUTTI VIVI")
+            print("\n  -> ALL ALIVE")
         else:
-            print(f"\n  -> MORTI: {', '.join(res['dead'])}")
+            print(f"\n  -> DEAD: {', '.join(res['dead'])}")
             if res["dead_bridge_suite"]:
-                print(f"     ripara (detached): bash /app/.launcher/start-agent.sh bridge   # {', '.join(res['dead_bridge_suite'])}")
+                print(f"     repair (detached): bash /app/.launcher/start-agent.sh bridge   # {', '.join(res['dead_bridge_suite'])}")
             if res["dead_deep"]:
-                print(f"     ESCALA al Capitano (process profondo): {', '.join(res['dead_deep'])}")
+                print(f"     ESCALATE to the Captain (deep process): {', '.join(res['dead_deep'])}")
     sys.exit(0 if res["all_ok"] else 1)
 
 

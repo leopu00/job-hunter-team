@@ -224,8 +224,8 @@ class TestSheetsConstants:
         )
 
     def test_headers_contains_required_columns(self, mod):
-        required = {"#", "Status", "Azienda", "Titolo", "Link", "Score",
-                    "CV Drive", "CL Drive", "Applicato"}
+        required = {"#", "Status", "Company", "Title", "Link", "Score",
+                    "CV Drive", "CL Drive", "Applied"}
         for col in required:
             assert col in mod.HEADERS, f"Colonna obbligatoria mancante: {col}"
 
@@ -234,20 +234,20 @@ class TestSheetsConstants:
         h = mod.HEADERS
         assert h[0] == "#"
         assert h[1] == "Status"
-        assert h[2] == "Azienda"
-        assert h[3] == "Titolo"
+        assert h[2] == "Company"
+        assert h[3] == "Title"
 
     def test_headers_has_salary(self, mod):
-        assert "Stipendio" in mod.HEADERS
+        assert "Salary" in mod.HEADERS
 
     def test_headers_has_critico(self, mod):
-        assert "Critico" in mod.HEADERS
+        assert "Critic" in mod.HEADERS
 
     def test_headers_has_verdict(self, mod):
         assert "Verdict" in mod.HEADERS
 
     def test_headers_has_data_applicazione(self, mod):
-        assert "Data Applicazione" in mod.HEADERS
+        assert "Application Date" in mod.HEADERS
 
 
 @requires_sheets
@@ -351,3 +351,39 @@ class TestSheetsFormatSalary:
     def test_returns_string(self, mod):
         result = mod.format_salary({})
         assert isinstance(result, str)
+
+
+@requires_sheets
+class TestSheetsPullHeaders:
+    """New sheets are English; existing Italian sheets remain readable."""
+
+    @pytest.fixture
+    def mod(self):
+        return _load_module(SHEETS_SCRIPT, "db_to_sheets_pull")
+
+    @pytest.mark.parametrize("headers", [
+        ["#", "Status", "Company", "Title", "Applied"],
+        ["#", "Status", "Azienda", "Titolo", "Applicato"],
+    ])
+    def test_pull_accepts_english_and_legacy_italian_headers(
+            self, mod, monkeypatch, headers):
+        class FakeSheet:
+            def get_all_values(self):
+                return [headers, ["1", "ready", "Acme", "Engineer", "TRUE"]]
+
+        patches = []
+        monkeypatch.setattr(mod, "load_env", lambda: ("https://example.test", "key"))
+        monkeypatch.setattr(mod, "get_sheet", lambda: FakeSheet())
+        monkeypatch.setattr(
+            mod, "supabase_get",
+            lambda *args: [{"id": "position-1", "status": "ready"}],
+        )
+        monkeypatch.setattr(
+            mod, "supabase_patch",
+            lambda *args: patches.append(args),
+        )
+
+        mod.cmd_pull()
+
+        assert len(patches) == 2
+        assert patches[0][-1]["applied"] is True

@@ -49,10 +49,10 @@ def _gap(vel_now, vel_target):
         return ""
     pct = round((vel_now / vel_target - 1.0) * 100)
     if pct >= 3:
-        return f"+{pct}% sopra"
+        return f"+{pct}% above"
     if pct <= -3:
-        return f"{pct}% sotto"
-    return "in pari"
+        return f"{pct}% below"
+    return "on pace"
 
 
 def _fmt_vel(v):
@@ -63,8 +63,57 @@ def _vel_block(label_target, vel_now, vel_target):
     """Riga 'velocità  X %/h   ·   <label> Y %/h     [scarto]'."""
     gap = _gap(vel_now, vel_target)
     gap_s = f"     [{gap}]" if gap else ""
-    return (f"   velocità  {_fmt_vel(vel_now)} %/h   ·   "
+    return (f"   velocity  {_fmt_vel(vel_now)} %/h   ·   "
             f"{label_target}  {_fmt_vel(vel_target)} %/h{gap_s}")
+
+
+def _display_status(value):
+    """English rendering for stable internal pacing/status identifiers."""
+    return {
+        "ATTENZIONE": "WARNING",
+        "SOTTOUTILIZZO": "UNDERUTILIZED",
+        "SOPRA-PACE-WEEKLY": "ABOVE-PACE-WEEKLY",
+        "SOPRA-PACE": "ABOVE-PACE",
+        "SOTTO-PACE": "BELOW-PACE",
+        "ALLINEATO": "ON-PACE",
+    }.get(value, value)
+
+
+def _display_duration(value):
+    """Normalize the launcher's legacy Italian day suffix for display only."""
+    if not isinstance(value, str):
+        return value
+    parts = value.split(" ", 1)
+    if parts and parts[0].endswith("g") and parts[0][:-1].isdigit():
+        parts[0] = f"{parts[0][:-1]}d"
+    return " ".join(parts)
+
+
+def _display_weekly_verdict(value):
+    """Translate the launcher's stable legacy verdict text without mutating it."""
+    if not isinstance(value, str):
+        return value
+    replacements = (
+        ("WEEKLY-PACE→RIPRESA-CONTROLLATA", "WEEKLY-PACE→CONTROLLED-RECOVERY"),
+        ("picco in uscita, NON frenare duro", "spike fading, DO NOT brake hard"),
+        ("WEEKLY-PACE→RALLENTA", "WEEKLY-PACE→SLOW-DOWN"),
+        (": vai a ~", ": target ~"),
+        (" (ora ", " (now "),
+        ("(resta ", "(remaining "),
+        ("h-lavoro)", " active-h)"),
+        (" → altrimenti ESAURISCI ~", " → otherwise EXHAUST ~"),
+        ("h-lavoro PRIMA del reset", " active-h BEFORE reset"),
+        ("WEEKLY-PACE→ACCELERA-SATURA", "WEEKLY-PACE→ACCELERATE-SATURATE"),
+        ("a ritmo attuale chiudi ~", "at the current pace you finish at ~"),
+        ("spreco ~", "wasting ~"),
+        ("del weekly prima del reset", "of the weekly budget before reset"),
+        ("budget a rischio spreco", "budget at risk of waste"),
+        ("WEEKLY-PACE→MANTIENI", "WEEKLY-PACE→HOLD"),
+    )
+    rendered = value
+    for source, target in replacements:
+        rendered = rendered.replace(source, target)
+    return rendered
 
 
 def derive_advice(v):
@@ -79,10 +128,10 @@ def derive_advice(v):
     # Tool rotto = azionabile SUBITO, in cima.
     broken = extras.get("tools_broken") or []
     if broken:
-        out.append(f"⚠ Tool giù: {', '.join(broken)} — fai sistemare prima di scalare.")
+        out.append(f"⚠ Tool down: {', '.join(broken)} — fix it before scaling up.")
 
     if phase == "OFF":
-        out.append("Fuori orario (regola 11): niente spawn, i worker finiscono e vanno idle.")
+        out.append("Outside working hours (rule 11): do not spawn; workers finish and go idle.")
         return out
 
     status = fh.get("status")
@@ -91,24 +140,24 @@ def derive_advice(v):
     burn = wk.get("burn_mode")
 
     if status == "LOCKED":
-        out.append("Budget settimanale esaurito: STOP spawn, attendi il reset.")
+        out.append("Weekly budget exhausted: STOP spawning and wait for the reset.")
         return out
 
     if burn:
-        out.append("BURN-MODE (sotto-pace + reset vicino): SATURA — scala worker, togli i throttle weekly.")
+        out.append("BURN MODE (below pace + reset near): SATURATE — scale workers and remove weekly throttles.")
     elif kind == "SOPRA-PACE" or status in ("ATTENZIONE", "SOPRA-PACE-WEEKLY"):
-        line = "Sopra-pace: throttle-to-pace + STOP nuovi spawn finché rientri."
+        line = "Above pace: throttle to pace and STOP new spawns until back on target."
         if isinstance(debt, (int, float)) and debt >= 8:
-            line += f" Debito alto (+{debt:.0f}pp) → freno proporzionale, non leggero."
+            line += f" High debt (+{debt:.0f}pp) → use proportional braking, not a light touch."
         else:
-            line += " Non killare: basta allungare gli sleep."
+            line += " Do not kill workers: longer sleeps are enough."
         out.append(line)
     elif status == "SOTTOUTILIZZO" and kind in (None, "SOTTO-PACE", "ALLINEATO"):
-        out.append("C'è margine: spawna sui colli di bottiglia (se hai coda).")
+        out.append("There is headroom: spawn on bottlenecks if work is queued.")
 
     mrem = extras.get("monthly_rem")
     if isinstance(mrem, (int, float)) and mrem < 15:
-        out.append(f"Mensile Kimi rimane {mrem}% — a esaurimento CONGELA: tieni il ritmo basso.")
+        out.append(f"Kimi monthly remaining: {mrem}% — FREEZE at exhaustion and keep the pace low.")
     return out
 
 
@@ -121,26 +170,26 @@ def render(v):
 
     # ── ⏱ FINESTRA 5H ──
     fh = v.get("fivehh") or {}
-    lines.append("⏱  FINESTRA 5H")
+    lines.append("⏱  5H WINDOW")
     u = fh.get("usage")
     t = fh.get("target")
     close = fh.get("reset_str") or "?"
     rin = fh.get("reset_in")
-    rin_s = f" (tra {rin})" if rin else ""
-    lines.append(f"   usage {u}%        target {t}%  →  chiusura {close}{rin_s}")
+    rin_s = f" (in {_display_duration(rin)})" if rin else ""
+    lines.append(f"   usage {u}%        target {t}%  →  closes {close}{rin_s}")
     lines.append(_vel_block("target", fh.get("vel_now"), fh.get("vel_target")))
     st = fh.get("status")
     proj = fh.get("proj")
     proj_s = f"   ·   proj {proj}%" if isinstance(proj, (int, float)) else ""
-    lines.append(f"   → {st}{proj_s}")
+    lines.append(f"   → {_display_status(st)}{proj_s}")
     lines.append("")
 
     # ── 📅 OGGI ──
     dl = v.get("daily")
     if dl:
-        lines.append("📅  OGGI  (budget giornaliero)")
-        flag = "⛔ SFORO" if dl.get("over") else "✅"
-        lines.append(f"   consumato {dl.get('consumed')}% / budget {dl.get('budget')}% "
+        lines.append("📅  TODAY  (daily budget)")
+        flag = "⛔ OVER BUDGET" if dl.get("over") else "✅"
+        lines.append(f"   consumed {dl.get('consumed')}% / budget {dl.get('budget')}% "
                      f"(cap {dl.get('cap')}%)   {flag}")
         lines.append(_vel_block("target", dl.get("vel_now"), dl.get("vel_target")))
         lines.append("")
@@ -148,25 +197,25 @@ def render(v):
     # ── 📆 SETTIMANA ──
     wk = v.get("weekly")
     if wk:
-        lines.append("📆  SETTIMANA")
+        lines.append("📆  WEEK")
         wclose = wk.get("reset_str") or "?"
         wrin = wk.get("reset_in")
-        wrin_s = f" (tra {wrin})" if wrin else ""
-        lines.append(f"   usato {wk.get('used')}%   ·   rimane {wk.get('remaining')}%   ·   "
+        wrin_s = f" (in {_display_duration(wrin)})" if wrin else ""
+        lines.append(f"   used {wk.get('used')}%   ·   remaining {wk.get('remaining')}%   ·   "
                      f"reset {wclose}{wrin_s}")
         # Verdetto imperativo (Passo A): headline azionabile, non solo numeri.
         # Assente sul path skill→Capitano che non lo popola → si salta pulito.
         vd = wk.get("verdict")
         if vd:
-            lines.append(f"   ➤ {vd}")
+            lines.append(f"   ➤ {_display_weekly_verdict(vd)}")
         ratio = wk.get("ratio")
         ratio_s = f"   ratio {ratio}×" if isinstance(ratio, (int, float)) else ""
-        lines.append(_vel_block("sostenibile", wk.get("vel_now"), wk.get("sustainable")) + ratio_s)
+        lines.append(_vel_block("sustainable", wk.get("vel_now"), wk.get("sustainable")) + ratio_s)
         tail = []
         if wk.get("kind"):
-            tail.append(str(wk["kind"]))
+            tail.append(str(_display_status(wk["kind"])))
         if isinstance(wk.get("debt"), (int, float)):
-            tail.append(f"debito {wk['debt']:+.0f}pp")
+            tail.append(f"debt {wk['debt']:+.0f}pp")
         if isinstance(wk.get("early_lockout"), (int, float)):
             tail.append(f"lockout ~{wk['early_lockout']:.0f}h")
         if tail:
@@ -176,7 +225,7 @@ def render(v):
     # ── 🧭 CONSIGLIO ──
     advice = derive_advice(v)
     if advice:
-        lines.append("🧭  CONSIGLIO BRIDGE")
+        lines.append("🧭  BRIDGE ADVICE")
         for a in advice:
             lines.append(f"   {a}")
     return "\n".join(lines).rstrip() + "\nsrc=bridge."

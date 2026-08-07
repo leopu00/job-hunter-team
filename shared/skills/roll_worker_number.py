@@ -58,7 +58,7 @@ def roll(role: str, die: int = DIE, used: set | None = None) -> int | None:
 
 def main(argv):
     if not argv or argv[0].lower() not in ROLES:
-        print("uso: roll_worker_number.py <scout|analista|scorer|scrittore> [--max N]",
+        print("usage: roll_worker_number.py <scout|analista|scorer|scrittore> [--max N]",
               file=sys.stderr)
         return 2
     role = argv[0].lower()
@@ -70,7 +70,7 @@ def main(argv):
             pass
     n = roll(role, die)
     if n is None:
-        print(f"# tutti i numeri 1-{die} per {role} sono in uso", file=sys.stderr)
+        print(f"# all numbers 1-{die} for {role} are in use", file=sys.stderr)
         return 1
     print(n)
     return 0

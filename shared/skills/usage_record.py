@@ -72,7 +72,7 @@ def _load_module(path, name):
         spec.loader.exec_module(mod)
         return mod
     except Exception as e:
-        print(f"[usage_record] errore caricamento {path}: {e}", file=sys.stderr)
+        print(f"[usage_record] error loading {path}: {e}", file=sys.stderr)
         return None
 
 
@@ -80,7 +80,7 @@ def load_compute_metrics():
     here = Path(__file__).resolve().parent
     mod = _load_module(here / "compute_metrics.py", "compute_metrics")
     if mod is None:
-        print("[usage_record] compute_metrics.py non trovato", file=sys.stderr)
+        print("[usage_record] compute_metrics.py not found", file=sys.stderr)
         sys.exit(3)
     return mod
 
@@ -149,7 +149,7 @@ def fetch_from_api():
     parsed dict o None su fail / provider non supportato."""
     bridge = load_bridge()
     if bridge is None:
-        print("[usage_record] bridge non importabile per --from-api", file=sys.stderr)
+        print("[usage_record] bridge cannot be imported for --from-api", file=sys.stderr)
         return None, "bridge_unavailable"
 
     try:
@@ -184,28 +184,30 @@ def make_sample(parsed, source):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="Record a usage sample in the bridge JSONL log."
+    )
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--from-api", action="store_true",
-                      help="fetch fresco dal provider attivo")
+                      help="fetch fresh data from the active provider")
     mode.add_argument("--manual", action="store_true",
-                      help="scrive sample con dati passati a mano")
+                      help="write a sample using manually supplied data")
 
     ap.add_argument("--source", required=True,
-                    help=f"chi sta scrivendo. Valori: {', '.join(sorted(VALID_SOURCES))}")
+                    help=f"sample source; values: {', '.join(sorted(VALID_SOURCES))}")
     ap.add_argument("--usage", type=float,
-                    help="(--manual) percentuale usage")
+                    help="(--manual) usage percentage")
     ap.add_argument("--reset-at",
-                    help="(--manual) reset HH:MM UTC")
+                    help="(--manual) reset time as HH:MM UTC")
     ap.add_argument("--provider",
-                    help="(--manual) provider, default da config")
+                    help="(--manual) provider; defaults to the configuration value")
     ap.add_argument("--weekly", type=int, default=None,
-                    help="(--manual) opzionale weekly usage %")
+                    help="(--manual) optional weekly usage percentage")
     args = ap.parse_args()
 
     if args.source not in VALID_SOURCES:
-        print(f"[usage_record] source '{args.source}' non valido. "
-              f"Usa uno di: {', '.join(sorted(VALID_SOURCES))}", file=sys.stderr)
+        print(f"[usage_record] invalid source '{args.source}'. "
+              f"Use one of: {', '.join(sorted(VALID_SOURCES))}", file=sys.stderr)
         sys.exit(2)
 
     if args.from_api:
@@ -215,7 +217,7 @@ def main():
             sys.exit(2)
     else:  # --manual
         if args.usage is None or not args.reset_at:
-            print("[usage_record] --manual richiede --usage e --reset-at", file=sys.stderr)
+            print("[usage_record] --manual requires --usage and --reset-at", file=sys.stderr)
             sys.exit(2)
         provider = args.provider
         if not provider:

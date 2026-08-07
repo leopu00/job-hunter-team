@@ -71,6 +71,22 @@ def ensure_schema(conn: sqlite3.Connection):
       `_migrate_positions_url_unique` (2026-07-30).
     """
     _run_migrations(conn)
+
+    # These six triggers reject an invalid literal timestamp and expose their
+    # RAISE(ABORT) text directly to agents and users.  CREATE TRIGGER IF NOT
+    # EXISTS alone would leave the old Italian message installed forever on
+    # existing databases, even after the container image is upgraded.  Drop
+    # only these named validation triggers so the schema script below can
+    # recreate them with the same predicates and the current English text.
+    # No table rows or user-authored content are changed.
+    conn.executescript("""
+    DROP TRIGGER IF EXISTS applications_reject_str_now_insert;
+    DROP TRIGGER IF EXISTS applications_reject_str_now_update;
+    DROP TRIGGER IF EXISTS positions_reject_str_now_insert;
+    DROP TRIGGER IF EXISTS positions_reject_str_now_update;
+    DROP TRIGGER IF EXISTS companies_reject_str_now_insert;
+    DROP TRIGGER IF EXISTS companies_reject_str_now_update;
+    """)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -396,7 +412,7 @@ def ensure_schema(conn: sqlite3.Connection):
     WHEN NEW.written_at = 'now' OR NEW.applied_at = 'now' OR NEW.response_at = 'now'
     BEGIN
       SELECT RAISE(ABORT,
-        'TIMESTAMP NON VALIDO: hai passato la stringa "now" come written_at/applied_at/response_at. USA: python3 /app/shared/skills/db_update.py application <POSITION_ID> ... (la skill UPSERT converte automaticamente). NON fare INSERT inline via python3 -c "import sqlite3 ... VALUES (..., now, ...)". Vedi REGOLA-11b nel tuo prompt.'
+        'INVALID TIMESTAMP: you passed the literal string "now" as written_at/applied_at/response_at. USE: python3 /app/shared/skills/db_update.py application <POSITION_ID> ... (the UPSERT skill converts it automatically). Do NOT run an inline INSERT via python3 -c "import sqlite3 ... VALUES (..., now, ...)". See RULE-11b in your prompt.'
       );
     END;
 
@@ -405,7 +421,7 @@ def ensure_schema(conn: sqlite3.Connection):
     WHEN NEW.written_at = 'now' OR NEW.applied_at = 'now' OR NEW.response_at = 'now'
     BEGIN
       SELECT RAISE(ABORT,
-        'TIMESTAMP NON VALIDO: hai passato la stringa "now" in UPDATE. USA: python3 /app/shared/skills/db_update.py application <POSITION_ID> --written-at now (la skill converte) oppure datetime("now","localtime") in SQL inline.'
+        'INVALID TIMESTAMP: you passed the literal string "now" in an UPDATE. USE: python3 /app/shared/skills/db_update.py application <POSITION_ID> --written-at now (the skill converts it), or datetime("now","localtime") in inline SQL.'
       );
     END;
 
@@ -419,7 +435,7 @@ def ensure_schema(conn: sqlite3.Connection):
     WHEN NEW.found_at = 'now' OR NEW.last_checked = 'now'
     BEGIN
       SELECT RAISE(ABORT,
-        'TIMESTAMP NON VALIDO: hai passato la stringa "now" come found_at/last_checked di positions. USA: db_update.py position <ID> --last-checked now (converte) oppure datetime("now","localtime") in SQL inline. NON passare la stringa "now" letterale.'
+        'INVALID TIMESTAMP: you passed the literal string "now" as positions.found_at/last_checked. USE: db_update.py position <ID> --last-checked now (it converts the value), or datetime("now","localtime") in inline SQL. Do NOT pass the literal string "now".'
       );
     END;
 
@@ -428,7 +444,7 @@ def ensure_schema(conn: sqlite3.Connection):
     WHEN NEW.found_at = 'now' OR NEW.last_checked = 'now'
     BEGIN
       SELECT RAISE(ABORT,
-        'TIMESTAMP NON VALIDO: hai passato la stringa "now" in UPDATE positions. USA: db_update.py position <ID> --last-checked now oppure datetime("now","localtime") in SQL inline.'
+        'INVALID TIMESTAMP: you passed the literal string "now" in an UPDATE on positions. USE: db_update.py position <ID> --last-checked now, or datetime("now","localtime") in inline SQL.'
       );
     END;
 
@@ -437,7 +453,7 @@ def ensure_schema(conn: sqlite3.Connection):
     WHEN NEW.analyzed_at = 'now'
     BEGIN
       SELECT RAISE(ABORT,
-        'TIMESTAMP NON VALIDO: hai passato la stringa "now" come analyzed_at di companies. USA: db_update.py company "<name>" ... (la skill imposta CURRENT_TIMESTAMP) oppure datetime("now","localtime") in SQL inline.'
+        'INVALID TIMESTAMP: you passed the literal string "now" as companies.analyzed_at. USE: db_update.py company "<name>" ... (the skill sets CURRENT_TIMESTAMP), or datetime("now","localtime") in inline SQL.'
       );
     END;
 
@@ -446,7 +462,7 @@ def ensure_schema(conn: sqlite3.Connection):
     WHEN NEW.analyzed_at = 'now'
     BEGIN
       SELECT RAISE(ABORT,
-        'TIMESTAMP NON VALIDO: hai passato la stringa "now" in UPDATE companies. USA: db_update.py company oppure datetime("now","localtime") in SQL inline.'
+        'INVALID TIMESTAMP: you passed the literal string "now" in an UPDATE on companies. USE: db_update.py company, or datetime("now","localtime") in inline SQL.'
       );
     END;
 
@@ -761,8 +777,8 @@ def _log_url_dedup(entries) -> None:
     import sys
     for e in entries:
         print(
-            f"[migrate] positions.url duplicato: #{e['moved_id']} spostato su "
-            f"'{e['new_url']}' (vince #{e['winner_id']})",
+            f"[migrate] duplicate positions.url: moved #{e['moved_id']} to "
+            f"'{e['new_url']}' (winner: #{e['winner_id']})",
             file=sys.stderr,
         )
     try:
@@ -819,9 +835,9 @@ def _resolve_duplicate_urls(conn: sqlite3.Connection) -> list:
             # con due stringhe identiche.
             new_url = f"{url}#jht-duplicate-{loser['id']}-of-{winner['id']}"
             note = (
-                f"[jht] URL duplicato di #{winner['id']}: la riga resta, "
-                f"l'URL è stato reso unico con un frammento "
-                f"(migrazione UNIQUE su positions.url)."
+                f"[jht] Duplicate URL of #{winner['id']}: the row was kept, "
+                f"and the URL was made unique with a fragment "
+                f"(UNIQUE migration on positions.url)."
             )
             conn.execute(
                 "UPDATE positions "
@@ -888,8 +904,8 @@ def _migrate_positions_url_unique(conn: sqlite3.Connection) -> None:
     except sqlite3.Error as exc:
         import sys
         print(
-            f"[migrate] indice unico su positions.url NON creato ({exc}). "
-            "La dedup resta affidata alla transazione in db_insert.py.",
+            f"[migrate] unique index on positions.url was NOT created ({exc}). "
+            "Deduplication still relies on the transaction in db_insert.py.",
             file=sys.stderr,
         )
 

@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
-"""deadline_extract — parser leggero per `positions.deadline` (F-4 task #50).
+"""deadline_extract — lightweight parser for `positions.deadline` (F-4 #50).
 
-Lo Scout/Analista chiama questa skill PRIMA di inserire una position per
-estrarre la deadline dal JD. Casi tipici (English + Italiano):
+The Scout or Analyst calls this skill BEFORE inserting a position to extract
+the deadline from the job description. Typical English examples:
 
   "apply by 2026-06-15"
   "deadline: June 15, 2026"
   "applications close on Friday"
   "expires in 30 days"
-  "le candidature chiudono il 15/06/2026"
-  "scadenza: 15 giugno"
 
-Strategia conservativa: estrae solo se MATCH ad alta confidenza
-(ISO date, "Month dd[, yyyy]", "dd/mm[/yyyy]", "expires in N days").
-Altrimenti ritorna None — meglio NULL nel DB che data inventata.
+Italian input remains supported for compatibility. The parser is conservative:
+it extracts only high-confidence matches (ISO date, "Month dd[, yyyy]",
+"dd/mm[/yyyy]", or "expires in N days"). Otherwise it returns None; a NULL
+database value is safer than an invented date.
 
 CLI:
     python3 /app/shared/skills/deadline_extract.py < jd.txt
     cat jd.txt | python3 /app/shared/skills/deadline_extract.py
     python3 /app/shared/skills/deadline_extract.py --jd "apply by 2026-06-15"
 
-Output: ISO date (YYYY-MM-DD) o stringa vuota se non trovata.
-Exit code 0 sempre (caller deve solo controllare se output != "").
+Output: an ISO date (YYYY-MM-DD), or an empty string when none is found.
+Exit code is always 0; callers only need to check whether output is non-empty.
 """
 from __future__ import annotations
 

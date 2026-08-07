@@ -305,21 +305,21 @@ def main() -> int:
     ap = argparse.ArgumentParser(prog="throttle-config")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p_get = sub.add_parser("get", help="stampa secondi correnti per agente")
+    p_get = sub.add_parser("get", help="print the current seconds for an agent")
     p_get.add_argument("agent")
 
-    p_set = sub.add_parser("set", help="set secondi per agente (atomic)")
+    p_set = sub.add_parser("set", help="set seconds for an agent (atomic)")
     p_set.add_argument("agent")
     p_set.add_argument("seconds", type=int)
 
-    sub.add_parser("dump", help="stampa tutto il config")
+    sub.add_parser("dump", help="print the full configuration")
 
-    sub.add_parser("reset", help="azzera tutti gli override (default=0)")
+    sub.add_parser("reset", help="clear all overrides (default=0)")
 
-    p_bulk = sub.add_parser("bulk-set", help="set multipli in 1 write atomico")
+    p_bulk = sub.add_parser("bulk-set", help="set multiple values in one atomic write")
     p_bulk.add_argument("pairs", nargs="+", help="agent=seconds ...")
 
-    p_q = sub.add_parser("quantize", help="aggancia secondi alla ladder (floor 5min)")
+    p_q = sub.add_parser("quantize", help="snap seconds to the ladder (5min floor)")
     p_q.add_argument("seconds")
 
     args = ap.parse_args()
@@ -339,9 +339,9 @@ def main() -> int:
             print(f"error: {e}", file=sys.stderr)
             return 1
         eff = get_agent(args.agent)
-        note = "" if eff == args.seconds else f" (richiesto {args.seconds}s → ladder)"
+        note = "" if eff == args.seconds else f" (requested {args.seconds}s → ladder)"
         if _burn_intent_active():
-            note += " [BURN-INTENT: floor e ladder in deroga]"
+            note += " [BURN-INTENT: floor and ladder overridden]"
         print(f"{args.agent}={eff}s{note}")
         return 0
 

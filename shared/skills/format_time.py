@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
-"""format_time — conversione UTC → fuso utente per output user-facing.
+"""format_time — convert UTC to the user's time zone for visible output.
 
-Bug #15: agenti comunicano in UTC, utente legge in CEST. Helper centrale
-per evitare retrofit manuale in ~10 callsite (matplotlib subtitle,
-telegram, dashboard, log Capitano).
+Bug #15: agents communicate in UTC while the user reads local time. This is
+the shared helper for matplotlib subtitles, Telegram, dashboards, and logs.
 
 API:
     fmt_user(dt_utc)              → "HH:MM CEST"
     fmt_user_with_utc(dt_utc)     → "HH:MM CEST (HH:MM UTC)"
-    fmt_user_long(dt_utc)         → "lun 17 mag, 03:21 CEST"
+    fmt_user_long(dt_utc)         → "Mon 17 May, 03:21 CEST"
     user_timezone()               → tz info per matplotlib axis tick
 
-La timezone utente viene letta da `candidate_profile.yml::timezone`
-(default `Europe/Rome`). Lookup cachato per il process — i prompt user
-non cambiano timezone a runtime.
+The user's time zone comes from the host configuration, with the legacy
+`candidate_profile.yml::timezone` field as a fallback. The lookup is cached
+for the process because the time zone does not change at runtime.
 
-Uso da shell (one-shot debug):
+Shell usage (one-shot debugging):
     python3 /app/shared/skills/format_time.py --now
     python3 /app/shared/skills/format_time.py --iso 2026-05-17T01:14:00Z
 """
@@ -206,8 +205,9 @@ def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--now", action="store_true")
-    g.add_argument("--iso", help="ISO timestamp (UTC), es 2026-05-17T01:14:00Z")
-    p.add_argument("--with-utc", action="store_true", help="aggiunge '(HH:MM UTC)' di fianco")
+    g.add_argument("--iso", help="ISO timestamp (UTC), e.g. 2026-05-17T01:14:00Z")
+    p.add_argument("--with-utc", action="store_true",
+                   help="append '(HH:MM UTC)' to the local time")
     args = p.parse_args(argv)
 
     if args.now:
@@ -217,7 +217,7 @@ def main(argv: list[str]) -> int:
         try:
             dt = datetime.fromisoformat(iso)
         except ValueError:
-            print(f"ISO non parsabile: {args.iso!r}", file=sys.stderr)
+            print(f"Could not parse ISO timestamp: {args.iso!r}", file=sys.stderr)
             return 2
 
     print(fmt_user_with_utc(dt) if args.with_utc else fmt_user(dt))

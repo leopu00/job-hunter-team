@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Genera dashboard HTML dal database SQLite.
+"""Generate the HTML dashboard from the SQLite database.
 
-Uso:
-  python3 generate_dashboard.py              # genera alfa/data/dashboard.html
-  python3 generate_dashboard.py --open       # genera e apre nel browser
-  python3 generate_dashboard.py --version    # salva anche una copia versionata
+Usage:
+  python3 generate_dashboard.py              # generate alfa/data/dashboard.html
+  python3 generate_dashboard.py --open       # generate and open it in the browser
+  python3 generate_dashboard.py --version    # also save a versioned copy
 """
 
 import os
@@ -161,7 +161,7 @@ def source_label(source, url):
         'wellfound': 'Wellfound',
         'otta': 'Otta',
         'berlinstartupjobs': 'Berlin Startup Jobs',
-        'migrated': 'Importata',
+        'migrated': 'Imported',
         'jobspy': 'JobSpy',
     }
     # Try to detect from URL if source is missing
@@ -271,12 +271,12 @@ def render_position_card(pos, highlights):
         lo = f"{pos['salary_declared_min']//1000}K" if pos['salary_declared_min'] else '?'
         hi = f"{pos['salary_declared_max']//1000}K" if pos['salary_declared_max'] else '?'
         cur = pos['salary_declared_currency'] or 'EUR'
-        salary = f'<span class="tag salary">&#128176; {lo}-{hi} {cur} <span class="salary-type" title="dichiarato">&#9989;</span></span>'
+        salary = f'<span class="tag salary">&#128176; {lo}-{hi} {cur} <span class="salary-type" title="declared">&#9989;</span></span>'
     elif has_estimated:
         lo = f"{pos['salary_estimated_min']//1000}K" if pos['salary_estimated_min'] else '?'
         hi = f"{pos['salary_estimated_max']//1000}K" if pos['salary_estimated_max'] else '?'
         cur = pos['salary_estimated_currency'] or 'EUR'
-        src = pos['salary_estimated_source'] or 'stima'
+        src = pos['salary_estimated_source'] or 'estimate'
         salary = f'<span class="tag salary">&#128176; {lo}-{hi} {cur} <span class="salary-type salary-estimated" title="{esc(src)}">&#128302;{esc(src)}</span></span>'
 
     # Deadline
@@ -293,12 +293,12 @@ def render_position_card(pos, highlights):
     app_section = ''
     if pos['app_status']:
         pdfs = f'{pdf_link(pos["cv_pdf_path"], "CV")} {pdf_link(pos["cl_pdf_path"], "CL")}'
-        critic = verdict_badge(pos['critic_verdict']) if pos['critic_verdict'] else '<span class="text-dim">in attesa review</span>'
-        applied = f'<div class="applied-badge">&#9989; Candidata {esc(pos["applied_at"] or "")} via {esc(pos["applied_via"] or "")}</div>' if pos['applied_at'] else ''
+        critic = verdict_badge(pos['critic_verdict']) if pos['critic_verdict'] else '<span class="text-dim">awaiting review</span>'
+        applied = f'<div class="applied-badge">&#9989; Applied {esc(pos["applied_at"] or "")} via {esc(pos["applied_via"] or "")}</div>' if pos['applied_at'] else ''
         app_section = f'''
         <div class="app-section">
             <div class="app-docs">{pdfs}</div>
-            <div class="app-critic">Critico: {critic}</div>
+            <div class="app-critic">Critic: {critic}</div>
             {applied}
         </div>'''
 
@@ -314,7 +314,7 @@ def render_position_card(pos, highlights):
         pros_html = f'<div class="hl-section hl-pro"><span class="hl-label">&#128994; Pro</span><ul>{items}</ul></div>'
     if hl['con']:
         items = ''.join(f'<li>{esc(t)}</li>' for t in hl['con'][:4])
-        cons_html = f'<div class="hl-section hl-con"><span class="hl-label">&#128308; Contro</span><ul>{items}</ul></div>'
+        cons_html = f'<div class="hl-section hl-con"><span class="hl-label">&#128308; Cons</span><ul>{items}</ul></div>'
     highlights_html = f'<div class="highlights">{pros_html}{cons_html}</div>' if (pros_html or cons_html) else ''
 
     rejected_class = ' rejected' if is_rejected else ''
@@ -395,7 +395,7 @@ def generate_html(positions, stats, company_stats, highlights, team=None):
     non_scored_cards = '\n'.join(render_position_card(p, highlights) for p in non_scored)
 
     return f'''<!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -605,19 +605,19 @@ def generate_html(positions, stats, company_stats, highlights, team=None):
 
 <div class="header">
   <h1>&#127919; Job Hunter — <span>Dashboard</span></h1>
-  <div class="date">Aggiornata: {now}</div>
+  <div class="date">Updated: {now}</div>
   <div class="live">&#128994; LIVE — auto-refresh 10s</div>
 </div>
 
 {render_team_status(team) if team else ''}
 
 <div class="stats">
-  <div class="stat-card"><div class="number stat-blue">{total}</div><div class="label">Posizioni attive</div></div>
-  <div class="stat-card"><div class="number stat-green">{scored_count}</div><div class="label">Valutate</div></div>
-  <div class="stat-card"><div class="number stat-yellow">{avg_score}</div><div class="label">Score medio</div></div>
-  <div class="stat-card"><div class="number stat-purple">{app_count}</div><div class="label">CV scritti</div></div>
-  <div class="stat-card"><div class="number stat-cyan">{applied_count}</div><div class="label">Inviate</div></div>
-  <div class="stat-card"><div class="number stat-red">{excluded_count}</div><div class="label">Escluse</div></div>
+  <div class="stat-card"><div class="number stat-blue">{total}</div><div class="label">Active positions</div></div>
+  <div class="stat-card"><div class="number stat-green">{scored_count}</div><div class="label">Scored</div></div>
+  <div class="stat-card"><div class="number stat-yellow">{avg_score}</div><div class="label">Average score</div></div>
+  <div class="stat-card"><div class="number stat-purple">{app_count}</div><div class="label">CVs written</div></div>
+  <div class="stat-card"><div class="number stat-cyan">{applied_count}</div><div class="label">Applied</div></div>
+  <div class="stat-card"><div class="number stat-red">{excluded_count}</div><div class="label">Excluded</div></div>
 </div>
 
 <div class="pipeline">
@@ -634,10 +634,10 @@ def generate_html(positions, stats, company_stats, highlights, team=None):
   <div class="pipe-step"><div class="pipe-count" style="color:var(--green)">{stats.get('applied', 0)}</div><div class="pipe-label">Applied</div></div>
 </div>
 
-<div class="section-title">&#128202; Posizioni valutate (per score) — {len(scored)}</div>
+<div class="section-title">&#128202; Scored positions (by score) — {len(scored)}</div>
 <div class="cards">{scored_cards}</div>
 
-{"" if not non_scored else f'<div class="section-title collapsible" onclick="toggle(this)">&#11044; Non ancora valutate — {len(non_scored)} &#9654;</div><div class="collapsible-content"><div class="cards">{non_scored_cards}</div></div>'}
+{"" if not non_scored else f'<div class="section-title collapsible" onclick="toggle(this)">&#11044; Not scored yet — {len(non_scored)} &#9654;</div><div class="collapsible-content"><div class="cards">{non_scored_cards}</div></div>'}
 
 </div>
 
@@ -658,15 +658,15 @@ def save_version(output_path):
     ts = datetime.now().strftime('%Y%m%d-%H%M%S')
     version_path = os.path.join(VERSIONS_DIR, f'dashboard-{ts}.html')
     shutil.copy2(output_path, version_path)
-    print(f"Versione salvata: {version_path}")
+    print(f"Version saved: {version_path}")
     return version_path
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Genera dashboard HTML dal DB')
-    parser.add_argument('--open', action='store_true', help='Apri nel browser')
-    parser.add_argument('--version', action='store_true', help='Salva anche una copia versionata')
-    parser.add_argument('--output', default=OUTPUT_PATH)
+    parser = argparse.ArgumentParser(description='Generate the HTML dashboard from the database')
+    parser.add_argument('--open', action='store_true', help='Open the dashboard in the browser')
+    parser.add_argument('--version', action='store_true', help='Also save a versioned copy')
+    parser.add_argument('--output', default=OUTPUT_PATH, help='Output HTML path')
     args = parser.parse_args()
 
     conn = get_db()
@@ -686,8 +686,8 @@ def main():
     with open(output, 'w', encoding='utf-8') as f:
         f.write(html)
 
-    print(f"Dashboard generata: {output}")
-    print(f"Posizioni: {len(positions)} | Valutate: {sum(1 for p in positions if p['total_score'] is not None)}")
+    print(f"Dashboard generated: {output}")
+    print(f"Positions: {len(positions)} | Scored: {sum(1 for p in positions if p['total_score'] is not None)}")
 
     if args.version:
         save_version(output)

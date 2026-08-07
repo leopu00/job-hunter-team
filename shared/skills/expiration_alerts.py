@@ -60,13 +60,13 @@ def find_deadlines(quiet: bool = False) -> int:
         score = r["critic_score"]
         score_str = f"(PASS {score:.1f})" if score is not None else "(PASS)"
         when = (
-            "OGGI" if days_left == 0
-            else "DOMANI" if days_left == 1
-            else f"tra {days_left}gg"
+            "TODAY" if days_left == 0
+            else "TOMORROW" if days_left == 1
+            else f"in {days_left} days"
         )
         line = (
             f"[DEADLINE] {r['company']} {r['title']} {score_str} — "
-            f"scade {deadline.isoformat()} ({when})."
+            f"expires {deadline.isoformat()} ({when})."
         )
         output_lines.append(line)
 

@@ -185,10 +185,13 @@ def banner(now: Optional[datetime] = None) -> str:
     st = status(now)
     if not st["active"]:
         return ""
-    reason = st.get("reason") or "nessun motivo indicato"
-    return (f"BURN-INTENT ATTIVO — deroga utente agli automatismi di spesa, "
-            f"scade fra {st['remaining_min']} min ({st['expires_at']}); "
-            f"motivo: {reason}. Restano attivi: {', '.join(NEVER_YIELDS)}.")
+    reason = st.get("reason") or "no reason provided"
+    # "BURN-INTENT ATTIVO" is a legacy transcript marker consumed by agent
+    # prompts; keep the marker and localize the human-readable body.
+    return (f"BURN-INTENT ATTIVO — user override for spending automation, "
+            f"expires in {st['remaining_min']} min ({st['expires_at']}); "
+            f"reason: {reason}. Safeguards still active: "
+            f"{', '.join(NEVER_YIELDS)}.")
 
 
 def _audit(event: str, **fields) -> None:
@@ -286,22 +289,22 @@ def sweep(now: Optional[datetime] = None) -> Optional[dict]:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         prog="burn_intent",
-        description="Intento di spesa dell'utente (deroga a termine agli automatismi)")
+        description="User spending intent (time-limited automation override)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p_st = sub.add_parser("status", help="stato corrente della deroga")
+    p_st = sub.add_parser("status", help="current override status")
     p_st.add_argument("--json", action="store_true", help="output machine-readable")
 
-    p_gr = sub.add_parser("grant", help="concede la deroga per N ore")
+    p_gr = sub.add_parser("grant", help="grant the override for N hours")
     p_gr.add_argument("--hours", type=float, default=DEFAULT_HOURS,
-                      help=f"durata in ore (default {DEFAULT_HOURS}, max {MAX_HOURS})")
-    p_gr.add_argument("--reason", default="", help="perché (finisce nei log)")
-    p_gr.add_argument("--by", default="user", help="chi la concede (default: user)")
+                      help=f"duration in hours (default {DEFAULT_HOURS}, max {MAX_HOURS})")
+    p_gr.add_argument("--reason", default="", help="reason (recorded in logs)")
+    p_gr.add_argument("--by", default="user", help="granting party (default: user)")
 
-    p_rv = sub.add_parser("revoke", help="revoca subito la deroga")
-    p_rv.add_argument("--reason", default="", help="perché (finisce nei log)")
+    p_rv = sub.add_parser("revoke", help="revoke the override immediately")
+    p_rv.add_argument("--reason", default="", help="reason (recorded in logs)")
 
-    sub.add_parser("sweep", help="rimuove il flag se scaduto")
+    sub.add_parser("sweep", help="remove the flag if expired")
 
     args = ap.parse_args(argv)
 
@@ -312,26 +315,26 @@ def main(argv: list[str]) -> int:
         elif st["active"]:
             print(banner())
         else:
-            print("BURN-INTENT off — gli automatismi di spesa sono attivi "
-                  "(comportamento predefinito).")
+            print("BURN-INTENT off — spending automation is active "
+                  "(default behavior).")
         return 0
 
     if args.cmd == "grant":
         payload = grant(args.hours, args.reason, args.by)
-        print(f"BURN-INTENT concesso per {payload['hours']}h "
-              f"(scade {payload['expires_at']}).")
-        print(f"NON cedono comunque: {', '.join(NEVER_YIELDS)}.")
+        print(f"BURN-INTENT granted for {payload['hours']}h "
+              f"(expires {payload['expires_at']}).")
+        print(f"These safeguards still DO NOT yield: {', '.join(NEVER_YIELDS)}.")
         return 0
 
     if args.cmd == "revoke":
         removed = revoke(args.reason)
-        print("BURN-INTENT revocato." if removed else "BURN-INTENT non era attivo.")
+        print("BURN-INTENT revoked." if removed else "BURN-INTENT was not active.")
         return 0
 
     if args.cmd == "sweep":
         removed = sweep()
-        print("BURN-INTENT scaduto → flag rimosso." if removed
-              else "nulla da rimuovere.")
+        print("BURN-INTENT expired → flag removed." if removed
+              else "nothing to remove.")
         return 0
 
     return 1

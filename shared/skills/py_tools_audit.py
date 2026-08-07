@@ -219,14 +219,14 @@ def fmt_age(mtime: float) -> str:
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--json', action='store_true', help='output strutturato')
+    ap = argparse.ArgumentParser(description='Audit installed Python tools against runtime imports.')
+    ap.add_argument('--json', action='store_true', help='structured output')
     ap.add_argument('--threshold-mb', type=int, default=0,
-                    help='warna se total install bytes > N MB')
+                    help='warn if total installed bytes exceed N MB')
     ap.add_argument('--candidates-only', action='store_true',
-                    help='solo lista candidates per uninstall, una per riga')
+                    help='list uninstall candidates only, one per line')
     ap.add_argument('--keep', nargs='*', default=[],
-                    help='pacchetti da escludere dai candidates (es. --keep numpy matplotlib)')
+                    help='packages to exclude from candidates (for example --keep numpy matplotlib)')
     args = ap.parse_args()
 
     # Trova le roots di ricerca (preferisci container path se esiste).
@@ -283,25 +283,25 @@ def main():
 
     print(f"\n  py-tools-audit — {site_pkgs_dir}")
     print(f"  search roots: {', '.join(roots)}")
-    print(f"  totale pacchetti: {len(pkgs)} ({fmt_size(total_bytes)} install)")
-    print(f"  con import attivi: {len(used)}")
-    print(f"  candidates uninstall: {len(candidates)} ({fmt_size(candidates_bytes)})")
+    print(f"  total packages: {len(pkgs)} ({fmt_size(total_bytes)} installed)")
+    print(f"  with active imports: {len(used)}")
+    print(f"  uninstall candidates: {len(candidates)} ({fmt_size(candidates_bytes)})")
 
     if candidates:
-        print(f"\n  --- CANDIDATES ({len(candidates)}) — uninstall safe se nessuno protesta ---")
+        print(f"\n  --- CANDIDATES ({len(candidates)}) — safe to uninstall if nobody objects ---")
         print(f"  {'pkg':<25} {'ver':<12} {'size':>10} {'install age':>12}")
         print('  ' + '-' * 65)
         for c in candidates:
             print(f"  {c['name'][:25]:<25} {c['version'][:12]:<12} {fmt_size(c['install_bytes']):>10} {fmt_age(c['mtime']):>12}")
 
-        print(f"\n  Comando broadcast suggerito (Capitano → tutto il team):")
+        print(f"\n  Suggested broadcast command (Captain → entire team):")
         print(f"    'py-tools-audit candidates: {', '.join(c['name'] for c in candidates[:10])}'")
         if len(candidates) > 10:
-            print(f"    + {len(candidates)-10} altri (vedi --json)")
-        print(f"    'Conferma [KEEP <pkg>] entro 1h se ne usi una.'")
+            print(f"    + {len(candidates)-10} more (see --json)")
+        print(f"    'Reply [KEEP <pkg>] within 1h if you use one.'")
 
     if args.threshold_mb and total_bytes > args.threshold_mb * 1048576:
-        print(f"\n  ⚠️  TOTALE > soglia ({args.threshold_mb} MB) — è ora di pulire.")
+        print(f"\n  ⚠️  TOTAL exceeds threshold ({args.threshold_mb} MB) — cleanup is required.")
         return 2  # exit code per Capitano script
 
     return 0

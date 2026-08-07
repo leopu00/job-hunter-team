@@ -442,7 +442,7 @@ def _self_test() -> int:
         "active_in_window = 0", r["active_hours_in_window"] == 0.0
     )
 
-    print("─ test 4: office W2 14:00-19:00 → 4h attive (clip a 18:00)")
+    print("─ test 4: office W2 14:00-19:00 → 4 active hours (clip at 18:00)")
     w2s = datetime(2026, 5, 25, 14, 0, tzinfo=timezone.utc)
     w2e = datetime(2026, 5, 25, 19, 0, tzinfo=timezone.utc)
     r = compute_target(
@@ -457,7 +457,7 @@ def _self_test() -> int:
         "target_cap ≈ 60.5", abs(r["current_window_target_pct"] - 60.47) < 0.1
     )
 
-    print("─ test 5: weekend (sab 10:00) — ratio Kimi None → fallback 92")
+    print("─ test 5: weekend (Sat 10:00) — Kimi ratio None → fallback 92")
     sat = datetime(2026, 5, 30, 10, 0, tzinfo=timezone.utc)
     sat_ws = datetime(2026, 5, 30, 9, 0, tzinfo=timezone.utc)
     sat_we = datetime(2026, 5, 30, 14, 0, tzinfo=timezone.utc)
@@ -501,7 +501,7 @@ def _self_test() -> int:
         at == datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc),
     )
 
-    print("─ test 8a: 24/7 weekly speso 60% con 72h al reset → throttle aggressivo")
+    print("─ test 8a: 24/7 weekly 60% spent with 72h to reset → aggressive throttle")
     # Scenario PACING-WEEKLY-EXHAUSTION: VPS 24/7, team ha già bruciato
     # 60% weekly e mancano 72h al reset. Senza weekly-aware il target
     # continua a essere 100/168×5/14.7×100 ≈ 20.3% per finestra.
@@ -536,7 +536,7 @@ def _self_test() -> int:
         r_aware["weekly_window_source"] == "residual_to_reset",
     )
 
-    print("─ test 8b: weekly cap esaurito (≥ 100%) → target 0")
+    print("─ test 8b: weekly cap exhausted (≥ 100%) → target 0")
     r_exhausted = compute_target(
         mon10, win_start, win_end, 14.7, ALWAYS,
         weekly_used_pct=100.0, weekly_reset_at_utc=reset_at,
@@ -550,7 +550,7 @@ def _self_test() -> int:
         r_exhausted["weekly_remaining_pct"] == 0.0,
     )
 
-    print("─ test 8c: weekly-aware office hours (45h sett, 30h restano, 50% speso)")
+    print("─ test 8c: weekly-aware office hours (45h/week, 30h left, 50% spent)")
     # Office hours: 30h ON nelle prossime 72h (3 giorni Mer-Ven 9-18 = 27h
     # + parziali). 50% weekly residuo. Calcolo: target_weekly = 50 × 5/h_remaining_on.
     # Verifichiamo che il source sia residual e che il valore sia coerente.
@@ -586,7 +586,7 @@ def _self_test() -> int:
         r_legacy["weekly_remaining_pct"] == 100.0,
     )
 
-    print("─ test 9: timezone Europe/Rome — office 9-18 locali")
+    print("─ test 9: Europe/Rome timezone — local office hours 9-18")
     rome_cfg = {
         "team": {
             "working_hours": {
@@ -613,7 +613,7 @@ def _self_test() -> int:
         abs(r["weekly_active_hours"] - 45.0) < 0.01,
     )
 
-    print("─ test 10: 7/7 08-20, partenza a META settimana (residual-based)")
+    print("─ test 10: 7/7 08-20, starting MID-WEEK (residual-based)")
     SEVEN_SEVEN = {
         "team": {
             "working_hours": {
@@ -637,20 +637,20 @@ def _self_test() -> int:
         weekly_used_pct=20.0, weekly_reset_at_utc=reset10,
     )
     failures += ok("source residual_to_reset", r["weekly_window_source"] == "residual_to_reset")
-    failures += ok("h_weekly residuo = 48h (non 84)", abs(r["weekly_active_hours"] - 48.0) < 0.05)
+    failures += ok("remaining h_weekly = 48h (not 84)", abs(r["weekly_active_hours"] - 48.0) < 0.05)
     failures += ok("even_pace ≈ 1.667%/h (80/48)", abs(r["even_pace_pct_per_active_hour"] - 1.6667) < 0.01)
     failures += ok("windows_remaining = 9.6 (48/5)", abs(r["windows_remaining_to_reset"] - 9.6) < 0.01)
-    failures += ok("target/finestra residua ≈ 8.333% (80/9.6)", abs(r["target_per_remaining_window_pct_of_weekly"] - 8.333) < 0.01)
+    failures += ok("target/remaining window ≈ 8.333% (80/9.6)", abs(r["target_per_remaining_window_pct_of_weekly"] - 8.333) < 0.01)
     # Finestra piena → la quota di QUESTA finestra coincide col target/finestra.
-    failures += ok("finestra piena: target_pct_of_weekly ≈ 8.333", abs(r["target_pct_of_weekly"] - 8.333) < 0.01)
+    failures += ok("full window: target_pct_of_weekly ≈ 8.333", abs(r["target_pct_of_weekly"] - 8.333) < 0.01)
 
     # Auto-calibrazione: stesso istante ma budget più speso (40%) → target più basso.
     r_cal = compute_target(
         now10, full_win_s, full_win_e, 14.7, SEVEN_SEVEN,
         weekly_used_pct=40.0, weekly_reset_at_utc=reset10,
     )
-    failures += ok("auto-calibra giù: 40% speso → 6.25% (60/9.6)", abs(r_cal["target_per_remaining_window_pct_of_weekly"] - 6.25) < 0.01)
-    failures += ok("auto-calibra: target più basso del caso 20%", r_cal["target_per_remaining_window_pct_of_weekly"] < r["target_per_remaining_window_pct_of_weekly"])
+    failures += ok("auto-calibrates down: 40% spent → 6.25% (60/9.6)", abs(r_cal["target_per_remaining_window_pct_of_weekly"] - 6.25) < 0.01)
+    failures += ok("auto-calibration: lower target than the 20% case", r_cal["target_per_remaining_window_pct_of_weekly"] < r["target_per_remaining_window_pct_of_weekly"])
 
     # Finestra che scavalla le 20:00 → solo le ore attive contano (la quota cala,
     # MA il riferimento per-finestra-piena resta 8.333).
@@ -660,14 +660,14 @@ def _self_test() -> int:
         now10, strad_s, strad_e, 14.7, SEVEN_SEVEN,
         weekly_used_pct=20.0, weekly_reset_at_utc=reset10,
     )
-    failures += ok("finestra a cavallo 20:00: 2h attive", abs(r_str["active_hours_in_window"] - 2.0) < 0.05)
-    failures += ok("quota finestra parziale ≈ 3.333% (80×2/48)", abs(r_str["target_pct_of_weekly"] - 3.333) < 0.05)
+    failures += ok("window crossing 20:00: 2 active hours", abs(r_str["active_hours_in_window"] - 2.0) < 0.05)
+    failures += ok("partial-window share ≈ 3.333% (80×2/48)", abs(r_str["target_pct_of_weekly"] - 3.333) < 0.05)
 
     print()
     if failures:
-        print(f"✗ {failures} test falliti")
+        print(f"✗ {failures} tests failed")
         return 1
-    print("✓ tutti i test passati")
+    print("✓ all tests passed")
     return 0
 
 

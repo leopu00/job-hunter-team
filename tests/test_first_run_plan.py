@@ -25,6 +25,20 @@ SKILLS_DIR = os.path.join(REPO_ROOT, 'shared', 'skills')
 
 sys.path.insert(0, SKILLS_DIR)
 import plan_registry  # noqa: E402
+import i18n  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def reset_plan_language(monkeypatch, tmp_path):
+    """Every case starts from the English product default."""
+    monkeypatch.delenv("JHT_LANG", raising=False)
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    monkeypatch.setenv("JHT_HOST_ENV_FILE", "/nonexistent/jht-host.env")
+    i18n._resolve_lang.cache_clear()
+    i18n._load_catalog.cache_clear()
+    yield
+    i18n._resolve_lang.cache_clear()
+    i18n._load_catalog.cache_clear()
 
 
 @pytest.fixture()
@@ -57,6 +71,40 @@ def test_provider_aliases_resolve():
     assert plan_registry.normalize_provider("codex") == "openai"
     assert plan_registry.normalize_provider("moonshot") == "kimi"
     assert plan_registry.normalize_provider("anthropic") == "claude"
+
+
+def test_plan_display_defaults_to_english_without_changing_contract(jht_home):
+    plans = plan_registry.list_plans("kimi")["kimi"]
+    assert [plan["id"] for plan in plans] == [
+        "adagio", "moderato", "allegretto", "allegro", "vivace",
+    ]
+    assert plans[0]["label"] == "Adagio (free)"
+    assert [plan["price"] for plan in plans] == [
+        "0", "19 $/month", "39 $/month", "99 $/month", "199 $/month",
+    ]
+    assert [plan["tier"] for plan in plans] == [0.2, 1, 5, 15, 30]
+    assert all(plan["weekly_capped"] is True for plan in plans)
+
+
+def test_plan_display_uses_the_existing_backend_catalog(jht_home, monkeypatch):
+    monkeypatch.setenv("JHT_LANG", "it")
+    i18n._resolve_lang.cache_clear()
+    plans = plan_registry.list_plans("kimi")["kimi"]
+    assert plans[0]["label"] == "Adagio (gratuito)"
+    assert plans[1]["price"] == "19 $/mese"
+
+
+def test_plan_catalog_keys_exist_in_all_seven_languages():
+    keys = {
+        "plan.free", "plan.price_month", "plan.unknown",
+        "plan.not_selected", "plan.select_hint", "plan.none_known",
+        "plan.weekly_cap", "plan.no_weekly_cap", "plan.window_5h",
+        "plan.no_window_5h", "plan.usage_pair", "plan.usage_single",
+    }
+    locales = os.path.join(REPO_ROOT, "shared", "locales")
+    for lang in ("en", "it", "es", "fr", "de", "pt", "hu"):
+        with open(os.path.join(locales, f"{lang}.json"), encoding="utf-8") as fh:
+            assert keys <= set(json.load(fh)), lang
 
 
 def test_no_plan_is_weekly_unlimited():
@@ -141,7 +189,7 @@ def test_new_install_waits_for_the_profile(first_run):
 def test_burst_refuses_to_start_without_a_declared_plan(first_run):
     out = first_run.begin_burst()
     assert out["ok"] is False
-    assert "piano" in out["reason"]
+    assert out["reason"] == "subscription plan not selected"
 
 
 def test_burst_carries_the_roster_and_the_goal(first_run):

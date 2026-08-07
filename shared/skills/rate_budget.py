@@ -71,9 +71,21 @@ def _fmt_reset(unix_ts, fallback=None):
 
 
 THROTTLE_POLICY = {
-    0: ("OK", "Proiezione dentro o sotto la finestra ottimale. Procedi col piano, spawna liberamente se hai coda."),
-    1: ("ATTENZIONE", "Proiezione > 95% al reset: stai bruciando troppo. Blocca nuovi spawn, allunga gli sleep degli agenti attivi fino a rientrare. Il bridge te lo ripeterà ogni minuto finché sei fuori zona."),
+    0: ("OK", "Projection is within or below the optimal window. Follow the plan and spawn freely if work is queued."),
+    1: ("WARNING", "Projection is above 95% at reset: usage is too high. Block new spawns and lengthen active-agent sleeps until back on target. The bridge will repeat this every minute while usage remains outside the target zone."),
 }
+
+
+def display_status(value):
+    """English label for stable internal status identifiers."""
+    return {
+        "ATTENZIONE": "WARNING",
+        "SOTTOUTILIZZO": "UNDERUTILIZED",
+        "SOPRA-PACE-WEEKLY": "ABOVE-PACE-WEEKLY",
+        "SOPRA-PACE": "ABOVE-PACE",
+        "SOTTO-PACE": "BELOW-PACE",
+        "ALLINEATO": "ON-PACE",
+    }.get(value, value)
 
 
 def load_last_sample():
@@ -155,12 +167,12 @@ def weekly_reset_remaining(unix_ts):
         return None
     d, rem = total_min // 1440, total_min % 1440
     h, m = rem // 60, rem % 60
-    return f"{d}g {h}h" if d > 0 else (f"{h}h {m}m" if h > 0 else f"{m}m")
+    return f"{d}d {h}h" if d > 0 else (f"{h}h {m}m" if h > 0 else f"{m}m")
 
 
 def status_line(entry):
     if not entry:
-        return "NO_DATA: nessun sample del bridge (il bridge non e' ancora partito o non ha ancora pollato)"
+        return "NO_DATA: no bridge sample (the bridge has not started or has not polled yet)"
     usage = entry.get("usage", "-")
     provider = entry.get("provider", "-")
     status = entry.get("status", "-")
@@ -192,9 +204,9 @@ def plan(entry):
     if not entry:
         print("NO_DATA")
         print("")
-        print("Il bridge non ha ancora pollato. Attendi 1-2 min e riprova.")
-        print("Se il problema persiste: tmux capture-pane -t CAPITANO e leggi il log")
-        print("del bridge in /tmp/sentinel-bridge.log.")
+        print("The bridge has not polled yet. Wait 1-2 minutes and try again.")
+        print("If the problem persists, run tmux capture-pane -t CAPITANO and read")
+        print("the bridge log at /tmp/sentinel-bridge.log.")
         return
 
     usage = entry.get("usage", 0)
@@ -210,32 +222,32 @@ def plan(entry):
     host = entry.get("host") or {}
     host_level = entry.get("host_level", "OK")
 
-    label, advice = THROTTLE_POLICY.get(throttle, (str(throttle), "Segui l'ordine del bridge."))
+    label, advice = THROTTLE_POLICY.get(throttle, (str(throttle), "Follow the bridge instruction."))
 
     print(f"=== Rate Budget - {provider} ===")
-    print(f"  Utilizzo:         {usage}%")
-    print(f"  Reset:            tra {remaining} ({local_reset_display(reset_at, reset_unix)})")
-    print(f"  Velocity misurata:{velocity_smooth:+g}%/h (EMA)")
+    print(f"  Usage:            {usage}%")
+    print(f"  Reset:            in {remaining} ({local_reset_display(reset_at, reset_unix)})")
+    print(f"  Measured velocity:{velocity_smooth:+g}%/h (EMA)")
     if velocity_ideal is not None:
-        print(f"  Velocity target:  {velocity_ideal:g}%/h (per chiudere a 95% al reset)")
+        print(f"  Target velocity:  {velocity_ideal:g}%/h (to finish at 95% at reset)")
     if projection is not None:
-        print(f"  Proiezione reset: {projection}%")
-    print(f"  Status:           {status}")
+        print(f"  Reset projection: {projection}%")
+    print(f"  Status:           {display_status(status)}")
     print(f"  Throttle:         {label}")
     print(f"  Host:             cpu={host.get('cpu_pct', '-')}% ram={host.get('ram_pct', '-')}% ({host_level})")
     print("")
-    print(f"  Policy consigliata: {advice}")
+    print(f"  Recommended policy: {advice}")
 
     # Stima "margine": quanto possiamo spendere prima di rompere il target.
     # Useful per l'LLM che decide quanti agenti parallelli tenere.
     # Target 95%: margine minimo sotto il 100% hard limit.
     if isinstance(usage, (int, float)) and usage < 95:
         remaining_budget = 95 - usage
-        print(f"  Margine al target 95%: {remaining_budget}%")
+        print(f"  Headroom to 95% target: {remaining_budget}%")
 
     # Timestamp del sample — cosi' l'LLM sa se e' fresco
     ts = entry.get("ts", "-")
-    print(f"  Ultimo tick:      {ts}")
+    print(f"  Last tick:        {ts}")
 
 
 def _import_bridge():
@@ -278,36 +290,36 @@ def live():
     """
     bridge = _import_bridge()
     if bridge is None:
-        print("LIVE_UNAVAILABLE: sentinel-bridge.py non trovato. Uso `status` da JSONL.", file=sys.stderr)
+        print("LIVE_UNAVAILABLE: sentinel-bridge.py not found. Falling back to JSONL `status`.", file=sys.stderr)
         print(status_line(load_last_sample()))
         sys.exit(3)
 
     try:
         _tick, provider = bridge.read_config()
     except Exception as e:
-        print(f"LIVE_UNAVAILABLE: read_config errore: {e}", file=sys.stderr)
+        print(f"LIVE_UNAVAILABLE: read_config error: {e}", file=sys.stderr)
         sys.exit(3)
 
     fn_name = _PROVIDER_FETCHERS.get(provider)
     if fn_name is None or not hasattr(bridge, fn_name):
-        print(f"LIVE_UNAVAILABLE: nessun fetcher per provider={provider}", file=sys.stderr)
+        print(f"LIVE_UNAVAILABLE: no fetcher for provider={provider}", file=sys.stderr)
         sys.exit(3)
 
     try:
         sample = getattr(bridge, fn_name)()
     except Exception as e:
-        print(f"LIVE_FAIL: chiamata API fallita ({provider}): {e}", file=sys.stderr)
+        print(f"LIVE_FAIL: API call failed ({provider}): {e}", file=sys.stderr)
         sys.exit(4)
 
     if not sample:
-        print(f"LIVE_FAIL: provider {provider} ha risposto vuoto/None (rate-limit, timeout o credenziali mancanti)", file=sys.stderr)
+        print(f"LIVE_FAIL: provider {provider} returned an empty/None response (rate limit, timeout, or missing credentials)", file=sys.stderr)
         sys.exit(4)
 
     # fetch_claude_api ritorna la stringa "RATE_LIMIT" (sentinel value, non dict)
     # quando Anthropic ha 429ato. Va trattato come fail esplicito così la
     # Sentinella sa che deve passare a L2 (TUI worker).
     if isinstance(sample, str):
-        print(f"LIVE_FAIL: provider {provider} segnale di rate-limit ({sample}). Usa L2 (check_usage.py).", file=sys.stderr)
+        print(f"LIVE_FAIL: provider {provider} reported a rate-limit signal ({sample}). Use L2 (check_usage.py).", file=sys.stderr)
         sys.exit(4)
 
     usage = sample.get("usage")
@@ -336,7 +348,7 @@ def live():
             "weekly_usage": weekly,
         }, source=detected_source)
     except Exception as e:
-        print(f"warn: auto-record JSONL fallito: {e}", file=sys.stderr)
+        print(f"warn: JSONL auto-record failed: {e}", file=sys.stderr)
 
     # Bug fix 2026-04-25: prima il one-liner stampava solo usage/reset/
     # weekly. La projection — l'unica metrica che il prompt del Capitano
@@ -416,8 +428,8 @@ def show_tick():
     except (OSError, FileNotFoundError):
         msg = ""
     if not msg:
-        print("NO_DATA: il bridge non ha ancora scritto un tick "
-              "(non ancora partito, o fuori orario di lavoro). Riprova tra 1-2 min.")
+        print("NO_DATA: the bridge has not written a tick yet "
+              "(it has not started, or it is outside working hours). Try again in 1-2 minutes.")
         return
     print(msg)
 
@@ -436,7 +448,7 @@ def main():
     elif cmd == "status":
         print(status_line(entry))
     else:
-        print(f"rate_budget: comando '{cmd}' sconosciuto. Usa: tick | status | plan | live", file=sys.stderr)
+        print(f"rate_budget: unknown command '{cmd}'. Use: tick | status | plan | live", file=sys.stderr)
         sys.exit(2)
 
 
