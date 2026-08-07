@@ -52,9 +52,7 @@ fi
 # repo lo stesso giorno di questo hook (2026-04-27) e da allora nessuno poteva
 # più aggiornarla — l'hook bloccava proprio il file che detect-secrets è fatto
 # per rigenerare. Una baseline che non si può aggiornare invecchia e basta.
-# `mp4` e `vtt` sono ammessi dal 2026-08-07 per media pubblici approvati: hash,
-# peso e provenienza devono restare verificati dai test del manifest web.
-ALLOWED_EXTENSIONS="ts|tsx|gd|uid|tscn|tres|godot|cfg|ttf|import|js|jsx|json|geojson|css|scss|md|py|sh|sql|yml|yaml|toml|lock|svg|png|txt|example|gitkeep|gitignore|gitattributes|gdignore|dockerignore|vercelignore|mjs|cjs|html|bat|ps1|icns|ico|rs|plist|list|jpg|jpeg|mp4|vtt|nsi|baseline|sha256"
+ALLOWED_EXTENSIONS="ts|tsx|gd|uid|tscn|tres|godot|cfg|ttf|import|js|jsx|json|geojson|css|scss|md|py|sh|sql|yml|yaml|toml|lock|svg|png|txt|example|gitkeep|gitignore|gitattributes|gdignore|dockerignore|vercelignore|mjs|cjs|html|bat|ps1|icns|ico|rs|plist|list|jpg|jpeg|nsi|baseline|sha256"
 
 BLOCKED_FILES=""
 while IFS= read -r file; do
@@ -69,6 +67,13 @@ while IFS= read -r file; do
     # Unica fixture PDF ammessa: il test dedicato la rigenera byte-per-byte,
     # ne estrae il testo e applica il contratto privacy al contenuto binario.
     if [[ "$file" == "tests/fixtures/sample-cv.pdf" ]]; then
+        continue
+    fi
+
+    # Unici media pubblici binari approvati per la home. L'eccezione resta sui
+    # path esatti: qualunque altro MP4/VTT continua a essere bloccato. Hash,
+    # peso e provenienza di questi file sono verificati dal test del manifest.
+    if [[ "$file" == "web/public/media/home-video-r4-web.mp4" || "$file" == "web/public/media/home-video-r4-music.vtt" ]]; then
         continue
     fi
 
