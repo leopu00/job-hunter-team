@@ -57,24 +57,24 @@ async function readConfigAsync() {
 async function checkNode() {
   const v = process.version
   const [major] = v.replace('v','').split('.').map(Number)
-  if (major < 18) return { ok: false, msg: `Node ${v}`, hint: 'Richiesto Node ≥18' }
+  if (major < 18) return { ok: false, msg: `Node ${v}`, hint: 'Required Node ≥18' }
   return { ok: true, msg: `Node ${v}` }
 }
 
 async function checkConfig() {
-  if (!(await fileExists(CONFIG_PATH))) return { ok: false, msg: 'jht.config.json non trovato', hint: 'Esegui: jht setup' }
+  if (!(await fileExists(CONFIG_PATH))) return { ok: false, msg: 'jht.config.json not found', hint: 'Run: jht setup' }
   const cfg = await readConfigAsync()
-  if (!cfg) return { ok: false, msg: 'Config JSON non valido', hint: 'Esegui: jht setup --reset' }
+  if (!cfg) return { ok: false, msg: 'Invalid config JSON', hint: 'Run: jht setup --reset' }
   const v = cfg.version ?? 1
-  if (v < 4) return { warn: true, msg: `Config v${v} — aggiornamento disponibile`, hint: 'Esegui: jht migrate' }
-  return { ok: true, msg: `Config v${v} valida` }
+  if (v < 4) return { warn: true, msg: `Config v${v} — update available`, hint: 'Run: jht migrate' }
+  return { ok: true, msg: `Config v${v} valid` }
 }
 
 async function checkProvider() {
   const cfg = await readConfigAsync()
-  if (!cfg) return { ok: false, msg: 'Provider — config mancante' }
+  if (!cfg) return { ok: false, msg: 'Providers — missing config' }
   const active = cfg.active_provider
-  if (!active) return { warn: true, msg: 'Nessun provider attivo', hint: 'Esegui: jht config set active_provider anthropic' }
+  if (!active) return { warn: true, msg: 'No active providers', hint: 'Run: jht config set active_provider anthropic' }
   const prov = cfg.providers?.[active]
   // Le subscription usano la sessione OAuth della CLI e non hanno, per
   // definizione, una API key nel config. Segnalarle come incomplete rende il
@@ -91,38 +91,38 @@ async function checkProvider() {
       ? 'OPENAI_API_KEY'
       : `${active.toUpperCase()}_API_KEY`
   const key = prov?.api_key || process.env[envName]
-  if (!key) return { warn: true, msg: `Provider ${active} senza API key`, hint: `Imposta ${envName}` }
+  if (!key) return { warn: true, msg: `Provider ${active} has no API key`, hint: `Set ${envName}` }
   return { ok: true, msg: `Provider: ${active}${prov?.model ? ` (${prov.model})` : ''}` }
 }
 
 async function checkApiKey() {
   const cfg = await readConfigAsync()
   const key = cfg?.providers?.anthropic?.api_key || process.env.ANTHROPIC_API_KEY
-  if (!key) return { skip: true, msg: 'Test API — nessuna key Anthropic trovata' }
+  if (!key) return { skip: true, msg: 'API test — no Anthropic key found' }
   try {
     const res = await fetch('https://api.anthropic.com/v1/models', {
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       signal: AbortSignal.timeout(5000),
     })
-    if (res.ok) return { ok: true, msg: 'Anthropic API key valida' }
-    if (res.status === 401) return { ok: false, msg: 'Anthropic API key non valida (401)', hint: 'Aggiorna ANTHROPIC_API_KEY' }
-    return { warn: true, msg: `Anthropic API risposta ${res.status}` }
+    if (res.ok) return { ok: true, msg: 'Anthropic API key valid' }
+    if (res.status === 401) return { ok: false, msg: 'Invalid Anthropic API key (401)', hint: 'Update ANTHROPIC_API_KEY' }
+    return { warn: true, msg: `Anthropic API response ${res.status}` }
   } catch (e) {
     if (e.name === 'TimeoutError') return { warn: true, msg: 'Anthropic API timeout (>5s)' }
-    return { warn: true, msg: 'Anthropic API non raggiungibile' }
+    return { warn: true, msg: 'Anthropic API unreachable' }
   }
 }
 
 async function checkDatabase() {
   const cfg = await readConfigAsync()
   const url = cfg?.supabase?.url || process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!url) return { skip: true, msg: 'Database — SUPABASE_URL non configurata' }
+  if (!url) return { skip: true, msg: 'Database — SUPABASE_URL not configured' }
   try {
     const res = await fetch(`${url}/rest/v1/`, { signal: AbortSignal.timeout(5000) })
-    if (res.status < 500) return { ok: true, msg: `Database Supabase raggiungibile` }
-    return { ok: false, msg: `Database Supabase errore ${res.status}` }
+    if (res.status < 500) return { ok: true, msg: `Database Supabase accessible` }
+    return { ok: false, msg: `Supabase database error ${res.status}` }
   } catch {
-    return { ok: false, msg: 'Database Supabase non raggiungibile', hint: 'Verifica SUPABASE_URL e connessione' }
+    return { ok: false, msg: 'Supabase database is not reachable', hint: 'Check SUPABASE_URL and network access' }
   }
 }
 
@@ -132,11 +132,11 @@ function checkDeps() {
   const results = []
   for (const cmd of required) {
     const v = cmdVersion(cmd)
-    results.push(v ? { ok: true, msg: `${cmd}: ${v}` } : { ok: false, msg: `${cmd}: non trovato`, hint: `Installa ${cmd}` })
+    results.push(v ? { ok: true, msg: `${cmd}: ${v}` } : { ok: false, msg: `${cmd}: not found`, hint: `Install ${cmd}` })
   }
   for (const cmd of optional) {
     const v = cmdVersion(cmd)
-    results.push(v ? { ok: true, msg: `${cmd}: ${v}` } : { skip: true, msg: `${cmd}: non trovato (opzionale)` })
+    results.push(v ? { ok: true, msg: `${cmd}: ${v}` } : { skip: true, msg: `${cmd}: not found (optional)` })
   }
   return results
 }
@@ -145,18 +145,18 @@ function checkWorkers() {
   try {
     const sessions = execSync('tmux list-sessions -F "#{session_name}" 2>/dev/null', { encoding: 'utf-8', stdio: 'pipe' })
       .trim().split('\n').filter(Boolean)
-    if (!sessions.length) return [{ warn: true, msg: 'Nessuna sessione tmux attiva', hint: 'Avvia i worker con il Coordinatore' }]
+    if (!sessions.length) return [{ warn: true, msg: 'No active tmux session', hint: 'Start workers with the Coordinator' }]
     const expected = ['assistente', 'capitano', 'mentor', 'sentinella']
     return expected.map(role => {
       const agent = AGENTS.find(a => a.role === role)
       const active = !!agent && sessions.some(s => isAgentSession(s, agent))
       const name = agent?.prefix ?? role.toUpperCase()
       return active
-        ? { ok: true, msg: `${name}: attivo` }
-        : { warn: true, msg: `${name}: non trovato`, hint: `Esegui: jht team start ${role}` }
+        ? { ok: true, msg: `${name}: active` }
+        : { warn: true, msg: `${name}: not found`, hint: `Run: jht team start ${role}` }
     })
   } catch {
-    return [{ skip: true, msg: 'tmux non disponibile — verifica workers manuale' }]
+    return [{ skip: true, msg: 'tmux not available — verify workers manually' }]
   }
 }
 
@@ -177,17 +177,17 @@ async function handleDoctor() {
 
   const s = spinner()
 
-  s.start('Verifica in corso…')
+  s.start('Check in progress...')
 
   const [nodeCk, configCk, providerCk, apiCk, dbCk, depsCk, workersCk] = await Promise.all([
     checkNode(), checkConfig(), checkProvider(), checkApiKey(),
     checkDatabase(), Promise.resolve(checkDeps()), Promise.resolve(checkWorkers()),
   ])
 
-  s.stop('Diagnosi completata')
+  s.stop('Diagnosis completed')
 
   const sections = [
-    { title: 'Ambiente',    checks: [nodeCk, ...depsCk] },
+    { title: 'Environment', checks: [nodeCk, ...depsCk] },
     { title: 'Config',      checks: [configCk] },
     { title: 'Provider LLM', checks: [providerCk, apiCk] },
     { title: 'Database',    checks: [dbCk] },
@@ -205,16 +205,16 @@ async function handleDoctor() {
   }
 
   if (errors > 0)
-    clack.outro(pc.red(`${errors} errori da risolvere — esegui i fix suggeriti`))
+    clack.outro(pc.red(`${errors} errors to be resolved — run the suggested fixes`))
   else if (warnings > 0)
-    clack.outro(pc.yellow(`${warnings} avvisi — sistema funzionante con limitazioni`))
+    clack.outro(pc.yellow(`${warnings} alerts — working system with limitations`))
   else
-    clack.outro(pc.green('Tutto OK — sistema pronto'))
+    clack.outro(pc.green('All OK — ready system'))
 }
 
 export function registerDoctorCommand(program) {
   program
     .command('doctor')
-    .description('Verifica setup — config, provider, API key, DB, workers')
+    .description('Check setup — config, provider, API key, database, and workers')
     .action(handleDoctor)
 }

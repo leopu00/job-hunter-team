@@ -115,9 +115,9 @@ function parseToken(raw) {
 async function handleEnable(options) {
   const token = parseToken(options.token);
   if (!token) {
-    console.error(pc.red('Token mancante o malformato.'));
-    console.error('Uso: ' + pc.bold('jht cloud enable --token jht_sync_xxxxxxxx'));
-    console.error(pc.dim('Genera un token su https://jobhunterteam.ai/settings/cloud-sync'));
+    console.error(pc.red('Missing or malformed token.'));
+    console.error('Usage: ' + pc.bold('jht cloud enable --token jht_sync_xxxxxxxx'));
+    console.error(pc.dim('Generate a token at https://jobhunterteam.ai/settings/cloud-sync'));
     process.exitCode = 1;
     return;
   }
@@ -125,7 +125,7 @@ async function handleEnable(options) {
   const baseUrl = (options.url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   const pingUrl = `${baseUrl}/api/cloud-sync/ping`;
 
-  console.log(pc.dim(`Verifica token su ${pingUrl}…`));
+  console.log(pc.dim(`Verifying token at ${pingUrl}…`));
 
   let res;
   try {
@@ -133,7 +133,7 @@ async function handleEnable(options) {
       headers: { Authorization: `Bearer ${token}` },
     });
   } catch (err) {
-    console.error(pc.red(`Errore di rete: ${err.message}`));
+    console.error(pc.red(`Network error: ${err.message}`));
     process.exitCode = 1;
     return;
   }
@@ -141,7 +141,7 @@ async function handleEnable(options) {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     console.error(
-      pc.red(`Verifica fallita (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`)
+      pc.red(`Failed verification (HTTP ${res.status}): ${body.error || 'unknown error'}`)
     );
     process.exitCode = 1;
     return;
@@ -156,7 +156,7 @@ async function handleEnable(options) {
     enabled_at: new Date().toISOString(),
   });
 
-  console.log(pc.green('✓ Cloud sync abilitato'));
+  console.log(pc.green('✓ Cloud sync enabled'));
   console.log(pc.dim(`  Base URL:   ${baseUrl}`));
   console.log(pc.dim(`  Token name: ${body.token?.name ?? 'unnamed'}`));
   console.log(pc.dim(`  User ID:    ${body.user_id}`));
@@ -165,7 +165,7 @@ async function handleEnable(options) {
   // Auto-push: l'utente ha appena collegato il VPS, vuole vedere i dati sul
   // dashboard subito — non ha senso forzarlo a un secondo comando.
   if (options.noPush) {
-    console.log(pc.dim(`  Push iniziale skippato (--no-push). Esegui: jht cloud push`));
+    console.log(pc.dim('  Initial push skipped (--no-push). Run: jht cloud push'));
     return;
   }
   // Se il DB non esiste ancora (team mai avviato): skip silenzioso. Il
@@ -174,18 +174,18 @@ async function handleEnable(options) {
   try {
     await stat(JHT_DB_PATH);
   } catch {
-    console.log(pc.dim(`  Nessun DB locale ancora (${JHT_DB_PATH}). Push skippato.`));
-    console.log(pc.dim(`  Avvia il team con 'jht team start' e poi 'jht cloud push'.`));
+    console.log(pc.dim(`  No local database yet (${JHT_DB_PATH}). Initial push skipped.`));
+    console.log(pc.dim(`  Start the team with 'jht team start' and then 'jht cloud push'.`));
     return;
   }
   console.log('');
-  console.log(pc.dim('Sincronizzo i dati locali al cloud...'));
+  console.log(pc.dim('Syncing local data to the cloud...'));
   // process.exitCode di handlePush e' best-effort: se push fallisce, l'enable
   // resta valido (token salvato) ma stampiamo l'errore. L'utente puo' riprovare.
   const prevExitCode = process.exitCode;
   await handlePush({});
   if (process.exitCode === 1) {
-    console.log(pc.yellow('  Enable e\' OK ma push iniziale e\' fallito. Riprova: jht cloud push'));
+    console.log(pc.yellow('  Cloud sync was enabled, but the initial push failed. Retry with: jht cloud push'));
     process.exitCode = prevExitCode;
   }
 }
@@ -215,29 +215,29 @@ async function handleEnable(options) {
 async function handleRestore(options) {
   const config = await loadCloudConfig();
   if (!config?.enabled) {
-    console.error(pc.red('Cloud non configurato. Esegui `jht cloud login` o `jht cloud enable`.'));
+    console.error(pc.red('Cloud not configured. Run `jht cloud login` or `jht cloud enable`.'));
     process.exitCode = 1;
     return;
   }
   const baseUrl = (config.base_url || '').replace(/\/+$/, '');
   const token = config.token;
   if (!baseUrl || !token) {
-    console.error(pc.red('cloud.json malformato (manca base_url o token).'));
+    console.error(pc.red('Malformed cloud.json: base_url or token is missing.'));
     process.exitCode = 1;
     return;
   }
 
   const dbPath = options.db || JHT_DB_PATH;
   if (!existsSync(dbPath)) {
-    console.error(pc.red(`SQLite locale assente: ${dbPath}`));
-    console.error(pc.dim('Lancia `jht team start` una volta per creare lo schema, poi riprova `jht cloud restore`.'));
+    console.error(pc.red(`Local SQLite database not found: ${dbPath}`));
+    console.error(pc.dim('Run `jht team start` once to create the schema, then retry `jht cloud restore`.'));
     process.exitCode = 1;
     return;
   }
 
   // GET dump
   const dumpUrl = `${baseUrl}/api/cloud-sync/full-dump`;
-  console.log(pc.dim(`Scarico snapshot da ${dumpUrl}...`));
+  console.log(pc.dim(`Downloading snapshot from ${dumpUrl}...`));
   let body;
   try {
     const res = await fetch(dumpUrl, {
@@ -246,12 +246,12 @@ async function handleRestore(options) {
     });
     body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      console.error(pc.red(`Dump fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`));
+      console.error(pc.red(`Dump failed (HTTP ${res.status}): ${body.error || 'unknown error'}`));
       process.exitCode = 1;
       return;
     }
   } catch (err) {
-    console.error(pc.red(`Errore di rete: ${err.message}`));
+    console.error(pc.red(`Network error: ${err.message}`));
     process.exitCode = 1;
     return;
   }
@@ -266,7 +266,7 @@ async function handleRestore(options) {
   try {
     ({ DatabaseSync } = await import('node:sqlite'));
   } catch (err) {
-    console.error(pc.red(`node:sqlite non disponibile (${err.message}). Richiesto Node >= 22.`));
+    console.error(pc.red(`node:sqlite is unavailable (${err.message}). Node 22 or newer is required.`));
     process.exitCode = 1;
     return;
   }
@@ -279,7 +279,7 @@ async function handleRestore(options) {
     localCounts.applications = dbRead.prepare('SELECT COUNT(*) AS n FROM applications').get().n;
     dbRead.close();
   } catch (err) {
-    console.error(pc.red(`Lettura SQLite fallita: ${err.message}`));
+    console.error(pc.red(`Failed to read SQLite: ${err.message}`));
     process.exitCode = 1;
     return;
   }
@@ -289,20 +289,20 @@ async function handleRestore(options) {
   console.log(pc.dim(`  Local:  ${localCounts.positions} positions, ${localCounts.scores} scores, ${localCounts.applications} applications`));
   console.log(pc.dim(`  Cloud:  ${cloudPositions.length} positions, ${cloudScores.length} scores, ${cloudApps.length} applications`));
   console.log('');
-  console.log(pc.dim('  Modo: INSERT OR REPLACE su id SQLite = legacy_id cloud.'));
-  console.log(pc.dim('  Righe locali NON pushate (legacy_id NULL cloud-side) restano intatte.'));
-  console.log(pc.dim('  companies e position_highlights NON ricostruite (out of scope MVP).'));
+  console.log(pc.dim('  Mode: INSERT OR REPLACE using the cloud legacy_id as the SQLite id.'));
+  console.log(pc.dim('  Local rows not pushed to the cloud (legacy_id NULL) remain unchanged.'));
+  console.log(pc.dim('  companies and position_highlights are not rebuilt (outside the MVP scope).'));
 
   let confirmed = false;
   if (options.confirmRestore) {
     confirmed = true;
   } else {
     const ans = await clack.confirm({
-      message: `Procedo con upsert di ${cloudPositions.length + cloudScores.length + cloudApps.length} righe in ${dbPath}?`,
+      message: `Proceed with upsert ${cloudPositions.length + cloudScores.length + cloudApps.length} rows in ${dbPath}?`,
       initialValue: false,
     });
     if (clack.isCancel(ans) || !ans) {
-      console.log(pc.dim('Annullato.'));
+      console.log(pc.dim('Cancelled.'));
       return;
     }
     confirmed = true;
@@ -429,7 +429,7 @@ async function handleRestore(options) {
       db.close();
     }
   } catch (err) {
-    console.error(pc.red(`Restore fallito: ${err.message}`));
+    console.error(pc.red(`Failed restore: ${err.message}`));
     process.exitCode = 1;
     return;
   }
@@ -444,11 +444,11 @@ async function handleRestore(options) {
   });
 
   console.log('');
-  console.log(pc.green('✓ Restore completato'));
-  console.log(pc.dim(`  Positions:    ${inserted.positions} upsert (${skipped.positions} skip per legacy_id mancante)`));
-  console.log(pc.dim(`  Scores:       ${inserted.scores} upsert (${skipped.scores} skip per position_id orfano)`));
-  console.log(pc.dim(`  Applications: ${inserted.applications} upsert (${skipped.applications} skip per position_id orfano)`));
-  console.log(pc.dim(`  Cursor sync reset a ${nowIso}`));
+  console.log(pc.green('✓ Restore completed'));
+  console.log(pc.dim(`  Positions:    ${inserted.positions} upserted (${skipped.positions} skipped: missing legacy_id)`));
+  console.log(pc.dim(`  Scores:       ${inserted.scores} upserted (${skipped.scores} skipped: orphaned position_id)`));
+  console.log(pc.dim(`  Applications: ${inserted.applications} upserted (${skipped.applications} skipped: orphaned position_id)`));
+  console.log(pc.dim(`  Sync cursor reset to ${nowIso}`));
   console.log('');
   void confirmed;
 }
@@ -522,7 +522,7 @@ async function invalidateCloudOwnershipCursors() {
 export async function handleClaim(options = {}) {
   const config = await loadCloudConfig();
   if (!config?.enabled || !config.base_url || !config.token) {
-    console.error(pc.red('Cloud sync non abilitato: claim richiede pairing prima.'));
+    console.error(pc.red('Cloud sync not enabled: claim requires pairing first.'));
     process.exitCode = 1;
     return;
   }
@@ -549,7 +549,7 @@ export async function handleClaim(options = {}) {
     });
     body = await res.json().catch(() => ({}));
   } catch (err) {
-    console.error(pc.red(`Claim fallito per errore di rete: ${err.message}`));
+    console.error(pc.red(`Claim failed due to a network error: ${err.message}`));
     process.exitCode = 1;
     return;
   }
@@ -558,23 +558,23 @@ export async function handleClaim(options = {}) {
     if (res.status === 409 && body.error === 'device_already_claimed') {
       console.error(
         pc.yellow(
-          `Claim occupato dal device ${body.current_device_id ?? 'unknown'}` +
+          `Claim held by device ${body.current_device_id ?? 'unknown'}` +
           (Number.isFinite(body.heartbeat_age_seconds)
-            ? ` (heartbeat ${body.heartbeat_age_seconds}s fa).`
+            ? ` (heartbeat ${body.heartbeat_age_seconds}s ago).`
             : '.')
         )
       );
       console.error(
         pc.dim(
           `  claimed_at: ${body.claimed_at ?? 'unknown'}\n` +
-          `  Per prendere il controllo adesso: jht cloud claim --force`
+          `  To take control now: jht cloud claim --force`
         )
       );
       process.exitCode = 2;
       return;
     }
     console.error(
-      pc.red(`Claim fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`)
+      pc.red(`Claim failed (HTTP ${res.status}): ${body.error || 'unknown error'}`)
     );
     process.exitCode = 1;
     return;
@@ -582,23 +582,23 @@ export async function handleClaim(options = {}) {
 
   const claimedDeviceId = body.claimed_device_id ?? body.state?.active_device_id ?? 'unknown';
   const evictedDeviceId = body.evicted_device_id ?? null;
-  console.log(pc.green('✓ Claim del team acquisito'));
-  console.log(pc.dim(`  device attivo: ${claimedDeviceId}`));
+  console.log(pc.green('✓ Team claim acquired'));
+  console.log(pc.dim(`  active device: ${claimedDeviceId}`));
 
   if (!evictedDeviceId) {
-    console.log(pc.dim('  Nessun altro device evicted; claim libero o gia\' appartenente a questo device.'));
+    console.log(pc.dim('  No device was evicted; the claim was free or already belonged to this device.'));
     return;
   }
 
-  console.log(pc.yellow(`  Device precedente evicted: ${evictedDeviceId}`));
+  console.log(pc.yellow(`  Previous device evicted: ${evictedDeviceId}`));
   const invalidated = await invalidateCloudOwnershipCursors();
   console.log(
     pc.dim(
-      `  Cursor locali invalidati: ${invalidated.removed}; il prossimo sync ripartira' senza cursor precedenti.`
+      `  Local cursors invalidated: ${invalidated.removed}; the next sync will start without previous cursors.`
     )
   );
   for (const failure of invalidated.failed) {
-    console.error(pc.yellow(`  warn: cursor non rimosso (${failure.path}): ${failure.error}`));
+    console.error(pc.yellow(`  warn: cursor not removed (${failure.path}): ${failure.error}`));
   }
   if (invalidated.failed.length > 0) process.exitCode = 1;
 }
@@ -624,7 +624,7 @@ export async function handleLogin(options = {}) {
   const initUrl = `${baseUrl}/api/cloud-sync/device-init`;
 
   // 1. Init: chiede al server una coppia (device_code, user_code).
-  if (!options.uiJson) console.log(pc.dim(`Inizio pairing su ${baseUrl}…`));
+  if (!options.uiJson) console.log(pc.dim(`Starting pairing at ${baseUrl}…`));
   let init;
   try {
     const res = await fetch(initUrl, { method: 'POST' });
@@ -633,13 +633,13 @@ export async function handleLogin(options = {}) {
       failCloudLogin(
         options,
         'init_failed',
-        `Init pairing fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`
+        `Pairing initialization failed (HTTP ${res.status}): ${body.error || 'unknown error'}`
       );
       return;
     }
     init = body;
   } catch (err) {
-    failCloudLogin(options, 'network_error', `Errore di rete: ${err.message}`);
+    failCloudLogin(options, 'network_error', `Network error: ${err.message}`);
     return;
   }
 
@@ -647,7 +647,7 @@ export async function handleLogin(options = {}) {
     failCloudLogin(
       options,
       'invalid_response',
-      'Risposta server malformata (manca device_code/user_code/verification_url).'
+      'Malformed server response: device_code, user_code, or verification_url is missing.'
     );
     return;
   }
@@ -657,7 +657,7 @@ export async function handleLogin(options = {}) {
     failCloudLogin(
       options,
       'invalid_response',
-      'Risposta server malformata (manca verification_url_complete).'
+      'Malformed server response: verification_url_complete is missing.'
     );
     return;
   }
@@ -668,20 +668,20 @@ export async function handleLogin(options = {}) {
   });
 
   // 2. Mostra istruzioni all'utente.
-  const tokenNameHint = options.name ? ` (nome consigliato: "${options.name}")` : '';
+  const tokenNameHint = options.name ? ` (suggested token name: "${options.name}")` : '';
   if (!options.uiJson) {
     console.log('');
-    console.log(pc.bold(`Apri questo URL nel browser:`));
+    console.log(pc.bold(`Open this URL in your browser:`));
     console.log(`  ${pc.cyan(init.verification_url)}`);
     if (init.verification_url_complete) {
-      console.log(pc.dim(`  (link diretto col codice precompilato: ${init.verification_url_complete})`));
+      console.log(pc.dim(`  (direct link with prefilled code: ${init.verification_url_complete})`));
     }
     console.log('');
-    console.log(pc.bold(`Codice da digitare:`));
+    console.log(pc.bold(`Code to type:`));
     console.log(`  ${pc.green(pc.bold(init.user_code))}${tokenNameHint}`);
     console.log('');
-    console.log(pc.dim(`Aspetto la tua conferma… (TTL ~${Math.round((init.expires_in ?? 600) / 60)} min, polling ogni ${init.interval ?? 2}s)`));
-    console.log(pc.dim(`Premi Ctrl+C per annullare.`));
+    console.log(pc.dim(`Waiting for confirmation… (TTL ~${Math.round((init.expires_in ?? 600) / 60)} min; polling every ${init.interval ?? 2}s)`));
+    console.log(pc.dim(`Press Ctrl+C to cancel.`));
   }
 
   // 3. Poll fino a status = approved | expired | timeout.
@@ -703,7 +703,7 @@ export async function handleLogin(options = {}) {
       // Tolerante a network blip transitorio: continua il poll.
       emitCloudLoginUi(options, 'network_retry');
       if (!options.uiJson) {
-        console.error(pc.yellow(`  ⚠ poll error transitorio: ${err.message}, ritento...`));
+        console.error(pc.yellow(`  ⚠ transient polling error: ${err.message}; retrying...`));
       }
       continue;
     }
@@ -714,7 +714,7 @@ export async function handleLogin(options = {}) {
       failCloudLogin(
         options,
         body.status === 'consumed' ? 'already_used' : 'expired',
-        `\nSessione ${body.status || 'expired'}. Riavvia 'jht cloud login'.`
+        `\nSession ${body.status || 'expired'}. Restart 'jht cloud login'.`
       );
       return;
     }
@@ -722,7 +722,7 @@ export async function handleLogin(options = {}) {
       failCloudLogin(
         options,
         'not_found',
-        `\nSessione non trovata sul server. Riavvia 'jht cloud login'.`
+        `\nSession not found on the server. Restart 'jht cloud login'.`
       );
       return;
     }
@@ -730,7 +730,7 @@ export async function handleLogin(options = {}) {
       failCloudLogin(
         options,
         'poll_failed',
-        `\nPoll error (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`
+        `\nPoll error (HTTP ${res.status}): ${body.error || 'unknown error'}`
       );
       return;
     }
@@ -740,7 +740,7 @@ export async function handleLogin(options = {}) {
     }
     // Status sconosciuto: log e continua, conservativo.
     if (!options.uiJson) {
-      console.error(pc.yellow(`  ⚠ poll status inatteso: ${body.status || 'undefined'}, continuo...`));
+      console.error(pc.yellow(`  ⚠ unexpected polling status: ${body.status || 'undefined'}; continuing...`));
     }
   }
 
@@ -748,7 +748,7 @@ export async function handleLogin(options = {}) {
     failCloudLogin(
       options,
       'timeout',
-      `\nTimeout pairing (${Math.round((init.expires_in ?? 600) / 60)} min). Riavvia 'jht cloud login'.`
+      `\nPairing timeout (${Math.round((init.expires_in ?? 600) / 60)} min). Restart 'jht cloud login'.`
     );
     return;
   }
@@ -768,7 +768,7 @@ export async function handleLogin(options = {}) {
 
   if (!options.uiJson) {
     console.log('');
-    console.log(pc.green(`✓ Pairing completato`));
+    console.log(pc.green(`✓ Pairing completed`));
     console.log(pc.dim(`  Base URL:   ${baseUrl}`));
     console.log(pc.dim(`  Token name: ${approved.token_name ?? 'unnamed'}`));
     console.log(pc.dim(`  User ID:    ${approved.user_id}`));
@@ -785,7 +785,7 @@ export async function handleLogin(options = {}) {
     console.log('');
     console.log(
       pc.yellow(
-        `⚠ Un altro device tiene il claim del team (heartbeat ${conflict.age_seconds}s fa).`
+        `⚠ Another device holds the team claim (heartbeat ${conflict.age_seconds}s ago).`
       )
     );
     console.log(
@@ -796,8 +796,8 @@ export async function handleLogin(options = {}) {
     );
     console.log(
       pc.dim(
-        `  Se avvii il team qui, il vecchio device verrà evicted (con notifica). ` +
-        `Per testare in parallelo senza conflitti, spegni l'altro container prima.`
+        `  If you start the team here, the old device will be evicted (with notification). ` +
+        `To test in parallel without conflicts, turn off the other container first.`
       )
     );
   }
@@ -805,7 +805,7 @@ export async function handleLogin(options = {}) {
   if (options.noPush) {
     if (!options.uiJson) {
       console.log('');
-      console.log(pc.dim(`Push iniziale skippato (--no-push). Esegui: jht cloud push`));
+      console.log(pc.dim(`Initial push skipped (--no-push). Run: jht cloud push`));
     }
     return;
   }
@@ -814,19 +814,19 @@ export async function handleLogin(options = {}) {
   } catch {
     if (!options.uiJson) {
       console.log('');
-      console.log(pc.dim(`Nessun DB locale ancora (${JHT_DB_PATH}). Push skippato.`));
-      console.log(pc.dim(`Avvia il team con 'jht team start' e poi 'jht cloud push'.`));
+      console.log(pc.dim(`No local database yet (${JHT_DB_PATH}). Initial push skipped.`));
+      console.log(pc.dim(`Start the team with 'jht team start' and then 'jht cloud push'.`));
     }
     return;
   }
   if (!options.uiJson) {
     console.log('');
-    console.log(pc.dim('Sincronizzo i dati locali al cloud...'));
+    console.log(pc.dim('Syncing local data to the cloud...'));
   }
   const prevExitCode = process.exitCode;
   await handlePush({});
   if (process.exitCode === 1) {
-    console.log(pc.yellow(`  Pairing OK ma push iniziale fallito. Riprova: jht cloud push`));
+    console.log(pc.yellow(`  Pairing OK but initial push failed. Recover: jht cloud push`));
     process.exitCode = prevExitCode;
   }
 }
@@ -834,11 +834,11 @@ export async function handleLogin(options = {}) {
 async function handleStatus() {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
-    console.log(pc.dim('Cloud sync: ') + pc.yellow('disabilitato'));
-    console.log(pc.dim('Abilita con: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
+    console.log(pc.dim('Cloud sync: ') + pc.yellow('disabled'));
+    console.log(pc.dim('Enable with: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
     return;
   }
-  console.log(pc.dim('Cloud sync: ') + pc.green('abilitato'));
+  console.log(pc.dim('Cloud sync: ') + pc.green('enabled'));
   console.log(pc.dim('Base URL:   ') + config.base_url);
   console.log(pc.dim('Token name: ') + (config.token_name ?? 'unnamed'));
   console.log(pc.dim('User ID:    ') + config.user_id);
@@ -1062,8 +1062,8 @@ function safeCursor(sent, skipped, field) {
 async function handlePush(options) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
-    console.error(pc.red('Cloud sync non abilitato.'));
-    console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
+    console.error(pc.red('Cloud sync is not enabled.'));
+    console.error(pc.dim('Enable with: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
     process.exitCode = 1;
     return { ok: false, authFailed: false, skipped: 0 };
   }
@@ -1078,8 +1078,8 @@ async function handlePush(options) {
   const dbPath = options.db || JHT_DB_PATH;
   const dbExists = await stat(dbPath).then(() => true).catch(() => false);
   if (!dbExists && !profilePayload) {
-    console.error(pc.red(`Database non trovato: ${dbPath}`));
-    console.error(pc.dim('Avvia il team almeno una volta o passa --db <path>'));
+    console.error(pc.red(`Database not found: ${dbPath}`));
+    console.error(pc.dim('Start the team at least once or pass --db <path>'));
     process.exitCode = 1;
     return { ok: false, authFailed: false, skipped: 0 };
   }
@@ -1088,7 +1088,7 @@ async function handlePush(options) {
   try {
     ({ DatabaseSync } = await import('node:sqlite'));
   } catch {
-    console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
+    console.error(pc.red('node:sqlite not available (requires Node 22.5+).'));
     process.exitCode = 1;
     return { ok: false, authFailed: false, skipped: 0 };
   }
@@ -1245,7 +1245,7 @@ async function handlePush(options) {
       }
       db.close();
     } catch (err) {
-      console.error(pc.red(`Errore lettura SQLite: ${err.message}`));
+      console.error(pc.red(`SQLite Reading Error: ${err.message}`));
       process.exitCode = 1;
       return { ok: false, authFailed: false, skipped: 0 };
     }
@@ -1277,7 +1277,7 @@ async function handlePush(options) {
     )
   );
   if (options.dryRun) {
-    console.log(pc.yellow('--dry-run: nulla viene pushato.'));
+    console.log(pc.yellow('--dry-run: nothing is pushed.'));
     // Nessun invio reale → non è un "sync completato": il chiamante non deve
     // ackare. (Il rendezvous "Sync now" non usa mai dryRun.)
     return { ok: false, authFailed: false, skipped: 0, dryRun: true };
@@ -1288,7 +1288,7 @@ async function handlePush(options) {
     highlights.length === 0 && pendingMessages.length === 0 &&
     tombstones.length === 0 && transitions.length === 0 && !profilePayload
   ) {
-    console.log(pc.yellow('Nessun dato da sincronizzare.'));
+    console.log(pc.yellow('No data to sync.'));
     // Già in pari col cloud: niente da spedire = sync di fatto completa →
     // il chiamante PUÒ ackare (nothingToSync). ok=true, skipped=0.
     return { ok: true, authFailed: false, skipped: 0, nothingToSync: true };
@@ -1373,13 +1373,13 @@ async function handlePush(options) {
         }
         if (res.status === 401 || res.status === 403) {
           outcome.aborted = true; outcome.authFailed = true;
-          console.error(pc.red(`Push auth fallita (HTTP ${res.status}): ${res.body.error || 'token?'}`));
+          console.error(pc.red(`Push auth failed (HTTP ${res.status}): ${res.body.error || 'Token?'}`));
           return { confirmed, skipped };
         }
         if (res.status === 413) {
           if (e - s <= 1) {
             skipped.push(items[s]); outcome.skipped += 1;
-            console.error(pc.red(`Push 413 su riga singola (item #${s}): SCARTATA per drenare il resto — riga anomala, ritentata al prossimo tick.`));
+            console.error(pc.red(`Push 413 for a single row (item #${s}): SKIPPED so the remaining queue can drain; the abnormal row will be retried next tick.`));
             continue;
           }
           const mid = s + Math.floor((e - s) / 2);
@@ -1391,10 +1391,10 @@ async function handlePush(options) {
         outcome.aborted = true;
         if (res.timedOut) outcome.timedOut = true;
         if (res.status === 409 && res.body.error === 'not_active_device') {
-          console.error(pc.red(`Push rifiutato (HTTP 409 not_active_device): un altro device ha il claim (active_device_id=${res.body.active_device_id ?? 'unknown'}).`));
-          console.error(pc.dim('  Per riprendere il controllo: jht cloud claim --force'));
+          console.error(pc.red(`Push refused (HTTP 409 not_active_device): another device has the claim (active_device_id=${res.body.active_device_id ?? 'unknown'}).`));
+          console.error(pc.dim('  To regain control: jht cloud claim --force'));
         } else {
-          console.error(pc.red(`Push fallito (HTTP ${res.status}): ${res.body.error || 'errore sconosciuto'}`));
+          console.error(pc.red(`Push failed (HTTP ${res.status}): ${res.body.error || 'unknown error'}`));
         }
         return { confirmed, skipped };
       }
@@ -1481,7 +1481,7 @@ async function handlePush(options) {
     else {
       outcome.aborted = true;
       if (r.timedOut) outcome.timedOut = true;
-      console.error(pc.red(`Push profile fallito (HTTP ${r.status})`));
+      console.error(pc.red(`Push profile failed (HTTP ${r.status})`));
     }
   }
 
@@ -1490,7 +1490,7 @@ async function handlePush(options) {
     // Non avanziamo ALCUN cursore: le richieste già andate a buon fine sono
     // idempotenti (upsert per legacy_id), verranno ri-chunkate al prossimo
     // tick. Nessuna riga persa. Segnaliamo il fallimento al chiamante.
-    console.error(pc.yellow(`Push interrotto dopo ${outcome.requests} richieste — cursore invariato, ritento al prossimo tick.`));
+    console.error(pc.yellow(`Push interrupted after ${outcome.requests} requests — cursor unchanged; retrying on the next tick.`));
     process.exitCode = 1;
     return {
       ok: false,
@@ -1500,12 +1500,12 @@ async function handlePush(options) {
     };
   }
 
-  console.log(pc.green(`✓ Push completato in ${outcome.requests} richieste`));
+  console.log(pc.green(`✓ Push completed in ${outcome.requests} requests`));
   console.log(pc.dim(`  positions: ${outcome.up.positions} · scores: ${outcome.up.scores} · applications: ${outcome.up.applications} · companies: ${outcome.up.companies} · highlights: ${outcome.up.position_highlights} · pending: ${outcome.up.pending_user_messages} · tombstones: ${outcome.up.tombstones} · transitions: ${outcome.up.position_transitions}`));
   if (outcome.skipped > 0) {
     // Segnale forte: righe scartate = una riga singola supera il limite server.
     // L'health-check del Mantenitore (Parte B) lo intercetta.
-    console.error(pc.red(`⚠ ${outcome.skipped} righe SCARTATE (riga singola > limite server): richiedono attenzione.`));
+    console.error(pc.red(`⚠ ${outcome.skipped} rows skipped (a single row exceeds the server limit); attention required.`));
   }
 
   // Cursore SICURO per-tabella: max sul prefisso confermato che precede la
@@ -1592,7 +1592,7 @@ async function handlePair(options) {
   // Idempotenza: se gia' paired e niente --force, no-op.
   const existing = await loadCloudConfig();
   if (existing?.enabled && !options.force) {
-    console.log(pc.dim('Cloud sync gia\' configurato — skip pair (usa --force per re-pair).'));
+    console.log(pc.dim('Cloud sync is already configured; pairing skipped. Use --force to pair again.'));
     // Cancello comunque .pairing-token se ancora presente: un re-run di
     // install.sh ce l'ha lasciato e non vogliamo materiale auth orfano
     // sul filesystem.
@@ -1606,11 +1606,11 @@ async function handlePair(options) {
     raw = await readFile(tokenPath, 'utf-8');
   } catch (err) {
     if (err.code === 'ENOENT') {
-      console.error(pc.red(`Nessun pairing-token trovato in ${tokenPath}.`));
-      console.error(pc.dim('Atteso scenario: install.sh deve essere stato lanciato con --pairing-token.'));
-      console.error(pc.dim('Per pairing manuale usa invece: jht cloud login'));
+      console.error(pc.red(`No pairing token found at ${tokenPath}.`));
+      console.error(pc.dim('The installer must have been run with --pairing-token.'));
+      console.error(pc.dim('For manual pairing, run: jht cloud login'));
     } else {
-      console.error(pc.red(`Errore lettura pairing-token: ${err.message}`));
+      console.error(pc.red(`Reading error pairing-token: ${err.message}`));
     }
     process.exitCode = 1;
     return;
@@ -1618,7 +1618,7 @@ async function handlePair(options) {
 
   const payload = decodePairingToken(raw);
   if (!payload) {
-    console.error(pc.red('pairing-token corrotto o malformato.'));
+    console.error(pc.red('pairing-token is corrupted or malformed.'));
     console.error(pc.dim(`File: ${tokenPath}`));
     process.exitCode = 1;
     return;
@@ -1626,7 +1626,7 @@ async function handlePair(options) {
 
   const deviceName = options.name || `vps-pairing-${new Date().toISOString().slice(0, 10)}`;
   const registerUrl = `${baseUrl}/api/cloud-sync/device-register`;
-  console.log(pc.dim(`Registro questo device su ${registerUrl}…`));
+  console.log(pc.dim(`Register this device on ${registerUrl}…`));
 
   let res;
   try {
@@ -1640,26 +1640,26 @@ async function handlePair(options) {
       }),
     });
   } catch (err) {
-    console.error(pc.red(`Errore di rete: ${err.message}`));
+    console.error(pc.red(`Network error: ${err.message}`));
     process.exitCode = 1;
     return;
   }
 
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    console.error(pc.red(`Pairing fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`));
+    console.error(pc.red(`failed Pairing (HTTP ${res.status}): ${body.error || 'unknown error'}`));
     // 401 = refresh_token scaduto/revocato lato Supabase. Suggerisci la
     // via di uscita: re-pair dal desktop o passare a `jht cloud login`.
     if (res.status === 401) {
-      console.error(pc.dim('Il refresh_token sembra scaduto. Re-genera il pairing dal desktop launcher,'));
-      console.error(pc.dim('oppure usa il pairing browser-based: ') + pc.bold('jht cloud login'));
+      console.error(pc.dim('The refresh_token may have expired. Generate a new pairing from the desktop launcher,'));
+      console.error(pc.dim('or use the pairing browser-based: ') + pc.bold('jht cloud login'));
     }
     process.exitCode = 1;
     return;
   }
 
   if (!body.token || !body.user_id) {
-    console.error(pc.red('Risposta server malformata (manca token/user_id).'));
+    console.error(pc.red('Malformed server response: token or user_id is missing.'));
     process.exitCode = 1;
     return;
   }
@@ -1685,12 +1685,12 @@ async function handlePair(options) {
   // lasciare un refresh_token sul disco.
   try { await unlink(tokenPath); } catch { /* best-effort */ }
 
-  console.log(pc.green('✓ Device registrato sul cloud'));
+  console.log(pc.green('✓ Device registered with the cloud'));
   console.log(pc.dim(`  Base URL:   ${baseUrl}`));
   console.log(pc.dim(`  Token name: ${body.token_name ?? deviceName}`));
   console.log(pc.dim(`  User ID:    ${body.user_id}`));
   console.log(pc.dim(`  File:       ${CLOUD_FILE} (0600)`));
-  console.log(pc.dim(`  Pairing-token cancellato dopo l'uso.`));
+  console.log(pc.dim('  Pairing token deleted after use.'));
 
   // Single-team preflight: warn se un altro device ha già il claim active.
   const conflict = await checkActiveDeviceConflict(baseUrl, body.token);
@@ -1698,13 +1698,13 @@ async function handlePair(options) {
     console.log('');
     console.log(
       pc.yellow(
-        `⚠ Un altro device tiene il claim del team (heartbeat ${conflict.age_seconds}s fa).`
+        `⚠ Another device holds the team claim (heartbeat ${conflict.age_seconds}s ago).`
       )
     );
     console.log(
       pc.dim(
         `  active_device_id: ${conflict.active_device_id?.slice(0, 12)}… ` +
-        `— il reconciler attenderà la scadenza (5min) o un'eviction esplicita.`
+        `— the applicant will wait for the expiry (5min) or an explicit eviction.`
       )
     );
   }
@@ -1713,7 +1713,7 @@ async function handlePair(options) {
 async function handleDisable(options = {}) {
   const config = await loadCloudConfig();
   if (!config) {
-    console.log(pc.dim('Cloud sync gia disabilitato.'));
+    console.log(pc.dim('Cloud sync is already disabled.'));
     return;
   }
   let revoked = false;
@@ -1729,26 +1729,26 @@ async function handleDisable(options = {}) {
       );
       const body = await res.json().catch(() => ({}));
       if (res.ok) revoked = true;
-      else revokeWarning = `revoca remota fallita (HTTP ${res.status}: ${body.error || 'errore sconosciuto'})`;
+      else revokeWarning = `remote revocation failed (HTTP ${res.status}: ${body.error || 'unknown error'})`;
     } catch (err) {
-      revokeWarning = `revoca remota non raggiungibile (${err.message})`;
+      revokeWarning = `remote revocation unavailable (${err.message})`;
     }
   }
   try {
     await unlink(CLOUD_FILE);
-    console.log(pc.green('✓ Cloud sync disabilitato'));
-    console.log(pc.dim('  Token rimosso dalla macchina locale.'));
+    console.log(pc.green('✓ Cloud sync disabled'));
+    console.log(pc.dim('  Token removed from the local machine.'));
     if (revoked) {
-      console.log(pc.dim('  Token revocato anche sul server.'));
+      console.log(pc.dim('  Token also revoked on the server.'));
     } else if (options.localOnly) {
-      console.log(pc.dim('  Revoca remota saltata (--local-only).'));
+      console.log(pc.dim('  Remote revocation skipped (--local-only).'));
     } else if (revokeWarning) {
       console.log(pc.yellow(`  ⚠ ${revokeWarning}`));
-      console.log(pc.dim('  Il sync locale è comunque fermo. Revoca il token su ') +
+      console.log(pc.dim('  Local sync is disabled. Revoke the token at ') +
         `${config.base_url || DEFAULT_BASE_URL}/settings/cloud-sync`);
     }
   } catch (err) {
-    console.error(pc.red(`Errore: ${err.message}`));
+    console.error(pc.red(`Error: ${err.message}`));
     process.exitCode = 1;
   }
 }
@@ -1779,8 +1779,8 @@ async function handlePullDesiredState(options = {}) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
     if (!silent) {
-      console.error(pc.red('Cloud sync non abilitato.'));
-      console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
+      console.error(pc.red('Cloud sync is not enabled.'));
+      console.error(pc.dim('Enable with: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
     }
     process.exitCode = 1;
     return;
@@ -1789,7 +1789,7 @@ async function handlePullDesiredState(options = {}) {
   const dbPath = options.db || JHT_DB_PATH;
   const dbExists = await stat(dbPath).then(() => true).catch(() => false);
   if (!dbExists) {
-    log(pc.dim(`  pull skip: SQLite locale non trovato (${dbPath}). Boot team prima.`));
+    log(pc.dim(`  pull skip: Local SQLite not found (${dbPath}). Boot team first.`));
     return;
   }
 
@@ -1797,7 +1797,7 @@ async function handlePullDesiredState(options = {}) {
   try {
     ({ DatabaseSync } = await import('node:sqlite'));
   } catch {
-    console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
+    console.error(pc.red('node:sqlite not available (requires Node 22.5+).'));
     process.exitCode = 1;
     return;
   }
@@ -1880,7 +1880,7 @@ async function handlePullDesiredState(options = {}) {
         headers: { Authorization: `Bearer ${config.token}` },
       });
     } catch (err) {
-      console.error(pc.yellow(`  pull warn: errore di rete (${err.message})`));
+      console.error(pc.yellow(`  pull warn: network error (${err.message})`));
       process.exitCode = 1;
       return;
     }
@@ -1888,7 +1888,7 @@ async function handlePullDesiredState(options = {}) {
     if (!res.ok) {
       console.error(
         pc.yellow(
-          `  pull warn: HTTP ${res.status} ${body.error || 'errore sconosciuto'}`
+          `  pull warn: HTTP ${res.status} ${body.error || 'unknown error'}`
         )
       );
       process.exitCode = 1;
@@ -1899,7 +1899,7 @@ async function handlePullDesiredState(options = {}) {
   const positions = Array.isArray(body.positions) ? body.positions : [];
   log(
     pc.dim(
-      `Pull desired-state [since=${cursor.since || 'lookback-7d'}]: ${positions.length} righe`
+      `Pull desired-state [since=${cursor.since || 'lookback-7d'}]: ${positions.length} Rows`
     )
   );
 
@@ -1914,10 +1914,10 @@ async function handlePullDesiredState(options = {}) {
         );
       }
       if (positions.length > 10) {
-        log(pc.dim(`  ... +${positions.length - 10} altre righe`));
+        log(pc.dim(`  ... +${positions.length - 10} Other rows`));
       }
     }
-    log(pc.yellow('--dry-run: nessuna UPDATE applicata.'));
+    log(pc.yellow('--dry-run: no UPDATE applied.'));
     return;
   }
 
@@ -1960,7 +1960,7 @@ async function handlePullDesiredState(options = {}) {
     }
     // Loggato anche in silent: è il segnale "l'utente ha scritto dal web".
     if (repliesApplied > 0) {
-      console.log(pc.green(`✓ Reply/ack web applicati in locale: ${repliesApplied}`));
+      console.log(pc.green(`✓ Web replies/acknowledgements applied locally: ${repliesApplied}`));
     }
   }
 
@@ -2098,7 +2098,7 @@ async function handlePullDesiredState(options = {}) {
     }
     db.close();
   } catch (err) {
-    console.error(pc.red(`Errore UPDATE SQLite: ${err.message}`));
+    console.error(pc.red(`UPDATE SQLite Error: ${err.message}`));
     process.exitCode = 1;
     return;
   }
@@ -2108,9 +2108,9 @@ async function handlePullDesiredState(options = {}) {
   // (segnale altrimenti invisibile, dato che il push container→cloud
   // riflette il proprio SQLite e farebbe da eco). Quando updated == 0
   // (tipico, no nuovi click) restiamo zitti se silent.
-  const successMsg = pc.green(`✓ Pull desired-state applicato: ${updated} positions aggiornate`)
-    + (excludeChanges > 0 ? pc.green(` (${excludeChanges} esclusioni utente sincronizzate)`) : '')
-    + (missing > 0 ? pc.dim(` (${missing} legacy_id non presenti localmente, skip)`) : '');
+  const successMsg = pc.green(`✓ Desired-state pull applied: ${updated} positions updated`)
+    + (excludeChanges > 0 ? pc.green(` (${excludeChanges} user exclusions synchronized)`) : '')
+    + (missing > 0 ? pc.dim(` (${missing} legacy_id values not found locally; skipped)`) : '');
   if (updated > 0 || excludeChanges > 0 || !silent) {
     console.log(successMsg);
   }
@@ -2122,7 +2122,7 @@ async function handlePullDesiredState(options = {}) {
     });
   }
   if (body.has_more) {
-    log(pc.dim('  has_more=true: rilancia per recuperare le righe rimanenti'));
+    log(pc.dim('  has_more=true: raise to recover the remaining rows'));
   }
 }
 
@@ -2152,8 +2152,8 @@ async function handleTicketSync(options = {}) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
     if (!silent) {
-      console.error(pc.red('Cloud sync non abilitato.'));
-      console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud login'));
+      console.error(pc.red('Cloud sync is not enabled.'));
+      console.error(pc.dim('Enable with: ') + pc.bold('jht cloud login'));
     }
     process.exitCode = 1;
     return;
@@ -2162,7 +2162,7 @@ async function handleTicketSync(options = {}) {
   const dbPath = options.db || JHT_DB_PATH;
   const dbExists = await stat(dbPath).then(() => true).catch(() => false);
   if (!dbExists) {
-    log(pc.dim(`  ticket-sync skip: SQLite locale non trovato (${dbPath}).`));
+    log(pc.dim(`  ticket-sync skip: Local SQLite not found (${dbPath}).`));
     return;
   }
 
@@ -2170,7 +2170,7 @@ async function handleTicketSync(options = {}) {
   try {
     ({ DatabaseSync } = await import('node:sqlite'));
   } catch {
-    console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
+    console.error(pc.red('node:sqlite not available (requires Node 22.5+).'));
     process.exitCode = 1;
     return;
   }
@@ -2198,7 +2198,7 @@ async function handleTicketSync(options = {}) {
       .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='position_tickets'")
       .get();
     if (!hasTicketsTable) {
-      log(pc.dim('  ticket-sync skip: tabella position_tickets non ancora creata (team al primo boot).'));
+      log(pc.dim('  ticket-sync skip: table position_tickets not yet created (team at first boot).'));
       db.close();
       return;
     }
@@ -2332,7 +2332,7 @@ async function handleTicketSync(options = {}) {
     db.close();
   } catch (err) {
     try { if (db) db.close(); } catch { /* già chiuso */ }
-    console.error(pc.red(`Errore ticket-sync SQLite: ${err.message}`));
+    console.error(pc.red(`Error ticket-sync SQLite: ${err.message}`));
     process.exitCode = 1;
     return;
   }
@@ -2354,9 +2354,9 @@ async function handleTicketSync(options = {}) {
       const more = importedTickets.length > 5 ? ` … +${importedTickets.length - 5}` : '';
       const message =
         `[@system -> @assistente] [NEW-TICKET] ${importedTickets.length} ` +
-        `richiesta/e utente dalla pagina posizione: ${parts.join(' · ')}${more}. ` +
-        `Inoltrala SUBITO al Capitano come [REQ] PRIORITÀ (skill ticket-relay): ` +
-        `le richieste utente vanno in prima fila.`;
+        `user request(s) from position pages: ${parts.join(' · ')}${more}. ` +
+        `Forward them to the Capitano immediately as [REQ] PRIORITY (ticket-relay skill): ` +
+        `user requests take priority.`;
       await new Promise((resolve) => {
         const child = spawn('jht-tmux-send', ['ASSISTENTE', message], {
           stdio: ['ignore', 'ignore', 'ignore'],
@@ -2373,7 +2373,7 @@ async function handleTicketSync(options = {}) {
   if (total > 0 || !silent) {
     console.log(
       pc.green(
-        `✓ Ticket sync: ${imported} importati↓, ${pushedUpdates} aggiornati↑, ${pushedInserts} nuovi↑`
+        `✓ Ticket sync: ${imported} imported ↓, ${pushedUpdates} updated ↑, ${pushedInserts} inserted ↑`
       )
     );
   }
@@ -2397,8 +2397,8 @@ async function handleDirectiveSync(options = {}) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
     if (!silent) {
-      console.error(pc.red('Cloud sync non abilitato.'));
-      console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud login'));
+      console.error(pc.red('Cloud sync is not enabled.'));
+      console.error(pc.dim('Enable with: ') + pc.bold('jht cloud login'));
     }
     process.exitCode = 1;
     return;
@@ -2407,7 +2407,7 @@ async function handleDirectiveSync(options = {}) {
   const dbPath = options.db || JHT_DB_PATH;
   const dbExists = await stat(dbPath).then(() => true).catch(() => false);
   if (!dbExists) {
-    log(pc.dim(`  directive-sync skip: SQLite locale non trovato (${dbPath}).`));
+    log(pc.dim(`  directive-sync skip: Local SQLite not found (${dbPath}).`));
     return;
   }
 
@@ -2415,7 +2415,7 @@ async function handleDirectiveSync(options = {}) {
   try {
     ({ DatabaseSync } = await import('node:sqlite'));
   } catch {
-    console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
+    console.error(pc.red('node:sqlite not available (requires Node 22.5+).'));
     process.exitCode = 1;
     return;
   }
@@ -2437,7 +2437,7 @@ async function handleDirectiveSync(options = {}) {
       .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='team_directives'")
       .get();
     if (!hasTable) {
-      log(pc.dim('  directive-sync skip: tabella team_directives non ancora creata (team al primo boot).'));
+      log(pc.dim('  directive-sync skipped: team_directives table has not been created yet (first team boot).'));
       db.close();
       return;
     }
@@ -2538,7 +2538,7 @@ async function handleDirectiveSync(options = {}) {
     db.close();
   } catch (err) {
     try { if (db) db.close(); } catch { /* già chiuso */ }
-    console.error(pc.red(`Errore directive-sync SQLite: ${err.message}`));
+    console.error(pc.red(`Error directive-sync SQLite: ${err.message}`));
     process.exitCode = 1;
     return;
   }
@@ -2549,7 +2549,7 @@ async function handleDirectiveSync(options = {}) {
   if (total > 0 || !silent) {
     console.log(
       pc.green(
-        `✓ Bacheca sync: ${imported} da cloud↓, ${pushedUpdates} aggiornate↑, ${pushedInserts} nuove↑`
+        `✓ Bacheca sync: ${imported} from cloud↓, ${pushedUpdates} Add to cart , ${pushedInserts} New products`
       )
     );
   }
@@ -2687,9 +2687,9 @@ export async function handleSyncRendezvous(options = {}) {
   if (pushOutcome.status !== 'ready_to_ack') {
     if (!silent) {
       const why = pushResult && (pushResult.skipped || 0) > 0
-        ? `${pushResult.skipped} righe scartate`
-        : 'push non riuscito';
-      console.error(pc.yellow(`  sync-rendezvous: ack NON scritto (${why}) — esito pubblicato, serve una nuova richiesta per ritentare.`));
+        ? `${pushResult.skipped} skipped rows`
+        : 'push failed';
+      console.error(pc.yellow(`  sync-rendezvous: ACK not written (${why}) — the outcome was published; a new request is required to retry.`));
     }
     const published = await publishSyncOutcomeBestEffort(
       config, reqAt, pushOutcome.status, { fetchFn },
@@ -2719,7 +2719,7 @@ export async function handleSyncRendezvous(options = {}) {
     if (ack.status === 'completed') {
       console.log(pc.green(`✓ Sync now servito: push fresco + ack (${ack.via})`));
     } else {
-      console.error(pc.yellow(`  sync-rendezvous: ${ack.status}; ack non confermato`));
+      console.error(pc.yellow(`  sync-rendezvous: ${ack.status}; not confirmed`));
     }
   }
   return ack;
@@ -2800,7 +2800,7 @@ export async function handleChatSync(options = {}) {
   try {
     ({ DatabaseSync } = await import('node:sqlite'));
   } catch {
-    log('error', 'chat-sync: node:sqlite non disponibile (sqlite_unavailable)');
+    log('error', 'chat-sync: node:sqlite not available (sqlite_unavailable)');
     return { status: 'sqlite_unavailable' };
   }
 
@@ -2815,7 +2815,7 @@ export async function handleChatSync(options = {}) {
     // ferma la chat per intero, ed è esattamente ciò che deve farsi vedere
     // anche dal daemon.
     const code = typeof err?.code === 'string' ? err.code : 'open_failed';
-    log('error', `chat-sync: DB non apribile (${code})`);
+    log('error', `chat-sync: unable to open DB (${code})`);
     return { status: 'db_unavailable' };
   }
   // Le colonne arrivano da _db.py alla prima apertura di un agente: un
@@ -2852,7 +2852,7 @@ export async function handleChatSync(options = {}) {
         importedIds = chat.importCloudUserTurns(db, cloudRows, { jhtHome });
       } catch (err) {
         readError = chat.cloudRequestFailure(err);
-        log('warn', `chat-sync: lettura turni utente fallita (${readError})`);
+        log('warn', `chat-sync: failed to read user turns (${readError})`);
       }
     }
 
@@ -2902,7 +2902,7 @@ export async function handleChatSync(options = {}) {
         acked = closeRendezvous && acknowledgement?.closed !== false;
       } catch (err) {
         ackFailed = true;
-        log('warn', `chat-sync: ack consegna fallito (${chat.cloudRequestFailure(err)})`);
+        log('warn', `chat-sync: failed delivery ack (${chat.cloudRequestFailure(err)})`);
       }
     }
 
@@ -2929,9 +2929,9 @@ export async function handleChatSync(options = {}) {
     if (!silent && (moved > 0 || mirrored.backfilled > 0)) {
       console.log(
         pc.green(
-          `✓ Chat: ${ingested.inserted} da chat.jsonl↓, ${mirrored.mirrored} verso chat.jsonl↑, ` +
-          `${sent.delivered} consegnati all'agente, ${pushed} pushati` +
-          (mirrored.backfilled > 0 ? ` (${mirrored.backfilled} storici marcati senza riversarli)` : '')
+          `✓ Chat: ${ingested.inserted} from chat.jsonl↓, ${mirrored.mirrored} verso chat.jsonl↑, ` +
+          `${sent.delivered} delivered to the agent, ${pushed} pushed` +
+          (mirrored.backfilled > 0 ? ` (${mirrored.backfilled} historical marked without spilling them)` : '')
         )
       );
     }
@@ -2953,7 +2953,7 @@ export async function handleChatSync(options = {}) {
       acked,
     };
   } catch (err) {
-    log('error', `chat-sync: giro fallito (${String(err?.code || err?.name || 'processing_error')})`);
+    log('error', `chat-sync: cycle failed (${String(err?.code || err?.name || 'processing_error')})`);
     return { status: 'processing_error' };
   } finally {
     try { db.close(); } catch { /* già chiuso */ }
@@ -3021,7 +3021,7 @@ async function reportChatLane(chat, config, reader, stall) {
 
   if (!stall) {
     if (!chatLaneAlert) return;
-    console.log(pc.green(`✓ chat: corsia di nuovo operativa (era: ${chatLaneAlert.summary})`));
+    console.log(pc.green(`✓ chat: lane again operational (was: ${chatLaneAlert.summary})`));
     chatLaneAlert = null;
     await patchTeamStateBestEffort(config, reader, { last_error: null });
     return;
@@ -3067,7 +3067,7 @@ async function pushChatRows(config, rows, ids, log) {
       });
       res = { status: r.status, ok: r.ok };
     } catch (err) {
-      log('warn', `chat push: rete (${err.message}) — ritento al prossimo giro`);
+      log('warn', `chat push: rete (${err.message}) — the next round`);
       return ok;
     }
     if (res.ok) {
@@ -3081,11 +3081,11 @@ async function pushChatRows(config, rows, ids, log) {
       continue;
     }
     if (res.status === 413) {
-      log('error', `chat push: 413 su un singolo messaggio (#${s}) — scartato, il resto prosegue`);
+      log('error', `chat push: 413 on a single message (#${s}) — discarded, the rest continues`);
       ok.push(ids[s]);
       continue;
     }
-    log('warn', `chat push: HTTP ${res.status} — ritento al prossimo giro`);
+    log('warn', `chat push: HTTP ${res.status} — the next round`);
     return ok;
   }
   return ok;
@@ -3139,7 +3139,7 @@ async function maybeBootstrapPush(options = {}) {
     });
     if (!silent) {
       console.log(pc.dim(
-        `  bootstrap-push chiuso (${decision.doneReason}) — da qui in poi il cloud si aggiorna solo su richiesta del browser.`
+        `  bootstrap-push closed (${decision.doneReason}) — from here on, the cloud only updates on request of the browser.`
       ));
     }
   }
@@ -3148,7 +3148,7 @@ async function maybeBootstrapPush(options = {}) {
   const attempt = (Number.isFinite(state.pushes) ? state.pushes : 0) + 1;
   if (!silent) {
     console.log(pc.dim(
-      `  bootstrap-push ${attempt}/${limits.maxPushes} (${decision.reason}, phase=${phase}) — account nuovo, spingo senza attendere un browser.`
+      `  bootstrap-push ${attempt}/${limits.maxPushes} (${decision.reason}, phase=${phase}) — new accounts, I push without waiting for a browser.`
     ));
   }
 
@@ -3160,7 +3160,7 @@ async function maybeBootstrapPush(options = {}) {
   await saveBootstrapState(nextBootstrapState({ state, now, signature, result }));
 
   if (!silent && result && result.authFailed === true) {
-    console.error(pc.yellow('  bootstrap-push chiuso (auth) — token non valido, smetto di spingere senza browser.'));
+    console.error(pc.yellow('  bootstrap-push disabled (auth): invalid token; open the browser before retrying.'));
   }
   return { ...decision, result };
 }
@@ -3218,19 +3218,19 @@ async function handleDaemon(options) {
 
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
-    console.error(pc.red('Cloud sync non abilitato: il daemon non puo\' girare.'));
-    console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud login') + pc.dim(' (pairing browser)'));
+    console.error(pc.red('Cloud sync is not enabled; the daemon cannot start.'));
+    console.error(pc.dim('Enable with: ') + pc.bold('jht cloud login') + pc.dim(' (pairing browser)'));
     process.exitCode = 1;
     return;
   }
 
-  console.log(pc.dim(`Cloud sync daemon: letture utente→team ogni ${intervalSec}s (Supabase) + push on-demand su "Sync now" → ${config.base_url}`));
+  console.log(pc.dim(`Cloud sync daemon: user readings→team every ${intervalSec}s (Supabase) + push on-demand su "Sync now" → ${config.base_url}`));
 
   let running = true;
   const shutdown = (sig) => {
     if (!running) return;
     running = false;
-    console.log(pc.dim(`\nRicevuto ${sig}, esco dal loop...`));
+    console.log(pc.dim(`\nReceived ${sig}; leaving the loop...`));
   };
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
@@ -3260,19 +3260,19 @@ async function handleDaemon(options) {
   // a ~5s. Con flag OFF resta il loop poll qui sotto (comportamento odierno invariato).
   if (realtimeSyncEnabled()) {
     await runRealtimeLoop({ config, isRunning: () => running });
-    console.log(pc.dim('Daemon terminato (event-driven).'));
+    console.log(pc.dim('Daemon stopped (event-driven).'));
     return;
   }
 
   while (running) {
     if (existsSync(WEEKLY_HALT_FLAG)) {
       if (haltSkipCount % heavyEvery === 0) {
-        console.log(pc.dim(`  HALT-WEEKLY attivo (${WEEKLY_HALT_FLAG}) — sync sospesa.`));
+        console.log(pc.dim(`  HALT-WEEKLY active (${WEEKLY_HALT_FLAG}) Sync suspended.`));
       }
       haltSkipCount += 1;
     } else {
       if (haltSkipCount > 0) {
-        console.log(pc.green(`  HALT-WEEKLY rimosso, riprendo.`));
+        console.log(pc.green(`  HALT-WEEKLY removed, resume.`));
         haltSkipCount = 0;
       }
       const doHeavy = fastTick % heavyEvery === 0;
@@ -3376,7 +3376,7 @@ async function handleDaemon(options) {
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
-  console.log(pc.dim('Daemon terminato.'));
+  console.log(pc.dim('Daemon stopped.'));
 }
 
 /**
@@ -3460,9 +3460,9 @@ async function runRealtimeLoop({ config, isRunning }) {
     // IDENTITY FULL). La RLS consegna solo le righe dell'utente.
     rt.subscribe('tickets', { table: 'position_tickets', event: '*' }, () => { void runTicketSync('realtime'); });
 
-    log('info', 'realtime pronto (team_state + position_tickets) — sync/ticket via websocket + paracadute attivo.');
+    log('info', 'realtime ready (team_state + position_tickets) — sync/ticket via websocket + active parachute.');
   } catch (e) {
-    console.error(pc.yellow(`  cloud-realtime setup fallito (${e.message}) — degrado al solo paracadute poll.`));
+    console.error(pc.yellow(`  cloud-realtime failed setup (${e.message}) — degradation to parachute polls only.`));
   }
 
   // ── Cadenze lente (tappe 4-5-6) ──
@@ -3541,19 +3541,19 @@ async function handlePullProfile(options = {}) {
   const log = (msg) => { if (!options.silent) console.log(msg); };
   const config = await loadCloudConfig();
   if (!config || config.enabled === false) {
-    log(pc.dim('cloud non abilitato — skip pull-profile'));
+    log(pc.dim('cloud sync disabled — pull-profile skipped'));
     return;
   }
   const baseUrl = (config.base_url || '').replace(/\/+$/, '');
   const token = config.token;
   if (!baseUrl || !token) {
-    if (!options.silent) console.error(pc.red('config cloud incompleta (base_url/token)'));
+    if (!options.silent) console.error(pc.red('incomplete cloud config (base_url/token)'));
     return;
   }
 
   const profilePath = join(PROFILE_DIR, 'candidate_profile.yml');
   if (existsSync(profilePath) && !options.force) {
-    log(pc.dim("profilo locale gia' presente — skip (usa --force per sovrascrivere)"));
+    log(pc.dim("local profile already present — skip (use --force to overwrite)"));
     return;
   }
 
@@ -3563,7 +3563,7 @@ async function handlePullProfile(options = {}) {
       headers: { Authorization: `Bearer ${token}` },
     });
   } catch (err) {
-    if (!options.silent) console.error(pc.red('pull-profile: errore di rete'), err.message);
+    if (!options.silent) console.error(pc.red('pull-profile: network error'), err.message);
     return;
   }
   if (!res.ok) {
@@ -3573,31 +3573,31 @@ async function handlePullProfile(options = {}) {
   let data;
   try { data = await res.json(); } catch { data = null; }
   if (!data || !data.ok) {
-    if (!options.silent) console.error(pc.red('pull-profile: ' + ((data && data.error) || 'risposta non valida')));
+    if (!options.silent) console.error(pc.red('pull-profile: ' + ((data && data.error) || 'invalid response')));
     return;
   }
   if (!data.configured || !data.yaml) {
-    log(pc.dim('nessun profilo sul cloud — niente da scaricare'));
+    log(pc.dim('no cloud profile — nothing to download'));
     return;
   }
 
   await mkdir(PROFILE_DIR, { recursive: true });
   await writeFile(profilePath, data.yaml);
-  log(pc.green('✓') + ` profilo scaricato dal cloud -> ${profilePath}`);
+  log(pc.green('✓') + ` Profile downloaded from cloud -> ${profilePath}`);
 }
 
 export function registerCloudCommand(program) {
   const cloud = program
     .command('cloud')
-    .description('Gestione cloud sync (opt-in): enable, status, disable');
+    .description('Manage optional cloud sync: enable, status, disable');
 
   cloud
     .command('login')
-    .description('Pairing browser-based: nessun token paste manuale (consigliato)')
-    .option('--url <url>', `Base URL del cloud (default ${DEFAULT_BASE_URL})`)
-    .option('--name <name>', 'Suggerimento per il nome del token sul web (es. "vps-marco")')
-    .option('--ui-json', 'Emette eventi sicuri machine-readable per la UI nativa')
-    .option('--no-push', 'Salta il push iniziale dei dati locali (default: push automatico)')
+    .description('Pairing browser-based: no manual token paste (recommended)')
+    .option('--url <url>', `cloud base URL (default: ${DEFAULT_BASE_URL})`)
+    .option('--name <name>', 'suggested web token name (for example, "vps-laptop")')
+    .option('--ui-json', 'Emit safe machine-readable events for the native UI')
+    .option('--no-push', 'Skip the initial push of local data (default: automatic push)')
     .action(handleLogin);
 
   // `pair` — non-interattivo: legge .pairing-token (salvato da install.sh
@@ -3605,37 +3605,37 @@ export function registerCloudCommand(program) {
   // device dell'utente. Pid1 lo invoca al primo boot del container su VPS.
   cloud
     .command('pair')
-    .description('Pair non-interattivo via .pairing-token (usato da pid1 al primo boot su VPS)')
-    .option('--url <url>', `Base URL del cloud (default ${DEFAULT_BASE_URL})`)
-    .option('--name <name>', 'Nome del token sul web (default: vps-pairing-YYYY-MM-DD)')
-    .option('--token-file <path>', `Path del pairing-token (default ${PAIRING_TOKEN_FILE})`)
-    .option('--force', 'Re-pair anche se cloud.json esiste gia\'')
+    .description('Pair non-interactively through .pairing-token (used by pid1 on the first VPS boot)')
+    .option('--url <url>', `cloud base URL (default: ${DEFAULT_BASE_URL})`)
+    .option('--name <name>', 'Name of the token on the web (default: vps-pairing-YYYY-MM-DD)')
+    .option('--token-file <path>', `pairing-token path (default: ${PAIRING_TOKEN_FILE})`)
+    .option('--force', 'pair again even when cloud.json already exists')
     .action(handlePair);
 
   cloud
     .command('enable')
-    .description('Abilita cloud sync con un token gia\' generato dal web (manual paste)')
-    .option('--token <token>', 'Token jht_sync_... (obbligatorio)')
-    .option('--url <url>', `Base URL del cloud (default ${DEFAULT_BASE_URL})`)
-    .option('--no-push', 'Salta il push iniziale dei dati locali (default: push automatico)')
+    .description('Enable cloud sync with a token already generated by the web (manual paste)')
+    .option('--token <token>', 'jht sync token (required)')
+    .option('--url <url>', `cloud base URL (default: ${DEFAULT_BASE_URL})`)
+    .option('--no-push', 'Skip the initial push of local data (default: automatic push)')
     .action(handleEnable);
 
   cloud
     .command('status')
-    .description('Mostra stato cloud sync')
+    .description('Show cloud sync status')
     .action(handleStatus);
 
   cloud
     .command('claim')
-    .description('Prende il claim del team per questo device (usa --force per un takeover)')
-    .option('--force', 'Evicta il device attivo e invalida i cursor locali precedenti')
+    .description('Acquire the team claim for this device (use --force for a takeover)')
+    .option('--force', 'evict the active device and invalidate previous local cursors')
     .action(handleClaim);
 
   cloud
     .command('push')
-    .description('Sincronizza metadati SQLite locale -> cloud (one-shot)')
-    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
-    .option('--dry-run', 'Mostra cosa verrebbe pushato senza chiamare il cloud')
+    .description('Synchronize local SQLite metadata to the cloud once')
+    .option('--db <path>', 'SQLite database path (default: ~/.jht/jobs.db)')
+    .option('--dry-run', 'Show what would be pushed without calling the cloud')
     .action(handlePush);
 
   // `bootstrap-status` — [CLOUDSYNC-PUSH-ONLY-WHEN-WATCHED] finestra sul push
@@ -3644,7 +3644,7 @@ export function registerCloudCommand(program) {
   // si può interrogare anche su un box in produzione senza effetti.
   cloud
     .command('bootstrap-status')
-    .description('Stato del push automatico del primo periodo (account nuovo): budget residuo e prossima decisione')
+    .description('Show first-period automatic-push state, remaining budget, and next decision')
     .action(async () => {
       const limits = bootstrapLimits();
       const state = readBootstrapState();
@@ -3659,28 +3659,28 @@ export function registerCloudCommand(program) {
         decision = decideBootstrapPush({ now: Date.now(), phase, state, limits, signature });
       }
       const pushes = Number.isFinite(state.pushes) ? state.pushes : 0;
-      console.log(pc.bold('Bootstrap push (primo periodo di vita dell\'account)'));
-      console.log(`  first-run:   ${pc.bold(phase ?? 'sconosciuta')} ${pc.dim(`(${FIRST_RUN_STATE_FILE})`)}`);
-      console.log(`  stato:       ${state.done === true ? pc.yellow(`chiuso (${state.done_reason ?? '?'})`) : pc.green('attivo')} ${pc.dim(`(${BOOTSTRAP_STATE_FILE})`)}`);
-      console.log(`  push fatti:  ${pushes}/${limits.maxPushes}`);
-      console.log(`  cadenza:     ${Math.round(limits.intervalMs / 1000)}s · finestra ${Math.round(limits.windowMs / 3600000)}h · ultimo ${state.last_push_at ?? '—'}`);
-      console.log(`  ora farebbe: ${decision.push ? pc.green(`PUSH (${decision.reason})`) : pc.dim(`niente (${decision.reason})`)}`);
-      if (!limits.enabled) console.log(pc.yellow('  JHT_CLOUD_BOOTSTRAP_PUSH=0 → disattivato.'));
+      console.log(pc.bold('Bootstrap push (initial account period)'));
+      console.log(`  first-run:   ${pc.bold(phase ?? 'unknown')} ${pc.dim(`(${FIRST_RUN_STATE_FILE})`)}`);
+      console.log(`  status:      ${state.done === true ? pc.yellow(`closed (${state.done_reason ?? '?'})`) : pc.green('active')} ${pc.dim(`(${BOOTSTRAP_STATE_FILE})`)}`);
+      console.log(`  pushes:      ${pushes}/${limits.maxPushes}`);
+      console.log(`  cadence:     ${Math.round(limits.intervalMs / 1000)}s · window ${Math.round(limits.windowMs / 3600000)}h · last ${state.last_push_at ?? '—'}`);
+      console.log(`  next action: ${decision.push ? pc.green(`PUSH (${decision.reason})`) : pc.dim(`none (${decision.reason})`)}`);
+      if (!limits.enabled) console.log(pc.yellow('  JHT_CLOUD_BOOTSTRAP_PUSH=0 → disabled.'));
     });
 
   cloud
     .command('pull-desired-state')
-    .description('Recupera flag user-driven (write_requested) da cloud -> SQLite locale')
-    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
-    .option('--full', 'Ignora cursor (lookback 7gg server-side)')
-    .option('--limit <n>', 'Max righe per chiamata (default 500, max 2000)')
-    .option('--dry-run', 'Mostra cosa verrebbe applicato senza UPDATE')
-    .option('--silent', 'Output minimo (per il boot)')
+    .description('Retrieve user-driven write_requested flags from the cloud into local SQLite')
+    .option('--db <path>', 'SQLite database path (default: ~/.jht/jobs.db)')
+    .option('--full', 'ignore cursors (server-side 7-day lookback)')
+    .option('--limit <n>', 'maximum rows per call (default 500, max 2000)')
+    .option('--dry-run', 'Show what would be applied without UPDATE')
+    .option('--silent', 'Minimum output (for boot)')
     .action(handlePullDesiredState);
 
   cloud
     .command('chat-sync')
-    .description('Un giro della corsia chat: chat.jsonl <-> SQLite, consegna al pane, push al cloud')
+    .description('Run one chat cycle: chat.jsonl <-> SQLite, tmux-pane delivery, and cloud push')
     .action(async () => {
       const config = await loadCloudConfig();
       // A mano si vuole anche il PULL, non solo i passi locali: si legge la
@@ -3691,31 +3691,31 @@ export function registerCloudCommand(program) {
 
   cloud
     .command('sync-tickets')
-    .description('Round-trip ticket cloud<->VPS: importa i ticket utente, pusha le risoluzioni del team')
-    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
-    .option('--full', 'Ignora i cursor (pull lookback 7gg, push tutto)')
-    .option('--silent', 'Output minimo (per il boot)')
+    .description('Round-trip ticket cloud<->VPS: import user tickets, push team resolutions')
+    .option('--db <path>', 'SQLite database path (default: ~/.jht/jobs.db)')
+    .option('--full', 'ignore cursors (7-day pull lookback; push everything)')
+    .option('--silent', 'Minimum output (for boot)')
     .action(handleTicketSync);
 
   cloud
     .command('sync-directives')
-    .description('Round-trip bacheca (team_directives) cloud<->VPS: importa gli edit dal dashboard, pusha le direttive locali')
-    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
-    .option('--full', 'Ignora i cursor (pull lookback 30gg, push tutto)')
-    .option('--silent', 'Output minimo (per il boot)')
+    .description('Round-trip board (team_directives) cloud<->VPS: import edits from dashboard, push local directives')
+    .option('--db <path>', 'SQLite database path (default: ~/.jht/jobs.db)')
+    .option('--full', 'ignore cursors (30-day pull lookback; push everything)')
+    .option('--silent', 'minimal output (for boot)')
     .action(handleDirectiveSync);
 
   cloud
     .command('pull-profile')
-    .description('Scarica il profilo dal cloud -> candidate_profile.yml (only-if-absent)')
-    .option('--force', "Sovrascrive il profilo locale anche se gia' presente")
-    .option('--silent', 'Output minimo (per il boot)')
+    .description('Download cloud profile -> candidate_profile.yml (only-if-absent)')
+    .option('--force', "Overwrites the local profile even if already present")
+    .option('--silent', 'Minimum output (for boot)')
     .action(handlePullProfile);
 
   cloud
     .command('disable')
-    .description('Ferma il sync, revoca il token cloud e lo rimuove dal dispositivo')
-    .option('--local-only', 'Rimuove il token solo da questo dispositivo senza revocarlo sul server')
+    .description('Stop sync, revoke the cloud token, and remove it from this device')
+    .option('--local-only', 'remove the token from this device without revoking it on the server')
     .action(handleDisable);
 
   // `restore` — disaster recovery: ricostruisce SQLite locale (positions /
@@ -3724,9 +3724,9 @@ export function registerCloudCommand(program) {
   // esplicita interattiva, --confirm-restore per skip in CI.
   cloud
     .command('restore')
-    .description('Ricostruisce SQLite locale dallo snapshot cloud (positions/scores/applications)')
-    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
-    .option('--confirm-restore', 'Skip conferma interattiva (richiesto per CI / script)')
+    .description('Rebuilds local SQLite from cloud snapshot (positions/scores/applications)')
+    .option('--db <path>', 'SQLite database path (default: ~/.jht/jobs.db)')
+    .option('--confirm-restore', 'skip interactive confirmation (required for CI or scripts)')
     .action(handleRestore);
 
   // `daemon` e' pensato come PID 1 del container su VPS: ciclo push
@@ -3737,8 +3737,8 @@ export function registerCloudCommand(program) {
   // motivo del cambio da 30s).
   cloud
     .command('daemon')
-    .description('Loop di push continuo (usato come PID 1 del container su VPS)')
-    .option('--interval <sec>', 'Secondi tra un push e il successivo (env JHT_CLOUD_PUSH_INTERVAL_SEC)')
+    .description('Continuous push loop (used as PID 1 of the container on VPS)')
+    .option('--interval <sec>', 'Seconds between a push and the next (env JHT_CLOUD_PUSH_INTERVAL_SEC)')
     .action(handleDaemon);
 
   // `realtime-listen` — long-running WebSocket subscriber su Supabase
@@ -3747,7 +3747,7 @@ export function registerCloudCommand(program) {
   // Co-spawnato da pid1 accanto a `cloud daemon`.
   cloud
     .command('realtime-listen')
-    .description('Subscriber Realtime per comandi team (start/stop) dal web')
+    .description('Subscriber Realtime for team commands (start/stop) from the web')
     .action(async () => {
       const { runTeamCommandsPoller } = await import('../lib/team-commands-poller.js');
       await runTeamCommandsPoller();
@@ -3760,7 +3760,7 @@ export function registerCloudCommand(program) {
   // i due subscriber chiamano gli stessi `jht team <action>`.
   cloud
     .command('team-state-listen')
-    .description('Reconciler team_state (desired-state, parallelo a realtime-listen)')
+    .description('Reconcile team_state desired state in parallel with realtime-listen')
     .action(async () => {
       const { runTeamStateReconciler } = await import('../lib/team-state-reconciler.js');
       await runTeamStateReconciler();
@@ -3785,7 +3785,7 @@ export function registerCloudCommand(program) {
   // docs/internal/file-bridge-on-demand-2026-06-07.md
   cloud
     .command('file-bridge-listen')
-    .description('Poller file bridge (indice + upload on-demand CV/allegati al web)')
+    .description('Poll the file bridge index and upload CVs/attachments to the web on demand')
     .action(async () => {
       const { runFileBridgePoller } = await import('../lib/file-bridge-poller.js');
       await runFileBridgePoller();
@@ -3797,31 +3797,31 @@ export function registerCloudCommand(program) {
   // (install.sh) che vogliono decidere se proseguire.
   cloud
     .command('preflight')
-    .description('Controlla se esiste già un team active per questo utente (exit 0=libero, 2=occupato)')
+    .description('Check for another active team for this user (exit 0=free, 2=another active device)')
     .action(async () => {
       const config = await loadCloudConfig();
       if (!config?.enabled) {
-        console.error(pc.red('Cloud sync non abilitato: preflight richiede pairing prima.'));
+        console.error(pc.red('Cloud sync is not enabled; preflight requires pairing first.'));
         process.exitCode = 1;
         return;
       }
       const baseUrl = (config.base_url || '').replace(/\/+$/, '');
       const conflict = await checkActiveDeviceConflict(baseUrl, config.token);
       if (!conflict.conflict) {
-        console.log(pc.green('✓ Nessun team attivo concorrente. Procedi liberamente.'));
+        console.log(pc.green('✓ No competing active team. Proceed freely.'));
         return;
       }
       console.log(
         pc.yellow(
-          `⚠ Team già attivo su altro device (heartbeat ${conflict.age_seconds}s fa).`
+          `⚠ Team already active on another device (heartbeat ${conflict.age_seconds}s ago).`
         )
       );
       console.log(
         pc.dim(
           `  active_device_id: ${conflict.active_device_id?.slice(0, 12)}…\n` +
           `  claimed_at:       ${conflict.claimed_at ?? 'unknown'}\n` +
-          `  Per evictare: avvia il container — il reconciler ritenterà ogni 60s\n` +
-          `  e prenderà il claim quando il vecchio device sparisce (5min).`
+          `  To evict it, start the container; the reconciler retries every 60s\n` +
+          `  and will take the claim when the old device disappears (5min).`
         )
       );
       process.exitCode = 2;

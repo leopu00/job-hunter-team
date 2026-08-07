@@ -62,7 +62,7 @@ async function handleLogs(options) {
   }
 
   if (logFiles.length === 0) {
-    console.log('\n  Nessun file di log trovato.\n');
+    console.log('\n  No log files found.\n');
     return;
   }
 
@@ -91,11 +91,11 @@ async function handleLogs(options) {
   const slice = allEntries.slice(-tail);
 
   if (slice.length === 0) {
-    console.log(`\n  Nessun log trovato (livello: ${level}${module ? `, modulo: ${module}` : ''}).\n`);
+    console.log(`\n  No logs found (level: ${level}${module ? `, form: ${module}` : ''}).\n`);
     return;
   }
 
-  console.log(`\n  JHT — Log (ultimi ${slice.length}, livello ≤ ${level})\n`);
+  console.log(`\n  JHT — Logs ${slice.length}, level ≤ ${level})\n`);
   for (const e of slice) {
     const color = LEVEL_COLOR[e.level] ?? '';
     const time = fmtTime(e.ts);
@@ -109,9 +109,9 @@ async function handleLogs(options) {
 export function registerLogsCommand(program) {
   program
     .command('logs')
-    .description('Mostra log strutturati con filtri')
-    .option('-l, --level <level>', 'livello minimo: error, warn, info, debug', 'info')
-    .option('-m, --module <module>', 'filtra per modulo/sorgente')
-    .option('-t, --tail <n>', 'numero di righe (default 50, max 500)', '50')
+    .description('Show structured logs with filters')
+    .option('-l, --level <level>', 'minimum level: error, warn, info, debug', 'info')
+    .option('-m, --module <module>', 'filter by module/source')
+    .option('-t, --tail <n>', 'number of rows (default 50, max 500)', '50')
     .action(handleLogs);
 }

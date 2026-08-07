@@ -109,11 +109,11 @@ def _signal(pids, sig):
 
 def main():
     ap = argparse.ArgumentParser(add_help=True)
-    ap.add_argument("marker", help="sottostringa da cercare nel cmdline")
+    ap.add_argument("marker", help="substring to find in the command line")
     ap.add_argument("--grace", type=float, default=0.0,
-                    help="secondi tra SIGTERM e SIGKILL (0 = solo SIGTERM)")
+                    help="seconds between SIGTERM and SIGKILL (0 = SIGTERM only)")
     ap.add_argument("--settle", type=float, default=0.0,
-                    help="secondi di attesa finale prima di uscire")
+                    help="seconds to wait before exiting")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 

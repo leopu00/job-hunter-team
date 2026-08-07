@@ -31,10 +31,10 @@ function fmtDate(ms) {
   const d = new Date(ms);
   const now = new Date();
   const diff = Math.floor((now.getTime() - ms) / 86400000);
-  if (diff === 0) return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-  if (diff === 1) return 'ieri';
-  if (diff < 7) return `${diff}g fa`;
-  return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+  if (diff === 0) return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  if (diff === 1) return 'yesterday';
+  if (diff < 7) return `${diff}d ago`;
+  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
 }
 
 async function handleNotifications(action, options) {
@@ -42,8 +42,8 @@ async function handleNotifications(action, options) {
   if (action === 'read') return await markRead(options);
   if (action === 'clear') return await clearNotifications();
 
-  console.error(`  Azione non valida: ${action}`);
-  console.error('  Azioni: list, read --id <id>, clear');
+  console.error(`  Invalid action: ${action}`);
+  console.error('  Actions: list, read --id <id>, clear');
   process.exitCode = 1;
 }
 
@@ -53,13 +53,13 @@ async function listNotifications(options) {
   if (!options.all) notifs = notifs.filter(n => !n.read);
 
   if (notifs.length === 0) {
-    console.log(`\n  ${DIM}Nessuna notifica${options.all ? '' : ' non letta'}.${RESET}\n`);
+    console.log(`\n  ${DIM}No notification${options.all ? '' : ' not read'}.${RESET}\n`);
     return;
   }
 
   const total = store.notifications?.length ?? 0;
   const unread = (store.notifications ?? []).filter(n => !n.read).length;
-  console.log(`\n  ${BOLD}JHT — Notifiche${RESET} (${unread} non lette / ${total} totali)\n`);
+  console.log(`\n  ${BOLD}JHT — Notifications${RESET} (${unread} unread / ${total} total)\n`);
 
   for (const n of notifs.slice(-50).reverse()) {
     const color = LEVEL_COLOR[n.level] ?? DIM;
@@ -74,7 +74,7 @@ async function listNotifications(options) {
 
 async function markRead(options) {
   if (!options.id && !options.all) {
-    console.error('  Usa --id <id> o --all per segnare come lette');
+    console.error('  Use --id <id> or --all to mark as read');
     process.exitCode = 1;
     return;
   }
@@ -87,7 +87,7 @@ async function markRead(options) {
   }
 
   await saveStore(store);
-  console.log(`\n  ${count} notifiche segnate come lette.\n`);
+  console.log(`\n  ${count} notifications marked as read.\n`);
 }
 
 async function clearNotifications() {
@@ -95,15 +95,15 @@ async function clearNotifications() {
   const count = store.notifications?.length ?? 0;
   store.notifications = [];
   await saveStore(store);
-  console.log(`\n  ${count} notifiche eliminate.\n`);
+  console.log(`\n  ${count} notifications deleted.\n`);
 }
 
 export function registerNotificationsCommand(program) {
   program
     .command('notifications [action]')
     .alias('notif')
-    .description('Gestione notifiche (azioni: list, read, clear)')
-    .option('--id <id>', 'ID notifica da segnare come letta')
-    .option('-a, --all', 'mostra tutte / segna tutte come lette')
+    .description('Notification management (actions: list, read, clear)')
+    .option('--id <id>', 'Notification ID to mark as read')
+    .option('-a, --all', 'show all / mark all as read')
     .action(handleNotifications);
 }

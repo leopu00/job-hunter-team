@@ -256,7 +256,7 @@ function probeCandidate(spec, configText, alias, log) {
   const probeCfg = join(dir, 'config.toml');
   writeFileSync(probeCfg, configText, 'utf-8');
   const args = spec.probeArgs(probeCfg, alias);
-  const shown = `${spec.bin} ${args.map((a) => (a === probeCfg ? '<copia-del-config>' : a)).join(' ')}`;
+  const shown = `${spec.bin} ${args.map((a) => (a === probeCfg ? '<config-copy>' : a)).join(' ')}`;
   log(`${MP} probe: ${shown}`);
 
   let r;
@@ -282,7 +282,7 @@ function probeCandidate(spec, configText, alias, log) {
 
   if (r.error) return { ok: false, reason: `${alias}: ${r.error.message}` };
   if (r.signal) {
-    return { ok: false, reason: `${alias}: ucciso da ${r.signal} dopo ${PROBE_TIMEOUT_MS / 1000}s` };
+    return { ok: false, reason: `${alias}: killed by ${r.signal} after ${PROBE_TIMEOUT_MS / 1000}s` };
   }
 
   const answer = String(r.stdout || '').trim();
@@ -294,12 +294,12 @@ function probeCandidate(spec, configText, alias, log) {
   //                             il motivo che arriva al Capitano e' diverso.
   if (r.status !== 0) {
     const tail = meaningfulTail(r.stderr) || meaningfulTail(r.stdout);
-    return { ok: false, reason: `${alias} non ha risposto (exit ${r.status}${tail ? ` — ${tail}` : ''})` };
+    return { ok: false, reason: `${alias} did not respond (exit ${r.status}${tail ? ` — ${tail}` : ''})` };
   }
   if (!answer) {
     return {
       ok: false,
-      reason: `${alias}: la CLI e' uscita 0 senza stampare niente — probe non concludente, NON una bocciatura del modello`,
+      reason: `${alias}: the CLI exited 0 without output — inconclusive probe, NOT a model rejection`,
     };
   }
   return { ok: true, via: shown, answer: answer.split('\n').pop().slice(0, 80) };
@@ -367,16 +367,16 @@ const PIN_SPECS = {
     tableParent: null,
     configPath: () => join(JHT_HOME, '.codex', 'config.toml'),
     detectOnlyReason:
-      'il suo config non elenca le alternative (non c\'e\' un catalogo da cui scegliere, e un nome '
-      + 'inventato lascerebbe la CLI con un pin che non risolve), e lo stesso file contiene le '
-      + 'entry trust_level degli agenti',
+      'its config does not list alternatives (there is no catalog to choose from, and an invented name '
+      + 'would leave the CLI with an unresolved pin), and the same file contains the agents\' '
+      + 'trust_level entries',
   },
   claude: {
     bin: 'claude',
     applicable: false,
     notApplicableReason:
-      'start-agent.sh passa --model opus|sonnet a ogni spawn (l\'argomento vince sul config) '
-      + 'e gli alias seguono la generazione corrente: nessun pin da rivedere',
+      'start-agent.sh passes --model opus|sonnet on every spawn (the argument overrides the config), '
+      + 'and the aliases follow the current generation: there is no pin to review',
   },
 };
 
@@ -407,7 +407,7 @@ function makeBackup(path) {
   const original = statSync(path);
   copyFileSync(path, backup);
   if (!existsSync(backup) || statSync(backup).size !== original.size) {
-    throw new Error(`backup incompleto (${backup})`);
+    throw new Error(`incomplete backup (${backup})`);
   }
   return { backup, mode: original.mode & 0o7777 };
 }
@@ -428,7 +428,7 @@ function pruneBackups(path, log) {
     const olds = readdirSync(dir).filter((f) => f.startsWith(prefix)).sort();
     for (const f of olds.slice(0, Math.max(0, olds.length - KEEP_BACKUPS))) {
       unlinkSync(join(dir, f));
-      log(`${MP} backup vecchio rimosso: ${f}`);
+      log(`${MP} old backup removed: ${f}`);
     }
   } catch { /* la potatura non e' mai un motivo per fallire */ }
 }
@@ -443,9 +443,9 @@ function pruneBackups(path, log) {
  * che non abbia funzionato.
  */
 const RESTART_NOTE =
-  'Nota: gli agenti leggono il modello all\'AVVIO della sessione. Al boot il cambio e\' gia\' attivo '
-  + '(questo passo gira prima degli spawn); su un team gia\' vivo il modello nuovo entra in uso solo '
-  + 'dopo un riavvio delle sessioni.';
+  'Note: agents read the model when their session STARTS. At boot the change is already active '
+  + '(this step runs before spawning); on a running team, the new model is used only after '
+  + 'the sessions restart.';
 
 /**
  * Rivede il pin di modello del provider attivo: legge il catalogo che il config
@@ -463,7 +463,7 @@ export async function refreshModelPin({ target, notifyCaptain, dryRun = false, l
   try {
     return runRefresh({ target, notifyCaptain, dryRun, log });
   } catch (err) {
-    log(`${MP} errore inatteso: ${err?.message ?? err} — pin lasciato com'e', il team parte`);
+    log(`${MP} unexpected error: ${err?.message ?? err} — pin left as it is, the team starts`);
     return { outcome: 'ERROR', detail: String(err?.message ?? err) };
   }
 }
@@ -471,17 +471,17 @@ export async function refreshModelPin({ target, notifyCaptain, dryRun = false, l
 function runRefresh({ target, notifyCaptain, dryRun, log }) {
   const spec = PIN_SPECS[target];
   if (!spec) {
-    log(`${MP} provider '${target}' senza spec di pin: niente da controllare`);
+    log(`${MP} provider '${target}'without pin spec: nothing to control`);
     return { outcome: 'NO_SPEC' };
   }
   if (spec.applicable === false) {
-    log(`${MP} ${target}: non applicabile — ${spec.notApplicableReason}`);
+    log(`${MP} ${target}: not applicable ${spec.notApplicableReason}`);
     return { outcome: 'NOT_APPLICABLE' };
   }
 
   const configPath = spec.configPath();
   if (!existsSync(configPath)) {
-    log(`${MP} ${target}: nessun config in ${configPath} — niente pin da rivedere`);
+    log(`${MP} ${target}: no config ${configPath} — no pin to review`);
     return { outcome: 'NO_CONFIG' };
   }
 
@@ -489,15 +489,15 @@ function runRefresh({ target, notifyCaptain, dryRun, log }) {
   try {
     text = readFileSync(configPath, 'utf-8');
   } catch (err) {
-    log(`${MP} ${target}: ${configPath} illeggibile (${err.message}) — non tocco niente`);
+    log(`${MP} ${target}: unable to read ${configPath} (${err.message}) — no changes made`);
     return { outcome: 'UNREADABLE' };
   }
 
   const pin = readPin(text, spec);
   const catalog = readModelCatalog(text, spec.tableParent);
   log(pin
-    ? `${MP} ${target}: pin corrente ${describePin(pin)} (${configPath})`
-    : `${MP} ${target}: nessun ${spec.defaultKey} in ${configPath} — la CLI ricade sul default del piano`);
+    ? `${MP} ${target}: current pin ${describePin(pin)} (${configPath})`
+    : `${MP} ${target}: no ${spec.defaultKey} in ${configPath} — the CLI falls on the default of the plan`);
 
   const state = readState();
   const signature = `${target}|${pin?.model ?? '-'}|${ctxOf(pin?.caps)}`;
@@ -510,33 +510,33 @@ function runRefresh({ target, notifyCaptain, dryRun, log }) {
   // Un finding per situazione, non per riavvio.
   const report = (msg, outcome, detail) => {
     if (sameAsLast(outcome, detail)) {
-      log(`${MP} finding gia' consegnato per questa situazione (${outcome}) — non lo ripeto`);
+      log(`${MP} finding already delivered for this situation (${outcome}) — not repeated`);
       return;
     }
-    if (notifyCaptain?.(msg)) log(`${MP} finding consegnato al Capitano (mailbox bridge)`);
+    if (notifyCaptain?.(msg)) log(`${MP} finding delivered to the Capitano (mailbox bridge)`);
   };
 
   // 1. Pin deliberato dell'utente: e' l'UNICA cosa che ferma l'aggiornamento
   //    automatico. Nessun finding: e' una scelta esplicita, non una scoperta.
   const deliberate = deliberatePin();
   if (deliberate) {
-    log(`${MP} ${target}: JHT_MODEL_PIN=${deliberate} — modello fissato dall'utente, non tocco il pin`);
+    log(`${MP} ${target}: JHT_MODEL_PIN=${deliberate} — model fixed by the user; pin unchanged`);
     return finish('DELIBERATE_PIN', deliberate);
   }
 
   // 2. Provider che rileviamo ma non modifichiamo.
   if (!spec.mutable) {
     if (!pin) {
-      log(`${MP} ${target}: nessun pin — la CLI usa il suo default`);
+      log(`${MP} ${target}: no pin — the CLI uses its default`);
       return finish('NO_PIN');
     }
-    log(`${MP} ${target}: rilevato ma NON modificabile — ${spec.detectOnlyReason}`);
+    log(`${MP} ${target}: detected but not modified — ${spec.detectOnlyReason}`);
     report([
-      `📌 [FINDING] Il config di ${target} contiene un pin di modello: ${describePin(pin)} (${configPath}).`,
-      'JHT non lo tocca da solo:',
+      `📌 [FINDING] The ${target} config contains a model pin: ${describePin(pin)} (${configPath}).`,
+      'JHT does not change it automatically:',
       `${spec.detectOnlyReason}.`,
-      'Finche\' resta li\', quel modello e\' quello che il team usa anche se il provider ne ha promosso uno piu\' recente:',
-      'cambiarlo altera costo, comportamento e finestra di contesto, quindi e\' una decisione dell\'utente — portagliela.',
+      'As long as it remains there, the team uses that model even if the provider promotes a newer one.',
+      'Changing it affects cost, behavior, and context window, so it is a user decision — bring it to the user.',
       RESTART_NOTE,
     ].join(' '), 'DETECT_ONLY', pin.model);
     return finish('DETECT_ONLY', pin.model);
@@ -545,22 +545,22 @@ function runRefresh({ target, notifyCaptain, dryRun, log }) {
   // 3. Il catalogo e' la risposta dell'account: senza, non c'e' niente fra cui
   //    scegliere, e inventarsi un alias e' il modo migliore di fermare il team.
   if (catalog.length === 0) {
-    log(`${MP} ${target}: il config non elenca nessun [${spec.tableParent}."…"] — nessuna alternativa fra cui scegliere`);
+    log(`${MP} ${target}: the config does not list any [${spec.tableParent}."..."] — no alternative to choose from`);
     return finish('NO_CATALOG', pin?.model);
   }
-  log(`${MP} ${target}: alias elencati dal config → ${catalog.map((m) => `${m.alias} (ctx ${ctxOf(m.caps) || '?'})`).join(', ')}`);
+  log(`${MP} ${target}: alias listed by the config → ${catalog.map((m) => `${m.alias} (ctx ${ctxOf(m.caps) || '?'})`).join(', ')}`);
 
   // 4. Senza credenziali la CLI non puo' rispondere: provare e' impossibile.
   const creds = spec.credentials?.() ?? [];
   if (creds.length > 0 && !creds.some((p) => existsSync(p))) {
-    log(`${MP} ${target}: credenziali assenti (${creds.join(', ')}) — verifica impossibile, pin intatto`);
+    log(`${MP} ${target}: missing credentials (${creds.join(', ')}) — verification unavailable, pin unchanged`);
     return finish('NO_CREDENTIALS', pin?.model);
   }
 
   // 5. Scelta: la finestra dichiarata dal file, non il nome.
   const candidates = rankCandidates(catalog, pin);
   if (candidates.length === 0) {
-    log(`${MP} ${target}: nessun alias con finestra piu' ampia di quella attuale (${ctxOf(pin?.caps) || 'sconosciuta'}) — niente da promuovere`);
+    log(`${MP} ${target}: no alias with a wider window than the current one (${ctxOf(pin?.caps) || 'unknown'}) — nothing to promote`);
     return finish('NO_BETTER_CANDIDATE', pin?.model);
   }
 
@@ -573,24 +573,24 @@ function runRefresh({ target, notifyCaptain, dryRun, log }) {
   for (const cand of candidates) {
     const res = probeCandidate(spec, text, cand.alias, log);
     if (res.ok) { chosen = cand; probe = res; break; }
-    log(`${MP} ${target}: candidato scartato — ${res.reason}`);
+    log(`${MP} ${target}: rejected candidate — ${res.reason}`);
     failures.push(res.reason);
   }
 
   if (!chosen) {
-    log(`${MP} ${target}: nessun candidato ha risposto — pin lasciato com'e'`);
+    log(`${MP} ${target}: no candidate answered — pin left as it is`);
     report([
-      `⚠️ [FINDING] Modello NON promosso (${target}): resta ${pin ? describePin(pin) : `senza ${spec.defaultKey}`}.`,
-      `Il config elenca alias con una finestra piu' ampia (${candidates.map((c) => `${c.alias} ctx ${ctxOf(c.caps)}`).join(', ')}),`,
-      `ma alla prova non ha risposto nessuno: ${failures.join(' | ')}.`,
-      'Non scrivo un modello che non ha risposto: un team su un modello vecchio e\' enormemente meglio di un team fermo.',
-      `Per rifare la prova a mano: \`jht providers model-pin --dry-run\` (config: ${configPath}).`,
+      `⚠️ [FINDING] Model NOT promoted (${target}): keeping ${pin ? describePin(pin) : `no ${spec.defaultKey}`}.`,
+      `The config lists aliases with a wider window (${candidates.map((c) => `${c.alias} ctx ${ctxOf(c.caps)}`).join(', ')}),`,
+      `but none responded to the probe: ${failures.join(' | ')}.`,
+      'A model that did not respond will not be written: a team on an older model is far better than a stopped team.',
+      `To rerun the probe manually: \`jht providers model-pin --dry-run\` (config: ${configPath}).`,
     ].join(' '), 'PROBE_FAILED', candidates[0].alias);
     return finish('PROBE_FAILED', candidates[0].alias);
   }
 
   if (dryRun) {
-    log(`${MP} ${target}: [dry-run] scriverei ${spec.defaultKey} = "${chosen.alias}" (${describeModel(chosen.alias, chosen.caps)}) — verificato con: ${probe.via}`);
+    log(`${MP} ${target}: [dry-run] would write ${spec.defaultKey} = "${chosen.alias}" (${describeModel(chosen.alias, chosen.caps)}) — verified with: ${probe.via}`);
     return { outcome: 'WOULD_PROMOTE', detail: chosen.alias };
   }
 
@@ -600,26 +600,25 @@ function runRefresh({ target, notifyCaptain, dryRun, log }) {
     const bk = makeBackup(configPath);
     backup = bk.backup;
     const note = `# ${new Date().toISOString().slice(0, 10)} JHT [PROVIDER-MODEL-PIN]: ${spec.defaultKey}`
-      + ` ${pin ? `"${pin.model}" (ctx ${ctxOf(pin.caps) || '?'})` : '(assente)'} → "${chosen.alias}" (ctx ${ctxOf(chosen.caps) || '?'}),`
-      + ` scelto fra gli alias elencati qui sotto e verificato con un turno reale. Backup: ${basename(backup)}`;
+      + ` ${pin ? `"${pin.model}" (ctx ${ctxOf(pin.caps) || '?'})` : '(missing)'} → "${chosen.alias}" (ctx ${ctxOf(chosen.caps) || '?'}),`
+      + ` selected from the aliases listed below and verified with a real turn. Backup: ${basename(backup)}`;
     atomicWrite(configPath, setDefaultModel(text, spec, chosen.alias, note), bk.mode);
     log(`${MP} backup: ${backup}`);
     pruneBackups(configPath, log);
   } catch (err) {
-    log(`${MP} ${target}: riscrittura ANNULLATA (${err.message}) — pin intatto`);
+    log(`${MP} ${target}: write cancelled (${err.message}) — pin unchanged`);
     return finish('WRITE_FAILED', err.message);
   }
 
-  const from = pin ? describePin(pin) : `(nessun ${spec.defaultKey})`;
-  log(`${MP} ${target}: modello PROMOSSO — ${from} → ${describeModel(chosen.alias, chosen.caps)} (verificato con: ${probe.via} → "${probe.answer}")`);
+  const from = pin ? describePin(pin) : `(no ${spec.defaultKey})`;
+  log(`${MP} ${target}: model PROMOTED — ${from} → ${describeModel(chosen.alias, chosen.caps)} (verified with: ${probe.via} → "${probe.answer}")`);
   report([
-    `🔄 [FINDING] Modello promosso al boot (${target}): ${from} → ${describeModel(chosen.alias, chosen.caps)}.`,
-    'Il valore vecchio lo aveva scritto la CLI al primo login e non lo rivedeva piu\': congelava il modello E la finestra',
-    'di contesto (e\' la finestra contro cui gli agenti si sono bloccati).',
-    `Scelto fra gli alias che il config gia' elencava (${catalog.map((m) => `${m.alias} ctx ${ctxOf(m.caps) || '?'}`).join(', ')}),`,
-    'in base alla finestra dichiarata — non al nome — e PROVATO prima di scriverlo: ha risposto a un turno reale.',
-    `Backup: ${backup} — per tornare indietro: \`cp ${backup} ${configPath}\` e riavvia le sessioni.`,
-    'Un cambio di modello altera costo, comportamento e finestra: l\'utente deve saperlo, anche quando e\' desiderato — portaglielo.',
+    `🔄 [FINDING] Model promoted at boot (${target}): ${from} → ${describeModel(chosen.alias, chosen.caps)}.`,
+    'The CLI wrote the old value at first login and never revisited it, freezing both the model and its context window.',
+    `The replacement was selected from aliases already listed in the config (${catalog.map((m) => `${m.alias} ctx ${ctxOf(m.caps) || '?'}`).join(', ')}),`,
+    'based on the declared window rather than the name, and PROBED before writing: it answered a real turn.',
+    `Backup: ${backup} — to roll back: \`cp ${backup} ${configPath}\` and restart the sessions.`,
+    'A model change affects cost, behavior, and context window; the user must be told even when the change is desirable.',
     RESTART_NOTE,
   ].join(' '), 'PROMOTED', chosen.alias);
   return finish('PROMOTED', chosen.alias);

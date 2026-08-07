@@ -43,7 +43,7 @@ jht_spawn_codex_dismiss_update
 
 # 4) Crea la sessione tmux MANTENITORE nella workdir corretta.
 tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$MANT_DIR" || {
-  echo "[$LABEL] ERROR: tmux new-session fallito" >&2
+  echo "[$LABEL] ERROR: tmux new-session failed" >&2
   exit 1
 }
 
@@ -60,10 +60,10 @@ tmux send-keys -t "$SESSION" "$MANT_CMD" C-m
 jht_spawn_wait_repl "$SESSION" "$MANT_CMD" "$LABEL" mantenitore "$LOGS_DIR" "spawn-maintainer.sh" || exit 1
 
 # 6c) Auto-accept dei dialog + iniezione del prompt iniziale.
-jht_spawn_kickoff "$SESSION" 'Leggi AGENTS.md ed esegui il maintainer-sweep come da procedura. Se sei fuori working hours, logga e resta in standby. Quando hai finito, scrivi il log finale e RESTA in standby disponibile — NON autodistruggerti (al prossimo spawn vieni sostituito, kill-then-create). Se i coordinatori ti scrivono, rispondi al loro bisogno.'
+jht_spawn_kickoff "$SESSION" 'Read AGENTS.md and run the maintainer sweep as documented. Outside working hours, log the condition and remain on standby. When finished, write the final log and REMAIN available on standby — DO NOT self-terminate (the next spawn replaces you using kill-then-create). If the coordinators contact you, respond to their request.'
 
 # 7) Log spawn evento per tracciabilità.
 ROUND_ID="$(date -u +%Y%m%dT%H%M%SZ)-maint"
 jht_spawn_log_event "$LOGS_DIR" mantenitore "$SESSION" "$ROUND_ID" "spawn-maintainer.sh"
 
-echo "[$LABEL] $SESSION avviato — workdir=$MANT_DIR — round=$ROUND_ID"
+echo "[$LABEL] $SESSION started — workdir=$MANT_DIR — round=$ROUND_ID"

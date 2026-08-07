@@ -21,7 +21,7 @@ import { WizardCancelledError } from './prompts.js';
 
 function guardCancel(value) {
   if (isCancel(value)) {
-    cancel(pc.red('Setup annullato.'));
+    cancel(pc.red('Setup cancelled.'));
     throw new WizardCancelledError();
   }
   return value;

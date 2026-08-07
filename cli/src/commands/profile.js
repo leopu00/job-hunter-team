@@ -14,7 +14,7 @@ const DEFAULT_PROFILE = join(JHT_PROFILE_DIR, 'candidate_profile.yml');
 function validateAction(file, opts) {
   const target = file || DEFAULT_PROFILE;
   if (!existsSync(VALIDATOR)) {
-    console.error(`✗ validatore non trovato: ${VALIDATOR}`);
+    console.error(`: validator not found: ${VALIDATOR}`);
     process.exitCode = 2;
     return;
   }
@@ -23,7 +23,7 @@ function validateAction(file, opts) {
   if (opts.json) args.push('--json');
   const r = spawnSync('python3', args, { stdio: 'inherit' });
   if (r.error) {
-    console.error(`✗ impossibile eseguire python3: ${r.error.message}`);
+    console.error(`: impossible to run python3: ${r.error.message}`);
     process.exitCode = 2;
     return;
   }
@@ -31,12 +31,12 @@ function validateAction(file, opts) {
 }
 
 export function registerProfileCommand(program) {
-  const cmd = new Command('profile').description('Profilo candidato (candidate_profile.yml)');
+  const cmd = new Command('profile').description('Candidate profile (candidate_profile.yml)');
 
   cmd
     .command('validate [file]')
-    .description('Valida il profilo contro lo schema canonico (default: $JHT_HOME/profile/candidate_profile.yml)')
-    .option('--strict', 'tratta anche i warning (chiavi legacy) come errori')
+    .description('Validate the profile against the canonical schema (default: $JHT_HOME/profile/candidate_profile.yml)')
+    .option('--strict', 'also treat warnings (legacy lists) as errors')
     .option('--json', 'output JSON {ok, errors, warnings}')
     .action(validateAction);
 

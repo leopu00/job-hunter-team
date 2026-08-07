@@ -9,18 +9,18 @@ export function listAction() {
   const inContainer = usingContainer();
 
   console.log('');
-  console.log(c.bold('Agenti disponibili:'));
-  console.log(c.dim(inContainer ? '  (sorgente: container jht)' : '  (sorgente: tmux host)'));
+  console.log(c.bold('Agents available:'));
+  console.log(c.dim(inContainer ? '  (source: jht container)' : '  (source: tmux host)'));
   console.log('');
   console.log(
-    `  ${'Ruolo'.padEnd(14)} ${'Sessione'.padEnd(16)} ${'Tipo'.padEnd(10)} ${'Effort'.padEnd(8)} Descrizione`
+    `  ${'Role'.padEnd(14)} ${'Session'.padEnd(16)} ${'Type'.padEnd(10)} ${'Effort'.padEnd(8)} Description`
   );
   console.log(`  ${'─'.repeat(14)} ${'─'.repeat(16)} ${'─'.repeat(10)} ${'─'.repeat(8)} ${'─'.repeat(40)}`);
 
   for (const agent of AGENTS) {
     const prefix = inContainer ? agent.prefix : `JHT-${agent.prefix}`;
     const sName = agent.multi ? `${prefix}-N` : prefix;
-    const tipo = agent.multi ? 'multiplo' : 'singolo';
+    const tipo = agent.multi ? 'multiple' : 'single';
     const active = sessions.some((s) => isAgentSession(s, agent));
     const status = active ? c.green('●') : c.dim('○');
     console.log(
@@ -39,8 +39,8 @@ export function statusAction() {
   // 1, ma le due righe di stderr — fra cui quella che dice come rimediare —
   // fanno in tempo a uscire. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
   if (!usingContainer() && !tmuxAvailable()) {
-    console.error(c.red('Errore: tmux non trovato sull\'host e container jht non attivo.'));
-    console.error(c.dim('  Avvia il container con: docker compose up -d jht'));
+    console.error(c.red('Error: tmux was not found on the host and the jht container is not active.'));
+    console.error(c.dim('  Start the container with: docker compose up -d jht'));
     process.exitCode = 1;
     return;
   }
@@ -52,15 +52,15 @@ export function statusAction() {
 
   if (agentSessions.length === 0) {
     console.log('');
-    console.log(c.yellow('Nessun agente attivo.'));
-    console.log(c.dim('  Avvia il team con: jht team start'));
+    console.log(c.yellow('No active agent.'));
+    console.log(c.dim('  Start the team with: jht team start'));
     console.log('');
     return;
   }
 
   console.log('');
   const source = usingContainer() ? c.dim('(container jht)') : c.dim('(host)');
-  console.log(`${c.bold(`Agenti attivi: ${agentSessions.length}`)} ${source}`);
+  console.log(`${c.bold(`Active agents: ${agentSessions.length}`)} ${source}`);
   console.log('');
 
   for (const s of agentSessions.sort()) {

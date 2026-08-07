@@ -47,13 +47,13 @@ function unreachable(container) {
   return {
     ok: false,
     stdout: '',
-    stderr: `container '${container}' non raggiungibile dall'interno di '${CONTAINER_NAME}'`,
+    stderr: `container '${container}' is unreachable from inside '${CONTAINER_NAME}'`,
     code: -1,
   };
 }
 
 function notRunning(container) {
-  return { ok: false, stdout: '', stderr: `container '${container}' non attivo`, code: -1 };
+  return { ok: false, stdout: '', stderr: `container '${container}' is not running`, code: -1 };
 }
 
 function toResult(r) {
@@ -83,7 +83,7 @@ export function execArgvInContainer(
   { container = CONTAINER_NAME, timeoutMs = 30_000, detached = false, env = null } = {},
 ) {
   if (!Array.isArray(argv) || argv.length === 0) {
-    return { ok: false, stdout: '', stderr: 'argv vuoto', code: -1 };
+    return { ok: false, stdout: '', stderr: 'empty argv', code: -1 };
   }
   const parts = argv.map((a) => String(a));
 

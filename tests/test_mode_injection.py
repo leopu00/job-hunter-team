@@ -319,7 +319,7 @@ def test_2b_senza_modalita_il_bridge_ordina_lo_spawn_scout(home):
     fermo → ORDINE di spawn (C-05). È il ramo che il test 2c deve spegnere."""
     b = Bridge(home, sessions=["CAPITANO", "ANALISTA-1"])
     msg = b.tick(T0)
-    assert "il sourcing è FERMO" in msg and "spawna 1 Scout ORA" in msg
+    assert "sourcing is STOPPED" in msg and "spawn one Scout NOW" in msg
     assert "MODE: search" in msg
 
 
@@ -354,7 +354,7 @@ def test_2e_con_stop_search_false_il_sourcing_resta_governato(home):
     set_mode(home, {"stop_search": False, "search_priority": "secondary"})
     b = Bridge(home, sessions=["CAPITANO"])
     msg = b.tick(T0)
-    assert "spawna 1 Scout ORA" in msg
+    assert "spawn one Scout NOW" in msg
     assert "search_priority: secondary" in msg
 
 
@@ -466,7 +466,7 @@ def test_4f_un_mode_banner_non_caricabile_e_un_guasto_scritto(home, capsys):
     b.mod._mode_banner_mod = lambda: None
     msg = b.tick(T0)
     assert "MODALITÀ CORRENTE" not in msg
-    assert "mode_banner non caricabile" in capsys.readouterr().out
+    assert "mode_banner not loadable" in capsys.readouterr().out
 
 
 # ── Accettazione 5 — la bacheca entra nell'iniezione ────────────────────

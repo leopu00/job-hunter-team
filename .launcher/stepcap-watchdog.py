@@ -164,9 +164,9 @@ MARKERS_FILE_NAME = "stepcap-markers.txt"
 WORKER_SESSION_RE = re.compile(
     r"^(scout|analista|scorer|scrittore|critico)(-[a-z0-9_]+)?$", re.IGNORECASE)
 
-RESUME_TEXT = ("[DA @SISTEMA A @{AGENT}] Continua da dove ti eri fermato. "
-               "Se il compito corrente è in stallo, chiudilo e passa al "
-               "successivo della coda.")
+RESUME_TEXT = ("[FROM @SYSTEM TO @{AGENT}] Continue where you left off. "
+               "If the current task is stalled, close it and move to the "
+               "next queued task.")
 
 
 # ── Path (risolti a ogni chiamata: JHT_HOME può cambiare tra i test) ──────
@@ -218,7 +218,7 @@ def _load_shared(name: str, filename: str):
             spec.loader.exec_module(mod)
             break
         except Exception as exc:  # noqa: BLE001 — un import rotto non ferma il watchdog
-            _log("import %s fallito: %s" % (filename, exc))
+            _log("import %s failed: %s" % (filename, exc))
             mod = None
     _MODULE_CACHE[name] = mod
     return mod
@@ -440,7 +440,7 @@ def emit(event: str, agent=None, ts=None, **fields) -> dict:
         with path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
     except OSError as exc:
-        _log("scrittura %s fallita: %s" % (path, exc))
+        _log("write to %s failed: %s" % (path, exc))
     _log("%s %s" % (event, json.dumps({k: v for k, v in record.items()
                                        if k not in ("ts", "ts_iso")},
                                       ensure_ascii=False)))
@@ -485,7 +485,7 @@ def write_state(state: dict) -> None:
                        encoding="utf-8")
         os.replace(tmp, path)
     except OSError as exc:
-        _log("scrittura stato fallita: %s" % exc)
+        _log("failed to write state: %s" % exc)
 
 
 # ── Throttle (stesso formato di agents/_tools/jht-throttle) ───────────────
@@ -530,7 +530,7 @@ def _standby_active(home: Path) -> bool:
     try:
         return bool(mod.is_active(home=home))
     except Exception as exc:  # noqa: BLE001
-        _log("standby predicato fallito (%s) — fallback su .exists()" % exc)
+        _log("standby predicate failed (%s) — falling back to .exists()" % exc)
         return (home / ".team-standby.flag").exists()
 
 
@@ -596,7 +596,7 @@ def send_resume(session: str, agent: str, message: str) -> bool:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(message, encoding="utf-8")
     except OSError as exc:
-        _log("scrittura messaggio di ripresa fallita: %s" % exc)
+        _log("failed to write resume message: %s" % exc)
         return False
     if _tmux("load-buffer", "-b", TMUX_BUFFER, str(path)) is None:
         return False
@@ -712,7 +712,7 @@ def _handle_agent(session, agent, entry, now, live_workers):
         # il verdetto è immediato) ma non si chiama stallo ciò che è un ordine.
         if resume_gate(now, live_workers):
             return
-        marker = f"nessun marcatore: pane immobile da {rounds} giri"
+        marker = f"no marker: pane unchanged for {rounds} cycles"
 
     produced = produced_count(agent)
     baseline = entry.get("produced")
@@ -735,10 +735,11 @@ def _handle_agent(session, agent, entry, now, live_workers):
         if now - last >= ESCALATE_COOLDOWN_SEC:
             entry["last_escalate_ts"] = now
             notify_captain(
-                "[DA @SISTEMA A @CAPITANO] %s è finito sul cap di step %d volte "
-                "di fila senza produrre nulla in mezzo: è un rabbit-hole, non un "
-                "incidente. NON lo riprendo più in automatico — decidi tu "
-                "(`/clear` o respawn). Storico: logs/stepcap.jsonl."
+                "[FROM @SYSTEM TO @CAPITANO] %s hit the step cap %d consecutive "
+                "times without producing anything between attempts: this is a "
+                "rabbit hole, not an isolated incident. I will NOT resume it "
+                "automatically again — decide whether to use `/clear` or respawn. "
+                "History: logs/stepcap.jsonl."
                 % (agent, consecutive))
         return
 
@@ -746,17 +747,17 @@ def _handle_agent(session, agent, entry, now, live_workers):
     try:
         write_throttle(agent, seconds, now)
     except OSError as exc:
-        _log("throttle non scritto per %s: %s" % (agent, exc))
+        _log("throttle was not written for %s: %s" % (agent, exc))
     entry.update(phase="throttled", until=now + seconds, throttle_sec=seconds)
     emit("throttled", agent=agent, ts=now, session=session, marker=marker,
          consecutive=consecutive, throttle_sec=seconds)
     if consecutive == ESCALATE_AT - 1:
         notify_captain(
-            "[DA @SISTEMA A @CAPITANO] %s è finito sul cap di step %d volte di "
-            "fila senza produrre nulla in mezzo. L'ho messo in pausa %d min e "
-            "poi lo riprendo: se ci ricasca smetto di riprenderlo e passo la "
-            "decisione a te. Il cap di 100 step è di solito un rabbit-hole — "
-            "vale la pena guardare cosa sta girando."
+            "[FROM @SYSTEM TO @CAPITANO] %s hit the step cap %d consecutive "
+            "times without producing anything between attempts. I paused it for "
+            "%d min and will then resume it; if it happens again, I will stop "
+            "resuming and pass the decision to you. A 100-step cap usually signals "
+            "a rabbit hole — inspect what is running."
             % (agent, consecutive, max(1, seconds // 60)))
 
 
@@ -781,7 +782,7 @@ def check_missing_acks(state: dict, now: float) -> list:
             else float(mod.NOTIFIED_ACK_MAX_SEC)
         stuck = mod.notified_without_ack(now=now, max_sec=limit)
     except Exception as exc:  # noqa: BLE001 — il segnale nuovo non abbatte il giro
-        _log("lettura dei flag di throttle fallita: %s" % exc)
+        _log("failed to read throttle flags: %s" % exc)
         return []
     if not stuck:
         # Nessuno fermo: si buttano i cooldown, così un agente che si ribloccasse
@@ -802,11 +803,11 @@ def check_missing_acks(state: dict, now: float) -> list:
             continue
         sent[agent] = now
         notify_captain(
-            "[DA @SISTEMA A @CAPITANO] %s ha ricevuto la sveglia dal motore dei "
-            "throttle %d min fa e non ha ancora firmato l'ack (flag fermo su "
-            "NOTIFIED). Non è «forse idle»: la sveglia è arrivata e non ha "
-            "risposto, quindi è bloccato. Non gli scrivo altro — decidi tu "
-            "(`/clear` o respawn). Prova: state/throttle-flags.json, storico "
+            "[FROM @SYSTEM TO @CAPITANO] %s received the throttle-engine wake-up "
+            "%d min ago and still has not acknowledged it (flag remains NOTIFIED). "
+            "This is not 'possibly idle': the wake-up arrived and got no response, "
+            "so the agent is blocked. I will not send anything else — decide whether "
+            "to use `/clear` or respawn. Evidence: state/throttle-flags.json; history: "
             "logs/throttle-engine.jsonl."
             % (agent, max(1, int(row.get("waiting_sec", 0) // 60))))
     # Un agente che ha firmato non deve portarsi dietro il suo cooldown.
@@ -838,7 +839,7 @@ def tick(now=None) -> dict:
         try:
             _handle_agent(session, agent, entry, now, live_workers)
         except Exception as exc:  # noqa: BLE001 — un agente rotto non ferma il giro
-            _log("errore su %s: %s" % (session, exc))
+            _log("error for %s: %s" % (session, exc))
 
     for gone in [a for a in agents if a not in seen]:
         agents.pop(gone, None)
@@ -848,7 +849,7 @@ def tick(now=None) -> dict:
     try:
         missing_acks = check_missing_acks(state, now)
     except Exception as exc:  # noqa: BLE001
-        _log("controllo degli ack fallito: %s" % exc)
+        _log("ack check failed: %s" % exc)
         missing_acks = []
 
     last_hb = state.get("last_heartbeat")
@@ -886,11 +887,11 @@ def health(now=None) -> dict:
                     last, event = float(rec["ts"]), rec.get("event")
     except OSError:
         out.update(ok=False, exists=False,
-                   reason="%s non esiste: il watchdog non ha mai scritto" % path.name)
+                   reason="%s does not exist: the watchdog has never written it" % path.name)
         return out
     out["exists"] = True
     if last is None:
-        out.update(ok=False, reason="nessun record leggibile")
+        out.update(ok=False, reason="no readable records")
         return out
     age = now - last
     out.update(age_sec=round(age, 1), last_event=event,
@@ -898,8 +899,8 @@ def health(now=None) -> dict:
                .isoformat().replace("+00:00", "Z"))
     out["ok"] = age <= MAX_LOG_AGE_SEC
     if not out["ok"]:
-        out["reason"] = ("ultimo record %.0f min fa (atteso un heartbeat ogni "
-                         "%.0f min): processo vivo ma funzione ferma?"
+        out["reason"] = ("last record %.0f min ago (expected one heartbeat every "
+                         "%.0f min): process alive but function stalled?"
                          % (age / 60.0, HEARTBEAT_SEC / 60.0))
     return out
 
@@ -907,10 +908,10 @@ def health(now=None) -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="stepcap-watchdog",
-        description="Riprende gli agenti fermi sul cap di step (throttle in mezzo).")
-    parser.add_argument("--once", action="store_true", help="un solo giro")
+        description="Resume agents stopped at the step cap (with throttling).")
+    parser.add_argument("--once", action="store_true", help="run one cycle")
     parser.add_argument("--health", action="store_true",
-                        help="freschezza di logs/stepcap.jsonl (exit 1 se stantio)")
+                        help="freshness of logs/stepcap.jsonl (exit 1 if stale)")
     args = parser.parse_args(argv)
 
     if args.health:

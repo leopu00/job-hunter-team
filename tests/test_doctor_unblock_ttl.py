@@ -658,7 +658,7 @@ def test_10_a_dead_worker_comes_back_within_one_watchdog_tick(tmux_factory, home
     assert r.returncode == 0, r.stderr
     assert marker.exists(), f"nessun respawn: {r.stdout}\n{r.stderr}"
     assert marker.read_text().split() == ["scorer", "3"]
-    assert "roster: SCORER-3" in r.stdout
+    assert "roster: expected session SCORER-3 is missing" in r.stdout
     # la sonda è stata registrata: non se ne spende una seconda subito
     roster = json.loads((home / "logs" / "team-roster.json").read_text())
     assert roster["agents"]["SCORER-3"]["respawns"]

@@ -112,20 +112,20 @@ async function handleProviders() {
     const hasCred = await fileExists(join(CREDS_DIR, `${id}.enc`)) || await fileExists(join(CREDS_DIR, `${id}.json`));
     const isActive = activeProvider === id;
 
-    const authMethod = provCfg?.auth_method ?? (hasEnv ? 'env' : hasCred ? 'file' : 'nessuna');
+    const authMethod = provCfg?.auth_method ?? (hasEnv ? 'env' : hasCred ? 'file' : 'none');
     const model = provCfg?.model ?? '—';
     const icon = hasConfig && (hasEnv || hasCred || provCfg?.api_key) ? OK : hasConfig ? WARN : ERR;
-    const activeLabel = isActive ? ` ${GREEN}[ATTIVO]${RESET}` : '';
+    const activeLabel = isActive ? ` ${GREEN}[ACTIVE]${RESET}` : '';
 
     console.log(`  ${icon}  ${known.name}${activeLabel}`);
-    console.log(`     ${DIM}ID: ${id} · Modello: ${model} · Auth: ${authMethod}${RESET}`);
+    console.log(`     ${DIM}ID: ${id} · Model: ${model} · Auth: ${authMethod}${RESET}`);
     if (hasEnv) console.log(`     ${DIM}Env: ${known.envKey} ✓${RESET}`);
-    if (hasCred) console.log(`     ${DIM}Credenziali: file cifrato ✓${RESET}`);
+    if (hasCred) console.log(`     ${DIM}Credentials: encrypted file ✓${RESET}`);
     const ver = getVersionInfo(id);
     if (ver.installed || ver.latest) {
       const updateAvail = !!(ver.installed && ver.latest && ver.installed !== ver.latest);
       let line = `     ${DIM}CLI: ${ver.installed || '—'}`;
-      if (updateAvail) line += ` ${YELLOW}→ ${ver.latest} ⚠ update disponibile${RESET}${DIM}`;
+      if (updateAvail) line += ` ${YELLOW}→ ${ver.latest} ⚠ update available${RESET}${DIM}`;
       line += RESET;
       console.log(line);
     }
@@ -139,21 +139,21 @@ async function handleProviders() {
     for (const id of custom) {
       const p = providers[id];
       const isActive = activeProvider === id;
-      const activeLabel = isActive ? ` ${GREEN}[ATTIVO]${RESET}` : '';
-      console.log(`  ${WARN}  ${id}${activeLabel} — modello: ${p?.model ?? '—'}`);
+      const activeLabel = isActive ? ` ${GREEN}[ACTIVE]${RESET}` : '';
+      console.log(`  ${WARN}  ${id}${activeLabel} — model: ${p?.model ?? '—'}`);
     }
     console.log('');
   }
 
   if (!activeProvider) {
-    console.log(`  ${DIM}Nessun provider attivo. Configura con: jht config set active_provider <id>${RESET}\n`);
+    console.log(`  ${DIM}No active providers. Configure with: jht config set active_provider <id>${RESET}\n`);
   }
 }
 
 async function handleUse(id) {
   const normalized = normalizeId(id);
   if (!normalized) {
-    console.error(`${ERR}  provider '${id}' non riconosciuto. Supportati: ${Object.keys(KNOWN_PROVIDERS).join(', ')}`);
+    console.error(`${ERR}  provider '${id}' unrecognized. Supported: ${Object.keys(KNOWN_PROVIDERS).join(', ')}`);
     process.exitCode = 1;
     return;
   }
@@ -170,10 +170,10 @@ async function handleUse(id) {
   }
   await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
   if (prev === normalized) {
-    console.log(`  ${OK} provider gia' attivo: ${normalized}`);
+    console.log(`  ${OK} provider already active: ${normalized}`);
   } else {
-    console.log(`  ${OK} provider attivo: ${prev || '(nessuno)'} → ${normalized}`);
-    console.log(`  ${DIM}Riavvia il team per applicare: jht team stop --all && jht team start${RESET}`);
+    console.log(`  ${OK} active provider: ${prev || '(none)'} → ${normalized}`);
+    console.log(`  ${DIM}Restart the team to apply: jht team stop --all && jht team start${RESET}`);
   }
 }
 
@@ -258,7 +258,7 @@ async function handleUpdate(id) {
     : Object.keys(UPDATE_SPECS); // `jht providers update` senza arg → aggiorna tutti
 
   if (targets.length === 0) {
-    console.error(`${ERR}  provider '${id}' non riconosciuto. Supportati: claude, codex, kimi`);
+    console.error(`${ERR}  provider '${id}' unrecognized. Supported: claude, codex, kimi`);
     process.exitCode = 1;
     return;
   }
@@ -278,13 +278,13 @@ async function handleUpdate(id) {
       process.exitCode = 1;
       return;
     }
-    console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
+    console.log(`\n  ${DIM}Restart agents to load the new version: jht team stop --all && jht team start${RESET}\n`);
     return;
   }
 
   const repoRoot = findRepoRoot();
   if (!repoRoot || !existsSync(join(repoRoot, 'docker-compose.yml'))) {
-    console.error(`${ERR}  docker-compose.yml non trovato. Esegui dalla root del repo JHT.`);
+    console.error(`${ERR}  docker-compose.yml not found. Run from the root of the JHT repo.`);
     process.exitCode = 1;
     return;
   }
@@ -305,12 +305,12 @@ async function handleUpdate(id) {
       console.log(`  ${DIM}$ docker ${args.join(' ')}${RESET}`);
       const r = spawnSync('docker', args, { cwd: repoRoot, stdio: 'inherit', env: dockerEnv });
       if (r.status !== 0) {
-        console.error(`  ${ERR}  step fallito (exit ${r.status}) per ${target}`);
+        console.error(`  ${ERR}  failed step (exit ${r.status}) for ${target}`);
         failed++;
         break;
       }
     }
-    if (!failed) console.log(`  ${OK}  ${target} aggiornato`);
+    if (!failed) console.log(`  ${OK}  ${target} updated`);
   }
 
   // `return` esplicito: con `process.exit()` bastava segnare il codice per
@@ -322,7 +322,7 @@ async function handleUpdate(id) {
     return;
   }
 
-  console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
+  console.log(`\n  ${DIM}Restart agents to load the new version: jht team stop --all && jht team start${RESET}\n`);
 }
 
 /**
@@ -392,19 +392,19 @@ async function handleUpdateInContainer(targets) {
         // Tre esiti da tenere distinti nel messaggio, perche' portano a tre
         // diagnosi diverse: binario assente, tempo scaduto, exit code.
         reason = r.timedOut
-          ? `${step.entrypoint} ucciso dopo ${UPDATE_STEP_TIMEOUT_MS / 1000}s (timeout)`
+          ? `${step.entrypoint} killed after ${UPDATE_STEP_TIMEOUT_MS / 1000}s (timeout)`
           : r.error
             ? `${step.entrypoint}: ${r.error.message}`
             : r.signal
-              ? `${step.entrypoint} ucciso da ${r.signal}`
+              ? `${step.entrypoint} killed by ${r.signal}`
               : `${step.entrypoint} exit ${r.status}`;
-        console.error(`  ${ERR}  step fallito (${reason}) per ${target}`);
+        console.error(`  ${ERR}  failed step (${reason}) for ${target}`);
         targetFailed = true;
         break;
       }
     }
     if (targetFailed) failed.push(target);
-    else console.log(`  ${OK}  ${target} aggiornato`);
+    else console.log(`  ${OK}  ${target} updated`);
   }
   return { ok: failed.length === 0, failed, reason };
 }
@@ -557,7 +557,7 @@ function appendCaptainFinding(msg) {
     appendFileSync(join(logsDir, 'bridge-mailbox.jsonl'), JSON.stringify(entry) + '\n', 'utf-8');
     return true;
   } catch (err) {
-    console.error(`${AU} finding non consegnato al Capitano: ${err.message}`);
+    console.error(`${AU} finding not delivered to Capitano: ${err.message}`);
     return false;
   }
 }
@@ -570,36 +570,36 @@ function autoUpdateDisabled() {
 
 async function autoUpdateOnce() {
   if (autoUpdateDisabled()) {
-    console.log(`${AU} disabilitato (JHT_PROVIDER_AUTOUPDATE=${process.env.JHT_PROVIDER_AUTOUPDATE}): nessun tentativo di update`);
+    console.log(`${AU} disabled (JHT_PROVIDER_AUTOUPDATE=${process.env.JHT_PROVIDER_AUTOUPDATE}): no update attempt`);
     return;
   }
   if (!isContainer()) {
-    console.log(`${AU} skip: fuori dal container. Dall'host si aggiorna con 'jht providers update <id>'`);
+    console.log(`${AU} skip: outside the container. From the host, run 'jht providers update <id>'`);
     return;
   }
 
   const active = await readActiveProvider();
   if (!active.id) {
-    console.log(`${AU} skip: active_provider non ancora configurato (${CONFIG_PATH}) — niente da aggiornare`);
+    console.log(`${AU} skip: active_provider not yet configured (${CONFIG_PATH}) — nothing to update`);
     return;
   }
   const target = resolveUpdateTarget(active.id);
   if (!target) {
-    console.log(`${AU} skip: provider attivo '${active.id}' senza spec di update (supportati: claude, codex, kimi)`);
+    console.log(`${AU} skip: active provider '${active.id}' has no update spec (supported: claude, codex, kimi)`);
     return;
   }
 
   const before = detectInstalledVersion(target);
-  console.log(`${AU} provider attivo '${active.id}' → aggiorno SOLO ${target} (installata: ${before ?? 'sconosciuta'})`);
+  console.log(`${AU} active provider '${active.id}' → target ${target} (installed: ${before ?? 'unknown'})`);
 
   const published = versionFromNpmRegistry(target);
   const alreadyLatest = !!before && !!published && before === published;
   let res;
   if (alreadyLatest) {
-    console.log(`${AU} ${target}: registry ${published}, installazione saltata (versione gia' corrente)`);
+    console.log(`${AU} ${target}: registry ${published}, installation skipped (already current)`);
     res = { ok: true, failed: [], reason: '', skipped: true };
   } else {
-    if (published) console.log(`${AU} ${target}: registry ${published}, installazione necessaria`);
+    if (published) console.log(`${AU} ${target}: registry ${published}, installation required`);
     res = await handleUpdateInContainer([target]);
   }
   const after = detectInstalledVersion(target);
@@ -607,18 +607,18 @@ async function autoUpdateOnce() {
   // Criterio 2: il log dice SEMPRE prima → dopo, e dice esplicitamente quando
   // non e' cambiato niente. Un log che tace sul no-op non permette di
   // distinguere "gia' aggiornata" da "non ha girato".
-  const b = before ?? 'sconosciuta';
-  const a = after ?? 'sconosciuta';
+  const b = before ?? 'unknown';
+  const a = after ?? 'unknown';
   const changed = !!before && !!after && before !== after;
   let verdict;
   if (changed) {
     verdict = res.ok
-      ? 'AGGIORNATA'
-      : 'AGGIORNATA (lo step ha riportato un errore ma la versione e\' cambiata)';
+      ? 'UPDATED'
+      : 'UPDATED (the step reported an error, but the version changed)';
   } else if (res.ok) {
-    verdict = 'INVARIATA — era gia\' all\'ultima versione, niente da reinstallare';
+    verdict = 'UNCHANGED — already at the latest version; nothing to reinstall';
   } else {
-    verdict = `INVARIATA — update NON riuscito (${res.reason || 'causa ignota'}); il team parte con la CLI gia' presente`;
+    verdict = `UNCHANGED — update FAILED (${res.reason || 'unknown cause'}); the team will use the existing CLI`;
   }
   console.log(`${AU} ${target}: ${b} → ${a} — ${verdict}`);
 
@@ -626,16 +626,16 @@ async function autoUpdateOnce() {
     // La CLI e' cambiata: qui si segnala e basta. Il Capitano lo legge al primo
     // drain della mailbox e lo porta all'utente, che decide.
     const modelLine = active.model
-      ? `\`${active.model}\` (da jht.config.json)`
-      : 'quello di default del provider (in jht.config.json non e\' fissato)';
+      ? `\`${active.model}\` (from jht.config.json)`
+      : 'the provider default (not pinned in jht.config.json)';
     const finding = [
-      `🔄 [FINDING] CLI del provider aggiornata al boot: ${target} ${b} → ${a}.`,
-      `Il MODELLO NON e' stato cambiato: resta ${modelLine}.`,
-      'Se questa versione della CLI espone un modello piu\' recente, il cambio e\' una DECISIONE DELL\'UTENTE',
-      '(cambia costi, comportamento e finestra di contesto): portaglielo, non applicarlo da solo.',
+      `🔄 [FINDING] Provider CLI updated at boot: ${target} ${b} → ${a}.`,
+      `The MODEL was NOT changed: it remains ${modelLine}.`,
+      'If this CLI version exposes a newer model, changing it is a USER DECISION',
+      '(it affects cost, behavior, and context window): bring it to the user; do not apply it automatically.',
     ].join(' ');
     if (appendCaptainFinding(finding)) {
-      console.log(`${AU} finding consegnato al Capitano (mailbox bridge, drain a inizio turno)`);
+      console.log(`${AU} finding delivered to the Capitano (mailbox bridge, drain at the beginning of shift)`);
     }
   }
 
@@ -664,12 +664,12 @@ async function handleModelPin(opts = {}) {
   const active = await readActiveProvider();
   const target = resolveUpdateTarget(active.id);
   if (!target) {
-    console.log(`${AU} nessun provider attivo con spec di pin (active_provider=${active.id ?? '(nessuno)'})`);
+    console.log(`${AU} no active provider with pin spec (active_provider=${active.id ?? '(Nothing)'})`);
     return;
   }
   let dryRun = !!opts.dryRun;
   if (!dryRun && !isContainer()) {
-    console.log(`${AU} fuori dal container: eseguo in dry-run (il config del provider e' dell'utente del container)`);
+    console.log(`${AU} outside the container: continuing in dry-run mode (the provider config belongs to the container user)`);
     dryRun = true;
   }
   await refreshModelPin({ target, notifyCaptain: appendCaptainFinding, dryRun });
@@ -683,7 +683,7 @@ async function handleAutoUpdate() {
   try {
     await autoUpdateOnce();
   } catch (err) {
-    console.error(`${AU} errore inatteso: ${err?.message ?? err} — proseguo con la CLI gia' presente`);
+    console.error(`${AU} unexpected error: ${err?.message ?? err} — continue with the CLI already present`);
   }
 }
 
@@ -698,7 +698,7 @@ async function handleCheck() {
     }
   }
   if (updates.length === 0) {
-    console.log(`${OK} tutti i provider sono aggiornati`);
+    console.log(`${OK} all providers are up to date`);
     return;
   }
   for (const u of updates) {
@@ -714,14 +714,14 @@ async function handleCheck() {
 
 async function handleCurrent() {
   if (!(await fileExists(CONFIG_PATH))) {
-    console.log(`  ${DIM}(nessun config)${RESET}`);
+    console.log(`  ${DIM}(No config)${RESET}`);
     return;
   }
   try {
     const config = JSON.parse(await readFile(CONFIG_PATH, 'utf-8'));
-    console.log(config.active_provider ?? '(nessuno)');
+    console.log(config.active_provider ?? '(Nothing)');
   } catch {
-    console.log('(config non valido)');
+    console.log('(invalid)');
   }
 }
 
@@ -733,38 +733,38 @@ export function registerProvidersCommand(program) {
 
   cmd
     .command('list')
-    .description('Mostra i provider configurati + stato auth')
+    .description('Show configured providers + auth status')
     .action(handleProviders);
 
   cmd
     .command('current')
-    .description('Stampa il provider attivo (one-liner, scriptable)')
+    .description('Print the active provider (one-liner, scriptable)')
     .action(handleCurrent);
 
   cmd
     .command('use <id>')
-    .description('Imposta il provider attivo (alias di `jht config set active_provider`)')
+    .description('Set the active provider (`jht config set active_provider` alias)')
     .action(handleUse);
 
   cmd
     .command('update [id]')
-    .description('Aggiorna il CLI del provider (claude/codex/kimi) all\'ultima versione. Omesso id: aggiorna tutti i provider supportati.')
+    .description('Update the provider\'s CLI (claude/codex/kimi) to the latest version. Omitted id: updates all supported providers.')
     .action(handleUpdate);
 
   cmd
     .command('autoupdate')
-    .description('Aggiorna la CLI del SOLO provider attivo e rivede il pin di modello scritto al login (passo di boot: fail-safe, non fallisce mai). Spegnibile con JHT_PROVIDER_AUTOUPDATE=0.')
+    .description('Update only the active provider CLI and review the model pin written at login (boot pass: fail-safe). Disable with JHT_PROVIDER_AUTOUPDATE=0.')
     .action(handleAutoUpdate);
 
   cmd
     .command('model-pin')
-    .description('Rivede il modello pinnato dalla CLI al login: sceglie fra gli alias che il config gia\' elenca (finestra piu\' ampia), lo prova e solo allora lo scrive. JHT_MODEL_PIN=<x> lo blocca.')
-    .option('--dry-run', 'verifica e riporta cosa farebbe, senza scrivere niente')
+    .description('Review the model pinned by the provider CLI at login: choose a wider-window alias already listed in the config, probe it, then write it. JHT_MODEL_PIN=<x> disables changes.')
+    .option('--dry-run', 'report what would be done without writing anything')
     .action((opts) => handleModelPin(opts));
 
   cmd
     .command('check')
-    .description('Mostra provider con update disponibili (scriptable, exit 1 se ce ne sono)')
+    .description('Show providers with updates available (scriptable; exit 1 if any)')
     .action(handleCheck);
 
   program.addCommand(cmd);
