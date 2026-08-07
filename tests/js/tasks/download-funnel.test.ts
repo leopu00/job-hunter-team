@@ -20,6 +20,7 @@ import {
   DOWNLOAD_AGGREGATE_RATE_LIMIT,
   recordDownloadClick,
 } from "../../../web/lib/download-clicks";
+import { checkDistributedRateLimit } from "../../../web/lib/rate-limit";
 
 const REPO = path.resolve(__dirname, "../../..");
 const MIGRATION = readFileSync(
@@ -416,6 +417,90 @@ describe("B8 download funnel", () => {
     );
     expect(RECORDER).toContain('identity: "global"');
     expect(RECORDER).not.toMatch(/headers\.get|cookies\(|user_agent|user_id/);
+  });
+
+  it("fails closed across instances when distributed coordination is absent", async () => {
+    const savedUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const savedToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    try {
+      expect(
+        await checkDistributedRateLimit(
+          "download-funnel",
+          "aggregate",
+          "global",
+          60,
+          60_000,
+        ),
+      ).toBeNull();
+
+      // Each call represents an independent cold instance. Without shared
+      // state every one must skip privileged work, not receive a fresh budget.
+      const increment = vi.fn(async (_event: DownloadClick) => {});
+      await Promise.all(
+        Array.from({ length: 100 }, () =>
+          recordDownloadClick(
+            {
+              ts_hour: "2026-08-09T14",
+              slug: "mac",
+              utm_source: "reddit",
+              utm_medium: "paid",
+              utm_campaign: "lancio-2026-08",
+            },
+            { check: checkDistributedRateLimit, increment },
+          ),
+        ),
+      );
+      expect(increment).not.toHaveBeenCalled();
+    } finally {
+      if (savedUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL;
+      else process.env.UPSTASH_REDIS_REST_URL = savedUrl;
+      if (savedToken === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      else process.env.UPSTASH_REDIS_REST_TOKEN = savedToken;
+    }
+  });
+
+  it("fails closed instead of using local memory on Upstash failure", async () => {
+    const savedUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const savedToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+    process.env.UPSTASH_REDIS_REST_URL = "https://rate-limit.invalid";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "test-token";
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(
+        Response.json({ unexpected: "pipeline response" }),
+      );
+
+    try {
+      expect(
+        await checkDistributedRateLimit(
+          "download-funnel",
+          "aggregate",
+          "global",
+          60,
+          60_000,
+        ),
+      ).toBeNull();
+      expect(
+        await checkDistributedRateLimit(
+          "download-funnel",
+          "aggregate",
+          "global",
+          60,
+          60_000,
+        ),
+      ).toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      fetchMock.mockRestore();
+      if (savedUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL;
+      else process.env.UPSTASH_REDIS_REST_URL = savedUrl;
+      if (savedToken === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      else process.env.UPSTASH_REDIS_REST_TOKEN = savedToken;
+    }
   });
 
   it("documents anonymous aggregated clicks in every privacy locale", () => {
