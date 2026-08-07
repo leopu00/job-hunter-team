@@ -168,7 +168,6 @@ const S := {
 	"title.name_enter": "ENTRA IN UFFICIO",
 	"title.name_skip": "Preferisco non dirlo, entriamo",
 	"title.press_enter": "▶ PREMI INVIO",
-	"title.footer": "prototipo — dati mock, nessun backend",
 	"title.hint_pause": "ESC menu",
 
 	# ── Menu pausa ────────────────────────────────────────────────
