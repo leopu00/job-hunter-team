@@ -371,6 +371,31 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
     }
   });
 
+  it("S03-S05 sono tradotti davvero nelle sei lingue derivate", () => {
+    const phaseIds = new Set([
+      "download-desktop-app",
+      "install-macos",
+      "install-windows",
+      "install-linux",
+      "open-for-the-first-time",
+    ]);
+    const phases = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).filter(
+      (phase) => phaseIds.has(phase.id),
+    );
+    expect(phases).toHaveLength(phaseIds.size);
+
+    const texts = phases.flatMap((phase) => [
+      phase.title,
+      phase.body,
+      ...(phase.links ?? []).map((link) => link.label),
+    ]);
+    for (const text of texts) {
+      for (const locale of LOCALES.filter((locale) => locale !== "en")) {
+        expect(text[locale], locale).not.toBe(text.en);
+      }
+    }
+  });
+
   it("W02-W04 e il segnaposto privacy-safe sono tradotti davvero", () => {
     const phases = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).filter(
       (phase) =>
