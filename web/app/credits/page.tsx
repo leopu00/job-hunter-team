@@ -90,14 +90,10 @@ export default function CreditsPage() {
           <dt className="font-semibold text-[var(--color-muted)]">Work</dt>
           <dd>{MUSIC_PROVENANCE.work}</dd>
 
-          <dt className="font-semibold text-[var(--color-muted)]">
-            Composer
-          </dt>
+          <dt className="font-semibold text-[var(--color-muted)]">Composer</dt>
           <dd>{MUSIC_PROVENANCE.composer}</dd>
 
-          <dt className="font-semibold text-[var(--color-muted)]">
-            Source
-          </dt>
+          <dt className="font-semibold text-[var(--color-muted)]">Source</dt>
           <dd>
             <a
               className="underline underline-offset-4 hover:text-[var(--color-green)]"
@@ -110,9 +106,7 @@ export default function CreditsPage() {
           <dt className="font-semibold text-[var(--color-muted)]">ISRC</dt>
           <dd>{MUSIC_PROVENANCE.isrc}</dd>
 
-          <dt className="font-semibold text-[var(--color-muted)]">
-            License
-          </dt>
+          <dt className="font-semibold text-[var(--color-muted)]">License</dt>
           <dd>{MUSIC_PROVENANCE.license}</dd>
 
           <dt className="font-semibold text-[var(--color-muted)]">
@@ -124,9 +118,7 @@ export default function CreditsPage() {
             </code>
           </dd>
 
-          <dt className="font-semibold text-[var(--color-muted)]">
-            Intro
-          </dt>
+          <dt className="font-semibold text-[var(--color-muted)]">Intro</dt>
           <dd>{MUSIC_PROVENANCE.intro}</dd>
 
           <dt className="font-semibold text-[var(--color-muted)]">
