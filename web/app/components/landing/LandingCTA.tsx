@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useLandingI18n } from "./LandingI18n";
 import { useTheme, type Theme } from "../../theme-provider";
+import { FooterSocialLinks } from "./FooterSocialLinks";
 
 // Switcher tema compatto per il footer: sistema / notte / giorno (testo).
 function FooterThemeSwitch() {
@@ -99,6 +100,12 @@ export function LandingFooter() {
             <div className="mt-4">
               <FooterThemeSwitch />
             </div>
+            <FooterSocialLinks
+              labels={{
+                instagram: t("footer_instagram_aria"),
+                tiktok: t("footer_tiktok_aria"),
+              }}
+            />
           </div>
 
           {/* Prodotto */}

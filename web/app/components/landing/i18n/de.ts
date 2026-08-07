@@ -42,6 +42,8 @@ export const de: Record<string, string> = {
   footer_resources: "Ressourcen",
   footer_tutorials: "Anleitungen",
   footer_contacts: "Kontakt",
+  footer_instagram_aria: "Job Hunter Team auf Instagram",
+  footer_tiktok_aria: "Job Hunter Team auf TikTok",
   nav_contact: "Kontakt",
   footer_bug: "Fehler melden",
   footer_privacy: "Datenschutz",
