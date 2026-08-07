@@ -779,7 +779,9 @@ export async function handleLogin(options = {}) {
   // < 5min), warn l'utente. Non blocca il login: l'utente potrebbe volere
   // forzare l'eviction. Vedi vps.md:392 "un solo team JHT per utente".
   const conflict = await checkActiveDeviceConflict(baseUrl, approved.token);
-  if (conflict.conflict) {
+  // Il preflight resta utile al CLI umano, ma nella corsia UI il processo è
+  // un protocollo: niente active_device_id o altri dettagli tecnici nel pipe.
+  if (conflict.conflict && !options.uiJson) {
     console.log('');
     console.log(
       pc.yellow(
