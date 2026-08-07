@@ -39,6 +39,7 @@ const LOCALES = ["it", "en", "es", "fr", "de", "pt", "hu"] as const;
  *  dice quale fase e quale campo, non «una stringa da qualche parte». */
 function everyText(): { where: string; text: GuideText }[] {
   const out: { where: string; text: GuideText }[] = [];
+  const seenFallbacks = new Set<object>();
   for (const chapter of GUIDE_CHAPTERS) {
     out.push({ where: `chapter ${chapter.id} · title`, text: chapter.title });
     out.push({
@@ -49,6 +50,17 @@ function everyText(): { where: string; text: GuideText }[] {
       const at = `phase ${chapter.id}/${phase.id}`;
       out.push({ where: `${at} · title`, text: phase.title });
       out.push({ where: `${at} · body`, text: phase.body });
+      if (phase.screenFallback && !seenFallbacks.has(phase.screenFallback)) {
+        seenFallbacks.add(phase.screenFallback);
+        out.push({
+          where: `${at} · screen fallback title`,
+          text: phase.screenFallback.title,
+        });
+        out.push({
+          where: `${at} · screen fallback body`,
+          text: phase.screenFallback.body,
+        });
+      }
       if (phase.warning)
         out.push({ where: `${at} · warning`, text: phase.warning });
       for (const screenRef of screensOf(phase))
@@ -243,7 +255,7 @@ describe("guida di setup — schermate", () => {
 });
 
 describe("guida di setup — contratto di HQ-DOCS", () => {
-  it("i requisiti non dichiarano un minimo di disco", () => {
+  it("i requisiti non dichiarano un minimo di disco in nessuna lingua", () => {
     // Regola dell'operatore: se un numero non è stato misurato, non si
     // scrive. Il minimo di disco non è mai stato misurato, e la frase che
     // lo dice apertamente è la parte più onesta del testo: non si taglia
@@ -252,9 +264,34 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
       (p) => p.id === "check-requirements",
     );
     expect(phase, "fase check-requirements assente").toBeDefined();
-    const body = phase!.body.en;
-    expect(body).toContain("no universal disk minimum is stated");
-    expect(body).toContain("has not been measured");
+    const notMeasured = {
+      en: "no universal disk minimum is stated because one has not been measured",
+      it: "non viene indicato un requisito minimo universale di spazio su disco perché non è stato misurato",
+      es: "no se indica un mínimo universal de espacio en disco porque no se ha medido",
+      fr: "aucun minimum universel d’espace disque n’est indiqué, car il n’a pas été mesuré",
+      de: "ein allgemeingültiges Minimum für den Festplattenspeicher wird nicht angegeben, weil es nicht gemessen wurde",
+      pt: "não é indicado um mínimo universal de espaço em disco porque não foi medido",
+      hu: "általános minimális lemezterület nincs megadva, mert ilyet nem mértek",
+    } as const;
+    for (const locale of LOCALES) {
+      expect(phase!.body[locale], locale).toContain(notMeasured[locale]);
+    }
+  });
+
+  it("S01 è tradotta davvero nelle sei lingue derivate", () => {
+    const phase = GUIDE_CHAPTERS.flatMap((c) => c.phases).find(
+      (p) => p.id === "check-requirements",
+    )!;
+    const texts = [
+      phase.title,
+      phase.body,
+      ...(phase.links ?? []).map((link) => link.label),
+    ];
+    for (const text of texts) {
+      for (const locale of LOCALES.filter((locale) => locale !== "en")) {
+        expect(text[locale], locale).not.toBe(text.en);
+      }
+    }
   });
 
   it("i requisiti tengono la baseline VPS separata e linkata", () => {

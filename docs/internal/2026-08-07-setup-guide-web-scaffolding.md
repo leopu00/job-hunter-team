@@ -118,7 +118,9 @@ I testi del contratto passano da `untranslated()`: la lacuna è esplicita e
 cercabile invece di sembrare già fatta, e chi traduce cerca `untranslated(`
 e sostituisce la voce con le sette lingue vere. A schermo il comportamento è
 il fallback all'inglese che il sito usa già ovunque. Il conteggio esatto lo
-stampa il test: **76 testi su 76** al momento.
+stampa il test: **74 testi su 78** al momento. I quattro testi di S01 sono
+tradotti; il totale include anche titolo e corpo del segnaposto visibile di
+W02–W04, che prima sfuggivano al censimento perché condivisi fra le tre fasi.
 
 ## Il difetto del titolo, e perché la guida non lo eredita
 
