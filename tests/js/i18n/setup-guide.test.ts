@@ -18,6 +18,10 @@ import { fileURLToPath } from "node:url";
 
 import { GUIDE_CHAPTERS } from "@/app/setup-guide/guide-content";
 import {
+  REQUIREMENTS_CARD_EVIDENCE,
+  REQUIREMENTS_CARD_VALUES,
+} from "@/app/setup-guide/requirements-card.i18n";
+import {
   SCREENS,
   missingCaptures,
   pendingScreens,
@@ -73,6 +77,13 @@ function everyText(): { where: string; text: GuideText }[] {
         out.push({ where: `${at} · link[${i}]`, text: link.label });
     }
   }
+  for (const [key, text] of Object.entries(REQUIREMENTS_CARD_VALUES)) {
+    out.push({ where: `requirements card · ${key}`, text });
+  }
+  out.push({
+    where: "requirements card · evidence",
+    text: REQUIREMENTS_CARD_EVIDENCE,
+  });
   return out;
 }
 
@@ -287,6 +298,34 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
     for (const locale of LOCALES) {
       expect(phase!.body[locale], locale).toContain(notMeasured[locale]);
     }
+  });
+
+  it("la scheda nativa non inventa un minimo di disco in nessuna lingua", () => {
+    const notMeasured = {
+      en: "no minimum has been measured",
+      it: "non è stato misurato alcun minimo",
+      es: "no se ha medido ningún mínimo",
+      fr: "aucun minimum n’a été mesuré",
+      de: "es wurde kein Minimum gemessen",
+      pt: "não foi medido qualquer mínimo",
+      hu: "nem mértek minimális tárhelyigényt",
+    } as const;
+    for (const locale of LOCALES) {
+      expect(REQUIREMENTS_CARD_VALUES.disk[locale], locale).toContain(
+        notMeasured[locale],
+      );
+    }
+  });
+
+  it("i sette testi misurati della scheda nativa sono tradotti davvero", () => {
+    const texts = [
+      ...Object.entries(REQUIREMENTS_CARD_VALUES),
+      ["evidence", REQUIREMENTS_CARD_EVIDENCE] as const,
+    ];
+    const pending = texts
+      .filter(([, text]) => isUntranslated(text))
+      .map(([key]) => key);
+    expect(pending).toEqual([]);
   });
 
   it("S01 è tradotta davvero nelle sei lingue derivate", () => {
