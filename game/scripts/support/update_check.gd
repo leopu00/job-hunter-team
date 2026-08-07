@@ -17,6 +17,14 @@ const REPO := "leopu00/job-hunter-team"
 const API_LATEST := "https://api.github.com/repos/leopu00/job-hunter-team/releases/latest"
 ## La pagina da aprire nel browser quando l'installazione non la facciamo noi.
 const RELEASES_PAGE := "https://github.com/leopu00/job-hunter-team/releases/latest"
+const WINDOWS_ASSET := "job-hunter-team-windows-x64-portable.exe"
+const MACOS_ASSET := "job-hunter-team.zip"
+## Contratto futuro Windows: il manifest sara firmato fuori dal canale GitHub
+## e verificato con una root gia incorporata nella 0.3.6. La sola presenza di
+## questi asset non abilita mai l'installazione.
+const WINDOWS_MANIFEST_ASSET := "WINDOWS-UPDATE-MANIFEST.json"
+const WINDOWS_SIGNATURE_ASSET := "WINDOWS-UPDATE-MANIFEST.sig"
+const WINDOWS_AUTO_BASELINE := "0.3.6"
 
 ## Un controllo al giorno. Non è una misura di rete — la richiesta è una sola e
 ## pesa qualche kilobyte: è una misura di rispetto. Un avviso che può ricomparire
@@ -120,35 +128,88 @@ static func release_info(payload: Dictionary) -> Dictionary:
 	var raw: Variant = payload.get("assets", [])
 	return {
 		"version": tag.trim_prefix("v").trim_prefix("V"),
+		"tag": "v" + tag.trim_prefix("v").trim_prefix("V"),
 		"page": page,
 		"assets": raw if raw is Array else [],
 	}
 
 
-## Il file da scaricare per questo sistema, o "" se qui non si scarica niente.
-##
-## Solo macOS: è l'unico export firmato Developer ID e notarizzato, cioè l'unico
-## di cui si possa DIMOSTRARE la provenienza prima di eseguirlo. Su Windows e
-## Linux i binari escono non firmati, e scaricare-ed-eseguire un file di cui non
-## si può verificare l'origine non è un aggiornamento: è una backdoor con una
-## barra di avanzamento.
-static func asset_url(assets: Array, os_name: String) -> String:
-	if not can_self_install(os_name):
-		return ""
+## I file necessari all'installazione, accettati soltanto dalla release/tag
+## attesi e con nomi fissi. Su Windows il binario da solo NON basta: manifest e
+## firma detached sono inseparabili. Trovarli non li rende attendibili: il
+## helper deve verificare la firma con la root locale prima dell'apply.
+static func asset_bundle(assets: Array, os_name: String, version: String) -> Dictionary:
+	if os_name not in ["macOS", "Windows"] or parse_version(version).is_empty():
+		return {}
+	var package_name := MACOS_ASSET if os_name == "macOS" else WINDOWS_ASSET
+	var required := [package_name]
+	if os_name == "Windows":
+		required.append_array([WINDOWS_MANIFEST_ASSET, WINDOWS_SIGNATURE_ASSET])
+	var found := {}
 	for item in assets:
 		if not (item is Dictionary):
 			continue
-		var name := str(item.get("name", "")).to_lower()
-		var url := str(item.get("browser_download_url", ""))
-		if name.ends_with(".zip") and url.begins_with("https://"):
-			return url
-	return ""
+		var name := str(item.get("name", ""))
+		if not required.has(name) or found.has(name):
+			continue
+		var expected_url := _release_asset_url(version, name)
+		if str(item.get("browser_download_url", "")) != expected_url:
+			continue
+		found[name] = item
+	for name: String in required:
+		if not found.has(name):
+			return {}
+	var out := {
+		"package": str(found[package_name].get("browser_download_url", "")),
+		"package_name": package_name,
+		"package_size": int(found[package_name].get("size", 0)),
+		"package_digest": str(found[package_name].get("digest", "")),
+	}
+	if os_name == "Windows":
+		out["manifest"] = str(found[WINDOWS_MANIFEST_ASSET].get(
+				"browser_download_url", ""))
+		out["signature"] = str(found[WINDOWS_SIGNATURE_ASSET].get(
+				"browser_download_url", ""))
+	return out
 
 
-## I sistemi su cui il gioco può sostituirsi da solo. Vedi `asset_url`: la
-## discriminante è la firma, non il sistema operativo in sé.
+static func asset_url(assets: Array, os_name: String, version: String = "") -> String:
+	return str(asset_bundle(assets, os_name, version).get("package", ""))
+
+
+## Stato effettivo, non roadmap. macOS ha gia un'ancora Developer ID. Windows
+## resta manuale finche root production e helper non sono entrambi distribuiti.
 static func can_self_install(os_name: String) -> bool:
 	return os_name == "macOS"
+
+
+## La 0.3.5 e precedenti non contengono il verifier: il salto alla 0.3.6 resta
+## manuale una tantum. Questa policy governa soltanto 0.3.6 -> versioni future.
+## Il helper riverifica sempre la firma in proprio e non si fida di questi flag.
+static func windows_forward_allowed(installed: String, candidate: String,
+		highest_committed: String, helper_ready: bool, trust_ready: bool) -> bool:
+	if compare(installed, WINDOWS_AUTO_BASELINE) < 0 or not helper_ready \
+			or not trust_ready:
+		return false
+	if highest_committed != "" and parse_version(highest_committed).is_empty():
+		return false
+	var floor_version := installed
+	if highest_committed != "" and compare(highest_committed, floor_version) > 0:
+		floor_version = highest_committed
+	return is_newer(candidate, floor_version)
+
+
+static func _release_asset_url(version: String, name: String) -> String:
+	return "https://github.com/%s/releases/download/v%s/%s" % [REPO, version, name]
+
+
+## "Piu tardi" sopravvive al riavvio, ma non nasconde una versione diversa e
+## non diventa un rifiuto permanente. Dopo un giorno la stessa release torna
+## visibile al successivo controllo.
+static func defer_active(candidate: String, deferred_version: String,
+		defer_until: float, now: float) -> bool:
+	return not parse_version(candidate).is_empty() and candidate == deferred_version \
+			and defer_until > now
 
 
 ## Perché NON si contatta la rete adesso, o "" se si può procedere.
