@@ -38,6 +38,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // anche l'export: due copie divergerebbero al primo cambio di schema.
 import { MANUAL_DELETE_ORDER } from "./account-data-tables";
 
+/** L'unico bucket in cui finiscono file dell'utente. */
+const STORAGE_BUCKET = "file-transit";
+
 export { MANUAL_DELETE_ORDER };
 
 export interface DeletionOutcome {
@@ -61,6 +64,26 @@ export async function deleteAccountData(
   if (!userId) throw new Error("userId mancante: cancellazione rifiutata");
 
   const removed: Record<string, number> = {};
+
+  // ── Prima i file su Storage, poi le righe ───────────────────────────
+  // `file_bridge_requests` cade per cascata, ma la riga non è il file: gli
+  // oggetti nel bucket `file-transit` sopravvivrebbero alla cancellazione.
+  // Non ci si può appoggiare a un purge automatico — nel bucket è stato
+  // trovato un oggetto rimasto per otto giorni — quindi si rimuovono qui,
+  // e PRIMA di perdere le righe, che sono l'unico posto dove i percorsi
+  // sono scritti.
+  const storage = await deleteStorageObjects(admin, userId);
+  removed["storage:file-transit"] = storage.removed;
+  if (storage.failed.length > 0) {
+    // Un file che resta è una cancellazione incompleta, e va detto invece
+    // di dichiarare completato: l'operatore ha scelto la cancellazione
+    // immediata proprio perché fosse vera.
+    throw new Error(
+      `${storage.failed.length} file su Storage non cancellati: ` +
+        `la cancellazione si ferma qui per non dichiararsi completa. ` +
+        `Percorsi rimasti: ${storage.failed.join(", ")}`,
+    );
+  }
 
   for (const table of MANUAL_DELETE_ORDER) {
     // `count: "exact"` serve al record tecnico: quante righe sono sparite,
@@ -87,6 +110,52 @@ export async function deleteAccountData(
   }
 
   return { removed, order: MANUAL_DELETE_ORDER };
+}
+
+/**
+ * Rimuove gli oggetti dell'utente dal bucket di transito.
+ *
+ * I percorsi si leggono da `file_bridge_requests`, che è l'unico posto
+ * dove sono registrati: per questo va fatto PRIMA di cancellare le righe.
+ * Se il bucket non risponde, o qualche oggetto resta, il chiamante lo
+ * tratta come un fallimento — meglio fermarsi che dire «cancellato».
+ */
+async function deleteStorageObjects(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<{ removed: number; failed: string[] }> {
+  const { data: rows, error } = await admin
+    .from("file_bridge_requests")
+    .select("storage_path")
+    .eq("user_id", userId);
+  if (error) {
+    throw new Error(
+      `impossibile leggere i file da cancellare: ${error.message}`,
+    );
+  }
+
+  const paths = (rows ?? [])
+    .map((r) => (r as { storage_path: string | null }).storage_path)
+    .filter((p): p is string => typeof p === "string" && p.length > 0);
+  if (paths.length === 0) return { removed: 0, failed: [] };
+
+  const { data: removedList, error: rmError } = await admin.storage
+    .from(STORAGE_BUCKET)
+    .remove(paths);
+  if (rmError) {
+    return { removed: 0, failed: paths };
+  }
+
+  // `remove` non fallisce per i percorsi inesistenti: si confronta ciò che
+  // dice di aver rimosso con ciò che si è chiesto, così un file rimasto
+  // non passa per cancellato.
+  const done = new Set(
+    (removedList ?? []).map((o) => (o as { name: string }).name),
+  );
+  const failed = paths.filter(
+    (p) => !done.has(p) && !done.has(p.split("/").pop() ?? p),
+  );
+  return { removed: paths.length - failed.length, failed };
 }
 
 /**

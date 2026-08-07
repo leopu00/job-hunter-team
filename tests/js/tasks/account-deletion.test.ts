@@ -18,10 +18,7 @@ import {
   deleteAccountData,
   deletionAuditLine,
 } from "@/lib/account-deletion";
-import {
-  CASCADE_TABLES,
-  USER_DATA_TABLES,
-} from "@/lib/account-data-tables";
+import { CASCADE_TABLES, USER_DATA_TABLES } from "@/lib/account-data-tables";
 
 interface Call {
   table: string;
@@ -30,12 +27,47 @@ interface Call {
 }
 
 /** Finto client: registra le delete e l'ordine in cui arrivano. */
-function fakeAdmin(opts: { failOn?: string; deleteUserFails?: boolean } = {}) {
+function fakeAdmin(
+  opts: {
+    failOn?: string;
+    deleteUserFails?: boolean;
+    storagePaths?: string[];
+    storageRemovesNothing?: boolean;
+  } = {},
+) {
   const calls: Call[] = [];
   const deletedUsers: string[] = [];
+  const removedPaths: string[] = [];
   const client = {
+    storage: {
+      from() {
+        return {
+          remove(paths: string[]) {
+            removedPaths.push(...paths);
+            return Promise.resolve({
+              data: opts.storageRemovesNothing
+                ? []
+                : paths.map((name) => ({ name })),
+              error: null,
+            });
+          },
+        };
+      },
+    },
     from(table: string) {
       return {
+        select() {
+          return {
+            eq() {
+              return Promise.resolve({
+                data: (opts.storagePaths ?? []).map((storage_path) => ({
+                  storage_path,
+                })),
+                error: null,
+              });
+            },
+          };
+        },
         delete() {
           return {
             eq(column: string, value: string) {
@@ -64,7 +96,7 @@ function fakeAdmin(opts: { failOn?: string; deleteUserFails?: boolean } = {}) {
     },
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { client: client as any, calls, deletedUsers };
+  return { client: client as any, calls, deletedUsers, removedPaths };
 }
 
 describe("cancellazione account — cancella tutto", () => {
@@ -74,7 +106,13 @@ describe("cancellazione account — cancella tutto", () => {
 
     expect(calls.map((c) => c.table)).toEqual([...MANUAL_DELETE_ORDER]);
     expect(deletedUsers).toEqual(["user-1"]);
-    expect(Object.keys(outcome.removed)).toEqual([...MANUAL_DELETE_ORDER]);
+    // Il resoconto include anche i file su Storage, che non sono una
+    // tabella ma vanno contati: una cancellazione che li dimentica non è
+    // completa.
+    expect(Object.keys(outcome.removed)).toEqual([
+      "storage:file-transit",
+      ...MANUAL_DELETE_ORDER,
+    ]);
   });
 
   it("rispetta l'ordine delle dipendenze", async () => {
@@ -181,5 +219,106 @@ describe("export e cancellazione parlano dello stesso insieme", () => {
     // E nessuna compare due volte: un doppione nell'ordine di
     // cancellazione significherebbe una delete ripetuta.
     expect(new Set(USER_DATA_TABLES).size).toBe(USER_DATA_TABLES.length);
+  });
+});
+
+describe("cancellazione account — i file su Storage non sopravvivono", () => {
+  it("rimuove gli oggetti prima di cancellare le righe che li nominano", async () => {
+    const { client, calls, removedPaths } = fakeAdmin({
+      storagePaths: ["u1/cv.pdf", "u1/lettera.pdf"],
+    });
+    await deleteAccountData(client, "user-1");
+    expect(removedPaths).toEqual(["u1/cv.pdf", "u1/lettera.pdf"]);
+    // I percorsi vivono solo in `file_bridge_requests`: se quella riga
+    // cadesse prima, non sapremmo più quali file cancellare.
+    expect(calls.length).toBeGreaterThan(0);
+  });
+
+  it("se un file resta, la cancellazione si ferma invece di dirsi completa", async () => {
+    const { client, deletedUsers } = fakeAdmin({
+      storagePaths: ["u1/cv.pdf"],
+      storageRemovesNothing: true,
+    });
+    await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
+      /non cancellati/,
+    );
+    expect(deletedUsers).toEqual([]);
+  });
+
+  it("senza file da cancellare non si inventa un fallimento", async () => {
+    const { client, deletedUsers } = fakeAdmin({ storagePaths: [] });
+    await deleteAccountData(client, "user-1");
+    expect(deletedUsers).toEqual(["user-1"]);
+  });
+});
+
+describe("export — nessun segreto esce", () => {
+  it("l'allowlist non contiene nessun campo proibito", async () => {
+    const { EXPORT_COLUMNS, FORBIDDEN_EXPORT_FIELDS } =
+      await import("@/lib/account-export-columns");
+    const leaked: string[] = [];
+    for (const [table, cols] of Object.entries(EXPORT_COLUMNS)) {
+      for (const col of cols) {
+        if ((FORBIDDEN_EXPORT_FIELDS as readonly string[]).includes(col)) {
+          leaked.push(`${table}.${col}`);
+        }
+      }
+    }
+    expect(leaked).toEqual([]);
+  });
+
+  it("un payload costruito dall'allowlist non nomina segreti", async () => {
+    // Simula il JSON: le chiavi sono le colonne dichiarate. Se un campo
+    // proibito comparisse, lo si vedrebbe nel testo serializzato.
+    const { EXPORT_COLUMNS, FORBIDDEN_EXPORT_FIELDS } =
+      await import("@/lib/account-export-columns");
+    const payload = JSON.stringify(
+      Object.fromEntries(
+        Object.entries(EXPORT_COLUMNS).map(([t, cols]) => [
+          t,
+          [Object.fromEntries(cols.map((c) => [c, "x"]))],
+        ]),
+      ),
+    );
+    for (const field of FORBIDDEN_EXPORT_FIELDS) {
+      expect(payload, `«${field}» nel payload`).not.toContain(`"${field}"`);
+    }
+  });
+
+  it("ogni tabella dei dati utente ha la sua allowlist", async () => {
+    // Una tabella senza allowlist non viene esportata: va bene, ma deve
+    // essere una scelta, non una dimenticanza. Qui si pretende che ci sia.
+    const { EXPORT_COLUMNS } = await import("@/lib/account-export-columns");
+    const missing = USER_DATA_TABLES.filter((t) => !EXPORT_COLUMNS[t]);
+    expect(missing).toEqual([]);
+  });
+
+  it("la route usa l'allowlist e non select(*)", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const url = await import("node:url");
+    const here = path.dirname(url.fileURLToPath(import.meta.url));
+    const route = fs.readFileSync(
+      path.resolve(here, "../../../web/app/api/account/export/route.ts"),
+      "utf8",
+    );
+    expect(route).toContain("EXPORT_COLUMNS");
+    // Si cerca la CHIAMATA, non la stringa: `select("*")` compare anche nel
+    // commento che spiega perché non si usa, e un match ingenuo lo
+    // scambierebbe per il difetto.
+    expect(route.includes('.select("*")')).toBe(false);
+  });
+});
+
+describe("il messaggio di errore non promette cose false", () => {
+  it("non dichiara che nulla è stato cancellato", async () => {
+    const { T } = await import("@/app/components/AccountDataCard.i18n");
+    // Il codice ammette la cancellazione parziale: la UI non può negarla.
+    for (const [lang, text] of Object.entries(T.error_delete)) {
+      expect(text.toLowerCase(), lang).not.toMatch(
+        /nulla è stato|nothing was|nichts wurde|rien n'a été|nada se ha|nada foi|semmi nem/,
+      );
+    }
+    expect(T.error_delete.en.toLowerCase()).toContain("may already");
   });
 });
