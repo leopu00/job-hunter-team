@@ -78,7 +78,17 @@ const P0_FORBIDDEN_ITALIAN := {
 	],
 	"res://scripts/setup/setup_service.gd": [
 		"Account e cloud", "Apri il link, scegli ACCEDI CON GOOGLE",
-		"Apri il link, accedi all'account",
+		"Apri il link, accedi all'account", "Provider selezionato: ",
+		"Abbonamento registrato", '_progress("container", "Avvio di Docker in corso',
+		"Controllo aggiornamenti del team", "Scarico l'immagine del team",
+		"MB scaricati", "Container JHT attivo",
+		"Docker Desktop avviato: attendo il motore",
+		"Colima avviato: attendo il motore",
+		"Console di login aperta dentro Job Hunter Team",
+		"Apri il link mostrato, accedi a ChatGPT",
+		"Nel prompt Kimi digita /login", "Nel menu Claude scegli",
+		"Team avviato: gli agenti arriveranno in ufficio",
+		"operazione in corso…",
 	],
 }
 
