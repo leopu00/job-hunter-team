@@ -11,9 +11,8 @@ extends SceneTree
 ##  1. si aggiorna solo IN AVANTI, e il confronto è numerico (alfabeticamente
 ##     "0.3.10" starebbe prima di "0.3.9" e l'avviso sparirebbe esattamente al
 ##     decimo rilascio della serie);
-##  2. si installa da soli SOLO dove il pacchetto è firmato, e solo se è firmato
-##     da chi ha firmato la copia in esecuzione — la notarizzazione da sola non
-##     basta, Apple ne firma centinaia di migliaia;
+##  2. si installa da soli SOLO con una root indipendente dal canale: firma della
+##     copia in uso su macOS; helper+trust root production locali su Windows;
 ##  3. non si va in rete quando non si deve: spento, senza finestra, in vetrina,
 ##     o già controllato oggi;
 ##  4. quello che arriva dalla rete non decide dove mandare il browser.
@@ -22,6 +21,7 @@ extends SceneTree
 ## l'orologio di sistema passa o fallisce a seconda di quando lo si esegue.
 
 const ORA := 1785000000.0
+const WindowsProtocol := preload("res://scripts/support/windows_update_protocol.gd")
 
 ## La forma dell'uscita di `codesign -dv --verbose=4` su un bundle firmato
 ## Developer ID e notarizzato — verificata sul pacchetto macOS della 0.3.1 il
@@ -52,6 +52,8 @@ func _init() -> void:
 	_versioni()
 	_release()
 	_pacchetti()
+	_protocollo_windows()
+	_source_gate_windows()
 	_ritmo()
 	_firme()
 	_percorsi()
@@ -151,34 +153,204 @@ func _release() -> void:
 # ── 3. Solo i pacchetti firmati si installano da soli ────────────────
 
 func _pacchetti() -> void:
+	var win_sha := "b".repeat(64)
 	var assets := [
-		{"name": "job-hunter-team.exe",
-			"browser_download_url": "https://github.com/leopu00/job-hunter-team/releases/download/v0.4.0/job-hunter-team.exe"},
-		{"name": "job-hunter-team.zip",
-			"browser_download_url": "https://github.com/leopu00/job-hunter-team/releases/download/v0.4.0/job-hunter-team.zip"},
-		{"name": "job-hunter-team-linux-x64.tar.gz",
-			"browser_download_url": "https://github.com/leopu00/job-hunter-team/releases/download/v0.4.0/job-hunter-team-linux-x64.tar.gz"},
+		{"name": UpdateCheck.WINDOWS_ASSET, "size": 222,
+			"digest": "sha256:" + win_sha,
+			"browser_download_url": UpdateCheck._release_asset_url(
+					"0.4.0", UpdateCheck.WINDOWS_ASSET)},
+		{"name": UpdateCheck.MACOS_ASSET,
+			"browser_download_url": UpdateCheck._release_asset_url(
+					"0.4.0", UpdateCheck.MACOS_ASSET)},
+		{"name": UpdateCheck.WINDOWS_MANIFEST_ASSET,
+			"browser_download_url": UpdateCheck._release_asset_url(
+					"0.4.0", UpdateCheck.WINDOWS_MANIFEST_ASSET)},
+		{"name": UpdateCheck.WINDOWS_SIGNATURE_ASSET,
+			"browser_download_url": UpdateCheck._release_asset_url(
+					"0.4.0", UpdateCheck.WINDOWS_SIGNATURE_ASSET)},
 	]
 	_check("macOS: si scarica lo zip firmato",
-			UpdateCheck.asset_url(assets, "macOS").ends_with("job-hunter-team.zip"),
-			UpdateCheck.asset_url(assets, "macOS"))
-	# Windows e Linux escono NON firmati: lì non si scarica e non si esegue
-	# niente: si apre la pagina e decide l'utente.
-	for os_name: String in ["Windows", "Linux", "Android", "Web"]:
+			UpdateCheck.asset_url(assets, "macOS", "0.4.0").ends_with(
+					UpdateCheck.MACOS_ASSET),
+			UpdateCheck.asset_url(assets, "macOS", "0.4.0"))
+	var windows := UpdateCheck.asset_bundle(assets, "Windows", "0.4.0")
+	_check("Windows: pacchetto, manifest e firma detached obbligatori",
+			str(windows.get("package", "")).ends_with(UpdateCheck.WINDOWS_ASSET)
+			and str(windows.get("manifest", "")).ends_with(
+					UpdateCheck.WINDOWS_MANIFEST_ASSET)
+			and str(windows.get("signature", "")).ends_with(
+					UpdateCheck.WINDOWS_SIGNATURE_ASSET), str(windows))
+	_check("Windows: senza root/helper production resta manuale",
+			not UpdateCheck.can_self_install("Windows"), "")
+	_check("0.3.5 -> 0.3.6 resta manuale anche con capability presenti",
+			not UpdateCheck.windows_forward_allowed(
+					"0.3.5", "0.3.6", "", true, true), "")
+	_check("0.3.6 -> futura ammessa solo con helper e trust root",
+			UpdateCheck.windows_forward_allowed(
+					"0.3.6", "0.3.7", "0.3.6", true, true), "")
+	for flags: Array in [[false, true], [true, false], [false, false]]:
+		_check("Windows: capability incompleta fallisce chiusa",
+				not UpdateCheck.windows_forward_allowed(
+						"0.3.6", "0.3.7", "0.3.6",
+						bool(flags[0]), bool(flags[1])), str(flags))
+	for candidate: String in ["0.3.6", "0.3.5", "latest"]:
+		_check("Windows: equal/downgrade/illeggibile rifiutato",
+				not UpdateCheck.windows_forward_allowed(
+						"0.3.6", candidate, "0.3.6", true, true), candidate)
+	_check("Windows: high-water impedisce replay firmato",
+			not UpdateCheck.windows_forward_allowed(
+					"0.3.6", "0.3.7", "0.3.7", true, true), "")
+	_check("Windows: soltanto una versione oltre high-water passa",
+			UpdateCheck.windows_forward_allowed(
+					"0.3.6", "0.3.8", "0.3.7", true, true), "")
+	_check("Windows: high-water corrotto fallisce chiuso",
+			not UpdateCheck.windows_forward_allowed(
+					"0.3.6", "0.3.8", "latest", true, true), "")
+	# Linux e i sistemi senza una strategia atomica restano manuali.
+	for os_name: String in ["Linux", "Android", "Web"]:
 		_check("%s: nessun pacchetto da installare" % os_name,
-				UpdateCheck.asset_url(assets, os_name) == "", os_name)
+				UpdateCheck.asset_url(assets, os_name, "0.4.0") == "", os_name)
 		_check("%s: niente installazione automatica" % os_name,
 				not UpdateCheck.can_self_install(os_name), os_name)
 	_check("macOS: installazione automatica ammessa",
 			UpdateCheck.can_self_install("macOS"), "")
-	# Un URL che non è https non si scarica.
-	_check("asset in chiaro rifiutato", UpdateCheck.asset_url(
-			[{"name": "job-hunter-team.zip",
-				"browser_download_url": "http://github.com/x.zip"}], "macOS") == "", "")
-	_check("nessun asset", UpdateCheck.asset_url([], "macOS") == "", "")
+	# Host, repository, tag e nome sono tutti appuntati: HTTPS generico non basta.
+	var ostile := assets.duplicate(true)
+	ostile[0]["browser_download_url"] = "https://example.invalid/" \
+			+ UpdateCheck.WINDOWS_ASSET
+	_check("Windows: URL fuori repository rifiutato",
+			UpdateCheck.asset_bundle(ostile, "Windows", "0.4.0").is_empty(), "")
+	_check("Windows: tag URL diverso rifiutato",
+			UpdateCheck.asset_bundle(assets, "Windows", "0.4.1").is_empty(), "")
+	var senza_firma := assets.duplicate(true)
+	senza_firma.pop_back()
+	_check("Windows: firma detached mancante rifiutata",
+			UpdateCheck.asset_bundle(senza_firma, "Windows", "0.4.0").is_empty(), "")
+	_check("nessun asset", UpdateCheck.asset_url([], "macOS", "0.4.0") == "", "")
+
+	# Il triplo confronto same-origin non compare piu nel contratto. La policy
+	# deve restare chiusa anche se API digest, SHA256SUMS e provenance concordano.
+	_check("same-origin non abilita Windows",
+			not UpdateCheck.can_self_install("Windows") and win_sha.length() == 64, "")
 
 
-# ── 4. Quando NON si va in rete ──────────────────────────────────────
+# ── 4. Helper/ACK/recovery Windows ───────────────────────────────────
+
+func _protocollo_windows() -> void:
+	var nonce := "1".repeat(WindowsProtocol.NONCE_HEX_LENGTH)
+	var old_sha := "a".repeat(WindowsProtocol.SHA256_HEX_LENGTH)
+	var new_sha := "b".repeat(WindowsProtocol.SHA256_HEX_LENGTH)
+	var manifest_sha := "c".repeat(WindowsProtocol.SHA256_HEX_LENGTH)
+	var expected := {
+		"nonce": nonce,
+		"request_id": "request-7",
+		"instance_id": "instance-3",
+		"old_pid": 1234,
+		"old_started": "1785000000000",
+		"manifest_sha256": manifest_sha,
+		"candidate_sha256": new_sha,
+	}
+	var ready := expected.duplicate(true)
+	ready.merge({"schema": WindowsProtocol.SCHEMA,
+		"type": WindowsProtocol.FRAME_READY, "ok": true})
+	_check("ready helper lega nonce/processo/manifest/candidato",
+			WindowsProtocol.ready_frame_matches(ready, expected), str(ready))
+	for field: String in ["nonce", "request_id", "instance_id", "old_started",
+			"manifest_sha256", "candidate_sha256"]:
+		var stale := ready.duplicate(true)
+		stale[field] = "fossile"
+		_check("ready stale rifiutato: " + field,
+				not WindowsProtocol.ready_frame_matches(stale, expected), str(stale))
+	var pid_solo := ready.duplicate(true)
+	pid_solo["old_started"] = "1784999999999"
+	_check("PID riusato senza creation token rifiutato",
+			not WindowsProtocol.ready_frame_matches(pid_solo, expected), "")
+	var ready_extra := ready.duplicate(true)
+	ready_extra["trusted"] = true
+	_check("campo ready inatteso non crea autorita",
+			not WindowsProtocol.ready_frame_matches(ready_extra, expected), "")
+
+	var health := WindowsProtocol.health_frame(nonce, "0.3.7", new_sha)
+	_check("ACK salute lega nonce/versione/hash",
+			WindowsProtocol.health_frame_matches(health, nonce, "0.3.7", new_sha),
+			str(health))
+	_check("ACK salute di altra versione rifiutato",
+			not WindowsProtocol.health_frame_matches(health, nonce, "0.3.8", new_sha), "")
+	_check("nonce non canonico non produce ACK",
+			WindowsProtocol.health_frame("../stage", "0.3.7", new_sha).is_empty(), "")
+	_check("path ACK deriva solo da LOCALAPPDATA+nonce",
+			WindowsProtocol.health_path("C:/Users/test/AppData/Local", nonce).ends_with(
+					"Job Hunter Team/host-runtime/updates/%s/health.json" % nonce),
+			WindowsProtocol.health_path("C:/Users/test/AppData/Local", nonce))
+	_check("LOCALAPPDATA relativo/traversal rifiutato",
+			WindowsProtocol.health_path("../Documents", nonce) == ""
+			and WindowsProtocol.health_path("C:/Users/test/../Documents", nonce) == "", "")
+
+	var journal := {
+		"schema": WindowsProtocol.SCHEMA,
+		"nonce": nonce,
+		"installed_version": "0.3.6",
+		"target_version": "0.3.7",
+		"old_sha256": old_sha,
+		"candidate_sha256": new_sha,
+		"state": WindowsProtocol.JOURNAL_PREPARED,
+	}
+	_check("interruzione pre-switch non applica byte staged",
+			WindowsProtocol.recovery_action(journal, old_sha, "")
+					== WindowsProtocol.RECOVERY_DISCARD_UNAPPLIED, "")
+	journal["state"] = WindowsProtocol.JOURNAL_CANDIDATE_INSTALLED
+	_check("interruzione post-switch senza ACK ripristina old",
+			WindowsProtocol.recovery_action(journal, new_sha, old_sha)
+					== WindowsProtocol.RECOVERY_RESTORE_OLD, "")
+	_check("old->new con ACK esatto completa",
+			WindowsProtocol.recovery_action(journal, new_sha, old_sha, health)
+					== WindowsProtocol.RECOVERY_COMMIT, "")
+	var wrong_health := health.duplicate(true)
+	wrong_health["exe_sha256"] = "d".repeat(64)
+	_check("ACK errato non impedisce rollback",
+			WindowsProtocol.recovery_action(journal, new_sha, old_sha, wrong_health)
+					== WindowsProtocol.RECOVERY_RESTORE_OLD, "")
+	var corrotto := journal.duplicate(true)
+	corrotto["target_version"] = "0.3.5"
+	_check("journal downgrade/corrotto fallisce chiuso",
+			WindowsProtocol.recovery_action(corrotto, new_sha, old_sha)
+					== WindowsProtocol.RECOVERY_FAIL_CLOSED, "")
+	journal["state"] = WindowsProtocol.JOURNAL_COMMITTED
+	_check("cleanup soltanto dopo commit e hash new",
+			WindowsProtocol.recovery_action(journal, new_sha, old_sha, health)
+					== WindowsProtocol.RECOVERY_CLEANUP_OWNED, "")
+
+
+## Regressione sul wiring: la vecchia pseudo-attestazione same-origin non deve
+## poter rientrare sotto un altro test verde, e finche manca una root production
+## il servizio non deve avere alcun launcher Windows/apply raggiungibile.
+func _source_gate_windows() -> void:
+	var check_source := FileAccess.get_file_as_string(
+			"res://scripts/support/update_check.gd")
+	var service_source := FileAccess.get_file_as_string(
+			"res://scripts/support/update_service.gd")
+	var protocol_source := FileAccess.get_file_as_string(
+			"res://scripts/support/windows_update_protocol.gd")
+	_check("nessun claim attestazione dal triplo same-origin",
+			"attest_windows_metadata" not in check_source
+			and "PROVENANCE_SCHEMA" not in check_source
+			and "tre fonti indipendenti" not in check_source, "")
+	_check("asset URL vincolato alla versione candidata",
+			"OS.get_name(), latest_version" in service_source, "")
+	_check("defer service-owned viene persistito",
+			"deferred_version" in service_source and "defer_until" in service_source
+			and "UpdateService.defer()" in FileAccess.get_file_as_string(
+					"res://scripts/ui/update_notice.gd"), "")
+	_check("protocollo puro non puo lanciare apply",
+			"OS.execute" not in protocol_source
+			and "OS.create_process" not in protocol_source
+			and "shell_open" not in protocol_source, "")
+	_check("servizio Windows emette soltanto health ACK",
+			"WindowsProtocol.health_frame" in service_source
+			and "windows_update_helper" not in service_source, "")
+
+
+# ── 5. Quando NON si va in rete ──────────────────────────────────────
 
 func _ritmo() -> void:
 	var base := {"env": "", "enabled": true, "headless": false,
@@ -217,6 +389,15 @@ func _ritmo() -> void:
 	forzato["enabled"] = true
 	_check("JHT_UPDATE_CHECK=0 vince",
 			UpdateCheck.skip_reason(forzato) == UpdateCheck.SKIP_ENV, "")
+
+	_check("defer persiste per la stessa versione",
+			UpdateCheck.defer_active("0.3.7", "0.3.7", ORA + 3600.0, ORA), "")
+	_check("versione nuova supera il defer",
+			not UpdateCheck.defer_active("0.3.8", "0.3.7", ORA + 3600.0, ORA), "")
+	_check("defer scaduto non diventa rifiuto permanente",
+			not UpdateCheck.defer_active("0.3.7", "0.3.7", ORA, ORA), "")
+	_check("versione defer malformata ignorata",
+			not UpdateCheck.defer_active("latest", "latest", ORA + 3600.0, ORA), "")
 
 
 # ── 5. Chi ha firmato il pacchetto ───────────────────────────────────

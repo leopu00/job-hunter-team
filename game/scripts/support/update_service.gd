@@ -24,6 +24,8 @@ extends Node
 ## L'unico segnale: la fascia e la pagina Impostazioni ridisegnano da qui.
 signal state_changed(state: Dictionary)
 
+const WindowsProtocol := preload("res://scripts/support/windows_update_protocol.gd")
+
 const PHASE_IDLE := "idle"
 const PHASE_CHECKING := "checking"
 ## C'è una versione più recente e l'utente non ha ancora deciso niente.
@@ -51,6 +53,10 @@ var progress := 0
 ## annota: chi era offline all'avvio riprova al lancio successivo invece di
 ## restare al buio per ventiquattro ore.
 var last_check := 0.0
+## "Piu tardi" e version-aware e sopravvive al riavvio. Non e mai trust: una
+## versione diversa lo supera e nessun valore qui abilita l'installazione.
+var deferred_version := ""
+var defer_until := 0.0
 
 var _http: HTTPRequest
 var _download: HTTPRequest
@@ -67,6 +73,9 @@ func _ready() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(UpdateCheck.CONFIG_PATH) == OK:
 		last_check = float(cfg.get_value("update", "last_check", 0.0))
+		deferred_version = str(cfg.get_value("update", "deferred_version", ""))
+		defer_until = float(cfg.get_value("update", "defer_until", 0.0))
+	_write_windows_health_ack.call_deferred()
 	# Mai direttamente da _ready: qui l'albero non è ancora completo, e questo
 	# autoload interroga il DisplayServer e apre una connessione di rete.
 	_boot.call_deferred()
@@ -101,6 +110,10 @@ func check(manual: bool) -> void:
 	if reason != "":
 		Log.debug("update", "controllo saltato: %s" % reason)
 		return
+	if manual and deferred_version != "":
+		deferred_version = ""
+		defer_until = 0.0
+		_save_cfg()
 	if _http == null:
 		_http = HTTPRequest.new()
 		_http.timeout = 10.0
@@ -141,11 +154,15 @@ func _on_checked(result: int, code: int, _headers: PackedStringArray,
 	release_page = str(info["page"])
 	if not UpdateCheck.is_newer(str(info["version"]), current_version()):
 		latest_version = current_version()
+		if deferred_version != "":
+			deferred_version = ""
+			defer_until = 0.0
+			_save_cfg()
 		Log.info("update", "nessun aggiornamento: %s è l'ultima" % current_version())
 		_set_phase(PHASE_CURRENT)
 		return
 	latest_version = str(info["version"])
-	asset_url = UpdateCheck.asset_url(info["assets"], OS.get_name())
+	asset_url = UpdateCheck.asset_url(info["assets"], OS.get_name(), latest_version)
 	Log.info("update", "disponibile la %s (in uso la %s)"
 			% [latest_version, current_version()])
 	_set_phase(PHASE_AVAILABLE)
@@ -169,6 +186,18 @@ func install_target() -> Dictionary:
 
 func open_release_page() -> void:
 	OS.shell_open(release_page if release_page != "" else UpdateCheck.RELEASES_PAGE)
+
+
+## Nasconde soltanto QUESTA versione per un giorno. La scelta viene salvata dal
+## servizio, non dal pannello, quindi un riavvio non la dimentica. Una release
+## successiva non eredita mai il defer della precedente.
+func defer() -> void:
+	if phase != PHASE_AVAILABLE or UpdateCheck.parse_version(latest_version).is_empty():
+		return
+	deferred_version = latest_version
+	defer_until = Time.get_unix_time_from_system() + UpdateCheck.CHECK_EVERY_S
+	_save_cfg()
+	state_changed.emit(state())
 
 
 func install() -> void:
@@ -287,6 +316,8 @@ func current_version() -> String:
 
 
 func state() -> Dictionary:
+	var deferred := UpdateCheck.defer_active(latest_version, deferred_version,
+			defer_until, Time.get_unix_time_from_system())
 	return {
 		"phase": phase,
 		"latest": latest_version,
@@ -295,6 +326,9 @@ func state() -> Dictionary:
 		"error": error_key,
 		"progress": progress,
 		"can_install": phase == PHASE_AVAILABLE and can_install(),
+		"deferred": deferred,
+		"deferred_version": deferred_version,
+		"defer_until": defer_until,
 		"last_check": last_check,
 	}
 
@@ -324,7 +358,42 @@ func _save_cfg() -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(UpdateCheck.CONFIG_PATH)
 	cfg.set_value("update", "last_check", last_check)
-	cfg.save(UpdateCheck.CONFIG_PATH)
+	cfg.set_value("update", "deferred_version", deferred_version)
+	cfg.set_value("update", "defer_until", defer_until)
+	var error := cfg.save(UpdateCheck.CONFIG_PATH)
+	if error != OK:
+		Log.warn("update", "stato aggiornamenti non salvato: errore %d" % error)
+
+
+## ACK di salute del processo NUOVO. Il helper passa soltanto il nonce; path,
+## versione e hash sono derivati localmente. La directory deve gia esistere ed
+## essere stata protetta dal helper: il gioco non la crea e non la considera mai
+## un'autorizzazione. Dopo la lettura il helper riverifica path/ACL/hash.
+func _write_windows_health_ack() -> void:
+	if OS.get_name() != "Windows":
+		return
+	var nonce := OS.get_environment("JHT_UPDATE_NONCE").strip_edges()
+	if not WindowsProtocol.valid_nonce(nonce):
+		return
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var executable := OS.get_executable_path()
+	var digest := FileAccess.get_sha256(executable)
+	var frame := WindowsProtocol.health_frame(nonce, current_version(), digest)
+	var path := WindowsProtocol.health_path(
+			OS.get_environment("LOCALAPPDATA"), nonce)
+	if frame.is_empty() or path == "" or not DirAccess.dir_exists_absolute(
+			path.get_base_dir()) or FileAccess.file_exists(path):
+		return
+	var temporary := "%s.tmp-%d" % [path, OS.get_process_id()]
+	var file := FileAccess.open(temporary, FileAccess.WRITE)
+	if file == null:
+		return
+	file.store_string(JSON.stringify(frame) + "\n")
+	file.flush()
+	file.close()
+	if DirAccess.rename_absolute(temporary, path) != OK:
+		DirAccess.remove_absolute(temporary)
 
 
 func _join_thread() -> void:
