@@ -4,8 +4,13 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useLandingI18n } from "./LandingI18n";
 import { isLocalDeploy } from "@/lib/deploy-mode";
+import { CONSENT_EVENT, CONSENT_STORAGE_KEY } from "../ConsentedAnalytics";
 
-const STORAGE_KEY = "jht:cookie-consent";
+// La chiave è quella di `ConsentedAnalytics`, importata e non
+// ricopiata: due costanti uguali scritte in due file si slegano al primo
+// rename, e il consenso smetterebbe di essere letto senza che nulla si
+// rompa in modo visibile.
+const STORAGE_KEY = CONSENT_STORAGE_KEY;
 
 const T = {
   it: {
@@ -73,6 +78,16 @@ export default function CookieConsent() {
   const respond = (choice: "accepted" | "necessary") => {
     try {
       localStorage.setItem(STORAGE_KEY, choice);
+    } catch {
+      /* ignore */
+    }
+    // Avvisa `ConsentedAnalytics` nello stesso istante: senza l'evento, un
+    // «Accetta» varrebbe solo dal caricamento successivo, e chi accetta si
+    // aspetta che valga subito. Nell'altro verso conta ancora di più: chi
+    // sceglie «Solo necessari» non deve essere misurato per il resto della
+    // visita.
+    try {
+      window.dispatchEvent(new Event(CONSENT_EVENT));
     } catch {
       /* ignore */
     }
