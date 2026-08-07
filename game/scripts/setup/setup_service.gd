@@ -1283,8 +1283,8 @@ static func _run_upgrade_json(path: String, args: PackedStringArray) -> Dictiona
 ## preparare il runtime" — il muro contro cui è finito il primo avvio pulito
 ## del 26/07. Vive nella cartella dell'applicazione, che è nostra per
 ## definizione; i volumi dentro al file sono path assoluti, quindi la sua
-## posizione non cambia nulla per docker. Il vecchio percorso resta letto
-## per chi ce l'ha già.
+## posizione non cambia nulla per docker. Il vecchio percorso sotto ~/.jht
+## non e' mai letto: il container puo' scriverlo tramite /jht_home.
 static func compose_home_path() -> String:
 	return ProjectSettings.globalize_path("user://runtime/docker-compose.yml")
 
@@ -1292,7 +1292,6 @@ static func compose_home_path() -> String:
 static func _find_compose_file() -> String:
 	var candidates := [
 		compose_home_path(),
-		_jht_home().path_join("runtime/docker-compose.yml"),
 		ProjectSettings.globalize_path("res://../docker-compose.yml"),
 	]
 	var user_data := OS.get_user_data_dir().get_base_dir()

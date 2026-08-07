@@ -167,20 +167,12 @@ ok "Language / Lingua / Nyelv / Idioma / Sprache / Langue / Idioma: $JHT_LANG"
 mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
 printf 'JHT_LANG=%s\n' "$JHT_LANG" > "$HOST_ENV_PATH"
 
-# ── i18n: source catalogo locales dopo scelta lingua ────────────────────
-# Da qui in poi tutti i prompt utente passano per t()/tf() che leggono
-# shared/locales/<JHT_LANG>.json. Se il catalogo non c'è (es. checkout
-# parziale), hardcoded English fallbacks are used inline.
-_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-_REPO_ROOT="$(cd "$_SCRIPT_DIR/.." && pwd)"
-if [ -f "$_REPO_ROOT/shared/i18n.sh" ]; then
-  export JHT_LANG
-  # shellcheck disable=SC1091
-  source "$_REPO_ROOT/shared/i18n.sh"
-fi
-# Safe helper: use t() when available, otherwise return the inline English default.
+# ── i18n: soltanto dati, mai helper shell dal filesystem ─────────────────
+# Questo script gira sull'host. Non importa codice da directory che il
+# container puo' scrivere; i fallback inglesi inline restano l'autorita'
+# sicura finche' i cataloghi non sono distribuiti nel bundle host attestato.
 ts() {
-  if declare -F t >/dev/null 2>&1; then t "$1"; else printf '%s' "$2"; fi
+  printf '%s' "$2"
 }
 
 # ── Detect VPS ───────────────────────────────────────────────────────────
