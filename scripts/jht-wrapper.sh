@@ -253,7 +253,7 @@ runtime_bootstrap_release() {
   # Legacy ~/.jht/runtime is deliberately never read or copied. A missing
   # authority is rebuilt only from the selected release origin into a new
   # host-owned directory, then atomically published with its digest manifest.
-  local stage release_base
+  local stage release_base migrate_wrapper=0 wrapper_publish
   [ ! -e "$RUNTIME_DIR" ] && [ ! -L "$RUNTIME_DIR" ] || return 1
   umask 077
   mkdir -p "$RUNTIME_DIR" || return 1
@@ -275,14 +275,40 @@ runtime_bootstrap_release() {
     rmdir "$RUNTIME_DIR" 2>/dev/null || true
     return 1
   fi
+  if ! grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH"; then
+    if [ "${JHT_ALLOW_LEGACY_WRAPPER_MIGRATION:-0}" != "1" ] \
+        || ! curl -fsSL "${release_base%/}/scripts/jht-wrapper.sh" -o "$stage/jht-wrapper.sh" \
+        || ! bash -n "$stage/jht-wrapper.sh" \
+        || ! grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$stage/jht-wrapper.sh"; then
+      rm -f "$stage/docker-compose.yml" "$stage/host-setup.sh" "$stage/jht-wrapper.sh"
+      rmdir "$stage" 2>/dev/null || true
+      rmdir "$RUNTIME_DIR" 2>/dev/null || true
+      return 1
+    fi
+    migrate_wrapper=1
+  fi
   chmod 600 "$stage/docker-compose.yml"
   chmod 700 "$stage/host-setup.sh"
+  if [ "$migrate_wrapper" -eq 1 ]; then
+    wrapper_publish="$(mktemp "$(dirname "$WRAPPER_PATH")/.jht-wrapper.XXXXXX")" || wrapper_publish=""
+    if [ -z "$wrapper_publish" ] \
+        || ! cp "$stage/jht-wrapper.sh" "$wrapper_publish" \
+        || ! chmod 700 "$wrapper_publish" \
+        || ! mv -f "$wrapper_publish" "$WRAPPER_PATH"; then
+      [ -z "$wrapper_publish" ] || rm -f "$wrapper_publish"
+      rm -f "$stage/docker-compose.yml" "$stage/host-setup.sh" "$stage/jht-wrapper.sh"
+      rmdir "$stage" 2>/dev/null || true
+      rmdir "$RUNTIME_DIR" 2>/dev/null || true
+      return 1
+    fi
+    rm -f "$stage/jht-wrapper.sh"
+  fi
   if ! { mv "$stage/docker-compose.yml" "$COMPOSE_FILE" \
       && mv "$stage/host-setup.sh" "$HOST_SETUP_SCRIPT" \
       && rmdir "$stage" \
       && runtime_write_manifest \
       && runtime_bundle_trusted; }; then
-    rm -f "$stage/docker-compose.yml" "$stage/host-setup.sh" \
+    rm -f "$stage/docker-compose.yml" "$stage/host-setup.sh" "$stage/jht-wrapper.sh" \
       "$COMPOSE_FILE" "$HOST_SETUP_SCRIPT" "$RUNTIME_MANIFEST"
     rmdir "$stage" 2>/dev/null || true
     rmdir "$RUNTIME_DIR" 2>/dev/null || true

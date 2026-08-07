@@ -180,6 +180,7 @@ function Install-ProtectedRuntimeFromRelease {
   if (Test-Path -LiteralPath $RuntimeDir) { return $false }
   if (-not (Test-RuntimePathAuthority)) { return $false }
   $temp = $null
+  $wrapperTemp = $null
   try {
     New-Item -ItemType Directory -Path $RuntimeDir -Force | Out-Null
     $acl = Get-Acl -LiteralPath $RuntimeDir
@@ -194,10 +195,19 @@ function Install-ProtectedRuntimeFromRelease {
     Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/docker-compose.yml" -OutFile $temp
     if (-not (Select-String -LiteralPath $temp -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { throw 'release compose lacks protected runtime mask' }
     Move-Item -LiteralPath $temp -Destination $ComposeFile
+    if (-not (Select-String -LiteralPath $WrapperPath -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) {
+      if ($env:JHT_ALLOW_LEGACY_WRAPPER_MIGRATION -ne '1') { throw 'legacy wrapper migration is not authorized' }
+      $wrapperTemp = Join-Path (Split-Path -LiteralPath $WrapperPath -Parent) ('.jht-wrapper-' + [guid]::NewGuid().ToString('N') + '.ps1')
+      Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/scripts/jht-wrapper.ps1" -OutFile $wrapperTemp
+      [scriptblock]::Create((Get-Content -LiteralPath $wrapperTemp -Raw)) | Out-Null
+      if (-not (Select-String -LiteralPath $wrapperTemp -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { throw 'release wrapper lacks protected runtime protocol' }
+      Move-Item -LiteralPath $wrapperTemp -Destination $WrapperPath -Force
+    }
     Write-RuntimeManifest
     return (Test-RuntimeBundleTrusted)
   } catch {
     if ($temp) { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+    if ($wrapperTemp) { Remove-Item -LiteralPath $wrapperTemp -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $ComposeFile -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $RuntimeManifest -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $RuntimeDir -Force -ErrorAction SilentlyContinue

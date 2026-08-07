@@ -332,6 +332,65 @@ def test_legacy_runtime_migration_downloads_fresh_release_bytes(tmp_path):
     assert all(f"/{release_sha}/" in url for url in interpreted)
 
 
+def test_attested_bootstrap_replaces_legacy_wrapper_without_executing_it(tmp_path):
+    home = tmp_path / "home"
+    (home / ".jht").mkdir(parents=True)
+    runtime = (tmp_path / "protected" / "host-runtime").resolve()
+    marker = tmp_path / "legacy-wrapper-ran"
+    legacy_wrapper = tmp_path / "host-bin" / "jht"
+    legacy_wrapper.parent.mkdir()
+    legacy_wrapper.write_text(
+        "#!/usr/bin/env bash\n"
+        "JHT_UPGRADE_PROTOCOL=1\n"
+        f"touch {shlex.quote(str(marker))}\n",
+        encoding="utf-8",
+    )
+    legacy_wrapper.chmod(0o700)
+
+    fake_bin = tmp_path / "bin"
+    docker_log = tmp_path / "docker.log"
+    make_fake_docker(fake_bin, docker_log)
+    curl = fake_bin / "curl"
+    curl.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -eu\n"
+        "url='' out=''\n"
+        "while [ \"$#\" -gt 0 ]; do\n"
+        "  case \"$1\" in -o) out=$2; shift 2 ;; -*) shift ;; *) url=$1; shift ;; esac\n"
+        "done\n"
+        "case \"$url\" in\n"
+        "  */commits/production) printf '{\\n  \"sha\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"\\n}\\n' ;;\n"
+        "  */docker-compose.yml) printf 'services:\\n  jht:\\n    image: example.invalid/jht\\n    volumes:\\n      - jht-runtime-mask:/jht_home/runtime\\nvolumes:\\n  jht-runtime-mask:\\n' > \"$out\" ;;\n"
+        "  */scripts/host-setup.sh) printf '#!/usr/bin/env bash\\nJHT_HOST_SETUP_PROTOCOL=1\\nexit 0\\n' > \"$out\" ;;\n"
+        "  */scripts/jht-wrapper.sh) cp \"$JHT_TEST_RELEASE_WRAPPER\" \"$out\" ;;\n"
+        "  *) exit 22 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    curl.chmod(0o755)
+    env = wrapper_runtime_env(home, runtime, fake_bin, docker_log)
+    env.update(
+        {
+            "JHT_WRAPPER_PATH": str(legacy_wrapper),
+            "JHT_ALLOW_LEGACY_WRAPPER_MIGRATION": "1",
+            "JHT_TEST_RELEASE_WRAPPER": str(WRAPPER),
+        }
+    )
+    result = subprocess.run(
+        ["bash", str(WRAPPER), "up"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not marker.exists()
+    assert "JHT_HOST_RUNTIME_PROTOCOL=1" in legacy_wrapper.read_text(encoding="utf-8")
+    manifest = (runtime / ".runtime-integrity").read_text(encoding="utf-8")
+    assert hashlib.sha256(legacy_wrapper.read_bytes()).hexdigest() in manifest
+
+
 @pytest.mark.parametrize("tamper", ["compose_symlink", "world_writable", "digest", "owner"])
 def test_untrusted_protected_runtime_stops_before_docker(tmp_path, tamper):
     home = tmp_path / "home"
