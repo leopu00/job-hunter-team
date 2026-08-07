@@ -278,7 +278,8 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "created_at",
     "updated_at",
   ],
-  // `storage_path` esce: serve all'utente per capire quale file era.
+  // `storage_path` is generated from user_id/request id by the database. It is
+  // safe to export as request metadata, but is never Storage authority.
   file_bridge_requests: [
     "id",
     "file_name",

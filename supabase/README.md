@@ -27,9 +27,13 @@ JHT supports **two ways** to use cloud sync:
 
 ## Security
 
-All tables have **Row Level Security (RLS)** enabled. Each user sees only their own rows via `auth.uid() = user_id`.
+All tables have **Row Level Security (RLS)** enabled. User-owned tables expose
+only rows matching `auth.uid() = user_id`. `feedback_tickets` has no reliable
+owner column: browser roles may submit a report but cannot read stored reports;
+only the service role can read them.
 
-Active policies: SELECT · INSERT · UPDATE · DELETE for the owner.
+`file_bridge_requests.storage_path` is generated from `user_id` and the request
+UUID. Browser INSERT is column-restricted to `user_id` and `file_name`.
 
 ## Setup
 
@@ -49,10 +53,11 @@ psql $DATABASE_URL -f supabase/seed.sql
 
 ```
 supabase/
-├── migrations/     # 001–053 — full, ordered schema history: core schema + RLS (001),
+├── migrations/     # 001–062 — full, ordered schema history: core schema + RLS (001),
 │                   #   feedback tickets (005), cloud-sync tokens + expiry (006, 036),
 │                   #   companies/highlights sync, position tickets, jd_summary,
-│                   #   function hardening (031/032), RLS/index tuning (053), …
+│                   #   function hardening (031/032), RLS/index tuning (053),
+│                   #   feedback/file-bridge authority hardening (062), …
 ├── seed.sql        # Demo data
 └── README.md
 ```
