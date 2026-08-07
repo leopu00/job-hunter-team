@@ -1,0 +1,593 @@
+"""Windows PowerShell 5.1 gate for the protected desktop update helper."""
+
+from __future__ import annotations
+
+import os
+import json
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import pytest
+
+from scripts.release_manifest import build_manifest, canonical_bytes
+from scripts.release_signing import public_key_id, render_helper
+
+
+ROOT = Path(__file__).resolve().parents[1]
+HELPER_SOURCE = ROOT / "scripts" / "jht-windows-update.ps1"
+DESKTOP = "job-hunter-team-windows-x64-portable.exe"
+HELPER = "jht-windows-update.ps1"
+SPECS = [
+    (
+        "windows-desktop",
+        "windows",
+        "x86_64",
+        DESKTOP,
+        "jht-windows-desktop-v1",
+    ),
+    (
+        "windows-update-helper",
+        "windows",
+        "x86_64",
+        HELPER,
+        "jht-windows-update-v1",
+    ),
+]
+EXTRA_ARTIFACTS = {
+    "extra-windows-installer": {
+        "role": "windows-installer",
+        "platform": "windows",
+        "arch": "x86_64",
+        "filename": "job-hunter-team-windows-x64-setup.exe",
+        "protocol": "jht-windows-installer-v1",
+    },
+    "extra-linux-desktop": {
+        "role": "linux-desktop",
+        "platform": "linux",
+        "arch": "x86_64",
+        "filename": "job-hunter-team-linux-x64.tar.gz",
+        "protocol": "jht-linux-desktop-v1",
+    },
+    "extra-macos-desktop": {
+        "role": "macos-desktop",
+        "platform": "macos",
+        "arch": "universal2",
+        "filename": "job-hunter-team.zip",
+        "protocol": "jht-macos-desktop-v1",
+    },
+}
+
+
+def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
+    source = HELPER_SOURCE.read_text()
+    producer = (ROOT / "scripts" / "release_manifest.py").read_text()
+    assert "__JHT_RELEASE_PUBLIC_KEYS_SPKI_PEM__" in source
+    for forbidden in (
+        "Invoke-Expression",
+        "DownloadString",
+        "Invoke-WebRequest",
+        "Start-BitsTransfer",
+        "cmd.exe",
+        "taskkill",
+        "Stop-Process",
+    ):
+        assert forbidden not in source
+    for required in (
+        "Read-VerifiedManifest",
+        "Get-CanonicalManifestText",
+        "Assert-ManifestSchema",
+        "Acquire-Lock",
+        "Get-RecoveryBundle",
+        "Restore-OldAuthority",
+        "Install-CandidateMetadata",
+        "Install-CandidateHelper",
+        "ReleaseOwnership",
+        "PROC_THREAD_ATTRIBUTE_JOB_LIST",
+        "EXTENDED_STARTUPINFO_PRESENT",
+        "Get-ObservedProcess",
+        "interrupted_commit_completed",
+        "committed floor forbids rollback",
+    ):
+        assert required in source
+    assert "Get-Process -ErrorAction SilentlyContinue" not in source
+    assert source.index("Write-AtomicJson $FloorPath") < source.index(
+        "Install-CandidateHelper $bundle"
+    )
+    assert source.index("Remove-Item -LiteralPath $ResultPath") < source.index(
+        "if ($Mode -eq 'Recover')"
+    )
+    for forbidden_role in (
+        "windows-installer",
+        "linux-desktop",
+        "macos-desktop",
+    ):
+        assert forbidden_role not in source
+        assert forbidden_role not in producer
+
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="PowerShell 5.1 process/ACL contract is Windows-only",
+)
+
+
+def _powershell() -> str:
+    executable = shutil.which("powershell.exe")
+    if not executable:
+        pytest.skip("Windows PowerShell 5.1 is unavailable")
+    return executable
+
+
+def _generate_rsa_pair(directory: Path, prefix: str) -> tuple[Path, Path]:
+    openssl = shutil.which("openssl.exe") or shutil.which("openssl")
+    if not openssl:
+        pytest.skip("OpenSSL is unavailable on the Windows runner")
+    private = directory / f"{prefix}-private.pem"
+    public = directory / f"{prefix}-public.pem"
+    subprocess.run(
+        [
+            openssl,
+            "genpkey",
+            "-algorithm",
+            "RSA",
+            "-pkeyopt",
+            "rsa_keygen_bits:3072",
+            "-out",
+            private,
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        [openssl, "pkey", "-in", private, "-pubout", "-out", public],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return private, public
+
+
+@pytest.fixture(scope="module")
+def rsa_keys(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+    return _generate_rsa_pair(tmp_path_factory.mktemp("windows-helper-rsa"), "release")
+
+
+def _protect_directory(path: Path) -> None:
+    subprocess.run(
+        [
+            _powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "$p=$args[0];$acl=Get-Acl -LiteralPath $p;"
+            "$acl.SetAccessRuleProtection($true,$false);"
+            "$rule=New-Object System.Security.AccessControl.FileSystemAccessRule("
+            "[System.Security.Principal.WindowsIdentity]::GetCurrent().User,"
+            "'FullControl','ContainerInherit,ObjectInherit','None','Allow');"
+            "$acl.SetAccessRule($rule);Set-Acl -LiteralPath $p -AclObject $acl",
+            str(path),
+        ],
+        check=True,
+    )
+
+
+def _write_signed_manifest(
+    *,
+    directory: Path,
+    version: str,
+    private: Path,
+    public: Path,
+) -> None:
+    manifest = build_manifest(
+        directory=directory,
+        artifact_specs=SPECS,
+        key_id=public_key_id(public),
+        version=version,
+        commit="2" * 40,
+        published_at="2026-08-07T12:34:56Z",
+    )
+    manifest_path = directory / "RELEASE-MANIFEST.json"
+    manifest_path.write_bytes(canonical_bytes(manifest))
+    openssl = shutil.which("openssl.exe") or shutil.which("openssl")
+    assert openssl is not None
+    subprocess.run(
+        [
+            openssl,
+            "dgst",
+            "-sha256",
+            "-sign",
+            str(private),
+            "-out",
+            str(directory / "RELEASE-MANIFEST.json.sig"),
+            str(manifest_path),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _run_verify(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    *,
+    candidate_version: str = "0.3.7",
+    mutation: str = "none",
+    rotation_keys: tuple[Path, Path] | None = None,
+) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+    private, public = rsa_keys
+    candidate_private, candidate_public = rotation_keys or rsa_keys
+    target_dir = tmp_path / "installed"
+    target_dir.mkdir()
+    _protect_directory(target_dir)
+    nonce = "a" * 32
+    state = tmp_path / "state"
+    transaction = state / nonce
+    transaction.mkdir(parents=True)
+    installed_build = tmp_path / "installed-build"
+    candidate_build = tmp_path / "candidate-build"
+    installed_build.mkdir()
+    candidate_build.mkdir()
+
+    ping = Path(os.environ["SystemRoot"]) / "System32" / "ping.exe"
+    helper = target_dir / HELPER
+    additional = (candidate_public,) if rotation_keys else ()
+    render_helper(
+        template=HELPER_SOURCE,
+        output=helper,
+        public_key=public,
+        additional_public_keys=additional,
+    )
+    shutil.copy2(ping, installed_build / DESKTOP)
+    shutil.copy2(helper, installed_build / HELPER)
+    _write_signed_manifest(
+        directory=installed_build,
+        version="0.3.6",
+        private=private,
+        public=public,
+    )
+    target = target_dir / DESKTOP
+    shutil.copy2(installed_build / DESKTOP, target)
+    shutil.copy2(installed_build / "RELEASE-MANIFEST.json", target_dir)
+    shutil.copy2(installed_build / "RELEASE-MANIFEST.json.sig", target_dir)
+
+    candidate_bytes = (installed_build / DESKTOP).read_bytes() + b"candidate"
+    (candidate_build / DESKTOP).write_bytes(candidate_bytes)
+    if rotation_keys:
+        render_helper(
+            template=HELPER_SOURCE,
+            output=candidate_build / HELPER,
+            public_key=candidate_public,
+        )
+    else:
+        shutil.copy2(helper, candidate_build / HELPER)
+    _write_signed_manifest(
+        directory=candidate_build,
+        version=candidate_version,
+        private=candidate_private,
+        public=candidate_public,
+    )
+    candidate = target_dir / f".jht-update-{nonce}.candidate.exe"
+    candidate.write_bytes(candidate_bytes)
+    shutil.copy2(candidate_build / HELPER, transaction / HELPER)
+    shutil.copy2(candidate_build / "RELEASE-MANIFEST.json", transaction)
+    shutil.copy2(candidate_build / "RELEASE-MANIFEST.json.sig", transaction)
+    if mutation == "asset":
+        candidate.write_bytes(candidate.read_bytes() + b"tamper")
+    elif mutation == "signature":
+        signature = transaction / "RELEASE-MANIFEST.json.sig"
+        raw = bytearray(signature.read_bytes())
+        raw[0] ^= 1
+        signature.write_bytes(raw)
+    elif mutation == "unsigned":
+        (transaction / "RELEASE-MANIFEST.json.sig").unlink()
+    elif mutation == "stale-result-before-lock":
+        signature = transaction / "RELEASE-MANIFEST.json.sig"
+        raw = bytearray(signature.read_bytes())
+        raw[0] ^= 1
+        signature.write_bytes(raw)
+        (transaction / "result.json").write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "ok": True,
+                    "phase": "committed",
+                    "code": "stale",
+                    "nonce": nonce,
+                    "rolled_back": False,
+                }
+            )
+        )
+    elif mutation in EXTRA_ARTIFACTS:
+        manifest_path = transaction / "RELEASE-MANIFEST.json"
+        manifest = json.loads(manifest_path.read_text())
+        entry = dict(EXTRA_ARTIFACTS[mutation])
+        entry.update(size=1, sha256="4" * 64)
+        manifest["artifacts"].append(entry)
+        manifest["artifacts"].sort(
+            key=lambda item: (
+                item["role"],
+                item["platform"],
+                item["arch"],
+                item["filename"],
+            )
+        )
+        manifest_path.write_bytes(canonical_bytes(manifest))
+        openssl = shutil.which("openssl.exe") or shutil.which("openssl")
+        assert openssl is not None
+        subprocess.run(
+            [
+                openssl,
+                "dgst",
+                "-sha256",
+                "-sign",
+                str(private),
+                "-out",
+                str(transaction / "RELEASE-MANIFEST.json.sig"),
+                str(manifest_path),
+            ],
+            check=True,
+        )
+
+    process = subprocess.Popen(
+        [str(target), "-t", "127.0.0.1"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        command = [
+            _powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(helper),
+            "-Mode",
+            "Verify",
+            "-TargetPath",
+            str(target),
+            "-CandidatePath",
+            str(candidate),
+            "-CandidateHelperPath",
+            str(transaction / HELPER),
+            "-InstalledManifestPath",
+            str(target_dir / "RELEASE-MANIFEST.json"),
+            "-InstalledSignaturePath",
+            str(target_dir / "RELEASE-MANIFEST.json.sig"),
+            "-CandidateManifestPath",
+            str(transaction / "RELEASE-MANIFEST.json"),
+            "-CandidateSignaturePath",
+            str(transaction / "RELEASE-MANIFEST.json.sig"),
+            "-StateRoot",
+            str(state),
+            "-Nonce",
+            nonce,
+            "-OldPid",
+            str(process.pid),
+        ]
+        result = subprocess.run(command, text=True, capture_output=True, timeout=30)
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+    return result, target, transaction
+
+
+def test_windows_powershell51_verifies_signed_bundle(
+    tmp_path: Path, rsa_keys: tuple[Path, Path]
+) -> None:
+    result, target, transaction = _run_verify(tmp_path, rsa_keys)
+    assert result.returncode == 0, result.stderr
+    assert (transaction / "ready.json").is_file()
+    ready = json.loads((transaction / "ready.json").read_text())
+    assert ready["old_pid"] > 0
+    assert str(ready["old_started"]).isdigit()
+    assert b"candidate" not in target.read_bytes()
+
+
+def test_windows_powershell51_rotation_overlap_accepts_new_signed_new_only_helper(
+    tmp_path: Path, rsa_keys: tuple[Path, Path]
+) -> None:
+    keys = tmp_path / "rotation-keys"
+    keys.mkdir()
+    next_keys = _generate_rsa_pair(keys, "next")
+    result, target, transaction = _run_verify(
+        tmp_path, rsa_keys, rotation_keys=next_keys
+    )
+    assert result.returncode == 0, result.stderr
+    assert (transaction / "ready.json").is_file()
+    installed_helper = target.parent / HELPER
+    candidate_helper = transaction / HELPER
+    assert installed_helper.read_text().count("-----BEGIN PUBLIC KEY-----") == (
+        candidate_helper.read_text().count("-----BEGIN PUBLIC KEY-----") + 1
+    )
+
+
+@pytest.mark.parametrize(
+    ("candidate_version", "mutation"),
+    [
+        ("0.3.7", "asset"),
+        ("0.3.7", "signature"),
+        ("0.3.7", "unsigned"),
+        ("0.3.7", "stale-result-before-lock"),
+        ("0.3.7", "extra-windows-installer"),
+        ("0.3.7", "extra-linux-desktop"),
+        ("0.3.7", "extra-macos-desktop"),
+        ("0.3.6", "none"),
+    ],
+)
+def test_windows_powershell51_rejects_untrusted_or_replayed_candidate(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    candidate_version: str,
+    mutation: str,
+) -> None:
+    result, target, transaction = _run_verify(
+        tmp_path,
+        rsa_keys,
+        candidate_version=candidate_version,
+        mutation=mutation,
+    )
+    assert result.returncode != 0
+    assert not (transaction / "ready.json").exists()
+    assert not (transaction.parent / "committed-floor.json").exists()
+    assert not (transaction.parent / ".update.lock").exists()
+    assert b"candidate" not in target.read_bytes()
+
+
+def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
+    tmp_path: Path, rsa_keys: tuple[Path, Path]
+) -> None:
+    private, public = rsa_keys
+    nonce = "b" * 32
+    target_dir = tmp_path / "installed"
+    target_dir.mkdir()
+    _protect_directory(target_dir)
+    state = tmp_path / "state"
+    transaction = state / nonce
+    transaction.mkdir(parents=True)
+    installed_build = tmp_path / "installed-build"
+    candidate_build = tmp_path / "candidate-build"
+    installed_build.mkdir()
+    candidate_build.mkdir()
+    system32 = Path(os.environ["SystemRoot"]) / "System32"
+    ping = system32 / "ping.exe"
+    notepad = system32 / "notepad.exe"
+    helper = target_dir / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+
+    shutil.copy2(ping, installed_build / DESKTOP)
+    shutil.copy2(helper, installed_build / HELPER)
+    _write_signed_manifest(
+        directory=installed_build,
+        version="0.3.6",
+        private=private,
+        public=public,
+    )
+    target = target_dir / DESKTOP
+    old_bytes = (installed_build / DESKTOP).read_bytes()
+    target.write_bytes(old_bytes)
+    shutil.copy2(installed_build / "RELEASE-MANIFEST.json", target_dir)
+    shutil.copy2(installed_build / "RELEASE-MANIFEST.json.sig", target_dir)
+
+    shutil.copy2(notepad, candidate_build / DESKTOP)
+    shutil.copy2(helper, candidate_build / HELPER)
+    _write_signed_manifest(
+        directory=candidate_build,
+        version="0.3.7",
+        private=private,
+        public=public,
+    )
+    candidate = target_dir / f".jht-update-{nonce}.candidate.exe"
+    shutil.copy2(candidate_build / DESKTOP, candidate)
+    shutil.copy2(candidate_build / HELPER, transaction / HELPER)
+    shutil.copy2(candidate_build / "RELEASE-MANIFEST.json", transaction)
+    shutil.copy2(candidate_build / "RELEASE-MANIFEST.json.sig", transaction)
+
+    old = subprocess.Popen(
+        [str(target), "-t", "127.0.0.1"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    candidate_pid = 0
+    updater: subprocess.Popen[str] | None = None
+    try:
+        base = [
+            _powershell(),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(helper),
+            "-TargetPath",
+            str(target),
+            "-CandidatePath",
+            str(candidate),
+            "-CandidateHelperPath",
+            str(transaction / HELPER),
+            "-InstalledManifestPath",
+            str(target_dir / "RELEASE-MANIFEST.json"),
+            "-InstalledSignaturePath",
+            str(target_dir / "RELEASE-MANIFEST.json.sig"),
+            "-CandidateManifestPath",
+            str(transaction / "RELEASE-MANIFEST.json"),
+            "-CandidateSignaturePath",
+            str(transaction / "RELEASE-MANIFEST.json.sig"),
+            "-StateRoot",
+            str(state),
+            "-Nonce",
+            nonce,
+            "-OldPid",
+            str(old.pid),
+        ]
+        updater = subprocess.Popen(
+            base + ["-Mode", "Apply"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        ready = transaction / "ready.json"
+        deadline = time.monotonic() + 15
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert ready.exists(), updater.communicate(timeout=2)
+        old.terminate()
+        old.wait(timeout=5)
+
+        journal_path = transaction / "journal.json"
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            if journal_path.exists():
+                journal = json.loads(journal_path.read_text())
+                if (
+                    journal.get("state") == "candidate_installed"
+                    and int(journal.get("candidate_pid", 0)) > 0
+                ):
+                    candidate_pid = int(journal["candidate_pid"])
+                    break
+            time.sleep(0.05)
+        assert candidate_pid > 0
+        updater.terminate()
+        updater.wait(timeout=5)
+        assert not candidate.exists()
+        assert (state / ".update.lock").is_dir()
+
+        recovered = subprocess.run(
+            base + ["-Mode", "Recover"],
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        assert recovered.returncode != 0, recovered.stderr
+        assert target.read_bytes() == old_bytes
+        assert json.loads(journal_path.read_text())["state"] == "rolled_back"
+        assert not (state / ".update.lock").exists()
+        process_check = subprocess.run(
+            [
+                _powershell(),
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "if (Get-Process -Id ([int]$args[0]) -ErrorAction SilentlyContinue) { exit 1 }",
+                str(candidate_pid),
+            ],
+            check=False,
+        )
+        assert process_check.returncode == 0
+    finally:
+        if updater and updater.poll() is None:
+            updater.kill()
+        if old.poll() is None:
+            old.kill()

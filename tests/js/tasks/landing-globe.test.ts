@@ -263,7 +263,7 @@ describe("globo della home pubblica", () => {
     // credito basemap). Un aria-hidden lì sopra li lascerebbe ricevere
     // il focus senza essere annunciati: focus fantasma.
     const vivo = landingGlobeSource.slice(
-      landingGlobeSource.indexOf('{mode === "live" && ('),
+      landingGlobeSource.indexOf("{mountLive && ("),
       landingGlobeSource.indexOf("<JobsGlobeLazy"),
     );
     expect(vivo).not.toContain("aria-hidden");
@@ -275,9 +275,10 @@ describe("globo della home pubblica", () => {
       expect(T.globe_live_label[locale].trim().length).toBeGreaterThan(40);
       expect(T.globe_alt[locale].trim().length).toBeGreaterThan(40);
     }
-    // Nessun doppione: finché il fallback è a schermo il blocco vivo è
-    // `invisible`, cioè fuori dall'albero di accessibilità.
-    expect(vivo).toContain('liveReady ? "visible" : "invisible"');
+    // Durante il warm-up il canvas è invisibile e fuori dall'albero a11y;
+    // quando il primo frame è pronto diventa visibile una volta sola.
+    expect(vivo).toContain('liveReady ? "visible opacity-100"');
+    expect(vivo).toContain('"invisible opacity-0"');
     // Il canvas non è una tappa di tabulazione: MapLibre gli darebbe
     // tabindex 0, ma in vetrina la tastiera è spenta apposta (le frecce
     // devono scorrere la home) — sarebbe un fermo del focus a vuoto.
@@ -286,6 +287,12 @@ describe("globo della home pubblica", () => {
     );
     expect(jobsGlobeSource).toContain("makeShowcaseCanvasUnfocusable(map)");
     expect(jobsGlobeSource).toContain("map.keyboard.disable()");
+    expect(jobsGlobeSource).toContain(
+      'showcaseRef.current?.onTierChange?.("low")',
+    );
+    expect(jobsGlobeSource).toContain(
+      'console.warn("[JobsGlobe] WebGL unavailable after probe:"',
+    );
   });
 
   it("mostra le opportunità una alla volta sopra al pin", () => {
@@ -302,23 +309,64 @@ describe("globo della home pubblica", () => {
     expect(jobsGlobeSource).toContain("{!showcase && (");
   });
 
-  it("sostituisce il fallback solo quando il globo vivo è pronto", () => {
+  it("non usa mai il fallback come anticamera del globo vivo", () => {
+    expect(landingGlobeSource).toContain('const liveReady = mode === "live"');
+    expect(landingGlobeSource).toContain('{mode === "static" && (');
+    expect(landingGlobeSource).not.toContain("{!liveReady && (");
     expect(landingGlobeSource).toContain(
-      'const liveReady = mode === "live" && began',
+      'const mountLive = mode === "warming" || mode === "live"',
     );
-    expect(landingGlobeSource).toContain("{!liveReady && (");
-    expect(landingGlobeSource).toContain('liveReady ? "visible" : "invisible"');
-    expect(landingGlobeSource).not.toContain("transition-opacity");
+    expect(landingGlobeSource).toContain("transition-opacity duration-[420ms]");
+    expect(landingGlobeSource).toContain(
+      'liveReady ? "visible opacity-100" : "invisible opacity-0"',
+    );
+    expect(landingGlobeSource).toContain("bg-[var(--color-void)]");
   });
 
-  it("usa un solo fallback e lo rende light dal tema pre-paint", () => {
-    expect(landingGlobeSource.match(/className="jht-globe-still/g)).toHaveLength(
-      1,
+  it("sceglie una volta sola fra primo frame 3D e fallback definitivo", () => {
+    expect(landingGlobeSource).toContain(
+      "const CAPABILITY_IDLE_TIMEOUT_MS = 450",
     );
+    expect(landingGlobeSource).toContain(
+      "const STATIC_PRELOAD_AFTER_MS = 1000",
+    );
+    expect(landingGlobeSource).toContain("const LIVE_READY_DEADLINE_MS = 2800");
+    expect(landingGlobeSource).toContain(
+      'const finalModeRef = useRef<"live" | "static" | null>(null)',
+    );
+    expect(landingGlobeSource).toContain(
+      "if (finalModeRef.current != null) return false",
+    );
+    expect(landingGlobeSource).toContain('() => chooseFinalMode("static"),');
+    expect(landingGlobeSource).toContain(
+      'if (!chooseFinalMode("live")) return',
+    );
+    expect(landingGlobeSource).toContain('fallback.fetchPriority = "low"');
+    // Un degrado FPS tardivo riduce MapLibre ma non sostituisce la scena.
+    expect(landingGlobeSource).toContain(
+      'tier === "low" && finalModeRef.current == null',
+    );
+    expect(landingGlobeSource).not.toContain(
+      'if (tier === "low") setMode("static")',
+    );
+  });
+
+  it("usa un solo fallback e allinea la palette ai due temi live", () => {
+    expect(
+      landingGlobeSource.match(/className="jht-globe-still/g),
+    ).toHaveLength(1);
     expect(globalCssSource).toContain(
       'html[data-theme="light"] .jht-globe-still',
     );
     expect(globalCssSource).toContain("invert(1) hue-rotate(180deg)");
+    expect(jobsGlobeSource).toContain(
+      '["background", "background-color", "#0c0b10"]',
+    );
+    expect(jobsGlobeSource).toContain('["water", "fill-color", "#24252a"]');
+    expect(jobsGlobeSource).toContain(
+      '["background", "background-color", "#f3f4ef"]',
+    );
+    expect(jobsGlobeSource).toContain('["water", "fill-color", "#dbdad5"]');
     expect(jobsGlobeSource).toContain(
       'document.documentElement.getAttribute("data-theme")',
     );

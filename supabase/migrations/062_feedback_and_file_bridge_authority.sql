@@ -11,34 +11,40 @@
 
 begin;
 
-lock table public.feedback_tickets in access exclusive mode;
-alter table public.feedback_tickets enable row level security;
-revoke select on table public.feedback_tickets
-    from public, anon, authenticated;
-
--- Remove every read-capable policy, not just the name used by migration 005.
--- Permissive RLS policies combine with OR, so a forgotten FOR ALL policy
--- would otherwise reopen the table despite dropping the known SELECT policy.
 do $$
 declare
     policy_record record;
 begin
-    for policy_record in
-        select policyname
-          from pg_policies
-         where schemaname = 'public'
-           and tablename = 'feedback_tickets'
-           and cmd in ('SELECT', 'ALL')
-    loop
-        execute format(
-            'drop policy %I on public.feedback_tickets',
-            policy_record.policyname
-        );
-    end loop;
+    -- Some deployed schemas predate migration 005 and never created this
+    -- optional table.  Every statement that resolves the relation is dynamic
+    -- and stays inside the existence guard, so the file-bridge hardening below
+    -- still runs without recreating feedback storage.
+    if to_regclass('public.feedback_tickets') is not null then
+        execute 'lock table public.feedback_tickets in access exclusive mode';
+        execute 'alter table public.feedback_tickets enable row level security';
+        execute 'revoke select on table public.feedback_tickets from public, anon, authenticated';
+
+        -- Remove every read-capable policy, not just the name used by
+        -- migration 005. Permissive RLS policies combine with OR, so a
+        -- forgotten FOR ALL policy would otherwise reopen the table despite
+        -- dropping the known SELECT policy.
+        for policy_record in
+            select policyname
+              from pg_policies
+             where schemaname = 'public'
+               and tablename = 'feedback_tickets'
+               and cmd in ('SELECT', 'ALL')
+        loop
+            execute format(
+                'drop policy %I on public.feedback_tickets',
+                policy_record.policyname
+            );
+        end loop;
+
+        execute 'grant select on table public.feedback_tickets to service_role';
+    end if;
 end
 $$;
-
-grant select on table public.feedback_tickets to service_role;
 
 drop policy if exists "file_bridge_requests select own"
     on public.file_bridge_requests;

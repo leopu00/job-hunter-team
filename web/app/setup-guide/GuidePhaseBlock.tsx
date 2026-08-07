@@ -61,7 +61,6 @@ export default function GuidePhaseBlock({
             screenRef={screenRef}
             os={os}
             lang={lang}
-            fallback={phase.screenFallback}
           />
         ))}
 

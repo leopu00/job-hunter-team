@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import { CANONICAL_MUSIC_CREDIT, MUSIC_LICENSE_URL } from "@/lib/media-credits";
 import { PUBLIC_VIDEOS } from "@/lib/public-video-manifest";
 import { useLandingI18n } from "../landing/LandingI18n";
 import DeferredVideo from "./DeferredVideo";
@@ -31,34 +29,6 @@ export default function HomeTrailer() {
         </h2>
 
         <DeferredVideo video={PUBLIC_VIDEOS.trailer} label={title} />
-
-        <section
-          aria-label="Music credit"
-          data-canonical-credit
-          className="mt-4 border border-[var(--color-border)] bg-[var(--color-card)] p-4 text-xs leading-5 text-[var(--color-muted)]"
-        >
-          {CANONICAL_MUSIC_CREDIT.map((line, index) => (
-            <p key={line}>
-              {index === 0 ? (
-                <Link
-                  className="underline underline-offset-2 hover:text-[var(--color-white)]"
-                  href="/credits"
-                >
-                  {line}
-                </Link>
-              ) : line === MUSIC_LICENSE_URL ? (
-                <a
-                  className="break-all underline underline-offset-2 hover:text-[var(--color-white)]"
-                  href={line}
-                >
-                  {line}
-                </a>
-              ) : (
-                line
-              )}
-            </p>
-          ))}
-        </section>
       </div>
     </section>
   );
