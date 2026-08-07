@@ -63,7 +63,7 @@ func _posix_contract() -> void:
 	_check("posix: rifiuta un wrapper senza runtime host protetto", check_command.contains(
 			"grep -Eq '^[[:space:]]*JHT_HOST_RUNTIME_PROTOCOL=1([[:space:]]|$)'"), check_command)
 	_check("posix: raw immutabile passato al wrapper", check_command.contains(
-			"JHT_RAW_BASE=\"$JHT_ATTESTED_RAW_BASE\""), check_command)
+			"JHT_RAW_BASE=\"$JHT_ATTESTED_RAW_BASE\" JHT_ALLOW_LEGACY_WRAPPER_MIGRATION=1"), check_command)
 	_check("posix: target reale passato al wrapper", check_command.contains(
 			"JHT_WRAPPER_PATH=" + quoted_legacy + " bash \"$JHT_BOOTSTRAP\""),
 			check_command)
@@ -113,7 +113,7 @@ func _windows_contract() -> void:
 	_check("windows: doppio gate precede ogni esecuzione",
 			runtime_gate >= 0 and execution > runtime_gate, command)
 	_check("windows: raw immutabile e target reale ereditati dal figlio", command.contains(
-			"$env:JHT_RAW_BASE=$rawBase; $env:JHT_WRAPPER_PATH="
+			"$env:JHT_RAW_BASE=$rawBase; $env:JHT_ALLOW_LEGACY_WRAPPER_MIGRATION='1'; $env:JHT_WRAPPER_PATH="
 			+ str(_service._powershell_quote(target))), command)
 	_check("windows: stdout JSON resta isolato", command.contains(
 			"1>$out 2>$err") and command.contains("[Console]::Out.Write"), command)

@@ -1187,7 +1187,7 @@ static func _posix_upgrade_bootstrap_with_target(wrapper_target: String,
 			+ "grep -Eq " + _shell_quote("^[[:space:]]*JHT_HOST_RUNTIME_PROTOCOL=" \
 					+ UPGRADE_BOOTSTRAP_HOST_RUNTIME_PROTOCOL + "([[:space:]]|$)") \
 			+ " \"$JHT_BOOTSTRAP\"; " \
-			+ "JHT_RAW_BASE=\"$JHT_ATTESTED_RAW_BASE\" " \
+			+ "JHT_RAW_BASE=\"$JHT_ATTESTED_RAW_BASE\" JHT_ALLOW_LEGACY_WRAPPER_MIGRATION=1 " \
 			+ wrapper_target + " bash \"$JHT_BOOTSTRAP\" " + _upgrade_arguments(check_only)
 
 
@@ -1240,7 +1240,7 @@ static func _windows_upgrade_bootstrap_command(wrapper_path: String,
 			+ UPGRADE_BOOTSTRAP_PROTOCOL + "\\s*$' -Quiet)) { throw 'Wrapper upgrade senza protocollo atomico' }; " \
 			+ "if (-not (Select-String -Path $tmp -Pattern '^\\s*\\$JHT_HOST_RUNTIME_PROTOCOL\\s*=\\s*" \
 			+ UPGRADE_BOOTSTRAP_HOST_RUNTIME_PROTOCOL + "\\s*$' -Quiet)) { throw 'Wrapper upgrade senza runtime host protetto' }; " \
-			+ "$env:JHT_RAW_BASE=$rawBase; " \
+			+ "$env:JHT_RAW_BASE=$rawBase; $env:JHT_ALLOW_LEGACY_WRAPPER_MIGRATION='1'; " \
 			+ "$env:JHT_WRAPPER_PATH=" + target + "; " \
 			+ "$engine=Join-Path $PSHOME 'pwsh.exe'; " \
 			+ "if (-not (Test-Path -LiteralPath $engine)) { $engine=Join-Path $PSHOME 'powershell.exe' }; " \
