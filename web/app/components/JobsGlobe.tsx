@@ -8,6 +8,7 @@ import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
 import { bestViewport } from "@/lib/globe-viewport";
+import { attachTouchAxisLock } from "@/lib/globe-touch-axis-lock";
 import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
 import { canonicalCountry, canonicalCityKey } from "@/lib/city-gazetteer";
 import { makeT } from "@/lib/i18n-dict";
@@ -568,66 +569,32 @@ function tuneShowcaseHandlers(map: MaplibreMap) {
   map.doubleClickZoom.enable();
 }
 
-// Blocco d'asse per il dito (solo vetrina): il gesto si assegna al globo
-// o alla pagina, mai a entrambi.
-//
-// `touch-action: pan-y` da solo NON basta, ed è un errore facile da fare:
-// MapLibre chiama preventDefault() sul PRIMO touchmove, e Chrome a quel
-// punto non ha ancora avviato lo scorrimento — quindi lo annulla per
-// tutto il gesto. Misurato: con il solo CSS, uno swipe verticale sopra
-// al globo lasciava la home immobile.
-//
-// Qui i primi millimetri del gesto non arrivano a MapLibre: si guarda
-// dove sta andando il dito e poi si decide una volta per tutte. Verticale
-// → l'evento non passa, il browser scorre la pagina come sopra a
-// qualunque immagine. Orizzontale → passa, e il globo gira. È il
-// funzionamento che ci si aspetta da un mappamondo dentro una pagina.
-function attachTouchAxisLock(map: MaplibreMap): () => void {
-  const el = map.getCanvasContainer();
-  // 8 px: due frame di gesto. Sotto questa soglia non si distingue una
-  // carezza verticale da una orizzontale, e nel dubbio si trattiene.
-  const DECIDE_PX = 8;
-  let startX = 0;
-  let startY = 0;
-  let axis: null | "x" | "y" = null;
+// Il blocco d'asse per il dito vive in lib/globe-touch-axis-lock.ts: è
+// logica di eventi pura, e da lì si prova con touch veri in un DOM vero
+// invece che cercando stringhe in questo sorgente.
+function attachShowcaseTouchLock(map: MaplibreMap): () => void {
+  return attachTouchAxisLock({
+    el: map.getCanvasContainer(),
+    setDragPanEnabled: (on) => {
+      if (on) map.dragPan.enable();
+      else map.dragPan.disable();
+    },
+  });
+}
 
-  const onStart = (e: TouchEvent) => {
-    // Più dita: non è un trascinamento, non ci mettiamo in mezzo.
-    if (e.touches.length !== 1) {
-      axis = "x";
-      return;
-    }
-    axis = null;
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-  };
-  const onMove = (e: TouchEvent) => {
-    if (axis === "x") return;
-    if (axis === "y") {
-      e.stopPropagation();
-      return;
-    }
-    const t = e.touches[0];
-    if (!t) return;
-    const dx = Math.abs(t.clientX - startX);
-    const dy = Math.abs(t.clientY - startY);
-    if (Math.max(dx, dy) < DECIDE_PX) {
-      e.stopPropagation();
-      return;
-    }
-    axis = dx > dy ? "x" : "y";
-    if (axis === "y") e.stopPropagation();
-  };
-
-  // In cattura sul contenitore: i listener di MapLibre stanno sullo
-  // stesso elemento ma in risalita, quindi qui si arriva prima di loro.
-  const opts = { capture: true, passive: true } as const;
-  el.addEventListener("touchstart", onStart, opts);
-  el.addEventListener("touchmove", onMove, opts);
-  return () => {
-    el.removeEventListener("touchstart", onStart, opts);
-    el.removeEventListener("touchmove", onMove, opts);
-  };
+// Vetrina: il canvas non deve essere una tappa di tabulazione. MapLibre
+// gli mette tabindex="0" perché la mappa è interattiva, ma qui gli
+// handler da tastiera sono spenti apposta (le frecce devono scorrere la
+// home, non spostare il globo) — lasciarlo raggiungibile darebbe un
+// fermo del focus su un controllo che non fa niente. Le opportunità non
+// si perdono: il giro le mostra da solo e le card restano nel DOM,
+// leggibili e con i loro comandi veri (chiudi, credito basemap).
+function makeShowcaseCanvasUnfocusable(map: MaplibreMap) {
+  try {
+    map.getCanvas().setAttribute("tabindex", "-1");
+  } catch {
+    /* canvas non ancora pronto: nessun focus da togliere */
+  }
 }
 
 // Data "trovata il" leggibile (gg/mm/aaaa). Solo client (la vignetta
@@ -942,7 +909,8 @@ export default function JobsGlobe({
     let detachAxisLock: (() => void) | null = null;
     if (isShowcase) {
       tuneShowcaseHandlers(map);
-      detachAxisLock = attachTouchAxisLock(map);
+      makeShowcaseCanvasUnfocusable(map);
+      detachAxisLock = attachShowcaseTouchLock(map);
     }
 
     // Vetrina: qualunque tocco umano sul globo — trascinamento, rotella,

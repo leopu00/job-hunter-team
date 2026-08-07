@@ -497,12 +497,23 @@ export default function LandingGlobe() {
         )}
 
         {/* Globo vivo: montato solo a decisione presa (browser in idle,
-            macchina capace). aria-hidden: è una scena animata e
-            manipolabile col mouse, la voce accessibile è l'alt
-            dell'immagine sotto più la frase di contesto qui accanto. */}
+            macchina capace).
+            NIENTE aria-hidden qui dentro. Da quando la vetrina si può
+            toccare, questo sottoalbero contiene roba VERA e raggiungibile
+            col tab: il pulsante di chiusura della card e il credito
+            basemap di MapLibre. Nasconderlo lascerebbe il focus atterrare
+            su comandi che uno screen reader non annuncia — il classico
+            focus fantasma.
+            La descrizione della scena la porta questo contenitore con
+            aria-label: quando il globo vivo prende il posto
+            dell'immagine, l'alt sparisce e senza etichetta l'hero
+            resterebbe muto. Nessun doppione: finché il fallback è a
+            schermo questo blocco è `invisible`, cioè fuori
+            dall'albero di accessibilità. */}
         {mode === "live" && (
           <div
-            aria-hidden
+            role="group"
+            aria-label={tr("globe_live_label")}
             // Il canvas deve montare per arrivare al suo primo idle, ma non
             // deve disegnare sotto al fallback durante l'attesa: altrimenti un
             // cambiamento di opacità o compositing può riesporre due globi.

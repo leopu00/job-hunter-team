@@ -23,6 +23,19 @@ export const T = {
     fr: "Les villes, les métiers et les scores sur le globe sont un exemple : ils montrent comment l’équipe vous présente ce qu’elle trouve, ce ne sont pas de vraies offres.",
     pt: "As cidades, as funções e as pontuações no globo são um exemplo: mostram como a equipa te apresenta o que encontra, não são ofertas reais.",
   },
+  // Etichetta del globo VIVO. Non è l'alt dell'immagine: quella descrive
+  // un fermo immagine, questa descrive una scena che si muove e che si
+  // può prendere in mano. Chi non vede lo schermo deve sapere entrambe
+  // le cose — cosa c'è e cosa può farci.
+  globe_live_label: {
+    it: "Globo terrestre delle ricerche di lavoro: gira da solo fra le città del mondo e mostra un'opportunità alla volta. Si può girare con il mouse e cliccare un segnaposto per leggerne la scheda.",
+    en: "Earth globe of job searches: it turns on its own between cities around the world and shows one opportunity at a time. You can turn it with the mouse and click a pin to read its card.",
+    hu: "Álláskereséseket bemutató földgömb: magától forog a világ városai között, és egyszerre egy lehetőséget mutat. Egérrel forgatható, és a jelölőkre kattintva elolvasható a kártyájuk.",
+    es: "Globo terráqueo de búsquedas de empleo: gira solo entre ciudades del mundo y muestra una oportunidad cada vez. Puedes girarlo con el ratón y hacer clic en un marcador para leer su ficha.",
+    de: "Erdglobus der Jobsuchen: Er dreht sich von selbst zwischen Städten weltweit und zeigt jeweils eine Chance. Mit der Maus lässt er sich drehen, ein Klick auf einen Marker öffnet dessen Karte.",
+    fr: "Globe terrestre des recherches d’emploi : il tourne tout seul entre les villes du monde et montre une opportunité à la fois. On peut le faire tourner à la souris et cliquer sur un repère pour lire sa fiche.",
+    pt: "Globo terrestre das pesquisas de emprego: roda sozinho entre cidades do mundo e mostra uma oportunidade de cada vez. Podes rodá-lo com o rato e clicar num marcador para ler a sua ficha.",
+  },
   // Alt dell'immagine statica di ripiego + descrizione accessibile
   // dell'intera vetrina (il globo animato è aria-hidden).
   globe_alt: {
