@@ -270,7 +270,7 @@ def fetch_events(days=DEFAULT_WINDOW_DAYS, limit=DEFAULT_EVENT_LIMIT,
                 ev["legacy_id"] = str(lid)
                 events.append(ev)
         if failures and failures == len(legacy_ids):
-            return [], "no-signal (nessuna posizione leggibile)"
+            return [], "no-signal (no readable positions)"
         return _within_window(_sorted_desc(events), days), None
 
     q = urllib.parse.urlencode({"days": int(days), "limit": int(limit)})
@@ -559,46 +559,46 @@ def themes_report(days=DEFAULT_WINDOW_DAYS, limit=DEFAULT_EVENT_LIMIT,
 
 def main() -> None:
     p = argparse.ArgumentParser(
-        description="Query position_feedback dal cloud (Scout/Scorer/Mentor).",
+        description="Query cloud position_feedback (Scout/Scorer/Mentor).",
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     chk = sub.add_parser(
         "check",
-        help="Ritorna l'azione più recente per una posizione (None se assente).",
+        help="Return the most recent action for a position (None if absent).",
     )
     chk.add_argument("legacy_id", help="positions.legacy_id (TEXT)")
 
     def _window_args(sp):
         sp.add_argument("--days", type=int, default=DEFAULT_WINDOW_DAYS,
-                        help="Finestra in giorni (default 30, 0 = tutto).")
+                        help="Window in days (default 30, 0 = all).")
         sp.add_argument("--limit", type=int, default=DEFAULT_EVENT_LIMIT,
-                        help="Tetto eventi letti dal cloud (default 500).")
+                        help="Maximum events read from the cloud (default 500).")
         sp.add_argument("--legacy-ids", default=None,
-                        help="Fallback: id separati da virgola, letti uno a "
-                             "uno invece che dall'endpoint aggregato.")
+                        help="Fallback: comma-separated IDs, read one at a time "
+                             "instead of from the aggregate endpoint.")
 
     rec = sub.add_parser(
         "recent",
-        help="Eventi di feedback su tutte le posizioni in una finestra.",
+        help="Feedback events for all positions within a window.",
     )
     _window_args(rec)
     rec.add_argument("--text-chars", type=int, default=DEFAULT_TEXT_CHARS,
-                     help="Tronca reason/comment (default 300, 0 = intero).")
+                     help="Truncate reason/comment (default 300, 0 = full text).")
 
     thm = sub.add_parser(
         "themes",
-        help="Motivi ricorrenti (raggruppati) nel testo scritto dall'utente.",
+        help="Recurring reasons grouped from user-written text.",
     )
     _window_args(thm)
     thm.add_argument("--field", choices=("reason", "comment", "both"),
-                     default="both", help="Quale testo aggregare (default both).")
+                     default="both", help="Which text to aggregate (default both).")
     thm.add_argument("--min-positions", type=int, default=3,
-                     help="Scarta i temi sotto N posizioni distinte (default 3).")
+                     help="Discard themes below N distinct positions (default 3).")
     thm.add_argument("--top", type=int, default=None,
-                     help="Tieni solo i primi N temi.")
+                     help="Keep only the top N themes.")
     thm.add_argument("--include-cleared", action="store_true",
-                     help="Conta anche le posizioni il cui voto è stato ritirato.")
+                     help="Also count positions whose vote was cleared.")
 
     args = p.parse_args()
     ids = None

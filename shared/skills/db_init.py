@@ -22,7 +22,7 @@ def check_profile_warnings():
         candidate = p.get('candidate', {})
         projects = candidate.get('projects', None)
         if projects is not None and len(projects) == 0:
-            print("⚠️  WARNING: candidate.projects e' una lista vuota — lo scrittore non avra' progetti da inserire nel CV")
+            print("⚠️  WARNING: candidate.projects is an empty list — the writer will have no projects to include in the CV")
     except ImportError:
         pass
     except Exception:
@@ -33,7 +33,7 @@ def main():
     conn = get_db()
     ensure_schema(conn)
     conn.commit()
-    print(f"Database inizializzato: {os.path.abspath(DB_PATH)}")
+    print(f"Database initialized: {os.path.abspath(DB_PATH)}")
     check_profile_warnings()
 
     # Mostra tabelle create
@@ -42,7 +42,7 @@ def main():
     ).fetchall()
     for t in tables:
         count = conn.execute(f"SELECT COUNT(*) FROM {t['name']}").fetchone()[0]
-        print(f"  {t['name']}: {count} righe")
+        print(f"  {t['name']}: {count} rows")
 
     conn.close()
 

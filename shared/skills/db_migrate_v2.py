@@ -22,7 +22,7 @@ def backup_db():
     ts = datetime.now().strftime('%Y%m%d-%H%M%S')
     backup_path = DB_PATH.replace('.db', f'-backup-{ts}.db')
     shutil.copy2(DB_PATH, backup_path)
-    print(f"Backup creato: {backup_path}")
+    print(f"Backup created: {backup_path}")
     return backup_path
 
 
@@ -36,7 +36,7 @@ def get_conn():
 
 def step1_cleanup(conn, dry_run=False):
     """Step 1: Pulizia record morti, duplicati, companies orfane."""
-    print("\n=== STEP 1: PULIZIA ===")
+    print("\n=== STEP 1: CLEANUP ===")
 
     # 1a. Excluded senza score e senza application
     dead = conn.execute("""
@@ -45,20 +45,20 @@ def step1_cleanup(conn, dry_run=False):
         AND NOT EXISTS (SELECT 1 FROM scores s WHERE s.position_id = p.id)
         AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.position_id = p.id)
     """).fetchall()
-    print(f"\nExcluded senza score/app: {len(dead)}")
+    print(f"\nExcluded without score/app: {len(dead)}")
     if dead and not dry_run:
         dead_ids = [r['id'] for r in dead]
         # Rimuovi highlights associati
         conn.execute(f"DELETE FROM position_highlights WHERE position_id IN ({','.join('?' * len(dead_ids))})", dead_ids)
         conn.execute(f"DELETE FROM positions WHERE id IN ({','.join('?' * len(dead_ids))})", dead_ids)
-        print(f"  Eliminati {len(dead_ids)} record morti + highlights")
+        print(f"  Deleted {len(dead_ids)} dead records + highlights")
 
     # 1b. Deduplicazione URL — tenere il record con più dati (score/app/status avanzato)
     dupes = conn.execute("""
         SELECT url, GROUP_CONCAT(id) as ids FROM positions
         WHERE url IS NOT NULL GROUP BY url HAVING COUNT(*) > 1
     """).fetchall()
-    print(f"\nURL duplicate: {len(dupes)}")
+    print(f"\nDuplicate URLs: {len(dupes)}")
 
     for d in dupes:
         ids = [int(x) for x in d['ids'].split(',')]
@@ -83,9 +83,9 @@ def step1_cleanup(conn, dry_run=False):
         keep = rows[0]
         remove = rows[1:]
         print(f"  URL: {d['url'][:60]}...")
-        print(f"    TENGO: #{keep['id']} ({keep['company']}) [{keep['status']}] score={keep['has_score']} app={keep['has_app']}")
+        print(f"    KEEP: #{keep['id']} ({keep['company']}) [{keep['status']}] score={keep['has_score']} app={keep['has_app']}")
         for r in remove:
-            print(f"    RIMUOVO: #{r['id']} ({r['company']}) [{r['status']}]")
+            print(f"    REMOVE: #{r['id']} ({r['company']}) [{r['status']}]")
             if not dry_run:
                 conn.execute("DELETE FROM position_highlights WHERE position_id = ?", (r['id'],))
                 conn.execute("DELETE FROM scores WHERE position_id = ?", (r['id'],))
@@ -96,33 +96,33 @@ def step1_cleanup(conn, dry_run=False):
         SELECT c.id, c.name FROM companies c
         WHERE NOT EXISTS (SELECT 1 FROM positions p WHERE LOWER(p.company) = LOWER(c.name))
     """).fetchall()
-    print(f"\nCompanies orfane: {len(orphans)}")
+    print(f"\nOrphan companies: {len(orphans)}")
     if orphans and not dry_run:
         orphan_ids = [r['id'] for r in orphans]
         conn.execute(f"DELETE FROM companies WHERE id IN ({','.join('?' * len(orphan_ids))})", orphan_ids)
-        print(f"  Eliminate {len(orphan_ids)} companies orfane")
+        print(f"  Deleted {len(orphan_ids)} orphan companies")
 
     if not dry_run:
         conn.commit()
-    print("Step 1 completato.")
+    print("Step 1 complete.")
 
 
 def step2_evolve_positions(conn, dry_run=False):
     """Step 2: Evoluzione schema positions — aggiunta campi, rimozione ridondanti."""
-    print("\n=== STEP 2: EVOLUZIONE SCHEMA POSITIONS ===")
+    print("\n=== STEP 2: POSITION SCHEMA EVOLUTION ===")
 
     # Leggi tutte le posizioni prima della migrazione
     positions = conn.execute("SELECT * FROM positions").fetchall()
     highlights = conn.execute("SELECT * FROM position_highlights").fetchall()
     scores = conn.execute("SELECT * FROM scores").fetchall()
     applications = conn.execute("SELECT * FROM applications").fetchall()
-    print(f"Posizioni da migrare: {len(positions)}")
+    print(f"Positions to migrate: {len(positions)}")
     print(f"Highlights: {len(highlights)}")
     print(f"Scores: {len(scores)}")
     print(f"Applications: {len(applications)}")
 
     if dry_run:
-        print("  [DRY RUN] Saltando creazione tabelle")
+        print("  [DRY RUN] Skipping table creation")
         return
 
     # Rinomina vecchia tabella
@@ -211,12 +211,12 @@ def step2_evolve_positions(conn, dry_run=False):
     );
     """)
 
-    print("Tabelle V2 create.")
+    print("V2 tables created.")
 
 
 def step3_migrate_data(conn, dry_run=False):
     """Step 3-4: Migrazione dati nelle nuove tabelle."""
-    print("\n=== STEP 3-4: MIGRAZIONE DATI ===")
+    print("\n=== STEP 3-4: DATA MIGRATION ===")
 
     if dry_run:
         # Mostra preview migrazione
@@ -232,12 +232,12 @@ def step3_migrate_data(conn, dry_run=False):
             WHERE EXISTS (SELECT 1 FROM companies c WHERE LOWER(c.name) = LOWER(p.company))
         """).fetchone()[0]
         total = conn.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
-        print(f"  Company match preview: {matched}/{total} positions matchano una company")
+        print(f"  Company match preview: {matched}/{total} positions match a company")
 
         # Location consolidation preview
         has_work_loc = conn.execute("SELECT COUNT(*) FROM positions WHERE work_location IS NOT NULL AND work_location != ''").fetchone()[0]
         has_location = conn.execute("SELECT COUNT(*) FROM positions WHERE location IS NOT NULL AND location != ''").fetchone()[0]
-        print(f"  Location: {has_work_loc} con work_location, {has_location} con location")
+        print(f"  Location: {has_work_loc} with work_location, {has_location} with location")
         return
 
     # Migra positions
@@ -285,7 +285,7 @@ def step3_migrate_data(conn, dry_run=False):
               p['url'], p['source'], p['jd_text'], p['requirements'],
               p['found_by'], p['found_at'], p['deadline'], p['status'], p['notes'], p['last_checked']))
 
-    print(f"  Migrate {len(old_positions)} posizioni")
+    print(f"  Migrated {len(old_positions)} positions")
 
     # Migra highlights
     old_hl = conn.execute("SELECT * FROM position_highlights_old").fetchall()
@@ -294,7 +294,7 @@ def step3_migrate_data(conn, dry_run=False):
             INSERT INTO position_highlights (id, position_id, type, text)
             VALUES (?, ?, ?, ?)
         """, (h['id'], h['position_id'], h['type'], h['text']))
-    print(f"  Migrati {len(old_hl)} highlights")
+    print(f"  Migrated {len(old_hl)} highlights")
 
     # Migra scores
     old_scores = conn.execute("SELECT * FROM scores_old").fetchall()
@@ -307,7 +307,7 @@ def step3_migrate_data(conn, dry_run=False):
         """, (s['id'], s['position_id'], s['total_score'], s['stack_match'],
               s['remote_fit'], s['salary_fit'], s['experience_fit'], s['strategic_fit'],
               s['breakdown'], s['notes'], s['scored_by'], s['scored_at']))
-    print(f"  Migrati {len(old_scores)} scores")
+    print(f"  Migrated {len(old_scores)} scores")
 
     # Migra applications (aggiungendo written_at e response_at come NULL)
     old_apps = conn.execute("SELECT * FROM applications_old").fetchall()
@@ -329,14 +329,14 @@ def step3_migrate_data(conn, dry_run=False):
               a['interview_round'] if 'interview_round' in a.keys() else None,
               a['cv_drive_id'] if 'cv_drive_id' in a.keys() else None,
               a['cl_drive_id'] if 'cl_drive_id' in a.keys() else None))
-    print(f"  Migrate {len(old_apps)} applications")
+    print(f"  Migrated {len(old_apps)} applications")
 
     # Rimuovi tabelle old
     conn.execute("DROP TABLE positions_old")
     conn.execute("DROP TABLE position_highlights_old")
     conn.execute("DROP TABLE scores_old")
     conn.execute("DROP TABLE applications_old")
-    print("  Tabelle old rimosse")
+    print("  Old tables removed")
 
     # Ricrea indici
     conn.executescript("""
@@ -347,25 +347,25 @@ def step3_migrate_data(conn, dry_run=False):
     CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
     CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
     """)
-    print("  Indici ricreati")
+    print("  Indexes recreated")
 
     # Setta user_version
     conn.execute("PRAGMA user_version = 2")
 
     conn.commit()
-    print("Migrazione dati completata.")
+    print("Data migration complete.")
 
 
 def verify(conn):
     """Verifica integrità post-migrazione."""
-    print("\n=== VERIFICA INTEGRITÀ ===")
+    print("\n=== INTEGRITY CHECK ===")
     ok = True
 
     # PRAGMA checks
     conn.execute("PRAGMA foreign_keys=ON")
     fk_check = conn.execute("PRAGMA foreign_key_check").fetchall()
     if fk_check:
-        print(f"ERRORE: {len(fk_check)} violazioni FK!")
+        print(f"ERROR: {len(fk_check)} FK violations!")
         for r in fk_check:
             print(f"  {r}")
         ok = False
@@ -374,7 +374,7 @@ def verify(conn):
 
     integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
     if integrity != 'ok':
-        print(f"ERRORE integrity_check: {integrity}")
+        print(f"ERROR integrity_check: {integrity}")
         ok = False
     else:
         print("Integrity check: OK")
@@ -383,7 +383,7 @@ def verify(conn):
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     print(f"User version: {version}")
     if version != 2:
-        print("  ATTENZIONE: versione non è 2!")
+        print("  WARNING: version is not 2!")
         ok = False
 
     # URL duplicate
@@ -392,12 +392,12 @@ def verify(conn):
         GROUP BY url HAVING COUNT(*) > 1
     """).fetchall()
     if dupes:
-        print(f"ATTENZIONE: {len(dupes)} URL duplicate rimaste!")
+        print(f"WARNING: {len(dupes)} duplicate URLs remain!")
         for d in dupes:
-            print(f"  {d[0]}: {d[1]} occorrenze")
+            print(f"  {d[0]}: {d[1]} occurrences")
         ok = False
     else:
-        print("Nessuna URL duplicata: OK")
+        print("No duplicate URLs: OK")
 
     # Tutti gli score hanno position_id valido
     orphan_scores = conn.execute("""
@@ -405,10 +405,10 @@ def verify(conn):
         WHERE NOT EXISTS (SELECT 1 FROM positions p WHERE p.id = s.position_id)
     """).fetchall()
     if orphan_scores:
-        print(f"ERRORE: {len(orphan_scores)} scores orfani!")
+        print(f"ERROR: {len(orphan_scores)} orphan scores!")
         ok = False
     else:
-        print("Scores tutti collegati a posizioni: OK")
+        print("All scores are linked to positions: OK")
 
     # Tutte le applications hanno position_id valido
     orphan_apps = conn.execute("""
@@ -416,16 +416,16 @@ def verify(conn):
         WHERE NOT EXISTS (SELECT 1 FROM positions p WHERE p.id = a.position_id)
     """).fetchall()
     if orphan_apps:
-        print(f"ERRORE: {len(orphan_apps)} applications orfane!")
+        print(f"ERROR: {len(orphan_apps)} orphan applications!")
         ok = False
     else:
-        print("Applications tutte collegate a posizioni: OK")
+        print("All applications are linked to positions: OK")
 
     # Statistiche post-migrazione
     stats = {}
     for table in ['positions', 'companies', 'scores', 'applications', 'position_highlights']:
         stats[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-    print(f"\nStatistiche post-migrazione:")
+    print(f"\nPost-migration statistics:")
     for k, v in stats.items():
         print(f"  {k}: {v}")
 
@@ -433,7 +433,7 @@ def verify(conn):
     with_cid = conn.execute("SELECT COUNT(*) FROM positions WHERE company_id IS NOT NULL").fetchone()[0]
     total = stats['positions']
     pct = (100 * with_cid // total) if total > 0 else 0
-    print(f"\nCompany ID popolati: {with_cid}/{total} ({pct}%)")
+    print(f"\nCompany IDs populated: {with_cid}/{total} ({pct}%)")
 
     # Salary split
     d_count = conn.execute("SELECT COUNT(*) FROM positions WHERE salary_declared_min IS NOT NULL OR salary_declared_max IS NOT NULL").fetchone()[0]
@@ -446,7 +446,7 @@ def verify(conn):
                 'salary_estimated_max', 'salary_estimated_source']
     missing = [c for c in required if c not in cols]
     if missing:
-        print(f"ERRORE: colonne mancanti in positions: {missing}")
+        print(f"ERROR: missing columns in positions: {missing}")
         ok = False
     else:
         print("Schema positions V2: OK")
@@ -454,30 +454,30 @@ def verify(conn):
     removed = ['company_hq', 'work_location', 'salary_type', 'salary_min', 'salary_max', 'salary_currency']
     still_there = [c for c in removed if c in cols]
     if still_there:
-        print(f"ATTENZIONE: colonne vecchie ancora presenti: {still_there}")
+        print(f"WARNING: old columns still present: {still_there}")
         ok = False
     else:
-        print("Colonne V1 rimosse: OK")
+        print("V1 columns removed: OK")
 
     # Applications schema check
     app_cols = [r[1] for r in conn.execute("PRAGMA table_info(applications)").fetchall()]
     app_required = ['written_at', 'response_at', 'interview_round', 'cv_drive_id', 'cl_drive_id']
     app_missing = [c for c in app_required if c not in app_cols]
     if app_missing:
-        print(f"ERRORE: colonne mancanti in applications: {app_missing}")
+        print(f"ERROR: missing columns in applications: {app_missing}")
         ok = False
     else:
         print("Schema applications V2: OK")
 
-    print(f"\n{'VERIFICA PASSATA' if ok else 'VERIFICA FALLITA — CONTROLLARE ERRORI'}")
+    print(f"\n{'CHECK PASSED' if ok else 'CHECK FAILED — REVIEW ERRORS'}")
     return ok
 
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description='Migrazione DB V2')
-    parser.add_argument('--dry-run', action='store_true', help='Mostra cosa farebbe senza eseguire')
-    parser.add_argument('--verify', action='store_true', help='Verifica integrità post-migrazione')
+    parser = argparse.ArgumentParser(description='V2 database migration')
+    parser.add_argument('--dry-run', action='store_true', help='Show what would be done without running it')
+    parser.add_argument('--verify', action='store_true', help='Verify post-migration integrity')
     args = parser.parse_args()
 
     if args.verify:
@@ -487,23 +487,23 @@ def main():
         return
 
     print("=" * 60)
-    print("  MIGRAZIONE DATABASE V1 → V2")
+    print("  DATABASE MIGRATION V1 → V2")
     print("=" * 60)
 
     if args.dry_run:
-        print("\n*** DRY RUN — nessuna modifica al database ***\n")
+        print("\n*** DRY RUN — no database changes ***\n")
 
     # Controlla se già migrato
     conn = get_conn()
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version >= 2:
-        print(f"Database già a versione {version}. Niente da fare.")
+        print(f"Database is already at version {version}. Nothing to do.")
         conn.close()
         return
 
     if not args.dry_run:
         backup_path = backup_db()
-        print(f"Backup pronto. In caso di problemi: cp {backup_path} {DB_PATH}")
+        print(f"Backup ready. In case of problems: cp {backup_path} {DB_PATH}")
 
     step1_cleanup(conn, dry_run=args.dry_run)
     step2_evolve_positions(conn, dry_run=args.dry_run)
@@ -515,9 +515,9 @@ def main():
     conn.close()
     print("\n" + "=" * 60)
     if args.dry_run:
-        print("  DRY RUN completato — nessuna modifica")
+        print("  DRY RUN complete — no changes")
     else:
-        print("  MIGRAZIONE V2 COMPLETATA CON SUCCESSO")
+        print("  V2 MIGRATION COMPLETED SUCCESSFULLY")
     print("=" * 60)
 
 

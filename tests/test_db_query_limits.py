@@ -163,7 +163,7 @@ def test_il_default_non_tocca_una_coda_piu_corta(db_corto):
     out = run(db_corto, 'next-for-analista').stdout
     assert len(rows_printed(out)) == 3
     assert '(3):' in out
-    assert 'mostrate' not in out
+    assert 'showing' not in out
 
 
 @pytest.mark.parametrize('queue', QUEUES)
@@ -199,8 +199,8 @@ def test_limite_alzato_oltre_la_coda_non_moltiplica_le_righe(db):
 def test_il_totale_e_dichiarato_quando_il_limite_taglia(db):
     """La parte che rende il limite accettabile: il backlog non sparisce."""
     out = run(db, 'next-for-analista', '--limit', '5').stdout
-    assert f"mostrate 5 di {NEW_POSITIONS}" in out
-    assert f"altre {NEW_POSITIONS - 5} in coda" in out
+    assert f"showing 5 of {NEW_POSITIONS}" in out
+    assert f"{NEW_POSITIONS - 5} more in the queue" in out
 
 
 def test_senza_taglio_l_intestazione_resta_quella_di_prima(db):
@@ -208,7 +208,7 @@ def test_senza_taglio_l_intestazione_resta_quella_di_prima(db):
     storica `(N)` non cambia per chi già la leggeva."""
     out = run(db, 'next-for-analista', '--all').stdout
     assert f"({NEW_POSITIONS}):" in out
-    assert 'mostrate' not in out
+    assert 'showing' not in out
     assert 'in coda' not in out
 
 
@@ -239,7 +239,7 @@ def test_coda_vuota_e_zero_non_una_frase(db):
     d = payload(run(db, 'next-for-scrittore', '--json'))
     assert d['enabled'] is True   # vuota, non spenta
     assert d['total'] == 0 and d['rows'] == []
-    assert 'nessuna' in run(db, 'next-for-scrittore').stdout.lower()
+    assert 'none' in run(db, 'next-for-scrittore').stdout.lower()
 
 
 def test_il_totale_di_una_coda_aggregata_conta_le_aziende(db):
@@ -257,7 +257,7 @@ def test_recheck_weekly_conserva_i_suoi_argomenti(db):
     si applica DOPO di loro, non al posto loro."""
     out = run(db, 'next-for-recheck-weekly', '--min-score', '90',
               '--older-than-days', '1').stdout
-    assert 'nessuna' in out.lower(), out
+    assert 'none' in out.lower(), out
 
     d = payload(run(db, 'next-for-recheck-weekly', '--min-score', '70',
                     '--older-than-days', '1', '--limit', '4', '--json'))
@@ -268,7 +268,7 @@ def test_recheck_weekly_conserva_i_suoi_argomenti(db):
 def test_recheck_weekly_senza_limite_usa_il_default(db):
     out = run(db, 'next-for-recheck-weekly', '--older-than-days', '1').stdout
     assert len(rows_printed(out)) == DEFAULT_QUEUE_LIMIT
-    assert f"mostrate {DEFAULT_QUEUE_LIMIT} di {SCORED_POSITIONS}" in out
+    assert f"showing {DEFAULT_QUEUE_LIMIT} of {SCORED_POSITIONS}" in out
 
 
 def test_coda_spenta_dalla_policy_resta_distinguibile_da_una_vuota(db):
