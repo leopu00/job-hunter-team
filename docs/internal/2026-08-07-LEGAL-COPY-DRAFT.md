@@ -153,8 +153,9 @@ privacy@jobhunterteam.ai alias is created, replace the contact consistently.]`
 
 When you run Job Hunter Team solely on your own computer or on a VPS that you
 choose and administer, you control that environment. We do not receive its
-contents unless you enable cloud synchronization, use an external provider, or
-send a report or support message.
+contents unless you enable cloud synchronization or send a report or support
+message. If you use an external AI provider, that provider—not Job Hunter
+Team—receives the task context described below.
 
 ### 2. Data processed locally or on your VPS
 
