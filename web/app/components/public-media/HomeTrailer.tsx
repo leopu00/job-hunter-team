@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { CANONICAL_MUSIC_CREDIT, MUSIC_LICENSE_URL } from "@/lib/media-credits";
 import { PUBLIC_VIDEOS } from "@/lib/public-video-manifest";
 import { useLandingI18n } from "../landing/LandingI18n";
 import DeferredVideo from "./DeferredVideo";
@@ -32,19 +34,30 @@ export default function HomeTrailer() {
 
         <section
           aria-label="Music credit"
+          data-canonical-credit
           className="mt-4 border border-[var(--color-border)] bg-[var(--color-card)] p-4 text-xs leading-5 text-[var(--color-muted)]"
         >
-          <p>Covert Affair Kevin MacLeod (incompetech.com)</p>
-          <p>Licensed under Creative Commons: By Attribution 4.0</p>
-          <p>
-            <a
-              className="underline underline-offset-2 hover:text-[var(--color-white)]"
-              href="https://creativecommons.org/licenses/by/4.0/"
-            >
-              https://creativecommons.org/licenses/by/4.0/
-            </a>
-          </p>
-          <p>Edited for timing and mixed with a CC0 cymbal-roll intro.</p>
+          {CANONICAL_MUSIC_CREDIT.map((line, index) => (
+            <p key={line}>
+              {index === 0 ? (
+                <Link
+                  className="underline underline-offset-2 hover:text-[var(--color-white)]"
+                  href="/credits"
+                >
+                  {line}
+                </Link>
+              ) : line === MUSIC_LICENSE_URL ? (
+                <a
+                  className="underline underline-offset-2 hover:text-[var(--color-white)]"
+                  href={line}
+                >
+                  {line}
+                </a>
+              ) : (
+                line
+              )}
+            </p>
+          ))}
         </section>
       </div>
     </section>

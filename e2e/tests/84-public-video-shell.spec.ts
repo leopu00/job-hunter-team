@@ -21,6 +21,7 @@ test.describe("shell pubblico tutorial e trailer", () => {
     expect(await trailer.locator("video").count()).toBe(0);
     const musicCredit = trailer.locator('section[aria-label="Music credit"]');
     await expect(musicCredit).toBeVisible();
+    await expect(musicCredit.locator('a[href="/credits"]')).toBeVisible();
     expect(await musicCredit.locator(":scope > p").allTextContents()).toEqual([
       "Covert Affair Kevin MacLeod (incompetech.com)",
       "Licensed under Creative Commons: By Attribution 4.0",
