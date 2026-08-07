@@ -396,6 +396,56 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
     }
   });
 
+  it("blocco Setup e S06-S10 sono tradotti davvero", () => {
+    const chapter = GUIDE_CHAPTERS.find(
+      (candidate) => candidate.id === "setup-screen",
+    )!;
+    const phaseIds = new Set([
+      "choose-language",
+      "enter-office",
+      "open-setup",
+      "start-container",
+      "choose-provider",
+    ]);
+    const phases = GUIDE_CHAPTERS.flatMap((item) => item.phases).filter(
+      (phase) => phaseIds.has(phase.id),
+    );
+    expect(phases).toHaveLength(phaseIds.size);
+
+    const texts = [
+      chapter.title,
+      chapter.summary,
+      ...phases.flatMap((phase) => [
+        phase.title,
+        phase.body,
+        ...(phase.links ?? []).map((link) => link.label),
+      ]),
+    ];
+    for (const text of texts) {
+      for (const locale of LOCALES.filter((locale) => locale !== "en")) {
+        expect(text[locale], locale).not.toBe(text.en);
+      }
+    }
+  });
+
+  it("S08 mantiene le etichette UI esatte in tutte le lingue", () => {
+    const phase = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).find(
+      (candidate) => candidate.id === "open-setup",
+    )!;
+    for (const locale of LOCALES) {
+      for (const label of [
+        "Team setup",
+        "Activate team",
+        "Container",
+        "AI provider",
+        "Profile and CV",
+        "Working hours",
+      ]) {
+        expect(phase.body[locale], `${locale}: ${label}`).toContain(label);
+      }
+    }
+  });
+
   it("W02-W04 e il segnaposto privacy-safe sono tradotti davvero", () => {
     const phases = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).filter(
       (phase) =>
