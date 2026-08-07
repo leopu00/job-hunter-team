@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
+import DeferredVideo from "../../../web/app/components/public-media/DeferredVideo";
 import {
   initialVideoBytes,
   orientationForViewport,
@@ -13,6 +15,9 @@ import {
 } from "../../../web/lib/public-video-manifest";
 
 const REPO = path.resolve(__dirname, "../../..");
+const requireFromWeb = createRequire(path.join(REPO, "web/package.json"));
+const { createElement } = requireFromWeb("react");
+const { renderToStaticMarkup } = requireFromWeb("react-dom/server");
 const DEFERRED_VIDEO = path.join(
   REPO,
   "web/app/components/public-media/DeferredVideo.tsx",
@@ -112,12 +117,27 @@ describe("manifest video pubblico", () => {
     const source = readFileSync(DEFERRED_VIDEO, "utf8");
     const home = readFileSync(HOME_VIDEO, "utf8");
 
-    expect(source).toContain("if (!video.published) return null");
+    expect(source).toContain(
+      "if (!video.published || validatePublicVideo(video).length > 0) return null",
+    );
     expect(source).not.toContain("data-video-pending");
     expect(home).toContain("validatePublicVideo(video)");
     expect(home).toContain("return null");
     expect(home).not.toContain("<h2");
     expect(home).not.toContain("trailer_title");
+  });
+
+  it("un media published ma parzialmente invalido non produce markup", () => {
+    const video = readyFixture();
+    video.variants.portrait.captions = [];
+    video.variants.portrait.poster.bytes =
+      PUBLIC_VIDEO_BUDGET.maxLazyPosterBytes + 1;
+
+    expect(
+      renderToStaticMarkup(
+        createElement(DeferredVideo, { video, label: "Play the video" }),
+      ),
+    ).toBe("");
   });
 
   it("sceglie la variante nativa adatta all'orientamento solo al click", () => {
@@ -148,7 +168,7 @@ describe("manifest video pubblico", () => {
     expect(source).toContain('preload="none"');
     expect(source).toContain('loading="lazy"');
     expect(source).toContain('kind="captions"');
-    expect(source).toContain("if (!video.published)");
+    expect(source).toContain("validatePublicVideo(video).length > 0");
     expect(source).not.toContain("data-video-pending");
     expect(source).not.toContain("autoPlay");
     expect(source).toContain("videoRef.current?.play()");
