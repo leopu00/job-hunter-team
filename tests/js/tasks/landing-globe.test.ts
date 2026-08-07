@@ -173,18 +173,19 @@ describe("globo della home pubblica", () => {
     expect(jobsGlobeSource).toContain("map.dragPan.enable()");
     expect(jobsGlobeSource).toContain("touch-action: pan-y");
     expect(jobsGlobeSource).toContain("jht-globe-showcase ");
-    // Il CSS da solo NON basta e questo test esiste perché non venga
-    // rimosso credendolo ridondante: MapLibre annulla lo scorrimento con
+    // Il CSS da solo NON basta: MapLibre annulla lo scorrimento con
     // preventDefault sul primo touchmove, prima che Chrome lo avvii.
-    // Serve il blocco d'asse, che quel primo touchmove non glielo fa
-    // nemmeno vedere finché non si sa dove sta andando il dito.
-    expect(jobsGlobeSource).toContain("function attachTouchAxisLock");
-    expect(jobsGlobeSource).toContain("detachAxisLock = attachTouchAxisLock(map)");
-    expect(jobsGlobeSource).toContain('axis = dx > dy ? "x" : "y"');
-    expect(jobsGlobeSource).toMatch(
-      /addEventListener\("touchmove", onMove, opts\)/,
+    // Serve il blocco d'asse — che qui si controlla solo COLLEGATO e
+    // STACCATO: come si comporta lo prova `globe-touch-axis-lock.test.ts`
+    // con eventi veri, perché una stringa nel sorgente non dice se
+    // funziona.
+    expect(jobsGlobeSource).toContain(
+      "detachAxisLock = attachShowcaseTouchLock(map)",
     );
     expect(jobsGlobeSource).toContain("detachAxisLock?.()");
+    expect(jobsGlobeSource).toContain(
+      'attachTouchAxisLock } from "@/lib/globe-touch-axis-lock"',
+    );
 
     // Click su un pin → card, click nel vuoto → chiusa. Nessun volo:
     // la camera resta dell'utente.
@@ -213,6 +214,37 @@ describe("globo della home pubblica", () => {
     // La ripresa risale alla vista d'insieme invece di ricominciare a
     // girare da dove l'utente aveva lasciato lo zoom.
     expect(landingGlobeSource).toContain("const RECENTER_MS = 2200");
+  });
+
+  it("non nasconde ai lettori di schermo una vetrina che ora si tocca", () => {
+    // Da quando si può trascinare il globo e cliccare i pin, il globo
+    // vivo contiene comandi VERI e raggiungibili col tab (chiudi card,
+    // credito basemap). Un aria-hidden lì sopra li lascerebbe ricevere
+    // il focus senza essere annunciati: focus fantasma.
+    const vivo = landingGlobeSource.slice(
+      landingGlobeSource.indexOf('{mode === "live" && ('),
+      landingGlobeSource.indexOf("<JobsGlobeLazy"),
+    );
+    expect(vivo).not.toContain("aria-hidden");
+    // …e la descrizione della scena non muore quando il fallback (con il
+    // suo alt) viene rimosso: la porta il contenitore del globo vivo.
+    expect(vivo).toContain('role="group"');
+    expect(vivo).toContain('aria-label={tr("globe_live_label")}');
+    for (const locale of LOCALES) {
+      expect(T.globe_live_label[locale].trim().length).toBeGreaterThan(40);
+      expect(T.globe_alt[locale].trim().length).toBeGreaterThan(40);
+    }
+    // Nessun doppione: finché il fallback è a schermo il blocco vivo è
+    // `invisible`, cioè fuori dall'albero di accessibilità.
+    expect(vivo).toContain('liveReady ? "visible" : "invisible"');
+    // Il canvas non è una tappa di tabulazione: MapLibre gli darebbe
+    // tabindex 0, ma in vetrina la tastiera è spenta apposta (le frecce
+    // devono scorrere la home) — sarebbe un fermo del focus a vuoto.
+    expect(jobsGlobeSource).toContain(
+      'map.getCanvas().setAttribute("tabindex", "-1")',
+    );
+    expect(jobsGlobeSource).toContain("makeShowcaseCanvasUnfocusable(map)");
+    expect(jobsGlobeSource).toContain("map.keyboard.disable()");
   });
 
   it("mostra le opportunità una alla volta sopra al pin", () => {
