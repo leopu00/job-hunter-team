@@ -141,11 +141,10 @@ describe("guida di setup — struttura", () => {
         c.phases.flatMap((p) => screensOf(p).map((s) => s.screenId)),
       ),
     );
-    // Fanno eccezione le voci che dichiarano di essere rese da un blocco
-    // costruito nella pagina: restano perché il contratto le elenca, ma
-    // nessuna fase le usa finché DOCS non decide.
+    // Fanno eccezione le superfici native (`G00`, `S01`): HQ-DOCS ha
+    // cancellato la loro richiesta PNG, ma l'id logico resta per l'audit.
     const orphans = Object.keys(SCREENS).filter(
-      (id) => !used.has(id) && !SCREENS[id].replacedByCard,
+      (id) => !used.has(id) && !SCREENS[id].nativeSurface,
     );
     expect(orphans).toEqual([]);
   });
@@ -241,8 +240,15 @@ describe("guida di setup — schermate", () => {
     // L'elenco di ciò che manca si legge dal codice: una schermata senza
     // file e senza `pending` sparisce dai conti.
     const undocumented = pendingScreens()
-      .filter((screen) => !screen.pending && !screen.replacedByCard)
+      .filter((screen) => !screen.pending && !screen.nativeSurface)
       .map((screen) => screen.id);
+    // Le superfici native non sono «in attesa»: non c'è nulla da riprendere.
+    expect(
+      pendingScreens().filter(
+        (screen) => screen.nativeSurface && screen.pending,
+      ),
+      "una superficie nativa non può avere anche una ripresa in attesa",
+    ).toEqual([]);
     expect(undocumented).toEqual([]);
   });
 });
