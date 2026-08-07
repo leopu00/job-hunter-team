@@ -119,7 +119,7 @@ test("download e how-to-run portano alla guida nel punto operativo", async ({
 }) => {
   await page.goto("/download", { waitUntil: "domcontentloaded" });
   const downloadGuide = page.getByRole("link", {
-    name: "Follow the step-by-step setup",
+    name: "Follow the step-by-step setup →",
     exact: true,
   });
   await expect(downloadGuide).toBeVisible();
