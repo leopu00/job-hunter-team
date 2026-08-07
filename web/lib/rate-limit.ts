@@ -93,9 +93,17 @@ async function upstashCheck(
       ]),
     });
     if (!res.ok) return null;
-    const arr = (await res.json()) as Array<{ result: number | string }>;
-    const count = Number(arr[0]?.result ?? 0);
-    const pttl = Number(arr[2]?.result ?? windowMs);
+    const payload: unknown = await res.json();
+    if (!Array.isArray(payload) || payload.length < 3) return null;
+    const count = Number((payload[0] as { result?: unknown })?.result);
+    const pttl = Number((payload[2] as { result?: unknown })?.result);
+    if (
+      !Number.isInteger(count) ||
+      count < 1 ||
+      !Number.isFinite(pttl) ||
+      pttl <= 0
+    )
+      return null;
     const now = Date.now();
     const resetAtMs = now + (pttl > 0 ? pttl : windowMs);
     const remaining = Math.max(0, max - count);
@@ -108,6 +116,23 @@ async function upstashCheck(
   } catch {
     return null;
   }
+}
+
+/**
+ * Rate limit that never degrades to process-local memory.
+ *
+ * Use this before privileged best-effort work exposed to anonymous traffic:
+ * without distributed coordination, skipping that work is safer than giving
+ * every instance and cold start a fresh budget.
+ */
+export async function checkDistributedRateLimit(
+  namespace: string,
+  scope: string,
+  identity: string,
+  max: number,
+  windowMs: number = 60_000,
+): Promise<RateLimitResult | null> {
+  return upstashCheck(`${namespace}:${scope}:${identity}`, max, windowMs);
 }
 
 /**
@@ -127,7 +152,13 @@ export async function checkRateLimit(
   windowMs: number = 60_000,
 ): Promise<RateLimitResult> {
   const bucketKey = `${namespace}:${scope}:${identity}`;
-  const upstash = await upstashCheck(bucketKey, max, windowMs);
+  const upstash = await checkDistributedRateLimit(
+    namespace,
+    scope,
+    identity,
+    max,
+    windowMs,
+  );
   if (upstash) return upstash;
   return inMemoryCheck(bucketKey, max, windowMs);
 }

@@ -105,7 +105,9 @@ test.describe("/welcome — accessibile solo a chi è autenticato", () => {
 
   test("le pagine dell'area riservata rimandano al login", async ({ page }) => {
     for (const path of ["/dashboard", "/positions"]) {
-      const res = await page.request.get(path, {
+      // Il contratto riguarda status e Location: HEAD evita di attendere il
+      // corpo RSC streaming delle pagine autenticate.
+      const res = await page.request.head(path, {
         maxRedirects: 0,
       });
       // 307 verso /?login=true (anonimo) oppure 200 (sessione attiva).

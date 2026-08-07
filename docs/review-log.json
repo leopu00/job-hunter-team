@@ -1499,6 +1499,11 @@
       "path": "web/public/brand/README.md",
       "description": "Provenienza, integrità e vincoli d'uso degli asset social ufficiali nel footer pubblico, con Instagram attivo e TikTok mantenuto non pubblicato",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/ops/download-funnel.md",
+      "description": "Query operativa delle ultime 72 ore per i click download aggregati e vincoli di accesso service-role al contatore anonimo",
+      "last_review": "2026-08-07"
     }
   ]
 }
