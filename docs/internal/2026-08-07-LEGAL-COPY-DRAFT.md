@@ -1,5 +1,9 @@
 # Privacy and Terms copy — pre-release draft
 
+> **Superseded on 7 August 2026.** The operator answered the product questions;
+> use [`2026-08-07-LEGAL-COPY-RELEASE.md`](2026-08-07-LEGAL-COPY-RELEASE.md)
+> for publication copy. This file remains the audit trail of the earlier draft.
+
 > **Status: operator and legal review required.** This is product-copy work, not
 > legal advice and not a claim that Job Hunter Team complies with any particular
 > law. Text in square brackets is deliberately unresolved. Do not publish it as
@@ -35,14 +39,13 @@ links must be usable before the user starts Google authentication.
 
 ### Desktop bug-report confirmation
 
-> Your redacted report may be published as a public GitHub issue, visible to
-> anyone. Review the preview before sending.
+> Your report is sent privately to the Job Hunter Team support inbox. It is not
+> published automatically. After review, the operator may create a public
+> GitHub issue using a redacted technical summary.
 
-This sentence belongs only on a surface whose report can actually reach
-GitHub. At source commit `b949dc89b`, `godot-desktop` reports may open a public
-issue, while clients whose identifier starts with `web-` do not. The web
-Support dialog and `/contact` must not claim that they publish to GitHub unless
-that routing is intentionally changed.
+This replaces the earlier automatic-publication contract for every feedback
+surface. The original report remains private; any later public issue is a
+manual operator action using a redacted technical summary.
 
 ### Explicit acceptance control
 
@@ -142,15 +145,14 @@ statement that the product complies with a particular law.
 
 ### 1. Who is responsible for your data
 
-`[FULL LEGAL NAME OF THE CONTROLLER]`, at `[REGISTERED OR POSTAL ADDRESS]`, is
-the data controller for the hosted Job Hunter Team website, cloud dashboard,
-and support channels.
+**Leone Emanuele Puglisi**, acting as an individual maintainer of a free,
+non-commercial open-source project, is the data controller for the hosted Job
+Hunter Team website, cloud dashboard, and support channels.
 
-Privacy contact: [support@jobhunterteam.ai](mailto:support@jobhunterteam.ai).
+Privacy contact: [privacy@jobhunterteam.ai](mailto:privacy@jobhunterteam.ai).
 
-`[OPERATOR DECISION REQUIRED: confirm the legal identity and address, and
-confirm that this mailbox is monitored for data-subject requests. If a working
-privacy@jobhunterteam.ai alias is created, replace the contact consistently.]`
+No physical address, VAT number, company, registered office, or legal form is
+published. The project is not operated as a commercial activity.
 
 When you run Job Hunter Team solely on your own computer or on a VPS that you
 choose and administer, you control that environment. We do not receive its
@@ -390,8 +392,8 @@ Hunter Team software. The open-source software is also distributed under the
 MIT License. If these Terms conflict with rights granted by the MIT License for
 the software itself, the MIT License controls those software-license rights.
 
-`[OPERATOR/LEGAL DECISION REQUIRED: insert the full legal name and address of
-the contracting party. Do not publish “we” without identifying who “we” is.]`
+Job Hunter Team is provided by **Leone Emanuele Puglisi**, acting as an
+individual maintainer of a free, non-commercial open-source project.
 
 ### 1. Eligibility and acceptance
 
