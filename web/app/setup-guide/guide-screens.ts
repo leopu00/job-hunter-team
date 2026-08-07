@@ -530,9 +530,20 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Sem horário a equipa pode trabalhar a qualquer hora, com a tua subscrição.",
       hu: "Beosztás nélkül a csapat bármikor dolgozhat — a te előfizetéseden.",
     },
-    assets: {},
+    assets: {
+      linux: {
+        src: "/setup-guide/S14-working-hours-linux.png",
+        width: 1920,
+        height: 1080,
+      },
+      macos: {
+        src: "/setup-guide/S14-working-hours-macos.png",
+        width: 3024,
+        height: 1898,
+      },
+    },
     pending:
-      "Pianificazione orari salvata. ⚠️ La candidatura Linux del 7 agosto è stata RESPINTA: le iniziali dei giorni erano quelle italiane — L M M G V S D invece di M T W T F S S. L'audit OCR non poteva prenderla, sono lettere singole. Serve prima il fix di prodotto sui giorni della settimana, poi si rigira.",
+      "Consegnate Linux e macOS dopo il fix dei giorni della settimana: le iniziali ora sono quelle inglesi. Resta Windows. La vecchia versione con L M M G V S D e' conservata in guide-stills/rejected per documentare il difetto.",
   },
   {
     id: "S15-setup-complete",
