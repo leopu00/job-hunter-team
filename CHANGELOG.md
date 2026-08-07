@@ -9,6 +9,62 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.3.6] — 2026-08-07
+
+**A clearer path from download to a working team, with safer host controls and
+user-controlled cloud data.**
+
+### Before you update
+
+- On Windows, moving from `0.3.5` to `0.3.6` is a one-time manual
+  installation. Download the `0.3.6` installer or portable executable from the
+  official GitHub Release and follow the release instructions.
+- The new Windows forward-only automatic updater has not yet been demonstrated
+  end to end and is **not** promised as working in this release. Keep following
+  the installation instructions published with each release until that
+  changes explicitly. Linux updates also remain manual.
+
+### Setup and desktop
+
+- The public Setup Guide now walks through Docker, the native download, first
+  launch, language and provider selection, CV loading, team activation and
+  local-to-web pairing on macOS, Windows and Linux. It is available in seven
+  languages from the main navigation, Download and Run pages; the former
+  Tutorials URL redirects to it.
+- The desktop account flow opens Google sign-in and device pairing in the
+  browser, then returns the connection and synchronization state to the app.
+- The CLI can download the verified desktop package for a selected operating
+  system and version, including the optional Windows portable build. It also
+  exposes `jht game start|stop|status` and `jht gui open` for native client
+  lifecycle control.
+
+### Account and website
+
+- Account settings can export cloud data as JSON and start an explicit,
+  irreversible account-deletion flow with a data preview and email
+  confirmation. Partial export or deletion failures are reported as failures,
+  not as completed operations.
+- Analytics and performance measurement load only after explicit acceptance;
+  choosing necessary cookies only, or making no choice, leaves them disabled.
+- Product feedback is delivered privately to the configured support mailbox
+  and is no longer turned into a public GitHub issue automatically.
+- The public site now includes the interactive landing globe, the approved
+  home trailer and a permanent media-credits page, with static and fail-closed
+  fallbacks when interactive media cannot be shown.
+
+### Security and reliability
+
+- This release corrects a container-to-host trust-boundary weakness present in
+  `0.3.5`. Host lifecycle commands no longer trust executable runtime files
+  from container-writable locations: host-owned metadata, canonical paths,
+  ownership and permissions, SHA-256 digests and protocol versions are checked
+  before use. Updating is recommended.
+- PDF artifacts are checked before the desktop app copies or opens them on the
+  host, and cloud export and deletion stay within explicit data and storage
+  boundaries.
+
+---
+
 ## [0.3.5] — 2026-08-05
 
 **Choose English at first launch and keep the complete release path in one

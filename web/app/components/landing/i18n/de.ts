@@ -49,7 +49,7 @@ export const de: Record<string, string> = {
   footer_privacy: "Datenschutz",
   footer_terms: "Nutzungsbedingungen",
   footer_copyright: "Open Source unter MIT-Lizenz",
-  trailer_title: "Trailer",
+  video_play_label: "Video abspielen",
 
   // Download page
   dl_desc:

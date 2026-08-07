@@ -11,6 +11,11 @@
 >
 > Legend: 🔴 fix soon · 🟡 in progress / partial · ⬜ open · ⚪ parked idea · *(M#)* = feeds that contributor mission
 
+## 🔁 Repository hygiene
+
+- 🔴 **[BRANCH-LIFECYCLE-CLEANUP]** — la chiusura di un merge deve essere meccanica e nello stesso giro: dopo push verde e `worktree-sync` verificato `0/0 clean`, HQ-MASTER elimina il branch remoto se l'owner non deve proseguire sullo stesso fronte; quando la sessione viene ritirata rimuove anche la worktree pulita e il branch locale già raggiungibile da `master`. A ogni giro di integrazione esegue inoltre un census fail-closed (`git branch -r` + `git worktree list`) che segnala: branch merge-ready non integrate, ref remote già antenate di `master`, e worktree senza sessione. Nessun branch con commit unici si elimina senza decisione esplicita merge/abbandono e verifica del contenuto.
+- 🔴 **[CROSS-BOUNDARY-CONTRACT-FREEZE]** — quando due owner producono e consumano lo stesso artefatto o protocollo, prima di scrivere codice devono congelare una specifica unica e versionata: nomi file, schema e tipi esatti, valori ammessi, canonicalizzazione, limiti, semantica fail-closed e vettori di test condivisi. Producer e consumer implementano e revisionano contro quella stessa fonte; varianti concorrenti non entrano nei branch e ogni modifica al contratto richiede una correzione esplicita che supersede le precedenti prima di riprendere il lavoro.
+
 ## 🔴 Pacing & budget correctness
 
 > `[PACING-RESET-EDGE-FREEZE]` è stato **chiuso per implementazione** il 2026-08-03. La causa matematica originale (`usage / window-fraction`) era già stata attenuata dalla proiezione sulla velocità media di sessione, ma il contratto distruttivo era rimasto: un sample ancora volatile negli ultimi 30 minuti poteva produrre `ATTENZIONE`, `suggested_throttle_s=3600` e, nei prompt, `freeze_team.py` su `proj>200`. `compute_metrics` ora espone `reset_edge_guard=true` tra −30 e +30 minuti dal reset (epoch canonico, con fallback `HH:MM` che non rotola falsamente a domani), conserva la proiezione per audit ma neutralizza status/throttle derivati da essa. Skill e prompt Sentinella in tutte le 7 lingue ignorano in quella finestra ogni trigger projection-only, incluso il `>150` persistente; i segnali hard indipendenti restano attivi. 35 test mirati.

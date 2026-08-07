@@ -16,7 +16,11 @@ test.describe("shell pubblico tutorial e trailer", () => {
 
     const trailer = page.locator("[data-trailer-inline]");
     await expect(trailer).toBeVisible();
-    await expect(trailer.locator("[data-video-pending=trailer]")).toBeVisible();
+    const launch = trailer.locator("[data-video-launch=trailer]");
+    await expect(launch).toBeVisible();
+    await expect(trailer.locator("h2")).toHaveCount(0);
+    await expect(page.getByText("Trailer", { exact: true })).toHaveCount(0);
+    await expect(trailer.locator("[data-video-pending]")).toHaveCount(0);
     expect(await page.locator('a[href="/trailer"]').count()).toBe(0);
     expect(await trailer.locator("video").count()).toBe(0);
     await expect(trailer.locator("[data-music-credit]")).toHaveCount(0);
@@ -38,6 +42,14 @@ test.describe("shell pubblico tutorial e trailer", () => {
       }),
       "player trailer non montato sotto il globo",
     ).toBe(true);
+
+    await launch.click();
+    const video = trailer.locator("video");
+    await expect(video).toBeVisible();
+    await expect(video).toHaveAttribute("controls", "");
+    await expect
+      .poll(() => mediaRequests.some((url) => url.endsWith(".mp4")))
+      .toBe(true);
   });
 
   test("/tutorials reindirizza alla guida e sparisce dalla navigazione", async ({
@@ -90,7 +102,8 @@ test.describe("shell pubblico tutorial e trailer", () => {
     expect(response?.request().redirectedFrom()?.url()).toMatch(/\/trailer$/);
     expect(new URL(page.url()).pathname).toBe("/");
     expect(new URL(page.url()).hash).toBe("#trailer");
-    expect(await page.locator("[data-video-pending=trailer]").count()).toBe(1);
+    expect(await page.locator("[data-video-launch=trailer]").count()).toBe(1);
+    expect(await page.locator("[data-video-pending]").count()).toBe(0);
     await expect(page.locator("#trailer [data-music-credit]")).toHaveCount(0);
     expect(await page.locator("video").count()).toBe(0);
     expect(mediaRequests, "media trailer richiesti prima di un click").toEqual(
