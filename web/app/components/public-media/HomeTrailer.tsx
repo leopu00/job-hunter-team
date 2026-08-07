@@ -1,34 +1,27 @@
 "use client";
 
-import { PUBLIC_VIDEOS } from "@/lib/public-video-manifest";
+import {
+  PUBLIC_VIDEOS,
+  validatePublicVideo,
+} from "@/lib/public-video-manifest";
 import { useLandingI18n } from "../landing/LandingI18n";
 import DeferredVideo from "./DeferredVideo";
 
 /**
- * Il trailer vive direttamente sulla home. Finché `published` resta falso il
- * manifest impedisce a poster, sorgenti e richieste media di raggiungere il
- * DOM; dopo il GO il player viene creato soltanto dal click dell'utente.
+ * Il video vive direttamente sulla home, senza titolo o cornice editoriale.
+ * Se il manifest non è pubblicato o non è completo, l'intera sezione sparisce:
+ * un media assente non deve mai lasciare un placeholder nel sito pubblico.
  */
 export default function HomeTrailer() {
   const { t } = useLandingI18n();
-  const title = t("trailer_title");
+  const video = PUBLIC_VIDEOS.trailer;
+
+  if (!video.published || validatePublicVideo(video).length > 0) return null;
 
   return (
-    <section
-      id="trailer"
-      aria-labelledby="trailer-title"
-      data-trailer-inline
-      className="mt-12 w-full px-6"
-    >
-      <div className="mx-auto max-w-4xl text-left">
-        <h2
-          id="trailer-title"
-          className="mb-4 text-xl font-extrabold tracking-tight text-[var(--color-white)] sm:text-2xl"
-        >
-          {title}
-        </h2>
-
-        <DeferredVideo video={PUBLIC_VIDEOS.trailer} label={title} />
+    <section id="trailer" data-trailer-inline className="mt-12 w-full px-6">
+      <div className="mx-auto max-w-4xl">
+        <DeferredVideo video={video} label={t("video_play_label")} />
       </div>
     </section>
   );
