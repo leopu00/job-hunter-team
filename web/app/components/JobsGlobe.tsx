@@ -475,8 +475,10 @@ function tintMap(map: MaplibreMap, mode: "dark" | "light") {
   const tweaks: Array<[string, string, string]> =
     mode === "dark"
       ? [
-          ["background", "background-color", "#0d0d11"],
-          ["water", "fill-color", "#23252b"],
+          // Campionati dal fallback statico: nessuno stacco di palette fra
+          // l'esito JPEG e quello MapLibre nel tema dark.
+          ["background", "background-color", "#0c0b10"],
+          ["water", "fill-color", "#24252a"],
           ["landcover_wood", "fill-color", "#14171a"],
           ["landcover_grass", "fill-color", "#181b1e"],
           ["landuse_overlay_national_park", "fill-color", "#181b1e"],
@@ -487,8 +489,10 @@ function tintMap(map: MaplibreMap, mode: "dark" | "light") {
           ["building-3d", "fill-color", "#1c1d22"],
         ]
       : [
-          ["background", "background-color", "#f3f3ee"],
-          ["water", "fill-color", "#dadce6"],
+          // Complementi esatti prodotti sullo stesso fallback dal filtro
+          // light pre-paint `invert(1) hue-rotate(180deg)`.
+          ["background", "background-color", "#f3f4ef"],
+          ["water", "fill-color", "#dbdad5"],
           ["landcover_wood", "fill-color", "#e6efe6"],
           ["landcover_grass", "fill-color", "#eaf2ea"],
           ["landuse_park", "fill-color", "#eaf2ea"],
@@ -530,8 +534,9 @@ function matchScoreColor(s: number | null): string {
 // sorgente di verità = la card non lampeggia quando le due cose si
 // incrociano.
 //
-// onTierChange espone i degradi del monitor FPS: la landing lo usa per
-// ripiegare su un'immagine statica quando la macchina non regge.
+// onTierChange espone i degradi del monitor FPS: prima del primo frame la
+// landing può ancora scegliere il fallback; dopo la scelta il profilo low
+// resta invece dentro MapLibre, evitando uno scambio visuale a metà scena.
 export type GlobeShowcase = {
   positions: PositionCoord[];
   onMapReady?: (map: MaplibreMap) => void;
@@ -895,23 +900,37 @@ export default function JobsGlobe({
     const isShowcase = showcaseRef.current != null;
     const bootTheme = paintedTheme(themeRef.current);
     themeRef.current = bootTheme;
-    const map = new maplibregl.Map({
-      container,
-      style: bootTheme === "light" ? STYLE_LIGHT : STYLE_DARK,
-      center: [10, 45], // centrato su Europa
-      zoom: 1.8,
-      attributionControl: { compact: true },
-      pitch: 0,
-      bearing: 0,
-      interactive: true,
-      // Qualità: pixelRatio e fadeDuration si possono dare SOLO qui
-      // (fadeDuration non ha setter pubblico), quindi il tier di boot
-      // deve essere già quello giusto. Il degrado runtime agisce poi su
-      // pixelRatio/proiezione/halo/icone, che sono modificabili a caldo.
-      pixelRatio: boot.canvasPixelRatio,
-      fadeDuration: boot.fadeDuration,
-      maxTileCacheSize: boot.maxTileCacheSize,
-    });
+    let map: maplibregl.Map;
+    try {
+      map = new maplibregl.Map({
+        container,
+        style: bootTheme === "light" ? STYLE_LIGHT : STYLE_DARK,
+        center: [10, 45], // centrato su Europa
+        zoom: 1.8,
+        attributionControl: { compact: true },
+        pitch: 0,
+        bearing: 0,
+        interactive: true,
+        // Qualità: pixelRatio e fadeDuration si possono dare SOLO qui
+        // (fadeDuration non ha setter pubblico), quindi il tier di boot
+        // deve essere già quello giusto. Il degrado runtime agisce poi su
+        // pixelRatio/proiezione/halo/icone, che sono modificabili a caldo.
+        pixelRatio: boot.canvasPixelRatio,
+        fadeDuration: boot.fadeDuration,
+        maxTileCacheSize: boot.maxTileCacheSize,
+      });
+    } catch (error) {
+      // Il probe usa un contesto usa-e-getta; fra probe e mount il browser può
+      // comunque esaurire/perdere WebGL. Sulla home questo è un esito statico,
+      // non un errore di pagina. Le mappe dell'area riservata mantengono invece
+      // il comportamento diagnostico precedente.
+      if (isShowcase) {
+        console.warn("[JobsGlobe] WebGL unavailable after probe:", error);
+        showcaseRef.current?.onTierChange?.("low");
+        return;
+      }
+      throw error;
+    }
     let detachAxisLock: (() => void) | null = null;
     if (isShowcase) {
       tuneShowcaseHandlers(map);
