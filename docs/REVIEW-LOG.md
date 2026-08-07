@@ -345,7 +345,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/2026-08-07-setup-guide-content-contract.md](./internal/2026-08-07-setup-guide-content-contract.md) | Contratto P0 della guida setup non pubblicata: naming, copy EN, fasi e requisiti screenshot per tre OS, local-web e censimento riuso | 2026-08-07 | 2026-08-07 | 🟢 |
 | [docs/internal/2026-08-07-setup-guide-web-scaffolding.md](./internal/2026-08-07-setup-guide-web-scaffolding.md) | Handoff web della guida setup non pubblicata: route noindex, contratto canonico, registro schermate, test e stato traduzioni | 2026-08-07 | 2026-08-07 | 🟢 |
 | [docs/internal/2026-08-07-web-compliance-audit.md](./internal/2026-08-07-web-compliance-audit.md) | Audit tecnico di conformità del sito web: consenso analytics, accesso a privacy e termini, inventario dei dati e decisioni aperte su export e cancellazione | — | 2026-08-07 | ✅ |
-| [docs/internal/2026-08-07-LEGAL-COPY-DRAFT.md](./internal/2026-08-07-LEGAL-COPY-DRAFT.md) | Audit pre-release e bozze EN versionate di Privacy e Termini, con flussi reali, copy condiviso web/desktop e decisioni legali esplicitamente aperte | — | — | ✅ |
+| [docs/internal/2026-08-07-LEGAL-COPY-DRAFT.md](./internal/2026-08-07-LEGAL-COPY-DRAFT.md) | Audit pre-release e bozze EN versionate di Privacy e Termini, con flussi reali, copy condiviso web/desktop e decisioni legali esplicitamente aperte | — | 2026-08-07 | ✅ |
+| [docs/internal/2026-08-07-LEGAL-COPY-RELEASE.md](./internal/2026-08-07-LEGAL-COPY-RELEASE.md) | Fonte EN di pubblicazione per Privacy e Termini v2026-08-07.1: titolare individuale, età 16, Google/cloud, analytics opt-in, CARTO, feedback privato, export e cancellazione cloud immediata | — | — | ✅ |
 
 
 ## 🔒 docs/security
