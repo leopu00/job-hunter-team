@@ -346,7 +346,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/2026-08-07-setup-guide-web-scaffolding.md](./internal/2026-08-07-setup-guide-web-scaffolding.md) | Handoff web della guida setup non pubblicata: route noindex, contratto canonico, registro schermate, test e stato traduzioni | 2026-08-07 | 2026-08-07 | 🟢 |
 | [docs/internal/2026-08-07-web-compliance-audit.md](./internal/2026-08-07-web-compliance-audit.md) | Audit tecnico di conformità del sito web: consenso analytics, accesso a privacy e termini, inventario dei dati e decisioni aperte su export e cancellazione | — | 2026-08-07 | ✅ |
 | [docs/internal/2026-08-07-LEGAL-COPY-DRAFT.md](./internal/2026-08-07-LEGAL-COPY-DRAFT.md) | Audit pre-release e bozze EN versionate di Privacy e Termini, con flussi reali, copy condiviso web/desktop e decisioni legali esplicitamente aperte | — | 2026-08-07 | ✅ |
-| [docs/internal/2026-08-07-LEGAL-COPY-RELEASE.md](./internal/2026-08-07-LEGAL-COPY-RELEASE.md) | Fonte EN di pubblicazione per Privacy e Termini v2026-08-07.1: titolare individuale, età 16, Google/cloud, analytics opt-in, CARTO, feedback privato, export e cancellazione cloud immediata | — | — | ✅ |
+| [docs/internal/2026-08-07-LEGAL-COPY-RELEASE.md](./internal/2026-08-07-LEGAL-COPY-RELEASE.md) | Fonte EN di pubblicazione per Privacy e Termini v2026-08-07.1: titolare individuale, età 16, Google/cloud, analytics opt-in, CARTO, feedback privato, export e cancellazione cloud immediata | — | 2026-08-07 | ✅ |
 
 
 ## 🔒 docs/security
@@ -411,6 +411,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [tests/fixtures/e2e_linux_cv.md](../tests/fixtures/e2e_linux_cv.md) | Synthetic candidate CV consumed by the Linux onboarding E2E: no real personal data, only the profile fields the first-run checklist has to parse | — | 2026-08-04 | ✅ |
 | [promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md](../promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md) | Specifica tipografica e motion del pack overlay 9:16 per l'animatic pubblicitario: safe area, palette JHT, font, CTA e uso editoriale | — | 2026-08-05 | ✅ |
 | [docs/assets/icons/SOURCES.md](./assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale | — | 2026-08-07 | ✅ |
+| [web/public/brand/README.md](../web/public/brand/README.md) | Provenienza, integrità e vincoli d'uso degli asset social ufficiali nel footer pubblico, con Instagram attivo e TikTok mantenuto non pubblicato | — | 2026-08-07 | ✅ |
 
 
 ---
