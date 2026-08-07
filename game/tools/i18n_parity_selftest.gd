@@ -105,6 +105,7 @@ func _init() -> void:
 	_check_english_fallback()
 	_check_keys_used_in_sources(it)
 	_check_role_names(it)
+	_check_hours_day_labels(it)
 	_check_no_hardcoded_labels()
 	_check_p0_english_surfaces()
 	if _failures.is_empty():
@@ -296,6 +297,24 @@ func _check_role_names(it: Dictionary) -> void:
 				src.contains(str(ROLE_NAME_SURFACES[path])),
 				"non chiama più %s: i nomi sono tornati scritti a mano"
 				% ROLE_NAME_SURFACES[path])
+
+
+## Le chiavi mon…sun sono il contratto persistito e non vanno tradotte; soltanto
+## le sette etichette dei pulsanti dipendono dalla lingua. Questa verifica evita
+## sia il ritorno delle iniziali italiane in inglese sia un refactor accidentale
+## del formato salvato per correggere un difetto puramente visivo.
+func _check_hours_day_labels(it: Dictionary) -> void:
+	var path := "res://scripts/ui/section_panel.gd"
+	var src := FileAccess.get_file_as_string(path)
+	_check("section_panel.gd leggibile per audit giorni", src != "")
+	for day: String in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+		var key: String = "hours.day_" + day
+		_check("etichetta %s presente" % day, it.has(key), key)
+		_check("giorno %s usa una chiave i18n" % day,
+				src.contains('["%s", "%s"]' % [day, key]), key)
+	_check("pulsanti giorni tradotti a runtime",
+			src.contains("toggle.text = UIStrings.t(str(day_def[1]))"),
+			"toggle.text non passa più da UIStrings.t")
 
 
 ## Nessuna frase scritta a mano nelle superfici dichiarate sopra.

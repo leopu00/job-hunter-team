@@ -1911,10 +1911,12 @@ var _hours_status: Label
 var _hours_save_btn: Button
 var _hours_loaded := false
 
-## Giorni della settimana: chiave che va nel config (mon…sun) ed etichetta
-## di una lettera per i sette pulsanti.
-const HOURS_DAYS := [["mon", "L"], ["tue", "M"], ["wed", "M"], ["thu", "G"],
-		["fri", "V"], ["sat", "S"], ["sun", "D"]]
+## Giorni della settimana: chiave stabile che va nel config (mon…sun) e chiave
+## i18n dell'etichetta di una lettera mostrata sui sette pulsanti.
+const HOURS_DAYS := [["mon", "hours.day_mon"], ["tue", "hours.day_tue"],
+		["wed", "hours.day_wed"], ["thu", "hours.day_thu"],
+		["fri", "hours.day_fri"], ["sat", "hours.day_sat"],
+		["sun", "hours.day_sun"]]
 
 ## Punti di partenza in un click. Chi apre questa pagina la prima volta non
 ## ha un'opinione sugli orari: ne ha una sul MODO in cui vuole lavorare.
@@ -2007,7 +2009,7 @@ func _build_hours() -> void:
 		for day_def in HOURS_DAYS:
 			var key := str(day_def[0])
 			var toggle := Button.new()
-			toggle.text = str(day_def[1])
+			toggle.text = UIStrings.t(str(day_def[1]))
 			toggle.toggle_mode = true
 			toggle.custom_minimum_size = Vector2(34, 0)
 			toggle.button_pressed = _hours_has_day(win_for_days, key)
