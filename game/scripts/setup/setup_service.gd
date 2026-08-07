@@ -2575,9 +2575,10 @@ func _apply_archive_to_local(archive: String, stamp: String,
 		_remove_tree(stage)
 		return {"ok": false, "message": UIStrings.t("vps.action.extracted_team_invalid")}
 	DirAccess.make_dir_recursive_absolute(staged_docs)
-	# Il runtime e le chiavi appartengono alla macchina destinazione, non alla
-	# sorgente. Si preservano fuori dallo snapshot prima dello swap atomico.
-	for rel in ["ssh", "runtime"]:
+	# Le chiavi appartengono alla macchina destinazione. Il vecchio runtime
+	# sotto .jht e invece input container-writable: non viene mai copiato; il
+	# compose host autorevole vive fuori dal bind in user://runtime.
+	for rel in ["ssh"]:
 		var src := home.path_join(".jht/" + rel)
 		if DirAccess.dir_exists_absolute(src):
 			var copied := _copy_tree(src, staged_jht.path_join(rel))
