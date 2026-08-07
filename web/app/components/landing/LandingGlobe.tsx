@@ -17,12 +17,11 @@
 //   • il globo (maplibre ~1 MB) NON è nel bundle della pagina: arriva
 //     via dynamic import (JobsGlobeLazy) e solo DOPO che il browser è
 //     in idle, così non contende banda/CPU al primo paint;
-//   • sotto al canvas c'è sempre un'immagine statica del globo: è lei
-//     l'LCP, e resta l'unica cosa mostrata se la macchina è debole
-//     (probe tier "low" di map-perf), se il WebGL manca, se gli FPS
-//     misurati crollano o se l'utente chiede prefers-reduced-motion.
-//     In quel caso non c'è nemmeno l'interazione: meglio un'immagine
-//     ferma e dignitosa di un globo che si trascina a scatti;
+//   • lo spazio del globo viene riservato subito, ma resta vuoto finché
+//     l'esito non è definitivo: primo frame 3D pronto entro la deadline,
+//     oppure immagine statica per macchina debole/WebGL assente/reduced
+//     motion/caricamento lento. Una volta mostrato un esito non si passa
+//     mai all'altro;
 //   • MapLibre si ferma quando la tab è nascosta o il pannello esce dal
 //     viewport: niente frame e batteria bruciata per una scena che nessuno
 //     guarda. Il copione però avanza sul solo orologio e al rientro viene
@@ -87,6 +86,12 @@ const RESUME_RAMP_DEG = 1.2;
 // lasciato il globo zoomato su un quartiere, l'autopilota non riprende
 // da lì — risale prima, poi ricomincia a girare.
 const RECENTER_MS = 2200;
+// La scelta visuale è una gara one-shot. Il probe parte quasi subito dopo
+// il primo paint; se import, stile, tile e pin non consegnano il primo idle
+// entro 2,8 s, compare il fallback e quella sessione resta statica.
+const CAPABILITY_IDLE_TIMEOUT_MS = 450;
+const STATIC_PRELOAD_AFTER_MS = 1000;
+const LIVE_READY_DEADLINE_MS = 2800;
 
 // Perché la pausa è in corso. Sono indipendenti: il globo fuori
 // schermo NON deve ripartire allo scadere del timer dell'utente, e
@@ -669,29 +674,45 @@ export default function LandingGlobe() {
   const { lang } = useLandingI18n();
   const tr = useMemo(() => makeT(T, lang), [lang]);
 
-  // pending: solo immagine statica (SSR/primo paint). live: globo vero
-  // sopra l'immagine. static: si resta sull'immagine, per scelta
-  // (reduced-motion) o per forza (macchina debole / niente WebGL).
-  const [mode, setMode] = useState<"pending" | "live" | "static">("pending");
+  // pending/warming sono entrambi uno slot vuoto. `warming` monta il canvas
+  // invisibile per sapere se il suo primo frame è davvero pronto; `live` e
+  // `static` sono esiti finali e mutuamente esclusivi.
+  const [mode, setMode] = useState<"pending" | "warming" | "live" | "static">(
+    "pending",
+  );
   // Profilo grafico ridotto (tier "medium" di map-perf): si monta la
   // variante lean del dataset — meno pin da disegnare a ogni frame.
   const [lean, setLean] = useState(false);
   // Opportunità la cui card è aperta sopra al pin. La scrivono in due:
   // l'autopilota durante il giro, l'utente quando clicca un pin.
   const [cardId, setCardId] = useState<string | null>(null);
-  const [began, setBegan] = useState(false);
-
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const autopilotRef = useRef<AutopilotHandle | null>(null);
+  const finalModeRef = useRef<"live" | "static" | null>(null);
+  const readyDeadlineRef = useRef<number | null>(null);
+  const preloadTimerRef = useRef<number | null>(null);
   // Visibilità corrente del pannello (viewport + tab): l'autopilota
   // può nascere DOPO che l'utente ha già scrollato via — si consulta
   // questo ref alla creazione, non solo agli eventi.
   const visibleRef = useRef(true);
   const resumeTimerRef = useRef<number | null>(null);
 
-  // Decisione live/static rimandata all'idle del browser: il probe è
-  // sincrono ma leggero, ed è soprattutto il dynamic import del globo
-  // a non dover competere con il primo paint della pagina.
+  const chooseFinalMode = useCallback((next: "live" | "static") => {
+    if (finalModeRef.current != null) return false;
+    finalModeRef.current = next;
+    if (readyDeadlineRef.current != null)
+      window.clearTimeout(readyDeadlineRef.current);
+    if (preloadTimerRef.current != null)
+      window.clearTimeout(preloadTimerRef.current);
+    readyDeadlineRef.current = null;
+    preloadTimerRef.current = null;
+    setMode(next);
+    return true;
+  }, []);
+
+  // Il probe è sincrono ma parte dopo il primo paint. Finché non termina non
+  // viene mostrato alcun globo. Una macchina capace monta il 3D invisibile e
+  // compete contro una deadline unica; chi perde mostra la JPEG e ci resta.
   useEffect(() => {
     let cancelled = false;
     const decide = () => {
@@ -700,15 +721,18 @@ export default function LandingGlobe() {
         window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ??
         false;
       if (reduced) {
-        setMode("static");
+        chooseFinalMode("static");
         return;
       }
       const { tier } = initialAutoTier();
-      // lean e mode nello stesso handler: il dataset è definitivo PRIMA
-      // che il render "live" monti JobsGlobe (che legge le posizioni
-      // una volta sola, al mount).
+      // lean e warming nello stesso handler: il dataset è definitivo PRIMA
+      // che JobsGlobe legga le posizioni al mount.
       setLean(tier === "medium");
-      setMode(tier === "low" ? "static" : "live");
+      if (tier === "low") {
+        chooseFinalMode("static");
+        return;
+      }
+      if (finalModeRef.current == null) setMode("warming");
     };
     type IdleWindow = Window & {
       requestIdleCallback?: (
@@ -720,17 +744,39 @@ export default function LandingGlobe() {
     const w = window as IdleWindow;
     let idleId: number | null = null;
     let toId: number | null = null;
+    readyDeadlineRef.current = window.setTimeout(
+      () => chooseFinalMode("static"),
+      LIVE_READY_DEADLINE_MS,
+    );
+    // La JPEG pesa ~42 KiB: non compete con i caricamenti veloci. Se dopo un
+    // secondo il 3D non è ancora pronto, la scaldiamo a priorità bassa così
+    // sarà già in cache qualora vinca la deadline statica.
+    preloadTimerRef.current = window.setTimeout(() => {
+      if (finalModeRef.current != null) return;
+      const fallback = new Image();
+      fallback.decoding = "async";
+      fallback.fetchPriority = "low";
+      fallback.src = "/landing-globe-still.jpg";
+    }, STATIC_PRELOAD_AFTER_MS);
     if (w.requestIdleCallback) {
-      idleId = w.requestIdleCallback(decide, { timeout: 2500 });
+      idleId = w.requestIdleCallback(decide, {
+        timeout: CAPABILITY_IDLE_TIMEOUT_MS,
+      });
     } else {
-      toId = window.setTimeout(decide, 1200);
+      toId = window.setTimeout(decide, 0);
     }
     return () => {
       cancelled = true;
       if (idleId != null) w.cancelIdleCallback?.(idleId);
       if (toId != null) window.clearTimeout(toId);
+      if (readyDeadlineRef.current != null)
+        window.clearTimeout(readyDeadlineRef.current);
+      if (preloadTimerRef.current != null)
+        window.clearTimeout(preloadTimerRef.current);
+      readyDeadlineRef.current = null;
+      preloadTimerRef.current = null;
     };
-  }, []);
+  }, [chooseFinalMode]);
 
   // Pausa quando non guardato: tab nascosta o pannello fuori viewport
   // (l'hero sta in cima: appena l'utente scrolla alle sezioni, il globo
@@ -796,21 +842,32 @@ export default function LandingGlobe() {
   // prima di quel momento non gli lascia in mano una lista vecchia.
   const tourRef = useRef(show.tour);
   tourRef.current = show.tour;
-  const onMapReady = useCallback((map: MaplibreMap) => {
-    autopilotRef.current?.dispose();
-    autopilotRef.current = startAutopilot(map, tourRef.current, {
-      onCardChange: setCardId,
-      onBegan: () => setBegan(true),
-    });
-    if (!visibleRef.current || document.hidden) {
-      autopilotRef.current.pause("offscreen");
-    }
-  }, []);
-  const onTierChange = useCallback((tier: MapTier) => {
-    // Gli FPS misurati dicono che la macchina non regge: meglio
-    // un'immagine ferma e dignitosa che un globo a scatti.
-    if (tier === "low") setMode("static");
-  }, []);
+  const onMapReady = useCallback(
+    (map: MaplibreMap) => {
+      // Se la deadline ha già scelto la JPEG, il callback tardivo non può più
+      // avviare né rendere visibile il globo. È il gate one-shot anti-staffetta.
+      if (!chooseFinalMode("live")) return;
+      autopilotRef.current?.dispose();
+      autopilotRef.current = startAutopilot(map, tourRef.current, {
+        onCardChange: setCardId,
+        onBegan: () => undefined,
+      });
+      if (!visibleRef.current || document.hidden) {
+        autopilotRef.current.pause("offscreen");
+      }
+    },
+    [chooseFinalMode],
+  );
+  const onTierChange = useCallback(
+    (tier: MapTier) => {
+      // Un low rilevato prima del primo frame sceglie la JPEG. Dopo che il 3D è
+      // visibile non si fa più uno scambio: JobsGlobe degrada già internamente
+      // pixel ratio, proiezione, label e halo sul profilo low.
+      if (tier === "low" && finalModeRef.current == null)
+        chooseFinalMode("static");
+    },
+    [chooseFinalMode],
+  );
 
   const showcase = useMemo(
     () => ({
@@ -842,16 +899,15 @@ export default function LandingGlobe() {
     ],
   );
 
-  // Il passaggio dev'essere atomico: sfumare due rappresentazioni dello
-  // stesso globo significa mostrarle entrambe per alcuni frame (con pin e
-  // label doppi). `began` arriva solo dopo il primo idle del canvas, quindi
-  // qui è sicuro sostituire l'immagine invece di sovrapporla.
-  const liveReady = mode === "live" && began;
+  const liveReady = mode === "live";
+  const mountLive = mode === "warming" || mode === "live";
 
   return (
     <>
       <div
         ref={wrapRef}
+        data-globe-mode={mode}
+        aria-busy={mode === "pending" || mode === "warming"}
         // Fascia a tutta larghezza (niente box): ritratto su telefono
         // (il globo respira e la card non lo copre), panoramico da tablet
         // in su. Sui monitor larghi l'aspect 16/9 darebbe un'altezza da
@@ -859,11 +915,11 @@ export default function LandingGlobe() {
         // titolo sopra e inizio contenuti sotto restano nel fold. Il /var
         // (--zoom) è obbligatorio: il body è zoomato e i vh sono calcolati
         // sul viewport NON zoomato (vedi commento in globals.css).
-        className="relative w-full overflow-hidden aspect-[3/4] sm:aspect-[4/3] md:aspect-[16/9] md:max-h-[calc(60vh/var(--zoom))] bg-[var(--color-deep)]"
+        className="relative w-full overflow-hidden aspect-[3/4] sm:aspect-[4/3] md:aspect-[16/9] md:max-h-[calc(60vh/var(--zoom))] bg-[var(--color-void)]"
       >
-        {/* Base statica: LCP della pagina, ripiego per macchine deboli e
-            descrizione accessibile dell'intera vetrina. */}
-        {!liveReady && (
+        {/* La JPEG è soltanto un esito finale. Non viene mai usata come
+            anticamera del 3D, quindi non può esistere una staffetta visibile. */}
+        {mode === "static" && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src="/landing-globe-still.jpg"
@@ -871,13 +927,6 @@ export default function LandingGlobe() {
             width={1672}
             height={941}
             fetchPriority="high"
-            // Non è una dissolvenza: su un canvas non opaco farebbe convivere
-            // due globi e due serie di etichette. L'immagine esiste fino al
-            // primo idle del canvas, poi viene rimossa nello stesso render che
-            // rende visibile la scena live.
-            // Il tema viene scritto su <html> dallo script pre-paint del
-            // layout. Il filtro light è quindi applicato a QUESTO STESSO
-            // elemento prima del primo frame, senza montare un secondo still.
             className="jht-globe-still absolute inset-0 w-full h-full object-cover"
           />
         )}
@@ -885,7 +934,7 @@ export default function LandingGlobe() {
         {/* Credito basemap per l'immagine statica (obbligo licenza
             CARTO/OSM: il render vivo ha il suo controllo attribution,
             l'immagine ferma deve portarselo scritto accanto). */}
-        {!liveReady && (
+        {mode === "static" && (
           <div
             className="jht-globe-static-credit absolute bottom-2 right-2 z-10 pointer-events-none rounded-sm px-1.5 py-1 text-[10px] leading-tight"
             style={{
@@ -912,14 +961,14 @@ export default function LandingGlobe() {
             resterebbe muto. Nessun doppione: finché il fallback è a
             schermo questo blocco è `invisible`, cioè fuori
             dall'albero di accessibilità. */}
-        {mode === "live" && (
+        {mountLive && (
           <div
             role="group"
             aria-label={tr("globe_live_label")}
-            // Il canvas deve montare per arrivare al suo primo idle, ma non
-            // deve disegnare sotto al fallback durante l'attesa: altrimenti un
-            // cambiamento di opacità o compositing può riesporre due globi.
-            className={`absolute inset-0 ${liveReady ? "visible" : "invisible"}`}
+            // Durante warming il canvas può preparare il primo frame ma resta
+            // invisibile e fuori dall'albero a11y. Se vince, compare da uno
+            // slot vuoto con una sola dissolvenza; se perde viene smontato.
+            className={`absolute inset-0 transition-opacity duration-[420ms] ease-out ${liveReady ? "visible opacity-100" : "invisible opacity-0"}`}
           >
             <JobsGlobeLazy
               fullscreen
