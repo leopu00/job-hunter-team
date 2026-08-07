@@ -239,19 +239,24 @@ func _save_local_copy(payload: Dictionary) -> String:
 
 
 func _to_markdown(payload: Dictionary) -> String:
-	var out := "# Segnalazione JHT\n\n"
-	out += "- **versione**: %s\n- **piattaforma**: %s\n- **lingua**: %s\n\n" % [
-			payload["app_version"], payload["platform"], payload["locale"]]
-	for pair in [["Cosa stavo facendo", "doing"], ["Cosa è successo", "happened"],
-			["Cosa mi aspettavo", "expected"]]:
+	var out := "# " + UIStrings.t("feedback.report.title") + "\n\n"
+	out += "- **%s**: %s\n- **%s**: %s\n- **%s**: %s\n\n" % [
+			UIStrings.t("feedback.report.version"), payload["app_version"],
+			UIStrings.t("feedback.report.platform"), payload["platform"],
+			UIStrings.t("feedback.report.language"), payload["locale"]]
+	for pair in [[UIStrings.t("feedback.report.doing"), "doing"],
+			[UIStrings.t("feedback.report.happened"), "happened"],
+			[UIStrings.t("feedback.report.expected"), "expected"]]:
 		out += "## %s\n\n%s\n\n" % [pair[0], str(payload[pair[1]])]
-	out += "## Diagnostica\n\n" + str(payload.get("diagnostics", ""))
+	out += "## " + UIStrings.t("feedback.report.diagnostics") + "\n\n" \
+			+ str(payload.get("diagnostics", ""))
 	var redaction: Dictionary = payload.get("redaction", {})
 	if not redaction.is_empty():
 		var removed := PackedStringArray()
 		for key in redaction:
 			removed.append("%s×%d" % [key, int(redaction[key])])
-		out += "\n## Dati rimossi prima dell'invio\n\n" + ", ".join(removed) + "\n"
+		out += "\n## " + UIStrings.t("feedback.report.redacted") + "\n\n" \
+				+ ", ".join(removed) + "\n"
 	return out
 
 

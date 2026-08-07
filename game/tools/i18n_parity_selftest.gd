@@ -89,7 +89,14 @@ const P0_FORBIDDEN_ITALIAN := {
 		"Nel prompt Kimi digita /login", "Nel menu Claude scegli",
 		"Team avviato: gli agenti arriveranno in ufficio",
 		"operazione in corso…",
+		"Chiave pubblica assente: genera prima", "Setup VPS fallito:",
+		"Snapshot sorgente fallito:", "Token BotFather non valido per",
+		"Salvataggio email fallito:",
 	],
+	"res://scripts/ui/game_sidebar.gd": ["Chiudi il menu"],
+	"res://scripts/ui/agent_usage_view.gd": ["uso agenti simulato"],
+	"res://scripts/ui/pipeline_queue_panel.gd": ["TROVATA DA", "VERDETTO"],
+	"res://scripts/ui/output_archive_panel.gd": ["VOTO CRITICO"],
 }
 
 var _failures: Array[String] = []
@@ -106,6 +113,8 @@ func _init() -> void:
 	_check_keys_used_in_sources(it)
 	_check_role_names(it)
 	_check_hours_day_labels(it)
+	_check_demo_position_titles(it)
+	_check_mock_data_localization(it)
 	_check_no_hardcoded_labels()
 	_check_p0_english_surfaces()
 	if _failures.is_empty():
@@ -116,6 +125,44 @@ func _init() -> void:
 		push_error("[i18n-test] " + failure)
 	print("I18N-PARITY-TEST FAIL (%d problemi)" % _failures.size())
 	quit(1)
+
+
+## Il registro applicazioni offline è una superficie pubblica: conserva gli
+## indici del dataset sintetico, ma risolve il titolo soltanto in presentazione.
+## Due titoli italiani sono già finiti in uno screenshot inglese reale; questo
+## controllo impedisce sia il ritorno dei literal sia un catalogo EN copiato.
+func _check_demo_position_titles(it: Dictionary) -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/data/demo_positions.gd")
+	_check("titoli demo risolti via i18n",
+			source.contains('var title_key := "dept.demo.role.%d.title"')
+			and source.contains("UIStrings.t(title_key)"),
+			"DemoPositions.build() non risolve più i titoli dal catalogo")
+	var english: Dictionary = _dicts.get("en", {})
+	for n in [1, 2, 3, 4, 6, 7, 8, 9, 23, 25, 38, 39]:
+		var key := "dept.demo.role.%d.title" % n
+		_check("titolo demo presente: " + key, it.has(key) and english.has(key), key)
+		if it.has(key) and english.has(key):
+			_check("titolo demo inglese reale: " + key,
+					str(it[key]) != str(english[key]), str(english[key]))
+
+
+## La sorgente offline è il default di TeamData prima del collegamento live:
+## candidature, attività e impostazioni devono localizzare copie, senza mutare
+## le costanti che fissano ID e ordine del dataset sintetico.
+func _check_mock_data_localization(it: Dictionary) -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/data/mock_data_source.gd")
+	for seam in ["APPLICATION_TITLE_KEYS", 'row["title"] = _t(',
+			'row["text"] = _t("dept.mock.activity.', "SETTINGS_LABEL_KEYS",
+			"SETTINGS_VALUE_KEYS", 'var pair: Array = source[i].duplicate()']:
+		_check("MockDataSource localizza copie: " + seam,
+				source.contains(seam), "seam assente")
+	var english: Dictionary = _dicts.get("en", {})
+	for key in ["dept.mock.application.1.title", "dept.mock.activity.scout.1.text",
+			"dept.mock.setting.profile.candidate", "dept.mock.setting.language.interface_value"]:
+		_check("mock key presente: " + key, it.has(key) and english.has(key), key)
+		if it.has(key) and english.has(key):
+			_check("mock inglese reale: " + key,
+					str(it[key]) != str(english[key]), str(english[key]))
 
 
 func _check(name: String, condition: bool, detail: String = "") -> void:
