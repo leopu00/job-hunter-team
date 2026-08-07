@@ -14,6 +14,7 @@
 ## 🔁 Repository hygiene
 
 - 🔴 **[BRANCH-LIFECYCLE-CLEANUP]** — la chiusura di un merge deve essere meccanica e nello stesso giro: dopo push verde e `worktree-sync` verificato `0/0 clean`, HQ-MASTER elimina il branch remoto se l'owner non deve proseguire sullo stesso fronte; quando la sessione viene ritirata rimuove anche la worktree pulita e il branch locale già raggiungibile da `master`. A ogni giro di integrazione esegue inoltre un census fail-closed (`git branch -r` + `git worktree list`) che segnala: branch merge-ready non integrate, ref remote già antenate di `master`, e worktree senza sessione. Nessun branch con commit unici si elimina senza decisione esplicita merge/abbandono e verifica del contenuto.
+- 🔴 **[CROSS-BOUNDARY-CONTRACT-FREEZE]** — quando due owner producono e consumano lo stesso artefatto o protocollo, prima di scrivere codice devono congelare una specifica unica e versionata: nomi file, schema e tipi esatti, valori ammessi, canonicalizzazione, limiti, semantica fail-closed e vettori di test condivisi. Producer e consumer implementano e revisionano contro quella stessa fonte; varianti concorrenti non entrano nei branch e ogni modifica al contratto richiede una correzione esplicita che supersede le precedenti prima di riprendere il lavoro.
 
 ## 🔴 Pacing & budget correctness
 
