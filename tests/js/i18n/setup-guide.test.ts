@@ -258,6 +258,34 @@ describe("guida di setup — schermate", () => {
     expect(missing.length).toBeLessThanOrEqual(total);
   });
 
+  it("l'estensione di ogni file dice il formato vero", () => {
+    // Due catture macOS sono arrivate come JPEG con estensione .png: il
+    // browser le mostra lo stesso, ma il nome mente e nessuno se ne accorge
+    // finche' qualcuno non passa `file` sulla cartella. Qui il confronto e'
+    // con i byte, non con il nome.
+    const MAGIC: { ext: string; bytes: number[] }[] = [
+      { ext: ".png", bytes: [0x89, 0x50, 0x4e, 0x47] },
+      { ext: ".jpg", bytes: [0xff, 0xd8, 0xff] },
+    ];
+    const wrong: string[] = [];
+    for (const screen of Object.values(SCREENS)) {
+      for (const asset of Object.values(screen.assets)) {
+        if (!asset) continue;
+        const file = path.join(PUBLIC_DIR, asset.src);
+        if (!fs.existsSync(file)) continue;
+        const head = fs.readFileSync(file).subarray(0, 4);
+        const real = MAGIC.find((m) => m.bytes.every((b, i) => head[i] === b));
+        const ext = path.extname(asset.src).toLowerCase();
+        if (!real) {
+          wrong.push(`${asset.src}: formato non riconosciuto`);
+        } else if (real.ext !== ext) {
+          wrong.push(`${asset.src}: e' ${real.ext}, non ${ext}`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
   it("ogni schermata mancante dichiara cosa deve mostrare", () => {
     // L'elenco di ciò che manca si legge dal codice: una schermata senza
     // file e senza `pending` sparisce dai conti.
@@ -344,7 +372,9 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
   });
 
   it("indice, G00 e S02 sono tradotti davvero nelle sei lingue derivate", () => {
-    const chapter = GUIDE_CHAPTERS.find((candidate) => candidate.id === "guide-index")!;
+    const chapter = GUIDE_CHAPTERS.find(
+      (candidate) => candidate.id === "guide-index",
+    )!;
     const phaseIds = new Set([
       "choose-setup-path",
       "install-docker-macos",
