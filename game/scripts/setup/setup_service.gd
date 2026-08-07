@@ -835,7 +835,7 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 		var used := _run("docker", PackedStringArray(["exec", "jht", "node",
 				"/app/cli/bin/jht.js", "providers", "use", install_id]))
 		if used["code"] == 0:
-			return {"ok": true, "message": "Provider selezionato: "
+			return {"ok": true, "message": "Provider selected: "
 					+ str(PROVIDERS[provider]["name"])}
 		Log.warn("setup", "providers use nel container fallito (%d): %s"
 				% [used["code"], str(used["out"]).strip_edges().right(200)])
@@ -851,7 +851,7 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 	providers[config_id] = provider_config
 	config["providers"] = providers
 	if JhtFs.write_json("jht.config.json", config):
-		return {"ok": true, "message": "Provider selezionato: "
+		return {"ok": true, "message": "Provider selected: "
 				+ str(PROVIDERS[provider]["name"])}
 	if JhtFs.host_home_blocked():
 		return {"ok": false, "message": "la cartella dati appartiene al team e "
@@ -898,7 +898,7 @@ func _do_select_plan(provider: String, plan_id: String,
 	if out == "":
 		return {"ok": false, "message": "abbonamento non salvato — "
 				+ "il container deve essere acceso (passo 01)"}
-	return {"ok": true, "message": "Abbonamento registrato"}
+	return {"ok": true, "message": "Subscription saved"}
 
 
 ## Esegue plan_registry.py dentro il container (locale o VPS). Stringa vuota
@@ -961,7 +961,7 @@ func _do_start_container() -> Dictionary:
 					"{{.Server.Version}}"] ))
 			if daemon["code"] == 0:
 				break
-			_progress("container", "Avvio di Docker in corso… (%ds)" % waited)
+			_progress("container", "Starting Docker… (%ds)" % waited)
 		if daemon["code"] != 0:
 			Log.call_deferred("warn", "setup", "docker non risponde dopo 120s")
 			return {"ok": false, "message": "Docker non risponde dopo 2 minuti. " \
@@ -978,13 +978,13 @@ func _do_start_container() -> Dictionary:
 		var fallback := _run("docker", PackedStringArray(["start", "jht"] ))
 		if fallback["code"] == 0:
 			Log.call_deferred("info", "setup", "container jht avviato (senza compose)")
-			return {"ok": true, "message": "Container JHT attivo"}
+			return {"ok": true, "message": "JHT container is running"}
 		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
 	_ensure_host_dirs()
 	Log.call_deferred("info", "setup", "attivazione: pull + compose up da " + compose)
 	_set_phase("image")
 	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
-			"Controllo aggiornamenti del team…")
+			"Checking for team updates…")
 	if not bool(pull["ok"]):
 		Log.call_deferred("warn", "setup",
 				"pull immagine fallito, proseguo con la copia locale: "
@@ -1340,14 +1340,14 @@ static func _ensure_host_dirs() -> void:
 ## dell'azione: i delay non toccano il main thread.
 func _compose_up_with_progress(compose: String) -> Dictionary:
 	var run := _compose_stream(compose, PackedStringArray(["up", "-d", "jht"]),
-			"Scarico l'immagine del team (qualche GB, dipende dalla rete)…")
+			"Downloading the team image (a few GB, depending on your connection)…")
 	if not bool(run.get("spawned", false)):
 		return {"ok": false, "message": "Impossibile avviare docker compose"}
 	var state := _run("docker", PackedStringArray(["inspect", "jht",
 			"--format", "{{.State.Status}}"]))
 	if state["code"] == 0 and str(state["out"]).contains("running"):
 		Log.call_deferred("info", "setup", "attivazione completata: container attivo")
-		return {"ok": true, "message": "Container JHT attivo"}
+		return {"ok": true, "message": "JHT container is running"}
 	Log.call_deferred("warn", "setup", "compose fallito: " + str(run.get("tail", "")).right(400))
 	return {"ok": false, "message": "Attivazione del container fallita: " \
 			+ str(run.get("tail", "")).strip_edges().right(260)}
@@ -1567,11 +1567,11 @@ static func _pull_progress_text(layers: Dictionary, layer_bytes: Dictionary) -> 
 		if status.contains("complete") or status.contains("exists"):
 			done += 1
 	var info := _pull_progress_info(layers, layer_bytes)
-	var text := "Scarico l'immagine del team: %d/%d parti" % [done, layers.size()]
+	var text := "Downloading the team image: %d/%d layers" % [done, layers.size()]
 	if float(info["fraction"]) >= 0.0:
 		text += " · %.0f/%.0f MB" % [float(info["got_mb"]), float(info["total_mb"])]
 	elif float(info["got_mb"]) > 0.0:
-		text += " · %.0f MB scaricati" % float(info["got_mb"])
+		text += " · %.0f MB downloaded" % float(info["got_mb"])
 	return text + "…"
 
 
@@ -1622,7 +1622,7 @@ static func _launch_docker_runtime() -> Dictionary:
 				return {"ok": false, "message": "Docker Desktop non è installato. " \
 						+ "Usa INSTALLA / RIPARA RUNTIME qui sotto."}
 			OS.create_process(DOCKER_DESKTOP_WIN, PackedStringArray())
-			return {"ok": true, "message": "Docker Desktop avviato: attendo il motore…"}
+			return {"ok": true, "message": "Docker Desktop started: waiting for the engine…"}
 		"macOS":
 			# Stesso criterio del probe: su POSIX un comando assente esce 127,
 			# mai -1 — col vecchio confronto questo ramo partiva anche senza
@@ -1631,10 +1631,10 @@ static func _launch_docker_runtime() -> Dictionary:
 			if _exec_present("colima",
 					int(_run("colima", PackedStringArray(["version"]))["code"])):
 				OS.create_process("colima", PackedStringArray(["start"]))
-				return {"ok": true, "message": "Colima avviato: attendo il motore…"}
+				return {"ok": true, "message": "Colima started: waiting for the engine…"}
 			if DirAccess.dir_exists_absolute("/Applications/Docker.app"):
 				OS.create_process("open", PackedStringArray(["-a", "Docker"]))
-				return {"ok": true, "message": "Docker Desktop avviato: attendo il motore…"}
+				return {"ok": true, "message": "Docker Desktop started: waiting for the engine…"}
 			return {"ok": false, "message": "Nessun runtime Docker trovato. " \
 					+ "Usa INSTALLA / RIPARA RUNTIME qui sotto."}
 		_:
@@ -1671,7 +1671,7 @@ func open_provider_login(provider: String) -> void:
 	terminal_requested.emit("provider:" + provider,
 			provider_login_spec(provider, _vps_config()))
 	action_changed.emit("login", false,
-			"Console di login aperta dentro Job Hunter Team", true)
+			"Login console opened in Job Hunter Team", true)
 
 
 func logout_provider(provider: String) -> void:
@@ -3103,7 +3103,7 @@ static func _provider_login_command(provider: String, vps: Dictionary = {}) -> S
 		if OS.get_name() == "Windows":
 			# cmd.exe non ha printf: niente banner, dritto al comando.
 			return _local_container_exec(tool)
-		return "printf '\\nJHT — login con abbonamento (console interna)\\n\\n'; " \
+		return "printf '\\nJHT — subscription login (embedded console)\\n\\n'; " \
 				+ _local_container_exec(tool)
 	var inner := "docker exec -it jht " + tool
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
@@ -3119,13 +3119,13 @@ static func _provider_login_command(provider: String, vps: Dictionary = {}) -> S
 static func _provider_terminal_hint(provider: String) -> String:
 	match provider:
 		"codex":
-			return "Apri il link mostrato, accedi a ChatGPT e inserisci il codice dispositivo."
+			return "Open the displayed link, sign in to ChatGPT, and enter the device code."
 		"kimi":
-			return "Nel prompt Kimi digita /login, scegli Kimi Code e completa il login nel browser."
+			return "At the Kimi prompt, type /login, choose Kimi Code, and complete login in your browser."
 		_:
-			return "Nel menu Claude scegli Login with subscription. Se il browser non si apre: " \
-					+ "COPIA LINK qui sotto e incollalo nel browser. Poi copia il codice dal browser, " \
-					+ "premi INCOLLA e Invio; se non risponde, premi INVIO una seconda volta."
+			return "In the Claude menu, choose Login with subscription. If the browser does not open, " \
+					+ "select COPY LINK below and paste it into your browser. Then copy the code from the browser, " \
+					+ "select PASTE and press Enter; if it does not respond, press Enter again."
 
 
 static func _shell_quote(value: String) -> String:
@@ -3178,7 +3178,7 @@ func _do_start_team(vps: Dictionary) -> Dictionary:
 			if not vps.is_empty() else _run("docker", PackedStringArray([
 					"exec", "jht", "node", "/app/cli/bin/jht.js", "team", "start"] ))
 	return {"ok": res["code"] == 0,
-			"message": "Team avviato: gli agenti arriveranno in ufficio" \
+			"message": "Team started: agents will arrive in the office" \
 			if res["code"] == 0 else "Avvio team fallito: " + str(res["out"]).right(240)}
 
 
@@ -3214,7 +3214,7 @@ static func _run_cli(vps: Dictionary, args: PackedStringArray) -> Dictionary:
 
 
 func _start_action(action: String, callable: Callable,
-		start_message := "operazione in corso…") -> void:
+		start_message := "Operation in progress…") -> void:
 	_action_running = true
 	current_action = action
 	action_phase = ""
