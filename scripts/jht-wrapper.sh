@@ -30,6 +30,7 @@ set -euo pipefail
 # trattare quei flag come un apply: il client deve allora avviare una copia
 # temporanea del wrapper production, con JHT_WRAPPER_PATH ancorato all'host.
 JHT_UPGRADE_PROTOCOL=1
+JHT_HOST_RUNTIME_PROTOCOL=1
 
 CONTAINER="${JHT_CONTAINER_NAME:-jht}"
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
@@ -243,6 +244,9 @@ runtime_bundle_trusted() {
   [ "$(runtime_manifest_value docker-compose.yml)" = "$(runtime_sha256 "$COMPOSE_FILE")" ] || return 1
   [ "$(runtime_manifest_value host-setup.sh)" = "$(runtime_sha256 "$HOST_SETUP_SCRIPT")" ] || return 1
   [ "$(runtime_manifest_value jht-wrapper.sh)" = "$(runtime_sha256 "$WRAPPER_PATH")" ] || return 1
+  grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH" || return 1
+  grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$HOST_SETUP_SCRIPT" || return 1
+  grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$COMPOSE_FILE" || return 1
 }
 
 runtime_bootstrap_release() {
@@ -254,7 +258,7 @@ runtime_bootstrap_release() {
   umask 077
   mkdir -p "$RUNTIME_DIR" || return 1
   chmod 700 "$RUNTIME_DIR" || return 1
-  runtime_path_allowed || return 1
+  runtime_path_allowed || { rmdir "$RUNTIME_DIR" 2>/dev/null || true; return 1; }
   stage="$(mktemp -d "$RUNTIME_DIR/.bootstrap.XXXXXX")" || return 1
   release_base="$(attested_raw_base)" || {
     rmdir "$stage" 2>/dev/null || true
@@ -263,7 +267,9 @@ runtime_bootstrap_release() {
   }
   if ! curl -fsSL "${release_base%/}/docker-compose.yml" -o "$stage/docker-compose.yml" \
       || ! curl -fsSL "${release_base%/}/scripts/host-setup.sh" -o "$stage/host-setup.sh" \
-      || ! bash -n "$stage/host-setup.sh"; then
+      || ! bash -n "$stage/host-setup.sh" \
+      || ! grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$stage/host-setup.sh" \
+      || ! grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$stage/docker-compose.yml"; then
     rm -f "$stage/docker-compose.yml" "$stage/host-setup.sh"
     rmdir "$stage" 2>/dev/null || true
     rmdir "$RUNTIME_DIR" 2>/dev/null || true
@@ -1196,6 +1202,8 @@ handle_runtime_upgrade() {
   if ! upgrade_run curl -fsSL "${release_base%/}/docker-compose.yml" -o "$candidate_compose" \
       || ! upgrade_run curl -fsSL "${release_base%/}/scripts/jht-wrapper.sh" -o "$candidate_wrapper" \
       || ! bash -n "$candidate_wrapper" \
+      || ! grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$candidate_wrapper" \
+      || ! grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$candidate_compose" \
       || ! upgrade_run upgrade_compose "$candidate_compose" config -q; then
     upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "Runtime remoto non valido o non raggiungibile" false
     return 1

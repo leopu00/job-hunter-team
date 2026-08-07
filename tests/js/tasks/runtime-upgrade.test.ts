@@ -97,7 +97,7 @@ function makeSandbox({
   writeFileSync(state, "sha256:old", "utf8");
   writeFileSync(
     path.join(runtime, "docker-compose.yml"),
-    "services:\n  jht:\n    image: example/old\n",
+    "services:\n  jht:\n    image: example/old\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\nvolumes:\n  jht-runtime-mask:\n",
     "utf8",
   );
   copyFileSync(WRAPPER, installed);
@@ -119,7 +119,7 @@ function makeSandbox({
   );
   writeFileSync(
     path.join(release, "docker-compose.yml"),
-    "services:\n  jht:\n    image: example/new\n",
+    "services:\n  jht:\n    image: example/new\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\nvolumes:\n  jht-runtime-mask:\n",
     "utf8",
   );
   // Basta essere uno script sintatticamente valido: il wrapper in esecuzione
@@ -127,7 +127,7 @@ function makeSandbox({
   // sano, quindi la forma del file e' parte del preflight.
   writeFileSync(
     path.join(release, "jht-wrapper.sh"),
-    "#!/usr/bin/env bash\nexit 0\n",
+    "#!/usr/bin/env bash\nJHT_HOST_RUNTIME_PROTOCOL=1\nexit 0\n",
     "utf8",
   );
 
@@ -320,6 +320,39 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     expect(sb.compose()).toContain("example/old");
     expect(sb.journal()).toBe(false);
   });
+
+  it.each(["wrapper-protocol", "compose-mask"])(
+    "rifiuta una release che regredisce il confine host: %s",
+    (missing) => {
+      const sb = makeSandbox();
+      if (missing === "wrapper-protocol") {
+        writeFileSync(
+          path.join(sb.root, "release", "jht-wrapper.sh"),
+          "#!/usr/bin/env bash\nexit 0\n",
+          "utf8",
+        );
+      } else {
+        writeFileSync(
+          path.join(sb.root, "release", "docker-compose.yml"),
+          "services:\n  jht:\n    image: example/new\n",
+          "utf8",
+        );
+      }
+
+      const result = run(sb, {}, ["upgrade", "--check", "--json"]);
+
+      expect(result.code).toBe(1);
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        ok: false,
+        phase: "preflight",
+      });
+      expect(sb.state()).toBe("sha256:old");
+      expect(readFileSync(sb.wrapper, "utf8")).toContain(
+        "JHT_HOST_RUNTIME_PROTOCOL=1",
+      );
+      expect(sb.journal()).toBe(false);
+    },
+  );
 
   it("al run seguente sana un journal lasciato da un processo ucciso prima di un nuovo check", () => {
     const sb = makeSandbox();

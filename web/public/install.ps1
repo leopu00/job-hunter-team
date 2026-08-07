@@ -189,11 +189,16 @@ function Get-RuntimeFiles {
 
   $runtimeFull = [IO.Path]::GetFullPath($RuntimeDir).TrimEnd('\', '/')
   $legacyFull = [IO.Path]::GetFullPath($JhtHome).TrimEnd('\', '/')
-  if ($runtimeFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+  $userDataHost = if ($env:JHT_USER_DIR_HOST) { $env:JHT_USER_DIR_HOST } else { Join-Path $env:USERPROFILE 'Documents\Job Hunter Team' }
+  $userDataFull = [IO.Path]::GetFullPath($userDataHost).TrimEnd('\', '/')
+  if ($runtimeFull.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $runtimeFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
     Write-Fail "Host runtime must be outside the container-writable .jht tree: $RuntimeDir"
   }
+  if ($runtimeFull.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $runtimeFull.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Fail "Host runtime must be outside the container-writable user data tree: $RuntimeDir"
+  }
   $binFull = [IO.Path]::GetFullPath($BinDir).TrimEnd('\', '/')
-  if ($binFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+  if ($binFull.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $binFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
     Write-Fail "Host wrapper must be outside the container-writable .jht tree: $BinDir"
   }
 
@@ -216,11 +221,22 @@ function Get-RuntimeFiles {
   Write-Info "Downloading docker-compose.yml..."
   $composeTemp = Join-Path $RuntimeDir ('.compose-' + [guid]::NewGuid().ToString('N'))
   Get-File -Url $composeUrl -Dest $composeTemp
+  if (-not $DryRun -and -not (Select-String -LiteralPath $composeTemp -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) {
+    Write-Fail 'Downloaded compose does not enforce the protected runtime boundary.'
+  }
   if (-not $DryRun) { Move-Item -LiteralPath $composeTemp -Destination $composeDest -Force }
   Write-Ok "compose: $composeDest"
 
   Write-Info "Downloading jht-wrapper.ps1..."
-  Get-File -Url $wrapperUrl -Dest $wrapperDest
+  $wrapperTemp = Join-Path $BinDir ('.jht-' + [guid]::NewGuid().ToString('N') + '.ps1')
+  Get-File -Url $wrapperUrl -Dest $wrapperTemp
+  if (-not $DryRun) {
+    [scriptblock]::Create((Get-Content -LiteralPath $wrapperTemp -Raw)) | Out-Null
+    if (-not (Select-String -LiteralPath $wrapperTemp -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) {
+      Write-Fail 'Downloaded wrapper does not implement the protected runtime protocol.'
+    }
+    Move-Item -LiteralPath $wrapperTemp -Destination $wrapperDest -Force
+  }
   Write-Ok "wrapper: $wrapperDest"
 
   # CMD shim for people using cmd.exe instead of pwsh. It allows `jht <args>`

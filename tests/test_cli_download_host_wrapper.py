@@ -58,9 +58,13 @@ def run_wrapper(tmp_path: Path, *args: str, extra_env=None):
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     runtime = runtime.resolve()
-    (runtime / "docker-compose.yml").write_text("services: {}\n")
+    (runtime / "docker-compose.yml").write_text(
+        "services:\n  jht:\n    image: example.invalid/jht\n"
+        "    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n"
+        "volumes:\n  jht-runtime-mask:\n"
+    )
     host_setup = runtime / "host-setup.sh"
-    host_setup.write_text("#!/usr/bin/env bash\nexit 0\n")
+    host_setup.write_text("#!/usr/bin/env bash\nJHT_HOST_SETUP_PROTOCOL=1\nexit 0\n")
     host_setup.chmod(0o700)
     compose_sha = hashlib.sha256((runtime / "docker-compose.yml").read_bytes()).hexdigest()
     setup_sha = hashlib.sha256(host_setup.read_bytes()).hexdigest()
