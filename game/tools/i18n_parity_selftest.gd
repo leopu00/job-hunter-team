@@ -178,7 +178,11 @@ func _check_runtime_english_presentation() -> void:
 	var snapshot := UIStrings.vps_presentation_snapshot()
 	for key in ["vps.upload.file_missing", "vps.upload.file_too_large",
 			"vps.response_unreadable", "vps.artifact.path_outside",
-			"vps.ticket.position_missing", "vps.ssh.failed"]:
+			"vps.ticket.position_missing", "vps.ssh.failed",
+			"vps.terminal.invalid_session", "vps.terminal.history_heading",
+			"vps.coordinator.unreadable", "vps.burn.unreadable",
+			"vps.chat.agent_busy", "vps.activity.working",
+			"vps.activity.session_unobserved", "vps.activity.throttled"]:
 		_check("snapshot VPS inglese: " + key,
 				snapshot.has(key) and str(snapshot[key]) != key, str(snapshot))
 	var vps_source := FileAccess.get_file_as_string("res://scripts/backend/vps_backend.gd")
@@ -213,6 +217,26 @@ func _check_runtime_english_presentation() -> void:
 			not bus_source.contains('"backend non collegato"')
 			and bus_source.contains('UIStrings.t("common.backend_not_connected")'),
 			"i segnali visibili non devono propagare il literal italiano")
+	var local_source := FileAccess.get_file_as_string("res://scripts/backend/local_backend.gd")
+	_check("snapshot runtime risolto sul main thread",
+			vps_source.contains("_runtime_labels = UIStrings.vps_presentation_snapshot()")
+			and local_source.contains("_runtime_labels = UIStrings.vps_presentation_snapshot()"),
+			"entrambi i backend devono catturare le etichette prima del thread")
+	for seam in ['_terminal_result(agent, "", "nome sessione tmux non valido")',
+			'content = "… output precedente omesso',
+			'else "stato coordinatore non leggibile"',
+			'false, "direttiva non valida")', 'false, "id non valido")',
+			'else "stato della deroga non leggibile"',
+			'_chat_sent(agent, false, "file temporaneo non scrivibile")',
+			'var reason := "l\'agente è occupato',
+			'{"ok": false, "error": "ruolo non valido"}',
+			'detail = "pacing: pausa temporizzata"']:
+		_check("sink VPS senza literal italiano: " + seam.left(36),
+				not vps_source.contains(seam), seam)
+	_check("activity detail localizzato al confine UI",
+			vps_source.contains("var detail := _activity_detail(")
+			and vps_source.contains('detail = _activity_detail("pacing: pausa temporizzata"'),
+			"lo stato interno deve restare stabile ma la presentazione va tradotta")
 	UIStrings.lang = previous
 
 
