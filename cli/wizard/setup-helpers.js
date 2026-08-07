@@ -76,26 +76,26 @@ export function validateConfigBeforeWrite(config) {
   const validProviders = ['claude', 'anthropic', 'openai', 'codex', 'kimi'];
 
   if (typeof config.version !== 'number' || config.version < 1) {
-    errors.push('version deve essere un numero positivo');
+    errors.push('version must be a positive number');
   }
   if (!validProviders.includes(config.active_provider)) {
-    errors.push(`active_provider deve essere uno di: ${validProviders.join(', ')}`);
+    errors.push(`active_provider must be one of: ${validProviders.join(', ')}`);
   }
   if (!config.providers || typeof config.providers !== 'object') {
-    errors.push('providers e\' obbligatorio');
+    errors.push('providers is required');
   }
   if (config.active_provider && !config.providers?.[config.active_provider]) {
-    errors.push('Il provider attivo deve avere una configurazione in providers');
+    errors.push('The active provider must have an entry in providers');
   }
   // Valida ogni provider configurato
   for (const key of validProviders) {
     const prov = config.providers?.[key];
     if (!prov) continue;
     if (!validProviders.includes(prov.name)) {
-      errors.push(`providers.${key}.name non valido`);
+      errors.push(`providers.${key}.name is invalid`);
     }
     if (prov.auth_method === 'api_key' && !prov.api_key) {
-      errors.push(`providers.${key}: api_key obbligatoria quando auth_method = 'api_key'`);
+      errors.push(`providers.${key}: api_key is required when auth_method = 'api_key'`);
     }
     // Per auth_method = 'subscription' non imponiamo piu' un blocco
     // 'subscription' nel config: l'autenticazione vera e' OAuth device-flow
@@ -115,7 +115,7 @@ export function validateConfigBeforeWrite(config) {
 export function writeConfigFile(config) {
   const validation = validateConfigBeforeWrite(config);
   if (!validation.success) {
-    throw new Error(`Config non valida:\n${validation.errors.join('\n')}`);
+    throw new Error(`Invalid configuration:\n${validation.errors.join('\n')}`);
   }
   fs.mkdirSync(JHT_CONFIG_DIR, { recursive: true });
   fs.writeFileSync(JHT_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
@@ -125,41 +125,41 @@ export function writeConfigFile(config) {
 
 export function validateApiKey(provider, value) {
   if (!value || value.trim().length === 0) {
-    return 'La API key non puo\' essere vuota';
+    return 'The API key cannot be empty';
   }
   const trimmed = value.trim();
   if (trimmed.length < 10) {
-    return 'La API key sembra troppo corta';
+    return 'The API key appears too short';
   }
   if (provider.keyPrefix && !trimmed.startsWith(provider.keyPrefix)) {
-    return `La key per ${provider.label} dovrebbe iniziare con "${provider.keyPrefix}"`;
+    return `The key for ${provider.label} should start with "${provider.keyPrefix}"`;
   }
   return undefined;
 }
 
 export function validateEmail(value) {
   if (!value || value.trim().length === 0) {
-    return 'L\'email non puo\' essere vuota';
+    return 'Email cannot be empty';
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
-    return 'Email non valida';
+    return 'Invalid email';
   }
   return undefined;
 }
 
 export function validateTelegramToken(value) {
   if (!value || value.trim().length === 0) {
-    return 'Il token non puo\' essere vuoto';
+    return 'The token cannot be empty';
   }
   if (!/^\d+:[A-Za-z0-9_-]+$/.test(value.trim())) {
-    return 'Formato token non valido (atteso: 123456:ABC...)';
+    return 'Invalid token format (expected: 123456:ABC...)';
   }
   return undefined;
 }
 
 export function validateChatId(value) {
   if (value && value.trim().length > 0 && !/^-?\d+$/.test(value.trim())) {
-    return 'Il chat ID deve essere un numero';
+    return 'The chat ID must be a number';
   }
   return undefined;
 }
@@ -174,17 +174,17 @@ export function summarizeExistingConfig(config) {
   }
   const activeProviderConfig = config.providers?.[config.active_provider];
   if (activeProviderConfig?.model) {
-    lines.push(`Modello: ${activeProviderConfig.model}`);
+    lines.push(`Model: ${activeProviderConfig.model}`);
   }
   if (activeProviderConfig?.auth_method) {
     lines.push(`Auth: ${activeProviderConfig.auth_method}`);
   }
   const bots = config.channels?.telegram?.bots;
   if (bots?.assistente?.bot_token && bots?.capitano?.bot_token && bots?.mentor?.bot_token) {
-    lines.push('Telegram: 3 bot configurati (assistente, capitano, mentor)');
+    lines.push('Telegram: 3 bots configured (assistente, capitano, mentor)');
   } else if (bots) {
     const present = ['assistente', 'capitano', 'mentor'].filter((r) => bots?.[r]?.bot_token);
-    lines.push(`Telegram: incompleto (${present.length}/3 bot)`);
+    lines.push(`Telegram: incomplete (${present.length}/3 bots)`);
   }
-  return lines.join('\n') || 'Config vuota';
+  return lines.join('\n') || 'Empty configuration';
 }

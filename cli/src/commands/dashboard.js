@@ -15,15 +15,15 @@ import { DIM, YELLOW, BOLD, RESET } from './_colors.js';
 
 function handleDashboard() {
   console.log(`\n  ${BOLD}JHT — Dashboard${RESET}\n`);
-  console.log(`  ${YELLOW}La dashboard web locale e' stata ritirata.${RESET}`);
-  console.log(`  ${DIM}Interazione local/VPS → app desktop Job Hunter Team (il gioco).${RESET}`);
-  console.log(`  ${DIM}Vista da browser/telefono → https://jobhunterteam.ai (richiede login).${RESET}\n`);
+  console.log(`  ${YELLOW}The local web dashboard has been withdrawn.${RESET}`);
+  console.log(`  ${DIM}Interaction local/VPS → desktop app Job Hunter Team (the game).${RESET}`);
+  console.log(`  ${DIM}View from browser/phone → https://jobhunterteam.ai (requires login).${RESET}\n`);
 }
 
 export function registerDashboardCommand(program) {
   program
     .command('dashboard')
     .alias('web')
-    .description('[deprecato] La dashboard locale ora vive nella app desktop')
+    .description('[deprecated] The local dashboard now lives in the desktop app')
     .action(handleDashboard);
 }

@@ -75,21 +75,21 @@ export function waitForCallback(expectedState) {
       const error = url.searchParams.get('error');
 
       if (error) {
-        res.writeHead(400).end(pageHtml('Errore', `Autenticazione fallita: ${error}`));
+        res.writeHead(400).end(pageHtml('Error', `Authentication failed: ${error}`));
         server.close();
         reject(new Error(`OAuth error: ${error}`));
         return;
       }
 
       if (!code || state !== expectedState) {
-        res.writeHead(400).end(pageHtml('Errore', 'Parametri callback non validi.'));
+        res.writeHead(400).end(pageHtml('Error', 'The callback parameters are invalid.'));
         server.close();
-        reject(new Error('Invalid callback: code mancante o state non corrispondente'));
+        reject(new Error('Invalid callback: missing code or state mismatch'));
         return;
       }
 
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-        .end(pageHtml('Login completato', 'Puoi chiudere questa finestra e tornare al terminale.'));
+        .end(pageHtml('Login complete', 'You can close this window and return to the terminal.'));
       server.close();
       resolve({ code, state });
     });
@@ -98,7 +98,7 @@ export function waitForCallback(expectedState) {
 
     const timeout = setTimeout(() => {
       server.close();
-      reject(new Error('Timeout: nessun callback ricevuto entro 2 minuti'));
+      reject(new Error('Timeout: no callback received within 2 minutes'));
     }, CALLBACK_TIMEOUT_MS);
 
     server.on('close', () => clearTimeout(timeout));
@@ -126,11 +126,11 @@ export async function startSubscriptionLogin({ authorizeUrl, clientId, scopes, p
   if (remote && prompter) {
     // Fallback manuale: mostra URL, chiedi il codice
     await prompter.note(
-      `Apri questo URL nel tuo browser:\n\n${url}\n\nDopo il login, incolla l'URL di redirect qui sotto.`,
-      'Login manuale',
+      `Open this URL in your browser:\n\n${url}\n\nAfter signing in, paste the redirect URL below.`,
+      'Manual login',
     );
     const redirectUrl = await prompter.text({
-      message: 'URL di redirect (incolla dalla barra del browser)',
+      message: 'Redirect URL (paste it from the browser address bar)',
       placeholder: 'http://127.0.0.1:3737/callback?code=...&state=...',
     });
     return parseRedirectUrl(redirectUrl, state, verifier);
@@ -140,8 +140,8 @@ export async function startSubscriptionLogin({ authorizeUrl, clientId, scopes, p
   const { ok } = openInBrowser(url);
   if (!ok && prompter) {
     await prompter.note(
-      `Non riesco ad aprire il browser. Apri manualmente:\n\n${url}`,
-      'Browser non disponibile',
+      `The browser could not be opened. Open this URL manually:\n\n${url}`,
+      'Browser unavailable',
     );
   }
 
@@ -150,7 +150,7 @@ export async function startSubscriptionLogin({ authorizeUrl, clientId, scopes, p
     return { code, verifier, state };
   } catch (err) {
     if (prompter) {
-      await prompter.note(`Callback fallito: ${err.message}`, 'Errore');
+      await prompter.note(`Callback failed: ${err.message}`, 'Error');
     }
     return null;
   }

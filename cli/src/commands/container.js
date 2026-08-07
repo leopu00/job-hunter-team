@@ -66,9 +66,9 @@ async function ensureDockerDaemon() {
 
   if (process.platform !== 'win32') {
     const hint = process.platform === 'darwin'
-      ? "Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
-      : "Avvialo (es. 'systemctl start docker').";
-    console.error(c.red(`Docker daemon non raggiungibile. ${hint}`));
+      ? "Start it with 'colima start' or 'open -a Docker' (Docker Desktop)."
+      : "Start it (for example, 'systemctl start docker').";
+    console.error(c.red(`Docker daemon cannot be reached. ${hint}`));
     return false;
   }
 
@@ -78,34 +78,34 @@ async function ensureDockerDaemon() {
   ].filter(Boolean);
   const exe = candidates.find(p => { try { return existsSync(p); } catch { return false; } });
   if (!exe) {
-    console.error(c.red('Docker Desktop.exe non trovato nei path standard. Avvialo a mano.'));
+    console.error(c.red('Docker Desktop.exe was not found in the standard locations. Start it manually.'));
     return false;
   }
 
-  console.log(c.dim('  Docker daemon giu\', avvio Docker Desktop...'));
+  console.log(c.dim('  Docker daemon is down; starting Docker Desktop...'));
   try {
     spawn(exe, [], { detached: true, stdio: 'ignore', shell: false }).unref();
   } catch (err) {
-    console.error(c.red(`  Impossibile lanciare Docker Desktop: ${err.message}`));
+    console.error(c.red(`  Can't launch Docker Desktop: ${err.message}`));
     return false;
   }
 
   const timeoutMs = 90_000;
   const pollMs = 2000;
   const start = Date.now();
-  process.stdout.write(c.dim('  Attendo daemon'));
+  process.stdout.write(c.dim('  Waiting for the daemon'));
   while (Date.now() - start < timeoutMs) {
     await new Promise(r => setTimeout(r, pollMs));
     process.stdout.write(c.dim('.'));
     if (dockerDaemonReady()) {
       process.stdout.write('\n');
       const elapsed = Math.round((Date.now() - start) / 1000);
-      console.log(c.green(`  ✓ Docker Desktop pronto (${elapsed}s)`));
+      console.log(c.green(`  ✓ Docker Desktop ready (${elapsed}s)`));
       return true;
     }
   }
   process.stdout.write('\n');
-  console.error(c.red(`  ✗ Docker Desktop non pronto dopo ${timeoutMs / 1000}s. Riprova a mano.`));
+  console.error(c.red(`  Docker Desktop was not ready after ${timeoutMs / 1000}s. Try again manually.`));
   return false;
 }
 
@@ -124,13 +124,13 @@ async function upAction() {
   }
 
   if (containerRunning()) {
-    console.log(c.yellow(`Container '${CONTAINER_NAME}' gia' attivo.`));
+    console.log(c.yellow(`Container '${CONTAINER_NAME}' is already active.`));
     return;
   }
-  console.log(c.bold('Avvio container jht...'));
+  console.log(c.bold('Starting the jht container...'));
   // Passo 1: create (senza avviare) per avere il volume anonimo .next
   if (!dockerCompose(['up', '--no-start', 'jht'])) {
-    console.error(c.red('docker compose up --no-start fallito'));
+    console.error(c.red('docker compose up failed --no-start'));
     process.exitCode = 1;
     return;
   }
@@ -139,34 +139,34 @@ async function upAction() {
   fixNextOwnership();
   // Passo 3: start
   if (!dockerCompose(['start', 'jht'])) {
-    console.error(c.red('docker compose start fallito'));
+    console.error(c.red('docker compose start failed'));
     process.exitCode = 1;
     return;
   }
-  console.log(c.green(`✓ Container ${CONTAINER_NAME} avviato`));
-  console.log(c.dim('  Interazione: app desktop JHT  ·  logs: jht container logs -f'));
+  console.log(c.green(`✓ Container ${CONTAINER_NAME} started`));
+  console.log(c.dim('  Interaction: JHT desktop app · logs: jht container logs -f'));
 }
 
 // ── down ───────────────────────────────────────────────────────────
 function downAction() {
   if (!containerRunning()) {
-    console.log(c.yellow(`Container '${CONTAINER_NAME}' non attivo.`));
+    console.log(c.yellow(`Container '${CONTAINER_NAME}' is not active.`));
     return;
   }
-  console.log(c.bold('Fermo container jht...'));
+  console.log(c.bold('Stopping the jht container...'));
   // compose stop preserva il container (ripartenza veloce con `up`)
   if (!dockerCompose(['stop', 'jht'])) {
-    console.error(c.red('docker compose stop fallito'));
+    console.error(c.red('docker compose stop failed'));
     process.exitCode = 1;
     return;
   }
-  console.log(c.green(`✓ Container ${CONTAINER_NAME} fermato (non rimosso)`));
-  console.log(c.dim('  Per rimuoverlo: docker rm jht'));
+  console.log(c.green(`✓ Container ${CONTAINER_NAME} stopped (not removed)`));
+  console.log(c.dim('  To remove it: docker rm jht'));
 }
 
 // ── recreate ───────────────────────────────────────────────────────
 async function recreateAction() {
-  console.log(c.bold('Ricreo container jht (down + up)...'));
+  console.log(c.bold('Recreating the jht container (down + up)...'));
   if (containerRunning()) {
     spawnSync('docker', ['rm', '-f', CONTAINER_NAME], {
       stdio: 'ignore',
@@ -183,8 +183,8 @@ function statusAction() {
   ], { encoding: 'utf8', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
 
   if (inspect.status !== 0) {
-    console.log(c.yellow(`Container '${CONTAINER_NAME}' non esiste.`));
-    console.log(c.dim('  Crealo con: jht container up'));
+    console.log(c.yellow(`Container '${CONTAINER_NAME}' does not exist.`));
+    console.log(c.dim('  Create it with: jht container up'));
     return;
   }
   const [state, image, startedAt, mounts] = inspect.stdout.trim().split('|');
@@ -197,10 +197,10 @@ function statusAction() {
 
   console.log('');
   console.log(`  ${c.bold('Container:')} ${CONTAINER_NAME}`);
-  console.log(`  Stato:     ${running ? c.green(state) : c.red(state)}`);
-  console.log(`  Immagine:  ${c.dim(image)}`);
+  console.log(`  State:     ${running ? c.green(state) : c.red(state)}`);
+  console.log(`  Image:     ${c.dim(image)}`);
   if (running) console.log(`  Uptime:    ${c.dim(uptime)}`);
-  console.log(`  Mount:`);
+  console.log('  Mounts:');
   for (const m of mounts.split(',')) {
     console.log('    ' + c.dim(m));
   }
@@ -210,7 +210,7 @@ function statusAction() {
 // ── logs ───────────────────────────────────────────────────────────
 function logsAction(options = {}) {
   if (!containerRunning()) {
-    console.log(c.yellow(`Container '${CONTAINER_NAME}' non attivo.`));
+    console.log(c.yellow(`Container '${CONTAINER_NAME}' is not active.`));
     return;
   }
   const args = ['logs'];
@@ -232,17 +232,17 @@ function logsAction(options = {}) {
 }
 
 export function registerContainerCommand(program) {
-  const cmd = new Command('container').description('Gestione container Docker jht');
+  const cmd = new Command('container').description('Manage the jht Docker container');
 
-  cmd.command('up').description('Avvia il container (via docker compose)').action(upAction);
-  cmd.command('down').description('Ferma il container (preserva)').action(downAction);
-  cmd.command('recreate').description('Rimuove e ricrea il container (perde tmux)').action(recreateAction);
-  cmd.command('status').description('Stato container + mount').action(statusAction);
+  cmd.command('up').description('Start the container (via docker compose)').action(upAction);
+  cmd.command('down').description('Stop the container (preserve)').action(downAction);
+  cmd.command('recreate').description('Remove and recreate the container (tmux sessions are lost)').action(recreateAction);
+  cmd.command('status').description('Container status + mount').action(statusAction);
   cmd
     .command('logs')
-    .description('Logs del container')
-    .option('-f, --follow', 'segui in tempo reale', false)
-    .option('-n, --tail <num>', 'ultime N righe', '50')
+    .description('Container logs')
+    .option('-f, --follow', 'follow in real time', false)
+    .option('-n, --tail <num>', 'last N rows', '50')
     .action(logsAction);
 
   program.addCommand(cmd);

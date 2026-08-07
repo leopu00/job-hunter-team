@@ -96,7 +96,7 @@ async function startActionContainer(agentArg, options = {}) {
   const bootstrap = useBootstrap ? buildContainerBootstrap() : null;
 
   console.log('');
-  console.log(c.bold('Avvio agenti nel container jht...'));
+  console.log(c.bold('Starting agents in the jht container...'));
   console.log(c.dim(`  Mode: ${mode}${useBootstrap ? '  | Bootstrap: ASSISTENTE + TG-BRIDGE + SENTINELLA + BRIDGE + TOKEN-METER + CAPITANO' : ''}`));
   console.log('');
 
@@ -114,11 +114,11 @@ async function startActionContainer(agentArg, options = {}) {
     const coreSessions = ['ASSISTENTE', 'SENTINELLA', 'MENTOR', 'CAPITANO'];
     if (coreSessions.every((session) => isSessionActive(session))) {
       for (const session of coreSessions) {
-        console.log(`  ${c.yellow('⏭')} ${session} — gia attivo`);
+        console.log(`  ${c.yellow('⏭')} ${session} — already active`);
       }
       console.log('');
-      console.log(`Risultato: ${c.green('0 avviati')}, ${c.yellow('4 gia attivi')}`);
-      console.log(c.dim('  Team gia operativo: nessun bridge o sync riavviato.'));
+      console.log(`Result: ${c.green('0 started')}, ${c.yellow('4 already active')}`);
+      console.log(c.dim('  Team already running: no bridge or sync process restarted.'));
       console.log('');
       return;
     }
@@ -135,7 +135,7 @@ async function startActionContainer(agentArg, options = {}) {
     );
     if (pullRes.code !== 0 && pullRes.stderr && !/non abilitato/i.test(pullRes.stderr)) {
       const lastLine = pullRes.stderr.trim().split('\n').slice(-1)[0];
-      console.log(c.dim(`  ℹ pull desired-state non applicato: ${lastLine}`));
+      console.log(c.dim(`  ℹ desired-state pull not applied: ${lastLine}`));
     }
 
     // Sync ticket cloud↔VPS PRIMA dello spawn: importa i ticket 'open' creati
@@ -147,7 +147,7 @@ async function startActionContainer(agentArg, options = {}) {
     );
     if (ticketRes.code !== 0 && ticketRes.stderr && !/non abilitato/i.test(ticketRes.stderr)) {
       const lastLine = ticketRes.stderr.trim().split('\n').slice(-1)[0];
-      console.log(c.dim(`  ℹ ticket-sync non applicato: ${lastLine}`));
+      console.log(c.dim(`  ℹ ticket sync not applied: ${lastLine}`));
     }
 
     // Sync bacheca (team_directives) cloud↔VPS PRIMA dello spawn: importa gli
@@ -159,7 +159,7 @@ async function startActionContainer(agentArg, options = {}) {
     );
     if (dirRes.code !== 0 && dirRes.stderr && !/non abilitato/i.test(dirRes.stderr)) {
       const lastLine = dirRes.stderr.trim().split('\n').slice(-1)[0];
-      console.log(c.dim(`  ℹ directive-sync non applicato: ${lastLine}`));
+      console.log(c.dim(`  ℹ directive sync not applied: ${lastLine}`));
     }
 
     // Pull profilo cloud → candidate_profile.yml se il file locale manca
@@ -171,7 +171,7 @@ async function startActionContainer(agentArg, options = {}) {
     );
     if (profileRes.code !== 0 && profileRes.stderr && !/non abilitato/i.test(profileRes.stderr)) {
       const lastLine = profileRes.stderr.trim().split('\n').slice(-1)[0];
-      console.log(c.dim(`  ℹ pull profilo non applicato: ${lastLine}`));
+      console.log(c.dim(`  ℹ profile pull not applied: ${lastLine}`));
     }
 
     // Il delay di ogni voce serve a far stabilizzare la voce precedente. In
@@ -180,7 +180,7 @@ async function startActionContainer(agentArg, options = {}) {
     let previousStarted = false;
     for (const item of bootstrap) {
       if (previousStarted && item.preDelayMs && item.preDelayMs > 0) {
-        console.log(c.dim(`  ⏳ Attendo ${Math.round(item.preDelayMs / 1000)}s prima di ${item.session}...`));
+        console.log(c.dim(`  ⏳ Waiting ${Math.round(item.preDelayMs / 1000)}s before ${item.session}...`));
         await sleep(item.preDelayMs);
       }
       const result = launchInContainer({ role: item.role, instance: null, mode, env: item.env, notATmuxSession: item.notATmuxSession, sessionLabel: item.session });
@@ -192,7 +192,7 @@ async function startActionContainer(agentArg, options = {}) {
   } else {
     const parsed = parseAgentArg(agentArg);
     if (!parsed) {
-      console.log(`  ${c.red('✗')} ${agentArg} — ruolo non riconosciuto`);
+      console.log(`  ${c.red('✗')} ${agentArg} — unrecognized role`);
       errored++;
     } else {
       const result = launchInContainer({ role: parsed.role, instance: parsed.instance, mode });
@@ -203,9 +203,9 @@ async function startActionContainer(agentArg, options = {}) {
   }
 
   console.log('');
-  console.log(`Risultato: ${c.green(started + ' avviati')}, ${c.yellow(skipped + ' gia attivi')}${errored ? `, ${c.red(errored + ' errori')}` : ''}`);
+  console.log(`Result: ${c.green(started + ' started')}, ${c.yellow(skipped + ' already active')}${errored ? `, ${c.red(errored + ' errors')}` : ''}`);
   if (useBootstrap) {
-    console.log(c.dim('  Il Capitano scalera' + ' gli altri agenti secondo le soglie del Bridge.'));
+    console.log(c.dim('  CAPITANO will scale the other agents according to the Bridge thresholds.'));
   }
   console.log('');
 
@@ -230,7 +230,7 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
   // Skip has-session check per i ruoli non-tmux (bridge): start-agent.sh
   // gestisce il singleton internamente via /proc cmdline scan.
   if (!notATmuxSession && isSessionActive(sName)) {
-    console.log(`  ${c.yellow('⏭')} ${sName} — gia attivo`);
+    console.log(`  ${c.yellow('⏭')} ${sName} — already active`);
     return 'skipped';
   }
 
@@ -246,10 +246,10 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
     env: Object.keys(childEnv).length ? childEnv : null,
   });
   if (r.code === 0) {
-    console.log(`  ${c.green('✓')} ${sName} avviato`);
+    console.log(`  ${c.green('✓')} ${sName} started`);
     return 'started';
   }
-  const msg = (r.stderr || r.stdout || 'errore').split('\n').filter(Boolean).slice(-1)[0];
+  const msg = (r.stderr || r.stdout || 'unknown error').split('\n').filter(Boolean).slice(-1)[0];
   console.log(`  ${c.red('✗')} ${sName} — ${msg}`);
   return 'error';
 }
@@ -276,12 +276,12 @@ export async function startAction(agentArg, options) {
   }
 
   if (!tmuxAvailable()) {
-    console.error(c.red('Errore: tmux non trovato. Installa con: brew install tmux'));
+    console.error(c.red('Error: tmux not found. Install it with: brew install tmux'));
     process.exitCode = 1;
     return;
   }
   if (!claudeAvailable()) {
-    console.error(c.red('Errore: Claude CLI non trovato.'));
+    console.error(c.red('Error: Claude CLI not found.'));
     process.exitCode = 1;
     return;
   }
@@ -291,7 +291,7 @@ export async function startAction(agentArg, options) {
   const targets = agentArg ? [agentArg] : DEFAULT_TEAM;
 
   console.log('');
-  console.log(c.bold('Avvio agenti...'));
+  console.log(c.bold('Starting agents...'));
   console.log(c.dim(`  Mode: ${mode} | JHT_HOME: ${JHT_HOME}`));
   console.log(c.dim(`  JHT_USER_DIR: ${JHT_USER_DIR}`));
   console.log('');
@@ -302,7 +302,7 @@ export async function startAction(agentArg, options) {
   for (const target of targets) {
     const parsed = parseAgentArg(target);
     if (!parsed) {
-      console.log(`  ${c.red('✗')} ${target} — ruolo non riconosciuto`);
+      console.log(`  ${c.red('✗')} ${target} — unrecognized role`);
       continue;
     }
 
@@ -311,7 +311,7 @@ export async function startAction(agentArg, options) {
     const sName = sessionName(role, instance);
 
     if (isSessionActive(sName)) {
-      console.log(`  ${c.yellow('⏭')} ${sName} — gia attivo`);
+      console.log(`  ${c.yellow('⏭')} ${sName} — already active`);
       skipped++;
       continue;
     }
@@ -345,14 +345,14 @@ export async function startAction(agentArg, options) {
       spawn('bash', ['-c', `sleep 4 && tmux send-keys -t "${sName}" Enter && sleep 3 && tmux send-keys -t "${sName}" Enter`], {
         detached: true, stdio: 'ignore',
       }).unref();
-      console.log(`  ${c.green('✓')} ${sName} avviato (effort: ${effort})`);
+      console.log(`  ${c.green('✓')} ${sName} started (effort: ${effort})`);
       started++;
     } catch (err) {
-      console.log(`  ${c.red('✗')} ${sName} — errore avvio: ${err.message}`);
+      console.log(`  ${c.red('✗')} ${sName} — start error: ${err.message}`);
     }
   }
 
   console.log('');
-  console.log(`Risultato: ${c.green(started + ' avviati')}, ${c.yellow(skipped + ' gia attivi')}`);
+  console.log(`Result: ${c.green(started + ' started')}, ${c.yellow(skipped + ' already active')}`);
   console.log('');
 }

@@ -208,7 +208,7 @@ def test_1c_pane_immobile_senza_marcatore_e_uno_stallo(home, monkeypatch):
     wd.tick(now=T0 + 5 * 60)
     det = events("detected")
     assert len(det) == 1
-    assert "immobile" in det[0]["marker"]
+    assert "unchanged" in det[0]["marker"]
 
 
 def test_1d_il_pane_che_si_muove_azzera_il_contatore(home, monkeypatch):
@@ -335,10 +335,10 @@ def test_4_dopo_resumed_il_pane_cambia_hash(home, monkeypatch):
     wd.tick(now=t + sec + 60)      # giro di verifica
     assert events("resume_failed") == []
     assert fake.resumes[0]["session"] == "SCOUT-3"
-    assert "Continua da dove ti eri fermato" in fake.resumes[0]["msg"]
-    assert "passa al successivo della coda" in fake.resumes[0]["msg"], \
+    assert "Continue where you left off" in fake.resumes[0]["msg"]
+    assert "move to the next queued task" in fake.resumes[0]["msg"], \
         "senza la seconda frase l'agente riprende lo stesso ramo che l'ha bloccato"
-    assert fake.resumes[0]["msg"].startswith("[DA @SISTEMA A @SCOUT-3]")
+    assert fake.resumes[0]["msg"].startswith("[FROM @SYSTEM TO @SCOUT-3]")
 
 
 def test_4b_una_ripresa_che_non_entra_viene_detta(home, monkeypatch):
@@ -408,7 +408,7 @@ def test_5_quattro_stalli_consecutivi_finiscono_in_escalated(home, monkeypatch):
     assert len(fake.resumes) == 3
     escalated = events("escalated")
     assert len(escalated) == 1 and escalated[0]["consecutive"] == 4
-    assert any("NON lo riprendo più" in m for m in CAPTAIN_MSGS), \
+    assert any("will NOT resume" in m for m in CAPTAIN_MSGS), \
         "l'escalation deve arrivare al Capitano, non solo al log"
     assert sum(1 for m in CAPTAIN_MSGS if "scout-3" in m) == 2, \
         "un avviso al 3° stallo (segnale) + uno al 4° (escalation)"
@@ -581,7 +581,7 @@ def test_health_distingue_watchdog_vivo_da_watchdog_fermo(home, monkeypatch):
 
     stale = wd.health(now=T0 + 4000)
     assert stale["ok"] is False
-    assert "processo vivo ma funzione ferma" in stale["reason"]
+    assert "process alive but function stalled" in stale["reason"]
 
 
 def test_health_cli_esce_1_quando_il_log_e_stantio(home, monkeypatch, capsys):

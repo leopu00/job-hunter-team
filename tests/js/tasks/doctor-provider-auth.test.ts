@@ -30,7 +30,7 @@ describe("jht doctor — autenticazione provider", () => {
 
     expect(r.code).toBe(0);
     expect(r.out).toContain("Provider: openai (gpt-5.6-sol) — subscription");
-    expect(r.out).not.toContain("Provider openai senza API key");
+    expect(r.out).not.toContain("Provider openai has no API key");
   }, 15_000);
 
   it("continua a segnalare una API key mancante per auth_method api_key", () => {
@@ -40,7 +40,7 @@ describe("jht doctor — autenticazione provider", () => {
     });
 
     expect(r.code).toBe(0);
-    expect(r.out).toContain("Provider openai senza API key");
+    expect(r.out).toContain("Provider openai has no API key");
     expect(r.out).toContain("OPENAI_API_KEY");
   }, 15_000);
 });

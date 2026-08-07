@@ -51,7 +51,7 @@ function setNestedValue(obj, keyPath, value) {
 async function handleGet(keyPath) {
   const config = await loadConfig();
   if (!config) {
-    console.error('Nessuna configurazione trovata. Esegui: jht setup');
+    console.error('No configuration found. Run: jht setup');
     process.exitCode = 1;
     return;
   }
@@ -63,7 +63,7 @@ async function handleGet(keyPath) {
 
   const value = getNestedValue(config, keyPath);
   if (value === undefined) {
-    console.error(`Chiave "${keyPath}" non trovata.`);
+    console.error(`Key "${keyPath}" not found.`);
     process.exitCode = 1;
     return;
   }
@@ -77,7 +77,7 @@ async function handleGet(keyPath) {
 
 async function handleSet(keyPath, value) {
   if (!keyPath || value === undefined) {
-    console.error('Uso: jht config set <chiave> <valore>');
+    console.error('Usage: jht config set <key> < value>');
     process.exitCode = 1;
     return;
   }
@@ -95,15 +95,15 @@ async function handleSet(keyPath, value) {
 export function registerConfigCommand(program) {
   const config = program
     .command('config')
-    .description('Gestione configurazione (get/set)');
+    .description('Configuration management (get/set)');
 
   config
     .command('get [key]')
-    .description('Mostra configurazione (tutta o per chiave, es: jht config get web.port)')
+    .description('Show all configuration or one key (for example, jht config get web.port)')
     .action(handleGet);
 
   config
     .command('set <key> <value>')
-    .description('Imposta valore (es: jht config set provider anthropic)')
+    .description('Set a value (for example, jht config set provider anthropic)')
     .action(handleSet);
 }

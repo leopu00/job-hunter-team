@@ -1,5 +1,5 @@
 function hostOnly(command) {
-  console.error(`\n  Errore: ${command} controlla l'app nativa e deve essere eseguito dal comando jht dell'host.\n`);
+  console.error(`\n  Error: ${command} controls the native app and must be run from the host jht command.\n`);
   process.exitCode = 1;
 }
 
@@ -7,14 +7,14 @@ function hostOnly(command) {
 export function registerGameCommand(program) {
   const game = program
     .command('game')
-    .description('Avvia, ferma e mostra lo stato del client desktop');
+    .description('Start, stop, and show the desktop client status');
 
-  game.command('start').description('Avvia il client in modo idempotente').action(() => hostOnly('game start'));
-  game.command('stop').description('Chiude il client lasciando il team in background').action(() => hostOnly('game stop'));
-  game.command('status').description('Mostra lo stato del client desktop').action(() => hostOnly('game status'));
-  game.command('restart').description('Riavvia il client in modo cooperativo').action(() => hostOnly('game restart'));
-  game.command('background').description('Minimizza il client lasciandolo in esecuzione').action(() => hostOnly('game background'));
+  game.command('start').description('Start the client idempotently').action(() => hostOnly('game start'));
+  game.command('stop').description('Close the client while leaving the team running in the background').action(() => hostOnly('game stop'));
+  game.command('status').description('Show the desktop client status').action(() => hostOnly('game status'));
+  game.command('restart').description('Restart the client cooperatively').action(() => hostOnly('game restart'));
+  game.command('background').description('Minimize the client while leaving it running').action(() => hostOnly('game background'));
 
-  const gui = program.command('gui').description("Controlla l'interfaccia grafica nativa");
-  gui.command('open').description("Avvia o porta in primo piano l'interfaccia").action(() => hostOnly('gui open'));
+  const gui = program.command('gui').description('Control the native graphical interface');
+  gui.command('open').description('Start the interface or bring it to the foreground').action(() => hostOnly('gui open'));
 }

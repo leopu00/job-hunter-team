@@ -129,7 +129,7 @@ function startTgBridge() {
     if (code === 0) {
       pid1Log('tg-bridge bootstrap OK (3 process detached)');
     } else {
-      pid1Log(`tg-bridge bootstrap fallito (exit ${code}): messaggi Telegram non arriveranno`);
+      pid1Log(`tg-bridge bootstrap failed (exit ${code}): Telegram messages will not arrive`);
     }
   });
 }
@@ -153,7 +153,7 @@ function startSentinelBridges() {
     if (code === 0) {
       pid1Log('sentinel/pacing bridge bootstrap OK (2 process detached)');
     } else {
-      pid1Log(`sentinel/pacing bridge bootstrap fallito (exit ${code}): nessun BRIDGE TICK al Capitano`);
+      pid1Log(`sentinel/pacing bridge bootstrap failed (exit ${code}): no BRIDGE TICK at Capitano`);
     }
   });
 }
@@ -190,10 +190,10 @@ async function ensureInitialTeamHalt() {
   }
   try {
     await writeFile(TEAM_HALTED_FLAG, 'initial-setup\n', { flag: 'wx', mode: 0o600 });
-    pid1Log('initial setup: team-halted gate creato — attendo Attiva team');
+    pid1Log('initial setup: team-halted gate created — waiting for team activation');
   } catch (err) {
     if (err?.code !== 'EEXIST') {
-      pid1Log(`initial setup: impossibile creare team-halted gate (${err.message})`);
+      pid1Log(`initial setup: unable to create team-halted gate (${err.message})`);
       throw err;
     }
   }
@@ -261,7 +261,7 @@ async function startUserFacingAgents() {
   // il flag al prossimo polling. Senza questo gate, il container post-restart
   // partiva sempre con agenti attivi anche se l'utente li aveva spenti.
   if (existsSync(TEAM_HALTED_FLAG)) {
-    pid1Log('auto-start agenti SKIPPED: .team-halted.flag presente (user ha cliccato Stop)');
+    pid1Log('auto-start agents SKIPPED: .team-halted.flag present (user clicked Stop)');
     return;
   }
   // Bug regressione post-recreate (osservato 2026-05-17 20:02): senza
@@ -271,7 +271,7 @@ async function startUserFacingAgents() {
   // anche lei è un agente LLM long-lived necessario al funzionamento
   // normale del team — non un worker spawnato on-demand dal Capitano.
   const agents = ['assistente', 'capitano', 'mentor', 'sentinella'];
-  pid1Log(`auto-start agenti user-facing (${agents.join(', ')})`);
+  pid1Log(`auto-start user-facing agents (${agents.join(', ')})`);
   for (const role of agents) {
     await new Promise((resolve) => {
       const child = spawnLabeled(`autostart-${role}`, process.execPath, [
@@ -284,7 +284,7 @@ async function startUserFacingAgents() {
         if (code === 0) {
           pid1Log(`auto-start ${role}: OK`);
         } else {
-          pid1Log(`auto-start ${role}: fallito (exit ${code}) — utente potrà cliccare Avvia dall'app desktop`);
+          pid1Log(`auto-start ${role}: failed (exit) ${code}) — user can click Start from desktop app`);
         }
         resolve();
       });
@@ -365,7 +365,7 @@ function spawnLabeled(label, cmd, args) {
       `\n[${new Date().toISOString()}] === spawn: ${cmd} ${args.join(' ')} ===\n`,
     );
   } catch (err) {
-    console.log(`[pid1] log-capture per '${label}' disabilitato: ${err.message}`);
+    console.log(`[pid1] log capture for '${label}' disabled: ${err.message}`);
   }
 
   const prefixStream = (stream, target) => {
@@ -431,12 +431,12 @@ async function maybeRunPairing() {
     // .pairing-token dovrebbe gia' essere stato cancellato da handlePair
     // (one-shot). Se e' ancora qui e' un residuo: rimuovilo per non lasciare
     // un refresh_token sul disco.
-    pid1Log('cloud.json gia\' presente: rimuovo .pairing-token residuo');
+    pid1Log('cloud.json already present: remove .pairing-token residue');
     try { await import('node:fs').then((m) => m.promises.unlink(PAIRING_TOKEN_PATH)); } catch { /* best-effort */ }
     return;
   }
 
-  pid1Log('pairing-token rilevato: eseguo jht cloud pair (one-shot)');
+  pid1Log('pairing token detected: running jht cloud pair (one shot)');
   await new Promise((resolve) => {
     const child = spawn(process.execPath, [JHT_ENTRY, 'cloud', 'pair'], {
       stdio: ['ignore', 'inherit', 'inherit'],
@@ -445,7 +445,7 @@ async function maybeRunPairing() {
       if (code === 0) {
         pid1Log('cloud pair OK');
       } else {
-        pid1Log(`cloud pair fallito (exit ${code}): proseguo, retry manuale via 'jht cloud pair'`);
+        pid1Log(`cloud pair failed (exit ${code}); continuing. Retry manually with 'jht cloud pair'`);
       }
       resolve();
     });
@@ -474,12 +474,12 @@ async function runMigrate() {
     // No config yet (pre-pairing su VPS): niente da migrare.
     return;
   }
-  pid1Log('running jht migrate (idempotente)');
+  pid1Log('running jht migrate (idempotent)');
   await new Promise((resolve) => {
     const child = spawnLabeled('migrate', process.execPath, [JHT_ENTRY, 'migrate']);
     child.on('exit', (code) => {
       if (code === 0) pid1Log('jht migrate ok');
-      else pid1Log(`jht migrate exit ${code} — proseguo, retry manuale via 'jht migrate'`);
+      else pid1Log(`jht migrate exit ${code} — continuation, manual retry via 'jht migrate'`);
       resolve();
     });
     child.on('error', (err) => {
@@ -510,7 +510,7 @@ async function runUnstuckPositions() {
     ]);
     child.on('exit', (code) => {
       if (code === 0) pid1Log('unstuck_positions ok');
-      else pid1Log(`unstuck_positions exit ${code} — non bloccante, proseguo`);
+      else pid1Log(`unstuck_positions exited ${code}; non-blocking, continuing`);
       resolve();
     });
     child.on('error', (err) => {
@@ -573,7 +573,7 @@ async function cleanupStaleBridgeState() {
  * prova, il pin resta com'e' e il Capitano riceve un finding.
  */
 async function runProviderAutoUpdate() {
-  pid1Log('provider CLI auto-update + revisione modello (prima dei bridge; JHT_PROVIDER_AUTOUPDATE=0 per spegnerlo, JHT_MODEL_PIN=<x> per fissare il modello)');
+  pid1Log('CLI auto-update + model review (before bridges; JHT_PROVIDER_AUTOUPDATE=0 to turn it off, JHT_MODEL_PIN=<x> to fix the model)');
   await new Promise((resolve) => {
     const child = spawnLabeled('provider-update', process.execPath, [
       JHT_ENTRY,
@@ -581,12 +581,12 @@ async function runProviderAutoUpdate() {
       'autoupdate',
     ]);
     child.on('exit', (code) => {
-      if (code === 0) pid1Log('provider CLI auto-update concluso');
-      else pid1Log(`provider CLI auto-update exit ${code} — proseguo con la CLI gia' presente`);
+      if (code === 0) pid1Log('provider CLI auto-update completed');
+      else pid1Log(`provider CLI auto-update exit ${code} — continue with the CLI already present`);
       resolve();
     });
     child.on('error', (err) => {
-      pid1Log(`provider CLI auto-update spawn error: ${err.message} — proseguo con la CLI gia' presente`);
+      pid1Log(`provider CLI auto-update spawn error: ${err.message} — continue with the CLI already present`);
       resolve();
     });
   });
@@ -647,7 +647,7 @@ async function dispatch() {
     startTgBridge();
     tgBridgeStarted = true;
   } else {
-    pid1Log('tg-bridge: nessun bot in jht.config.json, skip');
+    pid1Log('tg-bridge: no bots in jht.config.json, skip');
   }
 
   // Bridge Python (sentinel + pacing): partono SEMPRE indipendentemente
@@ -660,7 +660,7 @@ async function dispatch() {
     startSentinelBridges();
     sentinelBridgesStarted = true;
   } else {
-    pid1Log('sentinel/pacing bridge: active_provider mancante, skip — riprova dopo wizard');
+    pid1Log('sentinel/pacing bridge: active_provider missing, skip — try again after wizard');
   }
 
   // ── Welcome iniziale dei 3 bot Telegram (script bash deterministico,
@@ -674,7 +674,7 @@ async function dispatch() {
     spawn('/bin/bash', [WELCOME_SEND_SCRIPT], { stdio: 'inherit' })
       .on('exit', (code) => {
         if (code === 0) pid1Log('welcome-send: ok');
-        else pid1Log(`welcome-send: exit ${code} (errori per ruoli specifici loggati a logs/welcome-send.log)`);
+        else pid1Log(`welcome-send: exit ${code} (errors for specific roles lotted to logs/welcome-send.log)`);
       });
   }
 
@@ -693,10 +693,10 @@ async function dispatch() {
     (await hasProviderCredentials())
   ) {
     startUserFacingAgents().catch((err) =>
-      pid1Log(`auto-start agenti crashed: ${err.message}`),
+      pid1Log(`auto-start agents crashed: ${err.message}`),
     );
   } else if (hasBots && (await hasActiveProviderConfigured())) {
-    pid1Log('auto-start agenti rinviato: provider OAuth non ancora completato (watchdog provvederà)');
+    pid1Log('auto-start agents postponed: OAuth provider not yet completed (watchdog will provide)');
   }
 
   // ── #5: Watcher su jht.config.json — il wizard scrive bot/provider DOPO
@@ -711,19 +711,19 @@ async function dispatch() {
     const reconcileConfig = coalesceAsyncCalls(async () => {
       await new Promise((r) => setTimeout(r, 250)); // debounce write atomico (tmp+rename)
       if (!tgBridgeStarted && (await hasTelegramBotsConfigured())) {
-        pid1Log('jht.config.json aggiornato (bot configurati post-wizard): avvio tg-bridge + welcome');
+        pid1Log('jht.config.json updated (post-wizard configured bot): tg-bridge boot + welcome');
         startTgBridge();
         tgBridgeStarted = true;
         spawn('/bin/bash', [WELCOME_SEND_SCRIPT], { stdio: 'inherit' })
           .on('exit', (code) => pid1Log(`welcome-send (post-wizard): exit ${code}`));
       }
       if (!sentinelBridgesStarted && (await hasActiveProviderConfigured())) {
-        pid1Log('jht.config.json aggiornato (active_provider post-wizard): avvio sentinel + pacing bridge');
+        pid1Log('jht.config.json updated (active_provider post-wizard): start sentinel + pacing bridge');
         startSentinelBridges();
         sentinelBridgesStarted = true;
       }
       if (tgBridgeStarted && sentinelBridgesStarted && cfgWatcher) {
-        pid1Log('config watcher: tg-bridge + sentinel/pacing attivi, chiudo il watcher');
+        pid1Log('config watcher: tg-bridge + active sentinel/pacing, close watcher');
         cfgWatcher.close();
         cfgWatcher = null;
       }
@@ -732,12 +732,12 @@ async function dispatch() {
       cfgWatcher = watch(dirname(JHT_CONFIG_PATH), { persistent: true }, (eventType, filename) => {
         if (filename !== 'jht.config.json') return;
         void reconcileConfig().catch((err) =>
-          pid1Log(`config reconcile fallito (${err.message}) — riprovo al prossimo salvataggio`),
+          pid1Log(`config reconciliation failed (${err.message}) — retrying on the next event`),
         );
       });
       process.on('exit', () => { if (cfgWatcher) cfgWatcher.close(); });
     } catch (err) {
-      pid1Log(`config watcher fallito (${err.message}) — bridge non auto-ripartiranno post-wizard`);
+      pid1Log(`config watcher failed (${err.message}) — bridges will not auto-start after the wizard`);
     }
   }
 
@@ -764,7 +764,7 @@ async function dispatch() {
       if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
       watchdogRespawnTimer = setTimeout(() => {
         if (!shuttingDown) {
-          pid1Log('agent-watchdog respawn dopo crash');
+          pid1Log('agent-watchdog respawn after crashing');
           startAgentWatchdog();
         }
       }, 5000);
@@ -782,7 +782,7 @@ async function dispatch() {
   let autoReportRespawnTimer = null;
   const startAutoReportLoop = () => {
     if (autoReportChild && !autoReportChild.killed) return;
-    pid1Log('starting auto-report-loop (Telegram panoramic + PNG ogni 2h)');
+    pid1Log('starting auto-report-loop (Telegram overview + PNG every 2h)');
     autoReportChild = spawnLabeled('auto-report', '/bin/bash', [AUTO_REPORT_LOOP_SCRIPT]);
     autoReportChild.on('exit', (code, signal) => {
       const exited = autoReportChild;
@@ -792,7 +792,7 @@ async function dispatch() {
       if (autoReportRespawnTimer) clearTimeout(autoReportRespawnTimer);
       autoReportRespawnTimer = setTimeout(() => {
         if (!shuttingDown) {
-          pid1Log('auto-report-loop respawn dopo crash');
+          pid1Log('auto-report-loop respawn after crash');
           startAutoReportLoop();
         }
       }, 5000);
@@ -802,7 +802,7 @@ async function dispatch() {
   if (hasBots) {
     startAutoReportLoop();
   } else {
-    pid1Log('auto-report-loop skip: nessun bot Telegram configurato');
+    pid1Log('auto-report-loop skip: no Telegram bot configured');
   }
 
   // ── Doctor watchdog: loop bash che ogni 30 min spawna una sessione
@@ -815,7 +815,7 @@ async function dispatch() {
   let doctorWatchdogRespawnTimer = null;
   const startDoctorWatchdog = () => {
     if (doctorWatchdogChild && !doctorWatchdogChild.killed) return;
-    pid1Log('starting doctor-watchdog (auto-spawn DOTTORE ogni 30min)');
+    pid1Log('starting doctor-watchdog (auto-spawn DOTTORE every 30 min)');
     doctorWatchdogChild = spawnLabeled('doctor-watchdog', '/bin/bash', [DOCTOR_WATCHDOG_SCRIPT]);
     doctorWatchdogChild.on('exit', (code, signal) => {
       const exited = doctorWatchdogChild;
@@ -825,7 +825,7 @@ async function dispatch() {
       if (doctorWatchdogRespawnTimer) clearTimeout(doctorWatchdogRespawnTimer);
       doctorWatchdogRespawnTimer = setTimeout(() => {
         if (!shuttingDown) {
-          pid1Log('doctor-watchdog respawn dopo crash');
+          pid1Log('doctor-watchdog respawn after crash');
           startDoctorWatchdog();
         }
       }, 5000);
@@ -845,7 +845,7 @@ async function dispatch() {
   let stepcapRespawnTimer = null;
   const startStepcapWatchdog = () => {
     if (stepcapChild && !stepcapChild.killed) return;
-    pid1Log('starting stepcap-watchdog (ripresa agenti fermi sul cap di step, tick 60s)');
+    pid1Log('starting stepcap-watchdog (resume steady agents on step cap, tick 60s)');
     stepcapChild = spawnLabeled('stepcap-watchdog', '/usr/bin/env', [
       'python3',
       '-u',
@@ -859,7 +859,7 @@ async function dispatch() {
       if (stepcapRespawnTimer) clearTimeout(stepcapRespawnTimer);
       stepcapRespawnTimer = setTimeout(() => {
         if (!shuttingDown) {
-          pid1Log('stepcap-watchdog respawn dopo crash');
+          pid1Log('stepcap-watchdog respawn after crashing');
           startStepcapWatchdog();
         }
       }, 5000);
@@ -880,7 +880,7 @@ async function dispatch() {
   let throttleEngineRespawnTimer = null;
   const startThrottleEngine = () => {
     if (throttleEngineChild && !throttleEngineChild.killed) return;
-    pid1Log('starting throttle-engine (timer dei throttle + sveglia via tmux)');
+    pid1Log('starting throttle-engine (throttle timer + tmux alarm)');
     throttleEngineChild = spawnLabeled('throttle-engine', '/usr/bin/env', [
       'python3',
       '-u',
@@ -894,7 +894,7 @@ async function dispatch() {
       if (throttleEngineRespawnTimer) clearTimeout(throttleEngineRespawnTimer);
       throttleEngineRespawnTimer = setTimeout(() => {
         if (!shuttingDown) {
-          pid1Log('throttle-engine respawn dopo crash');
+          pid1Log('throttle-engine respawn after crash');
           startThrottleEngine();
         }
       }, 5000);
@@ -929,7 +929,7 @@ async function dispatch() {
       daemonRespawnTimer = setTimeout(async () => {
         if (shuttingDown) return;
         if (await isCloudConfigured()) {
-          pid1Log('daemon respawn dopo crash');
+          pid1Log('daemon respawn after crash');
           startDaemon();
         }
       }, 5000);
@@ -953,7 +953,7 @@ async function dispatch() {
       realtimeRespawnTimer = setTimeout(async () => {
         if (shuttingDown) return;
         if (await isCloudConfigured()) {
-          pid1Log('realtime subscriber respawn dopo crash');
+          pid1Log('realtime subscriber respawn after crash');
           startRealtime();
         }
       }, 5000);
@@ -977,7 +977,7 @@ async function dispatch() {
       userMessagesRespawnTimer = setTimeout(async () => {
         if (shuttingDown) return;
         if (await isCloudConfigured()) {
-          pid1Log('user-messages poller respawn dopo crash');
+          pid1Log('user-messages poller respawn after crashing');
           startUserMessages();
         }
       }, 5000);
@@ -1001,7 +1001,7 @@ async function dispatch() {
       teamStateRespawnTimer = setTimeout(async () => {
         if (shuttingDown) return;
         if (await isCloudConfigured()) {
-          pid1Log('team_state reconciler respawn dopo crash');
+          pid1Log('team_state reconciler respawn after crash');
           startTeamState();
         }
       }, 5000);
@@ -1015,7 +1015,7 @@ async function dispatch() {
   // docs/internal/file-bridge-on-demand-2026-06-07.md
   const startFileBridge = () => {
     if (fileBridgeChild && !fileBridgeChild.killed) return;
-    pid1Log('starting file-bridge poller (indice + upload on-demand)');
+    pid1Log('starting file-bridge poller (index + on-demand upload)');
     fileBridgeChild = spawnLabeled('file-bridge', process.execPath, fileBridgeCmd);
     fileBridgeChild.on('exit', (code, signal) => {
       const exitedChild = fileBridgeChild;
@@ -1026,7 +1026,7 @@ async function dispatch() {
       fileBridgeRespawnTimer = setTimeout(async () => {
         if (shuttingDown) return;
         if (await isCloudConfigured()) {
-          pid1Log('file-bridge poller respawn dopo crash');
+          pid1Log('file-bridge poller respawn after crash');
           startFileBridge();
         }
       }, 5000);
@@ -1109,7 +1109,7 @@ async function dispatch() {
       startUserMessages();
     }
   } else if (isVps) {
-    pid1Log('cloud sync non ancora configurato: aspetto cloud.json (auto-start dopo pairing)');
+    pid1Log('cloud sync not yet configured: watching for cloud.json (auto-start after pairing)');
   }
 
   // ── Watcher su cloud.json: hot-reload del daemon al pairing/unpairing.
@@ -1133,8 +1133,8 @@ async function dispatch() {
           // team-state/user-messages standalone solo con env override.
           pid1Log(
             controlPollers
-              ? 'cloud.json rilevato: avvio cloud daemon (con reconcile) + file-bridge + realtime + poller di controllo standalone (env override)'
-              : 'cloud.json rilevato: avvio cloud daemon (con reconcile team_state) + file-bridge poller',
+              ? 'cloud.json detected: starting cloud daemon (with sync) + file bridge + realtime + standalone control poller (env override)'
+              : 'cloud.json detected: starting cloud daemon (with team_state) + file-bridge poller',
           );
           startDaemon();
           startFileBridge();
@@ -1144,11 +1144,11 @@ async function dispatch() {
             startUserMessages();
           }
         } else {
-          stopDaemon('cloud.json rimosso o disabilitato');
+          stopDaemon('cloud.json removed or disabled');
         }
       });
     } catch (err) {
-      pid1Log(`watch fallito (${err.message}) — daemon hot-reload disabilitato`);
+      pid1Log(`watch failed (${err.message}) — daemon hot reload disabled`);
     }
     // Cleanup watcher allo shutdown
     process.on('exit', () => { if (watcher) watcher.close(); });
@@ -1189,6 +1189,6 @@ async function dispatch() {
 export function registerPid1Command(program) {
   program
     .command('pid1')
-    .description('Container entrypoint: bridges + watchdog (sempre) + cloud daemon (auto-start su VPS quando cloud.json appare)')
+    .description('Container entrypoint: bridges and watchdogs, plus cloud-daemon auto-start on VPS when cloud.json appears')
     .action(dispatch);
 }

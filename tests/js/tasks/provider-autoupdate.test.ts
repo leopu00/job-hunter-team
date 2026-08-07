@@ -134,7 +134,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
     expect(r.out).toContain("2.1.220 → 2.4.0");
-    expect(r.out).toContain("AGGIORNATA");
+    expect(r.out).toContain("UPDATED");
   });
 
   it("dice ESPLICITAMENTE quando la versione non è cambiata (criterio 2 + 7)", () => {
@@ -142,9 +142,9 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
     expect(r.out).toContain("2.4.0 → 2.4.0");
-    expect(r.out).toContain("INVARIATA");
-    expect(r.out).toContain("era gia' all'ultima versione");
-    expect(r.out).toContain("installazione saltata");
+    expect(r.out).toContain("UNCHANGED");
+    expect(r.out).toContain("already at the latest version");
+    expect(r.out).toContain("installation skipped");
     expect(sb.calls("npm").some((c) => c.startsWith("install "))).toBe(false);
     // Nessun rumore al Capitano quando non è successo niente.
     expect(sb.mailbox()).toHaveLength(0);
@@ -156,10 +156,10 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     // Il boot NON si ferma: è la regola più importante del ticket.
     expect(r.code).toBe(0);
     expect(r.out).toContain("ENOTFOUND");
-    expect(r.out).toContain("step fallito");
+    expect(r.out).toContain("failed step");
     expect(r.out).toContain("2.1.220 → 2.1.220");
-    expect(r.out).toContain("update NON riuscito");
-    expect(r.out).toContain("il team parte con la CLI gia' presente");
+    expect(r.out).toContain("update FAILED");
+    expect(r.out).toContain("the team will use the existing CLI");
     expect(sb.mailbox()).toHaveLength(0);
   });
 
@@ -171,7 +171,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     const r = runAutoUpdate(sb, { JHT_PROVIDER_UPDATE_TIMEOUT_SEC: "1" });
     expect(r.code).toBe(0);
     expect(Date.now() - started).toBeLessThan(30_000);
-    expect(r.out).toContain("update NON riuscito");
+    expect(r.out).toContain("update FAILED");
     expect(r.out).toContain("2.1.220 → 2.1.220");
   });
 
@@ -213,7 +213,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     expect(msg).toContain("FINDING");
     expect(msg).toContain("1.36.0 → 1.42.0");
     expect(msg).toContain("kimi-k2-0905-preview");
-    expect(msg).toContain("MODELLO NON e' stato cambiato");
+    expect(msg).toContain("The MODEL was NOT changed");
 
     // E il modello nel config è rimasto quello di prima.
     const cfg = JSON.parse(readFileSync(path.join(sb.home, "jht.config.json"), "utf-8"));
@@ -225,7 +225,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "bump" });
     const r = runAutoUpdate(sb, { JHT_PROVIDER_AUTOUPDATE: "0" });
     expect(r.code).toBe(0);
-    expect(r.out).toContain("disabilitato");
+    expect(r.out).toContain("disabled");
     expect(sb.calls("npm")).toHaveLength(0);
     expect(sb.calls("sh")).toHaveLength(0);
     expect(sb.mailbox()).toHaveLength(0);
@@ -239,7 +239,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     // resta 2.4.0 e non c'è nessun finding nuovo da mandare al Capitano.
     const second = runAutoUpdate(sb);
     expect(second.out).toContain("2.4.0 → 2.4.0");
-    expect(second.out).toContain("INVARIATA");
+    expect(second.out).toContain("UNCHANGED");
     expect(sb.mailbox()).toHaveLength(1);
   });
 
@@ -248,7 +248,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     writeFileSync(path.join(sb.home, "jht.config.json"), JSON.stringify({}), "utf-8");
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
-    expect(r.out).toContain("active_provider non ancora configurato");
+    expect(r.out).toContain("active_provider not yet configured");
     expect(sb.calls("npm")).toHaveLength(0);
   });
 
@@ -264,7 +264,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "bump" });
     const r = runAutoUpdate(sb, { IS_CONTAINER: "0" });
     expect(r.code).toBe(0);
-    expect(r.out).toContain("fuori dal container");
+    expect(r.out).toContain("outside the container");
     expect(sb.calls("npm")).toHaveLength(0);
   });
 });

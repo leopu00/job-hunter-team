@@ -96,7 +96,7 @@ def test_downloads_platform_asset_and_verifies_sha256(tmp_path, platform, asset)
     destination = tmp_path / "user" / "downloads" / asset
     assert result.returncode == 0, result.stderr
     assert destination.read_bytes() == body
-    assert "SHA-256 verificato" in result.stdout
+    assert "SHA-256 verified" in result.stdout
     assert "100%" in result.stdout + result.stderr
 
 
@@ -146,9 +146,9 @@ def test_checksum_mismatch_fails_and_removes_partial_file(tmp_path):
 @pytest.mark.parametrize(
     ("args", "message"),
     [
-        (("--os", "plan9", "--version", "0.3.5"), "Sistema operativo non supportato"),
-        (("--os", "windows", "--version", "not-a-version"), "Versione non valida"),
-        (("--os", "linux", "--version", "0.3.5", "--portable"), "solo per Windows"),
+            (("--os", "plan9", "--version", "0.3.5"), "Unsupported operating system"),
+            (("--os", "windows", "--version", "not-a-version"), "Invalid version"),
+            (("--os", "linux", "--version", "0.3.5", "--portable"), "only for Windows"),
     ],
 )
 def test_invalid_requests_fail_before_network(tmp_path, args, message):
@@ -166,7 +166,7 @@ def test_network_error_is_nonzero_and_leaves_no_file(tmp_path):
         env=isolated_env(tmp_path, "http://127.0.0.1:1/releases/download"),
     )
     assert result.returncode != 0
-    assert "Download non riuscito" in result.stderr
+    assert "Download failed" in result.stderr
     assert not (tmp_path / "user" / "downloads" / "job-hunter-team-linux-x64.tar.gz").exists()
 
 
@@ -181,5 +181,5 @@ def test_existing_wrong_file_is_not_overwritten(tmp_path):
         )
 
     assert result.returncode != 0
-    assert "esiste gia" in result.stderr
+    assert "already exists" in result.stderr
     assert output.read_bytes() == b"keep me"

@@ -18,7 +18,7 @@ function formatDuration(ms) {
 function createService() {
   return new CronService({
     onExecute: async (job) => {
-      console.log(`  Esecuzione job "${job.name}" (${job.id})...`);
+      console.log(`  Job execution "${job.name}" (${job.id})...`);
       console.log(`  Payload: ${JSON.stringify(job.payload)}`);
       return { status: 'ok' };
     },
@@ -32,36 +32,36 @@ async function handleList(opts) {
   svc.stop();
 
   if (jobs.length === 0) {
-    console.log('Nessun job configurato.');
+    console.log('No job configured.');
     return;
   }
 
   console.log(`\n  Job schedulati (${jobs.length}):\n`);
   for (const job of jobs) {
-    const status = job.enabled ? 'attivo' : 'disabilitato';
+    const status = job.enabled ? 'enabled' : 'disabled';
     const next = formatMs(job.state.nextRunAtMs);
     const last = formatMs(job.state.lastRunAtMs);
     const lastStatus = job.state.lastRunStatus || '-';
     console.log(`  ${job.name}`);
     console.log(`    ID:      ${job.id}`);
-    console.log(`    Stato:   ${status}`);
-    console.log(`    Prossimo: ${next}`);
-    console.log(`    Ultimo:  ${last} (${lastStatus})`);
-    if (job.state.lastError) console.log(`    Errore:  ${job.state.lastError}`);
+    console.log(`    State:   ${status}`);
+    console.log(`    Next:  ${next}`);
+    console.log(`    Last:  ${last} (${lastStatus})`);
+    if (job.state.lastError) console.log(`    Error:  ${job.state.lastError}`);
     console.log('');
   }
 }
 
 async function handleAdd(name, opts) {
   if (!opts.schedule) {
-    console.error('--schedule obbligatorio (cron expr o "every:Xm/h/s")');
+    console.error('--schedule is required (cron expression or "every:Xm/h/s")');
     process.exitCode = 1;
     return;
   }
 
   const schedule = parseScheduleOption(opts.schedule);
   if (!schedule) {
-    console.error('Formato schedule non valido. Esempi: "0 9 * * *", "every:30m", "at:2026-04-04T09:00"');
+    console.error('Invalid schedule format. Examples: "0 9 * * *", "every:30m", "at:2026-04-04T09:00"');
     process.exitCode = 1;
     return;
   }
@@ -77,8 +77,8 @@ async function handleAdd(name, opts) {
   });
   svc.stop();
 
-  console.log(`Job creato: "${job.name}" (${job.id})`);
-  console.log(`  Prossima esecuzione: ${formatMs(job.state.nextRunAtMs)}`);
+  console.log(`Job created: "${job.name}" (${job.id})`);
+  console.log(`  Next run: ${formatMs(job.state.nextRunAtMs)}`);
 }
 
 function parseScheduleOption(raw) {
@@ -108,9 +108,9 @@ async function handleRemove(id) {
   svc.stop();
 
   if (removed) {
-    console.log(`Job ${id} rimosso.`);
+    console.log(`Job ${id} removed.`);
   } else {
-    console.error(`Job ${id} non trovato.`);
+    console.error(`Job ${id} not found.`);
     process.exitCode = 1;
   }
 }
@@ -122,9 +122,9 @@ async function handleRun(id, opts) {
   try {
     const result = await svc.run(id, mode);
     if (result.ran) {
-      console.log(`Job ${id} eseguito.`);
+      console.log(`Job ${id} executed.`);
     } else {
-      console.log(`Job ${id} non eseguito (${result.reason}).`);
+      console.log(`Job ${id} not executed (${result.reason}).`);
     }
   } catch (err) {
     console.error(err.message);
@@ -139,41 +139,41 @@ async function handleStatus() {
   const info = await svc.status();
   svc.stop();
 
-  console.log('\n  Cron — Stato\n');
+  console.log('\n  Cron — State\n');
   console.log(`  Store:     ${info.storePath}`);
   console.log(`  Job:       ${info.jobs}`);
-  console.log(`  Prossimo:  ${formatMs(info.nextWakeAtMs)}`);
+  console.log(`  Next:  ${formatMs(info.nextWakeAtMs)}`);
   console.log('');
 }
 
 export function registerCronCommand(program) {
   const cron = program
     .command('cron')
-    .description('Gestione job schedulati');
+    .description('Manage scheduled jobs');
 
   cron.command('list')
-    .description('Mostra tutti i job')
-    .option('-a, --all', 'Includi job disabilitati')
+    .description('Show all jobs')
+    .option('-a, --all', 'Include disabled jobs')
     .action(handleList);
 
   cron.command('add <name>')
-    .description('Aggiungi un job (es: jht cron add "ricerca" --schedule "0 9 * * *")')
+    .description('Add a job (e.g. jht cron add "research" --schedule "0 9 * *")')
     .requiredOption('-s, --schedule <expr>', 'Schedule: cron expr, "every:30m", "at:ISO"')
-    .option('-d, --description <desc>', 'Descrizione')
+    .option('-d, --description <desc>', 'description')
     .option('-p, --payload <json>', 'Payload JSON')
-    .option('--once', 'Elimina dopo prima esecuzione')
+    .option('--once', 'Delete after first run')
     .action(handleAdd);
 
   cron.command('remove <id>')
-    .description('Rimuovi un job per ID')
+    .description('Remove a job for ID')
     .action(handleRemove);
 
   cron.command('run <id>')
-    .description('Esegui un job manualmente')
-    .option('-f, --force', 'Forza esecuzione anche se non due')
+    .description('Run a job manually')
+    .option('-f, --force', 'run even when the job is not due')
     .action(handleRun);
 
   cron.command('status')
-    .description('Mostra stato del sistema cron')
+    .description('Show status of cron system')
     .action(handleStatus);
 }

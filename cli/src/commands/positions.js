@@ -53,11 +53,11 @@ export function runSkill(skill, args) {
   // non ha modo di capire che gli manca il codice del team, non Python.
   const skillPath = join(SKILLS_DIR, skill);
   if (!existsSync(skillPath)) {
-    console.error(c.red(`✗ skill non trovata: ${skillPath}`));
+    console.error(c.red(`: skill not found: ${skillPath}`));
     console.error(c.dim(
-      `  Serve il container ${CONTAINER_NAME} attivo (jht team start) oppure una copia`,
+      `  Need the container ${CONTAINER_NAME} active (jht team start) or a copy`,
     ));
-    console.error(c.dim('  completa del repo: questo comando gira sulle skill in shared/skills/.'));
+    console.error(c.dim('  From a complete repository checkout, this command uses the skills in shared/skills/.'));
     return 2;
   }
   const r = spawnSync('python3', [skillPath, ...args], {
@@ -65,7 +65,7 @@ export function runSkill(skill, args) {
     env: { ...process.env, JHT_DB: JHT_DB_PATH },
   });
   if (r.error) {
-    console.error(c.red(`✗ impossibile eseguire python3: ${r.error.message}`));
+    console.error(c.red(`: impossible to run python3: ${r.error.message}`));
     return 2;
   }
   return r.status ?? 1;
@@ -103,7 +103,7 @@ function listAction(options, command) {
 
 function showAction(id, options, command) {
   if (!id) {
-    console.error(c.red('Uso: jht positions show <id|legacy_id>'));
+    console.error(c.red('Usage: jht positions show <id|legacy_id>'));
     process.exitCode = 1;
     return;
   }
@@ -156,13 +156,13 @@ function requestCvAction(id, options) {
 }
 
 export function registerPositionsCommand(program) {
-  const cmd = new Command('positions').description('Query DB posizioni (proxy a db_query.py)');
+  const cmd = new Command('positions').description('Query DB positions (proxy at db_query.py)');
 
   // `--json` su ogni lettura: il default resta la tabella per l'occhio umano,
   // il flag dà la stessa query come una riga JSON. Serve a chi guida `jht` da
   // uno script o da un agente LLM, che altrimenti deve estrarre i dati a
   // regex da colonne allineate a mano — vedi [JHT-CLI-AGENT-PARITY].
-  const JSON_HELP = 'output JSON (per script e agenti)';
+  const JSON_HELP = 'output JSON (for scripts and agents)';
 
   cmd
     .option('--json', JSON_HELP)
@@ -170,46 +170,46 @@ export function registerPositionsCommand(program) {
 
   cmd
     .command('list')
-    .description('Elenca posizioni con filtri opzionali')
-    .option('-s, --status <status>', 'filtro stato (new, checked, scored, writing, review, ready, applied, response, excluded)')
-    .option('-c, --company <name>', 'filtro azienda')
-    .option('--min-score <n>', 'score minimo')
-    .option('--max-score <n>', 'score massimo')
-    .option('--source <src>', 'filtro fonte (linkedin, greenhouse, lever, ashby, pythonjobs, websearch, careerpages)')
+    .description('List positions with optional filters')
+    .option('-s, --status <status>', 'filter by status (new, checked, scored, writing, review, ready, applied, response, excluded)')
+    .option('-c, --company <name>', 'filter by company')
+    .option('--min-score <n>', 'minimum score')
+    .option('--max-score <n>', 'maximum score')
+    .option('--source <src>', 'filter by source (linkedin, greenhouse, lever, ashby, pythonjobs, websearch, careerpages)')
     .option('--json', JSON_HELP)
     .action(listAction);
 
   cmd
     .command('show <id>')
-    .description('Mostra dettaglio di una posizione (id UUID o legacy_id numerico)')
+    .description('Show position details (UUID or numeric legacy_id)')
     .option('--json', JSON_HELP)
     .action(showAction);
 
   cmd
     .command('dashboard')
-    .description('Riepilogo pipeline (totali per stato)')
+    .description('pipeline summary (totals by state)')
     .option('--json', JSON_HELP)
     .action(dashboardAction);
 
   cmd
     .command('exclude <id>')
-    .description('Escludi una posizione: esce dalle code agenti (reversibile)')
+    .description('Exclude a position: exit from code agents (reversible)')
     .requiredOption(
-      '--reason <causa>',
+      '--reason <reason>',
       'closed | not_interested | mismatch | already_applied | company | conditions | other',
     )
-    .option('--note <testo>', "richiesta con --reason other")
+    .option('--note <text>', 'note required with --reason other')
     .action(excludeAction);
 
   cmd
     .command('restore <id>')
-    .description('Annulla un\'esclusione: la posizione torna allo stato precedente')
+    .description('Cancel an exclusion: the position returns to the previous state')
     .action(restoreAction);
 
   cmd
     .command('request-cv <id>')
-    .description('Chiedi al team di scrivere il CV per questa posizione')
-    .option('--off', 'annulla la richiesta invece di farla')
+    .description('Ask the team to write the CV for this position')
+    .option('--off', 'cancel the request instead of making it')
     .action(requestCvAction);
 
   program.addCommand(cmd);

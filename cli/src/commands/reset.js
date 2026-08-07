@@ -31,23 +31,23 @@ const SESSIONS_DIR = join(JHT_DIR, 'sessions')
 
 const SCOPES = {
   config: {
-    label:   'config — solo jht.config.json',
+    label:   'config — only jht.config.json',
     targets: [{ path: CONFIG_PATH, label: '~/.jht/jht.config.json', file: true }],
-    warn:    'La configurazione verrà eliminata. Dovrai eseguire jht setup.',
+    warn:    'The configuration will be deleted. You will need to run jht setup.',
   },
   creds: {
-    label:   'creds — config + credenziali + sessioni',
+    label:   'creds — config + credentials + sessions',
     targets: [
       { path: CONFIG_PATH,  label: '~/.jht/jht.config.json', file: true },
       { path: CREDS_DIR,    label: '~/.jht/credentials/',    dir: true },
       { path: SESSIONS_DIR, label: '~/.jht/sessions/',       dir: true },
     ],
-    warn:    'Config e credenziali verranno eliminate. Il workspace verrà conservato.',
+    warn:    'Configuration and credentials will be deleted. The workspace will be preserved.',
   },
   full: {
-    label:   'full — tutto ~/.jht/',
+    label:   'full — all ~/.jht/',
     targets: [{ path: JHT_DIR, label: '~/.jht/', dir: true }],
-    warn:    pc.red('ATTENZIONE: TUTTO ~/.jht/ verrà eliminato in modo permanente.'),
+    warn:    pc.red('WARNING: ALL of ~/.jht/ will be permanently deleted.'),
   },
 }
 
@@ -108,23 +108,23 @@ async function handleReset(opts) {
 
   if (!scopeKey) {
     if (opts.nonInteractive) {
-      clack.log.error('--scope richiesto in modalità --non-interactive')
-      clack.outro(pc.red('Annullato'))
+      clack.log.error('--scope required in --non-interactive mode')
+      clack.outro(pc.red('Cancelled'))
       process.exitCode = 1
       return
     }
     scopeKey = await clack.select({
-      message: 'Seleziona scope reset',
+      message: 'Select the reset scope',
       options: Object.entries(SCOPES).map(([value, s]) => ({ value, label: s.label })),
       initialValue: 'config',
     })
-    if (clack.isCancel(scopeKey)) { clack.outro(pc.dim('Annullato')); return }
+    if (clack.isCancel(scopeKey)) { clack.outro(pc.dim('Cancelled')); return }
   }
 
   const scope = SCOPES[scopeKey]
   if (!scope) {
-    clack.log.error(`Scope non valido: ${scopeKey}. Valori: config | creds | full`)
-    clack.outro(pc.red('Annullato')); process.exitCode = 1; return
+    clack.log.error(`Invalid scope: ${scopeKey}. Values: config | creds | full`)
+    clack.outro(pc.red('Cancelled')); process.exitCode = 1; return
   }
 
   // ── Build delete list ─────────────────────────────────────────────────
@@ -133,19 +133,19 @@ async function handleReset(opts) {
   const toDelete = list.filter(t => t.exists)
 
   if (!toDelete.length) {
-    clack.log.info('Nessun file da eliminare — già pulito.')
-    clack.outro(pc.dim('Niente da fare')); return
+    clack.log.info('No files to be deleted — already clean.')
+    clack.outro(pc.dim('Nothing to do')); return
   }
 
   // ── Show preview ──────────────────────────────────────────────────────
 
   clack.log.warn(scope.warn)
-  clack.log.message(pc.bold('File che verranno eliminati:'))
+  clack.log.message(pc.bold('Files that will be deleted:'))
   for (const t of list) {
     if (t.exists)
       clack.log.message(`  ${pc.red('✗')} ${t.label}${t.detail ? pc.dim(` (${t.detail})`) : ''}`)
     else
-      clack.log.message(`  ${pc.dim('—')} ${t.label} ${pc.dim('(non trovato)')}`)
+      clack.log.message(`  ${pc.dim('—')} ${t.label} ${pc.dim('(not found)')}`)
   }
 
   // ── Confirm ───────────────────────────────────────────────────────────
@@ -154,29 +154,29 @@ async function handleReset(opts) {
   if (opts.nonInteractive) {
     confirmed = !!opts.confirmReset
     if (!confirmed) {
-      clack.log.error('In --non-interactive richiede --confirm-reset')
-      clack.outro(pc.red('Annullato')); process.exitCode = 1; return
+      clack.log.error('--non-interactive requires --confirm-reset')
+      clack.outro(pc.red('Cancelled')); process.exitCode = 1; return
     }
   } else {
     const ans = await clack.confirm({
-      message: `Confermi eliminazione scope ${pc.bold(scopeKey)}?`,
+      message: `Confirm deletion for scope ${pc.bold(scopeKey)}?`,
       initialValue: false,
     })
-    if (clack.isCancel(ans) || !ans) { clack.outro(pc.dim('Annullato')); return }
+    if (clack.isCancel(ans) || !ans) { clack.outro(pc.dim('Cancelled')); return }
     confirmed = true
   }
 
   // ── Execute ───────────────────────────────────────────────────────────
 
   const s = spinner()
-  s.start('Eliminazione in corso…')
+  s.start('Deletion in progress...')
   const { deleted, skipped } = await executeReset(scope.targets)
-  s.stop('Eliminazione completata')
+  s.stop('Deletion completed')
 
-  for (const d of deleted) clack.log.success(`Eliminato: ${d}`)
-  for (const sk of skipped) clack.log.info(pc.dim(`Saltato (non trovato): ${sk}`))
+  for (const d of deleted) clack.log.success(`Deleted: ${d}`)
+  for (const sk of skipped) clack.log.info(pc.dim(`Skipped (not found): ${sk}`))
 
-  clack.outro(pc.green(`Reset ${scopeKey} completato — esegui jht setup per riconfigurare`))
+  clack.outro(pc.green(`Reset ${scopeKey} completed — run jht setup to reconfigure`))
 }
 
 // ── Registration ──────────────────────────────────────────────────────────
@@ -184,9 +184,9 @@ async function handleReset(opts) {
 export function registerResetCommand(program) {
   program
     .command('reset')
-    .description('Reset configurazione — config | creds | full')
+    .description('Reset configuration — config | creds | full')
     .option('--scope <scope>', 'Scope: config | creds | full')
-    .option('--non-interactive', 'Modalità non interattiva')
-    .option('--confirm-reset', 'Conferma reset in --non-interactive')
+    .option('--non-interactive', 'Non-interactive mode')
+    .option('--confirm-reset', 'confirm reset in --non-interactive mode')
     .action(handleReset)
 }

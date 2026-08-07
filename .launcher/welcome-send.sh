@@ -38,15 +38,15 @@ send_one() {
   local role="$1" flag_name="$2" body="$3"
   local flag="$PROFILE_DIR/$flag_name"
   if [ -f "$flag" ]; then
-    log "$role: flag già presente, skip"
+    log "$role: flag already present, skipping"
     return 0
   fi
-  log "$role: invio welcome via jht-telegram-send --from $role"
+  log "$role: sending welcome via jht-telegram-send --from $role"
   if "$SENDER" --from "$role" "$body" >>"$LOG" 2>&1; then
     touch "$flag"
-    log "$role: invio OK + flag creato"
+    log "$role: send OK + flag created"
   else
-    log "$role: invio FAIL (rc=$?), flag NON creato, retry al prossimo boot"
+    log "$role: send FAILED (rc=$?), flag NOT created; retrying at next boot"
     return 1
   fi
 }

@@ -56,12 +56,12 @@ function parseDayList(spec) {
   if (s.includes('-')) {
     const [a, b] = s.split('-');
     const i = ALL_DAYS.indexOf(a), j = ALL_DAYS.indexOf(b);
-    if (i < 0 || j < 0 || i > j) throw new Error(`range giorni invalido: "${spec}"`);
+    if (i < 0 || j < 0 || i > j) throw new Error(`invalid days range: "${spec}"`);
     return ALL_DAYS.slice(i, j + 1);
   }
   const list = s.split(',').map(d => d.trim()).filter(Boolean);
   for (const d of list) {
-    if (!ALL_DAYS.includes(d)) throw new Error(`giorno invalido: "${d}"`);
+    if (!ALL_DAYS.includes(d)) throw new Error(`invalid day: "${d}"`);
   }
   return list;
 }
@@ -69,16 +69,16 @@ function parseDayList(spec) {
 function parseHHMMRange(spec) {
   const [start, end] = (spec || '').split('-').map(s => s.trim());
   if (!HHMM_RE.test(start) || !HHMM_RE.test(end)) {
-    throw new Error(`range orario invalido: "${spec}" (atteso HH:MM-HH:MM)`);
+    throw new Error(`invalid time range: "${spec}" (expected HH:MM-HH:MM)`);
   }
   if (start === end) {
-    throw new Error(`inizio e fine non possono coincidere ("${spec}")`);
+    throw new Error(`beginning and end cannot coincide ("${spec}")`);
   }
   const h = windowHours(start, end);
   if (h < MIN_WINDOW_HOURS) {
     throw new Error(
-      `il blocco deve durare almeno ${MIN_WINDOW_HOURS}h (è ${h.toFixed(1)}h) — ` +
-      `gli orari di lavoro devono essere contigui e di almeno ${MIN_WINDOW_HOURS} ore`,
+      `the block must last at least ${MIN_WINDOW_HOURS}h (currently ${h.toFixed(1)}h) — ` +
+      `working hours must be contiguous and at least ${MIN_WINDOW_HOURS} hours long`,
     );
   }
   return { start, end };
@@ -86,7 +86,7 @@ function parseHHMMRange(spec) {
 
 function formatStatus(wh) {
   if (!wh || !wh.windows || wh.windows.length === 0) {
-    return '🌐 24/7 (sempre attivo)';
+    return '🌐 24/7 (always active)';
   }
   const tz = wh.timezone || 'UTC';
   const lines = [`tz=${tz}`];
@@ -109,19 +109,19 @@ function computeHoursPerWeek(wh) {
 async function handleShow() {
   const cfg = await loadConfig();
   if (!cfg) {
-    console.error('Nessuna configurazione trovata. Esegui: jht setup');
+    console.error('No configuration found. Run: jht setup');
     process.exitCode = 1; return;
   }
   const wh = cfg.team?.working_hours;
   console.log('📅 Working hours:');
   console.log(formatStatus(wh));
-  console.log(`\nOre/sett: ${computeHoursPerWeek(wh)}`);
+  console.log(`\nHours/week: ${computeHoursPerWeek(wh)}`);
 }
 
 async function handleSet(presetName) {
   const preset = PRESETS[presetName];
   if (!preset) {
-    console.error(`Preset sconosciuto: "${presetName}". Disponibili:`);
+    console.error(`Preset unknown: "${presetName}". Available:`);
     for (const [k, v] of Object.entries(PRESETS)) console.error(`  ${k.padEnd(10)} ${v.label}`);
     process.exitCode = 1; return;
   }
@@ -132,7 +132,7 @@ async function handleSet(presetName) {
   if (preset.clear) {
     delete cfg.team.working_hours;
     await saveConfig(cfg);
-    console.log('✓ Working hours → 24/7 (config rimosso)');
+    console.log('✓ Working hours → 24/7 (config removed)');
     return;
   }
 
@@ -143,7 +143,7 @@ async function handleSet(presetName) {
   await saveConfig(cfg);
   console.log(`✓ Working hours → ${preset.label}`);
   console.log(formatStatus(cfg.team.working_hours));
-  console.log(`\nOre/sett: ${computeHoursPerWeek(cfg.team.working_hours)}`);
+  console.log(`\nHours/week: ${computeHoursPerWeek(cfg.team.working_hours)}`);
 }
 
 async function handleSetCustom(daysSpec, rangeSpec, opts) {
@@ -162,16 +162,16 @@ async function handleSetCustom(daysSpec, rangeSpec, opts) {
     windows: [{ days, start, end }],
   };
   await saveConfig(cfg);
-  console.log('✓ Working hours custom impostate');
+  console.log('✓ Custom working hours set');
   console.log(formatStatus(cfg.team.working_hours));
-  console.log(`\nOre/sett: ${computeHoursPerWeek(cfg.team.working_hours)}`);
+  console.log(`\nHours/week: ${computeHoursPerWeek(cfg.team.working_hours)}`);
 }
 
 async function handleClear() {
   let cfg = (await loadConfig()) || {};
   if (cfg.team?.working_hours) delete cfg.team.working_hours;
   await saveConfig(cfg);
-  console.log('✓ Working hours rimosse → team 24/7');
+  console.log('✓ Working hours removed → team runs 24/7');
 }
 
 // La simulazione è un `import` di due moduli Python + un calcolo: sta
@@ -205,11 +205,11 @@ r['provider_active'] = pcap.read_active_provider()
 r['ratio_used'] = ratio
 print(json.dumps(r, indent=2, default=str))`,
     ]);
-    console.log('🧪 Simulazione target corrente (provider attivo + schedule attuale):\n');
+    console.log('Current target simulation (active usage + current schedule):\n');
     console.log(out);
   } catch (e) {
     console.error(`✗ ${e.message}`);
-    console.error('Assicurati che il container "jht" sia in esecuzione (jht team start).');
+    console.error('Make sure the "jht" container is running (jht team start).');
     process.exitCode = 1;
   }
 }
@@ -218,26 +218,26 @@ export function registerWorkingHoursCommand(program) {
   const wh = program
     .command('working-hours')
     .alias('wh')
-    .description('Gestione orari di lavoro del team (distribuzione weekly budget)');
+    .description('Team working hours management (weekly budget distribution)');
 
   wh.command('show')
-    .description('Mostra le working hours configurate + ore/sett totali')
+    .description('Show the working hours configured + total hours/week')
     .action(handleShow);
 
   wh.command('set <preset>')
-    .description(`Imposta un preset (${Object.keys(PRESETS).join(' | ')})`)
+    .description(`Set a preset (${Object.keys(PRESETS).join(' | ')})`)
     .action(handleSet);
 
   wh.command('set-custom <days> <range>')
     .description('Custom — es: jht wh set-custom mon-fri 09:00-18:00')
-    .option('--tz <iana>', 'timezone IANA (default: locale)')
+    .option('--tz <iana>', 'IANA timezone (default: local)')
     .action(handleSetCustom);
 
   wh.command('clear')
-    .description('Rimuove le working hours → team 24/7')
+    .description('Removes working hours → team 24/7')
     .action(handleClear);
 
   wh.command('simulate')
-    .description('Simula target attuale (richiede container running)')
+    .description('Simulate the current target (requires a running container)')
     .action(handleSimulate);
 }

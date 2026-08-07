@@ -43,7 +43,7 @@ jht_spawn_codex_dismiss_update
 
 # 4) Crea la sessione tmux DOTTORE nella workdir corretta.
 tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$DOTTORE_DIR" || {
-  echo "[$LABEL] ERROR: tmux new-session fallito" >&2
+  echo "[$LABEL] ERROR: tmux new-session failed" >&2
   exit 1
 }
 
@@ -59,10 +59,10 @@ tmux send-keys -t "$SESSION" "$DOCTOR_CMD" C-m
 jht_spawn_wait_repl "$SESSION" "$DOCTOR_CMD" "$LABEL" dottore "$LOGS_DIR" "spawn-doctor.sh" || exit 1
 
 # 6c) Auto-accept dei dialog + iniezione del prompt iniziale.
-jht_spawn_kickoff "$SESSION" 'Leggi AGENTS.md ed esegui il giro di health-check come da procedura. Quando hai finito, scrivi il log finale e RESTA in standby disponibile — NON autodistruggerti (al prossimo spawn vieni sostituito, kill-then-create). Se i coordinatori ti scrivono, rispondi al loro bisogno.'
+jht_spawn_kickoff "$SESSION" 'Read AGENTS.md and run the health-check cycle as documented. When finished, write the final log and REMAIN available on standby — DO NOT self-terminate (the next spawn replaces you using kill-then-create). If the coordinators contact you, respond to their request.'
 
 # 7) Log spawn evento per tracciabilità (UI lo mostrerà in timeline).
 ROUND_ID="$(date -u +%Y%m%dT%H%M%SZ)-spawn"
 jht_spawn_log_event "$LOGS_DIR" dottore "$SESSION" "$ROUND_ID" "spawn-doctor.sh"
 
-echo "[$LABEL] $SESSION avviato — workdir=$DOTTORE_DIR — round=$ROUND_ID"
+echo "[$LABEL] $SESSION started — workdir=$DOTTORE_DIR — round=$ROUND_ID"
