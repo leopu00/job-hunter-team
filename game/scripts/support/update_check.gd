@@ -22,8 +22,8 @@ const MACOS_ASSET := "job-hunter-team.zip"
 ## Contratto futuro Windows: il manifest sara firmato fuori dal canale GitHub
 ## e verificato con una root gia incorporata nella 0.3.6. La sola presenza di
 ## questi asset non abilita mai l'installazione.
-const WINDOWS_MANIFEST_ASSET := "WINDOWS-UPDATE-MANIFEST.json"
-const WINDOWS_SIGNATURE_ASSET := "WINDOWS-UPDATE-MANIFEST.sig"
+const WINDOWS_MANIFEST_ASSET := "RELEASE-MANIFEST.json"
+const WINDOWS_SIGNATURE_ASSET := "RELEASE-MANIFEST.json.sig"
 const WINDOWS_AUTO_BASELINE := "0.3.6"
 
 ## Un controllo al giorno. Non è una misura di rete — la richiesta è una sola e
@@ -146,16 +146,28 @@ static func asset_bundle(assets: Array, os_name: String, version: String) -> Dic
 	if os_name == "Windows":
 		required.append_array([WINDOWS_MANIFEST_ASSET, WINDOWS_SIGNATURE_ASSET])
 	var found := {}
+	var required_casefold := {}
+	var seen_required := {}
+	for required_name: String in required:
+		required_casefold[required_name.to_lower()] = required_name
 	for item in assets:
 		if not (item is Dictionary):
 			continue
 		var name := str(item.get("name", ""))
-		if not required.has(name) or found.has(name):
+		var folded := name.to_lower()
+		if not required_casefold.has(folded):
 			continue
+		# GitHub tratta i nomi come stringhe, Windows no: una coppia che cambia
+		# soltanto maiuscole/minuscole e un duplicato identico sono entrambi
+		# ambigui. Non scegliamo mai "il primo" da dati remoti.
+		var canonical_name := str(required_casefold[folded])
+		if name != canonical_name or seen_required.has(folded):
+			return {}
+		seen_required[folded] = true
 		var expected_url := _release_asset_url(version, name)
 		if str(item.get("browser_download_url", "")) != expected_url:
 			continue
-		found[name] = item
+		found[canonical_name] = item
 	for name: String in required:
 		if not found.has(name):
 			return {}

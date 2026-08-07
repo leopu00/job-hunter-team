@@ -79,6 +79,22 @@ static func _has_exact_keys(value: Dictionary, expected: Array[String]) -> bool:
 	return true
 
 
+static func _has_type(value: Dictionary, key: String, expected_type: int) -> bool:
+	return value.has(key) and typeof(value[key]) == expected_type
+
+
+## JSON non distingue integer e float e il parser Godot materializza ogni
+## numero come TYPE_FLOAT. Accettiamo quindi soltanto un numero JSON finito,
+## integrale e nel range esatto IEEE-754 (oppure l'int nativo prodotto in
+## memoria); stringhe e booleani non vengono mai coercizzati.
+static func _json_integer(value: Dictionary, key: String, minimum: int) -> bool:
+	if not value.has(key) or typeof(value[key]) not in [TYPE_INT, TYPE_FLOAT]:
+		return false
+	var number := float(value[key])
+	return is_finite(number) and number >= float(minimum) \
+			and number <= 9007199254740991.0 and floor(number) == number
+
+
 ## Frame emesso dal helper DOPO la propria verifica indipendente, ma prima che
 ## il processo vecchio esca. Serve al gioco solo per sapere che puo chiudersi;
 ## non viene mai riusato dal helper come prova della firma.
@@ -86,6 +102,23 @@ static func ready_frame_matches(frame: Dictionary, expected: Dictionary) -> bool
 	return _has_exact_keys(frame, ["schema", "type", "ok", "nonce",
 			"request_id", "instance_id", "old_pid", "old_started",
 			"manifest_sha256", "candidate_sha256"]) \
+			and _json_integer(frame, "schema", 1) \
+			and _has_type(frame, "type", TYPE_STRING) \
+			and _has_type(frame, "ok", TYPE_BOOL) \
+			and _has_type(frame, "nonce", TYPE_STRING) \
+			and _has_type(frame, "request_id", TYPE_STRING) \
+			and _has_type(frame, "instance_id", TYPE_STRING) \
+			and _json_integer(frame, "old_pid", 1) \
+			and _has_type(frame, "old_started", TYPE_STRING) \
+			and _has_type(frame, "manifest_sha256", TYPE_STRING) \
+			and _has_type(frame, "candidate_sha256", TYPE_STRING) \
+			and _has_type(expected, "nonce", TYPE_STRING) \
+			and _has_type(expected, "request_id", TYPE_STRING) \
+			and _has_type(expected, "instance_id", TYPE_STRING) \
+			and _has_type(expected, "old_pid", TYPE_INT) \
+			and _has_type(expected, "old_started", TYPE_STRING) \
+			and _has_type(expected, "manifest_sha256", TYPE_STRING) \
+			and _has_type(expected, "candidate_sha256", TYPE_STRING) \
 			and _valid_token(str(expected.get("request_id", ""))) \
 			and _valid_token(str(expected.get("instance_id", ""))) \
 			and int(expected.get("old_pid", 0)) > 0 \
@@ -124,27 +157,37 @@ static func health_frame(nonce: String, version: String, exe_sha256: String) -> 
 
 static func health_frame_matches(frame: Dictionary, nonce: String,
 		version: String, exe_sha256: String) -> bool:
-	return frame == health_frame(nonce, version, exe_sha256)
+	return _has_exact_keys(frame, ["schema", "type", "nonce", "version",
+			"exe_sha256"]) \
+			and _json_integer(frame, "schema", 1) \
+			and _has_type(frame, "type", TYPE_STRING) \
+			and _has_type(frame, "nonce", TYPE_STRING) \
+			and _has_type(frame, "version", TYPE_STRING) \
+			and _has_type(frame, "exe_sha256", TYPE_STRING) \
+			and valid_nonce(nonce) \
+			and not UpdateCheck.parse_version(version).is_empty() \
+			and valid_sha256(exe_sha256) \
+			and int(frame.get("schema", 0)) == SCHEMA \
+			and str(frame.get("type", "")) == FRAME_HEALTHY \
+			and str(frame.get("nonce", "")) == nonce \
+			and str(frame.get("version", "")) == version \
+			and str(frame.get("exe_sha256", "")) == exe_sha256
 
 
-## Cartella ACK deterministica: nessun path arriva dal manifest o da argv. Il
-## helper crea e protegge la directory e, dopo la lettura, ne riverifica owner,
-## ACL e assenza di reparse point. Il gioco scrive soltanto il frame di salute.
-static func health_dir(local_app_data: String, nonce: String) -> String:
-	var root := local_app_data.replace("\\", "/").trim_suffix("/")
-	var drive := root[0].to_upper() if not root.is_empty() else ""
-	if root.length() < 3 or root[1] != ":" or root[2] != "/" \
+## Il helper consegna al processo nuovo una capability esplicita gia creata e
+## protetta. Qui si rifiutano soltanto forme palesemente ambigue/traversal: NON
+## e path authority. Dopo la scrittura il helper deve ancora verificare percorso
+## canonico, owner, ACL e assenza di reparse point prima di fidarsi dell'ACK.
+static func health_capability_path(capability: String, nonce: String) -> String:
+	var path := capability.replace("\\", "/")
+	var drive := path[0].to_upper() if not path.is_empty() else ""
+	if path.length() < 3 or path[1] != ":" or path[2] != "/" \
 			or drive not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
-			or "\n" in root or "\r" in root \
-			or root.split("/").has("..") or not valid_nonce(nonce):
+			or "\n" in path or "\r" in path or path.split("/").has("..") \
+			or not valid_nonce(nonce):
 		return ""
-	return root.path_join("Job Hunter Team").path_join(
-			"host-runtime").path_join("updates").path_join(nonce)
-
-
-static func health_path(local_app_data: String, nonce: String) -> String:
-	var directory := health_dir(local_app_data, nonce)
-	return "" if directory == "" else directory.path_join("health.json")
+	var expected_suffix := "/updates/%s/health.json" % nonce
+	return path if path.ends_with(expected_suffix) else ""
 
 
 ## Recovery conservativa e idempotente. Non restituisce mai "apply": dopo un
@@ -190,6 +233,13 @@ static func recovery_action(journal: Dictionary, target_sha256: String,
 static func _valid_journal(journal: Dictionary) -> bool:
 	if not _has_exact_keys(journal, ["schema", "nonce", "installed_version",
 			"target_version", "old_sha256", "candidate_sha256", "state"]) \
+			or not _json_integer(journal, "schema", 1) \
+			or not _has_type(journal, "nonce", TYPE_STRING) \
+			or not _has_type(journal, "installed_version", TYPE_STRING) \
+			or not _has_type(journal, "target_version", TYPE_STRING) \
+			or not _has_type(journal, "old_sha256", TYPE_STRING) \
+			or not _has_type(journal, "candidate_sha256", TYPE_STRING) \
+			or not _has_type(journal, "state", TYPE_STRING) \
 			or int(journal.get("schema", 0)) != SCHEMA \
 			or not valid_nonce(str(journal.get("nonce", ""))) \
 			or UpdateCheck.parse_version(str(journal.get("installed_version", ""))).is_empty() \
@@ -197,7 +247,9 @@ static func _valid_journal(journal: Dictionary) -> bool:
 			or not UpdateCheck.is_newer(str(journal.get("target_version", "")),
 					str(journal.get("installed_version", ""))) \
 			or not valid_sha256(str(journal.get("old_sha256", ""))) \
-			or not valid_sha256(str(journal.get("candidate_sha256", ""))):
+			or not valid_sha256(str(journal.get("candidate_sha256", ""))) \
+			or str(journal.get("old_sha256", "")) \
+					== str(journal.get("candidate_sha256", "")):
 		return false
 	return str(journal.get("state", "")) in [JOURNAL_PREPARED,
 			JOURNAL_SWAP_INTENT, JOURNAL_CANDIDATE_INSTALLED,

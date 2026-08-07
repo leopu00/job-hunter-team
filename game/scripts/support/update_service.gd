@@ -365,10 +365,9 @@ func _save_cfg() -> void:
 		Log.warn("update", "stato aggiornamenti non salvato: errore %d" % error)
 
 
-## ACK di salute del processo NUOVO. Il helper passa soltanto il nonce; path,
-## versione e hash sono derivati localmente. La directory deve gia esistere ed
-## essere stata protetta dal helper: il gioco non la crea e non la considera mai
-## un'autorizzazione. Dopo la lettura il helper riverifica path/ACL/hash.
+## ACK di salute del processo NUOVO. Il helper passa nonce e capability path,
+## crea/protegge prima la directory e, dopo la lettura, riverifica percorso
+## canonico, ACL e hash. Il gioco non considera mai il path un'autorizzazione.
 func _write_windows_health_ack() -> void:
 	if OS.get_name() != "Windows":
 		return
@@ -380,8 +379,8 @@ func _write_windows_health_ack() -> void:
 	var executable := OS.get_executable_path()
 	var digest := FileAccess.get_sha256(executable)
 	var frame := WindowsProtocol.health_frame(nonce, current_version(), digest)
-	var path := WindowsProtocol.health_path(
-			OS.get_environment("LOCALAPPDATA"), nonce)
+	var path := WindowsProtocol.health_capability_path(
+			OS.get_environment("JHT_UPDATE_HEALTH_PATH"), nonce)
 	if frame.is_empty() or path == "" or not DirAccess.dir_exists_absolute(
 			path.get_base_dir()) or FileAccess.file_exists(path):
 		return
