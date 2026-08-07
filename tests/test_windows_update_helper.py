@@ -543,6 +543,23 @@ def _write_compact_json(path: Path, value: dict[str, object]) -> None:
     )
 
 
+def _helper_result_diagnostic(transaction: Path) -> str:
+    result_path = transaction / "result.json"
+    if not result_path.is_file():
+        return "helper result=missing"
+    try:
+        frame = json.loads(result_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "helper result=malformed"
+    if not isinstance(frame, dict):
+        return "helper result=wrong-type"
+    safe = {
+        key: frame.get(key)
+        for key in ("schema", "ok", "phase", "code", "rolled_back")
+    }
+    return "helper result=" + json.dumps(safe, sort_keys=True, separators=(",", ":"))
+
+
 @pytest.mark.parametrize(
     ("boundary", "install_candidate", "install_metadata", "commit_floor", "promote_helper"),
     [
@@ -568,7 +585,7 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
         rsa_keys,
         candidate_helper_suffix=b"\n# independently signed next helper\n",
     )
-    assert verified.returncode == 0, verified.stderr
+    assert verified.returncode == 0, _helper_result_diagnostic(transaction)
     nonce = transaction.name
     state = transaction.parent
     candidate = target.parent / f".jht-update-{nonce}.candidate.exe"
@@ -657,7 +674,7 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
         )
         result = json.loads((transaction / "result.json").read_text())
         if commit_floor:
-            assert recovered.returncode == 0, recovered.stderr
+            assert recovered.returncode == 0, _helper_result_diagnostic(transaction)
             assert result["phase"] == "committed"
             assert target.read_bytes() == candidate_bytes
             assert installed_helper.read_bytes() == candidate_helper_bytes
@@ -677,7 +694,7 @@ def test_windows_powershell51_verifies_signed_bundle(
     tmp_path: Path, rsa_keys: tuple[Path, Path]
 ) -> None:
     result, target, transaction = _run_verify(tmp_path, rsa_keys)
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, _helper_result_diagnostic(transaction)
     assert (transaction / "ready.json").is_file()
     ready = json.loads((transaction / "ready.json").read_text())
     assert ready["old_pid"] > 0
@@ -694,7 +711,7 @@ def test_windows_powershell51_rotation_overlap_accepts_new_signed_new_only_helpe
     result, target, transaction = _run_verify(
         tmp_path, rsa_keys, rotation_keys=next_keys
     )
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, _helper_result_diagnostic(transaction)
     assert (transaction / "ready.json").is_file()
     installed_helper = target.parent / HELPER
     candidate_helper = transaction / HELPER
@@ -750,6 +767,8 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
     state = tmp_path / "state"
     transaction = state / nonce
     transaction.mkdir(parents=True)
+    _protect_directory(state)
+    _protect_directory(transaction)
     installed_build = tmp_path / "installed-build"
     candidate_build = tmp_path / "candidate-build"
     installed_build.mkdir()
@@ -834,7 +853,7 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         deadline = time.monotonic() + 15
         while not ready.exists() and time.monotonic() < deadline:
             time.sleep(0.05)
-        assert ready.exists(), updater.communicate(timeout=2)
+        assert ready.exists(), _helper_result_diagnostic(transaction)
         old.terminate()
         old.wait(timeout=5)
 
