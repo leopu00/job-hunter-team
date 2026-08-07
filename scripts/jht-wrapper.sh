@@ -51,15 +51,73 @@ else
   GAME_CONTROL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/Job Hunter Team/client"
 fi
 
-# Carica la host env (scritta da host-setup.sh: JHT_HOST_TYPE=vps|local).
-# Il wizard Node usa JHT_HOST_TYPE per attivare step obbligatori (cloud
-# pairing, telegram) sul path VPS, e il dispatcher pid1 del container
-# lo usa per scegliere tra dashboard locale e cloud sync daemon.
+# Legge una singola chiave dal file host.env come DATI, mai come shell.
+#
+# ~/.jht e' montata read-write nel container, quindi host.env non attraversa
+# un confine di fiducia: un processo nel container puo' modificarlo. Fare
+# `source` di quel file trasformerebbe la scrittura nel bind mount in
+# esecuzione di comandi sull'host al successivo `jht`. Il parser accetta solo
+# le tre chiavi prodotte da host-setup.sh e valida i rispettivi domini.
+jht_host_env_value_valid() {
+  local key="$1" value="$2"
+  case "$key" in
+    JHT_HOST_TYPE)
+      case "$value" in local|vps) return 0 ;; esac
+      ;;
+    JHT_LANG)
+      case "$value" in en|it|hu|es|de|fr|pt) return 0 ;; esac
+      ;;
+    JHT_USER_TZ)
+      # IANA timezone: UTC oppure segmenti composti da caratteri portabili.
+      # Niente spazi o metacaratteri shell; host-setup fa la validazione
+      # semantica completa con zoneinfo quando riceve il valore dall'utente.
+      case "$value" in
+        ''|*[!A-Za-z0-9_+./-]*) return 1 ;;
+        *) return 0 ;;
+      esac
+      ;;
+  esac
+  return 1
+}
+
+jht_read_host_env_value() {
+  local file="$1" requested="$2" line key value result=""
+  local found=1
+  [ -f "$file" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    if [[ "$line" =~ ^[[:space:]]*(JHT_HOST_TYPE|JHT_LANG|JHT_USER_TZ)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+      case "$value" in
+        \"*\") value="${value#\"}"; value="${value%\"}" ;;
+        \'*\') value="${value#\'}"; value="${value%\'}" ;;
+      esac
+      if [ "$key" = "$requested" ] && jht_host_env_value_valid "$key" "$value"; then
+        result="$value"
+        found=0
+      fi
+    fi
+  done < "$file"
+  [ "$found" -eq 0 ] || return 1
+  printf '%s' "$result"
+}
+
+# Carica la host env scritta da host-setup.sh. Il wizard Node usa
+# JHT_HOST_TYPE per attivare gli step obbligatori sul path VPS, e pid1 lo usa
+# per scegliere il runtime. Le assegnazioni esplicite preservano il contratto
+# storico senza eseguire il contenuto del file.
 HOST_ENV_FILE="${JHT_HOST_ENV_FILE:-$HOME/.jht/host.env}"
-if [ -f "$HOST_ENV_FILE" ]; then
-  # shellcheck disable=SC1090
-  . "$HOST_ENV_FILE"
+if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_HOST_TYPE)"; then
+  JHT_HOST_TYPE="$host_env_value"
 fi
+if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_LANG)"; then
+  JHT_LANG="$host_env_value"
+fi
+if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_USER_TZ)"; then
+  JHT_USER_TZ="$host_env_value"
+fi
+unset host_env_value
 JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
 JHT_LANG="${JHT_LANG:-en}"
 # Bug #15: timezone utente esplicita dal setup wizard. Default UTC se mai
@@ -1157,15 +1215,19 @@ case "$SUB" in
         info "host-setup.sh non trovato in $HOST_SETUP_SCRIPT — skip preflight host"
       fi
     fi
-    # Re-source host.env DOPO host-setup.sh: il file viene scritto solo li',
-    # quindi il source iniziale del wrapper (top-level) lo manca al primo
-    # setup. Senza questo, JHT_HOST_TYPE arriverebbe "unknown" al wizard
-    # Node e il branch VPS-only (cloud + telegram obbligatori) non si
-    # attiverebbe. Idempotente nei run successivi.
-    if [ -f "$HOST_ENV_FILE" ]; then
-      # shellcheck disable=SC1090
-      . "$HOST_ENV_FILE"
+    # Rileggi host.env DOPO host-setup.sh: al primo setup il file non esiste
+    # ancora quando parte il wrapper. Anche qui resta input non fidato e passa
+    # esclusivamente dallo stesso parser allowlist, mai dalla shell.
+    if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_HOST_TYPE)"; then
+      JHT_HOST_TYPE="$host_env_value"
     fi
+    if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_LANG)"; then
+      JHT_LANG="$host_env_value"
+    fi
+    if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_USER_TZ)"; then
+      JHT_USER_TZ="$host_env_value"
+    fi
+    unset host_env_value
     JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
     ensure_up
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
