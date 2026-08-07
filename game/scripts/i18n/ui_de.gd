@@ -1558,6 +1558,7 @@ const S := {
 	"vps.artifact.path_outside": "Pfad liegt außerhalb der Datenbereiche",
 	"vps.artifact.file_missing": "Datei im Container nicht gefunden",
 	"vps.ticket.position_missing": "Stelle ist nicht vorhanden",
+	"vps.ssh.failed": "SSH fehlgeschlagen (Exit-Code %s)",
 	"diagnostics.section.app": "Anwendung", "diagnostics.section.system": "System",
 	"diagnostics.section.runtime": "Laufzeit", "diagnostics.field.version": "Version",
 	"diagnostics.field.engine": "Engine", "diagnostics.field.ui_language": "UI-Sprache",

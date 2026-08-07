@@ -1558,6 +1558,7 @@ const S := {
 	"vps.artifact.path_outside": "le chemin est hors des zones de données",
 	"vps.artifact.file_missing": "fichier introuvable dans le conteneur",
 	"vps.ticket.position_missing": "le poste n’existe pas",
+	"vps.ssh.failed": "échec de SSH (code de sortie %s)",
 	"diagnostics.section.app": "Application", "diagnostics.section.system": "Système",
 	"diagnostics.section.runtime": "Environnement d’exécution", "diagnostics.field.version": "version",
 	"diagnostics.field.engine": "moteur", "diagnostics.field.ui_language": "langue de l’interface",
