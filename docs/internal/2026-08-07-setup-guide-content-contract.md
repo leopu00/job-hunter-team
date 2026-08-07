@@ -85,20 +85,33 @@ data.
 your private dashboard. The team can remain fully local.
 
 **Google sign-in:** With the container running, open **Settings → Account** in
-Job Hunter Team Desktop, then select the **Account** tile under **Account and
-channels** and select **Sign in with Google**. The embedded console shows a
-one-time link and code. Open the link, sign in to the web with Google if asked,
-and enter the code. Google authenticates the web account. The OAuth call
-requests no explicit additional scopes; the guide must not claim which consent
-permissions Google will display before that screen is measured with an
-approved test account.
+Job Hunter Team Desktop, select the **Account** tile under **Account and
+channels**, then select **Sign in with Google**. The embedded console shows a
+temporary verification link and a one-time code. Open the link. The browser
+may show the Job Hunter Team sign-in page, Google's account chooser, and a
+Google consent screen. Select the Google account that should own the private
+dashboard.
 
-**Device authorization:** On **Connect the CLI**, enter the one-time code, add
-an optional token name if useful, and select **Confirm pairing**. **Pairing
-complete** means this device may sync positions, profile, and commands with the
-account. Return to **Settings → Account** and select **Sync now**. The local
-team stores a revocable device token. It never stores your Google password or
-browser cookies.
+Google sign-in requests only the standard identity access required by Supabase
+Auth: **OpenID** to authenticate the account, **email** to read its primary
+email address and verification status, and **profile** to read basic profile
+information such as display name and profile picture. Job Hunter Team adds no
+Google Drive, Gmail, Calendar, Contacts, or other Google product scope. These
+permissions create or authenticate the Job Hunter Team web account; they do not
+let the local team use those Google products. The optional
+[Team Gmail](/docs/guides/team-gmail) setup is separate: you explicitly connect
+a dedicated inbox later with its own app password, stored locally, and that
+does not add Gmail access to this Google sign-in.
+
+**Device authorization:** After Google sign-in, **Connect the CLI** asks for
+the one-time code from the embedded console and an optional token name. Select
+**Confirm pairing** only if the displayed account is the one you intend to use.
+**Pairing complete** means Job Hunter Team has issued this local installation a
+revocable device token. That token may sync positions and profile data to the
+private dashboard and receive dashboard commands for the local team. It is a
+Job Hunter Team token, not a Google credential: the local installation never
+stores your Google password or browser cookies. You can revoke the token later
+under **Cloud sync settings** without deleting the local team.
 
 **Verify sync:** Return to **Settings → Account** and confirm **CLOUD ACCOUNT
 — connected** and **DEVICE — paired**. Open the dashboard and check for
@@ -108,6 +121,11 @@ must show the same data.
 ## TypeScript handoff
 
 ```ts
+const GOOGLE_SCREEN_PLACEHOLDER = {
+  title: "Screenshot pending",
+  body: "This step is fully described below. A privacy-safe image will be added after an isolated Google test account is authorized.",
+} as const;
+
 export const SETUP_GUIDE = {
   slug: "/setup-guide",
   pageName: "Setup Guide",
@@ -330,26 +348,36 @@ export const SETUP_GUIDE = {
     {
       id: "sign-in-with-google",
       title: "Sign in with Google",
-      body: "Select SIGN IN WITH GOOGLE. The embedded console shows a one-time link and code. Open the link, sign in to the web with Google if asked, and enter the code on Connect the CLI. The OAuth call requests no explicit additional scopes; review the Google screen shown to you instead of relying on a fixed permission list.",
+      body: "With the container running, open Settings → Account, select Account under Account and channels, then select SIGN IN WITH GOOGLE. The embedded console shows a temporary verification link and one-time code. Open the link. The browser may show the Job Hunter Team sign-in page, Google's account chooser, and a consent screen. Select the Google account that should own your private dashboard. Do not enter the one-time code on any page whose address is not the expected Job Hunter Team site.",
       os: "all",
       screen: "W02-google-login",
+      screenFallback: GOOGLE_SCREEN_PLACEHOLDER,
       links: [{ label: "Cloud sync settings", href: "/settings/cloud-sync" }],
     },
     {
       id: "review-permissions",
-      title: "Approve this device",
-      body: "On Connect the CLI, add an optional token name and select Confirm pairing. Pairing complete authorizes this device to sync positions, profile, and commands. Return to Settings → Account and select SYNC NOW. The local team receives a revocable device token, never your Google password or browser cookies.",
+      title: "Review access and approve this device",
+      body: "Before continuing, review two separate grants. Google sign-in uses only OpenID to authenticate you, email to read your primary email address and verification status, and profile to read basic information such as your display name and profile picture. Job Hunter Team requests no Google Drive, Gmail, Calendar, Contacts, or other Google product access. The optional Team Gmail setup is separate: you explicitly connect a dedicated inbox later with its own app password, stored locally, and it does not add Gmail access to this sign-in. Next, Connect the CLI asks for the one-time code and an optional token name. Confirm pairing issues this installation a revocable Job Hunter Team device token: it may sync positions and profile data to your private dashboard and receive dashboard commands for the local team. It never contains or stores your Google password or browser cookies. Continue only if the Google account and these uses are correct.",
       os: "all",
       screen: "W03-permissions",
-      links: [],
+      screenFallback: GOOGLE_SCREEN_PLACEHOLDER,
+      links: [
+        { label: "Privacy policy", href: "/privacy" },
+        { label: "Set up a separate team inbox", href: "/docs/guides/team-gmail" },
+        { label: "Manage devices and revoke access", href: "/settings/cloud-sync" },
+      ],
     },
     {
       id: "verify-dashboard-sync",
       title: "Verify the dashboard sync",
-      body: "Confirm CLOUD ACCOUNT — connected and DEVICE — paired in Job Hunter Team Desktop. In the web dashboard, confirm ✓ Cloud sync, a recent Last: time, and the same positions and profile.",
+      body: "After Pairing complete, return to Settings → Account in Job Hunter Team Desktop. Confirm CLOUD ACCOUNT — connected and DEVICE — paired, or the safe token name you chose, then select SYNC NOW. Open the dashboard with the same Google account. ✓ Cloud sync means the local and cloud counts match; ◐ To sync means changes are still pending. Last: shows when the most recent successful sync completed. Confirm that the dashboard shows the same profile and positions as the local team. If it is empty, wait until the team has produced a scored position, select SYNC NOW again, and refresh the dashboard. If the app still says local / guest mode, repeat sign-in and pairing. You can stop future sync at any time by revoking the device under Cloud sync settings; local data is not deleted.",
       os: "all",
       screen: ["W04a-local-linked", "W04b-dashboard-synced"],
-      links: [{ label: "Open the dashboard", href: "/dashboard" }],
+      screenFallback: GOOGLE_SCREEN_PLACEHOLDER,
+      links: [
+        { label: "Open the dashboard", href: "/dashboard" },
+        { label: "Manage devices and revoke access", href: "/settings/cloud-sync" },
+      ],
     },
   ],
 } as const;
@@ -390,14 +418,23 @@ on the recording machine.
 
 `S05-first-launch` is a clean first launch at the English language picker.
 `S07-enter-office` uses an empty optional name field or a neutral fixture name.
-`W02-google-login` is blocked for an English capture until the embedded
-technical-terminal title and hint are localized: they are currently hardcoded
-in Italian even when the rest of the product is English. Do not publish the
-Italian frame and do not fabricate an English replacement. After that product
-fix, the frame may show only the pairing instructions, with every code and
-account detail excluded. `W03-permissions` uses the real English web title
-**Connect the CLI** and shows the device-approval state without an email,
-avatar, device identifier, or authorization code. `W04a-local-linked` and
+For every missing `W02`–`W04` asset, render `screenFallback` in the image slot;
+do not remove the phase or shorten its copy. Replace the placeholder only with
+an E2E-approved, privacy-safe image. The English localization for the embedded
+cloud-login terminal was merged into `master` through `13c9e7902` (source
+commit `f031bb2b3`), but a merge is not a shipped desktop release. A
+prepublication E2E capture may use only a build whose recorded provenance
+contains `f031bb2b3`; do not describe the localized terminal as behavior of the
+current public artifact until a published release contains that commit.
+Regardless of build provenance, Google-authenticated images remain blocked
+without an explicitly approved isolated test account.
+
+`W02-google-login` may show the pre-authentication product state, Google account
+chooser before an account is selected, or a consent page only when those
+surfaces contain no personal account data. Every code and account detail stays
+out of the frame. `W03-permissions` uses the real English web title **Connect
+the CLI** and shows the device-approval state without an email, avatar, device
+identifier, token name, or authorization code. `W04a-local-linked` and
 `W04b-dashboard-synced` show only the exact connected/sync labels defined above
 and synthetic profile/position data.
 
