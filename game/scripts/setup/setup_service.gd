@@ -160,8 +160,8 @@ func _self_test_vps_setup() -> void:
 			or not runtime_command.contains("$HOME/.local/bin/jht") \
 			or not runtime_command.contains("JHT_HOST_RUNTIME_PROTOCOL=1") \
 			or not runtime_command.contains("JHT_UPGRADE_PROTOCOL=1") \
-			or runtime_command.find("JHT_HOST_RUNTIME_PROTOCOL=1") \
-					> runtime_command.find("\"$JHT_BIN\" up"):
+			or runtime_command.contains("\"$JHT_BIN\" up") \
+			or not runtime_command.contains("JHT_WRAPPER_PATH=\"$JHT_BIN\" bash \"$JHT_BOOTSTRAP\""):
 		failures.append("rilevamento wrapper VPS incompleto")
 	# Un wrapper legacy con il solo protocollo upgrade non deve essere mai
 	# eseguito: migrazione e rollback condividono esattamente questo gate.
@@ -171,12 +171,28 @@ func _self_test_vps_setup() -> void:
 	DirAccess.make_dir_recursive_absolute(legacy_bin)
 	_test_write(legacy_jht, "#!/usr/bin/env bash\nJHT_UPGRADE_PROTOCOL=1\ntouch " \
 			+ _shell_quote(legacy_sentinel) + "\n")
+	var secure_fixture := legacy_bin.path_join("secure-bootstrap")
+	_test_write(secure_fixture, "#!/usr/bin/env bash\nJHT_UPGRADE_PROTOCOL=1\n" \
+			+ "JHT_HOST_RUNTIME_PROTOCOL=1\nexit 0\n")
+	var fake_curl := legacy_bin.path_join("curl")
+	_test_write(fake_curl, "#!/usr/bin/env bash\nset -eu\nurl='' out=''\n" \
+			+ "while [ \"$#\" -gt 0 ]; do case \"$1\" in -o) out=$2; shift 2;; -*) shift;; *) url=$1; shift;; esac; done\n" \
+			+ "case \"$url\" in */commits/production) printf '{\\n  \"sha\": \"cccccccccccccccccccccccccccccccccccccccc\"\\n}\\n' > \"$out\";; " \
+			+ "*) cp " + _shell_quote(secure_fixture) + " \"$out\";; esac\n")
 	_run("chmod", PackedStringArray(["700", legacy_jht]))
-	var legacy_probe := _run("bash", PackedStringArray(["-c",
-			"PATH=" + _shell_quote(legacy_bin) + ":/usr/bin:/bin; " + runtime_command]))
-	if legacy_probe.get("code", 0) == 0 \
+	_run("chmod", PackedStringArray(["700", fake_curl, secure_fixture]))
+	# OS.execute ricompone gli argomenti di `bash -c` tramite la shell su macOS:
+	# un comando ricco di virgolette perderebbe il confine del singolo argv.
+	# Uno script sintetico mantiene il test fedele a ciò che riceve SSH.
+	var probe_script := test_root.path_join("probe-vps-runtime.sh")
+	_test_write(probe_script, "#!/usr/bin/env bash\nPATH=" \
+			+ _shell_quote(legacy_bin) + ":/usr/bin:/bin\n" + runtime_command + "\n")
+	_run("chmod", PackedStringArray(["700", probe_script]))
+	var legacy_probe := _run("bash", PackedStringArray([probe_script]))
+	if legacy_probe.get("code", 1) != 0 \
 			or FileAccess.file_exists(legacy_sentinel):
-		failures.append("wrapper VPS legacy eseguito prima del doppio gate")
+		failures.append("bootstrap VPS non isola il wrapper legacy: " \
+				+ str(legacy_probe.get("out", "")).strip_edges().right(400))
 
 	var archive := test_root.path_join("migration.tar.gz")
 	var packed := _create_local_migration_archive(archive)
@@ -2175,9 +2191,7 @@ static func _vps_prepare_runtime_command() -> String:
 			+ "JHT_BIN_REAL=\"$(cd -P \"$(dirname \"$JHT_BIN\")\" && printf '%s/%s' \"$(pwd -P)\" \"$(basename \"$JHT_BIN\")\")\"; " \
 			+ "[ \"$JHT_BIN\" = \"$JHT_BIN_REAL\" ]; " \
 			+ "case \"$JHT_BIN_REAL\" in \"$HOME/.jht\"|\"$HOME/.jht/\"*|\"$HOME/Documents/Job Hunter Team\"|\"$HOME/Documents/Job Hunter Team/\"*) exit 1;; esac; " \
-			+ "grep -Eq '^[[:space:]]*JHT_UPGRADE_PROTOCOL=1([[:space:]]|$)' \"$JHT_BIN\"; " \
-			+ "grep -Eq '^[[:space:]]*JHT_HOST_RUNTIME_PROTOCOL=1([[:space:]]|$)' \"$JHT_BIN\"; " \
-			+ "\"$JHT_BIN\" up"
+			+ _posix_upgrade_bootstrap_with_target("JHT_WRAPPER_PATH=\"$JHT_BIN\"", false)
 
 
 func _do_provision_vps(target: Dictionary) -> Dictionary:
