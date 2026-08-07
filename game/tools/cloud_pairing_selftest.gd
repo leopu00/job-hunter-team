@@ -18,7 +18,10 @@ class FakeBrowserTerminal extends EmbeddedTerminal:
 
 
 func _init() -> void:
-	_run.call_deferred()
+	if OS.get_environment("JHT_CLOUD_PAIRING_MANUAL") == "1":
+		_run_manual.call_deferred()
+	else:
+		_run.call_deferred()
 
 
 func _event_line(event: Dictionary) -> String:
@@ -61,6 +64,20 @@ func _wait_until(predicate: Callable, attempts := 120) -> bool:
 			return true
 		await create_timer(0.025).timeout
 	return false
+
+
+## Prova manuale senza backend: apre example.com tramite la stessa modale e
+## lascia attivo "APRI DI NUOVO" per verificare un click reale. Non contiene
+## account, token o codici di pairing di produzione.
+func _run_manual() -> void:
+	root.title = "JHT · Cloud pairing manual test"
+	root.size = Vector2i(1100, 720)
+	var url := "https://example.com/?jht-cloud-pairing-manual=1"
+	var terminal := EmbeddedTerminal.new("cloud", _spec([
+		{"event": "ready", "url": url, "expires_in": 600},
+	], true))
+	root.add_child(terminal)
+	print("CLOUD-PAIRING-MANUAL READY url=", url)
 
 
 func _run() -> void:
