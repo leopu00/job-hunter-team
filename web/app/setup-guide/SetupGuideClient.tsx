@@ -63,7 +63,7 @@ function GuideContent() {
         className="mx-auto max-w-6xl px-6 pt-24 pb-20 sm:pt-28"
       >
         <header className="max-w-3xl">
-          <h1 className="text-[28px] font-extrabold leading-tight tracking-tight text-[var(--color-white)] sm:text-4xl">
+          <h1 className="hyphens-auto break-words text-[28px] font-extrabold leading-tight tracking-tight text-[var(--color-white)] sm:text-4xl">
             {GUIDE_UI.page_title[lang]}
           </h1>
           <p className="mt-4 text-[14px] leading-relaxed text-[var(--color-bright)] sm:text-[15px]">
@@ -124,7 +124,7 @@ function GuideContent() {
                 </p>
                 <h2
                   id={`chapter-${chapter.id}-title`}
-                  className="mt-1 text-[21px] font-bold tracking-tight text-[var(--color-white)] sm:text-2xl"
+                  className="mt-1 hyphens-auto break-words text-[21px] font-bold tracking-tight text-[var(--color-white)] sm:text-2xl"
                 >
                   {chapter.title[lang]}
                 </h2>
