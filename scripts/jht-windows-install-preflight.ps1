@@ -103,25 +103,13 @@ public static class JhtInstallerFileIdentity {
 
 function Get-NodeAcl {
   param([IO.FileSystemInfo]$Node)
-  if ($Node.PSIsContainer) {
-    return [IO.FileSystemAclExtensions]::GetAccessControl(
-      [IO.DirectoryInfo]$Node,
-      [Security.AccessControl.AccessControlSections]::All)
-  }
-  return [IO.FileSystemAclExtensions]::GetAccessControl(
-    [IO.FileInfo]$Node,
+  return $Node.GetAccessControl(
     [Security.AccessControl.AccessControlSections]::All)
 }
 
 function Set-NodeAcl {
   param([IO.FileSystemInfo]$Node, [Security.AccessControl.FileSystemSecurity]$Acl)
-  if ($Node.PSIsContainer) {
-    [IO.FileSystemAclExtensions]::SetAccessControl(
-      [IO.DirectoryInfo]$Node, [Security.AccessControl.DirectorySecurity]$Acl)
-  } else {
-    [IO.FileSystemAclExtensions]::SetAccessControl(
-      [IO.FileInfo]$Node, [Security.AccessControl.FileSecurity]$Acl)
-  }
+  $Node.SetAccessControl($Acl)
 }
 
 function Assert-OwnerAndAcl {

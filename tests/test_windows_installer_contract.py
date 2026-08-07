@@ -209,13 +209,13 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     set_owner = tmp_path / "set-owner.ps1"
     set_owner.write_text(
         "$item=[IO.FileInfo]::new($env:JHT_OWNER_PATH);"
-        "$acl=[IO.FileSystemAclExtensions]::GetAccessControl("
-        "$item,[Security.AccessControl.AccessControlSections]::All);"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
         "$sid=if($env:JHT_OWNER_MODE -ceq 'current'){"
         "[Security.Principal.WindowsIdentity]::GetCurrent().User"
         "}else{[Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')};"
         "$acl.SetOwner($sid);"
-        "[IO.FileSystemAclExtensions]::SetAccessControl($item,$acl)\n",
+        "$item.SetAccessControl($acl)\n",
         encoding="utf-8",
     )
     owner_env = environment.copy()
@@ -253,13 +253,13 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     foreign_acl = tmp_path / "add-foreign-ace.ps1"
     foreign_acl.write_text(
         "$item=[IO.DirectoryInfo]::new($env:JHT_ACL_PATH);"
-        "$acl=[IO.FileSystemAclExtensions]::GetAccessControl("
-        "$item,[Security.AccessControl.AccessControlSections]::All);"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
         "$sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-545');"
         "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
         "$sid,'Modify','ContainerInherit,ObjectInherit','None','Allow');"
         "$acl.AddAccessRule($rule);"
-        "[IO.FileSystemAclExtensions]::SetAccessControl($item,$acl)\n",
+        "$item.SetAccessControl($acl)\n",
         encoding="utf-8",
     )
     acl_env = environment.copy()

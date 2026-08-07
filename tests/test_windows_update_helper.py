@@ -323,6 +323,12 @@ def _run_verify(
         state = tmp_path / "state"
     transaction = state / nonce
     transaction.mkdir(parents=True)
+    if mutation != "state-junction":
+        # `%TEMP%` on the hosted runner can grant write to BUILTIN\Users.
+        # Production state lives under the owner-protected LOCALAPPDATA root;
+        # mirror that authority before the helper's pre-mutation attestation.
+        _protect_directory(state)
+        _protect_directory(transaction)
     installed_build = tmp_path / "installed-build"
     candidate_build = tmp_path / "candidate-build"
     installed_build.mkdir()
