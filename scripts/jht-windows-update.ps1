@@ -714,14 +714,18 @@ function Get-ObservedProcess {
 function Acquire-Lock {
   for ($attempt = 0; $attempt -lt 3; $attempt++) {
     $claim = Join-Path $StateRoot ('.update-claim-' + [guid]::NewGuid().ToString('N'))
+    $script:FailureCode = 'lock_claim_init'
     Initialize-ProtectedDirectory $claim
+    $script:FailureCode = 'lock_claim_write'
     Write-AtomicJson (Join-Path $claim 'owner.json') @{ schema = 1; nonce = $Nonce; pid = $PID; started = $script:LockOwnerStarted }
+    $script:FailureCode = 'lock_claim_promote'
     try {
       [IO.Directory]::Move($claim, $LockPath)
       return
     } catch {
       Remove-Item -LiteralPath $claim -Recurse -Force -ErrorAction SilentlyContinue
       if (-not (Test-Path -LiteralPath $LockPath -PathType Container)) { continue }
+      $script:FailureCode = 'lock_existing_validate'
       Assert-NoReparseAncestors $LockPath
       Assert-OwnerAndAcl $LockPath -Directory
       $owner = Read-JsonFile (Join-Path $LockPath 'owner.json')
@@ -730,10 +734,13 @@ function Acquire-Lock {
         if ($active) { throw 'another Windows update transaction is active' }
       }
       $stale = Join-Path $StateRoot ('.update-stale-' + [guid]::NewGuid().ToString('N'))
+      $script:FailureCode = 'lock_stale_promote'
       try { [IO.Directory]::Move($LockPath, $stale) } catch { continue }
+      $script:FailureCode = 'lock_stale_remove'
       Remove-Item -LiteralPath $stale -Recurse -Force -ErrorAction Stop
     }
   }
+  $script:FailureCode = 'lock_exhausted'
   throw 'unable to acquire the Windows update transaction lock'
 }
 

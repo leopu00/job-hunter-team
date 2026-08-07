@@ -103,6 +103,138 @@ try {
 & ([ScriptBlock]::Create($body + "`n" + $probe))
 """
 
+LOCK_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @(
+  'Test-JsonInteger', 'Test-ExactProperties', 'Get-FileSystemParent',
+  'Assert-NoReparseAncestors', 'Assert-NoForeignWriteAcl',
+  'Assert-OwnerAndAcl', 'Assert-CurrentOwner',
+  'Initialize-ProtectedDirectory', 'Write-AtomicJson', 'Read-JsonFile',
+  'Get-ExactProcess', 'Acquire-Lock')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) {
+  throw 'production lock functions are missing'
+}
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$root = [IO.Path]::GetFullPath($env:JHT_TEST_LOCK_ROOT)
+$script:FailureCode = 'lock_init'
+$script:LockOwnerStarted =
+  [Diagnostics.Process]::GetCurrentProcess().StartTime.ToUniversalTime().Ticks.ToString()
+
+function Assert-NoLockResidue {
+  param([string]$StateRoot)
+  $claims = @(Get-ChildItem -LiteralPath $StateRoot -Force |
+    Where-Object { $_.Name -like '.update-claim-*' })
+  $stale = @(Get-ChildItem -LiteralPath $StateRoot -Force |
+    Where-Object { $_.Name -like '.update-stale-*' })
+  if ($claims.Count -ne 0 -or $stale.Count -ne 0) {
+    throw 'lock seam left transient residue'
+  }
+}
+
+function Assert-ExactLockOwner {
+  param([string]$LockPath, [string]$ExpectedNonce)
+  $owner = Read-JsonFile (Join-Path $LockPath 'owner.json')
+  if (-not (Test-ExactProperties $owner @('nonce','pid','schema','started')) -or
+      -not (Test-JsonInteger $owner.schema) -or [int64]$owner.schema -ne 1 -or
+      -not (Test-JsonInteger $owner.pid) -or [int]$owner.pid -ne $PID -or
+      [string]$owner.nonce -cne $ExpectedNonce -or
+      [string]$owner.started -cne $script:LockOwnerStarted) {
+    throw 'production lock owner schema or binding mismatch'
+  }
+}
+
+function Get-LockSnapshot {
+  param([string]$LockPath)
+  $children = @(Get-ChildItem -LiteralPath $LockPath -Force)
+  if ($children.Count -ne 1 -or $children[0].Name -cne 'owner.json') {
+    throw 'production lock contains unexpected nodes'
+  }
+  $directory = [IO.DirectoryInfo]::new($LockPath)
+  $owner = [IO.FileInfo]::new((Join-Path $LockPath 'owner.json'))
+  $sections = [Security.AccessControl.AccessControlSections]::All
+  return ([ordered]@{
+    directory_sddl = $directory.GetAccessControl($sections).GetSecurityDescriptorSddlForm($sections)
+    owner_sddl = $owner.GetAccessControl($sections).GetSecurityDescriptorSddlForm($sections)
+    owner_bytes = [Convert]::ToBase64String([IO.File]::ReadAllBytes($owner.FullName))
+  } | ConvertTo-Json -Compress)
+}
+
+function Invoke-LockCase {
+  param([ValidateSet('clean','active','stale')][string]$Case)
+  $script:StateRoot = Join-Path $root $Case
+  $script:LockPath = Join-Path $script:StateRoot '.update.lock'
+  $script:Nonce = $Case.Substring(0, 1) * 32
+  Initialize-ProtectedDirectory $script:StateRoot
+  try {
+    if ($Case -ceq 'stale') {
+      Initialize-ProtectedDirectory $script:LockPath
+      Write-AtomicJson (Join-Path $script:LockPath 'owner.json') @{
+        schema = 1
+        nonce = 'f' * 32
+        pid = 2147483647
+        started = '100000000000000000'
+      }
+    }
+    Acquire-Lock
+    if (-not (Test-Path -LiteralPath $script:LockPath -PathType Container)) {
+      throw 'production lock was not materialized'
+    }
+    Assert-ExactLockOwner $script:LockPath $script:Nonce
+    $expected = 'lock_claim_promote'
+    if ($Case -ceq 'active') {
+      $beforeActive = Get-LockSnapshot $script:LockPath
+      try {
+        Acquire-Lock
+        throw 'active production lock was accepted'
+      } catch {
+        if ($script:FailureCode -cne 'lock_existing_validate') { throw }
+      }
+      $afterActive = Get-LockSnapshot $script:LockPath
+      if ($afterActive -cne $beforeActive) {
+        throw 'active production lock was mutated by the rejected claimant'
+      }
+      $expected = 'lock_existing_validate'
+    }
+    if ($script:FailureCode -cne $expected) {
+      throw 'unexpected production lock stage'
+    }
+    Assert-NoLockResidue $script:StateRoot
+    [Console]::Out.WriteLine(
+      'WINDOWS-LOCK-SEAM PASS mode=' + $Case +
+      ' code=' + $script:FailureCode)
+  } catch {
+    [Console]::Error.WriteLine(
+      'WINDOWS-LOCK-SEAM ERROR mode=' + $Case +
+      ' code=' + $script:FailureCode)
+    exit 31
+  } finally {
+    Remove-Item -LiteralPath $script:StateRoot -Recurse -Force `
+      -ErrorAction SilentlyContinue
+  }
+}
+
+try {
+  foreach ($case in @('clean','active','stale')) { Invoke-LockCase $case }
+} finally {
+  Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+}
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
 
 def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
     source = HELPER_SOURCE.read_text()
@@ -119,6 +251,13 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         "location_node_owner",
         "location_state_acl",
         "location_target_acl",
+        "lock_claim_init",
+        "lock_claim_write",
+        "lock_claim_promote",
+        "lock_existing_validate",
+        "lock_stale_promote",
+        "lock_stale_remove",
+        "lock_exhausted",
     ):
         assert diagnostic in source
     for forbidden in (
@@ -1261,14 +1400,46 @@ def test_production_traversal_rejects_regular_node_below_reparse_ancestor(
     assert not (transaction / "ready.json").exists()
 
 
+def test_production_lock_clean_active_and_stale_seams_leave_no_residue(
+    tmp_path: Path, rsa_keys: tuple[Path, Path]
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    lock_root = tmp_path / "lock-seam"
+    before = _authority_snapshot(tmp_path)
+    result = _run_powershell_command(
+        LOCK_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_LOCK_ROOT": str(lock_root),
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.splitlines() == [
+        "WINDOWS-LOCK-SEAM PASS mode=clean code=lock_claim_promote",
+        "WINDOWS-LOCK-SEAM PASS mode=active code=lock_existing_validate",
+        "WINDOWS-LOCK-SEAM PASS mode=stale code=lock_claim_promote",
+    ]
+    assert _authority_snapshot(tmp_path) == before
+    assert not lock_root.exists()
+
+
 def test_windows_prelock_internal_error_is_not_reported_as_reparse(
     tmp_path: Path, rsa_keys: tuple[Path, Path]
 ) -> None:
     _private, public = rsa_keys
     installed = tmp_path / "installed"
     installed.mkdir()
+    _protect_directory(installed)
     helper = installed / HELPER
     render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    _set_current_owner(helper)
+    _assert_authority("installed", installed, directory=True, protected=True)
+    _assert_authority("helper", helper, directory=False, protected=None)
     nonce = "c" * 32
     target = installed / INSTALLED_DESKTOP
     state = tmp_path / "missing-state-parent" / "state"
