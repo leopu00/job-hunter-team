@@ -1608,7 +1608,8 @@ func _plan_picker(col: VBoxContainer, provider: String, s: Dictionary) -> void:
 
 
 func _on_setup_refresh(_status: Dictionary) -> void:
-	if is_instance_valid(_content) and section in ["activation", "provider", "docker"]:
+	if is_instance_valid(_content) \
+			and section in ["activation", "provider", "docker", "account"]:
 		_build()
 
 
