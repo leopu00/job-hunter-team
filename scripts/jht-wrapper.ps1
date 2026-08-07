@@ -47,6 +47,7 @@ $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } els
 # Carica la host env (scritta da install.ps1 / setup wizard: JHT_HOST_TYPE=local|vps).
 # Formato file: VAR=value per riga, ignora # e righe vuote.
 $HostEnvFile = if ($env:JHT_HOST_ENV_FILE) { $env:JHT_HOST_ENV_FILE } else { Join-Path $env:USERPROFILE '.jht\host.env' }
+$AllowedHostEnvNames = @('JHT_HOST_TYPE', 'JHT_LANG', 'JHT_USER_TZ')
 if (Test-Path $HostEnvFile) {
   Get-Content $HostEnvFile | ForEach-Object {
     if ($_ -match '^\s*#') { return }
@@ -54,6 +55,7 @@ if (Test-Path $HostEnvFile) {
     if ($_ -match '^\s*([A-Z_][A-Z0-9_]*)=(.*)$') {
       $name  = $Matches[1]
       $value = $Matches[2].Trim('"').Trim("'")
+      if ($AllowedHostEnvNames -notcontains $name) { return }
       Set-Item -Path "env:$name" -Value $value -ErrorAction SilentlyContinue
     }
   }

@@ -65,6 +65,53 @@ esac
 # evita di richiedere la scelta a ogni invocazione.
 JHT_HOME_HOST="${JHT_HOME_HOST:-$HOME/.jht}"
 HOST_ENV_PATH="$JHT_HOME_HOST/host.env"
+
+# host.env vive in una directory bind-mountata read-write nel container. Va
+# quindi trattato come input non fidato: leggerne coppie note e validate, mai
+# eseguirlo con `source`/`.`. Questa copia locale rende host-setup.sh ancora
+# distribuibile come singolo file, come fa oggi l'installer.
+jht_host_env_value_valid() {
+  local key="$1" value="$2"
+  case "$key" in
+    JHT_HOST_TYPE)
+      case "$value" in local|vps) return 0 ;; esac
+      ;;
+    JHT_LANG)
+      case "$value" in en|it|hu|es|de|fr|pt) return 0 ;; esac
+      ;;
+    JHT_USER_TZ)
+      case "$value" in
+        ''|*[!A-Za-z0-9_+./-]*) return 1 ;;
+        *) return 0 ;;
+      esac
+      ;;
+  esac
+  return 1
+}
+
+jht_read_host_env_value() {
+  local file="$1" requested="$2" line key value result=""
+  local found=1
+  [ -f "$file" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    if [[ "$line" =~ ^[[:space:]]*(JHT_HOST_TYPE|JHT_LANG|JHT_USER_TZ)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+      case "$value" in
+        \"*\") value="${value#\"}"; value="${value%\"}" ;;
+        \'*\') value="${value#\'}"; value="${value%\'}" ;;
+      esac
+      if [ "$key" = "$requested" ] && jht_host_env_value_valid "$key" "$value"; then
+        result="$value"
+        found=0
+      fi
+    fi
+  done < "$file"
+  [ "$found" -eq 0 ] || return 1
+  printf '%s' "$result"
+}
+
 JHT_LANG_DEFAULT=en
 # Priorità lookup: env JHT_LANG > host.env > default 'en'. L'env vince
 # perché il setup in-game la passa esplicitamente quando rilancia
@@ -72,9 +119,7 @@ JHT_LANG_DEFAULT=en
 if [ -n "${JHT_LANG:-}" ]; then
   JHT_LANG_DEFAULT="$JHT_LANG"
 elif [ -f "$HOST_ENV_PATH" ]; then
-  # shellcheck disable=SC1090
-  EXISTING_LANG=$(. "$HOST_ENV_PATH" 2>/dev/null; printf %s "${JHT_LANG:-}")
-  if [ -n "$EXISTING_LANG" ]; then
+  if EXISTING_LANG="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_LANG)"; then
     JHT_LANG_DEFAULT="$EXISTING_LANG"
   fi
 fi
@@ -240,8 +285,7 @@ fi
 # 3. Esiste già in host.env? Skip prompt, riusa (scelta confermata in un
 #    install precedente — priorità massima).
 if [ -f "$HOST_ENV_PATH" ]; then
-  EXISTING_TZ=$(. "$HOST_ENV_PATH" 2>/dev/null; printf %s "${JHT_USER_TZ:-}")
-  if [ -n "$EXISTING_TZ" ]; then
+  if EXISTING_TZ="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_USER_TZ)"; then
     JHT_USER_TZ_DEFAULT="$EXISTING_TZ"
   fi
 fi
