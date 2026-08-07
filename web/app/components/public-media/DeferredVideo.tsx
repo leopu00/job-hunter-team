@@ -22,8 +22,8 @@ function currentOrientation(): VideoOrientation {
 
 /**
  * Il player è creato solo dopo l'intenzione esplicita dell'utente. Prima c'è
- * al massimo un poster lazy; per i media non pubblicati resta un placeholder
- * visuale senza `src`, iframe o richieste di rete.
+ * al massimo un poster lazy. Un media non pubblicato o incompleto non produce
+ * alcun nodo: niente `src`, placeholder, cornice o richiesta di rete.
  */
 export default function DeferredVideo({ video, label }: DeferredVideoProps) {
   const [orientation, setOrientation] = useState<VideoOrientation>("landscape");
@@ -40,20 +40,12 @@ export default function DeferredVideo({ video, label }: DeferredVideoProps) {
     void videoRef.current?.play().catch(() => undefined);
   }, [activated, variant]);
 
-  if (!video.published) {
-    return (
-      <div
-        aria-hidden="true"
-        data-video-pending={video.id}
-        className="w-full border border-[var(--color-border)] bg-[var(--color-card)]"
-        style={{ aspectRatio: video.variants.landscape.aspectRatio }}
-      />
-    );
-  }
+  if (!video.published) return null;
 
-  const poster = playableVariant(video, "landscape")?.poster;
+  const posterVariant = playableVariant(video, "landscape");
+  if (!posterVariant) return null;
 
-  if (!activated || !variant) {
+  if (!activated) {
     return (
       <button
         type="button"
@@ -63,30 +55,32 @@ export default function DeferredVideo({ video, label }: DeferredVideoProps) {
           setOrientation(currentOrientation());
           setActivated(true);
         }}
-        className="block w-full overflow-hidden border border-[var(--color-border)] bg-[var(--color-card)] p-0"
+        className="group relative block w-full cursor-pointer overflow-hidden border border-[var(--color-border)] bg-[var(--color-card)] p-0"
       >
-        {poster ? (
-          // Poster deliberatamente lazy: non è il video e non deve pesare sul
-          // primo hero, già occupato dal globo MapLibre.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={poster.src}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="block h-auto w-full"
-            style={{ aspectRatio: video.variants.landscape.aspectRatio }}
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="block w-full bg-[var(--color-card)]"
-            style={{ aspectRatio: video.variants.landscape.aspectRatio }}
-          />
-        )}
+        {/* Poster deliberatamente lazy: non è il video e non deve pesare sul
+            primo hero, già occupato dal globo MapLibre. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={posterVariant.poster.src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="block h-auto w-full"
+          style={{ aspectRatio: posterVariant.aspectRatio }}
+        />
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 grid place-items-center bg-black/10 transition-colors group-hover:bg-black/20"
+        >
+          <span className="grid size-14 place-items-center rounded-full bg-black/75 pl-1 text-2xl text-white shadow-lg sm:size-16">
+            ▶
+          </span>
+        </span>
       </button>
     );
   }
+
+  if (!variant) return null;
 
   return (
     <video

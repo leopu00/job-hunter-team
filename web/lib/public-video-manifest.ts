@@ -40,6 +40,14 @@ export type PublicVideo = {
   id: "trailer" | "tutorial-game" | "tutorial-web";
   /** Fatti di montaggio, non copy destinato alla pagina. */
   durationSeconds?: number;
+  /** Catena di derivazione verificabile; il credito musicale resta centralizzato in media-credits.ts. */
+  provenance?: {
+    approvedMaster: string;
+    approvedMasterSha256: string;
+    derivativeSha256: string;
+    derivativeBytes: number;
+    posterSha256: string;
+  };
 } & (PendingVideo | ReadyVideo);
 
 export const PUBLIC_VIDEO_BUDGET = {
@@ -52,15 +60,50 @@ export const PUBLIC_VIDEO_BUDGET = {
 const landscape: PendingVideoVariant = { aspectRatio: "16 / 9" };
 const portrait: PendingVideoVariant = { aspectRatio: "9 / 16" };
 
+const homeVideoVariant = {
+  aspectRatio: "16 / 9",
+  src: "/media/home-video-r4-web.mp4",
+  poster: {
+    src: "/media/home-video-r4-poster.jpg",
+    bytes: 11_031,
+  },
+  // Il montaggio è music-only: `zxx` indica correttamente assenza di
+  // contenuto linguistico, evitando una falsa preferenza fra le sette lingue.
+  captions: [
+    {
+      src: "/media/home-video-r4-music.vtt",
+      srcLang: "zxx",
+      label: "♪",
+      default: true,
+    },
+  ],
+} as const satisfies ReadyVideoVariant;
+
 /**
- * Tutte le voci iniziano volutamente spente: non anticipare CDN, URL, poster,
- * sottotitoli o copy prima del GO editoriale.
+ * Una voce passa a `published: true` soltanto dopo il GO editoriale e tecnico.
+ * Le altre restano prive di URL, poster e caption fino alla pubblicazione.
  */
 export const PUBLIC_VIDEOS = {
   trailer: {
     id: "trailer",
-    published: false,
-    variants: { landscape, portrait },
+    durationSeconds: 57,
+    published: true,
+    provenance: {
+      approvedMaster: "home-trailer-16x9-r4-six-fixes.mp4",
+      approvedMasterSha256:
+        "9f24ca9dfc0918d7f7a35b672f58300a2d6deb3722215409f4f0e93c542e3cf1",
+      derivativeSha256:
+        "2cf3eb15729ee0ad4fc0fe405626e3b166910a482d168ac6f76f6d00eba97e26",
+      derivativeBytes: 5_702_863,
+      posterSha256:
+        "e52dd24b7387ee89eb8525600d942a6601954310f4326d37bfc1ea0ee6efe45c",
+    },
+    // Non esiste un montaggio 9:16 approvato per la home: su viewport
+    // verticale usiamo lo stesso master 16:9, senza crop o contenuti diversi.
+    variants: {
+      landscape: homeVideoVariant,
+      portrait: homeVideoVariant,
+    },
   },
   game: {
     id: "tutorial-game",
