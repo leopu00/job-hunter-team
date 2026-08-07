@@ -603,50 +603,86 @@ export async function handleClaim(options = {}) {
   if (invalidated.failed.length > 0) process.exitCode = 1;
 }
 
-async function handleLogin(options) {
+// Protocollo stretto per la UI nativa. Il prefisso rende gli eventi
+// riconoscibili anche quando docker/ssh aggiungono banner o CR da pseudo-TTY;
+// il payload non contiene mai device_code, user_code, token o user_id.
+export const CLOUD_LOGIN_UI_PREFIX = 'JHT_CLOUD_UI ';
+
+function emitCloudLoginUi(options, event, details = {}) {
+  if (!options.uiJson) return;
+  console.log(`${CLOUD_LOGIN_UI_PREFIX}${JSON.stringify({ event, ...details })}`);
+}
+
+function failCloudLogin(options, event, humanMessage) {
+  emitCloudLoginUi(options, event);
+  if (!options.uiJson) console.error(pc.red(humanMessage));
+  process.exitCode = 1;
+}
+
+export async function handleLogin(options = {}) {
   const baseUrl = (options.url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   const initUrl = `${baseUrl}/api/cloud-sync/device-init`;
 
   // 1. Init: chiede al server una coppia (device_code, user_code).
-  console.log(pc.dim(`Inizio pairing su ${baseUrl}…`));
+  if (!options.uiJson) console.log(pc.dim(`Inizio pairing su ${baseUrl}…`));
   let init;
   try {
     const res = await fetch(initUrl, { method: 'POST' });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      console.error(
-        pc.red(`Init pairing fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`)
+      failCloudLogin(
+        options,
+        'init_failed',
+        `Init pairing fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`
       );
-      process.exitCode = 1;
       return;
     }
     init = body;
   } catch (err) {
-    console.error(pc.red(`Errore di rete: ${err.message}`));
-    process.exitCode = 1;
+    failCloudLogin(options, 'network_error', `Errore di rete: ${err.message}`);
     return;
   }
 
   if (!init.device_code || !init.user_code || !init.verification_url) {
-    console.error(pc.red('Risposta server malformata (manca device_code/user_code/verification_url).'));
-    process.exitCode = 1;
+    failCloudLogin(
+      options,
+      'invalid_response',
+      'Risposta server malformata (manca device_code/user_code/verification_url).'
+    );
+    return;
+  }
+  // La UI non mostra un codice separato: senza URL completo non puo' offrire
+  // il percorso browser-first senza regredire al copia/incolla da terminale.
+  if (options.uiJson && !init.verification_url_complete) {
+    failCloudLogin(
+      options,
+      'invalid_response',
+      'Risposta server malformata (manca verification_url_complete).'
+    );
     return;
   }
 
+  emitCloudLoginUi(options, 'ready', {
+    url: init.verification_url_complete,
+    expires_in: init.expires_in ?? 600,
+  });
+
   // 2. Mostra istruzioni all'utente.
   const tokenNameHint = options.name ? ` (nome consigliato: "${options.name}")` : '';
-  console.log('');
-  console.log(pc.bold(`Apri questo URL nel browser:`));
-  console.log(`  ${pc.cyan(init.verification_url)}`);
-  if (init.verification_url_complete) {
-    console.log(pc.dim(`  (link diretto col codice precompilato: ${init.verification_url_complete})`));
+  if (!options.uiJson) {
+    console.log('');
+    console.log(pc.bold(`Apri questo URL nel browser:`));
+    console.log(`  ${pc.cyan(init.verification_url)}`);
+    if (init.verification_url_complete) {
+      console.log(pc.dim(`  (link diretto col codice precompilato: ${init.verification_url_complete})`));
+    }
+    console.log('');
+    console.log(pc.bold(`Codice da digitare:`));
+    console.log(`  ${pc.green(pc.bold(init.user_code))}${tokenNameHint}`);
+    console.log('');
+    console.log(pc.dim(`Aspetto la tua conferma… (TTL ~${Math.round((init.expires_in ?? 600) / 60)} min, polling ogni ${init.interval ?? 2}s)`));
+    console.log(pc.dim(`Premi Ctrl+C per annullare.`));
   }
-  console.log('');
-  console.log(pc.bold(`Codice da digitare:`));
-  console.log(`  ${pc.green(pc.bold(init.user_code))}${tokenNameHint}`);
-  console.log('');
-  console.log(pc.dim(`Aspetto la tua conferma… (TTL ~${Math.round((init.expires_in ?? 600) / 60)} min, polling ogni ${init.interval ?? 2}s)`));
-  console.log(pc.dim(`Premi Ctrl+C per annullare.`));
 
   // 3. Poll fino a status = approved | expired | timeout.
   const pollUrl = `${baseUrl}/api/cloud-sync/device-poll`;
@@ -665,25 +701,37 @@ async function handleLogin(options) {
       });
     } catch (err) {
       // Tolerante a network blip transitorio: continua il poll.
-      console.error(pc.yellow(`  ⚠ poll error transitorio: ${err.message}, ritento...`));
+      emitCloudLoginUi(options, 'network_retry');
+      if (!options.uiJson) {
+        console.error(pc.yellow(`  ⚠ poll error transitorio: ${err.message}, ritento...`));
+      }
       continue;
     }
     const body = await res.json().catch(() => ({}));
 
     if (res.status === 202 && body.status === 'pending') continue;
     if (res.status === 410) {
-      console.error(pc.red(`\nSessione ${body.status || 'expired'}. Riavvia 'jht cloud login'.`));
-      process.exitCode = 1;
+      failCloudLogin(
+        options,
+        body.status === 'consumed' ? 'already_used' : 'expired',
+        `\nSessione ${body.status || 'expired'}. Riavvia 'jht cloud login'.`
+      );
       return;
     }
     if (res.status === 404) {
-      console.error(pc.red(`\nSessione non trovata sul server. Riavvia 'jht cloud login'.`));
-      process.exitCode = 1;
+      failCloudLogin(
+        options,
+        'not_found',
+        `\nSessione non trovata sul server. Riavvia 'jht cloud login'.`
+      );
       return;
     }
     if (!res.ok) {
-      console.error(pc.red(`\nPoll error (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`));
-      process.exitCode = 1;
+      failCloudLogin(
+        options,
+        'poll_failed',
+        `\nPoll error (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`
+      );
       return;
     }
     if (body.status === 'approved' && body.token) {
@@ -691,12 +739,17 @@ async function handleLogin(options) {
       break;
     }
     // Status sconosciuto: log e continua, conservativo.
-    console.error(pc.yellow(`  ⚠ poll status inatteso: ${body.status || 'undefined'}, continuo...`));
+    if (!options.uiJson) {
+      console.error(pc.yellow(`  ⚠ poll status inatteso: ${body.status || 'undefined'}, continuo...`));
+    }
   }
 
   if (!approved) {
-    console.error(pc.red(`\nTimeout pairing (${Math.round((init.expires_in ?? 600) / 60)} min). Riavvia 'jht cloud login'.`));
-    process.exitCode = 1;
+    failCloudLogin(
+      options,
+      'timeout',
+      `\nTimeout pairing (${Math.round((init.expires_in ?? 600) / 60)} min). Riavvia 'jht cloud login'.`
+    );
     return;
   }
 
@@ -709,13 +762,18 @@ async function handleLogin(options) {
     token_name: approved.token_name ?? null,
     enabled_at: new Date().toISOString(),
   });
+  emitCloudLoginUi(options, 'paired', {
+    token_name: approved.token_name ?? null,
+  });
 
-  console.log('');
-  console.log(pc.green(`✓ Pairing completato`));
-  console.log(pc.dim(`  Base URL:   ${baseUrl}`));
-  console.log(pc.dim(`  Token name: ${approved.token_name ?? 'unnamed'}`));
-  console.log(pc.dim(`  User ID:    ${approved.user_id}`));
-  console.log(pc.dim(`  File:       ${CLOUD_FILE} (0600)`));
+  if (!options.uiJson) {
+    console.log('');
+    console.log(pc.green(`✓ Pairing completato`));
+    console.log(pc.dim(`  Base URL:   ${baseUrl}`));
+    console.log(pc.dim(`  Token name: ${approved.token_name ?? 'unnamed'}`));
+    console.log(pc.dim(`  User ID:    ${approved.user_id}`));
+    console.log(pc.dim(`  File:       ${CLOUD_FILE} (0600)`));
+  }
 
   // Single-team preflight: se un altro device ha già il claim (heartbeat
   // < 5min), warn l'utente. Non blocca il login: l'utente potrebbe volere
@@ -743,20 +801,26 @@ async function handleLogin(options) {
   }
 
   if (options.noPush) {
-    console.log('');
-    console.log(pc.dim(`Push iniziale skippato (--no-push). Esegui: jht cloud push`));
+    if (!options.uiJson) {
+      console.log('');
+      console.log(pc.dim(`Push iniziale skippato (--no-push). Esegui: jht cloud push`));
+    }
     return;
   }
   try {
     await stat(JHT_DB_PATH);
   } catch {
-    console.log('');
-    console.log(pc.dim(`Nessun DB locale ancora (${JHT_DB_PATH}). Push skippato.`));
-    console.log(pc.dim(`Avvia il team con 'jht team start' e poi 'jht cloud push'.`));
+    if (!options.uiJson) {
+      console.log('');
+      console.log(pc.dim(`Nessun DB locale ancora (${JHT_DB_PATH}). Push skippato.`));
+      console.log(pc.dim(`Avvia il team con 'jht team start' e poi 'jht cloud push'.`));
+    }
     return;
   }
-  console.log('');
-  console.log(pc.dim('Sincronizzo i dati locali al cloud...'));
+  if (!options.uiJson) {
+    console.log('');
+    console.log(pc.dim('Sincronizzo i dati locali al cloud...'));
+  }
   const prevExitCode = process.exitCode;
   await handlePush({});
   if (process.exitCode === 1) {
@@ -3530,6 +3594,7 @@ export function registerCloudCommand(program) {
     .description('Pairing browser-based: nessun token paste manuale (consigliato)')
     .option('--url <url>', `Base URL del cloud (default ${DEFAULT_BASE_URL})`)
     .option('--name <name>', 'Suggerimento per il nome del token sul web (es. "vps-marco")')
+    .option('--ui-json', 'Emette eventi sicuri machine-readable per la UI nativa')
     .option('--no-push', 'Salta il push iniziale dei dati locali (default: push automatico)')
     .action(handleLogin);
 
