@@ -182,6 +182,11 @@ func _check_runtime_english_presentation() -> void:
 		_check("snapshot VPS inglese: " + key,
 				snapshot.has(key) and str(snapshot[key]) != key, str(snapshot))
 	var vps_source := FileAccess.get_file_as_string("res://scripts/backend/vps_backend.gd")
+	var bus_source := FileAccess.get_file_as_string("res://scripts/backend/backend_bus.gd")
+	_check("fallback worker SSH inglese",
+			vps_source.contains('"vps.ssh.failed": "SSH failed (exit %s)"')
+			and vps_source.contains('_ui_text(labels, "vps.ssh.failed") % res["code"]'),
+			"fallback statico EN mancante")
 	_check("filename payload stabile e non localizzato",
 			vps_source.contains('return out if out != "" else "document"')
 			and not vps_source.contains('else UIStrings.t("common.document")'),
@@ -196,6 +201,18 @@ func _check_runtime_english_presentation() -> void:
 			not vps_source.contains('UIStrings.t("vps.upload.')
 			and not vps_source.contains('UIStrings.t("vps.response_unreadable")'),
 			"UIStrings.t non deve essere chiamato dal worker")
+	var upload_worker := vps_source.get_slice("func _do_upload_document", 1).get_slice("\nfunc ", 0)
+	_check("upload worker usa solo snapshot già risolto",
+			not upload_worker.contains("UIStrings."), upload_worker.left(240))
+	for literal in ["chiave SSH non trovata", "client OpenSSH non installato",
+			"chiave host SSH non disponibile", "known-hosts non scrivibile",
+			"errore fingerprint SSH", "handshake ssh con"]:
+		_check("connessione VPS senza leak italiano: " + literal,
+				not vps_source.contains('"' + literal), literal)
+	_check("fallback BackendBus localizzato",
+			not bus_source.contains('"backend non collegato"')
+			and bus_source.contains('UIStrings.t("common.backend_not_connected")'),
+			"i segnali visibili non devono propagare il literal italiano")
 	UIStrings.lang = previous
 
 
