@@ -15,15 +15,6 @@ const LANG_CFG := "user://lang.cfg"
 ## dalla stessa lingua prevedibile su ogni installazione nuova.
 const DEFAULT_LANG := "en"
 
-## Valori legacy emessi dai payload VPS. Restano invariati sul filo e nei dati;
-## questa mappa è esclusivamente il confine di presentazione della UI Godot.
-const VPS_PRESENTATION_ERROR_KEYS := {
-	"percorso fuori dalle aree dati": "vps.artifact.path_outside",
-	"file non trovato sul container": "vps.artifact.file_missing",
-	"file oltre i 10 MB": "vps.upload.file_too_large",
-	"posizione inesistente": "vps.ticket.position_missing",
-}
-
 static var lang := DEFAULT_LANG
 
 ## Solo l'oracolo di persistenza sostituisce il file utente: le sue due
@@ -109,9 +100,17 @@ static func t(key: String) -> String:
 	return _translated(key, lang, _translations() if lang != "it" else {})
 
 
-static func present_vps_error(raw: String) -> String:
-	var key := str(VPS_PRESENTATION_ERROR_KEYS.get(raw, ""))
-	return t(key) if key != "" else raw
+## Snapshot creato sul main thread prima di accodare un worker VPS. Il thread
+## riceve solo stringhe già risolte e non inizializza mai il catalogo lazy.
+static func vps_presentation_snapshot() -> Dictionary:
+	var out := {}
+	for key in ["vps.upload.file_missing", "vps.upload.extension_denied",
+			"vps.upload.file_unreadable", "vps.upload.file_too_large",
+			"vps.response_unreadable", "vps.artifact.path_outside",
+			"vps.artifact.file_missing", "vps.ticket.position_missing",
+			"vps.ssh.failed"]:
+		out[key] = t(key)
+	return out
 
 
 ## Lookup puro tenuto separato per provare il fallback con cataloghi sintetici:
@@ -1783,6 +1782,7 @@ const S := {
 	"vps.artifact.path_outside": "percorso fuori dalle aree dati",
 	"vps.artifact.file_missing": "file non trovato nel container",
 	"vps.ticket.position_missing": "posizione inesistente",
+	"vps.ssh.failed": "SSH fallita (uscita %s)",
 	"diagnostics.section.app": "Applicazione", "diagnostics.section.system": "Sistema",
 	"diagnostics.section.runtime": "Runtime", "diagnostics.field.version": "versione",
 	"diagnostics.field.engine": "motore", "diagnostics.field.ui_language": "lingua UI",
