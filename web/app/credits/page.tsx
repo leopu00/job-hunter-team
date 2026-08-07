@@ -1,28 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-
-const LICENSE_URL = "https://creativecommons.org/licenses/by/4.0/";
-
-export const CANONICAL_MUSIC_CREDIT = [
-  "Covert Affair Kevin MacLeod (incompetech.com)",
-  "Licensed under Creative Commons: By Attribution 4.0",
-  LICENSE_URL,
-  "Edited for timing and mixed with a CC0 cymbal-roll intro.",
-] as const;
-
-export const MUSIC_PROVENANCE = {
-  work: "Covert Affair",
-  composer: "Kevin MacLeod",
-  source: "incompetech.com",
-  isrc: "USUAN1100795",
-  license: "CC BY 4.0",
-  sourceAudioSha256:
-    "279be47ea7880460be1393d66a83bcc7bee18e10d73537420098e4e1b1c0646f",
-  intro: "Orch 006 cymbal roll — Karma-Ron",
-  introLicense: "CC0",
-  introAudioSha256:
-    "215972193c783912bcd1fd249b4ed909d36d9d43145923bfb6fd3357160cd907",
-} as const;
+import {
+  CANONICAL_MUSIC_CREDIT,
+  MUSIC_LICENSE_URL,
+  MUSIC_PROVENANCE,
+} from "@/lib/media-credits";
 
 export const metadata: Metadata = {
   title: "Credits",
@@ -67,7 +49,7 @@ export default function CreditsPage() {
         >
           {CANONICAL_MUSIC_CREDIT.map((line) => (
             <p key={line}>
-              {line === LICENSE_URL ? (
+              {line === MUSIC_LICENSE_URL ? (
                 <a
                   className="break-all underline underline-offset-4 hover:text-[var(--color-white)]"
                   href={line}
@@ -90,14 +72,10 @@ export default function CreditsPage() {
           <dt className="font-semibold text-[var(--color-muted)]">Work</dt>
           <dd>{MUSIC_PROVENANCE.work}</dd>
 
-          <dt className="font-semibold text-[var(--color-muted)]">
-            Composer
-          </dt>
+          <dt className="font-semibold text-[var(--color-muted)]">Composer</dt>
           <dd>{MUSIC_PROVENANCE.composer}</dd>
 
-          <dt className="font-semibold text-[var(--color-muted)]">
-            Source
-          </dt>
+          <dt className="font-semibold text-[var(--color-muted)]">Source</dt>
           <dd>
             <a
               className="underline underline-offset-4 hover:text-[var(--color-green)]"
@@ -110,9 +88,7 @@ export default function CreditsPage() {
           <dt className="font-semibold text-[var(--color-muted)]">ISRC</dt>
           <dd>{MUSIC_PROVENANCE.isrc}</dd>
 
-          <dt className="font-semibold text-[var(--color-muted)]">
-            License
-          </dt>
+          <dt className="font-semibold text-[var(--color-muted)]">License</dt>
           <dd>{MUSIC_PROVENANCE.license}</dd>
 
           <dt className="font-semibold text-[var(--color-muted)]">
@@ -124,9 +100,7 @@ export default function CreditsPage() {
             </code>
           </dd>
 
-          <dt className="font-semibold text-[var(--color-muted)]">
-            Intro
-          </dt>
+          <dt className="font-semibold text-[var(--color-muted)]">Intro</dt>
           <dd>{MUSIC_PROVENANCE.intro}</dd>
 
           <dt className="font-semibold text-[var(--color-muted)]">

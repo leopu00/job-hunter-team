@@ -4,11 +4,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import CreditsPage, {
+import CreditsPage, { metadata } from "../../../web/app/credits/page";
+import {
   CANONICAL_MUSIC_CREDIT,
   MUSIC_PROVENANCE,
-  metadata,
-} from "../../../web/app/credits/page";
+} from "../../../web/lib/media-credits";
 
 const REPO = path.resolve(__dirname, "../../..");
 const webRequire = createRequire(path.join(REPO, "web/package.json"));
@@ -38,9 +38,7 @@ describe("pagina crediti pubblica permanente", () => {
 
     expect(renderedLines).toEqual(EXPECTED_CREDIT);
     expect(
-      document
-        .querySelector('[data-canonical-credit] a')
-        ?.getAttribute("href"),
+      document.querySelector("[data-canonical-credit] a")?.getAttribute("href"),
     ).toBe(EXPECTED_CREDIT[2]);
   });
 
