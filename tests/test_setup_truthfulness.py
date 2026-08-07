@@ -115,8 +115,10 @@ def test_runtime_installer_keeps_tty_and_reports_command_failure():
     assert '"term.done_plain": "CHIUDI CONSOLE"' in strings
 
 
-def test_cloud_login_terminal_copy_uses_the_selected_ui_language():
+def test_cloud_login_uses_native_browser_pairing_without_terminal_copy():
     setup = _src("game/scripts/setup/setup_service.gd")
+    panel = _src("game/scripts/ui/section_panel.gd")
+    terminal = _src("game/scripts/ui/embedded_terminal.gd")
     cloud_login = setup[
         setup.index("func open_cloud_login") : setup.index("func open_cloud_command")
     ]
@@ -132,6 +134,16 @@ def test_cloud_login_terminal_copy_uses_the_selected_ui_language():
         "Apri il link, accedi all'account",
     ):
         assert italian_literal not in cloud_login
+    assert '"--ui-json"' in cloud_login
+    assert '"--no-push"' in cloud_login
+    assert '"cloud_pairing": true' in cloud_login
+    assert '"prefer_google": prefer_google' in cloud_login
+    assert 'section in ["activation", "provider", "docker", "account"]' in panel
+    assert "return OS.shell_open(uri)" in terminal
+    assert 'UIStrings.t("cloud_pairing.fallback")' in terminal
+    assert 'UIStrings.t("term.copy_link")' in terminal
+    assert '"already_used"' in terminal
+    assert '"expired", "timeout"' in terminal
 
 
 def test_runtime_upgrade_uses_only_the_host_json_contract():
