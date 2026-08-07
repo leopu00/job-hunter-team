@@ -138,7 +138,23 @@ func _run() -> void:
 	check.call(consumed._cloud_retry.visible \
 			and consumed._cloud_state.text == UIStrings.t("cloud_pairing.already_used"),
 			"link consumato non offre rigenerazione esplicita")
+	consumed._check_cloud_pairing()
+	check.call(consumed._cloud_state.text == UIStrings.t("cloud_pairing.already_used"),
+			"VERIFICA sovrascrive l'esito link gia usato")
 	consumed.close()
+
+	var expired := FakeBrowserTerminal.new("cloud", _spec([
+		{"event": "ready", "url": url, "expires_in": 600},
+		{"event": "expired"},
+	]))
+	root.add_child(expired)
+	check.call(await _wait_until(func() -> bool:
+		return expired._cloud_terminal_event),
+			"link scaduto lascia il flusso pendente")
+	check.call(expired._cloud_retry.visible \
+			and expired._cloud_state.text == UIStrings.t("cloud_pairing.expired"),
+			"link scaduto non offre rigenerazione esplicita")
+	expired.close()
 
 	var ok := failures.is_empty()
 	print("CLOUD-PAIRING-TEST ", "PASS" if ok else "FAIL", " ",
