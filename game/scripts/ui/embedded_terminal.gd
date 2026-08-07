@@ -1033,7 +1033,7 @@ func _check_cloud_pairing() -> void:
 	_refresh_setup()
 	if _cloud_paired:
 		_cloud_set_status(UIStrings.t("cloud_pairing.paired"), Palette.GREEN)
-	else:
+	elif not _cloud_terminal_event:
 		_cloud_set_status(UIStrings.t("cloud_pairing.waiting"), Palette.YELLOW)
 
 
