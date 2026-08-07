@@ -1,67 +1,84 @@
 // @vitest-environment jsdom
 import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import CreditsPage, { metadata } from "../../../web/app/credits/page";
+import { metadata } from "../../../web/app/credits/page";
+import { MusicCreditLine } from "../../../web/app/credits/CreditsClient";
+import { CREDITS_COPY } from "../../../web/app/credits/credits.i18n";
 import {
-  CANONICAL_MUSIC_CREDIT,
+  MUSIC_LICENSE_URL,
   MUSIC_PROVENANCE,
+  PUBLIC_MUSIC_CREDIT,
 } from "../../../web/lib/media-credits";
 
 const REPO = path.resolve(__dirname, "../../..");
 const webRequire = createRequire(path.join(REPO, "web/package.json"));
 const { createElement } = webRequire("react");
 const { renderToStaticMarkup } = webRequire("react-dom/server");
+const LOCALES = ["it", "en", "es", "fr", "de", "pt", "hu"] as const;
 
-const EXPECTED_CREDIT = [
-  "Covert Affair Kevin MacLeod (incompetech.com)",
-  "Licensed under Creative Commons: By Attribution 4.0",
-  "https://creativecommons.org/licenses/by/4.0/",
-  "Edited for timing and mixed with a CC0 cymbal-roll intro.",
-] as const;
+function renderCredit(locale: (typeof LOCALES)[number]) {
+  if (!PUBLIC_MUSIC_CREDIT) throw new Error("music credit unexpectedly off");
+  return new JSDOM(
+    renderToStaticMarkup(
+      createElement(MusicCreditLine, {
+        lang: locale,
+        credit: PUBLIC_MUSIC_CREDIT,
+      }),
+    ),
+  ).window.document;
+}
 
-function renderCredits() {
-  return new JSDOM(renderToStaticMarkup(createElement(CreditsPage))).window
-    .document;
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const file = path.join(dir, name);
+    if (statSync(file).isDirectory()) return sourceFiles(file);
+    return /\.(?:ts|tsx)$/.test(name) ? [file] : [];
+  });
 }
 
 describe("pagina crediti pubblica permanente", () => {
-  it("riproduce il blocco canonico del manifest senza variazioni", () => {
-    expect(CANONICAL_MUSIC_CREDIT).toEqual(EXPECTED_CREDIT);
+  it("mantiene l'attribuzione pubblica in un solo oggetto removibile", () => {
+    expect(PUBLIC_MUSIC_CREDIT).toEqual({
+      work: "Covert Affair",
+      composer: "Kevin MacLeod",
+      source: "incompetech.com",
+      license: "CC BY 4.0",
+      licenseUrl: MUSIC_LICENSE_URL,
+    });
 
-    const document = renderCredits();
-    const renderedLines = [
-      ...document.querySelectorAll("[data-canonical-credit] > p"),
-    ].map((line) => line.textContent);
-
-    expect(renderedLines).toEqual(EXPECTED_CREDIT);
-    expect(
-      document.querySelector("[data-canonical-credit] a")?.getAttribute("href"),
-    ).toBe(EXPECTED_CREDIT[2]);
+    const consumers = sourceFiles(path.join(REPO, "web/app"))
+      .filter((file) =>
+        readFileSync(file, "utf8").includes("PUBLIC_MUSIC_CREDIT"),
+      )
+      .map((file) => path.relative(REPO, file));
+    expect(consumers).toEqual(["web/app/credits/CreditsClient.tsx"]);
   });
 
-  it("espone una struttura semantica accessibile e metadati permanenti", () => {
-    const document = renderCredits();
-    const article = document.querySelector("article");
+  it("rende una sola riga essenziale e tradotta in tutte le sette lingue", () => {
+    for (const locale of LOCALES) {
+      const document = renderCredit(locale);
+      const line = document.querySelector("p[data-music-credit]");
+      const text = line?.textContent ?? "";
 
-    expect(article?.getAttribute("aria-labelledby")).toBe("credits-title");
-    expect(document.querySelector("h1#credits-title")?.textContent).toBe(
-      "Credits",
-    );
+      expect(document.querySelectorAll("p[data-music-credit]")).toHaveLength(1);
+      expect(text).toContain("Covert Affair");
+      expect(text).toContain("Kevin MacLeod");
+      expect(text).toContain("CC BY 4.0");
+      expect(text).toContain("CC0");
+      expect(line?.querySelector("a")?.getAttribute("href")).toBe(
+        MUSIC_LICENSE_URL,
+      );
+      expect(CREDITS_COPY.credit_line[locale]).toContain("{license}");
+    }
     expect(
-      document.querySelector('section[aria-labelledby="music-credit-title"]'),
-    ).not.toBeNull();
-    expect(
-      document.querySelector('section[aria-labelledby="provenance-title"] dl'),
-    ).not.toBeNull();
-    expect(document.querySelector("main")).toBeNull();
-    expect(metadata.alternates).toEqual({ canonical: "/credits" });
-    expect(metadata.robots).toEqual({ index: true, follow: true });
+      new Set(LOCALES.map((locale) => CREDITS_COPY.credit_line[locale])).size,
+    ).toBe(LOCALES.length);
   });
 
-  it("pubblica la provenienza verificabile di musica e intro CC0", () => {
+  it("conserva fuori dalla UI la provenienza verificata dei due audio", () => {
     expect(MUSIC_PROVENANCE).toEqual({
       work: "Covert Affair",
       composer: "Kevin MacLeod",
@@ -75,22 +92,18 @@ describe("pagina crediti pubblica permanente", () => {
       introAudioSha256:
         "215972193c783912bcd1fd249b4ed909d36d9d43145923bfb6fd3357160cd907",
     });
-
-    const text = renderCredits().querySelector(
-      'section[aria-labelledby="provenance-title"]',
-    )?.textContent;
-    expect(text).toContain(MUSIC_PROVENANCE.sourceAudioSha256);
-    expect(text).toContain(MUSIC_PROVENANCE.introAudioSha256);
   });
 
-  it("resta autonoma da trailer e componenti Landing condivisi", () => {
-    const source = readFileSync(
-      path.join(REPO, "web/app/credits/page.tsx"),
+  it("espone metadati permanenti e lascia la Home senza attribuzioni duplicate", () => {
+    expect(metadata.alternates).toEqual({ canonical: "/credits" });
+    expect(metadata.robots).toEqual({ index: true, follow: true });
+
+    const homeTrailer = readFileSync(
+      path.join(REPO, "web/app/components/public-media/HomeTrailer.tsx"),
       "utf8",
     );
-
-    expect(source).not.toMatch(/components\/landing|Landing[A-Z]/);
-    expect(source).not.toMatch(/app\/trailer|TrailerClient/);
-    expect(source).not.toMatch(/--color-(?:text|bg)-muted/);
+    expect(homeTrailer).not.toMatch(
+      /media-credits|data-music-credit|Music credit|CC BY/,
+    );
   });
 });

@@ -17,9 +17,9 @@
 // `S06-choose-language` due.
 //
 // Le schermate non ancora riprese esistono comunque come voce, con `assets`
-// vuoto e `pending` che dice cosa devono mostrare: la pagina renderizza uno
-// slot al posto dell'immagine, e l'elenco di ciò che manca si ricava dal
-// codice invece che da una lista a parte.
+// vuoto e `pending` che dice cosa devono mostrare. `pending` non raggiunge mai
+// l'interfaccia pubblica: l'elenco di ciò che manca si ricava dal codice
+// invece che da una lista a parte.
 //
 // ⚠️ Zero dati personali: niente nomi, email, CV veri, path, identificativi
 // di account o dispositivo, user id, token, codici di autorizzazione. Una

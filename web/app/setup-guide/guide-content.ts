@@ -31,30 +31,6 @@ import {
 import { DOCS_TEAM_GMAIL, PRIVACY } from "./guide-config";
 import type { GuideChapter } from "./guide-types";
 
-/** Segnaposto delle fasi `W02`–`W04`, dal contratto. Dice una cosa diversa
- *  dallo slot generico: non «la stiamo rigirando», ma «arriverà quando ci
- *  sarà un account di prova approvato». */
-const GOOGLE_SCREEN_PLACEHOLDER = {
-  title: {
-    en: "Screenshot pending",
-    it: "Screenshot in attesa",
-    es: "Captura de pantalla pendiente",
-    fr: "Capture d’écran en attente",
-    de: "Screenshot ausstehend",
-    pt: "Captura de ecrã pendente",
-    hu: "Képernyőkép függőben",
-  },
-  body: {
-    en: "This step is fully described below. A privacy-safe image will be added after an isolated Google test account is authorized.",
-    it: "Questa fase è descritta per intero qui sotto. Verrà aggiunta un'immagine rispettosa della privacy dopo l'autorizzazione di un account Google di test isolato.",
-    es: "Este paso se describe por completo a continuación. Se añadirá una imagen segura para la privacidad después de autorizar una cuenta de prueba de Google aislada.",
-    fr: "Cette étape est entièrement décrite ci-dessous. Une image respectueuse de la vie privée sera ajoutée après l’autorisation d’un compte de test Google isolé.",
-    de: "Dieser Schritt wird unten vollständig beschrieben. Ein datenschutzsicheres Bild wird hinzugefügt, nachdem ein isoliertes Google-Testkonto autorisiert wurde.",
-    pt: "Esta fase está totalmente descrita abaixo. Será adicionada uma imagem que preserva a privacidade depois de ser autorizada uma conta de teste Google isolada.",
-    hu: "A lépés teljes leírása alább olvasható. Adatvédelmi szempontból biztonságos kép egy elkülönített Google-tesztfiók engedélyezése után kerül ide.",
-  },
-};
-
 export const GUIDE_CHAPTERS: GuideChapter[] = [
   {
     id: "guide-index",
@@ -846,7 +822,6 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
           hu: "Futó konténer mellett nyisd meg a Settings → Account oldalt, válaszd az Account and channels alatt az Account lehetőséget, majd a SIGN IN WITH GOOGLE gombot. A beágyazott konzol egy ideiglenes ellenőrző hivatkozást és egyszer használatos kódot jelenít meg. Nyisd meg a hivatkozást. A böngészőben megjelenhet a Job Hunter Team bejelentkezési oldala, a Google-fiókválasztó és egy hozzájárulási képernyő. Válaszd ki azt a Google-fiókot, amelyhez a privát irányítópultod tartozzon. Ne írd be az egyszer használatos kódot olyan oldalra, amelynek címe nem a várt Job Hunter Team-webhelyé.",
         },
         screen: { screenId: "W02-google-login" },
-        screenFallback: GOOGLE_SCREEN_PLACEHOLDER,
         links: [
           {
             kind: "internal",
@@ -885,7 +860,6 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
           hu: "A folytatás előtt tekints át két külön engedélyt. A Google-bejelentkezés kizárólag az OpenID hatókört használja a hitelesítésedhez, az email hatókört az elsődleges e-mail-címed és annak ellenőrzési állapota kiolvasásához, valamint a profile hatókört az olyan alapadatok kiolvasásához, mint a megjelenített neved és a profilképed. A Job Hunter Team nem kér hozzáférést a Google Drive-hoz, a Gmailhez, a Calendarhoz, a Contactshoz vagy más Google-termékhez. Az opcionális Team Gmail-beállítás ettől elkülönül: később kifejezetten egy külön postafiókot csatlakoztatsz a saját, helyben tárolt alkalmazásjelszavával, és ez nem ad Gmail-hozzáférést ehhez a bejelentkezéshez. Ezután a Connect the CLI bekéri az egyszer használatos kódot és egy opcionális tokennevet. A Confirm pairing kiválasztásakor ez a telepítés egy visszavonható Job Hunter Team-eszköztokent kap: pozíciókat és profiladatokat szinkronizálhat a privát irányítópultoddal, valamint irányítópult-parancsokat fogadhat a helyi csapat számára. A token soha nem tartalmazza és nem tárolja a Google-jelszavadat vagy a böngésződ cookie-jait. Csak akkor folytasd, ha a Google-fiók és ezek a felhasználások megfelelőek.",
         },
         screen: { screenId: "W03-permissions" },
-        screenFallback: GOOGLE_SCREEN_PLACEHOLDER,
         links: [
           {
             kind: "internal",
@@ -955,7 +929,6 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
           { screenId: "W04a-local-linked" },
           { screenId: "W04b-dashboard-synced" },
         ],
-        screenFallback: GOOGLE_SCREEN_PLACEHOLDER,
         links: [
           {
             kind: "internal",
