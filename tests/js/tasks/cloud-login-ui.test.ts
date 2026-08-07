@@ -86,7 +86,15 @@ describe("jht cloud login --ui-json", () => {
           token_name: "desktop-test",
         }),
       )
-      .mockResolvedValueOnce(response(200, { state: {} }));
+      .mockResolvedValueOnce(
+        response(200, {
+          state: {
+            active_device_id: "private-device-id",
+            active_device_claimed_at: new Date(Date.now()).toISOString(),
+            last_heartbeat_at: new Date(Date.now()).toISOString(),
+          },
+        }),
+      );
     vi.stubGlobal("fetch", fetchMock);
     const stdout = vi.spyOn(console, "log").mockImplementation(() => {});
     const { CLOUD_LOGIN_UI_PREFIX, handleLogin } = await loadCloud();
@@ -117,6 +125,7 @@ describe("jht cloud login --ui-json", () => {
     expect(raw).not.toContain("Codice da digitare");
     expect(raw).not.toContain("User ID");
     expect(raw).not.toContain("jht_sync_synthetic-test-token");
+    expect(raw).not.toContain("private-device-id");
     expect(JSON.parse(readFileSync(join(home, "cloud.json"), "utf8"))).toMatchObject({
       enabled: true,
       token_name: "desktop-test",
