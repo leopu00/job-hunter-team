@@ -40,12 +40,10 @@ links must be usable before the user starts Google authentication.
 ### Desktop bug-report confirmation
 
 > Your report is sent privately to the Job Hunter Team support inbox. It is not
-> published automatically. After review, the operator may create a public
-> GitHub issue using a redacted technical summary.
+> published automatically.
 
 This replaces the earlier automatic-publication contract for every feedback
-surface. The original report remains private; any later public issue is a
-manual operator action using a redacted technical summary.
+surface. The submitted report remains in the private support channel.
 
 ### Explicit acceptance control
 
@@ -82,8 +80,9 @@ surface. Optional analytics consent remains a separate control.
 ### Disconnect, export, and deletion
 
 > Disconnecting or revoking this device stops future synchronization but does
-> not delete data already stored in your cloud account. For a complete export
-> or deletion request, email support@jobhunterteam.ai.
+> not delete data already stored in your cloud account. Use **Your data** in
+> Settings to download your cloud data as JSON or permanently delete your cloud
+> account and its data.
 
 ### Desktop network disclosure
 

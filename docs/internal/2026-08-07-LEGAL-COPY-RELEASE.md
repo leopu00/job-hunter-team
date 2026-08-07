@@ -200,9 +200,9 @@ These recipients process data under their own terms and privacy documents.
 
 ### 11. Cloud export and immediate deletion
 
-While signed in, open **Settings → Privacy & data**.
+While signed in, open **Settings** and find **Your data**.
 
-Choose **Export cloud data** to download a machine-readable archive of the data
+Choose **Download my data (JSON)** to download a JSON file containing the data
 owned by your cloud account. The export includes your account and basic profile
 data; structured profile and contact data; experience, education, skills,
 languages, authorizations, and preferences; companies, positions, scores,
@@ -216,6 +216,11 @@ delete your authentication account and all user-owned active cloud data,
 including the categories listed above, pairing sessions, synchronization
 tokens, pending transfers, and cloud storage objects. Deletion is immediate and
 irreversible. Export first if you want a copy.
+
+After a successful deletion, Job Hunter Team writes a technical audit entry
+containing the deletion time, a non-reversible hashed account reference, and
+per-table row counts. It contains none of the deleted content, your email
+address, or your account identifier in clear text.
 
 Cloud deletion does not delete:
 
@@ -375,12 +380,12 @@ approve and the accounts you connect.
 
 ### 10. Cloud export and deletion
 
-You can export the data owned by your cloud account from **Settings → Privacy &
-data → Export cloud data**.
+You can export the data owned by your cloud account as JSON from **Settings →
+Your data → Download my data (JSON)**.
 
 You can immediately and irreversibly delete your authentication account and
-all user-owned active cloud data from **Settings → Privacy & data → Delete
-cloud account and data**. Export first if you want a copy. Deleting cloud data
+all user-owned active cloud data from **Settings → Your data → Delete your
+account**. Export first if you want a copy. Deleting cloud data
 does not delete local or VPS files or data held independently by third-party
 providers. The Privacy Policy describes the exact scope and fallback email
 process.
@@ -437,6 +442,8 @@ Privacy questions and data requests:
   action. Delete the auth user, every user-owned database row, pairing and sync
   tokens, pending file-transfer records, and cloud storage objects. Do not
   touch the user's local or VPS workspace.
+- Retain at most the technical deletion audit entry described in the Privacy
+  Policy; it must contain no deleted content or reversible account identifier.
 - Use the same document versions in web acceptance records and any desktop
   acknowledgement. Analytics consent remains a separate decision.
 - Translate the approved English meaning into all seven supported languages;
