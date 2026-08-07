@@ -22,7 +22,7 @@ async function writeJsonSafe(p, data) {
 const MIGRATIONS = [
   {
     version: 2,
-    name: 'Aggiunge campo version e providers strutturati',
+    name: 'Add version and structured providers fields',
     up(config) {
       if (!config.version) config.version = 2;
       if (!config.providers) config.providers = {};
@@ -35,7 +35,7 @@ const MIGRATIONS = [
   },
   {
     version: 3,
-    name: 'Aggiunge campo agents.list e channels',
+    name: 'Add agents.list and channels fields',
     up(config) {
       config.version = 3;
       if (!config.agents) config.agents = {};
@@ -46,7 +46,7 @@ const MIGRATIONS = [
   },
   {
     version: 4,
-    name: 'Aggiunge campo notifications e analytics',
+    name: 'Add notifications and analytics fields',
     up(config) {
       config.version = 4;
       if (!config.notifications) config.notifications = { enabled: true, channels: [] };
@@ -89,7 +89,7 @@ async function handleMigrate(options) {
 
   for (const m of pending) {
     config = m.up(config);
-    console.log(`  ✓ v${m.version} applicata`);
+    console.log(`  ✓ v${m.version} applied`);
   }
 
   await writeJsonSafe(CONFIG_PATH, config);

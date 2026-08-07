@@ -436,7 +436,7 @@ async function maybeRunPairing() {
     return;
   }
 
-  pid1Log('pairing-token rilevato: eseguo jht cloud pair (one-shot)');
+  pid1Log('pairing token detected: running jht cloud pair (one shot)');
   await new Promise((resolve) => {
     const child = spawn(process.execPath, [JHT_ENTRY, 'cloud', 'pair'], {
       stdio: ['ignore', 'inherit', 'inherit'],
@@ -445,7 +445,7 @@ async function maybeRunPairing() {
       if (code === 0) {
         pid1Log('cloud pair OK');
       } else {
-        pid1Log(`cloud pair failed (exit ${code}): proseguo, retry manuale via 'jht cloud pair'`);
+        pid1Log(`cloud pair failed (exit ${code}); continuing. Retry manually with 'jht cloud pair'`);
       }
       resolve();
     });
@@ -474,7 +474,7 @@ async function runMigrate() {
     // No config yet (pre-pairing su VPS): niente da migrare.
     return;
   }
-  pid1Log('running jht migrate (idempotente)');
+  pid1Log('running jht migrate (idempotent)');
   await new Promise((resolve) => {
     const child = spawnLabeled('migrate', process.execPath, [JHT_ENTRY, 'migrate']);
     child.on('exit', (code) => {
@@ -510,7 +510,7 @@ async function runUnstuckPositions() {
     ]);
     child.on('exit', (code) => {
       if (code === 0) pid1Log('unstuck_positions ok');
-      else pid1Log(`unstuck_positions exit ${code} — non-blocking, continuing`);
+      else pid1Log(`unstuck_positions exited ${code}; non-blocking, continuing`);
       resolve();
     });
     child.on('error', (err) => {
@@ -581,7 +581,7 @@ async function runProviderAutoUpdate() {
       'autoupdate',
     ]);
     child.on('exit', (code) => {
-      if (code === 0) pid1Log('provider CLI auto-update concluso');
+      if (code === 0) pid1Log('provider CLI auto-update completed');
       else pid1Log(`provider CLI auto-update exit ${code} — continue with the CLI already present`);
       resolve();
     });
@@ -782,7 +782,7 @@ async function dispatch() {
   let autoReportRespawnTimer = null;
   const startAutoReportLoop = () => {
     if (autoReportChild && !autoReportChild.killed) return;
-    pid1Log('starting auto-report-loop (Telegram panoramic + PNG ogni 2h)');
+    pid1Log('starting auto-report-loop (Telegram overview + PNG every 2h)');
     autoReportChild = spawnLabeled('auto-report', '/bin/bash', [AUTO_REPORT_LOOP_SCRIPT]);
     autoReportChild.on('exit', (code, signal) => {
       const exited = autoReportChild;
@@ -815,7 +815,7 @@ async function dispatch() {
   let doctorWatchdogRespawnTimer = null;
   const startDoctorWatchdog = () => {
     if (doctorWatchdogChild && !doctorWatchdogChild.killed) return;
-    pid1Log('starting doctor-watchdog (auto-spawn DOTTORE ogni 30min)');
+    pid1Log('starting doctor-watchdog (auto-spawn DOTTORE every 30 min)');
     doctorWatchdogChild = spawnLabeled('doctor-watchdog', '/bin/bash', [DOCTOR_WATCHDOG_SCRIPT]);
     doctorWatchdogChild.on('exit', (code, signal) => {
       const exited = doctorWatchdogChild;
@@ -825,7 +825,7 @@ async function dispatch() {
       if (doctorWatchdogRespawnTimer) clearTimeout(doctorWatchdogRespawnTimer);
       doctorWatchdogRespawnTimer = setTimeout(() => {
         if (!shuttingDown) {
-          pid1Log('doctor-watchdog respawn dopo crash');
+          pid1Log('doctor-watchdog respawn after crash');
           startDoctorWatchdog();
         }
       }, 5000);
@@ -894,7 +894,7 @@ async function dispatch() {
       if (throttleEngineRespawnTimer) clearTimeout(throttleEngineRespawnTimer);
       throttleEngineRespawnTimer = setTimeout(() => {
         if (!shuttingDown) {
-          pid1Log('throttle-engine respawn dopo crash');
+          pid1Log('throttle-engine respawn after crash');
           startThrottleEngine();
         }
       }, 5000);

@@ -69,7 +69,7 @@ async function handleHooks(action, options) {
   if (action === 'show') return await showHook(options.id);
 
   console.error(`  Invalid action: ${action}`);
-  console.error('  Azioni: list, enable --id <id>, disable --id <id>, show --id <id>');
+  console.error('  Actions: list, enable --id <id>, disable --id <id>, show --id <id>');
   process.exitCode = 1;
 }
 

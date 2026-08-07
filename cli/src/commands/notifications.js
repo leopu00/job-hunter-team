@@ -31,10 +31,10 @@ function fmtDate(ms) {
   const d = new Date(ms);
   const now = new Date();
   const diff = Math.floor((now.getTime() - ms) / 86400000);
-  if (diff === 0) return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-  if (diff === 1) return 'ieri';
-  if (diff < 7) return `${diff}g fa`;
-  return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+  if (diff === 0) return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  if (diff === 1) return 'yesterday';
+  if (diff < 7) return `${diff}d ago`;
+  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
 }
 
 async function handleNotifications(action, options) {
@@ -95,7 +95,7 @@ async function clearNotifications() {
   const count = store.notifications?.length ?? 0;
   store.notifications = [];
   await saveStore(store);
-  console.log(`\n  ${count} notifiche eliminate.\n`);
+  console.log(`\n  ${count} notifications deleted.\n`);
 }
 
 export function registerNotificationsCommand(program) {

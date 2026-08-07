@@ -50,7 +50,7 @@ async function handlePlugins(action, options) {
   if (action === 'disable') return await togglePlugin(options.id, false);
 
   console.error(`  Invalid action: ${action}`);
-  console.error('  Azioni: list, enable --id <id>, disable --id <id>');
+  console.error('  Actions: list, enable --id <id>, disable --id <id>');
   process.exitCode = 1;
 }
 

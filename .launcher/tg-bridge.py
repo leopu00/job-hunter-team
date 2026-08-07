@@ -337,7 +337,7 @@ def reject_too_large(name: str, size_bytes: int | None) -> None:
     log(f"doc {name} exceeds the limit ({size_bytes}B) — skipping")
     tmux_send(
         f"[@system -> @{TARGET_SESSION.lower()}] [TG-DOC-REJECT] "
-        f"file '{name}' oltre 20 MB ({quanto}). "
+        f"file '{name}' exceeds 20 MB ({quanto}). "
         f"Ask the user to send it again in a smaller format."
     )
 
@@ -452,7 +452,7 @@ def dispatch_update(token: str, allowed_chat: int, u: dict) -> None:
     elif "voice" in m:
         handle_voice(token, m)
     else:
-        log(f"uid={uid} message kind sconosciuto, skip")
+        log(f"uid={uid} unknown message kind, skipped")
 
 
 def dead_letter(u: dict, err: BaseException, attempts: int) -> None:
@@ -512,7 +512,7 @@ def main() -> None:
             log(f"reset: skipping backlog, starting at offset={offset}")
             save_offset(offset)
         except Exception as e:
-            log(f"reset failed, partiamo da 0: {e}")
+            log(f"reset failed; starting from offset 0: {e}")
             offset = 0
 
     while True:

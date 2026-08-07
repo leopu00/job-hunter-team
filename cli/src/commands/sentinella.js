@@ -83,7 +83,7 @@ function tailAction(options = {}) {
   }
   const tail = ticks.slice(-n);
   console.log('');
-  console.log(col.bold(`Ultimi ${tail.length} tick:`));
+  console.log(col.bold(`Latest ${tail.length} ticks:`));
   for (const t of tail) console.log('  ' + fmtTick(t));
   console.log('');
 
@@ -131,7 +131,7 @@ function graphAction(options = {}) {
   const lastTs = (last.ts || '').split('T')[1]?.slice(0, 5) || '';
   console.log('  ' + col.dim(firstTs + ' '.repeat(Math.max(0, ticks.length - 10)) + lastTs));
   console.log('');
-  console.log(`  Ora: ${col.bold(last.usage + '%')} ${statusFn(last.status)} T${last.throttle}  ` +
+  console.log(`  Now: ${col.bold(last.usage + '%')} ${statusFn(last.status)} T${last.throttle}  ` +
     `proj=${last.projection != null ? Math.round(last.projection) + '%' : '-'}  reset=${last.reset_at || '-'}`);
   console.log('');
 }

@@ -61,7 +61,7 @@ async function handleTools(action) {
   if (action === 'dups')     return await toolsDups();
 
   console.error(`  Invalid action: ${action}`);
-  console.error('  Azioni: stats, list, outdated, dups');
+  console.error('  Actions: stats, list, outdated, dups');
   process.exitCode = 1;
 }
 
@@ -116,7 +116,7 @@ async function toolsList() {
   for (const p of pkgs) {
     console.log(`  ${(p.name || '').padEnd(nameW)}  ${p.version || ''}`);
   }
-  console.log(`\n  Totale: ${pkgs.length} pacchetti\n`);
+  console.log(`\n  Total: ${pkgs.length} packages\n`);
 }
 
 async function toolsOutdated() {
@@ -173,7 +173,7 @@ async function toolsDups() {
   }
 
   for (const g of overlapHits) {
-    console.log(`  ${g.kind}: ${g.hits.length} pacchetti`);
+    console.log(`  ${g.kind}: ${g.hits.length} packages`);
     for (const p of g.hits) {
       const pkg = pkgs.find(x => (x.name || '').toLowerCase() === p);
       console.log(`    - ${p} ${pkg?.version ? '(' + pkg.version + ')' : ''}`);

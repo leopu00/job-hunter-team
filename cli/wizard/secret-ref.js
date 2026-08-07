@@ -60,7 +60,7 @@ export function formatSecretForConfig(mode, value) {
  * @returns {string}
  */
 export function describeSecret(secret) {
-  if (!secret) return 'non configurato';
+  if (!secret) return 'not configured';
   if (typeof secret === 'string') return `plaintext (${secret.slice(0, 8)}****)`;
   if (secret.type === 'plaintext') return `plaintext (${(secret.value ?? '').slice(0, 8)}****)`;
   if (secret.type === 'ref') {

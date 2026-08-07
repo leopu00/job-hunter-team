@@ -43,7 +43,7 @@ async function handleCache(action) {
   if (action === 'clear') return await cacheClear();
 
   console.error(`  Invalid action: ${action}`);
-  console.error('  Azioni: stats, prune, clear');
+  console.error('  Actions: stats, prune, clear');
   process.exitCode = 1;
 }
 
@@ -157,7 +157,7 @@ async function pruneUvCache() {
   if (r.error) {
     if (r.error.code === 'ENOENT') {
       console.error('  . uv not found in PATH. Skip prune.');
-      console.error('    (Installa uv: https://docs.astral.sh/uv/getting-started/installation/)');
+      console.error('    (Install uv: https://docs.astral.sh/uv/getting-started/installation/)');
     } else {
       console.error(`  to uv cache prune failed: ${r.error.message}`);
     }
@@ -227,7 +227,7 @@ async function pruneUvTools() {
     members.sort((a, b) => b.mtimeMs - a.mtimeMs);
     const keep = members[0];
     const drop = members.slice(1);
-    console.log(`  ${base}: ${members.length} versions — I keep "${keep.name}", I remove: ${drop.map(d => d.name).join(', ')}`);
+    console.log(`  ${base}: ${members.length} versions — keeping "${keep.name}"; removing: ${drop.map(d => d.name).join(', ')}`);
     for (const d of drop) {
       const sz = await dirSize(d.path);
       try {

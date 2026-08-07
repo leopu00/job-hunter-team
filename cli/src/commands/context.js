@@ -38,7 +38,7 @@ async function handleContext(action) {
   if (action === 'clear') return await contextClear();
 
   console.error(`  Invalid action: ${action}`);
-  console.error('  Azioni: status, sources, clear');
+  console.error('  Actions: status, sources, clear');
   process.exitCode = 1;
 }
 

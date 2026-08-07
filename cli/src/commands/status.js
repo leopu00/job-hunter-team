@@ -37,13 +37,13 @@ async function handleStatus() {
   if (hasConfig) {
     const raw = await readFile(CONFIG_FILE, 'utf-8');
     const config = JSON.parse(raw);
-    const activeProvider = config.active_provider || 'non impostato';
+    const activeProvider = config.active_provider || 'not set';
     const provConfig = config.providers?.[config.active_provider];
-    const model = provConfig?.model || 'non impostato';
-    const auth = provConfig?.auth_method || 'non impostato';
+    const model = provConfig?.model || 'not set';
+    const auth = provConfig?.auth_method || 'not set';
     console.log(`  Config:    ${CONFIG_FILE}`);
     console.log(`  Provider:  ${activeProvider}`);
-    console.log(`  Modello:   ${model}`);
+    console.log(`  Model:     ${model}`);
     console.log(`  Auth:      ${auth}`);
     if (config.workspace) console.log(`  Workspace: ${config.workspace}`);
     const tgBots = config.channels?.telegram?.bots;

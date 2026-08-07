@@ -784,7 +784,7 @@ def test_pid1_avvia_il_motore_e_lo_rispawna():
         .read_text(encoding="utf-8")
     assert "'/app/shared/skills/throttle_engine.py'" in src
     assert "startThrottleEngine();" in src
-    assert "throttle-engine respawn dopo crash" in src
+    assert "throttle-engine respawn after crash" in src
     assert "throttleEngineChild.kill(sig)" in src
     # Un boot del container respawna ogni agente: i flag di prima non
     # descrivono più nessuno, e tenerli manderebbe sveglie a raffica su agenti

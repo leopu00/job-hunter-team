@@ -97,7 +97,7 @@ async function handleImport(file, options) {
     return;
   }
 
-  console.log(`  Trovati ${v.count} records to import`);
+  console.log(`  Found ${v.count} records to import`);
 
   // Scrivere nel posto giusto non basta se in quel posto non guarda più
   // nessuno: `sessions.json` e `tasks.json` li leggeva la vecchia interfaccia
@@ -131,7 +131,7 @@ async function handleImport(file, options) {
     const store = { [cfg.key]: items, updatedAt: Date.now() };
     if (target === 'tasks') store.version = 1;
     await writeJsonSafe(dest, store);
-    console.log(`\n  ${items.length} record importati (replace) → ${dest}`);
+    console.log(`\n  ${items.length} records imported (replace) → ${dest}`);
     return;
   }
 
@@ -147,7 +147,7 @@ async function handleImport(file, options) {
   existing[cfg.key] = [...current, ...added];
   existing.updatedAt = Date.now();
   await writeJsonSafe(dest, existing);
-  console.log(`\n  ${added.length} record importati, ${items.length - added.length} duplicati saltati (merge) → ${dest}`);
+  console.log(`\n  ${added.length} records imported, ${items.length - added.length} duplicates skipped (merge) → ${dest}`);
 }
 
 export function registerImportCommand(program) {

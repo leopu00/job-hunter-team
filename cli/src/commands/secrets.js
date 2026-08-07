@@ -72,7 +72,7 @@ function decryptGCM(payloadJson, passphrase) {
 function decryptLegacyCBC(data, passphrase) {
   const key = scryptSync(passphrase, 'jht-salt', 32);
   const [ivHex, encHex] = data.split(':');
-  if (!ivHex || !encHex) throw new Error('Payload CBC malformato');
+  if (!ivHex || !encHex) throw new Error('Malformed CBC payload');
   const iv = Buffer.from(ivHex, 'hex');
   const encrypted = Buffer.from(encHex, 'hex');
   const decipher = createDecipheriv('aes-256-cbc', key, iv);
@@ -103,7 +103,7 @@ async function listSecrets() {
   }
 
   for (const f of secrets.sort()) {
-    const type = f.endsWith('.enc') ? `${GREEN}cifrato${RESET}` : `${DIM}plaintext${RESET}`;
+    const type = f.endsWith('.enc') ? `${GREEN}encrypted${RESET}` : `${DIM}plaintext${RESET}`;
     const name = f.replace(/\.(enc|json)$/, '');
     console.log(`  ${GREEN}●${RESET}  ${name.padEnd(20)} ${type}`);
   }
@@ -123,7 +123,7 @@ async function setSecret(options) {
   if (!passphrase) {
     console.error(`\n  ${RED}✗${RESET}  ${BOLD}${KEY_ENV} not set.${RESET}`);
     console.error(`  ${DIM}Secrets must be encrypted at rest. Set a passphrase:${RESET}`);
-    console.error(`    ${BOLD}export ${KEY_ENV}="<passphrase robusta>"${RESET}`);
+    console.error(`    ${BOLD}export ${KEY_ENV}="<strong passphrase>"${RESET}`);
     console.error(`  ${DIM}(${LEGACY_KEY_ENV} remains accepted only as a legacy fallback. )${RESET}`);
     console.error(`  ${DIM}Save it also in your rc shell (~/.bashrc, ~/.zshrc) for persistence,${RESET}`);
     console.error(`  ${DIM}or in an OS keyring (Keychain/Credential Manager/SecretService).${RESET}\n`);

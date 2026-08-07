@@ -199,7 +199,7 @@ def _resolve_target_band_center() -> float:
             return float(env_override)
         except ValueError:
             print(f"[pacing-bridge] WARN JHT_PACING_TARGET_PCT='{env_override}' "
-                  f"non parsabile come float, uso provider map",
+                  f"cannot be parsed as a float; using the provider map",
                   file=sys.stderr, flush=True)
     prov = _read_active_provider_for_target()
     return _PROVIDER_TARGET_BAND.get(prov, 92.0)
@@ -359,7 +359,7 @@ def _shared_skills_dir() -> Path:
     p = next((c for c in candidates if c.exists()), None)
     if p is None:
         raise RuntimeError(
-            f"shared/skills non trovata: ho provato {[str(c) for c in candidates]}"
+            f"shared/skills not found; tried {[str(c) for c in candidates]}"
         )
     return p
 
@@ -969,7 +969,7 @@ def format_message(d: dict) -> str:
         extra = ""
         if "delta_usage" in d:
             extra = f" delta_usage={d['delta_usage']} team_kt={d.get('team_kt', '?')}"
-        return f"[BRIDGE PACING] tick saltato reason={why}{extra}."
+        return f"[BRIDGE PACING] tick skipped reason={why}{extra}."
 
     ts = d["now"].strftime("%Y-%m-%d %H:%M UTC")
     usage_now = d["usage_now"]
@@ -1127,10 +1127,10 @@ def format_message(d: dict) -> str:
         elif top_consumer:
             cmd = f"throttle-config.py set {top_consumer} {thr}"
         else:
-            cmd = f"throttle-config.py set <top-consumer-produttivo> {thr}"
+            cmd = f"throttle-config.py set <top-productive-consumer> {thr}"
         parts.append(
             f"VERDICT: OVERSHOOT +{v['delta']:.2f}%/h → -{cap_pct:.0f}%"
-            f"{top_hint} | CMD: {cmd} | NO global reset, NO throttle a tutti"
+            f"{top_hint} | CMD: {cmd} | NO global reset, NO team-wide throttling"
         )
     elif v["kind"] == "MARGINE":
         # Sotto-pace: TOGLI il freno (set 0). Il vecchio `-{thr}` era rotto:
@@ -1141,7 +1141,7 @@ def format_message(d: dict) -> str:
         cmd = (
             f"throttle-config.py set {top_consumer} 0"
             if top_consumer else
-            "throttle-config.py set <top-consumer-produttivo> 0"
+            "throttle-config.py set <top-productive-consumer> 0"
         )
         parts.append(
             f"VERDICT: HEADROOM -{v['delta']:.2f}%/h → +{cap_pct:.0f}%"
@@ -1362,7 +1362,7 @@ def acquire_singleton_lock():
         except OSError:
             other = "?"
         fh.close()
-        print(f"[pacing-bridge] altra istanza viva (pid={other}), exit")
+        print(f"[pacing-bridge] another instance is running (pid={other}); exiting")
         sys.exit(0)
     _LOCK_FH = fh
     try:
@@ -1729,7 +1729,7 @@ if __name__ == "__main__":
             print("\n[pacing-bridge] interrupted.", file=sys.stderr)
             break
         except Exception as _e:  # noqa: BLE001 — catch-all VOLUTO
-            print(f"[pacing-bridge] FATAL nel loop: {_e} — riavvio in 5s",
+            print(f"[pacing-bridge] FATAL error in loop: {_e} — restarting in 5s",
                   file=sys.stderr, flush=True)
             _tb.print_exc()
             _time.sleep(5)

@@ -133,7 +133,7 @@ export function registerStandbyCommand(program) {
 
   standby
     .command('off')
-    .description('He comes out immediately from standby: flag away, then [RIPRENDI] to all (halted wins)')
+    .description('Exit standby immediately: remove the flag, then send [RIPRENDI] to all sessions (halted state wins)')
     .option('--reason <text>', 'reason recorded in logs')
     .action(offAction);
 

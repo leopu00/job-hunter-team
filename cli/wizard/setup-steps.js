@@ -490,7 +490,7 @@ async function promptManualSubscription(prompter, flow) {
     : false;
   let sessionToken;
   if (wantsToken) {
-    sessionToken = await prompter.text({ message: 'Session token', placeholder: 'glue the token...' });
+    sessionToken = await prompter.text({ message: 'Session token', placeholder: 'Paste the token...' });
     sessionToken = sessionToken?.trim() || undefined;
   }
   const config = { email: email.trim() };

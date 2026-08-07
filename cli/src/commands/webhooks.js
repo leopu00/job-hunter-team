@@ -37,7 +37,7 @@ async function handleWebhooks(action, options) {
   if (action === 'test') return await testWebhook(options);
 
   console.error(`  Invalid action: ${action}`);
-  console.error('  Azioni: list, create --url <url> --event <event>, delete --id <id>, test --id <id>');
+  console.error('  Actions: list, create --url <url> --event <event>, delete --id <id>, test --id <id>');
   process.exitCode = 1;
 }
 
@@ -134,9 +134,9 @@ export function registerWebhooksCommand(program) {
   program
     .command('webhooks [action]')
     .description('[not implemented] Webhook management — no dispatcher is connected (actions: list, create, delete, test)')
-    .option('--url <url>', 'URL endpoint webhook')
-    .option('--event <event>', 'evento trigger (es: task.completed)')
-    .option('--name <name>', 'nome webhook (opzionale)')
-    .option('--id <id>', 'ID webhook (per delete/test)')
+    .option('--url <url>', 'Webhook endpoint URL')
+    .option('--event <event>', 'Trigger event (for example: task.completed)')
+    .option('--name <name>', 'Webhook name (optional)')
+    .option('--id <id>', 'Webhook ID (for delete/test)')
     .action(handleWebhooks);
 }
