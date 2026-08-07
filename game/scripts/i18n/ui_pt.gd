@@ -1572,6 +1572,7 @@ const S := {
 	"vps.response_unreadable": "resposta ilegível da VPS",
 	"vps.artifact.path_outside": "o caminho está fora das áreas de dados",
 	"vps.artifact.file_missing": "arquivo não encontrado no container",
+	"vps.artifact.invalid": "documento rejeitado: caminho, tipo ou conteúdo inválido",
 	"vps.ticket.position_missing": "a vaga não existe",
 	"vps.ssh.failed": "falha no SSH (código de saída %s)",
 	"vps.ssh.key_missing": "Chave SSH não encontrada: %s",

@@ -1042,6 +1042,7 @@ const UPLOAD_EXTS := ["pdf", "doc", "docx", "txt", "md", "png", "jpg",
 const PRESENTATION_ERROR_KEYS := {
 	"percorso fuori dalle aree dati": "vps.artifact.path_outside",
 	"file non trovato sul container": "vps.artifact.file_missing",
+	"documento non valido": "vps.artifact.invalid",
 	"file oltre i 10 MB": "vps.upload.file_too_large",
 	"posizione inesistente": "vps.ticket.position_missing",
 	"file temporaneo non scrivibile": "vps.transport.temp_unwritable",
@@ -1076,6 +1077,7 @@ const PRESENTATION_ENGLISH := {
 	"vps.response_unreadable": "unreadable response from the VPS",
 	"vps.artifact.path_outside": "path is outside the data areas",
 	"vps.artifact.file_missing": "file not found in the container",
+	"vps.artifact.invalid": "document rejected: invalid path, type or content",
 	"vps.ticket.position_missing": "position does not exist",
 	"vps.ssh.failed": "SSH failed (exit %s)",
 	"vps.terminal.invalid_session": "invalid tmux session name",
@@ -1171,14 +1173,19 @@ const ARTIFACT_MAX_BYTES := 10 * 1024 * 1024  # stesso tetto dell'upload
 
 static var ARTIFACT_PY := payload("artifact.py")
 
-func fetch_artifact(path: String) -> void:
+func fetch_artifact(path: String, kind: String) -> void:
 	# thread one-shot: un pdf da qualche centinaio di KB non deve
 	# congelare né la UI né il giro di poll
-	_queue_worker(_do_fetch_artifact.bind(path, UIStrings.vps_presentation_snapshot()))
+	if not ArtifactPolicy.is_allowed_request(path, kind):
+		bus.call_deferred("publish_artifact", path, false, PackedByteArray(),
+				UIStrings.t("vps.artifact.invalid"))
+		return
+	_queue_worker(_do_fetch_artifact.bind(path, kind,
+			UIStrings.vps_presentation_snapshot()))
 
-func _do_fetch_artifact(path: String, labels: Dictionary) -> void:
-	var res := _ssh_python(ARTIFACT_PY % [Marshalls.utf8_to_base64(path),
-			ARTIFACT_MAX_BYTES])
+func _do_fetch_artifact(path: String, kind: String, labels: Dictionary) -> void:
+	var res := _ssh_python(ARTIFACT_PY % [ARTIFACT_MAX_BYTES,
+			Marshalls.utf8_to_base64(path), Marshalls.utf8_to_base64(kind)])
 	var ok := false
 	var data := PackedByteArray()
 	var err := ""
@@ -1195,6 +1202,11 @@ func _do_fetch_artifact(path: String, labels: Dictionary) -> void:
 				err = _present_error(str(d.get("error", "")), labels)
 				if ok:
 					data = Marshalls.base64_to_raw(str(d.get("b64", "")))
+					if kind == ArtifactPolicy.KIND_PDF \
+							and not ArtifactPolicy.is_pdf_bytes(data):
+						ok = false
+						data = PackedByteArray()
+						err = _ui_text(labels, "vps.artifact.invalid")
 			break
 	bus.call_deferred("publish_artifact", path, ok, data, err)
 
