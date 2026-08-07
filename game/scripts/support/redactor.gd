@@ -33,6 +33,42 @@ const RULES: Array[Dictionary] = [
 		"replace": "[private-key]",
 	},
 	{
+		# Header HTTP: il contesto Authorization e' obbligatorio. La parola
+		# "Bearer" compare anche in prosa diagnostica e da sola non prova che
+		# il token successivo sia una credenziale.
+		"key": "bearer_token",
+		"family": "secret",
+		"pattern": r"(?i)\b((?:Proxy-)?Authorization\s*:?\s*Bearer)\s+[A-Za-z0-9._~+/=-]{6,}",
+		"replace": "$1 [secret]",
+	},
+	{
+		# Una Basic credential e' Base64 valida, anche corta (`YTo=`). Il
+		# contesto evita di redigere frasi innocue come "Basic authentication".
+		"key": "basic_auth",
+		"family": "secret",
+		"pattern": r"(?i)\b((?:Proxy-)?Authorization\s*:?\s*Basic)\s+(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)",
+		"replace": "$1 [secret]",
+	},
+	{
+		# Access key id AWS: 4 caratteri di prefisso + 16 maiuscoli/cifre.
+		"key": "aws_access_key",
+		"family": "secret",
+		"pattern": r"\bAKIA[A-Z0-9]{16}\b",
+		"replace": "[aws-access-key]",
+	},
+	{
+		"key": "slack_token",
+		"family": "secret",
+		"pattern": r"\bxoxb-[A-Za-z0-9-]{10,}\b",
+		"replace": "[slack-token]",
+	},
+	{
+		"key": "gemini_key",
+		"family": "secret",
+		"pattern": r"\bAIza[A-Za-z0-9_-]{20,}\b",
+		"replace": "[gemini-key]",
+	},
+	{
 		# `token: abc123`, `password=hunter2`, `api_key "…"`. Si conserva il
 		# nome della chiave (diagnostico: dice QUALE credenziale era) e si
 		# butta solo il valore.
@@ -136,11 +172,18 @@ const RULES: Array[Dictionary] = [
 		"replace": "[ip]",
 	},
 	{
-		# Il nome utente del sistema operativo è un identificativo diretto e
-		# compare in ogni path assoluto dei log.
-		"key": "home_path",
+		# Windows ammette spazi nel componente utente. Drive e backslash
+		# distinguono questo caso da /Users e /home POSIX, dove estendere il
+		# match agli spazi divorerebbe la prosa diagnostica dopo il path.
+		"key": "home_path_windows",
 		"family": "personal",
-		"pattern": r"(?i)([/\\](?:Users|home)[/\\])([^/\\\s\x22\x27:;,)\]]+)",
+		"pattern": r"(?i)((?:[A-Z]:[/\\]|\\)Users[/\\])([^/\\\r\n\t\x22\x27:;,)\]]+)",
+		"replace": "$1[user]",
+	},
+	{
+		"key": "home_path_posix",
+		"family": "personal",
+		"pattern": r"(?i)((?:/Users|/home)/)([^/\s\x22\x27:;,)\]]+)",
 		"replace": "$1[user]",
 	},
 	{
@@ -220,8 +263,9 @@ static func redact_with_report(text: String,
 ## Vero se nel testo resta qualcosa che somiglia a un segreto: la usa il
 ## selftest e la può usare chi vuole un'ultima verifica prima di spedire.
 static func has_residual_secret(text: String) -> bool:
-	for key in ["private_key", "telegram_token", "github_token", "provider_key",
-			"jwt", "long_hex", "email"]:
+	for key in ["private_key", "bearer_token", "basic_auth", "aws_access_key",
+			"slack_token", "gemini_key", "telegram_token", "github_token",
+			"provider_key", "jwt", "long_hex", "email"]:
 		for rule in RULES:
 			if rule["key"] != key:
 				continue
@@ -229,17 +273,6 @@ static func has_residual_secret(text: String) -> bool:
 			if re != null and re.search(text) != null:
 				return true
 	return false
-
-
-## Riassunto leggibile del rendiconto, nella lingua della UI.
-static func summary(counts: Dictionary) -> String:
-	if counts.is_empty():
-		return UIStrings.t("feedback.redacted_none")
-	var total := 0
-	for key in counts:
-		total += int(counts[key])
-	return UIStrings.t("feedback.redacted_count") % total
-
 
 static var _cache := {}
 

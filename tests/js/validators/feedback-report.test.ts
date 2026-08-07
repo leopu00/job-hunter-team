@@ -31,6 +31,13 @@ const VALID = {
   expected: "che partisse",
   diagnostics: "### App\n\n- versione: 0.2.1\n",
 };
+const SERVER_SECRET_CASES = [
+  "synthetic" + ".bearer.token",
+  "c2FtcGxl" + "OnN5bnRoZXRpYw==",
+  "AK" + "IA" + "A1B2C3D4E5F6G7H8",
+  "xo" + "xb-111122223333-444455556666-abcdefghijklmnopqrstuvwx",
+  "AI" + "zaSyA1B2C3D4E5F6G7H8J9K0L1M2N3P4Q",
+];
 const FEEDBACK_ROUTE = readFileSync(
   path.resolve(__dirname, "../../../web/app/api/feedback/route.ts"),
   "utf8",
@@ -208,6 +215,24 @@ describe("email — la segnalazione anonima che arriva in casella", () => {
 });
 
 describe("privacy del contratto", () => {
+  it("redige le cinque famiglie nuove in issue e mail senza inviarle", () => {
+    const [bearer, basic, aws, slack, gemini] = SERVER_SECRET_CASES;
+    const report = parseReport({
+      ...VALID,
+      happened: [
+        `Authorization: Bearer ${bearer}`,
+        `Authorization: Basic ${basic}`,
+        `AWS ${aws}`,
+        `Slack ${slack}`,
+        `Gemini ${gemini}`,
+      ].join("\n"),
+    })!;
+    const delivered = `${issueBody(report, "JHT-SYNTHETIC")}\n${emailText(report, "JHT-SYNTHETIC")}`;
+    for (const secret of SERVER_SECRET_CASES) {
+      expect(delivered).not.toContain(secret);
+    }
+  });
+
   it("ignora contact e normalizza metadata non in allowlist", () => {
     const report = parseReport({
       ...VALID,
