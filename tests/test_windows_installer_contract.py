@@ -9,6 +9,7 @@ BUILDER = ROOT / "scripts" / "build-windows-installer.ps1"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 SMOKE_WORKFLOW = ROOT / ".github" / "workflows" / "windows-installer-smoke.yml"
 DOWNLOAD_CLIENT = ROOT / "web" / "app" / "download" / "DownloadClient.tsx"
+DOWNLOAD_FUNNEL = ROOT / "web" / "lib" / "download-funnel.ts"
 
 
 def test_nsis_uses_stable_per_user_release_name() -> None:
@@ -44,11 +45,23 @@ def test_release_publishes_setup_primary_and_portable_secondary() -> None:
 
 
 def test_download_page_prefers_installer_and_labels_portable_alternative() -> None:
-    source = DOWNLOAD_CLIENT.read_text()
-    assert 'windows: "job-hunter-team-windows-x64-setup.exe"' in source
-    assert '"job-hunter-team-windows-x64-portable.exe"' in source
-    assert 't("dl_windows_portable_label")' in source
-    assert 't("dl_windows_portable_link")' in source
+    client = DOWNLOAD_CLIENT.read_text()
+    funnel = DOWNLOAD_FUNNEL.read_text()
+
+    # The client owns stable local slugs; only the server-side allowlist owns
+    # release destinations, so a query parameter can never choose an asset.
+    assert 'windows: "win-setup"' in client
+    assert 'downloadHref("win-portable", attribution)' in client
+    assert (
+        '"win-setup": `${RELEASE_BASE}/job-hunter-team-windows-x64-setup.exe`'
+        in funnel
+    )
+    assert (
+        '"win-portable": `${RELEASE_BASE}/job-hunter-team-windows-x64-portable.exe`'
+        in funnel
+    )
+    assert 't("dl_windows_portable_label")' in client
+    assert 't("dl_windows_portable_link")' in client
 
 
 def test_native_windows_smoke_is_non_publishing() -> None:
