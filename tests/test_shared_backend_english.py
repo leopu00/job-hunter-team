@@ -54,7 +54,8 @@ ITALIAN_COPY = re.compile(
     r"avvis\w*|gratuit\w*|mesi?|ore|selezion\w*|scegli\w*|"
     r"avvi\w*|ferm\w*|disattiv\w*|consum(?:o|i|at[oaie]|are)|"
     r"scadut\w*|rilevat\w*|legg(?:i|ere)|scriv(?:i|ere)|chius\w*|"
-    r"rimos\w*|attiv(?:o|a|i|e)|disponibil\w*)\b",
+    r"rimos\w*|attiv(?:o|a|i|e)|disponibil\w*|tutti|mort[oi]|"
+    r"ripar\w*|attes[oi]|opzional\w*)\b",
     re.IGNORECASE,
 )
 
