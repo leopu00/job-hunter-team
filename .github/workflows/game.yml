@@ -18,6 +18,7 @@ on:
       - "game/**"
       - "shared/skills/burn_intent.py"
       - ".github/workflows/game.yml"
+      - ".github/workflows/release.yml"
   pull_request:
     branches:
       - master
@@ -25,6 +26,7 @@ on:
       - "game/**"
       - "shared/skills/burn_intent.py"
       - ".github/workflows/game.yml"
+      - ".github/workflows/release.yml"
   workflow_dispatch:
 
 jobs:
