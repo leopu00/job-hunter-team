@@ -130,6 +130,15 @@ export interface GuidePhase {
   /** Avvertenza breve, evidenziata: il punto dove ci si blocca. */
   warning?: GuideText;
   screen?: ScreenRef | ScreenRef[];
+  /**
+   * Testo dello slot quando la schermata non c'è ancora, al posto di quello
+   * generico. Le fasi `W02`–`W04` lo usano perché la loro attesa non è la
+   * stessa delle altre: non stanno per essere rigirate, sono **bloccate**
+   * finché non esiste un account Google di prova approvato. Il contratto è
+   * esplicito — si mostra il segnaposto, non si accorcia il testo e non si
+   * toglie la fase: il passo resta comprensibile senza immagine.
+   */
+  screenFallback?: { title: GuideText; body: GuideText };
   links?: GuideLink[];
 }
 
