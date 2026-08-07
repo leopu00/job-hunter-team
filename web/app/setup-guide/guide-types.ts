@@ -82,14 +82,17 @@ export interface GuideScreen {
    *  riprende: non viene mai mostrata all'utente finale. */
   pending?: string;
   /**
-   * La voce resta nel registro ma nessuna fase la usa, perché quel
-   * contenuto è reso da un blocco costruito nella pagina.
+   * La voce è una **superficie nativa**: l'id logico resta per l'audit, ma
+   * non esiste alcuna ripresa da fare, perché quel contenuto è costruito
+   * nella pagina.
    *
-   * Cancellarla perderebbe il fatto che il contratto la elenca; lasciarla
-   * senza spiegazione la farebbe sembrare una ripresa dimenticata. Chi
-   * decide se serva ancora è HQ-DOCS.
+   * Deciso da HQ-DOCS il 7 agosto 2026 per `S01` (scheda requisiti) e
+   * `G00` (indice + selettore OS dal vivo): niente PNG di una tabella che
+   * a 390 px non si legge, niente screenshot della pagina dentro sé
+   * stessa, niente duplicato mobile. L'id non si cancella — serve
+   * all'audit — ma non conta fra le riprese mancanti.
    */
-  replacedByCard?: string;
+  nativeSurface?: string;
 }
 
 /** Riferimento a una schermata dentro una fase. */

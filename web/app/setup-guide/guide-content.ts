@@ -57,7 +57,11 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
         body: untranslated(
           "Choose macOS, Windows, or Linux, then use the chapter index to move through Setup, Start, and Connect to web. The selected operating system stays active across every chapter.",
         ),
-        screen: { screenId: "G00-guide-index" },
+        // Nessuna schermata: il selettore OS e l'indice dei capitoli sono
+        // dal vivo appena sopra questa fase. Mostrare qui una foto della
+        // pagina che il lettore sta già guardando non aggiungerebbe nulla
+        // — decisione di HQ-DOCS del 7 agosto 2026, che ha cancellato la
+        // richiesta PNG di `G00` e il suo duplicato mobile.
       },
       {
         id: "check-requirements",

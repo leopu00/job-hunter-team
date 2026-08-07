@@ -50,8 +50,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "Az itt választott rendszer minden fejezetben kijelölve marad.",
     },
     assets: {},
-    pending:
-      "Indice della guida, uno stato per OS selezionato + G00-guide-index-mobile a 390 px.",
+    nativeSurface:
+      "Superficie nativa: l'indice dei capitoli e il selettore OS sono dal vivo in cima alla pagina. HQ-DOCS ha cancellato la richiesta PNG il 7 agosto 2026 — niente screenshot della pagina dentro sé stessa e niente duplicato mobile. Nessuna ripresa da fare per E2E.",
   },
   {
     id: "S01-prerequisites",
@@ -74,8 +74,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "Csak mért számok: ahol nem mértünk, ott nem állítunk semmit.",
     },
     assets: {},
-    replacedByCard:
-      "La scheda è costruita nella pagina (`RequirementsCard`), non fotografata: un'immagine di tabella è illeggibile a 390 px, andrebbe rigirata per ognuna delle sette lingue e renderebbe i numeri non correggibili senza rifare la ripresa. La voce resta perché il contratto la elenca: se HQ-DOCS conferma che l'immagine non serve, si cancella.",
+    nativeSurface:
+      "Superficie nativa: la scheda è `RequirementsCard`, costruita nella pagina. HQ-DOCS ha cancellato la richiesta PNG il 7 agosto 2026 — resta la fase, non l'immagine. Nessuna ripresa da fare per E2E.",
   },
   {
     id: "S02-docker-download",
@@ -677,7 +677,10 @@ export function missingCaptures(
   const out: { screenId: string; os: OsId }[] = [];
   for (const [screenId, systems] of usage) {
     const screen = SCREENS[screenId];
-    if (!screen || screen.assets.shared) continue;
+    // Una superficie nativa non è una ripresa mancante: non c'è nulla da
+    // girare. Il guard sta qui e non solo nei chiamanti, così il conto
+    // resta giusto anche se un domani una fase tornasse a referenziarla.
+    if (!screen || screen.nativeSurface || screen.assets.shared) continue;
     for (const os of systems) {
       if (!screen.assets[os]) out.push({ screenId, os });
     }
