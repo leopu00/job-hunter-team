@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { USER_DATA_TABLES } from "@/lib/account-data-tables";
+import { EXPORT_COLUMNS } from "@/lib/account-export-columns";
 
 export async function GET() {
   if (!hasSupabaseConfig()) {
@@ -34,9 +35,18 @@ export async function GET() {
   const failed: string[] = [];
 
   for (const table of USER_DATA_TABLES) {
+    // Allowlist esplicita, mai `select("*")`: una colonna aggiunta domani
+    // non deve poter finire nell'export senza che nessuno lo decida. Se
+    // una tabella non è nell'elenco, non si esporta affatto — è voluto, e
+    // il test lo verifica.
+    const columns = EXPORT_COLUMNS[table];
+    if (!columns) {
+      failed.push(table);
+      continue;
+    }
     const { data: rows, error } = await admin
       .from(table)
-      .select("*")
+      .select(columns.join(","))
       .eq("user_id", user.id);
     if (error) {
       // Una tabella che non si legge non deve far fallire tutto l'export:
