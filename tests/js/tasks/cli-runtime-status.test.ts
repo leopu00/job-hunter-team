@@ -1,12 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
-import {
-  chmodSync,
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -24,24 +18,17 @@ function sandbox() {
   const bin = path.join(root, "bin");
   mkdirSync(home, { recursive: true });
   mkdirSync(bin, { recursive: true });
-  writeFileSync(
-    path.join(home, "jht.config.json"),
-    JSON.stringify({
-      version: 4,
-      active_provider: "openai",
-      providers: { openai: { auth_method: "subscription" } },
-    }),
-    "utf-8",
-  );
-  writeExec(
-    path.join(bin, "tmux"),
-    [
-      'case "$*" in',
-      "  *list-sessions*) printf 'ASSISTENTE\\nCAPITANO\\nMENTOR\\nSENTINELLA\\nSCOUT-1\\nunrelated\\n' ;;",
-      "  *) echo 'tmux 3.5' ;;",
-      "esac",
-    ].join("\n"),
-  );
+  writeFileSync(path.join(home, "jht.config.json"), JSON.stringify({
+    version: 4,
+    active_provider: "openai",
+    providers: { openai: { auth_method: "subscription" } },
+  }), "utf-8");
+  writeExec(path.join(bin, "tmux"), [
+    "case \"$*\" in",
+    "  *list-sessions*) printf 'ASSISTENTE\\nCAPITANO\\nMENTOR\\nSENTINELLA\\nSCOUT-1\\nunrelated\\n' ;;",
+    "  *) echo 'tmux 3.5' ;;",
+    "esac",
+  ].join("\n"));
   writeExec(path.join(bin, "git"), "exit 1");
   return { root, home, bin };
 }
@@ -91,9 +78,7 @@ describe("team start — retry reattivo", () => {
     const firstCloudSync = source.indexOf("cloud pull-desired-state");
     expect(earlyNoop).toBeGreaterThan(0);
     expect(earlyNoop).toBeLessThan(firstCloudSync);
-    expect(source).toContain(
-      "Team gia operativo: nessun bridge o sync riavviato.",
-    );
+    expect(source).toContain("Team gia operativo: nessun bridge o sync riavviato.");
   });
 
   it("applica lo stagger solo quando la voce precedente è stata avviata", () => {

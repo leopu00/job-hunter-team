@@ -62,15 +62,16 @@ describe("profili riprese — dataset reale e ripetibile", () => {
     const command = join(repo, "web", "node_modules", ".bin", "tsx");
     const script = join(repo, "web", "scripts", "recording-profile.ts");
     const run = (action: "reset" | "verify", localOnly = true) =>
-      spawnSync(
-        command,
-        [script, action, "software", ...(localOnly ? ["--local-only"] : [])],
-        {
-          cwd: join(repo, "web"),
-          env,
-          encoding: "utf8",
-        },
-      );
+      spawnSync(command, [
+        script,
+        action,
+        "software",
+        ...(localOnly ? ["--local-only"] : []),
+      ], {
+        cwd: join(repo, "web"),
+        env,
+        encoding: "utf8",
+      });
     const profileRoot = join(
       env.XDG_DATA_HOME,
       "jht",
@@ -120,10 +121,9 @@ describe("profili riprese — dataset reale e ripetibile", () => {
         },
       );
       expect(bootRecovery.status).toBe(0);
-      expect(
-        canonicalDump(),
-        "il recovery del primo boot ha mutato il seed",
-      ).toBe(firstDump);
+      expect(canonicalDump(), "il recovery del primo boot ha mutato il seed").toBe(
+        firstDump,
+      );
 
       unlinkSync(join(profileRoot, "profile", "ready.flag"));
       const missingReady = run("verify");
@@ -179,13 +179,9 @@ describe("profili riprese — dataset reale e ripetibile", () => {
       buildRecordingProfileDataset(alias),
     );
     expect(datasets.every((d) => d.positions.length === 56)).toBe(true);
-    expect(
-      new Set(datasets.map((d) => d.candidateProfile.target_role)).size,
-    ).toBe(4);
-    expect(
-      new Set(datasets.flatMap((d) => d.positions.map((p) => p.role_family)))
-        .size,
-    ).toBeGreaterThan(12);
+    expect(new Set(datasets.map((d) => d.candidateProfile.target_role)).size).toBe(4);
+    expect(new Set(datasets.flatMap((d) => d.positions.map((p) => p.role_family))).size)
+      .toBeGreaterThan(12);
   });
 
   it("ricrea byte-per-byte lo stesso scenario alla stessa ancora", () => {
@@ -196,8 +192,7 @@ describe("profili riprese — dataset reale e ripetibile", () => {
 
   it("usa chiavi UUID stabili e non gli id riconoscibili della demo", () => {
     const data = buildRecordingProfileDataset("design");
-    const uuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
     for (const row of [
       ...data.positions,
       ...data.scores,
@@ -227,9 +222,9 @@ describe("profili riprese — dataset reale e ripetibile", () => {
           "excluded",
         ]),
       );
-      expect(
-        data.positions.every((position) => !position.write_requested),
-      ).toBe(true);
+      expect(data.positions.every((position) => !position.write_requested)).toBe(
+        true,
+      );
       expect(data.scores.length).toBeGreaterThan(0);
       expect(data.applications.length).toBeGreaterThan(0);
       expect(data.highlights.length).toBeGreaterThan(0);
@@ -252,9 +247,7 @@ describe("profili riprese — dataset reale e ripetibile", () => {
       for (const p of data.positions) {
         expect(String(p.id)).not.toContain("demo");
         expect(p.url).toBeNull();
-        expect(String(p.source)).not.toMatch(
-          /^(jht demo|showroom|mock|test)$/i,
-        );
+        expect(String(p.source)).not.toMatch(/^(jht demo|showroom|mock|test)$/i);
         expect(String(p.found_by)).not.toMatch(/^(showroom|mock|test)$/i);
       }
       for (const c of data.companies) expect(c.website).toBeNull();

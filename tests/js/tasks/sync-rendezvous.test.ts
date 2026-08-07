@@ -10,25 +10,13 @@ import {
 
 describe("rendezvous Sync now — stato terminale veritiero", () => {
   it("confronta istanti, non rappresentazioni testuali del fuso", () => {
-    expect(
-      syncRendezvousPending(
-        "2026-08-04T10:00:01Z",
-        "2026-08-04T10:00:00+00:00",
-      ),
-    ).toBe(true);
-    expect(
-      syncRendezvousPending(
-        "2026-08-04T10:00:00Z",
-        "2026-08-04T12:00:00+02:00",
-      ),
-    ).toBe(false);
+    expect(syncRendezvousPending("2026-08-04T10:00:01Z", "2026-08-04T10:00:00+00:00")).toBe(true);
+    expect(syncRendezvousPending("2026-08-04T10:00:00Z", "2026-08-04T12:00:00+02:00")).toBe(false);
     expect(syncRendezvousPending("dato-malformato", null)).toBe(false);
   });
 
   it("non permette l'ACK dopo push parziale, fallito o in timeout", () => {
-    expect(pushRendezvousOutcome({ ok: true, skipped: 0 })).toEqual({
-      status: "ready_to_ack",
-    });
+    expect(pushRendezvousOutcome({ ok: true, skipped: 0 })).toEqual({ status: "ready_to_ack" });
     expect(pushRendezvousOutcome({ ok: true, skipped: 1 })).toEqual({
       status: "push_failed",
       retryable: true,
@@ -44,28 +32,22 @@ describe("rendezvous Sync now — stato terminale veritiero", () => {
   });
 
   it("non ripete un esito terminale della stessa richiesta", () => {
-    expect(
-      syncRendezvousTerminal(
-        "2026-08-04T10:00:00Z",
-        "sync:timeout",
-        "2026-08-04T10:00:01Z",
-      ),
-    ).toBe("timeout");
+    expect(syncRendezvousTerminal(
+      "2026-08-04T10:00:00Z",
+      "sync:timeout",
+      "2026-08-04T10:00:01Z",
+    )).toBe("timeout");
     // Una nuova richiesta B è successiva all'esito di A: deve poter partire.
-    expect(
-      syncRendezvousTerminal(
-        "2026-08-04T10:00:02Z",
-        "sync:timeout",
-        "2026-08-04T10:00:01Z",
-      ),
-    ).toBeNull();
-    expect(
-      syncRendezvousTerminal(
-        "2026-08-04T10:00:00Z",
-        "heartbeat",
-        "2026-08-04T10:00:01Z",
-      ),
-    ).toBeNull();
+    expect(syncRendezvousTerminal(
+      "2026-08-04T10:00:02Z",
+      "sync:timeout",
+      "2026-08-04T10:00:01Z",
+    )).toBeNull();
+    expect(syncRendezvousTerminal(
+      "2026-08-04T10:00:00Z",
+      "heartbeat",
+      "2026-08-04T10:00:01Z",
+    )).toBeNull();
   });
 
   it("considera completato solo un ACK HTTP 2xx e propaga la deadline", async () => {
@@ -109,29 +91,24 @@ describe("rendezvous Sync now — stato terminale veritiero", () => {
       expectedRequestedAt: "2026-08-04T10:00:00Z",
       fetchFn: async () => ({ ok: false, status: 503 }) as Response,
     });
-    expect(rejected).toEqual({
-      status: "ack_failed",
-      httpStatus: 503,
-      retryable: true,
-    });
+    expect(rejected).toEqual({ status: "ack_failed", httpStatus: 503, retryable: true });
   });
 
   it("invia solo la correlazione: nessun timestamp può venire dal clock VPS", () => {
-    const observed = observedSyncOutcome("timeout", "2026-08-04T10:00:00.500Z");
+    const observed = observedSyncOutcome(
+      "timeout",
+      "2026-08-04T10:00:00.500Z",
+    );
     expect(observed).toEqual({
       expected_requested_at: "2026-08-04T10:00:00.500Z",
       status: "timeout",
     });
     expect(JSON.stringify(observed)).not.toContain("last_action_at");
-    expect(
-      observedSyncOutcome("stato-sconosciuto", "2026-08-04T10:00:00Z"),
-    ).toBeNull();
+    expect(observedSyncOutcome("stato-sconosciuto", "2026-08-04T10:00:00Z")).toBeNull();
   });
 
   it("distingue timeout da failure senza esporre il messaggio originale", async () => {
-    const timeout = Object.assign(new Error("dettaglio da non propagare"), {
-      name: "TimeoutError",
-    });
+    const timeout = Object.assign(new Error("dettaglio da non propagare"), { name: "TimeoutError" });
     expect(timeoutFailure(timeout)).toBe(true);
     expect(timeoutFailure(new Error("rete"))).toBe(false);
 
@@ -151,11 +128,7 @@ describe("rendezvous Sync now — stato terminale veritiero", () => {
   it("usa sempre l'endpoint CAS unico senza un falso verde", async () => {
     let calls = 0;
     const result = await acknowledgeSync({
-      reader: {
-        patchTeamState: async () => {
-          throw new Error("non va usato");
-        },
-      },
+      reader: { patchTeamState: async () => { throw new Error("non va usato"); } },
       url: "https://example.invalid/api/team-state",
       token: "token-di-test",
       expectedRequestedAt: "2026-08-04T10:00:00Z",
@@ -165,11 +138,7 @@ describe("rendezvous Sync now — stato terminale veritiero", () => {
       },
     });
     expect(calls).toBe(1);
-    expect(result).toEqual({
-      status: "ack_failed",
-      httpStatus: 401,
-      retryable: false,
-    });
+    expect(result).toEqual({ status: "ack_failed", httpStatus: 401, retryable: false });
   });
 
   it("tratta 409 come richiesta sostituita, non come errore di trasporto", async () => {
@@ -179,10 +148,6 @@ describe("rendezvous Sync now — stato terminale veritiero", () => {
       expectedRequestedAt: "2026-08-04T10:00:00Z",
       fetchFn: async () => ({ ok: false, status: 409 }) as Response,
     });
-    expect(result).toEqual({
-      status: "superseded",
-      retryable: false,
-      via: "http",
-    });
+    expect(result).toEqual({ status: "superseded", retryable: false, via: "http" });
   });
 });
