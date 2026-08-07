@@ -35,9 +35,13 @@ func _spec(events: Array[Dictionary], keep_alive := false) -> Dictionary:
 	if OS.get_name() == "Windows":
 		var statements := PackedStringArray()
 		for line in lines:
-			# Gli eventi non contengono apostrofi; il protocollo produzione usa
-			# JSON.stringify e il selftest mantiene lo stesso frame byte-per-byte.
-			statements.append("[Console]::Error.WriteLine('%s')" % line)
+			# Windows serializza `-Command` attraverso una command line: i doppi
+			# apici JSON nudi verrebbero consumati prima di PowerShell. È lo stesso
+			# confine base64 usato dal wrapper di produzione in SetupService.
+			var encoded := Marshalls.utf8_to_base64(line)
+			statements.append("[Console]::Error.WriteLine(" \
+					+ "[Text.Encoding]::UTF8.GetString(" \
+					+ "[Convert]::FromBase64String('%s')))" % encoded)
 		if keep_alive:
 			statements.append("Start-Sleep -Seconds 30")
 		return {
@@ -89,6 +93,7 @@ func _run() -> void:
 	var url := "https://jobhunterteam.ai/cli-link?code=TEST-1234"
 	var raw := "docker banner\r\n" + _event_line({
 		"event": "ready", "url": url, "expires_in": 600}) + "\r\n" \
+		+ EmbeddedTerminal.CLOUD_UI_PREFIX + "{event:malformed}\r\n" \
 		+ _event_line({"event": "paired", "token_name": "desktop-test"}) + "\r\n" \
 		+ EmbeddedTerminal.CLOUD_UI_PREFIX + "{\"event\":\"partial"
 	var parsed := EmbeddedTerminal._cloud_pairing_events(raw)
