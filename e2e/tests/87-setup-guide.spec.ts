@@ -68,7 +68,14 @@ test("il selettore OS cambia le fasi mostrate", async ({
     // La pagina dichiara da sé quando il selettore è vivo: prima
     // dell'idratazione un click si perde e il test fallirebbe per un
     // motivo che non c'entra con la guida.
-    await expect(page.locator("[data-guide-ready='true']")).toBeAttached();
+    //
+    // Il timeout è largo di proposito: contro `next dev` la prima visita a
+    // una route la compila al volo, e su una macchina carica ci vuole più
+    // dei 5 secondi di default. Aspettare la condizione vera con margine è
+    // meglio di un rosso che compare a caso e che poi nessuno crede.
+    await expect(page.locator("[data-guide-ready='true']")).toBeAttached({
+      timeout: 30_000,
+    });
     await expect(page.locator("#phase-install-macos")).toBeVisible();
     await expect(page.locator("#phase-install-windows")).toHaveCount(0);
 

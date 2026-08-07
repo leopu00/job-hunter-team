@@ -101,10 +101,25 @@ riuso perché il selettore lingua *è* la prima schermata di un avvio pulito:
 due voci del registro puntano a un file solo invece di spedire due volte lo
 stesso 1,3 MB. È il caso d'uso per cui il registro esiste.
 
-Il conteggio ora è per coppia **schermata × sistema**, limitato ai sistemi in
-cui la fase compare davvero: **5 riprese su 69**. Contare le schermate senza
+Il conteggio è per coppia **schermata × sistema**, limitato ai sistemi in
+cui la fase compare davvero: **5 riprese su 63**. Contare le schermate senza
 alcun file avrebbe dichiarato `S02` fatta nel momento in cui Linux ha
 consegnato, mentre macOS e Windows non hanno nulla.
+
+### Due superfici native, non due riprese
+
+HQ-DOCS ha deciso il 7 agosto (`3864199e3`) che `G00` e `S01` **non sono
+richieste di cattura**:
+
+- `S01` è la `RequirementsCard` costruita nella pagina;
+- `G00` è l'indice dei capitoli con il selettore OS dal vivo, in cima — una
+  foto della pagina dentro sé stessa non aggiungerebbe nulla, e il duplicato
+  mobile nemmeno.
+
+I due id restano nel registro marcati `nativeSurface` per l'audit, ma fuori
+dagli asset in attesa: E2E non deve catturarli. Il guard sta dentro
+`missingCaptures()`, non solo nei chiamanti, così il conto resta giusto anche
+se un domani una fase tornasse a referenziarli.
 
 ## Traduzioni: cosa è tradotto e cosa no
 
@@ -151,7 +166,7 @@ test e2e lo verifica in tedesco.
 
 ## Cosa manca, senza abbellimenti
 
-- **64 riprese su 69.** Linux ha consegnato le prime cinque; macOS e
+- **58 riprese su 63.** Linux ha consegnato le prime cinque; macOS e
   Windows non hanno ancora nulla. Le due immagini già in repo
   (`office-overview`, `departments`) restano **fuori** dalla guida: il
   contratto stabilisce che non provano né il setup né un team vivo.
