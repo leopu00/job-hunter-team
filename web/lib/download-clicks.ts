@@ -1,6 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { DownloadClick } from "@/lib/download-funnel";
-import { checkRateLimit, type RateLimitResult } from "@/lib/rate-limit";
+import {
+  checkDistributedRateLimit,
+  type RateLimitResult,
+} from "@/lib/rate-limit";
 
 export const DOWNLOAD_AGGREGATE_RATE_LIMIT = {
   namespace: "download-funnel",
@@ -17,12 +20,12 @@ type RecorderDependencies = {
     identity: string,
     max: number,
     windowMs: number,
-  ) => Promise<Pick<RateLimitResult, "allowed">>;
+  ) => Promise<Pick<RateLimitResult, "allowed"> | null>;
   increment: (event: DownloadClick) => Promise<void>;
 };
 
 const DEFAULT_DEPENDENCIES: RecorderDependencies = {
-  check: checkRateLimit,
+  check: checkDistributedRateLimit,
   increment: async (event) => {
     const admin = createAdminClient();
     const { error } = await admin.rpc("increment_download_clicks", {
@@ -43,7 +46,7 @@ export async function recordDownloadClick(
   dependencies: RecorderDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<void> {
   const limit = DOWNLOAD_AGGREGATE_RATE_LIMIT;
-  const { allowed } = await dependencies.check(
+  const result = await dependencies.check(
     limit.namespace,
     limit.scope,
     limit.identity,
@@ -51,11 +54,10 @@ export async function recordDownloadClick(
     limit.windowMs,
   );
 
-  // All anonymous callers share one constant bucket. When Upstash is
-  // configured this cap is distributed across instances; the existing
-  // in-memory fallback still protects each warm instance. Measurement may be
-  // sampled under abuse, but the download response is never delayed or lost.
-  if (!allowed) return;
+  // All anonymous callers share one constant distributed bucket. Missing or
+  // failed coordination is fail-closed for measurement: never fall back to a
+  // per-instance budget that an autoscaling attacker can multiply.
+  if (!result?.allowed) return;
 
   await dependencies.increment(event);
 }
