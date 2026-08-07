@@ -282,15 +282,15 @@ if __name__ == "__main__":
         ok("claude seed 15.0", get_window_cap_pct_of_weekly("claude") == 15.0)
         # 2026-07-26: Kimi NON è più weekly-unlimited (403 "billing cycle" preso
         # sul campo + quote settimanali dichiarate su tutti i piani).
-        ok("kimi seed 23.0 (misurato ThinkPad 2026-07-26)",
+        ok("kimi seed 23.0 (measured on ThinkPad 2026-07-26)",
            get_window_cap_pct_of_weekly("kimi") == 23.0)
-        ok("provider sconosciuto → None",
+        ok("unknown provider → None",
            get_window_cap_pct_of_weekly("foobar") is None)
         # Data-driven override: se il daemon ha osservato un weekly cap per un
         # provider flaggato unlimited, l'EMA vince (non più None).
-        ok("kimi unlimited+osservato → EMA",
+        ok("kimi unlimited+observed → EMA",
            _weekly_cap_observed({"ema_ratio_pct": 18.5, "days_observed": 34}) is True)
-        ok("kimi unlimited+osservazione acerba (<1g) → resta unlimited",
+        ok("kimi unlimited+early observation (<1d) → remains unlimited",
            _weekly_cap_observed({"ema_ratio_pct": 18.5, "days_observed": 0.3}) is False)
         sys.exit(0 if fails == 0 else 1)
     print(json.dumps(describe(), indent=2))

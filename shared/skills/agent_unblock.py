@@ -402,13 +402,13 @@ def build_scan(pane_states: dict, messages: list, now=None,
             blocks.append({
                 "kind": "pending_user_input", "session": sess,
                 "draft": st.get("draft", ""),
-                "cure": "relay al coordinatore + domanda all'Assistente; NON toccare il testo",
+                "cure": "relay to the coordinator + ask the Assistant; DO NOT alter the text",
             })
         elif st.get("state") == "draft_agent":
             blocks.append({
                 "kind": "pending_agent_input", "session": sess,
                 "draft": st.get("draft", ""),
-                "cure": "probe Space+Enter (una volta); se frozen → recreate",
+                "cure": "probe Space+Enter once; if frozen, recreate the session",
             })
         elif st.get("state") == "shell":
             blocks.append({"kind": "bare_shell", "session": sess, "draft": "",
@@ -418,8 +418,8 @@ def build_scan(pane_states: dict, messages: list, now=None,
         blocks.append({
             "kind": "retry_loop", "session": loop["from"].upper(),
             "target": loop["to"].upper(), "attempts": loop["attempts"],
-            "cure": "sbloccare il destinatario; se non sbloccabile, riassegnare "
-                    "o istruire il mittente a procedere",
+            "cure": "unblock the recipient; if that is not possible, reassign "
+                    "or instruct the sender to proceed",
         })
 
     operatives = [s for s in pane_states
@@ -428,7 +428,7 @@ def build_scan(pane_states: dict, messages: list, now=None,
     if operatives and len(idle_ops) == len(operatives):
         blocks.append({
             "kind": "all_operatives_idle", "session": ",".join(sorted(idle_ops)),
-            "cure": "kick-off dei ruoli operativi SENZA attendere il coordinatore",
+            "cure": "kick off operational roles WITHOUT waiting for the coordinator",
         })
 
     last_captain = None
@@ -446,7 +446,7 @@ def build_scan(pane_states: dict, messages: list, now=None,
                 "kind": "mute_coordinator", "session": "CAPITANO",
                 "silent_min": None if last_captain is None
                 else int((now - last_captain).total_seconds() // 60),
-                "cure": "escalation all'Assistente + ripresa autonoma dei worker",
+                "cure": "escalate to the Assistant + resume workers autonomously",
             })
 
     return {"ts": _iso(now), "blocks_found": len(blocks), "blocks": blocks,
@@ -463,18 +463,18 @@ def scan() -> dict:
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description="Rilevare e sciogliere i blocchi del team")
+    p = argparse.ArgumentParser(description="Detect and clear team blockages")
     sub = p.add_subparsers(dest="cmd")
-    sub.add_parser("scan", help="blocchi rilevati (JSON)")
-    pc = sub.add_parser("classify", help="stato del pane di una sessione")
+    sub.add_parser("scan", help="detected blockages (JSON)")
+    pc = sub.add_parser("classify", help="state of a session pane")
     pc.add_argument("session")
-    pp = sub.add_parser("probe", help="UNA sonda Space+Enter")
+    pp = sub.add_parser("probe", help="ONE Space+Enter probe")
     pp.add_argument("session")
-    prl = sub.add_parser("relay", help="consegna senza toccare il pane")
+    prl = sub.add_parser("relay", help="deliver without touching the pane")
     prl.add_argument("session")
     prl.add_argument("message")
     prl.add_argument("--kind", default="UNBLOCK")
-    prr = sub.add_parser("record-round", help="chiude il giro nel log del Dottore")
+    prr = sub.add_parser("record-round", help="close the round in the Doctor log")
     prr.add_argument("--round-id", required=True)
     prr.add_argument("--found", type=int, required=True)
     prr.add_argument("--cleared", type=int, required=True)

@@ -150,7 +150,7 @@ def main(argv):
         return 0
     if cmd == "mark":
         if len(argv) < 2 or argv[1] not in ("T30", "MID"):
-            print("uso: doctor_schedule.py mark <T30|MID>", file=sys.stderr)
+            print("usage: doctor_schedule.py mark <T30|MID>", file=sys.stderr)
             return 2
         mark(argv[1])
         return 0
@@ -160,7 +160,7 @@ def main(argv):
     if cmd == "mark-maintainer":
         mark_maintainer()
         return 0
-    print("uso: doctor_schedule.py <check|mark T30|mark MID|check-maintainer|mark-maintainer>",
+    print("usage: doctor_schedule.py <check|mark T30|mark MID|check-maintainer|mark-maintainer>",
           file=sys.stderr)
     return 2
 

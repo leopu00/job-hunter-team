@@ -52,7 +52,7 @@ def request_geocode(position_id: int, mode: str) -> dict:
     if not row:
         return {
             "ok": False,
-            "error": f"Posizione #{position_id} non trovata",
+            "error": f"Position #{position_id} not found",
             "status_code": "NOT_FOUND",
         }
 
@@ -85,14 +85,14 @@ def request_geocode(position_id: int, mode: str) -> dict:
 
 def main() -> None:
     p = argparse.ArgumentParser(
-        description="Richiesta geocoding user-driven (Geocoding-on-demand, V8)"
+        description="User-driven geocoding request (Geocoding-on-demand, V8)"
     )
     p.add_argument("position_id", type=int)
     p.add_argument(
         "--mode",
         choices=["on", "off"],
         default="on",
-        help="'on' = setta geocode_requested=1, 'off' = annulla (toggle).",
+        help="'on' sets geocode_requested=1; 'off' cancels the request.",
     )
     args = p.parse_args()
 

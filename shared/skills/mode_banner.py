@@ -107,11 +107,11 @@ LEGACY_MODES = {MODE_NORMAL: MODE_SEARCH, MODE_MAINTENANCE: MODE_CARE}
 MODE_UNKNOWN = "sconosciuto"
 
 MODE_LABELS = {
-    MODE_SEARCH: "ricerca",
-    MODE_HARVEST: "raccolto",
-    MODE_CARE: "cura",
-    MODE_CALIBRATION: "calibrazione",
-    MODE_SAVING: "risparmio",
+    MODE_SEARCH: "search",
+    MODE_HARVEST: "harvest",
+    MODE_CARE: "care",
+    MODE_CALIBRATION: "calibration",
+    MODE_SAVING: "saving",
 }
 
 # Le QUATTRO dichiarazioni di ogni modalità (code attive / sospeso / budget /
@@ -120,57 +120,57 @@ MODE_LABELS = {
 # vive nella skill `team-modes`; qui deve stare in un messaggio DIGITATO.
 MODE_SPECS = {
     MODE_SEARCH: {
-        "code": "pipeline piena: scout → analisi → score "
-                "(Scrittore/Critico on-demand, C-10)",
-        "sospeso": "niente — C-05/C-05c (anti-idle sourcing) attive",
-        "budget": "sourcing prima, poi analisi/score verso posizioni CON "
-                  "punteggio",
-        "uscita": "nessuna: modalità continua, la cambia solo l'utente",
+        "code": "full pipeline: scout → analysis → scoring "
+                "(Writer/Critic on demand, C-10)",
+        "sospeso": "nothing — C-05/C-05c (anti-idle sourcing) are active",
+        "budget": "sourcing first, then analysis/scoring toward SCORED "
+                  "positions",
+        "uscita": "none: continuous mode; only the user changes it",
     },
     MODE_HARVEST: {
-        "code": "convertire in CV le migliori GIÀ trovate (Scrittore "
-                "on-demand + Critico; liveness pre-CV)",
-        "sospeso": "sourcing: NIENTE Scout (C-05/C-05c sospese, coda `new` "
-                   "vuota BY DESIGN)",
-        "budget": "Scrittore/Critico prima; Analista solo per il pre-check "
-                  "liveness",
-        "uscita": "quando nessuna posizione viva sopra soglia resta senza CV",
+        "code": "turn the best positions ALREADY found into CVs (Writer "
+                "on demand + Critic; pre-CV liveness)",
+        "sospeso": "sourcing: NO Scouts (C-05/C-05c suspended; `new` queue "
+                   "empty BY DESIGN)",
+        "budget": "Writer/Critic first; Analyst only for the liveness "
+                  "pre-check",
+        "uscita": "when no live position above the threshold remains without a CV",
     },
     MODE_CARE: {
-        "code": "recheck cadenzato (14gg, score ≥ 70, migliori prima) + "
-                "geocode-missing + logo-missing + scarto scadute (C-18)",
-        "sospeso": "sourcing con stop_search=true (C-05/C-05c sospese)",
-        "budget": "cura del portafoglio, diluita sulle ore attive; CV solo "
-                  "su richiesta e ≥ cv_min_score",
-        "uscita": "code di cura TUTTE vuote (la cadenza 14gg le rimatura)",
+        "code": "scheduled recheck (14 days, score ≥ 70, best first) + "
+                "geocode-missing + logo-missing + discard expired positions (C-18)",
+        "sospeso": "sourcing when stop_search=true (C-05/C-05c suspended)",
+        "budget": "portfolio care spread across active hours; CV only "
+                  "on request and ≥ cv_min_score",
+        "uscita": "ALL care queues empty (the 14-day cadence makes them due again)",
     },
     MODE_CALIBRATION: {
-        "code": "feedback dell'utente (feedback-query, dal cloud) → "
-                "riorientare la PRIORITÀ di ricerca (+ re-score mirato)",
-        "sospeso": "sourcing di massa finché la priorità non è aggiornata "
-                   "(cercare con la mira vecchia è lo spreco da evitare)",
-        "budget": "lettura feedback + ritaratura, in batch limitati",
-        "uscita": "feedback recente letto e priorità aggiornata — lo "
-                  "dichiari TU all'utente",
+        "code": "user feedback (feedback-query, from the cloud) → "
+                "retarget SEARCH PRIORITY (+ targeted rescoring)",
+        "sospeso": "bulk sourcing until priority is updated (searching with "
+                   "the old aim wastes budget)",
+        "budget": "feedback reading + recalibration, in bounded batches",
+        "uscita": "recent feedback read and priority updated — YOU declare "
+                  "it to the user",
     },
     MODE_SAVING: {
-        "code": "solo il minimo vitale: risposte all'utente, ticket (C-15), "
-                "flag user-driven",
-        "sospeso": "sourcing E ogni enrichment autonomo "
+        "code": "bare minimum only: user replies, tickets (C-15), and "
+                "user-driven flags",
+        "sospeso": "sourcing AND every autonomous enrichment "
                    "(recheck/geocode/logo)",
-        "budget": "vicino a zero: nessuna spesa autonoma (C-25 qui NON "
-                  "sblocca sourcing: il margine si RIFERISCE, non si spende)",
-        "uscita": "nessuna: dura finché l'utente non la toglie",
+        "budget": "near zero: no autonomous spending (C-25 does NOT unlock "
+                  "sourcing here: report available headroom; do not spend it)",
+        "uscita": "none: lasts until the user removes it",
     },
 }
 
-HEADER = "[MODALITÀ CORRENTE — iniettata dal bridge, fonte: file su disco]"
+HEADER = "[MODALITÀ CORRENTE — injected by the bridge, source: on-disk files]"
 # L'ultima riga del disegno: senza di essa la sezione è un promemoria, con essa
 # è un ordine di precedenza.
 FOOTER = (
-    "Se questa sezione contraddice il tuo contesto, VINCE QUESTA: il file su "
-    "disco è la fonte di verità e il tuo contesto può essere stato azzerato da "
-    "un refresh."
+    "If this section contradicts your context, THIS SECTION WINS: on-disk "
+    "files are the source of truth, and a context refresh may have cleared "
+    "your context."
 )
 # Reso single-line: `jht-tmux-send` fa `tmux send-keys -l "$message"`, e un
 # newline nel testo verrebbe digitato come Enter → il messaggio partirebbe a
@@ -208,13 +208,13 @@ def _flag_paths():
     home, logs = _home(), _home() / "logs"
     return (
         ("team-halted", home / ".team-halted.flag",
-         "l'utente ha FERMATO il team"),
+         "the user STOPPED the team"),
         ("team-standby", home / ".team-standby.flag",
-         "standby a spesa zero"),
-        ("daily-halt", logs / "daily-halt.flag", "cap giornaliero sforato"),
-        ("daily-halt", home / ".daily-halt.flag", "cap giornaliero sforato"),
-        ("weekly-halt", home / ".weekly-halt.flag", "quota settimanale esaurita"),
-        ("weekly-halt", logs / "weekly-halt.flag", "quota settimanale esaurita"),
+         "zero-spend standby"),
+        ("daily-halt", logs / "daily-halt.flag", "daily cap exceeded"),
+        ("daily-halt", home / ".daily-halt.flag", "daily cap exceeded"),
+        ("weekly-halt", home / ".weekly-halt.flag", "weekly quota exhausted"),
+        ("weekly-halt", logs / "weekly-halt.flag", "weekly quota exhausted"),
     )
 
 
@@ -370,7 +370,7 @@ def read_flags() -> list:
     if bi and bi.get("active"):
         out.append({
             "name": "burn-intent",
-            "why": "deroga di spesa dell'utente, scade fra %s min"
+            "why": "user spending override, expires in %s min"
                    % bi.get("remaining_min"),
         })
     return out
@@ -536,7 +536,7 @@ def _care_queue_counts(conn) -> dict:
 
     # Le scadute non passano dalla policy: sono l'ordine
     # `discard_expired_rotating`, sempre parte della cura.
-    out["scadute"] = _count(conn, """
+    out["expired"] = _count(conn, """
         SELECT COUNT(*)
         FROM positions p
         WHERE p.status != 'excluded'
@@ -557,25 +557,25 @@ def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
 
     if mode == MODE_SEARCH:
         return {"kind": EXIT_CONTINUOUS,
-                "detail": "modalità continua, non finisce da sola — il "
-                          "surplus lo governa C-25"}
+                "detail": "continuous mode; it does not end on its own — "
+                          "C-25 governs surplus"}
     if mode == MODE_SAVING:
         return {"kind": EXIT_CONTINUOUS,
-                "detail": "dura finché l'utente non la toglie; se avanza "
-                          "budget RIFERISCILO (C-25), non spenderlo"}
+                "detail": "lasts until the user removes it; if budget "
+                          "remains, REPORT IT (C-25), do not spend it"}
     if mode == MODE_CALIBRATION:
         return {"kind": EXIT_UNAVAILABLE,
-                "detail": "non valutabile da qui (il feedback vive sul "
-                          "cloud): dichiari TU la chiusura quando il "
-                          "feedback recente è letto e la priorità "
-                          "aggiornata (`feedback-query`)"}
+                "detail": "cannot be evaluated here (feedback lives in the "
+                          "cloud): YOU declare completion after reading "
+                          "recent feedback and updating priority "
+                          "(`feedback-query`)"}
 
     if mode == MODE_HARVEST:
         conn = _db_ro_conn()
         if conn is None:
             return {"kind": EXIT_UNAVAILABLE,
-                    "detail": "jobs.db non leggibile — NON dedurre che il "
-                              "raccolto sia finito: verifica con db_query"}
+                    "detail": "jobs.db is unreadable — DO NOT infer that "
+                              "harvest is finished: check with db_query"}
         thr = orders.get("cv_min_score")
         if not isinstance(thr, (int, float)) or isinstance(thr, bool):
             thr = HARVEST_DEFAULT_CV_MIN_SCORE
@@ -609,23 +609,22 @@ def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
                 pass
         if n is None:
             return {"kind": EXIT_UNAVAILABLE,
-                    "detail": "conteggio non riuscito (schema?) — NON "
-                              "dedurre che il raccolto sia finito"}
+                    "detail": "count failed (schema?) — DO NOT infer that "
+                              "harvest is finished"}
         if n == 0:
             return {"kind": EXIT_DONE,
-                    "detail": "0 posizioni vive con score ≥ %s senza CV: "
-                              "RACCOLTO FINITO" % int(thr)}
+                    "detail": "0 live positions with score ≥ %s without a "
+                              "CV: HARVEST COMPLETE" % int(thr)}
         return {"kind": EXIT_PENDING,
-                "detail": "restano %d posizioni vive con score ≥ %s senza "
-                          "CV (stima RO)" % (n, int(thr))}
+                "detail": "%d live positions with score ≥ %s remain "
+                          "without a CV (read-only estimate)" % (n, int(thr))}
 
     if mode == MODE_CARE:
         conn = _db_ro_conn()
         if conn is None:
             return {"kind": EXIT_UNAVAILABLE,
-                    "detail": "jobs.db non leggibile — NON dedurre che le "
-                              "code di cura siano vuote: verifica con "
-                              "db_query"}
+                    "detail": "jobs.db is unreadable — DO NOT infer that "
+                              "care queues are empty: check with db_query"}
         try:
             counts = _care_queue_counts(conn)
         finally:
@@ -636,24 +635,25 @@ def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
         broken = sorted(k for k, v in counts.items() if v is None)
         if broken:
             return {"kind": EXIT_UNAVAILABLE,
-                    "detail": "code non contabili (%s) — NON dedurre che "
-                              "siano vuote: verifica con db_query"
+                    "detail": "queues could not be counted (%s) — DO NOT "
+                              "infer that they are empty: check with db_query"
                               % ", ".join(broken)}
         shown = ", ".join(
-            "%s=%s" % (k, "OFF da policy" if v == "off" else v)
+            "%s=%s" % (k, "OFF by policy" if v == "off" else v)
             for k, v in counts.items())
         exhausted = all(v == "off" or v == 0 for v in counts.values())
         if exhausted:
             return {"kind": EXIT_DONE,
-                    "detail": "code di cura esaurite (%s): CURA COMPLETA "
-                              "per ora (la cadenza 14gg le rimatura)" % shown}
+                    "detail": "care queues exhausted (%s): CARE COMPLETE "
+                              "for now (the 14-day cadence makes them due "
+                              "again)" % shown}
         return {"kind": EXIT_PENDING,
-                "detail": "lavoro residuo (stima RO): %s" % shown}
+                "detail": "remaining work (read-only estimate): %s" % shown}
 
     # Modalità fuori enum o illeggibile: nessuna valutazione possibile.
     return {"kind": EXIT_UNAVAILABLE,
-            "detail": "modalità non valutabile: apri il file e la skill "
-                      "`team-modes`"}
+            "detail": "mode cannot be evaluated: open the file and the "
+                      "`team-modes` skill"}
 
 
 # ── Composizione ──────────────────────────────────────────────────────────
@@ -680,22 +680,23 @@ def _order_line(key: str, value) -> str:
     resta un ordine dell'utente da riferire, non da nascondere."""
     v = _fmt_value(value)
     if key == "stop_search":
-        return ("stop_search: true — NIENTE Scout, nessuna offerta nuova: la "
-                "coda `new` resta vuota BY DESIGN (C-05/C-05c sospese)"
+        return ("stop_search: true — NO Scouts and no new positions: the "
+                "`new` queue stays empty BY DESIGN (C-05/C-05c suspended)"
                 if value is True else
-                f"stop_search: {v} — sourcing consentito SOLO col budget che "
-                f"avanza, la manutenzione resta la priorità")
+                f"stop_search: {v} — sourcing is allowed ONLY with remaining "
+                f"budget; care remains the priority")
     if key == "discard_expired_rotating":
-        return ("discard_expired_rotating: true — a rotazione ri-verifica le "
-                "scadute ed escludile (recheck-liveness → [SCADUTO])"
+        return ("discard_expired_rotating: true — rotate through expired "
+                "positions, recheck and exclude them "
+                "(recheck-liveness → [SCADUTO])"
                 if value is True else
-                f"discard_expired_rotating: {v} — non escludere per scadenza "
-                f"senza un ordine")
+                f"discard_expired_rotating: {v} — do not exclude positions "
+                f"as expired without an order")
     if key == "cv_min_score":
-        return f"cv_min_score: {v} — scrivi un CV solo per posizioni con score ≥ {v}"
+        return f"cv_min_score: {v} — write a CV only for positions with score ≥ {v}"
     if key == "pre_check_liveness_for_cv":
-        return ("pre_check_liveness_for_cv: true — prima di un CV verifica che "
-                "l'offerta sia ancora viva"
+        return ("pre_check_liveness_for_cv: true — before writing a CV, "
+                "verify that the position is still live"
                 if value is True else
                 f"pre_check_liveness_for_cv: {v}")
     return f"{key}: {v}"
@@ -778,32 +779,32 @@ def _lines(snap: dict) -> list:
     out = [HEADER]
     mode = snap["mode"]
     raw = snap.get("mode_raw")
-    since = f" (dal {snap['since']})" if snap["since"] else ""
-    legacy = (f' [nel file: "{raw}", valore legacy]'
+    since = f" (since {snap['since']})" if snap["since"] else ""
+    legacy = (f' [in file: "{raw}", legacy value]'
               if raw and raw != mode else "")
 
     if mode == MODE_UNKNOWN:
         out.append(
-            "MODE: sconosciuto — `profile/capitano-maintenance.json` esiste ma "
-            "NON è leggibile%s: trattalo come un ORDINE ATTIVO e apri il file "
-            "prima di decidere qualunque cosa sul sourcing."
-            % (f" (scritto {snap['since']})" if snap["since"] else ""))
+            "MODE: unknown — `profile/capitano-maintenance.json` exists but "
+            "is NOT readable%s: treat it as an ACTIVE ORDER and open the file "
+            "before making any sourcing decision."
+            % (f" (written {snap['since']})" if snap["since"] else ""))
     elif mode == MODE_SEARCH and not snap["maintenance_exists"]:
         out.append(
-            "MODE: search (ricerca) — nessun "
-            "`profile/capitano-maintenance.json`: è il default.")
+            "MODE: search — no `profile/capitano-maintenance.json`: this is "
+            "the default.")
     elif mode in MODE_LABELS:
         head = f"MODE: {mode} ({MODE_LABELS[mode]}){legacy}{since}"
         if snap.get("orders"):
-            head += " — ordini da `profile/capitano-maintenance.json`:"
+            head += " — orders from `profile/capitano-maintenance.json`:"
         out.append(head)
     else:
         # Valore fuori enum: resta un ordine dell'utente da riferire, non da
         # normalizzare via — ma senza scheda non si ordina nulla al buio.
         out.append(
-            "MODE: %s%s — valore FUORI dall'enum "
-            "(search|harvest|care|calibration|saving): trattalo come ORDINE "
-            "ATTIVO (sourcing fermo) e apri il file prima di decidere."
+            "MODE: %s%s — value OUTSIDE the enum "
+            "(search|harvest|care|calibration|saving): treat it as an ACTIVE "
+            "ORDER (sourcing stopped) and open the file before deciding."
             % (mode, since))
 
     orders = snap.get("orders") or {}
@@ -817,55 +818,55 @@ def _lines(snap: dict) -> list:
         for k in keys[:MAX_ORDER_LINES]:
             out.append("- " + _order_line(k, orders[k]))
         if len(keys) > MAX_ORDER_LINES:
-            out.append("- (+%d ordini nel file — leggilo)"
+            out.append("- (+%d orders in the file — read it)"
                        % (len(keys) - MAX_ORDER_LINES))
     elif mode not in (MODE_SEARCH, MODE_UNKNOWN):
-        out.append("- (nessun `orders` nel file: modalità dichiarata senza "
-                   "dettagli → `stop_search` vale TRUE per default, come lo "
-                   "legge la Console del Coordinatore. Apri il file.)")
+        out.append("- (no `orders` in the file: mode declared without "
+                   "details → `stop_search` defaults to TRUE, as read by the "
+                   "Coordinator Console. Open the file.)")
 
     # La SPECIFICA della modalità (le 4 dichiarazioni), non solo il nome: è
     # il requisito del contratto modalità 2026-08-03 — il Capitano che riceve
     # il battito deve sapere COSA implica, non solo come si chiama.
     spec = MODE_SPECS.get(mode)
     if spec:
-        out.append("- CODE ATTIVE: " + spec["code"])
-        out.append("- SOSPESO: " + spec["sospeso"])
+        out.append("- ACTIVE QUEUES: " + spec["code"])
+        out.append("- SUSPENDED: " + spec["sospeso"])
         out.append("- BUDGET: " + spec["budget"])
         ex = snap.get("exit") or {}
         kind, detail = ex.get("kind"), ex.get("detail", "")
         if kind == EXIT_DONE:
-            out.append("- USCITA: LAVORO ESAURITO — %s. Non cambiare "
-                       "modalità da solo: SEGNALALO all'utente (il silenzio "
-                       "non è ammesso; sul surplus vale C-25)." % detail)
+            out.append("- EXIT: WORK EXHAUSTED — %s. Do not change mode on "
+                       "your own: REPORT IT to the user (silence is not "
+                       "allowed; C-25 governs surplus)." % detail)
         elif kind == EXIT_PENDING:
-            out.append("- USCITA: %s. ADESSO: %s."
+            out.append("- EXIT: %s. NOW: %s."
                        % (spec["uscita"], detail))
         elif kind == EXIT_CONTINUOUS:
-            out.append("- USCITA: %s." % detail)
+            out.append("- EXIT: %s." % detail)
         else:
-            out.append("- USCITA: %s. ADESSO: NON VALUTABILE — %s."
+            out.append("- EXIT: %s. NOW: UNAVAILABLE — %s."
                        % (spec["uscita"], detail))
     if mode != MODE_SEARCH or snap["maintenance_exists"]:
-        out.append("Non ricordi cosa implica? Leggi la skill `team-modes` "
-                   "PRIMA di decidere.")
+        out.append("Do not remember what this implies? Read the `team-modes` "
+                   "skill BEFORE deciding.")
 
     if not snap["directives_readable"]:
-        out.append("DIRETTIVE ATTIVE: non leggibili (bacheca `team_directives` "
-                   "non raggiungibile) — NON dedurre che non ce ne siano")
+        out.append("ACTIVE DIRECTIVES: unreadable (`team_directives` board "
+                   "unreachable) — DO NOT infer that there are none")
     elif not snap["directives"]:
-        out.append("DIRETTIVE ATTIVE: nessuna")
+        out.append("ACTIVE DIRECTIVES: none")
     else:
         shown = "; ".join("#%s [%s] %s" % (d["id"], d["kind"], d["body"])
                           for d in snap["directives"])
         extra = snap["directives_total"] - len(snap["directives"])
-        out.append("DIRETTIVE ATTIVE (%d): %s%s"
+        out.append("ACTIVE DIRECTIVES (%d): %s%s"
                    % (snap["directives_total"], shown,
-                      f"; (+{extra} in bacheca)" if extra > 0 else ""))
+                      f"; (+{extra} on the board)" if extra > 0 else ""))
 
     flags = snap.get("flags") or []
     if flags:
-        out.append("FRENI ATTIVI: "
+        out.append("ACTIVE BRAKES: "
                    + "; ".join("%s (%s)" % (f["name"], f["why"]) for f in flags))
 
     out.append(FOOTER)
@@ -892,11 +893,11 @@ def line(now: Optional[datetime] = None) -> str:
 def main(argv: list) -> int:
     ap = argparse.ArgumentParser(
         prog="mode_banner",
-        description="Modalità corrente del team, letta da disco (mai da cache)")
+        description="Current team mode, read from disk (never from cache)")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("line", help="una riga (per tmux)")
-    sub.add_parser("show", help="multi-riga leggibile")
-    sub.add_parser("json", help="i fatti grezzi")
+    sub.add_parser("line", help="one line (for tmux)")
+    sub.add_parser("show", help="readable multiline output")
+    sub.add_parser("json", help="raw facts")
     args = ap.parse_args(argv)
 
     snap = snapshot()

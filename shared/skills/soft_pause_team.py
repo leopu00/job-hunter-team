@@ -68,32 +68,33 @@ EXCLUDE = {"SENTINELLA", "ASSISTENTE", "SENTINELLA-WORKER"}
 NEVER_MESSAGE = {"SENTINELLA-WORKER", "DOCTOR-WATCHDOG"}
 
 MSG_OPERATIVO = (
-    "[SENTINELLA] [PAUSA] Monitoraggio usage rotto (fallback L1+L2+L3 tutti ko). "
-    "Termina il task corrente in modo pulito, NON iniziarne nuovi, NON fare nuovi "
-    "tool calls. Resta in attesa silenziosa. Riprendi a lavorare SOLO quando ricevi "
-    "un messaggio '[RIPRENDI]' da SENTINELLA o CAPITANO. Conferma di aver letto."
+    "[SENTINELLA] [PAUSA] Usage monitoring failed (L1+L2+L3 fallbacks all "
+    "failed). Finish your current task cleanly, DO NOT start new ones, and DO "
+    "NOT make new tool calls. Wait silently. Resume work ONLY when you receive "
+    "a '[RIPRENDI]' message from SENTINELLA or CAPITANO. Confirm that you have "
+    "read this."
 )
 
 MSG_CAPITANO = (
-    "[SENTINELLA] [PAUSA TEAM] Sistema di monitoraggio usage in failure totale: "
-    "fetch HTTP (L1) + skill multi-provider (L2) + worker TUI manuale (L3) tutti "
-    "falliti. Non ho dati freschi sul consumo del provider AI, quindi NON posso "
-    "garantire che il team stia operando dentro il budget rate-limit.\n\n"
-    "AZIONE PRESA: ho mandato un messaggio di [PAUSA] a tutti gli agenti operativi "
-    "del team chiedendogli di terminare il task corrente in modo pulito e poi "
-    "restare in attesa.\n\n"
-    "COSA DEVI FARE TU:\n"
-    "1. NON spawnare nuovi agenti.\n"
-    "2. NON inviare nuovi ordini operativi agli agenti già attivi.\n"
-    "3. Chiudi il tuo turno corrente in modo pulito e resta in attesa.\n"
-    "4. NON forzare un /usage manuale: la sorgente è rotta, hai già il quadro.\n\n"
-    "RIPARTENZA: io continuo ad ascoltare i [BRIDGE TICK]. Appena la sorgente "
-    "torna leggibile (BRIDGE TICK valido o BRIDGE INFO), ti mando un "
-    "'[SENTINELLA] [RIPRENDI] usage=X% ...' con i numeri freschi. A quel punto "
-    "tu ridistribuisci '[RIPRENDI]' a tutti gli agenti operativi via "
-    "jht-tmux-send e il team riparte.\n\n"
-    "Se il problema persiste per 2 cicli consecutivi escalo a HARD freeze "
-    "(Esc x2 a tutti gli agenti via freeze_team.py)."
+    "[SENTINELLA] [PAUSA TEAM] Usage monitoring has failed completely: HTTP "
+    "fetch (L1), multi-provider skill (L2), and manual TUI worker (L3) all "
+    "failed. I have no fresh AI-provider usage data, so I CANNOT guarantee "
+    "that the team is operating within the rate-limit budget.\n\n"
+    "ACTION TAKEN: I sent a [PAUSA] message to every operational agent, asking "
+    "them to finish their current task cleanly and then wait.\n\n"
+    "WHAT YOU MUST DO:\n"
+    "1. DO NOT spawn new agents.\n"
+    "2. DO NOT send new operational orders to active agents.\n"
+    "3. Finish your current turn cleanly and wait.\n"
+    "4. DO NOT force a manual /usage check: the source is broken and you "
+    "already have the full picture.\n\n"
+    "RESUMING: I will keep listening for [BRIDGE TICK] messages. As soon as "
+    "the source is readable again (valid BRIDGE TICK or BRIDGE INFO), I will "
+    "send '[SENTINELLA] [RIPRENDI] usage=X% ...' with fresh figures. Then "
+    "redistribute '[RIPRENDI]' to every operational agent through "
+    "jht-tmux-send and the team will resume.\n\n"
+    "If the problem persists for 2 consecutive cycles, I will escalate to a "
+    "HARD freeze (Esc x2 to every agent through freeze_team.py)."
 )
 
 # ── Testi della modalità STANDBY (--include-core) ────────────────────────
@@ -102,33 +103,34 @@ MSG_CAPITANO = (
 # modello) e sono LORO la sveglia. Nessun agente deve controllare niente.
 
 MSG_STANDBY_OPERATIVO = (
-    "[STANDBY] [PAUSA] Team in standby a spesa zero{reason}. Termina il task "
-    "corrente in modo pulito, NON iniziarne nuovi, NON fare nuove tool call, "
-    "NON scrivere ad altri agenti. Resta in attesa SILENZIOSA. Riprendi SOLO "
-    "quando ricevi un messaggio '[RIPRENDI]'."
+    "[STANDBY] [PAUSA] Team entering zero-spend standby{reason}. Finish your "
+    "current task cleanly, DO NOT start new ones, DO NOT make new tool calls, "
+    "and DO NOT message other agents. Wait SILENTLY. Resume ONLY when you "
+    "receive a '[RIPRENDI]' message."
 )
 
 MSG_STANDBY_CAPITANO = (
-    "[STANDBY] [PAUSA TEAM] Il team entra in standby a SPESA ZERO{reason}. "
-    "Non è un guasto: è una sospensione deliberata — a pipeline ferma i soli "
-    "tick di coordinamento bruciano ~2 punti di weekly all'ora, e lo standby "
-    "azzera anche quelli.\n\n"
-    "COSA DEVI FARE TU:\n"
-    "1. NON spawnare nuovi agenti, NON dare nuovi ordini.\n"
-    "2. Chiudi il tuo turno corrente in modo pulito e resta in attesa SILENZIOSA.\n"
-    "3. NON aspettarti [BRIDGE PACING]/[HEARTBEAT]: sono sospesi, non rotti.\n"
-    "4. NON fare check di usage: i bridge continuano a campionare da soli.\n\n"
-    "RIPARTENZA: il sentinel-bridge valuta la condizione di uscita a ogni tick "
-    "e, quando è soddisfatta, manda '[RIPRENDI]' a TUTTI i ruoli (te incluso). "
-    "Fino ad allora, silenzio totale."
+    "[STANDBY] [PAUSA TEAM] The team is entering ZERO-SPEND standby{reason}. "
+    "This is not a failure: it is a deliberate suspension. With the pipeline "
+    "idle, coordination ticks alone consume about 2 weekly points per hour; "
+    "standby eliminates those too.\n\n"
+    "WHAT YOU MUST DO:\n"
+    "1. DO NOT spawn new agents or issue new orders.\n"
+    "2. Finish your current turn cleanly and wait SILENTLY.\n"
+    "3. DO NOT expect [BRIDGE PACING]/[HEARTBEAT]: they are suspended, not "
+    "broken.\n"
+    "4. DO NOT check usage: the bridges continue sampling by themselves.\n\n"
+    "RESUMING: sentinel-bridge evaluates the exit condition on every tick and, "
+    "when it is met, sends '[RIPRENDI]' to EVERY role (including you). Until "
+    "then, maintain complete silence."
 )
 
 MSG_STANDBY_SENTINELLA = (
-    "[STANDBY] [PAUSA] Team in standby a spesa zero{reason}. Non riceverai "
-    "[BRIDGE TICK] né [BRIDGE PACING] finché dura: NON è un guasto della "
-    "sorgente, NON fare fallback né check usage manuali. Il bridge continua a "
-    "campionare (sentinel-data.jsonl cresce) e fa lui da sveglia. Chiudi il "
-    "turno in modo pulito e resta in attesa SILENZIOSA fino al '[RIPRENDI]'."
+    "[STANDBY] [PAUSA] Team entering zero-spend standby{reason}. You will not "
+    "receive [BRIDGE TICK] or [BRIDGE PACING] while it lasts: this is NOT a "
+    "source failure, so DO NOT use fallbacks or run manual usage checks. The "
+    "bridge keeps sampling (sentinel-data.jsonl grows) and acts as the alarm. "
+    "Finish your turn cleanly and wait SILENTLY until '[RIPRENDI]'."
 )
 
 
@@ -189,17 +191,17 @@ def pause_all(include_core=False, reason=""):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="soft_pause_team",
-        description="Pausa graceful del team via messaggio tmux (mai Esc)")
+        description="Gracefully pause the team through tmux messages (never Esc)")
     ap.add_argument("--include-core", action="store_true",
-                    help="standby a spesa zero: pausa ANCHE Capitano/Assistente/"
-                         "Sentinella, con testi dedicati")
+                    help="zero-spend standby: ALSO pause Capitano/Assistente/"
+                         "Sentinella with dedicated messages")
     ap.add_argument("--reason", default="",
-                    help="motivo, mostrato negli avvisi agli agenti")
+                    help="reason shown in agent notifications")
     args = ap.parse_args(argv)
 
     sessions = list_sessions()
     if not sessions:
-        print("nessuna sessione tmux trovata")
+        print("no tmux sessions found")
         sys.exit(0)
 
     paused, skipped = pause_all(include_core=args.include_core,

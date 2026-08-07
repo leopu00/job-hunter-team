@@ -45,114 +45,114 @@ def _is_str(v) -> bool:
 
 def _require_str(obj, key, where):
     if not _is_str(obj.get(key)):
-        err(f"{where}.{key}: stringa non vuota richiesta")
+        err(f"{where}.{key}: non-empty string required")
 
 
 def validate_languages(langs):
     if not isinstance(langs, list) or len(langs) == 0:
-        err("languages: lista con almeno 1 voce richiesta")
+        err("languages: list with at least one entry required")
         return
     for i, l in enumerate(langs):
         if not isinstance(l, dict):
-            err(f"languages[{i}]: oggetto richiesto")
+            err(f"languages[{i}]: object required")
             continue
         name = l.get("language")
         if not _is_str(name):
             if _is_str(l.get("name")):
-                warn(f"languages[{i}]: usa 'language' (non 'name') — chiave canonica")
+                warn(f"languages[{i}]: use 'language' (not 'name') — canonical key")
             else:
-                err(f"languages[{i}].language: richiesto")
+                err(f"languages[{i}].language: required")
         if not _is_str(l.get("level")):
-            err(f"languages[{i}].level: richiesto")
+            err(f"languages[{i}].level: required")
 
 
 def validate_skills(skills):
     if isinstance(skills, dict):
         prim = skills.get("primary")
         if not isinstance(prim, list) or len([s for s in prim if _is_str(s)]) < 1:
-            err("skills.primary: almeno 1 competenza richiesta")
+            err("skills.primary: at least one skill required")
     elif isinstance(skills, list):
-        warn("skills: lista piatta legacy — usa { primary: [...], secondary: [...] }")
+        warn("skills: legacy flat list — use { primary: [...], secondary: [...] }")
         if len([s for s in skills if _is_str(s)]) < 1:
-            err("skills: almeno 1 competenza richiesta")
+            err("skills: at least one skill required")
     else:
-        err("skills: oggetto {primary, secondary} richiesto")
+        err("skills: {primary, secondary} object required")
 
 
 def validate_block_content(kind, content, where):
     if kind == "narrative":
         if not _is_str(content):
-            err(f"{where}.content: testo non vuoto richiesto per kind=narrative")
+            err(f"{where}.content: non-empty text required for kind=narrative")
     elif kind == "tag_list":
         if not isinstance(content, list) or any(not _is_str(x) for x in content):
-            err(f"{where}.content: lista di stringhe richiesta per kind=tag_list")
+            err(f"{where}.content: list of strings required for kind=tag_list")
     elif kind == "key_value":
         if not isinstance(content, list):
-            err(f"{where}.content: lista di {{label,value}} richiesta")
+            err(f"{where}.content: list of {{label,value}} required")
         else:
             for j, it in enumerate(content):
                 if not isinstance(it, dict) or not _is_str(it.get("label")):
-                    err(f"{where}.content[{j}]: 'label' richiesto")
+                    err(f"{where}.content[{j}]: 'label' required")
     elif kind == "key_points":
         if not isinstance(content, list):
-            err(f"{where}.content: lista di {{heading,text}} richiesta")
+            err(f"{where}.content: list of {{heading,text}} required")
         else:
             for j, it in enumerate(content):
                 if not isinstance(it, dict) or not _is_str(it.get("heading")):
-                    err(f"{where}.content[{j}]: 'heading' richiesto")
+                    err(f"{where}.content[{j}]: 'heading' required")
     elif kind == "timeline":
         if not isinstance(content, list):
-            err(f"{where}.content: lista di voci richiesta per kind=timeline")
+            err(f"{where}.content: list of entries required for kind=timeline")
         else:
             for j, it in enumerate(content):
                 if not isinstance(it, dict) or not _is_str(it.get("title")):
-                    err(f"{where}.content[{j}]: 'title' richiesto")
+                    err(f"{where}.content[{j}]: 'title' required")
     elif kind == "distribution":
         if not isinstance(content, list):
-            err(f"{where}.content: lista di {{label,value}} richiesta")
+            err(f"{where}.content: list of {{label,value}} required")
         else:
             for j, it in enumerate(content):
                 if not isinstance(it, dict) or not _is_str(it.get("label")) or not isinstance(it.get("value"), (int, float)):
-                    err(f"{where}.content[{j}]: 'label' (str) + 'value' (num) richiesti")
+                    err(f"{where}.content[{j}]: 'label' (str) + 'value' (num) required")
 
 
 def validate_blocks(blocks):
     if blocks is None:
         return
     if not isinstance(blocks, list):
-        err("blocks: lista richiesta")
+        err("blocks: list required")
         return
     seen = set()
     for i, b in enumerate(blocks):
         where = f"blocks[{i}]"
         if not isinstance(b, dict):
-            err(f"{where}: oggetto richiesto")
+            err(f"{where}: object required")
             continue
         _require_str(b, "key", where)
         _require_str(b, "title", where)
         key = b.get("key")
         if _is_str(key):
             if key in seen:
-                err(f"{where}.key: '{key}' duplicato")
+                err(f"{where}.key: duplicate '{key}'")
             seen.add(key)
         kind = b.get("kind")
         if kind not in BLOCK_KINDS:
-            err(f"{where}.kind: '{kind}' non valido (ammessi: {', '.join(sorted(BLOCK_KINDS))})")
+            err(f"{where}.kind: invalid '{kind}' (allowed: {', '.join(sorted(BLOCK_KINDS))})")
         else:
             validate_block_content(kind, b.get("content"), where)
 
 
 def validate(profile) -> None:
     if not isinstance(profile, dict):
-        err("(root): il profilo deve essere un oggetto YAML top-level")
+        err("(root): profile must be a top-level YAML object")
         return
     for k in ("name", "target_role", "location", "seniority_target"):
         _require_str(profile, k, "(root)")
     ey = profile.get("experience_years")
     if not isinstance(ey, int) or isinstance(ey, bool) or ey < 0:
-        err("experience_years: intero >= 0 richiesto")
+        err("experience_years: integer >= 0 required")
     if not isinstance(profile.get("has_degree"), bool):
-        err("has_degree: booleano richiesto")
+        err("has_degree: boolean required")
     validate_skills(profile.get("skills"))
     validate_languages(profile.get("languages"))
     validate_blocks(profile.get("blocks"))
@@ -164,21 +164,21 @@ def main() -> int:
     as_json = "--json" in args
     paths = [a for a in args if not a.startswith("--")]
     if not paths:
-        print("uso: validate_profile.py <candidate_profile.yml> [--strict] [--json]", file=sys.stderr)
+        print("usage: validate_profile.py <candidate_profile.yml> [--strict] [--json]", file=sys.stderr)
         return 2
     try:
         import yaml
     except ImportError:
-        print("ERROR: pyyaml non disponibile (import yaml)", file=sys.stderr)
+        print("ERROR: pyyaml is not available (import yaml)", file=sys.stderr)
         return 2
     try:
         with open(paths[0], "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
     except FileNotFoundError:
-        print(f"ERROR: file non trovato: {paths[0]}", file=sys.stderr)
+        print(f"ERROR: file not found: {paths[0]}", file=sys.stderr)
         return 1
     except yaml.YAMLError as e:
-        print(f"INVALID_PROFILE\nERROR: YAML non parsabile: {e}", file=sys.stderr)
+        print(f"INVALID_PROFILE\nERROR: YAML could not be parsed: {e}", file=sys.stderr)
         return 1
 
     validate(data)

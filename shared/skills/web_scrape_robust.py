@@ -1,35 +1,35 @@
 #!/usr/bin/env python3
-"""web_scrape_robust — fetch HTML/text robusto contro anti-bot (F-2.B).
+"""web_scrape_robust — robust HTML/text fetching against anti-bot systems (F-2.B).
 
-Strategia gerarchica anti-detection:
+Layered anti-detection strategy:
 
-  LIVELLO 1 — requests + UA random + cookie jar
-              veloce, basso costo, fallisce su SPA / Cloudflare hard / 403
-  LIVELLO 2 — Playwright stealth (chromium headless)
-              gestisce JS, set navigator.webdriver=false, UA realistica,
-              cookies persistenti per dominio
-  LIVELLO 3 — Playwright + persistent context (sessione utente)
-              richiede credenziali utente (es. LinkedIn login).
-              Fallback se anche L2 vede "Just a moment..." / login wall.
+  LEVEL 1 — requests + random UA + cookie jar
+            fast, low cost, fails on SPAs / hard Cloudflare / 403
+  LEVEL 2 — Playwright stealth (headless Chromium)
+            handles JS, sets navigator.webdriver=false, uses a realistic UA,
+            and keeps cookies per domain
+  LEVEL 3 — Playwright + persistent context (user session)
+            requires user credentials (for example, a LinkedIn login).
+            Fallback when L2 still sees "Just a moment..." / a login wall.
 
 Detection patterns: Cloudflare challenge, "Just a moment...", "Access
-denied", "Please verify you are a human", reCAPTCHA. Quando riconosciuti
-in L1+L2, la skill non insiste oltre il L3 e ritorna `blocked:True` —
-il chiamante può marcare la source come "blacklist temporanea".
+denied", "Please verify you are a human", reCAPTCHA. When detected in L1+L2,
+the skill does not retry beyond L3 and returns `blocked:True`; the caller can
+temporarily blacklist the source.
 
 CLI:
     python3 /app/shared/skills/web_scrape_robust.py <URL> [--level 1|2|3]
     python3 /app/shared/skills/web_scrape_robust.py <URL> --level 2 --out /tmp/page.html
 
-Output JSON su stdout:
+JSON output on stdout:
     {"url":"...", "status":200, "level":2, "blocked":false,
      "html_path":"/tmp/page.html", "text_chars":48213, "title":"...",
      "elapsed_ms":2317}
 
-Exit code:
-    0 fetch ok (anche se blocked:true, lo dice nel JSON)
-    1 URL non parsabile / errore inatteso
-    2 tutti i livelli falliti (network down, host morto, ecc.)
+Exit codes:
+    0 fetch succeeded (including blocked:true, which is reported in the JSON)
+    1 invalid URL / unexpected error
+    2 all levels failed (network down, unreachable host, etc.)
 """
 from __future__ import annotations
 
@@ -148,7 +148,7 @@ def fetch_level2(url: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
         from playwright.sync_api import sync_playwright
     except ImportError:
         return {"level": 2, "status": 0, "html": "", "blocked": True,
-                "error": "playwright non installato", "elapsed_ms": 0}
+                "error": "playwright is not installed", "elapsed_ms": 0}
 
     start = _now_ms()
     ua = random.choice(USER_AGENTS)
@@ -211,7 +211,7 @@ def fetch_level3(url: str, profile_dir: Path, timeout: int = DEFAULT_TIMEOUT) ->
         from playwright.sync_api import sync_playwright
     except ImportError:
         return {"level": 3, "status": 0, "html": "", "blocked": True,
-                "error": "playwright non installato", "elapsed_ms": 0}
+                "error": "playwright is not installed", "elapsed_ms": 0}
 
     start = _now_ms()
     profile_dir.mkdir(parents=True, exist_ok=True)
@@ -286,12 +286,13 @@ def fetch(url: str, max_level: int = 3, profile_dir: Path | None = None,
 
 def main(argv):
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("url")
+    p.add_argument("url", help="URL to fetch")
     p.add_argument("--level", type=int, default=3, choices=[1, 2, 3],
-                   help="Massimo livello da provare (default 3)")
-    p.add_argument("--out", help="Path dove salvare l'HTML completo")
-    p.add_argument("--profile-dir", help="(L3) directory di profilo persistente, es. linkedin-session")
-    p.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
+                   help="Maximum level to try (default: 3)")
+    p.add_argument("--out", help="Path where the complete HTML will be saved")
+    p.add_argument("--profile-dir", help="Persistent profile directory for L3, e.g. linkedin-session")
+    p.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT,
+                   help=f"Request timeout in seconds (default: {DEFAULT_TIMEOUT})")
     args = p.parse_args(argv)
 
     profile = Path(args.profile_dir) if args.profile_dir else None

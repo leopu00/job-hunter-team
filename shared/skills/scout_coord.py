@@ -62,14 +62,14 @@ def cmd_show():
         "SELECT * FROM coordination WHERE superseded_at IS NULL ORDER BY scout"
     ).fetchall()
     if not rows:
-        print("Nessuna distribuzione attiva.")
+        print("No active distribution.")
         return
     started = rows[0]["started_at"]
-    print(f"=== DISTRIBUZIONE ATTIVA (dal {started}) ===\n")
+    print(f"=== ACTIVE DISTRIBUTION (since {started}) ===\n")
     for r in rows:
         print(f"  {r['scout']}")
-        print(f"    Cerchi: {r['cerchi'] or '-'}")
-        print(f"    Fonti:  {r['fonti'] or '-'}")
+        print(f"    Search areas: {r['cerchi'] or '-'}")
+        print(f"    Sources:      {r['fonti'] or '-'}")
         if r["note"]:
             print(f"    Note:   {r['note']}")
         print()
@@ -82,15 +82,15 @@ def cmd_history():
         "SELECT * FROM coordination ORDER BY started_at DESC, scout"
     ).fetchall()
     if not rows:
-        print("Nessuno storico.")
+        print("No history.")
         return
     current_session = None
     for r in rows:
         session_key = r["started_at"]
         if session_key != current_session:
             current_session = session_key
-            status = "ATTIVA" if r["superseded_at"] is None else f"chiusa {r['superseded_at']}"
-            print(f"\n--- Sessione {r['started_at']} ({status}) ---")
+            status = "ACTIVE" if r["superseded_at"] is None else f"closed {r['superseded_at']}"
+            print(f"\n--- Session {r['started_at']} ({status}) ---")
         active = " *" if r["superseded_at"] is None else ""
         print(f"  {r['scout']}: cerchi={r['cerchi'] or '-'}, fonti={r['fonti'] or '-'}{active}")
     db.close()
@@ -107,13 +107,13 @@ def cmd_assign(scout, cerchi=None, fonti=None, note=None):
             "UPDATE coordination SET cerchi=?, fonti=?, note=?, started_at=CURRENT_TIMESTAMP WHERE id=?",
             (cerchi, fonti, note, existing["id"])
         )
-        print(f"Aggiornato: {scout} → cerchi={cerchi}, fonti={fonti}")
+        print(f"Updated: {scout} → search_areas={cerchi}, sources={fonti}")
     else:
         db.execute(
             "INSERT INTO coordination (scout, cerchi, fonti, note) VALUES (?, ?, ?, ?)",
             (scout, cerchi, fonti, note)
         )
-        print(f"Assegnato: {scout} → cerchi={cerchi}, fonti={fonti}")
+        print(f"Assigned: {scout} → search_areas={cerchi}, sources={fonti}")
     db.commit()
     db.close()
 
@@ -127,7 +127,7 @@ def cmd_reset():
     # Pulisci anche i claim vecchi (> 24h)
     db.execute("DELETE FROM claims WHERE claimed_at < datetime('now', '-24 hours')")
     db.commit()
-    print(f"Sessione chiusa: {updated} assegnazioni archiviate.")
+    print(f"Session closed: {updated} assignments archived.")
     db.close()
 
 
@@ -135,17 +135,17 @@ def cmd_claim(job_id, scout):
     db = get_db()
     existing = db.execute("SELECT scout, claimed_at FROM claims WHERE job_id=?", (job_id,)).fetchone()
     if existing:
-        print(f"GIA_CLAIMATA da {existing['scout']} alle {existing['claimed_at']}")
+        print(f"ALREADY_CLAIMED by {existing['scout']} at {existing['claimed_at']}")
         db.close()
         return False
     try:
         db.execute("INSERT INTO claims (job_id, scout) VALUES (?, ?)", (job_id, scout))
         db.commit()
-        print(f"CLAIMATA da {scout}")
+        print(f"CLAIMED by {scout}")
         db.close()
         return True
     except sqlite3.IntegrityError:
-        print(f"GIA_CLAIMATA (race condition)")
+        print("ALREADY_CLAIMED (race condition)")
         db.close()
         return False
 
@@ -154,9 +154,9 @@ def cmd_check_claim(job_id):
     db = get_db()
     existing = db.execute("SELECT scout, claimed_at FROM claims WHERE job_id=?", (job_id,)).fetchone()
     if existing:
-        print(f"CLAIMATA da {existing['scout']} alle {existing['claimed_at']}")
+        print(f"CLAIMED by {existing['scout']} at {existing['claimed_at']}")
     else:
-        print("LIBERA")
+        print("AVAILABLE")
     db.close()
 
 

@@ -75,12 +75,12 @@ def _append_event(payload: dict) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Sleep tracciato per agenti del team."
+        description="Tracked sleep for team agents."
     )
     ap.add_argument("seconds", type=float, nargs="?", default=None,
-                    help="durata pausa in secondi (se omesso, legge throttle-config)")
-    ap.add_argument("--agent", required=True, help="nome agente (es. scout-1)")
-    ap.add_argument("--reason", default=None, help="motivo opzionale")
+                    help="pause duration in seconds (reads throttle-config if omitted)")
+    ap.add_argument("--agent", required=True, help="agent name (for example, scout-1)")
+    ap.add_argument("--reason", default=None, help="optional reason")
     args = ap.parse_args()
 
     # Risoluzione del valore: argomento esplicito > config > 0.

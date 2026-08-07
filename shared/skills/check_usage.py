@@ -71,7 +71,7 @@ def _import_bridge():
                 spec.loader.exec_module(mod)
                 return mod
             except Exception as e:
-                print(f"[check_usage] errore caricamento bridge ({p}): {e}", file=sys.stderr)
+                print(f"[check_usage] error loading bridge ({p}): {e}", file=sys.stderr)
                 return None
     return None
 
@@ -133,7 +133,7 @@ def spawn_worker():
         )
         return r.returncode == 0
     except (subprocess.TimeoutExpired, OSError) as e:
-        print(f"ERRORE spawn WORKER: {e}", file=sys.stderr)
+        print(f"ERROR spawning WORKER: {e}", file=sys.stderr)
         return False
 
 
@@ -330,25 +330,25 @@ def check_claude():
     /usage, parsa la modal."""
     spawned_now = False
     if not tmux_has_session(WORKER_SESSION):
-        print(f"[check_usage] {WORKER_SESSION} non attiva, la spawno via start-agent.sh worker...")
+        print(f"[check_usage] {WORKER_SESSION} is not active; spawning it via start-agent.sh worker...")
         if not spawn_worker():
-            print("[check_usage] ERRORE: spawn fallito", file=sys.stderr)
+            print("[check_usage] ERROR: spawn failed", file=sys.stderr)
             return None, "spawn_failed"
-        print(f"[check_usage] attendo {WORKER_BOOT_WAIT_S}s per boot CLI...")
+        print(f"[check_usage] waiting {WORKER_BOOT_WAIT_S}s for the CLI to boot...")
         time.sleep(WORKER_BOOT_WAIT_S)
         spawned_now = True
 
     buf = query_claude_worker()
     parsed = parse_claude_usage(buf)
     if parsed is None and spawned_now:
-        print("[check_usage] primo /usage senza output utile, retry dopo 8s...")
+        print("[check_usage] first /usage returned no useful output; retrying in 8s...")
         time.sleep(8)
         buf = query_claude_worker()
         parsed = parse_claude_usage(buf)
 
     if parsed is None:
-        print("[check_usage] IMPOSSIBILE PARSARE /usage output.", file=sys.stderr)
-        print("--- ultimi 500 char del pane ---", file=sys.stderr)
+        print("[check_usage] UNABLE TO PARSE /usage output.", file=sys.stderr)
+        print("--- last 500 characters from the pane ---", file=sys.stderr)
         print(buf[-500:], file=sys.stderr)
         return None, "parse_failed"
 
@@ -405,12 +405,12 @@ def compute_verdict(usage):
     che invece non esiste.
     """
     if not isinstance(usage, (int, float)):
-        return "⚪ sconosciuto"
+        return "⚪ unknown"
     if usage >= 88:
-        return "🔴 CRITICO: vicino al rate-limit, freeza subito tutti gli spawn"
+        return "🔴 CRITICAL: near the rate limit; freeze all spawning immediately"
     if usage >= 75:
-        return "🟠 ATTENZIONE: riduci al minimo, niente spawn extra"
-    return "🟢 OK: margine disponibile"
+        return "🟠 WARNING: minimize usage; no extra spawning"
+    return "🟢 OK: headroom available"
 
 
 # ── Main: dispatch per provider ─────────────────────────────────────
@@ -418,7 +418,7 @@ def compute_verdict(usage):
 def main():
     provider = detect_provider()
     if provider is None:
-        print("[check_usage] provider non rilevabile (config mancante o bridge non importabile)", file=sys.stderr)
+        print("[check_usage] unable to detect provider (missing config or bridge cannot be imported)", file=sys.stderr)
         sys.exit(3)
 
     if provider == "claude":
@@ -426,7 +426,7 @@ def main():
     elif provider in ("kimi", "openai"):
         bridge = _import_bridge()
         if bridge is None:
-            print("[check_usage] bridge non disponibile per fallback non-claude", file=sys.stderr)
+            print("[check_usage] bridge unavailable for the non-Claude fallback", file=sys.stderr)
             sys.exit(3)
         if provider == "kimi":
             result, err = check_via_bridge_fetcher(bridge, "fetch_kimi_api", "http:/coding/v1/usages")
@@ -435,8 +435,8 @@ def main():
     else:
         # Placeholder esplicito: provider riconosciuto dalla config ma non
         # ancora implementato qui. Intenzionalmente NON facciamo guessing.
-        print(f"[check_usage] NOT_IMPLEMENTED: provider '{provider}' non ha ancora una strategia di fallback dedicata. "
-              "Aggiungi un branch in check_usage.py + un fetch_<provider>_api() in sentinel-bridge.py.",
+        print(f"[check_usage] NOT_IMPLEMENTED: provider '{provider}' does not have a dedicated fallback strategy yet. "
+              "Add a branch to check_usage.py and a fetch_<provider>_api() function to sentinel-bridge.py.",
               file=sys.stderr)
         sys.exit(4)
 
@@ -463,7 +463,7 @@ def main():
 
     # Verdict umano (riga successiva, opzionale per LLM Capitano)
     print(f"verdict: {verdict}")
-    print("note: check indipendente dal bridge. Se il bridge è vivo e fresco, preferisci `rate_budget.py plan`.")
+    print("note: this check is independent from the bridge. If the bridge is live and fresh, prefer `rate_budget.py plan`.")
 
 
 if __name__ == "__main__":

@@ -286,9 +286,9 @@ def test_advice_line_hands_the_decision_over():
                                   ["scout-1", "analista-1"])
     rec = r["throttle_recommended_s"]
     assert "\n" not in line                      # una riga sola: è un pane tmux
-    assert line.startswith("[@bridge -> @capitano] [PACE-GUARD] AVANTI")
-    assert "NON APPLICATO" in line
-    assert f"CONSIGLIATO {rec}s" in line
+    assert line.startswith("[@bridge -> @capitano] [PACE-GUARD] AHEAD")
+    assert "NOT APPLIED" in line
+    assert f"RECOMMENDED {rec}s" in line
     assert f"throttle-config.py bulk-set scout-1={rec} analista-1={rec}" in line
 
 
@@ -305,7 +305,7 @@ def test_lockout_advice_asks_for_the_roster_not_just_the_brake():
                             target_pct=100.0,
                             current_throttle_s=pace_guard.WORKER_FLOOR)
     line = pace_guard.advice_line(r, ["scout-1"], ["scout-1"])
-    assert "LOCKOUT-IMMINENTE" in line
+    assert "LOCKOUT-IMMINENT" in line
     assert "ROSTER" in line
 
 

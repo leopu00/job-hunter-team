@@ -92,6 +92,13 @@ ADVICE_ENVELOPE = "[@bridge -> @capitano]"
 ADVICE_TAG = "[PACE-GUARD]"
 THROTTLE_CLI = "python3 /app/shared/skills/throttle-config.py"
 
+VERDICT_LABELS = {
+    "LOCKOUT-IMMINENTE": "LOCKOUT-IMMINENT",
+    "AVANTI": "AHEAD",
+    "INDIETRO": "BEHIND",
+    "IN-PARI": "ON-PACE",
+}
+
 
 def _load_module(name: str, filename: str):
     """Importa un modulo fratello per path (i nomi con `-` non sono importabili)."""
@@ -200,11 +207,11 @@ def evaluate(sample: dict, now_unix: float,
     """
     usage = sample.get("usage")
     if not isinstance(usage, (int, float)) or isinstance(usage, bool):
-        return {"ok": False, "reason": "sample senza usage"}
+        return {"ok": False, "reason": "sample has no usage value"}
 
     bounds = window_bounds(sample, now_unix)
     if bounds is None:
-        return {"ok": False, "reason": "finestra non determinabile (sample vecchio?)"}
+        return {"ok": False, "reason": "unable to determine the window (stale sample?)"}
     start, end = bounds
 
     if target_pct is None:
@@ -322,21 +329,22 @@ def advice_line(result: dict, workers: list[str] | None = None,
     cmd = (f"{THROTTLE_CLI} bulk-set "
            + " ".join(f"{a}={rec}" for a in targets)) if targets else ""
     parts = [
-        f"{ADVICE_ENVELOPE} {ADVICE_TAG} {result['verdict']} "
-        f"— CONSIGLIO, THROTTLE NON APPLICATO",
-        f"usage={result['usage_pct']}% vs curva={result['ideal_pct']}% "
-        f"({result['deviation_pct']:+}pt sul target {result['target_pct']}% al reset)",
-        f"reset fra {result['minutes_to_reset']} min",
-        f"throttle worker ORA {result['throttle_current_s']}s "
-        f"→ CONSIGLIATO {rec}s ({result['steps']:+} gradini)",
-        f"worker: {', '.join(workers) if workers else 'nessuno'}",
+        f"{ADVICE_ENVELOPE} {ADVICE_TAG} "
+        f"{VERDICT_LABELS.get(result['verdict'], result['verdict'])} "
+        f"— RECOMMENDATION, THROTTLE NOT APPLIED",
+        f"usage={result['usage_pct']}% vs curve={result['ideal_pct']}% "
+        f"({result['deviation_pct']:+}pt against the {result['target_pct']}% reset target)",
+        f"reset in {result['minutes_to_reset']} min",
+        f"worker throttle NOW {result['throttle_current_s']}s "
+        f"→ RECOMMENDED {rec}s ({result['steps']:+} steps)",
+        f"workers: {', '.join(workers) if workers else 'none'}",
     ]
     if result.get("verdict") == "LOCKOUT-IMMINENTE":
-        parts.append("il freno da solo non basta: valuta di ridurre il ROSTER "
-                     "(togli uno Scout, mai l'Analista o lo Scorer)")
+        parts.append("throttling alone is not enough: consider reducing the ROSTER "
+                     "(remove one Scout, never the Analyst or Scorer)")
     parts.append(
-        f"decidi tu e applica: {cmd}" if cmd
-        else "nessun worker su cui agire (tutti esenti dal floor): decidi tu")
+        f"decide and apply: {cmd}" if cmd
+        else "no eligible workers (all are exempt from the floor): decide manually")
     return " | ".join(parts)
 
 
@@ -390,19 +398,19 @@ def current_worker_throttle(workers: list[str]) -> int:
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="Consigliere di pacing sulla finestra")
+    ap = argparse.ArgumentParser(description="Window pacing advisor")
     ap.add_argument("--apply", action="store_true",
-                    help="MANUALE: scrive il throttle consigliato sui worker vivi. "
-                         "Il bridge non usa mai questo flag — la via normale è il "
-                         "Capitano con throttle-config.py")
+                    help="MANUAL: writes the recommended throttle for live workers. "
+                         "The bridge never uses this flag; the normal path is the "
+                         "Captain using throttle-config.py")
     ap.add_argument("--json", action="store_true", help="output JSON")
     ap.add_argument("--target", type=float, default=None,
-                    help="target %% di finestra al reset (default: dal bridge, o 100)")
+                    help="target window %% at reset (default: from the bridge, or 100)")
     args = ap.parse_args(argv)
 
     sample = load_last_sample()
     if sample is None:
-        msg = {"ok": False, "reason": "nessun sample dal bridge"}
+        msg = {"ok": False, "reason": "no sample from the bridge"}
         print(json.dumps(msg) if args.json else msg["reason"], file=sys.stderr)
         return 1
 
@@ -422,7 +430,7 @@ def main(argv: list[str]) -> int:
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     elif not result.get("ok"):
-        print(result.get("reason", "errore"), file=sys.stderr)
+        print(result.get("reason", "error"), file=sys.stderr)
     else:
         # Stessa riga che riceve il Capitano: quello che si legge qui è
         # esattamente quello che gli arriva nel pane.

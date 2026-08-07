@@ -72,11 +72,11 @@ def acquire_singleton(lock_file, pid_file=None, label: str = "",
         lock_file.parent.mkdir(parents=True, exist_ok=True)
         fh = open(lock_file, "a+", encoding="utf-8")
     except OSError as e:
-        print(f"{tag} WARN lockfile non apribile ({e}) — proseguo senza lock",
+        print(f"{tag} WARN lockfile cannot be opened ({e}) — continuing without lock",
               flush=True)
         return True
     if fcntl is None:
-        print(f"{tag} WARN fcntl non disponibile — proseguo senza lock",
+        print(f"{tag} WARN fcntl unavailable — continuing without lock",
               flush=True)
         _HELD.append(fh)
         return True
@@ -89,7 +89,7 @@ def acquire_singleton(lock_file, pid_file=None, label: str = "",
         except OSError:
             other = "?"
         fh.close()
-        print(f"{tag} altra istanza viva (pid={other}), exit", flush=True)
+        print(f"{tag} another instance is live (pid={other}), exiting", flush=True)
         if exit_on_busy:
             sys.exit(0)
         return False

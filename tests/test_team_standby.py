@@ -128,7 +128,7 @@ def test_cli_on_without_exit_condition_refuses(sb, capsys):
     rc = sb.main(["on", "--reason", "weekly esaurito"])
     assert rc != 0
     assert not sb.STANDBY_FLAG.exists()
-    assert "condizione di uscita" in capsys.readouterr().err
+    assert "exit condition" in capsys.readouterr().err
 
 
 def test_enter_with_wake_on_weekly(sb):
@@ -289,7 +289,7 @@ def test_soft_pause_default_behavior_unchanged(monkeypatch):
     assert set(paused) == {"CAPITANO", "SCOUT-1"}
     assert set(skipped) == {"SENTINELLA", "ASSISTENTE", "SENTINELLA-WORKER"}
     by_session = dict(sent)
-    assert "Monitoraggio usage rotto" in by_session["SCOUT-1"]
+    assert "Usage monitoring failed" in by_session["SCOUT-1"]
     assert "[PAUSA TEAM]" in by_session["CAPITANO"]
 
 
@@ -311,8 +311,8 @@ def test_soft_pause_include_core_reaches_the_spenders(monkeypatch):
         assert "[STANDBY]" in msg and "[RIPRENDI]" in msg
         assert "weekly al muro" in msg
     # La Sentinella deve sapere che il silenzio dei bridge NON è un guasto.
-    assert "NON è un guasto" in by_session["SENTINELLA"]
-    assert "NON fare fallback" in by_session["SENTINELLA"]
+    assert "NOT a source failure" in by_session["SENTINELLA"]
+    assert "DO NOT use fallbacks" in by_session["SENTINELLA"]
 
 
 def test_never_message_sets_are_in_sync():

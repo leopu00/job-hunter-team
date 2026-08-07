@@ -121,7 +121,7 @@ def billing_weighted(tokens: dict, provider: str = "kimi") -> float:
             + tokens.get("reasoning_output_tokens", 0)
             + tokens.get("cached_input_tokens", 0) * 0.5
         )
-    raise ValueError(f"billing_weighted: provider sconosciuto {provider!r}")
+    raise ValueError(f"billing_weighted: unknown provider {provider!r}")
 
 
 # ── Kimi events reader ──────────────────────────────────────────────────
