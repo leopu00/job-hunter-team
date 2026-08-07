@@ -14,7 +14,6 @@ const S := {
 	"title.name_enter": "BELÉPÉS AZ IRODÁBA",
 	"title.name_skip": "Inkább nem mondom meg, menjünk be",
 	"title.press_enter": "▶ NYOMJ ENTERT",
-	"title.footer": "prototípus — mock adatok, nincs backend",
 	"title.hint_pause": "ESC menü",
 
 	"pause.title": "SZÜNET",

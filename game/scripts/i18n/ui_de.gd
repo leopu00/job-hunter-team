@@ -14,7 +14,6 @@ const S := {
 	"title.name_enter": "INS BÜRO GEHEN",
 	"title.name_skip": "Lieber nicht, gehen wir rein",
 	"title.press_enter": "▶ EINGABE DRÜCKEN",
-	"title.footer": "Prototyp — Mock-Daten, kein Backend",
 	"title.hint_pause": "ESC Menü",
 
 	"pause.title": "PAUSE",

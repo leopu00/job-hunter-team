@@ -6,6 +6,7 @@ const KEY_ART := "res://assets/gen-art/environment/title_screen.png"
 const LanguagePicker := preload("res://scripts/ui/language_picker.gd")
 
 var _blink: Label
+var _version_label: Label
 var _time := 0.0
 var _leaving := false
 var _language_picker: Control
@@ -90,7 +91,10 @@ func _language_picker_selftest() -> void:
 		_language_picker.confirm()
 	await get_tree().process_frame
 	ok = ok and _language_test_choice == "de" \
-			and UIStrings.lang == "de" and is_instance_valid(_blink)
+			and UIStrings.lang == "de" and is_instance_valid(_blink) \
+			and is_instance_valid(_version_label) \
+			and _version_label.text == "v%s" % str(ProjectSettings.get_setting(
+					"application/config/version"))
 	print("LANGUAGE-PICKER-TITLE-TEST %s" % ("PASS" if ok else "FAIL"))
 	get_tree().quit(0 if ok else 1)
 
@@ -213,11 +217,17 @@ func _build_title() -> void:
 	_blink.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_blink)
 
-	var footer := TerminalTheme.label(UIStrings.t("title.footer"), 15, Palette.DIM)
-	footer.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	footer.position = Vector2(28, -40)
-	footer.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	add_child(footer)
+	_version_label = TerminalTheme.label(
+			"v%s" % str(ProjectSettings.get_setting("application/config/version")),
+			15, Palette.DIM)
+	add_child(_version_label)
+	_version_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	var version_size := _version_label.get_combined_minimum_size()
+	_version_label.offset_left = 28
+	_version_label.offset_top = -40
+	_version_label.offset_right = 28 + version_size.x
+	_version_label.offset_bottom = -40 + version_size.y
+	_version_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 func _process(delta: float) -> void:
 	_time += delta
