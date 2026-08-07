@@ -163,13 +163,31 @@ def _run_powershell_command(
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            command,
+            "$ErrorActionPreference='Stop';" + command,
         ],
         env=environment,
         check=check,
         capture_output=capture_output,
         text=True,
     )
+
+
+def test_powershell_command_fixture_stops_on_nonterminating_error(
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "must-not-run"
+    result = _run_powershell_command(
+        "Get-Item -LiteralPath $env:JHT_TEST_MISSING_PATH;"
+        "[IO.File]::WriteAllText($env:JHT_TEST_MARKER,'bad')",
+        env_values={
+            "JHT_TEST_MISSING_PATH": str(tmp_path / "missing"),
+            "JHT_TEST_MARKER": str(marker),
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode != 0
+    assert not marker.exists()
 
 
 def test_consumer_uses_file_without_execution_policy_bypass() -> None:
@@ -247,12 +265,40 @@ def _protect_directory(path: Path) -> None:
         "$acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::All);"
         "$acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User);"
         "$acl.SetAccessRuleProtection($true,$false);"
+        "foreach($identity in @($acl.Access | ForEach-Object {$_.IdentityReference} | "
+        "Select-Object -Unique)){$acl.PurgeAccessRules($identity)};"
         "$rule=New-Object System.Security.AccessControl.FileSystemAccessRule("
         "[System.Security.Principal.WindowsIdentity]::GetCurrent().User,"
         "'FullControl','ContainerInherit,ObjectInherit','None','Allow');"
         "$acl.SetAccessRule($rule);$item.SetAccessControl($acl)",
         env_values={"JHT_TEST_ACL_PATH": str(path)},
     )
+
+
+def _set_current_owner(path: Path) -> None:
+    _run_powershell_command(
+        "$full=[IO.Path]::GetFullPath($env:JHT_TEST_OWNER_PATH);"
+        "$item=if([IO.Directory]::Exists($full)){[IO.DirectoryInfo]::new($full)}"
+        "elseif([IO.File]::Exists($full)){[IO.FileInfo]::new($full)}"
+        "else{throw 'owner fixture path is missing'};"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "$acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User);"
+        "$item.SetAccessControl($acl)",
+        env_values={"JHT_TEST_OWNER_PATH": str(path)},
+    )
+
+
+def _directory_acl_is_protected(path: Path) -> bool:
+    observed = _run_powershell_command(
+        "$item=[IO.DirectoryInfo]::new($env:JHT_TEST_ACL_PATH);"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "[Console]::Out.Write($acl.AreAccessRulesProtected.ToString())",
+        env_values={"JHT_TEST_ACL_PATH": str(path)},
+        capture_output=True,
+    )
+    return observed.stdout == "True"
 
 
 def test_acl_fixture_treats_path_with_spaces_as_data(tmp_path: Path) -> None:
@@ -319,6 +365,7 @@ def _run_verify(
     _protect_directory(target_dir)
     nonce = "a" * 32
     helper_env = os.environ.copy()
+    consumer_inherited_state = False
     if mutation in {"bind-root", "bind-descendant"}:
         fake_profile = tmp_path / "profile"
         fake_profile.mkdir()
@@ -339,13 +386,22 @@ def _run_verify(
             },
         )
     else:
-        state = tmp_path / "state"
+        local_authority = tmp_path / "local-app-data"
+        local_authority.mkdir()
+        _protect_directory(local_authority)
+        state = local_authority / "updates"
+        consumer_inherited_state = True
     transaction = state / nonce
     transaction.mkdir(parents=True)
-    if mutation != "state-junction":
-        # `%TEMP%` on the hosted runner can grant write to BUILTIN\Users.
-        # Production state lives under the owner-protected LOCALAPPDATA root;
-        # mirror that authority before the helper's pre-mutation attestation.
+    if consumer_inherited_state:
+        # The game creates these children recursively and does not protect
+        # their DACL itself. Model a normal non-elevated owner while keeping
+        # the inherited DACL so the helper must perform the normalization.
+        _set_current_owner(state)
+        _set_current_owner(transaction)
+        assert not _directory_acl_is_protected(state)
+        assert not _directory_acl_is_protected(transaction)
+    elif mutation != "state-junction":
         _protect_directory(state)
         _protect_directory(transaction)
     installed_build = tmp_path / "installed-build"
@@ -399,6 +455,17 @@ def _run_verify(
     shutil.copy2(candidate_build / HELPER, transaction / HELPER)
     shutil.copy2(candidate_build / "RELEASE-MANIFEST.json", transaction)
     shutil.copy2(candidate_build / "RELEASE-MANIFEST.json.sig", transaction)
+    for owned_path in (
+        helper,
+        target,
+        target_dir / "RELEASE-MANIFEST.json",
+        target_dir / "RELEASE-MANIFEST.json.sig",
+        candidate,
+        transaction / HELPER,
+        transaction / "RELEASE-MANIFEST.json",
+        transaction / "RELEASE-MANIFEST.json.sig",
+    ):
+        _set_current_owner(owned_path)
     if mutation == "asset":
         candidate.write_bytes(candidate.read_bytes() + b"tamper")
     elif mutation == "signature":
@@ -633,6 +700,8 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
     if install_candidate:
         shutil.copy2(target, backup)
         shutil.copy2(candidate, target)
+        _set_current_owner(backup)
+        _set_current_owner(target)
         candidate.unlink()
     if install_metadata:
         authority_backup.mkdir()
@@ -647,6 +716,14 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
         shutil.copy2(
             transaction / "RELEASE-MANIFEST.json.sig", installed_signature
         )
+        for owned_path in (
+            authority_backup / HELPER,
+            authority_backup / "RELEASE-MANIFEST.json",
+            authority_backup / "RELEASE-MANIFEST.json.sig",
+            installed_manifest,
+            installed_signature,
+        ):
+            _set_current_owner(owned_path)
     if commit_floor:
         _write_compact_json(
             state / "committed-floor.json",
@@ -656,8 +733,10 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                 "version": str(journal["target_version"]),
             },
         )
+        _set_current_owner(state / "committed-floor.json")
     if promote_helper:
         shutil.copy2(transaction / HELPER, installed_helper)
+        _set_current_owner(installed_helper)
 
     journal["state"] = "helper_intent" if boundary == "helper_promoted" else boundary
     candidate_process: subprocess.Popen[bytes] | None = None
@@ -689,6 +768,7 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                     "process_started_utc_ticks": started,
                 },
             )
+            _set_current_owner(transaction / "health.json")
         _write_compact_json(journal_path, journal)
 
         recovered = subprocess.run(
@@ -733,6 +813,8 @@ def test_windows_powershell51_verifies_signed_bundle(
     assert ready["old_pid"] > 0
     assert str(ready["old_started"]).isdigit()
     assert b"candidate" not in target.read_bytes()
+    assert _directory_acl_is_protected(transaction.parent)
+    assert _directory_acl_is_protected(transaction)
 
 
 def test_windows_powershell51_rotation_overlap_accepts_new_signed_new_only_helper(
@@ -747,6 +829,8 @@ def test_windows_powershell51_rotation_overlap_accepts_new_signed_new_only_helpe
     assert result.returncode == 0, _helper_result_diagnostic(
         transaction, result.stderr
     )
+    assert _directory_acl_is_protected(transaction.parent)
+    assert _directory_acl_is_protected(transaction)
     assert (transaction / "ready.json").is_file()
     installed_helper = target.parent / HELPER
     candidate_helper = transaction / HELPER
@@ -827,11 +911,16 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
     target_dir = tmp_path / "installed"
     target_dir.mkdir()
     _protect_directory(target_dir)
-    state = tmp_path / "state"
+    local_authority = tmp_path / "local-app-data"
+    local_authority.mkdir()
+    _protect_directory(local_authority)
+    state = local_authority / "updates"
     transaction = state / nonce
     transaction.mkdir(parents=True)
-    _protect_directory(state)
-    _protect_directory(transaction)
+    _set_current_owner(state)
+    _set_current_owner(transaction)
+    assert not _directory_acl_is_protected(state)
+    assert not _directory_acl_is_protected(transaction)
     installed_build = tmp_path / "installed-build"
     candidate_build = tmp_path / "candidate-build"
     installed_build.mkdir()
@@ -869,6 +958,17 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
     shutil.copy2(candidate_build / HELPER, transaction / HELPER)
     shutil.copy2(candidate_build / "RELEASE-MANIFEST.json", transaction)
     shutil.copy2(candidate_build / "RELEASE-MANIFEST.json.sig", transaction)
+    for owned_path in (
+        helper,
+        target,
+        target_dir / "RELEASE-MANIFEST.json",
+        target_dir / "RELEASE-MANIFEST.json.sig",
+        candidate,
+        transaction / HELPER,
+        transaction / "RELEASE-MANIFEST.json",
+        transaction / "RELEASE-MANIFEST.json.sig",
+    ):
+        _set_current_owner(owned_path)
 
     old = subprocess.Popen(
         [str(target), "-t", "127.0.0.1"],
@@ -919,6 +1019,8 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         if not ready.exists():
             _stdout, stderr = updater.communicate(timeout=2)
             pytest.fail(_helper_result_diagnostic(transaction, stderr))
+        assert _directory_acl_is_protected(state)
+        assert _directory_acl_is_protected(transaction)
         old.terminate()
         old.wait(timeout=5)
 

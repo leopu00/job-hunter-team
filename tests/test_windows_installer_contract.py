@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -19,6 +20,17 @@ PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish-signed-release.yml"
 SMOKE_WORKFLOW = ROOT / ".github" / "workflows" / "windows-installer-smoke.yml"
 DOWNLOAD_CLIENT = ROOT / "web" / "app" / "download" / "DownloadClient.tsx"
 DOWNLOAD_FUNNEL = ROOT / "web" / "lib" / "download-funnel.ts"
+UPDATE_HELPER = ROOT / "scripts" / "jht-windows-update.ps1"
+MUTATING_ACL_RIGHTS = {
+    "WriteData",
+    "AppendData",
+    "WriteExtendedAttributes",
+    "WriteAttributes",
+    "DeleteSubdirectoriesAndFiles",
+    "Delete",
+    "ChangePermissions",
+    "TakeOwnership",
+}
 
 
 def test_nsis_uses_stable_per_user_release_name() -> None:
@@ -69,11 +81,47 @@ def test_installer_preflight_is_handle_and_acl_fail_closed() -> None:
     assert "FileSystemRights]::FullControl -bor" not in source
 
 
+def test_acl_mutation_masks_remain_complete_and_in_sync() -> None:
+    observed: list[set[str]] = []
+    for path in (PREFLIGHT, UPDATE_HELPER, BUILDER):
+        source = path.read_text()
+        match = re.search(
+            r"\$writeMask\s*=(.*?)(?=\n\s*(?:if|foreach)\b)", source, re.DOTALL
+        )
+        assert match is not None, path
+        rights = re.findall(r"FileSystemRights\]::([A-Za-z]+)", match.group(1))
+        assert len(rights) == len(MUTATING_ACL_RIGHTS), path
+        assert set(rights) == MUTATING_ACL_RIGHTS, path
+        observed.append(set(rights))
+    assert observed[0] == observed[1] == observed[2]
+
+
 def _windows_powershell() -> str:
     executable = shutil.which("powershell.exe")
     if not executable:
         pytest.skip("Windows PowerShell 5.1 is unavailable")
     return executable
+
+
+def _windows_pwsh() -> str:
+    executable = shutil.which("pwsh")
+    if not executable:
+        pytest.skip("PowerShell 7 is unavailable")
+    return executable
+
+
+def _write_powershell_fixture(path: Path, body: str) -> None:
+    path.write_text("$ErrorActionPreference='Stop';" + body, encoding="utf-8")
+
+
+def test_powershell_fixture_writer_is_fail_closed_from_first_instruction(
+    tmp_path: Path,
+) -> None:
+    fixture = tmp_path / "fixture.ps1"
+    _write_powershell_fixture(fixture, "[Console]::Out.Write('ok')\n")
+    assert fixture.read_text(encoding="utf-8").startswith(
+        "$ErrorActionPreference='Stop';"
+    )
 
 
 def _run_preflight(
@@ -110,19 +158,21 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     environment["LOCALAPPDATA"] = str(local)
 
     local_acl = tmp_path / "protect-localappdata.ps1"
-    local_acl.write_text(
+    _write_powershell_fixture(
+        local_acl,
         "$item=[IO.DirectoryInfo]::new($env:JHT_LOCALAPPDATA);"
         "$acl=$item.GetAccessControl("
         "[Security.AccessControl.AccessControlSections]::All);"
         "$current=[Security.Principal.WindowsIdentity]::GetCurrent().User;"
         "$acl.SetOwner($current);$acl.SetAccessRuleProtection($true,$false);"
+        "foreach($identity in @($acl.Access | ForEach-Object {$_.IdentityReference} | "
+        "Select-Object -Unique)){$acl.PurgeAccessRules($identity)};"
         "foreach($sid in @($current,"
         "[Security.Principal.SecurityIdentifier]::new('S-1-5-18'),"
         "[Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))){"
         "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
         "$sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow');"
         "$acl.SetAccessRule($rule)};$item.SetAccessControl($acl)\n",
-        encoding="utf-8",
     )
     local_acl_env = environment.copy()
     local_acl_env["JHT_LOCALAPPDATA"] = str(local)
@@ -141,14 +191,17 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     install.mkdir(parents=True)
     (install / "job-hunter-team.exe").write_bytes(b"legacy-v0.3.5\n")
     fixture_owner = tmp_path / "set-fixture-owner.ps1"
-    fixture_owner.write_text(
+    _write_powershell_fixture(
+        fixture_owner,
         "foreach($path in @($env:JHT_OWNER_PATHS | ConvertFrom-Json)){"
-        "$item=Get-Item -LiteralPath $path -Force;"
+        "$full=[IO.Path]::GetFullPath([string]$path);"
+        "$item=if([IO.Directory]::Exists($full)){[IO.DirectoryInfo]::new($full)}"
+        "elseif([IO.File]::Exists($full)){[IO.FileInfo]::new($full)}"
+        "else{throw 'owner fixture path is missing'};"
         "$acl=$item.GetAccessControl("
         "[Security.AccessControl.AccessControlSections]::All);"
         "$acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User);"
         "$item.SetAccessControl($acl)}\n",
-        encoding="utf-8",
     )
     fixture_owner_env = environment.copy()
     fixture_owner_env["JHT_OWNER_PATHS"] = json.dumps(
@@ -172,7 +225,8 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         check=True,
     )
     read_acl = tmp_path / "add-read-only-ace.ps1"
-    read_acl.write_text(
+    _write_powershell_fixture(
+        read_acl,
         "$item=[IO.DirectoryInfo]::new($env:JHT_ACL_PATH);"
         "$acl=$item.GetAccessControl("
         "[Security.AccessControl.AccessControlSections]::All);"
@@ -180,7 +234,6 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
         "$sid,'ReadAndExecute','ContainerInherit,ObjectInherit','None','Allow');"
         "$acl.AddAccessRule($rule);$item.SetAccessControl($acl)\n",
-        encoding="utf-8",
     )
     read_acl_env = environment.copy()
     read_acl_env["JHT_ACL_PATH"] = str(install)
@@ -230,10 +283,10 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     marker.write_bytes(b"must-not-change")
     junction = install / "hostile-junction"
     fixture = tmp_path / "make-junction.ps1"
-    fixture.write_text(
+    _write_powershell_fixture(
+        fixture,
         "New-Item -ItemType $env:JHT_LINK_TYPE -Path $env:JHT_LINK "
         "-Target $env:JHT_TARGET | Out-Null\n",
-        encoding="utf-8",
     )
     fixture_env = environment.copy()
     fixture_env.update(
@@ -295,7 +348,8 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     owner_sentinel = install / "foreign-owner-sentinel"
     owner_sentinel.write_bytes(b"must-not-change")
     set_owner = tmp_path / "set-owner.ps1"
-    set_owner.write_text(
+    _write_powershell_fixture(
+        set_owner,
         "$item=[IO.FileInfo]::new($env:JHT_OWNER_PATH);"
         "$acl=$item.GetAccessControl("
         "[Security.AccessControl.AccessControlSections]::All);"
@@ -304,7 +358,6 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         "}else{[Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')};"
         "$acl.SetOwner($sid);"
         "$item.SetAccessControl($acl)\n",
-        encoding="utf-8",
     )
     owner_env = environment.copy()
     owner_env.update(JHT_OWNER_MODE="foreign", JHT_OWNER_PATH=str(owner_sentinel))
@@ -339,7 +392,8 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
     )
 
     foreign_acl = tmp_path / "set-foreign-ace.ps1"
-    foreign_acl.write_text(
+    _write_powershell_fixture(
+        foreign_acl,
         "$item=[IO.DirectoryInfo]::new($env:JHT_ACL_PATH);"
         "$acl=$item.GetAccessControl("
         "[Security.AccessControl.AccessControlSections]::All);"
@@ -349,7 +403,6 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         "if($env:JHT_ACL_MODE -ceq 'add'){$acl.AddAccessRule($rule)}"
         "else{$acl.RemoveAccessRuleSpecific($rule)};"
         "$item.SetAccessControl($acl)\n",
-        encoding="utf-8",
     )
     acl_env = environment.copy()
     acl_env["JHT_ACL_PATH"] = str(install)
@@ -374,6 +427,103 @@ def test_installer_preflight_reinstalls_and_rejects_hostile_nodes(
         subprocess.run(acl_argv, env=acl_env, check=True)
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows ACL gate")
+def test_builder_acl_seam_accepts_read_only_and_rejects_every_mutating_right(
+    tmp_path: Path,
+) -> None:
+    authority = tmp_path / "publish authority ';&$()"
+    authority.mkdir()
+    sentinel = authority / "sentinel"
+    sentinel.write_bytes(b"must-not-change")
+    acl_fixture = tmp_path / "builder-acl-fixture.ps1"
+    _write_powershell_fixture(
+        acl_fixture,
+        "$item=[IO.DirectoryInfo]::new($env:JHT_ACL_PATH);"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "$current=[Security.Principal.WindowsIdentity]::GetCurrent().User;"
+        "$foreign=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-545');"
+        "if($env:JHT_ACL_MODE -ceq 'protect'){"
+        "$acl.SetOwner($current);$acl.SetAccessRuleProtection($true,$false);"
+        "foreach($identity in @($acl.Access | ForEach-Object {$_.IdentityReference} | "
+        "Select-Object -Unique)){$acl.PurgeAccessRules($identity)};"
+        "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
+        "$current,'FullControl','ContainerInherit,ObjectInherit','None','Allow');"
+        "$acl.SetAccessRule($rule);$item.SetAccessControl($acl);exit 0};"
+        "if($env:JHT_ACL_MODE -ceq 'sddl'){"
+        "[Console]::Out.Write($acl.GetSecurityDescriptorSddlForm("
+        "[Security.AccessControl.AccessControlSections]::All));exit 0};"
+        "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
+        "$foreign,$env:JHT_ACL_RIGHTS,'ContainerInherit,ObjectInherit','None','Allow');"
+        "if($env:JHT_ACL_MODE -ceq 'add'){$acl.AddAccessRule($rule)}"
+        "elseif($env:JHT_ACL_MODE -ceq 'remove'){"
+        "$acl.RemoveAccessRuleSpecific($rule)}else{throw 'unknown fixture mode'};"
+        "$item.SetAccessControl($acl)\n",
+    )
+    environment = os.environ.copy()
+    environment["JHT_ACL_PATH"] = str(authority)
+    fixture_argv = [
+        _windows_powershell(),
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-File",
+        str(acl_fixture),
+    ]
+
+    def fixture(mode: str, rights: str = "") -> subprocess.CompletedProcess[str]:
+        fixture_env = environment.copy()
+        fixture_env.update(JHT_ACL_MODE=mode, JHT_ACL_RIGHTS=rights)
+        return subprocess.run(
+            fixture_argv,
+            env=fixture_env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    def assert_acl() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                _windows_pwsh(),
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                str(BUILDER),
+                "-Version",
+                "0.0.0",
+                "-AuthorityDirectory",
+                str(tmp_path),
+                "-AssertProtectedDirectoryPath",
+                str(authority),
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    fixture("protect")
+    fixture("add", "ReadAndExecute")
+    before = fixture("sddl").stdout
+    accepted = assert_acl()
+    assert accepted.returncode == 0, accepted.stderr
+    assert json.loads(accepted.stdout)["acl"] == "protected"
+    assert fixture("sddl").stdout == before
+    assert sentinel.read_bytes() == b"must-not-change"
+
+    for right in sorted(MUTATING_ACL_RIGHTS):
+        fixture("add", right)
+        before = fixture("sddl").stdout
+        rejected = assert_acl()
+        assert rejected.returncode != 0
+        assert "grants write to another principal" in rejected.stderr
+        assert fixture("sddl").stdout == before
+        assert sentinel.read_bytes() == b"must-not-change"
+        fixture("remove", right)
+
+
 def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
     source = BUILDER.read_text()
     for seam in (
@@ -390,6 +540,7 @@ def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
         "Assert-NoReparseAncestors",
         "Initialize-ProtectedDirectory",
         "Assert-ProtectedDirectory",
+        "AssertProtectedDirectoryPath",
         "FileSystemAclExtensions",
         "verify_artifact_files",
         "Signed release artifacts changed before packaging",

@@ -13,7 +13,11 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$AuthorityDirectory,
 
-  [switch]$Smoke
+  [switch]$Smoke,
+
+  # Read-only CI seam: exercises the exact ACL assertion used immediately
+  # before packaging without requiring an export, signature, or NSIS build.
+  [string]$AssertProtectedDirectoryPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -79,6 +83,11 @@ function Assert-ProtectedDirectory {
 
 if (-not $IsWindows) {
   throw 'The native installer smoke must run on Windows.'
+}
+if ($AssertProtectedDirectoryPath) {
+  Assert-ProtectedDirectory $AssertProtectedDirectoryPath
+  [ordered]@{ acl = 'protected' } | ConvertTo-Json -Compress
+  return
 }
 try {
   if (-not (Test-Path -LiteralPath $portable -PathType Leaf)) {
