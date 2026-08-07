@@ -17,7 +17,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { GUIDE_CHAPTERS } from "@/app/setup-guide/guide-content";
-import { SCREENS, pendingScreens } from "@/app/setup-guide/guide-screens";
+import {
+  SCREENS,
+  missingCaptures,
+  pendingScreens,
+} from "@/app/setup-guide/guide-screens";
 import {
   OS_IDS,
   isUntranslated,
@@ -202,6 +206,30 @@ describe("guida di setup — schermate", () => {
       }
     }
     expect(broken).toEqual([]);
+  });
+
+  it("dichiara quante riprese mancano, per sistema", () => {
+    // Il conto onesto è per coppia schermata × sistema: da quando Linux
+    // consegna, contare le schermate senza alcun file direbbe «S02 fatta»
+    // mentre macOS e Windows non ce l'hanno. Una schermata è coperta per un
+    // sistema solo se ha la sua variante, o una valida per tutti.
+    const usage = new Map<string, (typeof OS_IDS)[number][]>();
+    for (const chapter of GUIDE_CHAPTERS) {
+      for (const phase of chapter.phases) {
+        const systems = phase.os === "all" ? OS_IDS : phase.os;
+        for (const screenRef of screensOf(phase)) {
+          const seen = usage.get(screenRef.screenId) ?? [];
+          usage.set(screenRef.screenId, [...new Set([...seen, ...systems])]);
+        }
+      }
+    }
+    const missing = missingCaptures(usage);
+    const total = [...usage.values()].reduce((n, os) => n + os.length, 0);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[setup-guide] riprese: ${total - missing.length}/${total} consegnate, ${missing.length} mancanti`,
+    );
+    expect(missing.length).toBeLessThanOrEqual(total);
   });
 
   it("ogni schermata mancante dichiara cosa deve mostrare", () => {
