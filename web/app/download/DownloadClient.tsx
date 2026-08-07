@@ -12,6 +12,11 @@ import {
 import LandingNav from "../components/landing/LandingNav";
 import { LandingFooter } from "../components/landing/LandingCTA";
 import ScrollToTop from "../components/landing/ScrollToTop";
+import {
+  downloadHref,
+  type DownloadAttribution,
+  type DownloadSlug,
+} from "@/lib/download-funnel";
 
 function BackLink() {
   const { t } = useLandingI18n();
@@ -31,23 +36,19 @@ function BackLink() {
   );
 }
 
-// 2026-07-29: l'app desktop diventa scaricabile, marcata BETA. Gli asset sono
-// quelli della release più recente su GitHub, via `releases/latest/download/`:
-// il link non va aggiornato a ogni versione, ci pensa GitHub a risolverlo.
+// 2026-07-29: l'app desktop diventa scaricabile, marcata BETA. I quattro CTA
+// passano dagli slug locali `/go/*`: il server risolve la release GitHub più
+// recente da un'allowlist statica e misura solo bucket anonimi aggregati.
 // macOS è firmato Developer ID e notarizzato (dalla 0.3.1), quindi si apre con
 // un doppio clic; Windows e Linux non sono firmati e l'avviso di SmartScreen
 // va detto prima, non lasciato scoprire. Sostituisce il "in arrivo" del
 // 2026-07-03 (docs/internal/2026-07-03-desktop-app-status-and-vision.md).
 type InstallMode = "terminal" | "desktop";
 
-const RELEASE_BASE =
-  "https://github.com/leopu00/job-hunter-team/releases/latest/download";
-const WINDOWS_PORTABLE_ASSET = "job-hunter-team-windows-x64-portable.exe";
-
-const DESKTOP_ASSET: Record<PlatformId, string> = {
-  mac: "job-hunter-team.zip",
-  windows: "job-hunter-team-windows-x64-setup.exe",
-  linux: "job-hunter-team-linux-x64.tar.gz",
+const DOWNLOAD_SLUG: Record<PlatformId, DownloadSlug> = {
+  mac: "mac",
+  windows: "win-setup",
+  linux: "linux",
 };
 
 type DlKey = Parameters<ReturnType<typeof useLandingI18n>["t"]>[0];
@@ -144,7 +145,11 @@ const REQ_OS: Record<Lang, ReqOs> = {
   },
 };
 
-function DownloadContent() {
+function DownloadContent({
+  attribution,
+}: {
+  attribution: DownloadAttribution;
+}) {
   const { t, lang } = useLandingI18n();
   const [installMode, setInstallMode] = useState<InstallMode>("desktop");
 
@@ -244,7 +249,7 @@ function DownloadContent() {
                 {PLATFORMS.map((os) => (
                   <a
                     key={os.id}
-                    href={`${RELEASE_BASE}/${DESKTOP_ASSET[os.id]}`}
+                    href={downloadHref(DOWNLOAD_SLUG[os.id], attribution)}
                     className="border px-4 py-4 flex flex-col items-center gap-3 text-center transition-colors hover:border-[var(--color-green)]"
                     style={{
                       borderColor: "var(--color-border)",
@@ -272,7 +277,7 @@ function DownloadContent() {
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4 text-center">
                 {t("dl_windows_portable_label")}{" "}
                 <a
-                  href={`${RELEASE_BASE}/${WINDOWS_PORTABLE_ASSET}`}
+                  href={downloadHref("win-portable", attribution)}
                   className="font-semibold text-[var(--color-green)] underline underline-offset-2"
                 >
                   {t("dl_windows_portable_link")}
@@ -332,10 +337,14 @@ function DownloadContent() {
   );
 }
 
-export default function DownloadClient() {
+export default function DownloadClient({
+  attribution,
+}: {
+  attribution: DownloadAttribution;
+}) {
   return (
     <LandingI18nProvider>
-      <DownloadContent />
+      <DownloadContent attribution={attribution} />
     </LandingI18nProvider>
   );
 }
