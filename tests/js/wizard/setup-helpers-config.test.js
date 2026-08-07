@@ -134,7 +134,7 @@ describe('summarizeExistingConfig', () => {
         },
       },
     });
-    expect(summary).toMatch(/Telegram: 3 bot configurati/);
+    expect(summary).toMatch(/Telegram: 3 bots configured/);
   });
 
   it('mostra Telegram incompleto quando manca un bot', () => {
@@ -150,7 +150,7 @@ describe('summarizeExistingConfig', () => {
         },
       },
     });
-    expect(summary).toMatch(/Telegram: incompleto \(2\/3 bot\)/);
+    expect(summary).toMatch(/Telegram: incomplete \(2\/3 bots\)/);
   });
 
   it('ritorna stringa non vuota per config vuota', () => {

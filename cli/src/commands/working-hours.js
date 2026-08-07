@@ -115,7 +115,7 @@ async function handleShow() {
   const wh = cfg.team?.working_hours;
   console.log('📅 Working hours:');
   console.log(formatStatus(wh));
-  console.log(`\nOre/sett: ${computeHoursPerWeek(wh)}`);
+  console.log(`\nHours/week: ${computeHoursPerWeek(wh)}`);
 }
 
 async function handleSet(presetName) {
@@ -143,7 +143,7 @@ async function handleSet(presetName) {
   await saveConfig(cfg);
   console.log(`✓ Working hours → ${preset.label}`);
   console.log(formatStatus(cfg.team.working_hours));
-  console.log(`\nOre/sett: ${computeHoursPerWeek(cfg.team.working_hours)}`);
+  console.log(`\nHours/week: ${computeHoursPerWeek(cfg.team.working_hours)}`);
 }
 
 async function handleSetCustom(daysSpec, rangeSpec, opts) {
@@ -162,16 +162,16 @@ async function handleSetCustom(daysSpec, rangeSpec, opts) {
     windows: [{ days, start, end }],
   };
   await saveConfig(cfg);
-  console.log('✓ Working hours custom impostate');
+  console.log('✓ Custom working hours set');
   console.log(formatStatus(cfg.team.working_hours));
-  console.log(`\nOre/sett: ${computeHoursPerWeek(cfg.team.working_hours)}`);
+  console.log(`\nHours/week: ${computeHoursPerWeek(cfg.team.working_hours)}`);
 }
 
 async function handleClear() {
   let cfg = (await loadConfig()) || {};
   if (cfg.team?.working_hours) delete cfg.team.working_hours;
   await saveConfig(cfg);
-  console.log('✓ Working hours rimosse → team 24/7');
+  console.log('✓ Working hours removed → team runs 24/7');
 }
 
 // La simulazione è un `import` di due moduli Python + un calcolo: sta

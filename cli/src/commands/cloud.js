@@ -1552,7 +1552,7 @@ async function handlePair(options) {
 
   const payload = decodePairingToken(raw);
   if (!payload) {
-    console.error(pc.red('pairing-token corrotto o malformato.'));
+    console.error(pc.red('pairing-token is corrupted or malformed.'));
     console.error(pc.dim(`File: ${tokenPath}`));
     process.exitCode = 1;
     return;
@@ -1619,7 +1619,7 @@ async function handlePair(options) {
   // lasciare un refresh_token sul disco.
   try { await unlink(tokenPath); } catch { /* best-effort */ }
 
-  console.log(pc.green('✓ Device registrato sul cloud'));
+  console.log(pc.green('✓ Device registered with the cloud'));
   console.log(pc.dim(`  Base URL:   ${baseUrl}`));
   console.log(pc.dim(`  Token name: ${body.token_name ?? deviceName}`));
   console.log(pc.dim(`  User ID:    ${body.user_id}`));
@@ -2044,7 +2044,7 @@ async function handlePullDesiredState(options = {}) {
   // (tipico, no nuovi click) restiamo zitti se silent.
   const successMsg = pc.green(`✓ Desired-state pull applied: ${updated} positions updated`)
     + (excludeChanges > 0 ? pc.green(` (${excludeChanges} user exclusions synchronized)`) : '')
-    + (missing > 0 ? pc.dim(` (${missing} legacy_id non presenti localmente, skip)`) : '');
+    + (missing > 0 ? pc.dim(` (${missing} legacy_id values not found locally; skipped)`) : '');
   if (updated > 0 || excludeChanges > 0 || !silent) {
     console.log(successMsg);
   }
@@ -2622,7 +2622,7 @@ export async function handleSyncRendezvous(options = {}) {
     if (!silent) {
       const why = pushResult && (pushResult.skipped || 0) > 0
         ? `${pushResult.skipped} skipped rows`
-        : 'push non riuscito';
+        : 'push failed';
       console.error(pc.yellow(`  sync-rendezvous: ACK not written (${why}) — the outcome was published; a new request is required to retry.`));
     }
     const published = await publishSyncOutcomeBestEffort(

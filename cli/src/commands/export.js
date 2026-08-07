@@ -101,7 +101,7 @@ async function writeOutput(items, source, options) {
 
   await mkdir(dirname(outPath), { recursive: true }).catch(() => {});
   await writeFile(outPath, content, 'utf-8');
-  console.log(`\n  Esportati ${items.length} record → ${outPath} (${format.toUpperCase()})`);
+  console.log(`\n  Exported ${items.length} records → ${outPath} (${format.toUpperCase()})`);
 }
 
 export function registerExportCommand(program) {

@@ -125,11 +125,11 @@ export function writeConfigFile(config) {
 
 export function validateApiKey(provider, value) {
   if (!value || value.trim().length === 0) {
-    return 'La API key non puo\' essere vuota';
+    return 'The API key cannot be empty';
   }
   const trimmed = value.trim();
   if (trimmed.length < 10) {
-    return 'La API key sembra troppo corta';
+    return 'The API key appears too short';
   }
   if (provider.keyPrefix && !trimmed.startsWith(provider.keyPrefix)) {
     return `The key for ${provider.label} should start with "${provider.keyPrefix}"`;
@@ -139,17 +139,17 @@ export function validateApiKey(provider, value) {
 
 export function validateEmail(value) {
   if (!value || value.trim().length === 0) {
-    return 'L\'email non puo\' essere vuota';
+    return 'Email cannot be empty';
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
-    return 'Email non valida';
+    return 'Invalid email';
   }
   return undefined;
 }
 
 export function validateTelegramToken(value) {
   if (!value || value.trim().length === 0) {
-    return 'Il token non puo\' essere vuoto';
+    return 'The token cannot be empty';
   }
   if (!/^\d+:[A-Za-z0-9_-]+$/.test(value.trim())) {
     return 'Invalid token format (expected: 123456:ABC...)';
@@ -174,17 +174,17 @@ export function summarizeExistingConfig(config) {
   }
   const activeProviderConfig = config.providers?.[config.active_provider];
   if (activeProviderConfig?.model) {
-    lines.push(`Modello: ${activeProviderConfig.model}`);
+    lines.push(`Model: ${activeProviderConfig.model}`);
   }
   if (activeProviderConfig?.auth_method) {
     lines.push(`Auth: ${activeProviderConfig.auth_method}`);
   }
   const bots = config.channels?.telegram?.bots;
   if (bots?.assistente?.bot_token && bots?.capitano?.bot_token && bots?.mentor?.bot_token) {
-    lines.push('Telegram: 3 bot configurati (assistente, capitano, mentor)');
+    lines.push('Telegram: 3 bots configured (assistente, capitano, mentor)');
   } else if (bots) {
     const present = ['assistente', 'capitano', 'mentor'].filter((r) => bots?.[r]?.bot_token);
-    lines.push(`Telegram: incompleto (${present.length}/3 bot)`);
+    lines.push(`Telegram: incomplete (${present.length}/3 bots)`);
   }
-  return lines.join('\n') || 'Config vuota';
+  return lines.join('\n') || 'Empty configuration';
 }

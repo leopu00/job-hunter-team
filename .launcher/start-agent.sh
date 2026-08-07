@@ -784,7 +784,7 @@ fi
 
 if [ ! -f "$TEMPLATE" ] && [ ! -f "$IDENTITY_DEST" ]; then
   echo "Error: template $TEMPLATE not found and $IDENTITY_FILE does not exist in $AGENT_DIR."
-  echo "Crea agents/$ROLE/$ROLE.md (baseline) o agents/$ROLE/$ROLE.$USER_LOCALE.md, oppure $IDENTITY_DEST manualmente."
+  echo "Create agents/$ROLE/$ROLE.md (baseline) or agents/$ROLE/$ROLE.$USER_LOCALE.md, or create $IDENTITY_DEST manually."
   exit 1
 fi
 # Copia il template se il file runtime non esiste o differisce dal repo.
@@ -796,7 +796,7 @@ fi
 # vince sempre.
 if [ -f "$TEMPLATE" ] && { [ ! -f "$IDENTITY_DEST" ] || ! cmp -s "$TEMPLATE" "$IDENTITY_DEST"; }; then
   cp "$TEMPLATE" "$IDENTITY_DEST"
-  echo "  → $IDENTITY_FILE sincronizzato da template ($(basename "$TEMPLATE"))"
+  echo "  → $IDENTITY_FILE synchronized from template ($(basename "$TEMPLATE"))"
 fi
 
 # ── Team docs (team-rules, architettura) — fix-radice-A 2026-06-14 ───────────
@@ -886,7 +886,7 @@ if [ -d "$PRIVATE_SKILLS_DIR" ]; then
   done
 fi
 
-echo "  → $_skills_count skill(s) distribuite in $CLAUDE_SKILLS_DIR + $AGENTS_SKILLS_DIR"
+echo "  → $_skills_count skill(s) installed in $CLAUDE_SKILLS_DIR + $AGENTS_SKILLS_DIR"
 unset _line _name _src _skill _skills_count
 
 # ── Warmup ~/.claude.json se manca ──────────────────────────────────────────
@@ -910,7 +910,7 @@ if [ "$CLI_BIN" = "claude" ] && [ -n "${JHT_HOME:-}" ]; then
     HOME="$JHT_HOME" timeout 30 claude --dangerously-skip-permissions -p "ok" \
       >/dev/null 2>&1 || true
     if [ -s "$_claude_json" ]; then
-      echo "  ✓ .claude.json popolato ($(wc -c <"$_claude_json") byte)"
+      echo "  ✓ .claude.json populated ($(wc -c <"$_claude_json") bytes)"
     else
       echo "  ⚠ warmup did not populate .claude.json — the agent may fall back to Select login method"
     fi

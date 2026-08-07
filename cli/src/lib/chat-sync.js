@@ -552,7 +552,7 @@ export function sendToPane(agent, text, { spawnFn = spawn, timeoutMs = DELIVER_T
     };
     const timer = setTimeout(() => {
       try { child.kill('SIGKILL'); } catch { /* già morto */ }
-      done(-1, `timeout dopo ${timeoutMs}ms`);
+      done(-1, `timed out after ${timeoutMs}ms`);
     }, timeoutMs);
     child.stderr?.on('data', (d) => { stderr += d.toString(); });
     child.on('error', (err) => { clearTimeout(timer); done(-1, err.message); });

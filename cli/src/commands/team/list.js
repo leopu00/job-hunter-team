@@ -10,7 +10,7 @@ export function listAction() {
 
   console.log('');
   console.log(c.bold('Agents available:'));
-  console.log(c.dim(inContainer ? '  (sorgente: container jht)' : '  (source: tmux host)'));
+  console.log(c.dim(inContainer ? '  (source: jht container)' : '  (source: tmux host)'));
   console.log('');
   console.log(
     `  ${'Role'.padEnd(14)} ${'Session'.padEnd(16)} ${'Type'.padEnd(10)} ${'Effort'.padEnd(8)} Description`

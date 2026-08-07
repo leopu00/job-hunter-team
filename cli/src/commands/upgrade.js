@@ -23,7 +23,7 @@ function handleUpgrade(options) {
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } else {
     console.log(`\n  ${YELLOW}Host runtime update required.${RESET}`);
-    console.log(`  ${DIM}Esegui sul computer/VPS che ospita Docker:${RESET} ${GREEN}jht upgrade${RESET}`);
+    console.log(`  ${DIM}Run this on the computer or VPS that hosts Docker:${RESET} ${GREEN}jht upgrade${RESET}`);
     console.log(`  ${DIM}The host command downloads, checks and activates the new image;${RESET}`);
     console.log(`  ${DIM}If verification fails, the latest working version is restored.${RESET}\n`);
   }

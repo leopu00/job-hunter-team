@@ -407,7 +407,7 @@ function makeBackup(path) {
   const original = statSync(path);
   copyFileSync(path, backup);
   if (!existsSync(backup) || statSync(backup).size !== original.size) {
-    throw new Error(`backup incompleto (${backup})`);
+    throw new Error(`incomplete backup (${backup})`);
   }
   return { backup, mode: original.mode & 0o7777 };
 }

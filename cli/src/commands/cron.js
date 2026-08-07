@@ -122,7 +122,7 @@ async function handleRun(id, opts) {
   try {
     const result = await svc.run(id, mode);
     if (result.ran) {
-      console.log(`Job ${id} eseguito.`);
+      console.log(`Job ${id} executed.`);
     } else {
       console.log(`Job ${id} not executed (${result.reason}).`);
     }

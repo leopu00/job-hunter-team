@@ -52,12 +52,12 @@ function describe(err) {
  * stack. Lo stack resta disponibile a chi lo sta cercando (`JHT_DEBUG=1`).
  */
 function report(err, { fatal }) {
-  const prefix = fatal ? 'Errore' : 'Errore non fatale';
+  const prefix = fatal ? 'Error' : 'Non-fatal error';
   console.error(`\n  ${prefix}: ${describe(err)}\n`);
   if (process.env.JHT_DEBUG && err instanceof Error && err.stack) {
     console.error(err.stack);
   } else if (fatal) {
-    console.error('  Dettagli completi: rilancia con JHT_DEBUG=1\n');
+    console.error('  Full details: rerun with JHT_DEBUG=1\n');
   }
 }
 

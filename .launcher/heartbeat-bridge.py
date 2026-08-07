@@ -461,8 +461,9 @@ def _send(msg):
             # recupera — è uno stato che resta. Va detto, o 7 nudge orari
             # consecutivi sembrano consegnati e il destinatario è fermo.
             if r.returncode == 5:
-                print(f"[heartbeat-bridge] {TARGET} VIVA MA MUTA (rc=5): nudge "
-                      f"nel composer ma turno mai partito — va sbloccata a mano",
+                print(f"[heartbeat-bridge] {TARGET} ALIVE BUT UNRESPONSIVE (rc=5): "
+                      f"the nudge is in the composer, but the turn never started; "
+                      f"manual intervention is required",
                       file=sys.stderr, flush=True)
                 return False
         except FileNotFoundError:
@@ -549,7 +550,7 @@ def main():
         tick(datetime.now(timezone.utc), send)
         return
     _acquire_singleton()
-    _log(f"up — heartbeat orario al {TARGET}, jht_home={JHT_HOME}")
+    _log(f"up — hourly heartbeat to {TARGET}, jht_home={JHT_HOME}")
     while True:
         now = datetime.now(timezone.utc)
         nxt = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)

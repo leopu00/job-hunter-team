@@ -133,7 +133,7 @@ elif ! : >>"$LOCK_FILE" 2>/dev/null; then
 else
   exec 9>>"$LOCK_FILE"
   if ! flock -n 9; then
-    log "altra istanza viva (lock $LOCK_FILE) — exit"
+    log "another instance is running (lock $LOCK_FILE); exiting"
     exit 0
   fi
 fi
@@ -166,12 +166,12 @@ while true; do
     now=$(date +%s)
     last=$(cat "$cd_file" 2>/dev/null || echo 0)
     if [ $((now - last)) -lt "$COOLDOWN" ]; then
-      log "$sess: auth-fail rilevato ma in cooldown (ultimo restart $((now - last))s fa) — skip"
+      log "$sess: auth failure detected during cooldown (last restart $((now - last))s ago); skipped"
       continue
     fi
     echo "$now" > "$cd_file"
 
-    log "$sess: AUTH-FAIL rilevato ('session has ended'/refresh) → restart per ri-leggere auth.json fresca"
+    log "$sess: AUTH FAILURE detected ('session has ended'/refresh); restarting to reload the current auth.json"
     tmux kill-session -t "$sess" 2>/dev/null
     sleep 1
 

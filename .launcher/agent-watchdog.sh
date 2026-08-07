@@ -199,7 +199,7 @@ maybe_refresh_sentinella() {
   local age
   age=$(session_age_h SENTINELLA) || return 0
   if [ "$age" -ge "$SENTINELLA_MAX_CTX_AGE_H" ]; then
-    log "sentinella: context age ${age}h ≥ ${SENTINELLA_MAX_CTX_AGE_H}h — refresh (kill+recreate) per ripulire il contesto"
+    log "sentinella: context age ${age}h ≥ ${SENTINELLA_MAX_CTX_AGE_H}h — refreshing (kill+recreate) to clear the context"
     tmux kill-session -t SENTINELLA 2>/dev/null || true
   fi
 }
@@ -235,11 +235,11 @@ worker_kickoff() {
   # completo sta nel prompt che start-agent.sh ha già installato.
   local session="$1" role="$2" body
   case "$role" in
-    scout)     body="Riprendi il loop principale: parti dal CIRCLE 1 del profilo candidato e notifica gli Analisti a lotti di 3-5 posizioni." ;;
-    analista)  body="Riprendi il loop principale: coda da db_query.py next-for-analista." ;;
-    scorer)    body="Riprendi il loop principale: coda da db_query.py next-for-scorer." ;;
-    scrittore) body="Riprendi il loop principale: coda da db_query.py next-for-scrittore." ;;
-    *)         body="Riprendi il loop principale come da prompt." ;;
+    scout)     body="Resume the main loop: start from CIRCLE 1 of the candidate profile and notify the Analysts in batches of 3–5 positions." ;;
+    analista)  body="Resume the main loop using the db_query.py next-for-analista queue." ;;
+    scorer)    body="Resume the main loop using the db_query.py next-for-scorer queue." ;;
+    scrittore) body="Resume the main loop using the db_query.py next-for-scrittore queue." ;;
+    *)         body="Resume the main loop as instructed by your prompt." ;;
   esac
   ( sleep 12
     jht-tmux-send "$session" "[@watchdog -> @$(echo "$session" | tr '[:upper:]' '[:lower:]')] [MSG] Session recreated by the watchdog. $body" >/dev/null 2>&1 || true
@@ -379,7 +379,7 @@ maybe_respawn_bridges() {
   #     (idempotente kill+respawn). Anti-flap: oltre il cap, escala invece di loopare.
   if [ -n "$PROC_DEAD_BRIDGE_SUITE" ]; then
     if bridge_flap_ok bridge; then
-      log "bridge-watchdog: suite incompleta (morti: $PROC_DEAD_BRIDGE_SUITE) — respawn via start-agent.sh bridge"
+      log "bridge-watchdog: incomplete suite (dead: $PROC_DEAD_BRIDGE_SUITE) — respawning via start-agent.sh bridge"
       JHT_HOME="$JHT_HOME" bash /app/.launcher/start-agent.sh bridge >>"$LOG" 2>&1 \
         || log "bridge-watchdog: respawn bridge FAIL (rc=$?)"
       bridge_flap_record bridge
@@ -392,7 +392,7 @@ maybe_respawn_bridges() {
   #     configurati e mancano istanze (attese >=3 process: wrapper+python ×3).
   if tg_bots_configured && [ "${PROC_TG_ALIVE:-0}" -lt 3 ]; then
     if bridge_flap_ok tg-bridge; then
-      log "bridge-watchdog: tg-bridge incompleto (${PROC_TG_ALIVE}/3 process) — respawn via start-agent.sh tg-bridge"
+      log "bridge-watchdog: tg-bridge incomplete (${PROC_TG_ALIVE}/3 processes) — respawning via start-agent.sh tg-bridge"
       JHT_HOME="$JHT_HOME" bash /app/.launcher/start-agent.sh tg-bridge >>"$LOG" 2>&1 \
         || log "bridge-watchdog: respawn tg-bridge FAIL (rc=$?)"
       bridge_flap_record tg-bridge
@@ -410,7 +410,7 @@ maybe_respawn_bridges() {
   fi
 }
 
-log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no gate orario, 1/tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min)"
+log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no schedule gate, one per tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min)"
 
 # Loop principale: gate sulla config (può non essere ancora pronta al
 # primo boot del container — il wizard la scrive post-pairing). Sleep

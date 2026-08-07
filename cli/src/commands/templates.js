@@ -51,7 +51,7 @@ async function handleTemplates(action, options) {
   if (action === 'preview' || action === 'show') return await previewTemplate(options);
 
   console.error(`  Invalid action: ${action}`);
-  console.error('  Azioni: list, preview --name <name>');
+  console.error('  Actions: list, preview --name <name>');
   process.exitCode = 1;
 }
 
@@ -95,7 +95,7 @@ async function previewTemplate(options) {
   const t = templates.find(t => t.name === options.name || t.file === options.name);
   if (!t) {
     console.error(`  Template not found: ${options.name}`);
-    console.error(`  Disponibili: ${templates.map(t => t.name).join(', ') || 'Nobody.'}`);
+    console.error(`  Available: ${templates.map(t => t.name).join(', ') || 'none'}`);
     process.exitCode = 1;
     return;
   }
@@ -105,7 +105,7 @@ async function previewTemplate(options) {
 
   console.log(`\n  ${BOLD}${t.name}${RESET}  ${DIM}(${t.file})${RESET}`);
   if (t.description) console.log(`  ${DIM}${t.description}${RESET}`);
-  if (t.vars.length > 0) console.log(`  ${YELLOW}Variabili:${RESET} ${t.vars.join(', ')}`);
+  if (t.vars.length > 0) console.log(`  ${YELLOW}Variables:${RESET} ${t.vars.join(', ')}`);
   console.log(`\n  ${'─'.repeat(60)}\n`);
 
   const lines = body.split('\n').slice(0, parseInt(options.lines ?? '40', 10));

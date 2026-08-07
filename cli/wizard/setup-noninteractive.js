@@ -141,7 +141,7 @@ export async function runNonInteractiveSetup(opts) {
   } else {
     console.log(`  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ' · token preset' : ''})`);
   }
-  console.log(`  Modello:    ${model}`);
+  console.log(`  Model:      ${model}`);
   console.log(`  JHT home:   ${JHT_CONFIG_DIR}`);
   console.log('');
   if (authMethod === 'subscription') {

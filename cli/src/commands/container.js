@@ -67,7 +67,7 @@ async function ensureDockerDaemon() {
   if (process.platform !== 'win32') {
     const hint = process.platform === 'darwin'
       ? "Start it with 'colima start' or 'open -a Docker' (Docker Desktop)."
-      : "Avvialo (es. 'systemctl start docker').";
+      : "Start it (for example, 'systemctl start docker').";
     console.error(c.red(`Docker daemon cannot be reached. ${hint}`));
     return false;
   }
@@ -198,7 +198,7 @@ function statusAction() {
   console.log('');
   console.log(`  ${c.bold('Container:')} ${CONTAINER_NAME}`);
   console.log(`  State:     ${running ? c.green(state) : c.red(state)}`);
-  console.log(`  Immagine:  ${c.dim(image)}`);
+  console.log(`  Image:     ${c.dim(image)}`);
   if (running) console.log(`  Uptime:    ${c.dim(uptime)}`);
   console.log(`  Mount:`);
   for (const m of mounts.split(',')) {

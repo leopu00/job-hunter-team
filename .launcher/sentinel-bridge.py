@@ -553,7 +553,7 @@ def _standby_step(parsed):
         if do_wake:
             res = mod.wake(why, weekly_usage=weekly)
             print(f"[bridge V6] standby: WAKE ({why}) → flag removed, "
-                  f"[RESUME] sent to {res.get('resumed', 0)} sessions"
+                  f"[RIPRENDI] sent to {res.get('resumed', 0)} sessions"
                   + (" — SUPPRESSED: .team-halted.flag is present (the user's "
                      "stop takes precedence)" if res.get("halted") else ""))
     except Exception as e:                                  # noqa: BLE001
@@ -681,7 +681,7 @@ def _burn_intent_announce(state, bi):
     for _s in (CAPITANO_SESSION, SENTINELLA_SESSION):
         if session_exists(_s):
             jht_tmux_send(_s, msg)
-    print(f"[bridge V6] BURN-INTENT {'ON' if now_on else 'OFF'} → annunciato agli agenti")
+    print(f"[bridge V6] BURN-INTENT {'ON' if now_on else 'OFF'}; agents notified")
 
 
 def _esc_all_sessions():
@@ -873,10 +873,10 @@ def _sample_vitals_and_maybe_alert():
     _LAST_VITALS_ALERT_AT = now
     jht_tmux_send(
         SENTINELLA_SESSION,
-        f"[BRIDGE VITALS ALERT] Risorse container sopra soglia: {', '.join(over)} "
-        f"(>={VITALS_ALERT_PCT:.0f}%). Pressione risorse REALE (rischio OOM/saturazione), "
-        f"distinta dalla quota token. Valuta escalation al Capitano: ridurre roster / "
-        f"kill 1 worker. Storico per la diagnosi: {VITALS_FILE} (Mantenitore 1×/giorno).",
+        f"[BRIDGE VITALS ALERT] Container resources above threshold: {', '.join(over)} "
+        f"(>={VITALS_ALERT_PCT:.0f}%). This is real resource pressure (OOM/saturation risk), "
+        f"separate from the token quota. Consider escalating to Capitano: reduce the roster "
+        f"or stop one worker. Diagnostic history: {VITALS_FILE} (Mantenitore once per day).",
     )
 
 
@@ -1809,7 +1809,7 @@ def _pace_verdict_line(weekly_pace, wk_remaining_pct):
     # Contesto "resta X% in Yh-lavoro" (il guinzaglio weekly, leggibile).
     leash = ""
     if isinstance(wk_remaining_pct, (int, float)) and isinstance(reset_h, (int, float)):
-        leash = f" (resta {wk_remaining_pct:.0f}% in {reset_h:.0f}h-lavoro)"
+        leash = f" ({wk_remaining_pct:.0f}% remains across {reset_h:.0f} active hours)"
     # Priorità: burst in uscita > frena (binding/sopra-pace) > accelera (burn) > mantieni.
     if burst:
         return " WEEKLY-PACE→CONTROLLED-RECOVERY: exit spike, do NOT brake hard"
@@ -1817,21 +1817,21 @@ def _pace_verdict_line(weekly_pace, wk_remaining_pct):
         cut = None
         if isinstance(vel, (int, float)) and vel > 0 and isinstance(sust, (int, float)):
             cut = max(0.0, (vel - sust) / vel * 100.0)
-        head = (f" WEEKLY-PACE→RALLENTA ~{cut:.0f}%" if cut is not None
-                else " WEEKLY-PACE→RALLENTA")
-        goal = (f": vai a ~{sust:.2f}%/h (ora {vel:.2f})"
+        head = (f" WEEKLY-PACE→SLOW-DOWN ~{cut:.0f}%" if cut is not None
+                else " WEEKLY-PACE→SLOW-DOWN")
+        goal = (f": target ~{sust:.2f}%/h (currently {vel:.2f})"
                 if isinstance(sust, (int, float)) and isinstance(vel, (int, float))
                 else "")
-        trend = (f" → altrimenti ESAURISCI ~{early:.0f}h-lavoro PRIMA del reset"
+        trend = (f"; otherwise the quota will run out ~{early:.0f} active hours before reset"
                  if isinstance(early, (int, float)) and early > 0 else "")
         return head + goal + leash + trend
     if burn:
-        return (f" WEEKLY-PACE→ACCELERA-SATURA: a ritmo attuale chiudi ~{proj:.0f}%,"
-                f" spreco ~{wasted:.0f}% del weekly prima del reset"
+        return (f" WEEKLY-PACE→ACCELERATE-SATURATE: current pace ends at ~{proj:.0f}%,"
+                f" wasting ~{wasted:.0f}% of the weekly quota before reset"
                 if isinstance(proj, (int, float)) and isinstance(wasted, (int, float))
                 else " WEEKLY-PACE→ACCELERATE-SATURATE: budget at risk of waste")
     goal = (f" (~{sust:.2f}%/h)" if isinstance(sust, (int, float)) else "")
-    return f" WEEKLY-PACE→MANTIENI{goal}{leash}"
+    return f" WEEKLY-PACE→MAINTAIN{goal}{leash}"
 
 
 def _maybe_offhours_stop(state, now_ts, vel_team):
@@ -2040,7 +2040,7 @@ def _try_claude_tui_parser():
         # Primo boot: marca solo
         _worker_last_restart_ts = now
     elif (now - _worker_last_restart_ts) > WORKER_RESTART_INTERVAL_MIN * 60:
-        print(f"[bridge V5] worker restart periodico (>{WORKER_RESTART_INTERVAL_MIN} min)")
+        print(f"[bridge V5] periodic worker restart (>{WORKER_RESTART_INTERVAL_MIN} min)")
         _kill_worker()
         _worker_last_restart_ts = now
         _tui_tick_counter = 0
@@ -2090,7 +2090,8 @@ def _try_claude_tui_parser():
             http_u = http["usage"]
             diff = abs(tui_u - http_u)
             if diff > TUI_HTTP_DIVERGENCE_THRESHOLD:
-                print(f"[bridge V5] TUI/HTTP divergono: TUI={tui_u}% HTTP={http_u}% (Δ{diff}>5), uso HTTP + kill worker")
+                print(f"[bridge V5] TUI/HTTP mismatch: TUI={tui_u}% HTTP={http_u}% "
+                      f"(Δ{diff}>5); using HTTP and restarting the worker")
                 _kill_worker()
                 _worker_last_restart_ts = now
                 return http  # USA HTTP per questo tick
@@ -2156,12 +2157,12 @@ def main():
     override_min, _ = read_config()
     print(f"[bridge V6] pid={os.getpid()} sentinella={SENTINELLA_SESSION} capitano={CAPITANO_SESSION}")
     if override_min is not None:
-        print(f"[bridge V7] tick interval: {override_min} min (override da config)")
+        print(f"[bridge V7] tick interval: {override_min} min (configuration override)")
     else:
         print(
-            f"[bridge V7] tick ANCORATO all'orologio ogni {ANCHOR_TICK_MIN}min "
-            f"(x:00/05/10/...); Sentinella svegliata ai quarti (x:00/15/30/45) "
-            f"solo su edge azionabile + GATE ORARIO (no wake fuori finestra)"
+            f"[bridge V7] clock-anchored tick every {ANCHOR_TICK_MIN} min "
+            f"(x:00/05/10/...); Sentinella wakes every quarter hour (x:00/15/30/45) "
+            f"only on actionable edges and inside the schedule gate"
         )
         print(
             f"[bridge V7] sentinella cooldown={SENTINELLA_COOLDOWN_MIN}min, "
@@ -2585,6 +2586,6 @@ if __name__ == "__main__":
             print("\n[bridge V6] interrupted.")
             break
         except Exception as _e:  # noqa: BLE001 — catch-all VOLUTO: niente morte silenziosa
-            print(f"[bridge V6] FATAL nel loop: {_e} — riavvio in 5s", file=sys.stderr)
+            print(f"[bridge V6] FATAL error in loop: {_e} — restarting in 5s", file=sys.stderr)
             _tb.print_exc()
             _time.sleep(5)

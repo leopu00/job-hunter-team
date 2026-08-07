@@ -162,7 +162,7 @@ jht_spawn_copy_skills() {
       name="$(printf '%s' "$name" | tr -d '[:space:]')"
       [ -z "$name" ] && continue
       if [ ! -d "$lib/$name" ]; then
-        echo "[$label] WARN: skill '$name' in skills.list ma assente in $lib" >&2
+        echo "[$label] WARN: skill '$name' is listed in skills.list but is missing from $lib" >&2
         continue
       fi
       rm -rf "$dest/$name" 2>/dev/null || true

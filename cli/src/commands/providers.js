@@ -172,8 +172,8 @@ async function handleUse(id) {
   if (prev === normalized) {
     console.log(`  ${OK} provider already active: ${normalized}`);
   } else {
-    console.log(`  ${OK} active provider: ${prev || '(Nothing)'} → ${normalized}`);
-    console.log(`  ${DIM}Reboot team to apply: jht team stop --all && jht team start${RESET}`);
+    console.log(`  ${OK} active provider: ${prev || '(none)'} → ${normalized}`);
+    console.log(`  ${DIM}Restart the team to apply: jht team stop --all && jht team start${RESET}`);
   }
 }
 
@@ -278,7 +278,7 @@ async function handleUpdate(id) {
       process.exitCode = 1;
       return;
     }
-    console.log(`\n  ${DIM}Reboot agents to load the new version: jht team stop --all && jht team start${RESET}\n`);
+    console.log(`\n  ${DIM}Restart agents to load the new version: jht team stop --all && jht team start${RESET}\n`);
     return;
   }
 
@@ -322,7 +322,7 @@ async function handleUpdate(id) {
     return;
   }
 
-  console.log(`\n  ${DIM}Reboot agents to load the new version: jht team stop --all && jht team start${RESET}\n`);
+  console.log(`\n  ${DIM}Restart agents to load the new version: jht team stop --all && jht team start${RESET}\n`);
 }
 
 /**
@@ -753,12 +753,12 @@ export function registerProvidersCommand(program) {
 
   cmd
     .command('autoupdate')
-    .description('Update the CLI of the active SOLO provider and review the model pin written to the login (boot pass: fail-safe, never fails). Switchable with JHT_PROVIDER_AUTOUPDATE=0.')
+    .description('Update only the active provider CLI and review the model pin written at login (boot pass: fail-safe). Disable with JHT_PROVIDER_AUTOUPDATE=0.')
     .action(handleAutoUpdate);
 
   cmd
     .command('model-pin')
-    .description('It reveals the pinnate model from the CLI to the login: it chooses between the aliases that the config already lists (wider window), test it and only then writes it. JHT_MODEL_PIN=<x> blocks it.')
+    .description('Review the model pinned by the provider CLI at login: choose a wider-window alias already listed in the config, probe it, then write it. JHT_MODEL_PIN=<x> disables changes.')
     .option('--dry-run', 'report what would be done without writing anything')
     .action((opts) => handleModelPin(opts));
 
