@@ -228,15 +228,39 @@ class _StubGuard:
         return {}
 
 
-def _run_bridge_step(monkeypatch, tmp_path, result, sent):
-    """Esegue un tick di _pace_guard_step con il guard finto. Ritorna lo stub."""
-    bridge = _load_bridge()
+class _StubHours:
+    """working_hours finto: risponde quello che gli si dice, senza config."""
+
+    def __init__(self, inside):
+        self._inside = inside
+
+    def is_within_working_hours(self, *a, **k):
+        return self._inside
+
+
+def _run_bridge_step(monkeypatch, tmp_path, result, sent, within_hours=True,
+                     burn_intent_on=False, config_inside=True, bridge=None):
+    """Esegue un tick di _pace_guard_step con il guard finto. Ritorna lo stub.
+
+    `config_inside` è la risposta di `working_hours.is_within_working_hours()`
+    (la config dell'utente), distinta da `within_hours` che è il work_phase del
+    pacing-bridge: le due sorgenti rispondono a domande diverse e il gate le
+    consulta entrambe.
+    """
+    bridge = bridge or _load_bridge()
     guard = _StubGuard(result)
-    monkeypatch.setattr(bridge, "_load_skill_module", lambda *a, **k: guard)
+    hours = _StubHours(config_inside)
+
+    def _load(name, filename):
+        return hours if filename == "working_hours.py" else guard
+
+    monkeypatch.setattr(bridge, "_load_skill_module", _load)
     monkeypatch.setattr(bridge, "jht_tmux_send",
                         lambda session, text: (sent.append((session, text)), True)[1])
     monkeypatch.setattr(bridge, "LOGS_DIR", tmp_path)
-    bridge._pace_guard_step({"ts": "2026-07-26T16:00:00Z", "usage": 75})
+    bridge._pace_guard_step({"ts": "2026-07-26T16:00:00Z", "usage": 75},
+                            within_hours=within_hours,
+                            burn_intent_on=burn_intent_on)
     return guard
 
 
@@ -338,6 +362,86 @@ def test_the_same_advice_is_repeated_only_after_the_cooldown():
     cooldown = bridge.PACE_ADVICE_COOLDOWN_MIN * 60
     assert bridge._should_advise_captain(r, state, 1000.0 + cooldown - 1) is False
     assert bridge._should_advise_captain(r, state, 1000.0 + cooldown) is True
+
+
+# ── Quando si parla: la finestra di lavoro ──────────────────────────────
+#
+# Notte 29-30/07: un tick ogni 15 minuti ha tenuto sveglio il Capitano fino al
+# mattino a ~9%/h di weekly. Il guard aveva ragione sulla curva e torto sul
+# destinatario: fuori finestra non c'è nessun team da rimettere in pari, e la
+# sveglia costa più della manutenzione che stava cadenzando.
+
+def test_outside_working_hours_the_captain_is_not_woken(tmp_path, monkeypatch):
+    """Il caso della notte: si misura, si logga, non si parla."""
+    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    sent = []
+    _run_bridge_step(monkeypatch, tmp_path, r, sent, within_hours=False)
+
+    assert sent == []
+    logged = (tmp_path / "pace-guard.jsonl").read_text(encoding="utf-8")
+    # Il campione c'è (la misura non costa), e dice PERCHÉ è muto: un guard
+    # silenzioso per l'orario non deve somigliare a un guard morto.
+    assert '"verdict": "AVANTI"' in logged
+    assert '"silenced": "outside-working-hours"' in logged
+    assert '"advised": false' in logged
+    assert not (tmp_path / "bridge-mailbox.jsonl").exists()
+
+
+def test_the_config_window_silences_the_guard_on_its_own(tmp_path, monkeypatch):
+    """work_phase assente = "24/7 per back-compat", ma la config dell'utente no.
+
+    Se il pacing-bridge non scrive il target, il tick tratta l'orario come
+    aperto: è la strada per cui il guard parlava di notte. Il gate rilegge la
+    finestra dalla config e tace lo stesso.
+    """
+    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    sent = []
+    _run_bridge_step(monkeypatch, tmp_path, r, sent, within_hours=True,
+                     config_inside=False)
+    assert sent == []
+
+
+def test_a_burn_intent_buys_the_night_back(tmp_path, monkeypatch):
+    """La deroga di spesa è una decisione dell'utente: stanotte si lavora,
+    quindi il consiglio di pacing serve e deve arrivare."""
+    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    sent = []
+    _run_bridge_step(monkeypatch, tmp_path, r, sent, within_hours=False,
+                     burn_intent_on=True)
+    assert [s for s, _ in sent] == ["CAPITANO"]
+
+
+def test_the_advice_is_not_swallowed_by_the_night(tmp_path, monkeypatch):
+    """Alla riapertura il consiglio parte SUBITO, non dopo il cooldown.
+
+    Tacere non deve consumare l'edge: se lo stato dell'ultimo consiglio
+    venisse aggiornato mentre si tace, il primo tick del mattino sembrerebbe
+    una ripetizione e aspetterebbe il cooldown con il team già in corsa.
+    """
+    bridge = _load_bridge()
+    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    sent = []
+    _run_bridge_step(monkeypatch, tmp_path, r, sent, within_hours=False,
+                     bridge=bridge)
+    assert sent == []
+    _run_bridge_step(monkeypatch, tmp_path, r, sent, within_hours=True,
+                     bridge=bridge)
+    assert [s for s, _ in sent] == ["CAPITANO"]
+
+
+def test_a_broken_working_hours_skill_does_not_gag_the_guard(monkeypatch):
+    """Fail-open: senza la skill si parla. Un consiglio di troppo costa un
+    turno, un guard muto per un import rotto costa la finestra."""
+    bridge = _load_bridge()
+    monkeypatch.setattr(bridge, "_load_skill_module", lambda *a, **k: None)
+    assert bridge._pace_guard_within_hours(True, False) is True
+    # …ma un work_phase=OFF esplicito resta un no: lì il tick ha già deciso
+    # che nessuna LLM va svegliata.
+    assert bridge._pace_guard_within_hours(False, False) is False
 
 
 # ── Robustezza ──────────────────────────────────────────────────────────

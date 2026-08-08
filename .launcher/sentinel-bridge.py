@@ -1535,7 +1535,41 @@ def _should_advise_captain(result, state, now_ts):
     return (now_ts - (state.get("ts") or 0.0)) >= PACE_ADVICE_COOLDOWN_MIN * 60
 
 
-def _pace_guard_step(entry):
+def _pace_guard_within_hours(within_hours, burn_intent_on):
+    """Il guard può parlare adesso? (gate orario di [PACE-GUARD-IGNORES-WORK-PHASE])
+
+    Il consiglio di pacing costa un TURNO DEL CAPITANO: nella notte 29-30/07 un
+    tick ogni 15 minuti ha tenuto sveglio il coordinatore fino al mattino a
+    ~9%/h di weekly, per frenare un team che fuori finestra non stava correndo.
+    Il guard misurava una curva vera e la consegnava a chi non doveva lavorare.
+
+    Tre sorgenti, in quest'ordine, perché rispondono a domande diverse:
+      • deroga burn-intent → l'utente ha DECISO di lavorare stanotte: si parla
+        (stessa deroga che il tick applica poco sopra a `within_hours`);
+      • `within_hours` del tick (work_phase dal pacing-bridge) → se lì è OFF,
+        nessuna LLM va svegliata e il guard non fa eccezione;
+      • `working_hours.is_within_working_hours()` → la config dell'utente letta
+        DIRETTAMENTE: copre il caso in cui il pacing-bridge non scrive il target
+        (work_phase None = "24/7 per back-compat") mentre la finestra esiste.
+
+    Fail-open: skill non caricabile o errore → True. Un consiglio di troppo
+    costa un turno, un guard muto per un import rotto costa la finestra.
+    """
+    if burn_intent_on:
+        return True
+    if not within_hours:
+        return False
+    mod = _load_skill_module("working_hours", "working_hours.py")
+    fn = getattr(mod, "is_within_working_hours", None) if mod else None
+    if not callable(fn):
+        return True
+    try:
+        return bool(fn())
+    except Exception:  # noqa: BLE001 — vedi fail-open sopra
+        return True
+
+
+def _pace_guard_step(entry, within_hours=True, burn_intent_on=False):
     """Consiglio di pacing sulla curva della finestra (shared/skills/pace_guard.py).
 
     Il bridge MISURA e RACCOMANDA, non tocca il throttle: scrive nel pane del
@@ -1550,6 +1584,12 @@ def _pace_guard_step(entry):
     WORKER_FLOOR di 5 minuti (applicato da throttle-config.py a ogni lettura) e
     il daily hard-stop più sotto in main(). Frenare per stare sulla curva è
     pacing; impedire il disastro è un'altra cosa.
+
+    Fuori dalla finestra di lavoro il campione si scrive nel log e basta: la
+    misura non costa niente, la sveglia del Capitano sì (vedi
+    `_pace_guard_within_hours`). Il consiglio NON si accumula — alla riapertura
+    il primo tick attuabile è di nuovo un edge e parte subito, perché lo stato
+    dell'ultimo consiglio resta intatto mentre si tace.
 
     Fail-safe per costruzione: qualunque errore lascia il bridge intatto e il
     throttle dov'era. Disattivabile con JHT_PACE_GUARD=0.
@@ -1574,7 +1614,9 @@ def _pace_guard_step(entry):
         result["applied"] = False
         result["advice"] = mod.advice_line(
             result, workers, mod.advisable_workers(workers))
-        if _should_advise_captain(result, _pace_advice_state, now_ts):
+        in_hours = _pace_guard_within_hours(within_hours, burn_intent_on)
+        result["within_working_hours"] = in_hours
+        if in_hours and _should_advise_captain(result, _pace_advice_state, now_ts):
             result["advised"] = True
             result["delivered_via_tmux"] = _notify_captain_pace_guard(result)
             _pace_advice_state.update({
@@ -1584,6 +1626,10 @@ def _pace_guard_step(entry):
             })
         else:
             result["advised"] = False
+            if not in_hours:
+                # Il sample resta, la sveglia no: è la riga che distingue
+                # "guard silenzioso perché è notte" da "guard morto".
+                result["silenced"] = "outside-working-hours"
             if not result.get("recommends_change"):
                 # Rientrati in pari (spesso perché il Capitano ha applicato):
                 # si dimentica l'ultimo consiglio, così la prossima deriva
@@ -2271,7 +2317,11 @@ def main():
             entry["source"] = "bridge"
             write_jsonl(entry)
             write_log(entry)
-            _pace_guard_step(entry)
+            # Il gate orario calcolato in testa al tick vale anche qui: il
+            # consiglio di pacing sveglia il Capitano come qualunque altro
+            # messaggio, e fuori finestra nessuna LLM va svegliata.
+            _pace_guard_step(entry, within_hours=within_hours,
+                             burn_intent_on=_bi_on)
 
             # Vitals RAM/CPU (2026-06-18): campiona a OGNI tick su vitals.jsonl
             # (file dedicato — NON nel tick Sentinella, che resta sul flusso quota).
