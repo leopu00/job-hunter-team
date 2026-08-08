@@ -54,9 +54,9 @@ describe("quale device è il box", () => {
       row({ id: "vivo", client_seen_at: "2026-08-08T09:00:00Z" }),
     ];
     expect(pickActiveBox(tokens, null)?.id).toBe("vivo");
-    expect(pickActiveBox([row({ id: "solo", client_seen_at: null })], null)).toBe(
-      null,
-    );
+    expect(
+      pickActiveBox([row({ id: "solo", client_seen_at: null })], null),
+    ).toBe(null);
   });
 
   it("un active_device_id che non corrisponde a nessun token non inventa", () => {
@@ -74,7 +74,10 @@ describe("cosa il box dichiara di saper fare", () => {
   });
 
   it("ha parlato e la capability non c'è: no — è l'unico caso che blocca", () => {
-    const old = row({ client_capabilities: ["file-bridge"], client_version: "0.3.1" });
+    const old = row({
+      client_capabilities: ["file-bridge"],
+      client_version: "0.3.1",
+    });
     expect(boxSupports(old, "chat")).toBe("no");
     expect(chatComposerBlocked(old)).toBe(true);
   });

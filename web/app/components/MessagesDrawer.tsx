@@ -234,7 +234,7 @@ export default function MessagesDrawer() {
   const td = makeT(CHAT_DELIVERY_T, locale);
   // Stessa lettura di /messages: la corsia dice se qualcuno sta ancora
   // rispondendo al campanello, la riga dice se QUESTO turno è arrivato.
-  const lane = useChatLaneLive();
+  const { lane, refresh: refreshLane } = useChatLaneLive();
   const box = useBoxClient();
   const composerBlocked = chatComposerBlocked(box);
   const blockedNotice = box?.client_version
@@ -260,11 +260,25 @@ export default function MessagesDrawer() {
   }, [waiting]);
   const stalled = active ? hasStalledTurn(active.messages, lane, clock) : false;
 
+  // Quando la consegna riparte, l'esito dell'ultimo richiamo non ha più
+  // niente da dire: lasciarlo lì significherebbe ritrovarsi «richiesta
+  // rimandata al box» addosso al prossimo turno che si ferma, come se
+  // fosse la risposta a quello.
+  useEffect(() => {
+    if (!stalled) setRetryState("idle");
+  }, [stalled]);
+
   /** Richiama il box per i turni che non ha ritirato. Vedi MessagesList. */
   async function handleRetryDelivery() {
     if (retryState === "sending") return;
     setRetryState("sending");
-    setRetryState((await retryChatSignal()) ? "done" : "failed");
+    const ok = await retryChatSignal();
+    setRetryState(ok ? "done" : "failed");
+    // Il campanello è stato riscritto: la corsia va riletta adesso. Con
+    // Realtime attivo l'evento arriverebbe comunque, ma quando non c'è —
+    // socket caduto, websocket bloccati — senza questa rilettura il
+    // messaggio direbbe «fatto» mentre la bolla resta gialla.
+    if (ok) refreshLane();
   }
 
   // Aprire una chat marca come letti i suoi non letti (stile messenger).

@@ -41,7 +41,10 @@ interface TokenRow {
   client_capabilities?: string[] | null;
 }
 
-type PostgrestFailure = { code?: string | null; message?: string | null } | null;
+type PostgrestFailure = {
+  code?: string | null;
+  message?: string | null;
+} | null;
 
 // Una volta scoperto che la 064 non c'è, non si ritenta la select estesa a
 // ogni request: il flag vive quanto l'istanza serverless, e un deploy dello

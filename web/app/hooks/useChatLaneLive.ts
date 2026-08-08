@@ -19,7 +19,7 @@
 // canale parte con role anon e la RLS blocca in silenzio ogni evento
 // (gotcha E2E 2026-05-23).
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { ChatLane } from "@/lib/chat-delivery";
 
@@ -28,8 +28,28 @@ type LaneRow = {
   chat_delivered_at?: string | null;
 };
 
-export function useChatLaneLive(): ChatLane | null {
+export interface ChatLaneLive {
+  lane: ChatLane | null;
+  /**
+   * Rilegge la corsia adesso.
+   *
+   * Serve dopo un'azione che la cambia — «richiama il box» riscrive
+   * `chat_requested_at` — perché l'unico aggiornamento automatico è
+   * l'evento Realtime, e Realtime può non esserci: Safari su http, un
+   * socket caduto, una rete che blocca i websocket. In quei casi la
+   * richiesta partiva davvero, il messaggio diceva «fatto» e la bolla
+   * restava gialla: l'interfaccia contraddiceva sé stessa proprio nel
+   * momento in cui l'utente aveva appena agito.
+   */
+  refresh: () => void;
+}
+
+export function useChatLaneLive(): ChatLaneLive {
   const [lane, setLane] = useState<ChatLane | null>(null);
+  // La lettura di catch-up vive dentro l'effect (ha bisogno del client e
+  // della guardia `cancelled`): la ref è il modo di offrirla a chi sta
+  // fuori senza duplicarla né rifare la subscribe.
+  const catchUpRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -62,6 +82,7 @@ export function useChatLaneLive(): ChatLane | null {
       }
     };
 
+    catchUpRef.current = () => void catchUp();
     void catchUp();
 
     // Local mode / mock: niente websocket, resta il solo catch-up.
@@ -103,9 +124,14 @@ export function useChatLaneLive(): ChatLane | null {
 
     return () => {
       cancelled = true;
+      catchUpRef.current = null;
       if (channel) void supabase.removeChannel(channel);
     };
   }, []);
 
-  return lane;
+  const refresh = useCallback(() => {
+    catchUpRef.current?.();
+  }, []);
+
+  return { lane, refresh };
 }

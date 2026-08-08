@@ -21,8 +21,8 @@
  * difetto da cui nasce la voce di backlog.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import {
   CLIENT_CAPABILITIES,
   clientHeaderValue,
@@ -65,7 +65,25 @@ describe("dichiarazione del client (CLI)", () => {
     });
     expect(headers.Authorization).toBe("Bearer jht_sync_abc");
     expect(headers["Content-Type"]).toBe("application/json");
-    expect(headers["X-JHT-Client"]).toContain("version=");
+    // Non `toContain("version=")`: quella passerebbe anche con
+    // `version=undefined`, cioè proprio col caso da escludere. Si pretende
+    // il valore vero, e che sia un numero di versione.
+    expect(headers["X-JHT-Client"]).toContain(
+      `version=${clientIdentity().version}`,
+    );
+    expect(headers["X-JHT-Client"]).toMatch(/version=\d+\.\d+\.\d+/);
+  });
+
+  it("un campo senza valore si omette, non diventa la stringa undefined", () => {
+    // `version=undefined` è fatto di caratteri ammessi: passerebbe per una
+    // versione e finirebbe in colonna, dove nessuno saprebbe distinguere
+    // «non dichiarata» da «dichiarata male».
+    expect(formatClientHeader({})).toBe("");
+    expect(formatClientHeader({ platform: "linux" })).toBe("platform=linux");
+    expect(
+      formatClientHeader({ version: undefined, platform: "linux" }),
+    ).not.toContain("undefined");
+    expect(parseClientHeader(formatClientHeader({}))).toBeNull();
   });
 });
 
@@ -115,6 +133,17 @@ describe("lettura della dichiarazione (web)", () => {
     expect(parseClientHeader(`version=0.3.5; x=${"a".repeat(600)}`)).toBeNull();
   });
 
+  it("«undefined» non è una versione, per quanto ben formata sembri", () => {
+    // Secondo giro di chiave: il CLI ormai omette i campi vuoti, ma il
+    // parser legge anche client che non scriviamo noi.
+    expect(parseClientHeader("version=undefined")).toBeNull();
+    expect(parseClientHeader("version=null; platform=linux")).toEqual({
+      version: null,
+      platform: "linux",
+      capabilities: [],
+    });
+  });
+
   it("deduplica le capability e ne limita il numero", () => {
     expect(parseClientHeader("capabilities=chat,chat,file-bridge")).toEqual({
       version: null,
@@ -122,9 +151,9 @@ describe("lettura della dichiarazione (web)", () => {
       capabilities: ["chat", "file-bridge"],
     });
     const many = Array.from({ length: 50 }, (_, i) => `cap-${i}`).join(",");
-    expect(parseClientHeader(`capabilities=${many}`)?.capabilities).toHaveLength(
-      32,
-    );
+    expect(
+      parseClientHeader(`capabilities=${many}`)?.capabilities,
+    ).toHaveLength(32);
     // Una capability sporca cade da sola, senza portarsi via le altre.
     expect(
       parseClientHeader("capabilities=chat,NON valida!,tickets")?.capabilities,
@@ -133,7 +162,11 @@ describe("lettura della dichiarazione (web)", () => {
 });
 
 describe("scrittura su cloud_sync_tokens", () => {
-  const declared = { version: "0.3.5", platform: "linux", capabilities: ["chat"] };
+  const declared = {
+    version: "0.3.5",
+    platform: "linux",
+    capabilities: ["chat"],
+  };
 
   it("non riscrive una dichiarazione identica", () => {
     // Il box ripete lo stesso header per settimane: senza questo confronto
@@ -152,9 +185,9 @@ describe("scrittura su cloud_sync_tokens", () => {
   });
 
   it("riconosce un aggiornamento del box in ognuno dei tre campi", () => {
-    expect(
-      clientIdentityChanged({ client_version: "0.3.4" }, declared),
-    ).toBe(true);
+    expect(clientIdentityChanged({ client_version: "0.3.4" }, declared)).toBe(
+      true,
+    );
     expect(
       clientIdentityChanged(
         { client_version: "0.3.5", client_platform: "macos" },
@@ -199,7 +232,7 @@ describe("il web può arrivare prima della migration", () => {
     expect(missingClientColumns({ code: "42703" })).toBe(true);
     expect(
       missingClientColumns({
-        message: 'column cloud_sync_tokens.client_version does not exist',
+        message: "column cloud_sync_tokens.client_version does not exist",
       }),
     ).toBe(true);
   });
@@ -209,9 +242,9 @@ describe("il web può arrivare prima della migration", () => {
     // trattassimo come "colonne assenti" nasconderemmo il guasto dietro un
     // secondo tentativo identico.
     expect(missingClientColumns(null)).toBe(false);
-    expect(missingClientColumns({ code: "PGRST301", message: "JWT expired" })).toBe(
-      false,
-    );
+    expect(
+      missingClientColumns({ code: "PGRST301", message: "JWT expired" }),
+    ).toBe(false);
     expect(missingClientColumns({ message: "connection refused" })).toBe(false);
   });
 
@@ -230,24 +263,53 @@ describe("il web può arrivare prima della migration", () => {
 });
 
 describe("nessuna corsia cloud-sync senza firma", () => {
-  // Sorgenti che parlano con le NOSTRE route cloud-sync. Fuori lista restano
-  // supabase-direct.js (PostgREST) e l'upload su signed URL del file bridge:
-  // lì l'header non ha un lettore e sarebbe solo rumore.
-  const SIGNED = [
-    "commands/cloud.js",
-    "lib/chat-sync.js",
-    "lib/file-bridge-poller.js",
-    "lib/user-messages-poller.js",
-    "lib/team-commands-poller.js",
-    "lib/team-state-reconciler.js",
-    "lib/sync-rendezvous.js",
-  ];
+  // I file NON si elencano: si scoprono. Una lista scritta a mano dice
+  // «questi sette sono a posto», che non è la promessa del titolo — un
+  // poller nuovo con l'header montato a mano non comparirebbe in lista e
+  // passerebbe indisturbato, cioè esattamente il caso da intercettare.
+  function jsSourcesUnder(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...jsSourcesUnder(full));
+      else if (entry.name.endsWith(".js")) out.push(full);
+    }
+    return out;
+  }
 
-  it.each(SIGNED)("%s costruisce gli header dall'helper", (relative) => {
-    const source = readFileSync(join(CLI_ROOT, relative), "utf-8");
-    expect(source).toContain("cloudSyncHeaders");
-    // Un `Authorization` scritto a mano è una corsia che non dichiara nulla:
-    // il box resterebbe autenticato e invisibile insieme.
-    expect(source).not.toMatch(/Authorization: `Bearer/);
+  // Le uniche eccezioni ammesse, ognuna con la sua ragione. Sono chiamate
+  // che NON vanno alle nostre route, quindi un `X-JHT-Client` lì non
+  // avrebbe alcun lettore.
+  const EXEMPT: Record<string, string> = {
+    "lib/supabase-direct.js": "parla con PostgREST, non con le nostre route",
+    "lib/client-identity.js": "è l'helper stesso: qui l'header si costruisce",
+  };
+
+  const handRolled = jsSourcesUnder(CLI_ROOT)
+    .filter((file) =>
+      /Authorization: `Bearer/.test(readFileSync(file, "utf-8")),
+    )
+    .map((file) => relative(CLI_ROOT, file))
+    .filter((rel) => !(rel in EXEMPT));
+
+  it("nessun sorgente monta l'header di autenticazione a mano", () => {
+    // Un `Authorization` scritto a mano è una corsia che non dichiara
+    // nulla: quel box resterebbe autenticato e invisibile insieme, che è
+    // il difetto da cui nasce tutto questo lavoro. Se il file nuovo parla
+    // con qualcos'altro, va aggiunto a EXEMPT **con la sua ragione** —
+    // l'eccezione è ammessa, l'omissione silenziosa no.
+    expect(handRolled).toEqual([]);
+  });
+
+  it("i sorgenti che chiamano le nostre route passano dall'helper", () => {
+    const users = jsSourcesUnder(CLI_ROOT)
+      .filter((file) => /cloudSyncHeaders\(/.test(readFileSync(file, "utf-8")))
+      .map((file) => relative(CLI_ROOT, file));
+    // Se questo insieme si svuotasse, il test sopra passerebbe per il
+    // motivo sbagliato: nessuno monta l'header a mano perché nessuno lo
+    // monta più affatto.
+    expect(users.length).toBeGreaterThanOrEqual(7);
+    expect(users).toContain("commands/cloud.js");
+    expect(users).toContain("lib/chat-sync.js");
   });
 });

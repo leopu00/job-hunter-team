@@ -159,7 +159,9 @@ describe("effetto sullo stato di consegna", () => {
     const corrected = browserNow + currentClockOffset();
     const justOver = {
       ...justSent,
-      created_at: new Date(SERVER_MS - CHAT_DELIVERY_STALE_MS - 1000).toISOString(),
+      created_at: new Date(
+        SERVER_MS - CHAT_DELIVERY_STALE_MS - 1000,
+      ).toISOString(),
     };
     expect(chatTurnDelivery(justOver, null, corrected)).toBe("stalled");
   });
