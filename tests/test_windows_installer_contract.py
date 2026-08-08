@@ -22,6 +22,8 @@ GAME_WORKFLOW = ROOT / ".github" / "workflows" / "game.yml"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish-signed-release.yml"
 SMOKE_WORKFLOW = ROOT / ".github" / "workflows" / "windows-installer-smoke.yml"
 HEALTH_PCK_GATE = ROOT / "game" / "tools" / "windows_update_health_pck_test.ps1"
+GAME_BOOT = ROOT / "game" / "scripts" / "game.gd"
+UPDATE_SERVICE = ROOT / "game" / "scripts" / "support" / "update_service.gd"
 DOWNLOAD_CLIENT = ROOT / "web" / "app" / "download" / "DownloadClient.tsx"
 DOWNLOAD_FUNNEL = ROOT / "web" / "lib" / "download-funnel.ts"
 UPDATE_HELPER = ROOT / "scripts" / "jht-windows-update.ps1"
@@ -852,12 +854,22 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
         "AccessControlType]::Deny",
         "health consumer created an absent capability",
         "health consumer mutated a hostile capability",
+        "health case exit mismatch mode=",
+        "consumer_rc=",
+        "outcome=",
+        "WINDOWS-UPDATE-HEALTH code=",
+        "WINDOWS-UPDATE-HEALTH-NORMAL-WORK",
+        "'normal','positive','absent','hostile','nonce-only'",
+        "'path-only','invalid-nonce','invalid-path','journal-absent'",
+        "'journal-malformed','pid-mismatch','start-invalid'",
+        "WINDOWS-UPDATE-HEALTH-PCK-CASE mode=",
         "WINDOWS-UPDATE-HEALTH-PCK-TEST PASS",
     ):
         assert contract in gate
     assert "health.json.tmp-*" in gate
     assert "Set-Acl" not in gate
     assert "Get-Acl" not in gate
+    assert "WriteLine($consumerLog)" not in gate
 
     invocation = "./tools/windows_update_health_pck_test.ps1"
     for workflow_path in (GAME_WORKFLOW, RELEASE_WORKFLOW):
@@ -866,3 +878,69 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
         step = workflow[workflow.index(invocation) - 180 : workflow.index(invocation) + 180]
         assert "if: runner.os == 'Windows'" in step, workflow_path
         assert "shell: powershell" in step, workflow_path
+
+
+def test_windows_health_boot_is_path_free_and_fail_closed() -> None:
+    service = UPDATE_SERVICE.read_text()
+    codes = set(
+        re.findall(r'^const HEALTH_ACK_[A-Z_]+ := "([a-z_]+)"$', service, re.M)
+    )
+    assert codes == {
+        "health_written",
+        "health_env_partial",
+        "health_nonce_invalid",
+        "health_path_invalid",
+        "health_capability_absent",
+        "health_journal_absent",
+        "health_journal_open_failed",
+        "health_journal_read_failed",
+        "health_journal_invalid",
+        "health_process_invalid",
+        "health_frame_invalid",
+        "health_capability_open_failed",
+        "health_capability_write_failed",
+        "health_capability_flush_failed",
+    }
+    for contract in (
+        "_windows_health_protocol_requested()",
+        'print("WINDOWS-UPDATE-HEALTH code=", code)',
+        "Game.complete_windows_health_boot(false)",
+        "get_tree().quit(1)",
+        "Game.complete_windows_health_boot(true)",
+        "FileAccess.open(path, FileAccess.WRITE)",
+        "not file.store_string",
+        "file.flush()",
+        "file.get_error()",
+    ):
+        assert contract in service
+    assert service.index("Game.complete_windows_health_boot(false)") < service.index(
+        "get_tree().quit(1)"
+    )
+
+    guarded_components = {
+        "game/scripts/backend/backend_bus.gd": "backend",
+        "game/scripts/setup/setup_service.gd": "setup",
+        "game/scripts/setup/scripted_onboarding.gd": "onboarding",
+        "game/scripts/setup/tour_guide.gd": "tour",
+        "game/scripts/support/feedback_service.gd": "feedback",
+        "game/scripts/sfx.gd": "sfx",
+        "game/scripts/title.gd": "title",
+    }
+    for relative, component in guarded_components.items():
+        source = (ROOT / relative).read_text()
+        assert "await Game.windows_health_boot_allowed()" in source, relative
+        assert (
+            f'Game.mark_windows_health_normal_work("{component}")' in source
+        ), relative
+    game = GAME_BOOT.read_text()
+    assert "signal windows_health_boot_completed(ok: bool)" in game
+    assert "func windows_health_boot_allowed() -> bool:" in game
+    assert "_windows_health_boot_requested" in game
+    assert "_windows_health_boot_completed" in game
+    assert "_windows_health_boot_ok" in game
+    protocol = (
+        ROOT / "game/scripts/support/windows_update_protocol.gd"
+    ).read_text()
+    assert "static func health_boot_gate(requested: bool, completed: bool," in protocol
+    selftest = (ROOT / "game/tools/update_check_selftest.gd").read_text()
+    assert "health failure nega anche il subscriber tardivo" in selftest

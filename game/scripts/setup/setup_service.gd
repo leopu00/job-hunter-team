@@ -105,6 +105,9 @@ func busy() -> bool:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if not await Game.windows_health_boot_allowed():
+		return
+	Game.mark_windows_health_normal_work("setup")
 	if OS.get_environment("JHT_VPS_SETUP_TEST") == "1":
 		_self_test_vps_setup.call_deferred()
 		return

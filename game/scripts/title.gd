@@ -17,6 +17,13 @@ var _language_picker: Control
 var _language_test_choice := ""
 
 func _ready() -> void:
+	if not await Game.windows_health_boot_allowed():
+		return
+	_start_normal_title_boot()
+
+
+func _start_normal_title_boot() -> void:
+	Game.mark_windows_health_normal_work("title")
 	theme = TerminalTheme.get_theme()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	if TutorialHarness.cleanup_test():

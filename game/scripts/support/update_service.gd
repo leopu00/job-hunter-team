@@ -52,6 +52,21 @@ const WINDOWS_SIGNATURE_BYTES := 384
 const WINDOWS_HELPER_MAX_BYTES := 4 * 1024 * 1024
 const WINDOWS_DESKTOP_MAX_BYTES := 1024 * 1024 * 1024
 
+const HEALTH_ACK_WRITTEN := "health_written"
+const HEALTH_ACK_ENV_PARTIAL := "health_env_partial"
+const HEALTH_ACK_NONCE_INVALID := "health_nonce_invalid"
+const HEALTH_ACK_PATH_INVALID := "health_path_invalid"
+const HEALTH_ACK_CAPABILITY_ABSENT := "health_capability_absent"
+const HEALTH_ACK_JOURNAL_ABSENT := "health_journal_absent"
+const HEALTH_ACK_JOURNAL_OPEN_FAILED := "health_journal_open_failed"
+const HEALTH_ACK_JOURNAL_READ_FAILED := "health_journal_read_failed"
+const HEALTH_ACK_JOURNAL_INVALID := "health_journal_invalid"
+const HEALTH_ACK_PROCESS_INVALID := "health_process_invalid"
+const HEALTH_ACK_FRAME_INVALID := "health_frame_invalid"
+const HEALTH_ACK_CAPABILITY_OPEN_FAILED := "health_capability_open_failed"
+const HEALTH_ACK_CAPABILITY_WRITE_FAILED := "health_capability_write_failed"
+const HEALTH_ACK_CAPABILITY_FLUSH_FAILED := "health_capability_flush_failed"
+
 var phase := PHASE_IDLE
 var latest_version := ""
 var release_page := UpdateCheck.RELEASES_PAGE
@@ -90,6 +105,14 @@ var _check_manual := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if _windows_health_protocol_requested():
+		_run_windows_health_protocol.call_deferred()
+		return
+	_start_normal_update_service()
+
+
+func _start_normal_update_service() -> void:
+	Game.mark_windows_health_normal_work("update")
 	var cfg := ConfigFile.new()
 	if cfg.load(UpdateCheck.CONFIG_PATH) == OK:
 		last_check = float(cfg.get_value("update", "last_check", 0.0))
@@ -101,11 +124,27 @@ func _ready() -> void:
 				"update", "highest_committed_sequence", 0))
 		pending_nonce = str(cfg.get_value("update", "pending_nonce", ""))
 		pending_version = str(cfg.get_value("update", "pending_version", ""))
-	_write_windows_health_ack.call_deferred()
 	_resume_windows_pending.call_deferred()
 	# Mai direttamente da _ready: qui l'albero non è ancora completo, e questo
 	# autoload interroga il DisplayServer e apre una connessione di rete.
 	_boot.call_deferred()
+
+
+func _windows_health_protocol_requested() -> bool:
+	return OS.get_name() == "Windows" and (
+			OS.get_environment("JHT_UPDATE_NONCE") != ""
+			or OS.get_environment("JHT_UPDATE_HEALTH_PATH") != "")
+
+
+func _run_windows_health_protocol() -> void:
+	var code := await _write_windows_health_ack()
+	print("WINDOWS-UPDATE-HEALTH code=", code)
+	if code != HEALTH_ACK_WRITTEN:
+		Game.complete_windows_health_boot(false)
+		get_tree().quit(1)
+		return
+	Game.complete_windows_health_boot(true)
+	_start_normal_update_service()
 
 
 func _boot() -> void:
@@ -768,51 +807,76 @@ func _save_cfg() -> bool:
 	return true
 
 
-## ACK di salute del processo NUOVO. Il helper passa nonce e capability path,
-## crea/protegge prima la directory e, dopo la lettura, riverifica percorso
-## canonico, ACL e hash. Il gioco non considera mai il path un'autorizzazione.
-func _write_windows_health_ack() -> void:
-	if OS.get_name() != "Windows":
-		return
-	var nonce := OS.get_environment("JHT_UPDATE_NONCE").strip_edges()
-	if not WindowsProtocol.valid_nonce(nonce):
-		return
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var executable := OS.get_executable_path()
-	var digest := FileAccess.get_sha256(executable)
-	var path := WindowsProtocol.health_capability_path(
-			OS.get_environment("JHT_UPDATE_HEALTH_PATH"), nonce)
-	if path == "" or not DirAccess.dir_exists_absolute(
-			path.get_base_dir()) or not FileAccess.file_exists(path):
-		return
+## ACK di salute del processo NUOVO. Se uno dei due env di protocollo è
+## presente, il bootstrap diventa obbligatorio: nessun errore può degradare a
+## un avvio ordinario senza ACK. I codici sono deliberatamente path-free; il
+## helper conserva l'autorità su percorso, owner, DACL, hash e process handle.
+func _write_windows_health_ack() -> String:
+	var raw_nonce := OS.get_environment("JHT_UPDATE_NONCE")
+	var raw_path := OS.get_environment("JHT_UPDATE_HEALTH_PATH")
+	if raw_nonce == "" or raw_path == "":
+		return HEALTH_ACK_ENV_PARTIAL
+	var nonce := raw_nonce.strip_edges()
+	if nonce != raw_nonce or not WindowsProtocol.valid_nonce(nonce):
+		return HEALTH_ACK_NONCE_INVALID
+	var path := WindowsProtocol.health_capability_path(raw_path, nonce)
+	if path == "":
+		return HEALTH_ACK_PATH_INVALID
+	if not DirAccess.dir_exists_absolute(path.get_base_dir()) \
+			or not FileAccess.file_exists(path):
+		return HEALTH_ACK_CAPABILITY_ABSENT
+
 	# Il helper crea il candidato sospeso, annota PID/start-time nel proprio
 	# journal protetto e soltanto dopo lo fa partire. Il processo nuovo non
 	# inventa quel token dall'orologio: lo riecheggia; il helper lo confronta
 	# comunque con la process handle e col path/hash misurati in proprio.
-	var journal_value: Variant = JSON.parse_string(FileAccess.get_file_as_string(
-			path.get_base_dir().path_join("journal.json")))
+	var journal_path := path.get_base_dir().path_join("journal.json")
+	if not FileAccess.file_exists(journal_path):
+		return HEALTH_ACK_JOURNAL_ABSENT
+	var journal_file := FileAccess.open(journal_path, FileAccess.READ)
+	if journal_file == null:
+		return HEALTH_ACK_JOURNAL_OPEN_FAILED
+	var journal_text := journal_file.get_as_text()
+	var journal_error := journal_file.get_error()
+	journal_file.close()
+	if journal_error != OK:
+		return HEALTH_ACK_JOURNAL_READ_FAILED
+	var journal_value: Variant = JSON.parse_string(journal_text)
 	if not (journal_value is Dictionary):
-		return
+		return HEALTH_ACK_JOURNAL_INVALID
 	var journal: Dictionary = journal_value
 	var candidate_pid_value: Variant = journal.get("candidate_pid")
-	if typeof(candidate_pid_value) not in [TYPE_INT, TYPE_FLOAT] \
-			or int(candidate_pid_value) != OS.get_process_id():
-		return
+	if typeof(candidate_pid_value) not in [TYPE_INT, TYPE_FLOAT]:
+		return HEALTH_ACK_PROCESS_INVALID
+	var candidate_pid := int(candidate_pid_value)
+	if float(candidate_pid_value) != float(candidate_pid) \
+			or candidate_pid != OS.get_process_id():
+		return HEALTH_ACK_PROCESS_INVALID
+
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var executable := OS.get_executable_path()
+	var digest := FileAccess.get_sha256(executable)
 	var started := str(journal.get("candidate_started", ""))
 	var frame := WindowsProtocol.health_frame(nonce, current_version(), executable,
-			digest, OS.get_process_id(), started)
+			digest, candidate_pid, started)
 	if frame.is_empty():
-		return
+		return HEALTH_ACK_FRAME_INVALID
 	# Il helper precrea la capability con owner/DACL e identità già attestati.
 	# Scrivere in-place preserva quell'identità; il processo candidato non può
 	# sostituire il nodo privilegiato con un file materializzato dal checkout.
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
-		return
-	file.store_string(JSON.stringify(frame) + "\n")
+		return HEALTH_ACK_CAPABILITY_OPEN_FAILED
+	if not file.store_string(JSON.stringify(frame) + "\n"):
+		file.close()
+		return HEALTH_ACK_CAPABILITY_WRITE_FAILED
 	file.flush()
+	var flush_error := file.get_error()
 	file.close()
+	if flush_error != OK:
+		return HEALTH_ACK_CAPABILITY_FLUSH_FAILED
+	return HEALTH_ACK_WRITTEN
 
 
 func _join_thread() -> void:

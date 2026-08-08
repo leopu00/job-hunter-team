@@ -1,12 +1,15 @@
 extends Node
 ## Autoload `Game`: stato globale, profilo giocatore, cambio scena, pausa.
 
+signal windows_health_boot_completed(ok: bool)
+
 enum State { TITLE, WIZARD, OFFICE }
 
 const SCENE_TITLE := "res://scenes/title.tscn"
 const SCENE_WIZARD := "res://scenes/wizard.tscn"
 const SCENE_OFFICE := "res://scenes/office.tscn"
 const WindowsVerifier := preload("res://scripts/support/windows_update_verifier.gd")
+const WindowsProtocol := preload("res://scripts/support/windows_update_protocol.gd")
 
 ## Flag locale "onboarding completato": deciso dal wizard quando il
 ## backend dichiara il profilo ready (o l'utente entra con profilo già
@@ -20,6 +23,9 @@ var dialogue_active := false
 
 var _pause_menu: Node = null
 var _client_control: ClientControl = null
+var _windows_health_boot_requested := false
+var _windows_health_boot_completed := false
+var _windows_health_boot_ok := false
 
 func _enter_tree() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -44,6 +50,43 @@ func _enter_tree() -> void:
 				usable.position + usable.size - wsize - Vector2i(8, 8))
 
 func _ready() -> void:
+	_windows_health_boot_requested = OS.get_name() == "Windows" and (
+			OS.get_environment("JHT_UPDATE_NONCE") != ""
+			or OS.get_environment("JHT_UPDATE_HEALTH_PATH") != "")
+	if _windows_health_boot_requested:
+		return
+	_start_normal_game_boot()
+
+
+func windows_health_boot_pending() -> bool:
+	return _windows_health_boot_requested and not _windows_health_boot_completed
+
+
+func windows_health_boot_allowed() -> bool:
+	var gate := WindowsProtocol.health_boot_gate(_windows_health_boot_requested,
+			_windows_health_boot_completed, _windows_health_boot_ok)
+	if gate != WindowsProtocol.HEALTH_BOOT_PENDING:
+		return gate == WindowsProtocol.HEALTH_BOOT_ALLOW
+	return await windows_health_boot_completed
+
+
+func mark_windows_health_normal_work(component: String) -> void:
+	if OS.get_environment("JHT_WINDOWS_UPDATE_HEALTH_BOOT_TEST") == "1":
+		print("WINDOWS-UPDATE-HEALTH-NORMAL-WORK component=", component)
+
+
+func complete_windows_health_boot(ok: bool) -> void:
+	if not _windows_health_boot_requested or _windows_health_boot_completed:
+		return
+	_windows_health_boot_completed = true
+	_windows_health_boot_ok = ok
+	if ok:
+		_start_normal_game_boot()
+	windows_health_boot_completed.emit(ok)
+
+
+func _start_normal_game_boot() -> void:
+	mark_windows_health_normal_work("game")
 	# Gate dell'ARTEFATTO Windows: deve leggere la root dal PCK esportato, non
 	# dal checkout del runner. Un filtro export regressivo fallisce il tag.
 	if OS.get_environment("JHT_WINDOWS_UPDATE_TRUST_TEST") == "1":

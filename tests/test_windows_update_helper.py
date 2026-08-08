@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -949,10 +950,10 @@ function Assert-FileMatchesArtifact {
 try {
   if ($mode.StartsWith('bundle-') -or $mode.StartsWith('floor-')) {
     Get-FreshBundle | Out-Null
-  } elseif ($mode.StartsWith('journal-')) {
-    Write-Journal $mode.Substring(8) $bundle
   } elseif ($mode -ceq 'journal-process') {
     Update-JournalProcess $journal 123 '100000000000000000'
+  } elseif ($mode.StartsWith('journal-')) {
+    Write-Journal $mode.Substring(8) $bundle
   } elseif ($mode -ceq 'result-write') {
     Write-Result $false 'test' 'test_failed'
   } elseif ($mode.StartsWith('authority-')) {
@@ -1661,10 +1662,86 @@ def test_consumer_uses_file_without_execution_policy_bypass() -> None:
             "func _join_thread"
         )
     ]
-    assert "or not FileAccess.file_exists(path)" in health
+    assert "_windows_health_protocol_requested()" in service
+    assert 'get_tree().quit(1)' in service
+    assert 'print("WINDOWS-UPDATE-HEALTH code=", code)' in service
+    assert 'Game.mark_windows_health_normal_work("update")' in service
+    game = (ROOT / "game/scripts/game.gd").read_text()
+    assert 'print("WINDOWS-UPDATE-HEALTH-NORMAL-WORK component=", component)' in game
+    assert "HEALTH_ACK_ENV_PARTIAL" in health
+    assert "HEALTH_ACK_NONCE_INVALID" in health
+    assert "HEALTH_ACK_PATH_INVALID" in health
+    assert "HEALTH_ACK_CAPABILITY_ABSENT" in health
+    assert "HEALTH_ACK_JOURNAL_INVALID" in health
+    assert "HEALTH_ACK_PROCESS_INVALID" in health
+    assert "HEALTH_ACK_FRAME_INVALID" in health
+    assert "HEALTH_ACK_CAPABILITY_OPEN_FAILED" in health
+    assert "HEALTH_ACK_CAPABILITY_WRITE_FAILED" in health
+    assert "HEALTH_ACK_CAPABILITY_FLUSH_FAILED" in health
     assert "FileAccess.open(path, FileAccess.WRITE)" in health
+    assert "not file.store_string" in health
+    assert "file.flush()" in health
+    assert "file.get_error()" in health
     assert '"%s.tmp-%d"' not in health
     assert "DirAccess.rename_absolute" not in health
+
+
+def test_windows_health_failure_codes_are_closed_and_path_free() -> None:
+    service = (ROOT / "game/scripts/support/update_service.gd").read_text()
+    codes = set(
+        re.findall(r'^const HEALTH_ACK_[A-Z_]+ := "([a-z_]+)"$', service, re.M)
+    )
+    assert codes == {
+        "health_written",
+        "health_env_partial",
+        "health_nonce_invalid",
+        "health_path_invalid",
+        "health_capability_absent",
+        "health_journal_absent",
+        "health_journal_open_failed",
+        "health_journal_read_failed",
+        "health_journal_invalid",
+        "health_process_invalid",
+        "health_frame_invalid",
+        "health_capability_open_failed",
+        "health_capability_write_failed",
+        "health_capability_flush_failed",
+    }
+    assert "path=" not in "\n".join(
+        line for line in service.splitlines() if "WINDOWS-UPDATE-HEALTH code=" in line
+    )
+
+
+def test_windows_health_boot_blocks_normal_autoload_work_until_ack() -> None:
+    guarded_components = {
+        "game/scripts/backend/backend_bus.gd": "backend",
+        "game/scripts/setup/setup_service.gd": "setup",
+        "game/scripts/setup/scripted_onboarding.gd": "onboarding",
+        "game/scripts/setup/tour_guide.gd": "tour",
+        "game/scripts/support/feedback_service.gd": "feedback",
+        "game/scripts/sfx.gd": "sfx",
+        "game/scripts/title.gd": "title",
+    }
+    for relative, component in guarded_components.items():
+        source = (ROOT / relative).read_text()
+        assert "await Game.windows_health_boot_allowed()" in source, relative
+        assert (
+            f'Game.mark_windows_health_normal_work("{component}")' in source
+        ), relative
+
+    game = (ROOT / "game/scripts/game.gd").read_text()
+    assert "signal windows_health_boot_completed(ok: bool)" in game
+    assert "func windows_health_boot_allowed() -> bool:" in game
+    protocol = (
+        ROOT / "game/scripts/support/windows_update_protocol.gd"
+    ).read_text()
+    assert "static func health_boot_gate(requested: bool, completed: bool," in protocol
+    service = (ROOT / "game/scripts/support/update_service.gd").read_text()
+    assert "Game.complete_windows_health_boot(false)" in service
+    assert "Game.complete_windows_health_boot(true)" in service
+    assert service.index("Game.complete_windows_health_boot(false)") < service.index(
+        "get_tree().quit(1)"
+    )
 
 
 def test_restricted_execution_policy_fails_closed(tmp_path: Path) -> None:
@@ -2444,8 +2521,12 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
     if install_candidate:
         shutil.copy2(target, backup)
         shutil.copy2(candidate, target)
-        _set_current_owner(backup)
-        _set_current_owner(target)
+        # These nodes are materialized by Write-ProtectedAtomicFile in the
+        # real promotion.  A crash fixture that only changes owner retains the
+        # checkout/default DACL and turns recovery cleanup into a test of the
+        # fixture rather than of the production boundary.
+        _protect_file_current_only(backup)
+        _protect_file_current_only(target)
         candidate.unlink()
     if install_metadata:
         authority_backup.mkdir()
@@ -2467,7 +2548,7 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
             installed_manifest,
             installed_signature,
         ):
-            _set_current_owner(owned_path)
+            _protect_file_current_only(owned_path)
     if commit_floor:
         _write_compact_json(
             state / "committed-floor.json",
@@ -2477,11 +2558,28 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                 "version": str(journal["target_version"]),
             },
         )
-        _set_current_owner(state / "committed-floor.json")
+        _protect_file_current_only(state / "committed-floor.json")
     if promote_helper:
         shutil.copy2(transaction / HELPER, installed_helper)
-        _set_current_owner(installed_helper)
+        _protect_file_current_only(installed_helper)
 
+    production_owned_files = [journal_path]
+    if install_candidate:
+        production_owned_files.extend((backup, target))
+    if install_metadata:
+        production_owned_files.extend(
+            (
+                authority_backup / HELPER,
+                authority_backup / "RELEASE-MANIFEST.json",
+                authority_backup / "RELEASE-MANIFEST.json.sig",
+                installed_manifest,
+                installed_signature,
+            )
+        )
+    if commit_floor:
+        production_owned_files.append(state / "committed-floor.json")
+    if promote_helper:
+        production_owned_files.append(installed_helper)
     journal["state"] = "helper_intent" if boundary == "helper_promoted" else boundary
     candidate_process: subprocess.Popen[bytes] | None = None
     try:
@@ -2513,7 +2611,14 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                 },
             )
             _protect_file_current_only(transaction / "health.json")
+            production_owned_files.append(transaction / "health.json")
         _write_compact_json(journal_path, journal)
+        for production_owned_file in production_owned_files:
+            assert _file_acl_is_current_only(production_owned_file), (
+                production_owned_file.name
+            )
+        if install_metadata:
+            assert _directory_acl_is_protected(authority_backup)
 
         recovered = subprocess.run(
             _helper_command(

@@ -34,6 +34,18 @@ const RECOVERY_RESTORE_OLD := "restore_old"
 const RECOVERY_CLEANUP_OWNED := "cleanup_owned"
 const RECOVERY_FAIL_CLOSED := "fail_closed"
 
+const HEALTH_BOOT_PENDING := 0
+const HEALTH_BOOT_ALLOW := 1
+const HEALTH_BOOT_DENY := -1
+
+
+static func health_boot_gate(requested: bool, completed: bool, ok: bool) -> int:
+	if not requested:
+		return HEALTH_BOOT_ALLOW
+	if not completed:
+		return HEALTH_BOOT_PENDING
+	return HEALTH_BOOT_ALLOW if ok else HEALTH_BOOT_DENY
+
 
 static func is_lower_hex(value: String, expected_length: int) -> bool:
 	if value.length() != expected_length:

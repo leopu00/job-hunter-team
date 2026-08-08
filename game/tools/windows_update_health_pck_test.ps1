@@ -132,14 +132,16 @@ public sealed class JhtHealthPckProcess : IDisposable {
     [DllImport("kernel32.dll")]
     private static extern bool CloseHandle(IntPtr handle);
 
-    public static JhtHealthPckProcess Create(string inputPath) {
+    public static JhtHealthPckProcess Create(string inputPath, string logPath) {
         string path = Path.GetFullPath(inputPath);
+        string log = Path.GetFullPath(logPath);
         JhtHealthPckProcess value = new JhtHealthPckProcess();
         STARTUPINFO startup = new STARTUPINFO();
         startup.cb = (uint)Marshal.SizeOf(typeof(STARTUPINFO));
         PROCESS_INFORMATION info;
         StringBuilder command = new StringBuilder(
-            "\"" + path + "\" --headless --quit-after 120");
+            "\"" + path + "\" --headless --quit-after 120 --log-file \"" +
+            log + "\"");
         if (!CreateProcess(path, command, IntPtr.Zero, IntPtr.Zero, false,
             CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, IntPtr.Zero,
             Path.GetDirectoryName(path), ref startup, out info))
@@ -320,7 +322,7 @@ function Write-ExactJournal {
 
 function Assert-NoHealthTemporary {
   param([string]$Directory)
-  if (@(Get-ChildItem -LiteralPath $Directory -Force | Where-Object {
+  if (@(Get-ChildItem -LiteralPath $Directory -Recurse -Force | Where-Object {
       $_.Name -like 'health.json.tmp-*'
     }).Count -ne 0) {
     throw 'exported health consumer left a temporary file'
@@ -361,17 +363,24 @@ function Restore-Environment {
 }
 
 function Invoke-HealthCase {
-  param([string]$Root, [ValidateSet('positive','absent','hostile')][string]$Mode)
+  param(
+    [string]$Root,
+    [ValidateSet('normal','positive','absent','hostile','nonce-only',
+      'path-only','invalid-nonce','invalid-path','journal-absent',
+      'journal-malformed','pid-mismatch','start-invalid')]
+    [string]$Mode)
   $nonce = [guid]::NewGuid().ToString('N')
   $caseRoot = Join-Path $Root $Mode
   $runtimeRoot = Join-Path $caseRoot 'host-runtime'
   $nonceRoot = Join-Path $runtimeRoot $nonce
   $appData = Join-Path $caseRoot 'appdata'
+  $consumerLogPath = Join-Path $caseRoot 'consumer.log'
   foreach ($directory in @($caseRoot, $runtimeRoot, $nonceRoot, $appData)) {
     New-ExactDirectory $directory
   }
   $healthPath = Join-Path $nonceRoot 'health.json'
   $journalPath = Join-Path $nonceRoot 'journal.json'
+  $invalidPath = Join-Path $caseRoot 'invalid-health.json'
   $hostileBytes = [Text.UTF8Encoding]::new($false).GetBytes('hostile-capability')
   if ($Mode -ceq 'positive') {
     New-ExactFile $healthPath ([byte[]]@())
@@ -383,36 +392,66 @@ function Invoke-HealthCase {
   } elseif ($Mode -ceq 'hostile') {
     New-ExactFile $healthPath $hostileBytes
     Set-HostileFileSecurity $healthPath
-    $beforeHostile = Get-FullSnapshot $healthPath
+    $beforeCapability = Get-FullSnapshot $healthPath
+  } elseif ($Mode -in @('journal-absent','journal-malformed','pid-mismatch',
+      'start-invalid')) {
+    New-ExactFile $healthPath ([byte[]]@())
+    $beforeCapability = Get-FullSnapshot $healthPath
+  } elseif ($Mode -ceq 'invalid-path') {
+    New-ExactFile $invalidPath $hostileBytes
+    $beforeInvalid = Get-FullSnapshot $invalidPath
   }
 
   $previous = @{}
   foreach ($name in @('APPDATA','JHT_NOVPS','JHT_UPDATE_HEALTH_PATH',
-      'JHT_UPDATE_NONCE','JHT_UPDATE_NOTICE')) {
+      'JHT_UPDATE_NONCE','JHT_UPDATE_NOTICE',
+      'JHT_WINDOWS_UPDATE_HEALTH_BOOT_TEST')) {
     $previous[$name] = [Environment]::GetEnvironmentVariable($name)
   }
   $env:APPDATA = $appData
   $env:JHT_NOVPS = '1'
-  $env:JHT_UPDATE_HEALTH_PATH = $healthPath
-  $env:JHT_UPDATE_NONCE = $nonce
   $env:JHT_UPDATE_NOTICE = $expectedVersion
+  $env:JHT_WINDOWS_UPDATE_HEALTH_BOOT_TEST = '1'
+  Remove-Item Env:JHT_UPDATE_HEALTH_PATH -ErrorAction SilentlyContinue
+  Remove-Item Env:JHT_UPDATE_NONCE -ErrorAction SilentlyContinue
+  if ($Mode -notin @('normal','nonce-only')) {
+    $env:JHT_UPDATE_HEALTH_PATH = if ($Mode -ceq 'invalid-path') {
+      $invalidPath
+    } else {
+      $healthPath
+    }
+  }
+  if ($Mode -notin @('normal','path-only')) {
+    $env:JHT_UPDATE_NONCE = if ($Mode -ceq 'invalid-nonce') {
+      'invalid'
+    } else {
+      $nonce
+    }
+  }
 
   $suspended = $null
   $process = $null
   try {
-    $suspended = [JhtHealthPckProcess]::Create($Executable)
+    $suspended = [JhtHealthPckProcess]::Create($Executable, $consumerLogPath)
     $process = Get-Process -Id $suspended.ProcessId -ErrorAction Stop
     $started = $process.StartTime.ToUniversalTime().Ticks.ToString()
-    Write-ExactJournal $journalPath $nonce $process.Id $started
+    if ($Mode -in @('positive','absent','hostile')) {
+      Write-ExactJournal $journalPath $nonce $process.Id $started
+    } elseif ($Mode -ceq 'journal-malformed') {
+      New-ExactFile $journalPath (
+        [Text.UTF8Encoding]::new($false).GetBytes('not-json'))
+    } elseif ($Mode -ceq 'pid-mismatch') {
+      Write-ExactJournal $journalPath $nonce ($process.Id + 1) $started
+    } elseif ($Mode -ceq 'start-invalid') {
+      Write-ExactJournal $journalPath $nonce $process.Id 'invalid'
+    }
     $suspended.Resume()
     if (-not $process.WaitForExit(30000)) {
-      throw 'exported health consumer did not exit'
+      throw ('health case timeout mode=' + $Mode)
     }
-    if ($process.ExitCode -ne 0) {
-      throw 'exported health consumer failed'
-    }
+    $consumerExitCode = [int]$process.ExitCode
 
-    Assert-NoHealthTemporary $nonceRoot
+    Assert-NoHealthTemporary $caseRoot
     if ($Mode -ceq 'positive') {
       if ((Get-AuthoritySnapshot $healthPath) -cne $beforeAuthority) {
         throw 'health consumer replaced or changed capability authority'
@@ -444,9 +483,71 @@ function Invoke-HealthCase {
       if (Test-Path -LiteralPath $healthPath) {
         throw 'health consumer created an absent capability'
       }
-    } elseif ((Get-FullSnapshot $healthPath) -cne $beforeHostile) {
+    } elseif ($Mode -in @('hostile','journal-absent','journal-malformed',
+        'pid-mismatch','start-invalid') -and
+        (Get-FullSnapshot $healthPath) -cne $beforeCapability) {
       throw 'health consumer mutated a hostile capability'
+    } elseif ($Mode -ceq 'invalid-path' -and
+        (Get-FullSnapshot $invalidPath) -cne $beforeInvalid) {
+      throw 'health consumer mutated an invalid capability path'
     }
+
+    $expectedCode = switch ($Mode) {
+      'normal' { '' }
+      'positive' { 'health_written' }
+      'absent' { 'health_capability_absent' }
+      'hostile' { 'health_capability_open_failed' }
+      'nonce-only' { 'health_env_partial' }
+      'path-only' { 'health_env_partial' }
+      'invalid-nonce' { 'health_nonce_invalid' }
+      'invalid-path' { 'health_path_invalid' }
+      'journal-absent' { 'health_journal_absent' }
+      'journal-malformed' { 'health_journal_invalid' }
+      'pid-mismatch' { 'health_process_invalid' }
+      'start-invalid' { 'health_frame_invalid' }
+    }
+    $expectedExitCode = if ($Mode -in @('normal','positive')) { 0 } else { 1 }
+    if ($consumerExitCode -ne $expectedExitCode) {
+      throw ('health case exit mismatch mode=' + $Mode +
+        ' consumer_rc=' + $consumerExitCode)
+    }
+    if (-not (Test-Path -LiteralPath $consumerLogPath -PathType Leaf)) {
+      throw ('health case log missing mode=' + $Mode +
+        ' consumer_rc=' + $consumerExitCode)
+    }
+    $consumerLog = [IO.File]::ReadAllText($consumerLogPath)
+    $codeMatches = @([regex]::Matches(
+      $consumerLog,
+      '(?m)^WINDOWS-UPDATE-HEALTH code=([a-z_]+)\r?$'))
+    if ($expectedCode -ceq '') {
+      if ($codeMatches.Count -ne 0) {
+        throw ('health case unexpected protocol mode=' + $Mode +
+          ' consumer_rc=' + $consumerExitCode)
+      }
+    } elseif ($codeMatches.Count -ne 1 -or
+        $codeMatches[0].Groups[1].Value -cne $expectedCode) {
+      throw ('health case code mismatch mode=' + $Mode +
+        ' consumer_rc=' + $consumerExitCode)
+    }
+    $normalWorkMatches = @([regex]::Matches(
+      $consumerLog,
+      '(?m)^WINDOWS-UPDATE-HEALTH-NORMAL-WORK component=' +
+      '(backend|feedback|game|onboarding|setup|sfx|title|tour|update)\r?$'))
+    $normalWork = @($normalWorkMatches | ForEach-Object {
+      $_.Groups[1].Value
+    } | Sort-Object)
+    $expectedNormalWork = if ($Mode -in @('normal','positive')) {
+      @('backend','feedback','game','onboarding','setup','sfx','title','tour','update')
+    } else {
+      @()
+    }
+    if (($normalWork -join ',') -cne ($expectedNormalWork -join ',')) {
+      throw ('health case normal-work mismatch mode=' + $Mode +
+        ' consumer_rc=' + $consumerExitCode)
+    }
+    $outcome = if ($expectedCode -ceq '') { 'normal_boot' } else { $expectedCode }
+    [Console]::Out.WriteLine('WINDOWS-UPDATE-HEALTH-PCK-CASE mode=' +
+      $Mode + ' consumer_rc=' + $consumerExitCode + ' outcome=' + $outcome)
   } finally {
     if ($process -and -not $process.HasExited) {
       try { $process.Kill(); $null = $process.WaitForExit(5000) } catch { }
@@ -461,7 +562,9 @@ $gateRoot = Join-Path ([IO.Path]::GetFullPath($env:RUNNER_TEMP)) (
   'jht-health-pck-' + [guid]::NewGuid().ToString('N'))
 try {
   New-ExactDirectory $gateRoot
-  foreach ($mode in @('positive','absent','hostile')) {
+  foreach ($mode in @('normal','positive','absent','hostile','nonce-only',
+      'path-only','invalid-nonce','invalid-path','journal-absent',
+      'journal-malformed','pid-mismatch','start-invalid')) {
     Invoke-HealthCase $gateRoot $mode
   }
   [Console]::Out.WriteLine('WINDOWS-UPDATE-HEALTH-PCK-TEST PASS')

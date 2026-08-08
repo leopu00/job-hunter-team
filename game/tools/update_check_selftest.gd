@@ -57,6 +57,7 @@ func _init() -> void:
 	_protocollo_windows()
 	_verifier_windows()
 	_source_gate_windows()
+	_health_boot_gate_windows()
 	_ritmo()
 	_firme()
 	_percorsi()
@@ -73,6 +74,23 @@ func _init() -> void:
 func _check(name: String, condition: bool, detail: String = "") -> void:
 	if not condition:
 		_fails.append("%s — %s" % [name, detail])
+
+
+func _health_boot_gate_windows() -> void:
+	_check("health boot ordinario senza env",
+			WindowsProtocol.health_boot_gate(false, false, false)
+					== WindowsProtocol.HEALTH_BOOT_ALLOW)
+	_check("health boot richiesto resta in attesa",
+			WindowsProtocol.health_boot_gate(true, false, false)
+					== WindowsProtocol.HEALTH_BOOT_PENDING)
+	_check("health ACK positivo libera il boot",
+			WindowsProtocol.health_boot_gate(true, true, true)
+					== WindowsProtocol.HEALTH_BOOT_ALLOW)
+	var failed_once := WindowsProtocol.health_boot_gate(true, true, false)
+	var late_subscriber := WindowsProtocol.health_boot_gate(true, true, false)
+	_check("health failure nega anche il subscriber tardivo",
+			failed_once == WindowsProtocol.HEALTH_BOOT_DENY
+					and late_subscriber == WindowsProtocol.HEALTH_BOOT_DENY)
 
 
 # ── 1. Si aggiorna solo in avanti ────────────────────────────────────
