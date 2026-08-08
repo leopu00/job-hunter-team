@@ -844,7 +844,7 @@ function Remove-ProtectedFileIfPresent {
   if (Test-Path -LiteralPath $Path -PathType Leaf) { Remove-Item -LiteralPath $Path -Force -ErrorAction Stop }
 }
 
-function Remove-ProtectedTreeIfPresent {
+function Assert-ProtectedTreePreflight {
   param([string]$Path)
   Assert-NoReparseAncestors $Path
   $root = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
@@ -863,6 +863,12 @@ function Remove-ProtectedTreeIfPresent {
       if ($child -is [IO.DirectoryInfo]) { $pending += $child } elseif ($child -is [IO.FileInfo]) { $null = Get-Sha256 $child.FullName } else { throw 'protected cleanup tree contains an unexpected node' }
     }
   }
+}
+
+function Remove-ProtectedTreeIfPresent {
+  param([string]$Path)
+  Assert-ProtectedTreePreflight $Path
+  if (-not (Test-Path -LiteralPath $Path)) { return }
   Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
 }
 
@@ -1672,6 +1678,24 @@ function Invoke-Apply {
   Write-Result $true 'committed' 'updated'
 }
 
+function Complete-RecoveryCommitCleanup {
+  $script:FailurePhase = 'recovery'
+  # Attest every cleanup target before the first deletion.  A hostile later
+  # node must not turn recovery into a partial cleanup.
+  $script:FailureCode = 'recovery_commit_backup_cleanup_failed'
+  Assert-AtomicDestinationPreflight $BackupPath
+  $script:FailureCode = 'recovery_commit_failed_cleanup_failed'
+  Assert-AtomicDestinationPreflight $FailedPath
+  $script:FailureCode = 'recovery_commit_authority_cleanup_failed'
+  Assert-ProtectedTreePreflight $AuthorityBackupDir
+  $script:FailureCode = 'recovery_commit_backup_cleanup_failed'
+  Remove-ProtectedFileIfPresent $BackupPath
+  $script:FailureCode = 'recovery_commit_failed_cleanup_failed'
+  Remove-ProtectedFileIfPresent $FailedPath
+  $script:FailureCode = 'recovery_commit_authority_cleanup_failed'
+  Remove-ProtectedTreeIfPresent $AuthorityBackupDir
+}
+
 function Invoke-Recover {
   $script:FailurePhase = 'recovery'
   $script:FailureCode = 'recovery_path_attestation_failed'
@@ -1709,11 +1733,7 @@ function Invoke-Recover {
           $journal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
         }
         Update-JournalState $journal 'committed' ([int]$journal.candidate_pid) ([string]$journal.candidate_started)
-        $script:FailurePhase = 'recovery'
-        $script:FailureCode = 'recovery_commit_cleanup_failed'
-        Remove-ProtectedFileIfPresent $BackupPath
-        Remove-ProtectedFileIfPresent $FailedPath
-        Remove-ProtectedTreeIfPresent $AuthorityBackupDir
+        Complete-RecoveryCommitCleanup
         Write-Result $true 'committed' 'interrupted_commit_completed'
         return
       }

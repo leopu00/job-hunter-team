@@ -807,6 +807,61 @@ try {
 & ([ScriptBlock]::Create($body + "`n" + $probe))
 """
 
+RECOVERY_CLEANUP_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @(
+  'Get-FileSystemParent', 'Assert-NoReparseAncestors',
+  'Assert-NoForeignWriteAcl', 'Assert-CurrentOwner', 'Get-Sha256',
+  'Assert-AtomicDestinationPreflight', 'Assert-ProtectedTreePreflight',
+  'Remove-ProtectedFileIfPresent', 'Remove-ProtectedTreeIfPresent',
+  'Complete-RecoveryCommitCleanup')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) {
+  throw 'production recovery cleanup functions are missing'
+}
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$typeMarker = "Add-Type -TypeDefinition @'"
+$typeStart = $source.IndexOf($typeMarker) + $typeMarker.Length
+$typeEnd = $source.IndexOf("`n'@", $typeStart)
+if ($typeStart -lt $typeMarker.Length -or $typeEnd -le $typeStart) {
+  throw 'production native helper is missing'
+}
+$native = $source.Substring($typeStart, $typeEnd - $typeStart)
+if (-not ('JhtUpdateFileIdentity' -as [type])) {
+  Add-Type -TypeDefinition $native
+}
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$script:BackupPath = [IO.Path]::GetFullPath($env:JHT_TEST_CLEANUP_BACKUP)
+$script:FailedPath = [IO.Path]::GetFullPath($env:JHT_TEST_CLEANUP_FAILED)
+$script:AuthorityBackupDir =
+  [IO.Path]::GetFullPath($env:JHT_TEST_CLEANUP_AUTHORITY)
+$script:FailurePhase = 'recovery'
+$script:FailureCode = 'recovery_commit_cleanup_unset'
+try {
+  Complete-RecoveryCommitCleanup
+  [Console]::Out.WriteLine(
+    'WINDOWS-RECOVERY-CLEANUP PASS code=' + $script:FailureCode)
+} catch {
+  [Console]::Error.WriteLine(
+    'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=' + $script:FailurePhase +
+    ' code=' + $script:FailureCode)
+  exit 23
+}
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
 STAGE_FAULT_PROBE = r"""
 $source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
 $tokens = $null
@@ -1862,6 +1917,33 @@ def _directory_acl_is_protected(path: Path) -> bool:
     return observed.stdout == "True"
 
 
+def _directory_acl_is_current_only(path: Path) -> bool:
+    observed = _run_powershell_command(
+        "$item=[IO.DirectoryInfo]::new($env:JHT_TEST_ACL_PATH);"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "$current=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;"
+        "$owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value;"
+        "$rules=@($acl.GetAccessRules($true,$true,"
+        "[Security.Principal.SecurityIdentifier]));"
+        "$expected=[Security.AccessControl.InheritanceFlags]::ContainerInherit "
+        "-bor [Security.AccessControl.InheritanceFlags]::ObjectInherit;"
+        "$ok=$owner -eq $current -and $acl.AreAccessRulesProtected -and "
+        "$rules.Count -eq 1 -and -not $rules[0].IsInherited -and "
+        "$rules[0].IdentityReference.Value -eq $current -and "
+        "$rules[0].AccessControlType -eq 'Allow' -and "
+        "[Security.AccessControl.FileSystemRights]$rules[0].FileSystemRights "
+        "-eq [Security.AccessControl.FileSystemRights]::FullControl -and "
+        "$rules[0].InheritanceFlags -eq $expected -and "
+        "$rules[0].PropagationFlags -eq "
+        "[Security.AccessControl.PropagationFlags]::None;"
+        "[Console]::Out.Write($ok.ToString())",
+        env_values={"JHT_TEST_ACL_PATH": str(path)},
+        capture_output=True,
+    )
+    return observed.stdout == "True"
+
+
 def _file_acl_is_current_only(path: Path) -> bool:
     observed = _run_powershell_command(
         "$item=[IO.FileInfo]::new($env:JHT_TEST_ACL_PATH);"
@@ -2034,6 +2116,31 @@ def _assert_authority(
 
 def _authority_snapshot(root: Path) -> tuple[object, ...]:
     return (_tree_snapshot(root), _acl_tree_snapshot(root))
+
+
+def _cleanup_targets_snapshot(paths: tuple[Path, ...]) -> tuple[object, ...]:
+    observed: list[object] = []
+    for path in paths:
+        if not os.path.lexists(path):
+            observed.append((path.name, "absent"))
+            continue
+        metadata = path.lstat()
+        if _is_reparse(path):
+            observed.append((path.name, "reparse", metadata.st_size, metadata.st_nlink))
+        elif path.is_dir():
+            observed.append((path.name, _tree_snapshot(path), _acl_tree_snapshot(path)))
+        else:
+            observed.append(
+                (
+                    path.name,
+                    "file",
+                    metadata.st_size,
+                    metadata.st_nlink,
+                    hashlib.sha256(path.read_bytes()).hexdigest(),
+                    _sddl_digest(path),
+                )
+            )
+    return tuple(observed)
 
 
 def _side_effect_snapshot(
@@ -2507,6 +2614,7 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
     state = transaction.parent
     candidate = target.parent / f".jht-update-{nonce}.candidate.exe"
     backup = target.parent / f".jht-update-{nonce}.backup.exe"
+    failed = target.parent / f".jht-update-{nonce}.failed.exe"
     authority_backup = target.parent / f".jht-update-{nonce}.authority-backup"
     installed_helper = target.parent / HELPER
     installed_manifest = target.parent / "RELEASE-MANIFEST.json"
@@ -2614,11 +2722,15 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
             production_owned_files.append(transaction / "health.json")
         _write_compact_json(journal_path, journal)
         for production_owned_file in production_owned_files:
-            assert _file_acl_is_current_only(production_owned_file), (
-                production_owned_file.name
-            )
+            assert _file_acl_is_current_only(
+                production_owned_file
+            ), production_owned_file.name
+        for production_owned_directory in (target.parent, state, transaction):
+            assert _directory_acl_is_current_only(
+                production_owned_directory
+            ), production_owned_directory.name
         if install_metadata:
-            assert _directory_acl_is_protected(authority_backup)
+            assert _directory_acl_is_current_only(authority_backup)
 
         recovered = subprocess.run(
             _helper_command(
@@ -2639,6 +2751,46 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
             assert target.read_bytes() == candidate_bytes
             assert installed_helper.read_bytes() == candidate_helper_bytes
             assert json.loads(journal_path.read_text())["state"] == "committed"
+            if boundary == "floor_intent":
+                assert not backup.exists()
+                assert not failed.exists()
+                assert not authority_backup.exists()
+                # Model a crash after the first two deletes but before the
+                # authority tree delete.  The committed journal must make a
+                # second recovery remove only the residual owned tree.
+                authority_backup.mkdir()
+                _protect_directory(authority_backup)
+                residual_helper = authority_backup / HELPER
+                shutil.copy2(installed_helper, residual_helper)
+                _protect_file_current_only(residual_helper)
+                assert _directory_acl_is_current_only(authority_backup)
+                assert _file_acl_is_current_only(residual_helper)
+                stable_nodes = (
+                    target,
+                    installed_helper,
+                    state / "committed-floor.json",
+                )
+                stable_before = _cleanup_targets_snapshot(stable_nodes)
+                retried = subprocess.run(
+                    _helper_command(
+                        target=target,
+                        transaction=transaction,
+                        mode="Recover",
+                    ),
+                    text=True,
+                    capture_output=True,
+                    timeout=45,
+                )
+                assert retried.returncode == 0, _helper_result_diagnostic(
+                    transaction, retried.stderr
+                )
+                retry_result = json.loads((transaction / "result.json").read_text())
+                assert retry_result["phase"] == "committed"
+                assert retry_result["code"] == "interrupted_commit_completed"
+                assert _cleanup_targets_snapshot(stable_nodes) == stable_before
+                assert not backup.exists()
+                assert not failed.exists()
+                assert not authority_backup.exists()
         else:
             assert recovered.returncode != 0, recovered.stderr
             assert result["phase"] in {"rollback", "recovered"}
@@ -3000,6 +3152,135 @@ def test_production_atomic_file_seam_is_current_only_and_cleans_failures(
     assert result.stdout.strip() == f"WINDOWS-ATOMIC-SEAM PASS mode={mode}"
     assert _authority_snapshot(tmp_path) == before
     assert not tuple(root.glob(".jht-atomic-*"))
+
+
+def _new_recovery_cleanup_fixture(
+    tmp_path: Path,
+) -> tuple[Path, Path, Path, tuple[Path, ...]]:
+    root = tmp_path / "recovery-cleanup"
+    root.mkdir()
+    _protect_directory(root)
+    backup = root / "backup.exe"
+    failed = root / "failed.exe"
+    authority = root / "authority-backup"
+    backup.write_bytes(b"backup\n")
+    failed.write_bytes(b"failed\n")
+    _protect_file_current_only(backup)
+    _protect_file_current_only(failed)
+    authority.mkdir()
+    _protect_directory(authority)
+    for name, payload in (
+        (HELPER, b"helper\n"),
+        ("RELEASE-MANIFEST.json", b"manifest\n"),
+        ("RELEASE-MANIFEST.json.sig", b"signature\n"),
+    ):
+        child = authority / name
+        child.write_bytes(payload)
+        _protect_file_current_only(child)
+    assert _directory_acl_is_current_only(root)
+    assert _directory_acl_is_current_only(authority)
+    assert _file_acl_is_current_only(backup)
+    assert _file_acl_is_current_only(failed)
+    for child in authority.iterdir():
+        assert _file_acl_is_current_only(child)
+    return backup, failed, authority, (backup, failed, authority)
+
+
+def _inject_cleanup_hostility(
+    target: Path, hostile_kind: str, root: Path
+) -> tuple[Path, ...]:
+    if hostile_kind in {"foreign-owner", "foreign-ace"}:
+        item_type = "DirectoryInfo" if target.is_dir() else "FileInfo"
+        mutation = (
+            "$acl.SetOwner([Security.Principal.SecurityIdentifier]::new("
+            "'S-1-5-32-544'))"
+            if hostile_kind == "foreign-owner"
+            else "$foreign=[Security.Principal.SecurityIdentifier]::new("
+            "'S-1-5-32-545');"
+            "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
+            "$foreign,'WriteData','Allow');$acl.AddAccessRule($rule)"
+        )
+        _run_powershell_command(
+            f"$item=[IO.{item_type}]::new($env:JHT_TEST_CLEANUP_TARGET);"
+            "$acl=$item.GetAccessControl("
+            "[Security.AccessControl.AccessControlSections]::All);"
+            + mutation
+            + ";$item.SetAccessControl($acl)",
+            env_values={"JHT_TEST_CLEANUP_TARGET": str(target)},
+        )
+        return ()
+    if hostile_kind == "reparse":
+        external = root / f"external-{target.name}"
+        if target.is_dir():
+            target.rename(external)
+        else:
+            target.unlink()
+            external.mkdir()
+            _protect_directory(external)
+            payload = external / "payload.bin"
+            payload.write_bytes(b"external\n")
+            _protect_file_current_only(payload)
+        _run_powershell_command(
+            "New-Item -ItemType Junction -Path $env:JHT_TEST_JUNCTION_PATH "
+            "-Target $env:JHT_TEST_JUNCTION_TARGET | Out-Null",
+            env_values={
+                "JHT_TEST_JUNCTION_PATH": str(target),
+                "JHT_TEST_JUNCTION_TARGET": str(external),
+            },
+        )
+        return (external,)
+    if hostile_kind == "hardlink":
+        source = next(target.iterdir()) if target.is_dir() else target
+        external = root / f"external-link-{target.name}.bin"
+        os.link(source, external)
+        return (external,)
+    raise AssertionError(hostile_kind)
+
+
+@pytest.mark.parametrize(
+    ("target_name", "expected_code"),
+    [
+        ("backup", "recovery_commit_backup_cleanup_failed"),
+        ("failed", "recovery_commit_failed_cleanup_failed"),
+        ("authority", "recovery_commit_authority_cleanup_failed"),
+    ],
+)
+@pytest.mark.parametrize(
+    "hostile_kind", ["foreign-owner", "foreign-ace", "reparse", "hardlink"]
+)
+def test_recovery_commit_cleanup_rejects_each_hostile_target_without_mutation(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    target_name: str,
+    expected_code: str,
+    hostile_kind: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    backup, failed, authority, cleanup_targets = _new_recovery_cleanup_fixture(tmp_path)
+    target = {"backup": backup, "failed": failed, "authority": authority}[target_name]
+    external = _inject_cleanup_hostility(target, hostile_kind, backup.parent)
+    snapshot_targets = cleanup_targets + external
+    before = _cleanup_targets_snapshot(snapshot_targets)
+    result = _run_powershell_command(
+        RECOVERY_CLEANUP_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_CLEANUP_BACKUP": str(backup),
+            "JHT_TEST_CLEANUP_FAILED": str(failed),
+            "JHT_TEST_CLEANUP_AUTHORITY": str(authority),
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 23
+    assert result.stdout == ""
+    assert result.stderr.strip() == (
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=recovery " f"code={expected_code}"
+    )
+    assert str(tmp_path) not in result.stderr
+    assert _cleanup_targets_snapshot(snapshot_targets) == before
 
 
 @pytest.mark.parametrize(

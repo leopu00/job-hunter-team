@@ -841,7 +841,13 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
     gate = HEALTH_PCK_GATE.read_text()
     for contract in (
         "CREATE_SUSPENDED",
-        "--headless --quit-after 120",
+        'if (automaticQuit) command.Append(" --quit-after 120")',
+        "WaitForSingleObject",
+        "GetExitCodeProcess",
+        "CreateExitProbe",
+        "$automaticQuit = $Mode -in @('normal','positive')",
+        "$probeNativeExitCode -ne 7",
+        "$probeDotnetExitCode -ne 7",
         "JHT_UPDATE_HEALTH_PATH",
         "candidate_pid = $CandidatePid",
         "candidate_started = $CandidateStarted",
@@ -855,7 +861,8 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
         "health consumer created an absent capability",
         "health consumer mutated a hostile capability",
         "health case exit mismatch mode=",
-        "consumer_rc=",
+        "native_rc=",
+        "dotnet_rc=",
         "outcome=",
         "WINDOWS-UPDATE-HEALTH code=",
         "WINDOWS-UPDATE-HEALTH-NORMAL-WORK",
@@ -870,6 +877,10 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
     assert "Set-Acl" not in gate
     assert "Get-Acl" not in gate
     assert "WriteLine($consumerLog)" not in gate
+    assert "consumer_rc=" not in gate
+    assert gate.index("$consumerLog = [IO.File]::ReadAllText") < gate.index(
+        "$nativeExitCode -ne $dotnetExitCode"
+    )
 
     invocation = "./tools/windows_update_health_pck_test.ps1"
     for workflow_path in (GAME_WORKFLOW, RELEASE_WORKFLOW):
@@ -878,6 +889,33 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
         step = workflow[workflow.index(invocation) - 180 : workflow.index(invocation) + 180]
         assert "if: runner.os == 'Windows'" in step, workflow_path
         assert "shell: powershell" in step, workflow_path
+
+
+def test_recovery_commit_cleanup_attests_all_targets_before_deleting() -> None:
+    source = UPDATE_HELPER.read_text()
+    cleanup = source[
+        source.index("function Complete-RecoveryCommitCleanup") : source.index(
+            "function Invoke-Recover"
+        )
+    ]
+    codes = (
+        "recovery_commit_backup_cleanup_failed",
+        "recovery_commit_failed_cleanup_failed",
+        "recovery_commit_authority_cleanup_failed",
+    )
+    for code in codes:
+        assert cleanup.count(code) == 2
+    assert "recovery_commit_cleanup_failed" not in source
+    first_delete = cleanup.index("Remove-ProtectedFileIfPresent $BackupPath")
+    assert cleanup.index("Assert-AtomicDestinationPreflight $BackupPath") < first_delete
+    assert cleanup.index("Assert-AtomicDestinationPreflight $FailedPath") < first_delete
+    assert cleanup.index("Assert-ProtectedTreePreflight $AuthorityBackupDir") < (
+        first_delete
+    )
+    assert (
+        "Complete-RecoveryCommitCleanup"
+        in source[source.index("function Invoke-Recover") :]
+    )
 
 
 def test_windows_health_boot_is_path_free_and_fail_closed() -> None:
