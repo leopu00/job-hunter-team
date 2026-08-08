@@ -27,13 +27,18 @@ of this number, not this paragraph:
 | `83-recording-profile`      | 1     | private opt-in gate: real seeded account, no demo banner                                                       |
 | `88-protected-positions`    | 3     | the protected area's positions: list content, detail content, a filter that actually filters                   |
 | `89-protected-profile-team` | 5     | profile (data + cloud read-only), team activity, swipe deck, map reachable                                     |
+| `90-protected-swipe`        | 2     | the swipe deck actually plays: discard/like advance the deck, the judgment survives a reload                   |
 
 They run on every push and PR (`.github/workflows/test.yml`, job `e2e`) against
 `next start` in cloud mode with a real session.
 
 **`88-` and `89-` (added 2026-08-08)** close part of what [JHT-E2E-STALE]
 left open: the protected area was almost uncovered, because quarantining
-removed the specs that _claimed_ to cover it. They are written against the
+removed the specs that _claimed_ to cover it. **`90-`** (same day, T-028)
+goes one step further on the swipe deck: it clicks the verdict buttons and
+asserts the deck advances (counter, cards leaving/entering the three-card
+stack) and that the judgment persists across a reload via the demo overlay
+cookie. They are written against the
 pages that ship today and assert on the **content** of the demo dataset
 (`web/lib/demo/seeds/`, `web/lib/demo/profile.ts`) — a named position, a
 named company, the candidate's name — precisely because that dataset is
