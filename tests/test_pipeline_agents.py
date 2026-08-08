@@ -410,7 +410,11 @@ class TestScrittoreCriticoFlow:
 # ---------------------------------------------------------------------------
 
 class TestScoutCoordination:
-    """scout_coord.py gestisce la distribuzione del lavoro tra scout."""
+    """scout_coord.py gestisce la distribuzione del lavoro tra scout.
+
+    Dal 2026-08-08 le tabelle vivono in jobs.db ([JHT-DB-SCOUT-COORD]):
+    `DB_PATH` punta li', e i test lo dirottano su un file temporaneo.
+    """
 
     def test_scout_assign_records_in_db(self, tmp_path):
         """scout_coord assign deve registrare la distribuzione nel DB."""
@@ -435,7 +439,7 @@ print("OK")
 
         conn = sqlite3.connect(coord_db)
         row = conn.execute(
-            "SELECT scout, cerchi, fonti FROM coordination WHERE superseded_at IS NULL"
+            "SELECT scout, cerchi, fonti FROM scout_coordination WHERE superseded_at IS NULL"
         ).fetchone()
         conn.close()
         assert row is not None, "Nessuna distribuzione registrata"
@@ -468,7 +472,7 @@ mod.cmd_claim({repr(job_id)}, {repr(scout_name)})
         r2 = run_coord('42', 'scout-2', '2')
 
         conn = sqlite3.connect(coord_db)
-        claim = conn.execute("SELECT scout FROM claims WHERE job_id='42'").fetchone()
+        claim = conn.execute("SELECT scout FROM scout_claims WHERE job_id='42'").fetchone()
         conn.close()
 
         assert claim is not None

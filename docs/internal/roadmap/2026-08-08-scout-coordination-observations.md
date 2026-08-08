@@ -110,3 +110,33 @@ Nell'ordine, prima di [SOURCE-YIELD-MEMORY]:
 La memoria di resa per fonte resta ferma: con la divisione che non tiene, una
 resa misurata per lane misurerebbe soprattutto quante volte due Scout hanno
 lavorato la stessa fonte.
+
+## Aggiornamento in giornata: dove vive la coordinazione
+
+`[JHT-DB-SCOUT-COORD]` chiedeva di consolidare `scout_coordination.db` nel
+database principale **oppure** di scrivere perché deve restare separato. Le
+misure qui sopra hanno deciso: consolidare.
+
+**Contro la separazione**, in ordine di peso:
+
+* il file aveva un **suo** risolutore di percorso, ed è la causa diretta
+  dell'issue #132 — un percorso in più è un percorso che può non esistere, non
+  essere scrivibile, o risolversi diverso per due agenti;
+* non aveva **migrazioni** (le tabelle nascevano da `CREATE TABLE IF NOT
+  EXISTS` sparsi), né **backup**, né una diagnostica;
+* l'ufficio non può mostrare la divisione — la raccomandazione numero 1 qui
+  sopra — se la divisione vive in un file che il gioco non apre;
+* la deroga di percorso doveva essere propagata a mano a ogni agente, e per
+  giorni **non lo è stata** (il ramo PowerShell non la vedeva affatto).
+
+**A favore della separazione** restavano due argomenti, entrambi caduti:
+
+* *«la coordinazione non deve finire nel cloud»* — `db_to_supabase` sincronizza
+  una **lista esplicita** di tabelle, e queste non ci sono. `jobs.db` ospita già
+  `team_directives` e `maintenance_events`, stato interno che non viaggia;
+* *«un DB separato limita il raggio di un guasto»* — vero per una scrittura
+  pesante, non per due tabelle che ricevono qualche decina di righe al mese.
+
+Restano in `jobs.db` come `scout_coordination` e `scout_claims`, con
+`scout_coord.py` unico scrittore. Il vecchio file si importa una volta e resta
+dov'è: si legge, non si cancella.
