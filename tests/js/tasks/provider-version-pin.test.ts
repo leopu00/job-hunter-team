@@ -115,10 +115,17 @@ describe("provider-versions.json — il manifest della release", () => {
 // ── Criteri 1 e 5: nessun riferimento mutabile nel percorso di install ──
 
 describe("il percorso di install non contiene riferimenti mutabili", () => {
-  // I file che INSTALLANO davvero. La UI del web ha un suo percorso di
-  // installazione (`web/app/api/providers/route.ts`) che appartiene a un
-  // altro fronte e NON è coperto qui: se un giorno rientra, va aggiunto.
-  const ROOTS = ["cli/src", "cli/wizard", "cli/bin", ".launcher", "scripts"];
+  // I file che INSTALLANO davvero — CLI, launcher, script di setup e il
+  // bottone "aggiorna provider" della dashboard, che è l'altro percorso di
+  // installazione reale (locale) e passa dallo stesso manifest.
+  const ROOTS = [
+    "cli/src",
+    "cli/wizard",
+    "cli/bin",
+    ".launcher",
+    "scripts",
+    "web/app/api/providers",
+  ];
   const EXT = [".js", ".mjs", ".ts", ".sh", ".ps1"];
   const MUTABLE = /@openai\/codex@latest|@anthropic-ai\/claude-code@latest/;
 

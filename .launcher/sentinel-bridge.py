@@ -189,6 +189,23 @@ SENTINELLA_RECONFIRM_MIN = 45.0
 PACE_ADVICE_COOLDOWN_MIN = 15.0
 _pace_advice_state = {"ts": 0.0, "throttle_s": None, "verdict": None}
 
+# Il gate orario ([PACE-GUARD-IGNORES-WORK-PHASE]) impedisce di SVEGLIARE il
+# Capitano di notte, e va bene per un consiglio di crociera. Non va bene per un
+# LOCKOUT-IMMINENTE: quel verdetto dice che la finestra si sta chiudendo in
+# anticipo e che il freno da solo non basta (serve tagliare il roster), e
+# tacendo spariva anche dalla mailbox — cioè non arrivava nemmeno al mattino,
+# quando il Capitano la drena a inizio turno.
+#
+# La mailbox è asincrona per costruzione: scriverci NON consuma un turno di
+# modello e non sveglia nessuno. Quindi fuori finestra l'emergenza si scrive
+# lì e basta. Lo stato è SEPARATO da `_pace_advice_state` di proposito: quello
+# governa il pane e deve restare intatto durante il silenzio, così alla
+# riapertura il primo consiglio parte come edge invece che come ripetizione.
+_pace_mailbox_state = {"ts": 0.0, "throttle_s": None, "verdict": None}
+# Il solo verdetto che vale una riga di mailbox fuori orario. Gli altri
+# descrivono la velocità di crociera di un team che di notte non sta correndo.
+EMERGENCY_VERDICT = "LOCKOUT-IMMINENTE"
+
 
 # ── Config + tmux helpers (libreria per le skill) ───────────────────────
 
@@ -1625,6 +1642,12 @@ def _pace_guard_step(entry, within_hours=True, burn_intent_on=False):
     il primo tick attuabile è di nuovo un edge e parte subito, perché lo stato
     dell'ultimo consiglio resta intatto mentre si tace.
 
+    UNICA eccezione al silenzio: un `LOCKOUT-IMMINENTE` va comunque scritto in
+    `bridge-mailbox.jsonl`. Non sveglia nessuno (la mailbox si drena a inizio
+    turno) e senza di esso l'emergenza spariva insieme al consiglio ordinario:
+    quel verdetto chiede di ridurre il ROSTER, cioè la cosa che il freno da
+    solo non può fare.
+
     Fail-safe per costruzione: qualunque errore lascia il bridge intatto e il
     throttle dov'era. Disattivabile con JHT_PACE_GUARD=0.
     """
@@ -1664,6 +1687,8 @@ def _pace_guard_step(entry, within_hours=True, burn_intent_on=False):
                 # Il sample resta, la sveglia no: è la riga che distingue
                 # "guard silenzioso perché è notte" da "guard morto".
                 result["silenced"] = "outside-working-hours"
+                if _emergency_to_mailbox(result, now_ts):
+                    result["mailbox_only"] = True
             if not result.get("recommends_change"):
                 # Rientrati in pari (spesso perché il Capitano ha applicato):
                 # si dimentica l'ultimo consiglio, così la prossima deriva
@@ -1674,6 +1699,51 @@ def _pace_guard_step(entry, within_hours=True, burn_intent_on=False):
             f.write(json.dumps(result) + "\n")
     except Exception:  # noqa: BLE001 — il bridge non muore per il guard
         pass
+
+
+def _emergency_to_mailbox(result, now_ts):
+    """Fuori orario: il LOCKOUT-IMMINENTE si scrive in mailbox. Ritorna True se
+    la riga è stata scritta.
+
+    Non è una deroga al gate orario, è l'altra metà: il gate protegge dal
+    COSTO di svegliare una LLM, e la mailbox non ne sveglia nessuna — la drena
+    il Capitano quando riprende. Senza questo, l'unico verdetto che chiede di
+    tagliare il roster spariva del tutto per tutta la notte.
+
+    Deliberatamente NON si guarda `recommends_change`: a throttle già al
+    massimo il consiglio numerico non cambia niente, ma la riga sul roster
+    resta l'unica cosa che può salvare la finestra. Il cooldown è quello
+    normale, su uno stato separato, così le ore di silenzio non producono una
+    riga ogni cinque minuti né consumano l'edge del pane.
+    """
+    if result.get("verdict") != EMERGENCY_VERDICT:
+        return False
+    if (now_ts - (_pace_mailbox_state.get("ts") or 0.0)) < PACE_ADVICE_COOLDOWN_MIN * 60:
+        return False
+    advice = result.get("advice") or ""
+    if not advice:
+        return False
+    _append_pace_mailbox(advice, delivered=False, kind="pace-guard-offhours")
+    _pace_mailbox_state.update({
+        "ts": now_ts,
+        "throttle_s": result.get("throttle_recommended_s"),
+        "verdict": result.get("verdict"),
+    })
+    return True
+
+
+def _append_pace_mailbox(advice, delivered, kind="pace-guard"):
+    """Una riga nella mailbox che il Capitano drena a inizio turno."""
+    try:
+        with (LOGS_DIR / "bridge-mailbox.jsonl").open("a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "kind": kind,
+                "delivered_via_tmux": delivered,
+                "msg": advice,
+            }, separators=(",", ":")) + "\n")
+    except OSError as e:
+        print(f"[bridge V6] WARN append mailbox {kind}: {e}", file=sys.stderr)
 
 
 def _notify_captain_pace_guard(result):
@@ -1687,16 +1757,7 @@ def _notify_captain_pace_guard(result):
     """
     advice = result.get("advice") or ""
     delivered = jht_tmux_send(CAPITANO_SESSION, advice) if advice else False
-    try:
-        with (LOGS_DIR / "bridge-mailbox.jsonl").open("a", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "ts": datetime.now(timezone.utc).isoformat(),
-                "kind": "pace-guard",
-                "delivered_via_tmux": delivered,
-                "msg": advice,
-            }, separators=(",", ":")) + "\n")
-    except OSError as e:
-        print(f"[bridge V6] WARN append mailbox pace-guard: {e}", file=sys.stderr)
+    _append_pace_mailbox(advice, delivered)
     return delivered
 
 

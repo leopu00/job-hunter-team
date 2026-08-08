@@ -5,6 +5,11 @@ import { execSync, spawnSync } from "node:child_process";
 import { JHT_HOME } from "@/lib/jht-paths";
 import { loadJhtConfig, readJsonSafe } from "@/lib/json-files";
 import { requireAuth } from "@/lib/auth";
+// Le versioni dei CLI provider le dichiara la release, non il registry
+// (issue #130). Il JSON viene inlinato a build time — nessun path da
+// risolvere a runtime — e la regola di composizione è la stessa di
+// shared/runtime/provider-pins.js: `pkg@ver` per npm, `pkg==ver` per uv.
+import providerVersions from "../../../../shared/config/provider-versions.json";
 
 export const dynamic = "force-dynamic";
 
@@ -87,12 +92,14 @@ const ALL_AGENT_SESSION_PREFIXES = [
 // Mapping provider id → come leggere la versione installata/latest e come
 // aggiornare. Due kind supportati:
 //   - 'npm': installed da package.json del pacchetto global, update via
-//     `npm install -g <pkg>@latest`
+//     `npm install -g <pkg>@<versione della release>`
 //   - 'uv':  installed dal nome della dir dist-info (kimi_cli-X.Y.Z.dist-info),
-//     update via `uv tool install --force <pkg>`
+//     update via `uv tool install --force <pkg>==<versione della release>`
+// La versione la decide `shared/config/provider-versions.json` (issue #130),
+// non il registry: vedi `installSpecFor`.
 // `latestSource` è un path a JSON con `latest_version`. Solo codex lo ha
 // (il binario lo scrive per conto suo). Senza latestSource, niente badge —
-// il pulsante resta comunque disponibile per fare re-install "@latest".
+// il pulsante resta comunque disponibile per re-installare il pin.
 type CliSpec =
   | {
       kind: "npm";
@@ -121,10 +128,44 @@ const KIMI_SITE_PACKAGES = path.join(
   "site-packages",
 );
 
+type Pin = { kind: string; package: string; version: string };
+const PINS = providerVersions.pins as Record<string, Pin>;
+
+// Gli id del web (anthropic/openai/kimi) non sono le chiavi del manifest
+// (claude/codex/kimi): la mappa è qui, esplicita, come `resolveUpdateTarget`
+// nella CLI.
+const PIN_KEY: Record<string, string> = {
+  anthropic: "claude",
+  openai: "codex",
+  kimi: "kimi",
+};
+
+/**
+ * Lo specificatore da installare per `providerId`. Il bottone della dashboard
+ * è un aggiornamento ESPLICITO dell'utente, ma esplicito non vuol dire
+ * "prendi quello che c'è adesso sul registry": la macchina deve restare sulla
+ * versione che questa release dichiara, altrimenti un click riporterebbe il
+ * drift che il pin serve a evitare (e il boot successivo lo annullerebbe
+ * comunque, reinstallando il pin).
+ *
+ * Pin assente o malformato → `@latest`, come prima: meglio un'installazione
+ * non riproducibile che un provider che non si installa.
+ */
+function installSpecFor(providerId: string): string | null {
+  const pin = PINS[PIN_KEY[providerId] ?? ""];
+  if (!pin?.package) return null;
+  const version = /^\d+\.\d+\.\d+/.test(pin.version || "") ? pin.version : null;
+  if (!version)
+    return pin.kind === "uv" ? pin.package : `${pin.package}@latest`;
+  return pin.kind === "uv"
+    ? `${pin.package}==${version}`
+    : `${pin.package}@${version}`;
+}
+
 const CLI_SPECS: Record<string, CliSpec> = {
   anthropic: {
     kind: "npm",
-    npmPkg: "@anthropic-ai/claude-code@latest",
+    npmPkg: "@anthropic-ai/claude-code",
     installedPkgJson: path.join(
       NPM_GLOBAL,
       "@anthropic-ai",
@@ -134,7 +175,7 @@ const CLI_SPECS: Record<string, CliSpec> = {
   },
   openai: {
     kind: "npm",
-    npmPkg: "@openai/codex@latest",
+    npmPkg: "@openai/codex",
     installedPkgJson: path.join(NPM_GLOBAL, "@openai", "codex", "package.json"),
     latestSource: path.join(CODEX_HOME, "version.json"),
   },
@@ -328,14 +369,18 @@ export async function POST(req: Request) {
 
   let r: ReturnType<typeof spawnSync>;
   if (spec.kind === "npm") {
-    r = spawnSync("npm", ["install", "-g", spec.npmPkg], {
-      encoding: "utf-8",
-      env: {
-        ...process.env,
-        NPM_CONFIG_PREFIX: path.join(JHT_HOME, ".npm-global"),
+    r = spawnSync(
+      "npm",
+      ["install", "-g", installSpecFor(providerId) ?? spec.npmPkg],
+      {
+        encoding: "utf-8",
+        env: {
+          ...process.env,
+          NPM_CONFIG_PREFIX: path.join(JHT_HOME, ".npm-global"),
+        },
+        timeout: 180_000,
       },
-      timeout: 180_000,
-    });
+    );
   } else {
     // uv tool install --force: ricrea il venv e pinna l'ultima versione
     // dal PyPI. `--python 3.13` per coerenza con provider-install.js
@@ -350,7 +395,7 @@ export async function POST(req: Request) {
           "set -e",
           `export PATH="${localBin}:$PATH"`,
           "pip3 install --user --break-system-packages --upgrade uv >/dev/null 2>&1 || true",
-          `UV_TOOL_BIN_DIR=${path.join(JHT_HOME, ".npm-global", "bin")} uv tool install --force --python 3.13 ${spec.toolName}`,
+          `UV_TOOL_BIN_DIR=${path.join(JHT_HOME, ".npm-global", "bin")} uv tool install --force --python 3.13 ${installSpecFor(providerId) ?? spec.toolName}`,
         ].join(" && "),
       ],
       {

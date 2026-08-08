@@ -55,6 +55,13 @@ services:
       # comandi locali (siamo gia' nel posto giusto). Vedi
       # docs/internal/vps.md.
       - IS_CONTAINER=1
+      # Deroga dell'operatore quando `$JHT_HOME/data/` non è scrivibile
+      # (issue #132): l'UNICO fallback ammesso per il database di
+      # coordinamento Scout, e unico proprio perché sta nell'ambiente che
+      # arriva a tutti gli agenti. Senza questa riga resterebbe sull'host e
+      # nel container non esisterebbe. Vuota = nessuna deroga (il codice
+      # tratta la stringa vuota come assente).
+      - JHT_SCOUT_COORD_DB=${JHT_SCOUT_COORD_DB:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}

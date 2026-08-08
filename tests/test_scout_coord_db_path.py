@@ -199,8 +199,88 @@ def test_doctor_reports_counts_not_content(home):
 def test_start_agent_bootstraps_the_db_before_a_scout():
     """Il gancio in start-agent.sh esiste ed è per lo Scout: senza, la
     verifica pre-spawn resta una buona intenzione."""
-    src = open(os.path.join(REPO_ROOT, '.launcher', 'start-agent.sh'),
-               encoding='utf-8').read()
+    src = _start_agent_src()
     assert '"$ROLE" = "scout"' in src
     assert 'scout_coord.py' in src
     assert '"$COORD_SCRIPT" bootstrap' in src
+
+
+# ── 6. La deroga deve ARRIVARE all'agente ───────────────────────────────
+#
+# Il bootstrap pre-spawn gira nel processo del launcher e la variabile la
+# vede; l'agente vive in una tmux nuova, che non eredita niente e riceve solo
+# una lista ESPLICITA di export — e sul ramo PowerShell (WSL, la piattaforma
+# dell'incidente) una env di bash non attraversa proprio. Una deroga che non
+# raggiunge chi la deve usare non è una deroga: è uno Scout che esce 3.
+
+def _start_agent_src():
+    with open(os.path.join(REPO_ROOT, '.launcher', 'start-agent.sh'),
+              encoding='utf-8') as f:
+        return f.read()
+
+
+def _extract_propagation(src):
+    """La lista + la funzione VERE, ritagliate dal sorgente per eseguirle."""
+    start = src.index('OPTIONAL_AGENT_ENV=(')
+    end = src.index('send_env_vars() {')
+    return src[start:end]
+
+
+@pytest.mark.skipif(sys.platform == 'win32', reason='sandbox POSIX')
+@pytest.mark.parametrize('flavor,expected', [
+    ('bash', "export JHT_SCOUT_COORD_DB='/shared/coord.db'"),
+    ('powershell', "$env:JHT_SCOUT_COORD_DB='/shared/coord.db'"),
+])
+def test_the_declared_fallback_reaches_the_agent(tmp_path, flavor, expected):
+    """Entrambi i rami: la variabile arriva davvero nel pane dell'agente."""
+    calls = tmp_path / 'tmux.calls'
+    script = f"""
+set -euo pipefail
+SESSION=SCOUT-1
+tmux() {{ printf '%s\\n' "$*" >> {calls}; }}
+{_extract_propagation(_start_agent_src())}
+send_optional_env {flavor}
+"""
+    r = subprocess.run(['bash', '-c', script], capture_output=True, text=True,
+                       env={**os.environ, 'JHT_SCOUT_COORD_DB': '/shared/coord.db'})
+    assert r.returncode == 0, r.stderr
+    assert expected in calls.read_text(encoding='utf-8')
+
+
+@pytest.mark.skipif(sys.platform == 'win32', reason='sandbox POSIX')
+def test_an_undeclared_fallback_is_not_exported_empty(tmp_path):
+    """Senza deroga non si esporta niente: una stringa vuota renderebbe
+    indistinguibile «non dichiarata» da «dichiarata male»."""
+    calls = tmp_path / 'tmux.calls'
+    script = f"""
+set -euo pipefail
+SESSION=SCOUT-1
+tmux() {{ printf '%s\\n' "$*" >> {calls}; }}
+{_extract_propagation(_start_agent_src())}
+send_optional_env bash
+echo DONE
+"""
+    env = {k: v for k, v in os.environ.items() if k != 'JHT_SCOUT_COORD_DB'}
+    r = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=env)
+    # `set -u` è attivo nello script vero: la variabile assente non deve
+    # far esplodere lo spawn dell'agente.
+    assert r.returncode == 0, r.stderr
+    assert 'DONE' in r.stdout
+    assert not calls.exists()
+
+
+def test_both_spawn_branches_send_the_optional_env():
+    """Il ramo bash e quello PowerShell hanno DUE liste di export separate:
+    dimenticarne una è come non aver fatto niente sulla piattaforma sbagliata."""
+    src = _start_agent_src()
+    assert 'send_optional_env bash' in src
+    assert 'send_optional_env powershell' in src
+    assert 'OPTIONAL_AGENT_ENV=(JHT_SCOUT_COORD_DB)' in src
+
+
+def test_compose_passes_the_fallback_into_the_container():
+    """In Docker mode la deroga la dichiara l'operatore sull'host: senza il
+    pass-through nel compose, nel container non esisterebbe."""
+    with open(os.path.join(REPO_ROOT, 'docker-compose.yml'), encoding='utf-8') as f:
+        compose = f.read()
+    assert 'JHT_SCOUT_COORD_DB=${JHT_SCOUT_COORD_DB:-}' in compose
