@@ -107,7 +107,11 @@ test.describe("area riservata — swipe interattivo", () => {
       "la card scartata è ancora nel DOM",
     ).toHaveCount(0);
     await expect(
-      page.getByText(FOURTH),
+      // Ruolo, non testo: la DESCRIZIONE del seed quota il titolo della
+      // posizione, quindi getByText(FOURTH) matcha anche il div del
+      // riassunto (strict mode violation in CI, 2026-08-08). Il titolo
+      // della card è un link verso /positions/<id>: quello è unico.
+      page.getByRole("link", { name: FOURTH }),
       "la quarta card non è entrata nello stack",
     ).toBeAttached();
     expect(pageErrors, "errori JS durante lo scarto").toEqual([]);
