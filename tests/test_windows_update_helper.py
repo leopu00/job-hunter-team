@@ -1331,8 +1331,8 @@ $main = $source.Substring($mainStart + 1, $mainEnd - $mainStart - 1)
 $probe = @'
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
-$mode = $env:JHT_TEST_RECOVERY_MODE
-$script:mode = $mode
+$script:Mode = 'Recover'
+$script:FaultMode = $env:JHT_TEST_RECOVERY_MODE
 $script:FailurePhase = 'unset'
 $script:FailureCode = 'unset'
 $script:TargetPath = 'target.exe'
@@ -1370,7 +1370,7 @@ function Remove-ProtectedFileIfPresent {
 function Read-Result { return $script:result }
 function Release-Lock { $script:snapshot.lock = 'released' }
 function Restore-OldTarget {
-  if ($script:mode -ceq 'target') { throw 'injected target recovery failure' }
+  if ($script:FaultMode -ceq 'target') { throw 'injected target recovery failure' }
   $script:snapshot.target = 'old'
 }
 function Test-OldAuthorityInstalled {
@@ -1378,7 +1378,7 @@ function Test-OldAuthorityInstalled {
     $script:snapshot.metadata -ceq 'old')
 }
 function Restore-OldAuthority {
-  if ($script:mode -ceq 'authority') { throw 'injected authority recovery failure' }
+  if ($script:FaultMode -ceq 'authority') { throw 'injected authority recovery failure' }
   $script:snapshot.helper = 'old'
   $script:snapshot.metadata = 'old'
 }
@@ -1391,17 +1391,17 @@ function Write-Journal {
   $script:journalWrites++
   $script:FailurePhase = 'journal'
   $script:FailureCode = 'journal_rolled_back_write_failed'
-  if ($script:mode -ceq 'journal') { throw 'injected rollback journal failure' }
+  if ($script:FaultMode -ceq 'journal') { throw 'injected rollback journal failure' }
   $script:snapshot.journal = 'rolled_back'
 }
 function Start-Process {
-  if ($script:mode -ceq 'restart') { throw 'injected recovery restart failure' }
+  if ($script:FaultMode -ceq 'restart') { throw 'injected recovery restart failure' }
 }
 function Write-AtomicJson {
   param([string]$Path, [hashtable]$Value)
   $script:resultWriteCalls++
-  if (($script:mode -ceq 'result' -and $script:resultWriteCalls -eq 1) -or
-      $script:mode -ceq 'result-persistent') {
+  if (($script:FaultMode -ceq 'result' -and $script:resultWriteCalls -eq 1) -or
+      $script:FaultMode -ceq 'result-persistent') {
     throw 'injected recovery result failure'
   }
   $script:result = [pscustomobject]$Value
@@ -1421,11 +1421,19 @@ function Invoke-Recover {
 }
 function Invoke-Apply { throw 'recovery seam dispatched apply' }
 
+if ($script:Mode -cne 'Recover') {
+  throw 'recovery seam mode changed before first dispatch'
+}
 $firstRc = Invoke-ProductionMain
 if ($firstRc -ne 1 -or -not $script:staleRemoved) {
   throw 'recovery main dispatch accepted a fault or retained stale result'
 }
-$expected = switch -CaseSensitive ($mode) {
+$expectedFirstRollbackCommitted = $script:FaultMode -in @(
+  'restart','result','result-persistent')
+if ([bool]$script:RollbackCommitted -ne $expectedFirstRollbackCommitted) {
+  throw 'recovery first dispatch rollback commit state is not exact'
+}
+$expected = switch -CaseSensitive ($script:FaultMode) {
   'target' { 'candidate,candidate,candidate,absent,candidate_installed,released'; break }
   'authority' { 'old,candidate,candidate,absent,candidate_installed,released'; break }
   'journal' { 'old,old,old,absent,candidate_installed,released'; break }
@@ -1441,14 +1449,14 @@ $actual = @(
 if ($actual -cne $expected) {
   throw 'rollback fault mutated a node outside its completed stages'
 }
-if ($mode -ceq 'result-persistent') {
+if ($script:FaultMode -ceq 'result-persistent') {
   if ($null -ne $script:result) {
     throw 'persistent writer fault retained a result frame'
   }
 } else {
-  $expectedRolledBack = $mode -in @('restart','result')
+  $expectedRolledBack = $script:FaultMode -in @('restart','result')
   $expectedPhase = if ($expectedRolledBack) { 'rollback' } else {
-    if ($mode -ceq 'journal') { 'journal' } else { 'recovery' }
+    if ($script:FaultMode -ceq 'journal') { 'journal' } else { 'recovery' }
   }
   if ($null -eq $script:result -or
       [string]$script:result.phase -cne $expectedPhase -or
@@ -1459,20 +1467,28 @@ if ($mode -ceq 'result-persistent') {
   }
 }
 
-$script:mode = 'retry'
-$script:resultWriteCalls = 0
-$retryRc = Invoke-ProductionMain
-$expectedRetryPhase = if ($mode -in @('restart','result','result-persistent')) {
+$expectedRetryPhase = if ($script:FaultMode -in @(
+    'restart','result','result-persistent')) {
   'recovered'
 } else {
   'rollback'
 }
+$script:FaultMode = 'retry'
+$script:resultWriteCalls = 0
+if ($script:Mode -cne 'Recover') {
+  throw 'recovery seam mode changed before retry dispatch'
+}
+$retryRc = Invoke-ProductionMain
 $expectedRetryCode = if ($expectedRetryPhase -ceq 'recovered') {
   'old_version_intact'
 } else {
   'interrupted_update_recovered'
 }
 $expectedRetryRc = if ($expectedRetryPhase -ceq 'recovered') { 0 } else { 1 }
+$expectedRetryRollbackCommitted = $expectedRetryPhase -ceq 'rollback'
+if ([bool]$script:RollbackCommitted -ne $expectedRetryRollbackCommitted) {
+  throw 'recovery retry rollback commit state is not exact'
+}
 if ($retryRc -ne $expectedRetryRc -or $null -eq $script:result -or
     [string]$script:result.phase -cne $expectedRetryPhase -or
     [string]$script:result.code -cne $expectedRetryCode -or
@@ -1482,7 +1498,7 @@ if ($retryRc -ne $expectedRetryRc -or $null -eq $script:result -or
   throw 'recovery retry is not idempotent and exact'
 }
 [Console]::Out.WriteLine(
-  'WINDOWS-RECOVERY-SEAM PASS mode=' + $mode +
+  'WINDOWS-RECOVERY-SEAM PASS mode=' + $env:JHT_TEST_RECOVERY_MODE +
   ' phase=' + $env:JHT_TEST_EXPECTED_PHASE +
   ' code=' + $env:JHT_TEST_EXPECTED_CODE)
 '@
@@ -1848,7 +1864,7 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
     assert "$WriteFailurePhase = 'result'" in write_result
     assert "$WriteFailureCode = 'result_write_failed'" in write_result
     rollback = source[
-        source.index("function Invoke-Rollback") : source.index(
+        source.index("function Set-RollbackCommitted") : source.index(
             "function Test-CandidateHealth"
         )
     ]
