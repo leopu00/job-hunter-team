@@ -1310,6 +1310,29 @@ def _write_last_tick(msg):
         pass
 
 
+def _harvest_backlog_count():
+    """Posizioni già trovate e già pagate che aspettano un CV, o None.
+
+    Serve al consiglio di `burn_mode` ([BURN-MODE-ADVISES-THE-WRONG-LEVER]):
+    finché quel numero è > 0 esiste una leva di spesa che produce candidature,
+    mentre "scala worker" spinge sul sourcing, che è work-capped e non satura.
+    La conta la fa `mode_banner.harvest_backlog` — gli stessi predicati di
+    `next-for-harvest`, in sola lettura, senza mai creare il DB.
+
+    None = non contabile (jobs.db assente/illeggibile): il consiglio resta
+    quello storico, perché proporre un raccolto che non sappiamo se esiste
+    sarebbe peggio del consiglio imperfetto.
+    """
+    try:
+        mod = _load_skill_module("mode_banner", "mode_banner.py")
+        if mod is None:
+            return None
+        n, _thr = mod.harvest_backlog()
+        return n if isinstance(n, int) else None
+    except Exception:  # noqa: BLE001 — un consiglio non abbatte il bridge
+        return None
+
+
 def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_target,
                         work_phase, weekly_pace, weekly_locked, now_h, now_ts):
     """Costruisce il dict-valori 3-sezioni (5h/oggi/settimana) + extras e lo
@@ -1361,13 +1384,24 @@ def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_targe
             "ratio": wp.get("ratio"), "kind": kind if kind not in (None, "ND") else None,
             "debt": wp.get("debt_pct"), "early_lockout": wp.get("early_lockout_h"),
             "burn_mode": bool(wp.get("burn_mode")),
-            # Verdetto imperativo Passo A (RALLENTA ~X%/ACCELERA-SATURA/...): la
-            # CONCLUSIONE pronta per un modello debole (Kimi), non solo i numeri.
-            # Il renderer lo mostra come headline della sezione SETTIMANA.
-            "verdict": (_pace_verdict_line(
-                wp, entry.get("weekly_remaining_pct")) or "").strip() or None,
         }
     extras = {}
+    # [BURN-MODE-ADVISES-THE-WRONG-LEVER] — quante posizioni aspettano un CV.
+    # Si conta SOLO in burn_mode: è l'unico momento in cui la risposta cambia
+    # il consiglio, e una query in più a ogni tick non la paga nessuno.
+    harvest_backlog = None
+    if weekly and weekly.get("burn_mode"):
+        harvest_backlog = _harvest_backlog_count()
+        if harvest_backlog is not None:
+            extras["harvest_backlog"] = harvest_backlog
+    if weekly:
+        # Verdetto imperativo Passo A (RALLENTA ~X%/ACCELERA-SATURA/...): la
+        # CONCLUSIONE pronta per un modello debole (Kimi), non solo i numeri.
+        # Il renderer lo mostra come headline della sezione SETTIMANA.
+        weekly["verdict"] = (_pace_verdict_line(
+            weekly_pace if isinstance(weekly_pace, dict) else {},
+            entry.get("weekly_remaining_pct"),
+            harvest_backlog=harvest_backlog) or "").strip() or None
     mrp = parsed.get("monthly_remaining_pct") if isinstance(parsed, dict) else None
     if isinstance(mrp, (int, float)):
         extras["monthly_rem"] = mrp
@@ -1821,7 +1855,7 @@ def _evening_release(now_dt):
     return False
 
 
-def _pace_verdict_line(weekly_pace, wk_remaining_pct):
+def _pace_verdict_line(weekly_pace, wk_remaining_pct, harvest_backlog=None):
     """VERDETTO imperativo del weekly-pace per la Sentinella (Passo A, 2026-06-28).
 
     Visione utente: dare alla Sentinella la CONCLUSIONE pronta, non solo i numeri
@@ -1872,10 +1906,22 @@ def _pace_verdict_line(weekly_pace, wk_remaining_pct):
                  if isinstance(early, (int, float)) and early > 0 else "")
         return head + goal + leash + trend
     if burn:
-        return (f" WEEKLY-PACE→ACCELERATE-SATURATE: current pace ends at ~{proj:.0f}%,"
-                f" wasting ~{wasted:.0f}% of the weekly quota before reset"
+        diag = (f"current pace ends at ~{proj:.0f}%, wasting ~{wasted:.0f}% of "
+                f"the weekly quota before reset"
                 if isinstance(proj, (int, float)) and isinstance(wasted, (int, float))
-                else " WEEKLY-PACE→ACCELERATE-SATURATE: budget at risk of waste")
+                else "budget at risk of waste")
+        # [BURN-MODE-ADVISES-THE-WRONG-LEVER] — misurato su P05 il 2026-08-02:
+        # l'allarme ha suonato per ore su «scala worker» mentre il team aveva
+        # 460 posizioni e ZERO candidature. Più sourcing non satura (è
+        # work-capped); scrivere CV sì, ed è anche il lavoro che manca. Con un
+        # raccolto pronto il verdetto propone la MODALITÀ, che è una scelta
+        # dell'utente: il Capitano la gira, nessuno la cambia da sé.
+        if isinstance(harvest_backlog, int) and harvest_backlog > 0:
+            return (f" WEEKLY-PACE→PROPOSE-HARVEST: {diag}; "
+                    f"{harvest_backlog} positions already found are waiting for "
+                    f"a CV — more scouting cannot spend it. Ask the user to "
+                    f"switch to `harvest` mode; do NOT switch it yourself")
+        return f" WEEKLY-PACE→ACCELERATE-SATURATE: {diag}"
     goal = (f" (~{sust:.2f}%/h)" if isinstance(sust, (int, float)) else "")
     return f" WEEKLY-PACE→MAINTAIN{goal}{leash}"
 

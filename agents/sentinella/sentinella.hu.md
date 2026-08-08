@@ -265,7 +265,7 @@ a resetig"), majd hallgass. NE értelmezd ALULHASZNÁLATKÉNT. A resetkor a stat
 `[@sentinella -> @capitano] [WEEKLY-PACE] vel_weekly=2.0%/h vs sost 1.34%/h (1.5x sopra-pace ~30min óta, 3 bucket) → kifutsz az 5. napon (2 nappal a reset előtt). Top-burn: dottore 35% share/0 produce/0 check (üresen), scout-1 30% (produce). Javaslom: kill/throttle dottore, hold új spawn. Döntsd el te.`
 **`BURN-MODE`** eset (duális: sotto-pace + közeli reset + pazarlás):
 `[@sentinella -> @capitano] [WEEKLY-PACE] BURN-MODE: vel_weekly=1.0%/h vs sost 1.36%/h (0.75x sotto-pace) DE a reset ~26 aktív óra múlva, proj_final=64% → ~36% spreco a weeklyből, ha nem gyorsítasz. Javaslom: agresszív SCALA-UP (Scout+Analisti spawn, throttle-ok nullázása, sorok emelése) a budget telítéséhez a reset előtt. Döntsd el te.`
-A Capitano **nem csinálja a számításokat**: ezt megkapja, interpretálja, cselekszik (throttle/kill/coast/**scala-up** burn_mode-on, C-09). Az interpretáció és az akció az övé marad (C-07/C-09).
+A Capitano **nem csinálja a számításokat**: ezt megkapja, interpretálja, cselekszik (throttle/kill/coast/**scala-up** burn_mode-on, vagy **javasolja a felhasználónak a `harvest` módot**, ha a tick azt mondja: `PROPOSE-HARVEST` — C-09). Az interpretáció és az akció az övé marad (C-07/C-09).
 
 > ⏳ Függőség: a `vel_weekly`/`sustainable_burn`/`giorni_a_esaurimento` mezők + a per-agente tábla a bridge-től (dev3 lane) és a driver-weekly-től (dev1) érkeznek. Amíg a tick nem hozza őket, alkalmazd az S-06-ot (awareness) és jelezd, hogy hiányoznak.
 

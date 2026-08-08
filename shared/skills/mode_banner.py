@@ -551,6 +551,55 @@ def _care_queue_counts(conn) -> dict:
     return out
 
 
+def harvest_backlog(orders: Optional[dict] = None):
+    """`(posizioni pronte per un CV, soglia)`. Il conteggio è None se non
+    ottenibile — jobs.db illeggibile o schema vecchio — e in quel caso non si
+    deduce niente: né che il raccolto sia finito, né che sia pieno.
+
+    Sta qui e non dentro `exit_status` perché ha DUE lettori: la condizione di
+    uscita della modalità `harvest` e il consiglio di `burn_mode` del bridge
+    ([BURN-MODE-ADVISES-THE-WRONG-LEVER]), che deve sapere se esiste un
+    raccolto da proporre prima di suggerire di spendere. Una terza copia di
+    questa SQL era il modo più rapido per farle divergere.
+
+    Gli stessi predicati di `next-for-harvest` in db_query.py — la coda è la
+    fonte di verità e la stima deve contare le SUE righe, non un soprainsieme.
+    Senza `status='scored'` finivano nel conto anche le `ready` (122 su una VPS
+    reale) e le posizioni chiuse o scadute: il banner non avrebbe mai
+    dichiarato un falso «finito» — sovrastimare è conservativo — ma il numero
+    mostrato al Capitano era di un'altra coda. Se quei predicati cambiano di
+    là, vanno cambiati qui: la duplicazione è voluta (il banner non importa
+    db_query) ma non è libera.
+    """
+    orders = orders or {}
+    thr = orders.get("cv_min_score")
+    if not isinstance(thr, (int, float)) or isinstance(thr, bool):
+        thr = HARVEST_DEFAULT_CV_MIN_SCORE
+    conn = _db_ro_conn()
+    if conn is None:
+        return None, thr
+    try:
+        n = _count(conn, """
+            SELECT COUNT(*)
+            FROM positions p
+            JOIN (SELECT position_id, MAX(total_score) AS ts
+                  FROM scores GROUP BY position_id) s
+              ON s.position_id = p.id
+            LEFT JOIN applications a ON a.position_id = p.id
+            WHERE a.id IS NULL
+              AND p.status = 'scored'
+              AND s.ts >= ?
+              AND COALESCE(p.is_open, 1) != 0
+              AND (p.expires_at IS NULL OR p.expires_at >= date('now'))
+        """, (thr,))
+    finally:
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
+    return n, thr
+
+
 def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
     """La condizione di uscita della modalità, valutata ADESSO.
 
@@ -576,46 +625,12 @@ def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
                           "(`feedback-query`)"}
 
     if mode == MODE_HARVEST:
-        conn = _db_ro_conn()
-        if conn is None:
-            return {"kind": EXIT_UNAVAILABLE,
-                    "detail": "jobs.db is unreadable — DO NOT infer that "
-                              "harvest is finished: check with db_query"}
-        thr = orders.get("cv_min_score")
-        if not isinstance(thr, (int, float)) or isinstance(thr, bool):
-            thr = HARVEST_DEFAULT_CV_MIN_SCORE
-        try:
-            # Gli stessi predicati di `next-for-harvest` in db_query.py — la
-            # coda è la fonte di verità e la stima deve contare le SUE righe,
-            # non un soprainsieme. Senza `status='scored'` finivano nel conto
-            # anche le `ready` (122 su una VPS reale) e le posizioni chiuse o
-            # scadute: il banner non avrebbe mai dichiarato un falso «finito»
-            # — sovrastimare è conservativo — ma il numero mostrato al
-            # Capitano era di un'altra coda. Se quei predicati cambiano di là,
-            # vanno cambiati qui: la duplicazione è voluta (il banner non
-            # importa db_query) ma non è libera.
-            n = _count(conn, """
-                SELECT COUNT(*)
-                FROM positions p
-                JOIN (SELECT position_id, MAX(total_score) AS ts
-                      FROM scores GROUP BY position_id) s
-                  ON s.position_id = p.id
-                LEFT JOIN applications a ON a.position_id = p.id
-                WHERE a.id IS NULL
-                  AND p.status = 'scored'
-                  AND s.ts >= ?
-                  AND COALESCE(p.is_open, 1) != 0
-                  AND (p.expires_at IS NULL OR p.expires_at >= date('now'))
-            """, (thr,))
-        finally:
-            try:
-                conn.close()
-            except sqlite3.Error:
-                pass
+        n, thr = harvest_backlog(orders)
         if n is None:
             return {"kind": EXIT_UNAVAILABLE,
-                    "detail": "count failed (schema?) — DO NOT infer that "
-                              "harvest is finished"}
+                    "detail": "count unavailable (jobs.db unreadable, or an "
+                              "older schema) — DO NOT infer that harvest is "
+                              "finished: check with db_query"}
         if n == 0:
             return {"kind": EXIT_DONE,
                     "detail": "0 live positions with score ≥ %s without a "
