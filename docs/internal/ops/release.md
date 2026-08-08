@@ -69,6 +69,7 @@ fallback is pinned to `ghcr.io/leopu00/jht:X.Y.Z`.
 - [ ] **Bump every checked version field and regenerate every lockfile** for the new `X.Y.Z`.
 - [ ] **Update `CHANGELOG.md`** — rename the `[Unreleased]` heading to `[X.Y.Z] — YYYY-MM-DD` and open a fresh empty `[Unreleased]` block above it. The release job extracts the body of `## [X.Y.Z]` as the GitHub Release notes; if that block is missing it silently falls back to a `git log` dump, which is how a release ends up with unreadable notes.
 - [ ] Run `scripts/check-release-version.sh vX.Y.Z` locally — it must print `OK`.
+- [ ] **Decide the provider CLI versions** this release installs — `shared/config/provider-versions.json` (issue #130). Leaving them as they are is a decision too, and the right one unless a bump has been tested: the setup installs exactly what that file declares, so a machine on `vX.Y.Z` runs the same provider CLI as every other. If you do bump one, change `version`, `pinned_at` and `note` together (the diff is the release trace), and run the e2e of the affected platform: the pin is the only thing standing between a release and an untested runtime. `jht providers versions` prints expected vs installed on any machine.
 - [ ] Run the test suites: `npm test` (vitest + pytest) and, if the game changed, `npm run app:test`.
 - [ ] Commit as `chore(release): prepare vX.Y.Z` and push to `master`.
 - [ ] **Merge `master` into `production`** and push it — the release job refuses any tag that does not point at `origin/production` HEAD.

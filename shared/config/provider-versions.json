@@ -1,0 +1,28 @@
+{
+  "$schema_note": "Pinned provider CLI versions — the release installs THESE, never a mutable tag. Issue #130. Bumping a version here is the intentional act that upgrades a provider: it is a code change, it lands in a commit, and it ships with a release. Never edit it on a live machine to 'fix' something — that is exactly the drift the pin exists to prevent.",
+  "$how_to_bump": "1) check the changelog of the CLI; 2) change `version` and `pinned_at` here, and say WHY in `note`; 3) run the e2e of the affected platform; 4) commit — the diff is the release trace. `jht providers versions` shows expected vs installed on any machine.",
+  "$first_pin_is_a_freeze": "These three values are the versions observed running on the reference machine on 2026-08-08, NOT the newest published ones: introducing a pin must change nothing at runtime. Upgrading a provider is a separate, tested act — otherwise the commit that adds reproducibility would itself ship an untested runtime change.",
+  "pins": {
+    "claude": {
+      "kind": "npm",
+      "package": "@anthropic-ai/claude-code",
+      "version": "2.1.226",
+      "pinned_at": "2026-08-08",
+      "note": "First pin (issue #130): the version published when the pin was introduced. Before this, setup installed @latest and two machines on the same JHT release could run two different CLIs."
+    },
+    "codex": {
+      "kind": "npm",
+      "package": "@openai/codex",
+      "version": "0.147.0",
+      "pinned_at": "2026-08-08",
+      "note": "First pin (issue #130). The Windows v0.3.5 run installed `@openai/codex@latest`, so its runtime was not reproducible from the release tag."
+    },
+    "kimi": {
+      "kind": "uv",
+      "package": "kimi-cli",
+      "version": "1.36.0",
+      "pinned_at": "2026-08-08",
+      "note": "First pin (issue #130). Installed with uv from PyPI (`kimi-cli==<version>`), not npm. PyPI already publishes 1.49.0: the bump is a separate, tested change, not a side effect of adding the pin."
+    }
+  }
+}
