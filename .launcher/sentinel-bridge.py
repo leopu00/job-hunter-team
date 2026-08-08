@@ -1674,13 +1674,20 @@ def _pace_guard_step(entry, within_hours=True, burn_intent_on=False):
         in_hours = _pace_guard_within_hours(within_hours, burn_intent_on)
         result["within_working_hours"] = in_hours
         if in_hours and _should_advise_captain(result, _pace_advice_state, now_ts):
-            result["advised"] = True
             result["delivered_via_tmux"] = _notify_captain_pace_guard(result)
-            _pace_advice_state.update({
-                "ts": now_ts,
-                "throttle_s": result.get("throttle_recommended_s"),
-                "verdict": result.get("verdict"),
-            })
+            if result.get("suppressed"):
+                # stop_search sul disco + consiglio di accelerazione: trattenuto
+                # (vedi _notify_captain_pace_guard). Non è stato DETTO → non
+                # consuma l'edge: a modalità rientrata il primo consiglio utile
+                # non deve aspettare il cooldown per un consiglio mai partito.
+                result["advised"] = False
+            else:
+                result["advised"] = True
+                _pace_advice_state.update({
+                    "ts": now_ts,
+                    "throttle_s": result.get("throttle_recommended_s"),
+                    "verdict": result.get("verdict"),
+                })
         else:
             result["advised"] = False
             if not in_hours:
@@ -1746,6 +1753,34 @@ def _append_pace_mailbox(advice, delivered, kind="pace-guard"):
         print(f"[bridge V6] WARN append mailbox {kind}: {e}", file=sys.stderr)
 
 
+def _pace_mode_section():
+    """(sezione [MODALITÀ CORRENTE], sourcing_stopped) lette DA DISCO adesso.
+
+    T-025, residuo di [MODE-INJECTION-HOURLY-PROMPT]: il consiglio del pace
+    guard era l'unico messaggio periodico al Capitano che non dichiarava gli
+    ordini in vigore. Stesso contratto di `heartbeat-bridge._mode_section`:
+    la sezione si compone via `shared/skills/mode_banner.py` a OGNI invio e
+    non si cacha mai il risultato — un ordine cambiato a caldo deve valere al
+    consiglio successivo, non al riavvio del bridge.
+
+    Fail-open come il battito: modulo non caricabile o errore → ("", False),
+    il consiglio parte comunque e il WARN è il segnale «sezione mancante» —
+    che deve poter significare solo «bridge rotto», mai «modalità normale».
+    """
+    mod = _load_skill_module("mode_banner", "mode_banner.py")
+    if mod is None:
+        print("[bridge V6] WARN mode_banner not loadable: [CURRENT MODE] was "
+              "NOT injected", file=sys.stderr)
+        return ("", False)
+    try:
+        snap = mod.snapshot()
+        return (mod.banner(snap=snap), bool(mod.sourcing_stopped(snap)))
+    except Exception as e:  # noqa: BLE001 — un promemoria non abbatte il guard
+        print(f"[bridge V6] WARN [CURRENT MODE] could not be composed: {e}",
+              file=sys.stderr)
+        return ("", False)
+
+
 def _notify_captain_pace_guard(result):
     """Consegna il consiglio al Capitano. Ritorna True se il tmux-send è andato.
 
@@ -1754,10 +1789,29 @@ def _notify_captain_pace_guard(result):
     Il secondo esiste perché `jht-tmux-send` fallisce quando il Capitano è in
     turno lungo, e da oggi un consiglio perso significa nessuna correzione —
     prima il freno era già stato applicato e il messaggio era solo un'informativa.
+
+    T-025: il messaggio porta in coda la sezione [MODALITÀ CORRENTE], e con
+    `stop_search` sul disco il consiglio che spingerebbe SPESA NUOVA (verdetto
+    INDIETRO = «sei sotto curva, accelera») viene soppresso — come il bridge
+    orario disarma l'ordine C-05: con la coda `new` volutamente vuota per
+    ordine dell'utente, «vai più veloce» è la stessa contraddizione, nello
+    STESSO messaggio, della sezione che gli sta in coda. I consigli PROTETTIVI
+    (AVANTI, LOCKOUT-IMMINENTE: frenare) restano sempre: sono compatibili con
+    qualunque modalità e proteggono la finestra. Un consiglio soppresso è
+    marcato `suppressed` nel result (finisce in pace-guard.jsonl, così un
+    guard silenzioso per stop_search non somiglia a un guard morto) e NON
+    consuma l'edge del gate: a modalità rientrata il consiglio riparte subito.
     """
     advice = result.get("advice") or ""
-    delivered = jht_tmux_send(CAPITANO_SESSION, advice) if advice else False
-    _append_pace_mailbox(advice, delivered)
+    if not advice:
+        return False
+    mode_section, sourcing_stopped = _pace_mode_section()
+    if sourcing_stopped and result.get("verdict") == "INDIETRO":
+        result["suppressed"] = "sourcing-stopped"
+        return False
+    msg = f"{advice} {mode_section}" if mode_section else advice
+    delivered = jht_tmux_send(CAPITANO_SESSION, msg)
+    _append_pace_mailbox(msg, delivered)
     return delivered
 
 
