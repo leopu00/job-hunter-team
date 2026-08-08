@@ -34,6 +34,7 @@ import sqlite3
 import stat
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -328,3 +329,98 @@ def test_both_spawn_branches_send_the_optional_env():
     src = _start_agent_src()
     assert 'send_optional_env bash' in src
     assert 'send_optional_env powershell' in src
+
+
+# ── 7. Il bug del 2026-08-08: import a ogni comando + chiave mutabile ────
+#
+# `import_legacy` stava in `get_db()` → ripartiva a OGNI comando, e
+# `cmd_assign` mutava `started_at` (metà della chiave di dedup): la riga
+# importata cambiava chiave e al giro dopo rientrava come SECONDA attiva.
+# In parallelo, senza vincolo sotto il controllo-poi-inserisci, 4 bootstrap
+# producevano 20 righe invece di 5. I test di sezione 3 non lo vedevano
+# perché non incrociavano mai bootstrap → assign → show né i processi.
+
+def test_bootstrap_assign_show_leaves_one_active_row(home, env):
+    """La sequenza esatta del bug: bootstrap (importa) → assign → show.
+    Prima: DUE righe attive per lo stesso Scout, con territori che si
+    contraddicevano. Adesso: UNA, con il territorio nuovo — e sotto c'è
+    l'indice UNIQUE che presidia la chiave di dedup."""
+    _legacy(home, rows=[('scout-1', '1,2', 'remoteok', '2026-07-01 10:00:00', None)])
+    assert _run(env, 'bootstrap').returncode == 0
+    r = _run(env, 'assign', 'scout-1', '--cerchi', '9')
+    assert r.returncode == 0, r.stderr
+    show = _run(env, 'show').stdout
+    assert show.count('scout-1') == 1
+    assert 'remoteok' not in show   # il territorio vecchio non è rientrato
+    conn = sqlite3.connect(env['JHT_DB'])
+    active = conn.execute(
+        "SELECT COUNT(*) FROM scout_coordination "
+        "WHERE scout='scout-1' AND superseded_at IS NULL").fetchone()[0]
+    idx = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='index' "
+        "AND name='idx_scout_coordination_scout_started_unique'").fetchone()
+    conn.close()
+    assert active == 1
+    assert idx is not None
+
+
+def test_everyday_commands_do_not_rerun_the_import(home, env):
+    """L'import è del solo bootstrap: gli altri comandi non lo rilanciano.
+    Prima viveva in `get_db()` e ripartiva a ogni invocazione."""
+    _legacy(home, rows=[('scout-1', '1,2', 'remoteok', '2026-07-01 10:00:00', None)])
+    assert _run(env, 'bootstrap').returncode == 0
+    count = "SELECT COUNT(*) FROM scout_coordination"
+    before = sqlite3.connect(env['JHT_DB']).execute(count).fetchone()[0]
+    for args in (('show',), ('history',), ('claim', '7', 'scout-1'),
+                 ('check-claim', '7'), ('doctor',)):
+        r = _run(env, *args)
+        assert r.returncode == 0, r.stderr
+    after = sqlite3.connect(env['JHT_DB']).execute(count).fetchone()[0]
+    assert before == after == 1
+
+
+def test_concurrent_bootstraps_import_the_legacy_once(home, env, tmp_path):
+    """4 bootstrap SINCRONIZZATI su un legacy da 200 righe → 200 righe.
+
+    Lo schema esiste già (primo bootstrap senza legacy) ma l'import è ancora
+    da fare: è la finestra reale dei bootstrap pre-spawn, uno per Scout.
+    I processi partono da una BARRIERA (un file "go") — senza, quattro
+    background lanciati alla buona non fanno contesa e il test passa anche
+    col difetto vivo (verde falso, visto sul campo il 2026-08-08). Il legacy
+    è grosso apposta (200 righe) per allargare la finestra fra controllo e
+    inserimento.
+
+    Onestà del test: la corsa resta probabilistica. La garanzia
+    deterministica è l'indice UNIQUE `(scout, started_at)` — verificato a
+    vista dal test sopra — con `INSERT OR IGNORE` che traduce il conflitto
+    del perdente in «già importata da un pari» invece che in un exit 3."""
+    assert _run(env, 'bootstrap').returncode == 0
+    _legacy(home, rows=[(f'scout-{i}', str(i), 'x',
+                         f'2026-07-01 {10 + i // 3600:02d}:'
+                         f'{(i // 60) % 60:02d}:{i % 60:02d}', None)
+                        for i in range(1, 201)])
+    go = tmp_path / 'go'
+    child = (
+        "import os, sys, time, subprocess\n"
+        "go = os.environ['JHT_TEST_GO']\n"
+        "while not os.path.exists(go):\n"
+        "    time.sleep(0.005)\n"
+        "r = subprocess.run([sys.executable, os.environ['JHT_TEST_COORD'],\n"
+        "                    'bootstrap'])\n"
+        "sys.exit(r.returncode)\n"
+    )
+    spawn_env = {**os.environ, **{k: str(v) for k, v in env.items()},
+                 'JHT_TEST_GO': str(go), 'JHT_TEST_COORD': SCOUT_COORD}
+    procs = [subprocess.Popen([sys.executable, '-c', child],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              text=True, env=spawn_env)
+             for _ in range(4)]
+    time.sleep(1)   # tutti e quattro alla barriera
+    go.touch()
+    for p in procs:
+        _, err = p.communicate(timeout=60)
+        assert p.returncode == 0, err
+    conn = sqlite3.connect(env['JHT_DB'])
+    total = conn.execute("SELECT COUNT(*) FROM scout_coordination").fetchone()[0]
+    conn.close()
+    assert total == 200

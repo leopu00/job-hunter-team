@@ -13,7 +13,7 @@ Plusieurs Scouts s'exécutent en parallèle (max 2 instances selon la politique 
 
 L'état réside dans la **base de données SQLite partagée** gérée par `scout_coord.py` ; les scouts négocient via tmux au démarrage et y persistent l'accord.
 
-**Une seule base, ou aucune coordination.** Tous les Scouts doivent être sur le même fichier — deux Scouts sur deux fichiers ne se coordonnent pas, ils le croient seulement. `scout_coord.py` résout le chemin depuis l'environnement (`JHT_SCOUT_COORD_DB` si l'opérateur en a déclaré un, sinon `$JHT_HOME/data/`) et le crée s'il manque. S'il sort en **3**, la base est inutilisable : rapporte le message affiché et ARRÊTE-TOI. Ne crée jamais ta propre base, ne pointe jamais l'outil vers un autre chemin.
+**Une seule base, ou aucune coordination.** Tous les Scouts doivent être sur la même base — le `jobs.db` de l'équipe, le même `JHT_DB` que toutes les autres skills (le launcher l'exporte déjà dans ton panneau). Il n'y a plus de fichier de coordination séparé à résoudre ; un ancien `scout_coordination.db`, s'il existe, est importé une fois au bootstrap et laissé en place, en lecture seule ensuite. S'il sort en **3**, la base est inutilisable : rapporte le message affiché et ARRÊTE-TOI. Ne crée jamais ta propre base, ne pointe jamais l'outil vers un autre chemin.
 
 ```bash
 # Sur quelle base suis-je vraiment ?

@@ -21,8 +21,10 @@ cloud: `db_to_supabase` sincronizza una lista esplicita di tabelle e queste
 non ci sono.
 
 Il vecchio file, se esiste, viene **importato una volta sola** e lasciato
-dov'e': si legge, non si cancella. L'import deduplica su scout + `started_at`,
-quindi rileggerlo non duplica niente.
+dov'e': si legge, non si cancella. L'import deduplica su scout + `started_at`
+(la stessa chiave dell'indice UNIQUE dello schema) e avviene al solo
+`bootstrap` pre-spawn — non a ogni comando, che e' come e' nato il doppione
+ATTIVO del 2026-08-08.
 
 Uso:
   python3 scout_coord.py show                          # Distribuzione attuale
@@ -125,6 +127,12 @@ def import_legacy(conn):
     cartella legacy puo' essere proprio quella non scrivibile dell'issue #132,
     e un import che ha bisogno di scrivere accanto al file da leggere
     fallirebbe esattamente nel caso che deve coprire.
+
+    Il controllo in memoria (`seen`) non basta da solo: i bootstrap girano uno
+    per Scout prima dello scaglionamento, quindi due import possono correre
+    INSIEME. Sotto c'e' l'indice UNIQUE `(scout, started_at)` dello schema, e
+    `INSERT OR IGNORE` traduce il conflitto in «gia' importata da un pari»
+    invece che in un fallimento del bootstrap.
     """
     src = legacy_db_path()
     if src is None:
@@ -158,14 +166,14 @@ def import_legacy(conn):
             # comparire nella distribuzione IN VIGORE.
             superseded = now
             quarantined += 1
-        conn.execute(
-            "INSERT INTO scout_coordination "
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO scout_coordination "
             "(scout, cerchi, fonti, note, started_at, superseded_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             (r["scout"], r["cerchi"], r["fonti"], r["note"], r["started_at"],
              superseded))
         seen.add(key)
-        imported += 1
+        imported += cur.rowcount or 0
     claimed = 0
     for c in claims:
         cur = conn.execute(
@@ -225,7 +233,14 @@ def _connect(path):
 
 
 def get_db():
-    """Il database della squadra, con lo schema garantito e la storia importata.
+    """Il database della squadra, con lo schema garantito. Nient'altro.
+
+    L'import del file legacy NON sta qui: sta nel solo bootstrap
+    (`ensure_ready`). Averlo anche qui lo faceva ripartire a OGNI comando
+    (`show`, `assign`, `claim`...) — e poiche' il vecchio `assign` mutava
+    `started_at`, la chiave di dedup cambiava sotto l'import e la stessa
+    assegnazione rientrava come seconda riga ATTIVA (bug su master del
+    2026-08-08).
 
     Qualunque guasto esce come `CoordinationDbError`: il chiamante lo riporta
     e si ferma, non si sceglie un altro file.
@@ -233,14 +248,9 @@ def get_db():
     path = Path(DB_PATH)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        db = _connect(path)
+        return _connect(path)
     except (OSError, sqlite3.Error) as e:
         raise CoordinationDbError(_actionable(path, str(e)))
-    try:
-        import_legacy(db)
-    except sqlite3.Error:
-        pass   # la storia vecchia non vale il blocco della coordinazione di oggi
-    return db
 
 
 def cmd_show():
@@ -298,8 +308,13 @@ def cmd_assign(scout, cerchi=None, fonti=None, note=None):
         "SELECT id FROM scout_coordination WHERE scout=? AND superseded_at IS NULL", (scout,)
     ).fetchone()
     if existing:
+        # `started_at` NON si tocca: e' meta' della chiave di dedup
+        # dell'import legacy (e dell'indice UNIQUE sotto). Mutarlo qui — come
+        # faceva la versione del 2026-08-08 — cambiava la chiave della riga
+        # importata, e l'import successivo la re-inseriva come SECONDA riga
+        # attiva con il territorio vecchio.
         db.execute(
-            "UPDATE scout_coordination SET cerchi=?, fonti=?, note=?, started_at=CURRENT_TIMESTAMP WHERE id=?",
+            "UPDATE scout_coordination SET cerchi=?, fonti=?, note=? WHERE id=?",
             (cerchi, fonti, note, existing["id"])
         )
         print(f"Updated: {scout} → search_areas={cerchi}, sources={fonti}")

@@ -13,7 +13,7 @@ Tobb Scout fut parhuzamosan (csapatszabalyzat szerint maximum 2 peldany). A csap
 
 Az allapot a `scout_coord.py` altal kezelt **kozos SQLite adatbazisban** el; a scoutok inditaskor tmux-on keresztul targyalnak es ott rogzitik a megallapodast.
 
-**Egy adatbazis, vagy semmilyen koordinacio.** Minden Scoutnak ugyanazon a fajlon kell dolgoznia — ket Scout ket fajlon nem koordinal, csak hiszi. A `scout_coord.py` a kornyezetbol oldja fel az utvonalat (`JHT_SCOUT_COORD_DB`, ha az operator deklaralt egyet, kulonben `$JHT_HOME/data/`), es letrehozza, ha hianyzik. Ha **3**-mal lep ki, az adatbazis hasznalhatatlan: jelentsd a kiirt uzenetet es ALLJ MEG. Soha ne hozz letre sajat adatbazist, es soha ne iranyitsd az eszkozt mas utvonalra.
+**Egy adatbazis, vagy semmilyen koordinacio.** Minden Scoutnak ugyanazon az adatbazison kell dolgoznia — a csapat `jobs.db`-jen, ugyanazon a `JHT_DB`-n, mint minden mas skill (a launcher mar exportalja a paneledbe). Nincs tobbe kulon koordinacios fajl, amit fel kellene oldani; egy regi `scout_coordination.db`, ha letezik, egyszer importalodik a bootstrap soran, es helyben marad, onnantol csak olvashato. Ha **3**-mal lep ki, az adatbazis hasznalhatatlan: jelentsd a kiirt uzenetet es ALLJ MEG. Soha ne hozz letre sajat adatbazist, es soha ne iranyitsd az eszkozt mas utvonalra.
 
 ```bash
 # Melyik adatbazison dolgozom valojaban?

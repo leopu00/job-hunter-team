@@ -13,7 +13,7 @@ Più Scout girano in parallelo (max 2 istanze per policy del team). Il team funz
 
 Lo stato vive nel **database SQLite condiviso** gestito da `scout_coord.py`; gli scout negoziano via tmux all'avvio e persistono l'accordo lì.
 
-**Un solo database, o nessun coordinamento.** Tutti gli Scout devono stare sullo stesso file — due Scout su due file non si stanno coordinando, credono di farlo. `scout_coord.py` risolve il percorso dall'ambiente (`JHT_SCOUT_COORD_DB` se l'operatore ne ha dichiarato uno, altrimenti `$JHT_HOME/data/`) e lo crea se manca. Se esce **3**, il database non è utilizzabile: riferisci il messaggio che ha stampato e FERMATI. Mai creare un database tuo, mai puntare il tool a un altro percorso.
+**Un solo database, o nessun coordinamento.** Tutti gli Scout devono stare sullo stesso database — il `jobs.db` della squadra, lo stesso `JHT_DB` di ogni altra skill (il launcher lo esporta già nel tuo pane). Non c'è più un file di coordinamento separato da risolvere; un vecchio `scout_coordination.db`, se esiste, viene importato una volta al bootstrap e lasciato dov'è, in sola lettura da quel momento. Se esce **3**, il database non è utilizzabile: riferisci il messaggio che ha stampato e FERMATI. Mai creare un database tuo, mai puntare il tool a un altro percorso.
 
 ```bash
 # Su quale database sto lavorando davvero?
