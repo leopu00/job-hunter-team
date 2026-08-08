@@ -424,3 +424,87 @@ def test_concurrent_bootstraps_import_the_legacy_once(home, env, tmp_path):
     total = conn.execute("SELECT COUNT(*) FROM scout_coordination").fetchone()[0]
     conn.close()
     assert total == 200
+
+
+# ── 8. T-024: la dedup pre-indice cancella solo i duplicati ESATTI ──────
+#
+# La migrazione che prepara l'indice UNIQUE prima raggruppava solo per
+# CHIAVE (scout, started_at): due righe con stessa chiave ma territorio
+# diverso ne avrebbero persa una in silenzio. Adesso il GROUP BY copre
+# anche il contenuto — i conflitti restano e fanno fallire l'indice in
+# modo visibile.
+
+def _bare_coord_db(path, rows):
+    """Una `scout_coordination` SENZA l'indice UNIQUE, come un DB scritto
+    prima della migrazione (o dal difetto del 2026-08-08)."""
+    db = sqlite3.connect(path)
+    db.execute(
+        "CREATE TABLE scout_coordination ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, scout TEXT NOT NULL, "
+        "cerchi TEXT, fonti TEXT, note TEXT, "
+        "started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+        "superseded_at TIMESTAMP)")
+    for scout, cerchi, fonti, started in rows:
+        db.execute(
+            "INSERT INTO scout_coordination (scout, cerchi, fonti, started_at)"
+            " VALUES (?,?,?,?)", (scout, cerchi, fonti, started))
+    db.commit()
+    db.close()
+
+
+def _run_ensure_schema(db_path):
+    """La migrazione vera, in un processo pulito (come fa ogni agente)."""
+    return subprocess.run([sys.executable, '-c',
+                           "import sys, sqlite3\n"
+                           f"sys.path.insert(0, {SKILLS_DIR!r})\n"
+                           "import _db\n"
+                           f"conn = sqlite3.connect({str(db_path)!r})\n"
+                           "conn.row_factory = sqlite3.Row\n"
+                           "_db.ensure_schema(conn)\n"
+                           "conn.close()\n"],
+                          capture_output=True, text=True)
+
+
+def _index_names(db_path):
+    conn = sqlite3.connect(db_path)
+    names = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index'").fetchall()}
+    conn.close()
+    return names
+
+
+def test_exact_duplicates_are_removed_and_the_index_is_created(tmp_path):
+    """Stessa chiave E stesso contenuto = ridondanza pura: sparisce la
+    copia, l'indice nasce, la traccia va su stderr."""
+    db_path = tmp_path / 'jobs.db'
+    _bare_coord_db(db_path, [
+        ('scout-1', '1,2', 'remoteok', '2026-07-01 10:00:00'),
+        ('scout-1', '1,2', 'remoteok', '2026-07-01 10:00:00'),
+    ])
+    r = _run_ensure_schema(db_path)
+    assert r.returncode == 0, r.stderr
+    assert 'removed 1 exact duplicate' in r.stderr
+    conn = sqlite3.connect(db_path)
+    total = conn.execute("SELECT COUNT(*) FROM scout_coordination").fetchone()[0]
+    conn.close()
+    assert total == 1
+    assert 'idx_scout_coordination_scout_started_unique' in _index_names(db_path)
+
+
+def test_same_key_different_content_blocks_the_index_loudly(tmp_path):
+    """Stessa chiave, territorio diverso = CONFLITTO, non ridondanza:
+    nessuna riga persa, indice NON creato, errore ben visibile su stderr."""
+    db_path = tmp_path / 'jobs.db'
+    _bare_coord_db(db_path, [
+        ('scout-1', '1,2', 'remoteok', '2026-07-01 10:00:00'),
+        ('scout-1', '9', 'other', '2026-07-01 10:00:00'),
+    ])
+    r = _run_ensure_schema(db_path)
+    assert r.returncode == 0, r.stderr   # fail-safe: ensure_schema non cade
+    assert 'was NOT created' in r.stderr
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute(
+        "SELECT cerchi FROM scout_coordination ORDER BY id").fetchall()
+    conn.close()
+    assert [row[0] for row in rows] == ['1,2', '9']   # entrambe al loro posto
+    assert 'idx_scout_coordination_scout_started_unique' not in _index_names(db_path)
