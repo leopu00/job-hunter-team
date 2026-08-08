@@ -38,6 +38,111 @@ MUTATING_ACL_RIGHTS = {
     "TakeOwnership",
 }
 
+HEALTH_RAW_ORACLE_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HEALTH_GATE_SOURCE)
+$typeMarker = "Add-Type -TypeDefinition @'"
+$typeStart = $source.IndexOf($typeMarker) + $typeMarker.Length
+$typeEnd = $source.IndexOf("`n'@", $typeStart)
+if ($typeStart -lt $typeMarker.Length -or $typeEnd -le $typeStart) {
+  throw 'health gate native process owner is missing'
+}
+Add-Type -TypeDefinition $source.Substring($typeStart, $typeEnd - $typeStart)
+$tokens = $null
+$errors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$errors)
+if ($errors.Count -ne 0) { throw 'health gate parse failed' }
+$function = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -ceq 'Get-ManagedExitCodeBestEffort'
+}, $true))
+if ($function.Count -ne 1) { throw 'managed diagnostic function is missing' }
+. ([ScriptBlock]::Create($function[0].Extent.Text))
+
+function Assert-ProcessGone {
+  param([int]$ProcessId)
+  Start-Sleep -Milliseconds 100
+  if (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) {
+    throw 'raw process owner left a process behind'
+  }
+}
+
+$probe = $null
+$exited = $false
+$probePid = 0
+try {
+  $probe = [JhtHealthPckProcess]::CreateExitProbe()
+  $probePid = $probe.ProcessId
+  $probe.Resume()
+  $raw = $probe.WaitForExitCode(5000)
+  $exited = $true
+  $managed = Get-ManagedExitCodeBestEffort -ProcessId $probePid -InjectFailure
+  if ($raw -ne 7 -or $managed -ne -1) {
+    throw 'managed fault changed the authoritative raw result'
+  }
+} finally {
+  try {
+    if ($probe -and -not $exited) { $probe.TerminateAndWait(5000) }
+  } finally {
+    if ($probe) { $probe.Dispose() }
+  }
+}
+Assert-ProcessGone $probePid
+
+$probe = $null
+$exited = $false
+$probePid = 0
+try {
+  $probe = [JhtHealthPckProcess]::CreateExitProbeForTest(9)
+  $probePid = $probe.ProcessId
+  $probe.Resume()
+  $raw = $probe.WaitForExitCode(5000)
+  $exited = $true
+  if ($raw -ne 9) { throw 'non-seven raw result was accepted' }
+} finally {
+  try {
+    if ($probe -and -not $exited) { $probe.TerminateAndWait(5000) }
+  } finally {
+    if ($probe) { $probe.Dispose() }
+  }
+}
+Assert-ProcessGone $probePid
+
+$probe = $null
+$exited = $false
+$timedOut = $false
+$probePid = 0
+try {
+  $probe = [JhtHealthPckProcess]::CreateExitProbeForTest(7)
+  $probePid = $probe.ProcessId
+  try { $null = $probe.WaitForExitCode(1) } catch [TimeoutException] {
+    $timedOut = $true
+  }
+  if (-not $timedOut) { throw 'raw timeout was accepted' }
+} finally {
+  try {
+    if ($probe -and -not $exited) { $probe.TerminateAndWait(5000) }
+  } finally {
+    if ($probe) { $probe.Dispose() }
+  }
+}
+Assert-ProcessGone $probePid
+
+$probe = [JhtHealthPckProcess]::CreateExitProbe()
+$probePid = $probe.ProcessId
+$probe.Resume()
+$null = $probe.WaitForExitCode(5000)
+$probe.Dispose()
+$errored = $false
+try { $null = $probe.WaitForExitCode(1) } catch {
+  $errored = $true
+}
+if (-not $errored) { throw 'raw wait error was accepted' }
+Assert-ProcessGone $probePid
+[Console]::Out.WriteLine('WINDOWS-HEALTH-RAW-ORACLE PASS')
+"""
+
 
 def test_nsis_uses_stable_per_user_release_name() -> None:
     source = NSI.read_text()
@@ -845,9 +950,12 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
         "WaitForSingleObject",
         "GetExitCodeProcess",
         "CreateExitProbe",
+        "TerminateAndWait",
+        "Get-ManagedExitCodeBestEffort",
         "$automaticQuit = $Mode -in @('normal','positive')",
         "$probeNativeExitCode -ne 7",
-        "$probeDotnetExitCode -ne 7",
+        "$probeManagedExitCode",
+        '/d /s /c \\"exit /b 7\\"',
         "JHT_UPDATE_HEALTH_PATH",
         "candidate_pid = $CandidatePid",
         "candidate_started = $CandidateStarted",
@@ -862,7 +970,7 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
         "health consumer mutated a hostile capability",
         "health case exit mismatch mode=",
         "native_rc=",
-        "dotnet_rc=",
+        "managed_rc=",
         "outcome=",
         "WINDOWS-UPDATE-HEALTH code=",
         "WINDOWS-UPDATE-HEALTH-NORMAL-WORK",
@@ -878,9 +986,24 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
     assert "Get-Acl" not in gate
     assert "WriteLine($consumerLog)" not in gate
     assert "consumer_rc=" not in gate
+    assert "dotnet_rc=" not in gate
+    assert "if (-not $process.WaitForExit" not in gate
+    assert "if (-not $probeProcess.WaitForExit" not in gate
+    assert ".HasExited" not in gate
+    assert ".Kill()" not in gate
+    assert "$nativeExitCode -ne $managedExitCode" not in gate
     assert gate.index("$consumerLog = [IO.File]::ReadAllText") < gate.index(
-        "$nativeExitCode -ne $dotnetExitCode"
+        "$nativeExitCode -ne $expectedExitCode"
     )
+    calibration_failure = gate[
+        gate.index("if ($probeNativeExitCode -ne 7)") : gate.index(
+            "throw 'native exit-code oracle calibration failed'"
+        )
+    ]
+    assert "mode=calibration native_rc=" in calibration_failure
+    assert " managed_rc=" in calibration_failure
+    assert "outcome=" not in calibration_failure
+    assert "$probeNativeExitCode -ne $probeManagedExitCode" not in gate
 
     invocation = "./tools/windows_update_health_pck_test.ps1"
     for workflow_path in (GAME_WORKFLOW, RELEASE_WORKFLOW):
@@ -891,31 +1014,74 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
         assert "shell: powershell" in step, workflow_path
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="raw process-handle oracle requires Windows"
+)
+def test_exported_health_gate_raw_handle_owns_failure_cleanup() -> None:
+    powershell = shutil.which("powershell.exe")
+    if not powershell:
+        pytest.skip("Windows PowerShell 5.1 is unavailable")
+    environment = os.environ.copy()
+    environment["JHT_TEST_HEALTH_GATE_SOURCE"] = str(HEALTH_PCK_GATE)
+    result = subprocess.run(
+        [
+            powershell,
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "$ErrorActionPreference='Stop';Set-StrictMode -Version 2.0;"
+            + HEALTH_RAW_ORACLE_PROBE,
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=45,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.strip() == "WINDOWS-HEALTH-RAW-ORACLE PASS"
+
+
 def test_recovery_commit_cleanup_attests_all_targets_before_deleting() -> None:
     source = UPDATE_HELPER.read_text()
     cleanup = source[
-        source.index("function Complete-RecoveryCommitCleanup") : source.index(
+        source.index("function Set-CommitCleanupFailure") : source.index(
             "function Invoke-Recover"
         )
     ]
-    codes = (
-        "recovery_commit_backup_cleanup_failed",
-        "recovery_commit_failed_cleanup_failed",
-        "recovery_commit_authority_cleanup_failed",
+    stages = (
+        "backup_cleanup_failed",
+        "failed_cleanup_failed",
+        "authority_preflight_failed",
+        "authority_helper_cleanup_failed",
+        "authority_manifest_cleanup_failed",
+        "authority_signature_cleanup_failed",
+        "authority_root_cleanup_failed",
     )
-    for code in codes:
-        assert cleanup.count(code) == 2
+    for prefix in ("commit_", "recovery_commit_"):
+        for stage in stages:
+            assert prefix + stage in cleanup
     assert "recovery_commit_cleanup_failed" not in source
     first_delete = cleanup.index("Remove-ProtectedFileIfPresent $BackupPath")
     assert cleanup.index("Assert-AtomicDestinationPreflight $BackupPath") < first_delete
     assert cleanup.index("Assert-AtomicDestinationPreflight $FailedPath") < first_delete
-    assert cleanup.index("Assert-ProtectedTreePreflight $AuthorityBackupDir") < (
+    assert cleanup.index("Assert-AuthorityBackupPreflight") < (
         first_delete
     )
-    assert (
-        "Complete-RecoveryCommitCleanup"
-        in source[source.index("function Invoke-Recover") :]
-    )
+    assert "Remove-Item -LiteralPath $AuthorityBackupDir -Force" in cleanup
+    assert "-Recurse" not in cleanup
+    assert "-ErrorAction SilentlyContinue" not in cleanup
+    authority = source[
+        source.index("function Assert-AuthorityBackupLeaf") : source.index(
+            "function Open-AtomicTempStream"
+        )
+    ] + cleanup
+    assert "GetNoFollowNodeKind" in authority
+    assert "Test-Path" not in authority
+    assert "FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS" in source
+    assert "Complete-CommitCleanup -Context 'commit'" in source
+    assert "Complete-CommitCleanup -Context 'recovery'" in source
 
 
 def test_windows_health_boot_is_path_free_and_fail_closed() -> None:

@@ -74,12 +74,16 @@ public static class JhtUpdateFileIdentity {
     private const uint WRITE_DAC = 0x00040000;
     private const uint WRITE_OWNER = 0x00080000;
     private const uint FILE_SHARE_READ = 0x00000001;
+    private const uint FILE_SHARE_WRITE = 0x00000002;
+    private const uint FILE_SHARE_DELETE = 0x00000004;
     private const uint CREATE_NEW = 1;
     private const uint OPEN_EXISTING = 3;
     private const uint FILE_ATTRIBUTE_NORMAL = 0x00000080;
     private const uint FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000;
+    private const uint FILE_FLAG_BACKUP_SEMANTICS = 0x02000000;
     private const uint FILE_FLAG_SEQUENTIAL_SCAN = 0x08000000;
     private const uint FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400;
+    private const uint FILE_ATTRIBUTE_DIRECTORY = 0x00000010;
     private const uint MOVEFILE_REPLACE_EXISTING = 0x00000001;
     private const uint MOVEFILE_WRITE_THROUGH = 0x00000008;
     private const uint OWNER_SECURITY_INFORMATION = 0x00000001;
@@ -156,6 +160,40 @@ public static class JhtUpdateFileIdentity {
         if (!String.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("update file canonical path changed");
         return info;
+    }
+
+    public static int GetNoFollowNodeKind(string inputPath) {
+        string expected = Path.GetFullPath(inputPath);
+        using (SafeFileHandle handle = CreateFile(
+            expected, 0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            IntPtr.Zero, OPEN_EXISTING,
+            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+            IntPtr.Zero)) {
+            if (handle.IsInvalid) {
+                int error = Marshal.GetLastWin32Error();
+                if (error == 2 || error == 3) return 0;
+                throw new Win32Exception(error);
+            }
+            BY_HANDLE_FILE_INFORMATION info;
+            if (!GetFileInformationByHandle(handle, out info))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            if ((info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+                return 3;
+            StringBuilder finalPath = new StringBuilder(32768);
+            uint length = GetFinalPathNameByHandle(
+                handle, finalPath, (uint)finalPath.Capacity, 0);
+            if (length == 0 || length >= finalPath.Capacity)
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            string actual = Path.GetFullPath(
+                NormalizeFinalPath(finalPath.ToString()));
+            if (!String.Equals(actual, expected,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    "update node canonical path changed");
+            return (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0
+                ? 2 : 1;
+        }
     }
 
     public static string Sha256(string inputPath) {
@@ -674,7 +712,22 @@ function Assert-NoReparseAncestors {
   $reparseDetected = $false
   try {
     $full = [IO.Path]::GetFullPath($Path)
-    $probe = if (Test-Path -LiteralPath $full) { Get-Item -LiteralPath $full -Force } else { Get-Item -LiteralPath ([IO.Path]::GetDirectoryName($full)) -Force }
+    $probePath = $full
+    $kind = [JhtUpdateFileIdentity]::GetNoFollowNodeKind($probePath)
+    while ($kind -eq 0) {
+      $parentPath = [IO.Path]::GetDirectoryName($probePath)
+      if (-not $parentPath -or $parentPath -ceq $probePath) {
+        throw 'protected path has no existing filesystem ancestor'
+      }
+      $probePath = $parentPath
+      $kind = [JhtUpdateFileIdentity]::GetNoFollowNodeKind($probePath)
+    }
+    if ($kind -eq 3) {
+      $reparseDetected = $true
+      if ($ReparseCode) { $script:FailureCode = $ReparseCode }
+      throw 'reparse point in protected path'
+    }
+    $probe = Get-Item -LiteralPath $probePath -Force -ErrorAction Stop
     while ($null -ne $probe) {
       if (($probe.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
         $reparseDetected = $true
@@ -844,32 +897,80 @@ function Remove-ProtectedFileIfPresent {
   if (Test-Path -LiteralPath $Path -PathType Leaf) { Remove-Item -LiteralPath $Path -Force -ErrorAction Stop }
 }
 
-function Assert-ProtectedTreePreflight {
-  param([string]$Path)
+function Assert-AuthorityBackupLeaf {
+  param([string]$Path, [string]$ExpectedName)
+  if ([JhtUpdateFileIdentity]::GetNoFollowNodeKind($Path) -ne 1) {
+    throw 'authority backup leaf is not a regular file'
+  }
   Assert-NoReparseAncestors $Path
-  $root = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  if (($item -isnot [IO.FileInfo]) -or
+      ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+      $item.Name -cne $ExpectedName -or
+      -not ([IO.Path]::GetFullPath($item.FullName)).Equals(
+        [IO.Path]::GetFullPath($Path), [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'authority backup leaf is not canonical'
+  }
+  Assert-CurrentOwner $item.FullName
+  Assert-NoForeignWriteAcl $item.FullName
+  $null = Get-Sha256 $item.FullName
+}
+
+function Test-AuthorityBackupLeafPresent {
+  param([string]$Path, [string]$ExpectedName)
+  $kind = [JhtUpdateFileIdentity]::GetNoFollowNodeKind($Path)
+  if ($kind -eq 0) {
+    Assert-NoReparseAncestors $Path
+    return $false
+  }
+  if ($kind -ne 1) { throw 'authority backup leaf is not a regular file' }
+  Assert-AuthorityBackupLeaf $Path $ExpectedName
+  return $true
+}
+
+function Get-AttestedAuthorityBackupRoot {
+  param([switch]$Required)
+  $rootKind = [JhtUpdateFileIdentity]::GetNoFollowNodeKind($AuthorityBackupDir)
+  if ($rootKind -eq 0) {
+    Assert-NoReparseAncestors $AuthorityBackupDir
+    if ($Required) { throw 'authority backup root disappeared' }
+    return $null
+  }
+  if ($rootKind -ne 2) { throw 'authority backup root is not a directory' }
+  Assert-NoReparseAncestors $AuthorityBackupDir
+  $root = Get-Item -LiteralPath $AuthorityBackupDir -Force -ErrorAction Stop
+  if (($root -isnot [IO.DirectoryInfo]) -or
+      ($root.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+      -not ([IO.Path]::GetFullPath($root.FullName)).Equals(
+        [IO.Path]::GetFullPath($AuthorityBackupDir),
+        [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'authority backup root is not canonical'
+  }
+  Assert-CurrentOwner $root.FullName
+  Assert-NoForeignWriteAcl $root.FullName
+  return $root
+}
+
+function Assert-AuthorityBackupPreflight {
+  $root = Get-AttestedAuthorityBackupRoot
   if ($null -eq $root) { return }
-  if (($root -isnot [IO.DirectoryInfo]) -or ($root.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected cleanup directory expected' }
-  $pending = @($root)
-  while ($pending.Count -gt 0) {
-    $directory = $pending[$pending.Count - 1]
-    $pending = if ($pending.Count -eq 1) { @() } else { @($pending[0..($pending.Count - 2)]) }
-    Assert-CurrentOwner $directory.FullName
-    Assert-NoForeignWriteAcl $directory.FullName
-    foreach ($child in @(Get-ChildItem -LiteralPath $directory.FullName -Force -ErrorAction Stop)) {
-      if (($child.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected cleanup tree contains a reparse point' }
-      Assert-CurrentOwner $child.FullName
-      Assert-NoForeignWriteAcl $child.FullName
-      if ($child -is [IO.DirectoryInfo]) { $pending += $child } elseif ($child -is [IO.FileInfo]) { $null = Get-Sha256 $child.FullName } else { throw 'protected cleanup tree contains an unexpected node' }
+  foreach ($child in @(Get-ChildItem -LiteralPath $root.FullName -Force -ErrorAction Stop)) {
+    $expectedPath = switch -CaseSensitive ($child.Name) {
+      $AllowedHelperName { $OldHelperBackupPath; break }
+      'RELEASE-MANIFEST.json' { $OldManifestBackupPath; break }
+      'RELEASE-MANIFEST.json.sig' { $OldSignatureBackupPath; break }
+      default { throw 'authority backup contains an unexpected node' }
     }
+    Assert-AuthorityBackupLeaf $expectedPath $child.Name
   }
 }
 
-function Remove-ProtectedTreeIfPresent {
-  param([string]$Path)
-  Assert-ProtectedTreePreflight $Path
-  if (-not (Test-Path -LiteralPath $Path)) { return }
-  Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+function Assert-AuthorityBackupRootEmpty {
+  $root = Get-AttestedAuthorityBackupRoot -Required
+  if (@(Get-ChildItem -LiteralPath $root.FullName -Force -ErrorAction Stop).Count -ne 0) {
+    throw 'authority backup root is not empty'
+  }
+  return $true
 }
 
 function Open-AtomicTempStream {
@@ -1195,13 +1296,32 @@ function Assert-SafeLocationPlan {
     $script:FailureCode = 'location_candidate_owner'; Assert-CurrentOwner $CandidatePath
     $script:FailureCode = 'location_candidate_read'; $null = Get-Sha256 $CandidatePath
   }
-  if (Test-Path -LiteralPath $AuthorityBackupDir -PathType Container) {
+  $authorityBackupKind =
+    [JhtUpdateFileIdentity]::GetNoFollowNodeKind($AuthorityBackupDir)
+  if ($authorityBackupKind -ne 0) {
     Assert-NoReparseAncestors $AuthorityBackupDir `
       -ReparseCode 'location_backup_reparse' `
       -InternalCode 'location_backup_internal'
+    if ($authorityBackupKind -ne 2) {
+      $script:FailureCode = 'location_backup_internal'
+      throw 'authority backup root is not a directory'
+    }
     $script:FailureCode = 'location_backup_owner'
     Assert-CurrentOwner $AuthorityBackupDir
-    foreach ($path in @($OldHelperBackupPath, $OldManifestBackupPath, $OldSignatureBackupPath)) { if (Test-Path -LiteralPath $path -PathType Leaf) { Assert-NoReparseAncestors $path -ReparseCode 'location_backup_child_reparse' -InternalCode 'location_backup_child_internal'; $script:FailureCode = 'location_backup_child_owner'; Assert-CurrentOwner $path } }
+    foreach ($path in @($OldHelperBackupPath, $OldManifestBackupPath, $OldSignatureBackupPath)) {
+      $authorityLeafKind = [JhtUpdateFileIdentity]::GetNoFollowNodeKind($path)
+      if ($authorityLeafKind -ne 0) {
+        Assert-NoReparseAncestors $path `
+          -ReparseCode 'location_backup_child_reparse' `
+          -InternalCode 'location_backup_child_internal'
+        if ($authorityLeafKind -ne 1) {
+          $script:FailureCode = 'location_backup_child_internal'
+          throw 'authority backup child is not a regular file'
+        }
+        $script:FailureCode = 'location_backup_child_owner'
+        Assert-CurrentOwner $path
+      }
+    }
   }
   $script:FailureCode = 'location_target_acl'
   Assert-OwnerAndAcl $targetDir -Directory
@@ -1271,8 +1391,12 @@ function Assert-PreMutationTrust {
     $candidateHelper = Get-ArtifactByRole $candidate.Value $HelperRole
     if ($floor -and [uint64]$floor.sequence -ge [uint64]$candidate.Value.sequence -and $active -and $active.Sha256 -ceq $candidate.Sha256 -and (Get-Sha256 $TargetPath) -ceq [string]$candidateDesktop.sha256 -and (Get-Sha256 $PSCommandPath) -ceq [string]$candidateHelper.sha256) { return }
   }
-  $oldManifest = if ($Mode -eq 'Recover' -and (Test-Path -LiteralPath $OldManifestBackupPath -PathType Leaf)) { $OldManifestBackupPath } else { $InstalledManifestPath }
-  $oldSignature = if ($Mode -eq 'Recover' -and (Test-Path -LiteralPath $OldSignatureBackupPath -PathType Leaf)) { $OldSignatureBackupPath } else { $InstalledSignaturePath }
+  $oldManifestPresent = $Mode -eq 'Recover' -and `
+    (Test-AuthorityBackupLeafPresent $OldManifestBackupPath 'RELEASE-MANIFEST.json')
+  $oldSignaturePresent = $Mode -eq 'Recover' -and `
+    (Test-AuthorityBackupLeafPresent $OldSignatureBackupPath 'RELEASE-MANIFEST.json.sig')
+  $oldManifest = if ($oldManifestPresent) { $OldManifestBackupPath } else { $InstalledManifestPath }
+  $oldSignature = if ($oldSignaturePresent) { $OldSignatureBackupPath } else { $InstalledSignaturePath }
   $installed = Read-VerifiedManifest $oldManifest $oldSignature
   # Recovery può usare lo snapshot per autenticare la release old, ma deve
   # attestare SEMPRE i byte del helper che PowerShell sta eseguendo. Mai
@@ -1331,15 +1455,17 @@ function Get-RecoveryBundle {
   $script:FailureCode = 'recovery_candidate_read_failed'
   $candidate = Read-VerifiedManifest $CandidateManifestPath $CandidateSignaturePath
   $script:FailureCode = 'recovery_installed_read_failed'
-  $oldManifest = if (Test-Path -LiteralPath $OldManifestBackupPath -PathType Leaf) { $OldManifestBackupPath } else { $InstalledManifestPath }
-  $oldSignature = if (Test-Path -LiteralPath $OldSignatureBackupPath -PathType Leaf) { $OldSignatureBackupPath } else { $InstalledSignaturePath }
+  $oldManifest = if (Test-AuthorityBackupLeafPresent $OldManifestBackupPath 'RELEASE-MANIFEST.json') { $OldManifestBackupPath } else { $InstalledManifestPath }
+  $oldSignature = if (Test-AuthorityBackupLeafPresent $OldSignatureBackupPath 'RELEASE-MANIFEST.json.sig') { $OldSignatureBackupPath } else { $InstalledSignaturePath }
   $installed = Read-VerifiedManifest $oldManifest $oldSignature
   $old = Get-ArtifactByRole $installed.Value $DesktopRole
   $oldHelper = Get-ArtifactByRole $installed.Value $HelperRole
   $new = Get-ArtifactByRole $candidate.Value $DesktopRole
   $newHelper = Get-ArtifactByRole $candidate.Value $HelperRole
   Assert-FileMatchesArtifact $CandidateHelperPath $newHelper
-  if (Test-Path -LiteralPath $OldHelperBackupPath -PathType Leaf) { Assert-FileMatchesArtifact $OldHelperBackupPath $oldHelper }
+  if (Test-AuthorityBackupLeafPresent $OldHelperBackupPath $AllowedHelperName) {
+    Assert-FileMatchesArtifact $OldHelperBackupPath $oldHelper
+  }
   return @{
     Installed = $installed; Candidate = $candidate; Old = $old; OldHelper = $oldHelper; New = $new; NewHelper = $newHelper
     OldSignatureSha256 = Get-Sha256 $oldSignature
@@ -1438,7 +1564,14 @@ function Restore-OldAuthority {
   param([hashtable]$Bundle)
   $script:FailurePhase = 'recovery'
   $script:FailureCode = 'recovery_authority_validate_failed'
-  foreach ($path in @($OldHelperBackupPath, $OldManifestBackupPath, $OldSignatureBackupPath)) { if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'verified authority rollback snapshot is unavailable' } }
+  foreach ($leaf in @(
+      [pscustomobject]@{ Path = $OldHelperBackupPath; Name = $AllowedHelperName },
+      [pscustomobject]@{ Path = $OldManifestBackupPath; Name = 'RELEASE-MANIFEST.json' },
+      [pscustomobject]@{ Path = $OldSignatureBackupPath; Name = 'RELEASE-MANIFEST.json.sig' })) {
+    if (-not (Test-AuthorityBackupLeafPresent $leaf.Path $leaf.Name)) {
+      throw 'verified authority rollback snapshot is unavailable'
+    }
+  }
   $script:FailureCode = 'recovery_authority_helper_failed'
   Copy-AtomicVerified $OldHelperBackupPath $PSCommandPath ([string]$Bundle.OldHelper.sha256)
   $script:FailureCode = 'recovery_authority_manifest_failed'
@@ -1670,30 +1803,73 @@ function Invoke-Apply {
   Write-Journal 'helper_intent' $bundle $candidateProcess.Id $candidateStarted
   Install-CandidateHelper $bundle
   Write-Journal 'committed' $bundle $candidateProcess.Id $candidateStarted
-  $script:FailurePhase = 'cleanup'
-  $script:FailureCode = 'commit_cleanup_failed'
-  Remove-ProtectedFileIfPresent $BackupPath
-  Remove-ProtectedFileIfPresent $FailedPath
-  Remove-ProtectedTreeIfPresent $AuthorityBackupDir
+  Complete-CommitCleanup -Context 'commit'
   Write-Result $true 'committed' 'updated'
 }
 
-function Complete-RecoveryCommitCleanup {
-  $script:FailurePhase = 'recovery'
-  # Attest every cleanup target before the first deletion.  A hostile later
-  # node must not turn recovery into a partial cleanup.
-  $script:FailureCode = 'recovery_commit_backup_cleanup_failed'
+function Set-CommitCleanupFailure {
+  param(
+    [ValidateSet('commit','recovery')][string]$Context,
+    [ValidateSet('backup','failed','authority-preflight','authority-helper',
+      'authority-manifest','authority-signature','authority-root')][string]$Stage)
+  $script:FailurePhase = if ($Context -ceq 'commit') { 'cleanup' } else { 'recovery' }
+  $script:FailureCode = switch -CaseSensitive ($Context + ':' + $Stage) {
+    'commit:backup' { 'commit_backup_cleanup_failed'; break }
+    'commit:failed' { 'commit_failed_cleanup_failed'; break }
+    'commit:authority-preflight' { 'commit_authority_preflight_failed'; break }
+    'commit:authority-helper' { 'commit_authority_helper_cleanup_failed'; break }
+    'commit:authority-manifest' { 'commit_authority_manifest_cleanup_failed'; break }
+    'commit:authority-signature' { 'commit_authority_signature_cleanup_failed'; break }
+    'commit:authority-root' { 'commit_authority_root_cleanup_failed'; break }
+    'recovery:backup' { 'recovery_commit_backup_cleanup_failed'; break }
+    'recovery:failed' { 'recovery_commit_failed_cleanup_failed'; break }
+    'recovery:authority-preflight' { 'recovery_commit_authority_preflight_failed'; break }
+    'recovery:authority-helper' { 'recovery_commit_authority_helper_cleanup_failed'; break }
+    'recovery:authority-manifest' { 'recovery_commit_authority_manifest_cleanup_failed'; break }
+    'recovery:authority-signature' { 'recovery_commit_authority_signature_cleanup_failed'; break }
+    'recovery:authority-root' { 'recovery_commit_authority_root_cleanup_failed'; break }
+  }
+}
+
+function Remove-AuthorityBackupExact {
+  param([ValidateSet('commit','recovery')][string]$Context)
+  Set-CommitCleanupFailure $Context 'authority-preflight'
+  $root = Get-AttestedAuthorityBackupRoot
+  if ($null -eq $root) { return }
+  foreach ($leaf in @(
+      [pscustomobject]@{ Stage = 'authority-helper'; Path = $OldHelperBackupPath; Name = $AllowedHelperName },
+      [pscustomobject]@{ Stage = 'authority-manifest'; Path = $OldManifestBackupPath; Name = 'RELEASE-MANIFEST.json' },
+      [pscustomobject]@{ Stage = 'authority-signature'; Path = $OldSignatureBackupPath; Name = 'RELEASE-MANIFEST.json.sig' })) {
+    Set-CommitCleanupFailure $Context $leaf.Stage
+    $null = Get-AttestedAuthorityBackupRoot -Required
+    $leafKind = [JhtUpdateFileIdentity]::GetNoFollowNodeKind($leaf.Path)
+    if ($leafKind -ne 0) {
+      if ($leafKind -ne 1) { throw 'authority backup leaf changed before cleanup' }
+      Assert-AuthorityBackupLeaf $leaf.Path $leaf.Name
+      Remove-Item -LiteralPath $leaf.Path -Force -ErrorAction Stop
+    }
+  }
+  Set-CommitCleanupFailure $Context 'authority-root'
+  if (Assert-AuthorityBackupRootEmpty) {
+    Remove-Item -LiteralPath $AuthorityBackupDir -Force -ErrorAction Stop
+  }
+}
+
+function Complete-CommitCleanup {
+  param([ValidateSet('commit','recovery')][string]$Context)
+  # Attest every target before the first deletion.  The fixed authority
+  # snapshot is then removed leaf-by-leaf so a partial cleanup is retryable.
+  Set-CommitCleanupFailure $Context 'backup'
   Assert-AtomicDestinationPreflight $BackupPath
-  $script:FailureCode = 'recovery_commit_failed_cleanup_failed'
+  Set-CommitCleanupFailure $Context 'failed'
   Assert-AtomicDestinationPreflight $FailedPath
-  $script:FailureCode = 'recovery_commit_authority_cleanup_failed'
-  Assert-ProtectedTreePreflight $AuthorityBackupDir
-  $script:FailureCode = 'recovery_commit_backup_cleanup_failed'
+  Set-CommitCleanupFailure $Context 'authority-preflight'
+  Assert-AuthorityBackupPreflight
+  Set-CommitCleanupFailure $Context 'backup'
   Remove-ProtectedFileIfPresent $BackupPath
-  $script:FailureCode = 'recovery_commit_failed_cleanup_failed'
+  Set-CommitCleanupFailure $Context 'failed'
   Remove-ProtectedFileIfPresent $FailedPath
-  $script:FailureCode = 'recovery_commit_authority_cleanup_failed'
-  Remove-ProtectedTreeIfPresent $AuthorityBackupDir
+  Remove-AuthorityBackupExact $Context
 }
 
 function Invoke-Recover {
@@ -1733,7 +1909,7 @@ function Invoke-Recover {
           $journal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
         }
         Update-JournalState $journal 'committed' ([int]$journal.candidate_pid) ([string]$journal.candidate_started)
-        Complete-RecoveryCommitCleanup
+        Complete-CommitCleanup -Context 'recovery'
         Write-Result $true 'committed' 'interrupted_commit_completed'
         return
       }

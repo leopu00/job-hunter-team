@@ -172,7 +172,21 @@ public sealed class JhtHealthPckProcess : IDisposable {
         if (String.IsNullOrEmpty(shell))
             throw new InvalidOperationException("command interpreter is unavailable");
         string path = Path.GetFullPath(shell);
-        return CreateCommand(path, "\"" + path + "\" /d /c exit 7",
+        return CreateCommand(path,
+            "\"" + path + "\" /d /s /c \"exit /b 7\"",
+            Path.GetDirectoryName(path));
+    }
+
+    public static JhtHealthPckProcess CreateExitProbeForTest(int exitCode) {
+        if (exitCode < 0 || exitCode > 255)
+            throw new ArgumentOutOfRangeException("exitCode");
+        string shell = Environment.GetEnvironmentVariable("ComSpec");
+        if (String.IsNullOrEmpty(shell))
+            throw new InvalidOperationException("command interpreter is unavailable");
+        string path = Path.GetFullPath(shell);
+        return CreateCommand(path,
+            "\"" + path + "\" /d /s /c \"exit /b " +
+                exitCode.ToString() + "\"",
             Path.GetDirectoryName(path));
     }
 
@@ -184,8 +198,20 @@ public sealed class JhtHealthPckProcess : IDisposable {
         threadHandle = IntPtr.Zero;
     }
 
-    public void Terminate() {
-        if (processHandle != IntPtr.Zero) TerminateProcess(processHandle, 1);
+    public void TerminateAndWait(uint milliseconds) {
+        if (processHandle == IntPtr.Zero)
+            throw new ObjectDisposedException("JhtHealthPckProcess");
+        uint result = WaitForSingleObject(processHandle, 0);
+        if (result == WAIT_OBJECT_0) return;
+        if (result != WAIT_TIMEOUT)
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        if (!TerminateProcess(processHandle, 1))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        result = WaitForSingleObject(processHandle, milliseconds);
+        if (result == WAIT_TIMEOUT)
+            throw new TimeoutException("terminated process wait timed out");
+        if (result != WAIT_OBJECT_0)
+            throw new Win32Exception(Marshal.GetLastWin32Error());
     }
 
     public int WaitForExitCode(uint milliseconds) {
@@ -399,6 +425,29 @@ function Restore-Environment {
   }
 }
 
+function Get-ManagedExitCodeBestEffort {
+  param(
+    [Diagnostics.Process]$Process = $null,
+    [int]$ProcessId = 0,
+    [switch]$InjectFailure)
+  $owned = $false
+  try {
+    if ($InjectFailure) { throw 'injected managed exit-code read failure' }
+    if ($null -eq $Process) {
+      $Process = Get-Process -Id $ProcessId -ErrorAction Stop
+      $owned = $true
+    }
+    $Process.Refresh()
+    return [int]$Process.ExitCode
+  } catch {
+    return -1
+  } finally {
+    if ($owned -and $null -ne $Process) {
+      try { $Process.Dispose() } catch { }
+    }
+  }
+}
+
 function Invoke-HealthCase {
   param(
     [string]$Root,
@@ -468,33 +517,32 @@ function Invoke-HealthCase {
 
   $suspended = $null
   $process = $null
+  $nativeExited = $false
   try {
     $automaticQuit = $Mode -in @('normal','positive')
     $suspended = [JhtHealthPckProcess]::Create(
       $Executable, $consumerLogPath, $automaticQuit)
     $process = Get-Process -Id $suspended.ProcessId -ErrorAction Stop
+    $candidatePid = [int]$process.Id
     $started = $process.StartTime.ToUniversalTime().Ticks.ToString()
     if ($Mode -in @('positive','absent','hostile')) {
-      Write-ExactJournal $journalPath $nonce $process.Id $started
+      Write-ExactJournal $journalPath $nonce $candidatePid $started
     } elseif ($Mode -ceq 'journal-malformed') {
       New-ExactFile $journalPath (
         [Text.UTF8Encoding]::new($false).GetBytes('not-json'))
     } elseif ($Mode -ceq 'pid-mismatch') {
-      Write-ExactJournal $journalPath $nonce ($process.Id + 1) $started
+      Write-ExactJournal $journalPath $nonce ($candidatePid + 1) $started
     } elseif ($Mode -ceq 'start-invalid') {
-      Write-ExactJournal $journalPath $nonce $process.Id 'invalid'
+      Write-ExactJournal $journalPath $nonce $candidatePid 'invalid'
     }
     $suspended.Resume()
     try {
       $nativeExitCode = $suspended.WaitForExitCode(30000)
+      $nativeExited = $true
     } catch [TimeoutException] {
       throw ('health case timeout mode=' + $Mode)
     }
-    if (-not $process.WaitForExit(5000)) {
-      throw ('health case dotnet wait mismatch mode=' + $Mode)
-    }
-    $process.Refresh()
-    $dotnetExitCode = [int]$process.ExitCode
+    $managedExitCode = Get-ManagedExitCodeBestEffort -Process $process
 
     Assert-NoHealthTemporary $caseRoot
     if ($Mode -ceq 'positive') {
@@ -517,7 +565,7 @@ function Invoke-HealthCase {
       }
       if ([int64]$frame.schema -ne 1 -or $frame.type -cne 'healthy' -or
           $frame.nonce -cne $nonce -or $frame.version -cne $expectedVersion -or
-          [int]$frame.pid -ne $process.Id -or
+          [int]$frame.pid -ne $candidatePid -or
           $frame.process_started_utc_ticks -cne $started -or
           $frame.exe_sha256 -cne $expectedExecutableHash -or
           -not ([IO.Path]::GetFullPath([string]$frame.exe_path)).Equals(
@@ -553,7 +601,7 @@ function Invoke-HealthCase {
     }
     if (-not (Test-Path -LiteralPath $consumerLogPath -PathType Leaf)) {
       throw ('health case log missing mode=' + $Mode +
-        ' native_rc=' + $nativeExitCode + ' dotnet_rc=' + $dotnetExitCode)
+        ' native_rc=' + $nativeExitCode + ' managed_rc=' + $managedExitCode)
     }
     $consumerLog = [IO.File]::ReadAllText($consumerLogPath)
     $codeMatches = @([regex]::Matches(
@@ -562,12 +610,12 @@ function Invoke-HealthCase {
     if ($expectedCode -ceq '') {
       if ($codeMatches.Count -ne 0) {
         throw ('health case unexpected protocol mode=' + $Mode +
-          ' native_rc=' + $nativeExitCode + ' dotnet_rc=' + $dotnetExitCode)
+          ' native_rc=' + $nativeExitCode + ' managed_rc=' + $managedExitCode)
       }
     } elseif ($codeMatches.Count -ne 1 -or
         $codeMatches[0].Groups[1].Value -cne $expectedCode) {
       throw ('health case code mismatch mode=' + $Mode +
-        ' native_rc=' + $nativeExitCode + ' dotnet_rc=' + $dotnetExitCode)
+        ' native_rc=' + $nativeExitCode + ' managed_rc=' + $managedExitCode)
     }
     $normalWorkMatches = @([regex]::Matches(
       $consumerLog,
@@ -583,52 +631,53 @@ function Invoke-HealthCase {
     }
     if (($normalWork -join ',') -cne ($expectedNormalWork -join ',')) {
       throw ('health case normal-work mismatch mode=' + $Mode +
-        ' native_rc=' + $nativeExitCode + ' dotnet_rc=' + $dotnetExitCode)
-    }
-    if ($nativeExitCode -ne $dotnetExitCode) {
-      throw ('health case exit oracle mismatch mode=' + $Mode +
-        ' native_rc=' + $nativeExitCode + ' dotnet_rc=' + $dotnetExitCode)
+        ' native_rc=' + $nativeExitCode + ' managed_rc=' + $managedExitCode)
     }
     $expectedExitCode = if ($Mode -in @('normal','positive')) { 0 } else { 1 }
     if ($nativeExitCode -ne $expectedExitCode) {
       throw ('health case exit mismatch mode=' + $Mode +
-        ' native_rc=' + $nativeExitCode + ' dotnet_rc=' + $dotnetExitCode)
+        ' native_rc=' + $nativeExitCode + ' managed_rc=' + $managedExitCode)
     }
     $outcome = if ($expectedCode -ceq '') { 'normal_boot' } else { $expectedCode }
     [Console]::Out.WriteLine('WINDOWS-UPDATE-HEALTH-PCK-CASE mode=' +
       $Mode + ' native_rc=' + $nativeExitCode +
-      ' dotnet_rc=' + $dotnetExitCode + ' outcome=' + $outcome)
+      ' managed_rc=' + $managedExitCode + ' outcome=' + $outcome)
   } finally {
-    if ($process -and -not $process.HasExited) {
-      try { $process.Kill(); $null = $process.WaitForExit(5000) } catch { }
+    try {
+      if ($suspended -and -not $nativeExited) {
+        $suspended.TerminateAndWait(5000)
+      }
+    } finally {
+      if ($suspended) { $suspended.Dispose() }
+      if ($process) { try { $process.Dispose() } catch { } }
+      Restore-Environment $previous
     }
-    if ($suspended) { $suspended.Dispose() }
-    if ($process) { $process.Dispose() }
-    Restore-Environment $previous
   }
 }
 
 $probe = $null
-$probeProcess = $null
+$probeNativeExited = $false
 try {
   $probe = [JhtHealthPckProcess]::CreateExitProbe()
-  $probeProcess = Get-Process -Id $probe.ProcessId -ErrorAction Stop
   $probe.Resume()
   $probeNativeExitCode = $probe.WaitForExitCode(5000)
-  if (-not $probeProcess.WaitForExit(5000)) {
-    throw 'native exit-code oracle calibration timed out'
-  }
-  $probeProcess.Refresh()
-  $probeDotnetExitCode = [int]$probeProcess.ExitCode
-  if ($probeNativeExitCode -ne 7 -or $probeDotnetExitCode -ne 7) {
+  $probeNativeExited = $true
+  $probeManagedExitCode = Get-ManagedExitCodeBestEffort `
+    -ProcessId $probe.ProcessId
+  if ($probeNativeExitCode -ne 7) {
+    [Console]::Out.WriteLine(
+      'WINDOWS-UPDATE-HEALTH-PCK-CASE mode=calibration native_rc=' +
+      $probeNativeExitCode + ' managed_rc=' + $probeManagedExitCode)
     throw 'native exit-code oracle calibration failed'
   }
 } finally {
-  if ($probeProcess -and -not $probeProcess.HasExited) {
-    try { $probeProcess.Kill(); $null = $probeProcess.WaitForExit(5000) } catch { }
+  try {
+    if ($probe -and -not $probeNativeExited) {
+      $probe.TerminateAndWait(5000)
+    }
+  } finally {
+    if ($probe) { $probe.Dispose() }
   }
-  if ($probe) { $probe.Dispose() }
-  if ($probeProcess) { $probeProcess.Dispose() }
 }
 
 $gateRoot = Join-Path ([IO.Path]::GetFullPath($env:RUNNER_TEMP)) (

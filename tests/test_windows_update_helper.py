@@ -85,6 +85,16 @@ $functions = @($ast.FindAll({
 }, $true) | Sort-Object { $_.Extent.StartOffset })
 if ($functions.Count -ne 2) { throw 'production traversal functions are missing' }
 $body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$typeMarker = "Add-Type -TypeDefinition @'"
+$typeStart = $source.IndexOf($typeMarker) + $typeMarker.Length
+$typeEnd = $source.IndexOf("`n'@", $typeStart)
+if ($typeStart -lt $typeMarker.Length -or $typeEnd -le $typeStart) {
+  throw 'production native helper is missing'
+}
+$native = $source.Substring($typeStart, $typeEnd - $typeStart)
+if (-not ('JhtUpdateFileIdentity' -as [type])) {
+  Add-Type -TypeDefinition $native
+}
 $probe = @'
 Set-StrictMode -Version 2.0
 $script:FailureCode = 'location_init'
@@ -418,6 +428,16 @@ if ($functions.Count -ne $names.Count) {
   throw 'production initialize functions are missing'
 }
 $body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$typeMarker = "Add-Type -TypeDefinition @'"
+$typeStart = $source.IndexOf($typeMarker) + $typeMarker.Length
+$typeEnd = $source.IndexOf("`n'@", $typeStart)
+if ($typeStart -lt $typeMarker.Length -or $typeEnd -le $typeStart) {
+  throw 'production native helper is missing'
+}
+$native = $source.Substring($typeStart, $typeEnd - $typeStart)
+if (-not ('JhtUpdateFileIdentity' -as [type])) {
+  Add-Type -TypeDefinition $native
+}
 $probe = @'
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
@@ -464,6 +484,16 @@ if ($functions.Count -ne $names.Count) {
   throw 'production initialize functions are missing'
 }
 $body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$typeMarker = "Add-Type -TypeDefinition @'"
+$typeStart = $source.IndexOf($typeMarker) + $typeMarker.Length
+$typeEnd = $source.IndexOf("`n'@", $typeStart)
+if ($typeStart -lt $typeMarker.Length -or $typeEnd -le $typeStart) {
+  throw 'production native helper is missing'
+}
+$native = $source.Substring($typeStart, $typeEnd - $typeStart)
+if (-not ('JhtUpdateFileIdentity' -as [type])) {
+  Add-Type -TypeDefinition $native
+}
 $probe = @'
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
@@ -817,9 +847,11 @@ if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
 $names = @(
   'Get-FileSystemParent', 'Assert-NoReparseAncestors',
   'Assert-NoForeignWriteAcl', 'Assert-CurrentOwner', 'Get-Sha256',
-  'Assert-AtomicDestinationPreflight', 'Assert-ProtectedTreePreflight',
-  'Remove-ProtectedFileIfPresent', 'Remove-ProtectedTreeIfPresent',
-  'Complete-RecoveryCommitCleanup')
+  'Assert-AtomicDestinationPreflight', 'Remove-ProtectedFileIfPresent',
+  'Assert-AuthorityBackupLeaf', 'Get-AttestedAuthorityBackupRoot',
+  'Assert-AuthorityBackupPreflight',
+  'Assert-AuthorityBackupRootEmpty', 'Set-CommitCleanupFailure',
+  'Remove-AuthorityBackupExact', 'Complete-CommitCleanup')
 $functions = @($ast.FindAll({
   param($node)
   $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
@@ -846,10 +878,42 @@ $script:BackupPath = [IO.Path]::GetFullPath($env:JHT_TEST_CLEANUP_BACKUP)
 $script:FailedPath = [IO.Path]::GetFullPath($env:JHT_TEST_CLEANUP_FAILED)
 $script:AuthorityBackupDir =
   [IO.Path]::GetFullPath($env:JHT_TEST_CLEANUP_AUTHORITY)
+$script:AllowedHelperName = 'jht-windows-update.ps1'
+$script:OldHelperBackupPath = Join-Path $script:AuthorityBackupDir `
+  $script:AllowedHelperName
+$script:OldManifestBackupPath = Join-Path $script:AuthorityBackupDir `
+  'RELEASE-MANIFEST.json'
+$script:OldSignatureBackupPath = Join-Path $script:AuthorityBackupDir `
+  'RELEASE-MANIFEST.json.sig'
 $script:FailurePhase = 'recovery'
 $script:FailureCode = 'recovery_commit_cleanup_unset'
+$context = if ($env:JHT_TEST_CLEANUP_CONTEXT -ceq 'commit') {
+  'commit'
+} else {
+  'recovery'
+}
+$faultStage = $env:JHT_TEST_CLEANUP_FAULT_DELETE
+if ($faultStage) {
+  $script:FaultDeletePath = switch -CaseSensitive ($faultStage) {
+    'helper' { $script:OldHelperBackupPath; break }
+    'manifest' { $script:OldManifestBackupPath; break }
+    'signature' { $script:OldSignatureBackupPath; break }
+    'root' { $script:AuthorityBackupDir; break }
+    default { throw 'cleanup fault stage is invalid' }
+  }
+  Set-Item -LiteralPath Function:\Remove-Item -Value {
+    [CmdletBinding()]
+    param([string]$LiteralPath, [switch]$Force, [switch]$Recurse)
+    if ([IO.Path]::GetFullPath($LiteralPath).Equals(
+        [IO.Path]::GetFullPath($script:FaultDeletePath),
+        [StringComparison]::OrdinalIgnoreCase)) {
+      throw 'injected cleanup delete failure'
+    }
+    Microsoft.PowerShell.Management\Remove-Item @PSBoundParameters
+  }
+}
 try {
-  Complete-RecoveryCommitCleanup
+  Complete-CommitCleanup -Context $context
   [Console]::Out.WriteLine(
     'WINDOWS-RECOVERY-CLEANUP PASS code=' + $script:FailureCode)
 } catch {
@@ -1178,7 +1242,7 @@ function Read-ProtectedJsonFile { return [pscustomobject]@{} }
 function Backup-OldAuthority { }
 function Install-CandidateMetadata { }
 function Install-CandidateHelper { }
-function Remove-ProtectedTreeIfPresent { }
+function Complete-CommitCleanup { }
 
 $script:mode = $mode
 $script:bundle = $bundle
@@ -1478,6 +1542,20 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         "metadata_postflight_failed",
         "helper_install_failed",
         "helper_postflight_failed",
+        "commit_backup_cleanup_failed",
+        "commit_failed_cleanup_failed",
+        "commit_authority_preflight_failed",
+        "commit_authority_helper_cleanup_failed",
+        "commit_authority_manifest_cleanup_failed",
+        "commit_authority_signature_cleanup_failed",
+        "commit_authority_root_cleanup_failed",
+        "recovery_commit_backup_cleanup_failed",
+        "recovery_commit_failed_cleanup_failed",
+        "recovery_commit_authority_preflight_failed",
+        "recovery_commit_authority_helper_cleanup_failed",
+        "recovery_commit_authority_manifest_cleanup_failed",
+        "recovery_commit_authority_signature_cleanup_failed",
+        "recovery_commit_authority_root_cleanup_failed",
         "result_preflight_failed",
         "result_write_failed",
         "result_read_failed",
@@ -3209,7 +3287,7 @@ def _inject_cleanup_hostility(
             env_values={"JHT_TEST_CLEANUP_TARGET": str(target)},
         )
         return ()
-    if hostile_kind == "reparse":
+    if hostile_kind in {"reparse", "dangling-reparse"}:
         external = root / f"external-{target.name}"
         if target.is_dir():
             target.rename(external)
@@ -3228,6 +3306,9 @@ def _inject_cleanup_hostility(
                 "JHT_TEST_JUNCTION_TARGET": str(external),
             },
         )
+        if hostile_kind == "dangling-reparse":
+            shutil.rmtree(external)
+            return ()
         return (external,)
     if hostile_kind == "hardlink":
         source = next(target.iterdir()) if target.is_dir() else target
@@ -3237,18 +3318,52 @@ def _inject_cleanup_hostility(
     raise AssertionError(hostile_kind)
 
 
+def _run_recovery_cleanup_probe(
+    helper: Path,
+    backup: Path,
+    failed: Path,
+    authority: Path,
+    *,
+    context: str = "recovery",
+    fault_delete: str = "",
+) -> subprocess.CompletedProcess[str]:
+    return _run_powershell_command(
+        RECOVERY_CLEANUP_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_CLEANUP_BACKUP": str(backup),
+            "JHT_TEST_CLEANUP_FAILED": str(failed),
+            "JHT_TEST_CLEANUP_AUTHORITY": str(authority),
+            "JHT_TEST_CLEANUP_CONTEXT": context,
+            "JHT_TEST_CLEANUP_FAULT_DELETE": fault_delete,
+        },
+        check=False,
+        capture_output=True,
+    )
+
+
+def _assert_cleanup_error(
+    result: subprocess.CompletedProcess[str], expected_phase: str, expected_code: str
+) -> None:
+    assert result.returncode == 23
+    assert result.stdout == ""
+    assert result.stderr.strip() == (
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 "
+        f"phase={expected_phase} code={expected_code}"
+    )
+
+
 @pytest.mark.parametrize(
     ("target_name", "expected_code"),
     [
         ("backup", "recovery_commit_backup_cleanup_failed"),
         ("failed", "recovery_commit_failed_cleanup_failed"),
-        ("authority", "recovery_commit_authority_cleanup_failed"),
     ],
 )
 @pytest.mark.parametrize(
     "hostile_kind", ["foreign-owner", "foreign-ace", "reparse", "hardlink"]
 )
-def test_recovery_commit_cleanup_rejects_each_hostile_target_without_mutation(
+def test_recovery_commit_cleanup_rejects_hostile_swap_file_without_mutation(
     tmp_path: Path,
     rsa_keys: tuple[Path, Path],
     target_name: str,
@@ -3259,28 +3374,235 @@ def test_recovery_commit_cleanup_rejects_each_hostile_target_without_mutation(
     helper = tmp_path / HELPER
     render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
     backup, failed, authority, cleanup_targets = _new_recovery_cleanup_fixture(tmp_path)
-    target = {"backup": backup, "failed": failed, "authority": authority}[target_name]
+    target = {"backup": backup, "failed": failed}[target_name]
     external = _inject_cleanup_hostility(target, hostile_kind, backup.parent)
     snapshot_targets = cleanup_targets + external
     before = _cleanup_targets_snapshot(snapshot_targets)
-    result = _run_powershell_command(
-        RECOVERY_CLEANUP_PROBE,
-        env_values={
-            "JHT_TEST_HELPER_SOURCE": str(helper),
-            "JHT_TEST_CLEANUP_BACKUP": str(backup),
-            "JHT_TEST_CLEANUP_FAILED": str(failed),
-            "JHT_TEST_CLEANUP_AUTHORITY": str(authority),
-        },
-        check=False,
-        capture_output=True,
+    result = _run_recovery_cleanup_probe(
+        helper, backup, failed, authority
     )
-    assert result.returncode == 23
-    assert result.stdout == ""
-    assert result.stderr.strip() == (
-        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=recovery " f"code={expected_code}"
+    _assert_cleanup_error(result, "recovery", expected_code)
+    assert str(tmp_path) not in result.stderr
+    assert _cleanup_targets_snapshot(snapshot_targets) == before
+
+
+@pytest.mark.parametrize(
+    "hostile_kind", ["foreign-owner", "foreign-ace", "reparse", "wrong-type"]
+)
+def test_recovery_commit_cleanup_rejects_hostile_authority_root_without_mutation(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    hostile_kind: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    backup, failed, authority, cleanup_targets = _new_recovery_cleanup_fixture(tmp_path)
+    if hostile_kind == "wrong-type":
+        external_root = backup.parent / "external-authority-root"
+        authority.rename(external_root)
+        authority.write_bytes(b"wrong type\n")
+        _protect_file_current_only(authority)
+        external = (external_root,)
+    else:
+        external = _inject_cleanup_hostility(authority, hostile_kind, backup.parent)
+    snapshot_targets = cleanup_targets + external
+    before = _cleanup_targets_snapshot(snapshot_targets)
+    result = _run_recovery_cleanup_probe(helper, backup, failed, authority)
+    _assert_cleanup_error(
+        result, "recovery", "recovery_commit_authority_preflight_failed"
     )
     assert str(tmp_path) not in result.stderr
     assert _cleanup_targets_snapshot(snapshot_targets) == before
+
+
+@pytest.mark.parametrize(
+    "leaf_name", [HELPER, "RELEASE-MANIFEST.json", "RELEASE-MANIFEST.json.sig"]
+)
+@pytest.mark.parametrize(
+    "hostile_kind",
+    ["foreign-owner", "foreign-ace", "reparse", "hardlink", "wrong-type"],
+)
+def test_recovery_commit_cleanup_rejects_hostile_authority_leaf_without_mutation(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    leaf_name: str,
+    hostile_kind: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    backup, failed, authority, cleanup_targets = _new_recovery_cleanup_fixture(tmp_path)
+    leaf = authority / leaf_name
+    if hostile_kind == "wrong-type":
+        leaf.unlink()
+        leaf.mkdir()
+        _protect_directory(leaf)
+        external = ()
+    else:
+        external = _inject_cleanup_hostility(leaf, hostile_kind, backup.parent)
+    snapshot_targets = cleanup_targets + external
+    before = _cleanup_targets_snapshot(snapshot_targets)
+    result = _run_recovery_cleanup_probe(helper, backup, failed, authority)
+    _assert_cleanup_error(
+        result, "recovery", "recovery_commit_authority_preflight_failed"
+    )
+    assert str(tmp_path) not in result.stderr
+    assert _cleanup_targets_snapshot(snapshot_targets) == before
+
+
+@pytest.mark.parametrize(
+    ("context", "expected_phase", "code_prefix"),
+    [("commit", "cleanup", "commit_"), ("recovery", "recovery", "recovery_commit_")],
+)
+@pytest.mark.parametrize("node_kind", ["root", "leaf"])
+@pytest.mark.parametrize("reparse_kind", ["reparse", "dangling-reparse"])
+def test_commit_cleanup_no_follow_rejects_live_and_dangling_reparse_without_mutation(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    context: str,
+    expected_phase: str,
+    code_prefix: str,
+    node_kind: str,
+    reparse_kind: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    backup, failed, authority, cleanup_targets = _new_recovery_cleanup_fixture(tmp_path)
+    target = authority if node_kind == "root" else authority / HELPER
+    external = _inject_cleanup_hostility(target, reparse_kind, backup.parent)
+    snapshot_targets = cleanup_targets + external
+    before = _cleanup_targets_snapshot(snapshot_targets)
+    result = _run_recovery_cleanup_probe(
+        helper, backup, failed, authority, context=context
+    )
+    _assert_cleanup_error(
+        result, expected_phase, code_prefix + "authority_preflight_failed"
+    )
+    assert str(tmp_path) not in result.stderr
+    assert _cleanup_targets_snapshot(snapshot_targets) == before
+
+
+@pytest.mark.parametrize("extra_kind", ["file", "directory"])
+def test_recovery_commit_cleanup_rejects_extra_authority_node_without_mutation(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    extra_kind: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    backup, failed, authority, cleanup_targets = _new_recovery_cleanup_fixture(tmp_path)
+    extra = authority / "unexpected"
+    if extra_kind == "file":
+        extra.write_bytes(b"unexpected\n")
+        _protect_file_current_only(extra)
+    else:
+        extra.mkdir()
+        _protect_directory(extra)
+    before = _cleanup_targets_snapshot(cleanup_targets)
+    result = _run_recovery_cleanup_probe(helper, backup, failed, authority)
+    _assert_cleanup_error(
+        result, "recovery", "recovery_commit_authority_preflight_failed"
+    )
+    assert str(tmp_path) not in result.stderr
+    assert _cleanup_targets_snapshot(cleanup_targets) == before
+
+
+@pytest.mark.parametrize(
+    ("fault_stage", "code_suffix", "remaining_names"),
+    [
+        (
+            "helper",
+            "authority_helper_cleanup_failed",
+            (HELPER, "RELEASE-MANIFEST.json", "RELEASE-MANIFEST.json.sig"),
+        ),
+        (
+            "manifest",
+            "authority_manifest_cleanup_failed",
+            ("RELEASE-MANIFEST.json", "RELEASE-MANIFEST.json.sig"),
+        ),
+        (
+            "signature",
+            "authority_signature_cleanup_failed",
+            ("RELEASE-MANIFEST.json.sig",),
+        ),
+        ("root", "authority_root_cleanup_failed", ()),
+    ],
+)
+@pytest.mark.parametrize(
+    ("context", "expected_phase", "code_prefix"),
+    [("commit", "cleanup", "commit_"), ("recovery", "recovery", "recovery_commit_")],
+)
+def test_recovery_commit_cleanup_delete_fault_is_allowlisted_and_retryable(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    fault_stage: str,
+    code_suffix: str,
+    remaining_names: tuple[str, ...],
+    context: str,
+    expected_phase: str,
+    code_prefix: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    backup, failed, authority, _cleanup_targets = _new_recovery_cleanup_fixture(tmp_path)
+    backup.unlink()
+    failed.unlink()
+    stable = backup.parent / "stable.bin"
+    stable.write_bytes(b"stable\n")
+    _protect_file_current_only(stable)
+    stable_before = _cleanup_targets_snapshot((stable,))
+    result = _run_recovery_cleanup_probe(
+        helper,
+        backup,
+        failed,
+        authority,
+        context=context,
+        fault_delete=fault_stage,
+    )
+    _assert_cleanup_error(result, expected_phase, code_prefix + code_suffix)
+    assert str(tmp_path) not in result.stderr
+    assert authority.is_dir()
+    assert tuple(sorted(path.name for path in authority.iterdir())) == tuple(
+        sorted(remaining_names)
+    )
+    assert _cleanup_targets_snapshot((stable,)) == stable_before
+
+    retried = _run_recovery_cleanup_probe(
+        helper, backup, failed, authority, context=context
+    )
+    assert retried.returncode == 0, retried.stderr
+    assert retried.stderr == ""
+    assert not authority.exists()
+    assert _cleanup_targets_snapshot((stable,)) == stable_before
+
+
+@pytest.mark.parametrize("context", ["commit", "recovery"])
+def test_commit_cleanup_is_idempotent_when_every_target_is_absent(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    context: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    root = tmp_path / "absent-cleanup"
+    root.mkdir()
+    _protect_directory(root)
+    backup = root / "backup.exe"
+    failed = root / "failed.exe"
+    authority = root / "authority-backup"
+    before = _cleanup_targets_snapshot((root,))
+    for _attempt in range(2):
+        result = _run_recovery_cleanup_probe(
+            helper, backup, failed, authority, context=context
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stderr == ""
+        assert _cleanup_targets_snapshot((root,)) == before
 
 
 @pytest.mark.parametrize(
