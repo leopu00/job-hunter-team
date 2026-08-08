@@ -38,6 +38,7 @@ import { registerSentinellaCommand } from './commands/sentinella.js';
 import { registerContainerCommand } from './commands/container.js';
 import { registerPositionsCommand } from './commands/positions.js';
 import { registerTicketCommand, registerDirectivesCommand } from './commands/decisions.js';
+import { registerCoordinatorCommand } from './commands/coordinator.js';
 import { registerProfileCommand } from './commands/profile.js';
 import { registerPid1Command } from './commands/pid1.js';
 import { registerDownloadCommand } from './commands/download.js';
@@ -130,6 +131,7 @@ export function buildProgram() {
   registerPositionsCommand(program);
   registerTicketCommand(program);
   registerDirectivesCommand(program);
+  registerCoordinatorCommand(program);
   registerProfileCommand(program);
   registerPid1Command(program);
   registerDownloadCommand(program);
