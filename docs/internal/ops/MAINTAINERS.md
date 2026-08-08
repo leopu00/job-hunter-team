@@ -29,6 +29,40 @@ Credentials:  in web/.env.local (NOT in git)
 
 Tables: `candidate_profiles`, `positions`, `companies`, `scores`, `applications`, `cloud_sync_tokens`, `feedback_tickets`. **RLS** enforces `auth.uid() = user_id` on user-owned tables. `feedback_tickets` has no owner column and is write-only for browser roles; reads require service-role authority.
 
+### Fleet health — is the product working in the field
+
+Two views (migration `065_fleet_health_views.sql`), **service_role only** —
+no browser role can reach them, and they hold aggregates and timestamps
+only: never message bodies, position content or profile fields.
+
+```sql
+-- Teams burning quota into a mailbox nobody reads: the box is alive, the
+-- person is not. This is the pattern that hand-written SQL kept missing.
+SELECT user_id, client_version, machine_sync_last_used_at,
+       human_last_session_at, human_positions_opened, positions_total,
+       undelivered_user_turns
+FROM fleet_account_health
+WHERE machine_sync_last_used_at > now() - interval '1 day'
+  AND (human_last_session_at IS NULL
+       OR human_last_session_at < now() - interval '7 days')
+ORDER BY positions_total DESC;
+
+-- Who is affected by this bug (install base), now that a box declares
+-- its build on every cloud-sync call (migration 064).
+SELECT * FROM fleet_version_distribution ORDER BY accounts DESC;
+
+-- A repeat of the silent chat drop, as a number instead of an excavation.
+SELECT user_id, undelivered_user_turns, oldest_undelivered_user_turn_at
+FROM fleet_account_health
+WHERE undelivered_user_turns > 0;
+```
+
+**`machine_*` and `human_*` are never to be summed.**
+`cloud_sync_tokens.last_used_at` is written by the box's own sync loop, so
+an unattended team reads as maximally *active* while nobody has opened a
+browser in weeks — that column is machine liveness, and reading it as
+engagement is the mistake the split exists to prevent.
+
 ### Auth config
 
 - `site_url` → `https://jobhunterteam.ai`
