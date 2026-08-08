@@ -122,6 +122,11 @@ export default function MessagesList({ initialMessages }: Props) {
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Esito dell'ultimo "richiama il box". Non è lo stato della consegna —
+  // quello lo dicono le bolle: qui si dice solo se la richiesta è partita.
+  const [retryState, setRetryState] = useState<
+    "idle" | "sending" | "done" | "failed"
+  >("idle");
   const locale = useLocale();
   const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const threadScrollRef = useRef<HTMLDivElement>(null);
@@ -400,6 +405,21 @@ export default function MessagesList({ initialMessages }: Props) {
     } finally {
       setSending(false);
     }
+  }
+
+  /**
+   * Risuona il campanello per i turni che il box non ha ritirato.
+   *
+   * Il turno esiste già sul cloud: quello che può mancare è la richiesta di
+   * ritiro (un UPDATE perso, un daemon riavviato nel momento sbagliato).
+   * L'esito qui è solo "la richiesta è ripartita": se il box è spento o su
+   * una build senza corsia di chat, resterà non consegnato — e la bolla
+   * continuerà a dirlo, invece di lasciar credere che sia risolto.
+   */
+  async function handleRetryDelivery() {
+    if (retryState === "sending") return;
+    setRetryState("sending");
+    setRetryState((await retryChatSignal()) ? "done" : "failed");
   }
 
   const activeInfo = agentInfo(activeAgent, locale);
@@ -708,6 +728,28 @@ export default function MessagesList({ initialMessages }: Props) {
                 role="status"
               >
                 {td("stalled_hint")}
+                {/* L'attesa può essersi rotta anche solo perché il campanello
+                    è andato perso: dare all'utente il modo di risuonarlo è
+                    l'unica azione utile che può compiere da qui. Non rimanda
+                    il testo — il turno è già salvato, e il doppione è proprio
+                    l'errore che l'incidente ha indotto a fare a mano. */}
+                <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => void handleRetryDelivery()}
+                    disabled={retryState === "sending"}
+                    className="px-2 py-1 rounded border text-[10px] cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ borderColor: "var(--color-yellow)" }}
+                  >
+                    {retryState === "sending" ? td("retrying") : td("retry")}
+                  </button>
+                  {retryState === "done" && <span>{td("retry_done")}</span>}
+                  {retryState === "failed" && (
+                    <span style={{ color: "var(--color-red)" }}>
+                      {td("retry_failed")}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
             <div
