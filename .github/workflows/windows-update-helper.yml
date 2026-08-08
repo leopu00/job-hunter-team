@@ -46,7 +46,7 @@ jobs:
   powershell51:
     name: PowerShell 5.1 signed update seam
     runs-on: windows-2022
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

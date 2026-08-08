@@ -77,13 +77,15 @@ $parseErrors = $null
 $ast = [Management.Automation.Language.Parser]::ParseInput(
   $source, [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
-$names = @('Get-FileSystemParent', 'Assert-NoReparseAncestors')
+$names = @(
+  'Get-NoFollowNodeKind', 'Get-NoFollowCanonicalState',
+  'Assert-NoReparseAncestors')
 $functions = @($ast.FindAll({
   param($node)
   $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
     $node.Name -in $names
 }, $true) | Sort-Object { $_.Extent.StartOffset })
-if ($functions.Count -ne 2) { throw 'production traversal functions are missing' }
+if ($functions.Count -ne $names.Count) { throw 'production traversal functions are missing' }
 $body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
 $typeMarker = "Add-Type -TypeDefinition @'"
 $typeStart = $source.IndexOf($typeMarker) + $typeMarker.Length
@@ -97,14 +99,32 @@ if (-not ('JhtUpdateFileIdentity' -as [type])) {
 }
 $probe = @'
 Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$mode = $env:JHT_TEST_TRAVERSAL_MODE
+if (-not $mode) { $mode = 'reparse' }
 $script:FailureCode = 'location_init'
+if ($mode -ceq 'native-fault') {
+  Set-Item -LiteralPath Function:\Get-NoFollowNodeKind -Value {
+    param([string]$Path)
+    throw 'injected native census failure'
+  }
+}
 try {
   Assert-NoReparseAncestors $env:JHT_TEST_PROBE_PATH `
     -ReparseCode 'location_node_reparse' `
     -InternalCode 'location_node_internal'
-  throw 'reparse ancestor was accepted'
+  if ($mode -ceq 'success') {
+    [Console]::Out.WriteLine('WINDOWS-TRAVERSAL-SEAM PASS')
+    return
+  }
+  throw 'protected traversal failure was accepted'
 } catch {
-  if ($script:FailureCode -cne 'location_node_reparse') { throw }
+  $expected = if ($mode -ceq 'reparse') {
+    'location_node_reparse'
+  } else {
+    'location_node_internal'
+  }
+  if ($script:FailureCode -cne $expected) { throw }
   [Console]::Error.WriteLine(
     'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=location ' +
     'code=' + $script:FailureCode)
@@ -122,8 +142,9 @@ $ast = [Management.Automation.Language.Parser]::ParseInput(
   $source, [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
 $names = @(
-  'Test-JsonInteger', 'Test-ExactProperties', 'Get-FileSystemParent',
-  'Assert-NoReparseAncestors', 'Assert-NoForeignWriteAcl',
+  'Test-JsonInteger', 'Test-ExactProperties', 'Get-NoFollowNodeKind',
+  'Get-NoFollowCanonicalState', 'Assert-NoReparseAncestors',
+  'Assert-NoForeignWriteAcl',
   'Assert-OwnerAndAcl', 'Assert-ExactCurrentOnlyAcl', 'Assert-CurrentOwner',
   'Initialize-ProtectedDirectory', 'Protect-File', 'Protect-OwnedFile',
   'Get-BytesSha256', 'Assert-AtomicDestinationPreflight',
@@ -415,7 +436,8 @@ $ast = [Management.Automation.Language.Parser]::ParseInput(
   $source, [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
 $names = @(
-  'Get-FileSystemParent', 'Assert-NoReparseAncestors',
+  'Get-NoFollowNodeKind', 'Get-NoFollowCanonicalState',
+  'Assert-NoReparseAncestors',
   'Assert-NoForeignWriteAcl', 'Assert-OwnerAndAcl',
   'Assert-ExactCurrentOnlyAcl', 'Assert-CurrentOwner',
   'Initialize-ProtectedDirectory')
@@ -471,7 +493,8 @@ $ast = [Management.Automation.Language.Parser]::ParseInput(
   $source, [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
 $names = @(
-  'Get-FileSystemParent', 'Assert-NoReparseAncestors',
+  'Get-NoFollowNodeKind', 'Get-NoFollowCanonicalState',
+  'Assert-NoReparseAncestors',
   'Assert-NoForeignWriteAcl', 'Assert-OwnerAndAcl',
   'Assert-ExactCurrentOnlyAcl', 'Assert-CurrentOwner',
   'Initialize-ProtectedDirectory')
@@ -522,7 +545,8 @@ $ast = [Management.Automation.Language.Parser]::ParseInput(
   $source, [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
 $names = @(
-  'Get-FileSystemParent', 'Assert-NoReparseAncestors',
+  'Get-NoFollowNodeKind', 'Get-NoFollowCanonicalState',
+  'Assert-NoReparseAncestors',
   'Assert-NoForeignWriteAcl', 'Assert-OwnerAndAcl',
   'Assert-ExactCurrentOnlyAcl', 'Assert-CurrentOwner', 'Protect-OwnedFile',
   'Get-Sha256', 'Get-BytesSha256', 'Assert-AtomicDestinationPreflight',
@@ -845,7 +869,8 @@ $ast = [Management.Automation.Language.Parser]::ParseInput(
   $source, [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
 $names = @(
-  'Get-FileSystemParent', 'Assert-NoReparseAncestors',
+  'Get-NoFollowNodeKind', 'Get-NoFollowCanonicalState',
+  'Assert-NoReparseAncestors',
   'Assert-NoForeignWriteAcl', 'Assert-CurrentOwner', 'Get-Sha256',
   'Assert-AtomicDestinationPreflight', 'Remove-ProtectedFileIfPresent',
   'Assert-AuthorityBackupLeaf', 'Get-AttestedAuthorityBackupRoot',
@@ -1595,10 +1620,18 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         "committed floor forbids rollback",
     ):
         assert required in source
-    assert "function Get-FileSystemParent" in source
-    assert "if ($Node -is [IO.FileInfo]) { return $Node.Directory }" in source
-    assert "if ($Node -is [IO.DirectoryInfo]) { return $Node.Parent }" in source
-    assert "$parent = $probe.Parent" not in source
+    traversal = source[
+        source.index("function Get-NoFollowNodeKind") : source.index(
+            "function Assert-OwnerAndAcl"
+        )
+    ]
+    assert "GetPathRoot" in traversal
+    assert "StringSplitOptions]::RemoveEmptyEntries" in traversal
+    assert "Get-NoFollowNodeKind $probePath" in traversal
+    assert "Get-NoFollowCanonicalState $probePath" in traversal
+    assert "missing intermediate component" in traversal
+    assert "Get-Item" not in traversal
+    assert ".Parent" not in traversal
     initialize = source[
         source.index("function Initialize-ProtectedDirectory") : source.index(
             "function Protect-File"
@@ -2995,10 +3028,12 @@ def test_windows_prelock_error_is_sanitized(
 
 
 @pytest.mark.parametrize("node_kind", ["file", "directory"])
+@pytest.mark.parametrize("junction_state", ["live", "dangling"])
 def test_production_traversal_rejects_regular_node_below_reparse_ancestor(
     tmp_path: Path,
     rsa_keys: tuple[Path, Path],
     node_kind: str,
+    junction_state: str,
 ) -> None:
     _private, public = rsa_keys
     helper = tmp_path / HELPER
@@ -3022,8 +3057,12 @@ def test_production_traversal_rejects_regular_node_below_reparse_ancestor(
         if node_kind == "file"
         else junction / "regular"
     )
-    assert probe.is_file() if node_kind == "file" else probe.is_dir()
-    assert not _is_reparse(probe)
+    if junction_state == "dangling":
+        shutil.rmtree(real)
+        assert not probe.exists()
+    else:
+        assert probe.is_file() if node_kind == "file" else probe.is_dir()
+        assert not _is_reparse(probe)
     assert _is_reparse(junction)
 
     state = tmp_path / "state"
@@ -3034,6 +3073,7 @@ def test_production_traversal_rejects_regular_node_below_reparse_ancestor(
         env_values={
             "JHT_TEST_HELPER_SOURCE": str(helper),
             "JHT_TEST_PROBE_PATH": str(probe),
+            "JHT_TEST_TRAVERSAL_MODE": "reparse",
         },
         check=False,
         capture_output=True,
@@ -3051,6 +3091,94 @@ def test_production_traversal_rejects_regular_node_below_reparse_ancestor(
     assert not (state / ".update.lock").exists()
     assert not (state / "committed-floor.json").exists()
     assert not (transaction / "ready.json").exists()
+
+
+@pytest.mark.parametrize("terminal_state", ["present", "absent"])
+def test_production_traversal_accepts_regular_or_terminal_absent_path(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    terminal_state: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    root = tmp_path / "regular-root"
+    root.mkdir()
+    probe = root / "terminal"
+    if terminal_state == "present":
+        probe.write_bytes(b"regular\n")
+    before = _authority_snapshot(tmp_path)
+    result = _run_powershell_command(
+        ANCESTOR_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_PROBE_PATH": str(probe),
+            "JHT_TEST_TRAVERSAL_MODE": "success",
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.strip() == "WINDOWS-TRAVERSAL-SEAM PASS"
+    assert _authority_snapshot(tmp_path) == before
+
+
+def test_production_traversal_native_fault_is_internal_and_side_effect_zero(
+    tmp_path: Path, rsa_keys: tuple[Path, Path]
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    probe = tmp_path / "regular"
+    probe.mkdir()
+    before = _authority_snapshot(tmp_path)
+    result = _run_powershell_command(
+        ANCESTOR_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_PROBE_PATH": str(probe),
+            "JHT_TEST_TRAVERSAL_MODE": "native-fault",
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 23
+    assert result.stdout == ""
+    assert result.stderr.strip() == (
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=location "
+        "code=location_node_internal"
+    )
+    assert str(tmp_path) not in result.stderr
+    assert _authority_snapshot(tmp_path) == before
+
+
+def test_production_traversal_missing_intermediate_is_internal_and_side_effect_zero(
+    tmp_path: Path, rsa_keys: tuple[Path, Path]
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    probe = tmp_path / "missing-parent" / "terminal"
+    before = _authority_snapshot(tmp_path)
+    result = _run_powershell_command(
+        ANCESTOR_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_PROBE_PATH": str(probe),
+            "JHT_TEST_TRAVERSAL_MODE": "internal",
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 23
+    assert result.stdout == ""
+    assert result.stderr.strip() == (
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=location "
+        "code=location_node_internal"
+    )
+    assert str(tmp_path) not in result.stderr
+    assert _authority_snapshot(tmp_path) == before
 
 
 def test_production_lock_clean_active_and_stale_seams_leave_no_residue(

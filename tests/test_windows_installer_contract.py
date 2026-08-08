@@ -21,6 +21,7 @@ RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 GAME_WORKFLOW = ROOT / ".github" / "workflows" / "game.yml"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish-signed-release.yml"
 SMOKE_WORKFLOW = ROOT / ".github" / "workflows" / "windows-installer-smoke.yml"
+UPDATE_HELPER_WORKFLOW = ROOT / ".github" / "workflows" / "windows-update-helper.yml"
 HEALTH_PCK_GATE = ROOT / "game" / "tools" / "windows_update_health_pck_test.ps1"
 GAME_BOOT = ROOT / "game" / "scripts" / "game.gd"
 UPDATE_SERVICE = ROOT / "game" / "scripts" / "support" / "update_service.gd"
@@ -143,6 +144,112 @@ Assert-ProcessGone $probePid
 [Console]::Out.WriteLine('WINDOWS-HEALTH-RAW-ORACLE PASS')
 """
 
+HEALTH_TEARDOWN_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HEALTH_GATE_SOURCE)
+$typeMarker = "Add-Type -TypeDefinition @'"
+$typeStart = $source.IndexOf($typeMarker) + $typeMarker.Length
+$typeEnd = $source.IndexOf("`n'@", $typeStart)
+if ($typeStart -lt $typeMarker.Length -or $typeEnd -le $typeStart) {
+  throw 'health gate native identity helper is missing'
+}
+Add-Type -TypeDefinition $source.Substring($typeStart, $typeEnd - $typeStart)
+$tokens = $null
+$errors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$errors)
+if ($errors.Count -ne 0) { throw 'health gate parse failed' }
+$names = @(
+  'Set-ExactDirectorySecurity', 'New-ExactDirectory',
+  'Set-ExactFileSecurity', 'Set-HostileFileSecurity', 'New-ExactFile',
+  'Get-FullSnapshot', 'Get-GateNodeRecord', 'Get-GateTreeCensus',
+  'Assert-ExactCurrentDacl', 'Remove-GateTree')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) {
+  throw 'health teardown production functions are missing'
+}
+. ([ScriptBlock]::Create(
+  ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"))
+$currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+$sections = [Security.AccessControl.AccessControlSections]::All
+$root = [IO.Path]::GetFullPath($env:JHT_TEST_HEALTH_TEARDOWN_ROOT)
+$external = [IO.Path]::GetFullPath($env:JHT_TEST_HEALTH_TEARDOWN_EXTERNAL)
+$mode = $env:JHT_TEST_HEALTH_TEARDOWN_MODE
+New-ExactDirectory $root
+New-ExactDirectory (Join-Path $root 'case')
+$hostile = Join-Path $root 'case\health.json'
+New-ExactFile $hostile ([Text.UTF8Encoding]::new($false).GetBytes('hostile'))
+Set-HostileFileSecurity $hostile
+$script:HostileHealthPath = $hostile
+$script:HostileHealthSnapshot = Get-FullSnapshot $hostile
+$attack = Join-Path $root 'attack'
+$attackBefore = ''
+$sentinel = Join-Path $external 'sentinel.bin'
+if ($mode -ceq 'foreign-owner') {
+  New-ExactFile $attack ([Text.UTF8Encoding]::new($false).GetBytes('attack'))
+  $item = [IO.FileInfo]::new($attack)
+  $acl = $item.GetAccessControl($sections)
+  $acl.SetOwner([Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
+  $item.SetAccessControl($acl)
+  $attackBefore = Get-FullSnapshot $attack
+} elseif ($mode -ceq 'reparse') {
+  New-ExactDirectory $external
+  New-ExactFile $sentinel ([Text.UTF8Encoding]::new($false).GetBytes('sentinel'))
+  New-Item -ItemType Junction -Path $attack -Target $external | Out-Null
+} elseif ($mode -ceq 'hardlink') {
+  New-ExactDirectory $external
+  New-ExactFile $sentinel ([Text.UTF8Encoding]::new($false).GetBytes('sentinel'))
+  New-Item -ItemType HardLink -Path $attack -Target $sentinel | Out-Null
+} elseif ($mode -ceq 'reset-fault') {
+  $env:JHT_TEST_HEALTH_DACL_RESET_FAILURE = '1'
+  $attackBefore = Get-FullSnapshot $hostile
+} elseif ($mode -cne 'positive') {
+  throw 'unknown health teardown mode'
+}
+try {
+  Remove-GateTree $root
+  if ($mode -cne 'positive' -or
+      [JhtHealthPckIdentity]::GetNoFollowNodeKind($root) -ne 0) {
+    throw 'health teardown negative was accepted'
+  }
+  [Console]::Out.WriteLine('WINDOWS-HEALTH-TEARDOWN PASS')
+} catch {
+  if ($mode -ceq 'positive') { throw }
+  if ($mode -ceq 'foreign-owner' -and
+      (Get-FullSnapshot $attack) -cne $attackBefore) {
+    throw 'foreign-owner teardown failure mutated its node'
+  }
+  if ($mode -ceq 'reparse') {
+    if (-not (([IO.DirectoryInfo]::new($attack)).Attributes -band
+        [IO.FileAttributes]::ReparsePoint) -or
+        [IO.File]::ReadAllText($sentinel) -cne 'sentinel') {
+      throw 'reparse teardown failure mutated its sentinel'
+    }
+  }
+  if ($mode -ceq 'hardlink') {
+    $attackParts = [JhtHealthPckIdentity]::InspectNode($attack).Split('|')
+    $sentinelParts = [JhtHealthPckIdentity]::InspectNode($sentinel).Split('|')
+    if ($attackParts[0] -cne 'file' -or $attackParts[1] -cne '2' -or
+        $sentinelParts[0] -cne 'file' -or $sentinelParts[1] -cne '2' -or
+        $attackParts[2] -cne $sentinelParts[2] -or
+        [IO.File]::ReadAllText($sentinel) -cne 'sentinel') {
+      throw 'hardlink teardown failure mutated its sentinel'
+    }
+  }
+  if ($mode -ceq 'reset-fault' -and
+      (Get-FullSnapshot $hostile) -cne $attackBefore) {
+    throw 'reset fault mutated the hostile capability'
+  }
+  [Console]::Error.WriteLine(
+    'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=fixture ' +
+    'code=health_teardown_failed')
+  exit 23
+}
+"""
+
 
 def test_nsis_uses_stable_per_user_release_name() -> None:
     source = NSI.read_text()
@@ -225,9 +332,19 @@ def test_acl_mutation_masks_remain_complete_and_in_sync() -> None:
 def test_acl_authority_uses_typed_clr_accessors_in_all_copies() -> None:
     for path in (PREFLIGHT, UPDATE_HELPER, BUILDER):
         source = path.read_text()
-        assert "function Get-FileSystemParent" in source, path
-        assert "if ($Node -is [IO.FileInfo]) { return $Node.Directory }" in source, path
-        assert "if ($Node -is [IO.DirectoryInfo]) { return $Node.Parent }" in source, path
+        if path == UPDATE_HELPER:
+            assert "function Get-NoFollowNodeKind" in source
+            assert "function Get-NoFollowCanonicalState" in source
+            assert "GetPathRoot" in source
+            assert "Get-FileSystemParent" not in source
+        else:
+            assert "function Get-FileSystemParent" in source, path
+            assert (
+                "if ($Node -is [IO.FileInfo]) { return $Node.Directory }" in source
+            ), path
+            assert (
+                "if ($Node -is [IO.DirectoryInfo]) { return $Node.Parent }" in source
+            ), path
         assert "$parent = $probe.Parent" not in source, path
         assert re.search(
             r"\.GetOwner\(\s*\[Security\.Principal\.SecurityIdentifier\]\s*\)",
@@ -952,6 +1069,14 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
         "CreateExitProbe",
         "TerminateAndWait",
         "Get-ManagedExitCodeBestEffort",
+        "InspectNode",
+        "GetNoFollowNodeKind",
+        "ProtectCurrentOnlyDacl",
+        "DACL_SECURITY_INFORMATION",
+        "PROTECTED_DACL_SECURITY_INFORMATION",
+        "Get-GateTreeCensus",
+        "Assert-ExactCurrentDacl",
+        "WINDOWS-UPDATE-HEALTH-PCK-CASES PASS",
         "$automaticQuit = $Mode -in @('normal','positive')",
         "$probeNativeExitCode -ne 7",
         "$probeManagedExitCode",
@@ -1004,6 +1129,36 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
     assert " managed_rc=" in calibration_failure
     assert "outcome=" not in calibration_failure
     assert "$probeNativeExitCode -ne $probeManagedExitCode" not in gate
+    teardown = gate[
+        gate.index("function Remove-GateTree") : gate.index(
+            "function Restore-Environment"
+        )
+    ]
+    assert "Get-GateTreeCensus $Path" in teardown
+    assert "Test-Path -LiteralPath $Path" not in teardown
+    assert "ProtectCurrentOnlyDacl" in teardown
+    assert teardown.index("Assert-ExactCurrentDacl $record.Path $record.Kind") < (
+        teardown.index("ProtectCurrentOnlyDacl")
+    )
+    assert "Set-ExactFileSecurity" not in teardown
+    assert "Set-ExactDirectorySecurity" not in teardown
+    dacl_reset = gate[
+        gate.index("public static void ProtectCurrentOnlyDacl") : gate.index(
+            "public static string Snapshot"
+        )
+    ]
+    assert "READ_CONTROL | WRITE_DAC" in dacl_reset
+    assert "WRITE_OWNER" not in dacl_reset
+    assert ".SetOwner(" not in dacl_reset
+    assert "DACL_SECURITY_INFORMATION |" in dacl_reset
+    assert "PROTECTED_DACL_SECURITY_INFORMATION" in dacl_reset
+    assert "IntPtr.Zero, IntPtr.Zero, dacl, IntPtr.Zero" in dacl_reset
+    assert gate.index("WINDOWS-UPDATE-HEALTH-PCK-CASES PASS") < gate.index(
+        "Remove-GateTree $gateRoot"
+    )
+    assert gate.index("Remove-GateTree $gateRoot") < gate.index(
+        "WINDOWS-UPDATE-HEALTH-PCK-TEST PASS"
+    )
 
     invocation = "./tools/windows_update_health_pck_test.ps1"
     for workflow_path in (GAME_WORKFLOW, RELEASE_WORKFLOW):
@@ -1012,6 +1167,18 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
         step = workflow[workflow.index(invocation) - 180 : workflow.index(invocation) + 180]
         assert "if: runner.os == 'Windows'" in step, workflow_path
         assert "shell: powershell" in step, workflow_path
+
+
+def test_windows_contract_workflows_allow_the_full_ps51_suite_to_finish() -> None:
+    helper = UPDATE_HELPER_WORKFLOW.read_text()
+    installer = SMOKE_WORKFLOW.read_text()
+    for workflow in (helper, installer):
+        match = re.search(r"timeout-minutes:\s*(\d+)", workflow)
+        assert match and int(match.group(1)) >= 20
+        assert "continue-on-error" not in workflow
+    assert "tests/test_windows_update_helper.py `" in helper
+    assert "tests/test_windows_installer_contract.py `" in installer
+    assert "tests/test_windows_update_helper.py `" in installer
 
 
 @pytest.mark.skipif(
@@ -1041,6 +1208,55 @@ def test_exported_health_gate_raw_handle_owns_failure_cleanup() -> None:
     assert result.returncode == 0, result.stderr
     assert result.stderr == ""
     assert result.stdout.strip() == "WINDOWS-HEALTH-RAW-ORACLE PASS"
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="health teardown ACL gate requires Windows"
+)
+@pytest.mark.parametrize(
+    "mode", ["positive", "foreign-owner", "reparse", "hardlink", "reset-fault"]
+)
+def test_exported_health_gate_teardown_is_attested_and_dacl_only(
+    tmp_path: Path, mode: str
+) -> None:
+    powershell = shutil.which("powershell.exe")
+    if not powershell:
+        pytest.skip("Windows PowerShell 5.1 is unavailable")
+    environment = os.environ.copy()
+    environment.update(
+        JHT_TEST_HEALTH_GATE_SOURCE=str(HEALTH_PCK_GATE),
+        JHT_TEST_HEALTH_TEARDOWN_ROOT=str(tmp_path / "gate-root"),
+        JHT_TEST_HEALTH_TEARDOWN_EXTERNAL=str(tmp_path / "external"),
+        JHT_TEST_HEALTH_TEARDOWN_MODE=mode,
+    )
+    result = subprocess.run(
+        [
+            powershell,
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "$ErrorActionPreference='Stop';Set-StrictMode -Version 2.0;"
+            + HEALTH_TEARDOWN_PROBE,
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=45,
+    )
+    if mode == "positive":
+        assert result.returncode == 0, result.stderr
+        assert result.stderr == ""
+        assert result.stdout.strip() == "WINDOWS-HEALTH-TEARDOWN PASS"
+        assert not (tmp_path / "gate-root").exists()
+    else:
+        assert result.returncode == 23
+        assert result.stdout == ""
+        assert result.stderr.strip() == (
+            "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=fixture "
+            "code=health_teardown_failed"
+        )
+        assert "WINDOWS-UPDATE-HEALTH-PCK-TEST PASS" not in result.stdout
 
 
 def test_recovery_commit_cleanup_attests_all_targets_before_deleting() -> None:

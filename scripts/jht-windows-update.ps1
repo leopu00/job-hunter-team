@@ -180,6 +180,21 @@ public static class JhtUpdateFileIdentity {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             if ((info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
                 return 3;
+            return (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0
+                ? 2 : 1;
+        }
+    }
+
+    public static int GetNoFollowCanonicalState(string inputPath) {
+        string expected = Path.GetFullPath(inputPath);
+        using (SafeFileHandle handle = CreateFile(
+            expected, 0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            IntPtr.Zero, OPEN_EXISTING,
+            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+            IntPtr.Zero)) {
+            if (handle.IsInvalid)
+                throw new Win32Exception(Marshal.GetLastWin32Error());
             StringBuilder finalPath = new StringBuilder(32768);
             uint length = GetFinalPathNameByHandle(
                 handle, finalPath, (uint)finalPath.Capacity, 0);
@@ -187,12 +202,8 @@ public static class JhtUpdateFileIdentity {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             string actual = Path.GetFullPath(
                 NormalizeFinalPath(finalPath.ToString()));
-            if (!String.Equals(actual, expected,
-                    StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException(
-                    "update node canonical path changed");
-            return (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0
-                ? 2 : 1;
+            return String.Equals(actual, expected,
+                StringComparison.OrdinalIgnoreCase) ? 1 : 2;
         }
     }
 
@@ -697,11 +708,14 @@ function Assert-FileMatchesArtifact {
   if ([uint64]$item.Length -ne [uint64]$Artifact.size -or (Get-Sha256 $item.FullName) -cne [string]$Artifact.sha256) { throw 'artifact size/SHA-256 mismatch' }
 }
 
-function Get-FileSystemParent {
-  param([IO.FileSystemInfo]$Node)
-  if ($Node -is [IO.FileInfo]) { return $Node.Directory }
-  if ($Node -is [IO.DirectoryInfo]) { return $Node.Parent }
-  throw 'unexpected filesystem node type during protected path traversal'
+function Get-NoFollowNodeKind {
+  param([string]$Path)
+  return [JhtUpdateFileIdentity]::GetNoFollowNodeKind($Path)
+}
+
+function Get-NoFollowCanonicalState {
+  param([string]$Path)
+  return [JhtUpdateFileIdentity]::GetNoFollowCanonicalState($Path)
 }
 
 function Assert-NoReparseAncestors {
@@ -712,31 +726,45 @@ function Assert-NoReparseAncestors {
   $reparseDetected = $false
   try {
     $full = [IO.Path]::GetFullPath($Path)
-    $probePath = $full
-    $kind = [JhtUpdateFileIdentity]::GetNoFollowNodeKind($probePath)
-    while ($kind -eq 0) {
-      $parentPath = [IO.Path]::GetDirectoryName($probePath)
-      if (-not $parentPath -or $parentPath -ceq $probePath) {
-        throw 'protected path has no existing filesystem ancestor'
+    $root = [IO.Path]::GetPathRoot($full)
+    if (-not $root) { throw 'protected path root is unavailable' }
+    $prefixes = New-Object Collections.Generic.List[string]
+    $prefixes.Add([IO.Path]::GetFullPath($root))
+    $relative = $full.Substring($root.Length)
+    $segments = @($relative.Split(
+      [char[]]@([IO.Path]::DirectorySeparatorChar,
+        [IO.Path]::AltDirectorySeparatorChar),
+      [StringSplitOptions]::RemoveEmptyEntries))
+    $prefix = [IO.Path]::GetFullPath($root)
+    foreach ($segment in $segments) {
+      $prefix = Join-Path $prefix $segment
+      $prefixes.Add([IO.Path]::GetFullPath($prefix))
+    }
+    for ($index = 0; $index -lt $prefixes.Count; $index++) {
+      $probePath = $prefixes[$index]
+      $terminal = $index -eq ($prefixes.Count - 1)
+      $kind = Get-NoFollowNodeKind $probePath
+      if ($kind -eq 0) {
+        if ($terminal) { return }
+        throw 'protected path has a missing intermediate component'
       }
-      $probePath = $parentPath
-      $kind = [JhtUpdateFileIdentity]::GetNoFollowNodeKind($probePath)
-    }
-    if ($kind -eq 3) {
-      $reparseDetected = $true
-      if ($ReparseCode) { $script:FailureCode = $ReparseCode }
-      throw 'reparse point in protected path'
-    }
-    $probe = Get-Item -LiteralPath $probePath -Force -ErrorAction Stop
-    while ($null -ne $probe) {
-      if (($probe.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      if ($kind -eq 3) {
         $reparseDetected = $true
         if ($ReparseCode) { $script:FailureCode = $ReparseCode }
         throw 'reparse point in protected path'
       }
-      $parent = Get-FileSystemParent $probe
-      if ($null -eq $parent -or $parent.FullName -eq $probe.FullName) { break }
-      $probe = $parent
+      if (-not $terminal -and $kind -ne 2) {
+        throw 'protected path intermediate component is not a directory'
+      }
+      $canonical = Get-NoFollowCanonicalState $probePath
+      if ($canonical -eq 2) {
+        $reparseDetected = $true
+        if ($ReparseCode) { $script:FailureCode = $ReparseCode }
+        throw 'redirected component in protected path'
+      }
+      if ($canonical -ne 1) {
+        throw 'protected path canonical census is invalid'
+      }
     }
   } catch {
     if (-not $reparseDetected -and $InternalCode) {

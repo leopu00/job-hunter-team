@@ -35,17 +35,25 @@ using System;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
 public static class JhtHealthPckIdentity {
     private const uint GENERIC_READ = 0x80000000;
+    private const uint READ_CONTROL = 0x00020000;
+    private const uint WRITE_DAC = 0x00040000;
     private const uint FILE_SHARE_READ = 0x00000001;
     private const uint FILE_SHARE_WRITE = 0x00000002;
     private const uint FILE_SHARE_DELETE = 0x00000004;
     private const uint OPEN_EXISTING = 3;
     private const uint FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000;
+    private const uint FILE_FLAG_BACKUP_SEMANTICS = 0x02000000;
     private const uint FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400;
+    private const uint FILE_ATTRIBUTE_DIRECTORY = 0x00000010;
+    private const uint DACL_SECURITY_INFORMATION = 0x00000004;
+    private const uint PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct BY_HANDLE_FILE_INFORMATION {
@@ -70,6 +78,152 @@ public static class JhtHealthPckIdentity {
     private static extern bool GetFileInformationByHandle(
         SafeFileHandle file, out BY_HANDLE_FILE_INFORMATION information);
 
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetFinalPathNameByHandle(
+        SafeFileHandle file, StringBuilder path, uint length, uint flags);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetSecurityDescriptorDacl(
+        IntPtr descriptor, out bool present, out IntPtr dacl, out bool defaulted);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern uint SetSecurityInfo(
+        IntPtr handle, int objectType, uint information, IntPtr owner,
+        IntPtr group, IntPtr dacl, IntPtr sacl);
+
+    private static string NormalizeFinalPath(string path) {
+        if (path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
+            return @"\\" + path.Substring(8);
+        if (path.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase))
+            return path.Substring(4);
+        return path;
+    }
+
+    private static string Identity(BY_HANDLE_FILE_INFORMATION info) {
+        return info.VolumeSerialNumber.ToString("x8") + ":" +
+            info.FileIndexHigh.ToString("x8") +
+            info.FileIndexLow.ToString("x8");
+    }
+
+    private static string FinalPath(SafeFileHandle handle) {
+        StringBuilder path = new StringBuilder(32768);
+        uint length = GetFinalPathNameByHandle(
+            handle, path, (uint)path.Capacity, 0);
+        if (length == 0 || length >= path.Capacity)
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        return Path.GetFullPath(NormalizeFinalPath(path.ToString()));
+    }
+
+    public static int GetNoFollowNodeKind(string inputPath) {
+        string path = Path.GetFullPath(inputPath);
+        using (SafeFileHandle handle = CreateFile(
+            path, 0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            IntPtr.Zero, OPEN_EXISTING,
+            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+            IntPtr.Zero)) {
+            if (handle.IsInvalid) {
+                int error = Marshal.GetLastWin32Error();
+                if (error == 2 || error == 3) return 0;
+                throw new Win32Exception(error);
+            }
+            BY_HANDLE_FILE_INFORMATION info;
+            if (!GetFileInformationByHandle(handle, out info))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            if ((info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+                return 3;
+            return (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0
+                ? 2 : 1;
+        }
+    }
+
+    public static string InspectNode(string inputPath) {
+        string path = Path.GetFullPath(inputPath);
+        using (SafeFileHandle handle = CreateFile(
+            path, READ_CONTROL,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            IntPtr.Zero, OPEN_EXISTING,
+            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+            IntPtr.Zero)) {
+            if (handle.IsInvalid)
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            BY_HANDLE_FILE_INFORMATION info;
+            if (!GetFileInformationByHandle(handle, out info))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            if ((info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+                return "reparse|" + info.NumberOfLinks.ToString() + "|" +
+                    Identity(info);
+            string kind = (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0
+                ? "directory" : "file";
+            string canonical = String.Equals(FinalPath(handle), path,
+                StringComparison.OrdinalIgnoreCase) ? "canonical" : "redirect";
+            return kind + "|" + info.NumberOfLinks.ToString() + "|" +
+                Identity(info) + "|" + canonical;
+        }
+    }
+
+    public static void ProtectCurrentOnlyDacl(string inputPath, bool directory) {
+        string path = Path.GetFullPath(inputPath);
+        using (SafeFileHandle handle = CreateFile(
+            path, READ_CONTROL | WRITE_DAC,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            IntPtr.Zero, OPEN_EXISTING,
+            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+            IntPtr.Zero)) {
+            if (handle.IsInvalid)
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            BY_HANDLE_FILE_INFORMATION before;
+            if (!GetFileInformationByHandle(handle, out before))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            if ((before.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 ||
+                (!directory && before.NumberOfLinks != 1) ||
+                directory != ((before.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) ||
+                !String.Equals(FinalPath(handle), path,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("gate node identity is not exact");
+            FileSystemSecurity security = directory
+                ? (FileSystemSecurity)new DirectorySecurity()
+                : new FileSecurity();
+            SecurityIdentifier current = WindowsIdentity.GetCurrent().User;
+            security.SetAccessRuleProtection(true, false);
+            if (directory) {
+                security.AddAccessRule(new FileSystemAccessRule(
+                    current, FileSystemRights.FullControl,
+                    InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                    PropagationFlags.None, AccessControlType.Allow));
+            } else {
+                security.AddAccessRule(new FileSystemAccessRule(
+                    current, FileSystemRights.FullControl, AccessControlType.Allow));
+            }
+            byte[] descriptor = security.GetSecurityDescriptorBinaryForm();
+            GCHandle pinned = GCHandle.Alloc(descriptor, GCHandleType.Pinned);
+            try {
+                bool present;
+                bool defaulted;
+                IntPtr dacl;
+                if (!GetSecurityDescriptorDacl(
+                        pinned.AddrOfPinnedObject(), out present, out dacl,
+                        out defaulted) || !present)
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                uint result = SetSecurityInfo(handle.DangerousGetHandle(), 1,
+                    DACL_SECURITY_INFORMATION |
+                    PROTECTED_DACL_SECURITY_INFORMATION,
+                    IntPtr.Zero, IntPtr.Zero, dacl, IntPtr.Zero);
+                if (result != 0) throw new Win32Exception((int)result);
+            } finally {
+                pinned.Free();
+            }
+            BY_HANDLE_FILE_INFORMATION after;
+            if (!GetFileInformationByHandle(handle, out after))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            if (Identity(before) != Identity(after) ||
+                before.NumberOfLinks != after.NumberOfLinks ||
+                !String.Equals(FinalPath(handle), path,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("gate node identity changed");
+        }
+    }
+
     public static string Snapshot(string inputPath) {
         string path = Path.GetFullPath(inputPath);
         using (SafeFileHandle handle = CreateFile(
@@ -86,9 +240,7 @@ public static class JhtHealthPckIdentity {
                 throw new InvalidDataException("health capability is a reparse point");
             if (info.NumberOfLinks != 1)
                 throw new InvalidDataException("health capability has multiple links");
-            return info.VolumeSerialNumber.ToString("x8") + ":" +
-                info.FileIndexHigh.ToString("x8") +
-                info.FileIndexLow.ToString("x8");
+            return Identity(info);
         }
     }
 }
@@ -392,24 +544,173 @@ function Assert-NoHealthTemporary {
   }
 }
 
-function Remove-GateTree {
-  param([string]$Path)
-  if (-not (Test-Path -LiteralPath $Path -PathType Container)) { return }
-  $nodes = @(Get-ChildItem -LiteralPath $Path -Recurse -Force |
-    Sort-Object { $_.FullName.Length } -Descending)
-  foreach ($node in $nodes) {
-    if (($node.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-      throw 'exported health gate produced an unexpected reparse point'
-    }
-    if ($node -is [IO.FileInfo]) {
-      Set-ExactFileSecurity $node.FullName
-    } elseif ($node -is [IO.DirectoryInfo]) {
-      Set-ExactDirectorySecurity $node.FullName
+function Get-GateNodeRecord {
+  param([string]$Path, [string]$Root)
+  $full = [IO.Path]::GetFullPath($Path)
+  $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
+  if (-not ($full.Equals($rootFull, [StringComparison]::OrdinalIgnoreCase) -or
+      $full.StartsWith(
+        $rootFull + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase))) {
+    throw 'health gate node escapes the fixed root'
+  }
+  $parts = [JhtHealthPckIdentity]::InspectNode($full).Split('|')
+  if ($parts.Count -lt 3 -or $parts[0] -ceq 'reparse') {
+    throw 'health gate contains a reparse point'
+  }
+  if ($parts.Count -ne 4 -or $parts[3] -cne 'canonical' -or
+      $parts[0] -notin @('file','directory')) {
+    throw 'health gate node is not canonical'
+  }
+  $kind = $parts[0]
+  $links = [uint32]::Parse($parts[1])
+  if ($kind -ceq 'file' -and $links -ne 1) {
+    throw 'health gate file has multiple links'
+  }
+  $item = if ($kind -ceq 'directory') {
+    [IO.DirectoryInfo]::new($full)
+  } else {
+    [IO.FileInfo]::new($full)
+  }
+  $security = $item.GetAccessControl($sections)
+  $owner = $security.GetOwner(
+    [Security.Principal.SecurityIdentifier])
+  if ($owner -ne $currentSid) { throw 'health gate node has a foreign owner' }
+  $rules = @($security.GetAccessRules(
+    $true, $true, [Security.Principal.SecurityIdentifier]))
+  $currentPrincipalOnly = $rules.Count -ge 1
+  foreach ($rule in $rules) {
+    if ($rule.IdentityReference -ne $currentSid -or
+        $rule.AccessControlType -ne
+          [Security.AccessControl.AccessControlType]::Allow) {
+      $currentPrincipalOnly = $false
     }
   }
-  Set-ExactDirectorySecurity $Path
+  return [pscustomobject]@{
+    Path = $full
+    Kind = $kind
+    Identity = $parts[2]
+    Owner = $owner.Value
+    Sddl = $security.GetSecurityDescriptorSddlForm($sections)
+    Bytes = if ($kind -ceq 'file') {
+      [Convert]::ToBase64String([IO.File]::ReadAllBytes($full))
+    } else { '' }
+    CurrentPrincipalOnly = $currentPrincipalOnly
+  }
+}
+
+function Get-GateTreeCensus {
+  param([string]$Root)
+  $records = New-Object Collections.Generic.List[object]
+  $pending = New-Object Collections.Generic.Stack[string]
+  $rootRecord = Get-GateNodeRecord $Root $Root
+  if ($rootRecord.Kind -cne 'directory') {
+    throw 'health gate root is not a directory'
+  }
+  $records.Add($rootRecord)
+  $pending.Push($rootRecord.Path)
+  while ($pending.Count -gt 0) {
+    $directory = [IO.DirectoryInfo]::new($pending.Pop())
+    foreach ($child in @($directory.GetFileSystemInfos())) {
+      $record = Get-GateNodeRecord $child.FullName $Root
+      $records.Add($record)
+      if ($record.Kind -ceq 'directory') { $pending.Push($record.Path) }
+    }
+  }
+  return @($records)
+}
+
+function Assert-ExactCurrentDacl {
+  param([string]$Path, [ValidateSet('file','directory')][string]$Kind)
+  $item = if ($Kind -ceq 'directory') {
+    [IO.DirectoryInfo]::new($Path)
+  } else {
+    [IO.FileInfo]::new($Path)
+  }
+  $security = $item.GetAccessControl($sections)
+  $owner = $security.GetOwner(
+    [Security.Principal.SecurityIdentifier])
+  $rules = @($security.GetAccessRules(
+    $true, $true, [Security.Principal.SecurityIdentifier]))
+  if ($owner -ne $currentSid -or -not $security.AreAccessRulesProtected -or
+      $rules.Count -ne 1 -or $rules[0].IsInherited -or
+      $rules[0].IdentityReference -ne $currentSid -or
+      $rules[0].AccessControlType -ne
+        [Security.AccessControl.AccessControlType]::Allow -or
+      $rules[0].FileSystemRights -ne
+        [Security.AccessControl.FileSystemRights]::FullControl) {
+    throw 'health gate DACL reset is not exact current-only'
+  }
+}
+
+function Remove-GateTree {
+  param([string]$Path)
+  $records = @(Get-GateTreeCensus $Path)
+  $hostileFull = ''
+  if ($script:HostileHealthPath) {
+    $hostileFull = [IO.Path]::GetFullPath($script:HostileHealthPath)
+    $hostile = @($records | Where-Object {
+      $_.Path.Equals($hostileFull, [StringComparison]::OrdinalIgnoreCase)
+    })
+    if ($hostile.Count -ne 1 -or $hostile[0].Kind -cne 'file') {
+      throw 'health gate hostile capability binding is not exact'
+    }
+    $hostileBefore = $script:HostileHealthSnapshot |
+      ConvertFrom-Json -ErrorAction Stop
+    if ($hostile[0].Identity -cne [string]$hostileBefore.identity -or
+        $hostile[0].Sddl -cne [string]$hostileBefore.sddl -or
+        $hostile[0].Bytes -cne [string]$hostileBefore.bytes) {
+      throw 'health gate hostile capability changed before teardown'
+    }
+  }
+  foreach ($record in $records) {
+    if ($record.Path.Equals(
+        $hostileFull, [StringComparison]::OrdinalIgnoreCase)) {
+      continue
+    }
+    if (-not $record.CurrentPrincipalOnly) {
+      throw 'health gate contains an unexpected DACL'
+    }
+    Assert-ExactCurrentDacl $record.Path $record.Kind
+  }
+  if ($env:JHT_TEST_HEALTH_DACL_RESET_FAILURE -ceq '1') {
+    throw 'injected health gate DACL reset failure'
+  }
+  if ($hostileFull) {
+    $record = @($records | Where-Object {
+      $_.Path.Equals($hostileFull, [StringComparison]::OrdinalIgnoreCase)
+    })[0]
+    [JhtHealthPckIdentity]::ProtectCurrentOnlyDacl(
+      $record.Path, $false)
+    $after = Get-GateNodeRecord $record.Path $Path
+    if ($after.Identity -cne $record.Identity -or
+        $after.Owner -cne $record.Owner -or
+        $after.Bytes -cne $record.Bytes) {
+      throw 'health gate DACL reset changed node identity, owner, or bytes'
+    }
+    Assert-ExactCurrentDacl $record.Path $record.Kind
+  }
+  $postReset = @(Get-GateTreeCensus $Path)
+  if ($postReset.Count -ne $records.Count) {
+    throw 'health gate census changed during DACL reset'
+  }
+  foreach ($record in $records) {
+    $observed = @($postReset | Where-Object {
+      $_.Path.Equals($record.Path, [StringComparison]::OrdinalIgnoreCase)
+    })
+    if ($observed.Count -ne 1 -or
+        $observed[0].Identity -cne $record.Identity -or
+        $observed[0].Owner -cne $record.Owner -or
+        $observed[0].Bytes -cne $record.Bytes -or
+        (-not $record.Path.Equals(
+          $hostileFull, [StringComparison]::OrdinalIgnoreCase) -and
+          $observed[0].Sddl -cne $record.Sddl)) {
+      throw 'health gate census changed before delete'
+    }
+    Assert-ExactCurrentDacl $observed[0].Path $observed[0].Kind
+  }
   Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
-  if (Test-Path -LiteralPath $Path) {
+  if ([JhtHealthPckIdentity]::GetNoFollowNodeKind($Path) -ne 0) {
     throw 'exported health gate left fixture residue'
   }
 }
@@ -479,6 +780,8 @@ function Invoke-HealthCase {
     New-ExactFile $healthPath $hostileBytes
     Set-HostileFileSecurity $healthPath
     $beforeCapability = Get-FullSnapshot $healthPath
+    $script:HostileHealthPath = $healthPath
+    $script:HostileHealthSnapshot = $beforeCapability
   } elseif ($Mode -in @('journal-absent','journal-malformed','pid-mismatch',
       'start-invalid')) {
     New-ExactFile $healthPath ([byte[]]@())
@@ -682,6 +985,9 @@ try {
 
 $gateRoot = Join-Path ([IO.Path]::GetFullPath($env:RUNNER_TEMP)) (
   'jht-health-pck-' + [guid]::NewGuid().ToString('N'))
+$script:HostileHealthPath = ''
+$script:HostileHealthSnapshot = ''
+$casesPassed = $false
 try {
   New-ExactDirectory $gateRoot
   foreach ($mode in @('normal','positive','absent','hostile','nonce-only',
@@ -689,7 +995,12 @@ try {
       'journal-malformed','pid-mismatch','start-invalid')) {
     Invoke-HealthCase $gateRoot $mode
   }
-  [Console]::Out.WriteLine('WINDOWS-UPDATE-HEALTH-PCK-TEST PASS')
+  [Console]::Out.WriteLine('WINDOWS-UPDATE-HEALTH-PCK-CASES PASS')
+  $casesPassed = $true
 } finally {
   Remove-GateTree $gateRoot
+}
+if ($casesPassed -and
+    [JhtHealthPckIdentity]::GetNoFollowNodeKind($gateRoot) -eq 0) {
+  [Console]::Out.WriteLine('WINDOWS-UPDATE-HEALTH-PCK-TEST PASS')
 }
