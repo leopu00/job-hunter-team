@@ -55,6 +55,7 @@ of the review.
 | Active runtime vs credentials | `web/lib/providers.ts`, `shared/credentials/types.ts` | `web/lib/providers.test.ts`; credential-product IDs are not active runtimes |
 | Setup UX | `cli/wizard/setup-helpers.js`, `cli/wizard/setup-noninteractive.js`, native setup UI | Fresh setup writes a config the launcher accepts |
 | Install/update/model pin | `cli/src/commands/providers.js`, `cli/src/commands/model-pin.js`, container image | Install and update are idempotent; model changes require a successful probe |
+| CLI version the release installs | `shared/config/provider-versions.json`, `shared/runtime/provider-pins.js` | The new provider has a pinned version with `pinned_at` and a `note`; nothing in the install path uses a mutable tag (`tests/js/tasks/provider-version-pin.test.ts`) |
 | Process launch and recovery | `.launcher/start-agent.sh`, `.launcher/agent-watchdog.sh` | Correct binary, auth environment, health marker and zombie detection |
 | Usage and pacing | `.launcher/sentinel-bridge.py`, `shared/skills/usage_record.py`, `shared/skills/provider_capacity.py`, `shared/skills/plan_registry.py` | Parser fixture plus real quota export across complete reset windows |
 | Operator smoke | `scripts/test-providers.sh` | Login, one real turn, restart/resume and usage readback |
