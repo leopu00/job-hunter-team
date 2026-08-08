@@ -206,6 +206,14 @@ async function handleEnable(options) {
  *     mapping UUID→legacy_id per highlights, name-match per companies).
  *   - INSERT OR REPLACE su id SQLite = legacy_id cloud. Righe locali con
  *     id mai pushato (legacy_id=NULL cloud-side) restano intatte.
+ *   - Conflitto di URL: mai un DELETE per risolverlo (residuo dichiarato di
+ *     [DEDUP-URL-CORRECTNESS], T-027). Con l'indice UNIQUE parziale su `url`,
+ *     OR REPLACE risolverebbe il conflitto CANCELLANDO la riga locale che
+ *     possiede gia' quell'URL — e il trigger `positions_tombstone`
+ *     propagherebbe la delete al cloud: perdita silenziosa proprio nel
+ *     percorso di disaster-recovery. Una riga cloud il cui URL e' gia' di
+ *     un'altra riga (id diverso) viene SALTATA e dichiarata a video, con
+ *     conteggio dei conflitti nel report finale.
  *   - Cursor di push resettato a "now" per evitare ri-push delle righe
  *     appena scaricate al prossimo daemon tick.
  *
@@ -291,6 +299,7 @@ async function handleRestore(options) {
   console.log(pc.dim(`  Cloud:  ${cloudPositions.length} positions, ${cloudScores.length} scores, ${cloudApps.length} applications`));
   console.log('');
   console.log(pc.dim('  Mode: INSERT OR REPLACE using the cloud legacy_id as the SQLite id.'));
+  console.log(pc.dim('  URL conflicts are never resolved by deleting: the cloud row is skipped and reported.'));
   console.log(pc.dim('  Local rows not pushed to the cloud (legacy_id NULL) remain unchanged.'));
   console.log(pc.dim('  companies and position_highlights are not rebuilt (outside the MVP scope).'));
 
@@ -318,6 +327,7 @@ async function handleRestore(options) {
 
   let inserted = { positions: 0, scores: 0, applications: 0 };
   let skipped = { positions: 0, scores: 0, applications: 0 };
+  const urlConflicts = [];
 
   try {
     const db = new DatabaseSync(dbPath);
@@ -326,6 +336,16 @@ async function handleRestore(options) {
     // Positions: INSERT OR REPLACE su id = legacy_id. company_id resettato
     // a NULL (mapping cloud→sqlite non disponibile in MVP — l'Analista lo
     // ricostruisce al prossimo loop quando incontra la company).
+    // Guardia anti-DELETE (residuo [DEDUP-URL-CORRECTNESS], T-027): con
+    // l'indice UNIQUE parziale su `url`, OR REPLACE risolve un conflitto di
+    // URL CANCELLANDO la riga che possiede gia' quell'URL — e il trigger
+    // `positions_tombstone` propagherebbe la delete al cloud. Il restore non
+    // cancella MAI per un URL: conflitto = riga cloud saltata e dichiarata,
+    // con conteggio nel report. La query vede anche le righe appena
+    // ripristinate in questo giro, quindi vale pure fra righe cloud fra loro.
+    const urlConflictStmt = db.prepare(
+      'SELECT id FROM positions WHERE url = ? AND id <> ?'
+    );
     const posStmt = db.prepare(`
       INSERT OR REPLACE INTO positions (
         id, title, company, company_id, location, remote_type,
@@ -351,6 +371,14 @@ async function handleRestore(options) {
         if (!Number.isInteger(legacyId) || legacyId <= 0) {
           skipped.positions++;
           continue;
+        }
+        const url = p.url ?? null;
+        if (url) {
+          const clash = urlConflictStmt.get(url, legacyId);
+          if (clash) {
+            urlConflicts.push({ legacyId, url, localId: clash.id });
+            continue;
+          }
         }
         posStmt.run(
           legacyId,
@@ -449,6 +477,15 @@ async function handleRestore(options) {
   console.log(pc.dim(`  Positions:    ${inserted.positions} upserted (${skipped.positions} skipped: missing legacy_id)`));
   console.log(pc.dim(`  Scores:       ${inserted.scores} upserted (${skipped.scores} skipped: orphaned position_id)`));
   console.log(pc.dim(`  Applications: ${inserted.applications} upserted (${skipped.applications} skipped: orphaned position_id)`));
+  if (urlConflicts.length > 0) {
+    console.log(pc.yellow(`  URL conflicts: ${urlConflicts.length} cloud row(s) SKIPPED — the URL is already held by another local row; nothing was deleted:`));
+    for (const c of urlConflicts.slice(0, 10)) {
+      console.log(pc.yellow(`    legacy_id ${c.legacyId} skipped: url already held by local id ${c.localId}`));
+    }
+    if (urlConflicts.length > 10) {
+      console.log(pc.yellow(`    ... and ${urlConflicts.length - 10} more`));
+    }
+  }
   console.log(pc.dim(`  Sync cursor reset to ${nowIso}`));
   console.log('');
   void confirmed;
@@ -3533,7 +3570,7 @@ async function runRealtimeLoop({ config, isRunning }) {
 // per recuperare write_requested cliccato via web mentre container era
 // offline). Best-effort: il caller invoca con { silent: true } e ignora
 // process.exitCode così il boot prosegue anche se cloud è giù.
-export { handlePullDesiredState, handleTicketSync, handleDirectiveSync };
+export { handlePullDesiredState, handleTicketSync, handleDirectiveSync, handleRestore };
 
 /**
  * pull-profile — scarica il profilo dal cloud e ricostruisce
