@@ -99,14 +99,19 @@ export const CLIENT_COLUMNS =
  * passata. `42703` è `undefined_column` di Postgres; il controllo sul testo
  * copre i casi in cui PostgREST non propaga il codice.
  */
-export function missingClientColumns(error: {
-  code?: string | null;
-  message?: string | null;
-} | null): boolean {
+export function missingClientColumns(
+  error: {
+    code?: string | null;
+    message?: string | null;
+  } | null,
+): boolean {
   if (!error) return false;
   if (error.code === "42703") return true;
   const message = String(error.message ?? "").toLowerCase();
-  return message.includes("client_version") || message.includes("client_capabilities");
+  return (
+    message.includes("client_version") ||
+    message.includes("client_capabilities")
+  );
 }
 
 /** Colonne da scrivere su `cloud_sync_tokens` per questa dichiarazione. */

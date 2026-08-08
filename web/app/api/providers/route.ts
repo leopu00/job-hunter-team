@@ -10,6 +10,7 @@ import { requireAuth } from "@/lib/auth";
 // risolvere a runtime — e la regola di composizione è la stessa di
 // shared/runtime/provider-pins.js: `pkg@ver` per npm, `pkg==ver` per uv.
 import providerVersions from "../../../../shared/config/provider-versions.json";
+import { resolveUpdateTarget } from "@/lib/providers/update-target";
 
 export const dynamic = "force-dynamic";
 
@@ -207,26 +208,46 @@ function readUvToolVersion(
   return null;
 }
 
+/** La versione del pin per questo provider, se dichiarata e ben formata. */
+function pinnedVersionFor(providerId: string): string | null {
+  const pin = PINS[PIN_KEY[providerId] ?? ""];
+  const version = pin?.version ?? "";
+  return /^\d+\.\d+\.\d+/.test(version) ? version : null;
+}
+
+/**
+ * Versione installata e versione che il bottone porterebbe.
+ *
+ * Il bersaglio NON è più l'ultima del registry: è quella che
+ * `installSpecFor` installa davvero, cioè il pin della release. Prima il
+ * badge leggeva `~/.codex/version.json` e poteva quindi indicare un numero
+ * diverso da quello che il click avrebbe messo sulla macchina.
+ */
 function readVersionInfo(providerId: string): {
   installedVersion: string | null;
-  latestVersion: string | null;
+  targetVersion: string | null;
 } {
   const spec = CLI_SPECS[providerId];
-  if (!spec) return { installedVersion: null, latestVersion: null };
-  if (spec.kind === "npm") {
-    const pkg = readJsonSafe<{ version?: string }>(spec.installedPkgJson);
-    const installedVersion = pkg?.version ?? null;
-    const latestJson = spec.latestSource
-      ? readJsonSafe<{ latest_version?: string }>(spec.latestSource)
+  if (!spec) return { installedVersion: null, targetVersion: null };
+  const installedVersion =
+    spec.kind === "npm"
+      ? (readJsonSafe<{ version?: string }>(spec.installedPkgJson)?.version ??
+        null)
+      : readUvToolVersion(spec.distInfoParent, spec.distInfoGlob);
+  // Il registry serve solo come ripiego, e solo dove il pin manca: è
+  // esattamente il caso in cui `installSpecFor` cade su `@latest`, quindi
+  // l'etichetta continua a descrivere ciò che il bottone farebbe.
+  const registryLatest =
+    spec.kind === "npm" && spec.latestSource
+      ? (readJsonSafe<{ latest_version?: string }>(spec.latestSource)
+          ?.latest_version ?? null)
       : null;
-    const latestVersion = latestJson?.latest_version ?? null;
-    return { installedVersion, latestVersion };
-  }
-  // uv tool: latest version non disponibile offline — lasciamo null
-  return {
-    installedVersion: readUvToolVersion(spec.distInfoParent, spec.distInfoGlob),
-    latestVersion: null,
-  };
+  const { targetVersion } = resolveUpdateTarget({
+    pinnedVersion: pinnedVersionFor(providerId),
+    registryLatest,
+    installedVersion,
+  });
+  return { installedVersion, targetVersion };
 }
 
 function listActiveSessions(): string[] {
@@ -272,15 +293,17 @@ export async function GET() {
     const available = hasEnvKey || hasConfigKey;
     const activeModel = providerCfg?.model ?? p.models[0];
 
-    const { installedVersion, latestVersion } = readVersionInfo(p.id);
-    // updateAvailable richiede entrambi i valori + disuguaglianza. Per
-    // provider senza `latestSource` (es. anthropic) `latestVersion` è
-    // sempre null → mai "available", quindi niente falsi positivi.
-    const updateAvailable = !!(
-      installedVersion &&
-      latestVersion &&
-      installedVersion !== latestVersion
-    );
+    const { installedVersion, targetVersion } = readVersionInfo(p.id);
+    // Si propone l'aggiornamento solo se il bersaglio è più NUOVO
+    // dell'installata: una macchina può stare più avanti del pin (oggi kimi
+    // è pinnata alla 1.36.0 mentre PyPI pubblica la 1.49.0), e lì il
+    // bottone resta utile per riallineare ma chiamarlo «aggiornamento»
+    // sarebbe falso. Versioni non confrontabili → nessun invito.
+    const { updateAvailable } = resolveUpdateTarget({
+      pinnedVersion: pinnedVersionFor(p.id),
+      registryLatest: targetVersion,
+      installedVersion,
+    });
     const updatable = !!CLI_SPECS[p.id];
 
     return {
@@ -293,7 +316,7 @@ export async function GET() {
       activeModel,
       keySource: hasConfigKey ? "config" : hasEnvKey ? "env" : null,
       installedVersion,
-      latestVersion,
+      targetVersion,
       updateAvailable,
       updatable,
     };

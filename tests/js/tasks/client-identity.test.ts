@@ -122,9 +122,9 @@ describe("lettura della dichiarazione (web)", () => {
       capabilities: ["chat", "file-bridge"],
     });
     const many = Array.from({ length: 50 }, (_, i) => `cap-${i}`).join(",");
-    expect(parseClientHeader(`capabilities=${many}`)?.capabilities).toHaveLength(
-      32,
-    );
+    expect(
+      parseClientHeader(`capabilities=${many}`)?.capabilities,
+    ).toHaveLength(32);
     // Una capability sporca cade da sola, senza portarsi via le altre.
     expect(
       parseClientHeader("capabilities=chat,NON valida!,tickets")?.capabilities,
@@ -133,7 +133,11 @@ describe("lettura della dichiarazione (web)", () => {
 });
 
 describe("scrittura su cloud_sync_tokens", () => {
-  const declared = { version: "0.3.5", platform: "linux", capabilities: ["chat"] };
+  const declared = {
+    version: "0.3.5",
+    platform: "linux",
+    capabilities: ["chat"],
+  };
 
   it("non riscrive una dichiarazione identica", () => {
     // Il box ripete lo stesso header per settimane: senza questo confronto
@@ -152,9 +156,9 @@ describe("scrittura su cloud_sync_tokens", () => {
   });
 
   it("riconosce un aggiornamento del box in ognuno dei tre campi", () => {
-    expect(
-      clientIdentityChanged({ client_version: "0.3.4" }, declared),
-    ).toBe(true);
+    expect(clientIdentityChanged({ client_version: "0.3.4" }, declared)).toBe(
+      true,
+    );
     expect(
       clientIdentityChanged(
         { client_version: "0.3.5", client_platform: "macos" },
@@ -199,7 +203,7 @@ describe("il web può arrivare prima della migration", () => {
     expect(missingClientColumns({ code: "42703" })).toBe(true);
     expect(
       missingClientColumns({
-        message: 'column cloud_sync_tokens.client_version does not exist',
+        message: "column cloud_sync_tokens.client_version does not exist",
       }),
     ).toBe(true);
   });
@@ -209,9 +213,9 @@ describe("il web può arrivare prima della migration", () => {
     // trattassimo come "colonne assenti" nasconderemmo il guasto dietro un
     // secondo tentativo identico.
     expect(missingClientColumns(null)).toBe(false);
-    expect(missingClientColumns({ code: "PGRST301", message: "JWT expired" })).toBe(
-      false,
-    );
+    expect(
+      missingClientColumns({ code: "PGRST301", message: "JWT expired" }),
+    ).toBe(false);
     expect(missingClientColumns({ message: "connection refused" })).toBe(false);
   });
 
