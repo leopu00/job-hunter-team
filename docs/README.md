@@ -22,7 +22,7 @@ Public docs for anyone evaluating JHT, in two clusters (see the [index](about/RE
 
 ## 📘 [`guides/`](guides/) — operational guides
 Setup, usage and operations (see the [index](guides/README.md)). All in English, `UPPERCASE-KEBAB` naming.
-- 🚀 **Start:** `QUICKSTART` · `CLI-INSTALL` · `CLI-REFERENCE` · `AI-AGENT-INTEGRATION`
+- 🚀 **Start:** `CHOOSE-WHERE-TO-RUN` · `QUICKSTART` · `CLI-INSTALL` · `CLI-REFERENCE` · `AI-AGENT-INTEGRATION`
 - 📦 **Evidence:** `M4-EVIDENCE-BUNDLES` · `ADDING-A-PROVIDER` · `LOCAL-SCORER`
 - ☁️ **VPS:** `VPS-SETUP-WIZARD` · `VPS-SETUP`
 - 🧪 **Testing & feedback:** `BETA` · `FEEDBACK-TICKETING` · `EMAIL-FORWARDING`

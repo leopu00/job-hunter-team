@@ -6,7 +6,11 @@ Electron wizard is not involved.
 
 ## What you need
 
-- A Linux VPS reachable as `root` over SSH.
+- A Linux host reachable over SSH as `root`, with passwordless `sudo`, or with
+  an account already allowed to run Docker. Automated migration involving a
+  remote host still requires the root-owned path layout described below.
+- SSH available on the standard port 22. The native host field currently
+  accepts a hostname or IPv4 address, not a custom port or IPv6 address.
 - The SSH private key matching a public key installed on the VPS.
 - A dedicated Claude, Codex or Kimi subscription.
 - Optionally, three Telegram bots and a dedicated job-alert mailbox.
@@ -25,8 +29,8 @@ explicitly excluded from migrations.
    under **Settings → Connect VPS**.
 3. Generate or select the SSH key, copy the public key into the provider's
    server-creation form and enter the new server IP.
-4. Choose **Verify SSH**. The app verifies key authentication and root access
-   before changing the server.
+4. Choose **Verify SSH**. The app verifies key authentication and either root,
+   passwordless `sudo`, or working Docker access before changing the server.
 5. Choose **Prepare and connect automatically**. It installs the host runtime,
    writes VPS host mode, pulls and starts the container, saves the connection
    and switches the office to the remote backend. **Advanced console** keeps a
@@ -44,11 +48,17 @@ explicitly excluded from migrations.
 
 ## Move an existing team
 
-**Settings → Connect VPS → Complete migration** supports all host changes:
+**Settings → Connect VPS → Complete migration** supports these host changes
+when every remote source or destination uses the current root-owned layout:
 
 - this computer → a new VPS;
 - the currently saved VPS → a new VPS; or
 - the currently saved VPS → this computer.
+
+A fresh prepare/connect flow supports non-root accounts with passwordless
+`sudo` or Docker access, but the automated migration scripts still use paths
+under `/root`. Migration to or from a non-root remote account is therefore not
+implemented. A successful **Verify SSH** result does not remove this limit.
 
 For a VPS destination, enter its IP/key, select the source and confirm. For a
 local destination, use **Migrate from VPS to this computer**. The app:
@@ -105,8 +115,9 @@ security contract.
 
 ## Troubleshooting
 
-- **SSH does not connect:** verify the IP, key path, server firewall and that
-  `ssh -i <key> root@<ip>` works.
+- **SSH does not connect:** verify the hostname or IPv4 address, SSH user, key
+  path, port 22 and server firewall, then confirm that
+  `ssh -i <key> <user>@<host>` works.
 - **Install console fails:** keep the console open and use its Copy button;
   then run **Advanced → Diagnostics**.
 - **Provider stays disconnected:** finish the browser authorization, return to

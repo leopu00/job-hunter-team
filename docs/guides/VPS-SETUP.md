@@ -176,7 +176,12 @@ The office can move a local or remote team through
 **Settings → Connect VPS → Complete migration**. It stops the source, verifies
 the archive and database, excludes SSH keys and runtime files, stages the
 destination and keeps a verified backup. Do not run both copies after a
-successful migration. The full contract is in
+successful migration.
+
+The current automated remote migration scripts use root-owned paths under
+`/root`. Fresh setup supports root, passwordless `sudo`, or an account allowed
+to run Docker, but automated migration to or from a non-root remote account is
+not implemented. The full current contract is in
 [`VPS-SETUP-WIZARD.md`](VPS-SETUP-WIZARD.md).
 
 ## Related
