@@ -89,6 +89,30 @@ export const CHAT_DELIVERY_T = {
     fr: "Le box a été relancé. S'il est éteint ou sur une version ancienne, le message restera non remis.",
     pt: "O box foi chamado de novo. Se estiver desligado ou numa versão antiga, continuará por entregar.",
   },
+  // Il composer spento perché il box ha dichiarato di non saper ricevere la
+  // chat. Dice la versione (il fatto), cosa manca (la conseguenza) e come si
+  // chiude (l'azione) — senza mai dire "errore": non c'è nulla di rotto,
+  // c'è una build vecchia.
+  blocked_no_chat: {
+    it: "Il tuo box è sulla versione {version} e non sa ancora ricevere i messaggi dal sito. Aggiornalo per scrivere agli agenti da qui.",
+    en: "Your box is on version {version} and cannot receive messages from the site yet. Update it to write to the agents from here.",
+    hu: "A boxod a(z) {version} verzión fut, és még nem tud üzenetet fogadni a webhelyről. Frissítsd, hogy innen írhass az ügynököknek.",
+    es: "Tu box está en la versión {version} y todavía no puede recibir mensajes desde el sitio. Actualízalo para escribir a los agentes desde aquí.",
+    de: "Deine Box läuft auf Version {version} und kann noch keine Nachrichten von der Website empfangen. Aktualisiere sie, um von hier aus mit den Agenten zu schreiben.",
+    fr: "Votre box est en version {version} et ne sait pas encore recevoir les messages du site. Mettez-la à jour pour écrire aux agents depuis ici.",
+    pt: "O teu box está na versão {version} e ainda não consegue receber mensagens do site. Atualiza-o para escrever aos agentes a partir daqui.",
+  },
+  // Stessa cosa quando il box non ha dichiarato quale versione sia: la
+  // frase non può nominarla e non deve inventarla.
+  blocked_no_chat_unknown_version: {
+    it: "Il tuo box non sa ancora ricevere i messaggi dal sito. Aggiornalo per scrivere agli agenti da qui.",
+    en: "Your box cannot receive messages from the site yet. Update it to write to the agents from here.",
+    hu: "A boxod még nem tud üzenetet fogadni a webhelyről. Frissítsd, hogy innen írhass az ügynököknek.",
+    es: "Tu box todavía no puede recibir mensajes desde el sitio. Actualízalo para escribir a los agentes desde aquí.",
+    de: "Deine Box kann noch keine Nachrichten von der Website empfangen. Aktualisiere sie, um von hier aus mit den Agenten zu schreiben.",
+    fr: "Votre box ne sait pas encore recevoir les messages du site. Mettez-la à jour pour écrire aux agents depuis ici.",
+    pt: "O teu box ainda não consegue receber mensagens do site. Atualiza-o para escrever aos agentes a partir daqui.",
+  },
   retry_failed: {
     it: "Non è stato possibile richiamare il box. Riprova fra poco.",
     en: "Could not ping the box. Try again shortly.",
