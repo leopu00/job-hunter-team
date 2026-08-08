@@ -247,9 +247,7 @@ export default function MessagesDrawer() {
     const id = window.setInterval(() => setClock(Date.now()), 30_000);
     return () => window.clearInterval(id);
   }, [waiting]);
-  const stalled = active
-    ? hasStalledTurn(active.messages, lane, clock)
-    : false;
+  const stalled = active ? hasStalledTurn(active.messages, lane, clock) : false;
 
   /** Richiama il box per i turni che non ha ritirato. Vedi MessagesList. */
   async function handleRetryDelivery() {
@@ -673,9 +671,13 @@ export default function MessagesDrawer() {
                           className="px-2 py-1 rounded border text-[10px] cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           style={{ borderColor: "var(--color-yellow)" }}
                         >
-                          {retryState === "sending" ? td("retrying") : td("retry")}
+                          {retryState === "sending"
+                            ? td("retrying")
+                            : td("retry")}
                         </button>
-                        {retryState === "done" && <span>{td("retry_done")}</span>}
+                        {retryState === "done" && (
+                          <span>{td("retry_done")}</span>
+                        )}
                         {retryState === "failed" && (
                           <span style={{ color: "var(--color-red)" }}>
                             {td("retry_failed")}

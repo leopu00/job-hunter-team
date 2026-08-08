@@ -76,7 +76,8 @@ export default function UpdateBanner() {
   }, [latest?.version]);
 
   const current = box?.client_version ?? null;
-  const stale = !!current && !!latest && updateAvailable(latest.version, current);
+  const stale =
+    !!current && !!latest && updateAvailable(latest.version, current);
   if (!stale || dismissed || !latest) return null;
 
   const close = () => {

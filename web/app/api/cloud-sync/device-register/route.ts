@@ -209,7 +209,10 @@ export async function POST(req: NextRequest) {
 
   let { data, error } = await register(
     declared
-      ? { ...baseRow, ...clientIdentityPatch(declared, new Date().toISOString()) }
+      ? {
+          ...baseRow,
+          ...clientIdentityPatch(declared, new Date().toISOString()),
+        }
       : baseRow,
   );
   // Migration 064 non ancora applicata: si paira comunque. Un device che
