@@ -60,6 +60,15 @@ describe.each(SURFACES)("%s (%s)", (file) => {
     expect(src).toContain("composerBlocked");
   });
 
+  it("misura il tempo con l'orologio del server, non con quello locale", () => {
+    // I timestamp confrontati li scrive il server: misurarli con
+    // `Date.now()` del browser rende il verdetto una funzione dello skew
+    // del client — dieci minuti avanti e un turno appena spedito risulta
+    // già perduto, indietro e un turno perduto sembra appena spedito.
+    expect(src).toContain("serverNow()");
+    expect(src).not.toContain("setClock(Date.now())");
+  });
+
   it("continua a rendere le vecchie risposte appese", () => {
     // Il modello pre-unificazione non si riscrive: le conversazioni già
     // salvate devono restare leggibili com'erano.

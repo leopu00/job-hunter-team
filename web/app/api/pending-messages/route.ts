@@ -23,7 +23,17 @@ export async function GET() {
     getMessagesHistory(100),
     getPendingMessagesCount(),
   ]);
-  return NextResponse.json({ messages, unread });
+  // `server_now` viaggia con i messaggi perché lo stato di consegna si
+  // misura fra timestamp scritti dal server: senza, il browser userebbe il
+  // proprio orologio e uno skew di pochi minuti basta a marcare «non
+  // consegnato» un turno appena spedito (o a nascondere uno fermo da ore).
+  // Nel corpo e non solo nell'header `Date`: qui il valore non può essere
+  // quello di una risposta rimasta in una cache intermedia.
+  return NextResponse.json({
+    messages,
+    unread,
+    server_now: new Date().toISOString(),
+  });
 }
 
 /**

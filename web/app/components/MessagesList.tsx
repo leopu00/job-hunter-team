@@ -33,6 +33,7 @@ import { useChatLaneLive } from "@/app/hooks/useChatLaneLive";
 import { useBoxClient } from "@/app/hooks/useBoxClient";
 import { chatComposerBlocked } from "@/lib/box-client";
 import { chatTurnDelivery, hasStalledTurn } from "@/lib/chat-delivery";
+import { noteServerTime, serverNow } from "@/lib/server-clock";
 import { makeT } from "@/lib/i18n-dict";
 import { CHAT_DELIVERY_T } from "@/lib/chat-delivery.i18n";
 import {
@@ -51,6 +52,10 @@ import type { PendingMessage } from "@/lib/types";
 
 interface Props {
   initialMessages: PendingMessage[];
+  // Ora del server al momento della render (vedi lib/server-clock.ts): lo
+  // stato di consegna confronta timestamp scritti dal server, e l'orologio
+  // del browser può essere avanti o indietro di minuti.
+  serverNowIso?: string;
 }
 
 // Le tre conversazioni del web, nell'ordine voluto dall'utente. Sono FISSE:
@@ -115,7 +120,7 @@ const T: Record<string, Record<string, string>> = {
   },
 };
 
-export default function MessagesList({ initialMessages }: Props) {
+export default function MessagesList({ initialMessages, serverNowIso }: Props) {
   // Solo i turni delle tre conversazioni: un mittente fuori roster non deve
   // comparire qui (resta nel drawer della navbar, che li mostra tutti).
   const [messages, setMessages] = useState<PendingMessage[]>(() =>
@@ -254,12 +259,17 @@ export default function MessagesList({ initialMessages }: Props) {
     (m) =>
       m.author === "user" && !m.delivered_at && !m.id.startsWith("pending:"),
   );
+  // L'ora arrivata col markup vale da subito: è la stessa render, quindi lo
+  // scarto è noto prima che l'utente possa scrivere qualcosa.
   useEffect(() => {
-    setClock(Date.now());
+    noteServerTime(serverNowIso);
+  }, [serverNowIso]);
+  useEffect(() => {
+    setClock(serverNow());
     if (!waiting) return;
-    const id = window.setInterval(() => setClock(Date.now()), 30_000);
+    const id = window.setInterval(() => setClock(serverNow()), 30_000);
     return () => window.clearInterval(id);
-  }, [waiting]);
+  }, [waiting, serverNowIso]);
   const stalled = hasStalledTurn(thread, lane, clock);
 
   // Non letti = turni dell'AGENTE non ancora ack-ati: quelli scritti
