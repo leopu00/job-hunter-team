@@ -21,6 +21,9 @@ import {
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
   BOOTSTRAP_STATE_FILE, FIRST_RUN_STATE_FILE,
 } from '../lib/bootstrap-push.js';
+import {
+  decideBootstrapRestore, readLocalPositionsCount,
+} from '../lib/bootstrap-restore.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
@@ -165,6 +168,44 @@ async function handleEnable(options) {
 
   // Auto-push: l'utente ha appena collegato il VPS, vuole vedere i dati sul
   // dashboard subito — non ha senso forzarlo a un secondo comando.
+  // [JHT-CLOUD-RESTORE] T-029 — il lato PULL del bootstrap, simmetrico al
+  // push in coda: DB locale VUOTO → il restore parte da solo (dentro
+  // handleRestore ci sono gia' la transazione e la guardia anti-DELETE di
+  // T-027); DB con dati → push. Mai entrambi: un DB vuoto non ha nulla da
+  // spingere, un DB pieno non deve mai essere sovrascritto. `--no-push`
+  // governa solo il push: il restore scrive il DB LOCALE e solo quando non
+  // c'e' lavoro da preservare.
+  let dbPresent = true;
+  try {
+    await stat(JHT_DB_PATH);
+  } catch {
+    dbPresent = false;
+  }
+  let localPositions = null;
+  if (dbPresent) {
+    try {
+      const { DatabaseSync } = await import('node:sqlite');
+      localPositions = readLocalPositionsCount(DatabaseSync, JHT_DB_PATH);
+    } catch { /* Node < 22.5: resta null → niente restore automatico */ }
+  }
+  const restoreDecision = decideBootstrapRestore({ dbPresent, localPositions });
+  if (restoreDecision.restore) {
+    if (!options.uiJson) {
+      console.log('');
+      console.log(pc.dim('Empty local database: pulling the cloud snapshot (automatic bootstrap restore)...'));
+    }
+    emitCloudLoginUi(options, 'bootstrap_restore', { reason: restoreDecision.reason });
+    const prevExitCode = process.exitCode;
+    await handleRestore({ confirmRestore: true });
+    if (process.exitCode === 1) {
+      console.log(pc.yellow('  Pairing OK but the automatic restore failed. Recover: jht cloud restore --confirm-restore'));
+      process.exitCode = prevExitCode;
+    }
+    // Niente push dopo un restore: il cursore di sync e' gia' stato
+    // resettato a "now" dal restore stesso.
+    return;
+  }
+
   if (options.noPush) {
     console.log(pc.dim('  Initial push skipped (--no-push). Run: jht cloud push'));
     return;
@@ -837,6 +878,44 @@ export async function handleLogin(options = {}) {
     );
   }
 
+  // [JHT-CLOUD-RESTORE] T-029 — il lato PULL del bootstrap, simmetrico al
+  // push in coda: DB locale VUOTO → il restore parte da solo (dentro
+  // handleRestore ci sono gia' la transazione e la guardia anti-DELETE di
+  // T-027); DB con dati → push. Mai entrambi: un DB vuoto non ha nulla da
+  // spingere, un DB pieno non deve mai essere sovrascritto. `--no-push`
+  // governa solo il push: il restore scrive il DB LOCALE e solo quando non
+  // c'e' lavoro da preservare.
+  let dbPresent = true;
+  try {
+    await stat(JHT_DB_PATH);
+  } catch {
+    dbPresent = false;
+  }
+  let localPositions = null;
+  if (dbPresent) {
+    try {
+      const { DatabaseSync } = await import('node:sqlite');
+      localPositions = readLocalPositionsCount(DatabaseSync, JHT_DB_PATH);
+    } catch { /* Node < 22.5: resta null → niente restore automatico */ }
+  }
+  const restoreDecision = decideBootstrapRestore({ dbPresent, localPositions });
+  if (restoreDecision.restore) {
+    if (!options.uiJson) {
+      console.log('');
+      console.log(pc.dim('Empty local database: pulling the cloud snapshot (automatic bootstrap restore)...'));
+    }
+    emitCloudLoginUi(options, 'bootstrap_restore', { reason: restoreDecision.reason });
+    const prevExitCode = process.exitCode;
+    await handleRestore({ confirmRestore: true });
+    if (process.exitCode === 1) {
+      console.log(pc.yellow('  Pairing OK but the automatic restore failed. Recover: jht cloud restore --confirm-restore'));
+      process.exitCode = prevExitCode;
+    }
+    // Niente push dopo un restore: il cursore di sync e' gia' stato
+    // resettato a "now" dal restore stesso.
+    return;
+  }
+
   if (options.noPush) {
     if (!options.uiJson) {
       console.log('');
@@ -851,6 +930,7 @@ export async function handleLogin(options = {}) {
       console.log('');
       console.log(pc.dim(`No local database yet (${JHT_DB_PATH}). Initial push skipped.`));
       console.log(pc.dim(`Start the team with 'jht team start' and then 'jht cloud push'.`));
+      console.log(pc.dim(`To pull existing cloud data instead: 'jht cloud restore --confirm-restore' (once the schema exists).`));
     }
     return;
   }
