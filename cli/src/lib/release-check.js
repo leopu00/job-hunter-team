@@ -24,7 +24,13 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
-import { latestReleaseInfo, updateAvailable } from '../../../shared/release/version.js';
+import {
+  latestReleaseInfo,
+  updateAvailable,
+  updateCheckDisabled,
+} from '../../../shared/release/version.js';
+
+export { updateCheckDisabled };
 
 export const REPO = 'leopu00/job-hunter-team';
 const API_LATEST = `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -65,7 +71,14 @@ export async function fetchLatestRelease({
   fetchFn = fetch,
   now = Date.now(),
   useCache = true,
+  env = process.env,
 } = {}) {
+  // Spento: niente rete e nemmeno la cache. Chi ha messo questa variabile
+  // non ha chiesto «risparmia una richiesta», ha chiesto di non sentir
+  // parlare di aggiornamenti — e una riga pescata da un file locale sarebbe
+  // comunque quella riga.
+  if (updateCheckDisabled(env)) return null;
+
   if (useCache) {
     const cached = await readCache();
     if (cacheFresh(cached, now) && cached?.version) {

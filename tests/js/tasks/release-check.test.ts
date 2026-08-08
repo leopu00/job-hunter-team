@@ -23,6 +23,7 @@ import {
   cacheFresh,
   fetchLatestRelease,
   RELEASE_CACHE_TTL_MS,
+  updateCheckDisabled,
   updateNotice,
 } from "../../../cli/src/lib/release-check.js";
 
@@ -116,6 +117,40 @@ describe("la riga di jht status", () => {
     // esce con un errore. Mandare l'utente sull'host è metà del consiglio.
     expect(notice?.command).toBe("jht upgrade");
     expect(notice?.where).toContain("hosts Docker");
+  });
+});
+
+describe("JHT_UPDATE_CHECK=0 — la stessa leva in tutto il prodotto", () => {
+  // Il gioco la onora dalla 0.3.1 (`update_check.gd`, `skip_reason`); il CLI
+  // la ignorava. Una leva che funziona in un pezzo del prodotto e non
+  // nell'altro non è una leva: chi la mette si aspetta silenzio, e riceve
+  // silenzio solo a metà.
+  it("il valore 0 spegne, spazi inclusi", () => {
+    expect(updateCheckDisabled({ JHT_UPDATE_CHECK: "0" })).toBe(true);
+    expect(updateCheckDisabled({ JHT_UPDATE_CHECK: "  0 " })).toBe(true);
+  });
+
+  it("nessun altro valore spegne per conto suo", () => {
+    // Un interruttore che scatta su una stringa inattesa non è un
+    // interruttore. Stessa regola del gioco: solo `0` esatto.
+    for (const value of ["1", "false", "no", "", "00", "0.0", undefined]) {
+      expect(updateCheckDisabled({ JHT_UPDATE_CHECK: value })).toBe(false);
+    }
+    expect(updateCheckDisabled({})).toBe(false);
+  });
+
+  it("spento vuol dire nessuna rete E nessuna cache", () => {
+    // Chi mette questa variabile non ha chiesto di risparmiare una
+    // richiesta: ha chiesto di non sentir parlare di aggiornamenti.
+    const shouldNotRun = () => {
+      throw new Error("la rete non doveva essere toccata");
+    };
+    return expect(
+      fetchLatestRelease({
+        fetchFn: shouldNotRun,
+        env: { JHT_UPDATE_CHECK: "0" },
+      }),
+    ).resolves.toBeNull();
   });
 });
 

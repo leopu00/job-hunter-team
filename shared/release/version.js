@@ -12,6 +12,27 @@
  * importare JavaScript. Se le regole qui cambiano, quella va guardata.
  */
 
+/**
+ * L'interruttore esterno del canale aggiornamenti, e **vince su tutto**.
+ *
+ * Il gioco la onora dalla 0.3.1 (`game/scripts/support/update_check.gd`,
+ * `skip_reason`): è la leva per chi distribuisce JHT in un contesto che non
+ * deve andare in rete e per i banchi di prova. Sta qui, insieme al
+ * confronto, perché una leva che vale in un pezzo del prodotto e non negli
+ * altri non è una leva — e i pezzi che chiedono «c'è una versione nuova?»
+ * sono tre: il gioco, il CLI e il sito.
+ *
+ * Vale il valore `0` esatto una volta tolti gli spazi, come nel gioco.
+ * Qualunque altra stringa non spegne niente: un interruttore che scatta su
+ * un valore inatteso non è un interruttore.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {boolean}
+ */
+export function updateCheckDisabled(env) {
+  return String(env?.JHT_UPDATE_CHECK ?? '').trim() === '0';
+}
+
 /** Massima lunghezza di un tag credibile: oltre, è rumore da rete. */
 const MAX_TAG_LENGTH = 32;
 
