@@ -4,6 +4,10 @@ import * as yaml from "js-yaml";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import {
+  firstTeamRunPatch,
+  teamProducedWork,
+} from "@/lib/cloud-sync/onboarding-milestones";
 import { mapYamlToCanonical, syncProfileToSupabase } from "@/lib/profile-sync";
 import {
   normalizeApplicationStatus,
@@ -1111,6 +1115,51 @@ export async function POST(req: NextRequest) {
       await freshness;
     } catch {
       // best-effort: il segnale di freschezza non deve rompere il push
+    }
+  }
+
+  // [ONBOARDING-STATE-HALF-DEAD] «Il team ha mai girato davvero?»
+  //
+  // `user_onboarding_state.first_team_run_at` era NULL per OGNI account in
+  // produzione, compresi quelli con migliaia di posizioni: la colonna
+  // esisteva dalla migration 011 e nessuno la scriveva né la leggeva. Un
+  // imbuto mezzo popolato è peggio di nessun imbuto, perché qualcuno lo
+  // legge — quindi o si scrive dove il primo run è osservabile, o si toglie.
+  //
+  // Il primo push che porta lavoro del team è il segnale onesto, ed è già
+  // una chiamata cloud: niente meccanismo nuovo. Le righe che contano sono
+  // quelle prodotte dagli agenti; il profilo no — quello lo configura la
+  // persona, e ha già la sua milestone (`profile_configured_at`).
+  const producedWork = teamProducedWork({
+    positions: positionsUpserted,
+    companies: companiesUpserted,
+    scores: scoresUpserted,
+    applications: applicationsUpserted,
+    highlights: highlightsUpserted,
+    positionTransitions: positionTransitionsUpserted,
+    sentinelTicks: sentinelTicksUpserted,
+  });
+
+  if (producedWork) {
+    try {
+      const { data: onboarding } = await admin
+        .from("user_onboarding_state")
+        .select("first_team_run_at")
+        .eq("user_id", userId)
+        .maybeSingle();
+      const patch = firstTeamRunPatch(
+        onboarding,
+        userId,
+        new Date().toISOString(),
+      );
+      if (patch) {
+        await admin
+          .from("user_onboarding_state")
+          .upsert(patch, { onConflict: "user_id" });
+      }
+    } catch {
+      // best-effort come il gemello in device-register: il push è la cosa
+      // che deve riuscire, la milestone la recupera il prossimo.
     }
   }
 

@@ -36,6 +36,7 @@ import { existsSync, statSync, openSync, readSync, closeSync, appendFileSync, mk
 import { readFile, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { join, dirname } from 'node:path';
+import { cloudSyncHeaders } from './client-identity.js';
 
 /**
  * Le tre figure con cui l'utente conversa. Il web mostra esattamente
@@ -476,10 +477,7 @@ export function vercelChatChannel(
   const requestTimeoutMs = Math.max(1_000, Number(timeoutMs) || CLOUD_REQUEST_TIMEOUT_MS);
   const baseUrl = String(config?.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   const url = `${baseUrl}/api/cloud-sync/chat`;
-  const headers = {
-    Authorization: `Bearer ${config?.token}`,
-    'Content-Type': 'application/json',
-  };
+  const headers = cloudSyncHeaders(config?.token, { 'Content-Type': 'application/json' });
   const acknowledgeDelivery = async (
     ids = [],
     { closeRendezvous = false, expectedRequestedAt = null } = {},

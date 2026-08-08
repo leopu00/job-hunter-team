@@ -30,6 +30,8 @@ import AgentAvatar from "@/app/components/AgentAvatar";
 import ChatDeliveryMark from "@/app/components/ChatDeliveryMark";
 import { usePendingMessagesLive } from "@/app/hooks/usePendingMessagesLive";
 import { useChatLaneLive } from "@/app/hooks/useChatLaneLive";
+import { useBoxClient } from "@/app/hooks/useBoxClient";
+import { chatComposerBlocked } from "@/lib/box-client";
 import { chatTurnDelivery, hasStalledTurn } from "@/lib/chat-delivery";
 import { makeT } from "@/lib/i18n-dict";
 import { CHAT_DELIVERY_T } from "@/lib/chat-delivery.i18n";
@@ -122,6 +124,11 @@ export default function MessagesList({ initialMessages }: Props) {
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Esito dell'ultimo "richiama il box". Non è lo stato della consegna —
+  // quello lo dicono le bolle: qui si dice solo se la richiesta è partita.
+  const [retryState, setRetryState] = useState<
+    "idle" | "sending" | "done" | "failed"
+  >("idle");
   const locale = useLocale();
   const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const threadScrollRef = useRef<HTMLDivElement>(null);
@@ -220,7 +227,17 @@ export default function MessagesList({ initialMessages }: Props) {
   // pensando. `lane` è il rendezvous della corsia (team_state), la riga
   // porta il suo `delivered_at`: insieme dicono lo stato vero.
   const lane = useChatLaneLive();
+  // Il box ha dichiarato di non saper ricevere la chat: accettare il testo
+  // sarebbe incassarlo per nessuno. Vale solo la smentita esplicita —
+  // `chatComposerBlocked` lascia passare ogni forma di silenzio.
+  const box = useBoxClient();
+  const composerBlocked = chatComposerBlocked(box);
   const td = makeT(CHAT_DELIVERY_T, locale);
+  // La versione si nomina solo se il box l'ha detta: senza, la frase perde
+  // il numero invece di inventarne uno.
+  const blockedNotice = box?.client_version
+    ? td("blocked_no_chat").replace("{version}", box.client_version)
+    : td("blocked_no_chat_unknown_version");
 
   // Orologio interno. Senza, una bolla resterebbe "inviato" per sempre
   // anche quando l'attesa l'ha resa un guasto: i re-render arrivano coi
@@ -400,6 +417,21 @@ export default function MessagesList({ initialMessages }: Props) {
     } finally {
       setSending(false);
     }
+  }
+
+  /**
+   * Risuona il campanello per i turni che il box non ha ritirato.
+   *
+   * Il turno esiste già sul cloud: quello che può mancare è la richiesta di
+   * ritiro (un UPDATE perso, un daemon riavviato nel momento sbagliato).
+   * L'esito qui è solo "la richiesta è ripartita": se il box è spento o su
+   * una build senza corsia di chat, resterà non consegnato — e la bolla
+   * continuerà a dirlo, invece di lasciar credere che sia risolto.
+   */
+  async function handleRetryDelivery() {
+    if (retryState === "sending") return;
+    setRetryState("sending");
+    setRetryState((await retryChatSignal()) ? "done" : "failed");
   }
 
   const activeInfo = agentInfo(activeAgent, locale);
@@ -698,7 +730,23 @@ export default function MessagesList({ initialMessages }: Props) {
                 significa e cosa NON fare (riscrivere lo stesso messaggio).
                 Uno solo per conversazione: ripeterlo bolla per bolla
                 sarebbe la stessa notizia gridata cinque volte. */}
-            {stalled && !error && (
+            {/* Il box ha dichiarato di non saper ricevere la chat. Detto qui
+                sopra e non solo nel placeholder: il placeholder sparisce
+                appena si digita, e questa è la ragione per cui non si può
+                digitare. */}
+            {composerBlocked && (
+              <div
+                className="mb-2 px-3 py-1.5 rounded border text-[10px] leading-relaxed"
+                style={{
+                  borderColor: "var(--color-yellow)",
+                  color: "var(--color-yellow)",
+                }}
+                role="status"
+              >
+                {blockedNotice}
+              </div>
+            )}
+            {stalled && !error && !composerBlocked && (
               <div
                 className="mb-2 px-3 py-1.5 rounded border text-[10px] leading-relaxed"
                 style={{
@@ -708,6 +756,28 @@ export default function MessagesList({ initialMessages }: Props) {
                 role="status"
               >
                 {td("stalled_hint")}
+                {/* L'attesa può essersi rotta anche solo perché il campanello
+                    è andato perso: dare all'utente il modo di risuonarlo è
+                    l'unica azione utile che può compiere da qui. Non rimanda
+                    il testo — il turno è già salvato, e il doppione è proprio
+                    l'errore che l'incidente ha indotto a fare a mano. */}
+                <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => void handleRetryDelivery()}
+                    disabled={retryState === "sending"}
+                    className="px-2 py-1 rounded border text-[10px] cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ borderColor: "var(--color-yellow)" }}
+                  >
+                    {retryState === "sending" ? td("retrying") : td("retry")}
+                  </button>
+                  {retryState === "done" && <span>{td("retry_done")}</span>}
+                  {retryState === "failed" && (
+                    <span style={{ color: "var(--color-red)" }}>
+                      {td("retry_failed")}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
             <div
@@ -729,14 +799,20 @@ export default function MessagesList({ initialMessages }: Props) {
                 }}
                 rows={1}
                 maxLength={MAX_CHAT_BODY}
-                disabled={sending}
-                placeholder={tr("write_to").replace("{name}", activeInfo.name)}
+                disabled={sending || composerBlocked}
+                placeholder={
+                  composerBlocked
+                    ? blockedNotice
+                    : tr("write_to").replace("{name}", activeInfo.name)
+                }
                 className="flex-1 px-2 py-1.5 text-[12.5px] bg-transparent border-none resize-none text-[var(--color-base)] disabled:opacity-50 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={() => void handleSend()}
-                disabled={sending || replyText.trim().length === 0}
+                disabled={
+                  sending || composerBlocked || replyText.trim().length === 0
+                }
                 aria-label={tr("send")}
                 className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-default"
                 style={{

@@ -83,6 +83,38 @@ describe("stato del turno dell'utente", () => {
     expect(chatTurnDelivery(old, lane, NOW)).toBe("sent");
   });
 
+  it("campanello risuonato dopo il turno: torna in viaggio, non resta accusato", () => {
+    // È il retry esplicito ("richiama il box") su un turno vecchio: la
+    // richiesta di ritiro è fresca, quindi il box ha di nuovo il suo tempo.
+    // Senza questo, premere il pulsante non cambierebbe nulla a schermo e
+    // l'utente concluderebbe che è finto — tornando a riscrivere il testo,
+    // che è il doppione da cui è nata la voce di backlog.
+    const old = turn({ created_at: iso(6 * 3600_000) });
+    const rungNow = { requestedAt: iso(1000), deliveredAt: null };
+    expect(chatTurnDelivery(old, rungNow, NOW)).toBe("sent");
+    expect(hasStalledTurn([old], rungNow, NOW)).toBe(false);
+  });
+
+  it("il retry non è un condono: scaduta di nuovo l'attesa, torna fermo", () => {
+    // Il box spento resta spento. Il pulsante rimanda la richiesta, non
+    // promette una consegna: cinque minuti dopo la bolla riaccusa.
+    const old = turn({ created_at: iso(6 * 3600_000) });
+    const rungLongAgo = {
+      requestedAt: iso(CHAT_DELIVERY_STALE_MS + 1000),
+      deliveredAt: null,
+    };
+    expect(chatTurnDelivery(old, rungLongAgo, NOW)).toBe("stalled");
+  });
+
+  it("un campanello più VECCHIO del turno non allunga l'attesa", () => {
+    // Caso opposto: la richiesta è anteriore al messaggio (il campanello di
+    // un invio precedente). L'attesa resta quella del turno, altrimenti un
+    // messaggio nuovo erediterebbe il ritardo di quello vecchio.
+    const old = turn({ created_at: iso(6 * 3600_000) });
+    const lane = { requestedAt: iso(7 * 3600_000), deliveredAt: null };
+    expect(chatTurnDelivery(old, lane, NOW)).toBe("stalled");
+  });
+
   it("i turni dell'agente non portano segni di consegna", () => {
     expect(chatTurnDelivery(turn({ author: "agent" }), null, NOW)).toBe(
       "delivered",

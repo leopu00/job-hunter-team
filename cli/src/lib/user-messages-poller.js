@@ -37,6 +37,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
+import { cloudSyncHeaders } from './client-identity.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -97,10 +98,7 @@ async function loadCloudConfig() {
 async function apiCall(method, baseUrl, token, path, body) {
   const opts = {
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-    },
+    headers: cloudSyncHeaders(token, body ? { 'Content-Type': 'application/json' } : {}),
   };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(`${baseUrl}${path}`, opts);

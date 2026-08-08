@@ -30,6 +30,13 @@ interface TokenRow {
   token_prefix: string;
   last_used_at: string | null;
   created_at: string;
+  // Telemetria tecnica dichiarata dal box a ogni chiamata cloud-sync
+  // ([CLIENT-VERSION-INVISIBLE]). NULL finché un client abbastanza recente
+  // non si fa vivo: i token pairati prima non mandano l'header.
+  client_version: string | null;
+  client_platform: string | null;
+  client_capabilities: string[] | null;
+  client_seen_at: string | null;
 }
 
 type CreateState =
@@ -64,6 +71,9 @@ const T: Record<
     errHttp: string; // {status}
     errNetwork: string;
     loading: string;
+    clientBuild: string;
+    clientUnknown: string;
+    clientCapabilities: string;
   }
 > = {
   it: {
@@ -93,6 +103,9 @@ const T: Record<
     errHttp: "Errore HTTP {status}",
     errNetwork: "Errore di rete",
     loading: "Caricamento…",
+    clientBuild: "Versione",
+    clientUnknown: "non ancora dichiarata",
+    clientCapabilities: "Funzioni",
   },
   en: {
     title: "Device tokens (Cloud Sync)",
@@ -120,6 +133,9 @@ const T: Record<
     errHttp: "HTTP error {status}",
     errNetwork: "Network error",
     loading: "Loading…",
+    clientBuild: "Build",
+    clientUnknown: "not declared yet",
+    clientCapabilities: "Features",
   },
   es: {
     title: "Tokens de dispositivo (Cloud Sync)",
@@ -148,6 +164,9 @@ const T: Record<
     errHttp: "Error HTTP {status}",
     errNetwork: "Error de red",
     loading: "Cargando…",
+    clientBuild: "Versión",
+    clientUnknown: "aún no declarada",
+    clientCapabilities: "Funciones",
   },
   fr: {
     title: "Tokens d'appareil (Cloud Sync)",
@@ -176,6 +195,9 @@ const T: Record<
     errHttp: "Erreur HTTP {status}",
     errNetwork: "Erreur réseau",
     loading: "Chargement…",
+    clientBuild: "Version",
+    clientUnknown: "pas encore déclarée",
+    clientCapabilities: "Fonctions",
   },
   de: {
     title: "Geräte-Tokens (Cloud Sync)",
@@ -204,6 +226,9 @@ const T: Record<
     errHttp: "HTTP-Fehler {status}",
     errNetwork: "Netzwerkfehler",
     loading: "Laden…",
+    clientBuild: "Version",
+    clientUnknown: "noch nicht angegeben",
+    clientCapabilities: "Funktionen",
   },
   hu: {
     title: "Eszköztokenek (Cloud Sync)",
@@ -232,6 +257,9 @@ const T: Record<
     errHttp: "HTTP {status} hiba",
     errNetwork: "Hálózati hiba",
     loading: "Betöltés…",
+    clientBuild: "Verzió",
+    clientUnknown: "még nincs megadva",
+    clientCapabilities: "Funkciók",
   },
   pt: {
     title: "Tokens de dispositivo (Cloud Sync)",
@@ -260,6 +288,9 @@ const T: Record<
     errHttp: "Erro HTTP {status}",
     errNetwork: "Erro de rede",
     loading: "A carregar…",
+    clientBuild: "Versão",
+    clientUnknown: "ainda não declarada",
+    clientCapabilities: "Funções",
   },
 };
 
@@ -485,6 +516,27 @@ export default function CloudTokensClient() {
                   <div className="text-[10px] text-[var(--color-dim)] mt-0.5">
                     {t.created} {tok.created_at.slice(0, 10)} · {t.lastUsed}:{" "}
                     {tok.last_used_at ? tok.last_used_at.slice(0, 10) : t.never}
+                  </div>
+                  <div className="text-[10px] text-[var(--color-dim)] mt-0.5">
+                    {t.clientBuild}:{" "}
+                    {tok.client_version ? (
+                      <span className="font-mono text-[var(--color-muted)]">
+                        {tok.client_version}
+                        {tok.client_platform ? ` · ${tok.client_platform}` : ""}
+                      </span>
+                    ) : (
+                      t.clientUnknown
+                    )}
+                    {tok.client_capabilities &&
+                      tok.client_capabilities.length > 0 && (
+                        <>
+                          {" · "}
+                          {t.clientCapabilities}:{" "}
+                          <span className="font-mono text-[var(--color-muted)]">
+                            {tok.client_capabilities.join(", ")}
+                          </span>
+                        </>
+                      )}
                   </div>
                 </div>
                 <button
