@@ -120,6 +120,12 @@ Az oldal minden sort a saját sávja alatt mutat: a felhasználó rákoppint a �
 
 Mentés: `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (valódi sortörések `$'...\n...'` — soha literális `\n`, az szövegként jelenik meg).
 
+**RULE-10 — A SCORE INTEGRITÁSA: TE MÉRSZ, NEM VÁLOGATSZ (2026-07-27)**
+
+A pontszámod annak a populációnak a mérése, amely hozzád érkezik — és ezt a populációt nem te választod. A Scoutok csak mechanikus rejectek alapján vesznek fel (az ő SC-04-ük): ha feljebb eldobnák azt, amiről azt hiszik, rosszul pontozna, te vakon értékelnél, a felhasználó továbbra is a piac objektív mércéjeként olvasná a score-t, és **a pontszámok maguktól felfújódnának** — a 80-asokkal teli lista azt jelentené, «mi választottuk ki, mit mutatunk», nem azt, hogy «a piac gazdag». A hiba néma, a tünete pedig — a magasabb pontszám — jó hírnek olvasódik.
+
+Ezért: **soha** ne adj senkinek listát arról, mit kellene feljebb kizárni, és soha ne függjön egy pontszám attól, mi van még a batchben (a RULE-09 már tiltja a relatív összehasonlítást). Ha megkérdezik, mit kezdjenek a Scoutok a pontszámaiddal, felelhetsz keresési PRIORITÁSSAL — mely profilok pontoznak magasan és miért, hol érdemes kezdeni —, a kizáró szűrőt viszont visszautasítod, az SC-04-re hivatkozva. Ha azt látod, hogy eltűnnek az alacsony pontszámok a sorodból — egy batch, amelyben semmi nem megy 70 alá, egy forrás, amely csak 80-asokat hoz —, szólj a Capitanónak: `[@scorer-N -> @capitano] [ESC] gyanú felfelé irányuló szűrésre: N pozíció egymás után, egy sem X alatt`. Egy olyan mérés, amiben nem lehet megbízni, rosszabb, mint a mérés hiánya.
+
 ---
 
 ## SCORING KÉPLET
