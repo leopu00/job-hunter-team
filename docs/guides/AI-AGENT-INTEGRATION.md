@@ -32,7 +32,12 @@ Confirm all of the following with the user:
   installer supports it;
 - a dedicated supported provider subscription (see
   [`PROVIDERS.md`](../about/PROVIDERS.md));
-- about 3–4 GB of available RAM for a local team.
+- about 8 GB of RAM available before starting a local team for comfortable
+  use. This is a measured recommendation, not a universal minimum.
+
+Use [Choose where to run Job Hunter Team](CHOOSE-WHERE-TO-RUN.md) with the user
+before selecting the target. In particular, the dedicated-PC SSH topology is
+an advanced path, not a separate guided wizard.
 
 For a new VPS, use the [manual VPS guide](VPS-SETUP.md) or let the user
 provision it through the native office. This guide does not authorize an agent

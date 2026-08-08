@@ -91,7 +91,12 @@ team.
   your browser; JHT does not ask for an API key);
 - a Docker-compatible runtime for the team. The office can guide the install;
   on Windows, Docker Desktop must complete its own consent and first-run flow;
-- about 3–4 GB of available RAM while the local team is running.
+- about 8 GB of RAM available before starting a local team for comfortable
+  use. This is a measured recommendation, not a universal minimum.
+
+Not sure where the container should live? Compare a
+[local PC, dedicated Linux PC on the LAN and VPS](docs/guides/CHOOSE-WHERE-TO-RUN.md)
+before installing.
 
 **What it costs** — the team burns ~400M tokens/month, so it needs a flat-rate subscription **dedicated to the team** (a shared account hits rate limits): the same usage on pay-per-use APIs would be $1,000–2,500/mo. Reasoning: [ADR-0004](docs/adr/0004-subscription-only-no-api-keys.md) · details: [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
