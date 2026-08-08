@@ -18,6 +18,7 @@ Eseguire:
 """
 
 import importlib.util
+import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -533,3 +534,134 @@ def test_bridge_target_wins_when_present():
     assert r["target_pct"] == 48.0
     assert r["ideal_pct"] == pytest.approx(24.0, abs=0.5)
     assert r["verdict"] == "IN-PARI"
+
+
+# ── La modalità in coda al consiglio (T-025) ────────────────────────────
+#
+# Residuo di [MODE-INJECTION-HOURLY-PROMPT]: il pace guard era l'unico
+# processo periodico che parlava al Capitano SENZA la sezione [MODALITÀ
+# CORRENTE]. Ora il messaggio la porta in coda (letta da disco a ogni invio)
+# e, come il bridge orario disarma C-05, con `stop_search` sul disco trattiene
+# il consiglio che spingerebbe spesa nuova (INDIETRO = «accelera»): con la
+# coda `new` volutamente vuota, sarebbe la stessa contraddizione, nello stesso
+# messaggio, della sezione che gli sta in coda. I consigli protettivi (AVANTI,
+# LOCKOUT-IMMINENTE) non si sopprimono MAI: frenare è compatibile con
+# qualunque modalità.
+
+BEHIND = _sample(1)          # 1% consumato con la curva all'86%: «accelera»
+BEHIND_NOW = _ts("2026-07-26T19:00:00")
+
+
+def _behind_result():
+    r = pace_guard.evaluate(BEHIND, BEHIND_NOW, target_pct=100.0,
+                            current_throttle_s=600)
+    assert r["verdict"] == "INDIETRO" and r["recommends_change"]
+    return r
+
+
+def _set_mode(home, orders=None, mode="maintenance"):
+    """Scrive `profile/capitano-maintenance.json` nella forma REALE del file —
+    quella che scrive la Console del Coordinatore (come in test_mode_injection)."""
+    payload = {"mode": mode}
+    if orders is not None:
+        payload["orders"] = orders
+    prof = home / "profile"
+    prof.mkdir(parents=True, exist_ok=True)
+    (prof / "capitano-maintenance.json").write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _run_step_with_mode(monkeypatch, tmp_path, result, sent, bridge=None):
+    """Come `_run_bridge_step`, ma `mode_banner` è QUELLO VERO e legge JHT_HOME:
+    è il seam del ticket — la lettura da disco a ogni invio, nessuna cache."""
+    bridge = bridge or _load_bridge()
+    guard = _StubGuard(result)
+    hours = _StubHours(True)
+    mb = _load_by_path("mode_banner_real",
+                       os.path.join(SKILLS_DIR, "mode_banner.py"))
+
+    def _load(name, filename):
+        if filename == "working_hours.py":
+            return hours
+        if filename == "mode_banner.py":
+            return mb
+        return guard
+
+    monkeypatch.setattr(bridge, "_load_skill_module", _load)
+    monkeypatch.setattr(bridge, "jht_tmux_send",
+                        lambda session, text: (sent.append((session, text)), True)[1])
+    monkeypatch.setattr(bridge, "LOGS_DIR", tmp_path)
+    # JHT_HOME sulla tmp: mode_banner risolve i suoi path a OGNI chiamata da
+    # questa env var. JHT_DB via, o vincerebbe puntando il DB di chi lancia.
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    monkeypatch.delenv("JHT_DB", raising=False)
+    bridge._pace_guard_step({"ts": "2026-07-26T16:00:00Z", "usage": 75})
+    return bridge
+
+
+def test_the_advice_carries_the_current_mode_section(tmp_path, monkeypatch):
+    """Il consiglio dichiara gli ordini in vigore, esattamente come il battito
+    orario: pane e mailbox portano lo STESSO messaggio completo."""
+    _set_mode(tmp_path, {"stop_search": True})
+    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    sent = []
+    _run_step_with_mode(monkeypatch, tmp_path, r, sent)
+
+    assert [s for s, _ in sent] == ["CAPITANO"]
+    msg = sent[0][1]
+    assert pace_guard.ADVICE_TAG in msg        # il consiglio resta in testa
+    assert "[MODALITÀ CORRENTE" in msg         # …e la sezione gli sta in coda
+    # `maintenance` è canonicalizzato in `care` dal 2026-08-03, col valore
+    # legacy ancora visibile nel banner (v. test_mode_injection).
+    assert "MODE: care" in msg and 'legacy value' in msg
+    assert "stop_search: true" in msg
+    mailbox = (tmp_path / "bridge-mailbox.jsonl").read_text(encoding="utf-8")
+    assert "MODE: care" in mailbox
+
+
+def test_the_emergency_is_never_suppressed_by_stop_search(tmp_path, monkeypatch):
+    """Frenare non contraddice MAI un ordine dell'utente: il LOCKOUT chiede di
+    tagliare il roster, ed è l'unica cosa che può salvare la finestra."""
+    _set_mode(tmp_path, {"stop_search": True})
+    sent = []
+    _run_step_with_mode(monkeypatch, tmp_path, _lockout_result(), sent)
+    assert [s for s, _ in sent] == ["CAPITANO"]
+    assert "LOCKOUT-IMMINENT" in sent[0][1]
+    assert "[MODALITÀ CORRENTE" in sent[0][1]
+
+
+def test_speed_up_advice_is_suppressed_when_sourcing_is_stopped(tmp_path, monkeypatch):
+    """«Sei sotto curva, accelera» a sourcing fermo = ordinare spesa nuova con
+    la coda `new` volutamente vuota: il consiglio si trattiene, e il log dice
+    PERCHÉ — un guard silenzioso per stop_search non deve somigliare a un
+    guard morto."""
+    _set_mode(tmp_path, {"stop_search": True})
+    sent = []
+    _run_step_with_mode(monkeypatch, tmp_path, _behind_result(), sent)
+
+    assert sent == []
+    logged = (tmp_path / "pace-guard.jsonl").read_text(encoding="utf-8")
+    assert '"verdict": "INDIETRO"' in logged
+    assert '"suppressed": "sourcing-stopped"' in logged
+    assert '"advised": false' in logged
+    assert not (tmp_path / "bridge-mailbox.jsonl").exists()
+
+
+def test_a_suppressed_advice_does_not_consume_the_edge(tmp_path, monkeypatch):
+    """Un consiglio trattenuto non è stato DETTO: a modalità rientrata il
+    primo consiglio utile parte SUBITO, non dopo il cooldown. E il secondo
+    messaggio prova il cambio a caldo: il file è stato cancellato fra i due
+    tick e la sezione nuova dice `MODE: search` — lettura da disco, nessuna
+    cache."""
+    _set_mode(tmp_path, {"stop_search": True})
+    bridge = _load_bridge()
+    sent = []
+    _run_step_with_mode(monkeypatch, tmp_path, _behind_result(), sent,
+                        bridge=bridge)
+    assert sent == []
+    (tmp_path / "profile" / "capitano-maintenance.json").unlink()
+    _run_step_with_mode(monkeypatch, tmp_path, _behind_result(), sent,
+                        bridge=bridge)
+    assert [s for s, _ in sent] == ["CAPITANO"]
+    assert "MODE: search" in sent[0][1]

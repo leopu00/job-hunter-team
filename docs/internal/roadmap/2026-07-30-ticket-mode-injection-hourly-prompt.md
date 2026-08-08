@@ -11,6 +11,16 @@
 > `session-refresh` la accoda al `[RESUME]` del Capitano in tutte e 7 le lingue.
 > 29 test in `tests/test_mode_injection.py`.
 >
+> **Residuo chiuso il 2026-08-08 (T-025)**: `_notify_captain_pace_guard` in
+> `.launcher/sentinel-bridge.py` — l'ultimo messaggio periodico al Capitano
+> senza sezione — ora accoda la stessa sezione (letta da disco a ogni invio) e,
+> con `stop_search` sul disco, trattiene il consiglio di accelerazione
+> (verdetto `INDIETRO`: «sei sotto curva, spingi»), che con la coda `new`
+> volutamente vuota contraddirebbe la sezione nello stesso messaggio. I
+> consigli protettivi (`AVANTI`, `LOCKOUT-IMMINENTE`) non si sopprimono mai.
+> 4 test in `tests/test_pace_guard.py` (sezione «La modalità in coda al
+> consiglio»).
+>
 > **Due scelte diverse dal ticket**, entrambe deliberate:
 > 1. **L'ora di silenzio della rotazione salta** quando c'è un ordine in vigore.
 >    Il ticket prometteva «al peggio si perde per un'ora», ma la rotazione tace
