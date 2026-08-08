@@ -939,6 +939,37 @@ fi
 
 FULL_CMD="${CLI_ENV_PREFIX}${CLI_BIN}${CLI_ARGS:+ $CLI_ARGS}"
 
+# Env OPZIONALI che, quando esistono, devono arrivare all'agente. Le liste di
+# export qui sotto sono esplicite per costruzione — una tmux nuova non eredita
+# l'ambiente di questo processo, e sul ramo PowerShell (WSL) non eredita
+# proprio niente da bash — quindi una variabile che non è in lista, per
+# l'agente non esiste.
+#
+# Il caso che ha aperto questa lista (issue #132, 2026-08-08):
+# `JHT_SCOUT_COORD_DB` è l'UNICA deroga ammessa quando il percorso canonico del
+# database di coordinamento non è scrivibile. Il bootstrap pre-spawn la vedeva
+# (gira in questo processo) e lo Scout no: la deroga non raggiungeva chi la
+# doveva usare, e l'agente usciva 3 proprio sulla piattaforma dell'incidente.
+#
+# Si propagano SOLO se valorizzate: esportare una stringa vuota renderebbe
+# indistinguibile "non dichiarata" da "dichiarata male".
+OPTIONAL_AGENT_ENV=(JHT_SCOUT_COORD_DB)
+
+send_optional_env() {
+  # $1 = "bash" | "powershell" — la sintassi cambia, la lista no.
+  local _name _value
+  for _name in "${OPTIONAL_AGENT_ENV[@]}"; do
+    _value="${!_name:-}"
+    if [ -n "$_value" ]; then
+      if [ "$1" = "powershell" ]; then
+        tmux send-keys -t "$SESSION" "\$env:$_name='$_value'" Enter
+      else
+        tmux send-keys -t "$SESSION" "export $_name='$_value'" C-m
+      fi
+    fi
+  done
+}
+
 send_env_vars() {
   # Inside the JHT container a fresh tmux bash resets HOME to the OS
   # default (/home/jht, from /etc/passwd) — but the CLI credential
@@ -984,6 +1015,7 @@ send_env_vars() {
   tmux send-keys -t "$SESSION" "export JHT_CONFIG='$JHT_CONFIG'" C-m
   tmux send-keys -t "$SESSION" "export JHT_AGENT_DIR='$AGENT_DIR'" C-m
   tmux send-keys -t "$SESSION" "export JHT_AGENT_NAME='$AGENT_NAME'" C-m
+  send_optional_env bash
 }
 
 # Rileva se siamo in WSL nativo (non dentro un container Docker Desktop, che
@@ -1001,6 +1033,10 @@ if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/nu
   tmux send-keys -t "$SESSION" "\$env:JHT_CONFIG='$JHT_CONFIG'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_DIR='$AGENT_DIR'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_NAME='$AGENT_NAME'" Enter
+  # Le stesse deroghe del ramo bash: qui una env dell'ambiente bash non
+  # attraversa PowerShell in nessun modo implicito, quindi se non la si
+  # scrive a mano, per l'agente Windows non esiste (issue #132).
+  send_optional_env powershell
   tmux send-keys -t "$SESSION" "$FULL_CMD" Enter
   if [ "$CLI_BIN" != "python3" ]; then
     # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
