@@ -1,21 +1,28 @@
 """
-Il database di coordinamento Scout è UNO, e si dichiara invece di improvvisarlo.
+La coordinazione Scout vive nel database della squadra, e ce n'è UNO.
 
-Perché esiste (issue #132, run Windows 2026-08-05): il primo Scout non è
-riuscito ad aprire il database nel percorso previsto — `$JHT_HOME/data/` non
-esisteva e nessuno la creava — e ha proseguito scegliendosi un fallback
-scrivibile. Due Scout su due file non si stanno coordinando: credono di farlo,
-che è peggio del non coordinarsi affatto, perché nessuno dei due se ne accorge.
+Storia in due atti.
+
+**Atto I — issue #132** (run Windows 2026-08-05): il primo Scout non è riuscito
+ad aprire il database di coordinamento nel percorso previsto — `$JHT_HOME/data/`
+non esisteva, sqlite non crea la cartella padre — e ha proseguito scegliendosi
+un fallback scrivibile. Due Scout su due file non si coordinano: credono di
+farlo, che è peggio, perché nessuno se ne accorge.
+
+**Atto II — [JHT-DB-SCOUT-COORD]** (2026-08-08): il secondo file non serviva.
+Le tabelle sono passate dentro `jobs.db` (`scout_coordination`, `scout_claims`),
+accanto alle altre di stato interno della squadra. Il percorso da risolvere
+torna a essere UNO — `JHT_DB`, che il launcher esporta già a ogni agente — e con
+esso sparisce la classe di guasti dell'Atto I.
 
 Cosa proteggono questi test:
-  1. tutti gli agenti risolvono lo STESSO percorso dallo stesso ambiente,
-     e la precedenza è dichiarata (env > $JHT_HOME > repo);
-  2. il bootstrap crea la cartella mancante — il buco vero del run Windows;
-  3. un percorso non scrivibile produce un ERRORE azionabile e un exit code,
-     mai un secondo database;
-  4. il fallback esiste ma è UNO e sta nell'ambiente condiviso, non nella
-     testa di un singolo processo;
-  5. la diagnostica dice quale file si sta usando davvero.
+  1. tutti gli agenti risolvono lo stesso database, quello della squadra;
+  2. un percorso non scrivibile produce un ERRORE azionabile, mai un secondo DB;
+  3. la storia del vecchio file viene importata una volta sola e non si perde;
+  4. un nome di Scout non valido non entra (il caso `--help`, trovato ATTIVO in
+     produzione);
+  5. la diagnostica dice quale database si sta usando davvero;
+  6. le env opzionali arrivano davvero all'agente, su entrambi i rami di spawn.
 
 Eseguire con: pytest tests/test_scout_coord_db_path.py -v
 """
@@ -23,6 +30,7 @@ Eseguire con: pytest tests/test_scout_coord_db_path.py -v
 import importlib.util
 import json
 import os
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -36,12 +44,15 @@ SCOUT_COORD = os.path.join(SKILLS_DIR, 'scout_coord.py')
 
 def _load(env):
     """Carica il modulo con un ambiente dato: il path si risolve all'import,
-    quindi ogni scenario vuole la sua istanza."""
-    old = {k: os.environ.get(k) for k in ('JHT_HOME', 'JHT_SCOUT_COORD_DB')}
+    quindi ogni scenario vuole la sua istanza (e `_db` va buttato via, che
+    risolve `DB_PATH` all'import a sua volta)."""
+    keys = ('JHT_HOME', 'JHT_DB', 'JHT_SCOUT_COORD_DB')
+    old = {k: os.environ.get(k) for k in keys}
     try:
-        for k in old:
+        for k in keys:
             os.environ.pop(k, None)
         os.environ.update({k: str(v) for k, v in env.items()})
+        sys.modules.pop('_db', None)
         spec = importlib.util.spec_from_file_location('scout_coord_under_test',
                                                       SCOUT_COORD)
         mod = importlib.util.module_from_spec(spec)
@@ -68,60 +79,61 @@ def home(tmp_path):
     return h
 
 
-# ── 1. Un solo percorso, con una precedenza dichiarata ──────────────────
+@pytest.fixture
+def env(home):
+    """L'ambiente di un agente: JHT_HOME + il database della squadra."""
+    return {'JHT_HOME': str(home), 'JHT_DB': str(home / 'jobs.db')}
 
-def test_all_agents_resolve_the_same_path(home):
+
+def _legacy(home, rows=(), claims=()):
+    """Un vecchio `scout_coordination.db` come quelli in produzione."""
+    (home / 'data').mkdir(parents=True, exist_ok=True)
+    path = home / 'data' / 'scout_coordination.db'
+    db = sqlite3.connect(path)
+    db.executescript("""
+        CREATE TABLE coordination (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, scout TEXT NOT NULL,
+            cerchi TEXT, fonti TEXT, note TEXT,
+            started_at TIMESTAMP, superseded_at TIMESTAMP);
+        CREATE TABLE claims (
+            job_id TEXT PRIMARY KEY, scout TEXT NOT NULL, claimed_at TIMESTAMP);
+    """)
+    for scout, cerchi, fonti, started, superseded in rows:
+        db.execute("INSERT INTO coordination (scout, cerchi, fonti, started_at,"
+                   " superseded_at) VALUES (?,?,?,?,?)",
+                   (scout, cerchi, fonti, started, superseded))
+    for job_id, scout, claimed in claims:
+        db.execute("INSERT INTO claims VALUES (?,?,?)", (job_id, scout, claimed))
+    db.commit()
+    db.close()
+    return path
+
+
+# ── 1. Un solo database: quello della squadra ───────────────────────────
+
+def test_the_coordination_lives_in_the_team_database(env):
+    mod = _load(env)
+    assert str(mod.DB_PATH) == env['JHT_DB']
+    assert mod.DB_ORIGIN == 'jobs_db'
+    assert mod.resolve_db_path()[0].name == 'jobs.db'
+
+
+def test_all_agents_resolve_the_same_database(env):
     """Stesso ambiente, stesso file: è tutta la garanzia di coordinamento."""
-    a = _load({'JHT_HOME': home})
-    b = _load({'JHT_HOME': home})
-    assert a.DB_PATH == b.DB_PATH == home / 'data' / 'scout_coordination.db'
-    assert a.DB_ORIGIN == a.ORIGIN_JHT_HOME
+    assert _load(env).DB_PATH == _load(env).DB_PATH
 
 
-def test_the_declared_override_wins(home, tmp_path):
-    """Il fallback è UNO perché vive nell'ambiente che il launcher passa a
-    tutti, non nella scelta del singolo processo."""
-    elsewhere = tmp_path / 'shared' / 'coord.db'
-    mod = _load({'JHT_HOME': home, 'JHT_SCOUT_COORD_DB': elsewhere})
-    assert mod.DB_PATH == elsewhere
-    assert mod.DB_ORIGIN == mod.ORIGIN_ENV
+def test_the_tables_are_the_ones_of_the_team_schema(env):
+    assert _run(env, 'bootstrap').returncode == 0
+    conn = sqlite3.connect(env['JHT_DB'])
+    names = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    conn.close()
+    # Accanto alle tabelle del prodotto, non in un file a parte.
+    assert {'scout_coordination', 'scout_claims', 'positions'} <= names
 
 
-def test_without_jht_home_it_stays_in_the_repo(tmp_path):
-    """Esecuzione ad-hoc fuori dal container: si resta nel repo, non si
-    inventa una home."""
-    mod = _load({})
-    assert mod.DB_ORIGIN == mod.ORIGIN_REPO
-    assert mod.DB_PATH.name == 'scout_coordination.db'
-
-
-# ── 2. Il bootstrap crea ciò che manca ──────────────────────────────────
-
-def test_bootstrap_creates_the_missing_directory(home):
-    """Il buco del run Windows: `$JHT_HOME/data/` non esisteva e sqlite non
-    la crea da sé."""
-    assert not (home / 'data').exists()
-    r = _run({'JHT_HOME': home}, 'bootstrap')
-    assert r.returncode == 0, r.stderr
-    assert (home / 'data' / 'scout_coordination.db').exists()
-
-
-def test_a_claim_works_right_after_bootstrap(home):
-    _run({'JHT_HOME': home}, 'bootstrap')
-    r = _run({'JHT_HOME': home}, 'claim', '42', 'scout-1')
-    assert r.returncode == 0, r.stderr
-    assert 'CLAIMED' in r.stdout
-
-
-def test_a_claim_alone_also_creates_the_directory(home):
-    """Anche senza bootstrap non si deve fallire per una cartella mancante:
-    il pre-spawn è una rete, non l'unica strada."""
-    r = _run({'JHT_HOME': home}, 'claim', '42', 'scout-1')
-    assert r.returncode == 0, r.stderr
-    assert (home / 'data' / 'scout_coordination.db').exists()
-
-
-# ── 3. Non scrivibile = errore azionabile, mai un secondo DB ────────────
+# ── 2. Non scrivibile = errore azionabile, mai un secondo DB ────────────
 
 @pytest.fixture
 def readonly_home(tmp_path):
@@ -134,89 +146,133 @@ def readonly_home(tmp_path):
 
 @pytest.mark.skipif(os.geteuid() == 0,
                     reason="root scrive comunque: il permesso non è verificabile")
-def test_an_unwritable_path_fails_loudly(readonly_home):
-    r = _run({'JHT_HOME': readonly_home}, 'claim', '42', 'scout-1')
+def test_an_unwritable_database_fails_loudly(readonly_home):
+    r = _run({'JHT_HOME': str(readonly_home),
+              'JHT_DB': str(readonly_home / 'jobs.db')},
+             'claim', '42', 'scout-1')
     assert r.returncode == 3
-    # Azionabile: dice dove, perché, e cosa fare — inclusa la sola deroga
-    # ammessa, che è dichiarare UN percorso per tutta la squadra.
-    assert 'scout_coordination.db' in r.stderr
-    assert 'JHT_SCOUT_COORD_DB' in r.stderr
     assert 'Do NOT create a database of your own' in r.stderr
     assert 'CLAIMED' not in r.stdout
 
 
-@pytest.mark.skipif(os.geteuid() == 0,
-                    reason="root scrive comunque: il permesso non è verificabile")
-def test_the_declared_fallback_unblocks_an_unwritable_home(readonly_home, tmp_path):
-    """La via d'uscita c'è, ed è una sola: un percorso dichiarato che vale
-    per tutti gli agenti."""
-    fallback = tmp_path / 'fallback' / 'coord.db'
-    env = {'JHT_HOME': readonly_home, 'JHT_SCOUT_COORD_DB': fallback}
-    assert _run(env, 'bootstrap').returncode == 0
+def test_a_claim_creates_what_it_needs(env):
+    """Nessun bootstrap prima: il buco del run Windows non deve tornare."""
     r = _run(env, 'claim', '42', 'scout-1')
     assert r.returncode == 0, r.stderr
-    assert fallback.exists()
+    assert 'CLAIMED' in r.stdout
+    assert os.path.exists(env['JHT_DB'])
 
 
-# ── 4. La diagnostica dice quale file si sta usando ─────────────────────
+# ── 3. La storia del vecchio file non si perde ──────────────────────────
 
-def test_doctor_reports_the_database_actually_in_use(home):
-    _run({'JHT_HOME': home}, 'bootstrap')
-    _run({'JHT_HOME': home}, 'claim', '42', 'scout-1')
-    r = _run({'JHT_HOME': home}, 'doctor', '--json')
+def test_the_legacy_database_is_imported_once(home, env):
+    _legacy(home,
+            rows=[('scout-1', '1,2', 'remoteok', '2026-07-01 10:00:00', None),
+                  ('scout-2', '3,4', 'lever', '2026-07-01 10:02:00',
+                   '2026-07-02 08:00:00')],
+            claims=[('42', 'scout-1', '2026-07-01 10:05:00')])
+    first = _run(env, 'bootstrap')
+    assert first.returncode == 0, first.stderr
+    assert 'imported from the legacy database: 2 assignments, 1 claims' in first.stdout
+
+    # Secondo giro: idempotente, niente duplicati.
+    second = _run(env, 'bootstrap')
+    assert 'imported from the legacy database' not in second.stdout
+    conn = sqlite3.connect(env['JHT_DB'])
+    total = conn.execute("SELECT COUNT(*) FROM scout_coordination").fetchone()[0]
+    conn.close()
+    assert total == 2
+
+
+def test_the_legacy_file_is_left_in_place(home, env):
+    """Si legge, non si cancella: il dato dell'utente non si butta."""
+    legacy = _legacy(home, rows=[('scout-1', '1', 'x', '2026-07-01 10:00:00', None)])
+    _run(env, 'bootstrap')
+    assert legacy.exists()
+
+
+def test_a_ghost_assignment_is_imported_but_not_active(home, env):
+    """Il caso `--help`, trovato ATTIVO su una squadra in produzione: la
+    storia si tiene, ma un partecipante che non esiste non compare nella
+    distribuzione in vigore."""
+    _legacy(home, rows=[('--help', None, None, '2026-07-03 09:00:00', None),
+                        ('scout-1', '1', 'remoteok', '2026-07-01 10:00:00', None)])
+    out = _run(env, 'bootstrap')
+    assert 'imported as SUPERSEDED' in out.stdout
+    show = _run(env, 'show')
+    assert 'scout-1' in show.stdout
+    assert '--help' not in show.stdout
+    # …ma nello storico c'è ancora.
+    assert '--help' in _run(env, 'history').stdout
+
+
+def test_without_a_legacy_database_nothing_is_imported(env):
+    out = _run(env, 'bootstrap')
+    assert out.returncode == 0
+    assert 'imported from the legacy database' not in out.stdout
+
+
+# ── 4. Un nome di Scout è un nome di Scout ──────────────────────────────
+
+def test_a_flag_is_not_a_scout_name(env):
+    r = _run(env, 'assign', '--help', '--cerchi', '1')
+    assert r.returncode == 3
+    assert 'is not a Scout name' in r.stderr
+    conn = sqlite3.connect(env['JHT_DB']) if os.path.exists(env['JHT_DB']) else None
+    if conn:
+        rows = conn.execute("SELECT COUNT(*) FROM scout_coordination").fetchone()[0]
+        conn.close()
+        assert rows == 0
+
+
+def test_a_real_scout_name_goes_through(env):
+    r = _run(env, 'assign', 'scout-3', '--cerchi', '5', '--fonti', 'greenhouse')
+    assert r.returncode == 0, r.stderr
+    assert 'scout-3' in _run(env, 'show').stdout
+
+
+# ── 5. La diagnostica dice quale database si sta usando ─────────────────
+
+def test_doctor_reports_the_database_actually_in_use(env):
+    _run(env, 'bootstrap')
+    _run(env, 'claim', '42', 'scout-1')
+    r = _run(env, 'doctor', '--json')
     assert r.returncode == 0, r.stderr
     rep = json.loads(r.stdout)
-    assert rep['path'] == str(home / 'data' / 'scout_coordination.db')
-    assert rep['origin'] == 'jht_home'
+    assert rep['path'] == env['JHT_DB']
+    assert rep['origin'] == 'jobs_db'
     assert rep['writable'] is True
     assert rep['claims'] == 1
-    assert rep['env_override'] is False
 
 
-def test_doctor_does_not_create_what_it_is_inspecting(home):
-    """Un doctor che crea la cartella mancante risponde "tutto bene" alla
-    domanda sbagliata."""
-    r = _run({'JHT_HOME': home}, 'doctor', '--json')
-    assert r.returncode == 3
-    assert not (home / 'data').exists()
-    assert json.loads(r.stdout)['writable'] is False
+def test_doctor_names_the_legacy_database_when_there_is_one(home, env):
+    _legacy(home, rows=[('scout-1', '1', 'x', '2026-07-01 10:00:00', None)])
+    _run(env, 'bootstrap')
+    rep = json.loads(_run(env, 'doctor', '--json').stdout)
+    assert rep['legacy_db'] and rep['legacy_db'].endswith('scout_coordination.db')
 
 
-def test_doctor_reports_counts_not_content(home):
-    """Diagnostica senza contenuto: i conteggi bastano a capire QUALE DB è,
-    le righe no."""
-    _run({'JHT_HOME': home}, 'bootstrap')
-    _run({'JHT_HOME': home}, 'assign', 'scout-1', '--cerchi', '1,2',
-         '--fonti', 'remoteok')
-    r = _run({'JHT_HOME': home}, 'doctor')
-    assert 'scout-1' not in r.stdout
+def test_doctor_reports_counts_not_content(env):
+    _run(env, 'bootstrap')
+    _run(env, 'assign', 'scout-1', '--cerchi', '1,2', '--fonti', 'remoteok')
+    r = _run(env, 'doctor')
     assert 'remoteok' not in r.stdout
     assert 'active assignments: 1' in r.stdout
 
 
-# ── 5. Il pre-spawn è agganciato davvero ────────────────────────────────
-
-def test_start_agent_bootstraps_the_db_before_a_scout():
-    """Il gancio in start-agent.sh esiste ed è per lo Scout: senza, la
-    verifica pre-spawn resta una buona intenzione."""
-    src = _start_agent_src()
-    assert '"$ROLE" = "scout"' in src
-    assert 'scout_coord.py' in src
-    assert '"$COORD_SCRIPT" bootstrap' in src
-
-
-# ── 6. La deroga deve ARRIVARE all'agente ───────────────────────────────
-#
-# Il bootstrap pre-spawn gira nel processo del launcher e la variabile la
-# vede; l'agente vive in una tmux nuova, che non eredita niente e riceve solo
-# una lista ESPLICITA di export — e sul ramo PowerShell (WSL, la piattaforma
-# dell'incidente) una env di bash non attraversa proprio. Una deroga che non
-# raggiunge chi la deve usare non è una deroga: è uno Scout che esce 3.
+# ── 6. Il pre-spawn e le env opzionali ──────────────────────────────────
 
 def _start_agent_src():
     with open(os.path.join(REPO_ROOT, '.launcher', 'start-agent.sh'),
               encoding='utf-8') as f:
         return f.read()
+
+
+def test_start_agent_bootstraps_the_db_before_a_scout():
+    src = _start_agent_src()
+    assert '"$ROLE" = "scout"' in src
+    assert 'scout_coord.py' in src
+    assert '"$COORD_SCRIPT" bootstrap' in src
 
 
 def _extract_propagation(src):
@@ -231,8 +287,9 @@ def _extract_propagation(src):
     ('bash', "export JHT_SCOUT_COORD_DB='/shared/coord.db'"),
     ('powershell', "$env:JHT_SCOUT_COORD_DB='/shared/coord.db'"),
 ])
-def test_the_declared_fallback_reaches_the_agent(tmp_path, flavor, expected):
-    """Entrambi i rami: la variabile arriva davvero nel pane dell'agente."""
+def test_optional_env_reaches_the_agent(tmp_path, flavor, expected):
+    """Entrambi i rami di spawn: una tmux nuova non eredita niente, e sul ramo
+    PowerShell (WSL) una env di bash non attraversa proprio."""
     calls = tmp_path / 'tmux.calls'
     script = f"""
 set -euo pipefail
@@ -248,9 +305,9 @@ send_optional_env {flavor}
 
 
 @pytest.mark.skipif(sys.platform == 'win32', reason='sandbox POSIX')
-def test_an_undeclared_fallback_is_not_exported_empty(tmp_path):
-    """Senza deroga non si esporta niente: una stringa vuota renderebbe
-    indistinguibile «non dichiarata» da «dichiarata male»."""
+def test_an_unset_optional_env_is_not_exported_empty(tmp_path):
+    """Una stringa vuota renderebbe indistinguibile «non dichiarata» da
+    «dichiarata male» — e `set -u` non deve far saltare lo spawn."""
     calls = tmp_path / 'tmux.calls'
     script = f"""
 set -euo pipefail
@@ -262,25 +319,12 @@ echo DONE
 """
     env = {k: v for k, v in os.environ.items() if k != 'JHT_SCOUT_COORD_DB'}
     r = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=env)
-    # `set -u` è attivo nello script vero: la variabile assente non deve
-    # far esplodere lo spawn dell'agente.
     assert r.returncode == 0, r.stderr
     assert 'DONE' in r.stdout
     assert not calls.exists()
 
 
 def test_both_spawn_branches_send_the_optional_env():
-    """Il ramo bash e quello PowerShell hanno DUE liste di export separate:
-    dimenticarne una è come non aver fatto niente sulla piattaforma sbagliata."""
     src = _start_agent_src()
     assert 'send_optional_env bash' in src
     assert 'send_optional_env powershell' in src
-    assert 'OPTIONAL_AGENT_ENV=(JHT_SCOUT_COORD_DB)' in src
-
-
-def test_compose_passes_the_fallback_into_the_container():
-    """In Docker mode la deroga la dichiara l'operatore sull'host: senza il
-    pass-through nel compose, nel container non esisterebbe."""
-    with open(os.path.join(REPO_ROOT, 'docker-compose.yml'), encoding='utf-8') as f:
-        compose = f.read()
-    assert 'JHT_SCOUT_COORD_DB=${JHT_SCOUT_COORD_DB:-}' in compose

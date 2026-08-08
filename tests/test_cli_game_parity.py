@@ -49,6 +49,11 @@ COVERED = {
     'disconnect_backend':     'container',
     'pipeline_counts':        'positions',  # jht positions dashboard
     'save_user_profile':      'profile',
+    # Le impostazioni del Capitano — modalità di lavoro e ordini della cura.
+    # Il contratto del file sta in `coordinator_settings.py` (single-writer),
+    # il CLI è un proxy: `jht coordinator show` / `set-mode`.
+    'request_coordinator_state': 'coordinator',
+    'save_coordinator_settings': 'coordinator',
     'ensure_assistant':       'team',
     # La deroga alla spesa: il gioco pilota la stessa `burn_intent.grant/revoke`
     # che sta dietro `jht burn on|off|status`, non una sua copia.
@@ -110,10 +115,6 @@ KNOWN_GAPS = {
         "scaricare un CV/allegato prodotto dal team — [JHT-CLI-AGENT-PARITY]",
     'upload_user_document':
         "caricare un documento (CV, lettera) — [JHT-CLI-AGENT-PARITY]",
-    'request_coordinator_state':
-        "leggere le impostazioni del Capitano — [JHT-CLI-AGENT-PARITY]",
-    'save_coordinator_settings':
-        "scrivere le impostazioni del Capitano — [JHT-CLI-AGENT-PARITY]",
 }
 
 

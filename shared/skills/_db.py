@@ -307,6 +307,37 @@ def ensure_schema(conn: sqlite3.Connection):
         archived_at TIMESTAMP
     );
 
+    -- [JHT-DB-SCOUT-COORD] Divisione del territorio fra Scout e claim
+    -- anti-collisione. Vivevano in un SECONDO file sqlite
+    -- (`$JHT_HOME/data/scout_coordination.db`) con un suo risolutore di
+    -- percorso, e quel file è stato la causa dell'issue #132: un percorso in
+    -- più è un percorso che può non esistere, non essere scrivibile, o
+    -- risolversi diverso per due agenti. Qui la coordinazione sta accanto
+    -- alle altre tabelle di stato interno della squadra (`team_directives`,
+    -- `maintenance_events`), con la stessa risoluzione di path che ogni
+    -- agente riceve già (`JHT_DB`), le stesse migrazioni e lo stesso backup.
+    -- NON viaggia verso il cloud: `db_to_supabase` sincronizza una lista
+    -- esplicita di tabelle e questa non c'è.
+    -- Write-ops: shared/skills/scout_coord.py (unico scrittore).
+    CREATE TABLE IF NOT EXISTS scout_coordination (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scout TEXT NOT NULL,
+        cerchi TEXT,
+        fonti TEXT,
+        note TEXT,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        superseded_at TIMESTAMP
+    );
+
+    -- Claim per posizione: due Scout non lavorano lo stesso annuncio. La
+    -- PRIMARY KEY è il lock — l'INSERT del secondo fallisce, e quel
+    -- fallimento è la risposta.
+    CREATE TABLE IF NOT EXISTS scout_claims (
+        job_id TEXT PRIMARY KEY,
+        scout TEXT NOT NULL,
+        claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
     CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
     CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id);
@@ -324,6 +355,10 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_team_directives_status ON team_directives(status);
     CREATE INDEX IF NOT EXISTS idx_team_directives_cloud_id ON team_directives(cloud_id) WHERE cloud_id IS NOT NULL;
+    -- La distribuzione ATTIVA è la sola lettura calda: `show` la fa a ogni
+    -- boot di uno Scout, e con la storia di settimane accanto un full scan
+    -- sarebbe l'unica query lenta della coordinazione.
+    CREATE INDEX IF NOT EXISTS idx_scout_coordination_active ON scout_coordination(scout) WHERE superseded_at IS NULL;
 
     -- Bug #14: event-log delle transizioni di stato delle positions.
     -- `positions.status` è una colonna sovrascritta ad ogni UPDATE, quindi

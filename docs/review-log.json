@@ -1509,6 +1509,11 @@
       "path": "docs/guides/CHOOSE-WHERE-TO-RUN.md",
       "description": "Guida pubblica per scegliere fra runtime sul PC locale, PC Linux dedicato in LAN via SSH e VPS, con requisiti, confini dati, disponibilità, costi operativi e limiti correnti",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-08-08-scout-coordination-observations.md",
+      "description": "Misure su cinque squadre in produzione: perché la divisione del territorio fra Scout (C-21) non si vede mai all'opera. Smonta due delle tre ipotesi con i dati — la squadra coordinata parte e la skill viene aperta — e nomina la terza: il coordinamento è scritto ma non vissuto. Squadre anonimizzate.",
+      "last_review": null
     }
   ]
 }
