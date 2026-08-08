@@ -694,6 +694,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_companies_logo(conn)
     _migrate_pending_messages_chat_turns(conn)
     _migrate_positions_url_unique(conn)
+    _migrate_scout_coordination_unique(conn)
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
@@ -941,6 +942,63 @@ def _migrate_positions_url_unique(conn: sqlite3.Connection) -> None:
         print(
             f"[migrate] unique index on positions.url was NOT created ({exc}). "
             "Deduplication still relies on the transaction in db_insert.py.",
+            file=sys.stderr,
+        )
+
+
+def _migrate_scout_coordination_unique(conn: sqlite3.Connection) -> None:
+    """`(scout, started_at)` diventa UNIQUE su `scout_coordination`.
+
+    È il vincolo che mancava sotto la dedup dell'import legacy: il
+    controllo-poi-inserisci di `scout_coord.import_legacy`, senza niente
+    sotto, lasciava a due bootstrap concorrenti (ogni Scout ne fa uno
+    pre-spawn) la finestra per importare la stessa storia due volte —
+    misurato: 4 processi, 20 righe invece di 5.
+
+    POLITICA sui duplicati preesistenti: a differenza di `positions.url`
+    qui le righe doppie sono ridondanza pura (stessa chiave, stesso
+    contenuto importato due volte — stato interno della squadra, non dato
+    utente, e la tabella non sincronizza verso il cloud). Si tiene la prima
+    copia (MIN(id)) e le altre si cancellano, con traccia su stderr.
+
+    Fail-safe come `_migrate_positions_url_unique`: se l'indice non nasce
+    la funzione NON solleva — `ensure_schema` gira a ogni invocazione di
+    ogni agente e romperla per un vincolo di igiene sarebbe peggio del
+    vincolo mancante.
+    """
+    if not _table_exists(conn, 'scout_coordination'):
+        return
+    if _index_exists(conn, 'idx_scout_coordination_scout_started_unique'):
+        return  # già migrato
+    try:
+        dupes = conn.execute(
+            "SELECT COUNT(*) FROM (SELECT 1 FROM scout_coordination "
+            "GROUP BY scout, started_at HAVING COUNT(*) > 1)"
+        ).fetchone()[0]
+        if dupes:
+            removed = conn.execute(
+                "DELETE FROM scout_coordination WHERE id NOT IN "
+                "(SELECT MIN(id) FROM scout_coordination "
+                "GROUP BY scout, started_at)"
+            ).rowcount
+            import sys
+            print(
+                f"[migrate] scout_coordination: removed {removed} exact "
+                f"duplicate row(s) across {dupes} key(s) before the UNIQUE "
+                "index (double legacy import).",
+                file=sys.stderr,
+            )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS "
+            "idx_scout_coordination_scout_started_unique "
+            "ON scout_coordination(scout, started_at)"
+        )
+    except sqlite3.Error as exc:
+        import sys
+        print(
+            f"[migrate] unique index on scout_coordination(scout, started_at) "
+            f"was NOT created ({exc}). Legacy-import dedup still relies on "
+            "the in-memory check in scout_coord.import_legacy.",
             file=sys.stderr,
         )
 

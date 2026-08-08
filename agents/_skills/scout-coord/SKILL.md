@@ -12,7 +12,7 @@ Multiple Scouts run in parallel (max 2 instances by team policy). The team works
 
 The state lives in the **shared SQLite database** managed by `scout_coord.py`; the scouts negotiate via tmux at boot and persist the agreement there.
 
-**One database, or no coordination at all.** All Scouts must be on the same file — two Scouts on two files are not coordinating, they only believe they are. `scout_coord.py` resolves the path from the environment (`JHT_SCOUT_COORD_DB` if the operator declared one, otherwise `$JHT_HOME/data/`) and creates it if missing. If it exits **3**, the database is unusable: report the message it printed and STOP. Never create a database of your own, never point the tool at another path.
+**One database, or no coordination at all.** All Scouts must be on the same database — the team's own `jobs.db`, the same `JHT_DB` every other skill uses (the launcher already exports it to your pane). There is no separate coordination file to resolve anymore; an old `scout_coordination.db`, if one exists, is imported once at bootstrap and left in place, read-only from then on. If it exits **3**, the database is unusable: report the message it printed and STOP. Never create a database of your own, never point the tool at another path.
 
 ```bash
 # Which database am I actually on?

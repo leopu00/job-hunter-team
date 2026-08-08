@@ -13,7 +13,7 @@ Mehrere Scouts laufen parallel (maximal 2 Instanzen laut Team-Richtlinie). Das T
 
 Der Zustand liegt in der **gemeinsamen SQLite-Datenbank**, die von `scout_coord.py` verwaltet wird; die Scouts verhandeln beim Start über tmux und speichern die Vereinbarung dort.
 
-**Eine Datenbank, oder gar keine Koordination.** Alle Scouts müssen auf derselben Datei arbeiten — zwei Scouts auf zwei Dateien koordinieren sich nicht, sie glauben es nur. `scout_coord.py` löst den Pfad aus der Umgebung auf (`JHT_SCOUT_COORD_DB`, falls der Operator einen deklariert hat, sonst `$JHT_HOME/data/`) und legt ihn an, wenn er fehlt. Beendet es sich mit **3**, ist die Datenbank unbrauchbar: melde die ausgegebene Meldung und HALTE AN. Lege nie eine eigene Datenbank an und richte das Werkzeug nie auf einen anderen Pfad.
+**Eine Datenbank, oder gar keine Koordination.** Alle Scouts müssen auf derselben Datenbank arbeiten — der `jobs.db` des Teams, demselben `JHT_DB` wie jede andere Skill (der Launcher exportiert es bereits in dein Pane). Es gibt keine separate Koordinationsdatei mehr, die aufgelöst werden müsste; eine alte `scout_coordination.db`, falls vorhanden, wird einmal beim Bootstrap importiert und bleibt liegen, von da an schreibgeschützt. Beendet es sich mit **3**, ist die Datenbank unbrauchbar: melde die ausgegebene Meldung und HALTE AN. Lege nie eine eigene Datenbank an und richte das Werkzeug nie auf einen anderen Pfad.
 
 ```bash
 # Auf welcher Datenbank arbeite ich wirklich?

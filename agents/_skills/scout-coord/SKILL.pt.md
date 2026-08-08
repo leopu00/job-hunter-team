@@ -13,7 +13,7 @@ Multiplos Scouts correm em paralelo (maximo 2 instancias pela politica da equipa
 
 O estado reside na **base de dados SQLite partilhada** gerida pelo `scout_coord.py`; os scouts negoceiam via tmux no arranque e persistem o acordo la.
 
-**Uma so base de dados, ou nenhuma coordenacao.** Todos os Scouts tem de estar no mesmo ficheiro — dois Scouts em dois ficheiros nao se estao a coordenar, apenas acreditam que sim. O `scout_coord.py` resolve o caminho a partir do ambiente (`JHT_SCOUT_COORD_DB` se o operador declarou um, caso contrario `$JHT_HOME/data/`) e cria-o se faltar. Se sair com **3**, a base de dados nao e utilizavel: reporta a mensagem impressa e PARA. Nunca cries uma base de dados tua, nunca apontes a ferramenta para outro caminho.
+**Uma so base de dados, ou nenhuma coordenacao.** Todos os Scouts tem de estar na mesma base — o `jobs.db` da equipa, o mesmo `JHT_DB` de qualquer outra skill (o launcher ja o exporta no teu painel). Ja nao ha um ficheiro de coordenacao separado para resolver; um `scout_coordination.db` antigo, se existir, e importado uma vez no bootstrap e deixado onde esta, so de leitura dai em diante. Se sair com **3**, a base de dados nao e utilizavel: reporta a mensagem impressa e PARA. Nunca cries uma base de dados tua, nunca apontes a ferramenta para outro caminho.
 
 ```bash
 # Em que base de dados estou realmente?

@@ -13,7 +13,7 @@ Múltiples Scouts se ejecutan en paralelo (máx. 2 instancias por política del 
 
 El estado se almacena en la **base de datos SQLite compartida** gestionada por `scout_coord.py`; los scouts negocian vía tmux al arranque y persisten el acuerdo allí.
 
-**Una sola base de datos, o ningún coordinamiento.** Todos los Scouts deben estar en el mismo fichero — dos Scouts en dos ficheros no se están coordinando, solo lo creen. `scout_coord.py` resuelve la ruta desde el entorno (`JHT_SCOUT_COORD_DB` si el operador declaró una, si no `$JHT_HOME/data/`) y la crea si falta. Si sale con **3**, la base de datos no es utilizable: informa del mensaje que imprimió y PÁRATE. Nunca crees una base de datos propia, nunca apuntes la herramienta a otra ruta.
+**Una sola base de datos, o ningún coordinamiento.** Todos los Scouts deben estar en la misma base — el `jobs.db` del equipo, el mismo `JHT_DB` de cualquier otra skill (el launcher ya lo exporta en tu panel). Ya no hay un fichero de coordinación separado que resolver; un viejo `scout_coordination.db`, si existe, se importa una vez en el bootstrap y se deja donde está, en solo lectura desde entonces. Si sale con **3**, la base de datos no es utilizable: informa del mensaje que imprimió y PÁRATE. Nunca crees una base de datos propia, nunca apuntes la herramienta a otra ruta.
 
 ```bash
 # ¿En qué base de datos estoy realmente?
