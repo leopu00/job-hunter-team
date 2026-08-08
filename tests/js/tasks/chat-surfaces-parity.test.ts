@@ -60,6 +60,20 @@ describe.each(SURFACES)("%s (%s)", (file) => {
     expect(src).toContain("composerBlocked");
   });
 
+  it("dopo un richiamo riuscito rilegge la corsia", () => {
+    // Realtime può non esserci — Safari su http, socket caduto, websocket
+    // bloccati — e allora nulla aggiornerebbe la bolla: il messaggio
+    // direbbe «fatto» mentre il giallo resta, cioè l'interfaccia si
+    // contraddice proprio dopo che l'utente ha agito.
+    expect(src).toContain("refreshLane()");
+  });
+
+  it("azzera l'esito del richiamo quando la consegna riparte", () => {
+    // Senza, «richiesta rimandata al box» resterebbe addosso al prossimo
+    // turno che si ferma, letto come se fosse la risposta a quello.
+    expect(src).toMatch(/if \(!stalled\) setRetryState\("idle"\)/);
+  });
+
   it("misura il tempo con l'orologio del server, non con quello locale", () => {
     // I timestamp confrontati li scrive il server: misurarli con
     // `Date.now()` del browser rende il verdetto una funzione dello skew

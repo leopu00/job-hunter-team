@@ -231,7 +231,7 @@ export default function MessagesList({ initialMessages, serverNowIso }: Props) {
   // modo di dirlo — una bolla ferma non si distingue da un agente che sta
   // pensando. `lane` è il rendezvous della corsia (team_state), la riga
   // porta il suo `delivered_at`: insieme dicono lo stato vero.
-  const lane = useChatLaneLive();
+  const { lane, refresh: refreshLane } = useChatLaneLive();
   // Il box ha dichiarato di non saper ricevere la chat: accettare il testo
   // sarebbe incassarlo per nessuno. Vale solo la smentita esplicita —
   // `chatComposerBlocked` lascia passare ogni forma di silenzio.
@@ -271,6 +271,13 @@ export default function MessagesList({ initialMessages, serverNowIso }: Props) {
     return () => window.clearInterval(id);
   }, [waiting, serverNowIso]);
   const stalled = hasStalledTurn(thread, lane, clock);
+  // Quando la consegna riparte, l'esito dell'ultimo richiamo non ha più
+  // niente da dire: lasciarlo lì significherebbe ritrovarsi «richiesta
+  // rimandata al box» addosso al prossimo turno che si ferma, come se
+  // fosse la risposta a quello.
+  useEffect(() => {
+    if (!stalled) setRetryState("idle");
+  }, [stalled]);
 
   // Non letti = turni dell'AGENTE non ancora ack-ati: quelli scritti
   // dall'utente nascono già letti.
@@ -441,7 +448,13 @@ export default function MessagesList({ initialMessages, serverNowIso }: Props) {
   async function handleRetryDelivery() {
     if (retryState === "sending") return;
     setRetryState("sending");
-    setRetryState((await retryChatSignal()) ? "done" : "failed");
+    const ok = await retryChatSignal();
+    setRetryState(ok ? "done" : "failed");
+    // Il campanello è stato riscritto: la corsia va riletta adesso. Con
+    // Realtime attivo l'evento arriverebbe comunque, ma quando non c'è —
+    // socket caduto, websocket bloccati — senza questa rilettura il
+    // messaggio direbbe «fatto» mentre la bolla resta gialla.
+    if (ok) refreshLane();
   }
 
   const activeInfo = agentInfo(activeAgent, locale);

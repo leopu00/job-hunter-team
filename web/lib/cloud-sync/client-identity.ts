@@ -27,6 +27,13 @@ const MAX_HEADER_LENGTH = 512;
 const MAX_CAPABILITIES = 32;
 
 const VERSION_RE = /^[A-Za-z0-9._+-]{1,32}$/;
+// Parole che un client sciatto produce interpolando un valore mancante.
+// Sono fatte di caratteri ammessi, quindi passerebbero per versioni e
+// finirebbero in colonna, dove «undefined» sarebbe indistinguibile da una
+// versione vera chiamata così. Il CLI non le manda (`formatClientHeader`
+// omette i campi vuoti); questo è il secondo giro di chiave, per i client
+// che non scriviamo noi.
+const NOT_A_VALUE = new Set(["undefined", "null", "nan", "none", "false"]);
 const CAPABILITY_RE = /^[a-z0-9-]{1,32}$/;
 // Allineato al CHECK di `client_platform` in 064: un valore fuori lista
 // verrebbe rifiutato dal DB, quindi lo normalizziamo qui.
@@ -45,7 +52,11 @@ export function parseClientHeader(raw: string | null): ClientIdentity | null {
     const key = segment.slice(0, eq).trim().toLowerCase();
     const value = segment.slice(eq + 1).trim();
 
-    if (key === "version" && VERSION_RE.test(value)) {
+    if (
+      key === "version" &&
+      VERSION_RE.test(value) &&
+      !NOT_A_VALUE.has(value.toLowerCase())
+    ) {
       version = value;
     } else if (key === "platform" && PLATFORMS.has(value.toLowerCase())) {
       platform = value.toLowerCase();

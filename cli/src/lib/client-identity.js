@@ -41,7 +41,13 @@ export function normalizePlatform(platform) {
  * mandando senza decodificare nulla.
  */
 export function formatClientHeader({ version, platform, capabilities } = {}) {
-  const parts = [`version=${version}`, `platform=${platform}`];
+  // Un campo senza valore si OMETTE, non si scrive `version=undefined`: quel
+  // testo passerebbe per una versione plausibile — è fatto di caratteri
+  // ammessi — e finirebbe in colonna, dove nessuno saprebbe più distinguere
+  // «non dichiarata» da «dichiarata male».
+  const parts = [];
+  if (version) parts.push(`version=${version}`);
+  if (platform) parts.push(`platform=${platform}`);
   if (capabilities?.length) parts.push(`capabilities=${capabilities.join(',')}`);
   return parts.join('; ');
 }
