@@ -138,8 +138,14 @@ preferences the feedback does not show, or keep sourcing with the old aim.
    logo). Workers not needed for pending user requests are killed or left
    unspawned.
 3. **Budget priority**: near zero. The only spend is answering the user.
-4. **Exit condition**: none — it lasts until the user lifts it. Nothing to
-   exhaust; the banner says so.
+4. **Exit condition**: `mode_until` if the user gave one — at that date the
+   mode expires **on its own**, orders included, and the team is back in
+   `search` (the file still says `saving`: the deadline wins, and the banner
+   declares it). Without `mode_until` it lasts until the user lifts it, and
+   that is worth saying out loud: the weekly budget is a **window, not a
+   balance** — whatever is unspent at the reset is destroyed, so a saving left
+   by inertia does not conserve the cycle, it discards it. Tell the user they
+   can give it an end date.
 
 **What you do**: keep Capitano/Assistente/Mentor responsive; nothing else
 moves without a direct user request. **With C-25**: saving IS an explicit

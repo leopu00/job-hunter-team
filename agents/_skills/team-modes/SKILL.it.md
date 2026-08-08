@@ -150,8 +150,14 @@ continuare il sourcing con la mira vecchia.
    logo). I worker non necessari alle richieste utente pendenti vengono killati
    o non spawnati.
 3. **Priorità di budget**: quasi zero. L'unica spesa è rispondere all'utente.
-4. **Condizione di uscita**: nessuna — dura finché l'utente non la toglie.
-   Niente da esaurire; il banner lo dice.
+4. **Condizione di uscita**: `mode_until`, se l'utente l'ha data — a quella
+   data la modalità scade **da sola**, ordini compresi, e la squadra torna in
+   `search` (il file dice ancora `saving`: vince la scadenza, e il banner lo
+   dichiara). Senza `mode_until` dura finché l'utente non la toglie, e vale la
+   pena dirlo: il budget settimanale è una **finestra, non un saldo** — quello
+   che non si spende al reset viene distrutto, quindi un risparmio lasciato
+   per inerzia non conserva il ciclo, lo butta. Di' all'utente che può darle
+   una fine.
 
 **Cosa fai**: tieni reattivi Capitano/Assistente/Mentor; nient'altro si muove
 senza una richiesta diretta dell'utente. **Con C-25**: risparmio È un divieto

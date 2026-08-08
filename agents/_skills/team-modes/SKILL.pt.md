@@ -154,8 +154,13 @@ continuar o sourcing com a mira antiga.
    utilizador são mortos ou não são spawnados.
 3. **Prioridade de orçamento**: quase zero. A única despesa é responder ao
    utilizador.
-4. **Condição de saída**: nenhuma — dura até o utilizador o levantar. Nada para
-   esgotar; o banner di-lo.
+4. **Condição de saída**: `mode_until`, se o utilizador a deu — nessa data o
+   modo expira **sozinho**, ordens incluídas, e a equipa volta a `search` (o
+   ficheiro continua a dizer `saving`: ganha o prazo, e o banner declara-o).
+   Sem `mode_until` dura até o utilizador o levantar, e vale a pena dizê-lo: o
+   budget semanal é uma **janela, não um saldo** — o que não se gasta no reset
+   é destruído, portanto uma poupança deixada por inércia não conserva o ciclo,
+   deita-o fora. Diz ao utilizador que lhe pode dar um fim.
 
 **O que fazes**: mantém Capitano/Assistente/Mentor reativos; mais nada se mexe
 sem um pedido direto do utilizador. **Com C-25**: poupança É uma proibição
