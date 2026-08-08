@@ -24,6 +24,11 @@ PUBLIC_ROUTES = {
     "feedback/route.ts",            # pre-login support, rate-limited
     "health/route.ts",              # readiness probe, no dependencies/data
     "i18n/route.ts",                # public locale catalogs
+    # Latest published release, read from GitHub server-side. Reads nothing
+    # user-owned and takes no input: the answer is identical for every
+    # caller, which is why it is cached for the whole instance. A gate here
+    # would authenticate a request in order to return a public version tag.
+    "latest-release/route.ts",
     "preferences/route.ts",         # landing theme/locale; DB write session-bound
     "stats/route.ts",               # public project statistics
 }
