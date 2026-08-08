@@ -11,7 +11,14 @@ Plusieurs Scouts s'exécutent en parallèle (max 2 instances selon la politique 
 - quels **cercles** chacun possède (1 = préférence primaire, 2 = voisins géographiques, 3 = relocalisation, 4 = satellite, 5 = frontière)
 - quels **tiers de sources** chacun possède (LinkedIn / agrégateurs ATS / niche / WebSearch)
 
-L'état réside dans un petit JSON géré par `scout_coord.py` ; les scouts négocient via tmux au démarrage et y persistent l'accord.
+L'état réside dans la **base de données SQLite partagée** gérée par `scout_coord.py` ; les scouts négocient via tmux au démarrage et y persistent l'accord.
+
+**Une seule base, ou aucune coordination.** Tous les Scouts doivent être sur le même fichier — deux Scouts sur deux fichiers ne se coordonnent pas, ils le croient seulement. `scout_coord.py` résout le chemin depuis l'environnement (`JHT_SCOUT_COORD_DB` si l'opérateur en a déclaré un, sinon `$JHT_HOME/data/`) et le crée s'il manque. S'il sort en **3**, la base est inutilisable : rapporte le message affiché et ARRÊTE-TOI. Ne crée jamais ta propre base, ne pointe jamais l'outil vers un autre chemin.
+
+```bash
+# Sur quelle base suis-je vraiment ?
+python3 /app/shared/skills/scout_coord.py doctor
+```
 
 ## Step 1 — Découvrir les pairs
 
@@ -103,8 +110,8 @@ jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [INFO] scout-coord: tier 'niche-r
 ## Anti-patterns
 
 - ❌ Sauter le Step 1 ("je suis seul") sans vérifier — un pair pourrait avoir été tout juste respawné par le Dottore.
-- ❌ Reset effectué par chaque scout en parallèle — condition de course, le JSON finit corrompu. Seul le scout avec le numéro le plus bas.
-- ❌ Négocier puis oublier le Step 4 — le JSON est vide, les pairs ne peuvent pas voir votre revendication, deux scouts tapent sur la même source.
+- ❌ Reset effectué par chaque scout en parallèle — condition de course, la base finit corrompue. Seul le scout avec le numéro le plus bas.
+- ❌ Négocier puis oublier le Step 4 — la base est vide, les pairs ne peuvent pas voir votre revendication, deux scouts tapent sur la même source.
 - ❌ Revendiquer à la fois `linkedin` ET `greenhouse` ET `lever` ET `remoteok` ET `weworkremotely` ET `webresearch` "pour être sûr" — rien à partager avec le pair, il n'a rien à faire.
 - ❌ Renégocier en plein loop sans déclencheur — la partition se fait au démarrage. Si un pair meurt le Dottore le respawne avec le même rôle ; seul le SCOUT lui-même relit ses `cerchi`/`fonti` au démarrage.
 

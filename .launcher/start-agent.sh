@@ -704,6 +704,26 @@ case "$ROLE" in
     ;;
 esac
 mkdir -p "$AGENT_DIR"
+
+# ── DB di coordinamento Scout (issue #132) ───────────────────────────────────
+# Nel run Windows del 2026-08-05 il primo Scout non è riuscito ad aprire il
+# database di coordinamento — `$JHT_HOME/data/` non esisteva e nessuno la
+# creava — e ha proseguito scegliendosi un fallback scrivibile: due agenti
+# possono così credere di coordinarsi mentre guardano due file diversi. La
+# cartella e il file si creano e si VERIFICANO qui, prima dello spawn, perché
+# il primo a scoprire il problema non deve essere un agente a metà
+# negoziazione. Un fallimento NON blocca lo Scout (sorgere si può anche da
+# soli) ma resta a schermo: da lì in poi `scout_coord.py` esce 3 con un
+# messaggio azionabile invece di inventarsi un secondo database.
+if [ "$ROLE" = "scout" ] && command -v python3 >/dev/null 2>&1; then
+  COORD_SCRIPT="/app/shared/skills/scout_coord.py"
+  [ -f "$COORD_SCRIPT" ] || COORD_SCRIPT="$DEV_TEAM_DIR/../shared/skills/scout_coord.py"
+  if [ -f "$COORD_SCRIPT" ]; then
+    python3 "$COORD_SCRIPT" bootstrap || \
+      echo "⚠️  scout coordination db NOT ready — see the message above (issue #132)"
+  fi
+fi
+
 # Workspace layout (RULE-T12): agents must use these subdirs instead of
 # scattering files at the root of $AGENT_DIR. tools/ holds helper
 # scripts the agent wrote for itself; tmp/ holds throwaway intermediate

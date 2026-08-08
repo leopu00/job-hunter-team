@@ -11,7 +11,14 @@ Mehrere Scouts laufen parallel (maximal 2 Instanzen laut Team-Richtlinie). Das T
 - welche **Kreise** jeder besitzt (1 = primäre Präferenz, 2 = Geo-Nachbarn, 3 = Umzug, 4 = Satellit, 5 = Grenzgebiet)
 - welche **Quellenebenen** jeder besitzt (LinkedIn / ATS-Aggregatoren / Nische / WebSearch)
 
-Der Zustand wird in einer kleinen JSON-Datei gespeichert, die von `scout_coord.py` verwaltet wird; die Scouts verhandeln beim Start über tmux und speichern die Vereinbarung dort.
+Der Zustand liegt in der **gemeinsamen SQLite-Datenbank**, die von `scout_coord.py` verwaltet wird; die Scouts verhandeln beim Start über tmux und speichern die Vereinbarung dort.
+
+**Eine Datenbank, oder gar keine Koordination.** Alle Scouts müssen auf derselben Datei arbeiten — zwei Scouts auf zwei Dateien koordinieren sich nicht, sie glauben es nur. `scout_coord.py` löst den Pfad aus der Umgebung auf (`JHT_SCOUT_COORD_DB`, falls der Operator einen deklariert hat, sonst `$JHT_HOME/data/`) und legt ihn an, wenn er fehlt. Beendet es sich mit **3**, ist die Datenbank unbrauchbar: melde die ausgegebene Meldung und HALTE AN. Lege nie eine eigene Datenbank an und richte das Werkzeug nie auf einen anderen Pfad.
+
+```bash
+# Auf welcher Datenbank arbeite ich wirklich?
+python3 /app/shared/skills/scout_coord.py doctor
+```
 
 ## Schritt 1 — Peers entdecken
 
@@ -103,8 +110,8 @@ jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [INFO] scout-coord: tier 'niche-r
 ## Anti-Patterns
 
 - ❌ Schritt 1 überspringen ("es gibt nur mich") ohne zu prüfen — ein Peer könnte gerade vom Dottore neu gestartet worden sein.
-- ❌ Reset von jedem Scout parallel durchgeführt — Race Condition, das JSON wird korrumpiert. Nur der niedrigst nummerierte Scout.
-- ❌ Verhandeln und dann Schritt 4 vergessen — das JSON ist leer, Peers können deinen Anspruch nicht sehen, zwei Scouts treffen auf dieselbe Quelle.
+- ❌ Reset von jedem Scout parallel durchgeführt — Race Condition, die Datenbank wird korrumpiert. Nur der niedrigst nummerierte Scout.
+- ❌ Verhandeln und dann Schritt 4 vergessen — die Datenbank ist leer, Peers können deinen Anspruch nicht sehen, zwei Scouts treffen auf dieselbe Quelle.
 - ❌ Sowohl `linkedin` ALS AUCH `greenhouse` ALS AUCH `lever` ALS AUCH `remoteok` ALS AUCH `weworkremotely` ALS AUCH `webresearch` beanspruchen "um sicher zu gehen" — nichts zum Teilen mit dem Peer, dieser hat nichts zu tun.
 - ❌ Mitte der Schleife ohne Auslöser neu verhandeln — die Aufteilung erfolgt beim Start. Wenn ein Peer stirbt, startet der Dottore ihn mit derselben Rolle neu; nur der SCOUT selbst liest seine `cerchi`/`fonti` beim Start erneut.
 
