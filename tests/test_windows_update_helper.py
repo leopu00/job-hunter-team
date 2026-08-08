@@ -1128,7 +1128,7 @@ $parseErrors = $null
 $ast = [Management.Automation.Language.Parser]::ParseInput(
   $source, [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
-$names = @('Initialize-HealthCapability', 'Invoke-Apply')
+$names = @('Initialize-HealthCapability', 'Restore-EnvironmentValue', 'Invoke-Apply')
 $functions = @($ast.FindAll({
   param($node)
   $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
@@ -1144,8 +1144,19 @@ using System.Diagnostics;
 
 public sealed class JhtSuspendedProcess : IDisposable {
     public int ProcessId { get; private set; }
+    public static int LastProcessId { get; private set; }
+    public static int ReleaseCount { get; private set; }
+    private Process process;
+    private bool released;
     private JhtSuspendedProcess() {
-        ProcessId = Process.GetCurrentProcess().Id;
+        ProcessStartInfo start = new ProcessStartInfo(
+            Environment.GetEnvironmentVariable("SystemRoot") +
+            @"\System32\ping.exe", "-n 120 127.0.0.1");
+        start.UseShellExecute = false;
+        start.CreateNoWindow = true;
+        process = Process.Start(start);
+        ProcessId = process.Id;
+        LastProcessId = ProcessId;
     }
     public static JhtSuspendedProcess Create(string path) {
         if (Environment.GetEnvironmentVariable("JHT_TEST_DISPATCH_MODE") ==
@@ -1159,8 +1170,15 @@ public sealed class JhtSuspendedProcess : IDisposable {
     public void ReleaseOwnership() {
         if (Environment.GetEnvironmentVariable("JHT_TEST_DISPATCH_MODE") ==
             "health-release") throw new InvalidOperationException("injected release failure");
+        released = true;
+        ReleaseCount++;
     }
-    public void Dispose() { }
+    public void Dispose() {
+        if (!released && process != null && !process.HasExited) {
+            process.Kill(); process.WaitForExit();
+        }
+        if (process != null) process.Dispose();
+    }
 }
 '@
 if (-not ('JhtSuspendedProcess' -as [type])) { Add-Type -TypeDefinition $native }
@@ -1170,6 +1188,7 @@ $ErrorActionPreference = 'Stop'
 $mode = $env:JHT_TEST_DISPATCH_MODE
 $script:FailurePhase = 'unset'
 $script:FailureCode = 'unset'
+$script:ProcessOwnershipTransferred = $false
 $script:Mode = 'Apply'
 $script:OldPid = 123
 $script:OldStartedUtcTicks = ''
@@ -1186,6 +1205,7 @@ $script:FloorPath = 'floor.json'
 $script:writeProtectedCalls = 0
 $script:assertPathCalls = 0
 $script:journalWrites = 0
+$script:exactlyOneCalls = 0
 $manifest = [pscustomobject]@{
   Value = [pscustomobject]@{ version = '0.3.7'; sequence = 2 }
   Sha256 = 'a' * 64
@@ -1216,6 +1236,7 @@ function Get-ObservedProcess {
   if ($script:mode -ceq 'process-identity') { return $null }
   return @{ Process = $script:old; Started = '100000000000000000' }
 }
+function Get-CanonicalExecutableText { return 'c:/target.exe' }
 function Write-Journal {
   param(
     [string]$State,
@@ -1236,6 +1257,16 @@ function Write-Journal {
     'committed' { 'journal_committed_write_failed' }
     default { throw 'dispatch seam received an unexpected journal state' }
   }
+  $faultState = switch ($script:mode) {
+    'commit-health' { 'health_acked' }
+    'commit-authority' { 'authority_intent' }
+    'commit-metadata' { 'metadata_installed' }
+    'commit-floor-intent' { 'floor_intent' }
+    'commit-helper-intent' { 'helper_intent' }
+    'commit-journal' { 'committed' }
+    default { '' }
+  }
+  if ($State -ceq $faultState) { throw 'injected commit journal failure' }
 }
 function Write-AtomicJson {
   param([string]$Path, [hashtable]$Value)
@@ -1246,9 +1277,18 @@ function Write-AtomicJson {
     throw 'injected floor commit failure'
   }
 }
-function Write-Result { throw 'dispatch seam reached an unexpected result writer' }
+function Write-Result {
+  $script:FailurePhase = 'result'
+  $script:FailureCode = 'result_write_failed'
+  if ($script:mode -ceq 'result') { throw 'injected result writer failure' }
+}
 function Remove-ProtectedFileIfPresent {
   if ($script:mode -ceq 'swap-cleanup') { throw 'injected swap cleanup failure' }
+}
+function Set-ReadyHandoffProcess {
+  if ($script:mode -ceq 'health-handoff') {
+    throw 'injected health handoff READY failure'
+  }
 }
 function Write-ProtectedAtomicFile {
   $script:writeProtectedCalls++
@@ -1264,18 +1304,51 @@ function Test-CandidateHealth {
   return $true
 }
 function Read-ProtectedJsonFile { return [pscustomobject]@{} }
-function Backup-OldAuthority { }
-function Install-CandidateMetadata { }
-function Install-CandidateHelper { }
-function Complete-CommitCleanup { }
+function Backup-OldAuthority {
+  if ($script:mode -ceq 'commit-authority-backup') {
+    $script:FailurePhase = 'authority'
+    $script:FailureCode = 'authority_backup_init_failed'
+    throw 'injected authority backup failure'
+  }
+}
+function Install-CandidateMetadata {
+  if ($script:mode -ceq 'commit-metadata-install') {
+    $script:FailurePhase = 'metadata'
+    $script:FailureCode = 'metadata_manifest_install_failed'
+    throw 'injected metadata install failure'
+  }
+}
+function Install-CandidateHelper {
+  if ($script:mode -ceq 'commit-helper-install') {
+    $script:FailurePhase = 'helper'
+    $script:FailureCode = 'helper_install_failed'
+    throw 'injected helper install failure'
+  }
+}
+function Complete-CommitCleanup {
+  if ($script:mode -ceq 'commit-cleanup') {
+    $script:FailurePhase = 'cleanup'
+    $script:FailureCode = 'commit_backup_cleanup_failed'
+    throw 'injected commit cleanup failure'
+  }
+}
+function Assert-ExactlyOneTargetProcess {
+  $script:exactlyOneCalls++
+  if ($script:mode -ceq 'exactly-one') {
+    $script:FailurePhase = 'recovery'
+    $script:FailureCode = 'recovery_target_process_count_failed'
+    throw 'injected exactly-one failure'
+  }
+}
 
 $script:mode = $mode
 $script:bundle = $bundle
 $script:old = $old
 try {
   Invoke-Apply
-  throw 'injected dispatch fault was accepted'
+  if ($mode -cne 'success') { throw 'injected dispatch fault was accepted' }
 } catch {
+  if ($mode -ceq 'success') { throw }
   if ($script:FailurePhase -cne $env:JHT_TEST_EXPECTED_PHASE -or
       $script:FailureCode -cne $env:JHT_TEST_EXPECTED_CODE) { throw }
   $expectedJournalWrites = switch ($mode) {
@@ -1286,19 +1359,60 @@ try {
     'swap-promote' { 2 }
     'health-capability' { 3 }
     'health-process' { 3 }
+    'health-handoff' { 4 }
     'health-resume' { 4 }
     'health-release' { 4 }
     'health-ack' { 4 }
+    'commit-health' { 5 }
+    'commit-authority-backup' { 5 }
+    'commit-authority' { 6 }
+    'commit-metadata-install' { 6 }
+    'commit-metadata' { 7 }
+    'commit-floor-intent' { 8 }
     'floor-commit' { 8 }
+    'commit-helper-intent' { 9 }
+    'commit-helper-install' { 9 }
+    'commit-journal' { 10 }
+    'commit-cleanup' { 10 }
+    'exactly-one' { 10 }
+    'result' { 10 }
     default { 0 }
   }
   if ($script:journalWrites -ne $expectedJournalWrites) {
     throw 'dispatch seam did not traverse the expected nested journal writers'
   }
-  [Console]::Out.WriteLine(
-    'WINDOWS-DISPATCH-SEAM PASS mode=' + $mode +
-    ' phase=' + $script:FailurePhase + ' code=' + $script:FailureCode)
 }
+$ownedPid = [JhtSuspendedProcess]::LastProcessId
+$releaseCount = [JhtSuspendedProcess]::ReleaseCount
+$postTransfer = $mode -in @('result','success')
+if ($ownedPid -gt 0) {
+  $ownedProcess = Get-Process -Id $ownedPid -ErrorAction SilentlyContinue
+  if ($postTransfer) {
+    if ($releaseCount -ne 1 -or $null -eq $ownedProcess -or
+        $script:exactlyOneCalls -ne 1) {
+      throw 'dispatch seam did not retain exactly one released survivor'
+    }
+    $ownedProcess.Kill()
+    $null = $ownedProcess.WaitForExit(5000)
+  } elseif ($releaseCount -ne 0 -or $null -ne $ownedProcess) {
+    throw 'dispatch seam released or orphaned a pre-transfer child'
+  }
+}
+if ([bool]$script:ProcessOwnershipTransferred -ne $postTransfer) {
+  throw 'dispatch ownership transfer state is not exact'
+}
+if ($mode -ceq 'success') {
+  if ($script:FailurePhase -cne 'result' -or
+      $script:FailureCode -cne 'result_write_failed') {
+    throw 'dispatch success did not complete through the result writer'
+  }
+} elseif ($script:FailurePhase -cne $env:JHT_TEST_EXPECTED_PHASE -or
+          $script:FailureCode -cne $env:JHT_TEST_EXPECTED_CODE) {
+  throw 'dispatch seam changed its exact fault after ownership teardown'
+}
+[Console]::Out.WriteLine(
+  'WINDOWS-DISPATCH-SEAM PASS mode=' + $mode +
+  ' phase=' + $script:FailurePhase + ' code=' + $script:FailureCode)
 '@
 & ([ScriptBlock]::Create($body + "`n" + $probe))
 """
@@ -1322,7 +1436,9 @@ if ($functions.Count -ne $names.Count) {
   throw 'production rollback dispatch functions are missing'
 }
 $body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
-$mainStart = $source.LastIndexOf("`n`$script:RollbackCommitted = `$false`n`$exitCode = 1")
+$mainStart = $source.LastIndexOf(
+  "`n`$script:RollbackCommitted = `$false`n" +
+  "`$script:ProcessOwnershipTransferred = `$false`n`$exitCode = 1")
 $mainEnd = $source.LastIndexOf("`nexit `$exitCode")
 if ($mainStart -lt 0 -or $mainEnd -le $mainStart) {
   throw 'production main dispatch is missing'
@@ -1395,6 +1511,9 @@ function Write-Journal {
   $script:snapshot.journal = 'rolled_back'
 }
 function Start-Process {
+  if ($script:FaultMode -ceq 'restart') { throw 'injected recovery restart failure' }
+}
+function Start-RecoveredTarget {
   if ($script:FaultMode -ceq 'restart') { throw 'injected recovery restart failure' }
 }
 function Write-AtomicJson {
@@ -1514,7 +1633,7 @@ $parseErrors = $null
 $ast = [Management.Automation.Language.Parser]::ParseInput(
   $source, [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
-$names = @('Initialize-HealthCapability', 'Start-RecoveryHealthProbe')
+$names = @('Initialize-HealthCapability', 'Restore-EnvironmentValue', 'Start-RecoveryHealthProbe')
 $functions = @($ast.FindAll({
   param($node)
   $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
@@ -1529,13 +1648,19 @@ using System;
 using System.Diagnostics;
 public sealed class JhtSuspendedProcess : IDisposable {
     public int ProcessId { get; private set; }
+    public static int LastProcessId { get; private set; }
+    public static int ReleaseCount { get; private set; }
+    private Process process;
+    private bool released;
     private JhtSuspendedProcess() {
         ProcessStartInfo start = new ProcessStartInfo(
             Environment.GetEnvironmentVariable("SystemRoot") +
             @"\System32\ping.exe", "-n 30 127.0.0.1");
         start.UseShellExecute = false;
         start.CreateNoWindow = true;
-        ProcessId = Process.Start(start).Id;
+        process = Process.Start(start);
+        ProcessId = process.Id;
+        LastProcessId = ProcessId;
     }
     public static JhtSuspendedProcess Create(string path) {
         if (Environment.GetEnvironmentVariable("JHT_TEST_RECOVERY_HEALTH_MODE") ==
@@ -1549,8 +1674,15 @@ public sealed class JhtSuspendedProcess : IDisposable {
     public void ReleaseOwnership() {
         if (Environment.GetEnvironmentVariable("JHT_TEST_RECOVERY_HEALTH_MODE") ==
             "release") throw new InvalidOperationException("injected release failure");
+        released = true;
+        ReleaseCount++;
     }
-    public void Dispose() { }
+    public void Dispose() {
+        if (!released && process != null && !process.HasExited) {
+            process.Kill(); process.WaitForExit();
+        }
+        if (process != null) process.Dispose();
+    }
 }
 '@
 if (-not ('JhtSuspendedProcess' -as [type])) { Add-Type -TypeDefinition $native }
@@ -1562,6 +1694,7 @@ $script:FailurePhase = 'unset'
 $script:FailureCode = 'unset'
 $script:TargetPath = 'target.exe'
 $script:HealthPath = 'health.json'
+$script:HandoffPath = 'handoff.json'
 $script:JournalPath = 'journal.json'
 $script:Nonce = 'a' * 32
 $script:journalProcessWrites = 0
@@ -1579,23 +1712,83 @@ function Update-JournalProcess {
   $script:FailurePhase = 'journal'
   $script:FailureCode = 'journal_process_write_failed'
 }
+function Set-ReadyHandoffProcess {
+  if ($script:mode -ceq 'handoff') {
+    throw 'injected recovery handoff READY failure'
+  }
+}
+if ($mode.StartsWith('fault-')) {
+  function Resolve-TestEnvironmentName {
+    param([string]$Role)
+    switch -CaseSensitive ($Role) {
+      'nonce' { return 'JHT_UPDATE_NONCE' }
+      'health' { return 'JHT_UPDATE_HEALTH_PATH' }
+      'handoff' { return 'JHT_UPDATE_HANDOFF_PATH' }
+      default { throw 'invalid environment role' }
+    }
+  }
+  $faultPrefix = if ($mode.StartsWith('fault-null-')) { 'fault-null-' } elseif ($mode.StartsWith('fault-value-')) { 'fault-value-' } else { '' }
+  $faultRole = if ($faultPrefix) { $mode.Substring($faultPrefix.Length) } else { '' }
+  $expectedName = if ($faultRole) { Resolve-TestEnvironmentName $faultRole } else { '' }
+  function Remove-Item {
+    param([string]$LiteralPath, [switch]$Force, [string]$ErrorAction)
+    Microsoft.PowerShell.Management\Remove-Item @PSBoundParameters
+    if ($faultPrefix -ceq 'fault-null-' -and $LiteralPath -ceq ('Env:' + $expectedName)) {
+      [Environment]::SetEnvironmentVariable($expectedName, 'post-mutation-fault', 'Process')
+    }
+  }
+  function Set-Item {
+    param([string]$LiteralPath, [string]$Value, [string]$ErrorAction)
+    Microsoft.PowerShell.Management\Set-Item @PSBoundParameters
+    if ($faultPrefix -ceq 'fault-value-' -and $LiteralPath -ceq ('Env:' + $expectedName)) {
+      [Environment]::SetEnvironmentVariable($expectedName, 'post-mutation-fault', 'Process')
+    }
+  }
+}
 function Test-CandidateHealth {
   param([hashtable]$Bundle, [Diagnostics.Process]$Process, [string]$Started)
   if ($script:mode -ceq 'validate') {
-    $Process.Kill()
-    $null = $Process.WaitForExit(5000)
     throw 'injected health validation failure'
   }
   return $true
 }
 $script:mode = $mode
-try {
-  Start-RecoveryHealthProbe @{} ([pscustomobject]@{}) | Out-Null
+if ($mode.StartsWith('fault-value-') -and $mode -match 'nonce$') { $env:JHT_UPDATE_NONCE = 'MiXeD-Previous-Value' }
+if ($mode.StartsWith('fault-value-') -and $mode -match 'health$') { $env:JHT_UPDATE_HEALTH_PATH = 'MiXeD-Previous-Value' }
+if ($mode.StartsWith('fault-value-') -and $mode -match 'handoff$') { $env:JHT_UPDATE_HANDOFF_PATH = 'MiXeD-Previous-Value' }
+if ($mode.StartsWith('fault-null-')) {
+  $role = $mode.Substring(11)
+  $name = switch -CaseSensitive ($role) {
+    'nonce' { 'JHT_UPDATE_NONCE' }
+    'health' { 'JHT_UPDATE_HEALTH_PATH' }
+    'handoff' { 'JHT_UPDATE_HANDOFF_PATH' }
+    default { throw 'invalid environment role' }
+  }
+  [Environment]::SetEnvironmentVariable($name, $null, 'Process')
+}
+if ($mode -ceq 'success') {
+  $lease = Start-RecoveryHealthProbe @{} ([pscustomobject]@{})
+  if ($null -eq $lease -or $null -eq $lease.Suspended -or
+      $lease.Process.Id -ne [JhtSuspendedProcess]::LastProcessId -or
+      [string]::IsNullOrEmpty([string]$lease.Started) -or
+      [JhtSuspendedProcess]::ReleaseCount -ne 0 -or
+      $null -eq (Get-Process -Id $lease.Process.Id -ErrorAction SilentlyContinue)) {
+    throw 'recovery health seam did not retain its owned lease'
+  }
+  $lease.Suspended.Dispose()
+  if (Get-Process -Id $lease.Process.Id -ErrorAction SilentlyContinue) {
+    throw 'recovery health lease dispose left its child alive'
+  }
+} else { try {
+  $null = Start-RecoveryHealthProbe @{} ([pscustomobject]@{})
   throw 'injected recovery health fault was accepted'
 } catch {
   if ($script:FailurePhase -cne $env:JHT_TEST_EXPECTED_PHASE -or
       $script:FailureCode -cne $env:JHT_TEST_EXPECTED_CODE) { throw }
-  $expectedJournalWrites = if ($mode -in @('resume','release','validate')) {
+  $expectedJournalWrites = if ($mode -in @(
+      'handoff','resume','validate',
+      'fault-null-nonce','fault-value-nonce','fault-null-health','fault-value-health',
+      'fault-null-handoff','fault-value-handoff')) {
     1
   } else {
     0
@@ -1603,10 +1796,437 @@ try {
   if ($script:journalProcessWrites -ne $expectedJournalWrites) {
     throw 'recovery health seam did not traverse the nested journal writer'
   }
-  [Console]::Out.WriteLine(
-    'WINDOWS-RECOVERY-HEALTH-SEAM PASS mode=' + $mode +
-    ' phase=' + $script:FailurePhase + ' code=' + $script:FailureCode)
+  $ownedPid = [JhtSuspendedProcess]::LastProcessId
+  if ($ownedPid -gt 0 -and (Get-Process -Id $ownedPid -ErrorAction SilentlyContinue)) {
+    throw 'recovery health seam left its owned process alive'
+  }
+  if ([JhtSuspendedProcess]::ReleaseCount -ne 0) {
+    throw 'recovery health seam transferred ownership'
+  }
+  if ($mode.StartsWith('fault-') -and
+      [Environment]::GetEnvironmentVariable($expectedName, 'Process') -cne 'post-mutation-fault') {
+    throw 'health environment fault did not target the selected production path'
+  }
+} }
+[Console]::Out.WriteLine(
+  'WINDOWS-RECOVERY-HEALTH-SEAM PASS mode=' + $mode +
+  ' phase=' + $script:FailurePhase + ' code=' + $script:FailureCode)
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
+RECOVERY_RESTART_OWNERSHIP_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @('Restore-EnvironmentValue', 'Start-RecoveredTarget')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) { throw 'production recovery restart is missing' }
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$native = @'
+using System;
+using System.Diagnostics;
+public sealed class JhtSuspendedProcess : IDisposable {
+    public int ProcessId { get; private set; }
+    public static int LastProcessId { get; private set; }
+    public static int ReleaseCount { get; private set; }
+    private Process process;
+    private bool released;
+    private JhtSuspendedProcess() {
+        ProcessStartInfo start = new ProcessStartInfo(
+            Environment.GetEnvironmentVariable("SystemRoot") +
+            @"\System32\ping.exe", "-n 120 127.0.0.1");
+        start.UseShellExecute = false;
+        start.CreateNoWindow = true;
+        process = Process.Start(start);
+        ProcessId = process.Id;
+        LastProcessId = ProcessId;
+    }
+    public static JhtSuspendedProcess Create(string path) {
+        if (Environment.GetEnvironmentVariable("JHT_TEST_RECOVERY_RESTART_MODE") ==
+            "create") throw new InvalidOperationException("injected restart create failure");
+        return new JhtSuspendedProcess();
+    }
+    public void Resume() {
+        if (Environment.GetEnvironmentVariable("JHT_TEST_RECOVERY_RESTART_MODE") ==
+            "resume") throw new InvalidOperationException("injected restart resume failure");
+    }
+    public void ReleaseOwnership() {
+        if (Environment.GetEnvironmentVariable("JHT_TEST_RECOVERY_RESTART_MODE") ==
+            "release") throw new InvalidOperationException("injected restart release failure");
+        released = true;
+        ReleaseCount++;
+    }
+    public void Dispose() {
+        if (!released && process != null && !process.HasExited) {
+            process.Kill(); process.WaitForExit();
+        }
+        if (process != null) process.Dispose();
+    }
 }
+'@
+if (-not ('JhtSuspendedProcess' -as [type])) { Add-Type -TypeDefinition $native }
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$mode = $env:JHT_TEST_RECOVERY_RESTART_MODE
+$script:FailurePhase = 'recovery'
+$script:FailureCode = 'recovery_restart_failed'
+$script:ProcessOwnershipTransferred = $false
+$script:TargetPath = 'target.exe'
+$script:HandoffPath = 'handoff.json'
+$script:JournalPath = 'journal.json'
+$script:exactlyOneCalls = 0
+function Stop-JournalCandidate { }
+function Remove-ProtectedFileIfPresent { }
+function Read-ProtectedJsonFile { return [pscustomobject]@{} }
+function Update-JournalProcess { }
+function Set-ReadyHandoffProcess { }
+if ($mode.StartsWith('fault-')) {
+  function Remove-Item {
+    param([string]$LiteralPath, [switch]$Force, [string]$ErrorAction)
+    Microsoft.PowerShell.Management\Remove-Item @PSBoundParameters
+    [Environment]::SetEnvironmentVariable('JHT_UPDATE_HANDOFF_PATH', 'post-mutation-fault', 'Process')
+  }
+  function Set-Item {
+    param([string]$LiteralPath, [string]$Value, [string]$ErrorAction)
+    Microsoft.PowerShell.Management\Set-Item @PSBoundParameters
+    [Environment]::SetEnvironmentVariable('JHT_UPDATE_HANDOFF_PATH', 'post-mutation-fault', 'Process')
+  }
+}
+function Assert-ExactlyOneTargetProcess {
+  $script:exactlyOneCalls++
+  if ($script:mode -ceq 'exactly-one') {
+    $script:FailurePhase = 'recovery'
+    $script:FailureCode = 'recovery_target_process_count_failed'
+    throw 'injected restart exactly-one failure'
+  }
+}
+$script:mode = $mode
+if ($mode -ceq 'fault-value-handoff') { $env:JHT_UPDATE_HANDOFF_PATH = 'MiXeD-Previous-Value' }
+if ($mode -ceq 'fault-null-handoff') {
+  [Environment]::SetEnvironmentVariable('JHT_UPDATE_HANDOFF_PATH', $null, 'Process')
+}
+$completed = $false
+try {
+  $null = Start-RecoveredTarget ([pscustomobject]@{})
+  $completed = $true
+} catch {
+  if ($mode -ceq 'success' -or
+      $script:FailurePhase -cne $env:JHT_TEST_EXPECTED_PHASE -or
+      $script:FailureCode -cne $env:JHT_TEST_EXPECTED_CODE) { throw }
+}
+if ($mode -ceq 'success' -and -not $completed) {
+  throw 'recovery restart success did not complete'
+}
+if ($mode -cne 'success' -and $completed) {
+  throw 'injected recovery restart fault was accepted'
+}
+$ownedPid = [JhtSuspendedProcess]::LastProcessId
+$ownedProcess = if ($ownedPid -gt 0) {
+  Get-Process -Id $ownedPid -ErrorAction SilentlyContinue
+} else { $null }
+$transferred = $mode -ceq 'success'
+if ($transferred) {
+  if ([JhtSuspendedProcess]::ReleaseCount -ne 1 -or
+      $script:exactlyOneCalls -ne 1 -or $null -eq $ownedProcess) {
+    throw 'recovery restart did not preserve one released survivor'
+  }
+  $ownedProcess.Kill()
+  $null = $ownedProcess.WaitForExit(5000)
+} elseif ([JhtSuspendedProcess]::ReleaseCount -ne 0 -or
+          $null -ne $ownedProcess) {
+  throw 'recovery restart released or orphaned a pre-transfer child'
+}
+if ([bool]$script:ProcessOwnershipTransferred -ne $transferred) {
+  throw 'recovery restart transfer state is not exact'
+}
+[Console]::Out.WriteLine(
+  'WINDOWS-RECOVERY-RESTART-SEAM PASS mode=' + $mode +
+  ' phase=' + $script:FailurePhase + ' code=' + $script:FailureCode)
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
+RECOVERY_COMMIT_OWNERSHIP_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$function = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -ceq 'Invoke-Recover'
+}, $true))
+if ($function.Count -ne 1) { throw 'production recovery function is missing' }
+$body = $function[0].Extent.Text
+$native = @'
+using System;
+using System.Diagnostics;
+public sealed class JhtRecoveryLease : IDisposable {
+    public int ProcessId { get; private set; }
+    public static int LastProcessId { get; private set; }
+    public static int ReleaseCount { get; private set; }
+    private Process process;
+    private bool released;
+    public JhtRecoveryLease() {
+        ProcessStartInfo start = new ProcessStartInfo(
+            Environment.GetEnvironmentVariable("SystemRoot") +
+            @"\System32\ping.exe", "-n 120 127.0.0.1");
+        start.UseShellExecute = false;
+        start.CreateNoWindow = true;
+        process = Process.Start(start);
+        ProcessId = process.Id;
+        LastProcessId = ProcessId;
+    }
+    public void ReleaseOwnership() {
+        if (Environment.GetEnvironmentVariable("JHT_TEST_RECOVERY_COMMIT_MODE") ==
+            "release") throw new InvalidOperationException("injected release failure");
+        released = true;
+        ReleaseCount++;
+    }
+    public void Dispose() {
+        if (!released && process != null && !process.HasExited) {
+            process.Kill(); process.WaitForExit();
+        }
+        if (process != null) process.Dispose();
+    }
+}
+'@
+if (-not ('JhtRecoveryLease' -as [type])) { Add-Type -TypeDefinition $native }
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$mode = $env:JHT_TEST_RECOVERY_COMMIT_MODE
+$script:FailurePhase = 'unset'
+$script:FailureCode = 'unset'
+$script:ProcessOwnershipTransferred = $false
+$script:Mode = 'Apply'
+$script:Nonce = 'a' * 32
+$script:TargetPath = 'target.exe'
+$script:JournalPath = 'journal.json'
+$script:CandidateManifestPath = 'candidate.json'
+$script:CandidateSignaturePath = 'candidate.sig'
+$script:InstalledManifestPath = 'installed.json'
+$script:InstalledSignaturePath = 'installed.sig'
+$script:DesktopRole = 'desktop'
+$script:HelperRole = 'helper'
+$script:journalReads = 0
+$script:exactlyOneCalls = 0
+$script:candidate = [pscustomobject]@{
+  Value = [pscustomobject]@{ version = '0.3.7'; sequence = 2 }
+  Sha256 = 'c' * 64
+}
+$script:desktop = [pscustomobject]@{ sha256 = 'd' * 64 }
+$script:helper = [pscustomobject]@{ sha256 = 'e' * 64 }
+$script:journal = [pscustomobject]@{
+  schema = 1; nonce = $script:Nonce; state = 'floor_intent'
+  target_version = '0.3.7'; target_sequence = 2
+  candidate_sha256 = 'd' * 64; candidate_helper_sha256 = 'e' * 64
+  candidate_manifest_sha256 = 'c' * 64
+  candidate_signature_sha256 = 'f' * 64
+  candidate_pid = 0; candidate_started = '100000000000000000'
+  installed_sequence = 1; installed_version = '0.3.6'
+  old_helper_sha256 = '1' * 64; old_manifest_sha256 = '2' * 64
+  old_sha256 = '3' * 64; old_signature_sha256 = '4' * 64
+}
+function Assert-Paths { }
+function Test-ExactProperties { return $true }
+function Test-JsonInteger { return $true }
+function Read-ProtectedJsonFile {
+  $script:journalReads++
+  if ($script:journalReads -gt 1 -and $script:mode -ceq 'journal-refresh') {
+    throw 'injected recovery journal refresh failure'
+  }
+  return $script:journal
+}
+function Read-VerifiedManifest {
+  param([string]$ManifestPath, [string]$SignaturePath)
+  return $script:candidate
+}
+function Get-ArtifactByRole {
+  param([object]$Manifest, [string]$Role)
+  if ($Role -ceq $script:DesktopRole) { return $script:desktop }
+  return $script:helper
+}
+function Get-Sha256 {
+  param([string]$Path)
+  if ($Path -ceq $script:CandidateSignaturePath) { return 'f' * 64 }
+  if ($Path -ceq $script:TargetPath) { return 'd' * 64 }
+  if ($script:mode -in @('helper-intent','helper-install')) { return '0' * 64 }
+  return 'e' * 64
+}
+function Read-Floor { return [pscustomobject]@{ sequence = 2 } }
+function Start-RecoveryHealthProbe {
+  $owner = [JhtRecoveryLease]::new()
+  $process = Get-Process -Id $owner.ProcessId -ErrorAction Stop
+  $started = $process.StartTime.ToUniversalTime().Ticks.ToString()
+  $script:journal.candidate_pid = $process.Id
+  $script:journal.candidate_started = $started
+  return @{ Suspended = $owner; Process = $process; Started = $started }
+}
+function Update-JournalState {
+  param([object]$Journal, [string]$State, [int]$Pid, [string]$Started)
+  $script:FailurePhase = 'journal'
+  $script:FailureCode = if ($State -ceq 'helper_intent') {
+    'journal_helper_intent_write_failed'
+  } else { 'journal_committed_write_failed' }
+  if (($State -ceq 'helper_intent' -and $script:mode -ceq 'helper-intent') -or
+      ($State -ceq 'committed' -and $script:mode -ceq 'journal-commit')) {
+    throw 'injected recovery journal stage failure'
+  }
+  $script:journal.state = $State
+}
+function Install-CandidateHelper {
+  if ($script:mode -ceq 'helper-install') {
+    $script:FailurePhase = 'helper'
+    $script:FailureCode = 'helper_install_failed'
+    throw 'injected recovery helper install failure'
+  }
+}
+function Complete-CommitCleanup {
+  if ($script:mode -ceq 'cleanup') {
+    $script:FailurePhase = 'recovery'
+    $script:FailureCode = 'recovery_commit_backup_cleanup_failed'
+    throw 'injected recovery cleanup failure'
+  }
+}
+function Assert-ExactlyOneTargetProcess {
+  $script:exactlyOneCalls++
+  if ($script:mode -ceq 'exactly-one') {
+    $script:FailurePhase = 'recovery'
+    $script:FailureCode = 'recovery_target_process_count_failed'
+    throw 'injected recovery exactly-one failure'
+  }
+}
+function Write-Result {
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_result_write_failed'
+  if ($script:mode -ceq 'result') { throw 'injected recovery result failure' }
+}
+function Get-RecoveryBundle { throw 'recovery ownership seam entered rollback' }
+function Wait-RecoveryCallerHandoff { throw 'recovery ownership seam waited for caller' }
+function Start-RecoveredTarget { throw 'recovery ownership seam restarted old target' }
+function Invoke-Rollback { throw 'recovery ownership seam rolled back' }
+
+$script:mode = $mode
+$completed = $false
+try {
+  Invoke-Recover
+  $completed = $true
+} catch {
+  if ($mode -in @('result','success')) {
+    if ($mode -ceq 'success') { throw }
+  } elseif ($script:FailurePhase -cne $env:JHT_TEST_EXPECTED_PHASE -or
+            $script:FailureCode -cne $env:JHT_TEST_EXPECTED_CODE) { throw }
+}
+if ($mode -ceq 'success' -and -not $completed) {
+  throw 'recovery ownership success did not complete'
+}
+if ($mode -cne 'success' -and $completed) {
+  throw 'injected recovery ownership fault was accepted'
+}
+$ownedPid = [JhtRecoveryLease]::LastProcessId
+$ownedProcess = Get-Process -Id $ownedPid -ErrorAction SilentlyContinue
+$postTransfer = $mode -in @('result','success')
+if ($postTransfer) {
+  if ([JhtRecoveryLease]::ReleaseCount -ne 1 -or
+      $script:exactlyOneCalls -ne 1 -or $null -eq $ownedProcess) {
+    throw 'recovery commit did not preserve one released survivor'
+  }
+  $ownedProcess.Kill()
+  $null = $ownedProcess.WaitForExit(5000)
+} elseif ([JhtRecoveryLease]::ReleaseCount -ne 0 -or $null -ne $ownedProcess) {
+  throw 'recovery commit released or orphaned a pre-transfer child'
+}
+if ([bool]$script:ProcessOwnershipTransferred -ne $postTransfer) {
+  throw 'recovery commit ownership transfer state is not exact'
+}
+if ($mode -ne 'success' -and
+    ($script:FailurePhase -cne $env:JHT_TEST_EXPECTED_PHASE -or
+     $script:FailureCode -cne $env:JHT_TEST_EXPECTED_CODE)) {
+  throw 'recovery ownership fault code changed during teardown'
+}
+[Console]::Out.WriteLine(
+  'WINDOWS-RECOVERY-OWNERSHIP-SEAM PASS mode=' + $mode +
+  ' phase=' + $script:FailurePhase + ' code=' + $script:FailureCode)
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
+ENVIRONMENT_RESTORE_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$function = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -ceq 'Restore-EnvironmentValue'
+}, $true))
+if ($function.Count -ne 1) { throw 'production environment restore is missing' }
+$body = $function[0].Extent.Text
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$mode = $env:JHT_TEST_ENV_RESTORE_MODE
+$name = switch -Regex ($mode) {
+  'nonce$' { 'JHT_UPDATE_NONCE'; break }
+  'health$' { 'JHT_UPDATE_HEALTH_PATH'; break }
+  'handoff$' { 'JHT_UPDATE_HANDOFF_PATH'; break }
+  default { throw 'invalid environment restore mode' }
+}
+$isFault = $mode.StartsWith('fault-')
+$isNull = $mode.StartsWith('null-') -or $mode.StartsWith('fault-null-')
+$previous = if ($isNull) { $null } else { 'MiXeD-Previous-Value' }
+[Environment]::SetEnvironmentVariable($name, $previous, 'Process')
+if ($isNull) {
+  [Environment]::SetEnvironmentVariable($name, 'null-sentinel', 'Process')
+}
+if ($isFault) {
+  function Remove-Item {
+    param([string]$LiteralPath, [switch]$Force, [string]$ErrorAction)
+    Microsoft.PowerShell.Management\Remove-Item @PSBoundParameters
+    [Environment]::SetEnvironmentVariable($name, 'post-mutation-fault', 'Process')
+  }
+  function Set-Item {
+    param([string]$LiteralPath, [string]$Value, [string]$ErrorAction)
+    Microsoft.PowerShell.Management\Set-Item @PSBoundParameters
+    [Environment]::SetEnvironmentVariable($name, 'post-mutation-fault', 'Process')
+  }
+}
+$succeeded = $false
+try {
+  Restore-EnvironmentValue $name $previous
+  $succeeded = $true
+} catch {
+  if (-not $isFault) { throw }
+  if ([Environment]::GetEnvironmentVariable($name, 'Process') -cne 'post-mutation-fault') {
+    throw 'post-mutation fault did not mutate the process environment'
+  }
+}
+try {
+  $actual = [Environment]::GetEnvironmentVariable($name, 'Process')
+  if ($isFault -and $succeeded) { throw 'fault restore was accepted' }
+  if (-not $isFault -and -not $succeeded) { throw 'normal restore was rejected' }
+} finally {
+  [Environment]::SetEnvironmentVariable($name, $null, 'Process')
+}
+if ($isFault -and $succeeded) { throw 'fault restore reported success' }
+[Console]::Out.WriteLine(
+  'WINDOWS-ENV-RESTORE-SEAM PASS mode=' + $mode +
+  ' outcome=readback_exact')
 '@
 & ([ScriptBlock]::Create($body + "`n" + $probe))
 """
@@ -1694,6 +2314,7 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         "health_capability_init_failed",
         "health_process_start_failed",
         "health_process_resume_failed",
+        "health_env_restore_failed",
         "health_process_release_failed",
         "health_ack_failed",
         "authority_backup_init_failed",
@@ -1730,7 +2351,18 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         "recovery_journal_read_failed",
         "recovery_health_capability_init_failed",
         "recovery_health_resume_failed",
+        "recovery_health_env_restore_failed",
         "recovery_health_release_failed",
+        "recovery_handoff_identity_failed",
+        "recovery_handoff_ready_failed",
+        "recovery_handoff_wait_failed",
+        "recovery_candidate_handoff_failed",
+        "recovery_probe_handoff_ready_failed",
+        "recovery_restart_handoff_ready_failed",
+        "recovery_restart_env_restore_failed",
+        "recovery_restart_release_failed",
+        "health_handoff_ready_failed",
+        "recovery_target_process_count_failed",
         "recovery_restart_failed",
         "recovery_target_restore_failed",
     ):
@@ -1759,6 +2391,8 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         "PROC_THREAD_ATTRIBUTE_JOB_LIST",
         "EXTENDED_STARTUPINFO_PRESENT",
         "Get-ObservedProcess",
+        "Wait-RecoveryCallerHandoff",
+        "Assert-ExactlyOneTargetProcess",
         "interrupted_commit_completed",
         "committed floor forbids rollback",
     ):
@@ -1871,7 +2505,7 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
     assert "function Set-RollbackCommitted" in rollback
     assert rollback.index("Write-Journal 'rolled_back' $Bundle") < rollback.index(
         "Set-RollbackCommitted $Bundle"
-    ) < rollback.index("Start-Process")
+    ) < rollback.index("Start-RecoveredTarget")
     assert "$script:RollbackCommitted = $true" in rollback
     assert "-WriteFailurePhase 'recovery'" in rollback
     assert "-WriteFailureCode 'recovery_result_write_failed'" in rollback
@@ -1884,7 +2518,154 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         )
     ]
     assert "if ($null -eq $root) { return $false }" in source
+    env_restore = source[
+        source.index("function Restore-EnvironmentValue") : source.index(
+            "function Start-RecoveredTarget"
+        )
+    ]
+    assert "GetEnvironmentVariable($Name, 'Process')" in env_restore
+    assert "[StringComparer]::Ordinal.Compare" in env_restore
+    assert "environment restore readback expected absent" in env_restore
+    assert "environment restore readback mismatch" in env_restore
     assert "-and $floor -and" in recover
+    assert recover.index("Wait-RecoveryCallerHandoff") < recover.index(
+        "Start-RecoveryHealthProbe"
+    )
+    assert recover.index("Start-RecoveryHealthProbe") < recover.index(
+        "Update-JournalState $journal 'committed'"
+    ) < recover.index(
+        "Complete-CommitCleanup -Context 'recovery'"
+    ) < recover.index(
+        "Assert-ExactlyOneTargetProcess $healthyProcess"
+    ) < recover.index(
+        "$healthLease.Suspended.ReleaseOwnership()"
+    ) < recover.index(
+        "$script:ProcessOwnershipTransferred = $true"
+    ) < recover.index(
+        "Write-Result $true 'committed' 'interrupted_commit_completed'"
+    )
+    assert recover.index("if ($oldIntact)") < recover.index(
+        "$existingCaller = Get-ObservedProcess"
+    ) < recover.index(
+        "Assert-ExactlyOneTargetProcess $existingCaller.Process"
+    ) < recover.index(
+        "$script:ProcessOwnershipTransferred = $true",
+        recover.index("if ($oldIntact)"),
+    ) < recover.index(
+        "Write-Result $true 'recovered' 'old_version_intact'",
+        recover.index("if ($oldIntact)"),
+    ) < recover.index(
+        "$null = Start-RecoveredTarget $journal"
+    )
+    recovery_health = source[
+        source.index("function Start-RecoveryHealthProbe") : source.index(
+            "function Invoke-Apply"
+        )
+    ]
+    assert "$suspended.ReleaseOwnership()" not in recovery_health
+    assert recovery_health.index("Update-JournalProcess") < recovery_health.index(
+        "Set-ReadyHandoffProcess"
+    ) < recovery_health.index("$suspended.Resume()") < recovery_health.index(
+        "Test-CandidateHealth"
+    ) < recovery_health.index(
+        "Restore-EnvironmentValue 'JHT_UPDATE_NONCE' $previousNonce"
+    ) < recovery_health.index("return $lease")
+    assert "if ($suspended -and -not $leaseReturned) { $suspended.Dispose() }" in (
+        recovery_health
+    ) or "if (-not $restoreComplete -or $null -eq $lease)" in recovery_health
+    assert recovery_health.index("if (-not $restoreComplete -or $null -eq $lease)") < recovery_health.index(
+        "return $lease"
+    )
+    apply = source[
+        source.index("function Invoke-Apply") : source.index(
+            "function Set-CommitCleanupFailure"
+        )
+    ]
+    assert apply.index("$suspended.Resume()") < apply.index(
+        "Restore-EnvironmentValue 'JHT_UPDATE_NONCE' $previousNonce"
+    ) < apply.index(
+        "Test-CandidateHealth"
+    ) < apply.index(
+        "Write-Journal 'health_acked'"
+    ) < apply.index(
+        "Write-Journal 'committed'"
+    ) < apply.index(
+        "Complete-CommitCleanup -Context 'commit'"
+    ) < apply.index(
+        "Assert-ExactlyOneTargetProcess $candidateProcess"
+    ) < apply.index(
+        "$suspended.ReleaseOwnership()"
+    ) < apply.rindex("Write-Result $true 'committed' 'updated'")
+    assert apply.index("$suspended.ReleaseOwnership()") < apply.index(
+        "$script:ProcessOwnershipTransferred = $true"
+    ) < apply.rindex("Write-Result $true 'committed' 'updated'")
+    handoff = source[
+        source.index("function Wait-RecoveryCallerHandoff") : source.index(
+            "function Assert-ExactlyOneTargetProcess"
+        )
+    ]
+    assert "Get-ObservedProcess $OldPid $TargetPath $OldStartedUtcTicks" in handoff
+    assert "Assert-RecoveryCallerProcessSet $caller $Journal" in handoff
+    assert "old_started = [string]$caller.Started" in handoff
+    for ready_identity_field in (
+        "request_id = $RequestId",
+        "instance_id = $InstanceId",
+        "old_exe_path = $canonicalTarget",
+        "handoff_pid = $handoff.Process.Id",
+        "handoff_started = [string]$handoff.Started",
+        "handoff_exe_path = $canonicalTarget",
+    ):
+        assert ready_identity_field in handoff
+    assert handoff.index("Write-AtomicJson $ReadyPath") < handoff.index(
+        "$caller.Process.WaitForExit(60000)"
+    )
+    assert "$caller.Process.WaitForExit(60000)" in handoff
+    assert ".Kill(" not in handoff
+    assert "CloseMainWindow" not in handoff
+    stop_candidate = source[
+        source.index("function Stop-JournalCandidate") : source.index(
+            "function Backup-OldAuthority"
+        )
+    ]
+    for handoff_field in (
+        "nonce = $Nonce",
+        "request_id = $RequestId",
+        "instance_id = $InstanceId",
+        "exe_path = $canonicalTarget",
+        "pid = $process.Id",
+        "process_started_utc_ticks = [string]$Journal.candidate_started",
+    ):
+        assert handoff_field in stop_candidate
+    assert "Read-AttestedReadyFrame" in stop_candidate
+    assert ".Kill(" not in stop_candidate
+    assert "CloseMainWindow" not in stop_candidate
+    restart_target = source[
+        source.index("function Start-RecoveredTarget") : source.index(
+            "function Acquire-Lock"
+        )
+    ]
+    for restart_contract in (
+        "[JhtSuspendedProcess]::Create",
+        "Update-JournalProcess $currentJournal $process.Id $started",
+        "Set-ReadyHandoffProcess $process $started",
+        "$suspended.Resume()",
+        "$suspended.ReleaseOwnership()",
+        "Assert-ExactlyOneTargetProcess $process $started",
+    ):
+        assert restart_contract in restart_target
+    assert restart_target.index("$suspended.Resume()") < restart_target.index(
+        "Restore-EnvironmentValue 'JHT_UPDATE_HANDOFF_PATH' $previousHandoff"
+    ) < restart_target.index(
+        "Assert-ExactlyOneTargetProcess $process $started"
+    ) < restart_target.index(
+        "$script:FailureCode = 'recovery_restart_release_failed'"
+    ) < restart_target.index(
+        "$suspended.ReleaseOwnership()"
+    ) < restart_target.index(
+        "$script:ProcessOwnershipTransferred = $true"
+    ) < restart_target.index("return $process")
+    assert "Start-Process" not in restart_target
+    assert ".Kill(" not in restart_target
     assert "Invoke-Rollback $bundle $journal 'interrupted_update_recovered'" in recover
     result_fallback = source[
         source.index("function Write-FailureResultOrStderr") : source.index(
@@ -1904,6 +2685,10 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         main_dispatch
     )
     assert "if ($Mode -ne 'Recover' -and" in source
+    assert (
+        "if ($Mode -ne 'Recover' -and -not "
+        "$script:ProcessOwnershipTransferred -and"
+    ) in source
     assert "if ($script:RollbackCommitted)" in source
     assert "Write-FailureResultOrStderr 'rollback' $failedCode $true" in source
     assert "Get-Acl" not in source
@@ -2497,6 +3282,8 @@ def _run_verify(
     mutation: str = "none",
     rotation_keys: tuple[Path, Path] | None = None,
     candidate_helper_suffix: bytes = b"",
+    desktop_source: Path | None = None,
+    desktop_args: tuple[str, ...] = ("-t", "127.0.0.1"),
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
     private, public = rsa_keys
     candidate_private, candidate_public = rotation_keys or rsa_keys
@@ -2555,7 +3342,9 @@ def _run_verify(
     installed_build.mkdir()
     candidate_build.mkdir()
 
-    ping = Path(os.environ["SystemRoot"]) / "System32" / "ping.exe"
+    ping = desktop_source or (
+        Path(os.environ["SystemRoot"]) / "System32" / "ping.exe"
+    )
     helper = target_dir / HELPER
     additional = (candidate_public,) if rotation_keys else ()
     render_helper(
@@ -2564,7 +3353,7 @@ def _run_verify(
         public_key=public,
         additional_public_keys=additional,
     )
-    shutil.copy2(ping, installed_build / DESKTOP)
+    shutil.copy2(notepad, installed_build / DESKTOP)
     shutil.copy2(helper, installed_build / HELPER)
     _write_signed_manifest(
         directory=installed_build,
@@ -2733,7 +3522,7 @@ def _run_verify(
         else _side_effect_snapshot(target_dir, state, transaction)
     )
     process = subprocess.Popen(
-        [str(target), "-t", "127.0.0.1"],
+        [str(target), *desktop_args],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -2767,6 +3556,10 @@ def _run_verify(
             nonce,
             "-OldPid",
             str(process.pid),
+            "-RequestId",
+            "verify-" + "9" * 24,
+            "-InstanceId",
+            "instance-" + "a" * 24,
         ]
         result = subprocess.run(
             command,
@@ -2795,16 +3588,31 @@ def _run_verify(
                 before_side_effects
             )
     finally:
-        process.terminate()
-        try:
+        if len(desktop_args) == 2 and desktop_args[0] == "--quit-file":
+            Path(desktop_args[1]).touch()
             process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
+        elif desktop_args:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        elif process.poll() is None:
+            _close_process_voluntarily(
+                process.pid, _process_started_ticks(process.pid)
+            )
+            process.wait(timeout=5)
     return result, target, transaction
 
 
 def _helper_command(
-    *, target: Path, transaction: Path, mode: str, old_pid: int = 1
+    *,
+    target: Path,
+    transaction: Path,
+    mode: str,
+    old_pid: int = 1,
+    request_id: str = "recover-000000000000000000000000",
+    instance_id: str = "instance-000000000000000000000000",
 ) -> list[str]:
     state = transaction.parent
     nonce = transaction.name
@@ -2837,7 +3645,262 @@ def _helper_command(
         nonce,
         "-OldPid",
         str(old_pid),
+        "-RequestId",
+        request_id,
+        "-InstanceId",
+        instance_id,
     ]
+
+
+def _process_started_ticks(pid: int) -> str:
+    return _run_powershell_command(
+        "(Get-Process -Id ([int]$env:JHT_TEST_PID) -ErrorAction Stop)."
+        "StartTime.ToUniversalTime().Ticks.ToString()",
+        env_values={"JHT_TEST_PID": str(pid)},
+        capture_output=True,
+    ).stdout.strip()
+
+
+def _build_recovery_lifecycle_executable(tmp_path: Path) -> Path:
+    source = tmp_path / "recovery-lifecycle-client.cs"
+    executable = tmp_path / "recovery-lifecycle-client.exe"
+    source.write_text(
+        r'''
+using System;
+using System.Diagnostics;
+using System.Collections.Generic;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Web.Script.Serialization;
+public static class RecoveryLifecycleClient {
+    private static string Json(string value) {
+        return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+    }
+    private static string Sha256(string path) {
+        using (SHA256 sha = SHA256.Create())
+        using (FileStream input = new FileStream(path, FileMode.Open, FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete)) {
+            StringBuilder outHex = new StringBuilder();
+            foreach (byte value in sha.ComputeHash(input)) outHex.Append(value.ToString("x2"));
+            return outHex.ToString();
+        }
+    }
+    private static void WriteHealth(string nonce, string path) {
+        Process self = Process.GetCurrentProcess();
+        string exe = self.MainModule.FileName;
+        string frame = "{" +
+            "\"exe_path\":" + Json(exe) + "," +
+            "\"exe_sha256\":" + Json(Sha256(exe)) + "," +
+            "\"nonce\":" + Json(nonce) + "," +
+            "\"pid\":" + self.Id.ToString() + "," +
+            "\"process_started_utc_ticks\":" +
+                Json(self.StartTime.ToUniversalTime().Ticks.ToString()) + "," +
+            "\"schema\":1,\"type\":\"healthy\",\"version\":\"0.3.7\"}\n";
+        byte[] bytes = new UTF8Encoding(false).GetBytes(frame);
+        using (FileStream output = new FileStream(path, FileMode.Open, FileAccess.Write,
+            FileShare.None)) {
+            output.SetLength(0); output.Write(bytes, 0, bytes.Length); output.Flush(true);
+        }
+    }
+    private static string CanonicalExecutable(Process process) {
+        return Path.GetFullPath(process.MainModule.FileName)
+            .Replace('\\', '/').ToLowerInvariant();
+    }
+    private static bool ExactHandoff(string path, string nonce) {
+        if (path.Length == 0 || !File.Exists(path)) return false;
+        try {
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            Dictionary<string, object> frame = serializer.Deserialize<Dictionary<string, object>>(
+                File.ReadAllText(path));
+            Dictionary<string, object> ready = serializer.Deserialize<Dictionary<string, object>>(
+                File.ReadAllText(Path.Combine(Path.GetDirectoryName(path), "ready.json")));
+            Process self = Process.GetCurrentProcess();
+            string exe = CanonicalExecutable(self);
+            string started = self.StartTime.ToUniversalTime().Ticks.ToString();
+            string readyNonce = Convert.ToString(ready["nonce"]);
+            string expectedNonce = nonce.Length == 0 ? readyNonce : nonce;
+            string request = Convert.ToString(ready["request_id"]);
+            string instance = Convert.ToString(ready["instance_id"]);
+            bool readyExact = ready != null && ready.Count == 14 &&
+                Convert.ToInt32(ready["schema"]) == 1 &&
+                Convert.ToString(ready["type"]) == "ready" &&
+                Convert.ToBoolean(ready["ok"]) &&
+                Regex.IsMatch(expectedNonce, "^[0-9a-f]{32}$") &&
+                readyNonce == expectedNonce &&
+                Regex.IsMatch(request, "^[a-z]+-[0-9a-f]{24}$") &&
+                Regex.IsMatch(instance, "^[a-z]+-[0-9a-f]{24}$") &&
+                Convert.ToInt32(ready["old_pid"]) > 0 &&
+                Regex.IsMatch(Convert.ToString(ready["old_started"]), "^[0-9]{10,20}$") &&
+                Convert.ToString(ready["old_exe_path"]) == exe &&
+                Convert.ToInt32(ready["handoff_pid"]) == self.Id &&
+                Convert.ToString(ready["handoff_started"]) == started &&
+                Convert.ToString(ready["handoff_exe_path"]) == exe &&
+                Regex.IsMatch(Convert.ToString(ready["manifest_sha256"]), "^[0-9a-f]{64}$") &&
+                Regex.IsMatch(Convert.ToString(ready["candidate_sha256"]), "^[0-9a-f]{64}$");
+            return readyExact && frame != null && frame.Count == 8 &&
+                Convert.ToInt32(frame["schema"]) == 1 &&
+                Convert.ToString(frame["action"]) == "quit" &&
+                Convert.ToString(frame["nonce"]) == expectedNonce &&
+                Convert.ToString(frame["request_id"]) == request &&
+                Convert.ToString(frame["instance_id"]) == instance &&
+                Convert.ToString(frame["exe_path"]) == exe &&
+                Convert.ToInt32(frame["pid"]) == self.Id &&
+                Convert.ToString(frame["process_started_utc_ticks"]) == started;
+        } catch { return false; }
+    }
+    public static int Main(string[] args) {
+        string nonce = Environment.GetEnvironmentVariable("JHT_UPDATE_NONCE") ?? "";
+        string health = Environment.GetEnvironmentVariable("JHT_UPDATE_HEALTH_PATH") ?? "";
+        if ((nonce.Length == 0) != (health.Length == 0)) return 1;
+        if (nonce.Length > 0) WriteHealth(nonce, health);
+        string stop = Environment.GetEnvironmentVariable("JHT_TEST_TARGET_STOP_PATH") ?? "";
+        string handoff = Environment.GetEnvironmentVariable("JHT_UPDATE_HANDOFF_PATH") ?? "";
+        if (args.Length == 2 && args[0] == "--quit-file") stop = args[1];
+        while ((stop.Length == 0 || !File.Exists(stop)) &&
+               !ExactHandoff(handoff, nonce)) Thread.Sleep(50);
+        return 0;
+    }
+}
+''',
+        encoding="utf-8",
+    )
+    _run_powershell_command(
+        "Add-Type -TypeDefinition ([IO.File]::ReadAllText($env:JHT_TEST_SOURCE)) "
+        "-ReferencedAssemblies System.Web.Extensions.dll "
+        "-OutputAssembly $env:JHT_TEST_OUTPUT -OutputType ConsoleApplication",
+        env_values={"JHT_TEST_SOURCE": str(source), "JHT_TEST_OUTPUT": str(executable)},
+    )
+    return executable
+
+
+def _target_process_identities(target: Path) -> list[tuple[int, str]]:
+    result = _run_powershell_command(
+        "$target=[IO.Path]::GetFullPath($env:JHT_TEST_TARGET);"
+        "Get-Process -ErrorAction Stop | ForEach-Object { try {"
+        "$actual=[IO.Path]::GetFullPath($_.MainModule.FileName);"
+        "if ($actual.Equals($target,[StringComparison]::OrdinalIgnoreCase)) {"
+        "[Console]::Out.WriteLine(([string]$_.Id)+':' + "
+        "$_.StartTime.ToUniversalTime().Ticks.ToString())}} catch {} }",
+        env_values={"JHT_TEST_TARGET": str(target)},
+        capture_output=True,
+    )
+    identities: list[tuple[int, str]] = []
+    for line in result.stdout.splitlines():
+        pid, started = line.strip().split(":", 1)
+        identities.append((int(pid), started))
+    return identities
+
+
+def _close_process_voluntarily(pid: int, started: str) -> None:
+    _run_powershell_command(
+        "$process=Get-Process -Id ([int]$env:JHT_TEST_PID) -ErrorAction Stop;"
+        "if ($process.StartTime.ToUniversalTime().Ticks.ToString() -cne "
+        "$env:JHT_TEST_STARTED) { throw 'test process identity changed' };"
+        "$deadline=[DateTime]::UtcNow.AddSeconds(5);$closed=$false;"
+        "do {$closed=$process.CloseMainWindow();"
+        "if (-not $process.HasExited) {Start-Sleep -Milliseconds 100}"
+        "} while (-not $process.HasExited -and [DateTime]::UtcNow -lt $deadline);"
+        "if (-not $process.HasExited) { throw 'test process refused voluntary close' }",
+        env_values={"JHT_TEST_PID": str(pid), "JHT_TEST_STARTED": started},
+    )
+
+
+def _run_recover_with_live_caller(
+    *,
+    target: Path,
+    transaction: Path,
+    env: dict[str, str] | None = None,
+    caller_quit_path: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    caller_command = [str(target)]
+    if caller_quit_path is not None:
+        caller_quit_path.unlink(missing_ok=True)
+        caller_command += ["--quit-file", str(caller_quit_path)]
+    caller = subprocess.Popen(
+        caller_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    caller_started = _process_started_ticks(caller.pid)
+    request_id = "recover-" + os.urandom(12).hex()
+    instance_id = "instance-" + os.urandom(12).hex()
+    ready_path = transaction / "ready.json"
+    ready_path.unlink(missing_ok=True)
+    manifest_path = transaction / "RELEASE-MANIFEST.json"
+    expected_manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    expected_candidate_sha = next(
+        str(artifact["sha256"])
+        for artifact in manifest["artifacts"]
+        if artifact["role"] == "windows-desktop"
+    )
+    command = _helper_command(
+        target=target,
+        transaction=transaction,
+        mode="Recover",
+        old_pid=caller.pid,
+        request_id=request_id,
+        instance_id=instance_id,
+    )
+    helper = subprocess.Popen(
+        command,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+    )
+    try:
+        canonical_target = str(target.resolve()).replace("\\", "/").lower()
+        journal = json.loads((transaction / "journal.json").read_text(encoding="utf-8"))
+        journal_identity = (
+            int(journal["candidate_pid"]),
+            str(journal["candidate_started"]),
+        )
+        live_identities = _target_process_identities(target)
+        expected_handoff = (
+            journal_identity
+            if journal_identity in live_identities
+            else (caller.pid, caller_started)
+        )
+        deadline = time.monotonic() + 20
+        ready: dict[str, object] = {}
+        while time.monotonic() < deadline:
+            if ready_path.is_file():
+                ready = json.loads(ready_path.read_text(encoding="utf-8"))
+                if ready.get("request_id") == request_id:
+                    break
+            if helper.poll() is not None:
+                break
+            time.sleep(0.05)
+        assert ready == {
+            "schema": 1,
+            "type": "ready",
+            "ok": True,
+            "nonce": transaction.name,
+            "request_id": request_id,
+            "instance_id": instance_id,
+            "old_pid": caller.pid,
+            "old_started": caller_started,
+            "old_exe_path": canonical_target,
+            "handoff_pid": expected_handoff[0],
+            "handoff_started": expected_handoff[1],
+            "handoff_exe_path": canonical_target,
+            "manifest_sha256": expected_manifest_sha,
+            "candidate_sha256": expected_candidate_sha,
+        }
+        if caller_quit_path is None:
+            _close_process_voluntarily(caller.pid, caller_started)
+        else:
+            caller_quit_path.touch()
+        caller.wait(timeout=5)
+        stdout, stderr = helper.communicate(timeout=60)
+        return subprocess.CompletedProcess(command, helper.returncode, stdout, stderr)
+    finally:
+        if helper.poll() is None:
+            helper.kill()
+        if caller.poll() is None:
+            caller.kill()
 
 
 def _write_compact_json(path: Path, value: dict[str, object]) -> None:
@@ -2868,6 +3931,107 @@ def _helper_result_diagnostic(transaction: Path, stderr: str = "") -> str:
 
 
 @pytest.mark.parametrize(
+    ("field", "ready_field"),
+    [
+        ("nonce", "nonce"),
+        ("request_id", "request_id"),
+        ("instance_id", "instance_id"),
+        ("exe_path", "old_exe_path"),
+        ("exe_path", "handoff_exe_path"),
+        ("pid", "handoff_pid"),
+        ("process_started_utc_ticks", "handoff_started"),
+    ],
+)
+def test_windows_recovery_handoff_consumer_rejects_each_stale_tuple_field(
+    tmp_path: Path, field: str, ready_field: str
+) -> None:
+    target = _build_recovery_lifecycle_executable(tmp_path)
+    transaction = tmp_path / "handoff-transaction"
+    transaction.mkdir()
+    nonce = "d" * 32
+    request_id = "recover-" + "1" * 24
+    instance_id = "instance-" + "2" * 24
+    health_path = transaction / "health.json"
+    ready_path = transaction / "ready.json"
+    handoff_path = transaction / "handoff.json"
+    health_path.write_bytes(b"")
+    env = os.environ.copy()
+    env.pop("JHT_TEST_TARGET_STOP_PATH", None)
+    env.update(
+        {
+            "JHT_UPDATE_NONCE": nonce,
+            "JHT_UPDATE_HEALTH_PATH": str(health_path),
+            "JHT_UPDATE_HANDOFF_PATH": str(handoff_path),
+        }
+    )
+    process = subprocess.Popen(
+        [str(target)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+    )
+    try:
+        started = _process_started_ticks(process.pid)
+        canonical = str(target.resolve()).replace("\\", "/").lower()
+        ready = {
+            "schema": 1,
+            "type": "ready",
+            "ok": True,
+            "nonce": nonce,
+            "request_id": request_id,
+            "instance_id": instance_id,
+            "old_pid": process.pid,
+            "old_started": started,
+            "old_exe_path": canonical,
+            "handoff_pid": process.pid,
+            "handoff_started": started,
+            "handoff_exe_path": canonical,
+            "manifest_sha256": "3" * 64,
+            "candidate_sha256": "4" * 64,
+        }
+        handoff = {
+            "schema": 1,
+            "action": "quit",
+            "nonce": nonce,
+            "request_id": request_id,
+            "instance_id": instance_id,
+            "exe_path": canonical,
+            "pid": process.pid,
+            "process_started_utc_ticks": started,
+        }
+        wrong_values: dict[str, object] = {
+            "nonce": "e" * 32,
+            "request_id": "recover-" + "5" * 24,
+            "instance_id": "instance-" + "6" * 24,
+            "exe_path": "c:/wrong/job-hunter-team.exe",
+            "pid": process.pid + 1,
+            "process_started_utc_ticks": str(int(started) + 1),
+        }
+        stale_handoff = dict(handoff)
+        stale_handoff[field] = wrong_values[field]
+        _write_compact_json(ready_path, ready)
+        _write_compact_json(handoff_path, stale_handoff)
+        time.sleep(0.25)
+        assert process.poll() is None
+
+        stale_ready = dict(ready)
+        stale_ready[ready_field] = wrong_values[field]
+        _write_compact_json(ready_path, stale_ready)
+        _write_compact_json(handoff_path, handoff)
+        time.sleep(0.25)
+        assert process.poll() is None
+
+        _write_compact_json(ready_path, ready)
+        process.wait(timeout=5)
+        assert process.returncode == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        for path in (handoff_path, ready_path, health_path):
+            path.unlink(missing_ok=True)
+        assert _target_process_identities(target) == []
+        assert not handoff_path.exists()
+
+
+@pytest.mark.parametrize(
     ("boundary", "install_candidate", "install_metadata", "commit_floor", "promote_helper"),
     [
         ("swap_intent", False, False, False, False),
@@ -2887,10 +4051,15 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
     commit_floor: bool,
     promote_helper: bool,
 ) -> None:
+    caller_quit = tmp_path / "recovery-caller.quit"
+    target_stop = tmp_path / "recovery-target.quit"
+    desktop_source = _build_recovery_lifecycle_executable(tmp_path)
     verified, target, transaction = _run_verify(
         tmp_path,
         rsa_keys,
         candidate_helper_suffix=b"\n# independently signed next helper\n",
+        desktop_source=desktop_source,
+        desktop_args=("--quit-file", str(tmp_path / "verify-caller.quit")),
     )
     assert verified.returncode == 0, _helper_result_diagnostic(
         transaction, verified.stderr
@@ -2975,19 +4144,19 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
         production_owned_files.append(installed_helper)
     journal["state"] = "helper_intent" if boundary == "helper_promoted" else boundary
     candidate_process: subprocess.Popen[bytes] | None = None
+    recovery_env = os.environ.copy()
+    target_stop.unlink(missing_ok=True)
+    recovery_env["JHT_TEST_TARGET_STOP_PATH"] = str(target_stop)
+    recovery_env["JHT_UPDATE_HANDOFF_PATH"] = str(transaction / "handoff.json")
     try:
-        if commit_floor:
+        if commit_floor and boundary != "floor_intent":
             candidate_process = subprocess.Popen(
-                [str(target), "-t", "127.0.0.1"],
+                [str(target)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=recovery_env,
             )
-            started = _run_powershell_command(
-                "(Get-Process -Id ([int]$env:JHT_TEST_PID) -ErrorAction Stop)."
-                "StartTime.ToUniversalTime().Ticks.ToString()",
-                env_values={"JHT_TEST_PID": str(candidate_process.pid)},
-                capture_output=True,
-            ).stdout.strip()
+            started = _process_started_ticks(candidate_process.pid)
             journal["candidate_pid"] = candidate_process.pid
             journal["candidate_started"] = started
             _write_compact_json(
@@ -3017,15 +4186,11 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
         if install_metadata:
             assert _directory_acl_is_current_only(authority_backup)
 
-        recovered = subprocess.run(
-            _helper_command(
-                target=target,
-                transaction=transaction,
-                mode="Recover",
-            ),
-            text=True,
-            capture_output=True,
-            timeout=45,
+        recovered = _run_recover_with_live_caller(
+            target=target,
+            transaction=transaction,
+            env=recovery_env,
+            caller_quit_path=caller_quit,
         )
         result = json.loads((transaction / "result.json").read_text())
         if commit_floor:
@@ -3036,6 +4201,21 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
             assert target.read_bytes() == candidate_bytes
             assert installed_helper.read_bytes() == candidate_helper_bytes
             assert json.loads(journal_path.read_text())["state"] == "committed"
+            assert len(_target_process_identities(target)) == 1
+            final_pid, final_started = _target_process_identities(target)[0]
+            committed_journal = json.loads(journal_path.read_text())
+            health = json.loads((transaction / "health.json").read_text())
+            ready = json.loads((transaction / "ready.json").read_text())
+            assert (final_pid, final_started) == (
+                int(committed_journal["candidate_pid"]),
+                str(committed_journal["candidate_started"]),
+            )
+            assert (final_pid, final_started) == (
+                int(health["pid"]),
+                str(health["process_started_utc_ticks"]),
+            )
+            assert final_pid != int(ready["old_pid"])
+            assert not (transaction / "handoff.json").exists()
             if boundary == "floor_intent":
                 assert not backup.exists()
                 assert not failed.exists()
@@ -3056,15 +4236,11 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                     state / "committed-floor.json",
                 )
                 stable_before = _cleanup_targets_snapshot(stable_nodes)
-                retried = subprocess.run(
-                    _helper_command(
-                        target=target,
-                        transaction=transaction,
-                        mode="Recover",
-                    ),
-                    text=True,
-                    capture_output=True,
-                    timeout=45,
+                retried = _run_recover_with_live_caller(
+                    target=target,
+                    transaction=transaction,
+                    env=recovery_env,
+                    caller_quit_path=caller_quit,
                 )
                 assert retried.returncode == 0, _helper_result_diagnostic(
                     transaction, retried.stderr
@@ -3076,6 +4252,8 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                 assert not backup.exists()
                 assert not failed.exists()
                 assert not authority_backup.exists()
+                assert len(_target_process_identities(target)) == 1
+                assert not (transaction / "handoff.json").exists()
         else:
             assert recovered.returncode != 0, _helper_result_diagnostic(
                 transaction, recovered.stderr
@@ -3091,6 +4269,19 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
             assert target.read_bytes() == old_bytes
             assert installed_helper.read_bytes() == old_helper_bytes
             assert json.loads(journal_path.read_text())["state"] == "rolled_back"
+            assert len(_target_process_identities(target)) == 1
+            rollback_pid, rollback_started = _target_process_identities(target)[0]
+            rollback_journal = json.loads(journal_path.read_text())
+            rollback_ready = json.loads((transaction / "ready.json").read_text())
+            assert (rollback_pid, rollback_started) == (
+                int(rollback_journal["candidate_pid"]),
+                str(rollback_journal["candidate_started"]),
+            )
+            assert (rollback_pid, rollback_started) == (
+                int(rollback_ready["handoff_pid"]),
+                str(rollback_ready["handoff_started"]),
+            )
+            assert rollback_pid != int(rollback_ready["old_pid"])
             stable_nodes = (
                 target,
                 installed_helper,
@@ -3101,15 +4292,11 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                 state / ".update.lock",
             )
             stable_before = _cleanup_targets_snapshot(stable_nodes)
-            retried = subprocess.run(
-                _helper_command(
-                    target=target,
-                    transaction=transaction,
-                    mode="Recover",
-                ),
-                text=True,
-                capture_output=True,
-                timeout=45,
+            retried = _run_recover_with_live_caller(
+                target=target,
+                transaction=transaction,
+                env=recovery_env,
+                caller_quit_path=caller_quit,
             )
             assert retried.returncode == 0, _helper_result_diagnostic(
                 transaction, retried.stderr
@@ -3124,9 +4311,29 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                 "rolled_back": True,
             }
             assert _cleanup_targets_snapshot(stable_nodes) == stable_before
+            assert len(_target_process_identities(target)) == 1
+            retry_pid, retry_started = _target_process_identities(target)[0]
+            retry_journal = json.loads(journal_path.read_text())
+            retry_ready = json.loads((transaction / "ready.json").read_text())
+            assert (retry_pid, retry_started) == (
+                int(retry_journal["candidate_pid"]),
+                str(retry_journal["candidate_started"]),
+            )
+            assert (retry_pid, retry_started) == (
+                int(retry_ready["handoff_pid"]),
+                str(retry_ready["handoff_started"]),
+            )
+            assert not (transaction / "handoff.json").exists()
     finally:
-        if candidate_process and candidate_process.poll() is None:
-            candidate_process.kill()
+        target_stop.touch()
+        deadline = time.monotonic() + 5
+        while _target_process_identities(target) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert _target_process_identities(target) == []
+        if candidate_process is not None:
+            candidate_process.wait(timeout=5)
+        assert not (transaction / "handoff.json").exists()
+        assert not tuple(transaction.glob(".jht-atomic-*"))
 
 
 def test_windows_powershell51_verifies_signed_bundle(
@@ -3140,6 +4347,15 @@ def test_windows_powershell51_verifies_signed_bundle(
     ready = json.loads((transaction / "ready.json").read_text())
     assert ready["old_pid"] > 0
     assert str(ready["old_started"]).isdigit()
+    assert ready["request_id"] == "verify-" + "9" * 24
+    assert ready["instance_id"] == "instance-" + "a" * 24
+    canonical_target = str(target.resolve()).replace("\\", "/").lower()
+    assert ready["old_exe_path"] == canonical_target
+    assert (ready["handoff_pid"], ready["handoff_started"]) == (
+        ready["old_pid"],
+        ready["old_started"],
+    )
+    assert ready["handoff_exe_path"] == canonical_target
     assert b"candidate" not in target.read_bytes()
     assert _directory_acl_is_protected(transaction.parent)
     assert _directory_acl_is_protected(transaction)
@@ -4134,10 +5350,24 @@ def test_production_stage_faults_emit_exact_path_free_subcodes(
         ("swap-promote", "swap", "swap_promote_failed"),
         ("health-capability", "health", "health_capability_init_failed"),
         ("health-process", "health", "health_process_start_failed"),
+        ("health-handoff", "health", "health_handoff_ready_failed"),
         ("health-resume", "health", "health_process_resume_failed"),
         ("health-release", "health", "health_process_release_failed"),
         ("health-ack", "health", "health_ack_failed"),
+        ("commit-health", "journal", "journal_health_acked_write_failed"),
+        ("commit-authority-backup", "authority", "authority_backup_init_failed"),
+        ("commit-authority", "journal", "journal_authority_intent_write_failed"),
+        ("commit-metadata-install", "metadata", "metadata_manifest_install_failed"),
+        ("commit-metadata", "journal", "journal_metadata_installed_write_failed"),
+        ("commit-floor-intent", "journal", "journal_floor_intent_write_failed"),
         ("floor-commit", "floor", "floor_commit_failed"),
+        ("commit-helper-intent", "journal", "journal_helper_intent_write_failed"),
+        ("commit-helper-install", "helper", "helper_install_failed"),
+        ("commit-journal", "journal", "journal_committed_write_failed"),
+        ("commit-cleanup", "cleanup", "commit_backup_cleanup_failed"),
+        ("exactly-one", "recovery", "recovery_target_process_count_failed"),
+        ("result", "result", "result_write_failed"),
+        ("success", "result", "result_write_failed"),
     ],
 )
 def test_production_apply_dispatch_faults_preserve_exact_stage(
@@ -4223,9 +5453,16 @@ def test_production_recovery_dispatch_faults_preserve_exact_stage(
         ("cleanup", "recovery", "recovery_health_cleanup_failed"),
         ("capability", "recovery", "recovery_health_capability_init_failed"),
         ("process", "recovery", "recovery_health_process_failed"),
+        ("handoff", "recovery", "recovery_probe_handoff_ready_failed"),
         ("resume", "recovery", "recovery_health_resume_failed"),
-        ("release", "recovery", "recovery_health_release_failed"),
+        ("fault-null-nonce", "recovery", "recovery_health_env_restore_failed"),
+        ("fault-value-nonce", "recovery", "recovery_health_env_restore_failed"),
+        ("fault-null-health", "recovery", "recovery_health_env_restore_failed"),
+        ("fault-value-health", "recovery", "recovery_health_env_restore_failed"),
+        ("fault-null-handoff", "recovery", "recovery_health_env_restore_failed"),
+        ("fault-value-handoff", "recovery", "recovery_health_env_restore_failed"),
         ("validate", "recovery", "recovery_health_validate_failed"),
+        ("success", "recovery", "recovery_health_validate_failed"),
     ],
 )
 def test_production_recovery_health_faults_preserve_exact_stage(
@@ -4254,6 +5491,127 @@ def test_production_recovery_health_faults_preserve_exact_stage(
     assert result.stdout.strip() == (
         f"WINDOWS-RECOVERY-HEALTH-SEAM PASS mode={mode} "
         f"phase={phase} code={code}"
+    )
+    assert str(tmp_path) not in result.stdout
+    assert str(tmp_path) not in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("mode", "phase", "code"),
+    [
+        ("create", "recovery", "recovery_restart_failed"),
+        ("resume", "recovery", "recovery_restart_failed"),
+        ("fault-null-handoff", "recovery", "recovery_restart_env_restore_failed"),
+        ("fault-value-handoff", "recovery", "recovery_restart_env_restore_failed"),
+        ("exactly-one", "recovery", "recovery_target_process_count_failed"),
+        ("release", "recovery", "recovery_restart_release_failed"),
+        ("success", "recovery", "recovery_restart_release_failed"),
+    ],
+)
+def test_production_recovery_restart_transfers_ownership_last(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    mode: str,
+    phase: str,
+    code: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    result = _run_powershell_command(
+        RECOVERY_RESTART_OWNERSHIP_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_RECOVERY_RESTART_MODE": mode,
+            "JHT_TEST_EXPECTED_PHASE": phase,
+            "JHT_TEST_EXPECTED_CODE": code,
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.strip() == (
+        f"WINDOWS-RECOVERY-RESTART-SEAM PASS mode={mode} "
+        f"phase={phase} code={code}"
+    )
+    assert str(tmp_path) not in result.stdout
+    assert str(tmp_path) not in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("mode", "phase", "code"),
+    [
+        ("journal-refresh", "recovery", "recovery_journal_refresh_failed"),
+        ("helper-intent", "journal", "journal_helper_intent_write_failed"),
+        ("helper-install", "helper", "helper_install_failed"),
+        ("journal-commit", "journal", "journal_committed_write_failed"),
+        ("cleanup", "recovery", "recovery_commit_backup_cleanup_failed"),
+        ("exactly-one", "recovery", "recovery_target_process_count_failed"),
+        ("release", "recovery", "recovery_health_release_failed"),
+        ("result", "recovery", "recovery_result_write_failed"),
+        ("success", "recovery", "recovery_result_write_failed"),
+    ],
+)
+def test_production_recovery_commit_ownership_is_transferred_once(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    mode: str,
+    phase: str,
+    code: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    result = _run_powershell_command(
+        RECOVERY_COMMIT_OWNERSHIP_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_RECOVERY_COMMIT_MODE": mode,
+            "JHT_TEST_EXPECTED_PHASE": phase,
+            "JHT_TEST_EXPECTED_CODE": code,
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.strip() == (
+        f"WINDOWS-RECOVERY-OWNERSHIP-SEAM PASS mode={mode} "
+        f"phase={phase} code={code}"
+    )
+    assert str(tmp_path) not in result.stdout
+    assert str(tmp_path) not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "null-nonce", "value-nonce", "fault-null-nonce", "fault-value-nonce",
+        "null-health", "value-health", "fault-null-health", "fault-value-health",
+        "null-handoff", "value-handoff", "fault-null-handoff", "fault-value-handoff",
+    ],
+)
+def test_production_environment_restore_readback_is_exact(
+    tmp_path: Path, rsa_keys: tuple[Path, Path], mode: str
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    result = _run_powershell_command(
+        ENVIRONMENT_RESTORE_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_ENV_RESTORE_MODE": mode,
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.strip() == (
+        f"WINDOWS-ENV-RESTORE-SEAM PASS mode={mode} "
+        "outcome=readback_exact"
     )
     assert str(tmp_path) not in result.stdout
     assert str(tmp_path) not in result.stderr
@@ -4376,13 +5734,17 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
     candidate_build = tmp_path / "candidate-build"
     installed_build.mkdir()
     candidate_build.mkdir()
-    system32 = Path(os.environ["SystemRoot"]) / "System32"
-    ping = system32 / "ping.exe"
-    notepad = system32 / "notepad.exe"
+    lifecycle = _build_recovery_lifecycle_executable(tmp_path)
+    apply_caller_quit = tmp_path / "apply-caller.quit"
+    recovery_caller_quit = tmp_path / "recovery-caller.quit"
+    target_stop = tmp_path / "recovery-target.quit"
+    target_stop.unlink(missing_ok=True)
+    helper_env["JHT_TEST_TARGET_STOP_PATH"] = str(target_stop)
+    helper_env["JHT_UPDATE_HANDOFF_PATH"] = str(transaction / "handoff.json")
     helper = target_dir / HELPER
     render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
 
-    shutil.copy2(ping, installed_build / DESKTOP)
+    shutil.copy2(lifecycle, installed_build / DESKTOP)
     shutil.copy2(helper, installed_build / HELPER)
     _write_signed_manifest(
         directory=installed_build,
@@ -4396,7 +5758,7 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
     shutil.copy2(installed_build / "RELEASE-MANIFEST.json", target_dir)
     shutil.copy2(installed_build / "RELEASE-MANIFEST.json.sig", target_dir)
 
-    shutil.copy2(notepad, candidate_build / DESKTOP)
+    (candidate_build / DESKTOP).write_bytes(lifecycle.read_bytes() + b"candidate")
     shutil.copy2(helper, candidate_build / HELPER)
     _write_signed_manifest(
         directory=candidate_build,
@@ -4440,7 +5802,7 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         )
 
     old = subprocess.Popen(
-        [str(target), "-t", "127.0.0.1"],
+        [str(target), "--quit-file", str(apply_caller_quit)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -4474,6 +5836,10 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
             nonce,
             "-OldPid",
             str(old.pid),
+            "-RequestId",
+            "apply-" + "7" * 24,
+            "-InstanceId",
+            "instance-" + "8" * 24,
         ]
         updater = subprocess.Popen(
             base + ["-Mode", "Apply"],
@@ -4491,7 +5857,7 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
             pytest.fail(_helper_result_diagnostic(transaction, stderr))
         assert _directory_acl_is_protected(state)
         assert _directory_acl_is_protected(transaction)
-        old.terminate()
+        apply_caller_quit.touch()
         old.wait(timeout=5)
 
         journal_path = transaction / "journal.json"
@@ -4499,9 +5865,14 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         while time.monotonic() < deadline:
             if journal_path.exists():
                 journal = json.loads(journal_path.read_text())
+                try:
+                    health = json.loads((transaction / "health.json").read_text())
+                except (OSError, ValueError):
+                    health = {}
                 if (
                     journal.get("state") == "candidate_installed"
                     and int(journal.get("candidate_pid", 0)) > 0
+                    and int(health.get("pid", 0)) == int(journal["candidate_pid"])
                 ):
                     candidate_pid = int(journal["candidate_pid"])
                     break
@@ -4512,12 +5883,11 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         assert not candidate.exists()
         assert (state / ".update.lock").is_dir()
 
-        recovered = subprocess.run(
-            base + ["-Mode", "Recover"],
-            text=True,
-            capture_output=True,
-            timeout=30,
+        recovered = _run_recover_with_live_caller(
+            target=target,
+            transaction=transaction,
             env=helper_env,
+            caller_quit_path=recovery_caller_quit,
         )
         assert recovered.returncode != 0, _helper_result_diagnostic(
             transaction, recovered.stderr
@@ -4541,6 +5911,16 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
             check=False,
         )
         assert process_check.returncode == 0
+        assert len(_target_process_identities(target)) == 1
+        rollback_pid, rollback_started = _target_process_identities(target)[0]
+        rollback_journal = json.loads(journal_path.read_text())
+        handoff = json.loads((transaction / "ready.json").read_text())
+        assert (rollback_pid, rollback_started) == (
+            int(rollback_journal["candidate_pid"]),
+            str(rollback_journal["candidate_started"]),
+        )
+        assert rollback_pid != int(handoff["old_pid"])
+        assert not (transaction / "handoff.json").exists()
         stable_nodes = (
             target,
             helper,
@@ -4551,12 +5931,11 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
             state / ".update.lock",
         )
         stable_before = _cleanup_targets_snapshot(stable_nodes)
-        retried = subprocess.run(
-            base + ["-Mode", "Recover"],
-            text=True,
-            capture_output=True,
-            timeout=30,
+        retried = _run_recover_with_live_caller(
+            target=target,
+            transaction=transaction,
             env=helper_env,
+            caller_quit_path=recovery_caller_quit,
         )
         assert retried.returncode == 0, _helper_result_diagnostic(
             transaction, retried.stderr
@@ -4571,8 +5950,18 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
             "rolled_back": True,
         }
         assert _cleanup_targets_snapshot(stable_nodes) == stable_before
+        assert len(_target_process_identities(target)) == 1
+        assert not (transaction / "handoff.json").exists()
     finally:
         if updater and updater.poll() is None:
             updater.kill()
+        target_stop.touch()
+        deadline = time.monotonic() + 5
+        while _target_process_identities(target) and time.monotonic() < deadline:
+            time.sleep(0.05)
         if old.poll() is None:
             old.kill()
+            old.wait(timeout=5)
+        assert _target_process_identities(target) == []
+        assert not (transaction / "handoff.json").exists()
+        assert not tuple(transaction.glob(".jht-atomic-*"))

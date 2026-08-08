@@ -288,22 +288,27 @@ func _protocollo_windows() -> void:
 	var old_sha := "a".repeat(WindowsProtocol.SHA256_HEX_LENGTH)
 	var new_sha := "b".repeat(WindowsProtocol.SHA256_HEX_LENGTH)
 	var manifest_sha := "c".repeat(WindowsProtocol.SHA256_HEX_LENGTH)
+	var canonical_exe := "c:/program files/job hunter team/job-hunter-team.exe"
 	var expected := {
 		"nonce": nonce,
 		"request_id": "request-7",
 		"instance_id": "instance-3",
 		"old_pid": 1234,
+		"old_exe_path": canonical_exe,
+		"handoff_exe_path": canonical_exe,
 		"manifest_sha256": manifest_sha,
 		"candidate_sha256": new_sha,
 	}
 	var ready := expected.duplicate(true)
 	ready.merge({"schema": WindowsProtocol.SCHEMA,
 		"type": WindowsProtocol.FRAME_READY, "ok": true,
-		"old_started": "1785000000000"})
+		"old_started": "1785000000000", "handoff_pid": 5678,
+		"handoff_started": "1785000000001"})
 	var ready_wire: Dictionary = JSON.parse_string(JSON.stringify(ready))
 	_check("ready JSON reale lega nonce/processo/manifest/candidato",
 			WindowsProtocol.ready_frame_matches(ready_wire, expected), str(ready_wire))
 	for field: String in ["nonce", "request_id", "instance_id", "old_started",
+			"old_exe_path", "handoff_pid", "handoff_started", "handoff_exe_path",
 			"manifest_sha256", "candidate_sha256"]:
 		var stale := ready_wire.duplicate(true)
 		stale[field] = "fossile"
@@ -323,6 +328,20 @@ func _protocollo_windows() -> void:
 	ready_coerced["old_pid"] = "1234"
 	_check("tipi JSON ready non vengono coercizzati",
 			not WindowsProtocol.ready_frame_matches(ready_coerced, expected), "")
+	var handoff := {"schema": 1, "action": "quit", "nonce": nonce,
+			"request_id": "request-7", "instance_id": "instance-3",
+			"exe_path": canonical_exe, "pid": 5678,
+			"process_started_utc_ticks": "1785000000001"}
+	_check("handoff recovery lega READY e tuple processo exact",
+			WindowsProtocol.recovery_handoff_matches(handoff, ready_wire, nonce,
+					5678, "1785000000001", canonical_exe), str(handoff))
+	for field: String in ["nonce", "request_id", "instance_id", "exe_path",
+			"pid", "process_started_utc_ticks"]:
+		var stale_handoff := handoff.duplicate(true)
+		stale_handoff[field] = 9999 if field == "pid" else "stale"
+		_check("handoff stale rifiutato: " + field,
+				not WindowsProtocol.recovery_handoff_matches(stale_handoff, ready_wire,
+						nonce, 5678, "1785000000001", canonical_exe), "")
 
 	var exe_path := "C:/Program Files/Job Hunter Team/job-hunter-team.exe"
 	var started := "638901234567890123"
@@ -359,6 +378,12 @@ func _protocollo_windows() -> void:
 			and WindowsProtocol.health_capability_path(
 					"C:/runtime/updates/../%s/health.json" % nonce, nonce) == ""
 			and WindowsProtocol.health_capability_path(capability, "2".repeat(32)) == "", "")
+	var handoff_capability := capability.get_base_dir().path_join("handoff.json")
+	_check("capability handoff e fissa e legata allo stesso nonce",
+			WindowsProtocol.recovery_handoff_capability_path(
+					handoff_capability, nonce) == handoff_capability
+			and WindowsProtocol.recovery_handoff_capability_path(
+					capability, nonce) == "", handoff_capability)
 
 	var journal_native := {
 		"schema": WindowsProtocol.SCHEMA,
@@ -423,6 +448,9 @@ func _protocollo_windows() -> void:
 	_check("result fase/codice incoerenti rifiutati",
 			not WindowsProtocol.result_frame_matches(mismatched_result, nonce), "")
 	for recovery_failure: String in ["recovery_restart_failed",
+			"recovery_restart_handoff_ready_failed",
+			"recovery_restart_release_failed",
+			"recovery_target_process_count_failed",
 			"recovery_result_write_failed"]:
 		var rollback_failure := {"schema": 1, "ok": false, "phase": "rollback",
 				"code": recovery_failure, "nonce": nonce, "rolled_back": true}
@@ -431,6 +459,12 @@ func _protocollo_windows() -> void:
 		rollback_failure["rolled_back"] = false
 		_check("result rollback durevole richiede rolled_back",
 				not WindowsProtocol.result_frame_matches(rollback_failure, nonce), "")
+	for handoff_failure: String in ["recovery_handoff_identity_failed",
+			"recovery_handoff_ready_failed", "recovery_handoff_wait_failed"]:
+		var handoff_result := {"schema": 1, "ok": false, "phase": "failed",
+				"code": handoff_failure, "nonce": nonce, "rolled_back": false}
+		_check("result handoff fallisce chiuso " + handoff_failure,
+				WindowsProtocol.result_frame_matches(handoff_result, nonce), "")
 
 	var fake_plan := {
 		"installed_helper": "C:\\Program Files\\Job Hunter Team\\jht-windows-update.ps1",
@@ -802,7 +836,13 @@ func _source_gate_windows() -> void:
 			and service_source.count(
 					"DirAccess.remove_absolute(stale_result)") == 1
 			and "FileAccess.file_exists(stale_result)" in service_source
-			and "DirAccess.dir_exists_absolute(stale_result)" in service_source, "")
+			and "DirAccess.dir_exists_absolute(stale_result)" in service_source
+			and "WindowsClient.recovery_candidate_authority" in service_source
+			and "WindowsProtocol.ready_frame_matches(ready, expected)" in service_source
+			and "WindowsProtocol.recovery_handoff_matches(frame, ready" in service_source
+			and "JHT_UPDATE_HANDOFF_PATH" in service_source
+			and "helper_owns_handoff and journal_exists" in service_source
+			and service_source.count("Game.detach_from_cli()") >= 2, "")
 	_check("health PCK conserva il log precreato current-only",
 			"JHT_WINDOWS_UPDATE_HEALTH_BOOT_TEST" in log_source
 			and "FileAccess.file_exists(live) and not health_gate" in log_source, "")

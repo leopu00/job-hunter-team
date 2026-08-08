@@ -42,6 +42,7 @@ $TxnDir = Join-Path $StateRoot $Nonce
 $JournalPath = Join-Path $TxnDir 'journal.json'
 $ReadyPath = Join-Path $TxnDir 'ready.json'
 $HealthPath = Join-Path $TxnDir 'health.json'
+$HandoffPath = Join-Path $TxnDir 'handoff.json'
 $ResultPath = Join-Path $TxnDir 'result.json'
 $FloorPath = Join-Path $StateRoot 'committed-floor.json'
 $LockPath = Join-Path $StateRoot '.update.lock'
@@ -1252,6 +1253,203 @@ function Get-ObservedProcess {
   } catch { return $null }
 }
 
+function Get-TargetProcessSet {
+  $target = [IO.Path]::GetFullPath($TargetPath)
+  $found = New-Object 'System.Collections.Generic.List[object]'
+  foreach ($process in @(Get-Process -ErrorAction Stop)) {
+    try {
+      $actual = [IO.Path]::GetFullPath($process.MainModule.FileName)
+      if ($actual.Equals($target, [StringComparison]::OrdinalIgnoreCase)) {
+        $started = $process.StartTime.ToUniversalTime().Ticks.ToString()
+        $found.Add([pscustomobject]@{ Process = $process; Started = $started })
+      }
+    } catch { }
+  }
+  $found.ToArray()
+}
+
+function Get-ProcessIdentityKey {
+  param([Diagnostics.Process]$Process, [string]$Started)
+  return ([string]$Process.Id + ':' + $Started)
+}
+
+function Get-CanonicalExecutableText {
+  param([string]$Path)
+  return ([IO.Path]::GetFullPath($Path)).Replace('\','/').ToLowerInvariant()
+}
+
+function Assert-RecoveryCallerProcessSet {
+  param([hashtable]$Caller, [object]$Journal)
+  $allowed = @{}
+  $callerKey = Get-ProcessIdentityKey $Caller.Process ([string]$Caller.Started)
+  $allowed[$callerKey] = $true
+  $candidate = Get-ExactProcess ([int]$Journal.candidate_pid) `
+    ([string]$Journal.candidate_started) $TargetPath
+  if ($candidate) {
+    $candidateStarted = $candidate.StartTime.ToUniversalTime().Ticks.ToString()
+    $allowed[(Get-ProcessIdentityKey $candidate $candidateStarted)] = $true
+  }
+  $callerSeen = $false
+  foreach ($identity in @(Get-TargetProcessSet)) {
+    $key = Get-ProcessIdentityKey $identity.Process ([string]$identity.Started)
+    if (-not $allowed.ContainsKey($key)) {
+      throw 'an unowned target process blocks recovery handoff'
+    }
+    if ($key -ceq $callerKey) { $callerSeen = $true }
+  }
+  if (-not $callerSeen) { throw 'recovery caller identity disappeared' }
+  if ($candidate) {
+    return @{ Process = $candidate; Started = $candidateStarted }
+  }
+  return $Caller
+}
+
+function Wait-RecoveryCallerHandoff {
+  param([object]$Journal, [object]$Candidate, [object]$CandidateDesktop)
+  $script:FailurePhase = 'failed'
+  $script:FailureCode = 'recovery_handoff_identity_failed'
+  if ($RequestId -notmatch '^recover-[0-9a-f]{24}$' -or
+      $InstanceId -notmatch '^instance-[0-9a-f]{24}$') {
+    throw 'recovery handoff tokens are invalid'
+  }
+  $caller = Get-ObservedProcess $OldPid $TargetPath $OldStartedUtcTicks
+  if (-not $caller) { throw 'recovery caller identity is invalid' }
+  $handoff = Assert-RecoveryCallerProcessSet $caller $Journal
+  $canonicalTarget = Get-CanonicalExecutableText $TargetPath
+  $script:FailureCode = 'recovery_handoff_ready_failed'
+  Write-AtomicJson $ReadyPath @{
+    schema = 1; type = 'ready'; ok = $true; nonce = $Nonce
+    request_id = $RequestId; instance_id = $InstanceId
+    old_pid = $OldPid; old_started = [string]$caller.Started
+    old_exe_path = $canonicalTarget
+    handoff_pid = $handoff.Process.Id
+    handoff_started = [string]$handoff.Started
+    handoff_exe_path = $canonicalTarget
+    manifest_sha256 = [string]$Candidate.Sha256
+    candidate_sha256 = [string]$CandidateDesktop.sha256
+  }
+  $script:FailureCode = 'recovery_handoff_wait_failed'
+  if (-not $caller.Process.WaitForExit(60000)) {
+    throw 'recovery caller did not complete voluntary handoff'
+  }
+}
+
+function Assert-ExactlyOneTargetProcess {
+  param([Diagnostics.Process]$Expected, [string]$ExpectedStarted)
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_target_process_count_failed'
+  $processes = @(Get-TargetProcessSet)
+  if ($processes.Count -ne 1) { throw 'recovery did not leave exactly one target process' }
+  $actual = $processes[0]
+  if ((Get-ProcessIdentityKey $actual.Process ([string]$actual.Started)) -cne
+      (Get-ProcessIdentityKey $Expected $ExpectedStarted)) {
+    throw 'recovery target process identity changed'
+  }
+}
+
+function Read-AttestedReadyFrame {
+  $ready = Read-ProtectedJsonFile $ReadyPath -ExactCurrentOnly
+  $keys = @('candidate_sha256','handoff_exe_path','handoff_pid',
+    'handoff_started','instance_id','manifest_sha256','nonce','ok','old_exe_path',
+    'old_pid','old_started','request_id','schema','type')
+  $canonicalTarget = Get-CanonicalExecutableText $TargetPath
+  if (-not $ready -or -not (Test-ExactProperties $ready $keys) -or
+      -not (Test-JsonInteger $ready.schema) -or [int64]$ready.schema -ne 1 -or
+      $ready.type -cne 'ready' -or $ready.ok -ne $true -or
+      $ready.nonce -cne $Nonce -or $ready.request_id -cne $RequestId -or
+      $ready.instance_id -cne $InstanceId -or
+      (($Mode -eq 'Recover' -and $ready.request_id -notmatch '^recover-[0-9a-f]{24}$') -or
+       ($Mode -eq 'Apply' -and $ready.request_id -notmatch '^apply-[0-9a-f]{24}$')) -or
+      $ready.instance_id -notmatch '^instance-[0-9a-f]{24}$' -or
+      -not (Test-JsonInteger $ready.old_pid) -or [int]$ready.old_pid -ne $OldPid -or
+      [string]$ready.old_started -notmatch '^[0-9]{10,20}$' -or
+      [string]$ready.old_exe_path -cne $canonicalTarget -or
+      -not (Test-JsonInteger $ready.handoff_pid) -or [int]$ready.handoff_pid -le 0 -or
+      [string]$ready.handoff_started -notmatch '^[0-9]{10,20}$' -or
+      [string]$ready.handoff_exe_path -cne $canonicalTarget -or
+      [string]$ready.manifest_sha256 -notmatch '^[0-9a-f]{64}$' -or
+      [string]$ready.candidate_sha256 -notmatch '^[0-9a-f]{64}$') {
+    throw 'recovery ready handoff frame is invalid'
+  }
+  return $ready
+}
+
+function Set-ReadyHandoffProcess {
+  param([Diagnostics.Process]$Process, [string]$Started)
+  $ready = Read-AttestedReadyFrame
+  $value = @{}
+  foreach ($property in $ready.PSObject.Properties) {
+    $value[$property.Name] = $property.Value
+  }
+  $value['handoff_pid'] = $Process.Id
+  $value['handoff_started'] = $Started
+  $value['handoff_exe_path'] = Get-CanonicalExecutableText $TargetPath
+  Write-AtomicJson $ReadyPath $value
+}
+
+function Restore-EnvironmentValue {
+  param([string]$Name, [AllowNull()][object]$Value)
+  $path = 'Env:' + $Name
+  if ($null -eq $Value) {
+    Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+  } else {
+    Set-Item -LiteralPath $path -Value ([string]$Value) -ErrorAction Stop
+  }
+  $actual = [Environment]::GetEnvironmentVariable($Name, 'Process')
+  if ($null -eq $Value) {
+    if ($null -ne $actual) { throw 'environment restore readback expected absent' }
+  } elseif ($null -eq $actual -or
+      [StringComparer]::Ordinal.Compare($actual, [string]$Value) -ne 0) {
+    throw 'environment restore readback mismatch'
+  }
+}
+
+function Start-RecoveredTarget {
+  param([object]$Journal)
+  Stop-JournalCandidate $Journal
+  Remove-ProtectedFileIfPresent $HandoffPath
+  $previousHandoff = $env:JHT_UPDATE_HANDOFF_PATH
+  $env:JHT_UPDATE_HANDOFF_PATH = $HandoffPath
+  $suspended = $null
+  $environmentRestored = $false
+  try {
+    try {
+      $suspended = [JhtSuspendedProcess]::Create([IO.Path]::GetFullPath($TargetPath))
+      $process = Get-Process -Id $suspended.ProcessId -ErrorAction Stop
+      $started = $process.StartTime.ToUniversalTime().Ticks.ToString()
+      $currentJournal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
+      Update-JournalProcess $currentJournal $process.Id $started
+      $script:FailurePhase = 'recovery'
+      $script:FailureCode = 'recovery_restart_handoff_ready_failed'
+      Set-ReadyHandoffProcess $process $started
+      $script:FailureCode = 'recovery_restart_failed'
+      $suspended.Resume()
+      $script:FailureCode = 'recovery_restart_env_restore_failed'
+      Restore-EnvironmentValue 'JHT_UPDATE_HANDOFF_PATH' $previousHandoff
+      $environmentRestored = $true
+    } catch {
+      if (-not $environmentRestored) {
+        try {
+          Restore-EnvironmentValue 'JHT_UPDATE_HANDOFF_PATH' $previousHandoff
+          $environmentRestored = $true
+        } catch {
+          $script:FailurePhase = 'recovery'
+          $script:FailureCode = 'recovery_restart_env_restore_failed'
+          throw
+        }
+      }
+      throw
+    }
+    Assert-ExactlyOneTargetProcess $process $started
+    $script:FailureCode = 'recovery_restart_release_failed'
+    $suspended.ReleaseOwnership()
+    $script:ProcessOwnershipTransferred = $true
+    return $process
+  } finally {
+    if ($suspended) { $suspended.Dispose() }
+  }
+}
+
 function Acquire-Lock {
   for ($attempt = 0; $attempt -lt 3; $attempt++) {
     $claim = Join-Path $StateRoot ('.update-claim-' + [guid]::NewGuid().ToString('N'))
@@ -1590,9 +1788,27 @@ function Copy-AtomicVerified {
 function Stop-JournalCandidate {
   param([object]$Journal)
   $process = Get-ExactProcess ([int]$Journal.candidate_pid) ([string]$Journal.candidate_started) $TargetPath
-  if (-not $process) { return }
-  try { $null = $process.CloseMainWindow(); if ($process.WaitForExit(5000)) { return } } catch { }
-  try { $process.Kill(); $null = $process.WaitForExit(5000) } catch { }
+  if (-not $process) { Remove-ProtectedFileIfPresent $HandoffPath; return }
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_candidate_handoff_failed'
+  $ready = Read-AttestedReadyFrame
+  $canonicalTarget = Get-CanonicalExecutableText $TargetPath
+  if ([int]$ready.handoff_pid -ne $process.Id -or
+      [string]$ready.handoff_started -cne [string]$Journal.candidate_started -or
+      [string]$ready.handoff_exe_path -cne $canonicalTarget) {
+    throw 'journal candidate handoff was not attested before caller exit'
+  }
+  Remove-ProtectedFileIfPresent $HandoffPath
+  Write-AtomicJson $HandoffPath @{
+    schema = 1; action = 'quit'; nonce = $Nonce
+    request_id = $RequestId; instance_id = $InstanceId
+    exe_path = $canonicalTarget; pid = $process.Id
+    process_started_utc_ticks = [string]$Journal.candidate_started
+  }
+  if (-not $process.WaitForExit(30000)) {
+    throw 'journal candidate refused authenticated recovery handoff'
+  }
+  Remove-ProtectedFileIfPresent $HandoffPath
 }
 
 function Backup-OldAuthority {
@@ -1708,7 +1924,7 @@ function Invoke-Rollback {
   Set-RollbackCommitted $Bundle
   $script:FailurePhase = 'recovery'
   $script:FailureCode = 'recovery_restart_failed'
-  Start-Process -FilePath ([IO.Path]::GetFullPath($TargetPath)) | Out-Null
+  $null = Start-RecoveredTarget $Journal
   Write-Result $false 'rollback' $Code $true `
     -WriteFailurePhase 'recovery' `
     -WriteFailureCode 'recovery_result_write_failed'
@@ -1747,38 +1963,54 @@ function Start-RecoveryHealthProbe {
   $script:FailureCode = 'recovery_health_capability_init_failed'
   Initialize-HealthCapability
   $script:FailureCode = 'recovery_health_process_failed'
+  Remove-ProtectedFileIfPresent $HandoffPath
   $previousNonce = $env:JHT_UPDATE_NONCE; $previousHealth = $env:JHT_UPDATE_HEALTH_PATH
+  $previousHandoff = $env:JHT_UPDATE_HANDOFF_PATH
   $env:JHT_UPDATE_NONCE = $Nonce; $env:JHT_UPDATE_HEALTH_PATH = $HealthPath
-  $suspended = $null; $process = $null
+  $env:JHT_UPDATE_HANDOFF_PATH = $HandoffPath
+  $suspended = $null; $process = $null; $lease = $null
+  $environmentRestored = $false
   try {
     $suspended = [JhtSuspendedProcess]::Create([IO.Path]::GetFullPath($TargetPath))
     $process = Get-Process -Id $suspended.ProcessId -ErrorAction Stop
     $started = $process.StartTime.ToUniversalTime().Ticks.ToString()
     Update-JournalProcess $Journal $process.Id $started
     $script:FailurePhase = 'recovery'
+    $script:FailureCode = 'recovery_probe_handoff_ready_failed'
+    Set-ReadyHandoffProcess $process $started
+    $script:FailurePhase = 'recovery'
     $script:FailureCode = 'recovery_health_resume_failed'
     $suspended.Resume()
-    $script:FailureCode = 'recovery_health_release_failed'
-    $suspended.ReleaseOwnership()
-  } catch {
-    if ($process) { try { $process.Kill(); $null = $process.WaitForExit(5000) } catch { } }
-    throw
+    $script:FailureCode = 'recovery_health_validate_failed'
+    $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    do {
+      Start-Sleep -Milliseconds 200
+      if (Test-CandidateHealth $Bundle $process $started) {
+        $lease = @{ Suspended = $suspended; Process = $process; Started = $started }
+        break
+      }
+      if ($process.HasExited) { break }
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if ($null -eq $lease) { throw 'candidate health is not recoverable for commit' }
   } finally {
-    if ($suspended) { $suspended.Dispose() }
-    if ($null -eq $previousNonce) { Remove-Item Env:JHT_UPDATE_NONCE -ErrorAction SilentlyContinue } else { $env:JHT_UPDATE_NONCE = $previousNonce }
-    if ($null -eq $previousHealth) { Remove-Item Env:JHT_UPDATE_HEALTH_PATH -ErrorAction SilentlyContinue } else { $env:JHT_UPDATE_HEALTH_PATH = $previousHealth }
+    $restoreComplete = $false
+    try {
+      Restore-EnvironmentValue 'JHT_UPDATE_NONCE' $previousNonce
+      Restore-EnvironmentValue 'JHT_UPDATE_HEALTH_PATH' $previousHealth
+      Restore-EnvironmentValue 'JHT_UPDATE_HANDOFF_PATH' $previousHandoff
+      $restoreComplete = $true
+      $environmentRestored = $true
+    } catch {
+      $script:FailurePhase = 'recovery'
+      $script:FailureCode = 'recovery_health_env_restore_failed'
+      throw
+    } finally {
+      if (-not $restoreComplete -or $null -eq $lease) {
+        if ($suspended) { $suspended.Dispose() }
+      }
+    }
   }
-  $script:FailurePhase = 'recovery'
-  $script:FailureCode = 'recovery_health_validate_failed'
-  $deadline = [DateTime]::UtcNow.AddSeconds(30)
-  do {
-    Start-Sleep -Milliseconds 200
-    if (Test-CandidateHealth $Bundle $process $started) { return $true }
-    if ($process.HasExited) { break }
-  } while ([DateTime]::UtcNow -lt $deadline)
-  $currentJournal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
-  if ($currentJournal) { Stop-JournalCandidate $currentJournal }
-  return $false
+  return $lease
 }
 
 function Invoke-Apply {
@@ -1805,7 +2037,17 @@ function Invoke-Apply {
   Write-Journal 'prepared' $bundle
   $script:FailurePhase = 'ready'
   $script:FailureCode = 'ready_write_failed'
-  Write-AtomicJson $ReadyPath @{ schema = 1; type = 'ready'; ok = $true; nonce = $Nonce; request_id = $RequestId; instance_id = $InstanceId; old_pid = $OldPid; old_started = $observedOldStarted; manifest_sha256 = [string]$bundle.Candidate.Sha256; candidate_sha256 = [string]$bundle.New.sha256 }
+  $canonicalTarget = Get-CanonicalExecutableText $TargetPath
+  Write-AtomicJson $ReadyPath @{
+    schema = 1; type = 'ready'; ok = $true; nonce = $Nonce
+    request_id = $RequestId; instance_id = $InstanceId
+    old_pid = $OldPid; old_started = $observedOldStarted
+    old_exe_path = $canonicalTarget
+    handoff_pid = $OldPid; handoff_started = $observedOldStarted
+    handoff_exe_path = $canonicalTarget
+    manifest_sha256 = [string]$bundle.Candidate.Sha256
+    candidate_sha256 = [string]$bundle.New.sha256
+  }
   if ($Mode -eq 'Verify') { Write-Result $true 'ready' 'verified'; return }
   $script:FailurePhase = 'process'
   $script:FailureCode = 'process_old_wait_failed'
@@ -1832,49 +2074,82 @@ function Invoke-Apply {
   $script:FailureCode = 'health_capability_init_failed'
   Initialize-HealthCapability
   $script:FailureCode = 'health_process_start_failed'
+  Remove-ProtectedFileIfPresent $HandoffPath
   $previousNonce = $env:JHT_UPDATE_NONCE; $previousHealth = $env:JHT_UPDATE_HEALTH_PATH
+  $previousHandoff = $env:JHT_UPDATE_HANDOFF_PATH
   $env:JHT_UPDATE_NONCE = $Nonce; $env:JHT_UPDATE_HEALTH_PATH = $HealthPath
+  $env:JHT_UPDATE_HANDOFF_PATH = $HandoffPath
   $suspended = $null
+  $environmentRestored = $false
   try {
-    $suspended = [JhtSuspendedProcess]::Create([IO.Path]::GetFullPath($TargetPath))
-    $candidateProcess = Get-Process -Id $suspended.ProcessId -ErrorAction Stop
-    $candidateStarted = $candidateProcess.StartTime.ToUniversalTime().Ticks.ToString()
-    Write-Journal 'candidate_installed' $bundle $candidateProcess.Id $candidateStarted
+    try {
+      $suspended = [JhtSuspendedProcess]::Create([IO.Path]::GetFullPath($TargetPath))
+      $candidateProcess = Get-Process -Id $suspended.ProcessId -ErrorAction Stop
+      $candidateStarted = $candidateProcess.StartTime.ToUniversalTime().Ticks.ToString()
+      Write-Journal 'candidate_installed' $bundle $candidateProcess.Id $candidateStarted
+      $script:FailurePhase = 'health'
+      $script:FailureCode = 'health_handoff_ready_failed'
+      Set-ReadyHandoffProcess $candidateProcess $candidateStarted
+      $script:FailurePhase = 'health'
+      $script:FailureCode = 'health_process_resume_failed'
+      $suspended.Resume()
+      $script:FailureCode = 'health_env_restore_failed'
+      Restore-EnvironmentValue 'JHT_UPDATE_NONCE' $previousNonce
+      Restore-EnvironmentValue 'JHT_UPDATE_HEALTH_PATH' $previousHealth
+      Restore-EnvironmentValue 'JHT_UPDATE_HANDOFF_PATH' $previousHandoff
+      $environmentRestored = $true
+    } catch {
+      if (-not $environmentRestored) {
+        try {
+          Restore-EnvironmentValue 'JHT_UPDATE_NONCE' $previousNonce
+          Restore-EnvironmentValue 'JHT_UPDATE_HEALTH_PATH' $previousHealth
+          Restore-EnvironmentValue 'JHT_UPDATE_HANDOFF_PATH' $previousHandoff
+          $environmentRestored = $true
+        } catch {
+          $script:FailurePhase = 'health'
+          $script:FailureCode = 'health_env_restore_failed'
+          throw
+        }
+      }
+      throw
+    }
+    $deadline = [DateTime]::UtcNow.AddSeconds(30); $healthy = $false
+    $script:FailureCode = 'health_ack_failed'
+    do {
+      Start-Sleep -Milliseconds 200
+      if (Test-CandidateHealth $bundle $candidateProcess $candidateStarted) { $healthy = $true; break }
+      if ($candidateProcess.HasExited) { break }
+    } while ([DateTime]::UtcNow -lt $deadline)
+    $script:FailurePhase = 'journal'
+    $script:FailureCode = 'journal_health_read_failed'
+    $journal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
+    if (-not $healthy) {
+      $suspended.Dispose(); $suspended = $null
+      Invoke-Rollback $bundle $journal 'health_ack_failed'
+      return
+    }
+
+    Write-Journal 'health_acked' $bundle $candidateProcess.Id $candidateStarted
+    Backup-OldAuthority $bundle
+    Write-Journal 'authority_intent' $bundle $candidateProcess.Id $candidateStarted
+    Install-CandidateMetadata $bundle
+    Write-Journal 'metadata_installed' $bundle $candidateProcess.Id $candidateStarted
+    Write-Journal 'floor_intent' $bundle $candidateProcess.Id $candidateStarted
+    $script:FailurePhase = 'floor'
+    $script:FailureCode = 'floor_commit_failed'
+    Write-AtomicJson $FloorPath @{ schema = 1; sequence = [uint64]$bundle.Candidate.Value.sequence; version = [string]$bundle.Candidate.Value.version }
+    Write-Journal 'helper_intent' $bundle $candidateProcess.Id $candidateStarted
+    Install-CandidateHelper $bundle
+    Write-Journal 'committed' $bundle $candidateProcess.Id $candidateStarted
+    Complete-CommitCleanup -Context 'commit'
+    Assert-ExactlyOneTargetProcess $candidateProcess $candidateStarted
     $script:FailurePhase = 'health'
-    $script:FailureCode = 'health_process_resume_failed'
-    $suspended.Resume()
     $script:FailureCode = 'health_process_release_failed'
     $suspended.ReleaseOwnership()
+    $script:ProcessOwnershipTransferred = $true
   } finally {
     if ($suspended) { $suspended.Dispose() }
-    if ($null -eq $previousNonce) { Remove-Item Env:JHT_UPDATE_NONCE -ErrorAction SilentlyContinue } else { $env:JHT_UPDATE_NONCE = $previousNonce }
-    if ($null -eq $previousHealth) { Remove-Item Env:JHT_UPDATE_HEALTH_PATH -ErrorAction SilentlyContinue } else { $env:JHT_UPDATE_HEALTH_PATH = $previousHealth }
   }
-  $deadline = [DateTime]::UtcNow.AddSeconds(30); $healthy = $false
-  $script:FailureCode = 'health_ack_failed'
-  do {
-    Start-Sleep -Milliseconds 200
-    if (Test-CandidateHealth $bundle $candidateProcess $candidateStarted) { $healthy = $true; break }
-    if ($candidateProcess.HasExited) { break }
-  } while ([DateTime]::UtcNow -lt $deadline)
-  $script:FailurePhase = 'journal'
-  $script:FailureCode = 'journal_health_read_failed'
-  $journal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
-  if (-not $healthy) { Invoke-Rollback $bundle $journal 'health_ack_failed'; return }
-
-  Write-Journal 'health_acked' $bundle $candidateProcess.Id $candidateStarted
-  Backup-OldAuthority $bundle
-  Write-Journal 'authority_intent' $bundle $candidateProcess.Id $candidateStarted
-  Install-CandidateMetadata $bundle
-  Write-Journal 'metadata_installed' $bundle $candidateProcess.Id $candidateStarted
-  Write-Journal 'floor_intent' $bundle $candidateProcess.Id $candidateStarted
-  $script:FailurePhase = 'floor'
-  $script:FailureCode = 'floor_commit_failed'
-  Write-AtomicJson $FloorPath @{ schema = 1; sequence = [uint64]$bundle.Candidate.Value.sequence; version = [string]$bundle.Candidate.Value.version }
-  Write-Journal 'helper_intent' $bundle $candidateProcess.Id $candidateStarted
-  Install-CandidateHelper $bundle
-  Write-Journal 'committed' $bundle $candidateProcess.Id $candidateStarted
-  Complete-CommitCleanup -Context 'commit'
   Write-Result $true 'committed' 'updated'
 }
 
@@ -1957,19 +2232,37 @@ function Invoke-Recover {
   $journalKeys = @('candidate_helper_sha256','candidate_manifest_sha256','candidate_pid','candidate_sha256','candidate_signature_sha256','candidate_started','installed_sequence','installed_version','nonce','old_helper_sha256','old_manifest_sha256','old_sha256','old_signature_sha256','schema','state','target_sequence','target_version')
   $journalShapeOk = $journal -and (Test-ExactProperties $journal $journalKeys) -and (Test-JsonInteger $journal.schema) -and [int64]$journal.schema -eq 1
   $candidateIdentityMatches = $journalShapeOk -and $journal.nonce -ceq $Nonce -and $journal.target_version -ceq [string]$candidate.Value.version -and [string]$journal.target_sequence -ceq [string]$candidate.Value.sequence -and $journal.candidate_sha256 -ceq [string]$candidateDesktop.sha256 -and $journal.candidate_helper_sha256 -ceq [string]$candidateHelper.sha256 -and $journal.candidate_manifest_sha256 -ceq [string]$candidate.Sha256 -and $journal.candidate_signature_sha256 -ceq $candidateSignatureSha256
+  if (-not $candidateIdentityMatches) { throw 'recovery journal identity is invalid' }
   $script:FailureCode = 'recovery_floor_read_failed'
   $floor = Read-Floor
-  if ($candidateIdentityMatches -and @('metadata_installed','floor_intent','helper_intent','committed') -ccontains [string]$journal.state -and $floor -and [uint64]$floor.sequence -ge [uint64]$candidate.Value.sequence -and (Get-Sha256 $TargetPath) -ceq [string]$candidateDesktop.sha256) {
-    $active = $null
-    try { $active = Read-VerifiedManifest $InstalledManifestPath $InstalledSignaturePath } catch { }
-    if ($active -and $active.Sha256 -ceq [string]$candidate.Sha256) {
+  $active = $null
+  try { $active = Read-VerifiedManifest $InstalledManifestPath $InstalledSignaturePath } catch { }
+  $completeCommit = @('metadata_installed','floor_intent','helper_intent','committed') -ccontains [string]$journal.state -and $floor -and [uint64]$floor.sequence -ge [uint64]$candidate.Value.sequence -and (Get-Sha256 $TargetPath) -ceq [string]$candidateDesktop.sha256 -and $active -and $active.Sha256 -ceq [string]$candidate.Sha256
+  $bundle = $null
+  $oldIntact = $false
+  if (-not $completeCommit) {
+    $bundle = Get-RecoveryBundle
+    $script:FailurePhase = 'recovery'
+    $script:FailureCode = 'recovery_journal_validate_failed'
+    Assert-Journal $journal $bundle
+    $targetHash = Get-Sha256 $TargetPath
+    $helperHash = Get-Sha256 $PSCommandPath
+    if ($floor -and [uint64]$floor.sequence -ge [uint64]$bundle.Candidate.Value.sequence) {
+      throw 'committed floor forbids rollback to the previous version'
+    }
+    $oldIntact = $targetHash -ceq [string]$bundle.Old.sha256 -and `
+      $helperHash -ceq [string]$bundle.OldHelper.sha256 -and `
+      @('prepared','rolled_back') -ccontains [string]$journal.state
+  }
+  if ($Mode -eq 'Recover') {
+    Wait-RecoveryCallerHandoff $journal $candidate $candidateDesktop
+  }
+  if ($completeCommit) {
       $healthBundle = @{ Candidate = $candidate; New = $candidateDesktop }
-      $script:FailureCode = 'recovery_health_validate_failed'
-      $candidateProcess = Get-ExactProcess ([int]$journal.candidate_pid) ([string]$journal.candidate_started) $TargetPath
-      $healthy = $candidateProcess -and (Test-CandidateHealth $healthBundle $candidateProcess ([string]$journal.candidate_started))
-      if (-not $healthy) { $healthy = Start-RecoveryHealthProbe $healthBundle $journal }
-      if (-not $healthy) { throw 'candidate health is not recoverable for commit' }
-      if ($healthy) {
+      $healthLease = Start-RecoveryHealthProbe $healthBundle $journal
+      try {
+        $healthyProcess = $healthLease.Process
+        $healthyStarted = [string]$healthLease.Started
         $script:FailureCode = 'recovery_journal_refresh_failed'
         $journal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
         if ((Get-Sha256 $PSCommandPath) -cne [string]$candidateHelper.sha256) {
@@ -1981,23 +2274,35 @@ function Invoke-Recover {
         }
         Update-JournalState $journal 'committed' ([int]$journal.candidate_pid) ([string]$journal.candidate_started)
         Complete-CommitCleanup -Context 'recovery'
-        Write-Result $true 'committed' 'interrupted_commit_completed' $false `
+        Assert-ExactlyOneTargetProcess $healthyProcess $healthyStarted
+        $script:FailurePhase = 'recovery'
+        $script:FailureCode = 'recovery_health_release_failed'
+        $healthLease.Suspended.ReleaseOwnership()
+        $script:ProcessOwnershipTransferred = $true
+      } finally {
+        if ($healthLease -and $healthLease.Suspended) { $healthLease.Suspended.Dispose() }
+      }
+      Write-Result $true 'committed' 'interrupted_commit_completed' $false `
+        -WriteFailurePhase 'recovery' `
+        -WriteFailureCode 'recovery_result_write_failed'
+      return
+  }
+  if ($oldIntact) {
+    if ($Mode -eq 'Apply') {
+      $existingCaller = Get-ObservedProcess $OldPid $TargetPath $OldStartedUtcTicks
+      if ($existingCaller) {
+        Assert-ExactlyOneTargetProcess $existingCaller.Process `
+          ([string]$existingCaller.Started)
+        $script:ProcessOwnershipTransferred = $true
+        Write-Result $true 'recovered' 'old_version_intact' `
+          ($journal.state -ceq 'rolled_back') `
           -WriteFailurePhase 'recovery' `
           -WriteFailureCode 'recovery_result_write_failed'
         return
       }
     }
-  }
-  $bundle = Get-RecoveryBundle
-  $script:FailurePhase = 'recovery'
-  $script:FailureCode = 'recovery_journal_validate_failed'
-  Assert-Journal $journal $bundle
-  $targetHash = Get-Sha256 $TargetPath
-  $helperHash = Get-Sha256 $PSCommandPath
-  $script:FailureCode = 'recovery_floor_read_failed'
-  $floor = Read-Floor
-  if ($floor -and [uint64]$floor.sequence -ge [uint64]$bundle.Candidate.Value.sequence) { throw 'committed floor forbids rollback to the previous version' }
-  if ($targetHash -ceq [string]$bundle.Old.sha256 -and $helperHash -ceq [string]$bundle.OldHelper.sha256 -and @('prepared','rolled_back') -ccontains [string]$journal.state) {
+    $script:FailureCode = 'recovery_restart_failed'
+    $null = Start-RecoveredTarget $journal
     Write-Result $true 'recovered' 'old_version_intact' `
       ($journal.state -ceq 'rolled_back') `
       -WriteFailurePhase 'recovery' `
@@ -2008,6 +2313,7 @@ function Invoke-Recover {
 }
 
 $script:RollbackCommitted = $false
+$script:ProcessOwnershipTransferred = $false
 $exitCode = 1
 $lockHeld = $false
 try {
@@ -2040,7 +2346,7 @@ try {
   if ($lockHeld) {
     $failedPhase = $script:FailurePhase
     $failedCode = $script:FailureCode
-    if ($Mode -ne 'Recover' -and
+    if ($Mode -ne 'Recover' -and -not $script:ProcessOwnershipTransferred -and
         (Test-Path -LiteralPath $JournalPath -PathType Leaf)) {
       try { Invoke-Recover } catch { $failedPhase = $script:FailurePhase; $failedCode = $script:FailureCode }
     }

@@ -19,7 +19,10 @@ const RESULT_PHASES: Array[String] = ["ready", "committed", "recovered", "rollba
 const RESULT_CODES: Array[String] = ["verified", "updated",
 		"interrupted_commit_completed", "old_version_intact", "health_ack_failed",
 		"interrupted_update_recovered", "recovery_restart_failed",
-		"recovery_result_write_failed", "old_process_timeout", "update_failed"]
+		"recovery_restart_handoff_ready_failed", "recovery_restart_release_failed",
+		"recovery_result_write_failed", "recovery_handoff_identity_failed",
+		"recovery_handoff_ready_failed", "recovery_handoff_wait_failed",
+		"recovery_target_process_count_failed", "old_process_timeout", "update_failed"]
 
 const JOURNAL_PREPARED := "prepared"
 const JOURNAL_SWAP_INTENT := "swap_intent"
@@ -89,6 +92,14 @@ static func _decimal(value: String) -> bool:
 	return true
 
 
+static func _canonical_windows_executable(value: String) -> String:
+	var path := value.replace("\\", "/")
+	if path.length() < 4 or path[1] != ":" or path[2] != "/" \
+			or path.split("/").has("..") or "\n" in path or "\r" in path:
+		return ""
+	return path.to_lower()
+
+
 static func _has_exact_keys(value: Dictionary, expected: Array[String]) -> bool:
 	if value.size() != expected.size():
 		return false
@@ -119,7 +130,8 @@ static func _json_integer(value: Dictionary, key: String, minimum: int) -> bool:
 ## non viene mai riusato dal helper come prova della firma.
 static func ready_frame_matches(frame: Dictionary, expected: Dictionary) -> bool:
 	return _has_exact_keys(frame, ["schema", "type", "ok", "nonce",
-			"request_id", "instance_id", "old_pid", "old_started",
+			"request_id", "instance_id", "old_pid", "old_started", "old_exe_path",
+			"handoff_pid", "handoff_started", "handoff_exe_path",
 			"manifest_sha256", "candidate_sha256"]) \
 			and _json_integer(frame, "schema", 1) \
 			and _has_type(frame, "type", TYPE_STRING) \
@@ -129,19 +141,28 @@ static func ready_frame_matches(frame: Dictionary, expected: Dictionary) -> bool
 			and _has_type(frame, "instance_id", TYPE_STRING) \
 			and _json_integer(frame, "old_pid", 1) \
 			and _has_type(frame, "old_started", TYPE_STRING) \
+			and _has_type(frame, "old_exe_path", TYPE_STRING) \
+			and _json_integer(frame, "handoff_pid", 1) \
+			and _has_type(frame, "handoff_started", TYPE_STRING) \
+			and _has_type(frame, "handoff_exe_path", TYPE_STRING) \
 			and _has_type(frame, "manifest_sha256", TYPE_STRING) \
 			and _has_type(frame, "candidate_sha256", TYPE_STRING) \
 			and _has_type(expected, "nonce", TYPE_STRING) \
 			and _has_type(expected, "request_id", TYPE_STRING) \
 			and _has_type(expected, "instance_id", TYPE_STRING) \
 			and _has_type(expected, "old_pid", TYPE_INT) \
+			and _has_type(expected, "old_exe_path", TYPE_STRING) \
+			and _has_type(expected, "handoff_exe_path", TYPE_STRING) \
 			and not expected.has("old_started") \
+			and not expected.has("handoff_pid") \
+			and not expected.has("handoff_started") \
 			and _has_type(expected, "manifest_sha256", TYPE_STRING) \
 			and _has_type(expected, "candidate_sha256", TYPE_STRING) \
 			and _valid_token(str(expected.get("request_id", ""))) \
 			and _valid_token(str(expected.get("instance_id", ""))) \
 			and int(expected.get("old_pid", 0)) > 0 \
 			and _decimal(str(frame.get("old_started", ""))) \
+			and _decimal(str(frame.get("handoff_started", ""))) \
 			and int(frame.get("schema", 0)) == SCHEMA \
 			and str(frame.get("type", "")) == FRAME_READY \
 			and bool(frame.get("ok", false)) \
@@ -150,6 +171,19 @@ static func ready_frame_matches(frame: Dictionary, expected: Dictionary) -> bool
 			and str(frame.get("request_id", "")) == str(expected.get("request_id", "")) \
 			and str(frame.get("instance_id", "")) == str(expected.get("instance_id", "")) \
 			and int(frame.get("old_pid", 0)) == int(expected.get("old_pid", -1)) \
+			and _canonical_windows_executable(str(expected.get("old_exe_path", ""))) != "" \
+			and _canonical_windows_executable(str(frame.get("old_exe_path", ""))) \
+					== _canonical_windows_executable(str(expected.get("old_exe_path", ""))) \
+			and str(frame.get("old_exe_path", "")) \
+					== _canonical_windows_executable(str(frame.get("old_exe_path", ""))) \
+			and int(frame.get("handoff_pid", 0)) > 0 \
+			and _canonical_windows_executable( \
+					str(expected.get("handoff_exe_path", ""))) != "" \
+			and _canonical_windows_executable(str(frame.get("handoff_exe_path", ""))) \
+					== _canonical_windows_executable( \
+							str(expected.get("handoff_exe_path", ""))) \
+			and str(frame.get("handoff_exe_path", "")) \
+					== _canonical_windows_executable(str(frame.get("handoff_exe_path", ""))) \
 			and valid_sha256(str(frame.get("manifest_sha256", ""))) \
 			and str(frame.get("manifest_sha256", "")) \
 					== str(expected.get("manifest_sha256", "")) \
@@ -176,6 +210,45 @@ static func health_frame(nonce: String, version: String, exe_path: String,
 		"pid": pid,
 		"process_started_utc_ticks": process_started_utc_ticks,
 	}
+
+
+static func recovery_handoff_matches(frame: Dictionary, ready: Dictionary,
+		nonce: String, pid: int, started: String, executable: String) -> bool:
+	var canonical_executable := _canonical_windows_executable(executable)
+	var ready_expected := {
+		"nonce": nonce,
+		"request_id": str(ready.get("request_id", "")),
+		"instance_id": str(ready.get("instance_id", "")),
+		"old_pid": int(ready.get("old_pid", 0)),
+		"old_exe_path": canonical_executable,
+		"handoff_exe_path": canonical_executable,
+		"manifest_sha256": str(ready.get("manifest_sha256", "")),
+		"candidate_sha256": str(ready.get("candidate_sha256", "")),
+	}
+	return canonical_executable != "" \
+			and ready_frame_matches(ready, ready_expected) \
+			and int(ready.get("handoff_pid", 0)) == pid \
+			and str(ready.get("handoff_started", "")) == started \
+			and _has_exact_keys(frame, ["schema", "action", "nonce", "request_id",
+					"instance_id", "exe_path", "pid",
+				"process_started_utc_ticks"]) \
+			and _json_integer(frame, "schema", 1) \
+			and _has_type(frame, "action", TYPE_STRING) \
+			and _has_type(frame, "nonce", TYPE_STRING) \
+			and _has_type(frame, "request_id", TYPE_STRING) \
+			and _has_type(frame, "instance_id", TYPE_STRING) \
+			and _has_type(frame, "exe_path", TYPE_STRING) \
+			and _json_integer(frame, "pid", 1) \
+			and _has_type(frame, "process_started_utc_ticks", TYPE_STRING) \
+			and int(frame.get("schema", 0)) == SCHEMA \
+			and str(frame.get("action", "")) == "quit" \
+			and valid_nonce(nonce) and str(frame.get("nonce", "")) == nonce \
+			and str(frame.get("request_id", "")) == str(ready.get("request_id", "")) \
+			and str(frame.get("instance_id", "")) == str(ready.get("instance_id", "")) \
+			and str(frame.get("exe_path", "")) == canonical_executable \
+			and pid > 0 and int(frame.get("pid", 0)) == pid \
+			and _decimal(started) \
+			and str(frame.get("process_started_utc_ticks", "")) == started
 
 
 static func health_frame_matches(frame: Dictionary, nonce: String,
@@ -237,8 +310,13 @@ static func result_frame_matches(frame: Dictionary, nonce: String) -> bool:
 			or (phase == "recovered" and code == "old_version_intact" and ok) \
 			or (phase == "rollback" and code in ["health_ack_failed",
 					"interrupted_update_recovered", "recovery_restart_failed",
+					"recovery_restart_handoff_ready_failed",
+					"recovery_restart_release_failed",
+					"recovery_target_process_count_failed",
 					"recovery_result_write_failed"] and not ok and rollback) \
-			or (phase == "failed" and code == "update_failed" and not ok \
+			or (phase == "failed" and code in ["update_failed",
+					"recovery_handoff_identity_failed", "recovery_handoff_ready_failed",
+					"recovery_handoff_wait_failed"] and not ok \
 					and not rollback)
 
 
@@ -256,6 +334,18 @@ static func health_capability_path(capability: String, nonce: String) -> String:
 		return ""
 	var expected_suffix := "/host-runtime/%s/health.json" % nonce
 	return path if path.ends_with(expected_suffix) else ""
+
+
+static func recovery_handoff_capability_path(capability: String, nonce: String) -> String:
+	var path := capability.replace("\\", "/")
+	var drive := path[0].to_upper() if not path.is_empty() else ""
+	if path.length() < 3 or path[1] != ":" or path[2] != "/" \
+			or drive not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
+			or "\n" in path or "\r" in path or path.split("/").has("..") \
+			or not valid_nonce(nonce):
+		return ""
+	var expected_suffix := "/host-runtime/%s/handoff.json" % nonce
+	return path if path.to_lower().ends_with(expected_suffix) else ""
 
 
 ## Recovery conservativa e idempotente. Non restituisce mai "apply": dopo un

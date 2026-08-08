@@ -101,6 +101,7 @@ var _windows_plan := {}
 var _windows_verified := {}
 var _windows_instance := ""
 var _check_manual := false
+var _windows_health_started := ""
 
 
 func _ready() -> void:
@@ -108,6 +109,9 @@ func _ready() -> void:
 	if _windows_health_protocol_requested():
 		_run_windows_health_protocol.call_deferred()
 		return
+	if OS.get_name() == "Windows" \
+			and OS.get_environment("JHT_UPDATE_HANDOFF_PATH").strip_edges() != "":
+		_watch_windows_recovery_handoff.call_deferred()
 	_start_normal_update_service()
 
 
@@ -144,7 +148,38 @@ func _run_windows_health_protocol() -> void:
 		get_tree().quit(1)
 		return
 	Game.complete_windows_health_boot(true)
+	_watch_windows_recovery_handoff.call_deferred()
 	_start_normal_update_service()
+
+
+func _watch_windows_recovery_handoff() -> void:
+	var raw_path := OS.get_environment("JHT_UPDATE_HANDOFF_PATH").strip_edges() \
+			.replace("\\", "/")
+	var health_path := OS.get_environment("JHT_UPDATE_HEALTH_PATH").strip_edges() \
+			.replace("\\", "/")
+	if raw_path == "" or raw_path.get_file().to_lower() != "handoff.json":
+		return
+	var transaction := raw_path.get_base_dir()
+	if health_path != "" and health_path.get_base_dir().to_lower() \
+			!= transaction.to_lower():
+		return
+	var ready_path := transaction.path_join("ready.json")
+	while is_inside_tree():
+		await get_tree().create_timer(0.1).timeout
+		var frame := WindowsClient.read_json(raw_path)
+		var ready := WindowsClient.read_json(ready_path)
+		var nonce := OS.get_environment("JHT_UPDATE_NONCE")
+		if nonce == "":
+			nonce = str(ready.get("nonce", ""))
+		if WindowsProtocol.recovery_handoff_capability_path(raw_path, nonce) == "":
+			continue
+		var started := _windows_health_started
+		if started == "":
+			started = str(ready.get("handoff_started", ""))
+		if WindowsProtocol.recovery_handoff_matches(frame, ready,
+				nonce, OS.get_process_id(), started, OS.get_executable_path()):
+			Game.detach_from_cli()
+			return
 
 
 func _boot() -> void:
@@ -445,11 +480,14 @@ func _download_exact(url: String, destination: String, max_bytes: int,
 
 
 func _helper_expected(request_id: String) -> Dictionary:
+	var executable := str(_windows_plan.get("target", "")).replace("\\", "/").to_lower()
 	return {
 		"nonce": str(_windows_plan.get("nonce", "")),
 		"request_id": request_id,
 		"instance_id": _windows_instance,
 		"old_pid": OS.get_process_id(),
+		"old_exe_path": executable,
+		"handoff_exe_path": executable,
 		"manifest_sha256": str(_windows_verified.get("manifest_sha256", "")),
 		"candidate_sha256": str(_windows_verified.get("artifacts", {}) \
 				.get(WindowsVerifier.ROLE_DESKTOP, {}).get("sha256", "")),
@@ -607,15 +645,26 @@ func _resume_windows_pending() -> void:
 	if _consume_windows_result(result):
 		return
 	var journal_exists := FileAccess.file_exists(str(plan["journal"]))
-	if current_version() == pending_version and journal_exists:
-		# Il nuovo processo ha gia scritto health; il helper sta completando il
-		# commit. Attendi la sua finestra, poi entra esplicitamente in Recover:
-		# dopo un power loss il result puo non arrivare mai da solo.
+	var helper_owns_handoff := OS.get_environment(
+			"JHT_UPDATE_HANDOFF_PATH").strip_edges() != ""
+	if helper_owns_handoff and journal_exists:
+		# Un target avviato sospeso dal helper non deve gareggiare con il helper
+		# che lo possiede ancora: prima consuma il result della stessa transazione.
 		for _attempt in 175:
 			await get_tree().create_timer(0.2).timeout
 			result = WindowsClient.read_json(str(plan["result"]))
 			if _consume_windows_result(result):
 				return
+	if current_version() == pending_version and journal_exists:
+		# Il nuovo processo ha gia scritto health; il helper sta completando il
+		# commit. Attendi la sua finestra, poi entra esplicitamente in Recover:
+		# dopo un power loss il result puo non arrivare mai da solo.
+		if not helper_owns_handoff:
+			for _attempt in 175:
+				await get_tree().create_timer(0.2).timeout
+				result = WindowsClient.read_json(str(plan["result"]))
+				if _consume_windows_result(result):
+					return
 		await _recover_windows(plan)
 		return
 	if WindowsClient.pending_boot_requires_recovery(current_version(),
@@ -644,17 +693,24 @@ func _resume_windows_pending() -> void:
 
 
 func _recover_windows(plan: Dictionary) -> void:
-	if not WindowsClient.recovery_authority_ready(plan, pending_version):
+	var candidate := WindowsClient.recovery_candidate_authority(plan, pending_version)
+	if candidate.is_empty() \
+			or not WindowsClient.recovery_authority_ready(plan, pending_version):
 		_fail("update.err_recovery")
 		return
 	var request_id := WindowsClient.request_token("recover")
 	var instance_id := WindowsClient.request_token("instance")
+	_windows_plan = plan
+	_windows_verified = candidate
+	_windows_instance = instance_id
+	var expected := _helper_expected(request_id)
 	var argv := WindowsClient.helper_argv("Recover", plan, OS.get_process_id(),
 			request_id, instance_id)
 	# A prior Verify/Apply frame is not evidence about this Recover invocation.
 	# Remove it before launch so an early non-zero helper exit cannot be consumed
 	# as stale READY while the new authoritative result is still absent.
 	var stale_result := str(plan["result"])
+	DirAccess.remove_absolute(str(plan["ready"]))
 	DirAccess.remove_absolute(stale_result)
 	if FileAccess.file_exists(stale_result) \
 			or DirAccess.dir_exists_absolute(stale_result):
@@ -668,6 +724,13 @@ func _recover_windows(plan: Dictionary) -> void:
 	var deadline := Time.get_ticks_msec() + 45000
 	while Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.2).timeout
+		var ready := WindowsClient.read_json(str(plan["ready"]))
+		if WindowsProtocol.ready_frame_matches(ready, expected):
+			# Il helper possiede ora PID+creation del caller e aspetta che questa
+			# istanza esca. Il team resta vivo; il target recovery diventa l'unico
+			# client soltanto dopo il teardown volontario di questo processo.
+			Game.detach_from_cli()
+			return
 		var result := WindowsClient.read_json(str(plan["result"]))
 		if _consume_windows_result(result):
 			return
@@ -871,6 +934,7 @@ func _write_windows_health_ack() -> String:
 			digest, candidate_pid, started)
 	if frame.is_empty():
 		return HEALTH_ACK_FRAME_INVALID
+	_windows_health_started = started
 	# Il helper precrea la capability con owner/DACL e identità già attestati.
 	# Scrivere in-place preserva quell'identità; il processo candidato non può
 	# sostituire il nodo privilegiato con un file materializzato dal checkout.

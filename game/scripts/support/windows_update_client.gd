@@ -122,11 +122,8 @@ static func recovery_authority_ready(update_plan: Dictionary,
 			or UpdateCheck.parse_version(pending_version).is_empty() \
 			or not FileAccess.file_exists(str(update_plan.get("journal", ""))):
 		return false
-	var candidate := _verified_authority(
-			str(update_plan.get("candidate_manifest", "")),
-			str(update_plan.get("candidate_signature", "")))
-	if not bool(candidate.get("ok", false)) \
-			or str(candidate.get("version", "")) != pending_version:
+	var candidate := recovery_candidate_authority(update_plan, pending_version)
+	if candidate.is_empty():
 		return false
 	var authorities: Array[Dictionary] = [candidate]
 	for pair: Array in [
@@ -149,6 +146,17 @@ static func recovery_authority_ready(update_plan: Dictionary,
 				artifacts.get(UpdateVerifier.ROLE_DESKTOP, {}),
 				UpdatePolicy.WINDOWS_ASSET)
 	return helper_ok and target_ok
+
+
+static func recovery_candidate_authority(update_plan: Dictionary,
+		pending_version: String) -> Dictionary:
+	if UpdateCheck.parse_version(pending_version).is_empty():
+		return {}
+	var candidate := _verified_authority(
+			str(update_plan.get("candidate_manifest", "")),
+			str(update_plan.get("candidate_signature", "")))
+	return candidate if bool(candidate.get("ok", false)) \
+			and str(candidate.get("version", "")) == pending_version else {}
 
 
 static func _verified_authority(manifest_path: String,
