@@ -44,7 +44,15 @@ export default function UpdateBanner() {
   } | null>(null);
   const [dismissed, setDismissed] = useState(true);
 
+  const current = box?.client_version ?? null;
+
+  // Si chiede l'ultima release solo se sappiamo da che versione veniamo:
+  // senza la dichiarazione del box la fascia non potrebbe comparire in
+  // nessun caso, quindi l'invocazione sarebbe pagata per niente — e la
+  // maggior parte dei caricamenti (demo, account nuovi, box mai visto) sta
+  // proprio lì. Ora che la route è dinamica, le richieste inutili si contano.
   useEffect(() => {
+    if (!current) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -59,7 +67,7 @@ export default function UpdateBanner() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [current]);
 
   // Il dismiss si legge DOPO il mount: `localStorage` non esiste sul server
   // e leggerlo in render disallineerebbe l'idratazione. Parte da "chiusa"
@@ -75,7 +83,6 @@ export default function UpdateBanner() {
     }
   }, [latest?.version]);
 
-  const current = box?.client_version ?? null;
   const stale =
     !!current && !!latest && updateAvailable(latest.version, current);
   if (!stale || dismissed || !latest) return null;
