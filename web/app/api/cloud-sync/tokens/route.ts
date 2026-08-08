@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { generateSyncToken } from "@/lib/cloud-sync/tokens";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import {
+  CLIENT_COLUMNS,
+  missingClientColumns,
+} from "@/lib/cloud-sync/client-identity";
 import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
@@ -49,14 +53,21 @@ export async function GET() {
   // Le colonne client_* sono la telemetria tecnica che il box dichiara
   // ([CLIENT-VERSION-INVISIBLE]): tornano qui perché chi la produce deve
   // poterla rileggere, e questa GET passa dalla RLS del suo proprietario.
-  const { data, error } = await supabase
-    .from("cloud_sync_tokens")
-    .select(
-      "id, name, token_prefix, last_used_at, created_at, client_version, client_platform, client_capabilities, client_seen_at",
-    )
-    .eq("user_id", user.id)
-    .is("revoked_at", null)
-    .order("created_at", { ascending: false });
+  const BASE_COLUMNS = "id, name, token_prefix, last_used_at, created_at";
+  const list = (columns: string) =>
+    supabase
+      .from("cloud_sync_tokens")
+      .select(columns)
+      .eq("user_id", user.id)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false });
+
+  let { data, error } = await list(`${BASE_COLUMNS}, ${CLIENT_COLUMNS}`);
+  // Migration 064 non ancora applicata: la pagina mostra i token senza la
+  // telemetria invece di non mostrarli affatto.
+  if (missingClientColumns(error)) {
+    ({ data, error } = await list(BASE_COLUMNS));
+  }
 
   if (error)
     return sanitizedError(error, { status: 500, scope: "cloud-sync/tokens" });

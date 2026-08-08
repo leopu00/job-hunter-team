@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashSyncToken } from "@/lib/cloud-sync/tokens";
 import {
+  CLIENT_COLUMNS,
   clientIdentityChanged,
   clientIdentityPatch,
+  missingClientColumns,
   parseClientHeader,
 } from "@/lib/cloud-sync/client-identity";
 
@@ -26,6 +28,25 @@ export type VerifyResult =
 // la write su ogni request saturava il Disk IO Budget (vedi
 // docs/sessions/2026-05-18-supabase-disk-io-investigation/).
 const LAST_USED_THROTTLE_MS = 60 * 60 * 1000;
+
+interface TokenRow {
+  id: string;
+  user_id: string;
+  name: string;
+  revoked_at: string | null;
+  last_used_at: string | null;
+  expires_at: string | null;
+  client_version?: string | null;
+  client_platform?: string | null;
+  client_capabilities?: string[] | null;
+}
+
+type PostgrestFailure = { code?: string | null; message?: string | null } | null;
+
+// Una volta scoperto che la 064 non c'è, non si ritenta la select estesa a
+// ogni request: il flag vive quanto l'istanza serverless, e un deploy dello
+// schema fa comunque ripartire istanze nuove.
+let clientColumnsPresent = true;
 
 /**
  * Verifica un Bearer token jht_sync_... contro cloud_sync_tokens.
@@ -60,13 +81,30 @@ export async function verifyBearerToken(
   }
 
   const hash = hashSyncToken(match[1]);
-  const { data, error } = await admin
-    .from("cloud_sync_tokens")
-    .select(
-      "id, user_id, name, revoked_at, last_used_at, expires_at, client_version, client_platform, client_capabilities",
-    )
-    .eq("token_hash", hash)
-    .maybeSingle();
+  const BASE_COLUMNS =
+    "id, user_id, name, revoked_at, last_used_at, expires_at";
+  const lookup = (columns: string) =>
+    admin
+      .from("cloud_sync_tokens")
+      .select(columns)
+      .eq("token_hash", hash)
+      .maybeSingle();
+
+  let { data, error } = (await lookup(
+    clientColumnsPresent ? `${BASE_COLUMNS}, ${CLIENT_COLUMNS}` : BASE_COLUMNS,
+  )) as { data: TokenRow | null; error: PostgrestFailure };
+
+  // Il web può essere in produzione prima che la 064 sia applicata: in quel
+  // caso si rinuncia alla telemetria e si autentica lo stesso. Far fallire
+  // ogni chiamata cloud-sync per una colonna di versione sarebbe un guasto
+  // molto più grande di quello che quella colonna serve a evitare.
+  if (missingClientColumns(error)) {
+    clientColumnsPresent = false;
+    ({ data, error } = (await lookup(BASE_COLUMNS)) as {
+      data: TokenRow | null;
+      error: PostgrestFailure;
+    });
+  }
 
   if (error) {
     return {
@@ -107,7 +145,9 @@ export async function verifyBearerToken(
   // dichiarazione cambia — un aggiornamento del box è raro, l'header è
   // identico per settimane — e la accodiamo alla stessa UPDATE di
   // last_used_at, così una versione nuova non raddoppia le write.
-  const declared = parseClientHeader(req.headers.get("x-jht-client"));
+  const declared = clientColumnsPresent
+    ? parseClientHeader(req.headers.get("x-jht-client"))
+    : null;
   if (declared && clientIdentityChanged(data, declared)) {
     Object.assign(patch, clientIdentityPatch(declared, now));
   } else if (declared && touchLastUsed) {

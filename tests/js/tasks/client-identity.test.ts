@@ -32,8 +32,10 @@ import {
   normalizePlatform,
 } from "../../../cli/src/lib/client-identity.js";
 import {
+  CLIENT_COLUMNS,
   clientIdentityChanged,
   clientIdentityPatch,
+  missingClientColumns,
   parseClientHeader,
 } from "@/lib/cloud-sync/client-identity";
 
@@ -183,6 +185,47 @@ describe("scrittura su cloud_sync_tokens", () => {
       "client_seen_at",
       "client_version",
     ]);
+  });
+});
+
+describe("il web può arrivare prima della migration", () => {
+  // Deploy del codice e deploy dello schema sono due gesti distinti, e non
+  // c'è nulla che imponga l'ordine. Se una `select` sulle colonne di
+  // telemetria facesse fallire `verifyBearerToken`, il primo effetto di
+  // questo lavoro sarebbe spegnere la cloud-sync di tutti — un prezzo
+  // assurdo per una stringa di versione. Le query degradano, e questi test
+  // tengono fermo il riconoscimento del caso.
+  it("riconosce la colonna che non c'è ancora", () => {
+    expect(missingClientColumns({ code: "42703" })).toBe(true);
+    expect(
+      missingClientColumns({
+        message: 'column cloud_sync_tokens.client_version does not exist',
+      }),
+    ).toBe(true);
+  });
+
+  it("non scambia un guasto vero per una migration mancante", () => {
+    // Un errore di connessione o di permessi deve restare un errore: se lo
+    // trattassimo come "colonne assenti" nasconderemmo il guasto dietro un
+    // secondo tentativo identico.
+    expect(missingClientColumns(null)).toBe(false);
+    expect(missingClientColumns({ code: "PGRST301", message: "JWT expired" })).toBe(
+      false,
+    );
+    expect(missingClientColumns({ message: "connection refused" })).toBe(false);
+  });
+
+  it("le colonne di telemetria sono un elenco a parte, non sparse nelle query", () => {
+    // Se venissero scritte a mano in ogni `select`, la prossima
+    // aggiungerebbe una colonna senza il suo fallback.
+    for (const column of [
+      "client_version",
+      "client_platform",
+      "client_capabilities",
+      "client_seen_at",
+    ]) {
+      expect(CLIENT_COLUMNS).toContain(column);
+    }
   });
 });
 

@@ -6,6 +6,7 @@ import { generateSyncToken } from "@/lib/cloud-sync/tokens";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
 import {
   clientIdentityPatch,
+  missingClientColumns,
   parseClientHeader,
 } from "@/lib/cloud-sync/client-identity";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
@@ -192,26 +193,46 @@ export async function POST(req: NextRequest) {
   // versione è ignota. Se l'header manca, le colonne restano NULL e le
   // riempirà la prima chiamata autenticata.
   const declared = parseClientHeader(req.headers.get("x-jht-client"));
-  const { data, error } = await admin
-    .from("cloud_sync_tokens")
-    .insert({
-      user_id: verifiedUserId,
-      name: tokenName,
-      token_prefix: prefix,
-      token_hash: hash,
-      expires_at: null,
-      ...(declared
-        ? clientIdentityPatch(declared, new Date().toISOString())
-        : {}),
-    })
-    .select("id, name, token_prefix, created_at")
-    .single();
+  const baseRow = {
+    user_id: verifiedUserId,
+    name: tokenName,
+    token_prefix: prefix,
+    token_hash: hash,
+    expires_at: null,
+  };
+  const register = (row: Record<string, unknown>) =>
+    admin
+      .from("cloud_sync_tokens")
+      .insert(row)
+      .select("id, name, token_prefix, created_at")
+      .single();
+
+  let { data, error } = await register(
+    declared
+      ? { ...baseRow, ...clientIdentityPatch(declared, new Date().toISOString()) }
+      : baseRow,
+  );
+  // Migration 064 non ancora applicata: si paira comunque. Un device che
+  // non riesce a collegarsi perché manca una colonna di telemetria sarebbe
+  // il rimedio peggiore del male.
+  if (missingClientColumns(error)) {
+    ({ data, error } = await register(baseRow));
+  }
 
   if (error) {
     return sanitizedError(error, {
       status: 500,
       scope: "cloud-sync/device-register",
     });
+  }
+  if (!data) {
+    // `.single()` senza errore e senza riga non dovrebbe accadere; se accade,
+    // il pairing non è avvenuto e dirlo è meglio che rispondere 201 con un
+    // token che non ha una riga dietro.
+    return NextResponse.json(
+      { error: "device non registrato" },
+      { status: 500 },
+    );
   }
 
   // Segna lo stato di onboarding: il consume del pairing token = setup

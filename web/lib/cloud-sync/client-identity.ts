@@ -81,6 +81,34 @@ export function clientIdentityChanged(
   );
 }
 
+/**
+ * Le colonne aggiunte dalla migration 064, come lista per una `select`.
+ *
+ * Esistono separate perché il codice che le legge può andare in produzione
+ * PRIMA che la migration sia applicata — il deploy del web e quello dello
+ * schema sono due gesti distinti, in quest'ordine o nell'altro. Chiederle a
+ * un database che non le ha ancora significherebbe far fallire ogni
+ * chiamata cloud-sync per una colonna di telemetria: la stessa trappola per
+ * cui `useChatLaneLive` tratta le colonne `chat_*` come opzionali.
+ */
+export const CLIENT_COLUMNS =
+  "client_version, client_platform, client_capabilities, client_seen_at";
+
+/**
+ * L'errore dice «quella colonna non esiste» — cioè la 064 non è ancora
+ * passata. `42703` è `undefined_column` di Postgres; il controllo sul testo
+ * copre i casi in cui PostgREST non propaga il codice.
+ */
+export function missingClientColumns(error: {
+  code?: string | null;
+  message?: string | null;
+} | null): boolean {
+  if (!error) return false;
+  if (error.code === "42703") return true;
+  const message = String(error.message ?? "").toLowerCase();
+  return message.includes("client_version") || message.includes("client_capabilities");
+}
+
 /** Colonne da scrivere su `cloud_sync_tokens` per questa dichiarazione. */
 export function clientIdentityPatch(
   incoming: ClientIdentity,
