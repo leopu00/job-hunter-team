@@ -18,7 +18,8 @@ const RESULT_PHASES: Array[String] = ["ready", "committed", "recovered", "rollba
 		"failed"]
 const RESULT_CODES: Array[String] = ["verified", "updated",
 		"interrupted_commit_completed", "old_version_intact", "health_ack_failed",
-		"interrupted_update_recovered", "old_process_timeout", "update_failed"]
+		"interrupted_update_recovered", "recovery_restart_failed",
+		"recovery_result_write_failed", "old_process_timeout", "update_failed"]
 
 const JOURNAL_PREPARED := "prepared"
 const JOURNAL_SWAP_INTENT := "swap_intent"
@@ -235,7 +236,8 @@ static func result_frame_matches(frame: Dictionary, nonce: String) -> bool:
 					"interrupted_commit_completed"] and ok and not rollback) \
 			or (phase == "recovered" and code == "old_version_intact" and ok) \
 			or (phase == "rollback" and code in ["health_ack_failed",
-					"interrupted_update_recovered"] and not ok and rollback) \
+					"interrupted_update_recovered", "recovery_restart_failed",
+					"recovery_result_write_failed"] and not ok and rollback) \
 			or (phase == "failed" and code == "update_failed" and not ok \
 					and not rollback)
 

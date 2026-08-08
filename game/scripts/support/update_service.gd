@@ -651,6 +651,15 @@ func _recover_windows(plan: Dictionary) -> void:
 	var instance_id := WindowsClient.request_token("instance")
 	var argv := WindowsClient.helper_argv("Recover", plan, OS.get_process_id(),
 			request_id, instance_id)
+	# A prior Verify/Apply frame is not evidence about this Recover invocation.
+	# Remove it before launch so an early non-zero helper exit cannot be consumed
+	# as stale READY while the new authoritative result is still absent.
+	var stale_result := str(plan["result"])
+	DirAccess.remove_absolute(stale_result)
+	if FileAccess.file_exists(stale_result) \
+			or DirAccess.dir_exists_absolute(stale_result):
+		_fail("update.err_recovery")
+		return
 	if argv.is_empty() or not WindowsClient.recovery_authority_ready(
 			plan, pending_version) or OS.create_process(
 			WindowsClient.powershell_path(), argv, false) <= 0:

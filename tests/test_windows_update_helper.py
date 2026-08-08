@@ -1310,63 +1310,185 @@ $parseErrors = $null
 $ast = [Management.Automation.Language.Parser]::ParseInput(
   $source, [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @(
+  'Write-Result', 'Write-FailureResultOrStderr',
+  'Set-RollbackCommitted', 'Invoke-Rollback')
 $functions = @($ast.FindAll({
   param($node)
   $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
-    $node.Name -ceq 'Invoke-Rollback'
-}, $true))
-if ($functions.Count -ne 1) { throw 'production rollback function is missing' }
-$body = $functions[0].Extent.Text
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) {
+  throw 'production rollback dispatch functions are missing'
+}
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$mainStart = $source.LastIndexOf("`n`$script:RollbackCommitted = `$false`n`$exitCode = 1")
+$mainEnd = $source.LastIndexOf("`nexit `$exitCode")
+if ($mainStart -lt 0 -or $mainEnd -le $mainStart) {
+  throw 'production main dispatch is missing'
+}
+$main = $source.Substring($mainStart + 1, $mainEnd - $mainStart - 1)
 $probe = @'
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $mode = $env:JHT_TEST_RECOVERY_MODE
+$script:mode = $mode
 $script:FailurePhase = 'unset'
 $script:FailureCode = 'unset'
 $script:TargetPath = 'target.exe'
+$script:ResultPath = 'result.json'
+$script:JournalPath = 'journal.json'
+$script:StateRoot = 'state'
+$script:TxnDir = 'transaction'
+$script:Nonce = 'a' * 32
 $script:journalWrites = 0
+$script:resultWriteCalls = 0
+$script:staleRemoved = $false
+$script:result = [pscustomobject]@{
+  schema = 1; ok = $true; phase = 'ready'; code = 'verified'
+  nonce = $script:Nonce; rolled_back = $false
+}
+$script:snapshot = [ordered]@{
+  target = 'candidate'; helper = 'candidate'; metadata = 'candidate'
+  floor = 'absent'; journal = 'candidate_installed'; lock = 'held'
+}
+$script:bundle = @{
+  Old = [pscustomobject]@{ sha256 = 'old' }
+}
+function Assert-SafeLocationPlan { }
+function Assert-PreMutationTrust { }
+function Initialize-ProtectedDirectory { }
+function Acquire-Lock { $script:snapshot.lock = 'held' }
+function Assert-AtomicDestinationPreflight { }
+function Remove-ProtectedFileIfPresent {
+  param([string]$Path)
+  if ($Path -ceq $script:ResultPath) {
+    $script:result = $null
+    $script:staleRemoved = $true
+  }
+}
+function Read-Result { return $script:result }
+function Release-Lock { $script:snapshot.lock = 'released' }
 function Restore-OldTarget {
   if ($script:mode -ceq 'target') { throw 'injected target recovery failure' }
+  $script:snapshot.target = 'old'
 }
-function Test-OldAuthorityInstalled { return $false }
+function Test-OldAuthorityInstalled {
+  return ($script:snapshot.helper -ceq 'old' -and
+    $script:snapshot.metadata -ceq 'old')
+}
 function Restore-OldAuthority {
   if ($script:mode -ceq 'authority') { throw 'injected authority recovery failure' }
+  $script:snapshot.helper = 'old'
+  $script:snapshot.metadata = 'old'
 }
+function Get-Sha256 { return $script:snapshot.target }
+function Read-ProtectedJsonFile {
+  return [pscustomobject]@{ state = $script:snapshot.journal }
+}
+function Assert-Journal { }
 function Write-Journal {
   $script:journalWrites++
   $script:FailurePhase = 'journal'
   $script:FailureCode = 'journal_rolled_back_write_failed'
   if ($script:mode -ceq 'journal') { throw 'injected rollback journal failure' }
+  $script:snapshot.journal = 'rolled_back'
 }
 function Start-Process {
   if ($script:mode -ceq 'restart') { throw 'injected recovery restart failure' }
 }
-function Write-Result {
-  $script:FailurePhase = 'result'
-  $script:FailureCode = 'result_write_failed'
-  throw 'injected recovery result failure'
+function Write-AtomicJson {
+  param([string]$Path, [hashtable]$Value)
+  $script:resultWriteCalls++
+  if (($script:mode -ceq 'result' -and $script:resultWriteCalls -eq 1) -or
+      $script:mode -ceq 'result-persistent') {
+    throw 'injected recovery result failure'
+  }
+  $script:result = [pscustomobject]$Value
 }
-$script:mode = $mode
-try {
-  Invoke-Rollback @{} ([pscustomobject]@{}) 'injected'
-  throw 'injected recovery fault was accepted'
-} catch {
-  if ($script:FailurePhase -cne $env:JHT_TEST_EXPECTED_PHASE -or
-      $script:FailureCode -cne $env:JHT_TEST_EXPECTED_CODE) { throw }
-  $expectedJournalWrites = if ($mode -in @('journal','restart','result')) {
-    1
+function Invoke-Recover {
+  if ($script:snapshot.target -ceq 'old' -and
+      $script:snapshot.helper -ceq 'old' -and
+      $script:snapshot.metadata -ceq 'old' -and
+      $script:snapshot.journal -ceq 'rolled_back') {
+    Write-Result $true 'recovered' 'old_version_intact' $true `
+      -WriteFailurePhase 'recovery' `
+      -WriteFailureCode 'recovery_result_write_failed'
   } else {
-    0
+    Invoke-Rollback $script:bundle ([pscustomobject]@{}) `
+      'interrupted_update_recovered'
   }
-  if ($script:journalWrites -ne $expectedJournalWrites) {
-    throw 'rollback seam did not traverse the expected nested journal writer'
-  }
-  [Console]::Out.WriteLine(
-    'WINDOWS-RECOVERY-SEAM PASS mode=' + $mode +
-    ' phase=' + $script:FailurePhase + ' code=' + $script:FailureCode)
 }
+function Invoke-Apply { throw 'recovery seam dispatched apply' }
+
+$firstRc = Invoke-ProductionMain
+if ($firstRc -ne 1 -or -not $script:staleRemoved) {
+  throw 'recovery main dispatch accepted a fault or retained stale result'
+}
+$expected = switch -CaseSensitive ($mode) {
+  'target' { 'candidate,candidate,candidate,absent,candidate_installed,released'; break }
+  'authority' { 'old,candidate,candidate,absent,candidate_installed,released'; break }
+  'journal' { 'old,old,old,absent,candidate_installed,released'; break }
+  'restart' { 'old,old,old,absent,rolled_back,released'; break }
+  'result' { 'old,old,old,absent,rolled_back,released'; break }
+  'result-persistent' { 'old,old,old,absent,rolled_back,released'; break }
+  default { throw 'rollback seam mode is invalid' }
+}
+$actual = @(
+  $script:snapshot.target, $script:snapshot.helper,
+  $script:snapshot.metadata, $script:snapshot.floor,
+  $script:snapshot.journal, $script:snapshot.lock) -join ','
+if ($actual -cne $expected) {
+  throw 'rollback fault mutated a node outside its completed stages'
+}
+if ($mode -ceq 'result-persistent') {
+  if ($null -ne $script:result) {
+    throw 'persistent writer fault retained a result frame'
+  }
+} else {
+  $expectedRolledBack = $mode -in @('restart','result')
+  $expectedPhase = if ($expectedRolledBack) { 'rollback' } else {
+    if ($mode -ceq 'journal') { 'journal' } else { 'recovery' }
+  }
+  if ($null -eq $script:result -or
+      [string]$script:result.phase -cne $expectedPhase -or
+      [string]$script:result.code -cne $env:JHT_TEST_EXPECTED_CODE -or
+      [bool]$script:result.rolled_back -ne $expectedRolledBack -or
+      [string]$script:result.code -ceq 'verified') {
+    throw 'recovery fault result frame is not current and exact'
+  }
+}
+
+$script:mode = 'retry'
+$script:resultWriteCalls = 0
+$retryRc = Invoke-ProductionMain
+$expectedRetryPhase = if ($mode -in @('restart','result','result-persistent')) {
+  'recovered'
+} else {
+  'rollback'
+}
+$expectedRetryCode = if ($expectedRetryPhase -ceq 'recovered') {
+  'old_version_intact'
+} else {
+  'interrupted_update_recovered'
+}
+$expectedRetryRc = if ($expectedRetryPhase -ceq 'recovered') { 0 } else { 1 }
+if ($retryRc -ne $expectedRetryRc -or $null -eq $script:result -or
+    [string]$script:result.phase -cne $expectedRetryPhase -or
+    [string]$script:result.code -cne $expectedRetryCode -or
+    -not ([bool]$script:result.rolled_back) -or
+    ($script:snapshot.Values -join ',') -cne
+      'old,old,old,absent,rolled_back,released') {
+  throw 'recovery retry is not idempotent and exact'
+}
+[Console]::Out.WriteLine(
+  'WINDOWS-RECOVERY-SEAM PASS mode=' + $mode +
+  ' phase=' + $env:JHT_TEST_EXPECTED_PHASE +
+  ' code=' + $env:JHT_TEST_EXPECTED_CODE)
 '@
-& ([ScriptBlock]::Create($body + "`n" + $probe))
+$dispatch = "function Invoke-ProductionMain {`n" + $main +
+  "`nreturn `$exitCode`n}`n"
+& ([ScriptBlock]::Create($body + "`n" + $dispatch + $probe))
 """
 
 RECOVERY_HEALTH_FAULT_PROBE = r"""
@@ -1581,6 +1703,11 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         "recovery_commit_authority_manifest_cleanup_failed",
         "recovery_commit_authority_signature_cleanup_failed",
         "recovery_commit_authority_root_cleanup_failed",
+        "recovery_trust_failed",
+        "recovery_rollback_target_attest_failed",
+        "recovery_rollback_authority_attest_failed",
+        "recovery_rollback_journal_attest_failed",
+        "recovery_result_write_failed",
         "result_preflight_failed",
         "result_write_failed",
         "result_read_failed",
@@ -1718,12 +1845,40 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         )
     ]
     assert "catch" not in write_result
+    assert "$WriteFailurePhase = 'result'" in write_result
+    assert "$WriteFailureCode = 'result_write_failed'" in write_result
+    rollback = source[
+        source.index("function Invoke-Rollback") : source.index(
+            "function Test-CandidateHealth"
+        )
+    ]
+    assert "function Set-RollbackCommitted" in rollback
+    assert rollback.index("Write-Journal 'rolled_back' $Bundle") < rollback.index(
+        "Set-RollbackCommitted $Bundle"
+    ) < rollback.index("Start-Process")
+    assert "$script:RollbackCommitted = $true" in rollback
+    assert "-WriteFailurePhase 'recovery'" in rollback
+    assert "-WriteFailureCode 'recovery_result_write_failed'" in rollback
+    recover = source[
+        source.index("function Invoke-Recover") : source.index("$exitCode = 1")
+    ]
+    assert "$root = Get-AttestedAuthorityBackupRoot" in source[
+        source.index("function Test-AuthorityBackupLeafPresent") : source.index(
+            "function Get-AttestedAuthorityBackupRoot"
+        )
+    ]
+    assert "if ($null -eq $root) { return $false }" in source
+    assert "-and $floor -and" in recover
+    assert "Invoke-Rollback $bundle $journal 'interrupted_update_recovered'" in recover
     result_fallback = source[
         source.index("function Write-FailureResultOrStderr") : source.index(
             "function Get-ExactProcess"
         )
     ]
-    assert "phase=result code=result_write_failed" in result_fallback
+    assert "'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=' + $WriteFailurePhase" in (
+        result_fallback
+    )
+    assert "' code=' + $WriteFailureCode" in result_fallback
     assert "Get-Process -ErrorAction SilentlyContinue" not in source
     assert source.index("Write-AtomicJson $FloorPath") < source.index(
         "Install-CandidateHelper $bundle"
@@ -1732,6 +1887,9 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
     assert source.index("Assert-AtomicDestinationPreflight $ResultPath") < source.rindex(
         main_dispatch
     )
+    assert "if ($Mode -ne 'Recover' -and" in source
+    assert "if ($script:RollbackCommitted)" in source
+    assert "Write-FailureResultOrStderr 'rollback' $failedCode $true" in source
     assert "Get-Acl" not in source
     assert "Set-Acl" not in source
     assert "FileSystemRights]::Modify -bor" not in source
@@ -2903,11 +3061,53 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                 assert not failed.exists()
                 assert not authority_backup.exists()
         else:
-            assert recovered.returncode != 0, recovered.stderr
-            assert result["phase"] in {"rollback", "recovered"}
+            assert recovered.returncode != 0, _helper_result_diagnostic(
+                transaction, recovered.stderr
+            )
+            assert result == {
+                "schema": 1,
+                "ok": False,
+                "phase": "rollback",
+                "code": "interrupted_update_recovered",
+                "nonce": nonce,
+                "rolled_back": True,
+            }
             assert target.read_bytes() == old_bytes
             assert installed_helper.read_bytes() == old_helper_bytes
             assert json.loads(journal_path.read_text())["state"] == "rolled_back"
+            stable_nodes = (
+                target,
+                installed_helper,
+                installed_manifest,
+                installed_signature,
+                state / "committed-floor.json",
+                journal_path,
+                state / ".update.lock",
+            )
+            stable_before = _cleanup_targets_snapshot(stable_nodes)
+            retried = subprocess.run(
+                _helper_command(
+                    target=target,
+                    transaction=transaction,
+                    mode="Recover",
+                ),
+                text=True,
+                capture_output=True,
+                timeout=45,
+            )
+            assert retried.returncode == 0, _helper_result_diagnostic(
+                transaction, retried.stderr
+            )
+            retry_result = json.loads((transaction / "result.json").read_text())
+            assert retry_result == {
+                "schema": 1,
+                "ok": True,
+                "phase": "recovered",
+                "code": "old_version_intact",
+                "nonce": nonce,
+                "rolled_back": True,
+            }
+            assert _cleanup_targets_snapshot(stable_nodes) == stable_before
     finally:
         if candidate_process and candidate_process.poll() is None:
             candidate_process.kill()
@@ -3961,7 +4161,8 @@ def test_production_apply_dispatch_faults_preserve_exact_stage(
         ("authority", "recovery", "recovery_rollback_authority_failed"),
         ("journal", "journal", "journal_rolled_back_write_failed"),
         ("restart", "recovery", "recovery_restart_failed"),
-        ("result", "result", "result_write_failed"),
+        ("result", "recovery", "recovery_result_write_failed"),
+        ("result-persistent", "recovery", "recovery_result_write_failed"),
     ],
 )
 def test_production_recovery_dispatch_faults_preserve_exact_stage(
@@ -3986,7 +4187,13 @@ def test_production_recovery_dispatch_faults_preserve_exact_stage(
         capture_output=True,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stderr == ""
+    if mode == "result-persistent":
+        assert result.stderr.strip() == (
+            "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=recovery "
+            "code=recovery_result_write_failed"
+        )
+    else:
+        assert result.stderr == ""
     assert result.stdout.strip() == (
         f"WINDOWS-RECOVERY-SEAM PASS mode={mode} phase={phase} code={code}"
     )
@@ -4296,10 +4503,21 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
             timeout=30,
             env=helper_env,
         )
-        assert recovered.returncode != 0, recovered.stderr
+        assert recovered.returncode != 0, _helper_result_diagnostic(
+            transaction, recovered.stderr
+        )
         assert target.read_bytes() == old_bytes
         assert json.loads(journal_path.read_text())["state"] == "rolled_back"
         assert not (state / ".update.lock").exists()
+        result = json.loads((transaction / "result.json").read_text())
+        assert result == {
+            "schema": 1,
+            "ok": False,
+            "phase": "rollback",
+            "code": "interrupted_update_recovered",
+            "nonce": nonce,
+            "rolled_back": True,
+        }
         process_check = _run_powershell_command(
             "if (Get-Process -Id ([int]$env:JHT_TEST_PID) "
             "-ErrorAction SilentlyContinue) { exit 1 }",
@@ -4307,6 +4525,36 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
             check=False,
         )
         assert process_check.returncode == 0
+        stable_nodes = (
+            target,
+            helper,
+            target_dir / "RELEASE-MANIFEST.json",
+            target_dir / "RELEASE-MANIFEST.json.sig",
+            state / "committed-floor.json",
+            journal_path,
+            state / ".update.lock",
+        )
+        stable_before = _cleanup_targets_snapshot(stable_nodes)
+        retried = subprocess.run(
+            base + ["-Mode", "Recover"],
+            text=True,
+            capture_output=True,
+            timeout=30,
+            env=helper_env,
+        )
+        assert retried.returncode == 0, _helper_result_diagnostic(
+            transaction, retried.stderr
+        )
+        retry_result = json.loads((transaction / "result.json").read_text())
+        assert retry_result == {
+            "schema": 1,
+            "ok": True,
+            "phase": "recovered",
+            "code": "old_version_intact",
+            "nonce": nonce,
+            "rolled_back": True,
+        }
+        assert _cleanup_targets_snapshot(stable_nodes) == stable_before
     finally:
         if updater and updater.poll() is None:
             updater.kill()

@@ -544,6 +544,31 @@ function Assert-NoHealthTemporary {
   }
 }
 
+function Register-GateNodeRole {
+  param(
+    [string]$Path,
+    [ValidateSet('gate_root','case_root','runtime_root','nonce_root',
+      'appdata_root','godot_root','godot_userdata_root','godot_project_root',
+      'consumer_log','game_log','health_capability','journal','invalid_health',
+      'attack_probe')]
+    [string]$Role)
+  $key = [IO.Path]::GetFullPath($Path).ToLowerInvariant()
+  if ($script:GateNodeRoles.ContainsKey($key) -and
+      $script:GateNodeRoles[$key] -cne $Role) {
+    throw 'health gate role binding is ambiguous'
+  }
+  $script:GateNodeRoles[$key] = $Role
+}
+
+function Get-GateNodeRole {
+  param([string]$Path)
+  $key = [IO.Path]::GetFullPath($Path).ToLowerInvariant()
+  if (-not $script:GateNodeRoles.ContainsKey($key)) {
+    throw 'health gate contains an unknown output role=unknown'
+  }
+  return [string]$script:GateNodeRoles[$key]
+}
+
 function Get-GateNodeRecord {
   param([string]$Path, [string]$Root)
   $full = [IO.Path]::GetFullPath($Path)
@@ -554,6 +579,7 @@ function Get-GateNodeRecord {
         [StringComparison]::OrdinalIgnoreCase))) {
     throw 'health gate node escapes the fixed root'
   }
+  $role = Get-GateNodeRole $full
   $parts = [JhtHealthPckIdentity]::InspectNode($full).Split('|')
   if ($parts.Count -lt 3 -or $parts[0] -ceq 'reparse') {
     throw 'health gate contains a reparse point'
@@ -575,7 +601,9 @@ function Get-GateNodeRecord {
   $security = $item.GetAccessControl($sections)
   $owner = $security.GetOwner(
     [Security.Principal.SecurityIdentifier])
-  if ($owner -ne $currentSid) { throw 'health gate node has a foreign owner' }
+  if ($owner -ne $currentSid) {
+    throw ('health gate node has a foreign owner role=' + $role)
+  }
   $rules = @($security.GetAccessRules(
     $true, $true, [Security.Principal.SecurityIdentifier]))
   $currentPrincipalOnly = $rules.Count -ge 1
@@ -588,6 +616,7 @@ function Get-GateNodeRecord {
   }
   return [pscustomobject]@{
     Path = $full
+    Role = $role
     Kind = $kind
     Identity = $parts[2]
     Owner = $owner.Value
@@ -617,7 +646,9 @@ function Get-GateTreeCensus {
       if ($record.Kind -ceq 'directory') { $pending.Push($record.Path) }
     }
   }
-  return @($records)
+  # Windows PowerShell 5.1 cannot reliably unwrap List[object] through @(...)
+  # (Argument types do not match). Return the explicit CLR object array.
+  return [object[]]$records.ToArray()
 }
 
 function Assert-ExactCurrentDacl {
@@ -761,16 +792,35 @@ function Invoke-HealthCase {
   $runtimeRoot = Join-Path $caseRoot 'host-runtime'
   $nonceRoot = Join-Path $runtimeRoot $nonce
   $appData = Join-Path $caseRoot 'appdata'
+  $godotRoot = Join-Path $appData 'Godot'
+  $godotUserdataRoot = Join-Path $godotRoot 'app_userdata'
+  $godotProjectRoot = Join-Path $godotUserdataRoot 'Job Hunter Team'
   $consumerLogPath = Join-Path $caseRoot 'consumer.log'
-  foreach ($directory in @($caseRoot, $runtimeRoot, $nonceRoot, $appData)) {
-    New-ExactDirectory $directory
+  $gameLogPath = Join-Path $godotProjectRoot 'jht-game.log'
+  foreach ($directory in @(
+      [pscustomobject]@{ Path = $caseRoot; Role = 'case_root' },
+      [pscustomobject]@{ Path = $runtimeRoot; Role = 'runtime_root' },
+      [pscustomobject]@{ Path = $nonceRoot; Role = 'nonce_root' },
+      [pscustomobject]@{ Path = $appData; Role = 'appdata_root' },
+      [pscustomobject]@{ Path = $godotRoot; Role = 'godot_root' },
+      [pscustomobject]@{ Path = $godotUserdataRoot; Role = 'godot_userdata_root' },
+      [pscustomobject]@{ Path = $godotProjectRoot; Role = 'godot_project_root' })) {
+    New-ExactDirectory $directory.Path
+    Register-GateNodeRole $directory.Path $directory.Role
   }
+  New-ExactFile $consumerLogPath ([byte[]]@())
+  Register-GateNodeRole $consumerLogPath 'consumer_log'
+  $consumerLogAuthority = Get-AuthoritySnapshot $consumerLogPath
+  New-ExactFile $gameLogPath ([byte[]]@())
+  Register-GateNodeRole $gameLogPath 'game_log'
+  $gameLogAuthority = Get-AuthoritySnapshot $gameLogPath
   $healthPath = Join-Path $nonceRoot 'health.json'
   $journalPath = Join-Path $nonceRoot 'journal.json'
   $invalidPath = Join-Path $caseRoot 'invalid-health.json'
   $hostileBytes = [Text.UTF8Encoding]::new($false).GetBytes('hostile-capability')
   if ($Mode -ceq 'positive') {
     New-ExactFile $healthPath ([byte[]]@())
+    Register-GateNodeRole $healthPath 'health_capability'
     Assert-ExactCurrentFile $healthPath
     if ([IO.FileInfo]::new($healthPath).Length -ne 0) {
       throw 'precreated health capability is not empty'
@@ -778,6 +828,7 @@ function Invoke-HealthCase {
     $beforeAuthority = Get-AuthoritySnapshot $healthPath
   } elseif ($Mode -ceq 'hostile') {
     New-ExactFile $healthPath $hostileBytes
+    Register-GateNodeRole $healthPath 'health_capability'
     Set-HostileFileSecurity $healthPath
     $beforeCapability = Get-FullSnapshot $healthPath
     $script:HostileHealthPath = $healthPath
@@ -785,9 +836,11 @@ function Invoke-HealthCase {
   } elseif ($Mode -in @('journal-absent','journal-malformed','pid-mismatch',
       'start-invalid')) {
     New-ExactFile $healthPath ([byte[]]@())
+    Register-GateNodeRole $healthPath 'health_capability'
     $beforeCapability = Get-FullSnapshot $healthPath
   } elseif ($Mode -ceq 'invalid-path') {
     New-ExactFile $invalidPath $hostileBytes
+    Register-GateNodeRole $invalidPath 'invalid_health'
     $beforeInvalid = Get-FullSnapshot $invalidPath
   }
 
@@ -829,13 +882,17 @@ function Invoke-HealthCase {
     $candidatePid = [int]$process.Id
     $started = $process.StartTime.ToUniversalTime().Ticks.ToString()
     if ($Mode -in @('positive','absent','hostile')) {
+      Register-GateNodeRole $journalPath 'journal'
       Write-ExactJournal $journalPath $nonce $candidatePid $started
     } elseif ($Mode -ceq 'journal-malformed') {
+      Register-GateNodeRole $journalPath 'journal'
       New-ExactFile $journalPath (
         [Text.UTF8Encoding]::new($false).GetBytes('not-json'))
     } elseif ($Mode -ceq 'pid-mismatch') {
+      Register-GateNodeRole $journalPath 'journal'
       Write-ExactJournal $journalPath $nonce ($candidatePid + 1) $started
     } elseif ($Mode -ceq 'start-invalid') {
+      Register-GateNodeRole $journalPath 'journal'
       Write-ExactJournal $journalPath $nonce $candidatePid 'invalid'
     }
     $suspended.Resume()
@@ -847,6 +904,10 @@ function Invoke-HealthCase {
     }
     $managedExitCode = Get-ManagedExitCodeBestEffort -Process $process
 
+    if ((Get-AuthoritySnapshot $consumerLogPath) -cne $consumerLogAuthority -or
+        (Get-AuthoritySnapshot $gameLogPath) -cne $gameLogAuthority) {
+      throw ('health case known-output authority changed mode=' + $Mode)
+    }
     Assert-NoHealthTemporary $caseRoot
     if ($Mode -ceq 'positive') {
       if ((Get-AuthoritySnapshot $healthPath) -cne $beforeAuthority) {
@@ -985,11 +1046,13 @@ try {
 
 $gateRoot = Join-Path ([IO.Path]::GetFullPath($env:RUNNER_TEMP)) (
   'jht-health-pck-' + [guid]::NewGuid().ToString('N'))
+$script:GateNodeRoles = @{}
 $script:HostileHealthPath = ''
 $script:HostileHealthSnapshot = ''
 $casesPassed = $false
 try {
   New-ExactDirectory $gateRoot
+  Register-GateNodeRole $gateRoot 'gate_root'
   foreach ($mode in @('normal','positive','absent','hostile','nonce-only',
       'path-only','invalid-nonce','invalid-path','journal-absent',
       'journal-malformed','pid-mismatch','start-invalid')) {

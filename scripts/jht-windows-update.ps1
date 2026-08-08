@@ -54,6 +54,7 @@ $OldSignatureBackupPath = Join-Path $AuthorityBackupDir 'RELEASE-MANIFEST.json.s
 $script:LockOwnerStarted = [Diagnostics.Process]::GetCurrentProcess().StartTime.ToUniversalTime().Ticks.ToString()
 $script:FailurePhase = 'location'
 $script:FailureCode = 'location_init'
+$script:RollbackCommitted = $false
 
 if (-not ('JhtUpdateFileIdentity' -as [type])) {
   Add-Type -TypeDefinition @'
@@ -946,6 +947,11 @@ function Assert-AuthorityBackupLeaf {
 
 function Test-AuthorityBackupLeafPresent {
   param([string]$Path, [string]$ExpectedName)
+  # The authority root is optional before metadata promotion. Census it first
+  # so absence is evaluated on that terminal path rather than as a missing
+  # intermediate while inspecting one of its leaves.
+  $root = Get-AttestedAuthorityBackupRoot
+  if ($null -eq $root) { return $false }
   $kind = [JhtUpdateFileIdentity]::GetNoFollowNodeKind($Path)
   if ($kind -eq 0) {
     Assert-NoReparseAncestors $Path
@@ -1187,20 +1193,34 @@ function Read-Floor {
 }
 
 function Write-Result {
-  param([bool]$Ok, [string]$Phase, [string]$Code, [bool]$RolledBack = $false)
-  $script:FailurePhase = 'result'
-  $script:FailureCode = 'result_write_failed'
+  param(
+    [bool]$Ok,
+    [string]$Phase,
+    [string]$Code,
+    [bool]$RolledBack = $false,
+    [string]$WriteFailurePhase = 'result',
+    [string]$WriteFailureCode = 'result_write_failed')
+  $script:FailurePhase = $WriteFailurePhase
+  $script:FailureCode = $WriteFailureCode
   Write-AtomicJson $ResultPath @{ schema = 1; ok = $Ok; phase = $Phase; code = $Code; nonce = $Nonce; rolled_back = $RolledBack }
 }
 
 function Write-FailureResultOrStderr {
-  param([string]$Phase, [string]$Code)
+  param(
+    [string]$Phase,
+    [string]$Code,
+    [bool]$RolledBack = $false,
+    [string]$WriteFailurePhase = 'result',
+    [string]$WriteFailureCode = 'result_write_failed')
   try {
-    Write-Result $false $Phase $Code
+    Write-Result $false $Phase $Code $RolledBack `
+      -WriteFailurePhase $WriteFailurePhase `
+      -WriteFailureCode $WriteFailureCode
     return $true
   } catch {
     [Console]::Error.WriteLine(
-      'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=result code=result_write_failed')
+      'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=' + $WriteFailurePhase +
+      ' code=' + $WriteFailureCode)
     return $false
   }
 }
@@ -1656,6 +1676,26 @@ function Restore-OldTarget {
     -ReplacementBackupPath $FailedPath -ConsumeSource
 }
 
+function Set-RollbackCommitted {
+  param([hashtable]$Bundle)
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_rollback_target_attest_failed'
+  if ((Get-Sha256 $TargetPath) -cne [string]$Bundle.Old.sha256) {
+    throw 'rollback target is not durable'
+  }
+  $script:FailureCode = 'recovery_rollback_authority_attest_failed'
+  if (-not (Test-OldAuthorityInstalled $Bundle)) {
+    throw 'rollback authority is not durable'
+  }
+  $script:FailureCode = 'recovery_rollback_journal_attest_failed'
+  $rolledBackJournal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
+  Assert-Journal $rolledBackJournal $Bundle
+  if ([string]$rolledBackJournal.state -cne 'rolled_back') {
+    throw 'rollback journal is not durable'
+  }
+  $script:RollbackCommitted = $true
+}
+
 function Invoke-Rollback {
   param([hashtable]$Bundle, [object]$Journal, [string]$Code)
   $script:FailurePhase = 'recovery'
@@ -1665,10 +1705,13 @@ function Invoke-Rollback {
   if (-not (Test-OldAuthorityInstalled $Bundle)) { Restore-OldAuthority $Bundle }
   $script:FailureCode = 'recovery_rollback_journal_failed'
   Write-Journal 'rolled_back' $Bundle
+  Set-RollbackCommitted $Bundle
   $script:FailurePhase = 'recovery'
   $script:FailureCode = 'recovery_restart_failed'
   Start-Process -FilePath ([IO.Path]::GetFullPath($TargetPath)) | Out-Null
-  Write-Result $false 'rollback' $Code $true
+  Write-Result $false 'rollback' $Code $true `
+    -WriteFailurePhase 'recovery' `
+    -WriteFailureCode 'recovery_result_write_failed'
 }
 
 function Test-CandidateHealth {
@@ -1938,7 +1981,9 @@ function Invoke-Recover {
         }
         Update-JournalState $journal 'committed' ([int]$journal.candidate_pid) ([string]$journal.candidate_started)
         Complete-CommitCleanup -Context 'recovery'
-        Write-Result $true 'committed' 'interrupted_commit_completed'
+        Write-Result $true 'committed' 'interrupted_commit_completed' $false `
+          -WriteFailurePhase 'recovery' `
+          -WriteFailureCode 'recovery_result_write_failed'
         return
       }
     }
@@ -1953,18 +1998,26 @@ function Invoke-Recover {
   $floor = Read-Floor
   if ($floor -and [uint64]$floor.sequence -ge [uint64]$bundle.Candidate.Value.sequence) { throw 'committed floor forbids rollback to the previous version' }
   if ($targetHash -ceq [string]$bundle.Old.sha256 -and $helperHash -ceq [string]$bundle.OldHelper.sha256 -and @('prepared','rolled_back') -ccontains [string]$journal.state) {
-    Write-Result $true 'recovered' 'old_version_intact' ($journal.state -ceq 'rolled_back')
+    Write-Result $true 'recovered' 'old_version_intact' `
+      ($journal.state -ceq 'rolled_back') `
+      -WriteFailurePhase 'recovery' `
+      -WriteFailureCode 'recovery_result_write_failed'
     return
   }
   Invoke-Rollback $bundle $journal 'interrupted_update_recovered'
 }
 
+$script:RollbackCommitted = $false
 $exitCode = 1
 $lockHeld = $false
 try {
   Assert-SafeLocationPlan
   $script:FailurePhase = 'trust'
-  $script:FailureCode = 'trust_failed'
+  $script:FailureCode = if ($Mode -eq 'Recover') {
+    'recovery_trust_failed'
+  } else {
+    'trust_failed'
+  }
   Assert-PreMutationTrust
   $script:FailurePhase = 'state'
   $script:FailureCode = 'state_failed'
@@ -1987,12 +2040,19 @@ try {
   if ($lockHeld) {
     $failedPhase = $script:FailurePhase
     $failedCode = $script:FailureCode
-    if (Test-Path -LiteralPath $JournalPath -PathType Leaf) {
+    if ($Mode -ne 'Recover' -and
+        (Test-Path -LiteralPath $JournalPath -PathType Leaf)) {
       try { Invoke-Recover } catch { $failedPhase = $script:FailurePhase; $failedCode = $script:FailureCode }
     }
     try { $result = Read-Result } catch { $result = $null }
     if (-not $result) {
-      $null = Write-FailureResultOrStderr $failedPhase $failedCode
+      if ($script:RollbackCommitted) {
+        $null = Write-FailureResultOrStderr 'rollback' $failedCode $true `
+          -WriteFailurePhase 'recovery' `
+          -WriteFailureCode 'recovery_result_write_failed'
+      } else {
+        $null = Write-FailureResultOrStderr $failedPhase $failedCode
+      }
     }
     try { $result = Read-Result } catch { $result = $null }
     $exitCode = if ($result -and $result.ok -eq $true -and $result.phase -ceq 'committed') { 0 } else { 1 }

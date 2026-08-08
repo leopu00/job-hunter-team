@@ -422,6 +422,15 @@ func _protocollo_windows() -> void:
 	mismatched_result["phase"] = "committed"
 	_check("result fase/codice incoerenti rifiutati",
 			not WindowsProtocol.result_frame_matches(mismatched_result, nonce), "")
+	for recovery_failure: String in ["recovery_restart_failed",
+			"recovery_result_write_failed"]:
+		var rollback_failure := {"schema": 1, "ok": false, "phase": "rollback",
+				"code": recovery_failure, "nonce": nonce, "rolled_back": true}
+		_check("result rollback durevole accetta " + recovery_failure,
+				WindowsProtocol.result_frame_matches(rollback_failure, nonce), "")
+		rollback_failure["rolled_back"] = false
+		_check("result rollback durevole richiede rolled_back",
+				not WindowsProtocol.result_frame_matches(rollback_failure, nonce), "")
 
 	var fake_plan := {
 		"installed_helper": "C:\\Program Files\\Job Hunter Team\\jht-windows-update.ps1",
@@ -760,6 +769,7 @@ func _source_gate_windows() -> void:
 			"res://scripts/support/windows_update_verifier.gd")
 	var client_source := FileAccess.get_file_as_string(
 			"res://scripts/support/windows_update_client.gd")
+	var log_source := FileAccess.get_file_as_string("res://scripts/log.gd")
 	_check("nessun claim attestazione dal triplo same-origin",
 			"attest_windows_metadata" not in check_source
 			and "PROVENANCE_SCHEMA" not in check_source
@@ -788,7 +798,14 @@ func _source_gate_windows() -> void:
 			"await _recover_windows(plan)" in service_source
 			and "WindowsClient.recovery_authority_ready(plan, pending_version)" \
 					in service_source
-			and "pending_boot_requires_recovery" in service_source, "")
+			and "pending_boot_requires_recovery" in service_source
+			and service_source.count(
+					"DirAccess.remove_absolute(stale_result)") == 1
+			and "FileAccess.file_exists(stale_result)" in service_source
+			and "DirAccess.dir_exists_absolute(stale_result)" in service_source, "")
+	_check("health PCK conserva il log precreato current-only",
+			"JHT_WINDOWS_UPDATE_HEALTH_BOOT_TEST" in log_source
+			and "FileAccess.file_exists(live) and not health_gate" in log_source, "")
 	_check("download Windows e limitato durante e dopo il trasferimento",
 			"request.body_size_limit = max_bytes" in service_source
 			and "WINDOWS_MANIFEST_MAX_BYTES := 65536" in service_source
