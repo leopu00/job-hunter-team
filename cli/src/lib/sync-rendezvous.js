@@ -3,6 +3,8 @@
  * poter collaudare timestamp, ACK HTTP e timeout senza una VPS o credenziali.
  */
 
+import { cloudSyncHeaders } from './client-identity.js';
+
 export function syncRendezvousPending(requestedAt, completedAt) {
   if (!requestedAt) return false;
   const requested = Date.parse(requestedAt);
@@ -81,10 +83,7 @@ export async function publishSyncOutcome({
   try {
     const res = await fetchFn(url, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: cloudSyncHeaders(token, { 'Content-Type': 'application/json' }),
       signal,
       body: JSON.stringify(command),
     });

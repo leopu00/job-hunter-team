@@ -4,6 +4,10 @@ import { isSupabaseConfigured } from "@/lib/workspace";
 import { getSupabaseConfig } from "@/lib/supabase/config";
 import { generateSyncToken } from "@/lib/cloud-sync/tokens";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import {
+  clientIdentityPatch,
+  parseClientHeader,
+} from "@/lib/cloud-sync/client-identity";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
 
@@ -182,6 +186,12 @@ export async function POST(req: NextRequest) {
   // del sync token — una scadenza secca li costringerebbe a un ri-pairing
   // manuale ricorrente. Quindi expires_at = NULL (nessuna scadenza), scelta
   // esplicita e tracciata. La revoca resta possibile via UI (`revoked_at`).
+  // Il pairing parte dal box, quindi la sua dichiarazione tecnica
+  // ([CLIENT-VERSION-INVISIBLE]) è già disponibile alla nascita del token:
+  // registrarla qui evita una finestra in cui il device esiste ma la sua
+  // versione è ignota. Se l'header manca, le colonne restano NULL e le
+  // riempirà la prima chiamata autenticata.
+  const declared = parseClientHeader(req.headers.get("x-jht-client"));
   const { data, error } = await admin
     .from("cloud_sync_tokens")
     .insert({
@@ -190,6 +200,9 @@ export async function POST(req: NextRequest) {
       token_prefix: prefix,
       token_hash: hash,
       expires_at: null,
+      ...(declared
+        ? clientIdentityPatch(declared, new Date().toISOString())
+        : {}),
     })
     .select("id, name, token_prefix, created_at")
     .single();

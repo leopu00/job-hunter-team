@@ -46,9 +46,14 @@ export async function GET() {
   );
   if (!rl.allowed) return rateLimitedResponse(rl.retryAfterSec);
 
+  // Le colonne client_* sono la telemetria tecnica che il box dichiara
+  // ([CLIENT-VERSION-INVISIBLE]): tornano qui perché chi la produce deve
+  // poterla rileggere, e questa GET passa dalla RLS del suo proprietario.
   const { data, error } = await supabase
     .from("cloud_sync_tokens")
-    .select("id, name, token_prefix, last_used_at, created_at")
+    .select(
+      "id, name, token_prefix, last_used_at, created_at, client_version, client_platform, client_capabilities, client_seen_at",
+    )
     .eq("user_id", user.id)
     .is("revoked_at", null)
     .order("created_at", { ascending: false });

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashSyncToken } from "@/lib/cloud-sync/tokens";
+import {
+  clientIdentityChanged,
+  clientIdentityPatch,
+  parseClientHeader,
+} from "@/lib/cloud-sync/client-identity";
 
 const BEARER_RE = /^Bearer\s+(jht_sync_[A-Za-z0-9_\-]+)$/;
 
@@ -57,7 +62,9 @@ export async function verifyBearerToken(
   const hash = hashSyncToken(match[1]);
   const { data, error } = await admin
     .from("cloud_sync_tokens")
-    .select("id, user_id, name, revoked_at, last_used_at, expires_at")
+    .select(
+      "id, user_id, name, revoked_at, last_used_at, expires_at, client_version, client_platform, client_capabilities",
+    )
     .eq("token_hash", hash)
     .maybeSingle();
 
@@ -88,16 +95,31 @@ export async function verifyBearerToken(
     };
   }
 
-  const shouldUpdate =
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = {};
+
+  const touchLastUsed =
     !data.last_used_at ||
     Date.now() - new Date(data.last_used_at).getTime() > LAST_USED_THROTTLE_MS;
+  if (touchLastUsed) patch.last_used_at = now;
 
-  if (shouldUpdate) {
+  // Identità del client ([CLIENT-VERSION-INVISIBLE]): la scriviamo quando la
+  // dichiarazione cambia — un aggiornamento del box è raro, l'header è
+  // identico per settimane — e la accodiamo alla stessa UPDATE di
+  // last_used_at, così una versione nuova non raddoppia le write.
+  const declared = parseClientHeader(req.headers.get("x-jht-client"));
+  if (declared && clientIdentityChanged(data, declared)) {
+    Object.assign(patch, clientIdentityPatch(declared, now));
+  } else if (declared && touchLastUsed) {
+    patch.client_seen_at = now;
+  }
+
+  if (Object.keys(patch).length > 0) {
     // Fire-and-forget vero: niente await, la request risponde senza
     // attendere il write. L'errore viene silenziato perché non blocca.
     void admin
       .from("cloud_sync_tokens")
-      .update({ last_used_at: new Date().toISOString() })
+      .update(patch)
       .eq("id", data.id)
       .then(() => undefined);
   }

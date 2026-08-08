@@ -26,6 +26,7 @@ import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
+import { cloudSyncHeaders } from './client-identity.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -82,7 +83,7 @@ async function loadCloudConfig() {
 async function apiGet(baseUrl, token, path) {
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: cloudSyncHeaders(token),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`${path} → HTTP ${res.status}: ${body.error || 'unknown'}`);
@@ -92,7 +93,7 @@ async function apiGet(baseUrl, token, path) {
 async function apiSend(method, baseUrl, token, path, payload) {
   const res = await fetch(`${baseUrl}${path}`, {
     method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: cloudSyncHeaders(token, { 'Content-Type': 'application/json' }),
     body: payload === undefined ? undefined : JSON.stringify(payload),
   });
   const body = await res.json().catch(() => ({}));

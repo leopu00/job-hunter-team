@@ -15,6 +15,7 @@ import {
   syncRendezvousTerminal,
   timeoutFailure,
 } from '../lib/sync-rendezvous.js';
+import { clientIdentity, clientHeaderValue, cloudSyncHeaders } from '../lib/client-identity.js';
 import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
@@ -130,7 +131,7 @@ async function handleEnable(options) {
   let res;
   try {
     res = await fetch(pingUrl, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: cloudSyncHeaders(token),
     });
   } catch (err) {
     console.error(pc.red(`Network error: ${err.message}`));
@@ -242,7 +243,7 @@ async function handleRestore(options) {
   try {
     const res = await fetch(dumpUrl, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: cloudSyncHeaders(token),
     });
     body = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -473,7 +474,7 @@ async function checkActiveDeviceConflict(baseUrl, token) {
   try {
     const res = await fetch(`${baseUrl}/api/team-state`, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: cloudSyncHeaders(token),
     });
     if (!res.ok) return { conflict: false };
     const body = await res.json().catch(() => ({}));
@@ -538,10 +539,7 @@ export async function handleClaim(options = {}) {
   try {
     res = await fetch(`${baseUrl}/api/team-state/claim`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         force: options.force === true,
         device_label: deviceLabel,
@@ -843,6 +841,16 @@ async function handleStatus() {
   console.log(pc.dim('Token name: ') + (config.token_name ?? 'unnamed'));
   console.log(pc.dim('User ID:    ') + config.user_id);
   console.log(pc.dim('Enabled at: ') + config.enabled_at);
+
+  // Telemetria che questo box dichiara a ogni chiamata cloud-sync. È qui
+  // perché chi la produce deve poterla rileggere: raccogliere un dato che il
+  // suo soggetto non può vedere è esattamente ciò che non vorremmo su di noi.
+  const identity = clientIdentity();
+  console.log('');
+  console.log(pc.dim('Declared to the cloud on every call (technical telemetry only):'));
+  console.log(pc.dim('  Version:      ') + identity.version);
+  console.log(pc.dim('  Platform:     ') + identity.platform);
+  console.log(pc.dim('  Capabilities: ') + identity.capabilities.join(', '));
 }
 
 function readSqliteTable(db, table, columns) {
@@ -1304,10 +1312,7 @@ async function handlePush(options) {
   // (safeCursor) → nessuna riga persa né saltata, e il backlog già gonfio
   // (>500 positions) si drena in più richieste.
   const pushUrl = `${config.base_url}/api/cloud-sync/push`;
-  const authHeaders = {
-    Authorization: `Bearer ${config.token}`,
-    'Content-Type': 'application/json',
-  };
+  const authHeaders = cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' });
   // Chunk iniziali per tabella (il halving 413 scende sotto se serve). Scelti
   // per stare comodamente sotto il body-limit tipico (~4MB Vercel): le
   // positions sono le righe più pesanti (jd_text/jd_summary), quindi il chunk
@@ -1632,7 +1637,12 @@ async function handlePair(options) {
   try {
     res = await fetch(registerUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // Il device-register è l'unica creazione di token che parte dal box:
+      // firmandola, la riga nasce già con la versione invece di restare
+      // ignota fino al primo push. Nel device-flow (`jht cloud login`) il
+      // token lo crea il browser, quindi lì la versione arriva alla prima
+      // chiamata autenticata — pochi minuti dopo, col bootstrap push.
+      headers: { 'Content-Type': 'application/json', 'X-JHT-Client': clientHeaderValue() },
       body: JSON.stringify({
         user_id: payload.user_id,
         refresh_token: payload.refresh_token,
@@ -1724,7 +1734,7 @@ async function handleDisable(options = {}) {
         `${String(config.base_url).replace(/\/+$/, '')}/api/cloud-sync/revoke`,
         {
           method: 'POST',
-          headers: { Authorization: `Bearer ${config.token}` },
+          headers: cloudSyncHeaders(config.token),
         },
       );
       const body = await res.json().catch(() => ({}));
@@ -1877,7 +1887,7 @@ async function handlePullDesiredState(options = {}) {
     let res;
     try {
       res = await fetch(pullUrl, {
-        headers: { Authorization: `Bearer ${config.token}` },
+        headers: cloudSyncHeaders(config.token),
       });
     } catch (err) {
       console.error(pc.yellow(`  pull warn: network error (${err.message})`));
@@ -2228,7 +2238,7 @@ async function handleTicketSync(options = {}) {
       try {
         const res = await fetch(
           `${baseUrl}/api/cloud-sync/tickets?${pullParams.toString()}`,
-          { headers: { Authorization: `Bearer ${config.token}` } },
+          { headers: cloudSyncHeaders(config.token) },
         );
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -2296,10 +2306,7 @@ async function handleTicketSync(options = {}) {
       try {
         const res = await fetch(`${baseUrl}/api/cloud-sync/tickets`, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${config.token}`,
-            'Content-Type': 'application/json',
-          },
+          headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
           body: JSON.stringify({ tickets: rows }),
         });
         const pb = await res.json().catch(() => ({}));
@@ -2450,7 +2457,7 @@ async function handleDirectiveSync(options = {}) {
       try {
         const res = await fetch(
           `${baseUrl}/api/cloud-sync/team-directives?${pullParams.toString()}`,
-          { headers: { Authorization: `Bearer ${config.token}` } },
+          { headers: cloudSyncHeaders(config.token) },
         );
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -2504,10 +2511,7 @@ async function handleDirectiveSync(options = {}) {
       try {
         const res = await fetch(`${baseUrl}/api/cloud-sync/team-directives`, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${config.token}`,
-            'Content-Type': 'application/json',
-          },
+          headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
           body: JSON.stringify({ directives: rows }),
         });
         const pb = await res.json().catch(() => ({}));
@@ -2617,7 +2621,7 @@ export async function readRendezvousState(config, options = {}) {
   }
   try {
     const res = await fetchFn(`${baseUrl}/api/team-state`, {
-      headers: { Authorization: `Bearer ${config.token}` },
+      headers: cloudSyncHeaders(config.token),
       signal,
     });
     if (!res.ok) return null;
@@ -2995,7 +2999,7 @@ export async function patchTeamStateBestEffort(config, reader, fields, options =
   try {
     const res = await fetchFn(`${baseUrl}/api/team-state`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
+      headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
       signal,
       body: JSON.stringify(fields),
     });
@@ -3048,7 +3052,7 @@ async function reportChatLane(chat, config, reader, stall) {
 async function pushChatRows(config, rows, ids, log) {
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   const pushUrl = `${baseUrl}/api/cloud-sync/push`;
-  const headers = { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' };
+  const headers = cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' });
   const CHUNK = Math.max(1, parseInt(process.env.JHT_CHAT_PUSH_CHUNK || '25', 10) || 25);
   const ok = [];
 
@@ -3560,7 +3564,7 @@ async function handlePullProfile(options = {}) {
   let res;
   try {
     res = await fetch(`${baseUrl}/api/cloud-sync/pull-profile`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: cloudSyncHeaders(token),
     });
   } catch (err) {
     if (!options.silent) console.error(pc.red('pull-profile: network error'), err.message);
