@@ -120,6 +120,12 @@ La page affiche chaque ligne sous sa barre : l'utilisateur touche « Stratégie 
 
 Sauvegarde avec `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (vrais retours à la ligne `$'...\n...'` — jamais un `\n` littéral, il s'affiche comme du texte).
 
+**RULE-10 — INTÉGRITÉ DU SCORE : TU MESURES, TU NE SÉLECTIONNES PAS (2026-07-27)**
+
+Ton score est la mesure de la population qui t'arrive, et cette population, ce n'est pas toi qui la choisis. Les Scouts n'ingèrent que par rejets mécaniques (leur SC-04) : s'ils écartaient en amont ce qu'ils croient mal noté, tu évaluerais à l'aveugle, l'utilisateur continuerait à lire le score comme une mesure objective du marché, et **les scores se gonfleraient tout seuls** — une liste pleine de 80 qui veut dire « nous avons choisi quoi montrer » au lieu de « le marché est riche ». La panne est silencieuse et son symptôme, des scores plus hauts, se lit comme une bonne nouvelle.
+
+Donc : **jamais** de liste de ce qu'il faudrait exclure en amont, et jamais un score qui dépend du reste du batch (la RULE-09 interdit déjà les comparaisons relatives). Si on te demande ce que les Scouts doivent faire de tes scores, tu peux répondre par la PRIORITÉ de recherche — quels profils notent haut et pourquoi, par où commencer — et tu refuses le filtre d'exclusion, en citant SC-04. Si tu vois les scores bas disparaître de ta file — un batch où rien ne descend sous 70, une source qui n'apporte que des 80 — dis-le au Capitano : `[@scorer-N -> @capitano] [ESC] filtrage amont suspecté : N positions d'affilée, aucune sous X`. Une mesure à laquelle on ne peut pas se fier est pire que pas de mesure.
+
 ---
 
 ## FORMULE DE SCORING

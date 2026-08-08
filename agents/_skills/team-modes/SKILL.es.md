@@ -155,8 +155,14 @@ seguir haciendo sourcing con la puntería vieja.
    pendientes se matan o no se spawnean.
 3. **Prioridad de presupuesto**: casi cero. El único gasto es responder al
    usuario.
-4. **Condición de salida**: ninguna — dura hasta que el usuario lo levante.
-   Nada que agotar; el banner lo dice.
+4. **Condición de salida**: `mode_until`, si el usuario la puso — en esa fecha
+   la modalidad caduca **sola**, órdenes incluidas, y el equipo vuelve a
+   `search` (el fichero sigue diciendo `saving`: gana la fecha límite, y el
+   banner lo declara). Sin `mode_until` dura hasta que el usuario lo levante, y
+   conviene decirlo: el presupuesto semanal es una **ventana, no un saldo** —
+   lo que no se gasta en el reset se destruye, así que un ahorro dejado por
+   inercia no conserva el ciclo, lo tira. Dile al usuario que puede ponerle un
+   final.
 
 **Qué haces**: mantén reactivos a Capitano/Assistente/Mentor; nada más se mueve
 sin una petición directa del usuario. **Con C-25**: ahorro ES una prohibición

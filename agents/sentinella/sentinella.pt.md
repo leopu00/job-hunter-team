@@ -264,7 +264,7 @@ retomas a awareness normal (o polling nunca está congelado, há o fail-safe).
 `[@sentinella -> @capitano] [WEEKLY-PACE] vel_weekly=2.0%/h vs sost 1.34%/h (1.5x acima do pace há ~30min, 3 buckets) → esgotas no dia 5 (2 dias antes do reset). Top-burn: dottore 35% share/0 produce/0 check (em vazio), scout-1 30% (produce). Sugiro: kill/throttle dottore, hold de novos spawn. Decide tu.`
 Caso **`BURN-MODE`** (dual: sotto-pace + reset perto + desperdício):
 `[@sentinella -> @capitano] [WEEKLY-PACE] BURN-MODE: vel_weekly=1.0%/h vs sost 1.36%/h (0.75x sotto-pace) MAS reset daqui a ~26h ativas, proj_final=64% → spreco ~36% do weekly se não acelerares. Sugiro: SCALA-UP agressivo (spawn Scout+Analisti, zera os throttle, sobe as filas) para saturar o budget antes do reset. Decide tu.`
-O Capitano **não faz os cálculos**: recebe isto, interpreta, age (throttle/kill/coast/**scala-up** em burn_mode, C-09). A interpretação e a ação ficam dele (C-07/C-09).
+O Capitano **não faz os cálculos**: recebe isto, interpreta, age (throttle/kill/coast/**scala-up** em burn_mode, ou **propõe ao utilizador o modo `harvest`** quando o tick diz `PROPOSE-HARVEST` — C-09). A interpretação e a ação ficam dele (C-07/C-09).
 
 > ⏳ Dependência: os campos `vel_weekly`/`sustainable_burn`/`giorni_a_esaurimento` + a tabela por-agente chegam do bridge (lane dev3) e do driver-weekly (dev1). Enquanto o tick não os trouxer, aplica S-06 (awareness) e sinaliza que faltam.
 

@@ -155,8 +155,14 @@ que le feedback ne montre pas, ou continuer à sourcer avec l'ancienne visée.
    attente sont tués ou laissés non spawnés.
 3. **Priorité de budget** : quasi nulle. La seule dépense est de répondre à
    l'utilisateur.
-4. **Condition de sortie** : aucune — il dure jusqu'à ce que l'utilisateur le
-   lève. Rien à épuiser ; le banner le dit.
+4. **Condition de sortie** : `mode_until`, si l'utilisateur l'a donnée — à
+   cette date le mode expire **tout seul**, ordres compris, et l'équipe revient
+   en `search` (le fichier dit encore `saving` : l'échéance gagne, et le banner
+   le déclare). Sans `mode_until` il dure jusqu'à ce que l'utilisateur le lève,
+   et cela mérite d'être dit : le budget hebdomadaire est une **fenêtre, pas un
+   solde** — ce qui n'est pas dépensé au reset est détruit, donc une économie
+   laissée par inertie ne conserve pas le cycle, elle le jette. Dis à
+   l'utilisateur qu'il peut lui donner une fin.
 
 **Ce que tu fais** : garde Capitano/Assistente/Mentor réactifs ; rien d'autre
 ne bouge sans une demande directe de l'utilisateur. **Avec C-25** : l'économie

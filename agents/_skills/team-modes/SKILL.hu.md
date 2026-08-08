@@ -152,8 +152,14 @@ irányzékkal tovább sourcingolni.
    kérésekhez nem kellenek, megölésre kerülnek, vagy el sem indulnak.
 3. **Budget-prioritás**: nulla közeli. Az egyetlen kiadás a felhasználónak adott
    válasz.
-4. **Kilépési feltétel**: nincs — addig tart, amíg a felhasználó fel nem oldja.
-   Nincs mit kimeríteni; a banner ezt ki is mondja.
+4. **Kilépési feltétel**: `mode_until`, ha a felhasználó megadta — azon a napon
+   a mód **magától** lejár, az ordersekkel együtt, és a csapat visszatér
+   `search`-be (a fájl tovább is `saving`-et mond: a határidő nyer, és a banner
+   kimondja). `mode_until` nélkül addig tart, amíg a felhasználó fel nem oldja,
+   és ezt érdemes kimondani: a heti budget **ablak, nem egyenleg** — ami a
+   resetig nincs elköltve, megsemmisül, tehát a tehetetlenségből ottfelejtett
+   takarékosság nem megőrzi a ciklust, hanem eldobja. Mondd el a
+   felhasználónak, hogy adhat neki véghatáridőt.
 
 **Mit csinálsz**: tartsd válaszkésznek a Capitanót/Assistentét/Mentort; ezen túl
 semmi nem mozdul közvetlen felhasználói kérés nélkül. **C-25-tel**: a

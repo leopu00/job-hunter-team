@@ -39,7 +39,10 @@ POLICY_DISABLED / POLICY_SCORE_GATE. I prompt spiegano solo che una
 coda vuota per policy è stato VOLUTO, non un bug.
 
 MODALITÀ DI LAVORO (2026-08, enum chiuso in `capitano-maintenance.json`,
-chiave `"mode"`): search | harvest | care | calibration | saving.
+chiave `"mode"`): search | harvest | care | calibration | saving. La
+chiave opzionale `"mode_until"` le dà una FINE: passata quella data la
+modalità torna `search` da sola e la policy fine ricomincia a valere
+(`mode_deadline.py` — nessuna modalità deve durare per inerzia).
 Questo modulo NON duplica quel file — lo LEGGE (`current_mode()`), e la
 modalità `saving` compone con la policy: `is_enabled()` risponde False
 per ogni enrichment autonomo quando `mode == "saving"`, qualunque cosa
@@ -72,6 +75,7 @@ import json
 import os
 import sys
 
+import mode_deadline
 from _db import DB_PATH
 
 DEFAULT_POLICY = {
@@ -125,6 +129,8 @@ def current_mode() -> str:
     Ritorna un valore di MODES, oppure MODE_UNKNOWN. Normalizzazioni:
       · file assente → "search" (il default del contratto);
       · "maintenance" (valore storico pre-rinomina) → "care";
+      · `mode_until` passata → "search" (la modalità è finita da sola,
+        vedi mode_deadline.py: nessuna modalità dura per inerzia);
       · file presente ma illeggibile, o valore fuori enum → MODE_UNKNOWN.
     MODE_UNKNOWN NON diventa "search": per un freno di spesa la direzione
     sicura è trattare l'ignoto come un ordine attivo (stessa scelta di
@@ -145,8 +151,15 @@ def current_mode() -> str:
         return MODE_UNKNOWN
     mode = mode.strip()
     if mode == "maintenance":   # valore storico (file scritti pre-2026-07-30)
-        return "care"
-    return mode if mode in MODES else MODE_UNKNOWN
+        mode = "care"
+    if mode not in MODES:
+        return MODE_UNKNOWN
+    # La scadenza si valuta in LETTURA: la policy e il banner arrivano alla
+    # stessa conclusione nello stesso istante, senza un processo che riscriva
+    # il file. Un `mode_until` illeggibile non scade (ordine ancora attivo).
+    mode, _expired = mode_deadline.effective_mode(
+        mode, mode_deadline.parse_deadline(data.get(mode_deadline.DEADLINE_KEY)))
+    return mode
 
 
 def load_policy() -> dict:

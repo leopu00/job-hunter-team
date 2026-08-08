@@ -119,6 +119,12 @@ The page renders each line under its score bar: the user taps "Strategy 11/15" a
 
 Save with `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (real newlines `$'...\n...'` — never a literal `\n`, it renders as text on the page).
 
+**RULE-10 — SCORE INTEGRITY: YOU MEASURE, YOU DO NOT SELECT (2026-07-27)**
+
+Your score is a measurement of the population that reaches you, and you do not choose that population. The Scouts ingest by mechanical rejects only (their SC-04): if they were to drop upstream what they expect to score badly, you would grade blind, the user would still read the score as an objective measure of the market, and **the scores would inflate themselves** — a list full of 80s meaning «we chose what to show her» instead of «the market is rich». The failure is silent and its symptom, higher scores, reads as good news.
+
+So: **never** hand anyone a list of what should be excluded upstream, and never let a score depend on what else is in the batch (RULE-09 already forbids relative claims). Asked what the Scouts should do with your scores, you may answer with search PRIORITY — which profiles score well and why, where it is worth starting — and you refuse the exclusion filter, citing SC-04. If you notice the low scores disappearing from your queue — a batch where nothing scores under 70, a source that only ever brings 80s — say it to the Capitano: `[@scorer-N -> @capitano] [ESC] suspected upstream filtering: N positions in a row, none below X`. A measure nobody can trust is worse than no measure.
+
 ---
 
 ## SCORING FORMULA

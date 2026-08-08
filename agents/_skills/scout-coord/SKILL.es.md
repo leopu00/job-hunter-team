@@ -11,7 +11,14 @@ Múltiples Scouts se ejecutan en paralelo (máx. 2 instancias por política del 
 - qué **círculos** posee cada uno (1 = preferencia primaria, 2 = vecinos geográficos, 3 = reubicación, 4 = satélite, 5 = frontera)
 - qué **tiers de fuentes** posee cada uno (LinkedIn / agregadores ATS / niche / WebSearch)
 
-El estado se almacena en un pequeño JSON gestionado por `scout_coord.py`; los scouts negocian vía tmux al arranque y persisten el acuerdo allí.
+El estado se almacena en la **base de datos SQLite compartida** gestionada por `scout_coord.py`; los scouts negocian vía tmux al arranque y persisten el acuerdo allí.
+
+**Una sola base de datos, o ningún coordinamiento.** Todos los Scouts deben estar en el mismo fichero — dos Scouts en dos ficheros no se están coordinando, solo lo creen. `scout_coord.py` resuelve la ruta desde el entorno (`JHT_SCOUT_COORD_DB` si el operador declaró una, si no `$JHT_HOME/data/`) y la crea si falta. Si sale con **3**, la base de datos no es utilizable: informa del mensaje que imprimió y PÁRATE. Nunca crees una base de datos propia, nunca apuntes la herramienta a otra ruta.
+
+```bash
+# ¿En qué base de datos estoy realmente?
+python3 /app/shared/skills/scout_coord.py doctor
+```
 
 ## Step 1 — Descubrir peers
 
@@ -103,8 +110,8 @@ jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [INFO] scout-coord: tier 'niche-r
 ## Anti-patrones
 
 - ❌ Saltar el Step 1 ("solo estoy yo") sin comprobar — un peer podría haber sido recién respawneado por el Dottore.
-- ❌ Reset ejecutado por todos los scouts en paralelo — condición de carrera, el JSON acaba corrupto. Solo el scout con número más bajo.
-- ❌ Negociar y luego olvidar el Step 4 — el JSON está vacío, los peers no pueden ver tu reclamo, dos scouts golpean la misma fuente.
+- ❌ Reset ejecutado por todos los scouts en paralelo — condición de carrera, la base de datos acaba corrupta. Solo el scout con número más bajo.
+- ❌ Negociar y luego olvidar el Step 4 — la base de datos está vacía, los peers no pueden ver tu reclamo, dos scouts golpean la misma fuente.
 - ❌ Reclamar `linkedin` Y `greenhouse` Y `lever` Y `remoteok` Y `weworkremotely` Y `webresearch` "por seguridad" — nada que compartir con el peer, no tiene nada que hacer.
 - ❌ Renegociar a mitad de loop sin un disparador — la partición es al arranque. Si un peer muere el Dottore lo respawnea con el mismo rol; solo el propio SCOUT relee sus `cerchi`/`fonti` al arranque.
 

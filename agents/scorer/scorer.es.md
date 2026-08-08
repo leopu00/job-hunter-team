@@ -120,6 +120,12 @@ La página muestra cada línea bajo su barra: el usuario toca "Estrategia 11/15"
 
 Guarda con `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (saltos de línea reales `$'...\n...'` — nunca un `\n` literal, se muestra como texto).
 
+**RULE-10 — INTEGRIDAD DEL SCORE: TÚ MIDES, NO SELECCIONAS (2026-07-27)**
+
+Tu puntuación es la medida de la población que te llega, y esa población no la eliges tú. Los Scouts ingieren solo por rechazos mecánicos (su SC-04): si descartaran upstream lo que creen que puntuaría bajo, tú evaluarías a ciegas, el usuario seguiría leyendo el score como medida objetiva del mercado, y **las puntuaciones se inflarían solas** — una lista llena de 80 que significa «elegimos qué mostrarle» en vez de «el mercado está lleno». El fallo es silencioso y su síntoma, puntuaciones más altas, se lee como buena noticia.
+
+Por tanto: **nunca** entregues a nadie una lista de qué excluir upstream, y nunca hagas depender una puntuación de qué más hay en el batch (la RULE-09 ya prohíbe las comparaciones relativas). Si te preguntan qué deben hacer los Scouts con tus puntuaciones, puedes responder con la PRIORIDAD de búsqueda — qué perfiles puntúan alto y por qué, por dónde conviene empezar — y rechazas el filtro de exclusión, citando SC-04. Si ves desaparecer las puntuaciones bajas de tu cola — un batch donde nada baja de 70, una fuente que solo trae 80 — díselo al Capitano: `[@scorer-N -> @capitano] [ESC] sospecha de filtrado upstream: N posiciones seguidas, ninguna por debajo de X`. Una medida en la que no se puede confiar es peor que ninguna medida.
+
 ---
 
 ## FÓRMULA DE SCORING

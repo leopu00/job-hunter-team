@@ -661,6 +661,23 @@ def _sql_limit(limit):
     return limit if limit > 0 else -1
 
 
+# Ultima verifica di liveness di una posizione, QUALUNQUE colonna l'abbia
+# registrata ([RECHECK-MUST-UPDATE-LAST-CHECKED], 2026-07-30). Il recheck
+# scrive in due posti — `last_checked` (il pass generico) e `last_open_check`
+# (la lane on-demand) — e la coda cadenzata guardava solo il primo: la #58,
+# verificata alle 08:38 con `last_open_check` via UPDATE diretto, alle 10:02
+# era ancora in testa alla coda perché `last_checked` fermo al 04/06. Il
+# lavoro era stato fatto e la coda non lo sapeva, quindi la cadenza
+# quindicinale era una promessa che il dato non manteneva.
+#
+# `COALESCE(..., '')` e non un IS NULL a parte: la stringa vuota è minore di
+# qualunque data ISO, quindi una posizione mai verificata resta "scaduta da
+# sempre" e la condizione diventa UN confronto solo — lo stesso motivo per cui
+# l'ORDER BY non ha più bisogno del termine `IS NOT NULL`.
+LAST_VERIFIED_SQL = ("MAX(COALESCE(p.last_checked, ''), "
+                     "COALESCE(p.last_open_check, ''))")
+
+
 # ── Modalità RACCOLTO e CALIBRAZIONE (2026-08) ──────────────────────────
 #
 # I numeri che le motivano (misurati sulle 4 VPS reali il 30/07): su ~4.500
@@ -832,18 +849,17 @@ def recheck_due_rows(conn, min_score=None, older_than_days=None, limit=None):
     min_score = opts['min_score'] if min_score is None else min_score
     older_than_days = (opts['older_than_days'] if older_than_days is None
                        else older_than_days)
-    rows = conn.execute("""
+    rows = conn.execute(f"""
         SELECT p.id, p.title, p.company, p.url, p.last_checked, p.expires_at,
+               {LAST_VERIFIED_SQL} AS last_verified,
                s.total_score, COUNT(*) OVER () AS _total
         FROM positions p
         JOIN (SELECT position_id, MAX(total_score) AS total_score
               FROM scores GROUP BY position_id) s ON s.position_id = p.id
         WHERE p.status != 'excluded'
           AND s.total_score >= ?
-          AND (p.last_checked IS NULL
-               OR p.last_checked < datetime('now', ?))
-        ORDER BY s.total_score DESC, (p.last_checked IS NOT NULL),
-                 p.last_checked ASC
+          AND {LAST_VERIFIED_SQL} < datetime('now', ?)
+        ORDER BY s.total_score DESC, last_verified ASC
         LIMIT ?
     """, (min_score, f'-{older_than_days} days', _sql_limit(limit))).fetchall()
     return rows, min_score, older_than_days
@@ -1017,17 +1033,17 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         min_score = opts['min_score'] if min_score is None else min_score
         older_than_days = (opts['older_than_days'] if older_than_days is None
                            else older_than_days)
-        rows = conn.execute("""
+        rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.last_checked, p.expires_at, s.total_score,
+                   {LAST_VERIFIED_SQL} AS last_verified,
                    COUNT(*) OVER () AS _total
             FROM positions p
             JOIN (SELECT position_id, MAX(total_score) AS total_score
                   FROM scores GROUP BY position_id) s ON s.position_id = p.id
             WHERE p.status != 'excluded'
               AND s.total_score >= ?
-              AND (p.last_checked IS NULL
-                   OR p.last_checked < datetime('now', ?))
-            ORDER BY (p.last_checked IS NOT NULL), p.last_checked ASC
+              AND {LAST_VERIFIED_SQL} < datetime('now', ?)
+            ORDER BY last_verified ASC
             LIMIT ?
         """, (min_score, f'-{older_than_days} days', lim)).fetchall()
         label = (f"Scheduled care-mode recheck "

@@ -27,6 +27,11 @@ python3 /app/shared/skills/db_update.py position 42 --status excluded
 # Marqueur last-checked (lien confirmé vivant — aussi utilisé comme revendication anti-collision)
 python3 /app/shared/skills/db_update.py position 42 --last-checked now
 
+# Liveness : --is-open / --last-open-check font avancer aussi last_checked,
+# donc une position revérifiée sort de la file de soin (qui filtre sur la plus
+# récente des deux dates). --last-checked seulement pour la forcer.
+python3 /app/shared/skills/db_update.py position 42 --is-open false --last-open-check now
+
 # Salaire tel que déclaré dans le JD
 python3 /app/shared/skills/db_update.py position 42 --salary-declared-min 40000 --salary-declared-max 55000
 

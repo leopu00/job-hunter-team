@@ -1310,6 +1310,29 @@ def _write_last_tick(msg):
         pass
 
 
+def _harvest_backlog_count():
+    """Posizioni già trovate e già pagate che aspettano un CV, o None.
+
+    Serve al consiglio di `burn_mode` ([BURN-MODE-ADVISES-THE-WRONG-LEVER]):
+    finché quel numero è > 0 esiste una leva di spesa che produce candidature,
+    mentre "scala worker" spinge sul sourcing, che è work-capped e non satura.
+    La conta la fa `mode_banner.harvest_backlog` — gli stessi predicati di
+    `next-for-harvest`, in sola lettura, senza mai creare il DB.
+
+    None = non contabile (jobs.db assente/illeggibile): il consiglio resta
+    quello storico, perché proporre un raccolto che non sappiamo se esiste
+    sarebbe peggio del consiglio imperfetto.
+    """
+    try:
+        mod = _load_skill_module("mode_banner", "mode_banner.py")
+        if mod is None:
+            return None
+        n, _thr = mod.harvest_backlog()
+        return n if isinstance(n, int) else None
+    except Exception:  # noqa: BLE001 — un consiglio non abbatte il bridge
+        return None
+
+
 def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_target,
                         work_phase, weekly_pace, weekly_locked, now_h, now_ts):
     """Costruisce il dict-valori 3-sezioni (5h/oggi/settimana) + extras e lo
@@ -1361,13 +1384,24 @@ def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_targe
             "ratio": wp.get("ratio"), "kind": kind if kind not in (None, "ND") else None,
             "debt": wp.get("debt_pct"), "early_lockout": wp.get("early_lockout_h"),
             "burn_mode": bool(wp.get("burn_mode")),
-            # Verdetto imperativo Passo A (RALLENTA ~X%/ACCELERA-SATURA/...): la
-            # CONCLUSIONE pronta per un modello debole (Kimi), non solo i numeri.
-            # Il renderer lo mostra come headline della sezione SETTIMANA.
-            "verdict": (_pace_verdict_line(
-                wp, entry.get("weekly_remaining_pct")) or "").strip() or None,
         }
     extras = {}
+    # [BURN-MODE-ADVISES-THE-WRONG-LEVER] — quante posizioni aspettano un CV.
+    # Si conta SOLO in burn_mode: è l'unico momento in cui la risposta cambia
+    # il consiglio, e una query in più a ogni tick non la paga nessuno.
+    harvest_backlog = None
+    if weekly and weekly.get("burn_mode"):
+        harvest_backlog = _harvest_backlog_count()
+        if harvest_backlog is not None:
+            extras["harvest_backlog"] = harvest_backlog
+    if weekly:
+        # Verdetto imperativo Passo A (RALLENTA ~X%/ACCELERA-SATURA/...): la
+        # CONCLUSIONE pronta per un modello debole (Kimi), non solo i numeri.
+        # Il renderer lo mostra come headline della sezione SETTIMANA.
+        weekly["verdict"] = (_pace_verdict_line(
+            weekly_pace if isinstance(weekly_pace, dict) else {},
+            entry.get("weekly_remaining_pct"),
+            harvest_backlog=harvest_backlog) or "").strip() or None
     mrp = parsed.get("monthly_remaining_pct") if isinstance(parsed, dict) else None
     if isinstance(mrp, (int, float)):
         extras["monthly_rem"] = mrp
@@ -1535,7 +1569,41 @@ def _should_advise_captain(result, state, now_ts):
     return (now_ts - (state.get("ts") or 0.0)) >= PACE_ADVICE_COOLDOWN_MIN * 60
 
 
-def _pace_guard_step(entry):
+def _pace_guard_within_hours(within_hours, burn_intent_on):
+    """Il guard può parlare adesso? (gate orario di [PACE-GUARD-IGNORES-WORK-PHASE])
+
+    Il consiglio di pacing costa un TURNO DEL CAPITANO: nella notte 29-30/07 un
+    tick ogni 15 minuti ha tenuto sveglio il coordinatore fino al mattino a
+    ~9%/h di weekly, per frenare un team che fuori finestra non stava correndo.
+    Il guard misurava una curva vera e la consegnava a chi non doveva lavorare.
+
+    Tre sorgenti, in quest'ordine, perché rispondono a domande diverse:
+      • deroga burn-intent → l'utente ha DECISO di lavorare stanotte: si parla
+        (stessa deroga che il tick applica poco sopra a `within_hours`);
+      • `within_hours` del tick (work_phase dal pacing-bridge) → se lì è OFF,
+        nessuna LLM va svegliata e il guard non fa eccezione;
+      • `working_hours.is_within_working_hours()` → la config dell'utente letta
+        DIRETTAMENTE: copre il caso in cui il pacing-bridge non scrive il target
+        (work_phase None = "24/7 per back-compat") mentre la finestra esiste.
+
+    Fail-open: skill non caricabile o errore → True. Un consiglio di troppo
+    costa un turno, un guard muto per un import rotto costa la finestra.
+    """
+    if burn_intent_on:
+        return True
+    if not within_hours:
+        return False
+    mod = _load_skill_module("working_hours", "working_hours.py")
+    fn = getattr(mod, "is_within_working_hours", None) if mod else None
+    if not callable(fn):
+        return True
+    try:
+        return bool(fn())
+    except Exception:  # noqa: BLE001 — vedi fail-open sopra
+        return True
+
+
+def _pace_guard_step(entry, within_hours=True, burn_intent_on=False):
     """Consiglio di pacing sulla curva della finestra (shared/skills/pace_guard.py).
 
     Il bridge MISURA e RACCOMANDA, non tocca il throttle: scrive nel pane del
@@ -1550,6 +1618,12 @@ def _pace_guard_step(entry):
     WORKER_FLOOR di 5 minuti (applicato da throttle-config.py a ogni lettura) e
     il daily hard-stop più sotto in main(). Frenare per stare sulla curva è
     pacing; impedire il disastro è un'altra cosa.
+
+    Fuori dalla finestra di lavoro il campione si scrive nel log e basta: la
+    misura non costa niente, la sveglia del Capitano sì (vedi
+    `_pace_guard_within_hours`). Il consiglio NON si accumula — alla riapertura
+    il primo tick attuabile è di nuovo un edge e parte subito, perché lo stato
+    dell'ultimo consiglio resta intatto mentre si tace.
 
     Fail-safe per costruzione: qualunque errore lascia il bridge intatto e il
     throttle dov'era. Disattivabile con JHT_PACE_GUARD=0.
@@ -1574,7 +1648,9 @@ def _pace_guard_step(entry):
         result["applied"] = False
         result["advice"] = mod.advice_line(
             result, workers, mod.advisable_workers(workers))
-        if _should_advise_captain(result, _pace_advice_state, now_ts):
+        in_hours = _pace_guard_within_hours(within_hours, burn_intent_on)
+        result["within_working_hours"] = in_hours
+        if in_hours and _should_advise_captain(result, _pace_advice_state, now_ts):
             result["advised"] = True
             result["delivered_via_tmux"] = _notify_captain_pace_guard(result)
             _pace_advice_state.update({
@@ -1584,6 +1660,10 @@ def _pace_guard_step(entry):
             })
         else:
             result["advised"] = False
+            if not in_hours:
+                # Il sample resta, la sveglia no: è la riga che distingue
+                # "guard silenzioso perché è notte" da "guard morto".
+                result["silenced"] = "outside-working-hours"
             if not result.get("recommends_change"):
                 # Rientrati in pari (spesso perché il Capitano ha applicato):
                 # si dimentica l'ultimo consiglio, così la prossima deriva
@@ -1775,7 +1855,7 @@ def _evening_release(now_dt):
     return False
 
 
-def _pace_verdict_line(weekly_pace, wk_remaining_pct):
+def _pace_verdict_line(weekly_pace, wk_remaining_pct, harvest_backlog=None):
     """VERDETTO imperativo del weekly-pace per la Sentinella (Passo A, 2026-06-28).
 
     Visione utente: dare alla Sentinella la CONCLUSIONE pronta, non solo i numeri
@@ -1826,10 +1906,22 @@ def _pace_verdict_line(weekly_pace, wk_remaining_pct):
                  if isinstance(early, (int, float)) and early > 0 else "")
         return head + goal + leash + trend
     if burn:
-        return (f" WEEKLY-PACE→ACCELERATE-SATURATE: current pace ends at ~{proj:.0f}%,"
-                f" wasting ~{wasted:.0f}% of the weekly quota before reset"
+        diag = (f"current pace ends at ~{proj:.0f}%, wasting ~{wasted:.0f}% of "
+                f"the weekly quota before reset"
                 if isinstance(proj, (int, float)) and isinstance(wasted, (int, float))
-                else " WEEKLY-PACE→ACCELERATE-SATURATE: budget at risk of waste")
+                else "budget at risk of waste")
+        # [BURN-MODE-ADVISES-THE-WRONG-LEVER] — misurato su P05 il 2026-08-02:
+        # l'allarme ha suonato per ore su «scala worker» mentre il team aveva
+        # 460 posizioni e ZERO candidature. Più sourcing non satura (è
+        # work-capped); scrivere CV sì, ed è anche il lavoro che manca. Con un
+        # raccolto pronto il verdetto propone la MODALITÀ, che è una scelta
+        # dell'utente: il Capitano la gira, nessuno la cambia da sé.
+        if isinstance(harvest_backlog, int) and harvest_backlog > 0:
+            return (f" WEEKLY-PACE→PROPOSE-HARVEST: {diag}; "
+                    f"{harvest_backlog} positions already found are waiting for "
+                    f"a CV — more scouting cannot spend it. Ask the user to "
+                    f"switch to `harvest` mode; do NOT switch it yourself")
+        return f" WEEKLY-PACE→ACCELERATE-SATURATE: {diag}"
     goal = (f" (~{sust:.2f}%/h)" if isinstance(sust, (int, float)) else "")
     return f" WEEKLY-PACE→MAINTAIN{goal}{leash}"
 
@@ -2271,7 +2363,11 @@ def main():
             entry["source"] = "bridge"
             write_jsonl(entry)
             write_log(entry)
-            _pace_guard_step(entry)
+            # Il gate orario calcolato in testa al tick vale anche qui: il
+            # consiglio di pacing sveglia il Capitano come qualunque altro
+            # messaggio, e fuori finestra nessuna LLM va svegliata.
+            _pace_guard_step(entry, within_hours=within_hours,
+                             burn_intent_on=_bi_on)
 
             # Vitals RAM/CPU (2026-06-18): campiona a OGNI tick su vitals.jsonl
             # (file dedicato — NON nel tick Sentinella, che resta sul flusso quota).

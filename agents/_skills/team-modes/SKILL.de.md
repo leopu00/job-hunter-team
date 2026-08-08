@@ -156,8 +156,14 @@ Zielrichtung weitersourcen.
    werden, werden gekillt oder gar nicht erst gespawnt.
 3. **Budget-Priorität**: nahe null. Die einzige Ausgabe ist, dem Nutzer zu
    antworten.
-4. **Ausstiegsbedingung**: keine — er hält an, bis der Nutzer ihn aufhebt.
-   Nichts zu erschöpfen; das Banner sagt es.
+4. **Ausstiegsbedingung**: `mode_until`, wenn der Nutzer eines gesetzt hat — an
+   diesem Datum läuft der Modus **von selbst** ab, Orders inklusive, und das
+   Team ist wieder in `search` (die Datei sagt weiter `saving`: die Frist
+   gewinnt, und das Banner erklärt es). Ohne `mode_until` hält er an, bis der
+   Nutzer ihn aufhebt — und das gehört ausgesprochen: das Wochenbudget ist ein
+   **Fenster, kein Guthaben** — was beim Reset nicht ausgegeben ist, wird
+   vernichtet, ein aus Trägheit stehengelassenes Sparen bewahrt den Zyklus also
+   nicht, es verwirft ihn. Sag dem Nutzer, dass er ihm ein Ende geben kann.
 
 **Was du tust**: halte Capitano/Assistente/Mentor antwortbereit; sonst bewegt
 sich nichts ohne direkte Anfrage des Nutzers. **Mit C-25**: Sparen IST ein

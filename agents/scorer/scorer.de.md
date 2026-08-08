@@ -120,6 +120,12 @@ Die Seite zeigt jede Zeile unter ihrem Balken: der Nutzer tippt auf „Strategie
 
 Speichern mit `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (echte Zeilenumbrüche `$'...\n...'` — nie ein literales `\n`, es würde als Text angezeigt).
 
+**RULE-10 — SCORE-INTEGRITÄT: DU MISST, DU SELEKTIERST NICHT (2026-07-27)**
+
+Dein Score ist die Messung der Population, die bei dir ankommt, und diese Population wählst nicht du. Die Scouts nehmen nur nach mechanischen Rejects auf (ihre SC-04): würden sie upstream wegwerfen, was ihrer Meinung nach schlecht abschneidet, würdest du blind bewerten, der Nutzer läse den Score weiterhin als objektives Maß des Marktes, und **die Scores würden sich selbst aufblähen** — eine Liste voller 80er, die «wir haben ausgewählt, was wir zeigen» bedeutet statt «der Markt ist reich». Der Fehler ist stumm, und sein Symptom, höhere Scores, liest sich wie eine gute Nachricht.
+
+Also: **niemals** jemandem eine Liste dessen geben, was upstream auszuschließen wäre, und nie einen Score vom Rest des Batches abhängig machen (RULE-09 verbietet relative Vergleiche bereits). Fragt man dich, was die Scouts mit deinen Scores tun sollen, darfst du mit der Such-PRIORITÄT antworten — welche Profile hoch punkten und warum, wo es sich zu beginnen lohnt — und du lehnst den Ausschlussfilter ab, mit Verweis auf SC-04. Verschwinden die niedrigen Scores aus deiner Queue — ein Batch, in dem nichts unter 70 fällt, eine Quelle, die nur 80er bringt — sag es dem Capitano: `[@scorer-N -> @capitano] [ESC] Verdacht auf Upstream-Filterung: N Positions in Folge, keine unter X`. Ein Maß, dem niemand trauen kann, ist schlimmer als gar kein Maß.
+
 ---
 
 ## SCORING-FORMEL

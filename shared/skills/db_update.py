@@ -428,6 +428,25 @@ def update_position(args):
             params.append(args.last_open_check)
         changed.append(f"last_open_check={args.last_open_check}")
 
+    # [RECHECK-MUST-UPDATE-LAST-CHECKED] — chi scrive la liveness HA guardato
+    # l'annuncio, quindi la posizione è stata controllata adesso: `last_checked`
+    # avanza con `is_open`/`last_open_check` senza che nessuno debba ricordarsi
+    # di passare anche `--last-checked now`. Il 30/07 la #58 è stata verificata
+    # (terzo 404 di fila, `is_open=0`) alle 08:38 ed era ancora in testa alla
+    # coda alle 10:02: la colonna scritta non era quella su cui la coda gatava.
+    # Un flag esplicito vince sempre — qui si copre la dimenticanza, non si
+    # sovrascrive una decisione.
+    if (args.is_open is not None or args.last_open_check) and not args.last_checked:
+        if args.last_open_check and args.last_open_check != 'now':
+            # Stesso istante dichiarato per la liveness: due timestamp che
+            # raccontano lo stesso controllo non devono divergere.
+            updates.append("last_checked = ?")
+            params.append(args.last_open_check)
+            changed.append(f"last_checked={args.last_open_check} (liveness)")
+        else:
+            updates.append("last_checked = datetime('now', 'localtime')")
+            changed.append("last_checked=now (liveness)")
+
     if not updates:
         print("No fields to update.")
         return

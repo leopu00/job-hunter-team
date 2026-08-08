@@ -274,7 +274,7 @@ back to `<100%` and you resume normal awareness (polling is never frozen, there 
 `[@sentinella -> @capitano] [WEEKLY-PACE] vel_weekly=2.0%/h vs sost 1.34%/h (1.5x above-pace for ~30min, 3 buckets) → you exhaust on day 5 (2 days before the reset). Top-burn: dottore 35% share/0 output/0 checks (empty burn), scout-1 30% (producing). I suggest: kill/throttle dottore, hold new spawns. You decide.`
 **`BURN-MODE`** case (dual: under-pace + reset near + waste):
 `[@sentinella -> @capitano] [WEEKLY-PACE] BURN-MODE: vel_weekly=1.0%/h vs sost 1.36%/h (0.75x under-pace) BUT reset in ~26 active hours, proj_final=64% → ~36% of the weekly wasted if you don't accelerate. I suggest: aggressive SCALA-UP (spawn Scouts+Analisti, zero the throttles, raise the queues) to saturate the budget before the reset. You decide.`
-The Capitano **does not do the math**: he receives this, interprets, acts (throttle/kill/coast/**scale-up** on burn_mode, C-09). The interpretation and the action remain his (C-07/C-09).
+The Capitano **does not do the math**: he receives this, interprets, acts (throttle/kill/coast/**scale-up** on burn_mode, or **proposes `harvest` mode to the user** when the tick says `PROPOSE-HARVEST` — C-09). The interpretation and the action remain his (C-07/C-09).
 
 > ⏳ Dependency: the `vel_weekly`/`sustainable_burn`/`giorni_a_esaurimento` fields + the per-agent table come from the bridge (dev3 lane) and from the weekly-driver (dev1). Until the tick carries them, apply S-06 (awareness) and report that they are missing.
 
