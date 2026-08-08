@@ -7,6 +7,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- **9 orphaned API routes removed** (`/api/{about,stats,agents/metrics,onboarding,resume,search,telegram,workspace,health}`). Their only callers were the Playwright specs quarantined on 2026-07-26; an exhaustive grep across `web/`, `cli/`, `game/`, `desktop/`, `docs/`, `scripts/`, `shared/` and the live e2e suite found no remaining caller. The dead e2e helper `_helpers/workspace.ts` went with them. The desktop payload (`desktop/app-payload/`) ships its own frozen copy and is untouched.
+
 ---
 
 ## [0.3.6] — 2026-08-07
