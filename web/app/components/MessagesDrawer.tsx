@@ -35,6 +35,7 @@ import { useChatLaneLive } from "@/app/hooks/useChatLaneLive";
 import { useBoxClient } from "@/app/hooks/useBoxClient";
 import { chatComposerBlocked } from "@/lib/box-client";
 import { chatTurnDelivery, hasStalledTurn } from "@/lib/chat-delivery";
+import { noteServerTime, serverNow } from "@/lib/server-clock";
 import { CHAT_DELIVERY_T } from "@/lib/chat-delivery.i18n";
 import {
   optimisticUserTurn,
@@ -125,6 +126,9 @@ export default function MessagesDrawer() {
   const [retryState, setRetryState] = useState<
     "idle" | "sending" | "done" | "failed"
   >("idle");
+  // Orologio interno delle bolle. Sta qui, con gli altri stati, perché
+  // `refresh()` lo riallinea appena il server dice che ore sono.
+  const [clock, setClock] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
 
@@ -139,7 +143,15 @@ export default function MessagesDrawer() {
       const data = (await res.json()) as {
         messages: PendingMessage[];
         unread: number;
+        server_now?: string;
       };
+      // Lo scarto fra i due orologi si aggiorna a ogni giro: il drawer
+      // chiede questi messaggi al mount, alla riapertura e al ritorno del
+      // tab, quindi non serve nessuna chiamata in più per saperlo.
+      noteServerTime(data.server_now);
+      // Riallinea subito: aspettare il battito da 30s vorrebbe dire mezzo
+      // minuto in cui le bolle sono ancora misurate col vecchio scarto.
+      setClock(serverNow());
       setMessages(data.messages ?? []);
       setUnread(data.unread ?? 0);
     } catch {
@@ -236,15 +248,14 @@ export default function MessagesDrawer() {
   // prima render del client coincide con quella del server (il drawer vive
   // in navbar, quindi è renderizzato ovunque) e il tempo vero entra dopo il
   // mount. Batte solo finché c'è un turno in attesa.
-  const [clock, setClock] = useState(0);
   const waiting = messages.some(
     (m) =>
       m.author === "user" && !m.delivered_at && !m.id.startsWith("pending:"),
   );
   useEffect(() => {
-    setClock(Date.now());
+    setClock(serverNow());
     if (!waiting) return;
-    const id = window.setInterval(() => setClock(Date.now()), 30_000);
+    const id = window.setInterval(() => setClock(serverNow()), 30_000);
     return () => window.clearInterval(id);
   }, [waiting]);
   const stalled = active ? hasStalledTurn(active.messages, lane, clock) : false;

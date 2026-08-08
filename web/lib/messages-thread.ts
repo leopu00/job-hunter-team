@@ -12,6 +12,7 @@
  * nessuno stato, così ogni componente resta padrone del proprio.
  */
 import type { PendingMessage } from "@/lib/types";
+import { noteServerTimeFromResponse } from "@/lib/server-clock";
 
 /**
  * Voci di dizionario usate identiche da entrambe le viste. Ogni componente
@@ -104,6 +105,10 @@ export async function postChat(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ agent, message }),
   });
+  // Lo scarto fra gli orologi si rinfresca qui perché è il momento esatto
+  // in cui nasce un turno da misurare: la bolla appena creata verrà
+  // confrontata con timestamp scritti da questo stesso server.
+  noteServerTimeFromResponse(res);
   const body = (await res.json().catch(() => ({}))) as {
     error?: string;
     message?: PendingMessage;
