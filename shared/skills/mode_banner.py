@@ -482,6 +482,11 @@ def _care_queue_counts(conn) -> dict:
         except (TypeError, ValueError):
             ms = CARE_RECHECK_DEFAULT_MIN_SCORE
             days = CARE_RECHECK_DEFAULT_OLDER_THAN_DAYS
+        # Stessa anzianità della coda `recheck_due_rows` (db_query.py): l'ultima
+        # verifica è la PIÙ RECENTE fra `last_checked` e `last_open_check`
+        # ([RECHECK-MUST-UPDATE-LAST-CHECKED]). Guardando solo la prima, il
+        # banner conterebbe come "da ricontrollare" posizioni che la coda non
+        # serve più — e dichiarerebbe la cura mai finita.
         out["recheck"] = _count(conn, """
             SELECT COUNT(*)
             FROM positions p
@@ -489,8 +494,8 @@ def _care_queue_counts(conn) -> dict:
                   FROM scores GROUP BY position_id) s ON s.position_id = p.id
             WHERE p.status != 'excluded'
               AND s.ts >= ?
-              AND (p.last_checked IS NULL
-                   OR p.last_checked < datetime('now', ?))
+              AND MAX(COALESCE(p.last_checked, ''),
+                      COALESCE(p.last_open_check, '')) < datetime('now', ?)
         """, (ms, f"-{days} days"))
 
     gm = pol["geocode_missing"]
