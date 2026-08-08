@@ -168,43 +168,9 @@ async function handleEnable(options) {
 
   // Auto-push: l'utente ha appena collegato il VPS, vuole vedere i dati sul
   // dashboard subito — non ha senso forzarlo a un secondo comando.
-  // [JHT-CLOUD-RESTORE] T-029 — il lato PULL del bootstrap, simmetrico al
-  // push in coda: DB locale VUOTO → il restore parte da solo (dentro
-  // handleRestore ci sono gia' la transazione e la guardia anti-DELETE di
-  // T-027); DB con dati → push. Mai entrambi: un DB vuoto non ha nulla da
-  // spingere, un DB pieno non deve mai essere sovrascritto. `--no-push`
-  // governa solo il push: il restore scrive il DB LOCALE e solo quando non
-  // c'e' lavoro da preservare.
-  let dbPresent = true;
-  try {
-    await stat(JHT_DB_PATH);
-  } catch {
-    dbPresent = false;
-  }
-  let localPositions = null;
-  if (dbPresent) {
-    try {
-      const { DatabaseSync } = await import('node:sqlite');
-      localPositions = readLocalPositionsCount(DatabaseSync, JHT_DB_PATH);
-    } catch { /* Node < 22.5: resta null → niente restore automatico */ }
-  }
-  const restoreDecision = decideBootstrapRestore({ dbPresent, localPositions });
-  if (restoreDecision.restore) {
-    if (!options.uiJson) {
-      console.log('');
-      console.log(pc.dim('Empty local database: pulling the cloud snapshot (automatic bootstrap restore)...'));
-    }
-    emitCloudLoginUi(options, 'bootstrap_restore', { reason: restoreDecision.reason });
-    const prevExitCode = process.exitCode;
-    await handleRestore({ confirmRestore: true });
-    if (process.exitCode === 1) {
-      console.log(pc.yellow('  Pairing OK but the automatic restore failed. Recover: jht cloud restore --confirm-restore'));
-      process.exitCode = prevExitCode;
-    }
-    // Niente push dopo un restore: il cursore di sync e' gia' stato
-    // resettato a "now" dal restore stesso.
-    return;
-  }
+  // [JHT-CLOUD-RESTORE] T-029 — DB locale VUOTO → restore automatico; DB con
+  // dati → push. Mai entrambi. Il gancio e' UNO, in `maybeBootstrapRestore`.
+  if (await maybeBootstrapRestore(options)) return;
 
   if (options.noPush) {
     console.log(pc.dim('  Initial push skipped (--no-push). Run: jht cloud push'));
@@ -230,6 +196,51 @@ async function handleEnable(options) {
     console.log(pc.yellow('  Cloud sync was enabled, but the initial push failed. Retry with: jht cloud push'));
     process.exitCode = prevExitCode;
   }
+}
+
+/**
+ * [JHT-CLOUD-RESTORE] T-029 — il gancio bootstrap-restore, in UN punto (T-030:
+ * era duplicato identico in handleEnable e handleLogin, e due copie divergono
+ * al primo cambio).
+ *
+ * Sonda il DB locale (esiste? quante positions?) e lascia la DECISIONE a
+ * `bootstrap-restore.js`: DB vuoto → parte `handleRestore` con la sua
+ * transazione e la guardia anti-DELETE di T-027; qualunque altra forma di DB
+ * → niente. Fail-safe come il ramo push: un restore fallito non invalida il
+ * pairing — warn, recover hint, exitCode preservato.
+ *
+ * Ritorna true se il restore e' partito: il chiamante torna SENZA pushare
+ * (un DB appena tirato giu' non ha nulla di nuovo da dire, e il restore ha
+ * gia' resettato il cursore di sync a "now").
+ */
+async function maybeBootstrapRestore(options = {}) {
+  let dbPresent = true;
+  try {
+    await stat(JHT_DB_PATH);
+  } catch {
+    dbPresent = false;
+  }
+  let localPositions = null;
+  if (dbPresent) {
+    try {
+      const { DatabaseSync } = await import('node:sqlite');
+      localPositions = readLocalPositionsCount(DatabaseSync, JHT_DB_PATH);
+    } catch { /* Node < 22.5: resta null → niente restore automatico */ }
+  }
+  const decision = decideBootstrapRestore({ dbPresent, localPositions });
+  if (!decision.restore) return false;
+  if (!options.uiJson) {
+    console.log('');
+    console.log(pc.dim('Empty local database: pulling the cloud snapshot (automatic bootstrap restore)...'));
+  }
+  emitCloudLoginUi(options, 'bootstrap_restore', { reason: decision.reason });
+  const prevExitCode = process.exitCode;
+  await handleRestore({ confirmRestore: true });
+  if (process.exitCode === 1) {
+    console.log(pc.yellow('  Pairing OK but the automatic restore failed. Recover: jht cloud restore --confirm-restore'));
+    process.exitCode = prevExitCode;
+  }
+  return true;
 }
 
 /**
@@ -878,43 +889,9 @@ export async function handleLogin(options = {}) {
     );
   }
 
-  // [JHT-CLOUD-RESTORE] T-029 — il lato PULL del bootstrap, simmetrico al
-  // push in coda: DB locale VUOTO → il restore parte da solo (dentro
-  // handleRestore ci sono gia' la transazione e la guardia anti-DELETE di
-  // T-027); DB con dati → push. Mai entrambi: un DB vuoto non ha nulla da
-  // spingere, un DB pieno non deve mai essere sovrascritto. `--no-push`
-  // governa solo il push: il restore scrive il DB LOCALE e solo quando non
-  // c'e' lavoro da preservare.
-  let dbPresent = true;
-  try {
-    await stat(JHT_DB_PATH);
-  } catch {
-    dbPresent = false;
-  }
-  let localPositions = null;
-  if (dbPresent) {
-    try {
-      const { DatabaseSync } = await import('node:sqlite');
-      localPositions = readLocalPositionsCount(DatabaseSync, JHT_DB_PATH);
-    } catch { /* Node < 22.5: resta null → niente restore automatico */ }
-  }
-  const restoreDecision = decideBootstrapRestore({ dbPresent, localPositions });
-  if (restoreDecision.restore) {
-    if (!options.uiJson) {
-      console.log('');
-      console.log(pc.dim('Empty local database: pulling the cloud snapshot (automatic bootstrap restore)...'));
-    }
-    emitCloudLoginUi(options, 'bootstrap_restore', { reason: restoreDecision.reason });
-    const prevExitCode = process.exitCode;
-    await handleRestore({ confirmRestore: true });
-    if (process.exitCode === 1) {
-      console.log(pc.yellow('  Pairing OK but the automatic restore failed. Recover: jht cloud restore --confirm-restore'));
-      process.exitCode = prevExitCode;
-    }
-    // Niente push dopo un restore: il cursore di sync e' gia' stato
-    // resettato a "now" dal restore stesso.
-    return;
-  }
+  // [JHT-CLOUD-RESTORE] T-029 — DB locale VUOTO → restore automatico; DB con
+  // dati → push. Mai entrambi. Il gancio e' UNO, in `maybeBootstrapRestore`.
+  if (await maybeBootstrapRestore(options)) return;
 
   if (options.noPush) {
     if (!options.uiJson) {
