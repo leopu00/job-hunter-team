@@ -61,17 +61,30 @@ using System;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
 public static class JhtUpdateFileIdentity {
     private const uint GENERIC_READ = 0x80000000;
+    private const uint GENERIC_WRITE = 0x40000000;
+    private const uint READ_CONTROL = 0x00020000;
+    private const uint WRITE_DAC = 0x00040000;
+    private const uint WRITE_OWNER = 0x00080000;
     private const uint FILE_SHARE_READ = 0x00000001;
+    private const uint CREATE_NEW = 1;
     private const uint OPEN_EXISTING = 3;
+    private const uint FILE_ATTRIBUTE_NORMAL = 0x00000080;
     private const uint FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000;
     private const uint FILE_FLAG_SEQUENTIAL_SCAN = 0x08000000;
     private const uint FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400;
+    private const uint MOVEFILE_REPLACE_EXISTING = 0x00000001;
+    private const uint MOVEFILE_WRITE_THROUGH = 0x00000008;
+    private const uint OWNER_SECURITY_INFORMATION = 0x00000001;
+    private const uint DACL_SECURITY_INFORMATION = 0x00000004;
+    private const uint PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct BY_HANDLE_FILE_INFORMATION {
@@ -100,6 +113,23 @@ public static class JhtUpdateFileIdentity {
     private static extern uint GetFinalPathNameByHandle(
         SafeFileHandle file, StringBuilder path, uint length, uint flags);
 
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool MoveFileEx(
+        string existingName, string newName, uint flags);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetSecurityDescriptorOwner(
+        IntPtr descriptor, out IntPtr owner, out bool defaulted);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetSecurityDescriptorDacl(
+        IntPtr descriptor, out bool present, out IntPtr dacl, out bool defaulted);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern uint SetSecurityInfo(
+        IntPtr handle, int objectType, uint information, IntPtr owner,
+        IntPtr group, IntPtr dacl, IntPtr sacl);
+
     private static string NormalizeFinalPath(string path) {
         if (path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
             return @"\\" + path.Substring(8);
@@ -108,32 +138,106 @@ public static class JhtUpdateFileIdentity {
         return path;
     }
 
+    private static BY_HANDLE_FILE_INFORMATION AssertIdentity(
+        SafeFileHandle handle, string expected) {
+        BY_HANDLE_FILE_INFORMATION info;
+        if (!GetFileInformationByHandle(handle, out info))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        if ((info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+            throw new InvalidDataException("update file is a reparse point");
+        if (info.NumberOfLinks != 1)
+            throw new InvalidDataException("update file has multiple hard links");
+        StringBuilder finalPath = new StringBuilder(32768);
+        uint length = GetFinalPathNameByHandle(
+            handle, finalPath, (uint)finalPath.Capacity, 0);
+        if (length == 0 || length >= finalPath.Capacity)
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        string actual = Path.GetFullPath(NormalizeFinalPath(finalPath.ToString()));
+        if (!String.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("update file canonical path changed");
+        return info;
+    }
+
     public static string Sha256(string inputPath) {
         string expected = Path.GetFullPath(inputPath);
         using (SafeFileHandle handle = CreateFile(
             expected, GENERIC_READ, FILE_SHARE_READ, IntPtr.Zero, OPEN_EXISTING,
             FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN, IntPtr.Zero)) {
             if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
-            BY_HANDLE_FILE_INFORMATION info;
-            if (!GetFileInformationByHandle(handle, out info))
-                throw new Win32Exception(Marshal.GetLastWin32Error());
-            if ((info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
-                throw new InvalidDataException("update file is a reparse point");
-            if (info.NumberOfLinks != 1)
-                throw new InvalidDataException("update file has multiple hard links");
-            StringBuilder finalPath = new StringBuilder(32768);
-            uint length = GetFinalPathNameByHandle(handle, finalPath, (uint)finalPath.Capacity, 0);
-            if (length == 0 || length >= finalPath.Capacity)
-                throw new Win32Exception(Marshal.GetLastWin32Error());
-            string actual = Path.GetFullPath(NormalizeFinalPath(finalPath.ToString()));
-            if (!String.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("update file canonical path changed");
+            AssertIdentity(handle, expected);
             using (FileStream stream = new FileStream(handle, FileAccess.Read, 1048576, false))
             using (SHA256 algorithm = SHA256.Create()) {
                 return BitConverter.ToString(algorithm.ComputeHash(stream))
                     .Replace("-", "").ToLowerInvariant();
             }
         }
+    }
+
+    public static string HardenAndSha256(FileStream stream, string inputPath) {
+        string expected = Path.GetFullPath(inputPath);
+        SafeFileHandle handle = stream.SafeFileHandle;
+        BY_HANDLE_FILE_INFORMATION before = AssertIdentity(handle, expected);
+        FileSecurity security = new FileSecurity();
+        SecurityIdentifier current = WindowsIdentity.GetCurrent().User;
+        security.SetOwner(current);
+        security.SetAccessRuleProtection(true, false);
+        security.AddAccessRule(new FileSystemAccessRule(
+            current, FileSystemRights.FullControl, AccessControlType.Allow));
+        byte[] descriptor = security.GetSecurityDescriptorBinaryForm();
+        GCHandle pinned = GCHandle.Alloc(descriptor, GCHandleType.Pinned);
+        try {
+            IntPtr owner;
+            IntPtr dacl;
+            bool ownerDefaulted;
+            bool daclPresent;
+            bool daclDefaulted;
+            IntPtr value = pinned.AddrOfPinnedObject();
+            if (!GetSecurityDescriptorOwner(value, out owner, out ownerDefaulted) ||
+                !GetSecurityDescriptorDacl(
+                    value, out daclPresent, out dacl, out daclDefaulted) ||
+                !daclPresent)
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            uint result = SetSecurityInfo(handle.DangerousGetHandle(), 1,
+                OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION |
+                PROTECTED_DACL_SECURITY_INFORMATION, owner, IntPtr.Zero,
+                dacl, IntPtr.Zero);
+            if (result != 0) throw new Win32Exception((int)result);
+        } finally {
+            pinned.Free();
+        }
+        BY_HANDLE_FILE_INFORMATION after = AssertIdentity(handle, expected);
+        if (before.VolumeSerialNumber != after.VolumeSerialNumber ||
+            before.FileIndexHigh != after.FileIndexHigh ||
+            before.FileIndexLow != after.FileIndexLow)
+            throw new InvalidDataException("update file identity changed");
+        stream.Position = 0;
+        using (SHA256 algorithm = SHA256.Create()) {
+            return BitConverter.ToString(algorithm.ComputeHash(stream))
+                .Replace("-", "").ToLowerInvariant();
+        }
+    }
+
+    public static FileStream CreateNewAtomicStream(string inputPath) {
+        string path = Path.GetFullPath(inputPath);
+        SafeFileHandle handle = CreateFile(path,
+            GENERIC_READ | GENERIC_WRITE | READ_CONTROL | WRITE_DAC | WRITE_OWNER,
+            0, IntPtr.Zero, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
+        if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+        try {
+            return new FileStream(handle, FileAccess.ReadWrite, 4096, false);
+        } catch {
+            handle.Dispose();
+            throw;
+        }
+    }
+
+    public static void MoveReplace(string sourcePath, string destinationPath,
+        bool replaceExisting) {
+        uint flags = MOVEFILE_WRITE_THROUGH;
+        if (replaceExisting) flags |= MOVEFILE_REPLACE_EXISTING;
+        if (!MoveFileEx(Path.GetFullPath(sourcePath),
+            Path.GetFullPath(destinationPath), flags))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
     }
 }
 
@@ -619,6 +723,31 @@ function Assert-NoForeignWriteAcl {
   }
 }
 
+function Assert-ExactCurrentOnlyAcl {
+  param([string]$Path, [switch]$Directory)
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  $isDirectory = $item -is [IO.DirectoryInfo]
+  if ($Directory -and -not $isDirectory) { throw 'protected directory expected' }
+  if (-not $Directory -and $isDirectory) { throw 'protected file expected' }
+  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected node is a reparse point' }
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
+  if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $currentSid) { throw 'protected node has a foreign owner' }
+  if (-not $acl.AreAccessRulesProtected) { throw 'protected node inherits its DACL' }
+  $rules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+  if ($rules.Count -ne 1) { throw 'protected node DACL is not current-only' }
+  $rule = $rules[0]
+  $expectedInheritance = if ($Directory) { [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit } else { [Security.AccessControl.InheritanceFlags]::None }
+  if ($rule.IsInherited -or
+      $rule.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or
+      $rule.IdentityReference.Value -ne $currentSid -or
+      [Security.AccessControl.FileSystemRights]$rule.FileSystemRights -ne [Security.AccessControl.FileSystemRights]::FullControl -or
+      $rule.InheritanceFlags -ne $expectedInheritance -or
+      $rule.PropagationFlags -ne [Security.AccessControl.PropagationFlags]::None) {
+    throw 'protected node DACL is not current-only'
+  }
+}
+
 function Assert-CurrentOwner {
   param([string]$Path)
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
@@ -654,13 +783,13 @@ function Initialize-ProtectedDirectory {
   Assert-NoReparseAncestors $Path
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
   if (($item -isnot [IO.DirectoryInfo]) -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected directory expected' }
-  $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
+  $acl = if ($preexisting) { $item.GetAccessControl([Security.AccessControl.AccessControlSections]::All) } else { New-Object Security.AccessControl.DirectorySecurity }
   if (-not $preexisting) { $acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User) }
   $acl.SetAccessRuleProtection($true, $false)
   $rule = New-Object Security.AccessControl.FileSystemAccessRule([Security.Principal.WindowsIdentity]::GetCurrent().User, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-  $acl.SetAccessRule($rule)
+  if ($preexisting) { $acl.SetAccessRule($rule) } else { $acl.AddAccessRule($rule) }
   $item.SetAccessControl($acl)
-  Assert-OwnerAndAcl $Path -Directory
+  if ($preexisting) { Assert-OwnerAndAcl $Path -Directory } else { Assert-ExactCurrentOnlyAcl $Path -Directory }
 }
 
 function Protect-File {
@@ -678,13 +807,217 @@ function Protect-File {
   Assert-OwnerAndAcl $Path
 }
 
+function Protect-OwnedFile {
+  param([string]$Path)
+  Assert-NoReparseAncestors $Path
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  if (($item -isnot [IO.FileInfo]) -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected file expected' }
+  $acl = New-Object Security.AccessControl.FileSecurity
+  $acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User)
+  $acl.SetAccessRuleProtection($true, $false)
+  $rule = New-Object Security.AccessControl.FileSystemAccessRule([Security.Principal.WindowsIdentity]::GetCurrent().User, 'FullControl', 'Allow')
+  $acl.AddAccessRule($rule)
+  $item.SetAccessControl($acl)
+  Assert-ExactCurrentOnlyAcl $Path
+}
+
+function Get-BytesSha256 {
+  param([byte[]]$Bytes)
+  $algorithm = [Security.Cryptography.SHA256]::Create()
+  try { return ([BitConverter]::ToString($algorithm.ComputeHash($Bytes))).Replace('-', '').ToLowerInvariant() } finally { $algorithm.Dispose() }
+}
+
+function Assert-AtomicDestinationPreflight {
+  param([string]$Path)
+  Assert-NoReparseAncestors $Path
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+  if ($null -eq $item) { return }
+  if (($item -isnot [IO.FileInfo]) -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'atomic destination is not a regular file' }
+  Assert-CurrentOwner $Path
+  Assert-NoForeignWriteAcl $Path
+  $null = Get-Sha256 $Path
+}
+
+function Remove-ProtectedFileIfPresent {
+  param([string]$Path)
+  Assert-AtomicDestinationPreflight $Path
+  if (Test-Path -LiteralPath $Path -PathType Leaf) { Remove-Item -LiteralPath $Path -Force -ErrorAction Stop }
+}
+
+function Remove-ProtectedTreeIfPresent {
+  param([string]$Path)
+  Assert-NoReparseAncestors $Path
+  $root = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+  if ($null -eq $root) { return }
+  if (($root -isnot [IO.DirectoryInfo]) -or ($root.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected cleanup directory expected' }
+  $pending = @($root)
+  while ($pending.Count -gt 0) {
+    $directory = $pending[$pending.Count - 1]
+    $pending = if ($pending.Count -eq 1) { @() } else { @($pending[0..($pending.Count - 2)]) }
+    Assert-CurrentOwner $directory.FullName
+    Assert-NoForeignWriteAcl $directory.FullName
+    foreach ($child in @(Get-ChildItem -LiteralPath $directory.FullName -Force -ErrorAction Stop)) {
+      if (($child.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'protected cleanup tree contains a reparse point' }
+      Assert-CurrentOwner $child.FullName
+      Assert-NoForeignWriteAcl $child.FullName
+      if ($child -is [IO.DirectoryInfo]) { $pending += $child } elseif ($child -is [IO.FileInfo]) { $null = Get-Sha256 $child.FullName } else { throw 'protected cleanup tree contains an unexpected node' }
+    }
+  }
+  Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+}
+
+function Open-AtomicTempStream {
+  param([string]$Path)
+  return [JhtUpdateFileIdentity]::CreateNewAtomicStream($Path)
+}
+
+function Write-AtomicTempContent {
+  param([IO.Stream]$Stream, [byte[]]$Bytes = $null, [string]$Source = '')
+  if ($PSBoundParameters.ContainsKey('Bytes')) {
+    $Stream.Write($Bytes, 0, $Bytes.Length)
+    return
+  }
+  $sourceStream = [IO.File]::Open($Source, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+  try { $sourceStream.CopyTo($Stream) } finally { $sourceStream.Dispose() }
+}
+
+function Flush-AtomicTempStream {
+  param([IO.Stream]$Stream)
+  $Stream.Flush($true)
+}
+
+function Protect-OwnedAtomicStream {
+  param([IO.FileStream]$Stream, [string]$Path, [string]$ExpectedSha256, [uint64]$ExpectedSize)
+  if ([uint64]$Stream.Length -ne $ExpectedSize) { throw 'atomic stream size mismatch' }
+  $actual = [JhtUpdateFileIdentity]::HardenAndSha256($Stream, $Path)
+  if ($actual -cne $ExpectedSha256) { throw 'atomic stream hash mismatch' }
+}
+
+function Promote-AtomicTemp {
+  param([string]$Temporary, [string]$Destination, [bool]$DestinationExisted, [string]$Backup = '')
+  if ($Backup) { throw 'atomic promotion does not accept an implicit backup' }
+  [JhtUpdateFileIdentity]::MoveReplace($Temporary, $Destination, $DestinationExisted)
+}
+
+function Assert-ProtectedFileContent {
+  param([string]$Path, [string]$ExpectedSha256, [uint64]$ExpectedSize)
+  Assert-NoReparseAncestors $Path
+  Assert-ExactCurrentOnlyAcl $Path
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  if (($item -isnot [IO.FileInfo]) -or [uint64]$item.Length -ne $ExpectedSize) { throw 'atomic file size mismatch' }
+  if ((Get-Sha256 $Path) -cne $ExpectedSha256) { throw 'atomic file hash mismatch' }
+}
+
+function New-ProtectedAtomicTemp {
+  param(
+    [string]$Path,
+    [byte[]]$Bytes = $null,
+    [string]$Source = '',
+    [string]$ExpectedSha256,
+    [uint64]$ExpectedSize)
+  $stream = Open-AtomicTempStream $Path
+  try {
+    if ($PSBoundParameters.ContainsKey('Bytes')) { Write-AtomicTempContent $stream -Bytes $Bytes } else { Write-AtomicTempContent $stream -Source $Source }
+    Flush-AtomicTempStream $stream
+    Protect-OwnedAtomicStream $stream $Path $ExpectedSha256 $ExpectedSize
+  } finally { $stream.Dispose() }
+  Assert-ProtectedFileContent $Path $ExpectedSha256 $ExpectedSize
+}
+
+function Write-ProtectedAtomicFile {
+  param(
+    [string]$Destination,
+    [byte[]]$Bytes = $null,
+    [string]$Source = '',
+    [string]$ExpectedSha256 = '',
+    [string]$ReplacementBackupPath = '',
+    [switch]$ConsumeSource)
+  $hasBytes = $PSBoundParameters.ContainsKey('Bytes')
+  if ($hasBytes -eq [bool]$Source) { throw 'atomic content source is ambiguous' }
+  $destinationFull = [IO.Path]::GetFullPath($Destination)
+  $parent = [IO.Path]::GetDirectoryName($destinationFull)
+  Assert-NoReparseAncestors $parent
+  Assert-OwnerAndAcl $parent -Directory
+  $destinationExisted = Test-Path -LiteralPath $destinationFull
+  Assert-AtomicDestinationPreflight $destinationFull
+  $replacementBackupFull = ''
+  if ($ReplacementBackupPath) {
+    $replacementBackupFull = [IO.Path]::GetFullPath($ReplacementBackupPath)
+    if (-not ([IO.Path]::GetDirectoryName($replacementBackupFull)).Equals($parent, [StringComparison]::OrdinalIgnoreCase)) { throw 'atomic replacement backup must share the destination directory' }
+    Assert-AtomicDestinationPreflight $replacementBackupFull
+    if (Test-Path -LiteralPath $replacementBackupFull) { throw 'atomic replacement backup collision' }
+  }
+  if ($hasBytes) {
+    $expectedHash = Get-BytesSha256 $Bytes
+    $expectedSize = [uint64]$Bytes.Length
+  } else {
+    Assert-NoReparseAncestors $Source
+    Assert-CurrentOwner $Source
+    Assert-NoForeignWriteAcl $Source
+    $expectedHash = if ($ExpectedSha256) { $ExpectedSha256 } else { Get-Sha256 $Source }
+    if ((Get-Sha256 $Source) -cne $expectedHash) { throw 'atomic source hash mismatch' }
+    $expectedSize = [uint64](Get-Item -LiteralPath $Source -Force -ErrorAction Stop).Length
+  }
+  $temporary = Join-Path $parent ('.jht-atomic-' + [guid]::NewGuid().ToString('N'))
+  $rollback = if ($destinationExisted) { Join-Path $parent ('.jht-atomic-backup-' + [guid]::NewGuid().ToString('N')) } else { '' }
+  $rollbackLocation = $rollback
+  $originalSecurity = $null
+  $originalHash = ''
+  $originalSize = [uint64]0
+  $promoted = $false
+  try {
+    if ($destinationExisted) {
+      $originalItem = Get-Item -LiteralPath $destinationFull -Force -ErrorAction Stop
+      $originalSecurity = $originalItem.GetAccessControl([Security.AccessControl.AccessControlSections]::All)
+      $originalHash = Get-Sha256 $destinationFull
+      $originalSize = [uint64]$originalItem.Length
+      New-ProtectedAtomicTemp -Path $rollback -Source $destinationFull -ExpectedSha256 $originalHash -ExpectedSize $originalSize
+      Assert-AtomicDestinationPreflight $destinationFull
+      if ((Get-Sha256 $destinationFull) -cne $originalHash) { throw 'atomic destination changed during backup' }
+    }
+    if ($hasBytes) {
+      New-ProtectedAtomicTemp -Path $temporary -Bytes $Bytes -ExpectedSha256 $expectedHash -ExpectedSize $expectedSize
+    } else {
+      New-ProtectedAtomicTemp -Path $temporary -Source $Source -ExpectedSha256 $expectedHash -ExpectedSize $expectedSize
+    }
+    Promote-AtomicTemp $temporary $destinationFull $destinationExisted
+    $promoted = $true
+    Assert-ProtectedFileContent $destinationFull $expectedHash $expectedSize
+    if ($replacementBackupFull) {
+      Promote-AtomicTemp $rollback $replacementBackupFull $false
+      $rollbackLocation = $replacementBackupFull
+      Assert-ProtectedFileContent $replacementBackupFull $originalHash $originalSize
+    } elseif ($rollback -and (Test-Path -LiteralPath $rollback)) {
+      Remove-Item -LiteralPath $rollback -Force -ErrorAction Stop
+      $rollbackLocation = ''
+    }
+    if ($ConsumeSource -and (Test-Path -LiteralPath $Source)) { Remove-Item -LiteralPath $Source -Force -ErrorAction Stop }
+  } catch {
+    if ($promoted) {
+      if ($destinationExisted -and $rollbackLocation -and (Test-Path -LiteralPath $rollbackLocation -PathType Leaf)) {
+        Promote-AtomicTemp $rollbackLocation $destinationFull $true
+        $rollbackLocation = ''
+        if ($null -ne $originalSecurity) {
+          $restored = Get-Item -LiteralPath $destinationFull -Force -ErrorAction Stop
+          $restored.SetAccessControl($originalSecurity)
+        }
+        Assert-AtomicDestinationPreflight $destinationFull
+        if ((Get-Sha256 $destinationFull) -cne $originalHash) { throw 'atomic rollback content mismatch' }
+      } elseif (-not $destinationExisted -and (Test-Path -LiteralPath $destinationFull -PathType Leaf)) {
+        Remove-Item -LiteralPath $destinationFull -Force -ErrorAction Stop
+      }
+    }
+    throw
+  } finally {
+    if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force -ErrorAction Stop }
+    if ($rollback -and (Test-Path -LiteralPath $rollback)) { Remove-Item -LiteralPath $rollback -Force -ErrorAction Stop }
+  }
+}
+
 function Write-AtomicJson {
   param([string]$Path, [hashtable]$Value)
-  $temporary = "$Path.tmp-$PID-$([guid]::NewGuid().ToString('N'))"
   $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($Value | ConvertTo-Json -Compress -Depth 8) + "`n")
-  $stream = [IO.File]::Open($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-  try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
-  if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($temporary, $Path, $null) } else { [IO.File]::Move($temporary, $Path) }
+  Write-ProtectedAtomicFile -Destination $Path -Bytes $bytes
 }
 
 function Read-JsonFile {
@@ -692,17 +1025,49 @@ function Read-JsonFile {
   try { return Get-Content -LiteralPath $Path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop } catch { return $null }
 }
 
+function Read-ProtectedJsonFile {
+  param([string]$Path, [switch]$ExactCurrentOnly)
+  Assert-NoReparseAncestors $Path
+  Assert-CurrentOwner $Path
+  Assert-NoForeignWriteAcl $Path
+  $null = Get-Sha256 $Path
+  if ($ExactCurrentOnly) { Assert-ExactCurrentOnlyAcl $Path }
+  return Read-JsonFile $Path
+}
+
+function Read-Result {
+  if (-not (Test-Path -LiteralPath $ResultPath -PathType Leaf)) { return $null }
+  $result = Read-ProtectedJsonFile $ResultPath -ExactCurrentOnly
+  if (-not $result -or -not (Test-ExactProperties $result @('code','nonce','ok','phase','rolled_back','schema')) -or
+      -not (Test-JsonInteger $result.schema) -or [int64]$result.schema -ne 1 -or
+      [string]$result.nonce -cne $Nonce) { return $null }
+  return $result
+}
+
 function Read-Floor {
   if (-not (Test-Path -LiteralPath $FloorPath)) { return $null }
-  Assert-OwnerAndAcl $FloorPath
-  $floor = Read-JsonFile $FloorPath
+  $floor = Read-ProtectedJsonFile $FloorPath -ExactCurrentOnly
   if (-not (Test-ExactProperties $floor @('schema','sequence','version')) -or -not (Test-JsonInteger $floor.schema) -or [int64]$floor.schema -ne 1 -or -not (Test-JsonInteger $floor.sequence) -or [uint64]$floor.sequence -ne (Get-VersionSequence ([string]$floor.version))) { throw 'committed update floor is corrupt' }
   return $floor
 }
 
 function Write-Result {
   param([bool]$Ok, [string]$Phase, [string]$Code, [bool]$RolledBack = $false)
-  try { Write-AtomicJson $ResultPath @{ schema = 1; ok = $Ok; phase = $Phase; code = $Code; nonce = $Nonce; rolled_back = $RolledBack } } catch { }
+  $script:FailurePhase = 'result'
+  $script:FailureCode = 'result_write_failed'
+  Write-AtomicJson $ResultPath @{ schema = 1; ok = $Ok; phase = $Phase; code = $Code; nonce = $Nonce; rolled_back = $RolledBack }
+}
+
+function Write-FailureResultOrStderr {
+  param([string]$Phase, [string]$Code)
+  try {
+    Write-Result $false $Phase $Code
+    return $true
+  } catch {
+    [Console]::Error.WriteLine(
+      'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=result code=result_write_failed')
+    return $false
+  }
 }
 
 function Get-ExactProcess {
@@ -740,7 +1105,9 @@ function Acquire-Lock {
       $script:FailureCode = 'lock_claim_init'
       Initialize-ProtectedDirectory $claim -RequireNew -CreatedByInvocation ([ref]$claimCreated)
       $script:FailureCode = 'lock_claim_write'
-      Write-AtomicJson (Join-Path $claim 'owner.json') @{ schema = 1; nonce = $Nonce; pid = $PID; started = $script:LockOwnerStarted }
+      $claimOwnerPath = Join-Path $claim 'owner.json'
+      Write-AtomicJson $claimOwnerPath @{ schema = 1; nonce = $Nonce; pid = $PID; started = $script:LockOwnerStarted }
+      Assert-ExactCurrentOnlyAcl $claimOwnerPath
       $script:FailureCode = 'lock_claim_promote'
       try {
         [IO.Directory]::Move($claim, $LockPath)
@@ -753,7 +1120,9 @@ function Acquire-Lock {
         $script:FailureCode = 'lock_existing_validate'
         Assert-NoReparseAncestors $LockPath
         Assert-OwnerAndAcl $LockPath -Directory
-        $owner = Read-JsonFile (Join-Path $LockPath 'owner.json')
+        $lockOwnerPath = Join-Path $LockPath 'owner.json'
+        Assert-ExactCurrentOnlyAcl $lockOwnerPath
+        $owner = Read-JsonFile $lockOwnerPath
         if ($owner -and (Test-ExactProperties $owner @('nonce','pid','schema','started')) -and (Test-JsonInteger $owner.schema) -and [int64]$owner.schema -eq 1) {
           $active = Get-ExactProcess ([int]$owner.pid) ([string]$owner.started)
           if ($active) { throw 'another Windows update transaction is active' }
@@ -903,20 +1272,36 @@ function Assert-PreMutationTrust {
   # attestare SEMPRE i byte del helper che PowerShell sta eseguendo. Mai
   # sostituire questa verifica con quella della copia staged/backup.
   Assert-FileMatchesArtifact $PSCommandPath (Get-ArtifactByRole $installed.Value $HelperRole)
-  if ($Mode -ne 'Recover') { Assert-FileMatchesArtifact $TargetPath (Get-ArtifactByRole $installed.Value $DesktopRole) }
+  if ($Mode -ne 'Recover') {
+    Assert-FileMatchesArtifact $TargetPath (Get-ArtifactByRole $installed.Value $DesktopRole)
+    if ((Compare-Version ([string]$installed.Value.version) $BaselineVersion) -lt 0) { throw 'v0.3.5 to v0.3.6 is manual-only' }
+    if ((Compare-Version ([string]$candidate.Value.version) ([string]$installed.Value.version)) -le 0 -or
+        [uint64]$candidate.Value.sequence -le [uint64]$installed.Value.sequence) {
+      throw 'candidate is not strictly forward'
+    }
+  }
 }
 
 function Get-FreshBundle {
+  $script:FailurePhase = 'bundle'
+  $script:FailureCode = 'bundle_installed_read_failed'
   $installed = Read-VerifiedManifest $InstalledManifestPath $InstalledSignaturePath
+  $script:FailureCode = 'bundle_candidate_read_failed'
   $candidate = Read-VerifiedManifest $CandidateManifestPath $CandidateSignaturePath
+  $script:FailureCode = 'bundle_version_failed'
   if ((Compare-Version ([string]$installed.Value.version) $BaselineVersion) -lt 0) { throw 'v0.3.5 to v0.3.6 is manual-only' }
   if ((Compare-Version ([string]$candidate.Value.version) ([string]$installed.Value.version)) -le 0 -or [uint64]$candidate.Value.sequence -le [uint64]$installed.Value.sequence) { throw 'candidate is not strictly forward' }
+  $script:FailurePhase = 'floor'
+  $script:FailureCode = 'floor_read_failed'
   $floor = Read-Floor
   if (-not $floor) {
+    $script:FailureCode = 'floor_init_failed'
     Write-AtomicJson $FloorPath @{ schema = 1; sequence = [uint64]$installed.Value.sequence; version = [string]$installed.Value.version }
-    Protect-File $FloorPath
+    $script:FailureCode = 'floor_init_postflight_failed'
     $floor = Read-Floor
   }
+  $script:FailurePhase = 'bundle'
+  $script:FailureCode = 'bundle_artifact_validation_failed'
   if ([uint64]$candidate.Value.sequence -le [uint64]$floor.sequence -or (Compare-Version ([string]$candidate.Value.version) ([string]$floor.version)) -le 0) { throw 'candidate is a replay or downgrade' }
   if ([uint64]$installed.Value.sequence -lt [uint64]$floor.sequence) { throw 'installed version is below committed floor' }
   $old = Get-ArtifactByRole $installed.Value $DesktopRole
@@ -936,7 +1321,10 @@ function Get-FreshBundle {
 }
 
 function Get-RecoveryBundle {
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_candidate_read_failed'
   $candidate = Read-VerifiedManifest $CandidateManifestPath $CandidateSignaturePath
+  $script:FailureCode = 'recovery_installed_read_failed'
   $oldManifest = if (Test-Path -LiteralPath $OldManifestBackupPath -PathType Leaf) { $OldManifestBackupPath } else { $InstalledManifestPath }
   $oldSignature = if (Test-Path -LiteralPath $OldSignatureBackupPath -PathType Leaf) { $OldSignatureBackupPath } else { $InstalledSignaturePath }
   $installed = Read-VerifiedManifest $oldManifest $oldSignature
@@ -953,8 +1341,27 @@ function Get-RecoveryBundle {
   }
 }
 
+function Get-JournalWriteCode {
+  param([string]$State)
+  switch -CaseSensitive ($State) {
+    'prepared' { return 'journal_prepared_write_failed' }
+    'swap_intent' { return 'journal_swap_intent_write_failed' }
+    'candidate_installed' { return 'journal_candidate_installed_write_failed' }
+    'health_acked' { return 'journal_health_acked_write_failed' }
+    'authority_intent' { return 'journal_authority_intent_write_failed' }
+    'metadata_installed' { return 'journal_metadata_installed_write_failed' }
+    'floor_intent' { return 'journal_floor_intent_write_failed' }
+    'helper_intent' { return 'journal_helper_intent_write_failed' }
+    'committed' { return 'journal_committed_write_failed' }
+    'rolled_back' { return 'journal_rolled_back_write_failed' }
+    default { throw 'unknown journal transition' }
+  }
+}
+
 function Write-Journal {
   param([string]$State, [hashtable]$Bundle, [int]$CandidatePid = 0, [string]$CandidateStarted = '')
+  $script:FailurePhase = 'journal'
+  $script:FailureCode = Get-JournalWriteCode $State
   Write-AtomicJson $JournalPath @{
     schema = 1; nonce = $Nonce; state = $State
     installed_version = [string]$Bundle.Installed.Value.version; installed_sequence = [uint64]$Bundle.Installed.Value.sequence
@@ -969,6 +1376,8 @@ function Write-Journal {
 
 function Update-JournalState {
   param([object]$Journal, [string]$State, [int]$CandidatePid = 0, [string]$CandidateStarted = '')
+  $script:FailurePhase = 'journal'
+  $script:FailureCode = Get-JournalWriteCode $State
   $value = @{}
   foreach ($property in $Journal.PSObject.Properties) { $value[$property.Name] = $property.Value }
   $value['state'] = $State
@@ -995,13 +1404,7 @@ function Assert-Journal {
 
 function Copy-AtomicVerified {
   param([string]$Source, [string]$Destination, [string]$ExpectedSha256)
-  if ((Get-Sha256 $Source) -cne $ExpectedSha256) { throw 'trusted copy source hash mismatch' }
-  $temporary = Join-Path ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Destination))) ('.jht-copy-' + [guid]::NewGuid().ToString('N'))
-  Copy-Item -LiteralPath $Source -Destination $temporary -ErrorAction Stop
-  Protect-File $temporary
-  if ((Get-Sha256 $temporary) -cne $ExpectedSha256) { throw 'trusted copy staging hash mismatch' }
-  if (Test-Path -LiteralPath $Destination -PathType Leaf) { [IO.File]::Replace($temporary, $Destination, $null) } else { [IO.File]::Move($temporary, $Destination) }
-  if ((Get-Sha256 $Destination) -cne $ExpectedSha256) { throw 'trusted copy destination hash mismatch' }
+  Write-ProtectedAtomicFile -Destination $Destination -Source $Source -ExpectedSha256 $ExpectedSha256
 }
 
 function Stop-JournalCandidate {
@@ -1014,17 +1417,27 @@ function Stop-JournalCandidate {
 
 function Backup-OldAuthority {
   param([hashtable]$Bundle)
+  $script:FailurePhase = 'authority'
+  $script:FailureCode = 'authority_backup_init_failed'
   Initialize-ProtectedDirectory $AuthorityBackupDir
+  $script:FailureCode = 'authority_backup_helper_failed'
   Copy-AtomicVerified $PSCommandPath $OldHelperBackupPath ([string]$Bundle.OldHelper.sha256)
+  $script:FailureCode = 'authority_backup_manifest_failed'
   Copy-AtomicVerified $InstalledManifestPath $OldManifestBackupPath ([string]$Bundle.Installed.Sha256)
+  $script:FailureCode = 'authority_backup_signature_failed'
   Copy-AtomicVerified $InstalledSignaturePath $OldSignatureBackupPath ([string]$Bundle.OldSignatureSha256)
 }
 
 function Restore-OldAuthority {
   param([hashtable]$Bundle)
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_authority_validate_failed'
   foreach ($path in @($OldHelperBackupPath, $OldManifestBackupPath, $OldSignatureBackupPath)) { if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'verified authority rollback snapshot is unavailable' } }
+  $script:FailureCode = 'recovery_authority_helper_failed'
   Copy-AtomicVerified $OldHelperBackupPath $PSCommandPath ([string]$Bundle.OldHelper.sha256)
+  $script:FailureCode = 'recovery_authority_manifest_failed'
   Copy-AtomicVerified $OldManifestBackupPath $InstalledManifestPath ([string]$Bundle.Installed.Sha256)
+  $script:FailureCode = 'recovery_authority_signature_failed'
   Copy-AtomicVerified $OldSignatureBackupPath $InstalledSignaturePath ([string]$Bundle.OldSignatureSha256)
   $restored = Read-VerifiedManifest $InstalledManifestPath $InstalledSignaturePath
   Assert-FileMatchesArtifact $PSCommandPath (Get-ArtifactByRole $restored.Value $HelperRole)
@@ -1040,51 +1453,73 @@ function Test-OldAuthorityInstalled {
 
 function Install-CandidateMetadata {
   param([hashtable]$Bundle)
+  $script:FailurePhase = 'metadata'
+  $script:FailureCode = 'metadata_manifest_install_failed'
   Copy-AtomicVerified $CandidateManifestPath $InstalledManifestPath ([string]$Bundle.Candidate.Sha256)
+  $script:FailureCode = 'metadata_signature_install_failed'
   Copy-AtomicVerified $CandidateSignaturePath $InstalledSignaturePath ([string]$Bundle.CandidateSignatureSha256)
+  $script:FailureCode = 'metadata_postflight_failed'
   $installed = Read-VerifiedManifest $InstalledManifestPath $InstalledSignaturePath
   if ($installed.Sha256 -cne [string]$Bundle.Candidate.Sha256) { throw 'candidate authority metadata mismatch' }
 }
 
 function Install-CandidateHelper {
   param([hashtable]$Bundle)
+  $script:FailurePhase = 'helper'
+  $script:FailureCode = 'helper_install_failed'
   Copy-AtomicVerified $CandidateHelperPath $PSCommandPath ([string]$Bundle.NewHelper.sha256)
+  $script:FailureCode = 'helper_postflight_failed'
   $installed = Read-VerifiedManifest $InstalledManifestPath $InstalledSignaturePath
   Assert-FileMatchesArtifact $PSCommandPath (Get-ArtifactByRole $installed.Value $HelperRole)
 }
 
 function Restore-OldTarget {
   param([hashtable]$Bundle, [object]$Journal)
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_process_stop_failed'
   Stop-JournalCandidate $Journal
+  $script:FailureCode = 'recovery_target_validate_failed'
   if ((Get-Sha256 $TargetPath) -ceq [string]$Bundle.Old.sha256) { return }
   if (-not (Test-Path -LiteralPath $BackupPath -PathType Leaf) -or (Get-Sha256 $BackupPath) -cne [string]$Bundle.Old.sha256) { throw 'verified rollback snapshot is unavailable' }
-  $restore = Join-Path ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($TargetPath))) ('.jht-update-' + $Nonce + '.restore.exe')
-  Copy-Item -LiteralPath $BackupPath -Destination $restore -Force
-  Protect-File $restore
-  if ((Get-Sha256 $restore) -cne [string]$Bundle.Old.sha256) { throw 'rollback staging verification failed' }
-  Remove-Item -LiteralPath $FailedPath -Force -ErrorAction SilentlyContinue
-  [IO.File]::Replace($restore, [IO.Path]::GetFullPath($TargetPath), $FailedPath)
-  if ((Get-Sha256 $TargetPath) -cne [string]$Bundle.Old.sha256) { throw 'rollback target verification failed' }
+  $script:FailureCode = 'recovery_failed_cleanup_failed'
+  Remove-ProtectedFileIfPresent $FailedPath
+  $script:FailureCode = 'recovery_target_restore_failed'
+  Write-ProtectedAtomicFile -Destination $TargetPath -Source $BackupPath `
+    -ExpectedSha256 ([string]$Bundle.Old.sha256) `
+    -ReplacementBackupPath $FailedPath -ConsumeSource
 }
 
 function Invoke-Rollback {
   param([hashtable]$Bundle, [object]$Journal, [string]$Code)
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_rollback_target_failed'
   Restore-OldTarget $Bundle $Journal
+  $script:FailureCode = 'recovery_rollback_authority_failed'
   if (-not (Test-OldAuthorityInstalled $Bundle)) { Restore-OldAuthority $Bundle }
+  $script:FailureCode = 'recovery_rollback_journal_failed'
   Write-Journal 'rolled_back' $Bundle
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_restart_failed'
   Start-Process -FilePath ([IO.Path]::GetFullPath($TargetPath)) | Out-Null
   Write-Result $false 'rollback' $Code $true
 }
 
 function Test-CandidateHealth {
   param([hashtable]$Bundle, [Diagnostics.Process]$Process, [string]$Started)
-  $health = Read-JsonFile $HealthPath
+  try { $health = Read-ProtectedJsonFile $HealthPath -ExactCurrentOnly } catch { return $false }
   if (-not $health -or -not (Test-ExactProperties $health @('exe_path','exe_sha256','nonce','pid','process_started_utc_ticks','schema','type','version'))) { return $false }
   return (Test-JsonInteger $health.schema) -and [int64]$health.schema -eq 1 -and (Test-JsonInteger $health.pid) -and [int]$health.pid -eq $Process.Id -and $health.process_started_utc_ticks -ceq $Started -and $health.type -ceq 'healthy' -and $health.nonce -ceq $Nonce -and $health.version -ceq [string]$Bundle.Candidate.Value.version -and $health.exe_sha256 -ceq [string]$Bundle.New.sha256 -and ([IO.Path]::GetFullPath([string]$health.exe_path)).Equals([IO.Path]::GetFullPath($TargetPath), [StringComparison]::OrdinalIgnoreCase)
 }
 
+function Initialize-HealthCapability {
+  Write-ProtectedAtomicFile -Destination $HealthPath -Bytes ([byte[]]@())
+  Assert-ProtectedFileContent $HealthPath (Get-BytesSha256 ([byte[]]@())) 0
+}
+
 function Update-JournalProcess {
   param([object]$Journal, [int]$ProcessId, [string]$Started)
+  $script:FailurePhase = 'journal'
+  $script:FailureCode = 'journal_process_write_failed'
   $value = @{}
   foreach ($property in $Journal.PSObject.Properties) { $value[$property.Name] = $property.Value }
   $value['candidate_pid'] = $ProcessId
@@ -1094,8 +1529,14 @@ function Update-JournalProcess {
 
 function Start-RecoveryHealthProbe {
   param([hashtable]$Bundle, [object]$Journal)
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_health_process_failed'
   Stop-JournalCandidate $Journal
-  Remove-Item -LiteralPath $HealthPath -Force -ErrorAction SilentlyContinue
+  $script:FailureCode = 'recovery_health_cleanup_failed'
+  Remove-ProtectedFileIfPresent $HealthPath
+  $script:FailureCode = 'recovery_health_capability_init_failed'
+  Initialize-HealthCapability
+  $script:FailureCode = 'recovery_health_process_failed'
   $previousNonce = $env:JHT_UPDATE_NONCE; $previousHealth = $env:JHT_UPDATE_HEALTH_PATH
   $env:JHT_UPDATE_NONCE = $Nonce; $env:JHT_UPDATE_HEALTH_PATH = $HealthPath
   $suspended = $null; $process = $null
@@ -1104,7 +1545,10 @@ function Start-RecoveryHealthProbe {
     $process = Get-Process -Id $suspended.ProcessId -ErrorAction Stop
     $started = $process.StartTime.ToUniversalTime().Ticks.ToString()
     Update-JournalProcess $Journal $process.Id $started
+    $script:FailurePhase = 'recovery'
+    $script:FailureCode = 'recovery_health_resume_failed'
     $suspended.Resume()
+    $script:FailureCode = 'recovery_health_release_failed'
     $suspended.ReleaseOwnership()
   } catch {
     if ($process) { try { $process.Kill(); $null = $process.WaitForExit(5000) } catch { } }
@@ -1114,44 +1558,70 @@ function Start-RecoveryHealthProbe {
     if ($null -eq $previousNonce) { Remove-Item Env:JHT_UPDATE_NONCE -ErrorAction SilentlyContinue } else { $env:JHT_UPDATE_NONCE = $previousNonce }
     if ($null -eq $previousHealth) { Remove-Item Env:JHT_UPDATE_HEALTH_PATH -ErrorAction SilentlyContinue } else { $env:JHT_UPDATE_HEALTH_PATH = $previousHealth }
   }
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_health_validate_failed'
   $deadline = [DateTime]::UtcNow.AddSeconds(30)
   do {
     Start-Sleep -Milliseconds 200
     if (Test-CandidateHealth $Bundle $process $started) { return $true }
     if ($process.HasExited) { break }
   } while ([DateTime]::UtcNow -lt $deadline)
-  $currentJournal = Read-JsonFile $JournalPath
+  $currentJournal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
   if ($currentJournal) { Stop-JournalCandidate $currentJournal }
   return $false
 }
 
 function Invoke-Apply {
+  $script:FailurePhase = 'bundle'
+  $script:FailureCode = 'bundle_staging_protection_failed'
   Initialize-StagingProtection
+  $script:FailureCode = 'bundle_path_attestation_failed'
   Assert-Paths
   $bundle = Get-FreshBundle
   if (Test-Path -LiteralPath $JournalPath -PathType Leaf) {
-    $existingJournal = Read-JsonFile $JournalPath
+    $script:FailurePhase = 'journal'
+    $script:FailureCode = 'journal_existing_read_failed'
+    $existingJournal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
+    $script:FailureCode = 'journal_existing_validate_failed'
     Assert-Journal $existingJournal $bundle
     if ($existingJournal.state -cne 'prepared') { throw 'update nonce was already consumed' }
   }
+  $script:FailurePhase = 'process'
+  $script:FailureCode = 'process_old_identity_failed'
   $oldIdentity = Get-ObservedProcess $OldPid $TargetPath $OldStartedUtcTicks
   if (-not $oldIdentity) { throw 'old process identity is invalid' }
   $old = $oldIdentity.Process
   $observedOldStarted = [string]$oldIdentity.Started
   Write-Journal 'prepared' $bundle
+  $script:FailurePhase = 'ready'
+  $script:FailureCode = 'ready_write_failed'
   Write-AtomicJson $ReadyPath @{ schema = 1; type = 'ready'; ok = $true; nonce = $Nonce; request_id = $RequestId; instance_id = $InstanceId; old_pid = $OldPid; old_started = $observedOldStarted; manifest_sha256 = [string]$bundle.Candidate.Sha256; candidate_sha256 = [string]$bundle.New.sha256 }
   if ($Mode -eq 'Verify') { Write-Result $true 'ready' 'verified'; return }
+  $script:FailurePhase = 'process'
+  $script:FailureCode = 'process_old_wait_failed'
   if (-not $old.WaitForExit(60000)) { Write-Result $false 'ready' 'old_process_timeout'; return }
 
+  $script:FailurePhase = 'bundle'
+  $script:FailureCode = 'bundle_post_wait_attestation_failed'
   Assert-Paths
   $bundle = Get-FreshBundle
   Write-Journal 'swap_intent' $bundle
-  Remove-Item -LiteralPath $BackupPath -Force -ErrorAction SilentlyContinue
-  [IO.File]::Replace([IO.Path]::GetFullPath($CandidatePath), [IO.Path]::GetFullPath($TargetPath), $BackupPath)
-  if ((Get-Sha256 $TargetPath) -cne [string]$bundle.New.sha256 -or (Get-Sha256 $BackupPath) -cne [string]$bundle.Old.sha256) { throw 'post-replacement hash verification failed' }
+  $script:FailurePhase = 'swap'
+  $script:FailureCode = 'swap_backup_cleanup_failed'
+  Remove-ProtectedFileIfPresent $BackupPath
+  $script:FailureCode = 'swap_promote_failed'
+  Write-ProtectedAtomicFile -Destination $TargetPath -Source $CandidatePath `
+    -ExpectedSha256 ([string]$bundle.New.sha256) `
+    -ReplacementBackupPath $BackupPath -ConsumeSource
+  Assert-ProtectedFileContent $BackupPath ([string]$bundle.Old.sha256) ([uint64]$bundle.Old.size)
   Write-Journal 'candidate_installed' $bundle
 
-  Remove-Item -LiteralPath $HealthPath -Force -ErrorAction SilentlyContinue
+  $script:FailurePhase = 'health'
+  $script:FailureCode = 'health_cleanup_failed'
+  Remove-ProtectedFileIfPresent $HealthPath
+  $script:FailureCode = 'health_capability_init_failed'
+  Initialize-HealthCapability
+  $script:FailureCode = 'health_process_start_failed'
   $previousNonce = $env:JHT_UPDATE_NONCE; $previousHealth = $env:JHT_UPDATE_HEALTH_PATH
   $env:JHT_UPDATE_NONCE = $Nonce; $env:JHT_UPDATE_HEALTH_PATH = $HealthPath
   $suspended = $null
@@ -1160,7 +1630,10 @@ function Invoke-Apply {
     $candidateProcess = Get-Process -Id $suspended.ProcessId -ErrorAction Stop
     $candidateStarted = $candidateProcess.StartTime.ToUniversalTime().Ticks.ToString()
     Write-Journal 'candidate_installed' $bundle $candidateProcess.Id $candidateStarted
+    $script:FailurePhase = 'health'
+    $script:FailureCode = 'health_process_resume_failed'
     $suspended.Resume()
+    $script:FailureCode = 'health_process_release_failed'
     $suspended.ReleaseOwnership()
   } finally {
     if ($suspended) { $suspended.Dispose() }
@@ -1168,12 +1641,15 @@ function Invoke-Apply {
     if ($null -eq $previousHealth) { Remove-Item Env:JHT_UPDATE_HEALTH_PATH -ErrorAction SilentlyContinue } else { $env:JHT_UPDATE_HEALTH_PATH = $previousHealth }
   }
   $deadline = [DateTime]::UtcNow.AddSeconds(30); $healthy = $false
+  $script:FailureCode = 'health_ack_failed'
   do {
     Start-Sleep -Milliseconds 200
     if (Test-CandidateHealth $bundle $candidateProcess $candidateStarted) { $healthy = $true; break }
     if ($candidateProcess.HasExited) { break }
   } while ([DateTime]::UtcNow -lt $deadline)
-  $journal = Read-JsonFile $JournalPath
+  $script:FailurePhase = 'journal'
+  $script:FailureCode = 'journal_health_read_failed'
+  $journal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
   if (-not $healthy) { Invoke-Rollback $bundle $journal 'health_ack_failed'; return }
 
   Write-Journal 'health_acked' $bundle $candidateProcess.Id $candidateStarted
@@ -1182,18 +1658,27 @@ function Invoke-Apply {
   Install-CandidateMetadata $bundle
   Write-Journal 'metadata_installed' $bundle $candidateProcess.Id $candidateStarted
   Write-Journal 'floor_intent' $bundle $candidateProcess.Id $candidateStarted
+  $script:FailurePhase = 'floor'
+  $script:FailureCode = 'floor_commit_failed'
   Write-AtomicJson $FloorPath @{ schema = 1; sequence = [uint64]$bundle.Candidate.Value.sequence; version = [string]$bundle.Candidate.Value.version }
-  Protect-File $FloorPath
   Write-Journal 'helper_intent' $bundle $candidateProcess.Id $candidateStarted
   Install-CandidateHelper $bundle
   Write-Journal 'committed' $bundle $candidateProcess.Id $candidateStarted
-  Remove-Item -LiteralPath $BackupPath, $FailedPath, $AuthorityBackupDir -Recurse -Force -ErrorAction SilentlyContinue
+  $script:FailurePhase = 'cleanup'
+  $script:FailureCode = 'commit_cleanup_failed'
+  Remove-ProtectedFileIfPresent $BackupPath
+  Remove-ProtectedFileIfPresent $FailedPath
+  Remove-ProtectedTreeIfPresent $AuthorityBackupDir
   Write-Result $true 'committed' 'updated'
 }
 
 function Invoke-Recover {
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_path_attestation_failed'
   Assert-Paths
-  $journal = Read-JsonFile $JournalPath
+  $script:FailureCode = 'recovery_journal_read_failed'
+  $journal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
+  $script:FailureCode = 'recovery_candidate_read_failed'
   $candidate = Read-VerifiedManifest $CandidateManifestPath $CandidateSignaturePath
   $candidateDesktop = Get-ArtifactByRole $candidate.Value $DesktopRole
   $candidateHelper = Get-ArtifactByRole $candidate.Value $HelperRole
@@ -1201,34 +1686,46 @@ function Invoke-Recover {
   $journalKeys = @('candidate_helper_sha256','candidate_manifest_sha256','candidate_pid','candidate_sha256','candidate_signature_sha256','candidate_started','installed_sequence','installed_version','nonce','old_helper_sha256','old_manifest_sha256','old_sha256','old_signature_sha256','schema','state','target_sequence','target_version')
   $journalShapeOk = $journal -and (Test-ExactProperties $journal $journalKeys) -and (Test-JsonInteger $journal.schema) -and [int64]$journal.schema -eq 1
   $candidateIdentityMatches = $journalShapeOk -and $journal.nonce -ceq $Nonce -and $journal.target_version -ceq [string]$candidate.Value.version -and [string]$journal.target_sequence -ceq [string]$candidate.Value.sequence -and $journal.candidate_sha256 -ceq [string]$candidateDesktop.sha256 -and $journal.candidate_helper_sha256 -ceq [string]$candidateHelper.sha256 -and $journal.candidate_manifest_sha256 -ceq [string]$candidate.Sha256 -and $journal.candidate_signature_sha256 -ceq $candidateSignatureSha256
+  $script:FailureCode = 'recovery_floor_read_failed'
   $floor = Read-Floor
   if ($candidateIdentityMatches -and @('metadata_installed','floor_intent','helper_intent','committed') -ccontains [string]$journal.state -and $floor -and [uint64]$floor.sequence -ge [uint64]$candidate.Value.sequence -and (Get-Sha256 $TargetPath) -ceq [string]$candidateDesktop.sha256) {
     $active = $null
     try { $active = Read-VerifiedManifest $InstalledManifestPath $InstalledSignaturePath } catch { }
     if ($active -and $active.Sha256 -ceq [string]$candidate.Sha256) {
       $healthBundle = @{ Candidate = $candidate; New = $candidateDesktop }
+      $script:FailureCode = 'recovery_health_validate_failed'
       $candidateProcess = Get-ExactProcess ([int]$journal.candidate_pid) ([string]$journal.candidate_started) $TargetPath
       $healthy = $candidateProcess -and (Test-CandidateHealth $healthBundle $candidateProcess ([string]$journal.candidate_started))
       if (-not $healthy) { $healthy = Start-RecoveryHealthProbe $healthBundle $journal }
       if (-not $healthy) { throw 'candidate health is not recoverable for commit' }
       if ($healthy) {
-        $journal = Read-JsonFile $JournalPath
+        $script:FailureCode = 'recovery_journal_refresh_failed'
+        $journal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
         if ((Get-Sha256 $PSCommandPath) -cne [string]$candidateHelper.sha256) {
           Update-JournalState $journal 'helper_intent' ([int]$journal.candidate_pid) ([string]$journal.candidate_started)
           Install-CandidateHelper @{ Candidate = $candidate; NewHelper = $candidateHelper }
-          $journal = Read-JsonFile $JournalPath
+          $script:FailurePhase = 'recovery'
+          $script:FailureCode = 'recovery_journal_refresh_failed'
+          $journal = Read-ProtectedJsonFile $JournalPath -ExactCurrentOnly
         }
         Update-JournalState $journal 'committed' ([int]$journal.candidate_pid) ([string]$journal.candidate_started)
-        Remove-Item -LiteralPath $BackupPath, $FailedPath, $AuthorityBackupDir -Recurse -Force -ErrorAction SilentlyContinue
+        $script:FailurePhase = 'recovery'
+        $script:FailureCode = 'recovery_commit_cleanup_failed'
+        Remove-ProtectedFileIfPresent $BackupPath
+        Remove-ProtectedFileIfPresent $FailedPath
+        Remove-ProtectedTreeIfPresent $AuthorityBackupDir
         Write-Result $true 'committed' 'interrupted_commit_completed'
         return
       }
     }
   }
   $bundle = Get-RecoveryBundle
+  $script:FailurePhase = 'recovery'
+  $script:FailureCode = 'recovery_journal_validate_failed'
   Assert-Journal $journal $bundle
   $targetHash = Get-Sha256 $TargetPath
   $helperHash = Get-Sha256 $PSCommandPath
+  $script:FailureCode = 'recovery_floor_read_failed'
   $floor = Read-Floor
   if ($floor -and [uint64]$floor.sequence -ge [uint64]$bundle.Candidate.Value.sequence) { throw 'committed floor forbids rollback to the previous version' }
   if ($targetHash -ceq [string]$bundle.Old.sha256 -and $helperHash -ceq [string]$bundle.OldHelper.sha256 -and @('prepared','rolled_back') -ccontains [string]$journal.state) {
@@ -1252,18 +1749,28 @@ try {
   $script:FailurePhase = 'lock'
   $script:FailureCode = 'lock_failed'
   Acquire-Lock; $lockHeld = $true
-  Remove-Item -LiteralPath $ResultPath -Force -ErrorAction SilentlyContinue
+  $script:FailurePhase = 'result'
+  $script:FailureCode = 'result_preflight_failed'
+  Assert-AtomicDestinationPreflight $ResultPath
+  Remove-ProtectedFileIfPresent $ResultPath
   if ($Mode -eq 'Recover') { Invoke-Recover } else { Invoke-Apply }
-  $result = Read-JsonFile $ResultPath
+  $script:FailurePhase = 'result'
+  $script:FailureCode = 'result_read_failed'
+  $result = Read-Result
+  if (-not $result) { throw 'update result is missing or corrupt' }
   $exitCode = if ($result -and $result.ok -eq $true) { 0 } elseif ($result -and $result.phase -eq 'ready' -and $result.code -eq 'old_process_timeout') { 3 } else { 1 }
 } catch {
   if ($lockHeld) {
+    $failedPhase = $script:FailurePhase
+    $failedCode = $script:FailureCode
     if (Test-Path -LiteralPath $JournalPath -PathType Leaf) {
-      try { Invoke-Recover } catch { }
+      try { Invoke-Recover } catch { $failedPhase = $script:FailurePhase; $failedCode = $script:FailureCode }
     }
-    $result = Read-JsonFile $ResultPath
-    if (-not $result) { Write-Result $false 'failed' 'update_failed' }
-    $result = Read-JsonFile $ResultPath
+    try { $result = Read-Result } catch { $result = $null }
+    if (-not $result) {
+      $null = Write-FailureResultOrStderr $failedPhase $failedCode
+    }
+    try { $result = Read-Result } catch { $result = $null }
     $exitCode = if ($result -and $result.ok -eq $true -and $result.phase -ceq 'committed') { 0 } else { 1 }
   } else {
     [Console]::Error.WriteLine(

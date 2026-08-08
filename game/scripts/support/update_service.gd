@@ -784,7 +784,7 @@ func _write_windows_health_ack() -> void:
 	var path := WindowsProtocol.health_capability_path(
 			OS.get_environment("JHT_UPDATE_HEALTH_PATH"), nonce)
 	if path == "" or not DirAccess.dir_exists_absolute(
-			path.get_base_dir()) or FileAccess.file_exists(path):
+			path.get_base_dir()) or not FileAccess.file_exists(path):
 		return
 	# Il helper crea il candidato sospeso, annota PID/start-time nel proprio
 	# journal protetto e soltanto dopo lo fa partire. Il processo nuovo non
@@ -804,15 +804,15 @@ func _write_windows_health_ack() -> void:
 			digest, OS.get_process_id(), started)
 	if frame.is_empty():
 		return
-	var temporary := "%s.tmp-%d" % [path, OS.get_process_id()]
-	var file := FileAccess.open(temporary, FileAccess.WRITE)
+	# Il helper precrea la capability con owner/DACL e identità già attestati.
+	# Scrivere in-place preserva quell'identità; il processo candidato non può
+	# sostituire il nodo privilegiato con un file materializzato dal checkout.
+	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		return
 	file.store_string(JSON.stringify(frame) + "\n")
 	file.flush()
 	file.close()
-	if DirAccess.rename_absolute(temporary, path) != OK:
-		DirAccess.remove_absolute(temporary)
 
 
 func _join_thread() -> void:

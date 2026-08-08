@@ -113,8 +113,14 @@ if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
 $names = @(
   'Test-JsonInteger', 'Test-ExactProperties', 'Get-FileSystemParent',
   'Assert-NoReparseAncestors', 'Assert-NoForeignWriteAcl',
-  'Assert-OwnerAndAcl', 'Assert-CurrentOwner',
-  'Initialize-ProtectedDirectory', 'Write-AtomicJson', 'Read-JsonFile',
+  'Assert-OwnerAndAcl', 'Assert-ExactCurrentOnlyAcl', 'Assert-CurrentOwner',
+  'Initialize-ProtectedDirectory', 'Protect-File', 'Protect-OwnedFile',
+  'Get-BytesSha256', 'Assert-AtomicDestinationPreflight',
+  'Open-AtomicTempStream', 'Write-AtomicTempContent',
+  'Flush-AtomicTempStream', 'Protect-OwnedAtomicStream', 'Promote-AtomicTemp',
+  'Assert-ProtectedFileContent', 'New-ProtectedAtomicTemp',
+  'Write-ProtectedAtomicFile',
+  'Write-AtomicJson', 'Read-JsonFile',
   'Get-ExactProcess', 'Acquire-Lock')
 $functions = @($ast.FindAll({
   param($node)
@@ -125,6 +131,16 @@ if ($functions.Count -ne $names.Count) {
   throw 'production lock functions are missing'
 }
 $body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$typeMarker = "Add-Type -TypeDefinition @'"
+$typeStart = $source.IndexOf($typeMarker) + $typeMarker.Length
+$typeEnd = $source.IndexOf("`n'@", $typeStart)
+if ($typeStart -lt $typeMarker.Length -or $typeEnd -le $typeStart) {
+  throw 'production native helper is missing'
+}
+$native = $source.Substring($typeStart, $typeEnd - $typeStart)
+if (-not ('JhtUpdateFileIdentity' -as [type])) {
+  Add-Type -TypeDefinition $native
+}
 $probe = @'
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
@@ -132,6 +148,29 @@ $root = [IO.Path]::GetFullPath($env:JHT_TEST_LOCK_ROOT)
 $script:FailureCode = 'lock_init'
 $script:LockOwnerStarted =
   [Diagnostics.Process]::GetCurrentProcess().StartTime.ToUniversalTime().Ticks.ToString()
+
+function Get-Sha256 {
+  param([string]$Path)
+  $algorithm = [Security.Cryptography.SHA256]::Create()
+  try {
+    $stream = [IO.File]::OpenRead($Path)
+    try { return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant() } finally { $stream.Dispose() }
+  } finally { $algorithm.Dispose() }
+}
+
+function Protect-OwnedAtomicStream {
+  param(
+    [IO.FileStream]$Stream,
+    [string]$Path,
+    [string]$ExpectedSha256,
+    [uint64]$ExpectedSize)
+  $Stream.Dispose()
+  Protect-OwnedFile $Path
+  if ((Get-Sha256 $Path) -cne $ExpectedSha256 -or
+      [uint64]([IO.FileInfo]::new($Path).Length) -ne $ExpectedSize) {
+    throw 'lock seam atomic content mismatch'
+  }
+}
 
 function Assert-NoLockResidue {
   param([string]$StateRoot)
@@ -146,7 +185,10 @@ function Assert-NoLockResidue {
 
 function Assert-ExactLockOwner {
   param([string]$LockPath, [string]$ExpectedNonce)
-  $owner = Read-JsonFile (Join-Path $LockPath 'owner.json')
+  Assert-ExactCurrentOnlyAcl $LockPath -Directory
+  $ownerPath = Join-Path $LockPath 'owner.json'
+  Assert-ExactCurrentOnlyAcl $ownerPath
+  $owner = Read-JsonFile $ownerPath
   if (-not (Test-ExactProperties $owner @('nonce','pid','schema','started')) -or
       -not (Test-JsonInteger $owner.schema) -or [int64]$owner.schema -ne 1 -or
       -not (Test-JsonInteger $owner.pid) -or [int]$owner.pid -ne $PID -or
@@ -194,12 +236,15 @@ function Invoke-LockCase {
   try {
     if ($Case -ceq 'stale') {
       Initialize-ProtectedDirectory $script:LockPath
-      Write-AtomicJson (Join-Path $script:LockPath 'owner.json') @{
+      $staleOwnerPath = Join-Path $script:LockPath 'owner.json'
+      Write-AtomicJson $staleOwnerPath @{
         schema = 1
         nonce = 'f' * 32
         pid = 2147483647
         started = '100000000000000000'
       }
+      Protect-File $staleOwnerPath
+      Assert-ExactCurrentOnlyAcl $staleOwnerPath
     }
     Acquire-Lock
     if (-not (Test-Path -LiteralPath $script:LockPath -PathType Container)) {
@@ -305,7 +350,32 @@ function Invoke-LockFailureCase {
 }
 
 try {
-  Initialize-ProtectedDirectory $root
+  $script:InjectedNewPath = $root
+  function New-Item {
+    [CmdletBinding()]
+    param([string]$ItemType, [string]$Path)
+    $created = Microsoft.PowerShell.Management\New-Item `
+      -ItemType $ItemType -Path $Path -ErrorAction Stop
+    if ([IO.Path]::GetFullPath($Path).Equals(
+        [IO.Path]::GetFullPath($script:InjectedNewPath),
+        [StringComparison]::OrdinalIgnoreCase)) {
+      $item = [IO.DirectoryInfo]::new([IO.Path]::GetFullPath($Path))
+      $acl = $item.GetAccessControl(
+        [Security.AccessControl.AccessControlSections]::All)
+      $foreign = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-545')
+      $rule = [Security.AccessControl.FileSystemAccessRule]::new(
+        $foreign, 'WriteData', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+      $acl.AddAccessRule($rule)
+      $item.SetAccessControl($acl)
+    }
+    return $created
+  }
+  try {
+    Initialize-ProtectedDirectory $root
+  } finally {
+    Remove-Item -LiteralPath Function:\New-Item -Force -ErrorAction SilentlyContinue
+  }
+  Assert-ExactCurrentOnlyAcl $root -Directory
   Initialize-ProtectedDirectory $root
   $bindingPath = Join-Path $root 'binding-tracked'
   $bindingCreated = $false
@@ -335,7 +405,8 @@ $ast = [Management.Automation.Language.Parser]::ParseInput(
 if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
 $names = @(
   'Get-FileSystemParent', 'Assert-NoReparseAncestors',
-  'Assert-NoForeignWriteAcl', 'Assert-OwnerAndAcl', 'Assert-CurrentOwner',
+  'Assert-NoForeignWriteAcl', 'Assert-OwnerAndAcl',
+  'Assert-ExactCurrentOnlyAcl', 'Assert-CurrentOwner',
   'Initialize-ProtectedDirectory')
 $functions = @($ast.FindAll({
   param($node)
@@ -352,8 +423,13 @@ $ErrorActionPreference = 'Stop'
 $script:FailureCode = 'lock_claim_init'
 $created = $false
 try {
-  Initialize-ProtectedDirectory $env:JHT_TEST_COLLISION_PATH `
-    -RequireNew -CreatedByInvocation ([ref]$created)
+  if ($env:JHT_TEST_COLLISION_MODE -ceq 'attest') {
+    Initialize-ProtectedDirectory $env:JHT_TEST_COLLISION_PATH `
+      -CreatedByInvocation ([ref]$created)
+  } else {
+    Initialize-ProtectedDirectory $env:JHT_TEST_COLLISION_PATH `
+      -RequireNew -CreatedByInvocation ([ref]$created)
+  }
   throw 'preexisting protected node was adopted'
 } catch {
   if ($script:FailureCode -cne 'lock_claim_init' -or $created) { throw }
@@ -375,7 +451,8 @@ $ast = [Management.Automation.Language.Parser]::ParseInput(
 if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
 $names = @(
   'Get-FileSystemParent', 'Assert-NoReparseAncestors',
-  'Assert-NoForeignWriteAcl', 'Assert-OwnerAndAcl', 'Assert-CurrentOwner',
+  'Assert-NoForeignWriteAcl', 'Assert-OwnerAndAcl',
+  'Assert-ExactCurrentOnlyAcl', 'Assert-CurrentOwner',
   'Initialize-ProtectedDirectory')
 $functions = @($ast.FindAll({
   param($node)
@@ -406,6 +483,886 @@ try {
 & ([ScriptBlock]::Create($body + "`n" + $probe))
 """
 
+ATOMIC_FILE_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @(
+  'Get-FileSystemParent', 'Assert-NoReparseAncestors',
+  'Assert-NoForeignWriteAcl', 'Assert-OwnerAndAcl',
+  'Assert-ExactCurrentOnlyAcl', 'Assert-CurrentOwner', 'Protect-OwnedFile',
+  'Get-Sha256', 'Get-BytesSha256', 'Assert-AtomicDestinationPreflight',
+  'Open-AtomicTempStream', 'Write-AtomicTempContent',
+  'Flush-AtomicTempStream', 'Protect-OwnedAtomicStream', 'Promote-AtomicTemp',
+  'Assert-ProtectedFileContent', 'New-ProtectedAtomicTemp',
+  'Write-ProtectedAtomicFile',
+  'Write-AtomicJson', 'Copy-AtomicVerified')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) {
+  throw 'production atomic functions are missing'
+}
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$typeMarker = "Add-Type -TypeDefinition @'"
+$typeStart = $source.IndexOf($typeMarker) + $typeMarker.Length
+$typeEnd = $source.IndexOf("`n'@", $typeStart)
+if ($typeStart -lt $typeMarker.Length -or $typeEnd -le $typeStart) {
+  throw 'production native helper is missing'
+}
+$native = $source.Substring($typeStart, $typeEnd - $typeStart)
+if (-not ('JhtUpdateFileIdentity' -as [type])) {
+  Add-Type -TypeDefinition $native
+}
+$injection = @'
+using System;
+using System.ComponentModel;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Security.Principal;
+
+public static class JhtAtomicTestInjection {
+    private const uint OWNER_SECURITY_INFORMATION = 0x00000001;
+    private const uint DACL_SECURITY_INFORMATION = 0x00000004;
+    private const uint PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000;
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetSecurityDescriptorOwner(
+        IntPtr descriptor, out IntPtr owner, out bool defaulted);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetSecurityDescriptorDacl(
+        IntPtr descriptor, out bool present, out IntPtr dacl, out bool defaulted);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern uint SetSecurityInfo(
+        IntPtr handle, int objectType, uint information, IntPtr owner,
+        IntPtr group, IntPtr dacl, IntPtr sacl);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool CreateHardLink(
+        string newName, string existingName, IntPtr security);
+
+    public static void InjectForeignSecurity(FileStream stream) {
+        FileSecurity security = new FileSecurity();
+        security.SetOwner(new SecurityIdentifier("S-1-5-32-544"));
+        security.SetAccessRuleProtection(true, false);
+        security.AddAccessRule(new FileSystemAccessRule(
+            WindowsIdentity.GetCurrent().User, FileSystemRights.FullControl,
+            AccessControlType.Allow));
+        security.AddAccessRule(new FileSystemAccessRule(
+            new SecurityIdentifier("S-1-5-32-545"),
+            FileSystemRights.WriteData, AccessControlType.Allow));
+        byte[] descriptor = security.GetSecurityDescriptorBinaryForm();
+        GCHandle pinned = GCHandle.Alloc(descriptor, GCHandleType.Pinned);
+        try {
+            IntPtr owner;
+            IntPtr dacl;
+            bool ownerDefaulted;
+            bool daclPresent;
+            bool daclDefaulted;
+            IntPtr value = pinned.AddrOfPinnedObject();
+            if (!GetSecurityDescriptorOwner(value, out owner, out ownerDefaulted) ||
+                !GetSecurityDescriptorDacl(
+                    value, out daclPresent, out dacl, out daclDefaulted) ||
+                !daclPresent)
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            uint result = SetSecurityInfo(stream.SafeFileHandle.DangerousGetHandle(),
+                1, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION |
+                PROTECTED_DACL_SECURITY_INFORMATION, owner, IntPtr.Zero,
+                dacl, IntPtr.Zero);
+            if (result != 0) throw new Win32Exception((int)result);
+        } finally {
+            pinned.Free();
+        }
+    }
+
+    public static void InjectHardLink(string newName, string existingName) {
+        if (!CreateHardLink(Path.GetFullPath(newName),
+            Path.GetFullPath(existingName), IntPtr.Zero))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+    }
+}
+'@
+if (-not ('JhtAtomicTestInjection' -as [type])) {
+  Add-Type -TypeDefinition $injection
+}
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$root = [IO.Path]::GetFullPath($env:JHT_TEST_ATOMIC_ROOT)
+$destination = Join-Path $root 'destination.bin'
+$copyDestination = Join-Path $root 'copy.bin'
+$externalLink = Join-Path $root 'external-link.bin'
+$externalTarget = Join-Path $root 'external-target.bin'
+$sourcePath = [IO.Path]::GetFullPath($env:JHT_TEST_ATOMIC_SOURCE)
+$mode = $env:JHT_TEST_ATOMIC_MODE
+
+function Get-FileSnapshot {
+  param([string]$Path)
+  $item = [IO.FileInfo]::new($Path)
+  $sections = [Security.AccessControl.AccessControlSections]::All
+  return ([ordered]@{
+    bytes = [Convert]::ToBase64String([IO.File]::ReadAllBytes($Path))
+    sddl = $item.GetAccessControl($sections).GetSecurityDescriptorSddlForm($sections)
+  } | ConvertTo-Json -Compress)
+}
+
+function Assert-NoAtomicResidue {
+  if (@(Get-ChildItem -LiteralPath $root -Force | Where-Object {
+      $_.Name -like '.jht-atomic-*' }).Count -ne 0) {
+    throw 'atomic primitive left transient residue'
+  }
+}
+
+try {
+  if ($mode -ceq 'happy') {
+    $first = [Text.UTF8Encoding]::new($false).GetBytes('first')
+    $second = [Text.UTF8Encoding]::new($false).GetBytes('second')
+    Write-ProtectedAtomicFile -Destination $destination -Bytes $first
+    Assert-ProtectedFileContent $destination (Get-BytesSha256 $first) $first.Length
+    Write-ProtectedAtomicFile -Destination $destination -Bytes $second
+    Assert-ProtectedFileContent $destination (Get-BytesSha256 $second) $second.Length
+    $sourceHash = Get-Sha256 $sourcePath
+    Copy-AtomicVerified $sourcePath $copyDestination $sourceHash
+    Copy-AtomicVerified $sourcePath $copyDestination $sourceHash
+    Assert-ProtectedFileContent $copyDestination $sourceHash ([IO.FileInfo]::new($sourcePath).Length)
+    Remove-Item -LiteralPath $destination, $copyDestination -Force
+  } elseif ($mode -ceq 'foreign-temp') {
+    $productionProtect = ${function:Protect-OwnedAtomicStream}
+    Set-Item -Path Function:\Protect-OwnedAtomicStream -Value {
+      param(
+        [IO.FileStream]$Stream,
+        [string]$Path,
+        [string]$ExpectedSha256,
+        [uint64]$ExpectedSize)
+      [JhtAtomicTestInjection]::InjectForeignSecurity($Stream)
+      & $productionProtect $Stream $Path $ExpectedSha256 $ExpectedSize
+    }
+    try {
+      $bytes = [Text.UTF8Encoding]::new($false).GetBytes('hardened')
+      Write-ProtectedAtomicFile -Destination $destination -Bytes $bytes
+      Assert-ProtectedFileContent $destination (Get-BytesSha256 $bytes) $bytes.Length
+    } finally {
+      Set-Item -Path Function:\Protect-OwnedAtomicStream -Value $productionProtect
+      Remove-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue
+    }
+  } elseif ($mode -ceq 'harden-hardlink') {
+    $productionProtect = ${function:Protect-OwnedAtomicStream}
+    Set-Item -Path Function:\Protect-OwnedAtomicStream -Value {
+      param(
+        [IO.FileStream]$Stream,
+        [string]$Path,
+        [string]$ExpectedSha256,
+        [uint64]$ExpectedSize)
+      try {
+        [JhtAtomicTestInjection]::InjectHardLink($script:ExternalLink, $Path)
+      } catch {
+        $script:HardlinkDeniedByOpenHandle = $true
+        & $productionProtect $Stream $Path $ExpectedSha256 $ExpectedSize
+        return
+      }
+      $item = [IO.FileInfo]::new($script:ExternalLink)
+      $sections = [Security.AccessControl.AccessControlSections]::All
+      $script:ExternalSddlBefore =
+        $item.GetAccessControl($sections).GetSecurityDescriptorSddlForm($sections)
+      try {
+        & $productionProtect $Stream $Path $ExpectedSha256 $ExpectedSize
+      } finally {
+        $script:ExternalSddlAfter =
+          $item.GetAccessControl($sections).GetSecurityDescriptorSddlForm($sections)
+      }
+    }
+    $script:ExternalLink = $externalLink
+    $script:HardlinkDeniedByOpenHandle = $false
+    try {
+      $failed = $false
+      try {
+        Write-ProtectedAtomicFile -Destination $destination `
+          -Bytes ([Text.UTF8Encoding]::new($false).GetBytes('linked'))
+      } catch { $failed = $true }
+      if ($script:HardlinkDeniedByOpenHandle) {
+        if ($failed -or -not (Test-Path -LiteralPath $destination -PathType Leaf)) {
+          throw 'denied hardlink injection corrupted the atomic write'
+        }
+        Remove-Item -LiteralPath $destination -Force -ErrorAction Stop
+      } elseif (-not $failed -or
+          $script:ExternalSddlAfter -cne $script:ExternalSddlBefore) {
+          throw 'same-handle hardlink boundary was not fail-closed'
+      }
+    } finally {
+      Set-Item -Path Function:\Protect-OwnedAtomicStream -Value $productionProtect
+      Remove-Item -LiteralPath $externalLink -Force -ErrorAction SilentlyContinue
+    }
+  } elseif ($mode -ceq 'harden-reparse-denied') {
+    $externalBytes = [Text.UTF8Encoding]::new($false).GetBytes('external-target')
+    Write-ProtectedAtomicFile -Destination $externalTarget -Bytes $externalBytes
+    $externalBefore = Get-FileSnapshot $externalTarget
+    $productionProtect = ${function:Protect-OwnedAtomicStream}
+    Set-Item -Path Function:\Protect-OwnedAtomicStream -Value {
+      param(
+        [IO.FileStream]$Stream,
+        [string]$Path,
+        [string]$ExpectedSha256,
+        [uint64]$ExpectedSize)
+      $deleteDenied = $false
+      try { [IO.File]::Delete($Path) } catch { $deleteDenied = $true }
+      $replaceDenied = $false
+      try {
+        [JhtUpdateFileIdentity]::MoveReplace(
+          $script:ExternalTarget, $Path, $true)
+      } catch { $replaceDenied = $true }
+      if (-not $deleteDenied -or -not $replaceDenied) {
+        throw 'share-none handle allowed path substitution at harden boundary'
+      }
+      & $productionProtect $Stream $Path $ExpectedSha256 $ExpectedSize
+    }
+    $script:ExternalTarget = $externalTarget
+    try {
+      $bytes = [Text.UTF8Encoding]::new($false).GetBytes('share-none')
+      Write-ProtectedAtomicFile -Destination $destination -Bytes $bytes
+      Assert-ProtectedFileContent $destination (Get-BytesSha256 $bytes) $bytes.Length
+      if (-not (Test-Path -LiteralPath $externalTarget -PathType Leaf) -or
+          (Get-FileSnapshot $externalTarget) -cne $externalBefore) {
+        throw 'denied path substitution mutated the external target'
+      }
+    } finally {
+      Set-Item -Path Function:\Protect-OwnedAtomicStream -Value $productionProtect
+      Remove-Item -LiteralPath $destination, $externalTarget -Force `
+        -ErrorAction SilentlyContinue
+    }
+  } elseif ($mode -ceq 'hostile') {
+    try {
+      Write-ProtectedAtomicFile -Destination $destination `
+        -Bytes ([Text.UTF8Encoding]::new($false).GetBytes('replacement'))
+      throw 'hostile destination was replaced'
+    } catch {
+      [Console]::Error.WriteLine(
+        'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=atomic ' +
+        'code=atomic_preflight_failed')
+      exit 23
+    }
+  } else {
+    $old = [Text.UTF8Encoding]::new($false).GetBytes('old')
+    Write-ProtectedAtomicFile -Destination $destination -Bytes $old
+    $before = Get-FileSnapshot $destination
+    $functionName = switch ($mode) {
+      'failure-create' { 'Open-AtomicTempStream' }
+      'failure-write' { 'Write-AtomicTempContent' }
+      'failure-flush' { 'Flush-AtomicTempStream' }
+      'failure-harden' { 'Protect-OwnedAtomicStream' }
+      'failure-promote' { 'Promote-AtomicTemp' }
+      'failure-postflight' { 'Assert-ProtectedFileContent' }
+      default { throw 'unknown atomic probe mode' }
+    }
+    $path = 'Function:\' + $functionName
+    $production = Get-Item -LiteralPath $path
+    $script:calls = 0
+    if ($mode -ceq 'failure-postflight') {
+      $productionPostflight = ${function:Assert-ProtectedFileContent}
+      $script:AtomicDestination = $destination
+      Set-Item -LiteralPath $path -Value {
+        param([string]$Path, [string]$ExpectedSha256, [uint64]$ExpectedSize)
+        if ([IO.Path]::GetFullPath($Path).Equals(
+            [IO.Path]::GetFullPath($script:AtomicDestination),
+            [StringComparison]::OrdinalIgnoreCase)) {
+          throw 'injected atomic postflight failure'
+        }
+        & $productionPostflight $Path $ExpectedSha256 $ExpectedSize
+      }
+    } else {
+      Set-Item -LiteralPath $path -Value { throw 'injected atomic stage failure' }
+    }
+    try {
+      $failureObserved = $false
+      try {
+        Write-ProtectedAtomicFile -Destination $destination `
+          -Bytes ([Text.UTF8Encoding]::new($false).GetBytes('new'))
+      } catch { $failureObserved = $true }
+      if (-not $failureObserved) { throw 'injected atomic failure was accepted' }
+    } finally {
+      Set-Item -LiteralPath $path -Value $production.ScriptBlock
+    }
+    if ((Get-FileSnapshot $destination) -cne $before) {
+      throw 'atomic failure mutated its destination'
+    }
+    Remove-Item -LiteralPath $destination -Force
+  }
+  Assert-NoAtomicResidue
+  [Console]::Out.WriteLine('WINDOWS-ATOMIC-SEAM PASS mode=' + $mode)
+} finally {
+  if ($mode -cne 'hostile') {
+    Remove-Item -LiteralPath $destination, $copyDestination, $externalLink, $externalTarget -Force `
+      -ErrorAction SilentlyContinue
+  }
+}
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
+STAGE_FAULT_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @(
+  'Get-FreshBundle',
+  'Get-JournalWriteCode', 'Write-Journal', 'Update-JournalState',
+  'Update-JournalProcess', 'Backup-OldAuthority',
+  'Install-CandidateMetadata', 'Install-CandidateHelper', 'Write-Result')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) {
+  throw 'production stage functions are missing'
+}
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$mode = $env:JHT_TEST_STAGE_MODE
+$script:FailurePhase = 'unset'
+$script:FailureCode = 'unset'
+$script:copyCalls = 0
+$script:manifestCalls = 0
+$script:floorCalls = 0
+$script:JournalPath = 'journal.json'
+$script:ResultPath = 'result.json'
+$script:Nonce = 'a' * 32
+$script:AuthorityBackupDir = 'authority'
+$script:PSCommandPath = 'helper.ps1'
+$script:OldHelperBackupPath = 'old-helper.ps1'
+$script:InstalledManifestPath = 'installed.json'
+$script:OldManifestBackupPath = 'old-manifest.json'
+$script:InstalledSignaturePath = 'installed.sig'
+$script:OldSignatureBackupPath = 'old-signature.sig'
+$script:CandidateManifestPath = 'candidate.json'
+$script:CandidateSignaturePath = 'candidate.sig'
+$script:CandidateHelperPath = 'candidate-helper.ps1'
+$script:HelperRole = 'windows-update-helper'
+$script:DesktopRole = 'windows-desktop'
+$script:BaselineVersion = '0.3.6'
+$script:FloorPath = 'floor.json'
+$script:TargetPath = 'target.exe'
+$script:CandidatePath = 'candidate.exe'
+$manifest = [pscustomobject]@{
+  Value = [pscustomobject]@{ version = '0.3.6'; sequence = 1 }
+  Sha256 = 'a' * 64
+}
+$artifact = [pscustomobject]@{ sha256 = 'b' * 64 }
+$bundle = @{
+  Installed = $manifest
+  Candidate = [pscustomobject]@{
+    Value = [pscustomobject]@{ version = '0.3.7'; sequence = 2 }
+    Sha256 = 'c' * 64
+  }
+  Old = $artifact
+  OldHelper = $artifact
+  New = $artifact
+  NewHelper = $artifact
+  OldSignatureSha256 = 'd' * 64
+  CandidateSignatureSha256 = 'e' * 64
+}
+$script:installedManifest = $manifest
+$script:candidateManifest = $bundle.Candidate
+$script:artifact = $artifact
+$journal = [pscustomobject]@{
+  schema = 1; nonce = $script:Nonce; state = 'prepared'
+  installed_version = '0.3.6'; installed_sequence = 1
+  target_version = '0.3.7'; target_sequence = 2
+  old_sha256 = 'b' * 64; old_helper_sha256 = 'b' * 64
+  old_manifest_sha256 = 'a' * 64; old_signature_sha256 = 'd' * 64
+  candidate_sha256 = 'b' * 64; candidate_helper_sha256 = 'b' * 64
+  candidate_manifest_sha256 = 'c' * 64
+  candidate_signature_sha256 = 'e' * 64
+  candidate_pid = 0; candidate_started = ''
+}
+
+function Write-AtomicJson {
+  if ($mode -ceq 'floor-init-postflight') { return }
+  throw 'injected JSON writer failure'
+}
+function Read-VerifiedManifest {
+  $script:manifestCalls++
+  if ($mode -ceq 'bundle-installed' -and $script:manifestCalls -eq 1) {
+    throw 'injected installed manifest failure'
+  }
+  if ($mode -ceq 'bundle-candidate' -and $script:manifestCalls -eq 2) {
+    throw 'injected candidate manifest failure'
+  }
+  if ($script:manifestCalls -eq 1) { return $script:installedManifest }
+  return $script:candidateManifest
+}
+function Compare-Version {
+  param([string]$Left, [string]$Right)
+  if ($mode -ceq 'bundle-version') { return 0 }
+  if ($Left -ceq $script:BaselineVersion) { return 0 }
+  return 1
+}
+function Read-Floor {
+  $script:floorCalls++
+  if ($mode -ceq 'floor-read') { throw 'injected floor read failure' }
+  if ($mode -in @('floor-init','floor-init-postflight')) {
+    if ($script:floorCalls -eq 1) { return $null }
+    if ($mode -ceq 'floor-init-postflight') {
+      throw 'injected floor postflight failure'
+    }
+  }
+  return [pscustomobject]@{ sequence = 1; version = '0.3.6' }
+}
+function Get-ArtifactByRole {
+  if ($mode -ceq 'bundle-artifact') { throw 'injected artifact failure' }
+  return $script:artifact
+}
+function Assert-FileMatchesArtifact { }
+function Get-Sha256 { return 'f' * 64 }
+function Initialize-ProtectedDirectory {
+  if ($mode -ceq 'authority-init') { throw 'injected authority init failure' }
+}
+function Copy-AtomicVerified {
+  $script:copyCalls++
+  $failureCall = switch ($mode) {
+    'authority-helper' { 1 }
+    'authority-manifest' { 2 }
+    'authority-signature' { 3 }
+    'metadata-manifest' { 1 }
+    'metadata-signature' { 2 }
+    'helper-install' { 1 }
+    default { 0 }
+  }
+  if ($script:copyCalls -eq $failureCall) { throw 'injected copy writer failure' }
+}
+function Assert-FileMatchesArtifact {
+  if ($mode -ceq 'helper-postflight') { throw 'injected helper postflight failure' }
+}
+
+try {
+  if ($mode.StartsWith('bundle-') -or $mode.StartsWith('floor-')) {
+    Get-FreshBundle | Out-Null
+  } elseif ($mode.StartsWith('journal-')) {
+    Write-Journal $mode.Substring(8) $bundle
+  } elseif ($mode -ceq 'journal-process') {
+    Update-JournalProcess $journal 123 '100000000000000000'
+  } elseif ($mode -ceq 'result-write') {
+    Write-Result $false 'test' 'test_failed'
+  } elseif ($mode.StartsWith('authority-')) {
+    Backup-OldAuthority $bundle
+  } elseif ($mode.StartsWith('metadata-')) {
+    Install-CandidateMetadata $bundle
+  } elseif ($mode.StartsWith('helper-')) {
+    Install-CandidateHelper $bundle
+  } else {
+    throw 'unknown stage fault mode'
+  }
+  throw 'injected stage fault was accepted'
+} catch {
+  if ($script:FailurePhase -cne $env:JHT_TEST_EXPECTED_PHASE -or
+      $script:FailureCode -cne $env:JHT_TEST_EXPECTED_CODE) { throw }
+  [Console]::Out.WriteLine(
+    'WINDOWS-STAGE-SEAM PASS mode=' + $mode +
+    ' phase=' + $script:FailurePhase + ' code=' + $script:FailureCode)
+}
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
+DISPATCH_FAULT_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @('Initialize-HealthCapability', 'Invoke-Apply')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) {
+  throw 'production dispatch functions are missing'
+}
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$native = @'
+using System;
+using System.Diagnostics;
+
+public sealed class JhtSuspendedProcess : IDisposable {
+    public int ProcessId { get; private set; }
+    private JhtSuspendedProcess() {
+        ProcessId = Process.GetCurrentProcess().Id;
+    }
+    public static JhtSuspendedProcess Create(string path) {
+        if (Environment.GetEnvironmentVariable("JHT_TEST_DISPATCH_MODE") ==
+            "health-process") throw new InvalidOperationException("injected create failure");
+        return new JhtSuspendedProcess();
+    }
+    public void Resume() {
+        if (Environment.GetEnvironmentVariable("JHT_TEST_DISPATCH_MODE") ==
+            "health-resume") throw new InvalidOperationException("injected resume failure");
+    }
+    public void ReleaseOwnership() {
+        if (Environment.GetEnvironmentVariable("JHT_TEST_DISPATCH_MODE") ==
+            "health-release") throw new InvalidOperationException("injected release failure");
+    }
+    public void Dispose() { }
+}
+'@
+if (-not ('JhtSuspendedProcess' -as [type])) { Add-Type -TypeDefinition $native }
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$mode = $env:JHT_TEST_DISPATCH_MODE
+$script:FailurePhase = 'unset'
+$script:FailureCode = 'unset'
+$script:Mode = 'Apply'
+$script:OldPid = 123
+$script:OldStartedUtcTicks = ''
+$script:Nonce = 'a' * 32
+$script:RequestId = 'request'
+$script:InstanceId = 'instance'
+$script:TargetPath = 'target.exe'
+$script:CandidatePath = 'candidate.exe'
+$script:BackupPath = 'backup.exe'
+$script:HealthPath = 'health.json'
+$script:JournalPath = 'journal.json'
+$script:ReadyPath = 'ready.json'
+$script:FloorPath = 'floor.json'
+$script:writeProtectedCalls = 0
+$script:assertPathCalls = 0
+$script:journalWrites = 0
+$manifest = [pscustomobject]@{
+  Value = [pscustomobject]@{ version = '0.3.7'; sequence = 2 }
+  Sha256 = 'a' * 64
+}
+$artifact = [pscustomobject]@{ sha256 = 'b' * 64; size = 10 }
+$bundle = @{ Candidate = $manifest; New = $artifact; Old = $artifact }
+$old = [pscustomobject]@{}
+$old | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value {
+  param([int]$Milliseconds)
+  if ($script:mode -ceq 'process-wait') { throw 'injected old-process wait failure' }
+  return $true
+}
+
+function Initialize-StagingProtection {
+  if ($script:mode -ceq 'bundle-staging') { throw 'injected staging failure' }
+}
+function Assert-Paths {
+  $script:assertPathCalls++
+  if ($script:mode -ceq 'bundle-path' -and $script:assertPathCalls -eq 1) {
+    throw 'injected initial path failure'
+  }
+  if ($script:mode -ceq 'bundle-postwait' -and $script:assertPathCalls -eq 2) {
+    throw 'injected post-wait path failure'
+  }
+}
+function Get-FreshBundle { return $script:bundle }
+function Get-ObservedProcess {
+  if ($script:mode -ceq 'process-identity') { return $null }
+  return @{ Process = $script:old; Started = '100000000000000000' }
+}
+function Write-Journal {
+  param(
+    [string]$State,
+    [hashtable]$Bundle,
+    [int]$CandidatePid = 0,
+    [string]$CandidateStarted = '')
+  $script:journalWrites++
+  $script:FailurePhase = 'journal'
+  $script:FailureCode = switch ($State) {
+    'prepared' { 'journal_prepared_write_failed' }
+    'swap_intent' { 'journal_swap_intent_write_failed' }
+    'candidate_installed' { 'journal_candidate_installed_write_failed' }
+    'health_acked' { 'journal_health_acked_write_failed' }
+    'authority_intent' { 'journal_authority_intent_write_failed' }
+    'metadata_installed' { 'journal_metadata_installed_write_failed' }
+    'floor_intent' { 'journal_floor_intent_write_failed' }
+    'helper_intent' { 'journal_helper_intent_write_failed' }
+    'committed' { 'journal_committed_write_failed' }
+    default { throw 'dispatch seam received an unexpected journal state' }
+  }
+}
+function Write-AtomicJson {
+  param([string]$Path, [hashtable]$Value)
+  if ($script:mode -ceq 'ready' -and $Path -ceq $script:ReadyPath) {
+    throw 'injected ready writer failure'
+  }
+  if ($script:mode -ceq 'floor-commit' -and $Path -ceq $script:FloorPath) {
+    throw 'injected floor commit failure'
+  }
+}
+function Write-Result { throw 'dispatch seam reached an unexpected result writer' }
+function Remove-ProtectedFileIfPresent {
+  if ($script:mode -ceq 'swap-cleanup') { throw 'injected swap cleanup failure' }
+}
+function Write-ProtectedAtomicFile {
+  $script:writeProtectedCalls++
+  if ($script:mode -ceq 'swap-promote' -and
+      $script:writeProtectedCalls -eq 1) { throw 'injected swap promotion failure' }
+  if ($script:mode -ceq 'health-capability' -and
+      $script:writeProtectedCalls -eq 2) { throw 'injected health capability failure' }
+}
+function Assert-ProtectedFileContent { }
+function Get-BytesSha256 { return '0' * 64 }
+function Test-CandidateHealth {
+  if ($script:mode -ceq 'health-ack') { throw 'injected health ACK failure' }
+  return $true
+}
+function Read-ProtectedJsonFile { return [pscustomobject]@{} }
+function Backup-OldAuthority { }
+function Install-CandidateMetadata { }
+function Install-CandidateHelper { }
+function Remove-ProtectedTreeIfPresent { }
+
+$script:mode = $mode
+$script:bundle = $bundle
+$script:old = $old
+try {
+  Invoke-Apply
+  throw 'injected dispatch fault was accepted'
+} catch {
+  if ($script:FailurePhase -cne $env:JHT_TEST_EXPECTED_PHASE -or
+      $script:FailureCode -cne $env:JHT_TEST_EXPECTED_CODE) { throw }
+  $expectedJournalWrites = switch ($mode) {
+    'ready' { 1 }
+    'process-wait' { 1 }
+    'bundle-postwait' { 1 }
+    'swap-cleanup' { 2 }
+    'swap-promote' { 2 }
+    'health-capability' { 3 }
+    'health-process' { 3 }
+    'health-resume' { 4 }
+    'health-release' { 4 }
+    'health-ack' { 4 }
+    'floor-commit' { 8 }
+    default { 0 }
+  }
+  if ($script:journalWrites -ne $expectedJournalWrites) {
+    throw 'dispatch seam did not traverse the expected nested journal writers'
+  }
+  [Console]::Out.WriteLine(
+    'WINDOWS-DISPATCH-SEAM PASS mode=' + $mode +
+    ' phase=' + $script:FailurePhase + ' code=' + $script:FailureCode)
+}
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
+RECOVERY_FAULT_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -ceq 'Invoke-Rollback'
+}, $true))
+if ($functions.Count -ne 1) { throw 'production rollback function is missing' }
+$body = $functions[0].Extent.Text
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$mode = $env:JHT_TEST_RECOVERY_MODE
+$script:FailurePhase = 'unset'
+$script:FailureCode = 'unset'
+$script:TargetPath = 'target.exe'
+$script:journalWrites = 0
+function Restore-OldTarget {
+  if ($script:mode -ceq 'target') { throw 'injected target recovery failure' }
+}
+function Test-OldAuthorityInstalled { return $false }
+function Restore-OldAuthority {
+  if ($script:mode -ceq 'authority') { throw 'injected authority recovery failure' }
+}
+function Write-Journal {
+  $script:journalWrites++
+  $script:FailurePhase = 'journal'
+  $script:FailureCode = 'journal_rolled_back_write_failed'
+  if ($script:mode -ceq 'journal') { throw 'injected rollback journal failure' }
+}
+function Start-Process {
+  if ($script:mode -ceq 'restart') { throw 'injected recovery restart failure' }
+}
+function Write-Result {
+  $script:FailurePhase = 'result'
+  $script:FailureCode = 'result_write_failed'
+  throw 'injected recovery result failure'
+}
+$script:mode = $mode
+try {
+  Invoke-Rollback @{} ([pscustomobject]@{}) 'injected'
+  throw 'injected recovery fault was accepted'
+} catch {
+  if ($script:FailurePhase -cne $env:JHT_TEST_EXPECTED_PHASE -or
+      $script:FailureCode -cne $env:JHT_TEST_EXPECTED_CODE) { throw }
+  $expectedJournalWrites = if ($mode -in @('journal','restart','result')) {
+    1
+  } else {
+    0
+  }
+  if ($script:journalWrites -ne $expectedJournalWrites) {
+    throw 'rollback seam did not traverse the expected nested journal writer'
+  }
+  [Console]::Out.WriteLine(
+    'WINDOWS-RECOVERY-SEAM PASS mode=' + $mode +
+    ' phase=' + $script:FailurePhase + ' code=' + $script:FailureCode)
+}
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
+RECOVERY_HEALTH_FAULT_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @('Initialize-HealthCapability', 'Start-RecoveryHealthProbe')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) {
+  throw 'production recovery health functions are missing'
+}
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$native = @'
+using System;
+using System.Diagnostics;
+public sealed class JhtSuspendedProcess : IDisposable {
+    public int ProcessId { get; private set; }
+    private JhtSuspendedProcess() {
+        ProcessStartInfo start = new ProcessStartInfo(
+            Environment.GetEnvironmentVariable("SystemRoot") +
+            @"\System32\ping.exe", "-n 30 127.0.0.1");
+        start.UseShellExecute = false;
+        start.CreateNoWindow = true;
+        ProcessId = Process.Start(start).Id;
+    }
+    public static JhtSuspendedProcess Create(string path) {
+        if (Environment.GetEnvironmentVariable("JHT_TEST_RECOVERY_HEALTH_MODE") ==
+            "process") throw new InvalidOperationException("injected create failure");
+        return new JhtSuspendedProcess();
+    }
+    public void Resume() {
+        if (Environment.GetEnvironmentVariable("JHT_TEST_RECOVERY_HEALTH_MODE") ==
+            "resume") throw new InvalidOperationException("injected resume failure");
+    }
+    public void ReleaseOwnership() {
+        if (Environment.GetEnvironmentVariable("JHT_TEST_RECOVERY_HEALTH_MODE") ==
+            "release") throw new InvalidOperationException("injected release failure");
+    }
+    public void Dispose() { }
+}
+'@
+if (-not ('JhtSuspendedProcess' -as [type])) { Add-Type -TypeDefinition $native }
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$mode = $env:JHT_TEST_RECOVERY_HEALTH_MODE
+$script:FailurePhase = 'unset'
+$script:FailureCode = 'unset'
+$script:TargetPath = 'target.exe'
+$script:HealthPath = 'health.json'
+$script:JournalPath = 'journal.json'
+$script:Nonce = 'a' * 32
+$script:journalProcessWrites = 0
+function Stop-JournalCandidate { }
+function Remove-ProtectedFileIfPresent {
+  if ($script:mode -ceq 'cleanup') { throw 'injected health cleanup failure' }
+}
+function Write-ProtectedAtomicFile {
+  if ($script:mode -ceq 'capability') { throw 'injected capability failure' }
+}
+function Assert-ProtectedFileContent { }
+function Get-BytesSha256 { return '0' * 64 }
+function Update-JournalProcess {
+  $script:journalProcessWrites++
+  $script:FailurePhase = 'journal'
+  $script:FailureCode = 'journal_process_write_failed'
+}
+function Test-CandidateHealth {
+  param([hashtable]$Bundle, [Diagnostics.Process]$Process, [string]$Started)
+  if ($script:mode -ceq 'validate') {
+    $Process.Kill()
+    $null = $Process.WaitForExit(5000)
+    throw 'injected health validation failure'
+  }
+  return $true
+}
+$script:mode = $mode
+try {
+  Start-RecoveryHealthProbe @{} ([pscustomobject]@{}) | Out-Null
+  throw 'injected recovery health fault was accepted'
+} catch {
+  if ($script:FailurePhase -cne $env:JHT_TEST_EXPECTED_PHASE -or
+      $script:FailureCode -cne $env:JHT_TEST_EXPECTED_CODE) { throw }
+  $expectedJournalWrites = if ($mode -in @('resume','release','validate')) {
+    1
+  } else {
+    0
+  }
+  if ($script:journalProcessWrites -ne $expectedJournalWrites) {
+    throw 'recovery health seam did not traverse the nested journal writer'
+  }
+  [Console]::Out.WriteLine(
+    'WINDOWS-RECOVERY-HEALTH-SEAM PASS mode=' + $mode +
+    ' phase=' + $script:FailurePhase + ' code=' + $script:FailureCode)
+}
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
+RESULT_FALLBACK_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @('Write-Result', 'Write-FailureResultOrStderr')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) {
+  throw 'production result fallback functions are missing'
+}
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$script:FailurePhase = 'original'
+$script:FailureCode = 'original_failed'
+$script:ResultPath = 'result.json'
+$script:Nonce = 'a' * 32
+function Write-AtomicJson { throw 'injected result writer failure' }
+$written = Write-FailureResultOrStderr 'health' 'health_ack_failed'
+if ($written -or $script:FailurePhase -cne 'result' -or
+    $script:FailureCode -cne 'result_write_failed') {
+  throw 'result fallback did not preserve its exact stage'
+}
+[Console]::Out.WriteLine('WINDOWS-RESULT-FALLBACK-SEAM PASS')
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
 
 def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
     source = HELPER_SOURCE.read_text()
@@ -429,8 +1386,54 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         "lock_stale_promote",
         "lock_stale_remove",
         "lock_exhausted",
+        "bundle_installed_read_failed",
+        "bundle_candidate_read_failed",
+        "floor_read_failed",
+        "floor_init_failed",
+        "floor_init_postflight_failed",
+        "floor_commit_failed",
+        "journal_prepared_write_failed",
+        "journal_swap_intent_write_failed",
+        "journal_candidate_installed_write_failed",
+        "journal_health_acked_write_failed",
+        "journal_authority_intent_write_failed",
+        "journal_metadata_installed_write_failed",
+        "journal_floor_intent_write_failed",
+        "journal_helper_intent_write_failed",
+        "journal_committed_write_failed",
+        "journal_rolled_back_write_failed",
+        "ready_write_failed",
+        "process_old_identity_failed",
+        "process_old_wait_failed",
+        "swap_backup_cleanup_failed",
+        "swap_promote_failed",
+        "health_cleanup_failed",
+        "health_capability_init_failed",
+        "health_process_start_failed",
+        "health_process_resume_failed",
+        "health_process_release_failed",
+        "health_ack_failed",
+        "authority_backup_init_failed",
+        "authority_backup_helper_failed",
+        "authority_backup_manifest_failed",
+        "authority_backup_signature_failed",
+        "metadata_manifest_install_failed",
+        "metadata_signature_install_failed",
+        "metadata_postflight_failed",
+        "helper_install_failed",
+        "helper_postflight_failed",
+        "result_preflight_failed",
+        "result_write_failed",
+        "result_read_failed",
+        "recovery_journal_read_failed",
+        "recovery_health_capability_init_failed",
+        "recovery_health_resume_failed",
+        "recovery_health_release_failed",
+        "recovery_restart_failed",
+        "recovery_target_restore_failed",
     ):
         assert diagnostic in source
+    assert "update_failed" not in source
     for forbidden in (
         "Invoke-Expression",
         "DownloadString",
@@ -473,17 +1476,93 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
     assert "[System.Management.Automation.PSReference]" in initialize
     assert "[ref]$CreatedByInvocation" not in initialize
     assert "-CreatedByInvocation ([ref]$claimCreated)" in source
+    assert (
+        "else { New-Object Security.AccessControl.DirectorySecurity }" in initialize
+    )
+    assert "$acl.AddAccessRule($rule)" in initialize
+    assert "Assert-ExactCurrentOnlyAcl $Path -Directory" in initialize
     assert initialize.index("Assert-CurrentOwner $Path") < initialize.index(
         "if (-not $preexisting) { $acl.SetOwner("
     ) < initialize.index(
         "$acl.SetAccessRuleProtection("
     ) < initialize.index("Assert-OwnerAndAcl $Path -Directory")
+    exact_acl = source[
+        source.index("function Assert-ExactCurrentOnlyAcl") : source.index(
+            "function Assert-CurrentOwner"
+        )
+    ]
+    for exact_contract in (
+        "$rules.Count -ne 1",
+        "$rule.IsInherited",
+        "AccessControlType]::Allow",
+        "FileSystemRights]::FullControl",
+        "PropagationFlags]::None",
+    ):
+        assert exact_contract in exact_acl
+    acquire_lock = source[
+        source.index("function Acquire-Lock") : source.index(
+            "function Assert-SafeLocationPlan"
+        )
+    ]
+    assert acquire_lock.index("Write-AtomicJson $claimOwnerPath") < acquire_lock.index(
+        "Assert-ExactCurrentOnlyAcl $claimOwnerPath"
+    ) < acquire_lock.index("[IO.Directory]::Move($claim, $LockPath)")
+    atomic = source[
+        source.index("function Protect-OwnedFile") : source.index(
+            "function Write-AtomicJson"
+        )
+    ]
+    for atomic_contract in (
+        "New-Object Security.AccessControl.FileSecurity",
+        "CreateNewAtomicStream",
+        "$Stream.Flush($true)",
+        "Protect-OwnedAtomicStream $stream",
+        "Assert-AtomicDestinationPreflight $destinationFull",
+        "New-ProtectedAtomicTemp -Path $temporary",
+        "Promote-AtomicTemp $temporary",
+        "Assert-ProtectedFileContent $destinationFull",
+        "Remove-Item -LiteralPath $temporary",
+    ):
+        assert atomic_contract in atomic
+    assert "MOVEFILE_REPLACE_EXISTING" in source
+    assert "MOVEFILE_WRITE_THROUGH" in source
+    assert "SetSecurityInfo" in source
+    assert "HardenAndSha256" in source
+    harden = source[
+        source.index("public static string HardenAndSha256") : source.index(
+            "public static FileStream CreateNewAtomicStream"
+        )
+    ]
+    assert harden.index("AssertIdentity(handle, expected)") < harden.index(
+        "SetSecurityInfo("
+    ) < harden.rindex("AssertIdentity(handle, expected)")
+    assert "JhtUpdateFileIdentity]::MoveReplace" in atomic
+    assert "[IO.File]::Replace" not in atomic
+    copy_atomic = source[
+        source.index("function Copy-AtomicVerified") : source.index(
+            "function Stop-JournalCandidate"
+        )
+    ]
+    assert "Write-ProtectedAtomicFile" in copy_atomic
+    assert "Copy-Item" not in copy_atomic
+    write_result = source[
+        source.index("function Write-Result") : source.index(
+            "function Write-FailureResultOrStderr"
+        )
+    ]
+    assert "catch" not in write_result
+    result_fallback = source[
+        source.index("function Write-FailureResultOrStderr") : source.index(
+            "function Get-ExactProcess"
+        )
+    ]
+    assert "phase=result code=result_write_failed" in result_fallback
     assert "Get-Process -ErrorAction SilentlyContinue" not in source
     assert source.index("Write-AtomicJson $FloorPath") < source.index(
         "Install-CandidateHelper $bundle"
     )
     main_dispatch = "if ($Mode -eq 'Recover') { Invoke-Recover } else { Invoke-Apply }"
-    assert source.index("Remove-Item -LiteralPath $ResultPath") < source.rindex(
+    assert source.index("Assert-AtomicDestinationPreflight $ResultPath") < source.rindex(
         main_dispatch
     )
     assert "Get-Acl" not in source
@@ -576,6 +1655,16 @@ def test_consumer_uses_file_without_execution_policy_bypass() -> None:
     assert '"-File"' in argv
     assert "ExecutionPolicy" not in argv
     assert "Bypass" not in argv
+    service = (ROOT / "game/scripts/support/update_service.gd").read_text()
+    health = service[
+        service.index("func _write_windows_health_ack") : service.index(
+            "func _join_thread"
+        )
+    ]
+    assert "or not FileAccess.file_exists(path)" in health
+    assert "FileAccess.open(path, FileAccess.WRITE)" in health
+    assert '"%s.tmp-%d"' not in health
+    assert "DirAccess.rename_absolute" not in health
 
 
 def test_restricted_execution_policy_fails_closed(tmp_path: Path) -> None:
@@ -671,12 +1760,47 @@ def _set_current_owner(path: Path) -> None:
     )
 
 
+def _protect_file_current_only(path: Path) -> None:
+    _run_powershell_command(
+        "$item=[IO.FileInfo]::new($env:JHT_TEST_ACL_PATH);"
+        "$acl=New-Object Security.AccessControl.FileSecurity;"
+        "$current=[Security.Principal.WindowsIdentity]::GetCurrent().User;"
+        "$acl.SetOwner($current);$acl.SetAccessRuleProtection($true,$false);"
+        "$rule=New-Object Security.AccessControl.FileSystemAccessRule("
+        "$current,'FullControl','Allow');$acl.AddAccessRule($rule);"
+        "$item.SetAccessControl($acl)",
+        env_values={"JHT_TEST_ACL_PATH": str(path)},
+    )
+
+
 def _directory_acl_is_protected(path: Path) -> bool:
     observed = _run_powershell_command(
         "$item=[IO.DirectoryInfo]::new($env:JHT_TEST_ACL_PATH);"
         "$acl=$item.GetAccessControl("
         "[Security.AccessControl.AccessControlSections]::All);"
         "[Console]::Out.Write($acl.AreAccessRulesProtected.ToString())",
+        env_values={"JHT_TEST_ACL_PATH": str(path)},
+        capture_output=True,
+    )
+    return observed.stdout == "True"
+
+
+def _file_acl_is_current_only(path: Path) -> bool:
+    observed = _run_powershell_command(
+        "$item=[IO.FileInfo]::new($env:JHT_TEST_ACL_PATH);"
+        "$acl=$item.GetAccessControl("
+        "[Security.AccessControl.AccessControlSections]::All);"
+        "$current=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;"
+        "$owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value;"
+        "$rules=@($acl.GetAccessRules($true,$true,"
+        "[Security.Principal.SecurityIdentifier]));"
+        "$ok=$owner -eq $current -and $acl.AreAccessRulesProtected -and "
+        "$rules.Count -eq 1 -and -not $rules[0].IsInherited -and "
+        "$rules[0].IdentityReference.Value -eq $current -and "
+        "$rules[0].AccessControlType -eq 'Allow' -and "
+        "[Security.AccessControl.FileSystemRights]$rules[0].FileSystemRights "
+        "-eq [Security.AccessControl.FileSystemRights]::FullControl;"
+        "[Console]::Out.Write($ok.ToString())",
         env_values={"JHT_TEST_ACL_PATH": str(path)},
         capture_output=True,
     )
@@ -1388,7 +2512,7 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                     "process_started_utc_ticks": started,
                 },
             )
-            _set_current_owner(transaction / "health.json")
+            _protect_file_current_only(transaction / "health.json")
         _write_compact_json(journal_path, journal)
 
         recovered = subprocess.run(
@@ -1435,6 +2559,13 @@ def test_windows_powershell51_verifies_signed_bundle(
     assert b"candidate" not in target.read_bytes()
     assert _directory_acl_is_protected(transaction.parent)
     assert _directory_acl_is_protected(transaction)
+    for protected_file in (
+        transaction.parent / "committed-floor.json",
+        transaction / "journal.json",
+        transaction / "ready.json",
+        transaction / "result.json",
+    ):
+        assert _file_acl_is_current_only(protected_file), protected_file.name
 
 
 def test_windows_powershell51_rotation_overlap_accepts_new_signed_new_only_helper(
@@ -1619,7 +2750,10 @@ def test_production_lock_clean_active_and_stale_seams_leave_no_residue(
     assert not lock_root.exists()
 
 
-@pytest.mark.parametrize("collision_kind", ["foreign-owner", "foreign-ace", "reparse"])
+@pytest.mark.parametrize(
+    "collision_kind",
+    ["foreign-owner", "foreign-ace", "preexisting-foreign-ace", "reparse"],
+)
 def test_production_initialize_rejects_preexisting_collision_without_mutation(
     tmp_path: Path,
     rsa_keys: tuple[Path, Path],
@@ -1670,6 +2804,9 @@ def test_production_initialize_rejects_preexisting_collision_without_mutation(
         env_values={
             "JHT_TEST_HELPER_SOURCE": str(helper),
             "JHT_TEST_COLLISION_PATH": str(collision),
+            "JHT_TEST_COLLISION_MODE": (
+                "attest" if collision_kind == "preexisting-foreign-ace" else "require-new"
+            ),
         },
         check=False,
         capture_output=True,
@@ -1712,6 +2849,377 @@ def test_production_initialize_rejects_invalid_tracker_without_mutation(
     assert not tracked.exists()
     assert not tuple(tmp_path.glob("**/.update-claim-*"))
     assert not tuple(tmp_path.glob("**/.update-stale-*"))
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "happy",
+        "foreign-temp",
+        "harden-hardlink",
+        "harden-reparse-denied",
+        "failure-create",
+        "failure-write",
+        "failure-flush",
+        "failure-harden",
+        "failure-promote",
+        "failure-postflight",
+    ],
+)
+def test_production_atomic_file_seam_is_current_only_and_cleans_failures(
+    tmp_path: Path, rsa_keys: tuple[Path, Path], mode: str
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    root = tmp_path / "atomic-seam"
+    root.mkdir()
+    _protect_directory(root)
+    source = root / "source.bin"
+    source.write_bytes(b"trusted source\n")
+    _set_current_owner(source)
+    before = _authority_snapshot(tmp_path)
+    result = _run_powershell_command(
+        ATOMIC_FILE_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_ATOMIC_ROOT": str(root),
+            "JHT_TEST_ATOMIC_SOURCE": str(source),
+            "JHT_TEST_ATOMIC_MODE": mode,
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.strip() == f"WINDOWS-ATOMIC-SEAM PASS mode={mode}"
+    assert _authority_snapshot(tmp_path) == before
+    assert not tuple(root.glob(".jht-atomic-*"))
+
+
+@pytest.mark.parametrize(
+    "hostile_kind",
+    ["foreign-owner", "foreign-ace", "reparse", "hardlink"],
+)
+def test_production_atomic_file_rejects_hostile_existing_without_mutation(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    hostile_kind: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    root = tmp_path / "atomic-hostile"
+    root.mkdir()
+    _protect_directory(root)
+    source = root / "source.bin"
+    source.write_bytes(b"trusted source\n")
+    _set_current_owner(source)
+    destination = root / "destination.bin"
+    if hostile_kind == "reparse":
+        reparse_target = root / "reparse-target"
+        reparse_target.mkdir()
+        _run_powershell_command(
+            "New-Item -ItemType Junction -Path $env:JHT_TEST_JUNCTION_PATH "
+            "-Target $env:JHT_TEST_JUNCTION_TARGET | Out-Null",
+            env_values={
+                "JHT_TEST_JUNCTION_PATH": str(destination),
+                "JHT_TEST_JUNCTION_TARGET": str(reparse_target),
+            },
+        )
+    elif hostile_kind == "hardlink":
+        hardlink_target = root / "hardlink-target.bin"
+        hardlink_target.write_bytes(b"hostile destination\n")
+        os.link(hardlink_target, destination)
+        _set_current_owner(destination)
+    else:
+        destination.write_bytes(b"hostile destination\n")
+        _set_current_owner(destination)
+        if hostile_kind == "foreign-owner":
+            mutation = (
+                "$acl.SetOwner([Security.Principal.SecurityIdentifier]::new("
+                "'S-1-5-32-544'))"
+            )
+        else:
+            mutation = (
+                "$foreign=[Security.Principal.SecurityIdentifier]::new("
+                "'S-1-5-32-545');"
+                "$rule=[Security.AccessControl.FileSystemAccessRule]::new("
+                "$foreign,'WriteData','Allow');$acl.AddAccessRule($rule)"
+            )
+        _run_powershell_command(
+            "$item=[IO.FileInfo]::new($env:JHT_TEST_ATOMIC_DESTINATION);"
+            "$acl=$item.GetAccessControl("
+            "[Security.AccessControl.AccessControlSections]::All);"
+            + mutation
+            + ";$item.SetAccessControl($acl)",
+            env_values={"JHT_TEST_ATOMIC_DESTINATION": str(destination)},
+        )
+    before = _authority_snapshot(tmp_path)
+    result = _run_powershell_command(
+        ATOMIC_FILE_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_ATOMIC_ROOT": str(root),
+            "JHT_TEST_ATOMIC_SOURCE": str(source),
+            "JHT_TEST_ATOMIC_MODE": "hostile",
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 23
+    assert result.stdout == ""
+    assert result.stderr.strip() == (
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=atomic "
+        "code=atomic_preflight_failed"
+    )
+    assert str(tmp_path) not in result.stderr
+    assert _authority_snapshot(tmp_path) == before
+    assert not tuple(root.glob(".jht-atomic-*"))
+
+
+@pytest.mark.parametrize(
+    ("mode", "phase", "code"),
+    [
+        ("bundle-installed", "bundle", "bundle_installed_read_failed"),
+        ("bundle-candidate", "bundle", "bundle_candidate_read_failed"),
+        ("bundle-version", "bundle", "bundle_version_failed"),
+        ("floor-read", "floor", "floor_read_failed"),
+        ("floor-init", "floor", "floor_init_failed"),
+        ("floor-init-postflight", "floor", "floor_init_postflight_failed"),
+        ("bundle-artifact", "bundle", "bundle_artifact_validation_failed"),
+        ("journal-prepared", "journal", "journal_prepared_write_failed"),
+        ("journal-swap_intent", "journal", "journal_swap_intent_write_failed"),
+        (
+            "journal-candidate_installed",
+            "journal",
+            "journal_candidate_installed_write_failed",
+        ),
+        ("journal-health_acked", "journal", "journal_health_acked_write_failed"),
+        (
+            "journal-authority_intent",
+            "journal",
+            "journal_authority_intent_write_failed",
+        ),
+        (
+            "journal-metadata_installed",
+            "journal",
+            "journal_metadata_installed_write_failed",
+        ),
+        ("journal-floor_intent", "journal", "journal_floor_intent_write_failed"),
+        (
+            "journal-helper_intent",
+            "journal",
+            "journal_helper_intent_write_failed",
+        ),
+        ("journal-committed", "journal", "journal_committed_write_failed"),
+        ("journal-rolled_back", "journal", "journal_rolled_back_write_failed"),
+        ("journal-process", "journal", "journal_process_write_failed"),
+        ("result-write", "result", "result_write_failed"),
+        ("authority-init", "authority", "authority_backup_init_failed"),
+        ("authority-helper", "authority", "authority_backup_helper_failed"),
+        (
+            "authority-manifest",
+            "authority",
+            "authority_backup_manifest_failed",
+        ),
+        (
+            "authority-signature",
+            "authority",
+            "authority_backup_signature_failed",
+        ),
+        ("metadata-manifest", "metadata", "metadata_manifest_install_failed"),
+        (
+            "metadata-signature",
+            "metadata",
+            "metadata_signature_install_failed",
+        ),
+        ("metadata-postflight", "metadata", "metadata_postflight_failed"),
+        ("helper-install", "helper", "helper_install_failed"),
+        ("helper-postflight", "helper", "helper_postflight_failed"),
+    ],
+)
+def test_production_stage_faults_emit_exact_path_free_subcodes(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    mode: str,
+    phase: str,
+    code: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    result = _run_powershell_command(
+        STAGE_FAULT_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_STAGE_MODE": mode,
+            "JHT_TEST_EXPECTED_PHASE": phase,
+            "JHT_TEST_EXPECTED_CODE": code,
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.strip() == (
+        f"WINDOWS-STAGE-SEAM PASS mode={mode} phase={phase} code={code}"
+    )
+    assert str(tmp_path) not in result.stdout
+    assert str(tmp_path) not in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("mode", "phase", "code"),
+    [
+        ("bundle-staging", "bundle", "bundle_staging_protection_failed"),
+        ("bundle-path", "bundle", "bundle_path_attestation_failed"),
+        ("process-identity", "process", "process_old_identity_failed"),
+        ("ready", "ready", "ready_write_failed"),
+        ("process-wait", "process", "process_old_wait_failed"),
+        ("bundle-postwait", "bundle", "bundle_post_wait_attestation_failed"),
+        ("swap-cleanup", "swap", "swap_backup_cleanup_failed"),
+        ("swap-promote", "swap", "swap_promote_failed"),
+        ("health-capability", "health", "health_capability_init_failed"),
+        ("health-process", "health", "health_process_start_failed"),
+        ("health-resume", "health", "health_process_resume_failed"),
+        ("health-release", "health", "health_process_release_failed"),
+        ("health-ack", "health", "health_ack_failed"),
+        ("floor-commit", "floor", "floor_commit_failed"),
+    ],
+)
+def test_production_apply_dispatch_faults_preserve_exact_stage(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    mode: str,
+    phase: str,
+    code: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    result = _run_powershell_command(
+        DISPATCH_FAULT_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_DISPATCH_MODE": mode,
+            "JHT_TEST_EXPECTED_PHASE": phase,
+            "JHT_TEST_EXPECTED_CODE": code,
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.strip() == (
+        f"WINDOWS-DISPATCH-SEAM PASS mode={mode} phase={phase} code={code}"
+    )
+    assert str(tmp_path) not in result.stdout
+    assert str(tmp_path) not in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("mode", "phase", "code"),
+    [
+        ("target", "recovery", "recovery_rollback_target_failed"),
+        ("authority", "recovery", "recovery_rollback_authority_failed"),
+        ("journal", "journal", "journal_rolled_back_write_failed"),
+        ("restart", "recovery", "recovery_restart_failed"),
+        ("result", "result", "result_write_failed"),
+    ],
+)
+def test_production_recovery_dispatch_faults_preserve_exact_stage(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    mode: str,
+    phase: str,
+    code: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    result = _run_powershell_command(
+        RECOVERY_FAULT_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_RECOVERY_MODE": mode,
+            "JHT_TEST_EXPECTED_PHASE": phase,
+            "JHT_TEST_EXPECTED_CODE": code,
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.strip() == (
+        f"WINDOWS-RECOVERY-SEAM PASS mode={mode} phase={phase} code={code}"
+    )
+    assert str(tmp_path) not in result.stdout
+    assert str(tmp_path) not in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("mode", "phase", "code"),
+    [
+        ("cleanup", "recovery", "recovery_health_cleanup_failed"),
+        ("capability", "recovery", "recovery_health_capability_init_failed"),
+        ("process", "recovery", "recovery_health_process_failed"),
+        ("resume", "recovery", "recovery_health_resume_failed"),
+        ("release", "recovery", "recovery_health_release_failed"),
+        ("validate", "recovery", "recovery_health_validate_failed"),
+    ],
+)
+def test_production_recovery_health_faults_preserve_exact_stage(
+    tmp_path: Path,
+    rsa_keys: tuple[Path, Path],
+    mode: str,
+    phase: str,
+    code: str,
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    result = _run_powershell_command(
+        RECOVERY_HEALTH_FAULT_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_RECOVERY_HEALTH_MODE": mode,
+            "JHT_TEST_EXPECTED_PHASE": phase,
+            "JHT_TEST_EXPECTED_CODE": code,
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.strip() == (
+        f"WINDOWS-RECOVERY-HEALTH-SEAM PASS mode={mode} "
+        f"phase={phase} code={code}"
+    )
+    assert str(tmp_path) not in result.stdout
+    assert str(tmp_path) not in result.stderr
+
+
+def test_production_result_failure_falls_back_to_exact_path_free_stderr(
+    tmp_path: Path, rsa_keys: tuple[Path, Path]
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    result = _run_powershell_command(
+        RESULT_FALLBACK_PROBE,
+        env_values={"JHT_TEST_HELPER_SOURCE": str(helper)},
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "WINDOWS-RESULT-FALLBACK-SEAM PASS"
+    assert result.stderr.strip() == (
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 "
+        "phase=result code=result_write_failed"
+    )
+    assert str(tmp_path) not in result.stdout
+    assert str(tmp_path) not in result.stderr
 
 
 def test_windows_prelock_internal_error_is_not_reported_as_reparse(

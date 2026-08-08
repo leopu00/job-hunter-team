@@ -215,6 +215,14 @@ jobs:
           printf '%s\n' "$clean_out" | grep -Fx \
             "WINDOWS-UPDATE-TRUST-TEST PASS"
 
+      - name: Gate exported Windows health capability consumer
+        if: runner.os == 'Windows'
+        shell: powershell
+        working-directory: game
+        run: |
+          ./tools/windows_update_health_pck_test.ps1 `
+            -Executable '${{ matrix.output }}'
+
       - name: Preserve Linux executable permissions
         if: runner.os == 'Linux'
         working-directory: game

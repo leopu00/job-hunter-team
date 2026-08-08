@@ -18,8 +18,10 @@ NSI = ROOT / "game" / "installer" / "windows.nsi"
 BUILDER = ROOT / "scripts" / "build-windows-installer.ps1"
 PREFLIGHT = ROOT / "scripts" / "jht-windows-install-preflight.ps1"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+GAME_WORKFLOW = ROOT / ".github" / "workflows" / "game.yml"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish-signed-release.yml"
 SMOKE_WORKFLOW = ROOT / ".github" / "workflows" / "windows-installer-smoke.yml"
+HEALTH_PCK_GATE = ROOT / "game" / "tools" / "windows_update_health_pck_test.ps1"
 DOWNLOAD_CLIENT = ROOT / "web" / "app" / "download" / "DownloadClient.tsx"
 DOWNLOAD_FUNNEL = ROOT / "web" / "lib" / "download-funnel.ts"
 UPDATE_HELPER = ROOT / "scripts" / "jht-windows-update.ps1"
@@ -831,3 +833,36 @@ def test_native_windows_smoke_is_non_publishing() -> None:
     publish = PUBLISH_WORKFLOW.read_text()
     assert "build-windows-installer.ps1 -Version $version" in publish
     assert "-AuthorityDirectory release-assets -Smoke" in publish
+
+
+def test_exported_windows_pck_health_capability_is_gated_before_publication() -> None:
+    gate = HEALTH_PCK_GATE.read_text()
+    for contract in (
+        "CREATE_SUSPENDED",
+        "--headless --quit-after 120",
+        "JHT_UPDATE_HEALTH_PATH",
+        "candidate_pid = $CandidatePid",
+        "candidate_started = $CandidateStarted",
+        "JhtHealthPckIdentity]::Snapshot",
+        "GetSecurityDescriptorSddlForm",
+        "Get-AuthoritySnapshot $healthPath",
+        "Get-FullSnapshot $healthPath",
+        "Assert-ExactCurrentFile $healthPath",
+        "S-1-5-32-545",
+        "AccessControlType]::Deny",
+        "health consumer created an absent capability",
+        "health consumer mutated a hostile capability",
+        "WINDOWS-UPDATE-HEALTH-PCK-TEST PASS",
+    ):
+        assert contract in gate
+    assert "health.json.tmp-*" in gate
+    assert "Set-Acl" not in gate
+    assert "Get-Acl" not in gate
+
+    invocation = "./tools/windows_update_health_pck_test.ps1"
+    for workflow_path in (GAME_WORKFLOW, RELEASE_WORKFLOW):
+        workflow = workflow_path.read_text()
+        assert workflow.count(invocation) == 1, workflow_path
+        step = workflow[workflow.index(invocation) - 180 : workflow.index(invocation) + 180]
+        assert "if: runner.os == 'Windows'" in step, workflow_path
+        assert "shell: powershell" in step, workflow_path
