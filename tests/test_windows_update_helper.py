@@ -254,10 +254,17 @@ function Invoke-LockFailureCase {
         param(
           [string]$Path,
           [switch]$RequireNew,
-          [ref]$CreatedByInvocation = $null)
+          $CreatedByInvocation = $null)
+        $trackCreation = $PSBoundParameters.ContainsKey('CreatedByInvocation')
+        if ($trackCreation) {
+          if ($CreatedByInvocation -isnot [System.Management.Automation.PSReference]) {
+            throw 'creation tracker must be a PSReference'
+          }
+          $CreatedByInvocation.Value = $false
+        }
         if (-not $RequireNew) { throw 'unexpected injected init call' }
         New-Item -ItemType Directory -Path $Path -ErrorAction Stop | Out-Null
-        if ($null -ne $CreatedByInvocation) { $CreatedByInvocation.Value = $true }
+        if ($trackCreation) { $CreatedByInvocation.Value = $true }
         throw 'injected lock claim init failure'
       }
     } elseif ($Case -ceq 'write') {
@@ -298,6 +305,18 @@ function Invoke-LockFailureCase {
 }
 
 try {
+  Initialize-ProtectedDirectory $root
+  Initialize-ProtectedDirectory $root
+  $bindingPath = Join-Path $root 'binding-tracked'
+  $bindingCreated = $false
+  Initialize-ProtectedDirectory $bindingPath -RequireNew `
+    -CreatedByInvocation ([ref]$bindingCreated)
+  if (-not $bindingCreated) {
+    throw 'tracked initialize did not report its created directory'
+  }
+  Assert-OwnerAndAcl $bindingPath -Directory
+  Remove-Item -LiteralPath $bindingPath -Recurse -Force -ErrorAction Stop
+  [Console]::Out.WriteLine('WINDOWS-LOCK-SEAM PASS mode=initialize-binding')
   foreach ($case in @('clean','active','stale')) { Invoke-LockCase $case }
   foreach ($case in @('init','write','promote')) { Invoke-LockFailureCase $case }
 } finally {
@@ -338,6 +357,46 @@ try {
   throw 'preexisting protected node was adopted'
 } catch {
   if ($script:FailureCode -cne 'lock_claim_init' -or $created) { throw }
+  [Console]::Error.WriteLine(
+    'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=lock ' +
+    'code=' + $script:FailureCode)
+  exit 23
+}
+'@
+& ([ScriptBlock]::Create($body + "`n" + $probe))
+"""
+
+INITIALIZE_INVALID_TRACKER_PROBE = r"""
+$source = [IO.File]::ReadAllText($env:JHT_TEST_HELPER_SOURCE)
+$tokens = $null
+$parseErrors = $null
+$ast = [Management.Automation.Language.Parser]::ParseInput(
+  $source, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'rendered helper parse failed' }
+$names = @(
+  'Get-FileSystemParent', 'Assert-NoReparseAncestors',
+  'Assert-NoForeignWriteAcl', 'Assert-OwnerAndAcl', 'Assert-CurrentOwner',
+  'Initialize-ProtectedDirectory')
+$functions = @($ast.FindAll({
+  param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $node.Name -in $names
+}, $true) | Sort-Object { $_.Extent.StartOffset })
+if ($functions.Count -ne $names.Count) {
+  throw 'production initialize functions are missing'
+}
+$body = ($functions | ForEach-Object { $_.Extent.Text }) -join "`n"
+$probe = @'
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$script:FailureCode = 'lock_claim_init'
+try {
+  Initialize-ProtectedDirectory $env:JHT_TEST_INVALID_TRACKER_PATH `
+    -RequireNew -CreatedByInvocation $false
+  throw 'invalid creation tracker was accepted'
+} catch {
+  if (Test-Path -LiteralPath $env:JHT_TEST_INVALID_TRACKER_PATH) { throw }
+  if ($script:FailureCode -cne 'lock_claim_init') { throw }
   [Console]::Error.WriteLine(
     'JHT-WINDOWS-UPDATE-ERROR schema=1 phase=lock ' +
     'code=' + $script:FailureCode)
@@ -409,6 +468,10 @@ def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
         )
     ]
     assert "New-Item -ItemType Directory -Path $Path -Force" not in initialize
+    assert "$CreatedByInvocation = $null" in initialize
+    assert "$PSBoundParameters.ContainsKey('CreatedByInvocation')" in initialize
+    assert "[System.Management.Automation.PSReference]" in initialize
+    assert "[ref]$CreatedByInvocation" not in initialize
     assert "-CreatedByInvocation ([ref]$claimCreated)" in source
     assert initialize.index("Assert-CurrentOwner $Path") < initialize.index(
         "if (-not $preexisting) { $acl.SetOwner("
@@ -1544,6 +1607,7 @@ def test_production_lock_clean_active_and_stale_seams_leave_no_residue(
     assert result.returncode == 0, result.stderr
     assert result.stderr == ""
     assert result.stdout.splitlines() == [
+        "WINDOWS-LOCK-SEAM PASS mode=initialize-binding",
         "WINDOWS-LOCK-SEAM PASS mode=clean code=lock_claim_promote",
         "WINDOWS-LOCK-SEAM PASS mode=active code=lock_existing_validate",
         "WINDOWS-LOCK-SEAM PASS mode=stale code=lock_claim_promote",
@@ -1617,6 +1681,35 @@ def test_production_initialize_rejects_preexisting_collision_without_mutation(
     )
     assert str(tmp_path) not in result.stderr
     assert _authority_snapshot(tmp_path) == before
+    assert not tuple(tmp_path.glob("**/.update-claim-*"))
+    assert not tuple(tmp_path.glob("**/.update-stale-*"))
+
+
+def test_production_initialize_rejects_invalid_tracker_without_mutation(
+    tmp_path: Path, rsa_keys: tuple[Path, Path]
+) -> None:
+    _private, public = rsa_keys
+    helper = tmp_path / HELPER
+    render_helper(template=HELPER_SOURCE, output=helper, public_key=public)
+    tracked = tmp_path / "invalid-tracker-claim"
+    before = _authority_snapshot(tmp_path)
+    result = _run_powershell_command(
+        INITIALIZE_INVALID_TRACKER_PROBE,
+        env_values={
+            "JHT_TEST_HELPER_SOURCE": str(helper),
+            "JHT_TEST_INVALID_TRACKER_PATH": str(tracked),
+        },
+        check=False,
+        capture_output=True,
+    )
+    assert result.returncode == 23
+    assert result.stdout == ""
+    assert result.stderr.strip() == (
+        "JHT-WINDOWS-UPDATE-ERROR schema=1 phase=lock code=lock_claim_init"
+    )
+    assert str(tmp_path) not in result.stderr
+    assert _authority_snapshot(tmp_path) == before
+    assert not tracked.exists()
     assert not tuple(tmp_path.glob("**/.update-claim-*"))
     assert not tuple(tmp_path.glob("**/.update-stale-*"))
 

@@ -633,8 +633,12 @@ function Initialize-ProtectedDirectory {
   param(
     [string]$Path,
     [switch]$RequireNew,
-    [ref]$CreatedByInvocation = $null)
-  if ($null -ne $CreatedByInvocation) { $CreatedByInvocation.Value = $false }
+    $CreatedByInvocation = $null)
+  $trackCreation = $PSBoundParameters.ContainsKey('CreatedByInvocation')
+  if ($trackCreation) {
+    if ($CreatedByInvocation -isnot [System.Management.Automation.PSReference]) { throw 'creation tracker must be a PSReference' }
+    $CreatedByInvocation.Value = $false
+  }
   $preexisting = Test-Path -LiteralPath $Path
   if ($RequireNew -and $preexisting) { throw 'protected directory collision' }
   if ($preexisting) {
@@ -645,7 +649,7 @@ function Initialize-ProtectedDirectory {
     Assert-NoForeignWriteAcl $Path
   } else {
     New-Item -ItemType Directory -Path $Path -ErrorAction Stop | Out-Null
-    if ($null -ne $CreatedByInvocation) { $CreatedByInvocation.Value = $true }
+    if ($trackCreation) { $CreatedByInvocation.Value = $true }
   }
   Assert-NoReparseAncestors $Path
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
