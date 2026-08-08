@@ -262,6 +262,72 @@ describe("il web può arrivare prima della migration", () => {
   });
 });
 
+describe("le stesse regole valgono nel database", () => {
+  // La whitelist viveva solo qui, nel parser. Ma la RLS di
+  // `cloud_sync_tokens` lascia un utente autenticato aggiornare la PROPRIA
+  // riga, e PostgREST è una strada supportata per farlo: chiunque poteva
+  // scrivere testo libero nelle colonne che documentiamo come tecniche, e
+  // quel testo lo leggiamo noi nella vista di flotta. Un contratto imposto
+  // da un solo client non è un contratto.
+  //
+  // La migration 067 lo trascrive in SQL. Questo test è il guard di deriva
+  // fra le due copie — stesso ruolo del cross-check zod ↔ Python di
+  // `shared/config`: se le regole cambiano di qua e non di là, la
+  // divergenza si vede subito invece che il giorno in cui qualcosa passa
+  // dalla porta di servizio.
+  const migration = readFileSync(
+    join(
+      __dirname,
+      "../../../supabase/migrations/067_client_telemetry_constraints.sql",
+    ),
+    "utf-8",
+  );
+  const parser = readFileSync(
+    join(__dirname, "../../../web/lib/cloud-sync/client-identity.ts"),
+    "utf-8",
+  );
+
+  it("la forma della versione è la stessa nei due posti", () => {
+    const inParser = /const VERSION_RE = \/\^(.+)\$\//.exec(parser)?.[1];
+    expect(inParser).toBeTruthy();
+    expect(migration).toContain(`'^${inParser}$'`);
+  });
+
+  it("la forma di una capability è la stessa nei due posti", () => {
+    const inParser = /const CAPABILITY_RE = \/\^(.+)\$\//.exec(parser)?.[1];
+    expect(inParser).toBeTruthy();
+    expect(migration).toContain(`'^${inParser}$'`);
+  });
+
+  it("il tetto sul numero di capability è lo stesso", () => {
+    const cap = /const MAX_CAPABILITIES = (\d+)/.exec(parser)?.[1];
+    expect(cap).toBe("32");
+    expect(migration).toContain(`> ${cap}`);
+  });
+
+  it("le parole che non sono una versione sono le stesse", () => {
+    const listed = /const NOT_A_VALUE = new Set\(\[([^\]]+)\]/.exec(
+      parser,
+    )?.[1];
+    expect(listed).toBeTruthy();
+    for (const raw of listed!.split(",")) {
+      const word = raw.trim().replace(/["']/g, "");
+      if (!word) continue;
+      expect(migration).toContain(`'${word}'`);
+    }
+  });
+
+  it("bonifica prima di vincolare", () => {
+    // Un vincolo aggiunto sopra righe non conformi fallisce, e bloccherebbe
+    // un deploy proprio sulla spazzatura che la migration esiste per
+    // impedire. L'UPDATE deve venire prima delle ADD CONSTRAINT.
+    const firstUpdate = migration.indexOf("UPDATE public.cloud_sync_tokens");
+    const firstConstraint = migration.indexOf("ADD CONSTRAINT");
+    expect(firstUpdate).toBeGreaterThan(-1);
+    expect(firstConstraint).toBeGreaterThan(firstUpdate);
+  });
+});
+
 describe("nessuna corsia cloud-sync senza firma", () => {
   // I file NON si elencano: si scoprono. Una lista scritta a mano dice
   // «questi sette sono a posto», che non è la promessa del titolo — un
