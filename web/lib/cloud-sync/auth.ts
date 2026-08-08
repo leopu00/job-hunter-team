@@ -46,6 +46,13 @@ type PostgrestFailure = { code?: string | null; message?: string | null } | null
 // Una volta scoperto che la 064 non c'è, non si ritenta la select estesa a
 // ogni request: il flag vive quanto l'istanza serverless, e un deploy dello
 // schema fa comunque ripartire istanze nuove.
+//
+// Il rovescio, da sapere: applicare la 064 a caldo NON riaccende la
+// telemetria sulle istanze già in volo che avevano trovato le colonne
+// assenti — riparte quando quelle istanze vengono ricreate. È accettabile
+// perché il caso dura il tempo di un disallineamento fra due deploy, ma se
+// dopo una migration la versione dei box non compare, è qui che si guarda
+// prima di cercare un guasto altrove.
 let clientColumnsPresent = true;
 
 /**
