@@ -433,6 +433,81 @@ def test_the_advice_is_not_swallowed_by_the_night(tmp_path, monkeypatch):
     assert [s for s, _ in sent] == ["CAPITANO"]
 
 
+LOCKOUT = _sample(96)
+LOCKOUT_NOW = _ts("2026-07-26T15:30:00")
+
+
+def _lockout_result():
+    return pace_guard.evaluate(LOCKOUT, LOCKOUT_NOW, target_pct=100.0,
+                               current_throttle_s=pace_guard.WORKER_FLOOR)
+
+
+def test_the_emergency_survives_the_night_in_the_mailbox(tmp_path, monkeypatch):
+    """Il silenzio protegge dal COSTO di svegliare una LLM, non deve
+    cancellare l'unico verdetto che chiede di tagliare il roster.
+
+    La mailbox non sveglia nessuno: la drena il Capitano quando riprende.
+    """
+    sent = []
+    _run_bridge_step(monkeypatch, tmp_path, _lockout_result(), sent,
+                     within_hours=False)
+
+    assert sent == []                       # nessuno svegliato, il gate tiene
+    mailbox = (tmp_path / "bridge-mailbox.jsonl").read_text(encoding="utf-8")
+    assert '"kind":"pace-guard-offhours"' in mailbox
+    assert '"delivered_via_tmux":false' in mailbox
+    assert "LOCKOUT-IMMINENT" in mailbox
+    assert "ROSTER" in mailbox              # la parte che il freno non può fare
+    logged = (tmp_path / "pace-guard.jsonl").read_text(encoding="utf-8")
+    assert '"mailbox_only": true' in logged
+
+
+def test_ordinary_advice_does_not_pile_up_in_the_mailbox(tmp_path, monkeypatch):
+    """Un consiglio di crociera per un team che di notte non corre resta
+    rumore: è il ticket da cui siamo partiti."""
+    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    sent = []
+    _run_bridge_step(monkeypatch, tmp_path, r, sent, within_hours=False)
+    assert sent == []
+    assert not (tmp_path / "bridge-mailbox.jsonl").exists()
+
+
+def test_the_night_emergency_is_written_once_per_cooldown(tmp_path, monkeypatch):
+    """Ore di silenzio non devono diventare una riga ogni cinque minuti."""
+    bridge = _load_bridge()
+    sent = []
+    for _ in range(4):
+        _run_bridge_step(monkeypatch, tmp_path, _lockout_result(), sent,
+                         within_hours=False, bridge=bridge)
+    lines = [l for l in (tmp_path / "bridge-mailbox.jsonl")
+             .read_text(encoding="utf-8").splitlines() if l.strip()]
+    assert len(lines) == 1
+
+
+def test_the_night_mailbox_does_not_consume_the_morning_edge(tmp_path, monkeypatch):
+    """Lo stato della mailbox è separato da quello del pane: alla riapertura
+    il Capitano riceve comunque il consiglio SUBITO."""
+    bridge = _load_bridge()
+    sent = []
+    _run_bridge_step(monkeypatch, tmp_path, _lockout_result(), sent,
+                     within_hours=False, bridge=bridge)
+    assert sent == []
+    _run_bridge_step(monkeypatch, tmp_path, _lockout_result(), sent,
+                     within_hours=True, bridge=bridge)
+    assert [s for s, _ in sent] == ["CAPITANO"]
+
+
+def test_in_hours_the_emergency_goes_to_the_pane_as_before(tmp_path, monkeypatch):
+    """Dentro la finestra non cambia niente: pane + mailbox, come sempre."""
+    sent = []
+    _run_bridge_step(monkeypatch, tmp_path, _lockout_result(), sent,
+                     within_hours=True)
+    assert [s for s, _ in sent] == ["CAPITANO"]
+    mailbox = (tmp_path / "bridge-mailbox.jsonl").read_text(encoding="utf-8")
+    assert '"kind":"pace-guard"' in mailbox
+
+
 def test_a_broken_working_hours_skill_does_not_gag_the_guard(monkeypatch):
     """Fail-open: senza la skill si parla. Un consiglio di troppo costa un
     turno, un guard muto per un import rotto costa la finestra."""
