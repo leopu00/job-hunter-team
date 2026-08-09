@@ -5,13 +5,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
-
-- **9 orphaned API routes removed** (`/api/{about,stats,agents/metrics,onboarding,resume,search,telegram,workspace,health}`). Their only callers were the Playwright specs quarantined on 2026-07-26; an exhaustive grep across `web/`, `cli/`, `game/`, `desktop/`, `docs/`, `scripts/`, `shared/` and the live e2e suite found no remaining caller. The dead e2e helper `_helpers/workspace.ts` went with them. The desktop payload (`desktop/app-payload/`) ships its own frozen copy and is untouched.
-
 ---
 
-## [0.3.6] — 2026-08-07
+## [0.3.6] — 2026-08-09
 
 **A clearer path from download to a working team, with safer host controls and
 user-controlled cloud data.**
@@ -64,6 +60,32 @@ user-controlled cloud data.**
 - PDF artifacts are checked before the desktop app copies or opens them on the
   host, and cloud export and deletion stay within explicit data and storage
   boundaries.
+
+### Fixes and hardening (2026-08-08)
+
+- Signing in to the cloud on a fresh installation now restores the account on
+  its own: when the local database is empty, `jht cloud login` pulls the cloud
+  snapshot automatically (previously a manual `jht cloud restore`). Local work
+  is never overwritten, a failed restore never invalidates the pairing, and a
+  URL conflict during restore is skipped and reported — never resolved by
+  deleting a local row.
+- Scout coordination no longer shows two contradicting territories for the
+  same Scout on installations carrying a legacy coordination file: the import
+  runs once at bootstrap, the assignment key is no longer mutated, and a
+  uniqueness constraint — created only after exact duplicates are removed —
+  keeps concurrent bootstraps from multiplying rows.
+- The pace guard's advice to the coordinator now carries the current operating
+  mode with every message, and no longer suggests speeding up while searching
+  is deliberately stopped.
+- **9 orphaned API routes removed** (`/api/{about,stats,agents/metrics,
+  onboarding,resume,search,telegram,workspace,health}`). Their only callers
+  were the Playwright specs quarantined on 2026-07-26; an exhaustive grep
+  across `web/`, `cli/`, `game/`, `desktop/`, `docs/`, `scripts/`, `shared/`
+  and the live e2e suite found no remaining caller. The desktop payload
+  (`desktop/app-payload/`) ships its own frozen copy and is untouched.
+- New end-to-end coverage of the protected area: positions, profile, team and
+  a swipe deck that is actually played (discard/like advance the deck and the
+  judgement survives a reload), asserted against the pages that ship today.
 
 ---
 
