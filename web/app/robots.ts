@@ -11,6 +11,13 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/api/",
           "/auth",
+          // O-47 — percorsi tecnici delle campagne (/r Reddit, /t TikTok):
+          // redirect verso la home, non contenuti. Indicizzarli darebbe alla
+          // landing due URL doppioni e riempirebbe di crawler un contatore
+          // che serve a decidere dove spendere. La risposta porta anche
+          // `X-Robots-Tag: noindex` — chi non legge robots.txt lo trova lì.
+          "/r",
+          "/t",
           // Setup
           "/setup",
           // Top nav
