@@ -296,7 +296,21 @@ export async function getPositions(
   const w = await ws();
   if (w) {
     try {
-      return applyFacetFilters(local.getPositionsLocal(w, opts), opts);
+      // O-40: limit/offset NON scendono nella lettura. I filtri "intelligenti"
+      // della sidebar (famiglia, paese, città, fasce di score e di voto) li
+      // applica `applyFacetFilters` QUI, dopo, perché la stessa logica valga
+      // per Supabase e per SQLite. Tagliare prima significa scartare righe che
+      // il filtro non ha ancora guardato: una pagina da 50 ne mostrerebbe 31,
+      // e le mancanti non sono finite — sono state buttate prima di essere
+      // lette. Stessa forma di O-37, su un filtro invece che su un ordine.
+      const { limit, offset, ...rest } = opts ?? {};
+      const filtered = applyFacetFilters(
+        local.getPositionsLocal(w, rest),
+        opts,
+      );
+      if (limit == null && offset == null) return filtered;
+      const start = offset ?? 0;
+      return filtered.slice(start, limit != null ? start + limit : undefined);
     } catch {
       return [];
     }
