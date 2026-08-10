@@ -368,6 +368,47 @@ def pane_hash(tail: list) -> str:
     return hashlib.sha1("\n".join(tail).encode("utf-8", "replace")).hexdigest()
 
 
+# Segnali che l'agente è fermo perché ha ESAURITO LA QUOTA, non perché è in un
+# vicolo cieco. La differenza non è estetica: un agente a quota esaurita che
+# viene messo in pausa e poi ripreso torna contro lo stesso muro, e il Capitano
+# che riceve «ispeziona cosa sta girando» va a cercare un problema che non c'è.
+USAGE_LIMIT_MARKERS = (
+    "usage limit reached",
+    "limit reached",
+    "rate limit",
+    "429",
+    "quota exceeded",
+    "upgrade your plan",
+)
+
+
+def find_usage_limit(tail: list):
+    """La riga che dice «sei a quota», se c'è. Restituisce la riga, non un bool:
+    al Capitano serve vedere il testo originale, non una nostra parafrasi."""
+    for line in reversed(tail[-MARKER_TAIL_LINES:]):
+        low = line.lower()
+        for needle in USAGE_LIMIT_MARKERS:
+            if needle in low:
+                return line.strip()
+    return None
+
+
+def describe_stall(marker, rounds: int, usage_line) -> str:
+    """Cosa dire al Capitano: l'OSSERVAZIONE, non la supposizione.
+
+    Il messaggio storico diceva «hit the step cap» in entrambi i casi, ma lo
+    step cap esiste solo su Kimi (`--max-steps-per-turn 100` vive nel suo ramo
+    di start-agent.sh): su Claude e Codex quella frase è una diagnosi falsa, e
+    l'ordine che ne segue — «ispeziona cosa sta girando» — manda a cercare un
+    rabbit hole inesistente. Qui si riporta ciò che è stato visto.
+    """
+    if usage_line:
+        return "has run out of its usage quota (pane says: %r)" % usage_line
+    if marker and not str(marker).startswith("no marker:"):
+        return "hit the step cap (%s)" % marker
+    return "has not moved for %d minutes" % max(1, rounds)
+
+
 def find_marker(tail: list):
     """Marcatore presente nelle ultime MARKER_TAIL_LINES righe NON VUOTE."""
     window = tail[-MARKER_TAIL_LINES:]
@@ -695,6 +736,7 @@ def _handle_agent(session, agent, entry, now, live_workers):
     #     - nessun marcatore ma pane immobile da IDLE_STALL_ROUNDS giri →
     #       stallo lo stesso. Senza questa seconda strada il watchdog vede
     #       solo gli stalli che si annunciano da soli, cioè quasi nessuno.
+    usage_line = find_usage_limit(tail)
     previous = entry.get("hash")
     entry["hash"] = current
     if previous is None or previous != current:
@@ -713,6 +755,8 @@ def _handle_agent(session, agent, entry, now, live_workers):
         if resume_gate(now, live_workers):
             return
         marker = f"no marker: pane unchanged for {rounds} cycles"
+    stall_rounds = int(entry.get("immobile") or 0)
+    observed = describe_stall(marker, stall_rounds, usage_line)
 
     produced = produced_count(agent)
     baseline = entry.get("produced")
@@ -734,13 +778,23 @@ def _handle_agent(session, agent, entry, now, live_workers):
         last = entry.get("last_escalate_ts") or 0
         if now - last >= ESCALATE_COOLDOWN_SEC:
             entry["last_escalate_ts"] = now
-            notify_captain(
-                "[FROM @SYSTEM TO @CAPITANO] %s hit the step cap %d consecutive "
-                "times without producing anything between attempts: this is a "
-                "rabbit hole, not an isolated incident. I will NOT resume it "
-                "automatically again — decide whether to use `/clear` or respawn. "
-                "History: logs/stepcap.jsonl."
-                % (agent, consecutive))
+            if usage_line:
+                notify_captain(
+                    "[FROM @SYSTEM TO @CAPITANO] %s %s, %d times in a row with "
+                    "no progress in between. Pausing and resuming will NOT help: "
+                    "it goes back to the same wall until the quota resets. "
+                    "Do not look for a rabbit hole — decide whether to wait for "
+                    "the reset or move its work elsewhere. "
+                    "History: logs/stepcap.jsonl."
+                    % (agent, observed, consecutive))
+            else:
+                notify_captain(
+                    "[FROM @SYSTEM TO @CAPITANO] %s %s, %d consecutive times "
+                    "without producing anything between attempts: this looks like "
+                    "a rabbit hole, not an isolated incident. I will NOT resume it "
+                    "automatically again — decide whether to use `/clear` or respawn. "
+                    "History: logs/stepcap.jsonl."
+                    % (agent, observed, consecutive))
         return
 
     seconds = throttle_for(agent, consecutive)
@@ -752,13 +806,20 @@ def _handle_agent(session, agent, entry, now, live_workers):
     emit("throttled", agent=agent, ts=now, session=session, marker=marker,
          consecutive=consecutive, throttle_sec=seconds)
     if consecutive == ESCALATE_AT - 1:
-        notify_captain(
-            "[FROM @SYSTEM TO @CAPITANO] %s hit the step cap %d consecutive "
-            "times without producing anything between attempts. I paused it for "
-            "%d min and will then resume it; if it happens again, I will stop "
-            "resuming and pass the decision to you. A 100-step cap usually signals "
-            "a rabbit hole — inspect what is running."
-            % (agent, consecutive, max(1, seconds // 60)))
+        if usage_line:
+            notify_captain(
+                "[FROM @SYSTEM TO @CAPITANO] %s %s, %d times in a row. I paused "
+                "it for %d min, but a pause does not refill a quota: if it is "
+                "still empty it will stop again. Do not inspect what is running — "
+                "there is nothing wrong with it."
+                % (agent, observed, consecutive, max(1, seconds // 60)))
+        else:
+            notify_captain(
+                "[FROM @SYSTEM TO @CAPITANO] %s %s, %d consecutive times without "
+                "producing anything between attempts. I paused it for %d min and "
+                "will then resume it; if it happens again, I will stop resuming "
+                "and pass the decision to you. Inspect what is running."
+                % (agent, observed, consecutive, max(1, seconds // 60)))
 
 
 def check_missing_acks(state: dict, now: float) -> list:
