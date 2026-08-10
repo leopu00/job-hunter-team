@@ -212,7 +212,14 @@ export function getPositionsLocal(
       s.scored_at, s.scored_by,
       a.critic_score, a.critic_verdict,
       a.written_at, a.written_by, a.critic_reviewed_at, a.reviewed_by,
-      a.applied_at, a.response_at
+      a.applied_at, a.response_at,
+      -- O-31: un ticket aperto O ASSEGNATO è un ticket a cui l'utente non ha
+      -- ancora avuto risposta. 'assigned' significa che un agente ci sta
+      -- lavorando, non che la risposta sia arrivata: lasciarlo fuori
+      -- toglierebbe dalla vista proprio i ticket in lavorazione.
+      (SELECT COUNT(*) FROM position_tickets t
+        WHERE t.position_id = p.id
+          AND t.status IN ('open','assigned')) AS open_tickets
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     LEFT JOIN applications a ON a.position_id = p.id
@@ -248,6 +255,7 @@ export function getPositionsLocal(
       salary_max,
       salary_currency,
       applied_at: r.applied_at ?? null,
+      has_open_ticket: Number(r.open_tickets ?? 0) > 0,
       last_action_at: la.at,
       last_action_by: la.by,
       last_action_actor: la.actor,
