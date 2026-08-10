@@ -2,8 +2,8 @@
 """feedback_record.py — registra il giudizio dell'utente su una posizione.
 
 L'altra metà di `feedback_query.py`: quella legge like/dislike/hide/star, qui
-si scrivono. Il record vive solo su Supabase (`position_feedback`), non in
-SQLite, quindi questa è l'unica strada e passa dalla corsia cloud.
+si scrivono. Il record nasce in SQLite (`position_feedback`) e il cloud è un
+riflesso: local-first, come ogni altra scrittura del prodotto.
 
     python3 feedback_record.py set 12345 like
     python3 feedback_record.py set 12345 dislike --reason "troppo senior"
@@ -18,20 +18,26 @@ caduto su decisione esplicita dell'operatore: doveva impedire le azioni NON
 richieste, non impedire all'utente di farsi aiutare da `jht`. Il perché per
 esteso sta nel commento in cima a quella POST.
 
-**Un cloud spento qui è un ERRORE, non un "nessun segnale".** È la differenza
-che conta fra questo file e `feedback_query.py`: la lettura degrada in
-silenzio perché lo Scorer deve poter continuare senza feedback, la scrittura
-no. Un comando che dice "fatto" senza aver registrato niente lascia l'utente
-convinto di aver espresso un giudizio che non esiste — sarebbe il peggiore dei
-due mondi, peggio del comando che non c'era.
+**Un cloud spento non è più un errore (O-15).** Lo era finché il record
+esisteva solo su Supabase: allora "cloud spento" voleva dire davvero "non
+registrato da nessuna parte", e dire "fatto" sarebbe stata una bugia. Ora il
+giudizio è già salvo in SQLite quando il cloud viene interpellato, quindi un
+cloud irraggiungibile è un `cloud_synced: false` — un dettaglio sulla
+propagazione, non un fallimento della registrazione.
+
+Quello che NON è cambiato è il patto sottostante: non si dice "fatto" senza
+aver scritto. Se fallisce la scrittura LOCALE il comando fallisce, ed è la
+sola condizione in cui lo fa.
 
 Output: una riga JSON su stdout; exit 0 se registrato, 1 altrimenti.
-  {"ok": true, "legacy_id": "12345", "action": "like", "recorded_at": "..."}
-  {"ok": false, "error": "cloud-disabled", ...}
+  {"ok": true, "legacy_id": "12345", "action": "like", "recorded_at": "...",
+   "source": "local", "cloud_synced": false}
+  {"ok": false, "error": "position 12345 not found in the local database", ...}
 """
 import argparse
 import json
 import os
+import sqlite3
 import sys
 import urllib.parse
 
@@ -65,6 +71,60 @@ def validate(action: str, reason, comment, score, direction) -> str:
     return ""
 
 
+
+def _record_local(legacy_id, action, reason, comment, score, direction) -> dict:
+    """Scrive il giudizio nel jobs.db. È qui che il record esiste davvero.
+
+    Un jobs.db più vecchio del codice non ha ancora `position_feedback`: in
+    quel caso si crea la tabella al volo con la stessa migrazione idempotente
+    dello schema, invece di far fallire il comando. Fra l'aggiornamento del
+    CLI e il primo giro delle migrazioni c'è una finestra reale, ed è
+    esattamente lì che un utente perde un'azione senza capire perché (O-16).
+    """
+    try:
+        import _db
+    except ImportError as exc:  # pragma: no cover - ambiente senza skill
+        return {"ok": False, "error": f"local database unavailable: {exc}"}
+
+    try:
+        conn = _db.get_db()
+    except Exception as exc:
+        return {"ok": False, "error": f"cannot open the local database: {exc}"}
+
+    try:
+        conn.row_factory = sqlite3.Row
+        # Un DB senza `positions` non è un jobs.db del prodotto: è un file
+        # vuoto creato di passaggio. Dirlo con parole proprie, invece di
+        # lasciar emergere un "no such table" che manda a cercare un difetto.
+        if not _db._table_exists(conn, "positions"):
+            return {"ok": False,
+                    "error": "local database not initialised (start the team once)"}
+        if not _db._table_exists(conn, "position_feedback"):
+            _db._migrate_position_feedback(conn)
+        row = conn.execute(
+            "SELECT id FROM positions WHERE id = ?", (int(legacy_id),)
+        ).fetchone() if str(legacy_id).lstrip("-").isdigit() else None
+        if row is None:
+            return {"ok": False,
+                    "error": f"position {legacy_id} not found in the local database"}
+        cur = conn.execute(
+            """INSERT INTO position_feedback
+                 (position_id, action, reason, comment, score, direction)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (int(legacy_id), action, reason, comment, score, direction),
+        )
+        conn.commit()
+        created = conn.execute(
+            "SELECT created_at FROM position_feedback WHERE id = ?", (cur.lastrowid,)
+        ).fetchone()
+        return {"ok": True, "id": cur.lastrowid,
+                "created_at": created["created_at"] if created else None}
+    except Exception as exc:
+        return {"ok": False, "error": f"local write failed: {exc}"}
+    finally:
+        conn.close()
+
+
 def record(legacy_id: str, action: str, reason=None, comment=None,
            score=None, direction=None) -> dict:
     problem = validate(action, reason, comment, score, direction)
@@ -83,21 +143,35 @@ def record(legacy_id: str, action: str, reason=None, comment=None,
     if direction is not None:
         body["direction"] = direction
 
+    # ── 1. Locale, che è dove il giudizio ESISTE ────────────────────────
+    local = _record_local(legacy_id, action, reason, comment, score, direction)
+    if not local.get("ok"):
+        # L'unico fallimento che ferma il comando: qui il giudizio non è
+        # stato scritto da nessuna parte, e dire "fatto" sarebbe una bugia.
+        return {"ok": False, "error": local.get("error"),
+                "legacy_id": str(legacy_id), "action": action,
+                "recorded": False}
+
+    # ── 2. Cloud, che è un riflesso ─────────────────────────────────────
+    # Il suo esito diventa `cloud_synced`, MAI l'esito del comando: il
+    # giudizio è già salvo, e far fallire qui lo nasconderebbe all'utente
+    # esattamente come prima di O-15.
     safe_id = urllib.parse.quote(str(legacy_id), safe="")
     ok, payload = api_request("POST", f"/api/positions/{safe_id}/feedback", body)
-    if not ok:
-        # Nessun ripiego silenzioso: se il giudizio non è arrivato al cloud,
-        # non è stato registrato da nessuna parte.
-        return {"ok": False, "error": str(payload), "legacy_id": str(legacy_id),
-                "action": action, "recorded": False}
-    saved = (payload or {}).get("feedback") or {}
+    saved = (payload or {}).get("feedback") or {} if ok else {}
     return {
         "ok": True,
         "legacy_id": str(legacy_id),
         "action": saved.get("action", action),
         "score": saved.get("score", score),
         "direction": saved.get("direction", direction),
-        "recorded_at": saved.get("created_at"),
+        "recorded_at": saved.get("created_at") or local.get("created_at"),
+        "source": "local",
+        "cloud_synced": bool(ok),
+        # Perché il cloud non ha preso: 'cloud-disabled' è una scelta
+        # dell'utente, un errore di rete è un guasto passeggero. Chi legge
+        # deve poterli distinguere senza indovinare.
+        "cloud_error": None if ok else str(payload),
     }
 
 

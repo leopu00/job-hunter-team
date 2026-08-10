@@ -58,6 +58,7 @@ import argparse
 import json
 import os
 import re
+import sqlite3
 import sys
 import unicodedata
 import urllib.error
@@ -133,7 +134,47 @@ def _api_get(path: str, timeout: float = 10.0):
     return api_request("GET", path, timeout=timeout)
 
 
+def _local_events(legacy_id: str):
+    """Gli eventi di giudizio nel jobs.db, i più recenti per primi.
+
+    Ritorna None quando il locale non è consultabile (niente DB, tabella non
+    ancora migrata): è diverso da «nessun giudizio», e chi chiama deve poter
+    distinguere i due casi invece di leggere una lista vuota per entrambi.
+    """
+    if not str(legacy_id).lstrip("-").isdigit():
+        return None
+    try:
+        import _db
+        conn = _db.get_db()
+    except Exception:
+        return None
+    try:
+        conn.row_factory = sqlite3.Row
+        if not _db._table_exists(conn, "position_feedback"):
+            return None
+        rows = conn.execute(
+            """SELECT action, reason, comment, score, direction, created_at
+                 FROM position_feedback
+                WHERE position_id = ?
+                ORDER BY id DESC""",
+            (int(legacy_id),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return None
+    finally:
+        conn.close()
+
+
 def check_position(legacy_id: str) -> dict:
+    # Local-first (O-15): il giudizio vive nel jobs.db e il cloud è un
+    # riflesso. Si interroga la rete solo quando il locale non è consultabile
+    # — così a cloud spento la lettura RISPONDE invece di degradare, e non si
+    # paga una chiamata HTTP per sapere una cosa che è già in casa.
+    local = _local_events(legacy_id)
+    if local is not None:
+        return _shape_events(legacy_id, local, source="local")
+
     safe_id = urllib.parse.quote(str(legacy_id), safe="")
     ok, payload = _api_get(f"/api/positions/{safe_id}/feedback")
     if not ok:
@@ -148,8 +189,16 @@ def check_position(legacy_id: str) -> dict:
             "actions": [],
             "note": f"no-signal ({payload})",
         }
-    feedback = payload.get("feedback") or []
-    # La route GET ordina created_at DESC: feedback[0] è l'ultimo.
+    return _shape_events(legacy_id, payload.get("feedback") or [], source="cloud")
+
+
+def _shape_events(legacy_id: str, feedback, source: str) -> dict:
+    """Da elenco di eventi (locale o cloud) alla risposta di check_position.
+
+    Una forma sola per le due sorgenti: se divergessero, lo Scorer leggerebbe
+    due strutture diverse a seconda di dove ha trovato il dato.
+    """
+    # Gli eventi arrivano già dal più recente: feedback[0] è l'ultimo.
     # mig 028: comment / score / direction sono opzionali, possono essere
     # NULL su righe pre-estensione o quando l'utente non li valorizza.
     actions = [
@@ -176,6 +225,9 @@ def check_position(legacy_id: str) -> dict:
         "latest_direction": latest_direction,
         "count": len(actions),
         "actions": actions,
+        # Da dove viene la risposta: serve a distinguere «nessun giudizio»
+        # (locale consultato, vuoto) da «non l'ho potuto sapere» (cloud muto).
+        "source": source,
     }
 
 
