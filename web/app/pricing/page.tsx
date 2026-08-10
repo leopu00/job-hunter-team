@@ -15,7 +15,7 @@ type Tier = "base" | "high";
 
 type Provider = {
   name: string;
-  plan: string;
+  vendor: string;
   tier: Tier;
   url: string;
 } & Record<Lang, string>;
@@ -51,7 +51,7 @@ const TIER_LABEL: Record<Lang, Record<Tier, string>> = {
 const PROVIDERS: Provider[] = [
   {
     name: "Kimi",
-    plan: "Moonshot · Pro",
+    vendor: "Moonshot",
     tier: "base",
     url: "https://www.kimi.com/code",
     it: "Output paragonabile agli altri due e il piano più semplice da cui partire. Il modello è ancora in rifinitura sulla gestione del budget giornaliero.",
@@ -64,7 +64,7 @@ const PROVIDERS: Provider[] = [
   },
   {
     name: "Claude",
-    plan: "Anthropic · Max",
+    vendor: "Anthropic",
     tier: "high",
     url: "https://www.anthropic.com/pricing",
     it: "Un po' meno output di Codex, ma il più preciso e il più intelligente: la scelta migliore per valutare le offerte e scrivere i CV con cura.",
@@ -77,7 +77,7 @@ const PROVIDERS: Provider[] = [
   },
   {
     name: "Codex",
-    plan: "OpenAI · Plus / Pro",
+    vendor: "OpenAI",
     tier: "high",
     url: "https://openai.com/chatgpt/pricing",
     it: "Il più completo: provato a fondo in ogni scenario, offre l'output migliore per qualità e quantità. La scelta più solida se vuoi il massimo dal team.",
@@ -298,7 +298,7 @@ function PricingContent() {
                 style={{ background: "var(--color-panel)" }}
               >
                 <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-2">
-                  {prov.plan}
+                  {prov.vendor}
                 </span>
                 <h3 className="text-[16px] font-bold text-[var(--color-white)] mb-1">
                   {prov.name}
