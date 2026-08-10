@@ -381,6 +381,12 @@ export function toCloudRow(row, userId) {
   };
   return {
     user_id: userId,
+    // `id` E `legacy_id`: la route filtra il payload con
+    // `typeof m.id === 'number'` e ricostruisce lei `legacy_id`. Mandando
+    // solo `legacy_id` ogni riga della corsia rapida veniva scartata dal
+    // filtro, il payload restava vuoto e la POST rispondeva 200 — una
+    // perdita che si dichiarava successo (O-16).
+    id: row.id,
     legacy_id: row.id,
     agent: row.agent,
     body: row.body,
