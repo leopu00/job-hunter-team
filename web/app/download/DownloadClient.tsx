@@ -43,7 +43,7 @@ function BackLink() {
 // un doppio clic; Windows e Linux non sono firmati e l'avviso di SmartScreen
 // va detto prima, non lasciato scoprire. Sostituisce il "in arrivo" del
 // 2026-07-03 (docs/internal/2026-07-03-desktop-app-status-and-vision.md).
-type InstallMode = "terminal" | "desktop";
+type InstallMode = "terminal" | "desktop" | "prompt";
 
 const DOWNLOAD_SLUG: Record<PlatformId, DownloadSlug> = {
   mac: "mac",
@@ -55,6 +55,7 @@ type DlKey = Parameters<ReturnType<typeof useLandingI18n>["t"]>[0];
 const MODES: { id: InstallMode; labelKey: DlKey }[] = [
   { id: "desktop", labelKey: "dl_mode_desktop_title" },
   { id: "terminal", labelKey: "dl_mode_terminal_title" },
+  { id: "prompt", labelKey: "dl_mode_prompt_title" },
 ];
 
 type PlatformId = "mac" | "windows" | "linux";
@@ -73,6 +74,29 @@ function PlatformIcon({ id }: { id: PlatformId }) {
 }
 
 const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash`;
+
+// Il prompt da consegnare a un assistente AI. Esisteva fino ad `a494c6259`
+// (3 lug 2026), ritirato allora perché «non ha convinto»; rimesso su richiesta
+// dell'operatore il 2026-08-10.
+// ⚠️ NON è il testo di allora: da luglio sono cambiati la pagina, il flusso e
+// i comandi. Un prompt che manda l'assistente a fare cose che non esistono più
+// è peggio del metodo assente, quindi qui si nominano le due strade che
+// esistono davvero oggi — l'app desktop della pagina Download e il one-liner
+// qui sopra — e si rimanda alla guida per il resto.
+// Nessuna cifra né nome di piano commerciale: vale anche qui la regola O-12.
+const ASSISTANT_PROMPT = `I'd like to start using Job Hunter Team, an open-source team of AI agents that searches for jobs on my behalf. It runs on my own machine, in Docker.
+
+Repository: https://github.com/leopu00/job-hunter-team
+Website: https://jobhunterteam.ai
+Setup guide: https://jobhunterteam.ai/setup-guide
+
+Read the repository and the setup guide first, then walk me through installing and starting it on this computer, handling the technical steps yourself.
+
+There are two supported ways in, and they lead to the same team — pick with me whichever suits me better:
+1. The desktop app, downloaded from https://jobhunterteam.ai/download
+2. The one-liner: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+
+Two things you will need to check with me along the way: that Docker is available (Docker Desktop or Colima on macOS), and which AI provider subscription I want the team to use — it needs one of its own, separate from the one I use day to day, because the team consumes the whole allowance. Ask me whatever else you need instead of guessing.`;
 
 type ReqOs = {
   reqTitle: string;
@@ -180,7 +204,7 @@ function DownloadContent({
           </div>
 
           <div className="mb-8">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {MODES.map((m) => {
                 const active = installMode === m.id;
                 return (
@@ -236,6 +260,40 @@ function DownloadContent({
               </div>
               <p className="text-[10px] text-[var(--color-dim)] mt-3 text-center">
                 macOS · Linux · WSL
+              </p>
+            </div>
+          )}
+
+          {installMode === "prompt" && (
+            <div className="mb-8">
+              <p className="text-[12px] text-[var(--color-muted)] leading-relaxed mb-4">
+                {t("dl_prompt_intro")}
+              </p>
+              <div
+                className="border overflow-hidden"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "var(--color-card)",
+                }}
+              >
+                <div
+                  className="flex items-center justify-end px-3 py-2"
+                  style={{ borderBottom: "1px solid var(--color-border)" }}
+                >
+                  <CopyButton
+                    text={ASSISTANT_PROMPT}
+                    size="sm"
+                    className="rounded-none"
+                  >
+                    {t("dl_copy_prompt")}
+                  </CopyButton>
+                </div>
+                <pre className="px-4 py-4 overflow-x-auto whitespace-pre-wrap text-[11px] leading-relaxed font-mono text-[var(--color-bright)]">
+                  {ASSISTANT_PROMPT}
+                </pre>
+              </div>
+              <p className="text-[10px] text-[var(--color-dim)] mt-3 text-center">
+                {t("dl_prompt_note")}
               </p>
             </div>
           )}

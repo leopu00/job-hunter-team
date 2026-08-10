@@ -61,6 +61,11 @@ export const pt: Record<string, string> = {
   dl_copy_cmd: "Copiar comando",
   dl_mode_desktop_title: "Desktop",
   dl_mode_terminal_title: "CLI",
+  dl_mode_prompt_title: "Prompt",
+  dl_prompt_intro:
+    "Preferes não tratar disto? Copia este prompt e dá-o ao teu assistente de IA: lê a documentação, escolhe contigo o caminho e instala a equipa neste computador.",
+  dl_copy_prompt: "Copiar prompt",
+  dl_prompt_note: "Funciona com qualquer assistente que saiba usar o terminal.",
   dl_desktop_beta_desc:
     "A app de ambiente de trabalho é o escritório onde vês a equipa trabalhar. Está em beta: usamo-la todos os dias, mas muda com frequência. Se preferires um caminho mais assente, a CLI continua disponível.",
   dl_desktop_beta_badge: "Beta",

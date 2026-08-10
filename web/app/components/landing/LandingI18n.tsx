@@ -180,6 +180,22 @@ const translations = {
   },
   dl_mode_desktop_title: { it: "Desktop", en: "Desktop", hu: "Asztali" },
   dl_mode_terminal_title: { it: "CLI", en: "CLI", hu: "CLI" },
+  dl_mode_prompt_title: { it: "Prompt", en: "Prompt", hu: "Prompt" },
+  dl_prompt_intro: {
+    it: "Non vuoi occupartene tu? Copia questo prompt e dallo al tuo assistente AI: legge la documentazione, sceglie con te la strada e installa il team su questo computer.",
+    en: "Would rather not do it yourself? Copy this prompt and hand it to your AI assistant: it reads the documentation, picks the route with you and installs the team on this computer.",
+    hu: "Nem szeretnél magad bajlódni vele? Másold ki ezt a promptot, és add oda az AI-asszisztensednek: elolvassa a dokumentációt, veled együtt választ utat, és feltelepíti a csapatot erre a gépre.",
+  },
+  dl_copy_prompt: {
+    it: "Copia prompt",
+    en: "Copy prompt",
+    hu: "Prompt másolása",
+  },
+  dl_prompt_note: {
+    it: "Funziona con qualsiasi assistente che sappia usare il terminale.",
+    en: "Works with any assistant that can use the terminal.",
+    hu: "Bármelyik asszisztenssel működik, amelyik tudja használni a terminált.",
+  },
   dl_desktop_beta_desc: {
     it: "L'app desktop è l'ufficio dove vedi il team lavorare. È in beta: la usiamo tutti i giorni, ma cambia spesso. Se preferisci una strada più collaudata, resta la CLI.",
     en: "The desktop app is the office where you watch the team work. It is in beta: we use it daily, but it changes often. If you prefer a more settled path, the CLI is still there.",

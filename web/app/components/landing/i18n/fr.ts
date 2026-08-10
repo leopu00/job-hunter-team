@@ -61,6 +61,12 @@ export const fr: Record<string, string> = {
   dl_copy_cmd: "Copier la commande",
   dl_mode_desktop_title: "Bureau",
   dl_mode_terminal_title: "CLI",
+  dl_mode_prompt_title: "Prompt",
+  dl_prompt_intro:
+    "Vous préférez ne pas vous en occuper ? Copiez ce prompt et donnez-le à votre assistant IA : il lit la documentation, choisit la voie avec vous et installe l'équipe sur cet ordinateur.",
+  dl_copy_prompt: "Copier le prompt",
+  dl_prompt_note:
+    "Fonctionne avec tout assistant capable d'utiliser le terminal.",
   dl_desktop_beta_desc:
     "L'application de bureau est le bureau où vous voyez l'équipe travailler. Elle est en bêta : nous l'utilisons chaque jour, mais elle change souvent. Si vous préférez une voie plus éprouvée, la CLI reste disponible.",
   dl_desktop_beta_badge: "Bêta",

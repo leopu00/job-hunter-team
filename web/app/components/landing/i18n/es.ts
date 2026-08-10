@@ -61,6 +61,11 @@ export const es: Record<string, string> = {
   dl_copy_cmd: "Copiar comando",
   dl_mode_desktop_title: "Escritorio",
   dl_mode_terminal_title: "CLI",
+  dl_mode_prompt_title: "Prompt",
+  dl_prompt_intro:
+    "¿Prefieres no hacerlo tú? Copia este prompt y dáselo a tu asistente de IA: lee la documentación, elige contigo el camino e instala el equipo en este ordenador.",
+  dl_copy_prompt: "Copiar prompt",
+  dl_prompt_note: "Funciona con cualquier asistente que sepa usar la terminal.",
   dl_desktop_beta_desc:
     "La app de escritorio es la oficina donde ves trabajar al equipo. Está en beta: la usamos a diario, pero cambia a menudo. Si prefieres un camino más asentado, la CLI sigue ahí.",
   dl_desktop_beta_badge: "Beta",
