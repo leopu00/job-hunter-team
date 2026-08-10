@@ -247,6 +247,7 @@ export function getPositionsLocal(
       salary_min,
       salary_max,
       salary_currency,
+      applied_at: r.applied_at ?? null,
       last_action_at: la.at,
       last_action_by: la.by,
       last_action_actor: la.actor,
@@ -292,6 +293,8 @@ export function getPositionsLocal(
           return p.location ?? null;
         case "status":
           return p.status ?? null;
+        case "applied_at":
+          return p.applied_at ?? null;
         default:
           return null;
       }

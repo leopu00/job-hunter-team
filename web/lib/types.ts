@@ -250,6 +250,10 @@ export interface PositionWithScore extends Position {
   // Chi ha eseguito l'ultima azione (ruolo + istanza concreta).
   last_action_by?: string;
   last_action_actor?: string;
+  // Quando la candidatura è stata inviata (applications.applied_at). Non è
+  // ricavabile da `status: 'applied'`, che dice SE ma non QUANDO — ed è la
+  // metà che serve in lista quando le posizioni sono cinquanta (O-25).
+  applied_at?: string | null;
   // true = già aperta dall'utente (position_views, mig 055). undefined in
   // local mode: lì decide il client via localStorage (vedi UnseenDot).
   seen?: boolean;
