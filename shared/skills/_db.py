@@ -388,11 +388,20 @@ def ensure_schema(conn: sqlite3.Connection):
     --
     -- Non è un event-log (a differenza di `position_feedback`): è un blocco
     -- note, l'ultimo testo vale. Da qui la PRIMARY KEY su position_id.
+    -- Una riga per ORIGINE, non una per posizione (O-33): quando la stessa
+    -- nota diverge fra box e sito si tengono ENTRAMBI i testi, e non si
+    -- cancella mai niente. «Vince l'ultima» sembrava più semplice ma
+    -- obbligava a stabilire quale sia «l'ultima» fra due orologi non
+    -- sincronizzati — e il box tronca `created_at` ai secondi mentre il web
+    -- tiene i millisecondi (visto su O-16). Tenendole entrambe quel
+    -- problema non esiste.
     CREATE TABLE IF NOT EXISTS position_user_notes (
-        position_id INTEGER PRIMARY KEY,
+        position_id INTEGER NOT NULL,
+        origin TEXT NOT NULL DEFAULT 'box' CHECK (origin IN ('box','web')),
         body TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (position_id, origin),
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
@@ -810,6 +819,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_scout_coordination_unique(conn)
     _migrate_position_feedback(conn)
     _migrate_position_user_notes(conn)
+    _migrate_position_user_notes_origin(conn)
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
@@ -1059,6 +1069,62 @@ def _migrate_positions_url_unique(conn: sqlite3.Connection) -> None:
             "Deduplication still relies on the transaction in db_insert.py.",
             file=sys.stderr,
         )
+
+
+def _migrate_position_user_notes_origin(conn: sqlite3.Connection) -> None:
+    """Da «una nota per posizione» a «una nota per ORIGINE» (O-33).
+
+    La chiave primaria in SQLite non si cambia con un ALTER: la tabella si
+    ricrea. Ricreare significa poter perdere righe, quindi qui non si copia
+    sperando — si CONTA prima, si copia, si riconta, e se il totale non
+    coincide ci si ferma con un errore PRIMA di toccare la vecchia. Una
+    migrazione senza verifica è un'ipotesi, e l'ipotesi sarebbe sui dati di
+    qualcuno.
+
+    Idempotente: se la colonna `origin` c'è già, non fa niente.
+    """
+    if not _table_exists(conn, 'position_user_notes'):
+        return  # la crea già nella forma nuova lo schema base
+    if _column_exists(conn, 'position_user_notes', 'origin'):
+        return
+
+    before = conn.execute(
+        "SELECT COUNT(*) FROM position_user_notes").fetchone()[0]
+
+    conn.execute("""
+        CREATE TABLE position_user_notes_new (
+            position_id INTEGER NOT NULL,
+            origin TEXT NOT NULL DEFAULT 'box' CHECK (origin IN ('box','web')),
+            body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (position_id, origin),
+            FOREIGN KEY (position_id) REFERENCES positions(id)
+        )
+    """)
+    # Le note esistenti sono nate sul box: è l'unico posto da cui si potevano
+    # scrivere prima di O-33.
+    conn.execute("""
+        INSERT INTO position_user_notes_new
+            (position_id, origin, body, created_at, updated_at)
+        SELECT position_id, 'box', body, created_at, updated_at
+          FROM position_user_notes
+    """)
+
+    after = conn.execute(
+        "SELECT COUNT(*) FROM position_user_notes_new").fetchone()[0]
+    if after != before:
+        # Niente DROP: si lascia tutto com'è e si dice cosa non torna. Meglio
+        # una migrazione che non è passata di una nota che non c'è più.
+        conn.execute("DROP TABLE position_user_notes_new")
+        raise RuntimeError(
+            "position_user_notes migration aborted: "
+            f"{before} rows before, {after} copied. Nothing was dropped."
+        )
+
+    conn.execute("DROP TABLE position_user_notes")
+    conn.execute(
+        "ALTER TABLE position_user_notes_new RENAME TO position_user_notes")
 
 
 def _migrate_position_user_notes(conn: sqlite3.Connection) -> None:
