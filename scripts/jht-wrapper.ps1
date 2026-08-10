@@ -255,6 +255,52 @@ function Invoke-Compose {
   & docker compose -f $ComposeFile --project-directory $RuntimeDir @Args
 }
 
+function Test-DockerReachable {
+  # Docker c'e' ED e' raggiungibile? A differenza di Require-Docker NON esce:
+  # serve a DECIDERE, non a pretendere.
+  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return $false }
+  $null = docker info 2>&1
+  return ($LASTEXITCODE -eq 0)
+}
+
+function Write-LocalHelp {
+  # L'aiuto completo vive nel CLI DENTRO il container: senza container si
+  # stampa questo, che elenca cio' che il wrapper sa fare da se' sull'host.
+  @'
+jht - Job Hunter Team
+
+  Comandi dell'host (funzionano da qui):
+    jht up                 avvia il container del team
+    jht down               lo ferma
+    jht restart            lo riavvia
+    jht status             stato di container e team
+    jht logs [-f]          log del container
+    jht upgrade            aggiorna all'immagine piu' recente
+    jht setup              installazione guidata
+    jht download --os X    scarica l'app desktop per un sistema
+    jht game start|stop    avvia o ferma il videogioco
+    jht gui open           apre l'interfaccia grafica
+    jht shell              shell dentro il container
+
+  Tutti gli altri comandi (positions, stats, team, providers, cron,
+  working-hours, cloud...) girano DENTRO il container: per il loro aiuto
+  serve il container attivo.
+
+      jht up ; jht --help
+
+'@ | Write-Host
+}
+
+function Invoke-HelpWithoutDocker {
+  param([Parameter(ValueFromRemainingArguments)] $HelpArgs)
+  if ((Test-DockerReachable) -and (Test-ContainerUp)) {
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @HelpArgs
+    return $LASTEXITCODE
+  }
+  Write-LocalHelp
+  return 0
+}
+
 function Test-ContainerUp {
   $running = & docker ps --format '{{.Names}}' 2>$null
   return ($running -split "`n") -contains $Container
@@ -1098,7 +1144,24 @@ $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
 # corretto anche con 1 solo arg di coda.
 $Rest = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
 
+# ORDINE: si guarda COSA e' stato chiesto PRIMA di decidere se serve Docker.
+# Il contrario - Ensure-Up in cima al default - faceva si' che un semplice
+# `jht --help` scaricasse l'immagine (~300 MB) e creasse container e volumi,
+# cioe' il primo comando di chi non ha ancora deciso se installare (P-07).
 switch ($Sub) {
+  { $_ -in @('-h', '--help', 'help', '') } {
+    exit (Invoke-HelpWithoutDocker '--help')
+  }
+
+  { $_ -in @('-V', '--version', 'version') } {
+    if ((Test-DockerReachable) -and (Test-ContainerUp)) {
+      & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry --version
+    } else {
+      Write-Info "Per la versione del CLI in esecuzione serve il container attivo: 'jht up'."
+    }
+    exit 0
+  }
+
   'game' {
     $code = Invoke-GameCommand $Rest
     exit $code
@@ -1200,17 +1263,13 @@ switch ($Sub) {
     exit $script:HostDownloadExitCode
   }
 
-  # Default: nessun arg = help.
-  '' {
-    Require-ComposeFile
-    Require-Docker
-    Ensure-Up
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry --help
-    break
-  }
-
   # Tutto il resto: delegato al CLI Node nel container.
   default {
+    # Anche qui: se l'utente sta solo chiedendo aiuto su un sottocomando, non
+    # si accende nulla per rispondergli.
+    if ($Rest | Where-Object { $_ -in @('-h', '--help') }) {
+      exit (Invoke-HelpWithoutDocker $Sub @Rest)
+    }
     Require-ComposeFile
     Require-Docker
     Ensure-Up

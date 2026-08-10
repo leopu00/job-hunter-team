@@ -359,6 +359,55 @@ container_up() {
   docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"
 }
 
+# Docker c'e' ED e' raggiungibile? A differenza di require_docker NON esce:
+# serve a DECIDERE, non a pretendere.
+docker_reachable() {
+  command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1
+}
+
+# L'aiuto completo vive nel CLI DENTRO il container, quindi senza container si
+# stampa questo. Elenca cio' che il wrapper sa fare da se' sull'host: e' meno
+# dell'aiuto vero, ma e' onesto ed e' gratis.
+local_help() {
+  cat <<'JHTHELP'
+jht — Job Hunter Team
+
+  Comandi dell'host (funzionano da qui):
+    jht up                 avvia il container del team
+    jht down               lo ferma
+    jht restart            lo riavvia
+    jht status             stato di container e team
+    jht logs [-f]          log del container
+    jht upgrade            aggiorna all'immagine piu' recente
+    jht setup              installazione guidata
+    jht download --os X    scarica l'app desktop per un sistema
+    jht game start|stop    avvia o ferma il videogioco
+    jht gui open           apre l'interfaccia grafica
+    jht shell              shell dentro il container
+
+  Tutti gli altri comandi (positions, stats, team, providers, cron,
+  working-hours, cloud...) girano DENTRO il container: per il loro aiuto
+  serve il container attivo.
+
+      jht up && jht --help
+
+JHTHELP
+}
+
+# Richiesta di sola informazione: se il container e' gia' in piedi si serve
+# l'aiuto vero, altrimenti quello locale. In nessun caso si avvia qualcosa.
+serve_help_without_docker() {
+  if docker_reachable && container_up; then
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
+    return $?
+  fi
+  local_help
+  if [ $# -gt 1 ]; then
+    info "Per l'aiuto di '$1' serve il container attivo: 'jht up'."
+  fi
+  return 0
+}
+
 # Allinea l'owner delle dir bind-mountate all'UID che il container usa
 # internamente (jht = 1001). Senza questo, su VPS root (uid 0) il
 # container 'jht' non puo' scrivere in /jht_home: EACCES su jht.config.json,
@@ -1334,7 +1383,28 @@ fi
 # ── Dispatcher ────────────────────────────────────────────────────────────
 SUB="${1:-}"
 
+# ⚠️ ORDINE: si guarda COSA e' stato chiesto PRIMA di decidere se serve Docker.
+# Il contrario — chiamare ensure_up in cima al catch-all — faceva si' che un
+# semplice `jht --help` scaricasse l'immagine (~300 MB) e creasse container e
+# volumi, cioe' il primo comando di chi non ha ancora deciso se installare
+# (P-07, 2026-08-10). Un'eccezione per il solo `--help` avrebbe tappato il buco
+# lasciando la forma: e' il ramo informativo che va prima di tutto.
 case "$SUB" in
+  -h|--help|help|'')
+    serve_help_without_docker --help
+    exit $?
+    ;;
+
+  -V|--version|version)
+    if docker_reachable && container_up; then
+      docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" --version
+    else
+      printf '%s\n' "${JHT_IMAGE_TAG:-$(basename "${JHT_IMAGE:-jht}" | sed 's/.*://')}"
+      info "Versione dell'immagine configurata. Per quella del CLI in esecuzione: 'jht up' e poi 'jht --version'."
+    fi
+    exit 0
+    ;;
+
   game)
     handle_game_command "${@:2}"
     ;;
@@ -1468,14 +1538,17 @@ case "$SUB" in
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
-  '')
-    require_compose_file
-    require_docker
-    ensure_up
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" --help
-    ;;
-
   *)
+    # Anche qui: se l'utente sta solo chiedendo aiuto su un sottocomando, non
+    # si accende nulla per rispondergli.
+    for arg in "$@"; do
+      case "$arg" in
+        -h|--help)
+          serve_help_without_docker "$@"
+          exit $?
+          ;;
+      esac
+    done
     require_compose_file
     require_docker
     ensure_up
