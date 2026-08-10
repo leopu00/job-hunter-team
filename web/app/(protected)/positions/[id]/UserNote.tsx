@@ -7,6 +7,17 @@ import type { Locale } from "@/i18n/config";
 
 // O-22 — blocco note PRIVATO sulla posizione.
 //
+// ⚠️ IL MESSAGGIO `offline` DIPENDE DA DOVE LA FUNZIONE È ARRIVATA, e va
+// riletto a ogni release che la sposta. È già stato sbagliato due volte:
+//   1. «serve il team acceso» — una causa che nessuno aveva misurato, detta
+//      anche quando il team era acceso;
+//   2. «si salvano dall'app sul computer» — onesta come frase, ma descriveva
+//      un mondo che non esisteva: la nota è stata mergiata un'ora DOPO il tag
+//      della v0.3.7, quindi non è né sul web né nell'app installata.
+// Oggi dice che arrivano col prossimo aggiornamento. Quando O-33 sarà
+// rilasciata sarà di nuovo falso — cambiarlo fa parte di quel rilascio, non
+// è un dettaglio da lasciare a mentire per inerzia.
+//
 // «Cose che mi possono essere utili una volta che rivisito la posizione».
 // Non è un ordine al team: gli agenti non la leggono, e il pannello lo dice
 // esplicitamente — una nota che sembra condivisa e non lo è (o viceversa)
@@ -38,7 +49,7 @@ const T: Record<
     remove: "Elimina",
     error: "Non è riuscito a salvare la nota",
     offline:
-      "Le note si salvano dall'app sul computer. Dal sito non ancora: ci stiamo lavorando.",
+      "Le note non sono ancora disponibili: arrivano con il prossimo aggiornamento.",
   },
   en: {
     title: "Private notes",
@@ -50,8 +61,7 @@ const T: Record<
     saved: "Saved",
     remove: "Delete",
     error: "Could not save the note",
-    offline:
-      "Notes are saved from the app on your computer. Not from the site yet — we're working on it.",
+    offline: "Notes aren't available yet — they arrive with the next update.",
   },
   es: {
     title: "Notas privadas",
@@ -63,7 +73,7 @@ const T: Record<
     remove: "Eliminar",
     error: "No se pudo guardar la nota",
     offline:
-      "Las notas se guardan desde la app del ordenador. Desde la web todavía no: estamos en ello.",
+      "Las notas aún no están disponibles: llegan con la próxima actualización.",
   },
   de: {
     title: "Private Notizen",
@@ -76,7 +86,7 @@ const T: Record<
     remove: "Löschen",
     error: "Notiz konnte nicht gespeichert werden",
     offline:
-      "Notizen werden in der App auf dem Computer gespeichert. Auf der Website noch nicht — wir arbeiten daran.",
+      "Notizen sind noch nicht verfügbar — sie kommen mit dem nächsten Update.",
   },
   fr: {
     title: "Notes privées",
@@ -88,7 +98,7 @@ const T: Record<
     remove: "Supprimer",
     error: "Impossible d'enregistrer la note",
     offline:
-      "Les notes s'enregistrent depuis l'application sur l'ordinateur. Pas encore depuis le site : nous y travaillons.",
+      "Les notes ne sont pas encore disponibles : elles arrivent avec la prochaine mise à jour.",
   },
   pt: {
     title: "Notas privadas",
@@ -100,7 +110,7 @@ const T: Record<
     remove: "Eliminar",
     error: "Não foi possível guardar a nota",
     offline:
-      "As notas guardam-se na aplicação do computador. No site ainda não: estamos a trabalhar nisso.",
+      "As notas ainda não estão disponíveis: chegam com a próxima atualização.",
   },
   hu: {
     title: "Privát jegyzetek",
@@ -112,7 +122,7 @@ const T: Record<
     remove: "Törlés",
     error: "A jegyzetet nem sikerült menteni",
     offline:
-      "A jegyzetek a számítógépes alkalmazásban mentődnek. A weboldalról még nem — dolgozunk rajta.",
+      "A jegyzetek még nem érhetők el – a következő frissítéssel érkeznek.",
   },
 };
 

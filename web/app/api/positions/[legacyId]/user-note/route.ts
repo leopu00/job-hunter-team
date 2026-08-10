@@ -137,16 +137,17 @@ async function handle(
     // dire privata DAGLI AGENTI — non anche dal cloud: le due cose sono
     // diverse, e confonderle è ciò che ha prodotto questo ramo.
     //
-    // Il messaggio dice COSA SUCCEDE, non una causa dedotta. Il precedente
-    // diceva «serve il team acceso» anche quando il team era acceso, e
-    // mandava una persona a controllare il container per un motivo che col
-    // container non c'entrava.
+    // Il messaggio dice COSA SUCCEDE, non una causa dedotta — e descrive il
+    // mondo che ESISTE: la nota è stata mergiata un'ora dopo il tag della
+    // v0.3.7, quindi oggi non è né sul web né nell'app installata. Dire
+    // «salvala dall'app» manderebbe a cercarla dove non c'è.
+    // Va riletto a ogni release che sposta la funzione (vedi UserNote.tsx).
     cloud: async (): Promise<StepResult<NoteOutcome>> => ({
       ok: false,
       status: 503,
       body: {
         error:
-          "Le note si salvano dall'app sul computer. Dal sito non ancora: ci stiamo lavorando.",
+          "Le note non sono ancora disponibili: arrivano con il prossimo aggiornamento.",
       },
     }),
   });
