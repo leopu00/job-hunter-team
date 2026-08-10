@@ -92,7 +92,10 @@ func _rebuild() -> void:
 	_rows.add_child(hint)
 
 	var skip := Button.new()
-	skip.text = UIStrings.t("tour.skip")
+	# Non «salta la tappa» ma «esci dal giro»: chiude tutto, chat guidate
+	# comprese, e lo dice — insieme alla scorciatoia da tastiera, perché il
+	# cassetto del menu può coprire questa lista mentre ESC funziona sempre.
+	skip.text = UIStrings.t("tour.exit")
 	skip.flat = true
 	skip.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	skip.add_theme_font_size_override("font_size", 12)

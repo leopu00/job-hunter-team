@@ -129,7 +129,7 @@ const S := {
 	"tour.hint_follow": "The Assistant leads the way: follow her, she handles everything.",
 	"tour.hint_free": "Free tour: click anyone with a diamond, in any order.",
 	"tour.hint_launch": "Complete the three requirements: the yellow button on top opens the checklist.",
-	"tour.skip": "SKIP THE TOUR",
+	"tour.exit": "EXIT THE TOUR (ESC)",
 	"tour.done": "TOUR COMPLETE ✓",
 	"tour.invite": "%s%s! Come meet your new team.",
 	"tour.guide.scout.greet": "This is Research. Meet one of our Researchers.",

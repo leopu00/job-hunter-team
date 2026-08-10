@@ -7,6 +7,9 @@ extends Node
 
 signal conversation_changed(agent: String)
 signal action_requested(action: String, payload: Dictionary)
+## L'utente ha chiuso il giro guidato: chi mostra qualcosa per conto degli
+## agenti deve smettere, adesso e ai riavvii successivi.
+signal dismissed
 
 const SAVE_PATH := "user://guided_onboarding.cfg"
 const CONTEXT_JSON_PATH := "user://onboarding_context.json"
@@ -29,6 +32,10 @@ var _completed := {}
 var _reconciled := {}
 var _provider_choice := ""
 var _provider_test_override := -1
+## Uscita esplicita dell'utente dal giro guidato. È uno stato, non un evento:
+## sopravvive al riavvio, perché un giro da cui si è usciti che ricompare al
+## lancio successivo non è un'uscita, è un rinvio.
+var _dismissed := false
 
 
 func _ready() -> void:
@@ -47,10 +54,35 @@ func _ready() -> void:
 		_reconcile_with_status(SetupService.status)
 
 
+## Il giro è stato chiuso dall'utente? Chi disegna messaggi, opzioni o
+## marker per conto degli agenti guidati deve chiedersi questo per primo.
+func is_dismissed() -> bool:
+	return _dismissed
+
+
+## Uscita esplicita: chiude il giro guidato per intero — chat scriptate, azioni
+## che aprono pannelli da sole, tour fisico dei reparti.
+##
+## Un solo punto di uscita per due macchine (questa e TourGuide) perché finora
+## erano separate: chiudere il tour lasciava viva la chat guidata, che
+## continuava a parlare sopra il menu (O-14). Chiudere è definitivo e
+## idempotente: nessun ramo del codice lo riapre.
+func dismiss() -> void:
+	if _dismissed:
+		return
+	_dismissed = true
+	Log.info("onboarding", "giro guidato chiuso dall'utente")
+	_save_state()
+	# TourGuide.finish(), non skip(): skip() rientra qui e non serve.
+	if TourGuide.active():
+		TourGuide.finish()
+	dismissed.emit()
+
+
 ## Allinea il passo corrente ai prerequisiti già soddisfatti. Idempotente:
 ## ogni salto lo annuncia una volta sola e non torna mai indietro.
 func _reconcile_with_status(s: Dictionary) -> void:
-	if is_complete("coordinatore"):
+	if _dismissed or is_complete("coordinatore"):
 		return
 	var container := bool(s.get("container_running", false))
 	var provider := bool(s.get("provider_authenticated", false))
@@ -279,7 +311,9 @@ func use_scripted_chat(value: String) -> bool:
 	# `provider_authenticated` lasciava senza interlocutore chi arriva con un
 	# provider già configurato (token sul disco, container ancora spento) —
 	# scriptato spento e live non ancora disponibile (24/07).
-	return supports(agent) and not is_complete(agent) \
+	# Uscito dal giro: le chat authored si spengono in blocco. La finestra
+	# resta aperta e la storia leggibile — quello che sparisce è il seguito.
+	return supports(agent) and not _dismissed and not is_complete(agent) \
 			and not live_text_available(agent)
 
 
@@ -329,6 +363,7 @@ func reset_for_test() -> void:
 	_completed.clear()
 	_reconciled.clear()
 	_provider_choice = ""
+	_dismissed = false
 	for agent in AGENTS:
 		_ensure_started(agent)
 	_save_state()
@@ -485,7 +520,7 @@ func _choose_assistant(id: String) -> void:
 		"intro":
 			if id == "profile":
 				_reply("assistente", UIStrings.t("onb.a.intro.reply_profile"))
-				action_requested.emit("open_section", {"section": "profile"})
+				_request_action("open_section", {"section": "profile"})
 				_steps["assistente"] = "finish"
 			elif id == "later":
 				_reply("assistente", UIStrings.t("onb.a.intro.reply_later"))
@@ -550,11 +585,11 @@ func _choose_assistant(id: String) -> void:
 			_steps["assistente"] = "finish"
 		"finish":
 			if id == "complete_profile":
-				action_requested.emit("open_section", {"section": "profile"})
+				_request_action("open_section", {"section": "profile"})
 			elif id == "mentor":
-				action_requested.emit("open_scripted_chat", {"agent": "mentor"})
+				_request_action("open_scripted_chat", {"agent": "mentor"})
 			else:
-				action_requested.emit("open_scripted_chat", {"agent": "coordinatore"})
+				_request_action("open_scripted_chat", {"agent": "coordinatore"})
 			_completed["assistente"] = true
 			_reply("assistente", UIStrings.t("onb.a.finish.reply"))
 
@@ -638,7 +673,7 @@ func _choose_coordinator(id: String) -> void:
 				_preferences["runtime_location"] = id
 				if id == "vps":
 					_reply("coordinatore", UIStrings.t("onb.c.intro.reply_vps"))
-					action_requested.emit("open_section", {"section": "vps"})
+					_request_action("open_section", {"section": "vps"})
 				else:
 					_reply("coordinatore", UIStrings.t("onb.c.intro.reply_local"))
 				_steps["coordinatore"] = "runtime"
@@ -669,7 +704,7 @@ func _choose_coordinator(id: String) -> void:
 			elif id == "login":
 				if not bool(SetupService.status.get("container_running", false)):
 					_reply("coordinatore", UIStrings.t("onb.c.login.reply_no_container"))
-					action_requested.emit("open_section", {"section": "docker"})
+					_request_action("open_section", {"section": "docker"})
 				elif _provider_choice != "":
 					SetupService.open_provider_login(_provider_choice)
 					_reply("coordinatore", UIStrings.t("onb.c.login.reply_opened"))
@@ -681,7 +716,7 @@ func _choose_coordinator(id: String) -> void:
 				_steps["coordinatore"] = "provider"
 		"profile":
 			if id == "open_profile":
-				action_requested.emit("open_section", {"section": "profile"})
+				_request_action("open_section", {"section": "profile"})
 			_reply("coordinatore", UIStrings.t("onb.c.profile.reply"))
 			_steps["coordinatore"] = "autonomy"
 		"autonomy":
@@ -699,7 +734,7 @@ func _choose_coordinator(id: String) -> void:
 		"availability":
 			_preferences["team_availability"] = id
 			if id == "custom":
-				action_requested.emit("open_section", {"section": "hours"})
+				_request_action("open_section", {"section": "hours"})
 			_reply("coordinatore", _coordinator_policy_reply())
 			_steps["coordinatore"] = "channels"
 		"channels":
@@ -708,7 +743,7 @@ func _choose_coordinator(id: String) -> void:
 				_reply("coordinatore", UIStrings.t("onb.c.channels.reply_skip"))
 			else:
 				var sections := {"telegram": "telegram", "email": "email", "cloud": "account"}
-				action_requested.emit("open_section", {"section": sections.get(id, "activation")})
+				_request_action("open_section", {"section": sections.get(id, "activation")})
 				_reply("coordinatore", UIStrings.t("onb.c.channels.reply_open"))
 		"team":
 			if id == "start_team":
@@ -718,11 +753,11 @@ func _choose_coordinator(id: String) -> void:
 					_reply("coordinatore", UIStrings.t("onb.c.team.reply_start"))
 				else:
 					_reply("coordinatore", UIStrings.t("onb.c.team.reply_missing"))
-					action_requested.emit("open_section", {"section": "activation"})
+					_request_action("open_section", {"section": "activation"})
 			elif id == "overview":
-				action_requested.emit("open_section", {"section": "activation"})
+				_request_action("open_section", {"section": "activation"})
 			elif id == "mentor":
-				action_requested.emit("open_scripted_chat", {"agent": "mentor"})
+				_request_action("open_scripted_chat", {"agent": "mentor"})
 			else:
 				_steps["coordinatore"] = "autonomy"
 				_reply("coordinatore", UIStrings.t("onb.c.team.reply_review"))
@@ -835,7 +870,7 @@ func _choose_mentor(id: String) -> void:
 			_steps["mentor"] = "finish"
 		"finish":
 			if id == "hours":
-				action_requested.emit("open_section", {"section": "hours"})
+				_request_action("open_section", {"section": "hours"})
 				_reply("mentor", UIStrings.t("onb.m.finish.reply_hours"))
 			elif id == "restart":
 				_history["mentor"] = []
@@ -846,14 +881,28 @@ func _choose_mentor(id: String) -> void:
 				_steps["mentor"] = "intro"
 				_append("mentor", "assistant", _opening("mentor"))
 			elif id == "assistant":
-				action_requested.emit("open_scripted_chat", {"agent": "assistente"})
+				_request_action("open_scripted_chat", {"agent": "assistente"})
 			else:
 				_completed["mentor"] = true
 				_reply("mentor", UIStrings.t("onb.m.finish.reply_done"))
 
 
+## Battuta di un agente guidato. A giro chiuso non ne nascono più: è la
+## regola che tiene fede al «nessun messaggio compare più» di O-14, presa
+## qui sotto invece che in ogni chiamante.
 func _reply(agent: String, text: String) -> void:
+	if _dismissed:
+		return
 	_append(agent, "assistant", text)
+
+
+## Richiesta di aprire una superficie nativa (sezione, chat). A giro chiuso
+## resta inascoltata: erano queste ad aprirsi sopra ciò che l'utente stava
+## facendo, e un'uscita che non le ferma non è un'uscita.
+func _request_action(action: String, payload: Dictionary) -> void:
+	if _dismissed:
+		return
+	action_requested.emit(action, payload)
 
 
 func _assistant_finish_reply() -> String:
@@ -965,6 +1014,7 @@ func _save_state() -> void:
 	cfg.set_value("guided", "completed", JSON.stringify(_completed))
 	cfg.set_value("guided", "reconciled", JSON.stringify(_reconciled))
 	cfg.set_value("guided", "provider", _provider_choice)
+	cfg.set_value("guided", "dismissed", _dismissed)
 	var err := cfg.save(_state_path())
 	if err != OK:
 		push_warning("Impossibile salvare onboarding: %s" % error_string(err))
@@ -1003,6 +1053,7 @@ func _load_state() -> void:
 	_completed = _json_dict(str(cfg.get_value("guided", "completed", "{}")), {})
 	_reconciled = _json_dict(str(cfg.get_value("guided", "reconciled", "{}")), {})
 	_provider_choice = str(cfg.get_value("guided", "provider", ""))
+	_dismissed = bool(cfg.get_value("guided", "dismissed", false))
 
 
 func _state_path() -> String:

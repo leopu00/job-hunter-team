@@ -121,7 +121,7 @@ const S := {
 	"tour.hint_follow": "A Assistente abre caminho: segue-a, ela trata de tudo.",
 	"tour.hint_free": "Volta livre: clica em quem tiver o losango, na ordem que quiseres.",
 	"tour.hint_launch": "Cumpre os três requisitos: o botão amarelo em cima abre a lista.",
-	"tour.skip": "SALTAR A VISITA",
+	"tour.exit": "SAIR DA VISITA (ESC)",
 	"tour.done": "VISITA CONCLUÍDA ✓",
 	"tour.invite": "%s%s! Vem, apresento-te a tua nova equipa.",
 	"tour.guide.scout.greet": "Este é o departamento de Pesquisa. Apresento-te um dos nossos Pesquisadores.",

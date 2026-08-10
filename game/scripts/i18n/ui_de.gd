@@ -121,7 +121,7 @@ const S := {
 	"tour.hint_follow": "Die Assistentin geht voran: folge ihr, sie kümmert sich um alles.",
 	"tour.hint_free": "Freie Runde: klicke die Figuren mit der Raute an, in beliebiger Reihenfolge.",
 	"tour.hint_launch": "Erfülle die drei Voraussetzungen: der gelbe Knopf oben öffnet die Checkliste.",
-	"tour.skip": "RUNDGANG ÜBERSPRINGEN",
+	"tour.exit": "RUNDGANG VERLASSEN (ESC)",
 	"tour.done": "RUNDGANG ABGESCHLOSSEN ✓",
 	"tour.invite": "%s%s! Komm, ich stelle dir dein neues Team vor.",
 	"tour.guide.scout.greet": "Das ist die Recherche. Ich stelle dir einen unserer Rechercheure vor.",
