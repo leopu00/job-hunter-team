@@ -285,6 +285,33 @@ def ensure_schema(conn: sqlite3.Connection):
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
+    -- Giudizio dell'utente su una posizione (like/dislike/hide/star/clear).
+    -- EVENT-LOG, non stato: 'clear' non cancella niente, è un evento come gli
+    -- altri e l'ultimo prevale, così «ritiro il voto» resta leggibile nella
+    -- storia invece di sparire da essa (stessa semantica di mig 059).
+    --
+    -- Fino al 2026-08-11 esisteva SOLO su Supabase, e a cloud spento dare un
+    -- giudizio rispondeva errore: il prodotto è local-first, quindi il record
+    -- nasce QUI e il cloud è un riflesso, non un prerequisito (O-15).
+    -- cloud_id: id del gemello su Supabase, come position_tickets. NULL =
+    -- nato in locale e non ancora sincronizzato.
+    CREATE TABLE IF NOT EXISTS position_feedback (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        position_id INTEGER NOT NULL,
+        action TEXT NOT NULL CHECK (action IN (
+            'like','dislike','hide','star','clear'
+        )),
+        reason TEXT,
+        comment TEXT,
+        score INTEGER CHECK (score IS NULL OR (score BETWEEN 1 AND 5)),
+        direction TEXT CHECK (direction IS NULL OR direction IN (
+            'more_like_this','less_like_this'
+        )),
+        cloud_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (position_id) REFERENCES positions(id)
+    );
+
     -- Bacheca del team: direttive/ordini PERMANENTI dell'utente (strategia,
     -- formazione, policy operative) — es. "modalità mantenimento: CV solo 90+,
     -- stop scouting". A differenza del captain-diary (per-giorno, lezioni di
@@ -351,6 +378,8 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
     CREATE INDEX IF NOT EXISTS idx_position_tickets_status ON position_tickets(status);
+    CREATE INDEX IF NOT EXISTS idx_position_feedback_position
+        ON position_feedback(position_id, id DESC);
     CREATE INDEX IF NOT EXISTS idx_position_tickets_position ON position_tickets(position_id);
     CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_team_directives_status ON team_directives(status);
@@ -695,6 +724,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_pending_messages_chat_turns(conn)
     _migrate_positions_url_unique(conn)
     _migrate_scout_coordination_unique(conn)
+    _migrate_position_feedback(conn)
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
@@ -944,6 +974,38 @@ def _migrate_positions_url_unique(conn: sqlite3.Connection) -> None:
             "Deduplication still relies on the transaction in db_insert.py.",
             file=sys.stderr,
         )
+
+
+def _migrate_position_feedback(conn: sqlite3.Connection) -> None:
+    """Crea `position_feedback` sui DB nati prima di O-15.
+
+    Additiva e idempotente: CREATE TABLE IF NOT EXISTS, nessun rename, nessun
+    drop, nessuna riscrittura di righe esistenti. Un DB che non l'ha ancora
+    continua a funzionare — chi scrive e chi legge controllano la presenza
+    della tabella prima di toccarla, perché un jobs.db più vecchio del codice
+    è la condizione normale fra l'aggiornamento del CLI e il primo giro delle
+    migrazioni (è il difetto trovato su O-16, qui evitato per costruzione).
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS position_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            position_id INTEGER NOT NULL,
+            action TEXT NOT NULL CHECK (action IN (
+                'like','dislike','hide','star','clear'
+            )),
+            reason TEXT,
+            comment TEXT,
+            score INTEGER CHECK (score IS NULL OR (score BETWEEN 1 AND 5)),
+            direction TEXT CHECK (direction IS NULL OR direction IN (
+                'more_like_this','less_like_this'
+            )),
+            cloud_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (position_id) REFERENCES positions(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_position_feedback_position
+            ON position_feedback(position_id, id DESC);
+    """)
 
 
 def _migrate_scout_coordination_unique(conn: sqlite3.Connection) -> None:

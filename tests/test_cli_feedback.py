@@ -9,9 +9,11 @@ l'utente»*. Le due metà hanno contratti DIVERSI, ed è il punto di questo file
   ed esce 0. Un agente che chiede cosa pensa l'utente di una posizione e
   riceve un errore duro si ferma; deve poter proseguire sapendo che non c'è
   segnale.
-- **scrittura** (`set`): senza cloud FALLISCE. Un comando che esce 0 senza
-  aver registrato niente lascia l'utente convinto di aver espresso un
-  giudizio che non esiste — il peggiore dei due mondi, peggio del comando che
+- **scrittura** (`set`): fallisce se non riesce a registrare, che da O-15
+  vuol dire *in locale* — il cloud è un riflesso e un suo guasto non perde
+  più il giudizio. Un comando che esce 0 senza aver registrato niente lascia
+  l'utente convinto di aver espresso un giudizio che non esiste — il
+  peggiore dei due mondi, peggio del comando che
   non c'era.
 
 Il test sul confine dei verbi non è stato rimosso ma aggiornato: consente
@@ -105,9 +107,13 @@ def test_set_accetta_le_cinque_azioni_della_route(tmp_path, action):
     """L'elenco deve restare quello di VALID_ACTIONS nella route: un'azione in
     più qui sarebbe un 400 scoperto solo dopo una chiamata di rete."""
     r = run_jht("feedback", "set", "42", action, env=offline_env(tmp_path))
-    # Senza cloud fallisce, ma deve fallire per il cloud spento — non perché
-    # l'azione non è stata riconosciuta.
-    assert json.loads(r.stdout.strip().splitlines()[-1])["error"] == "cloud-disabled"
+    # Da O-15 la scrittura parte dal locale: qui non c'è nemmeno un jobs.db,
+    # quindi fallisce per QUELLO. Ciò che il test tiene fermo è che non
+    # fallisca perché l'azione non è stata riconosciuta — sarebbe un 400
+    # scoperto solo dopo una chiamata di rete.
+    error = json.loads(r.stdout.strip().splitlines()[-1])["error"]
+    assert "local database" in error
+    assert "invalid action" not in error
 
 
 def test_set_rifiuta_un_punteggio_fuori_scala_senza_chiamare_la_rete(tmp_path):
