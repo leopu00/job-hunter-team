@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Installa JHT come servizio sempre attivo.
+# Install JHT as an always-on service.
 #
-# Su macOS: LaunchAgent (launchd) in ~/Library/LaunchAgents/
-# Su Linux: servizio utente systemd in ~/.config/systemd/user/
+# On macOS: LaunchAgent (launchd) in ~/Library/LaunchAgents/
+# On Linux: systemd user service in ~/.config/systemd/user/
 #
-# Uso:
+# Usage:
 #   ./shared/daemon/install.sh --name jht-gateway --cmd "node /path/to/entry.js"
 #   ./shared/daemon/install.sh --name jht-cron    --cmd "node /path/to/cron.js"
 #
-# Opzioni:
-#   --name NAME    Nome univoco del servizio (obbligatorio)
-#   --cmd  CMD     Comando da eseguire (obbligatorio)
+# Options:
+#   --name NAME    Unique service name (required)
+#   --cmd  CMD     Command to run (required)
 #   --dir  DIR     Working directory (default: $HOME)
-#   --env  KEY=VAL Variabile d'ambiente aggiuntiva (ripetibile)
-#   -h, --help     Mostra questo messaggio
+#   --env  KEY=VAL Extra environment variable (repeatable)
+#   -h, --help     Show this message
 
 set -euo pipefail
 
@@ -26,7 +26,7 @@ WORK_DIR="$HOME"
 EXTRA_ENV=()
 
 log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
-err()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERRORE: $*" >&2; }
+err()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; }
 die()  { err "$*"; exit 1; }
 
 # ---------------------------------------------------------------------------
@@ -41,12 +41,12 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       sed -n '2,14p' "$0" | sed 's/^# \?//'
       exit 0 ;;
-    *) die "Opzione sconosciuta: $1" ;;
+    *) die "Unknown option: $1" ;;
   esac
 done
 
-[[ -n "$SERVICE_NAME" ]] || die "--name obbligatorio"
-[[ -n "$SERVICE_CMD"  ]] || die "--cmd obbligatorio"
+[[ -n "$SERVICE_NAME" ]] || die "--name is required"
+[[ -n "$SERVICE_CMD"  ]] || die "--cmd is required"
 
 mkdir -p "$JHT_LOG_DIR"
 LOG_OUT="$JHT_LOG_DIR/${SERVICE_NAME}.log"
@@ -116,7 +116,7 @@ PLIST
   launchctl enable "${domain}/${label}"
   launchctl bootstrap "$domain" "$plist_path"
 
-  log "LaunchAgent installato: $plist_path"
+  log "LaunchAgent installed: $plist_path"
   log "Log: $LOG_OUT"
 }
 
@@ -162,7 +162,7 @@ UNIT
   systemctl --user enable "${unit_name}"
   systemctl --user start  "${unit_name}"
 
-  log "Servizio systemd installato: $unit_path"
+  log "systemd service installed: $unit_path"
   log "Log: journalctl --user -u ${unit_name} -f"
 }
 
@@ -172,7 +172,7 @@ UNIT
 case "$(uname -s)" in
   Darwin) install_macos ;;
   Linux)  install_linux ;;
-  *)      die "Sistema operativo non supportato: $(uname -s)" ;;
+  *)      die "Unsupported operating system: $(uname -s)" ;;
 esac
 
-log "Servizio '${SERVICE_NAME}' avviato. Usa uninstall.sh per rimuoverlo."
+log "Service '${SERVICE_NAME}' started. Use uninstall.sh to remove it."

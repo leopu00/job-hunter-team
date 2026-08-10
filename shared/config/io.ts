@@ -55,7 +55,7 @@ export function readConfig(): {
   error?: string;
 } {
   if (!fs.existsSync(JHT_CONFIG_PATH)) {
-    return { success: false, error: `File non trovato: ${JHT_CONFIG_PATH}` };
+    return { success: false, error: `File not found: ${JHT_CONFIG_PATH}` };
   }
 
   let raw: string;
@@ -64,7 +64,7 @@ export function readConfig(): {
   } catch (err) {
     return {
       success: false,
-      error: `Errore lettura file: ${(err as Error).message}`,
+      error: `Failed to read file: ${(err as Error).message}`,
     };
   }
 
@@ -72,7 +72,7 @@ export function readConfig(): {
   try {
     parsed = parseJson5(raw);
   } catch {
-    return { success: false, error: "JSON non valido in config" };
+    return { success: false, error: "Invalid JSON in config" };
   }
 
   const result = validateConfig(parsed);
@@ -80,7 +80,7 @@ export function readConfig(): {
     const issues = result.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
       .join("\n");
-    return { success: false, error: `Validazione fallita:\n${issues}` };
+    return { success: false, error: `Validation failed:\n${issues}` };
   }
 
   return { success: true, data: result.data };
@@ -100,7 +100,7 @@ export function writeConfig(config: unknown): {
     const issues = result.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
       .join("\n");
-    return { success: false, error: `Validazione fallita:\n${issues}` };
+    return { success: false, error: `Validation failed:\n${issues}` };
   }
 
   try {
@@ -116,7 +116,7 @@ export function writeConfig(config: unknown): {
   } catch (err) {
     return {
       success: false,
-      error: `Errore scrittura file: ${(err as Error).message}`,
+      error: `Failed to write file: ${(err as Error).message}`,
     };
   }
 

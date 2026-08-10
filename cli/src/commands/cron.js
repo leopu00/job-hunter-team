@@ -36,7 +36,7 @@ async function handleList(opts) {
     return;
   }
 
-  console.log(`\n  Job schedulati (${jobs.length}):\n`);
+  console.log(`\n  Scheduled jobs (${jobs.length}):\n`);
   for (const job of jobs) {
     const status = job.enabled ? 'enabled' : 'disabled';
     const next = formatMs(job.state.nextRunAtMs);

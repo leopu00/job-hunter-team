@@ -42,10 +42,10 @@ function readEnvKey(provider: ApiKeyProvider): string | undefined {
 
 export function saveApiKey(provider: ApiKeyProvider, apiKey: string): void {
   if (!API_KEY_PROVIDERS.has(provider)) {
-    throw new Error(`Provider non supportato: ${provider}`);
+    throw new Error(`Unsupported provider: ${provider}`);
   }
   const key = apiKey.trim();
-  if (!key) throw new Error("API key vuota");
+  if (!key) throw new Error("Empty API key");
 
   const credential: ApiKeyCredential = {
     type: "api_key",
@@ -69,7 +69,7 @@ export function resolveApiKey(
   precedence: CredentialPrecedence = "env-first",
 ): ResolvedCredential | null {
   if (!API_KEY_PROVIDERS.has(provider)) {
-    throw new Error(`Provider non supportato: ${provider}`);
+    throw new Error(`Unsupported provider: ${provider}`);
   }
 
   const envKey = readEnvKey(provider);
@@ -90,7 +90,7 @@ export function resolveApiKey(
 
 export function deleteApiKey(provider: ApiKeyProvider): boolean {
   if (!API_KEY_PROVIDERS.has(provider)) {
-    throw new Error(`Provider non supportato: ${provider}`);
+    throw new Error(`Unsupported provider: ${provider}`);
   }
   return deleteCredential(provider);
 }
@@ -104,10 +104,10 @@ export function saveOAuthToken(
   expiresAt?: number,
 ): void {
   if (!OAUTH_PROVIDERS.has(provider)) {
-    throw new Error(`Provider OAuth non supportato: ${provider}`);
+    throw new Error(`Unsupported OAuth provider: ${provider}`);
   }
   const token = accessToken.trim();
-  if (!token) throw new Error("Access token vuoto");
+  if (!token) throw new Error("Empty access token");
 
   const credential: OAuthCredential = {
     type: "oauth",
@@ -128,7 +128,7 @@ export function resolveOAuthToken(
   provider: OAuthProvider,
 ): (OAuthCredential & { isExpired: boolean }) | null {
   if (!OAUTH_PROVIDERS.has(provider)) {
-    throw new Error(`Provider OAuth non supportato: ${provider}`);
+    throw new Error(`Unsupported OAuth provider: ${provider}`);
   }
   const credential = readCredential(provider) as OAuthCredential | null;
   if (!credential || credential.type !== "oauth") return null;
@@ -140,7 +140,7 @@ export function resolveOAuthToken(
 
 export function deleteOAuthToken(provider: OAuthProvider): boolean {
   if (!OAUTH_PROVIDERS.has(provider)) {
-    throw new Error(`Provider OAuth non supportato: ${provider}`);
+    throw new Error(`Unsupported OAuth provider: ${provider}`);
   }
   return deleteCredential(provider);
 }
@@ -162,7 +162,7 @@ export function resolveCredential(
     }
     return null;
   }
-  throw new Error(`Provider sconosciuto: ${provider}`);
+  throw new Error(`Unknown provider: ${provider}`);
 }
 
 export function listConfiguredProviders(): Array<{

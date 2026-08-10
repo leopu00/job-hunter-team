@@ -84,7 +84,7 @@ export function decrypt<T = unknown>(
 ): T {
   if (payload.version !== 1 || payload.algorithm !== ALGORITHM) {
     throw new Error(
-      `Formato payload non supportato: v${payload.version} ${payload.algorithm}`,
+      `Unsupported payload format: v${payload.version} ${payload.algorithm}`,
     );
   }
 

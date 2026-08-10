@@ -289,7 +289,7 @@ def cmd_history():
             status = "ACTIVE" if r["superseded_at"] is None else f"closed {r['superseded_at']}"
             print(f"\n--- Session {r['started_at']} ({status}) ---")
         active = " *" if r["superseded_at"] is None else ""
-        print(f"  {r['scout']}: cerchi={r['cerchi'] or '-'}, fonti={r['fonti'] or '-'}{active}")
+        print(f"  {r['scout']}: areas={r['cerchi'] or '-'}, sources={r['fonti'] or '-'}{active}")
     db.close()
 
 

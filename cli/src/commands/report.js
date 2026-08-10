@@ -104,7 +104,7 @@ async function handleReport(options) {
   } catch { /* skip */ }
 
   if (sharedDirs.length > 0) {
-    console.log(`  ${BOLD}Moduli shared/${RESET} (${sharedDirs.length})`);
+    console.log(`  ${BOLD}shared/ modules${RESET} (${sharedDirs.length})`);
     console.log(`    ${DIM}${sharedDirs.join(', ')}${RESET}\n`);
   }
 

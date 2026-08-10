@@ -110,7 +110,7 @@ describe("Crypto — encrypt / decrypt AES-256-GCM", () => {
   it("decrypt con versione non supportata lancia errore", () => {
     const encrypted = encrypt({ x: 1 }, key);
     const bad = { ...encrypted, version: 99 } as unknown as EncryptedPayload;
-    expect(() => decrypt(bad, key)).toThrow(/non supportato/);
+    expect(() => decrypt(bad, key)).toThrow(/Unsupported payload format/);
   });
 
   it("encrypt/decrypt gestisce strutture complesse", () => {
@@ -657,7 +657,7 @@ describe("Manager — API key e precedenza", () => {
     expect((manager.resolveApiKey("claude")?.credential as ApiKeyCredential).apiKey)
       .toBe("sk-con-spazi");
 
-    expect(() => manager.saveApiKey("claude", "   ")).toThrowError(/vuota/i);
+    expect(() => manager.saveApiKey("claude", "   ")).toThrowError(/empty/i);
   });
 
   it("env-first (default): l'env var vince sul file", async () => {
@@ -705,8 +705,8 @@ describe("Manager — API key e precedenza", () => {
   it("provider non API-key → errore esplicito su save e resolve", async () => {
     const { manager } = await withIsolatedHome();
     const bogus = "claude_max" as unknown as Parameters<typeof manager.saveApiKey>[0];
-    expect(() => manager.saveApiKey(bogus, "sk-x")).toThrowError(/non supportato/i);
-    expect(() => manager.resolveApiKey(bogus)).toThrowError(/non supportato/i);
+    expect(() => manager.saveApiKey(bogus, "sk-x")).toThrowError(/unsupported/i);
+    expect(() => manager.resolveApiKey(bogus)).toThrowError(/unsupported/i);
   });
 
   it("deleteApiKey ritorna true solo se il file c'era", async () => {
@@ -746,11 +746,11 @@ describe("Manager — OAuth", () => {
 
   it("access token vuoto → errore; provider non OAuth → errore", async () => {
     const { manager } = await withIsolatedHome();
-    expect(() => manager.saveOAuthToken("claude_max", "  ")).toThrowError(/vuoto/i);
+    expect(() => manager.saveOAuthToken("claude_max", "  ")).toThrowError(/empty/i);
 
     const bogus = "claude" as unknown as Parameters<typeof manager.saveOAuthToken>[0];
-    expect(() => manager.saveOAuthToken(bogus, "tok")).toThrowError(/non supportato/i);
-    expect(() => manager.resolveOAuthToken(bogus)).toThrowError(/non supportato/i);
+    expect(() => manager.saveOAuthToken(bogus, "tok")).toThrowError(/unsupported/i);
+    expect(() => manager.resolveOAuthToken(bogus)).toThrowError(/unsupported/i);
   });
 
   it("nessun token salvato → null, e deleteOAuthToken riflette l'esistenza del file", async () => {
@@ -769,13 +769,13 @@ describe("Manager — validazione provider sulle delete", () => {
     const { manager } = await withIsolatedHome();
 
     const oauthComeApiKey = "claude_max" as unknown as Parameters<typeof manager.deleteApiKey>[0];
-    expect(() => manager.deleteApiKey(oauthComeApiKey)).toThrowError(/non supportato/i);
+    expect(() => manager.deleteApiKey(oauthComeApiKey)).toThrowError(/unsupported/i);
 
     const apiKeyComeOauth = "claude" as unknown as Parameters<typeof manager.deleteOAuthToken>[0];
-    expect(() => manager.deleteOAuthToken(apiKeyComeOauth)).toThrowError(/non supportato/i);
+    expect(() => manager.deleteOAuthToken(apiKeyComeOauth)).toThrowError(/unsupported/i);
 
     const sconosciuto = "gemini" as unknown as Parameters<typeof manager.deleteApiKey>[0];
-    expect(() => manager.deleteApiKey(sconosciuto)).toThrowError(/non supportato/i);
+    expect(() => manager.deleteApiKey(sconosciuto)).toThrowError(/unsupported/i);
   });
 
   it("una stringa arbitraria non arriva mai al path del file", async () => {
@@ -787,7 +787,7 @@ describe("Manager — validazione provider sulle delete", () => {
     writeFileSync(fuori, "non sono una credenziale", { mode: 0o600 });
 
     const traversal = "../altro" as unknown as Parameters<typeof manager.deleteApiKey>[0];
-    expect(() => manager.deleteApiKey(traversal)).toThrowError(/non supportato/i);
+    expect(() => manager.deleteApiKey(traversal)).toThrowError(/unsupported/i);
     expect(existsSync(fuori)).toBe(true);
   });
 });
@@ -809,7 +809,7 @@ describe("Manager — interfaccia unificata", () => {
     expect(oauth?.credential).not.toHaveProperty("isExpired");
 
     const bogus = "gemini" as unknown as Parameters<typeof manager.resolveCredential>[0];
-    expect(() => manager.resolveCredential(bogus)).toThrowError(/sconosciuto/i);
+    expect(() => manager.resolveCredential(bogus)).toThrowError(/unknown/i);
   });
 
   it("resolveCredential propaga la precedenza richiesta per le API key", async () => {
