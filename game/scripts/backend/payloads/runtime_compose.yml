@@ -11,6 +11,10 @@ services:
       - JHT_USER_DIR=/jht_user
       - JHT_HOST_TYPE=${JHT_HOST_TYPE:-}
       - JHT_LANG=${JHT_LANG:-en}
+      # Locale di SISTEMA (≠ JHT_LANG, che e' la lingua del prodotto): senza,
+      # LC_CTYPE resta POSIX e chi si attacca a un pane vede `_` al posto
+      # delle accentate. Deve restare identica a docker-compose.yml.
+      - LANG=C.UTF-8
       - JHT_USER_TZ=${JHT_USER_TZ:-UTC}
       - IS_CONTAINER=1
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
