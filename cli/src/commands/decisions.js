@@ -76,12 +76,32 @@ export function registerFeedbackCommand(program) {
   const cmd = new Command('feedback')
     .description('Read the judgements the user gave on positions (proxy to feedback_query.py)');
 
-  // Sola LETTURA, e non per dimenticanza. Registrare un like/dislike passa da
-  // `web/app/api/positions/[legacyId]/feedback/route.ts`, che rifiuta con 403
-  // chiunque non arrivi da una sessione browser: un token di dispositivo —
-  // quello che hanno container e CLI — è escluso PER SCELTA. Aggiungere
-  // `jht positions rate` non è wrapping, è cambiare quella politica, e la
-  // decisione è dell'operatore. Vedi [JHT-CLI-AGENT-PARITY] nel BACKLOG.
+  // La scrittura è arrivata il 2026-08-10, con l'autorizzazione esplicita
+  // dell'operatore: fino a quel giorno la route rispondeva 403 a un token di
+  // dispositivo, e un `set` qui sarebbe stato un comando che esiste e
+  // fallisce. Il perché della rimozione sta in cima alla POST di
+  // `web/app/api/positions/[legacyId]/feedback/route.ts`.
+  //
+  // UN SOLO verbo di scrittura, `set`: like/dislike/hide/star/clear sono
+  // VALORI dell'azione, non comandi separati. Sei sottocomandi sarebbero sei
+  // superfici da autorizzare invece di una.
+  cmd
+    .command('set <legacy_id> <action>')
+    .description('Record the user judgement: like | dislike | hide | star | clear')
+    .option('--reason <text>', 'short reason (max 500 chars)')
+    .option('--comment <text>', 'free text (max 2000 chars)')
+    .option('--score <n>', 'rating from 1 to 5')
+    .option('--direction <dir>', 'more_like_this | less_like_this')
+    .action((legacyId, action, options) => {
+      const args = ['set', String(legacyId), String(action)];
+      for (const [flag, value] of [['--reason', options.reason],
+        ['--comment', options.comment], ['--score', options.score],
+        ['--direction', options.direction]]) {
+        if (value !== undefined) args.push(flag, String(value));
+      }
+      run('feedback_record.py', args);
+    });
+
   cmd
     .command('check <legacy_id>')
     .description('The most recent judgement on a position (null when there is none)')
