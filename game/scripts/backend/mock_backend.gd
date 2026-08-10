@@ -26,19 +26,19 @@ var _roster: Array = [
 ## Chat plausibile per ruolo: [from, to, testo]. "all" = broadcast,
 ## "user" = messaggio all'utente (fumetto "→ te").
 const CHATTER := [
-	["scout-1", "all", "3 board visitate: 6 posizioni nuove, 2 senior backend a Berlino, il resto remoto EU."],
-	["scout-2", "coordinatore-1", "LinkedIn rallenta le risposte, passo alla board successiva e riprovo tra un'ora."],
-	["scout-1", "coordinatore-1", "Quota città prioritaria al 32%: entro il cap, continuo sul remoto."],
-	["analista-1", "all", "Profilate 4 aziende: due scale-up fintech, una consultancy, una product house."],
-	["analista-2", "scorer-1", "Ti ho messo in coda 3 posizioni analizzate: manca solo il salary range di una."],
-	["scorer-1", "all", "Score medio della mattinata 71: la migliore è a 88, stack match quasi pieno."],
-	["scorer-1", "user", "Trovata una posizione a 88/100: stack pieno, remoto, salary sopra la tua mediana."],
+	["scout-1", "all", "3 boards checked: 6 new roles, 2 senior backend in Berlin, the rest remote EU."],
+	["scout-2", "coordinatore-1", "LinkedIn is throttling replies; moving to the next board and retrying in an hour."],
+	["scout-1", "coordinatore-1", "Priority-city quota at 32%: within the cap, staying on remote."],
+	["analista-1", "all", "Profiled 4 companies: two fintech scale-ups, one consultancy, one product house."],
+	["analista-2", "scorer-1", "Queued 3 analysed roles for you: only one is missing its salary range."],
+	["scorer-1", "all", "Morning average score 71: the best is at 88, near-full stack match."],
+	["scorer-1", "user", "Found a role at 88/100: full stack match, remote, salary above your median."],
 	["critico-1", "all", "Recensione CV: 8/10, PASS. Registro coerente, taglio le due ripetizioni e chiudo."],
-	["coordinatore-1", "all", "Weekly al 64%: pacing regolare, nessun intervento necessario."],
-	["coordinatore-1", "scout-2", "Riprendi il giro delle board: la coda analisti è quasi vuota."],
-	["mentor-1", "user", "Consiglio del giorno: nelle candidature remote EU cita il fuso e la disponibilità overlap."],
-	["assistente-1", "user", "Ho archiviato 2 notifiche e aggiornato il registro candidature."],
-	["coordinatore-1", "user", "Il team è a regime: 6 nuove posizioni oggi, 3 in analisi, 1 in scrittura."],
+	["coordinatore-1", "all", "Weekly at 64%: steady pacing, nothing to intervene on."],
+	["coordinatore-1", "scout-2", "Start another pass over the boards: the analyst queue is nearly empty."],
+	["mentor-1", "user", "Tip of the day: in remote EU applications, mention your timezone and overlap hours."],
+	["assistente-1", "user", "Archived 2 notifications and updated the application log."],
+	["coordinatore-1", "user", "The team is up to speed: 6 new roles today, 3 in analysis, 1 being written."],
 ]
 
 ## Transizioni di stato simulate (contratto bus.transitions: righe del
@@ -112,20 +112,20 @@ func _apply_scenario(scenario: String) -> void:
 			_roster = [_sim("scout-1", "scout", "working", 0.0, "turno in corso")]
 		"idle":
 			_roster = [_sim("analista-1", "analista", "idle", 0.0,
-					"sessione attiva, nessun turno in corso")]
+					"session active, no turn in progress")]
 		"paused":
 			_roster = [_sim("scorer-1", "scorer", "paused", 0.0,
 					"in attesa di ripresa")]
 		"throttle_short":
 			_roster = [_sim("scrittore-1", "scrittore", "throttled", 45.0,
-					"pacing: pausa temporizzata")]
+					"pacing: timed pause")]
 		"throttle_long":
 			_roster = [_sim("critico-1", "critico", "throttled", 240.0,
-					"pacing: pausa temporizzata")]
+					"pacing: timed pause")]
 		"mixed":
 			_roster = [
 				_sim("scout-1", "scout", "working", 0.0, "turno in corso"),
-				_sim("analista-1", "analista", "idle", 0.0, "nessun turno in corso"),
+				_sim("analista-1", "analista", "idle", 0.0, "no turn in progress"),
 				_sim("scorer-1", "scorer", "paused", 0.0, "in attesa di ripresa"),
 				_sim("scrittore-1", "scrittore", "throttled", 45.0, "pacing"),
 				_sim("critico-1", "critico", "throttled", 240.0, "pacing"),
@@ -134,8 +134,8 @@ func _apply_scenario(scenario: String) -> void:
 			# Audit grafico deterministico delle prime due postazioni:
 			# lead→desk 1 diagonale, seconda istanza→desk 0 laterale.
 			_roster = [
-				_sim("scrittore-1", "scrittore", "working", 0.0, "CV in scrittura"),
-				_sim("scrittore-2", "scrittore", "working", 0.0, "lettera in scrittura"),
+				_sim("scrittore-1", "scrittore", "working", 0.0, "writing CV"),
+				_sim("scrittore-2", "scrittore", "working", 0.0, "writing cover letter"),
 			]
 		"all_seated":
 			# Audit grafico completo: sei istanze per ciascun reparto, una per
@@ -245,9 +245,9 @@ func _transitions_loop() -> void:
 ## Chiavi = uid di GIOCO (contratto 1053f1ce: il bus non traduce più
 ## in "capitano"); il fallback copre ogni altro agente del roster.
 const REPLIES := {
-	"coordinatore-1": "Ricevuto. Il team è a regime: pacing regolare, nessun collo di bottiglia. Ti aggiorno al prossimo tick.",
-	"assistente-1": "Ricevuto! Lo segno subito nel registro del team.",
-	"mentor-1": "Buona domanda: parliamone. Intanto ricorda che la ricerca è una maratona.",
+	"coordinatore-1": "Got it. The team is up to speed: steady pacing, no bottlenecks. I'll update you next tick.",
+	"assistente-1": "Got it! Noting it in the team log right away.",
+	"mentor-1": "Good question, let's talk it through. In the meantime, remember the search is a marathon.",
 }
 
 var _chat_agent := ""
@@ -291,7 +291,7 @@ var _coord_state := {
 		"geocode": 17, "logos": 12, "recheck": 29, "expired": 6,
 		"harvest": 19, "calibration": 4},
 	"directives": [
-		{"id": 1, "body": "Dai priorità alle posizioni AI Engineering remote UE.",
+		{"id": 1, "body": "Prioritise remote EU AI Engineering roles.",
 			"kind": "strategy", "status": "active"},
 	],
 }
@@ -351,11 +351,11 @@ func set_burn_intent(active: bool, hours: float) -> void:
 func _mock_terminal_loop(agent: String, generation: int) -> void:
 	var lines := PackedStringArray([
 		"$ tmux attach -t %s" % agent.to_upper(),
-		"Job Hunter Team · sessione agente attiva",
+		"Job Hunter Team · agent session active",
 		"────────────────────────────────────────────────────────────",
 		"[09:41:02] carico il contesto e controllo la coda assegnata",
 		"[09:41:05] jobs.db: snapshot ricevuto, 12 elementi candidati",
-		"[09:41:07] applico i vincoli del profilo e le regole di pacing",
+		"[09:41:07] applying profile constraints and pacing rules",
 	])
 	if OS.get_environment("JHT_AGENT_UI_TEST") == "1":
 		for i in range(1, 141):
@@ -367,7 +367,7 @@ func _mock_terminal_loop(agent: String, generation: int) -> void:
 		tick += 1
 		lines.append("[%s] tick %02d · %s" % [
 				Time.get_time_string_from_system(), tick,
-				["analisi in corso", "verifica completata", "attendo il prossimo evento"][tick % 3]])
+				["analisi in corso", "check complete", "attendo il prossimo evento"][tick % 3]])
 		if lines.size() > 80:
 			lines.remove_at(3)
 
@@ -402,7 +402,7 @@ func _mock_reply(agent: String) -> void:
 			or agent.begins_with("capitano") or agent.begins_with("mentor"):
 		response["choices"] = [
 			{"label": "Approfondiamo questo punto", "value": "Approfondiamo questo punto"},
-			{"label": "Mostrami il prossimo passo", "value": "Mostrami il prossimo passo"},
+			{"label": "Show me the next step", "value": "Show me the next step"},
 		]
 	_chat_msgs.append(response)
 	_publish_chat_state(agent)
@@ -426,10 +426,10 @@ func _publish_chat_state(agent: String) -> void:
 const WIZ_READY_STEP := 4
 
 const WIZ_REPLIES := [
-	"Benvenuto! Sono l'Assistente: costruiamo insieme il tuo profilo. Raccontami che ruolo cerchi e da dove parti — oppure carica direttamente il CV.",
-	"Perfetto, lo segno sul badge. Mi dici anche località, anni di esperienza e le lingue che parli?",
-	"Ottimo, il profilo prende forma: mancano solo le competenze principali. Se carichi il CV le estraggo io.",
-	"Ci siamo: il tuo badge è completo. Quando vuoi, entra in ufficio — il team ti aspetta.",
+	"Welcome! I'm the Assistant: let's build your profile together. Tell me what role you're after and where you're starting from — or just upload your CV.",
+	"Great, I'll put that on your badge. Can you also tell me your location, years of experience and the languages you speak?",
+	"The profile is taking shape: only your main skills are missing. Upload your CV and I'll pull them out.",
+	"That's it: your badge is complete. Step into the office whenever you like — the team is waiting.",
 ]
 
 ## Tappe del profilo finto: a ogni passo si aggiungono campi, come farebbe
