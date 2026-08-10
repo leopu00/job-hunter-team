@@ -1,5 +1,6 @@
 """Contratti dello spegnimento desktop bounded e localmente corretto."""
 
+import re
 from pathlib import Path
 
 
@@ -18,7 +19,19 @@ def test_shutdown_worker_is_joined_but_every_docker_command_is_bounded():
         setup.index("static func _run_shutdown_command") :
         setup.index("func shutdown_team")
     ]
-    assert 'OS.create_process("docker", argv, false)' in runner
+    # Il processo parte non bloccante (terzo argomento `false`), altrimenti il
+    # timeout qui sotto non potrebbe mai scattare.
+    #
+    # Il binario va RISOLTO, non passato come nome nudo: un'app macOS aperta dal
+    # Finder eredita il PATH minimo di launchd e non vede /opt/homebrew/bin, per
+    # cui `OS.create_process("docker", ...)` fallirebbe su una macchina che
+    # docker ce l'ha (O-13, 2026-08-10). Prima questa riga era incollata alla
+    # forma testuale `"docker"` e il fix la faceva diventare rossa.
+    assert re.search(
+        r"OS\.create_process\(\s*_bin\(\s*\"docker\"\s*\)\s*,\s*argv\s*,\s*false\s*\)",
+        runner,
+    ), runner
+    assert 'OS.create_process("docker"' not in runner
     assert "OS.is_process_running(pid)" in runner
     assert "SHUTDOWN_COMMAND_TIMEOUT_MS" in runner
     assert "OS.kill(pid)" in runner
