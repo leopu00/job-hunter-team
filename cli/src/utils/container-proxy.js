@@ -77,10 +77,23 @@ function toResult(r) {
  * Ritorna { ok, stdout, stderr, code }. Il codice d'uscita del processo
  * interno e' preservato — il chiamante puo' distinguere fallimento del
  * trasporto (ok=false) da fallimento del comando (code !== 0).
+ *
+ * `input` scrive su stdin del processo e poi chiude: serve a chi deve passare
+ * un CONTENUTO e non un argomento (`jht artifact upload` manda i byte del
+ * documento). Non e' la stessa cosa di un argomento lungo: la riga di comando
+ * ha un tetto di sistema e finisce nella tabella dei processi, stdin no.
+ * Ignorato con `detached`, dove nessuno resta a scrivere.
+ *
+ * `maxBuffer` alza il tetto di stdout (default di Node: 1 MB). Un documento da
+ * 10 MB torna in base64, cioe' ~13 MB: col tetto di serie spawnSync fallisce
+ * con ENOBUFS e il chiamante vede un trasporto rotto invece di un file grande.
  */
 export function execArgvInContainer(
   argv,
-  { container = CONTAINER_NAME, timeoutMs = 30_000, detached = false, env = null } = {},
+  {
+    container = CONTAINER_NAME, timeoutMs = 30_000, detached = false, env = null,
+    input = null, maxBuffer = null,
+  } = {},
 ) {
   if (!Array.isArray(argv) || argv.length === 0) {
     return { ok: false, stdout: '', stderr: 'empty argv', code: -1 };
@@ -104,6 +117,8 @@ export function execArgvInContainer(
       encoding: 'utf8',
       timeout: timeoutMs,
       env: childEnv,
+      ...(input === null ? {} : { input }),
+      ...(maxBuffer === null ? {} : { maxBuffer }),
     });
     return toResult(r);
   }
@@ -119,6 +134,8 @@ export function execArgvInContainer(
     encoding: 'utf8',
     timeout: timeoutMs,
     env: { ...process.env, MSYS_NO_PATHCONV: '1' },
+    ...(input === null || detached ? {} : { input }),
+    ...(maxBuffer === null ? {} : { maxBuffer }),
   });
   return toResult(r);
 }

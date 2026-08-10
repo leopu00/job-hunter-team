@@ -36,6 +36,26 @@ const SKILLS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../share
  * sviluppo locale e alle macchine senza container su.
  */
 export function runSkill(skill, args) {
+  const r = runSkillCaptured(skill, args);
+  process.stdout.write(r.stdout);
+  if (r.stderr) process.stderr.write(r.stderr);
+  return r.code;
+}
+
+/**
+ * Come `runSkill`, ma l'output TORNA al chiamante invece di finire a schermo.
+ *
+ * Serve a chi deve leggere la risposta della skill prima di decidere cosa
+ * mostrare: `jht artifact fetch` riceve un JSON con i byte in base64 e deve
+ * scriverli in un file, non riversare un PDF nel terminale. `input` passa un
+ * contenuto su stdin (l'upload di un documento), `maxBuffer` alza il tetto di
+ * stdout per le risposte grandi.
+ *
+ * Ritorna { code, stdout, stderr }. `code` resta l'exit code della skill: chi
+ * chiama lo propaga così com'è, perché è l'unica cosa che un agente può
+ * controllare senza leggere il testo.
+ */
+export function runSkillCaptured(skill, args, { input = null, maxBuffer = null } = {}) {
   if (containerRunning()) {
     // Argomenti separati, senza shell: includono testo libero scritto
     // dall'utente (note di esclusione, corpo di una direttiva, risposta a un
@@ -43,32 +63,41 @@ export function runSkill(skill, args) {
     // uscire.
     const r = execArgvInContainer(['python3', `/app/shared/skills/${skill}`, ...args.map(String)], {
       timeoutMs: 30_000,
+      input,
+      maxBuffer,
     });
-    process.stdout.write(r.stdout);
-    if (r.stderr) process.stderr.write(r.stderr);
-    return r.code ?? 1;
+    return { code: r.code ?? 1, stdout: r.stdout, stderr: r.stderr };
   }
   // Fuori dal container la skill va cercata sul disco: se non c'è, il fallimento
   // deve essere un messaggio del prodotto — chi legge `python3: can't open file`
   // non ha modo di capire che gli manca il codice del team, non Python.
   const skillPath = join(SKILLS_DIR, skill);
   if (!existsSync(skillPath)) {
-    console.error(c.red(`: skill not found: ${skillPath}`));
-    console.error(c.dim(
-      `  Need the container ${CONTAINER_NAME} active (jht team start) or a copy`,
-    ));
-    console.error(c.dim('  From a complete repository checkout, this command uses the skills in shared/skills/.'));
-    return 2;
+    return {
+      code: 2,
+      stdout: '',
+      stderr: [
+        c.red(`: skill not found: ${skillPath}`),
+        c.dim(`  Need the container ${CONTAINER_NAME} active (jht team start) or a copy`),
+        c.dim('  From a complete repository checkout, this command uses the skills in shared/skills/.'),
+        '',
+      ].join('\n'),
+    };
   }
   const r = spawnSync('python3', [skillPath, ...args], {
-    stdio: 'inherit',
+    encoding: 'utf8',
     env: { ...process.env, JHT_DB: JHT_DB_PATH },
+    ...(input === null ? {} : { input }),
+    ...(maxBuffer === null ? {} : { maxBuffer }),
   });
   if (r.error) {
-    console.error(c.red(`: impossible to run python3: ${r.error.message}`));
-    return 2;
+    return {
+      code: 2,
+      stdout: '',
+      stderr: c.red(`: impossible to run python3: ${r.error.message}`) + '\n',
+    };
   }
-  return r.status ?? 1;
+  return { code: r.status ?? 1, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
 const runDbQuery = (args) => runSkill('db_query.py', args);
