@@ -72,6 +72,41 @@ export function registerTicketCommand(program) {
   program.addCommand(cmd);
 }
 
+export function registerFeedbackCommand(program) {
+  const cmd = new Command('feedback')
+    .description('Read the judgements the user gave on positions (proxy to feedback_query.py)');
+
+  // Sola LETTURA, e non per dimenticanza. Registrare un like/dislike passa da
+  // `web/app/api/positions/[legacyId]/feedback/route.ts`, che rifiuta con 403
+  // chiunque non arrivi da una sessione browser: un token di dispositivo —
+  // quello che hanno container e CLI — è escluso PER SCELTA. Aggiungere
+  // `jht positions rate` non è wrapping, è cambiare quella politica, e la
+  // decisione è dell'operatore. Vedi [JHT-CLI-AGENT-PARITY] nel BACKLOG.
+  cmd
+    .command('check <legacy_id>')
+    .description('The most recent judgement on a position (null when there is none)')
+    .action((legacyId) => run('feedback_query.py', ['check', String(legacyId)]));
+
+  cmd
+    .command('recent')
+    .description('Feedback events across all positions in a time window')
+    .option('--days <n>', 'window in days (0 = all)', '30')
+    .option('--limit <n>', 'maximum events read from the cloud', '500')
+    .action((options) =>
+      run('feedback_query.py', ['recent', '--days', options.days, '--limit', options.limit]));
+
+  cmd
+    .command('themes')
+    .description('Recurring reasons, grouped from what the user wrote')
+    .option('--days <n>', 'window in days (0 = all)', '30')
+    .option('--min-positions <n>', 'discard themes below N distinct positions', '3')
+    .action((options) =>
+      run('feedback_query.py',
+        ['themes', '--days', options.days, '--min-positions', options.minPositions]));
+
+  program.addCommand(cmd);
+}
+
 export function registerDirectivesCommand(program) {
   const cmd = new Command('directives')
     .description('Board: persistent team directives (proxy to team_directives.py)');
