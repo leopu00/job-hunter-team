@@ -132,16 +132,21 @@ async function handle(
       };
     },
 
-    // Nessun mirror sul cloud: la nota è PRIVATA e local-first, e mandarla
-    // su Supabase la renderebbe leggibile da una superficie che non è
-    // quella per cui è stata scritta. Se un giorno servirà cross-device,
-    // sarà una decisione, non un effetto collaterale di questo commit.
+    // Le note oggi si salvano solo dal programma sul computer: sul cloud non
+    // esiste ancora dove metterle (O-33 le darà una casa). «Privata» voleva
+    // dire privata DAGLI AGENTI — non anche dal cloud: le due cose sono
+    // diverse, e confonderle è ciò che ha prodotto questo ramo.
+    //
+    // Il messaggio dice COSA SUCCEDE, non una causa dedotta. Il precedente
+    // diceva «serve il team acceso» anche quando il team era acceso, e
+    // mandava una persona a controllare il container per un motivo che col
+    // container non c'entrava.
     cloud: async (): Promise<StepResult<NoteOutcome>> => ({
       ok: false,
       status: 503,
       body: {
         error:
-          "La nota privata vive sul tuo computer: serve il team acceso per scriverla.",
+          "Le note si salvano dall'app sul computer. Dal sito non ancora: ci stiamo lavorando.",
       },
     }),
   });
