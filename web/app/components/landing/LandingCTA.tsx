@@ -100,12 +100,6 @@ export function LandingFooter() {
             <div className="mt-4">
               <FooterThemeSwitch />
             </div>
-            <FooterSocialLinks
-              labels={{
-                instagram: t("footer_instagram_aria"),
-                tiktok: t("footer_tiktok_aria"),
-              }}
-            />
           </div>
 
           {/* Prodotto */}
@@ -190,21 +184,33 @@ export function LandingFooter() {
             &copy; {new Date().getFullYear()} Job Hunter Team &mdash;{" "}
             {t("footer_copyright")}
           </span>
-          <div className="flex items-center gap-3">
-            <span className="text-[9px] text-[var(--color-dim)]">
-              Made with ❤️ by{" "}
-              <a
-                href="https://github.com/leopu00"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[var(--color-muted)] hover:text-[var(--color-green)] no-underline"
-              >
-                leopu00
-              </a>
-            </span>
-            <span className="text-[9px] text-[var(--color-dim)]">
-              v{process.env.NEXT_PUBLIC_APP_VERSION}
-            </span>
+          {/* I social stanno a destra, sopra la riga «Made with … v0.3.x»
+              (richiesta dell'operatore 2026-08-10). Su mobile la bottom bar è
+              flex-col e questo gruppo si impila centrato sotto il copyright:
+              items-center tiene i glifi allineati alla riga anche lì. */}
+          <div className="flex flex-col items-center md:items-end gap-2">
+            <FooterSocialLinks
+              labels={{
+                instagram: t("footer_instagram_aria"),
+                tiktok: t("footer_tiktok_aria"),
+              }}
+            />
+            <div className="flex items-center gap-3">
+              <span className="text-[9px] text-[var(--color-dim)]">
+                Made with ❤️ by{" "}
+                <a
+                  href="https://github.com/leopu00"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[var(--color-muted)] hover:text-[var(--color-green)] no-underline"
+                >
+                  leopu00
+                </a>
+              </span>
+              <span className="text-[9px] text-[var(--color-dim)]">
+                v{process.env.NEXT_PUBLIC_APP_VERSION}
+              </span>
+            </div>
           </div>
         </div>
       </div>
