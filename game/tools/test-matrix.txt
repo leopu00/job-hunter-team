@@ -175,6 +175,13 @@ backend_switch|run|gate|any|JHT_SCENE=office JHT_BACKEND_SWITCH_TEST=1|-|BACKEND
 doctor|run|gate|any|JHT_SCENE=office JHT_DOCTOR_TEST=scout-4|-|SIMULATION-DOCTOR-TEST PASS
 feedback_panel|run|gate|any|JHT_SCENE=office JHT_FEEDBACK_PANEL_TEST=1|-|FEEDBACK-PANEL-TEST PASS
 guided|run|gate|any|JHT_SCENE=office JHT_GUIDED_TEST=1|-|GUIDED-ONBOARDING-TEST PASS
+# L'uscita dall'onboarding guidato (O-14): che ESC e il pulsante del cassetto
+# chiudano davvero il giro invece di metterlo in pausa, che a giro chiuso le
+# chat guidate non emettano piu' reply ne' action sopra l'interfaccia, e che
+# lo stato sopravviva al riavvio. Arrivato registrato SOLO in release.yml:
+# cosi' sarebbe girato al tag e in nessun'altra CI, che e' esattamente la
+# deriva per cui questo file e' l'unica fonte di verita' (`@master` 2026-08-10).
+tour_exit|run|gate|any|JHT_TUTORIAL_HARNESS=1 JHT_TUTORIAL_RESET=1 JHT_SCENE=office JHT_TOUR_EXIT_TEST=1|-|TOUR-EXIT-TEST PASS
 # La pagina di chat a fumetti: che le vignette esistano, siano nell'ordine
 # della storia, che quella dell'agente resti bianca col testo nero (e' una
 # richiesta esplicita, non una scelta di tema) con la coda verso il suo
