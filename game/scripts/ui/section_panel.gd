@@ -1067,31 +1067,45 @@ func _build_activation() -> void:
 	# la scelta esisteva solo sepolta in Impostazioni → Collega VPS, e
 	# nell'onboarding non compariva affatto (Leone, 26/07).
 	var on_vps: bool = BackendBus.is_remote() and BackendBus.is_live()
-	_setup_gate(progress, "01", UIStrings.t("setup.where"),
-			bool(s.get("container_running", false)) or on_vps,
-			UIStrings.t("setup.where_vps") if on_vps
-			else (UIStrings.t("setup.where_local") if bool(s.get("container_running", false))
-			else UIStrings.t("setup.where_todo")), "docker")
 	# Passi che il team connesso non ha saputo raccontare: si dicono ignoti. Il
 	# valore di questo computer non è una risposta — su una VPS è di un'altra
 	# macchina, e nel caso peggiore di un'altra persona.
 	var unknown: Array = s.get("unknown_steps", [])
-	_setup_gate(progress, "02", UIStrings.t("setup.provider"),
-			bool(s.get("provider_authenticated", false))
-					and bool(s.get("plan_ready", false)),
-			_provider_status_text(s), "provider", unknown.has("provider"))
-	_setup_gate(progress, "03", UIStrings.t("setup.profile"),
-			bool(s.get("profile_ready", false)),
+	# I quattro passi sono una CATENA, non quattro schede indipendenti: il
+	# profilo si costruisce parlando con l'Assistente, che vive nel container e
+	# usa l'abbonamento del provider. Aprirlo prima significava compilare un
+	# colloquio con un interlocutore spento (O-13e). Un passo ignoto non blocca
+	# mai il successivo: non sapere non è sapere di no.
+	var step_container := bool(s.get("container_running", false)) or on_vps
+	var step_provider := bool(s.get("provider_authenticated", false)) \
+			and bool(s.get("plan_ready", false))
+	var step_profile := bool(s.get("profile_ready", false))
+	var lock_provider := "" if step_container \
+			else UIStrings.t("setup.gate_needs_container")
+	var lock_profile := "" if step_provider or unknown.has("provider") \
+			else UIStrings.t("setup.gate_needs_provider")
+	var lock_hours := "" if step_profile or unknown.has("profile") \
+			else UIStrings.t("setup.gate_needs_profile")
+	_setup_gate(progress, "01", UIStrings.t("setup.where"), step_container,
+			UIStrings.t("setup.where_vps") if on_vps
+			else (UIStrings.t("setup.where_local") if bool(s.get("container_running", false))
+			else UIStrings.t("setup.where_todo")), "docker")
+	_setup_gate(progress, "02", UIStrings.t("setup.provider"), step_provider,
+			_provider_status_text(s), "provider", unknown.has("provider"),
+			lock_provider)
+	_setup_gate(progress, "03", UIStrings.t("setup.profile"), step_profile,
 			UIStrings.t("setup.remote_unknown") if unknown.has("profile")
-			else (UIStrings.t("setup.profile_ok") if bool(s.get("profile_ready", false))
-			else UIStrings.t("setup.profile_todo")), "profile", unknown.has("profile"))
+			else (UIStrings.t("setup.profile_ok") if step_profile
+			else UIStrings.t("setup.profile_todo")), "profile",
+			unknown.has("profile"), lock_profile)
 	# Quarto passo, obbligatorio come gli altri: senza finestre di lavoro il
 	# team macina a ogni ora del giorno e il conto arriva dopo.
 	_setup_gate(progress, "04", UIStrings.t("setup.hours"),
 			bool(s.get("hours_ready", false)),
 			UIStrings.t("setup.remote_unknown") if unknown.has("hours")
 			else (UIStrings.t("setup.hours_ok") if bool(s.get("hours_ready", false))
-			else UIStrings.t("setup.hours_todo")), "hours", unknown.has("hours"))
+			else UIStrings.t("setup.hours_todo")), "hours", unknown.has("hours"),
+			lock_hours)
 	_content.add_child(HSeparator.new())
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 14)
@@ -1142,7 +1156,7 @@ func _build_activation() -> void:
 
 func _setup_gate(parent: HBoxContainer, number: String, title: String,
 		done: bool, detail: String, destination: String,
-		unknown := false) -> void:
+		unknown := false, locked_by := "") -> void:
 	var panel := BracketPanel.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.custom_minimum_size = Vector2(260, 180)
@@ -1154,22 +1168,34 @@ func _setup_gate(parent: HBoxContainer, number: String, title: String,
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	pad.add_child(col)
+	# Quarto stato: il passo precedente non è fatto, quindi questo non si può
+	# ancora aprire. Serve un glifo suo — con ○ sarebbe indistinguibile da un
+	# passo semplicemente da fare, e l'utente proverebbe comunque ad aprirlo.
+	var locked := locked_by != ""
 	# Terzo stato accanto a fatto (✓) e da fare (○): il valore vive sulla
 	# macchina connessa e non siamo riusciti a leggerlo. Dirlo con uno degli
 	# altri due sarebbe inventarlo.
-	var tint: Color = Palette.DIM if unknown \
+	var tint: Color = Palette.DIM if unknown or locked \
 			else (Palette.GREEN if done else Palette.YELLOW)
 	col.add_child(TerminalTheme.label(
-			number + "  " + ("?" if unknown else ("✓" if done else "○")),
-			14, tint, "bold"))
-	col.add_child(TerminalTheme.label(title.to_upper(), 19, Palette.WHITE, "bold"))
-	var body := TerminalTheme.label(detail, 13, Palette.MUTED)
+			number + "  " + ("?" if unknown else ("✓" if done
+			else ("⌾" if locked else "○"))), 14, tint, "bold"))
+	col.add_child(TerminalTheme.label(title.to_upper(), 19,
+			Palette.MUTED if locked else Palette.WHITE, "bold"))
+	var body := TerminalTheme.label(locked_by if locked else detail, 13,
+			Palette.YELLOW if locked else Palette.MUTED)
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(body)
 	var open := Button.new()
-	open.text = UIStrings.t("setup.review") if done else UIStrings.t("setup.configure")
+	open.text = UIStrings.t("setup.gate_locked") if locked \
+			else (UIStrings.t("setup.review") if done else UIStrings.t("setup.configure"))
+	# Il passo bloccato non si apre: «se non ho fatto l'uno, non posso fare il
+	# quattro» (operatore, O-13e). Prima si poteva configurare il profilo con
+	# il container ancora inesistente, e il lavoro finiva in un vicolo cieco.
+	open.disabled = locked
 	open.add_theme_color_override("font_color", tint)
+	open.add_theme_color_override("font_disabled_color", Palette.DIM)
 	open.pressed.connect(func() -> void:
 		if destination == "profile":
 			Game.goto_wizard()
@@ -1204,14 +1230,38 @@ func _build_container_setup() -> void:
 	var upgrading := SetupService.busy() and SetupService.current_action == "upgrade"
 	var checking_update := SetupService.busy() and SetupService.current_action == "upgrade-check"
 	var phase: String = SetupService.action_phase if busy else ""
-	_content.add_child(TerminalTheme.label(UIStrings.t("setup.container_lead"),
-			15, Palette.BASE))
+	var remote := bool(s.get("remote", false))
+	var runtimes: PackedStringArray = s.get("runtimes", PackedStringArray())
+	# Nessun motore installato: è lo stato in cui «ATTIVA CONTAINER» non può
+	# riuscire, e finora restava premibile per finire in errore (O-13a).
+	var no_runtime := SetupService.runtime_missing(s)
+	# Il marchio Docker ufficiale sta DOVE si parla di Docker. Prima viveva
+	# solo nel pulsante in cima al menu (O-13d): proprio la finestra che
+	# accende il motore — l'unica in cui l'utente si chiede di che programma
+	# si stia parlando — non lo mostrava.
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 12)
+	_content.add_child(head)
+	var mark := SidebarIcon.new("container", Palette.BASE)
+	mark.custom_minimum_size = Vector2(28, 28)
+	mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(mark)
+	var lead := TerminalTheme.label(UIStrings.t("setup.container_lead"),
+			15, Palette.BASE)
+	lead.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lead.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(lead)
 	_content.add_child(HSeparator.new())
+	# La riga del motore dice anche QUALE motore: "runtime spento" secco, su un
+	# computer con Colima installato, si legge come "Docker non c'è" — ed è
+	# l'equivoco da cui nasce O-13.
 	_setup_phase_row(UIStrings.t("setup.phase_engine"),
 			_phase_state(bool(s.get("docker_running", false)), phase == "engine"),
 			UIStrings.t("setup.phase_running") if phase == "engine"
 			else (UIStrings.t("setup.docker_ready") if bool(s.get("docker_running", false))
-			else UIStrings.t("setup.docker_missing")))
+			else (UIStrings.t("setup.runtime_none") if no_runtime
+			else UIStrings.t("setup.runtime_installed_off")
+					% _runtime_name(str(s.get("runtime_selected", ""))))))
 	_setup_phase_row(UIStrings.t("setup.phase_image"),
 			_phase_state(str(s.get("image_id", "")) != "" or bool(s.get("remote", false)),
 					phase == "image"),
@@ -1248,6 +1298,13 @@ func _build_container_setup() -> void:
 	if busy or team_phase:
 		_content.add_child(SetupProgress.new())
 	_content.add_child(HSeparator.new())
+	# Due motori installati, due macchine virtuali diverse: quale accendere non
+	# è un dettaglio implementativo da indovinare al posto dell'utente (risorse,
+	# licenza e VM sono diverse), ed è la scelta che non gli veniva mai chiesta
+	# (O-13c). Con UN solo motore non c'è niente da chiedere e la riga non
+	# compare: una domanda a risposta unica è rumore.
+	if runtimes.size() > 1 and not remote:
+		_runtime_choice_row(runtimes, str(s.get("runtime_selected", "")))
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	_content.add_child(actions)
@@ -1268,7 +1325,10 @@ func _build_container_setup() -> void:
 	else:
 		start.text = UIStrings.t("setup.container_start")
 		start.pressed.connect(SetupService.start_container)
-	start.disabled = start.disabled or SetupService.busy()
+	# Senza motore installato il pulsante NON è premibile: prima partiva, dopo
+	# due minuti di attesa dichiarava "Docker non risponde" e lasciava l'utente
+	# esattamente dov'era. Il motivo sta scritto sotto, non nascosto in un log.
+	start.disabled = start.disabled or SetupService.busy() or no_runtime
 	start.add_theme_font_size_override("font_size", 16)
 	start.add_theme_color_override("font_color", Palette.GREEN)
 	# Spento perché lavora LUI → giallo (stato vivo); spento perché lavora
@@ -1276,12 +1336,14 @@ func _build_container_setup() -> void:
 	start.add_theme_color_override("font_disabled_color",
 			Palette.YELLOW if busy else Palette.MUTED)
 	actions.add_child(start)
-	# Docker assente: senza motore non si accende niente, e questa è l'unica
-	# azione sensata da offrire. Resta premibile ANCHE mentre un'azione gira:
-	# non passa dalla corsia di SetupService (apre la console incorporata) e
-	# l'unica azione possibile con Docker assente è la fase engine che sta
-	# proprio aspettando che il runtime compaia — installarlo la sblocca.
-	if not bool(s.get("docker_available", false)) and not bool(s.get("remote", false)):
+	# Nessun motore installato: senza di quello non si accende niente, e questa
+	# è l'unica azione sensata da offrire. La condizione è il motore, NON il
+	# client `docker`: con Colima installato il client c'è comunque, e la
+	# domanda "installo Docker?" non ha senso porla (O-13b). Resta premibile
+	# ANCHE mentre un'azione gira: non passa dalla corsia di SetupService (apre
+	# la console incorporata) e l'unica azione possibile senza motore è proprio
+	# installarne uno — è ciò che sblocca la fase engine ferma ad aspettare.
+	if no_runtime:
 		var install := Button.new()
 		install.text = UIStrings.t("setup.docker_install")
 		install.add_theme_color_override("font_color", Palette.YELLOW)
@@ -1315,6 +1377,14 @@ func _build_container_setup() -> void:
 				Palette.YELLOW if upgrading else Palette.MUTED)
 		update.pressed.connect(SetupService.update_runtime)
 		actions.add_child(update)
+	# Un pulsante spento e muto è indistinguibile da uno rotto: se «ATTIVA
+	# CONTAINER» è spento perché manca il motore, il motivo va detto QUI, non
+	# lasciato dedurre dalla riga della filiera.
+	if no_runtime:
+		var why := TerminalTheme.label(
+				UIStrings.t("setup.container_needs_runtime"), 12, Palette.YELLOW)
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(why)
 	# Vale per tutti i pulsanti spenti del pannello, FERMA CONTAINER incluso:
 	# condividono la stessa corsia unica, quindi la stessa ragione.
 	_busy_hint(_content)
@@ -1356,6 +1426,46 @@ func _build_container_setup() -> void:
 		stop.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		stop.pressed.connect(SetupService.stop_container)
 		footer.add_child(stop)
+
+
+## Il nome con cui l'utente conosce un motore container. Gli id interni
+## ("docker-desktop") non compaiono mai a schermo: sono chiavi, non parole.
+static func _runtime_name(id: String) -> String:
+	match id:
+		SetupService.RUNTIME_COLIMA:
+			return UIStrings.t("setup.runtime_colima")
+		SetupService.RUNTIME_DOCKER_DESKTOP:
+			return UIStrings.t("setup.runtime_docker_desktop")
+		SetupService.RUNTIME_DOCKER_SERVICE:
+			return UIStrings.t("setup.runtime_docker_service")
+	return UIStrings.t("setup.runtime_unknown")
+
+
+## La scelta esplicita fra i motori installati. Un pulsante per motore, quello
+## in uso marcato ●: è una preferenza, non un'azione, quindi non passa dalla
+## corsia unica di SetupService e resta viva anche durante un'attivazione —
+## cambiarla adesso vale per l'avvio successivo.
+func _runtime_choice_row(runtimes: PackedStringArray, selected: String) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	_content.add_child(row)
+	var label := TerminalTheme.label(UIStrings.t("setup.runtime_choice"), 13,
+			Palette.MUTED, "medium")
+	label.custom_minimum_size = Vector2(220, 0)
+	row.add_child(label)
+	for id in runtimes:
+		var engine := String(id)
+		var pick := Button.new()
+		var active := engine == selected
+		pick.text = ("● " if active else "○ ") + _runtime_name(engine)
+		pick.add_theme_color_override("font_color",
+				Palette.GREEN if active else Palette.BASE)
+		pick.pressed.connect(SetupService.choose_runtime.bind(engine))
+		row.add_child(pick)
+	var note := TerminalTheme.label(UIStrings.t("setup.runtime_choice_note"), 12,
+			Palette.DIM)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(note)
 
 
 ## Una riga della filiera di attivazione. Quattro stati, quattro letture:
