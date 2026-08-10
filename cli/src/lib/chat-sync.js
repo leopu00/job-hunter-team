@@ -336,6 +336,18 @@ export function mirrorDbTurnsToJsonl(
   return { mirrored, backfilled };
 }
 
+/**
+ * La colonna esiste su QUESTO jobs.db? Un box può girare con uno schema più
+ * vecchio del codice: il push e l'import devono degradare, non rompersi.
+ */
+function hasColumn(db, table, col) {
+  try {
+    return db.prepare(`PRAGMA table_info(${table})`).all().some((r) => r.name === col);
+  } catch {
+    return false;
+  }
+}
+
 // ── Passo 3: SQLite → cloud (push veloce, solo il nuovo) ────────────────
 
 /**
@@ -349,7 +361,10 @@ export function mirrorDbTurnsToJsonl(
 export function takeChatRowsToPush(db, { limit = 100 } = {}) {
   return db
     .prepare(
-      `SELECT id, agent, body, kind, author, chat_ts, related_position_id,
+      `SELECT id, ${hasColumn(db, 'pending_user_messages', 'cloud_legacy_id')
+                ? 'cloud_legacy_id' : 'NULL AS cloud_legacy_id'},
+              agent, body, kind, author, chat_ts,
+              related_position_id,
               delivered_via, delivered_at, acknowledged_at,
               user_reply, user_reply_at, agent_seen_reply_at, created_at
          FROM pending_user_messages
@@ -379,6 +394,14 @@ export function toCloudRow(row, userId) {
     if (s.includes('T') || s.endsWith('Z') || /[+-]\d\d:\d\d$/.test(s)) return s;
     return `${s.replace(' ', 'T')}Z`;
   };
+  // L'identità che il cloud già conosce vince sull'id locale: per un turno
+  // nato sul web è il `legacy_id` negativo con cui esiste là. Mandare l'id
+  // locale creava un secondo record dello stesso messaggio, che l'upsert su
+  // (user_id, legacy_id) non poteva riconoscere come lo stesso (O-16).
+  // NULL = nata in locale: l'id locale È la sua identità.
+  const identity = Number.isFinite(row.cloud_legacy_id)
+    ? row.cloud_legacy_id
+    : row.id;
   return {
     user_id: userId,
     // `id` E `legacy_id`: la route filtra il payload con
@@ -386,8 +409,8 @@ export function toCloudRow(row, userId) {
     // solo `legacy_id` ogni riga della corsia rapida veniva scartata dal
     // filtro, il payload restava vuoto e la POST rispondeva 200 — una
     // perdita che si dichiarava successo (O-16).
-    id: row.id,
-    legacy_id: row.id,
+    id: identity,
+    legacy_id: identity,
     agent: row.agent,
     body: row.body,
     kind: row.kind || 'notification',
@@ -594,10 +617,25 @@ export function chatTsOf(row) {
  *          destinazione senza pane supportato non è importata né ACKata.
  */
 export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS } = {}) {
+  // `cloud_legacy_id` conserva l'identità che il messaggio aveva GIÀ sul
+  // cloud (legacy_id negativo, nato dal web). Senza, il box gli sostituiva
+  // il proprio id locale e il full-push lo ripubblicava come riga nuova:
+  // stesso messaggio, due chiavi, un gemello che l'upsert non riconosceva.
+  //
+  // Su un jobs.db più vecchio del codice la colonna non c'è ancora: si
+  // scrive senza, esattamente come prima. Un turno che arriva non deve
+  // dipendere dall'ordine in cui migrazione e aggiornamento si incontrano.
+  const keepsCloudId = hasColumn(db, 'pending_user_messages', 'cloud_legacy_id');
   const insert = db.prepare(
-    `INSERT INTO pending_user_messages
-       (agent, body, kind, author, chat_ts, delivered_via, cloud_synced_at, created_at)
-     VALUES (?, ?, 'notification', 'user', ?, 'web', CURRENT_TIMESTAMP, ?)`
+    keepsCloudId
+      ? `INSERT INTO pending_user_messages
+           (agent, body, kind, author, chat_ts, delivered_via, cloud_synced_at,
+            created_at, cloud_legacy_id)
+         VALUES (?, ?, 'notification', 'user', ?, 'web', CURRENT_TIMESTAMP, ?, ?)`
+      : `INSERT INTO pending_user_messages
+           (agent, body, kind, author, chat_ts, delivered_via, cloud_synced_at,
+            created_at)
+         VALUES (?, ?, 'notification', 'user', ?, 'web', CURRENT_TIMESTAMP, ?)`
   );
   const already = db.prepare(
     'SELECT 1 AS hit FROM pending_user_messages WHERE agent = ? AND chat_ts = ? LIMIT 1'
@@ -617,7 +655,9 @@ export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS }
     const ts = chatTsOf(row);
     if (already.get(agent, ts)?.hit !== 1) {
       const at = new Date(ts * 1000).toISOString().replace('T', ' ').slice(0, 19);
-      insert.run(agent, body, ts, at);
+      const cloudLegacyId = Number.isFinite(row.legacy_id) ? row.legacy_id : null;
+      if (keepsCloudId) insert.run(agent, body, ts, at, cloudLegacyId);
+      else insert.run(agent, body, ts, at);
       // …e SUBITO nel file che legge il gioco. Non può farlo il mirror
       // (passo 3): quello lavora sulle righe con `chat_ts` NULL, e qui il
       // valore è già impostato perché è la chiave di dedup dell'import.

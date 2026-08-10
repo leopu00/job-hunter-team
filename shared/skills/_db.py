@@ -1404,6 +1404,18 @@ def _migrate_pending_messages_chat_turns(conn: sqlite3.Connection) -> None:
         )
     if not _column_exists(conn, 'pending_user_messages', 'chat_ts'):
         conn.execute("ALTER TABLE pending_user_messages ADD COLUMN chat_ts REAL")
+    # Identità del gemello cloud, quando il messaggio è NATO sul web (O-16).
+    # Stesso patto di `position_tickets.cloud_id`: NULL = nata in locale, ed è
+    # il caso di ogni riga preesistente — nessuna riscrittura, nessun default
+    # da inventare. Serve perché un turno scritto dal web ha già un'identità
+    # (legacy_id negativo) prima che il box lo veda: importandolo il box gli
+    # assegnava un id locale positivo e il full-push lo ripubblicava come se
+    # fosse nato qui, creando un gemello che l'upsert su (user_id, legacy_id)
+    # non poteva riconoscere.
+    if not _column_exists(conn, 'pending_user_messages', 'cloud_legacy_id'):
+        conn.execute(
+            "ALTER TABLE pending_user_messages ADD COLUMN cloud_legacy_id INTEGER"
+        )
     # Il mirror cerca "i turni che non sono ancora in chat.jsonl": indice
     # parziale, a regime quasi vuoto.
     conn.execute(

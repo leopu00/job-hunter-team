@@ -85,3 +85,30 @@ describe("O-16 — chat push contract between client and route", () => {
     expect(routeAccepts(withoutId)).toBe(false);
   });
 });
+
+describe("O-16 — a message born on the web keeps one identity", () => {
+  const WEB_BORN = {
+    id: 232, // id LOCALE, assegnato dal box all'import
+    cloud_legacy_id: -1786356560153, // identità che aveva già sul cloud
+    agent: "capitano",
+    body: "written from the web",
+    author: "user",
+    created_at: "2026-08-10 09:31:56",
+  };
+
+  it("pushes the cloud identity, not the local id", () => {
+    const cloud = toCloudRow(WEB_BORN, "user-uuid") as Record<string, unknown>;
+    // Se qui tornasse 232, l'upsert su (user_id, legacy_id) creerebbe un
+    // secondo record dello stesso messaggio: è il duplicato di O-16.
+    expect(cloud.id).toBe(-1786356560153);
+    expect(cloud.legacy_id).toBe(-1786356560153);
+    expect(routeAccepts(cloud)).toBe(true);
+  });
+
+  it("a row born locally still travels under its local id", () => {
+    const cloud = toCloudRow(LOCAL_ROW, "user-uuid") as Record<string, unknown>;
+    // NULL/assente = nata in locale. È il caso di ogni riga preesistente
+    // alla migrazione: non deve cambiare identità.
+    expect(cloud.id).toBe(233);
+  });
+});
