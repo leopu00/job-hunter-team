@@ -54,16 +54,23 @@ export function FooterSocialLinks({ labels }: FooterSocialLinksProps) {
           target="_blank"
           rel="noopener noreferrer"
           aria-label={labels[profile.network]}
-          className="flex h-6 w-6 items-center justify-center text-[var(--color-white)] no-underline"
+          className="flex h-6 w-6 items-center justify-center no-underline"
         >
           {/* --color-white è bianco sul tema scuro e quasi nero su quello
-              chiaro: il glifo segue il tema ereditando currentColor, senza
-              fondo e senza un secondo file. */}
+              chiaro: il glifo segue il tema, senza fondo e senza un secondo
+              file.
+              ⚠️ Il colore è uno STYLE INLINE, non una classe Tailwind
+              arbitraria: `text-[var(--color-white)]` viene rimossa dalla build
+              (Tailwind v4 / Lightning CSS) e il glifo eredita il verde dei
+              link del footer — misurato sulla preview, era rgb(8,113,58) in
+              ENTRAMBI i temi. Stessa trappola già documentata in globals.css
+              per le linee budget dei grafici. */}
           <svg
             viewBox="0 0 24 24"
             width={17}
             height={17}
             fill="currentColor"
+            style={{ color: "var(--color-white)" }}
             aria-hidden="true"
             focusable="false"
           >

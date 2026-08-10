@@ -96,6 +96,11 @@ describe("social link del footer pubblico", () => {
       // sul tema scuro).
       expect(svg?.getAttribute("fill")).toBe("currentColor");
       expect(svg?.getAttribute("aria-hidden")).toBe("true");
+      // Il colore va portato da uno style inline. Una classe Tailwind
+      // arbitraria come `text-[var(--color-white)]` viene rimossa dalla build
+      // (Tailwind v4 / Lightning CSS): misurato sulla preview, il glifo
+      // ereditava il verde dei link del footer in ENTRAMBI i temi.
+      expect(svg?.getAttribute("style")).toContain("var(--color-white)");
 
       const drawn = svg?.querySelector("path")?.getAttribute("d");
       expect(drawn).toBe(glyphPathFromAsset(network));
