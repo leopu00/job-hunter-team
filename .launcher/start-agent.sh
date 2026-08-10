@@ -61,7 +61,10 @@ MODE="${3:-default}"
 # Idempotente. IS_SANDBOX=1 (esportato sotto) salta anche il warning bypass.
 _ensure_claude_onboarding() {
   local home="${1:-${JHT_HOME:-/jht_home}}"
-  python3 - "$home/.claude.json" <<'PY' 2>/dev/null || true
+  local _out
+  # stderr catturato invece che buttato: qui dentro ora passa anche l'avviso
+  # sull'effort sganciato (O-19), e un avviso in `2>/dev/null` non è un avviso.
+  _out="$(python3 - "$home/.claude.json" <<'PY' 2>&1 || true
 import json, sys, os
 f = sys.argv[1]
 try:
@@ -71,9 +74,44 @@ except Exception:
 d["hasCompletedOnboarding"] = True
 d.setdefault("theme", "dark")
 d["bypassPermissionsModeAccepted"] = True
+
+# O-19 — `--effort` dichiarato ma non applicato.
+#
+# Un tocco dell'utente sul selettore della TUI scrive qui dei flag
+# `unpin<Modello>LaunchEffort`. Sganciano l'effort DI LANCIO: il processo
+# nasce col suo `--effort high` (`ps` lo mostra) e gira lo stesso al default
+# del modello. Gli agenti funzionano, quindi non se ne accorge nessuno —
+# l'unico segnale e' la bolletta, ed e' denaro dell'utente.
+#
+# Il file e' UNO per container (HOME=/jht_home): un tocco vale per tutti gli
+# agenti insieme, e resta vero a ogni riavvio finche' qualcuno non lo toglie.
+# Qui si toglie, allo stesso punto in cui gia' normalizziamo l'onboarding.
+#
+# Per PREFISSO e non per elenco: i tre nomi noti oggi sono legati a modelli
+# specifici (Opus 4.7, Opus 4.8, Fable 5) e il prossimo modello portera' il
+# suo. Un elenco fisso tornerebbe muto proprio quando cambia il modello.
+unpinned = sorted(
+    k for k, v in d.items()
+    if k.startswith("unpin") and k.endswith("LaunchEffort") and v
+)
+for k in unpinned:
+    d[k] = False
 os.makedirs(os.path.dirname(f), exist_ok=True)
 json.dump(d, open(f, "w"), indent=2)
+# Il disallineamento deve essere VISIBILE: dichiararlo e correggerlo in
+# silenzio ripeterebbe il difetto in forma piu' educata.
+if unpinned:
+    print("effort-unpin cleared: " + ", ".join(unpinned), file=sys.stderr)
 PY
+)"
+  # Solo l'avviso arriva a schermo: gli errori del normalizzatore restano
+  # fail-open come prima (un .claude.json illeggibile non blocca lo spawn).
+  case "$_out" in
+    *effort-unpin*)
+      echo "  ⚠ $_out — launch effort was unpinned in .claude.json:" \
+           "agents were running at the model default, not at the effort" \
+           "requested on the command line. Re-pinned for this start." ;;
+  esac
 }
 
 # ── Worker sentinel (fallback /usage per bridge) ─────────────────────
