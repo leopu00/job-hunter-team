@@ -974,19 +974,38 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Stato */}
                       {show("status") && (
                         <td className="px-4 py-3 text-center">
-                          <span
-                            className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
-                            style={{
-                              color:
-                                STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                              borderColor:
-                                STATUS_COLORS[p.status] ??
-                                "var(--color-border)",
-                              background: `${STATUS_COLORS[p.status]}18`,
-                            }}
-                          >
-                            {p.status}
-                          </span>
+                          {/* O-31: un ticket senza risposta prevale sullo
+                              stato della pipeline — è quello che l'utente
+                              sta aspettando. Non è uno stato salvato: quando
+                              il ticket si chiude questa riga torna da sola a
+                              mostrare lo stato della posizione. */}
+                          {p.has_open_ticket ? (
+                            <span
+                              title={tr("status_ticket_pending_full")}
+                              className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
+                              style={{
+                                color: "var(--color-yellow)",
+                                borderColor: "var(--color-yellow)",
+                                background: "var(--color-yellow)18",
+                              }}
+                            >
+                              {tr("status_ticket_pending")}
+                            </span>
+                          ) : (
+                            <span
+                              className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
+                              style={{
+                                color:
+                                  STATUS_COLORS[p.status] ?? "var(--color-dim)",
+                                borderColor:
+                                  STATUS_COLORS[p.status] ??
+                                  "var(--color-border)",
+                                background: `${STATUS_COLORS[p.status]}18`,
+                              }}
+                            >
+                              {p.status}
+                            </span>
+                          )}
                         </td>
                       )}
                       {/* Candidatura inviata: QUANDO, non solo se. Lo stato

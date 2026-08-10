@@ -254,6 +254,10 @@ export interface PositionWithScore extends Position {
   // ricavabile da `status: 'applied'`, che dice SE ma non QUANDO — ed è la
   // metà che serve in lista quando le posizioni sono cinquanta (O-25).
   applied_at?: string | null;
+  // O-31: esiste un ticket dell'utente ancora senza risposta (open o
+  // assigned). Deriva dai ticket, non è uno stato salvato: quando il ticket
+  // si chiude la posizione torna a mostrare il proprio stato da sé.
+  has_open_ticket?: boolean;
   // true = già aperta dall'utente (position_views, mig 055). undefined in
   // local mode: lì decide il client via localStorage (vedi UnseenDot).
   seen?: boolean;
