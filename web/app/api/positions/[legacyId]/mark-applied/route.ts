@@ -25,6 +25,25 @@ export const dynamic = "force-dynamic";
 /** Chi ha inviato: l'utente a mano, o il team. */
 const APPLIED_VIA_USER = "user_manual";
 
+// O-36 — «mi sono candidato» non si annullava.
+//
+// Un click per sbaglio (o un ripensamento: l'annuncio si apre e non era
+// quello) lasciava la posizione 'applied' per sempre, e il team smetteva di
+// lavorarci. L'operatore ci è cascato di persona il giorno del rilascio.
+//
+// A quale stato si torna: a quello REGISTRATO nella transizione che il POST
+// ha scritto (from_state). È il dato vero, non una ricostruzione. Solo
+// quando manca — box mai sincronizzato, riga potata — si deriva dai fatti
+// disponibili, nell'ordine in cui il team li produce.
+const FALLBACK_STATE = "scored";
+
+/** Stato plausibile quando la transizione non c'è: CV pronto → 'ready'. */
+function derivedPreviousState(hasCv: boolean, hasScore: boolean): string {
+  if (hasCv) return "ready";
+  if (hasScore) return FALLBACK_STATE;
+  return "new";
+}
+
 interface AppliedOutcome {
   id: string;
   status: string | null;
@@ -182,6 +201,218 @@ export async function POST(
           status: "applied",
           applied_at: appliedAt,
           applied_via: APPLIED_VIA_USER,
+        },
+      };
+    },
+  });
+}
+
+// ── Annulla la candidatura manuale (O-36) ──────────────────────────
+//
+// Due rifiuti espliciti, perché un annullamento silenzioso che annulla la
+// cosa sbagliata è peggio del bottone che manca:
+//   • se la posizione non è più 'applied', nel frattempo è successo altro
+//     (risposta dell'azienda, esclusione) e non tocchiamo niente;
+//   • se la candidatura l'ha mandata il TEAM (applied_via ≠ user_manual),
+//     annullarla da qui direbbe al team una cosa falsa sul proprio lavoro.
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ legacyId: string }> },
+) {
+  const { legacyId: legacyIdParam } = await params;
+
+  // [JHT-WEB-DEMO] Le posizioni demo non cambiano stato: dataset statico.
+  if (isDemoLegacyId(legacyIdParam) && (await activeDemoPersona())) {
+    return NextResponse.json({
+      id: `demo-${legacyIdParam}`,
+      status: FALLBACK_STATE,
+      applied_at: null,
+      applied_via: null,
+      source: "cloud",
+      cloud_synced: null,
+    });
+  }
+
+  const denied = await requireAuth();
+  if (denied) return denied;
+
+  const legacyId = Number.parseInt(legacyIdParam, 10);
+  if (!Number.isInteger(legacyId) || legacyId <= 0) {
+    return NextResponse.json({ error: "legacyId non valido" }, { status: 400 });
+  }
+
+  return localFirstWrite<AppliedOutcome>(req, {
+    sessionOnlyError:
+      "Solo il browser può annullare una candidatura manuale (no Bearer token)",
+
+    local: (db): StepResult<AppliedOutcome> => {
+      const row = db
+        .prepare<
+          [number],
+          { id: number; status: string | null }
+        >("SELECT id, status FROM positions WHERE id = ?")
+        .get(legacyId);
+      if (!row) {
+        return {
+          ok: false,
+          status: 404,
+          body: { error: `Posizione #${legacyId} non trovata` },
+        };
+      }
+      if (row.status !== "applied") {
+        return {
+          ok: false,
+          status: 409,
+          body: {
+            error: "not_applied",
+            status: row.status,
+          },
+        };
+      }
+
+      const app = db
+        .prepare<
+          [number],
+          {
+            applied_via: string | null;
+            cv_path: string | null;
+            cv_pdf_path: string | null;
+          }
+        >(
+          "SELECT applied_via, cv_path, cv_pdf_path FROM applications WHERE position_id = ?",
+        )
+        .get(legacyId);
+      if (app && app.applied_via && app.applied_via !== APPLIED_VIA_USER) {
+        return {
+          ok: false,
+          status: 409,
+          body: { error: "applied_by_team", applied_via: app.applied_via },
+        };
+      }
+
+      // Lo stato precedente scritto dal POST. `by_agent = 'user'` perché una
+      // transizione verso 'applied' fatta dal team non è quella da annullare.
+      const previous = db
+        .prepare<[number], { from_state: string | null }>(
+          `SELECT from_state FROM position_state_transitions
+            WHERE position_id = ? AND to_state = 'applied' AND by_agent = 'user'
+            ORDER BY id DESC LIMIT 1`,
+        )
+        .get(legacyId);
+      const hasScore =
+        db
+          .prepare<
+            [number],
+            { n: number }
+          >("SELECT COUNT(*) AS n FROM scores WHERE position_id = ?")
+          .get(legacyId)?.n ?? 0;
+      const restored =
+        previous?.from_state ??
+        derivedPreviousState(
+          Boolean(app?.cv_path || app?.cv_pdf_path),
+          hasScore > 0,
+        );
+
+      // Una transazione sola, come il POST: la posizione e la candidatura non
+      // devono poter raccontare due storie diverse.
+      db.transaction(() => {
+        db.prepare(
+          `UPDATE applications
+              SET applied = 0, applied_at = NULL, applied_via = NULL,
+                  status = CASE WHEN status = 'applied' THEN 'draft' ELSE status END,
+                  updated_at = CURRENT_TIMESTAMP
+            WHERE position_id = ?`,
+        ).run(legacyId);
+        db.prepare(
+          "UPDATE positions SET status = ?, last_actor = 'user' WHERE id = ?",
+        ).run(restored, legacyId);
+        db.prepare(
+          `INSERT INTO position_state_transitions
+             (position_id, from_state, to_state, by_agent, notes)
+           VALUES (?, 'applied', ?, 'user', 'annullata dall''utente')`,
+        ).run(legacyId, restored);
+      })();
+
+      return {
+        ok: true,
+        outcome: {
+          id: String(legacyId),
+          status: restored,
+          applied_at: null,
+          applied_via: null,
+        },
+      };
+    },
+
+    mirror: async (supabase, userId, outcome) => {
+      const { error } = await supabase
+        .from("positions")
+        .update({ status: outcome.status, last_actor: "user" })
+        .eq("user_id", userId)
+        .eq("legacy_id", legacyId);
+      if (error) throw new Error(error.message);
+    },
+
+    cloud: async (supabase, userId): Promise<StepResult<AppliedOutcome>> => {
+      const { data: row, error } = await supabase
+        .from("positions")
+        .select("status")
+        .eq("user_id", userId)
+        .eq("legacy_id", legacyId)
+        .maybeSingle();
+      if (error) {
+        console.error(`[positions/mark-applied DELETE] 500 ${error.message}`);
+        return { ok: false, status: 500, body: { error: "query_failed" } };
+      }
+      if (!row) {
+        return {
+          ok: false,
+          status: 404,
+          body: { error: `Posizione #${legacyId} non trovata` },
+        };
+      }
+      if (row.status !== "applied") {
+        return {
+          ok: false,
+          status: 409,
+          body: { error: "not_applied", status: row.status },
+        };
+      }
+
+      // Stessa fonte del ramo locale: `position_transitions` è la copia
+      // sincronizzata dal box (mig 044), quindi la risposta è la stessa da
+      // qualunque dispositivo la si chieda.
+      const { data: prev } = await supabase
+        .from("position_transitions")
+        .select("from_state, ts")
+        .eq("user_id", userId)
+        .eq("position_legacy_id", legacyId)
+        .eq("to_state", "applied")
+        .eq("by_agent", "user")
+        .order("ts", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const restored = prev?.from_state ?? FALLBACK_STATE;
+
+      const { error: upErr } = await supabase
+        .from("positions")
+        .update({ status: restored, last_actor: "user" })
+        .eq("user_id", userId)
+        .eq("legacy_id", legacyId);
+      if (upErr) {
+        return {
+          ok: false,
+          status: 500,
+          body: { error: `Supabase update failed: ${upErr.message}` },
+        };
+      }
+      return {
+        ok: true,
+        outcome: {
+          id: String(legacyId),
+          status: restored,
+          applied_at: null,
+          applied_via: null,
         },
       };
     },

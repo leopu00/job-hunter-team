@@ -88,6 +88,9 @@ const T: Record<
     markApplied: string;
     markAppliedDone: string;
     markAppliedError: string;
+    markAppliedUndoHint: string;
+    markAppliedUndoError: string;
+    markAppliedByTeam: string;
   }
 > = {
   it: {
@@ -113,6 +116,10 @@ const T: Record<
     markApplied: "Mi sono candidato",
     markAppliedDone: "Candidatura segnata",
     markAppliedError: "Non è riuscito a segnare la candidatura",
+    markAppliedUndoHint: "tocca per annullare",
+    markAppliedUndoError: "Non è riuscito ad annullare la candidatura",
+    markAppliedByTeam:
+      "Questa candidatura l’ha inviata il team: da qui non si annulla",
   },
   en: {
     verdicts: {
@@ -137,6 +144,10 @@ const T: Record<
     markApplied: "I applied myself",
     markAppliedDone: "Application recorded",
     markAppliedError: "Could not record the application",
+    markAppliedUndoHint: "tap to undo",
+    markAppliedUndoError: "Could not undo the application",
+    markAppliedByTeam:
+      "The team sent this application: it cannot be undone from here",
   },
   hu: {
     verdicts: {
@@ -161,6 +172,10 @@ const T: Record<
     markApplied: "Jelentkeztem",
     markAppliedDone: "Jelentkezés rögzítve",
     markAppliedError: "A jelentkezést nem sikerült rögzíteni",
+    markAppliedUndoHint: "koppints a visszavonáshoz",
+    markAppliedUndoError: "A jelentkezést nem sikerült visszavonni",
+    markAppliedByTeam:
+      "Ezt a jelentkezést a csapat küldte: innen nem vonható vissza",
   },
   es: {
     verdicts: {
@@ -185,6 +200,10 @@ const T: Record<
     markApplied: "Me he postulado",
     markAppliedDone: "Candidatura registrada",
     markAppliedError: "No se pudo registrar la candidatura",
+    markAppliedUndoHint: "toca para deshacer",
+    markAppliedUndoError: "No se pudo deshacer la candidatura",
+    markAppliedByTeam:
+      "Esta candidatura la envió el equipo: no se puede deshacer desde aquí",
   },
   de: {
     verdicts: {
@@ -209,6 +228,10 @@ const T: Record<
     markApplied: "Ich habe mich beworben",
     markAppliedDone: "Bewerbung vermerkt",
     markAppliedError: "Bewerbung konnte nicht vermerkt werden",
+    markAppliedUndoHint: "zum Rückgängigmachen tippen",
+    markAppliedUndoError: "Bewerbung konnte nicht rückgängig gemacht werden",
+    markAppliedByTeam:
+      "Diese Bewerbung hat das Team gesendet: von hier nicht widerrufbar",
   },
   fr: {
     verdicts: {
@@ -233,6 +256,10 @@ const T: Record<
     markApplied: "J'ai postulé moi-même",
     markAppliedDone: "Candidature enregistrée",
     markAppliedError: "Impossible d'enregistrer la candidature",
+    markAppliedUndoHint: "touchez pour annuler",
+    markAppliedUndoError: "Impossible d’annuler la candidature",
+    markAppliedByTeam:
+      "Cette candidature a été envoyée par l’équipe : impossible de l’annuler ici",
   },
   pt: {
     verdicts: {
@@ -257,6 +284,10 @@ const T: Record<
     markApplied: "Candidatei-me",
     markAppliedDone: "Candidatura registada",
     markAppliedError: "Não foi possível registar a candidatura",
+    markAppliedUndoHint: "toque para anular",
+    markAppliedUndoError: "Não foi possível anular a candidatura",
+    markAppliedByTeam:
+      "Esta candidatura foi enviada pela equipa: não se anula aqui",
   },
 };
 
@@ -602,6 +633,41 @@ export function FeedbackButtons({
     }
   }
 
+  // O-36 — l'inverso. Un click per sbaglio lasciava la posizione 'applied'
+  // per sempre e il team smetteva di lavorarci: era più facile candidarsi
+  // che disdirlo. Stessa forma di RecheckButton: una route, POST e DELETE.
+  async function undoApplied() {
+    setApplyError(null);
+    try {
+      const res = await fetch(`/api/positions/${legacyId}/mark-applied`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        // Il 409 non è un guasto: è il server che dice che annullare, ora,
+        // direbbe una cosa falsa. I due casi si spiegano in modo diverso.
+        if (body.error === "applied_by_team") {
+          setApplyError(t.markAppliedByTeam);
+          return;
+        }
+        if (body.error === "not_applied") {
+          // Nel frattempo è cambiato qualcos'altro: la pagina si riallinea
+          // al vero invece di discutere.
+          router.refresh();
+          return;
+        }
+        throw new Error(String(res.status));
+      }
+      setApplied(false);
+      setAppliedAt(null);
+      router.refresh();
+    } catch {
+      setApplyError(t.markAppliedUndoError);
+    }
+  }
+
   return (
     <div>
       <div className="grid grid-cols-4 gap-2">
@@ -655,9 +721,9 @@ export function FeedbackButtons({
       <button
         type="button"
         onClick={() => {
-          if (!applied) void markApplied();
+          void (applied ? undoApplied() : markApplied());
         }}
-        disabled={busy || applied}
+        disabled={busy}
         aria-pressed={applied}
         className="mt-2 w-full rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
         style={{
@@ -668,9 +734,19 @@ export function FeedbackButtons({
             : "transparent",
         }}
       >
-        {applied
-          ? `✓ ${t.markAppliedDone}${appliedAt ? ` · ${formatAppliedAt(appliedAt, locale)}` : ""}`
-          : t.markApplied}
+        {applied ? (
+          <span className="flex flex-col items-center gap-0.5">
+            <span>{`✓ ${t.markAppliedDone}${appliedAt ? ` · ${formatAppliedAt(appliedAt, locale)}` : ""}`}</span>
+            {/* Che si possa tornare indietro va DETTO: un bottone già
+                premuto, senza questa riga, si legge come definitivo — ed è
+                esattamente come l'operatore c'è cascato. */}
+            <span className="text-[9px] font-normal text-[var(--color-dim)]">
+              {t.markAppliedUndoHint}
+            </span>
+          </span>
+        ) : (
+          t.markApplied
+        )}
       </button>
       {applyError && (
         <p className="mt-2 text-[10px]" style={{ color: "var(--color-red)" }}>

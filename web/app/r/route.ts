@@ -1,13 +1,21 @@
-import { handleCampaignHit } from "@/lib/campaign-landing";
+import {
+  handleLandingRedirect,
+  landingMethodNotAllowed,
+} from "@/lib/landing-redirect";
 
-// Porta d'ingresso degli annunci Reddit. La logica sta in `campaign-landing`
-// perché /r e /t devono comportarsi in modo identico: due copie divergerebbero.
 export const dynamic = "force-dynamic";
 
+// Reddit. Route handler dedicato, non middleware: vedi `landing-redirect.ts`.
 export function GET(request: Request) {
-  return handleCampaignHit("r", request);
+  return handleLandingRedirect(request, "r");
 }
 
 export function HEAD(request: Request) {
-  return handleCampaignHit("r", request);
+  return handleLandingRedirect(request, "r");
 }
+
+export const POST = landingMethodNotAllowed;
+export const PUT = landingMethodNotAllowed;
+export const PATCH = landingMethodNotAllowed;
+export const DELETE = landingMethodNotAllowed;
+export const OPTIONS = landingMethodNotAllowed;

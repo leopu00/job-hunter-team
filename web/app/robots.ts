@@ -11,10 +11,11 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/api/",
           "/auth",
-          // O-47: porte d'ingresso degli annunci a pagamento. Sono percorsi
-          // tecnici che rimandano alla home, non contenuti: indicizzarli
-          // creerebbe due doppioni della home e sporcherebbe il conteggio dei
-          // clic con le visite dei crawler.
+          // O-47 — percorsi tecnici delle campagne (/r Reddit, /t TikTok):
+          // redirect verso la home, non contenuti. Indicizzarli darebbe alla
+          // landing due URL doppioni e riempirebbe di crawler un contatore
+          // che serve a decidere dove spendere. La risposta porta anche
+          // `X-Robots-Tag: noindex` — chi non legge robots.txt lo trova lì.
           "/r",
           "/t",
           // Setup

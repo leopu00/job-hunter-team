@@ -1,12 +1,21 @@
-import { handleCampaignHit } from "@/lib/campaign-landing";
+import {
+  handleLandingRedirect,
+  landingMethodNotAllowed,
+} from "@/lib/landing-redirect";
 
-// Porta d'ingresso degli annunci TikTok. Vedi `/r`: stessa logica condivisa.
 export const dynamic = "force-dynamic";
 
+// TikTok. Route handler dedicato, non middleware: vedi `landing-redirect.ts`.
 export function GET(request: Request) {
-  return handleCampaignHit("t", request);
+  return handleLandingRedirect(request, "t");
 }
 
 export function HEAD(request: Request) {
-  return handleCampaignHit("t", request);
+  return handleLandingRedirect(request, "t");
 }
+
+export const POST = landingMethodNotAllowed;
+export const PUT = landingMethodNotAllowed;
+export const PATCH = landingMethodNotAllowed;
+export const DELETE = landingMethodNotAllowed;
+export const OPTIONS = landingMethodNotAllowed;
