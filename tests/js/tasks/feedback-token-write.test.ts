@@ -247,8 +247,22 @@ describe("l'apertura riguarda SOLO questa POST", () => {
     "app/api/messages/route.ts",
   ];
 
+  // Le route convertite alla forma local-first condivisa (O-24) non tengono
+  // più la guardia in casa: la applica `localFirstWrite` per tutte. La
+  // garanzia non è cambiata — è cambiato il posto in cui è scritta, e il test
+  // la insegue lì invece di allentarsi.
+  const SHARED_FORM = "lib/positions/local-first-write.ts";
+
   it.each(SESSION_ONLY)("%s tiene ancora fuori i token", (relative) => {
     const source = fs.readFileSync(path.join(WEB, relative), "utf8");
+    if (source.includes("localFirstWrite")) {
+      const form = fs.readFileSync(path.join(WEB, SHARED_FORM), "utf8");
+      expect(form).toContain('source !== "session"');
+      // …e la route deve dire di quale rifiuto si tratta, altrimenti il 403
+      // arriva all'utente senza motivo.
+      expect(source).toContain("sessionOnlyError");
+      return;
+    }
     expect(source).toContain('source !== "session"');
   });
 
