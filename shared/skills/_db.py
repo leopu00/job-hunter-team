@@ -13,23 +13,83 @@ import os
 # scrivevano in /jht_home/agents/shared/data/jobs.db, mentre la dashboard
 # web leggeva $JHT_HOME/jobs.db → due DB non in sync, posizioni inserite
 # dagli agenti invisibili alla UI.
+# Nomi che NON esistono ma che si scrivono per sbaglio al posto di quelli
+# veri. `JHT_DB_PATH` è il nome lato web (web/lib/jht-paths.ts): chi passa da
+# lì lo usa per riflesso, e finora non succedeva niente — il modulo lo
+# ignorava e sceglieva un altro path, scrivendo altrove e dichiarando
+# successo. Due volte almeno: il 13/07/2026 e il 10/08/2026 (O-26).
+_WRONG_ENV_NAMES = ('JHT_DB_PATH', 'JHT_DATABASE', 'JHT_DB_FILE', 'JHT_JOBS_DB')
+
+# Il fallback fuori container resta possibile — è documentato in
+# agents/_manual/db-schema*.md — ma va CHIESTO. Ci si finiva dentro per
+# sbaglio, ed è la differenza fra un default e una scelta.
+_FALLBACK_ENV = 'JHT_DB_FALLBACK'
+
+
+class DbPathNotConfigured(RuntimeError):
+    """Nessun database indicato, o indicato con un nome che non esiste."""
+
+
 def _resolve_db_path() -> str:
+    """Il path del jobs.db, o un errore che dice cosa manca.
+
+    Non ripiega in silenzio: un path plausibile scelto al posto di quello
+    chiesto fa riuscire la scrittura NEL POSTO SBAGLIATO, e un'operazione
+    riuscita non lascia niente da cercare. Se la variabile giusta è
+    `JHT_HOME` e punta ai dati veri di qualcuno, lo stesso errore ci scrive
+    dentro dati di prova senza che nessuno se ne accorga.
+    """
     env_db = os.environ.get('JHT_DB')
     if env_db:
         return env_db
     jht_home = os.environ.get('JHT_HOME')
     if jht_home:
         return os.path.join(jht_home, 'jobs.db')
-    return os.path.join(os.path.dirname(__file__), '..', 'data', 'jobs.db')
+
+    # Il nome sbagliato si riconosce e si DICE. Silenzio qui significherebbe
+    # ripetere il difetto: chi l'ha scritto crede di aver configurato il DB.
+    mistaken = [name for name in _WRONG_ENV_NAMES if os.environ.get(name)]
+    if mistaken:
+        raise DbPathNotConfigured(
+            f"{mistaken[0]} is not a variable this module reads. "
+            f"Use JHT_DB=<file> or JHT_HOME=<dir> (the database is "
+            f"$JHT_HOME/jobs.db). Value ignored: {os.environ[mistaken[0]]}"
+        )
+
+    fallback = os.path.join(os.path.dirname(__file__), '..', 'data', 'jobs.db')
+    if os.environ.get(_FALLBACK_ENV) == '1':
+        return fallback
+    raise DbPathNotConfigured(
+        "no database configured: set JHT_DB=<file> or JHT_HOME=<dir> "
+        f"(the database is $JHT_HOME/jobs.db). Outside the container you can "
+        f"ask for the repo copy with {_FALLBACK_ENV}=1 ({fallback})."
+    )
 
 
-DB_PATH = _resolve_db_path()
+def __getattr__(name):
+    """`_db.DB_PATH` risolto al PRIMO ACCESSO, non all'import (PEP 562).
+
+    Calcolarlo all'import farebbe fallire il semplice `import _db` di
+    chiunque, compresa la fase di collection di pytest, che importa i moduli
+    prima che le fixture impostino l'ambiente. Il fallimento deve arrivare a
+    chi USA il database, non a chi nomina il modulo: è la differenza fra un
+    difetto silenzioso corretto e un blocco rumoroso nuovo.
+    """
+    if name == 'DB_PATH':
+        return _resolve_db_path()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def get_db() -> sqlite3.Connection:
     """Restituisce connessione al database con WAL mode e foreign keys."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10)
+    # `globals()`, non l'attributo: chi ASSEGNA `_db.DB_PATH = <file>` sta
+    # iniettando un database di prova, e va rispettato. È il modo in cui
+    # mezza suite isola il proprio SQLite (e con PEP 562 l'assegnazione
+    # crea davvero l'attributo, quindi `__getattr__` non viene più
+    # consultato). Senza variabile e senza assegnazione, si fallisce.
+    db_path = globals().get('DB_PATH') or _resolve_db_path()
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path, timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.row_factory = sqlite3.Row
