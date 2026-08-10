@@ -55,6 +55,12 @@ def test_recent_senza_cloud_non_e_un_errore(tmp_path):
     assert json.loads(r.stdout.strip().splitlines()[-1])["ok"]
 
 
+def test_themes_senza_cloud_non_e_un_errore(tmp_path):
+    r = run_jht("feedback", "themes", "--days", "30", env=offline_env(tmp_path))
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout.strip().splitlines()[-1])["ok"]
+
+
 def test_feedback_resta_di_sola_lettura(tmp_path):
     """Il confine, scritto come test. Registrare un voto richiede di cambiare
     chi è autorizzato a scriverlo — è una decisione dell'operatore, non un
