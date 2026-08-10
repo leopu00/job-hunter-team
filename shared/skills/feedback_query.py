@@ -85,10 +85,18 @@ def _load_cloud_config():
         return None
 
 
-def _api_get(path: str, timeout: float = 10.0):
-    """GET su /api con bearer token da cloud.json.
+def api_request(method: str, path: str, body=None, timeout: float = 10.0):
+    """Una chiamata a /api col bearer token di cloud.json.
 
-    Ritorna (ok, payload). payload è dict (parsed JSON) o stringa errore.
+    Ritorna (ok, payload). payload è dict (JSON già interpretato) o una stringa
+    che dice cosa è andato storto.
+
+    Sta qui, e non in due copie, perché la corsia cloud di `position_feedback`
+    è una sola: la lettura la usa per degradare a "nessun segnale", la
+    scrittura (`feedback_record.py`) per fallire in modo dichiarato. Chi
+    interpreta l'esito è il chiamante — questa funzione non decide se
+    un cloud spento sia un guasto o una normalità, perché la risposta cambia
+    fra le due direzioni.
     """
     cfg = _load_cloud_config()
     if not cfg or not cfg.get("enabled"):
@@ -98,22 +106,31 @@ def _api_get(path: str, timeout: float = 10.0):
     if not base_url or not token:
         return False, "missing-credentials"
 
+    headers = {"Authorization": f"Bearer {token}"}
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
     req = urllib.request.Request(
-        f"{base_url}{path}",
-        headers={"Authorization": f"Bearer {token}"},
+        f"{base_url}{path}", data=data, headers=headers, method=method,
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return True, json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        body = ""
+        body_text = ""
         try:
-            body = e.read().decode("utf-8")[:200]
+            body_text = e.read().decode("utf-8")[:200]
         except Exception:
             pass
-        return False, f"http-{e.code}: {body}"
+        return False, f"http-{e.code}: {body_text}"
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         return False, f"network: {e}"
+
+
+def _api_get(path: str, timeout: float = 10.0):
+    """GET su /api con bearer token da cloud.json."""
+    return api_request("GET", path, timeout=timeout)
 
 
 def check_position(legacy_id: str) -> dict:

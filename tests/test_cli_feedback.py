@@ -1,24 +1,29 @@
-"""Contratto di ``jht feedback``: leggere il giudizio dell'utente, e solo quello.
+"""Contratto di ``jht feedback``: leggere il giudizio dell'utente, e registrarlo.
 
-``feedback_query.py`` era l'ultima delle quattro skill citate in
-[JHT-CLI-AGENT-PARITY] senza un verbo `jht` davanti. È di sola LETTURA, e non
-per dimenticanza: registrare un like/dislike passa da
-``web/app/api/positions/[legacyId]/feedback/route.ts``, che rifiuta con 403
-chiunque non arrivi da una sessione browser — un token di dispositivo, quello
-che hanno container e CLI, è escluso per scelta. Il test qui sotto blocca quel
-confine: se un giorno comparisse un verbo di scrittura, deve essere una
-decisione presa, non una svista.
+Il comando è nato di sola lettura il 2026-08-10 perché la route rifiutava con
+403 i token di dispositivo, e ha guadagnato la scrittura lo stesso giorno,
+quando l'operatore ha autorizzato il caso: *«deve poterlo fare se lo chiede
+l'utente»*. Le due metà hanno contratti DIVERSI, ed è il punto di questo file:
 
-Il contratto che conta per un agente è il degrado: senza cloud configurato la
-skill risponde *no-signal* ed esce 0. Un agente che chiede "cosa ne pensa
-l'utente di questa posizione" e riceve un errore duro si ferma; deve invece
-poter proseguire sapendo che non c'è segnale.
+- **lettura** (`check`, `recent`, `themes`): senza cloud risponde *no-signal*
+  ed esce 0. Un agente che chiede cosa pensa l'utente di una posizione e
+  riceve un errore duro si ferma; deve poter proseguire sapendo che non c'è
+  segnale.
+- **scrittura** (`set`): senza cloud FALLISCE. Un comando che esce 0 senza
+  aver registrato niente lascia l'utente convinto di aver espresso un
+  giudizio che non esiste — il peggiore dei due mondi, peggio del comando che
+  non c'era.
+
+Il test sul confine dei verbi non è stato rimosso ma aggiornato: consente
+esattamente la scrittura autorizzata e continua a bloccare le altre.
 """
 
 import json
 import os
 import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 JHT = ROOT / "cli" / "bin" / "jht.js"
@@ -61,13 +66,52 @@ def test_themes_senza_cloud_non_e_un_errore(tmp_path):
     assert json.loads(r.stdout.strip().splitlines()[-1])["ok"]
 
 
-def test_feedback_resta_di_sola_lettura(tmp_path):
-    """Il confine, scritto come test. Registrare un voto richiede di cambiare
-    chi è autorizzato a scriverlo — è una decisione dell'operatore, non un
-    wrapper in più."""
+def test_la_scrittura_e_un_verbo_solo_e_autorizzato(tmp_path):
+    """Il confine, aggiornato invece che rimosso.
+
+    Nato per impedire che un verbo di scrittura comparisse per sbaglio finché
+    la route rifiutava i token di dispositivo. Il 2026-08-10 l'operatore ha
+    autorizzato ESATTAMENTE una scrittura — registrare il giudizio richiesto
+    dall'utente — e il test ora la consente e continua a bloccare tutto il
+    resto. Vale più del comando: è la differenza fra «non l'abbiamo fatto» e
+    «non si può fare senza accorgersene».
+
+    like/dislike/hide/star/clear restano fuori come SOTTOCOMANDI: sono valori
+    di `set <id> <action>`, e averli anche come verbi propri moltiplicherebbe
+    le superfici da autorizzare senza aggiungere niente.
+    """
     out = run_jht("feedback", "--help", env=offline_env(tmp_path)).stdout
-    for verb in ("rate", "like", "dislike", "star", "hide", "clear"):
+    assert "\n  set " in out, "il verbo autorizzato deve esserci"
+    for verb in ("rate", "like", "dislike", "star", "hide", "clear", "delete"):
         assert f"\n  {verb}" not in out, (
-            f"`jht feedback {verb}` è comparso: la scrittura passa da una "
-            "route che rifiuta i token di dispositivo, non da qui"
+            f"`jht feedback {verb}` è comparso: la scrittura autorizzata è "
+            "`set`, e una superficie in più va decisa, non aggiunta"
         )
+
+
+def test_set_senza_cloud_fallisce_invece_di_fingere(tmp_path):
+    """La differenza che conta rispetto a `check`: la lettura degrada a
+    «nessun segnale» ed esce 0 perché lo Scorer deve poter proseguire; la
+    scrittura no. Un `set` che esce 0 senza aver registrato niente lascia
+    l'utente convinto di aver espresso un giudizio che non esiste."""
+    r = run_jht("feedback", "set", "42", "like", env=offline_env(tmp_path))
+    assert r.returncode != 0
+    payload = json.loads(r.stdout.strip().splitlines()[-1])
+    assert payload["ok"] is False and payload["recorded"] is False
+
+
+@pytest.mark.parametrize("action", ["like", "dislike", "hide", "star", "clear"])
+def test_set_accetta_le_cinque_azioni_della_route(tmp_path, action):
+    """L'elenco deve restare quello di VALID_ACTIONS nella route: un'azione in
+    più qui sarebbe un 400 scoperto solo dopo una chiamata di rete."""
+    r = run_jht("feedback", "set", "42", action, env=offline_env(tmp_path))
+    # Senza cloud fallisce, ma deve fallire per il cloud spento — non perché
+    # l'azione non è stata riconosciuta.
+    assert json.loads(r.stdout.strip().splitlines()[-1])["error"] == "cloud-disabled"
+
+
+def test_set_rifiuta_un_punteggio_fuori_scala_senza_chiamare_la_rete(tmp_path):
+    r = run_jht("feedback", "set", "42", "star", "--score", "7",
+                env=offline_env(tmp_path))
+    assert r.returncode != 0
+    assert "1 and 5" in json.loads(r.stdout.strip().splitlines()[-1])["error"]

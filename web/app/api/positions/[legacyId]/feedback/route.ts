@@ -25,14 +25,36 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
+  // ── PERCHÉ QUI NON C'È PIÙ IL 403 SUL TOKEN DI DISPOSITIVO (2026-08-10) ──
+  //
+  // Fino a oggi questa POST rispondeva 403 «Solo il browser registra
+  // feedback» a chiunque non arrivasse da una sessione browser. Non era una
+  // svista: il vincolo esisteva per impedire che qualcosa registrasse un
+  // giudizio al posto dell'utente. Chi legge un 403 tolto da una route di
+  // scrittura ha ragione a preoccuparsi, quindi la ragione sta qui e non solo
+  // nel log di git.
+  //
+  // È caduto su decisione esplicita dell'OPERATORE, che ha risposto alla
+  // domanda posta in [JHT-CLI-AGENT-PARITY]: «deve poterlo fare se lo chiede
+  // l'utente, quindi da CLI si può fare tutto volendo». Il criterio non è
+  // un'apertura generica — il vincolo doveva fermare le azioni NON richieste,
+  // non impedire all'utente di farsi aiutare da `jht` o da un agente che
+  // guida `jht` per suo conto (docs/guides/AI-AGENT-INTEGRATION.md: una sola
+  // superficie CLI per persone, agenti AI e launcher desktop).
+  //
+  // Cosa NON cambia, e va tenuto così:
+  //  · l'apertura vale SOLO per questa POST. Le altre route con lo stesso
+  //    guard (user-exclude, ticket, write-request, recheck, geocode,
+  //    team-directives, emergency-stop, messages, summary) restano
+  //    session-only: ognuna è una decisione a sé;
+  //  · `userId` arriva dal token VERIFICATO, mai dal corpo della richiesta.
+  //    Per un attore token `supabase` è il client service_role, che scavalca
+  //    la RLS: se l'identità venisse dal payload, un token qualsiasi potrebbe
+  //    votare per chiunque;
+  //  · la validazione del corpo è la stessa per i due attori. Un token non
+  //    può scrivere azioni, punteggi o direzioni che il browser non potrebbe.
   const resolved = await resolveUser(req);
   if (!resolved.ok) return resolved.res;
-  if (resolved.user.source !== "session") {
-    return NextResponse.json(
-      { error: "Solo il browser registra feedback" },
-      { status: 403 },
-    );
-  }
   const { userId, supabase } = resolved.user;
   const { legacyId } = await params;
 
