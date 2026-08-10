@@ -7,6 +7,64 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.3.7] — 2026-08-10
+
+**Messages that actually arrive, judgements that work offline, and a set of
+defects found by asking "did that work?" instead of assuming it had.**
+
+### Fixed — your chat with the team
+
+- **Replies from the agents were being lost, and marked as delivered.** The
+  fast sync lane sent a field the server did not filter on, so every row was
+  dropped while the request answered `200` — and the client trusted that `200`
+  and stamped the row as synced, so it was never retried. If you noticed that
+  answers only appeared after pressing Sync on the dashboard, this was why.
+- **Your own messages could appear twice.** A message written on the web and a
+  message coming back from the box carried two different identities for the
+  same text, so both were kept. The box now keeps the identity the cloud gave
+  it.
+
+### Fixed — the desktop app
+
+- **macOS: "Start Container" no longer offers to install Docker when you
+  already have it.** An app opened from Finder inherits a minimal PATH and
+  could not see `/opt/homebrew/bin`, so both Docker and Colima looked absent.
+  The engine is now detected first, the choice between Docker Desktop and
+  Colima is explicit, and setup steps are enabled only once the previous one
+  is complete.
+- **The guided first run can be left.** There is now an exit that is always
+  reachable — a button in the sidebar drawer and `ESC` — which really closes
+  the tour instead of pausing it, persists across restarts, and stops the
+  agents' messages from appearing over the interface.
+
+### Fixed — the CLI
+
+- **`jht --help` no longer starts the product.** Asking for help downloaded the
+  container image and created volumes before printing anything.
+- **You can record a judgement on a position, and it works with the cloud
+  off.** Judgements used to live only in the cloud, so without syncing the
+  command failed instead of answering.
+- **`jht` refuses a wrongly named database variable instead of guessing.** With
+  a misspelled variable it could write into a path you did not intend.
+- New verbs: `jht artifact` (fetch a produced document, hand one to the team),
+  `jht feedback` (read and record judgements).
+
+### Fixed — the website
+
+- **Prices and plan names are gone from the public pages.** The team works on a
+  base subscription, and quoting figures — or naming the exact plan, which says
+  the same thing — discouraged people for the wrong reason.
+- You can record that you applied to a position yourself, from the detail page
+  and from the list, with the exact date and time.
+
+### Changed
+
+- The Critic now runs at the effort the launcher declares. It had been running
+  lower than the table promised, which made the quality review on every CV
+  shallower than anyone believed.
+
+---
+
 ## [0.3.6] — 2026-08-09
 
 **A clearer path from download to a working team, with safer host controls and

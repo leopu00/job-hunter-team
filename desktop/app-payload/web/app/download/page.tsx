@@ -47,7 +47,7 @@ function detectOS(): OS {
   return null
 }
 
-const FALLBACK_VERSION = '0.3.6'
+const FALLBACK_VERSION = '0.3.7'
 const FALLBACK_REPO = 'leopu00/job-hunter-team'
 const FALLBACK_BASE_URL = `https://github.com/${FALLBACK_REPO}/releases/latest/download`
 
