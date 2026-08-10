@@ -343,8 +343,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
     return null;
   }
 
-  // Card Panoramica (prima card in assoluto): score + stipendio stimato +
-  // modalità + categoria — i fatti decisivi tolti dall'header (19/07).
+  // Card Panoramica (prima card in assoluto): score + stipendio + modalità +
+  // categoria — i fatti decisivi tolti dall'header (19/07).
+  //
+  // O-32: quando ci sono ENTRAMBI vince il DICHIARATO. È scritto
+  // nell'annuncio; la stima è un'ipotesi del team e vale solo dove il
+  // dichiarato manca. Mostrare 35-60k su un annuncio che dichiara 12-24k fa
+  // investire tempo su un'offerta che l'utente avrebbe scartato — e un
+  // numero sembra un fatto, quindi nessuno va a controllare. Stessa regola
+  // di `shared/skills/generate_dashboard.py` (has_declared prima di
+  // has_estimated), che la applica da sempre.
   const salaryEst = formatSalary(
     position.salary_estimated_min,
     position.salary_estimated_max,
@@ -440,13 +448,13 @@ export default async function PositionDetailPage({ params }: PageProps) {
           {/* Fatti: label e valore su due colonne adiacenti, niente vuoto
               tra label e valore (feedback 22/07). */}
           <div className="ml-auto md:ml-0 grid grid-cols-[auto_auto] gap-x-5 gap-y-1.5 items-baseline min-w-0">
-            {(salaryEst || salaryDecl) && (
+            {(salaryDecl || salaryEst) && (
               <OverviewRow
                 label={t(
-                  salaryEst ? "d_salary_estimated" : "d_salary_declared",
+                  salaryDecl ? "d_salary_declared" : "d_salary_estimated",
                 )}
               >
-                {(salaryEst ?? salaryDecl)!}
+                {(salaryDecl ?? salaryEst)!}
               </OverviewRow>
             )}
             {position.remote_type && (
