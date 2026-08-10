@@ -189,6 +189,11 @@ agent_frame|run|gate|any|JHT_SCENE=office JHT_ALL_SEATED_PREVIEW=1 JHT_AGENT_FRA
 world_text|run|gate|any|JHT_SCENE=office JHT_WORLD_TEXT_TEST=1|-|WORLD-TEXT-TEST PASS
 graphics_panel|run|gate|any|JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1|-|GRAPHICS-PANEL-TEST PASS
 setup_busy|run|gate|any|JHT_SCENE=office JHT_SETUP_BUSY_TEST=1|-|SETUP-BUSY-TEST PASS
+# O-13: le schermate del setup che l'operatore ha trovato rotte a mano sulla
+# v0.3.6 e che nessun collaudo prendeva — runtime assente, solo Colima, step
+# saltato. Lo stato e' iniettato, quindi il verdetto non dipende da cosa e'
+# installato sul runner.
+setup_gating|run|gate|any|JHT_SCENE=office JHT_SETUP_GATING_TEST=1|-|SETUP-GATING-TEST PASS
 bubble_layout|run|gate|any|JHT_SCENE=office JHT_BUBBLE_LAYOUT_TEST=1|-|BUBBLE-LAYOUT-TEST PASS
 sim_badge|run|gate|any|JHT_SCENE=office JHT_SIM_BADGE_TEST=1|-|SIM-BADGE-TEST PASS
 promo_agent_review|run|gate|any|JHT_SCENE=office JHT_PROMO=agent-review JHT_PROMO_AGENT=scout JHT_PROMO_DIRECTIONS=1|--fixed-fps 30 --quit-after 1200|PROMO-AGENT-REVIEW PASS scout

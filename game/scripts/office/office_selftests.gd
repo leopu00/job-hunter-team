@@ -53,6 +53,7 @@ const FLAG_HOOKS := {
 	"JHT_THROTTLE_TEST": "_throttle_selftest",
 	"JHT_BACKEND_SWITCH_TEST": "_backend_switch_selftest",
 	"JHT_SETUP_BUSY_TEST": "_setup_busy_selftest",
+	"JHT_SETUP_GATING_TEST": "_setup_gating_selftest",
 	"JHT_BUBBLE_LAYOUT_TEST": "_bubble_layout_selftest",
 	"JHT_SIM_BADGE_TEST": "_sim_badge_selftest",
 	"JHT_LIVE_PROFILE_TEST": "_live_profile_selftest",
@@ -600,6 +601,151 @@ static func _panel_button(panel: Node, needle: String) -> Button:
 		if (node as Button).text.contains(needle):
 			return node
 	return null
+
+
+## Quanti pulsanti portano questa scritta. Serve dove la stessa etichetta
+## compare più volte per disegno — i passi bloccati della checklist — e
+## contarli è il solo modo di distinguere "uno solo" da "tutti".
+static func _panel_button_count(panel: Node, needle: String) -> int:
+	var found := 0
+	for node in panel.find_children("*", "Button", true, false):
+		if (node as Button).text.contains(needle):
+			found += 1
+	return found
+
+
+## O-13 — i quattro difetti d'uso trovati dall'operatore sul setup macOS della
+## v0.3.6, tutti nella stessa famiglia: la UI offre azioni che non possono
+## riuscire, e tace sul perché.
+##
+## Le tre schermate del ticket, provate qui una per una:
+##  · «runtime assente» → «ATTIVA CONTAINER» spento, motivo a schermo e
+##    INSTALLA DOCKER come unica strada;
+##  · «solo Colima» → motore riconosciuto, pulsante vivo e NESSUNA proposta di
+##    installare Docker (il difetto raccontato: colima girava davvero);
+##  · «step saltato» → il profilo non si apre col container spento.
+##
+## Lo stato si inietta in SetupService.status invece di dipendere dal computer
+## che esegue il test: le tre schermate devono valere su un runner senza
+## Docker come sulla macchina dell'operatore, che ha Colima acceso.
+func _setup_gating_selftest() -> void:
+	await get_tree().process_frame
+	var result := {}
+	var original: Dictionary = SetupService.status.duplicate(true)
+	var colima: String = SetupService.RUNTIME_COLIMA
+	var desktop: String = SetupService.RUNTIME_DOCKER_DESKTOP
+
+	# ── (a) Nessun motore installato ────────────────────────────────────
+	SetupService.status["remote"] = false
+	SetupService.status["runtimes"] = PackedStringArray()
+	SetupService.status["runtime_selected"] = ""
+	SetupService.status["docker_available"] = false
+	SetupService.status["docker_running"] = false
+	SetupService.status["container_running"] = false
+	var none := SectionPanel.new("docker", 24.0)
+	office.add_child(none)
+	await get_tree().process_frame
+	var start := _panel_button(none, UIStrings.t("setup.container_start"))
+	result["assente_attiva_spento"] = start != null and start.disabled
+	result["assente_motivo_a_schermo"] = _panel_has_label(none,
+			UIStrings.t("setup.container_needs_runtime"))
+	result["assente_offre_installazione"] = _panel_button(none,
+			UIStrings.t("setup.docker_install")) != null
+	result["assente_nessuna_scelta_motore"] = not _panel_has_label(none,
+			UIStrings.t("setup.runtime_choice"))
+	none.queue_free()
+	await get_tree().process_frame
+
+	# ── (b) Solo Colima, installato ma spento ───────────────────────────
+	SetupService.status["runtimes"] = PackedStringArray([colima])
+	SetupService.status["runtime_selected"] = colima
+	SetupService.status["docker_available"] = true
+	var only_colima := SectionPanel.new("docker", 24.0)
+	office.add_child(only_colima)
+	await get_tree().process_frame
+	start = _panel_button(only_colima, UIStrings.t("setup.container_start"))
+	result["colima_attiva_premibile"] = start != null and not start.disabled
+	# Il difetto O-13b in una riga: con un motore installato, "installa Docker"
+	# è una proposta senza senso.
+	result["colima_niente_installa_docker"] = _panel_button(only_colima,
+			UIStrings.t("setup.docker_install")) == null
+	result["colima_motore_nominato"] = _panel_has_label(only_colima,
+			UIStrings.t("setup.runtime_installed_off")
+			% UIStrings.t("setup.runtime_colima"))
+	result["colima_nessuna_scelta_inutile"] = not _panel_has_label(only_colima,
+			UIStrings.t("setup.runtime_choice"))
+	only_colima.queue_free()
+	await get_tree().process_frame
+
+	# ── (c) Due motori: la scelta va CHIESTA ────────────────────────────
+	SetupService.status["runtimes"] = PackedStringArray([colima, desktop])
+	SetupService.status["runtime_selected"] = colima
+	var both := SectionPanel.new("docker", 24.0)
+	office.add_child(both)
+	await get_tree().process_frame
+	result["due_motori_scelta_offerta"] = _panel_has_label(both,
+			UIStrings.t("setup.runtime_choice"))
+	result["due_motori_colima_selezionabile"] = _panel_button(both,
+			UIStrings.t("setup.runtime_colima")) != null
+	result["due_motori_desktop_selezionabile"] = _panel_button(both,
+			UIStrings.t("setup.runtime_docker_desktop")) != null
+	both.queue_free()
+	await get_tree().process_frame
+
+	# ── (e) Gli step sono una catena, non quattro schede ─────────────────
+	SetupService.status["provider_authenticated"] = false
+	SetupService.status["plan_ready"] = false
+	SetupService.status["profile_ready"] = false
+	SetupService.status["unknown_steps"] = []
+	var locked := SectionPanel.new("activation", 24.0)
+	office.add_child(locked)
+	await get_tree().process_frame
+	# Container spento: 02, 03 e 04 sono bloccati, 01 no.
+	result["catena_tre_passi_bloccati"] = _panel_button_count(locked,
+			UIStrings.t("setup.gate_locked")) == 3
+	result["catena_motivo_container"] = _panel_has_label(locked,
+			UIStrings.t("setup.gate_needs_container"))
+	# Il difetto raccontato dall'operatore: il profilo si apriva col container
+	# ancora inesistente, e il colloquio finiva contro un interlocutore spento.
+	var profile_gate := _panel_button(locked, UIStrings.t("setup.gate_locked"))
+	result["catena_bloccato_non_premibile"] = profile_gate != null \
+			and profile_gate.disabled
+	locked.queue_free()
+	await get_tree().process_frame
+
+	# Container acceso: si sblocca SOLO il passo successivo.
+	SetupService.status["container_running"] = true
+	SetupService.status["docker_running"] = true
+	var partial := SectionPanel.new("activation", 24.0)
+	office.add_child(partial)
+	await get_tree().process_frame
+	result["catena_sblocca_uno_alla_volta"] = _panel_button_count(partial,
+			UIStrings.t("setup.gate_locked")) == 2
+	result["catena_motivo_provider"] = _panel_has_label(partial,
+			UIStrings.t("setup.gate_needs_provider"))
+	partial.queue_free()
+	await get_tree().process_frame
+
+	# Setup completo: nessun passo bloccato, nessuna spiegazione da dare.
+	SetupService.status["provider_authenticated"] = true
+	SetupService.status["plan_ready"] = true
+	SetupService.status["profile_ready"] = true
+	SetupService.status["hours_ready"] = true
+	var open_all := SectionPanel.new("activation", 24.0)
+	office.add_child(open_all)
+	await get_tree().process_frame
+	result["catena_completa_tutto_aperto"] = _panel_button_count(open_all,
+			UIStrings.t("setup.gate_locked")) == 0
+	open_all.queue_free()
+	await get_tree().process_frame
+
+	SetupService.status = original
+	var ok := true
+	for key in result:
+		ok = ok and bool(result[key])
+	print("SETUP-GATING-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify(result)])
+	get_tree().quit(0 if ok else 1)
 
 
 ## Il contenuto grezzo di un file in `user://`, o un array vuoto se non c'è.

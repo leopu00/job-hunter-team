@@ -644,8 +644,17 @@ func _choose_coordinator(id: String) -> void:
 				_steps["coordinatore"] = "runtime"
 		"runtime":
 			if id == "start":
-				SetupService.start_container()
-				_reply("coordinatore", UIStrings.t("onb.c.runtime.reply_start"))
+				# Stessa regola del pulsante nel pannello (O-13a): senza motore
+				# l'avvio fallirebbe e basta. Qui non c'è un pulsante da
+				# spegnere, quindi il Coordinatore lo dice e porta l'utente
+				# dove si installa, invece di annunciare un controllo che non
+				# è mai partito.
+				if SetupService.runtime_missing(SetupService.status):
+					_reply("coordinatore", UIStrings.t("onb.c.runtime.reply_no_runtime"))
+					action_requested.emit("open_section", {"section": "docker"})
+				else:
+					SetupService.start_container()
+					_reply("coordinatore", UIStrings.t("onb.c.runtime.reply_start"))
 			elif id == "repair":
 				SetupService.open_runtime_install()
 				_reply("coordinatore", UIStrings.t("onb.c.runtime.reply_repair"))

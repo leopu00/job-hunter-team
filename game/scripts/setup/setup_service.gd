@@ -69,6 +69,10 @@ var status := {
 	"profile_ready": false, "team_running": false,
 	"ready": false, "completed": 0,
 	"image_id": "", "container_image_id": "", "runtime_stale": false,
+	# Prima del primo probe non sappiamo ancora quali motori ci sono. La UI
+	# legge "nessuno" e tiene spento «ATTIVA CONTAINER»: spegnere un pulsante
+	# per mezzo secondo è un difetto minore che offrirlo e farlo fallire.
+	"runtimes": PackedStringArray(), "runtime_choice": "", "runtime_selected": "",
 }
 
 var _probe_running := false
@@ -547,8 +551,53 @@ static func _jht_home() -> String:
 
 static func _run(path: String, args: PackedStringArray) -> Dictionary:
 	var output: Array = []
-	var code := OS.execute(path, args, output, true)
+	var code := OS.execute(_bin(path), args, output, true)
 	return {"code": code, "out": "\n".join(PackedStringArray(output)).strip_edges()}
+
+
+## Cartelle di binari che il PATH di una app con interfaccia può non contenere.
+## Un'app macOS aperta dal Finder (o dal DMG) eredita il PATH minimo di
+## launchd — /usr/bin:/bin:/usr/sbin:/sbin — mentre Homebrew installa `docker`
+## e `colima` in /opt/homebrew/bin (Apple Silicon) o /usr/local/bin (Intel):
+## nessuna delle due è lì dentro. È il difetto O-13b visto dall'operatore, che
+## aveva Colima ACCESO e si sentiva proporre INSTALLA DOCKER. Lo stesso PATH
+## esplicito lo aggiunge già il comando d'installazione
+## (_posix_runtime_install_command): qui vale anche per rilevare e lanciare.
+const DEFAULT_EXTRA_BIN_DIRS: Array[String] = [
+	"/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin",
+]
+## Sostituibile dai selftest: su una macchina di sviluppo un "PATH senza
+## docker" non esisterebbe più, e il caso «runtime assente» — la schermata che
+## deve comparire a chi arriva senza motore — resterebbe non verificabile.
+static var extra_bin_dirs: Array[String] = DEFAULT_EXTRA_BIN_DIRS.duplicate()
+
+
+## Le cartelle in cui cercare un comando: quelle del PATH, poi quelle che la
+## shell dell'utente avrebbe e la app no. L'ordine conta: il PATH dell'utente
+## vince sempre sulle aggiunte.
+static func _search_dirs() -> PackedStringArray:
+	var windows := OS.get_name() == "Windows"
+	var dirs := PackedStringArray()
+	for dir in OS.get_environment("PATH").split(";" if windows else ":", false):
+		if not dirs.has(String(dir)):
+			dirs.append(String(dir))
+	if not windows:
+		for dir in extra_bin_dirs:
+			if not dirs.has(String(dir)):
+				dirs.append(String(dir))
+	return dirs
+
+
+## Il comando risolto in percorso pieno, quando si riesce. Serve perché
+## OS.execute/create_process ereditano il PATH del processo, NON quello
+## aumentato di _which: senza questo passaggio il probe "vede"
+## /opt/homebrew/bin/docker e poi lancia un `docker` che l'app non trova.
+## Un percorso già esplicito passa intatto.
+static func _bin(name: String) -> String:
+	if name.contains("/") or name.contains("\\"):
+		return name
+	var resolved := _which(name)
+	return resolved if resolved != "" else name
 
 
 ## Cerca `exe` fra le cartelle del PATH, come farebbe la shell. Ritorna il
@@ -568,7 +617,7 @@ static func _which(exe: String) -> String:
 	# coprono gli shim. Su POSIX il nome è nudo.
 	var names := PackedStringArray([exe + ".exe", exe + ".cmd", exe + ".bat"]) \
 			if windows else PackedStringArray([exe])
-	for dir in OS.get_environment("PATH").split(";" if windows else ":", false):
+	for dir in _search_dirs():
 		for name in names:
 			var candidate := String(dir).path_join(String(name))
 			if not FileAccess.file_exists(candidate):
@@ -601,6 +650,95 @@ static func runtime_image() -> String:
 	return custom if custom != "" else DEFAULT_RUNTIME_IMAGE
 
 
+# ── Motori container: quali ci sono, e quale usare ──────────────────────────
+#
+# `docker` NON è un runtime: è il client, e su macOS parla indifferentemente
+# con Docker Desktop o con Colima. Confondere le due domande — «c'è un client?»
+# e «c'è un motore che posso accendere?» — è la radice di O-13: il pulsante
+# partiva da `docker version` e, al primo errore, proponeva di installare
+# Docker a chi aveva Colima installato e persino avviato.
+
+const RUNTIME_COLIMA := "colima"
+const RUNTIME_DOCKER_DESKTOP := "docker-desktop"
+## Il daemon di sistema di Linux: c'è o non c'è, e si accende con systemd —
+## non lo lancia l'app, ma resta un runtime presente da distinguere dal nulla.
+const RUNTIME_DOCKER_SERVICE := "docker-service"
+## La scelta esplicita dell'utente fra i motori installati. Sta in user:// come
+## tema e lingua: è una preferenza di QUESTA installazione del gioco, non un
+## dato del team, e ~/.jht appartiene al container (uid diverso).
+const RUNTIME_CHOICE_CFG := "user://container_runtime.cfg"
+
+
+## I motori container INSTALLATI su questa macchina, in ordine di preferenza.
+## Si chiede al filesystem, mai a `docker version`: motore spento e motore
+## assente sono due stati diversi con due schermate diverse, e appiattirli è
+## proprio ciò che mostrava INSTALLA DOCKER a chi non ne aveva bisogno.
+static func installed_runtimes() -> PackedStringArray:
+	var found := PackedStringArray()
+	match OS.get_name():
+		"Windows":
+			if FileAccess.file_exists(DOCKER_DESKTOP_WIN):
+				found.append(RUNTIME_DOCKER_DESKTOP)
+		"macOS":
+			if _which("colima") != "":
+				found.append(RUNTIME_COLIMA)
+			if DirAccess.dir_exists_absolute("/Applications/Docker.app"):
+				found.append(RUNTIME_DOCKER_DESKTOP)
+		_:
+			if _which("docker") != "":
+				found.append(RUNTIME_DOCKER_SERVICE)
+	return found
+
+
+## Il motore scelto dall'utente, se ne ha scelto uno ed è ancora installato.
+static func runtime_choice() -> String:
+	var cfg := ConfigFile.new()
+	if cfg.load(RUNTIME_CHOICE_CFG) != OK:
+		return ""
+	return str(cfg.get_value("runtime", "engine", ""))
+
+
+## Il motore da accendere adesso. Con UNO installato non c'è niente da
+## chiedere; con due la scelta è dell'utente (Docker Desktop e Colima non sono
+## intercambiabili: VM, risorse e licenza sono diverse) e questa funzione la
+## rispetta. La preferenza caduta — motore disinstallato — non blocca nulla:
+## si ricade sul primo disponibile invece di dichiarare l'assenza.
+##
+## `chosen` è esplicito perché la regola si possa provare senza toccare la
+## preferenza vera di chi sviluppa: il valore di default resta quella su disco.
+static func selected_runtime(installed: PackedStringArray,
+		chosen := runtime_choice()) -> String:
+	if installed.is_empty():
+		return ""
+	return chosen if installed.has(chosen) else installed[0]
+
+
+## Su questa macchina non c'è NIENTE da accendere? È la domanda che spegne
+## «ATTIVA CONTAINER» invece di lasciarlo premibile per finire in errore
+## (O-13a). In modalità VPS il motore vive dall'altra parte di SSH: non è
+## un'assenza, è un altro computer.
+static func runtime_missing(s: Dictionary) -> bool:
+	if bool(s.get("remote", false)):
+		return false
+	return (s.get("runtimes", PackedStringArray()) as PackedStringArray).is_empty()
+
+
+## Registra la scelta del motore. Solo un motore davvero installato: una
+## preferenza per qualcosa che non c'è produrrebbe un avvio che fallisce e
+## nessuna spiegazione utile.
+func choose_runtime(id: String) -> void:
+	if id != "" and not installed_runtimes().has(id):
+		return
+	var cfg := ConfigFile.new()
+	cfg.set_value("runtime", "engine", id)
+	cfg.save(RUNTIME_CHOICE_CFG)
+	status["runtime_choice"] = id
+	status["runtime_selected"] = selected_runtime(
+			status.get("runtimes", PackedStringArray()))
+	Log.info("setup", "motore container scelto: " + (id if id != "" else "automatico"))
+	status_changed.emit(status.duplicate(true))
+
+
 ## Il container è acceso adesso? Serve a decidere chi scrive nei dati del team:
 ## quando c'è, comanda lui (vedi _do_select_provider).
 static func _container_is_running() -> bool:
@@ -620,6 +758,12 @@ static func _probe_host(home: String) -> Dictionary:
 		"team_running": false,
 		"image_id": "", "container_image_id": "", "runtime_stale": false,
 	}
+	# I motori installati si contano PRIMA di interrogare il daemon: distinguono
+	# «spegni il pulsante e spiega perché» da «offri di installare», e nessuna
+	# delle due risposte sta dentro `docker version`.
+	d["runtimes"] = installed_runtimes()
+	d["runtime_choice"] = runtime_choice()
+	d["runtime_selected"] = selected_runtime(d["runtimes"])
 	# Presenza e stato del motore sono DUE domande, e le risponde chi le sa:
 	# la presenza il filesystem (_exec_present), lo stato del daemon il codice
 	# d'uscita di `docker version` (0 = attivo, altro = installato ma spento).
@@ -983,17 +1127,30 @@ static func _do_stop_container(vps: Dictionary) -> Dictionary:
 
 
 ## Flusso "ATTIVA CONTAINER" (porting della logica desktop Electron,
-## regola detect-first): daemon giù → avvia il runtime installato e POLLA
-## finché risponde (2s × 120s, progresso a video) → `docker start jht` →
+## regola detect-first): inventario dei motori installati → daemon giù → avvia
+## il motore SCELTO e POLLA finché risponde (2s × 120s, progresso a video) →
 ## container assente → compose imbarcato + `compose up` nel terminale
 ## visibile (il pull dell'immagine GHCR è lungo: l'utente deve vederlo).
+##
+## L'inventario viene PRIMA del daemon, e non è un dettaglio d'ordine: partire
+## da `docker version` significa leggere ogni errore del client come "non c'è
+## niente", ed è così che l'app offriva INSTALLA DOCKER a chi aveva Colima
+## installato e acceso (O-13b). Chi non ha alcun motore lo scopre qui, con la
+## frase giusta, invece che dopo due minuti di attesa.
 func _do_start_container() -> Dictionary:
-	Log.call_deferred("info", "setup", "attiva container: probe del daemon Docker")
+	Log.call_deferred("info", "setup", "attiva container: inventario dei motori")
 	_set_phase("engine")
+	var installed := installed_runtimes()
+	if installed.is_empty() and _which("docker") == "":
+		Log.call_deferred("warn", "setup", "nessun motore container installato")
+		return {"ok": false, "message": UIStrings.t("setup.runtime.missing")}
 	var daemon := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Server.Version}}"] ))
 	if daemon["code"] != 0:
-		var launch := _launch_docker_runtime()
+		var engine := selected_runtime(installed)
+		Log.call_deferred("info", "setup", "daemon giù, avvio il motore: "
+				+ (engine if engine != "" else "nessuno"))
+		var launch := _launch_docker_runtime(engine)
 		if not bool(launch["ok"]):
 			return launch
 		_progress("container", str(launch["message"]))
@@ -1441,7 +1598,7 @@ func _compose_stream(compose: String, args: PackedStringArray,
 ## parser delle righe, tutto il resto (drain finale, timeout, tick UI) è
 ## identico nelle due modalità.
 func _stream_compose(argv: PackedStringArray, json_mode: bool) -> Dictionary:
-	var process := OS.execute_with_pipe("docker", argv, false)
+	var process := OS.execute_with_pipe(_bin("docker"), argv, false)
 	if process.is_empty():
 		return {"ok": false, "spawned": false,
 				"tail": UIStrings.t("setup.action.compose_unavailable")}
@@ -1663,32 +1820,33 @@ static func _to_mb(value: String, unit: String) -> float:
 
 const DOCKER_DESKTOP_WIN := "C:/Program Files/Docker/Docker/Docker Desktop.exe"
 
-## Avvia il runtime Docker installato (mai installarne uno se un altro può
-## già rispondere — regola detect-first, ADR-0006). Ritorna ok=false con
-## istruzioni quando non c'è nulla da avviare.
-static func _launch_docker_runtime() -> Dictionary:
-	match OS.get_name():
-		"Windows":
-			if not FileAccess.file_exists(DOCKER_DESKTOP_WIN):
-				return {"ok": false, "message": UIStrings.t("setup.runtime.desktop_missing")}
-			OS.create_process(DOCKER_DESKTOP_WIN, PackedStringArray())
+## Accende il motore GIÀ SCELTO (mai installarne uno se un altro può già
+## rispondere — regola detect-first, ADR-0006). Chi decide quale sia è
+## selected_runtime(), che rispetta la preferenza dell'utente: qui si esegue e
+## basta. Ritorna ok=false con istruzioni quando non c'è nulla da avviare.
+static func _launch_docker_runtime(runtime: String) -> Dictionary:
+	match runtime:
+		RUNTIME_DOCKER_DESKTOP:
+			if OS.get_name() == "Windows":
+				if not FileAccess.file_exists(DOCKER_DESKTOP_WIN):
+					return {"ok": false,
+							"message": UIStrings.t("setup.runtime.desktop_missing")}
+				OS.create_process(DOCKER_DESKTOP_WIN, PackedStringArray())
+			else:
+				OS.create_process(_bin("open"), PackedStringArray(["-a", "Docker"]))
 			return {"ok": true, "message": UIStrings.t("setup.runtime.desktop_starting")}
-		"macOS":
-			# Stesso criterio del probe: su POSIX un comando assente esce 127,
-			# mai -1 — col vecchio confronto questo ramo partiva anche senza
-			# colima, dichiarava "Colima avviato" a vuoto e non ripiegava mai
-			# su Docker Desktop.
-			if _exec_present("colima",
-					int(_run("colima", PackedStringArray(["version"]))["code"])):
-				OS.create_process("colima", PackedStringArray(["start"]))
-				return {"ok": true, "message": UIStrings.t("setup.runtime.colima_starting")}
-			if DirAccess.dir_exists_absolute("/Applications/Docker.app"):
-				OS.create_process("open", PackedStringArray(["-a", "Docker"]))
-				return {"ok": true, "message": UIStrings.t("setup.runtime.desktop_starting")}
-			return {"ok": false, "message": UIStrings.t("setup.runtime.missing")}
-		_:
+		RUNTIME_COLIMA:
+			# Percorso pieno: `colima` vive in /opt/homebrew/bin, che una app
+			# aperta dal Finder non ha nel PATH. Prima il create_process
+			# falliva in silenzio e la UI annunciava "Colima avviato" a vuoto.
+			OS.create_process(_bin("colima"), PackedStringArray(["start"]))
+			return {"ok": true, "message": UIStrings.t("setup.runtime.colima_starting")}
+		RUNTIME_DOCKER_SERVICE:
+			# Il daemon di sistema non lo accende l'app: chiederebbe una
+			# password di root dentro un gioco. Si dice il comando e basta.
 			return {"ok": false, "message": UIStrings.t("setup.runtime.service_stopped") \
 					% "sudo systemctl start docker"}
+	return {"ok": false, "message": UIStrings.t("setup.runtime.missing")}
 
 
 ## Progresso intermedio di un'azione, emesso dal worker thread.
@@ -2536,7 +2694,7 @@ func _prepare_local_migration_target() -> Dictionary:
 	var daemon := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Server.Version}}"] ))
 	if daemon["code"] != 0:
-		var launch := _launch_docker_runtime()
+		var launch := _launch_docker_runtime(selected_runtime(installed_runtimes()))
 		if not bool(launch.get("ok", false)):
 			return launch
 		_progress("vps-migrate", str(launch.get("message",
@@ -3469,7 +3627,7 @@ const SHUTDOWN_COMMAND_TIMEOUT_MS := 5000
 
 
 static func _run_shutdown_command(argv: PackedStringArray) -> Dictionary:
-	var pid := OS.create_process("docker", argv, false)
+	var pid := OS.create_process(_bin("docker"), argv, false)
 	if pid <= 0:
 		return {"code": -1, "timeout": false}
 	var started := Time.get_ticks_msec()

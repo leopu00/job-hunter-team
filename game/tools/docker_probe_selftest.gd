@@ -13,6 +13,16 @@ extends SceneTree
 ## nel PATH: uno che manca, uno che risponde col daemon spento (l'errore vero
 ## di docker), uno che risponde col daemon acceso, e uno che esce 127 — il
 ## codice ambiguo che un criterio a soli numeri leggerebbe come "assente".
+##
+## O-13 (setup macOS, difetto d'uso trovato dall'operatore) ha aggiunto un
+## secondo contratto allo stesso probe: quali MOTORI ci sono, che è un'altra
+## domanda rispetto a "c'è il client docker". Un'app aperta dal Finder eredita
+## il PATH minimo di launchd e non vede /opt/homebrew/bin: sulla macchina
+## dell'operatore `colima` girava, ma l'app non lo trovava e offriva INSTALLA
+## DOCKER. Le sezioni nuove coprono le tre schermate che ne dipendono —
+## «runtime assente», «solo Colima», «due motori, scelta dell'utente» — e per
+## poterlo fare azzerano `extra_bin_dirs`: con le cartelle vere, su una
+## macchina di sviluppo il caso «assente» non esisterebbe più.
 
 var _fails: Array[String] = []
 ## Caricato in _run, MAI come inizializzatore di membro: lo script principale
@@ -25,6 +35,7 @@ var _svc_script: GDScript
 var _sections := 0
 var _root_dir := ""
 var _old_path := ""
+var _old_extra: Array[String] = []
 
 
 func _check(what: String, ok: bool, detail := "") -> void:
@@ -44,16 +55,24 @@ func _run() -> void:
 	_check("setup_service.gd caricabile", _svc_script != null
 			and _svc_script.can_instantiate())
 	_old_path = OS.get_environment("PATH")
+	# Le cartelle aggiuntive sono la RETE per l'app lanciata dal Finder, ma qui
+	# renderebbero indistinguibile "PATH senza docker" da "macchina senza
+	# docker": si azzerano, e la sezione dedicata le riaccende da sola.
+	_old_extra = _svc_script.extra_bin_dirs
+	_svc_script.extra_bin_dirs = [] as Array[String]
 	_root_dir = OS.get_cache_dir().path_join(
 			"jht-docker-probe-selftest-%d" % int(Time.get_ticks_usec()))
-	var expected := 2
+	var expected := 3
 	_which_contract()
 	_exec_present_contract()
+	_runtime_selection_contract()
 	if OS.get_name() != "Windows":
-		expected += 2
+		expected += 3
 		_probe_three_states()
 		_cli_started_team_contract()
+		_gui_path_contract()
 	OS.set_environment("PATH", _old_path)
+	_svc_script.extra_bin_dirs = _old_extra
 	_check("tutte le sezioni arrivate in fondo", _sections == expected,
 			"%d/%d" % [_sections, expected])
 	if _fails.is_empty():
@@ -124,6 +143,91 @@ func _exec_present_contract() -> void:
 			bool(_svc_script._exec_present("docker", 0)))
 	_check("present: exit 1 (daemon spento) prova la presenza anche a "
 			+ "PATH-scan cieco", bool(_svc_script._exec_present("docker", 1)))
+	_sections += 1
+
+
+## Quale motore accendere, e quando il pulsante deve restare spento. È logica
+## pura sui dati del probe: gira su tutti e tre i sistemi.
+func _runtime_selection_contract() -> void:
+	var colima: String = _svc_script.RUNTIME_COLIMA
+	var desktop: String = _svc_script.RUNTIME_DOCKER_DESKTOP
+	var both := PackedStringArray([colima, desktop])
+	_check("scelta: nessun motore installato → niente da avviare",
+			str(_svc_script.selected_runtime(PackedStringArray(), "")) == "")
+	_check("scelta: un solo motore, nessuna domanda da fare",
+			str(_svc_script.selected_runtime(PackedStringArray([colima]), ""))
+			== colima)
+	_check("scelta: con due motori senza preferenza vince l'ordine",
+			str(_svc_script.selected_runtime(both, "")) == colima)
+	# Il difetto O-13c: con due motori la scelta non veniva MAI chiesta, e
+	# l'app decideva per l'utente. Dichiarata, deve essere rispettata.
+	_check("scelta: la preferenza dell'utente batte l'ordine",
+			str(_svc_script.selected_runtime(both, desktop)) == desktop)
+	# Preferenza per un motore disinstallato: si riparte dal primo disponibile,
+	# non si dichiara l'assenza (sarebbe un setup bloccato da una vecchia
+	# scelta invisibile).
+	_check("scelta: preferenza caduta → primo disponibile, non blocco",
+			str(_svc_script.selected_runtime(PackedStringArray([colima]), desktop))
+			== colima)
+	# `runtime_missing` è ciò che spegne «ATTIVA CONTAINER» (O-13a).
+	_check("spegni: senza motori il pulsante non è premibile",
+			bool(_svc_script.runtime_missing({"runtimes": PackedStringArray()})))
+	_check("spegni: con un motore il pulsante resta premibile",
+			not bool(_svc_script.runtime_missing(
+					{"runtimes": PackedStringArray([colima])})))
+	# In modalità VPS il motore vive dall'altra parte di SSH: l'assenza locale
+	# non è un'assenza, e spegnere il pulsante lì sarebbe un difetto nuovo.
+	_check("spegni: su VPS il motore locale non c'entra",
+			not bool(_svc_script.runtime_missing(
+					{"remote": true, "runtimes": PackedStringArray()})))
+	# Nessun motore scelto: si dice, non si finge di averne avviato uno.
+	var launch: Dictionary = _svc_script._launch_docker_runtime("")
+	_check("avvio: senza motore l'esito è un no dichiarato",
+			not bool(launch.get("ok", true)))
+	_sections += 1
+
+
+## Il PATH ridotto delle app con interfaccia (O-13b). Su macOS un'app aperta
+## dal Finder eredita /usr/bin:/bin:/usr/sbin:/sbin: `colima` e `docker` di
+## Homebrew stanno altrove, e senza le cartelle aggiuntive il probe dichiara
+## "niente installato" su una macchina che ha entrambi — che è esattamente il
+## racconto dell'operatore.
+func _gui_path_contract() -> void:
+	var brew := _stub_dir("finder-brew")
+	_write_stub(brew.path_join("docker"),
+			"#!/bin/sh\necho '29.6.0|29.6.0'\nexit 0\n")
+	_write_stub(brew.path_join("colima"), "#!/bin/sh\nexit 0\n")
+	# Il PATH che launchd passa a un'app: nessuna traccia di Homebrew.
+	_set_path(PackedStringArray([_stub_dir("finder-launchd")]))
+	_svc_script.extra_bin_dirs = [] as Array[String]
+	_check("PATH ridotto: senza cartelle aggiuntive docker risulta assente",
+			str(_svc_script._which("docker")) == "")
+	_svc_script.extra_bin_dirs = [brew] as Array[String]
+	_check("PATH ridotto: la cartella aggiuntiva ritrova docker",
+			str(_svc_script._which("docker")) == brew.path_join("docker"))
+	# _bin esiste perché OS.execute eredita il PATH del processo, non quello
+	# aumentato: senza percorso pieno il probe "vede" un docker che poi non
+	# riesce a lanciare.
+	_check("PATH ridotto: il comando si lancia col percorso pieno",
+			str(_svc_script._bin("docker")) == brew.path_join("docker"))
+	_check("PATH ridotto: un percorso già esplicito passa intatto",
+			str(_svc_script._bin("/bin/sh")) == "/bin/sh")
+	if OS.get_name() == "macOS":
+		var installed: PackedStringArray = _svc_script.installed_runtimes()
+		_check("solo Colima: il motore è riconosciuto, non da installare",
+				installed.has(_svc_script.RUNTIME_COLIMA),
+				str(installed))
+		_check("solo Colima: INSTALLA DOCKER non deve comparire",
+				not bool(_svc_script.runtime_missing({"runtimes": installed})))
+		# Tolta la rete, lo stesso computer torna a non vedere Colima: è la
+		# prova che il caso «runtime assente» resta raggiungibile e che la
+		# differenza la fanno le cartelle, non la macchina.
+		_svc_script.extra_bin_dirs = [] as Array[String]
+		_set_path(PackedStringArray([_stub_dir("finder-empty")]))
+		_check("runtime assente: senza le cartelle aggiuntive Colima sparisce",
+				not (_svc_script.installed_runtimes() as PackedStringArray).has(
+					_svc_script.RUNTIME_COLIMA))
+	_svc_script.extra_bin_dirs = [] as Array[String]
 	_sections += 1
 
 
