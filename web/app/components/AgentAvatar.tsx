@@ -71,12 +71,16 @@ export default function AgentAvatar({
         height: size,
         flexShrink: 0,
         borderRadius: "50%",
-        // Il ritratto è ritagliato su fondo trasparente: il disco di colore
-        // dietro gli dà il contorno e lo lega al ruolo.
-        background: `color-mix(in srgb, ${info.color} 18%, var(--color-panel))`,
-        border: ring
-          ? `1px solid color-mix(in srgb, ${info.color} 55%, transparent)`
-          : undefined,
+        // Nessun colore di RUOLO qui (O-18): i volti si riconoscono da soli e
+        // il disco colorato addosso a ogni bolla era rumore.
+        //
+        // Ma nemmeno trasparente: il ritratto è ritagliato su fondo
+        // trasparente, e senza un disco dietro sul tema CHIARO il volto sfuma
+        // nel fondo e resta senza stacco. Serve un neutro che il tema porta
+        // con sé — `--color-row` è di un gradino diverso da `--color-panel` in
+        // entrambi i temi, quindi il contorno c'è di giorno e di notte.
+        background: "var(--color-row)",
+        border: ring ? "1px solid var(--color-border)" : undefined,
         // Il PNG è già quadrato e inquadrato sul volto: `cover` è difensivo,
         // non c'è niente da riposizionare.
         objectFit: "cover",
