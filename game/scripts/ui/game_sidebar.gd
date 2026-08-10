@@ -22,6 +22,11 @@ var _tab: Button
 var _docker_button: Button
 var _docker_icon: SidebarIcon
 var _docker_badge: Label
+## Uscita dal giro guidato, in cima al cassetto. Vive QUI e non solo nella
+## to-do list del tour perché il cassetto aperto copre la to-do list (layer 20
+## contro 15): chi apriva il menu per cercare una via d'uscita si nascondeva
+## da solo l'unico pulsante che ce l'aveva (O-14).
+var _exit_tour: Button
 
 func _init() -> void:
 	layer = 20
@@ -190,6 +195,22 @@ func _ready() -> void:
 	brand_pad.add_theme_constant_override("margin_right", 10)
 	brand_pad.add_child(brand_row)
 	box.add_child(brand_pad)
+	_exit_tour = Button.new()
+	_exit_tour.text = UIStrings.t("tour.exit")
+	_exit_tour.flat = true
+	_exit_tour.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_exit_tour.add_theme_font_size_override("font_size", 13)
+	_exit_tour.add_theme_color_override("font_color", Palette.YELLOW)
+	_exit_tour.add_theme_color_override("font_hover_color", Palette.WHITE)
+	_exit_tour.pressed.connect(Game.exit_guided_onboarding)
+	var exit_pad := MarginContainer.new()
+	exit_pad.add_theme_constant_override("margin_left", 10)
+	exit_pad.add_theme_constant_override("margin_bottom", 6)
+	exit_pad.add_child(_exit_tour)
+	box.add_child(exit_pad)
+	TourGuide.changed.connect(_refresh_exit_tour)
+	ScriptedOnboarding.dismissed.connect(_refresh_exit_tour)
+	_refresh_exit_tour()
 	_refresh_docker_button(SetupService.status)
 
 	# TEST-AUTO: JHT_SIDEBAR=1 apre il cassetto al boot (per gli screenshot);
@@ -216,6 +237,19 @@ func _ready() -> void:
 	BackendBus.chat_unread_changed.connect(func(_unread: Dictionary) -> void:
 		_refresh_chat_badges())
 	_refresh_chat_badges()
+
+## L'uscita compare finché il giro guidato è in corso e sparisce quando è
+## chiuso: a giro finito sarebbe una voce che non fa niente.
+func _refresh_exit_tour() -> void:
+	if not is_instance_valid(_exit_tour):
+		return
+	var visible_now := TourGuide.active() and not ScriptedOnboarding.is_dismissed()
+	# Il margine è il padre del pulsante: nasconderlo evita che resti una
+	# banda vuota in cima al menu a giro chiuso.
+	var row := _exit_tour.get_parent()
+	if row is Control:
+		(row as Control).visible = visible_now
+
 
 func toggle() -> void:
 	_open = not _open

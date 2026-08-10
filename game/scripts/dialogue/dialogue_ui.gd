@@ -37,6 +37,9 @@ func open(slug: String, display_name: String, tree_id := "") -> void:
 	_tree = Dialogues.TREES.get(_tree_id, {})
 	layer = 60
 	Game.dialogue_active = true
+	# Chi deve poter chiudere il dialogo dall'esterno (l'uscita dal giro
+	# guidato) lo trova da qui invece di tenerne un riferimento.
+	add_to_group(&"dialogue_ui")
 
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -237,6 +240,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		_goto(node["next"])
 	else:
 		_close()
+
+## Chiusura chiesta da fuori (uscita dal giro guidato): stessa strada del
+## congedo normale, così `dialogue_active` torna falso una volta sola.
+func close_now() -> void:
+	_close()
+
 
 func _close() -> void:
 	Game.dialogue_active = false

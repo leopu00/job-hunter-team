@@ -286,8 +286,12 @@ func _ready() -> void:
 		# Tour del primo avvio: attivo solo nel flusso reale (titolo → ufficio;
 		# ogni test/shot headless imposta JHT_SCENE e resta fuori) o quando il
 		# selftest lo forza. Il tour guida con marker mirati, camera e to-do.
+		# JHT_TOUR_EXIT_TEST accende il tour come i due precedenti ma NON
+		# spegne la persistenza di TourGuide: il test dell'uscita deve poter
+		# verificare che lo stato «uscito» finisca davvero su file.
 		_tour_enabled = OS.get_environment("JHT_TOUR_TEST") == "1" \
 				or OS.get_environment("JHT_TOUR_PREVIEW") == "1" \
+				or OS.get_environment("JHT_TOUR_EXIT_TEST") == "1" \
 				or (OS.get_environment("JHT_SCENE") == "" and TourGuide.active() \
 					and ScriptedOnboarding.story_mode())
 		if _tour_enabled:

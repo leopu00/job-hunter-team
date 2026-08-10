@@ -290,8 +290,12 @@ func finish() -> void:
 	changed.emit()
 	tour_finished.emit()
 
+## Uscita dal tour chiesta dall'utente. Passa da ScriptedOnboarding perché
+## chiudere solo il tour non basta: le chat guidate restavano vive e
+## continuavano a parlare sopra il menu (O-14). L'uscita è una sola.
 func skip() -> void:
 	Log.info("tour", "tour saltato dall'utente al passo %d" % _index)
+	ScriptedOnboarding.dismiss()
 	finish()
 
 func reset_for_test() -> void:
