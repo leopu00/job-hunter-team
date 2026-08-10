@@ -37,7 +37,8 @@ const T: Record<
     saved: "Salvata",
     remove: "Elimina",
     error: "Non è riuscito a salvare la nota",
-    offline: "La nota vive sul tuo computer: serve il team acceso.",
+    offline:
+      "Le note si salvano dall'app sul computer. Dal sito non ancora: ci stiamo lavorando.",
   },
   en: {
     title: "Private notes",
@@ -49,7 +50,8 @@ const T: Record<
     saved: "Saved",
     remove: "Delete",
     error: "Could not save the note",
-    offline: "The note lives on your computer: the team needs to be running.",
+    offline:
+      "Notes are saved from the app on your computer. Not from the site yet — we're working on it.",
   },
   es: {
     title: "Notas privadas",
@@ -60,7 +62,8 @@ const T: Record<
     saved: "Guardada",
     remove: "Eliminar",
     error: "No se pudo guardar la nota",
-    offline: "La nota vive en tu ordenador: el equipo debe estar activo.",
+    offline:
+      "Las notas se guardan desde la app del ordenador. Desde la web todavía no: estamos en ello.",
   },
   de: {
     title: "Private Notizen",
@@ -72,7 +75,8 @@ const T: Record<
     saved: "Gespeichert",
     remove: "Löschen",
     error: "Notiz konnte nicht gespeichert werden",
-    offline: "Die Notiz liegt auf deinem Rechner: das Team muss laufen.",
+    offline:
+      "Notizen werden in der App auf dem Computer gespeichert. Auf der Website noch nicht — wir arbeiten daran.",
   },
   fr: {
     title: "Notes privées",
@@ -83,7 +87,8 @@ const T: Record<
     saved: "Enregistrée",
     remove: "Supprimer",
     error: "Impossible d'enregistrer la note",
-    offline: "La note vit sur votre ordinateur : l'équipe doit être active.",
+    offline:
+      "Les notes s'enregistrent depuis l'application sur l'ordinateur. Pas encore depuis le site : nous y travaillons.",
   },
   pt: {
     title: "Notas privadas",
@@ -94,7 +99,8 @@ const T: Record<
     saved: "Guardada",
     remove: "Eliminar",
     error: "Não foi possível guardar a nota",
-    offline: "A nota vive no seu computador: a equipa tem de estar ativa.",
+    offline:
+      "As notas guardam-se na aplicação do computador. No site ainda não: estamos a trabalhar nisso.",
   },
   hu: {
     title: "Privát jegyzetek",
@@ -105,7 +111,8 @@ const T: Record<
     saved: "Mentve",
     remove: "Törlés",
     error: "A jegyzetet nem sikerült menteni",
-    offline: "A jegyzet a gépeden él: a csapatnak futnia kell.",
+    offline:
+      "A jegyzetek a számítógépes alkalmazásban mentődnek. A weboldalról még nem — dolgozunk rajta.",
   },
 };
 
