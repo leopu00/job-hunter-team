@@ -45,10 +45,9 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Which provider?",
     whichProviderP:
       "Three are supported and tested. Pick one — you can switch later in a couple of commands.",
-    kimi: "(Moonshot Pro, ~€40/mo) — cheapest, validated on multi-day runs. The mass-market starting point.",
-    codex: "(OpenAI Plus/Pro, ~€100/mo) — balanced quality and cost.",
-    claude:
-      "(Anthropic Max, ~€90/mo) — top precision for scoring and CV writing.",
+    kimi: "(Moonshot Pro) — validated on multi-day runs. The simplest starting point.",
+    codex: "(OpenAI Plus/Pro) — balanced quality and cost.",
+    claude: "(Anthropic Max) — top precision for scoring and CV writing.",
     dedicatedStrong: "Use a dedicated subscription.",
     dedicatedRest:
       "Sharing the account you use for personal AI drains the same weekly quota twice and the team will hit rate limits. See the",
@@ -80,10 +79,10 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Quale provider?",
     whichProviderP:
       "Tre sono supportati e testati. Scegline uno — potrai cambiarlo più avanti con un paio di comandi.",
-    kimi: "(Moonshot Pro, ~40€/mese) — il più economico, validato su run di più giorni. Il punto di partenza per il grande pubblico.",
-    codex: "(OpenAI Plus/Pro, ~100€/mese) — equilibrio tra qualità e costo.",
+    kimi: "(Moonshot Pro) — validato su run di più giorni. Il punto di partenza più semplice.",
+    codex: "(OpenAI Plus/Pro) — equilibrio tra qualità e costo.",
     claude:
-      "(Anthropic Max, ~90€/mese) — massima precisione per scoring e scrittura del CV.",
+      "(Anthropic Max) — massima precisione per scoring e scrittura del CV.",
     dedicatedStrong: "Usa un abbonamento dedicato.",
     dedicatedRest:
       "Condividere l'account che usi per l'AI personale consuma due volte la stessa quota settimanale e il team raggiungerà i limiti di rate. Consulta la",
@@ -115,10 +114,10 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 ¿Qué proveedor?",
     whichProviderP:
       "Tres están soportados y probados. Elige uno — puedes cambiarlo más adelante con un par de comandos.",
-    kimi: "(Moonshot Pro, ~40 €/mes) — el más barato, validado en ejecuciones de varios días. El punto de partida para el gran público.",
-    codex: "(OpenAI Plus/Pro, ~100 €/mes) — equilibrio entre calidad y coste.",
+    kimi: "(Moonshot Pro) — validado en ejecuciones de varios días. El punto de partida más sencillo.",
+    codex: "(OpenAI Plus/Pro) — equilibrio entre calidad y coste.",
     claude:
-      "(Anthropic Max, ~90 €/mes) — máxima precisión para la puntuación y la redacción del CV.",
+      "(Anthropic Max) — máxima precisión para la puntuación y la redacción del CV.",
     dedicatedStrong: "Usa una suscripción dedicada.",
     dedicatedRest:
       "Compartir la cuenta que usas para tu IA personal agota la misma cuota semanal dos veces y el equipo alcanzará los límites de tasa. Consulta la",
@@ -152,10 +151,10 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Quel fournisseur ?",
     whichProviderP:
       "Trois sont pris en charge et testés. Choisissez-en un — vous pourrez en changer plus tard en quelques commandes.",
-    kimi: "(Moonshot Pro, ~40 €/mois) — le moins cher, validé sur des exécutions de plusieurs jours. Le point de départ grand public.",
-    codex: "(OpenAI Plus/Pro, ~100 €/mois) — équilibre entre qualité et coût.",
+    kimi: "(Moonshot Pro) — validé sur des exécutions de plusieurs jours. Le point de départ le plus simple.",
+    codex: "(OpenAI Plus/Pro) — équilibre entre qualité et coût.",
     claude:
-      "(Anthropic Max, ~90 €/mois) — précision maximale pour le scoring et la rédaction du CV.",
+      "(Anthropic Max) — précision maximale pour le scoring et la rédaction du CV.",
     dedicatedStrong: "Utilisez un abonnement dédié.",
     dedicatedRest:
       "Partager le compte que vous utilisez pour votre IA personnelle épuise deux fois le même quota hebdomadaire et l'équipe atteindra les limites de débit. Consultez la",
@@ -189,11 +188,10 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Welcher Anbieter?",
     whichProviderP:
       "Drei werden unterstützt und sind getestet. Wähle einen — du kannst später mit ein paar Befehlen wechseln.",
-    kimi: "(Moonshot Pro, ~40 €/Monat) — der günstigste, validiert über mehrtägige Läufe. Der Einstiegspunkt für den Massenmarkt.",
-    codex:
-      "(OpenAI Plus/Pro, ~100 €/Monat) — ausgewogen in Qualität und Kosten.",
+    kimi: "(Moonshot Pro) — validiert über mehrtägige Läufe. Der einfachste Einstiegspunkt.",
+    codex: "(OpenAI Plus/Pro) — ausgewogen in Qualität und Kosten.",
     claude:
-      "(Anthropic Max, ~90 €/Monat) — höchste Präzision für Scoring und Lebenslauf-Erstellung.",
+      "(Anthropic Max) — höchste Präzision für Scoring und Lebenslauf-Erstellung.",
     dedicatedStrong: "Verwende ein eigenes Abonnement.",
     dedicatedRest:
       "Das Teilen des Kontos, das du für deine persönliche KI nutzt, verbraucht dasselbe wöchentliche Kontingent doppelt, und das Team läuft in Rate-Limits. Siehe die",
@@ -227,11 +225,10 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Melyik szolgáltató?",
     whichProviderP:
       "Három támogatott és tesztelt. Válassz egyet — később pár paranccsal válthatsz.",
-    kimi: "(Moonshot Pro, ~40 €/hó) — a legolcsóbb, többnapos futtatásokon validálva. A tömegpiaci kiindulópont.",
-    codex:
-      "(OpenAI Plus/Pro, ~100 €/hó) — kiegyensúlyozott minőség és költség.",
+    kimi: "(Moonshot Pro) — többnapos futtatásokon validálva. A legegyszerűbb kiindulópont.",
+    codex: "(OpenAI Plus/Pro) — kiegyensúlyozott minőség és költség.",
     claude:
-      "(Anthropic Max, ~90 €/hó) — csúcspontosság a pontozáshoz és az önéletrajz-íráshoz.",
+      "(Anthropic Max) — csúcspontosság a pontozáshoz és az önéletrajz-íráshoz.",
     dedicatedStrong: "Használj dedikált előfizetést.",
     dedicatedRest:
       "Ha a személyes AI-hoz használt fiókot osztod meg, az kétszer meríti ki ugyanazt a heti keretet, és a csapat eléri a sebességkorlátokat. Lásd az",
@@ -264,11 +261,9 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Qual provedor?",
     whichProviderP:
       "Três são suportados e testados. Escolha um — você pode trocar mais tarde com alguns comandos.",
-    kimi: "(Moonshot Pro, ~40 €/mês) — o mais barato, validado em execuções de vários dias. O ponto de partida para o grande público.",
-    codex:
-      "(OpenAI Plus/Pro, ~100 €/mês) — equilíbrio entre qualidade e custo.",
-    claude:
-      "(Anthropic Max, ~90 €/mês) — precisão máxima para pontuação e redação de CV.",
+    kimi: "(Moonshot Pro) — validado em execuções de vários dias. O ponto de partida mais simples.",
+    codex: "(OpenAI Plus/Pro) — equilíbrio entre qualidade e custo.",
+    claude: "(Anthropic Max) — precisão máxima para pontuação e redação de CV.",
     dedicatedStrong: "Use uma assinatura dedicada.",
     dedicatedRest:
       "Compartilhar a conta que você usa para sua IA pessoal esgota a mesma cota semanal duas vezes e a equipe atingirá os limites de taxa. Veja a",

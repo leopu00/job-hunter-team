@@ -1,7 +1,7 @@
 "use client";
 
-// Statistiche aggregate PER PROVIDER (Kimi ~€40 vs Codex ~€100: prezzi diversi,
-// non si mediano insieme). Un toggle sceglie il provider; UNA sola tabella-imbuto
+// Statistiche aggregate PER PROVIDER (canoni di fascia diversa: non si mediano
+// insieme). Un toggle sceglie il provider; UNA sola tabella-imbuto
 // mostra, per ogni tappa del funnel (Eccellenti ≥80 → Trovate), il totale medio in
 // un mese di budget, quante al giorno e il prezzo medio per risultato. Ogni riga ha
 // una descrizione (così "Valutate/Scored" e le soglie ≥70/≥80 sono chiare senza

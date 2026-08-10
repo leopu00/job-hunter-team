@@ -73,10 +73,10 @@ export const T: Record<Locale, Dict> = {
       ", not pay-per-use API keys — it works around the clock and that would get expensive. You need an active plan with ",
     subEmphOne: "one",
     subIntroD: " of three providers:",
-    kimi: " (Moonshot Pro, ~€40/mo) — the affordable, mass-market tier. A great place to start.",
-    codex: " (OpenAI Plus/Pro, ~€100/mo) — a balance of quality and cost.",
+    kimi: " (Moonshot Pro) — the simplest tier to start with.",
+    codex: " (OpenAI Plus/Pro) — a balance of quality and cost.",
     claude:
-      " (Anthropic Max x20, ~€200/mo) — the highest precision, best for scoring and writing.",
+      " (Anthropic Max x20) — the highest precision, best for scoring and writing.",
     dedicateLabel: "Dedicate the subscription to the team.",
     dedicateBody:
       " Don't reuse the same account you use for personal AI — they share one weekly quota and the team will hit limits unexpectedly. More on the ",
@@ -131,11 +131,10 @@ export const T: Record<Locale, Dict> = {
       ", non con chiavi API a consumo — lavora 24 ore su 24 e ciò diventerebbe costoso. Ti serve un piano attivo con ",
     subEmphOne: "uno",
     subIntroD: " dei tre provider:",
-    kimi: " (Moonshot Pro, ~40 €/mese) — la fascia accessibile e di massa. Un ottimo punto di partenza.",
-    codex:
-      " (OpenAI Plus/Pro, ~100 €/mese) — un equilibrio tra qualità e costo.",
+    kimi: " (Moonshot Pro) — la fascia più semplice da cui partire.",
+    codex: " (OpenAI Plus/Pro) — un equilibrio tra qualità e costo.",
     claude:
-      " (Anthropic Max x20, ~200 €/mese) — la massima precisione, ideale per scoring e scrittura.",
+      " (Anthropic Max x20) — la massima precisione, ideale per scoring e scrittura.",
     dedicateLabel: "Dedica l'abbonamento al team.",
     dedicateBody:
       " Non riutilizzare lo stesso account che usi per l'AI personale — condividono un'unica quota settimanale e il team raggiungerà i limiti in modo imprevisto. Maggiori dettagli sulla ",
@@ -191,11 +190,10 @@ export const T: Record<Locale, Dict> = {
       ", no con claves API de pago por uso — trabaja las 24 horas y eso resultaría caro. Necesitas un plan activo con ",
     subEmphOne: "uno",
     subIntroD: " de tres proveedores:",
-    kimi: " (Moonshot Pro, ~40 €/mes) — el nivel asequible y de gran público. Un excelente punto de partida.",
-    codex:
-      " (OpenAI Plus/Pro, ~100 €/mes) — un equilibrio entre calidad y coste.",
+    kimi: " (Moonshot Pro) — el nivel más sencillo para empezar.",
+    codex: " (OpenAI Plus/Pro) — un equilibrio entre calidad y coste.",
     claude:
-      " (Anthropic Max x20, ~200 €/mes) — la máxima precisión, ideal para puntuar y redactar.",
+      " (Anthropic Max x20) — la máxima precisión, ideal para puntuar y redactar.",
     dedicateLabel: "Dedica la suscripción al equipo.",
     dedicateBody:
       " No reutilices la misma cuenta que usas para tu IA personal — comparten una única cuota semanal y el equipo alcanzará los límites de forma inesperada. Más información en la ",
@@ -251,11 +249,10 @@ export const T: Record<Locale, Dict> = {
       ", pas avec des clés API à l'usage — elle travaille 24 heures sur 24 et cela coûterait cher. Vous avez besoin d'un forfait actif chez ",
     subEmphOne: "l'un",
     subIntroD: " des trois fournisseurs :",
-    kimi: " (Moonshot Pro, ~40 €/mois) — la formule abordable et grand public. Un excellent point de départ.",
-    codex:
-      " (OpenAI Plus/Pro, ~100 €/mois) — un équilibre entre qualité et coût.",
+    kimi: " (Moonshot Pro) — la formule la plus simple pour débuter.",
+    codex: " (OpenAI Plus/Pro) — un équilibre entre qualité et coût.",
     claude:
-      " (Anthropic Max x20, ~200 €/mois) — la plus haute précision, idéale pour la notation et la rédaction.",
+      " (Anthropic Max x20) — la plus haute précision, idéale pour la notation et la rédaction.",
     dedicateLabel: "Dédiez l'abonnement à l'équipe.",
     dedicateBody:
       " Ne réutilisez pas le même compte que pour votre IA personnelle — ils partagent un quota hebdomadaire unique et l'équipe atteindra les limites de façon imprévue. Plus d'informations sur la ",
@@ -312,11 +309,10 @@ export const T: Record<Locale, Dict> = {
       ", nicht mit nutzungsbasierten API-Schlüsseln — es arbeitet rund um die Uhr, und das würde teuer werden. Du brauchst einen aktiven Plan bei ",
     subEmphOne: "einem",
     subIntroD: " von drei Anbietern:",
-    kimi: " (Moonshot Pro, ~40 €/Monat) — die günstige Einstiegsstufe für die breite Masse. Ein großartiger Startpunkt.",
-    codex:
-      " (OpenAI Plus/Pro, ~100 €/Monat) — ein Gleichgewicht aus Qualität und Kosten.",
+    kimi: " (Moonshot Pro) — die einfachste Stufe für den Einstieg.",
+    codex: " (OpenAI Plus/Pro) — ein Gleichgewicht aus Qualität und Kosten.",
     claude:
-      " (Anthropic Max x20, ~200 €/Monat) — die höchste Präzision, ideal für Bewertung und Verfassen.",
+      " (Anthropic Max x20) — die höchste Präzision, ideal für Bewertung und Verfassen.",
     dedicateLabel: "Widme das Abonnement dem Team.",
     dedicateBody:
       " Verwende nicht dasselbe Konto wie für deine persönliche KI — sie teilen sich ein einziges wöchentliches Kontingent, und das Team stößt unerwartet an die Grenzen. Mehr dazu auf der ",
@@ -372,11 +368,10 @@ export const T: Record<Locale, Dict> = {
       " fut, nem használatalapú API-kulcsokon — a nap 24 órájában dolgozik, és az drága lenne. Aktív csomagra van szükséged az alábbi három szolgáltató ",
     subEmphOne: "egyikénél",
     subIntroD: ":",
-    kimi: " (Moonshot Pro, ~40 €/hó) — a megfizethető, tömegpiaci szint. Remek kiindulópont.",
-    codex:
-      " (OpenAI Plus/Pro, ~100 €/hó) — egyensúly a minőség és a költség között.",
+    kimi: " (Moonshot Pro) — a legegyszerűbb szint a kezdéshez.",
+    codex: " (OpenAI Plus/Pro) — egyensúly a minőség és a költség között.",
     claude:
-      " (Anthropic Max x20, ~200 €/hó) — a legnagyobb pontosság, ideális pontozáshoz és íráshoz.",
+      " (Anthropic Max x20) — a legnagyobb pontosság, ideális pontozáshoz és íráshoz.",
     dedicateLabel: "Szenteld az előfizetést a csapatnak.",
     dedicateBody:
       " Ne használd újra ugyanazt a fiókot, amit a személyes MI-hez használsz — egyetlen heti kvótán osztoznak, és a csapat váratlanul eléri a korlátokat. Bővebben az ",
@@ -432,11 +427,10 @@ export const T: Record<Locale, Dict> = {
       ", não com chaves de API pagas por utilização — trabalha 24 horas por dia e isso ficaria caro. Precisas de um plano ativo com ",
     subEmphOne: "um",
     subIntroD: " de três fornecedores:",
-    kimi: " (Moonshot Pro, ~40 €/mês) — o nível acessível e de grande público. Um excelente ponto de partida.",
-    codex:
-      " (OpenAI Plus/Pro, ~100 €/mês) — um equilíbrio entre qualidade e custo.",
+    kimi: " (Moonshot Pro) — o nível mais simples para começar.",
+    codex: " (OpenAI Plus/Pro) — um equilíbrio entre qualidade e custo.",
     claude:
-      " (Anthropic Max x20, ~200 €/mês) — a máxima precisão, ideal para pontuar e escrever.",
+      " (Anthropic Max x20) — a máxima precisão, ideal para pontuar e escrever.",
     dedicateLabel: "Dedica a subscrição à equipa.",
     dedicateBody:
       " Não reutilizes a mesma conta que usas para a IA pessoal — partilham uma única quota semanal e a equipa atingirá os limites de forma inesperada. Mais informações na ",

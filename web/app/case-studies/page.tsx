@@ -124,7 +124,7 @@ const T: Record<
     priceTitle: "Prezzo medio per risultato",
     priceEstimate: "stima",
     priceLead:
-      "Media del costo per risultato sui case study (canone mensile ÷ output del mese). Mescola abbonamenti da €100 (Codex) e €40 (Kimi) ed è in gran parte stimata (solo finance è ~un mese reale) → valore indicativo.",
+      "Media del costo per risultato sui case study (canone mensile ÷ output del mese). Mescola abbonamenti di fascia diversa (Codex e Kimi) ed è in gran parte stimata (solo finance è ~un mese reale) → valore indicativo.",
     pricePosition: "per posizione trovata",
     priceScored: "per posizione valutata",
     priceStrong: "per match forte ≥70",
@@ -204,7 +204,7 @@ const T: Record<
     priceTitle: "Average price per result",
     priceEstimate: "estimate",
     priceLead:
-      "Average cost per result across the case studies (monthly fee ÷ the month's output). It blends €100 (Codex) and €40 (Kimi) subscriptions and is mostly estimated (only finance is ~a real month) → indicative.",
+      "Average cost per result across the case studies (monthly fee ÷ the month's output). It blends different-tier Codex and Kimi subscriptions and is mostly estimated (only finance is ~a real month) → indicative.",
     pricePosition: "per position found",
     priceScored: "per position scored",
     priceStrong: "per strong match ≥70",
@@ -284,7 +284,7 @@ const T: Record<
     priceTitle: "Precio medio por resultado",
     priceEstimate: "estimación",
     priceLead:
-      "Coste medio por resultado en los casos de estudio (cuota mensual ÷ output del mes). Mezcla suscripciones de €100 (Codex) y €40 (Kimi) y es en gran parte estimado (solo finance es ~un mes real) → indicativo.",
+      "Coste medio por resultado en los casos de estudio (cuota mensual ÷ output del mes). Mezcla suscripciones de distinto nivel (Codex y Kimi) y es en gran parte estimado (solo finance es ~un mes real) → indicativo.",
     pricePosition: "por posición encontrada",
     priceScored: "por posición evaluada",
     priceStrong: "por match fuerte ≥70",
@@ -364,7 +364,7 @@ const T: Record<
     priceTitle: "Prix moyen par résultat",
     priceEstimate: "estimation",
     priceLead:
-      "Coût moyen par résultat sur les études de cas (abonnement mensuel ÷ output du mois). Il mêle des abonnements à €100 (Codex) et €40 (Kimi) et est en grande partie estimé (seul finance est ~un mois réel) → indicatif.",
+      "Coût moyen par résultat sur les études de cas (abonnement mensuel ÷ output du mois). Il mêle des abonnements de niveaux différents (Codex et Kimi) et est en grande partie estimé (seul finance est ~un mois réel) → indicatif.",
     pricePosition: "par poste trouvé",
     priceScored: "par poste évalué",
     priceStrong: "par match fort ≥70",
@@ -444,7 +444,7 @@ const T: Record<
     priceTitle: "Durchschnittspreis pro Ergebnis",
     priceEstimate: "Schätzung",
     priceLead:
-      "Durchschnittliche Kosten pro Ergebnis über die Fallstudien (Monatsgebühr ÷ Monats-Output). Mischt Abos zu €100 (Codex) und €40 (Kimi) und ist überwiegend geschätzt (nur Finance ist ~ein echter Monat) → indikativ.",
+      "Durchschnittliche Kosten pro Ergebnis über die Fallstudien (Monatsgebühr ÷ Monats-Output). Mischt Abos unterschiedlicher Klassen (Codex und Kimi) und ist überwiegend geschätzt (nur Finance ist ~ein echter Monat) → indikativ.",
     pricePosition: "pro gefundener Stelle",
     priceScored: "pro bewerteter Stelle",
     priceStrong: "pro starkem Match ≥70",
@@ -523,7 +523,7 @@ const T: Record<
     priceTitle: "Átlagár eredményenként",
     priceEstimate: "becslés",
     priceLead:
-      "Az eredményenkénti költség átlaga az esettanulmányokon (havi díj ÷ havi output). Vegyíti a €100 (Codex) és €40 (Kimi) előfizetéseket, és nagyrészt becsült (csak a finance ~egy valós hónap) → irányadó.",
+      "Az eredményenkénti költség átlaga az esettanulmányokon (havi díj ÷ havi output). Vegyíti a különböző kategóriájú (Codex és Kimi) előfizetéseket, és nagyrészt becsült (csak a finance ~egy valós hónap) → irányadó.",
     pricePosition: "talált pozíciónként",
     priceScored: "értékelt pozíciónként",
     priceStrong: "erős match ≥70",
@@ -603,7 +603,7 @@ const T: Record<
     priceTitle: "Preço médio por resultado",
     priceEstimate: "estimativa",
     priceLead:
-      "Custo médio por resultado nos estudos de caso (mensalidade ÷ output do mês). Mistura subscrições de €100 (Codex) e €40 (Kimi) e é em grande parte estimado (só finance é ~um mês real) → indicativo.",
+      "Custo médio por resultado nos estudos de caso (mensalidade ÷ output do mês). Mistura subscrições de níveis diferentes (Codex e Kimi) e é em grande parte estimado (só finance é ~um mês real) → indicativo.",
     pricePosition: "por posição encontrada",
     priceScored: "por posição avaliada",
     priceStrong: "por match forte ≥70",
@@ -661,7 +661,7 @@ export default async function CaseStudiesIndexPage() {
   const localized = CASE_STUDIES.map((cs) => localizeCaseStudy(cs, locale));
 
   // ── Statistiche PER PROVIDER ────────────────────────────────────────────
-  // Kimi (~€40) e Codex (~€100) NON si mediano insieme: prezzi diversi. Raggruppo
+  // Kimi e Codex NON si mediano insieme: canoni di fascia diversa. Raggruppo
   // i casi per provider (model) e proietto ogni run su un mese di budget: un mese
   // ≈ 4,345 budget settimanali, quindi una run che ne ha consumati W producendo X
   // rende X × 4,345/W al mese ("giorni × 30" grezzo sovrastima le run intensive).

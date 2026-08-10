@@ -1,6 +1,6 @@
 "use client";
 
-// Costo per RISULTATO. L'abbonamento AI è mensile e a costo fisso (es. €100/mese):
+// Costo per RISULTATO. L'abbonamento AI è mensile e a costo fisso:
 // la domanda è "quanto costa ogni posizione / match forte / eccellente in un mese".
 //
 // Due modalità:
