@@ -3163,14 +3163,40 @@ async function pushChatRows(config, rows, ids, log) {
         headers,
         body: JSON.stringify({ pending_user_messages: rows.slice(s, e) }),
       });
-      res = { status: r.status, ok: r.ok };
+      // Il CORPO, non solo lo stato: la route risponde 200 anche quando il
+      // suo filtro ha scartato ogni riga e non ha scritto niente. Fidarsi
+      // del 200 timbrava `cloud_synced_at` su righe mai arrivate, che non
+      // venivano più riprovate — perdita silenziosa, non ritardo (O-16).
+      let upserted = null;
+      try {
+        const payload = await r.json();
+        const count = payload?.pending_user_messages?.upserted;
+        if (typeof count === 'number') upserted = count;
+      } catch {
+        // Corpo illeggibile: sotto si tratta come esito ignoto.
+      }
+      res = { status: r.status, ok: r.ok, upserted };
     } catch (err) {
       log('warn', `chat push: rete (${err.message}) — the next round`);
       return ok;
     }
     if (res.ok) {
-      for (let i = s; i < e; i++) ok.push(ids[i]);
-      continue;
+      const sent = e - s;
+      // Conferma solo se la route dichiara di aver scritto TUTTE le righe
+      // del chunk. Il conteggio non dice QUALI: confermarne una parte a caso
+      // rischierebbe di timbrare proprio quella persa. Riprovare è gratis —
+      // l'upsert è idempotente su (user_id, legacy_id).
+      if (res.upserted === null) {
+        log('warn', 'chat push: risposta senza conteggio — righe da riprovare');
+        return ok;
+      }
+      if (res.upserted >= sent) {
+        for (let i = s; i < e; i++) ok.push(ids[i]);
+        continue;
+      }
+      log('warn',
+        `chat push: ${res.upserted}/${sent} scritte — le altre restano da riprovare`);
+      return ok;
     }
     if (res.status === 413 && e - s > 1) {
       const mid = s + Math.floor((e - s) / 2);
