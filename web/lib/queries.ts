@@ -202,6 +202,7 @@ const POSITION_SORT_KEYS = [
   "found_at",
   "last_action_at",
   "status",
+  "written_at",
   "applied_at",
 ] as const;
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number];
@@ -358,6 +359,10 @@ export async function getPositions(
       salary_max,
       salary_currency,
       applied_at: app?.applied_at ?? null,
+      // O-34: colonna "CV scritto il". Il campo è già nella select annidata,
+      // ma `...p` porta l'array `applications`, non i suoi campi: senza
+      // questa riga la colonna resterebbe vuota PROPRIO sul cloud.
+      written_at: app?.written_at ?? null,
       last_action_at,
       last_action_by,
       last_action_actor,

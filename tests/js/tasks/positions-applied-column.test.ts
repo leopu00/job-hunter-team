@@ -58,8 +58,10 @@ describe("colonna 'candidatura inviata' in lista", () => {
     // `formatFoundAt` per la giornata corrente mostra solo l'ora: scorrendo
     // cinquanta righe un "13:13" nudo si confonde con quello di ieri, ed è
     // esattamente ciò che la richiesta escludeva.
+    // `formatStamp` — ex `formatAppliedAt`: da O-34 lo stesso timbro esatto
+    // serve anche alle colonne "CV scritto il" e "Trovata".
     const fn = PAGE.slice(
-      PAGE.indexOf("function formatAppliedAt"),
+      PAGE.indexOf("function formatStamp"),
       PAGE.indexOf("// Mini-tag del giudizio utente"),
     );
     expect(fn).toContain("day:");
@@ -81,7 +83,13 @@ describe("colonna 'candidatura inviata' in lista", () => {
   it("è ordinabile in entrambi i rami", () => {
     const cloud = readFileSync(resolve(ROOT, "web/lib/queries.ts"), "utf-8");
     const local = readFileSync(resolve(ROOT, "web/lib/local-queries.ts"), "utf-8");
-    expect(cloud).toMatch(/"status",\s*\n\s*"applied_at",/);
+    // Chiave assente da POSITION_SORT_KEYS = ordinamento ignorato in
+    // silenzio sul cloud (la lista resta com'era, il click non fa niente).
+    const sortKeys = cloud.slice(
+      cloud.indexOf("const POSITION_SORT_KEYS"),
+      cloud.indexOf("] as const;", cloud.indexOf("const POSITION_SORT_KEYS")),
+    );
+    expect(sortKeys).toContain('"applied_at"');
     expect(local).toContain('case "applied_at"');
   });
 });

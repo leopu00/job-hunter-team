@@ -255,6 +255,9 @@ export function getPositionsLocal(
       salary_max,
       salary_currency,
       applied_at: r.applied_at ?? null,
+      // O-34: colonna "CV scritto il" — `mapPosition` mappa i campi di
+      // `positions`, quindi il join con `applications` va riportato a mano.
+      written_at: r.written_at ?? null,
       has_open_ticket: Number(r.open_tickets ?? 0) > 0,
       last_action_at: la.at,
       last_action_by: la.by,
@@ -303,6 +306,8 @@ export function getPositionsLocal(
           return p.status ?? null;
         case "applied_at":
           return p.applied_at ?? null;
+        case "written_at":
+          return p.written_at ?? null;
         default:
           return null;
       }
