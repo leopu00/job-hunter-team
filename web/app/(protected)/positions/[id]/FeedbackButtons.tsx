@@ -84,6 +84,9 @@ const T: Record<
     cancel: string;
     confirm: string;
     removeExclusion: string;
+    markApplied: string;
+    markAppliedDone: string;
+    markAppliedError: string;
   }
 > = {
   it: {
@@ -106,6 +109,9 @@ const T: Record<
     cancel: "Annulla",
     confirm: "Escludi",
     removeExclusion: "Annulla esclusione",
+    markApplied: "Mi sono candidato",
+    markAppliedDone: "Candidatura segnata",
+    markAppliedError: "Non è riuscito a segnare la candidatura",
   },
   en: {
     verdicts: {
@@ -127,6 +133,9 @@ const T: Record<
     cancel: "Cancel",
     confirm: "Exclude",
     removeExclusion: "Remove exclusion",
+    markApplied: "I applied myself",
+    markAppliedDone: "Application recorded",
+    markAppliedError: "Could not record the application",
   },
   hu: {
     verdicts: {
@@ -148,6 +157,9 @@ const T: Record<
     cancel: "Mégse",
     confirm: "Kizárás",
     removeExclusion: "Kizárás visszavonása",
+    markApplied: "Jelentkeztem",
+    markAppliedDone: "Jelentkezés rögzítve",
+    markAppliedError: "A jelentkezést nem sikerült rögzíteni",
   },
   es: {
     verdicts: {
@@ -169,6 +181,9 @@ const T: Record<
     cancel: "Cancelar",
     confirm: "Excluir",
     removeExclusion: "Anular exclusión",
+    markApplied: "Me he postulado",
+    markAppliedDone: "Candidatura registrada",
+    markAppliedError: "No se pudo registrar la candidatura",
   },
   de: {
     verdicts: {
@@ -190,6 +205,9 @@ const T: Record<
     cancel: "Abbrechen",
     confirm: "Ausschließen",
     removeExclusion: "Ausschluss aufheben",
+    markApplied: "Ich habe mich beworben",
+    markAppliedDone: "Bewerbung vermerkt",
+    markAppliedError: "Bewerbung konnte nicht vermerkt werden",
   },
   fr: {
     verdicts: {
@@ -211,6 +229,9 @@ const T: Record<
     cancel: "Annuler",
     confirm: "Exclure",
     removeExclusion: "Annuler l'exclusion",
+    markApplied: "J'ai postulé moi-même",
+    markAppliedDone: "Candidature enregistrée",
+    markAppliedError: "Impossible d'enregistrer la candidature",
   },
   pt: {
     verdicts: {
@@ -232,6 +253,9 @@ const T: Record<
     cancel: "Cancelar",
     confirm: "Excluir",
     removeExclusion: "Anular exclusão",
+    markApplied: "Candidatei-me",
+    markAppliedDone: "Candidatura registada",
+    markAppliedError: "Não foi possível registar a candidatura",
   },
 };
 
@@ -240,6 +264,7 @@ export function FeedbackButtons({
   initialVerdict,
   initialExcludedReason = null,
   initialExcludedNote = null,
+  initialApplied = false,
 }: {
   legacyId: number;
   initialVerdict: Verdict | null;
@@ -247,8 +272,14 @@ export function FeedbackButtons({
   // per evidenziare la causa attiva e permettere il toggle-off.
   initialExcludedReason?: string | null;
   initialExcludedNote?: string | null;
+  /** La posizione risulta già candidata (dal team o dall'utente). */
+  initialApplied?: boolean;
 }) {
   const t = T[useLocale()];
+  // O-24: candidatura mandata a mano dall'utente. Stato separato dal giudizio
+  // — non è un voto sull'offerta, è un fatto sul suo stato.
+  const [applied, setApplied] = useState(initialApplied);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [verdict, setVerdict] = useState<Verdict | null>(initialVerdict);
@@ -526,6 +557,25 @@ export function FeedbackButtons({
         )
       : null;
 
+  // Segna la candidatura come inviata dall'utente. Senza questo il team non
+  // sa che la posizione è già andata: continua a scriverci sopra e a
+  // riproporla, spendendo token su qualcosa di già fatto.
+  async function markApplied() {
+    setApplyError(null);
+    try {
+      const res = await fetch(`/api/positions/${legacyId}/mark-applied`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      setApplied(true);
+      router.refresh();
+    } catch {
+      setApplyError(t.markAppliedError);
+    }
+  }
+
   return (
     <div>
       <div className="grid grid-cols-4 gap-2">
@@ -572,6 +622,31 @@ export function FeedbackButtons({
       {error && (
         <p className="mt-2 text-[10px]" style={{ color: "var(--color-red)" }}>
           {error}
+        </p>
+      )}
+      {/* Fuori dalla fila dei giudizi di proposito: non è un voto
+          sull'offerta, è lo stato della candidatura. */}
+      <button
+        type="button"
+        onClick={() => {
+          if (!applied) void markApplied();
+        }}
+        disabled={busy || applied}
+        aria-pressed={applied}
+        className="mt-2 w-full rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
+        style={{
+          color: applied ? "var(--color-green)" : "var(--color-muted)",
+          borderColor: applied ? "var(--color-green)" : "var(--color-border)",
+          background: applied
+            ? "color-mix(in srgb, var(--color-green) 12%, transparent)"
+            : "transparent",
+        }}
+      >
+        {applied ? `✓ ${t.markAppliedDone}` : t.markApplied}
+      </button>
+      {applyError && (
+        <p className="mt-2 text-[10px]" style={{ color: "var(--color-red)" }}>
+          {applyError}
         </p>
       )}
       {popup}
