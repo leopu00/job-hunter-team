@@ -1299,7 +1299,22 @@ async function handlePush(options) {
       for (const c of ['author', 'chat_ts']) {
         if (sqliteHasColumn(db, 'pending_user_messages', c)) msgCols.push(c);
       }
+      const hasCloudLegacyId = sqliteHasColumn(db, 'pending_user_messages', 'cloud_legacy_id');
+      if (hasCloudLegacyId) msgCols.push('cloud_legacy_id');
       pendingMessages = readSqliteTable(db, 'pending_user_messages', msgCols);
+      // Un turno nato sul web arriva qui con un id LOCALE, ma sul cloud
+      // esiste già con la sua identità (legacy_id negativo). Rimandarlo
+      // com'è lo ripubblicava come riga nuova: era questo percorso — non la
+      // corsia veloce, che salta le righe già sincronizzate — a creare i
+      // gemelli (O-16). Su un DB più vecchio del codice la colonna non c'è:
+      // si comporta come prima, nessuna riga cambia identità.
+      if (hasCloudLegacyId) {
+        pendingMessages = pendingMessages.map((m) => {
+          if (!Number.isFinite(m.cloud_legacy_id)) return m;
+          const { cloud_legacy_id: cloudId, ...rest } = m;
+          return { ...rest, id: cloudId };
+        });
+      }
       // Tombstones delta (SQLite V7): righe (table_name, legacy_id,
       // deleted_at) accumulate dai trigger BEFORE DELETE. Filtro per
       // deleted_at > cursor → solo le nuove cancellazioni nel tick.
