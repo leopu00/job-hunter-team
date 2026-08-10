@@ -514,6 +514,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
             initialVerdict={initialVerdict}
             initialExcludedReason={position.user_excluded_reason ?? null}
             initialExcludedNote={position.user_excluded_note ?? null}
+            initialApplied={position.status === "applied"}
           />
         </div>
       )}

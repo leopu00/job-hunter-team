@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import Database from "better-sqlite3";
-import fs from "fs";
-import { resolveUser } from "@/lib/team-state/auth";
+import type Database from "better-sqlite3";
 import { requireAuth } from "@/lib/auth";
-import {
-  LOCAL_TOKEN_COOKIE,
-  isLocalTokenAuthenticated,
-} from "@/lib/local-token";
-import { JHT_DB_PATH } from "@/lib/jht-paths";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  localFirstWrite,
+  type StepResult,
+} from "@/lib/positions/local-first-write";
 import { isDemoLegacyId } from "@/lib/demo/data";
 import { activeDemoPersona } from "@/lib/demo/mode";
 
@@ -45,26 +41,19 @@ interface ExcludeOutcome {
   id: string;
   status: string | null;
   user_excluded_reason: string | null;
-  source: "local" | "cloud";
-  cloud_synced: boolean | null;
 }
 
-type ApplyResult =
-  | { ok: true; outcome: ExcludeOutcome }
-  | { ok: false; status: number; body: Record<string, unknown> };
+type ApplyResult = StepResult<ExcludeOutcome>;
 
 // ── Path A: SQLite locale source of truth ──────────────────────────
 function applyLocal(
+  db: Database.Database,
   legacyId: number,
   action: "exclude" | "unexclude",
   reason?: string,
   note?: string,
 ): ApplyResult {
-  const db = new Database(JHT_DB_PATH);
-  try {
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-
+  {
     const row = db
       .prepare<
         [number],
@@ -148,12 +137,8 @@ function applyLocal(
         id: String(legacyId),
         status: updated.status,
         user_excluded_reason: updated.user_excluded_reason,
-        source: "local",
-        cloud_synced: null,
       },
     };
-  } finally {
-    db.close();
   }
 }
 
@@ -239,8 +224,6 @@ async function applyCloud(
       id: String(legacyId),
       status: nextStatus,
       user_excluded_reason: nextReason,
-      source: "cloud",
-      cloud_synced: true,
     },
   };
 }
@@ -281,48 +264,18 @@ async function handle(
     }
   }
 
-  // [JHT-DASHBOARD-NATIVE] Desktop nativo: con local-token valido scrivi SOLO
-  // su SQLite locale (riusa applyLocal) e ritorna, senza cloud (resolveUser→
-  // Supabase resta per il browser web).
-  if (
-    isLocalTokenAuthenticated(
-      req.headers.get("authorization"),
-      (await cookies()).get(LOCAL_TOKEN_COOKIE)?.value,
-    )
-  ) {
-    if (!fs.existsSync(JHT_DB_PATH)) {
-      return NextResponse.json({ error: "DB locale assente" }, { status: 503 });
-    }
-    const local = applyLocal(legacyId, action, reason, note);
-    if (!local.ok) {
-      return NextResponse.json(local.body, { status: local.status });
-    }
-    return NextResponse.json({
-      ...local.outcome,
-      cloud_synced: null,
-      source: "local",
-    });
-  }
-
-  const resolved = await resolveUser(req);
-  if (!resolved.ok) return resolved.res;
-  if (resolved.user.source !== "session") {
-    return NextResponse.json(
-      { error: "Solo il browser può escludere manualmente (no Bearer token)" },
-      { status: 403 },
-    );
-  }
-  const { userId, supabase } = resolved.user;
-
-  const hasLocal = fs.existsSync(JHT_DB_PATH);
-
-  if (hasLocal) {
-    const local = applyLocal(legacyId, action, reason, note);
-    if (!local.ok)
-      return NextResponse.json(local.body, { status: local.status });
-    // Best-effort cloud write (single source-of-truth in-process = SQLite).
-    let cloudOk: boolean | null = null;
-    try {
+  // I tre rami (desktop nativo → solo locale; browser col box acceso →
+  // locale + mirror; box spento → solo cloud) vivono in `localFirstWrite`:
+  // sono gli stessi che servono a segnare una candidatura manuale (O-24) e,
+  // a breve, al giudizio local-first (O-15) e alle note (O-22). Qui resta
+  // solo ciò che è davvero di questa azione: il SQL e l'update cloud.
+  return localFirstWrite<ExcludeOutcome>(req, {
+    sessionOnlyError:
+      "Solo il browser può escludere manualmente (no Bearer token)",
+    local: (db) => applyLocal(db, legacyId, action, reason, note),
+    cloud: (supabase, userId) =>
+      applyCloud(supabase, userId, legacyId, action, reason, note),
+    mirror: async (supabase, userId, outcome) => {
       const update =
         action === "exclude"
           ? {
@@ -335,7 +288,7 @@ async function handle(
           : {
               // Allinea anche lo status (= quello ripristinato in locale), così
               // il cloud esce subito da 'excluded' senza attendere il push.
-              status: local.outcome.status,
+              status: outcome.status,
               user_excluded_reason: null,
               user_excluded_note: null,
               user_excluded_at: null,
@@ -347,23 +300,9 @@ async function handle(
         .update(update)
         .eq("user_id", userId)
         .eq("legacy_id", legacyId);
-      cloudOk = !error;
-    } catch {
-      cloudOk = false;
-    }
-    return NextResponse.json({ ...local.outcome, cloud_synced: cloudOk });
-  }
-
-  const cloud = await applyCloud(
-    supabase,
-    userId,
-    legacyId,
-    action,
-    reason,
-    note,
-  );
-  if (!cloud.ok) return NextResponse.json(cloud.body, { status: cloud.status });
-  return NextResponse.json(cloud.outcome);
+      if (error) throw new Error(error.message);
+    },
+  });
 }
 
 // [JHT-WEB-DEMO] Le posizioni demo non cambiano status (dataset statico):
