@@ -196,9 +196,16 @@ _GD_PLACEHOLDER_RE = re.compile(r"\{[^{}]*\}|%[0-9.]*[a-zA-Z]")
 _GD_IDENTIFIER_RE = re.compile(r"^[a-z0-9_.\-/]+$")
 ## Chiamate di log: `Log.info("scene", "…")`, `push_warning("…")`.
 _GD_LOG_RE = re.compile(r"\bLog\.(?:info|warn|error|debug)\s*\(|"
+                        r"\bLog\.call_deferred\s*\(|"
                         r"\bpush_(?:warning|error)\s*\(|\bprint(?:err)?\s*\(")
-## Busta di un messaggio verso un agente del prodotto: `[@utente -> @capitano]`.
-_GD_AGENT_ORDER_RE = re.compile(r"\[@[a-z0-9_-]+\s*->")
+## Messaggi verso un agente del PRODOTTO. Due forme, entrambe necessarie:
+## la busta `[@utente -> @capitano]`, e la consegna diretta in chat
+## `_do_send_chat("coordinatore", "…")`. La seconda è stata la sorpresa: 11
+## stringhe di vps_backend.gd sono istruzioni operative al Capitano
+## (manutenzione, bacheca, deroga di spesa) e NON portano nessuna busta.
+## Tradurle avrebbe cambiato il comportamento del team, non la lingua.
+_GD_AGENT_ORDER_RE = re.compile(
+    r"\[@[a-z0-9_-]+\s*->|\b_do_send_chat\s*\(")
 ## Percorsi e URI: `res://…`, `user://…`, `https://…`.
 _GD_PATH_RE = re.compile(r"^[a-z]+://|^/|\.(?:gd|tscn|png|svg|json|cfg|log)$")
 
@@ -230,8 +237,32 @@ def _gd_is_copy(value: str) -> bool:
 def gdscript_visible_literals(path: Path):
     """Frasi per l'utente in un file GDScript (identificatori esclusi)."""
     src = path.read_text(encoding="utf-8")
+    skipping = False
+    depth = 0
     for i, line in enumerate(src.splitlines(), 1):
         stripped = line.strip()
+        # Marcatore esplicito: copre l'istruzione (anche multi-riga) che
+        # segue. Serve perché la busta `[@x -> @y]` sta solo sulla PRIMA
+        # riga di un ordine, mentre le continuazioni sono testo che l'agente
+        # legge allo stesso modo. Marcarlo nel codice rende l'esclusione
+        # leggibile da chi passa di lì, non solo dal censimento.
+        if stripped.startswith("#") and "NON TRADURRE" in stripped:
+            skipping = True
+            continue
+        if skipping:
+            if stripped.startswith("#"):
+                continue
+            if not stripped:
+                skipping = False
+                continue
+            depth += stripped.count("(") - stripped.count(")")
+            # L'istruzione finisce quando le parentesi si richiudono e la
+            # riga non continua con `\`. Contano entrambe: una chiamata
+            # multi-riga continua fra parentesi, una concatenazione con `\`.
+            if depth <= 0 and not stripped.endswith("\\"):
+                skipping = False
+                depth = 0
+            continue
         if stripped.startswith("#"):
             continue
         # Una riga che passa dal dizionario è già tradotta per costruzione.

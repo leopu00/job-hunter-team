@@ -3599,6 +3599,13 @@ static func active_agents() -> PackedStringArray:
 static func request_graceful_shutdown() -> bool:
 	_run("docker", PackedStringArray(["exec", "jht", "rm", "-f",
 			SHUTDOWN_READY_FLAG]))
+	# ⚠️ NON TRADURRE: questo non è testo dell'interfaccia, è un ORDINE che il
+	# Capitano ESEGUE leggendolo. Gli agenti del prodotto girano in italiano;
+	# riscriverlo in inglese cambierebbe il COMPORTAMENTO — nel migliore dei
+	# casi l'ordine non viene riconosciuto e la chiusura pulita non parte.
+	# Riconoscibile dalla busta `[@mittente -> @destinatario]`: dove la vedi,
+	# vale la stessa regola. Il censimento della copy (O-07) lo salta apposta,
+	# e tests/test_shutdown_timeout_contract.py asserisce su questo testo.
 	var order := "[@utente -> @capitano] [SHUTDOWN] L'utente sta chiudendo " \
 			+ "l'applicazione. Usa la skill graceful-shutdown: fai annotare a " \
 			+ "ogni agente lo stato del lavoro in corso sulla propria agenda, " \

@@ -48,7 +48,7 @@ def test_shared_python_user_visible_copy_has_no_italian_baseline():
 ## verrebbe disattivato entro un giorno. Può solo SCENDERE: si abbassa a ogni
 ## lotto e arriva a 0 quando il fronte è chiuso. Se sale, qualcuno ha aggiunto
 ## copy italiana nuova — che è esattamente ciò che va fermato subito.
-GAME_COPY_BUDGET = 167
+GAME_COPY_BUDGET = 148
 
 
 def test_backend_perimeter_user_visible_copy_is_english():
