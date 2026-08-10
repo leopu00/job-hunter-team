@@ -11,6 +11,7 @@
 export const POSITIONS_COLUMNS = [
   "id",
   "last_action_at",
+  "found_at",
   "title",
   "company",
   "role_family",
@@ -23,6 +24,7 @@ export const POSITIONS_COLUMNS = [
   "last_action_by",
   "critic",
   "status",
+  "written_at",
   "applied_at",
 ] as const;
 
@@ -43,6 +45,9 @@ export type PositionsColumnKey = (typeof POSITIONS_COLUMNS)[number];
 export const POSITIONS_COL_MIN_WIDTH: Record<PositionsColumnKey, number> = {
   id: 78,
   last_action_at: 122,
+  // Quando lo Scout l'ha trovata. Ordinata crescente dice quali sono ferme
+  // in coda da più tempo — la domanda che si fa filtrando per stato.
+  found_at: 122,
   title: 260,
   company: 190,
   role_family: 150,
@@ -55,9 +60,17 @@ export const POSITIONS_COL_MIN_WIDTH: Record<PositionsColumnKey, number> = {
   last_action_by: 134,
   critic: 80,
   status: 104,
+  // Quando lo Scrittore ha prodotto il CV. Accanto ad `applied_at` racconta
+  // la coda: scritto il 3, ancora non inviato.
+  // 168 e non 122 come le altre date: l'intestazione "CV SCRITTO IL" è la più
+  // lunga della tabella e a 122 usciva troncata con l'ellissi sopra la
+  // freccia di ordinamento (visto a schermo, non da un test).
+  written_at: 168,
   // Data + ora, come `last_action_at`: la richiesta era l'orario ESATTO, non
   // un "2 giorni fa" che a colpo d'occhio non dice a quali si è già scritto.
-  applied_at: 122,
+  // 150 e non 122: con le colonne di O-34 accese la tabella arriva ai minimi
+  // e a 122 l'intestazione "CANDIDATURA" usciva tagliata.
+  applied_at: 150,
 };
 
 // Default = le 6 colonne della tabella dashboard ("Le Migliori

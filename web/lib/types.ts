@@ -254,6 +254,10 @@ export interface PositionWithScore extends Position {
   // ricavabile da `status: 'applied'`, che dice SE ma non QUANDO — ed è la
   // metà che serve in lista quando le posizioni sono cinquanta (O-25).
   applied_at?: string | null;
+  // Quando lo Scrittore ha prodotto il CV (applications.written_at). In lista
+  // serve per l'attesa: ordinata crescente, dice quali CV sono fermi da più
+  // tempo in revisione o pronti da inviare (O-34).
+  written_at?: string | null;
   // O-31: esiste un ticket dell'utente ancora senza risposta (open o
   // assigned). Deriva dai ticket, non è uno stato salvato: quando il ticket
   // si chiude la posizione torna a mostrare il proprio stato da sé.
