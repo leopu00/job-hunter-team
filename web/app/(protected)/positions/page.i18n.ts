@@ -189,6 +189,15 @@ export const T = {
     fr: "Statut",
     pt: "Estado",
   },
+  col_applied_at: {
+    it: "Candidatura",
+    en: "Applied",
+    hu: "Jelentkezés",
+    es: "Candidatura",
+    de: "Beworben",
+    fr: "Candidature",
+    pt: "Candidatura",
+  },
   col_critic: {
     it: "Voto finale",
     en: "Final score",

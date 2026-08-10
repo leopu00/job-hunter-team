@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
+import { intlTag } from "@/lib/locale-tag";
 import type { Locale } from "@/i18n/config";
 import {
   IconX,
@@ -259,12 +260,27 @@ const T: Record<
   },
 };
 
+// Data + ora della candidatura, nello stesso formato della colonna in lista
+// (`04/08, 13:13`): la richiesta era l'orario ESATTO, e le due superfici
+// devono dire la stessa cosa nello stesso modo.
+function formatAppliedAt(ts: string, locale: string): string {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(intlTag(locale), {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function FeedbackButtons({
   legacyId,
   initialVerdict,
   initialExcludedReason = null,
   initialExcludedNote = null,
   initialApplied = false,
+  initialAppliedAt = null,
 }: {
   legacyId: number;
   initialVerdict: Verdict | null;
@@ -274,11 +290,15 @@ export function FeedbackButtons({
   initialExcludedNote?: string | null;
   /** La posizione risulta già candidata (dal team o dall'utente). */
   initialApplied?: boolean;
+  /** Quando: l'ora esatta, non "candidata" e basta (O-25). */
+  initialAppliedAt?: string | null;
 }) {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   // O-24: candidatura mandata a mano dall'utente. Stato separato dal giudizio
   // — non è un voto sull'offerta, è un fatto sul suo stato.
   const [applied, setApplied] = useState(initialApplied);
+  const [appliedAt, setAppliedAt] = useState<string | null>(initialAppliedAt);
   const [applyError, setApplyError] = useState<string | null>(null);
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -569,7 +589,13 @@ export function FeedbackButtons({
         body: JSON.stringify({}),
       });
       if (!res.ok) throw new Error(String(res.status));
+      const saved = (await res.json().catch(() => null)) as {
+        applied_at?: string | null;
+      } | null;
       setApplied(true);
+      // L'ora la decide chi scrive, non il browser: così quella mostrata è
+      // quella registrata, anche a orologi disallineati.
+      setAppliedAt(saved?.applied_at ?? null);
       router.refresh();
     } catch {
       setApplyError(t.markAppliedError);
@@ -642,7 +668,9 @@ export function FeedbackButtons({
             : "transparent",
         }}
       >
-        {applied ? `✓ ${t.markAppliedDone}` : t.markApplied}
+        {applied
+          ? `✓ ${t.markAppliedDone}${appliedAt ? ` · ${formatAppliedAt(appliedAt, locale)}` : ""}`
+          : t.markApplied}
       </button>
       {applyError && (
         <p className="mt-2 text-[10px]" style={{ color: "var(--color-red)" }}>

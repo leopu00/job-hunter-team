@@ -71,6 +71,21 @@ function formatFoundAt(ts: string | null | undefined, locale: string) {
   });
 }
 
+// Quando è partita la candidatura. A differenza di `formatFoundAt` mostra
+// data E ora anche per oggi: la richiesta era l'orario ESATTO, e un "13:13"
+// senza data, scorrendo cinquanta righe, si confonde con quello di ieri.
+function formatAppliedAt(ts: string | null | undefined, locale: string) {
+  if (!ts) return null;
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(intlTag(locale), {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 // Mini-tag del giudizio utente sulle righe/card (stessi colori/icone di
 // /swipe): rende visibile il feedback direttamente in lista.
 const FB_TAG: Record<
@@ -151,6 +166,7 @@ const SORTABLE_COLUMNS = new Set([
   "found_at",
   "last_action_at",
   "status",
+  "applied_at",
 ]);
 
 // Verdetto critico → colore badge.
@@ -481,6 +497,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                   { key: "last_action_by", label: tr("col_updated_by") },
                   { key: "critic", label: tr("col_voto") },
                   { key: "status", label: tr("col_status") },
+                  { key: "applied_at", label: tr("col_applied_at") },
                 ]}
                 visible={[...visibleCols]}
                 texts={{ button: tr("cols_button"), reset: tr("cols_reset") }}
@@ -678,6 +695,12 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     {
                       col: "status",
                       label: tr("col_status"),
+                      sortable: true,
+                      center: true,
+                    },
+                    {
+                      col: "applied_at",
+                      label: tr("col_applied_at"),
                       sortable: true,
                       center: true,
                     },
@@ -964,6 +987,22 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           >
                             {p.status}
                           </span>
+                        </td>
+                      )}
+                      {/* Candidatura inviata: QUANDO, non solo se. Lo stato
+                          dice 'applied', questa colonna dice l'ora esatta —
+                          è ciò che serve scorrendo cinquanta righe. */}
+                      {show("applied_at") && (
+                        <td className="px-4 py-3 text-center">
+                          {formatAppliedAt(p.applied_at, locale) ? (
+                            <span className="font-mono tabular-nums text-[11px] text-[var(--color-base)] whitespace-nowrap">
+                              {formatAppliedAt(p.applied_at, locale)}
+                            </span>
+                          ) : (
+                            <span className="text-[var(--color-dim)] text-[11px]">
+                              —
+                            </span>
+                          )}
                         </td>
                       )}
                     </tr>

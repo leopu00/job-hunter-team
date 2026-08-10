@@ -202,6 +202,7 @@ const POSITION_SORT_KEYS = [
   "found_at",
   "last_action_at",
   "status",
+  "applied_at",
 ] as const;
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number];
 
@@ -356,6 +357,7 @@ export async function getPositions(
       salary_min,
       salary_max,
       salary_currency,
+      applied_at: app?.applied_at ?? null,
       last_action_at,
       last_action_by,
       last_action_actor,

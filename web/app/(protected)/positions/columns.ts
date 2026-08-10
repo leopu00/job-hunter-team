@@ -23,6 +23,7 @@ export const POSITIONS_COLUMNS = [
   "last_action_by",
   "critic",
   "status",
+  "applied_at",
 ] as const;
 
 export type PositionsColumnKey = (typeof POSITIONS_COLUMNS)[number];
@@ -54,6 +55,9 @@ export const POSITIONS_COL_MIN_WIDTH: Record<PositionsColumnKey, number> = {
   last_action_by: 134,
   critic: 80,
   status: 104,
+  // Data + ora, come `last_action_at`: la richiesta era l'orario ESATTO, non
+  // un "2 giorni fa" che a colpo d'occhio non dice a quali si è già scritto.
+  applied_at: 122,
 };
 
 // Default = le 6 colonne della tabella dashboard ("Le Migliori
