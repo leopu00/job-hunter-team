@@ -195,11 +195,16 @@ export function getPositionsLocal(
   }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
-  const limitClause = opts?.limit ? `LIMIT ?` : "";
-  const offsetClause = opts?.offset ? `OFFSET ?` : "";
-  if (opts?.limit) params.push(opts.limit);
-  if (opts?.offset) params.push(opts.offset);
 
+  // O-37: NIENTE LIMIT/OFFSET in SQL. La ORDER BY qui sotto conosce solo le
+  // colonne di POSITION_SORT_COLUMNS; per tutte le altre (written_at,
+  // applied_at, last_action_at, salary, remote, last_action_by — quelle
+  // derivate, che si ordinano in JS più sotto) cadeva sul default found_at
+  // DESC. Tagliare LÌ e riordinare DOPO significa riordinare le righe
+  // sbagliate: ordinando "CV scritto il" crescente in cima non arrivavano i
+  // più vecchi, ma i più vecchi FRA i primi N per data di rilevazione — e da
+  // pagina 2 in poi le righe si ripetevano. Il taglio ora è in fondo, dopo
+  // il sort, così vale per ogni chiave senza doverla saper esprimere in SQL.
   const sortCol = POSITION_SORT_COLUMNS[opts?.sort ?? ""] ?? "p.found_at";
   const sortDir = opts?.dir === "asc" ? "ASC" : "DESC";
   const nullsLast =
@@ -226,7 +231,6 @@ export function getPositionsLocal(
     LEFT JOIN applications a ON a.position_id = p.id
     ${whereClause}
     ORDER BY ${nullsLast}${sortCol} ${sortDir}
-    ${limitClause} ${offsetClause}
   `;
   const rows = db.prepare(sql).all(...params) as any[];
   const mapped = rows.map((r) => {
@@ -319,6 +323,14 @@ export function getPositionsLocal(
         return (va - vb) * mul;
       return String(va).localeCompare(String(vb)) * mul;
     });
+  }
+  // Paginazione DOPO l'ordinamento (O-37): vedi il commento sulla query.
+  // `default:` di `val()` ritorna null per le chiavi che non conosce, quindi
+  // un sort ignoto lascia l'ordine SQL — e il taglio resta comunque corretto
+  // rispetto all'ordine che l'utente sta vedendo.
+  if (opts?.offset || opts?.limit) {
+    const start = opts.offset ?? 0;
+    return mapped.slice(start, opts.limit ? start + opts.limit : undefined);
   }
   return mapped;
 }
