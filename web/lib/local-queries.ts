@@ -1,5 +1,6 @@
 import { getDb } from "./db";
 import { resolveCityPins } from "./city-coords";
+import { salaryPreference } from "./salary-source";
 import {
   aggregateRoleFamilies,
   type RoleFamilyCount,
@@ -229,16 +230,12 @@ export function getPositionsLocal(
   `;
   const rows = db.prepare(sql).all(...params) as any[];
   const mapped = rows.map((r) => {
-    // Stipendio: stima del team se presente, altrimenti il dichiarato.
-    const useEst =
-      r.salary_estimated_min != null || r.salary_estimated_max != null;
-    const salary_min =
-      (useEst ? r.salary_estimated_min : r.salary_declared_min) ?? null;
-    const salary_max =
-      (useEst ? r.salary_estimated_max : r.salary_declared_max) ?? null;
-    const salary_currency =
-      (useEst ? r.salary_estimated_currency : r.salary_declared_currency) ??
-      "EUR";
+    // Stipendio: il dichiarato vince, la stima è il fallback (O-32).
+    const {
+      min: salary_min,
+      max: salary_max,
+      currency: salary_currency,
+    } = salaryPreference(r);
     const la = pickLastActionLocal([
       { ts: r.found_at, by: "scout", actor: r.found_by },
       { ts: r.last_checked, by: "analista", actor: "analista" },
@@ -772,6 +769,8 @@ export function getDashboardPositionsLocal(ws: string) {
       { ts: r.applied_at, by: "user", actor: "user" },
       { ts: r.response_at, by: "user", actor: "user" },
     ]);
+    // Dichiarato prima della stima (O-32) — stessa regola della lista.
+    const salary = salaryPreference(r);
     return {
       id: sid(r.id),
       legacy_id: (r.legacy_id as number | null) ?? null,
@@ -785,18 +784,9 @@ export function getDashboardPositionsLocal(ws: string) {
       loc_country: (r.loc_country as string | null) ?? null,
       loc_city: (r.loc_city as string | null) ?? null,
       source: (r.source as string | null) ?? null,
-      salary_min:
-        (((r.salary_estimated_min ?? r.salary_estimated_max) != null
-          ? r.salary_estimated_min
-          : r.salary_declared_min) as number | null) ?? null,
-      salary_max:
-        (((r.salary_estimated_min ?? r.salary_estimated_max) != null
-          ? r.salary_estimated_max
-          : r.salary_declared_max) as number | null) ?? null,
-      salary_currency:
-        (((r.salary_estimated_min ?? r.salary_estimated_max) != null
-          ? r.salary_estimated_currency
-          : r.salary_declared_currency) as string | null) ?? "EUR",
+      salary_min: salary.min,
+      salary_max: salary.max,
+      salary_currency: salary.currency,
       found_at: (r.found_at as string | null) ?? null,
       scored_at: (r.scored_at as string | null) ?? null,
       last_action_at: ((r.last_action_at as string | null) ?? "") || at,
