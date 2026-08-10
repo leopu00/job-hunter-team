@@ -371,6 +371,40 @@ export async function getPositions(
       (p) => p.critic_verdict && set.has(p.critic_verdict),
     );
   }
+  // O-31 (ramo cloud) — quali posizioni hanno un ticket ancora senza
+  // risposta. UNA select in più, non una join: sul cloud i ticket sono
+  // legati per `position_legacy_id`, non da una foreign key annidabile
+  // nella select delle posizioni.
+  //
+  // `assigned` conta quanto `open`: un agente che ci lavora non è una
+  // risposta arrivata. Stesso criterio del ramo locale — se i due
+  // divergono, la stessa posizione dice due cose diverse a seconda di dove
+  // la si guarda.
+  const legacyIds = mapped
+    .map((p) => p.legacy_id)
+    .filter((id): id is number => typeof id === "number");
+  if (legacyIds.length) {
+    const { data: pending } = await supabase
+      .from("position_tickets")
+      .select("position_legacy_id")
+      // Nessun filtro esplicito sull'utente: sul cloud lo applica la RLS,
+      // come per le altre letture di questa funzione.
+      .in("status", ["open", "assigned"])
+      .in("position_legacy_id", legacyIds);
+    if (pending?.length) {
+      const waiting = new Set(
+        (pending as { position_legacy_id: number }[]).map(
+          (t) => t.position_legacy_id,
+        ),
+      );
+      mapped = mapped.map((p) =>
+        p.legacy_id != null && waiting.has(p.legacy_id)
+          ? { ...p, has_open_ticket: true }
+          : p,
+      );
+    }
+  }
+
   // Filtri "intelligenti" sidebar (family/location/score band).
   mapped = applyFacetFilters(mapped, opts);
 
@@ -1838,4 +1872,3 @@ export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
   await enrichRecent(supabase, events);
   return events;
 }
-
