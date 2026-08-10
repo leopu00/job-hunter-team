@@ -15,6 +15,7 @@ import * as local from "@/lib/local-queries";
 import { activeDemoPersona } from "@/lib/demo/mode";
 import * as demo from "@/lib/demo/queries";
 import { resolveCityPins } from "@/lib/city-coords";
+import { salaryPreference } from "@/lib/salary-source";
 import {
   aggregateRoleFamilies,
   UNCATEGORIZED_LABEL,
@@ -202,6 +203,7 @@ const POSITION_SORT_KEYS = [
   "found_at",
   "last_action_at",
   "status",
+  "written_at",
   "applied_at",
 ] as const;
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number];
@@ -323,17 +325,14 @@ export async function getPositions(
   let mapped: PositionWithScore[] = data.map((p: any) => {
     const s = firstRelated<any>(p.scores);
     const app = firstRelated<any>(p.applications);
-    // Stipendio: stima del team se presente, fallback sul dichiarato (stessa
-    // fonte per min/max/currency, così non mischiamo valute).
-    const useEst =
-      p.salary_estimated_min != null || p.salary_estimated_max != null;
-    const salary_min =
-      (useEst ? p.salary_estimated_min : p.salary_declared_min) ?? null;
-    const salary_max =
-      (useEst ? p.salary_estimated_max : p.salary_declared_max) ?? null;
-    const salary_currency =
-      (useEst ? p.salary_estimated_currency : p.salary_declared_currency) ??
-      "EUR";
+    // Stipendio: il DICHIARATO vince, la stima è il fallback (O-32). Vedi
+    // `salaryPreference` per il perché; stessa fonte per min/max/currency,
+    // così non mischiamo valute.
+    const {
+      min: salary_min,
+      max: salary_max,
+      currency: salary_currency,
+    } = salaryPreference(p);
     // Ultima azione (stesso mapping di getDashboardPositions).
     const {
       at: last_action_at,
@@ -358,6 +357,10 @@ export async function getPositions(
       salary_max,
       salary_currency,
       applied_at: app?.applied_at ?? null,
+      // O-34: colonna "CV scritto il". Il campo è già nella select annidata,
+      // ma `...p` porta l'array `applications`, non i suoi campi: senza
+      // questa riga la colonna resterebbe vuota PROPRIO sul cloud.
+      written_at: app?.written_at ?? null,
       last_action_at,
       last_action_by,
       last_action_actor,
@@ -897,19 +900,16 @@ export async function getSwipeDecks(limit = 1000): Promise<{
 
   const mapRow = (p: any): PositionWithScore => {
     const sc = firstRelated<any>(p.scores);
-    const useEst =
-      p.salary_estimated_min != null || p.salary_estimated_max != null;
+    // Dichiarato prima della stima (O-32): sullo swipe l'utente decide in un
+    // gesto, quindi il numero sbagliato lì costa ancora meno attenzione.
+    const salary = salaryPreference(p);
     return {
       ...p,
       score: p.score ?? sc?.total_score ?? undefined,
       scores: undefined,
-      salary_min:
-        (useEst ? p.salary_estimated_min : p.salary_declared_min) ?? null,
-      salary_max:
-        (useEst ? p.salary_estimated_max : p.salary_declared_max) ?? null,
-      salary_currency:
-        (useEst ? p.salary_estimated_currency : p.salary_declared_currency) ??
-        "EUR",
+      salary_min: salary.min,
+      salary_max: salary.max,
+      salary_currency: salary.currency,
     } as PositionWithScore;
   };
 
@@ -1010,22 +1010,13 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       { ts: a?.applied_at, by: "user", actor: "user" },
       { ts: a?.response_at, by: "user", actor: "user" },
     ]);
-    // Stipendio: preferisci la stima del team, fallback sul dichiarato.
+    // Stipendio: il dichiarato vince, la stima è il fallback (O-32).
     // min/max/currency provengono dalla STESSA fonte per non mischiare valute.
-    const useEst =
-      p.salary_estimated_min != null || p.salary_estimated_max != null;
-    const salary_min =
-      ((useEst ? p.salary_estimated_min : p.salary_declared_min) as
-        | number
-        | null) ?? null;
-    const salary_max =
-      ((useEst ? p.salary_estimated_max : p.salary_declared_max) as
-        | number
-        | null) ?? null;
-    const salary_currency =
-      ((useEst ? p.salary_estimated_currency : p.salary_declared_currency) as
-        | string
-        | null) ?? "EUR";
+    const {
+      min: salary_min,
+      max: salary_max,
+      currency: salary_currency,
+    } = salaryPreference(p);
     return {
       id: String(p.id),
       legacy_id: (p.legacy_id as number | null) ?? null,

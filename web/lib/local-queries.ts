@@ -1,5 +1,6 @@
 import { getDb } from "./db";
 import { resolveCityPins } from "./city-coords";
+import { salaryPreference } from "./salary-source";
 import {
   aggregateRoleFamilies,
   type RoleFamilyCount,
@@ -194,11 +195,16 @@ export function getPositionsLocal(
   }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
-  const limitClause = opts?.limit ? `LIMIT ?` : "";
-  const offsetClause = opts?.offset ? `OFFSET ?` : "";
-  if (opts?.limit) params.push(opts.limit);
-  if (opts?.offset) params.push(opts.offset);
 
+  // O-37: NIENTE LIMIT/OFFSET in SQL. La ORDER BY qui sotto conosce solo le
+  // colonne di POSITION_SORT_COLUMNS; per tutte le altre (written_at,
+  // applied_at, last_action_at, salary, remote, last_action_by — quelle
+  // derivate, che si ordinano in JS più sotto) cadeva sul default found_at
+  // DESC. Tagliare LÌ e riordinare DOPO significa riordinare le righe
+  // sbagliate: ordinando "CV scritto il" crescente in cima non arrivavano i
+  // più vecchi, ma i più vecchi FRA i primi N per data di rilevazione — e da
+  // pagina 2 in poi le righe si ripetevano. Il taglio ora è in fondo, dopo
+  // il sort, così vale per ogni chiave senza doverla saper esprimere in SQL.
   const sortCol = POSITION_SORT_COLUMNS[opts?.sort ?? ""] ?? "p.found_at";
   const sortDir = opts?.dir === "asc" ? "ASC" : "DESC";
   const nullsLast =
@@ -225,20 +231,15 @@ export function getPositionsLocal(
     LEFT JOIN applications a ON a.position_id = p.id
     ${whereClause}
     ORDER BY ${nullsLast}${sortCol} ${sortDir}
-    ${limitClause} ${offsetClause}
   `;
   const rows = db.prepare(sql).all(...params) as any[];
   const mapped = rows.map((r) => {
-    // Stipendio: stima del team se presente, altrimenti il dichiarato.
-    const useEst =
-      r.salary_estimated_min != null || r.salary_estimated_max != null;
-    const salary_min =
-      (useEst ? r.salary_estimated_min : r.salary_declared_min) ?? null;
-    const salary_max =
-      (useEst ? r.salary_estimated_max : r.salary_declared_max) ?? null;
-    const salary_currency =
-      (useEst ? r.salary_estimated_currency : r.salary_declared_currency) ??
-      "EUR";
+    // Stipendio: il dichiarato vince, la stima è il fallback (O-32).
+    const {
+      min: salary_min,
+      max: salary_max,
+      currency: salary_currency,
+    } = salaryPreference(r);
     const la = pickLastActionLocal([
       { ts: r.found_at, by: "scout", actor: r.found_by },
       { ts: r.last_checked, by: "analista", actor: "analista" },
@@ -255,6 +256,9 @@ export function getPositionsLocal(
       salary_max,
       salary_currency,
       applied_at: r.applied_at ?? null,
+      // O-34: colonna "CV scritto il" — `mapPosition` mappa i campi di
+      // `positions`, quindi il join con `applications` va riportato a mano.
+      written_at: r.written_at ?? null,
       has_open_ticket: Number(r.open_tickets ?? 0) > 0,
       last_action_at: la.at,
       last_action_by: la.by,
@@ -303,6 +307,8 @@ export function getPositionsLocal(
           return p.status ?? null;
         case "applied_at":
           return p.applied_at ?? null;
+        case "written_at":
+          return p.written_at ?? null;
         default:
           return null;
       }
@@ -317,6 +323,14 @@ export function getPositionsLocal(
         return (va - vb) * mul;
       return String(va).localeCompare(String(vb)) * mul;
     });
+  }
+  // Paginazione DOPO l'ordinamento (O-37): vedi il commento sulla query.
+  // `default:` di `val()` ritorna null per le chiavi che non conosce, quindi
+  // un sort ignoto lascia l'ordine SQL — e il taglio resta comunque corretto
+  // rispetto all'ordine che l'utente sta vedendo.
+  if (opts?.offset || opts?.limit) {
+    const start = opts.offset ?? 0;
+    return mapped.slice(start, opts.limit ? start + opts.limit : undefined);
   }
   return mapped;
 }
@@ -767,6 +781,8 @@ export function getDashboardPositionsLocal(ws: string) {
       { ts: r.applied_at, by: "user", actor: "user" },
       { ts: r.response_at, by: "user", actor: "user" },
     ]);
+    // Dichiarato prima della stima (O-32) — stessa regola della lista.
+    const salary = salaryPreference(r);
     return {
       id: sid(r.id),
       legacy_id: (r.legacy_id as number | null) ?? null,
@@ -780,18 +796,9 @@ export function getDashboardPositionsLocal(ws: string) {
       loc_country: (r.loc_country as string | null) ?? null,
       loc_city: (r.loc_city as string | null) ?? null,
       source: (r.source as string | null) ?? null,
-      salary_min:
-        (((r.salary_estimated_min ?? r.salary_estimated_max) != null
-          ? r.salary_estimated_min
-          : r.salary_declared_min) as number | null) ?? null,
-      salary_max:
-        (((r.salary_estimated_min ?? r.salary_estimated_max) != null
-          ? r.salary_estimated_max
-          : r.salary_declared_max) as number | null) ?? null,
-      salary_currency:
-        (((r.salary_estimated_min ?? r.salary_estimated_max) != null
-          ? r.salary_estimated_currency
-          : r.salary_declared_currency) as string | null) ?? "EUR",
+      salary_min: salary.min,
+      salary_max: salary.max,
+      salary_currency: salary.currency,
       found_at: (r.found_at as string | null) ?? null,
       scored_at: (r.scored_at as string | null) ?? null,
       last_action_at: ((r.last_action_at as string | null) ?? "") || at,

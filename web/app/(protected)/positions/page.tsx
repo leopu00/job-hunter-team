@@ -71,10 +71,11 @@ function formatFoundAt(ts: string | null | undefined, locale: string) {
   });
 }
 
-// Quando è partita la candidatura. A differenza di `formatFoundAt` mostra
-// data E ora anche per oggi: la richiesta era l'orario ESATTO, e un "13:13"
-// senza data, scorrendo cinquanta righe, si confonde con quello di ieri.
-function formatAppliedAt(ts: string | null | undefined, locale: string) {
+// Timbro esatto delle colonne-evento (candidatura, CV scritto, rilevazione).
+// A differenza di `formatFoundAt` mostra data E ora anche per oggi: la
+// richiesta era l'orario ESATTO, e un "13:13" senza data, scorrendo cinquanta
+// righe, si confonde con quello di ieri.
+function formatStamp(ts: string | null | undefined, locale: string) {
   if (!ts) return null;
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return null;
@@ -166,6 +167,7 @@ const SORTABLE_COLUMNS = new Set([
   "found_at",
   "last_action_at",
   "status",
+  "written_at",
   "applied_at",
 ]);
 
@@ -390,6 +392,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
       "critic",
       "found_at",
       "last_action_at",
+      "written_at",
+      "applied_at",
       "salary",
       "monthly",
     ]);
@@ -485,6 +489,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 columns={[
                   { key: "id", label: "ID" },
                   { key: "last_action_at", label: tr("col_updated") },
+                  { key: "found_at", label: tr("col_found_at") },
                   { key: "title", label: tr("col_title") },
                   { key: "company", label: tr("col_company") },
                   { key: "role_family", label: tr("col_category") },
@@ -497,6 +502,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                   { key: "last_action_by", label: tr("col_updated_by") },
                   { key: "critic", label: tr("col_voto") },
                   { key: "status", label: tr("col_status") },
+                  { key: "written_at", label: tr("col_written_at") },
                   { key: "applied_at", label: tr("col_applied_at") },
                 ]}
                 visible={[...visibleCols]}
@@ -650,6 +656,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       label: tr("col_updated"),
                       sortable: true,
                     },
+                    {
+                      col: "found_at",
+                      label: tr("col_found_at"),
+                      sortable: true,
+                    },
                     { col: "title", label: tr("col_title"), sortable: true },
                     {
                       col: "company",
@@ -695,6 +706,12 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     {
                       col: "status",
                       label: tr("col_status"),
+                      sortable: true,
+                      center: true,
+                    },
+                    {
+                      col: "written_at",
+                      label: tr("col_written_at"),
                       sortable: true,
                       center: true,
                     },
@@ -776,6 +793,16 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           {formatFoundAt(
                             p.last_action_at || p.found_at,
                             locale,
+                          )}
+                        </td>
+                      )}
+                      {/* Trovata (rilevazione dello Scout): ordinata
+                          crescente mette in cima le più vecchie, cioè quelle
+                          ferme in coda da più tempo. */}
+                      {show("found_at") && (
+                        <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
+                          {formatStamp(p.found_at, locale) ?? (
+                            <span className="text-[var(--color-dim)]">—</span>
                           )}
                         </td>
                       )}
@@ -1008,14 +1035,30 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           )}
                         </td>
                       )}
+                      {/* CV scritto il: ordinata crescente dice DA QUANTO un
+                          CV aspetta — con un filtro su 'In revisione' o
+                          'Pronte da inviare' è la coda vera e propria. */}
+                      {show("written_at") && (
+                        <td className="px-4 py-3 text-center">
+                          {formatStamp(p.written_at, locale) ? (
+                            <span className="font-mono tabular-nums text-[11px] text-[var(--color-base)] whitespace-nowrap">
+                              {formatStamp(p.written_at, locale)}
+                            </span>
+                          ) : (
+                            <span className="text-[var(--color-dim)] text-[11px]">
+                              —
+                            </span>
+                          )}
+                        </td>
+                      )}
                       {/* Candidatura inviata: QUANDO, non solo se. Lo stato
                           dice 'applied', questa colonna dice l'ora esatta —
                           è ciò che serve scorrendo cinquanta righe. */}
                       {show("applied_at") && (
                         <td className="px-4 py-3 text-center">
-                          {formatAppliedAt(p.applied_at, locale) ? (
+                          {formatStamp(p.applied_at, locale) ? (
                             <span className="font-mono tabular-nums text-[11px] text-[var(--color-base)] whitespace-nowrap">
-                              {formatAppliedAt(p.applied_at, locale)}
+                              {formatStamp(p.applied_at, locale)}
                             </span>
                           ) : (
                             <span className="text-[var(--color-dim)] text-[11px]">
