@@ -2,6 +2,7 @@ import { after } from "next/server";
 import {
   createLandingHit,
   isLandingPath,
+  LANDING_SOURCES,
   type LandingHit,
   type LandingPath,
 } from "@/lib/landing-funnel";
@@ -51,6 +52,34 @@ const RESPONSE_HEADERS = {
  *  e riusabili per la prossima campagna — un 301 se lo terrebbe il browser. */
 const LANDING_TARGET = "/";
 
+/**
+ * La home CON l'attribuzione del canale appesa.
+ *
+ * Senza questa parte il primo anello della catena non consegna niente al
+ * secondo: `/download` costruisce già i link `/go/<slug>` con gli UTM che
+ * trova in query, e `/go` li riporta sul conteggio dei download — ma se qui si
+ * atterra sulla home nuda, quella query non esiste e OGNI download risulta
+ * senza provenienza. Non solo TikTok: anche Reddit. Misurato in produzione da
+ * `@social` il 10/08, dopo che avevo dichiarato Reddit «completo»: non lo era.
+ *
+ * Gli UTM li scrive il SERVER dal percorso richiesto, non li ricopia dalla
+ * richiesta: un URL pubblicitario può portarsi dietro qualunque parametro, e
+ * un'attribuzione che si fida di chi arriva è un'attribuzione che si può
+ * falsificare dall'esterno. La allow-list a valle resta comunque il filtro.
+ */
+/** Deve restare uno dei valori di `DOWNLOAD_ATTRIBUTION_ALLOWLIST.utm_campaign`,
+ *  altrimenti il filtro a valle lo azzera a "none" e siamo al punto di prima. */
+const LANDING_CAMPAIGN = "lancio-2026-08";
+
+function landingTargetFor(path: LandingPath): string {
+  const query = new URLSearchParams({
+    utm_source: LANDING_SOURCES[path],
+    utm_medium: "paid",
+    utm_campaign: LANDING_CAMPAIGN,
+  });
+  return `${LANDING_TARGET}?${query.toString()}`;
+}
+
 export function handleLandingRedirect(
   request: Request,
   path: string,
@@ -66,7 +95,10 @@ export function handleLandingRedirect(
   const event = createLandingHit(path as LandingPath, dependencies.now());
   const response = new Response(null, {
     status: 307,
-    headers: { ...RESPONSE_HEADERS, Location: LANDING_TARGET },
+    headers: {
+      ...RESPONSE_HEADERS,
+      Location: landingTargetFor(path as LandingPath),
+    },
   });
 
   try {

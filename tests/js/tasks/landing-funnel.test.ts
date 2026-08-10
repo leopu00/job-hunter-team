@@ -77,7 +77,47 @@ describe("i due percorsi di campagna", () => {
     const { dependencies } = testDependencies();
     const res = handleLandingRedirect(get(), "r", dependencies);
     expect(res.status).toBe(307);
-    expect(res.headers.get("Location")).toBe("/");
+    expect(res.headers.get("Location")!.startsWith("/?")).toBe(true);
+  });
+
+  it.each([
+    ["r", "reddit"],
+    ["t", "tiktok"],
+  ] as const)(
+    "/%s consegna alla home l'attribuzione del canale %s",
+    (path, source) => {
+      // Il primo anello della catena. `/download` costruisce i link `/go/<slug>`
+      // con gli UTM che trova in query e `/go` li riporta sul conteggio dei
+      // download: se qui si atterra sulla home NUDA, quella query non esiste e
+      // ogni download risulta senza provenienza — non solo TikTok, anche
+      // Reddit. Misurato in produzione il 10/08, dopo che era stato dichiarato
+      // il contrario.
+      const { dependencies } = testDependencies();
+      const location = handleLandingRedirect(
+        get(),
+        path,
+        dependencies,
+      ).headers.get("Location")!;
+
+      expect(location).toContain(`utm_source=${source}`);
+      expect(location).toContain("utm_medium=paid");
+      expect(location).toContain("utm_campaign=lancio-2026-08");
+    },
+  );
+
+  it("scrive l'attribuzione dal percorso, non da chi arriva", () => {
+    // Un URL pubblicitario può portarsi dietro qualunque parametro: se
+    // ricopiassimo la query in ingresso, l'attribuzione sarebbe falsificabile
+    // dall'esterno.
+    const { dependencies } = testDependencies();
+    const req = new Request("https://x/r?utm_source=tiktok&utm_campaign=finta");
+    const location = handleLandingRedirect(req, "r", dependencies).headers.get(
+      "Location",
+    )!;
+
+    expect(location).toContain("utm_source=reddit");
+    expect(location).not.toContain("tiktok");
+    expect(location).not.toContain("finta");
   });
 
   it("non si lasciano mettere in cache", () => {
