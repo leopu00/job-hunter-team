@@ -1,8 +1,8 @@
 <!-- @translation: hu, ai-translated 2026-08-03 -->
 ---
 name: maintainer-sweep
-description: "A Mantenitore INFRA-karbantartó körútja 👷‍♂️ (a Dottore ikertestvére, csak nem az ügynökökre, hanem az infrastruktúrára fókuszálva). Naponta egyetlen one-shot menet: a konténer életfenntartó folyamatainak (bridge/daemon/watchdog) liveness-kanárija a process_health.py-jal, a mission-critical eszközök (browser/LinkedIn) füstpróbája a tool_health.py-jal, a nem szabványos helyre telepített függőségek auditja és összevonása, árva szkriptek és tmp-fájlok GC-je, ismétlődő szkriptek de-dupja, függőségek frissessége, lemez- és RAM-trend. Single-writer: az infrát KIZÁRÓLAG a Mantenitore javítja; a ROMBOLÓ műveleteket (törlés/archiválás) csak JAVASOLJA, dönteni a Capitano dönt. Az eredmény a mantenitore-logbook.jsonl végére kerül."
-allowed-tools: Bash(python3 /app/shared/skills/process_health.py *), Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /app/shared/skills/sync_health.py *), Bash(python3 /app/shared/skills/host_vitals.py *), Bash(python3 /app/shared/skills/log_archive.py *), Bash(bash /app/.launcher/start-agent.sh *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
+description: "A Mantenitore INFRA-karbantartó körútja 👷‍♂️ (a Dottore ikertestvére, csak nem az ügynökökre, hanem az infrastruktúrára fókuszálva). Naponta egyetlen one-shot menet: a konténer életfenntartó folyamatainak (bridge/daemon/watchdog) liveness-kanárija a process_health.py-jal, a mission-critical eszközök (browser/LinkedIn) füstpróbája a tool_health.py-jal, a nem szabványos helyre telepített függőségek auditja és összevonása, árva szkriptek és tmp-fájlok GC-je, ismétlődő szkriptek de-dupja, függőségek frissessége, lemez- és RAM-trend, a pane-ek UTF-8 locale-kanárija a locale_health.py-jal (kozmetikai hiba vs sérült adat). Single-writer: az infrát KIZÁRÓLAG a Mantenitore javítja; a ROMBOLÓ műveleteket (törlés/archiválás) csak JAVASOLJA, dönteni a Capitano dönt. Az eredmény a mantenitore-logbook.jsonl végére kerül."
+allowed-tools: Bash(python3 /app/shared/skills/process_health.py *), Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /app/shared/skills/sync_health.py *), Bash(python3 /app/shared/skills/host_vitals.py *), Bash(python3 /app/shared/skills/locale_health.py *), Bash(python3 /app/shared/skills/log_archive.py *), Bash(bash /app/.launcher/start-agent.sh *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
 ---
 
 # maintainer-sweep — az INFRA egészségben tartása csendben és regressziómentesen
@@ -116,6 +116,19 @@ LEGRÉGEBBI zipeket, és felsorolja őket neked a `pruned` alatt.
   más, a folyamaton kívüli törlésre továbbra is a single-writer szabály érvényes.
 - Naplózd a bejegyzésben: `log_archive: {archived_rows, weeks, pruned, free_gb}`.
 
+### 7. 🔤 A pane-ek UTF-8 locale-ja (kozmetikai ≠ sérült adat)
+```bash
+python3 /app/shared/skills/locale_health.py summary        # vagy --json
+```
+Két mérés egyben, és a második az, amelyik számít. A **konténer** locale-ját olvassa (`/proc/1/environ` — NEM ennek a folyamatnak a környezetét: a CPython magától `C.UTF-8`-ra „coerce-öli" az `LC_CTYPE`-ot, így egy `os.environ`-ra épülő ellenőrzés egészségesnek mondana egy elromlott konténert), majd **SZIGORÚAN dekódolja** minden élő session `capture-pane`-jét. A verdiktet az exit code hordozza:
+- **`0` ok** → naplózd: `locale_health: ok`, és menj tovább.
+- **`1` cosmetic** (nem UTF-8 locale, NULLA érvénytelen bájt) → az adatok **ÉPEK**: a megjelenítés romlott el annak, aki kívülről csatlakozik (`_` minden ékezetes betű helyén). **Jelentsd a Capitanónak, ne kezeld vészhelyzetként**, és főleg ne „javítsd": a fix a host `docker-compose.yml`-jében a `LANG=C.UTF-8`, és csak a konténer újralétrehozásától él — egy BENNE futó ügynök hatókörén kívül. Azonnali enyhítés az operátornak: `docker exec -it -e LC_ALL=C.UTF-8 jht tmux -u attach -r -t <session>`.
+- **`2` data_corruption** (érvénytelen bájtok egy pane-ben) → **P1, ESZKALÁLD** a Capitanónak a felsorolt sessionökkel: itt az ügynökök tényleg olvashatnak egy szót egy másik helyett.
+
+**Miért mindkét ellenőrzés, és nem csak az első**: az `echo $LANG` tud „kozmetikait" mondani, de „sérültet" SOHA — a szigorú dekódolás az egyetlen a kettő közül, amelyik elválasztja a megjelenítési hibát a károsodott adattól. 2026-08-10-én épp ez fordította gyanút („az ügynökök csonka szavakat kapnak") méréssé (392 ép ékezetes karakter, egyetlen érvénytelen bájt nélkül), és állította meg a rossz problémára célzott javítást.
+
+Naplózd az entrybe: `locale_health: {verdict, env, panes_scanned, corrupted_sessions}`.
+
 ## Logbook (append-only)
 Minden körút EGYETLEN sűrű bejegyzést ír a `/jht_home/logs/mantenitore-logbook.jsonl` fájlba (a Dottore logbookjának ikertestvére), hogy a következő Mantenitore lássa a trendet:
 ```json
@@ -123,6 +136,7 @@ Minden körút EGYETLEN sűrű bejegyzést ír a `/jht_home/logs/mantenitore-log
  "processes_respawned":[...],"sync_health":{"healthy":true,"problems":[]},
  "tools_health":{...},"repaired":[...],
  "escalated":[...],"deps_consolidated":[...],"gc_proposed":[...],"dedup_proposed":[...],
+ "locale_health":{"verdict":"ok|cosmetic|data_corruption","panes_scanned":N},
  "disk":{"used_pct":N,"delta_vs_last":N},"ram":{...},"duration_sec":N,"capitano_ack":"..."}
 ```
 `>>`-vel fűzd hozzá, soha ne írd felül. Sűrű összefoglaló (mint a Dottore/Capitano útijegyzetei): mit találtam, mit javítottam, mit javasoltam.
@@ -138,6 +152,7 @@ Minden körút EGYETLEN sűrű bejegyzést ír a `/jht_home/logs/mantenitore-log
 - `shared/skills/process_health.py` — a 0. lépésben használt liveness-kanári az életfenntartó folyamatokhoz (napi biztonsági háló; a tool_health folyamat-ikertestvére).
 - `shared/skills/sync_health.py` — a 0.5 lépésben használt cloud-sync kanári (pull churn / push 413 / elavult kurzorok); csak olvasásra, a process_health/tool_health SYNC-ikertestvére.
 - `shared/skills/tool_health.py` — az 1. lépésben újrahasznált füstpróba (egyben build-time gate + tick).
+- `shared/skills/locale_health.py` — a 7. lépés locale-kanárija (konténer locale + a pane-ek szigorú UTF-8 dekódolása); read-only, megkülönbözteti a kozmetikai hibát a sérült adattól.
 - `shared/skills/log_archive.py` — a 6.5 lépés determinisztikus archiválója (30 napnál régebbi heteket vág → zip, helyszűke esetén prune-ol).
 - `.launcher/agent-watchdog.sh` — a GYORS helyreállítás (30 másodpercenként, `maybe_respawn_bridges`), amelyhez a 0. lépés a napi biztonsági háló; a 27/06-i tanulság: a bridge-ek `setsid` detached módon indulnak, így sem a pid1 respawnja, sem az `agent-watchdog` (amely tmux-munkameneteket indít újra, nem Python-folyamatokat) nem fedi le őket — ha összeomlanak, a konténer újraindításáig lent maradnak.
 - `agents/mantenitore/mantenitore.md` — a Mantenitore personája/életciklusa (dev3).

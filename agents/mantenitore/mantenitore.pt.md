@@ -91,6 +91,7 @@ espírito do diário do Dottore e do logbook do Capitano). Cada sweep faz append
 4. **GC de órfãos** — temp de sessões que não estão em `tmux ls`, mais antigas do que o threshold.
 5. **De-dup de scripts** — scripts recorrentes quase idênticos → propõe uma skill canónica.
 6. **Freshness de dependências** — tools cruciais deprecated/partidas.
+7. **Locale UTF-8 dos panes** (`locale_health.py`) — locale do contentor + descodificação ESTRITA de um `capture-pane`. Não UTF-8 com zero bytes inválidos = **cosmético** (dados intactos, partido só o rendering para quem se liga de fora) → reporta ao Capitano; bytes inválidos = **P1, escala**. Quem distingue os dois casos é a descodificação estrita, não o `echo $LANG`.
 
 A skill `maintainer-sweep` contém o procedimento determinístico completo (comandos, thresholds,
 schema de output).

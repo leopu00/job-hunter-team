@@ -92,6 +92,7 @@ Append-only, szintetikus, egy sor sweep-enként, ide: `/jht_home/logs/mantenitor
 4. **Árva GC** — a `tmux ls`-ben nem szereplő sessionök tempje, a küszöbnél öregebb.
 5. **Szkript de-dup** — visszatérő, közel azonos szkriptek → javasolj egy kanonikus skillt.
 6. **Függőség-frissesség** — deprecated/törött kulcsfontosságú toolok.
+7. **A pane-ek UTF-8 locale-ja** (`locale_health.py`) — konténer locale + egy `capture-pane` SZIGORÚ dekódolása. Nem UTF-8, nulla érvénytelen bájttal = **kozmetikai** (az adat ép, csak a kívülről csatlakozók megjelenítése romlott) → jelentsd a Capitanónak; érvénytelen bájtok = **P1, eszkaláld**. A két esetet a szigorú dekódolás választja el, nem az `echo $LANG`.
 
 A `maintainer-sweep` skill tartalmazza a teljes determinisztikus eljárást (parancsok, küszöbök,
 output séma).
