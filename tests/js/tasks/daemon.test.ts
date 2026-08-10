@@ -45,19 +45,19 @@ describe("install.sh — argument parsing", () => {
   it("senza --name esce con errore", () => {
     const r = run(`${BASH} "${INSTALL}" --cmd "echo test"`);
     expect(r.code).not.toBe(0);
-    expect(r.out).toContain("--name obbligatorio");
+    expect(r.out).toContain("--name is required");
   });
 
   it("senza --cmd esce con errore", () => {
     const r = run(`${BASH} "${INSTALL}" --name test-svc`);
     expect(r.code).not.toBe(0);
-    expect(r.out).toContain("--cmd obbligatorio");
+    expect(r.out).toContain("--cmd is required");
   });
 
   it("opzione sconosciuta esce con errore", () => {
     const r = run(`${BASH} "${INSTALL}" --unknown-flag`);
     expect(r.code).not.toBe(0);
-    expect(r.out).toContain("Opzione sconosciuta");
+    expect(r.out).toContain("Unknown option");
   });
 });
 
@@ -116,7 +116,7 @@ describe("install.sh — platform detection", () => {
   it("dispatch per Darwin e Linux con fallback errore", () => {
     expect(installSrc).toContain('Darwin) install_macos');
     expect(installSrc).toContain('Linux)  install_linux');
-    expect(installSrc).toContain("Sistema operativo non supportato");
+    expect(installSrc).toContain("Unsupported operating system");
   });
 });
 
@@ -133,13 +133,13 @@ describe("uninstall.sh — argument parsing", () => {
   it("senza --name esce con errore", () => {
     const r = run(`${BASH} "${UNINSTALL}"`);
     expect(r.code).not.toBe(0);
-    expect(r.out).toContain("--name obbligatorio");
+    expect(r.out).toContain("--name is required");
   });
 
   it("opzione sconosciuta esce con errore", () => {
     const r = run(`${BASH} "${UNINSTALL}" --bad`);
     expect(r.code).not.toBe(0);
-    expect(r.out).toContain("Opzione sconosciuta");
+    expect(r.out).toContain("Unknown option");
   });
 });
 
@@ -147,7 +147,7 @@ describe("uninstall.sh — struttura e pulizia", () => {
   it("dispatch per Darwin e Linux con fallback errore", () => {
     expect(uninstallSrc).toContain('Darwin) uninstall_macos');
     expect(uninstallSrc).toContain('Linux)  uninstall_linux');
-    expect(uninstallSrc).toContain("Sistema operativo non supportato");
+    expect(uninstallSrc).toContain("Unsupported operating system");
   });
 
   it("macOS sposta plist nel Cestino come fallback sicuro", () => {

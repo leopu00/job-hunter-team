@@ -2647,7 +2647,7 @@ async function handleDirectiveSync(options = {}) {
   if (total > 0 || !silent) {
     console.log(
       pc.green(
-        `✓ Bacheca sync: ${imported} from cloud↓, ${pushedUpdates} Add to cart , ${pushedInserts} New products`
+        `✓ Directives sync: ${imported} from cloud↓, ${pushedUpdates} Add to cart , ${pushedInserts} New products`
       )
     );
   }
@@ -2815,7 +2815,7 @@ export async function handleSyncRendezvous(options = {}) {
   }
   if (!silent) {
     if (ack.status === 'completed') {
-      console.log(pc.green(`✓ Sync now servito: push fresco + ack (${ack.via})`));
+      console.log(pc.green(`✓ Sync now served: fresh push + ack (${ack.via})`));
     } else {
       console.error(pc.yellow(`  sync-rendezvous: ${ack.status}; not confirmed`));
     }
@@ -3027,7 +3027,7 @@ export async function handleChatSync(options = {}) {
     if (!silent && (moved > 0 || mirrored.backfilled > 0)) {
       console.log(
         pc.green(
-          `✓ Chat: ${ingested.inserted} from chat.jsonl↓, ${mirrored.mirrored} verso chat.jsonl↑, ` +
+          `✓ Chat: ${ingested.inserted} from chat.jsonl↓, ${mirrored.mirrored} to chat.jsonl↑, ` +
           `${sent.delivered} delivered to the agent, ${pushed} pushed` +
           (mirrored.backfilled > 0 ? ` (${mirrored.backfilled} historical marked without spilling them)` : '')
         )

@@ -632,8 +632,8 @@ fi
 if ! command -v "$CLI_BIN" &>/dev/null; then
   echo "Error: command '$CLI_BIN' not found (configured provider: ${PROVIDER:-claude})."
   case "$CLI_BIN" in
-    claude) echo "Installa Claude CLI: https://claude.ai/download" ;;
-    codex)  echo "Installa Codex CLI: https://github.com/openai/codex" ;;
+    claude) echo "Install the Claude CLI: https://claude.ai/download" ;;
+    codex)  echo "Install the Codex CLI: https://github.com/openai/codex" ;;
     kimi)   echo "Install the Kimi CLI from provider Moonshot." ;;
   esac
   echo "Alternatively, edit ~/.jht/jht.config.json to use another provider."

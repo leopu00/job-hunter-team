@@ -33,7 +33,7 @@ export async function loadCronStore(storePath) {
     const raw = await fs.promises.readFile(storePath, 'utf-8');
     let parsed;
     try { parsed = JSON.parse(raw); } catch {
-      throw new Error(`JSON non valido in ${storePath}`);
+      throw new Error(`Invalid JSON in ${storePath}`);
     }
     const jobs = Array.isArray(parsed?.jobs) ? parsed.jobs.filter(Boolean) : [];
     const store = { version: 1, jobs };

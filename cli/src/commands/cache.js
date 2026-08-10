@@ -176,7 +176,7 @@ async function pruneUvCache() {
   const after = await dirSize(uvCacheDir);
   const freed = before.bytes - after.bytes;
   console.log(`  uv cache: ${fmtSize(after.bytes)} (${after.files} files) after pruning`);
-  console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
+  console.log(`  freed: ${fmtSize(freed > 0 ? freed : 0)}`);
 }
 
 // Dedup ($JHT_HOME/.local/share/uv/tools) — uv tool installa ogni CLI in
@@ -244,7 +244,7 @@ async function pruneUvTools() {
   if (removed === 0) {
     console.log(`  uv tools: ${kept} tool, no duplicate version — nothing to do.`);
   } else {
-    console.log(`  uv tools: ${kept} tool required, ${removed} fossils removed, ${fmtSize(freed)} liberati.`);
+    console.log(`  uv tools: ${kept} tool required, ${removed} fossils removed, ${fmtSize(freed)} freed.`);
   }
 }
 
@@ -287,7 +287,7 @@ async function pruneNpmCache() {
   const after = await dirSize(npmCacheDir);
   const freed = before.bytes - after.bytes;
   console.log(`  npm cache: ${fmtSize(after.bytes)} (${after.files} files) after verification`);
-  console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
+  console.log(`  freed: ${fmtSize(freed > 0 ? freed : 0)}`);
 }
 
 // Prune ($JHT_HOME/.codex/logs_2.sqlite) — DELETE righe più vecchie di 10
@@ -344,7 +344,7 @@ async function pruneCodexLogs(idleSecondsArg) {
   const after = await stat(CODEX_LOGS_DB);
   const freed = s.size - after.size;
   console.log(`  Codex logs: ${fmtSize(after.size)} after pruning`);
-  console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
+  console.log(`  freed: ${fmtSize(freed > 0 ? freed : 0)}`);
 }
 
 // Rimuove le cache ephemeral di Codex (rigenerabili). Stessa safety

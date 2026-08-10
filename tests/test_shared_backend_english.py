@@ -1,104 +1,76 @@
-"""Release gate for the Python backend copy shipped inside the container.
+"""Release gate for the backend copy shipped inside the container.
 
 Comments, implementation docstrings, SQL identifiers, and compatibility
 patterns for Italian input are deliberately outside this test. It follows the
 actual user-facing sinks instead: terminal output, CLI help/errors, and message
 fields returned to agents or the game.
+
+The scanning rules live in `scripts/analysis/backend_copy_census.py` and are
+imported here rather than copied. They used to be duplicated, and the copies
+drifted: on 2026-08-10 the census reported zero while `Provider non supportato`
+was still being thrown by the credentials manager. One criterion, one regex —
+a gate that disagrees with its own census is worse than no gate.
 """
 
 from __future__ import annotations
 
-import ast
-import re
+import importlib.util
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CENSUS_PATH = ROOT / "scripts" / "analysis" / "backend_copy_census.py"
+
+
+def _load_census():
+    spec = importlib.util.spec_from_file_location("backend_copy_census", CENSUS_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+census = _load_census()
 SKILLS = ROOT / "shared" / "skills"
 
-VISIBLE_CALLS = {
-    "print",
-    "add_argument",
-    "add_parser",
-    "ArgumentParser",
-    "ValueError",
-    "RuntimeError",
-    "SystemExit",
-    "error",
-    "warn",
-    "warning",
-    "_log",
-}
-VISIBLE_FIELDS = {
-    "message",
-    "reason",
-    "hint",
-    "note",
-    "error",
-    "evidence",
-    "detail",
-    "suggest",
-    "label",
-}
 
-# High-signal Italian prose. Role ids such as `capitano` and `analista`, enum
-# values, and words commonly present in international job data are excluded.
-ITALIAN_COPY = re.compile(
-    r"[àèìòùÀÈÌÒÙ]|"
-    r"\b(?:nessun\w*|errore|attenzione|impossibile|sconosciut\w*|"
-    r"non\s+trovat\w*|già|aggiornat\w*|inserit\w*|completat\w*|"
-    r"posizion\w*|aziend\w*|candidatur\w*|profilo|lavoro|pausa|"
-    r"settimanal\w*|giorni?|righe?|soglia|durata|scrittura|"
-    r"caricat\w*|salvat\w*|fallit\w*|uso|prima|dopo|fuori|dentro|"
-    r"finestr\w*|velocità|agent[ei]|squadra|utente|messaggi?o?|"
-    r"avvis\w*|gratuit\w*|mesi?|ore|selezion\w*|scegli\w*|"
-    r"avvi\w*|ferm\w*|disattiv\w*|consum(?:o|i|at[oaie]|are)|"
-    r"scadut\w*|rilevat\w*|legg(?:i|ere)|scriv(?:i|ere)|chius\w*|"
-    r"rimos\w*|attiv(?:o|a|i|e)|disponibil\w*|tutti|mort[oi]|"
-    r"ripar\w*|attes[oi]|opzional\w*)\b",
-    re.IGNORECASE,
-)
+def _scan(dirs) -> list[str]:
+    """User-visible literals matching Italian prose, as `path:line: text`."""
+    leaks: list[str] = []
 
+    def record(path: Path, line: int, text: str) -> None:
+        if census.ITALIAN_COPY.search(text):
+            leaks.append(f"{path.relative_to(ROOT)}:{line}: {' '.join(text.split())[:180]}")
 
-def _call_name(node: ast.Call) -> str:
-    return getattr(node.func, "id", None) or getattr(node.func, "attr", "")
-
-
-def _strings(node: ast.AST):
-    for child in ast.walk(node):
-        if isinstance(child, ast.Constant) and isinstance(child.value, str):
-            yield child.lineno, child.value
-
-
-def _visible_literals(path: Path):
-    source = path.read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(path))
-    module_doc = ast.get_docstring(tree, clean=False)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and _call_name(node) in VISIBLE_CALLS:
-            for arg in node.args:
-                yield from _strings(arg)
-            for kw in node.keywords:
-                if kw.arg in {None, "help", "description", "message"}:
-                    if (module_doc and any(
-                            isinstance(child, ast.Name) and child.id == "__doc__"
-                            for child in ast.walk(kw.value))):
-                        yield 1, module_doc
-                    yield from _strings(kw.value)
-        elif isinstance(node, ast.Dict):
-            for key, value in zip(node.keys, node.values):
-                if isinstance(key, ast.Constant) and key.value in VISIBLE_FIELDS:
-                    yield from _strings(value)
+    for path in census._iter_files(dirs, {".py"}):
+        for line, value in census.python_visible_literals(path):
+            record(path, line, value)
+    for path in census._iter_files(dirs, {".sh"}):
+        for line, text in census.shell_visible_lines(path):
+            record(path, line, text)
+    for path in census._iter_files(dirs, {".js", ".mjs", ".ts"}):
+        if path.name.endswith(".test.ts"):
+            continue
+        for line, value in census.js_visible_literals(path):
+            record(path, line, value)
+    return leaks
 
 
 def test_shared_python_user_visible_copy_has_no_italian_baseline():
-    leaks: list[str] = []
-    for path in sorted(SKILLS.glob("*.py")):
-        for line, value in _visible_literals(path):
-            if ITALIAN_COPY.search(value):
-                compact = " ".join(value.split())[:180]
-                leaks.append(f"{path.relative_to(ROOT)}:{line}: {compact}")
+    leaks = _scan(("shared/skills",))
     assert not leaks, "Italian user-visible backend copy:\n" + "\n".join(leaks)
+
+
+def test_backend_perimeter_user_visible_copy_is_english():
+    """The whole O-07 perimeter, not just the Python skills.
+
+    Terminal output from the CLI and the launcher reaches the same user as the
+    container's own messages: leaving them out of the gate is what let the
+    English pass ship half-done.
+    """
+    leaks = [leak for dirs in census.AREAS.values() for leak in _scan(dirs)]
+    assert not leaks, (
+        f"Italian user-visible backend copy ({len(leaks)}):\n" + "\n".join(leaks)
+    )
 
 
 def test_directly_rendered_shared_surfaces_default_to_english():
@@ -114,3 +86,21 @@ def test_directly_rendered_shared_surfaces_default_to_english():
     for old_copy in ("Posizioni attive", "Valutate", "CV scritti", "Versione salvata"):
         assert old_copy not in dashboard
     assert "playwright non installato" not in scraper.lower()
+
+
+def test_census_regex_catches_the_words_that_slipped_through():
+    """Regression guard on the criterion itself.
+
+    Each of these shipped to users in Italian while the census reported zero.
+    """
+    for phrase in (
+        "Provider non supportato: claude",
+        "Formato payload non supportato: v1",
+        "  liberati: 12 MB",
+        "Job schedulati (3):",
+        "Moduli shared/",
+        "Bacheca sync: 2 from cloud",
+        "Sync now servito: push fresco",
+        "Installa Claude CLI",
+    ):
+        assert census.ITALIAN_COPY.search(phrase), f"not caught: {phrase}"
