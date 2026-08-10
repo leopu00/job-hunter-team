@@ -97,38 +97,54 @@ def test_running_it_twice_changes_nothing(db):
     assert rows[0]["body"] == "una nota"
 
 
-def test_it_refuses_to_drop_when_the_count_does_not_match(db, monkeypatch):
-    """Se la copia perde righe, la vecchia tabella resta dov'è.
+class _LosesOneRow(sqlite3.Connection):
+    """Connessione che copia UNA riga sola.
 
-    Si sabota la copia — un vincolo che rifiuta una delle due righe — e si
-    verifica che la migrazione si fermi con un errore INVECE di droppare.
-    È la differenza fra una migrazione che fallisce e una nota che sparisce.
+    Sostituisce il monkeypatch di `conn.execute`, che non è possibile:
+    l'attributo è read-only su sqlite3.Connection. Una factory è anche più
+    onesta — intercetta le stesse chiamate che farebbe il codice vero,
+    invece di rimpiazzare un metodo dall'esterno.
     """
-    conn = _old_db_with_notes(db, [(1, "prima"), (2, "seconda")])
 
-    real_execute = conn.execute
-
-    def sabotaged(sql, *args):
+    def execute(self, sql, *args):  # type: ignore[override]
         if sql.strip().startswith("INSERT INTO position_user_notes_new"):
-            # Copia una riga sola: la condizione che la verifica deve vedere.
-            return real_execute(
+            sql = (
                 "INSERT INTO position_user_notes_new "
                 "(position_id, origin, body) "
                 "SELECT position_id, 'box', body FROM position_user_notes LIMIT 1"
             )
-        return real_execute(sql, *args)
+            args = ()
+        return super().execute(sql, *args)
 
-    monkeypatch.setattr(conn, "execute", sabotaged)
+
+def test_it_refuses_to_drop_when_the_count_does_not_match(db, tmp_path):
+    """Se la copia perde righe, la vecchia tabella resta dov'è.
+
+    Si sabota la copia — ne passa una su due — e si verifica che la
+    migrazione si fermi con un errore INVECE di droppare. È la differenza
+    fra una migrazione che fallisce e una nota che sparisce.
+    """
+    path = tmp_path / "sabotaged.db"
+    conn = sqlite3.connect(path, factory=_LosesOneRow)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(OLD_SHAPE)
+    for pid, body in ((1, "prima"), (2, "seconda")):
+        conn.execute("INSERT INTO positions (id) VALUES (?)", (pid,))
+        conn.execute(
+            "INSERT INTO position_user_notes (position_id, body) VALUES (?, ?)",
+            (pid, body),
+        )
+    conn.commit()
 
     with pytest.raises(RuntimeError) as err:
         db._migrate_position_user_notes_origin(conn)
     assert "aborted" in str(err.value)
     assert "Nothing was dropped" in str(err.value)
 
-    monkeypatch.undo()
     # La tabella originale è ancora lì, con entrambe le note.
     rows = conn.execute("SELECT body FROM position_user_notes").fetchall()
     assert len(rows) == 2, "ha droppato la vecchia tabella nonostante l'errore"
+    assert {r["body"] for r in rows} == {"prima", "seconda"}
 
 
 def test_a_fresh_database_gets_the_new_shape_directly(db):
