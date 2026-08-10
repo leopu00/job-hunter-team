@@ -11,6 +11,12 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/api/",
           "/auth",
+          // O-47: porte d'ingresso degli annunci a pagamento. Sono percorsi
+          // tecnici che rimandano alla home, non contenuti: indicizzarli
+          // creerebbe due doppioni della home e sporcherebbe il conteggio dei
+          // clic con le visite dei crawler.
+          "/r",
+          "/t",
           // Setup
           "/setup",
           // Top nav

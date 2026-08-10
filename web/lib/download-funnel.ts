@@ -30,6 +30,11 @@ export const DOWNLOAD_ATTRIBUTION_ALLOWLIST: Record<
   AttributionKey,
   readonly string[]
 > = {
+  // O-47: `tiktok` NON è ancora qui, ed è deliberato. La tabella
+  // `download_clicks` ha un CHECK che accetta solo ('none','reddit'):
+  // aggiungerlo qui senza migrazione farebbe fallire l'INSERT proprio sui
+  // download di TikTok, cioè romperebbe il conteggio nel punto che il ticket
+  // voleva misurare. Entra insieme alla migrazione, non prima (O-50).
   utm_source: ["reddit"],
   utm_medium: ["paid"],
   utm_campaign: ["lancio-2026-08"],
