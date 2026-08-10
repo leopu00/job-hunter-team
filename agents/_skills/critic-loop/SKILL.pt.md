@@ -42,14 +42,27 @@ Hardcodar `claude` faz o Critico crashar quando a equipa corre em Codex ou Kimi 
 ```bash
 PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
 case "$PROVIDER" in
-  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort medium" ;;
+  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort high" ;;
   openai)              CRITICO_CMD="codex --yolo" ;;
   kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
   *)                   CRITICO_CMD="codex --yolo" ;;
 esac
 
 # Env mínimo para os CLIs globais instalados em /jht_home
-tmux send-keys -t "$CRITICO_SESSION" "export HOME=/jht_home && export PATH=/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH" Enter
+CRITICO_PATH="/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin"
+
+# The CLI must be RESOLVED, not just named. `claude` bare failed with
+# "command not found" because this shell does not have the dependency dirs
+# on its PATH — the agent noticed and retried by hand, which costs a round
+# every time and, on a less capable model, silently skips the quality gate.
+CRITICO_BIN=$(PATH="$CRITICO_PATH:$PATH" command -v "$(echo "$CRITICO_CMD" | sed 's/.*&& //; s/ .*//')" 2>/dev/null)
+if [ -z "$CRITICO_BIN" ]; then
+  echo "CRITIC-SPAWN-FAILED: CLI not found on PATH ($CRITICO_PATH)" >&2
+  echo "The quality gate did NOT run. Do not report the CV as reviewed." >&2
+  exit 1
+fi
+
+tmux send-keys -t "$CRITICO_SESSION" "export HOME=/jht_home && export PATH=$CRITICO_PATH:\$PATH" Enter
 tmux send-keys -t "$CRITICO_SESSION" "$CRITICO_CMD" Enter
 ```
 
