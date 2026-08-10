@@ -372,6 +372,30 @@ def ensure_schema(conn: sqlite3.Connection):
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
+    -- Blocco note PRIVATO dell'utente su una posizione (O-22). «Cose che mi
+    -- possono essere utili una volta che rivisito la posizione»: un
+    -- promemoria per sé, NON un ordine al team — gli agenti non la leggono.
+    --
+    -- Tabella separata, e non una colonna di `positions`, per due ragioni che
+    -- si sommano:
+    --   1. `positions.notes` è il campo degli AGENTI. Mescolarle renderebbe
+    --      irreversibile la scelta «privata»: una nota già finita sotto gli
+    --      occhi del team non si può più rendere privata;
+    --   2. `jht cloud restore` fa INSERT OR REPLACE su `positions` con un
+    --      elenco esplicito di colonne: una colonna in più verrebbe
+    --      AZZERATA a ogni restore. Un campo che perde quello che ci scrivi
+    --      è peggio di un campo che non c'è.
+    --
+    -- Non è un event-log (a differenza di `position_feedback`): è un blocco
+    -- note, l'ultimo testo vale. Da qui la PRIMARY KEY su position_id.
+    CREATE TABLE IF NOT EXISTS position_user_notes (
+        position_id INTEGER PRIMARY KEY,
+        body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (position_id) REFERENCES positions(id)
+    );
+
     -- Bacheca del team: direttive/ordini PERMANENTI dell'utente (strategia,
     -- formazione, policy operative) — es. "modalità mantenimento: CV solo 90+,
     -- stop scouting". A differenza del captain-diary (per-giorno, lezioni di
@@ -785,6 +809,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_url_unique(conn)
     _migrate_scout_coordination_unique(conn)
     _migrate_position_feedback(conn)
+    _migrate_position_user_notes(conn)
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
@@ -1034,6 +1059,25 @@ def _migrate_positions_url_unique(conn: sqlite3.Connection) -> None:
             "Deduplication still relies on the transaction in db_insert.py.",
             file=sys.stderr,
         )
+
+
+def _migrate_position_user_notes(conn: sqlite3.Connection) -> None:
+    """Crea `position_user_notes` sui DB nati prima di O-22.
+
+    Additiva e idempotente. Chi scrive e chi legge controllano che la tabella
+    esista prima di toccarla: fra l'aggiornamento del CLI e il primo giro
+    delle migrazioni c'è una finestra reale, ed è lì che un utente perde
+    quello che ha appena scritto (stesso difetto trovato su O-16).
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS position_user_notes (
+            position_id INTEGER PRIMARY KEY,
+            body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (position_id) REFERENCES positions(id)
+        );
+    """)
 
 
 def _migrate_position_feedback(conn: sqlite3.Connection) -> None:

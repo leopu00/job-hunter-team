@@ -324,6 +324,7 @@ export function getPositionByIdLocal(
   company: Company | null;
   application: Application | null;
   tickets: PositionTicket[];
+  userNote: { body: string; updated_at: string } | null;
 } | null {
   const db = getDb(ws);
   const numId = Number(id);
@@ -379,7 +380,28 @@ export function getPositionByIdLocal(
     company,
     application: app ? mapApplication(app) : null,
     tickets,
+    userNote: readUserNote(db, numId),
   };
+}
+
+/** Nota privata dell'utente (O-22), se il DB la conosce già.
+ *
+ * Tollerante alla tabella assente: un jobs.db più vecchio del codice non ha
+ * ancora `position_user_notes`, e la pagina deve aprirsi lo stesso. */
+function readUserNote(
+  db: ReturnType<typeof getDb>,
+  positionId: number,
+): { body: string; updated_at: string } | null {
+  try {
+    const row = db
+      .prepare(
+        "SELECT body, updated_at FROM position_user_notes WHERE position_id = ?",
+      )
+      .get(positionId) as { body: string; updated_at: string } | undefined;
+    return row ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function mapTicket(r: any): PositionTicket {

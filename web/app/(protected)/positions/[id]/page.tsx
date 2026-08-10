@@ -36,6 +36,7 @@ import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
 import { TeamActionsSheet } from "./TeamActionsSheet";
 import { FeedbackButtons } from "./FeedbackButtons";
+import UserNote from "./UserNote";
 import { verdictOf, type Verdict } from "@/lib/position-verdict";
 import PositionMapCardLazy from "./PositionMapCardLazy";
 import PrevNextNav from "./PrevNextNav";
@@ -236,6 +237,8 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // agenti (Scorer/Capitano) — la card Pro/Contro duplicava jd_summary,
   // note del team e razionale dello score (contratto contenuti 2026-07-23).
   const { position, score, company, application, tickets } = data;
+  // O-22: nota privata, presente solo col box acceso (vive in SQLite).
+  const userNote = data.userNote?.body ?? null;
   // Razionale dello score. `perDimension` (RULE-09) va espandibile sotto la
   // barra corrispondente; `rest` è ciò che non appartiene a una dimensione —
   // i breakdown vecchi, che restano visibili sotto le barre insieme alle
@@ -507,6 +510,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
       )}
       {/* Giudizio rapido in coda alla Panoramica: stessa fila di /swipe
             (evidenzia quello già dato; resta anche nel popup). */}
+      {/* L'identità che la route usa è l'id NUMERICO della posizione: in
+          locale `legacy_id` non esiste (è una colonna del cloud), e legare
+          il pannello a quello lo faceva sparire proprio sul box, cioè dove
+          la nota vive. */}
+      <div className="mt-4">
+        <UserNote
+          legacyId={Number(position.legacy_id ?? position.id)}
+          initialNote={userNote}
+        />
+      </div>
       {feedbackEnabled && position.legacy_id != null && (
         <div className="mt-4 border-t border-[var(--color-border)] pt-4">
           <FeedbackButtons

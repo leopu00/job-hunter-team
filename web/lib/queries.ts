@@ -424,6 +424,9 @@ export async function getPositionById(id: string): Promise<{
   company: Company | null;
   application: Application | null;
   tickets: PositionTicket[];
+  // Nota privata dell'utente (O-22): vive SOLO in locale, quindi a box
+  // spento è null — non è un errore, è dove la nota abita.
+  userNote?: { body: string; updated_at: string } | null;
 } | null> {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoPositionById(dp, id);
