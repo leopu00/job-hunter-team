@@ -41,6 +41,7 @@ const FLAG_HOOKS := {
 	"JHT_FEEDBACK_PANEL_TEST": "_feedback_panel_selftest",
 	"JHT_GUIDED_TEST": "_guided_onboarding_selftest",
 	"JHT_TOUR_TEST": "_tour_selftest",
+	"JHT_TOUR_EXIT_TEST": "_tour_exit_selftest",
 	"JHT_REGISTRY": "_arm_registry",
 	"JHT_CV_SHELF": "_arm_cv_shelf",
 	# il simulatore va montato PRIMA dei test che ne consumano gli eventi:
@@ -1227,6 +1228,138 @@ func _tour_selftest() -> void:
 			JSON.stringify({"failures": failures, "visited": visited}))
 	await get_tree().create_timer(0.3).timeout
 	get_tree().quit(0 if ok else 1)
+
+## O-14 — «l'utente esce all'inizio e va dritto al setup».
+##
+## Il difetto non era che mancasse un pulsante: era che l'uscita esisteva per
+## il TOUR e non per il GIRO. Chi la premeva si fermava a metà — la regia
+## taceva, ma le chat guidate continuavano a parlare e ad aprire pannelli
+## sopra quello che stava facendo. Da qui i controlli sotto: dopo l'uscita si
+## verifica che TACCIANO ANCHE LORO, non solo che il tour risulti concluso.
+##
+## Gira con il TutorialHarness acceso, quindi scrive sul config sintetico:
+## la persistenza è metà del contratto e va verificata su file vero, mai su
+## quello della persona che sta usando il gioco.
+func _tour_exit_selftest() -> void:
+	var failures: Array[String] = []
+	var check := func(ok: bool, message: String) -> void:
+		if not ok:
+			failures.append(message)
+	# Primo avvio: né provider né container, come chi apre il gioco la prima
+	# volta e vuole andare dritto alla configurazione.
+	ScriptedOnboarding.set_provider_test_override(0)
+	SetupService.status["provider_authenticated"] = false
+	SetupService.status["container_running"] = false
+	SetupService.status["profile_ready"] = false
+	SetupService.status["ready"] = false
+	office._on_setup_status_changed(SetupService.status)
+	await get_tree().create_timer(0.6).timeout
+	office._refresh_tour_markers()
+
+	check.call(office._tour_enabled and TourGuide.active(),
+			"il giro non è attivo: il test non starebbe provando nulla")
+	check.call(not ScriptedOnboarding.is_dismissed(),
+			"il giro risulta già chiuso prima di uscirne")
+	check.call(TourGuide.current_slug() == "assistente",
+			"l'uscita non viene provata all'INIZIO del giro")
+	var guided_before := ScriptedOnboarding.use_scripted_chat("assistente")
+	check.call(guided_before, "le chat guidate non sono attive prima dell'uscita")
+
+	# Le azioni che aprivano pannelli da sole: dopo l'uscita non ne deve
+	# partire più nessuna, ed è il motivo per cui si registrano da qui.
+	var actions: Array[String] = []
+	var capture := func(action: String, _payload: Dictionary) -> void:
+		actions.append(action)
+	ScriptedOnboarding.action_requested.connect(capture)
+
+	# ── Il pulsante esiste ed è VISIBILE, non solo istanziato ─────────
+	var sidebar: GameSidebar = null
+	for child in office.get_children():
+		if child is GameSidebar:
+			sidebar = child
+			break
+	check.call(sidebar != null, "sidebar assente: l'uscita non ha una casa stabile")
+	if sidebar:
+		var exit_row: Control = sidebar._exit_tour.get_parent() as Control
+		check.call(is_instance_valid(sidebar._exit_tour) and exit_row.visible,
+				"il menu laterale non mostra l'uscita mentre il giro è in corso")
+		check.call(sidebar._exit_tour.text != "" \
+				and sidebar._exit_tour.text != "tour.exit",
+				"l'uscita nel menu non è tradotta")
+	check.call(is_instance_valid(office._tour_tracker),
+			"la to-do list del tour, che ospita l'altro pulsante, non c'è")
+
+	# ── L'uscita col TASTO, dal percorso vero ─────────────────────────
+	# Chiamare exit_guided_onboarding() proverebbe la funzione, non la via
+	# che l'utente ha davvero: qui passa dal ramo ESC di Game.
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.physical_keycode = KEY_ESCAPE
+	esc.pressed = true
+	Game._unhandled_input(esc)
+	await get_tree().process_frame
+	check.call(not get_tree().paused,
+			"ESC ha messo in pausa invece di chiudere il giro")
+
+	check.call(ScriptedOnboarding.is_dismissed(), "l'uscita non chiude il giro")
+	check.call(not TourGuide.active(), "l'uscita non chiude il tour")
+	for agent in ScriptedOnboarding.AGENTS:
+		check.call(not ScriptedOnboarding.use_scripted_chat(agent),
+				"la chat guidata di %s parla ancora dopo l'uscita" % agent)
+		check.call((ScriptedOnboarding.options(agent) as Array).is_empty(),
+				"%s propone ancora opzioni guidate dopo l'uscita" % agent)
+
+	# Nessun messaggio nuovo: il container che si accende è proprio l'evento
+	# che faceva parlare il Coordinatore sopra il menu.
+	var history_before := (ScriptedOnboarding.messages("coordinatore") as Array).size()
+	SetupService.status["container_running"] = true
+	SetupService.status["provider_authenticated"] = true
+	ScriptedOnboarding._reconcile_with_status(SetupService.status)
+	await get_tree().process_frame
+	check.call((ScriptedOnboarding.messages("coordinatore") as Array).size() \
+			== history_before,
+			"un agente parla ancora a giro chiuso")
+	check.call(actions.is_empty(),
+			"a giro chiuso si aprono ancora pannelli da soli: " + JSON.stringify(actions))
+	ScriptedOnboarding.action_requested.disconnect(capture)
+
+	# ── Va dritto al setup: niente regia, niente marker che lo chiamano ──
+	office._refresh_tour_markers()
+	await get_tree().process_frame
+	var tour_markers := 0
+	for a in office.agents:
+		if a.quest_marker != null and a.quest_marker.visible \
+				and ScriptedOnboarding.normalize_agent(a.slug) == "assistente":
+			tour_markers += 1
+	check.call(TourGuide.current_slug() == "" and not TourGuide.stop_open("scout"),
+			"la regia del tour ha ancora una tappa aperta dopo l'uscita")
+	check.call(tour_markers == 0 or not TourGuide.active(),
+			"l'Assistente chiama ancora l'utente dopo l'uscita")
+	# La configurazione è raggiungibile: è il punto dell'uscita.
+	check.call(SetupService.status.has("ready"),
+			"lo stato del setup non è consultabile dopo l'uscita")
+
+	# ── Persiste al riavvio ──────────────────────────────────────────
+	var cfg := ConfigFile.new()
+	var saved := cfg.load(TutorialHarness.ONBOARDING_CFG) == OK \
+			and bool(cfg.get_value("guided", "dismissed", false))
+	check.call(saved, "l'uscita non è finita su file: al riavvio il giro torna")
+	# Riavvio simulato: stato in memoria azzerato, ricaricato da file.
+	ScriptedOnboarding._dismissed = false
+	ScriptedOnboarding._load_state()
+	check.call(ScriptedOnboarding.is_dismissed(),
+			"l'uscita non viene riletta al riavvio")
+	var tour_cfg := ConfigFile.new()
+	check.call(tour_cfg.load(TutorialHarness.TOUR_CFG) == OK \
+			and bool(tour_cfg.get_value("tour", "done", false)),
+			"il tour non risulta concluso su file dopo l'uscita")
+
+	var ok := failures.is_empty()
+	print("TOUR-EXIT-TEST ", "PASS " if ok else "FAIL ",
+			JSON.stringify({"failures": failures}))
+	await get_tree().create_timer(0.3).timeout
+	get_tree().quit(0 if ok else 1)
+
 
 func _guided_onboarding_selftest() -> void:
 	var failures: Array[String] = []
