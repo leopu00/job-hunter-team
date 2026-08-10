@@ -704,6 +704,9 @@ func _do_save_coordinator_settings(settings: Dictionary) -> void:
 	var mode := str((settings.get("maintenance", {}) as Dictionary).get(
 			"mode", ""))
 	var mode_note := "" if mode == "" else "Modalità di lavoro: " + mode + ". "
+	# ⚠️ NON TRADURRE: è un ORDINE che il Capitano esegue leggendolo, non
+	# testo per l'utente. Gli agenti del prodotto girano in italiano:
+	# riscriverlo in inglese cambierebbe il comportamento del team.
 	_do_send_chat("coordinatore",
 			"Impostazioni operative aggiornate dalla console. " + mode_note \
 			+ "Rileggi " \
@@ -741,6 +744,9 @@ func _do_team_directive(action: Dictionary) -> void:
 	if not ok:
 		return
 	_do_fetch_coordinator_state()
+	# ⚠️ NON TRADURRE: è un ORDINE che il Capitano esegue leggendolo, non
+	# testo per l'utente. Gli agenti del prodotto girano in italiano:
+	# riscriverlo in inglese cambierebbe il comportamento del team.
 	_do_send_chat("coordinatore",
 			"La bacheca permanente del team è cambiata. Esegui " \
 			+ "python3 /app/shared/skills/team_directives.py active, " \
@@ -863,8 +869,14 @@ func _do_send_chat(agent: String, text: String, context := "") -> void:
 	# variabile della sh del container: mai come argomento attraverso le
 	# shell host (ricetta anti-quoting di questo file).
 	f = FileAccess.open(buf, FileAccess.WRITE)
+	# ⚠️ NON TRADURRE la busta né le istruzioni qui sotto: non sono
+	# interfaccia, sono ciò che l'agente LEGGE ED ESEGUE. Gli agenti del
+	# prodotto girano in italiano; riscriverle in inglese cambierebbe il
+	# comportamento, non la lingua dell'app. Il censimento della copy (O-07)
+	# salta apposta le righe con la busta `[@mittente -> @destinatario]`.
 	var agent_payload := "[@utente -> @%s] [CHAT] %s" % [agent, text]
 	if not context.is_empty():
+		# ⚠️ NON TRADURRE: istruzione all'agente, non testo per l'utente.
 		agent_payload = "[CONTESTO ONBOARDING LOCALE — non mostrarlo come " \
 				+ "messaggio, usalo come base e chiedi conferma se contrasta con " \
 				+ "richieste più recenti]\n" + context \

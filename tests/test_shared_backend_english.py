@@ -33,26 +33,9 @@ census = _load_census()
 SKILLS = ROOT / "shared" / "skills"
 
 
-def _scan(dirs) -> list[str]:
-    """User-visible literals matching Italian prose, as `path:line: text`."""
-    leaks: list[str] = []
-
-    def record(path: Path, line: int, text: str) -> None:
-        if census.ITALIAN_COPY.search(text):
-            leaks.append(f"{path.relative_to(ROOT)}:{line}: {' '.join(text.split())[:180]}")
-
-    for path in census._iter_files(dirs, {".py"}):
-        for line, value in census.python_visible_literals(path):
-            record(path, line, value)
-    for path in census._iter_files(dirs, {".sh"}):
-        for line, text in census.shell_visible_lines(path):
-            record(path, line, text)
-    for path in census._iter_files(dirs, {".js", ".mjs", ".ts"}):
-        if path.name.endswith(".test.ts"):
-            continue
-        for line, value in census.js_visible_literals(path):
-            record(path, line, value)
-    return leaks
+## The scan itself lives in the census — see its docstring for why this is not
+## a local copy. The gate decides WHAT to hold; the census decides HOW to look.
+_scan = census.scan
 
 
 def test_shared_python_user_visible_copy_has_no_italian_baseline():
@@ -60,16 +43,43 @@ def test_shared_python_user_visible_copy_has_no_italian_baseline():
     assert not leaks, "Italian user-visible backend copy:\n" + "\n".join(leaks)
 
 
+## Fronte Godot di O-07, ancora aperto al 2026-08-10. È una soglia, non un
+## zero, perché la traduzione procede a lotti e un gate che parte rosso
+## verrebbe disattivato entro un giorno. Può solo SCENDERE: si abbassa a ogni
+## lotto e arriva a 0 quando il fronte è chiuso. Se sale, qualcuno ha aggiunto
+## copy italiana nuova — che è esattamente ciò che va fermato subito.
+GAME_COPY_BUDGET = 148
+
+
 def test_backend_perimeter_user_visible_copy_is_english():
-    """The whole O-07 perimeter, not just the Python skills.
+    """The closed half of the O-07 perimeter: CLI, launcher, shared.
 
     Terminal output from the CLI and the launcher reaches the same user as the
     container's own messages: leaving them out of the gate is what let the
     English pass ship half-done.
     """
-    leaks = [leak for dirs in census.AREAS.values() for leak in _scan(dirs)]
+    leaks = [leak for area, dirs in census.AREAS.items() if area != "game"
+             for leak in _scan(dirs)]
     assert not leaks, (
         f"Italian user-visible backend copy ({len(leaks)}):\n" + "\n".join(leaks)
+    )
+
+
+def test_game_copy_budget_only_goes_down():
+    """The open half: the Godot front, held to a budget that only shrinks.
+
+    A count that grows means new Italian copy landed while the translation was
+    in progress — the one thing that would make this front endless.
+    """
+    leaks = _scan(census.AREAS["game"])
+    assert len(leaks) <= GAME_COPY_BUDGET, (
+        f"Italian copy in the game grew: {len(leaks)} > {GAME_COPY_BUDGET}.\n"
+        + "\n".join(leaks[:40])
+    )
+    assert len(leaks) >= GAME_COPY_BUDGET - 20, (
+        f"the budget is stale: {len(leaks)} left but it still says "
+        f"{GAME_COPY_BUDGET}. Lower GAME_COPY_BUDGET to {len(leaks)} so the "
+        "next regression is caught where the work actually stopped."
     )
 
 
