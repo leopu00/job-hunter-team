@@ -96,10 +96,12 @@ describe("social link del footer pubblico", () => {
       // sul tema scuro).
       expect(svg?.getAttribute("fill")).toBe("currentColor");
       expect(svg?.getAttribute("aria-hidden")).toBe("true");
-      // Il colore va portato da uno style inline. Una classe Tailwind
-      // arbitraria come `text-[var(--color-white)]` viene rimossa dalla build
-      // (Tailwind v4 / Lightning CSS): misurato sulla preview, il glifo
-      // ereditava il verde dei link del footer in ENTRAMBI i temi.
+      // Il colore va portato da uno style inline: con la classe arbitraria
+      // `text-[var(--color-white)]` il glifo ereditava il verde dei link del
+      // footer (misurato sulla preview: rgb(8,113,58)). Questo test non può
+      // vederlo — in JSDOM non c'è CSS — quindi si limita a fissare la forma
+      // che sulla preview è risultata corretta: dark rgb(240,240,250), light
+      // rgb(10,10,32).
       expect(svg?.getAttribute("style")).toContain("var(--color-white)");
 
       const drawn = svg?.querySelector("path")?.getAttribute("d");

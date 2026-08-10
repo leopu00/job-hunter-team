@@ -60,11 +60,13 @@ export function FooterSocialLinks({ labels }: FooterSocialLinksProps) {
               chiaro: il glifo segue il tema, senza fondo e senza un secondo
               file.
               ⚠️ Il colore è uno STYLE INLINE, non una classe Tailwind
-              arbitraria: `text-[var(--color-white)]` viene rimossa dalla build
-              (Tailwind v4 / Lightning CSS) e il glifo eredita il verde dei
-              link del footer — misurato sulla preview, era rgb(8,113,58) in
-              ENTRAMBI i temi. Stessa trappola già documentata in globals.css
-              per le linee budget dei grafici. */}
+              arbitraria: con `text-[var(--color-white)]` il glifo ereditava il
+              verde dei link del footer (misurato sulla preview: rgb(8,113,58)
+              invece del bianco). Stessa famiglia di trappole già documentata
+              in globals.css per le linee budget dei grafici, dove var e classi
+              venivano rimosse dalla build.
+              Con lo style inline, misurato sulla preview: dark rgb(240,240,250),
+              light rgb(10,10,32), fondo trasparente in entrambi. */}
           <svg
             viewBox="0 0 24 24"
             width={17}
