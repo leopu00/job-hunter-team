@@ -3574,9 +3574,15 @@ func _build_pos_detail() -> void:
 			bar.max_value = float(w[2])
 			bar.value = float(val)
 			bar.show_percentage = false
+			# ProgressBar clampa `value` da se stesso: un 18 su un tetto di 15 si
+			# disegna pieno e in silenzio, indistinguibile da un 15/15. Il clamp
+			# resta (la barra non puo' fare piu' del pieno) ma il fuori scala si
+			# dichiara: colore e frase accanto al numero vero, non normalizzato.
+			var over_cap: bool = float(val) > float(w[2])
 			var ratio := float(val) / float(w[2])
-			var ratio_color := Palette.GREEN if ratio >= 0.7 \
-					else (Palette.YELLOW if ratio >= 0.45 else Palette.RED)
+			var ratio_color := Palette.RED if over_cap \
+					else (Palette.GREEN if ratio >= 0.7 \
+					else (Palette.YELLOW if ratio >= 0.45 else Palette.RED))
 			# Modulare il ProgressBar verde del tema non cambia davvero fascia
 			# (verde × giallo resta verde nel render). Fill e binario dedicati
 			# rendono il rapporto come sul web e funzionano anche nel tema light.
@@ -3591,8 +3597,16 @@ func _build_pos_detail() -> void:
 			bar.add_theme_stylebox_override("background", track)
 			bar.add_theme_stylebox_override("fill", fill)
 			wrow.add_child(bar)
+			# Il numero resta quello scritto nel DB; a cambiare e' solo cosa dice
+			# la riga. Il denominatore da solo non basta: e' scritto anche oggi e
+			# nessuno lo legge, per questo il fuori scala ha una frase sua.
 			wrow.add_child(TerminalTheme.label("%d/%d" % [int(val), w[2]],
-					13, Palette.BRIGHT, "medium"))
+					13, Palette.RED if over_cap else Palette.BRIGHT, "medium"))
+			if over_cap:
+				var warn := TerminalTheme.label(UIStrings.t("pos.score_over_cap"),
+						12, Palette.RED)
+				warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				score_box.add_child(warn)
 		if p.get("score_notes"):
 			score_box.add_child(TerminalTheme.label(UIStrings.t("pos.score_rationale"),
 					13, Palette.MUTED, "medium"))
