@@ -180,3 +180,7 @@ def test_indice_dei_turni_da_specchiare(tmp_path):
     finally:
         conn.close()
     assert 'idx_pending_messages_unmirrored' in names
+    # E il verso opposto: l'ingest chiede "di questi ts, quali ho gia'?" a
+    # ogni giro in cui chat.jsonl si muove, ed e' la guardia che impedisce di
+    # reimportare due volte lo stesso turno.
+    assert 'idx_pending_messages_mirrored' in names
