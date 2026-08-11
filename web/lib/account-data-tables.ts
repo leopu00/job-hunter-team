@@ -50,6 +50,11 @@ export const CASCADE_TABLES = [
   "position_feedback",
   "position_tickets",
   "position_transitions",
+  // O-33/mig 069: la nota privata, una riga per `origin` (la superficie che
+  // l'ha scritta). Cascata doppia (auth.users e positions), quindi qui e non
+  // in MANUAL_DELETE_ORDER. «Privata dagli agenti» non vuol dire esclusa
+  // dall'export: è un testo scritto dall'utente, ed è suo.
+  "position_user_notes",
   "position_views",
   "sentinel_ticks",
   "team_commands",
