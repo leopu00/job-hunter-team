@@ -40,7 +40,68 @@ if not isinstance(current, dict):
 # a durare per inerzia: il difetto che quella chiave esiste per chiudere.
 # Stessa regola di `coordinator_settings.write_mode`: una chiave che non si sta
 # nominando resta dov'è.
+#
+# La Console però ADESSO la nomina, in due forme:
+#   'mode_until'       → istante assoluto ISO 8601 (o null/'' per togliere la
+#                        scadenza): la forma che scrive anche `jht coordinator`;
+#   'mode_until_hours' → «per quante ore ancora», che il gioco preferisce e che
+#                        si converte QUI. Come per la deroga di spesa
+#                        (burn_intent), la durata viaggia relativa e diventa un
+#                        istante nel container: fra host e container il fuso può
+#                        differire, e una scadenza calcolata sull'orologio
+#                        sbagliato è diversa da quella che l'utente ha visto.
+# La validazione è quella di mode_deadline.py, non una copia: una data che il
+# lettore non digerisce sarebbe una modalità senza fine, cioè il difetto di
+# partenza. Import tollerante come in mode_banner, ma qui l'assenza del modulo
+# NON è silenziosa: su un'immagine che non sa valutare le scadenze, scrivere
+# `mode_until` significherebbe promettere una fine che nessuno farà scattare.
+try:
+    import mode_deadline
+except Exception:
+    mode_deadline = None
+
+_UNSET = object()
+requested = m.get('mode_until', _UNSET)
+if requested is _UNSET and m.get('mode_until_hours') is not None:
+    try:
+        hours = float(m.get('mode_until_hours'))
+    except Exception:
+        hours = 0.0
+    if hours > 0:
+        from datetime import datetime, timedelta, timezone
+        ends = datetime.now(timezone.utc) + timedelta(hours=hours)
+        requested = ends.replace(microsecond=0).isoformat()
+    else:
+        requested = None      # 0 ore = «senza scadenza», non «scaduta subito»
+if isinstance(requested, str) and not requested.strip():
+    requested = None
+if requested is not None and requested is not _UNSET:
+    requested = requested.strip() if isinstance(requested, str) else None
+    if requested is None:
+        print(json.dumps({'ok': False, 'error': 'mode_until must be an ISO 8601 '
+                          'date/time, null to clear it'}))
+        raise SystemExit(1)
+    if mode_deadline is None:
+        print(json.dumps({'ok': False, 'error': 'this container image does not '
+                          'evaluate mode deadlines yet (mode_deadline.py '
+                          'missing): a deadline written now would never fire'}))
+        raise SystemExit(1)
+    if mode_deadline.parse_deadline(requested) is None:
+        # Concatenazione e non formattazione: TUTTO questo file è un template
+        # che il gioco interpola col segno di percentuale (il JSON base64 in
+        # cima), quindi un secondo segno qui dentro romperebbe il payload.
+        print(json.dumps({'ok': False, 'error': repr(requested) + ' is not an '
+                          'ISO 8601 date/time (e.g. 2026-08-10T18:00:00Z)'},
+                         ensure_ascii=False))
+        raise SystemExit(1)
+
+
 def carry_deadline(payload):
+    if requested is not _UNSET:
+        # La Console ha parlato: una scadenza nuova, o nessuna scadenza.
+        if requested is not None:
+            payload['mode_until'] = requested
+        return payload
     until = current.get('mode_until')
     if isinstance(until, str) and until.strip():
         payload['mode_until'] = until.strip()

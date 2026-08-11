@@ -42,7 +42,8 @@ try:
     import mode_deadline
 except Exception:
     mode_deadline = None
-mode_until = maintenance_raw.get('mode_until') if isinstance(maintenance_raw, dict) else None
+mode_until = maintenance_raw.get('mode_until') \
+    if isinstance(maintenance_raw, dict) else None
 if not isinstance(mode_until, str) or not mode_until.strip():
     mode_until = None
 else:
@@ -68,8 +69,10 @@ maintenance = {
     'expired': expired,
     'mode_until': mode_until,
     # None = non c'è scadenza, o questa immagine non sa ancora valutarne una:
-    # in nessuno dei due casi si può dire all'utente che la sua data è illeggibile.
-    'mode_until_valid': (deadline is not None) if (mode_until and mode_deadline) else None,
+    # in nessuno dei due casi si può dire all'utente che la sua data è
+    # illeggibile.
+    'mode_until_valid': (deadline is not None)
+                        if (mode_until and mode_deadline) else None,
     'mode_until_in': (mode_deadline.remaining_text(deadline)
                       if (deadline is not None and mode_deadline) else ''),
     # Compat col vecchio toggle binario (client che leggono ancora 'enabled').

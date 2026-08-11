@@ -57,7 +57,7 @@ def _write_mode_file(home, payload):
     _mode_file(home).write_text(json.dumps(payload), encoding='utf-8')
 
 
-def _save(home, maintenance, enrichment=None):
+def _save(home, maintenance, enrichment=None, expect_ok=True):
     """Il payload della Console, eseguito come lo esegue il gioco.
 
     Il file è un template: il JSON delle impostazioni arriva base64 al posto
@@ -72,7 +72,7 @@ def _save(home, maintenance, enrichment=None):
     script.write_text(source, encoding='utf-8')
     res = subprocess.run([sys.executable, str(script)], capture_output=True,
                          text=True, env=_env(home))
-    assert res.returncode == 0, res.stderr
+    assert (res.returncode == 0) is expect_ok, res.stderr or res.stdout
     return json.loads(res.stdout)
 
 
@@ -130,6 +130,61 @@ def test_a_broken_mode_file_does_not_stop_the_save(home):
 
     assert json.loads(_mode_file(home).read_text(encoding='utf-8')) == {
         'mode': 'saving'}
+
+
+# ── La Console può DARE una scadenza, non solo perderla ───────────────────
+
+def test_save_accepts_an_absolute_deadline(home):
+    _save(home, {'mode': 'saving', 'mode_until': FUTURE})
+
+    assert json.loads(_mode_file(home).read_text(encoding='utf-8')) == {
+        'mode': 'saving', 'mode_until': FUTURE}
+
+
+def test_save_accepts_a_duration_and_dates_it_here(home):
+    """La durata viaggia relativa e diventa un istante NEL container: fra host e
+    container il fuso può differire (la lezione di `burn_intent`), e la scadenza
+    la valutano i lettori del container."""
+    _save(home, {'mode': 'saving', 'mode_until_hours': 48})
+
+    written = json.loads(_mode_file(home).read_text(encoding='utf-8'))
+    state = _state(home)['maintenance']
+    assert written['mode_until'] == state['mode_until']
+    assert state['expired'] is False
+    assert state['mode_until_in'] in ('2d 0h', '1d 23h')
+
+
+def test_save_can_take_the_deadline_away(home):
+    """`null` esplicito: togliere la scadenza è una scelta, e va distinta dal
+    non parlarne (che invece la preserva)."""
+    _write_mode_file(home, {'mode': 'saving', 'mode_until': FUTURE})
+
+    _save(home, {'mode': 'saving', 'mode_until': None})
+
+    assert json.loads(_mode_file(home).read_text(encoding='utf-8')) == {
+        'mode': 'saving'}
+
+
+def test_zero_hours_means_no_deadline_not_an_instant_one(home):
+    _write_mode_file(home, {'mode': 'saving', 'mode_until': FUTURE})
+
+    _save(home, {'mode': 'saving', 'mode_until_hours': 0})
+
+    assert 'mode_until' not in json.loads(
+        _mode_file(home).read_text(encoding='utf-8'))
+
+
+def test_an_unreadable_date_is_refused_before_anything_is_written(home):
+    """Una data che il lettore non digerisce sarebbe una modalità senza fine:
+    il difetto di partenza. Meglio rifiutare il salvataggio INTERO che scrivere
+    metà delle impostazioni con una promessa che nessuno mantiene."""
+    out = _save(home, {'mode': 'saving', 'mode_until': 'venerdì'},
+                expect_ok=False)
+
+    assert out['ok'] is False
+    assert 'ISO 8601' in out['error']
+    assert not _mode_file(home).exists()
+    assert not (home / 'profile' / 'enrichment-policy.json').exists()
 
 
 # ── La Console mostra la modalità in vigore, non quella scritta ────────────
