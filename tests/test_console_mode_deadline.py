@@ -141,6 +141,16 @@ def test_save_accepts_an_absolute_deadline(home):
         'mode': 'saving', 'mode_until': FUTURE}
 
 
+def test_the_console_can_prefill_its_field_from_the_state(home):
+    """Il campo «fino a quando» si precompila col delta, non con la data: è
+    quello che il gioco può rimandare indietro senza discutere di fusi."""
+    _save(home, {'mode': 'saving', 'mode_until_hours': 30})
+
+    left = _state(home)['maintenance']['mode_until_sec']
+
+    assert 29 * 3600 < left <= 30 * 3600
+
+
 def test_save_accepts_a_duration_and_dates_it_here(home):
     """La durata viaggia relativa e diventa un istante NEL container: fra host e
     container il fuso può differire (la lezione di `burn_intent`), e la scadenza
@@ -212,6 +222,7 @@ def test_state_keeps_a_mode_whose_deadline_is_still_ahead(home):
     assert maintenance['mode_until'] == FUTURE
     assert maintenance['mode_until_valid'] is True
     assert maintenance['mode_until_in']    # «quanto manca», non vuoto
+    assert maintenance['mode_until_sec'] > 0
 
 
 def test_state_reports_search_once_the_deadline_has_passed(home):

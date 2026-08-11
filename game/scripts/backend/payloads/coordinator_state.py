@@ -75,6 +75,14 @@ maintenance = {
                         if (mode_until and mode_deadline) else None,
     'mode_until_in': (mode_deadline.remaining_text(deadline)
                       if (deadline is not None and mode_deadline) else ''),
+    # Lo stesso dato in secondi, perché la Console precompila con questo il
+    # campo «fino a quando»: un delta non richiede che host e container
+    # concordino sul fuso (la scelta di `remaining_sec` della deroga di spesa).
+    # `getattr`: l'helper è più nuovo del modulo, e un'immagine container a
+    # metà rolling deploy può avere il secondo senza il primo.
+    'mode_until_sec': (getattr(mode_deadline, 'remaining_seconds',
+                               lambda *_a, **_k: 0)(deadline)
+                       if (deadline is not None and mode_deadline) else 0),
     # Compat col vecchio toggle binario (client che leggono ancora 'enabled').
     'enabled': mode == 'care',
     'stop_search': bool(orders.get('stop_search', True)),
