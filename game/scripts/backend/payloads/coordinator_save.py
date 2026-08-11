@@ -24,6 +24,28 @@ def atomic(path, value):
 
 m = data.get('maintenance', {})
 maintenance_path = os.path.join(profile, 'capitano-maintenance.json')
+# Cosa dice il file ADESSO. Serve perché la Console lo riscrive da zero: le
+# chiavi che NON sta cambiando devono sopravvivere alla riscrittura.
+try:
+    current = json.load(open(maintenance_path, encoding='utf-8'))
+except Exception:
+    current = {}
+if not isinstance(current, dict):
+    current = {}
+
+# `mode_until` — la scadenza di [SAVING-MODE-HAS-NO-DEADLINE] — non appartiene
+# a una modalità in particolare: dice fino a quando vale l'ordine, chiunque
+# l'abbia dato (`jht coordinator set-mode --until`, o un umano nel JSON).
+# Riscrivere il file da zero la CANCELLAVA senza avviso, e la modalità tornava
+# a durare per inerzia: il difetto che quella chiave esiste per chiudere.
+# Stessa regola di `coordinator_settings.write_mode`: una chiave che non si sta
+# nominando resta dov'è.
+def carry_deadline(payload):
+    until = current.get('mode_until')
+    if isinstance(until, str) and until.strip():
+        payload['mode_until'] = until.strip()
+    return payload
+
 # Modalità di lavoro (enum chiuso 2026-08). Contratto del file:
 #   assenza = search → si CANCELLA;
 #   care    → mode 'care' + gli `orders` fini della cura;
@@ -39,11 +61,13 @@ if mode == 'maintenance':
 if mode not in MODES:
     mode = 'care' if boolean(m.get('enabled')) else 'search'
 if mode == 'search':
+    # L'assenza del file È `search`: la scadenza se ne va con lui, perché
+    # `search` è già il posto in cui una scadenza fa tornare.
     maintenance = None
     try: os.unlink(maintenance_path)
     except FileNotFoundError: pass
 elif mode == 'care':
-    maintenance = {
+    maintenance = carry_deadline({
         'mode': 'care',
         'orders': {
             'stop_search': boolean(m.get('stop_search'), True),
@@ -51,10 +75,10 @@ elif mode == 'care':
             'cv_min_score': integer(m.get('cv_min_score'), 90, 0, 100),
             'pre_check_liveness_for_cv': boolean(m.get('pre_check_liveness_for_cv'), True),
         },
-    }
+    })
     atomic(maintenance_path, maintenance)
 else:
-    maintenance = {'mode': mode}
+    maintenance = carry_deadline({'mode': mode})
     atomic(maintenance_path, maintenance)
 
 e = data.get('enrichment', {})
