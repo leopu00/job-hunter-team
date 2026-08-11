@@ -129,6 +129,18 @@ export const T = {
     fr: "Adéquation stratégique",
     pt: "Ajuste estratégico",
   },
+  // Mostrata quando una dimensione supera il proprio massimo: la barra si
+  // ferma al pieno, ma il numero vero resta scritto e questo lo spiega. Senza
+  // la frase il pieno si leggerebbe come "punteggio perfetto".
+  sb_over_cap: {
+    it: "fuori scala: oltre il massimo della dimensione",
+    en: "out of scale: above this dimension's maximum",
+    hu: "skálán kívül: a dimenzió maximuma felett",
+    es: "fuera de escala: por encima del máximo de la dimensión",
+    de: "außerhalb der Skala: über dem Maximum dieser Dimension",
+    fr: "hors échelle : au-dessus du maximum de la dimension",
+    pt: "fora de escala: acima do máximo da dimensão",
+  },
   application: {
     it: "Candidatura",
     en: "Application",
