@@ -280,6 +280,28 @@ describe("SQLite → chat.jsonl", () => {
     expect(readFileSync(chatFileFor(home, "mentor"), "utf-8").trim().split("\n")).toHaveLength(1);
   });
 
+  it("un giro morto fra la scrittura e il timbro non lascia un gemello", () => {
+    // [CHAT-DUPLICATES-BORN-INSIDE-THE-BOX] La finestra fra `appendFileSync` e
+    // l'UPDATE di `chat_ts` è reale: un SIGTERM (docker stop, redeploy) o un
+    // lock sulla jobs.db in quell'istante lasciano la riga nel file e la
+    // colonna NULL. Il giro dopo la riscriveva: stesso testo, due bolle nella
+    // chat del gioco, per sempre. Si riproduce annullando il timbro.
+    db.prepare(
+      "INSERT INTO pending_user_messages (agent, body, author, created_at) VALUES ('mentor', 'scritta una volta', 'agent', '2026-07-29 10:00:00')",
+    ).run();
+    const at = Date.parse("2026-07-29T10:00:00Z") + 60_000;
+    expect(mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"], now: at }).mirrored).toBe(1);
+    // Il giro è morto qui: la riga è nel file, `chat_ts` non è mai stato scritto.
+    db.prepare("UPDATE pending_user_messages SET chat_ts = NULL").run();
+
+    const retry = mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"], now: at });
+    expect(retry.mirrored).toBe(0);
+    expect(readFileSync(chatFileFor(home, "mentor"), "utf-8").trim().split("\n")).toHaveLength(1);
+    // …e il lavoro si chiude: la colonna torna valorizzata, così l'ingest
+    // continua a riconoscere quella riga come propria.
+    expect(rowsOf()[0].chat_ts).not.toBeNull();
+  });
+
   it("due notifiche nello stesso secondo restano due turni distinti", () => {
     // created_at ha risoluzione al secondo: senza l'id nei millesimi le due
     // righe collasserebbero sulla stessa chiave di dedup e una sparirebbe.

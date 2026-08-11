@@ -325,6 +325,14 @@ export function ingestChatJsonl(db, { jhtHome, agents = CHAT_AGENTS, cursor = {}
  *
  * `chat_ts` viene valorizzato subito dopo la scrittura: è la guardia che
  * impedisce a `ingestChatJsonl` di reimportare la stessa riga al giro dopo.
+ *
+ * Fra la scrittura e il timbro c'è una finestra, e non è teorica: un SIGTERM
+ * (`docker stop`, un redeploy) o un lock sulla jobs.db in quell'istante
+ * lasciano la riga nel file e `chat_ts` NULL. Al giro dopo la riga viene
+ * riscritta: stesso testo, due volte nella chat del gioco, per sempre. Il
+ * `ts` è deterministico — `created_at` più l'id nei millesimi — quindi lo
+ * si può cercare nel file: se c'è già, si timbra e non si riscrive. È la
+ * stessa guardia dell'ingest, nel verso opposto.
  */
 export function mirrorDbTurnsToJsonl(
   db,
@@ -344,6 +352,23 @@ export function mirrorDbTurnsToJsonl(
   const stamp = db.prepare('UPDATE pending_user_messages SET chat_ts = ? WHERE id = ?');
   let mirrored = 0;
   let backfilled = 0;
+  // I ts già presenti nella coda del file, per agente. È una FOTOGRAFIA di
+  // prima di questo giro, e non si aggiorna man mano di proposito: due righe
+  // dello stesso batch possono derivare lo stesso ts (id a distanza di mille
+  // nello stesso secondo) e vanno scritte entrambe — trasformare un doppione
+  // in una riga persa sarebbe un peggioramento, non una correzione.
+  // Si legge al massimo una volta per agente e solo se c'è davvero qualcosa
+  // da specchiare: a conversazione ferma questo blocco non si raggiunge.
+  const inFile = new Map();
+  const tsInFile = (agent) => {
+    if (!inFile.has(agent)) {
+      inFile.set(
+        agent,
+        new Set(parseChatLines(readTailLines(chatFileFor(jhtHome, agent))).map((t) => t.ts)),
+      );
+    }
+    return inFile.get(agent);
+  };
 
   for (const row of rows) {
     // Un ts monotono e univoco: `created_at` ha risoluzione al secondo e
@@ -361,6 +386,13 @@ export function mirrorDbTurnsToJsonl(
     if (now - baseMs > maxAgeMs) {
       stamp.run(ts, row.id);
       backfilled += 1;
+      continue;
+    }
+
+    // Già nel file da un giro precedente morto fra la scrittura e il timbro:
+    // si chiude il lavoro a metà invece di aggiungere un gemello.
+    if (tsInFile(row.agent).has(ts)) {
+      stamp.run(ts, row.id);
       continue;
     }
 
