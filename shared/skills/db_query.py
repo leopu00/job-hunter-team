@@ -832,6 +832,156 @@ def _emit_disabled_queue(conn, role, label, message, as_json):
     conn.close()
 
 
+# ── Le code come PREDICATO, in un posto solo ([CONSOLE-COUNTS-INLINE-SQL]) ──
+#
+# Ogni coda ha un `FROM … WHERE …` e uno solo: qui. Chi ELENCA (`next_for_role`,
+# `recheck_due_rows`) e chi CONTA (`queue_total`, chiamata dalla Console del
+# gioco per i suoi contatori) partono dalla stessa riga di SQL, perché due copie
+# divergono — e su questa coda era già successo DUE volte. La prima:
+# `last_checked` da solo, che teneva in testa alla coda una posizione già
+# verificata ([RECHECK-MUST-UPDATE-LAST-CHECKED], da cui `LAST_VERIFIED_SQL`).
+# La seconda: la terza copia dentro `coordinator_state.py`, che ha continuato a
+# guardare solo `last_checked` per settimane e sovrastimava il recheck di tutte
+# le posizioni verificate via `last_open_check`.
+#
+# Uno «scope» è `(sql, params, count_expr)`: `sql` comincia da `FROM` e include
+# il `WHERE`; `count_expr` dice COSA si conta — le posizioni, oppure le AZIENDE
+# della coda logo, che è raggruppata per azienda.
+
+def recheck_due_scope(min_score, older_than_days):
+    """Recheck cadenzato della cura: vive, score alto, non verificate da N giorni."""
+    return (f"""
+        FROM positions p
+        JOIN (SELECT position_id, MAX(total_score) AS total_score
+              FROM scores GROUP BY position_id) s ON s.position_id = p.id
+        WHERE p.status != 'excluded'
+          AND s.total_score >= ?
+          AND {LAST_VERIFIED_SQL} < datetime('now', ?)
+    """, [min_score, f'-{older_than_days} days'], 'COUNT(*)')
+
+
+def geocode_missing_scope(min_score, non_remote_only):
+    """Geocoding autonomo: posizioni vive senza coordinate ufficio."""
+    sql = """
+        FROM positions p
+        WHERE p.status != 'excluded'
+          AND (p.office_lat IS NULL
+               OR p.office_geocoded IS NULL OR p.office_geocoded = 0)"""
+    params = []
+    if min_score is not None:
+        sql += """
+          AND EXISTS (SELECT 1 FROM scores sg
+                      WHERE sg.position_id = p.id
+                        AND sg.total_score >= ?)"""
+        params.append(min_score)
+    if non_remote_only:
+        sql += """
+          AND LOWER(COALESCE(p.work_mode, '')) != 'remote'"""
+    return sql, params, 'COUNT(*)'
+
+
+def logo_missing_scope(min_score):
+    """Logo aziendale: AZIENDE con almeno una posizione viva e logo mai tentato."""
+    sql = """
+        FROM companies c
+        JOIN positions p ON p.company_id = c.id AND p.status != 'excluded'
+        WHERE (c.logo_fetched IS NULL OR c.logo_fetched = 0)"""
+    params = []
+    if min_score is not None:
+        sql += """
+          AND EXISTS (SELECT 1 FROM positions p2
+                      JOIN scores s2 ON s2.position_id = p2.id
+                      WHERE p2.company_id = c.id
+                        AND p2.status != 'excluded'
+                        AND s2.total_score >= ?)"""
+        params.append(min_score)
+    # La lista raggruppa per `c.id` e conta i GRUPPI; il totale conta le aziende
+    # distinte sullo stesso insieme, senza raggruppare. Stesso numero.
+    return sql, params, 'COUNT(DISTINCT c.id)'
+
+
+def harvest_scope(min_score):
+    """Raccolto: posizioni vive con score alto e ancora senza CV."""
+    return ("""
+        FROM positions p
+        JOIN (SELECT position_id, MAX(total_score) AS total_score
+              FROM scores GROUP BY position_id) s ON s.position_id = p.id
+        LEFT JOIN applications a ON a.position_id = p.id
+        WHERE a.id IS NULL
+          AND p.status = 'scored'
+          AND s.total_score >= ?
+          AND COALESCE(p.is_open, 1) != 0
+          AND (p.expires_at IS NULL OR p.expires_at >= date('now'))
+    """, [min_score], 'COUNT(*)')
+
+
+def calibration_scope(watermark):
+    """Calibrazione: feedback dell'utente (esclusioni + ticket) non consumato."""
+    return ("""
+        FROM (
+            SELECT 'esclusione' AS kind, p.id, p.title, p.company,
+                   TRIM(COALESCE(p.user_excluded_reason, '') || ' ' ||
+                        COALESCE(p.user_excluded_note, '')) AS detail,
+                   p.user_excluded_at AS ts
+            FROM positions p
+            WHERE p.user_excluded_at IS NOT NULL
+              AND p.user_excluded_at > ?
+            UNION ALL
+            SELECT 'ticket' AS kind, p.id, p.title, p.company,
+                   t.request_text AS detail, t.created_at AS ts
+            FROM position_tickets t
+            JOIN positions p ON p.id = t.position_id
+            WHERE t.created_at > ?
+        )
+    """, [watermark, watermark], 'COUNT(*)')
+
+
+# Quale flag della enrichment-policy spegne quale coda. Le code di sola LETTURA
+# (harvest, calibration) non sono qui: sono liste, non spesa, e restano
+# interrogabili anche in risparmio.
+QUEUE_POLICY_FLAG = {
+    'recheck-due': 'recheck_weekly',
+    'geocode-missing': 'geocode_missing',
+    'logo-missing': 'logo',
+}
+
+
+def queue_total(conn, kind):
+    """Quante ne ha in coda `kind` ADESSO, o `None` se la coda è SPENTA.
+
+    `None` non è zero: è «questa coda non esiste in questo momento» — spenta
+    dalla enrichment-policy, da `economy`, o dalla modalità `saving`. La
+    distinzione serve a chi mostra il numero: una coda spenta che venisse
+    contata comunque annuncerebbe lavoro che nessuno farà (era il secondo
+    difetto dei contatori della Console).
+
+    Stesso gate e stesso predicato della coda che le ELENCA: è il punto di
+    questa funzione. `kind` è il nome della coda, quello di `next-for-<kind>`.
+    """
+    from enrichment_policy import (is_enabled, recheck_options,
+                                   geocode_options, logo_min_score)
+    flag = QUEUE_POLICY_FLAG.get(kind)
+    if flag is not None and not is_enabled(flag):
+        return None
+    if kind == 'recheck-due':
+        opts = recheck_options()
+        scope = recheck_due_scope(opts['min_score'], opts['older_than_days'])
+    elif kind == 'geocode-missing':
+        opts = geocode_options()
+        scope = geocode_missing_scope(opts['min_score'], opts['non_remote_only'])
+    elif kind == 'logo-missing':
+        scope = logo_missing_scope(logo_min_score())
+    elif kind == 'harvest':
+        scope = harvest_scope(HARVEST_MIN_SCORE)
+    elif kind == 'calibration':
+        scope = calibration_scope(read_calibration_watermark())
+    else:
+        raise ValueError(f'unknown queue: {kind}')
+    sql, params, count_expr = scope
+    row = conn.execute(f'SELECT {count_expr} {sql}', tuple(params)).fetchone()
+    return int(row[0])
+
+
 def recheck_due_rows(conn, min_score=None, older_than_days=None, limit=None):
     """Coda del recheck cadenzato della MODALITÀ CURA (ex "recheck-weekly").
 
@@ -849,19 +999,15 @@ def recheck_due_rows(conn, min_score=None, older_than_days=None, limit=None):
     min_score = opts['min_score'] if min_score is None else min_score
     older_than_days = (opts['older_than_days'] if older_than_days is None
                        else older_than_days)
+    scope, params, _count = recheck_due_scope(min_score, older_than_days)
     rows = conn.execute(f"""
         SELECT p.id, p.title, p.company, p.url, p.last_checked, p.expires_at,
                {LAST_VERIFIED_SQL} AS last_verified,
                s.total_score, COUNT(*) OVER () AS _total
-        FROM positions p
-        JOIN (SELECT position_id, MAX(total_score) AS total_score
-              FROM scores GROUP BY position_id) s ON s.position_id = p.id
-        WHERE p.status != 'excluded'
-          AND s.total_score >= ?
-          AND {LAST_VERIFIED_SQL} < datetime('now', ?)
+        {scope}
         ORDER BY s.total_score DESC, last_verified ASC
         LIMIT ?
-    """, (min_score, f'-{older_than_days} days', _sql_limit(limit))).fetchall()
+    """, tuple(params + [_sql_limit(limit)])).fetchall()
     return rows, min_score, older_than_days
 
 
@@ -1033,19 +1179,15 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         min_score = opts['min_score'] if min_score is None else min_score
         older_than_days = (opts['older_than_days'] if older_than_days is None
                            else older_than_days)
+        scope, params, _count = recheck_due_scope(min_score, older_than_days)
         rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.last_checked, p.expires_at, s.total_score,
                    {LAST_VERIFIED_SQL} AS last_verified,
                    COUNT(*) OVER () AS _total
-            FROM positions p
-            JOIN (SELECT position_id, MAX(total_score) AS total_score
-                  FROM scores GROUP BY position_id) s ON s.position_id = p.id
-            WHERE p.status != 'excluded'
-              AND s.total_score >= ?
-              AND {LAST_VERIFIED_SQL} < datetime('now', ?)
+            {scope}
             ORDER BY last_verified ASC
             LIMIT ?
-        """, (min_score, f'-{older_than_days} days', lim)).fetchall()
+        """, tuple(params + [lim])).fetchall()
         label = (f"Scheduled care-mode recheck "
                  f"(live, score>={min_score}, not checked for >{older_than_days} days)")
 
@@ -1064,27 +1206,12 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
                 f"OFF — {disabled_reason('geocode_missing')}.", as_json)
             return
         opts = geocode_options()
-        score_gate = ""
-        remote_gate = ""
-        params = []
-        if opts['min_score'] is not None:
-            score_gate = """
-              AND EXISTS (SELECT 1 FROM scores sg
-                          WHERE sg.position_id = p.id
-                            AND sg.total_score >= ?)"""
-            params.append(opts['min_score'])
-        if opts['non_remote_only']:
-            remote_gate = """
-              AND LOWER(COALESCE(p.work_mode, '')) != 'remote'"""
+        scope, params, _count = geocode_missing_scope(
+            opts['min_score'], opts['non_remote_only'])
         rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.location, p.loc_city, p.loc_country_code,
                    COUNT(*) OVER () AS _total
-            FROM positions p
-            WHERE p.status != 'excluded'
-              AND (p.office_lat IS NULL
-                   OR p.office_geocoded IS NULL OR p.office_geocoded = 0)
-              {score_gate}
-              {remote_gate}
+            {scope}
             ORDER BY p.found_at DESC
             LIMIT ?
         """, tuple(params + [lim])).fetchall()
@@ -1112,16 +1239,7 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
                 f"\nCare-mode logo: OFF — {disabled_reason('logo')}.", as_json)
             return
         ms = logo_min_score()
-        score_gate = ""
-        params: list = []
-        if ms is not None:
-            score_gate = """
-              AND EXISTS (SELECT 1 FROM positions p2
-                          JOIN scores s2 ON s2.position_id = p2.id
-                          WHERE p2.company_id = c.id
-                            AND p2.status != 'excluded'
-                            AND s2.total_score >= ?)"""
-            params = [ms]
+        scope, params, _count = logo_missing_scope(ms)
         # `COUNT(*) OVER ()` dopo un GROUP BY conta i GRUPPI (le aziende), che è
         # esattamente il totale di questa coda: le window function si applicano
         # alle righe già aggregate.
@@ -1130,10 +1248,7 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
                    COUNT(p.id) || ' live positions · '
                      || COALESCE(c.website, 'NO WEBSITE (find it first)') AS title,
                    COUNT(*) OVER () AS _total
-            FROM companies c
-            JOIN positions p ON p.company_id = c.id AND p.status != 'excluded'
-            WHERE (c.logo_fetched IS NULL OR c.logo_fetched = 0)
-              {score_gate}
+            {scope}
             GROUP BY c.id
             ORDER BY COUNT(p.id) DESC, c.name ASC
             LIMIT ?
@@ -1157,21 +1272,14 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         # dell'utente a convertire le migliori senza selezionarle una a una.
         if min_score is None:
             min_score = HARVEST_MIN_SCORE
-        rows = conn.execute("""
+        scope, params, _count = harvest_scope(min_score)
+        rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.found_at, s.total_score,
                    COUNT(*) OVER () AS _total
-            FROM positions p
-            JOIN (SELECT position_id, MAX(total_score) AS total_score
-                  FROM scores GROUP BY position_id) s ON s.position_id = p.id
-            LEFT JOIN applications a ON a.position_id = p.id
-            WHERE a.id IS NULL
-              AND p.status = 'scored'
-              AND s.total_score >= ?
-              AND COALESCE(p.is_open, 1) != 0
-              AND (p.expires_at IS NULL OR p.expires_at >= date('now'))
+            {scope}
             ORDER BY s.total_score DESC, p.found_at ASC
             LIMIT ?
-        """, (min_score, lim)).fetchall()
+        """, tuple(params + [lim])).fetchall()
         label = (f"Harvest: live positions with score >= {min_score} "
                  f"without a CV (best first)")
 
@@ -1191,27 +1299,14 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         # gate d'ingresso guidato dal feedback gonfierebbe gli score da solo
         # e trasformerebbe una misura in una lista pre-scelta da noi.
         wm = read_calibration_watermark()
-        rows = conn.execute("""
+        scope, params, _count = calibration_scope(wm)
+        rows = conn.execute(f"""
             SELECT kind, id, title, company, detail, ts,
                    COUNT(*) OVER () AS _total
-            FROM (
-                SELECT 'esclusione' AS kind, p.id, p.title, p.company,
-                       TRIM(COALESCE(p.user_excluded_reason, '') || ' ' ||
-                            COALESCE(p.user_excluded_note, '')) AS detail,
-                       p.user_excluded_at AS ts
-                FROM positions p
-                WHERE p.user_excluded_at IS NOT NULL
-                  AND p.user_excluded_at > ?
-                UNION ALL
-                SELECT 'ticket' AS kind, p.id, p.title, p.company,
-                       t.request_text AS detail, t.created_at AS ts
-                FROM position_tickets t
-                JOIN positions p ON p.id = t.position_id
-                WHERE t.created_at > ?
-            )
+            {scope}
             ORDER BY ts ASC
             LIMIT ?
-        """, (wm, wm, lim)).fetchall()
+        """, tuple(params + [lim])).fetchall()
         label = ("Calibration: unconsumed user feedback "
                  "(exclusions + tickets; cleared with calibration-consume)")
 
