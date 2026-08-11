@@ -202,8 +202,8 @@ No text on that event → the note stays as it is. That reason belongs to **this
 # --notes = 2-4 sentences on the decisive lever. Real newlines via $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
-  --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
-  --total 76 \
+  --stack-match 25 --experience-fit 9 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
+  --total 65 \
   --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
   --notes $'The decisive lever is the **salary below target**: technical fit alone was worth 85+.' \
   --scored-by $MY_ID

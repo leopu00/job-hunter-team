@@ -203,8 +203,8 @@ Sem texto nesse evento → a nota fica como está. Esse motivo vale **só para e
 # --notes = 2-4 frases sobre a alavanca decisiva. Quebras reais com $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
-  --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
-  --total 76 \
+  --stack-match 25 --experience-fit 9 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
+  --total 65 \
   --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
   --notes $'A alavanca decisiva é o **salário abaixo da meta**: o fit técnico sozinho valia 85+.' \
   --scored-by $MY_ID

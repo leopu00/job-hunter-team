@@ -203,8 +203,8 @@ Ha azon az eseményen nincs szöveg → a jegyzet marad, ahogy van. Az indok **c
 # --notes = 2-4 mondat a döntő tényezőről. Valódi sortörések: $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
-  --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
-  --total 76 \
+  --stack-match 25 --experience-fit 9 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
+  --total 65 \
   --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
   --notes $'A döntő tényező a **célszint alatti fizetés**: a technikai fit önmagában 85+ pontot ért.' \
   --scored-by $MY_ID
