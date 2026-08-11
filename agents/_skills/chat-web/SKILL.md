@@ -116,6 +116,7 @@ jht-send 'Done. Spawned an extra Analyst, throttle config dumped to the log.'
 - ❌ `cat << 'EOF' >> chat.jsonl ... EOF` — disables `$` interpolation, timestamp ends up as a literal string.
 - ❌ `python3 -c "import json; ..."` ad-hoc — same fragility as the shell heredoc.
 - ❌ Replying via `jht-tmux-send UTENTE ...` — there is no `UTENTE` session. The user lives in the web frontend.
+- ❌ Answering the `[CHAT]` with `jht-send` **and** re-sending the same content with `jht-notify-user`. Since the chat lane was unified they write into the SAME conversation: the user reads your reply twice, and nothing downstream removes the second one — the lane cannot tell a duplicate from two turns that happen to match. One message, one tool.
 - ❌ Sending a final reply with `--partial` — typing dots stuck on the user's screen.
 - ❌ Multiple `jht-send` calls (without `--partial`) for what should be one message — each non-partial call appears as a separate bubble.
 
