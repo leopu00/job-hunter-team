@@ -25,16 +25,17 @@ import {
 } from "../../../cli/src/lib/score-ranges.js";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..", "..");
-const DB_INSERT = join(REPO_ROOT, "shared", "skills", "db_insert.py");
+const SCORE_RANGES_PY = join(REPO_ROOT, "shared", "skills", "score_ranges.py");
 
-/** Rilegge i tetti dalle chiamate `_validate_score_range` del writer canonico. */
+/** Rilegge i tetti da `COMPONENT_LIMITS`, l'autorità lato Python. */
 function limitsEnforcedByPython(): Record<string, number> {
-  const source = readFileSync(DB_INSERT, "utf-8");
+  const source = readFileSync(SCORE_RANGES_PY, "utf-8");
+  const block = source.match(
+    /COMPONENT_LIMITS: dict\[str, int\] = \{([\s\S]*?)\}/,
+  );
+  if (!block) throw new Error("COMPONENT_LIMITS non trovato in score_ranges.py");
   const limits: Record<string, number> = {};
-  const pattern =
-    /_validate_score_range\(\s*args\.\w+\s*,\s*'(\w+)'\s*,\s*0\s*,\s*(\d+)\s*\)/g;
-  for (const match of source.matchAll(pattern)) {
-    if (match[1] === "total") continue;
+  for (const match of block[1].matchAll(/"(\w+)":\s*(\d+)/g)) {
     limits[match[1]] = Number(match[2]);
   }
   return limits;

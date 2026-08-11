@@ -28,13 +28,8 @@ SCOUT_COORD = os.path.join(SKILLS_DIR, 'scout_coord.py')
 
 AGENTS_DIR = os.path.join(REPO_ROOT, 'agents')
 
-SCORER_COMPONENT_RANGES = {
-    'stack_match': 40,
-    'experience_fit': 10,
-    'remote_fit': 25,
-    'salary_fit': 20,
-    'strategic_fit': 15,
-}
+sys.path.insert(0, SKILLS_DIR)
+from score_ranges import COMPONENT_LIMITS as SCORER_COMPONENT_RANGES  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helper (stesso pattern di test_pipeline.py)

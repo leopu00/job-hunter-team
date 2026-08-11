@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema, resolve_company_id
 from profile_gate import check_minimum_viable_profile
+from score_ranges import COMPONENT_LIMITS, SCORE_COMPONENT_LABELS, TOTAL_LIMIT
 import maintenance_log
 
 # Campi di uno score che, cambiando, dicono che la rivalutazione è avvenuta.
@@ -395,12 +396,12 @@ def insert_score(args):
         print("    Leave the position in 'checked' and escalate to the Captain (RULE-T10 — do not invent).")
         sys.exit(1)
 
-    _validate_score_range(args.total, 'total', 0, 100)
-    _validate_score_range(args.stack_match, 'stack_match', 0, 40)
-    _validate_score_range(args.remote_fit, 'remote_fit', 0, 25)
-    _validate_score_range(args.salary_fit, 'salary_fit', 0, 20)
-    _validate_score_range(args.experience_fit, 'experience_fit', 0, 10)
-    _validate_score_range(args.strategic_fit, 'strategic_fit', 0, 15)
+    # I tetti stanno in score_ranges.py, non qui: erano scritti a mano in questo
+    # file, nei prompt dello Scorer, nella pagina web e nel pannello del gioco,
+    # e hanno divergiuto senza che nessun test lo vedesse.
+    _validate_score_range(args.total, 'total', 0, TOTAL_LIMIT)
+    for column, maximum in COMPONENT_LIMITS.items():
+        _validate_score_range(getattr(args, column), column, 0, maximum)
 
     conn = get_db()
     ensure_schema(conn)
@@ -525,12 +526,15 @@ def main():
     # score
     s = sub.add_parser('score')
     s.add_argument('--position-id', type=int, required=True)
-    s.add_argument('--total', type=int, required=True)
-    s.add_argument('--stack-match', type=int, help='Stack component, range 0-40')
-    s.add_argument('--remote-fit', type=int, help='Remote/location component, range 0-25')
-    s.add_argument('--salary-fit', type=int, help='Salary component, range 0-20')
-    s.add_argument('--experience-fit', type=int, help='Seniority component, range 0-10')
-    s.add_argument('--strategic-fit', type=int, help='Strategic component, range 0-15')
+    s.add_argument('--total', type=int, required=True, help=f'Total, range 0-{TOTAL_LIMIT}')
+    # Il testo di --help dice il tetto che il codice applica davvero: prima erano
+    # due stringhe diverse da tenere allineate a mano.
+    for column, maximum in COMPONENT_LIMITS.items():
+        s.add_argument(
+            '--' + column.replace('_', '-'),
+            type=int,
+            help=f'{SCORE_COMPONENT_LABELS[column]} component, range 0-{maximum}',
+        )
     s.add_argument('--breakdown')
     s.add_argument('--pros')
     s.add_argument('--cons')
