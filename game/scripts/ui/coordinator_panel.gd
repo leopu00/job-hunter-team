@@ -26,6 +26,20 @@ var _stop_search: CheckButton
 var _discard_expired: CheckButton
 var _cv_score: SpinBox
 var _precheck_cv: CheckButton
+## «Fino a quando» (`mode_until`, [SAVING-MODE-HAS-NO-DEADLINE]): nessuna
+## modalità deve durare per inerzia, quindi la scadenza va SCELTA qui e non
+## soltanto dal terminale. Si manda come durata e il container la datalizza:
+## fra host e container il fuso può differire, come per la deroga di spesa.
+var _until_toggle: CheckButton
+var _until_row: Control
+var _until_days: SpinBox
+var _until_hours: SpinBox
+var _until_state: Label
+## Il campo si tocca, non si sfiora: finché l'utente non lo cambia, salvare
+## un'ALTRA impostazione non deve spostare né cancellare la scadenza in corso —
+## è il difetto da cui nasce questo pannello.
+var _until_dirty := false
+var _until_syncing := false
 var _economy: CheckButton
 var _geo_enabled: CheckButton
 var _geo_score: SpinBox
@@ -215,6 +229,7 @@ func _build_ui() -> void:
 			_precheck_cv = _compact_check(_maintenance_options,
 					UIStrings.t("coord.precheck"))
 	(_mode_buttons["search"] as CheckBox).set_pressed_no_signal(true)
+	_build_deadline(work)
 
 	var automation := _section_card(columns, UIStrings.t("coord.automation"),
 			UIStrings.t("coord.automation_desc"), Palette.BLUE)
@@ -683,6 +698,54 @@ func _update_mode_data(counts: Dictionary) -> void:
 			label.text = UIStrings.t(entry[1]) % int(counts.get(entry[0], 0))
 
 
+## «Fino a quando»: la scadenza della modalità come SCELTA, non come cosa che
+## si può solo perdere. Vale per la modalità selezionata, qualunque sia — la
+## lezione dei 18 giorni di cura che nessuno aveva notato non riguardava
+## `saving` in particolare, riguardava il durare per inerzia.
+##
+## Si scelgono giorni e ore, non una data: il gioco non sa in che fuso vive il
+## container, quindi manda una DURATA e il container la trasforma nell'istante
+## che poi tutti i lettori valutano (stessa scelta della deroga di spesa).
+func _build_deadline(parent: Container) -> void:
+	parent.add_child(HSeparator.new())
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	parent.add_child(head)
+	var title := TerminalTheme.label(UIStrings.t("coord.until"), 12,
+			Palette.BRIGHT, "bold")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.tooltip_text = UIStrings.t("coord.until_tip")
+	head.add_child(title)
+	_until_toggle = CheckButton.new()
+	_until_toggle.tooltip_text = UIStrings.t("coord.until_tip")
+	head.add_child(_until_toggle)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	parent.add_child(row)
+	_until_row = row
+	_until_days = _spin(row, UIStrings.t("coord.until_days"), 0, 90, 1)
+	_until_hours = _spin(row, UIStrings.t("coord.until_hours"), 0, 23, 0)
+	_until_state = TerminalTheme.label("", 10, Palette.MUTED)
+	_until_state.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(_until_state)
+	_until_toggle.toggled.connect(func(_on: bool) -> void: _touch_deadline())
+	_until_days.value_changed.connect(func(_v: float) -> void: _touch_deadline())
+	_until_hours.value_changed.connect(func(_v: float) -> void: _touch_deadline())
+
+
+## L'utente ha cambiato la scadenza (non la stiamo solo rileggendo dal backend).
+func _touch_deadline() -> void:
+	if _until_syncing:
+		return
+	_until_dirty = true
+	_refresh_control_states()
+
+
+## Quanto durerà la modalità, in ore. 0 = senza scadenza.
+func _deadline_hours() -> int:
+	return int(_until_days.value) * 24 + int(_until_hours.value)
+
+
 func _options_box(parent: Container) -> VBoxContainer:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 7)
@@ -760,17 +823,27 @@ func _card_style(background: Color, border: Color, padding: float) -> StyleBoxFl
 
 func _save_settings() -> void:
 	_status_text(UIStrings.t("coord.saving"), Palette.YELLOW)
+	var maintenance := {
+		# "mode" è il contratto nuovo (enum chiuso); "enabled" resta per
+		# compatibilità con chi legge ancora il toggle binario.
+		"mode": _selected_mode(),
+		"enabled": _selected_mode() == "care",
+		"stop_search": _stop_search.button_pressed,
+		"discard_expired_rotating": _discard_expired.button_pressed,
+		"cv_min_score": int(_cv_score.value),
+		"pre_check_liveness_for_cv": _precheck_cv.button_pressed,
+	}
+	# La scadenza si NOMINA solo se l'utente l'ha toccata: una chiave che la
+	# Console non manda resta com'è sul file, quindi salvare un'altra
+	# impostazione non sposta (e non cancella) una scadenza in corso. Prima era
+	# il contrario, e la scadenza sparita era il difetto.
+	if _until_dirty:
+		if _until_toggle.button_pressed:
+			maintenance["mode_until_hours"] = _deadline_hours()
+		else:
+			maintenance["mode_until"] = null
 	BackendBus.save_coordinator_settings({
-		"maintenance": {
-			# "mode" è il contratto nuovo (enum chiuso); "enabled" resta per
-			# compatibilità con chi legge ancora il toggle binario.
-			"mode": _selected_mode(),
-			"enabled": _selected_mode() == "care",
-			"stop_search": _stop_search.button_pressed,
-			"discard_expired_rotating": _discard_expired.button_pressed,
-			"cv_min_score": int(_cv_score.value),
-			"pre_check_liveness_for_cv": _precheck_cv.button_pressed,
-		},
+		"maintenance": maintenance,
 		"enrichment": {
 			"economy": _economy.button_pressed,
 			"logo_enabled": _logo_enabled.button_pressed,
@@ -812,6 +885,12 @@ func _refresh_control_states() -> void:
 	_discard_expired.disabled = not care_on
 	_cv_score.editable = care_on
 	_precheck_cv.disabled = not care_on
+
+	if _until_toggle != null:
+		var until_on := _until_toggle.button_pressed
+		_until_row.modulate.a = 1.0 if until_on else 0.34
+		_until_days.editable = until_on
+		_until_hours.editable = until_on
 
 	var economy_on := _economy.button_pressed
 	_automation_options.modulate.a = 0.34 if economy_on else 1.0
@@ -863,11 +942,54 @@ func _apply_state(state: Dictionary) -> void:
 	_recheck_days.value = float(enrichment.get("recheck_older_days", 7))
 	_mode_badge.text = "● " + UIStrings.t("coord.mode_" + mode).to_upper()
 	_mode_badge.add_theme_color_override("font_color", _mode_color(mode))
+	_apply_deadline(maintenance)
 	_update_mode_data(state.get("queue_counts", {}))
 	_build_queue_cards(state.get("queue_counts", {}))
 	_build_directives(state.get("directives", []))
 	_refresh_control_states()
 	_status_text(UIStrings.t("coord.ready"), Palette.MINT)
+
+
+## La scadenza in vigore secondo il backend. `maintenance.mode` arriva già
+## VALUTATO (una `saving` finita è `search`): qui si dice all'utente cosa è
+## scaduto e quando, invece di lasciargli credere che il team stia ancora
+## facendo quello che aveva chiesto. Un backend più vecchio non manda nessuna di
+## queste chiavi: il blocco resta muto e la scadenza non si tocca.
+func _apply_deadline(maintenance: Dictionary) -> void:
+	if _until_toggle == null:
+		return
+	var until: Variant = maintenance.get("mode_until", null)
+	var expired := bool(maintenance.get("expired", false))
+	var left := int(maintenance.get("mode_until_sec", 0))
+	var armed: bool = until != null and not expired
+	# `_until_syncing`: applicare lo stato non è una scelta dell'utente, e non
+	# deve far credere al salvataggio che la scadenza sia stata cambiata.
+	_until_syncing = true
+	_until_toggle.set_pressed_no_signal(armed)
+	if armed and left > 0:
+		_until_days.value = float(left / 86400)
+		_until_hours.value = float((left % 86400) / 3600)
+	_until_syncing = false
+	_until_dirty = false
+	var color := Palette.MUTED
+	if expired:
+		var ended := str(maintenance.get("mode_raw", ""))
+		_until_state.text = UIStrings.t("coord.until_expired") % [
+				UIStrings.t("coord.mode_" + ended) if ended != "" else ended,
+				str(until)]
+		color = Palette.YELLOW
+	elif until == null:
+		_until_state.text = UIStrings.t("coord.until_none")
+	elif maintenance.get("mode_until_valid", true) == false:
+		# Una data illeggibile NON scade (direzione sicura), ma va detto:
+		# l'utente crede di aver messo una fine e non ce n'è nessuna.
+		_until_state.text = UIStrings.t("coord.until_unreadable") % str(until)
+		color = Palette.RED
+	else:
+		_until_state.text = UIStrings.t("coord.until_set") % [str(until),
+				str(maintenance.get("mode_until_in", ""))]
+		color = Palette.MINT
+	_until_state.add_theme_color_override("font_color", color)
 
 
 func _nullable_score(value: Variant) -> float:
