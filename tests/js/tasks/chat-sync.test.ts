@@ -238,6 +238,31 @@ describe("chat.jsonl → SQLite", () => {
     ).toEqual([]);
   });
 
+  it("due giri in parallelo non fanno entrare il turno due volte", () => {
+    // [CHAT-DUPLICATES-BORN-INSIDE-THE-BOX] La dedup pre-giro è una LETTURA, e
+    // fra quella e la scrittura ci può stare la scrittura di un altro
+    // processo: `jht cloud chat-sync` è un comando pubblico e chi indaga sulla
+    // chat lo lancia a mano mentre il daemon gira il suo giro da 5 secondi.
+    // Qui si riproduce quel cieco rendendo muta la sola query di dedup: la
+    // guardia che deve tenere è quella DENTRO l'INSERT.
+    writeChat("capitano", [jsonlLine({ role: "user", text: "ciao", ts: 1753790000 })]);
+    expect(ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] }).inserted).toBe(1);
+
+    const blind = {
+      prepare(sql: string) {
+        const real = db.prepare(sql);
+        // È la query di `mirroredChatTs`: la facciamo rispondere "non ho
+        // niente", come se l'altro processo non avesse ancora scritto.
+        if (sql.includes("chat_ts IN (")) return { ...real, all: () => [] };
+        return real;
+      },
+    } as unknown as InstanceType<typeof DatabaseSync>;
+
+    const second = ingestChatJsonl(blind, { jhtHome: home, agents: ["capitano"] });
+    expect(second.inserted).toBe(0);
+    expect(rowsOf()).toHaveLength(1);
+  });
+
   it("il cursore evita di rileggere un file fermo", () => {
     writeChat("capitano", [jsonlLine({ role: "user", text: "ciao", ts: 1 })]);
     const first = ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });

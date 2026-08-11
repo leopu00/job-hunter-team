@@ -275,10 +275,22 @@ export function ingestChatJsonl(db, { jhtHome, agents = CHAT_AGENTS, cursor = {}
   const nextCursor = { ...cursor };
   let inserted = 0;
 
+  // `WHERE NOT EXISTS` e non un semplice VALUES: la dedup fatta prima del
+  // giro è una lettura, e fra quella lettura e questa scrittura ci può stare
+  // un'altra scrittura. Il caso non è di laboratorio — `jht cloud chat-sync`
+  // è un comando pubblico, e chi indaga sulla chat lo lancia a mano MENTRE il
+  // daemon gira il suo giro da 5 secondi: due processi leggono la stessa coda
+  // di chat.jsonl, nessuno dei due vede l'inserimento dell'altro, e il turno
+  // entra due volte a poche centinaia di millisecondi di distanza. Qui la
+  // condizione viaggia DENTRO la scrittura, che SQLite serializza: il secondo
+  // arrivato non inserisce niente.
   const insert = db.prepare(
     `INSERT INTO pending_user_messages
        (agent, body, kind, author, chat_ts, delivered_via, delivered_at, created_at)
-     VALUES (?, ?, 'notification', ?, ?, 'web', ?, ?)`
+     SELECT ?, ?, 'notification', ?, ?, 'web', ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pending_user_messages WHERE agent = ? AND chat_ts = ?
+      )`
   );
 
   for (const agent of agents) {
@@ -307,8 +319,10 @@ export function ingestChatJsonl(db, { jhtHome, agents = CHAT_AGENTS, cursor = {}
       const at = new Date(turn.ts * 1000).toISOString().replace('T', ' ').slice(0, 19);
       // `delivered_at` valorizzato: il turno è già passato per il pane
       // (l'ha scritto il gioco o l'agente stesso), non va riconsegnato.
-      insert.run(agent, turn.text, author, turn.ts, at, at);
-      inserted += 1;
+      const res = insert.run(agent, turn.text, author, turn.ts, at, at, agent, turn.ts);
+      // Il contatore dice cosa è ENTRATO: se la guardia ha respinto la riga
+      // (l'ha già scritta un altro processo) non è successo niente da contare.
+      if (Number(res?.changes ?? 1) > 0) inserted += 1;
     }
   }
 
