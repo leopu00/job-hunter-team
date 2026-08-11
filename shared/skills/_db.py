@@ -1134,13 +1134,24 @@ def _migrate_position_user_notes(conn: sqlite3.Connection) -> None:
     esista prima di toccarla: fra l'aggiornamento del CLI e il primo giro
     delle migrazioni c'è una finestra reale, ed è lì che un utente perde
     quello che ha appena scritto (stesso difetto trovato su O-16).
+
+    La crea nella forma di O-33 — chiave `(position_id, origin)` — e non in
+    quella originale. Su un DB appena creato questa gira nel primo giro di
+    `_run_migrations`, cioè PRIMA del DDL base: se qui nascesse con la vecchia
+    chiave, `_migrate_position_user_notes_origin` la troverebbe subito dopo
+    senza `origin` e proverebbe a ricrearla mentre `positions` ancora non
+    esiste, fallendo con "no such table: main.positions". Nascere già nella
+    forma nuova rende quella migrazione un no-op sul DB nuovo e la lascia
+    lavorare solo dove serve davvero: i jobs.db fra O-22 e O-33.
     """
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS position_user_notes (
-            position_id INTEGER PRIMARY KEY,
+            position_id INTEGER NOT NULL,
+            origin TEXT NOT NULL DEFAULT 'box' CHECK (origin IN ('box','web')),
             body TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (position_id, origin),
             FOREIGN KEY (position_id) REFERENCES positions(id)
         );
     """)
