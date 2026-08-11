@@ -352,6 +352,36 @@ describe("SQLite → chat.jsonl", () => {
     expect(new Set(ts).size).toBe(2);
   });
 
+  it("il ts del mirror porta l'id nei millesimi: è la firma che dice da dove viene una riga", () => {
+    // [CHAT-DUPLICATES-BORN-INSIDE-THE-BOX] Questa non è una curiosità: è
+    // l'unico modo di stabilire, guardando SOLO il dato, se una riga è nata
+    // da `jht-notify-user` (mirror) o da `jht-send` (ingest da chat.jsonl) —
+    // e quindi se una coppia di doppioni è entrata da due bocche diverse.
+    // `scripts/analysis/chat_duplicate_origin.sql` si appoggia a questo.
+    // Se la derivazione del ts cambia, quella query smette di discriminare
+    // in silenzio: qui la si inchioda.
+    db.prepare(
+      "INSERT INTO pending_user_messages (id, agent, body, author, created_at) VALUES (38, 'mentor', 'notificata', 'agent', '2026-07-29 10:00:00')",
+    ).run();
+    mirrorDbTurnsToJsonl(db, {
+      jhtHome: home,
+      agents: ["mentor"],
+      now: Date.parse("2026-07-29T10:00:30Z"),
+    });
+    const row = rowsOf()[0];
+    const chatTs = Number(row.chat_ts);
+    expect(Number((chatTs % 1).toFixed(3))).toBe((Number(row.id) % 1000) / 1000);
+
+    // Una riga entrata da chat.jsonl NON ce l'ha: porta il `time.time()` di
+    // chi l'ha scritta, che non ha ragione di coincidere con il proprio id.
+    writeChat("capitano", [
+      jsonlLine({ role: "assistant", text: "risposta", ts: 1753790000.5678902 }),
+    ]);
+    ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
+    const ingested = rowsOf().find((r) => r.agent === "capitano")!;
+    expect(Number(ingested.chat_ts) % 1).not.toBe((Number(ingested.id) % 1000) / 1000);
+  });
+
   it("al primo giro NON riversa lo storico vecchio nel file", () => {
     db.prepare(
       "INSERT INTO pending_user_messages (agent, body, author, created_at) VALUES ('mentor', 'notifica di due mesi fa', 'agent', '2026-05-20 09:00:00')",

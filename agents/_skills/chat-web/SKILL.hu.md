@@ -117,6 +117,7 @@ jht-send 'Kész. Elindítottam egy extra Analystot, a throttle konfig kiírva a 
 - ❌ `cat << 'EOF' >> chat.jsonl ... EOF` — kikapcsolja a `$` interpolációt, az időbélyeg literális stringként marad.
 - ❌ `python3 -c "import json; ..."` ad-hoc — ugyanolyan törékeny, mint a shell heredoc.
 - ❌ Válaszolás `jht-tmux-send UTENTE ...`-vel — nincs `UTENTE` munkamenet. A felhasználó a webes frontenden él.
+- ❌ A `[CHAT]` megválaszolása `jht-send`-del **és** ugyanannak a tartalomnak az újraküldése `jht-notify-user`-rel. Amióta a chat-sáv egységes, mindkettő UGYANABBA a beszélgetésbe ír: a felhasználó kétszer olvassa a válaszodat, és lejjebb senki nem távolítja el — a sáv nem tudja megkülönböztetni a duplikátumot két véletlenül egyező körtől. Egy üzenet, egy eszköz.
 - ❌ Végső válasz küldése `--partial`-lal — a gépelési pontok a felhasználó képernyőjén ragadnak.
 - ❌ Több `jht-send` hívás (`--partial` nélkül) aminek egy üzenetnek kellene lennie — minden nem-partial hívás külön buborékként jelenik meg.
 

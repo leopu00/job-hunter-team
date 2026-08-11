@@ -117,6 +117,7 @@ jht-send 'Fait. Un Analista supplémentaire spawné, config de throttle enregist
 - ❌ `cat << 'EOF' >> chat.jsonl ... EOF` — désactive l'interpolation `$`, l'horodatage finit comme chaîne littérale.
 - ❌ `python3 -c "import json; ..."` ad-hoc — même fragilité que le heredoc shell.
 - ❌ Répondre via `jht-tmux-send UTENTE ...` — il n'y a pas de session `UTENTE`. L'utilisateur est dans le frontend web.
+- ❌ Répondre au `[CHAT]` avec `jht-send` **et** renvoyer le même contenu avec `jht-notify-user`. Depuis que la voie du chat est unifiée, les deux écrivent dans la MÊME conversation : l'utilisateur lit ta réponse deux fois, et personne ne l'enlève en aval — la voie ne sait pas distinguer un doublon de deux tours identiques par hasard. Un message, un seul outil.
 - ❌ Envoyer une réponse finale avec `--partial` — les points de saisie restent bloqués sur l'écran de l'utilisateur.
 - ❌ Plusieurs appels `jht-send` (sans `--partial`) pour ce qui devrait être un seul message — chaque appel non-partial apparaît comme une bulle séparée.
 

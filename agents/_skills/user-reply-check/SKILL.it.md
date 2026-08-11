@@ -76,6 +76,7 @@ L'utente ha aperto la conversazione sulla **dashboard web**, non su Telegram. Si
 1. Chiama `jht-notify-user --agent <your_id> --no-telegram "<reply>"`. Il flag `--no-telegram` è importante — forza `delivered_via='web'` così la risposta finisce nello stesso canale che l'utente sta leggendo.
 2. Opzionalmente includi `--position-id <N>` quando il messaggio originale ne aveva uno (stessa posizione, stesso contesto).
 3. **NON** inviare la risposta anche via `jht-telegram-send`. L'utente riceverebbe una notifica sul telefono per una conversazione che sta avendo nel browser — confuso e rumoroso.
+4. **NON** inviare la risposta anche via `jht-send`. Da quando la corsia chat è unificata, quello che scrivi qui È già una bolla nella chat del videogioco e nel thread web — il box specchia `pending_user_messages` dentro `<agente>/chat.jsonl`. Mandarla due volte significa che l'utente legge la stessa risposta due volte, e a valle la seconda copia non la toglie nessuno: la corsia non sa distinguere un doppione da due battute che per caso coincidono. Un messaggio, uno strumento solo.
 
 Se la risposta è un semplice riscontro ("ok, ricevuto"), puoi anche saltare il nuovo messaggio: `acknowledged_at` è già stato impostato quando l'utente ha digitato la risposta, quindi l'utente sa che l'hai ricevuta non appena segni `agent_seen_reply_at` (questa skill lo fa automaticamente).
 
