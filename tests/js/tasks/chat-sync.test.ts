@@ -21,7 +21,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -200,6 +200,42 @@ describe("chat.jsonl → SQLite", () => {
     ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
     ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
     expect(rowsOf()).toHaveLength(1);
+  });
+
+  it("una chat lunga di battute corte non si duplica al giro dopo", () => {
+    // [CHAT-DUPLICATES-BORN-INSIDE-THE-BOX] La coda letta si misura in byte
+    // (96 KB), la dedup si misurava in righe (le ultime 1000 della tabella).
+    // Con battute corte — «ok», «sì», «vai» — in 96 KB ci stanno più di mille
+    // turni: il pezzo scoperto tornava "nuovo" a ogni giro in cui il file si
+    // muoveva e veniva reimportato. Doppioni nati dentro il box, prima di
+    // qualsiasi sincronizzazione.
+    const lines: string[] = [];
+    for (let i = 0; i < 1600; i += 1) {
+      lines.push(jsonlLine({ role: i % 2 ? "user" : "assistant", text: `ok ${i}`, ts: 1753790000 + i / 10 }));
+    }
+    writeChat("capitano", lines);
+    const first = ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
+    // Quanti ne entrino al primo giro lo decide la coda di 96 KB; quel che
+    // conta è che siano più di mille, cioè oltre la vecchia finestra.
+    expect(first.inserted).toBeGreaterThan(1000);
+
+    // Una battuta nuova qualsiasi rimette in moto la lettura del file: da qui
+    // in poi deve entrare SOLO quella.
+    appendFileSync(
+      chatFileFor(home, "capitano"),
+      jsonlLine({ role: "user", text: "battuta nuova", ts: 1753799999 }),
+      "utf-8",
+    );
+    const second = ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
+    expect(second.inserted).toBe(1);
+    expect(rowsOf()).toHaveLength(first.inserted + 1);
+    expect(
+      db
+        .prepare(
+          "SELECT chat_ts FROM pending_user_messages GROUP BY chat_ts HAVING COUNT(*) > 1",
+        )
+        .all(),
+    ).toEqual([]);
   });
 
   it("il cursore evita di rileggere un file fermo", () => {
