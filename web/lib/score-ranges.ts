@@ -54,6 +54,28 @@ export function outOfRangeComponents(
   return hits;
 }
 
+/**
+ * Riempimento della barra di una dimensione, e se quella dimensione sfonda.
+ *
+ * `pct` è limitato a 0..100 perché la barra non può disegnare più del pieno:
+ * prima la percentuale non aveva tetto e un 18/15 usciva 120%, che dentro un
+ * contenitore `overflow-hidden` si vedeva **pieno**, identico a un massimo
+ * legittimo. `over` esiste perché il clamp da solo nasconderebbe il difetto:
+ * chi disegna deve poter dire che il numero è fuori scala.
+ */
+export function barFill(
+  value: number | null | undefined,
+  max: number,
+): { pct: number; over: boolean } {
+  if (value == null || !Number.isFinite(value) || max <= 0) {
+    return { pct: 0, over: false };
+  }
+  return {
+    pct: Math.min(100, Math.max(0, Math.round((value / max) * 100))),
+    over: value > max,
+  };
+}
+
 /** Aggrega il conteggio fuori scala su un insieme di righe score. */
 export function summarizeOutOfRange(
   rows: Iterable<Record<string, unknown>> | null | undefined,

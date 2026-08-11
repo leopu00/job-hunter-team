@@ -121,6 +121,36 @@ describe("score ranges", () => {
   });
 });
 
+describe("barFill — la barra della pagina posizione", () => {
+  it("si ferma al pieno invece di disegnare 120%", () => {
+    // Il caso del ticket: 18 su un tetto di 15. Prima `width: 120%` dentro un
+    // contenitore overflow-hidden si vedeva pieno, indistinguibile da 15/15.
+    expect(web.barFill(18, 15)).toEqual({ pct: 100, over: true });
+    expect(web.barFill(96, 15)).toEqual({ pct: 100, over: true });
+  });
+
+  it("dichiara `over` solo oltre il tetto, non al tetto", () => {
+    expect(web.barFill(15, 15)).toEqual({ pct: 100, over: false });
+    expect(web.barFill(16, 15).over).toBe(true);
+  });
+
+  it("resta fedele sotto il tetto", () => {
+    expect(web.barFill(30, 40)).toEqual({ pct: 75, over: false });
+    expect(web.barFill(9, 10)).toEqual({ pct: 90, over: false });
+    expect(web.barFill(0, 40)).toEqual({ pct: 0, over: false });
+  });
+
+  it("non disegna nulla su valore assente o tetto non valido", () => {
+    expect(web.barFill(null, 40)).toEqual({ pct: 0, over: false });
+    expect(web.barFill(undefined, 40)).toEqual({ pct: 0, over: false });
+    expect(web.barFill(20, 0)).toEqual({ pct: 0, over: false });
+  });
+
+  it("non manda la barra in negativo", () => {
+    expect(web.barFill(-5, 20)).toEqual({ pct: 0, over: false });
+  });
+});
+
 describe("il gemello web non può divergere da quello CLI", () => {
   // Due implementazioni scritte a mano dello stesso righello sono la forma in
   // cui il difetto è nato. Finché restano due, almeno si controllano a vicenda.

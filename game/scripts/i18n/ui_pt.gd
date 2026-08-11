@@ -1388,6 +1388,7 @@ const S := {
 	"cv.error_folder_unwritable": "Documento indisponível: não é possível escrever na pasta",
 	"agent.activity_position": "posição", "email.address_ph": "nome.jht@gmail.com",
 	"pos.score_out_of": "%s (de %d)",
+	"pos.score_over_cap": "fora de escala: acima do máximo da dimensão",
 	"wizard.file_filter": "*.pdf, *.doc, *.docx, *.txt, *.md ; CV / documentos",
 	"dept.demo.role.1.title": "Enfermeiro comunitário",
 	"dept.demo.role.2.title": "Coordenadora de serviços clínicos",

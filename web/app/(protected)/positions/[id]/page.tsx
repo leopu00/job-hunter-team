@@ -46,6 +46,7 @@ import { Avatar } from "@/app/components/Avatar";
 import { isLocalRequest } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { makeT } from "@/lib/i18n-dict";
+import { SCORE_COMPONENT_LIMITS, barFill } from "@/lib/score-ranges";
 import { T } from "./page.i18n";
 
 // Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
@@ -135,8 +136,24 @@ function scoreColor(s: number | null) {
 // Colore di un sotto-punteggio relativo al SUO massimo (stack /40, remote
 // /25, …): un 26/40 (65%) è "buono", non "rosso". Il colore precedente
 // usava soglie assolute → tutte le barre apparivano rosse anche con fit ok.
+// Le cinque dimensioni nell'ordine in cui si leggono. Il massimo viene da
+// `score-ranges.ts`: prima era scritto a mano qui accanto a ogni barra, sesta
+// copia dello stesso righello — e le copie a mano sono il modo in cui i tetti
+// hanno divergiuto senza che nessun test lo vedesse.
+const SCORE_DIMENSIONS = [
+  { column: "stack_match", labelKey: "sb_stack_match", why: "stack" },
+  { column: "remote_fit", labelKey: "sb_remote_fit", why: "remote" },
+  { column: "salary_fit", labelKey: "sb_salary_fit", why: "salary" },
+  { column: "experience_fit", labelKey: "sb_experience_fit", why: "experience" },
+  { column: "strategic_fit", labelKey: "sb_strategic_fit", why: "strategic" },
+] as const;
+
 function ratioColor(value: number | null, max: number) {
   if (value == null || max <= 0) return "var(--color-dim)";
+  // Fuori scala non è "fit eccellente", è una misura rotta: senza questo ramo
+  // un 18/15 fa 120%, cade nel >=70% e si tinge di verde — cioè il caso da
+  // segnalare era quello che sembrava migliore di tutti.
+  if (value > max) return "var(--color-red)";
   const pct = (value / max) * 100;
   if (pct >= 70) return "var(--color-green)";
   if (pct >= 45) return "var(--color-yellow)";
@@ -148,6 +165,7 @@ function ScoreBar({
   value,
   max,
   detail,
+  overCapLabel,
 }: {
   label: string;
   value: number | null;
@@ -156,11 +174,19 @@ function ScoreBar({
   // presente la riga diventa espandibile via <details> nativo — niente
   // JS client, funziona anche nel render server.
   detail?: string;
+  // Frase mostrata quando `value` supera `max`. Arriva dall'esterno perché
+  // questo componente vive fuori dal render della pagina e non ha `t`.
+  overCapLabel: string;
 }) {
-  const pct = value ? Math.round((value / max) * 100) : 0;
+  // La barra si ferma al pieno, e `over` dice che il numero è fuori scala: il
+  // clamp da solo nasconderebbe il difetto invece di chiuderlo. Il numero vero
+  // resta scritto accanto, non normalizzato. Logica in `score-ranges.ts`
+  // perché è quella coperta dai test.
+  const { pct, over } = barFill(value, max);
   const color = ratioColor(value, max);
   const row = (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-3">
       <span className="text-[10px] text-[var(--color-dim)] w-28 shrink-0">
         {label}
       </span>
@@ -197,6 +223,13 @@ function ScoreBar({
           </svg>
         )}
       </span>
+      </div>
+      {over && (
+        <div className="flex items-start gap-1.5 pl-28 pr-[3.75rem] text-[10px] leading-snug text-[var(--color-red)]">
+          <span aria-hidden="true">▲</span>
+          <span>{overCapLabel}</span>
+        </div>
+      )}
     </div>
   );
   if (!detail) return row;
@@ -710,36 +743,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="section-label mb-4">{t("score_breakdown")}</div>
               <div className="space-y-3">
-                <ScoreBar
-                  label={t("sb_stack_match")}
-                  value={score.stack_match}
-                  max={40}
-                  detail={scoreWhy.perDimension.stack}
-                />
-                <ScoreBar
-                  label={t("sb_remote_fit")}
-                  value={score.remote_fit}
-                  max={25}
-                  detail={scoreWhy.perDimension.remote}
-                />
-                <ScoreBar
-                  label={t("sb_salary_fit")}
-                  value={score.salary_fit}
-                  max={20}
-                  detail={scoreWhy.perDimension.salary}
-                />
-                <ScoreBar
-                  label={t("sb_experience_fit")}
-                  value={score.experience_fit}
-                  max={10}
-                  detail={scoreWhy.perDimension.experience}
-                />
-                <ScoreBar
-                  label={t("sb_strategic_fit")}
-                  value={score.strategic_fit}
-                  max={15}
-                  detail={scoreWhy.perDimension.strategic}
-                />
+                {SCORE_DIMENSIONS.map((d) => (
+                  <ScoreBar
+                    key={d.column}
+                    label={t(d.labelKey)}
+                    value={score[d.column]}
+                    max={SCORE_COMPONENT_LIMITS[d.column]}
+                    detail={scoreWhy.perDimension[d.why]}
+                    overCapLabel={t("sb_over_cap")}
+                  />
+                ))}
               </div>
               {/* Sotto le barre: il commento che vale per l'intero score.
                   `rest` è il breakdown non attribuibile a una dimensione —

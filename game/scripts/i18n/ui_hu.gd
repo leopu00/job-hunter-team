@@ -1388,6 +1388,7 @@ const S := {
 	"cv.error_folder_unwritable": "A dokumentum nem érhető el: a mappa nem írható",
 	"agent.activity_position": "pozíció", "email.address_ph": "nev.jht@gmail.com",
 	"pos.score_out_of": "%s (%d pontból)",
+	"pos.score_over_cap": "skálán kívül: a dimenzió maximuma felett",
 	"wizard.file_filter": "*.pdf, *.doc, *.docx, *.txt, *.md ; Önéletrajz / dokumentumok",
 	"dept.demo.role.1.title": "Közösségi ápoló",
 	"dept.demo.role.2.title": "Klinikai szolgáltatási koordinátor",

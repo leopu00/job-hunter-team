@@ -1391,6 +1391,7 @@ const S := {
 	"cv.error_folder_unwritable": "Document unavailable: folder is not writable",
 	"agent.activity_position": "position", "email.address_ph": "name.jht@gmail.com",
 	"pos.score_out_of": "%s (out of %d)",
+	"pos.score_over_cap": "out of scale: above this dimension's maximum",
 	"wizard.file_filter": "*.pdf, *.doc, *.docx, *.txt, *.md ; CV / documents",
 	"dept.demo.role.1.title": "Community Nurse",
 	"dept.demo.role.2.title": "Clinical Services Coordinator",
