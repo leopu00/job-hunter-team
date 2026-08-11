@@ -237,7 +237,9 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // agenti (Scorer/Capitano) — la card Pro/Contro duplicava jd_summary,
   // note del team e razionale dello score (contratto contenuti 2026-07-23).
   const { position, score, company, application, tickets } = data;
-  // O-22: nota privata, presente solo col box acceso (vive in SQLite).
+  // O-22: nota privata. Da O-33 arriva da entrambe le sponde — dal jobs.db
+  // col box acceso, da `position_user_notes` sul cloud a box spento — quindi
+  // `null` qui vuol dire «non ne hai ancora scritta una», non «non si può».
   const userNote = data.userNote?.body ?? null;
   // Razionale dello score. `perDimension` (RULE-09) va espandibile sotto la
   // barra corrispondente; `rest` è ciò che non appartiene a una dimensione —
