@@ -16,6 +16,20 @@ L'utilisateur a plusieurs canaux (bot Telegram, tableau de bord web, futur push 
 
 L'utilisateur reçoit donc chaque message quelque part. L'agent n'a jamais à gérer les branches "Telegram est down".
 
+## ⚠️ Depuis que la voie du chat est unifiée : ce message est AUSSI une bulle de chat
+
+`jht-send` et `jht-notify-user` écrivaient à deux endroits différents — le fil
+de discussion et la file des notifications. Ce n'est plus le cas. La box
+recopie `pending_user_messages` dans `<agent>/chat.jsonl` : ce que tu écris
+ici apparaît donc aussi comme ta bulle dans le chat du jeu et dans le fil web,
+à côté de tes réponses envoyées avec `jht-send`.
+
+La conséquence est la seule règle qui compte ici : **un message, un seul
+outil.** Jamais le même contenu par les deux voies. L'utilisateur le lirait
+deux fois, et aucune des deux copies ne connaît l'autre — la voie ne sait pas
+distinguer un doublon de deux tours qui disent la même chose par hasard
+(« ok » arrive mille fois), donc personne ne fera le ménage en aval.
+
 ## Quand l'utiliser
 
 - ✅ Le Capitano notifie l'utilisateur tous les N positions prêtes (décision 2026-05-13, batch).

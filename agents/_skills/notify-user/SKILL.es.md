@@ -16,6 +16,20 @@ El usuario tiene múltiples canales (bot Telegram, dashboard web, futuro push m�
 
 El usuario por lo tanto recibe cada mensaje en algún lugar. El agente nunca tiene que manejar ramas "Telegram está caído".
 
+## ⚠️ Desde que el carril de chat está unificado: este mensaje es TAMBIÉN una burbuja de chat
+
+`jht-send` y `jht-notify-user` escribían en dos sitios distintos — el hilo del
+chat y la cola de notificaciones. Ya no. La caja replica
+`pending_user_messages` en `<agente>/chat.jsonl`, así que lo que escribes aquí
+aparece también como tu burbuja en el chat del juego y en el hilo web, junto a
+tus respuestas con `jht-send`.
+
+La consecuencia es la única regla que importa aquí: **un mensaje, una sola
+herramienta.** Nunca el mismo contenido por las dos vías. El usuario lo leería
+dos veces, y ninguna de las dos copias sabe de la otra — el carril no
+distingue un duplicado de dos turnos que dicen lo mismo por casualidad
+(«ok» llega mil veces), así que aguas abajo no lo limpia nadie.
+
 ## Cuándo usarlo
 
 - ✅ El Capitano notifica al usuario cada N posiciones listas (decisión 2026-05-13, batch).
