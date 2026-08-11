@@ -1665,6 +1665,15 @@ def _migrate_pending_messages_chat_turns(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_pending_messages_unmirrored "
         "ON pending_user_messages(agent, id) WHERE chat_ts IS NULL"
     )
+    # Il verso opposto: l'ingest chiede "di questi ts, quali ho gia'?" per
+    # ogni riga della coda di chat.jsonl che rilegge. E' la guardia contro i
+    # doppioni, quindi gira a ogni giro in cui il file si muove e su liste
+    # lunghe quanto la coda. Senza indice sarebbe una scansione della tabella
+    # per ogni battuta scambiata.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pending_messages_mirrored "
+        "ON pending_user_messages(agent, chat_ts) WHERE chat_ts IS NOT NULL"
+    )
 
 
 def _migrate_position_tickets_cloud_id(conn: sqlite3.Connection) -> None:

@@ -133,24 +133,37 @@ export function jsonlLine({ role, text, ts, done = true }) {
   return `${JSON.stringify({ role, text, ts, done })}\n`;
 }
 
+/** Le righe leggibili di una coda di `chat.jsonl`, già parsate e in ordine. */
+export function parseChatLines(lines) {
+  const out = [];
+  for (const line of lines) {
+    const parsed = parseChatLine(line);
+    if (parsed) out.push(parsed);
+  }
+  return out;
+}
+
 /**
- * Le righe del file che la SQLite non ha ancora. Il confronto è sul `ts`
- * (chiave di dedup del mirror, colonna `chat_ts`): l'id locale non esiste
- * nel file e il testo non è univoco ("ok" arriva mille volte).
+ * I turni che la SQLite non ha ancora. Il confronto è sul `ts` (chiave di
+ * dedup del mirror, colonna `chat_ts`): l'id locale non esiste nel file e il
+ * testo non è univoco ("ok" arriva mille volte).
  *
  * `knownTs` è un Set di numeri. Ritorna gli oggetti già parsati, in ordine.
  */
-export function pickUnmirrored(lines, knownTs) {
+export function pickUnmirroredTurns(turns, knownTs) {
   const out = [];
   const seen = new Set();
-  for (const line of lines) {
-    const parsed = parseChatLine(line);
-    if (!parsed) continue;
-    if (knownTs.has(parsed.ts) || seen.has(parsed.ts)) continue;
-    seen.add(parsed.ts);
-    out.push(parsed);
+  for (const turn of turns) {
+    if (knownTs.has(turn.ts) || seen.has(turn.ts)) continue;
+    seen.add(turn.ts);
+    out.push(turn);
   }
   return out;
+}
+
+/** Come sopra, partendo dalle righe grezze del file. */
+export function pickUnmirrored(lines, knownTs) {
+  return pickUnmirroredTurns(parseChatLines(lines), knownTs);
 }
 
 /**
@@ -221,6 +234,35 @@ export async function saveChatCursor(file, cursor) {
 // ── Passo 1: chat.jsonl → SQLite ────────────────────────────────────────
 
 /**
+ * Quali fra QUESTI `ts` la tabella ha già, per questo agente.
+ *
+ * Si chiede esattamente dei turni appena letti dal file, e non "gli ultimi
+ * N della tabella": la finestra della dedup deve coincidere con la finestra
+ * di lettura, altrimenti l'ingest reimporta il pezzo di coda che la dedup
+ * non copre. È il difetto che questa funzione chiude — vedi il commento
+ * sopra il chiamante.
+ *
+ * La lista si spezza in blocchi perché finisce in una `IN (...)`: una coda
+ * di 96 KB può portare qualche migliaio di righe e il numero di parametri
+ * di una singola query in SQLite non è illimitato.
+ */
+export function mirroredChatTs(db, agent, candidates, { chunkSize = 400 } = {}) {
+  const wanted = [...new Set((candidates || []).filter((t) => Number.isFinite(t)))];
+  const known = new Set();
+  for (let i = 0; i < wanted.length; i += chunkSize) {
+    const slice = wanted.slice(i, i + chunkSize);
+    const rows = db
+      .prepare(
+        `SELECT chat_ts FROM pending_user_messages
+          WHERE agent = ? AND chat_ts IN (${slice.map(() => '?').join(', ')})`
+      )
+      .all(agent, ...slice);
+    for (const row of rows) known.add(Number(row.chat_ts));
+  }
+  return known;
+}
+
+/**
  * Importa nella SQLite i turni comparsi in `chat.jsonl` e non ancora
  * specchiati. Copre entrambe le direzioni del gioco: il turno che l'utente
  * ha scritto dal gioco E la risposta che l'agente ha scritto con `jht-send`
@@ -233,10 +275,22 @@ export function ingestChatJsonl(db, { jhtHome, agents = CHAT_AGENTS, cursor = {}
   const nextCursor = { ...cursor };
   let inserted = 0;
 
+  // `WHERE NOT EXISTS` e non un semplice VALUES: la dedup fatta prima del
+  // giro è una lettura, e fra quella lettura e questa scrittura ci può stare
+  // un'altra scrittura. Il caso non è di laboratorio — `jht cloud chat-sync`
+  // è un comando pubblico, e chi indaga sulla chat lo lancia a mano MENTRE il
+  // daemon gira il suo giro da 5 secondi: due processi leggono la stessa coda
+  // di chat.jsonl, nessuno dei due vede l'inserimento dell'altro, e il turno
+  // entra due volte a poche centinaia di millisecondi di distanza. Qui la
+  // condizione viaggia DENTRO la scrittura, che SQLite serializza: il secondo
+  // arrivato non inserisce niente.
   const insert = db.prepare(
     `INSERT INTO pending_user_messages
        (agent, body, kind, author, chat_ts, delivered_via, delivered_at, created_at)
-     VALUES (?, ?, 'notification', ?, ?, 'web', ?, ?)`
+     SELECT ?, ?, 'notification', ?, ?, 'web', ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pending_user_messages WHERE agent = ? AND chat_ts = ?
+      )`
   );
 
   for (const agent of agents) {
@@ -246,27 +300,29 @@ export function ingestChatJsonl(db, { jhtHome, agents = CHAT_AGENTS, cursor = {}
     if (!fileChanged(cursor[agent], stat)) continue;
     nextCursor[agent] = { size: stat.size, mtimeMs: stat.mtimeMs };
 
-    // Solo i ts recenti: leggiamo la coda del file (96 KB), quindi non
-    // possiamo incontrare turni più vecchi di così. Caricare l'intera
-    // colonna di una conversazione lunga sarebbe sprecato a ogni giro.
-    const known = new Set(
-      db
-        .prepare(
-          `SELECT chat_ts FROM pending_user_messages
-            WHERE agent = ? AND chat_ts IS NOT NULL
-            ORDER BY id DESC LIMIT 1000`
-        )
-        .all(agent)
-        .map((r) => Number(r.chat_ts))
-    );
+    // La dedup si chiede dei turni CHE ABBIAMO IN MANO, uno per uno.
+    //
+    // Prima erano due finestre diverse: si leggeva la coda del file (96 KB)
+    // ma si consideravano "già visti" soltanto gli ultimi 1000 turni della
+    // tabella. Le due misure non sono commensurabili — una in byte, una in
+    // righe — e su una conversazione di battute corte (60-90 byte a riga:
+    // «ok», «sì», «vai») in 96 KB ci stanno più di mille turni. Il pezzo di
+    // coda scoperto risultava nuovo a OGNI giro in cui il file si muoveva, e
+    // veniva reimportato: un doppione per riga, nato dentro il box e prima
+    // di qualunque sincronizzazione. Chiedere dei ts letti fa coincidere le
+    // due finestre per costruzione, qualunque sia la lunghezza della chat.
+    const turns = parseChatLines(readTailLines(path));
+    const known = mirroredChatTs(db, agent, turns.map((t) => t.ts));
 
-    for (const turn of pickUnmirrored(readTailLines(path), known)) {
+    for (const turn of pickUnmirroredTurns(turns, known)) {
       const author = authorFromRole(turn.role);
       const at = new Date(turn.ts * 1000).toISOString().replace('T', ' ').slice(0, 19);
       // `delivered_at` valorizzato: il turno è già passato per il pane
       // (l'ha scritto il gioco o l'agente stesso), non va riconsegnato.
-      insert.run(agent, turn.text, author, turn.ts, at, at);
-      inserted += 1;
+      const res = insert.run(agent, turn.text, author, turn.ts, at, at, agent, turn.ts);
+      // Il contatore dice cosa è ENTRATO: se la guardia ha respinto la riga
+      // (l'ha già scritta un altro processo) non è successo niente da contare.
+      if (Number(res?.changes ?? 1) > 0) inserted += 1;
     }
   }
 
@@ -283,6 +339,14 @@ export function ingestChatJsonl(db, { jhtHome, agents = CHAT_AGENTS, cursor = {}
  *
  * `chat_ts` viene valorizzato subito dopo la scrittura: è la guardia che
  * impedisce a `ingestChatJsonl` di reimportare la stessa riga al giro dopo.
+ *
+ * Fra la scrittura e il timbro c'è una finestra, e non è teorica: un SIGTERM
+ * (`docker stop`, un redeploy) o un lock sulla jobs.db in quell'istante
+ * lasciano la riga nel file e `chat_ts` NULL. Al giro dopo la riga viene
+ * riscritta: stesso testo, due volte nella chat del gioco, per sempre. Il
+ * `ts` è deterministico — `created_at` più l'id nei millesimi — quindi lo
+ * si può cercare nel file: se c'è già, si timbra e non si riscrive. È la
+ * stessa guardia dell'ingest, nel verso opposto.
  */
 export function mirrorDbTurnsToJsonl(
   db,
@@ -302,6 +366,23 @@ export function mirrorDbTurnsToJsonl(
   const stamp = db.prepare('UPDATE pending_user_messages SET chat_ts = ? WHERE id = ?');
   let mirrored = 0;
   let backfilled = 0;
+  // I ts già presenti nella coda del file, per agente. È una FOTOGRAFIA di
+  // prima di questo giro, e non si aggiorna man mano di proposito: due righe
+  // dello stesso batch possono derivare lo stesso ts (id a distanza di mille
+  // nello stesso secondo) e vanno scritte entrambe — trasformare un doppione
+  // in una riga persa sarebbe un peggioramento, non una correzione.
+  // Si legge al massimo una volta per agente e solo se c'è davvero qualcosa
+  // da specchiare: a conversazione ferma questo blocco non si raggiunge.
+  const inFile = new Map();
+  const tsInFile = (agent) => {
+    if (!inFile.has(agent)) {
+      inFile.set(
+        agent,
+        new Set(parseChatLines(readTailLines(chatFileFor(jhtHome, agent))).map((t) => t.ts)),
+      );
+    }
+    return inFile.get(agent);
+  };
 
   for (const row of rows) {
     // Un ts monotono e univoco: `created_at` ha risoluzione al secondo e
@@ -319,6 +400,13 @@ export function mirrorDbTurnsToJsonl(
     if (now - baseMs > maxAgeMs) {
       stamp.run(ts, row.id);
       backfilled += 1;
+      continue;
+    }
+
+    // Già nel file da un giro precedente morto fra la scrittura e il timbro:
+    // si chiude il lavoro a metà invece di aggiungere un gemello.
+    if (tsInFile(row.agent).has(ts)) {
+      stamp.run(ts, row.id);
       continue;
     }
 

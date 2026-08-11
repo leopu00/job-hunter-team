@@ -21,7 +21,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -202,6 +202,67 @@ describe("chat.jsonl → SQLite", () => {
     expect(rowsOf()).toHaveLength(1);
   });
 
+  it("una chat lunga di battute corte non si duplica al giro dopo", () => {
+    // [CHAT-DUPLICATES-BORN-INSIDE-THE-BOX] La coda letta si misura in byte
+    // (96 KB), la dedup si misurava in righe (le ultime 1000 della tabella).
+    // Con battute corte — «ok», «sì», «vai» — in 96 KB ci stanno più di mille
+    // turni: il pezzo scoperto tornava "nuovo" a ogni giro in cui il file si
+    // muoveva e veniva reimportato. Doppioni nati dentro il box, prima di
+    // qualsiasi sincronizzazione.
+    const lines: string[] = [];
+    for (let i = 0; i < 1600; i += 1) {
+      lines.push(jsonlLine({ role: i % 2 ? "user" : "assistant", text: `ok ${i}`, ts: 1753790000 + i / 10 }));
+    }
+    writeChat("capitano", lines);
+    const first = ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
+    // Quanti ne entrino al primo giro lo decide la coda di 96 KB; quel che
+    // conta è che siano più di mille, cioè oltre la vecchia finestra.
+    expect(first.inserted).toBeGreaterThan(1000);
+
+    // Una battuta nuova qualsiasi rimette in moto la lettura del file: da qui
+    // in poi deve entrare SOLO quella.
+    appendFileSync(
+      chatFileFor(home, "capitano"),
+      jsonlLine({ role: "user", text: "battuta nuova", ts: 1753799999 }),
+      "utf-8",
+    );
+    const second = ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
+    expect(second.inserted).toBe(1);
+    expect(rowsOf()).toHaveLength(first.inserted + 1);
+    expect(
+      db
+        .prepare(
+          "SELECT chat_ts FROM pending_user_messages GROUP BY chat_ts HAVING COUNT(*) > 1",
+        )
+        .all(),
+    ).toEqual([]);
+  });
+
+  it("due giri in parallelo non fanno entrare il turno due volte", () => {
+    // [CHAT-DUPLICATES-BORN-INSIDE-THE-BOX] La dedup pre-giro è una LETTURA, e
+    // fra quella e la scrittura ci può stare la scrittura di un altro
+    // processo: `jht cloud chat-sync` è un comando pubblico e chi indaga sulla
+    // chat lo lancia a mano mentre il daemon gira il suo giro da 5 secondi.
+    // Qui si riproduce quel cieco rendendo muta la sola query di dedup: la
+    // guardia che deve tenere è quella DENTRO l'INSERT.
+    writeChat("capitano", [jsonlLine({ role: "user", text: "ciao", ts: 1753790000 })]);
+    expect(ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] }).inserted).toBe(1);
+
+    const blind = {
+      prepare(sql: string) {
+        const real = db.prepare(sql);
+        // È la query di `mirroredChatTs`: la facciamo rispondere "non ho
+        // niente", come se l'altro processo non avesse ancora scritto.
+        if (sql.includes("chat_ts IN (")) return { ...real, all: () => [] };
+        return real;
+      },
+    } as unknown as InstanceType<typeof DatabaseSync>;
+
+    const second = ingestChatJsonl(blind, { jhtHome: home, agents: ["capitano"] });
+    expect(second.inserted).toBe(0);
+    expect(rowsOf()).toHaveLength(1);
+  });
+
   it("il cursore evita di rileggere un file fermo", () => {
     writeChat("capitano", [jsonlLine({ role: "user", text: "ciao", ts: 1 })]);
     const first = ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
@@ -242,6 +303,28 @@ describe("SQLite → chat.jsonl", () => {
     // …e non riscriverla di nuovo nel file.
     expect(mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"] }).mirrored).toBe(0);
     expect(readFileSync(chatFileFor(home, "mentor"), "utf-8").trim().split("\n")).toHaveLength(1);
+  });
+
+  it("un giro morto fra la scrittura e il timbro non lascia un gemello", () => {
+    // [CHAT-DUPLICATES-BORN-INSIDE-THE-BOX] La finestra fra `appendFileSync` e
+    // l'UPDATE di `chat_ts` è reale: un SIGTERM (docker stop, redeploy) o un
+    // lock sulla jobs.db in quell'istante lasciano la riga nel file e la
+    // colonna NULL. Il giro dopo la riscriveva: stesso testo, due bolle nella
+    // chat del gioco, per sempre. Si riproduce annullando il timbro.
+    db.prepare(
+      "INSERT INTO pending_user_messages (agent, body, author, created_at) VALUES ('mentor', 'scritta una volta', 'agent', '2026-07-29 10:00:00')",
+    ).run();
+    const at = Date.parse("2026-07-29T10:00:00Z") + 60_000;
+    expect(mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"], now: at }).mirrored).toBe(1);
+    // Il giro è morto qui: la riga è nel file, `chat_ts` non è mai stato scritto.
+    db.prepare("UPDATE pending_user_messages SET chat_ts = NULL").run();
+
+    const retry = mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"], now: at });
+    expect(retry.mirrored).toBe(0);
+    expect(readFileSync(chatFileFor(home, "mentor"), "utf-8").trim().split("\n")).toHaveLength(1);
+    // …e il lavoro si chiude: la colonna torna valorizzata, così l'ingest
+    // continua a riconoscere quella riga come propria.
+    expect(rowsOf()[0].chat_ts).not.toBeNull();
   });
 
   it("due notifiche nello stesso secondo restano due turni distinti", () => {
