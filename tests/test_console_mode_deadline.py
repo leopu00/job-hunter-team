@@ -111,6 +111,23 @@ def test_save_preserves_the_deadline_across_a_mode_change(home):
     assert written['orders']['cv_min_score'] == 80
 
 
+def test_an_already_expired_deadline_is_not_carried_over(home):
+    """Chi sceglie una modalità nuova non deve riceverla NATA MORTA.
+
+    Con la scadenza passata la Console mostra «niente scadenza» (la modalità è
+    finita): riscriverla nel file darebbe alla modalità appena scelta una fine
+    già avvenuta, e sarebbe di nuovo un file che dice una cosa diversa
+    dall'interfaccia — il difetto di questo ticket, al contrario.
+    """
+    _write_mode_file(home, {'mode': 'saving', 'mode_until': PAST})
+
+    _save(home, {'mode': 'harvest'})
+
+    assert json.loads(_mode_file(home).read_text(encoding='utf-8')) == {
+        'mode': 'harvest'}
+    assert _state(home)['maintenance']['mode'] == 'harvest'
+
+
 def test_choosing_search_takes_the_deadline_with_it(home):
     """`search` cancella il file: una scadenza verso il posto in cui si è già
     non è un ordine, è un residuo."""

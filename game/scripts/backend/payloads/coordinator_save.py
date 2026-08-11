@@ -103,8 +103,20 @@ def carry_deadline(payload):
             payload['mode_until'] = requested
         return payload
     until = current.get('mode_until')
-    if isinstance(until, str) and until.strip():
-        payload['mode_until'] = until.strip()
+    if not (isinstance(until, str) and until.strip()):
+        return payload
+    until = until.strip()
+    # Una scadenza GIÀ PASSATA non si porta dietro: la Console la mostra come
+    # «niente scadenza» (la modalità è finita, il campo è spento), e riscriverla
+    # nel file darebbe alla modalità appena scelta una fine già avvenuta — nata
+    # morta, e di nuovo un file che dice una cosa diversa dall'interfaccia. Se
+    # questa immagine non sa valutare le scadenze, si preserva: non poter dire
+    # se è passata non autorizza a buttarla.
+    if mode_deadline is not None:
+        parsed = mode_deadline.parse_deadline(until)
+        if parsed is not None and mode_deadline.is_expired(parsed):
+            return payload
+    payload['mode_until'] = until
     return payload
 
 # Modalità di lavoro (enum chiuso 2026-08). Contratto del file:
