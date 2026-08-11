@@ -16,6 +16,7 @@ import {
   timeoutFailure,
 } from '../lib/sync-rendezvous.js';
 import { clientIdentity, clientHeaderValue, cloudSyncHeaders } from '../lib/client-identity.js';
+import { summarizeOutOfRange } from '../lib/score-ranges.js';
 import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
@@ -379,6 +380,7 @@ async function handleRestore(options) {
 
   let inserted = { positions: 0, scores: 0, applications: 0 };
   let skipped = { positions: 0, scores: 0, applications: 0 };
+  let outOfRange = { rows: 0, byColumn: {}, worst: null };
   const urlConflicts = [];
 
   try {
@@ -461,9 +463,11 @@ async function handleRestore(options) {
           scored_by, scored_at, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
+      const restoredScores = [];
       for (const s of cloudScores) {
         const legacy = uuidToLegacy.get(s.position_id);
         if (!legacy) { skipped.scores++; continue; }
+        restoredScores.push(s);
         scoreStmt.run(
           legacy,
           s.total_score ?? 0,
@@ -475,6 +479,7 @@ async function handleRestore(options) {
         );
         inserted.scores++;
       }
+      outOfRange = summarizeOutOfRange(restoredScores);
 
       const appStmt = db.prepare(`
         INSERT OR REPLACE INTO applications (
@@ -529,6 +534,20 @@ async function handleRestore(options) {
   console.log(pc.dim(`  Positions:    ${inserted.positions} upserted (${skipped.positions} skipped: missing legacy_id)`));
   console.log(pc.dim(`  Scores:       ${inserted.scores} upserted (${skipped.scores} skipped: orphaned position_id)`));
   console.log(pc.dim(`  Applications: ${inserted.applications} upserted (${skipped.applications} skipped: orphaned position_id)`));
+  // Il cloud non ha CHECK sulle dimensioni (solo su total_score, mig 001): una
+  // riga fuori scala rientra qui a ogni restore. Non la tocchiamo — i punteggi
+  // sono di utenti reali — ma la contiamo, altrimenti il fenomeno resta
+  // invisibile a chi non ha accesso al DB.
+  if (outOfRange.rows > 0) {
+    const detail = Object.entries(outOfRange.byColumn)
+      .map(([column, n]) => `${column} ×${n}`)
+      .join(', ');
+    console.log(pc.yellow(`  Out-of-range:  ${outOfRange.rows} restored score row(s) exceed their own per-dimension cap (${detail})`));
+    if (outOfRange.worst) {
+      const { column, value, max } = outOfRange.worst;
+      console.log(pc.yellow(`    worst: ${column} ${value} on a cap of ${max} — values kept as-is, nothing was rewritten`));
+    }
+  }
   if (urlConflicts.length > 0) {
     console.log(pc.yellow(`  URL conflicts: ${urlConflicts.length} cloud row(s) SKIPPED — the URL is already held by another local row; nothing was deleted:`));
     for (const c of urlConflicts.slice(0, 10)) {

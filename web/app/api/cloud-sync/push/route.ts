@@ -16,6 +16,10 @@ import {
 } from "@/lib/sync-vocabulary";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
+import {
+  summarizeOutOfRange,
+  type OutOfRangeSummary,
+} from "@/lib/score-ranges";
 import { syncRequestIsPending } from "@/lib/team-state/sync-freshness";
 
 export const dynamic = "force-dynamic";
@@ -390,6 +394,11 @@ export async function POST(req: NextRequest) {
 
   let positionsUpserted = 0;
   let scoresUpserted = 0;
+  let scoresOutOfRange: OutOfRangeSummary = {
+    rows: 0,
+    byColumn: {},
+    worst: null,
+  };
   let applicationsUpserted = 0;
   let companiesUpserted = 0;
   let highlightsUpserted = 0;
@@ -645,6 +654,11 @@ export async function POST(req: NextRequest) {
         });
       }
       scoresUpserted = upserted?.length ?? 0;
+      // Il cloud non ha CHECK sulle dimensioni (mig 001/003): quello che passa
+      // da qui torna identico a ogni restore. Non lo tocchiamo — i punteggi
+      // sono di utenti reali — ma lo contiamo, così il fenomeno è misurabile
+      // dalla risposta di sync invece che solo interrogando il DB.
+      scoresOutOfRange = summarizeOutOfRange(payload);
     }
   }
 
@@ -1166,7 +1180,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     positions: { upserted: positionsUpserted },
-    scores: { upserted: scoresUpserted },
+    scores: { upserted: scoresUpserted, out_of_range: scoresOutOfRange },
     applications: { upserted: applicationsUpserted },
     companies: { upserted: companiesUpserted },
     position_highlights: { upserted: highlightsUpserted },

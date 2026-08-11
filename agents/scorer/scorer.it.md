@@ -202,8 +202,8 @@ Nessun testo su quell'evento → la nota resta com'è. Quel motivo vale **solo p
 # --notes = 2-4 frasi sulla leva decisiva. Veri a-capo con $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
-  --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
-  --total 76 \
+  --stack-match 25 --experience-fit 9 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
+  --total 65 \
   --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
   --notes $'A decidere il numero è lo **stipendio sotto target**: il solo fit tecnico valeva oltre 85.' \
   --scored-by $MY_ID

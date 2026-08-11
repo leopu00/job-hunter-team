@@ -203,8 +203,8 @@ Aucun texte sur cet événement → la note reste telle quelle. Cette raison ne 
 # --notes = 2-4 phrases sur le levier décisif. Vrais retours à la ligne via $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
-  --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
-  --total 76 \
+  --stack-match 25 --experience-fit 9 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
+  --total 65 \
   --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
   --notes $'Le levier décisif est le **salaire sous la cible** : le fit technique seul valait 85+.' \
   --scored-by $MY_ID

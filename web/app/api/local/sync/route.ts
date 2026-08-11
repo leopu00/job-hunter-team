@@ -10,6 +10,10 @@ import {
   normalizePositionStatus,
 } from "@/lib/sync-vocabulary";
 import { sanitizedError } from "@/lib/error-response";
+import {
+  summarizeOutOfRange,
+  type OutOfRangeSummary,
+} from "@/lib/score-ranges";
 
 export const dynamic = "force-dynamic";
 
@@ -233,6 +237,11 @@ export async function POST() {
   const legacyToUuid = new Map<number, string>();
   let positionsUpserted = 0;
   let scoresUpserted = 0;
+  let scoresOutOfRange: OutOfRangeSummary = {
+    rows: 0,
+    byColumn: {},
+    worst: null,
+  };
   let applicationsUpserted = 0;
 
   // 1. Upsert positions via (user_id, legacy_id)
@@ -325,6 +334,9 @@ export async function POST() {
         });
       }
       scoresUpserted = upserted?.length ?? 0;
+      // Vedi il gemello in cloud-sync/push: contiamo le dimensioni fuori scala
+      // che attraversano il confine, senza toccarle.
+      scoresOutOfRange = summarizeOutOfRange(payload);
     }
   }
 
@@ -378,7 +390,11 @@ export async function POST() {
 
   const summary = {
     positions: { upserted: positionsUpserted, payload: positions.length },
-    scores: { upserted: scoresUpserted, payload: scores.length },
+    scores: {
+      upserted: scoresUpserted,
+      payload: scores.length,
+      out_of_range: scoresOutOfRange,
+    },
     applications: {
       upserted: applicationsUpserted,
       payload: applications.length,
@@ -400,7 +416,7 @@ export async function POST() {
   return NextResponse.json({
     empty: false,
     positions: { upserted: positionsUpserted },
-    scores: { upserted: scoresUpserted },
+    scores: { upserted: scoresUpserted, out_of_range: scoresOutOfRange },
     applications: { upserted: applicationsUpserted },
     payload: {
       positions: positions.length,
