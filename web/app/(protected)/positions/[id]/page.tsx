@@ -271,8 +271,14 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // note del team e razionale dello score (contratto contenuti 2026-07-23).
   const { position, score, company, application, tickets } = data;
   // O-22: nota privata. Da O-33 arriva da entrambe le sponde — dal jobs.db
-  // col box acceso, da `position_user_notes` sul cloud a box spento — quindi
-  // `null` qui vuol dire «non ne hai ancora scritta una», non «non si può».
+  // col box acceso, dalla tabella cloud (mig 069) a box spento — quindi `null`
+  // qui vuol dire «non ne hai ancora scritta una», non «non si può».
+  //
+  // Il nome della tabella NON si scrive qui di proposito: chi lo nomina entra
+  // nella scansione di user-note-origin.test.ts, che pretende consapevolezza
+  // di `origin` da chi tocca quella tabella. Questa pagina non la tocca — la
+  // legge `getPositionById` — e ci passerebbe solo perché la parola «origin»
+  // capita dentro «originale»: un verde che non prova niente.
   const userNote = data.userNote?.body ?? null;
   // Razionale dello score. `perDimension` (RULE-09) va espandibile sotto la
   // barra corrispondente; `rest` è ciò che non appartiene a una dimensione —
