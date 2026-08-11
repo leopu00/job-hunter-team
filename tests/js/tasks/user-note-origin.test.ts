@@ -69,11 +69,20 @@ function sources(dir: string, found: string[] = []): string[] {
 
 /** I file del web che toccano la tabella, qualunque siano. Deliberatamente
  * scoperti scandendo l'albero e non elencati a mano: un elenco a mano non si
- * accorge del file aggiunto domani, che è il caso da proteggere. */
+ * accorge del file aggiunto domani, che è il caso da proteggere.
+ *
+ * Scansione UNA volta, e al caricamento del modulo: leggere 571 file costa
+ * ~1,7s a macchina scarica, e con la suite intera in parallelo su Windows
+ * sfondava il timeout di 5s del singolo test — tre volte, una per test. Un
+ * test che diventa rosso per contesa di disco insegna soltanto a non fidarsi
+ * dei rossi. Qui il costo si paga in collection, che non ha quel budget, e
+ * l'albero non cambia mentre la suite gira. */
+const TOUCHING: { path: string; body: string }[] = sources(WEB)
+  .map((path) => ({ path, body: readFileSync(path, "utf-8") }))
+  .filter(({ body }) => body.includes(TABLE));
+
 function filesTouchingTheTable(): { path: string; body: string }[] {
-  return sources(WEB)
-    .map((path) => ({ path, body: readFileSync(path, "utf-8") }))
-    .filter(({ body }) => body.includes(TABLE));
+  return TOUCHING;
 }
 
 describe("nota privata — nessuno tocca la tabella ignorando `origin`", () => {
