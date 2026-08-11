@@ -82,11 +82,18 @@ def test_the_note_survives_a_cloud_restore(box):
     ).fetchone()["status"] == "applied"
 
 
-def test_one_note_per_position_the_last_one_wins(box):
-    """Blocco note, non event-log: riscrivere sostituisce."""
+def test_one_note_per_position_and_origin_the_last_one_wins(box):
+    """Blocco note, non event-log: riscrivere DALLA STESSA superficie sostituisce.
+
+    Da O-33 la chiave è `(position_id, origin)`, quindi «una sola nota» non è
+    più una proprietà della posizione ma della coppia posizione+superficie:
+    box e sito tengono due testi (lo prova test_note_origin_migration.py),
+    mentre la stessa superficie che riscrive continua a non accumulare righe.
+    """
     box.execute(
-        "INSERT INTO position_user_notes (position_id, body) VALUES (7, 'seconda')"
-        " ON CONFLICT(position_id) DO UPDATE SET body = excluded.body"
+        "INSERT INTO position_user_notes (position_id, origin, body) "
+        "VALUES (7, 'box', 'seconda')"
+        " ON CONFLICT(position_id, origin) DO UPDATE SET body = excluded.body"
     )
     box.commit()
     rows = box.execute(

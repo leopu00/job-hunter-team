@@ -32,17 +32,50 @@ interface NoteOutcome {
   updated_at: string | null;
 }
 
-/** La tabella può mancare su un jobs.db più vecchio del codice. */
+/** La superficie da cui questa route scrive.
+ *
+ * Il ramo `local` qui sotto scrive nel jobs.db DEL BOX: da O-33 la chiave è
+ * `(position_id, origin)` e questa riga è la riga del box, non del sito. La
+ * `web` nascerà quando le note avranno una casa sul cloud — oggi quel ramo
+ * risponde 503, quindi scrivere `'web'` da qui inventerebbe una provenienza
+ * che non esiste e la nota del box tornerebbe non editabile.
+ */
+const ORIGIN = "box";
+
+/** La tabella può mancare su un jobs.db più vecchio del codice.
+ *
+ * Nella forma di O-33: se la creasse ancora con la chiave `position_id` la
+ * route la farebbe nascere vecchia su un DB nuovo, e la migrazione lato box
+ * dovrebbe poi ricrearla — con dentro le note di qualcuno. */
 function ensureTable(db: import("better-sqlite3").Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS position_user_notes (
-      position_id INTEGER PRIMARY KEY,
+      position_id INTEGER NOT NULL,
+      origin TEXT NOT NULL DEFAULT 'box' CHECK (origin IN ('box','web')),
       body TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (position_id, origin),
       FOREIGN KEY (position_id) REFERENCES positions(id)
     );
   `);
+}
+
+/** La tabella c'è ma è ancora nella forma pre-O-33?
+ *
+ * `ensureTable` è un CREATE IF NOT EXISTS: su un jobs.db che ha già la tabella
+ * con la vecchia chiave non fa NIENTE, e la colonna `origin` non compare.
+ * Quella finestra è reale — fra l'aggiornamento del codice e il primo giro
+ * delle migrazioni del box passa del tempo, ed è la finestra in cui O-16 ha
+ * già fatto perdere a un utente quello che aveva appena scritto. Qui si
+ * guarda com'è fatta la tabella DAVVERO invece di dare per scontata la forma
+ * nuova: nella vecchia si scrive alla vecchia maniera e ci pensa la
+ * migrazione del box a etichettare la riga come `box`, che è dove è nata. */
+function hasOrigin(db: import("better-sqlite3").Database): boolean {
+  const cols = db
+    .prepare("PRAGMA table_info(position_user_notes)")
+    .all() as { name: string }[];
+  return cols.some((c) => c.name === "origin");
 }
 
 async function handle(
@@ -98,30 +131,64 @@ async function handle(
         };
       }
 
+      const keyed = hasOrigin(db);
+
       if (clearing) {
-        db.prepare("DELETE FROM position_user_notes WHERE position_id = ?").run(
-          legacyId,
-        );
+        // Solo la riga di QUESTA superficie: cancellare dal box una nota
+        // scritta sul sito sarebbe cancellare qualcosa che l'utente non ha
+        // davanti agli occhi.
+        if (keyed) {
+          db.prepare(
+            "DELETE FROM position_user_notes WHERE position_id = ? AND origin = ?",
+          ).run(legacyId, ORIGIN);
+        } else {
+          db.prepare(
+            "DELETE FROM position_user_notes WHERE position_id = ?",
+          ).run(legacyId);
+        }
         return {
           ok: true,
           outcome: { id: String(legacyId), note: null, updated_at: null },
         };
       }
 
-      db.prepare(
-        `INSERT INTO position_user_notes (position_id, body)
-         VALUES (?, ?)
-         ON CONFLICT(position_id) DO UPDATE SET
-           body = excluded.body,
-           updated_at = CURRENT_TIMESTAMP`,
-      ).run(legacyId, body);
+      if (keyed) {
+        db.prepare(
+          `INSERT INTO position_user_notes (position_id, origin, body)
+           VALUES (?, ?, ?)
+           ON CONFLICT(position_id, origin) DO UPDATE SET
+             body = excluded.body,
+             updated_at = CURRENT_TIMESTAMP`,
+        ).run(legacyId, ORIGIN, body);
+      } else {
+        db.prepare(
+          `INSERT INTO position_user_notes (position_id, body)
+           VALUES (?, ?)
+           ON CONFLICT(position_id) DO UPDATE SET
+             body = excluded.body,
+             updated_at = CURRENT_TIMESTAMP`,
+        ).run(legacyId, body);
+      }
 
-      const saved = db
-        .prepare<
-          [number],
-          { body: string; updated_at: string }
-        >("SELECT body, updated_at FROM position_user_notes WHERE position_id = ?")
-        .get(legacyId)!;
+      const saved = keyed
+        ? db
+            .prepare<
+              [number, string],
+              { body: string; updated_at: string }
+            >(
+              "SELECT body, updated_at FROM position_user_notes " +
+                "WHERE position_id = ? AND origin = ?",
+            )
+            .get(legacyId, ORIGIN)!
+        : db
+            .prepare<
+              [number],
+              { body: string; updated_at: string }
+            >(
+              "SELECT body, updated_at FROM position_user_notes " +
+                "WHERE position_id = ?",
+            )
+            .get(legacyId)!;
       return {
         ok: true,
         outcome: {

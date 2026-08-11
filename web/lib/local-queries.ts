@@ -409,20 +409,47 @@ export function getPositionByIdLocal(
 /** Nota privata dell'utente (O-22), se il DB la conosce già.
  *
  * Tollerante alla tabella assente: un jobs.db più vecchio del codice non ha
- * ancora `position_user_notes`, e la pagina deve aprirsi lo stesso. */
+ * ancora `position_user_notes`, e la pagina deve aprirsi lo stesso.
+ *
+ * Filtra su `origin = 'box'` (O-33). Senza il filtro la query tornerebbe una
+ * riga QUALSIASI fra le due che la nuova chiave permette, scelta dall'ordine
+ * fisico della tabella: la pagina mostrerebbe la nota del sito o quella del
+ * box a seconda di quale è stata scritta prima, e il salvataggio — che scrive
+ * sempre la riga del box — sembrerebbe non aver fatto niente. Questa pagina
+ * legge il jobs.db del box, quindi la riga del box è quella che deve vedere.
+ *
+ * Il fallback senza filtro NON è difensivismo: su un jobs.db che il box non ha
+ * ancora migrato la colonna `origin` non esiste, la query filtrata solleva, e
+ * un `catch` che tornasse `null` farebbe SPARIRE dalla pagina una nota che c'è
+ * — che è precisamente il modo in cui O-16 ha già perso il lavoro di qualcuno.
+ * Tabella assente e colonna assente vanno distinte: la prima è «non c'è
+ * niente», la seconda è «c'è, in un'altra forma». */
 function readUserNote(
   db: ReturnType<typeof getDb>,
   positionId: number,
 ): { body: string; updated_at: string } | null {
+  const read = (sql: string) =>
+    db.prepare(sql).get(positionId) as
+      | { body: string; updated_at: string }
+      | undefined;
   try {
-    const row = db
-      .prepare(
-        "SELECT body, updated_at FROM position_user_notes WHERE position_id = ?",
-      )
-      .get(positionId) as { body: string; updated_at: string } | undefined;
-    return row ?? null;
+    return (
+      read(
+        "SELECT body, updated_at FROM position_user_notes " +
+          "WHERE position_id = ? AND origin = 'box'",
+      ) ?? null
+    );
   } catch {
-    return null;
+    try {
+      return (
+        read(
+          "SELECT body, updated_at FROM position_user_notes " +
+            "WHERE position_id = ?",
+        ) ?? null
+      );
+    } catch {
+      return null;
+    }
   }
 }
 
