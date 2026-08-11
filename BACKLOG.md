@@ -199,6 +199,44 @@
 - ⬜ **[JHT-DOCS-FAQ]** — FAQ ("why not LangChain/AutoGen/CrewAI?") · **[JHT-AI-AGENT-EXAMPLES]** — example prompts for AI assistants driving `jht`.
 - ⬜ Phase-5 leftovers — subdomains (app/docs/api), launcher screenshots, visual FAQ, short video tutorials.
 
+## 🆕 Aperti dal 2026-08-10 (dal registro operativo)
+
+> Voci portate qui dal registro interno il 2026-08-11. Sono **difetti e
+> richieste di prodotto**: il traffico di coordinamento, le decisioni di spesa e
+> tutto ciò che riguarda persone o macchine resta fuori da questo file per
+> costruzione. Gli stati vengono dal registro operativo e **non sono stati
+> rimisurati uno per uno** al momento della trascrizione — vale la regola di
+> questo file: si verifica contro il prodotto prima di agire su una riga.
+
+- 🔴 **[SCORE-DIMENSIONS-EXCEED-THEIR-CAP]** — i punteggi per dimensione **sfondano il proprio massimo**, e il fenomeno **peggiora ogni mese**. Misurato su 3.738 righe reali: ad agosto **una riga su cinque** ha almeno una dimensione fuori scala, e il record osservato è **96 su un tetto di 15**. Il totale è la somma delle dimensioni, quindi il valore gonfiato entra nel punteggio finale — e siccome l'ordinamento per punteggio è il modo in cui l'utente decide cosa guardare per primo, **in cima finiscono posizioni che hanno vinto sfondando il righello**: due posizioni con lo stesso 78 non valgono la stessa cosa. **E l'interfaccia non lo mostra**: la barra calcola la percentuale senza limite, quindi 18 su 15 fa 120% e viene disegnata **piena**; il denominatore è scritto ma nessuno lo legge. Ordine dei passi: prima **chi** scrive fuori scala (lo scorer o un backfill), poi se i totali già scritti vanno ricalcolati, **la UI per ultima** — un semplice `clamp` da solo nasconderebbe il difetto invece di chiuderlo. ⚠️ I punteggi già scritti appartengono a utenti reali: non si toccano senza decisione esplicita.
+- 🔴 **[DB-PATH-FALLS-BACK-INSTEAD-OF-STOPPING]** — `shared/skills/_db.py` legge `JHT_DB` o `JHT_HOME` e, quando non li trova, **ripiega su un percorso plausibile invece di fermarsi**: può quindi scrivere dati di prova dentro il database **vero** di un utente. Fail-closed: senza una destinazione esplicita il modulo deve rifiutarsi di scrivere, non indovinare.
+- 🔴 **[PRIVATE-NOTE-MISSING-ON-WEB]** — la nota personale per posizione esiste **solo nell'app locale**: la route web crea la tabella in SQLite, il ramo cloud non nomina mai il campo e sul database gestito la tabella **non esiste affatto**. Non è un ramo cloud incompleto: è assente. Chi scrive una nota dal sito non ha dove salvarla.
+- 🔴 **[CHAT-DUPLICATES-BORN-INSIDE-THE-BOX]** — messaggi duplicati che nascono **dentro il container**, prima di qualsiasi sincronizzazione: due scritture a poche centinaia di millisecondi l'una dall'altra. Causa distinta dalla perdita di messaggi già chiusa: qui il messaggio non si perde, si sdoppia.
+- 🔴 **[TWO-FLAKY-TESTS-ARE-NORMALISING-RED]** — due test instabili in CI: il rosso sta diventando rumore di fondo, e un rosso che si ignora per abitudine è peggio di un test mancante, perché copre anche i guasti veri.
+- 🟡 **[ENGLISH-CENSUS-BLIND-TO-DICT-STRINGS]** — il censimento delle stringhe inglesi **non vede quelle dentro i dizionari**, anche quando sono il verdetto stampato a schermo, e non copre affatto la cartella degli agenti. Su un caso reale ha visto 3 punti su 5. Un controllo che riporta «pulito» guardando metà del perimetro è peggio di nessun controllo.
+- 🟡 **[DAILY-SPEND-HARDSTOP-DISABLED-BY-A-LINE-NOBODY-WROTE]** — su un'istanza self-hosted il freno di spesa giornaliero risulta **disattivato da due settimane**, dal giorno stesso in cui il flag è nato: non è una deroga rimasta accesa dopo un picco, è entrata **come se fosse un valore predefinito**. Il freno è quello *fisico* (allo sforo il team si ferma), mentre il controllo di ritmo misura e consiglia ma non frena. ⚠️ La domanda che conta non è se riattivarlo, ma **da dove viene quella riga**: nessun codice del prodotto la scrive, e lo script di setup riscrive quel file con tre righe soltanto senza conoscerla. Se sta in un runbook di provisioning, **ogni nuova istanza nasce col freno spento** — e allora non è un caso singolo ma un difetto di processo.
+- 🟡 **[ANALYTICS-CONSENT-MAY-BE-STRICTER-THAN-REQUIRED]** — il gating del consenso sull'analytics potrebbe essere **più restrittivo del necessario**, e ci rende ciechi sul traffico che paghiamo: i numeri visibili non sono il traffico, sono **solo chi accetta**. L'analytics in uso è *cookieless*, e l'obbligo nasce dall'archiviare o leggere dati **sul dispositivo**. ⚠️ Non è una scelta tecnica: è una valutazione legale, e va decisa da chi risponde della conformità — non da chi scrive il codice.
+- ⬜ **[APPLICATION-PANEL-READS-BACKWARDS]** — nel pannello candidatura etichetta e valore finiscono adiacenti alla cella accanto, così la riga **si legge al contrario**; e l'orario è in un formato diverso da quello della lista. Difetto pre-esistente, indipendente dalle colonne data.
+- ⬜ **[ATTACH-A-FILE-TO-A-POSITION]** — poter allegare un file a un ticket di posizione su **tutte e tre le superfici**: web, applicazione desktop e riga di comando. Il trasporto esiste già e non va reinventato.
+- ⬜ **[RESCORE-FROM-THE-POSITION-PAGE]** — un comando «rifai il punteggio» fra le richieste rapide della posizione. Da stabilire: se il punteggio precedente si conserva o viene sostituito.
+- ⬜ **[SHOW-TICKET-IN-PROGRESS-AS-STATUS]** — se una posizione ha un ticket in corso, lo stato mostrato nella lista dev'essere quello: oggi l'informazione esiste ma non arriva a chi guarda l'elenco.
+- ⬜ **[NO-GUARANTEE-THE-BEST-CV-IS-THE-ONE-DELIVERED]** — con più giri di scrittura non sappiamo garantire che il CV consegnato sia il migliore prodotto. Problema aperto, soluzione **non** decisa: mostrare i voti non è la stessa cosa che scegliere.
+- ⬜ **[LOCAL-FIRST-JUDGEMENT-ON-POSITIONS]** — il giudizio sulle posizioni deve poter vivere **in locale**, non solo sul cloud: l'utente deve poter fare tutto senza sincronizzare con il sito.
+- ⬜ **[AGENT-AVATARS-SHOULD-BE-COLOURLESS]** — gli avatar degli agenti in chat vanno resi senza colore. Estetico, bassa priorità.
+
+### 🪟 Difetti trovati su Windows con installazione pulita
+
+> ⚠️ **Senza banco di prova dal 2026-08-11**: la macchina virtuale Windows usata per queste verifiche è stata rimossa. Le voci restano valide, ma **nessuna è ri-verificabile** finché non esiste di nuovo un ambiente Windows.
+
+- 🔴 **[WIN-USERDIR-SURVIVES-REINSTALL]** — la cartella dati utente sopravvive a disinstallazione e reinstallazione: lingua, nome, onboarding e tour della sessione precedente restano. Chi reinstalla per «ripartire pulito» non riparte pulito.
+- 🔴 **[WIN-INTERACT-ACTION-UNDECLARED]** — l'azione `interact` non è dichiarata nell'InputMap: un errore a ogni input durante i dialoghi, decine di KB di log in pochi minuti che **seppelliscono i messaggi veri**.
+- 🔴 **[WIN-TOUR-DRAWS-OVER-SETUP]** — il tour guidato disegna sopra il pannello di setup e ne nasconde i pulsanti; se lo si interrompe **non si può riprendere**. Colpisce i primi cinque minuti di chi installa.
+- 🟡 **[WIN-TWO-SOURCES-OF-TRUTH-FOR-LANGUAGE]** — la lingua ha due fonti che non si parlano: il gioco scrive un file di configurazione, gli agenti ne leggono un altro. Cambiarla in un posto non la cambia nell'altro.
+- 🟡 **[WIN-DIALOGUES-MONOLINGUAL]** — i dialoghi non passano dal sistema di traduzione: interfaccia in sette lingue, narrativa solo in inglese. Un utente italiano vede metà applicazione tradotta.
+- 🟡 **[WIN-ROLE-LABELS-HARDCODED-MIXED-LANGUAGE]** — etichette di ruolo scritte a mano in lingua mista, salvate nel profilo **e** passate al modello: un utente non italiano se le ritrova nella lingua sbagliata dentro i propri dati.
+- ⬜ **[WIN-USERDIR-ORPHANED-BY-RENAME]** — la cartella dati resta orfana dopo un rename del progetto: ogni rinomina abbandona lo stato sul disco dell'utente.
+- ⬜ **[WIN-RENDERER-SILENTLY-REVERTED]** — il renderer dell'applicazione è stato riportato a OpenGL da un commit di build senza motivazione: cornice non nativa su Windows. Da riprendere insieme alla verifica dello schermo nero a schermo intero.
+
 ## 💡 Parked ideas
 
 - ⚪ **[JHT-POSITIONS-SWIPE-TRIAGE]** *(M1)* — swipe-style rapid triage of positions; backend action exists (`user-exclude` + async request lane), the card UX is the work.
