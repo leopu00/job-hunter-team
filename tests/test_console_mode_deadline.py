@@ -130,3 +130,84 @@ def test_a_broken_mode_file_does_not_stop_the_save(home):
 
     assert json.loads(_mode_file(home).read_text(encoding='utf-8')) == {
         'mode': 'saving'}
+
+
+# ── La Console mostra la modalità in vigore, non quella scritta ────────────
+
+def _current_mode(home):
+    """La modalità secondo il freno di spesa: l'altro lettore della stessa
+    chiave. È il confronto che conta — un payload che decide da sé quando una
+    scadenza è passata farebbe divergere UI e enforcement."""
+    res = subprocess.run(
+        [sys.executable, '-c',
+         'import json, enrichment_policy;'
+         ' print(json.dumps(enrichment_policy.current_mode()))'],
+        capture_output=True, text=True, env=_env(home))
+    assert res.returncode == 0, res.stderr
+    return json.loads(res.stdout)
+
+
+def test_state_keeps_a_mode_whose_deadline_is_still_ahead(home):
+    _write_mode_file(home, {'mode': 'saving', 'mode_until': FUTURE})
+
+    maintenance = _state(home)['maintenance']
+
+    assert maintenance['mode'] == 'saving' == _current_mode(home)
+    assert maintenance['expired'] is False
+    assert maintenance['mode_until'] == FUTURE
+    assert maintenance['mode_until_valid'] is True
+    assert maintenance['mode_until_in']    # «quanto manca», non vuoto
+
+
+def test_state_reports_search_once_the_deadline_has_passed(home):
+    """Il caso del ticket: il file dice ancora `saving`, il motore è già in
+    `search`, e finora la Console mostrava il file."""
+    _write_mode_file(home, {'mode': 'saving', 'mode_until': PAST})
+
+    maintenance = _state(home)['maintenance']
+
+    assert maintenance['mode'] == 'search' == _current_mode(home)
+    assert maintenance['expired'] is True
+    # Il grezzo resta, altrimenti la Console non può dire COSA è scaduto.
+    assert maintenance['mode_raw'] == 'saving'
+    assert maintenance['mode_until'] == PAST
+
+
+def test_an_expired_care_mode_takes_its_orders_with_it(home):
+    """«cura fino a venerdì» è UN ordine con una fine: `stop_search` che
+    sopravvive alla scadenza significherebbe tornare a `search` e non cercare
+    comunque, cioè non tornare affatto."""
+    _write_mode_file(home, {'mode': 'care', 'mode_until': PAST,
+                            'orders': {'stop_search': False,
+                                       'cv_min_score': 40}})
+
+    maintenance = _state(home)['maintenance']
+
+    assert maintenance['mode'] == 'search'
+    assert maintenance['enabled'] is False
+    assert maintenance['stop_search'] is True      # il default, non l'ordine
+    assert maintenance['cv_min_score'] == 90
+
+
+def test_an_unreadable_deadline_does_not_end_the_mode(home):
+    """Direzione sicura di `mode_deadline`: l'ignoto è un ordine ancora attivo.
+    La Console lo dice (`mode_until_valid` False) invece di inventare una fine.
+    """
+    _write_mode_file(home, {'mode': 'saving', 'mode_until': 'venerdì'})
+
+    maintenance = _state(home)['maintenance']
+
+    assert maintenance['mode'] == 'saving' == _current_mode(home)
+    assert maintenance['expired'] is False
+    assert maintenance['mode_until_valid'] is False
+
+
+def test_no_deadline_at_all_stays_silent(home):
+    _write_mode_file(home, {'mode': 'saving'})
+
+    maintenance = _state(home)['maintenance']
+
+    assert maintenance['mode'] == 'saving'
+    assert maintenance['mode_until'] is None
+    assert maintenance['mode_until_valid'] is None
+    assert maintenance['mode_until_in'] == ''
