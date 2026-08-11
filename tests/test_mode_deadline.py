@@ -114,6 +114,23 @@ def test_an_unreadable_deadline_does_not_expire_anything():
     assert mode_deadline.effective_mode('saving', None, NOW) == ('saving', False)
 
 
+def test_how_long_is_left_as_a_number():
+    """Le interfacce che presentano la scadenza come un campo modificabile
+    hanno bisogno del delta, non della data: un numero di secondi non richiede
+    che host e container concordino sul fuso."""
+    d = mode_deadline.parse_deadline('2026-08-10T18:00:00Z')
+    assert mode_deadline.remaining_seconds(d, NOW) == int(
+        timedelta(days=2, hours=6).total_seconds())
+
+
+def test_a_deadline_already_passed_has_nothing_left():
+    """0 e non un negativo: «quanto manca» a una fine passata è niente, e un
+    campo precompilato con un numero negativo non vuol dire nulla."""
+    past = mode_deadline.parse_deadline('2026-08-07T18:00:00Z')
+    assert mode_deadline.remaining_seconds(past, NOW) == 0
+    assert mode_deadline.remaining_seconds(None, NOW) == 0
+
+
 # ── Il freno di spesa ───────────────────────────────────────────────────
 
 def test_the_policy_lets_enrichment_back_in_after_the_deadline(home, policy):
