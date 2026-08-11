@@ -100,6 +100,23 @@ def effective_mode(mode: str, deadline: Optional[datetime],
     return mode, False
 
 
+def remaining_seconds(deadline: Optional[datetime],
+                      now: Optional[datetime] = None) -> int:
+    """Quanto manca, in secondi: 0 se non c'è scadenza o se è già passata.
+
+    Serve alle interfacce che devono PRESENTARE la scadenza come un campo
+    modificabile (la Console del gioco): un delta in secondi non richiede che
+    host e container concordino sul fuso, che è la stessa ragione per cui la
+    deroga di spesa viaggia come `remaining_sec` e non come orario di fine.
+    """
+    if deadline is None:
+        return 0
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return max(0, int((deadline - now).total_seconds()))
+
+
 def remaining_text(deadline: Optional[datetime],
                    now: Optional[datetime] = None) -> str:
     """Quanto manca, in una forma che si legge in un pane tmux ("2g 3h", "45m").

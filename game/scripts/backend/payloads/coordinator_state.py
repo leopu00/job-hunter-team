@@ -25,9 +25,64 @@ WORK_MODES = ('search', 'harvest', 'care', 'calibration', 'saving')
 raw_mode = maintenance_raw.get('mode') if isinstance(maintenance_raw, dict) else None
 if raw_mode == 'maintenance':
     raw_mode = 'care'
-mode = raw_mode if raw_mode in WORK_MODES else 'search'
+mode_raw = raw_mode if raw_mode in WORK_MODES else 'search'
+
+# Scadenza della modalità ([SAVING-MODE-HAS-NO-DEADLINE]): la chiave opzionale
+# `mode_until` dice fino a quando vale l'ordine, e si valuta IN LETTURA —
+# nessun demone riscrive il file, quindi ogni lettore deve concluderne la
+# stessa cosa nello stesso istante. La meccanica vive in mode_deadline.py e la
+# condividono `enrichment_policy.current_mode()` e `mode_banner`: qui si
+# IMPORTA, non si reimplementa, altrimenti la Console e il freno di spesa
+# raccontano due modalità diverse appena una delle due copie deriva.
+# L'import è tollerante come in mode_banner: durante un rolling deploy il gioco
+# può essere più nuovo dell'immagine container, e senza il modulo la scadenza
+# semplicemente non si applica — resta in vigore la modalità scritta, che è il
+# comportamento storico e la direzione sicura per un ordine di spesa.
+try:
+    import mode_deadline
+except Exception:
+    mode_deadline = None
+mode_until = maintenance_raw.get('mode_until') \
+    if isinstance(maintenance_raw, dict) else None
+if not isinstance(mode_until, str) or not mode_until.strip():
+    mode_until = None
+else:
+    mode_until = mode_until.strip()
+deadline = mode_deadline.parse_deadline(mode_until) \
+    if (mode_until and mode_deadline is not None) else None
+mode, expired = (mode_deadline.effective_mode(mode_raw, deadline)
+                 if mode_deadline is not None else (mode_raw, False))
+if expired:
+    # Scadono anche gli `orders` di quella modalità: «cura fino a venerdì» è UN
+    # ordine con una fine, e lasciare in piedi `stop_search` dopo la scadenza
+    # significherebbe tornare a `search` e non cercare comunque.
+    orders = {}
 maintenance = {
+    # `mode` è quella IN VIGORE ADESSO, non quella scritta sul file: ruoli
+    # invertiti rispetto a `coordinator_settings.read_state()` (dove `mode` è
+    # il grezzo) e di proposito, perché qui il lettore è una UI — anche una
+    # build vecchia del gioco, che conosce solo questa chiave, deve mostrare la
+    # modalità vera invece di una `saving` finita ore prima. Il grezzo resta
+    # accanto, per poter dire all'utente COSA è scaduto.
     'mode': mode,
+    'mode_raw': mode_raw,
+    'expired': expired,
+    'mode_until': mode_until,
+    # None = non c'è scadenza, o questa immagine non sa ancora valutarne una:
+    # in nessuno dei due casi si può dire all'utente che la sua data è
+    # illeggibile.
+    'mode_until_valid': (deadline is not None)
+                        if (mode_until and mode_deadline) else None,
+    'mode_until_in': (mode_deadline.remaining_text(deadline)
+                      if (deadline is not None and mode_deadline) else ''),
+    # Lo stesso dato in secondi, perché la Console precompila con questo il
+    # campo «fino a quando»: un delta non richiede che host e container
+    # concordino sul fuso (la scelta di `remaining_sec` della deroga di spesa).
+    # `getattr`: l'helper è più nuovo del modulo, e un'immagine container a
+    # metà rolling deploy può avere il secondo senza il primo.
+    'mode_until_sec': (getattr(mode_deadline, 'remaining_seconds',
+                               lambda *_a, **_k: 0)(deadline)
+                       if (deadline is not None and mode_deadline) else 0),
     # Compat col vecchio toggle binario (client che leggono ancora 'enabled').
     'enabled': mode == 'care',
     'stop_search': bool(orders.get('stop_search', True)),
