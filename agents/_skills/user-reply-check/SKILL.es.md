@@ -76,6 +76,7 @@ El usuario abrio la conversacion en el **dashboard web**, no en Telegram. Espera
 1. Llama a `jht-notify-user --agent <your_id> --no-telegram "<reply>"`. El flag `--no-telegram` es importante — fuerza `delivered_via='web'` para que la respuesta llegue al mismo canal que el usuario esta leyendo.
 2. Opcionalmente incluye `--position-id <N>` cuando el mensaje original tenia uno (misma posicion, mismo contexto).
 3. **NO** envies la respuesta tambien via `jht-telegram-send`. El usuario recibiria una notificacion en su telefono sobre una conversacion que esta teniendo en su navegador — confuso y ruidoso.
+4. **NO** envies la respuesta tambien via `jht-send`. Desde que el carril de chat esta unificado, lo que escribes aqui YA ES una burbuja en el chat del juego y en el hilo web — la caja replica `pending_user_messages` en `<agente>/chat.jsonl`. Enviarla dos veces significa que el usuario lee la misma respuesta dos veces, y aguas abajo nadie quita la segunda copia: el carril no distingue un duplicado de dos turnos que coinciden por casualidad. Un mensaje, una sola herramienta.
 
 Si la respuesta es un simple acuse de recibo ("ok, ricevuto"), puedes incluso omitir el nuevo mensaje: `acknowledged_at` ya fue establecido cuando el usuario escribio la respuesta, asi que el usuario sabe que la recibiste tan pronto como marcas `agent_seen_reply_at` (esta skill lo hace automaticamente).
 

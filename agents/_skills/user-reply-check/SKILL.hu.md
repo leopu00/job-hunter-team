@@ -76,6 +76,7 @@ A felhasznalo a **webes dashboardon** nyitotta meg a beszelgetest, nem a Telegra
 1. Hivd meg a `jht-notify-user --agent <your_id> --no-telegram "<reply>"`-t. A `--no-telegram` flag fontos — kikenyszeriti a `delivered_via='web'`-et, igy a valasz ugyanabba a csatornaba kerul, amit a felhasznalo eppen olvas.
 2. Opcionalisan add meg a `--position-id <N>`-t, ha az eredeti uzenetnek volt ilyen (ugyanaz a pozicio, ugyanaz a kontextus).
 3. **NE** kuld el a valaszt `jht-telegram-send`-en keresztul is. A felhasznalo ertesitest kapna a telefonjara egy olyan beszelgetesrol, amelyet a bongeszojeben folytat — zavaro es zajos.
+4. **NE** kuld el a valaszt `jht-send`-del is. Amiota a chat-sav egyseges, amit itt irsz, az MAR egy buborek a jatek chatjeben es a webes szalban — a box tukrozi a `pending_user_messages` tablat a `<agens>/chat.jsonl` fajlba. Ketszer elkuldeni azt jelenti, hogy a felhasznalo ketszer olvassa ugyanazt a valaszt, es lejjebb senki nem tavolitja el a masodik peldanyt: a sav nem tudja megkulonboztetni a duplikatumot ket veletlenul egyezo kortol. Egy uzenet, egy eszkoz.
 
 Ha a valasz egyszeru visszaigazolas ("ok, ricevuto"), akr ki is hagyhatod az uj uzenetet: az `acknowledged_at` mar be lett allitva, amikor a felhasznalo begeelte a valaszt, igy a felhasznalo tudja, hogy megkaptad, amint megjelolod az `agent_seen_reply_at`-ot (ez a skill ezt automatikusan megteszi).
 
