@@ -1388,6 +1388,7 @@ const S := {
 	"cv.error_folder_unwritable": "Dokument nicht verfügbar: Ordner ist nicht beschreibbar",
 	"agent.activity_position": "Stelle", "email.address_ph": "name.jht@gmail.com",
 	"pos.score_out_of": "%s (von %d)",
+	"pos.score_over_cap": "außerhalb der Skala: über dem Maximum dieser Dimension",
 	"wizard.file_filter": "*.pdf, *.doc, *.docx, *.txt, *.md ; Lebenslauf / Dokumente",
 	"dept.demo.role.1.title": "Gemeindepfleger",
 	"dept.demo.role.2.title": "Koordinatorin für klinische Dienste",

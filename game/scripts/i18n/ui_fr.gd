@@ -1388,6 +1388,7 @@ const S := {
 	"cv.error_folder_unwritable": "Document indisponible : impossible d’écrire dans le dossier",
 	"agent.activity_position": "offre", "email.address_ph": "nom.jht@gmail.com",
 	"pos.score_out_of": "%s (sur %d)",
+	"pos.score_over_cap": "hors échelle : au-dessus du maximum de la dimension",
 	"wizard.file_filter": "*.pdf, *.doc, *.docx, *.txt, *.md ; CV / documents",
 	"dept.demo.role.1.title": "Infirmier communautaire",
 	"dept.demo.role.2.title": "Coordinatrice des services cliniques",

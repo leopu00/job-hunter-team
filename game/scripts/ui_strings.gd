@@ -1611,6 +1611,7 @@ const S := {
 	"cv.error_folder_unwritable": "Documento non disponibile: cartella non scrivibile",
 	"agent.activity_position": "posizione", "email.address_ph": "nome.jht@gmail.com",
 	"pos.score_out_of": "%s (su %d)",
+	"pos.score_over_cap": "fuori scala: oltre il massimo della dimensione",
 	"wizard.file_filter": "*.pdf, *.doc, *.docx, *.txt, *.md ; CV / documenti",
 	"dept.demo.role.1.title": "Infermiere di comunità",
 	"dept.demo.role.2.title": "Coordinatrice di servizi clinici",

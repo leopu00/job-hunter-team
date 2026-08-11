@@ -1388,6 +1388,7 @@ const S := {
 	"cv.error_folder_unwritable": "Documento no disponible: no se puede escribir en la carpeta",
 	"agent.activity_position": "puesto", "email.address_ph": "nombre.jht@gmail.com",
 	"pos.score_out_of": "%s (de %d)",
+	"pos.score_over_cap": "fuera de escala: por encima del máximo de la dimensión",
 	"wizard.file_filter": "*.pdf, *.doc, *.docx, *.txt, *.md ; CV / documentos",
 	"dept.demo.role.1.title": "Enfermero comunitario",
 	"dept.demo.role.2.title": "Coordinadora de servicios clínicos",
