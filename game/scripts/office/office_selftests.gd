@@ -2934,18 +2934,46 @@ func _coordinator_selftest() -> void:
 			.get("mode", "")) == "care" \
 			and int(BackendBus.coordinator_state.get("enrichment", {}) \
 			.get("geocode_min_score", 0)) == 72
+	# «Fino a quando» ([MODE-DEADLINE-UNREACHABLE-AND-ERASED]): la scadenza si
+	# scegli dalla Console, e — soprattutto — salvare un'ALTRA impostazione non
+	# la porta via. Il secondo salvataggio qui sotto non tocca il campo: se la
+	# scadenza sparisse, sarebbe di nuovo il difetto del ticket.
+	var deadline_ok := false
+	if panel_ok:
+		var panel: CoordinatorPanel = office._coordinator_panel
+		panel._until_toggle.button_pressed = true
+		panel._until_days.value = 2
+		panel._until_hours.value = 0
+		panel._save_settings()
+		await get_tree().process_frame
+		var armed: Dictionary = BackendBus.coordinator_state.get("maintenance", {})
+		deadline_ok = int(armed.get("mode_until_sec", 0)) > 47 * 3600 \
+				and armed.get("mode_until") != null \
+				and panel._until_toggle.button_pressed
+		panel._cv_score.value = 77
+		panel._save_settings()
+		await get_tree().process_frame
+		var kept: Dictionary = BackendBus.coordinator_state.get("maintenance", {})
+		deadline_ok = deadline_ok and kept.get("mode_until") != null \
+				and int(kept.get("cv_min_score", 0)) == 77
+		# E toglierla resta una scelta esplicita.
+		panel._until_toggle.button_pressed = false
+		panel._save_settings()
+		await get_tree().process_frame
+		deadline_ok = deadline_ok and BackendBus.coordinator_state \
+				.get("maintenance", {}).get("mode_until") == null
 	var before: int = BackendBus.coordinator_state.get("directives", []).size()
 	BackendBus.add_team_directive("Test direttiva console", "order")
 	await get_tree().process_frame
 	var directive_ok: bool = BackendBus.coordinator_state.get("directives", []).size() \
 			== before + 1
 	var ok: bool = panel_ok and navigation_ok and chat_ok and thinking_ok \
-			and controls_ok and save_ok and directive_ok
+			and controls_ok and save_ok and directive_ok and deadline_ok
 	print("COORDINATOR-CONSOLE-TEST ", "PASS" if ok else "FAIL", " ",
 			JSON.stringify({"panel": panel_ok, "controls": controls_ok,
 				"navigation": navigation_ok, "chat": chat_ok,
 				"thinking": thinking_ok, "save": save_ok,
-				"directive": directive_ok}))
+				"directive": directive_ok, "deadline": deadline_ok}))
 	get_tree().quit(0 if ok else 1)
 ## Regressione del cambio macchina (JHT_BACKEND_SWITCH_TEST=1). Riproduce la
 ## misura del 27/07 senza due VPS: box A con 694 righe `scored`, cambio di

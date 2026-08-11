@@ -297,14 +297,57 @@ var _coord_state := {
 }
 var _coord_next_directive := 2
 
+## Scadenza della modalità nello showroom: nessun file, un istante simulato in
+## memoria — come per la deroga di spesa. Serve perché il campo «fino a quando»
+## si comporti come quello vero (compreso il tempo che scorre e il ritorno a
+## `search` alla scadenza) senza che chi sta configurando il prodotto veda un
+## campo che non fa niente.
+var _coord_mode_deadline_msec := 0
+
+func _coord_apply_deadline(maintenance: Dictionary) -> Dictionary:
+	if maintenance.has("mode_until_hours"):
+		var hours := float(maintenance["mode_until_hours"])
+		if hours > 0.0:
+			_coord_mode_deadline_msec = Time.get_ticks_msec() \
+					+ int(hours * 3600.0 * 1000.0)
+		else:
+			_coord_mode_deadline_msec = 0     # 0 ore = senza scadenza
+	elif maintenance.has("mode_until") and maintenance["mode_until"] == null:
+		_coord_mode_deadline_msec = 0
+	maintenance.erase("mode_until_hours")
+	return maintenance
+
+func _coord_maintenance_view() -> Dictionary:
+	var out: Dictionary = (_coord_state["maintenance"] as Dictionary).duplicate(true)
+	var left := 0
+	if _coord_mode_deadline_msec > 0:
+		left = maxi(0, (_coord_mode_deadline_msec - Time.get_ticks_msec()) / 1000)
+	var mode := str(out.get("mode", "search"))
+	var expired: bool = _coord_mode_deadline_msec > 0 and left == 0
+	out["mode_raw"] = mode
+	out["mode"] = "search" if expired else mode
+	out["expired"] = expired
+	# La data esatta non serve allo showroom: serve che ci SIA una scadenza e
+	# che il tempo residuo scorra, cioè quello che l'utente vede nel campo.
+	out["mode_until"] = null if _coord_mode_deadline_msec == 0 \
+			else Time.get_datetime_string_from_system(true)
+	out["mode_until_valid"] = null if _coord_mode_deadline_msec == 0 else true
+	out["mode_until_sec"] = left
+	out["mode_until_in"] = "" if left == 0 else "%dh %02dm" % [left / 3600,
+			(left % 3600) / 60]
+	return out
+
 func fetch_coordinator_state() -> void:
-	bus.publish_coordinator_state(_coord_state.duplicate(true))
+	var snapshot := _coord_state.duplicate(true)
+	snapshot["maintenance"] = _coord_maintenance_view()
+	bus.publish_coordinator_state(snapshot)
 
 func save_coordinator_settings(settings: Dictionary) -> void:
-	_coord_state["maintenance"] = settings.get("maintenance", {}).duplicate(true)
+	_coord_state["maintenance"] = _coord_apply_deadline(
+			settings.get("maintenance", {}).duplicate(true))
 	_coord_state["enrichment"] = settings.get("enrichment", {}).duplicate(true)
 	bus.publish_coordinator_action("save", true, "")
-	bus.publish_coordinator_state(_coord_state.duplicate(true))
+	fetch_coordinator_state()
 
 func add_team_directive(body: String, kind: String) -> void:
 	var row := {"id": _coord_next_directive, "body": body.strip_edges(),
