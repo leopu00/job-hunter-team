@@ -336,6 +336,15 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "notes",
     "created_at",
   ],
+  // `origin` è nell'export: senza di lui due note della stessa posizione
+  // scritte da superfici diverse sarebbero due righe indistinguibili.
+  position_user_notes: [
+    "position_id",
+    "origin",
+    "body",
+    "created_at",
+    "updated_at",
+  ],
   position_views: ["position_id", "viewed_at"],
   // Senza `restart_token` e `last_restart_token`.
   team_state: [

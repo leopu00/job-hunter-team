@@ -7,16 +7,22 @@ import type { Locale } from "@/i18n/config";
 
 // O-22 — blocco note PRIVATO sulla posizione.
 //
-// ⚠️ IL MESSAGGIO `offline` DIPENDE DA DOVE LA FUNZIONE È ARRIVATA, e va
-// riletto a ogni release che la sposta. È già stato sbagliato due volte:
+// ⚠️ IL MESSAGGIO DEL 503 DIPENDE DA DOVE LA FUNZIONE È ARRIVATA, e va
+// riletto a ogni release che la sposta. È già stato sbagliato tre volte:
 //   1. «serve il team acceso» — una causa che nessuno aveva misurato, detta
 //      anche quando il team era acceso;
 //   2. «si salvano dall'app sul computer» — onesta come frase, ma descriveva
 //      un mondo che non esisteva: la nota è stata mergiata un'ora DOPO il tag
-//      della v0.3.7, quindi non è né sul web né nell'app installata.
-// Oggi dice che arrivano col prossimo aggiornamento. Quando O-33 sarà
-// rilasciata sarà di nuovo falso — cambiarlo fa parte di quel rilascio, non
-// è un dettaglio da lasciare a mentire per inerzia.
+//      della v0.3.7, quindi non era né sul web né nell'app installata;
+//   3. «arrivano col prossimo aggiornamento» — vera fino a O-33, falsa dal
+//      momento in cui O-33 è uscita: l'aggiornamento È questo, e il 503 di
+//      quel ramo non esiste più.
+// Da O-33 la nota si scrive/rilegge/cancella anche a box spento (il ramo
+// `cloud` della route + mig 069). Il 503 su quella fetch resta possibile per
+// UNA sola causa diversa: il percorso local-token (app desktop nativa) quando
+// il jobs.db del box non esiste — «DB locale assente» dentro localFirstWrite.
+// Il messaggio qui sotto (`noLocalDb`) descrive QUELLA causa, l'unica
+// rimasta. Il ramo non si cancella: cambia quello che racconta.
 //
 // «Cose che mi possono essere utili una volta che rivisito la posizione».
 // Non è un ordine al team: gli agenti non la leggono, e il pannello lo dice
@@ -36,7 +42,7 @@ const T: Record<
     saved: string;
     remove: string;
     error: string;
-    offline: string;
+    noLocalDb: string;
   }
 > = {
   it: {
@@ -48,8 +54,8 @@ const T: Record<
     saved: "Salvata",
     remove: "Elimina",
     error: "Non è riuscito a salvare la nota",
-    offline:
-      "Le note non sono ancora disponibili: arrivano con il prossimo aggiornamento.",
+    noLocalDb:
+      "Il database del team non è raggiungibile: avvia il team una volta, poi riprova.",
   },
   en: {
     title: "Private notes",
@@ -61,7 +67,8 @@ const T: Record<
     saved: "Saved",
     remove: "Delete",
     error: "Could not save the note",
-    offline: "Notes aren't available yet — they arrive with the next update.",
+    noLocalDb:
+      "The team database isn't reachable: start the team once, then try again.",
   },
   es: {
     title: "Notas privadas",
@@ -72,8 +79,8 @@ const T: Record<
     saved: "Guardada",
     remove: "Eliminar",
     error: "No se pudo guardar la nota",
-    offline:
-      "Las notas aún no están disponibles: llegan con la próxima actualización.",
+    noLocalDb:
+      "No se puede acceder a la base de datos del equipo: inicia el equipo una vez y vuelve a intentarlo.",
   },
   de: {
     title: "Private Notizen",
@@ -85,8 +92,8 @@ const T: Record<
     saved: "Gespeichert",
     remove: "Löschen",
     error: "Notiz konnte nicht gespeichert werden",
-    offline:
-      "Notizen sind noch nicht verfügbar — sie kommen mit dem nächsten Update.",
+    noLocalDb:
+      "Die Team-Datenbank ist nicht erreichbar: starte das Team einmal und versuche es erneut.",
   },
   fr: {
     title: "Notes privées",
@@ -97,8 +104,8 @@ const T: Record<
     saved: "Enregistrée",
     remove: "Supprimer",
     error: "Impossible d'enregistrer la note",
-    offline:
-      "Les notes ne sont pas encore disponibles : elles arrivent avec la prochaine mise à jour.",
+    noLocalDb:
+      "La base de données de l'équipe est inaccessible : démarrez l'équipe une fois, puis réessayez.",
   },
   pt: {
     title: "Notas privadas",
@@ -109,8 +116,8 @@ const T: Record<
     saved: "Guardada",
     remove: "Eliminar",
     error: "Não foi possível guardar a nota",
-    offline:
-      "As notas ainda não estão disponíveis: chegam com a próxima atualização.",
+    noLocalDb:
+      "A base de dados da equipa está inacessível: inicie a equipa uma vez e tente novamente.",
   },
   hu: {
     title: "Privát jegyzetek",
@@ -121,8 +128,8 @@ const T: Record<
     saved: "Mentve",
     remove: "Törlés",
     error: "A jegyzetet nem sikerült menteni",
-    offline:
-      "A jegyzetek még nem érhetők el – a következő frissítéssel érkeznek.",
+    noLocalDb:
+      "A csapat adatbázisa nem érhető el: indítsd el egyszer a csapatot, majd próbáld újra.",
   },
 };
 
@@ -151,9 +158,11 @@ export default function UserNote({
         body: clearing ? undefined : JSON.stringify({ note: text.trim() }),
       });
       if (!res.ok) {
-        // 503 = box spento: la nota è locale per scelta, e dirlo è meglio
-        // che un errore generico che fa pensare a un guasto.
-        setError(res.status === 503 ? t.offline : t.error);
+        // 503 = l'app desktop non trova il jobs.db del box (localFirstWrite,
+        // percorso local-token). NON è più «box spento»: a box spento la nota
+        // va sul cloud da O-33. Dire la causa che resta è meglio di un errore
+        // generico che fa pensare a un guasto.
+        setError(res.status === 503 ? t.noLocalDb : t.error);
         return;
       }
       const body = (await res.json()) as { note?: string | null };

@@ -475,8 +475,11 @@ export async function getPositionById(id: string): Promise<{
   company: Company | null;
   application: Application | null;
   tickets: PositionTicket[];
-  // Nota privata dell'utente (O-22): vive SOLO in locale, quindi a box
-  // spento è null — non è un errore, è dove la nota abita.
+  // Nota privata dell'utente (O-22). Da O-33 ha una casa su entrambe le
+  // sponde: a box acceso la legge `getPositionByIdLocal` dal jobs.db (riga
+  // `origin = 'box'`), a box spento arriva da `position_user_notes` sul cloud
+  // (riga `origin = 'web'`, mig 069). Il pannello mostra sempre e solo la nota
+  // della superficie che quel Salva sovrascriverebbe.
   userNote?: { body: string; updated_at: string } | null;
 } | null> {
   const dp = await activeDemoPersona();
@@ -547,6 +550,24 @@ export async function getPositionById(id: string): Promise<{
       resolved_at: t.resolved_at ?? null,
     }));
   }
+
+  // Nota privata (O-33, mig 069). Filtra su `origin = 'web'` per la stessa
+  // ragione per cui il lettore del jobs.db filtra su `'box'`: la chiave tiene
+  // una riga PER SUPERFICIE, e senza il filtro tornerebbe una riga qualsiasi
+  // fra quelle che la chiave permette. Qui la superficie è il sito, ed è la
+  // riga che la route POST/DELETE riscrive — mostrarne un'altra farebbe
+  // sembrare che il salvataggio non abbia fatto niente. La RLS restringe già
+  // alla sessione, come per position_views.
+  //
+  // Errore o tabella non ancora migrata → nessuna nota, e la pagina si apre
+  // comunque: la nota è un riquadro della pagina, non la pagina.
+  const { data: noteRow } = await supabase
+    .from("position_user_notes")
+    .select("body, updated_at")
+    .eq("position_id", position.id)
+    .eq("origin", "web")
+    .maybeSingle();
+
   return {
     position,
     score: scoreRes.data ?? null,
@@ -554,6 +575,7 @@ export async function getPositionById(id: string): Promise<{
     company,
     application: appRes.data ?? null,
     tickets,
+    userNote: (noteRow as { body: string; updated_at: string } | null) ?? null,
   };
 }
 
