@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAuth } from "@/lib/auth";
 import { isDemoLegacyId } from "@/lib/demo/data";
 import { activeDemoPersona } from "@/lib/demo/mode";
@@ -32,15 +33,19 @@ interface NoteOutcome {
   updated_at: string | null;
 }
 
-/** La superficie da cui questa route scrive.
+/** Le due superfici da cui questa route scrive — una per ramo.
  *
- * Il ramo `local` qui sotto scrive nel jobs.db DEL BOX: da O-33 la chiave è
- * `(position_id, origin)` e questa riga è la riga del box, non del sito. La
- * `web` nascerà quando le note avranno una casa sul cloud — oggi quel ramo
- * risponde 503, quindi scrivere `'web'` da qui inventerebbe una provenienza
- * che non esiste e la nota del box tornerebbe non editabile.
+ * `origin` è LA SUPERFICIE CHE SCRIVE, non la UI, ed è in chiave perché
+ * quando i due testi divergono si tengono ENTRAMBI. Il ramo `local` scrive
+ * nel jobs.db DEL BOX, quindi la sua riga è `'box'` anche quando l'utente sta
+ * usando il sito: a box acceso è SQLite la source of truth in-process, e
+ * marcarla `'web'` renderebbe la nota del box non più editabile da qui.
+ *
+ * Il ramo `cloud` (box spento, mig 069) scrive sul cloud, dove la superficie
+ * è il sito: `'web'`. Sono le due sole combinazioni che questa route produce.
  */
-const ORIGIN = "box";
+const ORIGIN_BOX = "box";
+const ORIGIN_WEB = "web";
 
 /** La tabella può mancare su un jobs.db più vecchio del codice.
  *
@@ -76,6 +81,103 @@ function hasOrigin(db: import("better-sqlite3").Database): boolean {
     .prepare("PRAGMA table_info(position_user_notes)")
     .all() as { name: string }[];
   return cols.some((c) => c.name === "origin");
+}
+
+/** Ramo cloud: box spento, la nota vive su `public.position_user_notes`
+ * (mig 069) nella riga `origin = 'web'`.
+ *
+ * Il `legacyId` che arriva dall'URL è l'id SQLite del box; sul cloud le FK
+ * sono uuid, quindi la posizione va prima ritrovata fra le righe dell'utente —
+ * stesso lookup di ../user-exclude/route.ts. Il filtro su `user_id` non è
+ * ridondante con la RLS: `legacy_id` è un contatore per-box, quindi senza di
+ * esso la stessa query potrebbe indicare la posizione di un altro utente e la
+ * RLS la nasconderebbe soltanto, restituendo un 404 dove il difetto è nella
+ * query.
+ *
+ * La posizione mancante è un 404, non un 500: può semplicemente non essere
+ * ancora salita sul cloud (push del box in ritardo, o box che non ha mai
+ * sincronizzato), ed è un fatto normale — non un guasto. */
+async function applyCloud(
+  supabase: SupabaseClient,
+  userId: string,
+  legacyId: number,
+  clearing: boolean,
+  body: string,
+): Promise<StepResult<NoteOutcome>> {
+  const { data: pos, error } = await supabase
+    .from("positions")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("legacy_id", legacyId)
+    .maybeSingle();
+  if (error) {
+    // Helper che ritorna un BODY, non una NextResponse: `sanitizedError` non
+    // è applicabile, quindi ne replichiamo il contratto a mano.
+    console.error(`[positions/user-note] 500 ${error.message}`);
+    return { ok: false, status: 500, body: { error: "query_failed" } };
+  }
+  if (!pos) {
+    return {
+      ok: false,
+      status: 404,
+      body: { error: `Posizione #${legacyId} non trovata` },
+    };
+  }
+  const positionId = (pos as { id: string }).id;
+
+  if (clearing) {
+    // Solo la riga di QUESTA superficie, come nel ramo local: cancellare la
+    // riga 'box' significherebbe cancellare un testo che l'utente non ha
+    // davanti agli occhi.
+    const { error: delErr } = await supabase
+      .from("position_user_notes")
+      .delete()
+      .eq("user_id", userId)
+      .eq("position_id", positionId)
+      .eq("origin", ORIGIN_WEB);
+    if (delErr) {
+      return {
+        ok: false,
+        status: 500,
+        body: { error: `Supabase delete failed: ${delErr.message}` },
+      };
+    }
+    return {
+      ok: true,
+      outcome: { id: String(legacyId), note: null, updated_at: null },
+    };
+  }
+
+  // `onConflict` sulla chiave COMPLETA: dichiararlo sulle sole
+  // (user_id, position_id) non è un upsert che si comporta male, è un errore —
+  // non esiste un vincolo unico su quella coppia. `updated_at` lo muove il
+  // trigger della migration, non chi scrive.
+  const { data: saved, error: upErr } = await supabase
+    .from("position_user_notes")
+    .upsert(
+      { user_id: userId, position_id: positionId, origin: ORIGIN_WEB, body },
+      { onConflict: "user_id,position_id,origin" },
+    )
+    .select("body, updated_at")
+    .single();
+  if (upErr || !saved) {
+    return {
+      ok: false,
+      status: 500,
+      body: {
+        error: `Supabase upsert failed: ${upErr?.message ?? "nessuna riga"}`,
+      },
+    };
+  }
+  const row = saved as { body: string; updated_at: string | null };
+  return {
+    ok: true,
+    outcome: {
+      id: String(legacyId),
+      note: row.body,
+      updated_at: row.updated_at,
+    },
+  };
 }
 
 async function handle(
@@ -140,7 +242,7 @@ async function handle(
         if (keyed) {
           db.prepare(
             "DELETE FROM position_user_notes WHERE position_id = ? AND origin = ?",
-          ).run(legacyId, ORIGIN);
+          ).run(legacyId, ORIGIN_BOX);
         } else {
           db.prepare(
             "DELETE FROM position_user_notes WHERE position_id = ?",
@@ -159,7 +261,7 @@ async function handle(
            ON CONFLICT(position_id, origin) DO UPDATE SET
              body = excluded.body,
              updated_at = CURRENT_TIMESTAMP`,
-        ).run(legacyId, ORIGIN, body);
+        ).run(legacyId, ORIGIN_BOX, body);
       } else {
         db.prepare(
           `INSERT INTO position_user_notes (position_id, body)
@@ -179,7 +281,7 @@ async function handle(
               "SELECT body, updated_at FROM position_user_notes " +
                 "WHERE position_id = ? AND origin = ?",
             )
-            .get(legacyId, ORIGIN)!
+            .get(legacyId, ORIGIN_BOX)!
         : db
             .prepare<
               [number],
@@ -199,24 +301,19 @@ async function handle(
       };
     },
 
-    // Le note oggi si salvano solo dal programma sul computer: sul cloud non
-    // esiste ancora dove metterle (O-33 le darà una casa). «Privata» voleva
-    // dire privata DAGLI AGENTI — non anche dal cloud: le due cose sono
-    // diverse, e confonderle è ciò che ha prodotto questo ramo.
+    // Box spento: il cloud è l'unica sorgente, e da O-33 (mig 069) ce n'è
+    // una. Questo ramo rispondeva 503 «non esiste ancora dove metterle»:
+    // «privata» voleva dire privata DAGLI AGENTI — non anche dal cloud, e
+    // confondere le due cose è ciò che aveva prodotto quel 503. Gli agenti
+    // non la leggono perché non sta in `positions.notes`, non perché non si
+    // sincronizza.
     //
-    // Il messaggio dice COSA SUCCEDE, non una causa dedotta — e descrive il
-    // mondo che ESISTE: la nota è stata mergiata un'ora dopo il tag della
-    // v0.3.7, quindi oggi non è né sul web né nell'app installata. Dire
-    // «salvala dall'app» manderebbe a cercarla dove non c'è.
-    // Va riletto a ogni release che sposta la funzione (vedi UserNote.tsx).
-    cloud: async (): Promise<StepResult<NoteOutcome>> => ({
-      ok: false,
-      status: 503,
-      body: {
-        error:
-          "Le note non sono ancora disponibili: arrivano con il prossimo aggiornamento.",
-      },
-    }),
+    // Nessun `mirror`: a box acceso la nota resta nel jobs.db e non sale sul
+    // cloud. È deliberato per ora — un mirror porterebbe qui la riga 'box' e
+    // il lettore dovrebbe scegliere quale delle due mostrare in un pannello
+    // che ha un solo textarea. La tabella cloud ha già `origin` in chiave,
+    // quindi quel pezzo si aggiunge senza ri-migrare.
+    cloud: (supabase, userId) => applyCloud(supabase, userId, legacyId, clearing, body),
   });
 }
 
