@@ -23,6 +23,7 @@ import {
   outOfRangeComponents,
   summarizeOutOfRange,
 } from "../../../cli/src/lib/score-ranges.js";
+import * as web from "../../../web/lib/score-ranges";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..", "..");
 const SCORE_RANGES_PY = join(REPO_ROOT, "shared", "skills", "score_ranges.py");
@@ -117,5 +118,30 @@ describe("score ranges", () => {
     const row = { experience_fit: 20, strategic_fit: 96 };
     summarizeOutOfRange([row]);
     expect(row).toEqual({ experience_fit: 20, strategic_fit: 96 });
+  });
+});
+
+describe("il gemello web non può divergere da quello CLI", () => {
+  // Due implementazioni scritte a mano dello stesso righello sono la forma in
+  // cui il difetto è nato. Finché restano due, almeno si controllano a vicenda.
+  it("dichiara gli stessi tetti", () => {
+    expect({ ...web.SCORE_COMPONENT_LIMITS }).toEqual({
+      ...SCORE_COMPONENT_LIMITS,
+    });
+    expect({ ...web.SCORE_COMPONENT_LIMITS }).toEqual(limitsEnforcedByPython());
+  });
+
+  it("dà lo stesso verdetto sulle stesse righe", () => {
+    const rows = [
+      { stack_match: 40, experience_fit: 20, strategic_fit: 96 },
+      { stack_match: 30, remote_fit: 25, salary_fit: 8 },
+      { salary_fit: -1 },
+      { experience_fit: null, remote_fit: "26" },
+      {},
+    ];
+    for (const row of rows) {
+      expect(web.outOfRangeComponents(row)).toEqual(outOfRangeComponents(row));
+    }
+    expect(web.summarizeOutOfRange(rows)).toEqual(summarizeOutOfRange(rows));
   });
 });
