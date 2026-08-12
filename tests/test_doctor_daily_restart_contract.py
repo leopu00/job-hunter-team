@@ -12,6 +12,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -103,8 +104,13 @@ def test_schedule_claim_is_durable_before_a_slot_can_be_returned(
 
 
 def test_schedule_claim_fails_closed_when_state_cannot_be_persisted(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setattr(
+        doctor_schedule,
+        "STATE_FILE",
+        tmp_path / "logs" / "doctor-schedule-state.json",
+    )
     monkeypatch.setattr(doctor_schedule, "_bounds_now", _active_window)
     monkeypatch.setattr(doctor_schedule, "_load_state", lambda: {})
 
@@ -114,6 +120,112 @@ def test_schedule_claim_fails_closed_when_state_cannot_be_persisted(
     monkeypatch.setattr(doctor_schedule, "_save_state", fail_write)
     with pytest.raises(OSError, match="read-only"):
         doctor_schedule.claim()
+
+
+def test_schedule_claim_fails_closed_when_existing_state_is_unreadable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    state_file = tmp_path / "logs" / "doctor-schedule-state.json"
+    state_file.parent.mkdir(parents=True)
+    state_file.write_text("{truncated", encoding="utf-8")
+    monkeypatch.setattr(doctor_schedule, "STATE_FILE", state_file)
+    monkeypatch.setattr(doctor_schedule, "_bounds_now", _active_window)
+
+    with pytest.raises(OSError, match="state is unreadable"):
+        doctor_schedule.claim()
+    assert state_file.read_text(encoding="utf-8") == "{truncated"
+
+
+def test_schedule_claim_fails_closed_without_interprocess_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        doctor_schedule,
+        "STATE_FILE",
+        tmp_path / "logs" / "doctor-schedule-state.json",
+    )
+    monkeypatch.setattr(doctor_schedule, "_bounds_now", _active_window)
+    monkeypatch.setattr(doctor_schedule, "fcntl", None)
+
+    with pytest.raises(OSError, match="lock unavailable"):
+        doctor_schedule.claim()
+
+
+@pytest.mark.skipif(doctor_schedule.fcntl is None, reason="POSIX runtime lock")
+def test_schedule_claim_fails_closed_when_lock_release_is_uncertain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    state_file = tmp_path / "logs" / "doctor-schedule-state.json"
+    monkeypatch.setattr(doctor_schedule, "STATE_FILE", state_file)
+    monkeypatch.setattr(doctor_schedule, "_bounds_now", _active_window)
+    real_fcntl = doctor_schedule.fcntl
+
+    class UncertainUnlock:
+        LOCK_EX = real_fcntl.LOCK_EX
+        LOCK_UN = real_fcntl.LOCK_UN
+
+        @staticmethod
+        def flock(file_descriptor: int, operation: int):
+            if operation == real_fcntl.LOCK_UN:
+                raise OSError("synthetic uncertain unlock")
+            return real_fcntl.flock(file_descriptor, operation)
+
+    monkeypatch.setattr(doctor_schedule, "fcntl", UncertainUnlock)
+    with pytest.raises(OSError, match="uncertain unlock"):
+        doctor_schedule.claim()
+
+    monkeypatch.setattr(doctor_schedule, "fcntl", real_fcntl)
+    assert doctor_schedule.claim() == "WAIT"
+    assert json.loads(state_file.read_text(encoding="utf-8"))["claimed_t30"] is True
+
+
+@pytest.mark.skipif(doctor_schedule.fcntl is None, reason="POSIX runtime lock")
+@pytest.mark.parametrize(
+    ("mode", "expected_owner"), (("window", "T30"), ("fallback", "FALLBACK"))
+)
+def test_overlapping_schedule_processes_have_exactly_one_claim_owner(
+    tmp_path: Path, mode: str, expected_owner: str
+):
+    worker = tmp_path / "claim_worker.py"
+    worker.write_text(
+        f"""import importlib.util, sys, time
+from datetime import datetime, timedelta, timezone
+spec = importlib.util.spec_from_file_location("schedule_worker", {str(SCHEDULE_PATH)!r})
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+start = datetime(2026, 8, 12, 20, 0, tzinfo=timezone.utc)
+if sys.argv[1] == "window":
+    module._bounds_now = lambda: (start, start + timedelta(hours=12), start + timedelta(hours=1))
+else:
+    module._bounds_now = lambda: None
+    module.is_within_working_hours = lambda: True
+original_load = module._load_state
+def slow_load():
+    state = original_load()
+    time.sleep(0.25)
+    return state
+module._load_state = slow_load
+print(module.claim())
+""",
+        encoding="utf-8",
+    )
+    home = tmp_path / "home"
+    env = {**os.environ, "JHT_HOME": str(home)}
+    processes = [
+        subprocess.Popen(
+            [sys.executable, str(worker), mode],
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        for _ in range(2)
+    ]
+    results = [process.communicate(timeout=10) for process in processes]
+    assert all(process.returncode == 0 for process in processes), results
+    assert sorted(stdout.strip() for stdout, _ in results) == sorted(
+        [expected_owner, "WAIT"]
+    )
 
 
 def test_24_7_fallback_is_owned_by_the_same_durable_claim(

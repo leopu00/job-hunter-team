@@ -36,9 +36,11 @@
 
 `doctor-watchdog` è l'unico proprietario degli spawn **schedulati** del rich
 refresh (gli spawn diagnostici espliciti restano on-demand). Prima di chiamare
-`spawn-doctor.sh` chiede a `doctor_schedule.py claim`: lo slot viene scritto con
-replace atomico + fsync in `doctor-schedule-state.json`, e soltanto dopo il
-watchdog riceve `T30`, `MID` o `FALLBACK`.
+`spawn-doctor.sh` chiede a `doctor_schedule.py claim`: un lock POSIX serializza
+il read-modify-write fra processi sovrapposti, poi lo slot viene scritto con
+replace atomico + fsync in `doctor-schedule-state.json`; soltanto dopo il
+watchdog riceve `T30`, `MID` o `FALLBACK`. Lock assente o con esito incerto è
+un errore fail-closed, come una scrittura incerta.
 
 - spawn riuscito → `mark`, claim finalizzato;
 - spawn sicuramente fallito → `release`, il poll successivo può ritentare;

@@ -37,10 +37,11 @@ NON ESISTE (da creare):
   - **T+6h** (metà di una finestra 12h; in generale metà-finestra).
 - Idempotenza: `doctor-schedule-state.json` conserva per ogni slot sia il claim
   pre-spawn (`claimed_t30` / `claimed_mid`) sia l'esito (`did_t30` /
-  `did_mid`). Il claim usa replace atomico + fsync: senza persistenza non parte
-  alcun turno LLM; un esito incerto resta claimed e non viene duplicato. Reset
-  a nuova finestra. Lo stesso protocollo possiede il fallback 24/7, prima
-  mantenuto soltanto in RAM dal watchdog.
+  `did_mid`). Un lock POSIX serializza i processi concorrenti e il claim usa
+  replace atomico + fsync: senza persistenza non parte alcun turno LLM; un
+  esito incerto resta claimed e non viene duplicato. Reset a nuova finestra.
+  Lo stesso protocollo possiede il fallback 24/7, prima mantenuto soltanto in
+  RAM dal watchdog.
 - Gate invariati: OFF → niente spawn; `.team-halted.flag`/`.weekly-halt.flag` → niente.
 - Generalizzazione: gli offset (+30min, +mid) derivati dalla durata finestra, non hardcoded a 12h.
 

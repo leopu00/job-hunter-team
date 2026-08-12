@@ -31,8 +31,14 @@ from __future__ import annotations
 import json
 import os
 import sys
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - il runtime container e' POSIX
+    fcntl = None
 
 sys.path.insert(0, "/app")
 try:
@@ -58,11 +64,33 @@ WINDOW_SLOTS = {
 }
 
 
+@contextmanager
+def _state_lock():
+    """Serialize state read-modify-write across overlapping watchdog calls."""
+    if fcntl is None:
+        raise OSError("interprocess state lock unavailable")
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = STATE_FILE.with_name(f".{STATE_FILE.name}.lock")
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
 def _load_state() -> dict:
     try:
-        return json.loads(STATE_FILE.read_text())
-    except Exception:
+        raw_state = STATE_FILE.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return {}
+    try:
+        state = json.loads(raw_state)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise OSError("doctor schedule state is unreadable") from exc
+    if not isinstance(state, dict):
+        raise OSError("doctor schedule state is not an object")
+    return state
 
 
 def _save_state(state: dict) -> None:
@@ -143,10 +171,11 @@ def check() -> str:
     duration_min = (end - start).total_seconds() / 60.0
     mid_min = duration_min / 2.0
 
-    state, changed = _window_state(_load_state(), start)
-    if changed:
-        _save_state(state)
-    return _due_window_slot(state, elapsed_min, mid_min) or "WAIT"
+    with _state_lock():
+        state, changed = _window_state(_load_state(), start)
+        if changed:
+            _save_state(state)
+        return _due_window_slot(state, elapsed_min, mid_min) or "WAIT"
 
 
 def claim() -> str:
@@ -156,67 +185,70 @@ def claim() -> str:
     a duplicate LLM spawn. Missing that rich round is safe because the separate
     age-only watchdog still enforces the session TTL.
     """
-    bounds = _bounds_now()
-    state = _load_state()
-    if bounds is None:
-        if not is_within_working_hours():
-            return "OFF"
-        now_s = int(datetime.now().timestamp())
-        last = int(
-            state.get("fallback_claimed_at")
-            or state.get("fallback_done_at")
-            or 0
-        )
-        if now_s - last < FALLBACK_SEC:
-            return "WAIT"
-        state["fallback_claimed_at"] = now_s
-        _save_state(state)
-        return "FALLBACK"
+    with _state_lock():
+        bounds = _bounds_now()
+        state = _load_state()
+        if bounds is None:
+            if not is_within_working_hours():
+                return "OFF"
+            now_s = int(datetime.now().timestamp())
+            last = int(
+                state.get("fallback_claimed_at")
+                or state.get("fallback_done_at")
+                or 0
+            )
+            if now_s - last < FALLBACK_SEC:
+                return "WAIT"
+            state["fallback_claimed_at"] = now_s
+            _save_state(state)
+            return "FALLBACK"
 
-    start, end, now = bounds
-    elapsed_min = (now - start).total_seconds() / 60.0
-    mid_min = (end - start).total_seconds() / 120.0
-    state, changed = _window_state(state, start)
-    slot = _due_window_slot(state, elapsed_min, mid_min)
-    if slot:
-        state[WINDOW_SLOTS[slot][1]] = True
-        _save_state(state)
-        return slot
-    if changed:
-        _save_state(state)
-    return "WAIT"
+        start, end, now = bounds
+        elapsed_min = (now - start).total_seconds() / 60.0
+        mid_min = (end - start).total_seconds() / 120.0
+        state, changed = _window_state(state, start)
+        slot = _due_window_slot(state, elapsed_min, mid_min)
+        if slot:
+            state[WINDOW_SLOTS[slot][1]] = True
+            _save_state(state)
+            return slot
+        if changed:
+            _save_state(state)
+        return "WAIT"
 
 
 def mark(slot: str) -> None:
-    if slot == "FALLBACK":
-        state = _load_state()
-        state["fallback_done_at"] = int(datetime.now().timestamp())
-        state.pop("fallback_claimed_at", None)
+    with _state_lock():
+        b = _bounds_now()
+        if slot == "FALLBACK":
+            state = _load_state()
+            state["fallback_done_at"] = int(datetime.now().timestamp())
+            state.pop("fallback_claimed_at", None)
+            _save_state(state)
+            return
+        if b is None:
+            return
+        start, _, _ = b
+        state, _ = _window_state(_load_state(), start)
+        done_field, claim_field = WINDOW_SLOTS[slot]
+        state[done_field] = True
+        state[claim_field] = False
         _save_state(state)
-        return
-    b = _bounds_now()
-    if b is None:
-        return
-    start, _, _ = b
-    state, _ = _window_state(_load_state(), start)
-    done_field, claim_field = WINDOW_SLOTS[slot]
-    state[done_field] = True
-    state[claim_field] = False
-    _save_state(state)
 
 
 def release(slot: str) -> None:
     """Release only a known failed spawn; uncertain outcomes keep the claim."""
-    state = _load_state()
-    if slot == "FALLBACK":
-        state.pop("fallback_claimed_at", None)
+    with _state_lock():
+        bounds = _bounds_now()
+        state = _load_state()
+        if slot == "FALLBACK":
+            state.pop("fallback_claimed_at", None)
+            _save_state(state)
+            return
+        if bounds is None or state.get("window_start") != bounds[0].isoformat():
+            return
+        state[WINDOW_SLOTS[slot][1]] = False
         _save_state(state)
-        return
-    bounds = _bounds_now()
-    if bounds is None or state.get("window_start") != bounds[0].isoformat():
-        return
-    state[WINDOW_SLOTS[slot][1]] = False
-    _save_state(state)
 
 
 def _today_local() -> str:
@@ -243,9 +275,10 @@ def check_maintainer() -> str:
 
 
 def mark_maintainer() -> None:
-    state = _load_state()
-    state["maint_date"] = _today_local()
-    _save_state(state)
+    with _state_lock():
+        state = _load_state()
+        state["maint_date"] = _today_local()
+        _save_state(state)
 
 
 def main(argv):
