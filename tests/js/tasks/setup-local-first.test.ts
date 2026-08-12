@@ -13,6 +13,7 @@ const read = (relative: string) =>
 const LOCALES = ["en", "it", "hu", "es", "de", "fr", "pt"] as const;
 
 const hostSetup = read("scripts/host-setup.sh");
+const cliSetup = read("cli/wizard/setup.js");
 const gameTour = read("game/scripts/dialogue/dialogues.gd");
 const scriptedOnboarding = read("game/scripts/setup/scripted_onboarding.gd");
 const landing = [
@@ -130,6 +131,27 @@ describe("CLI host wizard — local e VPS sono host reali", () => {
       );
       expect(catalog["host_setup.option.vps.line2"].toLowerCase()).not.toMatch(
         /dashboard|panel web|tableau de bord|irányítópult/,
+      );
+    }
+  });
+
+  it("su VPS il pairing cloud resta una copia facoltativa, non un gate", () => {
+    expect(cliSetup).toContain("wizard.cloud.enable_prompt");
+    expect(cliSetup).not.toContain("await prompter.outro(t('wizard.cloud.pairing_failed'))");
+    expect(cliSetup.indexOf("wizard.cloud.pairing_failed")).toBeLessThan(
+      cliSetup.indexOf("wizard.provider.prompt"),
+    );
+    expect(read("docs/guides/VPS-SETUP.md")).toContain(
+      "Skipping or failing cloud pairing does not block the",
+    );
+    for (const locale of LOCALES) {
+      const catalog = JSON.parse(
+        read(`shared/locales/${locale}.json`),
+      ) as Record<string, string>;
+      expect(catalog["wizard.cloud.enable_prompt"], locale).toBeTruthy();
+      expect(catalog["wizard.cloud.pairing_body"], locale).toContain("jht cloud login");
+      expect(catalog["wizard.cloud.login_title"], locale).not.toMatch(
+        /required|obbligatorio|obligatorio|obligatoire|erforderlich|kötelező|obrigatório/i,
       );
     }
   });

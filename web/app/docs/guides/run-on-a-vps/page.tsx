@@ -418,7 +418,7 @@ jht up                                                  # pull image + start
 jht setup                                               # wizard: provider + login
 jht providers update                                    # install the provider CLI
 jht oauth-login                                         # provider OAuth device flow
-jht cloud login                                         # link the VPS to your web account
+jht cloud login                                         # optional: copy results to your web account
 jht team start                                          # start the agents
 jht team status                                         # verify`}
       </Pre>

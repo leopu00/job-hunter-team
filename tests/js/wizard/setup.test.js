@@ -55,6 +55,43 @@ beforeEach(() => {
   delete process.env.JHT_HOST_TYPE;
 });
 
+describe('runSetupWizard — VPS senza account cloud', () => {
+  it('salva il provider anche quando l’utente salta il pairing facoltativo', async () => {
+    process.env.JHT_HOST_TYPE = 'vps';
+    const prompter = createMockPrompter({
+      selects: ['claude'],
+      // skip cloud; poi non proseguire oltre il provider update sintetico.
+      confirms: [false, false],
+    });
+
+    await runSetupWizard(prompter);
+
+    expect(writeConfigFile).toHaveBeenCalledOnce();
+    const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
+    expect(savedConfig.active_provider).toBe('claude');
+    expect(prompter.confirm).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      initialValue: true,
+    }));
+  });
+
+  it('prosegue se il pairing facoltativo fallisce', async () => {
+    process.env.JHT_HOST_TYPE = 'vps';
+    const prompter = createMockPrompter({
+      selects: ['claude'],
+      // prova il cloud (il comando sintetico fallisce); poi ferma il post-save.
+      confirms: [true, false],
+    });
+
+    await runSetupWizard(prompter);
+
+    expect(writeConfigFile).toHaveBeenCalledOnce();
+    expect(prompter.note).toHaveBeenCalledWith(
+      'wizard.cloud.pairing_failed',
+      'wizard.cloud.pairing_title',
+    );
+  });
+});
+
 // Note di design (post-refactor 2026-05):
 // - Il wizard e' "quickstart" hardcoded (ADR-0004 → niente prompt setup-mode).
 // - auth_method = 'subscription' hardcoded (niente prompt api_key/subscription).

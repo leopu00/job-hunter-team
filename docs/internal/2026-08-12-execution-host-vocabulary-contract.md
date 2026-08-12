@@ -72,7 +72,7 @@ PC locale e VPS.
 | App nativa · onboarding scriptato | Scelte locale/VPS, locale elencato per primo. | Usare i nomi canonici e trade-off reali. |
 | App nativa · tour Coordinatore legacy | Offre locale, PC dedicato e «computer online» come tre percorsi guidati. | Rimuovere la falsa equivalenza del PC dedicato; nominare VPS. |
 | CLI · `host-setup.sh` | Rilevamento + conferma locale/VPS. | Conservare comportamento; rimuovere la promessa della dashboard locale/esposta. |
-| CLI · `setup.js` | Legge `JHT_HOST_TYPE`; su VPS il wizard richiede oggi pairing cloud, su locale no. | Non trasformarlo in chooser e non nascondere l'eccezione VPS esistente. |
+| CLI · `setup.js` | Legge `JHT_HOST_TYPE`; su VPS propone il pairing cloud prima del provider, su locale no. | Mantenerlo visibile ma facoltativo: saltarlo o fallirlo non blocca la configurazione del runtime. |
 | Web · landing | Nomina soltanto PC dedicato sempre acceso e VPS. | Reintrodurre PC locale come prima opzione. |
 | Web · setup guide / getting started | Percorso locale completo con link VPS separato. | Già coerente; proteggere con test. |
 | Web · guida VPS | Definisce VPS «raccomandata per una ricerca vera» e app desktop «in arrivo». | Rendere il trade-off neutro e descrivere il controllo SSH già presente. |

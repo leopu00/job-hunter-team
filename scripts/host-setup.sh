@@ -325,7 +325,7 @@ if { [ ! -t 0 ] || [ "$NON_INTERACTIVE" -eq 1 ]; } && [ "$JHT_USER_TZ" = "UTC" ]
 fi
 
 # Persisti la scelta in ~/.jht/host.env cosi' il wrapper bash + il wizard
-# Node sanno se siamo su VPS (per attivare step obbligatori cloud + telegram).
+# Node sanno se siamo su VPS (per proporre cloud + Telegram, entrambi opzionali).
 # Riscriviamo l'intero file mantenendo JHT_LANG + JHT_USER_TZ. Se in
 # futuro si aggiungono altre chiavi, usare un piccolo helper di merge
 # invece di sovrascrivere.
