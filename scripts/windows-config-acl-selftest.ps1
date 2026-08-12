@@ -52,7 +52,9 @@ try {
   $env:JHT_RUNTIME_DIR = (Join-Path $root 'runtime')
   $env:JHT_COMPOSE_FILE = (Join-Path $env:JHT_RUNTIME_DIR 'docker-compose.yml')
   $output = & powershell -NoProfile -File (Join-Path $PSScriptRoot 'jht-wrapper.ps1') up 2>&1
+  $wrapperExit = $LASTEXITCODE
   $outputText = ($output | Out-String)
-  if ($LASTEXITCODE -eq 0 -or -not ($outputText -match 'owner-only|ACL')) { throw 'wrapper did not fail closed before compose' }
+  if ($wrapperExit -eq 0 -or -not ($outputText -match 'owner-only|ACL')) { throw 'wrapper did not fail closed before compose' }
   Write-Host 'WINDOWS-CONFIG-ACL-SELFTEST PASS'
 } finally { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+exit 0
