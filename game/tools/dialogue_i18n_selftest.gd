@@ -18,7 +18,7 @@ const FORBIDDEN_ENGLISH_FRAGMENTS := [
 const FORBIDDEN_ENGLISH_WORDS := [
 	"Hello", "Welcome", "Please", "Thanks", "Sorry", "Ready", "Later",
 	"Working", "Update", "Start", "Stop", "Open", "Close", "Click",
-	"Writer", "Critic", "Maintainer", "Scout", "Coordinator",
+	"Writer", "Critic", "Maintainer", "Scout", "Coordinator", "Backup",
 ]
 const LOCALE_FORBIDDEN_ROLE_NAMES := {
 	"de": ["Sentinel", "Doctor"],
@@ -171,7 +171,9 @@ static func _placeholders(text: String) -> PackedStringArray:
 
 static func _contains_word(text: String, word: String) -> bool:
 	var regex := RegEx.new()
-	regex.compile("(^|[^A-Za-z])%s([^A-Za-z]|$)" % word)
+	## Residues are not guaranteed to preserve source capitalization, and the
+	## most common accidental carry-overs also arrive as regular English plurals.
+	regex.compile("(?i)(^|[^A-Za-z])%s(?:s|es)?([^A-Za-z]|$)" % word)
 	return regex.search(text) != null
 
 

@@ -50,7 +50,7 @@ const S := {
 	"dialogue.mantenitore.start.choice.container": "Dove lavora effettivamente il team?",
 	"dialogue.mantenitore.start.choice.end": "Tornerò più tardi.",
 	"dialogue.mantenitore.start.choice.updates": "Aggiornamenti.",
-	"dialogue.mantenitore.start.line": "Sono il Manutentore. Tengo gli strumenti in ordine, preparo gli aggiornamenti e conservo i backup. Di cosa sei curioso?",
+	"dialogue.mantenitore.start.line": "Sono il Manutentore. Tengo gli strumenti in ordine, preparo gli aggiornamenti e conservo le copie di sicurezza. Di cosa sei curioso?",
 	"dialogue.mantenitore.updates.line": "Preparo le modifiche, salvo ciò che conta e controllo che il team riparta in modo pulito. Se qualcosa va storto, posso tornare allo stato precedente.",
 	"dialogue.mentor.day.line": "{positions_summary} Alcuni sembrano ordinari; altri potrebbero davvero valere la pena di parlarne. Il compito di oggi è distinguerli.",
 	"dialogue.mentor.end.line": "Le porte della lounge sono sempre aperte. Torna quando vuoi.",
