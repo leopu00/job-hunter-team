@@ -12,15 +12,17 @@ export const CLOUD_SYNC_STALE_AFTER_MS = 20 * 60 * 1000;
 
 /** Vero quando il cloud non ha una conferma entro il bound automatico. */
 export function cloudSyncIsBehind(
-  completedAt: string | null,
+  status: string | null,
+  checkedAt: string | null,
   now = Date.now(),
   staleAfterMs = CLOUD_SYNC_STALE_AFTER_MS,
 ): boolean {
-  const completedMs = Date.parse(completedAt ?? "");
-  if (!Number.isFinite(completedMs)) return true;
+  if (status !== "current") return true;
+  const checkedMs = Date.parse(checkedAt ?? "");
+  if (!Number.isFinite(checkedMs)) return true;
   // Un timestamp futuro può derivare da clock skew, ma non dimostra ritardo.
-  if (completedMs > now) return false;
-  return now - completedMs > staleAfterMs;
+  if (checkedMs > now) return false;
+  return now - checkedMs > staleAfterMs;
 }
 
 const TERMINAL_SYNC_ACTIONS = new Set([

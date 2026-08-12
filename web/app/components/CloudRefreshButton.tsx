@@ -281,6 +281,8 @@ export default function CloudRefreshButton() {
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [freshnessKnown, setFreshnessKnown] = useState(false);
   const [freshnessClock, setFreshnessClock] = useState(() => Date.now());
+  const [pushStatus, setPushStatus] = useState<string | null>(null);
+  const [pushCheckedAt, setPushCheckedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
   const mounted = useRef(true);
@@ -309,19 +311,19 @@ export default function CloudRefreshButton() {
   // Nessun polling: questo timer cambia soltanto l'etichetta quando scade il
   // bound del daemon. I dati continuano ad arrivare via Realtime/catch-up.
   useEffect(() => {
-    if (!freshnessKnown || !lastSync) return;
-    const completedMs = Date.parse(lastSync);
-    if (!Number.isFinite(completedMs)) return;
+    if (!freshnessKnown || !pushCheckedAt) return;
+    const checkedMs = Date.parse(pushCheckedAt);
+    if (!Number.isFinite(checkedMs)) return;
     const delay = Math.max(
       0,
-      completedMs + CLOUD_SYNC_STALE_AFTER_MS - Date.now() + 50,
+      checkedMs + CLOUD_SYNC_STALE_AFTER_MS - Date.now() + 50,
     );
     const id = window.setTimeout(
       () => setFreshnessClock(Date.now()),
       Math.min(delay, 2_147_483_647),
     );
     return () => window.clearTimeout(id);
-  }, [freshnessKnown, lastSync]);
+  }, [freshnessKnown, pushCheckedAt]);
 
   useEffect(() => {
     mounted.current = true;
@@ -592,10 +594,14 @@ export default function CloudRefreshButton() {
       sync_completed_at?: string | null;
       last_action?: string | null;
       last_action_at?: string | null;
+      cloud_push_status?: string | null;
+      cloud_push_checked_at?: string | null;
     };
     const apply = (row: StateRow | null) => {
       setFreshnessKnown(true);
       setFreshnessClock(Date.now());
+      setPushStatus(row?.cloud_push_status ?? null);
+      setPushCheckedAt(row?.cloud_push_checked_at ?? null);
       if (pendingRef.current && requestArmedRef.current) {
         const observation: SyncObservation = {
           requestedAt: row?.sync_requested_at ?? null,
@@ -621,7 +627,7 @@ export default function CloudRefreshButton() {
         const { data } = await supabase
           .from("team_state")
           .select(
-            "sync_requested_at,sync_completed_at,last_action,last_action_at",
+            "sync_requested_at,sync_completed_at,last_action,last_action_at,cloud_push_status,cloud_push_checked_at",
           )
           .maybeSingle();
         if (mounted.current) apply(data as StateRow | null);
@@ -685,7 +691,9 @@ export default function CloudRefreshButton() {
 
   if (!remote || !loggedIn) return null;
 
-  const behind = freshnessKnown && cloudSyncIsBehind(lastSync, freshnessClock);
+  const behind =
+    freshnessKnown &&
+    cloudSyncIsBehind(pushStatus, pushCheckedAt, freshnessClock);
 
   return (
     <div

@@ -11,12 +11,14 @@ describe("visibilità del ritardo cloud", () => {
   it("resta fresco entro il bound automatico e diventa indietro oltre", () => {
     expect(
       cloudSyncIsBehind(
+        "current",
         new Date(now - CLOUD_SYNC_STALE_AFTER_MS).toISOString(),
         now,
       ),
     ).toBe(false);
     expect(
       cloudSyncIsBehind(
+        "current",
         new Date(now - CLOUD_SYNC_STALE_AFTER_MS - 1).toISOString(),
         now,
       ),
@@ -24,11 +26,14 @@ describe("visibilità del ritardo cloud", () => {
   });
 
   it("mai sincronizzato è visibilmente indietro; clock skew non lo è", () => {
-    expect(cloudSyncIsBehind(null, now)).toBe(true);
-    expect(cloudSyncIsBehind("not-a-date", now)).toBe(true);
-    expect(cloudSyncIsBehind(new Date(now + 1_000).toISOString(), now)).toBe(
-      false,
+    expect(cloudSyncIsBehind(null, null, now)).toBe(true);
+    expect(cloudSyncIsBehind("timeout", new Date(now).toISOString(), now)).toBe(
+      true,
     );
+    expect(cloudSyncIsBehind("current", "not-a-date", now)).toBe(true);
+    expect(
+      cloudSyncIsBehind("current", new Date(now + 1_000).toISOString(), now),
+    ).toBe(false);
   });
 });
 

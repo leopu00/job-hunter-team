@@ -15,6 +15,7 @@ import {
   nextPeriodicCheckState,
   nextPeriodicPushState,
   periodicPushLimits,
+  periodicPushObservation,
   periodicPushStatusLine,
   readPeriodicPushState,
   runPeriodicPushCycle,
@@ -137,6 +138,23 @@ describe("policy del push periodico", () => {
       signature: signature(),
     });
   });
+
+  it("pubblica solo current/errore e timestamp, mai la firma locale", () => {
+    const observation = periodicPushObservation({
+      state: nextPeriodicPushState({
+        state: {},
+        now: T0,
+        signature: signature(42),
+        result: { ok: true, skipped: 0 },
+        source: "periodic",
+      }),
+    });
+    expect(observation).toEqual({
+      cloud_push_status: "current",
+      cloud_push_checked_at: iso(T0),
+    });
+    expect(JSON.stringify(observation)).not.toContain("positions");
+  });
 });
 
 describe("esecuzione bounded", () => {
@@ -215,10 +233,18 @@ describe("effetto reale sul percorso Sync now", () => {
       db.close();
 
       const payloads: Array<Record<string, unknown>> = [];
+      const observations: Array<Record<string, unknown>> = [];
       vi.stubGlobal(
         "fetch",
-        vi.fn(async (_url: unknown, init?: RequestInit) => {
+        vi.fn(async (url: unknown, init?: RequestInit) => {
           const body = JSON.parse(String(init?.body || "{}"));
+          if (String(url).endsWith("/api/team-state")) {
+            observations.push(body);
+            return new Response(JSON.stringify({ state: body }), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
           payloads.push(body);
           return new Response(
             JSON.stringify({
@@ -262,6 +288,13 @@ describe("effetto reale sul percorso Sync now", () => {
         limits: testLimits,
         silent: true,
       });
+      await maybePeriodicPush({
+        db: dbPath,
+        statePath,
+        now: T0 + 2 * MIN,
+        limits: testLimits,
+        silent: true,
+      });
 
       expect(
         payloads.map((body) =>
@@ -270,8 +303,22 @@ describe("effetto reale sul percorso Sync now", () => {
           ),
         ),
       ).toEqual([[1], [2]]);
+      expect(observations).toEqual([
+        {
+          cloud_push_status: "current",
+          cloud_push_checked_at: iso(T0),
+        },
+        {
+          cloud_push_status: "current",
+          cloud_push_checked_at: iso(T0 + MIN),
+        },
+        {
+          cloud_push_status: "current",
+          cloud_push_checked_at: iso(T0 + 2 * MIN),
+        },
+      ]);
       expect(readPeriodicPushState(statePath)).toMatchObject({
-        status: "completed",
+        status: "idle",
         signature: { positions: { n: 2 } },
       });
     } finally {

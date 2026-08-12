@@ -29,6 +29,7 @@ import {
 } from '../lib/bootstrap-restore.js';
 import {
   periodicPushLimits,
+  periodicPushObservation,
   periodicPushStatusLine,
   readPeriodicPushState,
   runPeriodicPushCycle,
@@ -3421,6 +3422,37 @@ export async function maybePeriodicPush(options = {}) {
     },
   });
 
+  // Il browser non può vedere la firma SQLite. Pubblica soltanto l'esito
+  // minimale del controllo, così distingue "nessuna novità" da "daemon
+  // indietro" senza contatori, titoli o altri dati locali.
+  const observation = periodicPushObservation(outcome);
+  if (observation && options.publishObservation !== false) {
+    const publish = typeof options.publishObservation === 'function'
+      ? options.publishObservation
+      : async (value) => {
+        const config = options.config || (await loadCloudConfig());
+        if (!config?.enabled) return false;
+        // Passa dalla route token (non dal direct reader): lì vive il gate
+        // active_device. Un vecchio box ancora acceso non può sovrascrivere
+        // l'osservazione pubblicata dal device che possiede il claim.
+        try {
+          const res = await (options.fetchFn || fetch)(
+            `${(config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '')}/api/team-state`,
+            {
+              method: 'PATCH',
+              headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
+              signal: AbortSignal.timeout(10_000),
+              body: JSON.stringify(value),
+            }
+          );
+          return res.ok;
+        } catch {
+          return false;
+        }
+      };
+    outcome.observationPublished = await publish(observation);
+  }
+
   if (!silent && outcome.result && outcome.result.ok !== true) {
     console.error(pc.yellow(
       `  periodic-push ${outcome.state?.status || 'failed'}; retry automatico (${outcome.state?.consecutive_failures || 1} fallimenti consecutivi).`
@@ -3636,7 +3668,7 @@ async function handleDaemon(options) {
         // La firma evita traffico quando nulla è cambiato; timeout, retry e
         // ultimo esito sono persistiti e leggibili da `jht cloud status`.
         try {
-          await maybePeriodicPush({ silent: false });
+          await maybePeriodicPush({ silent: false, config });
         } catch (err) {
           console.error(pc.yellow(`  daemon periodic-push error: ${err.message}`));
         }
@@ -3787,7 +3819,7 @@ async function runRealtimeLoop({ config, isRunning }) {
     // NESSUNO chiede nulla — quindi vive sul tick, con la sua cadenza interna.
     try { await maybeBootstrapPush({ silent: false }); }
     catch (e) { console.error(pc.yellow(`  bootstrap-push error: ${e.message}`)); }
-    try { await maybePeriodicPush({ silent: false }); }
+    try { await maybePeriodicPush({ silent: false, config }); }
     catch (e) { console.error(pc.yellow(`  periodic-push error: ${e.message}`)); }
 
     tick += 1;

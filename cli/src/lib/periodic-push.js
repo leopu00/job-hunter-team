@@ -120,6 +120,8 @@ export function nextPeriodicCheckState({ state = {}, now, signature, reason }) {
   if (signature !== null && signature !== undefined) next.signature = signature;
   if (reason === "signature_unavailable") {
     next.consecutive_failures = (Number(state.consecutive_failures) || 0) + 1;
+  } else {
+    next.consecutive_failures = 0;
   }
   return next;
 }
@@ -169,6 +171,17 @@ export function periodicPushStatusLine(state = {}) {
   if (state.status === "completed") return `completed at ${last}`;
   if (state.status === "idle") return `idle; checked at ${last}`;
   return `${state.status} at ${last}; retry is automatic`;
+}
+
+/** Stato minimo pubblicabile: nessuna firma/conteggio locale lascia il box. */
+export function periodicPushObservation(outcome) {
+  const state = outcome?.state;
+  if (!state?.last_check_at) return null;
+  const current = state.status === "completed" || state.status === "idle";
+  return {
+    cloud_push_status: current ? "current" : state.status || "failed",
+    cloud_push_checked_at: state.last_check_at,
+  };
 }
 
 /**
