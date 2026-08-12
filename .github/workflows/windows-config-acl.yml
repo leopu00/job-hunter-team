@@ -1,0 +1,17 @@
+name: Windows config ACL gate
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/install.ps1'
+      - 'scripts/jht-wrapper.ps1'
+      - 'scripts/windows-config-acl-selftest.ps1'
+      - '.github/workflows/windows-config-acl.yml'
+jobs:
+  acl:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Host ACL and fail-closed wrapper selftest
+        shell: pwsh
+        run: ./scripts/windows-config-acl-selftest.ps1
