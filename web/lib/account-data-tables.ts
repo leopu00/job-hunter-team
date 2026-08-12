@@ -62,6 +62,7 @@ export const CASCADE_TABLES = [
   "team_state",
   "team_state_history",
   "user_onboarding_state",
+  "user_settings",
   "user_to_agent_messages",
 ] as const;
 
