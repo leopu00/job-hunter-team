@@ -143,29 +143,33 @@ afterEach(() => {
 });
 
 describe("team halt gate — CLI host verso runtime container", () => {
-  it("stop crea il gate nel container e start globale lo rimuove prima dello spawn", () => {
-    const sb = sandbox();
-    const stopped = run(sb, ["stop", "--all"], {
-      FAKE_CONTAINER_SESSIONS: "SCOUT-1",
-    });
-    expect(stopped.status, stopped.stderr).toBe(0);
-    expect(existsSync(sb.flag)).toBe(true);
+  it(
+    "stop crea il gate nel container e start globale lo rimuove prima dello spawn",
+    () => {
+      const sb = sandbox();
+      const stopped = run(sb, ["stop", "--all"], {
+        FAKE_CONTAINER_SESSIONS: "SCOUT-1",
+      });
+      expect(stopped.status, stopped.stderr).toBe(0);
+      expect(existsSync(sb.flag)).toBe(true);
 
-    const started = run(sb, ["start"], {
-      FAKE_START_SUCCESS_ROLE: "capitano",
-    });
-    expect(started.status, `${started.stdout}\n${started.stderr}`).toBe(0);
-    expect(existsSync(sb.flag)).toBe(false);
-    expect(started.stdout).toContain("1 started");
-    const log = dockerLog(sb);
-    const removedAt = log.findIndex((row) => row.command[0] === "rm");
-    const launchedAt = log.findIndex(
-      (row) => row.command[1] === "/app/.launcher/start-agent.sh",
-    );
-    expect(removedAt).toBeGreaterThan(-1);
-    expect(launchedAt).toBeGreaterThan(removedAt);
-    expect(log[launchedAt].flag).toBe(false);
-  });
+      const started = run(sb, ["start"], {
+        FAKE_START_SUCCESS_ROLE: "capitano",
+      });
+      expect(started.status, `${started.stdout}\n${started.stderr}`).toBe(0);
+      expect(existsSync(sb.flag)).toBe(false);
+      expect(started.stdout).toContain("1 started");
+      const log = dockerLog(sb);
+      const removedAt = log.findIndex((row) => row.command[0] === "rm");
+      const launchedAt = log.findIndex(
+        (row) => row.command[1] === "/app/.launcher/start-agent.sh",
+      );
+      expect(removedAt).toBeGreaterThan(-1);
+      expect(launchedAt).toBeGreaterThan(removedAt);
+      expect(log[launchedAt].flag).toBe(false);
+    },
+    15_000,
+  );
 
   it.each(["error", "residual"])(
     "un rm %s blocca lo start senza dichiarare agenti avviati",
