@@ -5,6 +5,12 @@ function Protect-JhtHomeAcl {
   foreach ($node in $nodes) {
     $acl = Get-Acl -LiteralPath $node.FullName
     $acl.SetAccessRuleProtection($true, $false)
+    foreach ($existing in @($acl.Access)) {
+      if ($existing.AccessControlType -eq 'Allow' -and $existing.IdentityReference.Value -ne $owner -and
+          $existing.IdentityReference.Value -notin @('NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators')) {
+        [void]$acl.RemoveAccessRule($existing)
+      }
+    }
     $inherit = if ($node.PSIsContainer) { 'ContainerInherit,ObjectInherit' } else { 'None' }
     $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($owner, 'FullControl', $inherit, 'None', 'Allow')
     $acl.SetAccessRule($rule)
