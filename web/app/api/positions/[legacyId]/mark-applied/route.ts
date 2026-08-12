@@ -16,11 +16,10 @@ export const dynamic = "force-dynamic";
 // continuava a trattare la posizione come da lavorare — scriveva CV, la
 // riproponeva, spendeva token su qualcosa di già fatto.
 //
-// Nessuna migrazione: il modello c'era già e non veniva raggiunto dal web.
-// `positions.status` ammette 'applied' (CHECK in _db.py) e `applications` ha
-// applied / applied_at / applied_via. Quest'ultimo è il campo che distingue
-// CHI ha mandato la candidatura, ed è l'informazione che serve al team per
-// non rifare il lavoro.
+// Il modello c'era già e non veniva raggiunto dal web: `positions.status`
+// ammette 'applied' e `applications` ha applied / applied_at / applied_via.
+// Da O-73 anche il cloud li scrive insieme tramite RPC: quest'ultimo campo
+// distingue CHI ha mandato la candidatura e impedisce al team di rifarla.
 
 /** Chi ha inviato: l'utente a mano, o il team. */
 const APPLIED_VIA_USER = "user_manual";
@@ -53,6 +52,56 @@ interface AppliedOutcome {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+/** Il risultato dell'RPC è la verità persistita, non un timestamp inventato. */
+function cloudOutcome(data: unknown): AppliedOutcome | null {
+  if (!data || typeof data !== "object") return null;
+  const value = data as Partial<AppliedOutcome>;
+  if (
+    typeof value.id !== "string" ||
+    typeof value.status !== "string" ||
+    typeof value.applied_at !== "string" ||
+    typeof value.applied_via !== "string"
+  ) {
+    return null;
+  }
+  return value as AppliedOutcome;
+}
+
+function cloudUndoOutcome(data: unknown): AppliedOutcome | null {
+  if (!data || typeof data !== "object") return null;
+  const value = data as Partial<AppliedOutcome>;
+  if (
+    typeof value.id !== "string" ||
+    typeof value.status !== "string" ||
+    value.applied_at !== null ||
+    value.applied_via !== null
+  ) {
+    return null;
+  }
+  return value as AppliedOutcome;
+}
+
+function rpcFailure(
+  message: string,
+  legacyId: number,
+): StepResult<AppliedOutcome> {
+  if (message.includes("position_not_found")) {
+    return {
+      ok: false,
+      status: 404,
+      body: { error: `Posizione #${legacyId} non trovata` },
+    };
+  }
+  if (message.includes("not_applied")) {
+    return { ok: false, status: 409, body: { error: "not_applied" } };
+  }
+  if (message.includes("applied_by_team")) {
+    return { ok: false, status: 409, body: { error: "applied_by_team" } };
+  }
+  console.error(`[positions/mark-applied] RPC failed: ${message}`);
+  return { ok: false, status: 500, body: { error: "update_failed" } };
 }
 
 export async function POST(
@@ -91,10 +140,9 @@ export async function POST(
 
     local: (db): StepResult<AppliedOutcome> => {
       const row = db
-        .prepare<
-          [number],
-          { id: number; status: string | null }
-        >("SELECT id, status FROM positions WHERE id = ?")
+        .prepare<[number], { id: number; status: string | null }>(
+          "SELECT id, status FROM positions WHERE id = ?",
+        )
         .get(legacyId);
       if (!row) {
         return {
@@ -151,58 +199,32 @@ export async function POST(
     },
 
     mirror: async (supabase, userId, outcome) => {
-      const { error } = await supabase
-        .from("positions")
-        .update({ status: "applied", last_actor: "user" })
-        .eq("user_id", userId)
-        .eq("legacy_id", legacyId);
+      const { error } = await supabase.rpc("mark_position_applied", {
+        p_position_legacy_id: legacyId,
+        p_applied_at: outcome.applied_at,
+        p_applied_via: outcome.applied_via,
+        p_note: note,
+      });
       if (error) throw new Error(error.message);
-      void outcome;
+      void userId;
     },
 
     cloud: async (supabase, userId): Promise<StepResult<AppliedOutcome>> => {
-      const { data: row, error } = await supabase
-        .from("positions")
-        .select("status")
-        .eq("user_id", userId)
-        .eq("legacy_id", legacyId)
-        .maybeSingle();
-      if (error) {
-        console.error(`[positions/mark-applied] 500 ${error.message}`);
-        return { ok: false, status: 500, body: { error: "query_failed" } };
-      }
-      if (!row) {
-        return {
-          ok: false,
-          status: 404,
-          body: { error: `Posizione #${legacyId} non trovata` },
-        };
-      }
-
       const appliedAt = nowIso();
-      const { error: upErr } = await supabase
-        .from("positions")
-        .update({ status: "applied", last_actor: "user" })
-        .eq("user_id", userId)
-        .eq("legacy_id", legacyId);
-      if (upErr) {
-        return {
-          ok: false,
-          status: 500,
-          body: { error: `Supabase update failed: ${upErr.message}` },
-        };
+      const { data, error } = await supabase.rpc("mark_position_applied", {
+        p_position_legacy_id: legacyId,
+        p_applied_at: appliedAt,
+        p_applied_via: APPLIED_VIA_USER,
+        p_note: note,
+      });
+      if (error) {
+        return rpcFailure(error.message, legacyId);
       }
-      // A box spento `applications` locale non esiste: lo stato torna
-      // completo quando il box si risincronizza e vede status='applied'.
-      return {
-        ok: true,
-        outcome: {
-          id: String(legacyId),
-          status: "applied",
-          applied_at: appliedAt,
-          applied_via: APPLIED_VIA_USER,
-        },
-      };
+      const outcome = cloudOutcome(data);
+      if (!outcome)
+        return { ok: false, status: 500, body: { error: "invalid_result" } };
+      void userId;
+      return { ok: true, outcome };
     },
   });
 }
@@ -247,10 +269,9 @@ export async function DELETE(
 
     local: (db): StepResult<AppliedOutcome> => {
       const row = db
-        .prepare<
-          [number],
-          { id: number; status: string | null }
-        >("SELECT id, status FROM positions WHERE id = ?")
+        .prepare<[number], { id: number; status: string | null }>(
+          "SELECT id, status FROM positions WHERE id = ?",
+        )
         .get(legacyId);
       if (!row) {
         return {
@@ -301,10 +322,9 @@ export async function DELETE(
         .get(legacyId);
       const hasScore =
         db
-          .prepare<
-            [number],
-            { n: number }
-          >("SELECT COUNT(*) AS n FROM scores WHERE position_id = ?")
+          .prepare<[number], { n: number }>(
+            "SELECT COUNT(*) AS n FROM scores WHERE position_id = ?",
+          )
           .get(legacyId)?.n ?? 0;
       const restored =
         previous?.from_state ??
@@ -344,77 +364,27 @@ export async function DELETE(
       };
     },
 
-    mirror: async (supabase, userId, outcome) => {
-      const { error } = await supabase
-        .from("positions")
-        .update({ status: outcome.status, last_actor: "user" })
-        .eq("user_id", userId)
-        .eq("legacy_id", legacyId);
+    mirror: async (supabase, userId) => {
+      const { error } = await supabase.rpc("undo_manual_position_application", {
+        p_position_legacy_id: legacyId,
+      });
       if (error) throw new Error(error.message);
+      void userId;
     },
 
     cloud: async (supabase, userId): Promise<StepResult<AppliedOutcome>> => {
-      const { data: row, error } = await supabase
-        .from("positions")
-        .select("status")
-        .eq("user_id", userId)
-        .eq("legacy_id", legacyId)
-        .maybeSingle();
+      const { data, error } = await supabase.rpc(
+        "undo_manual_position_application",
+        { p_position_legacy_id: legacyId },
+      );
       if (error) {
-        console.error(`[positions/mark-applied DELETE] 500 ${error.message}`);
-        return { ok: false, status: 500, body: { error: "query_failed" } };
+        return rpcFailure(error.message, legacyId);
       }
-      if (!row) {
-        return {
-          ok: false,
-          status: 404,
-          body: { error: `Posizione #${legacyId} non trovata` },
-        };
-      }
-      if (row.status !== "applied") {
-        return {
-          ok: false,
-          status: 409,
-          body: { error: "not_applied", status: row.status },
-        };
-      }
-
-      // Stessa fonte del ramo locale: `position_transitions` è la copia
-      // sincronizzata dal box (mig 044), quindi la risposta è la stessa da
-      // qualunque dispositivo la si chieda.
-      const { data: prev } = await supabase
-        .from("position_transitions")
-        .select("from_state, ts")
-        .eq("user_id", userId)
-        .eq("position_legacy_id", legacyId)
-        .eq("to_state", "applied")
-        .eq("by_agent", "user")
-        .order("ts", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const restored = prev?.from_state ?? FALLBACK_STATE;
-
-      const { error: upErr } = await supabase
-        .from("positions")
-        .update({ status: restored, last_actor: "user" })
-        .eq("user_id", userId)
-        .eq("legacy_id", legacyId);
-      if (upErr) {
-        return {
-          ok: false,
-          status: 500,
-          body: { error: `Supabase update failed: ${upErr.message}` },
-        };
-      }
-      return {
-        ok: true,
-        outcome: {
-          id: String(legacyId),
-          status: restored,
-          applied_at: null,
-          applied_via: null,
-        },
-      };
+      const outcome = cloudUndoOutcome(data);
+      if (!outcome)
+        return { ok: false, status: 500, body: { error: "invalid_result" } };
+      void userId;
+      return { ok: true, outcome };
     },
   });
 }

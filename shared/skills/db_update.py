@@ -596,6 +596,17 @@ def update_application(args):
         args.applied.lower() in ('true', '1', 'yes')
         if args.applied is not None else False
     )
+    if args.applied is not None and not applied_flag:
+        # Il flag da solo non sa a quale stato operativo tornare e lascerebbe
+        # applied_at/applied_via sospesi. L'undo web usa invece transizione e
+        # fatti disponibili, nella stessa transazione dei tre campi.
+        print(
+            "⚠️  APPLIED UNDO REJECTED: use the manual-application undo "
+            "action so position and application are restored atomically.",
+            file=sys.stderr,
+        )
+        conn.close()
+        sys.exit(1)
     marks_applied = bool(
         args.status == 'applied' or args.applied_at or applied_flag
     )

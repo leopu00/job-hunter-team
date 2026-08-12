@@ -29,6 +29,18 @@ def update_position(args):
     conn = get_db()
     ensure_schema(conn)
 
+    # `applied` richiede anche la candidatura completa. Questo comando non
+    # riceve timestamp e canale: fallisce chiuso invece di creare due verità.
+    if args.status == 'applied':
+        print(
+            "⚠️  APPLIED REJECTED: use `db_update.py application <ID> "
+            "--applied-at now --applied-via <channel>` so position and "
+            "application are updated atomically.",
+            file=sys.stderr,
+        )
+        conn.close()
+        sys.exit(1)
+
     updates = []
     params = []
     changed = []  # campi leggibili per output
@@ -181,6 +193,43 @@ def update_application(args):
     conn = get_db()
     ensure_schema(conn)
 
+    applied_flag = (
+        args.applied.lower() in ('true', '1', 'yes')
+        if args.applied is not None else False
+    )
+    if args.applied is not None and not applied_flag:
+        print(
+            "⚠️  APPLIED UNDO REJECTED: use the manual-application undo "
+            "action so position and application are restored atomically.",
+            file=sys.stderr,
+        )
+        conn.close()
+        sys.exit(1)
+    marks_applied = bool(
+        args.status == 'applied' or args.applied_at or applied_flag
+    )
+    if marks_applied:
+        if not (args.applied_via or '').strip():
+            print(
+                "⚠️  APPLIED REJECTED: --applied-via is required whenever "
+                "an application is marked as sent.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+        args.status = 'applied'
+        args.applied_at = args.applied_at or 'now'
+        if not conn.execute(
+            "SELECT 1 FROM positions WHERE id = ?", (args.position_id,)
+        ).fetchone():
+            print(
+                f"⚠️  position_id={args.position_id} does not exist in "
+                "positions. Aborting application update.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+
     updates = []
     params = []
 
@@ -210,8 +259,11 @@ def update_application(args):
             updates.append("written_at = ?")
             params.append(args.written_at)
     if args.applied_at:
-        updates.append("applied_at = ?")
-        params.append(args.applied_at)
+        if args.applied_at == 'now':
+            updates.append("applied_at = datetime('now', 'localtime')")
+        else:
+            updates.append("applied_at = ?")
+            params.append(args.applied_at)
         # Auto-cascade: se si setta applied_at, segna anche applied=1
         updates.append("applied = 1")
     if args.applied_via:
@@ -252,14 +304,56 @@ def update_application(args):
     params.append(args.position_id)
     cursor = conn.execute(f"UPDATE applications SET {', '.join(updates)} WHERE position_id = ?", params)
     if cursor.rowcount == 0:
-        print(f"⚠️  ERRORE: nessuna application trovata per position_id={args.position_id}!")
-        print(f"   Hai forse usato l'application ID invece del position_id?")
-        print(f"   Uso corretto: db_update.py application <POSITION_ID> --critic-score ...")
-        conn.close()
-        return
+        if not marks_applied:
+            print(f"⚠️  ERRORE: nessuna application trovata per position_id={args.position_id}!")
+            print("   Hai forse usato l'application ID invece del position_id?")
+            print("   Uso corretto: db_update.py application <POSITION_ID> --critic-score ...")
+            conn.close()
+            return
+        # Il primo invio deve poter creare la riga applications; gli stessi
+        # campi dell'UPDATE diventano colonne dell'INSERT senza trasformare
+        # datetime('now') nella stringa letterale "now".
+        ins_cols = ['position_id']
+        ins_vals = [args.position_id]
+        ins_placeholders = ['?']
+        for clause, val in _zip_set_clauses(updates, params[:-1]):
+            col, rhs = (part.strip() for part in clause.split('=', 1))
+            ins_cols.append(col)
+            ins_placeholders.append(rhs)
+            if rhs == '?':
+                ins_vals.append(val)
+        if 'written_at' not in ins_cols:
+            ins_cols.append('written_at')
+            ins_placeholders.append("datetime('now', 'localtime')")
+        conn.execute(
+            f"INSERT INTO applications ({', '.join(ins_cols)}) "
+            f"VALUES ({', '.join(ins_placeholders)})",
+            ins_vals,
+        )
+
+    if marks_applied:
+        # UPDATE application + position restano nella transazione implicita:
+        # un errore del secondo statement annulla anche il primo.
+        conn.execute(
+            "UPDATE positions SET status = 'applied', last_actor = ? "
+            "WHERE id = ?",
+            (os.environ.get('JHT_AGENT_NAME') or 'user', args.position_id),
+        )
     conn.commit()
     print(f"Application per posizione {args.position_id} aggiornata ({cursor.rowcount} riga)")
     conn.close()
+
+
+def _zip_set_clauses(set_clauses, params):
+    """Abbina ogni placeholder `?` al parametro che consuma."""
+    pi = 0
+    for clause in set_clauses:
+        rhs = clause.split('=', 1)[1].strip()
+        if rhs == '?':
+            yield clause, params[pi]
+            pi += 1
+        else:
+            yield clause, None
 
 
 def main():
