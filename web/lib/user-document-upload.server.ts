@@ -57,6 +57,16 @@ export async function saveUserDocument(file: File): Promise<SavedUserDocument> {
     );
   }
 
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(await file.arrayBuffer());
+  } catch {
+    throw new UserDocumentUploadError(`${file.name}: file non leggibile`);
+  }
+  if (bytes.length !== file.size) {
+    throw new UserDocumentUploadError(`${file.name}: lettura incompleta`);
+  }
+
   fs.mkdirSync(JHT_USER_UPLOADS_DIR, { recursive: true });
   const destination = path.join(JHT_USER_UPLOADS_DIR, safeName);
   const flags =
@@ -67,7 +77,6 @@ export async function saveUserDocument(file: File): Promise<SavedUserDocument> {
   let descriptor: number | null = null;
   try {
     descriptor = fs.openSync(destination, flags, 0o644);
-    const bytes = Buffer.from(await file.arrayBuffer());
     fs.writeFileSync(descriptor, bytes);
   } catch {
     throw new UserDocumentUploadError(`${file.name}: errore di scrittura`);

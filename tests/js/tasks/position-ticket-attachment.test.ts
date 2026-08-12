@@ -56,6 +56,7 @@ vi.mock("next/headers", () => ({
 const { POST: openTicket } =
   await import("@/app/api/positions/[legacyId]/ticket/route");
 const { POST: profileUpload } = await import("@/app/api/profile/upload/route");
+const { saveUserDocument } = await import("@/lib/user-document-upload.server");
 
 function ticketRequest(file: File) {
   const form = new FormData();
@@ -108,6 +109,29 @@ describe("allegato ticket web sul trasporto documenti esistente", () => {
     expect(
       db.prepare("SELECT COUNT(*) AS n FROM position_tickets").get(),
     ).toMatchObject({ n: 0 });
+  });
+
+  it("una lettura fallita non tronca un file omonimo già salvato", async () => {
+    const uploads = join(userDir, "allegati");
+    const first = new FormData();
+    first.append("files", new File(["original"], "brief.pdf"));
+    await profileUpload(
+      new Request("http://localhost/api/profile/upload", {
+        method: "POST",
+        body: first,
+      }) as never,
+    );
+    const unreadable = new File(["replacement"], "brief.pdf");
+    Object.defineProperty(unreadable, "arrayBuffer", {
+      value: async () => {
+        throw new Error("synthetic read failure");
+      },
+    });
+
+    await expect(saveUserDocument(unreadable)).rejects.toThrow(
+      "file non leggibile",
+    );
+    expect(readFileSync(join(uploads, "brief.pdf"), "utf8")).toBe("original");
   });
 
   it("anche il profilo passa dallo stesso writer", async () => {
