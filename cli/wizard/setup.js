@@ -201,8 +201,8 @@ export async function runSetupWizard(prompter) {
     || selectedProvider.models[0].value;
 
   // Telegram: chiesto inline solo se VPS (vedi step post-config).
-  // Su locale, la dashboard del browser e' raggiungibile e Telegram
-  // diventa opzionale → si configura dopo con `jht config`.
+  // Su locale l'app nativa controlla direttamente il team e Telegram
+  // resta opzionale → si configura dopo con `jht config`.
   let telegramChannel = baseConfig.channels?.telegram || undefined;
 
   // --- Working hours: orari di lavoro del team (distribuzione weekly) ---

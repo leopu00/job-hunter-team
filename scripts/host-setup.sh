@@ -246,12 +246,12 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
     DEFAULT_NUM=1
   fi
   printf "\n%s\n\n" "$(ts host_setup.where_running 'Where are you running JHT?')"
-  printf "  1) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.local.title 'Local computer')"
-  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.local.line1 'You are using JHT on your own PC, accessible only to you on the local network.')"
-  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.local.line2 'The web dashboard opens automatically.')"
-  printf "  2) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.vps.title 'Remote server / VPS')"
-  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.vps.line1 'JHT runs on a cloud server reachable via public IP.')"
-  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.vps.line2 'Extra steps are needed to expose the dashboard securely.')"
+  printf "  1) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.local.title 'Local PC')"
+  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.local.line1 'The full team runs on this PC; keep it awake with Docker running while the team works.')"
+  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.local.line2 'Shortest guided path; no VPS or cloud account required.')"
+  printf "  2) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.vps.title 'VPS / remote server')"
+  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.vps.line1 'The team runs on a remote Linux server over SSH and can continue when this PC is off.')"
+  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.vps.line2 'You provide and administer the server and its SSH access.')"
   printf "%s [%d]: " "$(ts host_setup.choice_prompt 'Choice')" "$DEFAULT_NUM"
   read -r CHOICE
   case "$CHOICE" in
