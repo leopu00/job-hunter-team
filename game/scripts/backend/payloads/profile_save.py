@@ -1,5 +1,30 @@
 import json, base64, re, shutil, time, yaml
 data = json.loads(base64.b64decode('%s').decode('utf-8'))
+TARGET_ROLE_SPECIALTIES = {
+    'software': {'backend', 'frontend', 'fullstack', 'platform', 'embedded', 'open'},
+    'data': {'data_science', 'ml', 'genai', 'data_engineering', 'research', 'open'},
+    'product': {'product', 'project', 'technical_pm', 'delivery', 'founder'},
+    'design': {'specialist', 'generalist', 'leadership', 'individual', 'explore'},
+    'business': {'specialist', 'generalist', 'leadership', 'individual', 'explore'},
+    'security': {'specialist', 'generalist', 'leadership', 'individual', 'explore'},
+    'other': {'specialist', 'generalist', 'leadership', 'individual', 'explore'},
+}
+category = data.get('target_role_category_id')
+specialty = data.get('target_specialty')
+if category is not None:
+    category = str(category).strip()
+    if category not in TARGET_ROLE_SPECIALTIES:
+        print(json.dumps(dict(ok=False, error='invalid target role category')))
+        raise SystemExit(2)
+    if specialty is not None:
+        specialty = str(specialty).strip()
+        if specialty not in TARGET_ROLE_SPECIALTIES[category]:
+            print(json.dumps(dict(ok=False, error='invalid target role specialty')))
+            raise SystemExit(2)
+else:
+    # Stato wizard legacy: prima questo campo non entrava nel profilo. Senza
+    # categoria non gli inventiamo ora un significato o una migrazione.
+    specialty = None
 path = '/jht_home/profile/candidate_profile.yml'
 try:
     prof = yaml.safe_load(open(path)) or {}
@@ -24,6 +49,10 @@ for key in ['name', 'email', 'target_role', 'location', 'experience_years',
             except ValueError:
                 pass
         prof[key] = v
+if category is not None:
+    prof['target_role_category_id'] = category
+    if specialty is not None:
+        prof['target_specialty'] = specialty
 if 'skills_primary' in data:
     skills = [s.strip() for s in str(data['skills_primary']).split(',') if s.strip()]
     prof.setdefault('skills', {})['primary'] = skills

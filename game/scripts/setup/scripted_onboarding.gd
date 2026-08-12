@@ -17,12 +17,28 @@ signal resumed
 const SAVE_PATH := "user://guided_onboarding.cfg"
 const CONTEXT_JSON_PATH := "user://onboarding_context.json"
 const CONTEXT_MARKDOWN_PATH := "user://onboarding_context.md"
-const CONTEXT_SCHEMA_VERSION := 2
+const CONTEXT_SCHEMA_VERSION := 3
 const AGENTS := ["assistente", "coordinatore", "mentor"]
 const PROFILE_CONTEXT_FIELDS := ["name", "email", "target_role", "location",
 		"experience_years", "seniority_target", "industry", "nationality",
 		"skills_primary", "languages", "salary_min", "salary_max",
-		"salary_currency"]
+		"salary_currency", "target_role_category_id"]
+## Gli ID sono dati; le label vivono soltanto nelle chiavi
+## `onb.a.role.<id>`. Vedi il contratto forward-only del 2026-08-12.
+const TARGET_ROLE_CATEGORY_IDS := [
+	"software", "data", "product", "design", "business", "security", "other",
+]
+## Sola lettura per riprendere un wizard già fermo al passo specialty. Non
+## viene mai usata per riscrivere target_role o inventare il nuovo campo.
+const LEGACY_TARGET_ROLE_CATEGORIES := {
+	"Software Engineering": "software",
+	"Data / AI": "data",
+	"Product / Project Management": "product",
+	"Design / UX": "design",
+	"Business / Operations": "business",
+	"Security / Infrastructure": "security",
+	"Da definire / multidisciplinare": "other",
+}
 
 var _steps := {
 	"assistente": "intro", "coordinatore": "intro", "mentor": "intro",
@@ -209,6 +225,21 @@ func answers() -> Array:
 	return _answers.duplicate(true)
 
 
+## Le label servono alla cronologia visibile, non al modello. I record legacy
+## le conservano nel config locale, ma l'export strutturato del topic ruolo le
+## rimuove e lascia il `value` canonico.
+func _model_answers() -> Array:
+	var out: Array = []
+	for item in _answers:
+		if not item is Dictionary:
+			continue
+		var clean: Dictionary = item.duplicate(true)
+		if str(clean.get("step", "")) == "role":
+			clean.erase("label")
+		out.append(clean)
+	return out
+
+
 func context_json_path() -> String:
 	var path := TutorialHarness.CONTEXT_JSON if TutorialHarness.enabled() else CONTEXT_JSON_PATH
 	return ProjectSettings.globalize_path(path)
@@ -225,7 +256,7 @@ func llm_context() -> Dictionary:
 		"updated_at": Time.get_datetime_string_from_system(false, true),
 		"profile": _draft.duplicate(true),
 		"preferences": _preferences.duplicate(true),
-		"answers": _answers.duplicate(true),
+		"answers": _model_answers(),
 		"onboarding_complete": _completed.duplicate(true),
 		"provider_preference": _provider_choice,
 	}
@@ -248,7 +279,7 @@ func llm_context_text() -> String:
 			lines.append("- %s: %s" % [str(key), _display_value(_preferences[key])])
 	if not _answers.is_empty():
 		lines.append("\n## Risposte onboarding")
-		for item in _answers:
+		for item in _model_answers():
 			if item is Dictionary:
 				lines.append("- [%s/%s] %s" % [str(item.get("agent", "")),
 						str(item.get("topic", item.get("step", ""))),
@@ -494,8 +525,8 @@ func _assistant_options(step: String) -> Array:
 
 
 func _assistant_specialty_options() -> Array:
-	match str(_draft.get("target_role", "")):
-		"Software Engineering": return _opts([
+	match _target_role_category_id():
+		"software": return _opts([
 			["backend", UIStrings.t("onb.a.spec.sw.backend")],
 			["frontend", UIStrings.t("onb.a.spec.sw.frontend")],
 			["fullstack", UIStrings.t("onb.a.spec.sw.fullstack")],
@@ -503,7 +534,7 @@ func _assistant_specialty_options() -> Array:
 			["embedded", UIStrings.t("onb.a.spec.sw.embedded")],
 			["open", UIStrings.t("onb.a.spec.sw.open")],
 		])
-		"Data / AI": return _opts([
+		"data": return _opts([
 			["data_science", UIStrings.t("onb.a.spec.data.data_science")],
 			["ml", UIStrings.t("onb.a.spec.data.ml")],
 			["genai", UIStrings.t("onb.a.spec.data.genai")],
@@ -511,7 +542,7 @@ func _assistant_specialty_options() -> Array:
 			["research", UIStrings.t("onb.a.spec.data.research")],
 			["open", UIStrings.t("onb.a.spec.data.open")],
 		])
-		"Product / Project Management": return _opts([
+		"product": return _opts([
 			["product", UIStrings.t("onb.a.spec.pm.product")],
 			["project", UIStrings.t("onb.a.spec.pm.project")],
 			["technical_pm", UIStrings.t("onb.a.spec.pm.technical_pm")],
@@ -527,6 +558,14 @@ func _assistant_specialty_options() -> Array:
 	])
 
 
+func _target_role_category_id() -> String:
+	var category := str(_draft.get("target_role_category_id", ""))
+	if TARGET_ROLE_CATEGORY_IDS.has(category):
+		return category
+	return str(LEGACY_TARGET_ROLE_CATEGORIES.get(
+			str(_draft.get("target_role", "")), ""))
+
+
 func _choose_assistant(id: String) -> void:
 	match str(_steps["assistente"]):
 		"intro":
@@ -540,11 +579,10 @@ func _choose_assistant(id: String) -> void:
 				_reply("assistente", UIStrings.t("onb.a.intro.reply_start"))
 				_steps["assistente"] = "role"
 		"role":
-			var roles := {"software": "Software Engineering", "data": "Data / AI",
-					"product": "Product / Project Management", "design": "Design / UX",
-					"business": "Business / Operations", "security": "Security / Infrastructure",
-					"other": "Da definire / multidisciplinare"}
-			_draft["target_role"] = roles.get(id, "Da definire")
+			if not TARGET_ROLE_CATEGORY_IDS.has(id):
+				return
+			_draft["target_role_category_id"] = id
+			_preferences.erase("target_specialty")
 			_reply("assistente", UIStrings.t("onb.a.role.reply"))
 			_steps["assistente"] = "specialty"
 		"specialty":
@@ -1024,6 +1062,7 @@ func _save_state() -> void:
 	# Anche il selftest del tour salva preferenze e nome: mai sporcare il
 	# config reale della macchina di sviluppo.
 	if OS.get_environment("JHT_GUIDED_TEST") == "1" \
+			or OS.get_environment("JHT_TARGET_ROLE_CATEGORY_TEST") == "1" \
 			or OS.get_environment("JHT_TOUR_TEST") == "1":
 		return
 	var cfg := ConfigFile.new()
@@ -1060,7 +1099,8 @@ func _export_context() -> void:
 
 
 func _load_state() -> void:
-	if OS.get_environment("JHT_GUIDED_TEST") == "1":
+	if OS.get_environment("JHT_GUIDED_TEST") == "1" \
+			or OS.get_environment("JHT_TARGET_ROLE_CATEGORY_TEST") == "1":
 		return
 	var cfg := ConfigFile.new()
 	if cfg.load(_state_path()) != OK:

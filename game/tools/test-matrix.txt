@@ -176,6 +176,9 @@ backend_switch|run|gate|any|JHT_SCENE=office JHT_BACKEND_SWITCH_TEST=1|-|BACKEND
 doctor|run|gate|any|JHT_SCENE=office JHT_DOCTOR_TEST=scout-4|-|SIMULATION-DOCTOR-TEST PASS
 feedback_panel|run|gate|any|JHT_SCENE=office JHT_FEEDBACK_PANEL_TEST=1|-|FEEDBACK-PANEL-TEST PASS
 guided|run|gate|any|JHT_SCENE=office JHT_GUIDED_TEST=1|-|GUIDED-ONBOARDING-TEST PASS
+# Scelta ruolo del wizard: ID stabili nei dati/prompt, label soltanto UI e
+# compatibilità legacy in sola lettura, senza migrazione di target_role.
+target_role_category|run|gate|any|JHT_SCENE=office JHT_TARGET_ROLE_CATEGORY_TEST=1|-|TARGET-ROLE-CATEGORY-TEST PASS
 # L'uscita dall'onboarding guidato (O-14): che ESC e il pulsante del cassetto
 # chiudano davvero il giro invece di metterlo in pausa, che a giro chiuso le
 # chat guidate non emettano piu' reply ne' action sopra l'interfaccia, e che
