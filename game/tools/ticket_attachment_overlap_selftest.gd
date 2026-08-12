@@ -61,6 +61,26 @@ func _ready() -> void:
 		_fail("ticket non correlato al brief", backend)
 		return
 
+	# Ordine inverso: il ticket C possiede il trasporto; il wizard D deve
+	# fallire chiuso senza sottrarre né cambiare l'esito attestato di C.
+	var reverse := DelayedBackend.new()
+	BackendBus.set_backend(reverse)
+	BackendBus.create_position_ticket(88, "Leggi il ticket", "/tmp/ticket.pdf")
+	BackendBus.upload_user_document("/tmp/wizard-later.pdf")
+	if reverse.uploads.size() != 1 \
+			or reverse.uploads[0]["path"] != "/tmp/ticket.pdf" \
+			or not reverse.tickets.is_empty():
+		_fail("overlap inverso non fail-closed", reverse)
+		return
+	BackendBus.publish_document_upload(
+			int(reverse.uploads[0]["request_id"]), true,
+			"/jht_user/allegati/ticket.pdf", "")
+	if reverse.tickets.size() != 1 \
+			or reverse.tickets[0]["attachment_path"] \
+			!= "/jht_user/allegati/ticket.pdf":
+		_fail("ticket iniziale consumato dal wizard", reverse)
+		return
+
 	BackendBus.set_backend(null)
 	print("TICKET-ATTACHMENT-OVERLAP PASS")
 	get_tree().quit(0)

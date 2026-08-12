@@ -244,6 +244,20 @@ def test_upload_non_scrive_attraverso_un_symlink(area, tmp_path):
     assert outside.read_bytes() == b"originale"
 
 
+def test_upload_non_segue_la_directory_allegati_symlink(area, tmp_path):
+    """O_NOFOLLOW sul solo file finale non basta: anche la directory della
+    drop-zone deve essere aperta rispetto alla root già attestata."""
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    (area / "allegati").rmdir()
+    os.symlink(outside, area / "allegati")
+
+    out = artifact.upload("boundary.pdf", PDF)
+
+    assert not out["ok"]
+    assert not (outside / "boundary.pdf").exists()
+
+
 # ── la skill non può essere più permissiva del client desktop ──────────────
 
 def run_payload(roots, path, kind):

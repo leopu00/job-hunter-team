@@ -37,6 +37,45 @@ function safeFilename(name: string): string {
   return cleaned || "document";
 }
 
+function assertUploadDirectory(directoryDescriptor: number): void {
+  const held = fs.fstatSync(directoryDescriptor);
+  const current = fs.lstatSync(JHT_USER_UPLOADS_DIR);
+  if (
+    !held.isDirectory() ||
+    !current.isDirectory() ||
+    current.isSymbolicLink() ||
+    held.dev !== current.dev ||
+    held.ino !== current.ino
+  ) {
+    throw new Error("upload directory changed");
+  }
+}
+
+/**
+ * Apre la drop-zone senza seguire il componente `allegati`. Il descriptor
+ * resta vivo fino a scrittura conclusa e viene confrontato prima e dopo
+ * l'apertura del file: un cambio di directory non può diventare un successo.
+ */
+function openUploadDirectory(): number {
+  fs.mkdirSync(path.dirname(JHT_USER_UPLOADS_DIR), { recursive: true });
+  try {
+    fs.mkdirSync(JHT_USER_UPLOADS_DIR, { mode: 0o755 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+  }
+  const descriptor = fs.openSync(
+    JHT_USER_UPLOADS_DIR,
+    fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW,
+  );
+  try {
+    assertUploadDirectory(descriptor);
+    return descriptor;
+  } catch (error) {
+    fs.closeSync(descriptor);
+    throw error;
+  }
+}
+
 /**
  * Trasporto web verso la stessa drop-zone di artifact.py e del desktop.
  * O_NOFOLLOW impedisce che una collisione con un symlink scriva fuori
@@ -67,7 +106,6 @@ export async function saveUserDocument(file: File): Promise<SavedUserDocument> {
     throw new UserDocumentUploadError(`${file.name}: lettura incompleta`);
   }
 
-  fs.mkdirSync(JHT_USER_UPLOADS_DIR, { recursive: true });
   const destination = path.join(JHT_USER_UPLOADS_DIR, safeName);
   const flags =
     fs.constants.O_WRONLY |
@@ -75,13 +113,17 @@ export async function saveUserDocument(file: File): Promise<SavedUserDocument> {
     fs.constants.O_TRUNC |
     fs.constants.O_NOFOLLOW;
   let descriptor: number | null = null;
+  let directoryDescriptor: number | null = null;
   try {
+    directoryDescriptor = openUploadDirectory();
     descriptor = fs.openSync(destination, flags, 0o644);
+    assertUploadDirectory(directoryDescriptor);
     fs.writeFileSync(descriptor, bytes);
   } catch {
     throw new UserDocumentUploadError(`${file.name}: errore di scrittura`);
   } finally {
     if (descriptor !== null) fs.closeSync(descriptor);
+    if (directoryDescriptor !== null) fs.closeSync(directoryDescriptor);
   }
 
   return {

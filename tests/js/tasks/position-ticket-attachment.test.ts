@@ -1,5 +1,11 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -132,6 +138,22 @@ describe("allegato ticket web sul trasporto documenti esistente", () => {
       "file non leggibile",
     );
     expect(readFileSync(join(uploads, "brief.pdf"), "utf8")).toBe("original");
+  });
+
+  it("non segue un symlink della directory allegati", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "jht-ticket-file-outside-"));
+    const uploads = join(userDir, "allegati");
+    rmSync(uploads, { recursive: true, force: true });
+    symlinkSync(outside, uploads, "dir");
+    try {
+      await expect(
+        saveUserDocument(new File(["synthetic"], "boundary.pdf")),
+      ).rejects.toThrow("errore di scrittura");
+      expect(existsSync(join(outside, "boundary.pdf"))).toBe(false);
+    } finally {
+      rmSync(uploads, { force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 
   it("anche il profilo passa dallo stesso writer", async () => {
