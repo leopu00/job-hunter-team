@@ -9,6 +9,7 @@ the resolution order and pin both sides to the frozen v1 contract.
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 from pathlib import Path
 import subprocess
@@ -21,6 +22,9 @@ VPS_BACKEND = ROOT / "game" / "scripts" / "backend" / "vps_backend.gd"
 LANGUAGE_PAYLOAD = (
     ROOT / "game" / "scripts" / "backend" / "payloads" / "language_save.py"
 )
+SHARED_I18N = ROOT / "shared" / "i18n.py"
+SHARED_I18N_SH = ROOT / "shared" / "i18n.sh"
+WIZARD_I18N = ROOT / "cli" / "wizard" / "i18n.js"
 
 
 def _fake_jq(bin_dir: Path) -> None:
@@ -65,6 +69,76 @@ def test_agent_spawn_prefers_canonical_file_over_stale_bootstrap(tmp_path):
             "bash",
             "-c",
             'source ".launcher/spawn-lib.sh"; jht_spawn_user_locale',
+        ],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "fr"
+
+
+def _divergent_language_home(tmp_path: Path) -> Path:
+    home = tmp_path / "jht-home"
+    home.mkdir()
+    (home / "i18n-prefs.json").write_text(
+        json.dumps({"locale": "fr"}), encoding="utf-8"
+    )
+    (home / "host.env").write_text("JHT_LANG=it\n", encoding="utf-8")
+    return home
+
+
+def test_python_copy_resolver_prefers_the_canonical_file(tmp_path, monkeypatch):
+    home = _divergent_language_home(tmp_path)
+    monkeypatch.setenv("JHT_HOME", str(home))
+    monkeypatch.setenv("JHT_LANG", "en")
+    spec = importlib.util.spec_from_file_location("contract_i18n", SHARED_I18N)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    assert module.current_lang() == "fr"
+
+
+def test_shell_copy_resolver_prefers_the_canonical_file(tmp_path):
+    home = _divergent_language_home(tmp_path)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake_jq(bin_dir)
+    env = {
+        **os.environ,
+        "JHT_HOME": _bash_path(home),
+        "JHT_LANG": "en",
+        "PATH": f"{_bash_path(bin_dir)}:/usr/local/bin:/usr/bin:/bin",
+    }
+    result = subprocess.run(
+        ["bash", "-c", 'source "shared/i18n.sh"; _i18n_resolve_lang'],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "fr"
+
+
+def test_node_copy_resolver_prefers_the_canonical_file(tmp_path):
+    home = _divergent_language_home(tmp_path)
+    env = {**os.environ, "JHT_HOME": str(home), "JHT_LANG": "en"}
+    result = subprocess.run(
+        [
+            "node",
+            "--input-type=module",
+            "--eval",
+            f'import {{ currentLang }} from {json.dumps(WIZARD_I18N.as_uri())}; '
+            "process.stdout.write(currentLang());",
         ],
         cwd=ROOT,
         env=env,
