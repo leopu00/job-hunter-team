@@ -156,9 +156,9 @@ export async function runSetupWizard(prompter) {
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // STEP VPS-FIRST: prima di QUALSIASI scelta tecnica, blocca finche' non
-  // c'e' un account web + pairing. Senza account web il tester non puo'
-  // monitorare nulla dal browser, quindi il setup non ha senso.
+  // STEP VPS-FIRST: presenta subito la sincronizzazione web, ma non la usa
+  // come gate del runtime. Il team vive sul VPS e l'app lo controlla via SSH;
+  // account e dashboard copiano soltanto le superfici cloud supportate.
   // ────────────────────────────────────────────────────────────────────────
   const isVps = (process.env.JHT_HOST_TYPE || '').toLowerCase() === 'vps';
   if (isVps) {
@@ -170,10 +170,18 @@ export async function runSetupWizard(prompter) {
       t('wizard.cloud.pairing_body'),
       t('wizard.cloud.pairing_title'),
     );
-    const cloudOk = runJhtSubcommand(['cloud', 'login'], 'cloud login');
-    if (!cloudOk) {
-      await prompter.outro(t('wizard.cloud.pairing_failed'));
-      return;
+    const pairCloud = await prompter.confirm({
+      message: t('wizard.cloud.enable_prompt'),
+      initialValue: true,
+    });
+    if (pairCloud) {
+      const cloudOk = runJhtSubcommand(['cloud', 'login'], 'cloud login');
+      if (!cloudOk) {
+        await prompter.note(
+          t('wizard.cloud.pairing_failed'),
+          t('wizard.cloud.pairing_title'),
+        );
+      }
     }
   }
 
@@ -201,8 +209,8 @@ export async function runSetupWizard(prompter) {
     || selectedProvider.models[0].value;
 
   // Telegram: chiesto inline solo se VPS (vedi step post-config).
-  // Su locale, la dashboard del browser e' raggiungibile e Telegram
-  // diventa opzionale → si configura dopo con `jht config`.
+  // Su locale l'app nativa controlla direttamente il team e Telegram
+  // resta opzionale → si configura dopo con `jht config`.
   let telegramChannel = baseConfig.channels?.telegram || undefined;
 
   // --- Working hours: orari di lavoro del team (distribuzione weekly) ---
@@ -253,8 +261,8 @@ export async function runSetupWizard(prompter) {
   // STEP VPS-ONLY: Telegram bot — CONSIGLIATO ma OPZIONALE (2026-06-16)
   // Direction shift "interaction planes": l'interazione primaria passa al
   // desktop; Telegram diventa il canale async OPZIONALE. Niente piu' gate —
-  // l'utente puo' saltare e configurarlo dopo con `jht config`. (Il cloud
-  // pairing resta il gate VPS-first, fatto a inizio wizard; Telegram no.)
+  // l'utente puo' saltare e configurarlo dopo con `jht config`. Anche il cloud
+  // pairing proposto a inizio wizard resta facoltativo e separato dal runtime.
   // Telegram va dopo providers update perche' richiede solo input utente,
   // non risorse del container.
   // ────────────────────────────────────────────────────────────────────────

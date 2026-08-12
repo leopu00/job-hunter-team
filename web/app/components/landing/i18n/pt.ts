@@ -110,7 +110,7 @@ export const pt: Record<string, string> = {
   home_setup_kicker: "Execute-o",
   home_setup_title: "Como quiser, onde quiser",
   home_setup_body:
-    "Corre num computador dedicado sempre ligado ou numa VPS económica, e trabalha para ti dia e noite. Geres tudo a partir da app de ambiente de trabalho: inicias, paras e vigias a equipa com um clique. E não ficas preso a esse computador: pela web podes acompanhar os resultados e falar com a equipa também a partir de outro PC ou do telemóvel.",
+    "Começa no teu PC local: é o percurso completo mais simples e a equipa trabalha enquanto o PC, o Docker e a rede estiverem disponíveis. Para continuar quando esse PC estiver desligado, podes usar uma VPS fornecida e administrada por ti. A sincronização web é opcional e não decide onde a equipa é executada.",
   home_setup_cta: "Como executá-lo →",
   home_pricing_kicker: "Preços",
   home_pricing_title: "Código aberto. A plataforma é gratuita.",

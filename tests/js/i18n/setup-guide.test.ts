@@ -527,11 +527,7 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
       ],
       "activate-team": ["Activate the team"],
       "verify-team-working": ["Team active", "Assistant"],
-      "open-account-link": [
-        "Settings",
-        "Account and channels",
-        "CLOUD ACCOUNT — local / guest mode",
-      ],
+      "open-account-link": ["Settings", "Account and channels"],
     };
     for (const [phaseId, labels] of Object.entries(exactByPhase)) {
       for (const locale of LOCALES) {
@@ -542,6 +538,23 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
           ).toContain(label);
         }
       }
+    }
+
+    // Lo stato account non descrive più l'host del team: conserva comunque
+    // l'etichetta UI esatta, tradotta come nel catalogo nativo, in ogni lingua.
+    const disconnectedAccountLabel: Record<(typeof LOCALES)[number], string> = {
+      en: "CLOUD ACCOUNT — not connected",
+      it: "ACCOUNT CLOUD — non collegato",
+      es: "CUENTA CLOUD — no conectada",
+      fr: "COMPTE CLOUD — non connecté",
+      de: "CLOUD-KONTO — nicht verbunden",
+      pt: "CONTA CLOUD — não ligada",
+      hu: "FELHŐFIÓK — nincs csatlakoztatva",
+    };
+    for (const locale of LOCALES) {
+      expect(phases["open-account-link"].body[locale], locale).toContain(
+        disconnectedAccountLabel[locale],
+      );
     }
   });
 

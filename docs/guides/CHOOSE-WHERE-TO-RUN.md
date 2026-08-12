@@ -61,12 +61,11 @@ supported AI accounts without turning an old price into a deployment promise.
   the work. Review that provider's current terms and privacy policy.
 - **Cloud pairing is optional for the runtime and native setup path.** Without
   it, the team can still run on its host. With it, supported profile, job and
-  team records are synchronized to the hosted dashboard. There is one current
-  workflow exception: the interactive CLI setup wizard on a host marked as a
-  VPS requires `jht cloud login` before it completes. A cloud-free remote
-  runtime is implemented, but skipping pairing is not a path offered by that
-  wizard today. The dashboard is not a local web server and does not replace
-  the SSH connection.
+  team records are synchronized to the hosted dashboard. On a host marked as
+  a VPS, the interactive CLI wizard offers pairing before provider setup, but
+  it can be skipped; a failed `jht cloud login` also leaves provider setup free
+  to continue. Pairing can be retried later with the same command. The
+  dashboard is not a local web server and does not replace the SSH connection.
 - **Plan for the Docker image and persistent data.** No universal local disk
   minimum has been measured. Leave room for the image, runtime state, uploaded
   documents and generated application files, and monitor growth on every
