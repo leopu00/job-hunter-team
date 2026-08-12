@@ -14,6 +14,10 @@
 -- ║ necessario per la correttezza.                                           ║
 -- ╚══════════════════════════════════════════════════════════════════════════╝
 
+-- Il deploy SQL applica il file direttamente: sanatoria, funzione e
+-- privilegi devono entrare insieme oppure non entrare affatto.
+BEGIN;
+
 -- Sessioni già approvate: fino al riscatto il bearer non può vivere più
 -- della sessione. È una sanatoria conservativa, non estende mai una scadenza.
 UPDATE public.cloud_sync_tokens AS token
@@ -192,3 +196,5 @@ REVOKE EXECUTE ON FUNCTION public.cleanup_pairing_sessions() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.cleanup_pairing_sessions() FROM anon;
 REVOKE EXECUTE ON FUNCTION public.cleanup_pairing_sessions() FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.cleanup_pairing_sessions() TO service_role;
+
+COMMIT;

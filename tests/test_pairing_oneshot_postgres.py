@@ -186,9 +186,9 @@ def postgres16():
         psql(setup)
         tenant_sql = _tenant_migration_sql()
         if tenant_sql is not None:
-            psql(f"BEGIN;\n{tenant_sql}\nCOMMIT;")
+            psql(tenant_sql)
         pairing_sql = MIGRATION.read_text(encoding="utf-8")
-        psql(f"BEGIN;\n{pairing_sql}\nCOMMIT;")
+        psql(pairing_sql)
         yield name, psql, tenant_sql is not None
     finally:
         _run(["docker", "rm", "--force", name], check=False)
@@ -371,7 +371,7 @@ def test_rls_execute_and_idempotent_real_migration(postgres16):
     _, psql, _ = postgres16
     # Applicazione ripetuta deve restare valida.
     pairing_sql = MIGRATION.read_text(encoding="utf-8")
-    psql(f"BEGIN;\n{pairing_sql}\nCOMMIT;")
+    psql(pairing_sql)
     privileges = psql("""
       SELECT
         has_function_privilege('anon',
