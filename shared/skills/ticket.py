@@ -105,16 +105,39 @@ def resolve(conn, ticket_id: int, response: str) -> None:
     if not response:
         print("Response cannot be empty.", file=sys.stderr)
         sys.exit(1)
+    # Per un ticket normale la risposta è l'effetto. Per ``rescore`` è solo
+    # la descrizione dell'effetto: il dato promesso è una NUOVA riga logica in
+    # ``scores`` (la tabella è single-state e viene riscritta). Il confronto
+    # con created_at è il baseline persistito già disponibile sul ticket.
+    # Tenerlo nella WHERE rende verifica + risoluzione atomiche: un prompt che
+    # dice allo Scorer di controllare non basta a impedire un ACK prematuro.
     cur = conn.execute(
-        "UPDATE position_tickets SET status = 'resolved', response_text = ?, "
+        "UPDATE position_tickets AS ticket "
+        "SET status = 'resolved', response_text = ?, "
         "resolved_at = datetime('now','localtime'), "
         "updated_at = datetime('now','localtime') "
-        "WHERE id = ?",
+        "WHERE ticket.id = ? "
+        "AND (ticket.kind <> 'rescore' OR EXISTS ("
+        "  SELECT 1 FROM scores s "
+        "  WHERE s.position_id = ticket.position_id "
+        "    AND julianday(s.scored_at) > julianday(ticket.created_at)"
+        "))",
         (response, ticket_id),
     )
     conn.commit()
     if cur.rowcount == 0:
-        print(f"Ticket #{ticket_id} not found.", file=sys.stderr)
+        ticket = conn.execute(
+            "SELECT kind FROM position_tickets WHERE id = ?", (ticket_id,)
+        ).fetchone()
+        if ticket and ticket['kind'] == 'rescore':
+            print(
+                f"Ticket #{ticket_id} cannot be resolved: rescore effect not "
+                "verified (scores.scored_at must be newer than the ticket "
+                "request). Run db_insert.py score --action rescore first.",
+                file=sys.stderr,
+            )
+        else:
+            print(f"Ticket #{ticket_id} not found.", file=sys.stderr)
         sys.exit(1)
     print(f"Ticket #{ticket_id} resolved (response visible to the user).")
 
