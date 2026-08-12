@@ -162,6 +162,38 @@ def test_bare_applied_false_cannot_create_a_half_undo(box, script):
     assert application["applied_at"] == "2026-08-12 15:30:00"
 
 
+@pytest.mark.parametrize("script", [DB_UPDATE, DESKTOP_DB_UPDATE])
+def test_applied_application_status_cannot_be_downgraded_alone(box, script):
+    db_path, home = box
+    marked = run_update(
+        db_path,
+        home,
+        "application",
+        "73",
+        "--applied-at",
+        "2026-08-12 15:30:00",
+        "--applied-via",
+        "manual",
+        script=script,
+    )
+    assert marked.returncode == 0, marked.stdout + marked.stderr
+
+    rejected = run_update(
+        db_path,
+        home,
+        "application",
+        "73",
+        "--status",
+        "draft",
+        script=script,
+    )
+    assert rejected.returncode == 1
+    assert "APPLIED STATUS CHANGE REJECTED" in rejected.stderr
+    position, application, _transition = read_state(db_path)
+    assert position["status"] == "applied"
+    assert application["status"] == "applied"
+
+
 def test_failure_after_application_write_rolls_back_everything(box):
     db_path, home = box
     conn = sqlite3.connect(db_path)

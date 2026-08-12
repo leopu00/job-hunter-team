@@ -208,6 +208,20 @@ def update_application(args):
     marks_applied = bool(
         args.status == 'applied' or args.applied_at or applied_flag
     )
+    if not marks_applied and args.status:
+        current = conn.execute(
+            "SELECT status FROM positions WHERE id = ?", (args.position_id,)
+        ).fetchone()
+        current_status = current['status'] if current else None
+        if current_status == 'applied':
+            print(
+                "⚠️  APPLIED STATUS CHANGE REJECTED: use an atomic undo or "
+                "post-submission action so position and application cannot "
+                "diverge.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
     if marks_applied:
         if not (args.applied_via or '').strip():
             print(
