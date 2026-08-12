@@ -48,6 +48,8 @@ $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
 $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
 $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
+$JhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
+. (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
 
 # Carica la host env (scritta da install.ps1 / setup wizard: JHT_HOST_TYPE=local|vps).
 # Formato file: VAR=value per riga, ignora # e righe vuote.
@@ -129,6 +131,7 @@ function Test-RuntimeDirectoryAcl {
     return $true
   } catch { return $false }
 }
+
 
 function Test-RuntimePathAuthority {
   try {
@@ -230,7 +233,14 @@ if ($env:JHT_RUNTIME_AUTHORITY_SELFTEST -eq '1') {
 }
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
+function Require-PrivateJhtHomeAcl {
+  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) {
+    throw "JHT_HOME ACL is not owner-only: $JhtHome"
+  }
+}
+
 function Require-Docker {
+  Require-PrivateJhtHomeAcl
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     Write-Err "docker non trovato nel PATH. Installa Docker Desktop per Windows."
     exit 127
@@ -243,11 +253,13 @@ function Require-Docker {
 }
 
 function Require-ComposeFile {
+  Require-PrivateJhtHomeAcl
   try { Assert-TrustedRuntime } catch { Write-Err $_.Exception.Message; exit 1 }
 }
 
 function Invoke-Compose {
   param([Parameter(ValueFromRemainingArguments)] $Args)
+  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { throw "JHT_HOME ACL is not owner-only: $JhtHome" }
   Assert-TrustedRuntime
   # Docker Desktop Windows accetta forward-slash o backslash. project-directory
   # punta al runtime dir per bind-mount relativi (anche se compose qui e'

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
 import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
+import { writePrivateJson } from '../lib/secure-config-io.js';
 
 const JHT_DIR     = JHT_HOME;
 const PLUGINS_DIR = join(JHT_DIR, 'plugins');
@@ -21,11 +22,7 @@ async function loadConfig() {
 }
 
 async function saveConfig(cfg) {
-  await mkdir(JHT_DIR, { recursive: true });
-  const tmp = CONFIG_PATH + '.tmp';
-  await writeFile(tmp, JSON.stringify(cfg, null, 2), 'utf-8');
-  const { rename } = await import('node:fs/promises');
-  await rename(tmp, CONFIG_PATH);
+  writePrivateJson(CONFIG_PATH, cfg);
 }
 
 async function discoverPlugins() {

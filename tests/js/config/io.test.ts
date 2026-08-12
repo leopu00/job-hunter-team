@@ -88,7 +88,7 @@ describe('writeConfig', () => {
     expect(r.success).toBe(true);
     expect(fs.mkdirSync).toHaveBeenCalledWith(
       expect.stringContaining('.jht'),
-      { recursive: true },
+      { recursive: true, mode: 0o700 },
     );
     expect(fs.writeFileSync).toHaveBeenCalled();
   });

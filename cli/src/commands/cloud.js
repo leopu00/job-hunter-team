@@ -7,6 +7,7 @@ import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
 import { SupabaseAuthError } from '../lib/supabase-direct.js';
 import { getDirectReader } from '../lib/cloud-direct.js';
 import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
+import { writePrivateJson } from '../lib/secure-config-io.js';
 import {
   acknowledgeSync,
   publishSyncOutcome,
@@ -115,9 +116,7 @@ async function loadCloudConfig() {
 }
 
 async function saveCloudConfig(config) {
-  await mkdir(JHT_HOME, { recursive: true });
-  await writeFile(CLOUD_FILE, JSON.stringify(config, null, 2) + '\n');
-  await chmod(CLOUD_FILE, 0o600);
+  writePrivateJson(CLOUD_FILE, config);
 }
 
 function parseToken(raw) {

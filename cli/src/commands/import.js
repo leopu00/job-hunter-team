@@ -1,7 +1,8 @@
-import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { readFile, access } from 'node:fs/promises';
+import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { RETIRED_SINCE, isRetiredStore, retiredStoreFile } from './_retired-stores.js';
+import { writePrivateJson } from '../lib/secure-config-io.js';
 
 const JHT_DIR = JHT_HOME;
 
@@ -45,11 +46,7 @@ async function readCurrent(cfg) {
 }
 
 async function writeJsonSafe(p, data) {
-  await mkdir(dirname(p), { recursive: true }).catch(() => {});
-  const tmp = p + '.tmp';
-  await writeFile(tmp, JSON.stringify(data, null, 2), 'utf-8');
-  const { rename } = await import('node:fs/promises');
-  await rename(tmp, p);
+  writePrivateJson(p, data);
 }
 
 function validate(target, data) {
