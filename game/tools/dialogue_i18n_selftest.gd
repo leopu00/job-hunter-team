@@ -10,7 +10,15 @@ const EXPECTED_DYNAMIC_SHELLS := 8
 const EXPECTED_TRANSLATED_CELLS := 2202
 const FORBIDDEN_ENGLISH_FRAGMENTS := [
 	"Research", "Analysis", "Quality Check", "Office Home", "escritório home",
+	"Applications", "Operations", "Setup", "setup",
 ]
+const LOCALE_FORBIDDEN_ROLE_NAMES := {
+	"de": ["Sentinel", "Doctor"],
+	"es": ["Sentinel"],
+	"fr": ["Sentinel"],
+	"hu": ["Sentinel"],
+	"pt": ["Sentinel"],
+}
 
 var _failures: Array[String] = []
 
@@ -138,6 +146,12 @@ static func _placeholders(text: String) -> PackedStringArray:
 	return PackedStringArray(found)
 
 
+static func _contains_word(text: String, word: String) -> bool:
+	var regex := RegEx.new()
+	regex.compile("(^|[^A-Za-z])%s([^A-Za-z]|$)" % word)
+	return regex.search(text) != null
+
+
 func _check_locale_catalogs(sources: Dictionary) -> void:
 	var translated_cells := 0
 	for locale: String in UIStrings.LANGS:
@@ -163,6 +177,10 @@ func _check_locale_catalogs(sources: Dictionary) -> void:
 				_check(not translated.contains(fragment),
 						"%s retains English fragment '%s' in %s" % [
 								key, fragment, locale])
+			for role_name: String in LOCALE_FORBIDDEN_ROLE_NAMES.get(locale, []):
+				_check(not _contains_word(translated, role_name),
+						"%s retains English role '%s' in %s" % [
+								key, role_name, locale])
 			_check(translated != str(sources[key]) \
 					or _placeholders(translated).size() > 0 \
 					and translated.strip_edges().begins_with("{"),

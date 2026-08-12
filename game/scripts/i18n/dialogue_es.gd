@@ -36,7 +36,7 @@ const S := {
 	"dialogue.dottore.start.choice.end": "Estoy bien como soy.",
 	"dialogue.dottore.start.choice.when": "¿Cuándo entras?",
 	"dialogue.dottore.start.line": "Soy el doctor de la oficina. Cuido a mis compañeros cuando disminuyen el ritmo, se atascan o no pueden terminar una tarea. ¿Quieres un chequeo rápido?",
-	"dialogue.dottore.when.line": "Cuando preguntas, o cuando Sentinel ve que el mismo problema regresa repetidamente. No interrumpo a las personas que están trabajando bien.",
+	"dialogue.dottore.when.line": "Cuando preguntas, o cuando el Tesorero ve que el mismo problema regresa repetidamente. No interrumpo a las personas que están trabajando bien.",
 	"dialogue.dynamic.greeting.afternoon": "Buenas tardes",
 	"dialogue.dynamic.greeting.evening": "Buenas noches",
 	"dialogue.dynamic.greeting.morning": "Buen día",
