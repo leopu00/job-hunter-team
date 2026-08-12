@@ -802,13 +802,14 @@ func _update_line(state: Dictionary) -> String:
 
 ## I campi sopravvivono al passaggio all'anteprima e ritorno: farglieli
 ## riscrivere sarebbe il modo più veloce per non ricevere più segnalazioni.
-var _fb_form := {"doing": "", "happened": "", "expected": ""}
+var _fb_form := {"doing": "", "happened": "", "expected": "", "reply_to": ""}
 var _fb_include_logs := true
 var _fb_include_container := true
 var _fb_status: Label
 var _fb_redaction: Label
 var _fb_send: Button
 var _fb_preview_body: TextEdit
+var _fb_email_error: Label
 
 const FB_FIELDS := [
 	["doing", "feedback.q_doing", "feedback.ph_doing", 60],
@@ -848,6 +849,27 @@ func _build_feedback() -> void:
 			_refresh_feedback_send()
 			_refresh_feedback_redaction())
 		list.add_child(edit)
+
+	# Il recapito vive fuori dai campi narrativi: questi ultimi vengono redatti,
+	# mentre l'indirizzo validato serve soltanto come Reply-To della mail.
+	list.add_child(TerminalTheme.label(
+			UIStrings.t("feedback.q_contact"), 13, Palette.MUTED, "medium"))
+	var reply := LineEdit.new()
+	reply.text = str(_fb_form["reply_to"])
+	reply.placeholder_text = UIStrings.t("feedback.ph_contact")
+	reply.max_length = 254
+	reply.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reply.text_changed.connect(func(value: String) -> void:
+		_fb_form["reply_to"] = value
+		_refresh_feedback_send())
+	list.add_child(reply)
+	var contact_hint := TerminalTheme.label(
+			UIStrings.t("feedback.contact_hint"), 11, Palette.DIM)
+	contact_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	list.add_child(contact_hint)
+	_fb_email_error = TerminalTheme.label("", 11, Palette.YELLOW)
+	_fb_email_error.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	list.add_child(_fb_email_error)
 
 	list.add_child(HSeparator.new())
 	var attach := HBoxContainer.new()
@@ -941,8 +963,11 @@ func _collect_feedback_preview() -> void:
 func _refresh_feedback_send() -> void:
 	if not is_instance_valid(_fb_send):
 		return
-	var ready := str(_fb_form["happened"]).strip_edges().length() >= 10
+	var email_ok := FeedbackService.valid_reply_email(_fb_form.get("reply_to", ""))
+	var ready := str(_fb_form["happened"]).strip_edges().length() >= 10 and email_ok
 	_fb_send.disabled = not ready
+	if is_instance_valid(_fb_email_error):
+		_fb_email_error.text = "" if email_ok else UIStrings.t("feedback.invalid_email")
 	# Il colore segue lo stato: un pulsante verde acceso che non risponde al
 	# click si legge come un bug del gioco, proprio nella schermata in cui si
 	# chiede fiducia all'utente. Serve l'override di font_disabled_color e non

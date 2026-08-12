@@ -4,10 +4,9 @@ import { dispatchFeedback } from "@/lib/feedback-dispatch";
 import { redact } from "@/lib/redact";
 import {
   MAX_BODY_BYTES,
-  emailSubject,
-  emailText,
   newTicket,
   parseReport,
+  resendEmailPayload,
   sembraSpam,
   type Report,
 } from "@/lib/feedback-report";
@@ -21,10 +20,11 @@ import { invalidJsonBody } from "@/app/api/_lib/error-body";
  * schermata è rimasta bianca. Questo endpoint è la porta pubblica; GitHub
  * resta la fonte di verità del triage, ma sul lato interno.
  *
- * Volutamente anonimo: nessun login, nessun cookie. Chi ha un problema in
- * fase di setup spesso non è ancora riuscito ad autenticarsi da nessuna
- * parte — chiedergli di fare login per segnalare che il login non funziona
- * chiuderebbe il cerchio nel modo sbagliato.
+ * Anonimo per default: nessun login, nessun cookie; soltanto chi desidera una
+ * risposta aggiunge il recapito facoltativo. Chi ha un problema in fase di
+ * setup spesso non è ancora riuscito ad autenticarsi da nessuna parte —
+ * chiedergli di fare login per segnalare che il login non funziona chiuderebbe
+ * il cerchio nel modo sbagliato.
  *
  * La logica pura (validazione, resa, neutralizzazione) sta in
  * `lib/feedback-report.ts`, dove è testabile senza Next.
@@ -63,12 +63,14 @@ async function sendEmail(report: Report, ticket: string): Promise<boolean> {
         Authorization: `Bearer ${RESEND_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        from: MAIL_FROM,
-        to: [MAIL_TO],
-        subject: emailSubject(report, ticket),
-        text: emailText(report, ticket),
-      }),
+      // Il recapito non entra nel corpo, nel webhook o nei log. Il payload
+      // puro lo colloca soltanto nel Reply-To usato dall'operatore.
+      body: JSON.stringify(resendEmailPayload(
+        report,
+        ticket,
+        MAIL_FROM,
+        MAIL_TO,
+      )),
     });
     if (!res.ok) {
       console.error("[feedback] Resend ha risposto", res.status);
