@@ -423,6 +423,138 @@ def test_un_ref_gia_ignoto_non_viene_contato_due_volte():
     assert census.needs_a_look == 1
 
 
+# ── ricerca dei claim ─────────────────────────────────────────────────────
+
+
+def claim(sha, subject, branches, in_base=False, date='2026-08-12'):
+    return bc.ClaimFacts(sha, date, subject, tuple(branches), in_base)
+
+
+def test_parse_claim_log_regge_un_oggetto_con_tabulazioni():
+    rows = bc.parse_claim_log(
+        '53e2f9fdfe\t2026-08-12\tWIP(hygiene): cercare un ID (BLC)\n'
+        'aaaa111\t2026-08-11\tfeat: qualcosa\tcon\ttab\n'
+        'riga rotta\n'
+        '\n'
+    )
+    assert rows[0] == ('53e2f9fdfe', '2026-08-12', 'WIP(hygiene): cercare un ID (BLC)')
+    assert rows[1][2] == 'feat: qualcosa\tcon\ttab'
+    assert len(rows) == 2
+
+
+def test_parse_contains_scarta_il_puntatore_simbolico():
+    """`origin/HEAD -> origin/master` non contiene niente: è un alias.
+
+    Contarlo farebbe risultare claimato su due branch ogni ticket mergiato.
+    """
+    branches = bc.parse_contains(
+        '  origin/dev2\n'
+        '  origin/HEAD -> origin/master\n'
+        '  origin/master\n'
+        '\n'
+    )
+    assert branches == ('origin/dev2', 'origin/master')
+
+
+def test_un_ticket_che_nessuno_nomina_e_libero():
+    report = bc.classify_claims('NUOVO-1', [], 'dev2')
+    assert report.verdict == bc.CLAIM_FREE
+    assert report.blocked is False
+    assert bc.claim_exit_code(report) == 0
+
+
+def test_un_ticket_solo_sul_mio_branch_e_mio():
+    report = bc.classify_claims(
+        'BLC', [claim('aaa', 'WIP(x): (BLC)', ['origin/dev2'])], 'dev2',
+    )
+    assert report.verdict == bc.CLAIM_MINE
+    assert report.blocked is False
+    assert bc.claim_exit_code(report) == 0
+
+
+def test_un_ticket_su_un_branch_altrui_ferma_il_lavoro():
+    """Il caso che il protocollo esiste per evitare: due macchine, un ticket."""
+    report = bc.classify_claims(
+        'O-99',
+        [claim('bbb', 'WIP(db): (O-99)', ['origin/fullstack-1'])],
+        'dev2',
+    )
+    assert report.verdict == bc.CLAIM_TAKEN
+    assert report.other_branches == ('origin/fullstack-1',)
+    assert 'fermati' in report.reason
+    assert report.blocked is True
+    assert bc.claim_exit_code(report) == 4
+
+
+def test_un_ticket_gia_integrato_e_fatto_non_occupato():
+    """Distinzione che serve: «tutti lo nominano» ≠ «qualcuno ci lavora»."""
+    report = bc.classify_claims(
+        'O-33',
+        [claim('ccc', 'feat: (O-33)', ['origin/production', 'origin/dev1'], in_base=True)],
+        'dev2',
+    )
+    assert report.verdict == bc.CLAIM_DONE
+    assert report.other_branches == ()
+    assert bc.claim_exit_code(report) == 5
+
+
+def test_il_mio_branch_non_conta_come_altrui_anche_col_prefisso_remoto():
+    report = bc.classify_claims(
+        'BLC', [claim('aaa', 'WIP (BLC)', ['origin/dev2'])], 'origin/dev2',
+    )
+    assert report.verdict == bc.CLAIM_MINE
+
+
+def test_un_claim_misto_mio_e_altrui_resta_bloccante():
+    report = bc.classify_claims(
+        'X-1',
+        [claim('aaa', 'WIP (X-1)', ['origin/dev2']),
+         claim('bbb', 'WIP (X-1)', ['origin/game'])],
+        'dev2',
+    )
+    assert report.verdict == bc.CLAIM_TAKEN
+    assert report.other_branches == ('origin/game',)
+
+
+def test_niente_trovato_con_la_copia_indietro_non_e_libero():
+    """L'asimmetria che regge tutto: «non ho visto» non è «non c'è»."""
+    report = bc.classify_claims('NUOVO-1', [], 'dev2', view_is_current=False)
+    assert report.verdict == bc.CLAIM_UNKNOWN
+    assert 'fetch' in report.reason
+    assert report.blocked is True
+    assert bc.claim_exit_code(report) == 1
+
+
+def test_un_claim_trovato_vale_anche_con_la_copia_indietro():
+    """L'altra metà: trovarlo è prova positiva, la staleness non la smentisce."""
+    report = bc.classify_claims(
+        'O-99', [claim('bbb', 'WIP (O-99)', ['origin/backend'])], 'dev2',
+        view_is_current=False,
+    )
+    assert report.verdict == bc.CLAIM_TAKEN
+
+
+def test_una_ricerca_fallita_non_dice_libero():
+    report = bc.classify_claims('NUOVO-1', [], 'dev2', search_ok=False)
+    assert report.verdict == bc.CLAIM_UNKNOWN
+    assert report.blocked is True
+
+
+def test_se_git_non_sa_dire_se_e_integrato_non_si_conclude():
+    report = bc.classify_claims(
+        'X-1', [claim('aaa', 'WIP (X-1)', ['origin/dev2'], in_base=None)], 'dev2',
+    )
+    assert report.verdict == bc.CLAIM_UNKNOWN
+    assert bc.claim_exit_code(report) == 1
+
+
+def test_il_verdetto_libero_suggerisce_il_comando_di_claim():
+    testo = bc.render_claim_text(bc.classify_claims('NUOVO-1', [], 'dev2'))
+    assert 'git commit --allow-empty' in testo
+    assert '(NUOVO-1)' in testo
+    assert 'git push origin dev2' in testo
+
+
 # ── codici di uscita ──────────────────────────────────────────────────────
 
 
@@ -518,6 +650,64 @@ def test_una_base_che_non_esiste_esce_due(repo_con_remote):
     done = _run_census(repo_con_remote, '--base', 'origin/inesistente')
     assert done.returncode == 2
     assert 'non esiste' in done.stderr
+
+
+def _run_claim(repo, ticket, *extra):
+    env = dict(os.environ, PYTHONIOENCODING='utf-8')
+    return subprocess.run(
+        [sys.executable, CENSUS_PY, '--repo', str(repo), '--json',
+         '--claim', ticket, *extra],
+        capture_output=True, text=True, encoding='utf-8', errors='replace', env=env,
+    )
+
+
+def test_un_claim_di_un_altra_macchina_ferma_il_lavoro(repo_con_remote):
+    """End-to-end del caso che il protocollo esiste per evitare.
+
+    Un branch che esiste SOLO su origin (come quello di un altro PC): il
+    branch locale viene cancellato dopo il push, così la ricerca deve trovarlo
+    fra i ref remoti e non fra i propri.
+    """
+    import json
+    _git(['checkout', '-b', 'altra'], str(repo_con_remote))
+    _git(['commit', '--allow-empty', '-m',
+          'WIP(db): prendo io questo (TICKET-9)'], str(repo_con_remote))
+    _git(['push', 'origin', 'altra'], str(repo_con_remote))
+    _git(['checkout', 'master'], str(repo_con_remote))
+    _git(['branch', '-D', 'altra'], str(repo_con_remote))
+    _git(['fetch', 'origin'], str(repo_con_remote))
+
+    preso = json.loads(_run_claim(repo_con_remote, 'TICKET-9').stdout)
+    assert preso['verdict'] == bc.CLAIM_TAKEN
+    assert preso['other_branches'] == ['origin/altra']
+    assert preso['blocked'] is True
+    assert _run_claim(repo_con_remote, 'TICKET-9').returncode == 4
+
+    # Lo stesso ticket, guardato DA quel branch, è lavoro proprio.
+    mio = _run_claim(repo_con_remote, 'TICKET-9', '--branch', 'altra')
+    assert json.loads(mio.stdout)['verdict'] == bc.CLAIM_MINE
+    assert mio.returncode == 0
+
+    # E un ID che nessuno nomina resta libero.
+    libero = _run_claim(repo_con_remote, 'TICKET-NESSUNO')
+    assert json.loads(libero.stdout)['verdict'] == bc.CLAIM_FREE
+    assert libero.returncode == 0
+
+
+def test_la_ricerca_del_claim_e_letterale_non_una_regex(repo_con_remote):
+    """Un ID con punti o parentesi non deve diventare un pattern."""
+    import json
+    _git(['commit', '--allow-empty', '-m', 'WIP(x): letterale (AxB)'],
+         str(repo_con_remote))
+    _git(['push', 'origin', 'master'], str(repo_con_remote))
+    _git(['fetch', 'origin'], str(repo_con_remote))
+    # Il commit nomina `AxB`. Cercare `A.B` come REGEX lo troverebbe (`.`
+    # matcha `x`) e direbbe che il ticket `A.B` è già preso: un falso positivo
+    # che ferma il lavoro per niente. Con --fixed-strings non lo trova.
+    assert json.loads(_run_claim(repo_con_remote, 'A.B').stdout)['verdict'] == bc.CLAIM_FREE
+    # E l'ID vero si trova comunque.
+    trovato = json.loads(_run_claim(repo_con_remote, 'AxB').stdout)
+    assert trovato['verdict'] == bc.CLAIM_DONE
 
 
 def test_un_branch_cancellato_su_origin_non_e_piu_un_candidato(repo_con_remote):
