@@ -94,6 +94,14 @@ BEGIN
     IF pairing.approved_token IS NULL
         OR pairing.approved_token_id IS NULL
         OR pairing.user_id IS NULL THEN
+      IF pairing.approved_token_id IS NOT NULL THEN
+        UPDATE public.cloud_sync_tokens
+        SET revoked_at = COALESCE(revoked_at, now())
+        WHERE id = pairing.approved_token_id;
+      END IF;
+      UPDATE public.cloud_sync_pairing_sessions
+      SET status = 'expired', approved_token = NULL
+      WHERE device_code = pairing.device_code;
       RETURN QUERY SELECT 'invalid'::text, NULL::text, pairing.user_id,
         pairing.approved_token_id, NULL::text;
       RETURN;

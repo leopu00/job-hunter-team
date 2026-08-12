@@ -367,6 +367,38 @@ def test_token_expired_before_pairing_is_revoked_and_never_delivered(postgres16)
     assert state == "expired|t|t"
 
 
+def test_malformed_approved_row_fails_closed_and_wipes_plaintext(postgres16):
+    _, psql, _ = postgres16
+    psql("""
+      INSERT INTO public.cloud_sync_tokens
+        (id, user_id, name, token_prefix, token_hash, expires_at)
+      VALUES
+        ('60000000-0000-0000-0000-000000000001',
+         '00000000-0000-0000-0000-000000000001',
+         'malformed', 'jht_sync_bad', 'malformed-hash', now() + interval '10 minutes');
+      INSERT INTO public.cloud_sync_pairing_sessions
+        (device_code, user_code, status, user_id, approved_token,
+         approved_token_id, expires_at)
+      VALUES
+        ('fffffffffffffffffffffffffffffffe', 'FFFF-2223', 'approved',
+         NULL, 'jht_sync_malformed_plain',
+         '60000000-0000-0000-0000-000000000001', now() + interval '10 minutes');
+    """)
+    result = psql("""
+      SELECT status, approved_token IS NULL
+      FROM public.redeem_cloud_sync_pairing('fffffffffffffffffffffffffffffffe');
+    """).stdout.strip()
+    assert result == "invalid|t"
+    state = psql("""
+      SELECT pairing.status, pairing.approved_token IS NULL,
+             token.revoked_at IS NOT NULL
+      FROM public.cloud_sync_pairing_sessions pairing
+      JOIN public.cloud_sync_tokens token ON token.id = pairing.approved_token_id
+      WHERE pairing.device_code = 'fffffffffffffffffffffffffffffffe';
+    """).stdout.strip()
+    assert state == "expired|t|t"
+
+
 def test_rls_execute_and_idempotent_real_migration(postgres16):
     _, psql, _ = postgres16
     # Applicazione ripetuta deve restare valida.
