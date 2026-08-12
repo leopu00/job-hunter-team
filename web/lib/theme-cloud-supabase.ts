@@ -76,10 +76,7 @@ export function createSupabaseThemeBackend(
     async writeTheme(userId, theme) {
       const result = await supabase
         .from("user_settings")
-        .upsert(
-          { user_id: userId, theme },
-          { onConflict: "user_id" },
-        )
+        .upsert({ user_id: userId, theme }, { onConflict: "user_id" })
         .select("theme")
         .single();
       return themeFromResult(result);

@@ -28,7 +28,7 @@ import json
 import urllib.request
 import urllib.error
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
 from _db import get_db, ensure_schema
@@ -408,6 +408,7 @@ def sync_applications(conn, sb_url, sb_key, user_id, position_map, dry_run=False
             "critic_score": r["critic_score"],
             "critic_verdict": _normalize_verdict(r["critic_verdict"]),
             "critic_notes": r["critic_notes"],
+            "critic_round": r["critic_round"],
             "applied_via": r["applied_via"],
             "written_by": r["written_by"],
             "reviewed_by": r["reviewed_by"],
@@ -424,6 +425,11 @@ def sync_applications(conn, sb_url, sb_key, user_id, position_map, dry_run=False
             data["response_at"] = r["response_at"]
         if r["critic_reviewed_at"]:
             data["critic_reviewed_at"] = r["critic_reviewed_at"]
+
+        # Il sync REST diretto non passa dalle route web che applicano la
+        # stessa guardia. Invalidiamo solo il payload: nessun backfill o UPDATE
+        # viene eseguito sul jobs.db reale.
+        data = _invalidate_stale_critic_payload(data)
 
         if sb_pos_id in pos_to_uuid:
             app_uuid = pos_to_uuid[sb_pos_id]
@@ -526,7 +532,7 @@ def _normalize_app_status(val):
     if not val:
         return "draft"
     val = val.lower().strip()
-    valid = {"draft", "review", "approved", "applied", "response"}
+    valid = {"draft", "review", "ready", "approved", "applied", "response"}
     return val if val in valid else "draft"
 
 
@@ -537,6 +543,44 @@ def _normalize_verdict(val):
     val = val.upper().strip()
     valid = {"PASS", "NEEDS_WORK", "REJECT"}
     return val if val in valid else None
+
+
+def _timestamp_seconds(value):
+    """Converte timestamp SQLite/ISO preservandone l'ordine temporale."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    normalized = value.strip().replace(" ", "T")
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _invalidate_stale_critic_payload(data):
+    """Rimuove dal solo payload un verdetto precedente al testo del CV."""
+    critic_fields = (
+        "critic_verdict", "critic_score", "critic_notes", "critic_round",
+        "reviewed_by", "critic_reviewed_at",
+    )
+    if not any(data.get(field) is not None for field in critic_fields):
+        return data
+
+    written_at = _timestamp_seconds(data.get("written_at"))
+    reviewed_at = _timestamp_seconds(data.get("critic_reviewed_at"))
+    if written_at is None or reviewed_at is None or reviewed_at >= written_at:
+        return data
+
+    clean = dict(data)
+    if clean.get("status") in {"ready", "approved"}:
+        clean["status"] = "review"
+    for field in critic_fields:
+        clean[field] = None
+    return clean
 
 
 # ── Comandi ───────────────────────────────────────────────────

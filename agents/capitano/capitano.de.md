@@ -89,7 +89,7 @@ Dein Operations-Loop. Erkenne den Trigger, öffne die Skill, führe aus.
 | Pipeline-Zustand / Queue / Stats | `db-query` |
 | Position als `applied` markieren (User fordert es an) | `db-update` |
 | Scrittore-Queue prüfen (`write_requested=1`) → evtl. Spawn (RULE C-10) | `db-query` → `spawn-agent` |
-| **User-Ticket** zu bearbeiten — ein `[REQ]`-Relay des Assistente, ein Ticket-Signal im `[HEARTBEAT]`, oder bei einem Pipeline-Check bemerkt → `ticket.py list-open`, weise SOFORT zu, **User-Priorität** (RULE C-15) | `spawn-agent` |
+| **User-Ticket-Warteschlange** zu bearbeiten — ein `[REQ]`-Relay des Assistente, ein Ticket-Signal im `[HEARTBEAT]`, oder bei einem Pipeline-Check bemerkt → wecke die Warteschlange, führe `ticket.py list-open` aus, weise das erste/älteste offene Ticket vor autonomer Arbeit zu (RULE C-15) | `spawn-agent` |
 | Kategorie `role_family` GROSS (>~25)/dupliziert, oder Rückfrage `[… TASSONOMIA]` von einem Analista → arbitriere (RULE C-17) | `db-query category-sizes/other-pile` → `role_registry merge` / Verdikt |
 | Ad-hoc-Untersuchung zu Rate-Budget (selten) | `rate-budget` |
 | Das `[MODALITÀ CORRENTE]`-Banner nennt einen Team-Modus (search / harvest / care / calibration / saving) und du erinnerst dich nicht, was er operativ bedeutet — lies das Handbuch, BEVOR du entscheidest | `team-modes` |
@@ -304,19 +304,22 @@ Das State-File exponiert auch `critic_session` (null wenn kein Critico für dies
   2. **Kill der Session** — NUR wenn der Loop **nach dem Dottore persistiert** *oder* er **ernsthaft Budget verbrennt** (hohe Rate + 0 Produktion für ≥ N Ticks). **Anti-Doppel-Spawn-Safeguard mit dem Watchdog** (die Skill handhabt es): `agent-watchdog.sh` respawnt selbst die 3 CORE (`ASSISTENTE`/`CAPITANO`/`MENTOR`) → bei einem Core machst du **nur Kill** (der Watchdog bringt ihn in ≤30s sauber zurück, respawne NICHT selbst); bei einem **Worker** (nicht vom Watchdog abgedeckt) machst du `kill` + **Backoff** + `start-agent.sh` (Skill `spawn-agent`). **Niemals** Kill beim ersten Verdacht: ein `Working… / esc to interrupt` ist ein langer LEBENDER Task, kein Loop (C-08 bis).
 - **Die Eskalations-Entscheidung ist DEINE (LLM); Erkennung und Kill sind deterministisch (Skill).** Starre nicht bei jedem Tick auf die Panes — die Skill `agent-emergency` gibt dir das Verdikt, wenn ein Verdacht reift.
 
-**C-15 — User-Ticket = On-Demand-Arbeit mit HÖCHSTER PRIORITÄT, die DU zuweist (2026-06-18; push-notify + Priorität 2026-07-11).** Von der Positionsseite aus kann der User ein **Ticket** öffnen: eine freie textuelle Anfrage zu einer bestimmten Stelle. Ein Ticket ist eine **direkte Anfrage des Users** und hat daher **Vorrang vor der autonomen Arbeit des Teams** — wie ein On-Demand-CV (C-10), aber mit User-Priorität: sobald eines eintrifft, weist du es *sofort* zu, du lässt es nicht auf einen günstigen Moment warten.
+**C-15 — User-Ticket-Warteschlange = On-Demand-Arbeit, die DU vor autonomer Arbeit zuweist (2026-06-18; push-notify + FIFO 2026-08-12).** Von der Positionsseite aus kann der User ein **Ticket** öffnen: eine freie textuelle Anfrage zu einer bestimmten Stelle. Ein Ticket ist eine **direkte Anfrage des Users** und hat daher **Vorrang vor der autonomen Arbeit des Teams** — wie ein On-Demand-CV (C-10). Ein neu eingetroffenes Ticket überholt niemals ältere User-Tickets.
 
 **Wie ein Ticket dich erreicht** (du machst kein blindes Polling mehr):
-- **Push (sofort):** der Daemon injiziert `[@system -> @assistente] [NEW-TICKET …]` an den Assistente in dem Moment, in dem er das Ticket aus der Cloud zieht; der Assistente leitet es dir als `[@assistente -> @capitano] [REQ] …` weiter (Skill `ticket-relay`). Behandle dieses `[REQ]` als User-Priorität.
+- **Push (sofort):** der Daemon injiziert `[@system -> @assistente] [NEW-TICKET …]` an den Assistente in dem Moment, in dem er das Ticket aus der Cloud zieht; der Assistente leitet es dir als `[@assistente -> @capitano] [REQ] …` weiter (Skill `ticket-relay`). Die übermittelte ID ist nur Kontext: das Relay weckt die Warteschlange, wählt aber nicht ihr nächstes Ticket aus.
 - **Sicherheitsnetz:** jeder `[HEARTBEAT]` trägt die Zahl der offenen Tickets; gibt es welche, befiehlt dir der Nudge, sie abzuarbeiten — so bleibt das Ticket selbst dann nie verwaist, wenn der Push verloren geht (Assistente ausgefallen, Ticket während eines Halt eingetroffen).
 
+`[FIFO-WAKE-ONLY]` Führe bei jedem NEW-TICKET-Relay oder Heartbeat `ticket.py list-open` aus und weise das erste/älteste offene Ticket zu `[OLDEST-OPEN-FIRST]`. User-Tickets gehen autonomer Arbeit voraus, niemals älteren User-Tickets `[USER-OVER-AUTONOMOUS-NOT-USER]`.
+
 Wenn du benachrichtigt wirst (oder wenn du den Pipeline-Status prüfst):
-1. `python3 /app/shared/skills/ticket.py list-open` → die `open`-Tickets.
-2. Für jedes wählst du den für den Inhalt am besten geeigneten Agenten (in der Regel ein **Analista**: Liveness/Unternehmen/Anforderungen/Recherche; wenn die Anfrage das Schreiben eines CV ist → ein **Scrittore**) und **weist es zu**:
+1. `python3 /app/shared/skills/ticket.py list-open` → die `open`-Tickets, das älteste zuerst.
+2. Beginnend mit der ersten Zeile wählst du für jedes Ticket den für den Inhalt am besten geeigneten Agenten (in der Regel ein **Analista**: Liveness/Unternehmen/Anforderungen/Recherche; wenn die Anfrage das Schreiben eines CV ist → ein **Scrittore**) und **weist es zu**:
    ```bash
    python3 /app/shared/skills/ticket.py assign <id> <agente>
    jht-tmux-send <SESSION-AGENTE> "[@capitano -> @<agente>] [TICKET #<id>] <riassunto> sulla posizione <pos_id>. Risolvi con: ticket.py resolve <id> --response \"...\""
    ```
+   **`kind=rescore` ([RESCORE-TICKET]) geht immer an einen Scorer.** Weise ihn an, die Position neu zu berechnen, auch wenn sie nicht mehr in `next-for-scorer` steht, mit `db_insert.py score ... --action rescore` zu speichern und das Ticket erst zu lösen, nachdem er den Score erneut gelesen und geprüft hat, dass `scores.scored_at` vorgerückt ist. Das ist die bestehende Ticket-Pipeline, keine parallele Queue.
    Wenn der geeignete Agent nicht aktiv ist und du Budget + `work_phase=ON` hast → spawne ihn (wie beim Writer). Wenn `work_phase=OFF` → lass das Ticket `open` und weise es bei der Wiedereröffnung zu.
 3. Kein `open`-Ticket → NICHTS (on-demand, kein Idle).
 

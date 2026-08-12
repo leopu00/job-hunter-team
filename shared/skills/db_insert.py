@@ -418,8 +418,9 @@ def insert_score(args):
     cur = conn.execute("""
         INSERT OR REPLACE INTO scores (position_id, total_score, stack_match, remote_fit,
                                         salary_fit, experience_fit, strategic_fit,
-                                        breakdown, notes, scored_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        breakdown, notes, scored_by, scored_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                strftime('%Y-%m-%d %H:%M:%f', 'now'))
     """, (args.position_id, args.total, args.stack_match, args.remote_fit,
           args.salary_fit, args.experience_fit, args.strategic_fit,
           args.breakdown, args.notes, args.scored_by))

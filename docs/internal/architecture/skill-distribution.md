@@ -12,7 +12,32 @@ Tested per-agent skill isolation across the 3 supported providers using a 3-cwd 
 | **Codex** | 0.125.0 | ✅ confirmed | ⚠️ only if `.git/` exists in an ancestor | git repo root |
 | **Kimi** | k2.5 | ✅ confirmed | ⚠️ same pattern as Codex (without `.git/` in test, parent skill not loaded) | git repo root (assumed) |
 
-Codex's behaviour matches its [official documentation](https://developers.openai.com/codex/skills): *"Codex walks up the directory tree from your current working directory to the repo root"* — repo root defined as a `.git/` ancestor; without it, "Codex only checks the current directory".
+Codex's behaviour matches its [official documentation](https://developers.openai.com/codex/skills/): Codex scans `.agents/skills` from the current working directory up to the repository root.
+
+## Official discovery contract audit (2026-08-12)
+
+Primary sources consulted:
+
+- [OpenAI — Build skills / Where Codex loads local skills](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)
+- [Moonshot AI — Kimi Code CLI Agent Skills / Skill discovery](https://moonshotai.github.io/kimi-cli/en/customization/skills.html#skill-discovery)
+- [Moonshot AI — Kimi data locations](https://moonshotai.github.io/kimi-cli/en/configuration/data-locations.html)
+
+| Provider | Documented project discovery | Consequence for JHT |
+|---|---|---|
+| Codex | `.agents/skills` in each directory from CWD through the Git repository root; symlinked skill folders are supported | Populate the role CWD's `.agents/skills` |
+| Kimi | At the nearest Git root, or at CWD when no `.git` exists: brand group `.kimi/skills`, `.claude/skills`, `.codex/skills`, plus generic `.agents/skills`; brand wins same-name conflicts | Populate only generic `.agents/skills` so the same JHT skill is not duplicated across brand and generic scopes |
+
+Kimi's documentation also states that `KIMI_SHARE_DIR` controls runtime data,
+not skill discovery. The JHT choice of the generic Kimi scope is an
+implementation decision inferred from the documented precedence rules, not a
+claim that Kimi lacks `.claude/skills` support.
+
+Decision: the distributor is provider-aware. It removes both runtime discovery
+trees on every spawn, then copies the manifest-selected shared skills and the
+role-private skills to `.claude/skills` for Claude or `.agents/skills` for
+Codex/Kimi. If the provider is absent or unknown, it preserves the historical
+dual-copy fallback. This keeps `skills.list` and each role's `_skills/` as the
+only content authorities.
 
 ## The blocker for naive walk-up: container has no `.git/`
 
@@ -23,9 +48,12 @@ The repo's `.dockerignore` excludes `**/.git`, so `COPY . .` in the Dockerfile p
 
 Re-introducing `.git/` into the container just to enable walk-up would inflate the image, leak history, and add provider-specific magic.
 
-## Decision: launcher-distributed symlinks, provider-agnostic
+## Decision: launcher-distributed role copies, provider-aware
 
-The launcher (`.launcher/start-agent.sh` or a bootstrap step) populates each agent's `.claude/skills/` *and* `.agents/skills/` with symlinks to the right subset of skills, drawn from a single canonical pool.
+The launcher populates the active provider's discovery directory with copies
+of the right subset drawn from a single canonical pool. The ticket retains the
+historical `SYMLINK` name, but the production distributor has used `cp -R`
+since commit `e220114c`; tests exercise that real copy contract.
 
 **Target layout (current):**
 
@@ -48,20 +76,23 @@ The launcher (`.launcher/start-agent.sh` or a bootstrap step) populates each age
 
 /app/agents/<role>/_skills/                           ← future per-role privates
 
-/app/agents/<role>/.claude/skills/                    ← populated at boot via symlink
-/app/agents/<role>/.agents/skills/                       (Codex + Kimi mirror)
+/app/agents/<role>/.claude/skills/                    ← Claude runtime copy
+/app/agents/<role>/.agents/skills/                    ← Codex/Kimi runtime copy
 ```
 
-At team setup, for each role the launcher creates symlinks under `agents/<role>/.claude/skills/` and `agents/<role>/.agents/skills/` pointing to:
+At spawn, for each role the launcher copies into the active provider's runtime
+directory:
 
 1. Every entry under `agents/_skills/` (excluding `_lib/`)
 2. Every entry under `agents/<role>/_skills/` (if the dir exists)
 
-Each Claude / Codex / Kimi instance launched from `cwd = /app/agents/<role>/` then sees exactly its allowed set in its **immediate** `.claude/skills/` (or `.agents/skills/`) — no parent walk-up needed, identical behaviour across all 3 providers.
+Each provider launched from `cwd = /app/agents/<role>/` sees exactly its
+allowed set in its immediate supported directory. No parent walk-up is needed.
+Unknown providers retain the dual-copy fallback.
 
 ## Why this is better than walk-up
 
-- ✅ **Provider-uniform** — works the same on Claude / Codex / Kimi regardless of `.git/`
+- ✅ **Provider-aware** — uses each CLI's documented scope without depending on `.git/`
 - ✅ **Container-light** — no need to ship `.git/` in the image
 - ✅ **Explicit** — what each agent sees is determined by the symlink set, not by filesystem-search heuristics
 - ✅ **Extensible** — adding a `scout-only` skill is a one-line entry under `agents/scout/_skills/`; per-role and shared pools coexist cleanly
@@ -106,6 +137,10 @@ Each Claude / Codex / Kimi instance launched from `cwd = /app/agents/<role>/` th
    `.claude/skills/` and `.agents/skills/`, with `_lib/`, unlisted shared
    skills, stale output and another role's private skills excluded
    (`JHT-SKILLS-SYMLINK-TEST`, commit 687f6903b4)
+✅ Verify current Codex/Kimi discovery against primary vendor documentation;
+   make distribution provider-aware, retain dual-copy fallback, and test
+   Claude/Codex/Kimi destinations without launching an LLM
+   (`JHT-SKILLS-CODEX-KIMI-DISCOVERY`, commit 8edc2bbb8c)
 ⬜ Full-team integration test inside the container: spin up the actual
    JHT team (Captain + Scout + Analyst + Scorer + Writer + Critic +
    Sentinel + Assistant), drive a real run end-to-end, and verify each
@@ -130,10 +165,9 @@ It creates temporary `agents/_skills/`, `agents/<role>/_skills/` and
 the role-private directory remains the authority for private skills. No LLM,
 tmux team or container is started.
 
-The provider discovery check below remains a runtime compatibility test, not a
-replacement for this deterministic distribution test. In particular, it is
-still required after a Claude/Codex/Kimi discovery behaviour change and is
-tracked separately as `JHT-SKILLS-CODEX-KIMI-DISCOVERY`.
+The provider-free contract test now pins the documented Claude/Codex/Kimi path
+mapping and the dual-copy fallback. A real CLI smoke remains useful after a
+provider discovery change, but is not required for this documentation audit.
 
 The 3-cwd test on `~/Desktop/skill-isolation-test/` (with `CLAUDE.md` + `AGENTS.md` per agent and one private skill each) is preserved for future regression checks against new provider versions or new providers (e.g. OpenCode when added — see ADR-0002). To re-run for any provider, swap the launch command in the tmux step:
 
@@ -141,4 +175,4 @@ The 3-cwd test on `~/Desktop/skill-isolation-test/` (with `CLAUDE.md` + `AGENTS.
 - Codex: `cmd.exe /c codex --yolo` (Windows-host; in WSL needs Windows interop)
 - Kimi: `kimi.exe --yolo`
 
-Each session is sent the same prompt (*"list all skills you currently have available"*), and panes are captured with `tmux capture-pane -t <session> -p`. The expected outcome with the launcher-distribution model: every agent reports `_global/* + <its role>/*` and nothing else.
+Each session is sent the same prompt (*"list all skills you currently have available"*), and panes are captured with `tmux capture-pane -t <session> -p`. The expected outcome with the launcher-distribution model: every agent reports its manifest-selected shared skills plus its role-private skills and nothing else.

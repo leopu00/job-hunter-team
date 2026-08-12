@@ -21,7 +21,15 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import { appendFileSync, mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import {
+  appendFileSync,
+  chmodSync,
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -41,6 +49,7 @@ import {
   jsonlLine,
   markChatRowsPushed,
   mirrorDbTurnsToJsonl,
+  paneEnvelope,
   parseChatLine,
   pickUnmirrored,
   readTailLines,
@@ -62,6 +71,7 @@ CREATE TABLE pending_user_messages (
   kind TEXT NOT NULL DEFAULT 'notification',
   author TEXT NOT NULL DEFAULT 'agent',
   chat_ts REAL,
+  source_id TEXT,
   related_position_id INTEGER,
   delivered_via TEXT,
   delivered_at TIMESTAMP,
@@ -105,7 +115,9 @@ const rowsOf = () =>
 
 describe("parsing di chat.jsonl", () => {
   it("legge una riga scritta da jht-send", () => {
-    expect(parseChatLine('{"role":"assistant","text":"ciao","ts":1753790000.5}')).toEqual({
+    expect(
+      parseChatLine('{"role":"assistant","text":"ciao","ts":1753790000.5}'),
+    ).toEqual({
       role: "assistant",
       text: "ciao",
       ts: 1753790000.5,
@@ -115,7 +127,13 @@ describe("parsing di chat.jsonl", () => {
   it("scarta le righe rotte invece di esplodere", () => {
     // Il quoting a mano produceva JSON invalido: il file non deve diventare
     // veleno per il mirror (era il motivo della skill chat-web).
-    for (const bad of ['{"role":"user","text":', "non json", "", '{"text":"x"}', '{"ts":1}']) {
+    for (const bad of [
+      '{"role":"user","text":',
+      "non json",
+      "",
+      '{"text":"x"}',
+      '{"ts":1}',
+    ]) {
       expect(parseChatLine(bad)).toBeNull();
     }
   });
@@ -128,8 +146,8 @@ describe("parsing di chat.jsonl", () => {
   });
 
   it("la busta per il pane è quella che l'agente già conosce", () => {
-    // Identica a vps_backend.gd (gioco) e a tg-bridge.py (Telegram): gli
-    // agenti hanno UNA skill di risposta e un solo formato da riconoscere.
+    // Identica a vps_backend.gd (gioco); Telegram converge qui passando
+    // prima dalla stessa pending_user_messages.
     expect(chatEnvelope("capitano", "che ore sono?")).toBe(
       "[@utente -> @capitano] [CHAT] che ore sono?",
     );
@@ -144,7 +162,11 @@ describe("parsing di chat.jsonl", () => {
 describe("coda del file", () => {
   it("legge solo l'ultima parte e scarta la riga tagliata a metà", () => {
     const lines = Array.from({ length: 50 }, (_, i) =>
-      jsonlLine({ role: "assistant", text: `messaggio numero ${i}`, ts: 1000 + i }),
+      jsonlLine({
+        role: "assistant",
+        text: `messaggio numero ${i}`,
+        ts: 1000 + i,
+      }),
     );
     const path = writeChat("capitano", lines);
     const tail = readTailLines(path, 200);
@@ -196,7 +218,9 @@ describe("chat.jsonl → SQLite", () => {
   });
 
   it("un secondo giro sullo stesso file non duplica nulla", () => {
-    writeChat("capitano", [jsonlLine({ role: "user", text: "ciao", ts: 1753790000 })]);
+    writeChat("capitano", [
+      jsonlLine({ role: "user", text: "ciao", ts: 1753790000 }),
+    ]);
     ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
     ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
     expect(rowsOf()).toHaveLength(1);
@@ -211,7 +235,13 @@ describe("chat.jsonl → SQLite", () => {
     // qualsiasi sincronizzazione.
     const lines: string[] = [];
     for (let i = 0; i < 1600; i += 1) {
-      lines.push(jsonlLine({ role: i % 2 ? "user" : "assistant", text: `ok ${i}`, ts: 1753790000 + i / 10 }));
+      lines.push(
+        jsonlLine({
+          role: i % 2 ? "user" : "assistant",
+          text: `ok ${i}`,
+          ts: 1753790000 + i / 10,
+        }),
+      );
     }
     writeChat("capitano", lines);
     const first = ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
@@ -245,8 +275,12 @@ describe("chat.jsonl → SQLite", () => {
     // chat lo lancia a mano mentre il daemon gira il suo giro da 5 secondi.
     // Qui si riproduce quel cieco rendendo muta la sola query di dedup: la
     // guardia che deve tenere è quella DENTRO l'INSERT.
-    writeChat("capitano", [jsonlLine({ role: "user", text: "ciao", ts: 1753790000 })]);
-    expect(ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] }).inserted).toBe(1);
+    writeChat("capitano", [
+      jsonlLine({ role: "user", text: "ciao", ts: 1753790000 }),
+    ]);
+    expect(
+      ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] }).inserted,
+    ).toBe(1);
 
     const blind = {
       prepare(sql: string) {
@@ -258,7 +292,10 @@ describe("chat.jsonl → SQLite", () => {
       },
     } as unknown as InstanceType<typeof DatabaseSync>;
 
-    const second = ingestChatJsonl(blind, { jhtHome: home, agents: ["capitano"] });
+    const second = ingestChatJsonl(blind, {
+      jhtHome: home,
+      agents: ["capitano"],
+    });
     expect(second.inserted).toBe(0);
     expect(rowsOf()).toHaveLength(1);
   });
@@ -286,7 +323,9 @@ describe("SQLite → chat.jsonl", () => {
     const res = mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"] });
     expect(res.mirrored).toBe(1);
 
-    const line = parseChatLine(readFileSync(chatFileFor(home, "mentor"), "utf-8").trim());
+    const line = parseChatLine(
+      readFileSync(chatFileFor(home, "mentor"), "utf-8").trim(),
+    );
     expect(line?.role).toBe("assistant");
     expect(line?.text).toBe("Guarda i pattern");
   });
@@ -301,8 +340,12 @@ describe("SQLite → chat.jsonl", () => {
     expect(back.inserted).toBe(0);
     expect(rowsOf()).toHaveLength(1);
     // …e non riscriverla di nuovo nel file.
-    expect(mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"] }).mirrored).toBe(0);
-    expect(readFileSync(chatFileFor(home, "mentor"), "utf-8").trim().split("\n")).toHaveLength(1);
+    expect(
+      mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"] }).mirrored,
+    ).toBe(0);
+    expect(
+      readFileSync(chatFileFor(home, "mentor"), "utf-8").trim().split("\n"),
+    ).toHaveLength(1);
   });
 
   it("un giro morto fra la scrittura e il timbro non lascia un gemello", () => {
@@ -315,13 +358,22 @@ describe("SQLite → chat.jsonl", () => {
       "INSERT INTO pending_user_messages (agent, body, author, created_at) VALUES ('mentor', 'scritta una volta', 'agent', '2026-07-29 10:00:00')",
     ).run();
     const at = Date.parse("2026-07-29T10:00:00Z") + 60_000;
-    expect(mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"], now: at }).mirrored).toBe(1);
+    expect(
+      mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"], now: at })
+        .mirrored,
+    ).toBe(1);
     // Il giro è morto qui: la riga è nel file, `chat_ts` non è mai stato scritto.
     db.prepare("UPDATE pending_user_messages SET chat_ts = NULL").run();
 
-    const retry = mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"], now: at });
+    const retry = mirrorDbTurnsToJsonl(db, {
+      jhtHome: home,
+      agents: ["mentor"],
+      now: at,
+    });
     expect(retry.mirrored).toBe(0);
-    expect(readFileSync(chatFileFor(home, "mentor"), "utf-8").trim().split("\n")).toHaveLength(1);
+    expect(
+      readFileSync(chatFileFor(home, "mentor"), "utf-8").trim().split("\n"),
+    ).toHaveLength(1);
     // …e il lavoro si chiude: la colonna torna valorizzata, così l'ingest
     // continua a riconoscere quella riga come propria.
     expect(rowsOf()[0].chat_ts).not.toBeNull();
@@ -370,16 +422,24 @@ describe("SQLite → chat.jsonl", () => {
     });
     const row = rowsOf()[0];
     const chatTs = Number(row.chat_ts);
-    expect(Number((chatTs % 1).toFixed(3))).toBe((Number(row.id) % 1000) / 1000);
+    expect(Number((chatTs % 1).toFixed(3))).toBe(
+      (Number(row.id) % 1000) / 1000,
+    );
 
     // Una riga entrata da chat.jsonl NON ce l'ha: porta il `time.time()` di
     // chi l'ha scritta, che non ha ragione di coincidere con il proprio id.
     writeChat("capitano", [
-      jsonlLine({ role: "assistant", text: "risposta", ts: 1753790000.5678902 }),
+      jsonlLine({
+        role: "assistant",
+        text: "risposta",
+        ts: 1753790000.5678902,
+      }),
     ]);
     ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
     const ingested = rowsOf().find((r) => r.agent === "capitano")!;
-    expect(Number(ingested.chat_ts) % 1).not.toBe((Number(ingested.id) % 1000) / 1000);
+    expect(Number(ingested.chat_ts) % 1).not.toBe(
+      (Number(ingested.id) % 1000) / 1000,
+    );
   });
 
   it("al primo giro NON riversa lo storico vecchio nel file", () => {
@@ -402,15 +462,18 @@ describe("SQLite → chat.jsonl", () => {
 
 describe("turni scritti dal web", () => {
   it("il ts deriva dal legacy_id negativo ed è stabile", () => {
-    const row = { legacy_id: -1753790000123, created_at: "2026-07-29T10:00:00Z" };
+    const row = {
+      legacy_id: -1753790000123,
+      created_at: "2026-07-29T10:00:00Z",
+    };
     expect(chatTsOf(row)).toBe(1753790000.123);
     expect(chatTsOf(row)).toBe(chatTsOf(row));
   });
 
   it("senza legacy_id negativo ricade su created_at", () => {
-    expect(chatTsOf({ legacy_id: 42, created_at: "2026-07-29T10:00:00Z" })).toBe(
-      Date.parse("2026-07-29T10:00:00Z") / 1000,
-    );
+    expect(
+      chatTsOf({ legacy_id: 42, created_at: "2026-07-29T10:00:00Z" }),
+    ).toBe(Date.parse("2026-07-29T10:00:00Z") / 1000);
   });
 
   it("una riga che il box ha pushato lui non si reimporta", () => {
@@ -434,14 +497,21 @@ describe("turni scritti dal web", () => {
       body: "ci sei?",
       created_at: "2026-08-11T12:43:35Z", // troncato al secondo dal push
     };
-    expect(importCloudUserTurns(db, [tornataIndietro], { jhtHome: home })).toEqual([]);
+    expect(
+      importCloudUserTurns(db, [tornataIndietro], { jhtHome: home }),
+    ).toEqual([]);
     expect(rowsOf()).toHaveLength(1);
     expect(rowsOf()[0].chat_ts).toBe(locale);
   });
 
   it("entrano in SQLite non consegnati e non da ripushare", () => {
     const ids = importCloudUserTurns(db, [
-      { id: "uuid-1", legacy_id: -1753790000000, agent: "capitano", body: "che ore sono?" },
+      {
+        id: "uuid-1",
+        legacy_id: -1753790000000,
+        agent: "capitano",
+        body: "che ore sono?",
+      },
     ]);
     expect(ids).toEqual(["uuid-1"]);
 
@@ -462,7 +532,14 @@ describe("turni scritti dal web", () => {
     // le due storie tornavano a divergere.
     importCloudUserTurns(
       db,
-      [{ id: "uuid-1", legacy_id: -1753790000000, agent: "capitano", body: "e domani?" }],
+      [
+        {
+          id: "uuid-1",
+          legacy_id: -1753790000000,
+          agent: "capitano",
+          body: "e domani?",
+        },
+      ],
       { jhtHome: home },
     );
     const line = parseChatLine(
@@ -472,7 +549,12 @@ describe("turni scritti dal web", () => {
   });
 
   it("importare due volte lo stesso turno non lo duplica, nemmeno nel file", () => {
-    const turn = { id: "uuid-1", legacy_id: -1753790000000, agent: "capitano", body: "ciao" };
+    const turn = {
+      id: "uuid-1",
+      legacy_id: -1753790000000,
+      agent: "capitano",
+      body: "ciao",
+    };
     importCloudUserTurns(db, [turn], { jhtHome: home });
     const second = importCloudUserTurns(db, [turn], { jhtHome: home });
     expect(rowsOf()).toHaveLength(1);
@@ -486,7 +568,14 @@ describe("turni scritti dal web", () => {
   it("il turno importato non torna indietro al giro dell'ingest", () => {
     importCloudUserTurns(
       db,
-      [{ id: "uuid-1", legacy_id: -1753790000000, agent: "capitano", body: "ciao" }],
+      [
+        {
+          id: "uuid-1",
+          legacy_id: -1753790000000,
+          agent: "capitano",
+          body: "ciao",
+        },
+      ],
       { jhtHome: home },
     );
     const back = ingestChatJsonl(db, { jhtHome: home, agents: ["capitano"] });
@@ -544,6 +633,223 @@ describe("consegna al pane tmux", () => {
     expect(retry.delivered).toBe(1);
   });
 
+  it("usa il VERO rc=4, conserva Telegram e ritenta una volta dopo restart", async () => {
+    const dbPath = join(home, "jobs.db");
+    let persisted = new DatabaseSync(dbPath);
+    persisted.exec(SCHEMA);
+    persisted
+      .prepare(
+        "INSERT INTO pending_user_messages " +
+          "(agent, body, author, delivered_via, source_id) " +
+          "VALUES ('assistente', 'domanda sintetica', 'user', 'telegram', " +
+          "'telegram:assistente:91')",
+      )
+      .run();
+
+    const bin = join(home, "bin");
+    const sender = join(bin, "jht-tmux-send");
+    const calls = join(home, "calls.txt");
+    mkdirSync(bin);
+    const senderScript = (code: number) =>
+      `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\nexit ${code}\n`;
+    writeFileSync(sender, senderScript(4));
+    chmodSync(sender, 0o755);
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${bin}:${previousPath}`;
+    try {
+      // La riga Telegram entra davvero nella cronologia che legge il gioco
+      // PRIMA della consegna al pane: non basta che esista nella SQLite.
+      expect(mirrorDbTurnsToJsonl(persisted, { jhtHome: home })).toEqual({
+        mirrored: 1,
+        backfilled: 0,
+      });
+      const unified = readFileSync(chatFileFor(home, "assistente"), "utf-8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      expect(unified).toHaveLength(1);
+      expect(unified[0]).toMatchObject({
+        role: "user",
+        text: "domanda sintetica",
+      });
+
+      // Non e' un'eccezione finta: sendToPane spawna davvero il child, che
+      // termina con lo stesso rc=4 restituito da jht-tmux-send sotto carico.
+      const deliveryLogs: string[] = [];
+      expect(
+        await deliverPendingUserTurns(persisted, {
+          log: (_level: string, message: string) => deliveryLogs.push(message),
+        }),
+      ).toEqual({
+        delivered: 0,
+        failed: 1,
+      });
+      expect(deliveryLogs).toEqual([
+        expect.stringContaining("failed (exit 4)"),
+      ]);
+      expect(
+        persisted
+          .prepare("SELECT delivered_at FROM pending_user_messages")
+          .get()?.delivered_at,
+      ).toBeNull();
+      persisted.close();
+
+      // Restart del consumer: stessa riga durevole, nessun clone. Anche un
+      // altro rc nonzero e un errore reale di spawn restano ritentabili.
+      writeFileSync(sender, senderScript(7));
+      chmodSync(sender, 0o755);
+      persisted = new DatabaseSync(dbPath);
+      expect(await deliverPendingUserTurns(persisted)).toEqual({
+        delivered: 0,
+        failed: 1,
+      });
+      expect(
+        persisted
+          .prepare("SELECT delivered_at FROM pending_user_messages")
+          .get()?.delivered_at,
+      ).toBeNull();
+
+      rmSync(sender);
+      process.env.PATH = bin;
+      expect(await deliverPendingUserTurns(persisted)).toEqual({
+        delivered: 0,
+        failed: 1,
+      });
+      expect(
+        persisted
+          .prepare("SELECT delivered_at FROM pending_user_messages")
+          .get()?.delivered_at,
+      ).toBeNull();
+
+      // Soltanto il vero exit 0 timbra la consegna. Il giro successivo non
+      // trova più il turno: nessuna seconda busta al pane.
+      writeFileSync(sender, senderScript(0));
+      chmodSync(sender, 0o755);
+      expect(await deliverPendingUserTurns(persisted)).toEqual({
+        delivered: 1,
+        failed: 0,
+      });
+      expect(
+        persisted
+          .prepare("SELECT delivered_at FROM pending_user_messages")
+          .get()?.delivered_at,
+      ).toBeTruthy();
+      expect(await deliverPendingUserTurns(persisted)).toEqual({
+        delivered: 0,
+        failed: 0,
+      });
+      persisted.close();
+
+      const attempts = readFileSync(calls, "utf-8").trim().split("\n");
+      expect(attempts).toHaveLength(3);
+      expect(attempts).toEqual([
+        "ASSISTENTE [@utente -> @assistente] [TG] domanda sintetica",
+        "ASSISTENTE [@utente -> @assistente] [TG] domanda sintetica",
+        "ASSISTENTE [@utente -> @assistente] [TG] domanda sintetica",
+      ]);
+    } finally {
+      process.env.PATH = previousPath;
+      try {
+        persisted.close();
+      } catch {
+        // gia' chiuso nel percorso felice
+      }
+    }
+  });
+
+  it("un claim atomico impedisce a due consumer di inviare la stessa riga", async () => {
+    seedUserTurn("assistente", "una sola busta");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let sends = 0;
+    const first = deliverPendingUserTurns(db, {
+      sendFn: async () => {
+        sends += 1;
+        await gate;
+        return { ok: true, code: 0, error: "" };
+      },
+    });
+
+    // Il primo consumer e' sospeso DENTRO l'effetto esterno. Il secondo vede
+    // la stessa SQLite, ma non puo' vincere la PK del claim.
+    const overlap = await deliverPendingUserTurns(db, {
+      sendFn: async () => {
+        throw new Error("il secondo consumer non deve inviare");
+      },
+    });
+    expect(overlap).toEqual({ delivered: 0, failed: 0 });
+    expect(sends).toBe(1);
+
+    release();
+    expect(await first).toEqual({ delivered: 1, failed: 0 });
+    expect(sends).toBe(1);
+  });
+
+  it("crash dopo exit 0 conserva un esito incerto e non riconsegna al restart", async () => {
+    seedUserTurn("assistente", "non duplicarmi");
+    let sends = 0;
+    const crashDb = {
+      exec: db.exec.bind(db),
+      prepare(sql: string) {
+        if (sql.startsWith("UPDATE pending_user_messages SET delivered_at")) {
+          return {
+            run() {
+              throw new Error("crash sintetico dopo l'effetto esterno");
+            },
+          };
+        }
+        return db.prepare(sql);
+      },
+    } as unknown as InstanceType<typeof DatabaseSync>;
+
+    await expect(
+      deliverPendingUserTurns(crashDb, {
+        sendFn: async () => {
+          sends += 1;
+          return { ok: true, code: 0, error: "" };
+        },
+      }),
+    ).rejects.toThrow("crash sintetico");
+    expect(sends).toBe(1);
+    expect(rowsOf()[0].delivered_at).toBeNull();
+
+    // Al riavvio il claim e' ancora nella SQLite: nessuna seconda busta. Lo
+    // stato non viene fatto scadere indovinando; la diagnosi lo espone subito.
+    expect(
+      await deliverPendingUserTurns(db, {
+        sendFn: async () => {
+          sends += 1;
+          return { ok: true, code: 0, error: "" };
+        },
+      }),
+    ).toEqual({ delivered: 0, failed: 0 });
+    expect(sends).toBe(1);
+    const queue = undeliveredUserTurns(db);
+    expect(queue).toMatchObject({ count: 1, uncertain: 1 });
+    expect(
+      diagnoseChatLane({
+        queued: queue.count,
+        oldestQueuedAt: queue.oldest,
+        uncertain: queue.uncertain,
+      })?.reason,
+    ).toBe("delivery-outcome-uncertain");
+  });
+
+  it("conserva i marker Telegram degli allegati sulla strada unificata", () => {
+    expect(paneEnvelope("assistente", "testo", "telegram")).toBe(
+      "[@utente -> @assistente] [TG] testo",
+    );
+    expect(
+      paneEnvelope(
+        "assistente",
+        "[TG-DOC] path=/tmp/synthetic.pdf",
+        "telegram",
+      ),
+    ).toBe("[@utente -> @assistente] [TG-DOC] path=/tmp/synthetic.pdf");
+  });
+
   it("un pane morto non blocca la coda degli altri agenti", async () => {
     seedUserTurn("capitano", "al capitano");
     seedUserTurn("mentor", "al mentor");
@@ -584,7 +890,10 @@ describe("push dei turni nuovi", () => {
     const batch = takeChatRowsToPush(db);
     expect(batch.map((r) => r.body)).toEqual(["nuovo"]);
 
-    markChatRowsPushed(db, batch.map((r) => r.id));
+    markChatRowsPushed(
+      db,
+      batch.map((r) => r.id),
+    );
     expect(takeChatRowsToPush(db)).toHaveLength(0);
   });
 
@@ -610,7 +919,12 @@ describe("push dei turni nuovi", () => {
 
   it("un timestamp già ISO non viene toccato", () => {
     const cloud = toCloudRow(
-      { id: 1, agent: "mentor", body: "x", created_at: "2026-07-29T10:00:00.000Z" },
+      {
+        id: 1,
+        agent: "mentor",
+        body: "x",
+        created_at: "2026-07-29T10:00:00.000Z",
+      },
       "u",
     );
     expect(cloud.created_at).toBe("2026-07-29T10:00:00.000Z");
@@ -624,15 +938,23 @@ describe("rendezvous chat", () => {
   it("pendente finché la consegna non supera la richiesta", () => {
     expect(chatPending(null, null)).toBe(false);
     expect(chatPending("2026-07-29T10:00:00Z", null)).toBe(true);
-    expect(chatPending("2026-07-29T10:00:00Z", "2026-07-29T09:59:00Z")).toBe(true);
-    expect(chatPending("2026-07-29T10:00:00Z", "2026-07-29T10:00:01Z")).toBe(false);
+    expect(chatPending("2026-07-29T10:00:00Z", "2026-07-29T09:59:00Z")).toBe(
+      true,
+    );
+    expect(chatPending("2026-07-29T10:00:00Z", "2026-07-29T10:00:01Z")).toBe(
+      false,
+    );
   });
 
   it("confronta le date, non le stringhe", () => {
     // `+00:00` e `Z` ordinano diversamente da come si datano: è la trappola
     // del cursore congelato del 15/07, e qui costerebbe una chat muta.
-    expect(chatPending("2026-07-29T10:00:00+00:00", "2026-07-29T09:00:00Z")).toBe(true);
-    expect(chatPending("2026-07-29T09:00:00+00:00", "2026-07-29T10:00:00Z")).toBe(false);
+    expect(
+      chatPending("2026-07-29T10:00:00+00:00", "2026-07-29T09:00:00Z"),
+    ).toBe(true);
+    expect(
+      chatPending("2026-07-29T09:00:00+00:00", "2026-07-29T10:00:00Z"),
+    ).toBe(false);
   });
 });
 
@@ -646,7 +968,9 @@ describe("rendezvous chat", () => {
 
 describe("diagnosi della corsia chat", () => {
   it("corsia che lavora: nessun allarme", () => {
-    expect(diagnoseChatLane({ pending: false, canRead: true, queued: 0 })).toBeNull();
+    expect(
+      diagnoseChatLane({ pending: false, canRead: true, queued: 0 }),
+    ).toBeNull();
   });
 
   it("il campanello del web suona e non c'è canale per rispondere", () => {
@@ -691,6 +1015,17 @@ describe("diagnosi della corsia chat", () => {
     ).toBeNull();
   });
 
+  it("un claim senza timbro e' incerto e si dichiara subito", () => {
+    const stall = diagnoseChatLane({
+      queued: 1,
+      oldestQueuedAt: "2026-07-24 09:59:59",
+      uncertain: 1,
+      now: Date.parse("2026-07-24T10:00:00Z"),
+    });
+    expect(stall?.reason).toBe("delivery-outcome-uncertain");
+    expect(stall?.message).toContain("automatic retry is stopped");
+  });
+
   it("turni in coda oltre la soglia: guasto dichiarato, col conto", () => {
     const now = Date.parse("2026-07-24T10:00:00Z");
     const stall = diagnoseChatLane({
@@ -714,8 +1049,14 @@ describe("diagnosi della corsia chat", () => {
       oldestQueuedAt: "2026-07-24 09:00:00",
       graceMs: 300_000,
     };
-    const a = diagnoseChatLane({ ...base, now: Date.parse("2026-07-24T10:00:00Z") });
-    const b = diagnoseChatLane({ ...base, now: Date.parse("2026-07-24T14:00:00Z") });
+    const a = diagnoseChatLane({
+      ...base,
+      now: Date.parse("2026-07-24T10:00:00Z"),
+    });
+    const b = diagnoseChatLane({
+      ...base,
+      now: Date.parse("2026-07-24T14:00:00Z"),
+    });
     expect(a?.summary).toBe(b?.summary);
     expect(a?.message).not.toBe(b?.message);
   });
@@ -753,13 +1094,28 @@ describe("frequenza delle segnalazioni", () => {
     // Il giro è ~5s: senza questo cancello sarebbero ~700 righe identiche
     // all'ora, cioè rumore che nessuno legge — di nuovo un guasto invisibile.
     const prev = { summary: "chat: guasto", at: now };
-    expect(shouldAnnounceStall(prev, "chat: guasto", { now: now + 5_000, everyMs: 900_000 })).toBe(false);
-    expect(shouldAnnounceStall(prev, "chat: guasto", { now: now + 900_000, everyMs: 900_000 })).toBe(true);
+    expect(
+      shouldAnnounceStall(prev, "chat: guasto", {
+        now: now + 5_000,
+        everyMs: 900_000,
+      }),
+    ).toBe(false);
+    expect(
+      shouldAnnounceStall(prev, "chat: guasto", {
+        now: now + 900_000,
+        everyMs: 900_000,
+      }),
+    ).toBe(true);
   });
 
   it("un guasto DIVERSO passa comunque, anche dentro l'intervallo", () => {
     const prev = { summary: "chat: guasto", at: now };
-    expect(shouldAnnounceStall(prev, "chat: altro guasto", { now: now + 1_000, everyMs: 900_000 })).toBe(true);
+    expect(
+      shouldAnnounceStall(prev, "chat: altro guasto", {
+        now: now + 1_000,
+        everyMs: 900_000,
+      }),
+    ).toBe(true);
   });
 });
 
@@ -767,7 +1123,11 @@ describe("perimetro delle chat web", () => {
   it("le tre conversazioni sono quelle che il web mostra", () => {
     // Se questa lista divergesse da web/lib/chat-agents.ts, la route
     // accetterebbe un messaggio che nessun pane riceverà mai.
-    expect([...CHAT_AGENTS].sort()).toEqual(["assistente", "capitano", "mentor"]);
+    expect([...CHAT_AGENTS].sort()).toEqual([
+      "assistente",
+      "capitano",
+      "mentor",
+    ]);
   });
 });
 
@@ -804,21 +1164,35 @@ function fakeCloud(messages: Record<string, unknown>[]) {
       body: init?.body ? JSON.parse(init.body as string) : undefined,
     });
     if (method === "GET") {
-      return { ok: true, status: 200, json: async () => ({ ok: true, messages }) };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, messages }),
+      };
     }
-    return { ok: true, status: 200, json: async () => ({ ok: true, delivered: messages.length }) };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, delivered: messages.length }),
+    };
   };
   return { fetchFn, calls };
 }
 
 describe("canale della chat senza lettore diretto", () => {
   it("un box senza JHT_SUPABASE_DIRECT ha comunque un canale", () => {
-    const channel = chatChannelFor(BOX_CONFIG, null, { fetchFn: async () => ({}) as any });
+    const channel = chatChannelFor(BOX_CONFIG, null, {
+      fetchFn: async () => ({}) as any,
+    });
     expect(channel?.kind).toBe("vercel");
   });
 
   it("col lettore diretto resta il canale diretto (costa meno)", () => {
-    const reader = { readUndeliveredUserChat: async () => [], markUserChatDelivered: async () => {}, patchTeamState: async () => {} };
+    const reader = {
+      readUndeliveredUserChat: async () => [],
+      markUserChatDelivered: async () => {},
+      patchTeamState: async () => {},
+    };
     expect(chatChannelFor(BOX_CONFIG, reader as any)?.kind).toBe("direct");
   });
 
@@ -828,8 +1202,12 @@ describe("canale della chat senza lettore diretto", () => {
     let body: Record<string, unknown> | undefined;
     const reader = {
       readUndeliveredUserChat: async () => [],
-      markUserChatDelivered: async (ids: string[]) => { marked.push(ids); },
-      patchTeamState: async () => { blindPatches += 1; },
+      markUserChatDelivered: async (ids: string[]) => {
+        marked.push(ids);
+      },
+      patchTeamState: async () => {
+        blindPatches += 1;
+      },
     };
     const channel = chatChannelFor(BOX_CONFIG, reader as any, {
       fetchFn: async (_url: string, init?: Record<string, any>) => {
@@ -837,10 +1215,13 @@ describe("canale della chat senza lettore diretto", () => {
         return { ok: false, status: 409 } as Response;
       },
     });
-    const result = await channel!.acknowledgeDelivery(["00000000-0000-4000-8000-000000000001"], {
-      closeRendezvous: true,
-      expectedRequestedAt: "2026-08-04T10:00:00Z",
-    });
+    const result = await channel!.acknowledgeDelivery(
+      ["00000000-0000-4000-8000-000000000001"],
+      {
+        closeRendezvous: true,
+        expectedRequestedAt: "2026-08-04T10:00:00Z",
+      },
+    );
     expect(marked).toEqual([["00000000-0000-4000-8000-000000000001"]]);
     expect(blindPatches).toBe(0);
     expect(body).toEqual({
@@ -852,7 +1233,9 @@ describe("canale della chat senza lettore diretto", () => {
   });
 
   it("senza token non c'è cloud da cui ritirare nulla", () => {
-    expect(chatChannelFor({ base_url: "https://jobhunterteam.ai" }, null)).toBeNull();
+    expect(
+      chatChannelFor({ base_url: "https://jobhunterteam.ai" }, null),
+    ).toBeNull();
   });
 
   it("il turno scritto dal web arriva al pane anche con reader = null", async () => {
@@ -865,7 +1248,9 @@ describe("canale della chat senza lettore diretto", () => {
         created_at: "2026-07-30T10:00:00Z",
       },
     ]);
-    const channel = chatChannelFor(BOX_CONFIG, null, { fetchFn: cloud.fetchFn });
+    const channel = chatChannelFor(BOX_CONFIG, null, {
+      fetchFn: cloud.fetchFn,
+    });
 
     // La condizione in cui gira il pull: il web ha suonato il campanello e
     // il box non ha ancora consegnato.
@@ -887,7 +1272,9 @@ describe("canale della chat senza lettore diretto", () => {
     expect(sends).toEqual([["capitano", "ci sei?"]]);
     expect(rowsOf()[0].delivered_at).not.toBeNull();
     // …e visibile anche nella chat del videogioco.
-    expect(readFileSync(chatFileFor(home, "capitano"), "utf-8")).toContain("ci sei?");
+    expect(readFileSync(chatFileFor(home, "capitano"), "utf-8")).toContain(
+      "ci sei?",
+    );
 
     // ── Ack + chiusura del rendezvous ──
     await channel!.closeRendezvous(importedIds);
@@ -912,14 +1299,18 @@ describe("canale della chat senza lettore diretto", () => {
     // canale non deve toccare la rete, e il pull parte SOLO col campanello
     // suonato — `chatPending` falso ⇒ zero richieste, come oggi.
     const cloud = fakeCloud([]);
-    const channel = chatChannelFor(BOX_CONFIG, null, { fetchFn: cloud.fetchFn });
+    const channel = chatChannelFor(BOX_CONFIG, null, {
+      fetchFn: cloud.fetchFn,
+    });
     expect(channel).not.toBeNull();
     expect(cloud.calls).toHaveLength(0);
 
     // Nessun messaggio mai scritto, e messaggio già consegnato: i due modi
     // in cui una chat sta ferma.
     expect(chatPending(null, null)).toBe(false);
-    expect(chatPending("2026-07-30T10:00:00Z", "2026-07-30T10:00:01Z")).toBe(false);
+    expect(chatPending("2026-07-30T10:00:00Z", "2026-07-30T10:00:01Z")).toBe(
+      false,
+    );
     expect(cloud.calls).toHaveLength(0);
   });
 
@@ -927,9 +1318,12 @@ describe("canale della chat senza lettore diretto", () => {
     // Se il pull ingoiasse l'errore ritornando [], il rendezvous verrebbe
     // chiuso su una coda vuota e il turno dell'utente sarebbe perso.
     const channel = chatChannelFor(BOX_CONFIG, null, {
-      fetchFn: async () => ({ ok: false, status: 500, json: async () => ({}) }) as any,
+      fetchFn: async () =>
+        ({ ok: false, status: 500, json: async () => ({}) }) as any,
     });
-    await expect(channel!.readUndeliveredUserChat({ limit: 10 })).rejects.toThrow(/500/);
+    await expect(
+      channel!.readUndeliveredUserChat({ limit: 10 }),
+    ).rejects.toThrow(/500/);
     await expect(channel!.closeRendezvous(["x"])).rejects.toThrow(/500/);
   });
 
@@ -941,7 +1335,11 @@ describe("canale della chat senza lettore diretto", () => {
         signals.push(init?.signal);
         return init?.method === "POST"
           ? ({ ok: true, status: 200 } as Response)
-          : ({ ok: true, status: 200, json: async () => ({ messages: [] }) } as any);
+          : ({
+              ok: true,
+              status: 200,
+              json: async () => ({ messages: [] }),
+            } as any);
       },
     });
     await channel!.readUndeliveredUserChat();
@@ -949,9 +1347,13 @@ describe("canale della chat senza lettore diretto", () => {
     expect(signals).toHaveLength(2);
     expect(signals.every((signal) => signal instanceof AbortSignal)).toBe(true);
 
-    const timeout = Object.assign(new Error("host-riservato"), { name: "TimeoutError" });
+    const timeout = Object.assign(new Error("host-riservato"), {
+      name: "TimeoutError",
+    });
     expect(cloudRequestFailure(timeout)).toBe("timeout");
-    expect(cloudRequestFailure(new Error("url-riservato"))).toBe("request_failed");
+    expect(cloudRequestFailure(new Error("url-riservato"))).toBe(
+      "request_failed",
+    );
   });
 
   it("i due lettori chiedono SOLO i turni nati sul web", () => {

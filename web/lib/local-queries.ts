@@ -402,7 +402,10 @@ export function getPositionByIdLocal(
   try {
     const tk = db
       .prepare(
-        "SELECT * FROM position_tickets WHERE position_id = ? ORDER BY created_at ASC",
+        // `created_at` è la cronologia della richiesta; `updated_at` cambia
+        // quando il team lavora il ticket. id DESC rende stabili le date uguali.
+        "SELECT * FROM position_tickets WHERE position_id = ? " +
+          "ORDER BY created_at DESC, id DESC",
       )
       .all(numId) as any[];
     tickets = tk.map(mapTicket);
@@ -1794,4 +1797,3 @@ function mapApplication(r: any): Application {
     interview_round: r.interview_round,
   };
 }
-

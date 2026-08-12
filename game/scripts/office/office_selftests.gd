@@ -1928,6 +1928,9 @@ func _guided_onboarding_selftest() -> void:
 	# Pannello Docker: deve mostrare la versione del runtime e l'azione di
 	# aggiornamento, altrimenti l'utente resta su un'immagine vecchia senza
 	# nemmeno saperlo (il gioco si aggiorna con l'installer, il container no).
+	# Il MockBackend serve agli assert chat sopra ma rappresenta una macchina
+	# remota: questo controtest dichiara esplicitamente lo stato Docker locale.
+	SetupService.status["remote"] = false
 	SetupService.status["docker_running"] = true
 	SetupService.status["docker_available"] = true
 	SetupService.status["container_exists"] = true
@@ -2453,8 +2456,16 @@ func _feedback_panel_selftest() -> void:
 	panel._fb_form["happened"] = "la finestra resta ferma su collegamento"
 	panel._refresh_feedback_send()
 	gate_ok = gate_ok and send != null and not send.disabled
-	var no_contact_control: bool = not _ui_has_text(panel,
+	var contact_control: bool = _ui_has_text(panel,
 			UIStrings.t("feedback.q_contact"))
+	# Assente è accettato; un valore invalido ferma l'invio; un indirizzo
+	# sintetico valido abilita di nuovo il gate.
+	panel._fb_form["reply_to"] = "not-an-address"
+	panel._refresh_feedback_send()
+	var email_gate := send != null and send.disabled
+	panel._fb_form["reply_to"] = "reporter@example.com"
+	panel._refresh_feedback_send()
+	email_gate = email_gate and send != null and not send.disabled
 
 	# La raccolta gira su un thread (docker, file): si attende l'esito.
 	var collected := false
@@ -2493,31 +2504,34 @@ func _feedback_panel_selftest() -> void:
 	# Tornando indietro il racconto è ancora lì: farlo riscrivere sarebbe il
 	# modo più rapido per non ricevere più segnalazioni.
 	var persist_ok := str(panel._fb_form["happened"]).contains("collegamento")
-	# Quattro invarianti del contratto privacy: il recapito non esce mai dal
-	# desktop, i racconti hanno la stessa redazione dei log, l'anteprima è il
-	# documento che verrà spedito e il contatore include anche ciò che l'utente
-	# ha scritto, non solo gli allegati tecnici.
+	# Il recapito dedicato esce soltanto col nome `reply_to`; il vecchio contact
+	# e gli indirizzi incollati nel racconto restano redatti. Anteprima e copia
+	# locale non mostrano il recapito, che non fa parte del report tecnico.
 	var fake_token := "ghp" + "_ABCdefGHIjklMNOpqrSTUvwxYZ0123456789"
 	var private_form := {
-		"doing": "CV in /Users/mariorossi/CV_Mario_Rossi.pdf",
-		"happened": "scrivi a user@example.com con token=" + fake_token,
+		"doing": "CV in /Users/local-account/Documents/resume.pdf",
+		"happened": "scrivi a narrative@example.com con token=" + fake_token,
 		"expected": "nessun contatto o segreto deve lasciare il computer",
-		"contact": "user@example.com", # client vecchio: deve essere ignorato
+		"reply_to": "reporter@example.com",
+		"contact": "legacy@example.com", # client vecchio: ignorato
 	}
 	var private_bundle := {"redaction": {}, "logs": {}}
 	var payload := FeedbackService._payload(private_form, private_bundle,
 			"diagnostica senza dati personali")
 	var payload_redaction: Dictionary = payload.get("redaction", {})
-	var no_contact := not payload.has("contact") \
-			and not JSON.stringify(payload).contains("user@example.com")
+	var reply_contract := not payload.has("contact") \
+			and str(payload.get("reply_to", "")) == "reporter@example.com" \
+			and not JSON.stringify(payload).contains("legacy@example.com") \
+			and not JSON.stringify(payload).contains("narrative@example.com")
 	var redacted_story := not JSON.stringify(payload).contains(fake_token) \
-			and not JSON.stringify(payload).contains("mariorossi") \
+			and not JSON.stringify(payload).contains("local-account") \
 			and int(payload.get("redaction", {}).size()) >= 3
 	var exact_preview := FeedbackService._to_markdown(payload)
 	var preview_matches_payload := exact_preview.contains("[email]") \
 			and exact_preview.contains("[document].pdf") \
 			and exact_preview.contains(UIStrings.t("feedback.report.redacted")) \
-			and not exact_preview.contains("user@example.com") \
+			and not exact_preview.contains("reporter@example.com") \
+			and not exact_preview.contains("narrative@example.com") \
 			and not exact_preview.contains(fake_token)
 	var counts_include_story: bool = int(payload_redaction.get("email", 0)) > 0 \
 			and not payload_redaction.is_empty()
@@ -2539,13 +2553,14 @@ func _feedback_panel_selftest() -> void:
 			FeedbackService.last_saved_path = ""
 		if not send_ok:
 			print("FEEDBACK-PANEL-TEST send esito=", result)
-	var ok: bool = gate_ok and no_contact_control and collected and preview_ok and persist_ok and no_contact \
+	var ok: bool = gate_ok and contact_control and email_gate and collected \
+			and preview_ok and persist_ok and reply_contract \
 			and redacted_story and preview_matches_payload and counts_include_story and send_ok
 	if not ok:
 		print("FEEDBACK-PANEL-TEST details gate=", gate_ok, " collected=", collected,
 				" preview=", preview_ok, " persist=", persist_ok,
-				" no_contact_control=", no_contact_control,
-				" no_contact=", no_contact, " redacted_story=", redacted_story,
+				" contact_control=", contact_control, " email_gate=", email_gate,
+				" reply_contract=", reply_contract, " redacted_story=", redacted_story,
 				" preview_matches_payload=", preview_matches_payload,
 				" counts_include_story=", counts_include_story)
 	print("FEEDBACK-PANEL-TEST ", "PASS" if ok else "FAIL")
