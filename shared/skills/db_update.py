@@ -174,6 +174,21 @@ def update_position(args):
     conn = get_db()
     ensure_schema(conn)
 
+    # `applied` non è soltanto uno stato della posizione: implica una riga
+    # applications completa (flag, timestamp e canale). Scriverlo da qui
+    # produrrebbe due verità perché questo comando non riceve quei dati.
+    # La corsia application più sotto li scrive insieme nella stessa
+    # transazione e resta l'unico ingresso CLI supportato.
+    if args.status == 'applied':
+        print(
+            "⚠️  APPLIED REJECTED: use `db_update.py application <ID> "
+            "--applied-at now --applied-via <channel>` so position and "
+            "application are updated atomically.",
+            file=sys.stderr,
+        )
+        conn.close()
+        sys.exit(1)
+
     # Bug #14: cattura lo stato corrente PRIMA dell'UPDATE per registrare
     # la transizione. Se status non cambia (es. solo notes aggiornate),
     # nessuna entry viene scritta nel transition log.
@@ -577,6 +592,45 @@ def update_application(args):
     conn = get_db()
     ensure_schema(conn)
 
+    applied_flag = (
+        args.applied.lower() in ('true', '1', 'yes')
+        if args.applied is not None else False
+    )
+    marks_applied = bool(
+        args.status == 'applied' or args.applied_at or applied_flag
+    )
+    if marks_applied:
+        # Un timestamp senza canale (o viceversa) non è uno stato completo.
+        # `status=applied` può essere una scorciatoia legittima, ma l'istante
+        # va materializzato adesso, non lasciato implicito nella posizione.
+        if not (args.applied_via or '').strip():
+            print(
+                "⚠️  APPLIED REJECTED: --applied-via is required whenever "
+                "an application is marked as sent.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+        args.status = 'applied'
+        args.applied_at = args.applied_at or 'now'
+
+    previous_position_status = None
+    if marks_applied:
+        position = conn.execute(
+            "SELECT status FROM positions WHERE id = ?", (args.position_id,)
+        ).fetchone()
+        if not position:
+            print(
+                f"⚠️  position_id={args.position_id} does not exist in "
+                "positions. Aborting application update.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+        previous_position_status = (
+            position['status'] if hasattr(position, 'keys') else position[0]
+        )
+
     updates = []
     params = []
 
@@ -708,12 +762,46 @@ def update_application(args):
             ins_placeholders.append("datetime('now', 'localtime')")
         sql = f"INSERT INTO applications ({', '.join(ins_cols)}) VALUES ({', '.join(ins_placeholders)})"
         conn.execute(sql, ins_vals)
-        conn.commit()
-        print(f"Application for position {args.position_id} CREATED (initial INSERT).")
-        conn.close()
-        return
+        created = True
+    else:
+        created = False
+
+    if marks_applied:
+        # La stessa transazione che pubblica applied_at aggiorna lo stato
+        # operativo e il suo event-log. Se uno dei tre statement fallisce,
+        # nessuna superficie può osservare una candidatura a metà.
+        conn.execute(
+            "UPDATE positions SET status = 'applied', last_actor = ? "
+            "WHERE id = ?",
+            (
+                os.environ.get('JHT_AGENT_NAME')
+                or os.environ.get('JHT_AGENT_DIR', '').split('/')[-1]
+                or 'user',
+                args.position_id,
+            ),
+        )
+        if previous_position_status != 'applied':
+            conn.execute(
+                "INSERT INTO position_state_transitions "
+                "(position_id, from_state, to_state, by_agent) "
+                "VALUES (?, ?, 'applied', ?)",
+                (
+                    args.position_id,
+                    previous_position_status,
+                    os.environ.get('JHT_AGENT_NAME') or 'user',
+                ),
+            )
     conn.commit()
-    print(f"Application for position {args.position_id} updated ({cursor.rowcount} row)")
+    if created:
+        print(
+            f"Application for position {args.position_id} CREATED "
+            "(initial INSERT)."
+        )
+    else:
+        print(
+            f"Application for position {args.position_id} updated "
+            f"({cursor.rowcount} row)"
+        )
     conn.close()
 
 
