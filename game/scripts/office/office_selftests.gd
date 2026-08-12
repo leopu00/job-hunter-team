@@ -1853,10 +1853,18 @@ func _guided_onboarding_selftest() -> void:
 	ScriptedOnboarding.remember_profile_fields({"name": "Ada Test",
 			"email": "ada@example.com", "languages": "Italiano, English"})
 	ScriptedOnboarding.record_dialogue_choice("tour_scout", "n2",
-			"Posso indicare aziende o tipi di lavoro preferiti?", "sources")
-	check.call(ScriptedOnboarding.llm_context_text().contains("Ada Test") \
+			"Posso indicare aziende o tipi di lavoro preferiti?", "sources",
+			"dialogue.tour_scout.n2.choice.sources")
+	var dialogue_context := ScriptedOnboarding.llm_context_text()
+	var dialogue_answer := (ScriptedOnboarding.llm_context().get("answers", []) \
+			as Array).filter(func(item: Dictionary) -> bool:
+				return str(item.get("kind", "")) == "dialogue_choice")
+	check.call(dialogue_context.contains("Ada Test") \
 			and ScriptedOnboarding.profile_draft().get("email", "") == "ada@example.com" \
-			and ScriptedOnboarding.llm_context_text().contains("lavoro preferiti"),
+			and dialogue_context.contains("sources") \
+			and not dialogue_context.contains("lavoro preferiti") \
+			and dialogue_answer.size() == 1 \
+			and not (dialogue_answer[0] as Dictionary).has("label"),
 			"dati del profilo nativo non sincronizzati nel contesto LLM")
 
 	BackendBus.set_backend(MockBackend.new())

@@ -234,7 +234,8 @@ func _model_answers() -> Array:
 		if not item is Dictionary:
 			continue
 		var clean: Dictionary = item.duplicate(true)
-		if str(clean.get("step", "")) == "role":
+		if str(clean.get("step", "")) == "role" \
+				or str(clean.get("kind", "")) == "dialogue_choice":
 			clean.erase("label")
 		out.append(clean)
 	return out
@@ -310,11 +311,12 @@ func set_preference(key: String, value: String) -> void:
 ## memoria strutturata. Non tutte sono preferenze operative, ma raccontano
 ## quali dubbi e risorse interessano di più all'utente.
 func record_dialogue_choice(tree_id: String, node_id: String,
-		choice_text: String, next_id: String) -> void:
+		choice_text: String, next_id: String, choice_id := "") -> void:
 	if not tree_id.begins_with("tour_"):
 		return
 	_record_answer(tree_id.trim_prefix("tour_"), node_id, next_id,
-			{"label": choice_text})
+			{"label": choice_text, "kind": "dialogue_choice",
+			"label_key": choice_id})
 	_save_state()
 
 
@@ -1037,14 +1039,19 @@ func _record_answer(agent: String, step: String, option_id: String,
 		var old: Variant = _answers[i]
 		if old is Dictionary and str(old.get("topic", "")) == topic:
 			_answers.remove_at(i)
-	_answers.append({
+	var answer := {
 		"agent": agent,
 		"step": step,
 		"topic": topic,
 		"value": option_id,
 		"label": str(selected.get("label", option_id)),
 		"updated_at": Time.get_datetime_string_from_system(false, true),
-	})
+	}
+	if str(selected.get("kind", "")) != "":
+		answer["kind"] = str(selected["kind"])
+	if str(selected.get("label_key", "")) != "":
+		answer["label_key"] = str(selected["label_key"])
+	_answers.append(answer)
 
 
 static func _display_value(value: Variant) -> String:
