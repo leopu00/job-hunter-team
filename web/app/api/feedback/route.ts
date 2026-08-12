@@ -65,12 +65,9 @@ async function sendEmail(report: Report, ticket: string): Promise<boolean> {
       },
       // Il recapito non entra nel corpo, nel webhook o nei log. Il payload
       // puro lo colloca soltanto nel Reply-To usato dall'operatore.
-      body: JSON.stringify(resendEmailPayload(
-        report,
-        ticket,
-        MAIL_FROM,
-        MAIL_TO,
-      )),
+      body: JSON.stringify(
+        resendEmailPayload(report, ticket, MAIL_FROM, MAIL_TO),
+      ),
     });
     if (!res.ok) {
       console.error("[feedback] Resend ha risposto", res.status);
