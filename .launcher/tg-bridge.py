@@ -6,7 +6,10 @@ Schema 2026-05-13 rev2: 3 bot dedicati (assistente, capitano, mentor). Ogni
 istanza del bridge gestisce UN solo bot/ruolo (one process per role). Lo
 script da' per scontato di essere lanciato da start-agent.sh con env:
 
-  JHT_TG_BOT_ROLE          — assistente | capitano | mentor (obbligatorio)
+  --role <nome>            — assistente | capitano | mentor (preferito: e' il
+                             solo modo per cui il ruolo compaia nel cmdline,
+                             che e' come il watchdog conta i bridge per ruolo)
+  JHT_TG_BOT_ROLE          — stesso valore, fallback storico
   JHT_TG_TARGET_SESSION    — sessione tmux destinataria (default = ROLE.upper())
   JHT_TG_OFFSET_RESET=1    — reset offset (skip backlog)
   JHT_HOME                 — dir config (default /jht_home)
@@ -65,10 +68,31 @@ JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 CONFIG_PATH = JHT_HOME / "jht.config.json"
 INBOX_DIR = JHT_HOME / "profile" / "inbox"
 
-BOT_ROLE = (os.environ.get("JHT_TG_BOT_ROLE", "") or "").strip().lower()
+def _role_from_argv(argv):
+    """Il ruolo passato come `--role <nome>` (o `--role=<nome>`).
+
+    O-58 — non è una comodità: è l'unico modo perché il ruolo finisca nel
+    cmdline del processo python. Con la sola env il cmdline è
+    `python3 -u tg-bridge.py` per tutti e tre i bridge, e la variabile vive
+    nella shell wrapper: contare i bridge PER RUOLO leggendo /proc — che è
+    quello che serve al watchdog per non ammazzare i sani — era letteralmente
+    impossibile. La env resta come fallback: un avvio a mano continua a
+    funzionare come prima.
+    """
+    for i, arg in enumerate(argv):
+        if arg == "--role" and i + 1 < len(argv):
+            return argv[i + 1]
+        if arg.startswith("--role="):
+            return arg.split("=", 1)[1]
+    return ""
+
+
+BOT_ROLE = (
+    _role_from_argv(sys.argv[1:]) or os.environ.get("JHT_TG_BOT_ROLE", "") or ""
+).strip().lower()
 if BOT_ROLE not in VALID_ROLES:
-    print(f"FATAL: JHT_TG_BOT_ROLE must be one of {VALID_ROLES} (received: '{BOT_ROLE}')",
-          flush=True)
+    print(f"FATAL: --role (or JHT_TG_BOT_ROLE) must be one of {VALID_ROLES} "
+          f"(received: '{BOT_ROLE}')", flush=True)
     sys.exit(2)
 
 # State file e default target session sono derivati dal ruolo. Cosi' 3 bridge

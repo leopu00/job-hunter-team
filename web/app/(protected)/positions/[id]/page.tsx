@@ -144,7 +144,11 @@ const SCORE_DIMENSIONS = [
   { column: "stack_match", labelKey: "sb_stack_match", why: "stack" },
   { column: "remote_fit", labelKey: "sb_remote_fit", why: "remote" },
   { column: "salary_fit", labelKey: "sb_salary_fit", why: "salary" },
-  { column: "experience_fit", labelKey: "sb_experience_fit", why: "experience" },
+  {
+    column: "experience_fit",
+    labelKey: "sb_experience_fit",
+    why: "experience",
+  },
   { column: "strategic_fit", labelKey: "sb_strategic_fit", why: "strategic" },
 ] as const;
 
@@ -187,42 +191,42 @@ function ScoreBar({
   const row = (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-3">
-      <span className="text-[10px] text-[var(--color-dim)] w-28 shrink-0">
-        {label}
-      </span>
-      <div
-        className="flex-1 h-1 rounded-full overflow-hidden"
-        style={{ background: "var(--color-border)" }}
-      >
+        <span className="text-[10px] text-[var(--color-dim)] w-28 shrink-0">
+          {label}
+        </span>
         <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${pct}%`, background: color }}
-        />
-      </div>
-      <span
-        className="text-[11px] font-semibold w-12 text-right tabular-nums"
-        style={{ color }}
-      >
-        {value ?? "—"}
-        <span className="text-[var(--color-dim)] font-normal">/{max}</span>
-      </span>
-      {/* Slot fisso per il chevron: mantiene allineate le barre con e
+          className="flex-1 h-1 rounded-full overflow-hidden"
+          style={{ background: "var(--color-border)" }}
+        >
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${pct}%`, background: color }}
+          />
+        </div>
+        <span
+          className="text-[11px] font-semibold w-12 text-right tabular-nums"
+          style={{ color }}
+        >
+          {value ?? "—"}
+          <span className="text-[var(--color-dim)] font-normal">/{max}</span>
+        </span>
+        {/* Slot fisso per il chevron: mantiene allineate le barre con e
           senza razionale. */}
-      <span className="w-3 shrink-0 flex items-center justify-center">
-        {detail && (
-          <svg
-            viewBox="0 0 10 6"
-            className="w-2.5 h-2.5 text-[var(--color-dim)] transition-transform group-open:rotate-180"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M1 1l4 4 4-4" />
-          </svg>
-        )}
-      </span>
+        <span className="w-3 shrink-0 flex items-center justify-center">
+          {detail && (
+            <svg
+              viewBox="0 0 10 6"
+              className="w-2.5 h-2.5 text-[var(--color-dim)] transition-transform group-open:rotate-180"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M1 1l4 4 4-4" />
+            </svg>
+          )}
+        </span>
       </div>
       {over && (
         <div className="flex items-start gap-1.5 pl-28 pr-[3.75rem] text-[10px] leading-snug text-[var(--color-red)]">

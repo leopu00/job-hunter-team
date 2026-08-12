@@ -85,7 +85,10 @@ func _refresh() -> void:
 		var btn := Button.new()
 		btn.flat = true
 		var score_v: Variant = p.get("total_score")
-		btn.text = "%s  %s — %s   · %s" % [
+		# L'ID nella riga: chi ha cercato "JHT-042" deve VEDERE il 042 nel
+		# risultato, se no non sa se ha trovato quello giusto.
+		btn.text = "JHT-%03d  %s  %s — %s   · %s" % [
+				int(p.get("id", 0)),
 				"—" if score_v == null else str(int(score_v)),
 				str(p.get("title", "?")), str(p.get("company", "?")),
 				str(p.get("loc_city", "") if p.get("loc_city") else "")]
@@ -99,18 +102,9 @@ func _refresh() -> void:
 		btn.pressed.connect(func() -> void: open_position.emit(pid))
 		_list.add_child(btn)
 
-## Match case-insensitive su titolo/azienda/città/famiglia; senza query
-## mostra le prime posizioni (ordine = snapshot, già per data).
+## Match su ID, titolo, azienda, città, famiglia e fonte. La REGOLA vive in
+## `position_search.gd` — gemella di `web/lib/position-search.ts` — così le due
+## superfici non rispondono due cose diverse alla stessa domanda, e il selftest
+## headless può eseguirla senza montare la UI (O-60).
 func _search(query: String) -> Array:
-	var out: Array = []
-	var q := query.to_lower()
-	for p in BackendBus.positions:
-		if q != "":
-			var hay := ("%s %s %s %s" % [p.get("title", ""), p.get("company", ""),
-					p.get("loc_city", ""), p.get("role_family", "")]).to_lower()
-			if not hay.contains(q):
-				continue
-		out.append(p)
-		if out.size() >= MAX_RESULTS:
-			break
-	return out
+	return PositionSearch.filter(BackendBus.positions, query, MAX_RESULTS)

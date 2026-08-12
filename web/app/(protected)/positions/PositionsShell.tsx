@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import PositionsFilterSidebar from "./PositionsFilterSidebar";
+import PositionsSearch from "./PositionsSearch";
 import SortPicker from "./SortPicker";
 
 /**
@@ -65,6 +66,10 @@ export default function PositionsShell({
                 colonna lì — stesso sort/dir URL della tabella. */}
             <SortPicker />
           </span>
+          {/* O-60 — la ricerca sta al centro della toolbar, sopra la tabella:
+              dentro la tabella sarebbe una colonna che scorre via insieme
+              alle altre proprio mentre la si cerca. */}
+          <PositionsSearch />
           {rowsControl}
         </div>
         {children}

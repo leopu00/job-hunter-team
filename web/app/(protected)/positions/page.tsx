@@ -116,6 +116,7 @@ interface PageProps {
     cnoscore?: string; // "1" = includi posizioni senza voto
     writereq?: string; // "1" = solo selezionate (write_requested); "0" = solo non
     fb?: string; // CSV giudizi utente: top,review_ok,review_low,no,none
+    q?: string; // O-60 — testo libero: titolo, azienda, città, fonte, ID
     sort?: string;
     dir?: string;
     page?: string;
@@ -242,6 +243,10 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const families = csv(params.family);
   const countries = csv(params.country);
   const cities = csv(params.city);
+  // O-60 — testo libero della ricerca. Vive nell'URL come ogni altro filtro:
+  // la tabella è un server component, quindi il match deve arrivare al
+  // database, e per giunta il link di una ricerca diventa condivisibile.
+  const query = (params.q ?? "").trim();
   const scoreBands = parseBands(params.band);
   const unscored = params.noscore === "1";
   const criticBands = parseBands(params.cscore);
@@ -282,6 +287,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
       criticBands: criticBands.length ? criticBands : undefined,
       criticUnscored: criticUnscored || undefined,
       writeRequested,
+      q: query || undefined,
       limit: 2000,
       sort: sortCol,
       dir: sortDir,
@@ -312,8 +318,16 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // senza-score (noscore=1).
   // La soglia sotto-40 NON vive qui: è la RULE-04 dello Scorer (score<40 →
   // excluded) e va rispettata NEI DATI — la vista non maschera niente.
+  //
+  // O-60 — e salta anche quando si sta CERCANDO. Chi scrive il nome di
+  // un'azienda vuole quell'offerta, non «quell'offerta se ha un punteggio»:
+  // nel database dell'operatore il default nasconde il 61% delle posizioni,
+  // e una ricerca che lo eredita risponde "nessun risultato" su qualcosa che
+  // esiste — una risposta sicura e falsa al posto di una fatica. Le righe che
+  // il default avrebbe nascosto restano riconoscibili: la colonna Stato dice
+  // già "excluded", e le senza punteggio mostrano "—" nello Score.
   let positions =
-    statuses.length || unscored
+    statuses.length || unscored || query
       ? allPositions
       : allPositions.filter(
           (p) =>
