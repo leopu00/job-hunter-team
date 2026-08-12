@@ -29,11 +29,19 @@ Uso:
   python3 scripts/branch_census.py --base origin/main
   python3 scripts/branch_census.py --sessions dev1,dev2   # sessioni iniettate
   python3 scripts/branch_census.py --no-session-check     # salta la sezione 3
+  python3 scripts/branch_census.py --no-remote-check      # non interroga origin
   python3 scripts/branch_census.py --strict        # esce 3 se ci sono candidati
 
-Lancialo DOPO un `git fetch --prune`: legge i ref locali di tracking, quindi
-su una copia stantia misura il passato. Il report stampa data e sha della base
-proprio per rendere visibile quanto è vecchia la fotografia.
+Un ref è proponibile solo se `git ls-remote` conferma che esiste ancora su
+origin, allo stesso sha del ref di tracking. Senza quel controllo il census
+propone di cancellare roba già cancellata: al primo giro reale ha annunciato
+14 candidati di cui 7 fantasmi, rimossi dall'auto-delete di GitHub al merge
+del PR. Un tracking stantio (`stale`) o superato (`drifted`) va fra i DA
+GUARDARE, non fra i candidati, perché la sua classificazione parla di uno sha
+che su origin non è più la punta — o non c'è più.
+
+`--no-remote-check` è la deroga esplicita: l'operatore dichiara di accettare i
+propri ref di tracking come autorità, e il report lo scrive in testa.
 
 Codici di uscita:
   0  census completo, tutto classificato
@@ -418,9 +426,17 @@ def build_census(
         category, reason = categories[facts.name]
         branch = strip_remote(facts.name, remote)
         session_state = by_branch.get(branch)
-        candidate = ref_is_candidate(category, session_state)
+        status, note = remote_status(facts.tracking_sha, remote_refs, branch)
+        candidate = ref_is_candidate(
+            category, session_state, status, trust_tracking
+        )
         if category == INTEGRATED and not candidate:
-            reason = f"{reason} — hold: worktree {session_state}"
+            # Due motivi diversi per non proporlo, e vanno detti diversi:
+            # qualcuno ci sta lavorando, oppure non so cosa ci sia su origin.
+            if session_state is not None and session_state != SESSION_ABSENT:
+                reason = f"{reason} — hold: worktree {session_state}"
+            else:
+                reason = f"{reason} — hold: {note or status}"
         census.refs.append(
             RefVerdict(
                 name=facts.name,
@@ -431,6 +447,8 @@ def build_census(
                 last_commit_date=facts.last_commit_date,
                 worktree_session=session_state,
                 candidate=candidate,
+                remote_status=status,
+                remote_note=note,
             )
         )
     census.refs.sort(key=lambda r: r.name)
@@ -499,13 +517,59 @@ def gather_refs(base: str, cwd: str | None, remote: str) -> list[RefFacts]:
         )
         unique = int(count_out) if count_code == 0 and count_out.isdigit() else None
         _, date = _git(["log", "-1", "--format=%ad", "--date=short", name], cwd)
+        sha_code, sha = _git(["rev-parse", "--verify", f"{name}^{{commit}}"], cwd)
         error = None
         if is_ancestor is None or unique is None:
             error = "git non ha risposto su antenato e/o commit unici"
         facts.append(
-            RefFacts(name, is_ancestor, unique, date or None, error)
+            RefFacts(
+                name, is_ancestor, unique, date or None, error,
+                tracking_sha=sha if sha_code == 0 and sha else None,
+            )
         )
     return facts
+
+
+def parse_ls_remote(text: str) -> dict[str, str]:
+    """Legge `git ls-remote --heads`: `<sha>\\t refs/heads/<branch>`.
+
+    Solo `refs/heads/`: i tag e `HEAD` non sono branch e non vanno confrontati
+    con i ref di tracking.
+    """
+    heads = {}
+    for line in text.splitlines():
+        sha, _, ref = line.partition("\t")
+        sha, ref = sha.strip(), ref.strip()
+        if not sha or not ref.startswith("refs/heads/"):
+            continue
+        heads[ref[len("refs/heads/"):]] = sha
+    return heads
+
+
+def probe_remote_refs(
+    remote: str, cwd: str | None, timeout: float = 60.0
+) -> tuple[dict[str, str] | None, str, str]:
+    """Chiede a origin quali branch esistono DAVVERO, e a che sha.
+
+    È l'unica sonda che esce di macchina, ed è di sola lettura: `ls-remote` non
+    scrive niente, né in locale né sul remote. `None` = non ho potuto chiedere,
+    e allora nessun ref è candidato.
+    """
+    try:
+        done = subprocess.run(
+            ["git", "ls-remote", "--heads", remote], cwd=cwd,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, REMOTE_UNVERIFIED, f"ls-remote non eseguibile: {exc}"
+    if done.returncode != 0:
+        detail = (done.stderr or done.stdout or "").strip().splitlines()
+        return None, REMOTE_UNVERIFIED, (
+            f"ls-remote uscito {done.returncode}: {detail[:1]}"
+        )
+    heads = parse_ls_remote(done.stdout)
+    return heads, "ok", f"{len(heads)} branch su {remote}"
 
 
 def parse_worktree_porcelain(text: str) -> list[WorktreeFacts]:
@@ -610,6 +674,15 @@ def render_text(census: Census) -> str:
         "CENSUS BRANCH & WORKTREE — [BRANCH-LIFECYCLE-CLEANUP]",
         f"base {census.base} @ {census.base_sha} ({census.base_date})",
         f"sessioni: probe {census.session_probe} — {census.session_probe_detail}",
+        f"origin:   probe {census.remote_probe} — {census.remote_probe_detail}",
+    ]
+    if census.trusting_tracking:
+        out.append(
+            "⚠️  --no-remote-check: i candidati escono dai ref di TRACKING, "
+            "non da origin. Se non hai appena fatto `git fetch --prune` "
+            "possono essere già stati cancellati."
+        )
+    out += [
         "",
         f"1. REF GIÀ ANTENATI DELLA BASE — merge fatto, ref rimasto  [{len(census.integrated)}]",
     ]
@@ -635,10 +708,12 @@ def render_text(census: Census) -> str:
     out += ["", f"PROTETTI — mai proposti  [{len(census.protected)}]"]
     out += [_ref_line(r) for r in census.protected] or ["    (nessuno)"]
 
-    out += ["", f"DA GUARDARE — non classificati  [{census.needs_a_look}]"]
+    out += ["", f"DA GUARDARE  [{census.needs_a_look}]"]
     if census.needs_a_look:
         for r in census.unknown_refs:
             out.append(f"    ref {r.name}: {r.reason}")
+        for r in census.suspect_refs:
+            out.append(f"    ref {r.name}: {r.remote_note}")
         for w in census.unknown_worktrees:
             out.append(f"    worktree {w.path}: {w.reason}")
     else:
@@ -664,10 +739,14 @@ def render_json(census: Census) -> str:
         "base_date": census.base_date,
         "session_probe": census.session_probe,
         "session_probe_detail": census.session_probe_detail,
+        "remote_probe": census.remote_probe,
+        "remote_probe_detail": census.remote_probe_detail,
+        "trusting_tracking": census.trusting_tracking,
         "integrated": [vars(r) for r in census.integrated],
         "unique": [vars(r) for r in census.with_unique],
         "protected": [vars(r) for r in census.protected],
         "unknown_refs": [vars(r) for r in census.unknown_refs],
+        "suspect_refs": [vars(r) for r in census.suspect_refs],
         "worktrees": [vars(w) for w in census.worktrees],
         "worktrees_without_session": [
             vars(w) for w in census.worktrees_without_session
@@ -702,6 +781,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="lista di sessioni separate da virgola, invece del probe")
     parser.add_argument("--no-session-check", action="store_true",
                         help="salta la sezione 3 invece di indovinarla")
+    parser.add_argument("--no-remote-check", action="store_true",
+                        help="non interroga origin: accetta i ref di tracking "
+                             "come autorità (deroga esplicita al fail-closed)")
     parser.add_argument("--protected", default=",".join(DEFAULT_PROTECTED),
                         help="branch mai proposti per la cancellazione")
     parser.add_argument("--strict", action="store_true",
@@ -728,6 +810,15 @@ def main(argv: list[str] | None = None) -> int:
     else:
         sessions, probe_state, probe_detail = probe_sessions()
 
+    if args.no_remote_check:
+        remote_refs, remote_state, remote_detail = None, REMOTE_UNVERIFIED, (
+            "--no-remote-check: origin non interrogato, valgono i ref di tracking"
+        )
+    else:
+        remote_refs, remote_state, remote_detail = probe_remote_refs(
+            args.remote, args.repo
+        )
+
     census = build_census(
         args.base, base_sha, base_date, ref_facts, worktree_facts, sessions,
         protected=tuple(p.strip() for p in args.protected.split(",") if p.strip()),
@@ -739,6 +830,10 @@ def main(argv: list[str] | None = None) -> int:
         unknown_session_label=(
             SESSION_SKIPPED if args.no_session_check else SESSION_UNKNOWN
         ),
+        remote_refs=remote_refs,
+        remote_probe=remote_state,
+        remote_probe_detail=remote_detail,
+        trust_tracking=args.no_remote_check,
     )
 
     print(render_json(census) if args.as_json else render_text(census))
