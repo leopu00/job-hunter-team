@@ -83,4 +83,35 @@ describe("validateCandidateProfile", () => {
   it("il vocabolario kind ha esattamente 6 renderer", () => {
     expect(BLOCK_KINDS.length).toBe(6);
   });
+
+  it("conserva categoria e specialty canoniche", () => {
+    const r = validateCandidateProfile({
+      ...VALID,
+      target_role_category_id: "software",
+      target_specialty: "fullstack",
+    });
+    expect(r.ok).toBe(true);
+    expect(r.value?.target_role).toBe("Backend Developer");
+    expect(r.value?.target_role_category_id).toBe("software");
+    expect(r.value?.target_specialty).toBe("fullstack");
+  });
+
+  it("rifiuta categoria, specialty e coppie non canoniche", () => {
+    expect(
+      validateCandidateProfile({
+        ...VALID,
+        target_role_category_id: "finance",
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateCandidateProfile({ ...VALID, target_specialty: "backend" }).ok,
+    ).toBe(false);
+    expect(
+      validateCandidateProfile({
+        ...VALID,
+        target_role_category_id: "software",
+        target_specialty: "research",
+      }).ok,
+    ).toBe(false);
+  });
 });
