@@ -287,22 +287,24 @@ func _ready() -> void:
 		# ogni test/shot headless imposta JHT_SCENE e resta fuori) o quando il
 		# selftest lo forza. Il tour guida con marker mirati, camera e to-do.
 		# JHT_TOUR_EXIT_TEST accende il tour come i due precedenti ma NON
-		# spegne la persistenza di TourGuide: il test dell'uscita deve poter
-		# verificare che lo stato «uscito» finisca davvero su file.
+		# spegne la persistenza: il test di pausa/ripresa verifica file veri.
 		_tour_enabled = OS.get_environment("JHT_TOUR_TEST") == "1" \
 				or OS.get_environment("JHT_TOUR_PREVIEW") == "1" \
 				or OS.get_environment("JHT_TOUR_EXIT_TEST") == "1" \
-				or (OS.get_environment("JHT_SCENE") == "" and TourGuide.active() \
-					and ScriptedOnboarding.story_mode())
+				or (OS.get_environment("JHT_SCENE") == "" and TourGuide.incomplete())
 		if _tour_enabled:
-			Log.info("tour", "tour primo avvio attivo dal passo %d" % TourGuide.step_index())
-			_tour_tracker = TourTracker.new()
-			add_child(_tour_tracker)
 			TourGuide.changed.connect(_on_tour_changed)
-			_refresh_tour_markers()
-			# Un breve respiro dopo il primo frame, poi la regia riprende il
-			# tour dal punto giusto (primo saluto o tappa interrotta).
-			get_tree().create_timer(1.2).timeout.connect(_tour_resume_entry)
+			ScriptedOnboarding.dismissed.connect(_on_tour_paused)
+			ScriptedOnboarding.resumed.connect(_on_tour_resumed)
+			if TourGuide.active():
+				Log.info("tour", "tour primo avvio attivo dal passo %d" % TourGuide.step_index())
+				_mount_tour_tracker()
+				_refresh_tour_markers()
+				# Un breve respiro dopo il primo frame, poi la regia riprende il
+				# tour dal punto giusto (primo saluto o tappa interrotta).
+				get_tree().create_timer(1.2).timeout.connect(_tour_resume_entry)
+			else:
+				_refresh_tour_markers()
 
 	Log.info("scene", "ufficio pronto: %d agenti, %d postazioni reparto, mondo %v" % [
 			agents.size(), DepartmentDefs.all_desks().size(), FurnitureDefs.WORLD.size])
@@ -815,6 +817,30 @@ func _on_tour_changed() -> void:
 		return
 	_tour_go_to_stop()
 
+## La pausa spegne la presentazione, i marker e il tracker, ma non tocca il
+## progresso. I timer già in volo consultano `TourGuide.active()` e decadono.
+func _on_tour_paused() -> void:
+	_tour_release_guide()
+	_refresh_tour_markers()
+	if is_instance_valid(_tour_tracker):
+		_tour_tracker.queue_free()
+	_tour_tracker = null
+
+## La ripresa rimonta soltanto la vista e richiama la regia sulla tappa che
+## TourGuide aveva già persistito. Nessun indice parallelo nella UI.
+func _on_tour_resumed() -> void:
+	if not _tour_enabled or not TourGuide.active():
+		return
+	_mount_tour_tracker()
+	_refresh_tour_markers()
+	get_tree().create_timer(0.2).timeout.connect(_tour_resume_entry)
+
+func _mount_tour_tracker() -> void:
+	if is_instance_valid(_tour_tracker):
+		return
+	_tour_tracker = TourTracker.new()
+	add_child(_tour_tracker)
+
 ## Ripresa all'avvio scena: primo saluto o tappa dove si era rimasti.
 func _tour_resume_entry() -> void:
 	if not _tour_enabled or not TourGuide.active() or TourGuide.in_launch_phase():
@@ -961,9 +987,9 @@ func _tour_begin_presentation(stop: String, guide: AgentNPC,
 func _tour_open_stop_dialogue(stop: String, preferred_host: AgentNPC = null) -> void:
 	if not _tour_enabled or not TourGuide.stop_open(stop):
 		return
-	if Game.dialogue_active or _registry or _dept_panel or _agent_card \
-			or _chat_panel or _cv_shelf_panel or _queue_panel \
-			or _thinking_panel or _coordinator_panel:
+	# FreeCamera e tutte le superfici native condividono già questo contratto.
+	# Consultarlo evita l'elenco privato che dimenticava SectionPanel/setup.
+	if Game.dialogue_active or get_tree().has_group(&"camera_blocking_overlay"):
 		get_tree().create_timer(0.8).timeout.connect(func() -> void:
 			_tour_open_stop_dialogue(stop, preferred_host))
 		return
@@ -1014,8 +1040,22 @@ func _on_tour_dialogue_action(action: String) -> void:
 	elif action == "tour:free":
 		TourGuide.set_free_mode()
 	elif action == "open_setup":
-		ScriptedOnboarding.action_requested.emit("open_section",
-				{"section": "activation"})
+		_open_section_after_dialogue("activation")
+
+## Un pannello nativo non nasce sotto DialogueUI (layer 60). La battuta finale
+## resta leggibile; quando l'utente la chiude, lo stesso evento `closed` apre
+## il setup. È il ciclo di vita UI esistente, non un flag di attesa parallelo.
+func _open_section_after_dialogue(section: String) -> void:
+	var dialogues := get_tree().get_nodes_in_group(&"dialogue_ui")
+	if dialogues.is_empty():
+		if not ScriptedOnboarding.is_dismissed():
+			ScriptedOnboarding.action_requested.emit("open_section", {"section": section})
+		return
+	var dialogue := dialogues[0]
+	var open_after_close := func() -> void:
+		if not ScriptedOnboarding.is_dismissed():
+			ScriptedOnboarding.action_requested.emit("open_section", {"section": section})
+	dialogue.closed.connect(open_after_close, CONNECT_ONE_SHOT)
 
 func _tour_release_guide() -> void:
 	_camera.stop_follow()

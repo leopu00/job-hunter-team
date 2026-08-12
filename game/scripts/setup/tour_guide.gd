@@ -115,9 +115,26 @@ func _ready() -> void:
 		if saved is Array:
 			for slug in saved:
 				_visited[str(slug)] = true
+	# Migrazione O-14: fra 0.3.7 e questa versione l'interruzione salvava sia
+	# `guided.dismissed=true` sia `tour.done=true`. Quella combinazione non può
+	# essere un completamento reale (a tour finito il comando spariva): riapre
+	# quindi il progresso esistente, senza azzerare indice, modalità o visite.
+	if _done and ScriptedOnboarding.is_dismissed():
+		_done = false
+		_save()
+		Log.info("tour", "interruzione O-14 migrata a tour riprendibile")
 
 func active() -> bool:
+	return not _done and not ScriptedOnboarding.is_dismissed()
+
+## Il giro ha ancora progresso da completare, anche quando è in pausa.
+func incomplete() -> bool:
 	return not _done
+
+## Materializza anche il passo zero quando il giro viene interrotto: i default
+## saprebbero ricostruirlo, ma la prova su file deve contenere la verità.
+func checkpoint() -> void:
+	_save()
 
 func mode() -> String:
 	return _mode
@@ -290,13 +307,12 @@ func finish() -> void:
 	changed.emit()
 	tour_finished.emit()
 
-## Uscita dal tour chiesta dall'utente. Passa da ScriptedOnboarding perché
-## chiudere solo il tour non basta: le chat guidate restavano vive e
-## continuavano a parlare sopra il menu (O-14). L'uscita è una sola.
+## Pausa del tour chiesta dall'utente. Passa da ScriptedOnboarding perché
+## interrompere solo la regia non basta: le chat guidate resterebbero vive.
+## Non chiude il progresso; `resume()` riapre questo stesso stato.
 func skip() -> void:
-	Log.info("tour", "tour saltato dall'utente al passo %d" % _index)
+	Log.info("tour", "tour interrotto dall'utente al passo %d" % _index)
 	ScriptedOnboarding.dismiss()
-	finish()
 
 func reset_for_test() -> void:
 	_index = 0

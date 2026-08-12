@@ -182,10 +182,9 @@ jobs:
           printf '%s\n' "$FEEDBACK_OUT" | grep "FEEDBACK-PANEL-TEST PASS"
           GUIDED_OUT="$(retry_godot JHT_SCENE=office JHT_GUIDED_TEST=1 godot --headless --path game)"
           printf '%s\n' "$GUIDED_OUT" | grep "GUIDED-ONBOARDING-TEST PASS"
-          # L'uscita dal giro guidato: chi vuole andare dritto al setup deve
-          # poterlo fare, e a giro chiuso nessun agente deve piu' parlare
-          # sopra il menu. Gira col harness acceso perche' la persistenza
-          # dell'uscita fa parte del contratto e si verifica su file.
+          # Pausa/ripresa del giro guidato: chi va dritto al setup non deve
+          # avere agenti sopra il menu e deve poter tornare alla stessa tappa.
+          # Il harness verifica su file sia il gate sia l'indice persistito.
           TOUREXIT_OUT="$(retry_godot JHT_TUTORIAL_HARNESS=1 JHT_TUTORIAL_RESET=1 JHT_SCENE=office JHT_TOUR_EXIT_TEST=1 godot --headless --path game)"
           printf '%s\n' "$TOUREXIT_OUT" | grep "TOUR-EXIT-TEST PASS"
           # La pagina di chat a fumetti: vignette nell'ordine della storia,

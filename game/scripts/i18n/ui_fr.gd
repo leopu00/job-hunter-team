@@ -122,6 +122,8 @@ const S := {
 	"tour.hint_free": "Tour libre : clique sur qui porte le losange, dans l'ordre que tu veux.",
 	"tour.hint_launch": "Remplis les trois conditions : le bouton jaune en haut ouvre la liste.",
 	"tour.exit": "QUITTER LA VISITE (ÉCHAP)",
+	"tour.pause": "METTRE LA VISITE EN PAUSE (ÉCHAP)",
+	"tour.resume": "REPRENDRE LA VISITE",
 	"tour.done": "VISITE TERMINÉE ✓",
 	"tour.invite": "%s%s ! Viens, je te présente ta nouvelle équipe.",
 	"tour.guide.scout.greet": "Voici le pôle Recherche. Je te présente l’un de nos Chercheurs.",

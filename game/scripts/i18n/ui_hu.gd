@@ -122,6 +122,8 @@ const S := {
 	"tour.hint_free": "Szabad körút: kattints arra, akinél a rombusz van, tetszőleges sorrendben.",
 	"tour.hint_launch": "Teljesítsd a három feltételt: a fenti sárga gomb nyitja a listát.",
 	"tour.exit": "KILÉPÉS A KÖRSÉTÁBÓL (ESC)",
+	"tour.pause": "KÖRSÉTA SZÜNETELTETÉSE (ESC)",
+	"tour.resume": "KÖRSÉTA FOLYTATÁSA",
 	"tour.done": "KÖRSÉTA KÉSZ ✓",
 	"tour.invite": "%s%s! Gyere, bemutatom az új csapatodat.",
 	"tour.guide.scout.greet": "Ez a Kutatás részleg. Bemutatom az egyik Kutatónkat.",
