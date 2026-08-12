@@ -2402,6 +2402,15 @@ async function handleTicketSync(options = {}) {
     }
     if (pullResult && Array.isArray(pullResult.tickets)) {
       const findByCloud = db.prepare('SELECT id FROM position_tickets WHERE cloud_id = ?');
+      const findActiveRescore = db.prepare(
+        `SELECT id, cloud_id FROM position_tickets
+         WHERE position_id = ? AND kind = 'rescore'
+           AND status IN ('open','assigned')
+         ORDER BY created_at ASC, id ASC LIMIT 1`
+      );
+      const linkActiveRescore = db.prepare(
+        'UPDATE position_tickets SET cloud_id = ? WHERE id = ? AND cloud_id IS NULL'
+      );
       const posExists = db.prepare('SELECT 1 FROM positions WHERE id = ?');
       const ins = db.prepare(
         `INSERT INTO position_tickets (position_id, request_text, kind, status, cloud_id, created_at)
@@ -2432,6 +2441,16 @@ async function handleTicketSync(options = {}) {
           cursorFrozen = true;
           continue;
         }
+        if (ct.kind === 'rescore') {
+          // Stessa richiesta nata offline su entrambe le superfici: conserva
+          // una sola riga attiva e collegala all'identità cloud canonica.
+          const active = findActiveRescore.get(posId);
+          if (active) {
+            if (active.cloud_id == null) linkActiveRescore.run(cloudId, active.id);
+            if (!cursorFrozen && ct.created_at) safeCursor = ct.created_at;
+            continue;
+          }
+        }
         ins.run(posId, ct.request_text || '', ct.kind || 'custom', cloudId, ct.created_at || null);
         imported++;
         importedTickets.push({ cloudId, posId, request: ct.request_text || '' });
@@ -2460,20 +2479,23 @@ async function handleTicketSync(options = {}) {
           body: JSON.stringify({ tickets: rows }),
         });
         const pb = await res.json().catch(() => ({}));
+        // Anche un batch non-2xx può contenere INSERT confermati prima della
+        // prima riga fallita. Correlali subito: il cursore resta fermo, ma al
+        // retry quelle righe partiranno come UPDATE per cloud_id invece di
+        // essere inserite una seconda volta (custom non ha UNIQUE naturale).
+        if (pb.id_map && typeof pb.id_map === 'object') {
+          const setCloud = db.prepare('UPDATE position_tickets SET cloud_id = ? WHERE id = ?');
+          for (const [localId, cloudId] of Object.entries(pb.id_map)) {
+            const ci = Number(cloudId);
+            const li = Number(localId);
+            if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
+          }
+        }
         if (!res.ok) {
           console.error(pc.yellow(`  ticket push warn: HTTP ${res.status} ${pb.error || ''}`));
         } else {
           pushedUpdates = pb.updated || 0;
           pushedInserts = pb.inserted || 0;
-          // write-back dei cloud_id sugli INSERT → chiude la correlazione.
-          if (pb.id_map && typeof pb.id_map === 'object') {
-            const setCloud = db.prepare('UPDATE position_tickets SET cloud_id = ? WHERE id = ?');
-            for (const [localId, cloudId] of Object.entries(pb.id_map)) {
-              const ci = Number(cloudId);
-              const li = Number(localId);
-              if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
-            }
-          }
           // avanza push cursor = MAX(updated_at) tra le righe inviate.
           let maxU = cursor.push_since || null;
           for (const r of rows) {

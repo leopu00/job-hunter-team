@@ -856,6 +856,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_jd_summary(conn)
     _migrate_role_family_registry(conn)
     _migrate_position_tickets_cloud_id(conn)
+    _migrate_position_tickets_active_rescore(conn)
     _migrate_companies_logo(conn)
     _migrate_pending_messages_chat_turns(conn)
     _migrate_positions_url_unique(conn)
@@ -1764,6 +1765,52 @@ def _migrate_position_tickets_cloud_id(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id "
         "ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL"
     )
+
+
+def _migrate_position_tickets_active_rescore(conn: sqlite3.Connection) -> None:
+    """Impedisce due rivalutazioni attive senza rompere i DB precedenti.
+
+    ``kind`` è sempre stato testo libero, quindi un database antecedente a
+    O-70 può già contenere più ``rescore`` open/assigned per la stessa
+    posizione. Creare subito l'indice UNIQUE renderebbe ``ensure_schema``
+    inutilizzabile proprio su quei database.
+
+    La sanatoria non cancella ticket né testo: mantiene attivo quello su cui
+    il team ha già iniziato a lavorare (``assigned`` prima di ``open``), poi
+    il più antico e infine l'id minore come spareggio stabile. Gli altri
+    diventano ``resolved`` e restano integralmente leggibili nello storico.
+    UPDATE e CREATE INDEX vivono nella stessa transazione SQLite aperta dalla
+    connessione, quindi non esiste una finestra senza vincolo dopo la cura.
+    """
+    index = 'idx_position_tickets_active_rescore'
+    if not _table_exists(conn, 'position_tickets') or _index_exists(conn, index):
+        return
+
+    conn.execute("""
+        WITH ranked AS (
+            SELECT id,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY position_id
+                       ORDER BY CASE status WHEN 'assigned' THEN 0 ELSE 1 END,
+                                CASE WHEN created_at IS NULL THEN 1 ELSE 0 END,
+                                created_at ASC,
+                                id ASC
+                   ) AS active_rank
+              FROM position_tickets
+             WHERE kind = 'rescore'
+               AND status IN ('open', 'assigned')
+        )
+        UPDATE position_tickets
+           SET status = 'resolved',
+               resolved_at = COALESCE(resolved_at, CURRENT_TIMESTAMP),
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id IN (SELECT id FROM ranked WHERE active_rank > 1)
+    """)
+    conn.execute(f"""
+        CREATE UNIQUE INDEX IF NOT EXISTS {index}
+            ON position_tickets(position_id, kind)
+            WHERE kind = 'rescore' AND status IN ('open', 'assigned')
+    """)
 
 
 def _migrate_positions_user_excluded(conn: sqlite3.Connection) -> None:

@@ -81,6 +81,15 @@ export const T = {
     fr: "Détail du score",
     pt: "Detalhe da pontuação",
   },
+  score_assessed_at: {
+    it: "Valutato dallo Scorer il",
+    en: "Scored by the Scorer on",
+    hu: "A Scorer értékelésének ideje:",
+    es: "Evaluado por el Scorer el",
+    de: "Vom Scorer bewertet am",
+    fr: "Évalué par le Scorer le",
+    pt: "Avaliado pelo Scorer em",
+  },
   sb_stack_match: {
     it: "Competenze",
     en: "Stack match",

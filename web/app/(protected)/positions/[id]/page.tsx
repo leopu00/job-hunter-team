@@ -50,6 +50,8 @@ import { formatPositionEventStamp } from "@/lib/position-event-stamp";
 import { SCORE_COMPONENT_LIMITS, barFill } from "@/lib/score-ranges";
 import { T } from "./page.i18n";
 import { resolveCoverLetterPdfFileName } from "@/lib/position-document-file.server";
+import { activeRescoreTicket } from "@/lib/rescore-ticket";
+import { RescoreRequestButton } from "./RescoreRequestButton";
 
 // Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
 // inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
@@ -291,6 +293,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // i breakdown vecchi, che restano visibili sotto le barre insieme alle
   // note invece di sparire.
   const scoreWhy = parseScoreBreakdown(score?.breakdown);
+  // `scored_at` appartiene alla riga score e viene riscritto dallo Scorer
+  // insieme alla valutazione. Non usare `positions.updated_at`: cambia anche
+  // per azioni estranee allo score e farebbe sembrare fresca una misura vecchia.
+  const scoreAssessedAt = formatPositionEventStamp(score?.scored_at, locale);
+  const rescoreTicket = activeRescoreTicket(tickets);
 
   // Analisi semi-strutturata dell'Analista (campo notes) → metadati,
   // motivo esclusione, disallineamenti, prosa. Vedi lib/parse-analysis.
@@ -488,14 +495,22 @@ export default async function PositionDetailPage({ params }: PageProps) {
         </div>
         <div className="flex items-center gap-4 md:gap-6 min-w-0">
           {score && (
-            <div
-              className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
-              style={{
-                borderColor: scoreColor(score.total_score),
-                color: scoreColor(score.total_score),
-              }}
-            >
-              {score.total_score}
+            <div className="flex shrink-0 flex-col items-center gap-1.5">
+              <div
+                className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl"
+                style={{
+                  borderColor: scoreColor(score.total_score),
+                  color: scoreColor(score.total_score),
+                }}
+              >
+                {score.total_score}
+              </div>
+              {scoreAssessedAt && (
+                <span className="max-w-36 text-center text-[9.5px] leading-tight text-[var(--color-dim)]">
+                  {t("score_assessed_at")}{" "}
+                  <time dateTime={score.scored_at}>{scoreAssessedAt}</time>
+                </span>
+              )}
             </div>
           )}
           {/* Fatti: label e valore su due colonne adiacenti, niente vuoto
@@ -1216,6 +1231,20 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     legacyId={position.legacy_id}
                     initialRequested={position.recheck_requested === true}
                     lastOpenCheck={position.last_open_check}
+                  />
+                  {/* Stessa pipeline dei ticket liberi: il kind rende la
+                      destinazione Scorer deterministica e lo stato impedisce
+                      di aprire una seconda rivalutazione mentre la prima è in
+                      attesa o assegnata. */}
+                  <RescoreRequestButton
+                    legacyId={position.legacy_id}
+                    initialStatus={
+                      rescoreTicket?.status === "open" ||
+                      rescoreTicket?.status === "assigned"
+                        ? rescoreTicket.status
+                        : null
+                    }
+                    disabled={score == null}
                   />
                   {(() => {
                     // Writer-on-demand (V6): il button e' visibile solo se la

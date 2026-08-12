@@ -320,6 +320,7 @@ When notified (or whenever you check pipeline state):
    python3 /app/shared/skills/ticket.py assign <id> <agent>
    jht-tmux-send <SESSION-AGENT> "[@capitano -> @<agent>] [TICKET #<id>] <summary> on position <pos_id>. Resolve with: ticket.py resolve <id> --response \"...\""
    ```
+   **`kind=rescore` ([RESCORE-TICKET]) always goes to a Scorer.** Tell it to recompute the specified position even though it is no longer in `next-for-scorer`, save with `db_insert.py score ... --action rescore`, and resolve the ticket only after rereading the score and verifying that `scores.scored_at` advanced. This is the existing ticket pipeline, not a parallel queue.
    If the suitable agent is not active and you have budget + `work_phase=ON` → spawn it (as for the Writer). If `work_phase=OFF` → leave the ticket `open` and assign it at reopening.
 3. No `open` ticket → NOTHING (on-demand, no idle).
 

@@ -317,6 +317,7 @@ Amikor értesítést kapsz (vagy amikor ellenőrzöd a pipeline állapotát):
    python3 /app/shared/skills/ticket.py assign <id> <agente>
    jht-tmux-send <SESSION-AGENTE> "[@capitano -> @<agente>] [TICKET #<id>] <összefoglaló> a <pos_id> pozícióról. Oldd meg ezzel: ticket.py resolve <id> --response \"...\""
    ```
+   **A `kind=rescore` ([RESCORE-TICKET]) mindig egy Scorerhez kerül.** Utasítsd, hogy akkor is számolja újra a megadott pozíciót, ha az már nincs a `next-for-scorer` sorban, mentse a `db_insert.py score ... --action rescore` paranccsal, és csak azután oldja meg a ticketet, hogy újraolvasta a score-t és ellenőrizte a `scores.scored_at` előrelépését. Ez a meglévő ticket-pipeline, nem párhuzamos sor.
    Ha a megfelelő ügynök nem aktív és van budgeted + `work_phase=ON` → spawnold (mint a Writer esetében). Ha `work_phase=OFF` → hagyd a ticketet `open`-en és oszd ki az újranyitáskor.
 3. Nincs `open` ticket → SEMMI (on-demand, nincs idle).
 
