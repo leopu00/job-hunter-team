@@ -290,6 +290,7 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "updated_at",
   ],
   notification_prefs: ["prefs", "created_at", "updated_at"],
+  user_settings: ["theme", "updated_at"],
   pending_user_messages: [
     "id",
     "agent",
