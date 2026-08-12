@@ -16,6 +16,7 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import pytest
 
@@ -59,14 +60,31 @@ def _pg_binaries() -> dict[str, str] | None:
 
 @pytest.fixture(scope="module")
 def postgres_cluster(tmp_path_factory):
-    binaries = _pg_binaries()
     root = tmp_path_factory.mktemp("tenant-delete-postgres")
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
+    external_url = os.environ.get("JHT_TEST_POSTGRES_URL")
+    binaries = _pg_binaries()
     container_name: str | None = None
     data: Path | None = None
-    if binaries is not None:
+    external = external_url is not None
+    if external_url is not None:
+        parsed = urlparse(external_url)
+        psql_client = shutil.which("psql")
+        if not psql_client or not parsed.hostname:
+            pytest.skip("JHT_TEST_POSTGRES_URL requires psql and a valid host")
+        binaries = {"psql": psql_client}
+        host = parsed.hostname
+        port = parsed.port or 5432
+        base_database = parsed.path.lstrip("/") or "postgres"
+        user = unquote(parsed.username or "postgres")
+        password = unquote(parsed.password or "")
+    else:
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        base_database = "postgres"
+        user = "postgres"
+        password = ""
+    if not external and binaries is not None:
         data = root / "data"
         socket_dir = root / "socket"
         socket_dir.mkdir()
@@ -103,7 +121,7 @@ def postgres_cluster(tmp_path_factory):
             text=True,
         )
         host = str(socket_dir)
-    else:
+    elif not external:
         docker = shutil.which("docker")
         psql_client = shutil.which("psql")
         image = "postgres:16-alpine"
@@ -141,13 +159,14 @@ def postgres_cluster(tmp_path_factory):
         **os.environ,
         "PGHOST": host,
         "PGPORT": str(port),
-        "PGUSER": "postgres",
+        "PGUSER": user,
+        "PGPASSWORD": password,
     }
 
     def psql(
         sql: str,
         *,
-        database: str = "postgres",
+        database: str = base_database,
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -172,7 +191,7 @@ def postgres_cluster(tmp_path_factory):
         last_error = ""
         for _ in range(100):
             ready = subprocess.run(
-                [binaries["psql"], "-X", "-d", "postgres", "-c", "SELECT 1"],
+                [binaries["psql"], "-X", "-d", base_database, "-c", "SELECT 1"],
                 env=env,
                 capture_output=True,
                 text=True,
@@ -183,11 +202,21 @@ def postgres_cluster(tmp_path_factory):
             time.sleep(0.1)
         else:
             raise AssertionError(f"temporary PostgreSQL did not start: {last_error}")
-        psql("CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; "
-             "CREATE ROLE service_role NOLOGIN;")
+        psql(
+            """
+            DO $$ BEGIN CREATE ROLE anon NOLOGIN;
+              EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+            DO $$ BEGIN CREATE ROLE authenticated NOLOGIN;
+              EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+            DO $$ BEGIN CREATE ROLE service_role NOLOGIN;
+              EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+            """
+        )
         yield {"psql": psql, "env": env, "bin": binaries}
     finally:
-        if container_name is not None:
+        if external:
+            pass
+        elif container_name is not None:
             subprocess.run(
                 [binaries["docker"], "stop", container_name],
                 check=False,
