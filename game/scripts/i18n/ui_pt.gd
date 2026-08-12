@@ -457,7 +457,7 @@ const S := {
 	"agents.no_comms": "nenhuma comunicação recente",
 	"agents.chat_besteffort": "(resposta não garantida: protocolo de chat fora do prompt dele)",
 
-	"search.placeholder": "busque posições: título, empresa, cidade…  (ESC fecha)",
+	"search.placeholder": "busque posições: título, empresa, ID…  (ESC fecha)",
 	"search.no_match": "nenhuma posição encontrada",
 	"search.need_vps": "conecte a VPS para buscar entre as posições reais",
 

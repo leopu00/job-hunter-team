@@ -53,6 +53,7 @@ embedded_terminal|script|gate|any|-|tools/embedded_terminal_selftest.gd|-
 # Il seam fake evita di aprire davvero browser nei runner dei tre sistemi.
 cloud_pairing|script|gate|any|-|tools/cloud_pairing_selftest.gd|CLOUD-PAIRING-TEST PASS
 redactor|script|gate|any|-|tools/redactor_selftest.gd|-
+global_search|script|gate|any|-|tools/global_search_selftest.gd|[search-test] PASS
 diagnostics|script|gate|any|-|tools/diagnostics_selftest.gd|-
 theme|script|gate|any|-|tools/theme_selftest.gd|-
 budget_notice|script|gate|any|-|tools/budget_notice_selftest.gd|-

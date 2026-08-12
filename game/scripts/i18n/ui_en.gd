@@ -465,7 +465,7 @@ const S := {
 	"agents.no_comms": "no recent communications",
 	"agents.chat_besteffort": "(reply not guaranteed: chat protocol not in its prompt)",
 
-	"search.placeholder": "search positions: title, company, city…  (ESC closes)",
+	"search.placeholder": "search positions: title, company, ID…  (ESC closes)",
 	"search.no_match": "no positions found",
 	"search.need_vps": "connect the VPS to search the real positions",
 

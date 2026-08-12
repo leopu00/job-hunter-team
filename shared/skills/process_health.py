@@ -66,7 +66,22 @@ EXPECTED = [
     ("pid1",               "jht.js pid1",           "core"),
 ]
 TG_MARKER = "tg-bridge.py"
-TG_EXPECTED = 3  # assistente / capitano / mentor
+TG_ROLES = ("assistente", "capitano", "mentor")
+
+# O-58 — quanti bridge Telegram sono ATTESI non è un numero fisso: sono i
+# ruoli che hanno davvero un `bot_token`.
+#
+# Con `TG_EXPECTED = 3` e il gate "almeno un bot configurato", una install con
+# assistente e capitano configurati e il mentor no aspettava per sempre tre
+# processi che non potevano esistere: il mentor moriva FATAL in partenza
+# (tg-bridge.py esce 2 se il token manca), il conteggio restava a 2/3 e il
+# watchdog rispawnava — cioè uccideva e ricreava anche i DUE SANI, tre volte
+# ogni dieci minuti. Un componente non configurato ne rompeva due funzionanti,
+# e in quella finestra un messaggio dell'operatore è andato perso.
+#
+# Il gate per-ruolo non è un'invenzione: questo stesso file lo applica già ad
+# `auto-report-loop` (TELEGRAM_GATED). Qui mancava.
+
 # Processi che pid1 avvia SOLO se ci sono bot Telegram configurati (come tg-bridge):
 # senza Telegram pid1 li SKIPPA apposta (pid1.js `hasBots`, riga ~595-598) → su una
 # VPS senza Telegram NON sono un "morto da rianimare", sono correttamente assenti.
@@ -128,14 +143,29 @@ def _telegram_configured():
     morto e il watchdog escala al Capitano ~1×/h a vuoto (falso positivo, stessa
     classe del cloud-daemon). Default prudente: False se config manca/illeggibile.
     """
+    return bool(_telegram_roles_configured())
+
+
+def _telegram_roles_configured():
+    """I ruoli che hanno un `bot_token` non vuoto — cioè quelli ATTESI (O-58).
+
+    Un bot senza token non è un processo morto da rianimare: è un bot che non
+    esiste. `tg-bridge.py` esce con FATAL in partenza, e aspettarselo vivo
+    tiene il watchdog in un ciclo di kill-and-respawn che travolge i bridge
+    sani. Ritorna una tupla nell'ordine di TG_ROLES, così il messaggio al
+    watchdog è stabile.
+    """
     home = os.environ.get("JHT_HOME") or os.path.expanduser("~")
     try:
         with open(os.path.join(home, "jht.config.json"), encoding="utf-8") as f:
             cfg = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return False
+        return ()
     bots = (((cfg.get("channels") or {}).get("telegram") or {}).get("bots")) or {}
-    return any((b or {}).get("bot_token", "").strip() for b in bots.values())
+    return tuple(
+        role for role in TG_ROLES
+        if ((bots.get(role) or {}).get("bot_token") or "").strip()
+    )
 
 
 def _cmdlines():
@@ -171,10 +201,18 @@ def scan():
         elif name == "auto-report-loop" and not tg_configured:
             row["optional"] = True
         rows.append(row)
-    tg = count(TG_MARKER)
+    # Conteggio PER RUOLO (O-58): il ruolo è nel cmdline grazie a `--role`
+    # (tg-bridge.py). Prima si contava il marker nudo, quindi "2 su 3" non
+    # diceva QUALE mancava e l'unica riparazione possibile era rifarli tutti.
+    tg_expected_roles = _telegram_roles_configured()
+    tg_by_role = {role: count("%s --role %s" % (TG_MARKER, role)) for role in TG_ROLES}
+    tg_missing = [role for role in tg_expected_roles if tg_by_role[role] == 0]
+    tg_total = count(TG_MARKER)
     rows.append({
-        "name": "tg-bridge", "group": "tg-bridge", "alive": tg > 0,
-        "count": tg, "expected": TG_EXPECTED, "optional": True,
+        "name": "tg-bridge", "group": "tg-bridge", "alive": tg_total > 0,
+        "count": tg_total, "expected": len(tg_expected_roles),
+        "by_role": tg_by_role, "missing_roles": tg_missing,
+        "expected_roles": list(tg_expected_roles), "optional": True,
     })
 
     # Gate Telegram: i processi TELEGRAM_GATED non sono attesi senza bot configurati
@@ -195,7 +233,14 @@ def scan():
         "dead": [r["name"] for r in dead],
         "dead_bridge_suite": dead_bridge_suite,   # → start-agent.sh bridge
         "dead_deep": dead_deep,                    # → ESCALA al Capitano
-        "tg": {"alive": tg_row["count"], "expected": TG_EXPECTED},
+        "tg": {
+            "alive": tg_row["count"],
+            "expected": tg_row["expected"],
+            "by_role": tg_row["by_role"],
+            # I ruoli da rianimare, UNO PER UNO: è ciò che permette al
+            # watchdog di non toccare quelli che stanno lavorando.
+            "missing_roles": tg_row["missing_roles"],
+        },
         "all_ok": not dead,
     }
 
@@ -211,6 +256,11 @@ def main():
         print("PROC_DEAD_BRIDGE_SUITE='%s'" % " ".join(res["dead_bridge_suite"]))
         print("PROC_DEAD_DEEP='%s'" % " ".join(res["dead_deep"]))
         print("PROC_TG_ALIVE=%d" % res["tg"]["alive"])
+        print("PROC_TG_EXPECTED=%d" % res["tg"]["expected"])
+        # I ruoli mancanti, non il loro numero: il watchdog rispawna questi e
+        # basta. Vuoto = niente da fare, anche quando i processi sono meno di
+        # tre perché un bot non è configurato.
+        print("PROC_TG_MISSING='%s'" % " ".join(res["tg"]["missing_roles"]))
         print("PROC_ALL_OK=%d" % (1 if res["all_ok"] else 0))
     else:
         for r in res["rows"]:

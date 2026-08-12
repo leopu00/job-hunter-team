@@ -72,6 +72,7 @@ AGENT_MAX_SESSION_AGE_H="${JHT_AGENT_MAX_SESSION_AGE_H:-12}"
 # container restano quelli dell'immagine.
 ROSTER_TOOL="${JHT_ROSTER_TOOL:-/app/shared/skills/team_roster.py}"
 START_AGENT="${JHT_START_AGENT:-/app/.launcher/start-agent.sh}"
+PROCESS_HEALTH_TOOL="${JHT_PROCESS_HEALTH_TOOL:-/app/shared/skills/process_health.py}"
 
 # ── Bridge suite supervision (2026-06-27) ──────────────────────────────
 # I bridge/daemon ausiliari sono lanciati `setsid` detached da start-agent.sh
@@ -366,21 +367,31 @@ maybe_respawn_bridges() {
   # riporterebbe SEMPRE "vivo"). Unica fonte di verità, condivisa col Mantenitore
   # (step 0 di maintainer-sweep). In steady-state: 1 call, tutti vivi, zero azione.
   local plan PROC_DEAD_BRIDGE_SUITE="" PROC_DEAD_DEEP="" PROC_TG_ALIVE=0 PROC_ALL_OK=1
+  local PROC_TG_MISSING="" PROC_TG_EXPECTED=0 _tg_role
   # NB: process_health.py esce 1 PROPRIO quando c'è un morto (è il caso che ci
   # interessa) → NON gatare su `|| return` sull'exit code, sarebbe un no-op
   # esattamente quando serve agire. Catturiamo l'output sempre; skip solo se vuoto
   # (python assente/errore reale).
-  plan=$(python3 /app/shared/skills/process_health.py summary --shell 2>/dev/null)
+  # Path override-abili come JHT_PROC_KILL_PY (daemon-lib.sh): il default è
+  # quello del container, e fuori si può eseguire questa funzione per davvero
+  # invece di leggerla.
+  plan=$(python3 "$PROCESS_HEALTH_TOOL" summary --shell 2>/dev/null)
   [ -z "$plan" ] && return 0
   eval "$plan" 2>/dev/null || return 0
-  [ "${PROC_ALL_OK:-1}" = "1" ] && [ -z "$PROC_DEAD_BRIDGE_SUITE" ] && [ "${PROC_TG_ALIVE:-9}" -ge 3 ] && return 0
+  # Uscita rapida dello steady-state. La condizione sul Telegram è "nessun
+  # ruolo atteso manca" (O-58): con `-ge 3` una install a due bot non usciva
+  # mai di qui, e ogni tick ripartiva la riparazione di qualcosa che non era
+  # rotto. `PROC_TG_MISSING` assente (versione vecchia dello script) → vuoto →
+  # nessun respawn, che è il default prudente.
+  local _tg_missing="${PROC_TG_MISSING:-}"
+  [ "${PROC_ALL_OK:-1}" = "1" ] && [ -z "$PROC_DEAD_BRIDGE_SUITE" ] && [ -z "$_tg_missing" ] && return 0
 
   # (1) bridge-suite morti → un solo `start-agent.sh bridge` li rispawna tutti
   #     (idempotente kill+respawn). Anti-flap: oltre il cap, escala invece di loopare.
   if [ -n "$PROC_DEAD_BRIDGE_SUITE" ]; then
     if bridge_flap_ok bridge; then
       log "bridge-watchdog: incomplete suite (dead: $PROC_DEAD_BRIDGE_SUITE) — respawning via start-agent.sh bridge"
-      JHT_HOME="$JHT_HOME" bash /app/.launcher/start-agent.sh bridge >>"$LOG" 2>&1 \
+      JHT_HOME="$JHT_HOME" bash "$START_AGENT" bridge >>"$LOG" 2>&1 \
         || log "bridge-watchdog: respawn bridge FAIL (rc=$?)"
       bridge_flap_record bridge
     else
@@ -388,17 +399,30 @@ maybe_respawn_bridges() {
     fi
   fi
 
-  # (2) tg-bridge: canale Telegram OPZIONALE → respawn solo se i bot sono
-  #     configurati e mancano istanze (attese >=3 process: wrapper+python ×3).
-  if tg_bots_configured && [ "${PROC_TG_ALIVE:-0}" -lt 3 ]; then
-    if bridge_flap_ok tg-bridge; then
-      log "bridge-watchdog: tg-bridge incomplete (${PROC_TG_ALIVE}/3 processes) — respawning via start-agent.sh tg-bridge"
-      JHT_HOME="$JHT_HOME" bash /app/.launcher/start-agent.sh tg-bridge >>"$LOG" 2>&1 \
-        || log "bridge-watchdog: respawn tg-bridge FAIL (rc=$?)"
-      bridge_flap_record tg-bridge
-    else
-      bridge_escalate "tg-bridge (${PROC_TG_ALIVE}/3)"
-    fi
+  # (2) tg-bridge: canale Telegram OPZIONALE → respawn dei SOLI ruoli mancanti.
+  #
+  # O-58 — prima qui c'era `PROC_TG_ALIVE < 3`, cioè un conteggio globale
+  # confrontato con un numero fisso, e la riparazione era rifare tutti e tre.
+  # Due conseguenze, entrambe pagate: un bot non configurato (mentor senza
+  # token → FATAL in partenza) teneva il conteggio sotto soglia PER SEMPRE, e
+  # ogni giro uccideva e ricreava anche i due bridge SANI. In quella finestra
+  # un messaggio dell'operatore è stato ricevuto e mai consegnato.
+  #
+  # Ora `PROC_TG_MISSING` contiene i ruoli ATTESI (= con bot_token) e assenti:
+  # vuoto significa "niente da fare", anche quando i processi sono meno di
+  # tre. Il flap-cap è per ruolo, se no quello rotto consuma il credito dei
+  # sani e li lascia morti quando muoiono davvero.
+  if tg_bots_configured && [ -n "${PROC_TG_MISSING:-}" ]; then
+    for _tg_role in $PROC_TG_MISSING; do
+      if bridge_flap_ok "tg-bridge-$_tg_role"; then
+        log "bridge-watchdog: tg-bridge[$_tg_role] missing (alive=${PROC_TG_ALIVE:-0}, expected=${PROC_TG_EXPECTED:-0}) — respawning that role only"
+        JHT_HOME="$JHT_HOME" bash "$START_AGENT" tg-bridge "$_tg_role" >>"$LOG" 2>&1 \
+          || log "bridge-watchdog: respawn tg-bridge[$_tg_role] FAIL (rc=$?)"
+        bridge_flap_record "tg-bridge-$_tg_role"
+      else
+        bridge_escalate "tg-bridge[$_tg_role]"
+      fi
+    done
   fi
 
   # (3) Process "profondi" morti (doctor-watchdog/auto-report/cloud-daemon/pid1):
