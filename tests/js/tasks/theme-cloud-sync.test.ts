@@ -96,6 +96,24 @@ describe("theme cloud sync v1", () => {
     expect(cloud.writes).toBe(0);
   });
 
+  it("se un altro browser vince il bootstrap adotta il vincitore", async () => {
+    const storage = new MemoryStorage();
+    cache(storage, "light");
+    let reads = 0;
+    const backend: ThemeCloudBackend = {
+      currentUserId: async () => "user-1",
+      readTheme: async () => (++reads === 1 ? null : "dark"),
+      createTheme: async () => "conflict",
+      writeTheme: async (_userId, theme) => theme,
+    };
+
+    const result = await initializeThemeSync(storage, backend);
+
+    expect(result).toMatchObject({ theme: "dark", status: "synced" });
+    expect(storage.getItem(THEME_STORAGE_KEY)).toBe("dark");
+    expect(reads).toBe(2);
+  });
+
   it("su errore di lettura conserva la cache e non inizializza il cloud", async () => {
     const cloud = new SharedCloud();
     cloud.failRead = true;
@@ -139,6 +157,43 @@ describe("theme cloud sync v1", () => {
     expect(retried).toMatchObject({ theme: "light", status: "synced" });
     expect(storage.getItem(PENDING_THEME_STORAGE_KEY)).toBeNull();
     expect(cloud.rows.get("user-1")).toBe("light");
+  });
+
+  it("una risposta vecchia non cancella un pending esplicito piu recente", async () => {
+    const storage = new MemoryStorage();
+    cache(storage, "system");
+    const writes: Array<{
+      theme: Theme;
+      resolve: (theme: Theme) => void;
+      reject: (error: Error) => void;
+    }> = [];
+    const backend: ThemeCloudBackend = {
+      currentUserId: async () => "user-1",
+      readTheme: async () => "system",
+      createTheme: async () => "conflict",
+      writeTheme: async (_userId, theme) =>
+        new Promise<Theme>((resolve, reject) => {
+          writes.push({ theme, resolve, reject });
+        }),
+    };
+
+    const first = persistThemeChange("light", storage, backend);
+    await Promise.resolve();
+    await Promise.resolve();
+    const second = persistThemeChange("dark", storage, backend);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(writes.map((write) => write.theme)).toEqual(["light", "dark"]);
+    writes[0].resolve("light");
+    await first;
+    writes[1].reject(new Error("offline"));
+    await second;
+
+    expect(storage.getItem(THEME_STORAGE_KEY)).toBe("dark");
+    expect(storage.getItem(PENDING_THEME_STORAGE_KEY)).toBe(
+      JSON.stringify({ userId: "user-1", theme: "dark" }),
+    );
   });
 
   it("fa prevalere il cloud su una cache stale quando non c'e pending", async () => {
