@@ -231,6 +231,13 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
     const params = new URLSearchParams();
     params.set('select', 'id,legacy_id,agent,body,created_at');
     params.set('author', 'eq.user');
+    // NATIVE DEL CLOUD, cioe' scritte dal browser: `legacy_id` negativo (mig
+    // 060). Il filtro era dichiarato nel commento e non nella query, e senza
+    // di esso il box si ripescava i PROPRI turni — quelli che aveva appena
+    // pushato, con id positivo — reimportandoli come nuovi. Il gemello
+    // nasceva con `chat_ts` troncato al secondo (frazione .000), che e' la
+    // firma vista sulla coppia 291/292.
+    params.set('legacy_id', 'lt.0');
     params.set('delivered_at', 'is.null');
     params.set('order', 'created_at.asc');
     params.set('limit', String(limit));

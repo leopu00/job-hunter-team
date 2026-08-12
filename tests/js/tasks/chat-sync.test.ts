@@ -954,6 +954,28 @@ describe("canale della chat senza lettore diretto", () => {
     expect(cloudRequestFailure(new Error("url-riservato"))).toBe("request_failed");
   });
 
+  it("i due lettori chiedono SOLO i turni nati sul web", () => {
+    // [CHAT-DUPLICATES-BORN-INSIDE-THE-BOX] Il difetto della coppia 291/292:
+    // entrambi i lettori DICHIARAVANO nel commento di prendere solo le righe
+    // native del cloud (`legacy_id` negativo, mig 060) e nessuno dei due lo
+    // filtrava. Il box si ripescava i propri turni e li reimportava.
+    // Il controllo è sul SORGENTE perché è una clausola di query: nessun
+    // typecheck e nessun test funzionale sul box la vedrebbe mancare — è
+    // codice valido che chiede la cosa sbagliata, la stessa classe di
+    // difetto del drawer in [CHAT-LANE-SILENT-DROP-ON-OLD-CLIENT].
+    const diretto = readFileSync(
+      join(__dirname, "../../../cli/src/lib/supabase-direct.js"),
+      "utf-8",
+    );
+    expect(diretto).toContain("params.set('legacy_id', 'lt.0');");
+
+    const route = readFileSync(
+      join(__dirname, "../../../web/app/api/cloud-sync/chat/route.ts"),
+      "utf-8",
+    );
+    expect(route).toContain('.lt("legacy_id", 0)');
+  });
+
   it("la corsia in cloud.js non è più gatata sul lettore diretto", () => {
     // Il difetto era una sola condizione: `if (pending && reader)`. Questo
     // controllo è sul SORGENTE perché typecheck e lint non lo vedrebbero.
