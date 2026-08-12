@@ -220,7 +220,7 @@ def test_packaged_desktop_copy_enforces_the_same_applied_contract(box):
         script=DESKTOP_DB_UPDATE,
     )
     assert complete.returncode == 0, complete.stdout + complete.stderr
-    position, application, _transition = read_state(db_path)
+    position, application, transition = read_state(db_path)
     assert position["status"] == "applied"
     assert dict(application) == {
         "status": "applied",
@@ -228,6 +228,7 @@ def test_packaged_desktop_copy_enforces_the_same_applied_contract(box):
         "applied_at": "2026-08-12 15:30:00",
         "applied_via": "desktop_manual",
     }
+    assert dict(transition) == {"from_state": "ready", "to_state": "applied"}
 
 
 def test_packaged_desktop_copy_rolls_back_a_partial_application(box):
@@ -260,3 +261,45 @@ def test_packaged_desktop_copy_rolls_back_a_partial_application(box):
     assert position["status"] == "ready"
     assert application is None
     assert transition is None
+
+
+def test_packaged_desktop_fresh_schema_records_undo_provenance(tmp_path):
+    home = tmp_path / "desktop-fresh"
+    db_path = home / "jobs.db"
+    skills = DESKTOP_DB_UPDATE.parent
+    seed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from _db import get_db, ensure_schema; "
+                "c=get_db(); ensure_schema(c); "
+                "c.execute(\"INSERT INTO positions "
+                "(id,title,company,status) VALUES "
+                "(73,'Synthetic role','Example company','ready')\"); "
+                "c.commit(); c.close()"
+            ),
+        ],
+        cwd=skills,
+        env={**os.environ, "JHT_DB": str(db_path), "JHT_HOME": str(home)},
+        capture_output=True,
+        text=True,
+    )
+    assert seed.returncode == 0, seed.stdout + seed.stderr
+
+    result = run_update(
+        db_path,
+        home,
+        "application",
+        "73",
+        "--applied-at",
+        "2026-08-12 15:30:00",
+        "--applied-via",
+        "desktop_manual",
+        script=DESKTOP_DB_UPDATE,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    position, application, transition = read_state(db_path)
+    assert position["status"] == "applied"
+    assert application["applied_at"] == "2026-08-12 15:30:00"
+    assert dict(transition) == {"from_state": "ready", "to_state": "applied"}

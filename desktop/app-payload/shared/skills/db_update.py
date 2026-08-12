@@ -219,9 +219,10 @@ def update_application(args):
             sys.exit(1)
         args.status = 'applied'
         args.applied_at = args.applied_at or 'now'
-        if not conn.execute(
-            "SELECT 1 FROM positions WHERE id = ?", (args.position_id,)
-        ).fetchone():
+        position = conn.execute(
+            "SELECT status FROM positions WHERE id = ?", (args.position_id,)
+        ).fetchone()
+        if not position:
             print(
                 f"⚠️  position_id={args.position_id} does not exist in "
                 "positions. Aborting application update.",
@@ -229,6 +230,9 @@ def update_application(args):
             )
             conn.close()
             sys.exit(1)
+        previous_position_status = position['status']
+    else:
+        previous_position_status = None
 
     updates = []
     params = []
@@ -334,11 +338,19 @@ def update_application(args):
     if marks_applied:
         # UPDATE application + position restano nella transazione implicita:
         # un errore del secondo statement annulla anche il primo.
+        actor = os.environ.get('JHT_AGENT_NAME') or 'user'
         conn.execute(
             "UPDATE positions SET status = 'applied', last_actor = ? "
             "WHERE id = ?",
-            (os.environ.get('JHT_AGENT_NAME') or 'user', args.position_id),
+            (actor, args.position_id),
         )
+        if previous_position_status != 'applied':
+            conn.execute(
+                "INSERT INTO position_state_transitions "
+                "(position_id, from_state, to_state, by_agent) "
+                "VALUES (?, ?, 'applied', ?)",
+                (args.position_id, previous_position_status, actor),
+            )
     conn.commit()
     print(f"Application per posizione {args.position_id} aggiornata ({cursor.rowcount} riga)")
     conn.close()
