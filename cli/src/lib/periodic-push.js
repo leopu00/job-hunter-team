@@ -135,7 +135,7 @@ export function periodicPushResultStatus(result) {
   return "failed";
 }
 
-/** Ogni full-push del daemon aggiorna lo stesso stato, anche Sync now. */
+/** Il giro periodico avanza la firma soltanto dopo un full-push integro. */
 export function nextPeriodicPushState({
   state = {},
   now,
