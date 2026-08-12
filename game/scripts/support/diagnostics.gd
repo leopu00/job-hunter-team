@@ -403,7 +403,9 @@ static func _is_alert_line(line: String) -> bool:
 	var upper := " " + line.to_upper() + " "
 	return upper.contains("[ERROR]") or upper.contains("[WARN]") \
 			or upper.contains("[WARNING]") or upper.contains(" ERROR ") \
-			or upper.contains(" WARN ") or upper.contains(" WARNING ")
+			or upper.contains(" WARN ") or upper.contains(" WARNING ") \
+			or upper.contains(" ERROR:") or upper.contains(" WARN:") \
+			or upper.contains(" WARNING:")
 
 
 static func _is_repeated_state_line(line: String) -> bool:

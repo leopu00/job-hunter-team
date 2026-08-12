@@ -153,7 +153,10 @@ func _test_alerts_survive_truncation_and_redaction() -> void:
 	var token := "ghp" + "_ABCdefGHIjklMNOpqrSTUvwxYZ0123456789"
 	var email := "reporter@example.com"
 	var lines := PackedStringArray([
-			"[00:00:001] [WARN] synthetic fault " + email + " token=" + token])
+			"[00:00:001] [WARN] synthetic fault " + email + " token=" + token,
+			"ERROR: synthetic colon error",
+			"WARNING: synthetic colon warning",
+	])
 	for i in DiagnosticsScript.MAX_LOG_LINES + 50:
 		lines.append("ordinary-line-%03d" % i)
 	# Un'ultima riga oltre il budget caratteri dimostra anche il cap per byte.
@@ -162,7 +165,9 @@ func _test_alerts_survive_truncation_and_redaction() -> void:
 	_check("alert espulso dalla coda principale", not str(prepared["main"]).contains(
 			"synthetic fault"), "il controtest non esercita il troncamento")
 	_check("alert preservato separatamente", str(prepared["alerts"]).contains(
-			"synthetic fault"), str(prepared))
+			"synthetic fault") and str(prepared["alerts"]).contains(
+			"synthetic colon error") and str(prepared["alerts"]).contains(
+			"synthetic colon warning"), str(prepared))
 	_check("budget caratteri applicato", str(prepared["main"]).contains("truncated") \
 			and str(prepared["main"]).contains("TAIL-END"),
 			str(prepared["main"]).substr(0, 120))
