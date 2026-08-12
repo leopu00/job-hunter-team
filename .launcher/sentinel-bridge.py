@@ -630,6 +630,58 @@ def _daily_hardstop_disabled():
     return os.environ.get("JHT_DAILY_HARDSTOP", "1").strip() in ("0", "false", "no")
 
 
+# Ogni quanto ripetere l'avviso di deroga permanente. 15 min: abbastanza raro
+# per non sporcare il log, abbastanza spesso perché non si possa scoprire due
+# settimane dopo leggendo una riga di backlog.
+DAILY_HARDSTOP_NOTICE_SEC = float(os.environ.get(
+    "JHT_HARDSTOP_NOTICE_SEC", "900"))
+
+#: Stato dell'avviso, conservato fra i tick del loop del bridge.
+_HARDSTOP_NOTICE_STATE: dict = {"since": None, "announced": None}
+
+
+def daily_hardstop_notice(disabled, now_ts, state,
+                          every_sec=DAILY_HARDSTOP_NOTICE_SEC):
+    """Riga da stampare quando il freno FISICO sulla spesa è disattivato.
+
+    [DAILY-SPEND-HARDSTOP-DISABLED-BY-A-LINE-NOBODY-WROTE] Il difetto non era
+    la deroga: era il suo SILENZIO. A `JHT_DAILY_HARDSTOP=0` il ramo che la
+    applica stampava qualcosa solo se c'era un halt da rimuovere; nello stato
+    normale — deroga in piedi, nessun halt — non diceva niente, tick dopo tick.
+    Così l'ultima rete automatica sul tetto di spesa è rimasta giù due
+    settimane e se n'è accorto un rilettore, non il prodotto.
+
+    A differenza del BURN-INTENT, che è una deroga dell'utente **a termine**,
+    questa è di configurazione e non scade: la commit che l'ha introdotta
+    (`f8e32f913b`) dice «meant for one window, not forever», e senza una
+    scadenza l'unico modo di rispettarlo è ripeterlo a voce alta.
+
+    Funzione pura più uno `state` che il chiamante conserva: nessun I/O, così
+    il test la guida senza bridge.
+
+    :param state: dict mutabile con `since` e `announced` (timestamp).
+    :returns: il testo da stampare, oppure None se non c'è nulla da dire.
+    """
+    if not disabled:
+        if state.get("since") is None:
+            return None
+        state["since"] = None
+        state["announced"] = None
+        return ("DAILY-HARDSTOP re-enabled — the physical stop on daily spend "
+                "is back on")
+
+    if state.get("since") is None:
+        state["since"] = now_ts
+    last = state.get("announced")
+    if last is not None and (now_ts - last) < every_sec:
+        return None
+    state["announced"] = now_ts
+    return ("DAILY-HARDSTOP DISABLED (JHT_DAILY_HARDSTOP=0) — the last "
+            "AUTOMATIC stop on daily spend is OFF: pace_guard measures and "
+            "advises but does not brake. Meant for one window, not forever — "
+            "unset the variable (or set it to 1) to restore the brake.")
+
+
 # Modulo di intento cachato: l'import per path costa un exec, e qui si legge a
 # ogni tick. Il MODULO è cachato, non lo STATO: `status()` rilegge il file ogni
 # volta, così una revoca dell'utente vale entro il tick successivo.
@@ -2573,7 +2625,15 @@ def main():
                 entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
             _hb = _dp.get("budget") if isinstance(_dp, dict) else None
             _hc = _dp.get("consumed") if isinstance(_dp, dict) else None
-            if _daily_hardstop_disabled() or _bi_on:
+            # La deroga di CONFIGURAZIONE si dichiara sempre, anche quando non
+            # c'è nessun halt da rimuovere: era proprio lo stato muto in cui il
+            # freno è rimasto giù due settimane. Il BURN-INTENT non passa da qui
+            # perché è a termine e ha già la sua riga di scadenza.
+            _hs_off = _daily_hardstop_disabled()
+            _hs_msg = daily_hardstop_notice(_hs_off, now_ts, _HARDSTOP_NOTICE_STATE)
+            if _hs_msg:
+                print(f"[bridge V6] {now_h} {_hs_msg}")
+            if _hs_off or _bi_on:
                 # Due deroghe, stesso effetto: il cap giornaliero NON scatta.
                 #   • JHT_DAILY_HARDSTOP=0 — deroga di configurazione (burst
                 #     dimostrativo: saturare la finestra 5h invece di spalmarla);
