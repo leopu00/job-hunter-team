@@ -258,6 +258,23 @@ describe("allegato ticket web sul trasporto documenti esistente", () => {
     ).toMatchObject({ n: 0 });
   });
 
+  it("rifiuta dal POST un MIME immagine incoerente con l'estensione", async () => {
+    const response = await ticketRequest(
+      new File(["not-png"], "clipboard-screenshot-deadbeef.png", {
+        type: "image/webp",
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(
+      db.prepare("SELECT COUNT(*) AS n FROM position_tickets").get(),
+    ).toMatchObject({ n: 0 });
+    expect(
+      existsSync(
+        join(userDir, "allegati", "clipboard-screenshot-deadbeef.png"),
+      ),
+    ).toBe(false);
+  });
+
   it("una lettura fallita non tronca un file omonimo già salvato", async () => {
     const uploads = join(userDir, "allegati");
     const first = new FormData();

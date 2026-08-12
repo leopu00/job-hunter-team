@@ -171,6 +171,19 @@ export async function saveUserDocument(file: File): Promise<SavedUserDocument> {
       `${file.name}: file troppo grande (max 10MB)`,
     );
   }
+  const expectedImageType: Record<string, string> = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+  };
+  if (
+    expectedImageType[extension] &&
+    file.type !== expectedImageType[extension]
+  ) {
+    throw new UserDocumentUploadError(
+      `${file.name}: tipo immagine non coerente`,
+    );
+  }
 
   let bytes: Buffer;
   try {
