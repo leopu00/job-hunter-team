@@ -95,9 +95,11 @@ describe.each([
   it("mostra data E ora, non solo l'ora di oggi", () => {
     // `formatFoundAt` per la giornata corrente stampa solo l'orario: in una
     // colonna che serve a misurare un'attesa, un "13:13" nudo non dice di
-    // quale giorno. `formatStamp` porta sempre giorno+mese+ora.
+    // quale giorno. Il formatter canonico porta sempre giorno+mese+ora.
     const cell = PAGE.slice(PAGE.indexOf(`show("${col}") && (`));
-    expect(cell.slice(0, 400)).toContain(`formatStamp(p.${col}, locale)`);
+    expect(cell.slice(0, 500)).toContain(
+      `formatPositionEventStamp(p.${col}, locale)`,
+    );
   });
 });
 

@@ -23,6 +23,10 @@ const PAGE = readFileSync(
   resolve(ROOT, "web/app/(protected)/positions/page.tsx"),
   "utf-8",
 );
+const EVENT_STAMP = readFileSync(
+  resolve(ROOT, "web/lib/position-event-stamp.ts"),
+  "utf-8",
+);
 const LOCALES = ["it", "en", "hu", "es", "de", "fr", "pt"] as const;
 
 describe("colonna 'candidatura inviata' in lista", () => {
@@ -58,17 +62,13 @@ describe("colonna 'candidatura inviata' in lista", () => {
     // `formatFoundAt` per la giornata corrente mostra solo l'ora: scorrendo
     // cinquanta righe un "13:13" nudo si confonde con quello di ieri, ed è
     // esattamente ciò che la richiesta escludeva.
-    // `formatStamp` — ex `formatAppliedAt`: da O-34 lo stesso timbro esatto
-    // serve anche alle colonne "CV scritto il" e "Trovata".
-    const fn = PAGE.slice(
-      PAGE.indexOf("function formatStamp"),
-      PAGE.indexOf("// Mini-tag del giudizio utente"),
-    );
-    expect(fn).toContain("day:");
-    expect(fn).toContain("month:");
-    expect(fn).toContain("hour:");
-    expect(fn).toContain("minute:");
-    expect(fn).not.toContain("sameDay");
+    // Il formatter canonico è condiviso anche col pannello dettaglio: qui si
+    // verifica la sua semantica, non una copia privata nella pagina lista.
+    expect(EVENT_STAMP).toContain("day:");
+    expect(EVENT_STAMP).toContain("month:");
+    expect(EVENT_STAMP).toContain("hour:");
+    expect(EVENT_STAMP).toContain("minute:");
+    expect(EVENT_STAMP).not.toContain("sameDay");
   });
 
   it("il dato arriva da entrambe le sorgenti, non solo dal cloud", () => {
