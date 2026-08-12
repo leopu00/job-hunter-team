@@ -176,9 +176,12 @@ export async function saveUserDocument(file: File): Promise<SavedUserDocument> {
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
   };
+  const expectedType = expectedImageType[extension];
+  const isImageMime = file.type.startsWith("image/");
   if (
-    expectedImageType[extension] &&
-    file.type !== expectedImageType[extension]
+    (expectedType && file.type !== expectedType) ||
+    (isImageMime && !expectedType) ||
+    (isImageMime && file.type !== expectedType)
   ) {
     throw new UserDocumentUploadError(
       `${file.name}: tipo immagine non coerente`,

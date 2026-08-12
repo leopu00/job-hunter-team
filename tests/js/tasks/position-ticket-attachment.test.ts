@@ -275,6 +275,31 @@ describe("allegato ticket web sul trasporto documenti esistente", () => {
     ).toBe(false);
   });
 
+  it("rifiuta anche MIME immagine con estensione documentale", async () => {
+    const response = await ticketRequest(
+      new File(["not-pdf"], "clipboard-forged.pdf", { type: "image/png" }),
+    );
+    expect(response.status).toBe(400);
+    expect(
+      db.prepare("SELECT COUNT(*) AS n FROM position_tickets").get(),
+    ).toMatchObject({ n: 0 });
+    expect(existsSync(join(userDir, "allegati", "clipboard-forged.pdf"))).toBe(
+      false,
+    );
+    const webp = await ticketRequest(
+      new File(["not-pdf"], "clipboard-forged-webp.pdf", {
+        type: "image/webp",
+      }),
+    );
+    expect(webp.status).toBe(400);
+    expect(
+      db.prepare("SELECT COUNT(*) AS n FROM position_tickets").get(),
+    ).toMatchObject({ n: 0 });
+    expect(
+      existsSync(join(userDir, "allegati", "clipboard-forged-webp.pdf")),
+    ).toBe(false);
+  });
+
   it("una lettura fallita non tronca un file omonimo già salvato", async () => {
     const uploads = join(userDir, "allegati");
     const first = new FormData();
