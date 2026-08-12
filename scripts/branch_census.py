@@ -72,6 +72,16 @@ SESSION_ABSENT = "absent"
 SESSION_UNKNOWN = "unknown"
 SESSION_SKIPPED = "skipped"
 
+# Stato di un ref rispetto al remote VERO, non ai ref di tracking locali.
+# Serve perché il census legge `refs/remotes/*`, che è una fotografia: senza
+# `git fetch --prune` continua a vedere branch già cancellati su origin e li
+# propone per la cancellazione. È successo al primo giro reale — 14 candidati
+# annunciati, 7 dei quali fantasmi già rimossi dall'auto-delete di GitHub.
+REMOTE_CONFIRMED = "confirmed"   # esiste su origin, allo stesso sha del tracking
+REMOTE_STALE = "stale"           # non esiste più su origin: tracking stantio
+REMOTE_DRIFTED = "drifted"       # esiste ma a uno sha diverso: la mia foto è vecchia
+REMOTE_UNVERIFIED = "unverified"  # non ho potuto chiedere a origin
+
 # Il probe delle sessioni: tmux gira DENTRO WSL. `wsl.exe -e bash -lc` passa
 # per una shell di login, che è la forma che trova tmux sul PATH; `wsl.exe --
 # tmux ls` dipende dal PATH di default della distro e su alcune torna vuoto.
@@ -92,6 +102,9 @@ class RefFacts:
     unique_commits: int | None
     last_commit_date: str | None = None
     error: str | None = None
+    # Sha del ref di tracking: serve a scoprire se il remote è andato avanti
+    # sotto di noi, cioè se «0 commit unici» parla di uno sha superato.
+    tracking_sha: str | None = None
 
 
 @dataclass(frozen=True)
@@ -114,6 +127,8 @@ class RefVerdict:
     last_commit_date: str | None
     worktree_session: str | None
     candidate: bool
+    remote_status: str = REMOTE_UNVERIFIED
+    remote_note: str = ""
 
 
 @dataclass
@@ -136,6 +151,9 @@ class Census:
     worktrees: list[WorktreeVerdict] = field(default_factory=list)
     session_probe: str = SESSION_UNKNOWN
     session_probe_detail: str = ""
+    remote_probe: str = REMOTE_UNVERIFIED
+    remote_probe_detail: str = ""
+    trusting_tracking: bool = False
 
     @property
     def integrated(self) -> list[RefVerdict]:
@@ -166,8 +184,28 @@ class Census:
         return [r for r in self.refs if r.candidate]
 
     @property
+    def suspect_refs(self) -> list[RefVerdict]:
+        """Ref la cui foto locale non combacia col remote, o non verificata.
+
+        Non è una categoria di ciclo di vita: è un dubbio sui dati. Un ref qui
+        non si tocca, perché la sua classificazione parla di uno sha che su
+        origin potrebbe non esistere più o non essere più la punta.
+        """
+        if self.trusting_tracking:
+            return []
+        return [
+            r for r in self.refs
+            if r.category != UNKNOWN
+            and r.remote_status != REMOTE_CONFIRMED
+        ]
+
+    @property
     def needs_a_look(self) -> int:
-        return len(self.unknown_refs) + len(self.unknown_worktrees)
+        return (
+            len(self.unknown_refs)
+            + len(self.suspect_refs)
+            + len(self.unknown_worktrees)
+        )
 
 
 # ── Nucleo puro: classificazione ──────────────────────────────────────────
@@ -277,17 +315,56 @@ def classify_worktree(
     )
 
 
-def ref_is_candidate(category: str, session_state: str | None) -> bool:
-    """Un ref si propone per la cancellazione solo se integrato E libero.
+def remote_status(
+    tracking_sha: str | None,
+    remote_refs: dict[str, str] | None,
+    branch: str,
+) -> tuple[str, str]:
+    """Stato del ref sul remote vero. `remote_refs=None` = non ho potuto chiedere."""
+    if remote_refs is None:
+        return REMOTE_UNVERIFIED, "esistenza su origin non verificata"
+    live = remote_refs.get(branch)
+    if live is None:
+        return REMOTE_STALE, (
+            "non esiste più su origin: ref di tracking stantio, "
+            "fai `git fetch --prune`"
+        )
+    if tracking_sha and not (
+        live.startswith(tracking_sha) or tracking_sha.startswith(live)
+    ):
+        return REMOTE_DRIFTED, (
+            f"su origin è a {live[:10]}, in locale a {tracking_sha[:10]}: "
+            "la classificazione parla di uno sha superato"
+        )
+    return REMOTE_CONFIRMED, ""
 
-    `None` = nessuna worktree su quel branch. Sessione viva, ignota o non
-    controllata ⇒ si tiene: il dubbio non autorizza una cancellazione.
+
+def ref_is_candidate(
+    category: str,
+    session_state: str | None,
+    remote: str = REMOTE_CONFIRMED,
+    trust_tracking: bool = False,
+) -> bool:
+    """Un ref si propone per la cancellazione solo se integrato E libero E vivo.
+
+    Tre gate, e ognuno risponde a un modo diverso di sbagliare:
+      * `category` — solo un ref già integrato è una scoria;
+      * `session_state` — `None` = nessuna worktree; viva, ignota o non
+        controllata ⇒ si tiene, perché il dubbio non autorizza niente;
+      * `remote` — deve essere confermato presente su origin allo stesso sha.
+        Senza questo gate il census proponeva di cancellare ref già cancellati,
+        annunciandoli come lavoro da fare.
+
+    `trust_tracking` è l'unica deroga, e va chiesta a mano (`--no-remote-check`):
+    l'operatore dichiara di accettare i propri ref di tracking come autorità.
     """
     if category != INTEGRATED:
         return False
-    if session_state is None:
-        return True
-    return session_state == SESSION_ABSENT
+    if session_state is not None and session_state != SESSION_ABSENT:
+        return False
+    if not trust_tracking and remote != REMOTE_CONFIRMED:
+        return False
+    return True
 
 
 def build_census(
@@ -303,10 +380,17 @@ def build_census(
     session_probe: str = SESSION_UNKNOWN,
     session_probe_detail: str = "",
     unknown_session_label: str = SESSION_UNKNOWN,
+    remote_refs: dict[str, str] | None = None,
+    remote_probe: str = REMOTE_UNVERIFIED,
+    remote_probe_detail: str = "",
+    trust_tracking: bool = False,
 ) -> Census:
     """Compone il verdetto. Nessun I/O: è il pezzo che i test guidano."""
     census = Census(base, base_sha, base_date, session_probe=session_probe,
-                    session_probe_detail=session_probe_detail)
+                    session_probe_detail=session_probe_detail,
+                    remote_probe=remote_probe,
+                    remote_probe_detail=remote_probe_detail,
+                    trusting_tracking=trust_tracking)
 
     categories = {}
     for facts in ref_facts:
