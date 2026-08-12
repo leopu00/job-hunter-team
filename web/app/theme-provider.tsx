@@ -5,12 +5,24 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
+import { createClient } from "@/lib/supabase/client";
+import {
+  THEME_STORAGE_KEY,
+  initializeThemeSync,
+  persistThemeChange,
+  readLocalTheme,
+  type Theme,
+  type ThemeCloudBackend,
+} from "@/lib/theme-cloud-sync";
+import {
+  createSupabaseThemeBackend,
+  type ThemeSupabaseClient,
+} from "@/lib/theme-cloud-supabase";
 
-export type Theme = "dark" | "light" | "system";
-
-const STORAGE_KEY = "jht-theme";
+export type { Theme } from "@/lib/theme-cloud-sync";
 
 type ThemeCtx = {
   theme: Theme;
@@ -52,10 +64,7 @@ function getSystemTheme(): "dark" | "light" {
 
 /** Risolve tema iniziale: stored → 'system' se niente salvato */
 function resolveInitialTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-  if (stored === "dark" || stored === "light" || stored === "system")
-    return stored;
-  return "system";
+  return readLocalTheme(localStorage);
 }
 
 function resolveActual(t: Theme): "dark" | "light" {
@@ -66,21 +75,74 @@ function resolveActual(t: Theme): "dark" | "light" {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
   const [resolvedTheme, setResolved] = useState<"dark" | "light">("dark");
+  const backendRef = useRef<ThemeCloudBackend | null>(null);
+  const explicitVersionRef = useRef(0);
+  const latestExplicitThemeRef = useRef<Theme | null>(null);
 
-  // Init: legge localStorage, fallback system
-  useEffect(() => {
-    const t = resolveInitialTheme();
-    const actual = resolveActual(t);
-    setThemeState(t);
+  const adoptTheme = useCallback((next: Theme) => {
+    const actual = resolveActual(next);
+    setThemeState(next);
     setResolved(actual);
     applyTheme(actual);
   }, []);
+
+  // La cache locale evita flash. La riconciliazione cloud parte dopo il mount:
+  // anonimo = nessuna query tabella; autenticato = contratto sync v1.
+  useEffect(() => {
+    adoptTheme(resolveInitialTheme());
+
+    const supabase = createClient();
+    const backend = createSupabaseThemeBackend(
+      supabase as unknown as ThemeSupabaseClient,
+    );
+    backendRef.current = backend;
+    let cancelled = false;
+
+    const reconcile = () => {
+      const versionAtStart = explicitVersionRef.current;
+      void initializeThemeSync(window.localStorage, backend).then((result) => {
+        if (cancelled) return;
+        if (versionAtStart !== explicitVersionRef.current) {
+          // Una scelta utente iniziata dopo questa lettura e' piu' recente.
+          // Il motore protegge il pending; qui proteggiamo anche UI e cache da
+          // una risposta cloud partita prima del click.
+          const latest = latestExplicitThemeRef.current;
+          if (latest) {
+            try {
+              localStorage.setItem(THEME_STORAGE_KEY, latest);
+            } catch {
+              // Il tema resta comunque applicato in memoria.
+            }
+            adoptTheme(latest);
+          }
+          return;
+        }
+        adoptTheme(result.theme);
+      });
+    };
+    reconcile();
+
+    const onOnline = () => reconcile();
+    window.addEventListener("online", onOnline);
+    const { data } = supabase.auth.onAuthStateChange(() => {
+      // Fuori dal callback Supabase: evita di nidificare una nuova query auth
+      // mentre il client sta ancora completando il cambio sessione.
+      window.setTimeout(reconcile, 0);
+    });
+
+    return () => {
+      cancelled = true;
+      backendRef.current = null;
+      window.removeEventListener("online", onOnline);
+      data.subscription.unsubscribe();
+    };
+  }, [adoptTheme]);
 
   // Ascolta cambi di system preference
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = (e: MediaQueryListEvent) => {
-      const current = (localStorage.getItem(STORAGE_KEY) ?? "system") as Theme;
+      const current = readLocalTheme(localStorage);
       if (current !== "system") return;
       const sys: "dark" | "light" = e.matches ? "dark" : "light";
       setResolved(sys);
@@ -92,17 +154,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = useCallback((t: Theme) => {
     enableTransition();
-    const actual = resolveActual(t);
-    setThemeState(t);
-    setResolved(actual);
-    applyTheme(actual);
-    localStorage.setItem(STORAGE_KEY, t);
-    fetch("/api/preferences", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ theme: t }),
-    }).catch(() => null);
-  }, []);
+    const version = ++explicitVersionRef.current;
+    latestExplicitThemeRef.current = t;
+    adoptTheme(t);
+    const backend = backendRef.current;
+    if (!backend) {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, t);
+      } catch {
+        // Il tema resta applicato per la visita corrente.
+      }
+      return;
+    }
+    void persistThemeChange(t, window.localStorage, backend).then((result) => {
+      if (version === explicitVersionRef.current) adoptTheme(result.theme);
+    });
+  }, [adoptTheme]);
 
   const toggleTheme = useCallback(() => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");

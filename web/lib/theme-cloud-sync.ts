@@ -91,7 +91,24 @@ function writePendingTheme(
   );
 }
 
-function confirmTheme(storage: StorageLike, theme: Theme): ThemeSyncResult {
+function samePending(
+  left: PendingTheme | null,
+  right: PendingTheme,
+): boolean {
+  return left?.userId === right.userId && left.theme === right.theme;
+}
+
+function confirmPendingTheme(
+  storage: StorageLike,
+  expected: PendingTheme,
+  theme: Theme,
+): ThemeSyncResult {
+  // Una seconda scelta puo' essere gia' pending mentre la prima risposta e'
+  // ancora in volo. La risposta vecchia e' valida per il cloud, ma non deve
+  // cancellare o ricoprire lo stato locale piu' recente.
+  if (!samePending(readPendingTheme(storage), expected)) {
+    return { theme, status: "synced" };
+  }
   cacheTheme(storage, theme);
   safeRemove(storage, PENDING_THEME_STORAGE_KEY);
   return { theme, status: "synced" };
@@ -124,7 +141,7 @@ export async function initializeThemeSync(
     try {
       const confirmed = await backend.writeTheme(userId, pending.theme);
       if (!isTheme(confirmed)) throw new Error("invalid cloud theme");
-      return confirmTheme(storage, confirmed);
+      return confirmPendingTheme(storage, pending, confirmed);
     } catch {
       return { theme: localTheme, status: "pending" };
     }
@@ -183,7 +200,7 @@ export async function persistThemeChange(
   try {
     const confirmed = await backend.writeTheme(userId, theme);
     if (!isTheme(confirmed)) throw new Error("invalid cloud theme");
-    return confirmTheme(storage, confirmed);
+    return confirmPendingTheme(storage, { userId, theme }, confirmed);
   } catch {
     return { theme, status: "pending" };
   }
