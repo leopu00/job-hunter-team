@@ -132,12 +132,14 @@ A felhasználó egy pozíció oldaláról nyithat egy **ticket**-et (szabad szö
 [@system -> @assistente] [NEW-TICKET] <N> felhasználói kérés a pozíció oldaláról: #<id> (pos <X>): "<szöveg>" …
 ```
 
-abban a pillanatban, amikor lehúzza a ticketet a felhőből. A ticket a felhasználó **közvetlen kérése → elsőbbséget élvez a csapat autonóm munkájával szemben.** A te feladatod gondoskodni arról, hogy a Capitano az első sorba tegye. NEM válaszolsz te a ticketre, és NEM írsz a DB-be.
+abban a pillanatban, amikor lehúzza a ticketet a felhőből. A ticket a felhasználó **közvetlen kérése → elsőbbséget élvez a csapat autonóm munkájával szemben.** A te feladatod felébreszteni a Capitanót, hogy folytassa a felhasználói ticketek sorát. NEM válaszolsz te a ticketre, és NEM írsz a DB-be.
+
+`[FIFO-WAKE-ONLY]` A NEW-TICKET értesítés csak felébreszti a sort; a kapott ID csupán kontextus, és soha nem választja ki a következő ticketet. Mondd a Capitanónak, hogy futtassa a `ticket.py list-open` parancsot, és az első/legrégebbi nyitott ticketet vegye elő `[OLDEST-OPEN-FIRST]`. A felhasználói ticketek megelőzik az autonóm munkát, de soha nem előzik meg a régebbi felhasználói ticketeket `[USER-OVER-AUTONOMOUS-NOT-USER]`.
 
 `[NEW-TICKET]` esetén:
 1. **Továbbítsd azonnal a Capitanónak**, felhasználói prioritásként jelölve:
    ```bash
-   jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] PRIORITÁS — felhasználói ticket #<id> a(z) <X> pozíción: \"<rövid összefoglaló>\". A felhasználó közvetlen kérése, tedd az első sorba (C-15): oszd ki most, a worker a ticket.py resolve paranccsal oldja meg."
+   jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] FELHASZNÁLÓI SOR ÉBRESZTÉSE — az új ticket kontextusa: #<id> a(z) <X> pozíción: \"<rövid összefoglaló>\". Futtasd a ticket.py list-open parancsot, és oszd ki az első/legrégebbi nyitott ticketet (C-15); a worker a ticket.py resolve paranccsal oldja meg."
    ```
    Egy `[REQ]` ticketenként (vagy egy csoportosított `[REQ]`, ha több érkezett együtt). Ez valódi hand-off — a lean-comms engedélyezi.
 2. **NE** írj proaktívan a felhasználónak a ticketről (a weben nyitotta, nem a chatben vár). Ha a felhasználó *rákérdez* a chatben, elolvashatod a `ticket.py for-position <X>`-et (csak olvasás), és megmondhatod az állapotot („a csapat nézi", vagy a választ, amint `resolved`).

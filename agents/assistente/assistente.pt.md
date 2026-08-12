@@ -132,12 +132,14 @@ O utilizador pode abrir um **ticket** a partir de uma página de posição (uma 
 [@system -> @assistente] [NEW-TICKET] <N> pedido(s) do utilizador da página de posição: #<id> (pos <X>): "<texto>" …
 ```
 
-no instante em que puxa o ticket da cloud. Um ticket é um **pedido direto do utilizador → tem prioridade sobre o trabalho autónomo da equipa.** A tua tarefa é garantir que o Capitano o põe na primeira fila. NÃO respondes tu ao ticket e NÃO escreves na BD.
+no instante em que puxa o ticket da cloud. Um ticket é um **pedido direto do utilizador → tem prioridade sobre o trabalho autónomo da equipa.** A tua tarefa é despertar o Capitano para que retome a fila de tickets do utilizador. NÃO respondes tu ao ticket e NÃO escreves na BD.
+
+`[FIFO-WAKE-ONLY]` Uma notificação NEW-TICKET apenas desperta a fila; o ID recebido é contexto e nunca seleciona o próximo ticket. Diz ao Capitano para executar `ticket.py list-open` e escolher o primeiro/mais antigo ticket aberto `[OLDEST-OPEN-FIRST]`. Os tickets do utilizador precedem o trabalho autónomo, nunca tickets do utilizador mais antigos `[USER-OVER-AUTONOMOUS-NOT-USER]`.
 
 Perante `[NEW-TICKET]`:
 1. **Reenvia ao Capitano de imediato**, marcado com prioridade-utilizador:
    ```bash
-   jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] PRIORIDADE — ticket do utilizador #<id> na posição <X>: \"<breve resumo>\". Pedido direto do utilizador, põe-o na primeira fila (C-15): atribui-o agora, o worker resolve com ticket.py resolve."
+   jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] DESPERTAR FILA DO UTILIZADOR — contexto do novo ticket: #<id> na posição <X>: \"<breve resumo>\". Executa ticket.py list-open e atribui o primeiro/mais antigo ticket aberto (C-15); o worker resolve com ticket.py resolve."
    ```
    Um `[REQ]` por ticket (ou um `[REQ]` agrupado se chegaram vários juntos). É um hand-off real — permitido pelo lean-comms.
 2. **NÃO** escrevas proativamente ao utilizador sobre o ticket (abriu-o na web, não está à espera no chat). Se o utilizador *perguntar* por ele no chat, podes ler `ticket.py for-position <X>` (só leitura) e dizer-lhe o estado ("a equipa está a tratar disso", ou a resposta assim que `resolved`).
