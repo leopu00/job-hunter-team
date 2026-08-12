@@ -58,11 +58,12 @@ VIAddVersionKey "CompanyName" "Job Hunter Team"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\JobHunterTeam"
 
 ; ── I dati dell'utente, e perché non si cancellano da soli ────────────
-; Il gioco non imposta `use_custom_user_dir`, quindi `user://` di Godot è
-; $APPDATA\Godot\app_userdata\<nome progetto>: lì vivono onboarding
+; Il gioco fissa `user://` Windows a questo stesso percorso con gli override
+; `.windows` di project.godot. Il custom name riproduce il path storico, ma non
+; segue piu' `config/name`: una rinomina del prodotto non abbandona onboarding
 ; (guided_onboarding.cfg, onboarding_context.*), tour (tour.cfg),
-; configurazione VPS e runtime, log e cache. Verificato su una macchina reale
-; il 2026-08-12.
+; configurazione VPS e runtime, log e cache. Il path storico e' stato
+; verificato su una macchina reale il 2026-08-12.
 ;
 ; DIRETTIVA: questa cartella NON viene cancellata da disinstallazione né da
 ; upgrade. È roba dell'utente — profilo, lingua, configurazione — e un

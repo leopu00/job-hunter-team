@@ -21,6 +21,14 @@ $setup = Join-Path $gameDir 'builds/windows/job-hunter-team-windows-x64-setup.ex
 $nsi = Join-Path $gameDir 'installer/windows.nsi'
 $numericVersion = (($Version -split '-', 2)[0]) + '.0'
 
+function Get-FileObservation {
+  param([string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+  $item = Get-Item -LiteralPath $Path
+  $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+  return '{0}:{1}:{2}' -f $item.LastWriteTimeUtc.Ticks, $item.Length, $hash
+}
+
 if (-not $IsWindows) {
   throw 'The native installer smoke must run on Windows.'
 }
@@ -67,12 +75,14 @@ if ($Smoke) {
   $desktopShortcut = Join-Path $env:USERPROFILE 'Desktop/Job Hunter Team.lnk'
   $startMenuDir = Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/Job Hunter Team'
   $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\JobHunterTeam'
-  # Godot's `user://` with no custom user dir. This is where language,
-  # onboarding, tour and VPS configuration live: the uninstaller must leave it
-  # alone unless the user ticks the opt-in component, and a silent uninstall
-  # must never remove it at all. [WIN-USERDIR-SURVIVES-REINSTALL]
+  # Godot's stable Windows `user://`. project.godot pins this exact historical
+  # path independently from config/name: the workflow deliberately exports a
+  # renamed product and the launch below must still update the log here.
+  # The uninstaller leaves it alone unless the user ticks the opt-in component.
+  # [WIN-USERDIR-SURVIVES-REINSTALL] [WIN-USERDIR-ORPHANED-BY-RENAME]
   $userDataDir = Join-Path $env:APPDATA 'Godot/app_userdata/Job Hunter Team'
   $userDataSentinel = Join-Path $userDataDir 'smoke-userdata-sentinel.txt'
+  $userDataRuntimeLog = Join-Path $userDataDir 'jht-game.log'
 
   if (Test-Path -LiteralPath $installDir) {
     throw "Refusing to overwrite an existing per-user installation: $installDir"
@@ -98,6 +108,7 @@ if ($Smoke) {
 
     $previousNoVps = $env:JHT_NOVPS
     $env:JHT_NOVPS = '1'
+    $userDataRuntimeLogBefore = Get-FileObservation $userDataRuntimeLog
     try {
       $launch = Start-Process -FilePath $installedExe -ArgumentList '--headless', '--quit-after', '3' -Wait -PassThru
       if ($launch.ExitCode -ne 0) {
@@ -105,6 +116,15 @@ if ($Smoke) {
       }
     } finally {
       $env:JHT_NOVPS = $previousNoVps
+    }
+
+    $userDataRuntimeLogAfter = Get-FileObservation $userDataRuntimeLog
+    if ($null -eq $userDataRuntimeLogAfter) {
+      throw "Renamed application did not write its log to stable user data: $userDataRuntimeLog"
+    }
+    if ($null -ne $userDataRuntimeLogBefore -and
+        $userDataRuntimeLogAfter -eq $userDataRuntimeLogBefore) {
+      throw "Renamed application did not update the pre-existing stable user data log: $userDataRuntimeLog"
     }
 
     # A file of the user's, placed where the user's files live, before the

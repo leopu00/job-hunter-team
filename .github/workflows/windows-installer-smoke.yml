@@ -55,6 +55,21 @@ jobs:
           set -euo pipefail
           mkdir -p builds/windows
           godot --headless --path . --import
+          # [WIN-USERDIR-ORPHANED-BY-RENAME] L'export collauda un nome
+          # visibile diverso da quello storico. Il binario deve continuare a
+          # scrivere user:// nella cartella esistente, verificata dopo il
+          # launch da build-windows-installer.ps1.
+          python - <<'PY'
+          from pathlib import Path
+
+          project = Path("project.godot")
+          source = project.read_text(encoding="utf-8")
+          old = 'config/name="Job Hunter Team"'
+          new = 'config/name="Job Hunter Team Rename Probe"'
+          if source.count(old) != 1:
+              raise SystemExit("project name seam changed: rename probe not applied")
+          project.write_text(source.replace(old, new), encoding="utf-8")
+          PY
           godot --headless --path . \
             --export-release 'Windows Desktop' \
             builds/windows/job-hunter-team.exe
