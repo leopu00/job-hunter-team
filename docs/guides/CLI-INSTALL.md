@@ -85,7 +85,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `JHT_INSTALL_DIR` | `$HOME/.jht/src` | Where the repo lands in native mode |
 | `JHT_RUNTIME_DIR` | `$HOME/.jht/runtime` | Where `docker-compose.yml` lands in Docker mode |
 | `JHT_BIN_DIR` | `$HOME/.local/bin` | Where the `jht` wrapper / symlink lands |
-| `JHT_IMAGE` | `ghcr.io/leopu00/jht:0.3.7` | Version-pinned container image referenced by the compose |
+| `JHT_IMAGE` | `ghcr.io/leopu00/jht:0.3.8` | Version-pinned container image referenced by the compose |
 | `JHT_RAW_BASE` | `https://raw.githubusercontent.com/leopu00/job-hunter-team/$JHT_BRANCH` | Base URL for the runtime file downloads |
 | `JHT_SKIP_ONBOARD` | `0` | Skip the post-install `jht setup` wizard |
 
@@ -223,7 +223,7 @@ Example output (abridged; exact actions depend on the host):
 ╚══════════════════════════════════════════╝
 
   mode:   Docker (isolated)
-  image:  ghcr.io/leopu00/jht:0.3.7
+  image:  ghcr.io/leopu00/jht:0.3.8
   branch: production
   runtime:$HOME/.jht/runtime
   dry-run: ON (no changes to the system)

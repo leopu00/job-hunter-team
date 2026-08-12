@@ -106,7 +106,7 @@ export default function CronPage() {
         </div>
 
         <p className="mt-6 text-center text-[9px]" style={{ color: 'var(--color-dim)' }}>
-          v0.3.7 · Job Hunter Team
+          v0.3.8 · Job Hunter Team
         </p>
       </div>
     </main>

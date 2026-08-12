@@ -26,7 +26,7 @@ function DownloadJsonLd() {
     operatingSystem: 'macOS, Linux, Windows',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     downloadUrl: `${SITE_URL}/download`,
-    softwareVersion: '0.3.7',
+    softwareVersion: '0.3.8',
     description: 'Un team di agenti AI che automatizza la ricerca di lavoro. Open source, locale, privato.',
     license: 'https://opensource.org/licenses/MIT',
     isAccessibleForFree: true,

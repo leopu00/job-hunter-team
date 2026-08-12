@@ -7,6 +7,84 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.3.8] — 2026-08-12
+
+**Complete search results, safer message delivery, and a desktop workflow that
+shows what the team actually knows — without hiding stale or missing data.**
+
+### Find and act on the right positions
+
+- Search is now available in both the positions list and map. Cloud queries
+  page through the complete result set instead of silently stopping at 1,000
+  rows, so totals, pins and searches agree with the data you have.
+- Position tickets accept documents from the web, desktop and CLI. Images can
+  be pasted directly with `Ctrl+V` or `Cmd+V`, and use the same size, type and
+  filesystem protections as selected files. Cover letters can be downloaded
+  even when an older record has no direct PDF path.
+- Applied positions keep one authoritative application timestamp across local
+  and cloud updates. The score date is visible in the list and score detail,
+  and you can explicitly request a fresh score from the position page.
+- Rewriting a CV invalidates an old Critic verdict instead of presenting it as
+  current. Applied and response-stage records remain preserved.
+
+### Messages, tickets and synchronization
+
+- Telegram messages are durably recorded before acknowledgement and share the
+  same conversation history as the web. Busy or failed delivery is retried
+  instead of silently losing the user's message; uncertain outcomes are kept
+  single-delivery and diagnosed.
+- The team page now warns when a sanitized chat-delivery failure needs
+  attention, and clears the warning after recovery without exposing message
+  content or infrastructure details.
+- Position changes are pushed to the cloud automatically with bounded retries.
+  The interface shows when the current device is behind, and **Sync now**
+  updates the same freshness state rather than following a separate path.
+- New-ticket notifications wake the team without jumping ahead of older open
+  user tickets. User work still takes priority over autonomous work, while
+  user tickets remain first-in, first-out.
+
+### Setup, desktop and support
+
+- A Local PC is now a complete first-class setup. VPS installations can finish
+  provider configuration and run locally without making a cloud account or
+  pairing a mandatory gate; cloud synchronization remains an explicit opt-in.
+- Remote diagnostics read the authoritative VPS state and logs, preserve
+  errors and warnings before trimming repetitive output, and no longer report
+  a provider rate limit without provider evidence.
+- Feedback can include an optional reply email, validated before delivery and
+  used only as the support email's Reply-To. Desktop feedback and remote logs
+  are redacted before leaving the device.
+- Windows keeps the existing `user://` data directory if the application name
+  changes. The installer and smoke test now verify the installed executable's
+  real write path, and configuration directories are repaired to owner-only
+  permissions on Windows and POSIX systems.
+- Guided dialogue is complete and consistent in English, Italian, German,
+  Spanish, French, Hungarian and Portuguese, including dynamic choices and
+  operational attachments.
+
+### Security and reliability
+
+- Account deletion is a single privileged transaction with same-tenant
+  foreign keys and rollback on failure, preventing cross-account references
+  and partial deletion.
+- Device pairing is one-shot: only the transaction that consumes a session can
+  receive its token, and expired or invalid sessions revoke and erase it.
+- Attachment writers reject path and symlink races before creating files, use
+  unique request identities, and validate image MIME types and extensions on
+  the server before any ticket or file is created.
+- Global team start removes and verifies the container's stop gate before
+  launching agents. Telegram bridge restarts are serialized per role, and the
+  daily Doctor claim is interprocess-safe, preventing duplicate workers under
+  concurrent watchdogs.
+
+### Updating
+
+- On Windows, continue to install this release manually from the official
+  GitHub Release. The automatic updater is not promised until an end-to-end
+  release recovery run has passed. Linux updates also remain manual.
+
+---
+
 ## [0.3.7] — 2026-08-10
 
 **Messages that actually arrive, judgements that work offline, and a set of
@@ -136,7 +214,7 @@ user-controlled cloud data.**
   mode with every message, and no longer suggests speeding up while searching
   is deliberately stopped.
 - **9 orphaned API routes removed** (`/api/{about,stats,agents/metrics,
-  onboarding,resume,search,telegram,workspace,health}`). Their only callers
+onboarding,resume,search,telegram,workspace,health}`). Their only callers
   were the Playwright specs quarantined on 2026-07-26; an exhaustive grep
   across `web/`, `cli/`, `game/`, `desktop/`, `docs/`, `scripts/`, `shared/`
   and the live e2e suite found no remaining caller. The desktop payload
@@ -228,8 +306,8 @@ live.
 
 ### 🎨 Portraits
 
-- **The six missing `pensieroso` poses** — assistant, coordinator, critic, writer, sentinel, maintainer. The chat switches to that pose *while an agent is composing its reply*, and those six were silently falling back to `neutro`: waiting looked exactly like answered, which is the one thing the pose exists to say.
-- **Sixty per-instance portraits**, `neutro` and `pensieroso` for all thirty desks across the five departments. These are not new characters: the office already gave each agent a face by desk, and the chat was the side flattening them onto the role — so `scout-1` and `scout-5` shared one portrait while sitting as visibly different people ten metres apart. Each face is derived from that desk's own sprite. The `a` variants deliberately reuse the role portrait, because they *are* the same identity: the department lead.
+- **The six missing `pensieroso` poses** — assistant, coordinator, critic, writer, sentinel, maintainer. The chat switches to that pose _while an agent is composing its reply_, and those six were silently falling back to `neutro`: waiting looked exactly like answered, which is the one thing the pose exists to say.
+- **Sixty per-instance portraits**, `neutro` and `pensieroso` for all thirty desks across the five departments. These are not new characters: the office already gave each agent a face by desk, and the chat was the side flattening them onto the role — so `scout-1` and `scout-5` shared one portrait while sitting as visibly different people ten metres apart. Each face is derived from that desk's own sprite. The `a` variants deliberately reuse the role portrait, because they _are_ the same identity: the department lead.
 - **Overlapping and clipped sprite frames repaired** across the character sheets, plus two audit tools that make the whole thing checkable without opening the game: `audit_instance_portraits.py` (format, alpha, import files, lead mapping) and `audit_character_sheets.py` (36 sheets, frame geometry).
 
 Combined with the surnames from 0.3.2, opening a chat now reads `HOLMES · SCOUT-1` next to the face that agent actually has at their desk.
@@ -258,7 +336,7 @@ Combined with the surnames from 0.3.2, opening a chat now reads `HOLMES · SCOUT
 
 ### 💬 One chat, and a reply that arrives
 
-The web chat did not work, and the reason was not a bug but **four missing links**. A message written on the site reached the box within a minute and then waited: nobody was responsible for putting it in front of the agent, who was expected to go and look on its own initiative. The reply, once written, waited again — for the user to press *Sync now*, since periodic pushes were disabled to protect quota. And whatever did arrive was filtered out of the page by a `delivered_via='web'` clause that Telegram-delivered messages never match. A message sent twenty hours earlier had simply never been delivered to anyone.
+The web chat did not work, and the reason was not a bug but **four missing links**. A message written on the site reached the box within a minute and then waited: nobody was responsible for putting it in front of the agent, who was expected to go and look on its own initiative. The reply, once written, waited again — for the user to press _Sync now_, since periodic pushes were disabled to protect quota. And whatever did arrive was filtered out of the page by a `delivered_via='web'` clause that Telegram-delivered messages never match. A message sent twenty hours earlier had simply never been delivered to anyone.
 
 Now the turn reaches the agent's pane **within about five seconds** and the answer is on the browser in as many, over a lane that costs nothing while the conversation is idle — every step is fronted by a local guard, so a quiet chat touches neither Supabase nor Vercel. Game and site are **one conversation**: `chat.jsonl` on the box is the meeting point, mirrored both ways with the turn's own timestamp as the dedup key, so what you write in the office you find on the site, and the other way round. Replies written with `jht-send`, which never reached the cloud at all, now do.
 
@@ -266,28 +344,28 @@ The composer also stopped going dark: it used to attach itself to the agent's la
 
 ### 🩺 The team stops getting stuck
 
-- **A step-capped agent is resumed.** The `max_steps=100` cap interrupts an agent without terminating it: the session stays alive, the pane ends on *"Send another message to continue"*, and it waits for an input no component was responsible for sending. Found in production with the only active Scout stalled that way — the Analysts' queue emptied, the Scorers starved, and every health indicator read green, because the existing watchdogs check that a session *exists*. The new watchdog asks whether the **database advances**, applies a throttle before resuming (the cap is usually a rabbit-hole; resuming instantly sends the agent back into the same loop), and escalates to the Captain on the fourth consecutive stall instead of nudging forever.
+- **A step-capped agent is resumed.** The `max_steps=100` cap interrupts an agent without terminating it: the session stays alive, the pane ends on _"Send another message to continue"_, and it waits for an input no component was responsible for sending. Found in production with the only active Scout stalled that way — the Analysts' queue emptied, the Scorers starved, and every health indicator read green, because the existing watchdogs check that a session _exists_. The new watchdog asks whether the **database advances**, applies a throttle before resuming (the cap is usually a rabbit-hole; resuming instantly sends the agent back into the same loop), and escalates to the Captain on the fourth consecutive stall instead of nudging forever.
 - **The Doctor dissolves blocks instead of reporting them.** It had diagnosed a deadlock perfectly — an unsent line in the coordinator's pane, an agent looping on retries for hours — written it down, and stood by while the team stayed frozen for six more hours. It now has an unblock phase that runs before anything else, and a round that leaves a block alive is logged as **failed**. It still never touches text you typed: it forwards the question to the Assistant and tells the coordinator to carry on meanwhile.
 - **The sender stopped lying.** `jht-tmux-send` returned success right after pressing Enter, without checking. When the key was lost the message sat in the composer — and unsent text makes a pane look busy to everyone, turning one lost Enter into a permanent deadlock. It now re-reads the pane, looking only at the prompt line (after a successful submit the text is still on screen, in the transcript). The `Space+Enter` reinforcement is no longer gated to Kimi: the failure was reproduced on Claude.
-- **Sessions expire at 12 hours**, on age alone — no context threshold, no PARKED state, no health heuristic can override it, and a test greps the function body to keep it that way. In the incident the sessions were 38, 29 and 27 hours old and every heuristic said *healthy*. Enforced by the watchdog too, because the Doctor is an agent and can itself be stuck.
+- **Sessions expire at 12 hours**, on age alone — no context threshold, no PARKED state, no health heuristic can override it, and a test greps the function body to keep it that way. In the incident the sessions were 38, 29 and 27 hours old and every heuristic said _healthy_. Enforced by the watchdog too, because the Doctor is an agent and can itself be stuck.
 - **Workers are watched.** The deterministic safety net covered only the four core roles, so four dead workers went unnoticed with no log line and no respawn. It now reads the live roster — with three guards against fighting the coordinator, since "dead" and "deliberately removed" are genuinely indistinguishable today.
 
 ### 💰 Spending
 
 - **`jht standby on`** — a running team costs money even with every worker at maximum throttle: measured at ~2 weekly points per hour on a completely idle pipeline, which hit the wall and froze the team for four and a half days. The residual is the core roles and the bridges, none of which the throttle governs. In standby **the bridges keep reading and stop talking**: quota is read over HTTP, which costs no model turn, so the alarm clock survives at zero cost. It always carries an exit condition — a standby that cannot end is refused.
-- **The Captain is woken 81% less.** Of 37 inbound messages in an hour and a half, 30 were pure status — and he runs on the most expensive model in the fleet while the workers run on the cheapest. The workers no longer announce start and finish; what leaves no trace in the database (blocked, conflicts, decisions) still arrives immediately. He pulls the rest with one query that rides inside the hourly beat he was taking anyway. The asymmetry is written down where it bites: that query shows who *produces*, so a stalled agent **disappears** from it — a missing name is exactly what you must go and look at.
+- **The Captain is woken 81% less.** Of 37 inbound messages in an hour and a half, 30 were pure status — and he runs on the most expensive model in the fleet while the workers run on the cheapest. The workers no longer announce start and finish; what leaves no trace in the database (blocked, conflicts, decisions) still arrives immediately. He pulls the rest with one query that rides inside the hourly beat he was taking anyway. The asymmetry is written down where it bites: that query shows who _produces_, so a stalled agent **disappears** from it — a missing name is exactly what you must go and look at.
 - **The spawn offset comes from the rung.** It was a fixed ten minutes, unrelated to the period the workers would actually run on; with N workers sharing period T the spacing that spreads them is T/N. Measured from the previous worker's phase rather than from now, because a burst spawns back-to-back and everyone would otherwise land in the same minute.
 
 ### 🖥️ The window
 
-- **The game used to cost more CPU than the team it was watching** — 37% against ~8% each for five agents, at 75 °C. Measured before touching anything: headless 3.8% against 31.8% windowed, so seven eighths of the bill is frames drawn, not logic. Now 10 fps unfocused and 3 minimized: **31% → 14.7% → 4.6%**. Two traps defused on the way: the adaptive graphics calibration would have read our own low frame rate as a struggling machine and pixelated the world *while nobody was watching*, persisting it to disk; and below 7.5 fps Godot discards game time, so a three-hour absence would have come back minutes behind.
+- **The game used to cost more CPU than the team it was watching** — 37% against ~8% each for five agents, at 75 °C. Measured before touching anything: headless 3.8% against 31.8% windowed, so seven eighths of the bill is frames drawn, not logic. Now 10 fps unfocused and 3 minimized: **31% → 14.7% → 4.6%**. Two traps defused on the way: the adaptive graphics calibration would have read our own low frame rate as a struggling machine and pixelated the world _while nobody was watching_, persisting it to disk; and below 7.5 fps Godot discards game time, so a three-hour absence would have come back minutes behind.
 - **Closing the window no longer means stopping the team.** Three explicit ways out, each with its consequence written next to it: stop the team and close, **leave the agents working** (with the budget still running, said out loud), or close everything immediately without waiting for anyone to save their place. Coming back, a band tells you how long the team worked without you.
-- **The sidebar went from 28 rows to 13** without losing a destination: the five monitoring views became tabs of one window, the twelve configuration pages tiles behind *Impostazioni*. No section id was renamed, so every deep link and the whole guided tour still resolve.
-- **The app notices a new version.** Until now whoever installed 0.3.0 stayed on 0.3.0 forever, without being told otherwise. On macOS it can install it, and only after proving the package is *ours*: signature, Gatekeeper, and the team anchor compared against the running copy — notarization alone means Apple looked at it, not that we built it. The package must also start before anything is replaced, and rolls back if it does not. On Windows and Linux, where the exports are unsigned, it opens the release page and nothing else.
+- **The sidebar went from 28 rows to 13** without losing a destination: the five monitoring views became tabs of one window, the twelve configuration pages tiles behind _Impostazioni_. No section id was renamed, so every deep link and the whole guided tour still resolve.
+- **The app notices a new version.** Until now whoever installed 0.3.0 stayed on 0.3.0 forever, without being told otherwise. On macOS it can install it, and only after proving the package is _ours_: signature, Gatekeeper, and the team anchor compared against the running copy — notarization alone means Apple looked at it, not that we built it. The package must also start before anything is replaced, and rolls back if it does not. On Windows and Linux, where the exports are unsigned, it opens the release page and nothing else.
 
 ### 🔒 Also
 
-The provider CLI refreshes itself at boot and **substitutes** a stale model pin instead of deleting it (deleting brought the old one straight back, because that is the plan's default); a tag now runs the same self-tests as a push; Windows users are told what the SmartScreen warning is and what to click; and the `soft_pause_team` brake is classified in writing as a safety net that does not yield to the user's spending derogation — it fires when *no* usage number can be read, and yielding there would not mean spending more, it would mean spending blind.
+The provider CLI refreshes itself at boot and **substitutes** a stale model pin instead of deleting it (deleting brought the old one straight back, because that is the plan's default); a tag now runs the same self-tests as a push; Windows users are told what the SmartScreen warning is and what to click; and the `soft_pause_team` brake is classified in writing as a safety net that does not yield to the user's spending derogation — it fires when _no_ usage number can be read, and yielding there would not mean spending more, it would mean spending blind.
 
 ---
 
@@ -301,22 +379,22 @@ The provider CLI refreshes itself at boot and **substitutes** a stale model pin 
 - **The activation checklist grades the connected box, not the laptop.** Steps 02-04 read the local `~/.jht/` while connected to a VPS: a correctly provisioned box could never reach 4/4 (so the activation gate never opened), and — worse — step 03 went **green while validating a different tester's profile** left over on the operator's machine. Every probe now travels the same transport as step 01, and a remote value that cannot be read renders as **unknown**, never as the local one and never as green.
 - **Switching VPS no longer leaves the previous machine's state on the bus.** The office kept drawing the old box's pipeline — a 692→697 paper pile against 14 positions actually in the new database — because a freshly provisioned box publishes an empty list and the re-seed only ran on non-empty ones. The audit found much more than the counters surviving a reconnect: CPU telemetry, `live_settings` (which fed back into the setup screen as the active provider), chat history with its unread badges, coordinator state, usage history and profile status. All of it is now invalidated and re-seeded before the first paint, covered by a new headless self-test. With one box per beta tester, this was showing one user another user's work.
 - **The map fetches the office address and how sure the team is of it.** `office_address` appeared in no `.gd` file at all: the exact street address the Analysts work to obtain could not be displayed anywhere, and without `office_verified` a pin resolved to a street number rendered identically to one resolved to the city centroid — 30 geocoded positions collapsing onto 24 distinct points, which reads as a broken map. Verified offices are now a filled disc labelled with the company; everything else in that city is a single hollow ring marked `≈ City (n)`, and the address appears in the position card.
-- **The SSH key fingerprint is recomputed when the key changes.** It was written once while the panel was built, into a label nobody kept a reference to: picking a different key left the previous fingerprint on screen while the *new* key was the one actually used. That field exists to be compared against what the provider shows, so a stale value does not merely mislead — it turns an anti-MITM check into false assurance. When it cannot be computed it now says so instead of falling back to anything.
+- **The SSH key fingerprint is recomputed when the key changes.** It was written once while the panel was built, into a label nobody kept a reference to: picking a different key left the previous fingerprint on screen while the _new_ key was the one actually used. That field exists to be compared against what the provider shows, so a stale value does not merely mislead — it turns an anti-MITM check into false assurance. When it cannot be computed it now says so instead of falling back to anything.
 
 ### 🤖 Pacing — decisions move from scripts to agents
 
-- **The pace guard advises, the Captain decides.** It used to rewrite the worker throttle at every bridge sample, which made any manual override last less than five minutes. It now measures, produces a verdict and writes one line to the Captain — nothing applies it automatically. The reason is not ceremony: its correction is **one number for everybody**, derived from the most-braked worker, and it slowed the Analyst and the Scorer — the two roles that turn a backlog into a position *with a score* — exactly as hard as a Scout that was over-sourcing.
-- **New `throttle-distribution` skill** (7 languages) that owns the arithmetic of *who* pays the cut and *how much*: share answers who, production data answers who is worth slowing, and the role asymmetry says the Analyst and the Scorer go last. It also owns the do-nothing cases, because an intervention at every tick is noise and waking the Captain costs real budget. A pre-existing calibration formula was corrected along the way: it was linear and computed before the floor, producing 40-second durations that the 5-minute floor silently clamped to 300.
-- **Coprime throttle ladder.** The rungs were 5, 10, 15, 20, 25, 30, 40, 50, 60 minutes — every one a multiple of five, so two workers on different rungs resynchronised *by construction*: 5+10 collided every 10 minutes. Each coincidence was a burst of simultaneous requests. The rungs are now prime minutes (1, 2, 3, 5, 7, 11, 13, 17, 23, 31, 41, 53, 60); worst-case time between any pair goes from 10 to 35 minutes.
+- **The pace guard advises, the Captain decides.** It used to rewrite the worker throttle at every bridge sample, which made any manual override last less than five minutes. It now measures, produces a verdict and writes one line to the Captain — nothing applies it automatically. The reason is not ceremony: its correction is **one number for everybody**, derived from the most-braked worker, and it slowed the Analyst and the Scorer — the two roles that turn a backlog into a position _with a score_ — exactly as hard as a Scout that was over-sourcing.
+- **New `throttle-distribution` skill** (7 languages) that owns the arithmetic of _who_ pays the cut and _how much_: share answers who, production data answers who is worth slowing, and the role asymmetry says the Analyst and the Scorer go last. It also owns the do-nothing cases, because an intervention at every tick is noise and waking the Captain costs real budget. A pre-existing calibration formula was corrected along the way: it was linear and computed before the floor, producing 40-second durations that the 5-minute floor silently clamped to 300.
+- **Coprime throttle ladder.** The rungs were 5, 10, 15, 20, 25, 30, 40, 50, 60 minutes — every one a multiple of five, so two workers on different rungs resynchronised _by construction_: 5+10 collided every 10 minutes. Each coincidence was a burst of simultaneous requests. The rungs are now prime minutes (1, 2, 3, 5, 7, 11, 13, 17, 23, 31, 41, 53, 60); worst-case time between any pair goes from 10 to 35 minutes.
 - **Per-agent exemption from the worker floor**, deliberately not a global switch — the floor exists because of a measured incident, and removing it everywhere reproduces the July 15 night burn where floor and hard-stop were both off.
 
 ### 🔥 The user can suspend the spending automatisms
 
-`jht burn on [--hours N]` — when the user orders *"the budget is not a constraint"*, that order finally has a place to live instead of five separate derogations dismantled by hand. Ten points consult it **before** braking rather than after: the three bridges before writing `daily-halt`, the working-hours gate, and `throttle-config` — which matters most, because the floor and the ladder apply **on read**, which is why every manual override used to snap back to 300 seconds on its own.
+`jht burn on [--hours N]` — when the user orders _"the budget is not a constraint"_, that order finally has a place to live instead of five separate derogations dismantled by hand. Ten points consult it **before** braking rather than after: the three bridges before writing `daily-halt`, the working-hours gate, and `throttle-config` — which matters most, because the floor and the ladder apply **on read**, which is why every manual override used to snap back to 300 seconds on its own.
 
-It expires by itself (5 hours by default, one window; hard cap 12) and it reaches the agents, which was the requirement that made this hard: a technical derogation is not enough if the prompts do not know about it. On 2026-07-27 six workers had been exempted in code and the coordinator re-narrowed the exemption *in good faith*, correctly citing its own rule, undoing the user's order. So the Captain gets **C-23** and the Sentinella **S-10**, in all seven languages, both stating that narrowing the derogation is not theirs to do. The Sentinella's evening reserve stands down with the daily cap — it is the same ceiling under another name — and the brake re-arms immediately at expiry, bypassing its own cooldown.
+It expires by itself (5 hours by default, one window; hard cap 12) and it reaches the agents, which was the requirement that made this hard: a technical derogation is not enough if the prompts do not know about it. On 2026-07-27 six workers had been exempted in code and the coordinator re-narrowed the exemption _in good faith_, correctly citing its own rule, undoing the user's order. So the Captain gets **C-23** and the Sentinella **S-10**, in all seven languages, both stating that narrowing the derogation is not theirs to do. The Sentinella's evening reserve stands down with the daily cap — it is the same ceiling under another name — and the brake re-arms immediately at expiry, bypassing its own cooldown.
 
-**Four brakes never yield**, and they are a code constant rather than prose: `weekly-halt` (beyond it the provider stops answering), `host_agent_cap` (19 sessions → load 24 on 6 cores → SSH unreachable: forcing it produces *less*), one-position-per-iteration, and `freeze_team`.
+**Four brakes never yield**, and they are a code constant rather than prose: `weekly-halt` (beyond it the provider stops answering), `host_agent_cap` (19 sessions → load 24 on 6 cores → SSH unreachable: forcing it produces _less_), one-position-per-iteration, and `freeze_team`.
 
 ### 🐳 Container, CLI & CI
 
@@ -329,13 +407,13 @@ It expires by itself (5 hours by default, one window; hard cap 12) and it reache
 
 ## [0.3.0] — 2026-07-27
 
-**The native-application cycle** — 2026-07-06 → 2026-07-27, 842 commits since v0.2.0. The desktop surface moved from an Electron launcher wrapping a web dashboard to a **native Godot office**; the browser is now cloud-only. Four user-visible removals are listed under *Breaking changes* below — read those first if you are upgrading an existing install.
+**The native-application cycle** — 2026-07-06 → 2026-07-27, 842 commits since v0.2.0. The desktop surface moved from an Electron launcher wrapping a web dashboard to a **native Godot office**; the browser is now cloud-only. Four user-visible removals are listed under _Breaking changes_ below — read those first if you are upgrading an existing install.
 
 ### 💥 Breaking changes
 
 - **Electron desktop launcher removed.** The whole `desktop/` tree is gone (−35k lines); the supported desktop application is the Godot office in [`game/`](game/), built by `.github/workflows/release.yml` for macOS (signed + notarized `.zip`), Windows (NSIS `.exe`) and Linux (`.tar.gz`). Release version consistency is now checked against `package.json` + `game/project.godot` + `game/export_presets.cfg` — see [`docs/internal/ops/release.md`](docs/internal/ops/release.md).
 - **Local web dashboard on `:3000` retired.** The container no longer serves Next.js: no `EXPOSE 3000`, no `ports:` in `docker-compose.yml`, no dashboard child process in `jht pid1`. Local and VPS interaction happen in the native app (`docker exec` / SSH); the browser only ever talks to the cloud deployment (jobhunterteam.ai, authenticated). `jht dashboard` still exists but prints a pointer and exits 0.
-- **`/onboarding` removed from the web app.** Onboarding is a first-run experience of the native office; the cloud app opens at `/dashboard`, and new cloud users get the `/welcome` wizard (see *Demo mode* below) instead.
+- **`/onboarding` removed from the web app.** Onboarding is a first-run experience of the native office; the cloud app opens at `/dashboard`, and new cloud users get the `/welcome` wizard (see _Demo mode_ below) instead.
 - **The TUI is gone.** `tui/` (29 files) is removed: it was compiled by every user on install and its job — watching sessions, reading logs — is done by the CLI and by the native office. With it went the Python LLM layer in `shared/` and the two SDKs only it needed, plus 30 unreachable `shared/` subdirectories.
 
 ### 🖥️ Native desktop application (Godot 4.7)
@@ -424,7 +502,7 @@ and twenty more. Untouched since birth except by one repo-wide Prettier pass.
   container build for zero imports.
 - **`tests/js/tasks/_disabled/` deleted** (40 specs, 6068 lines) — parked on
   2026-05-31 with a re-enable procedure nobody ran, asserting against surfaces
-  that were *removed* rather than renamed. Dropping the folder-wide vitest
+  that were _removed_ rather than renamed. Dropping the folder-wide vitest
   exclude then revealed a second, unknown `_disabled/` holding one **working**
   file: its move had broken a relative import, not its subject. 18 passing tests
   came back.
@@ -446,7 +524,7 @@ restores any of it.
 
 ### 📚 Documentation
 
-User-facing guides were updated in the same commit as the `:3000` retirement (QUICKSTART, CLI-REFERENCE, VPS-SETUP, AI-AGENT-INTEGRATION and the public *dashboard-and-results* page in 7 languages). The rest of the documentation had fallen three weeks behind and was realigned on 2026-07-24/25:
+User-facing guides were updated in the same commit as the `:3000` retirement (QUICKSTART, CLI-REFERENCE, VPS-SETUP, AI-AGENT-INTEGRATION and the public _dashboard-and-results_ page in 7 languages). The rest of the documentation had fallen three weeks behind and was realigned on 2026-07-24/25:
 
 - [`docs/internal/ops/release.md`](docs/internal/ops/release.md) rewritten for the Godot pipeline — it still told the maintainer to bump `desktop/package.json` and to expect electron-builder artifacts, which would have failed on the first CI job. The macOS signing playbook in `MAINTAINERS.md` went with it (signing is mandatory now, not "deferred post-beta").
 - [`04-threat-model.md`](docs/security/04-threat-model.md) → v0.2: the document meant to become the public `SECURITY.md` still modelled "Electron + a dashboard on localhost:3000". The April audit documents around it are now labelled as the dated snapshot they are.
@@ -458,7 +536,7 @@ User-facing guides were updated in the same commit as the `:3000` retirement (QU
 
 **First public release** — the version announced on Reddit. CLI-first beta, built for contributors.
 
-**What it is:** a self-hosted team of AI agents (Captain, Scout, Analyst, Scorer, Writer, Critic + support core) that runs your job search on your own LLM subscription. Everything below this section was previously tracked under *Unreleased* and shipped with this tag.
+**What it is:** a self-hosted team of AI agents (Captain, Scout, Analyst, Scorer, Writer, Critic + support core) that runs your job search on your own LLM subscription. Everything below this section was previously tracked under _Unreleased_ and shipped with this tag.
 
 **Highlights of the launch sprint (2026-07-02 → 03):**
 
@@ -471,7 +549,6 @@ User-facing guides were updated in the same commit as the `:3000` retirement (QU
 - 🖥️ **Desktop installers** for macOS/Windows/Linux attached as unsupported preview builds (the supported path is the CLI); three Windows-runner build bugs fixed along the way (electron-builder auto-publish, `npm.cmd` spawn, GNU tar vs `C:\` paths).
 
 > ℹ️ Historical entries below this point are a mixed Italian/English engineering log that predates the English-only policy (2026-07-03). They are kept verbatim as project history.
-
 
 ### 📚 Docs restructure: one-screen ROADMAP + slim BACKLOG index — 2026-07-03
 
@@ -495,15 +572,17 @@ Supera l'ADR-0001 (Colima-only su macOS) con [ADR-0006](docs/adr/0006-user-choic
 
 Dettaglio architettura in [`docs/internal/architecture/cloud-sync-architecture.md`](docs/internal/architecture/cloud-sync-architecture.md) (living doc).
 
-**Macro-shift architetturale**: il modello "push-only macro-events" del 2026-05-13 è stato superato. Cloud sync v2 è ora **ibrido push + pull desired-state**: il container resta source-of-truth dei *risultati* (positions/scores/applications, push delta-only ~30s), mentre le **intenzioni utente** che entrano dal web (start/stop team, "scrivi CV", "geocodifica", like/dislike, chat) tornano al container via 2 long-poller HTTP (`team-state-reconciler` + `team-commands-poller`) + endpoint dedicato `pull-desired-state` per i flag per-row. Pattern desired-state Kubernetes-style: il browser scrive `should_run=true`, il reconciler converge.
+**Macro-shift architetturale**: il modello "push-only macro-events" del 2026-05-13 è stato superato. Cloud sync v2 è ora **ibrido push + pull desired-state**: il container resta source-of-truth dei _risultati_ (positions/scores/applications, push delta-only ~30s), mentre le **intenzioni utente** che entrano dal web (start/stop team, "scrivi CV", "geocodifica", like/dislike, chat) tornano al container via 2 long-poller HTTP (`team-state-reconciler` + `team-commands-poller`) + endpoint dedicato `pull-desired-state` per i flag per-row. Pattern desired-state Kubernetes-style: il browser scrive `should_run=true`, il reconciler converge.
 
 **On-demand UX — l'utente decide cosa fare lavorare al team**:
+
 - ✅ **Writer-on-demand V6** (mig 024): Scrittore NON spawnato al boot, lazy-spawn dal Capitano quando `positions.write_requested=1`. Bottone "Scrivi CV" sul dashboard + Telegram `/cv <id>` setta il flag. Latenza ~15s/ondata, zero token bruciati in idle loop. RULE C-10.
 - ✅ **Geocoding opt-in/out V8** (mig 027): replica esatta del pattern, `positions.geocode_requested` flag, button "Geocodifica" detail page. Analista REGOLA-16 diventa OPT-IN (skippa silenziosamente quando flag=0). Nuova coda parallela `next-for-geocoding` per posizioni già processate.
 - ✅ **Feedback loop esteso** (mig 028): `position_feedback` + `comment` (≤2000 char) + `score` (1-5) + `direction` (more_like_this/less_like_this). Skill `feedback_query.py` espone `latest_direction` (più recente non-NULL). Scout prompt EN+IT con sezione "pattern steering": `less_like_this` → deprioritize fonte/company, `more_like_this` → replica pattern. Scorer Step 5 obbligatorio multiplier (like ×1.10, star ×1.15, dislike ×0.85, hide → excluded), cap 100.
 - ✅ **Chat utente→agente bidirezionale**: `user_to_agent_messages` poller container-side fa long-poll `/api/messages?status=pending`, claim atomico PATCH `delivered`, forward al tmux pane dell'agente target via `jht-tmux-send`. Polling adattivo 3 tier (active 5s / idle 30s / deep-idle 120s) basato su ultima consegna riuscita — riduce carico Vercel ~90% in idle h24.
 
 **Backend bidirezionale completo**:
+
 - ✅ **`team_state` desired-state + 3 event lanes** (mig 019-022): single-team enforcement (claim 409 + push 409 + PATCH 409), status inference, `user_to_agent_messages`, `position_feedback`. Realtime publication su tutte le lane (~200ms browser).
 - ✅ **Pull cloud→SQLite al boot** + **periodic pull nel daemon**: GET `/api/cloud-sync/pull-desired-state?since=<ISO>` wired al boot di `startActionContainer` + ad ogni tick del push daemon. Cursor separato `.cloud-pull-cursor.json`. Chiude multi-device "live" (mobile click + team su VPS).
 - ✅ **Route write-request supporta cloud-mode senza SQLite locale**: discriminazione `hasLocal` (SQLite presente → path locale, altrimenti SELECT+UPDATE solo Supabase con embedded validate). Loop chiuso: utente clicca su Vercel con container offline → flag su cloud → pull al boot applica → Capitano spawn Scrittore.
@@ -511,18 +590,22 @@ Dettaglio architettura in [`docs/internal/architecture/cloud-sync-architecture.m
 - ✅ **Killswitch dedicato 401/403**: counter separato `MAX_CONSECUTIVE_AUTH_FAILS=3` (vs 5 generico, perché token revocato non recupera mai). Halt + INSERT `pending_user_messages` con istruzioni "riapri pairing + jht cloud login". Reset solo su push success 200.
 
 **Disaster recovery + privacy-first**:
+
 - ✅ **`jht cloud restore`** (CLI + endpoint `/api/cloud-sync/full-dump`): full DB rebuild da cloud per container vuoto o SQLite corrotto. 3 tabelle (positions/scores/applications, `deleted_at IS NULL`, cap 10k righe/tabella, rate limit 5/min). Conferma esplicita interattiva via `@clack/prompts`, flag `--confirm-restore` per skip in CI. Mappa cloud_uuid→legacy_id per scores/apps. INSERT OR REPLACE idempotente. Reset cursor push a "now".
 - ✅ **JHT-LOCAL-NO-API**: privacy-first switch. `web/lib/workspace.ts` espone `isCloudEnabled()` + `isLocalOnlyMode()`. Quando l'utente disabilita cloud sync e gira tutto localmente → **zero chiamate Supabase** (skip `supabase.auth.getUser()` e fetch in `layout.tsx`, `dashboard/page.tsx`, `map/page.tsx`, `positions/page.tsx`). Su Vercel/remote sempre false, comportamento immutato.
 
 **Refactor naming + hygiene**:
+
 - ✅ **`realtime-subscriber.js` → `team-commands-poller.js`**: il file faceva HTTP long-poll, non WebSocket Realtime (il nome era ereditato dall'intent originale). Il comando CLI `jht cloud realtime-listen` resta per compat con i pid1 deployati; sarà ribattezzato `team-commands-listen` quando il cutover handleAction singolo agente finisce.
 - ✅ **DB hygiene + RLS init-plan fix** (mig 024-026): 9 FK indexes mancanti aggiunti, 22 policy `auth.uid()` per-row riavvolte a `(select auth.uid())` (Postgres materializza init-plan una sola volta, da O(N×K) a O(N+K)), 9 unused indexes droppati.
 
 **Throttling + freshness team — context drift mitigation**:
+
 - ✅ **TOKEN-MONITOR-WRITER-CRITIC**: il Critico (`CRITICO-S<N>`) è child task atomico dello Scrittore N, ma il suo consumo token NON era attribuito al parent. Il Capitano vedeva `scrittore-1=200kT/min` e decideva "throttle OK", mentre la unit reale Scrittore-1 stava consumando 280kT/min (40% in più). Nuova funzione `aggregate_writer_critic_rates()` mappa 1:1 e produce `per_writer_aggregated` nel state JSON. RULE Capitano **C-11** (IT+EN) istruisce a leggere `combined_rate_kt_per_min` per le decisioni di throttle.
 - ✅ **DOCTOR-DAILY-RESTART MVP**: nuova skill `daily-restart-wave` (gating triplo: finestra 03:00 UTC ± 30 min + 23h anti-thrash via state file + rispetto `.team-halted.flag`/`.weekly-halt.flag`). Restart pre-emptivo di TUTTI gli agenti (vivi inclusi) per context freshness. Ordine tier 3 → tier 1 (workers first, Capitano LAST). Heads-up Capitano 10 min prima. Chiude il gap Case Study #1 (Codex run 2026-05-19/21) dove l'utente aveva dovuto fare 1 restart manuale per arrestare drift di lucidità dopo ~12-24h.
 
 **CI/DX**:
+
 - ✅ Migration dev3 rinumerate 024/025 → 027/028 per evitare collisione con master.
 - ✅ Prettier autoformat post-merge dev3 (5 file Writer-on-demand + 3 file Geocoding).
 - ✅ ESLint 8 errori bloccanti risolti.
@@ -538,6 +621,7 @@ Dettaglio in
 e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-18-fix-effectiveness-review/).
 
 **Effetto cumulativo misurato (pre/post-fix)**:
+
 - 🚨 EMERGENZA Sentinella **−96%** (25 → 1)
 - 🚨 URG msg **−71%** (24 → 7)
 - 🚨 FREEZE menzioni **−82%** (34 → 6)
@@ -548,6 +632,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - ✅ Boot container **4/9 auto-start → 9/9 auto-start** (zero comandi manuali)
 
 **13 bug strategici + 3 feature chiusi**:
+
 - **#14** state-event log positions transitions (commit `2ceb0a17`)
 - **#15** timezone CEST/UTC — setup wizard chiede TZ + cascade format_time (commit `78004470`, `eb4cad5d`)
 - **#17** Capitano C-05 auto-triage attivo (commit `426f1865`)
@@ -566,13 +651,16 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - **F-4** Expiration tracking: deadline parser EN/IT + alert utente idempotente (commit `69a7c117`)
 
 **2 regressioni introdotte durante lo sprint, già risolte**:
+
 - Zombie night 18/5 23:14→09:05 UTC — agent-watchdog non controllava pane_current_command, kimi crashato in sessione tmux viva = silent zombie 6h. Fix: pane check + kill+respawn + cadenza Dottore 30min→2h + skill `spawn-doctor` per coordinatori (commit `dad3c94a`, `d012b75c`). Post-mortem [`docs/sessions/2026-05-18-capitano-zombie-night/`](docs/sessions/2026-05-18-capitano-zombie-night/).
 - CV "estetica semplificata" 18/5 — skill cv-structure citava `--pdf-engine=typst` non disponibile in pandoc 2.17 container, Scrittori fallback a fpdf2 1-pagina spartana. Fix: 4 reti di sicurezza (preflight engine + gate Producer post-render + guard pdf_gen.py refuse CV paths + regola scrittore S-05). 31 CV brutti rigenerati retroattivamente (commit `f695b503`).
 
 **Infrastruttura altri fix correlati**:
+
 - `488ff9ac` — pid1.js auto-spawn `sentinella` tmux + `sentinel-bridge.py` + `pacing-bridge.py` (boot 9/9 senza intervento manuale)
 
 **Debt residuo identificato** (non blocking):
+
 - 🟡 Capitano context bloat (83.7k tokens/turn vs 50k storico) → soluzione proposta: refresh contesto periodico dei coordinatori (memoria nel DB, conversazione non critica)
 - 🟡 Scout sweep 116k tokens/turn — cap parziale linkedin_access.py, retrofit `web_scrape_robust.py` da fare
 - 🟡 F-3 weekly distribution (deferred — default G-spot OK)
@@ -580,6 +668,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - 🟡 F-4.B Analista re-check periodica positions vecchie (deferred)
 
 **Analisi consumo settimanale** ([`docs/sessions/2026-05-18-weekly-budget-analysis/`](docs/sessions/2026-05-18-weekly-budget-analysis/)):
+
 - 1% finestra Kimi ≈ 0.20% weekly budget (+8.5% rispetto a 0.189 settimana scorsa, causa context bloat)
 - ~5 finestre piene/settimana capacità (vs 5.9 settimana scorsa)
 
@@ -607,6 +696,7 @@ The 10-day arc was not a clean V1→V5 progression — it was a real-world explo
 4. **Bridge V3** — active fetcher, Sentinel as fallback only
 5. **Bridge V4** — Sentinel repositioned as filter between Bridge and Captain
 6. **Bridge V5 (current)** — "Pasqua-style" activates above V4 stack
+
 - **🚦 Bridge rule-set** — single rule 85–95% with L1/L2/L3 escalation, lazy WORKER fallback, throttle on absolute usage with target 95% and EMA reset on gap, singleton lock + kill-before-spawn in `start-agent.sh`, EMA 10-tick + burst filter on cumulative delta of last hour, invalidate last sample on provider change, notify only on throttle/host change (not on every status), tau-aware projection, watchdog degraded mode, default poll 5min
 - **🌉 Bridge as separate role in launcher** — ordered startup (Captain → Sentinel → Bridge), first usage sample now comes from Bridge (removed pre-Bridge `sleep 20`)
 - **🌉 Bridge API + UI** — `/api/bridge/{start,stop,status}` endpoints, popover in web team page with interval slider, live LED tied to real bridge state, start/stop from UI, countdown + animation synced with the real bridge clock
@@ -653,7 +743,7 @@ The 10-day arc was not a clean V1→V5 progression — it was a real-world explo
 
 ### 📚 Documentation
 
-- **📘 README rewritten** end-to-end for pre-launch — story, providers, vision, monitoring stack, AI-agent integration. Manifesto: *"AI on the side of workers, not against them."* Track record callout (~200 offers · ~20 applications · 5 interview invites in 2 weeks). Local-first positioning. Demo placeholder. AI-agent CLI USP section.
+- **📘 README rewritten** end-to-end for pre-launch — story, providers, vision, monitoring stack, AI-agent integration. Manifesto: _"AI on the side of workers, not against them."_ Track record callout (~200 offers · ~20 applications · 5 interview invites in 2 weeks). Local-first positioning. Demo placeholder. AI-agent CLI USP section.
 - **📋 BACKLOG rewritten** in English with status refresh — 12 tasks flipped ⬜→✅ (CLOUDSYNC ping/push, ONBOARDING split-screen, FRONTEND 1-5, multi-provider, CLI ↔ container 5/5, JHT-QA-01 with 75+ Playwright specs); 5 known bugs removed (all fixed); restructured by area; added PHASE 6 (Pre-Launch) with 4 BLOCKERs (SECURITY, COC, demo video, security review) + new tasks (test campaign, VPS validate, monitoring weekly window, user work hours, Kimi optimize, Sentinel optimize).
 - **🆕 9 new documents:**
   - `docs/about/STORY.md` — origin story (legacy team results, why open source)
@@ -1026,16 +1116,16 @@ Release focused on friction points that emerged from manual E2E tests on Windows
 
 11 fixes applied to the early V2 worktree-based team (one CLAUDE.md per agent worktree) before the project was packaged as v0.1.0. Captured here for historical traceability after the standalone optimization log (`ottimizzazioni-team.md`) was retired.
 
-- **OPT-001** — *Scout: tool strategy table.* Explicit site→tool mapping in CLAUDE.md; lists sites blocked by robots.txt (LinkedIn, Wellfound, Revolut, WTTJ) so scouts stop wasting turns trying `fetch` on them.
-- **OPT-002** — *Scout: LinkedIn auth fallback.* On intermittent `linkedin` MCP `authentication_failed`, don't retry immediately; wait 2-3 turns and use `jobspy` for bulk search in the meantime.
-- **OPT-003** — *Scout: insert-fast / update-later.* Write the position to DB on discovery (title + company + URL) and fill the JD afterwards, instead of waiting for full data.
-- **OPT-004** — *Scout: stop condition.* One cycle = all assigned sources × 2-3 queries, max 15-20 minutes, mandatory end-of-cycle summary, then STOP and wait for instructions; never re-run on already-covered sources.
-- **OPT-005** — *Scout: Captain (`🐺 ALFA`) communication.* Verify with `tmux has-session` before sending; the Captain reads via `capture-pane`, no message needed.
-- **OPT-006** — *Scout: geographic + relocation availability.* Added "DISPONIBILITÀ GEOGRAFICA" section to the candidate profile in CLAUDE.md; only hard exclusion is "US work authorization required"; queries updated to include city names (Berlin, Amsterdam, London…); removed "On-site fuori Roma" as a negative criterion.
-- **OPT-007** — *Scout: concentric circles protocol.* 5 circles (Remote EU → Roma → Italia → EU capitals → rest of EU) split between scouts by opportunity type (not by source); all scouts use all sources, but with circle-specific queries; added EU tech career-page list (Spotify, Booking, Adyen, Wise).
-- **OPT-008** — *Scorer + Writers: practice-interview tier.* New score tiers 🟢 SERIOUS (≥70) · 🟡 PRACTICE (40-69) · 🔵 REFERENCE_ONLY (<40); writer effort levels match (full personalization · template · skip); on-site penalty rebalanced (relocation OK, US-only −25).
-- **OPT-009** — *Analysts: data cleaning + filtering.* Analysts now correct company name / location / remote_type via `db_update.py` (not just in notes); new `excluded` status for unfit positions (US-only, no Python, senior 5+, scam, UK-only post-Brexit); scorer only ever sees clean, fit-able positions.
-- **OPT-010** — *Scorer: sequential one-at-a-time.* Never load all positions in a bash batch; the loop is query next → detail → score → insert → update → repeat.
-- **OPT-011** — *Scout + Analysts: URL and deadline mandatory.* `--url` is now `required=True` in `db_insert.py position` (script fails without it); new `deadline` column in DB; analysts scrub for missing URLs and mark expired/404 JDs as `excluded`; dashboard surfaces deadline on cards.
+- **OPT-001** — _Scout: tool strategy table._ Explicit site→tool mapping in CLAUDE.md; lists sites blocked by robots.txt (LinkedIn, Wellfound, Revolut, WTTJ) so scouts stop wasting turns trying `fetch` on them.
+- **OPT-002** — _Scout: LinkedIn auth fallback._ On intermittent `linkedin` MCP `authentication_failed`, don't retry immediately; wait 2-3 turns and use `jobspy` for bulk search in the meantime.
+- **OPT-003** — _Scout: insert-fast / update-later._ Write the position to DB on discovery (title + company + URL) and fill the JD afterwards, instead of waiting for full data.
+- **OPT-004** — _Scout: stop condition._ One cycle = all assigned sources × 2-3 queries, max 15-20 minutes, mandatory end-of-cycle summary, then STOP and wait for instructions; never re-run on already-covered sources.
+- **OPT-005** — _Scout: Captain (`🐺 ALFA`) communication._ Verify with `tmux has-session` before sending; the Captain reads via `capture-pane`, no message needed.
+- **OPT-006** — _Scout: geographic + relocation availability._ Added "DISPONIBILITÀ GEOGRAFICA" section to the candidate profile in CLAUDE.md; only hard exclusion is "US work authorization required"; queries updated to include city names (Berlin, Amsterdam, London…); removed "On-site fuori Roma" as a negative criterion.
+- **OPT-007** — _Scout: concentric circles protocol._ 5 circles (Remote EU → Roma → Italia → EU capitals → rest of EU) split between scouts by opportunity type (not by source); all scouts use all sources, but with circle-specific queries; added EU tech career-page list (Spotify, Booking, Adyen, Wise).
+- **OPT-008** — _Scorer + Writers: practice-interview tier._ New score tiers 🟢 SERIOUS (≥70) · 🟡 PRACTICE (40-69) · 🔵 REFERENCE_ONLY (<40); writer effort levels match (full personalization · template · skip); on-site penalty rebalanced (relocation OK, US-only −25).
+- **OPT-009** — _Analysts: data cleaning + filtering._ Analysts now correct company name / location / remote_type via `db_update.py` (not just in notes); new `excluded` status for unfit positions (US-only, no Python, senior 5+, scam, UK-only post-Brexit); scorer only ever sees clean, fit-able positions.
+- **OPT-010** — _Scorer: sequential one-at-a-time._ Never load all positions in a bash batch; the loop is query next → detail → score → insert → update → repeat.
+- **OPT-011** — _Scout + Analysts: URL and deadline mandatory._ `--url` is now `required=True` in `db_insert.py position` (script fails without it); new `deadline` column in DB; analysts scrub for missing URLs and mark expired/404 JDs as `excluded`; dashboard surfaces deadline on cards.
 
 > Note: paths in the entries above (`scout-1/CLAUDE.md`, `scrittore-1/CLAUDE.md`, sessione `🐺 ALFA`) reference the pre-0.1.0 worktree-per-agent architecture. The current single-prompt-multi-instance model lives at `agents/<role>/<role>.md`.
