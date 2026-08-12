@@ -100,6 +100,10 @@ terminal_selection|script|gate|posix|-|tools/terminal_selection_selftest.gd|-
 # duplicate in ui_en.gd passavano in verde e rompevano l'avvio in tutte le
 # lingue tranne una.
 i18n_parity|script|gate|any|-|tools/i18n_parity_selftest.gd|-
+# I 367 testi narrativi hanno ID semantici e sei overlay completi: il fallback
+# inglese resta una rete di sicurezza, non il modo normale in cui un utente
+# italiano/ungherese/spagnolo/tedesco/francese/portoghese legge la storia.
+dialogue_i18n|script|gate|any|-|tools/dialogue_i18n_selftest.gd|DIALOGUE-I18N-TEST PASS
 # Il velo fra title/wizard/office dura pochi frame ma finisce nelle riprese:
 # costruisce il vero overlay di Game e ne blocca lingua e fallback sull'inglese.
 loading_english|script|gate|any|-|tools/loading_english_selftest.gd|LOADING-ENGLISH-TEST PASS

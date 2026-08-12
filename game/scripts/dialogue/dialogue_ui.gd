@@ -103,7 +103,7 @@ func _goto(id: String) -> void:
 	var node: Dictionary = _tree[id]
 	if node.has("action"):
 		action_triggered.emit(str(node["action"]))
-	var parsed := Dialogues.parse_emotion(node["text"])
+	var parsed := Dialogues.parse_emotion(Dialogues.node_text(_tree_id, _node_id))
 	var emo: String = parsed[0]
 	var text: String = Dialogues.resolve_placeholders(parsed[1], TeamData)
 	_portrait.set_state(node.get("pose", _portrait._cur_pose if _portrait._cur_pose else "a"), emo)
@@ -183,12 +183,15 @@ func _show_choices(choices: Array) -> void:
 	for i in choices.size():
 		var choice: Dictionary = choices[i]
 		var b := Button.new()
-		b.text = "%d · %s" % [i + 1, choice["text"]]
+		var localized_choice := Dialogues.choice_text(_tree_id, _node_id, choice)
+		var choice_id := Dialogues.choice_text_id(_tree_id, _node_id,
+				str(choice.get("next", "")))
+		b.text = "%d · %s" % [i + 1, localized_choice]
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.pressed.connect(func() -> void:
 			Sfx.play_blip()
 			ScriptedOnboarding.record_dialogue_choice(_tree_id, _node_id,
-					str(choice.get("text", "")), str(choice.get("next", "")))
+					localized_choice, str(choice.get("next", "")), choice_id)
 			_goto(choice["next"]))
 		_choices_box.add_child(b)
 	if _choices_box.get_child_count() > 0:
@@ -221,8 +224,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if idx >= 0 and idx < node["choices"].size():
 			Sfx.play_blip()
 			var choice: Dictionary = node["choices"][idx]
+			var localized_choice := Dialogues.choice_text(_tree_id, _node_id, choice)
+			var choice_id := Dialogues.choice_text_id(_tree_id, _node_id,
+					str(choice.get("next", "")))
 			ScriptedOnboarding.record_dialogue_choice(_tree_id, _node_id,
-					str(choice.get("text", "")), str(choice.get("next", "")))
+					localized_choice, str(choice.get("next", "")), choice_id)
 			_goto(choice["next"])
 			return
 	var advance: bool = event.is_action_pressed("ui_accept") \
