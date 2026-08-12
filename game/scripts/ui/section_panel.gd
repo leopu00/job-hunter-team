@@ -3776,8 +3776,6 @@ func _build_ticket_form(box: VBoxContainer, pid: int) -> void:
 		return
 	if not BackendBus.ticket_created.is_connected(_on_ticket_created):
 		BackendBus.ticket_created.connect(_on_ticket_created)
-	if not BackendBus.document_uploaded.is_connected(_on_ticket_document_uploaded):
-		BackendBus.document_uploaded.connect(_on_ticket_document_uploaded)
 	var form := HBoxContainer.new()
 	form.add_theme_constant_override("separation", 10)
 	box.add_child(form)
@@ -3804,11 +3802,11 @@ func _build_ticket_form(box: VBoxContainer, pid: int) -> void:
 		_ticket_send.disabled = true
 		_ticket_attach.disabled = true
 		_ticket_pending_pid = pid
-		_ticket_pending_text = txt
 		_ticket_status.add_theme_color_override("font_color", Palette.DIM)
 		if _ticket_attachment_local_path != "":
 			_ticket_status.text = UIStrings.t("pos.ticket_uploading")
-			BackendBus.upload_user_document(_ticket_attachment_local_path)
+			BackendBus.create_position_ticket(
+					pid, txt, _ticket_attachment_local_path)
 		else:
 			_ticket_status.text = UIStrings.t("pos.ticket_sending")
 			BackendBus.create_position_ticket(pid, txt)
@@ -3831,7 +3829,6 @@ var _ticket_attachment_status: Label
 var _ticket_attachment_dialog: FileDialog
 var _ticket_attachment_local_path := ""
 var _ticket_pending_pid := 0
-var _ticket_pending_text := ""
 
 func _browse_ticket_attachment() -> void:
 	if not is_instance_valid(_ticket_attachment_dialog):
@@ -3849,19 +3846,6 @@ func _on_ticket_attachment_selected(path: String) -> void:
 	_ticket_attachment_local_path = path
 	if is_instance_valid(_ticket_attachment_status):
 		_ticket_attachment_status.text = UIStrings.t("pos.ticket_attached") % path.get_file()
-
-func _on_ticket_document_uploaded(ok: bool, remote_path: String, error: String) -> void:
-	# document_uploaded è condiviso col wizard: senza un submit pendente questo
-	# pannello osserva soltanto e non crea ticket per l'upload di un'altra UI.
-	if _ticket_pending_pid <= 0:
-		return
-	if not ok:
-		_on_ticket_created(_ticket_pending_pid, false, error)
-		return
-	if is_instance_valid(_ticket_status):
-		_ticket_status.text = UIStrings.t("pos.ticket_sending")
-	BackendBus.create_position_ticket(
-			_ticket_pending_pid, _ticket_pending_text, remote_path)
 
 func _on_ticket_created(_pid: int, ok: bool, error: String) -> void:
 	if _ticket_pending_pid > 0 and _pid != _ticket_pending_pid:
@@ -3884,7 +3868,6 @@ func _on_ticket_created(_pid: int, ok: bool, error: String) -> void:
 	if is_instance_valid(_ticket_attach):
 		_ticket_attach.disabled = false
 	_ticket_pending_pid = 0
-	_ticket_pending_text = ""
 
 static func _ticket_request_parts(raw: String) -> Dictionary:
 	const MARKER := "\n\n[FILE ALLEGATI]\n"

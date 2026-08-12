@@ -20,6 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "shared" / "skills"
 PAYLOAD = ROOT / "game" / "scripts" / "backend" / "payloads" / "ticket.py"
 SECTION_PANEL = ROOT / "game" / "scripts" / "ui" / "section_panel.gd"
+BACKEND_BUS = ROOT / "game" / "scripts" / "backend" / "backend_bus.gd"
+PROJECT = ROOT / "game" / "project.godot"
 MARKER = "[FILE ALLEGATI]"
 
 sys.path.insert(0, str(SKILLS))
@@ -92,21 +94,28 @@ def test_payload_desktop_rifiuta_path_arbitrario_senza_ticket(database):
 
 
 def test_ui_desktop_apre_ticket_solo_dopo_upload_riuscito():
-    source = SECTION_PANEL.read_text(encoding="utf-8")
-    worker = source.split("func _on_ticket_document_uploaded", 1)[1].split(
+    panel = SECTION_PANEL.read_text(encoding="utf-8")
+    bus = BACKEND_BUS.read_text(encoding="utf-8")
+    worker = bus.split("func _on_ticket_document_uploaded", 1)[1].split(
         "\nfunc ", 1
     )[0]
-    submit = source.split("var submit := func() -> void:", 1)[1].split(
+    submit = panel.split("var submit := func() -> void:", 1)[1].split(
         "\t_ticket_send.pressed.connect", 1
     )[0]
 
-    assert "BackendBus.upload_user_document(_ticket_attachment_local_path)" in submit
-    assert "BackendBus.create_position_ticket(pid, txt)" in submit
+    assert "pid, txt, _ticket_attachment_local_path" in submit
+    assert "_pending_ticket_document" in bus
+    assert "upload_user_document(local_attachment_path)" in bus
     assert "if not ok:" in worker
-    create_at = worker.index("BackendBus.create_position_ticket(")
+    create_at = worker.index("_backend.create_ticket(")
     guard_at = worker.index("if not ok:")
     assert guard_at < create_at
-    assert "_ticket_pending_text, remote_path" in worker
+    assert 'str(pending["text"]), remote_path' in worker
+    assert "document_uploaded.connect(_on_ticket_document_uploaded)" in bus
+    assert "document_uploaded.connect(_on_ticket_document_uploaded)" not in panel
+    assert 'BackendBus="*res://scripts/backend/backend_bus.gd"' in PROJECT.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_label_desktop_pari_in_sette_lingue():
@@ -120,6 +129,7 @@ def test_label_desktop_pari_in_sette_lingue():
             "pos.ticket_attach",
             "pos.ticket_attached",
             "pos.ticket_uploading",
+            "pos.ticket_upload_in_progress",
             "vps.ticket.invalid_attachment",
         ):
             assert source.count(f'"{key}":') == 1, f"{path.name}: {key}"

@@ -434,6 +434,7 @@ const S := {
 	"pos.ticket_attach": "DATEI ANHÄNGEN",
 	"pos.ticket_attached": "📎 %s",
 	"pos.ticket_uploading": "Anhang wird hochgeladen…",
+	"pos.ticket_upload_in_progress": "ein anderer Ticket-Anhang wird bereits hochgeladen",
 	"pos.ticket_send": "TICKET ÖFFNEN",
 	"pos.ticket_sending": "Ticket wird an die VPS gesendet…",
 	"pos.ticket_ok": "✓ Ticket geöffnet — der Koordinator übernimmt es",

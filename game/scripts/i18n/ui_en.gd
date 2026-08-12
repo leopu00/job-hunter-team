@@ -442,6 +442,7 @@ const S := {
 	"pos.ticket_attach": "ATTACH FILE",
 	"pos.ticket_attached": "📎 %s",
 	"pos.ticket_uploading": "uploading attachment…",
+	"pos.ticket_upload_in_progress": "another ticket attachment is already uploading",
 	"pos.ticket_send": "OPEN TICKET",
 	"pos.ticket_sending": "sending the ticket to the VPS…",
 	"pos.ticket_ok": "✓ ticket opened — the Coordinator will pick it up",

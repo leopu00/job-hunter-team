@@ -434,6 +434,7 @@ const S := {
 	"pos.ticket_attach": "ADJUNTAR ARCHIVO",
 	"pos.ticket_attached": "📎 %s",
 	"pos.ticket_uploading": "subiendo archivo…",
+	"pos.ticket_upload_in_progress": "ya se está subiendo otro archivo de ticket",
 	"pos.ticket_send": "ABRIR TICKET",
 	"pos.ticket_sending": "enviando el ticket a la VPS…",
 	"pos.ticket_ok": "✓ ticket abierto — el Coordinador se hará cargo",

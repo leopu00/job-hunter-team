@@ -621,6 +621,7 @@ const S := {
 	"pos.ticket_attach": "ALLEGA FILE",
 	"pos.ticket_attached": "📎 %s",
 	"pos.ticket_uploading": "caricamento allegato…",
+	"pos.ticket_upload_in_progress": "un altro allegato ticket è già in caricamento",
 	"pos.ticket_send": "APRI TICKET",
 	"pos.ticket_sending": "invio del ticket alla VPS…",
 	"pos.ticket_ok": "✓ ticket aperto — il Coordinatore lo prenderà in carico",

@@ -434,6 +434,7 @@ const S := {
 	"pos.ticket_attach": "FÁJL CSATOLÁSA",
 	"pos.ticket_attached": "📎 %s",
 	"pos.ticket_uploading": "melléklet feltöltése…",
+	"pos.ticket_upload_in_progress": "egy másik ticketmelléklet feltöltése már folyamatban van",
 	"pos.ticket_send": "TICKET NYITÁSA",
 	"pos.ticket_sending": "ticket küldése a VPS-re…",
 	"pos.ticket_ok": "✓ ticket megnyitva — a Koordinátor átveszi",

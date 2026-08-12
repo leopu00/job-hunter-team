@@ -836,11 +836,49 @@ func publish_artifact(path: String, ok: bool, data: PackedByteArray,
 
 ## ── Ticket utente→team ───────────────────────────────────────────────
 
+## Il caricamento è il primo passo di un'unica intenzione utente. Lo stato
+## vive nell'autoload, non nel pannello: chiudere/cambiare pagina mentre i byte
+## viaggiano non deve lasciare un file caricato senza il ticket richiesto.
+var _pending_ticket_document: Dictionary = {}
+
 ## Apre un ticket sulla posizione (async: esito su ticket_created; la
-## lista ticket si aggiorna col prossimo snapshot posizioni).
-func create_position_ticket(position_id: int, text: String, attachment_path := "") -> void:
-	if _backend and position_id > 0 and text.strip_edges() != "":
-		_backend.create_ticket(position_id, text.strip_edges(), attachment_path)
+## lista ticket si aggiorna col prossimo snapshot posizioni). Il path opzionale
+## è LOCALE: il bus lo carica col trasporto documenti esistente e passa al
+## backend solo il path container attestato da document_uploaded(ok=true).
+func create_position_ticket(position_id: int, text: String,
+		local_attachment_path := "") -> void:
+	var clean := text.strip_edges()
+	if not _backend or position_id <= 0 or clean == "":
+		return
+	if local_attachment_path == "":
+		_backend.create_ticket(position_id, clean)
+		return
+	# La UI disabilita il submit, ma il bus resta il confine autorevole: due
+	# pannelli o due segnali nello stesso frame non possono rubarsi il path.
+	if not _pending_ticket_document.is_empty():
+		ticket_created.emit(position_id, false,
+				UIStrings.t("pos.ticket_upload_in_progress"))
+		return
+	_pending_ticket_document = {"position_id": position_id, "text": clean}
+	if not document_uploaded.is_connected(_on_ticket_document_uploaded):
+		document_uploaded.connect(_on_ticket_document_uploaded)
+	upload_user_document(local_attachment_path)
+
+func _on_ticket_document_uploaded(ok: bool, remote_path: String,
+		error: String) -> void:
+	if _pending_ticket_document.is_empty():
+		return
+	var pending := _pending_ticket_document.duplicate()
+	_pending_ticket_document.clear()
+	var position_id := int(pending["position_id"])
+	if not ok:
+		ticket_created.emit(position_id, false, error)
+		return
+	if _backend:
+		_backend.create_ticket(position_id, str(pending["text"]), remote_path)
+	else:
+		ticket_created.emit(position_id, false,
+				UIStrings.t("common.backend_not_connected"))
 
 
 ## ── Configurazione VPS (voce Impostazioni → Collega VPS) ─────────────
