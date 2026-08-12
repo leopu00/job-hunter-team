@@ -34,10 +34,10 @@ does not change an ID; changing a branch target is a graph change and therefore
 changes the choice ID deliberately.
 
 The language is always `UIStrings.lang`, backed by the shared
-`i18n-prefs.json` contract. Narrative translations are sparse overlays: a
-missing entry falls back to the canonical English source. We do not copy the
-same English string into seven files merely to make key sets look equal.
-Every one of the seven supported locales must nevertheless resolve every ID to
+`i18n-prefs.json` contract. Narrative translations are locale overlays: the
+six non-English catalogs each contain every authored ID, while a missing entry
+still falls back to the canonical English source as a last-resort runtime
+safety net. Every one of the seven supported locales resolves every ID to
 non-empty text with the same placeholders as the English source.
 
 ## Presentation versus data
@@ -57,10 +57,10 @@ non-empty text with the same placeholders as the English source.
 
 ## Verifiable delivery boundary
 
-This ticket introduces the resolver, canonical IDs, seven-locale resolution
-and placeholder gates for all 367 currently bypassing authored strings. The
-17 already-localized staged-tour keys stay in the authoritative UI catalog.
-Human translation of 367 strings into each of the six non-English locales is
-a separate editorial workload (2,202 locale-string cells) and is not invented
-by machine or hidden by duplicated English entries. The census/test reports
-that residue precisely while runtime has a deterministic English fallback.
+This ticket introduces the resolver, canonical IDs, complete six-locale
+overlays and placeholder gates for all 367 previously bypassed authored
+strings: 2,202 translated locale-string cells. The 17 already-localized
+staged-tour keys stay in the authoritative UI catalog. The census/test rejects
+missing and orphan keys, empty copy, placeholder drift and catalogs that exist
+but are not wired into the runtime resolver; English remains the deterministic
+fallback for damaged or future incomplete catalogs.

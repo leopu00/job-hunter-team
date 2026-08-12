@@ -7,14 +7,20 @@ const EXPECTED_TREES := 38
 const EXPECTED_NODES := 221
 const EXPECTED_CHOICES := 138
 const EXPECTED_DYNAMIC_SHELLS := 8
+const EXPECTED_TRANSLATED_CELLS := 2202
 
 var _failures: Array[String] = []
 
 
 func _init() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
 	var nodes := 0
 	var choices := 0
 	var ids := {}
+	var sources := {}
 	for tree_id: String in Dialogues.TREES:
 		var tree: Dictionary = Dialogues.TREES[tree_id]
 		for node_id: String in tree:
@@ -27,6 +33,7 @@ func _init() -> void:
 			ids[node_key] = true
 			var source_line := str(node.get("text", ""))
 			var source_emotion := str(Dialogues.parse_emotion(source_line)[0])
+			sources[node_key] = str(Dialogues.parse_emotion(source_line)[1])
 			for locale: String in UIStrings.LANGS:
 				var resolved := Dialogues.node_text(tree_id, node_id, locale)
 				_check(resolved != "", "%s empty in %s" % [node_key, locale])
@@ -50,6 +57,7 @@ func _init() -> void:
 				_check(not ids.has(choice_key), "duplicate ID: " + choice_key)
 				ids[choice_key] = true
 				var source_choice := str(choice.get("text", ""))
+				sources[choice_key] = source_choice
 				for locale: String in UIStrings.LANGS:
 					var resolved_choice := Dialogues.choice_text(
 							tree_id, node_id, choice, locale)
@@ -68,6 +76,11 @@ func _init() -> void:
 	_check(UIStrings.LANGS.size() == 7, "language contract is not seven locales")
 	_check(Dialogues.dynamic_shell_ids().size() == EXPECTED_DYNAMIC_SHELLS,
 			"dynamic shell census drift")
+	for dynamic_key: String in Dialogues.DYNAMIC_SHELLS:
+		sources[dynamic_key] = str(Dialogues.DYNAMIC_SHELLS[dynamic_key])
+	_check(sources.size() == EXPECTED_NODES + EXPECTED_CHOICES \
+			+ EXPECTED_DYNAMIC_SHELLS, "authored source census mismatch")
+	_check_locale_catalogs(sources)
 	_check(Dialogues.greeting_for_hour(9, "en") == "Good morning",
 			"greeting does not pass through authored resolver")
 	_check(Dialogues.positions_summary(3, "en").contains("3"),
@@ -90,7 +103,8 @@ func _init() -> void:
 			"localized narrative label can still enter model context")
 
 	if _failures.is_empty():
-		print("DIALOGUE-I18N-TEST PASS (38 trees, 359 IDs, 7 locales, residue 2202)")
+		print("DIALOGUE-I18N-TEST PASS " \
+				+ "(38 trees, 367 IDs, 7 locales, 2202 translated cells)")
 		quit(0)
 		return
 	for failure in _failures:
@@ -106,9 +120,45 @@ func _check(condition: bool, message: String) -> void:
 
 static func _placeholders(text: String) -> PackedStringArray:
 	var regex := RegEx.new()
-	regex.compile("\\{[a-z_]+\\}")
+	regex.compile("\\{[a-z_]+\\}|%[a-z]")
 	var found: Array[String] = []
 	for item in regex.search_all(text):
 		found.append(item.get_string())
 	found.sort()
 	return PackedStringArray(found)
+
+
+func _check_locale_catalogs(sources: Dictionary) -> void:
+	var translated_cells := 0
+	for locale: String in UIStrings.LANGS:
+		if locale == UIStrings.DEFAULT_LANG:
+			continue
+		var path := "res://scripts/i18n/dialogue_%s.gd" % locale
+		_check(ResourceLoader.exists(path), "missing locale catalog: " + path)
+		if not ResourceLoader.exists(path):
+			continue
+		var script: GDScript = load(path)
+		var catalog: Dictionary = script.get_script_constant_map().get("S", {})
+		_check(catalog.size() == sources.size(),
+				"%s catalog has %d/%d keys" % [
+						locale, catalog.size(), sources.size()])
+		for key: String in sources:
+			_check(catalog.has(key), "%s missing %s" % [locale, key])
+			if not catalog.has(key):
+				continue
+			translated_cells += 1
+			var translated := str(catalog[key])
+			_check(translated.strip_edges() != "", "%s empty in %s" % [key, locale])
+			_check(translated != str(sources[key]) \
+					or _placeholders(translated).size() > 0 \
+					and translated.strip_edges().begins_with("{"),
+					"%s still uses English copy in %s" % [key, locale])
+			_check(_placeholders(translated) == _placeholders(str(sources[key])),
+					"%s placeholder drift in %s" % [key, locale])
+			_check(UIStrings.authored(key, str(sources[key]), locale) == translated,
+					"%s catalog is not wired in %s" % [key, locale])
+		for key: String in catalog:
+			_check(sources.has(key), "%s orphan key %s" % [locale, key])
+	_check(translated_cells == EXPECTED_TRANSLATED_CELLS,
+			"translated cell census %d != %d" % [
+					translated_cells, EXPECTED_TRANSLATED_CELLS])
