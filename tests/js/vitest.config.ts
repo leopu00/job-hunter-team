@@ -1,8 +1,34 @@
 import { defineConfig } from "vitest/config";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** Fuori dalla CI il pool si limita a metà dei core, non al default (~core−1).
+ *
+ * Sulla macchina di sviluppo (12 core, disco che è già il collo di bottiglia
+ * documentato) il default significa ~11 processi fork che spawnano node,
+ * transformano TypeScript e scrivono SQLite in tmpdir TUTTI INSIEME, sullo
+ * stesso disco. I sintomi raccolti nei log del 2026-08-11/12 sono tutti
+ * forme della stessa starvation, non difetti dei file che la subiscono:
+ *
+ *   - 4 file morti INTERI con «Failed to start forks worker: Timeout
+ *     waiting for worker to respond» — il fork non parte entro il limite;
+ *   - `cloud-restore`: «Hook timed out in 10000ms» su un beforeEach che a
+ *     macchina scarica sta sotto il secondo (mkdtemp + DDL su disco);
+ *   - `positions-sort-pagination`: «Test timed out in 5000ms» su un test
+ *     sincrono che a vuoto costa 4ms — inflazione di tre ordini di grandezza;
+ *   - tempi cumulativi transform/environment (135s/141s) molte volte sopra
+ *     il wall-clock (89s): i worker passano il tempo a contendersi I/O.
+ *
+ * Quale file cade è una lotteria: per questo un budget più largo NEI file
+ * colpiti nasconderebbe il guasto invece di toglierlo. Metà dei core (6 qui)
+ * raddoppia la banda disco per worker e riporta il profilo locale vicino a
+ * quello della CI (runner a 4 core, dove queste morti non si vedono). In CI
+ * il default resta intatto di proposito: lì il dimensionamento va bene ed è
+ * un ambiente che non ha il nostro disco. */
+const localMaxWorkers = Math.max(2, Math.floor(os.cpus().length / 2));
 
 // L'alias `@` → `web/` serve ai test che importano moduli dell'app (es.
 // tasks/demo-*.test.ts su `@/lib/demo/...`): senza, l'import non risolve e il
@@ -38,5 +64,6 @@ export default defineConfig({
     // (~1900 test di una dipendenza, 3 file rossi per pacchetti che non
     // installiamo) e la suite del repo sparisce nel rumore.
     exclude: ["**/node_modules/**", "../../**/node_modules/**"],
+    ...(process.env.CI ? {} : { maxWorkers: localMaxWorkers }),
   },
 });
