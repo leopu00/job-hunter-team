@@ -222,7 +222,7 @@ def test_release_notes_render_every_verified_asset_without_a_second_list(
         repository=REPOSITORY,
     )
 
-    assert output.read_text() == body
+    assert output.read_text(encoding="utf-8") == body
     assert "### SHA-256 checksums" in body
     assert "- Curated change" in body
     for asset in assets:
