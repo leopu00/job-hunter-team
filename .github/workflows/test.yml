@@ -390,4 +390,12 @@ jobs:
       - name: Run production smoke
         env:
           VERCEL_URL: https://jobhunterteam.ai
-        run: python -m pytest tests/ -v -rs -m production
+        # Censimento esplicito: questi sono i due moduli production (38 test).
+        # Raccogliere tutta tests/ importa anche moduli non selezionati dal
+        # marker e rende lo smoke dipendente dalle librerie del container
+        # (per esempio PyYAML) prima ancora di interrogare il sito vivo.
+        run: >-
+          python -m pytest
+          tests/test_vercel_pages.py
+          tests/test_missing_pages.py
+          -v -rs -m production
