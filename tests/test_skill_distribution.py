@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 import subprocess
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -90,3 +92,49 @@ def test_start_agent_uses_the_shared_distribution_authority() -> None:
     source = (ROOT / ".launcher" / "start-agent.sh").read_text(encoding="utf-8")
 
     assert 'jht_spawn_copy_skills "$ROLE" "$AGENT_DIR"' in source
+
+
+@pytest.mark.parametrize(
+    ("provider", "discovery_dir"),
+    [
+        ("claude", ".claude"),
+        ("codex", ".agents"),
+        ("kimi", ".agents"),
+    ],
+)
+def test_known_provider_populates_only_its_official_discovery_tree(
+    tmp_path: Path,
+    provider: str,
+    discovery_dir: str,
+) -> None:
+    app = tmp_path / "app"
+    _skill(app / "agents" / "_skills", "shared-alpha", "shared alpha")
+    role = app / "agents" / "capitano"
+    role.mkdir(parents=True)
+    (role / "skills.list").write_text("shared-alpha\n", encoding="utf-8")
+    workdir = tmp_path / "runtime" / "capitano"
+    for provider_dir in (".claude", ".agents"):
+        _skill(workdir / provider_dir / "skills", "stale", "must disappear")
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'export JHT_APP_ROOT="{_bash_path(app)}" JHT_LANG=en; '
+            'source ".launcher/spawn-lib.sh"; '
+            f'jht_spawn_copy_skills capitano "{_bash_path(workdir)}" TEST '
+            f'"{provider}"',
+        ],
+        cwd=ROOT,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert _names(workdir / discovery_dir / "skills") == {"shared-alpha"}
+    unused_dir = ".agents" if discovery_dir == ".claude" else ".claude"
+    unused = workdir / unused_dir / "skills"
+    assert not unused.exists() or _names(unused) == set()
