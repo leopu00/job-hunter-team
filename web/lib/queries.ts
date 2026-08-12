@@ -613,7 +613,11 @@ export async function getPositionById(id: string): Promise<{
       .from("position_tickets")
       .select("*")
       .eq("position_legacy_id", position.legacy_id)
-      .order("created_at", { ascending: true });
+      // La cronologia della richiesta nasce qui: `updated_at` cambia anche
+      // quando il team assegna/risolve un ticket e farebbe risalire richieste
+      // vecchie. L'id identity rende totale l'ordine a parità di timestamp.
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
     tickets = (tkData ?? []).map((t: any) => ({
       id: String(t.id),
       position_id: String(position.id),
