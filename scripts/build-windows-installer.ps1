@@ -67,12 +67,14 @@ if ($Smoke) {
   $desktopShortcut = Join-Path $env:USERPROFILE 'Desktop/Job Hunter Team.lnk'
   $startMenuDir = Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/Job Hunter Team'
   $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\JobHunterTeam'
-  # Godot's `user://` with no custom user dir. This is where language,
-  # onboarding, tour and VPS configuration live: the uninstaller must leave it
-  # alone unless the user ticks the opt-in component, and a silent uninstall
-  # must never remove it at all. [WIN-USERDIR-SURVIVES-REINSTALL]
+  # Godot's stable Windows `user://`. project.godot pins this exact historical
+  # path independently from config/name: the workflow deliberately exports a
+  # renamed product and the launch below must still update the log here.
+  # The uninstaller leaves it alone unless the user ticks the opt-in component.
+  # [WIN-USERDIR-SURVIVES-REINSTALL] [WIN-USERDIR-ORPHANED-BY-RENAME]
   $userDataDir = Join-Path $env:APPDATA 'Godot/app_userdata/Job Hunter Team'
   $userDataSentinel = Join-Path $userDataDir 'smoke-userdata-sentinel.txt'
+  $userDataRuntimeLog = Join-Path $userDataDir 'jht-game.log'
 
   if (Test-Path -LiteralPath $installDir) {
     throw "Refusing to overwrite an existing per-user installation: $installDir"
@@ -98,6 +100,7 @@ if ($Smoke) {
 
     $previousNoVps = $env:JHT_NOVPS
     $env:JHT_NOVPS = '1'
+    $launchStartedAt = [DateTime]::UtcNow.AddSeconds(-1)
     try {
       $launch = Start-Process -FilePath $installedExe -ArgumentList '--headless', '--quit-after', '3' -Wait -PassThru
       if ($launch.ExitCode -ne 0) {
@@ -105,6 +108,13 @@ if ($Smoke) {
       }
     } finally {
       $env:JHT_NOVPS = $previousNoVps
+    }
+
+    if (-not (Test-Path -LiteralPath $userDataRuntimeLog -PathType Leaf)) {
+      throw "Renamed application did not write its log to stable user data: $userDataRuntimeLog"
+    }
+    if ((Get-Item -LiteralPath $userDataRuntimeLog).LastWriteTimeUtc -lt $launchStartedAt) {
+      throw "Stable user data log was not updated by the renamed application: $userDataRuntimeLog"
     }
 
     # A file of the user's, placed where the user's files live, before the

@@ -120,3 +120,19 @@ def test_all_windows_consumers_name_the_same_historical_directory():
     assert f'$APPDATA\\{expected_backslash}' in installer
     assert f"'{expected_slash}'" in smoke
     assert f"'{expected_backslash}\\client'" in wrapper
+
+
+def test_windows_smoke_exports_a_renamed_product_and_observes_the_real_log():
+    workflow = (
+        ROOT / ".github/workflows/windows-installer-smoke.yml"
+    ).read_text(encoding="utf-8")
+    smoke = (ROOT / "scripts/build-windows-installer.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'config/name="Job Hunter Team Rename Probe"' in workflow
+    assert "source.count(old) != 1" in workflow
+    assert "project.write_text(source.replace(old, new)" in workflow
+    assert "$userDataRuntimeLog" in smoke
+    assert "LastWriteTimeUtc -lt $launchStartedAt" in smoke
+    assert "Renamed application did not write its log" in smoke
