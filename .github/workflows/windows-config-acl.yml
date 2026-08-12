@@ -13,7 +13,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5a9d7a5a5f7f3e1d8b7f7b1f4b0f3f5f2 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Host ACL and fail-closed wrapper selftest
         shell: pwsh
         run: ./scripts/windows-config-acl-selftest.ps1
