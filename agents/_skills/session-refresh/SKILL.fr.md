@@ -78,12 +78,18 @@ rafraîchissement (TTL ou contexte), prévenir le Capitano **avant l'Étape 2**.
 Ne pas répéter pour chaque agent ni envoyer si le tour ne fera que des skips :
 ```bash
 if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
-  /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Le context refresh commence : workers d'abord, coordinateurs en dernier, toi tout à la fin. Ne lance pas de mission courte avant le rapport de fin."
-  ROUND_HEADS_UP_SENT=1
+  if /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Le context refresh commence : workers d'abord, coordinateurs en dernier, toi tout à la fin. Ne lance pas de mission courte avant le rapport de fin."; then
+    ROUND_HEADS_UP_SENT=1
+  else
+    echo "Échec de livraison du HEADS-UP — abandonner le rich refresh avant tout recreate"
+    exit 1
+  fi
 fi
 ```
 C'est de la coordination, pas un second scheduler ni une demande de
 permission. Le tour reste séquentiel et le Capitano reste actif jusqu'à la fin.
+La livraison est une précondition : un exit non nul du sender abandonne le tour
+avant capture/kill ; ne jamais marquer un heads-up en échec comme envoyé.
 
 ## Étape 2 — par session : capture (large + saillant)
 Capture tout le scrollback une fois, puis les lignes saillantes — ne charge PAS des milliers de lignes dans ton propre contexte, grep les moments forts :

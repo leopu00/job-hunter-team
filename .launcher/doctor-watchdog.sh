@@ -26,9 +26,14 @@ mkdir -p "$LOGS_DIR"
 POLL_SEC="${DOCTOR_WATCHDOG_POLL:-300}"               # ricontrolla ogni 5 min
 OFF_RECHECK_SEC="${DOCTOR_WATCHDOG_OFF_RECHECK:-900}" # fuori finestra ogni 15 min
 FALLBACK_SEC="${DOCTOR_WATCHDOG_FALLBACK:-21600}"     # 24/7 senza finestra: ~ogni 6h
-SPAWNER="/app/.launcher/spawn-doctor.sh"
-MAINT_SPAWNER="/app/.launcher/spawn-maintainer.sh"   # 👷‍♂️ Mantenitore (1x/giorno)
-SCHED="/app/shared/skills/doctor_schedule.py"
+SPAWNER="${JHT_DOCTOR_SPAWNER:-/app/.launcher/spawn-doctor.sh}"
+MAINT_SPAWNER="${JHT_MAINT_SPAWNER:-/app/.launcher/spawn-maintainer.sh}" # 👷‍♂️ 1x/giorno
+SCHED="${JHT_DOCTOR_SCHED:-/app/shared/skills/doctor_schedule.py}"
+# Test seam: zero significa daemon infinito (produzione). Un valore positivo
+# chiude dopo N cicli completi, così il contratto runtime si esercita senza tmux
+# o processi LLM e senza usare timeout che nascondono loop inattesi.
+MAX_TICKS="${JHT_DOCTOR_WATCHDOG_MAX_TICKS:-0}"
+tick_count=0
 # On-demand: i coordinatori (Capitano/Assistente/Sentinella/Mentor) hanno la
 # skill `spawn-doctor` per invocare lo spawner fuori dagli slot programmati.
 
@@ -89,13 +94,22 @@ sys.exit(0 if provider and marker and os.path.exists(marker) else 1)
 PYEOF
 }
 
+finish_tick() {
+  local delay="$1"
+  tick_count=$((tick_count + 1))
+  if [ "$MAX_TICKS" -gt 0 ] && [ "$tick_count" -ge "$MAX_TICKS" ]; then
+    log "watchdog max ticks reached (${MAX_TICKS}) — exiting"
+    exit 0
+  fi
+  sleep "$delay"
+}
+
 halt_log_tick=0
 offhours_log_tick=0
 config_log_tick=0
 
 log "watchdog starting · Dottore twice/window (+30 min, halfway) + Mantenitore once/day · poll=${POLL_SEC}s · sched=$SCHED"
 
-last_fallback=0
 while true; do
   # Il wizard salva il provider prima che il browser completi OAuth. Fino alla
   # comparsa del marker credenziali non consumare turni LLM e non tentare il
@@ -105,7 +119,7 @@ while true; do
       log "provider not authenticated yet — Dottore/Mantenitore scheduling suspended"
     fi
     config_log_tick=$((config_log_tick + 1))
-    sleep "$POLL_SEC"
+    finish_tick "$POLL_SEC"
     continue
   fi
   if [ "$config_log_tick" -gt 0 ]; then
@@ -124,7 +138,7 @@ while true; do
       fi
     fi
     halt_log_tick=$((halt_log_tick + 1))
-    sleep "$POLL_SEC"
+    finish_tick "$POLL_SEC"
     continue
   fi
   if [ "$halt_log_tick" -gt 0 ]; then
@@ -151,48 +165,54 @@ while true; do
     fi
   fi
 
-  # Decisione di scheduling: doctor_schedule.py gestisce GIA' il gate
-  # working-hours (ritorna OFF fuori finestra) + gli slot +30min / metà.
-  # Fail-open conservativo: su errore → WAIT (non spawnare a vuoto).
-  slot=$(python3 "$SCHED" check 2>/dev/null) || slot=WAIT
+  # Decisione + ownership: doctor_schedule.py persiste un CLAIM prima di
+  # restituire uno slot. Se il claim non può essere scritto, nessun Dottore
+  # parte (fail-closed); agent-watchdog conserva comunque il tetto TTL.
+  # Un claim dal risultato incerto NON viene rilasciato: meglio saltare un rich
+  # round che duplicare spawn LLM. Solo un fallimento certo dello spawner fa
+  # `release`, così il prossimo poll può ritentare.
+  slot_out=$(DOCTOR_FALLBACK_SEC="$FALLBACK_SEC" python3 "$SCHED" claim 2>&1) && slot_rc=0 || slot_rc=$?
+  if [ "$slot_rc" -ne 0 ]; then
+    log "schedule claim FAILED rc=$slot_rc — rich refresh not spawned (TTL fail-safe remains active): $slot_out"
+    slot=WAIT
+  else
+    slot="$slot_out"
+  fi
 
   case "$slot" in
-    T30|MID)
+    T30|MID|FALLBACK)
       if [ ! -f "$SPAWNER" ]; then
         log "ERROR: spawner not found at $SPAWNER"
+        python3 "$SCHED" release "$slot" >/dev/null 2>&1 \
+          || log "schedule release FAILED for missing spawner (slot=$slot) — claim stays fail-closed"
       else
         out=$(bash "$SPAWNER" 2>&1) && rc=0 || rc=$?
         if [ "$rc" -eq 0 ]; then
-          log "spawn ok (slot=$slot): $out"
-          python3 "$SCHED" mark "$slot" 2>/dev/null || true
+          if python3 "$SCHED" mark "$slot" >/dev/null 2>&1; then
+            log "spawn ok and claim finalized (slot=$slot): $out"
+          else
+            # Il claim pre-spawn resta su disco: niente doppio spawn al poll
+            # successivo, anche se la finalizzazione ha perso la risposta.
+            log "schedule mark FAILED after successful spawn (slot=$slot) — claim retained, no duplicate retry"
+          fi
         else
-          # Non marchiamo lo slot: ritenta al prossimo poll.
           log "spawn FAILED (slot=$slot) rc=$rc: $out"
+          python3 "$SCHED" release "$slot" >/dev/null 2>&1 \
+            || log "schedule release FAILED (slot=$slot) — claim retained fail-closed"
         fi
       fi
-      sleep "$POLL_SEC"
+      finish_tick "$POLL_SEC"
       ;;
     OFF)
       if [ $((offhours_log_tick % 8)) -eq 0 ]; then
         log "outside working hours — scheduling suspended (actual OFF interval)"
       fi
       offhours_log_tick=$((offhours_log_tick + 1))
-      sleep "$OFF_RECHECK_SEC"
-      ;;
-    NOWINDOW)
-      # Team 24/7 (nessuna finestra delimitata): fallback periodico ~ogni 6h.
-      offhours_log_tick=0
-      now_s=$(date +%s)
-      if [ $((now_s - last_fallback)) -ge "$FALLBACK_SEC" ] && [ -f "$SPAWNER" ]; then
-        out=$(bash "$SPAWNER" 2>&1) && rc=0 || rc=$?
-        if [ "$rc" -eq 0 ]; then log "spawn ok (24/7 fallback): $out"; last_fallback=$now_s
-        else log "spawn FAILED (24/7) rc=$rc: $out"; fi
-      fi
-      sleep "$POLL_SEC"
+      finish_tick "$OFF_RECHECK_SEC"
       ;;
     *)  # WAIT o errore: dentro finestra ma nessuno slot dovuto ora.
       offhours_log_tick=0
-      sleep "$POLL_SEC"
+      finish_tick "$POLL_SEC"
       ;;
   esac
 done

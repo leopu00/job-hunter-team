@@ -85,12 +85,18 @@ send one heads-up to the Capitano **before Step 2**. Do not repeat it for every
 agent, and do not send it when the round will only log skips:
 ```bash
 if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
-  /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Context refresh starting: workers first, coordinators last, you last. Do not start short-lived assignments until the completion report."
-  ROUND_HEADS_UP_SENT=1
+  if /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Context refresh starting: workers first, coordinators last, you last. Do not start short-lived assignments until the completion report."; then
+    ROUND_HEADS_UP_SENT=1
+  else
+    echo "HEADS-UP delivery failed — aborting the rich refresh before any recreate"
+    exit 1
+  fi
 fi
 ```
 This is coordination, not a second scheduler or a request for permission. The
-round remains sequential and the Capitano stays alive until the end.
+round remains sequential and the Capitano stays alive until the end. Delivery
+is a precondition: a nonzero sender exit aborts the round before capture/kill;
+never mark a failed heads-up as sent.
 
 ## Step 2 — per session: capture (wide + salient)
 Capture the WHOLE scrollback once, then the salient lines — do NOT load thousands of lines into your own context, grep the highlights:

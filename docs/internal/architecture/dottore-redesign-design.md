@@ -35,7 +35,12 @@ NON ESISTE (da creare):
 - Non più "ogni 2h". Il watchdog calcola l'inizio della finestra ON corrente (da working_hours) e spawna il Dottore SOLO a:
   - **T+30min** dall'inizio finestra (calibrazione: dopo mezz'ora il Capitano ha deciso chi lavora).
   - **T+6h** (metà di una finestra 12h; in generale metà-finestra).
-- Idempotenza: uno stato `doctor-schedule-state.json` con `{window_start, did_t30, did_mid}` per non rispawnare lo stesso slot. Reset a nuova finestra.
+- Idempotenza: `doctor-schedule-state.json` conserva per ogni slot sia il claim
+  pre-spawn (`claimed_t30` / `claimed_mid`) sia l'esito (`did_t30` /
+  `did_mid`). Il claim usa replace atomico + fsync: senza persistenza non parte
+  alcun turno LLM; un esito incerto resta claimed e non viene duplicato. Reset
+  a nuova finestra. Lo stesso protocollo possiede il fallback 24/7, prima
+  mantenuto soltanto in RAM dal watchdog.
 - Gate invariati: OFF → niente spawn; `.team-halted.flag`/`.weekly-halt.flag` → niente.
 - Generalizzazione: gli offset (+30min, +mid) derivati dalla durata finestra, non hardcoded a 12h.
 

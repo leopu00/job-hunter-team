@@ -78,12 +78,18 @@ Kontext), den Capitano **vor Schritt 2** informieren. Nicht für jeden Agenten
 wiederholen und nicht senden, wenn die Runde nur Skips protokollieren wird:
 ```bash
 if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
-  /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Context-Refresh beginnt: Worker zuerst, Koordinatoren zuletzt, du ganz zuletzt. Starte bis zum Abschlussbericht keine kurzlebigen Aufträge."
-  ROUND_HEADS_UP_SENT=1
+  if /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Context-Refresh beginnt: Worker zuerst, Koordinatoren zuletzt, du ganz zuletzt. Starte bis zum Abschlussbericht keine kurzlebigen Aufträge."; then
+    ROUND_HEADS_UP_SENT=1
+  else
+    echo "HEADS-UP-Zustellung fehlgeschlagen — Rich-Refresh vor jedem Recreate abbrechen"
+    exit 1
+  fi
 fi
 ```
 Das ist Koordination, kein zweiter Scheduler und keine Bitte um Erlaubnis. Die
-Runde bleibt sequenziell und der Capitano bleibt bis zum Ende aktiv.
+Runde bleibt sequenziell und der Capitano bleibt bis zum Ende aktiv. Die
+Zustellung ist eine Vorbedingung: Ein Sender-Exit ungleich null bricht die Runde
+vor Capture/Kill ab; ein fehlgeschlagenes Heads-up nie als gesendet markieren.
 
 ## Schritt 2 — pro Sitzung: Erfassung (breit + relevant)
 Erfasse den GESAMTEN Scrollback einmal, dann die relevanten Zeilen — lade NICHT Tausende von Zeilen in deinen eigenen Kontext, grep die Highlights:

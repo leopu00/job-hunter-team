@@ -78,12 +78,18 @@ Csak akkor, amikor ez a kör kiválasztotta az első valódi frissítési célpo
 minden agentnél, és ne küldd el, ha a kör csak kihagyásokat naplóz:
 ```bash
 if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
-  /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Indul a kontextusfrissítés: először a workerek, utoljára a koordinátorok, te pedig legutoljára. A befejezési jelentésig ne indíts rövid feladatokat."
-  ROUND_HEADS_UP_SENT=1
+  if /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Indul a kontextusfrissítés: először a workerek, utoljára a koordinátorok, te pedig legutoljára. A befejezési jelentésig ne indíts rövid feladatokat."; then
+    ROUND_HEADS_UP_SENT=1
+  else
+    echo "A HEADS-UP kézbesítése sikertelen — a rich refresh megszakítása minden recreate előtt"
+    exit 1
+  fi
 fi
 ```
 Ez koordináció, nem második scheduler és nem engedélykérés. A kör szekvenciális
-marad, a Capitano pedig a végéig aktív.
+marad, a Capitano pedig a végéig aktív. A kézbesítés előfeltétel: a sender
+nem nulla exitje megszakítja a kört a capture/kill előtt; sikertelen heads-upot
+soha ne jelölj elküldöttként.
 
 ## Step 2 — munkamenetenként: capture (széles + lényegi)
 Egyszerre fogd be a TELJES scrollbacket, majd a lényegi sorokat — NE tölts több ezer sort a saját kontextusodba, grep-eld ki a kiemeléseket:

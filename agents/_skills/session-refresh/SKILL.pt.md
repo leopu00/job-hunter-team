@@ -78,12 +78,18 @@ ou contexto), envie um aviso ao Capitano **antes do Step 2**. Não repita por
 cada agente nem envie se a ronda só for registar skips:
 ```bash
 if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
-  /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] A renovação de contexto vai começar: workers primeiro, coordenadores no fim, tu por último. Não inicies tarefas curtas até ao relatório de conclusão."
-  ROUND_HEADS_UP_SENT=1
+  if /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] A renovação de contexto vai começar: workers primeiro, coordenadores no fim, tu por último. Não inicies tarefas curtas até ao relatório de conclusão."; then
+    ROUND_HEADS_UP_SENT=1
+  else
+    echo "Falhou a entrega do HEADS-UP — aborta o rich refresh antes de qualquer recreate"
+    exit 1
+  fi
 fi
 ```
 Isto é coordenação, não um segundo scheduler nem um pedido de permissão. A
-ronda continua sequencial e o Capitano permanece ativo até ao fim.
+ronda continua sequencial e o Capitano permanece ativo até ao fim. A entrega
+é uma precondição: um exit não zero do sender aborta a ronda antes de
+capture/kill; nunca marques como enviado um heads-up que falhou.
 
 ## Step 2 — por sessão: capture (ampla + saliente)
 Capture o scrollback INTEIRO uma vez, depois as linhas salientes — NÃO carregue milhares de linhas no seu próprio contexto, faça grep dos destaques:

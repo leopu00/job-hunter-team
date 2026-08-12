@@ -78,12 +78,18 @@ contesto), manda un heads-up al Capitano **prima dello Step 2**. Non ripeterlo
 per ogni agente e non mandarlo se il giro produrra' soltanto skip:
 ```bash
 if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
-  /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Inizia il context refresh: worker prima, coordinatori ultimi, tu per ultimo. Non avviare incarichi brevi fino al report di completamento."
-  ROUND_HEADS_UP_SENT=1
+  if /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Inizia il context refresh: worker prima, coordinatori ultimi, tu per ultimo. Non avviare incarichi brevi fino al report di completamento."; then
+    ROUND_HEADS_UP_SENT=1
+  else
+    echo "Consegna HEADS-UP fallita — interrompi il rich refresh prima di ogni recreate"
+    exit 1
+  fi
 fi
 ```
 E' coordinamento, non un secondo scheduler ne' una richiesta di permesso. Il
-giro resta sequenziale e il Capitano rimane vivo fino alla fine.
+giro resta sequenziale e il Capitano rimane vivo fino alla fine. La consegna e'
+una precondizione: un exit nonzero del sender interrompe il giro prima di
+capture/kill; non marcare mai come inviato un heads-up fallito.
 
 ## Step 2 — per sessione: cattura (ampia + saliente)
 Cattura UNA volta l'intero scrollback, poi le righe salienti — NON caricare migliaia di righe nel tuo contesto, fai il grep degli highlight:

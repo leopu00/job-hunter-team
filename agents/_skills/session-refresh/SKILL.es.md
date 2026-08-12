@@ -78,12 +78,18 @@ Solo cuando esta ronda haya seleccionado su primer objetivo real de refresco
 por cada agente ni lo envíes si la ronda solo registrará omisiones:
 ```bash
 if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
-  /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Empieza el refresco de contexto: workers primero, coordinadores al final, tú el último. No inicies tareas breves hasta el informe de finalización."
-  ROUND_HEADS_UP_SENT=1
+  if /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Empieza el refresco de contexto: workers primero, coordinadores al final, tú el último. No inicies tareas breves hasta el informe de finalización."; then
+    ROUND_HEADS_UP_SENT=1
+  else
+    echo "Falló la entrega del HEADS-UP — aborta el rich refresh antes de cualquier recreate"
+    exit 1
+  fi
 fi
 ```
 Es coordinación, no un segundo scheduler ni una solicitud de permiso. La ronda
-sigue siendo secuencial y el Capitano permanece activo hasta el final.
+sigue siendo secuencial y el Capitano permanece activo hasta el final. La
+entrega es una precondición: un exit no cero del sender aborta la ronda antes de
+capture/kill; nunca marques como enviado un heads-up fallido.
 
 ## Paso 2 — por sesión: captura (amplia + saliente)
 Captura TODO el scrollback una vez, luego las líneas salientes — NO cargues miles de líneas en tu propio contexto, haz grep de los puntos destacados:
