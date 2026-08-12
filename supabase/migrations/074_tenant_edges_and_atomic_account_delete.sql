@@ -19,7 +19,9 @@ LOCK TABLE
   public.scores,
   public.applications,
   public.position_highlights,
-  public.position_views
+  public.position_views,
+  public.position_user_notes,
+  public.pending_user_messages
 IN SHARE ROW EXCLUSIVE MODE;
 
 UPDATE public.positions AS position
@@ -51,6 +53,23 @@ DELETE FROM public.position_views AS child
  USING public.positions AS parent
  WHERE child.position_id = parent.id
    AND child.user_id IS DISTINCT FROM parent.user_id;
+
+DELETE FROM public.position_user_notes AS child
+ USING public.positions AS parent
+ WHERE child.position_id = parent.id
+   AND child.user_id IS DISTINCT FROM parent.user_id;
+
+-- The relation is optional: preserve the message, but detach an unsafe
+-- historical link exactly as positions.company_id is detached above.
+UPDATE public.pending_user_messages AS child
+   SET related_position_id = NULL
+ WHERE child.related_position_id IS NOT NULL
+   AND NOT EXISTS (
+     SELECT 1
+       FROM public.positions AS parent
+      WHERE parent.id = child.related_position_id
+        AND parent.user_id = child.user_id
+   );
 
 -- PostgreSQL requires a unique key whose columns exactly match the composite
 -- FK target. id remains the primary identity; these indexes certify its owner.
@@ -97,6 +116,22 @@ ALTER TABLE public.position_views
     FOREIGN KEY (user_id, position_id)
     REFERENCES public.positions (user_id, id)
     ON DELETE CASCADE;
+
+ALTER TABLE public.position_user_notes
+  DROP CONSTRAINT IF EXISTS position_user_notes_position_id_fkey,
+  DROP CONSTRAINT IF EXISTS position_user_notes_position_tenant_fkey,
+  ADD CONSTRAINT position_user_notes_position_tenant_fkey
+    FOREIGN KEY (user_id, position_id)
+    REFERENCES public.positions (user_id, id)
+    ON DELETE CASCADE;
+
+ALTER TABLE public.pending_user_messages
+  DROP CONSTRAINT IF EXISTS pending_user_messages_related_position_id_fkey,
+  DROP CONSTRAINT IF EXISTS pending_user_messages_position_tenant_fkey,
+  ADD CONSTRAINT pending_user_messages_position_tenant_fkey
+    FOREIGN KEY (user_id, related_position_id)
+    REFERENCES public.positions (user_id, id)
+    ON DELETE SET NULL (related_position_id);
 
 -- One privileged call owns every database mutation. Any FK, trigger or other
 -- unexpected failure aborts the PostgreSQL statement and rolls all preceding

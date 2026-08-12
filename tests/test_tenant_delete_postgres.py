@@ -33,6 +33,7 @@ USER_A = "00000000-0000-0000-0000-000000000001"
 USER_B = "00000000-0000-0000-0000-000000000002"
 USER_C = "00000000-0000-0000-0000-000000000003"
 USER_D = "00000000-0000-0000-0000-000000000004"
+USER_E = "00000000-0000-0000-0000-000000000005"
 COMPANY_A = "10000000-0000-0000-0000-000000000001"
 COMPANY_B = "10000000-0000-0000-0000-000000000002"
 POSITION_A = "20000000-0000-0000-0000-000000000001"
@@ -278,6 +279,19 @@ CREATE TABLE public.position_views (
   position_id UUID NOT NULL REFERENCES public.positions(id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, position_id)
 );
+CREATE TABLE public.position_user_notes (
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  position_id UUID NOT NULL REFERENCES public.positions(id) ON DELETE CASCADE,
+  origin TEXT NOT NULL,
+  body TEXT NOT NULL,
+  PRIMARY KEY (user_id, position_id, origin)
+);
+CREATE TABLE public.pending_user_messages (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  related_position_id UUID REFERENCES public.positions(id) ON DELETE SET NULL,
+  body TEXT NOT NULL
+);
 CREATE TABLE public.candidate_profiles (
   id UUID PRIMARY KEY,
   user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id)
@@ -296,8 +310,8 @@ DECLARE table_name TEXT;
 BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'companies', 'positions', 'scores', 'applications',
-    'position_highlights', 'position_views', 'candidate_profiles',
-    'user_settings'
+    'position_highlights', 'position_views', 'position_user_notes',
+    'pending_user_messages', 'candidate_profiles', 'user_settings'
   ] LOOP
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_name);
     EXECUTE format(
@@ -311,7 +325,7 @@ END
 $policies$;
 
 INSERT INTO auth.users(id) VALUES
-  ('{USER_A}'), ('{USER_B}'), ('{USER_C}'), ('{USER_D}');
+  ('{USER_A}'), ('{USER_B}'), ('{USER_C}'), ('{USER_D}'), ('{USER_E}');
 INSERT INTO public.companies(id, user_id, name) VALUES
   ('{COMPANY_A}', '{USER_A}', 'Synthetic A'),
   ('{COMPANY_B}', '{USER_B}', 'Synthetic B');
@@ -328,6 +342,12 @@ INSERT INTO public.applications VALUES
 INSERT INTO public.position_highlights VALUES
   ('50000000-0000-0000-0000-000000000001', '{USER_A}', '{POSITION_A}');
 INSERT INTO public.position_views VALUES ('{USER_A}', '{POSITION_A}');
+INSERT INTO public.position_user_notes VALUES
+  ('{USER_A}', '{POSITION_A}', 'web', 'Synthetic A'),
+  ('{USER_B}', '{POSITION_B}', 'web', 'Synthetic B');
+INSERT INTO public.pending_user_messages VALUES
+  ('70000000-0000-0000-0000-000000000001', '{USER_A}', '{POSITION_A}', 'Synthetic A'),
+  ('70000000-0000-0000-0000-000000000002', '{USER_B}', '{POSITION_B}', 'Synthetic B');
 
 -- Each legacy row below passed the old UUID-only FK but crosses tenants.
 INSERT INTO public.scores VALUES
@@ -337,6 +357,11 @@ INSERT INTO public.applications VALUES
 INSERT INTO public.position_highlights VALUES
   ('50000000-0000-0000-0000-000000000002', '{USER_A}', '{POSITION_B}');
 INSERT INTO public.position_views VALUES ('{USER_A}', '{POSITION_B}');
+INSERT INTO public.position_user_notes VALUES
+  ('{USER_A}', '{POSITION_B}', 'box', 'Synthetic mismatch');
+INSERT INTO public.pending_user_messages VALUES
+  ('70000000-0000-0000-0000-000000000010', '{USER_A}', '{POSITION_B}',
+   'Synthetic mismatch');
 """
 
 
@@ -387,9 +412,12 @@ def test_migration_repairs_legacy_rows_before_composite_foreign_keys(
         SELECT count(*) FROM public.applications;
         SELECT count(*) FROM public.position_highlights;
         SELECT count(*) FROM public.position_views;
+        SELECT count(*) FROM public.position_user_notes;
+        SELECT related_position_id IS NULL FROM public.pending_user_messages
+         WHERE id = '70000000-0000-0000-0000-000000000010';
         """,
     ).stdout.splitlines()
-    assert repaired == ["t", "1", "1", "1", "1"]
+    assert repaired == ["t", "1", "1", "1", "1", "2", "t"]
 
     attempts = [
         (
@@ -420,6 +448,17 @@ def test_migration_repairs_legacy_rows_before_composite_foreign_keys(
             "view/position",
             f"INSERT INTO public.position_views VALUES "
             f"('{USER_A}', '{POSITION_B}');",
+        ),
+        (
+            "note/position",
+            f"INSERT INTO public.position_user_notes VALUES "
+            f"('{USER_A}', '{POSITION_B}', 'box', 'Rejected');",
+        ),
+        (
+            "message/position",
+            f"INSERT INTO public.pending_user_messages VALUES "
+            f"('71000000-0000-0000-0000-000000000001', '{USER_A}', "
+            f"'{POSITION_B}', 'Rejected');",
         ),
     ]
     for edge, statement in attempts:
@@ -510,9 +549,11 @@ def test_privileged_rpc_deletes_only_the_selected_tenant(
         SELECT count(*) FROM public.companies WHERE user_id = '{USER_B}';
         SELECT count(*) FROM public.positions WHERE user_id = '{USER_B}';
         SELECT count(*) FROM public.user_settings WHERE user_id = '{USER_B}';
+        SELECT count(*) FROM public.position_user_notes WHERE user_id = '{USER_B}';
+        SELECT count(*) FROM public.pending_user_messages WHERE user_id = '{USER_B}';
         """,
     ).stdout.splitlines()
-    assert remaining == ["0", "1", "1", "1", "1"]
+    assert remaining == ["0", "1", "1", "1", "1", "1", "1"]
 
 
 def _insert_deletion_fixture(postgres_cluster, database: str, user: str, suffix: str):
@@ -532,6 +573,11 @@ def _insert_deletion_fixture(postgres_cluster, database: str, user: str, suffix:
         INSERT INTO public.position_highlights VALUES
           ('55000000-0000-0000-0000-0000000000{suffix}', '{user}', '{position}');
         INSERT INTO public.position_views VALUES ('{user}', '{position}');
+        INSERT INTO public.position_user_notes VALUES
+          ('{user}', '{position}', 'web', 'Synthetic');
+        INSERT INTO public.pending_user_messages VALUES
+          ('77000000-0000-0000-0000-0000000000{suffix}', '{user}',
+           '{position}', 'Synthetic');
         INSERT INTO public.candidate_profiles VALUES
           ('66000000-0000-0000-0000-0000000000{suffix}', '{user}');
         INSERT INTO public.user_settings VALUES ('{user}', 'synthetic');
@@ -581,9 +627,11 @@ def test_rpc_failure_rolls_back_every_database_delete(
         SELECT count(*) FROM public.companies WHERE user_id = '{USER_C}';
         SELECT count(*) FROM public.candidate_profiles WHERE user_id = '{USER_C}';
         SELECT count(*) FROM public.user_settings WHERE user_id = '{USER_C}';
+        SELECT count(*) FROM public.position_user_notes WHERE user_id = '{USER_C}';
+        SELECT count(*) FROM public.pending_user_messages WHERE user_id = '{USER_C}';
         """,
     ).stdout.splitlines()
-    assert counts == ["1"] * 8
+    assert counts == ["1"] * 10
 
 
 def test_concurrent_rpc_calls_serialize_on_the_auth_row(
@@ -646,6 +694,106 @@ def test_concurrent_rpc_calls_serialize_on_the_auth_row(
         SELECT count(*) FROM auth.users WHERE id = '{USER_D}';
         SELECT count(*) FROM public.positions WHERE user_id = '{USER_D}';
         SELECT count(*) FROM public.user_settings WHERE user_id = '{USER_D}';
+        SELECT count(*) FROM public.position_user_notes WHERE user_id = '{USER_D}';
+        SELECT count(*) FROM public.pending_user_messages WHERE user_id = '{USER_D}';
         """,
     ).stdout.splitlines()
-    assert remaining == ["0", "0", "0"]
+    assert remaining == ["0", "0", "0", "0", "0"]
+
+
+def test_insert_racing_account_delete_cannot_leave_a_child(
+    postgres_cluster, migrated_database
+):
+    db = migrated_database
+    position = _insert_deletion_fixture(postgres_cluster, db, USER_E, "05")
+    _sql(
+        postgres_cluster,
+        db,
+        f"""
+        CREATE FUNCTION public.delay_delete_for_insert_race() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          IF OLD.user_id = '{USER_E}' THEN PERFORM pg_sleep(1); END IF;
+          RETURN OLD;
+        END $$;
+        CREATE TRIGGER delay_delete_for_insert_race
+          BEFORE DELETE ON public.positions
+          FOR EACH ROW EXECUTE FUNCTION public.delay_delete_for_insert_race();
+        """,
+    )
+    base_command = [
+        postgres_cluster["bin"]["psql"],
+        "-X",
+        "-A",
+        "-t",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-d",
+        db,
+        "-c",
+    ]
+    delete_env = {
+        **postgres_cluster["env"],
+        "PGAPPNAME": "jht-tenant-delete-insert-race",
+    }
+    deleter = subprocess.Popen(
+        [
+            *base_command,
+            f"SET ROLE service_role; SELECT public.delete_account_data('{USER_E}');",
+        ],
+        env=delete_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    # Start the writer only after the delete reached its trigger. At that
+    # point the RPC already owns auth.users FOR UPDATE; this proves the writer
+    # overlaps the protected interval instead of merely running afterwards.
+    for _ in range(100):
+        activity = _sql(
+            postgres_cluster,
+            db,
+            """
+            SELECT state || '|' || COALESCE(wait_event, '')
+              FROM pg_stat_activity
+             WHERE application_name = 'jht-tenant-delete-insert-race';
+            """,
+        ).stdout.strip()
+        if activity == "active|PgSleep":
+            break
+        time.sleep(0.02)
+    else:
+        deleter.kill()
+        deleter.communicate(timeout=5)
+        pytest.fail(f"delete did not reach the locked interval: {activity!r}")
+
+    inserter = subprocess.Popen(
+        [
+            *base_command,
+            "SET ROLE authenticated; "
+            f"SET \"request.jwt.claim.sub\" = '{USER_E}'; "
+            "INSERT INTO public.position_user_notes "
+            "(user_id, position_id, origin, body) VALUES "
+            f"('{USER_E}', '{position}', 'box', 'Synthetic racing insert');",
+        ],
+        env=postgres_cluster["env"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    delete_out, delete_err = deleter.communicate(timeout=10)
+    insert_out, insert_err = inserter.communicate(timeout=10)
+    assert deleter.returncode == 0, (delete_out, delete_err)
+    assert inserter.returncode != 0, (insert_out, insert_err)
+    assert "foreign key constraint" in insert_err.lower()
+
+    remaining = _sql(
+        postgres_cluster,
+        db,
+        f"""
+        SELECT count(*) FROM auth.users WHERE id = '{USER_E}';
+        SELECT count(*) FROM public.position_user_notes WHERE user_id = '{USER_E}';
+        """,
+    ).stdout.splitlines()
+    assert remaining == ["0", "0"]
