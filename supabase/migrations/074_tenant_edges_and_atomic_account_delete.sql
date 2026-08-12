@@ -9,7 +9,9 @@
 -- The repair is deliberately in the same migration and under table locks as
 -- the new constraints. Existing inconsistent children have no safe owner: we
 -- delete them. positions.company_id is optional, so a cross-tenant legacy
--- link is detached instead of deleting the position.
+-- relation is deleted because it has no safe owner. Optional links
+-- (positions.company_id and pending_user_messages.related_position_id) are
+-- detached instead, preserving the owning row.
 
 BEGIN;
 
