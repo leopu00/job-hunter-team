@@ -72,6 +72,20 @@ function Write-Fail { param([string]$Msg) Write-Host "  x $Msg" -ForegroundColor
 function Write-Step { param([int]$N, [int]$Total, [string]$Title) Write-Host ""; Write-Host "[$N/$Total] $Title" -ForegroundColor White }
 function Write-Dry  { param([string]$Cmd) Write-Host "  [dry-run] would execute: $Cmd" -ForegroundColor DarkGray }
 
+function Protect-JhtHomeAcl {
+  param([string]$Path)
+  try {
+    $acl = Get-Acl -LiteralPath $Path
+    $acl.SetAccessRuleProtection($true, $false)
+    $owner = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($owner, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+    $acl.SetAccessRule($rule)
+    Set-Acl -LiteralPath $Path -AclObject $acl
+    $check = Get-Acl -LiteralPath $Path
+    if ($check.AreAccessRulesProtected -ne $true) { throw 'ACL inheritance remains enabled' }
+  } catch { throw "Unable to enforce owner-only ACL on $Path`: $($_.Exception.Message)" }
+}
+
 function Invoke-Action {
   param([scriptblock]$Block, [string]$Description)
   if ($DryRun) {
@@ -209,6 +223,7 @@ function Get-RuntimeFiles {
     New-Item -ItemType Directory -Force -Path $RuntimeDir | Out-Null
     New-Item -ItemType Directory -Force -Path $BinDir     | Out-Null
     New-Item -ItemType Directory -Force -Path $JhtHome    | Out-Null
+    Protect-JhtHomeAcl -Path $JhtHome
   } | Out-Null
 
   if (-not $DryRun) {

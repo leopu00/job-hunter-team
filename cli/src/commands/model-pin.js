@@ -46,7 +46,6 @@ import {
   renameSync, statSync, chmodSync, mkdirSync, unlinkSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { execFileSync } from 'node:child_process';
 import { join, dirname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
@@ -422,11 +421,6 @@ function atomicWrite(path, text, mode) {
   try { chmodSync(tmp, 0o600); } catch { /* fs senza permessi POSIX */ }
   renameSync(tmp, path);
   try { chmodSync(path, 0o600); } catch { /* fs senza permessi POSIX */ }
-  if (process.platform === 'win32') {
-    try {
-      execFileSync('icacls', [path, '/inheritance:r', '/grant:r', `${process.env.USERNAME}:F`], { stdio: 'ignore' });
-    } catch { throw new Error('unable to enforce owner-only ACL on model config'); }
-  }
 }
 
 /** Tiene i KEEP_BACKUPS piu' recenti: i .bak non devono accumularsi a ogni boot. */
