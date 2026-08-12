@@ -186,6 +186,21 @@ describe("CLI host wizard — local e VPS sono host reali", () => {
       .filter(([, contents]) => mandatoryVpsCloud.test(contents))
       .map(([file]) => file);
     expect(staleDocs).toEqual([]);
+    const retiredVpsRecovery = /(?:VPS metadata[^\n]{0,80}(?:snapshot ID|tailnet)|Tailscale auth-key|re-incolla[^\n]{0,30}Hetzner API token|inietta SSH key effimera|riconfigura Tailscale|VPS NON ricreata[^\n]{0,30}niente dato perso|VPS[^\n]{0,80}push(?:a|are|es|ing)?[^\n]{0,30}(?:il |to )?cloud[^\n]{0,80}unica vista)/i;
+    for (const staleClaim of [
+      "VPS metadata (provider, IP, region, snapshot ID, tailnet)",
+      "Tailscale auth-key cifrata con passphrase utente",
+      "User re-incolla Hetzner API token",
+      "Launcher inietta SSH key effimera e riconfigura Tailscale",
+      "VPS NON ricreata, niente dato perso",
+      "la VPS continua a pushare verso il cloud: è l'unica vista disponibile",
+    ]) {
+      expect(retiredVpsRecovery.test(staleClaim), staleClaim).toBe(true);
+    }
+    const retiredRecoveryDocs = activeDocumentation()
+      .filter(([, contents]) => retiredVpsRecovery.test(contents))
+      .map(([file]) => file);
+    expect(retiredRecoveryDocs).toEqual([]);
     for (const locale of LOCALES) {
       const catalog = JSON.parse(
         read(`shared/locales/${locale}.json`),

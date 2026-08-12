@@ -183,7 +183,12 @@ Sul VPS via `install.sh` Docker-mode finiva in un container effimero senza acces
 | Vista da browser / telefono | `jobhunterteam.ai` (cloud, sola lettura, con login) | idem — **mai** la VPS direttamente         |
 | Snapshot / destroy          | n/a                                | console Hetzner, a mano (vedi «Lifecycle e shutdown UX») |
 
-In VPS mode il launcher è **lifecycle controller**: dopo il setup iniziale può anche essere chiuso, la VPS continua a lavorare da sola e a pushare verso il cloud. È esattamente il motivo per cui il piano cloud esiste: è l'unica vista disponibile quando l'app desktop è chiusa.
+In VPS mode il launcher è **lifecycle controller**: dopo il setup iniziale può
+anche essere chiuso e la VPS continua a lavorare da sola. Il controllo torna
+disponibile quando l'app si riconnette via SSH. Se l'utente ha attivato la sync
+cloud, i soli record supportati vengono copiati anche nella dashboard ospitata,
+che resta consultabile a desktop chiuso; senza opt-in non esiste una copia o
+una vista cloud dei dati VPS.
 
 ---
 
@@ -344,13 +349,12 @@ Hetzner ha una **trappola di billing**: server *powered off* **continuano a fatt
 
 > 🔗 **Per la vista consolidata "accesso macchina + dove vivono le credenziali" (3 modi × storage × LLM agent path)** → [`docs/internal/ops/access-and-credentials.md`](access-and-credentials.md). Questo file resta la fonte di verità architetturale; quello consolida la sezione credenziali con confronto doc vs codice e punch list.
 
-## 🔐 Account web opzionale + recovery cross-device
+## 🔐 Account web e sync opzionali
 
-> **Revisione 2026-08-12:** il principio (blast radius, credenziali di spesa
-> sempre lato utente) resta valido. Tailscale e token API Hetzner citati dal
-> design 2026-05 non fanno parte del flusso corrente: l'accesso alla VPS usa
-> una chiave SSH. Anche l'account web è separato dal runtime e abilita solo le
-> superfici cloud supportate.
+> **Revisione 2026-08-12:** Tailscale, provisioning via API Hetzner e recovery
+> automatico della VPS appartenevano al design 2026-05 ma non al flusso
+> corrente. L'accesso alla VPS usa una chiave SSH locale. L'account web è
+> separato dal runtime e abilita soltanto le superfici cloud supportate.
 
 Il runtime VPS funziona senza login web: l'app lo controlla via SSH e il wizard
 CLI prosegue quando il pairing viene saltato o fallisce. Il login web resta un
@@ -366,48 +370,25 @@ opt-in separato, disponibile sia per PC locale sia per VPS:
 │     • OAuth Google/GitHub via launcher                 │
 │     • Apre browser di sistema, callback a localhost    │
 │     • Token Supabase salvato in OS keychain            │
-│     • Abilita: copia cloud, restore dei dati copiati,   │
-│       vista multi-device                               │
+│     • Abilita: sync dei record supportati e relativa   │
+│       vista ospitata                                   │
 └────────────────────────────────────────────────────────┘
 ```
 
-### Cosa va nel cloud, cosa resta locale
+### Confine della sync e del recovery
 
-Principio: **limitare il blast radius**. Se Supabase viene violato, l'attaccante NON deve poter (1) creare server fatturati sulla carta dell'utente, (2) accedere ai dati locali della VPS direttamente.
+La sync copia soltanto i record supportati (profilo, lavori e stato del team)
+dopo l'opt-in. Non copia la chiave SSH, credenziali del provider VPS o lo stato
+completo della macchina. L'elenco effettivo resta quello delle API di sync:
+questa pagina non deve trasformare una proposta architetturale in una promessa
+di prodotto.
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│  ☁️  CLOUD (Supabase, cifrato user-side con passphrase)         │
-│  ✅ profilo + preferenze                                        │
-│  ✅ VPS metadata (provider, IP, region, snapshot ID, tailnet)   │
-│  ✅ Tailscale auth-key (cifrato con passphrase utente)          │
-│  ❌ Hetzner API token                ← NON sincronizzato        │
-│  ❌ chiavi SSH                       ← NON sincronizzate (effimere) │
-├────────────────────────────────────────────────────────────────┤
-│  🖥️  LOCAL  (OS keychain, mai esce dal PC)                      │
-│  ✅ Hetzner API token (master key)                              │
-│  ✅ token Supabase session                                      │
-│  ✅ Tailscale auth-key (decifrato in memoria)                   │
-└────────────────────────────────────────────────────────────────┘
-```
-
-**Perché Hetzner token NON va nel cloud**: è la master key che permette di creare server e fatturare sulla carta. Se Supabase viene compromesso, attaccante potrebbe spawnare €€€ di server. La filosofia "AI on the side of workers" pretende che le credenziali con potere di spesa restino sempre lato utente.
-
-### Flusso recovery su nuovo PC
-
-```
-1. Install launcher su laptop B → Sign in OAuth → session token in keychain
-2. Pull config cifrata da Supabase
-3. User inserisce passphrase di recovery (mostrata 1 volta al setup iniziale)
-4. Config decifrata → "hai una VPS Hetzner @ 5.6.7.8"
-5. User re-incolla Hetzner API token
-   ├─ in 1Password/Bitwarden? 30 secondi
-   └─ perso? 2 min: console.hetzner.cloud → Security → New Token
-6. Launcher: lista server (conferma VPS), inietta SSH key effimera, riconfigura Tailscale
-7. ✅ Dashboard riconnessa, VPS NON ricreata, niente dato perso
-```
-
-Punto critico = passo 5: l'utente DEVE avere accesso al suo account Hetzner. È il "qualcosa che possiedi" della 2FA implicita — non possiamo recuperarlo per lui.
+Su un nuovo PC l'account può rendere nuovamente disponibili soltanto i dati
+che erano già stati sincronizzati. Ricollegare una VPS esistente richiede
+ancora le coordinate e le credenziali SSH previste dal wizard; ricreare la
+macchina resta un'operazione separata sul portale del provider. Non esiste oggi
+un recovery automatico della VPS né una garanzia generale contro la perdita di
+dati non sincronizzati.
 
 ---
 
@@ -596,7 +577,7 @@ Piano del 2026-05-13; esito verificato il 2026-07-30.
 2. 🟡 **Refactor CLI Node** — fatto per `team`/`sentinella`; **non** la rimozione di `container-proxy.js` (vive in `cli/src/utils/`) né la rinomina di `cli/bin/jht.js`, entrambe abbandonate
 3. ✅ **`install.sh` ridisegno** — Docker-mode senza clone repo, `--no-docker` invariato
 4. ✅ **Compose dual-file** — `docker-compose.yml` + `docker-compose.dev.yml`
-5. ✅ **Smoke test VPS** (copre `[JHT-VPS-VALIDATE]`) — Hetzner CPX21/CPX22. ⚠️ il criterio di allora («end-to-end fino a web :3000 via SSH tunnel») è **decaduto** dal 2026-07-23: oggi l'end-to-end è app desktop → `ssh … docker exec` → team attivo, più il push verso il cloud
+5. ✅ **Smoke test VPS** (copre `[JHT-VPS-VALIDATE]`) — Hetzner CPX21/CPX22. ⚠️ il criterio di allora («end-to-end fino a web :3000 via SSH tunnel») è **decaduto** dal 2026-07-23: oggi l'end-to-end è app desktop → `ssh … docker exec` → team attivo; l'eventuale copia cloud è un opt-in separato
 6. ✅ **Wrapper PowerShell** — `scripts/jht-wrapper.ps1` (non `jht.ps1`). Il «Desktop launcher refit» Electron è decaduto: la desktop app è il gioco Godot
 7. ❌ **`docs/guides/VPS-COMPARISON.md`** — mai creato. Le guide utente esistenti sono `docs/guides/VPS-SETUP.md` (path tech manuale) e `docs/guides/VPS-SETUP-WIZARD.md` (path dall'ufficio Godot); il decision tree onesto resta da scrivere
 
