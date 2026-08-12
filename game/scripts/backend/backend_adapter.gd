@@ -105,7 +105,7 @@ func set_burn_intent(_active: bool, _hours: float) -> void:
 
 ## Apre un ticket 'open' sulla posizione: la richiesta che il
 ## Coordinatore smista sulla VPS. Esito su bus.ticket_created.
-func create_ticket(_position_id: int, _text: String) -> void:
+func create_ticket(_position_id: int, _text: String, _attachment_path := "") -> void:
 	pass
 
 

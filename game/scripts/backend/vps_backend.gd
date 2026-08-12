@@ -1057,6 +1057,7 @@ const PRESENTATION_ERROR_KEYS := {
 	"documento non valido": "vps.artifact.invalid",
 	"file oltre i 10 MB": "vps.upload.file_too_large",
 	"posizione inesistente": "vps.ticket.position_missing",
+	"invalid attachment path": "vps.ticket.invalid_attachment",
 	"file temporaneo non scrivibile": "vps.transport.temp_unwritable",
 	"file temporaneo non leggibile": "vps.transport.temp_unreadable",
 	"client OpenSSH non avviabile": "vps.transport.ssh_unavailable",
@@ -1091,6 +1092,7 @@ const PRESENTATION_ENGLISH := {
 	"vps.artifact.file_missing": "file not found in the container",
 	"vps.artifact.invalid": "document rejected: invalid path, type or content",
 	"vps.ticket.position_missing": "position does not exist",
+	"vps.ticket.invalid_attachment": "invalid attachment path",
 	"vps.ssh.failed": "SSH failed (exit %s)",
 	"vps.terminal.invalid_session": "invalid tmux session name",
 	"vps.terminal.output_omitted": "… earlier output omitted …",
@@ -1266,16 +1268,18 @@ const TICKET_MAX_LEN := 2000  # stesso limite della route web
 
 static var TICKET_PY := payload("ticket.py")
 
-func create_ticket(position_id: int, text: String) -> void:
+func create_ticket(position_id: int, text: String, attachment_path := "") -> void:
 	var t := text.strip_edges().left(TICKET_MAX_LEN)
 	if t == "" or position_id <= 0:
 		return
 	# thread one-shot: l'INSERT remoto non deve congelare UI né poll
-	_queue_worker(_do_create_ticket.bind(position_id, t,
+	_queue_worker(_do_create_ticket.bind(position_id, t, attachment_path,
 			UIStrings.vps_presentation_snapshot()))
 
-func _do_create_ticket(position_id: int, text: String, labels: Dictionary) -> void:
-	var res := _ssh_python(TICKET_PY % [Marshalls.utf8_to_base64(text), position_id])
+func _do_create_ticket(position_id: int, text: String, attachment_path: String,
+		labels: Dictionary) -> void:
+	var res := _ssh_python(TICKET_PY % [Marshalls.utf8_to_base64(text),
+			Marshalls.utf8_to_base64(attachment_path), position_id])
 	var ok := false
 	var err := ""
 	if res["code"] != 0:

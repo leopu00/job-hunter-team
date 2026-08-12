@@ -589,6 +589,9 @@ func upload_document(local_path: String) -> void:
 			"/jht_user/allegati/" + local_path.get_file(), "")
 	_wiz_advance(2)
 
+func create_ticket(position_id: int, _text: String, _attachment_path := "") -> void:
+	bus.ticket_created.emit(position_id, true, "")
+
 func _wiz_advance(steps: int) -> void:
 	_wiz_step = mini(_wiz_step + steps, WIZ_READY_STEP)
 	_publish_profile_status()

@@ -2829,6 +2829,7 @@ func _on_positions_refresh(_list: Array) -> void:
 		# lo snapshot nuovo non deve buttarti fuori dal dettaglio aperto,
 		# né cancellare il ticket che stai scrivendo o aspettando
 		if is_instance_valid(_ticket_input) and (_ticket_input.text.strip_edges() != ""
+				or _ticket_attachment_local_path != ""
 				or (is_instance_valid(_ticket_send) and _ticket_send.disabled)):
 			return
 		_build("detail" if _pos_detail_id != 0 else "")
@@ -3752,12 +3753,15 @@ func _build_pos_detail() -> void:
 		tickets_box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_none"),
 				13, Palette.MUTED))
 	for t in tickets:
+		var request := _ticket_request_parts(str(t.get("request_text", "")))
 		var trow := HBoxContainer.new()
 		trow.add_theme_constant_override("separation", 12)
 		tickets_box.add_child(trow)
 		trow.add_child(TerminalTheme.label("[%s]" % str(t.get("status", "?")), 13,
 				Palette.MINT if str(t.get("status")) == "resolved" else Palette.YELLOW, "medium"))
-		trow.add_child(_pos_paragraph(str(t.get("request_text", ""))))
+		trow.add_child(_pos_paragraph(str(request["text"])))
+		if str(request["attachment_name"]) != "":
+			tickets_box.add_child(_pos_paragraph("📎 " + str(request["attachment_name"])))
 		if t.get("response_text"):
 			tickets_box.add_child(_pos_paragraph("↳ " + str(t["response_text"])))
 	_build_ticket_form(tickets_box, int(p.get("id", 0)))
@@ -3772,6 +3776,8 @@ func _build_ticket_form(box: VBoxContainer, pid: int) -> void:
 		return
 	if not BackendBus.ticket_created.is_connected(_on_ticket_created):
 		BackendBus.ticket_created.connect(_on_ticket_created)
+	if not BackendBus.document_uploaded.is_connected(_on_ticket_document_uploaded):
+		BackendBus.document_uploaded.connect(_on_ticket_document_uploaded)
 	var form := HBoxContainer.new()
 	form.add_theme_constant_override("separation", 10)
 	box.add_child(form)
@@ -3780,19 +3786,32 @@ func _build_ticket_form(box: VBoxContainer, pid: int) -> void:
 	_ticket_input.max_length = 2000
 	_ticket_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	form.add_child(_ticket_input)
+	_ticket_attach = Button.new()
+	_ticket_attach.text = UIStrings.t("pos.ticket_attach")
+	_ticket_attach.pressed.connect(_browse_ticket_attachment)
+	form.add_child(_ticket_attach)
 	_ticket_send = Button.new()
 	_ticket_send.text = UIStrings.t("pos.ticket_send")
 	form.add_child(_ticket_send)
 	_ticket_status = TerminalTheme.label("", 12, Palette.DIM)
 	box.add_child(_ticket_status)
+	_ticket_attachment_status = TerminalTheme.label("", 12, Palette.DIM)
+	box.add_child(_ticket_attachment_status)
 	var submit := func() -> void:
 		var txt: String = _ticket_input.text.strip_edges()
 		if txt == "" or _ticket_send.disabled:
 			return
 		_ticket_send.disabled = true
-		_ticket_status.text = UIStrings.t("pos.ticket_sending")
+		_ticket_attach.disabled = true
+		_ticket_pending_pid = pid
+		_ticket_pending_text = txt
 		_ticket_status.add_theme_color_override("font_color", Palette.DIM)
-		BackendBus.create_position_ticket(pid, txt)
+		if _ticket_attachment_local_path != "":
+			_ticket_status.text = UIStrings.t("pos.ticket_uploading")
+			BackendBus.upload_user_document(_ticket_attachment_local_path)
+		else:
+			_ticket_status.text = UIStrings.t("pos.ticket_sending")
+			BackendBus.create_position_ticket(pid, txt)
 	_ticket_send.pressed.connect(submit)
 	_ticket_input.text_submitted.connect(func(_t: String) -> void: submit.call())
 	# TEST-AUTO: JHT_TICKET_TEST=<testo> invia un ticket appena il form
@@ -3806,9 +3825,47 @@ static var _ticket_test_done := false
 
 var _ticket_input: LineEdit
 var _ticket_send: Button
+var _ticket_attach: Button
 var _ticket_status: Label
+var _ticket_attachment_status: Label
+var _ticket_attachment_dialog: FileDialog
+var _ticket_attachment_local_path := ""
+var _ticket_pending_pid := 0
+var _ticket_pending_text := ""
+
+func _browse_ticket_attachment() -> void:
+	if not is_instance_valid(_ticket_attachment_dialog):
+		_ticket_attachment_dialog = FileDialog.new()
+		_ticket_attachment_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+		_ticket_attachment_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_ticket_attachment_dialog.use_native_dialog = true
+		_ticket_attachment_dialog.filters = PackedStringArray([
+				UIStrings.t("wizard.file_filter")])
+		_ticket_attachment_dialog.file_selected.connect(_on_ticket_attachment_selected)
+		add_child(_ticket_attachment_dialog)
+	_ticket_attachment_dialog.popup_centered()
+
+func _on_ticket_attachment_selected(path: String) -> void:
+	_ticket_attachment_local_path = path
+	if is_instance_valid(_ticket_attachment_status):
+		_ticket_attachment_status.text = UIStrings.t("pos.ticket_attached") % path.get_file()
+
+func _on_ticket_document_uploaded(ok: bool, remote_path: String, error: String) -> void:
+	# document_uploaded è condiviso col wizard: senza un submit pendente questo
+	# pannello osserva soltanto e non crea ticket per l'upload di un'altra UI.
+	if _ticket_pending_pid <= 0:
+		return
+	if not ok:
+		_on_ticket_created(_ticket_pending_pid, false, error)
+		return
+	if is_instance_valid(_ticket_status):
+		_ticket_status.text = UIStrings.t("pos.ticket_sending")
+	BackendBus.create_position_ticket(
+			_ticket_pending_pid, _ticket_pending_text, remote_path)
 
 func _on_ticket_created(_pid: int, ok: bool, error: String) -> void:
+	if _ticket_pending_pid > 0 and _pid != _ticket_pending_pid:
+		return
 	if not is_instance_valid(_ticket_status):
 		return
 	if ok:
@@ -3816,11 +3873,31 @@ func _on_ticket_created(_pid: int, ok: bool, error: String) -> void:
 		_ticket_status.add_theme_color_override("font_color", Palette.MINT)
 		if is_instance_valid(_ticket_input):
 			_ticket_input.text = ""
+		_ticket_attachment_local_path = ""
+		if is_instance_valid(_ticket_attachment_status):
+			_ticket_attachment_status.text = ""
 	else:
 		_ticket_status.text = UIStrings.t("pos.ticket_err") % error
 		_ticket_status.add_theme_color_override("font_color", Palette.RED)
 	if is_instance_valid(_ticket_send):
 		_ticket_send.disabled = false
+	if is_instance_valid(_ticket_attach):
+		_ticket_attach.disabled = false
+	_ticket_pending_pid = 0
+	_ticket_pending_text = ""
+
+static func _ticket_request_parts(raw: String) -> Dictionary:
+	const MARKER := "\n\n[FILE ALLEGATI]\n"
+	const PREFIX := "/jht_user/allegati/"
+	var at := raw.rfind(MARKER)
+	if at < 0:
+		return {"text": raw, "attachment_name": ""}
+	var attached := raw.substr(at + MARKER.length())
+	var name := attached.trim_prefix(PREFIX)
+	if not attached.begins_with(PREFIX) or name == "" or name.contains("/") \
+			or name.contains("\\"):
+		return {"text": raw, "attachment_name": ""}
+	return {"text": raw.substr(0, at), "attachment_name": name}
 
 ## Paragrafo a capo automatico con il grassetto Markdown prodotto dal team.
 func _pos_paragraph(text: String) -> RichTextLabel:

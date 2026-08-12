@@ -838,9 +838,9 @@ func publish_artifact(path: String, ok: bool, data: PackedByteArray,
 
 ## Apre un ticket sulla posizione (async: esito su ticket_created; la
 ## lista ticket si aggiorna col prossimo snapshot posizioni).
-func create_position_ticket(position_id: int, text: String) -> void:
+func create_position_ticket(position_id: int, text: String, attachment_path := "") -> void:
 	if _backend and position_id > 0 and text.strip_edges() != "":
-		_backend.create_ticket(position_id, text.strip_edges())
+		_backend.create_ticket(position_id, text.strip_edges(), attachment_path)
 
 
 ## ── Configurazione VPS (voce Impostazioni → Collega VPS) ─────────────
