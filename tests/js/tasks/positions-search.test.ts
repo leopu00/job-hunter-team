@@ -143,15 +143,20 @@ describe("la ricerca NON eredita la vista", () => {
 
 describe("la ricerca scende nel database, in TUTTI i rami", () => {
   it("cloud: prima del limite, non dopo", () => {
+    const start = CLOUD.indexOf("export async function getPositions(");
+    const pagination = CLOUD.indexOf("fetchPostgrestRows", start);
     const fetchBlock = CLOUD.slice(
-      CLOUD.indexOf("export async function getPositions("),
-      CLOUD.indexOf("const { data, error } = await query;"),
+      start,
+      CLOUD.indexOf("if (error || !data) return [];", pagination),
     );
     expect(fetchBlock).toContain("parsePositionQuery(opts?.q)");
-    // L'ordine è la sostanza: cercare dopo `.limit()` vuol dire cercare
-    // dentro le prime N righe per data.
+    // L'ordine è la sostanza: ricerca e filtri devono costruire l'universo
+    // PRIMA che limit/range ne chiedano una finestra.
     expect(fetchBlock.indexOf("query.or(")).toBeLessThan(
       fetchBlock.indexOf("query.limit(opts.limit)"),
+    );
+    expect(fetchBlock.indexOf("query.or(")).toBeLessThan(
+      fetchBlock.indexOf("fetchPostgrestRows"),
     );
   });
 
