@@ -90,6 +90,8 @@ signal profile_status_updated(profile: Dictionary, required: Dictionary, ready: 
 signal document_uploaded(ok: bool, remote_path: String, error: String)
 ## Esito del salvataggio degli orari di lavoro (working_hours).
 signal hours_saved(ok: bool, error: String)
+## Esito della propagazione della preferenza lingua al runtime attivo.
+signal ui_language_saved(locale: String, ok: bool, error: String)
 ## Contenuto di un documento prodotto dal team (CV/cover letter, md o
 ## pdf), letto on-demand dal filesystem del container per l'anteprima
 ## in-game. data = bytes del file (utf-8 per gli md, binari per i pdf).
@@ -766,6 +768,13 @@ func save_working_hours(wh: Dictionary) -> void:
 		_backend.save_working_hours(wh)
 	else:
 		hours_saved.emit(false, UIStrings.t("common.backend_not_connected"))
+
+func save_ui_language(locale: String) -> void:
+	if _backend and _backend.has_method("save_ui_language"):
+		_backend.save_ui_language(locale)
+	else:
+		ui_language_saved.emit(locale, false,
+				UIStrings.t("common.backend_not_connected"))
 
 
 ## ── Storico usage (finestre di monitoraggio risorse) ─────────────────

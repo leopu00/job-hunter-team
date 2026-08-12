@@ -113,11 +113,20 @@ jht_read_host_env_value() {
   printf '%s' "$result"
 }
 
+I18N_PREFS_PATH="$JHT_HOME_HOST/i18n-prefs.json"
+jht_read_i18n_locale() {
+  local file="$1" value=""
+  [ -f "$file" ] || return 1
+  value="$(sed -n 's/.*"locale"[[:space:]]*:[[:space:]]*"\([a-z][a-z]\)".*/\1/p' "$file" | head -n 1)"
+  case "$value" in en|it|hu|es|de|fr|pt) printf '%s' "$value" ;; *) return 1 ;; esac
+}
+
 JHT_LANG_DEFAULT=en
-# Priorità lookup: env JHT_LANG > host.env > default 'en'. L'env vince
-# perché il setup in-game la passa esplicitamente quando rilancia
-# host-setup non-interactive (la scelta lingua viene fatta nel desktop).
-if [ -n "${JHT_LANG:-}" ]; then
+# La preferenza canonica vince. Env e host.env inizializzano soltanto una
+# macchina che non ha ancora i18n-prefs.json (contratto lingua v1).
+if EXISTING_PREFS_LANG="$(jht_read_i18n_locale "$I18N_PREFS_PATH")"; then
+  JHT_LANG_DEFAULT="$EXISTING_PREFS_LANG"
+elif jht_host_env_value_valid JHT_LANG "${JHT_LANG:-}"; then
   JHT_LANG_DEFAULT="$JHT_LANG"
 elif [ -f "$HOST_ENV_PATH" ]; then
   if EXISTING_LANG="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_LANG)"; then
@@ -167,6 +176,11 @@ ok "Language / Lingua / Nyelv / Idioma / Sprache / Langue / Idioma: $JHT_LANG"
 # JHT_HOST_TYPE allo stesso file.
 mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
 printf 'JHT_LANG=%s\n' "$JHT_LANG" > "$HOST_ENV_PATH"
+if ! jht_read_i18n_locale "$I18N_PREFS_PATH" >/dev/null 2>&1; then
+  I18N_PREFS_TMP="$I18N_PREFS_PATH.tmp-$$"
+  printf '{\n  "locale": "%s"\n}\n' "$JHT_LANG" > "$I18N_PREFS_TMP"
+  mv -f "$I18N_PREFS_TMP" "$I18N_PREFS_PATH"
+fi
 
 # ── i18n: soltanto dati, mai helper shell dal filesystem ─────────────────
 # Questo script gira sull'host. Non importa codice da directory che il
