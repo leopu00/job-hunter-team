@@ -53,6 +53,7 @@ const GAME_MATRIX = readFileSync(
   resolve(ROOT, "game/tools/test-matrix.txt"),
   "utf-8",
 );
+const GAME_RUNNER = readFileSync(resolve(ROOT, "game/tools/run.sh"), "utf-8");
 
 const row = (over: Record<string, unknown> = {}) => ({
   legacy_id: 42,
@@ -227,6 +228,13 @@ describe("la stessa ricerca nel gioco", () => {
     // modo in cui 15 test su 45 erano rimasti invisibili.
     expect(GAME_MATRIX).toContain("global_search|script|gate");
     expect(GAME_MATRIX).toContain("tools/global_search_selftest.gd");
+  });
+
+  it("il runner tratta il marker del selftest come testo letterale", () => {
+    // `[search-test]` è una classe di caratteri per grep senza -F: il test
+    // stampava PASS, ma il gate Linux dichiarava che il marker mancava.
+    expect(GAME_MATRIX).toContain("|[search-test] PASS");
+    expect(GAME_RUNNER).toContain('grep -Fq -- "$marker"');
   });
 
   it("mostra l'ID nel risultato", () => {

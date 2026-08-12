@@ -57,7 +57,7 @@ matrix_run_one() {
 			;;
 	esac
 	if [ "$rc" -eq 0 ] && [ "$marker" != "-" ] \
-			&& ! printf '%s\n' "$out" | grep -q "$marker"; then
+			&& ! printf '%s\n' "$out" | grep -Fq -- "$marker"; then
 		# Uscire 0 senza stampare il marker significa che le asserzioni non
 		# sono state eseguite: e' un rosso, non un verde silenzioso.
 		rc=1
