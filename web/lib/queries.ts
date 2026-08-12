@@ -16,6 +16,7 @@ import { activeDemoPersona } from "@/lib/demo/mode";
 import * as demo from "@/lib/demo/queries";
 import { resolveCityPins } from "@/lib/city-coords";
 import { salaryPreference } from "@/lib/salary-source";
+import { parsePositionQuery } from "@/lib/position-search";
 import {
   aggregateRoleFamilies,
   UNCATEGORIZED_LABEL,
@@ -225,6 +226,11 @@ export type PositionFilterOpts = {
   // selezionate; undefined = nessun filtro. Alimenta i deep-link delle card
   // pipeline "Da scrivere" / "Con lo score".
   writeRequested?: boolean;
+  // O-60 — testo libero: titolo, azienda, città, famiglia, fonte e ID
+  // ("42" o "JHT-042"). Scende nella query, non filtra la pagina: cercare
+  // dentro le righe già caricate risponderebbe "nessun risultato" su un
+  // database che quel risultato ce l'ha.
+  q?: string;
   limit?: number;
   offset?: number;
   sort?: string;
@@ -330,6 +336,30 @@ export async function getPositions(
   if (opts?.remoteTypes?.length)
     query = query.in("remote_type", opts.remoteTypes);
   if (opts?.sources?.length) query = query.in("source", opts.sources);
+  // O-60 — la ricerca scende QUI, prima del limite. Filtrarla dopo il fetch
+  // vorrebbe dire cercare dentro le prime N righe per data e rispondere
+  // "nessun risultato" su un database che quel risultato ce l'ha: è la stessa
+  // forma di O-37 e O-40, tagliare prima di aver deciso cosa serve.
+  const search = parsePositionQuery(opts?.q);
+  if (search.text) {
+    // Il valore va fra doppi apici: senza, una virgola nel testo cercato
+    // spezzerebbe la lista di condizioni di PostgREST e la query direbbe
+    // tutt'altro. I doppi apici stessi non possono starci dentro.
+    const needle = search.text.replace(/"/g, " ");
+    const like = `%${needle}%`;
+    const clauses = [
+      `title.ilike."${like}"`,
+      `company.ilike."${like}"`,
+      `loc_city.ilike."${like}"`,
+      `loc_country.ilike."${like}"`,
+      `role_family.ilike."${like}"`,
+      `source.ilike."${like}"`,
+    ];
+    // L'ID è un OR in più, non un ramo alternativo: "42" può essere sia un
+    // identificativo sia un pezzo di titolo, e chi cerca vuole entrambi.
+    if (search.legacyId != null) clauses.push(`legacy_id.eq.${search.legacyId}`);
+    query = query.or(clauses.join(","));
+  }
   if (opts?.limit) query = query.limit(opts.limit);
   if (opts?.offset)
     query = query.range(opts.offset, opts.offset + (opts.limit ?? 50) - 1);

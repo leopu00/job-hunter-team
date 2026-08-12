@@ -77,9 +77,9 @@ function ensureTable(db: import("better-sqlite3").Database): void {
  * nuova: nella vecchia si scrive alla vecchia maniera e ci pensa la
  * migrazione del box a etichettare la riga come `box`, che è dove è nata. */
 function hasOrigin(db: import("better-sqlite3").Database): boolean {
-  const cols = db
-    .prepare("PRAGMA table_info(position_user_notes)")
-    .all() as { name: string }[];
+  const cols = db.prepare("PRAGMA table_info(position_user_notes)").all() as {
+    name: string;
+  }[];
   return cols.some((c) => c.name === "origin");
 }
 
@@ -277,19 +277,13 @@ async function handle(
             .prepare<
               [number, string],
               { body: string; updated_at: string }
-            >(
-              "SELECT body, updated_at FROM position_user_notes " +
-                "WHERE position_id = ? AND origin = ?",
-            )
+            >("SELECT body, updated_at FROM position_user_notes " + "WHERE position_id = ? AND origin = ?")
             .get(legacyId, ORIGIN_BOX)!
         : db
             .prepare<
               [number],
               { body: string; updated_at: string }
-            >(
-              "SELECT body, updated_at FROM position_user_notes " +
-                "WHERE position_id = ?",
-            )
+            >("SELECT body, updated_at FROM position_user_notes " + "WHERE position_id = ?")
             .get(legacyId)!;
       return {
         ok: true,
@@ -313,7 +307,8 @@ async function handle(
     // il lettore dovrebbe scegliere quale delle due mostrare in un pannello
     // che ha un solo textarea. La tabella cloud ha già `origin` in chiave,
     // quindi quel pezzo si aggiunge senza ri-migrare.
-    cloud: (supabase, userId) => applyCloud(supabase, userId, legacyId, clearing, body),
+    cloud: (supabase, userId) =>
+      applyCloud(supabase, userId, legacyId, clearing, body),
   });
 }
 

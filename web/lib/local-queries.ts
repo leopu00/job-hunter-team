@@ -1,6 +1,7 @@
 import { getDb } from "./db";
 import { resolveCityPins } from "./city-coords";
 import { salaryPreference } from "./salary-source";
+import { likePattern, parsePositionQuery } from "./position-search";
 import {
   aggregateRoleFamilies,
   type RoleFamilyCount,
@@ -159,6 +160,8 @@ type LocalPositionFilterOpts = {
   remoteTypes?: string[];
   sources?: string[];
   verdicts?: string[];
+  /** Testo libero della ricerca (O-60): stessa semantica del ramo cloud. */
+  q?: string;
   limit?: number;
   offset?: number;
   sort?: string;
@@ -192,6 +195,31 @@ export function getPositionsLocal(
       `a.critic_verdict IN (${opts.verdicts.map(() => "?").join(",")})`,
     );
     params.push(...opts.verdicts);
+  }
+  // O-60 — la ricerca sta nella WHERE, non dopo: cercare fra le righe già
+  // lette risponderebbe "nessun risultato" su un database che ce l'ha.
+  // `ESCAPE` perché % e _ scritti dall'utente sono testo, non jolly.
+  const search = parsePositionQuery(opts?.q);
+  if (search.text) {
+    const like = likePattern(search.text);
+    const cols = [
+      "p.title",
+      "p.company",
+      "p.loc_city",
+      "p.loc_country",
+      "p.role_family",
+      "p.source",
+    ];
+    const ors = cols.map((c) => `LOWER(${c}) LIKE ? ESCAPE '\\'`);
+    params.push(...cols.map(() => like));
+    // L'id è una condizione IN PIÙ, non alternativa: "42" può essere anche
+    // un pezzo di titolo. `legacy_id` può mancare su workspace vecchi, e
+    // allora vale l'id locale, che è lo stesso numero.
+    if (search.legacyId != null) {
+      ors.push("COALESCE(p.legacy_id, p.id) = ?");
+      params.push(search.legacyId);
+    }
+    where.push(`(${ors.join(" OR ")})`);
   }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";

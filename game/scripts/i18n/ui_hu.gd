@@ -457,7 +457,7 @@ const S := {
 	"agents.no_comms": "nincs friss kommunikáció",
 	"agents.chat_besteffort": "(a válasz nem garantált: a chat protokoll nincs a promptjában)",
 
-	"search.placeholder": "pozíciók keresése: cím, cég, város…  (ESC bezár)",
+	"search.placeholder": "pozíciók keresése: cím, cég, azonosító…  (ESC bezár)",
 	"search.no_match": "nem található pozíció",
 	"search.need_vps": "kösd össze a VPS-t a valódi pozíciók kereséséhez",
 
