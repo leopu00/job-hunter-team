@@ -2471,20 +2471,23 @@ async function handleTicketSync(options = {}) {
           body: JSON.stringify({ tickets: rows }),
         });
         const pb = await res.json().catch(() => ({}));
+        // Anche un batch non-2xx può contenere INSERT confermati prima della
+        // prima riga fallita. Correlali subito: il cursore resta fermo, ma al
+        // retry quelle righe partiranno come UPDATE per cloud_id invece di
+        // essere inserite una seconda volta (custom non ha UNIQUE naturale).
+        if (pb.id_map && typeof pb.id_map === 'object') {
+          const setCloud = db.prepare('UPDATE position_tickets SET cloud_id = ? WHERE id = ?');
+          for (const [localId, cloudId] of Object.entries(pb.id_map)) {
+            const ci = Number(cloudId);
+            const li = Number(localId);
+            if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
+          }
+        }
         if (!res.ok) {
           console.error(pc.yellow(`  ticket push warn: HTTP ${res.status} ${pb.error || ''}`));
         } else {
           pushedUpdates = pb.updated || 0;
           pushedInserts = pb.inserted || 0;
-          // write-back dei cloud_id sugli INSERT → chiude la correlazione.
-          if (pb.id_map && typeof pb.id_map === 'object') {
-            const setCloud = db.prepare('UPDATE position_tickets SET cloud_id = ? WHERE id = ?');
-            for (const [localId, cloudId] of Object.entries(pb.id_map)) {
-              const ci = Number(cloudId);
-              const li = Number(localId);
-              if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
-            }
-          }
           // avanza push cursor = MAX(updated_at) tra le righe inviate.
           let maxU = cursor.push_since || null;
           for (const r of rows) {
