@@ -121,7 +121,17 @@ try:
         t = iso_to_unix(s)
         if FROM_TS <= t <= TO_TS:
             acc[bucket_of(t)] = acc.get(bucket_of(t), 0) + 1
-    db = sqlite3.connect('file:/jht_home/jobs.db?mode=ro', uri=True)
+    # Il path non si indovina nemmeno in lettura: '/jht_home/jobs.db'
+    # scritto a mano legge il database SBAGLIATO quando JHT_DB punta
+    # altrove, e una serie contata sul DB sbagliato è un grafico che mente
+    # (DB-PATH-FALLS-BACK-INSTEAD-OF-STOPPING). La risoluzione sta DENTRO
+    # questo try di proposito: se l'ambiente non dice dov'è il database,
+    # l'errore actionable di _db finisce in db_error e le altre serie del
+    # payload sopravvivono — questa sezione è best-effort come le sorelle.
+    import sys
+    sys.path.insert(0, '/app/shared/skills')
+    from _db import DB_PATH
+    db = sqlite3.connect('file:' + DB_PATH + '?mode=ro', uri=True)
     like = ROLE + '-%%'
     for (ts,) in db.execute(
             'SELECT ts FROM position_state_transitions '
