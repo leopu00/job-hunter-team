@@ -67,6 +67,12 @@ if ($Smoke) {
   $desktopShortcut = Join-Path $env:USERPROFILE 'Desktop/Job Hunter Team.lnk'
   $startMenuDir = Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/Job Hunter Team'
   $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\JobHunterTeam'
+  # Godot's `user://` with no custom user dir. This is where language,
+  # onboarding, tour and VPS configuration live: the uninstaller must leave it
+  # alone unless the user ticks the opt-in component, and a silent uninstall
+  # must never remove it at all. [WIN-USERDIR-SURVIVES-REINSTALL]
+  $userDataDir = Join-Path $env:APPDATA 'Godot/app_userdata/Job Hunter Team'
+  $userDataSentinel = Join-Path $userDataDir 'smoke-userdata-sentinel.txt'
 
   if (Test-Path -LiteralPath $installDir) {
     throw "Refusing to overwrite an existing per-user installation: $installDir"
@@ -100,6 +106,13 @@ if ($Smoke) {
     } finally {
       $env:JHT_NOVPS = $previousNoVps
     }
+
+    # A file of the user's, placed where the user's files live, before the
+    # uninstaller runs. Nothing else in this smoke would notice if a future
+    # edit made the uninstaller wipe the directory — and by the time a real
+    # user noticed, their profile would be gone.
+    New-Item -ItemType Directory -Force -Path $userDataDir | Out-Null
+    Set-Content -LiteralPath $userDataSentinel -Value 'user data must survive' -Encoding utf8
   } finally {
     if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {
       $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru
@@ -114,6 +127,16 @@ if ($Smoke) {
       throw "Uninstaller left a published target behind: $removed"
     }
   }
+
+  # The other direction, and it is a directive rather than a preference: a
+  # silent uninstall keeps the user's data. Removing it is an opt-in component
+  # on the uninstaller's page, deselected by default, and `/S` cannot select
+  # it. An installer that takes a profile away on its own is the worst damage
+  # this product can do.
+  if (-not (Test-Path -LiteralPath $userDataSentinel)) {
+    throw "Silent uninstall deleted user data: $userDataDir must survive (see game/installer/windows.nsi)"
+  }
+  Remove-Item -LiteralPath $userDataSentinel -Force
 }
 
 $hash = Get-FileHash -LiteralPath $setup -Algorithm SHA256
