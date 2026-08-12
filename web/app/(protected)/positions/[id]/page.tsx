@@ -48,6 +48,7 @@ import { isSupabaseConfigured } from "@/lib/workspace";
 import { makeT } from "@/lib/i18n-dict";
 import { SCORE_COMPONENT_LIMITS, barFill } from "@/lib/score-ranges";
 import { T } from "./page.i18n";
+import { resolveCoverLetterPdfFileName } from "@/lib/position-document-file.server";
 
 // Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
 // inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
@@ -348,10 +349,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
   const mapsUrl = exactAddress
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(exactAddress)}`
     : null;
-  // basename dei PDF: i path nel DB sono assoluti sul container VPS, ma il
-  // bridge e il file-serving locale risolvono per basename.
+  // Basename dei PDF: i path nel DB sono assoluti sul container VPS, ma il
+  // bridge e il file-serving locale risolvono per basename. Per la cover
+  // letter il file inventory e' il fallback: vecchi Writer potevano lasciare
+  // il PDF sul disco senza collegarlo in applications.cl_pdf_path (O-72).
   const cvFileName = application?.cv_pdf_path?.split("/").pop() || null;
-  const clFileName = application?.cl_pdf_path?.split("/").pop() || null;
+  const clFileName = await resolveCoverLetterPdfFileName({
+    explicitPath: application?.cl_pdf_path,
+    legacyId: position.legacy_id,
+    cloudMode,
+  });
 
   // Valuta di visualizzazione (Impostazioni → Valuta stipendi): valuta
   // diversa da quella dell'annuncio → importo convertito ("≈") con
