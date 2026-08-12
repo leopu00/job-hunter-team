@@ -100,4 +100,33 @@ describe("round-trip map → reconstruct conserva i campi chiave", () => {
     assert.equal((r.location_preferences as unknown[]).length, 2);
     assert.equal((r.contacts as { email: string }).email, "m@x.it");
   });
+
+  it("porta categoria e specialty nel positioning e ritorno", () => {
+    const c = mapYamlToCanonical(
+      {
+        ...RAW_LEGACY,
+        target_role_category_id: "software",
+        target_specialty: "backend",
+      },
+      "u",
+    );
+    const positioning = c.profileRow.positioning as Record<string, unknown>;
+    assert.equal(positioning.target_role_category_id, "software");
+    assert.equal(positioning.target_specialty, "backend");
+
+    const r = reconstructCanonicalProfile({
+      profile: c.profileRow,
+      skills: c.skills,
+      languages: c.languages,
+      experiences: c.experiences,
+      education: c.education,
+      workAuth: c.workAuth,
+      locationPrefs: c.locationPrefs,
+      contacts: c.contacts,
+      blocks: c.blocks,
+    });
+    assert.equal(r.target_role, "Backend Developer");
+    assert.equal(r.target_role_category_id, "software");
+    assert.equal(r.target_specialty, "backend");
+  });
 });
