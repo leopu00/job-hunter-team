@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
 import {
   existsSync,
   mkdtempSync,
@@ -152,6 +153,33 @@ describe("allegato ticket web sul trasporto documenti esistente", () => {
       expect(existsSync(join(outside, "boundary.pdf"))).toBe(false);
     } finally {
       rmSync(uploads, { force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("non crea fuori root se allegati cambia dopo l'attestazione", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "jht-ticket-race-outside-"));
+    const uploads = join(userDir, "allegati");
+    const held = join(userDir, "allegati-held");
+    let swapped = false;
+    const originalClose = fs.closeSync.bind(fs);
+    const closeSpy = vi.spyOn(fs, "closeSync").mockImplementation((fd) => {
+      originalClose(fd);
+      if (!swapped) {
+        swapped = true;
+        fs.renameSync(uploads, held);
+        fs.symlinkSync(outside, uploads, "dir");
+      }
+    });
+    try {
+      await expect(
+        saveUserDocument(new File(["synthetic"], "boundary-race.pdf")),
+      ).rejects.toThrow("errore di scrittura");
+      expect(existsSync(join(outside, "boundary-race.pdf"))).toBe(false);
+    } finally {
+      closeSpy.mockRestore();
+      rmSync(uploads, { force: true });
+      rmSync(held, { recursive: true, force: true });
       rmSync(outside, { recursive: true, force: true });
     }
   });

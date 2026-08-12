@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { JHT_USER_UPLOADS_DIR } from "./jht-paths";
 
 const CONTAINER_UPLOAD_DIR = "/jht_user/allegati";
@@ -76,6 +77,81 @@ function openUploadDirectory(): number {
   }
 }
 
+type ArtifactUploadResult = {
+  ok?: boolean;
+  path?: string;
+  name?: string;
+  bytes?: number;
+};
+
+function artifactSkillPath(): string {
+  const candidates = [
+    path.resolve(process.cwd(), "shared/skills/artifact.py"),
+    path.resolve(process.cwd(), "../shared/skills/artifact.py"),
+    path.resolve(process.cwd(), "../../shared/skills/artifact.py"),
+  ];
+  const found = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!found) throw new Error("artifact skill unavailable");
+  return found;
+}
+
+/**
+ * Il write effettivo passa dalla skill canonica, che apre root/directory/file
+ * con openat. Node non espone openat: un path assoluto verificato prima della
+ * open avrebbe comunque una finestra TOCTOU.
+ */
+function writeWithArtifactSkill(
+  safeName: string,
+  bytes: Buffer,
+): ArtifactUploadResult {
+  const shellVia = process.env.JHT_SHELL_VIA;
+  const dockerContainer = shellVia?.startsWith("docker:")
+    ? shellVia.slice("docker:".length)
+    : null;
+  const command = dockerContainer ? "docker" : "python3";
+  const args = dockerContainer
+    ? [
+        "exec",
+        "-i",
+        dockerContainer,
+        "python3",
+        "/app/shared/skills/artifact.py",
+        "upload",
+        "--name",
+        safeName,
+        "--raw",
+      ]
+    : [artifactSkillPath(), "upload", "--name", safeName, "--raw"];
+  const result = spawnSync(command, args, {
+    input: bytes,
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024,
+    env: dockerContainer
+      ? process.env
+      : {
+          ...process.env,
+          JHT_ARTIFACT_ROOT: path.dirname(JHT_USER_UPLOADS_DIR),
+        },
+  });
+  let payload: ArtifactUploadResult = {};
+  try {
+    payload = JSON.parse(result.stdout || "{}") as ArtifactUploadResult;
+  } catch {
+    // Il controllo comune sotto rende anche output tronco/non JSON fail-closed.
+  }
+  if (
+    result.error ||
+    result.status !== 0 ||
+    payload.ok !== true ||
+    payload.name !== safeName ||
+    payload.path !== `${CONTAINER_UPLOAD_DIR}/${safeName}` ||
+    payload.bytes !== bytes.length
+  ) {
+    throw new Error("artifact upload failed");
+  }
+  return payload;
+}
+
 /**
  * Trasporto web verso la stessa drop-zone di artifact.py e del desktop.
  * O_NOFOLLOW impedisce che una collisione con un symlink scriva fuori
@@ -106,23 +182,15 @@ export async function saveUserDocument(file: File): Promise<SavedUserDocument> {
     throw new UserDocumentUploadError(`${file.name}: lettura incompleta`);
   }
 
-  const destination = path.join(JHT_USER_UPLOADS_DIR, safeName);
-  const flags =
-    fs.constants.O_WRONLY |
-    fs.constants.O_CREAT |
-    fs.constants.O_TRUNC |
-    fs.constants.O_NOFOLLOW;
-  let descriptor: number | null = null;
   let directoryDescriptor: number | null = null;
   try {
     directoryDescriptor = openUploadDirectory();
-    descriptor = fs.openSync(destination, flags, 0o644);
-    assertUploadDirectory(directoryDescriptor);
-    fs.writeFileSync(descriptor, bytes);
+    fs.closeSync(directoryDescriptor);
+    directoryDescriptor = null;
+    writeWithArtifactSkill(safeName, bytes);
   } catch {
     throw new UserDocumentUploadError(`${file.name}: errore di scrittura`);
   } finally {
-    if (descriptor !== null) fs.closeSync(descriptor);
     if (directoryDescriptor !== null) fs.closeSync(directoryDescriptor);
   }
 

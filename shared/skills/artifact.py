@@ -12,6 +12,7 @@ attached to it. See [JHT-CLI-AGENT-PARITY] in BACKLOG.md.
 
     python3 artifact.py fetch /jht_user/cv/cv_42.pdf --kind pdf
     python3 artifact.py upload --name cv.pdf   # bytes as base64 on stdin
+    python3 artifact.py upload --name cv.pdf --raw  # raw bytes on stdin
 
 Output: one JSON row on stdout; exit 0 on success, 1 on refusal or failure.
   {"ok": true, "path": "/jht_user/cv/cv_42.pdf", "kind": "pdf",
@@ -258,6 +259,8 @@ def main() -> int:
     p_upload = sub.add_parser("upload", help="hand a document to the team")
     p_upload.add_argument("--name", required=True,
                           help="file name (the bytes arrive base64 on stdin)")
+    p_upload.add_argument("--raw", action="store_true",
+                          help="read raw bytes instead of base64")
 
     p_roots = sub.add_parser("roots", help="the data areas this skill can read")
 
@@ -268,10 +271,13 @@ def main() -> int:
         return emit({"ok": True, "root": user_root(), "roots": list(roots()),
                      "upload_dir": user_root() + "/" + UPLOAD_SUBDIR})
     raw = sys.stdin.buffer.read()
-    try:
-        data = base64.b64decode(raw, validate=True)
-    except Exception:
-        return emit({"ok": False, "error": "stdin is not valid base64"})
+    if args.raw:
+        data = raw
+    else:
+        try:
+            data = base64.b64decode(raw, validate=True)
+        except Exception:
+            return emit({"ok": False, "error": "stdin is not valid base64"})
     return emit(upload(args.name, data))
 
 
