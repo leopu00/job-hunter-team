@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 from pathlib import Path
 
@@ -170,7 +171,90 @@ def test_release_workflow_verifies_and_publishes_integrity_files() -> None:
     assert "${{ matrix.artifact_path }}.provenance.json" in workflow
     assert "release-assets/SHA256SUMS" in workflow
     assert "release-assets/RELEASE-PROVENANCE.json" in workflow
+    assert "release_artifacts.py notes" in workflow
+    assert "body_path: release-assets/RELEASE-NOTES.md" in workflow
     assert "draft: true" in workflow
     assert workflow.index("release_artifacts.py verify") < workflow.index(
+        "release_artifacts.py notes"
+    ) < workflow.index(
         "softprops/action-gh-release"
     )
+
+
+def test_release_notes_render_every_verified_asset_without_a_second_list(
+    tmp_path: Path,
+) -> None:
+    # Nomi volutamente sintetici: il renderer deve consumare l'autorità
+    # RELEASE-PROVENANCE, non conoscere Windows/macOS/Linux in proprio.
+    assets = [
+        {
+            "asset": "custom-alpha.bin",
+            "size": 11,
+            "sha256": "a" * 64,
+        },
+        {
+            "asset": "custom-beta.pkg",
+            "size": 22,
+            "sha256": "b" * 64,
+        },
+    ]
+    provenance = tmp_path / "RELEASE-PROVENANCE.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "repository": REPOSITORY,
+                "tag": TAG,
+                "commit": "c" * 40,
+                "assets": assets,
+            }
+        )
+    )
+    output = tmp_path / "RELEASE-NOTES.md"
+
+    from scripts import release_artifacts
+
+    body = release_artifacts.render_release_notes(
+        notes="- Curated change",
+        provenance=provenance,
+        output=output,
+        tag=TAG,
+        repository=REPOSITORY,
+    )
+
+    assert output.read_text(encoding="utf-8") == body
+    assert "### SHA-256 checksums" in body
+    assert "- Curated change" in body
+    for asset in assets:
+        line = f'{asset["sha256"]}  {asset["asset"]}'
+        assert body.count(line) == 1
+
+
+def test_release_notes_reject_invalid_provenance_instead_of_publishing_it(
+    tmp_path: Path,
+) -> None:
+    provenance = tmp_path / "RELEASE-PROVENANCE.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "repository": REPOSITORY,
+                "tag": TAG,
+                "commit": "c" * 40,
+                "assets": [
+                    {"asset": "asset.bin", "size": 1, "sha256": "not-a-hash"}
+                ],
+            }
+        )
+    )
+
+    from scripts import release_artifacts
+
+    with pytest.raises(ReleaseArtifactError, match="provenance"):
+        release_artifacts.render_release_notes(
+            notes="notes",
+            provenance=provenance,
+            output=tmp_path / "RELEASE-NOTES.md",
+            tag=TAG,
+            repository=REPOSITORY,
+        )

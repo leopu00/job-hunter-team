@@ -245,6 +245,99 @@ def audit_published_release(
     return release_provenance
 
 
+def render_release_notes(
+    *,
+    notes: str,
+    provenance: Path,
+    output: Path,
+    tag: str,
+    repository: str,
+) -> str:
+    """Render the GitHub Release body from verified provenance.
+
+    `RELEASE-PROVENANCE.json` is the existing authority for the published
+    asset set.  Iterating it here keeps filenames and hashes out of a second
+    release-notes list while still failing closed before the draft is made.
+    """
+    try:
+        release_provenance = json.loads(provenance.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ReleaseArtifactError(
+            f"invalid release provenance for notes: {provenance}"
+        ) from exc
+
+    commit = str(release_provenance.get("commit", ""))
+    _validate_identity(tag, commit, repository)
+    expected_header = {
+        "schema_version": SCHEMA_VERSION,
+        "repository": repository,
+        "tag": tag,
+        "commit": commit,
+    }
+    if {key: release_provenance.get(key) for key in expected_header} != expected_header:
+        raise ReleaseArtifactError("release provenance identity mismatch for notes")
+
+    assets = release_provenance.get("assets")
+    if not isinstance(assets, list) or not assets:
+        raise ReleaseArtifactError("release provenance for notes has no assets")
+
+    checksum_lines: list[str] = []
+    names: list[str] = []
+    for entry in assets:
+        if not isinstance(entry, dict):
+            raise ReleaseArtifactError("release provenance asset is not an object")
+        name = entry.get("asset")
+        size = entry.get("size")
+        digest = entry.get("sha256")
+        if (
+            not isinstance(name, str)
+            or Path(name).name != name
+            or not isinstance(size, int)
+            or isinstance(size, bool)
+            or size <= 0
+            or not isinstance(digest, str)
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+        ):
+            raise ReleaseArtifactError(
+                f"invalid release provenance asset for notes: {entry!r}"
+            )
+        if name in names:
+            raise ReleaseArtifactError(f"duplicate release provenance asset: {name}")
+        names.append(name)
+        checksum_lines.append(f"{digest}  {name}")
+    if names != sorted(names):
+        raise ReleaseArtifactError("release provenance assets are not sorted for notes")
+
+    curated = notes.strip() or "- Release prepared without curated notes."
+    checksums = "\n".join(checksum_lines)
+    body = f"""## What's new in {tag}
+
+{curated}
+
+### Windows
+
+Use `job-hunter-team-windows-x64-setup.exe` for the normal per-user installation. `job-hunter-team-windows-x64-portable.exe` is the optional standalone build. Neither Windows file is code-signed, so Windows may show **\"Windows protected your PC\"**: click **More info** → **Run anyway** only for files downloaded from this release and matching the SHA-256 values below. The macOS `.zip` is signed and notarized by Apple; the Linux `.tar.gz` is unsigned as well.
+
+### SHA-256 checksums
+
+These digests come from the verified release provenance for the exact assets attached to this release:
+
+```text
+{checksums}
+```
+
+`SHA256SUMS` contains the same machine-readable values. `RELEASE-PROVENANCE.json` also records the exact tagged commit and byte size for every attached artifact.
+
+---
+See [CHANGELOG.md](https://github.com/{repository}/blob/{tag}/CHANGELOG.md) for the full history.
+"""
+    try:
+        output.write_text(body, encoding="utf-8")
+    except OSError as exc:
+        raise ReleaseArtifactError(f"cannot write release notes: {output}") from exc
+    return body
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -271,6 +364,15 @@ def _parser() -> argparse.ArgumentParser:
     audit.add_argument("--tag", required=True)
     audit.add_argument("--commit", required=True)
     audit.add_argument("--repository", required=True)
+
+    notes = subparsers.add_parser(
+        "notes", help="render a GitHub Release body from verified provenance"
+    )
+    notes.add_argument("--notes", required=True)
+    notes.add_argument("--provenance", type=Path, required=True)
+    notes.add_argument("--output", type=Path, required=True)
+    notes.add_argument("--tag", required=True)
+    notes.add_argument("--repository", required=True)
     return parser
 
 
@@ -296,17 +398,25 @@ def main() -> int:
                 checksums=args.checksums,
                 provenance=args.provenance,
             )
-        else:
+        elif args.command == "audit":
             result = audit_published_release(
                 directory=args.directory,
                 tag=args.tag,
                 commit=args.commit,
                 repository=args.repository,
             )
+        else:
+            result = render_release_notes(
+                notes=args.notes,
+                provenance=args.provenance,
+                output=args.output,
+                tag=args.tag,
+                repository=args.repository,
+            )
     except ReleaseArtifactError as exc:
         print(f"release-artifacts: ERROR: {exc}")
         return 1
-    print(json.dumps(result, sort_keys=True))
+    print(result if isinstance(result, str) else json.dumps(result, sort_keys=True))
     return 0
 
 
