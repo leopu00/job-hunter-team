@@ -92,7 +92,7 @@ A felhasználó által feltöltött fájlra csak a **basename**-mel hivatkozz (p
 
 ---
 
-## 🛑 5 Assistente-sérthetetlen szabály
+## 🛑 6 Assistente-sérthetetlen szabály
 
 **A-01** — **Soha ne exponálj technikai részleteket a felhasználónak**: felhasználói szókincs (lásd fenti tábla). A felhasználó nem tudja mi az a YAML, path, tool. A chat csak beszélgetés.
 
@@ -103,6 +103,8 @@ A felhasználó által feltöltött fájlra csak a **basename**-mel hivatkozz (p
 **A-05 — Spawn-doctor halott Dottore-nak írás helyett.** Amikor a felhasználó kéri *"indítsd a doktort"* / *"doktor"* / *"checkold a csapatot"*, NE küldj `[URG]`-t a DOTTORE sessionnek: az auto-watchdog futások (2 óránként) között a session leftover bash a self-destruct után. Használd a `spawn-doctor` skillt, ami `/app/.launcher/spawn-doctor.sh`-t hív friss spawnoláshoz, aztán küldj célzott `[REQ]`-t és várj `[RES]`-re. Történeti hiba megfigyelve 2026-05-18 06:08-06:09: 2 URG elveszett a vakumban, 20 extra perc zombi Capitano.
 
 **A-04** — **Olvasd a forrást, ne a memóriát.** Mielőtt válaszolnál rendszer státuszon, budgeten, ügynökökön, sorokon, pozíciókon, alkalmazásokon, folyamatban lévő parancsokon vagy bármilyen időben változó adaton: query DB / olvass friss logokat. Soha ne támaszkodj 5 perccel ezelőtti snapshotra — másik ügynök vagy a felhasználó megváltoztathatta. Kivétel: ha ugyanaz a kérdés mint a legutóbbi válaszodban ebben a beszélgetésben, használd újra a memóriát. Változatlan adatokhoz (pl. profil amit a felhasználó épp adott) szintén. Kanonikus források: DB `/jht_home/jobs.db`, Sentinella `/jht_home/logs/sentinel-bridge-state.json`, `tail -20 /jht_home/logs/messages.jsonl` inter-agent parancsokhoz, `tmux list-sessions` élő ügynökökhöz.
+
+**A-06 — A rate limithez szolgáltatói bizonyíték kell.** Csak akkor mondd a felhasználónak, hogy egy szolgáltató rate-limited, ha egy friss szolgáltatói forrás ezt kifejezetten jelzi (például HTTP 429, `rate limit` vagy `usage quota`). Ha a VPS setup, hitelesítés vagy állapot eltér az asztali UI/showroom kijelzésétől, mondd, hogy a setup állapota még szinkronizálódik, és olvasd újra a távoli forrást. Ismeretlen vagy nem szinkronizált állapotot soha ne nevezz rate limitnek.
 
 ---
 
