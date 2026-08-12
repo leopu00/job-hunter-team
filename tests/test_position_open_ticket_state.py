@@ -15,7 +15,9 @@ giorno qualcuno lo materializzasse in una colonna, è qui che lo scopre.
 
 from __future__ import annotations
 
+import os
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
@@ -113,6 +115,246 @@ def test_several_tickets_on_one_position_still_read_as_one_pending(box):
     box.commit()
     # Alla lista serve sapere SE c'è qualcosa in sospeso, non quanti.
     assert _pending(box) >= 1
+
+
+def test_rescore_ticket_has_one_active_request_but_keeps_resolved_history(box):
+    box.execute(
+        "INSERT INTO position_tickets (position_id, request_text, kind, status) "
+        "VALUES (5, 'rivaluta', 'rescore', 'open')"
+    )
+    box.commit()
+
+    with pytest.raises(sqlite3.IntegrityError):
+        box.execute(
+            "INSERT INTO position_tickets "
+            "(position_id, request_text, kind, status) "
+            "VALUES (5, 'duplicato', 'rescore', 'assigned')"
+        )
+    box.rollback()
+
+    box.execute(
+        "UPDATE position_tickets SET status = 'resolved' "
+        "WHERE position_id = 5 AND kind = 'rescore'"
+    )
+    box.execute(
+        "INSERT INTO position_tickets (position_id, request_text, kind, status) "
+        "VALUES (5, 'rivaluta ancora', 'rescore', 'open')"
+    )
+    box.commit()
+    assert box.execute(
+        "SELECT COUNT(*) FROM position_tickets "
+        "WHERE position_id = 5 AND kind = 'rescore'"
+    ).fetchone()[0] == 2
+
+
+def test_schema_upgrade_sanitizes_legacy_active_rescores_without_data_loss(
+    box,
+):
+    """Un DB pre-O-70 poteva già usare liberamente ``kind=rescore``."""
+    import _db
+
+    box.execute("DROP INDEX idx_position_tickets_active_rescore")
+    legacy_rows = [
+        (
+            "richiesta open più vecchia",
+            "open",
+            None,
+            "risposta open conservata",
+            401,
+            "2026-01-01 08:00:00",
+            None,
+        ),
+        (
+            "richiesta assegnata",
+            "assigned",
+            "SCORER",
+            "risposta assigned conservata",
+            402,
+            "2026-01-02 08:00:00",
+            "2026-01-02 09:00:00",
+        ),
+        (
+            "seconda richiesta assegnata",
+            "assigned",
+            "SCORER-2",
+            None,
+            403,
+            "2026-01-03 08:00:00",
+            "2026-01-03 09:00:00",
+        ),
+    ]
+    box.executemany(
+        "INSERT INTO position_tickets "
+        "(position_id, request_text, kind, status, assigned_agent, "
+        " response_text, cloud_id, created_at, assigned_at) "
+        "VALUES (5, ?, 'rescore', ?, ?, ?, ?, ?, ?)",
+        legacy_rows,
+    )
+    box.commit()
+
+    before = [
+        tuple(row)
+        for row in box.execute(
+            "SELECT id, request_text, assigned_agent, response_text, cloud_id, "
+            "created_at, assigned_at FROM position_tickets "
+            "WHERE kind = 'rescore' ORDER BY id"
+        )
+    ]
+
+    _db.ensure_schema(box)
+
+    after = [
+        tuple(row)
+        for row in box.execute(
+            "SELECT id, request_text, assigned_agent, response_text, cloud_id, "
+            "created_at, assigned_at FROM position_tickets "
+            "WHERE kind = 'rescore' ORDER BY id"
+        )
+    ]
+    assert after == before, "la sanatoria non deve perdere o riscrivere contenuto"
+
+    rows = box.execute(
+        "SELECT request_text, status, resolved_at FROM position_tickets "
+        "WHERE kind = 'rescore' ORDER BY id"
+    ).fetchall()
+    assert [(row["request_text"], row["status"]) for row in rows] == [
+        ("richiesta open più vecchia", "resolved"),
+        ("richiesta assegnata", "assigned"),
+        ("seconda richiesta assegnata", "resolved"),
+    ]
+    assert rows[0]["resolved_at"] is not None
+    assert rows[1]["resolved_at"] is None
+    assert rows[2]["resolved_at"] is not None
+    assert box.execute(
+        "SELECT COUNT(*) FROM sqlite_master "
+        "WHERE type = 'index' AND name = 'idx_position_tickets_active_rescore'"
+    ).fetchone()[0] == 1
+
+    with pytest.raises(sqlite3.IntegrityError):
+        box.execute(
+            "INSERT INTO position_tickets "
+            "(position_id, request_text, kind, status) "
+            "VALUES (5, 'nuovo duplicato', 'rescore', 'open')"
+        )
+    box.rollback()
+
+
+def test_rescore_ticket_resolves_only_after_the_score_effect(box, tmp_path):
+    """Rifiuto → db_insert rescore reale → effetto avanzato → resolve."""
+    db_path = box.execute("PRAGMA database_list").fetchone()[2]
+    box.execute(
+        "INSERT INTO scores (position_id, total_score, scored_at) "
+        "VALUES (5, 60, '2000-01-01 00:00:00')"
+    )
+    ticket_id = box.execute(
+        "INSERT INTO position_tickets "
+        "(position_id, request_text, kind, status, assigned_agent, created_at) "
+        "VALUES (5, 'rivaluta', 'rescore', 'assigned', 'SCORER', "
+        "        '2000-01-02 00:00:00')"
+    ).lastrowid
+    box.commit()
+
+    env = {
+        **os.environ,
+        "JHT_DB": db_path,
+        "JHT_HOME": str(tmp_path),
+    }
+    ticket_cli = ROOT / "shared" / "skills" / "ticket.py"
+    db_insert_cli = ROOT / "shared" / "skills" / "db_insert.py"
+
+    premature = subprocess.run(
+        [sys.executable, str(ticket_cli), "resolve", str(ticket_id),
+         "--response", "Rivalutazione completata"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert premature.returncode == 1
+    assert "rescore effect not verified" in premature.stderr
+    still_assigned = box.execute(
+        "SELECT status, response_text FROM position_tickets WHERE id = ?",
+        (ticket_id,),
+    ).fetchone()
+    assert tuple(still_assigned) == ("assigned", None)
+
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir(exist_ok=True)
+    (profile_dir / "candidate_profile.yml").write_text(
+        'name: "Synthetic Test"\ntarget_role: "Backend Developer"\n',
+        encoding="utf-8",
+    )
+    scored = subprocess.run(
+        [
+            sys.executable,
+            str(db_insert_cli),
+            "score",
+            "--position-id", "5",
+            "--total", "80",
+            "--stack", "30",
+            "--remote", "20",
+            "--salary", "15",
+            "--experience", "5",
+            "--strategic", "10",
+            "--scored-by", "scorer-test",
+            "--action", "rescore",
+            "--outcome", "updated",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert scored.returncode == 0, scored.stdout + scored.stderr
+    new_score = box.execute(
+        "SELECT total_score, scored_at, "
+        "       julianday(scored_at) > julianday('2000-01-02 00:00:00') "
+        "FROM scores WHERE position_id = 5"
+    ).fetchone()
+    assert tuple(new_score)[0] == 80
+    assert tuple(new_score)[2] == 1
+
+    completed = subprocess.run(
+        [sys.executable, str(ticket_cli), "resolve", str(ticket_id),
+         "--response", "Rivalutazione completata"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    resolved = box.execute(
+        "SELECT status, response_text FROM position_tickets WHERE id = ?",
+        (ticket_id,),
+    ).fetchone()
+    assert tuple(resolved) == ("resolved", "Rivalutazione completata")
+
+
+def test_cloud_migration_sanitizes_legacy_rescores_before_unique_index():
+    migration = (
+        ROOT / "supabase" / "migrations" / "071_rescore_ticket_dedup.sql"
+    ).read_text(encoding="utf-8")
+    update_at = migration.index("UPDATE position_tickets AS ticket")
+    index_at = migration.index("CREATE UNIQUE INDEX")
+
+    assert update_at < index_at
+    assert "PARTITION BY user_id, position_legacy_id, kind" in migration
+    assert "CASE status WHEN 'assigned' THEN 0 ELSE 1 END" in migration
+    assert "ranked.active_rank > 1" in migration
+    assert "SET status = 'resolved'" in migration
+    assert "DELETE FROM POSITION_TICKETS" not in migration.upper()
+
+
+def test_ticket_cli_exposes_rescore_kind_for_captain_routing(box):
+    import ticket
+
+    box.execute(
+        "INSERT INTO position_tickets (position_id, request_text, kind, status) "
+        "VALUES (5, 'rivaluta', 'rescore', 'open')"
+    )
+    box.commit()
+    row = box.execute(
+        "SELECT * FROM position_tickets WHERE position_id = 5"
+    ).fetchone()
+
+    assert "kind=rescore" in ticket._fmt(row)
 
 
 def test_the_query_matches_the_one_the_list_actually_runs():

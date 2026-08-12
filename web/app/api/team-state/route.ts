@@ -51,6 +51,10 @@ const OBSERVED_FIELDS = [
   // Ack del solo rendezvous STOP mobile. Il device non può creare richieste:
   // emergency_stop_requested_at è scritto esclusivamente dalla route browser.
   "emergency_stop_completed_at",
+  // O-66: osservazione minimale del push automatico. La firma SQLite resta
+  // locale; il browser riceve soltanto current/errore + timestamp.
+  "cloud_push_status",
+  "cloud_push_checked_at",
 ] as const;
 
 type DesiredField = (typeof DESIRED_FIELDS)[number];

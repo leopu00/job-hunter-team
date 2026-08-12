@@ -198,9 +198,35 @@ def _spawn(env, *args, background=False):
     return subprocess.run(cmd, env=env["environ"], capture_output=True, text=True)
 
 
+def _remove_tg_lock(env):
+    """Rimuove il solo lock O-58 dalla copia dello script sotto test.
+
+    Eliminare lo stub `flock` dal PATH non basta su Linux: la lookup prosegue
+    e trova util-linux in `/usr/bin`, quindi il presunto controfattuale resta
+    protetto dal lock. Qui costruiamo davvero il predecessore dello script,
+    lasciando invariati kill, settle e spawn.
+    """
+    script = env["launcher"] / "start-agent.sh"
+    source = script.read_text(encoding="utf-8")
+    lock_block = '''  if command -v flock >/dev/null 2>&1; then
+    mkdir -p "${JHT_HOME:-/jht_home}/locks"
+    exec 9>"${JHT_HOME:-/jht_home}/locks/start-tg-bridge.lock"
+    if ! flock -w 30 9; then
+      echo "Error: timed out waiting for the concurrent spawn of tg-bridge [$TG_ROLES]." >&2
+      exit 1
+    fi
+  fi
+'''
+    assert source.count(lock_block) == 1, "blocco lock tg-bridge non riconosciuto"
+    script.write_text(source.replace(lock_block, "", 1), encoding="utf-8")
+
+
 def _alive(env):
     """Ruoli vivi → numero di processi python per quel ruolo."""
-    rows = subprocess.run(["ps", "-ax", "-o", "command="],
+    # `ww` è necessario su GNU ps: nel runner GitHub il path /tmp completo
+    # supera la larghezza predefinita e senza argv wide scompare proprio
+    # `tg-bridge.py --role …`, facendo sembrare morti processi vivi.
+    rows = subprocess.run(["ps", "-axww", "-o", "command="],
                           capture_output=True, text=True).stdout.splitlines()
     script = str(env["launcher"] / "tg-bridge.py")
     counts = {r: 0 for r in ROLES}
@@ -237,15 +263,15 @@ def test_two_concurrent_spawns_leave_one_bridge_per_role(env):
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="ps/pkill POSIX")
-def test_without_the_lock_the_same_race_leaves_duplicates(env, tmp_path):
+def test_without_the_lock_the_same_race_leaves_duplicates(env):
     """La prova che il test sopra vede davvero la race.
 
-    Tolto `flock` dal PATH lo script prende il ramo di fallback storico —
-    quello che girava in produzione — e gli stessi due start concorrenti
+    Tolto dalla copia dello script il solo blocco `flock`, ricostruiamo il ramo
+    storico che girava in produzione: gli stessi due start concorrenti
     lasciano più di un poller per bot. Se un giorno questo test diventasse
     verde, vorrebbe dire che l'altro non sta più misurando niente.
     """
-    (env["bin"] / "flock").unlink()
+    _remove_tg_lock(env)
 
     first = _spawn(env, background=True)
     time.sleep(0.05)
@@ -288,7 +314,7 @@ def test_respawning_one_role_leaves_the_others_alone(env):
 
 
 def _pids(env):
-    rows = subprocess.run(["ps", "-ax", "-o", "pid=,command="],
+    rows = subprocess.run(["ps", "-axww", "-o", "pid=,command="],
                           capture_output=True, text=True).stdout.splitlines()
     script = str(env["launcher"] / "tg-bridge.py")
     out = {}

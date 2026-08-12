@@ -484,18 +484,16 @@ export async function syncProfileToSupabase(
   // 3. contacts (1:1 upsert)
   if (c.contacts) {
     try {
-      const { error } = await admin
-        .from("candidate_contacts")
-        .upsert(
-          {
-            user_id: userId,
-            ...encryptContacts(
-              c.contacts as Record<string, string | null | undefined>,
-            ),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" },
-        );
+      const { error } = await admin.from("candidate_contacts").upsert(
+        {
+          user_id: userId,
+          ...encryptContacts(
+            c.contacts as Record<string, string | null | undefined>,
+          ),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
       if (error) throw error;
     } catch (e) {
       warnings.push(`candidate_contacts: ${(e as Error).message}`);

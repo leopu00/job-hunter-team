@@ -152,24 +152,29 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  const setTheme = useCallback((t: Theme) => {
-    enableTransition();
-    const version = ++explicitVersionRef.current;
-    latestExplicitThemeRef.current = t;
-    adoptTheme(t);
-    const backend = backendRef.current;
-    if (!backend) {
-      try {
-        localStorage.setItem(THEME_STORAGE_KEY, t);
-      } catch {
-        // Il tema resta applicato per la visita corrente.
+  const setTheme = useCallback(
+    (t: Theme) => {
+      enableTransition();
+      const version = ++explicitVersionRef.current;
+      latestExplicitThemeRef.current = t;
+      adoptTheme(t);
+      const backend = backendRef.current;
+      if (!backend) {
+        try {
+          localStorage.setItem(THEME_STORAGE_KEY, t);
+        } catch {
+          // Il tema resta applicato per la visita corrente.
+        }
+        return;
       }
-      return;
-    }
-    void persistThemeChange(t, window.localStorage, backend).then((result) => {
-      if (version === explicitVersionRef.current) adoptTheme(result.theme);
-    });
-  }, [adoptTheme]);
+      void persistThemeChange(t, window.localStorage, backend).then(
+        (result) => {
+          if (version === explicitVersionRef.current) adoptTheme(result.theme);
+        },
+      );
+    },
+    [adoptTheme],
+  );
 
   const toggleTheme = useCallback(() => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");

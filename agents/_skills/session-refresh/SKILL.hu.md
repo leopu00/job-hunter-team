@@ -18,6 +18,7 @@ WIN_START=$(python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skill
 ROUND_ID=$(date -u +%Y%m%dT%H%M%SZ)
 DAY=$(date -u +%F)
 JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
+ROUND_HEADS_UP_SENT=0
 ```
 
 ## Step 1 — munkamenetek + kor listázása, sorrend eldöntése
@@ -70,6 +71,25 @@ Dönts a `$PCT` alapján (egy `24.9k/1m tokens (2%)` jellegű sorból kinyerve):
 - **`PCT` ≤ 50** → KIHAGYNI, **hacsak a TTL nem lépett életbe a Step 1.4-ben**. A TTL alatti munkamenetet NE hozd újra létre, még ha régi is. Naplózd: `action=skipped_lowctx` a mért `%`-kal. Lépj a következő munkamenetre.
 - **`PCT` > 50** → folytasd a frissítéssel (Step 2–7).
 - **a parancs nem renderelődött / a parse elbukott** → ess vissza a kor-heurisztikára (`age ≥ 40min` → frissítés), és naplózd: `ctx=unparsed`.
+
+## Step 1.6 — értesítsd egyszer a Capitanót az első frissítés előtt
+Csak akkor, amikor ez a kör kiválasztotta az első valódi frissítési célpontot
+(TTL vagy kontextus), értesítsd a Capitanót **a Step 2 előtt**. Ne ismételd meg
+minden agentnél, és ne küldd el, ha a kör csak kihagyásokat naplóz:
+```bash
+if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
+  if /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Indul a kontextusfrissítés: először a workerek, utoljára a koordinátorok, te pedig legutoljára. A befejezési jelentésig ne indíts rövid feladatokat."; then
+    ROUND_HEADS_UP_SENT=1
+  else
+    echo "A HEADS-UP kézbesítése sikertelen — a rich refresh megszakítása minden recreate előtt"
+    exit 1
+  fi
+fi
+```
+Ez koordináció, nem második scheduler és nem engedélykérés. A kör szekvenciális
+marad, a Capitano pedig a végéig aktív. A kézbesítés előfeltétel: a sender
+nem nulla exitje megszakítja a kört a capture/kill előtt; sikertelen heads-upot
+soha ne jelölj elküldöttként.
 
 ## Step 2 — munkamenetenként: capture (széles + lényegi)
 Egyszerre fogd be a TELJES scrollbacket, majd a lényegi sorokat — NE tölts több ezer sort a saját kontextusodba, grep-eld ki a kiemeléseket:

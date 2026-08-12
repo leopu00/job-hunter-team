@@ -10,6 +10,7 @@ import {
 } from "@/lib/cloud-sync/onboarding-milestones";
 import { mapYamlToCanonical, syncProfileToSupabase } from "@/lib/profile-sync";
 import {
+  invalidateStaleCriticVerdict,
   normalizeApplicationStatus,
   normalizeCriticVerdict,
   normalizePositionStatus,
@@ -124,6 +125,7 @@ interface ApplicationIn {
   critic_score?: number | null;
   critic_verdict?: string | null;
   critic_notes?: string | null;
+  critic_round?: number | null;
   written_at?: string | null;
   applied_at?: string | null;
   applied_via?: string | null;
@@ -407,6 +409,7 @@ export async function POST(req: NextRequest) {
   let tombstonesApplied = 0;
   let positionTransitionsUpserted = 0;
   const legacyToUuid = new Map<number, string>();
+  const appliedPositionIds = new Set<number>();
   // companies.id locale (int) → companies.id cloud (UUID). Popolata
   // dall'upsert companies, consumata dal mapping positions.company_id.
   const companyLegacyToUuid = new Map<number, string>();
@@ -486,134 +489,157 @@ export async function POST(req: NextRequest) {
 
     const payload = positions
       .filter((p) => typeof p.id === "number" && p.title && p.company)
-      .map((p) => ({
-        user_id: userId,
-        legacy_id: p.id,
-        title: p.title,
-        company: p.company,
-        // company_id (UUID cloud) risolto via companyLegacyToUuid; null se la
-        // company non è ancora sul cloud (degrada a "no Company card", si
-        // popola al prossimo push completo).
-        company_id:
-          p.company_id != null
-            ? (companyLegacyToUuid.get(p.company_id) ?? null)
-            : null,
-        url: p.url ?? null,
-        location: p.location ?? null,
-        remote_type: p.remote_type ?? null,
-        status: normalizePositionStatus(p.status),
-        notes: p.notes ?? null,
-        source: p.source ?? null,
-        jd_text: p.jd_text ?? null,
-        jd_summary: p.jd_summary ?? null,
-        requirements: p.requirements ?? null,
-        found_by: p.found_by ?? null,
-        found_at: p.found_at ?? null,
-        deadline: p.deadline ?? null,
-        last_checked: p.last_checked ?? null,
-        last_actor: p.last_actor ?? null,
-        // Metadati location/categoria (Parte B sync) — alimentano i grafici
-        // categoria/mappa della dashboard. Text/numeric: passthrough.
-        role_family: p.role_family ?? null,
-        loc_city: p.loc_city ?? null,
-        loc_region: p.loc_region ?? null,
-        loc_country: p.loc_country ?? null,
-        loc_country_code: p.loc_country_code ?? null,
-        loc_continent: p.loc_continent ?? null,
-        work_mode: p.work_mode ?? null,
-        work_country: p.work_country ?? null,
-        work_country_code: p.work_country_code ?? null,
-        location_notes: p.location_notes ?? null,
-        office_address: p.office_address ?? null,
-        office_lat: p.office_lat ?? null,
-        office_lon: p.office_lon ?? null,
-        // boolean: SQLite 0|1 → BOOLEAN (default false se assente), come write_requested.
-        is_multi_location:
-          p.is_multi_location == null
-            ? false
-            : typeof p.is_multi_location === "boolean"
-              ? p.is_multi_location
-              : p.is_multi_location === 1,
-        office_geocoded:
-          p.office_geocoded == null
-            ? false
-            : typeof p.office_geocoded === "boolean"
-              ? p.office_geocoded
-              : p.office_geocoded === 1,
-        office_verified:
-          p.office_verified == null
-            ? false
-            : typeof p.office_verified === "boolean"
-              ? p.office_verified
-              : p.office_verified === 1,
-        // Expiry/lifecycle (mig 038). is_open default TRUE (NOT NULL DEFAULT TRUE).
-        expires_at: p.expires_at ?? null,
-        is_open:
-          p.is_open == null
-            ? true
-            : typeof p.is_open === "boolean"
-              ? p.is_open
-              : p.is_open === 1,
-        last_open_check: p.last_open_check ?? null,
-        salary_declared_min: p.salary_declared_min ?? null,
-        salary_declared_max: p.salary_declared_max ?? null,
-        salary_declared_currency: p.salary_declared_currency ?? null,
-        salary_estimated_min: p.salary_estimated_min ?? null,
-        salary_estimated_max: p.salary_estimated_max ?? null,
-        salary_estimated_currency: p.salary_estimated_currency ?? null,
-        salary_estimated_source: p.salary_estimated_source ?? null,
-        // SQLite invia integer (0|1); Supabase ha BOOLEAN — coerce esplicito.
-        // Default FALSE quando il campo manca (compat con DB pre-V6 / pre-V8
-        // / push legacy).
-        write_requested:
-          p.write_requested == null
-            ? false
-            : typeof p.write_requested === "boolean"
-              ? p.write_requested
-              : p.write_requested === 1,
-        write_requested_at: p.write_requested_at ?? null,
-        geocode_requested:
-          p.geocode_requested == null
-            ? false
-            : typeof p.geocode_requested === "boolean"
-              ? p.geocode_requested
-              : p.geocode_requested === 1,
-        geocode_requested_at: p.geocode_requested_at ?? null,
-        // Recheck on-demand (mig 042). Flag user-driven default FALSE.
-        recheck_requested:
-          p.recheck_requested == null
-            ? false
-            : typeof p.recheck_requested === "boolean"
-              ? p.recheck_requested
-              : p.recheck_requested === 1,
-        recheck_requested_at: p.recheck_requested_at ?? null,
-        // Salary-precise on-demand (V9, mig 040). Flag user-driven default FALSE.
-        salary_precise_requested:
-          p.salary_precise_requested == null
-            ? false
-            : typeof p.salary_precise_requested === "boolean"
-              ? p.salary_precise_requested
-              : p.salary_precise_requested === 1,
-        salary_precise_requested_at: p.salary_precise_requested_at ?? null,
-        salary_precise: p.salary_precise ?? null,
-      }));
-
-    const { data: upserted, error } = await admin
-      .from("positions")
-      .upsert(payload, { onConflict: "user_id,legacy_id" })
-      .select("id, legacy_id");
-
-    if (error) {
-      return sanitizedError(error, {
-        status: 500,
-        scope: "cloud-sync/push",
-        publicMessage: "positions_upsert_failed",
+      .map((p) => {
+        const status = normalizePositionStatus(p.status);
+        if (status === "applied") appliedPositionIds.add(p.id);
+        return {
+          user_id: userId,
+          legacy_id: p.id,
+          title: p.title,
+          company: p.company,
+          // company_id (UUID cloud) risolto via companyLegacyToUuid; null se la
+          // company non è ancora sul cloud (degrada a "no Company card", si
+          // popola al prossimo push completo).
+          company_id:
+            p.company_id != null
+              ? (companyLegacyToUuid.get(p.company_id) ?? null)
+              : null,
+          url: p.url ?? null,
+          location: p.location ?? null,
+          remote_type: p.remote_type ?? null,
+          status,
+          notes: p.notes ?? null,
+          source: p.source ?? null,
+          jd_text: p.jd_text ?? null,
+          jd_summary: p.jd_summary ?? null,
+          requirements: p.requirements ?? null,
+          found_by: p.found_by ?? null,
+          found_at: p.found_at ?? null,
+          deadline: p.deadline ?? null,
+          last_checked: p.last_checked ?? null,
+          last_actor: p.last_actor ?? null,
+          // Metadati location/categoria (Parte B sync) — alimentano i grafici
+          // categoria/mappa della dashboard. Text/numeric: passthrough.
+          role_family: p.role_family ?? null,
+          loc_city: p.loc_city ?? null,
+          loc_region: p.loc_region ?? null,
+          loc_country: p.loc_country ?? null,
+          loc_country_code: p.loc_country_code ?? null,
+          loc_continent: p.loc_continent ?? null,
+          work_mode: p.work_mode ?? null,
+          work_country: p.work_country ?? null,
+          work_country_code: p.work_country_code ?? null,
+          location_notes: p.location_notes ?? null,
+          office_address: p.office_address ?? null,
+          office_lat: p.office_lat ?? null,
+          office_lon: p.office_lon ?? null,
+          // boolean: SQLite 0|1 → BOOLEAN (default false se assente), come write_requested.
+          is_multi_location:
+            p.is_multi_location == null
+              ? false
+              : typeof p.is_multi_location === "boolean"
+                ? p.is_multi_location
+                : p.is_multi_location === 1,
+          office_geocoded:
+            p.office_geocoded == null
+              ? false
+              : typeof p.office_geocoded === "boolean"
+                ? p.office_geocoded
+                : p.office_geocoded === 1,
+          office_verified:
+            p.office_verified == null
+              ? false
+              : typeof p.office_verified === "boolean"
+                ? p.office_verified
+                : p.office_verified === 1,
+          // Expiry/lifecycle (mig 038). is_open default TRUE (NOT NULL DEFAULT TRUE).
+          expires_at: p.expires_at ?? null,
+          is_open:
+            p.is_open == null
+              ? true
+              : typeof p.is_open === "boolean"
+                ? p.is_open
+                : p.is_open === 1,
+          last_open_check: p.last_open_check ?? null,
+          salary_declared_min: p.salary_declared_min ?? null,
+          salary_declared_max: p.salary_declared_max ?? null,
+          salary_declared_currency: p.salary_declared_currency ?? null,
+          salary_estimated_min: p.salary_estimated_min ?? null,
+          salary_estimated_max: p.salary_estimated_max ?? null,
+          salary_estimated_currency: p.salary_estimated_currency ?? null,
+          salary_estimated_source: p.salary_estimated_source ?? null,
+          // SQLite invia integer (0|1); Supabase ha BOOLEAN — coerce esplicito.
+          // Default FALSE quando il campo manca (compat con DB pre-V6 / pre-V8
+          // / push legacy).
+          write_requested:
+            p.write_requested == null
+              ? false
+              : typeof p.write_requested === "boolean"
+                ? p.write_requested
+                : p.write_requested === 1,
+          write_requested_at: p.write_requested_at ?? null,
+          geocode_requested:
+            p.geocode_requested == null
+              ? false
+              : typeof p.geocode_requested === "boolean"
+                ? p.geocode_requested
+                : p.geocode_requested === 1,
+          geocode_requested_at: p.geocode_requested_at ?? null,
+          // Recheck on-demand (mig 042). Flag user-driven default FALSE.
+          recheck_requested:
+            p.recheck_requested == null
+              ? false
+              : typeof p.recheck_requested === "boolean"
+                ? p.recheck_requested
+                : p.recheck_requested === 1,
+          recheck_requested_at: p.recheck_requested_at ?? null,
+          // Salary-precise on-demand (V9, mig 040). Flag user-driven default FALSE.
+          salary_precise_requested:
+            p.salary_precise_requested == null
+              ? false
+              : typeof p.salary_precise_requested === "boolean"
+                ? p.salary_precise_requested
+                : p.salary_precise_requested === 1,
+          salary_precise_requested_at: p.salary_precise_requested_at ?? null,
+          salary_precise: p.salary_precise ?? null,
+        };
       });
-    }
 
-    positionsUpserted = upserted?.length ?? 0;
-    for (const row of upserted ?? []) {
-      if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
+    const regularPayload = payload.filter((p) => p.status !== "applied");
+    const deferredAppliedPayload = payload
+      .filter((p) => p.status === "applied")
+      .map((p) => {
+        const { status, ...deferred } = p;
+        if (status !== "applied") throw new Error("unreachable_status");
+        return deferred;
+      });
+    for (const batch of [
+      { rows: regularPayload, defaultToNull: true },
+      { rows: deferredAppliedPayload, defaultToNull: false },
+    ]) {
+      if (batch.rows.length === 0) continue;
+      // Su INSERT lo status assente usa il default `new`; su UPDATE resta
+      // quello corrente. Solo l'RPC dopo applications pubblica `applied`.
+      const { data: upserted, error } = await admin
+        .from("positions")
+        .upsert(batch.rows, {
+          onConflict: "user_id,legacy_id",
+          defaultToNull: batch.defaultToNull,
+        })
+        .select("id, legacy_id");
+
+      if (error) {
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "positions_upsert_failed",
+        });
+      }
+
+      positionsUpserted += upserted?.length ?? 0;
+      for (const row of upserted ?? []) {
+        if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
+      }
     }
   }
 
@@ -662,23 +688,57 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 3. Upsert applications via position_id UUID
-  if (applications.length > 0 && legacyToUuid.size > 0) {
+  // 3. Upsert applications via position_id UUID. Nei delta storici il figlio
+  // può arrivare senza la position: risolviamo anche quel legame, invece di
+  // scartare la riga e lasciare avanzare il cursore come se fosse persistita.
+  if (applications.length > 0) {
+    const needsLookup = new Set<number>();
+    for (const application of applications) {
+      if (
+        typeof application.position_id === "number" &&
+        !legacyToUuid.has(application.position_id)
+      ) {
+        needsLookup.add(application.position_id);
+      }
+    }
+    if (needsLookup.size > 0) {
+      const { data: rows, error } = await admin
+        .from("positions")
+        .select("id, legacy_id")
+        .eq("user_id", userId)
+        .in("legacy_id", Array.from(needsLookup));
+      if (error) {
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "application_positions_lookup_failed",
+        });
+      }
+      for (const row of rows ?? []) {
+        if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
+      }
+    }
+
     const payload = applications
       .map((a) => {
         const uuid = legacyToUuid.get(a.position_id);
         if (!uuid) return null;
-        return {
+        const status = normalizeApplicationStatus(a.status);
+        if (status === "applied") appliedPositionIds.add(a.position_id);
+        return invalidateStaleCriticVerdict({
           user_id: userId,
           position_id: uuid,
           cv_path: a.cv_path ?? null,
           cv_pdf_path: a.cv_pdf_path ?? null,
           cl_path: a.cl_path ?? null,
           cl_pdf_path: a.cl_pdf_path ?? null,
-          status: normalizeApplicationStatus(a.status),
+          status,
           critic_score: a.critic_score ?? null,
           critic_verdict: normalizeCriticVerdict(a.critic_verdict),
           critic_notes: a.critic_notes ?? null,
+          // `undefined` resta assente per i client pre-O-64 e non cancella il
+          // round cloud; i client aggiornati inviano invece number o null.
+          critic_round: a.critic_round,
           written_at: a.written_at ?? null,
           applied_at: a.applied_at ?? null,
           applied_via: a.applied_via ?? null,
@@ -690,15 +750,21 @@ export async function POST(req: NextRequest) {
           applied: a.applied ?? null,
           cv_drive_id: a.cv_drive_id ?? null,
           cl_drive_id: a.cl_drive_id ?? null,
-        };
+        });
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (payload.length > 0) {
-      const { data: upserted, error } = await admin
-        .from("applications")
-        .upsert(payload, { onConflict: "position_id" })
-        .select("id");
+      // L'RPC prende il lock della position prima di valutare l'application.
+      // Un push stale non può quindi retrocedere la candidatura dopo che una
+      // mark_position_applied concorrente l'ha resa visibile come applied.
+      const { data: upserted, error } = await admin.rpc(
+        "sync_upsert_applications",
+        {
+          p_user_id: userId,
+          p_applications: payload,
+        },
+      );
 
       if (error) {
         return sanitizedError(error, {
@@ -707,7 +773,24 @@ export async function POST(req: NextRequest) {
           publicMessage: "applications_upsert_failed",
         });
       }
-      applicationsUpserted = upserted?.length ?? 0;
+      applicationsUpserted = typeof upserted === "number" ? upserted : 0;
+    }
+  }
+
+  // Il solo passo che rende la posizione visibile nel filtro applied avviene
+  // dopo l'application. L'RPC controlla sotto lock status, flag, timestamp e
+  // canale; se uno manca, fallisce e il client non avanza il cursore.
+  if (appliedPositionIds.size > 0) {
+    const { error } = await admin.rpc("sync_confirm_positions_applied", {
+      p_user_id: userId,
+      p_position_legacy_ids: Array.from(appliedPositionIds),
+    });
+    if (error) {
+      return sanitizedError(error, {
+        status: 500,
+        scope: "cloud-sync/push",
+        publicMessage: "application_state_invariant_failed",
+      });
     }
   }
 

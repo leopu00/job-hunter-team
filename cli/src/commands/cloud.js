@@ -27,6 +27,14 @@ import {
 import {
   decideBootstrapRestore, readLocalPositionsCount,
 } from '../lib/bootstrap-restore.js';
+import {
+  periodicPushLimits,
+  periodicPushObservation,
+  periodicPushStatusLine,
+  readPeriodicPushState,
+  runPeriodicPushCycle,
+  savePeriodicPushState,
+} from '../lib/periodic-push.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
@@ -483,14 +491,20 @@ async function handleRestore(options) {
       }
       outOfRange = summarizeOutOfRange(restoredScores);
 
+      // O-64 ha reso critic_round parte dello stato locale del Critico. Un
+      // restore puo' partire da un jobs.db creato dall'immagine precedente:
+      // allineiamo solo lo schema, senza modificare righe esistenti.
+      if (!sqliteHasColumn(db, 'applications', 'critic_round')) {
+        db.exec('ALTER TABLE applications ADD COLUMN critic_round INTEGER');
+      }
       const appStmt = db.prepare(`
         INSERT OR REPLACE INTO applications (
           position_id, cv_path, cv_pdf_path, cl_path, cl_pdf_path,
-          status, critic_score, critic_verdict, critic_notes,
+          status, critic_score, critic_verdict, critic_notes, critic_round,
           written_at, applied_at, applied_via, response, response_at,
           written_by, reviewed_by, critic_reviewed_at, applied,
           cv_drive_id, cl_drive_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const a of cloudApps) {
         const legacy = uuidToLegacy.get(a.position_id);
@@ -498,7 +512,8 @@ async function handleRestore(options) {
         appStmt.run(
           legacy,
           a.cv_path ?? null, a.cv_pdf_path ?? null, a.cl_path ?? null, a.cl_pdf_path ?? null,
-          a.status ?? null, a.critic_score ?? null, a.critic_verdict ?? null, a.critic_notes ?? null,
+          a.status ?? null, a.critic_score ?? null, a.critic_verdict ?? null,
+          a.critic_notes ?? null, a.critic_round ?? null,
           a.written_at ?? null, a.applied_at ?? null, a.applied_via ?? null,
           a.response ?? null, a.response_at ?? null,
           a.written_by ?? null, a.reviewed_by ?? null, a.critic_reviewed_at ?? null,
@@ -966,6 +981,17 @@ async function handleStatus() {
   console.log(pc.dim('  Version:      ') + identity.version);
   console.log(pc.dim('  Platform:     ') + identity.platform);
   console.log(pc.dim('  Capabilities: ') + identity.capabilities.join(', '));
+
+  const periodic = readPeriodicPushState();
+  console.log('');
+  console.log(pc.dim('Automatic full push: ') + periodicPushStatusLine(periodic));
+  if (periodic.consecutive_failures > 0) {
+    console.log(
+      pc.yellow(
+        `  ${periodic.consecutive_failures} consecutive failure(s); the daemon retries automatically.`,
+      ),
+    );
+  }
 }
 
 function readSqliteTable(db, table, columns) {
@@ -1272,13 +1298,19 @@ async function performPush(options) {
         'stack_match', 'remote_fit', 'strategic_fit', 'breakdown', 'notes',
         'scored_by', 'scored_at',
       ], cursor.scores);
-      applications = readSqliteTableDelta(db, 'applications', [
+      const applicationCols = [
         'position_id', 'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
         'status', 'critic_score', 'critic_verdict', 'critic_notes',
         'written_at', 'applied_at', 'applied_via', 'response', 'response_at',
         'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',
         'cv_drive_id', 'cl_drive_id',
-      ], cursor.applications);
+      ];
+      // Compatibilita' con un DB che non e' ancora passato da ensure_schema:
+      // il push continua con i campi disponibili e non rompe il daemon.
+      if (sqliteHasColumn(db, 'applications', 'critic_round')) {
+        applicationCols.push('critic_round');
+      }
+      applications = readSqliteTableDelta(db, 'applications', applicationCols, cursor.applications);
       // Companies + position_highlights (mig 046): erano OMESSE dal push →
       // Company card e blocchi Pro/Contro sempre vuoti sul cloud. `id` (int
       // locale) → legacy_id cloud; il server risolve le FK (positions.company_id,
@@ -1544,10 +1576,11 @@ async function performPush(options) {
     return x < y ? -1 : x > y ? 1 : 0;
   };
 
-  // Bundle position→figli: scores/applications/highlights DEVONO viaggiare
-  // nello stesso POST della loro position (il server risolve position_id via
-  // legacyToUuid costruita SOLO dalle positions in-request — nessun lookup di
-  // fallback per scores/applications, vedi route push §2/§3).
+  // Bundle position→figli: evita lookup cloud e conserva una sola conferma
+  // HTTP per la famiglia. Scores richiede ancora la position nello stesso
+  // request; applications e highlights hanno anche un lookup server-side.
+  // Per applications è obbligatorio: perderla può rendere visibile uno
+  // status applied senza timestamp.
   const scoresByPos = groupBy(scores, 'position_id');
   const appsByPos = groupBy(applications, 'position_id');
   const hlByPos = groupBy(highlights, 'position_id');
@@ -1559,10 +1592,9 @@ async function performPush(options) {
     hls: hlByPos.get(p.id) || [],
   }));
   // Figli "orfani": la loro position non è nel delta di questo tick (position
-  // invariata ma figlio cambiato). Il server li scarterebbe comunque (come nel
-  // push monolitico odierno: position_id non risolvibile → drop), ma li
-  // inviamo lo stesso perché il cursore avanzi coerentemente col comportamento
-  // attuale. Vengono spediti con positions:[] → 200, 0 upsert, cursore avanza.
+  // invariata ma figlio cambiato). Scores mantiene il contratto storico;
+  // applications/highlights vengono risolte dal server via legacy_id. La
+  // prima deve risultare davvero persistita prima che il cursore avanzi.
   const orphanScores = scores.filter((s) => !posIds.has(s.position_id));
   const orphanApps = applications.filter((a) => !posIds.has(a.position_id));
   const orphanHls = highlights.filter((h) => !posIds.has(h.position_id));
@@ -1587,7 +1619,8 @@ async function performPush(options) {
   const sentHls = posRes.confirmed.flatMap((b) => b.hls);
   const skipHls = posRes.skipped.flatMap((b) => b.hls);
 
-  // 3) Figli orfani (positions:[] → dropped server-side, cursore avanza).
+  // 3) Figli orfani. Applications/highlights hanno lookup server-side; scores
+  // conserva il comportamento legacy finché il suo contratto non cambia.
   const oSco = await sendChunked(orphanScores.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], scores: r }));
   const oApp = await sendChunked(orphanApps.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], applications: r }));
   const oHl = await sendChunked(orphanHls.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], position_highlights: r }));
@@ -1669,7 +1702,7 @@ async function performPush(options) {
 // entrambi passano da questa coda e non possono sovrapporre lettura cursor,
 // upload e avanzamento cursor. Non è un secondo scheduler e non assembla un
 // secondo payload: `performPush` resta l'unico producer.
-const handlePush = createExclusiveRunner(performPush);
+export const handlePush = createExclusiveRunner(performPush);
 
 /**
  * Decodifica un pairing-token base64 generato da
@@ -2389,6 +2422,15 @@ async function handleTicketSync(options = {}) {
     }
     if (pullResult && Array.isArray(pullResult.tickets)) {
       const findByCloud = db.prepare('SELECT id FROM position_tickets WHERE cloud_id = ?');
+      const findActiveRescore = db.prepare(
+        `SELECT id, cloud_id FROM position_tickets
+         WHERE position_id = ? AND kind = 'rescore'
+           AND status IN ('open','assigned')
+         ORDER BY created_at ASC, id ASC LIMIT 1`
+      );
+      const linkActiveRescore = db.prepare(
+        'UPDATE position_tickets SET cloud_id = ? WHERE id = ? AND cloud_id IS NULL'
+      );
       const posExists = db.prepare('SELECT 1 FROM positions WHERE id = ?');
       const ins = db.prepare(
         `INSERT INTO position_tickets (position_id, request_text, kind, status, cloud_id, created_at)
@@ -2419,6 +2461,16 @@ async function handleTicketSync(options = {}) {
           cursorFrozen = true;
           continue;
         }
+        if (ct.kind === 'rescore') {
+          // Stessa richiesta nata offline su entrambe le superfici: conserva
+          // una sola riga attiva e collegala all'identità cloud canonica.
+          const active = findActiveRescore.get(posId);
+          if (active) {
+            if (active.cloud_id == null) linkActiveRescore.run(cloudId, active.id);
+            if (!cursorFrozen && ct.created_at) safeCursor = ct.created_at;
+            continue;
+          }
+        }
         ins.run(posId, ct.request_text || '', ct.kind || 'custom', cloudId, ct.created_at || null);
         imported++;
         importedTickets.push({ cloudId, posId, request: ct.request_text || '' });
@@ -2447,20 +2499,23 @@ async function handleTicketSync(options = {}) {
           body: JSON.stringify({ tickets: rows }),
         });
         const pb = await res.json().catch(() => ({}));
+        // Anche un batch non-2xx può contenere INSERT confermati prima della
+        // prima riga fallita. Correlali subito: il cursore resta fermo, ma al
+        // retry quelle righe partiranno come UPDATE per cloud_id invece di
+        // essere inserite una seconda volta (custom non ha UNIQUE naturale).
+        if (pb.id_map && typeof pb.id_map === 'object') {
+          const setCloud = db.prepare('UPDATE position_tickets SET cloud_id = ? WHERE id = ?');
+          for (const [localId, cloudId] of Object.entries(pb.id_map)) {
+            const ci = Number(cloudId);
+            const li = Number(localId);
+            if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
+          }
+        }
         if (!res.ok) {
           console.error(pc.yellow(`  ticket push warn: HTTP ${res.status} ${pb.error || ''}`));
         } else {
           pushedUpdates = pb.updated || 0;
           pushedInserts = pb.inserted || 0;
-          // write-back dei cloud_id sugli INSERT → chiude la correlazione.
-          if (pb.id_map && typeof pb.id_map === 'object') {
-            const setCloud = db.prepare('UPDATE position_tickets SET cloud_id = ? WHERE id = ?');
-            for (const [localId, cloudId] of Object.entries(pb.id_map)) {
-              const ci = Number(cloudId);
-              const li = Number(localId);
-              if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
-            }
-          }
           // avanza push cursor = MAX(updated_at) tra le righe inviate.
           let maxU = cursor.push_since || null;
           for (const r of rows) {
@@ -3064,6 +3119,7 @@ export async function handleChatSync(options = {}) {
       queued: queue.count,
       oldestQueuedAt: queue.oldest,
       deliverFailed: sent.failed,
+      uncertain: queue.uncertain,
     }));
 
     const moved = ingested.inserted + mirrored.mirrored + sent.delivered + pushed;
@@ -3079,13 +3135,15 @@ export async function handleChatSync(options = {}) {
     return {
       status: readError
         ? readError
-        : sent.failed > 0
-          ? 'delivery_pending'
-          : ackFailed
-            ? 'ack_failed'
-            : pending && !acked
-              ? 'delivery_pending'
-              : 'completed',
+        : queue.uncertain > 0
+          ? 'delivery_uncertain'
+          : sent.failed > 0
+            ? 'delivery_pending'
+            : ackFailed
+              ? 'ack_failed'
+              : pending && !acked
+                ? 'delivery_pending'
+                : 'completed',
       pending: !!pending,
       imported: importedIds.length,
       delivered: sent.delivered,
@@ -3333,6 +3391,78 @@ async function maybeBootstrapPush(options = {}) {
 }
 
 /**
+ * Push automatico a regime (O-66). La policy legge soltanto una firma locale;
+ * quando trova modifiche entra nello STESSO `handlePush` di bootstrap e
+ * "Sync now", già serializzato da `createExclusiveRunner`.
+ */
+export async function maybePeriodicPush(options = {}) {
+  const silent = options.silent === true;
+  const now = options.now ?? Date.now();
+  const limits = options.limits || periodicPushLimits();
+  const state = options.state || readPeriodicPushState(options.statePath);
+  const readSignature = options.readSignature || (async () => {
+    let DatabaseSync = null;
+    try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* Node < 22.5 */ }
+    return DatabaseSync
+      ? readLocalSignature(DatabaseSync, options.db || JHT_DB_PATH, options.profilePath || PROFILE_YAML_PATH)
+      : null;
+  });
+  const save = options.save || ((next) => savePeriodicPushState(next, options.statePath));
+  const pushFn = options.pushFn || handlePush;
+
+  const outcome = await runPeriodicPushCycle({
+    now, limits, state, readSignature, save, signal: options.signal,
+    push: async ({ signal }) => {
+      const prev = process.exitCode;
+      process.exitCode = 0;
+      try {
+        return await pushFn({ ...(options.db ? { db: options.db } : {}), signal });
+      } finally {
+        process.exitCode = prev;
+      }
+    },
+  });
+
+  // Il browser non può vedere la firma SQLite. Pubblica soltanto l'esito
+  // minimale del controllo, così distingue "nessuna novità" da "daemon
+  // indietro" senza contatori, titoli o altri dati locali.
+  const observation = periodicPushObservation(outcome);
+  if (observation && options.publishObservation !== false) {
+    const publish = typeof options.publishObservation === 'function'
+      ? options.publishObservation
+      : async (value) => {
+        const config = options.config || (await loadCloudConfig());
+        if (!config?.enabled) return false;
+        // Passa dalla route token (non dal direct reader): lì vive il gate
+        // active_device. Un vecchio box ancora acceso non può sovrascrivere
+        // l'osservazione pubblicata dal device che possiede il claim.
+        try {
+          const res = await (options.fetchFn || fetch)(
+            `${(config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '')}/api/team-state`,
+            {
+              method: 'PATCH',
+              headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
+              signal: AbortSignal.timeout(10_000),
+              body: JSON.stringify(value),
+            }
+          );
+          return res.ok;
+        } catch {
+          return false;
+        }
+      };
+    outcome.observationPublished = await publish(observation);
+  }
+
+  if (!silent && outcome.result && outcome.result.ok !== true) {
+    console.error(pc.yellow(
+      `  periodic-push ${outcome.state?.status || 'failed'}; retry automatico (${outcome.state?.consecutive_failures || 1} fallimenti consecutivi).`
+    ));
+  }
+  return outcome;
+}
+
+/**
  * Inserisce un messaggio in pending_user_messages locale. Best-effort:
  * usato dal killswitch del daemon per notificare l'utente quando il token
  * è revocato. Il push delta-only normalmente propaga questa tabella in
@@ -3391,7 +3521,7 @@ async function handleDaemon(options) {
     return;
   }
 
-  console.log(pc.dim(`Cloud sync daemon: user readings→team every ${intervalSec}s (Supabase) + push on-demand su "Sync now" → ${config.base_url}`));
+  console.log(pc.dim(`Cloud sync daemon: user readings→team every ${intervalSec}s (Supabase) + automatic full push bounded + "Sync now" → ${config.base_url}`));
 
   let running = true;
   const shutdown = (sig) => {
@@ -3409,10 +3539,10 @@ async function handleDaemon(options) {
   // (vedi docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md). Logghiamo
   // ogni 10 tick per evitare spam ma confermare che il daemon e' vivo.
   let haltSkipCount = 0;
-  // [PUSH ON-DEMAND 2026-06-25] Niente push automatico per-tick: la dashboard cloud
-  // si aggiorna SOLO quando l'utente preme "Sync now" (sync_requested_at →
-  // handleSyncRendezvous → handlePush). Niente killswitch su push periodico (non
-  // esiste più): gli errori del push on-demand sono best-effort.
+  // Il push automatico NON gira a ogni tick: la policy O-66 calcola la firma
+  // locale al massimo ogni 15 minuti (retry a 1 minuto dopo un errore) e usa
+  // lo stesso `handlePush` del rendezvous. Il fast loop resta una sola lettura
+  // economica di team_state.
   //
   // Cadenza a DUE velocità: il CHECK del flag "Sync now" gira VELOCE (~5s, lettura
   // di 1 riga su Supabase ≈ gratis) così il pulsante risponde in pochi secondi; le
@@ -3533,6 +3663,15 @@ async function handleDaemon(options) {
           await maybeBootstrapPush({ silent: false });
         } catch (err) {
           console.error(pc.yellow(`  daemon bootstrap-push error: ${err.message}`));
+        }
+
+        // ── Push automatico a regime (O-66) ──
+        // La firma evita traffico quando nulla è cambiato; timeout, retry e
+        // ultimo esito sono persistiti e leggibili da `jht cloud status`.
+        try {
+          await maybePeriodicPush({ silent: false, config });
+        } catch (err) {
+          console.error(pc.yellow(`  daemon periodic-push error: ${err.message}`));
         }
       }
     }
@@ -3681,6 +3820,8 @@ async function runRealtimeLoop({ config, isRunning }) {
     // NESSUNO chiede nulla — quindi vive sul tick, con la sua cadenza interna.
     try { await maybeBootstrapPush({ silent: false }); }
     catch (e) { console.error(pc.yellow(`  bootstrap-push error: ${e.message}`)); }
+    try { await maybePeriodicPush({ silent: false, config }); }
+    catch (e) { console.error(pc.yellow(`  periodic-push error: ${e.message}`)); }
 
     tick += 1;
     await sleepTick();

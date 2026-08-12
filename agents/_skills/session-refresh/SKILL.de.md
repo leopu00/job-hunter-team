@@ -18,6 +18,7 @@ WIN_START=$(python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skill
 ROUND_ID=$(date -u +%Y%m%dT%H%M%SZ)
 DAY=$(date -u +%F)
 JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
+ROUND_HEADS_UP_SENT=0
 ```
 
 ## Schritt 1 — Sitzungen + Alter auflisten, Reihenfolge entscheiden
@@ -70,6 +71,25 @@ Entscheide anhand von `$PCT` (geparst aus einer Zeile wie `24.9k/1m tokens (2%)`
 - **`PCT` ≤ 50** → ÜBERSPRINGEN, **außer das TTL hat in Schritt 1.4 ausgelöst**. Eine Sitzung unterhalb des TTL NICHT neu erstellen, auch wenn sie alt ist. Logge `action=skipped_lowctx` mit der gemessenen `%`. Gehe zur nächsten Sitzung.
 - **`PCT` > 50** → fahre mit dem Refresh fort (Schritte 2–7).
 - **Befehl wurde nicht gerendert / Parsing fehlgeschlagen** → Rückfall auf die Alters-Heuristik (`age ≥ 40min` → Refresh) und logge `ctx=unparsed`.
+
+## Schritt 1.6 — den Capitano einmal vor dem ersten Refresh informieren
+Erst wenn diese Runde ihr erstes echtes Refresh-Ziel gewählt hat (TTL oder
+Kontext), den Capitano **vor Schritt 2** informieren. Nicht für jeden Agenten
+wiederholen und nicht senden, wenn die Runde nur Skips protokollieren wird:
+```bash
+if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
+  if /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Context-Refresh beginnt: Worker zuerst, Koordinatoren zuletzt, du ganz zuletzt. Starte bis zum Abschlussbericht keine kurzlebigen Aufträge."; then
+    ROUND_HEADS_UP_SENT=1
+  else
+    echo "HEADS-UP-Zustellung fehlgeschlagen — Rich-Refresh vor jedem Recreate abbrechen"
+    exit 1
+  fi
+fi
+```
+Das ist Koordination, kein zweiter Scheduler und keine Bitte um Erlaubnis. Die
+Runde bleibt sequenziell und der Capitano bleibt bis zum Ende aktiv. Die
+Zustellung ist eine Vorbedingung: Ein Sender-Exit ungleich null bricht die Runde
+vor Capture/Kill ab; ein fehlgeschlagenes Heads-up nie als gesendet markieren.
 
 ## Schritt 2 — pro Sitzung: Erfassung (breit + relevant)
 Erfasse den GESAMTEN Scrollback einmal, dann die relevanten Zeilen — lade NICHT Tausende von Zeilen in deinen eigenen Kontext, grep die Highlights:

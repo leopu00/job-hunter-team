@@ -106,6 +106,12 @@ NOT_APPLICABLE = {
 # Verbi scoperti e ancora senza controparte: ognuno con il tag che li traccia.
 # Svuotare questo dizionario è il lavoro; finché non è vuoto, almeno è scritto.
 KNOWN_GAPS = {
+    # Il desktop propaga la preferenza canonica al runtime con questo verbo,
+    # ma `jht` non espone ancora un comando lingua equivalente. Classificarlo
+    # come UI nasconderebbe una vera scrittura di stato condiviso.
+    'save_ui_language':
+        "preferenza lingua canonica: manca il comando CLI equivalente "
+        "— [WIN-TWO-SOURCES-OF-TRUTH-FOR-LANGUAGE]",
     # Stavano in COVERED, mappati su `stats`. Ma `jht stats` legge
     # `tasks.json`, `analytics.json` e `sessions.json`, che nessuno scrive più
     # da quando la TUI è stata rimossa (2026-07-25): rispondeva zeri, e il
