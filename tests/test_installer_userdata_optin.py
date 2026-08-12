@@ -27,9 +27,9 @@ REPO = Path(__file__).resolve().parent.parent
 NSI = REPO / "game" / "installer" / "windows.nsi"
 SMOKE = REPO / "scripts" / "build-windows-installer.ps1"
 
-# I percorsi che contengono roba dell'utente. Il primo è `user://` di Godot
-# (il gioco non imposta use_custom_user_dir), il secondo l'app Electron di
-# prima.
+# I percorsi che contengono roba dell'utente. Il primo è il `user://` Windows
+# storico, ora fissato dallo stesso valore in project.godot; il secondo è
+# l'app Electron di prima.
 USERDATA_TOKENS = ("app_userdata", "JHT Desktop")
 
 
