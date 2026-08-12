@@ -136,6 +136,9 @@ describe("CLI host wizard — local e VPS sono host reali", () => {
   });
 
   it("su VPS il pairing cloud resta una copia facoltativa, non un gate", () => {
+    const historicalOnboarding = read(
+      "docs/internal/architecture/onboarding-flow.md",
+    );
     expect(cliSetup).toContain("wizard.cloud.enable_prompt");
     expect(cliSetup).not.toContain("await prompter.outro(t('wizard.cloud.pairing_failed'))");
     expect(cliSetup.indexOf("wizard.cloud.pairing_failed")).toBeLessThan(
@@ -143,6 +146,12 @@ describe("CLI host wizard — local e VPS sono host reali", () => {
     );
     expect(read("docs/guides/VPS-SETUP.md")).toContain(
       "Skipping or failing cloud pairing does not block the",
+    );
+    expect(historicalOnboarding).toContain(
+      "Saltarlo o fallirlo non blocca",
+    );
+    expect(historicalOnboarding).not.toMatch(
+      /VPS[^\n]{0,40}(?:sync|cloud)[^\n]{0,40}(?:obbligatorio|strutturalmente obbligatorio)/i,
     );
     for (const locale of LOCALES) {
       const catalog = JSON.parse(

@@ -1,7 +1,11 @@
 # 🚪 Onboarding flow JHT
 
-**Data**: 2026-05-13
-**Stato**: design lock — sequenza ufficiale di onboarding utente.
+**Data**: 2026-05-13 · aggiornato 2026-08-12
+**Stato**: record storico del design originario. Per il comportamento corrente
+di host e cloud vale
+[`2026-08-12-execution-host-vocabulary-contract.md`](../2026-08-12-execution-host-vocabulary-contract.md):
+PC locale e VPS sono host del runtime, mentre la sincronizzazione cloud è
+separata e facoltativa su entrambi.
 
 > Cross-cutting tra `bot-telegram.md` (tutti 3 obbligatori), `vps.md` (path VPS), e `[JHT-DESKTOP-LOGIN]`/`[JHT-DESKTOP-SYNC]` (sync Supabase). Doc dedicato perché tocca tutti e tre.
 
@@ -23,7 +27,11 @@ Per chi usa già Claude Code/OpenClaw/Codex. L'AI agent dell'utente guida il set
 
 ---
 
-## 📋 Sequenza canonica (desktop app)
+## 📋 Sequenza originaria (desktop app)
+
+La sequenza seguente conserva il contesto del design 2026-05-13. Non è un
+runbook corrente: in particolare JHT non provisiona più una VPS e account
+cloud e Telegram non sono prerequisiti del runtime.
 
 ```
 1. 🏁  Splash + privacy notice
@@ -34,8 +42,8 @@ Per chi usa già Claude Code/OpenClaw/Codex. L'AI agent dell'utente guida il set
 
 3. ☁️  Login Supabase
        ├─ Local PC: opt-in (toggle anytime da settings)
-       │            → abilita sync dashboard cloud + multi-device
-       └─ VPS:      OBBLIGATORIO (serve per cloud sync + pairing)
+       └─ VPS:      opt-in separato dal collegamento SSH
+                    → abilita copia dati supportati + vista cloud
 
 4. 🤖  Telegram bot — 3 token BotFather
        (Assistente + Capitano + Mentor, tutti obbligatori)
@@ -49,12 +57,9 @@ Per chi usa già Claude Code/OpenClaw/Codex. L'AI agent dell'utente guida il set
        ├─ App genera SSH keypair locale (passphrase opzionale)
        │  └─ se utente la setta, app la salva in keychain OS
        ├─ Utente: copia pubkey → Hetzner → crea VPS → paste IP nell'app
-       ├─ App: ssh → curl install.sh --pairing-token <token-da-supabase-session>
-       │  └─ pairing token derivato dalla session Supabase già attiva → niente
-       │     `jht cloud login` interattivo dentro la VPS, OAuth fatto una volta sola
-       │  └─ install.sh chiama `jht cloud pair --token <t>` che hit
-       │     POST /api/cloud-sync/device-register su Supabase
-       │     (merge dev2, commit `61a544aa` + `a4112d10`)
+       ├─ App: ssh → install.sh sulla VPS
+       │  ├─ con sync opt-in: pairing token dalla sessione Supabase
+       │  └─ senza sync: nessun token cloud; il controllo resta via SSH
        └─ Reclaim "ho già la VPS": paste IP, app verifica match SSH key
 
 7. 🔑  Provider AI login              ←── ULTIMO, sul host finale
@@ -98,10 +103,12 @@ Generare il token direttamente sul host finale = zero migrazione, zero stato int
 
 ### Sync separato dal path
 
-Il vincolo "VPS → sync obbligatorio" deriva da una necessità tecnica (cloud sync per pairing/recovery), non da una scelta di prodotto. In Local mode il sync è **puramente UX** (vuoi vedere la dashboard anche da altri device?), quindi:
-- Opt-in durante onboarding (mostra valore: "dashboard sincronizzata cloud, accesso da telefono/altro PC")
+Il runtime non dipende dal cloud: il PC locale gira direttamente e la VPS è
+controllata via SSH. Su entrambi gli host il sync è **puramente UX** (vuoi
+copiare i dati supportati nella dashboard accessibile da altri device?), quindi:
+- Opt-in durante onboarding (mostra il valore reale: copia dati supportati e vista cloud)
 - Toggle accessibile **sempre** da settings, non solo in onboarding
-- L'utente Local può abilitare/disabilitare quando vuole senza riconfigurare il team
+- L'utente può abilitarlo/disabilitarlo senza cambiare l'host o riconfigurare il team
 
 ### AI-agent path solo CLI
 
@@ -111,7 +118,7 @@ Doppio canale di guida (AI agent + desktop app) confonde. Chi usa un AI agent pe
 
 ## 🔄 Toggle sync post-onboarding
 
-L'utente Local PC che dopo X giorni vuole abilitare sync:
+L'utente che dopo X giorni vuole abilitare sync, su PC locale o VPS:
 
 ```
 Settings → Cloud sync → "Abilita sync con il cloud"
@@ -145,11 +152,13 @@ L'utente:
 
 ## 🔒 Decisioni lockate (2026-05-13 sera)
 
-### Sync nel Path 2 (VPS) — **non disabilitabile**
+### Sync nel Path 2 (VPS) — decisione superata il 2026-08-12
 
-In modalità VPS, il sync con Supabase è **strutturalmente obbligatorio** e non può essere spento dopo l'onboarding: senza sync il pairing CLI ↔ web si rompe, la dashboard cloud non vede più nulla, il fallback "Telegram down → cloud sync" non funziona. È un'invariante architetturale del Path 2, non una preferenza utente. Niente toggle in settings.
-
-In Path 1 (Local PC), il sync resta opt-in e toggleable a piacere (vedi sopra).
+Il vecchio design usava Supabase come prerequisito del Path 2. Il contratto
+corrente separa i piani: la VPS ospita il runtime ed è controllata via SSH;
+il pairing cloud copia soltanto i dati supportati ed è opt-in, disabilitabile
+e ripetibile in seguito con `jht cloud login`. Saltarlo o fallirlo non blocca
+la configurazione del provider né l'avvio del team.
 
 ### Reclaim VPS da nuovo PC — decisione storica, superata il 2026-07-26
 
@@ -168,8 +177,10 @@ nuovo PC → desktop app → login Supabase (stesso account)
   → app re-seedare i dati dal cloud sulla VPS nuova
 ```
 
-Perché funziona:
-- Il cloud sync di Path 2 è strutturalmente obbligatorio (vedi sopra), quindi i dati utente sono **sempre** già sincronizzati su Supabase: nessuna perdita.
+Perché funzionava nel vecchio design:
+- Presupponeva che i dati fossero già sincronizzati su Supabase. Oggi questa
+  assunzione vale solo se l'utente ha attivato il sync; il recupero senza sync
+  dipende dai backup verificati e dal trasporto SSH documentato nel runbook corrente.
 - Costo accettato: 24h-48h di ridondanza Hetzner (vecchia VPS attiva finché l'utente non la cancella manualmente). È pulizia utente, non automation app.
 - Niente codice "reclaim VPS esistente via Hetzner API + re-iniezione SSH key" — superato dal wipe+ricreate.
 
