@@ -18,6 +18,7 @@ WIN_START=$(python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skill
 ROUND_ID=$(date -u +%Y%m%dT%H%M%SZ)
 DAY=$(date -u +%F)
 JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
+ROUND_HEADS_UP_SENT=0
 ```
 
 ## Paso 1 — listar sesiones + edad, decidir el orden
@@ -70,6 +71,25 @@ Decide a partir de `$PCT` (extraído de una línea como `24.9k/1m tokens (2%)`):
 - **`PCT` ≤ 50** → SALTAR **salvo que el TTL se haya disparado en el Paso 1.4**. NO recrees una sesión por debajo del TTL, aunque sea vieja. Registra `action=skipped_lowctx` con el `%` medido. Pasa a la siguiente sesión.
 - **`PCT` > 50** → procede al refresco (Pasos 2–7).
 - **el comando no se renderizó / falló el parseo** → recae en la heurística de edad (`age ≥ 40min` → refresco) y registra `ctx=unparsed`.
+
+## Paso 1.6 — avisar una vez al Capitano, antes del primer refresco
+Solo cuando esta ronda haya seleccionado su primer objetivo real de refresco
+(TTL o contexto), envía un aviso al Capitano **antes del Paso 2**. No lo repitas
+por cada agente ni lo envíes si la ronda solo registrará omisiones:
+```bash
+if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
+  if /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Empieza el refresco de contexto: workers primero, coordinadores al final, tú el último. No inicies tareas breves hasta el informe de finalización."; then
+    ROUND_HEADS_UP_SENT=1
+  else
+    echo "Falló la entrega del HEADS-UP — aborta el rich refresh antes de cualquier recreate"
+    exit 1
+  fi
+fi
+```
+Es coordinación, no un segundo scheduler ni una solicitud de permiso. La ronda
+sigue siendo secuencial y el Capitano permanece activo hasta el final. La
+entrega es una precondición: un exit no cero del sender aborta la ronda antes de
+capture/kill; nunca marques como enviado un heads-up fallido.
 
 ## Paso 2 — por sesión: captura (amplia + saliente)
 Captura TODO el scrollback una vez, luego las líneas salientes — NO cargues miles de líneas en tu propio contexto, haz grep de los puntos destacados:
