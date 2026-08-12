@@ -18,6 +18,7 @@ WIN_START=$(python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skill
 ROUND_ID=$(date -u +%Y%m%dT%H%M%SZ)
 DAY=$(date -u +%F)
 JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
+ROUND_HEADS_UP_SENT=0
 ```
 
 ## Step 1 — elenca le sessioni + eta', decidi l'ordine
@@ -70,6 +71,19 @@ Decidi da `$PCT` (estratto da una riga tipo `24.9k/1m tokens (2%)`):
 - **`PCT` ≤ 50** → SALTA **a meno che il TTL non sia scattato allo Step 1.4**. NON ricreare una sessione sotto il TTL, anche se e' vecchiotta. Logga `action=skipped_lowctx` con la `%` misurata. Passa alla successiva.
 - **`PCT` > 50** → procedi al refresh (Step 2–7).
 - **comando non renderizzato / parse fallito** → ricadi sull'euristica dell'eta' (`age ≥ 40min` → refresh) e logga `ctx=unparsed`.
+
+## Step 1.6 — avvisa il Capitano una volta, prima del primo refresh
+Solo quando questo giro ha selezionato il primo vero target di refresh (TTL o
+contesto), manda un heads-up al Capitano **prima dello Step 2**. Non ripeterlo
+per ogni agente e non mandarlo se il giro produrra' soltanto skip:
+```bash
+if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
+  /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Inizia il context refresh: worker prima, coordinatori ultimi, tu per ultimo. Non avviare incarichi brevi fino al report di completamento."
+  ROUND_HEADS_UP_SENT=1
+fi
+```
+E' coordinamento, non un secondo scheduler ne' una richiesta di permesso. Il
+giro resta sequenziale e il Capitano rimane vivo fino alla fine.
 
 ## Step 2 — per sessione: cattura (ampia + saliente)
 Cattura UNA volta l'intero scrollback, poi le righe salienti — NON caricare migliaia di righe nel tuo contesto, fai il grep degli highlight:

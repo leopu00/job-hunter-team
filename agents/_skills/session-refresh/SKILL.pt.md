@@ -18,6 +18,7 @@ WIN_START=$(python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skill
 ROUND_ID=$(date -u +%Y%m%dT%H%M%SZ)
 DAY=$(date -u +%F)
 JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
+ROUND_HEADS_UP_SENT=0
 ```
 
 ## Step 1 — liste as sessões + idade, decida a ordem
@@ -70,6 +71,19 @@ Decida a partir de `$PCT` (extraído de uma linha como `24.9k/1m tokens (2%)`):
 - **`PCT` ≤ 50** → PULAR **a menos que o TTL tenha disparado no Step 1.4**. NÃO recrie uma sessão abaixo do TTL, mesmo que seja velha. Registre `action=skipped_lowctx` com a `%` medida. Passe para a próxima sessão.
 - **`PCT` > 50** → prossiga para a renovação (Steps 2–7).
 - **o comando não renderizou / o parse falhou** → recaia na heurística de idade (`age ≥ 40min` → renovar) e registre `ctx=unparsed`.
+
+## Step 1.6 — avise o Capitano uma vez, antes da primeira renovação
+Só quando esta ronda tiver selecionado o primeiro alvo real de renovação (TTL
+ou contexto), envie um aviso ao Capitano **antes do Step 2**. Não repita por
+cada agente nem envie se a ronda só for registar skips:
+```bash
+if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
+  /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] A renovação de contexto vai começar: workers primeiro, coordenadores no fim, tu por último. Não inicies tarefas curtas até ao relatório de conclusão."
+  ROUND_HEADS_UP_SENT=1
+fi
+```
+Isto é coordenação, não um segundo scheduler nem um pedido de permissão. A
+ronda continua sequencial e o Capitano permanece ativo até ao fim.
 
 ## Step 2 — por sessão: capture (ampla + saliente)
 Capture o scrollback INTEIRO uma vez, depois as linhas salientes — NÃO carregue milhares de linhas no seu próprio contexto, faça grep dos destaques:
