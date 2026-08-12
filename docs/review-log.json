@@ -1514,6 +1514,16 @@
       "path": "docs/internal/roadmap/2026-08-08-scout-coordination-observations.md",
       "description": "Misure su cinque squadre in produzione: perché la divisione del territorio fra Scout (C-21) non si vede mai all'opera. Smonta due delle tre ipotesi con i dati — la squadra coordinata parte e la skill viene aperta — e nomina la terza: il coordinamento è scritto ma non vissuto. Squadre anonimizzate.",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-12-chat-twin-line-removal-proposal.md",
+      "description": "Proposta di rimozione della riga gemella da chat.jsonl — valutata e SCARTATA (perdita muta a team acceso); resta il come, se le condizioni cambiano.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-12-cross-boundary-contract.md",
+      "description": "Contratto fra i due owner del repo: ruoli dei branch, forma del claim WIP(...)(ID), verifica via branch_census.py, semantica fail-closed, versioning.",
+      "last_review": null
     }
   ]
 }
