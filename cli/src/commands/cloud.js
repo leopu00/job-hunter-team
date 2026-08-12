@@ -3077,6 +3077,7 @@ export async function handleChatSync(options = {}) {
       queued: queue.count,
       oldestQueuedAt: queue.oldest,
       deliverFailed: sent.failed,
+      uncertain: queue.uncertain,
     }));
 
     const moved = ingested.inserted + mirrored.mirrored + sent.delivered + pushed;
@@ -3092,13 +3093,15 @@ export async function handleChatSync(options = {}) {
     return {
       status: readError
         ? readError
-        : sent.failed > 0
-          ? 'delivery_pending'
-          : ackFailed
-            ? 'ack_failed'
-            : pending && !acked
-              ? 'delivery_pending'
-              : 'completed',
+        : queue.uncertain > 0
+          ? 'delivery_uncertain'
+          : sent.failed > 0
+            ? 'delivery_pending'
+            : ackFailed
+              ? 'ack_failed'
+              : pending && !acked
+                ? 'delivery_pending'
+                : 'completed',
       pending: !!pending,
       imported: importedIds.length,
       delivered: sent.delivered,

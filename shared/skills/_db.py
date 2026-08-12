@@ -307,6 +307,7 @@ def ensure_schema(conn: sqlite3.Connection):
         )),
         author TEXT NOT NULL DEFAULT 'agent' CHECK (author IN ('agent','user')),
         chat_ts REAL,
+        source_id TEXT,
         related_position_id INTEGER,
         delivered_via TEXT CHECK (delivered_via IN ('telegram','web') OR delivered_via IS NULL),
         delivered_at TIMESTAMP,
@@ -318,6 +319,18 @@ def ensure_schema(conn: sqlite3.Connection):
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (related_position_id) REFERENCES positions(id)
+    );
+
+    -- Claim locale della consegna al pane (O-67). Non contiene il testo:
+    -- conserva soltanto l'identita' della riga e rende fail-closed il confine
+    -- non transazionale SQLite -> TUI. Un claim sopravvissuto a un crash ha
+    -- esito esterno incerto e NON viene fatto scadere automaticamente: il
+    -- daemon lo segnala invece di rischiare una seconda consegna.
+    CREATE TABLE IF NOT EXISTS pending_user_message_delivery_claims (
+        message_id INTEGER PRIMARY KEY,
+        claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (message_id) REFERENCES pending_user_messages(id)
+            ON DELETE CASCADE
     );
 
     -- Ticket utente→team su una posizione (2026-06-18). L'utente, dalla pagina
@@ -471,6 +484,8 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_messages_source_id
+      ON pending_user_messages(source_id) WHERE source_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_position_tickets_status ON position_tickets(status);
     CREATE INDEX IF NOT EXISTS idx_position_feedback_position
         ON position_feedback(position_id, id DESC);
@@ -1689,6 +1704,13 @@ def _migrate_pending_messages_chat_turns(conn: sqlite3.Connection) -> None:
         )
     if not _column_exists(conn, 'pending_user_messages', 'chat_ts'):
         conn.execute("ALTER TABLE pending_user_messages ADD COLUMN chat_ts REAL")
+    # Identita' del canale inbound (O-67). Per Telegram e'
+    # `telegram:<ruolo>:<update_id>`: sopravvive a restart e replay fra
+    # journal, offset e SQLite senza deduplicare sul testo (due "ok" restano
+    # due turni). Locale soltanto: sul cloud l'identita' continua a essere il
+    # legacy_id della riga, quindi il payload di sync non cambia.
+    if not _column_exists(conn, 'pending_user_messages', 'source_id'):
+        conn.execute("ALTER TABLE pending_user_messages ADD COLUMN source_id TEXT")
     # Identità del gemello cloud, quando il messaggio è NATO sul web (O-16).
     # Stesso patto di `position_tickets.cloud_id`: NULL = nata in locale, ed è
     # il caso di ogni riga preesistente — nessuna riscrittura, nessun default
@@ -1715,6 +1737,10 @@ def _migrate_pending_messages_chat_turns(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_pending_messages_mirrored "
         "ON pending_user_messages(agent, chat_ts) WHERE chat_ts IS NOT NULL"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_messages_source_id "
+        "ON pending_user_messages(source_id) WHERE source_id IS NOT NULL"
     )
 
 
