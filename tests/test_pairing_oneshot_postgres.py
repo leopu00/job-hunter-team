@@ -8,6 +8,7 @@ interroga stato, privilegi e RLS dopo gli effetti.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import time
@@ -19,6 +20,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase/migrations/075_cloud_sync_pairing_oneshot.sql"
+TENANT_MIGRATION = (
+    ROOT
+    / "supabase/migrations/074_tenant_edges_and_atomic_account_delete.sql"
+)
 IMAGE = "postgres:16-alpine"
 
 
@@ -31,6 +36,22 @@ def _run(argv, *, input_text=None, check=True):
         check=check,
         timeout=30,
     )
+
+
+def _tenant_migration_sql() -> str | None:
+    """Legge la 074 locale o, soltanto nel gate pre-merge, da un ref exact."""
+    if TENANT_MIGRATION.is_file():
+        return TENANT_MIGRATION.read_text(encoding="utf-8")
+    ref = os.environ.get("JHT_TENANT_MIGRATION_REF")
+    if not ref:
+        return None
+    return _run(
+        [
+            "git",
+            "show",
+            f"{ref}:supabase/migrations/{TENANT_MIGRATION.name}",
+        ]
+    ).stdout
 
 
 @pytest.fixture(scope="module")
@@ -106,6 +127,41 @@ def postgres16():
           created_at timestamptz NOT NULL DEFAULT now(),
           expires_at timestamptz NOT NULL
         );
+        -- Schema minimo pre-074 tenant/delete. Tenerlo nello stesso database
+        -- fa sì che il gate applichi davvero 074 e poi 075, come in release.
+        CREATE TABLE public.companies (
+          id uuid PRIMARY KEY,
+          user_id uuid NOT NULL REFERENCES auth.users(id)
+        );
+        CREATE TABLE public.positions (
+          id uuid PRIMARY KEY,
+          user_id uuid NOT NULL REFERENCES auth.users(id),
+          company_id uuid REFERENCES public.companies(id)
+        );
+        CREATE TABLE public.scores (
+          id uuid PRIMARY KEY,
+          user_id uuid NOT NULL REFERENCES auth.users(id),
+          position_id uuid NOT NULL REFERENCES public.positions(id)
+        );
+        CREATE TABLE public.applications (
+          id uuid PRIMARY KEY,
+          user_id uuid NOT NULL REFERENCES auth.users(id),
+          position_id uuid NOT NULL REFERENCES public.positions(id)
+        );
+        CREATE TABLE public.position_highlights (
+          id uuid PRIMARY KEY,
+          user_id uuid NOT NULL REFERENCES auth.users(id),
+          position_id uuid NOT NULL REFERENCES public.positions(id)
+        );
+        CREATE TABLE public.position_views (
+          user_id uuid NOT NULL REFERENCES auth.users(id),
+          position_id uuid NOT NULL REFERENCES public.positions(id),
+          PRIMARY KEY (user_id, position_id)
+        );
+        CREATE TABLE public.candidate_profiles (
+          id uuid PRIMARY KEY,
+          user_id uuid NOT NULL REFERENCES auth.users(id)
+        );
         ALTER TABLE public.cloud_sync_pairing_sessions ENABLE ROW LEVEL SECURITY;
         CREATE POLICY pairing_owner ON public.cloud_sync_pairing_sessions
           FOR SELECT USING (false);
@@ -128,14 +184,18 @@ def postgres16():
            '10000000-0000-0000-0000-000000000001', now() - interval '1 minute');
         """
         psql(setup)
-        psql(MIGRATION.read_text(encoding="utf-8"))
-        yield name, psql
+        tenant_sql = _tenant_migration_sql()
+        if tenant_sql is not None:
+            psql(f"BEGIN;\n{tenant_sql}\nCOMMIT;")
+        pairing_sql = MIGRATION.read_text(encoding="utf-8")
+        psql(f"BEGIN;\n{pairing_sql}\nCOMMIT;")
+        yield name, psql, tenant_sql is not None
     finally:
         _run(["docker", "rm", "--force", name], check=False)
 
 
 def test_migration_sanitizes_existing_expired_plaintext(postgres16):
-    _, psql = postgres16
+    _, psql, _ = postgres16
     state = psql("""
       SELECT pairing.status, pairing.approved_token IS NULL,
              token.revoked_at IS NOT NULL
@@ -147,7 +207,7 @@ def test_migration_sanitizes_existing_expired_plaintext(postgres16):
 
 
 def test_two_concurrent_polls_deliver_one_token(postgres16):
-    name, psql = postgres16
+    name, psql, _ = postgres16
     psql("""
       INSERT INTO public.cloud_sync_tokens
         (id, user_id, name, token_prefix, token_hash, expires_at)
@@ -202,7 +262,7 @@ def test_two_concurrent_polls_deliver_one_token(postgres16):
 
 
 def test_never_redeemed_past_ttl_is_unrecoverable_and_invalid(postgres16):
-    _, psql = postgres16
+    _, psql, _ = postgres16
     psql("""
       INSERT INTO public.cloud_sync_tokens
         (id, user_id, name, token_prefix, token_hash, expires_at)
@@ -248,7 +308,7 @@ def test_never_redeemed_past_ttl_is_unrecoverable_and_invalid(postgres16):
 
 
 def test_cleanup_also_wipes_and_revokes_without_redemption(postgres16):
-    _, psql = postgres16
+    _, psql, _ = postgres16
     psql("""
       INSERT INTO public.cloud_sync_tokens
         (id, user_id, name, token_prefix, token_hash, expires_at)
@@ -276,7 +336,7 @@ def test_cleanup_also_wipes_and_revokes_without_redemption(postgres16):
 
 
 def test_token_expired_before_pairing_is_revoked_and_never_delivered(postgres16):
-    _, psql = postgres16
+    _, psql, _ = postgres16
     psql("""
       INSERT INTO public.cloud_sync_tokens
         (id, user_id, name, token_prefix, token_hash, expires_at)
@@ -308,9 +368,10 @@ def test_token_expired_before_pairing_is_revoked_and_never_delivered(postgres16)
 
 
 def test_rls_execute_and_idempotent_real_migration(postgres16):
-    _, psql = postgres16
+    _, psql, _ = postgres16
     # Applicazione ripetuta deve restare valida.
-    psql(MIGRATION.read_text(encoding="utf-8"))
+    pairing_sql = MIGRATION.read_text(encoding="utf-8")
+    psql(f"BEGIN;\n{pairing_sql}\nCOMMIT;")
     privileges = psql("""
       SELECT
         has_function_privilege('anon',
@@ -351,3 +412,24 @@ def test_rls_execute_and_idempotent_real_migration(postgres16):
         "('ffffffffffffffffffffffffffffffff'); RESET ROLE;"
     )
     assert allowed.stdout.strip() == "not_found"
+
+
+def test_release_migration_prefix_census_has_no_collisions():
+    migrations = sorted((ROOT / "supabase/migrations").glob("[0-9][0-9][0-9]_*.sql"))
+    by_prefix: dict[str, list[str]] = {}
+    for migration in migrations:
+        by_prefix.setdefault(migration.name[:3], []).append(migration.name)
+    collisions = {prefix: names for prefix, names in by_prefix.items() if len(names) > 1}
+    assert collisions == {}
+    assert MIGRATION.name == "075_cloud_sync_pairing_oneshot.sql"
+
+
+def test_tenant_074_then_pairing_075_were_applied_when_available(postgres16):
+    _, psql, tenant_applied = postgres16
+    if not tenant_applied:
+        pytest.skip("migration 074 tenant/delete non ancora presente sulla base")
+    functions = psql("""
+      SELECT to_regprocedure('public.delete_account_data(uuid)') IS NOT NULL,
+             to_regprocedure('public.redeem_cloud_sync_pairing(text)') IS NOT NULL;
+    """).stdout.strip()
+    assert functions == "t|t"
