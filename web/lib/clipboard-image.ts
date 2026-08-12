@@ -1,5 +1,4 @@
 const MAX_CLIPBOARD_IMAGE_BYTES = 10 * 1024 * 1024;
-let clipboardImageSequence = 0;
 
 export type ClipboardImageResult =
   | { kind: "image"; file: File }
@@ -28,12 +27,11 @@ export function clipboardImageFile(
     return { kind: "rejected", reason: "size" };
   }
   const extension = blob.type === "image/png" ? "png" : "jpg";
-  clipboardImageSequence += 1;
   return {
     kind: "image",
     file: new File(
       [blob],
-      `clipboard-screenshot-${clipboardImageSequence}.${extension}`,
+      `clipboard-screenshot-${crypto.randomUUID()}.${extension}`,
       {
         type: blob.type,
         lastModified: 0,

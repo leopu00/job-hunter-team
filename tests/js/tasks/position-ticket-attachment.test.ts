@@ -106,7 +106,9 @@ describe("allegato ticket web sul trasporto documenti esistente", () => {
     } as never);
     expect(result.kind).toBe("image");
     if (result.kind !== "image") throw new Error("image not extracted");
-    expect(result.file.name).toMatch(/^clipboard-screenshot-\d+\.png$/);
+    expect(result.file.name).toMatch(
+      /^clipboard-screenshot-[0-9a-f-]{36}\.png$/,
+    );
     const response = await ticketRequest(result.file);
     expect(response.status).toBe(200);
     expect(readFileSync(join(userDir, "allegati", result.file.name))).toEqual(
@@ -147,6 +149,26 @@ describe("allegato ticket web sul trasporto documenti esistente", () => {
     expect(readFileSync(join(userDir, "allegati", second.file.name))).toEqual(
       Buffer.from("second"),
     );
+  });
+
+  it("mantiene identità diverse anche dopo un reload del modulo", async () => {
+    const clipboard = (bytes: string) => ({
+      items: [
+        {
+          kind: "file",
+          type: "image/png",
+          getAsFile: () => new File([bytes], "ignored", { type: "image/png" }),
+        },
+      ],
+    });
+    const before = clipboardImageFile(clipboard("before") as never);
+    vi.resetModules();
+    const fresh = await import("../../../web/lib/clipboard-image");
+    const after = fresh.clipboardImageFile(clipboard("after") as never);
+    expect(before.kind).toBe("image");
+    expect(after.kind).toBe("image");
+    if (before.kind !== "image" || after.kind !== "image") return;
+    expect(before.file.name).not.toBe(after.file.name);
   });
 
   it("rifiuta immagini incollate oltre 10 MB prima del ticket", async () => {
