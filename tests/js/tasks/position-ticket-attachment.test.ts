@@ -154,7 +154,30 @@ describe("allegato ticket web sul trasporto documenti esistente", () => {
       clipboardImageFile({
         items: [{ kind: "file", type: "image/webp", getAsFile: () => null }],
       } as never),
-    ).toEqual({ kind: "none" });
+    ).toEqual({ kind: "rejected", reason: "type" });
+  });
+
+  it("rifiuta MIME discordanti o piu immagini nello stesso paste", () => {
+    const png = new File(["x"], "x.png", { type: "image/png" });
+    expect(
+      clipboardImageFile({
+        items: [
+          {
+            kind: "file",
+            type: "image/png",
+            getAsFile: () => new File(["x"], "x.webp", { type: "image/webp" }),
+          },
+        ],
+      } as never),
+    ).toEqual({ kind: "rejected", reason: "type" });
+    expect(
+      clipboardImageFile({
+        items: [
+          { kind: "file", type: "image/png", getAsFile: () => png },
+          { kind: "file", type: "image/png", getAsFile: () => png },
+        ],
+      } as never),
+    ).toEqual({ kind: "rejected", reason: "type" });
   });
 
   it("salva i byte e registra nel ticket il path visto dal team", async () => {

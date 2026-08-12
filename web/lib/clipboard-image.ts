@@ -10,14 +10,19 @@ export function clipboardImageFile(
   clipboard: Pick<ClipboardEvent, "clipboardData">["clipboardData"],
 ): ClipboardImageResult {
   if (!clipboard) return { kind: "none" };
-  const item = Array.from(clipboard.items).find(
+  const imageItems = Array.from(clipboard.items).filter(
     (candidate) =>
-      candidate.kind === "file" &&
-      (candidate.type === "image/png" || candidate.type === "image/jpeg"),
+      candidate.kind === "file" && candidate.type.startsWith("image/"),
   );
-  if (!item) return { kind: "none" };
+  if (imageItems.length === 0) return { kind: "none" };
+  if (imageItems.length !== 1) return { kind: "rejected", reason: "type" };
+  const item = imageItems[0];
+  if (item.type !== "image/png" && item.type !== "image/jpeg") {
+    return { kind: "rejected", reason: "type" };
+  }
   const blob = item.getAsFile();
   if (!blob) return { kind: "rejected", reason: "type" };
+  if (blob.type !== item.type) return { kind: "rejected", reason: "type" };
   if (blob.size > MAX_CLIPBOARD_IMAGE_BYTES) {
     return { kind: "rejected", reason: "size" };
   }
