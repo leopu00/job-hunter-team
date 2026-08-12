@@ -1,7 +1,8 @@
-import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { writePrivateJson } from '../lib/secure-config-io.js';
 
 const JHT_DIR     = JHT_HOME;
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
@@ -11,11 +12,7 @@ async function fileExists(p) {
 }
 
 async function writeJsonSafe(p, data) {
-  await mkdir(join(p, '..'), { recursive: true }).catch(() => {});
-  const tmp = p + '.tmp';
-  await writeFile(tmp, JSON.stringify(data, null, 2), 'utf-8');
-  const { rename } = await import('node:fs/promises');
-  await rename(tmp, p);
+  writePrivateJson(p, data);
 }
 
 // Migrazioni ordinate per versione
