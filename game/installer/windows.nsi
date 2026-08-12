@@ -59,8 +59,8 @@ VIAddVersionKey "CompanyName" "Job Hunter Team"
 
 ; ── I dati dell'utente, e perché non si cancellano da soli ────────────
 ; Il gioco non imposta `use_custom_user_dir`, quindi `user://` di Godot è
-; $APPDATA\Godot\app_userdata\<nome progetto>: lì vivono lingua (lang.cfg),
-; onboarding (guided_onboarding.cfg, onboarding_context.*), tour (tour.cfg),
+; $APPDATA\Godot\app_userdata\<nome progetto>: lì vivono onboarding
+; (guided_onboarding.cfg, onboarding_context.*), tour (tour.cfg),
 ; configurazione VPS e runtime, log e cache. Verificato su una macchina reale
 ; il 2026-08-12.
 ;

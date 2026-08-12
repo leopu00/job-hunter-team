@@ -21,7 +21,7 @@ SENDER="/app/agents/_tools/jht-telegram-send"
 LOG="$JHT_HOME/logs/welcome-send.log"
 mkdir -p "$(dirname "$LOG")" "$PROFILE_DIR"
 
-# i18n: carica catalogo locales (en/it/hu) — usa $JHT_LANG da host.env
+# i18n: carica uno dei sette cataloghi dalla preferenza canonica
 # English fallback if i18n.sh is unavailable (legacy build).
 if [ -f /app/shared/i18n.sh ]; then
   # shellcheck disable=SC1091
@@ -52,7 +52,7 @@ send_one() {
 }
 
 # ── Copy welcome per i 3 ruoli ──────────────────────────────────────
-# Stringhe da shared/locales/<JHT_LANG>.json. Se il catalogo non c'è
+# Stringhe da shared/locales/<locale>.json. Se il catalogo non c'è
 # (legacy build without i18n.sh), English fallback.
 if declare -F t >/dev/null 2>&1; then
   ASSISTENTE_MSG="$(t welcome.assistente)"
