@@ -114,3 +114,66 @@ def test_census_regex_catches_the_words_that_slipped_through():
         "Installa Claude CLI",
     ):
         assert census.ITALIAN_COPY.search(phrase), f"not caught: {phrase}"
+
+
+def test_python_census_reads_copy_from_arbitrary_dictionary_fields(tmp_path):
+    """A rendered verdict is copy even when its dictionary key is new.
+
+    `scaling_calc.py` exposed the real failure: `reason` and `note` happened
+    to be allowlisted, while the equally visible `then` verdict disappeared
+    from the census before `_fmt()` printed it.
+    """
+    source = tmp_path / "verdicts.py"
+    source.write_text(
+        'VERDICTS = {\n'
+        '    "steady": "Tutto regolare",\n'
+        '    "next_step": "Ricalcola prima del prossimo",\n'
+        '}\n',
+        encoding="utf-8",
+    )
+
+    assert list(census.python_visible_literals(source)) == [
+        (2, "Tutto regolare"),
+        (3, "Ricalcola prima del prossimo"),
+    ]
+
+
+def test_agents_are_an_explicit_census_area():
+    assert census.AREAS["agents"] == ("agents",)
+
+
+def test_agent_census_reads_english_markdown_and_extensionless_tools(
+        tmp_path, monkeypatch):
+    agents = tmp_path / "agents"
+    role = agents / "scout"
+    tools = agents / "_tools"
+    role.mkdir(parents=True)
+    tools.mkdir(parents=True)
+    (role / "scout.md").write_text(
+        "# Scout\n\nAttenzione: controlla tutte le fonti.\n",
+        encoding="utf-8",
+    )
+    # A localized catalogue is supposed to contain Italian and must stay out.
+    (role / "scout.it.md").write_text(
+        "# Scout\n\nAttenzione: questa e' la traduzione italiana.\n",
+        encoding="utf-8",
+    )
+    tool = tools / "agent-check"
+    tool.write_text(
+        '#!/usr/bin/env python3\nprint("Errore: agente non trovato")\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(census, "ROOT", tmp_path)
+
+    hits = census.scan(("agents",))
+
+    assert len(hits) == 2
+    assert any("agents/scout/scout.md:3:" in hit for hit in hits)
+    assert any("agents/_tools/agent-check:2:" in hit for hit in hits)
+    assert all("scout.it.md" not in hit for hit in hits)
+
+
+def test_census_exclusions_accept_windows_separators():
+    assert census._excluded_relative(
+        r"game\scripts\backend\payloads\agent_history.py"
+    )
