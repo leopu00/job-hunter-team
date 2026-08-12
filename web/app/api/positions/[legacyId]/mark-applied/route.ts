@@ -140,9 +140,10 @@ export async function POST(
 
     local: (db): StepResult<AppliedOutcome> => {
       const row = db
-        .prepare<[number], { id: number; status: string | null }>(
-          "SELECT id, status FROM positions WHERE id = ?",
-        )
+        .prepare<
+          [number],
+          { id: number; status: string | null }
+        >("SELECT id, status FROM positions WHERE id = ?")
         .get(legacyId);
       if (!row) {
         return {
@@ -269,9 +270,10 @@ export async function DELETE(
 
     local: (db): StepResult<AppliedOutcome> => {
       const row = db
-        .prepare<[number], { id: number; status: string | null }>(
-          "SELECT id, status FROM positions WHERE id = ?",
-        )
+        .prepare<
+          [number],
+          { id: number; status: string | null }
+        >("SELECT id, status FROM positions WHERE id = ?")
         .get(legacyId);
       if (!row) {
         return {
@@ -322,9 +324,10 @@ export async function DELETE(
         .get(legacyId);
       const hasScore =
         db
-          .prepare<[number], { n: number }>(
-            "SELECT COUNT(*) AS n FROM scores WHERE position_id = ?",
-          )
+          .prepare<
+            [number],
+            { n: number }
+          >("SELECT COUNT(*) AS n FROM scores WHERE position_id = ?")
           .get(legacyId)?.n ?? 0;
       const restored =
         previous?.from_state ??
