@@ -180,6 +180,25 @@ def safe_filename(name: str) -> str:
     return cleaned or "document"
 
 
+def is_uploaded_document_path(path: str) -> bool:
+    """È un riferimento canonico alla drop-zone condivisa?
+
+    Il ticket non riceve i byte: riceve il path già restituito da ``upload``.
+    Validarlo qui evita che le tre superfici inventino ciascuna una propria
+    idea di path allegato e, soprattutto, che un valore scritto dall'utente
+    trasformi il ticket in un riferimento arbitrario sul filesystem.
+    """
+    prefix = CONTAINER_ROOT + "/" + UPLOAD_SUBDIR + "/"
+    if not isinstance(path, str) or path != path.strip() \
+            or not path.startswith(prefix) or "\\" in path or "\0" in path:
+        return False
+    name = path[len(prefix):]
+    if not name or "/" in name or name != safe_filename(name):
+        return False
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    return ext in UPLOAD_EXTS
+
+
 def upload(name: str, data: bytes) -> dict:
     safe = safe_filename(name)
     ext = safe.rsplit(".", 1)[-1].lower() if "." in safe else ""

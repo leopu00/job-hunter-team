@@ -357,6 +357,35 @@ def test_ticket_cli_exposes_rescore_kind_for_captain_routing(box):
     assert "kind=rescore" in ticket._fmt(row)
 
 
+def test_ticket_skill_compone_allegato_senza_nuovo_storage(box):
+    import ticket
+
+    ticket_id = ticket.open_ticket(
+        box,
+        5,
+        "Verifica i requisiti nel documento",
+        attachment_path="/jht_user/allegati/requisiti.pdf",
+    )
+    request = box.execute(
+        "SELECT request_text FROM position_tickets WHERE id = ?", (ticket_id,)
+    ).fetchone()[0]
+
+    assert request == (
+        "Verifica i requisiti nel documento\n\n"
+        "[FILE ALLEGATI]\n/jht_user/allegati/requisiti.pdf"
+    )
+
+
+def test_ticket_skill_rifiuta_un_path_non_restituito_dal_trasporto(box):
+    import ticket
+
+    with pytest.raises(ValueError, match="invalid attachment path"):
+        ticket.open_ticket(
+            box, 5, "Leggi", attachment_path="/jht_user/allegati/../segreto.pdf"
+        )
+    assert box.execute("SELECT COUNT(*) FROM position_tickets").fetchone()[0] == 0
+
+
 def test_the_query_matches_the_one_the_list_actually_runs():
     """Il test parla della lista vera solo se la sotto-query è la stessa."""
     src = (ROOT / "web/lib/local-queries.ts").read_text(encoding="utf-8")

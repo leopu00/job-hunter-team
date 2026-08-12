@@ -13,7 +13,9 @@ temporanea. È lo stesso percorso che usa chi sviluppa da un checkout.
 
 import json
 import os
+import sqlite3
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -59,6 +61,28 @@ def env(area):
     # JHT_CONTAINER_NAME inesistente: anche su una macchina col container vero
     # acceso, il test deve provare SEMPRE lo stesso percorso.
     return {"JHT_ARTIFACT_ROOT": str(area), "JHT_CONTAINER_NAME": "jht-test-absent"}
+
+
+@pytest.fixture()
+def ticket_env(area, tmp_path):
+    """DB e drop-zone isolati per il comando composto upload → ticket."""
+    home = tmp_path / "home"
+    home.mkdir()
+    sys.path.insert(0, str(ROOT / "shared" / "skills"))
+    import _db
+    conn = sqlite3.connect(home / "jobs.db")
+    conn.row_factory = sqlite3.Row
+    _db.ensure_schema(conn)
+    conn.execute(
+        "INSERT INTO positions (id, title, company) VALUES (42, 'Role', 'Company')"
+    )
+    conn.commit()
+    conn.close()
+    return {
+        "JHT_HOME": str(home),
+        "JHT_ARTIFACT_ROOT": str(area),
+        "JHT_CONTAINER_NAME": "jht-test-absent",
+    }
 
 
 # ── fetch ──────────────────────────────────────────────────────────────────
@@ -166,6 +190,48 @@ def test_upload_regge_un_file_grande(env, area, tmp_path):
     r = run_jht("artifact", "upload", str(src), env=env)
     assert r.returncode == 0, r.stderr
     assert (area / "allegati" / "grosso.pdf").read_bytes() == body
+
+
+def test_ticket_open_attach_usa_upload_e_registra_il_path(
+        ticket_env, area, tmp_path):
+    """L'effetto completo CLI: byte salvati e stesso path nel ticket reale."""
+    src = tmp_path / "brief con spazi.pdf"
+    src.write_bytes(PDF)
+
+    r = run_jht(
+        "ticket", "open", "42", "Confronta il brief con la posizione",
+        "--attach", str(src), env=ticket_env,
+    )
+
+    assert r.returncode == 0, r.stderr
+    saved = area / "allegati" / "brief_con_spazi.pdf"
+    assert saved.read_bytes() == PDF
+    db = sqlite3.connect(Path(ticket_env["JHT_HOME"]) / "jobs.db")
+    request = db.execute(
+        "SELECT request_text FROM position_tickets WHERE position_id = 42"
+    ).fetchone()[0]
+    db.close()
+    assert request == (
+        "Confronta il brief con la posizione\n\n"
+        "[FILE ALLEGATI]\n/jht_user/allegati/brief_con_spazi.pdf"
+    )
+
+
+def test_ticket_open_attach_non_apre_il_ticket_se_upload_fallisce(
+        ticket_env, tmp_path):
+    src = tmp_path / "payload.exe"
+    src.write_bytes(b"not allowed")
+
+    r = run_jht(
+        "ticket", "open", "42", "Analizza questo file",
+        "--attach", str(src), env=ticket_env,
+    )
+
+    assert r.returncode != 0
+    db = sqlite3.connect(Path(ticket_env["JHT_HOME"]) / "jobs.db")
+    count = db.execute("SELECT COUNT(*) FROM position_tickets").fetchone()[0]
+    db.close()
+    assert count == 0
 
 
 def test_fetch_regge_un_file_grande(env, area, tmp_path):

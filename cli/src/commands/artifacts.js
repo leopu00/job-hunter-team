@@ -94,14 +94,18 @@ function fetchAction(path, options) {
   process.stdout.write(data.toString('utf8'));
 }
 
-function uploadAction(file, options) {
+/**
+ * Carica un file attraverso la skill canonica senza decidere cosa farne dopo.
+ * Anche `ticket open --attach` usa questa funzione: upload e ticket non hanno
+ * due trasporti quasi uguali che possono divergere su limiti o path.
+ */
+export function uploadFileToTeam(file) {
   let data;
   try {
     data = readFileSync(file);
   } catch (error) {
-    console.error(c.red(`: cannot read ${file}: ${error.message}`));
-    process.exitCode = EXIT_USAGE;
-    return;
+    return { ok: false, code: EXIT_USAGE,
+      error: c.red(`: cannot read ${file}: ${error.message}`) };
   }
   // Il nome viaggia separato dai byte: la skill decide se l'estensione è
   // ammessa, qui non si giudica niente.
@@ -110,10 +114,25 @@ function uploadAction(file, options) {
     { input: data.toString('base64'), maxBuffer: MAX_BUFFER });
   const parsed = parseSkillJson(result.stdout);
   if (result.code !== 0 || !parsed || !parsed.ok) {
-    reportSkillFailure(result, parsed);
-    process.exitCode = result.code === 0 ? EXIT_USAGE : result.code;
+    return { ok: false, code: result.code === 0 ? EXIT_USAGE : result.code,
+      result, parsed };
+  }
+  return { ok: true, code: 0, parsed };
+}
+
+export function reportUploadFailure(outcome) {
+  if (outcome.error) console.error(outcome.error);
+  else reportSkillFailure(outcome.result, outcome.parsed);
+}
+
+function uploadAction(file, options) {
+  const outcome = uploadFileToTeam(file);
+  if (!outcome.ok) {
+    reportUploadFailure(outcome);
+    process.exitCode = outcome.code;
     return;
   }
+  const parsed = outcome.parsed;
   console.log(options.json ? JSON.stringify(parsed)
     : `${parsed.path} — ${parsed.bytes} bytes`);
 }

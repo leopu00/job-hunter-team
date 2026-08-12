@@ -181,6 +181,27 @@ def test_upload_torna_sempre_il_path_del_container(area):
     assert artifact.upload("cv.pdf", PDF)["path"].startswith("/jht_user/")
 
 
+@pytest.mark.parametrize("path", [
+    "/jht_user/allegati/cv.pdf",
+    "/jht_user/allegati/brief_con_spazi.docx",
+    "/jht_user/allegati/data.csv",
+])
+def test_path_upload_canonico_puo_essere_allegato(path):
+    assert artifact.is_uploaded_document_path(path)
+
+
+@pytest.mark.parametrize("path", [
+    "/jht_user/cv/cv.pdf",
+    "/jht_user/allegati/../cv/cv.pdf",
+    "/jht_user/allegati/sub/cv.pdf",
+    "/jht_user/allegati/payload.exe",
+    "/jht_user/allegati/nome con spazi.pdf",
+    " /jht_user/allegati/cv.pdf",
+])
+def test_path_allegato_non_puo_uscire_dal_trasporto(path):
+    assert not artifact.is_uploaded_document_path(path)
+
+
 @pytest.mark.parametrize("name", ["script.js", "binario.exe", "senza_estensione",
                                   "archivio.tar.gz", ".bashrc"])
 def test_upload_rifiuta_estensioni_fuori_elenco(area, name):

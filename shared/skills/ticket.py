@@ -19,6 +19,31 @@ import argparse
 import sys
 
 from _db import get_db, ensure_schema
+from artifact import is_uploaded_document_path
+
+
+ATTACHMENT_MARKER = "[FILE ALLEGATI]"
+REQUEST_MAX_CHARS = 2000
+
+
+def request_with_attachment(text: str, attachment_path: str | None = None) -> str:
+    """Costruisce il solo formato ticket che può riferire un allegato.
+
+    I byte restano nella drop-zone governata da ``artifact.py``; nel DB passa
+    soltanto il path container restituito da quel trasporto. Il marker è già
+    il protocollo usato dall'Assistente per distinguere un documento dai
+    comandi: nessuna colonna o coda parallela da sincronizzare.
+    """
+    request = (text or "").strip()
+    if not request:
+        raise ValueError("request text cannot be empty")
+    if len(request) > REQUEST_MAX_CHARS:
+        raise ValueError(f"request text exceeds {REQUEST_MAX_CHARS} characters")
+    if not attachment_path:
+        return request
+    if not is_uploaded_document_path(attachment_path):
+        raise ValueError("invalid attachment path")
+    return f"{request}\n\n{ATTACHMENT_MARKER}\n{attachment_path}"
 
 
 def _fmt(t) -> str:
@@ -35,7 +60,8 @@ def _fmt(t) -> str:
     return "\n".join(lines)
 
 
-def open_ticket(conn, position_id: int, text: str, kind: str = "custom") -> int:
+def open_ticket(conn, position_id: int, text: str, kind: str = "custom",
+                attachment_path: str | None = None) -> int:
     """Apre un ticket dell'UTENTE su una posizione. Ritorna l'id creato.
 
     Aggiunta il 2026-07-25: fino ad allora questa operazione viveva solo dentro
@@ -47,8 +73,7 @@ def open_ticket(conn, position_id: int, text: str, kind: str = "custom") -> int:
     `jht cloud sync-tickets`, che correla via `cloud_id`. Scriverlo anche qui
     creava una riga cloud scollegata che il pull ri-importava come duplicato.
     """
-    if not (text or "").strip():
-        raise ValueError("request text cannot be empty")
+    request_text = request_with_attachment(text, attachment_path)
     row = conn.execute(
         "SELECT id FROM positions WHERE id = ?", (position_id,)
     ).fetchone()
@@ -57,7 +82,7 @@ def open_ticket(conn, position_id: int, text: str, kind: str = "custom") -> int:
     cur = conn.execute(
         "INSERT INTO position_tickets (position_id, request_text, kind, status) "
         "VALUES (?, ?, ?, 'open')",
-        (position_id, text.strip(), kind),
+        (position_id, request_text, kind),
     )
     conn.commit()
     return int(cur.lastrowid)
@@ -172,6 +197,7 @@ def main() -> None:
     o.add_argument("position_id", type=int)
     o.add_argument("text", help="what you are asking the team")
     o.add_argument("--kind", default="custom")
+    o.add_argument("--attachment", help="path returned by artifact.py upload")
     sub.add_parser("list-open")
     sub.add_parser("count-open")
     a = sub.add_parser("assign")
@@ -191,7 +217,8 @@ def main() -> None:
     try:
         if args.cmd == "open":
             try:
-                new_id = open_ticket(conn, args.position_id, args.text, args.kind)
+                new_id = open_ticket(conn, args.position_id, args.text, args.kind,
+                                     args.attachment)
             except (ValueError, LookupError) as e:
                 print(f"✗ {e}", file=sys.stderr)
                 sys.exit(1)
