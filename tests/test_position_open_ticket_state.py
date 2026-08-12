@@ -115,6 +115,51 @@ def test_several_tickets_on_one_position_still_read_as_one_pending(box):
     assert _pending(box) >= 1
 
 
+def test_rescore_ticket_has_one_active_request_but_keeps_resolved_history(box):
+    box.execute(
+        "INSERT INTO position_tickets (position_id, request_text, kind, status) "
+        "VALUES (5, 'rivaluta', 'rescore', 'open')"
+    )
+    box.commit()
+
+    with pytest.raises(sqlite3.IntegrityError):
+        box.execute(
+            "INSERT INTO position_tickets "
+            "(position_id, request_text, kind, status) "
+            "VALUES (5, 'duplicato', 'rescore', 'assigned')"
+        )
+    box.rollback()
+
+    box.execute(
+        "UPDATE position_tickets SET status = 'resolved' "
+        "WHERE position_id = 5 AND kind = 'rescore'"
+    )
+    box.execute(
+        "INSERT INTO position_tickets (position_id, request_text, kind, status) "
+        "VALUES (5, 'rivaluta ancora', 'rescore', 'open')"
+    )
+    box.commit()
+    assert box.execute(
+        "SELECT COUNT(*) FROM position_tickets "
+        "WHERE position_id = 5 AND kind = 'rescore'"
+    ).fetchone()[0] == 2
+
+
+def test_ticket_cli_exposes_rescore_kind_for_captain_routing(box):
+    import ticket
+
+    box.execute(
+        "INSERT INTO position_tickets (position_id, request_text, kind, status) "
+        "VALUES (5, 'rivaluta', 'rescore', 'open')"
+    )
+    box.commit()
+    row = box.execute(
+        "SELECT * FROM position_tickets WHERE position_id = 5"
+    ).fetchone()
+
+    assert "kind=rescore" in ticket._fmt(row)
+
+
 def test_the_query_matches_the_one_the_list_actually_runs():
     """Il test parla della lista vera solo se la sotto-query è la stessa."""
     src = (ROOT / "web/lib/local-queries.ts").read_text(encoding="utf-8")

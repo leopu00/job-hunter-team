@@ -2394,6 +2394,15 @@ async function handleTicketSync(options = {}) {
     }
     if (pullResult && Array.isArray(pullResult.tickets)) {
       const findByCloud = db.prepare('SELECT id FROM position_tickets WHERE cloud_id = ?');
+      const findActiveRescore = db.prepare(
+        `SELECT id, cloud_id FROM position_tickets
+         WHERE position_id = ? AND kind = 'rescore'
+           AND status IN ('open','assigned')
+         ORDER BY created_at ASC, id ASC LIMIT 1`
+      );
+      const linkActiveRescore = db.prepare(
+        'UPDATE position_tickets SET cloud_id = ? WHERE id = ? AND cloud_id IS NULL'
+      );
       const posExists = db.prepare('SELECT 1 FROM positions WHERE id = ?');
       const ins = db.prepare(
         `INSERT INTO position_tickets (position_id, request_text, kind, status, cloud_id, created_at)
@@ -2423,6 +2432,16 @@ async function handleTicketSync(options = {}) {
         if (!posExists.get(posId)) {                  // posizione non ancora locale → riprova al giro dopo
           cursorFrozen = true;
           continue;
+        }
+        if (ct.kind === 'rescore') {
+          // Stessa richiesta nata offline su entrambe le superfici: conserva
+          // una sola riga attiva e collegala all'identità cloud canonica.
+          const active = findActiveRescore.get(posId);
+          if (active) {
+            if (active.cloud_id == null) linkActiveRescore.run(cloudId, active.id);
+            if (!cursorFrozen && ct.created_at) safeCursor = ct.created_at;
+            continue;
+          }
         }
         ins.run(posId, ct.request_text || '', ct.kind || 'custom', cloudId, ct.created_at || null);
         imported++;

@@ -476,6 +476,12 @@ def ensure_schema(conn: sqlite3.Connection):
         ON position_feedback(position_id, id DESC);
     CREATE INDEX IF NOT EXISTS idx_position_tickets_position ON position_tickets(position_id);
     CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL;
+    -- Una rivalutazione è un ticket normale, ma due ticket attivi farebbero
+    -- lavorare due Scorer sullo stesso score. I resolved restano storia e non
+    -- bloccano una richiesta futura.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_position_tickets_active_rescore
+        ON position_tickets(position_id, kind)
+        WHERE kind = 'rescore' AND status IN ('open', 'assigned');
     CREATE INDEX IF NOT EXISTS idx_team_directives_status ON team_directives(status);
     CREATE INDEX IF NOT EXISTS idx_team_directives_cloud_id ON team_directives(cloud_id) WHERE cloud_id IS NOT NULL;
     -- La distribuzione ATTIVA è la sola lettura calda: `show` la fa a ogni

@@ -22,7 +22,11 @@ from _db import get_db, ensure_schema
 
 
 def _fmt(t) -> str:
-    head = f"#{t['id']} [pos {t['position_id']}] {t['status']}"
+    # `kind` è routing, non decorazione: `rescore` deve andare allo Scorer.
+    # Senza mostrarlo, il Capitano vedrebbe solo prosa libera e potrebbe
+    # assegnare la richiesta all'agente sbagliato.
+    head = (f"#{t['id']} [pos {t['position_id']}] {t['status']} "
+            f"kind={t['kind'] or 'custom'}")
     if t['assigned_agent']:
         head += f" → {t['assigned_agent']}"
     lines = [head, f"   request : {t['request_text']}"]

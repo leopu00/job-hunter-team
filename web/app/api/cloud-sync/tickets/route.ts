@@ -27,6 +27,7 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 const ALLOWED_STATUS = new Set(["open", "assigned", "resolved"]);
+const RESCORE_KIND = "rescore";
 
 interface TicketPushIn {
   // id locale SQLite — eco per la correlazione lato CLI (id_map sugli INSERT).
@@ -136,6 +137,18 @@ export async function POST(req: NextRequest) {
   let inserted = 0;
   const idMap: Record<string, number> = {}; // local_id (string) → cloud_id
 
+  const findActiveRescore = async (positionLegacyId: number) =>
+    admin
+      .from("position_tickets")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("position_legacy_id", positionLegacyId)
+      .eq("kind", RESCORE_KIND)
+      .in("status", ["open", "assigned"])
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
   for (const t of tickets) {
     if (!t || typeof t.position_legacy_id !== "number") continue;
     const status = ALLOWED_STATUS.has(t.status) ? t.status : "open";
@@ -159,6 +172,16 @@ export async function POST(req: NextRequest) {
     } else {
       // INSERT di un ticket nato in locale → ritorna l'id per la correlazione.
       if (typeof t.local_id !== "number" || !t.request_text) continue;
+      if (t.kind === RESCORE_KIND) {
+        // Una richiesta equivalente può essere nata sul web mentre il box era
+        // offline. Correlala all'identità cloud esistente: riprovare l'INSERT
+        // a ogni tick lascerebbe il ticket locale senza cloud_id per sempre.
+        const { data: active } = await findActiveRescore(t.position_legacy_id);
+        if (active) {
+          idMap[String(t.local_id)] = active.id as number;
+          continue;
+        }
+      }
       const { data, error } = await admin
         .from("position_tickets")
         .insert({
@@ -178,6 +201,10 @@ export async function POST(req: NextRequest) {
       if (!error && data) {
         idMap[String(t.local_id)] = data.id as number;
         inserted++;
+      } else if (t.kind === RESCORE_KIND && error?.code === "23505") {
+        // Race dopo il pre-check: l'indice ha scelto il vincitore, rileggilo.
+        const { data: active } = await findActiveRescore(t.position_legacy_id);
+        if (active) idMap[String(t.local_id)] = active.id as number;
       }
     }
   }

@@ -50,6 +50,8 @@ import { formatPositionEventStamp } from "@/lib/position-event-stamp";
 import { SCORE_COMPONENT_LIMITS, barFill } from "@/lib/score-ranges";
 import { T } from "./page.i18n";
 import { resolveCoverLetterPdfFileName } from "@/lib/position-document-file.server";
+import { activeRescoreTicket } from "@/lib/rescore-ticket";
+import { RescoreRequestButton } from "./RescoreRequestButton";
 
 // Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
 // inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
@@ -295,6 +297,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // insieme alla valutazione. Non usare `positions.updated_at`: cambia anche
   // per azioni estranee allo score e farebbe sembrare fresca una misura vecchia.
   const scoreAssessedAt = formatPositionEventStamp(score?.scored_at, locale);
+  const rescoreTicket = activeRescoreTicket(tickets);
 
   // Analisi semi-strutturata dell'Analista (campo notes) → metadati,
   // motivo esclusione, disallineamenti, prosa. Vedi lib/parse-analysis.
@@ -1228,6 +1231,20 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     legacyId={position.legacy_id}
                     initialRequested={position.recheck_requested === true}
                     lastOpenCheck={position.last_open_check}
+                  />
+                  {/* Stessa pipeline dei ticket liberi: il kind rende la
+                      destinazione Scorer deterministica e lo stato impedisce
+                      di aprire una seconda rivalutazione mentre la prima è in
+                      attesa o assegnata. */}
+                  <RescoreRequestButton
+                    legacyId={position.legacy_id}
+                    initialStatus={
+                      rescoreTicket?.status === "open" ||
+                      rescoreTicket?.status === "assigned"
+                        ? rescoreTicket.status
+                        : null
+                    }
+                    disabled={score == null}
                   />
                   {(() => {
                     // Writer-on-demand (V6): il button e' visibile solo se la
