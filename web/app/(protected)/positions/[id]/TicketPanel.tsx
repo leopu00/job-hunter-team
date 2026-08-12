@@ -38,6 +38,7 @@ const T: Record<
     attachFile: string;
     removeFile: string;
     pasteTooLarge: string;
+    pasteUnsupported: string;
   }
 > = {
   it: {
@@ -62,6 +63,7 @@ const T: Record<
     attachFile: "Allega un file",
     removeFile: "Rimuovi allegato",
     pasteTooLarge: "L'immagine incollata supera il limite di 10 MB",
+    pasteUnsupported: "Formato immagine incollato non supportato",
   },
   en: {
     statusLabel: {
@@ -85,6 +87,7 @@ const T: Record<
     attachFile: "Attach a file",
     removeFile: "Remove attachment",
     pasteTooLarge: "The pasted image exceeds the 10 MB limit",
+    pasteUnsupported: "The pasted image format is not supported",
   },
   es: {
     statusLabel: {
@@ -108,6 +111,7 @@ const T: Record<
     attachFile: "Adjuntar un archivo",
     removeFile: "Quitar archivo",
     pasteTooLarge: "La imagen pegada supera el límite de 10 MB",
+    pasteUnsupported: "El formato de imagen pegado no es compatible",
   },
   fr: {
     statusLabel: {
@@ -131,6 +135,7 @@ const T: Record<
     attachFile: "Joindre un fichier",
     removeFile: "Retirer le fichier",
     pasteTooLarge: "L'image collée dépasse la limite de 10 Mo",
+    pasteUnsupported: "Le format d'image collée n'est pas pris en charge",
   },
   de: {
     statusLabel: {
@@ -154,6 +159,7 @@ const T: Record<
     attachFile: "Datei anhängen",
     removeFile: "Anhang entfernen",
     pasteTooLarge: "Das eingefügte Bild überschreitet das 10-MB-Limit",
+    pasteUnsupported: "Das eingefügte Bildformat wird nicht unterstützt",
   },
   hu: {
     statusLabel: {
@@ -177,6 +183,7 @@ const T: Record<
     attachFile: "Fájl csatolása",
     removeFile: "Melléklet eltávolítása",
     pasteTooLarge: "A beillesztett kép meghaladja a 10 MB-os korlátot",
+    pasteUnsupported: "A beillesztett képformátum nem támogatott",
   },
   pt: {
     statusLabel: {
@@ -200,6 +207,7 @@ const T: Record<
     attachFile: "Anexar um ficheiro",
     removeFile: "Remover anexo",
     pasteTooLarge: "A imagem colada excede o limite de 10 MB",
+    pasteUnsupported: "O formato da imagem colada não é suportado",
   },
 };
 
@@ -224,11 +232,15 @@ export function TicketPanel({
   const [attachment, setAttachment] = useState<File | null>(null);
 
   const pasteImage = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (busy || isPending) {
+      event.preventDefault();
+      return;
+    }
     const result = clipboardImageFile(event.clipboardData);
     if (result.kind === "none") return;
     event.preventDefault();
     if (result.kind === "rejected") {
-      setError(result.reason === "size" ? t.pasteTooLarge : t.networkError);
+      setError(result.reason === "size" ? t.pasteTooLarge : t.pasteUnsupported);
       return;
     }
     setAttachment(result.file);
@@ -299,6 +311,7 @@ export function TicketPanel({
             value={text}
             onChange={(e) => setText(e.target.value)}
             onPaste={pasteImage}
+            disabled={busy || isPending}
             rows={3}
             maxLength={2000}
             placeholder={t.placeholder}
@@ -318,6 +331,7 @@ export function TicketPanel({
               <input
                 type="file"
                 className="sr-only"
+                disabled={busy || isPending}
                 onChange={(event) =>
                   setAttachment(event.target.files?.[0] ?? null)
                 }

@@ -106,7 +106,7 @@ describe("allegato ticket web sul trasporto documenti esistente", () => {
     } as never);
     expect(result.kind).toBe("image");
     if (result.kind !== "image") throw new Error("image not extracted");
-    expect(result.file.name).toBe("clipboard-screenshot.png");
+    expect(result.file.name).toMatch(/^clipboard-screenshot-\d+\.png$/);
     const response = await ticketRequest(result.file);
     expect(response.status).toBe(200);
     expect(readFileSync(join(userDir, "allegati", result.file.name))).toEqual(
@@ -116,9 +116,37 @@ describe("allegato ticket web sul trasporto documenti esistente", () => {
       db.prepare("SELECT request_text FROM position_tickets").get(),
     ).toMatchObject({
       request_text: expect.stringContaining(
-        "/jht_user/allegati/clipboard-screenshot.png",
+        `/jht_user/allegati/${result.file.name}`,
       ),
     });
+  });
+
+  it("non sovrascrive un'immagine incollata da un ticket precedente", async () => {
+    const make = (bytes: string) =>
+      clipboardImageFile({
+        items: [
+          {
+            kind: "file",
+            type: "image/png",
+            getAsFile: () =>
+              new File([bytes], "ignored", { type: "image/png" }),
+          },
+        ],
+      } as never);
+    const first = make("first");
+    const second = make("second");
+    expect(first.kind).toBe("image");
+    expect(second.kind).toBe("image");
+    if (first.kind !== "image" || second.kind !== "image") return;
+    expect(first.file.name).not.toBe(second.file.name);
+    expect((await ticketRequest(first.file)).status).toBe(200);
+    expect((await ticketRequest(second.file)).status).toBe(200);
+    expect(readFileSync(join(userDir, "allegati", first.file.name))).toEqual(
+      Buffer.from("first"),
+    );
+    expect(readFileSync(join(userDir, "allegati", second.file.name))).toEqual(
+      Buffer.from("second"),
+    );
   });
 
   it("rifiuta immagini incollate oltre 10 MB prima del ticket", async () => {
