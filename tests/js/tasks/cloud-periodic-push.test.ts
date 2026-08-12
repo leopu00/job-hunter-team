@@ -1,16 +1,23 @@
 /** O-66 — il cloud converge senza aspettare che qualcuno prema Sync now. */
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createSingleFlightPush,
   decidePeriodicPush,
   nextPeriodicCheckState,
   nextPeriodicPushState,
   periodicPushLimits,
   periodicPushStatusLine,
   readPeriodicPushState,
+  runPeriodicPushCycle,
   savePeriodicPushState,
 } from "../../../cli/src/lib/periodic-push.js";
 
@@ -132,32 +139,149 @@ describe("policy del push periodico", () => {
   });
 });
 
-describe("single-flight condiviso con Sync now", () => {
-  it("due trigger sovrapposti attendono lo stesso push e il successivo riparte", async () => {
-    let release!: (value: { ok: boolean; skipped: number }) => void;
-    const first = new Promise<{ ok: boolean; skipped: number }>((resolve) => {
-      release = resolve;
+describe("esecuzione bounded", () => {
+  it("passa un AbortSignal al writer e rende persistente il timeout", async () => {
+    const saved: Record<string, unknown>[] = [];
+    const outcome = await runPeriodicPushCycle({
+      now: T0,
+      limits: { ...limits, timeoutMs: 5 },
+      state: {},
+      readSignature: () => signature(),
+      push: ({ signal }) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+        }),
+      save: async (state) => {
+        saved.push(state);
+        return true;
+      },
     });
-    const push = vi
-      .fn()
-      .mockImplementationOnce(() => first)
-      .mockResolvedValue({ ok: true, skipped: 0 });
-    const joined = vi.fn();
-    const run = createSingleFlightPush(push, joined);
 
-    const automatic = run({ source: "periodic" });
-    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
-    const syncNow = run({ source: "sync-now" });
-    expect(push).toHaveBeenCalledTimes(1);
-    expect(joined).toHaveBeenCalledTimes(1);
-    release({ ok: true, skipped: 0 });
-    await expect(Promise.all([automatic, syncNow])).resolves.toEqual([
-      { ok: true, skipped: 0 },
-      { ok: true, skipped: 0 },
-    ]);
+    expect(outcome.result).toMatchObject({ ok: false, timedOut: true });
+    expect(outcome.state).toMatchObject({
+      status: "timeout",
+      consecutive_failures: 1,
+    });
+    expect(saved).toHaveLength(1);
+  });
+});
 
-    await run({ source: "periodic" });
-    expect(push).toHaveBeenCalledTimes(2);
+describe("effetto reale sul percorso Sync now", () => {
+  it("invia ogni nuova posizione col writer autorevole e il cursor evita duplicati", async () => {
+    const previousHome = process.env.JHT_HOME;
+    const home = mkdtempSync(join(tmpdir(), "jht-periodic-effect-"));
+    const dbPath = join(home, "jobs.db");
+    const statePath = join(home, "periodic-state.json");
+    try {
+      process.env.JHT_HOME = home;
+      writeFileSync(
+        join(home, "cloud.json"),
+        JSON.stringify({
+          enabled: true,
+          base_url: "https://cloud.example.test",
+          token: "jht_sync_synthetic-test-token",
+        }),
+      );
+      const db = new DatabaseSync(dbPath);
+      db.exec(`
+        CREATE TABLE positions (
+          id INTEGER PRIMARY KEY, title TEXT, company TEXT, company_id INTEGER,
+          url TEXT, location TEXT, remote_type TEXT, status TEXT, notes TEXT,
+          source TEXT, jd_text TEXT, jd_summary TEXT, requirements TEXT,
+          found_by TEXT, found_at TEXT, deadline TEXT, last_checked TEXT,
+          last_actor TEXT, salary_declared_min INTEGER,
+          salary_declared_max INTEGER, salary_declared_currency TEXT,
+          salary_estimated_min INTEGER, salary_estimated_max INTEGER,
+          salary_estimated_currency TEXT, salary_estimated_source TEXT,
+          write_requested INTEGER, write_requested_at TEXT,
+          geocode_requested INTEGER, geocode_requested_at TEXT,
+          recheck_requested INTEGER, recheck_requested_at TEXT,
+          salary_precise_requested INTEGER, salary_precise_requested_at TEXT,
+          salary_precise TEXT, role_family TEXT, loc_city TEXT, loc_region TEXT,
+          loc_country TEXT, loc_country_code TEXT, loc_continent TEXT,
+          work_mode TEXT, work_country TEXT, work_country_code TEXT,
+          location_notes TEXT, is_multi_location INTEGER, office_lat REAL,
+          office_lon REAL, office_address TEXT, office_geocoded INTEGER,
+          office_verified INTEGER, expires_at TEXT, is_open INTEGER,
+          last_open_check TEXT, created_at TEXT, updated_at TEXT
+        );
+      `);
+      const insert = db.prepare(
+        "INSERT INTO positions (id, title, company, updated_at) VALUES (?, ?, 'Example', ?)",
+      );
+      insert.run(1, "First role", "2026-08-12 15:00:00");
+      db.close();
+
+      const payloads: Array<Record<string, unknown>> = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (_url: unknown, init?: RequestInit) => {
+          const body = JSON.parse(String(init?.body || "{}"));
+          payloads.push(body);
+          return new Response(
+            JSON.stringify({
+              positions: {
+                upserted: Array.isArray(body.positions)
+                  ? body.positions.length
+                  : 0,
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }),
+      );
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.resetModules();
+      const { maybePeriodicPush } =
+        await import("../../../cli/src/commands/cloud.js");
+      const testLimits = { ...limits, intervalMs: MIN };
+
+      await expect(
+        maybePeriodicPush({
+          db: dbPath,
+          statePath,
+          now: T0,
+          limits: testLimits,
+          silent: true,
+        }),
+      ).resolves.toMatchObject({ result: { ok: true, skipped: 0 } });
+
+      const db2 = new DatabaseSync(dbPath);
+      db2
+        .prepare(
+          "INSERT INTO positions (id, title, company, updated_at) VALUES (?, ?, 'Example', ?)",
+        )
+        .run(2, "Second role", "2026-08-12 15:01:00");
+      db2.close();
+      await maybePeriodicPush({
+        db: dbPath,
+        statePath,
+        now: T0 + MIN,
+        limits: testLimits,
+        silent: true,
+      });
+
+      expect(
+        payloads.map((body) =>
+          (body.positions as Array<{ id: number }> | undefined)?.map(
+            (position) => position.id,
+          ),
+        ),
+      ).toEqual([[1], [2]]);
+      expect(readPeriodicPushState(statePath)).toMatchObject({
+        status: "completed",
+        signature: { positions: { n: 2 } },
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+      rmSync(home, { recursive: true, force: true });
+      if (previousHome === undefined) delete process.env.JHT_HOME;
+      else process.env.JHT_HOME = previousHome;
+      process.exitCode = undefined;
+    }
   });
 });
 

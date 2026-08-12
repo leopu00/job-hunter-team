@@ -6,7 +6,7 @@
  * verifica della risposta. Qui decidiamo soltanto quando quel percorso può
  * partire, persistiamo un esito leggibile e impediamo due push sovrapposti.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { JHT_HOME } from "../jht-paths.js";
@@ -59,6 +59,9 @@ export async function savePeriodicPushState(
     await writeFile(path, `${JSON.stringify(state, null, 2)}\n`, {
       mode: 0o600,
     });
+    // `mode` vale soltanto alla creazione: un file già esistente e troppo
+    // permissivo deve essere corretto, non perpetuato a ogni riscrittura.
+    await chmod(path, 0o600);
     return true;
   } catch {
     return false;
@@ -169,24 +172,59 @@ export function periodicPushStatusLine(state = {}) {
 }
 
 /**
- * Single-flight: Sync now, bootstrap e periodic condividono UNA promessa.
- * Chi arriva mentre il push è in corso ne attende l'esito invece di iniziare
- * una seconda lettura/catena HTTP sullo stesso cursore.
+ * Esegue UN giro della policy. Il producer del payload arriva dal chiamante:
+ * in produzione è l'`handlePush` esclusivo già condiviso da bootstrap e
+ * "Sync now". Questo modulo non legge tabelle né costruisce richieste cloud.
  */
-export function createSingleFlightPush(pushFn, onJoin = () => {}) {
-  let active = null;
-  return async (...args) => {
-    if (active) {
-      onJoin(...args);
-      return active;
-    }
-    active = Promise.resolve().then(() => pushFn(...args));
-    try {
-      return await active;
-    } finally {
-      active = null;
-    }
-  };
+export async function runPeriodicPushCycle({
+  now = Date.now(),
+  limits = periodicPushLimits(),
+  state = {},
+  readSignature,
+  push,
+  save = savePeriodicPushState,
+  signal,
+}) {
+  let signature;
+  let decision = decidePeriodicPush({ now, state, limits });
+  if (decision.needsSignature) {
+    signature = await readSignature();
+    decision = decidePeriodicPush({ now, state, limits, signature });
+  }
+
+  if (!decision.push) {
+    if (!decision.checked) return decision;
+    const nextState = nextPeriodicCheckState({
+      state,
+      now,
+      signature,
+      reason: decision.reason,
+    });
+    const persisted = await save(nextState);
+    return { ...decision, state: nextState, persisted };
+  }
+
+  const pushSignal = signal || AbortSignal.timeout(limits.timeoutMs);
+  let result;
+  try {
+    result = await push({ signal: pushSignal });
+  } catch (error) {
+    const name = String(error?.name || "").toLowerCase();
+    result = {
+      ok: false,
+      skipped: 0,
+      timedOut: name.includes("timeout") || error?.name === "AbortError",
+    };
+  }
+  const nextState = nextPeriodicPushState({
+    state,
+    now,
+    signature,
+    result,
+    source: "periodic",
+  });
+  const persisted = await save(nextState);
+  return { ...decision, result, state: nextState, persisted };
 }
 
 /** Il file è osservabile senza confondere "mai partito" con "manca". */
