@@ -15,6 +15,7 @@ import {
 import {
   CLOUD_SYNC_STALE_AFTER_MS,
   cloudSyncIsBehind,
+  freshnessRowFromRead,
 } from "@/lib/team-state/sync-freshness";
 
 // "Sync now" lato CLOUD ([JHT-DATA-SYNC] fase 3). Mirror del CloudSyncStatusBanner
@@ -624,13 +625,17 @@ export default function CloudRefreshButton() {
 
     const catchUp = async () => {
       try {
-        const { data } = await supabase
-          .from("team_state")
-          .select(
-            "sync_requested_at,sync_completed_at,last_action,last_action_at,cloud_push_status,cloud_push_checked_at",
-          )
-          .maybeSingle();
-        if (mounted.current) apply(data as StateRow | null);
+        const row = freshnessRowFromRead(
+          await supabase
+            .from("team_state")
+            .select(
+              "sync_requested_at,sync_completed_at,last_action,last_action_at,cloud_push_status,cloud_push_checked_at",
+            )
+            .maybeSingle(),
+        );
+        if (mounted.current && row !== undefined) {
+          apply(row as StateRow | null);
+        }
       } catch {
         /* offline: nessun timestamp */
       }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CLOUD_SYNC_STALE_AFTER_MS,
   cloudSyncIsBehind,
+  freshnessRowFromRead,
   syncRequestIsPending,
 } from "./sync-freshness";
 
@@ -34,6 +35,22 @@ describe("visibilità del ritardo cloud", () => {
     expect(
       cloudSyncIsBehind("current", new Date(now + 1_000).toISOString(), now),
     ).toBe(false);
+  });
+
+  it("un errore Supabase resta sconosciuto, non diventa una riga nulla", () => {
+    expect(
+      freshnessRowFromRead({
+        data: null,
+        error: { message: "transient read failure" },
+      }),
+    ).toBeUndefined();
+    expect(freshnessRowFromRead({ data: null, error: null })).toBeNull();
+    expect(
+      freshnessRowFromRead({
+        data: { cloud_push_status: "current" },
+        error: null,
+      }),
+    ).toEqual({ cloud_push_status: "current" });
   });
 });
 
