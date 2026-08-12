@@ -338,24 +338,82 @@ fi
 # singleton via /proc cmdline). Lanciato dopo che le 3 sessioni tmux sono
 # partite, cosi' i primi messaggi trovano gia' sessione pronta a ricevere.
 if [ "$ROLE" = "tg-bridge" ]; then
-  TG_SCRIPT="/app/.launcher/tg-bridge.py"
+  # Accanto a questo script, non un path assoluto al container: in /app è la
+  # stessa cosa, e fuori (test, host) lo script diventa eseguibile davvero
+  # invece di fallire su una directory che non esiste.
+  TG_SCRIPT="$DEV_TEAM_DIR/tg-bridge.py"
   if [ ! -f "$TG_SCRIPT" ]; then
     echo "✗ $TG_SCRIPT not found — tg-bridge did NOT start"
     exit 1
   fi
-  # Kill TUTTE le istanze esistenti (di qualsiasi ruolo): rispawnamo 3 fresche.
-  jht_kill_by_marker tg-bridge.py 0 1
+
+  # O-58 — un solo ruolo, se richiesto: `start-agent.sh tg-bridge mentor`.
+  # Prima esisteva solo il rispawn di tutti e tre, e chi voleva rianimarne uno
+  # ammazzava gli altri due che stavano lavorando. Il watchdog ora chiede il
+  # ruolo mancante e basta; senza argomento il comportamento è quello storico
+  # (tutti e tre), che serve al boot.
+  TG_ROLES="assistente capitano mentor"
+  if [ -n "$INSTANCE" ]; then
+    case " $TG_ROLES " in
+      *" $INSTANCE "*) TG_ROLES="$INSTANCE" ;;
+      *)
+        echo "Error: unknown tg-bridge role '$INSTANCE' (valid: assistente, capitano, mentor)." >&2
+        exit 1
+        ;;
+    esac
+  fi
+
+  # O-58 — LOCK, come per le sessioni agente (vedi più sotto, stessa
+  # motivazione: watchdog, Capitano e operatore chiedono lo stesso spawn quasi
+  # nello stesso istante). Questo ramo ne era escluso, e senza lock due start
+  # concorrenti si intrecciano così: A uccide, B uccide, A spawna 3, B spawna
+  # 3 → SEI poller sugli stessi tre bot. Telegram risponde 409 a raffica a
+  # getUpdates concorrenti, e da lì un messaggio dell'operatore è stato
+  # ricevuto e mai consegnato (jht-tmux-send rc=141), per trenta ore.
+  # UNA chiave sola, non una per ruolo: il boot chiede tutti e tre mentre il
+  # watchdog può chiedere il mentor, e con due lock diversi quelle due
+  # sequenze si intreccerebbero di nuovo. Serializzare costa l'attesa di uno
+  # spawn (il python parte staccato, sono millisecondi) e toglie la classe
+  # intera.
+  if command -v flock >/dev/null 2>&1; then
+    mkdir -p "${JHT_HOME:-/jht_home}/locks"
+    exec 9>"${JHT_HOME:-/jht_home}/locks/start-tg-bridge.lock"
+    if ! flock -w 30 9; then
+      echo "Error: timed out waiting for the concurrent spawn of tg-bridge [$TG_ROLES]." >&2
+      exit 1
+    fi
+  fi
+
+  # Kill MIRATO: il marker include il ruolo, che compare nel cmdline grazie a
+  # `--role` (vedi tg-bridge.py). Prima si uccideva per marker `tg-bridge.py`,
+  # cioè tutti e tre, anche quando ne serviva uno solo — ed è così che la
+  # morte del mentor si portava dietro assistente e capitano.
+  for _role in $TG_ROLES; do
+    jht_kill_by_marker "tg-bridge.py --role $_role" 0 0
+  done
+  # UN solo settle per l'intera raffica, come quando il kill era uno solo:
+  # tre attese da un secondo allungherebbero ogni boot senza motivo.
+  sleep 1
+
   # JHT_TG_OFFSET_RESET=1 → al primo poll skippa il backlog (utile in fresh
   # install per non rifare replay di vecchi /start dell'utente).
-  for _role in assistente capitano mentor; do
+  #
+  # `9>&-` NON è decorativo: il lock di flock vive nella *open file
+  # description*, che i figli EREDITANO. I bridge sono detached e restano vivi
+  # per giorni, quindi senza questa chiusura il fd 9 resta aperto in loro e il
+  # lock non viene mai rilasciato: il primo spawn della vita del container
+  # bloccherebbe ogni respawn successivo, che andrebbe in timeout dopo 30s. Il
+  # rimedio sarebbe stato peggiore del difetto — il watchdog non avrebbe più
+  # potuto rianimare niente. Trovato dal test della race, non a occhio.
+  for _role in $TG_ROLES; do
     _target=$(echo "$_role" | tr '[:lower:]' '[:upper:]')
     _log="$(jht_daemon_log "tg-bridge-${_role}.log")"
     setsid sh -c "
       JHT_TG_BOT_ROLE='$_role' \
       JHT_TG_TARGET_SESSION='$_target' \
       JHT_TG_OFFSET_RESET='${JHT_TG_OFFSET_RESET:-}' \
-        python3 -u $TG_SCRIPT >> '$_log' 2>&1
-    " >/dev/null 2>&1 < /dev/null &
+        python3 -u $TG_SCRIPT --role $_role >> '$_log' 2>&1
+    " >/dev/null 2>&1 < /dev/null 9>&- &
     echo "✓ tg-bridge[$_role] started (target=$_target, log $_log)"
   done
   exit 0
