@@ -58,6 +58,7 @@ if (-not $LocalAppData) { throw 'LOCALAPPDATA is unavailable: refusing an unprot
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir     = if ($env:JHT_BIN_DIR)     { $env:JHT_BIN_DIR }     else { Join-Path $env:USERPROFILE '.local\bin' }
 $JhtHome    = Join-Path $env:USERPROFILE '.jht'
+. (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
 $Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht:0.3.7' }
 $env:JHT_IMAGE = $Image
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
@@ -72,22 +73,6 @@ function Write-Fail { param([string]$Msg) Write-Host "  x $Msg" -ForegroundColor
 function Write-Step { param([int]$N, [int]$Total, [string]$Title) Write-Host ""; Write-Host "[$N/$Total] $Title" -ForegroundColor White }
 function Write-Dry  { param([string]$Cmd) Write-Host "  [dry-run] would execute: $Cmd" -ForegroundColor DarkGray }
 
-function Protect-JhtHomeAcl {
-  param([string]$Path)
-  try {
-    $owner = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $nodes = @(Get-Item -LiteralPath $Path) + @(Get-ChildItem -LiteralPath $Path -Force -Recurse)
-    foreach ($node in $nodes) {
-      $acl = Get-Acl -LiteralPath $node.FullName
-      $acl.SetAccessRuleProtection($true, $false)
-      $inherit = if ($node.PSIsContainer) { 'ContainerInherit,ObjectInherit' } else { 'None' }
-      $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($owner, 'FullControl', $inherit, 'None', 'Allow')
-      $acl.SetAccessRule($rule)
-      Set-Acl -LiteralPath $node.FullName -AclObject $acl
-      if ((Get-Acl -LiteralPath $node.FullName).AreAccessRulesProtected -ne $true) { throw "ACL inheritance remains enabled: $($node.FullName)" }
-    }
-  } catch { throw "Unable to enforce owner-only ACL on $Path`: $($_.Exception.Message)" }
-}
 
 function Invoke-Action {
   param([scriptblock]$Block, [string]$Description)

@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $root = Join-Path $env:RUNNER_TEMP ("jht-acl-selftest-" + [guid]::NewGuid().ToString('N'))
+. (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 try {
   $owner = [Security.Principal.WindowsIdentity]::GetCurrent().Name
@@ -9,15 +10,7 @@ try {
   $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($foreign, 'FullControl', 'Allow')))
   Set-Acl $root $acl
 
-  # Same host-side repair contract as install.ps1, deliberately verify ACEs.
-  $nodes = @(Get-Item $root) + @(Get-ChildItem $root -Force -Recurse)
-  foreach ($node in $nodes) {
-    $a = Get-Acl $node.FullName
-    $a.SetAccessRuleProtection($true, $false)
-    $inherit = if ($node.PSIsContainer) { 'ContainerInherit,ObjectInherit' } else { 'None' }
-    $a.SetAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($owner, 'FullControl', $inherit, 'None', 'Allow')))
-    Set-Acl $node.FullName $a
-  }
+  Protect-JhtHomeAcl -Path $root
   $effective = Get-Acl $root
   $allowed = @($owner, 'NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators')
   if (-not $effective.AreAccessRulesProtected) { throw 'inheritance still enabled' }
@@ -26,6 +19,7 @@ try {
       throw "unexpected writable ACE: $($rule.IdentityReference.Value)"
     }
   }
+  if (-not (Test-PrivateJhtHomeAcl -Path $root)) { throw 'foreign ACE survived repair' }
 
   # A broad ACE must fail before docker compose is reached.
   $bad = Join-Path $root 'bad'; New-Item -ItemType Directory $bad | Out-Null
