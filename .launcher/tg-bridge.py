@@ -470,13 +470,18 @@ def fetch_file(token: str, file_id: str, dest_name: str) -> Path | None:
         file_path = result["file_path"]
         dl_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
         INBOX_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(INBOX_DIR, 0o700)
+        except OSError:
+            pass
         # Anti-clobber: prefisso timestamp se nome gia' presente
         local = INBOX_DIR / dest_name
         if local.exists():
             ts = datetime.now().strftime("%Y%m%d-%H%M%S")
             local = INBOX_DIR / f"{ts}-{dest_name}"
         written = 0
-        with urllib.request.urlopen(dl_url, timeout=60) as r, open(local, "wb") as f:
+        fd = os.open(local, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with urllib.request.urlopen(dl_url, timeout=60) as r, os.fdopen(fd, "wb") as f:
             while True:
                 chunk = r.read(DOWNLOAD_CHUNK_BYTES)
                 if not chunk:
