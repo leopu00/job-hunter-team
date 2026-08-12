@@ -1,7 +1,8 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { execArgvInContainer } from '../utils/container-proxy.js';
+import { writePrivateJson } from '../lib/secure-config-io.js';
 
 // #9 — `jht wh simulate` girava SEMPRE via `docker exec jht`, ma il wrapper
 // `jht` esegue già DENTRO il container (JHT_SHELL_VIA=docker:jht): da lì non
@@ -40,8 +41,7 @@ async function loadConfig() {
 }
 
 async function saveConfig(cfg) {
-  await mkdir(JHT_HOME, { recursive: true });
-  await writeFile(CONFIG_FILE, JSON.stringify(cfg, null, 2) + '\n');
+  writePrivateJson(CONFIG_FILE, cfg);
 }
 
 function detectLocalTz() {
