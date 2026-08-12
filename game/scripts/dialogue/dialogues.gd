@@ -1097,6 +1097,79 @@ const TREES := {
 	},
 }
 
+## Le shell dinamiche sono narrativa autoriale, mentre i valori inseriti nei
+## loro placeholder sono dati utente/esterni e non vengono mai tradotti.
+const DYNAMIC_SHELLS := {
+	"dialogue.dynamic.greeting.morning": "Good morning",
+	"dialogue.dynamic.greeting.afternoon": "Good afternoon",
+	"dialogue.dynamic.greeting.evening": "Good evening",
+	"dialogue.dynamic.runtime.container_running": "The team's workspace is already ready. I'll open the panel so you can see what is still needed to begin.",
+	"dialogue.dynamic.runtime.docker_running": "The team's home is already ready—perfect, the big work is done. In the panel I open, confirm activation and the team can begin work.",
+	"dialogue.dynamic.runtime.docker_available": "The office home is already installed on this computer, but it is currently off. Start it, wait a few seconds, then return to the panel I open to let the team in.",
+	"dialogue.dynamic.runtime.missing": "First we need to build a small private home for the office on this computer. The panel I open has guided installation; complete it once, then return here and activate the team.",
+	"dialogue.dynamic.positions_summary": "Research brought in %d new positions.",
+}
+
+
+static func node_text_id(tree_id: String, node_id: String) -> String:
+	return "dialogue.%s.%s.line" % [tree_id, node_id]
+
+
+static func choice_text_id(tree_id: String, node_id: String,
+		next_id: String) -> String:
+	return "dialogue.%s.%s.choice.%s" % [tree_id, node_id, next_id]
+
+
+## L'emozione è controllo strutturale: viene dalla sorgente canonica e resta
+## fuori dal catalogo. Solo il corpo leggibile è affidato alla traduzione.
+static func node_text(tree_id: String, node_id: String,
+		locale := "") -> String:
+	var node: Dictionary = TREES.get(tree_id, {}).get(node_id, {})
+	var source := str(node.get("text", ""))
+	var parsed := parse_emotion(source)
+	var translated := UIStrings.authored(node_text_id(tree_id, node_id),
+			str(parsed[1]), locale)
+	return "[%s] %s" % [str(parsed[0]), translated] if source.begins_with("[") \
+			else translated
+
+
+static func choice_text(tree_id: String, node_id: String, choice: Dictionary,
+		locale := "") -> String:
+	var next_id := str(choice.get("next", ""))
+	return UIStrings.authored(choice_text_id(tree_id, node_id, next_id),
+			str(choice.get("text", "")), locale)
+
+
+static func dynamic_shell_ids() -> PackedStringArray:
+	return PackedStringArray(DYNAMIC_SHELLS.keys())
+
+
+static func _dynamic_text(key: String, locale := "") -> String:
+	return UIStrings.authored(key, str(DYNAMIC_SHELLS.get(key, key)), locale)
+
+
+static func greeting_for_hour(hour: int, locale := "") -> String:
+	if hour >= 5 and hour < 13:
+		return _dynamic_text("dialogue.dynamic.greeting.morning", locale)
+	if hour >= 13 and hour < 18:
+		return _dynamic_text("dialogue.dynamic.greeting.afternoon", locale)
+	return _dynamic_text("dialogue.dynamic.greeting.evening", locale)
+
+
+static func positions_summary(count: int, locale := "") -> String:
+	return _dynamic_text("dialogue.dynamic.positions_summary", locale) % count
+
+
+static func docker_line_for_status(status: Dictionary, locale := "") -> String:
+	var key := "dialogue.dynamic.runtime.missing"
+	if bool(status.get("container_running", false)):
+		key = "dialogue.dynamic.runtime.container_running"
+	elif bool(status.get("docker_running", false)):
+		key = "dialogue.dynamic.runtime.docker_running"
+	elif bool(status.get("docker_available", false)):
+		key = "dialogue.dynamic.runtime.docker_available"
+	return _dynamic_text(key, locale)
+
 ## Risolve i segnaposto dinamici con i dati di TeamData (mock oggi, reali domani).
 static func resolve_placeholders(text: String, team_data: Node) -> String:
 	if text.find("{") == -1:
@@ -1116,7 +1189,7 @@ static func resolve_placeholders(text: String, team_data: Node) -> String:
 		"docker_line": _docker_line(team_data),
 		"mentor_tip": team_data.mentor_tip(),
 		"positions": pos_lines.strip_edges(),
-		"positions_summary": "Research brought in %d new positions." % summary["positions_today"],
+		"positions_summary": positions_summary(int(summary["positions_today"])),
 		"avg_score": str(summary["avg_score"]),
 		"score_title": expl["title"],
 		"score_company": expl["company"],
@@ -1134,23 +1207,13 @@ static func _player_suffix(team_data: Node) -> String:
 static func _docker_line(team_data: Node) -> String:
 	var setup := team_data.get_node_or_null("/root/SetupService")
 	var status: Dictionary = setup.status if setup != null else {}
-	if bool(status.get("container_running", false)):
-		return "The team's workspace is already ready. I'll open the panel so you can see what is still needed to begin."
-	if bool(status.get("docker_running", false)):
-		return "The team's home is already ready—perfect, the big work is done. In the panel I open, confirm activation and the team can begin work."
-	if bool(status.get("docker_available", false)):
-		return "The office home is already installed on this computer, but it is currently off. Start it, wait a few seconds, then return to the panel I open to let the team in."
-	return "First we need to build a small private home for the office on this computer. The panel I open has guided installation; complete it once, then return here and activate the team."
+	return docker_line_for_status(status)
 
 ## Saluto in base all'orario locale dell'utente: l'accoglienza deve
 ## sembrare quella di una persona vera, non di un software.
 static func greeting() -> String:
 	var hour := int(Time.get_datetime_dict_from_system().get("hour", 12))
-	if hour >= 5 and hour < 13:
-		return "Good morning"
-	if hour >= 13 and hour < 18:
-		return "Good afternoon"
-	return "Good evening"
+	return greeting_for_hour(hour)
 
 ## Estrae il tag emozione inline: "[caldo] Ciao" → ["caldo", "Ciao"].
 static func parse_emotion(text: String) -> Array:

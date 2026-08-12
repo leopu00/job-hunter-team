@@ -109,6 +109,20 @@ static func t(key: String) -> String:
 	return _translated(key, lang, _translations() if lang != "it" else {})
 
 
+## Copy autoriale su cataloghi sparsi. A differenza della UI, la narrativa ha
+## centinaia di righe e non duplica l'inglese in sette mappe solo per ottenere
+## parità strutturale: se la traduzione non esiste, la sorgente EN esplicita è
+## il fallback. I file opzionali sono scripts/i18n/dialogue_<lang>.gd.
+static func authored(key: String, english_source: String,
+		requested_lang := "") -> String:
+	var locale := requested_lang if requested_lang != "" else lang
+	if locale == DEFAULT_LANG or not LANGS.has(locale):
+		return english_source
+	var translated: String = str(_authored_translations().get(locale, {}).get(
+			key, ""))
+	return translated if translated != "" else english_source
+
+
 ## Snapshot creato sul main thread prima di accodare un worker VPS. Il thread
 ## riceve solo stringhe già risolte e non inizializza mai il catalogo lazy.
 static func vps_presentation_snapshot() -> Dictionary:
@@ -151,6 +165,8 @@ static func _translated(key: String, requested_lang: String,
 ## I dizionari tradotti, caricati pigramente (i preload in const
 ## creerebbero un ciclo di parse se un file i18n mancasse in dev).
 static var _tr_cache := {}
+static var _authored_tr_cache := {}
+static var _authored_tr_loaded := false
 
 static func _translations() -> Dictionary:
 	if _tr_cache.is_empty():
@@ -162,6 +178,22 @@ static func _translations() -> Dictionary:
 				var script: GDScript = load(path)
 				_tr_cache[l] = script.get_script_constant_map().get("S", {})
 	return _tr_cache
+
+
+## Overlay narrativi caricati soltanto se esistono. Il catalogo inglese non è
+## un ottavo file: vive accanto alla struttura canonica che gli dà significato.
+static func _authored_translations() -> Dictionary:
+	if not _authored_tr_loaded:
+		for locale in LANGS:
+			if locale == DEFAULT_LANG:
+				continue
+			var path := "res://scripts/i18n/dialogue_%s.gd" % locale
+			if ResourceLoader.exists(path):
+				var script: GDScript = load(path)
+				_authored_tr_cache[locale] = script.get_script_constant_map().get(
+						"S", {})
+		_authored_tr_loaded = true
+	return _authored_tr_cache
 
 const S := {
 	"common.loading": "CARICAMENTO…",

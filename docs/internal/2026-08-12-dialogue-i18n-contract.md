@@ -8,14 +8,14 @@ The authored dialogue surface is not one undifferentiated set of strings:
 
 | Surface | Canonical source | Measured coverage |
 | --- | --- | ---: |
-| Dialogue-tree narrative | `Dialogues.TREES` | 38 trees, 222 node lines, 138 choice labels (360 strings) |
+| Dialogue-tree narrative | `Dialogues.TREES` | 38 trees, 221 node lines, 138 choice labels (359 strings) |
 | Dynamic narrative shells | `Dialogues` | 3 greetings, 4 runtime-location lines, 1 position-summary template (8 strings) |
 | Staged-tour UI/narrative bridge | `tour.invite` and `tour.guide.*` in `UIStrings` | 17 keys, already present in all 7 locales |
 | Dialogue chrome | `hud.dialogue_*` and role-name keys in `UIStrings` | already localized UI copy |
 | User/external data | player name, position title/company/location, score reasons and free text | never translated |
 
 The partial system is therefore real: dialogue chrome and the 17 staged-tour
-lines already use `UIStrings`, while `DialogueUI` reads all 360 tree strings
+lines already use `UIStrings`, while `DialogueUI` reads all 359 tree strings
 directly and the 8 dynamic shells are English literals.
 
 ## Canonical identity and fallback
@@ -44,8 +44,9 @@ non-empty text with the same placeholders as the English source.
 
 - UI copy continues to use ordinary `UIStrings` keys.
 - Authored narrative is resolved only at presentation time. Emotion tags are
-  part of the localized line; pose, action, `next_id` and tree structure are
-  not localized.
+  structural control metadata extracted from the English source, not words for
+  translators; pose, action, `next_id` and tree structure are likewise not
+  localized.
 - Player/external values inserted into placeholders are data and remain
   byte-for-byte unchanged by translation.
 - A dialogue selection is user data only as its canonical branch value
@@ -57,9 +58,9 @@ non-empty text with the same placeholders as the English source.
 ## Verifiable delivery boundary
 
 This ticket introduces the resolver, canonical IDs, seven-locale resolution
-and placeholder gates for all 368 currently bypassing authored strings. The
+and placeholder gates for all 367 currently bypassing authored strings. The
 17 already-localized staged-tour keys stay in the authoritative UI catalog.
-Human translation of 368 strings into each of the six non-English locales is
-a separate editorial workload (2,208 locale-string cells) and is not invented
+Human translation of 367 strings into each of the six non-English locales is
+a separate editorial workload (2,202 locale-string cells) and is not invented
 by machine or hidden by duplicated English entries. The census/test reports
 that residue precisely while runtime has a deterministic English fallback.

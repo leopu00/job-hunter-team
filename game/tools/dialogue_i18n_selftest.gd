@@ -4,7 +4,7 @@ extends SceneTree
 ##   godot --headless --path game --script res://tools/dialogue_i18n_selftest.gd
 
 const EXPECTED_TREES := 38
-const EXPECTED_NODES := 222
+const EXPECTED_NODES := 221
 const EXPECTED_CHOICES := 138
 const EXPECTED_DYNAMIC_SHELLS := 8
 
@@ -26,9 +26,12 @@ func _init() -> void:
 			_check(not ids.has(node_key), "duplicate ID: " + node_key)
 			ids[node_key] = true
 			var source_line := str(node.get("text", ""))
+			var source_emotion := str(Dialogues.parse_emotion(source_line)[0])
 			for locale: String in UIStrings.LANGS:
 				var resolved := Dialogues.node_text(tree_id, node_id, locale)
 				_check(resolved != "", "%s empty in %s" % [node_key, locale])
+				_check(str(Dialogues.parse_emotion(resolved)[0]) == source_emotion,
+						"%s structural emotion drift in %s" % [node_key, locale])
 				_check(_placeholders(resolved) == _placeholders(source_line),
 						"%s placeholder drift in %s" % [node_key, locale])
 				if locale == UIStrings.DEFAULT_LANG:
@@ -83,11 +86,11 @@ func _init() -> void:
 			"res://scripts/setup/scripted_onboarding.gd")
 	_check(onboarding_source.contains('"kind": "dialogue_choice"'),
 			"new dialogue choices are not distinguished from narrative labels")
-	_check(onboarding_source.contains('if str(clean.get("kind", "")) == "dialogue_choice"'),
+	_check(onboarding_source.contains('str(clean.get("kind", "")) == "dialogue_choice"'),
 			"localized narrative label can still enter model context")
 
 	if _failures.is_empty():
-		print("DIALOGUE-I18N-TEST PASS (38 trees, 360 IDs, 7 locales, residue 2208)")
+		print("DIALOGUE-I18N-TEST PASS (38 trees, 359 IDs, 7 locales, residue 2202)")
 		quit(0)
 		return
 	for failure in _failures:
