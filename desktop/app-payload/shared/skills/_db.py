@@ -161,6 +161,20 @@ def ensure_schema(conn: sqlite3.Connection):
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
+    -- Provenienza necessaria all'undo della candidatura manuale: senza
+    -- from_state la UI può soltanto dedurre lo stato precedente e rischia di
+    -- riportare una posizione review/checked nello stato sbagliato.
+    CREATE TABLE IF NOT EXISTS position_state_transitions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        position_id INTEGER NOT NULL,
+        from_state TEXT,
+        to_state TEXT NOT NULL,
+        ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        by_agent TEXT NOT NULL,
+        notes TEXT,
+        FOREIGN KEY (position_id) REFERENCES positions(id)
+    );
+
     CREATE TABLE IF NOT EXISTS pending_user_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         agent TEXT NOT NULL,
@@ -187,6 +201,9 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
     CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
     CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
+    CREATE INDEX IF NOT EXISTS idx_pst_position_ts ON position_state_transitions(position_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_pst_ts ON position_state_transitions(ts);
+    CREATE INDEX IF NOT EXISTS idx_pst_to_state ON position_state_transitions(to_state, ts);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);

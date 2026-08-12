@@ -1557,10 +1557,11 @@ async function performPush(options) {
     return x < y ? -1 : x > y ? 1 : 0;
   };
 
-  // Bundle position→figli: scores/applications/highlights DEVONO viaggiare
-  // nello stesso POST della loro position (il server risolve position_id via
-  // legacyToUuid costruita SOLO dalle positions in-request — nessun lookup di
-  // fallback per scores/applications, vedi route push §2/§3).
+  // Bundle position→figli: evita lookup cloud e conserva una sola conferma
+  // HTTP per la famiglia. Scores richiede ancora la position nello stesso
+  // request; applications e highlights hanno anche un lookup server-side.
+  // Per applications è obbligatorio: perderla può rendere visibile uno
+  // status applied senza timestamp.
   const scoresByPos = groupBy(scores, 'position_id');
   const appsByPos = groupBy(applications, 'position_id');
   const hlByPos = groupBy(highlights, 'position_id');
@@ -1572,10 +1573,9 @@ async function performPush(options) {
     hls: hlByPos.get(p.id) || [],
   }));
   // Figli "orfani": la loro position non è nel delta di questo tick (position
-  // invariata ma figlio cambiato). Il server li scarterebbe comunque (come nel
-  // push monolitico odierno: position_id non risolvibile → drop), ma li
-  // inviamo lo stesso perché il cursore avanzi coerentemente col comportamento
-  // attuale. Vengono spediti con positions:[] → 200, 0 upsert, cursore avanza.
+  // invariata ma figlio cambiato). Scores mantiene il contratto storico;
+  // applications/highlights vengono risolte dal server via legacy_id. La
+  // prima deve risultare davvero persistita prima che il cursore avanzi.
   const orphanScores = scores.filter((s) => !posIds.has(s.position_id));
   const orphanApps = applications.filter((a) => !posIds.has(a.position_id));
   const orphanHls = highlights.filter((h) => !posIds.has(h.position_id));
@@ -1600,7 +1600,8 @@ async function performPush(options) {
   const sentHls = posRes.confirmed.flatMap((b) => b.hls);
   const skipHls = posRes.skipped.flatMap((b) => b.hls);
 
-  // 3) Figli orfani (positions:[] → dropped server-side, cursore avanza).
+  // 3) Figli orfani. Applications/highlights hanno lookup server-side; scores
+  // conserva il comportamento legacy finché il suo contratto non cambia.
   const oSco = await sendChunked(orphanScores.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], scores: r }));
   const oApp = await sendChunked(orphanApps.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], applications: r }));
   const oHl = await sendChunked(orphanHls.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], position_highlights: r }));
