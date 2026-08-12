@@ -318,12 +318,18 @@ def test_rls_execute_and_idempotent_real_migration(postgres16):
         has_function_privilege('authenticated',
           'public.redeem_cloud_sync_pairing(text)', 'EXECUTE'),
         has_function_privilege('service_role',
-          'public.redeem_cloud_sync_pairing(text)', 'EXECUTE');
+          'public.redeem_cloud_sync_pairing(text)', 'EXECUTE'),
+        has_function_privilege('anon',
+          'public.cleanup_pairing_sessions()', 'EXECUTE'),
+        has_function_privilege('authenticated',
+          'public.cleanup_pairing_sessions()', 'EXECUTE'),
+        has_function_privilege('service_role',
+          'public.cleanup_pairing_sessions()', 'EXECUTE');
       SET ROLE anon;
       SELECT count(*) FROM public.cloud_sync_pairing_sessions;
       RESET ROLE;
     """).stdout.strip().splitlines()
-    assert privileges == ["f|f|t", "0"]
+    assert privileges == ["f|f|t|f|f|t", "0"]
 
     denied = psql(
         "SET ROLE anon; SELECT * FROM public.redeem_cloud_sync_pairing"
@@ -332,6 +338,13 @@ def test_rls_execute_and_idempotent_real_migration(postgres16):
     )
     assert denied.returncode != 0
     assert "permission denied" in denied.stderr.lower()
+    cleanup_denied = psql(
+        "SET ROLE authenticated; SELECT * FROM "
+        "public.cleanup_pairing_sessions();",
+        check=False,
+    )
+    assert cleanup_denied.returncode != 0
+    assert "permission denied" in cleanup_denied.stderr.lower()
     allowed = psql(
         "SET ROLE service_role; SELECT status FROM "
         "public.redeem_cloud_sync_pairing"
