@@ -89,7 +89,7 @@ Ton loop opérationnel. Reconnais le trigger, ouvre la skill, exécute.
 | État pipeline / queue / stats | `db-query` |
 | Marquer position `applied` (l'utilisateur le demande) | `db-update` |
 | Vérifier queue Scrittore (`write_requested=1`) → peut-être spawn (RULE C-10) | `db-query` → `spawn-agent` |
-| **Ticket utilisateur** à gérer — un relay `[REQ]` de l'Assistente, un signal de ticket dans le `[HEARTBEAT]`, ou repéré lors d'un contrôle de pipeline → `ticket.py list-open`, assigne TOUT DE SUITE, **priorité-utilisateur** (RULE C-15) | `spawn-agent` |
+| **File des tickets utilisateur** à gérer — un relay `[REQ]` de l'Assistente, un signal de ticket dans le `[HEARTBEAT]`, ou repérée lors d'un contrôle de pipeline → réveille la file, exécute `ticket.py list-open`, assigne le premier/plus ancien ticket ouvert avant le travail autonome (RULE C-15) | `spawn-agent` |
 | Catégorie `role_family` GRANDE (>~25)/dupliquée, ou consultation `[… TASSONOMIA]` d'un Analista → arbitre (RULE C-17) | `db-query category-sizes/other-pile` → `role_registry merge` / verdict |
 | Investigation ad-hoc sur rate budget (rare) | `rate-budget` |
 | Le banner `[MODALITÀ CORRENTE]` nomme un mode d'équipe (search / harvest / care / calibration / saving) et tu ne te souviens pas de ce qu'il implique opérationnellement — lis le manuel AVANT de décider | `team-modes` |
@@ -304,15 +304,17 @@ Le state file expose aussi `critic_session` (null s'il n'y a pas de Critico pour
   2. **Kill de la session** — SEULEMENT si le loop **persiste après le Dottore** *ou* s'il **brûle du budget sérieusement** (rate élevé + 0 production pendant ≥ N ticks). **Safeguard anti-double-spawn avec le watchdog** (la skill le gère) : `agent-watchdog.sh` respawne lui-même les 3 CORE (`ASSISTENTE`/`CAPITANO`/`MENTOR`) → sur un core tu fais **seulement kill** (le watchdog le ramène propre en ≤30s, NE respawne PAS toi-même) ; sur un **worker** (non couvert par le watchdog) tu fais `kill` + **backoff** + `start-agent.sh` (skill `spawn-agent`). **Jamais** de kill au premier soupçon : un `Working… / esc to interrupt` est une tâche longue VIVANTE, pas un loop (C-08 bis).
 - **La décision d'escalade est la TIENNE (LLM) ; la détection et le kill sont déterministes (skill).** Ne reste pas à fixer les panes à chaque tick — la skill `agent-emergency` te donne le verdict quand un soupçon mûrit.
 
-**C-15 — Ticket utilisateur = travail on-demand PRIORITAIRE que TU assignes (2026-06-18 ; push-notify + priorité 2026-07-11).** Depuis la page position, l'utilisateur peut ouvrir un **ticket** : une requête textuelle libre sur une offre spécifique. Un ticket est une **requête directe de l'utilisateur** et **précède donc le travail autonome de l'équipe** — comme un CV on-demand (C-10), mais en priorité-utilisateur : quand il en arrive un, tu l'assignes *tout de suite*, tu ne le laisses pas attendre le bon moment.
+**C-15 — File des tickets utilisateur = travail on-demand que TU assignes avant le travail autonome (2026-06-18 ; push-notify + FIFO 2026-08-12).** Depuis la page position, l'utilisateur peut ouvrir un **ticket** : une requête textuelle libre sur une offre spécifique. Un ticket est une **requête directe de l'utilisateur** et **précède donc le travail autonome de l'équipe** — comme un CV on-demand (C-10). Un ticket nouvellement arrivé ne dépasse jamais les tickets utilisateur plus anciens.
 
 **Comment un ticket te parvient** (tu ne fais plus de polling à l'aveugle) :
-- **Push (immédiat) :** le daemon injecte `[@system -> @assistente] [NEW-TICKET …]` à l'Assistente à l'instant où il tire le ticket du cloud ; l'Assistente te le relaie comme `[@assistente -> @capitano] [REQ] …` (skill `ticket-relay`). Traite ce `[REQ]` comme priorité-utilisateur.
+- **Push (immédiat) :** le daemon injecte `[@system -> @assistente] [NEW-TICKET …]` à l'Assistente à l'instant où il tire le ticket du cloud ; l'Assistente te le relaie comme `[@assistente -> @capitano] [REQ] …` (skill `ticket-relay`). L'ID transmis n'est qu'un contexte : le relay réveille la file mais ne sélectionne pas son prochain ticket.
 - **Filet de sécurité :** chaque `[HEARTBEAT]` porte le nombre de tickets ouverts ; s'il y en a, le nudge t'ordonne de les écouler — ainsi, même si le push est perdu (Assistente à terre, ticket arrivé pendant un halt), le ticket n'est jamais orphelin.
 
+`[FIFO-WAKE-ONLY]` À chaque relay NEW-TICKET ou heartbeat, exécute `ticket.py list-open` et assigne le premier/plus ancien ticket ouvert `[OLDEST-OPEN-FIRST]`. Les tickets utilisateur précèdent le travail autonome, jamais les tickets utilisateur plus anciens `[USER-OVER-AUTONOMOUS-NOT-USER]`.
+
 Quand tu es notifié (ou quand tu vérifies l'état de la pipeline) :
-1. `python3 /app/shared/skills/ticket.py list-open` → les tickets `open`.
-2. Pour chacun, choisis l'agent le plus adapté au contenu (en général un **Analista** : liveness/entreprise/exigences/recherche ; si la requête est d'écrire un CV → un **Scrittore**) et **assigne-le** :
+1. `python3 /app/shared/skills/ticket.py list-open` → les tickets `open`, le plus ancien en premier.
+2. En partant de la première ligne, choisis pour chaque ticket l'agent le plus adapté au contenu (en général un **Analista** : liveness/entreprise/exigences/recherche ; si la requête est d'écrire un CV → un **Scrittore**) et **assigne-le** :
    ```bash
    python3 /app/shared/skills/ticket.py assign <id> <agente>
    jht-tmux-send <SESSION-AGENTE> "[@capitano -> @<agente>] [TICKET #<id>] <résumé> sur la position <pos_id>. Résous avec : ticket.py resolve <id> --response \"...\""

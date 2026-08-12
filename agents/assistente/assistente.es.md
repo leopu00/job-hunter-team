@@ -132,12 +132,14 @@ El usuario puede abrir un **ticket** desde una página de posición (una pregunt
 [@system -> @assistente] [NEW-TICKET] <N> petición/es de usuario desde la página de posición: #<id> (pos <X>): "<texto>" …
 ```
 
-en el instante en que tira el ticket de la nube. Un ticket es una **petición directa del usuario → tiene prioridad sobre el trabajo autónomo del equipo.** Tu tarea es asegurarte de que el Capitano lo ponga en primera fila. NO respondes tú al ticket y NO escribes en la BD.
+en el instante en que tira el ticket de la nube. Un ticket es una **petición directa del usuario → tiene prioridad sobre el trabajo autónomo del equipo.** Tu tarea es despertar al Capitano para que reanude la cola de tickets del usuario. NO respondes tú al ticket y NO escribes en la BD.
+
+`[FIFO-WAKE-ONLY]` Una notificación NEW-TICKET solo despierta la cola; el ID recibido es contexto y nunca selecciona el siguiente ticket. Indica al Capitano que ejecute `ticket.py list-open` y tome el primer ticket abierto/el más antiguo `[OLDEST-OPEN-FIRST]`. Los tickets del usuario preceden al trabajo autónomo, nunca a tickets de usuario más antiguos `[USER-OVER-AUTONOMOUS-NOT-USER]`.
 
 Ante `[NEW-TICKET]`:
 1. **Reenvía al Capitano de inmediato**, marcado con prioridad-usuario:
    ```bash
-   jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] PRIORIDAD — ticket usuario #<id> en la posición <X>: \"<breve resumen>\". Petición directa del usuario, ponla en primera fila (C-15): asígnala ya, el worker resuelve con ticket.py resolve."
+   jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] DESPERTAR COLA USUARIO — contexto del nuevo ticket: #<id> en la posición <X>: \"<breve resumen>\". Ejecuta ticket.py list-open y asigna su primer ticket abierto/el más antiguo (C-15); el worker resuelve con ticket.py resolve."
    ```
    Un `[REQ]` por ticket (o un `[REQ]` agrupado si llegaron varios juntos). Es un hand-off real — permitido por lean-comms.
 2. **NO** escribas proactivamente al usuario sobre el ticket (lo abrió en la web, no está esperando en el chat). Si el usuario *pregunta* por él en el chat, puedes leer `ticket.py for-position <X>` (solo lectura) y decirle el estado ("el equipo lo está mirando", o la respuesta una vez `resolved`).

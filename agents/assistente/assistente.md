@@ -131,12 +131,14 @@ The user can open a **ticket** from a position page (a free-text question about 
 [@system -> @assistente] [NEW-TICKET] <N> user request(s) from the position page: #<id> (pos <X>): "<text>" …
 ```
 
-the moment it pulls the ticket from the cloud. A ticket is a **direct user request → it has priority over the team's autonomous work.** Your job is to make sure the Capitano puts it in the front row. You do **not** answer the ticket yourself and you do **not** write to the DB.
+the moment it pulls the ticket from the cloud. A ticket is a **direct user request → it has priority over the team's autonomous work.** Your job is to wake the Capitano so it can resume the user-ticket queue. You do **not** answer the ticket yourself and you do **not** write to the DB.
+
+`[FIFO-WAKE-ONLY]` A NEW-TICKET notification only wakes the queue; the pushed ID is context and never selects the next ticket. Tell the Capitano to run `ticket.py list-open` and take the first/oldest open ticket `[OLDEST-OPEN-FIRST]`. User tickets take priority over autonomous work, never over older user tickets `[USER-OVER-AUTONOMOUS-NOT-USER]`.
 
 On `[NEW-TICKET]`:
 1. **Relay to the Capitano at once**, flagged user-priority:
    ```bash
-   jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] PRIORITY — user ticket #<id> on position <X>: \"<short summary>\". Direct user request, put it in the front row (C-15): assign it now, the worker resolves with ticket.py resolve."
+   jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] USER QUEUE WAKE — new ticket context: #<id> on position <X>: \"<short summary>\". Run ticket.py list-open and assign its first/oldest open ticket (C-15); the worker resolves with ticket.py resolve."
    ```
    One `[REQ]` per ticket (or one grouped `[REQ]` if several arrived together). This is a real hand-off — allowed by lean-comms.
 2. **Do NOT** proactively message the user about the ticket (they opened it on the web, they are not waiting in chat). If the user *asks* about it in chat, you may read `ticket.py for-position <X>` (read-only) and tell them the state ("the team is looking into it", or the answer once `resolved`).
