@@ -809,6 +809,15 @@ func _register_inputs() -> void:
 	_add_key_action("move_right", [KEY_D, KEY_RIGHT])
 	_add_key_action("move_up", [KEY_W, KEY_UP])
 	_add_key_action("move_down", [KEY_S, KEY_DOWN])
+	# Avanza il dialogo (dialogue_ui.gd), sul tasto che aveva dalla nascita
+	# (3bd089ce3c). La rimozione del personaggio giocatore (a9b518dfc1) tolse
+	# questa riga insieme all'interazione in ufficio, ma il consumo nel
+	# dialogo sopravvisse: da allora OGNI input a dialogo aperto loggava
+	# «unknown action» — decine di KB in pochi minuti che seppellivano i
+	# messaggi veri (WIN-INTERACT-ACTION-UNDECLARED). Il test
+	# tests/test_input_actions_declared.py confronta le azioni consumate nei
+	# .gd con quelle dichiarate qui, senza far girare Godot.
+	_add_key_action("interact", [KEY_E])
 	_add_key_action("registry", [KEY_TAB])
 	_add_key_action("pause", [KEY_ESCAPE])
 	_add_key_action("fullscreen", [KEY_F11])

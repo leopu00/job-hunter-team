@@ -17,6 +17,7 @@ import {
 } from '../lib/sync-rendezvous.js';
 import { clientIdentity, clientHeaderValue, cloudSyncHeaders } from '../lib/client-identity.js';
 import { summarizeOutOfRange } from '../lib/score-ranges.js';
+import { createHaltGate, guardedLane } from '../lib/halt-gate.js';
 import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
@@ -3552,52 +3553,49 @@ async function handleDaemon(options) {
 async function runRealtimeLoop({ config, isRunning }) {
   const log = (level, msg) => console.error(pc.dim(`  cloud-realtime ${level}: ${msg}`));
 
+  // [HALT-FLAG-IGNORED-BY-THE-EVENT-DRIVEN-LOOP] Il freno settimanale frenava
+  // solo il loop a poll: qui compariva una volta sola, nella cadenza lenta, e
+  // nessuna delle corsie event-driven lo guardava — così a freno tirato un
+  // UPDATE su team_state faceva partire lo stesso rendezvous e push, cioè la
+  // spesa che il flag esiste per fermare.
+  //
+  // Un cancello all'INGRESSO del ramo non basterebbe: il flag si alza a daemon
+  // acceso (`touch` su un box che gira), e un controllo fatto solo all'avvio
+  // non lo vedrebbe mai. Il punto giusto è il guscio che le corsie già
+  // condividevano: chi ne aggiunge una quinta la fa nascere frenata.
+  const haltGate = createHaltGate({
+    isHalted: () => existsSync(WEEKLY_HALT_FLAG),
+    onHalt: (lane) => console.log(pc.dim(
+      `  HALT-WEEKLY active (${WEEKLY_HALT_FLAG}) Sync suspended.${lane ? ` [${lane}]` : ''}`
+    )),
+    onResume: () => console.log(pc.green('  HALT-WEEKLY removed, resume.')),
+  });
+
   // Debounce per corsia: una raffica di eventi Realtime non deve lanciare letture
-  // concorrenti sovrapposte (push o ticket-sync).
-  let syncing = false;
-  const runSync = async (tag) => {
-    if (syncing) return;
-    syncing = true;
-    try { await handleSyncRendezvous({ silent: true }); }
-    catch { console.error(pc.yellow(`  ${tag} sync-rendezvous error (unexpected_failure)`)); }
-    finally { syncing = false; }
-  };
-  let ticketing = false;
-  const runTicketSync = async (tag) => {
-    if (ticketing) return;
-    ticketing = true;
-    try { await handleTicketSync({ silent: true }); }
-    catch (e) { console.error(pc.yellow(`  ${tag} ticket-sync error: ${e.message}`)); }
-    finally { ticketing = false; }
-  };
+  // concorrenti sovrapposte (push o ticket-sync). Il freno sta nello stesso
+  // guscio del debounce, non accanto a ogni chiamata.
+  const runSync = guardedLane(haltGate, 'sync', async () => {
+    await handleSyncRendezvous({ silent: true });
+  }, () => console.error(pc.yellow('  sync-rendezvous error (unexpected_failure)')));
+
+  const runTicketSync = guardedLane(haltGate, 'ticket', async () => {
+    await handleTicketSync({ silent: true });
+  }, (e) => console.error(pc.yellow(`  ticket-sync error: ${e.message}`)));
   // [JHT-CHAT-UNIFY] La chat ha DUE sorgenti: il cloud (turno scritto dal
   // web → evento su team_state) e il box stesso (l'agente che risponde con
   // `jht-send`, che non produce alcun evento remoto). Serve quindi sia
   // l'aggancio all'evento sia un battito locale corto — che però resta
   // gratis, perché ogni passo di handleChatSync ha una guardia locale.
-  let chatting = false;
-  const runChatSync = async (tag, state) => {
-    if (chatting) return;
-    chatting = true;
-    try { await handleChatSync({ silent: true, config, state }); }
-    catch { console.error(pc.yellow(`  ${tag} chat-sync error (unexpected_failure)`)); }
-    finally { chatting = false; }
-  };
+  const runChatSync = guardedLane(haltGate, 'chat', async (_tag, state) => {
+    await handleChatSync({ silent: true, config, state });
+  }, () => console.error(pc.yellow('  chat-sync error (unexpected_failure)')));
   const chatLocalSec = Math.max(1, parseInt(process.env.JHT_CHAT_LOCAL_SEC || '5', 10) || 5);
   const chatTimer = setInterval(() => { void runChatSync('local', null); }, chatLocalSec * 1000);
-  let emergencyStopping = false;
-  const runEmergencyStop = async (tag, state) => {
-    if (emergencyStopping) return;
-    emergencyStopping = true;
-    try {
-      const { reconcileEmergencyStop } = await import('../lib/team-state-reconciler.js');
-      await reconcileEmergencyStop(config, state);
-    } catch (e) {
-      console.error(pc.yellow(`  ${tag} emergency-stop error: ${e.message}`));
-    } finally {
-      emergencyStopping = false;
-    }
-  };
+
+  const runEmergencyStop = guardedLane(haltGate, 'emergency-stop', async (_tag, state) => {
+    const { reconcileEmergencyStop } = await import('../lib/team-state-reconciler.js');
+    await reconcileEmergencyStop(config, state);
+  }, (e) => console.error(pc.yellow(`  emergency-stop error: ${e.message}`)));
 
   let rt = null;
   try {
@@ -3650,7 +3648,8 @@ async function runRealtimeLoop({ config, isRunning }) {
 
   let tick = 0;
   while (isRunning()) {
-    if (existsSync(WEEKLY_HALT_FLAG)) { await sleepTick(); tick += 1; continue; }
+    // Stesso cancello delle corsie: un solo predicato, un solo annuncio.
+    if (haltGate('slow')) { await sleepTick(); tick += 1; continue; }
 
     // Heartbeat ~ogni 3min (mantiene la VPS "online" sulla dashboard).
     await heartbeat();

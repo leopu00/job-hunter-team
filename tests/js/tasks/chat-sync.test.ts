@@ -413,6 +413,32 @@ describe("turni scritti dal web", () => {
     );
   });
 
+  it("una riga che il box ha pushato lui non si reimporta", () => {
+    // [CHAT-DUPLICATES-BORN-INSIDE-THE-BOX] Firma del TRONCAMENTO, coppia
+    // 291/292 sul dato reale: 659 ms di distanza e la seconda con frazione
+    // .000 esatta. Un turno nato sul web ha `legacy_id` NEGATIVO (policy di
+    // INSERT del browser, mig 060), quindi il positivo è per forza una riga
+    // di questo box tornata indietro dal pull. Reimportandola `chatTsOf` non
+    // trova il negativo e ricava il ts da `created_at`, che il box scrive
+    // troncato al secondo: il gemello nasce a frazione .000 e la dedup, che
+    // confronta i chat_ts, non lo riconosce.
+    const locale = 1786452215.659;
+    db.prepare(
+      "INSERT INTO pending_user_messages (agent, body, author, chat_ts, delivered_via, created_at) VALUES ('assistente', 'ci sei?', 'user', ?, 'web', '2026-08-11 12:43:35')",
+    ).run(locale);
+
+    const tornataIndietro = {
+      id: "uuid-291",
+      legacy_id: 291, // positivo = l'ha scritta il box, non il browser
+      agent: "assistente",
+      body: "ci sei?",
+      created_at: "2026-08-11T12:43:35Z", // troncato al secondo dal push
+    };
+    expect(importCloudUserTurns(db, [tornataIndietro], { jhtHome: home })).toEqual([]);
+    expect(rowsOf()).toHaveLength(1);
+    expect(rowsOf()[0].chat_ts).toBe(locale);
+  });
+
   it("entrano in SQLite non consegnati e non da ripushare", () => {
     const ids = importCloudUserTurns(db, [
       { id: "uuid-1", legacy_id: -1753790000000, agent: "capitano", body: "che ore sono?" },
@@ -926,6 +952,28 @@ describe("canale della chat senza lettore diretto", () => {
     const timeout = Object.assign(new Error("host-riservato"), { name: "TimeoutError" });
     expect(cloudRequestFailure(timeout)).toBe("timeout");
     expect(cloudRequestFailure(new Error("url-riservato"))).toBe("request_failed");
+  });
+
+  it("i due lettori chiedono SOLO i turni nati sul web", () => {
+    // [CHAT-DUPLICATES-BORN-INSIDE-THE-BOX] Il difetto della coppia 291/292:
+    // entrambi i lettori DICHIARAVANO nel commento di prendere solo le righe
+    // native del cloud (`legacy_id` negativo, mig 060) e nessuno dei due lo
+    // filtrava. Il box si ripescava i propri turni e li reimportava.
+    // Il controllo è sul SORGENTE perché è una clausola di query: nessun
+    // typecheck e nessun test funzionale sul box la vedrebbe mancare — è
+    // codice valido che chiede la cosa sbagliata, la stessa classe di
+    // difetto del drawer in [CHAT-LANE-SILENT-DROP-ON-OLD-CLIENT].
+    const diretto = readFileSync(
+      join(__dirname, "../../../cli/src/lib/supabase-direct.js"),
+      "utf-8",
+    );
+    expect(diretto).toContain("params.set('legacy_id', 'lt.0');");
+
+    const route = readFileSync(
+      join(__dirname, "../../../web/app/api/cloud-sync/chat/route.ts"),
+      "utf-8",
+    );
+    expect(route).toContain('.lt("legacy_id", 0)');
   });
 
   it("la corsia in cloud.js non è più gatata sul lettore diretto", () => {

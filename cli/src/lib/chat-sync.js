@@ -740,6 +740,18 @@ export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS }
     if (!agents.includes(agent)) {
       continue;
     }
+    // Un turno NATO SUL WEB ha `legacy_id` negativo: lo impone la policy di
+    // INSERT del browser (mig 060), quindi lo spazio positivo può contenere
+    // soltanto righe che ha pushato QUESTO box. Ripescarle è importare da
+    // capo quello che già si ha — e `chatTsOf`, non trovando il negativo,
+    // ricava il ts da `created_at`, che il box scrive troncato al secondo:
+    // il gemello nasce con `chat_ts` a frazione .000 e la dedup non lo
+    // riconosce. È la firma osservata sulla coppia 291/292 (659 ms). Il
+    // filtro vero sta nei due lettori, che non devono nemmeno chiederle;
+    // qui si rifiuta comunque di scriverle, perché è dove nasce il danno.
+    if (!(Number(row.legacy_id) < 0)) {
+      continue;
+    }
     const ts = chatTsOf(row);
     if (already.get(agent, ts)?.hit !== 1) {
       const at = new Date(ts * 1000).toISOString().replace('T', ' ').slice(0, 19);
