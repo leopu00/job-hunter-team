@@ -129,6 +129,15 @@ func _test_container_log_transport() -> void:
 	var unavailable: Dictionary = DiagnosticsScript._container_log({}, invalid_context)
 	_check("fallback VPS leggibile", str(unavailable.get("main", "")).contains(
 			"container logs unavailable"), str(unavailable))
+	var private_host := "sensitive-host" + ".invalid"
+	var remote_error := DiagnosticsScript._container_log_failure_detail({
+			"code": 255, "out": "ssh: could not resolve hostname " + private_host}, true)
+	_check("errore SSH non ripete hostname", not remote_error.contains(private_host) \
+			and remote_error.contains("code 255"), remote_error)
+	var local_error := DiagnosticsScript._container_log_failure_detail({
+			"code": 1, "out": "local container missing"}, false)
+	_check("errore locale resta diagnostico", local_error == "local container missing",
+			local_error)
 
 
 ## 600 heartbeat in coda avrebbero espulso tutte le righe utili se il filtro

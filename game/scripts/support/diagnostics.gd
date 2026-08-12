@@ -282,11 +282,19 @@ static func _container_log(labels: Dictionary = {}, context: Dictionary = {}) ->
 	var logs := _run(str(spec["path"]), spec["args"])
 	if int(logs.get("code", -1)) != 0:
 		# Il fallimento è esso stesso diagnostico: dice che il container non
-		# c'è o non risponde, che è metà della risposta su un bug di avvio.
+		# c'è o non risponde. L'errore SSH grezzo può però ripetere hostname,
+		# IP o path chiave: in remoto si conserva solo exit code + trasporto.
 		return {"main": _label(labels, "diagnostics.container_logs_unavailable",
 				"[container logs unavailable] %s") % \
-				str(logs.get("out", "")).strip_edges(), "alerts": ""}
+				_container_log_failure_detail(logs,
+						bool(context.get("backend_remote", false))), "alerts": ""}
 	return _prepare_log(str(logs.get("out", "")), labels)
+
+
+static func _container_log_failure_detail(result: Dictionary, remote: bool) -> String:
+	if remote:
+		return "remote SSH command failed (code %d)" % int(result.get("code", -1))
+	return str(result.get("out", "")).strip_edges()
 
 
 ## Descrive il trasporto senza eseguirlo: il controtest dimostra che la modalità
