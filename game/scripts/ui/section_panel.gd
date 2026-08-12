@@ -2577,7 +2577,12 @@ func _graphics_key(mode: String) -> String:
 ## Impostazioni → Lingua: le 7 lingue del web. Il cambio ricostruisce la
 ## scena corrente, così HUD, sidebar, pannelli e popup non restano metà
 ## nella vecchia lingua.
+var _language_status: Label
+var _pending_language := ""
+
 func _build_language() -> void:
+	if not BackendBus.ui_language_saved.is_connected(_on_ui_language_saved):
+		BackendBus.ui_language_saved.connect(_on_ui_language_saved)
 	_content.add_child(TerminalTheme.label(UIStrings.t("lang.intro"), 14, Palette.MUTED))
 	for l in UIStrings.LANGS:
 		var selected: bool = UIStrings.lang == l
@@ -2591,13 +2596,38 @@ func _build_language() -> void:
 		btn.add_theme_color_override("font_hover_color", Palette.MINT)
 		var code := str(l)
 		btn.pressed.connect(func() -> void:
-			Game.set_ui_language(code))
+			_request_ui_language(code))
 		_content.add_child(btn)
+	_language_status = TerminalTheme.label("", 13, Palette.DIM)
+	_language_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(_language_status)
 	if UIStrings.lang != "it":
 		_content.add_child(_wrapped_label(
 				UIStrings.t("lang.narrative_note"), 13, Palette.YELLOW))
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(UIStrings.t("lang.note"), 13, Palette.DIM))
+
+
+func _request_ui_language(locale: String) -> void:
+	if BackendBus.is_live() and BackendBus.is_remote():
+		_pending_language = locale
+		_language_status.text = UIStrings.t("lang.syncing")
+		_language_status.add_theme_color_override("font_color", Palette.DIM)
+		BackendBus.save_ui_language(locale)
+		return
+	Game.set_ui_language(locale)
+
+
+func _on_ui_language_saved(locale: String, ok: bool, error: String) -> void:
+	if locale != _pending_language or _pending_language == "":
+		return
+	_pending_language = ""
+	if ok:
+		Game.set_ui_language(locale)
+		return
+	if is_instance_valid(_language_status):
+		_language_status.text = UIStrings.t("lang.sync_failed") % error
+		_language_status.add_theme_color_override("font_color", Palette.RED)
 
 # ── Posizioni: la pagina positions del web privato, dati veri ────────
 

@@ -708,6 +708,8 @@ const S := {
 	"lang.intro": "Lingua dell'interfaccia — le 7 lingue del sito.",
 	"lang.narrative_note": "// nota: il tour narrativo e le sue scelte sono attualmente disponibili in italiano",
 	"lang.note": "// si applica subito ai pannelli; riapri quelli già aperti per vederli tradotti",
+	"lang.syncing": "Sincronizzo la lingua con il team…",
+	"lang.sync_failed": "Lingua non cambiata: sincronizzazione col team fallita (%s)",
 
 	# ── Statistiche: grafici cross-filter (come la dashboard web) ─
 	"stats.hint": "// click su una barra per filtrare: gli altri grafici si aggiornano",

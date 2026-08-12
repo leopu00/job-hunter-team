@@ -509,6 +509,8 @@ const S := {
 	"lang.intro": "A felület nyelve — a weboldal 7 nyelve.",
 	"lang.narrative_note": "// megjegyzés: a történetvezérelt túra és választásai jelenleg olaszul érhetők el",
 	"lang.note": "// azonnal érvényes a panelekre; a már nyitottakat nyisd újra a fordításhoz",
+	"lang.syncing": "A nyelv szinkronizálása a csapattal…",
+	"lang.sync_failed": "A nyelv nem változott: a csapatszinkronizálás sikertelen (%s)",
 
 	"stats.hint": "// kattints egy sávra a szűréshez: a többi grafikon frissül",
 	"stats.filters": "AKTÍV SZŰRŐK: %d",

@@ -537,6 +537,11 @@ func _on_profile_status(_profile: Dictionary, _required: Dictionary, ready: bool
 func _on_backend_connection(state: int, _detail: String) -> void:
 	if state == BackendBus.CONNECTED:
 		BackendBus.open_profile_watch()
+		# La scelta nasce sul desktop e vale per il team che quel desktop
+		# controlla. LocalBackend condivide già lo stesso bind JhtFs; sulla VPS
+		# serve consegnare esplicitamente il medesimo artefatto canonico.
+		if BackendBus.is_live() and BackendBus.is_remote():
+			BackendBus.save_ui_language(UIStrings.lang)
 	refresh()
 
 

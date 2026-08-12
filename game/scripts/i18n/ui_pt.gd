@@ -509,6 +509,8 @@ const S := {
 	"lang.intro": "Idioma da interface — os 7 idiomas do site.",
 	"lang.narrative_note": "// nota: a visita narrativa e as suas escolhas estão atualmente disponíveis em italiano",
 	"lang.note": "// aplica-se na hora aos painéis; reabra os já abertos para vê-los traduzidos",
+	"lang.syncing": "A sincronizar o idioma com a equipa…",
+	"lang.sync_failed": "Idioma não alterado: falhou a sincronização com a equipa (%s)",
 
 	"stats.hint": "// clique numa barra para filtrar: os outros gráficos se atualizam",
 	"stats.filters": "FILTROS ATIVOS: %d",

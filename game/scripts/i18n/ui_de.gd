@@ -509,6 +509,8 @@ const S := {
 	"lang.intro": "Sprache der Oberfläche — die 7 Sprachen der Website.",
 	"lang.narrative_note": "// Hinweis: Die erzählte Tour und ihre Auswahlmöglichkeiten sind derzeit auf Italienisch verfügbar",
 	"lang.note": "// gilt sofort für die Panels; bereits offene neu öffnen, um sie übersetzt zu sehen",
+	"lang.syncing": "Sprache wird mit dem Team synchronisiert…",
+	"lang.sync_failed": "Sprache nicht geändert: Teamsynchronisierung fehlgeschlagen (%s)",
 
 	"stats.hint": "// auf einen Balken klicken zum Filtern: die anderen Diagramme aktualisieren sich",
 	"stats.filters": "AKTIVE FILTER: %d",
