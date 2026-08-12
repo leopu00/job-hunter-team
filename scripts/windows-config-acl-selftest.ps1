@@ -3,6 +3,10 @@ $root = Join-Path $env:RUNNER_TEMP ("jht-acl-selftest-" + [guid]::NewGuid().ToSt
 . (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 try {
+  foreach ($script in @('install.ps1', 'jht-wrapper.ps1', 'windows-private-acl.ps1', 'windows-config-acl-selftest.ps1')) {
+    $path = Join-Path $PSScriptRoot $script
+    [void][scriptblock]::Create((Get-Content -LiteralPath $path -Raw))
+  }
   $owner = [Security.Principal.WindowsIdentity]::GetCurrent().Name
   $foreign = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
   $acl = Get-Acl $root

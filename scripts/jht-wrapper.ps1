@@ -242,7 +242,6 @@ function Require-PrivateJhtHomeAcl {
 function Require-Docker {
   Require-PrivateJhtHomeAcl
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     Write-Err "docker non trovato nel PATH. Installa Docker Desktop per Windows."
     exit 127
   }
