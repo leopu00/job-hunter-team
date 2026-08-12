@@ -142,6 +142,26 @@ def test_profile_writer_rejects_an_invalid_pair_before_touching_the_file(tmp_pat
     assert list(profile.parent.glob(profile.name + ".bak-*")) == []
 
 
+def test_new_category_drops_only_a_stale_specialty_from_the_previous_category(
+    tmp_path,
+):
+    result, saved, _ = _run_profile_writer(
+        tmp_path,
+        {
+            "name": "Ada",
+            "target_role": "My own role title",
+            "target_role_category_id": "software",
+            "target_specialty": "backend",
+        },
+        {"target_role_category_id": "data"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert saved["target_role"] == "My own role title"
+    assert saved["target_role_category_id"] == "data"
+    assert "target_specialty" not in saved
+
+
 def test_legacy_specialty_without_category_is_not_backfilled(tmp_path):
     result, saved, _ = _run_profile_writer(
         tmp_path,

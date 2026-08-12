@@ -99,6 +99,14 @@ describe("round-trip map → reconstruct conserva i campi chiave", () => {
     assert.equal((r.experience as unknown[]).length, 1);
     assert.equal((r.location_preferences as unknown[]).length, 2);
     assert.equal((r.contacts as { email: string }).email, "m@x.it");
+    assert.equal(
+      Object.hasOwn(
+        c.profileRow.positioning as object,
+        "target_role_category_id",
+      ),
+      false,
+    );
+    assert.equal(Object.hasOwn(r, "target_role_category_id"), false);
   });
 
   it("porta categoria e specialty nel positioning e ritorno", () => {

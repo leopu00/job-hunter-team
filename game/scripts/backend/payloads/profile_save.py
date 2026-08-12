@@ -53,6 +53,10 @@ if category is not None:
     prof['target_role_category_id'] = category
     if specialty is not None:
         prof['target_specialty'] = specialty
+    else:
+        # Una nuova categoria esplicita non può ereditare lo specialty della
+        # categoria precedente. L'assenza resta valida e non inventa un default.
+        prof.pop('target_specialty', None)
 if 'skills_primary' in data:
     skills = [s.strip() for s in str(data['skills_primary']).split(',') if s.strip()]
     prof.setdefault('skills', {})['primary'] = skills
