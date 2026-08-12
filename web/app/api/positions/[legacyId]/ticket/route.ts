@@ -79,9 +79,10 @@ export async function POST(
       db.pragma("journal_mode = WAL");
       db.pragma("foreign_keys = ON");
       const exists = db
-        .prepare<[number], { id: number }>(
-          "SELECT id FROM positions WHERE id = ?",
-        )
+        .prepare<
+          [number],
+          { id: number }
+        >("SELECT id FROM positions WHERE id = ?")
         .get(legacyId);
       if (!exists) {
         return NextResponse.json(
@@ -100,12 +101,7 @@ export async function POST(
           .prepare<
             [number, string],
             { id: number; status: "open" | "assigned" }
-          >(
-            "SELECT id, status FROM position_tickets " +
-              "WHERE position_id = ? AND kind = ? " +
-              "AND status IN ('open','assigned') " +
-              "ORDER BY created_at ASC, id ASC LIMIT 1",
-          )
+          >("SELECT id, status FROM position_tickets " + "WHERE position_id = ? AND kind = ? " + "AND status IN ('open','assigned') " + "ORDER BY created_at ASC, id ASC LIMIT 1")
           .get(legacyId, RESCORE_TICKET_KIND);
         if (active) {
           ticketId = active.id;
