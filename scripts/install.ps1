@@ -58,7 +58,22 @@ if (-not $LocalAppData) { throw 'LOCALAPPDATA is unavailable: refusing an unprot
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir     = if ($env:JHT_BIN_DIR)     { $env:JHT_BIN_DIR }     else { Join-Path $env:USERPROFILE '.local\bin' }
 $JhtHome    = Join-Path $env:USERPROFILE '.jht'
-. (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
+function Protect-JhtHomeAcl {
+  param([Parameter(Mandatory)][string]$Path)
+  $owner = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+  $nodes = @(Get-Item -LiteralPath $Path) + @(Get-ChildItem -LiteralPath $Path -Force -Recurse)
+  foreach ($node in $nodes) {
+    $acl = Get-Acl -LiteralPath $node.FullName
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($existing in @($acl.Access)) {
+      if ($existing.AccessControlType -eq 'Allow' -and $existing.IdentityReference.Value -ne $owner -and $existing.IdentityReference.Value -notin @('NT AUTHORITY\\SYSTEM','BUILTIN\\Administrators')) { [void]$acl.RemoveAccessRule($existing) }
+    }
+    $inherit = if ($node.PSIsContainer) { 'ContainerInherit,ObjectInherit' } else { 'None' }
+    $acl.SetAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($owner, 'FullControl', $inherit, 'None', 'Allow')))
+    Set-Acl -LiteralPath $node.FullName -AclObject $acl
+  }
+  if (-not (Get-Acl -LiteralPath $Path).AreAccessRulesProtected) { throw "ACL inheritance remains enabled: $Path" }
+}
 $Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht:0.3.7' }
 $env:JHT_IMAGE = $Image
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }

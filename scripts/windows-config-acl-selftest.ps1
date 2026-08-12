@@ -7,6 +7,10 @@ try {
     $path = Join-Path $PSScriptRoot $script
     [void][scriptblock]::Create((Get-Content -LiteralPath $path -Raw))
   }
+  $standalone = Join-Path $root 'standalone-install.ps1'
+  Copy-Item (Join-Path $PSScriptRoot 'install.ps1') $standalone
+  if (Test-Path (Join-Path $root 'windows-private-acl.ps1')) { throw 'standalone fixture unexpectedly has helper' }
+  [void][scriptblock]::Create((Get-Content -LiteralPath $standalone -Raw))
   $owner = [Security.Principal.WindowsIdentity]::GetCurrent().Name
   $foreign = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
   $acl = Get-Acl $root
