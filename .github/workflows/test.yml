@@ -84,6 +84,24 @@ jobs:
     name: pytest — agents, skills, sync
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
+    # Migration 074 is exercised on PostgreSQL itself: parsing SQL or mocking
+    # Supabase cannot prove composite FKs, RLS privileges, row locks or a full
+    # transaction rollback. A disposable service keeps that gate executable in
+    # CI even when the runner image changes its preinstalled server packages.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      JHT_TEST_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
 
     steps:
       - uses: actions/checkout@v7
