@@ -42,10 +42,11 @@
  * pin scritto male costa l'intero team.
  */
 import {
-  existsSync, readFileSync, writeFileSync, copyFileSync, mkdtempSync, readdirSync,
+  existsSync, readFileSync, writeFileSync, mkdtempSync, readdirSync,
   renameSync, statSync, chmodSync, mkdirSync, unlinkSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { join, dirname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
@@ -407,8 +408,7 @@ function makeBackup(path) {
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-');
   const backup = `${path}.bak-model-pin-${stamp}`;
   const original = statSync(path);
-  copyFileSync(path, backup);
-  try { chmodSync(backup, 0o600); } catch { /* fs senza permessi POSIX */ }
+  writeFileSync(backup, readFileSync(path), { mode: 0o600, flag: 'wx' });
   if (!existsSync(backup) || statSync(backup).size !== original.size) {
     throw new Error(`incomplete backup (${backup})`);
   }
@@ -418,9 +418,15 @@ function makeBackup(path) {
 /** Scrittura atomica: temp + rename, cosi' un'interruzione non tronca il config. */
 function atomicWrite(path, text, mode) {
   const tmp = `${path}.jht-model-pin.tmp`;
-  writeFileSync(tmp, text, 'utf-8');
+  writeFileSync(tmp, text, { encoding: 'utf-8', mode: 0o600, flag: 'wx' });
   try { chmodSync(tmp, mode); } catch { /* fs senza permessi POSIX */ }
   renameSync(tmp, path);
+  try { chmodSync(path, 0o600); } catch { /* fs senza permessi POSIX */ }
+  if (process.platform === 'win32') {
+    try {
+      execFileSync('icacls', [path, '/inheritance:r', '/grant:r', `${process.env.USERNAME}:F`], { stdio: 'ignore' });
+    } catch { throw new Error('unable to enforce owner-only ACL on model config'); }
+  }
 }
 
 /** Tiene i KEEP_BACKUPS piu' recenti: i .bak non devono accumularsi a ogni boot. */
