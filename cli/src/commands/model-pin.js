@@ -406,7 +406,7 @@ function writeState(state) {
 /** Backup PRIMA di toccare un file che non e' nostro. Se fallisce, non si scrive. */
 function makeBackup(path) {
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-');
-  const backup = `${path}.bak-model-pin-${stamp}`;
+  const backup = `${path}.bak-model-pin-${stamp}-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
   const original = statSync(path);
   writeFileSync(backup, readFileSync(path), { mode: 0o600, flag: 'wx' });
   if (!existsSync(backup) || statSync(backup).size !== original.size) {
