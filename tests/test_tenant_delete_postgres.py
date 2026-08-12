@@ -351,7 +351,6 @@ def migrated_database(postgres_cluster):
             [
                 postgres_cluster["bin"]["psql"],
                 "-X",
-                "--single-transaction",
                 "-v",
                 "ON_ERROR_STOP=1",
                 "-d",

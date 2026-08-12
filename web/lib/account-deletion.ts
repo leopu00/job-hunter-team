@@ -72,7 +72,7 @@ export class DeletionError extends Error {
 export interface DeletionOutcome {
   /** Righe rimosse per tabella. Serve al record tecnico e ai test. */
   removed: Record<string, number>;
-  /** Tabelle svuotate a mano, in ordine. */
+  /** Tabelle svuotate esplicitamente dalla RPC, in ordine. */
   order: readonly string[];
 }
 

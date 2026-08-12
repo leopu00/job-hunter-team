@@ -7,9 +7,9 @@
  * FA, non cosa i commenti promettono.
  *
  * La seconda garanzia ha una forma particolare: non si dimostra provando
- * un id sbagliato e vedendolo rifiutato, ma osservando che ogni singola
- * delete porta il filtro sull'utente della sessione. È la differenza fra
- * «validiamo l'input» e «non esiste un input da validare».
+ * un id sbagliato e vedendolo rifiutato, ma osservando che esiste una sola
+ * RPC e riceve l'id della sessione. È la differenza fra «validiamo l'input»
+ * e «non esiste un input da validare».
  */
 import { describe, it, expect } from "vitest";
 
@@ -27,11 +27,10 @@ interface Call {
   filterValue?: string;
 }
 
-/** Finto client: registra le delete e l'ordine in cui arrivano. */
+/** Finto client: registra Storage e la singola RPC PostgreSQL. */
 function fakeAdmin(
   opts: {
-    failOn?: string;
-    deleteUserFails?: boolean;
+    rpcFails?: boolean;
     storagePaths?: string[];
     storageTree?: Record<string, true>;
     storageRemovesNothing?: boolean;
@@ -116,7 +115,7 @@ function fakeAdmin(
         filterColumn: "p_user_id",
         filterValue: args.p_user_id,
       });
-      if (opts.failOn || opts.deleteUserFails) {
+      if (opts.rpcFails) {
         return Promise.resolve({ data: null, error: { message: "boom" } });
       }
       if (args.p_user_id) deletedUsers.push(args.p_user_id);
@@ -221,7 +220,7 @@ describe("cancellazione account — non tocca l'account sbagliato", () => {
 
 describe("cancellazione account — fallimenti detti, non mascherati", () => {
   it("un errore della transazione privilegiata interrompe senza fallback", async () => {
-    const { client, deletedUsers } = fakeAdmin({ failOn: "positions" });
+    const { client, deletedUsers } = fakeAdmin({ rpcFails: true });
     await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
       /database_delete_failed/,
     );
@@ -609,7 +608,7 @@ describe("cancellazione — nessun nome di file esce, né in log né in risposta
   it("il fallimento RPC non riporta il messaggio del database", async () => {
     // `error.message` di Postgres può contenere il valore che ha violato
     // il vincolo, cioè dato dell'utente.
-    const { client } = fakeAdmin({ failOn: "positions" });
+    const { client } = fakeAdmin({ rpcFails: true });
     let error: unknown;
     try {
       await deleteAccountData(client, "user-1");

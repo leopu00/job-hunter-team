@@ -11,6 +11,8 @@
 -- delete them. positions.company_id is optional, so a cross-tenant legacy
 -- link is detached instead of deleting the position.
 
+BEGIN;
+
 LOCK TABLE
   public.companies,
   public.positions,
@@ -163,3 +165,5 @@ $$;
 REVOKE ALL ON FUNCTION public.delete_account_data(UUID)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.delete_account_data(UUID) TO service_role;
+
+COMMIT;
