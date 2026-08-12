@@ -10,7 +10,7 @@ const EXPECTED_DYNAMIC_SHELLS := 8
 const EXPECTED_TRANSLATED_CELLS := 2202
 const FORBIDDEN_ENGLISH_FRAGMENTS := [
 	"Research", "Analysis", "Quality Check", "Office Home", "escritório home",
-	"Applications", "Operations", "Setup", "setup",
+	"Applications", "Operations", "Setup", "setup", "READY CVS", "READY CVs",
 ]
 const LOCALE_FORBIDDEN_ROLE_NAMES := {
 	"de": ["Sentinel", "Doctor"],
@@ -18,6 +18,9 @@ const LOCALE_FORBIDDEN_ROLE_NAMES := {
 	"fr": ["Sentinel"],
 	"hu": ["Sentinel"],
 	"pt": ["Sentinel"],
+}
+const LOCALE_FORBIDDEN_COPY := {
+	"hu": ["Hello"],
 }
 
 var _failures: Array[String] = []
@@ -96,13 +99,20 @@ func _run() -> void:
 			"greeting does not pass through authored resolver")
 	_check(Dialogues.positions_summary(3, "en").contains("3"),
 			"position summary lost its data placeholder")
-	var german_activation := UIStrings.authored(
-			"dialogue.dynamic.runtime.docker_running",
-			str(Dialogues.DYNAMIC_SHELLS["dialogue.dynamic.runtime.docker_running"]),
-			"de")
-	_check(german_activation.contains("Bestätigen Sie") \
-			and not german_activation.contains("bestätige ich"),
-			"German activation instruction changes the actor")
+	var activation_source := str(Dialogues.DYNAMIC_SHELLS[
+			"dialogue.dynamic.runtime.docker_running"])
+	var activation_actor_contract := {
+		"de": ["Bestätigen Sie", "bestätige ich"],
+		"es": ["confirma la activación", "confirmo la activación"],
+		"pt": ["confirme a ativação", "confirmo a ativação"],
+	}
+	for locale: String in activation_actor_contract:
+		var activation := UIStrings.authored(
+				"dialogue.dynamic.runtime.docker_running", activation_source, locale)
+		var actor_terms: Array = activation_actor_contract[locale]
+		_check(activation.contains(str(actor_terms[0])) \
+				and not activation.contains(str(actor_terms[1])),
+				"%s activation instruction changes the actor" % locale)
 
 	var ui_source := FileAccess.get_file_as_string(
 			"res://scripts/dialogue/dialogue_ui.gd")
@@ -181,6 +191,10 @@ func _check_locale_catalogs(sources: Dictionary) -> void:
 				_check(not _contains_word(translated, role_name),
 						"%s retains English role '%s' in %s" % [
 								key, role_name, locale])
+			for fragment: String in LOCALE_FORBIDDEN_COPY.get(locale, []):
+				_check(not _contains_word(translated, fragment),
+						"%s retains English copy '%s' in %s" % [
+								key, fragment, locale])
 			_check(translated != str(sources[key]) \
 					or _placeholders(translated).size() > 0 \
 					and translated.strip_edges().begins_with("{"),
