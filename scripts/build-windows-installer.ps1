@@ -21,6 +21,14 @@ $setup = Join-Path $gameDir 'builds/windows/job-hunter-team-windows-x64-setup.ex
 $nsi = Join-Path $gameDir 'installer/windows.nsi'
 $numericVersion = (($Version -split '-', 2)[0]) + '.0'
 
+function Get-FileObservation {
+  param([string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+  $item = Get-Item -LiteralPath $Path
+  $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+  return '{0}:{1}:{2}' -f $item.LastWriteTimeUtc.Ticks, $item.Length, $hash
+}
+
 if (-not $IsWindows) {
   throw 'The native installer smoke must run on Windows.'
 }
@@ -100,7 +108,7 @@ if ($Smoke) {
 
     $previousNoVps = $env:JHT_NOVPS
     $env:JHT_NOVPS = '1'
-    $launchStartedAt = [DateTime]::UtcNow.AddSeconds(-1)
+    $userDataRuntimeLogBefore = Get-FileObservation $userDataRuntimeLog
     try {
       $launch = Start-Process -FilePath $installedExe -ArgumentList '--headless', '--quit-after', '3' -Wait -PassThru
       if ($launch.ExitCode -ne 0) {
@@ -110,11 +118,13 @@ if ($Smoke) {
       $env:JHT_NOVPS = $previousNoVps
     }
 
-    if (-not (Test-Path -LiteralPath $userDataRuntimeLog -PathType Leaf)) {
+    $userDataRuntimeLogAfter = Get-FileObservation $userDataRuntimeLog
+    if ($null -eq $userDataRuntimeLogAfter) {
       throw "Renamed application did not write its log to stable user data: $userDataRuntimeLog"
     }
-    if ((Get-Item -LiteralPath $userDataRuntimeLog).LastWriteTimeUtc -lt $launchStartedAt) {
-      throw "Stable user data log was not updated by the renamed application: $userDataRuntimeLog"
+    if ($null -ne $userDataRuntimeLogBefore -and
+        $userDataRuntimeLogAfter -eq $userDataRuntimeLogBefore) {
+      throw "Renamed application did not update the pre-existing stable user data log: $userDataRuntimeLog"
     }
 
     # A file of the user's, placed where the user's files live, before the

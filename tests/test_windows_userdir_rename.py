@@ -133,6 +133,10 @@ def test_windows_smoke_exports_a_renamed_product_and_observes_the_real_log():
     assert 'config/name="Job Hunter Team Rename Probe"' in workflow
     assert "source.count(old) != 1" in workflow
     assert "project.write_text(source.replace(old, new)" in workflow
-    assert "$userDataRuntimeLog" in smoke
-    assert "LastWriteTimeUtc -lt $launchStartedAt" in smoke
+    assert "$userDataRuntimeLogBefore = Get-FileObservation" in smoke
+    assert "$userDataRuntimeLogAfter = Get-FileObservation" in smoke
+    assert "$userDataRuntimeLogAfter -eq $userDataRuntimeLogBefore" in smoke
+    assert "LastWriteTimeUtc.Ticks" in smoke
+    assert "Get-FileHash" in smoke
+    assert "$launchStartedAt" not in smoke
     assert "Renamed application did not write its log" in smoke
