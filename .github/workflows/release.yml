@@ -531,27 +531,24 @@ jobs:
             --checksums release-assets/SHA256SUMS \
             --provenance release-assets/RELEASE-PROVENANCE.json
 
+      # Il body consuma RELEASE-PROVENANCE.json, già verificato qui sopra:
+      # nessuna quinta lista di nomi asset da mantenere nelle release notes.
+      - name: Render verified SHA-256 checksums into release notes
+        env:
+          RELEASE_NOTES: ${{ steps.changelog.outputs.notes }}
+        run: |
+          python scripts/release_artifacts.py notes \
+            --notes "$RELEASE_NOTES" \
+            --provenance release-assets/RELEASE-PROVENANCE.json \
+            --output release-assets/RELEASE-NOTES.md \
+            --tag "$GITHUB_REF_NAME" \
+            --repository "$GITHUB_REPOSITORY"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           name: "Job Hunter Team ${{ github.ref_name }}"
-          # La nota Windows sta QUI perche' questa e' la pagina da cui si
-          # scaricano installer e portable: il sito non serve i binari desktop e
-          # nessun doc pubblico linka le Release. Tre fatti, niente scuse: cosa
-          # vede, cosa clicca, perche' succede.
-          body: |
-            ## What's new in ${{ github.ref_name }}
-
-            ${{ steps.changelog.outputs.notes }}
-
-            ### Windows
-
-            Use `job-hunter-team-windows-x64-setup.exe` for the normal per-user installation. `job-hunter-team-windows-x64-portable.exe` is the optional standalone build. Neither Windows file is code-signed, so Windows may show **"Windows protected your PC"**: click **More info** → **Run anyway** only for files downloaded from this release and matching `SHA256SUMS`. The macOS `.zip` is signed and notarized by Apple; the Linux `.tar.gz` is unsigned as well.
-
-            `SHA256SUMS` verifies the downloaded bytes. `RELEASE-PROVENANCE.json` records the exact tagged commit from which every attached asset was built.
-
-            ---
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for the full history.
+          body_path: release-assets/RELEASE-NOTES.md
           # Gli asset restano invisibili al pubblico finche' HQ-MASTER non li
           # riscarica dalla draft e passa `release_artifacts.py audit`.
           draft: true

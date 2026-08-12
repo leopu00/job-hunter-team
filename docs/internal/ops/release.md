@@ -97,7 +97,7 @@ git push origin v0.2.1
   commit and its SHA-256;
 - uploads the artifact.
 
-**3 · `release`** — re-checks that the tag is `origin/production` HEAD, builds the web app (`npm ci` in `web/` **and** `shared/`, because the web build imports `shared/config/schema.ts` which needs `zod`), extracts the release notes from `CHANGELOG.md`, downloads the four platform artifacts, verifies their provenance and hashes, generates `SHA256SUMS` plus `RELEASE-PROVENANCE.json`, and then creates the GitHub Release as a **draft**. A tag containing `-` (e.g. `v0.3.0-rc1`) is marked as a **prerelease** when published.
+**3 · `release`** — re-checks that the tag is `origin/production` HEAD, builds the web app (`npm ci` in `web/` **and** `shared/`, because the web build imports `shared/config/schema.ts` which needs `zod`), extracts the release notes from `CHANGELOG.md`, downloads the four platform artifacts, verifies their provenance and hashes, generates `SHA256SUMS` plus `RELEASE-PROVENANCE.json`, and then creates the GitHub Release as a **draft**. The release body prints the same SHA-256 lines under the human-readable notes: `scripts/release_artifacts.py notes` consumes the already-verified `RELEASE-PROVENANCE.json`, so it cannot drift into a second platform-asset list. A tag containing `-` (e.g. `v0.3.0-rc1`) is marked as a **prerelease** when published.
 
 **4 · independent draft audit and publication** — download the assets back from
 GitHub, verify the exact public bytes and only then publish:
