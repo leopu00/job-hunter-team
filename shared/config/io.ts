@@ -105,17 +105,35 @@ export function writeConfig(config: unknown): {
 
   try {
     fs.mkdirSync(JHT_CONFIG_DIR, { recursive: true, mode: 0o700 });
-    try { fs.chmodSync(JHT_CONFIG_DIR, 0o700); } catch { /* Windows ACLs */ }
+    try {
+      fs.chmodSync(JHT_CONFIG_DIR, 0o700);
+    } catch {
+      /* Windows ACLs */
+    }
     // Scrittura atomica: tmp + rename
     const tmpPath = JHT_CONFIG_PATH + ".tmp";
     const fd = fs.openSync(tmpPath, "wx", 0o600);
     try {
-      fs.writeFileSync(fd, JSON.stringify(result.data, null, 2) + "\n", "utf-8");
+      fs.writeFileSync(
+        fd,
+        JSON.stringify(result.data, null, 2) + "\n",
+        "utf-8",
+      );
       fs.fsyncSync(fd);
-    } finally { fs.closeSync(fd); }
-    try { fs.chmodSync(tmpPath, 0o600); } catch { /* Windows ACLs */ }
+    } finally {
+      fs.closeSync(fd);
+    }
+    try {
+      fs.chmodSync(tmpPath, 0o600);
+    } catch {
+      /* Windows ACLs */
+    }
     fs.renameSync(tmpPath, JHT_CONFIG_PATH);
-    try { fs.chmodSync(JHT_CONFIG_PATH, 0o600); } catch { /* Windows ACLs */ }
+    try {
+      fs.chmodSync(JHT_CONFIG_PATH, 0o600);
+    } catch {
+      /* Windows ACLs */
+    }
   } catch (err) {
     return {
       success: false,
