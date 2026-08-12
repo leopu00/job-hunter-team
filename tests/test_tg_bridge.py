@@ -1,25 +1,24 @@
 """Test del bridge Telegram inbound (.launcher/tg-bridge.py).
 
-Perché conta: è l'unico percorso che porta un messaggio dell'utente dentro
-tmux, ed è fail-closed. Un difetto qui non produce un errore visibile ma
+Perché conta: è l'ingresso Telegram della conversazione unificata, ed è
+fail-closed. Un difetto qui non produce un errore visibile ma
 **silenzio**: l'utente scrive e nessuno risponde, e la diagnosi arriva solo
 leggendo i log del container. Prima di questo file non c'era un solo test.
 
-I test caricano il modulo con `JHT_HOME` in una tmp_path e sostituiscono i
-due seam esterni — `urllib.request.urlopen` e `tmux_send` — quindi non
-esiste traffico di rete né tmux. Sono coperti:
+I test caricano il modulo con `JHT_HOME` in una tmp_path e sostituiscono la
+rete Telegram. Il bridge non invia più direttamente a tmux: journalizza e
+trasferisce in `pending_user_messages`, da cui parte l'unico consumer
+`chat-sync.js`. Sono coperti:
 
   • il gate di boot sul ruolo (env mancante o sbagliata = exit 2);
   • lettura config e persistenza dell'offset (incluso il reset del backlog);
-  • le buste inviate a tmux per testo, documento, foto e vocale, che sono il
-    contratto che gli agenti parsano;
+  • i turni durevoli per testo, documento, foto e vocale;
   • il rifiuto di un documento oltre i 20 MB e il fallimento del download,
     che devono comunque avvisare l'agente invece di sparire;
   • il loop principale: whitelist sul chat_id, `/start` non inoltrato,
     avanzamento dell'offset, e sopravvivenza a un handler che solleva;
-  • la consegna at-least-once: un update che solleva viene **ritentato**
-    (offset fermo dietro di lui), e uno che solleva sempre finisce in
-    dead-letter con un avviso all'agente invece di bloccare la coda.
+  • il confine crash/restart: journal prima dell'offset, identità stabile,
+    trasferimento SQLite idempotente e permessi minimi.
 
 Eseguire:
     pytest tests/test_tg_bridge.py -v
@@ -29,6 +28,7 @@ import importlib.util
 import io
 import json
 import re
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -58,11 +58,7 @@ def _load_bridge(monkeypatch, home, role="assistente", **env):
 
 @pytest.fixture
 def bridge(monkeypatch, tmp_path):
-    mod = _load_bridge(monkeypatch, tmp_path)
-    sent = []
-    monkeypatch.setattr(mod, "tmux_send", lambda text: sent.append(text))
-    mod._sent = sent  # comodità per i test
-    return mod
+    return _load_bridge(monkeypatch, tmp_path)
 
 
 def _write_config(home, role="assistente", token="123:ABC", chat_id=999):
@@ -71,6 +67,39 @@ def _write_config(home, role="assistente", token="123:ABC", chat_id=999):
             "bot_token": token, "chat_id": chat_id,
         }}}}
     }))
+
+
+def _journal(mod):
+    return [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(mod.INBOUND_QUEUE_DIR.glob("update-*.json"))
+    ]
+
+
+def _create_chat_db(path, *, legacy=False):
+    conn = sqlite3.connect(path)
+    extra = "" if legacy else "author TEXT NOT NULL DEFAULT 'agent', chat_ts REAL, source_id TEXT,"
+    conn.executescript(f"""
+        CREATE TABLE pending_user_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent TEXT NOT NULL, body TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'notification',
+            {extra}
+            delivered_via TEXT, delivered_at TEXT, created_at TEXT
+        );
+    """)
+    conn.close()
+
+
+def _chat_rows(path):
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    try:
+        return [dict(row) for row in conn.execute(
+            "SELECT * FROM pending_user_messages ORDER BY id"
+        )]
+    finally:
+        conn.close()
 
 
 # ── Gate di boot ────────────────────────────────────────────────────────
@@ -190,62 +219,139 @@ def test_save_offset_non_solleva_se_il_path_non_e_scrivibile(monkeypatch, tmp_pa
     mod.save_offset(7)  # nessuna eccezione
 
 
-# ── Buste verso tmux ────────────────────────────────────────────────────
+# ── Journal durevole → cronologia unificata ─────────────────────────────
 
-def test_testo_produce_la_busta_attesa(bridge):
-    bridge.handle_text({"text": "  ciao team  "})
-    assert bridge._sent == ["[@utente -> @assistente] [TG] ciao team"]
+def test_journal_nasce_atomico_con_identita_stabile_e_permessi_minimi(bridge):
+    update = _msg(41, text="domanda sintetica", date=1_723_480_000)
+    bridge.dispatch_update("tok", 999, update)
+
+    rows = _journal(bridge)
+    assert rows == [{
+        "version": 1,
+        "source_id": "telegram:assistente:41",
+        "update_id": 41,
+        "agent": "assistente",
+        "body": "domanda sintetica",
+        "author": "user",
+        "delivered_via": "telegram",
+        "created_at": "2024-08-12 16:26:40",
+        "edited": False,
+    }]
+    queue_file = next(bridge.INBOUND_QUEUE_DIR.iterdir())
+    assert bridge.INBOUND_QUEUE_DIR.stat().st_mode & 0o777 == 0o700
+    assert queue_file.stat().st_mode & 0o777 == 0o600
+    assert not list(bridge.INBOUND_QUEUE_DIR.glob("*.tmp"))
+
+
+def test_flush_entra_nella_cronologia_legacy_e_rimuove_subito_il_journal(
+    bridge, tmp_path,
+):
+    db_path = tmp_path / "jobs.db"
+    _create_chat_db(db_path, legacy=True)
+    bridge.dispatch_update("tok", 999, _msg(9, text="testo persistito"))
+
+    assert bridge.flush_inbound_queue(db_path) == 1
+    rows = _chat_rows(db_path)
+    assert len(rows) == 1
+    assert rows[0]["body"] == "testo persistito"
+    assert rows[0]["author"] == "user"
+    assert rows[0]["delivered_via"] == "telegram"
+    assert rows[0]["delivered_at"] is None
+    assert rows[0]["chat_ts"] is None  # il mirror chat-sync e' l'unico consumer
+    assert rows[0]["source_id"] == "telegram:assistente:9"
+    assert _journal(bridge) == []  # retention minima: solo fino al COMMIT
+
+
+def test_restart_fra_journal_offset_commit_e_cleanup_non_perde_ne_duplica(
+    monkeypatch, tmp_path,
+):
+    db_path = tmp_path / "jobs.db"
+    _create_chat_db(db_path)
+    update = _msg(77, text="una volta sola")
+
+    first = _load_bridge(monkeypatch, tmp_path)
+    first.dispatch_update("tok", 999, update)
+    # Crash prima dell'offset: Telegram ripropone lo stesso update.
+    second = _load_bridge(monkeypatch, tmp_path)
+    second.dispatch_update("tok", 999, update)
+    assert len(_journal(second)) == 1
+
+    assert second.flush_inbound_queue(db_path) == 1
+    # Crash dopo COMMIT ma prima che l'offset sia sicuramente persistito:
+    # il replay ricrea il journal, source_id rende l'INSERT idempotente.
+    third = _load_bridge(monkeypatch, tmp_path)
+    third.dispatch_update("tok", 999, update)
+    assert third.flush_inbound_queue(db_path) == 1
+    assert [r["body"] for r in _chat_rows(db_path)] == ["una volta sola"]
+    assert _journal(third) == []
+
+
+def test_due_testi_uguali_con_update_diversi_restano_due_turni(bridge, tmp_path):
+    db_path = tmp_path / "jobs.db"
+    _create_chat_db(db_path)
+    bridge.dispatch_update("tok", 999, _msg(1, text="ok"))
+    bridge.dispatch_update("tok", 999, _msg(2, text="ok"))
+    bridge.flush_inbound_queue(db_path)
+    rows = _chat_rows(db_path)
+    assert [r["body"] for r in rows] == ["ok", "ok"]
+    assert {r["source_id"] for r in rows} == {
+        "telegram:assistente:1", "telegram:assistente:2",
+    }
+
+
+# ── Contenuto dei turni Telegram ────────────────────────────────────────
+
+def test_testo_produce_il_turno_atteso(bridge):
+    assert bridge.handle_text({"text": "  ciao team  "}) == "ciao team"
 
 
 def test_testo_vuoto_non_inoltra_nulla(bridge):
-    bridge.handle_text({"text": "   "})
-    bridge.handle_text({})
-    assert bridge._sent == []
+    assert bridge.handle_text({"text": "   "}) is None
+    assert bridge.handle_text({}) is None
 
 
 def test_documento_inoltra_path_nome_mime_e_size(bridge, monkeypatch, tmp_path):
     monkeypatch.setattr(bridge, "fetch_file", lambda t, fid, name: tmp_path / name)
-    bridge.handle_document("tok", {"document": {
+    body = bridge.handle_document("tok", {"document": {
         "file_id": "AAA", "file_name": "cv.pdf",
         "mime_type": "application/pdf", "file_size": 1234,
     }})
-    busta = bridge._sent[0]
-    assert busta.startswith("[@utente -> @assistente] [TG-DOC] ")
-    assert f"path={tmp_path / 'cv.pdf'}" in busta
-    assert "name=cv.pdf" in busta
-    assert "mime=application/pdf" in busta
-    assert "size=1234" in busta
+    assert body.startswith("[TG-DOC] ")
+    assert f"path={tmp_path / 'cv.pdf'}" in body
+    assert "name=cv.pdf" in body
+    assert "mime=application/pdf" in body
+    assert "size=1234" in body
 
 
 def test_documento_oltre_20mb_avvisa_e_non_scarica(bridge, monkeypatch):
     chiamate = []
     monkeypatch.setattr(bridge, "fetch_file", lambda *a: chiamate.append(a))
-    bridge.handle_document("tok", {"document": {
+    body = bridge.handle_document("tok", {"document": {
         "file_id": "AAA", "file_name": "enorme.pdf", "file_size": 21 * 1024 * 1024,
     }})
     assert chiamate == []
-    assert "[TG-DOC-REJECT]" in bridge._sent[0]
-    assert "enorme.pdf" in bridge._sent[0]
+    assert "[TG-DOC-REJECT]" in body
+    assert "enorme.pdf" in body
 
 
 def test_documento_al_limite_esatto_passa(bridge, monkeypatch, tmp_path):
     monkeypatch.setattr(bridge, "fetch_file", lambda t, fid, name: tmp_path / name)
-    bridge.handle_document("tok", {"document": {
+    body = bridge.handle_document("tok", {"document": {
         "file_id": "AAA", "file_name": "borderline.pdf",
         "file_size": bridge.MAX_DOC_SIZE_BYTES,
     }})
-    assert "[TG-DOC]" in bridge._sent[0]
+    assert "[TG-DOC]" in body
 
 
 def test_download_fallito_avvisa_l_agente(bridge, monkeypatch):
     """Il caso peggiore sarebbe il silenzio: l'utente ha mandato il CV e
     nessuno glielo dice."""
     monkeypatch.setattr(bridge, "fetch_file", lambda *a: None)
-    bridge.handle_document("tok", {"document": {
+    body = bridge.handle_document("tok", {"document": {
         "file_id": "AAA", "file_name": "cv.pdf", "file_size": 10,
     }})
-    assert "[TG-DOC-ERROR]" in bridge._sent[0]
-    assert "cv.pdf" in bridge._sent[0]
+    assert "[TG-DOC-ERROR]" in body
+    assert "cv.pdf" in body
 
 
 def test_foto_prende_la_risoluzione_piu_grande(bridge, monkeypatch, tmp_path):
@@ -256,37 +362,36 @@ def test_foto_prende_la_risoluzione_piu_grande(bridge, monkeypatch, tmp_path):
         return tmp_path / name
 
     monkeypatch.setattr(bridge, "fetch_file", _fetch)
-    bridge.handle_photo("tok", {"photo": [
+    body = bridge.handle_photo("tok", {"photo": [
         {"file_id": "small", "file_size": 100},
         {"file_id": "large", "file_size": 9000},
         {"file_id": "mid", "file_size": 4000},
     ]})
     assert scaricati == ["large"]
-    assert "size=9000" in bridge._sent[0]
-    assert "mime=image/jpeg" in bridge._sent[0]
+    assert "size=9000" in body
+    assert "mime=image/jpeg" in body
 
 
 def test_foto_senza_array_non_inoltra(bridge):
-    bridge.handle_photo("tok", {"photo": []})
-    assert bridge._sent == []
+    assert bridge.handle_photo("tok", {"photo": []}) is None
 
 
 def test_vocale_include_la_durata(bridge, monkeypatch, tmp_path):
     monkeypatch.setattr(bridge, "fetch_file", lambda t, fid, name: tmp_path / name)
-    bridge.handle_voice("tok", {"voice": {
+    body = bridge.handle_voice("tok", {"voice": {
         "file_id": "VOICE12345", "file_size": 500, "duration": 12,
     }})
-    busta = bridge._sent[0]
-    assert "mime=audio/ogg" in busta
-    assert "duration=12s" in busta
-    assert ".ogg" in busta
+    assert "mime=audio/ogg" in body
+    assert "duration=12s" in body
+    assert ".ogg" in body
 
 
-def test_allegato_non_scaricato_non_produce_busta(bridge, monkeypatch):
+def test_allegato_non_scaricato_produce_un_errore_durevole(bridge, monkeypatch):
     monkeypatch.setattr(bridge, "fetch_file", lambda *a: None)
-    bridge.handle_photo("tok", {"photo": [{"file_id": "x", "file_size": 1}]})
-    bridge.handle_voice("tok", {"voice": {"file_id": "y"}})
-    assert bridge._sent == []
+    photo = bridge.handle_photo("tok", {"photo": [{"file_id": "x", "file_size": 1}]})
+    voice = bridge.handle_voice("tok", {"voice": {"file_id": "y"}})
+    assert "[TG-DOC-ERROR]" in photo
+    assert "[TG-DOC-ERROR]" in voice
 
 
 # ── setMyCommands ───────────────────────────────────────────────────────
@@ -358,10 +463,28 @@ def _msg(uid, chat=999, **campi):
     return {"update_id": uid, "message": {"chat": {"id": chat}, **campi}}
 
 
-def test_main_inoltra_il_messaggio_e_avanza_l_offset(bridge, monkeypatch):
+def test_main_journalizza_il_messaggio_prima_di_avanzare_l_offset(bridge, monkeypatch):
     _run_main_con_updates(bridge, monkeypatch, [_msg(10, text="ciao")])
-    assert bridge._sent == ["[@utente -> @assistente] [TG] ciao"]
+    assert [row["body"] for row in _journal(bridge)] == ["ciao"]
     assert json.loads(bridge.STATE_PATH.read_text())["last_offset"] == 10
+
+
+def test_main_non_avanza_se_il_journal_durevole_fallisce(bridge, monkeypatch):
+    def _fail(*_args, **_kwargs):
+        raise bridge.DurableQueueError("disco non scrivibile")
+
+    monkeypatch.setattr(bridge, "enqueue_inbound_turn", _fail)
+    _run_main_con_updates(bridge, monkeypatch, [_msg(10, text="non perdermi")])
+    state = json.loads(bridge.STATE_PATH.read_text())
+    assert state["last_offset"] == 0
+    assert state["attempts"] == {"10": 1}
+
+
+def test_main_flusha_la_coda_ad_ogni_poll(bridge, monkeypatch):
+    calls = []
+    monkeypatch.setattr(bridge, "flush_inbound_queue", lambda: calls.append("flush"))
+    _run_main_con_updates(bridge, monkeypatch, [], giri=1)
+    assert len(calls) >= 2
 
 
 def test_main_scarta_le_chat_non_in_whitelist(bridge, monkeypatch):
@@ -370,7 +493,7 @@ def test_main_scarta_le_chat_non_in_whitelist(bridge, monkeypatch):
         _msg(1, chat=12345, text="sono un estraneo"),
         _msg(2, chat=999, text="sono l'utente"),
     ])
-    assert bridge._sent == ["[@utente -> @assistente] [TG] sono l'utente"]
+    assert [row["body"] for row in _journal(bridge)] == ["sono l'utente"]
     # L'offset avanza comunque: l'update scartato non va riprocessato.
     assert json.loads(bridge.STATE_PATH.read_text())["last_offset"] == 2
 
@@ -381,7 +504,7 @@ def test_main_non_inoltra_lo_start(bridge, monkeypatch):
         _msg(2, text="  /start  "),
         _msg(3, text="/startup non e' /start"),
     ])
-    assert bridge._sent == ["[@utente -> @assistente] [TG] /startup non e' /start"]
+    assert [row["body"] for row in _journal(bridge)] == ["/startup non e' /start"]
 
 
 def test_main_gestisce_anche_i_messaggi_modificati(bridge, monkeypatch):
@@ -389,7 +512,8 @@ def test_main_gestisce_anche_i_messaggi_modificati(bridge, monkeypatch):
     _run_main_con_updates(bridge, monkeypatch, [
         {"update_id": 5, "edited_message": {"chat": {"id": 999}, "text": "corretto"}},
     ])
-    assert bridge._sent == ["[@utente -> @assistente] [TG] corretto"]
+    assert [row["body"] for row in _journal(bridge)] == ["[TG-EDITED] corretto"]
+    assert _journal(bridge)[0]["edited"] is True
 
 
 def test_main_smista_per_tipo_di_allegato(bridge, monkeypatch, tmp_path):
@@ -401,18 +525,19 @@ def test_main_smista_per_tipo_di_allegato(bridge, monkeypatch, tmp_path):
         _msg(4, voice={"file_id": "v", "file_size": 3, "duration": 1}),
         _msg(5, sticker={"file_id": "s"}),   # tipo sconosciuto: solo log
     ])
-    assert len(bridge._sent) == 4
-    assert "[TG] testo" in bridge._sent[0]
-    assert "name=cv.pdf" in bridge._sent[1]
-    assert "mime=image/jpeg" in bridge._sent[2]
-    assert "mime=audio/ogg" in bridge._sent[3]
+    turns = [row["body"] for row in _journal(bridge)]
+    assert len(turns) == 4
+    assert turns[0] == "testo"
+    assert "name=cv.pdf" in turns[1]
+    assert "mime=image/jpeg" in turns[2]
+    assert "mime=audio/ogg" in turns[3]
 
 
 def test_main_ignora_gli_update_senza_messaggio(bridge, monkeypatch):
     _run_main_con_updates(bridge, monkeypatch, [
         {"update_id": 7, "channel_post": {"text": "non mio"}},
     ])
-    assert bridge._sent == []
+    assert _journal(bridge) == []
 
 
 def test_main_sopravvive_a_un_handler_che_solleva(bridge, monkeypatch):
@@ -443,7 +568,7 @@ def test_main_sopravvive_a_una_risposta_non_json(bridge, monkeypatch):
     monkeypatch.setattr(bridge.urllib.request, "urlopen", _urlopen)
     with pytest.raises(KeyboardInterrupt):
         bridge.main()
-    assert bridge._sent == []
+    assert _journal(bridge) == []
 
 
 # ── Consegna at-least-once: ritentativi e dead-letter ───────────────────
@@ -510,7 +635,7 @@ def _handler_che_fallisce_le_prime(bridge, monkeypatch, volte):
         conteggio["n"] += 1
         if conteggio["n"] <= volte:
             raise RuntimeError("tmux non ancora pronto")
-        reale(msg)
+        return reale(msg)
 
     monkeypatch.setattr(bridge, "handle_text", _flaky)
     return conteggio
@@ -522,7 +647,7 @@ def test_un_errore_transitorio_non_perde_il_messaggio(bridge, monkeypatch):
     fake = _FakeTelegram([_msg(10, text="il mio CV e' pronto")], max_polls=3)
     _run_main(bridge, monkeypatch, fake)
 
-    assert bridge._sent == ["[@utente -> @assistente] [TG] il mio CV e' pronto"]
+    assert [row["body"] for row in _journal(bridge)] == ["il mio CV e' pronto"]
     assert _stato(bridge)["last_offset"] == 10
     # Il secondo poll ha davvero richiesto di nuovo lo stesso update.
     assert fake.serviti[0] == [10] and fake.serviti[1] == [10]
@@ -539,7 +664,7 @@ def test_offset_fermo_dietro_l_update_fallito(bridge, monkeypatch):
     stato = _stato(bridge)
     assert stato["last_offset"] == 0
     assert stato["attempts"] == {"42": 1}
-    assert bridge._sent == []
+    assert _journal(bridge) == []
 
 
 def test_i_messaggi_dietro_non_vengono_ne_persi_ne_riordinati(bridge, monkeypatch):
@@ -553,10 +678,8 @@ def test_i_messaggi_dietro_non_vengono_ne_persi_ne_riordinati(bridge, monkeypatc
     ], max_polls=3)
     _run_main(bridge, monkeypatch, fake)
 
-    assert bridge._sent == [
-        "[@utente -> @assistente] [TG] primo",
-        "[@utente -> @assistente] [TG] secondo",
-        "[@utente -> @assistente] [TG] terzo",
+    assert [row["body"] for row in _journal(bridge)] == [
+        "primo", "secondo", "terzo",
     ]
     assert _stato(bridge)["last_offset"] == 3
 
@@ -570,7 +693,7 @@ def test_un_update_velenoso_non_blocca_la_coda(bridge, monkeypatch):
     def _handler(msg):
         if msg.get("text") == "veleno":
             raise KeyError("payload malformato")
-        reale(msg)
+        return reale(msg)
 
     monkeypatch.setattr(bridge, "handle_text", _handler)
 
@@ -581,7 +704,7 @@ def test_un_update_velenoso_non_blocca_la_coda(bridge, monkeypatch):
     _run_main(bridge, monkeypatch, fake)
 
     # Il messaggio dietro è arrivato, e l'offset è oltre entrambi.
-    assert "[@utente -> @assistente] [TG] messaggio buono in coda" in bridge._sent
+    assert "messaggio buono in coda" in [row["body"] for row in _journal(bridge)]
     assert _stato(bridge)["last_offset"] == 2
     assert _stato(bridge).get("attempts") in (None, {})
     # Esattamente MAX_UPDATE_ATTEMPTS tentativi, non uno di più.
@@ -596,7 +719,7 @@ def test_l_update_scartato_finisce_su_file_e_l_agente_lo_sa(bridge, monkeypatch)
     fake = _FakeTelegram([_msg(7, text="qualcosa")], max_polls=4)
     _run_main(bridge, monkeypatch, fake)
 
-    avvisi = [s for s in bridge._sent if "[TG-UNDELIVERED]" in s]
+    avvisi = [r["body"] for r in _journal(bridge) if "[TG-UNDELIVERED]" in r["body"]]
     assert len(avvisi) == 1
     assert "update_id=7" in avvisi[0]
     assert f"attempts={bridge.MAX_UPDATE_ATTEMPTS}" in avvisi[0]
@@ -619,19 +742,17 @@ def test_i_tentativi_sopravvivono_al_riavvio_del_bridge(monkeypatch, tmp_path):
     riavvio alla volta."""
     def _avvia(max_polls):
         mod = _load_bridge(monkeypatch, tmp_path)
-        inviati = []
-        monkeypatch.setattr(mod, "tmux_send", lambda t: inviati.append(t))
         monkeypatch.setattr(mod, "handle_text", _solleva(RuntimeError("veleno")))
         _run_main(mod, monkeypatch, _FakeTelegram([_msg(3, text="x")], max_polls=max_polls))
-        return mod, inviati
+        return mod
 
-    primo, inviati1 = _avvia(max_polls=2)
+    primo = _avvia(max_polls=2)
     assert json.loads(primo.STATE_PATH.read_text())["attempts"] == {"3": 2}
-    assert not any("[TG-UNDELIVERED]" in s for s in inviati1)
+    assert not any("[TG-UNDELIVERED]" in r["body"] for r in _journal(primo))
 
     # Riavvio: modulo ricaricato da zero, stesso JHT_HOME.
-    secondo, inviati2 = _avvia(max_polls=1)
-    assert any("[TG-UNDELIVERED]" in s for s in inviati2)
+    secondo = _avvia(max_polls=1)
+    assert any("[TG-UNDELIVERED]" in r["body"] for r in _journal(secondo))
     assert secondo.DEADLETTER_PATH.exists()
 
 
@@ -646,7 +767,7 @@ def test_lo_scarto_legittimo_non_conta_come_fallimento(bridge, monkeypatch):
     ], max_polls=2)
     _run_main(bridge, monkeypatch, fake)
 
-    assert bridge._sent == []
+    assert _journal(bridge) == []
     assert _stato(bridge)["last_offset"] == 4
     assert _stato(bridge).get("attempts") in (None, {})
     assert not bridge.DEADLETTER_PATH.exists()
@@ -658,7 +779,7 @@ def test_update_senza_id_non_ferma_il_loop(bridge, monkeypatch):
         _msg(5, text="con id"),
     ], max_polls=1)
     _run_main(bridge, monkeypatch, fake)
-    assert bridge._sent == ["[@utente -> @assistente] [TG] con id"]
+    assert [row["body"] for row in _journal(bridge)] == ["con id"]
 
 
 # ── Guard dimensione: campo assente ≠ file piccolo ──────────────────────
@@ -700,13 +821,13 @@ def test_file_size_assente_non_e_un_file_piccolo(bridge, monkeypatch):
     monkeypatch.setattr(bridge, "DOWNLOAD_CHUNK_BYTES", 16)
     _fake_download(bridge, monkeypatch, b"x" * 5000)
 
-    bridge.handle_document("tok", {"document": {
+    body = bridge.handle_document("tok", {"document": {
         "file_id": "AAA", "file_name": "senza-size.pdf",
     }})
 
-    assert "[TG-DOC-REJECT]" in bridge._sent[0]
-    assert "senza-size.pdf" in bridge._sent[0]
-    assert not any("[TG-DOC]" in s for s in bridge._sent)
+    assert "[TG-DOC-REJECT]" in body
+    assert "senza-size.pdf" in body
+    assert "[TG-DOC]" not in body
     # Nessun parziale abbandonato nella inbox: un agente lo leggerebbe come buono.
     assert list(bridge.INBOX_DIR.glob("*")) == []
 
@@ -720,9 +841,9 @@ def test_file_size_non_intero_non_bypassa_il_guard(bridge, monkeypatch, size):
     doc = {"file_id": "AAA", "file_name": "sospetto.pdf"}
     if size is not None:
         doc["file_size"] = size
-    bridge.handle_document("tok", {"document": doc})
+    body = bridge.handle_document("tok", {"document": doc})
 
-    assert "[TG-DOC-REJECT]" in bridge._sent[0]
+    assert "[TG-DOC-REJECT]" in body
 
 
 def test_file_size_assente_ma_file_piccolo_viene_consegnato(bridge, monkeypatch):
@@ -732,13 +853,12 @@ def test_file_size_assente_ma_file_piccolo_viene_consegnato(bridge, monkeypatch)
     monkeypatch.setattr(bridge, "DOWNLOAD_CHUNK_BYTES", 16)
     _fake_download(bridge, monkeypatch, b"z" * 50)
 
-    bridge.handle_document("tok", {"document": {
+    body = bridge.handle_document("tok", {"document": {
         "file_id": "AAA", "file_name": "cv.pdf", "mime_type": "application/pdf",
     }})
 
-    busta = bridge._sent[0]
-    assert "[TG-DOC]" in busta
-    assert "size=50" in busta
+    assert "[TG-DOC]" in body
+    assert "size=50" in body
     assert (bridge.INBOX_DIR / "cv.pdf").read_bytes() == b"z" * 50
 
 
@@ -748,11 +868,11 @@ def test_size_dichiarata_da_getfile_evita_il_download(bridge, monkeypatch):
     monkeypatch.setattr(bridge, "MAX_DOC_SIZE_BYTES", 100)
     aperti = _fake_download(bridge, monkeypatch, b"w" * 5000, meta_size=999_999)
 
-    bridge.handle_document("tok", {"document": {
+    body = bridge.handle_document("tok", {"document": {
         "file_id": "AAA", "file_name": "grosso.pdf",
     }})
 
-    assert "[TG-DOC-REJECT]" in bridge._sent[0]
+    assert "[TG-DOC-REJECT]" in body
     assert all("/getFile" in u for u in aperti)
 
 
@@ -761,11 +881,11 @@ def test_foto_e_vocale_oltre_limite_avvisano_invece_di_sparire(bridge, monkeypat
     monkeypatch.setattr(bridge, "DOWNLOAD_CHUNK_BYTES", 16)
     _fake_download(bridge, monkeypatch, b"p" * 5000)
 
-    bridge.handle_photo("tok", {"photo": [{"file_id": "pppppppppp"}]})
-    bridge.handle_voice("tok", {"voice": {"file_id": "vvvvvvvvvv"}})
+    photo = bridge.handle_photo("tok", {"photo": [{"file_id": "pppppppppp"}]})
+    voice = bridge.handle_voice("tok", {"voice": {"file_id": "vvvvvvvvvv"}})
 
-    assert len(bridge._sent) == 2
-    assert all("[TG-DOC-REJECT]" in s for s in bridge._sent)
+    assert "[TG-DOC-REJECT]" in photo
+    assert "[TG-DOC-REJECT]" in voice
 
 
 def test_download_fallito_non_lascia_parziali(bridge, monkeypatch):

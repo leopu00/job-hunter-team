@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS applications (
   critic_verdict TEXT,
   critic_score REAL,
   critic_notes TEXT,
+  critic_round INTEGER,
   status TEXT DEFAULT 'draft',
   written_at TIMESTAMP,
   applied_at TIMESTAMP,

@@ -142,28 +142,39 @@ jht_spawn_sync_prompt() {
   fi
 }
 
-# jht_spawn_copy_skills <ruolo> <workdir> <label>
+# jht_spawn_copy_skills <ruolo> <workdir> <label> [provider]
 #   Installa nella workdir le skill condivise dichiarate nel manifest e tutte
 #   le private del ruolo. JHT_APP_ROOT e' configurabile solo per gli scaffold
 #   riproducibili; nel container resta /app.
-#   Claude legge .claude/skills/, Codex/Kimi leggono .agents/skills/: popoliamo
-#   entrambe come fa start-agent.sh, così l'agente funziona con ogni provider.
+#   Claude legge .claude/skills/; Codex legge .agents/skills/; Kimi supporta
+#   entrambi ma usiamo il generico .agents/skills/ per non duplicare la stessa
+#   skill tra scope brand e generic. Se il provider manca/non e' riconosciuto,
+#   il fallback conserva il mirror su entrambi i path.
 #   Ogni spawn riscrive le cartelle → un cambio di manifest è preso al volo.
 #   Locale-aware come start-agent.sh: SKILL.<locale>.md diventa SKILL.md e le
 #   varianti spariscono dalla workspace — l'agente vede UN solo SKILL.md,
 #   nella sua lingua, invece di leggersi 6 traduzioni a ogni giro.
 jht_spawn_copy_skills() {
   local role="$1" workdir="$2" label="$3"
+  local provider="${4:-}"
   local app_root="${JHT_APP_ROOT:-/app}"
   local lib="$app_root/agents/_skills"
   local manifest="$app_root/agents/$role/skills.list"
   local private="$app_root/agents/$role/_skills"
   local dest name line locale localized src skill
+  local -a destinations
   locale="$(jht_spawn_user_locale)"
-  for dest in "$workdir/.claude/skills" "$workdir/.agents/skills"; do
-    # Ricostruire da zero e' parte dell'isolamento: una skill rimossa dal
-    # manifest (o privata di un ruolo precedente) non deve sopravvivere.
-    rm -rf "$dest" 2>/dev/null || true
+
+  # Puliamo sempre entrambi: dopo un cambio provider nessuna skill del vecchio
+  # scope deve restare visibile al nuovo processo.
+  rm -rf "$workdir/.claude/skills" "$workdir/.agents/skills" 2>/dev/null || true
+  case "$provider" in
+    anthropic|claude) destinations=("$workdir/.claude/skills") ;;
+    openai|codex|kimi) destinations=("$workdir/.agents/skills") ;;
+    *) destinations=("$workdir/.claude/skills" "$workdir/.agents/skills") ;;
+  esac
+
+  for dest in "${destinations[@]}"; do
     mkdir -p "$dest" 2>/dev/null || continue
 
     if [ -f "$manifest" ]; then

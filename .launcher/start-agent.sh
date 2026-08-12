@@ -941,8 +941,9 @@ fi
 # ── Skill distribution ──────────────────────────────────────────────────────
 # Unica implementazione condivisa con gli spawn speciali. skills.list resta
 # la source of truth delle shared; agents/<role>/_skills aggiunge solo le
-# private del ruolo. La funzione ricostruisce sia .claude che .agents.
-JHT_APP_ROOT="$REPO_ROOT" jht_spawn_copy_skills "$ROLE" "$AGENT_DIR" "start-agent"
+# private del ruolo. CLI_BIN e' gia' la selezione provider normalizzata.
+JHT_APP_ROOT="$REPO_ROOT" jht_spawn_copy_skills \
+  "$ROLE" "$AGENT_DIR" "start-agent" "$CLI_BIN"
 
 # ── Warmup ~/.claude.json se manca ──────────────────────────────────────────
 # Bug osservato 2026-05-12: Claude Code 2.1.139 considera "loggato" solo se

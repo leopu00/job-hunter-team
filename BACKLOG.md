@@ -141,7 +141,7 @@
 - ✅ **[JHT-ACCESS-CREDENTIALS-GAPS]** *(M3, audited 2026-08-03)* — doc-vs-code audit completed in [`access-and-credentials.md`](docs/internal/ops/access-and-credentials.md): canonical key env fixed, stale desktop plaintext fallback removed, unsupported Hetzner/backup/keyring claims corrected; residual implementation gaps split explicitly in the punch list.
 - ⬜ Skill distribution punch list — Python script colocation, `_lib/` for shared deps, smoke + full-team integration tests → [`docs/internal/architecture/skill-distribution.md`](docs/internal/architecture/skill-distribution.md).
   - ✅ **[JHT-SKILLS-SYMLINK-TEST]** — scaffold temporaneo deterministico sul distributore reale: parita' `.claude/skills` / `.agents/skills`, shared + private, `_lib` esclusa e nessun leakage tra ruoli.
-  - ⬜ **[JHT-SKILLS-CODEX-KIMI-DISCOVERY]** — discovery runtime con i provider reali.
+  - ✅ **[JHT-SKILLS-CODEX-KIMI-DISCOVERY]** — convenzioni correnti verificate sulle fonti ufficiali; launcher provider-aware (`.claude` per Claude, `.agents` per Codex/Kimi) con fallback doppio e test deterministico, senza avviare LLM.
 
 ## 🗄️ DB & filesystem hygiene
 
