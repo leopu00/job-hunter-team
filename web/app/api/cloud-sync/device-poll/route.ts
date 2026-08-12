@@ -20,7 +20,12 @@ const POLL_LIMIT_PER_MIN = 60;
 
 type PairingRedemption = {
   status:
-    "not_found" | "pending" | "approved" | "consumed" | "expired" | "invalid";
+    | "not_found"
+    | "pending"
+    | "approved"
+    | "consumed"
+    | "expired"
+    | "invalid";
   approved_token: string | null;
   user_id: string | null;
   approved_token_id: string | null;
