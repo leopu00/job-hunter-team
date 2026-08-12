@@ -201,6 +201,18 @@ describe("CLI host wizard — local e VPS sono host reali", () => {
       .filter(([, contents]) => retiredVpsRecovery.test(contents))
       .map(([file]) => file);
     expect(retiredRecoveryDocs).toEqual([]);
+    const unconditionalCloudArchitecture = /(?:└─\s*pid1:\s*cloud daemon \+ bridges|identico nei due modi[\s\S]{0,250}push USCENTE dal container|Supabase,\s+che il container alimenta da fuori)/i;
+    for (const staleClaim of [
+      "└─ pid1: cloud daemon + bridges",
+      "identico nei due modi\nBrowser → cloud\npush USCENTE dal container",
+      "legge Supabase, che il container alimenta da fuori",
+    ]) {
+      expect(unconditionalCloudArchitecture.test(staleClaim), staleClaim).toBe(true);
+    }
+    const unconditionalCloudDocs = activeDocumentation()
+      .filter(([, contents]) => unconditionalCloudArchitecture.test(contents))
+      .map(([file]) => file);
+    expect(unconditionalCloudDocs).toEqual([]);
     for (const locale of LOCALES) {
       const catalog = JSON.parse(
         read(`shared/locales/${locale}.json`),

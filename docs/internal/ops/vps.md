@@ -65,7 +65,11 @@ Il container `jht` esegue `pid1` (`command: ["pid1"]` in `docker-compose.yml`) c
 - nessuna `EXPOSE` nel `Dockerfile`, nessuna chiave `ports:` né in `docker-compose.yml` né in `docker-compose.dev.yml`
 - `web/` **non è installato nell'immagine** (commento in `Dockerfile`, sezione build)
 
-Il container non ha porte in ascolto: è un **client uscente** in entrambe le direzioni (HTTPS push + WebSocket Supabase Realtime). Da qui la proprietà che conta per l'ops: **una VPS JHT non richiede nessuna porta inbound aperta oltre a SSH.**
+Il container non ha porte in ascolto. Quando il pairing cloud è attivo, il
+daemon è un **client uscente** (HTTPS push + WebSocket Supabase Realtime);
+senza pairing quei collegamenti cloud non partono. Da qui la proprietà che
+conta per l'ops: **una VPS JHT non richiede nessuna porta inbound aperta oltre
+a SSH.**
 
 ### I due piani di interazione
 
@@ -86,16 +90,20 @@ USER PC                                    USER PC
                                            │
                                            VPS
                                            └── 🐳 container jht
-                                                 └─ pid1: cloud daemon + bridges
+                                                 ├─ pid1: bridges
+                                                 └─ con sync opt-in: cloud daemon
 
-─── identico nei due modi ─────────────────────────────────────────────
+─── piano cloud opzionale, solo dopo pairing/sync ─────────────────────
 
 🌐 Browser ───► jobhunterteam.ai (Vercel + Supabase) — SOLA LETTURA, con login
                         ▲
-                        └── push USCENTE dal container (HTTPS + Supabase Realtime WS)
+                        └── push USCENTE dal cloud daemon, quando attivo
 ```
 
-**Il browser non raggiunge mai il container**, né in locale né su VPS: legge Supabase, che il container alimenta da fuori. Nessuna route web compone verso una VPS.
+**Il browser non raggiunge mai il container**, né in locale né su VPS. Con la
+sync opt-in legge da Supabase i record supportati che il daemon ha copiato;
+senza pairing questo piano non è disponibile. Nessuna route web compone verso
+una VPS.
 
 **Cosa cambia nel codice fra i due modi**: solo il trasporto. `LocalBackend` estende `VpsBackend` e ne riusa comandi e parser, sostituendo `ssh … docker exec` con `docker` locale. La logica di dominio è una sola.
 
@@ -103,7 +111,8 @@ USER PC                                    USER PC
 
 - ❌ un server HTTP dentro al container, o una porta pubblicata dal compose
 - ❌ una porta inbound sulla VPS oltre a SSH
-- ❌ una route del sito cloud che dialoga con una VPS: la direzione è sempre container → cloud
+- ❌ una route del sito cloud che dialoga con una VPS: quando la sync è attiva,
+  la direzione resta container → cloud
 
 `jht dashboard` resta registrato ma è **deprecato dal 2026-07-23**: non apre nessuna URL, stampa dove sono finite le cose ed esce 0.
 
