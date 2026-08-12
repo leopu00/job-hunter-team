@@ -6,6 +6,8 @@ on:
       - 'scripts/install.ps1'
       - 'scripts/jht-wrapper.ps1'
       - 'scripts/windows-config-acl-selftest.ps1'
+      - 'scripts/windows-private-acl.ps1'
+      - 'web/public/install.ps1'
       - '.github/workflows/windows-config-acl.yml'
 jobs:
   acl:
