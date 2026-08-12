@@ -40,8 +40,13 @@ def _load():
 bc = _load()
 
 
-def ref(name, ancestor, unique, error=None):
-    return bc.RefFacts(name, ancestor, unique, '2026-08-10', error)
+def ref(name, ancestor, unique, error=None, tracking_sha='aaaa111'):
+    return bc.RefFacts(name, ancestor, unique, '2026-08-10', error, tracking_sha)
+
+
+def live_on_origin(*names, sha='aaaa111'):
+    """Mappa branch→sha come la ritorna `git ls-remote --heads`."""
+    return {n: sha for n in names}
 
 
 def wt(path, branch, is_main=False, prunable=None):
@@ -222,8 +227,15 @@ def _scenario(sessions):
         wt('C:/repos/jht/dev2', 'dev2'),
         wt('C:/repos/jht/ritirata', 'ritirata'),
     ]
-    return bc.build_census('origin/master', 'f439df2213', '2026-08-11',
-                           refs, worktrees, sessions)
+    # Tutti e sette esistono davvero su origin: qui si misura il ciclo di vita,
+    # non la freschezza della copia locale. Quella ha i suoi test più sotto.
+    return bc.build_census(
+        'origin/master', 'f439df2213', '2026-08-11', refs, worktrees, sessions,
+        remote_refs=live_on_origin(
+            'docs', 'e2e-windows', 'dev2', 'dev1', 'backend', 'game', 'production',
+        ),
+        remote_probe='ok',
+    )
 
 
 def test_il_census_tiene_separate_le_tre_categorie():
@@ -270,9 +282,145 @@ def test_una_worktree_ritirata_libera_il_suo_ref():
         [ref('origin/ritirata', True, 0)],
         [wt('C:/repos/jht/ritirata', 'ritirata')],
         frozenset({'dev1'}),
+        remote_refs=live_on_origin('ritirata'),
+        remote_probe='ok',
     )
     assert [r.name for r in census.candidates] == ['origin/ritirata']
     assert [w.name for w in census.worktrees_without_session] == ['ritirata']
+
+
+# ── il gate sull'esistenza su origin ──────────────────────────────────────
+
+
+def test_parse_ls_remote_prende_solo_i_branch():
+    heads = bc.parse_ls_remote(
+        'aaa111\trefs/heads/master\n'
+        'bbb222\trefs/heads/preview/o31-cloud\n'
+        'ccc333\trefs/tags/v0.3.6\n'
+        'ddd444\tHEAD\n'
+        '\n'
+    )
+    assert heads == {'master': 'aaa111', 'preview/o31-cloud': 'bbb222'}
+
+
+def test_un_ref_confermato_su_origin_allo_stesso_sha():
+    status, note = bc.remote_status('aaaa111', {'docs': 'aaaa111'}, 'docs')
+    assert status == bc.REMOTE_CONFIRMED
+    assert note == ''
+
+
+def test_un_ref_gia_cancellato_su_origin_e_stale():
+    """Il caso vero: 7 dependabot già rimosse dall'auto-delete di GitHub."""
+    status, note = bc.remote_status('aaaa111', {'master': 'bbb222'}, 'dependabot/x')
+    assert status == bc.REMOTE_STALE
+    assert 'fetch --prune' in note
+
+
+def test_un_ref_che_su_origin_e_andato_avanti_e_drifted():
+    status, note = bc.remote_status('aaaa111', {'dev3': 'ffff999'}, 'dev3')
+    assert status == bc.REMOTE_DRIFTED
+    assert 'sha superato' in note
+
+
+def test_lo_sha_abbreviato_combacia_con_quello_lungo():
+    """Il tracking è risolto per intero, ls-remote pure: ma non diamo per
+    scontata la lunghezza, un prefisso valido non deve sembrare una deriva."""
+    status, _ = bc.remote_status('aaaa111', {'docs': 'aaaa111bbbccc'}, 'docs')
+    assert status == bc.REMOTE_CONFIRMED
+
+
+def test_senza_risposta_da_origin_niente_e_confermato():
+    status, note = bc.remote_status('aaaa111', None, 'docs')
+    assert status == bc.REMOTE_UNVERIFIED
+    assert 'non verificata' in note
+
+
+@pytest.mark.parametrize('status', [
+    bc.REMOTE_STALE, bc.REMOTE_DRIFTED, bc.REMOTE_UNVERIFIED,
+])
+def test_solo_un_ref_confermato_su_origin_e_candidato(status):
+    assert bc.ref_is_candidate(bc.INTEGRATED, None, status) is False
+    assert bc.ref_is_candidate(bc.INTEGRATED, None, bc.REMOTE_CONFIRMED) is True
+
+
+def test_la_deroga_esplicita_riapre_la_candidatura():
+    """`--no-remote-check`: l'operatore accetta i propri ref di tracking."""
+    assert bc.ref_is_candidate(
+        bc.INTEGRATED, None, bc.REMOTE_UNVERIFIED, trust_tracking=True
+    ) is True
+    # Ma la deroga vale solo sul remote: gli altri due gate restano.
+    assert bc.ref_is_candidate(
+        bc.UNIQUE, None, bc.REMOTE_CONFIRMED, trust_tracking=True
+    ) is False
+    assert bc.ref_is_candidate(
+        bc.INTEGRATED, bc.SESSION_LIVE, bc.REMOTE_CONFIRMED, trust_tracking=True
+    ) is False
+
+
+def _scenario_stantio(**kwargs):
+    """Un ref integrato che su origin non esiste più: il difetto del 2026-08-12."""
+    return bc.build_census(
+        'origin/master', 'abc', '2026-08-12',
+        [ref('origin/docs', True, 0), ref('origin/fantasma', True, 0)],
+        [],
+        frozenset(),
+        remote_refs=live_on_origin('docs'),
+        remote_probe='ok',
+        **kwargs,
+    )
+
+
+def test_un_ref_fantasma_non_e_un_candidato_ma_un_da_guardare():
+    census = _scenario_stantio()
+    assert [r.name for r in census.candidates] == ['origin/docs']
+    assert [r.name for r in census.suspect_refs] == ['origin/fantasma']
+    assert census.needs_a_look == 1
+    assert bc.exit_code(census, strict=False) == 1
+
+
+def test_il_fantasma_resta_nella_sua_categoria_di_ciclo_di_vita():
+    """`stale` è un dubbio sui DATI, non una categoria di ciclo di vita: il ref
+    resta fra gli integrati, con l'`hold` che ne spiega il motivo."""
+    census = _scenario_stantio()
+    fantasma = next(r for r in census.refs if r.name == 'origin/fantasma')
+    assert fantasma.category == bc.INTEGRATED
+    assert fantasma.remote_status == bc.REMOTE_STALE
+    assert 'hold' in fantasma.reason and 'prune' in fantasma.reason
+
+
+def test_col_probe_di_origin_rotto_nessun_ref_e_candidato():
+    census = bc.build_census(
+        'origin/master', 'abc', '2026-08-12',
+        [ref('origin/docs', True, 0), ref('origin/e2e-windows', True, 0)],
+        [], frozenset(),
+        remote_refs=None, remote_probe=bc.REMOTE_UNVERIFIED,
+    )
+    assert census.candidates == []
+    assert len(census.suspect_refs) == 2
+    assert bc.exit_code(census, strict=False) == 1
+
+
+def test_con_la_deroga_il_dubbio_sui_dati_non_e_piu_un_da_guardare():
+    census = bc.build_census(
+        'origin/master', 'abc', '2026-08-12',
+        [ref('origin/docs', True, 0)], [], frozenset(),
+        remote_refs=None, remote_probe=bc.REMOTE_UNVERIFIED, trust_tracking=True,
+    )
+    assert [r.name for r in census.candidates] == ['origin/docs']
+    assert census.suspect_refs == []
+    assert bc.exit_code(census, strict=False) == 0
+
+
+def test_un_ref_gia_ignoto_non_viene_contato_due_volte():
+    """Un ref non classificabile è già DA GUARDARE: non deve sommarsi a sé."""
+    census = bc.build_census(
+        'origin/master', 'abc', '2026-08-12',
+        [ref('origin/rotta', None, None)], [], frozenset(),
+        remote_refs=live_on_origin('altra'), remote_probe='ok',
+    )
+    assert len(census.unknown_refs) == 1
+    assert census.suspect_refs == []
+    assert census.needs_a_look == 1
 
 
 # ── codici di uscita ──────────────────────────────────────────────────────
@@ -370,3 +518,28 @@ def test_una_base_che_non_esiste_esce_due(repo_con_remote):
     done = _run_census(repo_con_remote, '--base', 'origin/inesistente')
     assert done.returncode == 2
     assert 'non esiste' in done.stderr
+
+
+def test_un_branch_cancellato_su_origin_non_e_piu_un_candidato(repo_con_remote):
+    """Il difetto del 2026-08-12, riprodotto contro git vero.
+
+    `integrata` viene rimossa dal remote (come fa l'auto-delete di GitHub al
+    merge del PR) senza `git fetch --prune` in locale: il ref di tracking resta
+    e il census, prima del gate, la annunciava come lavoro da fare.
+    """
+    import json
+    upstream = repo_con_remote.parent / 'upstream.git'
+    _git(['branch', '-D', 'integrata'], str(upstream))
+
+    done = _run_census(repo_con_remote)
+    payload = json.loads(done.stdout)
+    assert payload['candidates'] == []
+    assert [r['name'] for r in payload['suspect_refs']] == ['origin/integrata']
+    assert payload['suspect_refs'][0]['remote_status'] == bc.REMOTE_STALE
+    assert done.returncode == 1
+
+    # Con la deroga esplicita torna candidato: è l'operatore a dichiarare che
+    # si fida del proprio tracking, e il report glielo scrive in testa.
+    con_deroga = _run_census(repo_con_remote, '--no-remote-check')
+    assert json.loads(con_deroga.stdout)['candidates'] == ['origin/integrata']
+    assert con_deroga.returncode == 0
