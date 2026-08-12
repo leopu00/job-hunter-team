@@ -39,6 +39,7 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 
 | File | Topic |
 |---|---|
+| [`2026-08-12-dialogue-i18n-contract.md`](architecture/2026-08-12-dialogue-i18n-contract.md) | 🌍 Contratto eseguibile dei dialoghi authored EN+6: parità degli ID, resolver runtime, contesto LLM canonico e gate contro residui inglesi |
 | [`2026-08-03-local-vault-design.md`](architecture/2026-08-03-local-vault-design.md) | 🔐 Design del vault locale: envelope encryption, broker runtime e migrazione fail-closed; richiede ADR e dependency review prima dell'implementazione |
 | [`provider-touchpoint-inventory.md`](architecture/provider-touchpoint-inventory.md) | 🧭 Machine-checked map of provider-specific seams and the role-scoped M5 Local Scorer boundary |
 | [`2026-08-03-maintenance-evidence-log-design.md`](architecture/2026-08-03-maintenance-evidence-log-design.md) | 🔬 `maintenance_events` append-only: oggi i campi di manutenzione sono stato last-write-wins, quindi chi scrive il timestamp senza lavorare è indistinguibile da chi lavora — evidenza ri-derivabile (status + hash), aggancio unico in `db_update.py`, tasso di no-op come metrica |

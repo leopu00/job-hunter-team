@@ -355,7 +355,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/2026-08-12-language-source-contract.md](./internal/2026-08-12-language-source-contract.md) | Contratto eseguibile della preferenza lingua unica: artefatto canonico i18n-prefs.json, precedenza dei reader, writer autorizzati, non-migrazione di lang.cfg e vettori obbligatori. | — | 2026-08-12 | ✅ |
 | [docs/internal/2026-08-12-target-role-category-contract.md](./internal/2026-08-12-target-role-category-contract.md) | Contratto forward-only per separare titolo professionale libero, ID canonico della categoria ruolo e specialty, con persistenza e round-trip cloud senza contaminazione delle label localizzate. | — | 2026-08-12 | ✅ |
 | [docs/internal/2026-08-12-theme-cloud-sync-contract.md](./internal/2026-08-12-theme-cloud-sync-contract.md) | Contratto v1 del tema cloud autenticato: schema e RLS, cache e pending per utente, precedenza al bootstrap, gestione offline fail-closed e vettori di concorrenza. | — | 2026-08-12 | ✅ |
-| [docs/internal/2026-08-12-dialogue-i18n-contract.md](./internal/2026-08-12-dialogue-i18n-contract.md) | Contratto eseguibile per la localizzazione dei dialoghi authored: parità degli ID EN+6, resolver runtime, contesto LLM canonico e gate contro residui inglesi nelle traduzioni. | — | 2026-08-12 | ✅ |
+| [docs/internal/architecture/2026-08-12-dialogue-i18n-contract.md](./internal/architecture/2026-08-12-dialogue-i18n-contract.md) | Contratto eseguibile per la localizzazione dei dialoghi authored: parità degli ID EN+6, resolver runtime, contesto LLM canonico e gate contro residui inglesi nelle traduzioni. | — | — | ✅ |
 
 
 ## 🔒 docs/security
