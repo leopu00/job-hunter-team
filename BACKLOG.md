@@ -138,7 +138,9 @@
 - ⬜ **[JHT-MENTOR-SKILLS]** *(M6)* — add Mentor-specific skills as testing reveals needs.
 - ⬜ **[JHT-AGENT-PROMPTS-V2]** — deep section-by-section validation of the agent prompts.
 - ✅ **[JHT-ACCESS-CREDENTIALS-GAPS]** *(M3, audited 2026-08-03)* — doc-vs-code audit completed in [`access-and-credentials.md`](docs/internal/ops/access-and-credentials.md): canonical key env fixed, stale desktop plaintext fallback removed, unsupported Hetzner/backup/keyring claims corrected; residual implementation gaps split explicitly in the punch list.
-- ⬜ Skill distribution punch list — Python script colocation, `_lib/` for shared deps, smoke + full-team integration tests → [`docs/internal/architecture/skill-distribution.md`](docs/internal/architecture/skill-distribution.md); includes **[JHT-SKILLS-SYMLINK-TEST]** and **[JHT-SKILLS-CODEX-KIMI-DISCOVERY]**.
+- ⬜ Skill distribution punch list — Python script colocation, `_lib/` for shared deps, smoke + full-team integration tests → [`docs/internal/architecture/skill-distribution.md`](docs/internal/architecture/skill-distribution.md).
+  - ✅ **[JHT-SKILLS-SYMLINK-TEST]** — scaffold temporaneo deterministico sul distributore reale: parita' `.claude/skills` / `.agents/skills`, shared + private, `_lib` esclusa e nessun leakage tra ruoli.
+  - ⬜ **[JHT-SKILLS-CODEX-KIMI-DISCOVERY]** — discovery runtime con i provider reali.
 
 ## 🗄️ DB & filesystem hygiene
 
