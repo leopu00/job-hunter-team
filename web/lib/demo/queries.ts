@@ -4,6 +4,10 @@
 // SOLO di tipi (elisi a compile-time) per non creare cicli runtime; le
 // poche logiche condivise (filtri faceted, verdict mapping) sono replicate
 // qui con commento — se cambiano di là vanno allineate.
+import {
+  matchesPositionQuery,
+  parsePositionQuery,
+} from "@/lib/position-search";
 import type {
   DashboardStats,
   PendingMessage,
@@ -127,6 +131,11 @@ function applyFilters(
   opts?: PositionFilterOpts,
 ): PositionWithScore[] {
   let out = rows;
+  // O-60 — la ricerca vale anche in demo: la stessa funzione dei due rami
+  // veri, così la persona che prova il prodotto non trova un campo che non
+  // fa niente.
+  const search = parsePositionQuery(opts?.q);
+  if (search.text) out = out.filter((p) => matchesPositionQuery(p, search));
   if (opts?.statuses?.length) {
     const set = new Set(opts.statuses);
     out = out.filter((p) => set.has(p.status));

@@ -637,7 +637,7 @@ const S := {
 	"agents.chat_besteffort": "(risposta non garantita: protocollo chat non nel suo prompt)",
 
 	# ── GlobalSearch (Cmd+K) ──────────────────────────────────────
-	"search.placeholder": "cerca posizioni: titolo, azienda, città…  (ESC chiude)",
+	"search.placeholder": "cerca posizioni: titolo, azienda, ID…  (ESC chiude)",
 	"search.no_match": "nessuna posizione trovata",
 	"search.need_vps": "collega la VPS per cercare tra le posizioni reali",
 
