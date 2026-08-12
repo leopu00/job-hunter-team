@@ -1,10 +1,15 @@
+import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { ScoreAssessedAt } from "../../../web/app/(protected)/positions/[id]/ScoreAssessedAt";
 import { formatPositionEventStamp } from "../../../web/lib/position-event-stamp";
 import { T } from "../../../web/app/(protected)/positions/[id]/page.i18n";
 
 const repo = join(__dirname, "../../..");
+const requireFromWeb = createRequire(join(repo, "web/package.json"));
+const { createElement } = requireFromWeb("react");
+const { renderToStaticMarkup } = requireFromWeb("react-dom/server");
 const page = readFileSync(
   join(repo, "web/app/(protected)/positions/[id]/page.tsx"),
   "utf8",
@@ -26,6 +31,9 @@ describe("data della valutazione nella pagina posizione", () => {
     );
     expect(page).toContain("<time dateTime={score.scored_at}>");
     expect(page).toContain('t("score_assessed_at")');
+    expect(page).toContain("<ScoreAssessedAt");
+    expect(page).toContain("scoredAt={score.scored_at}");
+    expect(page).toContain("formatted={scoreAssessedAt}");
     expect(page).not.toMatch(
       /scoreAssessedAt\s*=\s*formatPositionEventStamp\(position\.(?:updated_at|found_at)/,
     );
@@ -35,5 +43,34 @@ describe("data della valutazione nella pagina posizione", () => {
         .toBeTypeOf("string")
         .not.toHaveLength(0);
     }
+  });
+
+  it("mostra scored_at nel dettaglio punteggio quando il dato esiste", () => {
+    const scoredAt = "2026-08-12T15:24:00.000";
+    const formatted = formatPositionEventStamp(scoredAt, "it");
+    const html = renderToStaticMarkup(
+      createElement(ScoreAssessedAt, {
+        label: T.score_assessed_at.it,
+        scoredAt,
+        formatted,
+      }),
+    );
+
+    expect(html).toContain('data-score-assessed-at=""');
+    expect(html).toContain(`dateTime="${scoredAt}"`);
+    expect(html).toContain("Valutato dallo Scorer il");
+    expect(html).toContain("12/08, 15:24");
+  });
+
+  it("non inventa una data nel dettaglio quando scored_at e' assente", () => {
+    const html = renderToStaticMarkup(
+      createElement(ScoreAssessedAt, {
+        label: T.score_assessed_at.it,
+        scoredAt: null,
+        formatted: null,
+      }),
+    );
+
+    expect(html).toBe("");
   });
 });
