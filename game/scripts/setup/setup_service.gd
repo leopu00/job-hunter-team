@@ -317,6 +317,27 @@ func _self_test_vps_setup() -> void:
 		failures.append("orari di questo computer spacciati per quelli della VPS")
 	if not bool(altrui.get("provider_authenticated", false)):
 		failures.append("login presente sulla VPS non riconosciuto")
+	if not bool(altrui.get("container_running", false)) \
+			or not bool(altrui.get("remote", false)):
+		failures.append("Docker locale assente nasconde il container VPS raggiungibile")
+	# Controtest showroom: tutti e quattro i fatti arrivano dal probe remoto,
+	# mentre il dizionario di partenza riproduce Docker locale indisponibile.
+	var remoto_pronto := {"docker_available": false, "docker_running": false,
+			"container_exists": false, "container_running": false,
+			"active_provider": "", "provider_authenticated": false,
+			"plan_ready": false, "profile_ready": false, "hours_ready": false}
+	_apply_vps_probe(remoto_pronto, {"config_read": true,
+			"active_provider": "openai", "providers": {"openai": {"plan": "pro"}},
+			"team": {"working_hours": {"windows": [{"days": [1],
+			"start": "09:00", "end": "17:00"}]}},
+			"auth": {"codex": ".codex/auth.json"}, "ready": true})
+	_finalize(remoto_pronto)
+	if not bool(remoto_pronto.get("ready", false)) \
+			or int(remoto_pronto.get("completed", 0)) != 4:
+		failures.append("setup VPS completo non fa uscire dallo showroom")
+	if str(remoto_pronto.get("active_provider", "")) != "codex" \
+			or not bool(remoto_pronto.get("provider_authenticated", false)):
+		failures.append("provider o login VPS persi dopo setup remoto")
 	# VPS che non risponde: nessun valore, e nessuno preso in prestito dal disco.
 	var muta := {"provider_authenticated": true, "plan_ready": true,
 			"container_running": true, "profile_ready": true, "hours_ready": true}
@@ -325,8 +346,10 @@ func _self_test_vps_setup() -> void:
 		if not _is_unknown(muta, str(step)):
 			failures.append("passo senza risposta dalla VPS non marcato ignoto: " + str(step))
 	_finalize(muta)
-	if bool(muta.get("ready", false)) or int(muta.get("completed", 0)) != 1:
+	if bool(muta.get("ready", false)) or int(muta.get("completed", 0)) != 0:
 		failures.append("checklist data per fatta su valori mai letti")
+	if bool(muta.get("container_running", false)) or not bool(muta.get("remote", false)):
+		failures.append("VPS muta ricade sul container Docker locale")
 	_mark_known(muta, "hours")
 	if _is_unknown(muta, "hours"):
 		failures.append("valore arrivato dal team che resta ignoto")
@@ -447,24 +470,24 @@ func _apply_probe(next: Dictionary) -> void:
 	# rinfresca un tick ogni otto: sceglievi Kimi, il file cambiava subito, e
 	# la scheda restava sul provider di prima finché il fetch non passava. Da
 	# fuori sembrava che il pulsante non facesse niente (Leone, 26/07).
-	if BackendBus.is_remote() and BackendBus.is_live():
-		# In modalità VPS il container vive dall'altra parte di SSH: non deve
-		# risultare "spento" solo perché sul portatile non esiste un jht locale.
-		next["remote"] = true
-		next["docker_available"] = true
-		next["docker_running"] = true
-		next["container_exists"] = true
-		next["container_running"] = true
-		next["container_state"] = "running · VPS"
-		next["team_running"] = _agents_have_operational_team(BackendBus.agents)
-		var remote_provider := _ui_provider_id(str(
-				BackendBus.live_settings.get("active_provider", "")))
-		if remote_provider != "":
-			next["active_provider"] = remote_provider
-			next["provider_authenticated"] = bool(
-					BackendBus.live_settings.get("provider_auth_ready", false))
-			next["provider_auth_match"] = "VPS" \
-					if next["provider_authenticated"] else ""
+	if BackendBus.is_remote():
+		# La scelta della macchina è già una fonte di autorità: finché la
+		# VPS non risponde, lo stato resta ignoto e NON ricade sul Docker di
+		# questo portatile. La finestra fra `set_backend()` e CONNECTED era il
+		# difetto della prima segnalazione reale: setup remoto riuscito, Docker
+		# locale assente, checklist ferma a 3/4 e showroom ancora visibile.
+		_mark_remote_runtime(next, false)
+		if BackendBus.is_live():
+			_mark_remote_runtime(next, true)
+			next["team_running"] = _agents_have_operational_team(BackendBus.agents)
+			var remote_provider := _ui_provider_id(str(
+					BackendBus.live_settings.get("active_provider", "")))
+			if remote_provider != "":
+				next["active_provider"] = remote_provider
+				next["provider_authenticated"] = bool(
+						BackendBus.live_settings.get("provider_auth_ready", false))
+				next["provider_auth_match"] = "VPS" \
+						if next["provider_authenticated"] else ""
 	# Il backend conosce anche il caso checklist completa senza ready.flag.
 	if bool(BackendBus.profile_status.get("ready", false)):
 		next["profile_ready"] = true
@@ -947,6 +970,10 @@ static func _probe_vps(vps: Dictionary) -> Dictionary:
 ## percorso locale: il payload ha la forma della config proprio per questo.
 static func _apply_vps_probe(next: Dictionary, remote: Dictionary) -> void:
 	var unknown: Array = []
+	# Questo metodo viene chiamato soltanto quando la modalità selezionata è
+	# VPS. Anche una risposta vuota deve quindi cancellare il probe host locale:
+	# "non so cosa c'è sulla VPS" non significa "usa Docker su questo Mac".
+	_mark_remote_runtime(next, not remote.is_empty())
 	if bool(remote.get("config_read", false)):
 		var active := _ui_provider_id(str(remote.get("active_provider", "")))
 		var auth: Variant = remote.get("auth", {})
@@ -974,6 +1001,20 @@ static func _apply_vps_probe(next: Dictionary, remote: Dictionary) -> void:
 		next["profile_ready"] = false
 		unknown.append("profile")
 	next["unknown_steps"] = unknown
+
+
+## Applica lo stato runtime della macchina remota senza consultare mai Docker
+## locale. Un probe checklist non vuoto arriva soltanto dopo un `docker exec`
+## remoto riuscito, quindi attesta sia SSH sia container; vuoto resta ignoto.
+static func _mark_remote_runtime(next: Dictionary, running: bool) -> void:
+	next["remote"] = true
+	next["docker_available"] = running
+	next["docker_running"] = running
+	next["container_exists"] = running
+	next["container_running"] = running
+	next["container_state"] = "running · VPS" if running else "unknown · VPS"
+	if not running:
+		next["team_running"] = false
 
 
 ## Passo che nessuno ha saputo raccontare: la UI lo mostra come tale invece di

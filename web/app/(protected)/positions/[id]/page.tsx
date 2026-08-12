@@ -52,6 +52,7 @@ import { T } from "./page.i18n";
 import { resolveCoverLetterPdfFileName } from "@/lib/position-document-file.server";
 import { activeRescoreTicket } from "@/lib/rescore-ticket";
 import { RescoreRequestButton } from "./RescoreRequestButton";
+import { ScoreAssessedAt } from "./ScoreAssessedAt";
 
 // Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
 // inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
@@ -775,6 +776,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
           {score && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="section-label mb-4">{t("score_breakdown")}</div>
+              <ScoreAssessedAt
+                label={t("score_assessed_at")}
+                scoredAt={score.scored_at}
+                formatted={scoreAssessedAt}
+              />
               <div className="space-y-3">
                 {SCORE_DIMENSIONS.map((d) => (
                   <ScoreBar

@@ -55,7 +55,13 @@ describe("JHT-ONBOARDING-04 — ownership del push periodico", () => {
   });
 
   it("riusa handlePush e il daemon autorevole, senza db_to_supabase o cron", () => {
-    expect(CLOUD).toContain("const handlePush = createExclusiveRunner(performPush)");
+    expect(CLOUD).toContain(
+      "const handlePush = createExclusiveRunner(performPush)",
+    );
+    expect(CLOUD).toContain("const pushFn = options.pushFn || handlePush");
+    expect(
+      CLOUD.match(/await maybePeriodicPush\(\{ silent: false, config \}\);/g),
+    ).toHaveLength(2);
     expect(CLOUD).not.toContain("db_to_supabase");
     expect(PID1).not.toContain("db_to_supabase");
     expect(PID1).toContain("if (isVps && await isCloudConfigured())");
