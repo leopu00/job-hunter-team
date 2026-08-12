@@ -190,6 +190,9 @@ describe("route pubbliche — il locale non e' una demo e il cloud non e' un hos
     expect(vpsRoute).not.toMatch(/recommended setup for a real job search/i);
     expect(vpsRoute).not.toMatch(/configurazione consigliata per una ricerca di lavoro vera/i);
     expect(vpsRoute).not.toMatch(/coming soon|in arrivo|próximamente|bientôt|demnächst|hamarosan|em breve/i);
+    expect(vpsRoute).not.toMatch(/VPS[^"\n]{0,80}(?:essential|essenziale|esencial|essentiel|essenziell|elengedhetetlen)/i);
+    expect(vpsRoute).toContain("optionally pairs the server");
+    expect(vpsRoute).toContain("controllare il runtime VPS via SSH");
     expect(vpsRoute).toContain("Local PC");
   });
 

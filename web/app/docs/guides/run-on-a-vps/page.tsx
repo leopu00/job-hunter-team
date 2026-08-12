@@ -85,9 +85,10 @@ const T: Record<
     step4Body:
       "Run the one-liner and the commands from the short version above. Two things matter on a VPS specifically:",
     step4Li1Pre:
-      "— pairs the server to your web account so you can see results from any browser. On a VPS this is essential: you won't be at the terminal all day, the",
+      "— optionally pairs the server to your web account so you can see copied results from any browser. If you enable it, the",
     step4Dashboard: "web dashboard",
-    step4Li1Post: "is your main window into the team.",
+    step4Li1Post:
+      "is an additional view; the desktop app still controls the VPS runtime over SSH.",
     step4Li2Pre: "The container runs",
     step4Li2Post: ", so the team survives reboots automatically.",
     calloutDesktopLabel: "Prefer no terminal?",
@@ -131,9 +132,10 @@ const T: Record<
     step4Body:
       "Esegui la one-liner e i comandi della versione breve qui sopra. Due cose contano in particolare su un VPS:",
     step4Li1Pre:
-      "— collega il server al tuo account web così puoi vedere i risultati da qualsiasi browser. Su un VPS è essenziale: non sarai al terminale tutto il giorno, la",
+      "— collega facoltativamente il server al tuo account web per vedere i risultati copiati da qualsiasi browser. Se lo attivi, la",
     step4Dashboard: "dashboard web",
-    step4Li1Post: "è la tua finestra principale sul team.",
+    step4Li1Post:
+      "è una vista aggiuntiva; l'app desktop continua a controllare il runtime VPS via SSH.",
     step4Li2Pre: "Il container gira con",
     step4Li2Post: ", così il team sopravvive automaticamente ai riavvii.",
     calloutDesktopLabel: "Preferisci niente terminale?",
@@ -178,9 +180,10 @@ const T: Record<
     step4Body:
       "Ejecuta la one-liner y los comandos de la versión breve de arriba. Dos cosas importan en concreto en un VPS:",
     step4Li1Pre:
-      "— vincula el servidor a tu cuenta web para que puedas ver los resultados desde cualquier navegador. En un VPS es esencial: no estarás en el terminal todo el día, el",
+      "— vincula opcionalmente el servidor a tu cuenta web para ver los resultados copiados desde cualquier navegador. Si lo activas, el",
     step4Dashboard: "panel web",
-    step4Li1Post: "es tu ventana principal al equipo.",
+    step4Li1Post:
+      "es una vista adicional; la app de escritorio sigue controlando el runtime de la VPS mediante SSH.",
     step4Li2Pre: "El contenedor se ejecuta con",
     step4Li2Post:
       ", así que el equipo sobrevive a los reinicios automáticamente.",
@@ -227,9 +230,10 @@ const T: Record<
     step4Body:
       "Exécutez la commande en une ligne et les commandes de la version courte ci-dessus. Deux choses comptent spécifiquement sur un VPS :",
     step4Li1Pre:
-      "— associe le serveur à votre compte web pour que vous puissiez voir les résultats depuis n'importe quel navigateur. Sur un VPS c'est essentiel : vous ne serez pas au terminal toute la journée, le",
+      "— associe facultativement le serveur à votre compte web pour voir les résultats copiés depuis n'importe quel navigateur. Si vous l'activez, le",
     step4Dashboard: "tableau de bord web",
-    step4Li1Post: "est votre principale fenêtre sur l'équipe.",
+    step4Li1Post:
+      "est une vue supplémentaire ; l'application de bureau continue à contrôler le runtime VPS via SSH.",
     step4Li2Pre: "Le conteneur tourne avec",
     step4Li2Post: ", donc l'équipe survit automatiquement aux redémarrages.",
     calloutDesktopLabel: "Vous préférez sans terminal ?",
@@ -275,9 +279,10 @@ const T: Record<
     step4Body:
       "Führe den Einzeiler und die Befehle aus der Kurzfassung oben aus. Zwei Dinge sind speziell auf einem VPS wichtig:",
     step4Li1Pre:
-      "— koppelt den Server an dein Web-Konto, damit du die Ergebnisse von jedem Browser aus sehen kannst. Auf einem VPS ist das essenziell: Du wirst nicht den ganzen Tag am Terminal sein, das",
+      "— koppelt den Server optional an dein Web-Konto, damit du kopierte Ergebnisse in jedem Browser sehen kannst. Wenn du dies aktivierst, ist das",
     step4Dashboard: "Web-Dashboard",
-    step4Li1Post: "ist dein Hauptfenster zum Team.",
+    step4Li1Post:
+      "eine zusätzliche Ansicht; die Desktop-App steuert die VPS-Laufzeit weiterhin über SSH.",
     step4Li2Pre: "Der Container läuft mit",
     step4Li2Post: ", sodass das Team Neustarts automatisch übersteht.",
     calloutDesktopLabel: "Lieber ohne Terminal?",
@@ -322,9 +327,10 @@ const T: Record<
     step4Body:
       "Futtasd az egysoros parancsot és a fenti rövid változat parancsait. Két dolog számít kifejezetten egy VPS-en:",
     step4Li1Pre:
-      "— összepárosítja a szervert a webes fiókoddal, így bármelyik böngészőből láthatod az eredményeket. Egy VPS-en ez elengedhetetlen: nem leszel egész nap a terminálnál, a",
+      "— opcionálisan összepárosítja a szervert a webes fiókoddal, így bármelyik böngészőből láthatod a másolt eredményeket. Ha bekapcsolod, a",
     step4Dashboard: "webes irányítópult",
-    step4Li1Post: "a fő ablakod a csapatra.",
+    step4Li1Post:
+      "egy további nézet; az asztali alkalmazás továbbra is SSH-n keresztül vezérli a VPS futtatási környezetét.",
     step4Li2Pre: "A konténer így fut:",
     step4Li2Post: ", így a csapat automatikusan túléli az újraindításokat.",
     calloutDesktopLabel: "Inkább terminál nélkül?",
@@ -369,9 +375,10 @@ const T: Record<
     step4Body:
       "Executa a one-liner e os comandos da versão curta acima. Duas coisas importam especificamente num VPS:",
     step4Li1Pre:
-      "— emparelha o servidor com a tua conta web para que possas ver os resultados a partir de qualquer navegador. Num VPS é essencial: não vais estar no terminal o dia todo, o",
+      "— emparelha opcionalmente o servidor com a tua conta web para veres os resultados copiados em qualquer navegador. Se o ativares, o",
     step4Dashboard: "painel web",
-    step4Li1Post: "é a tua janela principal para a equipa.",
+    step4Li1Post:
+      "é uma vista adicional; a aplicação de desktop continua a controlar o runtime da VPS por SSH.",
     step4Li2Pre: "O contentor corre com",
     step4Li2Post:
       ", por isso a equipa sobrevive automaticamente aos reinícios.",
