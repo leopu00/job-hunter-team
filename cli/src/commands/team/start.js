@@ -8,7 +8,9 @@ import {
   sessionName, parseAgentArg, resolveConfig, getAgentDir, usingContainer,
   JHT_HOME, JHT_USER_DIR, JHT_DB_PATH, JHT_CONFIG_PATH,
 } from './agents.js';
-import { execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
+import { execArgvInContainer, execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
+
+const CONTAINER_TEAM_HALTED_FLAG = '/jht_home/.team-halted.flag';
 
 // Serve solo al path host legacy (tmux fuori dal container): dentro al
 // container gli argomenti passano separati, senza shell di mezzo.
@@ -85,6 +87,37 @@ function buildContainerBootstrap() {
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+// Uno stop globale crea il gate nel runtime che possiede gli agenti. Start
+// deve rimuoverlo NELLO STESSO runtime e osservare l'effetto prima di lanciare
+// qualunque TUI: un `rm` richiesto ma non applicato non è uno Start riuscito.
+function clearGlobalHaltGate(containerMode) {
+  if (containerMode) {
+    const removed = execArgvInContainer(['rm', '-f', CONTAINER_TEAM_HALTED_FLAG]);
+    if (removed.code !== 0) {
+      return {
+        ok: false,
+        error: removed.stderr || removed.stdout || 'container refused to remove the halt gate',
+      };
+    }
+    const absent = execArgvInContainer(['test', '!', '-e', CONTAINER_TEAM_HALTED_FLAG]);
+    if (absent.code !== 0) {
+      return { ok: false, error: `${CONTAINER_TEAM_HALTED_FLAG} is still present` };
+    }
+    return { ok: true, error: '' };
+  }
+
+  const haltedFlag = join(JHT_HOME, '.team-halted.flag');
+  try {
+    if (existsSync(haltedFlag)) unlinkSync(haltedFlag);
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+  if (existsSync(haltedFlag)) {
+    return { ok: false, error: `${haltedFlag} is still present` };
+  }
+  return { ok: true, error: '' };
+}
 
 // ── Container mode ─────────────────────────────────────────────────
 async function startActionContainer(agentArg, options = {}) {
@@ -260,10 +293,13 @@ export async function startAction(agentArg, options) {
   // ESPLICITO dell'utente sul cockpit/CLI è la via di recupero; lo start di un
   // singolo agente (per esempio l'Assistente del profilo) non lo rimuove, così
   // un processo interno non può annullare lo stop globale.
+  const containerMode = usingContainer();
   if (!agentArg) {
-    const haltedFlag = join(JHT_HOME, '.team-halted.flag');
-    if (existsSync(haltedFlag)) {
-      try { unlinkSync(haltedFlag); } catch { /* start mostrerà l'eventuale errore reale */ }
+    const gate = clearGlobalHaltGate(containerMode);
+    if (!gate.ok) {
+      console.error(c.red(`Unable to resume the team: ${String(gate.error).trim()}`));
+      process.exitCode = 1;
+      return;
     }
   }
 
@@ -271,7 +307,7 @@ export async function startAction(agentArg, options) {
   // jht — coerente col boot del bridge Sentinella e con le dipendenze CLI
   // installate nell'immagine. (Era la stessa logica della route web
   // `/api/team/start-all`, rimossa il 2026-07-25.)
-  if (usingContainer()) {
+  if (containerMode) {
     return await startActionContainer(agentArg, options);
   }
 
