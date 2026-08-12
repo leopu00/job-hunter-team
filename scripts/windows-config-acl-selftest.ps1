@@ -3,6 +3,8 @@ $root = Join-Path $env:RUNNER_TEMP ("jht-acl-selftest-" + [guid]::NewGuid().ToSt
 . (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 try {
+  $owner = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+  $foreign = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
   foreach ($script in @('install.ps1', 'jht-wrapper.ps1', 'windows-private-acl.ps1', 'windows-config-acl-selftest.ps1')) {
     $path = Join-Path $PSScriptRoot $script
     [void][scriptblock]::Create((Get-Content -LiteralPath $path -Raw))
@@ -13,9 +15,18 @@ try {
   $standalone = Join-Path $root 'standalone-install.ps1'
   Copy-Item (Join-Path $PSScriptRoot 'install.ps1') $standalone
   if (Test-Path (Join-Path $root 'windows-private-acl.ps1')) { throw 'standalone fixture unexpectedly has helper' }
-  [void][scriptblock]::Create((Get-Content -LiteralPath $standalone -Raw))
-  $owner = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-  $foreign = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
+  $tokens = $null; $errors = $null
+  $ast = [System.Management.Automation.Language.Parser]::ParseFile($standalone, [ref]$tokens, [ref]$errors)
+  if ($errors.Count) { throw "standalone parse failed: $($errors[0])" }
+  $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Protect-JhtHomeAcl' }, $true)
+  if (-not $fn) { throw 'standalone Protect-JhtHomeAcl function missing' }
+  . ([scriptblock]::Create($fn.Extent.Text))
+  $standaloneFixture = Join-Path $root 'standalone-fixture'
+  New-Item -ItemType Directory -Path $standaloneFixture -Force | Out-Null
+  $foreignRule = New-Object System.Security.AccessControl.FileSystemAccessRule($foreign, 'FullControl', 'Allow')
+  $standaloneAcl = Get-Acl $standaloneFixture; $standaloneAcl.SetAccessRuleProtection($true, $false); $standaloneAcl.AddAccessRule($foreignRule); Set-Acl $standaloneFixture $standaloneAcl
+  Protect-JhtHomeAcl -Path $standaloneFixture
+  if (-not (Test-PrivateJhtHomeAcl -Path $standaloneFixture)) { throw 'standalone inline ACL repair failed' }
   $acl = Get-Acl $root
   $acl.SetAccessRuleProtection($true, $false)
   $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($foreign, 'FullControl', 'Allow')))
