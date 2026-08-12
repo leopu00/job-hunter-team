@@ -18,6 +18,7 @@ import {
 import { clientIdentity, clientHeaderValue, cloudSyncHeaders } from '../lib/client-identity.js';
 import { summarizeOutOfRange } from '../lib/score-ranges.js';
 import { createHaltGate, guardedLane } from '../lib/halt-gate.js';
+import { createExclusiveRunner } from '../lib/exclusive-runner.js';
 import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
@@ -1181,7 +1182,7 @@ function safeCursor(sent, skipped, field) {
   return max;
 }
 
-async function handlePush(options) {
+async function performPush(options) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
     console.error(pc.red('Cloud sync is not enabled.'));
@@ -1662,6 +1663,13 @@ async function handlePush(options) {
   // skipped>0. Esponiamo skipped per far decidere il chiamante.
   return { ok: true, authFailed: false, skipped: outcome.skipped };
 }
+
+// Un solo writer locale→cloud per processo. Il daemon è l'owner dello
+// scheduling, ma bootstrap e rendezvous Realtime possono svegliarlo insieme:
+// entrambi passano da questa coda e non possono sovrapporre lettura cursor,
+// upload e avanzamento cursor. Non è un secondo scheduler e non assembla un
+// secondo payload: `performPush` resta l'unico producer.
+const handlePush = createExclusiveRunner(performPush);
 
 /**
  * Decodifica un pairing-token base64 generato da
