@@ -28,6 +28,22 @@ const WEB = path.resolve(HERE, "../../../web");
 const LOCALES = ["it", "en", "es", "fr", "de", "pt", "hu"] as const;
 const SKIP_DIRS = new Set(["node_modules", ".next", "out", "dist", ".git"]);
 
+/** Budget dei test che IMPORTANO un dizionario, misurato — non il default.
+ *
+ * Il controllo forte del blocco 1 è proprio l'import vero del modulo, e ogni
+ * import paga il transform TypeScript del file: 100–690ms a macchina scarica
+ * (--reporter=verbose, 2026-08-12; team-gmail 690ms, critico 611ms). Sotto
+ * contesa — la suite gira con 13 worker che transformano tutti insieme — quel
+ * costo si gonfia oltre il default di 5000ms: questo file è caduto con «Test
+ * timed out in 5000ms» in una run normale della suite (DashboardLinkedCharts)
+ * e in entrambe le run sotto saturazione, sempre verde rieseguito da solo. Il
+ * rosso misurava la macchina, non il codice. Stessa famiglia e stessa cura di
+ * daemon.test.ts e cloud-bootstrap-restore.test.ts: 15s, la cifra già usata
+ * dai file fratelli. I test che NON importano (regex su sorgenti già letti,
+ * 0–1ms) restano al default: un budget largo dove non è motivato è solo un
+ * modo di non guardare. */
+const IMPORT_TEST_TIMEOUT_MS = 15_000;
+
 /** Tutti i file sotto `web/` che corrispondono al filtro. */
 function walk(dir: string, keep: (f: string) => boolean, acc: string[] = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -144,7 +160,7 @@ describe("dizionari estratti (*.i18n.ts)", () => {
         }
       }
       expect(problemi, problemi.join("\n")).toEqual([]);
-    });
+    }, IMPORT_TEST_TIMEOUT_MS);
   }
 });
 
@@ -181,7 +197,7 @@ describe("overlay della landing", () => {
           `Se il valore inglese va bene anche in questa lingua, dichiaralo ` +
           `comunque: così resta una decisione e non una dimenticanza.`,
       ).toEqual([]);
-    });
+    }, IMPORT_TEST_TIMEOUT_MS);
 
     it(`${loc}.ts non ha chiavi che la base non conosce`, async () => {
       const mod = await import(
@@ -191,7 +207,7 @@ describe("overlay della landing", () => {
       expect(orfane, `chiavi orfane in ${loc}.ts: ${orfane.join(", ")}`).toEqual(
         [],
       );
-    });
+    }, IMPORT_TEST_TIMEOUT_MS);
   }
 });
 
