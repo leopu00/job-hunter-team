@@ -27,6 +27,7 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 const ALLOWED_STATUS = new Set(["open", "assigned", "resolved"]);
+const RESCORE_KIND = "rescore";
 
 interface TicketPushIn {
   // id locale SQLite — eco per la correlazione lato CLI (id_map sugli INSERT).
@@ -42,6 +43,35 @@ interface TicketPushIn {
   created_at?: string | null;
   assigned_at?: string | null;
   resolved_at?: string | null;
+}
+
+function ticketBatchFailure(
+  cause: unknown,
+  options: {
+    status: number;
+    scope: string;
+    publicMessage: string;
+    failedLocalId: number | null;
+    updated: number;
+    inserted: number;
+    idMap: Record<string, number>;
+  },
+) {
+  // Il dettaglio resta nei log server, mentre al client tornano anche gli ACK
+  // già confermati. Il CLI deve poter correlare un INSERT riuscito prima che
+  // una riga successiva fallisca; senza id_map il retry lo reinserirebbe.
+  console.error(`[${options.scope}] ${options.status}`, cause);
+  return NextResponse.json(
+    {
+      ok: false,
+      error: options.publicMessage,
+      failed_local_id: options.failedLocalId,
+      updated: options.updated,
+      inserted: options.inserted,
+      id_map: options.idMap,
+    },
+    { status: options.status },
+  );
 }
 
 // ── GET: pull dei ticket 'open' creati dall'utente sul cloud ───────────────
@@ -136,14 +166,64 @@ export async function POST(req: NextRequest) {
   let inserted = 0;
   const idMap: Record<string, number> = {}; // local_id (string) → cloud_id
 
-  for (const t of tickets) {
-    if (!t || typeof t.position_legacy_id !== "number") continue;
-    const status = ALLOWED_STATUS.has(t.status) ? t.status : "open";
+  const fail = (
+    cause: unknown,
+    status: number,
+    scope: string,
+    publicMessage: string,
+    failedLocalId: number | null,
+  ) =>
+    ticketBatchFailure(cause, {
+      status,
+      scope,
+      publicMessage,
+      failedLocalId,
+      updated,
+      inserted,
+      idMap,
+    });
 
-    if (typeof t.cloud_id === "number") {
+  const findActiveRescore = async (positionLegacyId: number) =>
+    admin
+      .from("position_tickets")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("position_legacy_id", positionLegacyId)
+      .eq("kind", RESCORE_KIND)
+      .in("status", ["open", "assigned"])
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+  for (const t of tickets) {
+    if (
+      !t ||
+      !Number.isInteger(t.local_id) ||
+      !Number.isInteger(t.position_legacy_id)
+    ) {
+      return fail(
+        new Error("invalid ticket identity in push payload"),
+        400,
+        "cloud-sync/tickets-payload",
+        "invalid_ticket_payload",
+        Number.isInteger(t?.local_id) ? t.local_id : null,
+      );
+    }
+    if (!ALLOWED_STATUS.has(t.status)) {
+      return fail(
+        new Error("invalid ticket status in push payload"),
+        400,
+        "cloud-sync/tickets-payload",
+        "invalid_ticket_payload",
+        t.local_id,
+      );
+    }
+    const status = t.status;
+
+    if (Number.isInteger(t.cloud_id)) {
       // UPDATE risoluzione/assegnazione. Filtro user_id obbligatorio
       // (service-role → no RLS): impedisce il takeover di ticket altrui.
-      const { error } = await admin
+      const { data: updatedTicket, error } = await admin
         .from("position_tickets")
         .update({
           status,
@@ -154,11 +234,65 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", t.cloud_id)
-        .eq("user_id", userId);
-      if (!error) updated++;
+        .eq("user_id", userId)
+        .select("id")
+        .maybeSingle();
+      if (error) {
+        // Il client avanza push_since soltanto su HTTP 2xx. Un 200 qui
+        // trasformerebbe un errore transitorio in una risoluzione persa per
+        // sempre: il ticket locale non verrebbe più inviato.
+        return fail(
+          error,
+          500,
+          "cloud-sync/tickets-update",
+          "ticket_update_failed",
+          t.local_id,
+        );
+      }
+      if (!updatedTicket) {
+        // Supabase non considera errore un UPDATE che non trova righe. Anche
+        // quello non è un effetto confermato (cloud_id errato/riga rimossa).
+        return fail(
+          new Error("ticket update matched no row"),
+          409,
+          "cloud-sync/tickets-update",
+          "ticket_update_not_applied",
+          t.local_id,
+        );
+      }
+      updated++;
     } else {
       // INSERT di un ticket nato in locale → ritorna l'id per la correlazione.
-      if (typeof t.local_id !== "number" || !t.request_text) continue;
+      if (!t.request_text) {
+        return fail(
+          new Error("ticket insert has no request text"),
+          400,
+          "cloud-sync/tickets-payload",
+          "invalid_ticket_payload",
+          t.local_id,
+        );
+      }
+      if (t.kind === RESCORE_KIND) {
+        // Una richiesta equivalente può essere nata sul web mentre il box era
+        // offline. Correlala all'identità cloud esistente: riprovare l'INSERT
+        // a ogni tick lascerebbe il ticket locale senza cloud_id per sempre.
+        const { data: active, error: activeError } = await findActiveRescore(
+          t.position_legacy_id,
+        );
+        if (activeError) {
+          return fail(
+            activeError,
+            500,
+            "cloud-sync/tickets-rescore-lookup",
+            "ticket_query_failed",
+            t.local_id,
+          );
+        }
+        if (active) {
+          idMap[String(t.local_id)] = active.id as number;
+          continue;
+        }
+      }
       const { data, error } = await admin
         .from("position_tickets")
         .insert({
@@ -178,6 +312,29 @@ export async function POST(req: NextRequest) {
       if (!error && data) {
         idMap[String(t.local_id)] = data.id as number;
         inserted++;
+      } else if (t.kind === RESCORE_KIND && error?.code === "23505") {
+        // Race dopo il pre-check: l'indice ha scelto il vincitore, rileggilo.
+        const { data: active, error: activeError } = await findActiveRescore(
+          t.position_legacy_id,
+        );
+        if (activeError || !active) {
+          return fail(
+            activeError ?? new Error("rescore winner missing after conflict"),
+            500,
+            "cloud-sync/tickets-rescore-race",
+            "ticket_insert_failed",
+            t.local_id,
+          );
+        }
+        idMap[String(t.local_id)] = active.id as number;
+      } else {
+        return fail(
+          error ?? new Error("ticket insert returned no row"),
+          500,
+          "cloud-sync/tickets-insert",
+          "ticket_insert_failed",
+          t.local_id,
+        );
       }
     }
   }

@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { getLocalDbPath, localDbExists } from "@/lib/cloud-sync/local";
 import { writeSyncState } from "@/lib/cloud-sync/state";
 import {
+  invalidateStaleCriticVerdict,
   normalizeApplicationStatus,
   normalizeCriticVerdict,
   normalizePositionStatus,
@@ -14,6 +15,7 @@ import {
   summarizeOutOfRange,
   type OutOfRangeSummary,
 } from "@/lib/score-ranges";
+import { readSqliteTableCompatible } from "@/lib/sqlite-compatible-read";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +75,7 @@ const APPLICATIONS_COLUMNS = [
   "critic_score",
   "critic_verdict",
   "critic_notes",
+  "critic_round",
   "written_at",
   "applied_at",
   "applied_via",
@@ -141,6 +144,7 @@ interface ApplicationRow {
   critic_score: number | null;
   critic_verdict: string | null;
   critic_notes: string | null;
+  critic_round?: number | null;
   written_at: string | null;
   applied_at: string | null;
   applied_via: string | null;
@@ -206,10 +210,11 @@ export async function POST() {
     });
     positions = readTable<PositionRow>(db, "positions", POSITIONS_COLUMNS);
     scores = readTable<ScoreRow>(db, "scores", SCORES_COLUMNS);
-    applications = readTable<ApplicationRow>(
+    applications = readSqliteTableCompatible<ApplicationRow>(
       db,
       "applications",
       APPLICATIONS_COLUMNS,
+      new Set(["critic_round"]),
     );
   } catch (err) {
     return sanitizedError(err, {
@@ -346,7 +351,7 @@ export async function POST() {
       .map((a) => {
         const uuid = legacyToUuid.get(a.position_id);
         if (!uuid) return null;
-        return {
+        return invalidateStaleCriticVerdict({
           user_id: userId,
           position_id: uuid,
           cv_path: a.cv_path,
@@ -357,6 +362,7 @@ export async function POST() {
           critic_score: a.critic_score,
           critic_verdict: normalizeCriticVerdict(a.critic_verdict),
           critic_notes: a.critic_notes,
+          critic_round: a.critic_round,
           written_at: a.written_at,
           applied_at: a.applied_at,
           applied_via: a.applied_via,
@@ -368,7 +374,7 @@ export async function POST() {
           applied: a.applied != null ? Boolean(a.applied) : null,
           cv_drive_id: a.cv_drive_id,
           cl_drive_id: a.cl_drive_id,
-        };
+        });
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 

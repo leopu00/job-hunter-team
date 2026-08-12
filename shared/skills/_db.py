@@ -273,6 +273,7 @@ def ensure_schema(conn: sqlite3.Connection):
         critic_verdict TEXT,
         critic_score REAL,
         critic_notes TEXT,
+        critic_round INTEGER,
         status TEXT DEFAULT 'draft',
         written_at TIMESTAMP,
         applied_at TIMESTAMP,
@@ -306,6 +307,7 @@ def ensure_schema(conn: sqlite3.Connection):
         )),
         author TEXT NOT NULL DEFAULT 'agent' CHECK (author IN ('agent','user')),
         chat_ts REAL,
+        source_id TEXT,
         related_position_id INTEGER,
         delivered_via TEXT CHECK (delivered_via IN ('telegram','web') OR delivered_via IS NULL),
         delivered_at TIMESTAMP,
@@ -317,6 +319,18 @@ def ensure_schema(conn: sqlite3.Connection):
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (related_position_id) REFERENCES positions(id)
+    );
+
+    -- Claim locale della consegna al pane (O-67). Non contiene il testo:
+    -- conserva soltanto l'identita' della riga e rende fail-closed il confine
+    -- non transazionale SQLite -> TUI. Un claim sopravvissuto a un crash ha
+    -- esito esterno incerto e NON viene fatto scadere automaticamente: il
+    -- daemon lo segnala invece di rischiare una seconda consegna.
+    CREATE TABLE IF NOT EXISTS pending_user_message_delivery_claims (
+        message_id INTEGER PRIMARY KEY,
+        claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (message_id) REFERENCES pending_user_messages(id)
+            ON DELETE CASCADE
     );
 
     -- Ticket utente→team su una posizione (2026-06-18). L'utente, dalla pagina
@@ -470,6 +484,8 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_messages_source_id
+      ON pending_user_messages(source_id) WHERE source_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_position_tickets_status ON position_tickets(status);
     CREATE INDEX IF NOT EXISTS idx_position_feedback_position
         ON position_feedback(position_id, id DESC);
@@ -709,6 +725,33 @@ def ensure_schema(conn: sqlite3.Connection):
       UPDATE applications SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
+    -- O-64: written_at e' il marker persistito della versione del CV. Se
+    -- cambia dopo una revisione, il giudizio riguarda per definizione il
+    -- testo precedente: lo invalidiamo nello stesso statement che pubblica
+    -- la nuova versione. I soli cambi di path/PDF non toccano written_at e
+    -- quindi non fanno decadere un verdetto ancora valido.
+    CREATE TRIGGER IF NOT EXISTS applications_invalidate_critic_after_rewrite
+    AFTER UPDATE OF written_at ON applications FOR EACH ROW
+    WHEN NEW.written_at IS NOT OLD.written_at AND (
+      NEW.critic_verdict IS NOT NULL OR NEW.critic_score IS NOT NULL OR
+      NEW.critic_notes IS NOT NULL OR NEW.critic_round IS NOT NULL OR
+      NEW.reviewed_by IS NOT NULL OR NEW.critic_reviewed_at IS NOT NULL
+    )
+    BEGIN
+      UPDATE applications
+      SET status = CASE
+            WHEN status IN ('ready', 'approved') THEN 'review'
+            ELSE status
+          END,
+          critic_verdict = NULL,
+          critic_score = NULL,
+          critic_notes = NULL,
+          critic_round = NULL,
+          reviewed_by = NULL,
+          critic_reviewed_at = NULL
+      WHERE id = NEW.id;
+    END;
+
     CREATE TRIGGER IF NOT EXISTS applications_default_created_at
     AFTER INSERT ON applications FOR EACH ROW
     WHEN NEW.created_at IS NULL OR NEW.updated_at IS NULL
@@ -813,6 +856,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_jd_summary(conn)
     _migrate_role_family_registry(conn)
     _migrate_position_tickets_cloud_id(conn)
+    _migrate_position_tickets_active_rescore(conn)
     _migrate_companies_logo(conn)
     _migrate_pending_messages_chat_turns(conn)
     _migrate_positions_url_unique(conn)
@@ -820,6 +864,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_position_feedback(conn)
     _migrate_position_user_notes(conn)
     _migrate_position_user_notes_origin(conn)
+    _migrate_applications_critic_round(conn)
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
@@ -895,6 +940,19 @@ def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
 def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return any(row['name'] == column for row in rows)
+
+
+def _migrate_applications_critic_round(conn: sqlite3.Connection) -> None:
+    """Rende locale lo stato di round gia' presente nel modello cloud.
+
+    ``db_update.py`` accetta ``--critic-round`` da tempo, ma lo schema SQLite
+    fresco non aveva la colonna. O-64 deve poter invalidare lo stato completo
+    del Critico e sincronizzarlo, non soltanto voto e verdetto.
+    """
+    if not _table_exists(conn, 'applications'):
+        return
+    if not _column_exists(conn, 'applications', 'critic_round'):
+        conn.execute("ALTER TABLE applications ADD COLUMN critic_round INTEGER")
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
@@ -1647,6 +1705,13 @@ def _migrate_pending_messages_chat_turns(conn: sqlite3.Connection) -> None:
         )
     if not _column_exists(conn, 'pending_user_messages', 'chat_ts'):
         conn.execute("ALTER TABLE pending_user_messages ADD COLUMN chat_ts REAL")
+    # Identita' del canale inbound (O-67). Per Telegram e'
+    # `telegram:<ruolo>:<update_id>`: sopravvive a restart e replay fra
+    # journal, offset e SQLite senza deduplicare sul testo (due "ok" restano
+    # due turni). Locale soltanto: sul cloud l'identita' continua a essere il
+    # legacy_id della riga, quindi il payload di sync non cambia.
+    if not _column_exists(conn, 'pending_user_messages', 'source_id'):
+        conn.execute("ALTER TABLE pending_user_messages ADD COLUMN source_id TEXT")
     # Identità del gemello cloud, quando il messaggio è NATO sul web (O-16).
     # Stesso patto di `position_tickets.cloud_id`: NULL = nata in locale, ed è
     # il caso di ogni riga preesistente — nessuna riscrittura, nessun default
@@ -1674,6 +1739,10 @@ def _migrate_pending_messages_chat_turns(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_pending_messages_mirrored "
         "ON pending_user_messages(agent, chat_ts) WHERE chat_ts IS NOT NULL"
     )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_messages_source_id "
+        "ON pending_user_messages(source_id) WHERE source_id IS NOT NULL"
+    )
 
 
 def _migrate_position_tickets_cloud_id(conn: sqlite3.Connection) -> None:
@@ -1696,6 +1765,52 @@ def _migrate_position_tickets_cloud_id(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id "
         "ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL"
     )
+
+
+def _migrate_position_tickets_active_rescore(conn: sqlite3.Connection) -> None:
+    """Impedisce due rivalutazioni attive senza rompere i DB precedenti.
+
+    ``kind`` è sempre stato testo libero, quindi un database antecedente a
+    O-70 può già contenere più ``rescore`` open/assigned per la stessa
+    posizione. Creare subito l'indice UNIQUE renderebbe ``ensure_schema``
+    inutilizzabile proprio su quei database.
+
+    La sanatoria non cancella ticket né testo: mantiene attivo quello su cui
+    il team ha già iniziato a lavorare (``assigned`` prima di ``open``), poi
+    il più antico e infine l'id minore come spareggio stabile. Gli altri
+    diventano ``resolved`` e restano integralmente leggibili nello storico.
+    UPDATE e CREATE INDEX vivono nella stessa transazione SQLite aperta dalla
+    connessione, quindi non esiste una finestra senza vincolo dopo la cura.
+    """
+    index = 'idx_position_tickets_active_rescore'
+    if not _table_exists(conn, 'position_tickets') or _index_exists(conn, index):
+        return
+
+    conn.execute("""
+        WITH ranked AS (
+            SELECT id,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY position_id
+                       ORDER BY CASE status WHEN 'assigned' THEN 0 ELSE 1 END,
+                                CASE WHEN created_at IS NULL THEN 1 ELSE 0 END,
+                                created_at ASC,
+                                id ASC
+                   ) AS active_rank
+              FROM position_tickets
+             WHERE kind = 'rescore'
+               AND status IN ('open', 'assigned')
+        )
+        UPDATE position_tickets
+           SET status = 'resolved',
+               resolved_at = COALESCE(resolved_at, CURRENT_TIMESTAMP),
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id IN (SELECT id FROM ranked WHERE active_rank > 1)
+    """)
+    conn.execute(f"""
+        CREATE UNIQUE INDEX IF NOT EXISTS {index}
+            ON position_tickets(position_id, kind)
+            WHERE kind = 'rescore' AND status IN ('open', 'assigned')
+    """)
 
 
 def _migrate_positions_user_excluded(conn: sqlite3.Connection) -> None:

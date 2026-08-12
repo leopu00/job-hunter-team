@@ -237,3 +237,39 @@ class TestInsertScoreGate:
         _write_profile(tmp_path, PARTIAL_PROFILE)
         db_insert.insert_score(_score_args(position_id=2, total=61))
         assert _count_scores(score_db) == 1
+
+    def test_rescore_action_rewrites_score_and_advances_its_timestamp(
+            self, score_db, tmp_path, monkeypatch):
+        """O-70: il ticket deve produrre una nuova valutazione, non un ACK."""
+        monkeypatch.setenv('JHT_HOME', str(tmp_path))
+        _write_profile(tmp_path, MINIMAL_PROFILE)
+        db_insert.insert_score(_score_args(position_id=3, total=60))
+
+        conn = score_db()
+        conn.execute(
+            "UPDATE scores SET scored_at = '2000-01-01 00:00:00' "
+            "WHERE position_id = 3")
+        conn.commit()
+        conn.close()
+
+        # Lo storico è già coperto da test_maintenance_log; qui isoliamo
+        # l'effetto del writer score e il timestamp che O-71 mostra in pagina.
+        monkeypatch.setattr(
+            db_insert.maintenance_log, 'record_diffs', lambda *a, **k: None)
+        args = _score_args(position_id=3, total=75)
+        args.action = 'rescore'
+        args.outcome = 'updated'
+        args.evidence_kind = None
+        args.evidence_url = None
+        args.evidence_code = None
+        args.evidence_hash = None
+        args.duration_ms = None
+        db_insert.insert_score(args)
+
+        conn = score_db()
+        row = conn.execute(
+            "SELECT total_score, scored_at FROM scores WHERE position_id = 3"
+        ).fetchone()
+        conn.close()
+        assert row['total_score'] == 75
+        assert row['scored_at'] != '2000-01-01 00:00:00'

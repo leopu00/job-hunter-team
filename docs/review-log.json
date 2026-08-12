@@ -1524,6 +1524,21 @@
       "path": "docs/internal/2026-08-12-cross-boundary-contract.md",
       "description": "Contratto fra i due owner del repo: ruoli dei branch, forma del claim WIP(...)(ID), verifica via branch_census.py, semantica fail-closed, versioning.",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-12-language-source-contract.md",
+      "description": "Contratto eseguibile della preferenza lingua unica: artefatto canonico i18n-prefs.json, precedenza dei reader, writer autorizzati, non-migrazione di lang.cfg e vettori obbligatori.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-12-target-role-category-contract.md",
+      "description": "Contratto forward-only per separare titolo professionale libero, ID canonico della categoria ruolo e specialty, con persistenza e round-trip cloud senza contaminazione delle label localizzate.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-12-theme-cloud-sync-contract.md",
+      "description": "Contratto v1 del tema cloud autenticato: schema e RLS, cache e pending per utente, precedenza al bootstrap, gestione offline fail-closed e vettori di concorrenza.",
+      "last_review": null
     }
   ]
 }

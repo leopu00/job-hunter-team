@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Telegram Inbound Bridge — long-poll Bot API → tmux <agente>.
+Telegram Inbound Bridge — long-poll Bot API → cronologia unificata.
 
 Schema 2026-05-13 rev2: 3 bot dedicati (assistente, capitano, mentor). Ogni
 istanza del bridge gestisce UN solo bot/ruolo (one process per role). Lo
@@ -19,16 +19,20 @@ Config:
 
 Architettura (pattern simile a sentinel-bridge.py):
   • Long-poll su /getUpdates con timeout 30s
-  • Per ogni messaggio text: invia [@utente -> @<target>] [TG] <body>
-    al tmux <target> via jht-tmux-send
+  • Prima di avanzare l'offset, ogni turno autorizzato entra in un journal
+    atomico per-update sotto $JHT_HOME/tg-inbound-queue-<role>/
+  • A ogni poll il journal confluisce in pending_user_messages (jobs.db):
+    chat-sync lo specchia in chat.jsonl e resta l'UNICO consumer verso tmux
   • Per allegati document/photo/voice: scarica via getFile + salva in
-    $JHT_HOME/profile/inbox/<filename>, invia [TG-DOC] path=... name=...
+    $JHT_HOME/profile/inbox/<filename>, conserva [TG-DOC] path=... name=...
   • Whitelist su chat_id: solo l'utente del config (canale 1:1, anti-spam)
   • Persistenza offset in $JHT_HOME/tg-bridge-state-<role>.json (per-ruolo)
-  • At-least-once: l'offset avanza DOPO il dispatch. Un update che solleva
-    viene ritentato (max MAX_UPDATE_ATTEMPTS, contatore persistito nello
-    state file), poi finisce in $JHT_HOME/tg-bridge-deadletter-<role>.jsonl
-    con un avviso [TG-UNDELIVERED] all'agente e la coda riparte
+  • No-loss: l'offset avanza DOPO il journal durevole; source_id rende
+    idempotenti replay e crash fra journal, COMMIT SQLite e cleanup. Un
+    payload non journalizzabile tiene l'offset fermo senza soglia
+  • Un handler applicativo sempre rotto viene ritentato (max
+    MAX_UPDATE_ATTEMPTS), poi produce dead-letter e [TG-UNDELIVERED] sulla
+    stessa strada unificata
   • Singleton per-ruolo: kill orchestrato da start-agent.sh
 
 Outbound (telegram-send) e' una skill agente che usa jht-telegram-send
@@ -37,6 +41,7 @@ direttamente. Questo bridge gestisce solo l'inbound.
 
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import time
@@ -99,6 +104,8 @@ if BOT_ROLE not in VALID_ROLES:
 # paralleli (uno per bot) non si pestano i piedi sull'offset file.
 STATE_PATH = JHT_HOME / f"tg-bridge-state-{BOT_ROLE}.json"
 DEADLETTER_PATH = JHT_HOME / f"tg-bridge-deadletter-{BOT_ROLE}.jsonl"
+INBOUND_QUEUE_DIR = JHT_HOME / f"tg-inbound-queue-{BOT_ROLE}"
+JOBS_DB_PATH = JHT_HOME / "jobs.db"
 TARGET_SESSION = os.environ.get("JHT_TG_TARGET_SESSION", BOT_ROLE.upper())
 POLL_TIMEOUT_SEC = 30
 MAX_DOC_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard limit Bot API
@@ -122,6 +129,14 @@ class DocumentTooLarge(Exception):
     def __init__(self, downloaded: int):
         super().__init__(f"{downloaded}B > {MAX_DOC_SIZE_BYTES}B")
         self.downloaded = downloaded
+
+
+class DurableQueueError(Exception):
+    """Il turno non e' ancora su un supporto che sopravvive al processo.
+
+    Questo errore non diventa mai dead-letter per numero di tentativi: finche'
+    il journal non e' durevole l'offset Telegram deve restare fermo.
+    """
 
 
 # ── Commands per Telegram Bot API setMyCommands ────────────────────────
@@ -250,27 +265,187 @@ def load_attempts() -> dict[int, int]:
         return {}
 
 
+def _fsync_dir(path: Path) -> None:
+    """Rende durevole rename/unlink quando il filesystem lo supporta."""
+    try:
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except OSError:
+        pass
+
+
+def _atomic_json(path: Path, value: dict, mode: int = 0o600) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        os.chmod(path.parent, 0o700)
+    except OSError:
+        pass
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(value, f, ensure_ascii=False)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+        try:
+            os.chmod(path, mode)
+        except OSError:
+            pass
+        _fsync_dir(path.parent)
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+
 def save_offset(offset: int, attempts: dict[int, int] | None = None) -> None:
     state: dict = {"last_offset": offset}
     if attempts:
         state["attempts"] = {str(k): int(v) for k, v in attempts.items()}
     try:
-        STATE_PATH.write_text(json.dumps(state))
+        _atomic_json(STATE_PATH, state)
     except Exception as e:
         log(f"warn: save offset failed: {e}")
 
 
-def tmux_send(text: str) -> None:
-    """Wrapper safe: errori loggati ma non fatali."""
+def _queue_file(update_id: int) -> Path:
+    return INBOUND_QUEUE_DIR / f"update-{update_id}.json"
+
+
+def _telegram_created_at(msg: dict) -> str:
+    raw = msg.get("date")
     try:
-        r = subprocess.run(
-            ["/usr/local/bin/jht-tmux-send", TARGET_SESSION, text],
-            capture_output=True, text=True, timeout=15,
-        )
-        if r.returncode != 0:
-            log(f"jht-tmux-send rc={r.returncode}: {r.stderr.strip()}")
+        stamp = int(raw)
+    except (TypeError, ValueError):
+        stamp = int(time.time())
+    # Stesso formato UTC scritto dagli altri producer SQLite. Il mirror usa
+    # `created_at` per ricavare un chat_ts deterministico: un ISO gia' dotato
+    # di offset seguito da un secondo `Z` cadrebbe sul fallback `now` e, dopo
+    # un crash fra append e timbro, potrebbe riscrivere lo stesso turno.
+    return datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def enqueue_inbound_turn(update_id: int, msg: dict, body: str,
+                         *, edited: bool = False) -> bool:
+    """Journal atomico PRIMA dell'offset; update_id e' la chiave di dedup.
+
+    Un file per update evita rewrite non atomiche della coda. Se il processo
+    cade dopo il rename ma prima di `save_offset`, Telegram ripropone lo stesso
+    update e trova gia' la stessa identita': nessuna seconda riga.
+    """
+    if not isinstance(update_id, int) or not str(body).strip():
+        raise DurableQueueError("update_id/body non validi")
+    path = _queue_file(update_id)
+    if path.exists():
+        return False
+    record = {
+        "version": 1,
+        "source_id": f"telegram:{BOT_ROLE}:{update_id}",
+        "update_id": update_id,
+        "agent": BOT_ROLE,
+        "body": str(body),
+        "author": "user",
+        "delivered_via": "telegram",
+        "created_at": _telegram_created_at(msg),
+        "edited": bool(edited),
+    }
+    try:
+        _atomic_json(path, record)
     except Exception as e:
-        log(f"jht-tmux-send error: {e}")
+        raise DurableQueueError(f"journal write failed: {e}") from e
+    return True
+
+
+def _ensure_inbound_schema(db: sqlite3.Connection) -> None:
+    columns = {
+        row[1] for row in db.execute("PRAGMA table_info(pending_user_messages)")
+    }
+    if not columns:
+        raise DurableQueueError("pending_user_messages non disponibile")
+    if "author" not in columns:
+        db.execute(
+            "ALTER TABLE pending_user_messages "
+            "ADD COLUMN author TEXT NOT NULL DEFAULT 'agent'"
+        )
+    if "chat_ts" not in columns:
+        db.execute("ALTER TABLE pending_user_messages ADD COLUMN chat_ts REAL")
+    if "source_id" not in columns:
+        db.execute("ALTER TABLE pending_user_messages ADD COLUMN source_id TEXT")
+    db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_messages_source_id "
+        "ON pending_user_messages(source_id) WHERE source_id IS NOT NULL"
+    )
+
+
+def flush_inbound_queue(db_path: Path | None = None) -> int:
+    """Trasferisce il journal nella cronologia unificata, poi lo elimina.
+
+    Il COMMIT SQLite viene prima dell'unlink. Un crash fra i due lascia sia la
+    riga sia il file; al riavvio l'indice su source_id rende il replay un no-op
+    e il file viene rimosso. Dopo il commit il solo consumer verso il pane e'
+    `chat-sync.js`, quindi non esistono due consegne concorrenti.
+    """
+    if not INBOUND_QUEUE_DIR.exists():
+        return 0
+    paths = sorted(
+        INBOUND_QUEUE_DIR.glob("update-*.json"),
+        key=lambda p: int(p.stem.split("-", 1)[1]),
+    )
+    if not paths:
+        return 0
+    target = db_path or JOBS_DB_PATH
+    if not target.exists():
+        log(f"inbound queue waiting: {target} not found")
+        return 0
+
+    records = []
+    try:
+        for path in paths:
+            rec = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(rec, dict) or not rec.get("source_id"):
+                raise DurableQueueError(f"journal corrotto: {path.name}")
+            records.append((path, rec))
+        db = sqlite3.connect(target, timeout=5)
+        try:
+            _ensure_inbound_schema(db)
+            insert = (
+                "INSERT OR IGNORE INTO pending_user_messages "
+                "(agent, body, kind, author, chat_ts, delivered_via, "
+                " delivered_at, created_at, source_id) "
+                "VALUES (?, ?, 'notification', 'user', NULL, 'telegram', "
+                "        NULL, ?, ?)"
+            )
+            for _path, rec in records:
+                db.execute(insert, (
+                    rec["agent"], rec["body"], rec["created_at"], rec["source_id"],
+                ))
+            db.commit()
+        finally:
+            db.close()
+    except (OSError, ValueError, KeyError, sqlite3.Error, DurableQueueError) as e:
+        log(f"inbound queue flush failed: {e} — durable journal retained")
+        return 0
+
+    for path, _rec in records:
+        try:
+            path.unlink()
+        except OSError as e:
+            # La riga e' gia' nel DB. Lasciare il file significa solo un replay
+            # idempotente al prossimo poll, mai una perdita o un doppione.
+            log(f"inbound queue cleanup warn ({path.name}): {e}")
+    _fsync_dir(INBOUND_QUEUE_DIR)
+    return len(records)
 
 
 def fetch_file(token: str, file_id: str, dest_name: str) -> Path | None:
@@ -335,13 +510,12 @@ def _discard_partial(local: Path | None) -> None:
 
 # ── Dispatch messaggi ───────────────────────────────────────────────────
 
-def handle_text(msg: dict) -> None:
+def handle_text(msg: dict) -> str | None:
     text = msg.get("text", "").strip()
     if not text:
-        return
-    envelope = f"[@utente -> @{TARGET_SESSION.lower()}] [TG] {text}"
+        return None
     log(f"text len={len(text)} → {TARGET_SESSION}")
-    tmux_send(envelope)
+    return text
 
 
 def declared_size(payload: dict) -> int | None:
@@ -356,45 +530,42 @@ def declared_size(payload: dict) -> int | None:
     return size
 
 
-def reject_too_large(name: str, size_bytes: int | None) -> None:
+def reject_too_large(name: str, size_bytes: int | None) -> str:
     quanto = f"{size_bytes // 1024 // 1024} MB" if size_bytes is not None else "over the limit"
     log(f"doc {name} exceeds the limit ({size_bytes}B) — skipping")
-    tmux_send(
-        f"[@system -> @{TARGET_SESSION.lower()}] [TG-DOC-REJECT] "
+    return (
+        f"[TG-DOC-REJECT] "
         f"file '{name}' exceeds 20 MB ({quanto}). "
         f"Ask the user to send it again in a smaller format."
     )
 
 
-def handle_document(token: str, msg: dict) -> None:
+def handle_document(token: str, msg: dict) -> str:
     doc = msg["document"]
     size = declared_size(doc)
     name = doc.get("file_name", f"file-{doc['file_id'][:8]}")
     mime = doc.get("mime_type", "application/octet-stream")
     if size is not None and size > MAX_DOC_SIZE_BYTES:
-        reject_too_large(name, size)
-        return
+        return reject_too_large(name, size)
     if size is None:
         log(f"doc {name}: file_size missing — the limit will be enforced on the stream")
     try:
         local = fetch_file(token, doc["file_id"], name)
     except DocumentTooLarge as e:
-        reject_too_large(name, e.downloaded)
-        return
+        return reject_too_large(name, e.downloaded)
     if not local:
-        tmux_send(
-            f"[@system -> @{TARGET_SESSION.lower()}] [TG-DOC-ERROR] "
+        return (
+            f"[TG-DOC-ERROR] "
             f"download of '{name}' failed — ask the user to try again."
         )
-        return
     if size is None:
         size = _size_on_disk(local)
-    envelope = (
-        f"[@utente -> @{TARGET_SESSION.lower()}] [TG-DOC] "
+    body = (
+        f"[TG-DOC] "
         f"path={local} name={name} mime={mime} size={size}"
     )
     log(f"doc {name} → {local} ({size}B)")
-    tmux_send(envelope)
+    return body
 
 
 def _size_on_disk(local: Path) -> int:
@@ -404,45 +575,43 @@ def _size_on_disk(local: Path) -> int:
         return 0
 
 
-def handle_photo(token: str, msg: dict) -> None:
+def handle_photo(token: str, msg: dict) -> str | None:
     """Photo array — prendi quella piu' grande."""
     photos = msg.get("photo", [])
     if not photos:
-        return
+        return None
     largest = max(photos, key=lambda p: p.get("file_size", 0))
     name = f"photo-{largest['file_id'][:10]}.jpg"
     try:
         local = fetch_file(token, largest["file_id"], name)
     except DocumentTooLarge as e:
-        reject_too_large(name, e.downloaded)
-        return
+        return reject_too_large(name, e.downloaded)
     if not local:
-        return
-    envelope = (
-        f"[@utente -> @{TARGET_SESSION.lower()}] [TG-DOC] "
+        return f"[TG-DOC-ERROR] download of '{name}' failed — ask the user to try again."
+    body = (
+        f"[TG-DOC] "
         f"path={local} name={name} mime=image/jpeg size={largest.get('file_size', 0)}"
     )
     log(f"photo → {local}")
-    tmux_send(envelope)
+    return body
 
 
-def handle_voice(token: str, msg: dict) -> None:
+def handle_voice(token: str, msg: dict) -> str:
     v = msg["voice"]
     name = f"voice-{v['file_id'][:10]}.ogg"
     try:
         local = fetch_file(token, v["file_id"], name)
     except DocumentTooLarge as e:
-        reject_too_large(name, e.downloaded)
-        return
+        return reject_too_large(name, e.downloaded)
     if not local:
-        return
-    envelope = (
-        f"[@utente -> @{TARGET_SESSION.lower()}] [TG-DOC] "
+        return f"[TG-DOC-ERROR] download of '{name}' failed — ask the user to try again."
+    body = (
+        f"[TG-DOC] "
         f"path={local} name={name} mime=audio/ogg size={v.get('file_size', 0)} "
         f"duration={v.get('duration', 0)}s"
     )
     log(f"voice → {local}")
-    tmux_send(envelope)
+    return body
 
 
 # ── Dispatch di un singolo update ───────────────────────────────────────
@@ -455,6 +624,7 @@ def dispatch_update(token: str, allowed_chat: int, u: dict) -> None:
     falliti, e la coda deve avanzare oltre.
     """
     uid = u.get("update_id")
+    edited = "edited_message" in u and "message" not in u
     m = u.get("message") or u.get("edited_message")
     if not m:
         return
@@ -467,16 +637,23 @@ def dispatch_update(token: str, allowed_chat: int, u: dict) -> None:
     if (m.get("text") or "").strip() == "/start":
         log(f"uid={uid} /start ack (no forward)")
         return
+    body = None
     if "text" in m:
-        handle_text(m)
+        body = handle_text(m)
     elif "document" in m:
-        handle_document(token, m)
+        body = handle_document(token, m)
     elif "photo" in m:
-        handle_photo(token, m)
+        body = handle_photo(token, m)
     elif "voice" in m:
-        handle_voice(token, m)
+        body = handle_voice(token, m)
     else:
         log(f"uid={uid} unknown message kind, skipped")
+    if body:
+        # Un edit e' un NUOVO turno con il proprio update_id: non riscrive lo
+        # storico gia' consegnato e non puo' collidere col messaggio originale.
+        if edited:
+            body = f"[TG-EDITED] {body}"
+        enqueue_inbound_turn(uid, m, body, edited=edited)
 
 
 def dead_letter(u: dict, err: BaseException, attempts: int) -> None:
@@ -498,15 +675,29 @@ def dead_letter(u: dict, err: BaseException, attempts: int) -> None:
     }
     try:
         DEADLETTER_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(DEADLETTER_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        fd = os.open(DEADLETTER_PATH, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+        except Exception:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            raise
     except Exception as e:
         log(f"warning: failed to write dead letter: {e}")
     log(f"DEAD-LETTER uid={uid} after {attempts} attempts ({reason}) — resuming the queue")
-    tmux_send(
-        f"[@system -> @{TARGET_SESSION.lower()}] [TG-UNDELIVERED] "
+    m = u.get("message") or u.get("edited_message") or {}
+    enqueue_inbound_turn(
+        uid,
+        m,
+        f"[TG-UNDELIVERED] "
         f"update_id={uid} attempts={attempts} error={reason} file={DEADLETTER_PATH} — "
-        f"a user message was not delivered: notify the user and ask them to send it again."
+        f"a user message was not delivered: notify the user and ask them to send it again.",
     )
 
 
@@ -541,6 +732,10 @@ def main() -> None:
 
     while True:
         try:
+            # Journal Telegram → SQLite a ogni poll. Se jobs.db non e' ancora
+            # pronto il file resta: leggere nuovi update e' comunque sicuro,
+            # perche' l'offset puo' avanzare solo dopo il journal atomico.
+            flush_inbound_queue()
             url = (
                 f"https://api.telegram.org/bot{token}/getUpdates"
                 f"?offset={offset + 1}&timeout={POLL_TIMEOUT_SEC}"
@@ -555,6 +750,15 @@ def main() -> None:
                     continue
                 try:
                     dispatch_update(token, allowed_chat, u)
+                except DurableQueueError as e:
+                    # Fail-closed senza soglia: un disco/DB non scrivibile non
+                    # trasforma mai un messaggio reale in dead-letter. Fermiamo
+                    # anche il batch, cosi' l'ordine resta quello di Telegram.
+                    attempts[uid] = attempts.get(uid, 0) + 1
+                    log(f"durable enqueue uid={uid} failed ({e}) — offset held; "
+                        "retrying on the next poll")
+                    ritenta = True
+                    break
                 except Exception as e:
                     tentativi = attempts.get(uid, 0) + 1
                     if tentativi < MAX_UPDATE_ATTEMPTS:
@@ -568,13 +772,24 @@ def main() -> None:
                         break
                     # Veleno: tentativi esauriti. Si scarta, si avvisa, si va
                     # avanti — un update rotto non puo' zittire tutta la coda.
-                    dead_letter(u, e, tentativi)
-                    attempts.pop(uid, None)
+                    try:
+                        dead_letter(u, e, tentativi)
+                    except DurableQueueError as queue_err:
+                        attempts[uid] = tentativi
+                        log(f"dead-letter enqueue uid={uid} failed ({queue_err}) — "
+                            "offset held; retrying")
+                        ritenta = True
+                        break
+                    else:
+                        attempts.pop(uid, None)
                 else:
                     attempts.pop(uid, None)
                 if uid > offset:
                     offset = uid
             save_offset(offset, attempts)
+            # Riduce la latenza normale: il journal appena scritto entra nella
+            # cronologia senza aspettare i 30s del long-poll successivo.
+            flush_inbound_queue()
             if ritenta:
                 time.sleep(RETRY_BACKOFF_SEC)
         except urllib.error.HTTPError as e:

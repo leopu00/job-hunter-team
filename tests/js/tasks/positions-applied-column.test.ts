@@ -74,7 +74,10 @@ describe("colonna 'candidatura inviata' in lista", () => {
   it("il dato arriva da entrambe le sorgenti, non solo dal cloud", () => {
     // Local-first: in locale la lista si costruisce da SQLite, e una colonna
     // popolata solo nel ramo Supabase resterebbe vuota proprio sul box.
-    const local = readFileSync(resolve(ROOT, "web/lib/local-queries.ts"), "utf-8");
+    const local = readFileSync(
+      resolve(ROOT, "web/lib/local-queries.ts"),
+      "utf-8",
+    );
     const cloud = readFileSync(resolve(ROOT, "web/lib/queries.ts"), "utf-8");
     expect(local).toContain("applied_at: r.applied_at");
     expect(cloud).toContain("applied_at: app?.applied_at");
@@ -82,7 +85,10 @@ describe("colonna 'candidatura inviata' in lista", () => {
 
   it("è ordinabile in entrambi i rami", () => {
     const cloud = readFileSync(resolve(ROOT, "web/lib/queries.ts"), "utf-8");
-    const local = readFileSync(resolve(ROOT, "web/lib/local-queries.ts"), "utf-8");
+    const local = readFileSync(
+      resolve(ROOT, "web/lib/local-queries.ts"),
+      "utf-8",
+    );
     // Chiave assente da POSITION_SORT_KEYS = ordinamento ignorato in
     // silenzio sul cloud (la lista resta com'era, il click non fa niente).
     const sortKeys = cloud.slice(

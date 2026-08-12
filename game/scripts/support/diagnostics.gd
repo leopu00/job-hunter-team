@@ -10,14 +10,14 @@ class_name Diagnostics
 ## Tutto ciò che esce da qui è già passato dal Redactor. Nessun chiamante deve
 ## potersi dimenticare di ripulire: la sanificazione sta dentro `collect()`.
 ##
-## `collect()` esegue processi esterni (docker) e legge file: va invocata da un
+## `collect()` esegue processi esterni (docker/ssh) e legge file: va invocata da un
 ## Thread, mai dal main loop, o la finestra si pianta per la durata delle sonde.
 
-## Cap sui log allegati. Si prende la CODA: il crash sta alla fine, e un bundle
-## da decine di MB non lo apre né lo carica nessuno.
+## Cap sui log allegati. Si prende la CODA dopo aver tolto gli stati ripetuti;
+## WARN/ERROR vengono estratti prima del budget e conservati a parte.
 const MAX_LOG_LINES := 400
 const MAX_LOG_CHARS := 120_000
-const CONTAINER_LOG_LINES := 200
+const CONTAINER_LOG_LINES := 1200
 
 ## Le chiavi del bundle restano stabili per redazione e test; questa tabella
 ## riguarda soltanto la loro presentazione nel markdown mostrato all'utente.
@@ -61,6 +61,7 @@ const ENGLISH_LABELS := {
 	"diagnostics.value.unavailable": "unavailable",
 	"diagnostics.value.none": "none",
 	"diagnostics.log_title": "Log: %s",
+	"diagnostics.alert_title": "ERROR/WARN from: %s",
 	"diagnostics.redacted": "Data removed before sending",
 	"diagnostics.container_logs_unavailable": "[container logs unavailable] %s",
 	"diagnostics.truncated": "[…truncated…]\n%s",
@@ -69,7 +70,8 @@ const ENGLISH_LABELS := {
 
 
 ## Il bundle completo, già ripulito.
-## `{"app":…, "system":…, "runtime":…, "logs":…, "redaction":{regola: quante}}`
+## `{"app":…, "system":…, "runtime":…, "logs":…, "alerts":…,
+##   "redaction":{regola: quante}}`
 static func collect(include_game_log := true, include_container_log := true,
 		context: Dictionary = {}) -> Dictionary:
 	var labels: Dictionary = context.get("diagnostic_labels", {})
@@ -78,16 +80,17 @@ static func collect(include_game_log := true, include_container_log := true,
 		"system": _system_section(context),
 		"runtime": _runtime_section(context),
 		"logs": {},
+		"alerts": {},
 	}
 	if include_game_log:
-		bundle["logs"]["game"] = _tail_file("user://jht-game.log", labels)
+		_attach_log(bundle, "game", _prepare_file("user://jht-game.log", labels))
 		# Dopo un crash il log corrente riparte vuoto: la diagnosi vive nel
 		# .prev.log, ed è proprio il caso in cui serve (vedi log.gd).
-		var prev := _tail_file("user://jht-game.prev.log", labels)
-		if prev != "":
-			bundle["logs"]["game_previous"] = prev
+		var prev := _prepare_file("user://jht-game.prev.log", labels)
+		if str(prev.get("main", "")) != "":
+			_attach_log(bundle, "game_previous", prev)
 	if include_container_log:
-		bundle["logs"]["container"] = _container_log(labels)
+		_attach_log(bundle, "container", _container_log(labels, context))
 	return _sanitize(bundle, context)
 
 
@@ -110,6 +113,15 @@ static func capture_context() -> Dictionary:
 	var bus := _autoload("BackendBus")
 	if bus != null:
 		context["backend_live"] = bool(bus.call("is_live"))
+		context["backend_remote"] = bool(bus.call("is_remote"))
+		if bool(context["backend_remote"]):
+			# Config interna al worker: serve a costruire argv SSH ma non viene mai
+			# aggiunta al bundle. L'host entra invece tra i termini sensibili: se
+			# il container lo cita per esteso, viene tolto anche dai suoi log.
+			var vps_config := (bus.call("load_vps_config") as Dictionary) \
+					.duplicate(true)
+			context["vps_config"] = vps_config
+			_append_vps_sensitive_terms(context, vps_config)
 	var onboarding := _autoload("ScriptedOnboarding")
 	if onboarding != null:
 		var full := str(onboarding.call("player_full_name"))
@@ -118,6 +130,17 @@ static func capture_context() -> Dictionary:
 			if clean.length() >= 3:
 				context["sensitive_terms"].append(clean)
 	return context
+
+
+## L'indirizzo del server e' infrastruttura privata anche quando e' un hostname
+## invece di un IPv4, quindi la redazione strutturale da sola non basta.
+static func _append_vps_sensitive_terms(context: Dictionary,
+		vps_config: Dictionary) -> void:
+	var host := str(vps_config.get("ip", "")).strip_edges()
+	if host.length() >= 3:
+		var terms := context["sensitive_terms"] as PackedStringArray
+		terms.append(host)
+		context["sensitive_terms"] = terms
 
 
 ## I termini che identificano l'utente e vanno tolti dai log oltre alle regole
@@ -147,6 +170,16 @@ static func to_markdown(bundle: Dictionary, labels: Dictionary = {}) -> String:
 					_label(labels, label_key, str(ENGLISH_LABELS.get(label_key, key)))
 			out += "- **%s**: %s\n" % [field_label, str(data[key])]
 		out += "\n"
+	# Prima dei log ordinari: anche il server applica un cap al markdown, quindi
+	# la sezione che non deve sparire va messa davanti alla parte sacrificabile.
+	var alerts: Dictionary = bundle.get("alerts", {})
+	for key in alerts:
+		var text := str(alerts[key])
+		if text.strip_edges() == "":
+			continue
+		out += "### %s\n\n```text\n%s\n```\n\n" % [
+				_label(labels, "diagnostics.alert_title", "ERROR/WARN from: %s") % key,
+				text]
 	var logs: Dictionary = bundle.get("logs", {})
 	for key in logs:
 		var text := str(logs[key])
@@ -205,13 +238,14 @@ static func _system_section(context: Dictionary) -> Dictionary:
 ## dover parlare col container.
 static func _runtime_section(context: Dictionary) -> Dictionary:
 	var data := {}
+	var remote := bool(context.get("backend_remote", false))
 	if context.has("setup_status"):
 		var status: Dictionary = context["setup_status"]
 		for key in ["docker_available", "docker_running", "container_exists",
 				"container_state", "container_running", "team_running",
 				"active_provider", "provider_authenticated", "runtime_stale"]:
 			data[key] = status.get(key, "?")
-	else:
+	elif not remote:
 		# Senza autoload (selftest headless) le sonde base restano possibili.
 		# Stesso criterio di setup_service._exec_present ma replicato SENZA
 		# caricare quello script: questa sonda può girare prima che gli
@@ -225,6 +259,11 @@ static func _runtime_section(context: Dictionary) -> Dictionary:
 		var code := int(version.get("code", -1))
 		data["docker_available"] = code != -1 and code != 126 and code != 127
 		data["docker_running"] = code == 0
+	if remote:
+		# La VPS selezionata resta la macchina autorevole anche se in questo
+		# istante SSH è giù: mai descrivere il Docker del portatile come runtime.
+		data["backend"] = "VPS"
+		return data
 	if context.has("backend_live"):
 		# MAI l'IP della VPS: identifica l'infrastruttura dell'utente. Il modo
 		# di connessione basta a inquadrare il problema.
@@ -248,19 +287,69 @@ static func _runtime_section(context: Dictionary) -> Dictionary:
 	return data
 
 
-static func _container_log(labels: Dictionary = {}) -> String:
-	var logs := _run("docker", PackedStringArray(["logs", "--tail",
-			str(CONTAINER_LOG_LINES), "jht"]))
+static func _container_log(labels: Dictionary = {}, context: Dictionary = {}) -> Dictionary:
+	var spec := _container_log_spec(context)
+	if str(spec.get("path", "")) == "":
+		return {"main": _label(labels, "diagnostics.container_logs_unavailable",
+				"[container logs unavailable] %s") % str(spec.get("error", "")),
+				"alerts": ""}
+	var logs := _run(str(spec["path"]), spec["args"])
 	if int(logs.get("code", -1)) != 0:
 		# Il fallimento è esso stesso diagnostico: dice che il container non
-		# c'è o non risponde, che è metà della risposta su un bug di avvio.
-		return _label(labels, "diagnostics.container_logs_unavailable",
+		# c'è o non risponde. L'errore SSH grezzo può però ripetere hostname,
+		# IP o path chiave: in remoto si conserva solo exit code + trasporto.
+		return {"main": _label(labels, "diagnostics.container_logs_unavailable",
 				"[container logs unavailable] %s") % \
-				str(logs.get("out", "")).strip_edges()
-	return _tail_text(str(logs.get("out", "")), labels)
+				_container_log_failure_detail(logs,
+						bool(context.get("backend_remote", false))), "alerts": ""}
+	return _prepare_log(str(logs.get("out", "")), labels)
+
+
+static func _container_log_failure_detail(result: Dictionary, remote: bool) -> String:
+	if remote:
+		return "remote SSH command failed (code %d)" % int(result.get("code", -1))
+	return str(result.get("out", "")).strip_edges()
+
+
+## Descrive il trasporto senza eseguirlo: il controtest dimostra che la modalità
+## VPS non può ricadere su `docker logs` locale quando SSH/config falliscono.
+static func _container_log_spec(context: Dictionary = {}) -> Dictionary:
+	if not bool(context.get("backend_remote", false)):
+		return {"path": "docker", "args": PackedStringArray([
+				"logs", "--tail", str(CONTAINER_LOG_LINES), "jht"])}
+	var vps: Dictionary = context.get("vps_config", {})
+	var host := str(vps.get("ip", "")).strip_edges()
+	var user := str(vps.get("user", "root")).strip_edges()
+	if user == "":
+		user = "root"
+	var key := _expand_user_path(str(vps.get("key_path", "")).strip_edges())
+	var host_re := RegEx.new()
+	var user_re := RegEx.new()
+	if host_re.compile("^[A-Za-z0-9][A-Za-z0-9.:-]*$") != OK \
+			or user_re.compile("^[A-Za-z_][A-Za-z0-9_-]*$") != OK \
+			or host_re.search(host) == null or user_re.search(user) == null or key == "":
+		return {"path": "", "args": PackedStringArray(),
+				"error": "invalid VPS diagnostics config"}
+	return {"path": "ssh", "args": PackedStringArray([
+			"-i", key,
+			"-o", "BatchMode=yes",
+			"-o", "IdentitiesOnly=yes",
+			"-o", "ConnectTimeout=8",
+			"-o", "StrictHostKeyChecking=yes",
+			"-o", "UserKnownHostsFile=" + _known_hosts_path(host),
+			"%s@%s" % [user, host],
+			"docker logs --tail %d jht" % CONTAINER_LOG_LINES,
+	])}
 
 
 # ── Utilità ──────────────────────────────────────────────────────────
+
+static func _attach_log(bundle: Dictionary, key: String, prepared: Dictionary) -> void:
+	bundle["logs"][key] = str(prepared.get("main", ""))
+	var alerts := str(prepared.get("alerts", ""))
+	if alerts != "":
+		bundle["alerts"][key] = alerts
+
 
 ## Ripulisce OGNI stringa del bundle e allega il rendiconto. Ricorsiva: nessun
 ## campo aggiunto in futuro può sfuggire alla redazione per dimenticanza.
@@ -293,16 +382,80 @@ static func _sanitize_value(value: Variant, terms: PackedStringArray,
 
 
 static func _tail_file(path: String, labels: Dictionary = {}) -> String:
+	return str(_prepare_file(path, labels).get("main", ""))
+
+
+static func _prepare_file(path: String, labels: Dictionary = {}) -> Dictionary:
 	if not FileAccess.file_exists(path):
-		return ""
+		return {"main": "", "alerts": ""}
 	var text := FileAccess.get_file_as_string(path)
 	if text == "":
-		return ""
-	return _tail_text(text, labels)
+		return {"main": "", "alerts": ""}
+	return _prepare_log(text, labels)
+
+
+## Gli alert si estraggono dal testo COMPLETO prima di qualunque cap. Le righe
+## INFO di stato identiche (a parte il timestamp iniziale) si tengono una volta
+## sola, poi si applica il budget: 800 heartbeat non possono espellere la riga
+## che spiega il guasto.
+static func _prepare_log(text: String, labels: Dictionary = {}) -> Dictionary:
+	var compacted := PackedStringArray()
+	var alerts := PackedStringArray()
+	var seen_states := {}
+	for raw in text.split("\n", false):
+		var line := str(raw)
+		if _is_alert_line(line):
+			alerts.append(line)
+		if _is_repeated_state_line(line):
+			var key := _state_line_key(line)
+			if seen_states.has(key):
+				continue
+			seen_states[key] = true
+		compacted.append(line)
+	return {
+		"main": _tail_lines(compacted, labels),
+		# La sorgente è limitata dal trasporto e i file gioco ruotano; non si
+		# applica il cap principale agli alert, altrimenti "sempre preservati"
+		# tornerebbe a significare "forse nella coda".
+		"alerts": "\n".join(alerts),
+	}
+
+
+static func _is_alert_line(line: String) -> bool:
+	var upper := " " + line.to_upper() + " "
+	return upper.contains("[ERROR]") or upper.contains("[WARN]") \
+			or upper.contains("[WARNING]") or upper.contains(" ERROR ") \
+			or upper.contains(" WARN ") or upper.contains(" WARNING ") \
+			or upper.contains(" ERROR:") or upper.contains(" WARN:") \
+			or upper.contains(" WARNING:")
+
+
+static func _is_repeated_state_line(line: String) -> bool:
+	var lower := line.to_lower()
+	if not (lower.contains("[info]") or lower.begins_with("info ")):
+		return false
+	for marker in ["status", "state", "heartbeat", "poll", "stato", "showroom"]:
+		if lower.contains(marker):
+			return true
+	return false
+
+
+static func _state_line_key(line: String) -> String:
+	var clean := line.strip_edges()
+	if clean.begins_with("["):
+		var close := clean.find("]")
+		if close > 0:
+			var prefix := clean.substr(1, close - 1)
+			if prefix.contains(":") or prefix.contains("T"):
+				clean = clean.substr(close + 1).strip_edges()
+	return clean
 
 
 static func _tail_text(text: String, labels: Dictionary = {}) -> String:
-	var lines := text.split("\n", false)
+	return str(_prepare_log(text, labels).get("main", ""))
+
+
+static func _tail_lines(lines: PackedStringArray, labels: Dictionary = {}) -> String:
 	var start := maxi(0, lines.size() - MAX_LOG_LINES)
 	var kept := PackedStringArray()
 	for i in range(start, lines.size()):
@@ -315,6 +468,18 @@ static func _tail_text(text: String, labels: Dictionary = {}) -> String:
 		out = _label(labels, "diagnostics.lines_omitted",
 				"[…%d earlier lines omitted…]\n%s") % [start, out]
 	return out
+
+
+static func _expand_user_path(path: String) -> String:
+	if not (path == "~" or path.begins_with("~/") or path.begins_with("~\\")):
+		return path
+	var home := OS.get_environment("USERPROFILE") if OS.get_name() == "Windows" \
+			else OS.get_environment("HOME")
+	return home.path_join(path.substr(2)) if path.length() > 1 else home
+
+
+static func _known_hosts_path(host: String) -> String:
+	return _jht_home().path_join("ssh/known_hosts/" + host.sha256_text())
 
 
 ## Snapshot di presentazione catturato esclusivamente sul main thread.

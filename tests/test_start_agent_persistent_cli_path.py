@@ -16,9 +16,12 @@ def test_start_agent_can_spawn_workers_from_an_agent_tui():
 
 
 def test_start_agent_serializes_before_rewriting_agent_skills():
-    source = (Path(__file__).parents[1] / ".launcher" / "start-agent.sh").read_text()
+    launcher = Path(__file__).parents[1] / ".launcher"
+    source = (launcher / "start-agent.sh").read_text()
+    spawn_lib = (launcher / "spawn-lib.sh").read_text()
     lock = source.index('flock -w 30 9')
     early_idempotence = source.index('if tmux has-session -t "$SESSION"', lock)
-    destructive_sync = source.index('rm -rf "$CLAUDE_SKILLS_DIR"')
+    skill_sync = source.index("jht_spawn_copy_skills \\", early_idempotence)
 
-    assert lock < early_idempotence < destructive_sync
+    assert 'rm -rf "$workdir/.claude/skills" "$workdir/.agents/skills"' in spawn_lib
+    assert lock < early_idempotence < skill_sync

@@ -10,6 +10,7 @@ import {
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
 import { sanitizedError } from "@/lib/error-response";
+import { RESCORE_TICKET_KIND } from "@/lib/rescore-ticket";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,15 @@ export async function POST(
 
   const body = (await req.json().catch(() => ({}))) as {
     request_text?: string;
+    kind?: string;
   };
+  const kind = body.kind ?? "custom";
+  if (kind !== "custom" && kind !== RESCORE_TICKET_KIND) {
+    return NextResponse.json(
+      { error: "Tipo di richiesta non valido" },
+      { status: 400 },
+    );
+  }
   const text =
     typeof body.request_text === "string" ? body.request_text.trim() : "";
   if (!text) {
@@ -62,7 +71,10 @@ export async function POST(
 
   if (hasLocal) {
     let ticketId: number;
+    let ticketStatus = "open";
+    let deduplicated = false;
     const db = new Database(JHT_DB_PATH);
+    let transactionOpen = false;
     try {
       db.pragma("journal_mode = WAL");
       db.pragma("foreign_keys = ON");
@@ -78,13 +90,48 @@ export async function POST(
           { status: 404 },
         );
       }
+
+      if (kind === RESCORE_TICKET_KIND) {
+        // Il lock rende atomici controllo+INSERT. L'indice parziale nello
+        // schema è la seconda barriera: due click/processi non possono lasciare
+        // due rivalutazioni attive della stessa posizione.
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen = true;
+        const active = db
+          .prepare<
+            [number, string],
+            { id: number; status: "open" | "assigned" }
+          >("SELECT id, status FROM position_tickets " + "WHERE position_id = ? AND kind = ? " + "AND status IN ('open','assigned') " + "ORDER BY created_at ASC, id ASC LIMIT 1")
+          .get(legacyId, RESCORE_TICKET_KIND);
+        if (active) {
+          ticketId = active.id;
+          ticketStatus = active.status;
+          deduplicated = true;
+          db.exec("COMMIT");
+          transactionOpen = false;
+          return NextResponse.json({
+            id: String(ticketId),
+            status: ticketStatus,
+            deduplicated,
+            cloud_synced: false,
+            source: "local",
+          });
+        }
+      }
       const info = db
         .prepare(
           "INSERT INTO position_tickets (position_id, request_text, kind, status) " +
-            "VALUES (?, ?, 'custom', 'open')",
+            "VALUES (?, ?, ?, 'open')",
         )
-        .run(legacyId, text);
+        .run(legacyId, text, kind);
       ticketId = Number(info.lastInsertRowid);
+      if (transactionOpen) {
+        db.exec("COMMIT");
+        transactionOpen = false;
+      }
+    } catch (error) {
+      if (transactionOpen) db.exec("ROLLBACK");
+      throw error;
     } finally {
       db.close();
     }
@@ -95,7 +142,8 @@ export async function POST(
     // quindi differito al prossimo tick del daemon.
     return NextResponse.json({
       id: String(ticketId),
-      status: "open",
+      status: ticketStatus,
+      deduplicated,
       cloud_synced: false,
       source: "local",
     });
@@ -122,6 +170,38 @@ export async function POST(
   }
   const { userId, supabase } = resolved.user;
 
+  const findActiveRescore = async () =>
+    supabase
+      .from("position_tickets")
+      .select("id, status")
+      .eq("user_id", userId)
+      .eq("position_legacy_id", legacyId)
+      .eq("kind", RESCORE_TICKET_KIND)
+      .in("status", ["open", "assigned"])
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+  if (kind === RESCORE_TICKET_KIND) {
+    const { data: active, error: activeError } = await findActiveRescore();
+    if (activeError) {
+      return sanitizedError(activeError, {
+        status: 500,
+        scope: "positions/[legacyId]/ticket",
+        publicMessage: "query_failed",
+      });
+    }
+    if (active) {
+      return NextResponse.json({
+        id: String(active.id),
+        status: active.status,
+        deduplicated: true,
+        cloud_synced: true,
+        source: "cloud",
+      });
+    }
+  }
+
   // Cloud-mode: il ticket vive su Supabase (il team lo vedrà al sync — follow-up).
   const { data, error } = await supabase
     .from("position_tickets")
@@ -129,12 +209,27 @@ export async function POST(
       user_id: userId,
       position_legacy_id: legacyId,
       request_text: text,
-      kind: "custom",
+      kind,
       status: "open",
     })
     .select("id")
     .single();
   if (error) {
+    // L'indice parziale chiude la race fra due richieste cloud concorrenti.
+    // Il loser rilegge il ticket vincente e restituisce la sua identità: un
+    // 23505 non diventa un falso errore né crea un canale alternativo.
+    if (kind === RESCORE_TICKET_KIND && error.code === "23505") {
+      const { data: active } = await findActiveRescore();
+      if (active) {
+        return NextResponse.json({
+          id: String(active.id),
+          status: active.status,
+          deduplicated: true,
+          cloud_synced: true,
+          source: "cloud",
+        });
+      }
+    }
     return sanitizedError(error, {
       status: 500,
       scope: "positions/[legacyId]/ticket",
@@ -144,6 +239,7 @@ export async function POST(
   return NextResponse.json({
     id: String(data.id),
     status: "open",
+    deduplicated: false,
     cloud_synced: true,
     source: "cloud",
   });
