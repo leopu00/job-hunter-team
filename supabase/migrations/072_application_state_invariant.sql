@@ -209,7 +209,7 @@ BEGIN
          WHERE user_id = p_user_id AND position_id = position_row.id
          FOR UPDATE;
         IF NOT FOUND
-           OR application_row.status <> 'applied'
+           OR application_row.status IS DISTINCT FROM 'applied'
            OR application_row.applied IS NOT TRUE
            OR application_row.applied_at IS NULL
            OR NULLIF(BTRIM(application_row.applied_via), '') IS NULL THEN

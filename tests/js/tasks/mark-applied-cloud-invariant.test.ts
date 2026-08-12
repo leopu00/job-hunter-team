@@ -205,6 +205,9 @@ describe("migrazione cloud atomica", () => {
     expect(migration).toMatch(/undo_manual_position_application/i);
     expect(migration).toMatch(/sync_confirm_positions_applied/i);
     expect(migration).toMatch(/incomplete_application/i);
+    expect(migration).toMatch(
+      /application_row\.status IS DISTINCT FROM 'applied'/i,
+    );
   });
 });
 
