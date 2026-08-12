@@ -11,7 +11,9 @@ const page = readFileSync(
 );
 describe("data della valutazione nella pagina posizione", () => {
   it("formatta la data gia' scritta dallo Scorer senza sostituirla con altre date", () => {
-    const scoredAt = "2026-08-12T13:24:00.000Z";
+    // Senza offset: il contratto qui e' che venga mostrato il timestamp dello
+    // Scorer, non che il browser dell'utente sia nel fuso Europe/Rome.
+    const scoredAt = "2026-08-12T15:24:00.000";
 
     expect(formatPositionEventStamp(scoredAt, "it")).toBe("12/08, 15:24");
     expect(formatPositionEventStamp("", "it")).toBeNull();
