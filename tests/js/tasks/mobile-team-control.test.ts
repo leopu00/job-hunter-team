@@ -151,6 +151,14 @@ describe("POST /api/team-state/emergency-stop", () => {
     ]);
     expect(row).not.toHaveProperty("action");
     expect(row).not.toHaveProperty("target");
+    // Lo stop non deve far sparire falsamente l'avviso chat: la risposta
+    // conserva insieme classificazione e timestamp già presenti.
+    expect(db.select).toHaveBeenCalledWith(
+      expect.stringContaining("last_error"),
+    );
+    expect(db.select).toHaveBeenCalledWith(
+      expect.stringContaining("last_error_at"),
+    );
   });
 
   it("risponde 429 senza scrivere quando il bucket utente è esaurito", async () => {
