@@ -14,6 +14,7 @@ import {
   splitTicketRequest,
   ticketRequestWithAttachment,
 } from "../../../web/lib/ticket-attachment";
+import { clipboardImageFile } from "../../../web/lib/clipboard-image";
 
 const repo = join(__dirname, "../../..");
 const home = mkdtempSync(join(tmpdir(), "jht-ticket-file-home-"));
@@ -90,6 +91,145 @@ afterAll(() => {
 });
 
 describe("allegato ticket web sul trasporto documenti esistente", () => {
+  it("incolla un'immagine con nome deterministico sulla stessa pipeline", async () => {
+    const pasted = new File(["png-bytes"], "ignored-name.bin", {
+      type: "image/png",
+    });
+    const result = clipboardImageFile({
+      items: [
+        {
+          kind: "file",
+          type: "image/png",
+          getAsFile: () => pasted,
+        },
+      ],
+    } as never);
+    expect(result.kind).toBe("image");
+    if (result.kind !== "image") throw new Error("image not extracted");
+    expect(result.file.name).toMatch(
+      /^clipboard-screenshot-[0-9a-f-]{36}\.png$/,
+    );
+    const response = await ticketRequest(result.file);
+    expect(response.status).toBe(200);
+    expect(readFileSync(join(userDir, "allegati", result.file.name))).toEqual(
+      Buffer.from("png-bytes"),
+    );
+    expect(
+      db.prepare("SELECT request_text FROM position_tickets").get(),
+    ).toMatchObject({
+      request_text: expect.stringContaining(
+        `/jht_user/allegati/${result.file.name}`,
+      ),
+    });
+  });
+
+  it("non sovrascrive un'immagine incollata da un ticket precedente", async () => {
+    const make = (bytes: string) =>
+      clipboardImageFile({
+        items: [
+          {
+            kind: "file",
+            type: "image/png",
+            getAsFile: () =>
+              new File([bytes], "ignored", { type: "image/png" }),
+          },
+        ],
+      } as never);
+    const first = make("first");
+    const second = make("second");
+    expect(first.kind).toBe("image");
+    expect(second.kind).toBe("image");
+    if (first.kind !== "image" || second.kind !== "image") return;
+    expect(first.file.name).not.toBe(second.file.name);
+    expect((await ticketRequest(first.file)).status).toBe(200);
+    expect((await ticketRequest(second.file)).status).toBe(200);
+    expect(readFileSync(join(userDir, "allegati", first.file.name))).toEqual(
+      Buffer.from("first"),
+    );
+    expect(readFileSync(join(userDir, "allegati", second.file.name))).toEqual(
+      Buffer.from("second"),
+    );
+  });
+
+  it("mantiene identità diverse anche dopo un reload del modulo", async () => {
+    const clipboard = (bytes: string) => ({
+      items: [
+        {
+          kind: "file",
+          type: "image/png",
+          getAsFile: () => new File([bytes], "ignored", { type: "image/png" }),
+        },
+      ],
+    });
+    const before = clipboardImageFile(clipboard("before") as never);
+    vi.resetModules();
+    const fresh = await import("../../../web/lib/clipboard-image");
+    const after = fresh.clipboardImageFile(clipboard("after") as never);
+    expect(before.kind).toBe("image");
+    expect(after.kind).toBe("image");
+    if (before.kind !== "image" || after.kind !== "image") return;
+    expect(before.file.name).not.toBe(after.file.name);
+  });
+
+  it("rifiuta immagini incollate oltre 10 MB prima del ticket", async () => {
+    const oversized = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "x", {
+      type: "image/jpeg",
+    });
+    const result = clipboardImageFile({
+      items: [
+        {
+          kind: "file",
+          type: "image/jpeg",
+          getAsFile: () => oversized,
+        },
+      ],
+    } as never);
+    expect(result).toEqual({ kind: "rejected", reason: "size" });
+    expect(
+      db.prepare("SELECT COUNT(*) AS n FROM position_tickets").get(),
+    ).toMatchObject({ n: 0 });
+    expect(
+      existsSync(join(userDir, "allegati", "clipboard-screenshot.jpg")),
+    ).toBe(false);
+  });
+
+  it("lascia intatto il testo per clipboard non immagine o MIME non ammesso", () => {
+    expect(clipboardImageFile(null)).toEqual({ kind: "none" });
+    expect(
+      clipboardImageFile({
+        items: [{ kind: "string", type: "text/plain", getAsFile: () => null }],
+      } as never),
+    ).toEqual({ kind: "none" });
+    expect(
+      clipboardImageFile({
+        items: [{ kind: "file", type: "image/webp", getAsFile: () => null }],
+      } as never),
+    ).toEqual({ kind: "rejected", reason: "type" });
+  });
+
+  it("rifiuta MIME discordanti o piu immagini nello stesso paste", () => {
+    const png = new File(["x"], "x.png", { type: "image/png" });
+    expect(
+      clipboardImageFile({
+        items: [
+          {
+            kind: "file",
+            type: "image/png",
+            getAsFile: () => new File(["x"], "x.webp", { type: "image/webp" }),
+          },
+        ],
+      } as never),
+    ).toEqual({ kind: "rejected", reason: "type" });
+    expect(
+      clipboardImageFile({
+        items: [
+          { kind: "file", type: "image/png", getAsFile: () => png },
+          { kind: "file", type: "image/png", getAsFile: () => png },
+        ],
+      } as never),
+    ).toEqual({ kind: "rejected", reason: "type" });
+  });
+
   it("salva i byte e registra nel ticket il path visto dal team", async () => {
     const bytes = new TextEncoder().encode("synthetic document");
     const response = await ticketRequest(
@@ -116,6 +256,48 @@ describe("allegato ticket web sul trasporto documenti esistente", () => {
     expect(
       db.prepare("SELECT COUNT(*) AS n FROM position_tickets").get(),
     ).toMatchObject({ n: 0 });
+  });
+
+  it("rifiuta dal POST un MIME immagine incoerente con l'estensione", async () => {
+    const response = await ticketRequest(
+      new File(["not-png"], "clipboard-screenshot-deadbeef.png", {
+        type: "image/webp",
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(
+      db.prepare("SELECT COUNT(*) AS n FROM position_tickets").get(),
+    ).toMatchObject({ n: 0 });
+    expect(
+      existsSync(
+        join(userDir, "allegati", "clipboard-screenshot-deadbeef.png"),
+      ),
+    ).toBe(false);
+  });
+
+  it("rifiuta anche MIME immagine con estensione documentale", async () => {
+    const response = await ticketRequest(
+      new File(["not-pdf"], "clipboard-forged.pdf", { type: "image/png" }),
+    );
+    expect(response.status).toBe(400);
+    expect(
+      db.prepare("SELECT COUNT(*) AS n FROM position_tickets").get(),
+    ).toMatchObject({ n: 0 });
+    expect(existsSync(join(userDir, "allegati", "clipboard-forged.pdf"))).toBe(
+      false,
+    );
+    const webp = await ticketRequest(
+      new File(["not-pdf"], "clipboard-forged-webp.pdf", {
+        type: "image/webp",
+      }),
+    );
+    expect(webp.status).toBe(400);
+    expect(
+      db.prepare("SELECT COUNT(*) AS n FROM position_tickets").get(),
+    ).toMatchObject({ n: 0 });
+    expect(
+      existsSync(join(userDir, "allegati", "clipboard-forged-webp.pdf")),
+    ).toBe(false);
   });
 
   it("una lettura fallita non tronca un file omonimo già salvato", async () => {

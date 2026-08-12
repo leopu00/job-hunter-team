@@ -6,6 +6,7 @@ import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import type { PositionTicket } from "@/lib/types";
 import { splitTicketRequest } from "@/lib/ticket-attachment";
+import { clipboardImageFile } from "@/lib/clipboard-image";
 
 // Sezione "Richieste al team" sulla pagina posizione. L'utente scrive una
 // richiesta testuale libera (popup) → ticket 'open'; il Capitano l'assegna a un
@@ -36,6 +37,8 @@ const T: Record<
     teamResponse: string;
     attachFile: string;
     removeFile: string;
+    pasteTooLarge: string;
+    pasteUnsupported: string;
   }
 > = {
   it: {
@@ -59,6 +62,8 @@ const T: Record<
     teamResponse: "Risposta del team",
     attachFile: "Allega un file",
     removeFile: "Rimuovi allegato",
+    pasteTooLarge: "L'immagine incollata supera il limite di 10 MB",
+    pasteUnsupported: "Formato immagine incollato non supportato",
   },
   en: {
     statusLabel: {
@@ -81,6 +86,8 @@ const T: Record<
     teamResponse: "Team response",
     attachFile: "Attach a file",
     removeFile: "Remove attachment",
+    pasteTooLarge: "The pasted image exceeds the 10 MB limit",
+    pasteUnsupported: "The pasted image format is not supported",
   },
   es: {
     statusLabel: {
@@ -103,6 +110,8 @@ const T: Record<
     teamResponse: "Respuesta del equipo",
     attachFile: "Adjuntar un archivo",
     removeFile: "Quitar archivo",
+    pasteTooLarge: "La imagen pegada supera el límite de 10 MB",
+    pasteUnsupported: "El formato de imagen pegado no es compatible",
   },
   fr: {
     statusLabel: {
@@ -125,6 +134,8 @@ const T: Record<
     teamResponse: "Réponse de l'équipe",
     attachFile: "Joindre un fichier",
     removeFile: "Retirer le fichier",
+    pasteTooLarge: "L'image collée dépasse la limite de 10 Mo",
+    pasteUnsupported: "Le format d'image collée n'est pas pris en charge",
   },
   de: {
     statusLabel: {
@@ -147,6 +158,8 @@ const T: Record<
     teamResponse: "Antwort des Teams",
     attachFile: "Datei anhängen",
     removeFile: "Anhang entfernen",
+    pasteTooLarge: "Das eingefügte Bild überschreitet das 10-MB-Limit",
+    pasteUnsupported: "Das eingefügte Bildformat wird nicht unterstützt",
   },
   hu: {
     statusLabel: {
@@ -169,6 +182,8 @@ const T: Record<
     teamResponse: "A csapat válasza",
     attachFile: "Fájl csatolása",
     removeFile: "Melléklet eltávolítása",
+    pasteTooLarge: "A beillesztett kép meghaladja a 10 MB-os korlátot",
+    pasteUnsupported: "A beillesztett képformátum nem támogatott",
   },
   pt: {
     statusLabel: {
@@ -191,6 +206,8 @@ const T: Record<
     teamResponse: "Resposta da equipa",
     attachFile: "Anexar um ficheiro",
     removeFile: "Remover anexo",
+    pasteTooLarge: "A imagem colada excede o limite de 10 MB",
+    pasteUnsupported: "O formato da imagem colada não é suportado",
   },
 };
 
@@ -213,6 +230,22 @@ export function TicketPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
+
+  const pasteImage = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (busy || isPending) {
+      event.preventDefault();
+      return;
+    }
+    const result = clipboardImageFile(event.clipboardData);
+    if (result.kind === "none") return;
+    event.preventDefault();
+    if (result.kind === "rejected") {
+      setError(result.reason === "size" ? t.pasteTooLarge : t.pasteUnsupported);
+      return;
+    }
+    setAttachment(result.file);
+    setError(null);
+  };
 
   const submit = async () => {
     setError(null);
@@ -277,6 +310,8 @@ export function TicketPanel({
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onPaste={pasteImage}
+            disabled={busy || isPending}
             rows={3}
             maxLength={2000}
             placeholder={t.placeholder}
@@ -296,6 +331,7 @@ export function TicketPanel({
               <input
                 type="file"
                 className="sr-only"
+                disabled={busy || isPending}
                 onChange={(event) =>
                   setAttachment(event.target.files?.[0] ?? null)
                 }
