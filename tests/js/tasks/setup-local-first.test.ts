@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,6 +26,59 @@ const privacyRoute = read("web/app/privacy/page.tsx");
 const setupGuide = read("web/app/setup-guide/guide-content.ts");
 const chooseWhere = read("docs/guides/CHOOSE-WHERE-TO-RUN.md");
 
+function runHostSetup(options: {
+  display?: string;
+  args?: string[];
+}) {
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "jht-host-setup-"));
+  const bin = path.join(sandbox, "bin");
+  const jhtHome = path.join(sandbox, "jht-home");
+  fs.mkdirSync(bin);
+  // Il kernel simulato rende il test identico su macOS e Linux. L'awk finto
+  // dichiara swap già attivo: il ramo VPS resta una verifica senza effetti host.
+  fs.writeFileSync(path.join(bin, "uname"), "#!/bin/sh\necho Linux\n", {
+    mode: 0o700,
+  });
+  fs.writeFileSync(
+    path.join(bin, "awk"),
+    `#!/bin/sh
+case "$1" in
+  *MemTotal*) echo 4194304 ;;
+  *SwapTotal*) echo 2097152 ;;
+  *) exec /usr/bin/awk "$@" ;;
+esac
+`,
+    { mode: 0o700 },
+  );
+  const env = {
+    ...process.env,
+    JHT_HOME_HOST: jhtHome,
+    JHT_LANG: "en",
+    JHT_USER_TZ: "UTC",
+    PATH: `${bin}:${process.env.PATH ?? ""}`,
+  };
+  if (options.display === undefined) {
+    delete env.DISPLAY;
+    delete env.WAYLAND_DISPLAY;
+  } else {
+    env.DISPLAY = options.display;
+    delete env.WAYLAND_DISPLAY;
+  }
+  try {
+    const result = spawnSync(
+      "bash",
+      [path.join(ROOT, "scripts/host-setup.sh"), "--non-interactive", ...(options.args ?? [])],
+      { env, encoding: "utf8" },
+    );
+    return {
+      ...result,
+      hostEnv: fs.readFileSync(path.join(jhtHome, "host.env"), "utf8"),
+    };
+  } finally {
+    fs.rmSync(sandbox, { recursive: true, force: true });
+  }
+}
+
 describe("CLI host wizard — local e VPS sono host reali", () => {
   it("conserva rilevamento, conferma e override senza un default inventato", () => {
     expect(hostSetup).toContain('HOST_TYPE="$DETECTED"');
@@ -33,6 +88,21 @@ describe("CLI host wizard — local e VPS sono host reali", () => {
     expect(hostSetup.indexOf("host_setup.option.local.title")).toBeLessThan(
       hostSetup.indexOf("host_setup.option.vps.title"),
     );
+  });
+
+  it("rileva desktop e headless, mentre l'override esplicito resta autorevole", () => {
+    const desktop = runHostSetup({ display: ":synthetic" });
+    expect(desktop.status, desktop.stderr).toBe(0);
+    expect(desktop.hostEnv).toContain("JHT_HOST_TYPE=local");
+
+    const headless = runHostSetup({});
+    expect(headless.status, headless.stderr).toBe(0);
+    expect(headless.hostEnv).toContain("JHT_HOST_TYPE=vps");
+    expect(headless.stdout).toContain("Swap already configured");
+
+    const explicit = runHostSetup({ args: ["--host-type=local"] });
+    expect(explicit.status, explicit.stderr).toBe(0);
+    expect(explicit.hostEnv).toContain("JHT_HOST_TYPE=local");
   });
 
   it("non promette la dashboard locale ritirata o una dashboard esposta", () => {
