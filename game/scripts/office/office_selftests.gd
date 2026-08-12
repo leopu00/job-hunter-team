@@ -1375,13 +1375,15 @@ func _tour_selftest() -> void:
 	await get_tree().create_timer(0.3).timeout
 	get_tree().quit(0 if ok else 1)
 
-## O-14 — «l'utente esce all'inizio e va dritto al setup».
+## O-14 + WIN-TOUR-DRAWS-OVER-SETUP — «l'utente interrompe all'inizio,
+## va dritto al setup e poi riprende dallo stesso punto».
 ##
-## Il difetto non era che mancasse un pulsante: era che l'uscita esisteva per
+## Il difetto non era che mancasse un pulsante: era che l'interruzione esisteva per
 ## il TOUR e non per il GIRO. Chi la premeva si fermava a metà — la regia
 ## taceva, ma le chat guidate continuavano a parlare e ad aprire pannelli
 ## sopra quello che stava facendo. Da qui i controlli sotto: dopo l'uscita si
-## verifica che TACCIANO ANCHE LORO, non solo che il tour risulti concluso.
+## verifica che TACCIANO ANCHE LORO, ma senza marcare concluso il progresso:
+## la ripresa deve riusare l'indice già persistito, non ricominciare.
 ##
 ## Gira con il TutorialHarness acceso, quindi scrive sul config sintetico:
 ## la persistenza è metà del contratto e va verificata su file vero, mai su
@@ -1447,8 +1449,8 @@ func _tour_exit_selftest() -> void:
 	check.call(not get_tree().paused,
 			"ESC ha messo in pausa invece di chiudere il giro")
 
-	check.call(ScriptedOnboarding.is_dismissed(), "l'uscita non chiude il giro")
-	check.call(not TourGuide.active(), "l'uscita non chiude il tour")
+	check.call(ScriptedOnboarding.is_dismissed(), "l'interruzione non silenzia il giro")
+	check.call(not TourGuide.active(), "l'interruzione lascia attiva la regia")
 	for agent in ScriptedOnboarding.AGENTS:
 		check.call(not ScriptedOnboarding.use_scripted_chat(agent),
 				"la chat guidata di %s parla ancora dopo l'uscita" % agent)
@@ -1477,8 +1479,9 @@ func _tour_exit_selftest() -> void:
 		if a.quest_marker != null and a.quest_marker.visible \
 				and ScriptedOnboarding.normalize_agent(a.slug) == "assistente":
 			tour_markers += 1
-	check.call(TourGuide.current_slug() == "" and not TourGuide.stop_open("scout"),
-			"la regia del tour ha ancora una tappa aperta dopo l'uscita")
+	check.call(TourGuide.step_index() == 0 and TourGuide.current_slug() == "assistente" \
+			and not TourGuide.stop_open("scout"),
+			"l'interruzione ha perso o avanzato la tappa persistita")
 	check.call(tour_markers == 0 or not TourGuide.active(),
 			"l'Assistente chiama ancora l'utente dopo l'uscita")
 	# La configurazione è raggiungibile: è il punto dell'uscita.
@@ -1489,16 +1492,39 @@ func _tour_exit_selftest() -> void:
 	var cfg := ConfigFile.new()
 	var saved := cfg.load(TutorialHarness.ONBOARDING_CFG) == OK \
 			and bool(cfg.get_value("guided", "dismissed", false))
-	check.call(saved, "l'uscita non è finita su file: al riavvio il giro torna")
+	check.call(saved, "l'interruzione non è finita su file: al riavvio riparte da sola")
 	# Riavvio simulato: stato in memoria azzerato, ricaricato da file.
 	ScriptedOnboarding._dismissed = false
 	ScriptedOnboarding._load_state()
 	check.call(ScriptedOnboarding.is_dismissed(),
-			"l'uscita non viene riletta al riavvio")
+			"l'interruzione non viene riletta al riavvio")
 	var tour_cfg := ConfigFile.new()
 	check.call(tour_cfg.load(TutorialHarness.TOUR_CFG) == OK \
-			and bool(tour_cfg.get_value("tour", "done", false)),
-			"il tour non risulta concluso su file dopo l'uscita")
+			and not bool(tour_cfg.get_value("tour", "done", true)) \
+			and int(tour_cfg.get_value("tour", "index", -1)) == 0,
+			"l'interruzione ha scritto un completamento o perso l'indice su file")
+
+	# ── Ripresa dal pulsante vero: stesso indice, tracker rimontato ─────
+	if sidebar:
+		var resume_row: Control = sidebar._exit_tour.get_parent() as Control
+		check.call(resume_row.visible and sidebar._exit_tour.text != "" \
+				and sidebar._exit_tour.text != "tour.resume",
+				"la sidebar non offre la ripresa persistita")
+		sidebar._exit_tour.pressed.emit()
+		await get_tree().process_frame
+		check.call(not ScriptedOnboarding.is_dismissed(),
+				"il pulsante non riapre il gate del giro")
+		check.call(TourGuide.active() and TourGuide.step_index() == 0 \
+				and TourGuide.current_slug() == "assistente",
+				"la ripresa non torna alla stessa tappa")
+		check.call(is_instance_valid(office._tour_tracker),
+				"la ripresa non rimonta il tracker")
+		check.call(ScriptedOnboarding.use_scripted_chat("assistente"),
+				"la ripresa non riattiva la chat guidata")
+		var resumed_cfg := ConfigFile.new()
+		check.call(resumed_cfg.load(TutorialHarness.ONBOARDING_CFG) == OK \
+				and not bool(resumed_cfg.get_value("guided", "dismissed", true)),
+				"la ripresa non è persistita: al riavvio tornerebbe in pausa")
 
 	var ok := failures.is_empty()
 	print("TOUR-EXIT-TEST ", "PASS " if ok else "FAIL ",

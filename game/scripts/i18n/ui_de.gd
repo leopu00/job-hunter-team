@@ -122,6 +122,8 @@ const S := {
 	"tour.hint_free": "Freie Runde: klicke die Figuren mit der Raute an, in beliebiger Reihenfolge.",
 	"tour.hint_launch": "Erfülle die drei Voraussetzungen: der gelbe Knopf oben öffnet die Checkliste.",
 	"tour.exit": "RUNDGANG VERLASSEN (ESC)",
+	"tour.pause": "RUNDGANG PAUSIEREN (ESC)",
+	"tour.resume": "RUNDGANG FORTSETZEN",
 	"tour.done": "RUNDGANG ABGESCHLOSSEN ✓",
 	"tour.invite": "%s%s! Komm, ich stelle dir dein neues Team vor.",
 	"tour.guide.scout.greet": "Das ist die Recherche. Ich stelle dir einen unserer Rechercheure vor.",

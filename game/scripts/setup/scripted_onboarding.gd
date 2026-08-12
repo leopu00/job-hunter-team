@@ -7,9 +7,12 @@ extends Node
 
 signal conversation_changed(agent: String)
 signal action_requested(action: String, payload: Dictionary)
-## L'utente ha chiuso il giro guidato: chi mostra qualcosa per conto degli
-## agenti deve smettere, adesso e ai riavvii successivi.
+## L'utente ha interrotto il giro guidato: chi mostra qualcosa per conto degli
+## agenti deve smettere, adesso e ai riavvii successivi, fino alla ripresa.
 signal dismissed
+## Il giro interrotto riparte dallo stato già persistito: nessuna seconda
+## macchina di avanzamento, solo il gate `dismissed` che torna aperto.
+signal resumed
 
 const SAVE_PATH := "user://guided_onboarding.cfg"
 const CONTEXT_JSON_PATH := "user://onboarding_context.json"
@@ -32,9 +35,9 @@ var _completed := {}
 var _reconciled := {}
 var _provider_choice := ""
 var _provider_test_override := -1
-## Uscita esplicita dell'utente dal giro guidato. È uno stato, non un evento:
-## sopravvive al riavvio, perché un giro da cui si è usciti che ricompare al
-## lancio successivo non è un'uscita, è un rinvio.
+## Pausa esplicita del giro guidato. È uno stato, non un evento: sopravvive al
+## riavvio e silenzia insieme chat, azioni e regia, ma non duplica l'indice del
+## tour — quello resta nella sua fonte di verità, TourGuide.
 var _dismissed := false
 
 
@@ -54,29 +57,38 @@ func _ready() -> void:
 		_reconcile_with_status(SetupService.status)
 
 
-## Il giro è stato chiuso dall'utente? Chi disegna messaggi, opzioni o
+## Il giro è stato interrotto dall'utente? Chi disegna messaggi, opzioni o
 ## marker per conto degli agenti guidati deve chiedersi questo per primo.
 func is_dismissed() -> bool:
 	return _dismissed
 
 
-## Uscita esplicita: chiude il giro guidato per intero — chat scriptate, azioni
-## che aprono pannelli da sole, tour fisico dei reparti.
+## Pausa esplicita: interrompe il giro guidato per intero — chat scriptate,
+## azioni che aprono pannelli da sole e tour fisico dei reparti.
 ##
-## Un solo punto di uscita per due macchine (questa e TourGuide) perché finora
-## erano separate: chiudere il tour lasciava viva la chat guidata, che
-## continuava a parlare sopra il menu (O-14). Chiudere è definitivo e
-## idempotente: nessun ramo del codice lo riapre.
+## Un solo gate per le due macchine perché interrompere soltanto il tour
+## lasciava viva la chat guidata (O-14). Non chiama `TourGuide.finish()`:
+## completamento e pausa non sono sinonimi, e TourGuide ha già indice,
+## modalità e visite persistiti per ripartire dal punto esatto.
 func dismiss() -> void:
 	if _dismissed:
 		return
 	_dismissed = true
-	Log.info("onboarding", "giro guidato chiuso dall'utente")
+	Log.info("onboarding", "giro guidato interrotto dall'utente")
+	TourGuide.checkpoint()
 	_save_state()
-	# TourGuide.finish(), non skip(): skip() rientra qui e non serve.
-	if TourGuide.active():
-		TourGuide.finish()
 	dismissed.emit()
+
+
+## Riapre lo stesso gate persistito. Il progresso non viene copiato né
+## ricostruito: TourGuide espone di nuovo la tappa che aveva già salvato.
+func resume() -> void:
+	if not _dismissed or not TourGuide.incomplete():
+		return
+	_dismissed = false
+	Log.info("onboarding", "giro guidato ripreso dall'utente")
+	_save_state()
+	resumed.emit()
 
 
 ## Allinea il passo corrente ai prerequisiti già soddisfatti. Idempotente:
@@ -299,7 +311,7 @@ func set_provider_test_override(value: int) -> void:
 ## non esistono e i marker/story devono restare, altrimenti l'utente clicca
 ## agenti muti (24/07).
 func story_mode() -> bool:
-	return not (provider_authenticated() \
+	return not _dismissed and not (provider_authenticated() \
 			and bool(SetupService.status.get("container_running", false)))
 
 
@@ -311,7 +323,7 @@ func use_scripted_chat(value: String) -> bool:
 	# `provider_authenticated` lasciava senza interlocutore chi arriva con un
 	# provider già configurato (token sul disco, container ancora spento) —
 	# scriptato spento e live non ancora disponibile (24/07).
-	# Uscito dal giro: le chat authored si spengono in blocco. La finestra
+	# Giro in pausa: le chat authored si spengono in blocco. La finestra
 	# resta aperta e la storia leggibile — quello che sparisce è il seguito.
 	return supports(agent) and not _dismissed and not is_complete(agent) \
 			and not live_text_available(agent)
@@ -896,7 +908,7 @@ func _choose_mentor(id: String) -> void:
 				_reply("mentor", UIStrings.t("onb.m.finish.reply_done"))
 
 
-## Battuta di un agente guidato. A giro chiuso non ne nascono più: è la
+## Battuta di un agente guidato. A giro in pausa non ne nascono più: è la
 ## regola che tiene fede al «nessun messaggio compare più» di O-14, presa
 ## qui sotto invece che in ogni chiamante.
 func _reply(agent: String, text: String) -> void:
@@ -905,7 +917,7 @@ func _reply(agent: String, text: String) -> void:
 	_append(agent, "assistant", text)
 
 
-## Richiesta di aprire una superficie nativa (sezione, chat). A giro chiuso
+## Richiesta di aprire una superficie nativa (sezione, chat). A giro in pausa
 ## resta inascoltata: erano queste ad aprirsi sopra ciò che l'utente stava
 ## facendo, e un'uscita che non le ferma non è un'uscita.
 func _request_action(action: String, payload: Dictionary) -> void:

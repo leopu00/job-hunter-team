@@ -92,16 +92,15 @@ func _rebuild() -> void:
 	_rows.add_child(hint)
 
 	var skip := Button.new()
-	# Non «salta la tappa» ma «esci dal giro»: chiude tutto, chat guidate
-	# comprese, e lo dice — insieme alla scorciatoia da tastiera, perché il
-	# cassetto del menu può coprire questa lista mentre ESC funziona sempre.
-	skip.text = UIStrings.t("tour.exit")
+	# La pausa silenzia regia e chat insieme ma conserva la tappa; il percorso
+	# di ripresa resta nella sidebar, raggiungibile anche dopo un riavvio.
+	skip.text = UIStrings.t("tour.pause")
 	skip.flat = true
 	skip.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	skip.add_theme_font_size_override("font_size", 12)
 	skip.add_theme_color_override("font_color", Palette.MUTED)
 	skip.add_theme_color_override("font_hover_color", Palette.WHITE)
-	skip.pressed.connect(TourGuide.skip)
+	skip.pressed.connect(Game.exit_guided_onboarding)
 	_rows.add_child(skip)
 
 ## Stato di una riga principale rispetto all'indice del tour: il blocco
