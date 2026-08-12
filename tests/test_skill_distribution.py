@@ -45,6 +45,7 @@ def test_role_distribution_is_identical_and_isolated_for_both_providers(
     _skill(shared, "shared-beta", "shared beta")
     _skill(shared, "_lib", "implementation detail")
     _skill(captain_private, "captain-private", "captain only")
+    _skill(captain_private, "_lib", "private implementation detail")
     _skill(sentinel_private, "sentinel-private", "sentinel only")
     (app / "agents" / "capitano" / "skills.list").write_text(
         "# source of truth for shared skills\n"
