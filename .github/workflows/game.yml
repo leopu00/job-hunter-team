@@ -13,6 +13,8 @@ name: Game — Native desktop matrix
 # vale ~30 minuti di runner su tre OS a ogni modifica Python. Quando passera' a
 # `gate` vanno aggiunti anche loro, altrimenti si ricrea questo stesso buco.
 on:
+  # Nessun filtro `branches`: i path di gioco avviano già la matrice anche su
+  # hq-master, quindi il ramo d'integrazione è coperto senza duplicare regole.
   push:
     paths:
       - "game/**"

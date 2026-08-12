@@ -4,9 +4,9 @@ extends Node
 ## Tre invarianti, in ordine di importanza.
 ##
 ## 1. NIENTE ESCE SENZA REDAZIONE. Il bundle e ogni campo libero passano da
-##    Redactor con le regole per dati personali e segreti. Un recapito è un
-##    dato personale: non esiste nel payload desktop, neppure se un client
-##    vecchio prova a inserirlo nel dizionario del modulo.
+##    Redactor con le regole per dati personali e segreti. L'unica eccezione
+##    deliberata è `reply_to`: facoltativo, validato e destinato esclusivamente
+##    all'header di risposta della mail di supporto, mai al testo o ai log.
 ## 2. LA COPIA LOCALE SI SCRIVE SEMPRE, prima del tentativo di invio. Se la rete
 ##    manca, se l'endpoint è giù, se l'utente è dietro un proxy ostile, il report
 ##    esiste comunque su disco e si può allegare a mano. Un canale che perde il
@@ -68,7 +68,7 @@ func build_preview(include_logs := true, include_container := true) -> void:
 	_start_collect({"logs": include_logs, "container": include_container}, {})
 
 
-## Invia. `form` = {"doing":…, "happened":…, "expected":…}.
+## Invia. `form` include le tre risposte e l'eventuale `reply_to`.
 ##
 ## Non viene MAI ignorato in silenzio. Se una raccolta di anteprima è ancora in
 ## volo — succede se l'utente scrive in fretta e preme invia subito — la
@@ -146,6 +146,9 @@ func _on_collected(bundle: Dictionary, markdown: String, form: Dictionary,
 # ── Consegna ─────────────────────────────────────────────────────────
 
 func _deliver(form: Dictionary, bundle: Dictionary, markdown: String) -> void:
+	if not valid_reply_email(form.get("reply_to", "")):
+		_finish(false, UIStrings.t("feedback.invalid_email"), "")
+		return
 	var payload := _payload(form, bundle, markdown)
 	# Prima il disco, poi la rete: se qui sotto va storto qualcosa, il lavoro
 	# dell'utente è già salvo.
@@ -173,7 +176,7 @@ func _payload(form: Dictionary, bundle: Dictionary, markdown: String) -> Diction
 	var counts := _merged_redaction_counts(bundle.get("redaction", {}), [
 		doing.get("counts", {}), happened.get("counts", {}), expected.get("counts", {}),
 	])
-	return {
+	var payload := {
 		"client": "godot-desktop",
 		"app_version": ProjectSettings.get_setting("application/config/version", "dev"),
 		"locale": UIStrings.lang,
@@ -186,6 +189,28 @@ func _payload(form: Dictionary, bundle: Dictionary, markdown: String) -> Diction
 		"diagnostics": markdown,
 		"redaction": counts,
 	}
+	# Il recapito non passa dal Redactor: verrebbe giustamente cancellato. Entra
+	# solo col nome contrattuale che il server trasforma nell'header Reply-To;
+	# `_to_markdown` lo ignora, quindi la copia locale e l'anteprima restano il
+	# report tecnico sanificato e non diventano un archivio di contatti.
+	var reply_to := str(form.get("reply_to", "")).strip_edges()
+	if reply_to != "" and valid_reply_email(reply_to):
+		payload["reply_to"] = reply_to
+	return payload
+
+
+## Difesa client, replicata dal server: vuoto è valido perché il campo è
+## facoltativo; spazi, newline e indirizzi senza dominio non partono mai.
+static func valid_reply_email(value: Variant) -> bool:
+	var email := str(value).strip_edges()
+	if email == "":
+		return true
+	if email.length() > 254 or email.contains("\n") or email.contains("\r"):
+		return false
+	var regex := RegEx.new()
+	if regex.compile("^[^\\s@<>]+@[^\\s@<>]+\\.[^\\s@<>]+$") != OK:
+		return false
+	return regex.search(email) != null
 
 
 func _clean_field(value: Variant,

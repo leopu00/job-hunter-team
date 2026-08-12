@@ -3,18 +3,12 @@ export type Theme = "dark" | "light" | "system";
 export const THEME_STORAGE_KEY = "jht-theme";
 export const PENDING_THEME_STORAGE_KEY = "jht-theme-pending.v1";
 
-export type StorageLike = Pick<
-  Storage,
-  "getItem" | "setItem" | "removeItem"
->;
+export type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export type ThemeCloudBackend = {
   currentUserId(): Promise<string | null>;
   readTheme(userId: string): Promise<Theme | null>;
-  createTheme(
-    userId: string,
-    theme: Theme,
-  ): Promise<"created" | "conflict">;
+  createTheme(userId: string, theme: Theme): Promise<"created" | "conflict">;
   writeTheme(userId: string, theme: Theme): Promise<Theme>;
 };
 
@@ -91,10 +85,7 @@ function writePendingTheme(
   );
 }
 
-function samePending(
-  left: PendingTheme | null,
-  right: PendingTheme,
-): boolean {
+function samePending(left: PendingTheme | null, right: PendingTheme): boolean {
   return left?.userId === right.userId && left.theme === right.theme;
 }
 

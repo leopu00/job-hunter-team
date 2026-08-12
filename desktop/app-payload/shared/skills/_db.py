@@ -53,6 +53,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_v2_to_v3(conn)
     _migrate_v3_to_v4(conn)
     _migrate_positions_status_review(conn)
+    _migrate_applications_critic_round(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,6 +142,7 @@ def ensure_schema(conn: sqlite3.Connection):
         critic_verdict TEXT,
         critic_score REAL,
         critic_notes TEXT,
+        critic_round INTEGER,
         status TEXT DEFAULT 'draft',
         written_at TIMESTAMP,
         applied_at TIMESTAMP,
@@ -156,6 +158,20 @@ def ensure_schema(conn: sqlite3.Connection):
         cl_drive_id TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (position_id) REFERENCES positions(id)
+    );
+
+    -- Provenienza necessaria all'undo della candidatura manuale: senza
+    -- from_state la UI può soltanto dedurre lo stato precedente e rischia di
+    -- riportare una posizione review/checked nello stato sbagliato.
+    CREATE TABLE IF NOT EXISTS position_state_transitions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        position_id INTEGER NOT NULL,
+        from_state TEXT,
+        to_state TEXT NOT NULL,
+        ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        by_agent TEXT NOT NULL,
+        notes TEXT,
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
@@ -185,6 +201,9 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
     CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
     CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
+    CREATE INDEX IF NOT EXISTS idx_pst_position_ts ON position_state_transitions(position_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_pst_ts ON position_state_transitions(ts);
+    CREATE INDEX IF NOT EXISTS idx_pst_to_state ON position_state_transitions(to_state, ts);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
@@ -345,6 +364,31 @@ def ensure_schema(conn: sqlite3.Connection):
       UPDATE applications SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
+    -- O-64: una nuova versione testuale rende stale il giudizio precedente.
+    -- Il trigger sta al confine DB per coprire sia la CLI sia eventuali write
+    -- diretti; un cambio non testuale di path/PDF non varia written_at.
+    CREATE TRIGGER IF NOT EXISTS applications_invalidate_critic_after_rewrite
+    AFTER UPDATE OF written_at ON applications FOR EACH ROW
+    WHEN NEW.written_at IS NOT OLD.written_at AND (
+      NEW.critic_verdict IS NOT NULL OR NEW.critic_score IS NOT NULL OR
+      NEW.critic_notes IS NOT NULL OR NEW.critic_round IS NOT NULL OR
+      NEW.reviewed_by IS NOT NULL OR NEW.critic_reviewed_at IS NOT NULL
+    )
+    BEGIN
+      UPDATE applications
+      SET status = CASE
+            WHEN status IN ('ready', 'approved') THEN 'review'
+            ELSE status
+          END,
+          critic_verdict = NULL,
+          critic_score = NULL,
+          critic_notes = NULL,
+          critic_round = NULL,
+          reviewed_by = NULL,
+          critic_reviewed_at = NULL
+      WHERE id = NEW.id;
+    END;
+
     CREATE TRIGGER IF NOT EXISTS applications_default_created_at
     AFTER INSERT ON applications FOR EACH ROW
     WHEN NEW.created_at IS NULL OR NEW.updated_at IS NULL
@@ -449,6 +493,14 @@ def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
 def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return any(row['name'] == column for row in rows)
+
+
+def _migrate_applications_critic_round(conn: sqlite3.Connection) -> None:
+    """Allinea SQLite al campo critic_round gia' presente sul cloud."""
+    if not _table_exists(conn, 'applications'):
+        return
+    if not _column_exists(conn, 'applications', 'critic_round'):
+        conn.execute("ALTER TABLE applications ADD COLUMN critic_round INTEGER")
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:

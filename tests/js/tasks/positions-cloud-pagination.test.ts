@@ -290,6 +290,37 @@ describe("le undici query cloud superano il tetto PostgREST", () => {
 });
 
 describe("filtri, ordine e finestra di getPositions", () => {
+  it("mappa application.applied_at, non la data dello score", async () => {
+    positionRows = rows(2);
+    positionRows[0] = {
+      ...positionRows[0],
+      status: "applied",
+      applications: {
+        ...positionRows[0].applications,
+        applied_at: "2026-08-12T16:30:00.000Z",
+      },
+    };
+    positionRows[1] = {
+      ...positionRows[1],
+      status: "scored",
+      scores: {
+        ...positionRows[1].scores,
+        scored_at: "2026-08-11T10:00:00.000Z",
+      },
+      applications: {
+        ...positionRows[1].applications,
+        applied_at: null,
+      },
+    };
+
+    const result = await queries.getPositions();
+    expect(result[0]).toMatchObject({
+      status: "applied",
+      applied_at: "2026-08-12T16:30:00.000Z",
+    });
+    expect(result[1]).toMatchObject({ status: "scored", applied_at: null });
+  });
+
   it("cerca prima di paginare e conserva offset + limit oltre 1000", async () => {
     positionRows = rows(1600);
     const result = await queries.getPositions({
