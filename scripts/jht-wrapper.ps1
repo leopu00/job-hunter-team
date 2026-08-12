@@ -233,7 +233,15 @@ if ($env:JHT_RUNTIME_AUTHORITY_SELFTEST -eq '1') {
 }
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
+function Require-PrivateJhtHomeAcl {
+  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) {
+    throw "JHT_HOME ACL is not owner-only: $JhtHome"
+  }
+}
+
 function Require-Docker {
+  Require-PrivateJhtHomeAcl
+  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     Write-Err "docker non trovato nel PATH. Installa Docker Desktop per Windows."
     exit 127
@@ -246,6 +254,7 @@ function Require-Docker {
 }
 
 function Require-ComposeFile {
+  Require-PrivateJhtHomeAcl
   try { Assert-TrustedRuntime } catch { Write-Err $_.Exception.Message; exit 1 }
 }
 
