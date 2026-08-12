@@ -26,6 +26,16 @@ import sys
 import json
 
 BLOCK_KINDS = {"key_value", "tag_list", "timeline", "narrative", "key_points", "distribution"}
+TARGET_ROLE_CATEGORY_IDS = {"software", "data", "product", "design", "business", "security", "other"}
+TARGET_ROLE_SPECIALTIES = {
+    "software": {"backend", "frontend", "fullstack", "platform", "embedded", "open"},
+    "data": {"data_science", "ml", "genai", "data_engineering", "research", "open"},
+    "product": {"product", "project", "technical_pm", "delivery", "founder"},
+    "design": {"specialist", "generalist", "leadership", "individual", "explore"},
+    "business": {"specialist", "generalist", "leadership", "individual", "explore"},
+    "security": {"specialist", "generalist", "leadership", "individual", "explore"},
+    "other": {"specialist", "generalist", "leadership", "individual", "explore"},
+}
 
 errors: list[str] = []
 warnings: list[str] = []
@@ -142,6 +152,20 @@ def validate_blocks(blocks):
             validate_block_content(kind, b.get("content"), where)
 
 
+def validate_target_role_choice(profile):
+    category = profile.get("target_role_category_id")
+    specialty = profile.get("target_specialty")
+    if category is None:
+        if specialty is not None:
+            err("target_specialty: requires target_role_category_id")
+        return
+    if category not in TARGET_ROLE_CATEGORY_IDS:
+        err("target_role_category_id: invalid canonical ID")
+        return
+    if specialty is not None and specialty not in TARGET_ROLE_SPECIALTIES[category]:
+        err("target_specialty: invalid for target_role_category_id")
+
+
 def validate(profile) -> None:
     if not isinstance(profile, dict):
         err("(root): profile must be a top-level YAML object")
@@ -156,6 +180,7 @@ def validate(profile) -> None:
     validate_skills(profile.get("skills"))
     validate_languages(profile.get("languages"))
     validate_blocks(profile.get("blocks"))
+    validate_target_role_choice(profile)
 
 
 def main() -> int:

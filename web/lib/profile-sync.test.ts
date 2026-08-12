@@ -129,4 +129,19 @@ describe("round-trip map → reconstruct conserva i campi chiave", () => {
     assert.equal(r.target_role_category_id, "software");
     assert.equal(r.target_specialty, "backend");
   });
+
+  it("rifiuta una coppia non canonica prima del push", () => {
+    assert.throws(
+      () =>
+        mapYamlToCanonical(
+          {
+            ...RAW_LEGACY,
+            target_role_category_id: "software",
+            target_specialty: "research",
+          },
+          "u",
+        ),
+      /target_specialty is not valid/,
+    );
+  });
 });

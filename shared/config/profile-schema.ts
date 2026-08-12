@@ -19,6 +19,55 @@ import { z } from "zod";
 
 const MAX_TEXT = 8000;
 
+export const TARGET_ROLE_CATEGORY_IDS = [
+  "software",
+  "data",
+  "product",
+  "design",
+  "business",
+  "security",
+  "other",
+] as const;
+export type TargetRoleCategoryId = (typeof TARGET_ROLE_CATEGORY_IDS)[number];
+export const TARGET_ROLE_SPECIALTIES: Readonly<
+  Record<TargetRoleCategoryId, readonly string[]>
+> = {
+  software: [
+    "backend",
+    "frontend",
+    "fullstack",
+    "platform",
+    "embedded",
+    "open",
+  ],
+  data: ["data_science", "ml", "genai", "data_engineering", "research", "open"],
+  product: ["product", "project", "technical_pm", "delivery", "founder"],
+  design: ["specialist", "generalist", "leadership", "individual", "explore"],
+  business: ["specialist", "generalist", "leadership", "individual", "explore"],
+  security: ["specialist", "generalist", "leadership", "individual", "explore"],
+  other: ["specialist", "generalist", "leadership", "individual", "explore"],
+};
+
+export function targetRoleChoiceError(
+  category: string | null | undefined,
+  specialty: string | null | undefined,
+): string | null {
+  if (!category)
+    return specialty
+      ? "target_specialty requires target_role_category_id"
+      : null;
+  if (!(TARGET_ROLE_CATEGORY_IDS as readonly string[]).includes(category))
+    return "invalid target_role_category_id";
+  if (
+    specialty &&
+    !TARGET_ROLE_SPECIALTIES[category as TargetRoleCategoryId].includes(
+      specialty,
+    )
+  )
+    return "target_specialty is not valid for target_role_category_id";
+  return null;
+}
+
 // ── Block kinds (il vocabolario concordato di renderer) ──────────────
 export const BLOCK_KINDS = [
   "key_value", // coppie label → valore (info base, contatti, "consulting fit")
@@ -132,45 +181,65 @@ export const ContactsSchema = z
   })
   .partial();
 
-export const CandidateProfileSchema = z.object({
-  schema_version: z.literal(1).default(1),
+export const CandidateProfileSchema = z
+  .object({
+    schema_version: z.literal(1).default(1),
 
-  // identità (L1 frozen — mandatori)
-  name: z.string().min(1),
-  target_role: z.string().min(1),
-  location: z.string().min(1),
-  experience_years: z.number().int().nonnegative(),
-  has_degree: z.boolean(),
-  seniority_target: z.string().min(1),
+    // identità (L1 frozen — mandatori)
+    name: z.string().min(1),
+    target_role: z.string().min(1),
+    location: z.string().min(1),
+    experience_years: z.number().int().nonnegative(),
+    has_degree: z.boolean(),
+    seniority_target: z.string().min(1),
 
-  // identità (L1 — opzionali)
-  email: z.string().optional(),
-  timezone: z.string().optional(),
-  nationality: z.string().optional(),
-  birth_year: z.number().int().optional(),
-  experience_months: z.number().int().nonnegative().optional(),
-  industry: z.string().optional(),
+    // identità (L1 — opzionali)
+    email: z.string().optional(),
+    timezone: z.string().optional(),
+    nationality: z.string().optional(),
+    birth_year: z.number().int().optional(),
+    experience_months: z.number().int().nonnegative().optional(),
+    industry: z.string().optional(),
+    target_role_category_id: z.enum(TARGET_ROLE_CATEGORY_IDS).optional(),
+    target_specialty: z.string().min(1).optional(),
 
-  // liste strutturate (L1)
-  skills: z.object({
-    primary: z.array(z.string().min(1)).min(1),
-    secondary: z.array(z.string().min(1)).default([]),
-  }),
-  languages: z.array(LanguageSchema).min(1),
-  experience: z.array(ExperienceSchema).default([]),
-  education: z.array(EducationSchema).default([]),
-  work_authorization: z.array(WorkAuthSchema).default([]),
-  location_preferences: z.array(z.string().min(1)).default([]),
+    // liste strutturate (L1)
+    skills: z.object({
+      primary: z.array(z.string().min(1)).min(1),
+      secondary: z.array(z.string().min(1)).default([]),
+    }),
+    languages: z.array(LanguageSchema).min(1),
+    experience: z.array(ExperienceSchema).default([]),
+    education: z.array(EducationSchema).default([]),
+    work_authorization: z.array(WorkAuthSchema).default([]),
+    location_preferences: z.array(z.string().min(1)).default([]),
 
-  // PII
-  contacts: ContactsSchema.optional(),
+    // PII
+    contacts: ContactsSchema.optional(),
 
-  // L2/L3
-  blocks: z.array(ProfileBlockSchema).default([]),
+    // L2/L3
+    blocks: z.array(ProfileBlockSchema).default([]),
 
-  // provenienza
-  sources: z.array(z.string()).default([]),
-});
+    // provenienza
+    sources: z.array(z.string()).default([]),
+  })
+  .superRefine((profile, ctx) => {
+    const error = targetRoleChoiceError(
+      profile.target_role_category_id,
+      profile.target_specialty,
+    );
+    if (error) {
+      ctx.addIssue({
+        code: "custom",
+        path: [
+          profile.target_role_category_id
+            ? "target_specialty"
+            : "target_role_category_id",
+        ],
+        message: error,
+      });
+    }
+  });
 export type CandidateProfileCanonical = z.infer<typeof CandidateProfileSchema>;
 
 /**
