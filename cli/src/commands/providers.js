@@ -4,6 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { writePrivateJson } from '../lib/secure-config-io.js';
 import { refreshModelPin } from './model-pin.js';
 import { isContainer } from '../../../shared/runtime/container.js';
 import { installSpec, pinnedVersion, pinnedPackage, manifestPath } from '../../../shared/runtime/provider-pins.js';
@@ -178,7 +179,7 @@ async function handleUse(id) {
   if (!config.providers[normalized]) {
     config.providers[normalized] = { auth_method: 'subscription' };
   }
-  await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  writePrivateJson(CONFIG_PATH, config);
   if (prev === normalized) {
     console.log(`  ${OK} provider already active: ${normalized}`);
   } else {
