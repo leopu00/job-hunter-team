@@ -179,6 +179,11 @@ func save_working_hours(_wh: Dictionary) -> void:
 	if bus:
 		bus.hours_saved.emit(false, msg)
 
+func save_ui_language(locale: String) -> void:
+	var msg := _unsupported("save_ui_language")
+	if bus:
+		bus.ui_language_saved.emit(locale, false, msg)
+
 
 ## ── Storico usage (finestre di monitoraggio risorse) ─────────────────
 

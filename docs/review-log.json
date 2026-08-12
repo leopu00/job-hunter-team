@@ -1524,6 +1524,11 @@
       "path": "docs/internal/2026-08-12-cross-boundary-contract.md",
       "description": "Contratto fra i due owner del repo: ruoli dei branch, forma del claim WIP(...)(ID), verifica via branch_census.py, semantica fail-closed, versioning.",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-12-language-source-contract.md",
+      "description": "Contratto eseguibile della preferenza lingua unica: artefatto canonico i18n-prefs.json, precedenza dei reader, writer autorizzati, non-migrazione di lang.cfg e vettori obbligatori.",
+      "last_review": null
     }
   ]
 }

@@ -46,6 +46,7 @@ import { Avatar } from "@/app/components/Avatar";
 import { isLocalRequest } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { makeT } from "@/lib/i18n-dict";
+import { formatPositionEventStamp } from "@/lib/position-event-stamp";
 import { SCORE_COMPONENT_LIMITS, barFill } from "@/lib/score-ranges";
 import { T } from "./page.i18n";
 
@@ -844,17 +845,15 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 <InfoRow
                   label={t("a_written")}
                   value={
-                    application.written_at
-                      ? application.written_at.slice(0, 10)
-                      : "—"
+                    formatPositionEventStamp(application.written_at, locale) ??
+                    "—"
                   }
                 />
                 <InfoRow
                   label={t("a_sent")}
                   value={
-                    application.applied_at
-                      ? application.applied_at.slice(0, 10)
-                      : "—"
+                    formatPositionEventStamp(application.applied_at, locale) ??
+                    "—"
                   }
                 />
                 {application.applied_via && (
@@ -1278,11 +1277,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-2">
+    <div className="flex items-baseline gap-2 min-w-0">
       <span className="text-[10px] text-[var(--color-dim)] shrink-0">
         {label}
       </span>
-      <span className="text-[11px] text-[var(--color-base)] text-right">
+      <span className="text-[11px] text-[var(--color-base)] min-w-0 break-words">
         {value}
       </span>
     </div>

@@ -124,12 +124,11 @@ fi
 case "$MODE" in
 	test)
 		# Ogni self-test parte da uno stato NOTO, non da quello che gli ha
-		# lasciato il test prima (o l'ultima partita vera). La lingua vive in
-		# user://lang.cfg e la scrive l'UTENTE da Impostazioni → Lingua:
-		# nessun ripristino fatto dai test può metterla al sicuro, perché non
-		# sono i test a sporcarla. Le asserzioni della suite sono in italiano
+		# lasciato il test prima (o l'ultima partita vera). La lingua persistente
+		# vive in ~/.jht/i18n-prefs.json e la scrive l'UTENTE da Impostazioni →
+		# Lingua. Le asserzioni della suite sono in italiano
 		# ("PAGINA 1 / 3", "SUCCESSIVA ▶"), quindi la lingua va dichiarata
-		# come INGRESSO — JHT_LANG ha già la precedenza sul file — invece di
+		# come override effimero di test tramite JHT_LANG, invece di
 		# essere ereditata. Prima reggeva solo per l'ordine della suite: i tre
 		# pannelli, lanciati da soli, cadevano.
 		export JHT_LANG=it

@@ -23,6 +23,10 @@ const PAGE = readFileSync(
   resolve(ROOT, "web/app/(protected)/positions/page.tsx"),
   "utf-8",
 );
+const EVENT_STAMP = readFileSync(
+  resolve(ROOT, "web/lib/position-event-stamp.ts"),
+  "utf-8",
+);
 const LOCALES = ["it", "en", "hu", "es", "de", "fr", "pt"] as const;
 
 describe("colonna 'candidatura inviata' in lista", () => {
@@ -58,23 +62,22 @@ describe("colonna 'candidatura inviata' in lista", () => {
     // `formatFoundAt` per la giornata corrente mostra solo l'ora: scorrendo
     // cinquanta righe un "13:13" nudo si confonde con quello di ieri, ed è
     // esattamente ciò che la richiesta escludeva.
-    // `formatStamp` — ex `formatAppliedAt`: da O-34 lo stesso timbro esatto
-    // serve anche alle colonne "CV scritto il" e "Trovata".
-    const fn = PAGE.slice(
-      PAGE.indexOf("function formatStamp"),
-      PAGE.indexOf("// Mini-tag del giudizio utente"),
-    );
-    expect(fn).toContain("day:");
-    expect(fn).toContain("month:");
-    expect(fn).toContain("hour:");
-    expect(fn).toContain("minute:");
-    expect(fn).not.toContain("sameDay");
+    // Il formatter canonico è condiviso anche col pannello dettaglio: qui si
+    // verifica la sua semantica, non una copia privata nella pagina lista.
+    expect(EVENT_STAMP).toContain("day:");
+    expect(EVENT_STAMP).toContain("month:");
+    expect(EVENT_STAMP).toContain("hour:");
+    expect(EVENT_STAMP).toContain("minute:");
+    expect(EVENT_STAMP).not.toContain("sameDay");
   });
 
   it("il dato arriva da entrambe le sorgenti, non solo dal cloud", () => {
     // Local-first: in locale la lista si costruisce da SQLite, e una colonna
     // popolata solo nel ramo Supabase resterebbe vuota proprio sul box.
-    const local = readFileSync(resolve(ROOT, "web/lib/local-queries.ts"), "utf-8");
+    const local = readFileSync(
+      resolve(ROOT, "web/lib/local-queries.ts"),
+      "utf-8",
+    );
     const cloud = readFileSync(resolve(ROOT, "web/lib/queries.ts"), "utf-8");
     expect(local).toContain("applied_at: r.applied_at");
     expect(cloud).toContain("applied_at: app?.applied_at");
@@ -82,7 +85,10 @@ describe("colonna 'candidatura inviata' in lista", () => {
 
   it("è ordinabile in entrambi i rami", () => {
     const cloud = readFileSync(resolve(ROOT, "web/lib/queries.ts"), "utf-8");
-    const local = readFileSync(resolve(ROOT, "web/lib/local-queries.ts"), "utf-8");
+    const local = readFileSync(
+      resolve(ROOT, "web/lib/local-queries.ts"),
+      "utf-8",
+    );
     // Chiave assente da POSITION_SORT_KEYS = ordinamento ignorato in
     // silenzio sul cloud (la lista resta com'era, il click non fa niente).
     const sortKeys = cloud.slice(

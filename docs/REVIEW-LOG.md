@@ -352,6 +352,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/roadmap/2026-08-08-scout-coordination-observations.md](./internal/roadmap/2026-08-08-scout-coordination-observations.md) | Misure su cinque squadre in produzione: perché la divisione del territorio fra Scout (C-21) non si vede mai all'opera. Smonta due delle tre ipotesi con i dati — la squadra coordinata parte e la skill viene aperta — e nomina la terza: il coordinamento è scritto ma non vissuto. Squadre anonimizzate. | — | 2026-08-08 | ✅ |
 | [docs/internal/2026-08-12-chat-twin-line-removal-proposal.md](./internal/2026-08-12-chat-twin-line-removal-proposal.md) | Proposta di rimozione della riga gemella da chat.jsonl — valutata e SCARTATA (perdita muta a team acceso); resta il come, se le condizioni cambiano. | — | 2026-08-12 | ✅ |
 | [docs/internal/2026-08-12-cross-boundary-contract.md](./internal/2026-08-12-cross-boundary-contract.md) | Contratto fra i due owner del repo: ruoli dei branch, forma del claim WIP(...)(ID), verifica via branch_census.py, semantica fail-closed, versioning. | — | 2026-08-12 | ✅ |
+| [docs/internal/2026-08-12-language-source-contract.md](./internal/2026-08-12-language-source-contract.md) | Contratto eseguibile della preferenza lingua unica: artefatto canonico i18n-prefs.json, precedenza dei reader, writer autorizzati, non-migrazione di lang.cfg e vettori obbligatori. | — | 2026-08-12 | ✅ |
 
 
 ## 🔒 docs/security

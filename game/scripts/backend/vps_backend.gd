@@ -1229,6 +1229,7 @@ func _do_fetch_artifact(path: String, kind: String, labels: Dictionary) -> void:
 ## incluse — che non lasciano mai il container), con backup prima.
 
 static var HOURS_SAVE_PY := payload("hours_save.py")
+static var LANGUAGE_SAVE_PY := payload("language_save.py")
 
 func save_working_hours(wh: Dictionary) -> void:
 	_queue_worker(_do_save_hours.bind(wh))
@@ -1241,6 +1242,17 @@ func _do_save_hours(wh: Dictionary) -> void:
 			"" if ok else _short_error(res, _runtime_labels))
 	if ok:
 		_fetch_settings()
+
+
+func save_ui_language(locale: String) -> void:
+	_queue_worker(_do_save_ui_language.bind(locale))
+
+func _do_save_ui_language(locale: String) -> void:
+	var b64 := Marshalls.utf8_to_base64(JSON.stringify({"locale": locale}))
+	var res := _ssh_python(LANGUAGE_SAVE_PY % b64)
+	var ok: bool = res["code"] == 0 and str(res["out"]).contains("\"ok\": true")
+	bus.call_deferred("emit_signal", "ui_language_saved", locale, ok,
+			"" if ok else _short_error(res, _runtime_labels))
 
 
 ## ── Ticket utente→team (gate 1: l'unica scrittura sul jobs.db) ───────

@@ -71,9 +71,8 @@ JHT_SPAWN_PANE_PATH="$(jht_spawn_pane_path)" || true
 
 # jht_spawn_user_locale
 #   Locale dell'utente, con la cascata canonica (in ordine di priorità):
-#     1. $JHT_LANG (env) — usata per i test rapidi e dagli altri script i18n
-#        (shared/i18n.sh, shared/i18n.py, cli/wizard/i18n.js)
-#     2. $JHT_HOME/i18n-prefs.json::locale — scritto dal wizard desktop
+#     1. $JHT_HOME/i18n-prefs.json::locale — scelta persistente canonica
+#     2. $JHT_LANG (env) — bootstrap/test, soltanto se la scelta non esiste
 #     3. host.env::JHT_LANG — persistito dal preflight di host-setup.sh
 #     4. 'en' — la lingua master dei template
 #
@@ -86,17 +85,20 @@ JHT_SPAWN_PANE_PATH="$(jht_spawn_pane_path)" || true
 jht_spawn_user_locale() {
   local locale="" prefs host_env home
   home="${JHT_HOME:-$HOME/.jht}"
-  if [ -n "${JHT_LANG:-}" ]; then
-    locale="$JHT_LANG"
-  fi
   prefs="$home/i18n-prefs.json"
-  if [ -z "$locale" ] && [ -f "$prefs" ] && command -v jq >/dev/null 2>&1; then
-    locale="$(jq -r '.locale // "en"' "$prefs" 2>/dev/null || echo en)"
+  if [ -f "$prefs" ] && command -v jq >/dev/null 2>&1; then
+    locale="$(jq -r '.locale // empty' "$prefs" 2>/dev/null || true)"
     [ "$locale" = "null" ] && locale=""
+  fi
+  case "$locale" in en|it|hu|es|de|fr|pt) ;; *) locale="" ;; esac
+  if [ -z "$locale" ]; then
+    locale="${JHT_LANG:-}"
+    case "$locale" in en|it|hu|es|de|fr|pt) ;; *) locale="" ;; esac
   fi
   host_env="$home/host.env"
   if [ -z "$locale" ] && [ -f "$host_env" ]; then
     locale="$(grep -E '^JHT_LANG=' "$host_env" 2>/dev/null | cut -d= -f2 | tr -d '"' | head -1)"
+    case "$locale" in en|it|hu|es|de|fr|pt) ;; *) locale="" ;; esac
   fi
   [ -z "$locale" ] && locale="en"
   printf '%s' "$locale"

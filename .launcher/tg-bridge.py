@@ -128,7 +128,7 @@ class DocumentTooLarge(Exception):
 # F-1 task #50 (bug #16): slash commands cliccabili nel menu "/" del client
 # Telegram. Bootstrap idempotente al primo boot del bridge. Le keys del
 # dict sono i 3 ruoli user-facing; ogni lista è un set di (command, key)
-# dove `key` è la i18n key da risolvere via shared/i18n.py → JHT_LANG.
+# dove `key` è la i18n key da risolvere via shared/i18n.py → locale canonico.
 # Senza questi, l'utente nuovo non sa cosa chiedere — vede una chat vuota
 # e cerca di indovinare.
 #

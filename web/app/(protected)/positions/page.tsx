@@ -36,6 +36,7 @@ import {
 import PositionsShell from "./PositionsShell";
 import TableScrollSync from "./TableScrollSync";
 import { intlTag } from "@/lib/locale-tag";
+import { formatPositionEventStamp } from "@/lib/position-event-stamp";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";
 
@@ -63,22 +64,6 @@ function formatFoundAt(ts: string | null | undefined, locale: string) {
       minute: "2-digit",
     });
   }
-  return d.toLocaleString(intlTag(locale), {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-// Timbro esatto delle colonne-evento (candidatura, CV scritto, rilevazione).
-// A differenza di `formatFoundAt` mostra data E ora anche per oggi: la
-// richiesta era l'orario ESATTO, e un "13:13" senza data, scorrendo cinquanta
-// righe, si confonde con quello di ieri.
-function formatStamp(ts: string | null | undefined, locale: string) {
-  if (!ts) return null;
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleString(intlTag(locale), {
     day: "2-digit",
     month: "2-digit",
@@ -815,7 +800,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           ferme in coda da più tempo. */}
                       {show("found_at") && (
                         <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
-                          {formatStamp(p.found_at, locale) ?? (
+                          {formatPositionEventStamp(p.found_at, locale) ?? (
                             <span className="text-[var(--color-dim)]">—</span>
                           )}
                         </td>
@@ -1054,9 +1039,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           'Pronte da inviare' è la coda vera e propria. */}
                       {show("written_at") && (
                         <td className="px-4 py-3 text-center">
-                          {formatStamp(p.written_at, locale) ? (
+                          {formatPositionEventStamp(p.written_at, locale) ? (
                             <span className="font-mono tabular-nums text-[11px] text-[var(--color-base)] whitespace-nowrap">
-                              {formatStamp(p.written_at, locale)}
+                              {formatPositionEventStamp(p.written_at, locale)}
                             </span>
                           ) : (
                             <span className="text-[var(--color-dim)] text-[11px]">
@@ -1070,9 +1055,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           è ciò che serve scorrendo cinquanta righe. */}
                       {show("applied_at") && (
                         <td className="px-4 py-3 text-center">
-                          {formatStamp(p.applied_at, locale) ? (
+                          {formatPositionEventStamp(p.applied_at, locale) ? (
                             <span className="font-mono tabular-nums text-[11px] text-[var(--color-base)] whitespace-nowrap">
-                              {formatStamp(p.applied_at, locale)}
+                              {formatPositionEventStamp(p.applied_at, locale)}
                             </span>
                           ) : (
                             <span className="text-[var(--color-dim)] text-[11px]">

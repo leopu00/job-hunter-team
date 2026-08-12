@@ -863,7 +863,7 @@ IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 
 # Risoluzione locale del template d'identità.
 # Convenzione: agents/<role>/<role>.<locale>.md → fallback agents/<role>/<role>.md.
-# La cascata ($JHT_LANG → i18n-prefs.json → host.env → 'en') vive in
+# La cascata (i18n-prefs.json → $JHT_LANG → host.env → 'en') vive in
 # .launcher/spawn-lib.sh::jht_spawn_user_locale, sourceata in testa a questo
 # file: era codice locale a start-agent.sh, e i due agenti che NON passano da
 # qui (Dottore e Mantenitore, spawnati da spawn-doctor.sh/spawn-maintainer.sh)

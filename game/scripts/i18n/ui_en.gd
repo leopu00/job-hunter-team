@@ -519,6 +519,8 @@ const S := {
 	"lang.intro": "Interface language — the site's 7 languages.",
 	"lang.narrative_note": "// note: the narrative tour and its choices are currently available in Italian",
 	"lang.note": "// applies immediately to panels; reopen the ones already open to see them translated",
+	"lang.syncing": "Syncing the language with the team…",
+	"lang.sync_failed": "Language not changed: team sync failed (%s)",
 
 	"stats.hint": "// click a bar to filter: the other charts update",
 	"stats.filters": "ACTIVE FILTERS: %d",
