@@ -48,6 +48,7 @@ $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
 $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
 $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
+$JhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
 
 # Carica la host env (scritta da install.ps1 / setup wizard: JHT_HOST_TYPE=local|vps).
 # Formato file: VAR=value per riga, ignora # e righe vuote.
@@ -125,6 +126,20 @@ function Test-RuntimeDirectoryAcl {
       if (-not $writes) { continue }
       $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
       if ($sid -notin @($currentSid, 'S-1-5-18', 'S-1-5-32-544')) { return $false }
+    }
+    return $true
+  } catch { return $false }
+}
+
+function Test-PrivateJhtHomeAcl {
+  try {
+    $acl = Get-Acl -LiteralPath $JhtHome -ErrorAction Stop
+    if (-not $acl.AreAccessRulesProtected) { return $false }
+    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    foreach ($rule in $acl.Access) {
+      if ($rule.AccessControlType -ne 'Allow') { continue }
+      $rSid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+      if ($rSid -ne $sid -and $rSid -notin @('S-1-5-18','S-1-5-32-544')) { return $false }
     }
     return $true
   } catch { return $false }
@@ -248,6 +263,7 @@ function Require-ComposeFile {
 
 function Invoke-Compose {
   param([Parameter(ValueFromRemainingArguments)] $Args)
+  if (-not (Test-PrivateJhtHomeAcl)) { throw "JHT_HOME ACL is not owner-only: $JhtHome" }
   Assert-TrustedRuntime
   # Docker Desktop Windows accetta forward-slash o backslash. project-directory
   # punta al runtime dir per bind-mount relativi (anche se compose qui e'
