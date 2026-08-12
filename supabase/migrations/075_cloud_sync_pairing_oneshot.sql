@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════════════════╗
--- ║ Migration 074 — pairing browser realmente one-shot                      ║
+-- ║ Migration 075 — pairing browser realmente one-shot                      ║
 -- ╠══════════════════════════════════════════════════════════════════════════╣
 -- ║ device-poll leggeva approved_token prima di un UPDATE "CAS-like", ma   ║
 -- ║ non verificava se l'UPDATE avesse modificato una riga. Due poll potevano ║

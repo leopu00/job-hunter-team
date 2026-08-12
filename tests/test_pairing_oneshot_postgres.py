@@ -18,7 +18,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase/migrations/074_cloud_sync_pairing_oneshot.sql"
+MIGRATION = ROOT / "supabase/migrations/075_cloud_sync_pairing_oneshot.sql"
 IMAGE = "postgres:16-alpine"
 
 
