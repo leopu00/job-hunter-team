@@ -10,6 +10,7 @@ import {
 } from "@/lib/cloud-sync/onboarding-milestones";
 import { mapYamlToCanonical, syncProfileToSupabase } from "@/lib/profile-sync";
 import {
+  invalidateStaleCriticVerdict,
   normalizeApplicationStatus,
   normalizeCriticVerdict,
   normalizePositionStatus,
@@ -124,6 +125,7 @@ interface ApplicationIn {
   critic_score?: number | null;
   critic_verdict?: string | null;
   critic_notes?: string | null;
+  critic_round?: number | null;
   written_at?: string | null;
   applied_at?: string | null;
   applied_via?: string | null;
@@ -668,7 +670,7 @@ export async function POST(req: NextRequest) {
       .map((a) => {
         const uuid = legacyToUuid.get(a.position_id);
         if (!uuid) return null;
-        return {
+        return invalidateStaleCriticVerdict({
           user_id: userId,
           position_id: uuid,
           cv_path: a.cv_path ?? null,
@@ -679,6 +681,9 @@ export async function POST(req: NextRequest) {
           critic_score: a.critic_score ?? null,
           critic_verdict: normalizeCriticVerdict(a.critic_verdict),
           critic_notes: a.critic_notes ?? null,
+          // `undefined` resta assente per i client pre-O-64 e non cancella il
+          // round cloud; i client aggiornati inviano invece number o null.
+          critic_round: a.critic_round,
           written_at: a.written_at ?? null,
           applied_at: a.applied_at ?? null,
           applied_via: a.applied_via ?? null,
@@ -690,7 +695,7 @@ export async function POST(req: NextRequest) {
           applied: a.applied ?? null,
           cv_drive_id: a.cv_drive_id ?? null,
           cl_drive_id: a.cl_drive_id ?? null,
-        };
+        });
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
