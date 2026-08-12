@@ -1648,6 +1648,7 @@ const S := {
 	"diagnostics.value.screen_window": "%s (Fenster %s)",
 	"diagnostics.value.backend_local": "lokal", "diagnostics.value.unavailable": "nicht verfügbar",
 	"diagnostics.value.none": "keiner", "diagnostics.log_title": "Protokoll: %s",
+	"diagnostics.alert_title": "ERROR/WARN aus: %s",
 	"diagnostics.redacted": "Vor dem Senden entfernte Daten",
 	"diagnostics.container_logs_unavailable": "[Container-Protokolle nicht verfügbar] %s",
 	"diagnostics.truncated": "[…gekürzt…]\n%s",

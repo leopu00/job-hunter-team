@@ -1662,6 +1662,7 @@ const S := {
 	"diagnostics.value.screen_window": "%s (window %s)",
 	"diagnostics.value.backend_local": "local", "diagnostics.value.unavailable": "unavailable",
 	"diagnostics.value.none": "none", "diagnostics.log_title": "Log: %s",
+	"diagnostics.alert_title": "ERROR/WARN from: %s",
 	"diagnostics.redacted": "Data removed before sending",
 	"diagnostics.container_logs_unavailable": "[container logs unavailable] %s",
 	"diagnostics.truncated": "[…truncated…]\n%s",

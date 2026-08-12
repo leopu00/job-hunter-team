@@ -1648,6 +1648,7 @@ const S := {
 	"diagnostics.value.screen_window": "%s (janela %s)",
 	"diagnostics.value.backend_local": "local", "diagnostics.value.unavailable": "indisponível",
 	"diagnostics.value.none": "nenhum", "diagnostics.log_title": "Registro: %s",
+	"diagnostics.alert_title": "ERROR/WARN de: %s",
 	"diagnostics.redacted": "Dados removidos antes do envio",
 	"diagnostics.container_logs_unavailable": "[registros do container indisponíveis] %s",
 	"diagnostics.truncated": "[…truncado…]\n%s",

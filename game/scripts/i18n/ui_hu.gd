@@ -1649,6 +1649,7 @@ const S := {
 	"diagnostics.value.screen_window": "%s (ablak %s)",
 	"diagnostics.value.backend_local": "helyi", "diagnostics.value.unavailable": "nem érhető el",
 	"diagnostics.value.none": "nincs", "diagnostics.log_title": "Napló: %s",
+	"diagnostics.alert_title": "ERROR/WARN innen: %s",
 	"diagnostics.redacted": "Küldés előtt eltávolított adatok",
 	"diagnostics.container_logs_unavailable": "[a konténer naplói nem érhetők el] %s",
 	"diagnostics.truncated": "[…csonkolva…]\n%s",
