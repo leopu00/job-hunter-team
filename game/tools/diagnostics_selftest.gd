@@ -161,8 +161,10 @@ func _test_repeated_status_before_budget() -> void:
 func _test_alerts_survive_truncation_and_redaction() -> void:
 	var token := "ghp" + "_ABCdefGHIjklMNOpqrSTUvwxYZ0123456789"
 	var email := "reporter@example.com"
+	var private_host := "sensitive-host" + ".invalid"
 	var lines := PackedStringArray([
-			"[00:00:001] [WARN] synthetic fault " + email + " token=" + token,
+			"[00:00:001] [WARN] synthetic fault " + email + " token=" + token \
+					+ " host=" + private_host,
 			"ERROR: synthetic colon error",
 			"WARNING: synthetic colon warning",
 	])
@@ -182,9 +184,12 @@ func _test_alerts_survive_truncation_and_redaction() -> void:
 			str(prepared["main"]).substr(0, 120))
 	var raw_bundle := {"logs": {"container": prepared["main"]},
 			"alerts": {"container": prepared["alerts"]}}
-	var clean: Dictionary = DiagnosticsScript._sanitize(raw_bundle)
+	var context := {"sensitive_terms": PackedStringArray()}
+	DiagnosticsScript._append_vps_sensitive_terms(context, {"ip": private_host})
+	var clean: Dictionary = DiagnosticsScript._sanitize(raw_bundle, context)
 	var rendered := DiagnosticsScript.to_markdown(clean)
-	_check("alert redatto", not rendered.contains(email) and not rendered.contains(token),
+	_check("alert redatto", not rendered.contains(email) and not rendered.contains(token) \
+			and not rendered.contains(private_host),
 			rendered.substr(0, 300))
 	_check("sezione alert separata", rendered.contains("ERROR/WARN from: container"),
 			rendered.substr(0, 300))

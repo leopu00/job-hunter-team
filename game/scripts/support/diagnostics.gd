@@ -116,9 +116,12 @@ static func capture_context() -> Dictionary:
 		context["backend_remote"] = bool(bus.call("is_remote"))
 		if bool(context["backend_remote"]):
 			# Config interna al worker: serve a costruire argv SSH ma non viene mai
-			# aggiunta al bundle, quindi host/key non compaiono nell'anteprima.
-			context["vps_config"] = (bus.call("load_vps_config") as Dictionary) \
+			# aggiunta al bundle. L'host entra invece tra i termini sensibili: se
+			# il container lo cita per esteso, viene tolto anche dai suoi log.
+			var vps_config := (bus.call("load_vps_config") as Dictionary) \
 					.duplicate(true)
+			context["vps_config"] = vps_config
+			_append_vps_sensitive_terms(context, vps_config)
 	var onboarding := _autoload("ScriptedOnboarding")
 	if onboarding != null:
 		var full := str(onboarding.call("player_full_name"))
@@ -127,6 +130,17 @@ static func capture_context() -> Dictionary:
 			if clean.length() >= 3:
 				context["sensitive_terms"].append(clean)
 	return context
+
+
+## L'indirizzo del server e' infrastruttura privata anche quando e' un hostname
+## invece di un IPv4, quindi la redazione strutturale da sola non basta.
+static func _append_vps_sensitive_terms(context: Dictionary,
+		vps_config: Dictionary) -> void:
+	var host := str(vps_config.get("ip", "")).strip_edges()
+	if host.length() >= 3:
+		var terms := context["sensitive_terms"] as PackedStringArray
+		terms.append(host)
+		context["sensitive_terms"] = terms
 
 
 ## I termini che identificano l'utente e vanno tolti dai log oltre alle regole
