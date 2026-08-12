@@ -126,65 +126,45 @@ def count(sql, params=()):
     except Exception:
         return 0
 
+# Gli stati della pipeline si contano qui: sono `positions.status`, non code —
+# nessun predicato condiviso da rispettare, nessuna policy che li spenga.
 queue_counts = {
     'new': count("SELECT COUNT(*) FROM positions WHERE status='new'"),
     'analysis': count("SELECT COUNT(*) FROM positions WHERE status='checked'"),
     'scored': count("SELECT COUNT(*) FROM positions WHERE status='scored'"),
     'expired': count("SELECT COUNT(*) FROM positions WHERE status!='excluded' AND expires_at IS NOT NULL AND expires_at < datetime('now')"),
 }
-geo_sql = ("SELECT COUNT(*) FROM positions p "
-           "WHERE p.status!='excluded' "
-           "AND (p.office_lat IS NULL OR p.office_geocoded IS NULL OR p.office_geocoded=0)")
-geo_params = []
-if geo.get('min_score') is not None:
-    geo_sql += " AND EXISTS (SELECT 1 FROM scores s WHERE s.position_id=p.id AND s.total_score>=?)"
-    geo_params.append(int(geo['min_score']))
-if geo.get('non_remote_only', True):
-    geo_sql += " AND LOWER(COALESCE(p.work_mode,''))!='remote'"
-queue_counts['geocode'] = count(geo_sql, tuple(geo_params))
 
-logo_score = logo_min_score(policy)
-logo_sql = ("SELECT COUNT(*) FROM companies c "
-            "WHERE (c.logo_fetched IS NULL OR c.logo_fetched=0) "
-            "AND EXISTS (SELECT 1 FROM positions p WHERE p.company_id=c.id AND p.status!='excluded')")
-logo_params = []
-if logo_score is not None:
-    logo_sql += " AND EXISTS (SELECT 1 FROM positions p JOIN scores s ON s.position_id=p.id WHERE p.company_id=c.id AND p.status!='excluded' AND s.total_score>=?)"
-    logo_params.append(int(logo_score))
-queue_counts['logos'] = count(logo_sql, tuple(logo_params))
-queue_counts['recheck'] = count("SELECT COUNT(DISTINCT p.id) FROM positions p "
-   "JOIN scores s ON s.position_id=p.id "
-   "WHERE p.status!='excluded' AND s.total_score>=? "
-   "AND (p.last_checked IS NULL OR p.last_checked < datetime('now', ?))",
-   (int(recheck['min_score']), '-' + str(int(recheck['older_than_days'])) + ' days'))
-
-# Dati a supporto del selettore modalità (stessa semantica delle code
-# `next-for-harvest` / `next-for-calibration` di db_query.py; soglia 75 =
-# HARVEST_MIN_SCORE, la leva misurata del burn weekly). SQL replicato come
-# per geo/logo/recheck qui sopra: il payload deve girare anche su un'immagine
-# container che non conosce ancora le code nuove.
-queue_counts['harvest'] = count(
-    "SELECT COUNT(*) FROM positions p "
-    "JOIN (SELECT position_id, MAX(total_score) AS total_score "
-    "      FROM scores GROUP BY position_id) s ON s.position_id=p.id "
-    "LEFT JOIN applications a ON a.position_id=p.id "
-    "WHERE a.id IS NULL AND p.status='scored' AND s.total_score>=75 "
-    "AND COALESCE(p.is_open,1)!=0 "
-    "AND (p.expires_at IS NULL OR p.expires_at>=date('now'))")
-calibration_wm = '1970-01-01 00:00:00'
+# Le CODE invece si CHIEDONO, non si ricontano ([CONSOLE-COUNTS-INLINE-SQL]).
+# Qui c'era una copia dell'SQL di ognuna, e le copie divergono: quella del
+# recheck guardava solo `last_checked` e ignorava `last_open_check`, quindi
+# contava come da rifare posizioni già verificate — lo stesso errore che
+# `LAST_VERIFIED_SQL` aveva corretto nella coda vera. E nessuna copia
+# conosceva il gate della policy, quindi in risparmio (o con l'automatismo
+# spento) la Console annunciava lavoro che nessuno avrebbe fatto.
+#
+# `db_query.queue_total` è la risposta della coda stessa: stesso predicato,
+# stesso gate. `None` = coda SPENTA, e vale 0 lavori in attesa.
+#
+# Import tollerante (rolling deploy: il gioco può essere più nuovo
+# dell'immagine): se questa immagine non sa rispondere, la chiave NON viene
+# mandata affatto e la Console mostra «—». Meglio nessun numero che il numero
+# sbagliato — è il motivo per cui questa riga esiste.
 try:
-    _wm = json.load(open(os.path.join(profile, 'calibration-watermark.json'),
-                         encoding='utf-8'))
-    if isinstance(_wm, dict) and isinstance(_wm.get('consumed_through'), str) \
-            and _wm['consumed_through'].strip():
-        calibration_wm = _wm['consumed_through'].strip()
+    import db_query
 except Exception:
-    pass  # file assente/corrotto = epoch: si RIPRESENTA tutto, mai il contrario
-queue_counts['calibration'] = count(
-    "SELECT (SELECT COUNT(*) FROM positions "
-    "        WHERE user_excluded_at IS NOT NULL AND user_excluded_at > ?) "
-    "     + (SELECT COUNT(*) FROM position_tickets WHERE created_at > ?)",
-    (calibration_wm, calibration_wm))
+    db_query = None
+QUEUE_CARDS = (('geocode', 'geocode-missing'), ('logos', 'logo-missing'),
+               ('recheck', 'recheck-due'), ('harvest', 'harvest'),
+               ('calibration', 'calibration'))
+for card, queue in QUEUE_CARDS:
+    if db_query is None or not hasattr(db_query, 'queue_total'):
+        continue
+    try:
+        total = db_query.queue_total(conn, queue)
+    except Exception:
+        continue
+    queue_counts[card] = 0 if total is None else int(total)
 
 directives = []
 for row in conn.execute("SELECT id,body,kind,status,sort_order,created_at,updated_at "

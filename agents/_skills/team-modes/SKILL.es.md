@@ -162,7 +162,9 @@ seguir haciendo sourcing con la puntería vieja.
    conviene decirlo: el presupuesto semanal es una **ventana, no un saldo** —
    lo que no se gasta en el reset se destruye, así que un ahorro dejado por
    inercia no conserva el ciclo, lo tira. Dile al usuario que puede ponerle un
-   final.
+   final, y dónde: la Consola tiene el campo «Hasta cuándo» (días y horas, al
+   lado del selector), y desde una shell es `jht coordinator set-mode saving
+   --until <iso>`. Escriben la misma clave en el mismo fichero.
 
 **Qué haces**: mantén reactivos a Capitano/Assistente/Mentor; nada más se mueve
 sin una petición directa del usuario. **Con C-25**: ahorro ES una prohibición
@@ -187,7 +189,9 @@ como "un poco de sourcing no hace daño".
   dosificado.
 - **Salida ≠ cambio.** Cuando un modo reporta su trabajo agotado, avisa al
   usuario y sigue respetando el modo hasta que sea ÉL quien lo cambie. El
-  archivo lo escribe la consola del juego en nombre del usuario — nunca tú.
+  archivo se escribe en nombre del usuario — desde la Consola del juego (fecha
+  límite incluida) o con `jht coordinator` si él lo pide — y nunca por
+  iniciativa tuya.
 
 ## Véase también
 

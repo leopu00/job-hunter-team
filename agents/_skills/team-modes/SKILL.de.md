@@ -163,7 +163,10 @@ Zielrichtung weitersourcen.
    Nutzer ihn aufhebt — und das gehört ausgesprochen: das Wochenbudget ist ein
    **Fenster, kein Guthaben** — was beim Reset nicht ausgegeben ist, wird
    vernichtet, ein aus Trägheit stehengelassenes Sparen bewahrt den Zyklus also
-   nicht, es verwirft ihn. Sag dem Nutzer, dass er ihm ein Ende geben kann.
+   nicht, es verwirft ihn. Sag dem Nutzer, dass er ihm ein Ende geben kann — und wo: die Konsole hat
+   das Feld «Bis wann» (Tage und Stunden, neben der Modus-Auswahl), und in der
+   Shell ist es `jht coordinator set-mode saving --until <iso>`. Beide schreiben
+   denselben Schlüssel in dieselbe Datei.
 
 **Was du tust**: halte Capitano/Assistente/Mentor antwortbereit; sonst bewegt
 sich nichts ohne direkte Anfrage des Nutzers. **Mit C-25**: Sparen IST ein
@@ -188,7 +191,9 @@ bisschen Sourcing schadet nicht" umdeuten.
   Budget geht.
 - **Ausstieg ≠ Wechsel.** Wenn ein Modus seine Arbeit als erschöpft meldet,
   benachrichtige den Nutzer und befolge den Modus weiter, bis ER ihn ändert.
-  Die Datei schreibt die Konsole des Spiels im Auftrag des Nutzers — nie du.
+  Die Datei wird im Auftrag des Nutzers geschrieben — von der Konsole des
+  Spiels (Frist inklusive) oder mit `jht coordinator`, wenn er es verlangt — und
+  nie aus eigener Initiative.
 
 ## Siehe auch
 
