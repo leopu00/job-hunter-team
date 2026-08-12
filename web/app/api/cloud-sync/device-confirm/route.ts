@@ -138,6 +138,9 @@ export async function POST(req: NextRequest) {
       name: tokenName,
       token_prefix: prefix,
       token_hash: hash,
+      // Prima del riscatto il bearer condivide la TTL della sessione. La RPC
+      // lo rende no-expiry soltanto nello stesso commit che consuma il token.
+      expires_at: session.expires_at,
     })
     .select("id, name, token_prefix, created_at")
     .single();
@@ -158,6 +161,7 @@ export async function POST(req: NextRequest) {
     })
     .eq("device_code", session.device_code)
     .eq("status", "pending")
+    .gt("expires_at", new Date().toISOString())
     .select("device_code")
     .maybeSingle();
 
