@@ -18,6 +18,7 @@ WIN_START=$(python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skill
 ROUND_ID=$(date -u +%Y%m%dT%H%M%SZ)
 DAY=$(date -u +%F)
 JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
+ROUND_HEADS_UP_SENT=0
 ```
 
 ## Étape 1 — lister les sessions + âge, décider l'ordre
@@ -70,6 +71,25 @@ Décide à partir de `$PCT` (extrait d'une ligne comme `24.9k/1m tokens (2%)`) :
 - **`PCT` ≤ 50** → IGNORER **sauf si le TTL s'est déclenché à l'Étape 1.4**. NE recrée PAS une session sous le TTL, même si elle est vieille. Journalise `action=skipped_lowctx` avec le `%` mesuré. Passe à la session suivante.
 - **`PCT` > 50** → procède au rafraîchissement (Étapes 2–7).
 - **la commande ne s'est pas affichée / le parsing a échoué** → repli sur l'heuristique d'âge (`age ≥ 40min` → rafraîchir) et journalise `ctx=unparsed`.
+
+## Étape 1.6 — prévenir le Capitano une fois, avant le premier rafraîchissement
+Seulement lorsque ce tour a sélectionné sa première vraie cible de
+rafraîchissement (TTL ou contexte), prévenir le Capitano **avant l'Étape 2**.
+Ne pas répéter pour chaque agent ni envoyer si le tour ne fera que des skips :
+```bash
+if [ "$ROUND_HEADS_UP_SENT" -eq 0 ]; then
+  if /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "[@dottore -> @capitano] [HEADS-UP] Le context refresh commence : workers d'abord, coordinateurs en dernier, toi tout à la fin. Ne lance pas de mission courte avant le rapport de fin."; then
+    ROUND_HEADS_UP_SENT=1
+  else
+    echo "Échec de livraison du HEADS-UP — abandonner le rich refresh avant tout recreate"
+    exit 1
+  fi
+fi
+```
+C'est de la coordination, pas un second scheduler ni une demande de
+permission. Le tour reste séquentiel et le Capitano reste actif jusqu'à la fin.
+La livraison est une précondition : un exit non nul du sender abandonne le tour
+avant capture/kill ; ne jamais marquer un heads-up en échec comme envoyé.
 
 ## Étape 2 — par session : capture (large + saillant)
 Capture tout le scrollback une fois, puis les lignes saillantes — ne charge PAS des milliers de lignes dans ton propre contexte, grep les moments forts :
