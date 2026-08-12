@@ -62,6 +62,46 @@ async function ws(): Promise<string | null> {
   return p;
 }
 
+// PostgREST applica un massimo server-side (1000 nel progetto) anche quando
+// il chiamante non specifica alcun limite. Una query secca sembra riuscire ma
+// restituisce solo il primo blocco: statistiche, faccette, lista e mappa si
+// ritrovano così con universi diversi. Il builder arriva qui DOPO filtri e
+// order; `.range()` cambia soltanto la finestra, quindi ogni pagina mantiene
+// esattamente la semantica della query del chiamante.
+const POSTGREST_PAGE_SIZE = 1000;
+
+type PostgrestRangeQuery<T> = {
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{ data: T[] | null; error: unknown }>;
+};
+
+async function fetchPostgrestRows<T>(
+  query: PostgrestRangeQuery<T>,
+  opts: { offset?: number; limit?: number } = {},
+): Promise<{ data: T[]; error: unknown | null }> {
+  const rows: T[] = [];
+  let offset = opts.offset ?? 0;
+
+  while (opts.limit == null || rows.length < opts.limit) {
+    const remaining = opts.limit == null ? Infinity : opts.limit - rows.length;
+    const pageSize = Math.min(POSTGREST_PAGE_SIZE, remaining);
+    const { data, error } = await query.range(offset, offset + pageSize - 1);
+    if (error || !data) {
+      return {
+        data: rows,
+        error: error ?? new Error("PostgREST response did not contain data"),
+      };
+    }
+    rows.push(...data);
+    if (data.length < pageSize) break;
+    offset += data.length;
+  }
+
+  return { data: rows, error: null };
+}
+
 // ── Dashboard Stats ────────────────────────────────────────────────
 const EMPTY_STATS: DashboardStats = {
   total: 0,
@@ -92,10 +132,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   if (!isSupabaseConfigured) return EMPTY_STATS;
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select("status, write_requested")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return EMPTY_STATS;
 
   const counts = data.reduce(
@@ -330,7 +372,8 @@ export async function getPositions(
       "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, found_by, last_checked, deadline, status, notes, score, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
     )
     .is("deleted_at", null)
-    .order("found_at", { ascending: false });
+    .order("found_at", { ascending: false })
+    .order("id", { ascending: true });
 
   if (opts?.statuses?.length) query = query.in("status", opts.statuses);
   if (opts?.remoteTypes?.length)
@@ -357,14 +400,17 @@ export async function getPositions(
     ];
     // L'ID è un OR in più, non un ramo alternativo: "42" può essere sia un
     // identificativo sia un pezzo di titolo, e chi cerca vuole entrambi.
-    if (search.legacyId != null) clauses.push(`legacy_id.eq.${search.legacyId}`);
+    if (search.legacyId != null)
+      clauses.push(`legacy_id.eq.${search.legacyId}`);
     query = query.or(clauses.join(","));
   }
   if (opts?.limit) query = query.limit(opts.limit);
-  if (opts?.offset)
-    query = query.range(opts.offset, opts.offset + (opts.limit ?? 50) - 1);
-
-  const { data, error } = await query;
+  const { data, error } = await fetchPostgrestRows<any>(query, {
+    // Mantiene la semantica precedente: offset senza limit implica 50 righe;
+    // zero, come prima, non attiva una finestra esplicita.
+    offset: opts?.offset || 0,
+    limit: opts?.limit || (opts?.offset ? 50 : undefined),
+  });
   if (error || !data) return [];
   let mapped: PositionWithScore[] = data.map((p: any) => {
     const s = firstRelated<any>(p.scores);
@@ -632,11 +678,13 @@ export async function getScoreDistribution() {
   if (!isSupabaseConfigured) return empty;
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select("score, scores(total_score)")
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return empty;
 
   const scores = data.map(
@@ -681,11 +729,13 @@ export async function getSourceDistribution(): Promise<
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select("source")
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const counts: Record<string, number> = {};
   for (const row of data) {
@@ -730,12 +780,14 @@ export async function getPositionFacets(): Promise<PositionFacet[]> {
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select(
       "id, title, company, status, role_family, loc_country, loc_city, score, scores ( total_score ), applications ( critic_score )",
     )
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   return (data as any[]).map((p) => {
     const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
@@ -1038,7 +1090,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select(
       "id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, source, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
@@ -1046,7 +1098,8 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
     .order("found_at", { ascending: false })
-    .limit(1000);
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   return (data as any[]).map((p) => {
     const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
@@ -1126,13 +1179,15 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   const supabase = await createClient();
   // Niente più filtro office_lat: prendiamo TUTTE le non-escluse e risolviamo
   // le coordinate a livello città (ufficio esatto o centro-città).
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select(
       "id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, remote_type, created_at, scores ( total_score )",
     )
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = data as any[];
   const pins = resolveCityPins(
@@ -1261,11 +1316,13 @@ export async function getPositionLocations(): Promise<LocationCountry[]> {
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select("id, title, company, loc_country, loc_city, scores ( total_score )")
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = (data as any[]).map((p) => {
     const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
@@ -1316,13 +1373,15 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
   const supabase = await createClient();
   // Tutte le non-escluse; tieni solo quelle la cui città NON è risolvibile a
   // pin (no città, o città senza alcun sibling geocodificato) → bucket residuo.
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select(
       "id, title, company, status, role_family, office_lat, office_lon, is_remote, remote_type, location, loc_country, loc_city, created_at, scores ( total_score )",
     )
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = data as any[];
   // Qui id/score non servono: interessa solo se il pin è risolvibile
@@ -1383,13 +1442,15 @@ export async function getPositionTypeDistribution(): Promise<
   // Legge `role_family` dalla colonna popolata dal team analyst.
   // Score: preferisci positions.score, fallback su scores.total_score via join.
   // Critic: applications.critic_score.
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select(
       "role_family, score, scores(total_score), applications(critic_score)",
     )
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = (data as any[]).map((r) => {
     const scoresRel = Array.isArray(r.scores) ? r.scores[0] : r.scores;
@@ -1418,16 +1479,20 @@ export async function getScoutStats() {
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
+  const positionsQuery = supabase
+    .from("positions")
+    .select("id, found_by, status")
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const applicationsQuery = supabase
+    .from("applications")
+    .select("position_id")
+    .or("status.eq.response,response.not.is.null")
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const [posRes, appRes] = await Promise.all([
-    supabase
-      .from("positions")
-      .select("id, found_by, status")
-      .is("deleted_at", null),
-    supabase
-      .from("applications")
-      .select("position_id")
-      .or("status.eq.response,response.not.is.null")
-      .is("deleted_at", null),
+    fetchPostgrestRows<any>(positionsQuery),
+    fetchPostgrestRows<any>(applicationsQuery),
   ]);
   if (posRes.error || !posRes.data) return [];
   const respondedPositionIds = new Set(
@@ -1583,26 +1648,17 @@ async function fetchTransitionEvents(
   fromIso?: string,
   untilIso?: string,
 ): Promise<TeamActivityEvent[]> {
-  // PostgREST taglia a ~1000 righe/richiesta: con event-log oltre 1000
-  // transizioni una query secca perderebbe (senza order) le più recenti in
-  // ordine fisico → il feed si fermerebbe a giorni indietro. Pagina per `ts`
-  // DESC con .range() finché la pagina è piena, così la copertura è completa.
-  const PAGE = 1000;
-  const rows: any[] = [];
-  for (let offset = 0; ; offset += PAGE) {
-    let q = supabase
-      .from("position_transitions")
-      .select("position_legacy_id, by_agent, ts")
-      .not("by_agent", "is", null)
-      .order("ts", { ascending: false })
-      .range(offset, offset + PAGE - 1);
-    if (fromIso) q = q.gte("ts", fromIso);
-    if (untilIso) q = q.lt("ts", untilIso);
-    const { data, error } = await q;
-    if (error || !data) break;
-    rows.push(...data);
-    if (data.length < PAGE) break;
-  }
+  let query = supabase
+    .from("position_transitions")
+    .select("position_legacy_id, by_agent, ts")
+    .not("by_agent", "is", null)
+    .order("ts", { ascending: false })
+    .order("id", { ascending: true });
+  if (fromIso) query = query.gte("ts", fromIso);
+  if (untilIso) query = query.lt("ts", untilIso);
+  // Il feed mantiene il comportamento best-effort precedente: se una pagina
+  // successiva fallisce, usa comunque le righe complete già ricevute.
+  const { data: rows } = await fetchPostgrestRows<any>(query);
   return rows.flatMap((r) => {
     const role = String(r.by_agent ?? "").split("-")[0] as TeamActivityRole;
     if (!ROLE_PREFIX_SET.has(role)) return [];
