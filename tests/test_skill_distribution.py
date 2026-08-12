@@ -59,20 +59,16 @@ def test_role_distribution_is_identical_and_isolated_for_both_providers(
         leaked.mkdir(parents=True)
         (leaked / "SKILL.md").write_text("stale leakage", encoding="utf-8")
 
-    env = {
-        **os.environ,
-        "JHT_APP_ROOT": _bash_path(app),
-        "JHT_LANG": "en",
-    }
     result = subprocess.run(
         [
             "bash",
             "-c",
+            f'export JHT_APP_ROOT="{_bash_path(app)}" JHT_LANG=en; '
             'source ".launcher/spawn-lib.sh"; '
             f'jht_spawn_copy_skills capitano "{_bash_path(workdir)}" TEST',
         ],
         cwd=ROOT,
-        env=env,
+        env=os.environ.copy(),
         capture_output=True,
         text=True,
         check=False,
@@ -93,4 +89,3 @@ def test_start_agent_uses_the_shared_distribution_authority() -> None:
     source = (ROOT / ".launcher" / "start-agent.sh").read_text(encoding="utf-8")
 
     assert 'jht_spawn_copy_skills "$ROLE" "$AGENT_DIR"' in source
-
