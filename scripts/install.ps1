@@ -75,14 +75,17 @@ function Write-Dry  { param([string]$Cmd) Write-Host "  [dry-run] would execute:
 function Protect-JhtHomeAcl {
   param([string]$Path)
   try {
-    $acl = Get-Acl -LiteralPath $Path
-    $acl.SetAccessRuleProtection($true, $false)
     $owner = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($owner, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-    $acl.SetAccessRule($rule)
-    Set-Acl -LiteralPath $Path -AclObject $acl
-    $check = Get-Acl -LiteralPath $Path
-    if ($check.AreAccessRulesProtected -ne $true) { throw 'ACL inheritance remains enabled' }
+    $nodes = @(Get-Item -LiteralPath $Path) + @(Get-ChildItem -LiteralPath $Path -Force -Recurse)
+    foreach ($node in $nodes) {
+      $acl = Get-Acl -LiteralPath $node.FullName
+      $acl.SetAccessRuleProtection($true, $false)
+      $inherit = if ($node.PSIsContainer) { 'ContainerInherit,ObjectInherit' } else { 'None' }
+      $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($owner, 'FullControl', $inherit, 'None', 'Allow')
+      $acl.SetAccessRule($rule)
+      Set-Acl -LiteralPath $node.FullName -AclObject $acl
+      if ((Get-Acl -LiteralPath $node.FullName).AreAccessRulesProtected -ne $true) { throw "ACL inheritance remains enabled: $($node.FullName)" }
+    }
   } catch { throw "Unable to enforce owner-only ACL on $Path`: $($_.Exception.Message)" }
 }
 
