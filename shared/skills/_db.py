@@ -321,6 +321,18 @@ def ensure_schema(conn: sqlite3.Connection):
         FOREIGN KEY (related_position_id) REFERENCES positions(id)
     );
 
+    -- Claim locale della consegna al pane (O-67). Non contiene il testo:
+    -- conserva soltanto l'identita' della riga e rende fail-closed il confine
+    -- non transazionale SQLite -> TUI. Un claim sopravvissuto a un crash ha
+    -- esito esterno incerto e NON viene fatto scadere automaticamente: il
+    -- daemon lo segnala invece di rischiare una seconda consegna.
+    CREATE TABLE IF NOT EXISTS pending_user_message_delivery_claims (
+        message_id INTEGER PRIMARY KEY,
+        claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (message_id) REFERENCES pending_user_messages(id)
+            ON DELETE CASCADE
+    );
+
     -- Ticket utente→team su una posizione (2026-06-18). L'utente, dalla pagina
     -- posizione, scrive una richiesta testuale libera → ticket 'open'. Il
     -- Capitano lo assegna a un agente (status 'assigned', assigned_agent) come

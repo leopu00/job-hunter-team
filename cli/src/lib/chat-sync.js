@@ -979,12 +979,38 @@ export async function deliverPendingUserTurns(
     max = MAX_DELIVER_PER_TICK,
   } = {},
 ) {
+  // L'effetto esterno (submit nel pane) non puo' stare nella stessa
+  // transazione della SQLite. Il claim e' quindi un record DUREVOLE, non un
+  // mutex in memoria: due processi (daemon + comando manuale) non possono
+  // vincere la stessa riga e un crash non cancella l'incertezza sull'effetto.
+  db.prepare(
+    `CREATE TABLE IF NOT EXISTS pending_user_message_delivery_claims (
+      message_id INTEGER PRIMARY KEY,
+      claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (message_id) REFERENCES pending_user_messages(id) ON DELETE CASCADE
+    )`,
+  ).run();
+  // Crash dopo il timbro ma prima del cleanup: qui l'esito e' certo e il
+  // claim e' solo spazzatura. Il caso opposto (claim + delivered_at NULL) non
+  // si elimina mai automaticamente: potrebbe aver gia' raggiunto il pane.
+  db.prepare(
+    `DELETE FROM pending_user_message_delivery_claims
+      WHERE message_id IN (
+        SELECT id FROM pending_user_messages WHERE delivered_at IS NOT NULL
+      )
+         OR message_id NOT IN (SELECT id FROM pending_user_messages)`,
+  ).run();
+
   const placeholders = agents.map(() => "?").join(", ");
   const rows = db
     .prepare(
       `SELECT id, agent, body, delivered_via
-         FROM pending_user_messages
+        FROM pending_user_messages
         WHERE author = 'user' AND delivered_at IS NULL AND agent IN (${placeholders})
+          AND NOT EXISTS (
+            SELECT 1 FROM pending_user_message_delivery_claims c
+             WHERE c.message_id = pending_user_messages.id
+          )
         ORDER BY id ASC
         LIMIT ?`,
     )
@@ -994,14 +1020,40 @@ export async function deliverPendingUserTurns(
   const stamp = db.prepare(
     "UPDATE pending_user_messages SET delivered_at = CURRENT_TIMESTAMP WHERE id = ?",
   );
+  const claim = db.prepare(
+    `INSERT OR IGNORE INTO pending_user_message_delivery_claims (message_id)
+     VALUES (?)`,
+  );
+  const release = db.prepare(
+    "DELETE FROM pending_user_message_delivery_claims WHERE message_id = ?",
+  );
   let delivered = 0;
   let failed = 0;
 
   for (const row of rows) {
-    const res = await sendFn(row.agent, row.body, {
-      channel: row.delivered_via,
-    });
+    // La SELECT non e' il claim: un altro processo puo' aver letto la stessa
+    // fotografia. Solo chi inserisce la PK ha il diritto di produrre
+    // l'effetto esterno.
+    if (Number(claim.run(row.id).changes) !== 1) continue;
+
+    let res;
+    try {
+      res = await sendFn(row.agent, row.body, {
+        channel: row.delivered_via,
+      });
+    } catch (err) {
+      // Il sender non ha restituito un esito: per il contratto di sendToPane
+      // questo e' un errore prima della consegna e resta ritentabile.
+      release.run(row.id);
+      failed += 1;
+      log(
+        "warn",
+        `chat: delivery to ${tmuxSessionFor(row.agent)} failed (spawn error): ${String(err?.message || err)} — the next round`,
+      );
+      continue;
+    }
     if (!res.ok) {
+      release.run(row.id);
       failed += 1;
       log(
         "warn",
@@ -1010,7 +1062,11 @@ export async function deliverPendingUserTurns(
       // Un pane morto blocca solo la SUA coda: gli altri agenti proseguono.
       continue;
     }
+    // Ordine intenzionale: timbro PRIMA del cleanup. Se stamp.run solleva o
+    // il processo muore dopo exit 0, il claim resta e impedisce di indovinare
+    // (e duplicare) l'effetto al riavvio. La diagnosi lo rende subito visibile.
     stamp.run(row.id);
+    release.run(row.id);
     delivered += 1;
   }
 
@@ -1062,18 +1118,42 @@ export function undeliveredUserTurns(db, { agents = CHAT_AGENTS } = {}) {
         WHERE author = 'user' AND delivered_at IS NULL AND agent IN (${placeholders})`,
     )
     .get(...agents);
-  return { count: Number(row?.n || 0), oldest: row?.oldest ?? null };
+  let uncertain = 0;
+  try {
+    uncertain = Number(
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n
+             FROM pending_user_message_delivery_claims c
+             JOIN pending_user_messages m ON m.id = c.message_id
+            WHERE m.author = 'user' AND m.delivered_at IS NULL
+              AND m.agent IN (${placeholders})`,
+        )
+        .get(...agents)?.n || 0,
+    );
+  } catch {
+    // Schema precedente al primo giro del nuovo consumer: nessun claim puo'
+    // ancora esistere, quindi zero e' l'unica risposta corretta.
+  }
+  return {
+    count: Number(row?.n || 0),
+    oldest: row?.oldest ?? null,
+    uncertain,
+  };
 }
 
 /**
  * Diagnosi della corsia: `null` se sta lavorando, altrimenti il guasto.
  *
- * Tre modi di essere muti, in ordine di gravità:
+ * Quattro modi di essere muti, in ordine di gravità:
  *   · `no-inbound-channel` — il campanello del web suona (`chat_requested_at`
  *     più recente di `chat_delivered_at`) e il box non ha proprio il canale
  *     per andare a prendersi i turni. Nessuna grazia: aspettare non lo fa
  *     comparire, e finché manca NESSUN messaggio dal web arriverà mai;
  *   · `inbound-read-failed` — il canale c'è ma la lettura è fallita;
+ *   · `delivery-outcome-uncertain` — un processo aveva acquisito il claim
+ *     durevole ma non ha timbrato l'esito. Non si ritenta alla cieca: il
+ *     submit potrebbe essere gia' entrato nel pane;
  *   · `delivery-stuck` — i turni sono entrati in SQLite e nessuno li porta
  *     al pane da più di `graceMs` (pane morto, sessione tmux sbagliata,
  *     agente fermo).
@@ -1091,6 +1171,7 @@ export function diagnoseChatLane({
   queued = 0,
   oldestQueuedAt = null,
   deliverFailed = 0,
+  uncertain = 0,
   now = Date.now(),
   graceMs = STALL_AFTER_MS,
 } = {}) {
@@ -1126,6 +1207,18 @@ export function diagnoseChatLane({
       message:
         `chat: failed to read user turns from the cloud (${String(readError).slice(0, 160)}), ` +
         `waiting for ${formatWaited(waitingMs)} — ${tail}`,
+    };
+  }
+
+  if (uncertain > 0) {
+    return {
+      reason: "delivery-outcome-uncertain",
+      count: uncertain,
+      waitingMs: waitedSince(oldestQueuedAt),
+      summary: `chat: ${uncertain} pane delivery outcomes are uncertain`,
+      message:
+        `chat: ${uncertain} user turns have a durable delivery claim but no delivered_at; ` +
+        `automatic retry is stopped to prevent duplicate pane delivery — ${tail}`,
     };
   }
 

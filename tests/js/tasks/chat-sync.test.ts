@@ -757,6 +757,86 @@ describe("consegna al pane tmux", () => {
     }
   });
 
+  it("un claim atomico impedisce a due consumer di inviare la stessa riga", async () => {
+    seedUserTurn("assistente", "una sola busta");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let sends = 0;
+    const first = deliverPendingUserTurns(db, {
+      sendFn: async () => {
+        sends += 1;
+        await gate;
+        return { ok: true, code: 0, error: "" };
+      },
+    });
+
+    // Il primo consumer e' sospeso DENTRO l'effetto esterno. Il secondo vede
+    // la stessa SQLite, ma non puo' vincere la PK del claim.
+    const overlap = await deliverPendingUserTurns(db, {
+      sendFn: async () => {
+        throw new Error("il secondo consumer non deve inviare");
+      },
+    });
+    expect(overlap).toEqual({ delivered: 0, failed: 0 });
+    expect(sends).toBe(1);
+
+    release();
+    expect(await first).toEqual({ delivered: 1, failed: 0 });
+    expect(sends).toBe(1);
+  });
+
+  it("crash dopo exit 0 conserva un esito incerto e non riconsegna al restart", async () => {
+    seedUserTurn("assistente", "non duplicarmi");
+    let sends = 0;
+    const crashDb = {
+      exec: db.exec.bind(db),
+      prepare(sql: string) {
+        if (sql.startsWith("UPDATE pending_user_messages SET delivered_at")) {
+          return {
+            run() {
+              throw new Error("crash sintetico dopo l'effetto esterno");
+            },
+          };
+        }
+        return db.prepare(sql);
+      },
+    } as unknown as InstanceType<typeof DatabaseSync>;
+
+    await expect(
+      deliverPendingUserTurns(crashDb, {
+        sendFn: async () => {
+          sends += 1;
+          return { ok: true, code: 0, error: "" };
+        },
+      }),
+    ).rejects.toThrow("crash sintetico");
+    expect(sends).toBe(1);
+    expect(rowsOf()[0].delivered_at).toBeNull();
+
+    // Al riavvio il claim e' ancora nella SQLite: nessuna seconda busta. Lo
+    // stato non viene fatto scadere indovinando; la diagnosi lo espone subito.
+    expect(
+      await deliverPendingUserTurns(db, {
+        sendFn: async () => {
+          sends += 1;
+          return { ok: true, code: 0, error: "" };
+        },
+      }),
+    ).toEqual({ delivered: 0, failed: 0 });
+    expect(sends).toBe(1);
+    const queue = undeliveredUserTurns(db);
+    expect(queue).toMatchObject({ count: 1, uncertain: 1 });
+    expect(
+      diagnoseChatLane({
+        queued: queue.count,
+        oldestQueuedAt: queue.oldest,
+        uncertain: queue.uncertain,
+      })?.reason,
+    ).toBe("delivery-outcome-uncertain");
+  });
+
   it("conserva i marker Telegram degli allegati sulla strada unificata", () => {
     expect(paneEnvelope("assistente", "testo", "telegram")).toBe(
       "[@utente -> @assistente] [TG] testo",
@@ -933,6 +1013,17 @@ describe("diagnosi della corsia chat", () => {
         graceMs: 300_000,
       }),
     ).toBeNull();
+  });
+
+  it("un claim senza timbro e' incerto e si dichiara subito", () => {
+    const stall = diagnoseChatLane({
+      queued: 1,
+      oldestQueuedAt: "2026-07-24 09:59:59",
+      uncertain: 1,
+      now: Date.parse("2026-07-24T10:00:00Z"),
+    });
+    expect(stall?.reason).toBe("delivery-outcome-uncertain");
+    expect(stall?.message).toContain("automatic retry is stopped");
   });
 
   it("turni in coda oltre la soglia: guasto dichiarato, col conto", () => {

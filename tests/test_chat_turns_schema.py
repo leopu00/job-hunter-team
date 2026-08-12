@@ -205,3 +205,17 @@ def test_source_id_deduplica_il_replay_non_il_testo(tmp_path):
             conn.execute(insert, ('testo diverso', 'telegram:assistente:1'))
     finally:
         conn.close()
+
+
+def test_schema_crea_la_tabella_dei_claim_senza_testo_privato(tmp_path):
+    db = ensure_schema_on(tmp_path / 'jobs.db')
+    conn = sqlite3.connect(db)
+    try:
+        columns = {
+            row[1] for row in conn.execute(
+                'PRAGMA table_info(pending_user_message_delivery_claims)'
+            )
+        }
+    finally:
+        conn.close()
+    assert columns == {'message_id', 'claimed_at'}

@@ -239,6 +239,7 @@ Pattern simile a `sentinel-bridge.py`. Long-poll Telegram Bot API → journal du
 - Prima dell'offset, un file 0600 per `update_id` entra atomicamente in `$JHT_HOME/tg-inbound-queue-<role>/` (directory 0700)
 - Ogni poll trasferisce il journal in SQLite con `source_id=telegram:<role>:<update_id>`; il COMMIT precede il cleanup, quindi un crash può causare solo un replay idempotente
 - `delivered_at` viene valorizzato da `chat-sync.js` soltanto dopo exit 0 reale di `jht-tmux-send`; rc nonzero resta visibile e ritentabile
+- Prima del pane, `chat-sync.js` acquisisce un claim SQLite per riga: due consumer non possono inviare lo stesso turno. Exit nonzero rilascia il claim; un crash con esito esterno incerto lo conserva, blocca la riconsegna automatica e produce subito la diagnosi `delivery-outcome-uncertain`
 - Singleton: `kill` preesistenti via `/proc/*/cmdline` scan (no pkill)
 - Dispatch per kind:
   - `text` → turno Telegram; il consumer costruisce `[@utente -> @assistente] [TG] <body>`
