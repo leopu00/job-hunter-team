@@ -158,6 +158,19 @@ def postgres16():
           position_id uuid NOT NULL REFERENCES public.positions(id),
           PRIMARY KEY (user_id, position_id)
         );
+        CREATE TABLE public.position_user_notes (
+          user_id uuid NOT NULL REFERENCES auth.users(id),
+          position_id uuid NOT NULL REFERENCES public.positions(id),
+          origin text NOT NULL,
+          body text NOT NULL,
+          PRIMARY KEY (user_id, position_id, origin)
+        );
+        CREATE TABLE public.pending_user_messages (
+          id uuid PRIMARY KEY,
+          user_id uuid NOT NULL REFERENCES auth.users(id),
+          related_position_id uuid REFERENCES public.positions(id),
+          body text NOT NULL
+        );
         CREATE TABLE public.candidate_profiles (
           id uuid PRIMARY KEY,
           user_id uuid NOT NULL REFERENCES auth.users(id)
