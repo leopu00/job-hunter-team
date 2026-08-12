@@ -180,6 +180,22 @@ function expectTwoPages(table = "positions", index = 0) {
     [0, 999],
     [1000, 1999],
   ]);
+  const orders = call.operations.filter(
+    (operation) => operation.name === "order",
+  );
+  // Chiedere due range non basta: senza ordine totale le finestre possono
+  // sovrapporsi o lasciare buchi. Ogni query termina quindi sulla PK univoca.
+  expect(orders.length).toBeGreaterThan(0);
+  expect(orders.at(-1)?.args).toEqual(["id", { ascending: true }]);
+  expect(call.operations.indexOf(orders[0])).toBeLessThan(
+    call.operations.findIndex((operation) => operation.name === "range"),
+  );
+}
+
+function orderArgs(call: QueryCall) {
+  return call.operations
+    .filter((operation) => operation.name === "order")
+    .map((operation) => operation.args);
 }
 
 describe("le undici query cloud superano il tetto PostgREST", () => {
@@ -240,6 +256,10 @@ describe("le undici query cloud superano il tetto PostgREST", () => {
   it("getDashboardPositions restituisce anche la riga 1001", async () => {
     await expect(queries.getDashboardPositions()).resolves.toHaveLength(1001);
     expectTwoPages();
+    expect(orderArgs(supa.calls[0])).toEqual([
+      ["found_at", { ascending: false }],
+      ["id", { ascending: true }],
+    ]);
   });
 
   it("getPositionsWithCoords restituisce anche la riga 1001", async () => {
@@ -292,6 +312,10 @@ describe("filtri, ordine e finestra di getPositions", () => {
     expect(names.indexOf("in")).toBeLessThan(names.indexOf("range"));
     expect(names.indexOf("or")).toBeLessThan(names.indexOf("range"));
     expect(names.indexOf("limit")).toBeLessThan(names.indexOf("range"));
+    expect(orderArgs(call)).toEqual([
+      ["found_at", { ascending: false }],
+      ["id", { ascending: true }],
+    ]);
   });
 });
 

@@ -135,7 +135,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const query = supabase
     .from("positions")
     .select("status, write_requested")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return EMPTY_STATS;
 
@@ -371,7 +372,8 @@ export async function getPositions(
       "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, found_by, last_checked, deadline, status, notes, score, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
     )
     .is("deleted_at", null)
-    .order("found_at", { ascending: false });
+    .order("found_at", { ascending: false })
+    .order("id", { ascending: true });
 
   if (opts?.statuses?.length) query = query.in("status", opts.statuses);
   if (opts?.remoteTypes?.length)
@@ -680,7 +682,8 @@ export async function getScoreDistribution() {
     .from("positions")
     .select("score, scores(total_score)")
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return empty;
 
@@ -730,7 +733,8 @@ export async function getSourceDistribution(): Promise<
     .from("positions")
     .select("source")
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const counts: Record<string, number> = {};
@@ -781,7 +785,8 @@ export async function getPositionFacets(): Promise<PositionFacet[]> {
     .select(
       "id, title, company, status, role_family, loc_country, loc_city, score, scores ( total_score ), applications ( critic_score )",
     )
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   return (data as any[]).map((p) => {
@@ -1092,7 +1097,8 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
     )
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
-    .order("found_at", { ascending: false });
+    .order("found_at", { ascending: false })
+    .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   return (data as any[]).map((p) => {
@@ -1179,7 +1185,8 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
       "id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, remote_type, created_at, scores ( total_score )",
     )
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = data as any[];
@@ -1313,7 +1320,8 @@ export async function getPositionLocations(): Promise<LocationCountry[]> {
     .from("positions")
     .select("id, title, company, loc_country, loc_city, scores ( total_score )")
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = (data as any[]).map((p) => {
@@ -1371,7 +1379,8 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
       "id, title, company, status, role_family, office_lat, office_lon, is_remote, remote_type, location, loc_country, loc_city, created_at, scores ( total_score )",
     )
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = data as any[];
@@ -1439,7 +1448,8 @@ export async function getPositionTypeDistribution(): Promise<
       "role_family, score, scores(total_score), applications(critic_score)",
     )
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = (data as any[]).map((r) => {
@@ -1472,12 +1482,14 @@ export async function getScoutStats() {
   const positionsQuery = supabase
     .from("positions")
     .select("id, found_by, status")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const applicationsQuery = supabase
     .from("applications")
     .select("position_id")
     .or("status.eq.response,response.not.is.null")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const [posRes, appRes] = await Promise.all([
     fetchPostgrestRows<any>(positionsQuery),
     fetchPostgrestRows<any>(applicationsQuery),
@@ -1640,7 +1652,8 @@ async function fetchTransitionEvents(
     .from("position_transitions")
     .select("position_legacy_id, by_agent, ts")
     .not("by_agent", "is", null)
-    .order("ts", { ascending: false });
+    .order("ts", { ascending: false })
+    .order("id", { ascending: true });
   if (fromIso) query = query.gte("ts", fromIso);
   if (untilIso) query = query.lt("ts", untilIso);
   // Il feed mantiene il comportamento best-effort precedente: se una pagina
