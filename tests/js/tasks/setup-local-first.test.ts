@@ -173,7 +173,15 @@ describe("CLI host wizard — local e VPS sono host reali", () => {
     expect(historicalOnboarding).not.toMatch(
       /VPS[^\n]{0,40}(?:sync|cloud)[^\n]{0,40}(?:obbligatorio|strutturalmente obbligatorio)/i,
     );
-    const mandatoryVpsCloud = /(?:mandatory for VPS|VPS\s*:\s*(?:OBBLIGATORIO|mandatory|required)|(?:cloud|sync)[^\n]{0,50}(?:obbligatori[oa]|mandatory|required)[^\n]{0,50}(?:VPS|Path 2))/i;
+    const mandatoryVpsCloud = /(?:mandatory for VPS|VPS\s*:\s*(?:OBBLIGATORIO|mandatory|required)|VPS[^\n]{0,50}requires[^\n]{0,50}(?:cloud|account|pairing|jht cloud login)|VPS mode[^\n]{0,50}richiede[^\n]{0,50}signed-in|signed-in mode[^\n]{0,50}(?:necessari[oa]|obbligatori[oa])[^\n]{0,50}(?:VPS|Path 2)|(?:account (?:cloud|web)|cloud account)[^\n]{0,50}(?:necessari[oa]|obbligatori[oa]|required|mandatory)|(?:cloud|sync)[^\n]{0,50}(?:obbligatori[oa]|mandatory|required)[^\n]{0,50}(?:VPS|Path 2))/i;
+    for (const staleClaim of [
+      "VPS requires jht cloud login before it completes",
+      "VPS mode richiede signed-in mode",
+      "signed-in mode necessario per VPS",
+      "account cloud obbligatorio per Path 2",
+    ]) {
+      expect(mandatoryVpsCloud.test(staleClaim), staleClaim).toBe(true);
+    }
     const staleDocs = activeDocumentation()
       .filter(([, contents]) => mandatoryVpsCloud.test(contents))
       .map(([file]) => file);

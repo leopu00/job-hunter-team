@@ -334,7 +334,7 @@ Hetzner ha una **trappola di billing**: server *powered off* **continuano a fatt
 |-----------------------|----------------------|---------------|
 | Provisioning iniziale | ✅ sì                 | `install.sh` sulla VPS, tail del log, verifica container |
 | Runtime quotidiano    | ✅ sì, ma invisibile  | ogni azione dell'app desktop è `ssh -i <key> <user>@<ip> docker exec jht …` |
-| Vista senza app aperta| ❌ no                 | `jobhunterteam.ai` in sola lettura: il container ci pusha da solo, in uscita |
+| Vista senza app aperta| ❌ no                 | con sync opt-in, `jobhunterteam.ai` mostra i dati supportati copiati dal container |
 | Update container      | ✅ sì                 | `ssh … jht upgrade` (nessuna porta inbound su cui triggerare un update) |
 | Debug power-user      | 🟢 opzionale         | terminale integrato nell'app: `ssh -tt … docker exec -it jht …` |
 
@@ -344,23 +344,30 @@ Hetzner ha una **trappola di billing**: server *powered off* **continuano a fatt
 
 > 🔗 **Per la vista consolidata "accesso macchina + dove vivono le credenziali" (3 modi × storage × LLM agent path)** → [`docs/internal/ops/access-and-credentials.md`](access-and-credentials.md). Questo file resta la fonte di verità architetturale; quello consolida la sezione credenziali con confronto doc vs codice e punch list.
 
-## 🔐 Login launcher + recovery cross-device
+## 🔐 Account web opzionale + recovery cross-device
 
-> ⚠️ *Nota 2026-07-30, senza ri-triage della sezione*: il principio (blast radius, credenziali di spesa sempre lato utente) regge ed è la parte che conta. Due dettagli sono però datati **2026-05-13** e non descrivono il codice di oggi: (1) la **Tailscale auth-key** citata nei due box e al passo 6 non esiste — Tailscale non compare in nessun file di codice, l'accesso è a chiave SSH; (2) il **token API Hetzner** non è "master key locale" ma non è usato affatto (vedi «Setup wizard decisions» § 1). Chi riapre questa sezione la riverifichi contro `cli/src/commands/cloud.js` e `game/scripts/setup/setup_service.gd`.
+> **Revisione 2026-08-12:** il principio (blast radius, credenziali di spesa
+> sempre lato utente) resta valido. Tailscale e token API Hetzner citati dal
+> design 2026-05 non fanno parte del flusso corrente: l'accesso alla VPS usa
+> una chiave SSH. Anche l'account web è separato dal runtime e abilita solo le
+> superfici cloud supportate.
 
-VPS mode richiede **signed-in mode** (Local PC mode resta in guest mode disponibile sempre):
+Il runtime VPS funziona senza login web: l'app lo controlla via SSH e il wizard
+CLI prosegue quando il pairing viene saltato o fallisce. Il login web resta un
+opt-in separato, disponibile sia per PC locale sia per VPS:
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│  🔓 GUEST MODE  (resta sempre disponibile)              │
-│     • Setup locale, niente account                     │
-│     • PC locale only — niente VPS, niente sync         │
+│  🔓 NON COLLEGATO (resta sempre disponibile)            │
+│     • Setup locale oppure VPS via SSH, niente account  │
+│     • Runtime completo, niente copia dati cloud        │
 ├────────────────────────────────────────────────────────┤
-│  🔐 SIGNED-IN MODE  (necessario per VPS)                │
+│  🔐 ACCOUNT WEB (facoltativo su ogni host)              │
 │     • OAuth Google/GitHub via launcher                 │
 │     • Apre browser di sistema, callback a localhost    │
 │     • Token Supabase salvato in OS keychain            │
-│     • Sblocca: cloud sync, VPS recovery, multi-device  │
+│     • Abilita: copia cloud, restore dei dati copiati,   │
+│       vista multi-device                               │
 └────────────────────────────────────────────────────────┘
 ```
 
