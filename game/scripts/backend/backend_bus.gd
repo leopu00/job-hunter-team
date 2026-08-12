@@ -842,6 +842,7 @@ func publish_artifact(path: String, ok: bool, data: PackedByteArray,
 ## viaggiano non deve lasciare un file caricato senza il ticket richiesto.
 ## Tutti gli upload, anche quelli del wizard, attraversano QUESTO owner.
 var _active_document_upload: Dictionary = {}
+var _document_upload_sequence := 0
 
 ## Apre un ticket sulla posizione (async: esito su ticket_created; la
 ## lista ticket si aggiorna col prossimo snapshot posizioni). Il path opzionale
@@ -874,15 +875,18 @@ func _begin_document_upload(request: Dictionary) -> bool:
 			document_uploaded.emit(false, "",
 					UIStrings.t("common.backend_not_connected"))
 		return true
+	_document_upload_sequence += 1
 	_active_document_upload = request.duplicate()
-	_backend.upload_document(str(request["path"]))
+	_active_document_upload["request_id"] = _document_upload_sequence
+	_backend.upload_document(str(request["path"]), _document_upload_sequence)
 	return true
 
 ## Unico ingresso degli adapter per completare un upload. L'esito appartiene
 ## necessariamente all'unica richiesta attiva; senza owner viene ignorato.
-func publish_document_upload(ok: bool, remote_path: String,
+func publish_document_upload(request_id: int, ok: bool, remote_path: String,
 		error: String) -> void:
-	if _active_document_upload.is_empty():
+	if _active_document_upload.is_empty() \
+			or int(_active_document_upload.get("request_id", 0)) != request_id:
 		return
 	var request := _active_document_upload.duplicate()
 	_active_document_upload.clear()

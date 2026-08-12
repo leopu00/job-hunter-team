@@ -4,7 +4,7 @@ extends Node
 ## wizard non deve mai diventare l'allegato del ticket arrivato dopo.
 
 class DelayedBackend extends BackendAdapter:
-	var uploads: Array[String] = []
+	var uploads: Array[Dictionary] = []
 	var tickets: Array[Dictionary] = []
 
 	func start(_config: Dictionary) -> void:
@@ -13,8 +13,8 @@ class DelayedBackend extends BackendAdapter:
 	func stop() -> void:
 		live = false
 
-	func upload_document(local_path: String) -> void:
-		uploads.append(local_path)
+	func upload_document(local_path: String, request_id := 0) -> void:
+		uploads.append({"path": local_path, "request_id": request_id})
 
 	func create_ticket(position_id: int, text: String,
 			attachment_path := "") -> void:
@@ -31,18 +31,29 @@ func _ready() -> void:
 	BackendBus.upload_user_document("/tmp/wizard-cv.pdf")
 	BackendBus.create_position_ticket(77, "Leggi il brief", "/tmp/brief.pdf")
 	BackendBus.publish_document_upload(
-			true, "/jht_user/allegati/wizard-cv.pdf", "")
-	if backend.uploads != ["/tmp/wizard-cv.pdf"] or not backend.tickets.is_empty():
+			int(backend.uploads[0]["request_id"]), true,
+			"/jht_user/allegati/wizard-cv.pdf", "")
+	if backend.uploads.size() != 1 \
+			or backend.uploads[0]["path"] != "/tmp/wizard-cv.pdf" \
+			or not backend.tickets.is_empty():
 		_fail("overlap non fail-closed", backend)
 		return
 
 	# Dopo che A ha terminato, riprovare B crea esattamente un upload e il
 	# ticket nasce soltanto dal SUO esito attestato.
 	BackendBus.create_position_ticket(77, "Leggi il brief", "/tmp/brief.pdf")
-	if backend.uploads != ["/tmp/wizard-cv.pdf", "/tmp/brief.pdf"]:
+	if backend.uploads.size() != 2 \
+			or backend.uploads[1]["path"] != "/tmp/brief.pdf":
 		_fail("retry non ha avviato il brief", backend)
 		return
-	BackendBus.publish_document_upload(true, "/jht_user/allegati/brief.pdf", "")
+	# Anche un completamento duplicato/tardivo di A non può consumare B.
+	BackendBus.publish_document_upload(int(backend.uploads[0]["request_id"]),
+			true, "/jht_user/allegati/wizard-cv.pdf", "")
+	if not backend.tickets.is_empty():
+		_fail("completamento stale attribuito al retry", backend)
+		return
+	BackendBus.publish_document_upload(int(backend.uploads[1]["request_id"]),
+			true, "/jht_user/allegati/brief.pdf", "")
 	var ok: bool = backend.tickets.size() == 1 \
 			and backend.tickets[0]["attachment_path"] \
 			== "/jht_user/allegati/brief.pdf"

@@ -1120,44 +1120,51 @@ const PRESENTATION_ENGLISH := {
 	"vps.transport.local_command_unavailable": "host command unavailable locally",
 }
 
-func upload_document(local_path: String) -> void:
-	_queue_worker(_do_upload_document.bind(local_path,
+func upload_document(local_path: String, request_id := 0) -> void:
+	_queue_worker(_do_upload_document.bind(local_path, request_id,
 			UIStrings.vps_presentation_snapshot()))
 
-func _do_upload_document(local_path: String, labels: Dictionary) -> void:
+func _do_upload_document(local_path: String, request_id: int,
+		labels: Dictionary) -> void:
 	if not FileAccess.file_exists(local_path):
-		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.file_missing") % local_path)
+		_doc_uploaded(request_id, false, "",
+				_ui_text(labels, "vps.upload.file_missing") % local_path)
 		return
 	var ext := local_path.get_extension().to_lower()
 	if not UPLOAD_EXTS.has(ext):
-		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.extension_denied") % ext)
+		_doc_uploaded(request_id, false, "",
+				_ui_text(labels, "vps.upload.extension_denied") % ext)
 		return
 	var f := FileAccess.open(local_path, FileAccess.READ)
 	if f == null:
-		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.file_unreadable"))
+		_doc_uploaded(request_id, false, "",
+				_ui_text(labels, "vps.upload.file_unreadable"))
 		return
 	var size := f.get_length()
 	f.close()
 	if size > UPLOAD_MAX_BYTES:
-		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.file_too_large"))
+		_doc_uploaded(request_id, false, "",
+				_ui_text(labels, "vps.upload.file_too_large"))
 		return
 	var safe := _safe_filename(local_path.get_file())
 	var remote := UPLOAD_DIR + "/" + safe
 	var mk := _ssh("docker exec jht mkdir -p " + UPLOAD_DIR)
 	if mk["code"] != 0:
-		_doc_uploaded(false, "", _short_error(mk, labels))
+		_doc_uploaded(request_id, false, "", _short_error(mk, labels))
 		return
 	# >/dev/null dentro la sh del container: al livello host sarebbe un
 	# redirect PowerShell verso il file C:\dev\null (Windows locale).
 	var res := _ssh_stdin_file(local_path,
 			"docker exec -i jht sh -lc 'tee " + remote + " >/dev/null'")
 	if res["code"] != 0:
-		_doc_uploaded(false, "", _short_error(res, labels))
+		_doc_uploaded(request_id, false, "", _short_error(res, labels))
 		return
-	_doc_uploaded(true, remote, "")
+	_doc_uploaded(request_id, true, remote, "")
 
-func _doc_uploaded(ok: bool, remote_path: String, error: String) -> void:
-	bus.call_deferred("publish_document_upload", ok, remote_path, error)
+func _doc_uploaded(request_id: int, ok: bool, remote_path: String,
+		error: String) -> void:
+	bus.call_deferred("publish_document_upload", request_id, ok,
+			remote_path, error)
 
 ## Nome file sicuro per il viaggio in shell remota: solo [A-Za-z0-9._-],
 ## il resto diventa _ (stessa igiene della route web di upload).

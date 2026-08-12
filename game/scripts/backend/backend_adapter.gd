@@ -161,10 +161,10 @@ func ensure_assistant() -> void:
 	_unsupported("ensure_assistant")
 
 ## Carica un documento locale (CV…) nella drop-zone allegati del container.
-func upload_document(_local_path: String) -> void:
+func upload_document(_local_path: String, request_id := 0) -> void:
 	var msg := _unsupported("upload_document")
 	if bus:
-		bus.publish_document_upload(false, "", msg)
+		bus.publish_document_upload(request_id, false, "", msg)
 
 
 ## ── Profilo utente e orari (scrittura dal desktop) ───────────────────
