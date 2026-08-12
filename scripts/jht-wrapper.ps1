@@ -251,7 +251,7 @@ function Require-ComposeFile {
 
 function Invoke-Compose {
   param([Parameter(ValueFromRemainingArguments)] $Args)
-  if (-not (Test-PrivateJhtHomeAcl)) { throw "JHT_HOME ACL is not owner-only: $JhtHome" }
+  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { throw "JHT_HOME ACL is not owner-only: $JhtHome" }
   Assert-TrustedRuntime
   # Docker Desktop Windows accetta forward-slash o backslash. project-directory
   # punta al runtime dir per bind-mount relativi (anche se compose qui e'
