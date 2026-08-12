@@ -8,6 +8,9 @@ const EXPECTED_NODES := 221
 const EXPECTED_CHOICES := 138
 const EXPECTED_DYNAMIC_SHELLS := 8
 const EXPECTED_TRANSLATED_CELLS := 2202
+const FORBIDDEN_ENGLISH_FRAGMENTS := [
+	"Research", "Analysis", "Quality Check", "Office Home", "escritório home",
+]
 
 var _failures: Array[String] = []
 
@@ -85,6 +88,13 @@ func _run() -> void:
 			"greeting does not pass through authored resolver")
 	_check(Dialogues.positions_summary(3, "en").contains("3"),
 			"position summary lost its data placeholder")
+	var german_activation := UIStrings.authored(
+			"dialogue.dynamic.runtime.docker_running",
+			str(Dialogues.DYNAMIC_SHELLS["dialogue.dynamic.runtime.docker_running"]),
+			"de")
+	_check(german_activation.contains("Bestätigen Sie") \
+			and not german_activation.contains("bestätige ich"),
+			"German activation instruction changes the actor")
 
 	var ui_source := FileAccess.get_file_as_string(
 			"res://scripts/dialogue/dialogue_ui.gd")
@@ -149,6 +159,10 @@ func _check_locale_catalogs(sources: Dictionary) -> void:
 			translated_cells += 1
 			var translated := str(catalog[key])
 			_check(translated.strip_edges() != "", "%s empty in %s" % [key, locale])
+			for fragment: String in FORBIDDEN_ENGLISH_FRAGMENTS:
+				_check(not translated.contains(fragment),
+						"%s retains English fragment '%s' in %s" % [
+								key, fragment, locale])
 			_check(translated != str(sources[key]) \
 					or _placeholders(translated).size() > 0 \
 					and translated.strip_edges().begins_with("{"),
