@@ -62,7 +62,12 @@ Two managed services can hold a **read-only mirror** of the operational state:
 - **Supabase** — PostgreSQL for structured metadata (positions, scores, applications) + auth
 - **Google Drive** — user files (CVs, cover letters, generated PDFs)
 
-This is **opt-in for Local PC**, **mandatory for VPS** (the VPS uses cloud storage as the only way to recover state if it dies). When enabled, the local container periodically pushes a snapshot of operational state to Supabase + Drive so the user can:
+This is **opt-in for both Local PC and VPS**. Disabling it does not stop the
+runtime: the native app controls a local container directly and a VPS through
+SSH. Cloud restore is available only for the supported data that was synced;
+without sync, recovery uses the user's verified backup or the SSH migration
+archive. When enabled, the container periodically pushes supported operational
+state to Supabase + Drive so the user can:
 - Browse positions/applications from another device (phone, work laptop)
 - Have a backup against local data loss
 - Visit `jobhunterteam.ai` and see their own results in the web dashboard

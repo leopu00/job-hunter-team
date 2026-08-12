@@ -10,6 +10,26 @@ const ROOT = path.resolve(HERE, "../../..");
 const read = (relative: string) =>
   fs.readFileSync(path.join(ROOT, relative), "utf8");
 
+function activeDocumentation(): Array<[string, string]> {
+  const docsRoot = path.join(ROOT, "docs");
+  const files: Array<[string, string]> = [];
+  const visit = (directory: string) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== "_archive") visit(absolute);
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        files.push([
+          path.relative(ROOT, absolute),
+          fs.readFileSync(absolute, "utf8"),
+        ]);
+      }
+    }
+  };
+  visit(docsRoot);
+  return files;
+}
+
 const LOCALES = ["en", "it", "hu", "es", "de", "fr", "pt"] as const;
 
 const hostSetup = read("scripts/host-setup.sh");
@@ -153,6 +173,11 @@ describe("CLI host wizard — local e VPS sono host reali", () => {
     expect(historicalOnboarding).not.toMatch(
       /VPS[^\n]{0,40}(?:sync|cloud)[^\n]{0,40}(?:obbligatorio|strutturalmente obbligatorio)/i,
     );
+    const mandatoryVpsCloud = /(?:mandatory for VPS|VPS\s*:\s*(?:OBBLIGATORIO|mandatory|required)|(?:cloud|sync)[^\n]{0,50}(?:obbligatori[oa]|mandatory|required)[^\n]{0,50}(?:VPS|Path 2))/i;
+    const staleDocs = activeDocumentation()
+      .filter(([, contents]) => mandatoryVpsCloud.test(contents))
+      .map(([file]) => file);
+    expect(staleDocs).toEqual([]);
     for (const locale of LOCALES) {
       const catalog = JSON.parse(
         read(`shared/locales/${locale}.json`),
