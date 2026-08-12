@@ -151,7 +151,7 @@ describe("invariante candidatura sul cloud", () => {
     expect(rpcCalls).toEqual([
       {
         name: "undo_manual_position_application",
-        args: { p_position_legacy_id: 73 },
+        args: { p_position_legacy_id: 73, p_restored_status: null },
       },
     ]);
   });
@@ -162,7 +162,10 @@ describe("invariante candidatura sul cloud", () => {
     await expect(response.json()).resolves.toMatchObject({
       cloud_synced: true,
     });
-    expect(rpcCalls[0].name).toBe("undo_manual_position_application");
+    expect(rpcCalls[0]).toEqual({
+      name: "undo_manual_position_application",
+      args: { p_position_legacy_id: 73, p_restored_status: "ready" },
+    });
   });
 
   it("rifiuta senza falso successo se l'RPC non applica la modifica", async () => {
@@ -185,7 +188,7 @@ describe("migrazione cloud atomica", () => {
   it("usa privilegi della sessione e non fa backfill", () => {
     expect(
       migration.match(/LANGUAGE plpgsql\s+SECURITY INVOKER/gi),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(migration).toMatch(/actor UUID := \(SELECT auth\.uid\(\)\)/i);
     expect(migration).not.toMatch(/security definer/i);
     expect(migration).not.toMatch(/DO\s+\$\$/i);
@@ -200,5 +203,41 @@ describe("migrazione cloud atomica", () => {
       /UPDATE public\.applications[\s\S]*applied_at = NULL[\s\S]*applied_via = NULL/i,
     );
     expect(migration).toMatch(/undo_manual_position_application/i);
+    expect(migration).toMatch(/sync_confirm_positions_applied/i);
+    expect(migration).toMatch(/incomplete_application/i);
+  });
+});
+
+describe("confine cloud-sync applied", () => {
+  const route = readFileSync(
+    resolve(__dirname, "../../../web/app/api/cloud-sync/push/route.ts"),
+    "utf8",
+  );
+
+  it("non pubblica lo status prima di aver scritto application", () => {
+    const deferAt = route.indexOf("const deferredAppliedPayload");
+    const applicationAt = route.indexOf("// 3. Upsert applications");
+    const confirmAt = route.indexOf(
+      'admin.rpc("sync_confirm_positions_applied"',
+    );
+    expect(deferAt).toBeGreaterThan(-1);
+    expect(route.slice(deferAt, applicationAt)).toContain(
+      "const { status, ...deferred } = p",
+    );
+    expect(route.slice(deferAt, applicationAt)).toContain(
+      "defaultToNull: false",
+    );
+    expect(confirmAt).toBeGreaterThan(applicationAt);
+  });
+
+  it("recupera le application orfane e fallisce chiuso se l'RPC rifiuta", () => {
+    const applicationAt = route.indexOf("// 3. Upsert applications");
+    const confirmAt = route.indexOf(
+      'admin.rpc("sync_confirm_positions_applied"',
+    );
+    const section = route.slice(applicationAt, confirmAt + 1000);
+    expect(section).toContain("application_positions_lookup_failed");
+    expect(section).toContain("application_state_invariant_failed");
+    expect(section).toContain("p_position_legacy_ids");
   });
 });

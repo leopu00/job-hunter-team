@@ -364,9 +364,10 @@ export async function DELETE(
       };
     },
 
-    mirror: async (supabase, userId) => {
+    mirror: async (supabase, userId, outcome) => {
       const { error } = await supabase.rpc("undo_manual_position_application", {
         p_position_legacy_id: legacyId,
+        p_restored_status: outcome.status,
       });
       if (error) throw new Error(error.message);
       void userId;
@@ -375,7 +376,7 @@ export async function DELETE(
     cloud: async (supabase, userId): Promise<StepResult<AppliedOutcome>> => {
       const { data, error } = await supabase.rpc(
         "undo_manual_position_application",
-        { p_position_legacy_id: legacyId },
+        { p_position_legacy_id: legacyId, p_restored_status: null },
       );
       if (error) {
         return rpcFailure(error.message, legacyId);

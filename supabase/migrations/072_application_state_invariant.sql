@@ -75,7 +75,8 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.undo_manual_position_application(
-    p_position_legacy_id INTEGER
+    p_position_legacy_id INTEGER,
+    p_restored_status TEXT DEFAULT NULL
 ) RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY INVOKER
@@ -122,7 +123,15 @@ BEGIN
      ORDER BY transition.ts DESC, transition.id DESC
      LIMIT 1;
 
-    IF previous_state IS NOT NULL THEN
+    IF p_restored_status IS NOT NULL THEN
+        IF p_restored_status = 'applied' OR p_restored_status NOT IN (
+            'new', 'checked', 'excluded', 'scored', 'writing', 'review',
+            'ready', 'response'
+        ) THEN
+            RAISE EXCEPTION 'invalid_restored_status';
+        END IF;
+        restored_state := p_restored_status;
+    ELSIF previous_state IS NOT NULL THEN
         restored_state := previous_state;
     ELSIF application_row.cv_path IS NOT NULL
        OR application_row.cv_pdf_path IS NOT NULL THEN
@@ -162,12 +171,72 @@ BEGIN
 END;
 $$;
 
+-- Il push container usa il client service_role, quindi auth.uid() non è
+-- disponibile. La funzione resta SECURITY INVOKER ed è eseguibile soltanto
+-- da service_role: prima verifica che ogni application sia già completa,
+-- poi pubblica status='applied'. In questo modo il solo passo che rende la
+-- posizione visibile nel filtro "Candidature" non può precedere la sua data.
+CREATE OR REPLACE FUNCTION public.sync_confirm_positions_applied(
+    p_user_id UUID,
+    p_position_legacy_ids INTEGER[]
+) RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    requested_id INTEGER;
+    position_row public.positions%ROWTYPE;
+    application_row public.applications%ROWTYPE;
+    confirmed INTEGER := 0;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'user_id_required';
+    END IF;
+
+    FOREACH requested_id IN ARRAY COALESCE(p_position_legacy_ids, ARRAY[]::INTEGER[])
+    LOOP
+        SELECT * INTO position_row
+          FROM public.positions
+         WHERE user_id = p_user_id AND legacy_id = requested_id
+         FOR UPDATE;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'position_not_found';
+        END IF;
+
+        SELECT * INTO application_row
+          FROM public.applications
+         WHERE user_id = p_user_id AND position_id = position_row.id
+         FOR UPDATE;
+        IF NOT FOUND
+           OR application_row.status <> 'applied'
+           OR application_row.applied IS NOT TRUE
+           OR application_row.applied_at IS NULL
+           OR NULLIF(BTRIM(application_row.applied_via), '') IS NULL THEN
+            RAISE EXCEPTION 'incomplete_application';
+        END IF;
+
+        UPDATE public.positions
+           SET status = 'applied'
+         WHERE id = position_row.id AND user_id = p_user_id;
+        confirmed := confirmed + 1;
+    END LOOP;
+
+    RETURN confirmed;
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.mark_position_applied(INTEGER, TIMESTAMPTZ, TEXT, TEXT)
     FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.mark_position_applied(INTEGER, TIMESTAMPTZ, TEXT, TEXT)
     TO authenticated;
 
-REVOKE ALL ON FUNCTION public.undo_manual_position_application(INTEGER)
+REVOKE ALL ON FUNCTION public.undo_manual_position_application(INTEGER, TEXT)
     FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.undo_manual_position_application(INTEGER)
+GRANT EXECUTE ON FUNCTION public.undo_manual_position_application(INTEGER, TEXT)
     TO authenticated;
+
+REVOKE ALL ON FUNCTION public.sync_confirm_positions_applied(UUID, INTEGER[])
+    FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.sync_confirm_positions_applied(UUID, INTEGER[])
+    TO service_role;
