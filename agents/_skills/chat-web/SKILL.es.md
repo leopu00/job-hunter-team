@@ -117,6 +117,7 @@ jht-send 'Hecho. Generado un Analyst extra, configuración de throttle volcada a
 - ❌ `cat << 'EOF' >> chat.jsonl ... EOF` — desactiva la interpolación `$`, el timestamp termina como cadena literal.
 - ❌ `python3 -c "import json; ..."` ad-hoc — misma fragilidad que el heredoc del shell.
 - ❌ Responder vía `jht-tmux-send UTENTE ...` — no hay sesión `UTENTE`. El usuario vive en el frontend web.
+- ❌ Responder al `[CHAT]` con `jht-send` **y** reenviar el mismo contenido con `jht-notify-user`. Desde que el carril de chat está unificado escriben en la MISMA conversación: el usuario lee tu respuesta dos veces, y aguas abajo no la quita nadie — el carril no distingue un duplicado de dos turnos que coinciden por casualidad. Un mensaje, una sola herramienta.
 - ❌ Enviar una respuesta final con `--partial` — puntos de escritura atascados en la pantalla del usuario.
 - ❌ Múltiples llamadas a `jht-send` (sin `--partial`) para lo que debería ser un mensaje — cada llamada no-partial aparece como una burbuja separada.
 

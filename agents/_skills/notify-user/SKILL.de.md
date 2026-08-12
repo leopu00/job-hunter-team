@@ -16,6 +16,20 @@ Der Nutzer hat mehrere Kanäle (Telegram-Bot, Web-Dashboard, zukünftiger mobile
 
 Der Nutzer erhält daher jede Nachricht irgendwo. Der Agent muss nie "Telegram ist down"-Verzweigungen handhaben.
 
+## ⚠️ Seit die Chat-Spur vereinheitlicht ist: diese Nachricht ist AUCH eine Chat-Blase
+
+`jht-send` und `jht-notify-user` schrieben früher an zwei verschiedene Orte —
+den Chat-Thread und die Benachrichtigungs-Queue. Das gilt nicht mehr. Die Box
+spiegelt `pending_user_messages` nach `<agent>/chat.jsonl`, also erscheint
+das, was du hier schreibst, auch als deine Blase im Spiel-Chat und im
+Web-Thread, direkt neben deinen Antworten mit `jht-send`.
+
+Die Folge ist die einzige Regel, die hier zählt: **eine Nachricht, ein
+Werkzeug.** Niemals denselben Inhalt über beide Wege. Der Nutzer würde ihn
+zweimal lesen, und keine der beiden Kopien weiß von der anderen — die Spur
+kann ein Duplikat nicht von zwei Beiträgen unterscheiden, die zufällig
+dasselbe sagen („ok“ kommt tausendmal), also räumt weiter unten niemand auf.
+
 ## Wann verwenden
 
 - ✅ Capitano benachrichtigt den Nutzer alle N fertigen Positionen (Entscheidung 2026-05-13, Batch).

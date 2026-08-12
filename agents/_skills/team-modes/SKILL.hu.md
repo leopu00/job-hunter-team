@@ -159,7 +159,10 @@ irányzékkal tovább sourcingolni.
    és ezt érdemes kimondani: a heti budget **ablak, nem egyenleg** — ami a
    resetig nincs elköltve, megsemmisül, tehát a tehetetlenségből ottfelejtett
    takarékosság nem megőrzi a ciklust, hanem eldobja. Mondd el a
-   felhasználónak, hogy adhat neki véghatáridőt.
+   felhasználónak, hogy adhat neki véghatáridőt, és hogy hol: a Konzolban ott a
+   «Meddig» mező (nap és óra, a módválasztó mellett), shellből pedig
+   `jht coordinator set-mode saving --until <iso>`. Ugyanazt a kulcsot írják
+   ugyanabba a fájlba.
 
 **Mit csinálsz**: tartsd válaszkésznek a Capitanót/Assistentét/Mentort; ezen túl
 semmi nem mozdul közvetlen felhasználói kérés nélkül. **C-25-tel**: a
@@ -184,8 +187,9 @@ felhasználónak (ez a C-25 másik fele), nem költöd el. **NE tedd**: a
   HOVÁ megy az adagolt budget.
 - **Kilépés ≠ módváltás.** Amikor egy mód jelenti, hogy a munkája kimerült,
   értesítsd a felhasználót, és tartsd tovább a módot, amíg Ő meg nem
-  változtatja. A fájlt a játék konzolja írja a felhasználó nevében — soha nem
-  te.
+  változtatja. A fájlt a felhasználó nevében írja valaki — a játék Konzolja
+  (a határidővel együtt) vagy a `jht coordinator`, ha ő kéri — és soha nem te,
+  saját elhatározásból.
 
 ## Lásd még
 

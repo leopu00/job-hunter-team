@@ -1016,7 +1016,13 @@ func _build_queue_cards(counts: Dictionary) -> void:
 		var box := VBoxContainer.new()
 		box.alignment = BoxContainer.ALIGNMENT_CENTER
 		card.add_child(box)
-		var value := TerminalTheme.label(str(int(counts.get(entry[0], 0))),
+		# Chiave assente = il backend NON sa dire quel numero (immagine container
+		# più vecchia del gioco, per qualche minuto durante un aggiornamento).
+		# «—» e non 0: uno zero è un'informazione — «la coda è vuota» — e questo
+		# non lo è. Mostrarlo come zero è come sbagliava la Console prima di
+		# chiedere alle code condivise, solo nell'altra direzione.
+		var value := TerminalTheme.label(
+				str(int(counts[entry[0]])) if counts.has(entry[0]) else "—",
 				20, color, "bold")
 		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		box.add_child(value)

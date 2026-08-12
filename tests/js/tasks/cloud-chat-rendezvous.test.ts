@@ -20,6 +20,20 @@ function request(body: unknown) {
   return { json: vi.fn().mockResolvedValue(body) } as never;
 }
 
+/** Budget dei test, misurato — non il default.
+ *
+ * Ogni test fa `await import` della route DENTRO il proprio corpo, e il primo
+ * paga il transform TypeScript dell'intero grafo del modulo: 519ms a macchina
+ * scarica (--reporter=verbose, 2026-08-12; gli altri 1–2ms, a grafo caldo).
+ * Sotto contesa — la suite gira con 13 worker che transformano tutti insieme
+ * — quel costo si gonfia oltre il default di 5000ms: questo file è caduto con
+ * «Test timed out in 5000ms» in una run normale della suite (due test) e in
+ * entrambe le run sotto saturazione, sempre verde rieseguito da solo. Il
+ * rosso misurava la macchina, non il codice. Stessa famiglia e stessa cura di
+ * daemon.test.ts e cloud-bootstrap-restore.test.ts: 15s, la cifra già usata
+ * dai file fratelli. */
+const TEST_TIMEOUT_MS = 15_000;
+
 function chatDb({ closed }: { closed: Record<string, unknown> | null }) {
   const deliveredSelect = vi.fn().mockResolvedValue({
     data: [{ id: "11111111-1111-4111-8111-111111111111" }],
@@ -103,7 +117,7 @@ describe("POST /api/cloud-sync/chat — ACK correlato", () => {
       closed: false,
       reason: "superseded",
     });
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("non timbra il rendezvous quando close_rendezvous e' false", async () => {
     const db = chatDb({ closed: null });
@@ -125,7 +139,7 @@ describe("POST /api/cloud-sync/chat — ACK correlato", () => {
       delivered: 1,
       closed: false,
     });
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("chiude soltanto la richiesta attesa e restituisce il timestamp server", async () => {
     const expected = "2026-08-04T14:00:00.000Z";
@@ -158,5 +172,5 @@ describe("POST /api/cloud-sync/chat — ACK correlato", () => {
       closed: true,
       chat_delivered_at: deliveredAt,
     });
-  });
+  }, TEST_TIMEOUT_MS);
 });

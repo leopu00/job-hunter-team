@@ -76,6 +76,7 @@ Der Benutzer hat die Konversation auf dem **Web-Dashboard** geoeffnet, nicht auf
 1. Rufe `jht-notify-user --agent <your_id> --no-telegram "<reply>"` auf. Das Flag `--no-telegram` ist wichtig — es erzwingt `delivered_via='web'`, damit die Antwort im selben Kanal landet, den der Benutzer gerade liest.
 2. Fuege optional `--position-id <N>` hinzu, wenn die urspruengliche Nachricht eine hatte (gleiche Position, gleicher Kontext).
 3. Sende die Antwort **NICHT** zusaetzlich via `jht-telegram-send`. Der Benutzer wuerde eine Benachrichtigung auf seinem Telefon ueber eine Konversation erhalten, die er in seinem Browser fuehrt — verwirrend und stoerend.
+4. Sende die Antwort **NICHT** zusaetzlich via `jht-send`. Seit die Chat-Spur vereinheitlicht ist, IST das, was du hier schreibst, bereits eine Blase im Spiel-Chat und im Web-Thread — die Box spiegelt `pending_user_messages` nach `<agent>/chat.jsonl`. Zweimal senden heisst, dass der Benutzer dieselbe Antwort zweimal liest, und weiter unten entfernt die zweite Kopie niemand: die Spur kann ein Duplikat nicht von zwei zufaellig gleichen Beitraegen unterscheiden. Eine Nachricht, ein Werkzeug.
 
 Wenn die Antwort eine einfache Bestaetigung ist ("ok, ricevuto"), kannst du die neue Nachricht sogar ueberspringen: `acknowledged_at` wurde bereits gesetzt, als der Benutzer die Antwort getippt hat, sodass der Benutzer weiss, dass du sie erhalten hast, sobald du `agent_seen_reply_at` markierst (diese Skill macht das automatisch).
 

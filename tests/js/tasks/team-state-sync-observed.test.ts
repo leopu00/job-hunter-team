@@ -22,6 +22,20 @@ function request(body: unknown) {
   return { json: vi.fn().mockResolvedValue(body) } as never;
 }
 
+/** Budget dei test, misurato — non il default.
+ *
+ * Ogni test fa `await import` della route DENTRO il proprio corpo, e il primo
+ * per grafo paga il transform TypeScript: 643ms per sync-observed e 123ms per
+ * la route legacy del PATCH, a macchina scarica (--reporter=verbose,
+ * 2026-08-12; il resto 2–3ms a grafo caldo). Sotto contesa — 13 worker che
+ * transformano tutti insieme — quel costo si gonfia oltre il default di
+ * 5000ms: questo file è caduto con «Test timed out in 5000ms» in una run
+ * normale della suite e in entrambe le run sotto saturazione, sempre verde
+ * rieseguito da solo. Il rosso misurava la macchina, non il codice. Stessa
+ * famiglia e stessa cura di daemon.test.ts e cloud-bootstrap-restore.test.ts:
+ * 15s, la cifra già usata dai file fratelli. */
+const TEST_TIMEOUT_MS = 15_000;
+
 function teamStateDb(result: Record<string, unknown> | null) {
   const maybeSingle = vi.fn().mockResolvedValue({ data: result, error: null });
   const query = {
@@ -94,7 +108,7 @@ describe("POST /api/team-state/sync-observed", () => {
       sync_completed_at: observedAt,
       last_action_at: observedAt,
     });
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("un failure non tocca sync_completed_at", async () => {
     const expected = "2026-08-04T13:59:59.000Z";
@@ -117,7 +131,7 @@ describe("POST /api/team-state/sync-observed", () => {
       last_action: "sync:push_failed",
       last_action_at: observedAt,
     });
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("restituisce 409 se B ha sostituito A o A e' gia terminale", async () => {
     const expected = "2026-08-04T14:00:00.000Z";
@@ -135,7 +149,7 @@ describe("POST /api/team-state/sync-observed", () => {
       status: "completed",
       reason: "superseded",
     });
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("rifiuta status o correlazione malformati senza scrivere", async () => {
     const db = teamStateDb(null);
@@ -148,7 +162,7 @@ describe("POST /api/team-state/sync-observed", () => {
 
     expect(response.status).toBe(400);
     expect(db.from).not.toHaveBeenCalled();
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("il PATCH observed legacy non puo bypassare il CAS", async () => {
     const from = vi.fn();
@@ -172,5 +186,5 @@ describe("POST /api/team-state/sync-observed", () => {
       error: "sync_observed_endpoint_required",
     });
     expect(from).not.toHaveBeenCalled();
-  });
+  }, TEST_TIMEOUT_MS);
 });

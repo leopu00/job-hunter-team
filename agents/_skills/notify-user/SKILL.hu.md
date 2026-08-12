@@ -16,6 +16,20 @@ A felhasználónak több csatornája van (Telegram bot, webes dashboard, jövőb
 
 A felhasználó tehát minden üzenetet megkap valahol. Az ágensnek soha nem kell kezelnie a "Telegram leállt" ágakat.
 
+## ⚠️ Amióta a chat-sáv egységes: ez az üzenet EGYBEN chatbuborék is
+
+A `jht-send` és a `jht-notify-user` régen két különböző helyre írt — a
+chat-szálba és az értesítési sorba. Ez már nem így van. A box tükrözi a
+`pending_user_messages` táblát a `<ágens>/chat.jsonl` fájlba, tehát amit itt
+írsz, az a játék chatjében és a webes szálban is megjelenik a te
+buborékodként, a `jht-send`-del küldött válaszaid mellett.
+
+A következmény az egyetlen szabály, ami itt számít: **egy üzenet, egy
+eszköz.** Soha ne küldd ugyanazt a tartalmat mindkét úton. A felhasználó
+kétszer olvasná, és egyik példány sem tud a másikról — a sáv nem tudja
+megkülönböztetni a duplikátumot két olyan körtől, amely véletlenül ugyanazt
+mondja (az „ok” ezerszer érkezik), tehát lejjebb senki nem takarítja el.
+
 ## Mikor használd
 
 - ✅ Capitano értesíti a felhasználót minden N kész pozíciónál (2026-05-13 döntés, kötegelt).

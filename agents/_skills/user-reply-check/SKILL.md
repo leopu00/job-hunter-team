@@ -75,6 +75,7 @@ The user opened the conversation on the **web dashboard**, not on Telegram. They
 1. Call `jht-notify-user --agent <your_id> --no-telegram "<reply>"`. The `--no-telegram` flag is important — it forces `delivered_via='web'` so the answer lands in the same channel the user is reading.
 2. Optionally include `--position-id <N>` when the original message had one (same position, same context).
 3. **Do NOT** also send the reply via `jht-telegram-send`. The user would receive a notification on their phone about a conversation they're having in their browser — confusing and noisy.
+4. **Do NOT** also send the reply via `jht-send`. Since the chat lane was unified, what you write here already IS a bubble in the game chat and in the web chat thread — the box mirrors `pending_user_messages` into `<agent>/chat.jsonl`. Sending it twice means the user reads the same answer twice, and nothing downstream removes the second copy: the lane cannot tell a duplicate from two turns that happen to match. One message, one tool.
 
 If the reply is a simple acknowledgment ("ok, ricevuto"), you can even skip the new message: `acknowledged_at` was already set when the user typed the reply, so the user knows you got it as soon as you mark `agent_seen_reply_at` (this skill does that automatically).
 
