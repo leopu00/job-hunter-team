@@ -939,71 +939,10 @@ if [ -d "$TEAM_SRC" ]; then
 fi
 
 # ── Skill distribution ──────────────────────────────────────────────────────
-# Per-agent skill discovery: each agent only sees the skills it actually
-# uses. The shared library lives at agents/_skills/; the manifest at
-# agents/<role>/skills.list declares which ones the agent consumes.
-# Private skills under agents/<role>/_skills/ are always copied (no
-# manifest needed — they are role-specific by definition).
-#
-# Claude Code reads .claude/skills/ in the cwd; Codex/Kimi read
-# .agents/skills/ — we populate both so the agent works regardless of
-# which CLI start-agent.sh selects via PROVIDER. Each spawn rewrites
-# the workspace skill folders so a manifest change between spawns is
-# picked up cleanly.
-SKILLS_LIB="$REPO_ROOT/agents/_skills"
-SKILL_MANIFEST="$REPO_ROOT/agents/$ROLE/skills.list"
-PRIVATE_SKILLS_DIR="$REPO_ROOT/agents/$ROLE/_skills"
-CLAUDE_SKILLS_DIR="$AGENT_DIR/.claude/skills"
-AGENTS_SKILLS_DIR="$AGENT_DIR/.agents/skills"
-
-rm -rf "$CLAUDE_SKILLS_DIR" "$AGENTS_SKILLS_DIR"
-mkdir -p "$CLAUDE_SKILLS_DIR" "$AGENTS_SKILLS_DIR"
-
-_copy_skill() {
-  local src="$1"
-  local name="$2"
-  cp -R "$src" "$CLAUDE_SKILLS_DIR/$name"
-  cp -R "$src" "$AGENTS_SKILLS_DIR/$name"
-  # Locale-aware: if SKILL.<locale>.md exists, use it as SKILL.md
-  local localized="$src/SKILL.$USER_LOCALE.md"
-  if [ "$USER_LOCALE" != "en" ] && [ -f "$localized" ]; then
-    cp "$localized" "$CLAUDE_SKILLS_DIR/$name/SKILL.md"
-    cp "$localized" "$AGENTS_SKILLS_DIR/$name/SKILL.md"
-  fi
-  # Remove locale variants from workspace (agent sees only SKILL.md)
-  rm -f "$CLAUDE_SKILLS_DIR/$name"/SKILL.*.md
-  rm -f "$AGENTS_SKILLS_DIR/$name"/SKILL.*.md
-}
-
-_skills_count=0
-if [ -f "$SKILL_MANIFEST" ]; then
-  while IFS= read -r _line || [ -n "$_line" ]; do
-    # Strip comments and surrounding whitespace
-    _name="${_line%%#*}"
-    _name="$(echo "$_name" | tr -d '[:space:]')"
-    [ -z "$_name" ] && continue
-    _src="$SKILLS_LIB/$_name"
-    if [ ! -d "$_src" ]; then
-      echo "  ⚠ skill '$_name' listed in $SKILL_MANIFEST but not found at $_src" >&2
-      continue
-    fi
-    _copy_skill "$_src" "$_name"
-    _skills_count=$((_skills_count + 1))
-  done < "$SKILL_MANIFEST"
-fi
-
-if [ -d "$PRIVATE_SKILLS_DIR" ]; then
-  for _skill in "$PRIVATE_SKILLS_DIR"/*/; do
-    [ -d "$_skill" ] || continue
-    _name="$(basename "$_skill")"
-    [ "$_name" = "_lib" ] && continue
-    _copy_skill "$_skill" "$_name"
-    _skills_count=$((_skills_count + 1))
-  done
-fi
-
-echo "  → $_skills_count skill(s) installed in $CLAUDE_SKILLS_DIR + $AGENTS_SKILLS_DIR"
-unset _line _name _src _skill _skills_count
+# Unica implementazione condivisa con gli spawn speciali. skills.list resta
+# la source of truth delle shared; agents/<role>/_skills aggiunge solo le
+# private del ruolo. La funzione ricostruisce sia .claude che .agents.
+JHT_APP_ROOT="$REPO_ROOT" jht_spawn_copy_skills "$ROLE" "$AGENT_DIR" "start-agent"
 
 # ── Warmup ~/.claude.json se manca ──────────────────────────────────────────
 # Bug osservato 2026-05-12: Claude Code 2.1.139 considera "loggato" solo se

@@ -143,7 +143,9 @@ jht_spawn_sync_prompt() {
 }
 
 # jht_spawn_copy_skills <ruolo> <workdir> <label>
-#   Installa nella workdir le skill dichiarate in agents/<ruolo>/skills.list.
+#   Installa nella workdir le skill condivise dichiarate nel manifest e tutte
+#   le private del ruolo. JHT_APP_ROOT e' configurabile solo per gli scaffold
+#   riproducibili; nel container resta /app.
 #   Claude legge .claude/skills/, Codex/Kimi leggono .agents/skills/: popoliamo
 #   entrambe come fa start-agent.sh, così l'agente funziona con ogni provider.
 #   Ogni spawn riscrive le cartelle → un cambio di manifest è preso al volo.
@@ -152,32 +154,56 @@ jht_spawn_sync_prompt() {
 #   nella sua lingua, invece di leggersi 6 traduzioni a ogni giro.
 jht_spawn_copy_skills() {
   local role="$1" workdir="$2" label="$3"
-  local lib="/app/agents/_skills" manifest="/app/agents/$role/skills.list"
-  local dest name line locale localized
-  [ -f "$manifest" ] || return 0
+  local app_root="${JHT_APP_ROOT:-/app}"
+  local lib="$app_root/agents/_skills"
+  local manifest="$app_root/agents/$role/skills.list"
+  local private="$app_root/agents/$role/_skills"
+  local dest name line locale localized src skill
   locale="$(jht_spawn_user_locale)"
   for dest in "$workdir/.claude/skills" "$workdir/.agents/skills"; do
+    # Ricostruire da zero e' parte dell'isolamento: una skill rimossa dal
+    # manifest (o privata di un ruolo precedente) non deve sopravvivere.
+    rm -rf "$dest" 2>/dev/null || true
     mkdir -p "$dest" 2>/dev/null || continue
-    while IFS= read -r line || [ -n "$line" ]; do
-      # strip del commento inline + spazi (il manifest è documentato)
-      name="${line%%#*}"
-      name="$(printf '%s' "$name" | tr -d '[:space:]')"
-      [ -z "$name" ] && continue
-      if [ ! -d "$lib/$name" ]; then
-        echo "[$label] WARN: skill '$name' is listed in skills.list but is missing from $lib" >&2
-        continue
-      fi
-      rm -rf "$dest/$name" 2>/dev/null || true
-      cp -R "$lib/$name" "$dest/$name" 2>/dev/null || true
-      # Locale-aware: SKILL.<locale>.md vince su SKILL.md (fallback silenzioso
-      # sul baseline EN se la traduzione non esiste), poi via le varianti — il
-      # glob SKILL.*.md non matcha SKILL.md, che resta l'unico file letto.
-      localized="$lib/$name/SKILL.$locale.md"
-      if [ "$locale" != "en" ] && [ -f "$localized" ]; then
-        cp "$localized" "$dest/$name/SKILL.md" 2>/dev/null || true
-      fi
-      rm -f "$dest/$name"/SKILL.*.md 2>/dev/null || true
-    done < "$manifest"
+
+    if [ -f "$manifest" ]; then
+      while IFS= read -r line || [ -n "$line" ]; do
+        # strip del commento inline + spazi (il manifest e' documentato)
+        name="${line%%#*}"
+        name="$(printf '%s' "$name" | tr -d '[:space:]')"
+        [ -z "$name" ] && continue
+        # _lib contiene dipendenze delle skill, non una skill discoverable.
+        [ "$name" = "_lib" ] && continue
+        src="$lib/$name"
+        if [ ! -d "$src" ]; then
+          echo "[$label] WARN: skill '$name' is listed in skills.list but is missing from $lib" >&2
+          continue
+        fi
+        cp -R "$src" "$dest/$name" 2>/dev/null || true
+        # Locale-aware: SKILL.<locale>.md vince su SKILL.md (fallback
+        # silenzioso sul baseline EN), poi via le varianti.
+        localized="$src/SKILL.$locale.md"
+        if [ "$locale" != "en" ] && [ -f "$localized" ]; then
+          cp "$localized" "$dest/$name/SKILL.md" 2>/dev/null || true
+        fi
+        rm -f "$dest/$name"/SKILL.*.md 2>/dev/null || true
+      done < "$manifest"
+    fi
+
+    if [ -d "$private" ]; then
+      for skill in "$private"/*/; do
+        [ -d "$skill" ] || continue
+        name="$(basename "$skill")"
+        [ "$name" = "_lib" ] && continue
+        src="${skill%/}"
+        cp -R "$src" "$dest/$name" 2>/dev/null || true
+        localized="$src/SKILL.$locale.md"
+        if [ "$locale" != "en" ] && [ -f "$localized" ]; then
+          cp "$localized" "$dest/$name/SKILL.md" 2>/dev/null || true
+        fi
+        rm -f "$dest/$name"/SKILL.*.md 2>/dev/null || true
+      done
+    fi
   done
 }
 

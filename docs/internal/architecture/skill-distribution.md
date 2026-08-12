@@ -100,8 +100,12 @@ Each Claude / Codex / Kimi instance launched from `cwd = /app/agents/<role>/` th
 ⬜ Update CONTRIBUTING + agents/_team/architettura.md (Skills section)
    to describe the new layout and how to add a skill (drop into
    agents/_skills/ for shared, into agents/<role>/_skills/ for private)
-⬜ Add a smoke test: launch each role's tmux session, capture-pane,
-   verify the agent reports exactly its expected skill set
+✅ Add a deterministic distribution smoke test (`tests/test_skill_distribution.py`):
+   run the real `jht_spawn_copy_skills` against temporary shared/private pools
+   and a role manifest; assert the exact same isolated set under both
+   `.claude/skills/` and `.agents/skills/`, with `_lib/`, unlisted shared
+   skills, stale output and another role's private skills excluded
+   (`JHT-SKILLS-SYMLINK-TEST`, commit 687f6903b4)
 ⬜ Full-team integration test inside the container: spin up the actual
    JHT team (Captain + Scout + Analyst + Scorer + Writer + Critic +
    Sentinel + Assistant), drive a real run end-to-end, and verify each
@@ -113,6 +117,23 @@ Each Claude / Codex / Kimi instance launched from `cwd = /app/agents/<role>/` th
 ```
 
 ## Reproducible test scaffold
+
+The launcher-distribution contract has a local, provider-free regression gate:
+
+```bash
+python -m pytest tests/test_skill_distribution.py -q
+```
+
+It creates temporary `agents/_skills/`, `agents/<role>/_skills/` and
+`skills.list` fixtures, then invokes the production distributor from
+`.launcher/spawn-lib.sh`. The manifest remains the authority for shared skills;
+the role-private directory remains the authority for private skills. No LLM,
+tmux team or container is started.
+
+The provider discovery check below remains a runtime compatibility test, not a
+replacement for this deterministic distribution test. In particular, it is
+still required after a Claude/Codex/Kimi discovery behaviour change and is
+tracked separately as `JHT-SKILLS-CODEX-KIMI-DISCOVERY`.
 
 The 3-cwd test on `~/Desktop/skill-isolation-test/` (with `CLAUDE.md` + `AGENTS.md` per agent and one private skill each) is preserved for future regression checks against new provider versions or new providers (e.g. OpenCode when added — see ADR-0002). To re-run for any provider, swap the launch command in the tmux step:
 
