@@ -40,9 +40,9 @@ def test_pid1_creates_first_setup_halt_before_watchdogs():
 
 def test_assistant_onboarding_does_not_remove_the_halt_gate():
     src = _src(START)
-    branch = src[src.index("if (!agentArg)") : src.index("if (usingContainer())")]
-    assert "unlinkSync(haltedFlag)" in branch
-    assert "if (!agentArg)" in branch
+    branch = src[src.index("if (!agentArg)") : src.index("// Container mode:")]
+    assert "clearGlobalHaltGate(containerMode)" in branch
+    assert "unlinkSync(haltedFlag)" in src
     setup = _src(SETUP)
     assert "BackendBus.ensure_assistant()" in setup
 
