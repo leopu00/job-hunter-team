@@ -53,6 +53,7 @@ const GAME_MATRIX = readFileSync(
   resolve(ROOT, "game/tools/test-matrix.txt"),
   "utf-8",
 );
+const GAME_RUNNER = readFileSync(resolve(ROOT, "game/tools/run.sh"), "utf-8");
 
 const row = (over: Record<string, unknown> = {}) => ({
   legacy_id: 42,
@@ -143,15 +144,20 @@ describe("la ricerca NON eredita la vista", () => {
 
 describe("la ricerca scende nel database, in TUTTI i rami", () => {
   it("cloud: prima del limite, non dopo", () => {
+    const start = CLOUD.indexOf("export async function getPositions(");
+    const pagination = CLOUD.indexOf("fetchPostgrestRows", start);
     const fetchBlock = CLOUD.slice(
-      CLOUD.indexOf("export async function getPositions("),
-      CLOUD.indexOf("const { data, error } = await query;"),
+      start,
+      CLOUD.indexOf("if (error || !data) return [];", pagination),
     );
     expect(fetchBlock).toContain("parsePositionQuery(opts?.q)");
-    // L'ordine è la sostanza: cercare dopo `.limit()` vuol dire cercare
-    // dentro le prime N righe per data.
+    // L'ordine è la sostanza: ricerca e filtri devono costruire l'universo
+    // PRIMA che limit/range ne chiedano una finestra.
     expect(fetchBlock.indexOf("query.or(")).toBeLessThan(
       fetchBlock.indexOf("query.limit(opts.limit)"),
+    );
+    expect(fetchBlock.indexOf("query.or(")).toBeLessThan(
+      fetchBlock.indexOf("fetchPostgrestRows"),
     );
   });
 
@@ -227,6 +233,13 @@ describe("la stessa ricerca nel gioco", () => {
     // modo in cui 15 test su 45 erano rimasti invisibili.
     expect(GAME_MATRIX).toContain("global_search|script|gate");
     expect(GAME_MATRIX).toContain("tools/global_search_selftest.gd");
+  });
+
+  it("il runner tratta il marker del selftest come testo letterale", () => {
+    // `[search-test]` è una classe di caratteri per grep senza -F: il test
+    // stampava PASS, ma il gate Linux dichiarava che il marker mancava.
+    expect(GAME_MATRIX).toContain("|[search-test] PASS");
+    expect(GAME_RUNNER).toContain('grep -Fq -- "$marker"');
   });
 
   it("mostra l'ID nel risultato", () => {
