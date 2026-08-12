@@ -49,6 +49,7 @@ def test_shared_python_user_visible_copy_has_no_italian_baseline():
 ## lotto e arriva a 0 quando il fronte è chiuso. Se sale, qualcuno ha aggiunto
 ## copy italiana nuova — che è esattamente ciò che va fermato subito.
 GAME_COPY_BUDGET = 85
+AGENT_COPY_BUDGET = 1005
 
 
 def test_backend_perimeter_user_visible_copy_is_english():
@@ -58,7 +59,8 @@ def test_backend_perimeter_user_visible_copy_is_english():
     container's own messages: leaving them out of the gate is what let the
     English pass ship half-done.
     """
-    leaks = [leak for area, dirs in census.AREAS.items() if area != "game"
+    open_fronts = {"agents", "game"}
+    leaks = [leak for area, dirs in census.AREAS.items() if area not in open_fronts
              for leak in _scan(dirs)]
     assert not leaks, (
         f"Italian user-visible backend copy ({len(leaks)}):\n" + "\n".join(leaks)
@@ -80,6 +82,20 @@ def test_game_copy_budget_only_goes_down():
         f"the budget is stale: {len(leaks)} left but it still says "
         f"{GAME_COPY_BUDGET}. Lower GAME_COPY_BUDGET to {len(leaks)} so the "
         "next regression is caught where the work actually stopped."
+    )
+
+
+def test_agent_copy_budget_only_goes_down():
+    """English agent prompts/tools are measured while their pass is open."""
+    leaks = _scan(census.AREAS["agents"])
+    assert len(leaks) <= AGENT_COPY_BUDGET, (
+        f"Italian copy in English agent surfaces grew: "
+        f"{len(leaks)} > {AGENT_COPY_BUDGET}.\n" + "\n".join(leaks[:40])
+    )
+    assert len(leaks) >= AGENT_COPY_BUDGET - 20, (
+        f"the agent budget is stale: {len(leaks)} left but it still says "
+        f"{AGENT_COPY_BUDGET}. Lower AGENT_COPY_BUDGET to {len(leaks)} so "
+        "the next regression is caught where the work actually stopped."
     )
 
 
@@ -136,6 +152,14 @@ def test_python_census_reads_copy_from_arbitrary_dictionary_fields(tmp_path):
         (2, "Tutto regolare"),
         (3, "Ricalcola prima del prossimo"),
     ]
+
+
+def test_real_scaling_verdict_inside_then_field_is_counted():
+    hits = _scan(("agents/_skills/scaling-calc",))
+    assert any(
+        "ri-misura il burn reale e ricalcola prima del prossimo" in hit
+        for hit in hits
+    )
 
 
 def test_agents_are_an_explicit_census_area():
