@@ -36,7 +36,8 @@ jht_spawn_sync_prompt dottore "$DOTTORE_DIR" "$LABEL"
 #     COPIATE nella workdir, altrimenti `session-refresh` (che il prompt del
 #     Dottore gli dice di aprire) semplicemente non esiste per il provider.
 #     Divergenza storica: spawn-maintainer.sh lo faceva, spawn-doctor no.
-jht_spawn_copy_skills dottore "$DOTTORE_DIR" "$LABEL"
+jht_spawn_copy_skills dottore "$DOTTORE_DIR" "$LABEL" \
+  "$(jht_spawn_active_provider)"
 
 # 3) Soppressione auto-update Codex (stesso fix di start-agent.sh).
 jht_spawn_codex_dismiss_update
