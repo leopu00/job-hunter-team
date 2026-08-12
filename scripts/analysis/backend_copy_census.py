@@ -70,10 +70,7 @@ PY_VISIBLE_CALLS = {
     "ValueError", "RuntimeError", "SystemExit", "error", "warn",
     "warning", "_log",
 }
-PY_VISIBLE_FIELDS = {
-    "message", "reason", "hint", "note", "error", "evidence",
-    "detail", "suggest", "label",
-}
+LOCALES = {"de", "es", "fr", "hu", "it", "pt"}
 
 # ── Sink shell: righe che parlano all'utente (commenti esclusi) ─────────
 SH_VISIBLE = re.compile(r"\b(?:echo|printf|err|info|warn|die|log)\b")
@@ -112,10 +109,18 @@ def python_visible_literals(path: Path):
     """Letterali nei sink user-visible di un file Python."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     module_doc = ast.get_docstring(tree, clean=False)
+    seen: set[tuple[int, str]] = set()
+
+    def unseen_strings(node: ast.AST):
+        for item in _py_strings(node):
+            if item not in seen:
+                seen.add(item)
+                yield item
+
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and _call_name(node) in PY_VISIBLE_CALLS:
             for arg in node.args:
-                yield from _py_strings(arg)
+                yield from unseen_strings(arg)
             for kw in node.keywords:
                 if kw.arg in {None, "help", "description", "message"}:
                     # `ArgumentParser(description=__doc__)` stampa il docstring
@@ -124,12 +129,20 @@ def python_visible_literals(path: Path):
                     if module_doc and any(
                             isinstance(child, ast.Name) and child.id == "__doc__"
                             for child in ast.walk(kw.value)):
-                        yield 1, module_doc
-                    yield from _py_strings(kw.value)
+                        item = (1, module_doc)
+                        if item not in seen:
+                            seen.add(item)
+                            yield item
+                    yield from unseen_strings(kw.value)
         elif isinstance(node, ast.Dict):
-            for key, value in zip(node.keys, node.values):
-                if isinstance(key, ast.Constant) and key.value in PY_VISIBLE_FIELDS:
-                    yield from _py_strings(value)
+            # Copy stored in data structures is still copy. The old allowlist
+            # of field names (`message`, `reason`, `note`, ...) saw three of
+            # five real verdicts in scaling_calc.py: `_fmt()` also renders the
+            # values under `then`, but a new key silently fell out of the
+            # census. The Italian matcher remains the noise filter; dictionary
+            # keys are identifiers and stay out, every textual value is read.
+            for value in node.values:
+                yield from unseen_strings(value)
 
 
 def shell_visible_lines(path: Path):
@@ -139,6 +152,18 @@ def shell_visible_lines(path: Path):
         if stripped.startswith("#"):
             continue
         if SH_VISIBLE.search(stripped):
+            yield i, line
+
+
+def markdown_visible_lines(path: Path):
+    """Prose in the canonical English agent prompt or skill.
+
+    Agent Markdown is itself the surface delivered to the model. Unlike
+    implementation docs, comments do not exist here: headings, examples and
+    fenced snippets all become prompt context and therefore all count.
+    """
+    for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if line.strip():
             yield i, line
 
 
@@ -302,6 +327,10 @@ AREAS = {
     "cli": ("cli/src", "cli/wizard", "cli/bin"),
     "launcher": (".launcher",),
     "shared": ("shared",),
+    # English role prompts, shared/private skills and the executable tools
+    # shipped to agents. Localized `*.it.md`/etc. catalogues are excluded by
+    # construction; the baseline `*.md` is what JHT_LANG=en installs.
+    "agents": ("agents",),
     # Fronte Godot di O-07. I cataloghi restano fuori: lì l'italiano è il
     # catalogo strutturale (S) e le altre sei lingue gli stanno accanto —
     # tradurlo sarebbe cancellare una lingua, non aggiungerne una.
@@ -328,9 +357,28 @@ def _is_selftest(path: Path) -> bool:
 
 
 def _excluded(path: Path) -> bool:
-    rel = str(path.relative_to(ROOT))
+    return _excluded_relative(path.relative_to(ROOT).as_posix())
+
+
+def _excluded_relative(rel: str) -> bool:
+    """Whether a repo-relative name is excluded, on every host OS."""
+    rel = rel.replace("\\", "/")
     return any(rel == key or rel.startswith(key + "/")
                for key in CENSUS_EXCLUDED)
+
+
+def _localized_markdown(path: Path) -> bool:
+    parts = path.name.split(".")
+    return len(parts) >= 3 and parts[-2] in LOCALES and parts[-1] == "md"
+
+
+def _has_shebang(path: Path, interpreters: tuple[str, ...]) -> bool:
+    try:
+        with path.open(encoding="utf-8") as source:
+            first = source.readline().lower()
+    except (OSError, UnicodeDecodeError):
+        return False
+    return first.startswith("#!") and any(name in first for name in interpreters)
 
 
 def _iter_files(dirs, suffixes):
@@ -358,15 +406,23 @@ def scan(dirs) -> list[str]:
 
     def record(path: Path, line: int, text: str) -> None:
         if ITALIAN_COPY.search(text):
-            hits.append(f"{path.relative_to(ROOT)}:{line}: "
+            hits.append(f"{path.relative_to(ROOT).as_posix()}:{line}: "
                         f"{' '.join(text.split())[:160]}")
 
     for path in _iter_files(dirs, {".py"}):
         for line, value in python_visible_literals(path):
             record(path, line, value)
+    for path in _iter_files(dirs, {""}):
+        if _has_shebang(path, ("python",)):
+            for line, value in python_visible_literals(path):
+                record(path, line, value)
     for path in _iter_files(dirs, {".sh"}):
         for line, text in shell_visible_lines(path):
             record(path, line, text)
+    for path in _iter_files(dirs, {""}):
+        if _has_shebang(path, ("/sh", "bash")):
+            for line, text in shell_visible_lines(path):
+                record(path, line, text)
     for path in _iter_files(dirs, {".js", ".mjs", ".ts"}):
         if path.name.endswith(".test.ts"):
             continue
@@ -375,6 +431,10 @@ def scan(dirs) -> list[str]:
     for path in _iter_files(dirs, {".gd"}):
         for line, value in gdscript_visible_literals(path):
             record(path, line, value)
+    for path in _iter_files(dirs, {".md"}):
+        if not _localized_markdown(path):
+            for line, value in markdown_visible_lines(path):
+                record(path, line, value)
     return hits
 
 
