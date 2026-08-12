@@ -16,6 +16,7 @@
 import { describe, it, expect } from "vitest";
 import {
   bootstrapLimits,
+  bootstrapRetryDelayMs,
   decideBootstrapPush,
   nextBootstrapState,
   signatureIsEmpty,
@@ -82,6 +83,18 @@ describe("quando spinge", () => {
   it("dentro l'intervallo non spinge", () => {
     const state = { pushes: 1, started_at: iso(T0 - 5 * MIN), last_push_at: iso(T0 - 5 * MIN) };
     expect(decide({ state })).toMatchObject({ push: false, reason: "cadenza" });
+  });
+
+  it("dopo errori consecutivi applica backoff, senza martellare il cloud", () => {
+    const state = {
+      pushes: 2,
+      consecutive_failures: 2,
+      started_at: iso(T0 - H),
+      last_push_at: iso(T0 - 45 * MIN),
+    };
+    expect(bootstrapRetryDelayMs(limits, state)).toBe(60 * MIN);
+    expect(decide({ state })).toMatchObject({ push: false, reason: "backoff" });
+    expect(decide({ state, now: T0 + 16 * MIN }).push).toBe(true);
   });
 
   it("niente di nuovo in locale = nessun push (il budget non si consuma a vuoto)", () => {
@@ -161,6 +174,7 @@ describe("garanzia 2 — il budget chiude anche se la fase non passa mai", () =>
       result: { ok: false, authFailed: false, skipped: 0 },
     });
     expect(next.pushes).toBe(6);
+    expect(next.consecutive_failures).toBe(1);
     // ...ma la firma no: il tick dopo ritenta le stesse righe.
     expect(next.signature).toBeUndefined();
   });
@@ -190,6 +204,7 @@ describe("esiti del push → stato successivo", () => {
     });
     expect(next).toMatchObject({ pushes: 1, started_at: iso(T0), last_push_at: iso(T0) });
     expect(next.signature).toEqual(sig(3));
+    expect(next.consecutive_failures).toBe(0);
   });
 
   it("righe scartate dopo un 413: la firma NON avanza → si ritenta", () => {

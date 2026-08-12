@@ -211,6 +211,23 @@ export function signaturesDiffer(a, b) {
 }
 
 /**
+ * Attesa dopo l'ultimo tentativo. Ogni fallimento consecutivo raddoppia la
+ * cadenza (15m → 30m → 60m…), con tetto alla finestra bootstrap: un endpoint
+ * guasto riceve sempre meno traffico e budget/finestra continuano a garantire
+ * la terminazione. Un successo azzera `consecutive_failures`.
+ */
+export function bootstrapRetryDelayMs(limits, state = {}) {
+  const failures = Math.max(
+    0,
+    Number.isFinite(state.consecutive_failures)
+      ? Math.trunc(state.consecutive_failures)
+      : 0,
+  );
+  const multiplier = 2 ** Math.min(failures, 8);
+  return Math.min(limits.intervalMs * multiplier, limits.windowMs);
+}
+
+/**
  * La decisione, pura. Nessun IO: tutto quello che serve arriva dai parametri,
  * così il comportamento è verificabile in millisecondi invece che in ore.
  *
@@ -254,7 +271,10 @@ export function decideBootstrapPush({ now, phase, state = {}, limits, signature 
   // cloud lo sa entro un tick del daemon. È la metà del valore di questa
   // funzione — un account che si popola subito non sembra mai rotto.
   const lastAt = parseMs(state.last_push_at);
-  if (lastAt !== null && now - lastAt < limits.intervalMs) return no('cadenza');
+  const retryDelayMs = bootstrapRetryDelayMs(limits, state);
+  if (lastAt !== null && now - lastAt < retryDelayMs) {
+    return no((state.consecutive_failures ?? 0) > 0 ? 'backoff' : 'cadenza');
+  }
 
   if (signature === undefined) {
     return { push: false, reason: 'firma-richiesta', done: false, doneReason: null, needsSignature: true };
@@ -293,6 +313,12 @@ export function nextBootstrapState({ state = {}, now, signature, result }) {
   if (fullSuccess) {
     next.signature = signature;
     next.last_ok_at = nowIso;
+    next.consecutive_failures = 0;
+  } else {
+    next.consecutive_failures =
+      (Number.isFinite(state.consecutive_failures)
+        ? state.consecutive_failures
+        : 0) + 1;
   }
   if (result && result.authFailed === true) {
     next.done = true;

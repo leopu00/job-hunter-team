@@ -39,6 +39,7 @@ const FLAG_HOOKS := {
 	"JHT_MAP_PANEL_TEST": "_map_panel_selftest",
 	"JHT_USAGE_PANEL_TEST": "_usage_panel_selftest",
 	"JHT_FEEDBACK_PANEL_TEST": "_feedback_panel_selftest",
+	"JHT_TARGET_ROLE_CATEGORY_TEST": "_target_role_category_selftest",
 	"JHT_GUIDED_TEST": "_guided_onboarding_selftest",
 	"JHT_TOUR_TEST": "_tour_selftest",
 	"JHT_TOUR_EXIT_TEST": "_tour_exit_selftest",
@@ -1533,6 +1534,79 @@ func _tour_exit_selftest() -> void:
 	get_tree().quit(0 if ok else 1)
 
 
+func _target_role_category_selftest() -> void:
+	await get_tree().process_frame
+	var failures: Array[String] = []
+	var check := func(ok: bool, message: String) -> void:
+		if not ok:
+			failures.append(message)
+	UIStrings.set_lang("de", false)
+	ScriptedOnboarding.set_provider_test_override(0)
+	ScriptedOnboarding.reset_for_test()
+	ScriptedOnboarding.choose("assistente", "start")
+	var localized_label := UIStrings.t("onb.a.role.design")
+	ScriptedOnboarding.choose("assistente", "design")
+
+	var draft := ScriptedOnboarding.profile_draft()
+	check.call(draft.get("target_role_category_id", "") == "design",
+			"nuova scelta non conserva l'ID categoria")
+	check.call(not draft.has("target_role"),
+			"nuova scelta crea target_role dalla label")
+	var specialty_options := ScriptedOnboarding.options("assistente")
+	check.call(not specialty_options.is_empty() \
+			and str(specialty_options[0].get("id", "")) == "specialist",
+			"categoria design non apre le specialty generiche")
+	ScriptedOnboarding.choose("assistente", "specialist")
+
+	var model := ScriptedOnboarding.llm_context()
+	var model_text := ScriptedOnboarding.llm_context_text()
+	var role_answers: Array = []
+	for answer in model.get("answers", []):
+		if answer is Dictionary and str(answer.get("step", "")) == "role":
+			role_answers.append(answer)
+	check.call(model.get("schema_version", 0) == 3,
+			"schema contesto non incrementato")
+	check.call(role_answers.size() == 1 \
+			and str(role_answers[0].get("value", "")) == "design",
+			"risposta ruolo non strutturata")
+	check.call(role_answers.size() == 1 \
+			and not (role_answers[0] as Dictionary).has("label"),
+			"label localizzata ancora nella risposta modello")
+	check.call(model_text.contains("target_role_category_id: design") \
+			and model_text.contains("target_specialty: specialist"),
+			"prompt senza categoria o specialty canoniche")
+	check.call(not model_text.contains(localized_label),
+			"prompt contaminato dalla label localizzata")
+
+	var enriched := ScriptedOnboarding.enrich_profile_fields({
+		"target_role": "Senior Product Designer",
+	})
+	check.call(enriched.get("target_role", "") == "Senior Product Designer",
+			"testo target_role libero modificato")
+	check.call(enriched.get("target_role_category_id", "") == "design" \
+			and enriched.get("target_specialty", "") == "specialist",
+			"profilo strutturato senza gli ID canonici")
+
+	# Il vecchio valore instrada in sola lettura, senza riscrivere il draft.
+	ScriptedOnboarding.reset_for_test()
+	ScriptedOnboarding._steps["assistente"] = "specialty"
+	ScriptedOnboarding._draft["target_role"] = "Data / AI"
+	var legacy_options := ScriptedOnboarding.options("assistente")
+	var legacy_draft := ScriptedOnboarding.profile_draft()
+	check.call(not legacy_options.is_empty() \
+			and str(legacy_options[0].get("id", "")) == "data_science",
+			"legacy non instrada le specialty data")
+	check.call(legacy_draft.get("target_role", "") == "Data / AI",
+			"target_role legacy modificato")
+	check.call(not legacy_draft.has("target_role_category_id"),
+			"target_role legacy migrato")
+
+	var ok := failures.is_empty()
+	print("TARGET-ROLE-CATEGORY-TEST ", "PASS" if ok else "FAIL ",
+			"" if ok else JSON.stringify({"failures": failures}))
+	get_tree().quit(0 if ok else 1)
+
+
 func _guided_onboarding_selftest() -> void:
 	var failures: Array[String] = []
 	var original_setup := SetupService.status.duplicate(true)
@@ -1636,7 +1710,12 @@ func _guided_onboarding_selftest() -> void:
 			"remote_first", "europe", "depends", "permanent", "improve", "scaleup"]:
 		ScriptedOnboarding.choose("assistente", choice)
 	var draft := ScriptedOnboarding.profile_draft()
-	check.call(draft.get("target_role") == "Software Engineering", "ruolo non raccolto")
+	check.call(draft.get("target_role_category_id") == "software",
+			"ID categoria ruolo non raccolto")
+	check.call(not draft.has("target_role"),
+			"la label ruolo ha contaminato target_role")
+	check.call(ScriptedOnboarding.preferences().get("target_specialty") == "backend",
+			"ID specialty non raccolto")
 	check.call(draft.get("experience_years") == "3", "esperienza non raccolta")
 	check.call(draft.get("location") == "Europa", "località non raccolta")
 	check.call(ScriptedOnboarding.options("assistente").size() == 3,
@@ -1759,9 +1838,17 @@ func _guided_onboarding_selftest() -> void:
 	draft = ScriptedOnboarding.profile_draft()
 	check.call(ScriptedOnboarding.answers().size() >= 12,
 			"le risposte onboarding non sono state strutturate")
-	check.call(ScriptedOnboarding.llm_context_text().contains("target_role") \
-			and ScriptedOnboarding.llm_context_text().contains("Software Engineering") \
-			and ScriptedOnboarding.llm_context().get("schema_version", 0) == 2,
+	var role_context := ScriptedOnboarding.llm_context()
+	var role_context_text := ScriptedOnboarding.llm_context_text()
+	var role_answer := (role_context.get("answers", []) as Array).filter(
+			func(item: Dictionary) -> bool: return str(item.get("step", "")) == "role")
+	check.call(role_context_text.contains("target_role_category_id") \
+			and role_context_text.contains("software") \
+			and role_context_text.contains("fullstack") \
+			and not role_context_text.contains(UIStrings.t("onb.a.role.software")) \
+			and role_context.get("schema_version", 0) == 3 \
+			and role_answer.size() == 1 \
+			and not (role_answer[0] as Dictionary).has("label"),
 			"contesto LLM onboarding incompleto")
 	ScriptedOnboarding.remember_profile_fields({"name": "Ada Test",
 			"email": "ada@example.com", "languages": "Italiano, English"})
@@ -1808,8 +1895,8 @@ func _guided_onboarding_selftest() -> void:
 		]) == "Italiano (madrelingua), Inglese (C1)",
 			"le lingue strutturate vengono mostrate come dizionari interni")
 	check.call(profile_panel._prof_edits.has("target_role") \
-			and profile_panel._prof_edits["target_role"].text == "Software Engineering",
-			"bozza scripted non precompila il profilo")
+			and profile_panel._prof_edits["target_role"].text == "",
+			"la categoria scripted ha contaminato il target_role libero")
 
 	# Regressione 24/07 — provider GIÀ configurato e container ancora spento:
 	# prima i dialoghi authored si spegnevano al solo vedere il token e la

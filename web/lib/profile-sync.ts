@@ -20,6 +20,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { encryptContacts } from "./pii-crypto";
+import { targetRoleChoiceError } from "../../shared/config/profile-schema";
 
 type Dict = Record<string, unknown>;
 const BLOCK_KINDS = [
@@ -176,6 +177,13 @@ export function mapYamlToCanonical(
 ): CanonicalProfile {
   const candidate = isObj(raw.candidate) ? raw.candidate : {};
   const personal = isObj(raw.personal) ? raw.personal : {};
+  const targetRoleCategoryId = str(raw.target_role_category_id);
+  const targetSpecialty = str(raw.target_specialty);
+  const targetRoleError = targetRoleChoiceError(
+    targetRoleCategoryId,
+    targetSpecialty,
+  );
+  if (targetRoleError) throw new Error(targetRoleError);
 
   // skills (dict {primary,secondary} o lista piatta)
   const rawSkills = candidate.skills ?? raw.skills;
@@ -405,6 +413,10 @@ export function mapYamlToCanonical(
     ),
     work_authorization: Array.isArray(rawWa) ? rawWa : [],
     positioning: {
+      ...(targetRoleCategoryId
+        ? { target_role_category_id: targetRoleCategoryId }
+        : {}),
+      ...(targetSpecialty ? { target_specialty: targetSpecialty } : {}),
       seniority_target: str(raw.seniority_target),
       industry: str(raw.industry),
       experience: candidate.experience ?? raw.experience,
@@ -472,18 +484,16 @@ export async function syncProfileToSupabase(
   // 3. contacts (1:1 upsert)
   if (c.contacts) {
     try {
-      const { error } = await admin
-        .from("candidate_contacts")
-        .upsert(
-          {
-            user_id: userId,
-            ...encryptContacts(
-              c.contacts as Record<string, string | null | undefined>,
-            ),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" },
-        );
+      const { error } = await admin.from("candidate_contacts").upsert(
+        {
+          user_id: userId,
+          ...encryptContacts(
+            c.contacts as Record<string, string | null | undefined>,
+          ),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
       if (error) throw error;
     } catch (e) {
       warnings.push(`candidate_contacts: ${(e as Error).message}`);
@@ -530,6 +540,7 @@ function clean<T extends Dict>(obj: T): Dict {
  */
 export function reconstructCanonicalProfile(d: ProfileTables): Dict {
   const p = d.profile ?? {};
+  const positioning = isObj(p.positioning) ? p.positioning : {};
   const skillsByCat: Record<string, string[]> = {};
   for (const s of d.skills) (skillsByCat[s.category] ??= []).push(s.name);
 
@@ -537,6 +548,8 @@ export function reconstructCanonicalProfile(d: ProfileTables): Dict {
     schema_version: 1,
     name: p.name,
     target_role: p.target_role,
+    target_role_category_id: positioning.target_role_category_id,
+    target_specialty: positioning.target_specialty,
     location: p.location,
     timezone: p.timezone,
     nationality: p.nationality,
