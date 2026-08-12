@@ -1,6 +1,7 @@
 # 💬 JHT bot Telegram — design, scelta canale, ingest documenti
 
 **Doc consolidato il 2026-05-13** unificando:
+
 - `2026-05-12-document-channels-decision.md` — scelta canale doc (Telegram = Opzione B primaria)
 - `2026-05-12-telegram-document-ingest-design.md` — spec implementazione `tg-bridge.py` + `jht-telegram-send`
 - Tema A di `2026-05-12-open-questions-bot-and-vps-setup.md` (poi cancellato) — design multi-agente + decisioni 2026-05-13
@@ -12,11 +13,13 @@
 ## 🎯 TL;DR
 
 **Setup bot (decisione 2026-05-13 rev2 — tutti e 3 obbligatori = Opzione 2):**
+
 - 🤖 **Assistente + Capitano + Mentor bot = TUTTI OBBLIGATORI** in onboarding (3 step BotFather forzati). 3 token nel config (`channels.telegram.bots.{assistente,capitano,mentor}`), 3 `/start` separati prima del primo team start.
 - Ogni agente parla all'utente sul suo bot dedicato → notifiche separate Telegram-native, contesto pulito, "tag" implicito dal canale.
 - Scartate: Opzione 1 (un bot router), Opzione 3 (topic mode forum), Opzione 4 (@-tag in chat unica).
 
 **Comportamento runtime (decisioni 2026-05-13 sera):**
+
 - 🔢 **Notifiche batch Capitano**: default N=10 ready, configurabile post-onboarding (no domanda nel wizard). Edge case "team silenzioso" → segnali di vita iniziali nelle prime ore.
 - ⏰ **Working hours**: default team 24/7 + notifiche appena qualcosa di importante. Utente configura slot/giorni per limitare lavoro+notifiche.
 - 🆘 **`/stop` dal bot**: ferma team agents ma NON killa il container (dashboard resta accessibile).
@@ -64,6 +67,7 @@ Il Capitano notifica l'utente ogni **N posizioni in stato `ready`**. **Default N
 **Routing notifica**: direttamente sul bot Capitano (sempre configurato — vedi setup obbligatorio sopra).
 
 **Formato notifica:**
+
 - Top-N posizioni ordinate per score/voto **decrescente**
 - Per ogni posizione: link all'offerta + breve descrizione
 - Le offerte con rating più alto in cima
@@ -97,7 +101,7 @@ Quando Telegram bot è non configurato/down/rate-limited:
 
 1. Messaggio destinato all'utente → l'agente chiama `jht-notify-user --agent <id>` (skill `notify-user`). La riga finisce in `pending_user_messages` con `delivered_via='web'` se Telegram non risponde (timeout 25s).
 2. DB sincronizza con Supabase via `[JHT-DESKTOP-SYNC]` / `jht cloud daemon`. **Aggiornato 2026-07-29** (`[JHT-CHAT-UNIFY]`): non è più il push periodico di allora — dal `[PUSH ON-DEMAND 2026-06-25]` il push dati parte solo su "Sync now", ma i turni di `pending_user_messages` hanno una **corsia dedicata nel giro veloce (~5s)** che li porta su da sola.
-3. Dashboard e chat web leggono `pending_user_messages` e mostrano una card per ogni messaggio non letto, con bottoni "segna come letto" / "rispondi". **Aggiornato 2026-07-29**: il filtro `delivered_via='web'` **non c'è più** — quella colonna dice su quale *canale* è stata spinta la notifica, non se il messaggio appartiene alla conversazione, e con Telegram configurato nascondeva sul web ogni riga marcata `'telegram'`. I non-letti sono ora `author='agent' AND acknowledged_at IS NULL` (un turno scritto dall'utente è letto per definizione).
+3. Dashboard e chat web leggono `pending_user_messages` e mostrano una card per ogni messaggio non letto, con bottoni "segna come letto" / "rispondi". **Aggiornato 2026-07-29**: il filtro `delivered_via='web'` **non c'è più** — quella colonna dice su quale _canale_ è stata spinta la notifica, non se il messaggio appartiene alla conversazione, e con Telegram configurato nascondeva sul web ogni riga marcata `'telegram'`. I non-letti sono ora `author='agent' AND acknowledged_at IS NULL` (un turno scritto dall'utente è letto per definizione).
 4. Quando l'utente risponde via dashboard, `POST /api/pending-messages/[id]/reply` scrive `user_reply` + `user_reply_at`.
 5. Al prossimo tick l'agente chiama la skill `user-reply-check` (tool `jht-check-user-replies --agent <id>`) che ritorna le risposte non ancora viste e le marca `agent_seen_reply_at`. **Questo è il "marker" prompt-injection**: l'output del tool finisce nel contesto dell'agente al loop successivo.
 6. L'agente risponde con `jht-notify-user --no-telegram` per restare nel canale web (mandare la stessa risposta anche via TG confonderebbe l'utente, che vive il thread sulla dashboard).
@@ -146,14 +150,14 @@ L'utente può fermare il team via comando bot. Il comando **ferma gli agenti** (
 
 ### Opzioni valutate
 
-| Opz | Sintesi                                          | UX 👤 | Effort 🔧 | Costo ☁️ | Scala 📈 | Sicurezza 🔐 |
-|-----|--------------------------------------------------|-------|-----------|----------|----------|--------------|
-| A   | Upload web → DB transit → VPS pulla → DELETE     | 🟢    | 🟡        | 🟡       | 🟡 < 1k  | 🟢           |
-| B   | **Telegram bot bidirezionale** ⭐                | 🟢    | 🟢        | 🟢 0     | 🟢       | 🟢           |
-| C   | HTTPS pubblico diretto su VPS                    | 🟢    | 🔴        | 🟡       | 🟢       | 🔴           |
-| D   | Relay cloud (S3/R2) + cloud-sync pull            | 🟢    | 🟡        | 🟢 €/GB  | 🟢       | 🟢           |
-| E   | Tailscale tra browser utente e VPS               | 🟡    | 🟢        | 🟢 0     | 🟢       | 🟢🟢         |
-| F   | Mailbox dedicata + IMAP poll                     | 🟡    | 🟡        | 🟡       | 🟢       | 🟡           |
+| Opz | Sintesi                                      | UX 👤 | Effort 🔧 | Costo ☁️ | Scala 📈 | Sicurezza 🔐 |
+| --- | -------------------------------------------- | ----- | --------- | -------- | -------- | ------------ |
+| A   | Upload web → DB transit → VPS pulla → DELETE | 🟢    | 🟡        | 🟡       | 🟡 < 1k  | 🟢           |
+| B   | **Telegram bot bidirezionale** ⭐            | 🟢    | 🟢        | 🟢 0     | 🟢       | 🟢           |
+| C   | HTTPS pubblico diretto su VPS                | 🟢    | 🔴        | 🟡       | 🟢       | 🔴           |
+| D   | Relay cloud (S3/R2) + cloud-sync pull        | 🟢    | 🟡        | 🟢 €/GB  | 🟢       | 🟢           |
+| E   | Tailscale tra browser utente e VPS           | 🟡    | 🟢        | 🟢 0     | 🟢       | 🟢🟢         |
+| F   | Mailbox dedicata + IMAP poll                 | 🟡    | 🟡        | 🟡       | 🟢       | 🟡           |
 
 ### Decisione
 
@@ -162,12 +166,14 @@ L'utente può fermare il team via comando bot. Il comando **ferma gli agenti** (
 Già infrastruttura nostra (Capitano bridge), zero costi, bidirezionale, allegati nativi fino a 20 MB (50 MB con Bot API self-hosted, sufficiente per CV/PDF). Il flow `setup` configura Telegram nei primi step → all'utente arriva subito un messaggio "mandami il tuo CV qui" → gli agenti lo ricevono dentro la VPS senza che l'utente apra una shell.
 
 **Perché:**
+
 - Effort minimo (estensione del bridge esistente)
 - Robustezza: TLS Telegram + auth via chat_id pinato al pairing utente
 - Bidirezionale gratis: l'utente riceve CV generati sullo stesso canale dove ha mandato l'input
 - Funziona anche da mobile, indipendente dal browser
 
 **Limiti accettati per la beta:**
+
 - 20 MB/file (raro che un CV superi)
 - Dipendenza Telegram come account (mitigata con secondary channel più sotto)
 - No "libreria documenti" navigabile dal sito (rimedio in v1)
@@ -182,14 +188,14 @@ Per chi non usa Telegram. Stesso pattern (bot bidirezionale, allegati), ma su Wh
 
 Telegram **non sarà escluso** quando aggiungeremo questi canali. Resta come opzione, perché è quella più "no-setup" per molti utenti.
 
-**D — Relay cloud S3/R2 + cloud-sync pull** *(raccomandato come v1)*
+**D — Relay cloud S3/R2 + cloud-sync pull** _(raccomandato come v1)_
 Quando dobbiamo togliere Telegram come dipendenza obbligatoria. L'utente carica via dashboard → bucket transit (TTL 10 min, presigned PUT) → la VPS pulla via `cloud-sync` client (riusa il token di pairing già esistente) → bucket purge. DB Supabase tiene SOLO l'indice (sha, filename, location_on_vps).
 **Trigger di adozione**: prima volta che un beta tester chiede "voglio caricare 20 PDF in un colpo" o "voglio una libreria documenti sul sito".
 
-**A — DB transit** *(fallback, scartato come primario)*
+**A — DB transit** _(fallback, scartato come primario)_
 Variante più semplice ma trasforma Postgres in coda binaria. Tenibile come piano B se D è troppo costoso. **Default**: non lo facciamo, D è meglio.
 
-**E — Tailscale** *(per power-user e self-hoster)*
+**E — Tailscale** _(per power-user e self-hoster)_
 Mesh VPN tra PC utente e VPS. Dashboard locale-like, sicurezza massima, zero esposizione pubblica. Trade-off: l'utente deve installare un'app in più. Lo offriremo come "modalità avanzata" nel wizard del desktop launcher (`[JHT-VPS-FRIENDLY]`).
 **Trigger di adozione**: quando il desktop launcher per VPS è pronto e vogliamo dare un'alternativa "no cloud relay" ai privacy-sensitive.
 
@@ -205,15 +211,15 @@ Mesh VPN tra PC utente e VPS. Dashboard locale-like, sicurezza massima, zero esp
 ### Flow end-to-end
 
 ```
-👤 telefono              📡 Bot API                🖥️ container jht                 🤖 Assistente
-   ┌──────┐  /start    ┌───────────┐             ┌────────────────────┐         ┌──────────────┐
-   │ user │ ─────────▶ │ Bot       │             │                    │         │              │
-   │  📎  │  +file     │ getFile   │ long-poll   │ tg-bridge.py       │ tmux    │ ASSISTENTE   │
-   └──────┘ ─────────▶ │           │ ◀─────────  │  ↓ download        │ ──────▶ │ (claude TUI) │
-                       └───────────┘             │ profile/inbox/     │         │              │
-                                                 │ <filename>         │         └──────┬───────┘
-                                                 └────────────────────┘                │ read + sort
-                                                                                       ▼
+👤 telefono       📡 Bot API         🖥️ container jht                              🤖 Assistente
+   ┌──────┐     ┌───────────┐      ┌────────────────────────────────────┐         ┌──────────────┐
+   │ user │ ──▶ │ getUpdates│ ───▶ │ tg-bridge.py                      │         │              │
+   │  📎  │     │ + getFile │      │ journal atomico → jobs.db         │         │ ASSISTENTE   │
+   └──────┘     └───────────┘      │       ↓             ↓             │         │ (agent TUI)  │
+                                   │ chat.jsonl    chat-sync ───────────┼────────▶│              │
+                                   │ profile/inbox/<filename>           │ exit 0  └──────┬───────┘
+                                   └────────────────────────────────────┘                │ read + sort
+                                                                                         ▼
                                                                           profile/sources/<file>
                                                                           + candidate_profile.yml
                                                                           + summaries/*.md
@@ -226,16 +232,19 @@ Mesh VPN tra PC utente e VPS. Dashboard locale-like, sicurezza massima, zero esp
 
 #### 1. `tg-bridge.py` (`.launcher/`)
 
-Pattern simile a `sentinel-bridge.py`. Long-poll Telegram Bot API → `jht-tmux-send ASSISTENTE`.
+Pattern simile a `sentinel-bridge.py`. Long-poll Telegram Bot API → journal durevole → `pending_user_messages`. `chat-sync.js` è l'unica strada da lì a `jht-tmux-send`.
 
 - Token + chat_id whitelist letti da `$JHT_HOME/jht.config.json` (`channels.telegram`)
-- Offset persistente in `$JHT_HOME/tg-bridge-state.json` (sopravvive restart)
+- Offset persistente per ruolo in `$JHT_HOME/tg-bridge-state-<role>.json` (sopravvive restart)
+- Prima dell'offset, un file 0600 per `update_id` entra atomicamente in `$JHT_HOME/tg-inbound-queue-<role>/` (directory 0700)
+- Ogni poll trasferisce il journal in SQLite con `source_id=telegram:<role>:<update_id>`; il COMMIT precede il cleanup, quindi un crash può causare solo un replay idempotente
+- `delivered_at` viene valorizzato da `chat-sync.js` soltanto dopo exit 0 reale di `jht-tmux-send`; rc nonzero resta visibile e ritentabile
 - Singleton: `kill` preesistenti via `/proc/*/cmdline` scan (no pkill)
 - Dispatch per kind:
-  - `text` → envelope `[@utente -> @assistente] [TG] <body>`
-  - `document` → `getFile` + download in `profile/inbox/`, envelope `[TG-DOC] path=... name=... mime=... size=...`
-  - `photo` → versione più grande, salva come `photo-<id>.jpg`, envelope `[TG-DOC]`
-  - `voice` → salva come `voice-<id>.ogg`, envelope `[TG-DOC]` con `duration`
+  - `text` → turno Telegram; il consumer costruisce `[@utente -> @assistente] [TG] <body>`
+  - `document` → `getFile` + download in `profile/inbox/`, turno `[TG-DOC] path=... name=... mime=... size=...`
+  - `photo` → versione più grande, salva come `photo-<id>.jpg`, turno `[TG-DOC]`
+  - `voice` → salva come `voice-<id>.ogg`, turno `[TG-DOC]` con `duration`
 - Skip `/start` (è solo attivazione bot anti-spam)
 - Limite hard 20 MB/file (limite Bot API): oltre → `[TG-DOC-REJECT]` all'Assistente che chiede all'utente di rimandare
 - Download failure → `[TG-DOC-ERROR]`
@@ -261,6 +270,7 @@ Short-circuit role analogo a `bridge` / `worker`: spawn `tg-bridge.py` in backgr
 #### 5. Bootstrap V7 (CLI + web)
 
 Ordine post-fix:
+
 ```
 0. ASSISTENTE       (tmux + welcome Telegram)
 1. TG-BRIDGE +5s    (inbound consegna su ASSISTENTE)
