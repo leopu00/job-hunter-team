@@ -67,7 +67,15 @@ export async function POST(req: NextRequest) {
     last_action: `sync:${status}`,
     last_action_at: observedAt,
   };
-  if (status === "completed") update.sync_completed_at = observedAt;
+  if (status === "completed") {
+    update.sync_completed_at = observedAt;
+    // Un Sync now riuscito ha appena attraversato lo stesso full writer del
+    // tick automatico: non lasciare in UI un vecchio warning fino al prossimo
+    // controllo periodico. Il trigger O-66 sostituisce questo timestamp con
+    // clock_timestamp() del database.
+    update.cloud_push_status = "current";
+    update.cloud_push_checked_at = observedAt;
+  }
 
   // Condizioni nello stesso UPDATE:
   // - il token e' ancora il device attivo (oppure il claim e' legacy/null);

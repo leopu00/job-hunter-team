@@ -94,6 +94,8 @@ describe("POST /api/team-state/sync-observed", () => {
       last_action: "sync:completed",
       last_action_at: observedAt,
       sync_completed_at: observedAt,
+      cloud_push_status: "current",
+      cloud_push_checked_at: observedAt,
     });
     expect(db.query.eq).toHaveBeenCalledWith("sync_requested_at", expected);
     expect(db.query.or).toHaveBeenCalledWith(
