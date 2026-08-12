@@ -3,34 +3,28 @@
 // ⚠️ IRREVERSIBILE. Le protezioni non sono decorative, sono la ragione per
 // cui questo file esiste separato dalla route.
 //
-// ── Perché non basta `auth.admin.deleteUser` ──────────────────────────
-// L'assunzione naturale è che cancellare la riga in `auth.users` porti via
-// tutto per cascata. **Non è vero su questo schema.** Verificato sul
-// catalogo di produzione il 7 agosto 2026: sei tabelle referenziano
-// `auth.users` con `NO ACTION`, non `CASCADE`, e sono proprio quelle che
-// contengono il lavoro dell'utente:
+// ── Perché una RPC, non una sequenza dal server web ───────────────────
+// Sei tabelle referenziano `auth.users` con `NO ACTION`, non `CASCADE`, e
+// vanno quindi svuotate prima della riga Auth:
 //
 //   applications · candidate_profiles · companies · position_highlights
 //   positions · scores
 //
-// Con `NO ACTION` Postgres RIFIUTA di cancellare il padre finché esistono
-// figli: un `deleteUser` diretto fallirebbe con violazione di chiave, e
-// l'utente vedrebbe un errore dopo aver confermato una cancellazione.
-// Vanno quindi svuotate esplicitamente, e nell'ordine giusto.
+// Farlo con sei REST delete seguite da `auth.admin.deleteUser` non è una
+// transazione: un errore al quarto passo lascia i primi tre già committati.
+// La migration 074 espone una sola RPC SECURITY DEFINER, riservata al
+// service_role, che prende il lock dell'utente e fa tutte le delete dentro la
+// transazione PostgreSQL della chiamata. Un errore restituisce zero modifiche
+// al database, non una cancellazione parziale.
 //
 // ── L'ordine, e da dove viene ─────────────────────────────────────────
 // Dipendenze interne verificate sullo stesso catalogo:
 //
 //   companies ← positions ← { applications, position_highlights, scores }
 //
-// quindi si va dai figli ai padri. Il resto delle tabelle (candidate_*,
-// cloud_sync_*, team_*, notification_prefs, …) ha `CASCADE` e sparisce da
-// sé quando cade `auth.users`, che è l'ultimo passo.
-//
-// `companies` è per-utente: verificato che nessuna azienda è referenziata
-// da posizioni di un altro utente, quindi cancellarla non tocca dati
-// altrui. Se un giorno le aziende diventassero condivise, questa riga va
-// ripensata prima di ogni altra cosa.
+// quindi la funzione va dai figli ai padri. Le FK composite della stessa
+// migration rendono strutturalmente impossibile che una riga di un altro
+// tenant dipenda da quelle che la RPC sta rimuovendo.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -82,8 +76,35 @@ export interface DeletionOutcome {
   order: readonly string[];
 }
 
+type DatabaseDeletionPayload = {
+  removed?: unknown;
+};
+
+function parseDatabaseDeletion(data: unknown): Record<string, number> {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new DeletionError("database_delete_invalid_response", "database");
+  }
+  const removed = (data as DatabaseDeletionPayload).removed;
+  if (!removed || typeof removed !== "object" || Array.isArray(removed)) {
+    throw new DeletionError("database_delete_invalid_response", "database");
+  }
+  const counts = removed as Record<string, unknown>;
+  if (
+    Object.keys(counts).length !== MANUAL_DELETE_ORDER.length ||
+    MANUAL_DELETE_ORDER.some(
+      (table) =>
+        !Number.isSafeInteger(counts[table]) || (counts[table] as number) < 0,
+    )
+  ) {
+    throw new DeletionError("database_delete_invalid_response", "database");
+  }
+  return Object.fromEntries(
+    MANUAL_DELETE_ORDER.map((table) => [table, counts[table] as number]),
+  );
+}
+
 /**
- * Svuota le tabelle senza cascata e poi cancella l'utente.
+ * Cancella file, righe PostgreSQL e utente Auth senza successi ottimistici.
  *
  * `userId` arriva SEMPRE dalla sessione del chiamante, mai dal corpo della
  * richiesta: è così che si rende impossibile cancellare l'account di
@@ -97,8 +118,6 @@ export async function deleteAccountData(
   // in cui deve indovinare cosa è successo.
   if (!userId) throw new DeletionError("missing_user_id", "input");
 
-  const removed: Record<string, number> = {};
-
   // ── Prima i file, poi le righe ──────────────────────────────────────
   // Gli oggetti nel bucket `file-transit` non cadono per cascata: senza
   // questo passo sopravvivrebbero alla cancellazione. E non ci si può
@@ -108,7 +127,6 @@ export async function deleteAccountData(
   // I percorsi si leggono dal BUCKET, non dalle righe: vedi
   // `deleteStorageObjects` per il perché.
   const storage = await deleteStorageObjects(admin, userId);
-  removed["storage:file-transit"] = storage.removed;
   if (storage.failed.length > 0) {
     // Un file che resta è una cancellazione incompleta, e va detto invece
     // di dichiarare completato: l'operatore ha scelto la cancellazione
@@ -131,29 +149,26 @@ export async function deleteAccountData(
     );
   }
 
-  for (const table of MANUAL_DELETE_ORDER) {
-    // `count: "exact"` serve al record tecnico: quante righe sono sparite,
-    // senza conservare nulla di ciò che contenevano.
-    const { count, error } = await admin
-      .from(table)
-      .delete({ count: "exact" })
-      .eq("user_id", userId);
-    if (error) {
-      // Niente `error.message`: quello di Postgres può riportare il valore
-      // che ha violato il vincolo, cioè dato dell'utente. Il nome della
-      // tabella basta a sapere dove riprendere.
-      throw new DeletionError("table_delete_failed", table);
-    }
-    removed[table] = count ?? 0;
-  }
-
-  // Ultimo passo: cade l'utente e con lui tutto ciò che ha CASCADE.
-  const { error } = await admin.auth.admin.deleteUser(userId);
+  // Una sola chiamata = una sola transazione PostgreSQL privilegiata. Non
+  // esiste fallback alla vecchia sequenza REST: se la RPC manca o fallisce,
+  // fermarsi è l'unico comportamento che non dichiara cancellati dati rimasti.
+  const { data, error } = await admin.rpc("delete_account_data", {
+    p_user_id: userId,
+  });
   if (error) {
-    throw new DeletionError("auth_user_not_deleted", "auth");
+    // Niente `error.message`: Postgres può includere il valore che ha fatto
+    // fallire un vincolo o un trigger.
+    throw new DeletionError("database_delete_failed", "database");
   }
+  const databaseRemoved = parseDatabaseDeletion(data);
 
-  return { removed, order: MANUAL_DELETE_ORDER };
+  return {
+    removed: {
+      "storage:file-transit": storage.removed,
+      ...databaseRemoved,
+    },
+    order: MANUAL_DELETE_ORDER,
+  };
 }
 
 /**
