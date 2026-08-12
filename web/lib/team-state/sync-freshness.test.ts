@@ -1,5 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { syncRequestIsPending } from "./sync-freshness";
+import {
+  CLOUD_SYNC_STALE_AFTER_MS,
+  cloudSyncIsBehind,
+  syncRequestIsPending,
+} from "./sync-freshness";
+
+describe("visibilità del ritardo cloud", () => {
+  const now = Date.parse("2026-08-12T18:00:00.000Z");
+
+  it("resta fresco entro il bound automatico e diventa indietro oltre", () => {
+    expect(
+      cloudSyncIsBehind(
+        new Date(now - CLOUD_SYNC_STALE_AFTER_MS).toISOString(),
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      cloudSyncIsBehind(
+        new Date(now - CLOUD_SYNC_STALE_AFTER_MS - 1).toISOString(),
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  it("mai sincronizzato è visibilmente indietro; clock skew non lo è", () => {
+    expect(cloudSyncIsBehind(null, now)).toBe(true);
+    expect(cloudSyncIsBehind("not-a-date", now)).toBe(true);
+    expect(cloudSyncIsBehind(new Date(now + 1_000).toISOString(), now)).toBe(
+      false,
+    );
+  });
+});
 
 describe("segnale freshness durante Sync now", () => {
   it("considera pending una richiesta senza completion", () => {
