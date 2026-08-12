@@ -395,7 +395,7 @@ func _build_account() -> void:
 			14, Palette.MUTED))
 	_content.add_child(HSeparator.new())
 	_setup_state_row(UIStrings.t("account.cloud"), configured,
-			UIStrings.t("account.linked") if configured else UIStrings.t("account.local_mode"))
+			UIStrings.t("account.linked") if configured else UIStrings.t("account.not_connected"))
 	if configured:
 		_setup_state_row(UIStrings.t("account.device"), true,
 				str(cloud.get("token_name", "")) if str(cloud.get("token_name", "")) != "" \
