@@ -1928,6 +1928,9 @@ func _guided_onboarding_selftest() -> void:
 	# Pannello Docker: deve mostrare la versione del runtime e l'azione di
 	# aggiornamento, altrimenti l'utente resta su un'immagine vecchia senza
 	# nemmeno saperlo (il gioco si aggiorna con l'installer, il container no).
+	# Il MockBackend serve agli assert chat sopra ma rappresenta una macchina
+	# remota: questo controtest dichiara esplicitamente lo stato Docker locale.
+	SetupService.status["remote"] = false
 	SetupService.status["docker_running"] = true
 	SetupService.status["docker_available"] = true
 	SetupService.status["container_exists"] = true
