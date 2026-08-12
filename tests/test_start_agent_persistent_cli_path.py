@@ -21,10 +21,7 @@ def test_start_agent_serializes_before_rewriting_agent_skills():
     spawn_lib = (launcher / "spawn-lib.sh").read_text()
     lock = source.index('flock -w 30 9')
     early_idempotence = source.index('if tmux has-session -t "$SESSION"', lock)
-    skill_sync = source.index(
-        'jht_spawn_copy_skills "$ROLE" "$AGENT_DIR" "start-agent"',
-        early_idempotence,
-    )
+    skill_sync = source.index("jht_spawn_copy_skills \\", early_idempotence)
 
-    assert 'rm -rf "$dest"' in spawn_lib
+    assert 'rm -rf "$workdir/.claude/skills" "$workdir/.agents/skills"' in spawn_lib
     assert lock < early_idempotence < skill_sync
