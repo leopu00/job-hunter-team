@@ -105,7 +105,7 @@ func set_burn_intent(_active: bool, _hours: float) -> void:
 
 ## Apre un ticket 'open' sulla posizione: la richiesta che il
 ## Coordinatore smista sulla VPS. Esito su bus.ticket_created.
-func create_ticket(_position_id: int, _text: String) -> void:
+func create_ticket(_position_id: int, _text: String, _attachment_path := "") -> void:
 	pass
 
 
@@ -161,10 +161,10 @@ func ensure_assistant() -> void:
 	_unsupported("ensure_assistant")
 
 ## Carica un documento locale (CV…) nella drop-zone allegati del container.
-func upload_document(_local_path: String) -> void:
+func upload_document(_local_path: String, request_id := 0) -> void:
 	var msg := _unsupported("upload_document")
 	if bus:
-		bus.document_uploaded.emit(false, "", msg)
+		bus.publish_document_upload(request_id, false, "", msg)
 
 
 ## ── Profilo utente e orari (scrittura dal desktop) ───────────────────

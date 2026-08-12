@@ -15,6 +15,7 @@
 
 import { Command } from 'commander';
 import { runSkill } from './positions.js';
+import { reportUploadFailure, uploadFileToTeam } from './artifacts.js';
 
 // L'esito si posa su `process.exitCode` e si lascia terminare il processo da
 // solo. Con `process.exit()` l'uscita era immediata, e l'output della skill —
@@ -31,8 +32,20 @@ export function registerTicketCommand(program) {
     .command('open <position_id> <text>')
     .description('Open a ticket for the Capitano')
     .option('--kind <type>', 'ticket category', 'custom')
-    .action((positionId, text, options) =>
-      run('ticket.py', ['open', String(positionId), text, '--kind', options.kind]));
+    .option('--attach <file>', 'upload this file and attach it to the ticket')
+    .action((positionId, text, options) => {
+      const args = ['open', String(positionId), text, '--kind', options.kind];
+      if (options.attach) {
+        const upload = uploadFileToTeam(options.attach);
+        if (!upload.ok) {
+          reportUploadFailure(upload);
+          process.exitCode = upload.code;
+          return;
+        }
+        args.push('--attachment', upload.parsed.path);
+      }
+      run('ticket.py', args);
+    });
 
   cmd
     .command('list')

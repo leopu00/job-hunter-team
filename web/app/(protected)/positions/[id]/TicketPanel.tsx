@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import type { PositionTicket } from "@/lib/types";
+import { splitTicketRequest } from "@/lib/ticket-attachment";
 
 // Sezione "Richieste al team" sulla pagina posizione. L'utente scrive una
 // richiesta testuale libera (popup) → ticket 'open'; il Capitano l'assegna a un
@@ -33,6 +34,8 @@ const T: Record<
     networkError: string;
     emptyState: string;
     teamResponse: string;
+    attachFile: string;
+    removeFile: string;
   }
 > = {
   it: {
@@ -54,6 +57,8 @@ const T: Record<
     emptyState:
       "Nessuna richiesta. Usa “Nuova richiesta” per chiedere al team qualcosa su questa offerta.",
     teamResponse: "Risposta del team",
+    attachFile: "Allega un file",
+    removeFile: "Rimuovi allegato",
   },
   en: {
     statusLabel: {
@@ -74,6 +79,8 @@ const T: Record<
     emptyState:
       "No requests. Use “New request” to ask the team something about this position.",
     teamResponse: "Team response",
+    attachFile: "Attach a file",
+    removeFile: "Remove attachment",
   },
   es: {
     statusLabel: {
@@ -94,6 +101,8 @@ const T: Record<
     emptyState:
       "Sin solicitudes. Usa “Nueva solicitud” para pedirle algo al equipo sobre esta posición.",
     teamResponse: "Respuesta del equipo",
+    attachFile: "Adjuntar un archivo",
+    removeFile: "Quitar archivo",
   },
   fr: {
     statusLabel: {
@@ -114,6 +123,8 @@ const T: Record<
     emptyState:
       "Aucune demande. Utilisez « Nouvelle demande » pour demander quelque chose à l'équipe sur ce poste.",
     teamResponse: "Réponse de l'équipe",
+    attachFile: "Joindre un fichier",
+    removeFile: "Retirer le fichier",
   },
   de: {
     statusLabel: {
@@ -134,6 +145,8 @@ const T: Record<
     emptyState:
       "Keine Anfragen. Nutze „Neue Anfrage“, um das Team etwas zu dieser Stelle zu fragen.",
     teamResponse: "Antwort des Teams",
+    attachFile: "Datei anhängen",
+    removeFile: "Anhang entfernen",
   },
   hu: {
     statusLabel: {
@@ -154,6 +167,8 @@ const T: Record<
     emptyState:
       "Nincs kérés. Használd az „Új kérés” gombot, hogy kérj valamit a csapattól ehhez az álláshoz.",
     teamResponse: "A csapat válasza",
+    attachFile: "Fájl csatolása",
+    removeFile: "Melléklet eltávolítása",
   },
   pt: {
     statusLabel: {
@@ -174,6 +189,8 @@ const T: Record<
     emptyState:
       "Sem pedidos. Usa “Novo pedido” para pedir algo à equipa sobre esta vaga.",
     teamResponse: "Resposta da equipa",
+    attachFile: "Anexar um ficheiro",
+    removeFile: "Remover anexo",
   },
 };
 
@@ -195,6 +212,7 @@ export function TicketPanel({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attachment, setAttachment] = useState<File | null>(null);
 
   const submit = async () => {
     setError(null);
@@ -204,10 +222,12 @@ export function TicketPanel({
     }
     setBusy(true);
     try {
+      const form = new FormData();
+      form.append("request_text", text.trim());
+      if (attachment) form.append("attachment", attachment);
       const res = await fetch(`/api/positions/${legacyId}/ticket`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ request_text: text.trim() }),
+        body: form,
       });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
@@ -216,6 +236,7 @@ export function TicketPanel({
         return;
       }
       setText("");
+      setAttachment(null);
       setOpen(false);
       startTransition(() => router.refresh());
     } catch (e) {
@@ -266,12 +287,42 @@ export function TicketPanel({
               color: "var(--color-text)",
             }}
           />
+          <div className="flex items-center gap-2 text-[11px]">
+            <label
+              className="px-3 py-1.5 rounded-lg border cursor-pointer"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              {t.attachFile}
+              <input
+                type="file"
+                className="sr-only"
+                onChange={(event) =>
+                  setAttachment(event.target.files?.[0] ?? null)
+                }
+              />
+            </label>
+            {attachment && (
+              <>
+                <span style={{ color: "var(--color-dim)" }}>
+                  📎 {attachment.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAttachment(null)}
+                  style={{ color: "var(--color-red)" }}
+                >
+                  {t.removeFile}
+                </button>
+              </>
+            )}
+          </div>
           <div className="flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => {
                 setOpen(false);
                 setText("");
+                setAttachment(null);
                 setError(null);
               }}
               className="px-3 py-1.5 rounded-lg text-[11px]"
@@ -306,58 +357,69 @@ export function TicketPanel({
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {tickets.map((tk) => (
-            <li
-              key={tk.id}
-              className="p-3 rounded-lg border"
-              style={{ borderColor: "var(--color-border)" }}
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className="text-[10px] uppercase font-semibold tracking-wide"
-                  style={{
-                    color: STATUS_COLOR[tk.status] ?? "var(--color-dim)",
-                  }}
-                >
-                  {t.statusLabel[tk.status as TicketStatus] ?? tk.status}
-                  {tk.assigned_agent ? ` · ${tk.assigned_agent}` : ""}
-                </span>
-                <span
-                  className="text-[10px]"
-                  style={{ color: "var(--color-dim)" }}
-                >
-                  {tk.created_at
-                    ? tk.created_at.slice(0, 16).replace("T", " ")
-                    : ""}
-                </span>
-              </div>
-              <p
-                className="text-[13px] mt-1"
-                style={{ color: "var(--color-text)" }}
+          {tickets.map((tk) => {
+            const request = splitTicketRequest(tk.request_text);
+            return (
+              <li
+                key={tk.id}
+                className="p-3 rounded-lg border"
+                style={{ borderColor: "var(--color-border)" }}
               >
-                {tk.request_text}
-              </p>
-              {tk.response_text && (
-                <div
-                  className="mt-2 pl-3 border-l-2"
-                  style={{ borderColor: "var(--color-green)" }}
-                >
+                <div className="flex items-center justify-between">
                   <span
-                    className="text-[10px] uppercase font-semibold"
-                    style={{ color: "var(--color-green)" }}
+                    className="text-[10px] uppercase font-semibold tracking-wide"
+                    style={{
+                      color: STATUS_COLOR[tk.status] ?? "var(--color-dim)",
+                    }}
                   >
-                    {t.teamResponse}
+                    {t.statusLabel[tk.status as TicketStatus] ?? tk.status}
+                    {tk.assigned_agent ? ` · ${tk.assigned_agent}` : ""}
                   </span>
-                  <p
-                    className="text-[13px]"
-                    style={{ color: "var(--color-text)" }}
+                  <span
+                    className="text-[10px]"
+                    style={{ color: "var(--color-dim)" }}
                   >
-                    {tk.response_text}
-                  </p>
+                    {tk.created_at
+                      ? tk.created_at.slice(0, 16).replace("T", " ")
+                      : ""}
+                  </span>
                 </div>
-              )}
-            </li>
-          ))}
+                <p
+                  className="text-[13px] mt-1"
+                  style={{ color: "var(--color-text)" }}
+                >
+                  {request.text}
+                </p>
+                {request.attachmentName && (
+                  <p
+                    className="text-[11px] mt-1"
+                    style={{ color: "var(--color-purple)" }}
+                  >
+                    📎 {request.attachmentName}
+                  </p>
+                )}
+                {tk.response_text && (
+                  <div
+                    className="mt-2 pl-3 border-l-2"
+                    style={{ borderColor: "var(--color-green)" }}
+                  >
+                    <span
+                      className="text-[10px] uppercase font-semibold"
+                      style={{ color: "var(--color-green)" }}
+                    >
+                      {t.teamResponse}
+                    </span>
+                    <p
+                      className="text-[13px]"
+                      style={{ color: "var(--color-text)" }}
+                    >
+                      {tk.response_text}
+                    </p>
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

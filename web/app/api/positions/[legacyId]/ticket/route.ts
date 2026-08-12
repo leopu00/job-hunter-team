@@ -11,6 +11,11 @@ import {
 import { JHT_DB_PATH } from "@/lib/jht-paths";
 import { sanitizedError } from "@/lib/error-response";
 import { RESCORE_TICKET_KIND } from "@/lib/rescore-ticket";
+import { ticketRequestWithAttachment } from "@/lib/ticket-attachment";
+import {
+  saveUserDocument,
+  UserDocumentUploadError,
+} from "@/lib/user-document-upload.server";
 
 export const dynamic = "force-dynamic";
 
@@ -41,19 +46,37 @@ export async function POST(
     return NextResponse.json({ error: "legacyId non valido" }, { status: 400 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as {
-    request_text?: string;
-    kind?: string;
-  };
-  const kind = body.kind ?? "custom";
+  let requestText: unknown;
+  let requestedKind: unknown;
+  let attachment: File | null = null;
+  if (req.headers.get("content-type")?.includes("multipart/form-data")) {
+    const form = await req.formData().catch(() => null);
+    if (!form) {
+      return NextResponse.json(
+        { error: "form data non valido" },
+        { status: 400 },
+      );
+    }
+    requestText = form.get("request_text");
+    requestedKind = form.get("kind");
+    const candidate = form.get("attachment");
+    attachment = candidate && typeof candidate !== "string" ? candidate : null;
+  } else {
+    const body = (await req.json().catch(() => ({}))) as {
+      request_text?: string;
+      kind?: string;
+    };
+    requestText = body.request_text;
+    requestedKind = body.kind;
+  }
+  const kind = typeof requestedKind === "string" ? requestedKind : "custom";
   if (kind !== "custom" && kind !== RESCORE_TICKET_KIND) {
     return NextResponse.json(
       { error: "Tipo di richiesta non valido" },
       { status: 400 },
     );
   }
-  const text =
-    typeof body.request_text === "string" ? body.request_text.trim() : "";
+  const text = typeof requestText === "string" ? requestText.trim() : "";
   if (!text) {
     return NextResponse.json(
       { error: "La richiesta non può essere vuota" },
@@ -69,6 +92,13 @@ export async function POST(
 
   const hasLocal = fs.existsSync(JHT_DB_PATH);
 
+  if (attachment && !hasLocal) {
+    return NextResponse.json(
+      { error: "L'allegato richiede un team locale collegato" },
+      { status: 503 },
+    );
+  }
+
   if (hasLocal) {
     let ticketId: number;
     let ticketStatus = "open";
@@ -79,16 +109,33 @@ export async function POST(
       db.pragma("journal_mode = WAL");
       db.pragma("foreign_keys = ON");
       const exists = db
-        .prepare<
-          [number],
-          { id: number }
-        >("SELECT id FROM positions WHERE id = ?")
+        .prepare<[number], { id: number }>(
+          "SELECT id FROM positions WHERE id = ?",
+        )
         .get(legacyId);
       if (!exists) {
         return NextResponse.json(
           { error: `Posizione #${legacyId} non trovata` },
           { status: 404 },
         );
+      }
+
+      let storedText = text;
+      if (attachment) {
+        try {
+          const saved = await saveUserDocument(attachment);
+          storedText = ticketRequestWithAttachment(text, saved.path);
+        } catch (error) {
+          return NextResponse.json(
+            {
+              error:
+                error instanceof UserDocumentUploadError
+                  ? error.message
+                  : "Errore durante il caricamento dell'allegato",
+            },
+            { status: 400 },
+          );
+        }
       }
 
       if (kind === RESCORE_TICKET_KIND) {
@@ -101,7 +148,12 @@ export async function POST(
           .prepare<
             [number, string],
             { id: number; status: "open" | "assigned" }
-          >("SELECT id, status FROM position_tickets " + "WHERE position_id = ? AND kind = ? " + "AND status IN ('open','assigned') " + "ORDER BY created_at ASC, id ASC LIMIT 1")
+          >(
+            "SELECT id, status FROM position_tickets " +
+              "WHERE position_id = ? AND kind = ? " +
+              "AND status IN ('open','assigned') " +
+              "ORDER BY created_at ASC, id ASC LIMIT 1",
+          )
           .get(legacyId, RESCORE_TICKET_KIND);
         if (active) {
           ticketId = active.id;
@@ -123,7 +175,7 @@ export async function POST(
           "INSERT INTO position_tickets (position_id, request_text, kind, status) " +
             "VALUES (?, ?, ?, 'open')",
         )
-        .run(legacyId, text, kind);
+        .run(legacyId, storedText, kind);
       ticketId = Number(info.lastInsertRowid);
       if (transactionOpen) {
         db.exec("COMMIT");

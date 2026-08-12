@@ -12,6 +12,7 @@ attached to it. See [JHT-CLI-AGENT-PARITY] in BACKLOG.md.
 
     python3 artifact.py fetch /jht_user/cv/cv_42.pdf --kind pdf
     python3 artifact.py upload --name cv.pdf   # bytes as base64 on stdin
+    python3 artifact.py upload --name cv.pdf --raw  # raw bytes on stdin
 
 Output: one JSON row on stdout; exit 0 on success, 1 on refusal or failure.
   {"ok": true, "path": "/jht_user/cv/cv_42.pdf", "kind": "pdf",
@@ -180,6 +181,25 @@ def safe_filename(name: str) -> str:
     return cleaned or "document"
 
 
+def is_uploaded_document_path(path: str) -> bool:
+    """È un riferimento canonico alla drop-zone condivisa?
+
+    Il ticket non riceve i byte: riceve il path già restituito da ``upload``.
+    Validarlo qui evita che le tre superfici inventino ciascuna una propria
+    idea di path allegato e, soprattutto, che un valore scritto dall'utente
+    trasformi il ticket in un riferimento arbitrario sul filesystem.
+    """
+    prefix = CONTAINER_ROOT + "/" + UPLOAD_SUBDIR + "/"
+    if not isinstance(path, str) or path != path.strip() \
+            or not path.startswith(prefix) or "\\" in path or "\0" in path:
+        return False
+    name = path[len(prefix):]
+    if not name or "/" in name or name != safe_filename(name):
+        return False
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    return ext in UPLOAD_EXTS
+
+
 def upload(name: str, data: bytes) -> dict:
     safe = safe_filename(name)
     ext = safe.rsplit(".", 1)[-1].lower() if "." in safe else ""
@@ -191,24 +211,36 @@ def upload(name: str, data: bytes) -> dict:
         return {"ok": False, "error": "empty file"}
     if len(data) > MAX_BYTES:
         return {"ok": False, "error": "file over 10 MB"}
-    target_dir = user_root() + "/" + UPLOAD_SUBDIR
-    try:
-        os.makedirs(target_dir, exist_ok=True)
-    except OSError as exc:
-        return {"ok": False, "error": f"drop-zone unavailable: {exc.strerror}"}
-    # O_NOFOLLOW: ricaricare un documento SOVRASCRIVE quello con lo stesso nome
-    # (è il gesto che l'utente si aspetta), ma mai attraverso un symlink piazzato
-    # lì da qualcun altro — quello scriverebbe fuori dall'area dati.
+    root_fd = None
+    target_fd = None
+    fd = None
+    dflags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
-        fd = os.open(target_dir + "/" + safe, flags, 0o644)
+        # La root configurata è il confine fidato. Ogni componente sotto di
+        # essa viene creato/aperto rispetto al descriptor precedente: se
+        # `allegati` è (o diventa) un symlink, O_NOFOLLOW chiude la scrittura.
+        root_fd = os.open(user_root(), dflags)
+        try:
+            os.mkdir(UPLOAD_SUBDIR, 0o755, dir_fd=root_fd)
+        except FileExistsError:
+            pass
+        target_fd = os.open(UPLOAD_SUBDIR, dflags, dir_fd=root_fd)
+        # Ricaricare un documento sovrascrive quello omonimo, ma il file
+        # finale è aperto rispetto alla directory già attestata.
+        fd = os.open(safe, flags, 0o644, dir_fd=target_fd)
+        with os.fdopen(fd, "wb") as fh:
+            fd = None  # ownership passata al file object
+            fh.write(data)
     except OSError as exc:
         return {"ok": False, "error": f"cannot write the document: {exc.strerror}"}
-    try:
-        with os.fdopen(fd, "wb", closefd=False) as fh:
-            fh.write(data)
     finally:
-        os.close(fd)
+        if fd is not None:
+            os.close(fd)
+        if target_fd is not None:
+            os.close(target_fd)
+        if root_fd is not None:
+            os.close(root_fd)
     # Il path tornato è quello che il team userà: sempre in forma container,
     # perché è quella che finisce nel jobs.db e nei prompt degli agenti.
     container_path = CONTAINER_ROOT + "/" + UPLOAD_SUBDIR + "/" + safe
@@ -227,6 +259,8 @@ def main() -> int:
     p_upload = sub.add_parser("upload", help="hand a document to the team")
     p_upload.add_argument("--name", required=True,
                           help="file name (the bytes arrive base64 on stdin)")
+    p_upload.add_argument("--raw", action="store_true",
+                          help="read raw bytes instead of base64")
 
     p_roots = sub.add_parser("roots", help="the data areas this skill can read")
 
@@ -237,10 +271,13 @@ def main() -> int:
         return emit({"ok": True, "root": user_root(), "roots": list(roots()),
                      "upload_dir": user_root() + "/" + UPLOAD_SUBDIR})
     raw = sys.stdin.buffer.read()
-    try:
-        data = base64.b64decode(raw, validate=True)
-    except Exception:
-        return emit({"ok": False, "error": "stdin is not valid base64"})
+    if args.raw:
+        data = raw
+    else:
+        try:
+            data = base64.b64decode(raw, validate=True)
+        except Exception:
+            return emit({"ok": False, "error": "stdin is not valid base64"})
     return emit(upload(args.name, data))
 
 

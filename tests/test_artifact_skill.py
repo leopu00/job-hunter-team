@@ -181,6 +181,27 @@ def test_upload_torna_sempre_il_path_del_container(area):
     assert artifact.upload("cv.pdf", PDF)["path"].startswith("/jht_user/")
 
 
+@pytest.mark.parametrize("path", [
+    "/jht_user/allegati/cv.pdf",
+    "/jht_user/allegati/brief_con_spazi.docx",
+    "/jht_user/allegati/data.csv",
+])
+def test_path_upload_canonico_puo_essere_allegato(path):
+    assert artifact.is_uploaded_document_path(path)
+
+
+@pytest.mark.parametrize("path", [
+    "/jht_user/cv/cv.pdf",
+    "/jht_user/allegati/../cv/cv.pdf",
+    "/jht_user/allegati/sub/cv.pdf",
+    "/jht_user/allegati/payload.exe",
+    "/jht_user/allegati/nome con spazi.pdf",
+    " /jht_user/allegati/cv.pdf",
+])
+def test_path_allegato_non_puo_uscire_dal_trasporto(path):
+    assert not artifact.is_uploaded_document_path(path)
+
+
 @pytest.mark.parametrize("name", ["script.js", "binario.exe", "senza_estensione",
                                   "archivio.tar.gz", ".bashrc"])
 def test_upload_rifiuta_estensioni_fuori_elenco(area, name):
@@ -221,6 +242,20 @@ def test_upload_non_scrive_attraverso_un_symlink(area, tmp_path):
     os.symlink(outside, area / "allegati" / "cv.pdf")
     assert not artifact.upload("cv.pdf", PDF)["ok"]
     assert outside.read_bytes() == b"originale"
+
+
+def test_upload_non_segue_la_directory_allegati_symlink(area, tmp_path):
+    """O_NOFOLLOW sul solo file finale non basta: anche la directory della
+    drop-zone deve essere aperta rispetto alla root già attestata."""
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    (area / "allegati").rmdir()
+    os.symlink(outside, area / "allegati")
+
+    out = artifact.upload("boundary.pdf", PDF)
+
+    assert not out["ok"]
+    assert not (outside / "boundary.pdf").exists()
 
 
 # ── la skill non può essere più permissiva del client desktop ──────────────

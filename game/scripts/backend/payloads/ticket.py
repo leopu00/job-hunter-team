@@ -1,5 +1,6 @@
 import sqlite3, base64, json, sys
 text = base64.b64decode('%s').decode('utf-8')
+attachment_path = base64.b64decode('%s').decode('utf-8')
 pid = %d
 # Il path del database NON si indovina: lo risolve _db, lo stesso modulo
 # degli agenti (pattern di coordinator_state.py). Prima qui c'era
@@ -13,6 +14,7 @@ pid = %d
 sys.path.insert(0, '/app/shared/skills')
 try:
     from _db import DB_PATH
+    from ticket import open_ticket
 except Exception as exc:
     print(json.dumps(dict(ok=False, error=str(exc))))
     raise SystemExit(0)
@@ -20,13 +22,13 @@ db = sqlite3.connect(DB_PATH)
 try:
     db.execute('PRAGMA journal_mode=WAL')
     db.execute('PRAGMA foreign_keys=ON')
-    if db.execute('SELECT id FROM positions WHERE id=?', (pid,)).fetchone() is None:
+    try:
+        ticket_id = open_ticket(db, pid, text,
+                                attachment_path=attachment_path or None)
+        print(json.dumps(dict(ok=True, id=ticket_id)))
+    except LookupError:
         print(json.dumps(dict(ok=False, error='posizione inesistente')))
-    else:
-        cur = db.execute(
-            "INSERT INTO position_tickets (position_id, request_text, kind, status) "
-            "VALUES (?, ?, 'custom', 'open')", (pid, text))
-        db.commit()
-        print(json.dumps(dict(ok=True, id=cur.lastrowid)))
+    except ValueError as exc:
+        print(json.dumps(dict(ok=False, error=str(exc))))
 finally:
     db.close()
