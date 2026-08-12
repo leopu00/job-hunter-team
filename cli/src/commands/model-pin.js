@@ -393,8 +393,10 @@ function readState() {
 
 function writeState(state) {
   try {
-    mkdirSync(dirname(STATE_PATH()), { recursive: true });
-    writeFileSync(STATE_PATH(), JSON.stringify(state, null, 2) + '\n', 'utf-8');
+    mkdirSync(dirname(STATE_PATH()), { recursive: true, mode: 0o700 });
+    chmodSync(dirname(STATE_PATH()), 0o700);
+    writeFileSync(STATE_PATH(), JSON.stringify(state, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600 });
+    chmodSync(STATE_PATH(), 0o600);
   } catch { /* best effort: lo stato e' un'ottimizzazione, non una dipendenza */ }
 }
 
@@ -406,6 +408,7 @@ function makeBackup(path) {
   const backup = `${path}.bak-model-pin-${stamp}`;
   const original = statSync(path);
   copyFileSync(path, backup);
+  try { chmodSync(backup, 0o600); } catch { /* fs senza permessi POSIX */ }
   if (!existsSync(backup) || statSync(backup).size !== original.size) {
     throw new Error(`incomplete backup (${backup})`);
   }
