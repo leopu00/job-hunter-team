@@ -18,6 +18,20 @@ const NOT_CLOUD = NextResponse.json(
 // su device_code (che e' 32 hex chars, 128 bit entropy comunque).
 const POLL_LIMIT_PER_MIN = 60;
 
+type PairingRedemption = {
+  status:
+    | "not_found"
+    | "pending"
+    | "approved"
+    | "consumed"
+    | "expired"
+    | "invalid";
+  approved_token: string | null;
+  user_id: string | null;
+  approved_token_id: string | null;
+  token_name: string | null;
+};
+
 /**
  * POST /api/cloud-sync/device-poll
  *
@@ -93,13 +107,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { data: session, error } = await admin
-    .from("cloud_sync_pairing_sessions")
-    .select(
-      "device_code, status, user_id, approved_token, approved_token_id, expires_at",
-    )
-    .eq("device_code", device_code)
-    .maybeSingle();
+  // La RPC possiede lettura, CAS, wipe e revoca nella stessa transazione.
+  // Leggere il token qui e poi "chiedere" un UPDATE non basta: il perdente
+  // di una race potrebbe ignorare uno zero-row update e restituire plaintext.
+  const { data: session, error } = (await admin
+    .rpc("redeem_cloud_sync_pairing", { p_device_code: device_code })
+    .maybeSingle()) as {
+    data: PairingRedemption | null;
+    error: { message: string } | null;
+  };
 
   if (error) {
     return sanitizedError(error, {
@@ -111,15 +127,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "not_found" }, { status: 404 });
   }
 
-  // Auto-marca expired se passata la TTL (cleanup lazy lato read).
-  if (new Date(session.expires_at).getTime() < Date.now()) {
-    if (session.status !== "expired") {
-      await admin
-        .from("cloud_sync_pairing_sessions")
-        .update({ status: "expired" })
-        .eq("device_code", device_code);
-    }
-    return NextResponse.json({ status: "expired" }, { status: 410 });
+  if (session.status === "not_found") {
+    return NextResponse.json({ status: "not_found" }, { status: 404 });
   }
 
   if (session.status === "pending") {
@@ -137,41 +146,13 @@ export async function POST(req: NextRequest) {
 
   if (session.status === "approved") {
     if (!session.approved_token || !session.user_id) {
-      return NextResponse.json({ status: "pending" }, { status: 202 });
+      return NextResponse.json({ status: "invalid" }, { status: 500 });
     }
-
-    // ATOMIC redemption: marca consumed E cancella approved_token in
-    // un solo update. Il token e' poi tornato al CLI e cancellato dal DB
-    // — non sopravvive in clear text dopo la redemption.
-    const tokenToReturn = session.approved_token;
-    const userId = session.user_id;
-
-    // Recuperiamo il name del token per UX nel CLI.
-    const { data: tokenRow } = await admin
-      .from("cloud_sync_tokens")
-      .select("name")
-      .eq("id", session.approved_token_id ?? "")
-      .maybeSingle();
-
-    const { error: updateErr } = await admin
-      .from("cloud_sync_pairing_sessions")
-      .update({
-        status: "consumed",
-        approved_token: null, // wipe in clear, restano solo metadati
-        consumed_at: new Date().toISOString(),
-      })
-      .eq("device_code", device_code)
-      .eq("status", "approved"); // CAS-like: protegge contro double-redemption
-
-    if (updateErr) {
-      return NextResponse.json({ error: updateErr.message }, { status: 500 });
-    }
-
     return NextResponse.json({
       status: "approved",
-      token: tokenToReturn,
-      user_id: userId,
-      token_name: tokenRow?.name ?? "cli-pairing",
+      token: session.approved_token,
+      user_id: session.user_id,
+      token_name: session.token_name ?? "cli-pairing",
     });
   }
 
