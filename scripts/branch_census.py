@@ -85,6 +85,16 @@ SESSION_SKIPPED = "skipped"
 # `git fetch --prune` continua a vedere branch già cancellati su origin e li
 # propone per la cancellazione. È successo al primo giro reale — 14 candidati
 # annunciati, 7 dei quali fantasmi già rimossi dall'auto-delete di GitHub.
+# Esito della ricerca di un claim, cioè della domanda «questo ticket lo sta già
+# facendo qualcun altro?». Il protocollo del 2026-08-12 vuole che un ticket si
+# dichiari con un commit `WIP(<scope>): ... (<ID>)` pushato PRIMA di scrivere
+# codice, così due macchine sullo stesso repo non lo prendono entrambe.
+CLAIM_FREE = "free"        # nessun commit lo nomina
+CLAIM_MINE = "mine"        # solo sul mio branch, lavoro in corso mio
+CLAIM_TAKEN = "taken"      # su un branch altrui e non ancora integrato: FERMATI
+CLAIM_DONE = "done"        # tutti i commit che lo nominano sono già nella base
+CLAIM_UNKNOWN = "unknown"  # la ricerca non è accertabile: non dico «libero»
+
 REMOTE_CONFIRMED = "confirmed"   # esiste su origin, allo stesso sha del tracking
 REMOTE_STALE = "stale"           # non esiste più su origin: tracking stantio
 REMOTE_DRIFTED = "drifted"       # esiste ma a uno sha diverso: la mia foto è vecchia
@@ -148,6 +158,34 @@ class WorktreeVerdict:
     session: str
     reason: str
     branch_integrated: bool | None = None
+
+
+@dataclass(frozen=True)
+class ClaimFacts:
+    """Un commit che nomina l'ID del ticket, e dove si trova."""
+
+    sha: str
+    date: str
+    subject: str
+    branches: tuple[str, ...]
+    # `True` = già raggiungibile dalla base, quindi il ticket risulta
+    # integrato; `None` = git non ha saputo dirlo (fail-closed).
+    in_base: bool | None
+
+
+@dataclass
+class ClaimReport:
+    ticket: str
+    verdict: str
+    reason: str
+    own_branch: str
+    claims: list[ClaimFacts] = field(default_factory=list)
+    other_branches: tuple[str, ...] = ()
+
+    @property
+    def blocked(self) -> bool:
+        """Se True, il protocollo dice di fermarsi e chiedere."""
+        return self.verdict in (CLAIM_TAKEN, CLAIM_UNKNOWN)
 
 
 @dataclass
@@ -321,6 +359,74 @@ def classify_worktree(
         facts.path, facts.branch, name, facts.is_main, SESSION_ABSENT,
         "nessuna sessione con questo nome", integrated,
     )
+
+
+def classify_claims(
+    ticket: str,
+    claims: list[ClaimFacts],
+    own_branch: str,
+    *,
+    search_ok: bool = True,
+    view_is_current: bool = True,
+) -> ClaimReport:
+    """Decide se un ticket è libero, mio, di altri, o già fatto.
+
+    Due asimmetrie volute, ed è lì che sta il fail-closed:
+
+    * «non ho trovato niente» vale come *libero* SOLO se la mia copia dei ref
+      remoti è allineata. Se un branch su origin è andato avanti dopo l'ultimo
+      fetch, un claim può esistere e io non vederlo: allora è `unknown`, non
+      `free`. Dire «libero» per ignoranza è il modo in cui due macchine
+      finiscono sullo stesso ticket, che è esattamente ciò che il protocollo
+      esiste per evitare.
+    * «ho trovato un claim» resta valido anche con la copia indietro: trovarlo
+      è prova positiva, e una copia stantia non la smentisce.
+    """
+    report = ClaimReport(ticket=ticket, verdict=CLAIM_UNKNOWN, reason="",
+                         own_branch=own_branch, claims=list(claims))
+    if not search_ok:
+        report.reason = "la ricerca dei claim non è potuta girare"
+        return report
+    if not claims:
+        if not view_is_current:
+            report.reason = (
+                "nessun claim trovato, ma la copia dei ref remoti è indietro: "
+                "fai `git fetch --all --prune` e ripeti"
+            )
+            return report
+        report.verdict = CLAIM_FREE
+        report.reason = "nessun commit remoto nomina questo ID"
+        return report
+
+    pending = [c for c in claims if c.in_base is not True]
+    if any(c.in_base is None for c in pending):
+        report.reason = "git non ha saputo dire se i claim sono già nella base"
+        return report
+    if not pending:
+        report.verdict = CLAIM_DONE
+        report.reason = (
+            f"{len(claims)} commit lo nominano, tutti già integrati nella base: "
+            "il ticket risulta fatto"
+        )
+        return report
+
+    others = tuple(sorted({
+        branch
+        for claim in pending
+        for branch in claim.branches
+        if strip_remote(branch) != strip_remote(own_branch)
+    }))
+    report.other_branches = others
+    if others:
+        report.verdict = CLAIM_TAKEN
+        report.reason = (
+            f"claimato su {', '.join(others)}: fermati e chiedi a Leone, "
+            "non lavorarci sopra"
+        )
+        return report
+    report.verdict = CLAIM_MINE
+    report.reason = f"claimato solo su {own_branch}: è lavoro tuo, prosegui"
+    return report
 
 
 def remote_status(
@@ -530,6 +636,66 @@ def gather_refs(base: str, cwd: str | None, remote: str) -> list[RefFacts]:
     return facts
 
 
+def parse_claim_log(text: str) -> list[tuple[str, str, str]]:
+    """Legge `git log --format='%H\\t%ad\\t%s'`. Ritorna (sha, data, oggetto)."""
+    rows = []
+    for line in text.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 3 or not parts[0].strip():
+            continue
+        rows.append((parts[0].strip(), parts[1].strip(), "\t".join(parts[2:]).strip()))
+    return rows
+
+
+def parse_contains(text: str) -> tuple[str, ...]:
+    """Legge `git branch -r --contains`, scartando i puntatori simbolici.
+
+    `origin/HEAD -> origin/master` non è un branch che «contiene» qualcosa: è
+    un alias, e contarlo farebbe risultare claimato ogni ticket già mergiato.
+    """
+    branches = []
+    for raw in text.splitlines():
+        name = raw.strip()
+        if not name or "->" in name:
+            continue
+        branches.append(name)
+    return tuple(sorted(branches))
+
+
+def gather_claims(
+    ticket: str, base: str, cwd: str | None
+) -> tuple[list[ClaimFacts] | None, str]:
+    """Cerca l'ID fra i commit di TUTTI i ref remoti. `None` = ricerca fallita."""
+    code, out = _git(
+        [
+            "log", "--remotes", "--fixed-strings", "-i", f"--grep={ticket}",
+            "--format=%H%x09%ad%x09%s", "--date=short",
+        ],
+        cwd,
+    )
+    if code != 0:
+        return None, f"`git log --grep` è uscito {code}: {out[:200]}"
+    facts = []
+    for sha, date, subject in parse_claim_log(out):
+        # `%S` darebbe un solo ref, e per un ticket già mergiato sarebbe il
+        # primo che git incontra (spesso `origin/production`): inutile per
+        # decidere se qualcuno ci sta lavorando ADESSO. `--contains` li dà tutti.
+        contains_code, contains_out = _git(
+            ["branch", "-r", "--contains", sha], cwd
+        )
+        base_code, _ = _git(["merge-base", "--is-ancestor", sha, base], cwd)
+        facts.append(
+            ClaimFacts(
+                sha=sha[:10],
+                date=date,
+                subject=subject,
+                branches=parse_contains(contains_out) if contains_code == 0 else (),
+                in_base=(True if base_code == 0 else False if base_code == 1 else None),
+            )
+        )
+    return facts, f"{len(facts)} commit nominano l'ID"
+
+
 def parse_ls_remote(text: str) -> dict[str, str]:
     """Legge `git ls-remote --heads`: `<sha>\\t refs/heads/<branch>`.
 
@@ -732,6 +898,64 @@ def render_text(census: Census) -> str:
     return "\n".join(out)
 
 
+CLAIM_HEADLINE = {
+    CLAIM_FREE: "LIBERO — puoi claimarlo",
+    CLAIM_MINE: "TUO — lavoro già in corso su questo branch",
+    CLAIM_TAKEN: "GIÀ CLAIMATO DA ALTRI — fermati",
+    CLAIM_DONE: "GIÀ FATTO — risulta integrato nella base",
+    CLAIM_UNKNOWN: "NON ACCERTABILE — non dico libero per ignoranza",
+}
+
+
+def render_claim_text(report: ClaimReport) -> str:
+    out = [
+        f"CLAIM — {report.ticket}",
+        f"branch corrente: {report.own_branch}",
+        "",
+        f"{CLAIM_HEADLINE[report.verdict]}",
+        f"  {report.reason}",
+    ]
+    if report.claims:
+        out += ["", f"Commit che nominano l'ID  [{len(report.claims)}]"]
+        for claim in report.claims:
+            dove = ", ".join(claim.branches) or "nessun branch remoto"
+            stato = "già nella base" if claim.in_base else "NON integrato"
+            out.append(f"    {claim.sha}  {claim.date}  {claim.subject}")
+            out.append(f"        {dove} — {stato}")
+    if report.verdict == CLAIM_FREE:
+        out += [
+            "",
+            "Prossimo passo (protocollo 2026-08-12):",
+            f'    git commit --allow-empty -m "WIP(<scope>): <cosa> ({report.ticket})"',
+            f"    git push origin {report.own_branch}",
+        ]
+    return "\n".join(out)
+
+
+def render_claim_json(report: ClaimReport) -> str:
+    payload = {
+        "ticket": report.ticket,
+        "verdict": report.verdict,
+        "reason": report.reason,
+        "own_branch": report.own_branch,
+        "blocked": report.blocked,
+        "other_branches": list(report.other_branches),
+        "claims": [vars(c) | {"branches": list(c.branches)} for c in report.claims],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def claim_exit_code(report: ClaimReport) -> int:
+    """0 libero o mio · 1 non accertabile · 4 preso da altri · 5 già fatto."""
+    if report.verdict in (CLAIM_FREE, CLAIM_MINE):
+        return 0
+    if report.verdict == CLAIM_TAKEN:
+        return 4
+    if report.verdict == CLAIM_DONE:
+        return 5
+    return 1
+
+
 def render_json(census: Census) -> str:
     payload = {
         "base": census.base,
@@ -768,6 +992,57 @@ def exit_code(census: Census, strict: bool) -> int:
 # ── CLI ───────────────────────────────────────────────────────────────────
 
 
+def current_branch(cwd: str | None) -> str:
+    code, name = _git(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
+    return name if code == 0 and name and name != "HEAD" else "(detached)"
+
+
+def tracking_is_current(remote: str, cwd: str | None) -> tuple[bool | None, str]:
+    """La mia copia dei ref remoti è allineata a origin?
+
+    Se un branch su origin è andato avanti dopo l'ultimo fetch, un claim può
+    esistere senza che io lo veda: allora «non ho trovato niente» non vale come
+    «libero». Riusa `ls-remote`, la stessa sonda del gate sui candidati.
+    """
+    heads, state, detail = probe_remote_refs(remote, cwd)
+    if heads is None:
+        return None, detail
+    behind = []
+    for branch, live_sha in heads.items():
+        code, local = _git(
+            ["rev-parse", "--verify", f"{remote}/{branch}^{{commit}}"], cwd
+        )
+        if code != 0 or not local:
+            behind.append(f"{branch} (mai fetchato)")
+        elif not (live_sha.startswith(local) or local.startswith(live_sha)):
+            behind.append(branch)
+    if behind:
+        return False, f"indietro su: {', '.join(sorted(behind))}"
+    return True, f"allineata a {remote} ({len(heads)} branch)"
+
+
+def run_claim(args) -> int:
+    ticket = args.claim.strip()
+    own = args.branch or current_branch(args.repo)
+    claims, detail = gather_claims(ticket, args.base, args.repo)
+    fresh, fresh_detail = tracking_is_current(args.remote, args.repo)
+    report = classify_claims(
+        ticket, claims or [], own,
+        search_ok=claims is not None,
+        # `None` (non ho potuto chiedere a origin) vale come NON allineata:
+        # è il verso prudente, l'unico che non produce un «libero» inventato.
+        view_is_current=fresh is True,
+    )
+    if claims is None:
+        report.reason = detail
+    elif fresh is not True and report.verdict == CLAIM_UNKNOWN:
+        report.reason = f"{report.reason} [{fresh_detail}]"
+    print(
+        render_claim_json(report) if args.as_json else render_claim_text(report)
+    )
+    return claim_exit_code(report)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Census fail-closed di branch remoti e worktree. Non cancella niente.",
@@ -788,7 +1063,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="branch mai proposti per la cancellazione")
     parser.add_argument("--strict", action="store_true",
                         help="esce 3 se ci sono candidati da smaltire")
+    parser.add_argument("--claim", metavar="ID-TICKET", default=None,
+                        help="cerca chi ha già claimato questo ticket ed esci")
+    parser.add_argument("--branch", default=None,
+                        help="il proprio branch (default: quello corrente)")
     args = parser.parse_args(argv)
+
+    if args.claim:
+        return run_claim(args)
 
     try:
         base_sha, base_date = resolve_base(args.base, args.repo)
