@@ -164,7 +164,7 @@ func ensure_assistant() -> void:
 func upload_document(_local_path: String) -> void:
 	var msg := _unsupported("upload_document")
 	if bus:
-		bus.document_uploaded.emit(false, "", msg)
+		bus.publish_document_upload(false, "", msg)
 
 
 ## ── Profilo utente e orari (scrittura dal desktop) ───────────────────

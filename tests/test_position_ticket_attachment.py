@@ -96,7 +96,7 @@ def test_payload_desktop_rifiuta_path_arbitrario_senza_ticket(database):
 def test_ui_desktop_apre_ticket_solo_dopo_upload_riuscito():
     panel = SECTION_PANEL.read_text(encoding="utf-8")
     bus = BACKEND_BUS.read_text(encoding="utf-8")
-    worker = bus.split("func _on_ticket_document_uploaded", 1)[1].split(
+    worker = bus.split("func publish_document_upload", 1)[1].split(
         "\nfunc ", 1
     )[0]
     submit = panel.split("var submit := func() -> void:", 1)[1].split(
@@ -104,18 +104,23 @@ def test_ui_desktop_apre_ticket_solo_dopo_upload_riuscito():
     )[0]
 
     assert "pid, txt, _ticket_attachment_local_path" in submit
-    assert "_pending_ticket_document" in bus
-    assert "upload_user_document(local_attachment_path)" in bus
+    assert "_active_document_upload" in bus
+    assert '_begin_document_upload({"kind": "ticket"' in bus
     assert "if not ok:" in worker
-    create_at = worker.index("_backend.create_ticket(")
-    guard_at = worker.index("if not ok:")
-    assert guard_at < create_at
-    assert 'str(pending["text"]), remote_path' in worker
-    assert "document_uploaded.connect(_on_ticket_document_uploaded)" in bus
+    assert "publish_document_upload" in bus
+    assert "document_uploaded.connect" not in bus
     assert "document_uploaded.connect(_on_ticket_document_uploaded)" not in panel
     assert 'BackendBus="*res://scripts/backend/backend_bus.gd"' in PROJECT.read_text(
         encoding="utf-8"
     )
+
+
+def test_desktop_ha_oracolo_esecutivo_per_overlap_upload():
+    matrix = (ROOT / "game" / "tools" / "test-matrix.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "ticket_attachment_overlap|run|gate|any|" in matrix
+    assert "TICKET-ATTACHMENT-OVERLAP PASS" in matrix
 
 
 def test_label_desktop_pari_in_sette_lingue():

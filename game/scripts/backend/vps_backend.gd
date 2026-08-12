@@ -1157,7 +1157,7 @@ func _do_upload_document(local_path: String, labels: Dictionary) -> void:
 	_doc_uploaded(true, remote, "")
 
 func _doc_uploaded(ok: bool, remote_path: String, error: String) -> void:
-	bus.call_deferred("emit_signal", "document_uploaded", ok, remote_path, error)
+	bus.call_deferred("publish_document_upload", ok, remote_path, error)
 
 ## Nome file sicuro per il viaggio in shell remota: solo [A-Za-z0-9._-],
 ## il resto diventa _ (stessa igiene della route web di upload).

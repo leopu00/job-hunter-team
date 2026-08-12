@@ -388,6 +388,7 @@ func to_eur(amount: float, currency: String) -> float:
 ## Collega la sorgente eventi (MockBackend, VpsBackend). Sostituisce
 ## l'eventuale backend attivo. config passa dritta a start().
 func set_backend(backend: BackendAdapter, config: Dictionary = {}) -> void:
+	_fail_active_document_upload(UIStrings.t("common.backend_not_connected"))
 	if _backend:
 		_backend.stop()
 		publish_state(DISCONNECTED, "")
@@ -740,13 +741,13 @@ func ensure_assistant() -> void:
 	if _backend and _backend.has_method("ensure_assistant"):
 		_backend.ensure_assistant()
 
-## Carica un documento locale (CV…) nella drop-zone allegati del
-## container. Esito su document_uploaded.
+## Carica un documento locale (CV…) nella drop-zone allegati del container.
+## Il bus è il single-owner: un secondo upload mentre il primo è in volo
+## fallisce, così nessun esito globale può essere attribuito al file sbagliato.
 func upload_user_document(local_path: String) -> void:
-	if _backend and _backend.has_method("upload_document"):
-		_backend.upload_document(local_path)
-	else:
-		document_uploaded.emit(false, "", UIStrings.t("common.backend_not_connected"))
+	if not _begin_document_upload({"kind": "generic", "path": local_path}):
+		document_uploaded.emit(false, "",
+				UIStrings.t("pos.ticket_upload_in_progress"))
 
 ## Il backend pubblica lo stato profilo da qui (thread → call_deferred).
 func publish_profile_status(status: Dictionary) -> void:
@@ -836,10 +837,11 @@ func publish_artifact(path: String, ok: bool, data: PackedByteArray,
 
 ## ── Ticket utente→team ───────────────────────────────────────────────
 
-## Il caricamento è il primo passo di un'unica intenzione utente. Lo stato
-## vive nell'autoload, non nel pannello: chiudere/cambiare pagina mentre i byte
+## Il caricamento è il primo passo di un'unica intenzione utente. Lo stato vive
+## nell'autoload, non nel pannello: chiudere/cambiare pagina mentre i byte
 ## viaggiano non deve lasciare un file caricato senza il ticket richiesto.
-var _pending_ticket_document: Dictionary = {}
+## Tutti gli upload, anche quelli del wizard, attraversano QUESTO owner.
+var _active_document_upload: Dictionary = {}
 
 ## Apre un ticket sulla posizione (async: esito su ticket_created; la
 ## lista ticket si aggiorna col prossimo snapshot posizioni). Il path opzionale
@@ -853,32 +855,59 @@ func create_position_ticket(position_id: int, text: String,
 	if local_attachment_path == "":
 		_backend.create_ticket(position_id, clean)
 		return
-	# La UI disabilita il submit, ma il bus resta il confine autorevole: due
-	# pannelli o due segnali nello stesso frame non possono rubarsi il path.
-	if not _pending_ticket_document.is_empty():
+	# La UI disabilita il submit, ma il bus resta il confine autorevole: anche
+	# un upload del wizard già attivo rende il ticket fail-closed.
+	if not _begin_document_upload({"kind": "ticket", "path": local_attachment_path,
+			"position_id": position_id, "text": clean}):
 		ticket_created.emit(position_id, false,
 				UIStrings.t("pos.ticket_upload_in_progress"))
-		return
-	_pending_ticket_document = {"position_id": position_id, "text": clean}
-	if not document_uploaded.is_connected(_on_ticket_document_uploaded):
-		document_uploaded.connect(_on_ticket_document_uploaded)
-	upload_user_document(local_attachment_path)
 
-func _on_ticket_document_uploaded(ok: bool, remote_path: String,
+func _begin_document_upload(request: Dictionary) -> bool:
+	if not _active_document_upload.is_empty():
+		return false
+	if not _backend or not _backend.has_method("upload_document"):
+		var position_id := int(request.get("position_id", 0))
+		if position_id > 0:
+			ticket_created.emit(position_id, false,
+					UIStrings.t("common.backend_not_connected"))
+		else:
+			document_uploaded.emit(false, "",
+					UIStrings.t("common.backend_not_connected"))
+		return true
+	_active_document_upload = request.duplicate()
+	_backend.upload_document(str(request["path"]))
+	return true
+
+## Unico ingresso degli adapter per completare un upload. L'esito appartiene
+## necessariamente all'unica richiesta attiva; senza owner viene ignorato.
+func publish_document_upload(ok: bool, remote_path: String,
 		error: String) -> void:
-	if _pending_ticket_document.is_empty():
+	if _active_document_upload.is_empty():
 		return
-	var pending := _pending_ticket_document.duplicate()
-	_pending_ticket_document.clear()
-	var position_id := int(pending["position_id"])
+	var request := _active_document_upload.duplicate()
+	_active_document_upload.clear()
+	if str(request["kind"]) == "generic":
+		document_uploaded.emit(ok, remote_path, error)
+		return
+	var position_id := int(request["position_id"])
 	if not ok:
 		ticket_created.emit(position_id, false, error)
 		return
 	if _backend:
-		_backend.create_ticket(position_id, str(pending["text"]), remote_path)
+		_backend.create_ticket(position_id, str(request["text"]), remote_path)
 	else:
 		ticket_created.emit(position_id, false,
 				UIStrings.t("common.backend_not_connected"))
+
+func _fail_active_document_upload(error: String) -> void:
+	if _active_document_upload.is_empty():
+		return
+	var request := _active_document_upload.duplicate()
+	_active_document_upload.clear()
+	if str(request["kind"]) == "ticket":
+		ticket_created.emit(int(request["position_id"]), false, error)
+	else:
+		document_uploaded.emit(false, "", error)
 
 
 ## ── Configurazione VPS (voce Impostazioni → Collega VPS) ─────────────

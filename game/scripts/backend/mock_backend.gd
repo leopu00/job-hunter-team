@@ -585,7 +585,7 @@ func ensure_assistant() -> void:
 	pass  # nel mock l'assistente è già nel roster
 
 func upload_document(local_path: String) -> void:
-	bus.document_uploaded.emit(true,
+	bus.publish_document_upload(true,
 			"/jht_user/allegati/" + local_path.get_file(), "")
 	_wiz_advance(2)
 

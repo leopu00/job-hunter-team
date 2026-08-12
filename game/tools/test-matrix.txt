@@ -235,3 +235,4 @@ coordinator|run|watch|any|JHT_SCENE=office JHT_BACKEND_TEST=1 JHT_COORDINATOR_TE
 # `game/`, e per questo il piu' esposto a un runner pulito.
 coordinator_policy|python|watch|any|-|tools/coordinator_policy_selftest.py|-
 asset_orphans|python|gate|any|-|tools/asset_orphan_audit.py|-
+ticket_attachment_overlap|run|gate|any|-|res://tools/ticket_attachment_overlap_selftest.tscn|TICKET-ATTACHMENT-OVERLAP PASS

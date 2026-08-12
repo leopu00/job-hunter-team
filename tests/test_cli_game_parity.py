@@ -96,6 +96,7 @@ NOT_APPLICABLE = {
     'publish_chat_sent': 'bus', 'publish_profile_status': 'bus',
     'publish_usage_history': 'bus', 'publish_agent_history': 'bus',
     'publish_artifact': 'bus', 'publish_state': 'bus',
+    'publish_document_upload': 'bus',
     'publish_state_key': 'bus',
     'publish_burn_intent': 'bus', 'publish_burn_intent_action': 'bus',
     'publish_agents': 'bus', 'publish_telemetry': 'bus',
