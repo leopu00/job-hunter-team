@@ -9,7 +9,10 @@ const LANGS := {
 	"it": "Italiano", "en": "English", "hu": "Magyar", "es": "Español",
 	"de": "Deutsch", "fr": "Français", "pt": "Português",
 }
-const LANG_CFG := "user://lang.cfg"
+## Preferenza persistente condivisa da gioco, web e runtime agenti.
+## Il path assoluto e l'ownership passano da JhtFs: sul container acceso
+## /jht_home appartiene all'utente jht, a container spento è il file host.
+const LANGUAGE_PREFS := "i18n-prefs.json"
 ## Lingua mostrata prima che esista una preferenza esplicita dell'utente.
 ## Non leggiamo il locale del sistema: il video/tutorial e la UI devono partire
 ## dalla stessa lingua prevedibile su ogni installazione nuova.
@@ -29,7 +32,7 @@ static func language_config_path() -> String:
 	# verifica che un save KO non faccia avanzare la UI come se avesse salvato.
 	if persistence_test == "save_failure":
 		return "user://language_persistence_missing/lang.cfg"
-	return LANG_CFG
+	return JhtFs.host_path(LANGUAGE_PREFS)
 
 static func _static_init() -> void:
 	# Il harness registrabile deve partire come prima installazione ma non può
@@ -72,6 +75,10 @@ static func needs_initial_language_choice() -> bool:
 ## scrittura → riapertura senza mai toccare le preferenze di chi sviluppa.
 static func saved_language(config_path := "") -> String:
 	var path := config_path if config_path != "" else language_config_path()
+	if path == JhtFs.host_path(LANGUAGE_PREFS):
+		var prefs := JhtFs.read_json(LANGUAGE_PREFS)
+		var locale := str(prefs.get("locale", ""))
+		return locale if LANGS.has(locale) else ""
 	var cfg := ConfigFile.new()
 	if cfg.load(path) != OK:
 		return ""
@@ -80,6 +87,8 @@ static func saved_language(config_path := "") -> String:
 
 static func _save_language(l: String, config_path := "") -> bool:
 	var path := config_path if config_path != "" else language_config_path()
+	if path == JhtFs.host_path(LANGUAGE_PREFS):
+		return JhtFs.write_json(LANGUAGE_PREFS, {"locale": l})
 	var cfg := ConfigFile.new()
 	cfg.set_value("ui", "lang", l)
 	return cfg.save(path) == OK

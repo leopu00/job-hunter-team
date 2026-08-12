@@ -32,7 +32,7 @@ def _fake_jq(bin_dir: Path) -> None:
     jq = bin_dir / "jq"
     jq.write_text(
         "#!/usr/bin/env sh\n"
-        "python3 -c 'import json,sys; print(json.load(open(sys.argv[-1])).get(\"locale\", \"en\"))' \"$@\"\n",
+        "printf fr\n",
         encoding="utf-8",
     )
     jq.chmod(0o755)
@@ -68,7 +68,9 @@ def test_agent_spawn_prefers_canonical_file_over_stale_bootstrap(tmp_path):
         [
             "bash",
             "-c",
-            'source ".launcher/spawn-lib.sh"; jht_spawn_user_locale',
+            f"export JHT_HOME='{_bash_path(home)}' JHT_LANG=en; "
+            'jq() { printf fr; }; source ".launcher/spawn-lib.sh"; '
+            "jht_spawn_user_locale",
         ],
         cwd=ROOT,
         env=env,
@@ -116,7 +118,12 @@ def test_shell_copy_resolver_prefers_the_canonical_file(tmp_path):
         "PATH": f"{_bash_path(bin_dir)}:/usr/local/bin:/usr/bin:/bin",
     }
     result = subprocess.run(
-        ["bash", "-c", 'source "shared/i18n.sh"; _i18n_resolve_lang'],
+        [
+            "bash",
+            "-c",
+            f"export JHT_HOME='{_bash_path(home)}' JHT_LANG=en; "
+            'jq() { printf fr; }; source "shared/i18n.sh"; _i18n_resolve_lang',
+        ],
         cwd=ROOT,
         env=env,
         capture_output=True,
