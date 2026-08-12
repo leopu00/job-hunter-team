@@ -7,9 +7,9 @@
  * FA, non cosa i commenti promettono.
  *
  * La seconda garanzia ha una forma particolare: non si dimostra provando
- * un id sbagliato e vedendolo rifiutato, ma osservando che ogni singola
- * delete porta il filtro sull'utente della sessione. È la differenza fra
- * «validiamo l'input» e «non esiste un input da validare».
+ * un id sbagliato e vedendolo rifiutato, ma osservando che esiste una sola
+ * RPC e riceve l'id della sessione. È la differenza fra «validiamo l'input»
+ * e «non esiste un input da validare».
  */
 import { describe, it, expect } from "vitest";
 
@@ -27,16 +27,16 @@ interface Call {
   filterValue?: string;
 }
 
-/** Finto client: registra le delete e l'ordine in cui arrivano. */
+/** Finto client: registra Storage e la singola RPC PostgreSQL. */
 function fakeAdmin(
   opts: {
-    failOn?: string;
-    deleteUserFails?: boolean;
+    rpcFails?: boolean;
     storagePaths?: string[];
     storageTree?: Record<string, true>;
     storageRemovesNothing?: boolean;
     /** Numero del lotto (1-based) che deve fallire. */
     failBatch?: number;
+    rpcPayload?: unknown;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -109,45 +109,24 @@ function fakeAdmin(
         };
       },
     },
-    from(table: string) {
-      return {
-        select() {
-          return {
-            eq() {
-              return Promise.resolve({
-                data: (opts.storagePaths ?? []).map((storage_path) => ({
-                  storage_path,
-                })),
-                error: null,
-              });
-            },
-          };
+    rpc(name: string, args: { p_user_id?: string }) {
+      calls.push({
+        table: `rpc:${name}`,
+        filterColumn: "p_user_id",
+        filterValue: args.p_user_id,
+      });
+      if (opts.rpcFails) {
+        return Promise.resolve({ data: null, error: { message: "boom" } });
+      }
+      if (args.p_user_id) deletedUsers.push(args.p_user_id);
+      return Promise.resolve({
+        data: opts.rpcPayload ?? {
+          removed: Object.fromEntries(
+            MANUAL_DELETE_ORDER.map((table) => [table, 2]),
+          ),
         },
-        delete() {
-          return {
-            eq(column: string, value: string) {
-              calls.push({ table, filterColumn: column, filterValue: value });
-              if (opts.failOn === table) {
-                return Promise.resolve({
-                  count: null,
-                  error: { message: "boom" },
-                });
-              }
-              return Promise.resolve({ count: 2, error: null });
-            },
-          };
-        },
-      };
-    },
-    auth: {
-      admin: {
-        deleteUser(id: string) {
-          deletedUsers.push(id);
-          return Promise.resolve({
-            error: opts.deleteUserFails ? { message: "no" } : null,
-          });
-        },
-      },
+        error: null,
+      });
     },
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,11 +134,17 @@ function fakeAdmin(
 }
 
 describe("cancellazione account — cancella tutto", () => {
-  it("svuota ogni tabella senza cascata, e poi cancella l'utente", async () => {
+  it("usa una sola RPC privilegiata per database e utente", async () => {
     const { client, calls, deletedUsers } = fakeAdmin();
     const outcome = await deleteAccountData(client, "user-1");
 
-    expect(calls.map((c) => c.table)).toEqual([...MANUAL_DELETE_ORDER]);
+    expect(calls).toEqual([
+      {
+        table: "rpc:delete_account_data",
+        filterColumn: "p_user_id",
+        filterValue: "user-1",
+      },
+    ]);
     expect(deletedUsers).toEqual(["user-1"]);
     // Il resoconto include anche i file su Storage, che non sono una
     // tabella ma vanno contati: una cancellazione che li dimentica non è
@@ -170,13 +155,10 @@ describe("cancellazione account — cancella tutto", () => {
     ]);
   });
 
-  it("rispetta l'ordine delle dipendenze", async () => {
-    // Le tabelle figlie devono cadere prima delle padri: invertire produce
-    // una violazione di chiave a metà cancellazione, cioè dati rimossi
-    // solo in parte con l'utente ancora esistente.
-    const { client, calls } = fakeAdmin();
-    await deleteAccountData(client, "user-1");
-    const order = calls.map((c) => c.table);
+  it("espone l'ordine delle dipendenze restituito dal contratto", async () => {
+    const { client } = fakeAdmin();
+    const outcome = await deleteAccountData(client, "user-1");
+    const order = outcome.order;
     for (const [child, parent] of [
       ["applications", "positions"],
       ["position_highlights", "positions"],
@@ -190,22 +172,22 @@ describe("cancellazione account — cancella tutto", () => {
     }
   });
 
-  it("l'utente cade per ultimo, mai prima dei suoi dati", async () => {
+  it("non conserva il vecchio fallback REST + Admin Auth", async () => {
     const { client, calls, deletedUsers } = fakeAdmin();
     await deleteAccountData(client, "user-1");
-    // Se `deleteUser` fosse chiamata prima, le tabelle NO ACTION
-    // rifiuterebbero e resteremmo con l'utente vivo e i dati orfani.
-    expect(calls.length).toBe(MANUAL_DELETE_ORDER.length);
+    expect(calls.map((call) => call.table)).toEqual([
+      "rpc:delete_account_data",
+    ]);
     expect(deletedUsers.length).toBe(1);
   });
 });
 
 describe("cancellazione account — non tocca l'account sbagliato", () => {
-  it("ogni delete filtra sull'utente della sessione", async () => {
+  it("la RPC riceve soltanto l'utente della sessione", async () => {
     const { client, calls } = fakeAdmin();
     await deleteAccountData(client, "user-1");
     for (const call of calls) {
-      expect(call.filterColumn).toBe("user_id");
+      expect(call.filterColumn).toBe("p_user_id");
       expect(call.filterValue).toBe("user-1");
     }
   });
@@ -237,20 +219,18 @@ describe("cancellazione account — non tocca l'account sbagliato", () => {
 });
 
 describe("cancellazione account — fallimenti detti, non mascherati", () => {
-  it("un errore a metà interrompe e dice dove", async () => {
-    const { client, deletedUsers } = fakeAdmin({ failOn: "positions" });
+  it("un errore della transazione privilegiata interrompe senza fallback", async () => {
+    const { client, deletedUsers } = fakeAdmin({ rpcFails: true });
     await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
-      /table_delete_failed/,
+      /database_delete_failed/,
     );
-    // L'utente NON deve essere cancellato se i suoi dati non lo sono:
-    // sarebbe il caso peggiore, dati orfani senza più un proprietario.
     expect(deletedUsers).toEqual([]);
   });
 
-  it("se l'utente non cade, lo dice invece di rispondere ok", async () => {
-    const { client } = fakeAdmin({ deleteUserFails: true });
+  it("una risposta RPC incompleta non diventa successo", async () => {
+    const { client } = fakeAdmin({ rpcPayload: { removed: {} } });
     await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
-      /auth_user_not_deleted/,
+      /database_delete_invalid_response/,
     );
   });
 });
@@ -625,10 +605,10 @@ describe("cancellazione — nessun nome di file esce, né in log né in risposta
     expect(everything).toContain("file-transit");
   });
 
-  it("il fallimento su una tabella non riporta il messaggio del database", async () => {
+  it("il fallimento RPC non riporta il messaggio del database", async () => {
     // `error.message` di Postgres può contenere il valore che ha violato
     // il vincolo, cioè dato dell'utente.
-    const { client } = fakeAdmin({ failOn: "positions" });
+    const { client } = fakeAdmin({ rpcFails: true });
     let error: unknown;
     try {
       await deleteAccountData(client, "user-1");
@@ -636,8 +616,8 @@ describe("cancellazione — nessun nome di file esce, né in log né in risposta
       error = err;
     }
     const e = error as InstanceType<typeof DeletionError>;
-    expect(e.code).toBe("table_delete_failed");
-    expect(e.stage).toBe("positions");
+    expect(e.code).toBe("database_delete_failed");
+    expect(e.stage).toBe("database");
     expect(e.message).not.toContain("boom");
   });
 });

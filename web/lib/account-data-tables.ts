@@ -9,9 +9,9 @@
 // L'ordine qui NON è quello di cancellazione: quello vive in
 // `MANUAL_DELETE_ORDER` ed è vincolato dalle chiavi esterne.
 
-/** Tabelle senza `ON DELETE CASCADE` verso `auth.users`: vanno svuotate a
- *  mano, in quest'ordine, prima di cancellare l'utente. Verificato sul
- *  catalogo di produzione il 7 agosto 2026. */
+/** Tabelle senza `ON DELETE CASCADE` verso `auth.users`: la RPC privilegiata
+ *  le svuota esplicitamente, in quest'ordine, prima di cancellare l'utente.
+ *  Verificato sul catalogo di produzione il 7 agosto 2026. */
 export const MANUAL_DELETE_ORDER = [
   "applications",
   "position_highlights",
