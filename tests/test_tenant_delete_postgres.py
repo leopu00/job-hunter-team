@@ -70,7 +70,7 @@ def postgres_cluster(tmp_path_factory):
         parsed = urlparse(external_url)
         psql_client = shutil.which("psql")
         if not psql_client or not parsed.hostname:
-            pytest.skip("JHT_TEST_POSTGRES_URL requires psql and a valid host")
+            pytest.fail("JHT_TEST_POSTGRES_URL requires psql and a valid host")
         binaries = {"psql": psql_client}
         host = parsed.hostname
         port = parsed.port or 5432
