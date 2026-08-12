@@ -62,6 +62,13 @@ fallire la scrittura prima di modificare il file.
 
 Il contesto onboarding machine-readable passa da schema 2 a schema 3.
 
+Nel profilo candidato i due campi sono top-level opzionali e tipizzati anche
+da `shared/config/profile-schema.ts`. Il round-trip cloud non introduce colonne
+né migrazioni SQL: li proietta nel JSONB `candidate_profiles.positioning`, già
+destinato ai segnali di posizionamento, e al pull li ricostruisce di nuovo come
+campi top-level. Un profilo che non li contiene continua a essere valido e non
+riceve alcun backfill.
+
 ## 4. Compatibilità forward-only
 
 I profili e i draft esistenti possono contenere in `target_role` valori come
