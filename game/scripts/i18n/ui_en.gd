@@ -130,6 +130,8 @@ const S := {
 	"tour.hint_free": "Free tour: click anyone with a diamond, in any order.",
 	"tour.hint_launch": "Complete the three requirements: the yellow button on top opens the checklist.",
 	"tour.exit": "EXIT THE TOUR (ESC)",
+	"tour.pause": "PAUSE THE TOUR (ESC)",
+	"tour.resume": "RESUME THE TOUR",
 	"tour.done": "TOUR COMPLETE ✓",
 	"tour.invite": "%s%s! Come meet your new team.",
 	"tour.guide.scout.greet": "This is Research. Meet one of our Researchers.",

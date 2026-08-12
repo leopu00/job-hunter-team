@@ -282,6 +282,8 @@ const S := {
 	"tour.hint_free": "Giro libero: clicca chi ha il diamante, in qualsiasi ordine.",
 	"tour.hint_launch": "Completa i tre requisiti: il pulsante giallo in alto apre la checklist.",
 	"tour.exit": "ESCI DAL GIRO (ESC)",
+	"tour.pause": "INTERROMPI IL GIRO (ESC)",
+	"tour.resume": "RIPRENDI IL GIRO",
 	"tour.done": "TOUR COMPLETATO ✓",
 	"tour.invite": "%s%s! Vieni, ti presento il tuo nuovo team.",
 	"tour.guide.scout.greet": "Questo è il reparto Ricerca. Ti presento uno dei nostri Ricercatori.",

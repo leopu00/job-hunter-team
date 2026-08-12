@@ -194,13 +194,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("fullscreen"):
 		toggle_fullscreen()
 		return
-	# ESC durante il giro guidato ne ESCE, invece di aprire la pausa. Era il
+	# ESC durante il giro guidato lo INTERROMPE, invece di aprire la pausa. Era il
 	# gesto istintivo di chi voleva andare dritto al setup e non trovava
 	# un'uscita: metteva in pausa il gioco mentre gli agenti continuavano a
 	# parlare sopra il menu (O-14). Vale anche a dialogo aperto, dove ESC
 	# oggi non fa nulla e il dialogo copre ogni pulsante a schermo.
 	# A gioco in pausa ESC chiude il menu, come sempre: chi è nel menu si
-	# aspetta quello, e l'uscita dal giro ha il suo pulsante.
+	# aspetta quello, e pausa/ripresa del giro hanno il pulsante nella sidebar.
 	if event.is_action_pressed("pause") and state != State.TITLE \
 			and not get_tree().paused and TourGuide.active():
 		exit_guided_onboarding()
@@ -734,19 +734,19 @@ func _reload_ui_theme() -> void:
 
 # ── Giro guidato ──────────────────────────────────────────────────────
 
-## Chiude il giro guidato di primo avvio, da qualunque punto lo si chieda
+## Interrompe il giro guidato di primo avvio, da qualunque punto lo si chieda
 ## (ESC, pulsante della to-do list, voce del menu laterale).
 ##
-## Chiude anche il dialogo a ritratti eventualmente aperto: durante il tour
-## copre tutto lo schermo, e un'uscita raggiungibile solo quando nessuno sta
-## parlando non è raggiungibile quando serve.
+## Prima chiude il gate persistito e POI il dialogo a ritratti: il callback
+## `closed` non deve avanzare la tappa che l'utente sta interrompendo. Indice,
+## modalità e visite restano in TourGuide e la sidebar può riprenderli.
 func exit_guided_onboarding() -> void:
 	if ScriptedOnboarding.is_dismissed():
 		return
+	ScriptedOnboarding.dismiss()
 	for dialogue in get_tree().get_nodes_in_group(&"dialogue_ui"):
 		if dialogue.has_method("close_now"):
 			dialogue.close_now()
-	ScriptedOnboarding.dismiss()
 
 
 # ── Pausa ─────────────────────────────────────────────────────────────
