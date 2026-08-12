@@ -610,7 +610,11 @@ def update_application(args):
     marks_applied = bool(
         args.status == 'applied' or args.applied_at or applied_flag
     )
-    if not marks_applied and args.status:
+    guards_applied_downgrade = bool(not marks_applied and args.status)
+    if guards_applied_downgrade:
+        # Fast path per un errore già persistito. La garanzia concorrente non
+        # dipende da questa lettura: il predicato dell'UPDATE sotto conserva
+        # la stessa guardia dopo che SQLite ha acquisito il write lock.
         current = conn.execute(
             "SELECT status FROM positions WHERE id = ?", (args.position_id,)
         ).fetchone()
@@ -751,11 +755,42 @@ def update_application(args):
 
     if not updates:
         print("No fields to update.")
+        conn.close()
         return
 
     params.append(args.position_id)
-    cursor = conn.execute(f"UPDATE applications SET {', '.join(updates)} WHERE position_id = ?", params)
+    guarded_where = "position_id = ?"
+    if guards_applied_downgrade:
+        guarded_where += (
+            " AND NOT EXISTS (SELECT 1 FROM positions "
+            "WHERE id = applications.position_id AND status = 'applied')"
+        )
+    cursor = conn.execute(
+        f"UPDATE applications SET {', '.join(updates)} WHERE {guarded_where}",
+        params,
+    )
     if cursor.rowcount == 0:
+        if guards_applied_downgrade:
+            # L'UPDATE è già una write transaction: questa verifica distingue
+            # un'applicazione assente da un downgrade respinto senza lasciare
+            # spazio a un altro writer fra decisione e INSERT.
+            current = conn.execute(
+                "SELECT status FROM positions WHERE id = ?",
+                (args.position_id,),
+            ).fetchone()
+            current_status = (
+                current['status'] if current and hasattr(current, 'keys')
+                else current[0] if current else None
+            )
+            if current_status == 'applied':
+                print(
+                    "⚠️  APPLIED STATUS CHANGE REJECTED: use an atomic undo "
+                    "or post-submission action so position and application "
+                    "cannot diverge.",
+                    file=sys.stderr,
+                )
+                conn.close()
+                sys.exit(1)
         # UPSERT: nessuna application esistente → INSERT iniziale.
         # Senza questo path, lo Scrittore deve fare INSERT a mano via
         # python3 -c "import sqlite3 ..." e finiva per passare la stringa

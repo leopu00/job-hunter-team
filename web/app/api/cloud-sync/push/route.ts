@@ -755,10 +755,16 @@ export async function POST(req: NextRequest) {
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (payload.length > 0) {
-      const { data: upserted, error } = await admin
-        .from("applications")
-        .upsert(payload, { onConflict: "position_id" })
-        .select("id");
+      // L'RPC prende il lock della position prima di valutare l'application.
+      // Un push stale non può quindi retrocedere la candidatura dopo che una
+      // mark_position_applied concorrente l'ha resa visibile come applied.
+      const { data: upserted, error } = await admin.rpc(
+        "sync_upsert_applications",
+        {
+          p_user_id: userId,
+          p_applications: payload,
+        },
+      );
 
       if (error) {
         return sanitizedError(error, {
@@ -767,7 +773,7 @@ export async function POST(req: NextRequest) {
           publicMessage: "applications_upsert_failed",
         });
       }
-      applicationsUpserted = upserted?.length ?? 0;
+      applicationsUpserted = typeof upserted === "number" ? upserted : 0;
     }
   }
 

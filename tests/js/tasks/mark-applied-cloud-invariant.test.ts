@@ -188,7 +188,7 @@ describe("migrazione cloud atomica", () => {
   it("usa privilegi della sessione e non fa backfill", () => {
     expect(
       migration.match(/LANGUAGE plpgsql\s+SECURITY INVOKER/gi),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     expect(migration).toMatch(/actor UUID := \(SELECT auth\.uid\(\)\)/i);
     expect(migration).not.toMatch(/security definer/i);
     expect(migration).not.toMatch(/DO\s+\$\$/i);
@@ -204,6 +204,14 @@ describe("migrazione cloud atomica", () => {
     );
     expect(migration).toMatch(/undo_manual_position_application/i);
     expect(migration).toMatch(/sync_confirm_positions_applied/i);
+    expect(migration).toMatch(/sync_upsert_applications/i);
+    expect(migration).toMatch(/stale_application_downgrade/i);
+    expect(migration).toMatch(
+      /incoming_status IS NULL\s+OR incoming_status NOT IN \('applied', 'response'\)/i,
+    );
+    expect(migration).toMatch(
+      /OLD\.status IN \('applied', 'response'\)[\s\S]*NEW\.status IS NULL/i,
+    );
     expect(migration).toMatch(/incomplete_application/i);
     expect(migration).toMatch(
       /application_row\.status IS DISTINCT FROM 'applied'/i,

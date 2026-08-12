@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import os
+import importlib.util
 import sqlite3
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -192,6 +194,115 @@ def test_applied_application_status_cannot_be_downgraded_alone(box, script):
     position, application, _transition = read_state(db_path)
     assert position["status"] == "applied"
     assert application["status"] == "applied"
+
+
+@pytest.mark.parametrize("script", [DB_UPDATE, DESKTOP_DB_UPDATE])
+def test_downgrade_update_rechecks_position_under_write_lock(script):
+    source = script.read_text(encoding="utf-8")
+    function = source[source.index("def update_application(args):"):]
+    guard_read = function.index("SELECT status FROM positions")
+    guarded_predicate = function.index(
+        "AND NOT EXISTS (SELECT 1 FROM positions"
+    )
+    application_write = function.index("UPDATE applications SET")
+    assert guard_read < guarded_predicate < application_write
+
+
+@pytest.mark.parametrize("script", [DB_UPDATE, DESKTOP_DB_UPDATE])
+def test_concurrent_applied_write_wins_over_stale_downgrade(box, script):
+    db_path, home = box
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO applications (position_id, status, applied) "
+        "VALUES (73, 'draft', 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    selected = threading.Event()
+    release = threading.Event()
+
+    class GatedConnection(sqlite3.Connection):
+        gated = False
+
+        def execute(self, sql, parameters=()):
+            cursor = super().execute(sql, parameters)
+            if (
+                not self.gated
+                and " ".join(sql.split()).lower()
+                == "select status from positions where id = ?"
+                and tuple(parameters) == (73,)
+            ):
+                self.gated = True
+                selected.set()
+                assert release.wait(10), "concurrent writer never completed"
+            return cursor
+
+    def gated_get_db():
+        guarded = sqlite3.connect(
+            db_path, timeout=10, factory=GatedConnection
+        )
+        guarded.row_factory = sqlite3.Row
+        guarded.execute("PRAGMA journal_mode=WAL")
+        guarded.execute("PRAGMA foreign_keys=ON")
+        return guarded
+
+    spec = importlib.util.spec_from_file_location(
+        f"o73_db_update_{script.parent.name}_{id(script)}", script
+    )
+    assert spec and spec.loader
+    update_module = importlib.util.module_from_spec(spec)
+    original_path = sys.path[:]
+    try:
+        spec.loader.exec_module(update_module)
+    finally:
+        # Entrambe le CLI inseriscono la propria directory in sys.path. Non
+        # deve influenzare il reload di `_db` nelle fixture successive.
+        sys.path[:] = original_path
+    update_module.get_db = gated_get_db
+
+    downgrade_result = {}
+
+    def downgrade():
+        old_argv = sys.argv
+        sys.argv = ["db_update.py", "application", "73", "--status", "draft"]
+        try:
+            update_module.main()
+            downgrade_result["code"] = 0
+        except SystemExit as exc:
+            downgrade_result["code"] = int(exc.code or 0)
+        finally:
+            sys.argv = old_argv
+
+    thread = threading.Thread(target=downgrade, daemon=True)
+    thread.start()
+    assert selected.wait(10), "downgrade never reached its advisory read"
+
+    marked = run_update(
+        db_path,
+        home,
+        "application",
+        "73",
+        "--applied-at",
+        "2026-08-12 15:30:00",
+        "--applied-via",
+        "manual",
+        script=script,
+    )
+    release.set()
+    thread.join(10)
+
+    assert marked.returncode == 0, marked.stdout + marked.stderr
+    assert not thread.is_alive()
+    assert downgrade_result == {"code": 1}
+    position, application, _transition = read_state(db_path)
+    assert position["status"] == "applied"
+    assert dict(application) == {
+        "status": "applied",
+        "applied": 1,
+        "applied_at": "2026-08-12 15:30:00",
+        "applied_via": "manual",
+    }
 
 
 def test_failure_after_application_write_rolls_back_everything(box):

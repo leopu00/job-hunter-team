@@ -140,7 +140,7 @@ describe("push sync di una candidatura", () => {
     expect(position?.options).toMatchObject({ defaultToNull: false });
 
     const applicationAt = calls.findIndex(
-      (call) => call.kind === "upsert" && call.table === "applications",
+      (call) => call.kind === "rpc" && call.name === "sync_upsert_applications",
     );
     const confirmAt = calls.findIndex(
       (call) =>
@@ -159,7 +159,7 @@ describe("push sync di una candidatura", () => {
     const response = await push({ status: "applied", applied: false });
     expect(response.status).toBe(500);
     const body = await response.json();
-    expect(body).toMatchObject({ error: "application_state_invariant_failed" });
+    expect(body).toMatchObject({ error: "applications_upsert_failed" });
     const position = calls.find(
       (call) => call.kind === "upsert" && call.table === "positions",
     );
@@ -179,7 +179,8 @@ describe("push sync di una candidatura", () => {
     expect(response.status).toBe(200);
     expect(
       calls.some(
-        (call) => call.kind === "upsert" && call.table === "applications",
+        (call) =>
+          call.kind === "rpc" && call.name === "sync_upsert_applications",
       ),
     ).toBe(true);
     expect(calls.at(-1)).toMatchObject({

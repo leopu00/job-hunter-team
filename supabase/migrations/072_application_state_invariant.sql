@@ -74,6 +74,151 @@ BEGIN
 END;
 $$;
 
+-- Il push usa un'unica RPC per il batch applications. Tutti i percorsi che
+-- cambiano il fatto "inviata" prendono prima il lock della position: così
+-- l'ordine di commit, non una lettura stale nella route, decide il risultato.
+-- Se la mark concorrente ha già vinto, un payload incompleto fallisce e il
+-- client non può avanzare il cursore.
+CREATE OR REPLACE FUNCTION public.sync_upsert_applications(
+    p_user_id UUID,
+    p_applications JSONB
+) RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    item JSONB;
+    position_row public.positions%ROWTYPE;
+    incoming_status TEXT;
+    incoming_applied BOOLEAN;
+    incoming_applied_at TIMESTAMPTZ;
+    incoming_applied_via TEXT;
+    upserted INTEGER := 0;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'user_id_required';
+    END IF;
+    IF p_applications IS NULL
+       OR jsonb_typeof(p_applications) IS DISTINCT FROM 'array' THEN
+        RAISE EXCEPTION 'applications_array_required';
+    END IF;
+
+    FOR item IN SELECT value FROM jsonb_array_elements(p_applications)
+    LOOP
+        SELECT * INTO position_row
+          FROM public.positions
+         WHERE id = (item->>'position_id')::UUID
+           AND user_id = p_user_id
+         FOR UPDATE;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'position_not_found';
+        END IF;
+
+        incoming_status := item->>'status';
+        incoming_applied := (item->>'applied')::BOOLEAN;
+        incoming_applied_at := (item->>'applied_at')::TIMESTAMPTZ;
+        incoming_applied_via := item->>'applied_via';
+        IF position_row.status IN ('applied', 'response')
+           AND (
+               incoming_status IS NULL
+               OR incoming_status NOT IN ('applied', 'response')
+               OR incoming_applied IS NOT TRUE
+               OR incoming_applied_at IS NULL
+               OR NULLIF(BTRIM(incoming_applied_via), '') IS NULL
+           ) THEN
+            RAISE EXCEPTION 'stale_application_downgrade';
+        END IF;
+
+        INSERT INTO public.applications (
+            user_id, position_id, cv_path, cv_pdf_path, cl_path, cl_pdf_path,
+            status, critic_score, critic_verdict, critic_notes, critic_round,
+            written_at, applied_at, applied_via, response, response_at,
+            written_by, reviewed_by, critic_reviewed_at, applied,
+            cv_drive_id, cl_drive_id
+        ) VALUES (
+            p_user_id, position_row.id, item->>'cv_path',
+            item->>'cv_pdf_path', item->>'cl_path', item->>'cl_pdf_path',
+            incoming_status, (item->>'critic_score')::REAL,
+            item->>'critic_verdict', item->>'critic_notes',
+            (item->>'critic_round')::INTEGER,
+            (item->>'written_at')::TIMESTAMPTZ, incoming_applied_at,
+            incoming_applied_via, item->>'response',
+            (item->>'response_at')::TIMESTAMPTZ, item->>'written_by',
+            item->>'reviewed_by',
+            (item->>'critic_reviewed_at')::TIMESTAMPTZ, incoming_applied,
+            item->>'cv_drive_id', item->>'cl_drive_id'
+        )
+        ON CONFLICT (position_id) DO UPDATE SET
+            cv_path = EXCLUDED.cv_path,
+            cv_pdf_path = EXCLUDED.cv_pdf_path,
+            cl_path = EXCLUDED.cl_path,
+            cl_pdf_path = EXCLUDED.cl_pdf_path,
+            status = EXCLUDED.status,
+            critic_score = EXCLUDED.critic_score,
+            critic_verdict = EXCLUDED.critic_verdict,
+            critic_notes = EXCLUDED.critic_notes,
+            critic_round = CASE
+                WHEN item ? 'critic_round' THEN EXCLUDED.critic_round
+                ELSE applications.critic_round
+            END,
+            written_at = EXCLUDED.written_at,
+            applied_at = EXCLUDED.applied_at,
+            applied_via = EXCLUDED.applied_via,
+            response = EXCLUDED.response,
+            response_at = EXCLUDED.response_at,
+            written_by = EXCLUDED.written_by,
+            reviewed_by = EXCLUDED.reviewed_by,
+            critic_reviewed_at = EXCLUDED.critic_reviewed_at,
+            applied = EXCLUDED.applied,
+            cv_drive_id = EXCLUDED.cv_drive_id,
+            cl_drive_id = EXCLUDED.cl_drive_id;
+        upserted := upserted + 1;
+    END LOOP;
+
+    RETURN upserted;
+END;
+$$;
+
+-- Protegge anche l'ordine opposto: se la mark ha già committato prima
+-- dell'upsert positions, un delta locale precedente non può riportare la
+-- position a ready/scored mentre l'application conserva il fatto inviato.
+-- `response` è l'unica progressione post-invio; l'undo prima azzera i campi
+-- application e poi ripristina lo stato precedente nella stessa transazione.
+CREATE OR REPLACE FUNCTION public.reject_stale_applied_position_downgrade()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF OLD.status IN ('applied', 'response')
+       AND (
+           NEW.status IS NULL
+           OR NEW.status NOT IN ('applied', 'response')
+       )
+       AND EXISTS (
+           SELECT 1
+             FROM public.applications AS application
+            WHERE application.position_id = OLD.id
+              AND application.user_id = OLD.user_id
+              AND application.status IN ('applied', 'response')
+              AND application.applied IS TRUE
+              AND application.applied_at IS NOT NULL
+              AND NULLIF(BTRIM(application.applied_via), '') IS NOT NULL
+       ) THEN
+        RAISE EXCEPTION 'stale_position_downgrade';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS positions_reject_stale_applied_downgrade
+    ON public.positions;
+CREATE TRIGGER positions_reject_stale_applied_downgrade
+BEFORE UPDATE OF status ON public.positions
+FOR EACH ROW
+EXECUTE FUNCTION public.reject_stale_applied_position_downgrade();
+
 CREATE OR REPLACE FUNCTION public.undo_manual_position_application(
     p_position_legacy_id INTEGER,
     p_restored_status TEXT DEFAULT NULL
@@ -239,4 +384,9 @@ GRANT EXECUTE ON FUNCTION public.undo_manual_position_application(INTEGER, TEXT)
 REVOKE ALL ON FUNCTION public.sync_confirm_positions_applied(UUID, INTEGER[])
     FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sync_confirm_positions_applied(UUID, INTEGER[])
+    TO service_role;
+
+REVOKE ALL ON FUNCTION public.sync_upsert_applications(UUID, JSONB)
+    FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.sync_upsert_applications(UUID, JSONB)
     TO service_role;

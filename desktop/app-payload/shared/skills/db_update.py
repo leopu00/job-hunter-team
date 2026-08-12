@@ -208,7 +208,10 @@ def update_application(args):
     marks_applied = bool(
         args.status == 'applied' or args.applied_at or applied_flag
     )
-    if not marks_applied and args.status:
+    guards_applied_downgrade = bool(not marks_applied and args.status)
+    if guards_applied_downgrade:
+        # Questa lettura anticipa l'errore comune; la condizione nell'UPDATE
+        # resta l'autorità quando due processi scrivono lo stesso WAL.
         current = conn.execute(
             "SELECT status FROM positions WHERE id = ?", (args.position_id,)
         ).fetchone()
@@ -317,11 +320,35 @@ def update_application(args):
 
     if not updates:
         print("Nessun campo da aggiornare.")
+        conn.close()
         return
 
     params.append(args.position_id)
-    cursor = conn.execute(f"UPDATE applications SET {', '.join(updates)} WHERE position_id = ?", params)
+    guarded_where = "position_id = ?"
+    if guards_applied_downgrade:
+        guarded_where += (
+            " AND NOT EXISTS (SELECT 1 FROM positions "
+            "WHERE id = applications.position_id AND status = 'applied')"
+        )
+    cursor = conn.execute(
+        f"UPDATE applications SET {', '.join(updates)} WHERE {guarded_where}",
+        params,
+    )
     if cursor.rowcount == 0:
+        if guards_applied_downgrade:
+            current = conn.execute(
+                "SELECT status FROM positions WHERE id = ?",
+                (args.position_id,),
+            ).fetchone()
+            if current and current['status'] == 'applied':
+                print(
+                    "⚠️  APPLIED STATUS CHANGE REJECTED: use an atomic undo "
+                    "or post-submission action so position and application "
+                    "cannot diverge.",
+                    file=sys.stderr,
+                )
+                conn.close()
+                sys.exit(1)
         if not marks_applied:
             print(f"⚠️  ERRORE: nessuna application trovata per position_id={args.position_id}!")
             print("   Hai forse usato l'application ID invece del position_id?")
