@@ -91,7 +91,7 @@ def test_role_distribution_is_identical_and_isolated_for_both_providers(
 def test_start_agent_uses_the_shared_distribution_authority() -> None:
     source = (ROOT / ".launcher" / "start-agent.sh").read_text(encoding="utf-8")
 
-    assert 'jht_spawn_copy_skills "$ROLE" "$AGENT_DIR"' in source
+    assert '"$ROLE" "$AGENT_DIR" "start-agent" "$CLI_BIN"' in source
 
 
 @pytest.mark.parametrize(

@@ -36,7 +36,8 @@ jht_spawn_sync_prompt mantenitore "$MANT_DIR" "$LABEL"
 # 2b) Skill discovery: le skill di skills.list nella workdir, così
 #     `maintainer-sweep`/`resilience` sono discoverabili come skill vere dal
 #     provider (Claude → .claude/skills, Codex/Kimi → .agents/skills).
-jht_spawn_copy_skills mantenitore "$MANT_DIR" "$LABEL"
+jht_spawn_copy_skills mantenitore "$MANT_DIR" "$LABEL" \
+  "$(jht_spawn_active_provider)"
 
 # 3) Soppressione auto-update Codex (stesso fix di spawn-doctor/start-agent).
 jht_spawn_codex_dismiss_update
