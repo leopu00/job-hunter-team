@@ -49,6 +49,7 @@ def test_shared_python_user_visible_copy_has_no_italian_baseline():
 ## lotto e arriva a 0 quando il fronte è chiuso. Se sale, qualcuno ha aggiunto
 ## copy italiana nuova — che è esattamente ciò che va fermato subito.
 GAME_COPY_BUDGET = 85
+AGENT_COPY_BUDGET = 1005
 
 
 def test_backend_perimeter_user_visible_copy_is_english():
@@ -58,7 +59,8 @@ def test_backend_perimeter_user_visible_copy_is_english():
     container's own messages: leaving them out of the gate is what let the
     English pass ship half-done.
     """
-    leaks = [leak for area, dirs in census.AREAS.items() if area != "game"
+    open_fronts = {"agents", "game"}
+    leaks = [leak for area, dirs in census.AREAS.items() if area not in open_fronts
              for leak in _scan(dirs)]
     assert not leaks, (
         f"Italian user-visible backend copy ({len(leaks)}):\n" + "\n".join(leaks)
@@ -80,6 +82,20 @@ def test_game_copy_budget_only_goes_down():
         f"the budget is stale: {len(leaks)} left but it still says "
         f"{GAME_COPY_BUDGET}. Lower GAME_COPY_BUDGET to {len(leaks)} so the "
         "next regression is caught where the work actually stopped."
+    )
+
+
+def test_agent_copy_budget_only_goes_down():
+    """English agent prompts/tools are measured while their pass is open."""
+    leaks = _scan(census.AREAS["agents"])
+    assert len(leaks) <= AGENT_COPY_BUDGET, (
+        f"Italian copy in English agent surfaces grew: "
+        f"{len(leaks)} > {AGENT_COPY_BUDGET}.\n" + "\n".join(leaks[:40])
+    )
+    assert len(leaks) >= AGENT_COPY_BUDGET - 20, (
+        f"the agent budget is stale: {len(leaks)} left but it still says "
+        f"{AGENT_COPY_BUDGET}. Lower AGENT_COPY_BUDGET to {len(leaks)} so "
+        "the next regression is caught where the work actually stopped."
     )
 
 
@@ -114,3 +130,74 @@ def test_census_regex_catches_the_words_that_slipped_through():
         "Installa Claude CLI",
     ):
         assert census.ITALIAN_COPY.search(phrase), f"not caught: {phrase}"
+
+
+def test_python_census_reads_copy_from_arbitrary_dictionary_fields(tmp_path):
+    """A rendered verdict is copy even when its dictionary key is new.
+
+    `scaling_calc.py` exposed the real failure: `reason` and `note` happened
+    to be allowlisted, while the equally visible `then` verdict disappeared
+    from the census before `_fmt()` printed it.
+    """
+    source = tmp_path / "verdicts.py"
+    source.write_text(
+        'VERDICTS = {\n'
+        '    "steady": "Tutto regolare",\n'
+        '    "next_step": "Ricalcola prima del prossimo",\n'
+        '}\n',
+        encoding="utf-8",
+    )
+
+    assert list(census.python_visible_literals(source)) == [
+        (2, "Tutto regolare"),
+        (3, "Ricalcola prima del prossimo"),
+    ]
+
+
+def test_real_scaling_verdict_inside_then_field_is_counted():
+    hits = _scan(("agents/_skills/scaling-calc",))
+    assert any(
+        "ri-misura il burn reale e ricalcola prima del prossimo" in hit
+        for hit in hits
+    )
+
+
+def test_agents_are_an_explicit_census_area():
+    assert census.AREAS["agents"] == ("agents",)
+
+
+def test_agent_census_reads_english_markdown_and_extensionless_tools(
+        tmp_path, monkeypatch):
+    agents = tmp_path / "agents"
+    role = agents / "scout"
+    tools = agents / "_tools"
+    role.mkdir(parents=True)
+    tools.mkdir(parents=True)
+    (role / "scout.md").write_text(
+        "# Scout\n\nAttenzione: controlla tutte le fonti.\n",
+        encoding="utf-8",
+    )
+    # A localized catalogue is supposed to contain Italian and must stay out.
+    (role / "scout.it.md").write_text(
+        "# Scout\n\nAttenzione: questa e' la traduzione italiana.\n",
+        encoding="utf-8",
+    )
+    tool = tools / "agent-check"
+    tool.write_text(
+        '#!/usr/bin/env python3\nprint("Errore: agente non trovato")\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(census, "ROOT", tmp_path)
+
+    hits = census.scan(("agents",))
+
+    assert len(hits) == 2
+    assert any("agents/scout/scout.md:3:" in hit for hit in hits)
+    assert any("agents/_tools/agent-check:2:" in hit for hit in hits)
+    assert all("scout.it.md" not in hit for hit in hits)
+
+
+def test_census_exclusions_accept_windows_separators():
+    assert census._excluded_relative(
+        r"game\scripts\backend\payloads\agent_history.py"
+    )
