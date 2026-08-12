@@ -24,6 +24,25 @@ import {
 
 type CloudModule = typeof import("../../../cli/src/commands/cloud.js");
 
+/** Budget dei tre test che eseguono `handleLogin`, misurato — non il default.
+ *
+ * Ogni login porta almeno UN SECONDO di sonno per contratto: cloud.js clampa
+ * l'intervallo di poll a `Math.max(1, init.interval)` secondi e ci dorme
+ * sopra prima di interrogare device-poll — il mock chiede già `interval: 1`,
+ * cioè il minimo, quindi quel secondo non si comprime da qui. Sopra ci vanno
+ * `vi.resetModules()` + il re-import del grafo di cloud.js e la creazione del
+ * jobs.db con lo schema intero. Misurato a macchina scarica (--reporter=
+ * verbose, 2026-08-12): 2472ms, 1361ms, 1539ms.
+ *
+ * Il default di vitest è 5000ms: margine ~2× su un lavoro che parte da 1s di
+ * sleep, su un host dove la suite gira con 13 worker in parallelo. È il
+ * motivo per cui questo file cadeva con «Test timed out in 5000ms» dentro la
+ * suite intera — visto in due run normali e sotto saturazione — e passava
+ * rieseguito da solo: il rosso misurava la macchina, non il codice. Stessa
+ * forma di daemon.test.ts, stessa cura: 15s, la cifra già usata dai file che
+ * avviano processi (cli-runtime-status, doctor-provider-auth). */
+const LOGIN_TEST_TIMEOUT_MS = 15_000;
+
 let home: string;
 let dbPath: string;
 let originalJhtHome: string | undefined;
@@ -215,7 +234,7 @@ describe("jht cloud login — gancio bootstrap restore (T-029)", () => {
     expect(outputOf(stdout)).toContain("automatic bootstrap restore");
     expect(outputOf(stdout)).toContain("2 upserted");
     expect(process.exitCode).toBeUndefined();
-  });
+  }, LOGIN_TEST_TIMEOUT_MS);
 
   it("DB con lavoro locale: niente restore, si va sul push — full-dump mai chiamato", async () => {
     createLocalDb([{ id: 5, title: "Local work", url: "https://boards.example/jobs/5" }]);
@@ -231,7 +250,7 @@ describe("jht cloud login — gancio bootstrap restore (T-029)", () => {
     // Il lavoro locale è intatto e non è arrivato niente dal cloud.
     expect(localPositionIds()).toEqual([5]);
     expect(process.exitCode).toBeUndefined();
-  });
+  }, LOGIN_TEST_TIMEOUT_MS);
 
   it("cloud giù durante il restore automatico: pairing OK, fail-safe senza exitCode appiccicoso", async () => {
     createLocalDb();
@@ -247,5 +266,5 @@ describe("jht cloud login — gancio bootstrap restore (T-029)", () => {
     expect(outputOf(stderr)).toContain("Dump failed (HTTP 503)");
     expect(outputOf(stdout)).toContain("automatic restore failed. Recover: jht cloud restore");
     expect(process.exitCode).toBeUndefined();
-  });
+  }, LOGIN_TEST_TIMEOUT_MS);
 });
