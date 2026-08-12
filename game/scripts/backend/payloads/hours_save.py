@@ -11,7 +11,11 @@ except (FileNotFoundError, json.JSONDecodeError, TypeError):
     # il primo passo della checklist.
     c = {}
 try:
-    shutil.copy2(path, path + '.bak-' + time.strftime('%%Y%%m%%dT%%H%%M%%S'))
+    backup = path + '.bak-' + time.strftime('%%Y%%m%%dT%%H%%M%%S')
+    bfd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(bfd, 'wb') as output:
+        with open(path, 'rb') as source:
+            output.write(source.read()); output.flush(); os.fsync(output.fileno())
 except Exception:
     pass
 c.setdefault('team', {})['working_hours'] = data

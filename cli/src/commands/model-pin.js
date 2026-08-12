@@ -419,7 +419,7 @@ function makeBackup(path) {
 function atomicWrite(path, text, mode) {
   const tmp = `${path}.jht-model-pin.tmp`;
   writeFileSync(tmp, text, { encoding: 'utf-8', mode: 0o600, flag: 'wx' });
-  try { chmodSync(tmp, mode); } catch { /* fs senza permessi POSIX */ }
+  try { chmodSync(tmp, 0o600); } catch { /* fs senza permessi POSIX */ }
   renameSync(tmp, path);
   try { chmodSync(path, 0o600); } catch { /* fs senza permessi POSIX */ }
   if (process.platform === 'win32') {
