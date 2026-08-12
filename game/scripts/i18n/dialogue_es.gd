@@ -299,7 +299,7 @@ const S := {
 	"dialogue.tour_mentor.cadence.choice.cad_daily": "Un breve resumen cada día.",
 	"dialogue.tour_mentor.cadence.choice.cad_demand": "Sólo cuando vengo a buscarte.",
 	"dialogue.tour_mentor.cadence.choice.cad_mile": "Sólo cuando hay que tomar una decisión importante.",
-	"dialogue.tour_mentor.cadence.choice.cad_week": "Un check-in honesto cada semana.",
+	"dialogue.tour_mentor.cadence.choice.cad_week": "Una revisión honesta cada semana.",
 	"dialogue.tour_mentor.cadence.line": "Estaré aquí de cualquier manera. ¿Cómo te gustaría saber de mí?",
 	"dialogue.tour_mentor.change2.line": "Usaremos tu presente como brújula inversa: todo lo que hoy te pesa se convierte en criterio de búsqueda. El equipo proporciona la coherencia; tu parte es la importante: elegir.",
 	"dialogue.tour_mentor.final.line": "Una última cosa, entonces el Coordinador está esperando: ahí fuera, tu CV hablará de habilidades, pero estás buscando un lugar donde puedas prosperar. No te conformes.",

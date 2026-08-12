@@ -12,6 +12,14 @@ const FORBIDDEN_ENGLISH_FRAGMENTS := [
 	"Research", "Analysis", "Quality Check", "Office Home", "escritório home",
 	"Applications", "Operations", "Setup", "setup", "READY CVS", "READY CVs",
 ]
+## Common English narrative/UI words that are not product names in any locale.
+## Unlike the incident list above, this is an open lexical net: it catches new
+## untranslated copy even when review has never seen that exact phrase.
+const FORBIDDEN_ENGLISH_WORDS := [
+	"Hello", "Welcome", "Please", "Thanks", "Sorry", "Ready", "Later",
+	"Working", "Update", "Start", "Stop", "Open", "Close", "Click",
+	"Writer", "Critic", "Maintainer", "Scout", "Coordinator",
+]
 const LOCALE_FORBIDDEN_ROLE_NAMES := {
 	"de": ["Sentinel", "Doctor"],
 	"es": ["Sentinel"],
@@ -20,7 +28,12 @@ const LOCALE_FORBIDDEN_ROLE_NAMES := {
 	"pt": ["Sentinel"],
 }
 const LOCALE_FORBIDDEN_COPY := {
-	"hu": ["Hello"],
+	"de": ["Guide", "Updates", "Check-in", "Check-up"],
+	"es": ["Check-in", "Check-up"],
+	"fr": ["Check-in", "Check-up"],
+	"hu": ["Check-in", "Check-up"],
+	"it": ["Check-in", "Check-up"],
+	"pt": ["Check-in", "Check-up"],
 }
 
 var _failures: Array[String] = []
@@ -187,6 +200,10 @@ func _check_locale_catalogs(sources: Dictionary) -> void:
 				_check(not translated.contains(fragment),
 						"%s retains English fragment '%s' in %s" % [
 								key, fragment, locale])
+			for word: String in FORBIDDEN_ENGLISH_WORDS:
+				_check(not _contains_word(translated, word),
+						"%s retains common English word '%s' in %s" % [
+								key, word, locale])
 			for role_name: String in LOCALE_FORBIDDEN_ROLE_NAMES.get(locale, []):
 				_check(not _contains_word(translated, role_name),
 						"%s retains English role '%s' in %s" % [
