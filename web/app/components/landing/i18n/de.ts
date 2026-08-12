@@ -111,7 +111,7 @@ export const de: Record<string, string> = {
   home_setup_kicker: "Starte es",
   home_setup_title: "Wie du willst, wo du willst",
   home_setup_body:
-    "Es läuft auf einem dauerhaft eingeschalteten dedizierten Computer oder einem günstigen VPS und arbeitet Tag und Nacht für dich. Du verwaltest es über die Desktop-App: starten, stoppen und das Team mit einem Klick im Blick behalten. Und du bist nicht an diesen Computer gebunden: Über das Web kannst du die Ergebnisse verfolgen und mit dem Team auch von einem anderen PC oder deinem Handy sprechen.",
+    "Beginne auf deinem lokalen PC: Das ist der einfachste vollständige Weg, und das Team arbeitet, solange PC, Docker und Netzwerk verfügbar sind. Für einen durchgängigen Betrieb bei ausgeschaltetem PC kannst du einen VPS nutzen, den du selbst bereitstellst und verwaltest. Die Web-Synchronisierung ist optional und bestimmt nicht, wo das Team läuft.",
   home_setup_cta: "Wie man es startet →",
   home_pricing_kicker: "Preise",
   home_pricing_title: "Open Source. Die Plattform ist kostenlos.",

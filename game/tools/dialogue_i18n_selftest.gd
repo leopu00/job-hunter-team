@@ -4,10 +4,10 @@ extends SceneTree
 ##   godot --headless --path game --script res://tools/dialogue_i18n_selftest.gd
 
 const EXPECTED_TREES := 38
-const EXPECTED_NODES := 221
-const EXPECTED_CHOICES := 138
+const EXPECTED_NODES := 219
+const EXPECTED_CHOICES := 137
 const EXPECTED_DYNAMIC_SHELLS := 8
-const EXPECTED_TRANSLATED_CELLS := 2202
+const EXPECTED_TRANSLATED_CELLS := 2184
 const FORBIDDEN_ENGLISH_FRAGMENTS := [
 	"Research", "Analysis", "Quality Check", "Office Home", "escritório home",
 	"Applications", "Operations", "Setup", "setup", "READY CVS", "READY CVs",
@@ -145,7 +145,7 @@ func _run() -> void:
 
 	if _failures.is_empty():
 		print("DIALOGUE-I18N-TEST PASS " \
-				+ "(38 trees, 367 IDs, 7 locales, 2202 translated cells)")
+				+ "(38 trees, 364 IDs, 7 locales, 2184 translated cells)")
 		quit(0)
 		return
 	for failure in _failures:

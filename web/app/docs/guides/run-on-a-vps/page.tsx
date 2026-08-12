@@ -58,7 +58,7 @@ const T: Record<
     title: "Run 24/7 on a VPS",
     tagline: "A small cloud server so the team works while you sleep",
     intro:
-      "A VPS is the cheapest way to keep the team hunting around the clock — no computer left on, no fans, no interruptions. About €6–10/mo on top of your provider. This is the recommended setup for a real job search.",
+      "A Local PC is the simplest complete way to start. Choose a VPS when you want the team to keep running while that PC is off: it costs about €6–10/mo on top of your AI provider, and you administer the server, SSH access, Docker, network, and storage.",
     validatedLabel: "Validated end-to-end",
     validatedBody1: "on a Hetzner",
     validatedBody2:
@@ -85,14 +85,15 @@ const T: Record<
     step4Body:
       "Run the one-liner and the commands from the short version above. Two things matter on a VPS specifically:",
     step4Li1Pre:
-      "— pairs the server to your web account so you can see results from any browser. On a VPS this is essential: you won't be at the terminal all day, the",
+      "— optionally pairs the server to your web account so you can see copied results from any browser. If you enable it, the",
     step4Dashboard: "web dashboard",
-    step4Li1Post: "is your main window into the team.",
+    step4Li1Post:
+      "is an additional view; the desktop app still controls the VPS runtime over SSH.",
     step4Li2Pre: "The container runs",
     step4Li2Post: ", so the team survives reboots automatically.",
     calloutDesktopLabel: "Prefer no terminal?",
     calloutDesktopPre:
-      "The desktop app (coming soon) will connect to and control a team running on a VPS — start, stop and monitor it as if it were local. See",
+      "The desktop app can connect to and control a team running on a VPS — start, stop and monitor it from your computer. See",
     calloutDesktopLink: "how to run it",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "One team per user.",
@@ -103,7 +104,7 @@ const T: Record<
     title: "Esegui 24/7 su un VPS",
     tagline: "Un piccolo server cloud così il team lavora mentre dormi",
     intro:
-      "Un VPS è il modo più economico per tenere il team a caccia tutto il giorno — nessun computer acceso, nessuna ventola, nessuna interruzione. Circa €6–10/mese oltre al tuo provider. Questa è la configurazione consigliata per una ricerca di lavoro vera.",
+      "Il PC locale è il modo completo più semplice per iniziare. Scegli un VPS se vuoi che il team continui quando quel PC è spento: costa circa €6–10/mese oltre al provider AI e sei tu ad amministrare server, accesso SSH, Docker, rete e spazio di archiviazione.",
     validatedLabel: "Validato end-to-end",
     validatedBody1: "su un Hetzner",
     validatedBody2:
@@ -131,14 +132,15 @@ const T: Record<
     step4Body:
       "Esegui la one-liner e i comandi della versione breve qui sopra. Due cose contano in particolare su un VPS:",
     step4Li1Pre:
-      "— collega il server al tuo account web così puoi vedere i risultati da qualsiasi browser. Su un VPS è essenziale: non sarai al terminale tutto il giorno, la",
+      "— collega facoltativamente il server al tuo account web per vedere i risultati copiati da qualsiasi browser. Se lo attivi, la",
     step4Dashboard: "dashboard web",
-    step4Li1Post: "è la tua finestra principale sul team.",
+    step4Li1Post:
+      "è una vista aggiuntiva; l'app desktop continua a controllare il runtime VPS via SSH.",
     step4Li2Pre: "Il container gira con",
     step4Li2Post: ", così il team sopravvive automaticamente ai riavvii.",
     calloutDesktopLabel: "Preferisci niente terminale?",
     calloutDesktopPre:
-      "L'app desktop (in arrivo) si connetterà e controllerà un team in esecuzione su un VPS — avvialo, fermalo e monitoralo come se fosse locale. Vedi",
+      "L'app desktop può connettersi a un team in esecuzione su un VPS e controllarlo — avvialo, fermalo e monitoralo dal tuo computer. Vedi",
     calloutDesktopLink: "come eseguirlo",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Un team per utente.",
@@ -150,7 +152,7 @@ const T: Record<
     tagline:
       "Un pequeño servidor en la nube para que el equipo trabaje mientras duermes",
     intro:
-      "Un VPS es la forma más barata de mantener al equipo a la caza las 24 horas — sin ordenador encendido, sin ventiladores, sin interrupciones. Unos €6–10/mes además de tu proveedor. Esta es la configuración recomendada para una búsqueda de empleo real.",
+      "El PC local es la forma completa más sencilla de empezar. Elige una VPS si quieres que el equipo continúe cuando ese PC esté apagado: cuesta unos €6–10/mes además del proveedor de IA y tú administras el servidor, el acceso SSH, Docker, la red y el almacenamiento.",
     validatedLabel: "Validado de extremo a extremo",
     validatedBody1: "en un Hetzner",
     validatedBody2:
@@ -178,15 +180,16 @@ const T: Record<
     step4Body:
       "Ejecuta la one-liner y los comandos de la versión breve de arriba. Dos cosas importan en concreto en un VPS:",
     step4Li1Pre:
-      "— vincula el servidor a tu cuenta web para que puedas ver los resultados desde cualquier navegador. En un VPS es esencial: no estarás en el terminal todo el día, el",
+      "— vincula opcionalmente el servidor a tu cuenta web para ver los resultados copiados desde cualquier navegador. Si lo activas, el",
     step4Dashboard: "panel web",
-    step4Li1Post: "es tu ventana principal al equipo.",
+    step4Li1Post:
+      "es una vista adicional; la app de escritorio sigue controlando el runtime de la VPS mediante SSH.",
     step4Li2Pre: "El contenedor se ejecuta con",
     step4Li2Post:
       ", así que el equipo sobrevive a los reinicios automáticamente.",
     calloutDesktopLabel: "¿Prefieres sin terminal?",
     calloutDesktopPre:
-      "La app de escritorio (próximamente) se conectará y controlará un equipo en ejecución en un VPS — iniciarlo, detenerlo y monitorizarlo como si fuera local. Mira",
+      "La app de escritorio puede conectarse a un equipo que se ejecuta en una VPS y controlarlo — iniciarlo, detenerlo y monitorizarlo desde tu ordenador. Mira",
     calloutDesktopLink: "cómo ejecutarlo",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Un equipo por usuario.",
@@ -198,7 +201,7 @@ const T: Record<
     tagline:
       "Un petit serveur cloud pour que l'équipe travaille pendant que vous dormez",
     intro:
-      "Un VPS est le moyen le moins cher de garder l'équipe à la chasse 24h/24 — aucun ordinateur allumé, aucun ventilateur, aucune interruption. Environ 6–10 €/mois en plus de votre fournisseur. C'est la configuration recommandée pour une vraie recherche d'emploi.",
+      "Le PC local est le moyen complet le plus simple de commencer. Choisissez un VPS si vous voulez que l'équipe continue lorsque ce PC est éteint : il coûte environ 6–10 €/mois en plus du fournisseur d'IA, et vous administrez le serveur, l'accès SSH, Docker, le réseau et le stockage.",
     validatedLabel: "Validé de bout en bout",
     validatedBody1: "sur un Hetzner",
     validatedBody2:
@@ -227,14 +230,15 @@ const T: Record<
     step4Body:
       "Exécutez la commande en une ligne et les commandes de la version courte ci-dessus. Deux choses comptent spécifiquement sur un VPS :",
     step4Li1Pre:
-      "— associe le serveur à votre compte web pour que vous puissiez voir les résultats depuis n'importe quel navigateur. Sur un VPS c'est essentiel : vous ne serez pas au terminal toute la journée, le",
+      "— associe facultativement le serveur à votre compte web pour voir les résultats copiés depuis n'importe quel navigateur. Si vous l'activez, le",
     step4Dashboard: "tableau de bord web",
-    step4Li1Post: "est votre principale fenêtre sur l'équipe.",
+    step4Li1Post:
+      "est une vue supplémentaire ; l'application de bureau continue à contrôler le runtime VPS via SSH.",
     step4Li2Pre: "Le conteneur tourne avec",
     step4Li2Post: ", donc l'équipe survit automatiquement aux redémarrages.",
     calloutDesktopLabel: "Vous préférez sans terminal ?",
     calloutDesktopPre:
-      "L'application de bureau (bientôt disponible) pourra se connecter à une équipe tournant sur un VPS et la contrôler — la démarrer, l'arrêter et la surveiller comme si elle était locale. Voir",
+      "L'application de bureau peut se connecter à une équipe tournant sur un VPS et la contrôler — la démarrer, l'arrêter et la surveiller depuis votre ordinateur. Voir",
     calloutDesktopLink: "comment l'exécuter",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Une équipe par utilisateur.",
@@ -246,7 +250,7 @@ const T: Record<
     tagline:
       "Ein kleiner Cloud-Server, damit das Team arbeitet, während du schläfst",
     intro:
-      "Ein VPS ist der günstigste Weg, das Team rund um die Uhr auf der Jagd zu halten — kein Computer bleibt an, keine Lüfter, keine Unterbrechungen. Etwa 6–10 €/Monat zusätzlich zu deinem Anbieter. Das ist die empfohlene Einrichtung für eine echte Jobsuche.",
+      "Der lokale PC ist der einfachste vollständige Einstieg. Wähle einen VPS, wenn das Team bei ausgeschaltetem PC weiterarbeiten soll: Er kostet etwa 6–10 €/Monat zusätzlich zum KI-Anbieter, und du verwaltest Server, SSH-Zugang, Docker, Netzwerk und Speicher.",
     validatedLabel: "End-to-end validiert",
     validatedBody1: "auf einem Hetzner",
     validatedBody2:
@@ -275,14 +279,15 @@ const T: Record<
     step4Body:
       "Führe den Einzeiler und die Befehle aus der Kurzfassung oben aus. Zwei Dinge sind speziell auf einem VPS wichtig:",
     step4Li1Pre:
-      "— koppelt den Server an dein Web-Konto, damit du die Ergebnisse von jedem Browser aus sehen kannst. Auf einem VPS ist das essenziell: Du wirst nicht den ganzen Tag am Terminal sein, das",
+      "— koppelt den Server optional an dein Web-Konto, damit du kopierte Ergebnisse in jedem Browser sehen kannst. Wenn du dies aktivierst, ist das",
     step4Dashboard: "Web-Dashboard",
-    step4Li1Post: "ist dein Hauptfenster zum Team.",
+    step4Li1Post:
+      "eine zusätzliche Ansicht; die Desktop-App steuert die VPS-Laufzeit weiterhin über SSH.",
     step4Li2Pre: "Der Container läuft mit",
     step4Li2Post: ", sodass das Team Neustarts automatisch übersteht.",
     calloutDesktopLabel: "Lieber ohne Terminal?",
     calloutDesktopPre:
-      "Die Desktop-App (demnächst) wird sich mit einem Team verbinden können, das auf einem VPS läuft, und es steuern — starten, stoppen und überwachen, als wäre es lokal. Siehe",
+      "Die Desktop-App kann sich mit einem Team verbinden, das auf einem VPS läuft, und es steuern — starten, stoppen und von deinem Computer aus überwachen. Siehe",
     calloutDesktopLink: "wie man es ausführt",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Ein Team pro Benutzer.",
@@ -294,7 +299,7 @@ const T: Record<
     tagline:
       "Egy kis felhőszerver, hogy a csapat akkor is dolgozzon, amikor alszol",
     intro:
-      "A VPS a legolcsóbb módja annak, hogy a csapatot a nap minden órájában vadászatban tartsd — nem marad bekapcsolva számítógép, nincs ventilátor, nincs megszakítás. Körülbelül havi €6–10 a szolgáltatódon felül. Ez az ajánlott beállítás egy valódi álláskereséshez.",
+      "A helyi PC a legegyszerűbb teljes kiindulópont. Válassz VPS-t, ha azt szeretnéd, hogy a csapat a PC kikapcsolása után is működjön: ez havi körülbelül €6–10 az AI-szolgáltató díján felül, a szervert, az SSH-hozzáférést, a Dockert, a hálózatot és a tárhelyet pedig te kezeled.",
     validatedLabel: "Végpontok közt validálva",
     validatedBody1: "egy Hetzner",
     validatedBody2:
@@ -322,14 +327,15 @@ const T: Record<
     step4Body:
       "Futtasd az egysoros parancsot és a fenti rövid változat parancsait. Két dolog számít kifejezetten egy VPS-en:",
     step4Li1Pre:
-      "— összepárosítja a szervert a webes fiókoddal, így bármelyik böngészőből láthatod az eredményeket. Egy VPS-en ez elengedhetetlen: nem leszel egész nap a terminálnál, a",
+      "— opcionálisan összepárosítja a szervert a webes fiókoddal, így bármelyik böngészőből láthatod a másolt eredményeket. Ha bekapcsolod, a",
     step4Dashboard: "webes irányítópult",
-    step4Li1Post: "a fő ablakod a csapatra.",
+    step4Li1Post:
+      "egy további nézet; az asztali alkalmazás továbbra is SSH-n keresztül vezérli a VPS futtatási környezetét.",
     step4Li2Pre: "A konténer így fut:",
     step4Li2Post: ", így a csapat automatikusan túléli az újraindításokat.",
     calloutDesktopLabel: "Inkább terminál nélkül?",
     calloutDesktopPre:
-      "Az asztali alkalmazás (hamarosan) csatlakozni tud majd egy VPS-en futó csapathoz és vezérelni azt — indíthatod, leállíthatod és figyelheted, mintha helyi lenne. Lásd:",
+      "Az asztali alkalmazás csatlakozhat egy VPS-en futó csapathoz és vezérelheti azt — a saját számítógépedről indíthatod, leállíthatod és figyelheted. Lásd:",
     calloutDesktopLink: "hogyan futtasd",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Egy csapat felhasználónként.",
@@ -341,7 +347,7 @@ const T: Record<
     tagline:
       "Um pequeno servidor na nuvem para a equipa trabalhar enquanto dormes",
     intro:
-      "Um VPS é a forma mais barata de manter a equipa à caça 24 horas por dia — sem computador ligado, sem ventoinhas, sem interrupções. Cerca de €6–10/mês além do teu fornecedor. Esta é a configuração recomendada para uma procura de emprego a sério.",
+      "O PC local é a forma completa mais simples de começar. Escolhe uma VPS se quiseres que a equipa continue quando esse PC estiver desligado: custa cerca de €6–10/mês além do fornecedor de IA e és tu que administras o servidor, o acesso SSH, o Docker, a rede e o armazenamento.",
     validatedLabel: "Validado de ponta a ponta",
     validatedBody1: "num Hetzner",
     validatedBody2:
@@ -369,15 +375,16 @@ const T: Record<
     step4Body:
       "Executa a one-liner e os comandos da versão curta acima. Duas coisas importam especificamente num VPS:",
     step4Li1Pre:
-      "— emparelha o servidor com a tua conta web para que possas ver os resultados a partir de qualquer navegador. Num VPS é essencial: não vais estar no terminal o dia todo, o",
+      "— emparelha opcionalmente o servidor com a tua conta web para veres os resultados copiados em qualquer navegador. Se o ativares, o",
     step4Dashboard: "painel web",
-    step4Li1Post: "é a tua janela principal para a equipa.",
+    step4Li1Post:
+      "é uma vista adicional; a aplicação de desktop continua a controlar o runtime da VPS por SSH.",
     step4Li2Pre: "O contentor corre com",
     step4Li2Post:
       ", por isso a equipa sobrevive automaticamente aos reinícios.",
     calloutDesktopLabel: "Preferes sem terminal?",
     calloutDesktopPre:
-      "A aplicação de desktop (em breve) poderá ligar-se e controlar uma equipa a correr num VPS — iniciá-la, pará-la e monitorizá-la como se fosse local. Vê",
+      "A aplicação de desktop pode ligar-se a uma equipa a correr numa VPS e controlá-la — iniciá-la, pará-la e monitorizá-la a partir do teu computador. Vê",
     calloutDesktopLink: "como a executar",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Uma equipa por utilizador.",
@@ -411,7 +418,7 @@ jht up                                                  # pull image + start
 jht setup                                               # wizard: provider + login
 jht providers update                                    # install the provider CLI
 jht oauth-login                                         # provider OAuth device flow
-jht cloud login                                         # link the VPS to your web account
+jht cloud login                                         # optional: copy results to your web account
 jht team start                                          # start the agents
 jht team status                                         # verify`}
       </Pre>

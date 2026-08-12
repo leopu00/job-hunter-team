@@ -74,9 +74,10 @@ jht setup
 
 ## 3. Complete browser flows from your computer
 
-The VPS setup wizard first requests cloud pairing, then provider choice and
-subscription login. Follow only the URLs and instructions printed by the
-current CLI; do not copy codes or credentials into chat or public logs.
+The VPS setup wizard first offers optional cloud pairing, then provider choice
+and subscription login. Skipping or failing cloud pairing does not block the
+team runtime. Follow only the URLs and instructions printed by the current
+CLI; do not copy codes or credentials into chat or public logs.
 
 When setup reaches provider login, leave it open and connect with a second
 terminal from your computer:
@@ -97,13 +98,14 @@ jht doctor
 jht status
 jht team status
 jht sentinella status
-jht cloud status
+jht cloud status      # optional: verify cloud sync only if you enabled it
 ```
 
 - `jht doctor` must not report a blocking dependency or authentication error.
 - `jht status` must show the container running.
 - `jht team status` must show the configured agents.
-- `jht cloud status` must confirm the VPS pairing required by this setup path.
+- `jht cloud status` should confirm the VPS pairing only when optional cloud
+  sync was enabled.
 
 The container uses `restart: unless-stopped`, so it returns after a normal host
 reboot. Generated files remain under `~/Documents/Job Hunter Team/`; runtime,

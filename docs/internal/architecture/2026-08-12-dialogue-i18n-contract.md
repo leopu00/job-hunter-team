@@ -8,7 +8,7 @@ The authored dialogue surface is not one undifferentiated set of strings:
 
 | Surface | Canonical source | Measured coverage |
 | --- | --- | ---: |
-| Dialogue-tree narrative | `Dialogues.TREES` | 38 trees, 221 node lines, 138 choice labels (359 strings) |
+| Dialogue-tree narrative | `Dialogues.TREES` | 38 trees, 219 node lines, 137 choice labels (356 strings) |
 | Dynamic narrative shells | `Dialogues` | 3 greetings, 4 runtime-location lines, 1 position-summary template (8 strings) |
 | Staged-tour UI/narrative bridge | `tour.invite` and `tour.guide.*` in `UIStrings` | 17 keys, already present in all 7 locales |
 | Dialogue chrome | `hud.dialogue_*` and role-name keys in `UIStrings` | already localized UI copy |
@@ -58,7 +58,7 @@ non-empty text with the same placeholders as the English source.
 ## Verifiable delivery boundary
 
 This ticket introduces the resolver, canonical IDs, complete six-locale
-overlays and placeholder gates for all 367 previously bypassed authored
+overlays and placeholder gates for all 364 previously bypassed authored
 strings: 2,202 translated locale-string cells. The 17 already-localized
 staged-tour keys stay in the authoritative UI catalog. The census/test rejects
 missing and orphan keys, empty copy, placeholder drift and catalogs that exist

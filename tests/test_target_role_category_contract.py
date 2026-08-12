@@ -37,7 +37,8 @@ def test_model_context_strips_the_localized_role_label():
     source = SCRIPTED.read_text(encoding="utf-8")
 
     assert "func _model_answers() -> Array:" in source
-    assert 'if str(clean.get("step", "")) == "role":' in source
+    assert 'str(clean.get("step", "")) == "role"' in source
+    assert 'str(clean.get("kind", "")) == "dialogue_choice"' in source
     assert 'clean.erase("label")' in source
     assert '"answers": _model_answers()' in source
     assert "for item in _model_answers():" in source

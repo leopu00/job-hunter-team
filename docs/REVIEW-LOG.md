@@ -209,7 +209,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI | — | 2026-08-11 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali | — | 2026-08-04 | ✅ |
-| [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-08-08 | ✅ |
+| [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-08-12 | ✅ |
 | [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-08-10 | ✅ |
 | [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-08-11 | ✅ |
 | [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-07-25 | ✅ |
@@ -222,14 +222,14 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/M4-EVIDENCE-BUNDLES.md](./guides/M4-EVIDENCE-BUNDLES.md) | Versioned M4 evidence-bundle operator guide: scrubbed export boundary, hashes, provenance classes, fixture/live fail-closed rules, and external-validation limits | — | 2026-08-03 | ✅ |
 | [docs/guides/TUTORIALS.md](./guides/TUTORIALS.md) | Text-first game and web tutorials: prerequisites, ordered actions, expected results, and optional video alternatives | — | 2026-08-05 | ✅ |
 | [docs/guides/TUTORIALS-LOCALIZATIONS.md](./guides/TUTORIALS-LOCALIZATIONS.md) | Localized source copy for the public text-first game and web tutorials in Italian, Spanish, French, German, Portuguese and Hungarian | — | 2026-08-05 | ✅ |
-| [docs/guides/CHOOSE-WHERE-TO-RUN.md](./guides/CHOOSE-WHERE-TO-RUN.md) | Guida pubblica per scegliere fra runtime sul PC locale, PC Linux dedicato in LAN via SSH e VPS, con requisiti, confini dati, disponibilità, costi operativi e limiti correnti | — | 2026-08-08 | ✅ |
+| [docs/guides/CHOOSE-WHERE-TO-RUN.md](./guides/CHOOSE-WHERE-TO-RUN.md) | Guida pubblica per scegliere fra runtime sul PC locale, PC Linux dedicato in LAN via SSH e VPS, con requisiti, confini dati, disponibilità, costi operativi e limiti correnti | — | 2026-08-12 | ✅ |
 
 
 ## 🛰️ docs/internal
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-08-08 | ✅ |
+| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-08-12 | ✅ |
 | [docs/internal/architecture/2026-05-19-dashboard-routing-cases.md](./internal/architecture/2026-05-19-dashboard-routing-cases.md) | 🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-20-world-globe-feature.md](./internal/architecture/2026-05-20-world-globe-feature.md) | 🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-25-work-hours-design.md](./internal/architecture/2026-05-25-work-hours-design.md) | 🗓️ Work hours UI — design + monitoring settimanale — Sessione di design 2026-05-25. | — | 2026-06-13 | ✅ |
@@ -255,7 +255,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/architecture/dottore-redesign-design.md](./internal/architecture/dottore-redesign-design.md) | 🩺 Design-doc — Ridisegno ruolo DOTTORE (context-refresh) — Stato: DRAFT — schema/flow da lockare prima di codare (design-doc-first). | — | 2026-08-12 | ✅ |
 | [docs/internal/architecture/file-bridge-on-demand.md](./internal/architecture/file-bridge-on-demand.md) | 📎 File bridge on-demand — architettura & stato — Living doc. | — | 2026-08-07 | ✅ |
 | [docs/internal/architecture/kimi-vs-codex-economics.md](./internal/architecture/kimi-vs-codex-economics.md) | 💰 Economia Kimi vs Codex — budget · coordinatori · prezzo (living doc) — Living doc (non datato): riflette lo stato corrente dell'analisi economica dei | — | 2026-07-03 | ✅ |
-| [docs/internal/architecture/onboarding-flow.md](./internal/architecture/onboarding-flow.md) | 🚪 Onboarding flow JHT — Stato: design lock — sequenza ufficiale di onboarding utente. | — | 2026-07-26 | ✅ |
+| [docs/internal/architecture/onboarding-flow.md](./internal/architecture/onboarding-flow.md) | 🚪 Onboarding flow JHT — Stato: design lock — sequenza ufficiale di onboarding utente. | — | 2026-08-12 | ✅ |
 | [docs/internal/architecture/skill-distribution.md](./internal/architecture/skill-distribution.md) | 🛠️ Skill distribution — launcher-distributed isolation — Moved verbatim from docs/about/ROADMAP.md in the 2026-07-03 docs restructure (the ROADMAP keeps only the strategic view). | — | 2026-08-12 | ✅ |
 | [docs/internal/architecture/usage-monitoring-redesign-design.md](./internal/architecture/usage-monitoring-redesign-design.md) | 📡 Design-doc — Ridisegno monitoraggio usage (Sentinella ↔ Capitano) — Stato: DRAFT (visione utente 2026-06-13). | — | 2026-06-14 | ✅ |
 | [docs/internal/experiments/2026-05-03-rate-kimi-weights.md](./internal/experiments/2026-05-03-rate-kimi-weights.md) | ⚖️ 2026-05-03 — Pesi rate-limit Kimi K2: analisi empirica e calibrazione — Il rate budget Kimi K2 e' guidato da input_tokens + output_tokens, | — | 2026-06-13 | ✅ |
@@ -271,12 +271,12 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/experiments/2026-05-25-sim-5-office-geocoding-mario-rossi-report.md](./internal/experiments/2026-05-25-sim-5-office-geocoding-mario-rossi-report.md) | 🧪 Simulazione 5 — office geocoding su owner (Marton / Tech Writer) — Container: jht-sim-d2 (reset totale, candidate_profile.yml ripristinato su Marton Kovacs) | — | 2026-06-13 | ✅ |
 | [docs/internal/experiments/2026-06-13-kimi-quota-tiers-discovery.md](./internal/experiments/2026-06-13-kimi-quota-tiers-discovery.md) | 🔍 Kimi Code — i tre tier di quota e il buco totalQuota (scoperta 2026-06-13) — Contesto: deploy del team su VPS betaB (Kimi, 203.0.113.20) con l'immagine | — | 2026-06-14 | ✅ |
 | [docs/internal/landing-image-prompts.md](./internal/landing-image-prompts.md) | 🎨 Prompt immagini — Sito pubblico — Raccolta dei prompt per tutte le immagini del sito pubblico (landing + pagine | — | 2026-07-25 | ✅ |
-| [docs/internal/ops/INFRA.md](./internal/ops/INFRA.md) | 🏗️ Infrastructure — Job Hunter Team — 📐 High-level deployment diagram. | — | 2026-08-04 | ✅ |
+| [docs/internal/ops/INFRA.md](./internal/ops/INFRA.md) | 🏗️ Infrastructure — Job Hunter Team — 📐 High-level deployment diagram. | — | 2026-08-12 | ✅ |
 | [docs/internal/ops/MAINTAINERS.md](./internal/ops/MAINTAINERS.md) | 👥 Maintainers Reference — 🔒 Internal information for project maintainers. | — | 2026-08-08 | ✅ |
 | [docs/internal/ops/access-and-credentials.md](./internal/ops/access-and-credentials.md) | 🔐 Access & Credentials — guida consolidata — Last updated: 2026-05-26. | — | 2026-08-03 | ✅ |
 | [docs/internal/ops/release.md](./internal/ops/release.md) | 🚢 Release — Cutting a release means pushing a vX.Y.Z tag that points at the production HEAD. | — | 2026-08-12 | ✅ |
 | [docs/internal/ops/triage.md](./internal/ops/triage.md) | 🐛 Issue triage workflow — Internal contract for how we handle incoming issues post-launch. | — | 2026-08-05 | ✅ |
-| [docs/internal/ops/vps.md](./internal/ops/vps.md) | ☁️ JHT su VPS — design, providers, install UX — Doc consolidato il 2026-05-13 unificando | — | 2026-08-05 | ✅ |
+| [docs/internal/ops/vps.md](./internal/ops/vps.md) | ☁️ JHT su VPS — design, providers, install UX — Doc consolidato il 2026-05-13 unificando | — | 2026-08-12 | ✅ |
 | [docs/internal/postmortems/2026-05-21-halt-weekly-incident.md](./internal/postmortems/2026-05-21-halt-weekly-incident.md) | 🛑 HALT-WEEKLY incident — 2026-05-21 — Manovra di emergenza sulla VPS1 (203.0.113.20, Hetzner CPX22) per evitare la saturazione del weekly cap Codex ProLite… | — | 2026-06-13 | ✅ |
 | [docs/internal/postmortems/2026-05-21-vps-bootstrap-fixes-validated.md](./internal/postmortems/2026-05-21-vps-bootstrap-fixes-validated.md) | ✅ 2026-05-21 — VPS bootstrap bugs FIXED & VALIDATED su VPS fresh — I 3 bug bloccanti dello startup VPS documentati il 2026-05-20 (docs/internal/_archive/2026-05-20-vps-bootstrap-bugs.md) sono… | — | 2026-06-13 | ✅ |
 | [docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md](./internal/postmortems/2026-05-21-vps1-run-postmortem.md) | 📉 2026-05-21 — VPS1 first run (35h) postmortem — Consolida 3 inchieste sullo stesso run VPS1 (2026-05-19 20:29 → 2026-05-21 07:20 UTC, ≈ 35h) | — | 2026-06-13 | ✅ |
@@ -355,7 +355,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/2026-08-12-language-source-contract.md](./internal/2026-08-12-language-source-contract.md) | Contratto eseguibile della preferenza lingua unica: artefatto canonico i18n-prefs.json, precedenza dei reader, writer autorizzati, non-migrazione di lang.cfg e vettori obbligatori. | — | 2026-08-12 | ✅ |
 | [docs/internal/2026-08-12-target-role-category-contract.md](./internal/2026-08-12-target-role-category-contract.md) | Contratto forward-only per separare titolo professionale libero, ID canonico della categoria ruolo e specialty, con persistenza e round-trip cloud senza contaminazione delle label localizzate. | — | 2026-08-12 | ✅ |
 | [docs/internal/2026-08-12-theme-cloud-sync-contract.md](./internal/2026-08-12-theme-cloud-sync-contract.md) | Contratto v1 del tema cloud autenticato: schema e RLS, cache e pending per utente, precedenza al bootstrap, gestione offline fail-closed e vettori di concorrenza. | — | 2026-08-12 | ✅ |
-| [docs/internal/2026-08-12-dialogue-i18n-contract.md](./internal/2026-08-12-dialogue-i18n-contract.md) | Contratto eseguibile per la localizzazione dei dialoghi authored: parità degli ID EN+6, resolver runtime, contesto LLM canonico e gate contro residui inglesi nelle traduzioni. | — | 2026-08-12 | ✅ |
+| [docs/internal/architecture/2026-08-12-dialogue-i18n-contract.md](./internal/architecture/2026-08-12-dialogue-i18n-contract.md) | Contratto eseguibile per la localizzazione dei dialoghi authored: parità degli ID EN+6, resolver runtime, contesto LLM canonico e gate contro residui inglesi nelle traduzioni. | — | 2026-08-12 | ✅ |
+| [docs/internal/architecture/2026-08-12-execution-host-vocabulary-contract.md](./internal/architecture/2026-08-12-execution-host-vocabulary-contract.md) | Contratto del luogo di esecuzione: PC locale e VPS come host supportati, cloud opzionale separato dal runtime e capacità da non promettere. | — | — | ✅ |
 
 
 ## 🔒 docs/security

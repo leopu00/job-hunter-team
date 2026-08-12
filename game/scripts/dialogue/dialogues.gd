@@ -704,19 +704,15 @@ const TREES := {
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[neutro] The team needs a home: a computer that is on to do its work. There are three good options; it depends on you.",
+			"text": "[neutro] The team needs a home: a computer that is on to do its work. There are two supported options, and you can change your choice later.",
 			"pose": "b", "next": "n3",
 		},
 		"n3": {
-			"text": "[neutro] The first: THIS computer. The simplest option: the team works while you use it and rests when you turn it off.",
+			"text": "[neutro] Start on THIS computer. It is the simplest complete setup: the team works while the PC, Docker, and its network connection are available.",
 			"pose": "b", "next": "n4",
 		},
 		"n4": {
-			"text": "[neutro] The second: a DEDICATED computer—an extra laptop or a small PC in a corner, always on. The team works while you get on with life.",
-			"pose": "b", "next": "n5",
-		},
-		"n5": {
-			"text": "[neutro] The third: an always-on online computer that you can control from here even when yours is off. It is the most continuous option and needs no extra room at home.",
+			"text": "[neutro] Or use a VPS: a remote server that can keep the team running when this PC is off. You provide and administer the server, SSH access, Docker, network, storage, and billing.",
 			"pose": "b", "next": "choose",
 		},
 		"choose": {
@@ -724,8 +720,7 @@ const TREES := {
 			"pose": "a",
 			"choices": [
 				{"text": "On this computer.", "next": "pick_local"},
-				{"text": "On a dedicated computer.", "next": "pick_dedicated"},
-				{"text": "On an always-on online computer.", "next": "pick_vps"},
+				{"text": "On a VPS.", "next": "pick_vps"},
 			],
 		},
 		"pick_local": {
@@ -736,12 +731,8 @@ const TREES := {
 			"text": "[neutro] {docker_line}",
 			"pose": "b",
 		},
-		"pick_dedicated": {
-			"text": "[caldo] An excellent middle ground. Install the app on that machine and repeat these steps there; meanwhile, I'll open the page that prepares the team's workspace.",
-			"pose": "a", "action": "runtime:dedicated",
-		},
 		"pick_vps": {
-			"text": "[caldo] Great choice. I'll open online-computer setup; it will ask where it is and how to access it, explaining every step.",
+			"text": "[caldo] All right. I'll open VPS setup; it will ask for the server and SSH access, explaining every step.",
 			"pose": "a", "action": "runtime:vps",
 		},
 	},

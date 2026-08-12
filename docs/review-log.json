@@ -1541,8 +1541,13 @@
       "last_review": null
     },
     {
-      "path": "docs/internal/2026-08-12-dialogue-i18n-contract.md",
+      "path": "docs/internal/architecture/2026-08-12-dialogue-i18n-contract.md",
       "description": "Contratto eseguibile per la localizzazione dei dialoghi authored: parità degli ID EN+6, resolver runtime, contesto LLM canonico e gate contro residui inglesi nelle traduzioni.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-08-12-execution-host-vocabulary-contract.md",
+      "description": "Contratto del luogo di esecuzione: PC locale e VPS come host supportati, cloud opzionale separato dal runtime e capacità da non promettere.",
       "last_review": null
     }
   ]
