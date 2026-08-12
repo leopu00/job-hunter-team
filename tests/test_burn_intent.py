@@ -158,7 +158,11 @@ def _src(path: Path) -> str:
 
 def test_sentinel_bridge_consults_intent_before_writing_daily_halt():
     src = _src(LAUNCHER_DIR / "sentinel-bridge.py")
-    assert "if _daily_hardstop_disabled() or _bi_on:" in src, (
+    # Dal 2026-08-12 la deroga di configurazione passa per la FASE (vale una
+    # finestra e poi scade — HARDSTOP-DEROGATION-EXPIRES-AFTER-ONE-WINDOW); la
+    # proprietà di QUESTO test è invariata: l'intento utente `_bi_on` deve
+    # stare nel cancello che salta la scrittura dell'halt.
+    assert "if _hs_phase == HARDSTOP_RUNNING or _bi_on:" in src, (
         "il ramo che NON scrive l'halt deve considerare l'intento utente")
     consult = src.index("_bi = _burn_intent_status()")
     write = src.index("_activate_daily_halt(_hc, _hcap, _hb)")

@@ -636,13 +636,96 @@ def _daily_hardstop_disabled():
 DAILY_HARDSTOP_NOTICE_SEC = float(os.environ.get(
     "JHT_HARDSTOP_NOTICE_SEC", "900"))
 
+# [HARDSTOP-DEROGATION-EXPIRES-AFTER-ONE-WINDOW] Quanto vale la deroga di
+# configurazione prima che il freno torni da sé: una finestra provider (5h),
+# perché è la durata che la commit che l'ha creata (`f8e32f913b`) dichiarava
+# come intento — «meant for one window, not forever». La deroga dell'utente
+# (BURN-INTENT) era già a termine; questa era l'unica senza scadenza.
+DAILY_HARDSTOP_WINDOW_SEC = float(os.environ.get(
+    "JHT_HARDSTOP_WINDOW_SEC", str(5 * 3600)))
+
+#: Dove vive l'inizio-finestra della deroga. Su FILE e non in memoria: il
+#: bridge riparte (watchdog, FATAL→restart) e un orologio in RAM ripartirebbe
+#: da zero a ogni riavvio, cioè la deroga non scadrebbe mai davvero.
+HARDSTOP_OVERRIDE_STATE_FILE = LOGS_DIR / "daily-hardstop-override.json"
+
 #: Stato dell'avviso, conservato fra i tick del loop del bridge.
-_HARDSTOP_NOTICE_STATE: dict = {"since": None, "announced": None}
+_HARDSTOP_NOTICE_STATE: dict = {"since": None, "announced": None, "phase": None}
+
+HARDSTOP_OFF = "off"           # variabile assente/1: freno inserito
+HARDSTOP_RUNNING = "running"   # deroga onorata, finestra in corso
+HARDSTOP_EXPIRED = "expired"   # variabile ancora a 0, ma la finestra è finita
 
 
-def daily_hardstop_notice(disabled, now_ts, state,
+def hardstop_override_phase(disabled, now_ts, started_ts,
+                            window_sec=DAILY_HARDSTOP_WINDOW_SEC):
+    """In che fase è la deroga di configurazione. Pura: l'I/O sta al chiamante.
+
+    La deroga vale UNA finestra e poi il freno torna da sé, fail-closed:
+    `JHT_DAILY_HARDSTOP=0` lasciata nell'ambiente non tiene il freno giù per
+    sempre — dopo `window_sec` viene IGNORATA finché non viene rinnovata, e il
+    rinnovo è esplicito (togliere la variabile, che chiude la finestra, e
+    rimetterla). È la differenza fra una deroga e un default: la seconda non
+    chiede mai niente a nessuno.
+
+    :param started_ts: inizio finestra persistito, ``None`` se non ancora
+        partita. Un valore non finito (stato corrotto) vale «partita da
+        sempre», quindi scaduta: non sapere quando è iniziata non autorizza
+        a tenerla in piedi.
+    :returns: ``(phase, started_ts)`` — la fase e l'inizio da persistere.
+    """
+    if not disabled:
+        return HARDSTOP_OFF, None
+    if started_ts is None:
+        return HARDSTOP_RUNNING, now_ts
+    try:
+        started = float(started_ts)
+    except (TypeError, ValueError):
+        return HARDSTOP_EXPIRED, None
+    if started != started or started in (float("inf"), float("-inf")):
+        return HARDSTOP_EXPIRED, None
+    if now_ts - started < window_sec:
+        return HARDSTOP_RUNNING, started
+    return HARDSTOP_EXPIRED, started
+
+
+def _read_hardstop_override_started():
+    """Inizio finestra dal file di stato. `None` = mai partita.
+
+    File illeggibile o malformato → ``float('nan')``, che la fase tratta come
+    scaduta: se non so quando la deroga è iniziata, il freno torna.
+    """
+    try:
+        raw = HARDSTOP_OVERRIDE_STATE_FILE.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return float("nan")
+    try:
+        value = json.loads(raw).get("started_ts")
+        return float(value)
+    except (ValueError, TypeError, AttributeError, json.JSONDecodeError):
+        return float("nan")
+
+
+def _persist_hardstop_override(phase, started_ts):
+    """Allinea il file di stato alla fase. Best-effort: un write fallito non
+    cambia la decisione del tick, che è già presa in memoria."""
+    try:
+        if phase == HARDSTOP_OFF:
+            HARDSTOP_OVERRIDE_STATE_FILE.unlink(missing_ok=True)
+        elif started_ts is not None:
+            LOGS_DIR.mkdir(parents=True, exist_ok=True)
+            HARDSTOP_OVERRIDE_STATE_FILE.write_text(
+                json.dumps({"started_ts": started_ts}), encoding="utf-8")
+    except OSError as exc:
+        print(f"[bridge V6] WARN hardstop-override persist: {exc}",
+              file=sys.stderr)
+
+
+def daily_hardstop_notice(phase, now_ts, state,
                           every_sec=DAILY_HARDSTOP_NOTICE_SEC):
-    """Riga da stampare quando il freno FISICO sulla spesa è disattivato.
+    """Riga da stampare sullo stato della deroga di configurazione.
 
     [DAILY-SPEND-HARDSTOP-DISABLED-BY-A-LINE-NOBODY-WROTE] Il difetto non era
     la deroga: era il suo SILENZIO. A `JHT_DAILY_HARDSTOP=0` il ramo che la
@@ -651,35 +734,41 @@ def daily_hardstop_notice(disabled, now_ts, state,
     Così l'ultima rete automatica sul tetto di spesa è rimasta giù due
     settimane e se n'è accorto un rilettore, non il prodotto.
 
-    A differenza del BURN-INTENT, che è una deroga dell'utente **a termine**,
-    questa è di configurazione e non scade: la commit che l'ha introdotta
-    (`f8e32f913b`) dice «meant for one window, not forever», e senza una
-    scadenza l'unico modo di rispettarlo è ripeterlo a voce alta.
-
     Funzione pura più uno `state` che il chiamante conserva: nessun I/O, così
-    il test la guida senza bridge.
+    il test la guida senza bridge. Un cambio di fase parla SUBITO, senza
+    aspettare la finestra dell'annuncio: «la deroga è scaduta» detto 14 minuti
+    dopo è un freno tornato in silenzio.
 
-    :param state: dict mutabile con `since` e `announced` (timestamp).
+    :param phase: HARDSTOP_OFF | HARDSTOP_RUNNING | HARDSTOP_EXPIRED.
+    :param state: dict mutabile con `since`, `announced` e `phase`.
     :returns: il testo da stampare, oppure None se non c'è nulla da dire.
     """
-    if not disabled:
+    if phase == HARDSTOP_OFF:
         if state.get("since") is None:
             return None
         state["since"] = None
         state["announced"] = None
+        state["phase"] = None
         return ("DAILY-HARDSTOP re-enabled — the physical stop on daily spend "
                 "is back on")
 
     if state.get("since") is None:
         state["since"] = now_ts
+    phase_changed = state.get("phase") != phase
+    state["phase"] = phase
     last = state.get("announced")
-    if last is not None and (now_ts - last) < every_sec:
+    if not phase_changed and last is not None and (now_ts - last) < every_sec:
         return None
     state["announced"] = now_ts
+    if phase == HARDSTOP_EXPIRED:
+        return ("DAILY-HARDSTOP derogation EXPIRED — JHT_DAILY_HARDSTOP=0 was "
+                "honored for one window and is now IGNORED: the brake is back "
+                "on. To renew for another window, unset the variable and set "
+                "it again.")
     return ("DAILY-HARDSTOP DISABLED (JHT_DAILY_HARDSTOP=0) — the last "
             "AUTOMATIC stop on daily spend is OFF: pace_guard measures and "
-            "advises but does not brake. Meant for one window, not forever — "
-            "unset the variable (or set it to 1) to restore the brake.")
+            "advises but does not brake. Valid for ONE window, then the brake "
+            "returns by itself.")
 
 
 # Modulo di intento cachato: l'import per path costa un exec, e qui si legge a
@@ -2629,14 +2718,22 @@ def main():
             # c'è nessun halt da rimuovere: era proprio lo stato muto in cui il
             # freno è rimasto giù due settimane. Il BURN-INTENT non passa da qui
             # perché è a termine e ha già la sua riga di scadenza.
-            _hs_off = _daily_hardstop_disabled()
-            _hs_msg = daily_hardstop_notice(_hs_off, now_ts, _HARDSTOP_NOTICE_STATE)
+            # [HARDSTOP-DEROGATION-EXPIRES-AFTER-ONE-WINDOW] La deroga vale UNA
+            # finestra: dopo, la variabile viene ignorata e il freno torna da
+            # sé. L'inizio-finestra sta su file, così sopravvive ai riavvii del
+            # bridge; il rinnovo è esplicito (togliere la variabile, rimetterla).
+            _hs_phase, _hs_started = hardstop_override_phase(
+                _daily_hardstop_disabled(), now_ts,
+                _read_hardstop_override_started())
+            _persist_hardstop_override(_hs_phase, _hs_started)
+            _hs_msg = daily_hardstop_notice(_hs_phase, now_ts, _HARDSTOP_NOTICE_STATE)
             if _hs_msg:
                 print(f"[bridge V6] {now_h} {_hs_msg}")
-            if _hs_off or _bi_on:
+            if _hs_phase == HARDSTOP_RUNNING or _bi_on:
                 # Due deroghe, stesso effetto: il cap giornaliero NON scatta.
                 #   • JHT_DAILY_HARDSTOP=0 — deroga di configurazione (burst
-                #     dimostrativo: saturare la finestra 5h invece di spalmarla);
+                #     dimostrativo: saturare la finestra 5h invece di spalmarla),
+                #     valida una finestra e poi scaduta;
                 #   • BURN-INTENT — deroga esplicita dell'UTENTE, a termine, letta
                 #     QUI **prima** di scrivere l'halt e non dopo: fra la scrittura
                 #     del flag e la sua rimozione il team è già andato in ESC su
