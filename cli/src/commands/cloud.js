@@ -482,14 +482,20 @@ async function handleRestore(options) {
       }
       outOfRange = summarizeOutOfRange(restoredScores);
 
+      // O-64 ha reso critic_round parte dello stato locale del Critico. Un
+      // restore puo' partire da un jobs.db creato dall'immagine precedente:
+      // allineiamo solo lo schema, senza modificare righe esistenti.
+      if (!sqliteHasColumn(db, 'applications', 'critic_round')) {
+        db.exec('ALTER TABLE applications ADD COLUMN critic_round INTEGER');
+      }
       const appStmt = db.prepare(`
         INSERT OR REPLACE INTO applications (
           position_id, cv_path, cv_pdf_path, cl_path, cl_pdf_path,
-          status, critic_score, critic_verdict, critic_notes,
+          status, critic_score, critic_verdict, critic_notes, critic_round,
           written_at, applied_at, applied_via, response, response_at,
           written_by, reviewed_by, critic_reviewed_at, applied,
           cv_drive_id, cl_drive_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const a of cloudApps) {
         const legacy = uuidToLegacy.get(a.position_id);
@@ -497,7 +503,8 @@ async function handleRestore(options) {
         appStmt.run(
           legacy,
           a.cv_path ?? null, a.cv_pdf_path ?? null, a.cl_path ?? null, a.cl_pdf_path ?? null,
-          a.status ?? null, a.critic_score ?? null, a.critic_verdict ?? null, a.critic_notes ?? null,
+          a.status ?? null, a.critic_score ?? null, a.critic_verdict ?? null,
+          a.critic_notes ?? null, a.critic_round ?? null,
           a.written_at ?? null, a.applied_at ?? null, a.applied_via ?? null,
           a.response ?? null, a.response_at ?? null,
           a.written_by ?? null, a.reviewed_by ?? null, a.critic_reviewed_at ?? null,
@@ -1181,7 +1188,7 @@ function safeCursor(sent, skipped, field) {
   return max;
 }
 
-async function handlePush(options) {
+export async function handlePush(options) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
     console.error(pc.red('Cloud sync is not enabled.'));
@@ -1271,13 +1278,19 @@ async function handlePush(options) {
         'stack_match', 'remote_fit', 'strategic_fit', 'breakdown', 'notes',
         'scored_by', 'scored_at',
       ], cursor.scores);
-      applications = readSqliteTableDelta(db, 'applications', [
+      const applicationCols = [
         'position_id', 'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
         'status', 'critic_score', 'critic_verdict', 'critic_notes',
         'written_at', 'applied_at', 'applied_via', 'response', 'response_at',
         'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',
         'cv_drive_id', 'cl_drive_id',
-      ], cursor.applications);
+      ];
+      // Compatibilita' con un DB che non e' ancora passato da ensure_schema:
+      // il push continua con i campi disponibili e non rompe il daemon.
+      if (sqliteHasColumn(db, 'applications', 'critic_round')) {
+        applicationCols.push('critic_round');
+      }
+      applications = readSqliteTableDelta(db, 'applications', applicationCols, cursor.applications);
       // Companies + position_highlights (mig 046): erano OMESSE dal push →
       // Company card e blocchi Pro/Contro sempre vuoti sul cloud. `id` (int
       // locale) → legacy_id cloud; il server risolve le FK (positions.company_id,
