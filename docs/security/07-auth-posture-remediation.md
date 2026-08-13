@@ -23,6 +23,7 @@ Applying the same values again has no additional effect:
 |---|---|
 | Email provider | Disabled |
 | Approved social providers | At least one of Google or GitHub enabled |
+| Every other external provider | Disabled; a new provider field requires a contract update |
 
 With email disabled, password length, leaked-password rejection and email
 confirmation are not authentication controls used by JHT. The gate still

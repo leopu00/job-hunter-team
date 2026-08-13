@@ -34,6 +34,7 @@ ENDPOINT_RE = re.compile(
     + r"/v1/projects/[a-z0-9]{20}/(?:config/auth|advisors/security)$"
 )
 FIELD_RE = re.compile(r"^[a-z][a-z0-9_]{2,80}$")
+PROVIDER_FIELD_RE = re.compile(r"^external_[a-z0-9_]+_enabled$")
 CONTRACT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{2,80}$")
 SAFE_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{2,80}$")
 
@@ -50,6 +51,7 @@ class GateError(RuntimeError):
 class Contract:
     contract_id: str
     approved_oauth_provider_fields: tuple[str, ...]
+    known_external_provider_fields: tuple[str, ...]
     required_boolean_fields: tuple[str, ...]
     required_integer_fields: tuple[str, ...]
     minimum_password_length: int
@@ -106,6 +108,7 @@ def load_contract() -> Contract:
         "schema_version",
         "contract_id",
         "approved_oauth_provider_fields",
+        "known_external_provider_fields",
         "required_boolean_fields",
         "required_integer_fields",
         "minimum_password_length",
@@ -115,6 +118,7 @@ def load_contract() -> Contract:
         raise GateError("contract_invalid")
     contract_id = document.get("contract_id")
     oauth_fields = document.get("approved_oauth_provider_fields")
+    known_provider_fields = document.get("known_external_provider_fields")
     boolean_fields = document.get("required_boolean_fields")
     integer_fields = document.get("required_integer_fields")
     minimum = document.get("minimum_password_length")
@@ -129,6 +133,15 @@ def load_contract() -> Contract:
             "external_github_enabled",
             "external_google_enabled",
         }
+        or not _valid_field_list(known_provider_fields)
+        or any(
+            not PROVIDER_FIELD_RE.fullmatch(field)
+            for field in known_provider_fields
+        )
+        or not set(oauth_fields) < set(known_provider_fields)
+        or "external_email_enabled" not in known_provider_fields
+        or "external_phone_enabled" not in known_provider_fields
+        or "external_anonymous_users_enabled" not in known_provider_fields
         or not _valid_field_list(boolean_fields)
         or not _valid_field_list(integer_fields)
         or not isinstance(minimum, int)
@@ -164,6 +177,7 @@ def load_contract() -> Contract:
     return Contract(
         contract_id=contract_id,
         approved_oauth_provider_fields=tuple(oauth_fields),
+        known_external_provider_fields=tuple(known_provider_fields),
         required_boolean_fields=tuple(boolean_fields),
         required_integer_fields=tuple(integer_fields),
         minimum_password_length=minimum,
@@ -200,8 +214,15 @@ def _advisor_name_counts(payload: object) -> dict[str, int]:
 def evaluate(contract: Contract, config: object, advisors: object) -> GateResult:
     if not isinstance(config, dict):
         raise GateError("auth_config_invalid")
+    observed_provider_fields = {
+        field
+        for field in config
+        if isinstance(field, str) and PROVIDER_FIELD_RE.fullmatch(field)
+    }
+    if observed_provider_fields != set(contract.known_external_provider_fields):
+        raise GateError("auth_provider_set_changed")
     required_booleans = (
-        contract.required_boolean_fields + contract.approved_oauth_provider_fields
+        contract.required_boolean_fields + contract.known_external_provider_fields
     )
     for field in required_booleans:
         if not isinstance(config.get(field), bool):
@@ -233,6 +254,17 @@ def evaluate(contract: Contract, config: object, advisors: object) -> GateResult
     )
     email_enabled = config["external_email_enabled"]
     email_signup_enabled = email_enabled and not config["disable_signup"]
+    conditionally_allowed = set(contract.approved_oauth_provider_fields) | {
+        "external_email_enabled"
+    }
+    unsupported_enabled = any(
+        config[field]
+        for field in contract.known_external_provider_fields
+        if field not in conditionally_allowed
+    )
+    if unsupported_enabled:
+        codes.add("unsupported_auth_provider_enabled")
+
     if email_enabled:
         mode = "email"
         if config["mailer_autoconfirm"]:
@@ -250,6 +282,8 @@ def evaluate(contract: Contract, config: object, advisors: object) -> GateResult
         mode = "oauth-only"
         if oauth_count == 0:
             codes.add("no_approved_login_provider")
+    if unsupported_enabled:
+        mode = "unsupported"
 
     return GateResult(
         contract_id=contract.contract_id,

@@ -23,17 +23,21 @@ spec.loader.exec_module(gate)
 
 
 def auth_config(**overrides):
-    config = {
-        "disable_signup": False,
-        "external_email_enabled": False,
-        "external_github_enabled": True,
-        "external_google_enabled": True,
-        "mailer_autoconfirm": True,
-        "mfa_totp_enroll_enabled": False,
-        "mfa_totp_verify_enabled": False,
-        "password_hibp_enabled": False,
-        "password_min_length": 6,
-    }
+    contract = gate.load_contract()
+    config = {field: False for field in contract.known_external_provider_fields}
+    config.update(
+        {
+            "disable_signup": False,
+            "external_email_enabled": False,
+            "external_github_enabled": True,
+            "external_google_enabled": True,
+            "mailer_autoconfirm": True,
+            "mfa_totp_enroll_enabled": False,
+            "mfa_totp_verify_enabled": False,
+            "password_hibp_enabled": False,
+            "password_min_length": 6,
+        }
+    )
     config.update(overrides)
     return config
 
@@ -113,9 +117,42 @@ def test_no_approved_provider_fails_closed():
 
 
 @pytest.mark.parametrize(
+    "provider",
+    [
+        "external_phone_enabled",
+        "external_anonymous_users_enabled",
+        "external_facebook_enabled",
+        "external_web3_ethereum_enabled",
+    ],
+)
+def test_non_product_provider_can_never_pass_as_oauth_only(provider):
+    result = gate.evaluate(
+        gate.load_contract(),
+        auth_config(**{provider: True}),
+        disabled_control_advisors(),
+    )
+    assert result.mode == "unsupported"
+    assert result.codes == ("unsupported_auth_provider_enabled",)
+
+
+def test_new_or_missing_provider_field_requires_a_versioned_contract_update():
+    contract = gate.load_contract()
+    new_provider = auth_config(external_synthetic_enabled=False)
+    with pytest.raises(gate.GateError, match="auth_provider_set_changed"):
+        gate.evaluate(contract, new_provider, disabled_control_advisors())
+
+    missing_provider = auth_config()
+    del missing_provider["external_phone_enabled"]
+    with pytest.raises(gate.GateError, match="auth_provider_set_changed"):
+        gate.evaluate(contract, missing_provider, disabled_control_advisors())
+
+    with pytest.raises(gate.GateError, match="auth_provider_set_changed"):
+        gate.evaluate(contract, {}, disabled_control_advisors())
+
+
+@pytest.mark.parametrize(
     "config",
     [
-        {},
         auth_config(external_email_enabled="false"),
         auth_config(password_min_length=True),
         auth_config(external_google_enabled=None),
