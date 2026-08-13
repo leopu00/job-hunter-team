@@ -1,0 +1,996 @@
+"""Executable oracles for the H-08 live-schema pre-deploy canary."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+import uuid
+from contextlib import contextmanager
+from pathlib import Path
+
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "scripts/check-live-schema.py"
+MANIFEST = ROOT / "supabase/live-schema/078-081.v1.json"
+QUERY = ROOT / "supabase/live-schema/078-081.v1.sql"
+PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
+SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
+MIGRATIONS = [
+    ROOT / "supabase/migrations/078_positions_write_request_kind.sql",
+    ROOT / "supabase/migrations/079_team_directive_events_atomic.sql",
+    ROOT / "supabase/migrations/080_profile_snapshot_atomic.sql",
+    ROOT / "supabase/migrations/081_live_schema_reconciliation.sql",
+]
+
+PREFLIGHT_BASE_ROWS = """
+INSERT INTO auth.users(id, created_at) VALUES
+  ('00000000-0000-0000-0000-00000000a001', now()),
+  ('00000000-0000-0000-0000-00000000b002', now());
+INSERT INTO public.companies(id, user_id, name) VALUES
+  ('00000000-0000-0000-0000-00000000b201',
+   '00000000-0000-0000-0000-00000000b002', 'Synthetic B');
+INSERT INTO public.positions(
+  id, user_id, title, company, company_id, legacy_id
+) VALUES (
+  '00000000-0000-0000-0000-00000000b101',
+  '00000000-0000-0000-0000-00000000b002',
+  'Synthetic B', 'Synthetic B',
+  '00000000-0000-0000-0000-00000000b201', 62002
+);
+"""
+
+PREFLIGHT_ANOMALY_SEEDS = {
+    "071.rescore.rows_ranked": """
+DROP INDEX IF EXISTS public.idx_position_tickets_active_rescore;
+INSERT INTO public.position_tickets(
+  id, user_id, position_legacy_id, request_text, kind, status
+) VALUES
+  (71001, '00000000-0000-0000-0000-00000000a001', 4242,
+   'Synthetic rescore A', 'rescore', 'open'),
+  (71002, '00000000-0000-0000-0000-00000000a001', 4242,
+   'Synthetic rescore B', 'rescore', 'assigned');
+""",
+    "074.positions.company_detach": """
+INSERT INTO public.positions(
+  id, user_id, title, company, company_id, legacy_id
+) VALUES (
+  '00000000-0000-0000-0000-00000000a102',
+  '00000000-0000-0000-0000-00000000a001',
+  'Synthetic cross tenant', 'Synthetic B',
+  '00000000-0000-0000-0000-00000000b201', 61001
+);
+""",
+    "074.pending_messages.detach": """
+INSERT INTO public.pending_user_messages(
+  user_id, legacy_id, agent, body, related_position_id
+) VALUES (
+  '00000000-0000-0000-0000-00000000a001', 74001,
+  'synthetic', 'Synthetic message',
+  '00000000-0000-0000-0000-00000000b101'
+);
+""",
+    "074.scores.required_parent": """
+INSERT INTO public.scores(user_id, position_id, total_score) VALUES (
+  '00000000-0000-0000-0000-00000000a001',
+  '00000000-0000-0000-0000-00000000b101', 50
+);
+""",
+    "074.applications.required_parent": """
+INSERT INTO public.applications(user_id, position_id) VALUES (
+  '00000000-0000-0000-0000-00000000a001',
+  '00000000-0000-0000-0000-00000000b101'
+);
+""",
+    "074.position_highlights.required_parent": """
+INSERT INTO public.position_highlights(user_id, position_id, type, text) VALUES (
+  '00000000-0000-0000-0000-00000000a001',
+  '00000000-0000-0000-0000-00000000b101',
+  'pro', 'Synthetic highlight'
+);
+""",
+    "074.position_views.required_parent": """
+INSERT INTO public.position_views(user_id, position_id) VALUES (
+  '00000000-0000-0000-0000-00000000a001',
+  '00000000-0000-0000-0000-00000000b101'
+);
+""",
+    "074.position_user_notes.required_parent": """
+INSERT INTO public.position_user_notes(user_id, position_id, body) VALUES (
+  '00000000-0000-0000-0000-00000000a001',
+  '00000000-0000-0000-0000-00000000b101', 'Synthetic note'
+);
+""",
+    "075.token.expiry_shortening": """
+INSERT INTO public.cloud_sync_tokens(
+  id, user_id, name, token_prefix, token_hash, expires_at
+) VALUES (
+  '00000000-0000-0000-0000-000000007501',
+  '00000000-0000-0000-0000-00000000a001',
+  'Synthetic expiry', 'syn-exp', 'synthetic-hash-expiry', now() + interval '1 hour'
+);
+INSERT INTO public.cloud_sync_pairing_sessions(
+  device_code, user_code, status, user_id, approved_token,
+  approved_token_id, approved_at, expires_at
+) VALUES (
+  'synthetic-device-expiry', 'SYNEXP01', 'approved',
+  '00000000-0000-0000-0000-00000000a001', 'synthetic-plaintext',
+  '00000000-0000-0000-0000-000000007501', now(), now() + interval '10 minutes'
+);
+""",
+    "075.token.expired_unrevoked": """
+INSERT INTO public.cloud_sync_tokens(
+  id, user_id, name, token_prefix, token_hash, expires_at
+) VALUES (
+  '00000000-0000-0000-0000-000000007502',
+  '00000000-0000-0000-0000-00000000a001',
+  'Synthetic unrevoked', 'syn-unr', 'synthetic-hash-unrevoked', NULL
+);
+INSERT INTO public.cloud_sync_pairing_sessions(
+  device_code, user_code, status, user_id, approved_token_id, expires_at
+) VALUES (
+  'synthetic-device-unrevoked', 'SYNUNR01', 'expired',
+  '00000000-0000-0000-0000-00000000a001',
+  '00000000-0000-0000-0000-000000007502', now() - interval '1 minute'
+);
+""",
+    "075.session.expired_status": """
+INSERT INTO public.cloud_sync_pairing_sessions(
+  device_code, user_code, status, expires_at
+) VALUES (
+  'synthetic-device-status', 'SYNSTA01', 'pending', now() - interval '1 minute'
+);
+""",
+    "075.session.expired_token_wipe": """
+INSERT INTO public.cloud_sync_pairing_sessions(
+  device_code, user_code, status, approved_token, expires_at
+) VALUES (
+  'synthetic-device-wipe', 'SYNWIP01', 'expired',
+  'synthetic-plaintext', now() - interval '1 minute'
+);
+""",
+}
+
+PREFLIGHT_FINGERPRINT_QUERY = """
+SELECT pg_catalog.md5(
+  COALESCE(pg_catalog.string_agg(rows.payload, E'\\n' ORDER BY rows.payload), '')
+) AS fingerprint
+FROM (
+  SELECT 'auth.users:' || pg_catalog.row_to_json(row_value)::text AS payload
+    FROM auth.users AS row_value
+  UNION ALL SELECT 'applications:' || pg_catalog.row_to_json(row_value)::text
+    FROM public.applications AS row_value
+  UNION ALL SELECT 'cloud_sync_pairing_sessions:' || pg_catalog.row_to_json(row_value)::text
+    FROM public.cloud_sync_pairing_sessions AS row_value
+  UNION ALL SELECT 'cloud_sync_tokens:' || pg_catalog.row_to_json(row_value)::text
+    FROM public.cloud_sync_tokens AS row_value
+  UNION ALL SELECT 'companies:' || pg_catalog.row_to_json(row_value)::text
+    FROM public.companies AS row_value
+  UNION ALL SELECT 'pending_user_messages:' || pg_catalog.row_to_json(row_value)::text
+    FROM public.pending_user_messages AS row_value
+  UNION ALL SELECT 'position_highlights:' || pg_catalog.row_to_json(row_value)::text
+    FROM public.position_highlights AS row_value
+  UNION ALL SELECT 'position_tickets:' || pg_catalog.row_to_json(row_value)::text
+    FROM public.position_tickets AS row_value
+  UNION ALL SELECT 'position_user_notes:' || pg_catalog.row_to_json(row_value)::text
+    FROM public.position_user_notes AS row_value
+  UNION ALL SELECT 'position_views:' || pg_catalog.row_to_json(row_value)::text
+    FROM public.position_views AS row_value
+  UNION ALL SELECT 'positions:' || pg_catalog.row_to_json(row_value)::text
+    FROM public.positions AS row_value
+  UNION ALL SELECT 'scores:' || pg_catalog.row_to_json(row_value)::text
+    FROM public.scores AS row_value
+) AS rows
+"""
+
+spec = importlib.util.spec_from_file_location("check_live_schema", SCRIPT)
+assert spec and spec.loader
+canary = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = canary
+spec.loader.exec_module(canary)
+
+
+class FakeResponse:
+    def __init__(self, payload: object, status: int = 201):
+        self.body = json.dumps(payload).encode()
+        self.status = status
+        self.read_called = False
+
+    def getcode(self) -> int:
+        return self.status
+
+    def read(self, amount: int = -1) -> bytes:
+        self.read_called = True
+        return self.body[:amount] if amount >= 0 else self.body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return None
+
+
+def successful_rows(contract=None):
+    contract = contract or canary.load_contract(MANIFEST)
+    return [{"check_id": check_id, "ok": True} for check_id in contract.expected_checks]
+
+
+def test_manifest_pins_clone_order_migrations_query_and_check_set():
+    contract = canary.load_contract(MANIFEST)
+    manifest = json.loads(MANIFEST.read_text())
+
+    assert contract.contract_id == "release-0.3.9-schema-078-081"
+    assert len(contract.expected_checks) == 42
+    assert manifest["clone_contract"] == {
+        "baseline": "live-schema-only-pg-dump",
+        "contains_user_rows": False,
+        "postgres_major": 16,
+        "ordered_migrations": [
+            "supabase/migrations/078_positions_write_request_kind.sql",
+            "supabase/migrations/079_team_directive_events_atomic.sql",
+            "supabase/migrations/080_profile_snapshot_atomic.sql",
+            "supabase/migrations/081_live_schema_reconciliation.sql",
+        ],
+    }
+    assert [entry["path"] for entry in manifest["migrations"]] == manifest[
+        "clone_contract"
+    ]["ordered_migrations"]
+
+
+def test_manifest_fails_closed_when_a_pinned_hash_drifts(tmp_path):
+    manifest = json.loads(MANIFEST.read_text())
+    manifest["query"]["sha256"] = "0" * 64
+    changed = tmp_path / "changed.json"
+    changed.write_text(json.dumps(manifest))
+
+    with pytest.raises(canary.CanaryError, match="manifest_stale"):
+        canary.load_contract(changed)
+
+
+def test_manifest_rejects_duplicate_or_unknown_keys(tmp_path):
+    raw = MANIFEST.read_text()
+    duplicate = tmp_path / "duplicate.json"
+    duplicate.write_text(
+        raw.replace(
+            '"schema_version": 1,',
+            '"schema_version": 1,\n  "schema_version": 1,',
+        )
+    )
+    with pytest.raises(canary.CanaryError, match="manifest_invalid"):
+        canary.load_contract(duplicate)
+
+    unknown = json.loads(raw)
+    unknown["unversioned_override"] = True
+    changed = tmp_path / "unknown.json"
+    changed.write_text(json.dumps(unknown))
+    with pytest.raises(canary.CanaryError, match="manifest_invalid"):
+        canary.load_contract(changed)
+
+
+def test_cli_cannot_select_an_unversioned_manifest(capsys):
+    with pytest.raises(SystemExit) as error:
+        canary.main(["--manifest", "/tmp/synthetic.json", "--validate-only"])
+
+    assert error.value.code == 2
+    assert "unrecognized arguments" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "UPDATE public.positions SET status = 'synthetic'",
+        "WITH candidate AS (SELECT 1) DELETE FROM public.positions",
+        "SELECT 1; SELECT 2",
+        "SELECT public.some_mutating_rpc()",
+        "SELECT positions.id FROM public.positions AS positions",
+        "WITH safe AS (SELECT 1) SELECT users.id FROM auth.users AS users",
+    ],
+)
+def test_local_query_guard_rejects_mutations_and_multiple_statements(query):
+    with pytest.raises(canary.CanaryError, match="query_not_read_only"):
+        canary.validate_read_only_query(query)
+
+
+def test_transport_uses_only_fixed_read_only_endpoint_and_exact_query():
+    contract = canary.load_contract(MANIFEST)
+    observed = {}
+
+    def opener(request, timeout):
+        observed["url"] = request.full_url
+        observed["method"] = request.get_method()
+        observed["headers"] = dict(request.header_items())
+        observed["body"] = json.loads(request.data)
+        observed["timeout"] = timeout
+        return FakeResponse(successful_rows(contract))
+
+    result = canary.run_live_canary(
+        contract,
+        access_token="synthetic-test-only",
+        project_ref="abcdefghijklmnopqrst",
+        opener=opener,
+    )
+
+    assert result.ok
+    assert observed["url"] == (
+        "https://api.supabase.com/v1/projects/abcdefghijklmnopqrst/"
+        "database/query/read-only"
+    )
+    assert observed["method"] == "POST"
+    assert observed["body"] == {"query": QUERY.read_text()}
+    assert observed["headers"]["Authorization"] == "Bearer synthetic-test-only"
+    assert observed["timeout"] == 20
+    assert "/database/query/read-only" in SCRIPT.read_text()
+    assert "/database/migrations" not in SCRIPT.read_text()
+    assert "SUPABASE_DB_PASSWORD" not in SCRIPT.read_text()
+    assert "SUPABASE_SERVICE" not in SCRIPT.read_text()
+
+
+def test_false_check_blocks_release_and_reports_only_versioned_identity():
+    contract = canary.load_contract(MANIFEST)
+    rows = successful_rows(contract)
+    rows[0]["ok"] = False
+    result = canary.evaluate_response(contract, rows)
+
+    assert not result.ok
+    assert result.failed == (contract.expected_checks[0],)
+    assert len(result.passed) == len(contract.expected_checks) - 1
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        [{"check_id": "unexpected.private.value", "ok": True}],
+        [{"check_id": "078.positions.write_request_kind.column", "ok": "yes"}],
+        [
+            {"check_id": "078.positions.write_request_kind.column", "ok": True},
+            {"check_id": "078.positions.write_request_kind.column", "ok": True},
+        ],
+        {"rows": []},
+    ],
+)
+def test_partial_duplicate_or_unknown_receipts_fail_closed(payload):
+    contract = canary.load_contract(MANIFEST)
+    with pytest.raises(canary.CanaryError, match="protocol_invalid"):
+        canary.evaluate_response(contract, payload)
+
+
+def test_supported_response_envelopes_still_require_the_exact_multiset():
+    contract = canary.load_contract(MANIFEST)
+    for key in ("data", "result"):
+        result = canary.evaluate_response(contract, {key: successful_rows(contract)})
+        assert result.ok
+
+
+def test_remote_json_with_duplicate_keys_fails_closed():
+    contract = canary.load_contract(MANIFEST)
+    response = FakeResponse([])
+    response.body = b'[{"check_id":"safe","check_id":"other","ok":true}]'
+
+    with pytest.raises(canary.CanaryError, match="protocol_invalid"):
+        canary.run_live_canary(
+            contract,
+            access_token="synthetic-test-only",
+            project_ref="abcdefghijklmnopqrst",
+            opener=lambda request, timeout: response,
+        )
+
+
+def test_dml_preflight_is_exactly_twelve_checks_and_has_no_mutation_or_raw_projection():
+    query = PREFLIGHT_QUERY.read_text()
+    ids = re.findall(r"'([0-9]{3}\.[a-z0-9_.-]+)'", query)
+    assert len(ids) == len(set(ids)) == 12
+    assert set(ids) == {
+        "071.rescore.rows_ranked",
+        "074.positions.company_detach",
+        "074.pending_messages.detach",
+        "074.scores.required_parent",
+        "074.applications.required_parent",
+        "074.position_highlights.required_parent",
+        "074.position_views.required_parent",
+        "074.position_user_notes.required_parent",
+        "075.token.expiry_shortening",
+        "075.token.expired_unrevoked",
+        "075.session.expired_status",
+        "075.session.expired_token_wipe",
+    }
+    executable = canary._strip_sql_literals_and_comments(query)
+    assert not re.search(
+        r"\b(?:INSERT|UPDATE|DELETE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\b",
+        executable,
+        re.I,
+    )
+    assert "SELECT check_id, ok" in query
+    assert "SELECT count(*)" in query
+    assert "SELECT *" not in query
+
+
+def test_snapshot_attestation_does_not_accept_caller_supplied_hash():
+    source = Path(__file__).read_text()
+    forbidden_lookup = 'os.environ.get("SNAPSHOT_' + 'SHA256"'
+    assert forbidden_lookup not in source
+    assert (
+        SNAPSHOT_SHA256
+        == "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
+    )
+
+
+def test_preflight_synthetic_anomalies_are_row_scoped_and_non_mutating_contract():
+    """The fixture matrix names every seeded anomaly, including orphan/tenant edges.
+
+    The actual live-shape runner injects these rows into the private schema dump;
+    this contract test prevents a future query from dropping a predicate or
+    returning raw counts while keeping all fixture values synthetic.
+    """
+    anomalies = {
+        "071.rescore.rows_ranked": "duplicate active rescore rows (rank > 1)",
+        "074.positions.company_detach": "company parent other tenant",
+        "074.pending_messages.detach": "related position parent other tenant",
+        "074.scores.required_parent": "orphan score and other-tenant parent",
+        "074.applications.required_parent": "orphan application and other-tenant parent",
+        "074.position_highlights.required_parent": "orphan highlight and other-tenant parent",
+        "074.position_views.required_parent": "orphan view and other-tenant parent",
+        "074.position_user_notes.required_parent": "orphan note and other-tenant parent",
+        "075.token.expiry_shortening": "approved token beyond pairing expiry",
+        "075.token.expired_unrevoked": "expired token not revoked",
+        "075.session.expired_status": "expired pending session",
+        "075.session.expired_token_wipe": "expired session plaintext token",
+    }
+    assert len(anomalies) == 12
+    assert all("user" not in value and "@" not in value for value in anomalies.values())
+    assert "UPDATE" not in PREFLIGHT_QUERY.read_text().upper()
+
+
+def test_076_077_contract_pins_every_function_identity_dimension():
+    query = QUERY.read_text()
+    for token in (
+        "proargnames",
+        "proargtypes::text",
+        "proallargtypes IS NULL",
+        "proargmodes IS NULL",
+        "prorettype",
+        "pronargdefaults",
+        "proargdefaults",
+        "prokind",
+        "prolang",
+        "provolatile",
+        "prosecdef",
+        "proconfig",
+        "aclexplode",
+        "privilege_type = 'EXECUTE'",
+        "is_grantable",
+    ):
+        assert token in query
+
+
+@pytest.mark.parametrize(
+    "access_token",
+    ["short", "synthetic-test-only\nprivate", "synthetic test only private"],
+)
+def test_invalid_token_fails_before_transport_without_relay(access_token):
+    contract = canary.load_contract(MANIFEST)
+    called = False
+
+    def opener(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("transport must not run")
+
+    with pytest.raises(canary.CanaryError, match="credentials_invalid") as error:
+        canary.run_live_canary(
+            contract,
+            access_token=access_token,
+            project_ref="abcdefghijklmnopqrst",
+            opener=opener,
+        )
+
+    assert not called
+    assert access_token not in str(error.value)
+
+
+def test_http_error_body_is_not_read_or_relayed():
+    contract = canary.load_contract(MANIFEST)
+    response = FakeResponse(
+        {"private": "synthetic-private-response-detail"}, status=500
+    )
+
+    with pytest.raises(canary.CanaryError, match="transport_error") as error:
+        canary.run_live_canary(
+            contract,
+            access_token="synthetic-test-only",
+            project_ref="abcdefghijklmnopqrst",
+            opener=lambda request, timeout: response,
+        )
+
+    assert error.value.code == "transport_error"
+    assert not response.read_called
+    assert "synthetic-private-response-detail" not in str(error.value)
+    assert "abcdefghijklmnopqrst" not in str(error.value)
+
+
+def test_cli_output_sanitizes_transport_details(monkeypatch, capsys):
+    monkeypatch.setenv("SUPABASE_ACCESS_TOKEN", "synthetic-test-only")
+    monkeypatch.setenv("SUPABASE_PROJECT_REF", "abcdefghijklmnopqrst")
+
+    def failed_transport(*args, **kwargs):
+        try:
+            raise RuntimeError("synthetic-private-response-detail")
+        except RuntimeError as cause:
+            raise canary.CanaryError("transport_error") from cause
+
+    monkeypatch.setattr(canary, "run_live_canary", failed_transport)
+    assert canary.main([]) == 1
+    output = capsys.readouterr()
+    rendered = output.out + output.err
+    assert rendered.strip() == "LIVE-SCHEMA FAIL code=transport_error"
+    assert "synthetic-private-response-detail" not in rendered
+    assert "abcdefghijklmnopqrst" not in rendered
+    assert "synthetic-test-only" not in rendered
+
+
+@contextmanager
+def pg16_schema_clone(*, migrated: bool, include_081: bool = True):
+    snapshot = os.environ.get("JHT_H08_SCHEMA_SNAPSHOT")
+    if not snapshot:
+        pytest.skip("dump schema-only H-08 attestato non disponibile")
+    snapshot_path = Path(snapshot)
+    if not snapshot_path.is_file() or snapshot_path.stat().st_size > 32 * 1024 * 1024:
+        pytest.fail("attested schema snapshot unavailable")
+    actual_sha = __import__("hashlib").sha256(snapshot_path.read_bytes()).hexdigest()
+    if actual_sha != SNAPSHOT_SHA256:
+        pytest.fail("attested schema snapshot hash mismatch")
+    if not shutil.which("docker"):
+        pytest.skip("docker non disponibile")
+    if subprocess.run(
+        ["docker", "image", "inspect", "postgres:16-alpine"],
+        capture_output=True,
+    ).returncode:
+        pytest.skip("postgres:16-alpine non disponibile localmente")
+    name = f"jht-live-schema-{uuid.uuid4().hex[:10]}"
+    started = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--detach",
+            "--rm",
+            "--name",
+            name,
+            "--tmpfs",
+            "/var/lib/postgresql/data:rw,size=256m",
+            "-e",
+            "POSTGRES_PASSWORD=synthetic-test-only",
+            "postgres:16-alpine",
+        ],
+        text=True,
+        capture_output=True,
+    )
+    if started.returncode:
+        pytest.fail("PostgreSQL 16 schema clone non avviabile")
+
+    def psql(sql: str, *, check: bool = True):
+        return subprocess.run(
+            [
+                "docker",
+                "exec",
+                "-i",
+                name,
+                "psql",
+                "-X",
+                "-q",
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-U",
+                "postgres",
+                "-d",
+                "postgres",
+                "-At",
+                "-F",
+                "|",
+            ],
+            input=sql,
+            text=True,
+            capture_output=True,
+            check=check,
+        )
+
+    try:
+        stable = 0
+        for _ in range(100):
+            if psql("SELECT 1", check=False).returncode == 0:
+                stable += 1
+            else:
+                stable = 0
+            if stable == 2:
+                break
+            time.sleep(0.1)
+        else:
+            pytest.fail("PostgreSQL 16 schema clone non pronto")
+        psql(
+            "DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE service_role NOLOGIN BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$; CREATE SCHEMA IF NOT EXISTS auth; CREATE TABLE IF NOT EXISTS auth.users(id uuid PRIMARY KEY, created_at timestamptz); CREATE TABLE IF NOT EXISTS auth.sessions(user_id uuid, updated_at timestamptz); CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $$; GRANT USAGE ON SCHEMA public, auth TO anon, authenticated, service_role;"
+        )
+        psql(snapshot_path.read_text(encoding="utf-8"))
+        if migrated:
+            for migration in MIGRATIONS if include_081 else MIGRATIONS[:3]:
+                psql(migration.read_text())
+        yield psql
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], text=True, capture_output=True)
+
+
+def query_results(psql):
+    result = psql(QUERY.read_text())
+    return receipt_rows(result.stdout)
+
+
+def receipt_rows(output: str):
+    return {
+        check_id: value == "t"
+        for check_id, value in (
+            line.split("|", 1) for line in output.splitlines() if "|" in line
+        )
+    }
+
+
+def query_results_in_transaction(psql, mutation: str):
+    result = psql(f"BEGIN;\n{mutation}\n{QUERY.read_text()};\nROLLBACK;")
+    return receipt_rows(result.stdout)
+
+
+def test_pg16_schema_only_clone_passes_after_ordered_078_079_080():
+    contract = canary.load_contract(MANIFEST)
+    with pg16_schema_clone(migrated=True) as psql:
+        observed = query_results(psql)
+
+    assert tuple(sorted(observed)) == contract.expected_checks
+    assert all(observed.values())
+
+
+def test_pg16_schema_only_clone_fails_before_the_ordered_migrations():
+    contract = canary.load_contract(MANIFEST)
+    with pg16_schema_clone(migrated=False) as psql:
+        observed = query_results(psql)
+
+    assert tuple(sorted(observed)) == contract.expected_checks
+    assert not all(observed.values())
+    assert not observed["078.positions.write_request_kind.column"]
+
+
+def test_pg16_078_080_without_081_fails_reconciliation_receipt():
+    contract = canary.load_contract(MANIFEST)
+    with pg16_schema_clone(migrated=True, include_081=False) as psql:
+        observed = query_results(psql)
+    assert tuple(sorted(observed)) == contract.expected_checks
+    assert not observed["081.reconciliation.present"]
+    assert all(
+        observed[check]
+        for check in contract.expected_checks
+        if not check.startswith("081.")
+    )
+    assert any(
+        not observed[check]
+        for check in contract.expected_checks
+        if check.startswith("081.")
+    )
+
+
+def test_pg16_076_077_function_identity_rejects_each_metadata_drift():
+    mutations = (
+        """
+CREATE FUNCTION public.sync_upsert_applications(integer) RETURNS jsonb
+LANGUAGE plpgsql AS $$ BEGIN RETURN '{}'::jsonb; END $$;
+""",
+        """
+UPDATE pg_catalog.pg_proc SET proargnames = ARRAY['synthetic_a', 'synthetic_b']
+WHERE oid = 'public.sync_upsert_applications(uuid,jsonb)'::regprocedure;
+""",
+        """
+UPDATE pg_catalog.pg_proc SET prorettype = 'text'::regtype
+WHERE oid = 'public.sync_upsert_applications(uuid,jsonb)'::regprocedure;
+""",
+        """
+UPDATE pg_catalog.pg_proc SET pronargdefaults = 1
+WHERE oid = 'public.sync_upsert_applications(uuid,jsonb)'::regprocedure;
+""",
+        """
+UPDATE pg_catalog.pg_proc SET prokind = 'p'
+WHERE oid = 'public.sync_upsert_applications(uuid,jsonb)'::regprocedure;
+""",
+        """
+UPDATE pg_catalog.pg_proc SET prolang = (
+  SELECT oid FROM pg_catalog.pg_language WHERE lanname = 'sql'
+)
+WHERE oid = 'public.sync_upsert_applications(uuid,jsonb)'::regprocedure;
+""",
+        "ALTER FUNCTION public.sync_upsert_applications(uuid,jsonb) STABLE;",
+        "ALTER FUNCTION public.sync_upsert_applications(uuid,jsonb) SECURITY DEFINER;",
+        "ALTER FUNCTION public.sync_upsert_applications(uuid,jsonb) RESET ALL;",
+        "GRANT EXECUTE ON FUNCTION public.sync_upsert_applications(uuid,jsonb) TO PUBLIC;",
+    )
+    with pg16_schema_clone(migrated=True) as psql:
+        for mutation in mutations:
+            observed = query_results_in_transaction(psql, mutation)
+            assert not observed["076.sync_upsert_applications.definition"]
+
+        for check_id, mutation in (
+            (
+                "077.mark_position_applied.definition",
+                "ALTER FUNCTION public.mark_position_applied(integer,timestamptz,text,text) RESET ALL;",
+            ),
+            (
+                "077.undo_manual_position_application.definition",
+                "GRANT EXECUTE ON FUNCTION public.undo_manual_position_application(integer,text) TO PUBLIC;",
+            ),
+        ):
+            observed = query_results_in_transaction(psql, mutation)
+            assert not observed[check_id]
+
+
+def test_pg16_all_six_081_function_bodies_are_independently_pinned():
+    functions = {
+        "081.cleanup.definition": "cleanup_pairing_sessions",
+        "081.delete_account.definition": "delete_account_data",
+        "081.redeem_pairing.definition": "redeem_cloud_sync_pairing",
+        "081.reject_stale_applied.definition": (
+            "reject_stale_applied_position_downgrade"
+        ),
+        "081.sync_confirm.definition": "sync_confirm_positions_applied",
+        "081.team_state_stamp.definition": "team_state_stamp_cloud_push_check",
+    }
+    with pg16_schema_clone(migrated=True) as psql:
+        for check_id, function_name in functions.items():
+            observed = query_results_in_transaction(
+                psql,
+                f"""
+UPDATE pg_catalog.pg_proc AS procedure
+SET prosrc = procedure.prosrc || E'\\n-- synthetic body drift'
+FROM pg_catalog.pg_namespace AS namespace
+WHERE namespace.oid = procedure.pronamespace
+  AND namespace.nspname = 'public'
+  AND procedure.proname = '{function_name}';
+""",
+            )
+            assert not observed[check_id]
+            assert all(observed[other] for other in functions if other != check_id)
+
+
+def test_pg16_081_function_metadata_acl_and_trigger_links_are_pinned():
+    metadata_drifts = (
+        (
+            "081.cleanup.definition",
+            """
+UPDATE pg_catalog.pg_proc SET prokind = 'p'
+WHERE oid = 'public.cleanup_pairing_sessions()'::regprocedure;
+""",
+        ),
+        (
+            "081.delete_account.definition",
+            """
+UPDATE pg_catalog.pg_proc SET prolang = (
+  SELECT oid FROM pg_catalog.pg_language WHERE lanname = 'sql'
+)
+WHERE oid = 'public.delete_account_data(uuid)'::regprocedure;
+""",
+        ),
+        (
+            "081.redeem_pairing.definition",
+            "ALTER FUNCTION public.redeem_cloud_sync_pairing(text) STABLE;",
+        ),
+        (
+            "081.sync_confirm.definition",
+            """
+ALTER FUNCTION public.sync_confirm_positions_applied(uuid,integer[])
+SECURITY DEFINER;
+""",
+        ),
+        (
+            "081.team_state_stamp.definition",
+            "ALTER FUNCTION public.team_state_stamp_cloud_push_check() RESET ALL;",
+        ),
+        (
+            "081.redeem_pairing.definition",
+            """
+UPDATE pg_catalog.pg_proc
+SET proargnames = ARRAY[
+  'synthetic_device_code', 'status', 'approved_token',
+  'user_id', 'approved_token_id', 'token_name'
+]
+WHERE oid = 'public.redeem_cloud_sync_pairing(text)'::regprocedure;
+""",
+        ),
+        (
+            "081.cleanup.definition",
+            """
+UPDATE pg_catalog.pg_proc SET proallargtypes = ARRAY[23, 25]::oid[]
+WHERE oid = 'public.cleanup_pairing_sessions()'::regprocedure;
+""",
+        ),
+    )
+    acl_drifts = (
+        (
+            "081.cleanup.definition",
+            "REVOKE EXECUTE ON FUNCTION public.cleanup_pairing_sessions() FROM service_role;",
+        ),
+        (
+            "081.delete_account.definition",
+            "GRANT EXECUTE ON FUNCTION public.delete_account_data(uuid) TO PUBLIC;",
+        ),
+        (
+            "081.redeem_pairing.definition",
+            "GRANT EXECUTE ON FUNCTION public.redeem_cloud_sync_pairing(text) TO authenticated;",
+        ),
+        (
+            "081.sync_confirm.definition",
+            "REVOKE EXECUTE ON FUNCTION public.sync_confirm_positions_applied(uuid,integer[]) FROM service_role;",
+        ),
+        (
+            "081.reject_stale_applied.definition",
+            "REVOKE EXECUTE ON FUNCTION public.reject_stale_applied_position_downgrade() FROM anon;",
+        ),
+        (
+            "081.team_state_stamp.definition",
+            "GRANT EXECUTE ON FUNCTION public.team_state_stamp_cloud_push_check() TO PUBLIC;",
+        ),
+    )
+    trigger_drifts = (
+        (
+            "081.reject_stale_applied.trigger",
+            """
+DROP TRIGGER positions_reject_stale_applied_downgrade ON public.positions;
+CREATE TRIGGER positions_reject_stale_applied_downgrade
+AFTER UPDATE ON public.positions
+FOR EACH STATEMENT
+EXECUTE FUNCTION public.reject_stale_applied_position_downgrade();
+""",
+        ),
+        (
+            "081.team_state_stamp.trigger",
+            """
+DROP TRIGGER trg_team_state_stamp_cloud_push_check ON public.team_state;
+CREATE TRIGGER trg_team_state_stamp_cloud_push_check
+AFTER UPDATE ON public.team_state
+FOR EACH ROW
+EXECUTE FUNCTION public.team_state_stamp_cloud_push_check();
+""",
+        ),
+    )
+
+    with pg16_schema_clone(migrated=True) as psql:
+        for check_id, mutation in metadata_drifts + acl_drifts + trigger_drifts:
+            observed = query_results_in_transaction(psql, mutation)
+            assert not observed[check_id]
+
+
+def test_pg16_081_tenant_fk_receipt_rejects_uuid_only_same_name_substitute():
+    with pg16_schema_clone(migrated=True) as psql:
+        observed = query_results_in_transaction(
+            psql,
+            """
+ALTER TABLE public.scores DROP CONSTRAINT scores_position_tenant_fkey;
+ALTER TABLE public.scores ADD CONSTRAINT scores_position_tenant_fkey
+  FOREIGN KEY (position_id) REFERENCES public.positions(id) ON DELETE CASCADE;
+""",
+        )
+
+    assert not observed["081.tenant_fk.count"]
+
+
+def test_pg16_081_user_settings_and_team_directive_policies_are_exact():
+    user_settings_drifts = (
+        "ALTER TABLE public.user_settings DISABLE ROW LEVEL SECURITY;",
+        """
+DROP POLICY "Users manage own settings" ON public.user_settings;
+CREATE POLICY "Users manage own settings" ON public.user_settings
+FOR ALL USING (true) WITH CHECK (true);
+""",
+        "REVOKE SELECT ON public.user_settings FROM authenticated;",
+    )
+    with pg16_schema_clone(migrated=True) as psql:
+        for mutation in user_settings_drifts:
+            observed = query_results_in_transaction(psql, mutation)
+            assert not observed["081.reconciliation.present"]
+
+        observed = query_results_in_transaction(
+            psql,
+            """
+DROP POLICY "users select own team directives" ON public.team_directives;
+CREATE POLICY "users select own team directives" ON public.team_directives
+FOR SELECT USING (true);
+""",
+        )
+        assert not observed["081.team_directives.policies"]
+
+        observed = query_results_in_transaction(
+            psql,
+            "ALTER TABLE public.team_directives DISABLE ROW LEVEL SECURITY;",
+        )
+        assert not observed["081.team_directives.policies"]
+
+        observed = query_results_in_transaction(
+            psql,
+            "ALTER TABLE public.pending_user_messages DISABLE ROW LEVEL SECURITY;",
+        )
+        assert not observed["079.pending_messages.column_acl"]
+
+        observed = query_results_in_transaction(
+            psql,
+            """
+DROP POLICY "Users can view own pending messages"
+ON public.pending_user_messages;
+CREATE POLICY "Users can view own pending messages"
+ON public.pending_user_messages FOR SELECT USING (true);
+""",
+        )
+        assert not observed["079.pending_messages.column_acl"]
+
+
+def test_pg16_preflight_proves_each_seed_causal_and_preserves_row_fingerprint():
+    expected = tuple(sorted(PREFLIGHT_ANOMALY_SEEDS))
+    with pg16_schema_clone(migrated=True, include_081=False) as psql:
+        baseline = receipt_rows(psql(PREFLIGHT_QUERY.read_text()).stdout)
+        assert tuple(sorted(baseline)) == expected
+        assert all(baseline.values())
+
+        for target, seed in PREFLIGHT_ANOMALY_SEEDS.items():
+            result = psql(
+                "BEGIN;\n"
+                + PREFLIGHT_BASE_ROWS
+                + seed
+                + "SELECT '_fingerprint.before', ("
+                + PREFLIGHT_FINGERPRINT_QUERY
+                + ");\n"
+                + PREFLIGHT_QUERY.read_text()
+                + ";\nSELECT '_fingerprint.after', ("
+                + PREFLIGHT_FINGERPRINT_QUERY
+                + ");\nROLLBACK;"
+            )
+            rows = dict(
+                line.split("|", 1) for line in result.stdout.splitlines() if "|" in line
+            )
+            assert rows.pop("_fingerprint.before") == rows.pop("_fingerprint.after")
+            assert tuple(sorted(rows)) == expected
+            assert rows[target] == "f"
+            assert all(value == "t" for key, value in rows.items() if key != target)
+
+
+def test_pg16_rpc_body_drift_fails_with_signature_security_and_acl_unchanged():
+    with pg16_schema_clone(migrated=True) as psql:
+        psql(
+            """
+CREATE OR REPLACE FUNCTION public.mutate_team_directive_with_event(
+  p_id BIGINT, p_action TEXT, p_body TEXT, p_kind TEXT, p_request_id TEXT
+) RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$ BEGIN RETURN '{}'::jsonb; END $$;
+
+CREATE OR REPLACE FUNCTION public.sync_candidate_profile_atomic(
+  p_user_id UUID, p_content_hash TEXT, p_snapshot JSONB,
+  p_force BOOLEAN DEFAULT FALSE
+) RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$ BEGIN RETURN '{}'::jsonb; END $$;
+"""
+        )
+        observed = query_results(psql)
+
+    assert not observed["079.directive_rpc.definition"]
+    assert not observed["080.profile_rpc.definition"]
+    for check_id in (
+        "079.directive_rpc.signature",
+        "079.directive_rpc.security",
+        "079.directive_rpc.acl",
+        "080.profile_rpc.signature",
+        "080.profile_rpc.security",
+        "080.profile_rpc.acl",
+    ):
+        assert observed[check_id], check_id
