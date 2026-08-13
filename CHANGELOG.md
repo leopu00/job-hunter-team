@@ -7,6 +7,73 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.3.9] — 2026-08-13
+
+**Cloud synchronization that keeps moving, application actions that only report
+success after the change is durable, and messages that are never discarded just
+because an agent is busy.**
+
+### Reliable cloud synchronization
+
+- Cloud pushes now acknowledge the exact source row that was persisted. A
+  rejected row can be isolated in a durable quarantine while valid rows before
+  and after it continue; transient, protocol-wide and unknown failures still
+  stop safely without advancing the affected cursor.
+- Application and score identities are kept separate from their parent
+  position identities, including tenant-bound database constraints and
+  collision-safe retries. Existing application deletions continue to use their
+  historical position-based tombstone identity, so pending deletions remain
+  compatible.
+- Quarantined records expose a sanitized, actionable status and retry history.
+  The Maintainer can inspect and resolve them without receiving raw database
+  errors or user data.
+
+### Honest application actions
+
+- **Mi sono candidato** now uses the authoritative cloud operation on the
+  hosted site even when a local database path is present in the deployment.
+  The interface stays pending or shows an actionable error unless the server
+  confirms the persisted effect; a successful response with an unconfirmed
+  mirror is no longer presented as success.
+- Applying, retrying after an uncertain response and undoing remain atomic and
+  idempotent. Tenant checks and row locks prevent cross-account changes and
+  duplicate application transitions.
+- Hosted ticket, geocoding, recheck and writing requests no longer enter local
+  database paths. Unknown server errors are mapped to localized public copy
+  instead of exposing internal paths, sessions or infrastructure terms.
+
+### Team behaviour and communication
+
+- Provider selection is configuration, not a prompt instruction. Agent
+  launchers validate the configured provider and ignore provider names embedded
+  in directives, while preserving the requested work itself.
+- Conflicting modes and directives are resolved by their effective timestamps
+  in all seven languages. The current choice wins, the user is notified once,
+  and crash-safe deduplication does not store directive text.
+- Messages are typed and submitted even while an agent is working. The busy
+  composer is verified when visible; an unverifiable delivery is recorded
+  durably instead of waiting fifteen seconds and dropping the message. Kimi's
+  immediate-submit shortcut remains supported.
+
+### Position details
+
+- The score date remains in the score detail and positions list, while the
+  overview stays concise. Overview facts now use stable semantic rows and
+  responsive column widths so labels and values remain aligned on narrow
+  screens.
+- Exclusion reasons now show when the exclusion decision was made, without
+  substituting unrelated update or discovery timestamps when that date is
+  unavailable.
+
+### Updating
+
+- VPS installations must update the container as well as the website to use
+  the new row receipts, quarantine and cursor behaviour. Leaving a `0.3.8`
+  container running keeps the old all-or-nothing push client.
+- Windows and Linux desktop updates remain manual as documented for `0.3.8`.
+
+---
+
 ## [0.3.8] — 2026-08-12
 
 **Complete search results, safer message delivery, and a desktop workflow that

@@ -636,6 +636,15 @@ export const T = {
     fr: "Exclue par l'équipe",
     pt: "Excluída pela equipa",
   },
+  exclusion_decided_at: {
+    it: "Decisione presa il",
+    en: "Decision made on",
+    hu: "A döntés időpontja:",
+    es: "Decisión tomada el",
+    de: "Entschieden am",
+    fr: "Décision prise le",
+    pt: "Decisão tomada em",
+  },
   xr_closed: {
     it: "Chiusa / non più attiva",
     en: "Closed / no longer active",

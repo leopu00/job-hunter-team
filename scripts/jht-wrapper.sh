@@ -1308,7 +1308,7 @@ handle_runtime_upgrade() {
   # Il compose nuovo e' la fonte di verita': non assumere che l'immagine
   # resti per sempre latest o che un override JHT_IMAGE punti allo stesso ref.
   candidate_ref="$(upgrade_compose "$candidate_compose" config --images 2>/dev/null | head -n 1)"
-  candidate_image="$(docker image inspect "${candidate_ref:-${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.8}}" --format '{{.Id}}' 2>/dev/null || true)"
+  candidate_image="$(docker image inspect "${candidate_ref:-${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.9}}" --format '{{.Id}}' 2>/dev/null || true)"
   candidate_image="${candidate_image:-sconosciuta}"
   upgrade_write_journal pulled "$old_image" "$was_running" || {
     upgrade_result false false pull "$old_version" "$old_image" "$old_version" "$old_image" false "Impossibile aggiornare il journal" false
