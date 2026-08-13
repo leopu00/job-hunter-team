@@ -193,6 +193,27 @@ def test_exact_base_not_merge_base_rejects_a_branch_behind(tmp_path: Path):
     assert _codes(issues) == {"history_not_ancestor"}
 
 
+def test_ci_base_resolution_handles_pull_request_normal_and_first_branch_push(
+    tmp_path: Path,
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    (repo / "supabase/migrations/002_feature.sql").write_text("SELECT 2;\n")
+    head = _commit(repo, "head")
+
+    assert gate.resolve_migration_base(repo, "pull_request", head, "", base) == base
+    assert gate.resolve_migration_base(repo, "push", head, base, "") == base
+    assert gate.resolve_migration_base(repo, "push", head, "0" * 40, "") == base
+
+
+def test_ci_base_resolution_fails_closed_for_a_first_push_without_parent(
+    tmp_path: Path,
+):
+    repo, root = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+
+    with pytest.raises(gate.GateInvalid):
+        gate.resolve_migration_base(repo, "push", root, "0" * 40, "")
+
+
 def test_timestamp_anchor_requires_exact_manifest_hash_mapping_and_noop(
     tmp_path: Path,
 ):
@@ -521,21 +542,94 @@ def test_pg16_executes_manifested_anchor_without_counting_it_as_ddl(
     assert "new=1 anchors=1 applied=1" in capsys.readouterr().out
 
 
-def test_pg16_gate_rejects_non_loopback_without_exposing_target(
-    tmp_path: Path, monkeypatch, capsys
+@pytest.mark.parametrize(
+    "target",
+    [
+        "postgresql://synthetic-token@private-host.invalid/private",
+        "postgresql://postgres@localhost:5432/postgres",
+        "postgresql://postgres@127.0.0.1:5432,remote.invalid:5432/postgres",
+        "postgresql://postgres@127.0.0.1:99999/postgres",
+    ],
+)
+def test_pg16_gate_rejects_nonliteral_loopback_without_exposing_target(
+    tmp_path: Path, monkeypatch, capsys, target: str
 ):
     repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
     (repo / "supabase/migrations/002_new.sql").write_text("SELECT 2;\n")
     head = _commit(repo, "new")
-    secret = "synthetic-token@private-host.invalid"
-    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", f"postgresql://{secret}/private")
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", target)
+
+    def unexpected_psql(*_args, **_kwargs):
+        raise AssertionError("psql must not run for a nonliteral loopback host")
+
+    monkeypatch.setattr(gate, "_psql", unexpected_psql)
 
     result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
     output = capsys.readouterr().out
 
     assert result == 1
     assert "postgres_unavailable" in output
-    assert secret not in output
+    assert target not in output
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        "host=remote.invalid",
+        "hostaddr=203.0.113.7",
+        "service=synthetic-private",
+        "dbname=private",
+        "port=6543",
+        "user=private",
+        "password=synthetic-private",
+    ],
+)
+def test_pg16_rejects_libpq_uri_overrides_before_psql(
+    tmp_path: Path, monkeypatch, capsys, override: str
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    (repo / "supabase/migrations/002_new.sql").write_text("SELECT 2;\n")
+    head = _commit(repo, "new")
+    target = f"postgresql://postgres@127.0.0.1:5432/postgres?{override}"
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", target)
+
+    def unexpected_psql(*_args, **_kwargs):
+        raise AssertionError("psql must not run for an extended URI")
+
+    monkeypatch.setattr(gate, "_psql", unexpected_psql)
+
+    result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "postgres_unavailable" in output
+    assert target not in output
+
+
+@pytest.mark.parametrize(
+    "encoded_path",
+    ["/postgres%3Fhost=remote.invalid", "/postgres%23host=remote.invalid"],
+)
+def test_pg16_rejects_encoded_path_delimiters_before_psql(
+    tmp_path: Path, monkeypatch, capsys, encoded_path: str
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    (repo / "supabase/migrations/002_new.sql").write_text("SELECT 2;\n")
+    head = _commit(repo, "new")
+    target = f"postgresql://postgres@127.0.0.1:5432{encoded_path}"
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", target)
+
+    def unexpected_psql(*_args, **_kwargs):
+        raise AssertionError("psql must not run for an encoded database path")
+
+    monkeypatch.setattr(gate, "_psql", unexpected_psql)
+
+    result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "postgres_unavailable" in output
+    assert target not in output
 
 
 def test_ci_runs_git_and_real_pg16_gates_with_full_history_checkout():
@@ -544,6 +638,9 @@ def test_ci_runs_git_and_real_pg16_gates_with_full_history_checkout():
     section = workflow.split("  migration-gate:", 1)[1].split("\n  pytest:", 1)[0]
     assert "postgres:16-alpine" in section
     assert "fetch-depth: 0" in section
+    assert "migration_gate.py base" in section
+    assert '--push-before "$PUSH_BEFORE_SHA"' in section
+    assert "steps.migration-base.outputs.sha" in section
     assert "migration_gate.py git" in section
     assert "--fetch-remote origin" in section
     assert "migration_gate.py pg16" in section

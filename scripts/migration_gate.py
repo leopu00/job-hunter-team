@@ -25,7 +25,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
-from urllib.parse import unquote, urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -717,6 +717,45 @@ def command_git(args: argparse.Namespace) -> int:
     return 0
 
 
+def resolve_migration_base(
+    repo: Path,
+    event: str,
+    head_ref: str,
+    push_before: str,
+    pull_request_base: str,
+) -> str:
+    """Resolve the exact immutable tree used as CI comparison base."""
+
+    head = _resolve_commit(repo, head_ref)
+    if event == "pull_request":
+        candidate = pull_request_base
+    elif event == "push":
+        candidate = f"{head}^" if re.fullmatch(r"0{40}", push_before) else push_before
+    else:
+        raise GateInvalid("unsupported CI event")
+    if not candidate:
+        raise GateInvalid("migration base missing")
+    base = _resolve_commit(repo, candidate)
+    if not _is_ancestor(repo, base, head):
+        raise GateInvalid("migration base is not an ancestor")
+    return base
+
+
+def command_base(args: argparse.Namespace) -> int:
+    try:
+        base = resolve_migration_base(
+            Path(args.repo).resolve(),
+            args.event,
+            args.head,
+            args.push_before,
+            args.pull_request_base,
+        )
+    except (GateInvalid, OSError, UnicodeError):
+        return emit_issues("git", [Issue("base_unavailable", "none")])
+    print(base)
+    return 0
+
+
 def _local_versions(repo: Path) -> list[str]:
     directory = repo / MIGRATION_PREFIX
     migrations: list[Migration] = []
@@ -826,11 +865,27 @@ def _loopback_urls(raw_url: str, database: str) -> tuple[str, str]:
     parsed = urlparse(raw_url)
     if parsed.scheme not in {"postgres", "postgresql"}:
         raise GateInvalid("unsupported PostgreSQL URL")
-    if parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+    # libpq connection parameters in the query string override URI fields.
+    # Reject the entire extension surface instead of maintaining a fragile
+    # denylist: this executor needs only a plain loopback connection URI.
+    if parsed.params or parsed.query or parsed.fragment:
+        raise GateInvalid("PostgreSQL URL extensions are not allowed")
+    raw_host_port = parsed.netloc.rsplit("@", 1)[-1]
+    if not re.fullmatch(r"(?:127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?", raw_host_port):
+        raise GateInvalid("PostgreSQL host list is not a single loopback")
+    if parsed.hostname not in {"127.0.0.1", "::1"}:
         raise GateInvalid("PostgreSQL target is not loopback")
     if not parsed.username:
         raise GateInvalid("PostgreSQL user missing")
-    admin_path = "/" + (unquote(parsed.path.lstrip("/")) or "postgres")
+    try:
+        port = parsed.port
+    except ValueError:
+        raise GateInvalid("PostgreSQL port is invalid") from None
+    if port is not None and not 1 <= port <= 65535:
+        raise GateInvalid("PostgreSQL port is invalid")
+    if parsed.path and not re.fullmatch(r"/[A-Za-z0-9_.-]+", parsed.path):
+        raise GateInvalid("PostgreSQL database name is not canonical")
+    admin_path = parsed.path or "/postgres"
     admin = urlunparse(parsed._replace(path=admin_path))
     target = urlunparse(parsed._replace(path="/" + database))
     return admin, target
@@ -1011,6 +1066,16 @@ def build_parser() -> argparse.ArgumentParser:
     git_parser.add_argument("--cross-ref", action="append", default=[])
     git_parser.add_argument("--fetch-remote")
     git_parser.set_defaults(func=command_git)
+
+    base_parser = subparsers.add_parser(
+        "base", help="resolve the immutable CI comparison base"
+    )
+    base_parser.add_argument("--repo", default=str(ROOT))
+    base_parser.add_argument("--event", required=True, choices=("push", "pull_request"))
+    base_parser.add_argument("--head", required=True)
+    base_parser.add_argument("--push-before", default="")
+    base_parser.add_argument("--pull-request-base", default="")
+    base_parser.set_defaults(func=command_base)
 
     linked = subparsers.add_parser("linked", help="validate captured linked history")
     linked.add_argument("--repo", default=str(ROOT))

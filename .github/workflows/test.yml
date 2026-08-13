@@ -105,7 +105,6 @@ jobs:
           --health-timeout 5s
           --health-retries 15
     env:
-      JHT_MIGRATION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
       JHT_TEST_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
 
     steps:
@@ -119,17 +118,31 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Resolve immutable migration base
+        id: migration-base
+        env:
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          resolved_base="$(python scripts/migration_gate.py base \
+            --event "$GITHUB_EVENT_NAME" \
+            --head "$GITHUB_SHA" \
+            --push-before "$PUSH_BEFORE_SHA" \
+            --pull-request-base "$PULL_REQUEST_BASE_SHA")"
+          printf 'sha=%s\n' "$resolved_base" >> "$GITHUB_OUTPUT"
+
       - name: Check immutable migration identities
         run: >-
           python scripts/migration_gate.py git
-          --base "$JHT_MIGRATION_BASE_SHA"
+          --base "${{ steps.migration-base.outputs.sha }}"
           --head "$GITHUB_SHA"
           --fetch-remote origin
 
       - name: Apply new migrations on PostgreSQL 16
         run: >-
           python scripts/migration_gate.py pg16
-          --base "$JHT_MIGRATION_BASE_SHA"
+          --base "${{ steps.migration-base.outputs.sha }}"
           --head "$GITHUB_SHA"
 
   # La suite Python (agenti, skill, sync, installer) girava solo a mano: per
