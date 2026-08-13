@@ -17,6 +17,7 @@ import * as demo from "@/lib/demo/queries";
 import { resolveCityPins } from "@/lib/city-coords";
 import { salaryPreference } from "@/lib/salary-source";
 import { parsePositionQuery } from "@/lib/position-search";
+import { publicPositionState } from "@/lib/position-state";
 import {
   aggregateRoleFamilies,
   UNCATEGORIZED_LABEL,
@@ -439,6 +440,9 @@ export async function getPositions(
     ]);
     return {
       ...p,
+      public_state: publicPositionState(p.status),
+      has_open_ticket: false,
+      ticket_indicator: "none" as const,
       score: p.score ?? s?.total_score ?? undefined,
       scores: p.scores ?? undefined,
       critic_score: app?.critic_score ?? null,
@@ -492,7 +496,11 @@ export async function getPositions(
       );
       mapped = mapped.map((p) =>
         p.legacy_id != null && waiting.has(p.legacy_id)
-          ? { ...p, has_open_ticket: true }
+          ? {
+              ...p,
+              has_open_ticket: true,
+              ticket_indicator: "pending" as const,
+            }
           : p,
       );
     }

@@ -134,7 +134,7 @@ describe("su cosa si cerca", () => {
 describe("la ricerca NON eredita la vista", () => {
   it("il default che nasconde il 61% si allenta quando si cerca", () => {
     // Il ramo è lo stesso degli stati espliciti: non è un'eccezione nuova.
-    expect(PAGE).toContain("statuses.length || unscored || query");
+    expect(PAGE).toContain("selectedStates.length || unscored || query");
   });
 
   it("il testo arriva alla query, non filtra la pagina", () => {

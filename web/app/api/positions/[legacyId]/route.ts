@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { getPositionById } from "@/lib/queries";
+import {
+  publicApplicationState,
+  publicPositionState,
+} from "@/lib/position-state";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +52,15 @@ export async function GET(
     : null;
 
   return NextResponse.json({
+    state: publicPositionState(position.status),
+    application_state: detail.application
+      ? publicApplicationState(detail.application.status)
+      : null,
+    ticket_indicator: (detail.tickets ?? []).some(
+      (ticket) => ticket.status === "open" || ticket.status === "assigned",
+    )
+      ? "pending"
+      : "none",
     position,
     score,
     highlights: detail.highlights ?? [],

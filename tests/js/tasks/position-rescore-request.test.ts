@@ -17,7 +17,7 @@ process.env.JHT_HOME = home;
 
 const db = new Database(join(home, "jobs.db"));
 db.exec(`
-  CREATE TABLE positions (id INTEGER PRIMARY KEY, title TEXT, company TEXT);
+  CREATE TABLE positions (id INTEGER PRIMARY KEY, title TEXT, company TEXT, status TEXT NOT NULL DEFAULT 'new');
   CREATE TABLE position_tickets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     position_id INTEGER NOT NULL,
@@ -192,8 +192,8 @@ describe("stato e wiring della quarta azione", () => {
     expect(button).toContain("kind: RESCORE_TICKET_KIND");
     expect(button).toContain('body.status !== "open"');
     expect(route).toContain("BEGIN IMMEDIATE");
-    expect(route).toContain('error.code === "23505"');
-    expect(cloudSync).toContain('const RESCORE_KIND = "rescore"');
+    expect(route).toContain('rpc("create_position_ticket"');
+    expect(cloudSync).toContain('rpc("sync_create_position_ticket"');
     expect(cliSync).toContain("findActiveRescore");
 
     for (const suffix of ["", ".it", ".es", ".fr", ".de", ".hu", ".pt"]) {

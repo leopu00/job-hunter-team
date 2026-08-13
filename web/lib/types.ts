@@ -264,6 +264,10 @@ export interface PositionWithScore extends Position {
   // assigned). Deriva dai ticket, non è uno stato salvato: quando il ticket
   // si chiude la posizione torna a mostrare il proprio stato da sé.
   has_open_ticket?: boolean;
+  // Proiezione pubblica unica dello stato tecnico. Il ticket resta un
+  // indicatore separato: non può più sostituire o rinominare lo stato.
+  public_state?: import("./position-state").PublicPositionState;
+  ticket_indicator?: import("./position-state").TicketIndicator;
   // true = già aperta dall'utente (position_views, mig 055). undefined in
   // local mode: lì decide il client via localStorage (vedi UnseenDot).
   seen?: boolean;

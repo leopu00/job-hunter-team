@@ -54,12 +54,10 @@ function updateRequest() {
 }
 
 function partialFailureAdmin() {
-  const insertSingle = vi.fn(async () => ({
-    data: { id: 701 },
+  const rpc = vi.fn(async () => ({
+    data: { id: 701, deduplicated: false },
     error: null,
   }));
-  const insertSelect = vi.fn(() => ({ single: insertSingle }));
-  const insert = vi.fn(() => ({ select: insertSelect }));
 
   const updateMaybeSingle = vi.fn(async () => ({
     data: null,
@@ -70,7 +68,7 @@ function partialFailureAdmin() {
   const updateIdEq = vi.fn(() => ({ eq: updateUserEq }));
   const update = vi.fn(() => ({ eq: updateIdEq }));
 
-  return { admin: { from: vi.fn(() => ({ insert, update })) } };
+  return { admin: { from: vi.fn(() => ({ update })), rpc } };
 }
 
 describe("ticket cloud sync fail-closed", () => {

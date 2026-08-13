@@ -4,10 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { UNCATEGORIZED_LABEL, colorForFamily } from "@/lib/position-classifier";
 import { useLocale } from "@/lib/use-locale";
-import { type Locale } from "@/i18n/config";
 import RangeHistogram, { buildBins, type Range } from "./RangeHistogram";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./PositionsFilterSidebar.i18n";
+import {
+  PUBLIC_POSITION_STATES,
+  PUBLIC_STATE_COLORS,
+  publicPositionStateLabel,
+  type PublicPositionState,
+} from "@/lib/position-state";
 
 // Dataset leggero servito da /api/positions/facets.
 type Facet = {
@@ -34,20 +39,12 @@ type Option = { val: string; label: string; color?: string };
 // Variante interna con chiave di traduzione (risolta a runtime via locale).
 type OptionKey = { val: string; labelKey: string; color?: string };
 
-// Etichette esplicative (stessa terminologia della pipeline del dashboard):
-// chiariscono la fase del workflow invece dello status grezzo. Il `val` resta
-// lo status reale (URL + filtro server), la label è una chiave i18n.
-const STATUS_OPTIONS: OptionKey[] = [
-  { val: "new", labelKey: "st_new", color: "var(--color-muted)" },
-  { val: "checked", labelKey: "st_checked", color: "var(--color-blue)" },
-  { val: "scored", labelKey: "st_scored", color: "var(--color-purple)" },
-  { val: "writing", labelKey: "st_writing", color: "var(--color-yellow)" },
-  { val: "review", labelKey: "st_review", color: "var(--color-orange)" },
-  { val: "ready", labelKey: "st_ready", color: "#7fffb2" },
-  { val: "applied", labelKey: "st_applied", color: "var(--color-green)" },
-  { val: "response", labelKey: "st_response", color: "#58a6ff" },
-  { val: "excluded", labelKey: "st_excluded", color: "var(--color-red)" },
-];
+// La sidebar usa gli stessi stati pubblici della tabella. `review` resta uno
+// stato tecnico interno e confluisce in `preparing` insieme a `writing`.
+const STATUS_OPTIONS = PUBLIC_POSITION_STATES.filter(
+  (state): state is Exclude<PublicPositionState, "needs_attention"> =>
+    state !== "needs_attention",
+);
 
 const REMOTE_OPTIONS: OptionKey[] = [
   { val: "full_remote", labelKey: "rm_full" },
@@ -155,33 +152,27 @@ export default function PositionsFilterSidebar({
     () => [
       {
         key: "fb" as DirectKey,
-        options: FB_OPTIONS.map(
-          (o): Option => ({
-            val: o.val,
-            label: tr(o.labelKey),
-            color: o.color,
-          }),
-        ),
+        options: FB_OPTIONS.map((o): Option => ({
+          val: o.val,
+          label: tr(o.labelKey),
+          color: o.color,
+        })),
       },
       {
         key: "status" as DirectKey,
-        options: STATUS_OPTIONS.map(
-          (o): Option => ({
-            val: o.val,
-            label: tr(o.labelKey),
-            color: o.color,
-          }),
-        ),
+        options: STATUS_OPTIONS.map((state): Option => ({
+          val: state,
+          label: publicPositionStateLabel(state, locale),
+          color: PUBLIC_STATE_COLORS[state],
+        })),
       },
       {
         key: "remote" as DirectKey,
-        options: REMOTE_OPTIONS.map(
-          (o): Option => ({
-            val: o.val,
-            label: tr(o.labelKey),
-            color: o.color,
-          }),
-        ),
+        options: REMOTE_OPTIONS.map((o): Option => ({
+          val: o.val,
+          label: tr(o.labelKey),
+          color: o.color,
+        })),
       },
       {
         key: "source" as DirectKey,

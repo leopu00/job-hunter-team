@@ -27,7 +27,6 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 const ALLOWED_STATUS = new Set(["open", "assigned", "resolved"]);
-const RESCORE_KIND = "rescore";
 
 interface TicketPushIn {
   // id locale SQLite — eco per la correlazione lato CLI (id_map sugli INSERT).
@@ -183,18 +182,6 @@ export async function POST(req: NextRequest) {
       idMap,
     });
 
-  const findActiveRescore = async (positionLegacyId: number) =>
-    admin
-      .from("position_tickets")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("position_legacy_id", positionLegacyId)
-      .eq("kind", RESCORE_KIND)
-      .in("status", ["open", "assigned"])
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
   for (const t of tickets) {
     if (
       !t ||
@@ -272,64 +259,32 @@ export async function POST(req: NextRequest) {
           t.local_id,
         );
       }
-      if (t.kind === RESCORE_KIND) {
-        // Una richiesta equivalente può essere nata sul web mentre il box era
-        // offline. Correlala all'identità cloud esistente: riprovare l'INSERT
-        // a ogni tick lascerebbe il ticket locale senza cloud_id per sempre.
-        const { data: active, error: activeError } = await findActiveRescore(
-          t.position_legacy_id,
-        );
-        if (activeError) {
-          return fail(
-            activeError,
-            500,
-            "cloud-sync/tickets-rescore-lookup",
-            "ticket_query_failed",
-            t.local_id,
-          );
-        }
-        if (active) {
-          idMap[String(t.local_id)] = active.id as number;
-          continue;
-        }
-      }
-      const { data, error } = await admin
-        .from("position_tickets")
-        .insert({
-          user_id: userId,
-          position_legacy_id: t.position_legacy_id,
-          request_text: t.request_text,
-          kind: t.kind ?? "custom",
-          status,
-          assigned_agent: t.assigned_agent ?? null,
-          response_text: t.response_text ?? null,
-          ...(t.created_at ? { created_at: t.created_at } : {}),
-          assigned_at: t.assigned_at ?? null,
-          resolved_at: t.resolved_at ?? null,
-        })
-        .select("id")
-        .single();
-      if (!error && data) {
-        idMap[String(t.local_id)] = data.id as number;
-        inserted++;
-      } else if (t.kind === RESCORE_KIND && error?.code === "23505") {
-        // Race dopo il pre-check: l'indice ha scelto il vincitore, rileggilo.
-        const { data: active, error: activeError } = await findActiveRescore(
-          t.position_legacy_id,
-        );
-        if (activeError || !active) {
-          return fail(
-            activeError ?? new Error("rescore winner missing after conflict"),
-            500,
-            "cloud-sync/tickets-rescore-race",
-            "ticket_insert_failed",
-            t.local_id,
-          );
-        }
-        idMap[String(t.local_id)] = active.id as number;
+      // UUID parent resolution + INSERT/dedup are a single tenant-bound
+      // transaction. The route never writes the relationship directly.
+      const { data, error } = await admin.rpc("sync_create_position_ticket", {
+        p_user_id: userId,
+        p_position_legacy_id: t.position_legacy_id,
+        p_request_text: t.request_text,
+        p_kind: t.kind ?? "custom",
+        p_status: status,
+        p_assigned_agent: t.assigned_agent ?? null,
+        p_response_text: t.response_text ?? null,
+        p_created_at: t.created_at ?? null,
+        p_assigned_at: t.assigned_at ?? null,
+        p_resolved_at: t.resolved_at ?? null,
+      });
+      const receipt = data as Record<string, unknown> | null;
+      if (
+        !error &&
+        receipt &&
+        Number.isInteger(receipt.id) &&
+        typeof receipt.deduplicated === "boolean"
+      ) {
+        idMap[String(t.local_id)] = receipt.id as number;
+        if (!receipt.deduplicated) inserted++;
       } else {
         return fail(
-          error ?? new Error("ticket insert returned no row"),
+          error ?? new Error("ticket RPC returned invalid receipt"),
           500,
           "cloud-sync/tickets-insert",
           "ticket_insert_failed",
