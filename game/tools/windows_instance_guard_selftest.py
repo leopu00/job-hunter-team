@@ -106,6 +106,11 @@ def main() -> None:
     for seam in required_consumer:
         require(seam in consumer, f"missing consumer seam: {seam}")
     require(
+        "not _stdio.store_buffer" not in consumer
+        and "_stdio.get_error() != OK" in consumer,
+        "pipe write must inspect FileAccess error, not the void store_buffer result",
+    )
+    require(
         "ExecutionPolicy" not in consumer and "Bypass" not in consumer,
         "consumer must not override PowerShell policy",
     )
