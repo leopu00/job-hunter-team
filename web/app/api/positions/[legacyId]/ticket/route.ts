@@ -12,6 +12,7 @@ import { JHT_DB_PATH } from "@/lib/jht-paths";
 import { isCloudDeploy } from "@/lib/deploy-mode";
 import { sanitizedError } from "@/lib/error-response";
 import { RESCORE_TICKET_KIND } from "@/lib/rescore-ticket";
+import { publicPositionState } from "@/lib/position-state";
 import { ticketRequestWithAttachment } from "@/lib/ticket-attachment";
 import {
   saveUserDocument,
@@ -106,21 +107,28 @@ export async function POST(
     let deduplicated = false;
     const db = new Database(JHT_DB_PATH);
     let transactionOpen = false;
+    let positionStatus = "new";
     try {
       db.pragma("journal_mode = WAL");
       db.pragma("foreign_keys = ON");
+      // Parent lookup + ticket effect are one write transaction for every
+      // kind, not only rescore. A concurrent delete cannot orphan the ticket.
+      db.exec("BEGIN IMMEDIATE");
+      transactionOpen = true;
       const exists = db
-        .prepare<
-          [number],
-          { id: number }
-        >("SELECT id FROM positions WHERE id = ?")
+        .prepare<[number], { id: number; status: string }>(
+          "SELECT id, status FROM positions WHERE id = ?",
+        )
         .get(legacyId);
       if (!exists) {
+        db.exec("ROLLBACK");
+        transactionOpen = false;
         return NextResponse.json(
           { error: `Posizione #${legacyId} non trovata` },
           { status: 404 },
         );
       }
+      positionStatus = exists.status;
 
       let storedText = text;
       if (attachment) {
@@ -128,6 +136,8 @@ export async function POST(
           const saved = await saveUserDocument(attachment);
           storedText = ticketRequestWithAttachment(text, saved.path);
         } catch (error) {
+          db.exec("ROLLBACK");
+          transactionOpen = false;
           return NextResponse.json(
             {
               error:
@@ -141,16 +151,18 @@ export async function POST(
       }
 
       if (kind === RESCORE_TICKET_KIND) {
-        // Il lock rende atomici controllo+INSERT. L'indice parziale nello
-        // schema è la seconda barriera: due click/processi non possono lasciare
+        // BEGIN IMMEDIATE + indice parziale: due processi non possono lasciare
         // due rivalutazioni attive della stessa posizione.
-        db.exec("BEGIN IMMEDIATE");
-        transactionOpen = true;
         const active = db
           .prepare<
             [number, string],
             { id: number; status: "open" | "assigned" }
-          >("SELECT id, status FROM position_tickets " + "WHERE position_id = ? AND kind = ? " + "AND status IN ('open','assigned') " + "ORDER BY created_at ASC, id ASC LIMIT 1")
+          >(
+            "SELECT id, status FROM position_tickets " +
+              "WHERE position_id = ? AND kind = ? " +
+              "AND status IN ('open','assigned') " +
+              "ORDER BY created_at ASC, id ASC LIMIT 1",
+          )
           .get(legacyId, RESCORE_TICKET_KIND);
         if (active) {
           ticketId = active.id;
@@ -162,6 +174,8 @@ export async function POST(
             id: String(ticketId),
             status: ticketStatus,
             deduplicated,
+            position_state: publicPositionState(positionStatus),
+            ticket_indicator: "pending",
             cloud_synced: false,
             source: "local",
           });
@@ -193,6 +207,8 @@ export async function POST(
       id: String(ticketId),
       status: ticketStatus,
       deduplicated,
+      position_state: publicPositionState(positionStatus),
+      ticket_indicator: "pending",
       cloud_synced: false,
       source: "local",
     });
@@ -202,6 +218,7 @@ export async function POST(
   // desktop nativo col local-token richiede il DB locale: se manca → 503,
   // non passiamo dal cloud (resolveUser→Supabase, che rifiuterebbe il Bearer).
   if (
+    !isCloudDeploy() &&
     isLocalTokenAuthenticated(
       req.headers.get("authorization"),
       (await cookies()).get(LOCAL_TOKEN_COOKIE)?.value,
@@ -217,78 +234,39 @@ export async function POST(
       { status: 403 },
     );
   }
-  const { userId, supabase } = resolved.user;
+  const { supabase } = resolved.user;
 
-  const findActiveRescore = async () =>
-    supabase
-      .from("position_tickets")
-      .select("id, status")
-      .eq("user_id", userId)
-      .eq("position_legacy_id", legacyId)
-      .eq("kind", RESCORE_TICKET_KIND)
-      .in("status", ["open", "assigned"])
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-  if (kind === RESCORE_TICKET_KIND) {
-    const { data: active, error: activeError } = await findActiveRescore();
-    if (activeError) {
-      return sanitizedError(activeError, {
-        status: 500,
-        scope: "positions/[legacyId]/ticket",
-        publicMessage: "query_failed",
-      });
-    }
-    if (active) {
-      return NextResponse.json({
-        id: String(active.id),
-        status: active.status,
-        deduplicated: true,
-        cloud_synced: true,
-        source: "cloud",
-      });
-    }
-  }
-
-  // Cloud-mode: il ticket vive su Supabase (il team lo vedrà al sync — follow-up).
-  const { data, error } = await supabase
-    .from("position_tickets")
-    .insert({
-      user_id: userId,
-      position_legacy_id: legacyId,
-      request_text: text,
-      kind,
-      status: "open",
-    })
-    .select("id")
-    .single();
+  // La RPC risolve e blocca il parent tenant-bound, deduplica il rescore e
+  // inserisce il ticket nella stessa transazione PostgreSQL.
+  const { data, error } = await supabase.rpc("create_position_ticket", {
+    p_position_legacy_id: legacyId,
+    p_request_text: text,
+    p_kind: kind,
+  });
   if (error) {
-    // L'indice parziale chiude la race fra due richieste cloud concorrenti.
-    // Il loser rilegge il ticket vincente e restituisce la sua identità: un
-    // 23505 non diventa un falso errore né crea un canale alternativo.
-    if (kind === RESCORE_TICKET_KIND && error.code === "23505") {
-      const { data: active } = await findActiveRescore();
-      if (active) {
-        return NextResponse.json({
-          id: String(active.id),
-          status: active.status,
-          deduplicated: true,
-          cloud_synced: true,
-          source: "cloud",
-        });
-      }
-    }
     return sanitizedError(error, {
       status: 500,
       scope: "positions/[legacyId]/ticket",
       publicMessage: "insert_failed",
     });
   }
+  const receipt = data as Record<string, unknown> | null;
+  if (
+    !receipt ||
+    typeof receipt.id !== "string" ||
+    (receipt.status !== "open" && receipt.status !== "assigned") ||
+    typeof receipt.position_status !== "string" ||
+    typeof receipt.deduplicated !== "boolean"
+  ) {
+    console.error("[positions/[legacyId]/ticket] invalid RPC receipt");
+    return NextResponse.json({ error: "invalid_ack" }, { status: 502 });
+  }
   return NextResponse.json({
-    id: String(data.id),
-    status: "open",
-    deduplicated: false,
+    id: receipt.id,
+    status: receipt.status,
+    deduplicated: receipt.deduplicated,
+    position_state: publicPositionState(receipt.position_status),
+    ticket_indicator: "pending",
     cloud_synced: true,
     source: "cloud",
   });

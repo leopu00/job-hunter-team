@@ -39,18 +39,8 @@ import { intlTag } from "@/lib/locale-tag";
 import { formatPositionEventStamp } from "@/lib/position-event-stamp";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";
-
-const STATUS_COLORS: Record<string, string> = {
-  new: "var(--color-muted)",
-  checked: "var(--color-blue)",
-  scored: "var(--color-purple)",
-  writing: "var(--color-yellow)",
-  review: "var(--color-orange)",
-  ready: "var(--color-ready)",
-  applied: "var(--color-green)",
-  response: "#58a6ff",
-  excluded: "var(--color-red)",
-};
+import PositionStateCell from "@/app/components/PositionStateCell";
+import { positionStatusesForFilters } from "@/lib/position-state";
 
 function formatFoundAt(ts: string | null | undefined, locale: string) {
   if (!ts) return "—";
@@ -220,7 +210,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     (s, c) => s + POSITIONS_COL_MIN_WIDTH[c],
     0,
   );
-  const statuses = csv(params.status);
+  const selectedStates = csv(params.status);
+  const statuses = positionStatusesForFilters(selectedStates);
   const remotes = csv(params.remote);
   const sources = csv(params.source);
   const verdicts = csv(params.verdict);
@@ -312,7 +303,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // il default avrebbe nascosto restano riconoscibili: la colonna Stato dice
   // già "excluded", e le senza punteggio mostrano "—" nello Score.
   let positions =
-    statuses.length || unscored || query
+    selectedStates.length || unscored || query
       ? allPositions
       : allPositions.filter(
           (p) =>
@@ -346,7 +337,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     overrides: Partial<Record<"sort" | "dir" | "page" | "pageSize", string>>,
   ) => {
     const merged: Record<string, string> = {};
-    if (statuses.length) merged.status = statuses.join(",");
+    if (selectedStates.length) merged.status = selectedStates.join(",");
     if (remotes.length) merged.remote = remotes.join(",");
     if (sources.length) merged.source = sources.join(",");
     if (verdicts.length) merged.verdict = verdicts.join(",");
@@ -1000,38 +991,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Stato */}
                       {show("status") && (
                         <td className="px-4 py-3 text-center">
-                          {/* O-31: un ticket senza risposta prevale sullo
-                              stato della pipeline — è quello che l'utente
-                              sta aspettando. Non è uno stato salvato: quando
-                              il ticket si chiude questa riga torna da sola a
-                              mostrare lo stato della posizione. */}
-                          {p.has_open_ticket ? (
-                            <span
-                              title={tr("status_ticket_pending_full")}
-                              className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
-                              style={{
-                                color: "var(--color-yellow)",
-                                borderColor: "var(--color-yellow)",
-                                background: "var(--color-yellow)18",
-                              }}
-                            >
-                              {tr("status_ticket_pending")}
-                            </span>
-                          ) : (
-                            <span
-                              className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
-                              style={{
-                                color:
-                                  STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                                borderColor:
-                                  STATUS_COLORS[p.status] ??
-                                  "var(--color-border)",
-                                background: `${STATUS_COLORS[p.status]}18`,
-                              }}
-                            >
-                              {p.status}
-                            </span>
-                          )}
+                          <PositionStateCell
+                            status={p.status}
+                            hasOpenTicket={p.has_open_ticket}
+                            locale={locale}
+                          />
                         </td>
                       )}
                       {/* CV scritto il: ordinata crescente dice DA QUANTO un

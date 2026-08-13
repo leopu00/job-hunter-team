@@ -26,7 +26,7 @@ const requireFromWeb = createRequire(join(repo, "web/package.json"));
 const Database = requireFromWeb("better-sqlite3");
 const db = new Database(join(home, "jobs.db"));
 db.exec(`
-  CREATE TABLE positions (id INTEGER PRIMARY KEY, title TEXT, company TEXT);
+  CREATE TABLE positions (id INTEGER PRIMARY KEY, title TEXT, company TEXT, status TEXT NOT NULL DEFAULT 'new');
   CREATE TABLE position_tickets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     position_id INTEGER NOT NULL,
