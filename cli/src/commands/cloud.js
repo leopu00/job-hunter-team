@@ -1579,14 +1579,15 @@ async function performPush(options) {
     outcome.up.position_transitions += b.position_transitions?.upserted ?? 0;
   };
 
-  const safeServerCode = (body) =>
-    typeof body?.error === 'string' && /^[a-z0-9][a-z0-9_:-]{0,119}$/.test(body.error);
   const canIsolate = (res) => {
     if (res.network || res.timedOut) return false;
     if ([401, 403, 429].includes(res.status)) return false;
     if (res.status === 409 && res.body?.error === 'not_active_device') return false;
     if (res.status === 413 || [400, 409, 422].includes(res.status)) return true;
-    return res.status >= 500 && res.status < 600 && safeServerCode(res.body);
+    // A sanitized code says what failed, not whether one row caused it.  A
+    // 5xx stays convoy-wide unless the server explicitly attests row scope.
+    return res.status >= 500 && res.status < 600 &&
+      res.body?.rejection_scope === 'row';
   };
 
   // Bisection makes a final singleton attributable. Only a durable quarantine

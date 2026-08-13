@@ -120,7 +120,7 @@ describe("cloud push record isolation — real writer path", () => {
               error: "applications_upsert_failed",
               detail: "synthetic server detail must not be persisted",
             },
-            500,
+            422,
           );
         }
         if (table === "applications")
@@ -206,7 +206,7 @@ describe("cloud push record isolation — real writer path", () => {
         const table = Object.keys(body)[0];
         const rows = body[table] as Array<unknown>;
         if (table === "applications")
-          return jsonResponse({ error: "applications_upsert_failed" }, 500);
+          return jsonResponse({ error: "application_row_rejected" }, 422);
         return jsonResponse({
           accepted: { [table]: rows.length },
           [table]: { upserted: rows.length },
@@ -227,6 +227,39 @@ describe("cloud push record isolation — real writer path", () => {
     );
     expect(cursor.positions).toBe("2026-08-13 10:02:00");
     expect(cursor.applications).toBeUndefined();
+  });
+
+  it("keeps a classified 5xx convoy-wide without blaming or acknowledging a row", async () => {
+    const { home, dbPath } = fixture();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}"));
+        const table = Object.keys(body)[0];
+        const rows = body[table] as Array<unknown>;
+        if (table === "applications")
+          return jsonResponse({ error: "applications_upsert_failed" }, 500);
+        return jsonResponse({
+          accepted: { [table]: rows.length },
+          [table]: { upserted: rows.length },
+        });
+      }),
+    );
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.resetModules();
+    const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+
+    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject({
+      ok: false,
+      skipped: 0,
+    });
+    expect(
+      readFileSync(join(home, ".cloud-sync-cursor.json"), "utf8"),
+    ).toContain("positions");
+    expect(() =>
+      readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
+    ).toThrow();
   });
 
   it("does not checkpoint a timestamp shared with an unsettled row", async () => {
@@ -285,7 +318,13 @@ describe("cloud push record isolation — real writer path", () => {
         if (table === "applications") {
           applicationBatches.push(rows.map((row) => row.position_id!));
           if (reject && rows.some((row) => row.position_id === 2))
-            return jsonResponse({ error: "applications_upsert_failed" }, 500);
+            return jsonResponse(
+              {
+                error: "applications_upsert_failed",
+                rejection_scope: "row",
+              },
+              500,
+            );
         }
         return jsonResponse({
           accepted: { [table]: rows.length },
@@ -338,7 +377,13 @@ describe("cloud push record isolation — real writer path", () => {
         if (table === "applications") {
           applicationBatches.push(rows.map((row) => row.position_id!));
           if (reject && rows.some((row) => row.position_id === 2))
-            return jsonResponse({ error: "applications_upsert_failed" }, 500);
+            return jsonResponse(
+              {
+                error: "applications_upsert_failed",
+                rejection_scope: "row",
+              },
+              500,
+            );
         }
         return jsonResponse({
           accepted: { [table]: rows.length },

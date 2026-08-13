@@ -7,7 +7,14 @@
  * details cannot leak through diagnostics or support bundles.
  */
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+} from "node:fs";
 import { join } from "node:path";
 import { JHT_HOME } from "../jht-paths.js";
 import { writePrivateJson } from "./secure-config-io.js";
@@ -31,6 +38,50 @@ export const QUARANTINE_TABLES = Object.freeze([
 
 const TABLE_SET = new Set(QUARANTINE_TABLES);
 const SAFE_REASON = /^[a-z0-9][a-z0-9_:-]{0,119}$/;
+const LOCK_WAIT_MS = 10;
+const LOCK_TIMEOUT_MS = 2_000;
+const LOCK_STALE_MS = 30_000;
+const LOCK_SLEEP = new Int32Array(new SharedArrayBuffer(4));
+
+function sleepSync(ms) {
+  Atomics.wait(LOCK_SLEEP, 0, 0, ms);
+}
+
+/** Serialize daemon/manual CLI read-modify-write cycles across processes. */
+function withStateLock(path, action) {
+  const lockPath = `${path}.lock`;
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  let fd;
+  while (fd === undefined) {
+    try {
+      fd = openSync(lockPath, "wx", 0o600);
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      try {
+        if (Date.now() - statSync(lockPath).mtimeMs > LOCK_STALE_MS) {
+          unlinkSync(lockPath);
+          continue;
+        }
+      } catch (statError) {
+        if (statError?.code !== "ENOENT") throw statError;
+        continue;
+      }
+      if (Date.now() >= deadline)
+        throw new Error("cloud push quarantine lock timeout");
+      sleepSync(LOCK_WAIT_MS);
+    }
+  }
+  try {
+    return action();
+  } finally {
+    closeSync(fd);
+    try {
+      unlinkSync(lockPath);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+}
 
 function stableKey(table, row) {
   switch (table) {
@@ -132,10 +183,12 @@ function saveState(state, path, now) {
 export function clearCorruptQuarantine(
   { path = CLOUD_PUSH_QUARANTINE_FILE, now = Date.now() } = {},
 ) {
-  const state = readCloudPushQuarantine(path);
-  if (state.corrupt !== true) return false;
-  saveState(emptyState(), path, now);
-  return true;
+  return withStateLock(path, () => {
+    const state = readCloudPushQuarantine(path);
+    if (state.corrupt !== true) return false;
+    saveState(emptyState(), path, now);
+    return true;
+  });
 }
 
 export function quarantineRow({
@@ -149,65 +202,71 @@ export function quarantineRow({
     throw new Error(`unsupported quarantine table: ${table}`);
   if (!SAFE_REASON.test(String(reason || "")))
     throw new Error("unsafe quarantine reason");
-  const state = readCloudPushQuarantine(path);
-  const identity = quarantineIdentity(table, row);
-  const at = new Date(now).toISOString();
-  const existing = state.entries.find((entry) => entry.identity === identity);
-  if (existing) {
-    existing.reason = reason;
-    existing.attempts += 1;
-    existing.last_failed_at = at;
-    existing.status = "active";
-    delete existing.retry_requested_at;
-    delete existing.resolved_at;
-  } else {
-    state.entries.push({
-      identity,
-      table,
-      reason,
-      attempts: 1,
-      first_failed_at: at,
-      last_failed_at: at,
-      status: "active",
-    });
-  }
-  saveState(state, path, now);
-  return identity;
+  return withStateLock(path, () => {
+    const state = readCloudPushQuarantine(path);
+    const identity = quarantineIdentity(table, row);
+    const at = new Date(now).toISOString();
+    const existing = state.entries.find((entry) => entry.identity === identity);
+    if (existing) {
+      existing.reason = reason;
+      existing.attempts += 1;
+      existing.last_failed_at = at;
+      existing.status = "active";
+      delete existing.retry_requested_at;
+      delete existing.resolved_at;
+    } else {
+      state.entries.push({
+        identity,
+        table,
+        reason,
+        attempts: 1,
+        first_failed_at: at,
+        last_failed_at: at,
+        status: "active",
+      });
+    }
+    saveState(state, path, now);
+    return identity;
+  });
 }
 
 export function requestQuarantineRetry(
   identity,
   { path = CLOUD_PUSH_QUARANTINE_FILE, now = Date.now() } = {},
 ) {
-  const state = readCloudPushQuarantine(path);
-  const targets = state.entries.filter(
-    (entry) =>
-      entry.status !== "resolved" &&
-      (identity === "all" || entry.identity === identity),
-  );
-  if (targets.length === 0) return { changed: 0, state };
-  const at = new Date(now).toISOString();
-  for (const entry of targets) {
-    entry.status = "retry";
-    entry.retry_requested_at = at;
-  }
-  return { changed: targets.length, state: saveState(state, path, now) };
+  return withStateLock(path, () => {
+    const state = readCloudPushQuarantine(path);
+    const targets = state.entries.filter(
+      (entry) =>
+        entry.status !== "resolved" &&
+        (identity === "all" || entry.identity === identity),
+    );
+    if (targets.length === 0) return { changed: 0, state };
+    const at = new Date(now).toISOString();
+    for (const entry of targets) {
+      entry.status = "retry";
+      entry.retry_requested_at = at;
+    }
+    return { changed: targets.length, state: saveState(state, path, now) };
+  });
 }
 
 export function resolveQuarantine(
   identity,
   { path = CLOUD_PUSH_QUARANTINE_FILE, now = Date.now() } = {},
 ) {
-  const state = readCloudPushQuarantine(path);
-  const entry = state.entries.find(
-    (candidate) =>
-      candidate.identity === identity && candidate.status !== "resolved",
-  );
-  if (!entry) return { changed: 0, state };
-  entry.status = "resolved";
-  entry.resolved_at = new Date(now).toISOString();
-  delete entry.retry_requested_at;
-  return { changed: 1, state: saveState(state, path, now) };
+  return withStateLock(path, () => {
+    const state = readCloudPushQuarantine(path);
+    const entry = state.entries.find(
+      (candidate) =>
+        candidate.identity === identity && candidate.status !== "resolved",
+    );
+    if (!entry) return { changed: 0, state };
+    entry.status = "resolved";
+    entry.resolved_at = new Date(now).toISOString();
+    delete entry.retry_requested_at;
+    return { changed: 1, state: saveState(state, path, now) };
+  });
 }
 
 /** A confirmed retry is resolved only after the server response was read. */
@@ -217,24 +276,28 @@ export function resolveConfirmedRetries(
   { path = CLOUD_PUSH_QUARANTINE_FILE, now = Date.now() } = {},
 ) {
   if (!rows.length) return 0;
-  const state = readCloudPushQuarantine(path);
-  const identities = new Set(rows.map((row) => quarantineIdentity(table, row)));
-  let changed = 0;
-  const at = new Date(now).toISOString();
-  for (const entry of state.entries) {
-    if (
-      entry.table === table &&
-      entry.status === "retry" &&
-      identities.has(entry.identity)
-    ) {
-      entry.status = "resolved";
-      entry.resolved_at = at;
-      delete entry.retry_requested_at;
-      changed += 1;
+  return withStateLock(path, () => {
+    const state = readCloudPushQuarantine(path);
+    const identities = new Set(
+      rows.map((row) => quarantineIdentity(table, row)),
+    );
+    let changed = 0;
+    const at = new Date(now).toISOString();
+    for (const entry of state.entries) {
+      if (
+        entry.table === table &&
+        entry.status === "retry" &&
+        identities.has(entry.identity)
+      ) {
+        entry.status = "resolved";
+        entry.resolved_at = at;
+        delete entry.retry_requested_at;
+        changed += 1;
+      }
     }
-  }
-  if (changed > 0) saveState(state, path, now);
-  return changed;
+    if (changed > 0) saveState(state, path, now);
+    return changed;
+  });
 }
 
 export function activeQuarantineEntries(state) {

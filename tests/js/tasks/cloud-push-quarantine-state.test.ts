@@ -3,8 +3,10 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -27,6 +29,42 @@ const makeFile = () => {
   dirs.push(dir);
   return join(dir, "quarantine.json");
 };
+
+function childWriter(path: string, id: number) {
+  const moduleUrl = new URL(
+    "../../../cli/src/lib/cloud-push-quarantine.js",
+    import.meta.url,
+  ).href;
+  const source = `
+    const q = await import(process.env.JHT_TEST_QUARANTINE_MODULE);
+    q.quarantineRow({
+      table: "positions",
+      row: { id: Number(process.env.JHT_TEST_QUARANTINE_ID) },
+      reason: "http_422:record_rejected",
+      path: process.env.JHT_TEST_QUARANTINE_PATH,
+    });
+  `;
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
+      env: {
+        ...process.env,
+        JHT_TEST_QUARANTINE_MODULE: moduleUrl,
+        JHT_TEST_QUARANTINE_PATH: path,
+        JHT_TEST_QUARANTINE_ID: String(id),
+      },
+      stdio: "pipe",
+    });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`child writer ${id} failed (${code}): ${stderr}`));
+    });
+  });
+}
 
 afterEach(() => {
   for (const dir of dirs.splice(0))
@@ -107,6 +145,53 @@ describe("cloud push quarantine metadata", () => {
     expect(activeQuarantineEntries(readCloudPushQuarantine(path))).toEqual([]);
   });
 
+  it("keeps tied tombstones/transitions and timestamp-less messages distinct", () => {
+    const at = "2026-08-13T10:00:00.000Z";
+    expect(
+      quarantineIdentity("tombstones", {
+        table_name: "positions",
+        legacy_id: 1,
+        deleted_at: at,
+      }),
+    ).not.toBe(
+      quarantineIdentity("tombstones", {
+        table_name: "positions",
+        legacy_id: 2,
+        deleted_at: at,
+      }),
+    );
+    expect(
+      quarantineIdentity("position_transitions", {
+        position_legacy_id: 1,
+        ts: at,
+        by_agent: "SCOUT",
+        to_state: "review",
+      }),
+    ).not.toBe(
+      quarantineIdentity("position_transitions", {
+        position_legacy_id: 2,
+        ts: at,
+        by_agent: "SCOUT",
+        to_state: "review",
+      }),
+    );
+    const messages = [{ id: 11 }, { id: 12 }];
+    const path = makeFile();
+    quarantineRow({
+      table: "pending_user_messages",
+      row: messages[0],
+      reason: "http_422:record_rejected",
+      path,
+    });
+    expect(
+      partitionQuarantinedRows(
+        "pending_user_messages",
+        messages,
+        readCloudPushQuarantine(path),
+      ),
+    ).toEqual({ send: [messages[1]], held: [messages[0]] });
+  });
+
   it("keeps resolved history and never accepts raw server prose as a reason", () => {
     const path = makeFile();
     const row = { id: 7 };
@@ -135,5 +220,24 @@ describe("cloud push quarantine metadata", () => {
       entries: [],
       corrupt: true,
     });
+  });
+
+  it("serializes overlapping writers across real processes without lost updates", async () => {
+    const path = makeFile();
+    const lockPath = `${path}.lock`;
+    writeFileSync(lockPath, "", { mode: 0o600 });
+    const blocked = childWriter(path, 1);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(() => readFileSync(path, "utf8")).toThrow();
+    unlinkSync(lockPath);
+    await blocked;
+
+    await Promise.all(
+      Array.from({ length: 8 }, (_, index) => childWriter(path, index + 2)),
+    );
+    const state = readCloudPushQuarantine(path);
+    expect(state.corrupt).not.toBe(true);
+    expect(state.entries).toHaveLength(9);
+    expect(new Set(state.entries.map((entry) => entry.identity)).size).toBe(9);
   });
 });
