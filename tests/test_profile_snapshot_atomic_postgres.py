@@ -14,6 +14,10 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+IDENTITY_MIGRATION = ROOT / "supabase/migrations/076_application_sync_identity.sql"
+APPLICATION_HOTFIX_MIGRATION = (
+    ROOT / "supabase/migrations/077_application_mark_undo_hotfix.sql"
+)
 WRITER_MIGRATION = ROOT / "supabase/migrations/078_positions_write_request_kind.sql"
 DIRECTIVE_MIGRATION = ROOT / "supabase/migrations/079_team_directive_events_atomic.sql"
 MIGRATION = ROOT / "supabase/migrations/080_profile_snapshot_atomic.sql"
@@ -107,7 +111,33 @@ def postgres16():
               SELECT NULLIF(current_setting('request.jwt.claim.sub', TRUE), '')::UUID
             $$;
 
-            CREATE TABLE public.positions (id UUID PRIMARY KEY);
+            CREATE TABLE public.positions (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id UUID NOT NULL REFERENCES auth.users(id),
+              legacy_id INTEGER, status TEXT, last_actor TEXT
+            );
+            CREATE UNIQUE INDEX positions_user_legacy
+              ON public.positions(user_id, legacy_id);
+            CREATE TABLE public.applications (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL,
+              position_id UUID UNIQUE, cv_path TEXT, cv_pdf_path TEXT,
+              cl_path TEXT, cl_pdf_path TEXT, status TEXT, critic_score REAL,
+              critic_verdict TEXT, critic_notes TEXT, critic_round INTEGER,
+              written_at TIMESTAMPTZ, applied_at TIMESTAMPTZ, applied_via TEXT,
+              response TEXT, response_at TIMESTAMPTZ, written_by TEXT,
+              reviewed_by TEXT, critic_reviewed_at TIMESTAMPTZ, applied BOOLEAN,
+              cv_drive_id TEXT, cl_drive_id TEXT
+            );
+            CREATE TABLE public.scores (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID,
+              position_id UUID
+            );
+            CREATE TABLE public.position_transitions (
+              id BIGSERIAL PRIMARY KEY, user_id UUID,
+              position_legacy_id INTEGER, from_state TEXT, to_state TEXT,
+              ts TIMESTAMPTZ, by_agent TEXT, notes TEXT,
+              UNIQUE (user_id, position_legacy_id, ts, by_agent, to_state)
+            );
             CREATE TABLE public.pending_user_messages (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -202,8 +232,10 @@ def postgres16():
               public.candidate_skills TO authenticated;
             """
         )
-        # Exercise the real release order itself, not migration 080 in
-        # isolation: O-80 owns 079 and O-85 must remain applicable after it.
+        # Exercise the full release order from the last pre-identity schema,
+        # not migration 080 in isolation.
+        psql(IDENTITY_MIGRATION.read_text(encoding="utf-8"))
+        psql(APPLICATION_HOTFIX_MIGRATION.read_text(encoding="utf-8"))
         psql(WRITER_MIGRATION.read_text(encoding="utf-8"))
         psql(DIRECTIVE_MIGRATION.read_text(encoding="utf-8"))
         # Reapplication is part of the contract: release retries must be safe.
@@ -480,6 +512,12 @@ def test_release_migration_sequence_and_prefix_census(postgres16):
                     AND column_name='write_request_kind'
                ),
                to_regprocedure(
+                 'public.sync_upsert_applications(uuid,jsonb)'
+               ) IS NOT NULL,
+               to_regprocedure(
+                 'public.mark_position_applied(integer,timestamptz,text,text)'
+               ) IS NOT NULL,
+               to_regprocedure(
                  'public.mutate_team_directive_with_event(bigint,text,text,text,text)'
                ) IS NOT NULL,
                to_regprocedure(
@@ -487,4 +525,4 @@ def test_release_migration_sequence_and_prefix_census(postgres16):
                ) IS NOT NULL;
         """
     ).stdout.strip()
-    assert contracts == "t|t|t"
+    assert contracts == "t|t|t|t|t"
