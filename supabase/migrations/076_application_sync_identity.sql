@@ -1,4 +1,4 @@
--- Application identity is independent from position identity.
+-- Child-row identity is independent from position identity.
 --
 -- SQLite has two integer keys on every application row:
 --   applications.id          -> applications.legacy_id
@@ -7,6 +7,46 @@
 -- or acknowledge the application's own identity.  Keep the cloud UUID as the
 -- primary key, and store the local application key as a tenant-scoped origin
 -- key like the other synced entities.
+
+-- Scores have the same two-key shape. Keep existing cloud-only scores NULL:
+-- there is no safe source id to backfill. The first sync may claim a NULL row,
+-- after which neither its source identity nor parent may change.
+ALTER TABLE public.scores
+  ADD COLUMN IF NOT EXISTS legacy_id INTEGER;
+
+CREATE UNIQUE INDEX IF NOT EXISTS scores_user_legacy_uidx
+  ON public.scores (user_id, legacy_id)
+  WHERE legacy_id IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION public.guard_score_sync_identity()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF NEW.legacy_id IS NOT NULL AND NEW.legacy_id <= 0 THEN
+        RAISE EXCEPTION 'invalid_score_identity';
+    END IF;
+    IF TG_OP = 'UPDATE'
+       AND OLD.legacy_id IS NOT NULL
+       AND (
+           NEW.legacy_id IS DISTINCT FROM OLD.legacy_id
+           OR NEW.user_id IS DISTINCT FROM OLD.user_id
+           OR NEW.position_id IS DISTINCT FROM OLD.position_id
+       ) THEN
+        RAISE EXCEPTION 'score_identity_mismatch';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS scores_sync_identity_guard ON public.scores;
+CREATE TRIGGER scores_sync_identity_guard
+BEFORE INSERT OR UPDATE OF legacy_id, user_id, position_id
+ON public.scores
+FOR EACH ROW
+EXECUTE FUNCTION public.guard_score_sync_identity();
 
 ALTER TABLE public.applications
   ADD COLUMN IF NOT EXISTS legacy_id INTEGER;

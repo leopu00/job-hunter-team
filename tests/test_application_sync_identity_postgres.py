@@ -123,9 +123,24 @@ def postgres16():
               FOREIGN KEY (user_id, position_id)
                 REFERENCES public.positions (user_id, id)
             );
+            CREATE TABLE public.scores (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id UUID NOT NULL REFERENCES auth.users(id),
+              position_id UUID NOT NULL,
+              total_score INTEGER NOT NULL,
+              experience_fit INTEGER, salary_fit INTEGER,
+              stack_match INTEGER, remote_fit INTEGER, strategic_fit INTEGER,
+              breakdown TEXT, notes TEXT, scored_by TEXT,
+              scored_at TIMESTAMPTZ,
+              UNIQUE (position_id),
+              FOREIGN KEY (user_id, position_id)
+                REFERENCES public.positions (user_id, id)
+            );
             ALTER TABLE public.positions ENABLE ROW LEVEL SECURITY;
             ALTER TABLE public.applications ENABLE ROW LEVEL SECURITY;
-            GRANT SELECT, INSERT, UPDATE ON public.positions, public.applications
+            ALTER TABLE public.scores ENABLE ROW LEVEL SECURITY;
+            GRANT SELECT, INSERT, UPDATE ON
+              public.positions, public.applications, public.scores
               TO service_role;
 
             INSERT INTO public.positions (id, user_id, legacy_id, status) VALUES
@@ -143,6 +158,12 @@ def postgres16():
             VALUES (
               '30000000-0000-0000-0000-000000000193', '{USER_1}',
               '10000000-0000-0000-0000-000000000042', 'draft'
+            );
+            INSERT INTO public.scores (
+              id, user_id, position_id, total_score
+            ) VALUES (
+              '40000000-0000-0000-0000-000000000088', '{USER_1}',
+              '10000000-0000-0000-0000-000000000042', 70
             );
             """
         )
@@ -168,6 +189,33 @@ def _rpc_sql(rows, *, user_id=USER_1):
     return (
         f"SELECT public.sync_upsert_applications('{user_id}', "
         f"$json${payload}$json$::jsonb);"
+    )
+
+
+def _score_upsert_sql(*, legacy_id, position_legacy_id, total_score=80):
+    return f"""
+        INSERT INTO public.scores (
+          user_id, position_id, legacy_id, total_score
+        )
+        SELECT '{USER_1}', position.id, {legacy_id}, {total_score}
+          FROM public.positions AS position
+         WHERE position.user_id = '{USER_1}'
+           AND position.legacy_id = {position_legacy_id}
+        ON CONFLICT (position_id) DO UPDATE SET
+          legacy_id = EXCLUDED.legacy_id,
+          total_score = EXCLUDED.total_score
+        RETURNING legacy_id, position_id;
+    """
+
+
+def _score_upsert(psql, *, legacy_id, position_legacy_id, check=True):
+    return psql(
+        _score_upsert_sql(
+            legacy_id=legacy_id,
+            position_legacy_id=position_legacy_id,
+        ),
+        role="service_role",
+        check=check,
     )
 
 
@@ -205,6 +253,29 @@ def _overlap(psql, first_rows, second_rows):
     time.sleep(0.15)
     second = subprocess.Popen(
         [*argv, _rpc_sql(second_rows)],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    results = [first.communicate(timeout=15), second.communicate(timeout=15)]
+    return first.returncode, second.returncode, results
+
+
+def _overlap_sql(psql, first_sql, second_sql):
+    argv = [
+        "docker", "exec", "-i", psql.container_name,
+        "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
+        "-U", "service_role", "-d", "postgres", "-At", "-F", "|", "-c",
+    ]
+    first = subprocess.Popen(
+        [*argv, "BEGIN; " + first_sql + " SELECT pg_sleep(0.5); COMMIT;"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    time.sleep(0.15)
+    second = subprocess.Popen(
+        [*argv, second_sql],
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -387,6 +458,85 @@ def test_late_batch_mismatch_rolls_back_earlier_insert(postgres16):
     ).stdout.strip() == "0"
 
 
+def test_score_identity_repairs_null_inserts_and_retries_idempotently(postgres16):
+    psql = postgres16
+    assert psql(
+        "SELECT legacy_id IS NULL FROM public.scores "
+        "WHERE id = '40000000-0000-0000-0000-000000000088';"
+    ).stdout.strip() == "t"
+    repaired = _score_upsert(psql, legacy_id=88, position_legacy_id=42)
+    assert repaired.stdout.strip().startswith("88|")
+    inserted = _score_upsert(psql, legacy_id=89, position_legacy_id=43)
+    assert inserted.stdout.strip().startswith("89|")
+    retry = _score_upsert(psql, legacy_id=89, position_legacy_id=43)
+    assert retry.stdout == inserted.stdout
+    state = psql(
+        f"""
+        SELECT score.legacy_id, position.legacy_id, score.id
+          FROM public.scores AS score
+          JOIN public.positions AS position ON position.id = score.position_id
+         WHERE score.user_id = '{USER_1}'
+         ORDER BY score.legacy_id;
+        """
+    ).stdout.strip().splitlines()
+    assert state[0] == "88|42|40000000-0000-0000-0000-000000000088"
+    assert state[1].split("|")[:2] == ["89", "43"]
+
+
+def test_score_identity_mismatch_and_collision_fail_closed(postgres16):
+    wrong_source = _score_upsert(
+        postgres16,
+        legacy_id=90,
+        position_legacy_id=42,
+        check=False,
+    )
+    assert wrong_source.returncode != 0
+    assert "score_identity_mismatch" in wrong_source.stderr
+
+    moved_source = _score_upsert(
+        postgres16,
+        legacy_id=88,
+        position_legacy_id=47,
+        check=False,
+    )
+    assert moved_source.returncode != 0
+    assert "unique constraint" in moved_source.stderr.lower()
+    assert postgres16(
+        f"SELECT count(*) FROM public.scores WHERE user_id = '{USER_1}' "
+        "AND legacy_id = 88;"
+    ).stdout.strip() == "1"
+
+
+def test_concurrent_score_ids_for_same_position_have_one_winner(postgres16):
+    first_rc, second_rc, results = _overlap_sql(
+        postgres16,
+        _score_upsert_sql(legacy_id=91, position_legacy_id=48),
+        _score_upsert_sql(legacy_id=92, position_legacy_id=48),
+    )
+    assert first_rc == 0, results
+    assert second_rc != 0, results
+    assert "score_identity_mismatch" in results[1][1]
+    assert postgres16(
+        f"SELECT legacy_id FROM public.scores WHERE user_id = '{USER_1}' "
+        "AND position_id = '10000000-0000-0000-0000-000000000048';"
+    ).stdout.strip() == "91"
+
+
+def test_concurrent_same_score_id_for_two_positions_has_one_winner(postgres16):
+    first_rc, second_rc, results = _overlap_sql(
+        postgres16,
+        _score_upsert_sql(legacy_id=93, position_legacy_id=44),
+        _score_upsert_sql(legacy_id=93, position_legacy_id=45),
+    )
+    assert first_rc == 0, results
+    assert second_rc != 0, results
+    assert "unique constraint" in results[1][1].lower()
+    assert postgres16(
+        f"SELECT count(*) FROM public.scores WHERE user_id = '{USER_1}' "
+        "AND legacy_id = 93;"
+    ).stdout.strip() == "1"
+
+
 def test_execute_is_service_role_only_and_migration_reapplies(postgres16):
     psql = postgres16
     psql(MIGRATION.read_text(encoding="utf-8"))
@@ -402,6 +552,22 @@ def test_execute_is_service_role_only_and_migration_reapplies(postgres16):
         """
     ).stdout.strip()
     assert privileges == "f|f|t"
+    score_contract = psql(
+        """
+        SELECT
+          EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'scores'
+               AND column_name = 'legacy_id'
+          ),
+          to_regclass('public.scores_user_legacy_uidx') IS NOT NULL,
+          EXISTS (
+            SELECT 1 FROM pg_trigger
+             WHERE tgname = 'scores_sync_identity_guard' AND NOT tgisinternal
+          );
+        """
+    ).stdout.strip()
+    assert score_contract == "t|t|t"
 
     denied = psql(
         f"SET ROLE anon; SELECT public.sync_upsert_applications('{USER_1}', '[]');",

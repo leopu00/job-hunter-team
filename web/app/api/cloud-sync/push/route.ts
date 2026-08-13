@@ -729,14 +729,17 @@ export async function POST(req: NextRequest) {
     }
 
     const scoreReceiptByUuid = new Map<string, string>();
+    const scoreLegacyByUuid = new Map<string, number>();
     const payload = scores
       .map((s) => {
         const uuid = legacyToUuid.get(s.position_id);
         if (!uuid || typeof s.total_score !== "number") return null;
         scoreReceiptByUuid.set(uuid, sourceReceiptId("scores", s.legacy_id));
+        scoreLegacyByUuid.set(uuid, s.legacy_id);
         return {
           user_id: userId,
           position_id: uuid,
+          legacy_id: s.legacy_id,
           total_score: Math.max(0, Math.min(100, Math.round(s.total_score))),
           experience_fit: s.experience_fit ?? null,
           salary_fit: s.salary_fit ?? null,
@@ -762,7 +765,7 @@ export async function POST(req: NextRequest) {
       const { data: upserted, error } = await admin
         .from("scores")
         .upsert(payload, { onConflict: "position_id" })
-        .select("position_id");
+        .select("position_id, legacy_id");
 
       if (error) {
         return sanitizedError(error, {
@@ -772,7 +775,11 @@ export async function POST(req: NextRequest) {
         });
       }
       const persistedReceiptIds = Array.isArray(upserted)
-        ? upserted.map((row) => scoreReceiptByUuid.get(row.position_id) ?? null)
+        ? upserted.map((row) =>
+            row.legacy_id === scoreLegacyByUuid.get(row.position_id)
+              ? (scoreReceiptByUuid.get(row.position_id) ?? null)
+              : null,
+          )
         : [];
       const completeReceipt =
         persistedReceiptIds.length === payload.length &&

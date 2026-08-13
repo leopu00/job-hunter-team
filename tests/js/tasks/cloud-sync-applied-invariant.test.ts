@@ -15,6 +15,7 @@ let rpcError: string | null = null;
 let applicationReceipts: unknown[] | null = null;
 let selectedPositions: { id: string; legacy_id: number }[] = [];
 let scorePersistedParents: string[] | null = null;
+let scorePersistedLegacyOverride: number | null = null;
 
 function fakeAdmin() {
   return {
@@ -53,8 +54,16 @@ function fakeAdmin() {
               ? [{ id: "position-uuid-73", legacy_id: 73 }]
               : operation === "upsert" && table === "scores"
                 ? (scorePersistedParents ??
-                  writtenPayload.map((row: any) => row.position_id))
-                    .map((position_id: string) => ({ position_id }))
+                  writtenPayload.map((row: any) => row.position_id)).map(
+                    (position_id: string) => ({
+                      position_id,
+                      legacy_id:
+                        scorePersistedLegacyOverride ??
+                        writtenPayload.find(
+                          (row: any) => row.position_id === position_id,
+                        )?.legacy_id,
+                    }),
+                  )
                 : operation === "upsert" && table === "applications"
                   ? [{ id: "application-uuid-73" }]
                   : operation === "select" && table === "positions"
@@ -149,6 +158,7 @@ beforeEach(() => {
   applicationReceipts = null;
   selectedPositions = [{ id: "position-uuid-73", legacy_id: 73 }];
   scorePersistedParents = null;
+  scorePersistedLegacyOverride = null;
   admin = fakeAdmin();
 });
 
@@ -494,6 +504,28 @@ describe("push sync di una candidatura", () => {
               total_score: 81,
             },
           ],
+        }),
+      }) as any,
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "scores_receipt_mismatch",
+    });
+  });
+
+  it("non esporta ACK se il legacy_id persistito non coincide", async () => {
+    scorePersistedLegacyOverride = 999;
+    admin = fakeAdmin();
+    const response = await POST(
+      new Request("http://localhost/api/cloud-sync/push", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          positions: [
+            { id: 73, title: "Synthetic", company: "Example", status: "scored" },
+          ],
+          scores: [{ legacy_id: 88, position_id: 73, total_score: 81 }],
         }),
       }) as any,
     );
