@@ -19,8 +19,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/check-live-schema.py"
-MANIFEST = ROOT / "supabase/live-schema/078-083.v2.json"
-QUERY = ROOT / "supabase/live-schema/078-083.v2.sql"
+MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
+QUERY = ROOT / "supabase/live-schema/078-084.v3.sql"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
 POSTGRES_READY_MARKER = "database system is ready to accept connections"
@@ -31,7 +31,23 @@ MIGRATIONS = [
     ROOT / "supabase/migrations/081_live_schema_reconciliation.sql",
     ROOT / "supabase/migrations/082_download_clicks_tiktok_source.sql",
     ROOT / "supabase/migrations/083_position_ticket_state_model.sql",
+    ROOT / "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
 ]
+
+LEGACY_ARTIFACT_SHA256 = {
+    "supabase/live-schema/078-081.v1.json": (
+        "5996737996ecd61bb64896eaee7c3c810c424de98230be76489ae57b97e32045"
+    ),
+    "supabase/live-schema/078-081.v1.sql": (
+        "7b9995f0fe494427e73cfcba852b51e33a893b4c63aa07ddb2f742e13d4d8270"
+    ),
+    "supabase/live-schema/078-083.v2.json": (
+        "1b95d97a1f3b8bbbb8d44d61dd6062c2da1bc215cde3fb2b9651f9e1a3c07ceb"
+    ),
+    "supabase/live-schema/078-083.v2.sql": (
+        "2a5aed82aac8c7f129d7cc5d74bf875bd77750b1917a10aecbcf65a201336971"
+    ),
+}
 
 PREFLIGHT_BASE_ROWS = """
 INSERT INTO auth.users(id, created_at) VALUES
@@ -234,8 +250,8 @@ def test_manifest_pins_clone_order_migrations_query_and_check_set():
     contract = canary.load_contract(MANIFEST)
     manifest = json.loads(MANIFEST.read_text())
 
-    assert contract.contract_id == "release-0.3.9-schema-078-083"
-    assert len(contract.expected_checks) == 50
+    assert contract.contract_id == "release-0.3.9-schema-078-084"
+    assert len(contract.expected_checks) == 59
     assert manifest["clone_contract"] == {
         "baseline": "live-schema-only-pg-dump",
         "contains_user_rows": False,
@@ -247,11 +263,41 @@ def test_manifest_pins_clone_order_migrations_query_and_check_set():
             "supabase/migrations/081_live_schema_reconciliation.sql",
             "supabase/migrations/082_download_clicks_tiktok_source.sql",
             "supabase/migrations/083_position_ticket_state_model.sql",
+            "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
         ],
     }
     assert [entry["path"] for entry in manifest["migrations"]] == manifest[
         "clone_contract"
     ]["ordered_migrations"]
+    migration_084 = manifest["migrations"][-1]
+    assert migration_084 == {
+        "path": "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
+        "sha256": ("9bbfdfa73a5c21fa85911267a4ab69ba4e84e2f7738e13b48ae0463a2ce1189b"),
+    }
+    assert tuple(
+        check for check in contract.expected_checks if check.startswith("084.")
+    ) == (
+        "084.consume_pairing_attempt.body",
+        "084.consume_pairing_attempt.execute",
+        "084.consume_pairing_attempt.metadata",
+        "084.consume_pairing_attempt.search_path",
+        "084.migration.receipt",
+        "084.pairing_attempts.account_cascade",
+        "084.pairing_attempts.bucket_constraints",
+        "084.pairing_attempts.rls_acl",
+        "084.pairing_attempts.table",
+    )
+
+
+def test_v1_and_v2_artifacts_remain_byte_for_byte_immutable():
+    import hashlib
+
+    observed = {
+        relative: hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+        for relative in LEGACY_ARTIFACT_SHA256
+    }
+
+    assert observed == LEGACY_ARTIFACT_SHA256
 
 
 def test_manifest_fails_closed_when_a_pinned_hash_drifts(tmp_path):
@@ -557,7 +603,7 @@ def test_cli_output_sanitizes_transport_details(monkeypatch, capsys):
 def pg16_schema_clone(
     *,
     migrated: bool,
-    through_version: int = 83,
+    through_version: int = 84,
     omit_versions: tuple[int, ...] = (),
 ):
     snapshot = os.environ.get("JHT_H08_SCHEMA_SNAPSHOT")
@@ -673,7 +719,7 @@ def query_results_in_transaction(psql, mutation: str):
     return receipt_rows(result.stdout)
 
 
-def test_pg16_schema_only_clone_passes_after_ordered_078_through_083():
+def test_pg16_schema_only_clone_passes_after_ordered_078_through_084():
     contract = canary.load_contract(MANIFEST)
     with pg16_schema_clone(migrated=True) as psql:
         observed = query_results(psql)
@@ -699,14 +745,10 @@ def test_pg16_078_080_without_081_through_083_fails_reconciliation_receipt():
     assert tuple(sorted(observed)) == contract.expected_checks
     assert not observed["081.reconciliation.present"]
     assert all(
-        observed[check]
-        for check in contract.expected_checks
-        if check[:3] <= "080"
+        observed[check] for check in contract.expected_checks if check[:3] <= "080"
     )
     assert any(
-        not observed[check]
-        for check in contract.expected_checks
-        if check[:3] >= "081"
+        not observed[check] for check in contract.expected_checks if check[:3] >= "081"
     )
 
 
@@ -718,9 +760,7 @@ def test_pg16_missing_082_or_083_fails_only_that_versioned_receipt(
     missing_version, failed_prefix, surviving_prefix
 ):
     contract = canary.load_contract(MANIFEST)
-    with pg16_schema_clone(
-        migrated=True, omit_versions=(missing_version,)
-    ) as psql:
+    with pg16_schema_clone(migrated=True, omit_versions=(missing_version,)) as psql:
         observed = query_results(psql)
 
     assert tuple(sorted(observed)) == contract.expected_checks
@@ -731,6 +771,156 @@ def test_pg16_missing_082_or_083_fails_only_that_versioned_receipt(
         ok for check, ok in observed.items() if check.startswith(surviving_prefix)
     )
     assert not all(observed.values())
+
+
+def test_pg16_missing_084_fails_every_084_receipt_and_preserves_prior_contract():
+    contract = canary.load_contract(MANIFEST)
+    with pg16_schema_clone(migrated=True, omit_versions=(84,)) as psql:
+        observed = query_results(psql)
+
+    assert tuple(sorted(observed)) == contract.expected_checks
+    assert all(ok for check, ok in observed.items() if not check.startswith("084."))
+    assert not any(ok for check, ok in observed.items() if check.startswith("084."))
+
+
+def test_pg16_084_catalog_and_rpc_receipts_fail_on_independent_drift():
+    signature = "public.consume_pairing_attempt(uuid,text,integer,integer)"
+    drifts = (
+        (
+            "084.pairing_attempts.table",
+            "ALTER TABLE public.cloud_sync_pairing_attempts DROP COLUMN locked_until;",
+        ),
+        (
+            "084.pairing_attempts.bucket_constraints",
+            """
+ALTER TABLE public.cloud_sync_pairing_attempts
+  DROP CONSTRAINT cloud_sync_pairing_attempts_attempts_check;
+""",
+        ),
+        (
+            "084.pairing_attempts.account_cascade",
+            """
+ALTER TABLE public.cloud_sync_pairing_attempts
+  DROP CONSTRAINT cloud_sync_pairing_attempts_user_id_fkey;
+ALTER TABLE public.cloud_sync_pairing_attempts
+  ADD CONSTRAINT cloud_sync_pairing_attempts_user_id_fkey
+  FOREIGN KEY (user_id) REFERENCES auth.users(id);
+""",
+        ),
+        (
+            "084.pairing_attempts.account_cascade",
+            """
+ALTER TABLE public.cloud_sync_pairing_attempts
+  ADD CONSTRAINT synthetic_extra_user_fk
+  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+""",
+        ),
+        (
+            "084.pairing_attempts.rls_acl",
+            "ALTER TABLE public.cloud_sync_pairing_attempts DISABLE ROW LEVEL SECURITY;",
+        ),
+        (
+            "084.pairing_attempts.rls_acl",
+            "GRANT SELECT ON public.cloud_sync_pairing_attempts TO authenticated;",
+        ),
+        (
+            "084.consume_pairing_attempt.metadata",
+            f"ALTER FUNCTION {signature} STABLE;",
+        ),
+        (
+            "084.consume_pairing_attempt.body",
+            """
+UPDATE pg_catalog.pg_proc
+SET prosrc = prosrc || E'\n-- synthetic 084 body drift'
+WHERE oid =
+  'public.consume_pairing_attempt(uuid,text,integer,integer)'::regprocedure;
+""",
+        ),
+        (
+            "084.consume_pairing_attempt.search_path",
+            f"ALTER FUNCTION {signature} SET search_path = public;",
+        ),
+        (
+            "084.consume_pairing_attempt.execute",
+            f"GRANT EXECUTE ON FUNCTION {signature} TO authenticated;",
+        ),
+    )
+    with pg16_schema_clone(migrated=True) as psql:
+        for target, mutation in drifts:
+            observed = query_results_in_transaction(psql, mutation)
+            assert not observed[target], target
+            assert not observed["084.migration.receipt"], target
+
+
+def test_pg16_084_reapply_preserves_every_exact_receipt():
+    contract = canary.load_contract(MANIFEST)
+    with pg16_schema_clone(migrated=True) as psql:
+        before = query_results(psql)
+        psql(MIGRATIONS[-1].read_text())
+        after = query_results(psql)
+
+    assert tuple(sorted(before)) == contract.expected_checks
+    assert before == after
+    assert all(after.values())
+
+
+def test_pg16_084_account_deletion_cascades_attempt_bucket():
+    user_id = "00000000-0000-0000-0000-000000008401"
+    with pg16_schema_clone(migrated=True) as psql:
+        psql(
+            f"""
+INSERT INTO auth.users(id, created_at) VALUES ('{user_id}', now());
+INSERT INTO public.cloud_sync_pairing_attempts(user_id, attempts)
+VALUES ('{user_id}', 3);
+SELECT public.delete_account_data('{user_id}'::uuid);
+"""
+        )
+        attempts = psql(
+            f"""
+SELECT pg_catalog.count(*)
+FROM public.cloud_sync_pairing_attempts
+WHERE user_id = '{user_id}'::uuid;
+"""
+        ).stdout.strip()
+        user_count = psql(
+            f"SELECT pg_catalog.count(*) FROM auth.users WHERE id = '{user_id}'::uuid;"
+        ).stdout.strip()
+
+    assert attempts == "0"
+    assert user_count == "0"
+
+
+def test_084_attempt_bucket_is_declared_for_account_deletion_and_safe_export():
+    table_source = (ROOT / "web/lib/account-data-tables.ts").read_text()
+    export_source = (ROOT / "web/lib/account-export-columns.ts").read_text()
+    cascade_match = re.search(
+        r"export const CASCADE_TABLES = \[(.*?)\] as const;",
+        table_source,
+        flags=re.DOTALL,
+    )
+    export_match = re.search(
+        r"\bcloud_sync_pairing_attempts:\s*\[(.*?)\],",
+        export_source,
+        flags=re.DOTALL,
+    )
+
+    assert cascade_match is not None
+    assert (
+        re.findall(r'"([a-z_]+)"', cascade_match.group(1)).count(
+            "cloud_sync_pairing_attempts"
+        )
+        == 1
+    )
+    assert export_match is not None
+    assert re.findall(r'"([a-z_]+)"', export_match.group(1)) == [
+        "attempts",
+        "locked_until",
+        "invalidated_at",
+        "created_at",
+        "updated_at",
+    ]
+    assert "last_device_code" not in export_match.group(1)
+    assert "user_id" not in export_match.group(1)
 
 
 def test_pg16_082_and_083_catalog_receipts_fail_on_independent_drift():
