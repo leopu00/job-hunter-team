@@ -14,6 +14,7 @@ This folder gathers the security analysis of the repo and the pre-open-source ha
 | [`04-threat-model.md`](04-threat-model.md) | Explicit JHT threat model: what's in scope, what isn't, deployment assumptions, trust decisions |
 | [`05-checklist.md`](05-checklist.md) | Actionable checklist of fixes to implement. `[x]` flipped when the commit lands on `master` |
 | [`06-post-fix-comparison.md`](06-post-fix-comparison.md) | Post-fix comparison with OpenClaw: gap closed from -78 to -25, security score 30% → 74%, 12-area breakdown |
+| [`07-auth-posture-remediation.md`](07-auth-posture-remediation.md) | Versioned read-only Auth gate and idempotent OAuth/email desired states |
 
 ## How to read it
 
@@ -23,6 +24,7 @@ This folder gathers the security analysis of the repo and the pre-open-source ha
 4. `04-threat-model.md` is the document to publish as `SECURITY.md` at the repo root when going open source — it heads off half the false-positives before they arrive.
 5. `05-checklist.md` is the fix-by-fix execution status (commit SHA closing each item).
 6. `06-post-fix-comparison.md` closes the loop: what changed vs OpenClaw after the sprint.
+7. `07-auth-posture-remediation.md` defines the executable Auth posture gate and its two desired states.
 
 ## Status
 

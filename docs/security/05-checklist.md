@@ -287,7 +287,12 @@ Second-pass adversarial audit (cloud-sync tokens, agent prompt-injection, route 
 
 **Verified non-issues** (agent over-flagged, confirmed against live state):
 - `refresh_token` reuse → already single-use via Supabase **refresh-token rotation** (verified: `auth.refresh_tokens` 73% revoked). `device-register` one-shot is enforced by rotation, not by our code.
-- Auth `leaked_password_protection` / `MFA` advisors → **N/A**: auth is 100% OAuth (Google/GitHub), no passwords managed.
+- Auth `leaked_password_protection` / `MFA` advisors → the prior **N/A** claim
+  was disproved by a read-only live configuration check on 2026-08-14: the
+  email provider was enabled alongside Google/GitHub. The versioned F-02/F-08
+  gate and idempotent desired states are documented in
+  [`07-auth-posture-remediation.md`](07-auth-posture-remediation.md). Production
+  configuration remains unchanged until an operator authorizes remediation.
 
 A couple of residual low-risk items remain; they are tracked **privately** (local-only report), not detailed here.
 
