@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "contract_id": "release-0.3.9-dml-preflight-071-075",
+  "query": {
+    "path": "supabase/live-schema/081-preflight.v1.sql",
+    "sha256": "f3730d3bf2e000f6cbf238fce19ca42a3dcc92c1d00e457c3e2e831322bf5267"
+  },
+  "expected_checks": [
+    "071.rescore.rows_ranked",
+    "074.applications.required_parent",
+    "074.pending_messages.detach",
+    "074.position_highlights.required_parent",
+    "074.position_user_notes.required_parent",
+    "074.position_views.required_parent",
+    "074.positions.company_detach",
+    "074.scores.required_parent",
+    "075.session.expired_status",
+    "075.session.expired_token_wipe",
+    "075.token.expired_unrevoked",
+    "075.token.expiry_shortening"
+  ]
+}
