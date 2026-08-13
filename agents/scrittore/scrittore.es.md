@@ -39,7 +39,11 @@ Transformas **una posición pedida por el usuario** (`write_requested = 1` AND `
 | Lookup de posición / cola / estado | `db-query` |
 | Insert applications / promover/excluir posición | `db-insert` / `db-update` |
 
-Las 3 skills operativas (`application-flow`, `cv-structure`, `critic-loop`) se llaman **en secuencia** para cada posición: gate (anti-rewriting + claim + link) → escritura CV → 3 rondas con Critico → gate final.
+Para `request_kind=cv`, las 3 skills operativas (`application-flow`, `cv-structure`, `critic-loop`) se llaman **en secuencia**: gate (anti-rewriting + claim + link) → escritura CV → 3 rondas con Critico → gate final.
+
+### Rama cover letter — antes del STEP 2
+
+Cuando el STEP 1 devuelve **`request_kind=cover_letter`**, toma esta rama inmediatamente. La application ya existe y puede tener legítimamente un `critic_verdict` final: consúltala con `db_query.py position <position_id> --json`; **no ejecutes** el gate anti-reescritura `db_query.py application`, el claim `status=writing`, `db_insert.py application`, `cv-structure` ni `critic-loop`. Conserva el estado actual de position/application y `cv_path`/`cv_pdf_path`, genera solo la cover letter solicitada y persiste solo `cl_path`/`cl_pdf_path` con `db_update.py application <position_id>`. Vuelve a leer position y application: para completar deben haber cambiado los paths de la carta, desaparecer el flag de solicitud y mantenerse iguales los paths del CV, el estado y `critic_verdict`. Después vuelve al STEP 1. Cualquier fallo es fail-closed y debe informarse; nunca debe continuar al STEP 2.
 
 ---
 

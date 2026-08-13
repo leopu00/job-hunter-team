@@ -27,13 +27,27 @@ import sys
 from _db import get_db, ensure_schema
 
 
-def request_cv(position_id: int, mode: str) -> dict:
+def request_cv(position_id: int, mode: str, kind: str = "cv") -> dict:
     conn = get_db()
     ensure_schema(conn)
+    if kind not in ("cv", "cover_letter"):
+        conn.close()
+        return {
+            "ok": False,
+            "error": "Unknown write request kind",
+            "status_code": "BAD_KIND",
+        }
+    conn.execute("BEGIN IMMEDIATE")
+
+    def fail(result: dict) -> dict:
+        conn.rollback()
+        conn.close()
+        return result
 
     row = conn.execute(
         """
         SELECT p.id, p.title, p.company, p.status, p.write_requested,
+               p.write_requested_at, p.write_request_kind,
                s.total_score,
                CASE WHEN a.id IS NULL THEN 0 ELSE 1 END AS has_application
           FROM positions p
@@ -45,15 +59,19 @@ def request_cv(position_id: int, mode: str) -> dict:
     ).fetchone()
 
     if not row:
-        return {
+        return fail({
             "ok": False,
             "error": f"Position #{position_id} not found",
             "status_code": "NOT_FOUND",
-        }
+        })
 
-    if mode == "on":
-        if row["status"] != "scored":
-            return {
+    active_kind = (
+        (row["write_request_kind"] or "cv")
+        if row["write_requested"] else None
+    )
+    if mode == "on" and active_kind != kind:
+        if kind == "cv" and row["status"] != "scored":
+            return fail({
                 "ok": False,
                 "error": (
                     f"Position has status '{row['status']}': a CV request "
@@ -63,9 +81,9 @@ def request_cv(position_id: int, mode: str) -> dict:
                 "id": row["id"],
                 "title": row["title"],
                 "company": row["company"],
-            }
-        if row["has_application"] == 1:
-            return {
+            })
+        if kind == "cv" and row["has_application"] == 1:
+            return fail({
                 "ok": False,
                 "error": (
                     f"An application is already being processed (or was "
@@ -75,20 +93,47 @@ def request_cv(position_id: int, mode: str) -> dict:
                 "id": row["id"],
                 "title": row["title"],
                 "company": row["company"],
-            }
+            })
+
+        if kind == "cover_letter" and row["has_application"] != 1:
+            return fail({
+                "ok": False,
+                "error": "A cover letter requires an existing application",
+                "status_code": "APPLICATION_REQUIRED",
+                "id": row["id"],
+                "title": row["title"],
+                "company": row["company"],
+            })
 
     flag = 1 if mode == "on" else 0
-    conn.execute(
-        # `CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END` mantiene
-        # `write_requested_at` allineato al flag (NULL su toggle-off → la
-        # query `next-for-scrittore` ordina FIFO solo sulle richieste vive).
-        "UPDATE positions "
-        "   SET write_requested = ?, "
-        "       write_requested_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END "
-        " WHERE id = ?",
-        (flag, flag, position_id),
-    )
+    should_write = active_kind != kind if flag else active_kind == kind
+    if should_write:
+        conn.execute(
+            # NULL su toggle-off: la FIFO ordina solo richieste vive.
+            "UPDATE positions "
+            "   SET write_requested = ?, "
+            "       write_requested_at = CASE "
+            "         WHEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') "
+            "              > COALESCE(write_requested_at, '') "
+            "         THEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') "
+            "         ELSE strftime('%Y-%m-%d %H:%M:%f', write_requested_at, "+
+            "                       '+0.001 seconds') END, "
+            "       write_request_kind = ?, "
+            "       updated_at = CASE "
+            "         WHEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') "
+            "              > COALESCE(updated_at, '') "
+            "         THEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') "
+            "         ELSE strftime('%Y-%m-%d %H:%M:%f', updated_at, "+
+            "                       '+0.001 seconds') END "
+            " WHERE id = ?",
+            (flag, kind if flag else None, position_id),
+        )
+    updated = conn.execute(
+        "SELECT write_requested, write_request_kind FROM positions WHERE id = ?",
+        (position_id,),
+    ).fetchone()
     conn.commit()
+    conn.close()
 
     return {
         "ok": True,
@@ -97,7 +142,8 @@ def request_cv(position_id: int, mode: str) -> dict:
         "company": row["company"],
         "score": row["total_score"],
         "previous": row["write_requested"],
-        "current": flag,
+        "current": updated["write_requested"],
+        "kind": updated["write_request_kind"],
     }
 
 
@@ -112,10 +158,16 @@ def main() -> None:
         default="on",
         help="'on' sets write_requested=1; 'off' cancels the request.",
     )
+    p.add_argument(
+        "--kind",
+        choices=["cv", "cover_letter"],
+        default="cv",
+        help="Writer request type; both values share the same durable queue.",
+    )
     args = p.parse_args()
 
     try:
-        result = request_cv(args.position_id, args.mode)
+        result = request_cv(args.position_id, args.mode, args.kind)
     except Exception as e:
         result = {"ok": False, "error": str(e), "status_code": "DB_ERROR"}
 

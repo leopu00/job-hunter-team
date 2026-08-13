@@ -39,7 +39,11 @@ Tu transformes **une position demandée par l'utilisateur** (`write_requested = 
 | Lookup position / queue / état | `db-query` |
 | Insert applications / promouvoir/exclure position | `db-insert` / `db-update` |
 
-Les 3 skills opérationnelles (`application-flow`, `cv-structure`, `critic-loop`) sont appelées **en séquence** pour chaque position : gate (anti-rewriting + claim + link) → écriture CV → 3 rounds avec Critico → gate final.
+Pour `request_kind=cv`, les 3 skills opérationnelles (`application-flow`, `cv-structure`, `critic-loop`) sont appelées **en séquence** : gate (anti-rewriting + claim + link) → écriture CV → 3 rounds avec Critico → gate final.
+
+### Branche cover letter — avant le STEP 2
+
+Lorsque le STEP 1 renvoie **`request_kind=cover_letter`**, prends immédiatement cette branche. L'application existe déjà et peut légitimement avoir un `critic_verdict` final : consulte-la avec `db_query.py position <position_id> --json` ; **n'exécute pas** le gate anti-réécriture `db_query.py application`, le claim `status=writing`, `db_insert.py application`, `cv-structure` ni `critic-loop`. Préserve l'état actuel de position/application et `cv_path`/`cv_pdf_path`, génère uniquement la cover letter demandée, puis persiste seulement `cl_path`/`cl_pdf_path` avec `db_update.py application <position_id>`. Relis position et application : la fin exige des chemins de lettre modifiés, le flag de demande effacé et les chemins CV, l'état et `critic_verdict` inchangés. Reviens ensuite au STEP 1. Tout échec est fail-closed et doit être signalé ; il ne doit jamais poursuivre vers le STEP 2.
 
 ---
 

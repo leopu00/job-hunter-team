@@ -79,9 +79,18 @@ export function ActionRow({
   );
 }
 
-function Svg({ children, size = 17 }: { children: ReactNode; size?: number }) {
+function Svg({
+  children,
+  icon,
+  size = 17,
+}: {
+  children: ReactNode;
+  icon: string;
+  size?: number;
+}) {
   return (
     <svg
+      data-action-icon={icon}
       width={size}
       height={size}
       viewBox="0 0 24 24"
@@ -99,7 +108,7 @@ function Svg({ children, size = 17 }: { children: ReactNode; size?: number }) {
 
 export function IconMapPin() {
   return (
-    <Svg>
+    <Svg icon="geocode">
       <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z" />
       <circle cx="12" cy="10" r="3" />
     </Svg>
@@ -108,7 +117,7 @@ export function IconMapPin() {
 
 export function IconRefresh() {
   return (
-    <Svg>
+    <Svg icon="rescore">
       <path d="M21 12a9 9 0 1 1-2.64-6.36" />
       <path d="M21 3v6h-6" />
     </Svg>
@@ -117,10 +126,29 @@ export function IconRefresh() {
 
 export function IconFileText() {
   return (
-    <Svg>
+    <Svg icon="cv">
       <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z" />
       <path d="M14 2v5h5" />
       <path d="M9 13h6M9 17h4" />
+    </Svg>
+  );
+}
+
+export function IconOpenCheck() {
+  return (
+    <Svg icon="open-check">
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+      <path d="m9.5 12 1.7 1.7 3.8-4" />
+    </Svg>
+  );
+}
+
+export function IconCoverLetter() {
+  return (
+    <Svg icon="cover-letter">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+      <path d="m16.5 3.5 1 1 2-2" />
     </Svg>
   );
 }

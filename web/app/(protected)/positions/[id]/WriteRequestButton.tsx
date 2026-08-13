@@ -29,7 +29,7 @@ const T: Record<
 > = {
   it: {
     title: "Richiedi il CV su misura",
-    desc: "Il team scrive CV e lettera di presentazione per questa offerta",
+    desc: "Il team scrive un CV su misura per questa offerta",
     requestedDesc: "CV richiesto al team — tocca per annullare",
     sending: "Un momento…",
     unavailable: "Non disponibile",
@@ -37,7 +37,7 @@ const T: Record<
   },
   en: {
     title: "Request a tailored CV",
-    desc: "The team writes a CV and cover letter for this position",
+    desc: "The team writes a tailored CV for this position",
     requestedDesc: "CV requested from the team — tap to cancel",
     sending: "One moment…",
     unavailable: "Not available",
@@ -45,7 +45,7 @@ const T: Record<
   },
   es: {
     title: "Solicita un CV a medida",
-    desc: "El equipo redacta el CV y la carta de presentación para esta oferta",
+    desc: "El equipo redacta un CV a medida para esta oferta",
     requestedDesc: "CV solicitado al equipo — toca para cancelar",
     sending: "Un momento…",
     unavailable: "No disponible",
@@ -53,7 +53,7 @@ const T: Record<
   },
   fr: {
     title: "Demander un CV sur mesure",
-    desc: "L'équipe rédige le CV et la lettre de motivation pour ce poste",
+    desc: "L'équipe rédige un CV sur mesure pour ce poste",
     requestedDesc: "CV demandé à l'équipe — touchez pour annuler",
     sending: "Un instant…",
     unavailable: "Non disponible",
@@ -61,7 +61,7 @@ const T: Record<
   },
   de: {
     title: "Maßgeschneiderten Lebenslauf anfordern",
-    desc: "Das Team schreibt Lebenslauf und Anschreiben für diese Stelle",
+    desc: "Das Team schreibt einen passenden Lebenslauf für diese Stelle",
     requestedDesc: "Lebenslauf angefordert — zum Abbrechen tippen",
     sending: "Einen Moment…",
     unavailable: "Nicht verfügbar",
@@ -69,7 +69,7 @@ const T: Record<
   },
   hu: {
     title: "Kérj testreszabott önéletrajzot",
-    desc: "A csapat önéletrajzot és motivációs levelet ír ehhez az álláshoz",
+    desc: "A csapat személyre szabott önéletrajzot ír ehhez az álláshoz",
     requestedDesc: "Önéletrajz kérve a csapattól — koppints a visszavonáshoz",
     sending: "Egy pillanat…",
     unavailable: "Nem elérhető",
@@ -77,7 +77,7 @@ const T: Record<
   },
   pt: {
     title: "Pede um CV à medida",
-    desc: "A equipa escreve o CV e a carta de apresentação para esta vaga",
+    desc: "A equipa escreve um CV à medida para esta vaga",
     requestedDesc: "CV solicitado à equipa — toca para cancelar",
     sending: "Um momento…",
     unavailable: "Não disponível",
