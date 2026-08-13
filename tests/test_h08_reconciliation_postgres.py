@@ -36,6 +36,14 @@ PROTECTED_FUNCTIONS = (
     "undo_manual_position_application",
 )
 
+TENANT_A = "00000000-0000-0000-0000-000000000091"
+TENANT_B = "00000000-0000-0000-0000-000000000092"
+COMPANY_A = "10000000-0000-0000-0000-000000000091"
+COMPANY_B = "10000000-0000-0000-0000-000000000092"
+POSITION_A = "20000000-0000-0000-0000-000000000091"
+POSITION_B = "20000000-0000-0000-0000-000000000092"
+POSITION_BAD_COMPANY = "20000000-0000-0000-0000-000000000093"
+
 
 class Pg16Clone:
     def __init__(self, container: str):
@@ -193,6 +201,58 @@ def h08_clone():
             for migration in SEQUENCE:
                 pg.apply(database, migration)
 
+        # Historical rows that old UUID-only foreign keys admitted. The
+        # actual 081 file must repair all seven tenant edges before adding
+        # composite constraints; testing 074 separately would not prove that.
+        pg.psql(
+            "h08_main",
+            f"""
+            INSERT INTO auth.users(id, created_at) VALUES
+              ('{TENANT_A}', now()), ('{TENANT_B}', now());
+            INSERT INTO public.companies(id, user_id, name) VALUES
+              ('{COMPANY_A}', '{TENANT_A}', 'H-08 A'),
+              ('{COMPANY_B}', '{TENANT_B}', 'H-08 B');
+            INSERT INTO public.positions(
+              id, user_id, legacy_id, title, company, company_id, status
+            ) VALUES
+              ('{POSITION_A}', '{TENANT_A}', 9101, 'H-08 A', 'H-08 A',
+               '{COMPANY_A}', 'new'),
+              ('{POSITION_B}', '{TENANT_B}', 9201, 'H-08 B', 'H-08 B',
+               '{COMPANY_B}', 'new'),
+              ('{POSITION_BAD_COMPANY}', '{TENANT_A}', 9102,
+               'H-08 bad company', 'H-08 B', '{COMPANY_B}', 'new');
+            INSERT INTO public.scores(
+              id, user_id, legacy_id, position_id, total_score
+            ) VALUES (
+              '30000000-0000-0000-0000-000000000091', '{TENANT_A}', 9301,
+              '{POSITION_B}', 50
+            );
+            INSERT INTO public.applications(
+              id, user_id, legacy_id, position_id, status
+            ) VALUES (
+              '40000000-0000-0000-0000-000000000091', '{TENANT_A}', 9401,
+              '{POSITION_B}', 'draft'
+            );
+            INSERT INTO public.position_highlights(
+              id, user_id, position_id, type, text
+            ) VALUES (
+              '50000000-0000-0000-0000-000000000091', '{TENANT_A}',
+              '{POSITION_B}', 'pro', 'H-08 mismatch'
+            );
+            INSERT INTO public.position_views(user_id, position_id)
+            VALUES ('{TENANT_A}', '{POSITION_B}');
+            INSERT INTO public.position_user_notes(
+              user_id, position_id, origin, body
+            ) VALUES ('{TENANT_A}', '{POSITION_B}', 'web', 'H-08 mismatch');
+            INSERT INTO public.pending_user_messages(
+              id, user_id, legacy_id, agent, body, related_position_id
+            ) VALUES (
+              '60000000-0000-0000-0000-000000000091', '{TENANT_A}', 9601,
+              'capitano', 'H-08 mismatch', '{POSITION_B}'
+            );
+            """,
+        )
+
         protected_before = pg.function_hashes("h08_main")
         assert set(protected_before) == set(PROTECTED_FUNCTIONS)
         pg.apply("h08_main", RECONCILIATION)
@@ -341,6 +401,74 @@ def test_081_reapply_has_zero_schema_diff(h08_clone):
     pg.apply("h08_main", RECONCILIATION)
     after = pg.schema_dump("h08_main")
     assert after == before
+
+
+def test_081_repairs_and_enforces_all_seven_tenant_edges(h08_clone):
+    pg, _ = h08_clone
+    database = "h08_main"
+    repaired = pg.psql(
+        database,
+        f"""
+        SELECT company_id IS NULL FROM public.positions
+         WHERE id = '{POSITION_BAD_COMPANY}';
+        SELECT count(*) FROM public.scores
+         WHERE user_id = '{TENANT_A}' AND position_id = '{POSITION_B}';
+        SELECT count(*) FROM public.applications
+         WHERE user_id = '{TENANT_A}' AND position_id = '{POSITION_B}';
+        SELECT count(*) FROM public.position_highlights
+         WHERE user_id = '{TENANT_A}' AND position_id = '{POSITION_B}';
+        SELECT count(*) FROM public.position_views
+         WHERE user_id = '{TENANT_A}' AND position_id = '{POSITION_B}';
+        SELECT count(*) FROM public.position_user_notes
+         WHERE user_id = '{TENANT_A}' AND position_id = '{POSITION_B}';
+        SELECT related_position_id IS NULL
+          FROM public.pending_user_messages
+         WHERE id = '60000000-0000-0000-0000-000000000091';
+        """,
+    ).stdout.splitlines()
+    assert repaired == ["t", "0", "0", "0", "0", "0", "t"]
+
+    attempts = [
+        f"""INSERT INTO public.positions(
+              id,user_id,legacy_id,title,company,company_id,status
+            ) VALUES (
+              '21000000-0000-0000-0000-000000000091','{TENANT_A}',9191,
+              'Rejected','H-08 B','{COMPANY_B}','new'
+            );""",
+        f"""INSERT INTO public.scores(
+              id,user_id,legacy_id,position_id,total_score
+            ) VALUES (
+              '31000000-0000-0000-0000-000000000091','{TENANT_A}',9391,
+              '{POSITION_B}',50
+            );""",
+        f"""INSERT INTO public.applications(
+              id,user_id,legacy_id,position_id,status
+            ) VALUES (
+              '41000000-0000-0000-0000-000000000091','{TENANT_A}',9491,
+              '{POSITION_B}','draft'
+            );""",
+        f"""INSERT INTO public.position_highlights(
+              id,user_id,position_id,type,text
+            ) VALUES (
+              '51000000-0000-0000-0000-000000000091','{TENANT_A}',
+              '{POSITION_B}','pro','Rejected'
+            );""",
+        f"INSERT INTO public.position_views(user_id,position_id) "
+        f"VALUES ('{TENANT_A}','{POSITION_B}');",
+        f"""INSERT INTO public.position_user_notes(
+              user_id,position_id,origin,body
+            ) VALUES ('{TENANT_A}','{POSITION_B}','box','Rejected');""",
+        f"""INSERT INTO public.pending_user_messages(
+              id,user_id,legacy_id,agent,body,related_position_id
+            ) VALUES (
+              '61000000-0000-0000-0000-000000000091','{TENANT_A}',9691,
+              'capitano','Rejected','{POSITION_B}'
+            );""",
+    ]
+    for statement in attempts:
+        denied = pg.psql(database, statement, check=False)
+        assert denied.returncode != 0
+        assert "foreign key constraint" in denied.stderr.lower()
 
 
 def test_account_delete_cascades_late_tables_and_rolls_back_atomically(
