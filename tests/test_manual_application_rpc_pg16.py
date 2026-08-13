@@ -93,6 +93,13 @@ def test_pg16_apply_reapply_click_undo_tenant_and_privileges(pg16):
     applied = pg16(apply_sql).stdout.strip().splitlines()
     assert len(applied) == 2 and all('"status": "applied"' in row or '"status":"applied"' in row for row in applied)
     assert pg16("SELECT p.status, a.applied, a.applied_via FROM public.positions p JOIN public.applications a ON a.position_id=p.id WHERE p.legacy_id=73;").stdout.strip() == "applied|t|user_manual"
+    for role in ("anon", "service_role"):
+        denied = pg16(f"SET ROLE {role}; SELECT public.undo_manual_position_application(73,'ready');", check=False)
+        assert denied.returncode != 0 and "permission denied" in denied.stderr.lower()
+        assert pg16("SELECT status FROM public.positions WHERE legacy_id=73;").stdout.strip() == "applied"
+    tenant_undo = pg16(f"SET ROLE authenticated; SET request.jwt.claim.sub='{other}'; SELECT public.undo_manual_position_application(73,'ready');", check=False)
+    assert tenant_undo.returncode != 0 and "position_not_found" in tenant_undo.stderr
+    assert pg16("SELECT status FROM public.positions WHERE legacy_id=73;").stdout.strip() == "applied"
     undone = pg16(f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.undo_manual_position_application(73,'ready');").stdout.strip()
     assert '"status": "ready"' in undone or '"status":"ready"' in undone
     assert pg16("SELECT status FROM public.positions WHERE user_id='" + owner + "' AND legacy_id=73;").stdout.strip() == "ready"
