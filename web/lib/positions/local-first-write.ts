@@ -67,6 +67,11 @@ export type LocalFirstResponse<T> = T & {
   cloud_synced: boolean | null;
 };
 
+/** Cloud deploys never select an incidental mounted SQLite file. */
+export function shouldUseLocalFirst(hasDb: boolean, cloudDeploy: boolean): boolean {
+  return hasDb && !cloudDeploy;
+}
+
 function openLocalDb(): Database.Database {
   const db = new Database(JHT_DB_PATH);
   db.pragma("journal_mode = WAL");
@@ -119,7 +124,7 @@ export async function localFirstWrite<T>(
   // accidentally mounted SQLite file happens to be present.  Local-first is
   // reserved for the co-located runtime; otherwise an ephemeral Vercel file
   // could report a successful local write that never reached the cloud.
-  if (!isCloudDeploy() && fs.existsSync(JHT_DB_PATH)) {
+  if (shouldUseLocalFirst(fs.existsSync(JHT_DB_PATH), isCloudDeploy())) {
     const local = runLocal(spec);
     if (!local.ok)
       return NextResponse.json(local.body, { status: local.status });

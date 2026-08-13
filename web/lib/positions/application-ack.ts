@@ -7,7 +7,8 @@ export type ApplicationWriteAck = {
 export function applicationAckAccepted(
   saved: ApplicationWriteAck | null | undefined,
 ): boolean {
-  return Boolean(
-    saved && !(saved.source === "local" && saved.cloud_synced === false),
-  );
+  if (!saved || (saved.source !== "local" && saved.source !== "cloud"))
+    return false;
+  if (saved.source === "cloud") return saved.cloud_synced === true;
+  return saved.cloud_synced === true || saved.cloud_synced === null;
 }
