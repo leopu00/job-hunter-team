@@ -63,7 +63,7 @@ jobs:
             [void][Management.Automation.Language.Parser]::ParseFile(
               (Resolve-Path -LiteralPath $file), [ref]$tokens, [ref]$errors)
             if ($errors.Count -ne 0) {
-              throw "PowerShell syntax validation failed: $file count=$($errors.Count)"
+              throw "PowerShell syntax validation failed: $file count=$($errors.Count) id=$($errors[0].ErrorId) line=$($errors[0].Extent.StartLineNumber)"
             }
           }
 
