@@ -8,6 +8,10 @@ import ContactForm, {
   type ContactStrings,
 } from "../../../web/app/contact/ContactForm";
 import {
+  parseReport,
+  resendEmailPayload,
+} from "../../../web/lib/feedback-report";
+import {
   publicContactPayload,
   validReplyEmail,
 } from "../../../web/lib/feedback-contact";
@@ -29,6 +33,7 @@ const STRINGS: ContactStrings = {
   name_ph: "Your name",
   email: "Email (optional)",
   email_ph: "name@example.com",
+  email_help: "Only if you would like us to reply.",
   subject: "Subject",
   subject_ph: "What is it about",
   report_intro: "Add your email only if you want a reply.",
@@ -67,8 +72,12 @@ describe("O-87 — recapito del modulo pubblico", () => {
     expect(email?.type).toBe("email");
     expect(email?.autocomplete).toBe("email");
     expect(email?.required).toBe(false);
+    expect(email?.getAttribute("aria-describedby")).toBe("c-email-help");
     expect(document.querySelector('label[for="c-email"]')?.textContent).toBe(
       "Email (optional)",
+    );
+    expect(document.querySelector("#c-email-help")?.textContent).toBe(
+      STRINGS.email_help,
     );
   });
 
@@ -78,7 +87,7 @@ describe("O-87 — recapito del modulo pubblico", () => {
       email: "  reporter@example.com ",
       locale: "en",
       website: "",
-    });
+    })!;
 
     expect(payload).toMatchObject({
       client: "web-contact",
@@ -86,6 +95,26 @@ describe("O-87 — recapito del modulo pubblico", () => {
       reply_to: "reporter@example.com",
     });
     expect(payload.happened).not.toContain(payload.reply_to);
+  });
+
+  it("porta lo stesso recapito dal form fino al Reply-To di Resend", () => {
+    const payload = publicContactPayload({
+      message: "Synthetic public report for support",
+      email: "reporter@example.com",
+      locale: "en",
+      website: "",
+    });
+    const report = parseReport(payload)!;
+    const resend = resendEmailPayload(
+      report,
+      "JHT-SYNTHETIC",
+      "sender@example.com",
+      "support@example.com",
+    );
+
+    expect(report.replyTo).toBe("reporter@example.com");
+    expect(resend.reply_to).toBe("reporter@example.com");
+    expect(resend.text).not.toContain("reporter@example.com");
   });
 
   it("la submit reale inoltra il recapito al confine HTTP", async () => {
@@ -136,19 +165,26 @@ describe("O-87 — recapito del modulo pubblico", () => {
   });
 
   it("preserva l'invio anonimo e rifiuta recapiti non validi prima della rete", () => {
-    expect(
-      publicContactPayload({
-        message: "The public page stays blank",
-        email: "",
-        locale: "en",
-        website: "",
-      }).reply_to,
-    ).toBe("");
+    const anonymous = publicContactPayload({
+      message: "The public page stays blank",
+      email: "",
+      locale: "en",
+      website: "",
+    });
+    expect(anonymous).not.toHaveProperty("reply_to");
     expect(validReplyEmail("")).toBe(true);
     expect(validReplyEmail("reporter@example.com")).toBe(true);
     expect(
       validReplyEmail("reporter@example.com\nBcc: other@example.com"),
     ).toBe(false);
+    expect(
+      publicContactPayload({
+        message: "The public page stays blank",
+        email: "reporter@example.com\nBcc: other@example.com",
+        locale: "en",
+        website: "",
+      }),
+    ).toBeNull();
   });
 
   it("spiega uso e facoltatività del recapito in tutte le sette lingue", () => {
@@ -174,5 +210,6 @@ describe("O-87 — recapito del modulo pubblico", () => {
     expect(catalogue.match(/privacy_note:/g)).toHaveLength(7);
     expect(catalogue.match(/report_intro:/g)).toHaveLength(7);
     expect(catalogue.match(/data_body:/g)).toHaveLength(7);
+    expect(catalogue.match(/email_help:/g)).toHaveLength(7);
   });
 });

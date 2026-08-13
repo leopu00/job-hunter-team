@@ -23,7 +23,9 @@ export function publicContactPayload({
   email: string;
   locale: string;
   website: string;
-}) {
+}): Record<string, string> | null {
+  if (!validReplyEmail(email)) return null;
+  const replyTo = email.trim();
   return {
     client: "web-contact",
     kind: "bug",
@@ -34,6 +36,6 @@ export function publicContactPayload({
     website,
     // Facoltativo per conservare l'invio anonimo. Quando presente, il server
     // lo usa esclusivamente come Reply-To e non lo copia nel testo o nei log.
-    reply_to: email.trim(),
+    ...(replyTo ? { reply_to: replyTo } : {}),
   };
 }

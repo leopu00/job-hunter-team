@@ -43,6 +43,7 @@ const T: Record<string, Testi> = {
     name_ph: "Il tuo nome",
     email: "Email (facoltativa)",
     email_ph: "nome@esempio.it",
+    email_help: "Solo se vuoi che ti rispondiamo.",
     subject: "Oggetto",
     subject_ph: "Di cosa vuoi parlarci",
     report_intro:
@@ -86,6 +87,7 @@ const T: Record<string, Testi> = {
     name_ph: "Your name",
     email: "Email (optional)",
     email_ph: "name@example.com",
+    email_help: "Only if you would like us to reply.",
     subject: "Subject",
     subject_ph: "What is it about",
     report_intro:
@@ -129,6 +131,7 @@ const T: Record<string, Testi> = {
     name_ph: "Tu nombre",
     email: "Correo (opcional)",
     email_ph: "nombre@ejemplo.com",
+    email_help: "Solo si quieres que te respondamos.",
     subject: "Asunto",
     subject_ph: "De qué quieres hablarnos",
     report_intro:
@@ -173,6 +176,7 @@ const T: Record<string, Testi> = {
     name_ph: "Ton nom",
     email: "Email (facultatif)",
     email_ph: "nom@exemple.com",
+    email_help: "Uniquement si tu souhaites que nous te répondions.",
     subject: "Objet",
     subject_ph: "De quoi veux-tu nous parler",
     report_intro:
@@ -216,6 +220,7 @@ const T: Record<string, Testi> = {
     name_ph: "Dein Name",
     email: "E-Mail (optional)",
     email_ph: "name@beispiel.de",
+    email_help: "Nur wenn du möchtest, dass wir dir antworten.",
     subject: "Betreff",
     subject_ph: "Worum geht es",
     report_intro:
@@ -260,6 +265,7 @@ const T: Record<string, Testi> = {
     name_ph: "O teu nome",
     email: "Email (opcional)",
     email_ph: "nome@exemplo.com",
+    email_help: "Apenas se quiseres que te respondamos.",
     subject: "Assunto",
     subject_ph: "Sobre o que nos queres falar",
     report_intro:
@@ -305,6 +311,7 @@ const T: Record<string, Testi> = {
     name_ph: "A neved",
     email: "E-mail (nem kötelező)",
     email_ph: "nev@pelda.hu",
+    email_help: "Csak akkor, ha szeretnéd, hogy válaszoljunk.",
     subject: "Tárgy",
     subject_ph: "Miről szeretnél írni",
     report_intro:
