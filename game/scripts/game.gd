@@ -22,6 +22,8 @@ var _client_control: ClientControl = null
 
 func _enter_tree() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	# Cap FPS a 60 + vsync. Con Vulkan il present in vsync (FIFO) è fluido e non
 	# blocca il resto del desktop come faceva OpenGL; niente tearing.
 	Engine.max_fps = 60
@@ -43,6 +45,8 @@ func _enter_tree() -> void:
 				usable.position + usable.size - wsize - Vector2i(8, 8))
 
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	RenderingServer.set_default_clear_color(Palette.VOID)
 	_client_control = ClientControl.new()
 	add_child(_client_control)

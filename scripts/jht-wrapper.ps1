@@ -48,6 +48,7 @@ $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
 $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
 $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
+$WindowsInstanceGuardSha256 = '3f5c9ec40f3d27428b54a5a30a4df63a9ae6921a21ff7a84b044ba4c220efafa'
 $JhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
 . (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
 
@@ -372,6 +373,32 @@ function Write-GameJsonAtomic {
   }
 }
 
+function Get-CanonicalGameProcessPath {
+  param([Diagnostics.Process]$Process)
+  $path = [string]$Process.Path
+  if (-not $path) { $path = [string]$Process.MainModule.FileName }
+  if (-not $path) { throw 'process executable unavailable' }
+  return ([IO.Path]::GetFullPath($path)).Replace('\', '/').ToLowerInvariant()
+}
+
+function Get-GameProcessStartTicks {
+  param([Diagnostics.Process]$Process)
+  return $Process.StartTime.ToUniversalTime().Ticks.ToString(
+    [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-InstanceGuardFingerprint {
+  $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  if (-not $sid) { throw 'current user identity unavailable' }
+  $utf8 = [Text.UTF8Encoding]::new($false, $true)
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try {
+    return ([BitConverter]::ToString(
+      $sha.ComputeHash($utf8.GetBytes('jht-instance-guard-v1|' + $sid.Value))
+    )).Replace('-', '').ToLowerInvariant()
+  } finally { $sha.Dispose() }
+}
+
 function Get-LiveGameState {
   $statePath = Join-Path $GameControlDir 'state.json'
   $state = Read-GameJson $statePath
@@ -384,11 +411,10 @@ function Get-LiveGameState {
   try {
     $process = Get-Process -Id $statePid -ErrorAction Stop
     if ($process.HasExited) { throw 'stale state' }
-    $stateExecutable = [IO.Path]::GetFullPath([string]$state.executable)
-    $processExecutable = [string]$process.Path
-    if (-not $processExecutable) { $processExecutable = [string]$process.MainModule.FileName }
-    if (-not $processExecutable -or
-        [IO.Path]::GetFullPath($processExecutable) -ine $stateExecutable) {
+    $stateExecutable = ([IO.Path]::GetFullPath(
+      [string]$state.executable)).Replace('\', '/').ToLowerInvariant()
+    $processExecutable = Get-CanonicalGameProcessPath $process
+    if ($processExecutable -cne $stateExecutable) {
       throw 'stale state or recycled pid'
     }
     $processStarted = [DateTimeOffset]::new($process.StartTime.ToUniversalTime()).ToUnixTimeSeconds()
@@ -397,6 +423,34 @@ function Get-LiveGameState {
     # molto sotto qualunque riuso credibile dello stesso PID+stesso binario.
     if ([Math]::Abs($processStarted - [double]$state.started_at) -gt 30) {
       throw 'stale state or recycled pid'
+    }
+
+    # Su Windows state.json e' autorevole soltanto se lega anche il sidecar
+    # che possiede il mutex per-user. PID da solo e stato riciclabile; path,
+    # start ticks, sessione, source PCK e SID fingerprint devono coincidere.
+    $guardPid = 0
+    if ([int]$state.schema -ne 2 -or -not $state.guard -or
+        -not [int]::TryParse([string]$state.guard.pid, [ref]$guardPid) -or
+        $guardPid -le 0 -or $guardPid -eq $statePid -or
+        [string]$state.guard.source_sha256 -cne $WindowsInstanceGuardSha256 -or
+        [string]$state.guard.instance_id -cnotmatch '^instance-[0-9a-f]{24}$' -or
+        [string]$state.guard.mode -cnotin @('normal', 'update') -or
+        [string]$state.guard.mutex_fingerprint -cnotmatch '^[0-9a-f]{64}$') {
+      throw 'missing instance guard binding'
+    }
+    $guard = Get-Process -Id $guardPid -ErrorAction Stop
+    if ($guard.HasExited -or $guard.SessionId -ne $process.SessionId) {
+      throw 'stale instance guard'
+    }
+    $expectedPowerShell = ([IO.Path]::GetFullPath((Join-Path $env:SystemRoot
+      'System32\WindowsPowerShell\v1.0\powershell.exe'))).Replace('\', '/').ToLowerInvariant()
+    if ((Get-CanonicalGameProcessPath $guard) -cne $expectedPowerShell -or
+        [string]$state.guard.executable -cne $expectedPowerShell -or
+        [string]$state.guard.desktop_executable -cne $processExecutable -or
+        [string]$state.guard.desktop_started -cne (Get-GameProcessStartTicks $process) -or
+        [string]$state.guard.started -cne (Get-GameProcessStartTicks $guard) -or
+        [string]$state.guard.mutex_fingerprint -cne (Get-InstanceGuardFingerprint)) {
+      throw 'instance guard binding mismatch'
     }
     return $state
   } catch {

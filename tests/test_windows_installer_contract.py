@@ -70,3 +70,27 @@ def test_native_windows_smoke_is_non_publishing() -> None:
     assert "build-windows-installer.ps1 -Version $version -Smoke" in workflow
     assert "actions/upload-artifact" not in workflow
     assert "release.yml" in workflow
+
+
+def test_native_windows_smoke_attests_pck_and_rejects_second_instance() -> None:
+    builder = BUILDER.read_text(encoding="utf-8")
+    workflow = SMOKE_WORKFLOW.read_text(encoding="utf-8")
+    for seam in (
+        "JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST",
+        "WINDOWS-INSTANCE-GUARD-PCK source=exported-pck",
+        "Exported PCK instance guard census mismatch",
+        "$second.ExitCode -ne 1",
+        "$first.HasExited",
+        "Concurrent installed application did not fail closed",
+    ):
+        assert seam in builder
+    for watched in (
+        '"game/scripts/support/windows_instance_guard.*"',
+        '"game/tools/windows_instance_guard_selftest.py"',
+        '"scripts/jht-wrapper.ps1"',
+        '"tests/test_cli_game_host_contract.py"',
+        '"tests/test_windows_installer_contract.py"',
+    ):
+        assert workflow.count(watched) == 2
+    assert "Management.Automation.Language.Parser]::ParseFile" in workflow
+    assert "PowerShell syntax validation failed" in workflow

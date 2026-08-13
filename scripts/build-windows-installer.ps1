@@ -107,15 +107,66 @@ if ($Smoke) {
     }
 
     $previousNoVps = $env:JHT_NOVPS
+    $previousGuardPckTest = $env:JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST
     $env:JHT_NOVPS = '1'
+    $guardStdout = Join-Path $env:TEMP ('jht-instance-guard-' + [guid]::NewGuid().ToString('N') + '.out')
+    $guardStderr = Join-Path $env:TEMP ('jht-instance-guard-' + [guid]::NewGuid().ToString('N') + '.err')
     $userDataRuntimeLogBefore = Get-FileObservation $userDataRuntimeLog
+    $userDataRuntimeLogAfter = $null
+    $first = $null
     try {
-      $launch = Start-Process -FilePath $installedExe -ArgumentList '--headless', '--quit-after', '3' -Wait -PassThru
-      if ($launch.ExitCode -ne 0) {
-        throw "Installed application smoke exited with $($launch.ExitCode)"
+      # Il source eseguito viene letto dal PCK dell'artefatto, non dal checkout:
+      # il census esatto lega byte, hash e argv alla guardia che verra pubblicata.
+      $env:JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST = '1'
+      $sourceProbe = Start-Process -FilePath $installedExe `
+        -ArgumentList '--headless', '--quit-after', '10' -Wait -PassThru `
+        -RedirectStandardOutput $guardStdout -RedirectStandardError $guardStderr
+      $expectedCensus = 'WINDOWS-INSTANCE-GUARD-PCK source=exported-pck bytes=9813 argv_utf16=26288 sha256=3f5c9ec40f3d27428b54a5a30a4df63a9ae6921a21ff7a84b044ba4c220efafa'
+      $sourceOutput = if (Test-Path -LiteralPath $guardStdout) {
+        Get-Content -LiteralPath $guardStdout -Raw
+      } else { '' }
+      $sourceMatches = @($sourceOutput -split "`r?`n" | Where-Object { $_ -ceq $expectedCensus })
+      if ($sourceProbe.ExitCode -ne 0 -or $sourceMatches.Count -ne 1) {
+        throw 'Exported PCK instance guard census mismatch.'
+      }
+      Start-Sleep -Milliseconds 500
+
+      # Un primo processo deve completare l'handshake e iniziare lavoro normale;
+      # il secondo, concorrente e identico, deve fallire mentre il primo vive.
+      $env:JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST = $null
+      $first = Start-Process -FilePath $installedExe `
+        -ArgumentList '--headless', '--quit-after', '20' -PassThru
+      try {
+        $normalWorkDeadline = [DateTime]::UtcNow.AddSeconds(12)
+        do {
+          Start-Sleep -Milliseconds 100
+          $userDataRuntimeLogAfter = Get-FileObservation $userDataRuntimeLog
+        } while (-not $first.HasExited -and
+          ($null -eq $userDataRuntimeLogAfter -or
+           $userDataRuntimeLogAfter -eq $userDataRuntimeLogBefore) -and
+          [DateTime]::UtcNow -lt $normalWorkDeadline)
+        if ($first.HasExited -or $null -eq $userDataRuntimeLogAfter -or
+            $userDataRuntimeLogAfter -eq $userDataRuntimeLogBefore) {
+          throw 'Primary installed application did not reach normal work after guard handshake.'
+        }
+        $second = Start-Process -FilePath $installedExe `
+          -ArgumentList '--headless', '--quit-after', '3' -Wait -PassThru
+        if ($second.ExitCode -ne 1 -or $first.HasExited) {
+          throw 'Concurrent installed application did not fail closed behind the live instance.'
+        }
+        if (-not $first.WaitForExit(30000) -or $first.ExitCode -ne 0) {
+          throw 'Primary installed application did not remain healthy through singleton probe.'
+        }
+      } finally {
+        if ($first -and -not $first.HasExited) {
+          $first.Kill()
+          $first.WaitForExit()
+        }
       }
     } finally {
       $env:JHT_NOVPS = $previousNoVps
+      $env:JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST = $previousGuardPckTest
+      Remove-Item -LiteralPath $guardStdout, $guardStderr -Force -ErrorAction SilentlyContinue
     }
 
     $userDataRuntimeLogAfter = Get-FileObservation $userDataRuntimeLog
