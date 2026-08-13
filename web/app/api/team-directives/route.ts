@@ -78,6 +78,12 @@ function existingCaptainEvent(
   return Number(match[2]);
 }
 
+function ensureRequestLedger(db: Database.Database) {
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS team_directive_request_ledger (request_id TEXT PRIMARY KEY, action TEXT NOT NULL, target_id INTEGER NOT NULL, payload TEXT, result TEXT)",
+  );
+}
+
 interface DirectiveRow {
   id: number;
   body: string;
@@ -188,6 +194,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const db = localDbOrNull();
   if (db) {
     try {
+      ensureRequestLedger(db);
+      const claim = db
+        .prepare(
+          "INSERT OR IGNORE INTO team_directive_request_ledger(request_id,action,target_id,payload) VALUES(?,?,?,?)",
+        )
+        .run(requestId, "created", 0, text);
+      if (!claim.changes) {
+        const prior = db
+          .prepare(
+            "SELECT action,target_id,payload,result FROM team_directive_request_ledger WHERE request_id=?",
+          )
+          .get(requestId) as {
+          action: string;
+          target_id: number;
+          payload: string;
+          result?: string;
+        };
+        if (
+          prior.action !== "created" ||
+          prior.target_id !== 0 ||
+          prior.payload !== text
+        )
+          throw new Error("request id payload mismatch");
+        if (prior.result) return NextResponse.json(JSON.parse(prior.result));
+      }
       const replayId = existingCaptainEvent(db, requestId, "created");
       if (replayId)
         return NextResponse.json({
@@ -216,11 +247,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           throw new Error(captainEvent.error || "enqueue_failed");
         return { id, captainEvent };
       })();
-      return NextResponse.json({
+      const response = {
         id: String(result.id),
         source: "local",
         captain_event: result.captainEvent,
-      });
+      };
+      db.prepare(
+        "UPDATE team_directive_request_ledger SET result=? WHERE request_id=?",
+      ).run(JSON.stringify(response), requestId);
+      return NextResponse.json(response);
     } catch (error) {
       return NextResponse.json(
         {
@@ -311,6 +346,32 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
   const db = localDbOrNull();
   if (db) {
     try {
+      ensureRequestLedger(db);
+      const action = archive ? "archived" : "edited";
+      const claim = db
+        .prepare(
+          "INSERT OR IGNORE INTO team_directive_request_ledger(request_id,action,target_id,payload) VALUES(?,?,?,?)",
+        )
+        .run(requestId, action, id, text);
+      if (!claim.changes) {
+        const prior = db
+          .prepare(
+            "SELECT action,target_id,payload,result FROM team_directive_request_ledger WHERE request_id=?",
+          )
+          .get(requestId) as {
+          action: string;
+          target_id: number;
+          payload: string | null;
+          result?: string;
+        };
+        if (
+          prior.action !== action ||
+          prior.target_id !== id ||
+          prior.payload !== text
+        )
+          throw new Error("request id payload mismatch");
+        if (prior.result) return NextResponse.json(JSON.parse(prior.result));
+      }
       const replayId = existingCaptainEvent(
         db,
         requestId,
@@ -345,11 +406,15 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
           throw new Error(captainEvent.error || "enqueue_failed");
         return captainEvent;
       })();
-      return NextResponse.json({
+      const response = {
         ok: true,
         source: "local",
         captain_event: result,
-      });
+      };
+      db.prepare(
+        "UPDATE team_directive_request_ledger SET result=? WHERE request_id=?",
+      ).run(JSON.stringify(response), requestId);
+      return NextResponse.json(response);
     } catch (error) {
       return NextResponse.json(
         {
