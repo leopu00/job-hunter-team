@@ -77,6 +77,10 @@ function emptyState() {
   return { version: 1, entries: [] };
 }
 
+function corruptState() {
+  return { version: 1, entries: [], corrupt: true };
+}
+
 function validEntry(entry) {
   return (
     entry &&
@@ -95,18 +99,22 @@ export function readCloudPushQuarantine(path = CLOUD_PUSH_QUARANTINE_FILE) {
   if (!existsSync(path)) return emptyState();
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8"));
-    if (parsed?.version !== 1 || !Array.isArray(parsed.entries))
-      return emptyState();
+    if (
+      parsed?.version !== 1 ||
+      !Array.isArray(parsed.entries) ||
+      parsed.entries.some((entry) => !validEntry(entry))
+    )
+      return corruptState();
     return {
       version: 1,
       updated_at:
         typeof parsed.updated_at === "string" ? parsed.updated_at : undefined,
-      entries: parsed.entries.filter(validEntry),
+      entries: parsed.entries,
     };
   } catch {
-    // A corrupt metadata file must never cause a cursor to skip rows.  Treat it
-    // as empty: the next rejected row is retried and rebuilt durably.
-    return emptyState();
+    // The caller must reopen all table cursors. Treating corruption as a normal
+    // empty state could strand rows behind a cursor that already advanced.
+    return corruptState();
   }
 }
 
@@ -118,6 +126,16 @@ function saveState(state, path, now) {
   };
   writePrivateJson(path, next);
   return next;
+}
+
+/** Clear corruption only after a full replay completed without interruption. */
+export function clearCorruptQuarantine(
+  { path = CLOUD_PUSH_QUARANTINE_FILE, now = Date.now() } = {},
+) {
+  const state = readCloudPushQuarantine(path);
+  if (state.corrupt !== true) return false;
+  saveState(emptyState(), path, now);
+  return true;
 }
 
 export function quarantineRow({

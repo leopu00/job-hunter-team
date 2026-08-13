@@ -1,4 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -118,6 +124,16 @@ describe("cloud push quarantine metadata", () => {
       identity,
       reason: "http_500:record_rejected",
       status: "resolved",
+    });
+  });
+
+  it("marks malformed metadata as corrupt instead of pretending it is empty", () => {
+    const path = makeFile();
+    writeFileSync(path, "{not-json", "utf8");
+    expect(readCloudPushQuarantine(path)).toEqual({
+      version: 1,
+      entries: [],
+      corrupt: true,
     });
   });
 });

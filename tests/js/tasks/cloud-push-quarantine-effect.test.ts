@@ -324,4 +324,46 @@ describe("cloud push record isolation — real writer path", () => {
     });
     expect(applicationBatches.at(-1)).toEqual([1, 2, 3]);
   });
+
+  it("replays all tables after corrupt quarantine metadata, then repairs it", async () => {
+    const { home, dbPath } = fixture();
+    let reject = true;
+    const applicationBatches: number[][] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}"));
+        const table = Object.keys(body)[0];
+        const rows = body[table] as Array<{ position_id?: number }>;
+        if (table === "applications") {
+          applicationBatches.push(rows.map((row) => row.position_id!));
+          if (reject && rows.some((row) => row.position_id === 2))
+            return jsonResponse({ error: "applications_upsert_failed" }, 500);
+        }
+        return jsonResponse({
+          accepted: { [table]: rows.length },
+          [table]: { upserted: rows.length },
+        });
+      }),
+    );
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.resetModules();
+    let cloud = await import("../../../cli/src/commands/cloud.js");
+    await cloud.handlePush({ db: dbPath, full: true });
+
+    writeFileSync(join(home, ".cloud-push-quarantine.json"), "{not-json");
+    reject = false;
+    vi.resetModules();
+    cloud = await import("../../../cli/src/commands/cloud.js");
+    await expect(cloud.handlePush({ db: dbPath })).resolves.toMatchObject({
+      ok: true,
+      quarantined: 0,
+    });
+    expect(applicationBatches.at(-1)).toEqual([1, 2, 3]);
+    const repaired = JSON.parse(
+      readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
+    );
+    expect(repaired).toMatchObject({ version: 1, entries: [] });
+  });
 });

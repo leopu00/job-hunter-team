@@ -23,6 +23,7 @@ import { createExclusiveRunner } from '../lib/exclusive-runner.js';
 import {
   CLOUD_PUSH_QUARANTINE_FILE,
   activeQuarantineEntries,
+  clearCorruptQuarantine,
   partitionQuarantinedRows,
   quarantineRow,
   readCloudPushQuarantine,
@@ -1209,25 +1210,6 @@ async function saveDirectivesCursor(cursor) {
   }
 }
 
-/**
- * Dato un array di righe con campo updated_at, ritorna il MAX(updated_at)
- * come stringa ISO. Null se l'array e' vuoto o nessuna riga ha il campo.
- */
-function maxUpdatedAt(rows) {
-  let max = null;
-  for (const r of rows) {
-    const u = r?.updated_at;
-    if (u && (max === null || u > max)) max = u;
-  }
-  return max;
-}
-
-/**
- * Raggruppa `rows` per il valore della colonna `key` (Map key→row[]).
- * Righe con key null/undefined vengono ignorate. Usato dal push chunked per
- * legare scores/applications/highlights alla loro position (stesso batch =
- * il server risolve la FK via legacyToUuid in-request).
- */
 /** Cursor over rows whose outcome is durable (ACK or persisted quarantine). */
 function settledCursor(rows, field) {
   let max = null;
@@ -1289,7 +1271,7 @@ async function performPush(options) {
   // read. Dopo push HTTP 200: aggiorniamo cursor con MAX(updated_at)
   // delle righe pushate.
   const cursor = options.full ? {} : loadCloudCursor();
-  const readCursor = { ...cursor };
+  const readCursor = quarantineState.corrupt === true ? {} : { ...cursor };
   for (const table of retryingTables) {
     const cursorKey = table === 'position_transitions' ? 'transitions' : table;
     delete readCursor[cursorKey];
@@ -1530,6 +1512,10 @@ async function performPush(options) {
     tombstones.length === 0 && transitions.length === 0 && !sendProfile
   ) {
     console.log(pc.yellow('No data to sync.'));
+    if (quarantineState.corrupt === true) {
+      clearCorruptQuarantine({ path: quarantinePath });
+      quarantineState = readCloudPushQuarantine(quarantinePath);
+    }
     const unresolved = activeQuarantineEntries(quarantineState).length;
     return {
       ok: true,
@@ -1547,7 +1533,7 @@ async function performPush(options) {
   // ancora più grande → altri 413 (loop irreversibile, dashboard ferma). Ora
   // spezziamo il payload in richieste piccole con halving adattivo sul 413 e
   // avanziamo il cursore per-tabella SOLO sul prefisso di righe confermate
-  // (safeCursor) → nessuna riga persa né saltata, e il backlog già gonfio
+  // (checkpoint per tabella) → nessuna riga persa né saltata, e il backlog già gonfio
   // (>500 positions) si drena in più richieste.
   const pushUrl = `${config.base_url}/api/cloud-sync/push`;
   const authHeaders = cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' });
@@ -1749,6 +1735,10 @@ async function performPush(options) {
   console.log(pc.green(`✓ Push completed in ${outcome.requests} requests`));
   console.log(pc.dim(`  positions: ${outcome.up.positions} · scores: ${outcome.up.scores} · applications: ${outcome.up.applications} · companies: ${outcome.up.companies} · highlights: ${outcome.up.position_highlights} · pending: ${outcome.up.pending_user_messages} · tombstones: ${outcome.up.tombstones} · transitions: ${outcome.up.position_transitions}`));
   quarantineState = readCloudPushQuarantine(quarantinePath);
+  if (quarantineState.corrupt === true) {
+    clearCorruptQuarantine({ path: quarantinePath });
+    quarantineState = readCloudPushQuarantine(quarantinePath);
+  }
   const unresolved = activeQuarantineEntries(quarantineState).length;
   if (unresolved > 0) {
     console.error(pc.yellow(
@@ -2943,9 +2933,8 @@ export async function handleSyncRendezvous(options = {}) {
   //   • completato ma con righe scartate (skipped>0)             → NO ack:
   //     il sync NON è integro; lasciando l'ack non scritto il pulsante resta
   //     "in sospeso"/riprovabile e il prossimo tick ritenta le righe scartate
-  //     (che con safeCursor NON sono state superate dal cursore). Le righe
-  //     scartate sono già loggate in rosso da handlePush e intercettate dal
-  //     canary sync_health (Mantenitore) → segnale distinto senza nuovo stato.
+  //     (che senza un ACK durevole non sono superate dal checkpoint). Le righe
+  //     isolate restano visibili nella quarantena e in sync_health.
   const pushOutcome = pushRendezvousOutcome(pushResult);
   if (pushOutcome.status !== 'ready_to_ack') {
     if (!silent) {
@@ -3397,8 +3386,8 @@ async function pushChatRows(config, rows, ids, log) {
  * `first_run.py` non dichiara `phase: steady`, e poi mai più — vedi
  * `cli/src/lib/bootstrap-push.js` per le tre garanzie di terminazione.
  *
- * Il push è `handlePush` invariato: stesso chunking anti-413, stesso
- * `safeCursor`. Nessun nuovo percorso di assemblaggio del payload = nessun modo
+ * Il push è `handlePush` invariato: stesso chunking anti-413, stessi
+ * checkpoint durevoli. Nessun nuovo percorso di assemblaggio = nessun modo
  * di riaprire l'incidente del 2026-07-15.
  */
 async function maybeBootstrapPush(options = {}) {
