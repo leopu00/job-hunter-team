@@ -124,8 +124,8 @@ interface ApplicationIn {
   // Identità distinte nel DB SQLite: applications.id non è positions.id.
   legacy_id: number;
   position_legacy_id: number;
-  // Il client quarantine aggiunge un hash opaco. Finché quel client non è
-  // distribuito, la route usa un receipt interno deterministico e non esposto.
+  // Il client quarantine aggiunge un hash opaco. Per i client precedenti la
+  // route lo deriva dalla stessa source identity e lo esporta senza ID raw.
   _receipt_id?: string;
   cv_path?: string | null;
   cv_pdf_path?: string | null;
@@ -424,7 +424,9 @@ export async function POST(req: NextRequest) {
     byColumn: {},
     worst: null,
   };
+  let scoreReceiptIds: string[] = [];
   let applicationsUpserted = 0;
+  let applicationReceiptIds: string[] = [];
   let companiesUpserted = 0;
   let highlightsUpserted = 0;
   let pendingMessagesUpserted = 0;
@@ -666,27 +668,72 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 2. Upsert scores via position_id UUID. I client pre-quarantine non hanno
-  // _receipt_id; se è presente, però, deve essere quello derivato dallo score
-  // locale e non un correlation token scelto dal chiamante.
+  // 2. Upsert scores via position_id UUID. L'identità dell'ACK è però sempre
+  // scores.legacy_id: il parent serve solo a risolvere la FK cloud.
+  const scoreParents = new Set<number>();
+  const scoreLegacyIds = new Set<number>();
   for (const score of scores) {
+    if (!Number.isInteger(score.legacy_id) || score.legacy_id <= 0) {
+      return NextResponse.json(
+        { error: "invalid_score_identity" },
+        { status: 400 },
+      );
+    }
+    const derivedReceiptId = sourceReceiptId("scores", score.legacy_id);
     if (
       score._receipt_id !== undefined &&
-      (!Number.isInteger(score.legacy_id) ||
-        score.legacy_id <= 0 ||
-        score._receipt_id !== sourceReceiptId("scores", score.legacy_id))
+      score._receipt_id !== derivedReceiptId
     ) {
       return NextResponse.json(
         { error: "invalid_score_receipt_id" },
         { status: 400 },
       );
     }
+    if (
+      scoreParents.has(score.position_id) ||
+      scoreLegacyIds.has(score.legacy_id)
+    ) {
+      return NextResponse.json(
+        { error: "score_identity_collision" },
+        { status: 400 },
+      );
+    }
+    scoreParents.add(score.position_id);
+    scoreLegacyIds.add(score.legacy_id);
   }
-  if (scores.length > 0 && legacyToUuid.size > 0) {
+  if (scores.length > 0) {
+    const scoreParentsToResolve = new Set<number>();
+    for (const score of scores) {
+      if (!legacyToUuid.has(score.position_id)) {
+        scoreParentsToResolve.add(score.position_id);
+      }
+    }
+    if (scoreParentsToResolve.size > 0) {
+      const { data: rows, error } = await admin
+        .from("positions")
+        .select("id, legacy_id")
+        .eq("user_id", userId)
+        .in("legacy_id", Array.from(scoreParentsToResolve));
+      if (error) {
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "scores_positions_lookup_failed",
+        });
+      }
+      for (const row of rows ?? []) {
+        if (row.legacy_id != null) {
+          legacyToUuid.set(row.legacy_id, row.id as string);
+        }
+      }
+    }
+
+    const scoreReceiptByUuid = new Map<string, string>();
     const payload = scores
       .map((s) => {
         const uuid = legacyToUuid.get(s.position_id);
         if (!uuid || typeof s.total_score !== "number") return null;
+        scoreReceiptByUuid.set(uuid, sourceReceiptId("scores", s.legacy_id));
         return {
           user_id: userId,
           position_id: uuid,
@@ -704,11 +751,18 @@ export async function POST(req: NextRequest) {
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
+    if (payload.length !== scores.length) {
+      return NextResponse.json(
+        { error: "scores_identity_unresolved" },
+        { status: 400 },
+      );
+    }
+
     if (payload.length > 0) {
       const { data: upserted, error } = await admin
         .from("scores")
         .upsert(payload, { onConflict: "position_id" })
-        .select("id");
+        .select("position_id");
 
       if (error) {
         return sanitizedError(error, {
@@ -717,6 +771,20 @@ export async function POST(req: NextRequest) {
           publicMessage: "scores_upsert_failed",
         });
       }
+      const persistedReceiptIds = Array.isArray(upserted)
+        ? upserted.map((row) => scoreReceiptByUuid.get(row.position_id) ?? null)
+        : [];
+      const completeReceipt =
+        persistedReceiptIds.length === payload.length &&
+        persistedReceiptIds.every((receiptId) => receiptId !== null) &&
+        new Set(persistedReceiptIds).size === payload.length;
+      if (!completeReceipt) {
+        return NextResponse.json(
+          { error: "scores_receipt_mismatch" },
+          { status: 500 },
+        );
+      }
+      scoreReceiptIds = (persistedReceiptIds as string[]).sort();
       scoresUpserted = upserted?.length ?? 0;
       // Il cloud non ha CHECK sulle dimensioni (mig 001/003): quello che passa
       // da qui torna identico a ogni restore. Non lo tocchiamo — i punteggi
@@ -828,6 +896,7 @@ export async function POST(req: NextRequest) {
           { status: 500 },
         );
       }
+      applicationReceiptIds = receivedReceiptIds as string[];
       applicationsUpserted = receipts.length;
     }
   }
@@ -1320,6 +1389,10 @@ export async function POST(req: NextRequest) {
     positions: { upserted: positionsUpserted },
     scores: { upserted: scoresUpserted, out_of_range: scoresOutOfRange },
     applications: { upserted: applicationsUpserted },
+    receipts: {
+      applications: applicationReceiptIds,
+      scores: scoreReceiptIds,
+    },
     companies: { upserted: companiesUpserted },
     position_highlights: { upserted: highlightsUpserted },
     pending_user_messages: { upserted: pendingMessagesUpserted },

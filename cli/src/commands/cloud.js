@@ -1578,8 +1578,8 @@ async function performPush(options) {
   };
 
   // Bundle position→figli: evita lookup cloud e conserva una sola conferma
-  // HTTP per la famiglia. Scores richiede ancora la position nello stesso
-  // request; applications e highlights hanno anche un lookup server-side.
+  // HTTP per la famiglia. Scores, applications e highlights hanno anche un
+  // lookup server-side quando il parent non è nel delta di questo tick.
   // Per applications è obbligatorio: perderla può rendere visibile uno
   // status applied senza timestamp.
   const scoresByPos = groupBy(scores, 'position_id');
@@ -1621,8 +1621,7 @@ async function performPush(options) {
   const sentHls = posRes.confirmed.flatMap((b) => b.hls);
   const skipHls = posRes.skipped.flatMap((b) => b.hls);
 
-  // 3) Figli orfani. Applications/highlights hanno lookup server-side; scores
-  // conserva il comportamento legacy finché il suo contratto non cambia.
+  // 3) Figli orfani: tutti risolvono il parent server-side.
   const oSco = await sendChunked(orphanScores.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], scores: r }));
   const oApp = await sendChunked(orphanApps.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], applications: r }));
   const oHl = await sendChunked(orphanHls.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], position_highlights: r }));

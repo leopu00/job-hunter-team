@@ -227,7 +227,7 @@ describe("confine cloud-sync applied", () => {
 
   it("non pubblica lo status prima di aver scritto application", () => {
     const deferAt = route.indexOf("const deferredAppliedPayload");
-    const applicationAt = route.indexOf("// 3. Upsert applications");
+    const applicationAt = route.indexOf("// 3. L'RPC");
     const confirmAt = route.indexOf(
       'admin.rpc("sync_confirm_positions_applied"',
     );
@@ -241,13 +241,14 @@ describe("confine cloud-sync applied", () => {
     expect(confirmAt).toBeGreaterThan(applicationAt);
   });
 
-  it("recupera le application orfane e fallisce chiuso se l'RPC rifiuta", () => {
-    const applicationAt = route.indexOf("// 3. Upsert applications");
+  it("delega il lookup orphan alla RPC e fallisce chiuso senza receipt", () => {
+    const applicationAt = route.indexOf("// 3. L'RPC");
     const confirmAt = route.indexOf(
       'admin.rpc("sync_confirm_positions_applied"',
     );
     const section = route.slice(applicationAt, confirmAt + 1000);
-    expect(section).toContain("application_positions_lookup_failed");
+    expect(section).toContain("position_legacy_id");
+    expect(section).toContain("applications_receipt_mismatch");
     expect(section).toContain("application_state_invariant_failed");
     expect(section).toContain("p_position_legacy_ids");
   });

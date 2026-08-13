@@ -80,13 +80,15 @@ function createLocalDb(positions: { id: number; title: string; url?: string }[] 
     CREATE UNIQUE INDEX idx_positions_url_unique
       ON positions(url) WHERE url IS NOT NULL AND url <> '';
     CREATE TABLE scores (
-      position_id INTEGER PRIMARY KEY, total_score INTEGER,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      position_id INTEGER NOT NULL UNIQUE, total_score INTEGER,
       experience_fit INTEGER, salary_fit INTEGER, stack_match INTEGER,
       remote_fit INTEGER, strategic_fit INTEGER, breakdown TEXT, notes TEXT,
       scored_by TEXT, scored_at TEXT, created_at TEXT, updated_at TEXT
     );
     CREATE TABLE applications (
-      position_id INTEGER PRIMARY KEY, cv_path TEXT, cv_pdf_path TEXT,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      position_id INTEGER NOT NULL UNIQUE, cv_path TEXT, cv_pdf_path TEXT,
       cl_path TEXT, cl_pdf_path TEXT, status TEXT, critic_score REAL,
       critic_verdict TEXT, critic_notes TEXT, written_at TEXT, applied_at TEXT,
       applied_via TEXT, response TEXT, response_at TEXT, written_by TEXT,
