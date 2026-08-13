@@ -13,6 +13,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS team_directives_source_id_unique
   ON public.team_directives(user_id, source_id);
 CREATE UNIQUE INDEX IF NOT EXISTS pending_user_messages_source_id_unique
   ON public.pending_user_messages(user_id, source_id);
+CREATE TABLE IF NOT EXISTS public.team_directive_request_ledger (
+  user_id UUID NOT NULL, request_id TEXT NOT NULL, action TEXT NOT NULL,
+  target_id BIGINT NOT NULL, payload TEXT, result JSONB,
+  PRIMARY KEY (user_id, request_id)
+);
 
 CREATE OR REPLACE FUNCTION public.mutate_team_directive_with_event(
   p_id BIGINT,
@@ -28,12 +33,27 @@ DECLARE
   v_existing_action TEXT;
   v_existing_payload TEXT;
   v_existing_directive BIGINT;
+  v_claimed BOOLEAN;
+  v_result JSONB;
 BEGIN
   IF v_user IS NULL OR p_action NOT IN ('created','edited','archived') THEN
     RAISE EXCEPTION 'invalid directive event';
   END IF;
   IF p_source_id IS NULL OR length(p_source_id) < 1 OR length(p_source_id) > 200 THEN
     RAISE EXCEPTION 'invalid directive request id';
+  END IF;
+  INSERT INTO team_directive_request_ledger(user_id, request_id, action, target_id, payload)
+    VALUES (v_user, p_source_id, p_action, p_id, p_body)
+    ON CONFLICT (user_id, request_id) DO NOTHING;
+  GET DIAGNOSTICS v_changed = ROW_COUNT;
+  IF v_changed = 0 THEN
+    SELECT action, target_id, payload, result INTO v_existing_action, v_existing_directive, v_existing_payload, v_result
+      FROM team_directive_request_ledger WHERE user_id=v_user AND request_id=p_source_id;
+    IF v_existing_action <> p_action OR v_existing_directive <> p_id OR v_existing_payload IS DISTINCT FROM p_body THEN
+      RAISE EXCEPTION 'request id payload mismatch';
+    END IF;
+    IF v_result IS NOT NULL THEN RETURN v_result; END IF;
+    RAISE EXCEPTION 'request still in progress';
   END IF;
   SELECT source_action, source_payload, source_directive_id
     INTO v_existing_action, v_existing_payload, v_existing_directive
@@ -68,7 +88,10 @@ BEGIN
     ON CONFLICT (user_id, source_id) DO NOTHING;
   INSERT INTO team_state (user_id, chat_requested_at) VALUES (v_user, now())
     ON CONFLICT (user_id) DO UPDATE SET chat_requested_at=EXCLUDED.chat_requested_at;
-  RETURN jsonb_build_object('id', p_id, 'status', 'queued');
+  v_result := jsonb_build_object('id', p_id, 'status', 'queued');
+  UPDATE team_directive_request_ledger SET result=v_result
+    WHERE user_id=v_user AND request_id=p_source_id;
+  RETURN v_result;
 END;
 $$;
 

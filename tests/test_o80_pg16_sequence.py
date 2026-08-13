@@ -46,6 +46,7 @@ CREATE TABLE pending_user_messages(id serial primary key,user_id uuid,agent text
 CREATE UNIQUE INDEX pending_user_messages_source_id_unique ON pending_user_messages(user_id, source_id);
 CREATE TABLE team_directives(id bigserial primary key,user_id uuid,body text,kind text,status text,created_by text,source_id text,archived_at timestamptz,updated_at timestamptz);
 CREATE UNIQUE INDEX team_directives_source_id_unique ON team_directives(user_id, source_id);
+CREATE TABLE team_directive_request_ledger(user_id uuid,request_id text,action text,target_id bigint,payload text,result jsonb,primary key(user_id,request_id));
 CREATE TABLE team_state(user_id uuid primary key,chat_requested_at timestamptz);
 GRANT USAGE ON SCHEMA public,auth TO authenticated; GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
 GRANT SELECT,INSERT,UPDATE ON positions,applications,scores,position_transitions,pending_user_messages,team_directives,team_state TO authenticated;
