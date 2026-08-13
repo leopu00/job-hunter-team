@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Query position_feedback (loop user→agenti).
 
-Reads recent like/dislike/hide/star feedback from the cloud per position.
-Used by the Scorer to apply a score multiplier (boost like/star, malus
-dislike, exclude hide). Optionally consulted by the Scout for source
-prioritization.
+Reads like/dislike/hide/star feedback from the cloud per position or as
+sanitized aggregate themes. The Scorer uses only themes from OTHER positions
+as contextual preference evidence for future scoring, explicitly excluding
+the position being evaluated; feedback never rewrites that position's score,
+status, or notes. The Scout may consult the signal for source prioritization.
 
 Reads cloud config from $JHT_HOME/cloud.json (same place as the daemon
 and pollers). If cloud is disabled OR the endpoint is unreachable,

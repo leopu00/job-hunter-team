@@ -42,12 +42,16 @@ def test_runtime_has_no_current_position_feedback_adjuster():
 def test_active_runtime_inventory_and_guides_do_not_restore_the_old_contract():
     active_contracts = (
         "agents/scorer/skills.list",
+        "shared/skills/feedback_query.py",
         "docs/guides/LOCAL-SCORER.md",
         "docs/internal/architecture/provider-touchpoint-inventory.md",
         "docs/internal/architecture/cloud-sync-architecture.md",
     )
     forbidden = (
         "multiplier on final score",
+        "score multiplier",
+        "boost like/star",
+        "exclude hide",
         "Scorer step 5 multiplier",
         "like ×1.10",
         "star ×1.15",
