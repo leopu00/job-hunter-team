@@ -182,6 +182,12 @@ def ensure_schema(conn: sqlite3.Connection):
         kind TEXT NOT NULL DEFAULT 'notification' CHECK (kind IN (
             'notification','question','digest','alert'
         )),
+        author TEXT NOT NULL DEFAULT 'agent' CHECK (author IN ('agent','user')),
+        chat_ts REAL,
+        source_id TEXT,
+        source_action TEXT,
+        source_payload TEXT,
+        source_directive_id INTEGER,
         related_position_id INTEGER,
         delivered_via TEXT CHECK (delivered_via IN ('telegram','web') OR delivered_via IS NULL),
         delivered_at TIMESTAMP,
@@ -193,6 +199,29 @@ def ensure_schema(conn: sqlite3.Connection):
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (related_position_id) REFERENCES positions(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS team_directives (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        body TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'order' CHECK (kind IN (
+            'order','strategy','formation','note'
+        )),
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_by TEXT NOT NULL DEFAULT 'user',
+        cloud_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        archived_at TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS team_directive_request_ledger (
+        request_id TEXT PRIMARY KEY,
+        action TEXT NOT NULL,
+        target_id INTEGER NOT NULL,
+        payload TEXT,
+        result TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
@@ -207,6 +236,9 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_messages_source_id
+      ON pending_user_messages(source_id) WHERE source_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_team_directives_status ON team_directives(status);
 
     -- Trigger educativi: rifiutano la stringa letterale 'now' nei timestamp
     -- e suggeriscono il pattern corretto. Audit 2026-05-02 mostro' 8 record

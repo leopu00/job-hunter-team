@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useToast } from '../../components/Toast'
+import DirectivesPanel from './DirectivesPanel'
 
 /* ── Tipi ─────────────────────────────────────────────────────────── */
 
@@ -372,6 +373,8 @@ export default function TeamPage() {
           />
         ))}
       </div>
+
+      <DirectivesPanel />
 
       {/* Footer hint */}
       <div className="mt-8 pt-4 border-t border-[var(--color-border)] text-center">
