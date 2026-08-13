@@ -46,6 +46,7 @@ const POSITIONS_COLUMNS = [
   // push CLI in cli/src/commands/cloud.js per parita' tra i due path.
   "write_requested",
   "write_requested_at",
+  "write_request_kind",
   // Geocoding-on-demand (V8): user-driven office-geocoding flag, mig 027.
   "geocode_requested",
   "geocode_requested_at",
@@ -115,6 +116,7 @@ interface PositionRow {
   // V6 (2026-05-29): SQLite stores INTEGER 0|1, Supabase expects BOOLEAN.
   write_requested: number | null;
   write_requested_at: string | null;
+  write_request_kind?: "cv" | "cover_letter" | null;
   // V8 (2026-05-31): stesso mapping integer→boolean.
   geocode_requested: number | null;
   geocode_requested_at: string | null;
@@ -208,7 +210,12 @@ export async function POST() {
       readonly: true,
       fileMustExist: true,
     });
-    positions = readTable<PositionRow>(db, "positions", POSITIONS_COLUMNS);
+    positions = readSqliteTableCompatible<PositionRow>(
+      db,
+      "positions",
+      POSITIONS_COLUMNS,
+      new Set(["write_request_kind"]),
+    );
     scores = readTable<ScoreRow>(db, "scores", SCORES_COLUMNS);
     applications = readSqliteTableCompatible<ApplicationRow>(
       db,
@@ -281,13 +288,21 @@ export async function POST() {
         // pre-V6/pre-V8 -> false (default semantico: nessuna richiesta).
         write_requested: p.write_requested === 1,
         write_requested_at: p.write_requested_at,
+        // Un exporter legacy non conosce questo desired-state: ometterlo deve
+        // preservare la richiesta cloud, mentre NULL esplicito la risolve.
+        ...(Object.prototype.hasOwnProperty.call(p, "write_request_kind")
+          ? { write_request_kind: p.write_request_kind ?? null }
+          : {}),
         geocode_requested: p.geocode_requested === 1,
         geocode_requested_at: p.geocode_requested_at,
       }));
 
     const { data: upserted, error } = await supabase
       .from("positions")
-      .upsert(payload, { onConflict: "user_id,legacy_id" })
+      .upsert(payload, {
+        onConflict: "user_id,legacy_id",
+        defaultToNull: false,
+      })
       .select("id, legacy_id");
 
     if (error) {

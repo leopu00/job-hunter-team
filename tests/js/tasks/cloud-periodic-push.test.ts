@@ -284,6 +284,7 @@ describe("effetto reale sul percorso Sync now", () => {
           salary_estimated_min INTEGER, salary_estimated_max INTEGER,
           salary_estimated_currency TEXT, salary_estimated_source TEXT,
           write_requested INTEGER, write_requested_at TEXT,
+          write_request_kind TEXT,
           geocode_requested INTEGER, geocode_requested_at TEXT,
           recheck_requested INTEGER, recheck_requested_at TEXT,
           salary_precise_requested INTEGER, salary_precise_requested_at TEXT,
@@ -297,7 +298,9 @@ describe("effetto reale sul percorso Sync now", () => {
         );
       `);
       const insert = db.prepare(
-        "INSERT INTO positions (id, title, company, updated_at) VALUES (?, ?, 'Example', ?)",
+        "INSERT INTO positions (id, title, company, write_requested, " +
+          "write_request_kind, updated_at) " +
+          "VALUES (?, ?, 'Example', 1, 'cover_letter', ?)",
       );
       insert.run(1, "First role", "2026-08-12 15:00:00");
       db.close();
@@ -348,6 +351,12 @@ describe("effetto reale sul percorso Sync now", () => {
           silent: true,
         }),
       ).resolves.toMatchObject({ result: { ok: true, skipped: 0 } });
+      expect(
+        (payloads[0].positions as Array<Record<string, unknown>>)[0],
+      ).toMatchObject({
+        write_requested: 1,
+        write_request_kind: "cover_letter",
+      });
 
       const db2 = new DatabaseSync(dbPath);
       db2

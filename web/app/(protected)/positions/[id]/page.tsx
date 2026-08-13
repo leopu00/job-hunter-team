@@ -28,6 +28,7 @@ import { sourceDisplayName } from "@/lib/case-study-sources";
 import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
+import { CoverLetterRequestButton } from "./CoverLetterRequestButton";
 import { ExcludeButton } from "./ExcludeButton";
 import { RecheckButton } from "./RecheckButton";
 import { TicketPanel } from "./TicketPanel";
@@ -1266,12 +1267,23 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     return (
                       <WriteRequestButton
                         legacyId={position.legacy_id}
-                        initialRequested={position.write_requested === true}
+                        initialRequested={
+                          position.write_requested === true &&
+                          position.write_request_kind !== "cover_letter"
+                        }
                         disabled={isDisabled}
                         disabledReason={reason}
                       />
                     );
                   })()}
+                  <CoverLetterRequestButton
+                    legacyId={position.legacy_id}
+                    initialRequested={
+                      position.write_requested === true &&
+                      position.write_request_kind === "cover_letter"
+                    }
+                    disabled={application == null}
+                  />
                   {/* Esclusione manuale utente (mig 041): l'utente esclude
                       l'offerta con una causa → status 'excluded', gli agenti
                       smettono di ri-verificarne la liveness. */}

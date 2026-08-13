@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await admin
     .from("positions")
     .select(
-      "legacy_id, write_requested, write_requested_at, geocode_requested, geocode_requested_at, recheck_requested, recheck_requested_at, salary_precise_requested, salary_precise_requested_at, status, user_excluded_reason, user_excluded_note, user_excluded_at, user_excluded_prev_status, updated_at",
+      "legacy_id, write_requested, write_requested_at, write_request_kind, geocode_requested, geocode_requested_at, recheck_requested, recheck_requested_at, salary_precise_requested, salary_precise_requested_at, status, user_excluded_reason, user_excluded_note, user_excluded_at, user_excluded_prev_status, updated_at",
     )
     .eq("user_id", userId)
     .gt("updated_at", since.toISOString())

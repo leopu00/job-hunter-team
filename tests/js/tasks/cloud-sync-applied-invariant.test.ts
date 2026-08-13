@@ -229,6 +229,45 @@ beforeEach(() => {
 });
 
 describe("push sync di una candidatura", () => {
+  it("preserva il tipo richiesta cloud quando un client legacy non lo invia", async () => {
+    const legacy = await pushBody({
+      positions: [
+        {
+          id: 73,
+          title: "Synthetic role",
+          company: "Example",
+          status: "ready",
+          write_requested: 1,
+        },
+      ],
+    });
+    expect(legacy.status).toBe(200);
+    const legacyWrite = calls.find(
+      (call) => call.kind === "upsert" && call.table === "positions",
+    );
+    expect(legacyWrite?.payload[0]).not.toHaveProperty("write_request_kind");
+    expect(legacyWrite?.options).toMatchObject({ defaultToNull: false });
+
+    calls = [];
+    const modernResolution = await pushBody({
+      positions: [
+        {
+          id: 73,
+          title: "Synthetic role",
+          company: "Example",
+          status: "ready",
+          write_requested: 0,
+          write_request_kind: null,
+        },
+      ],
+    });
+    expect(modernResolution.status).toBe(200);
+    const modernWrite = calls.find(
+      (call) => call.kind === "upsert" && call.table === "positions",
+    );
+    expect(modernWrite?.payload[0]).toHaveProperty("write_request_kind", null);
+  });
+
   it("classifica solo SQLSTATE row-data come rifiuto isolabile", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     upsertError = { code: "22P02", message: "synthetic invalid data" };

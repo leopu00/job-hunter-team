@@ -140,6 +140,7 @@ CREATE TABLE IF NOT EXISTS positions (
   role_family TEXT,
   write_requested INTEGER DEFAULT 0,
   write_requested_at TIMESTAMP,
+  write_request_kind TEXT,
   geocode_requested INTEGER DEFAULT 0,
   geocode_requested_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

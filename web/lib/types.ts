@@ -59,6 +59,8 @@ export interface Position {
   // o /cv Telegram. Il Capitano spawna Scrittori solo quando = true.
   write_requested?: boolean;
   write_requested_at?: string | null;
+  // Stessa coda Writer-on-demand: NULL legacy equivale a richiesta CV.
+  write_request_kind?: "cv" | "cover_letter" | null;
   // V8 (2026-05-31) — Geocoding-on-demand: utente seleziona da dashboard
   // per coordinate ufficio precise. L'Analista esegue office-geocoding
   // solo quando = true. office_geocoded indica lo stato di completamento.
