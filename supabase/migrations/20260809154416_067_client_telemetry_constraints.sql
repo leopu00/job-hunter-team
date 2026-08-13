@@ -1,0 +1,8 @@
+-- H-08 migration-history anchor: intentionally no executable SQL.
+-- Remote identity: 20260809154416 / 067_client_telemetry_constraints
+-- Canonical effect: supabase/migrations/067_client_telemetry_constraints.sql
+-- Remote statements MD5: e1cce7643b7b33ead7ae4822c3982d56
+--
+-- The linked database already records this timestamped migration. Keeping
+-- the exact identity locally reconciles history without replaying old DDL;
+-- the canonical migration (or forward-only 081) owns the final schema.

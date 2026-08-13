@@ -1,0 +1,8 @@
+-- H-08 migration-history anchor: intentionally no executable SQL.
+-- Remote identity: 20260809154318 / 064_cloud_sync_client_identity
+-- Canonical effect: supabase/migrations/064_cloud_sync_client_identity.sql
+-- Remote statements MD5: 0a480dc5320600c639fb173e702b28a7
+--
+-- The linked database already records this timestamped migration. Keeping
+-- the exact identity locally reconciles history without replaying old DDL;
+-- the canonical migration (or forward-only 081) owns the final schema.

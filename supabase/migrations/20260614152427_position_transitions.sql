@@ -1,0 +1,8 @@
+-- H-08 migration-history anchor: intentionally no executable SQL.
+-- Remote identity: 20260614152427 / position_transitions
+-- Canonical effect: supabase/migrations/044_position_transitions.sql
+-- Remote statements MD5: bf757d50c6b05c2986169b08172a60f3
+--
+-- The linked database already records this timestamped migration. Keeping
+-- the exact identity locally reconciles history without replaying old DDL;
+-- the canonical migration (or forward-only 081) owns the final schema.
