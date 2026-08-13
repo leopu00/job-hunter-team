@@ -29,6 +29,8 @@ var _windows_health_boot_ok := false
 
 func _enter_tree() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	# Cap FPS a 60 + vsync. Con Vulkan il present in vsync (FIFO) è fluido e non
 	# blocca il resto del desktop come faceva OpenGL; niente tearing.
 	Engine.max_fps = 60
@@ -50,6 +52,8 @@ func _enter_tree() -> void:
 				usable.position + usable.size - wsize - Vector2i(8, 8))
 
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	_windows_health_boot_requested = OS.get_name() == "Windows" and (
 			OS.get_environment("JHT_UPDATE_NONCE") != ""
 			or OS.get_environment("JHT_UPDATE_HEALTH_PATH") != "")

@@ -783,7 +783,7 @@ function Get-ManagedExitCodeBestEffort {
 function Invoke-HealthCase {
   param(
     [string]$Root,
-    [ValidateSet('normal','positive','absent','hostile','nonce-only',
+    [ValidateSet('guard-source','normal','positive','absent','hostile','nonce-only',
       'path-only','invalid-nonce','invalid-path','journal-absent',
       'journal-malformed','pid-mismatch','start-invalid')]
     [string]$Mode)
@@ -845,25 +845,32 @@ function Invoke-HealthCase {
   }
 
   $previous = @{}
-  foreach ($name in @('APPDATA','JHT_NOVPS','JHT_UPDATE_HEALTH_PATH',
+  foreach ($name in @('APPDATA','LOCALAPPDATA','JHT_NOVPS','JHT_UPDATE_HEALTH_PATH',
       'JHT_UPDATE_NONCE','JHT_UPDATE_NOTICE',
-      'JHT_WINDOWS_UPDATE_HEALTH_BOOT_TEST')) {
+      'JHT_WINDOWS_UPDATE_HEALTH_BOOT_TEST',
+      'JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST')) {
     $previous[$name] = [Environment]::GetEnvironmentVariable($name)
   }
   $env:APPDATA = $appData
+  $env:LOCALAPPDATA = $appData
   $env:JHT_NOVPS = '1'
   $env:JHT_UPDATE_NOTICE = $expectedVersion
   $env:JHT_WINDOWS_UPDATE_HEALTH_BOOT_TEST = '1'
+  if ($Mode -ceq 'guard-source') {
+    $env:JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST = '1'
+  } else {
+    Remove-Item Env:JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST -ErrorAction SilentlyContinue
+  }
   Remove-Item Env:JHT_UPDATE_HEALTH_PATH -ErrorAction SilentlyContinue
   Remove-Item Env:JHT_UPDATE_NONCE -ErrorAction SilentlyContinue
-  if ($Mode -notin @('normal','nonce-only')) {
+  if ($Mode -notin @('guard-source','normal','nonce-only')) {
     $env:JHT_UPDATE_HEALTH_PATH = if ($Mode -ceq 'invalid-path') {
       $invalidPath
     } else {
       $healthPath
     }
   }
-  if ($Mode -notin @('normal','path-only')) {
+  if ($Mode -notin @('guard-source','normal','path-only')) {
     $env:JHT_UPDATE_NONCE = if ($Mode -ceq 'invalid-nonce') {
       'invalid'
     } else {
@@ -875,7 +882,7 @@ function Invoke-HealthCase {
   $process = $null
   $nativeExited = $false
   try {
-    $automaticQuit = $Mode -in @('normal','positive')
+    $automaticQuit = $Mode -in @('guard-source','normal','positive')
     $suspended = [JhtHealthPckProcess]::Create(
       $Executable, $consumerLogPath, $automaticQuit)
     $process = Get-Process -Id $suspended.ProcessId -ErrorAction Stop
@@ -950,6 +957,7 @@ function Invoke-HealthCase {
     }
 
     $expectedCode = switch ($Mode) {
+      'guard-source' { '' }
       'normal' { '' }
       'positive' { 'health_written' }
       'absent' { 'health_capability_absent' }
@@ -968,6 +976,10 @@ function Invoke-HealthCase {
         ' native_rc=' + $nativeExitCode + ' managed_rc=' + $managedExitCode)
     }
     $consumerLog = [IO.File]::ReadAllText($consumerLogPath)
+    if ($Mode -ceq 'guard-source' -and $consumerLog -notmatch
+        '(?m)^WINDOWS-INSTANCE-GUARD-PCK source=exported-pck bytes=9813 argv_utf16=26288 sha256=3f5c9ec40f3d27428b54a5a30a4df63a9ae6921a21ff7a84b044ba4c220efafa\r?$') {
+      throw 'exported PCK guard source census mismatch'
+    }
     $codeMatches = @([regex]::Matches(
       $consumerLog,
       '(?m)^WINDOWS-UPDATE-HEALTH code=([a-z_]+)\r?$'))
@@ -997,12 +1009,13 @@ function Invoke-HealthCase {
       throw ('health case normal-work mismatch mode=' + $Mode +
         ' native_rc=' + $nativeExitCode + ' managed_rc=' + $managedExitCode)
     }
-    $expectedExitCode = if ($Mode -in @('normal','positive')) { 0 } else { 1 }
+    $expectedExitCode = if ($Mode -in @('guard-source','normal','positive')) { 0 } else { 1 }
     if ($nativeExitCode -ne $expectedExitCode) {
       throw ('health case exit mismatch mode=' + $Mode +
         ' native_rc=' + $nativeExitCode + ' managed_rc=' + $managedExitCode)
     }
-    $outcome = if ($expectedCode -ceq '') { 'normal_boot' } else { $expectedCode }
+    $outcome = if ($Mode -ceq 'guard-source') { 'pck_source' } elseif (
+        $expectedCode -ceq '') { 'normal_boot' } else { $expectedCode }
     [Console]::Out.WriteLine('WINDOWS-UPDATE-HEALTH-PCK-CASE mode=' +
       $Mode + ' native_rc=' + $nativeExitCode +
       ' managed_rc=' + $managedExitCode + ' outcome=' + $outcome)
@@ -1053,7 +1066,7 @@ $casesPassed = $false
 try {
   New-ExactDirectory $gateRoot
   Register-GateNodeRole $gateRoot 'gate_root'
-  foreach ($mode in @('normal','positive','absent','hostile','nonce-only',
+  foreach ($mode in @('guard-source','normal','positive','absent','hostile','nonce-only',
       'path-only','invalid-nonce','invalid-path','journal-absent',
       'journal-malformed','pid-mismatch','start-invalid')) {
     Invoke-HealthCase $gateRoot $mode

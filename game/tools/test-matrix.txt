@@ -71,6 +71,10 @@ headless_exit|script|gate|any|-|tools/headless_exit_selftest.gd|-
 # policy Git LF, census delle due copie e fingerprint DER senza dipendere da
 # come il checkout del runner materializza i file.
 windows_trust_root_checkout|python|gate|any|-|tools/windows_trust_root_selftest.py|WINDOWS-UPDATE-TRUST-CHECKOUT-TEST PASS
+# Il singleton Windows nasce da source PS5.1 nel PCK: il gate blocca derive di
+# byte/encoding/pin, autoload dopo Log/Game, policy override e superamento dei
+# limiti CreateProcess prima ancora del test real-process sull'export Windows.
+windows_instance_guard|python|gate|any|-|tools/windows_instance_guard_selftest.py|WINDOWS-INSTANCE-GUARD-SELFTEST PASS
 # L'aggiornamento automatico. Si sbaglia in tre modi che a schermo si
 # assomigliano tutti a "non succede niente": non avvisare mai, proporre un
 # DECLASSAMENTO (alfabeticamente "0.3.10" viene prima di "0.3.9"), o installare

@@ -10,6 +10,8 @@ var _file: FileAccess
 var _debug_on := false
 
 func _enter_tree() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	_debug_on = OS.get_environment("JHT_LOG") == "debug"
 	# La sessione precedente sopravvive in .prev.log: dopo un crash il log
 	# corrente riparte vuoto e la diagnosi andrebbe persa (crash Docker 21/07).
@@ -29,6 +31,8 @@ func _enter_tree() -> void:
 	info("boot", "file di log: %s" % ProjectSettings.globalize_path("user://jht-game.log"))
 
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	# GPU e driver reali (smaschera i fallback software: llvmpipe/WARP = lag).
 	info("boot", "video: %s — %s" % [
 		RenderingServer.get_video_adapter_name(),

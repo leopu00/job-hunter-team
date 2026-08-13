@@ -1098,7 +1098,7 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
         "game_log",
         "Assert-ExactCurrentDacl",
         "WINDOWS-UPDATE-HEALTH-PCK-CASES PASS",
-        "$automaticQuit = $Mode -in @('normal','positive')",
+        "$automaticQuit = $Mode -in @('guard-source','normal','positive')",
         "$probeNativeExitCode -ne 7",
         "$probeManagedExitCode",
         '/d /s /c \\"exit /b 7\\"',
@@ -1120,10 +1120,12 @@ def test_exported_windows_pck_health_capability_is_gated_before_publication() ->
         "outcome=",
         "WINDOWS-UPDATE-HEALTH code=",
         "WINDOWS-UPDATE-HEALTH-NORMAL-WORK",
-        "'normal','positive','absent','hostile','nonce-only'",
+        "'guard-source','normal','positive','absent','hostile','nonce-only'",
         "'path-only','invalid-nonce','invalid-path','journal-absent'",
         "'journal-malformed','pid-mismatch','start-invalid'",
         "WINDOWS-UPDATE-HEALTH-PCK-CASE mode=",
+        "WINDOWS-INSTANCE-GUARD-PCK source=exported-pck",
+        "exported PCK guard source census mismatch",
         "WINDOWS-UPDATE-HEALTH-PCK-TEST PASS",
     ):
         assert contract in gate
