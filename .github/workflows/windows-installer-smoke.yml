@@ -9,7 +9,13 @@ on:
       - "game/export_presets.cfg"
       - "game/installer/**"
       - "game/project.godot"
+      - "game/scripts/client_control.gd"
+      - "game/scripts/support/windows_instance_guard.*"
+      - "game/tools/windows_instance_guard_selftest.py"
       - "scripts/build-windows-installer.ps1"
+      - "scripts/jht-wrapper.ps1"
+      - "tests/test_cli_game_host_contract.py"
+      - "tests/test_windows_installer_contract.py"
   pull_request:
     branches:
       - master
@@ -18,7 +24,13 @@ on:
       - "game/export_presets.cfg"
       - "game/installer/**"
       - "game/project.godot"
+      - "game/scripts/client_control.gd"
+      - "game/scripts/support/windows_instance_guard.*"
+      - "game/tools/windows_instance_guard_selftest.py"
       - "scripts/build-windows-installer.ps1"
+      - "scripts/jht-wrapper.ps1"
+      - "tests/test_cli_game_host_contract.py"
+      - "tests/test_windows_installer_contract.py"
   workflow_dispatch:
 
 permissions:
@@ -36,6 +48,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+
+      - name: Validate Windows PowerShell syntax
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($file in @(
+            'game/scripts/support/windows_instance_guard.ps1',
+            'scripts/build-windows-installer.ps1',
+            'scripts/jht-wrapper.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path -LiteralPath $file), [ref]$tokens, [ref]$errors)
+            if ($errors.Count -ne 0) { throw 'PowerShell syntax validation failed.' }
+          }
 
       - uses: chickensoft-games/setup-godot@v2.4.1
         with:

@@ -51,6 +51,8 @@ var _http: HTTPRequest
 
 
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
