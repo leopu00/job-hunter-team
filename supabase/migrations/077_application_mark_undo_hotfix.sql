@@ -1,4 +1,4 @@
--- O-80 hotfix: production 0.3.8 may be missing the two RPCs called by the
+-- P0 CLICK hotfix: production 0.3.8 may be missing the two RPCs called by the
 -- "Mi sono candidato" POST/DELETE routes.  This migration is intentionally
 -- narrow: it installs only those two tenant-bound, locking, atomic functions.
 -- It must not re-run or alter sync_upsert_applications from migration 072.

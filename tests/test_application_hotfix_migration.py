@@ -1,4 +1,4 @@
-"""Contract tests for the production-only O-80 RPC hotfix.
+"""Contract tests for the production-only manual-application RPC hotfix.
 
 The CI PG16 job executes this migration against its production-like schema;
 these source checks keep the small hotfix from silently absorbing batch-sync
