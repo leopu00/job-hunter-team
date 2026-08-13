@@ -78,7 +78,20 @@ describe("forma local-first delle scritture su posizione", () => {
     const panel = read("web/app/(protected)/positions/[id]/TicketPanel.tsx");
     expect(panel).toContain("attachmentUnavailable");
     expect(panel.match(/attachmentUnavailable:/g)).toHaveLength(8);
-    expect(panel).toContain('b?.error === "attachment_unavailable"');
+    expect(panel).toContain("ticketErrorMessage(b?.error, t)");
+  });
+
+  it("non rende mai errori server grezzi", async () => {
+    const { ticketErrorMessage } = await import("@/lib/ticket-error");
+    const copy = {
+      networkError: "Errore di rete",
+      attachmentUnavailable: "Allegato non disponibile",
+    };
+    const secret = "team localhost session path code segreto";
+    expect(ticketErrorMessage(secret, copy)).toBe(copy.networkError);
+    expect(ticketErrorMessage("attachment_unavailable", copy)).toBe(
+      copy.attachmentUnavailable,
+    );
   });
 
   it("l'errore candidatura è azionabile e non espone dettagli interni", () => {

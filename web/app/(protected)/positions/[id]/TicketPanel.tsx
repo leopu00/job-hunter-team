@@ -7,6 +7,7 @@ import type { Locale } from "@/i18n/config";
 import type { PositionTicket } from "@/lib/types";
 import { splitTicketRequest } from "@/lib/ticket-attachment";
 import { clipboardImageFile } from "@/lib/clipboard-image";
+import { ticketErrorMessage } from "@/lib/ticket-error";
 
 // Sezione "Richieste al team" sulla pagina posizione. L'utente scrive una
 // richiesta testuale libera (popup) → ticket 'open'; il Capitano l'assegna a un
@@ -279,11 +280,7 @@ export function TicketPanel({
       });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
-        setError(
-          b?.error === "attachment_unavailable"
-            ? t.attachmentUnavailable
-            : (b?.error ?? t.networkError),
-        );
+        setError(ticketErrorMessage(b?.error, t));
         setBusy(false);
         return;
       }
