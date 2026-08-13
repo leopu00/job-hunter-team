@@ -223,6 +223,19 @@ def test_linked_history_fails_when_local_and_remote_diverge_both_ways(tmp_path: 
     assert "remote_only=1" in result.stdout
 
 
+def test_linked_parser_classifies_the_sanitized_real_drift_fixture(tmp_path: Path):
+    fixture = ROOT / "tests/fixtures/supabase-migration-list-linked-drift.txt"
+    result, _ = _run_wrapper(tmp_path, fixture.read_text(encoding="utf-8"))
+
+    assert result.returncode == 1
+    assert "history_diverged" in result.stdout
+    assert "local=80" in result.stdout
+    assert "remote=69" in result.stdout
+    assert "matched=15" in result.stdout
+    assert "local_only=65" in result.stdout
+    assert "remote_only=54" in result.stdout
+
+
 @pytest.mark.parametrize("xtrace", [False, True])
 def test_linked_wrapper_never_exposes_raw_cli_output_or_diagnostics(
     tmp_path: Path, xtrace: bool

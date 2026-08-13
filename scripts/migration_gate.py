@@ -380,10 +380,12 @@ def _parse_linked_table(text: str) -> tuple[list[str], list[str]]:
         if not line:
             continue
         cells = [cell.strip().strip("`") for cell in re.split(r"[|│]", line)]
-        if cells and not cells[0]:
-            cells.pop(0)
-        if cells and not cells[-1]:
-            cells.pop()
+        # Glamour's real pretty table has no outer border.  A remote-only row
+        # therefore starts with ``| <remote> | <time>``: its leading empty cell
+        # is data (the missing local version), not decoration.  Only remove
+        # outer Markdown borders when both are present and there are 5 cells.
+        if len(cells) >= 5 and not cells[0] and not cells[-1]:
+            cells = cells[1:-1]
         if len(cells) < 3:
             raise GateInvalid("unrecognised linked output")
         first, second = cells[0].strip(), cells[1].strip()
