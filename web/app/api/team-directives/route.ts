@@ -62,6 +62,22 @@ function requestIdOrNew(value: unknown): string {
   return value.trim();
 }
 
+function existingCaptainEvent(
+  db: Database.Database,
+  requestId: string,
+  action: string,
+  id = 0,
+) {
+  const row = db
+    .prepare("SELECT body FROM pending_user_messages WHERE source_id = ?")
+    .get(`team-directive:${requestId}`) as { body?: string } | undefined;
+  if (!row) return null;
+  const match = row.body?.match(/^\[TEAM-DIRECTIVE\] (\w+) #(\d+)$/);
+  if (!match || match[1] !== action || (id && Number(match[2]) !== id))
+    throw new Error("request id payload mismatch");
+  return Number(match[2]);
+}
+
 interface DirectiveRow {
   id: number;
   body: string;
@@ -172,6 +188,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const db = localDbOrNull();
   if (db) {
     try {
+      const replayId = existingCaptainEvent(db, requestId, "created");
+      if (replayId)
+        return NextResponse.json({
+          id: String(replayId),
+          source: "local",
+          captain_event: { ok: true, status: "queued" },
+        });
       const nxt = db
         .prepare(
           "SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM team_directives WHERE status = 'active'",
@@ -288,6 +311,18 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
   const db = localDbOrNull();
   if (db) {
     try {
+      const replayId = existingCaptainEvent(
+        db,
+        requestId,
+        archive ? "archived" : "edited",
+        id,
+      );
+      if (replayId)
+        return NextResponse.json({
+          id: String(replayId),
+          source: "local",
+          captain_event: { ok: true, status: "queued" },
+        });
       const result = db.transaction(() => {
         const changed = archive
           ? db

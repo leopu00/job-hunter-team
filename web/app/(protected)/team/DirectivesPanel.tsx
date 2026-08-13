@@ -148,7 +148,12 @@ export default function DirectivesPanel({
   const add = async () => {
     const body = newBody.trim();
     if (!body) return;
-    if (await post({ body, kind: newKind }, t("added"))) {
+    if (
+      await post(
+        { body, kind: newKind, request_id: crypto.randomUUID() },
+        t("added"),
+      )
+    ) {
       setNewBody("");
       setNewKind("order");
     }
@@ -157,14 +162,17 @@ export default function DirectivesPanel({
   const saveEdit = async (id: number) => {
     const body = editText.trim();
     if (!body) return;
-    if (await post({ id, body })) {
+    if (await post({ id, body, request_id: crypto.randomUUID() })) {
       setEditId(null);
       setEditText("");
     }
   };
 
   const archive = (id: number) =>
-    post({ id, action: "archive" }, t("archivedMsg"));
+    post(
+      { id, action: "archive", request_id: crypto.randomUUID() },
+      t("archivedMsg"),
+    );
 
   const active = items.filter((d) => d.status === "active");
   const archived = items.filter((d) => d.status === "archived");

@@ -112,7 +112,7 @@ export default function DirectivesPanel() {
           type="button"
           disabled={!text.trim()}
           onClick={() => {
-            void mutate({ body: text });
+            void mutate({ body: text, request_id: crypto.randomUUID() });
             setText("");
           }}
           className="rounded bg-[var(--color-blue)] px-3 py-1 text-xs"
@@ -130,7 +130,13 @@ export default function DirectivesPanel() {
               <span className="flex-1 whitespace-pre-wrap">{d.body}</span>
               <button
                 type="button"
-                onClick={() => void mutate({ id: d.id, action: "archive" })}
+                onClick={() =>
+                  void mutate({
+                    id: d.id,
+                    action: "archive",
+                    request_id: crypto.randomUUID(),
+                  })
+                }
               >
                 {t.archive}
               </button>

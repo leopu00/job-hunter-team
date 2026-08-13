@@ -34,6 +34,22 @@ function captainEvent(
   }
 }
 
+function replayId(
+  db: Database.Database,
+  requestId: string,
+  action: string,
+  id = 0,
+) {
+  const row = db
+    .prepare("SELECT body FROM pending_user_messages WHERE source_id = ?")
+    .get(`team-directive:${requestId}`) as { body?: string } | undefined;
+  if (!row) return null;
+  const match = row.body?.match(/^\[TEAM-DIRECTIVE\] (\w+) #(\d+)$/);
+  if (!match || match[1] !== action || (id && Number(match[2]) !== id))
+    throw new Error("request id payload mismatch");
+  return Number(match[2]);
+}
+
 export async function GET() {
   const db = openDb();
   if (!db) return NextResponse.json({ directives: [], source: "local" });
@@ -74,6 +90,13 @@ export async function POST(req: NextRequest) {
       { status: 503 },
     );
   try {
+    const prior = replayId(db, requestId, "created");
+    if (prior)
+      return NextResponse.json({
+        id: prior,
+        source: "local",
+        captain_event: { status: "queued" },
+      });
     const n = (
       db
         .prepare(
@@ -130,6 +153,18 @@ export async function PATCH(req: NextRequest) {
       { status: 503 },
     );
   try {
+    const prior = replayId(
+      db,
+      requestId,
+      body.action === "archive" ? "archived" : "edited",
+      id,
+    );
+    if (prior)
+      return NextResponse.json({
+        id: prior,
+        source: "local",
+        captain_event: { status: "queued" },
+      });
     const result = db.transaction(() => {
       const changed =
         body.action === "archive"
