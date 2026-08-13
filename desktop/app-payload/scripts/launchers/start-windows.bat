@@ -27,7 +27,7 @@ echo [err] PowerShell non trovato. Installa PowerShell o esegui manualmente:
 echo       cd web
 echo       npm install
 echo       npm run build
-echo       npm run start
+echo       npm run start -- -H 127.0.0.1
 pause
 
 :end

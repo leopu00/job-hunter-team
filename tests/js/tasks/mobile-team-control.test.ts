@@ -205,11 +205,11 @@ describe("/team mobile read-only", () => {
     ).toBe("stopped");
   });
 
-  it("monta stato + stop e rende la bacheca non editabile", () => {
+  it("monta stato + stop e lascia la bacheca editabile", () => {
     const page = readWeb("app/(protected)/team/page.tsx");
     const ui = readWeb("app/(protected)/team/MobileTeamStatus.tsx");
     expect(page).toContain("<MobileTeamStatus />");
-    expect(page).toContain("<DirectivesPanel readOnly />");
+    expect(page).toContain("<DirectivesPanel />");
     expect(ui).toContain('fetch("/api/team-state/emergency-stop"');
     expect(ui).toContain("min-h-12");
     expect(ui).toContain('role="alertdialog"');

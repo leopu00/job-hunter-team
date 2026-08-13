@@ -337,11 +337,15 @@ def _latest_feedback_reason(actions: list[Any], action: str) -> str:
     event = actions[0]
     if event.get("action") != action:
         raise LocalScorerError("feedback latest_action does not match actions[0]")
-    reason = event.get("reason") or event.get("comment")
+    # `reason`/`comment` are raw machine input. Only their display twins have
+    # crossed the shared feedback sanitizer and may enter score.notes.
+    reason = event.get("display_reason") or event.get("display_comment")
     if reason is None:
         return ""
     if not isinstance(reason, str):
-        raise LocalScorerError("feedback reason/comment must be a string or null")
+        raise LocalScorerError(
+            "feedback display_reason/display_comment must be a string or null"
+        )
     compact = " ".join(reason.split())
     if len(compact) > 80:
         compact = compact[:79].rstrip() + "…"

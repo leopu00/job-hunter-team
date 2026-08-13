@@ -39,7 +39,7 @@ export default async function TeamActivityPage({ searchParams }: PageProps) {
       {/* 📋 Bacheca del team — ordini/strategia permanenti dell'utente. Il
           Capitano le rilegge a ogni riavvio (team_directives.py active). */}
       <section className="mx-auto w-full max-w-[900px] px-4 py-10">
-        <DirectivesPanel readOnly />
+        <DirectivesPanel />
       </section>
     </div>
   );

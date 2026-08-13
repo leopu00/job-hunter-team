@@ -10,6 +10,17 @@ import {
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
 import { sanitizedError } from "@/lib/error-response";
+import { isCloudDeploy } from "@/lib/deploy-mode";
+import {
+  readTeamDirectivesForUser,
+  type TeamDirectivesReader,
+  validateDirectiveMutationResult,
+} from "@/lib/team-directives-cloud";
+import {
+  MAX_DIRECTIVE_REQUEST_ID_LENGTH,
+  mutateLocalTeamDirective,
+  publicDirectiveError,
+} from "@/lib/team-directives-local";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +35,16 @@ export const dynamic = "force-dynamic";
 const KINDS = new Set(["order", "strategy", "formation", "note"]);
 const MAX_LEN = 2000;
 
+function requireRequestId(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.trim().length === 0 ||
+    value.trim().length > MAX_DIRECTIVE_REQUEST_ID_LENGTH
+  )
+    throw new Error("invalid request id");
+  return value.trim();
+}
+
 interface DirectiveRow {
   id: number;
   body: string;
@@ -37,7 +58,7 @@ interface DirectiveRow {
 }
 
 function localDbOrNull(): Database.Database | null {
-  if (!fs.existsSync(JHT_DB_PATH)) return null;
+  if (isCloudDeploy() || !fs.existsSync(JHT_DB_PATH)) return null;
   const db = new Database(JHT_DB_PATH);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
@@ -89,16 +110,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (guard) return guard;
   const resolved = await resolveUser(req);
   if (!resolved.ok) return resolved.res;
-  const { userId, supabase } = resolved.user;
-  const { data, error } = await supabase
-    .from("team_directives")
-    .select(
-      "id, body, kind, status, sort_order, created_by, created_at, updated_at, archived_at",
-    )
-    .eq("user_id", userId)
-    .order("status", { ascending: true })
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true });
+  const { supabase, userId } = resolved.user;
+  const { data, error } = await readTeamDirectivesForUser(
+    supabase as unknown as TeamDirectivesReader,
+    userId,
+  );
   if (error) {
     return sanitizedError(error, {
       status: 500,
@@ -116,6 +132,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const body = (await req.json().catch(() => ({}))) as {
     body?: string;
     kind?: string;
+    request_id?: string;
   };
   const text = typeof body.body === "string" ? body.body.trim() : "";
   if (!text) {
@@ -131,25 +148,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
   const kind = body.kind && KINDS.has(body.kind) ? body.kind : "order";
+  let requestId: string;
+  try {
+    requestId = requireRequestId(body.request_id);
+  } catch {
+    return NextResponse.json({ error: "invalid request id" }, { status: 400 });
+  }
 
   const db = localDbOrNull();
   if (db) {
     try {
-      const nxt = db
-        .prepare(
-          "SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM team_directives WHERE status = 'active'",
-        )
-        .get() as { n: number };
-      const info = db
-        .prepare(
-          "INSERT INTO team_directives (body, kind, status, sort_order, created_by) " +
-            "VALUES (?, ?, 'active', ?, 'user')",
-        )
-        .run(text, kind, nxt?.n ?? 1);
-      return NextResponse.json({
-        id: String(info.lastInsertRowid),
-        source: "local",
-      });
+      return NextResponse.json(
+        mutateLocalTeamDirective(db, {
+          requestId,
+          action: "created",
+          id: 0,
+          body: text,
+          kind,
+        }),
+      );
+    } catch (error) {
+      const failure = publicDirectiveError(error);
+      return NextResponse.json(
+        { error: failure.error },
+        { status: failure.status },
+      );
     } finally {
       db.close();
     }
@@ -165,26 +188,45 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       { status: 403 },
     );
   }
-  const { userId, supabase } = resolved.user;
-  const { data, error } = await supabase
-    .from("team_directives")
-    .insert({
-      user_id: userId,
-      body: text,
-      kind,
-      status: "active",
-      created_by: "user",
-    })
-    .select("id")
-    .single();
+  const { supabase } = resolved.user;
+  const { data, error } = await supabase.rpc(
+    "mutate_team_directive_with_event",
+    {
+      p_id: 0,
+      p_action: "created",
+      p_body: text,
+      p_kind: kind,
+      p_request_id: requestId,
+    },
+  );
   if (error) {
+    if (error.message?.includes("request id payload mismatch")) {
+      return NextResponse.json(
+        { error: "request_id_mismatch" },
+        { status: 409 },
+      );
+    }
     return sanitizedError(error, {
       status: 500,
       scope: "team-directives",
       publicMessage: "insert_failed",
     });
   }
-  return NextResponse.json({ id: String(data.id), source: "cloud" });
+  const mutation = validateDirectiveMutationResult(data, {
+    requestId,
+    action: "created",
+  });
+  if (!mutation) {
+    return NextResponse.json({ error: "insert_unconfirmed" }, { status: 502 });
+  }
+  return NextResponse.json({
+    id: String(mutation.id),
+    ok: true,
+    source: "cloud",
+    request_id: requestId,
+    action: "created",
+    captain_event: { ok: true, status: "queued" },
+  });
 }
 
 // ── PATCH: modifica il testo o archivia una direttiva ──────────────────────
@@ -195,12 +237,19 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     id?: number | string;
     body?: string;
     action?: string;
+    request_id?: string;
   };
   const id = Number(body.id);
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ error: "id non valido" }, { status: 400 });
   }
   const archive = body.action === "archive";
+  let requestId: string;
+  try {
+    requestId = requireRequestId(body.request_id);
+  } catch {
+    return NextResponse.json({ error: "invalid request id" }, { status: 400 });
+  }
   const text = typeof body.body === "string" ? body.body.trim() : null;
   if (!archive && !text) {
     return NextResponse.json(
@@ -218,18 +267,21 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
   const db = localDbOrNull();
   if (db) {
     try {
-      if (archive) {
-        db.prepare(
-          "UPDATE team_directives SET status = 'archived', " +
-            "archived_at = datetime('now','localtime'), updated_at = datetime('now','localtime') " +
-            "WHERE id = ?",
-        ).run(id);
-      } else {
-        db.prepare(
-          "UPDATE team_directives SET body = ?, updated_at = datetime('now','localtime') WHERE id = ?",
-        ).run(text, id);
-      }
-      return NextResponse.json({ ok: true, source: "local" });
+      const action = archive ? "archived" : "edited";
+      return NextResponse.json(
+        mutateLocalTeamDirective(db, {
+          requestId,
+          action,
+          id,
+          body: archive ? null : text,
+        }),
+      );
+    } catch (error) {
+      const failure = publicDirectiveError(error);
+      return NextResponse.json(
+        { error: failure.error },
+        { status: failure.status },
+      );
     } finally {
       db.close();
     }
@@ -245,25 +297,45 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       { status: 403 },
     );
   }
-  const { userId, supabase } = resolved.user;
-  const patch = archive
-    ? {
-        status: "archived",
-        archived_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-    : { body: text, updated_at: new Date().toISOString() };
-  const { error } = await supabase
-    .from("team_directives")
-    .update(patch)
-    .eq("id", id)
-    .eq("user_id", userId);
+  const { supabase } = resolved.user;
+  const { data, error } = await supabase.rpc(
+    "mutate_team_directive_with_event",
+    {
+      p_id: id,
+      p_action: archive ? "archived" : "edited",
+      p_body: text,
+      p_kind: null,
+      p_request_id: requestId,
+    },
+  );
   if (error) {
+    if (error.message?.includes("request id payload mismatch")) {
+      return NextResponse.json(
+        { error: "request_id_mismatch" },
+        { status: 409 },
+      );
+    }
     return sanitizedError(error, {
       status: 500,
       scope: "team-directives",
       publicMessage: "update_failed",
     });
   }
-  return NextResponse.json({ ok: true, source: "cloud" });
+  const action = archive ? "archived" : "edited";
+  const mutation = validateDirectiveMutationResult(data, {
+    requestId,
+    action,
+    id,
+  });
+  if (!mutation) {
+    return NextResponse.json({ error: "update_unconfirmed" }, { status: 502 });
+  }
+  return NextResponse.json({
+    ok: true,
+    id: String(mutation.id),
+    source: "cloud",
+    request_id: requestId,
+    action,
+    captain_event: { ok: true, status: "queued" },
+  });
 }

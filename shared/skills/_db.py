@@ -309,6 +309,9 @@ def ensure_schema(conn: sqlite3.Connection):
         author TEXT NOT NULL DEFAULT 'agent' CHECK (author IN ('agent','user')),
         chat_ts REAL,
         source_id TEXT,
+        source_action TEXT,
+        source_payload TEXT,
+        source_directive_id INTEGER,
         related_position_id INTEGER,
         delivered_via TEXT CHECK (delivered_via IN ('telegram','web') OR delivered_via IS NULL),
         delivered_at TIMESTAMP,
@@ -440,6 +443,17 @@ def ensure_schema(conn: sqlite3.Connection):
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         archived_at TIMESTAMP
+    );
+
+    -- O-80: claim e risultato della singola operazione dashboard. Vive nello
+    -- stesso DB di direttiva ed evento perché i quattro write devono fare
+    -- commit oppure rollback insieme.
+    CREATE TABLE IF NOT EXISTS team_directive_request_ledger (
+        request_id TEXT PRIMARY KEY,
+        action TEXT NOT NULL,
+        target_id INTEGER NOT NULL,
+        payload TEXT,
+        result TEXT
     );
 
     -- [JHT-DB-SCOUT-COORD] Divisione del territorio fra Scout e claim
@@ -1715,6 +1729,21 @@ def _migrate_pending_messages_chat_turns(conn: sqlite3.Connection) -> None:
     # legacy_id della riga, quindi il payload di sync non cambia.
     if not _column_exists(conn, 'pending_user_messages', 'source_id'):
         conn.execute("ALTER TABLE pending_user_messages ADD COLUMN source_id TEXT")
+    # O-80 correlation metadata is deliberately separate from `body`: the
+    # Captain receives only a trusted wake marker, while audits can still bind
+    # the event to the exact mutation without parsing or executing user text.
+    if not _column_exists(conn, 'pending_user_messages', 'source_action'):
+        conn.execute(
+            "ALTER TABLE pending_user_messages ADD COLUMN source_action TEXT"
+        )
+    if not _column_exists(conn, 'pending_user_messages', 'source_payload'):
+        conn.execute(
+            "ALTER TABLE pending_user_messages ADD COLUMN source_payload TEXT"
+        )
+    if not _column_exists(conn, 'pending_user_messages', 'source_directive_id'):
+        conn.execute(
+            "ALTER TABLE pending_user_messages ADD COLUMN source_directive_id INTEGER"
+        )
     # Identità del gemello cloud, quando il messaggio è NATO sul web (O-16).
     # Stesso patto di `position_tickets.cloud_id`: NULL = nata in locale, ed è
     # il caso di ogni riga preesistente — nessuna riscrittura, nessun default

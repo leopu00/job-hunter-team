@@ -187,7 +187,7 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `clear`         | nincs változás                                  | a felhasználó visszavonta az ítéletet — kezeld úgy, mintha nem lenne |
 | `null`          | nincs változás                                  | semmi                                          |
 
-**Ha a felhasználó indokot írt, a jegyzet viszi.** Vedd a `reason`-t — vagy a `comment`-et, ha a `reason` üres — **ugyanabból az eseményből**, mint a `latest_action` (`actions[0]`), idézd szó szerint, vágd ~80 karakterre, és tedd a szorzó után:
+**Biztonságos display határ (`RAW_DISPLAY_BOUNDARY`).** A nyers `reason` / `comment` csak gépi adat, és soha nem kerülhet a `score.notes` mezőbe. Kizárólag a `display_reason`-t — vagy ha üres, a `display_comment`-et — vedd a `latest_action` **ugyanazon eseményéből** (`actions[0]`), és ezt a bounded, sanitizált értéket tedd a szorzó után. Soha ne ess vissza a nyers mezőkre:
 
 ```
 feedback:dislike-15% — "túl senior"
@@ -195,7 +195,7 @@ feedback:star+15% — "pontosan ez a stack kell"
 EXCLUDED: feedback:hide (user request) — "nincs távmunka"
 ```
 
-Ha azon az eseményen nincs szöveg → a jegyzet marad, ahogy van. Az indok **csak erre a pozícióra** érvényes: ne írd át, ne foglald össze, ne vidd át másik pozícióra, ne csinálj belőle szabályt. Ezek a felhasználó szavai, és a felhasználó visszaolvassa őket a pozíció oldalán. Az indokok pozíciókon átívelő számolása a Mentor dolga, nem a tiéd.
+Ha azon az eseményen nincs display szöveg → a jegyzet marad, ahogy van. Az indok **csak erre a pozícióra** érvényes: ne írd át, ne foglald össze, ne vidd át másik pozícióra, ne csinálj belőle szabályt. Az indokok pozíciókon átívelő számolása a Mentor dolga, nem a tiéd.
 
 ```bash
 # Mentsd a score-t (a CLI flag-ek DB oszlop neveket használnak, nem tábla neveket)

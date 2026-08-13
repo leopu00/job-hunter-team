@@ -148,23 +148,25 @@ Ojo con la diferencia respecto al Patrón B: allí las exclusiones son de los **
 
 Este feedback vive en la nube (`position_feedback`), no en `jobs.db`: es el único patrón que no pasa por `db_query.py`.
 
+**`RAW_DISPLAY_BOUNDARY`** — agrupa sobre los raw `reason` / `comment`, pero nunca los reenvíes. Toda interpretación user-facing puede usar solo `display_reason` / `display_comment` y `label` / `examples` sanitizados de los temas; claves de máquina, IDs y notes `no-signal:*` quedan internos.
+
 ### Detección
 
 ```bash
 # Los temas en los motivos que escribió el usuario, últimos 30 días
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# El mismo feedback sin agregar, para leer sus palabras exactas
+# El mismo feedback sin agregar; lee solo display_reason/display_comment
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
 `themes` agrupa el texto libre por similitud simple — no exige coincidencia exacta. Pone en minúsculas, quita acentos, puntuación y palabras de servicio, corta cada palabra a sus primeros 5 caracteres (`senior` / `seniority` / `seniore` / `séniorité` caen en la misma clave), y luego cuenta palabras sueltas y pares adyacentes por **posiciones distintas**. Un par gana a sus partes cuando cubre las mismas posiciones: "demasiado senior" dice más que "senior", y los intensificadores se conservan precisamente por eso.
 
-Por cada tema devuelve `positions`, `events`, `share` (fracción de las posiciones que llevan texto), `actions` (cómo se reparte el tema entre like / dislike / hide / star), `legacy_ids` y hasta 3 `examples` literales.
+Por cada tema devuelve `positions`, `events`, `share` (fracción de las posiciones que llevan texto), `actions` (cómo se reparte el tema entre like / dislike / hide / star), `legacy_ids` internos y hasta 3 `examples` display sanitizados.
 
 Es tosco por construcción y se nota: los sinónimos lejanos quedan separados (`salario` y `RAL` son dos temas). Lee los `examples` y une con la cabeza lo que la herramienta no pudo.
 
-Si el payload trae una `note` (`no-signal (...)`), la nube está apagada o inaccesible y no hay agregado: cállate, no reconstruyas el cuadro con llamadas `check` posición por posición.
+Si el payload trae una `note` enum cerrada (`no-signal:*`), no hay agregado: guarda silencio, no reenvíes el código y no reconstruyas el cuadro con llamadas `check` posición por posición.
 
 ### Umbral
 

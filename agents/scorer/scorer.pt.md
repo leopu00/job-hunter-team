@@ -187,7 +187,7 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `clear`         | sem mudança                                  | o utilizador retirou o juízo — trata-o como ausente |
 | `null`          | sem mudança                                  | nenhum                                          |
 
-**Se o utilizador escreveu um motivo, a nota leva-o.** Pega em `reason` — ou `comment` se `reason` estiver vazio — do **mesmo evento** de `latest_action` (`actions[0]`), cita-o literalmente, corta a ~80 caracteres e acrescenta-o depois do multiplicador:
+**Fronteira display segura (`RAW_DISPLAY_BOUNDARY`).** Os raw `reason` / `comment` são apenas para a máquina e nunca devem entrar em `score.notes`. Usa somente `display_reason` — ou `display_comment` se vazio — do **mesmo evento** de `latest_action` (`actions[0]`) e acrescenta esse valor bounded e sanitizado depois do multiplicador. Nunca recues para os campos raw:
 
 ```
 feedback:dislike-15% — "demasiado senior"
@@ -195,7 +195,7 @@ feedback:star+15% — "exatamente a stack que quero"
 EXCLUDED: feedback:hide (user request) — "sem remoto"
 ```
 
-Sem texto nesse evento → a nota fica como está. Esse motivo vale **só para esta posição**: não o reescrevas, não o resumas, não o passes para outra posição, não o transformes numa regra. São palavras do utilizador e o utilizador relê-as na página da posição. Contar os motivos através das posições é trabalho do Mentor, não teu.
+Sem texto display nesse evento → a nota fica como está. Esse motivo vale **só para esta posição**: não o reescrevas, não o resumas, não o passes para outra posição, não o transformes numa regra. Contar os motivos através das posições é trabalho do Mentor, não teu.
 
 ```bash
 # Guarda score (os flags CLI usam nomes de colunas DB, não nomes de tabelas)

@@ -103,7 +103,7 @@ Push-Location $WebDir
 $serverJob = Start-Job -ScriptBlock {
     param($Dir, $P, $Log)
     Set-Location $Dir
-    & npm run start -- -p $P *> $Log
+    & npm run start -- -H 127.0.0.1 -p $P *> $Log
 } -ArgumentList $WebDir, $Port, $LogFile
 Pop-Location
 

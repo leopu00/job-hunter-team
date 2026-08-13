@@ -5,6 +5,10 @@ description: Nutzer-Feedback (like/dislike/hide/star) aus der Cloud lesen — ei
 allowed-tools: Bash(python3 *)
 ---
 
+## Raw/Display-Grenze (`RAW_DISPLAY_BOUNDARY`)
+
+`reason` und `comment` sind rohe Eingaben nur für Maschinen. Zitiere, übermittle, fasse oder zeige sie dem Nutzer niemals. Jede user-facing Notiz oder Nachricht darf nur `display_reason` / `display_comment` verwenden; `label` / `examples` der Themen haben bereits denselben gemeinsamen Sanitizer durchlaufen. Eine `note` ist nur ein geschlossenes `no-signal:*`-Enum: behandle sie als Verfügbarkeitsstatus, nie als Infrastrukturdetail.
+
 # feedback-query — Nutzer-Feedback pro Position
 
 Der Nutzer kann auf dem Web-Dashboard like/dislike/hide/star auf jede Position klicken. Diese Klicks werden in Supabase `position_feedback` gespeichert (Mig 019 Basis + Mig 028 erweitert) und über diesen Skill an Agenten weitergegeben. Schema:
@@ -39,9 +43,11 @@ Ausgabe (JSON auf stdout):
   "actions": [
     {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
      "reason": "too senior", "comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
+     "display_reason": "too senior", "display_comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
      "score": 2, "direction": "less_like_this"},
     {"action": "like", "created_at": "2026-05-28T09:00:00Z",
-     "reason": null, "comment": null, "score": null, "direction": null}
+     "reason": null, "comment": null, "display_reason": null,
+     "display_comment": null, "score": null, "direction": null}
   ]
 }
 ```
@@ -58,7 +64,7 @@ Wenn die Cloud deaktiviert oder der Endpunkt nicht erreichbar ist, gibt der Skil
 ```json
 {"ok": true, "legacy_id": "...", "latest_action": null,
  "latest_direction": null, "count": 0, "actions": [],
- "note": "no-signal (cloud-disabled)"}
+ "note": "no-signal:cloud-disabled"}
 ```
 
 ## Aggregierte Abfrage (Zeitfenster über alle Positionen)
@@ -93,7 +99,7 @@ Ausgabe von `themes`:
 Wie die Gruppierung arbeitet (keine exakte Übereinstimmung nötig, keine neue Abhängigkeit): Kleinschreibung → Akzente weg → Interpunktion weg → Funktionswörter weg → jedes Wort auf die ersten 5 Zeichen gekürzt (`senior` / `seniority` / `seniore` / `séniorité` fallen auf einen Schlüssel) → gezählt werden Einzelwörter und **benachbarte Paare**, nach **verschiedenen Positionen**, nicht nach Events. Ein Paar schluckt seine Teile, wenn es ≥ 80% derselben Positionen abdeckt, so gewinnt "zu senior" gegen "senior"; Verstärkungswörter bleiben absichtlich im Strom. `reason` und `comment` werden getrennt tokenisiert, also wird kein Paar über die Grenze der beiden hinweg erfunden.
 
 Bewusste Grenzen, benannt, damit niemand mehr in die Zahlen liest, als drinsteht:
-- Entfernte Synonyme bleiben getrennt (`Gehalt` und `RAL` sind zwei Themen) — das ist Wörterzählen, keine Semantik. Lies die `examples` (wörtlich, max. 3) und verbinde mit dem Kopf, was das Werkzeug nicht konnte.
+- Entfernte Synonyme bleiben getrennt (`Gehalt` und `RAL` sind zwei Themen) — das ist Wörterzählen, keine Semantik. Lies die sanitizten Display-`examples` (max. 3) und verbinde mit dem Kopf, was das Werkzeug nicht konnte.
 - Positionen, deren **letztes** Event `clear` ist, bleiben draußen (das Urteil wurde zurückgezogen); `--include-cleared` holt sie zurück.
 - `share` = Positionen des Themas / `positions_with_text`.
 - `--field reason|comment|both` (Standard `both`), `--top N`, `--days 0` für die ganze Historie.
@@ -101,7 +107,7 @@ Bewusste Grenzen, benannt, damit niemand mehr in die Zahlen liest, als drinsteht
 
 Flags: `--days` (Standard 30, `0` = alles), `--limit` (Standard 500 Events), `--min-positions` (Standard 3), `--text-chars` bei `recent` (Standard 300, kürzt lange Kommentare).
 
-Trägt der Payload eine `note` (`no-signal (...)`), gibt es kein Aggregat: Cloud aus, Endpunkt fehlt oder Netz weg. Behandle das als "keine Daten", nie als "kein Feedback".
+Trägt der Payload eine geschlossene `note`-Enum (`no-signal:*`), gibt es kein Aggregat. Behandle sie als "keine Daten", nie als "kein Feedback", und gib den Code nie weiter.
 
 ## Wie Agenten es verwenden
 
@@ -113,7 +119,7 @@ Trägt der Payload eine `note` (`no-signal (...)`), gibt es kein Aggregat: Cloud
    - `dislike` → final_score = round(base * 0.85), Notiz `feedback:dislike-15%` hinzufügen
    - `hide` → status=`excluded`, Notiz `feedback:hide`, Score-Schreiben überspringen
    - `clear` / `null` → keine Änderung (ein zurückgezogenes Urteil ist kein Urteil)
-3. **Trage den Grund in die Notiz**, wenn der Nutzer einen geschrieben hat. Nimm `reason` (oder, wenn leer, `comment`) aus **demselben Event** wie `latest_action` — `actions[0]` — zitiere ihn wörtlich, kürze auf ~80 Zeichen und hänge ihn an die Notiz:
+3. **Trage den sicheren Display-Grund in die Notiz**, wenn vorhanden. Nimm `display_reason` (oder, wenn leer, `display_comment`) aus **demselben Event** wie `latest_action` — `actions[0]` — und hänge ihn an die Notiz. Falle nie auf rohe `reason` / `comment` zurück:
 
    ```
    feedback:dislike-15% — "zu senior"

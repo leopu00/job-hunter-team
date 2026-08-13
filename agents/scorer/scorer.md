@@ -186,7 +186,7 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `clear`         | no change                                  | the user withdrew the judgement — treat as none |
 | `null`          | no change                                  | none                                          |
 
-**If the user wrote a reason, the note carries it.** Take `reason` — or `comment` when `reason` is empty — from the **same event** as `latest_action` (`actions[0]`), quote it verbatim, trim to ~80 characters, and append it after the multiplier:
+**Safe display boundary (`RAW_DISPLAY_BOUNDARY`).** Raw `reason` / `comment` are machine-only and must never enter `score.notes`. Take only `display_reason` — or `display_comment` when empty — from the **same event** as `latest_action` (`actions[0]`) and append that bounded, sanitized value after the multiplier. Never fall back to raw fields:
 
 ```
 feedback:dislike-15% — "too senior"
@@ -194,7 +194,7 @@ feedback:star+15% — "exactly the stack I want"
 EXCLUDED: feedback:hide (user request) — "no remote"
 ```
 
-No text on that event → the note stays as it is. That reason belongs to **this position only**: do not rewrite it, do not summarise it, do not carry it over to another position, do not turn it into a rule. Those are the user's words and the user reads them back on the position page. Counting reasons across positions is the Mentor's job, not yours.
+No display text on that event → the note stays as it is. That reason belongs to **this position only**: do not rewrite it, do not summarise it, do not carry it over to another position, do not turn it into a rule. Counting reasons across positions is the Mentor's job, not yours.
 
 ```bash
 # Save score (CLI flags use DB column names, not table names)

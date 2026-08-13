@@ -72,6 +72,9 @@ CREATE TABLE pending_user_messages (
   author TEXT NOT NULL DEFAULT 'agent',
   chat_ts REAL,
   source_id TEXT,
+  source_action TEXT,
+  source_payload TEXT,
+  source_directive_id INTEGER,
   related_position_id INTEGER,
   delivered_via TEXT,
   delivered_at TIMESTAMP,
@@ -524,6 +527,27 @@ describe("turni scritti dal web", () => {
     expect(row.cloud_synced_at).not.toBeNull();
   });
 
+  it("conserva la provenienza trusted di un marker direttiva cloud", () => {
+    importCloudUserTurns(db, [
+      {
+        id: "uuid-directive",
+        legacy_id: -1753790000001,
+        agent: "capitano",
+        body: "[TEAM-DIRECTIVE] edited",
+        source_id: "team-directive:req-1",
+        source_action: "edited",
+        source_payload: "testo che non entra nel body",
+        source_directive_id: 91,
+      },
+    ]);
+    expect(rowsOf()[0]).toMatchObject({
+      source_id: "team-directive:req-1",
+      source_action: "edited",
+      source_payload: "testo che non entra nel body",
+      source_directive_id: 91,
+    });
+  });
+
   it("finiscono SUBITO anche nel file che legge il videogioco", () => {
     // Trovato dallo smoke end-to-end: il mirror (passo 3) lavora sulle
     // righe con chat_ts NULL, e qui il valore è già impostato perché è la
@@ -614,6 +638,33 @@ describe("consegna al pane tmux", () => {
     expect(res).toEqual({ delivered: 1, failed: 0 });
     expect(seen).toEqual([["capitano", "che ore sono?"]]);
     expect(rowsOf()[0].delivered_at).toBeTruthy();
+  });
+
+  it("usa la corsia sistema solo per un marker direttiva correlato", async () => {
+    db.prepare(
+      `INSERT INTO pending_user_messages
+       (agent,body,author,source_id,source_action)
+       VALUES ('capitano','[TEAM-DIRECTIVE] edited','user',
+               'team-directive:req-1','edited')`,
+    ).run();
+    seedUserTurn("capitano", "[TEAM-DIRECTIVE] edited");
+    const seen: Array<{ text: string; channel: string | null }> = [];
+    await deliverPendingUserTurns(db, {
+      sendFn: async (_agent: string, text: string, options: any) => {
+        seen.push({ text, channel: options.channel });
+        return { ok: true, code: 0, error: "" };
+      },
+    });
+    expect(seen).toEqual([
+      { text: "[TEAM-DIRECTIVE] edited", channel: "team-directive" },
+      { text: "[TEAM-DIRECTIVE] edited", channel: null },
+    ]);
+    expect(
+      paneEnvelope("capitano", seen[0].text, seen[0].channel),
+    ).toBe("[@sistema -> @capitano] [TEAM-DIRECTIVE] edited");
+    expect(
+      paneEnvelope("capitano", seen[1].text, seen[1].channel),
+    ).toBe("[@utente -> @capitano] [CHAT] [TEAM-DIRECTIVE] edited");
   });
 
   it("pane occupato (exit 4) = messaggio NON perso, delivered_at resta NULL", async () => {

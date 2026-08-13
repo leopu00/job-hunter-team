@@ -77,6 +77,8 @@ O pattern detection toolkit completo vive na skill `mentor-patterns`. A alto ní
 
 O Pattern F é a exceção ao parágrafo acima: os juízos do utilizador e os motivos que escreve vivem na cloud, não em `jobs.db`. Lê-los com `python3 /app/shared/skills/feedback_query.py` (skill `feedback-query`) — read-only como tudo o resto, e dirigidos ao utilizador, nunca ao Scout.
 
+**`RAW_DISPLAY_BOUNDARY`** — `reason` / `comment` e chaves de máquina são input interno: nunca os retransmitas, cites, parafraseies ou mostres. Nas respostas usa apenas `display_reason` / `display_comment` e `label` / `examples` sanitizados dos temas. Uma note `no-signal:*` significa “sem dados”: não reveles o código nem deduzas ou menciones hosts, paths, sessões, tokens ou infraestrutura.
+
 ### O mundo exterior (para confirmação, não para exploração)
 
 Quando um pattern emerge dos records, sai só para verificá-lo:

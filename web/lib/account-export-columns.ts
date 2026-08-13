@@ -383,6 +383,14 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "updated_at",
     "archived_at",
   ],
+  team_directive_request_ledger: [
+    "request_id",
+    "action",
+    "target_id",
+    "payload",
+    "kind",
+    "result",
+  ],
   user_onboarding_state: [
     "vps_setup_completed_at",
     "profile_configured_at",

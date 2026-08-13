@@ -73,7 +73,9 @@ export async function GET(req: NextRequest) {
   // è stata scritta. Indice parziale dedicato: idx_..._undelivered_user.
   const { data, error } = await admin
     .from("pending_user_messages")
-    .select("id, legacy_id, agent, body, created_at")
+    .select(
+      "id, legacy_id, agent, body, source_id, source_action, source_payload, source_directive_id, created_at",
+    )
     .eq("user_id", userId)
     .eq("author", "user")
     // `legacy_id < 0` = nata QUI, dal browser (mig 060). Il filtro era

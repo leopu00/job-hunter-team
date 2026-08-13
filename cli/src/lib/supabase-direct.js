@@ -229,7 +229,10 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
    */
   async function readUndeliveredUserChat({ limit = 50 } = {}) {
     const params = new URLSearchParams();
-    params.set('select', 'id,legacy_id,agent,body,created_at');
+    params.set(
+      'select',
+      'id,legacy_id,agent,body,source_id,source_action,source_payload,source_directive_id,created_at',
+    );
     params.set('author', 'eq.user');
     // NATIVE DEL CLOUD, cioe' scritte dal browser: `legacy_id` negativo (mig
     // 060). Il filtro era dichiarato nel commento e non nella query, e senza

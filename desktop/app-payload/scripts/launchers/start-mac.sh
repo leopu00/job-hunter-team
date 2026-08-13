@@ -94,7 +94,7 @@ fi
 # ── Avvio server ──
 info "Avvio server su http://localhost:$PORT ..."
 cd "$WEB_DIR"
-npm run start -- -p "$PORT" > "$LOG_FILE" 2>&1 &
+npm run start -- -H 127.0.0.1 -p "$PORT" > "$LOG_FILE" 2>&1 &
 SERVER_PID=$!
 
 # ── Attendi che il server sia pronto ──
