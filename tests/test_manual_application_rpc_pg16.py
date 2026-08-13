@@ -59,6 +59,14 @@ GRANT USAGE ON SCHEMA auth TO authenticated;
 GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.positions, public.applications, public.position_transitions, public.scores TO authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+ALTER TABLE public.positions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.position_transitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.scores ENABLE ROW LEVEL SECURITY;
+CREATE POLICY positions_owner ON public.positions FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY applications_owner ON public.applications FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY transitions_owner ON public.position_transitions FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY scores_owner ON public.scores FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 """
 
 
@@ -75,6 +83,12 @@ def test_pg16_apply_reapply_click_undo_tenant_and_privileges(pg16):
     privileges = pg16("SELECT has_function_privilege('anon','public.mark_position_applied(integer,timestamptz,text,text)','execute'), has_function_privilege('authenticated','public.mark_position_applied(integer,timestamptz,text,text)','execute'), has_function_privilege('service_role','public.mark_position_applied(integer,timestamptz,text,text)','execute');").stdout.strip()
     assert privileges == "f|t|f"
     pg16(f"INSERT INTO public.positions VALUES ('{pos}','{owner}',73,'ready',NULL), ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','{other}',73+1,'ready',NULL);")
+    for role in ("anon", "service_role"):
+        denied = pg16(f"SET ROLE {role}; SELECT public.mark_position_applied(73,'2026-08-13T12:00:00Z','user_manual','synthetic');", check=False)
+        assert denied.returncode != 0 and "permission denied" in denied.stderr.lower()
+    tenant = pg16(f"SET ROLE authenticated; SET request.jwt.claim.sub='{other}'; SELECT public.mark_position_applied(73,'2026-08-13T12:00:00Z','user_manual','synthetic');", check=False)
+    assert tenant.returncode != 0 and "position_not_found" in tenant.stderr
+    assert pg16("SELECT status FROM public.positions WHERE legacy_id=73;").stdout.strip() == "ready"
     apply_sql = f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.mark_position_applied(73,'2026-08-13T12:00:00Z','user_manual','synthetic'); SELECT public.mark_position_applied(73,'2026-08-13T12:01:00Z','user_manual','synthetic');"
     applied = pg16(apply_sql).stdout.strip().splitlines()
     assert len(applied) == 2 and all('"status": "applied"' in row or '"status":"applied"' in row for row in applied)
