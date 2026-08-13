@@ -33,7 +33,7 @@ const T: Record<string, Testi> = {
     intro_app:
       "Hai già installato JHT? Per i problemi tecnici usa «Segnala un problema» dentro l'app: allega in automatico una diagnostica anonimizzata.",
     privacy_note:
-      "Il report tecnico qui sotto è anonimo: prima dell'invio mostra esattamente quali dati tecnici raccoglie.",
+      "L'email è facoltativa: senza, il report resta anonimo; se la inserisci, viene usata solo per risponderti.",
     kind_label: "Argomento",
     kind_support: "Supporto tecnico",
     kind_question: "Domanda generale",
@@ -41,17 +41,17 @@ const T: Record<string, Testi> = {
     kind_privacy: "Privacy e dati",
     name: "Nome",
     name_ph: "Il tuo nome",
-    email: "Email",
+    email: "Email (facoltativa)",
     email_ph: "nome@esempio.it",
     subject: "Oggetto",
     subject_ph: "Di cosa vuoi parlarci",
     report_intro:
-      "Hai trovato un bug o un malfunzionamento? Descrivilo qui: non chiediamo nome o email.",
+      "Hai trovato un bug o un malfunzionamento? Descrivilo qui. Lascia l'email solo se vuoi ricevere una risposta.",
     message: "Messaggio",
     message_ph: "Cosa è successo e cosa ti aspettavi",
     data_title: "Dati inviati",
     data_body:
-      "Inviamo il testo che scrivi, questa pagina e la lingua dell'interfaccia. Non inviamo nome, email, CV, contatti, file o log.",
+      "Inviamo il testo che scrivi, questa pagina, la lingua dell'interfaccia e, se la inserisci, l'email soltanto come indirizzo di risposta. Non inviamo nome, CV, altri contatti, file o log.",
     data_page: "Pagina",
     data_language: "Lingua",
     data_client: "Sito web",
@@ -76,7 +76,7 @@ const T: Record<string, Testi> = {
     intro_app:
       "Already using JHT? For technical issues use «Report a problem» inside the app: it automatically attaches an anonymised diagnostic.",
     privacy_note:
-      "The technical report below is anonymous: it shows exactly which technical data it collects before sending.",
+      "Email is optional: without it, the report stays anonymous; if you enter it, we use it only to reply to you.",
     kind_label: "Topic",
     kind_support: "Technical support",
     kind_question: "General question",
@@ -84,17 +84,17 @@ const T: Record<string, Testi> = {
     kind_privacy: "Privacy & data",
     name: "Name",
     name_ph: "Your name",
-    email: "Email",
+    email: "Email (optional)",
     email_ph: "name@example.com",
     subject: "Subject",
     subject_ph: "What is it about",
     report_intro:
-      "Found a bug or something not working? Describe it here — we do not ask for your name or email.",
+      "Found a bug or something not working? Describe it here. Add your email only if you want a reply.",
     message: "Message",
     message_ph: "What happened and what you expected",
     data_title: "Data being sent",
     data_body:
-      "We send the text you write, this page and the interface language. We do not send your name, email, CV, contacts, files or logs.",
+      "We send the text you write, this page, the interface language and, if entered, your email only as a reply address. We do not send your name, CV, other contacts, files or logs.",
     data_page: "Page",
     data_language: "Language",
     data_client: "Website",
@@ -119,7 +119,7 @@ const T: Record<string, Testi> = {
     intro_app:
       "¿Ya usas JHT? Para problemas técnicos usa «Informar de un problema» dentro de la app: adjunta automáticamente un diagnóstico anonimizado.",
     privacy_note:
-      "El informe técnico de abajo es anónimo: antes de enviarlo muestra exactamente qué datos técnicos recoge.",
+      "El correo es opcional: sin él, el informe sigue siendo anónimo; si lo indicas, solo lo usamos para responderte.",
     kind_label: "Asunto",
     kind_support: "Soporte técnico",
     kind_question: "Consulta general",
@@ -127,17 +127,17 @@ const T: Record<string, Testi> = {
     kind_privacy: "Privacidad y datos",
     name: "Nombre",
     name_ph: "Tu nombre",
-    email: "Email",
+    email: "Correo (opcional)",
     email_ph: "nombre@ejemplo.com",
     subject: "Asunto",
     subject_ph: "De qué quieres hablarnos",
     report_intro:
-      "¿Has encontrado un error o algo que no funciona? Descríbelo aquí: no pedimos nombre ni correo.",
+      "¿Has encontrado un error o algo que no funciona? Descríbelo aquí. Indica tu correo solo si quieres recibir una respuesta.",
     message: "Mensaje",
     message_ph: "Qué ha pasado y qué esperabas",
     data_title: "Datos enviados",
     data_body:
-      "Enviamos el texto que escribes, esta página y el idioma de la interfaz. No enviamos nombre, correo, CV, contactos, archivos ni registros.",
+      "Enviamos el texto que escribes, esta página, el idioma de la interfaz y, si lo indicas, tu correo solo como dirección de respuesta. No enviamos nombre, CV, otros contactos, archivos ni registros.",
     data_page: "Página",
     data_language: "Idioma",
     data_client: "Sitio web",
@@ -163,7 +163,7 @@ const T: Record<string, Testi> = {
     intro_app:
       "Tu utilises déjà JHT ? Pour les problèmes techniques, utilise « Signaler un problème » dans l'app : elle joint automatiquement un diagnostic anonymisé.",
     privacy_note:
-      "Le signalement technique ci-dessous est anonyme : il montre exactement quelles données techniques il collecte avant l'envoi.",
+      "L'email est facultatif : sans lui, le signalement reste anonyme ; si tu le saisis, nous l'utilisons uniquement pour te répondre.",
     kind_label: "Sujet",
     kind_support: "Support technique",
     kind_question: "Question générale",
@@ -171,17 +171,17 @@ const T: Record<string, Testi> = {
     kind_privacy: "Confidentialité",
     name: "Nom",
     name_ph: "Ton nom",
-    email: "Email",
+    email: "Email (facultatif)",
     email_ph: "nom@exemple.com",
     subject: "Objet",
     subject_ph: "De quoi veux-tu nous parler",
     report_intro:
-      "Tu as trouvé un bug ou quelque chose qui ne marche pas ? Décris-le ici : nous ne demandons ni nom ni email.",
+      "Tu as trouvé un bug ou quelque chose qui ne marche pas ? Décris-le ici. Indique ton email uniquement si tu souhaites une réponse.",
     message: "Message",
     message_ph: "Ce qui s'est passé et ce que tu attendais",
     data_title: "Données envoyées",
     data_body:
-      "Nous envoyons le texte que tu écris, cette page et la langue de l'interface. Nous n'envoyons ni nom, ni email, ni CV, ni contacts, ni fichiers, ni journaux.",
+      "Nous envoyons le texte que tu écris, cette page, la langue de l'interface et, si tu le saisis, ton email uniquement comme adresse de réponse. Nous n'envoyons ni nom, ni CV, ni autres coordonnées, ni fichiers, ni journaux.",
     data_page: "Page",
     data_language: "Langue",
     data_client: "Site web",
@@ -206,7 +206,7 @@ const T: Record<string, Testi> = {
     intro_app:
       "Du nutzt JHT bereits? Für technische Probleme nimm «Problem melden» in der App: sie hängt automatisch eine anonymisierte Diagnose an.",
     privacy_note:
-      "Die technische Meldung unten ist anonym: Vor dem Senden zeigt sie genau, welche technischen Daten sie erfasst.",
+      "Die E-Mail-Adresse ist optional: Ohne sie bleibt die Meldung anonym; wenn du sie eingibst, verwenden wir sie nur, um dir zu antworten.",
     kind_label: "Thema",
     kind_support: "Technischer Support",
     kind_question: "Allgemeine Frage",
@@ -214,17 +214,17 @@ const T: Record<string, Testi> = {
     kind_privacy: "Datenschutz",
     name: "Name",
     name_ph: "Dein Name",
-    email: "E-Mail",
+    email: "E-Mail (optional)",
     email_ph: "name@beispiel.de",
     subject: "Betreff",
     subject_ph: "Worum geht es",
     report_intro:
-      "Du hast einen Fehler oder etwas entdeckt, das nicht funktioniert? Beschreibe es hier: Wir fragen weder Namen noch E-Mail-Adresse ab.",
+      "Du hast einen Fehler oder etwas entdeckt, das nicht funktioniert? Beschreibe es hier. Gib deine E-Mail-Adresse nur an, wenn du eine Antwort möchtest.",
     message: "Nachricht",
     message_ph: "Was passiert ist und was du erwartet hast",
     data_title: "Gesendete Daten",
     data_body:
-      "Wir senden deinen Text, diese Seite und die Sprache der Oberfläche. Wir senden keinen Namen, keine E-Mail-Adresse, keinen Lebenslauf, Kontakte, Dateien oder Logs.",
+      "Wir senden deinen Text, diese Seite, die Sprache der Oberfläche und, falls angegeben, deine E-Mail-Adresse nur als Antwortadresse. Wir senden keinen Namen, keinen Lebenslauf, keine weiteren Kontaktdaten, Dateien oder Logs.",
     data_page: "Seite",
     data_language: "Sprache",
     data_client: "Website",
@@ -250,7 +250,7 @@ const T: Record<string, Testi> = {
     intro_app:
       "Já usas o JHT? Para problemas técnicos usa «Comunicar um problema» dentro da app: anexa automaticamente um diagnóstico anonimizado.",
     privacy_note:
-      "A comunicação técnica abaixo é anónima: mostra exatamente que dados técnicos recolhe antes de enviar.",
+      "O email é opcional: sem ele, a comunicação permanece anónima; se o indicares, usamos apenas para te responder.",
     kind_label: "Assunto",
     kind_support: "Suporte técnico",
     kind_question: "Questão geral",
@@ -258,17 +258,17 @@ const T: Record<string, Testi> = {
     kind_privacy: "Privacidade e dados",
     name: "Nome",
     name_ph: "O teu nome",
-    email: "Email",
+    email: "Email (opcional)",
     email_ph: "nome@exemplo.com",
     subject: "Assunto",
     subject_ph: "Sobre o que nos queres falar",
     report_intro:
-      "Encontraste um erro ou algo que não funciona? Descreve-o aqui: não pedimos nome nem email.",
+      "Encontraste um erro ou algo que não funciona? Descreve-o aqui. Indica o teu email apenas se quiseres receber uma resposta.",
     message: "Mensagem",
     message_ph: "O que aconteceu e o que esperavas",
     data_title: "Dados enviados",
     data_body:
-      "Enviamos o texto que escreves, esta página e o idioma da interface. Não enviamos nome, email, CV, contactos, ficheiros ou registos.",
+      "Enviamos o texto que escreves, esta página, o idioma da interface e, se o indicares, o teu email apenas como endereço de resposta. Não enviamos nome, CV, outros contactos, ficheiros ou registos.",
     data_page: "Página",
     data_language: "Idioma",
     data_client: "Site web",
@@ -295,7 +295,7 @@ const T: Record<string, Testi> = {
     intro_app:
       "Már használod a JHT-t? Technikai problémához használd az app «Hiba jelentése» gombját: automatikusan csatol egy anonimizált diagnosztikát.",
     privacy_note:
-      "Az alábbi technikai bejelentés névtelen: küldés előtt pontosan megmutatja, milyen technikai adatokat gyűjt.",
+      "Az e-mail-cím megadása nem kötelező: nélküle a bejelentés névtelen marad; ha megadod, csak válaszadásra használjuk.",
     kind_label: "Téma",
     kind_support: "Technikai támogatás",
     kind_question: "Általános kérdés",
@@ -303,17 +303,17 @@ const T: Record<string, Testi> = {
     kind_privacy: "Adatvédelem",
     name: "Név",
     name_ph: "A neved",
-    email: "E-mail",
+    email: "E-mail (nem kötelező)",
     email_ph: "nev@pelda.hu",
     subject: "Tárgy",
     subject_ph: "Miről szeretnél írni",
     report_intro:
-      "Hibát vagy nem működő funkciót találtál? Írd le itt: nem kérünk nevet vagy e-mail-címet.",
+      "Hibát vagy nem működő funkciót találtál? Írd le itt. Csak akkor add meg az e-mail-címedet, ha választ szeretnél kapni.",
     message: "Üzenet",
     message_ph: "Mi történt és mire számítottál",
     data_title: "Elküldött adatok",
     data_body:
-      "Az általad írt szöveget, ezt az oldalt és a felület nyelvét küldjük el. Nem küldünk nevet, e-mail-címet, CV-t, kapcsolatokat, fájlokat vagy naplókat.",
+      "Az általad írt szöveget, ezt az oldalt, a felület nyelvét és — ha megadod — az e-mail-címedet csak válaszcímként küldjük el. Nevet, CV-t, más elérhetőséget, fájlokat vagy naplókat nem küldünk.",
     data_page: "Oldal",
     data_language: "Nyelv",
     data_client: "Webhely",

@@ -249,12 +249,14 @@ describe("email — la segnalazione anonima che arriva in casella", () => {
     );
     expect(payload.reply_to).toBe("reporter@example.com");
     expect(payload.text).not.toContain("reporter@example.com");
-    expect(resendEmailPayload(
-      report,
-      "JHT-9Z",
-      "support@example.com",
-      "inbox@example.com",
-    )).not.toHaveProperty("reply_to");
+    expect(
+      resendEmailPayload(
+        report,
+        "JHT-9Z",
+        "support@example.com",
+        "inbox@example.com",
+      ),
+    ).not.toHaveProperty("reply_to");
   });
 });
 
@@ -392,5 +394,17 @@ describe("oggetto scritto da chi invia", () => {
   it("non lascia passare un oggetto smisurato", () => {
     const r = parseReport({ ...VALID, subject: "x".repeat(400) })!;
     expect(r.subject.length).toBe(120);
+  });
+
+  it("normalizza newline e controlli prima di costruire l'header email", () => {
+    const r = parseReport({
+      ...VALID,
+      subject: "  Errore\r\nBcc: victim@example.com\t nella pagina  ",
+    })!;
+    const subject = emailSubject(r, "JHT-1");
+
+    expect(r.subject).toBe("Errore Bcc: [email] nella pagina");
+    expect(subject).toBe("[JHT-1] Errore Bcc: [email] nella pagina");
+    expect(subject).not.toMatch(/[\r\n\t]/);
   });
 });
