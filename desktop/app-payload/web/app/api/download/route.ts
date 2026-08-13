@@ -23,9 +23,9 @@ interface PlatformInfo {
 function getVersion(): string {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'web', 'package.json'), 'utf-8'));
-    return pkg.version || '0.3.8';
+    return pkg.version || '0.3.9';
   } catch {
-    return '0.3.8';
+    return '0.3.9';
   }
 }
 

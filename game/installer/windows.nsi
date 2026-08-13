@@ -7,7 +7,7 @@
 ; Install per-utente (no admin), come il vecchio installer Electron. /S = silenzioso.
 
 !ifndef VERSION
-  !define VERSION "0.3.8"
+  !define VERSION "0.3.9"
 !endif
 !ifndef VERSION_NUMERIC
   !define VERSION_NUMERIC "${VERSION}.0"
