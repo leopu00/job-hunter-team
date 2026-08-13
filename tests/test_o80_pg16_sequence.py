@@ -65,6 +65,12 @@ def test_sequence_reapply_and_tenant_event(psql):
     created_id = result_rows[0]['id']
     assert result_rows[0]['status'] == result_rows[1]['status'] == 'queued'
     assert psql("SELECT count(*) FROM pending_user_messages WHERE source_id='stable-source';").stdout.strip() == '1'
+    fresh = psql(f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.mutate_team_directive_with_event(0,'created','synthetic','fresh-source');").stdout
+    fresh_row = json.loads([line for line in fresh.splitlines() if line.startswith('{')][-1])
+    assert fresh_row['id'] != created_id
+    assert psql("SELECT count(*) FROM team_directives WHERE body='synthetic';").stdout.strip() == '2'
+    psql(f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.mutate_team_directive_with_event({fresh_row['id']},'edited','B','edit-b-1'); SELECT public.mutate_team_directive_with_event({fresh_row['id']},'edited','C','edit-c'); SELECT public.mutate_team_directive_with_event({fresh_row['id']},'edited','B','edit-b-2');")
+    assert psql("SELECT count(*) FROM pending_user_messages WHERE source_id IN ('edit-b-1','edit-c','edit-b-2');").stdout.strip() == '3'
     repeat = psql(f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.mutate_team_directive_with_event(0,'created','synthetic','stable-source');").stdout
     repeat_row = json.loads([line for line in repeat.splitlines() if line.startswith('{')][-1])
     assert repeat_row == {'id': created_id, 'status': 'queued'}
