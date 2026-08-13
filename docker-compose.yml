@@ -17,7 +17,7 @@ services:
   jht:
     # Override via env var: JHT_IMAGE=ghcr.io/leopu00/jht:dev-1 jht upgrade
     # Utile per testare immagini di branch dev prima del merge a master.
-    image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.8}
+    image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.9}
     container_name: jht
     # Override del CMD Dockerfile (--help): entry point `pid1` che
     # in base a JHT_HOST_TYPE dispatch tra:
