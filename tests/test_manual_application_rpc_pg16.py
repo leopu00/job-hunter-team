@@ -142,10 +142,21 @@ def test_pg16_apply_reapply_click_undo_tenant_and_privileges(pg16):
     tenant = pg16(f"SET ROLE authenticated; SET request.jwt.claim.sub='{other}'; SELECT public.mark_position_applied(73,'2026-08-13T12:00:00Z','user_manual','synthetic');", check=False)
     assert tenant.returncode != 0 and "position_not_found" in tenant.stderr
     assert pg16("SELECT status FROM public.positions WHERE legacy_id=73;").stdout.strip() == "ready"
-    apply_sql = f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.mark_position_applied(73,'2026-08-13T12:00:00Z','user_manual','synthetic'); SELECT public.mark_position_applied(73,'2026-08-13T12:01:00Z','user_manual','synthetic');"
-    applied = pg16(apply_sql).stdout.strip().splitlines()
-    assert len(applied) == 2 and all('"status": "applied"' in row or '"status":"applied"' in row for row in applied)
+    # A pre-effect failure must leave no rows behind.
+    failed = pg16(f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.mark_position_applied(999,'2026-08-13T12:00:00Z','user_manual','synthetic');", check=False)
+    assert failed.returncode != 0 and "position_not_found" in failed.stderr
+    assert pg16("SELECT count(*) FROM public.applications;").stdout.strip() == "0"
+
+    # The first successful RPC is deliberately treated as an uncertain
+    # response by the caller (its outcome is discarded). Retrying the same
+    # idempotent RPC must converge without a second application/transition.
+    first = pg16(f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.mark_position_applied(73,'2026-08-13T12:00:00Z','user_manual','synthetic');").stdout.strip()
+    assert '"status": "applied"' in first or '"status":"applied"' in first
+    retry = pg16(f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.mark_position_applied(73,'2026-08-13T12:00:00Z','user_manual','synthetic');").stdout.strip()
+    assert '"status": "applied"' in retry or '"status":"applied"' in retry
     assert pg16("SELECT p.status, a.applied, a.applied_via FROM public.positions p JOIN public.applications a ON a.position_id=p.id WHERE p.legacy_id=73;").stdout.strip() == "applied|t|user_manual"
+    assert pg16("SELECT count(*) FROM public.applications WHERE position_id=(SELECT id FROM public.positions WHERE legacy_id=73);").stdout.strip() == "1"
+    assert pg16("SELECT count(*) FROM public.position_transitions WHERE position_legacy_id=73 AND to_state='applied' AND by_agent='user';").stdout.strip() == "1"
     for role in ("anon", "service_role"):
         denied = pg16(f"SET ROLE {role}; SELECT public.undo_manual_position_application(73,'ready');", check=False)
         assert denied.returncode != 0 and "permission denied" in denied.stderr.lower()
