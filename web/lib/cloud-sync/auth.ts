@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sanitizedError } from "@/lib/error-response";
 import { hashSyncToken } from "@/lib/cloud-sync/tokens";
 import {
   CLIENT_COLUMNS,
@@ -119,7 +120,11 @@ export async function verifyBearerToken(
   if (error) {
     return {
       ok: false,
-      res: NextResponse.json({ error: error.message }, { status: 500 }),
+      res: sanitizedError(error, {
+        status: 500,
+        scope: "cloud-sync/auth",
+        publicMessage: "autenticazione cloud non disponibile",
+      }),
     };
   }
   if (!data) {

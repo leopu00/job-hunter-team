@@ -6,6 +6,7 @@ import { generateSyncToken } from "@/lib/cloud-sync/tokens";
 import { normalizeUserCode } from "@/lib/cloud-sync/pairing";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -110,7 +111,11 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (lookupErr) {
-    return NextResponse.json({ error: lookupErr.message }, { status: 500 });
+    return sanitizedError(lookupErr, {
+      status: 500,
+      scope: "cloud-sync/device-confirm",
+      publicMessage: "conferma dispositivo non disponibile",
+    });
   }
   if (!session) {
     return NextResponse.json(
@@ -146,7 +151,11 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (tokenErr) {
-    return NextResponse.json({ error: tokenErr.message }, { status: 500 });
+    return sanitizedError(tokenErr, {
+      status: 500,
+      scope: "cloud-sync/device-confirm",
+      publicMessage: "conferma dispositivo non disponibile",
+    });
   }
 
   // Approva la sessione (CAS contro double-approve).
@@ -171,7 +180,11 @@ export async function POST(req: NextRequest) {
       .from("cloud_sync_tokens")
       .update({ revoked_at: new Date().toISOString() })
       .eq("id", tokenRow.id);
-    return NextResponse.json({ error: approveErr.message }, { status: 500 });
+    return sanitizedError(approveErr, {
+      status: 500,
+      scope: "cloud-sync/device-confirm",
+      publicMessage: "conferma dispositivo non disponibile",
+    });
   }
   if (!updated) {
     // Race: qualcun altro ha gia' approvato. Rollback token.
