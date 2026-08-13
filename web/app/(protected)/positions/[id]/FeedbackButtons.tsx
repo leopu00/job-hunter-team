@@ -331,6 +331,7 @@ export function FeedbackButtons({
   const [applied, setApplied] = useState(initialApplied);
   const [appliedAt, setAppliedAt] = useState<string | null>(initialAppliedAt);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [applyPending, setApplyPending] = useState(false);
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [verdict, setVerdict] = useState<Verdict | null>(initialVerdict);
@@ -613,6 +614,7 @@ export function FeedbackButtons({
   // riproporla, spendendo token su qualcosa di già fatto.
   async function markApplied() {
     setApplyError(null);
+    setApplyPending(true);
     try {
       const res = await fetch(`/api/positions/${legacyId}/mark-applied`, {
         method: "POST",
@@ -622,7 +624,17 @@ export function FeedbackButtons({
       if (!res.ok) throw new Error(String(res.status));
       const saved = (await res.json().catch(() => null)) as {
         applied_at?: string | null;
+        source?: "local" | "cloud";
+        cloud_synced?: boolean | null;
       } | null;
+      // A local write whose cloud mirror was not acknowledged is not a
+      // confirmed click: keep the UI pending/error and never claim applied.
+      if (
+        !saved ||
+        (saved.source === "local" && saved.cloud_synced === false)
+      ) {
+        throw new Error("cloud_sync_unconfirmed");
+      }
       setApplied(true);
       // L'ora la decide chi scrive, non il browser: così quella mostrata è
       // quella registrata, anche a orologi disallineati.
@@ -630,6 +642,8 @@ export function FeedbackButtons({
       router.refresh();
     } catch {
       setApplyError(t.markAppliedError);
+    } finally {
+      setApplyPending(false);
     }
   }
 
@@ -723,7 +737,7 @@ export function FeedbackButtons({
         onClick={() => {
           void (applied ? undoApplied() : markApplied());
         }}
-        disabled={busy}
+        disabled={busy || applyPending}
         aria-pressed={applied}
         className="mt-2 w-full rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
         style={{
