@@ -318,6 +318,11 @@ describe("effetto reale sul percorso Sync now", () => {
           payloads.push(body);
           return new Response(
             JSON.stringify({
+              receipts: {
+                positions: Array.isArray(body.positions)
+                  ? body.positions.map((row: any) => row._receipt_id)
+                  : [],
+              },
               positions: {
                 upserted: Array.isArray(body.positions)
                   ? body.positions.length

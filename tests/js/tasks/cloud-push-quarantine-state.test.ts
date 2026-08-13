@@ -45,15 +45,19 @@ function childWriter(path: string, id: number) {
     });
   `;
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
-      env: {
-        ...process.env,
-        JHT_TEST_QUARANTINE_MODULE: moduleUrl,
-        JHT_TEST_QUARANTINE_PATH: path,
-        JHT_TEST_QUARANTINE_ID: String(id),
+    const child = spawn(
+      process.execPath,
+      ["--input-type=module", "-e", source],
+      {
+        env: {
+          ...process.env,
+          JHT_TEST_QUARANTINE_MODULE: moduleUrl,
+          JHT_TEST_QUARANTINE_PATH: path,
+          JHT_TEST_QUARANTINE_ID: String(id),
+        },
+        stdio: "pipe",
       },
-      stdio: "pipe",
-    });
+    );
     let stderr = "";
     child.stderr.on("data", (chunk) => {
       stderr += String(chunk);
@@ -86,16 +90,20 @@ function childMutation(path: string, action: string, value: string) {
     });
   `;
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
-      env: {
-        ...process.env,
-        JHT_TEST_QUARANTINE_MODULE: moduleUrl,
-        JHT_TEST_QUARANTINE_PATH: path,
-        JHT_TEST_QUARANTINE_ACTION: action,
-        JHT_TEST_QUARANTINE_VALUE: value,
+    const child = spawn(
+      process.execPath,
+      ["--input-type=module", "-e", source],
+      {
+        env: {
+          ...process.env,
+          JHT_TEST_QUARANTINE_MODULE: moduleUrl,
+          JHT_TEST_QUARANTINE_PATH: path,
+          JHT_TEST_QUARANTINE_ACTION: action,
+          JHT_TEST_QUARANTINE_VALUE: value,
+        },
+        stdio: "pipe",
       },
-      stdio: "pipe",
-    });
+    );
     let stderr = "";
     child.stderr.on("data", (chunk) => {
       stderr += String(chunk);
@@ -117,6 +125,7 @@ describe("cloud push quarantine metadata", () => {
   it("persists opaque metadata only and increments attempts", () => {
     const path = makeFile();
     const row = {
+      legacy_id: 17,
       position_id: 42,
       critic_notes: "synthetic-private-body-must-not-leak",
     };
@@ -232,6 +241,28 @@ describe("cloud push quarantine metadata", () => {
         readCloudPushQuarantine(path),
       ),
     ).toEqual({ send: [messages[1]], held: [messages[0]] });
+  });
+
+  it("rejects missing source identities before they can share quarantine state", () => {
+    const path = makeFile();
+    const invalidRows = [{ name: "Synthetic one" }, { name: "Synthetic two" }];
+
+    expect(() =>
+      partitionQuarantinedRows(
+        "companies",
+        invalidRows,
+        readCloudPushQuarantine(path),
+      ),
+    ).toThrow(/invalid cloud push source identity/);
+    expect(() =>
+      quarantineRow({
+        table: "companies",
+        row: invalidRows[0],
+        reason: "http_422:record_rejected",
+        path,
+      }),
+    ).toThrow(/invalid cloud push source identity/);
+    expect(readCloudPushQuarantine(path).entries).toEqual([]);
   });
 
   it("keeps resolved history and never accepts raw server prose as a reason", () => {

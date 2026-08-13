@@ -83,20 +83,46 @@ function withStateLock(path, action) {
   }
 }
 
+function positiveInteger(value, label) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`invalid cloud push source identity: ${label}`);
+  }
+  return value;
+}
+
+function nonEmptyString(value, label) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`invalid cloud push source identity: ${label}`);
+  }
+  return value;
+}
+
 function stableKey(table, row) {
   switch (table) {
     case "companies":
     case "positions":
     case "position_highlights":
     case "pending_user_messages":
-      return [row?.id];
+      return [positiveInteger(row?.id, `${table}.id`)];
     case "scores":
     case "applications":
-      return [row?.position_id];
+      return [positiveInteger(row?.legacy_id, `${table}.legacy_id`)];
     case "position_transitions":
-      return [row?.position_legacy_id, row?.ts, row?.by_agent, row?.to_state];
+      return [
+        positiveInteger(
+          row?.position_legacy_id,
+          "position_transitions.position_legacy_id",
+        ),
+        nonEmptyString(row?.ts, "position_transitions.ts"),
+        nonEmptyString(row?.by_agent, "position_transitions.by_agent"),
+        nonEmptyString(row?.to_state, "position_transitions.to_state"),
+      ];
     case "tombstones":
-      return [row?.table_name, row?.legacy_id, row?.deleted_at];
+      return [
+        nonEmptyString(row?.table_name, "tombstones.table_name"),
+        positiveInteger(row?.legacy_id, "tombstones.legacy_id"),
+        nonEmptyString(row?.deleted_at, "tombstones.deleted_at"),
+      ];
     case "profile":
       return ["candidate_profile"];
     default:

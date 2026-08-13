@@ -45,7 +45,7 @@ function fixture() {
       last_open_check TEXT, created_at TEXT, updated_at TEXT
     );
     CREATE TABLE applications (
-      position_id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT, position_id INTEGER UNIQUE,
       cv_path TEXT, cv_pdf_path TEXT, cl_path TEXT, cl_pdf_path TEXT,
       status TEXT, critic_score REAL, critic_verdict TEXT, critic_notes TEXT,
       critic_round INTEGER, written_at TEXT, applied_at TEXT, applied_via TEXT,
@@ -87,6 +87,13 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+function acknowledged(table: string, rows: Array<{ _receipt_id?: string }>) {
+  return {
+    receipts: { [table]: rows.map((row) => row._receipt_id) },
+    [table]: { upserted: rows.length },
+  };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -99,6 +106,42 @@ afterEach(() => {
 });
 
 describe("cloud push record isolation — real writer path", () => {
+  it("aborts before network when two rows have no stable source identity", async () => {
+    const { home, dbPath } = fixture();
+    const db = new DatabaseSync(dbPath);
+    db.exec(`
+      CREATE TABLE companies (
+        id INTEGER, name TEXT, website TEXT, hq_country TEXT, sector TEXT,
+        size TEXT, glassdoor_rating REAL, red_flags TEXT, culture_notes TEXT,
+        analyzed_by TEXT, analyzed_at TEXT, verdict TEXT, updated_at TEXT
+      );
+      INSERT INTO companies (id, name, updated_at) VALUES
+        (NULL, 'Synthetic one', '2026-08-13 10:00:00'),
+        (NULL, 'Synthetic two', '2026-08-13 10:01:00');
+    `);
+    db.close();
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.resetModules();
+    const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+
+    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject(
+      {
+        ok: false,
+        skipped: 0,
+      },
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(() =>
+      readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
+    ).toThrow();
+    expect(() =>
+      readFileSync(join(home, ".cloud-sync-cursor.json"), "utf8"),
+    ).toThrow();
+  });
+
   it("quarantines one rejected application and delivers valid rows before/after", async () => {
     const { home, dbPath } = fixture();
     const acceptedApplications: number[] = [];
@@ -109,11 +152,11 @@ describe("cloud push record isolation — real writer path", () => {
         const table = Object.keys(body)[0];
         const rows = body[table] as Array<{
           id?: number;
-          position_id?: number;
+          position_legacy_id?: number;
         }>;
         if (
           table === "applications" &&
-          rows.some((row) => row.position_id === 2)
+          rows.some((row) => row.position_legacy_id === 2)
         ) {
           return jsonResponse(
             {
@@ -124,11 +167,10 @@ describe("cloud push record isolation — real writer path", () => {
           );
         }
         if (table === "applications")
-          acceptedApplications.push(...rows.map((row) => row.position_id!));
-        return jsonResponse({
-          accepted: { [table]: rows.length },
-          [table]: { upserted: rows.length },
-        });
+          acceptedApplications.push(
+            ...rows.map((row) => row.position_legacy_id!),
+          );
+        return jsonResponse(acknowledged(table, rows));
       }),
     );
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -170,15 +212,23 @@ describe("cloud push record isolation — real writer path", () => {
       vi.fn(async (_url: unknown, init?: RequestInit) => {
         const body = JSON.parse(String(init?.body || "{}"));
         const table = Object.keys(body)[0];
-        const rows = body[table] as Array<{ position_id?: number }>;
+        const rows = body[table] as Array<{ position_legacy_id?: number }>;
         const rejected =
           table === "applications" &&
-          rows.some((row) => row.position_id === 2);
+          rows.some((row) => row.position_legacy_id === 2);
         if (table === "applications" && !rejected)
-          acceptedApplications.push(...rows.map((row) => row.position_id!));
+          acceptedApplications.push(
+            ...rows.map((row) => row.position_legacy_id!),
+          );
         return jsonResponse({
-          accepted: { [table]: rejected ? rows.length - 1 : rows.length },
-          [table]: { upserted: rejected ? rows.length - 1 : rows.length },
+          ...acknowledged(table, rows),
+          receipts: {
+            [table]: rows.map((row: any) =>
+              rejected && row.position_legacy_id === 2
+                ? "q_ffffffffffffffffffffffff"
+                : row._receipt_id,
+            ),
+          },
         });
       }),
     );
@@ -187,14 +237,46 @@ describe("cloud push record isolation — real writer path", () => {
     vi.resetModules();
     const { handlePush } = await import("../../../cli/src/commands/cloud.js");
 
-    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject({
-      ok: true,
-      quarantined: 1,
-    });
+    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject(
+      {
+        ok: true,
+        quarantined: 1,
+      },
+    );
     expect(acceptedApplications).toEqual([1, 3]);
     expect(
       readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
     ).toContain("acknowledgement_mismatch");
+  });
+
+  it("aborts without quarantine when a successful server omits row receipts", async () => {
+    const { home, dbPath } = fixture();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}"));
+        const table = Object.keys(body)[0];
+        const rows = body[table] as unknown[];
+        return jsonResponse({ [table]: { upserted: rows.length } });
+      }),
+    );
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.resetModules();
+    const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+
+    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject(
+      {
+        ok: false,
+        skipped: 0,
+      },
+    );
+    expect(() =>
+      readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
+    ).toThrow();
+    expect(() =>
+      readFileSync(join(home, ".cloud-sync-cursor.json"), "utf8"),
+    ).toThrow();
   });
 
   it("keeps earlier table checkpoints when durable quarantine itself fails", async () => {
@@ -207,10 +289,7 @@ describe("cloud push record isolation — real writer path", () => {
         const rows = body[table] as Array<unknown>;
         if (table === "applications")
           return jsonResponse({ error: "application_row_rejected" }, 422);
-        return jsonResponse({
-          accepted: { [table]: rows.length },
-          [table]: { upserted: rows.length },
-        });
+        return jsonResponse(acknowledged(table, rows as any[]));
       }),
     );
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -239,10 +318,7 @@ describe("cloud push record isolation — real writer path", () => {
         const rows = body[table] as Array<unknown>;
         if (table === "applications")
           return jsonResponse({ error: "applications_upsert_failed" }, 500);
-        return jsonResponse({
-          accepted: { [table]: rows.length },
-          [table]: { upserted: rows.length },
-        });
+        return jsonResponse(acknowledged(table, rows as any[]));
       }),
     );
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -250,10 +326,12 @@ describe("cloud push record isolation — real writer path", () => {
     vi.resetModules();
     const { handlePush } = await import("../../../cli/src/commands/cloud.js");
 
-    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject({
-      ok: false,
-      skipped: 0,
-    });
+    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject(
+      {
+        ok: false,
+        skipped: 0,
+      },
+    );
     expect(
       readFileSync(join(home, ".cloud-sync-cursor.json"), "utf8"),
     ).toContain("positions");
@@ -274,18 +352,15 @@ describe("cloud push record isolation — real writer path", () => {
       vi.fn(async (_url: unknown, init?: RequestInit) => {
         const body = JSON.parse(String(init?.body || "{}"));
         const table = Object.keys(body)[0];
-        const rows = body[table] as Array<{ position_id?: number }>;
+        const rows = body[table] as Array<{ position_legacy_id?: number }>;
         if (table === "applications" && rows.length > 1)
           return jsonResponse({ error: "application_row_rejected" }, 422);
-        if (table === "applications" && rows[0]?.position_id === 2)
+        if (table === "applications" && rows[0]?.position_legacy_id === 2)
           return jsonResponse(
             { detail: "synthetic infrastructure failure" },
             503,
           );
-        return jsonResponse({
-          accepted: { [table]: rows.length },
-          [table]: { upserted: rows.length },
-        });
+        return jsonResponse(acknowledged(table, rows as any[]));
       }),
     );
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -314,10 +389,10 @@ describe("cloud push record isolation — real writer path", () => {
       vi.fn(async (_url: unknown, init?: RequestInit) => {
         const body = JSON.parse(String(init?.body || "{}"));
         const table = Object.keys(body)[0];
-        const rows = body[table] as Array<{ position_id?: number }>;
+        const rows = body[table] as Array<{ position_legacy_id?: number }>;
         if (table === "applications") {
-          applicationBatches.push(rows.map((row) => row.position_id!));
-          if (reject && rows.some((row) => row.position_id === 2))
+          applicationBatches.push(rows.map((row) => row.position_legacy_id!));
+          if (reject && rows.some((row) => row.position_legacy_id === 2))
             return jsonResponse(
               {
                 error: "applications_upsert_failed",
@@ -326,10 +401,7 @@ describe("cloud push record isolation — real writer path", () => {
               500,
             );
         }
-        return jsonResponse({
-          accepted: { [table]: rows.length },
-          [table]: { upserted: rows.length },
-        });
+        return jsonResponse(acknowledged(table, rows as any[]));
       }),
     );
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -373,10 +445,10 @@ describe("cloud push record isolation — real writer path", () => {
       vi.fn(async (_url: unknown, init?: RequestInit) => {
         const body = JSON.parse(String(init?.body || "{}"));
         const table = Object.keys(body)[0];
-        const rows = body[table] as Array<{ position_id?: number }>;
+        const rows = body[table] as Array<{ position_legacy_id?: number }>;
         if (table === "applications") {
-          applicationBatches.push(rows.map((row) => row.position_id!));
-          if (reject && rows.some((row) => row.position_id === 2))
+          applicationBatches.push(rows.map((row) => row.position_legacy_id!));
+          if (reject && rows.some((row) => row.position_legacy_id === 2))
             return jsonResponse(
               {
                 error: "applications_upsert_failed",
@@ -385,10 +457,7 @@ describe("cloud push record isolation — real writer path", () => {
               500,
             );
         }
-        return jsonResponse({
-          accepted: { [table]: rows.length },
-          [table]: { upserted: rows.length },
-        });
+        return jsonResponse(acknowledged(table, rows as any[]));
       }),
     );
     vi.spyOn(console, "log").mockImplementation(() => {});

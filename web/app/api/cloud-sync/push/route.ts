@@ -26,8 +26,47 @@ import { syncRequestIsPending } from "@/lib/team-state/sync-freshness";
 
 export const dynamic = "force-dynamic";
 
+const ROW_DATA_SQLSTATE = /^(?:22[A-Z0-9]{3}|2350[235]|23514|23P01)$/;
+const ROW_P0001_MESSAGES = new Set([
+  "application_identity_mismatch",
+  "application_not_persisted",
+  "application_object_required",
+  "invalid_application_identity",
+  "invalid_application_receipt_id",
+  "invalid_score_identity",
+  "position_not_found",
+  "score_identity_mismatch",
+  "stale_application_downgrade",
+]);
+
+function rowAttributableWriteError(error: unknown, publicMessage: string) {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : "";
+  const rowAttributable =
+    ROW_DATA_SQLSTATE.test(code) ||
+    (code === "P0001" && ROW_P0001_MESSAGES.has(message));
+  // PostgreSQL row errors often echo the rejected value. The SQLSTATE is
+  // enough for operators and classification; never copy the value to logs.
+  const loggableError = rowAttributable
+    ? new Error(`row write rejected (${code})`)
+    : error;
+  return sanitizedError(loggableError, {
+    status: 500,
+    scope: "cloud-sync/push",
+    publicMessage,
+    ...(rowAttributable ? { rejectionScope: "row" as const } : {}),
+  });
+}
+
 interface PositionIn {
   id: number;
+  _receipt_id?: string;
   title: string;
   company: string;
   // FK locale (companies.id int) → risolta a companies.id UUID cloud via
@@ -149,11 +188,33 @@ interface ApplicationIn {
   cl_drive_id?: string | null;
 }
 
-function sourceReceiptId(table: "applications" | "scores", legacyId: number) {
+type ReceiptTable =
+  | "applications"
+  | "scores"
+  | "companies"
+  | "positions"
+  | "position_highlights"
+  | "pending_user_messages"
+  | "tombstones"
+  | "position_transitions"
+  | "profile";
+
+function sourceReceiptId(table: ReceiptTable, sourceKey: unknown | unknown[]) {
+  const key = Array.isArray(sourceKey) ? sourceKey : [sourceKey];
   return `q_${createHash("sha256")
-    .update(`${table}\0${JSON.stringify([legacyId])}`)
+    .update(`${table}\0${JSON.stringify(key)}`)
     .digest("hex")
     .slice(0, 24)}`;
+}
+
+function validReceipt(
+  table: ReceiptTable,
+  sourceKey: unknown | unknown[],
+  supplied: string | undefined,
+) {
+  return (
+    supplied === undefined || supplied === sourceReceiptId(table, sourceKey)
+  );
 }
 
 function applicationReceiptId(application: ApplicationIn): string {
@@ -164,11 +225,13 @@ function applicationReceiptId(application: ApplicationIn): string {
 
 interface ProfileIn {
   yaml: string;
+  _receipt_id?: string;
   summaries?: Record<string, string>;
 }
 
 interface PendingMessageIn {
   id: number;
+  _receipt_id?: string;
   agent: string;
   body: string;
   kind?: string | null;
@@ -218,6 +281,7 @@ interface SentinelTickIn {
 // Il receive le interpreta come soft-delete cloud: UPDATE deleted_at.
 // Vedi mig 025 + shared/skills/_db.py _migrate_v6_to_v7_tombstones.
 interface TombstoneIn {
+  _receipt_id?: string;
   table_name: "positions" | "scores" | "applications";
   legacy_id: number;
   deleted_at: string; // ISO timestamp client-side (preserva il "quando")
@@ -230,6 +294,7 @@ interface TombstoneIn {
 // chiave verso le posizioni è `position_legacy_id` (l'int stabile == positions.legacy_id),
 // non l'uuid per-account, così le righe sono portabili tra account/mirror.
 interface PositionTransitionIn {
+  _receipt_id?: string;
   position_legacy_id: number;
   from_state?: string | null;
   to_state: string;
@@ -245,6 +310,7 @@ interface PositionTransitionIn {
 // per risolvere positions.company_id.
 interface CompanyIn {
   id: number;
+  _receipt_id?: string;
   name: string;
   website?: string | null;
   hq_country?: string | null;
@@ -268,6 +334,7 @@ interface CompanyIn {
 // UUID cloud via legacyToUuid (come scores/applications).
 interface HighlightIn {
   id: number;
+  _receipt_id?: string;
   position_id: number;
   type: string;
   text: string;
@@ -433,6 +500,17 @@ export async function POST(req: NextRequest) {
   let sentinelTicksUpserted = 0;
   let tombstonesApplied = 0;
   let positionTransitionsUpserted = 0;
+  const rowReceipts: Record<ReceiptTable, string[]> = {
+    applications: applicationReceiptIds,
+    scores: scoreReceiptIds,
+    companies: [],
+    positions: [],
+    position_highlights: [],
+    pending_user_messages: [],
+    tombstones: [],
+    position_transitions: [],
+    profile: [],
+  };
   const legacyToUuid = new Map<number, string>();
   const appliedPositionIds = new Set<number>();
   // companies.id locale (int) → companies.id cloud (UUID). Popolata
@@ -443,6 +521,17 @@ export async function POST(req: NextRequest) {
   // companyLegacyToUuid è pronta per risolvere positions.company_id. Mapping
   // colonne: nomi SQLite locali → cloud, con hq_country → hq (schemi disallineati).
   if (companies.length > 0) {
+    if (
+      companies.some(
+        (company) =>
+          !validReceipt("companies", company.id, company._receipt_id),
+      )
+    ) {
+      return NextResponse.json(
+        { error: "invalid_companies_receipt_id" },
+        { status: 400 },
+      );
+    }
     const payload = companies
       .filter((c) => typeof c.id === "number" && cleanText(c.name))
       .map((c) => ({
@@ -471,22 +560,33 @@ export async function POST(req: NextRequest) {
         .select("id, legacy_id");
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "companies_upsert_failed",
-        });
+        return rowAttributableWriteError(error, "companies_upsert_failed");
       }
       companiesUpserted = upserted?.length ?? 0;
       for (const row of upserted ?? []) {
-        if (row.legacy_id != null)
+        if (row.legacy_id != null) {
           companyLegacyToUuid.set(row.legacy_id, row.id);
+          rowReceipts.companies.push(
+            sourceReceiptId("companies", row.legacy_id),
+          );
+        }
       }
     }
   }
 
   // 1. Upsert positions via (user_id, legacy_id)
   if (positions.length > 0) {
+    if (
+      positions.some(
+        (position) =>
+          !validReceipt("positions", position.id, position._receipt_id),
+      )
+    ) {
+      return NextResponse.json(
+        { error: "invalid_positions_receipt_id" },
+        { status: 400 },
+      );
+    }
     // Risolvi company_id (int locale) → UUID cloud. Riusa companyLegacyToUuid
     // dall'upsert companies; per i company_id referenziati da una position ma
     // NON presenti nel batch (delta dove la company non è cambiata), lookup
@@ -654,16 +754,17 @@ export async function POST(req: NextRequest) {
         .select("id, legacy_id");
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "positions_upsert_failed",
-        });
+        return rowAttributableWriteError(error, "positions_upsert_failed");
       }
 
       positionsUpserted += upserted?.length ?? 0;
       for (const row of upserted ?? []) {
-        if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
+        if (row.legacy_id != null) {
+          legacyToUuid.set(row.legacy_id, row.id);
+          rowReceipts.positions.push(
+            sourceReceiptId("positions", row.legacy_id),
+          );
+        }
       }
     }
   }
@@ -768,11 +869,7 @@ export async function POST(req: NextRequest) {
         .select("position_id, legacy_id");
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "scores_upsert_failed",
-        });
+        return rowAttributableWriteError(error, "scores_upsert_failed");
       }
       const persistedReceiptIds = Array.isArray(upserted)
         ? upserted.map((row) =>
@@ -877,11 +974,7 @@ export async function POST(req: NextRequest) {
       );
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "applications_upsert_failed",
-        });
+        return rowAttributableWriteError(error, "applications_upsert_failed");
       }
       const expectedReceiptIds = payload
         .map((application) => application._receipt_id)
@@ -917,11 +1010,10 @@ export async function POST(req: NextRequest) {
       p_position_legacy_ids: Array.from(appliedPositionIds),
     });
     if (error) {
-      return sanitizedError(error, {
-        status: 500,
-        scope: "cloud-sync/push",
-        publicMessage: "application_state_invariant_failed",
-      });
+      return rowAttributableWriteError(
+        error,
+        "application_state_invariant_failed",
+      );
     }
   }
 
@@ -931,6 +1023,21 @@ export async function POST(req: NextRequest) {
   // pattern di scores/applications). type validato (pro|con), righe fuori enum
   // scartate per non far fallire l'intero upsert.
   if (highlights.length > 0) {
+    if (
+      highlights.some(
+        (highlight) =>
+          !validReceipt(
+            "position_highlights",
+            highlight.id,
+            highlight._receipt_id,
+          ),
+      )
+    ) {
+      return NextResponse.json(
+        { error: "invalid_position_highlights_receipt_id" },
+        { status: 400 },
+      );
+    }
     const hlNeedsLookup = new Set<number>();
     for (const h of highlights) {
       if (typeof h.position_id === "number" && !legacyToUuid.has(h.position_id))
@@ -973,33 +1080,83 @@ export async function POST(req: NextRequest) {
       const { data: upserted, error } = await admin
         .from("position_highlights")
         .upsert(payload, { onConflict: "user_id,legacy_id" })
-        .select("id");
+        .select("legacy_id");
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "position_highlights_upsert_failed",
-        });
+        return rowAttributableWriteError(
+          error,
+          "position_highlights_upsert_failed",
+        );
       }
       highlightsUpserted = upserted?.length ?? 0;
+      for (const row of upserted ?? []) {
+        if (row.legacy_id != null) {
+          rowReceipts.position_highlights.push(
+            sourceReceiptId("position_highlights", row.legacy_id),
+          );
+        }
+      }
     }
   }
 
   // 3b. Upsert pending_user_messages via (user_id, legacy_id).
-  // related_position_id (numero locale) -> UUID cloud via legacyToUuid se
-  // disponibile. Se non lo conosciamo (push parziale o push successivo dove
-  // la position esiste gia' cloud ma non in questo batch), passiamo NULL —
-  // la dashboard mostra il messaggio senza link alla posizione, che e' un
-  // degrado accettabile. Una soluzione completa farebbe un lookup
-  // server-side per legacy_id mancanti, e' rimandata.
+  // related_position_id (numero locale) -> UUID cloud. Un parent dichiarato
+  // non può degradare a NULL: sarebbe un 200 con perdita semantica.
   if (pendingMessages.length > 0) {
+    if (
+      pendingMessages.some(
+        (message) =>
+          !validReceipt(
+            "pending_user_messages",
+            message.id,
+            message._receipt_id,
+          ),
+      )
+    ) {
+      return NextResponse.json(
+        { error: "invalid_pending_user_messages_receipt_id" },
+        { status: 400 },
+      );
+    }
+    const pendingNeedsLookup = new Set<number>();
+    for (const message of pendingMessages) {
+      if (
+        typeof message.related_position_id === "number" &&
+        !legacyToUuid.has(message.related_position_id)
+      ) {
+        pendingNeedsLookup.add(message.related_position_id);
+      }
+    }
+    if (pendingNeedsLookup.size > 0) {
+      const { data: rows, error } = await admin
+        .from("positions")
+        .select("id, legacy_id")
+        .eq("user_id", userId)
+        .in("legacy_id", Array.from(pendingNeedsLookup));
+      if (error) {
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "message_positions_lookup_failed",
+        });
+      }
+      for (const row of rows ?? []) {
+        if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
+      }
+    }
     const payload = pendingMessages
-      .filter((m) => typeof m.id === "number" && m.agent && m.body)
+      .filter(
+        (m) =>
+          typeof m.id === "number" &&
+          m.agent &&
+          m.body &&
+          (m.related_position_id == null ||
+            legacyToUuid.has(m.related_position_id)),
+      )
       .map((m) => {
         const relatedUuid =
           m.related_position_id != null
-            ? (legacyToUuid.get(m.related_position_id) ?? null)
+            ? legacyToUuid.get(m.related_position_id)!
             : null;
         return {
           user_id: userId,
@@ -1043,14 +1200,35 @@ export async function POST(req: NextRequest) {
       );
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "pending_user_messages_upsert_failed",
-        });
+        return rowAttributableWriteError(
+          error,
+          "pending_user_messages_upsert_failed",
+        );
       }
       pendingMessagesUpserted =
         typeof upsertedCount === "number" ? upsertedCount : payload.length;
+      const { data: persisted, error: receiptError } = await admin
+        .from("pending_user_messages")
+        .select("legacy_id")
+        .eq("user_id", userId)
+        .in(
+          "legacy_id",
+          payload.map((message) => message.legacy_id),
+        );
+      if (receiptError) {
+        return sanitizedError(receiptError, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "pending_user_messages_receipt_failed",
+        });
+      }
+      for (const row of persisted ?? []) {
+        if (row.legacy_id != null) {
+          rowReceipts.pending_user_messages.push(
+            sourceReceiptId("pending_user_messages", row.legacy_id),
+          );
+        }
+      }
     }
   }
 
@@ -1110,11 +1288,7 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "sentinel_ticks_upsert_failed",
-        });
+        return rowAttributableWriteError(error, "sentinel_ticks_upsert_failed");
       }
       sentinelTicksUpserted = upserted?.length ?? 0;
     }
@@ -1134,6 +1308,21 @@ export async function POST(req: NextRequest) {
   // Idempotente: il filter `deleted_at IS NULL` evita di sovrascrivere
   // tombstone già applicati (un re-push dopo cursor reset non rompe nulla).
   if (tombstones.length > 0) {
+    if (
+      tombstones.some(
+        (tombstone) =>
+          !validReceipt(
+            "tombstones",
+            [tombstone.table_name, tombstone.legacy_id, tombstone.deleted_at],
+            tombstone._receipt_id,
+          ),
+      )
+    ) {
+      return NextResponse.json(
+        { error: "invalid_tombstones_receipt_id" },
+        { status: 400 },
+      );
+    }
     const byTable = {
       positions: [] as TombstoneIn[],
       scores: [] as TombstoneIn[],
@@ -1169,33 +1358,69 @@ export async function POST(req: NextRequest) {
     }
 
     for (const t of byTable.positions) {
-      const { error } = await admin
+      const { data, error } = await admin
         .from("positions")
         .update({ deleted_at: t.deleted_at })
         .eq("user_id", userId)
         .eq("legacy_id", t.legacy_id)
-        .is("deleted_at", null);
-      if (!error) tombstonesApplied++;
+        .select("legacy_id");
+      if (error) {
+        return rowAttributableWriteError(error, "tombstones_update_failed");
+      }
+      if ((data?.length ?? 0) > 0) {
+        tombstonesApplied++;
+        rowReceipts.tombstones.push(
+          sourceReceiptId("tombstones", [
+            t.table_name,
+            t.legacy_id,
+            t.deleted_at,
+          ]),
+        );
+      }
     }
     for (const t of byTable.scores) {
       const uuid = legacyToUuid.get(t.legacy_id);
       if (!uuid) continue;
-      const { error } = await admin
+      const { data, error } = await admin
         .from("scores")
         .update({ deleted_at: t.deleted_at })
         .eq("position_id", uuid)
-        .is("deleted_at", null);
-      if (!error) tombstonesApplied++;
+        .select("position_id");
+      if (error) {
+        return rowAttributableWriteError(error, "tombstones_update_failed");
+      }
+      if ((data?.length ?? 0) > 0) {
+        tombstonesApplied++;
+        rowReceipts.tombstones.push(
+          sourceReceiptId("tombstones", [
+            t.table_name,
+            t.legacy_id,
+            t.deleted_at,
+          ]),
+        );
+      }
     }
     for (const t of byTable.applications) {
       const uuid = legacyToUuid.get(t.legacy_id);
       if (!uuid) continue;
-      const { error } = await admin
+      const { data, error } = await admin
         .from("applications")
         .update({ deleted_at: t.deleted_at })
         .eq("position_id", uuid)
-        .is("deleted_at", null);
-      if (!error) tombstonesApplied++;
+        .select("position_id");
+      if (error) {
+        return rowAttributableWriteError(error, "tombstones_update_failed");
+      }
+      if ((data?.length ?? 0) > 0) {
+        tombstonesApplied++;
+        rowReceipts.tombstones.push(
+          sourceReceiptId("tombstones", [
+            t.table_name,
+            t.legacy_id,
+            t.deleted_at,
+          ]),
+        );
+      }
     }
   }
 
@@ -1206,6 +1431,26 @@ export async function POST(req: NextRequest) {
   // count riflette solo le righe davvero nuove. `position_legacy_id` è l'int
   // locale stabile: nessun lookup UUID necessario (a differenza di scores/apps).
   if (positionTransitions.length > 0) {
+    if (
+      positionTransitions.some(
+        (transition) =>
+          !validReceipt(
+            "position_transitions",
+            [
+              transition.position_legacy_id,
+              transition.ts,
+              transition.by_agent,
+              transition.to_state,
+            ],
+            transition._receipt_id,
+          ),
+      )
+    ) {
+      return NextResponse.json(
+        { error: "invalid_position_transitions_receipt_id" },
+        { status: 400 },
+      );
+    }
     const payload = positionTransitions
       .filter(
         (t) =>
@@ -1229,18 +1474,26 @@ export async function POST(req: NextRequest) {
         .from("position_transitions")
         .upsert(payload, {
           onConflict: "user_id,position_legacy_id,ts,by_agent,to_state",
-          ignoreDuplicates: true,
         })
-        .select("id");
+        .select("position_legacy_id,ts,by_agent,to_state");
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "position_transitions_upsert_failed",
-        });
+        return rowAttributableWriteError(
+          error,
+          "position_transitions_upsert_failed",
+        );
       }
       positionTransitionsUpserted = upserted?.length ?? 0;
+      for (const row of upserted ?? []) {
+        rowReceipts.position_transitions.push(
+          sourceReceiptId("position_transitions", [
+            row.position_legacy_id,
+            row.ts,
+            row.by_agent,
+            row.to_state,
+          ]),
+        );
+      }
     }
   }
 
@@ -1248,6 +1501,14 @@ export async function POST(req: NextRequest) {
   let profileUpserted = false;
   let profileError: string | null = null;
   if (body.profile && typeof body.profile.yaml === "string") {
+    if (
+      !validReceipt("profile", "candidate_profile", body.profile._receipt_id)
+    ) {
+      return NextResponse.json(
+        { error: "invalid_profile_receipt_id" },
+        { status: 400 },
+      );
+    }
     const yamlRaw = body.profile.yaml;
     if (yamlRaw.length > 64 * 1024) {
       profileError = "profile yaml troppo grande (>64 KB)";
@@ -1268,6 +1529,9 @@ export async function POST(req: NextRequest) {
             profileError = sync.error;
           } else {
             profileUpserted = true;
+            rowReceipts.profile.push(
+              sourceReceiptId("profile", "candidate_profile"),
+            );
             if (sync.warnings.length) {
               console.warn(
                 "[cloud-sync/push] profile sync warnings:",
@@ -1399,6 +1663,13 @@ export async function POST(req: NextRequest) {
     receipts: {
       applications: applicationReceiptIds,
       scores: scoreReceiptIds,
+      companies: rowReceipts.companies,
+      positions: rowReceipts.positions,
+      position_highlights: rowReceipts.position_highlights,
+      pending_user_messages: rowReceipts.pending_user_messages,
+      tombstones: rowReceipts.tombstones,
+      position_transitions: rowReceipts.position_transitions,
+      profile: rowReceipts.profile,
     },
     companies: { upserted: companiesUpserted },
     position_highlights: { upserted: highlightsUpserted },

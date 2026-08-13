@@ -25,6 +25,7 @@ import {
   activeQuarantineEntries,
   clearCorruptQuarantine,
   partitionQuarantinedRows,
+  quarantineIdentity,
   quarantineRow,
   readCloudPushQuarantine,
   requestQuarantineRetry,
@@ -1462,17 +1463,24 @@ async function performPush(options) {
     held[table] = result.held;
     return result.send;
   };
-  companies = partition('companies', companies);
-  positions = partition('positions', positions);
-  scores = partition('scores', scores);
-  applications = partition('applications', applications);
-  highlights = partition('position_highlights', highlights);
-  transitions = partition('position_transitions', transitions);
-  tombstones = partition('tombstones', tombstones);
-  pendingMessages = partition('pending_user_messages', pendingMessages);
-  const profilePartition = profilePayload
-    ? partitionQuarantinedRows('profile', [profilePayload], quarantineState)
-    : { send: [], held: [] };
+  let profilePartition;
+  try {
+    companies = partition('companies', companies);
+    positions = partition('positions', positions);
+    scores = partition('scores', scores);
+    applications = partition('applications', applications);
+    highlights = partition('position_highlights', highlights);
+    transitions = partition('position_transitions', transitions);
+    tombstones = partition('tombstones', tombstones);
+    pendingMessages = partition('pending_user_messages', pendingMessages);
+    profilePartition = profilePayload
+      ? partitionQuarantinedRows('profile', [profilePayload], quarantineState)
+      : { send: [], held: [] };
+  } catch {
+    console.error(pc.red('Cloud push source identity is invalid; no rows were sent.'));
+    process.exitCode = 1;
+    return { ok: false, authFailed: false, skipped: 0 };
+  }
   held.profile = profilePartition.held;
   const sendProfile = profilePartition.send[0] || null;
 
@@ -1592,6 +1600,19 @@ async function performPush(options) {
       res.body?.rejection_scope === 'row';
   };
 
+  const sameReceiptMultiset = (expected, received) => {
+    if (!Array.isArray(received) || received.length !== expected.length) return false;
+    const counts = new Map();
+    for (const receipt of expected) counts.set(receipt, (counts.get(receipt) || 0) + 1);
+    for (const receipt of received) {
+      if (typeof receipt !== 'string' || !counts.has(receipt)) return false;
+      const remaining = counts.get(receipt) - 1;
+      if (remaining === 0) counts.delete(receipt);
+      else counts.set(receipt, remaining);
+    }
+    return counts.size === 0;
+  };
+
   // Bisection makes a final singleton attributable. Only a durable quarantine
   // record lets the convoy continue; transport/rate/auth failures remain
   // table-wide and never blame a row.
@@ -1604,14 +1625,30 @@ async function performPush(options) {
       while (queue.length && !outcome.aborted) {
         const [s, e] = queue.shift();
         if (s >= e) continue;
-        let res = await postBatch(build(items.slice(s, e)));
+        const rows = items.slice(s, e);
+        let receiptIds;
+        try {
+          receiptIds = rows.map((row) => quarantineIdentity(table, row));
+        } catch {
+          outcome.aborted = true;
+          console.error(pc.red('Cloud push source identity is invalid; cursor unchanged.'));
+          return { confirmed, quarantined };
+        }
+        const wireRows = rows.map((row, index) => ({
+          ...row,
+          _receipt_id: receiptIds[index],
+        }));
+        let res = await postBatch(build(wireRows));
         outcome.requests += 1;
-        const accepted = res.body?.accepted?.[table];
-        if (res.ok && Number.isInteger(accepted) && accepted !== e - s) {
+        const receivedReceipts = res.body?.receipts?.[table];
+        if (res.ok && !Array.isArray(receivedReceipts)) {
+          // A rolling/old server may have persisted the write but cannot prove
+          // which rows. Retry is safe; blaming a singleton would not be.
+          res = { status: 502, ok: false, body: { error: 'receipt_protocol_missing' } };
+        } else if (res.ok && !sameReceiptMultiset(receiptIds, receivedReceipts)) {
           res = { status: 422, ok: false, body: { error: 'acknowledgement_mismatch' } };
         }
         if (res.ok) {
-          const rows = items.slice(s, e);
           try {
             resolveConfirmedRetries(table, rows, { path: quarantinePath });
           } catch {
