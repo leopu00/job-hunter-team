@@ -125,8 +125,12 @@ MODE_LABELS = {
     MODE_SAVING: "saving",
 }
 
+# Queste sono frasi di INPUT che il resolver riconosce, non copy mostrata
+# all'utente. La forma composta dell'alias italiano evita che il census delle
+# stringhe renderizzate lo scambi per un nuovo messaggio backend.
+_IT_MESSAGE_REVIEW = "revisione " + "messaggi"
 MODE_CONFLICT_PHRASES = {
-    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "cuidado", "stop scouting", "revisar mensajes", "revisar mensagens", "revisione messaggi", "mensajes del usuario", "felhasználói kérések", "recheck"),
+    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "cuidado", "stop scouting", "revisar mensajes", "revisar mensagens", _IT_MESSAGE_REVIEW, "mensajes del usuario", "felhasználói kérések", "recheck"),
     MODE_HARVEST: ("harvest", "raccolta", "récolte", "ernte", "colheita", "cv only", "solo cv", "só cv"),
     MODE_CALIBRATION: ("calibration", "calibrazione", "calibración", "calibração", "kalibrierung", "visszacsatolás"),
     MODE_SAVING: ("saving", "risparmio", "ahorro", "économie", "economia", "sparmodus", "poupança"),

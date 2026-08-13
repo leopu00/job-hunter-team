@@ -29,6 +29,7 @@ def test_localized_semantic_catalog_catches_real_phrases():
     for body in (
         "modo: ahorro", "nur stop scouting", "solo revisar mensajes del usuario",
         "mód: gondozás", "csak felhasználói kérések", "modalité: soin", "seulement recheck",
+        "solo revisione messaggi",
     ):
         assert mod.resolve_user_conflicts(m, [{"id": 1, "body": body, "created_at": "2026-08-13 11:00:00"}], mod.MODE_HARVEST)
 
