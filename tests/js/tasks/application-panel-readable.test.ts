@@ -15,7 +15,7 @@ const LIST = readFileSync(
 describe("pannello candidatura leggibile", () => {
   it("tiene etichetta e valore vicini nella stessa cella", () => {
     const infoRow = DETAIL.match(
-      /function InfoRow[\s\S]*?\r?\n}\r?\n\r?\n\/\/ Riga della card Panoramica/,
+      /function InfoRow[\s\S]*?\r?\n  \);\r?\n}/,
     )?.[0];
 
     expect(infoRow, "helper InfoRow non trovato").toBeTruthy();
