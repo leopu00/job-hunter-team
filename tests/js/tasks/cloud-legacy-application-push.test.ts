@@ -78,11 +78,23 @@ describe("jht cloud push — applications legacy", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_url: unknown, init?: RequestInit) => {
-        bodies.push(JSON.parse(String(init?.body ?? "{}")));
-        return new Response(JSON.stringify({ applications: { upserted: 1 } }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        bodies.push(body);
+        const receipts = Object.fromEntries(
+          Object.entries(body).map(([table, value]) => [
+            table,
+            Array.isArray(value)
+              ? value.map((row: any) => row._receipt_id)
+              : [(value as any)?._receipt_id],
+          ]),
+        );
+        return new Response(
+          JSON.stringify({ receipts, applications: { upserted: 1 } }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
       }),
     );
     vi.spyOn(console, "log").mockImplementation(() => {});

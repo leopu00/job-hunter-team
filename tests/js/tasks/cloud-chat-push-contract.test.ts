@@ -27,16 +27,26 @@ const ROUTE_PATH = resolve(
 function pendingMessagesFilterSource(): string {
   const src = readFileSync(ROUTE_PATH, "utf-8");
   const anchor = src.indexOf("const payload = pendingMessages");
-  expect(anchor, "il blocco pending_user_messages non è più nella route").toBeGreaterThan(-1);
+  expect(
+    anchor,
+    "il blocco pending_user_messages non è più nella route",
+  ).toBeGreaterThan(-1);
   const filterAt = src.indexOf(".filter(", anchor);
-  expect(filterAt, "la route non filtra più pending_user_messages").toBeGreaterThan(-1);
+  expect(
+    filterAt,
+    "la route non filtra più pending_user_messages",
+  ).toBeGreaterThan(-1);
   const open = src.indexOf("(", filterAt + ".filter".length);
   let depth = 0;
   for (let i = open; i < src.length; i++) {
     if (src[i] === "(") depth++;
     else if (src[i] === ")") {
       depth--;
-      if (depth === 0) return src.slice(open + 1, i).trim();
+      if (depth === 0)
+        return src
+          .slice(open + 1, i)
+          .trim()
+          .replace(/,\s*$/, "");
     }
   }
   throw new Error("filtro non bilanciato nella route");
