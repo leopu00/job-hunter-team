@@ -66,6 +66,48 @@ function childWriter(path: string, id: number) {
   });
 }
 
+function childMutation(path: string, action: string, value: string) {
+  const moduleUrl = new URL(
+    "../../../cli/src/lib/cloud-push-quarantine.js",
+    import.meta.url,
+  ).href;
+  const source = `
+    const q = await import(process.env.JHT_TEST_QUARANTINE_MODULE);
+    const action = process.env.JHT_TEST_QUARANTINE_ACTION;
+    const value = process.env.JHT_TEST_QUARANTINE_VALUE;
+    const path = process.env.JHT_TEST_QUARANTINE_PATH;
+    if (action === "retry") q.requestQuarantineRetry(value, { path });
+    else if (action === "resolve") q.resolveQuarantine(value, { path });
+    else q.quarantineRow({
+      table: "positions",
+      row: { id: Number(value) },
+      reason: "http_422:record_rejected",
+      path,
+    });
+  `;
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
+      env: {
+        ...process.env,
+        JHT_TEST_QUARANTINE_MODULE: moduleUrl,
+        JHT_TEST_QUARANTINE_PATH: path,
+        JHT_TEST_QUARANTINE_ACTION: action,
+        JHT_TEST_QUARANTINE_VALUE: value,
+      },
+      stdio: "pipe",
+    });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`child ${action} failed (${code}): ${stderr}`));
+    });
+  });
+}
+
 afterEach(() => {
   for (const dir of dirs.splice(0))
     rmSync(dir, { recursive: true, force: true });
@@ -239,5 +281,35 @@ describe("cloud push quarantine metadata", () => {
     expect(state.corrupt).not.toBe(true);
     expect(state.entries).toHaveLength(9);
     expect(new Set(state.entries.map((entry) => entry.identity)).size).toBe(9);
+  });
+
+  it("preserves overlapping push, retry and resolve mutations", async () => {
+    const path = makeFile();
+    const retryIdentity = quarantineRow({
+      table: "positions",
+      row: { id: 21 },
+      reason: "http_422:record_rejected",
+      path,
+    });
+    const resolveIdentity = quarantineRow({
+      table: "positions",
+      row: { id: 22 },
+      reason: "http_422:record_rejected",
+      path,
+    });
+
+    await Promise.all([
+      childMutation(path, "retry", retryIdentity),
+      childMutation(path, "resolve", resolveIdentity),
+      childMutation(path, "quarantine", "23"),
+    ]);
+    const entries = readCloudPushQuarantine(path).entries;
+    expect(
+      entries.find((entry) => entry.identity === retryIdentity)?.status,
+    ).toBe("retry");
+    expect(
+      entries.find((entry) => entry.identity === resolveIdentity)?.status,
+    ).toBe("resolved");
+    expect(entries).toHaveLength(3);
   });
 });
