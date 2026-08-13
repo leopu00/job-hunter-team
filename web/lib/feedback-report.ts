@@ -6,6 +6,9 @@
  * risultato — invece che a colpi di grep sul sorgente della route.
  */
 import { redact } from "./redact";
+import { validReplyEmail } from "./feedback-contact";
+
+export { validReplyEmail } from "./feedback-contact";
 
 /** Oltre questa soglia non è una segnalazione: il bundle del client sta sotto
  *  i 200 KB con i log al massimo della coda. */
@@ -94,17 +97,14 @@ function safePlatform(value: unknown): string {
   return PLATFORM_ALIASES[field(value, 40).toLowerCase()] ?? "unknown";
 }
 
-/**
- * Un header di posta non può tollerare newline o sintassi ambigua. Il client
- * fa lo stesso controllo per dare feedback immediato, ma il confine di fiducia
- * è qui: un client vecchio o di terzi non può iniettare header in Resend.
- */
-export function validReplyEmail(value: unknown): boolean {
-  if (typeof value !== "string") return value === undefined || value === null;
-  const email = value.trim();
-  if (!email) return true;
-  if (email.length > 254 || /[\r\n]/.test(email)) return false;
-  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
+/** Un header è sempre una sola riga, anche se arriva da un client terzo. */
+function safeSubject(value: unknown): string {
+  return safeNarrative(value, 1000)
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120)
+    .trim();
 }
 
 function safeDoing(client: string, value: unknown): string {
@@ -147,8 +147,11 @@ export function parseReport(raw: unknown): Report | null {
   const client = safeClient(body.client);
   return {
     client,
-    replyTo: field(body.reply_to, 254),
-    subject: safeNarrative(body.subject, 120),
+    // `validReplyEmail` misura il valore già trimmato: conservarlo nello
+    // stesso ordine evita di troncare l'ultimo carattere di un indirizzo al
+    // limite quando il client ha aggiunto spazi esterni.
+    replyTo: typeof body.reply_to === "string" ? body.reply_to.trim() : "",
+    subject: safeSubject(body.subject),
     kind: safeKind(body.kind),
     appVersion: safeVersion(body.app_version),
     locale: safeLocale(body.locale),
@@ -193,8 +196,9 @@ export function emailSubject(report: Report, ticket: string): string {
   // Quello che ha scritto chi invia batte sempre il troncamento automatico
   // del messaggio: sintetizza meglio, e senza si finisce con una casella
   // piena di mail intitolate "Ciao".
-  const summary =
-    report.subject || report.happened.split("\n")[0].slice(0, 80).trim();
+  const summary = safeSubject(
+    report.subject || report.happened.split("\n")[0].slice(0, 80),
+  );
   // Il tipo in oggetto fa la differenza fra una casella che si smista a
   // colpo d'occhio e una in cui bisogna aprire tutto per capire cosa c'è.
   const tipo = report.kind ? `(${report.kind}) ` : "";
