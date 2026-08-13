@@ -39,7 +39,11 @@ Használd ezeket a változókat a munka során: tmux üzenetek, DB claim-ek, Cri
 | Pozíció lookup / queue / állapot | `db-query` |
 | Application insert / pozíció promoválás/kizárás | `db-insert` / `db-update` |
 
-A 3 működési skill (`application-flow`, `cv-structure`, `critic-loop`) **szekvenciálisan** hívódik minden pozícióhoz: gate (anti-rewriting + claim + link) → CV írás → 3 kör Critico-val → végső gate.
+A `request_kind=cv` esetén a 3 működési skill (`application-flow`, `cv-structure`, `critic-loop`) **szekvenciálisan** hívódik: gate (anti-rewriting + claim + link) → CV írás → 3 kör Critico-val → végső gate.
+
+### Cover-letter ág — a STEP 2 előtt
+
+Ha a STEP 1 **`request_kind=cover_letter`** értéket ad, azonnal ezt az ágat kövesd. Az application már létezik, és jogosan lehet végleges `critic_verdict` értéke: olvasd ki a `db_query.py position <position_id> --json` paranccsal; **ne futtasd** az anti-rewriting `db_query.py application` gate-et, a `status=writing` claimet, a `db_insert.py application`, `cv-structure` vagy `critic-loop` lépést. Őrizd meg a position/application aktuális állapotát és a `cv_path`/`cv_pdf_path` mezőket, csak a kért motivációs levelet készítsd el, majd kizárólag a `cl_path`/`cl_pdf_path` mezőket mentsd a `db_update.py application <position_id>` paranccsal. Olvasd vissza a positiont és applicationt: a befejezéshez megváltozott levélútvonalak, törölt kérésjelző és változatlan CV-útvonalak, állapot és `critic_verdict` szükséges. Ezután térj vissza a STEP 1-hez. Minden sikertelen ellenőrzés fail-closed és jelentendő; soha ne folytassa a STEP 2-vel.
 
 ---
 
@@ -81,8 +85,6 @@ STEP 8 → VISSZA STEP 1-RE
 **Üres queue (lazy-spawn paradigma)**: tisztán lépj ki `[REPORT] queue empty, exiting`-gal a Capitano-nak. NE idle-loop-olj. A Capitano monitorozza a DB-t és friss Scrittore-t respawnol, amint a felhasználó új pozíciót flag-el a dashboard / `/cv`-n keresztül.
 
 **Választási priorítás**: FIFO `write_requested_at` ASC szerint (a felhasználó látja a csapatot reagálni abban a sorrendben, ahogy klikkelt), tiebreaker `total_score` DESC szerint. A `db_query.py next-for-scrittore` kezeli.
-
-**`request_kind=cover_letter`** ugyanazt a tartós Writer-sort használja, mint a CV-kérések. Az application már létezik: őrizd meg a `cv_path`/`cv_pdf_path` mezőket, és csak a `cl_path`/`cl_pdf_path` mezőket frissítsd a `db_update.py application <position_id>` paranccsal. A kérés csak akkor zárul le atomikusan, ha eltérő motivációslevél-útvonal lett mentve; a készre jelentés előtt ellenőrizd az applicationt és a pozíció jelzőjét. Ehhez a művelethez soha ne használd a sort lecserélő `db_insert.py application` parancsot.
 
 ---
 

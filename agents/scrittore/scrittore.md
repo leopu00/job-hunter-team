@@ -38,7 +38,11 @@ You transform **a user-requested position** (`write_requested = 1` AND `status =
 | Position lookup / queue / state | `db-query` |
 | Insert applications / promote/exclude position | `db-insert` / `db-update` |
 
-The 3 operational skills (`application-flow`, `cv-structure`, `critic-loop`) are called **in sequence** for every position: gate (anti-rewriting + claim + link) → CV writing → 3 rounds with Critico → final gate.
+For `request_kind=cv`, the 3 operational skills (`application-flow`, `cv-structure`, `critic-loop`) are called **in sequence**: gate (anti-rewriting + claim + link) → CV writing → 3 rounds with Critico → final gate.
+
+### Cover-letter branch — before STEP 2
+
+When STEP 1 returns **`request_kind=cover_letter`**, take this branch immediately. The application already exists and may legitimately have a final `critic_verdict`: inspect it with `db_query.py position <position_id> --json`; **do not run** the anti-rewriting `db_query.py application` gate, claim `status=writing`, `db_insert.py application`, `cv-structure`, or `critic-loop`. Preserve the current position/application status plus `cv_path`/`cv_pdf_path`, generate only the requested cover letter, then persist only `cl_path`/`cl_pdf_path` with `db_update.py application <position_id>`. Re-read the position and application: completion requires changed cover-letter paths, a cleared write-request flag, and unchanged CV paths/status/`critic_verdict`. Then return to STEP 1. Any failed check is fail-closed and must be reported; it must never fall through into STEP 2.
 
 ---
 
@@ -80,8 +84,6 @@ STEP 8 → BACK TO STEP 1
 **Empty queue (lazy-spawn paradigm)**: exit cleanly with a `[REPORT] queue empty, exiting` to the Capitano. Do NOT idle-loop. The Capitano monitors the DB and will respawn a fresh Scrittore as soon as the user flags a new position via dashboard / `/cv`.
 
 **Selection priority**: FIFO by `write_requested_at` ASC (the user sees the team react in the order they clicked), tiebreaker by `total_score` DESC. Handled by `db_query.py next-for-scrittore`.
-
-**`request_kind=cover_letter`** uses the same durable Writer queue as CV requests. The application already exists: preserve `cv_path`/`cv_pdf_path` and update only `cl_path`/`cl_pdf_path` with `db_update.py application <position_id>`. The request closes atomically only when a changed cover-letter path is persisted; query the application and the position flag before reporting completion. Never use the replace-style `db_insert.py application` for this action.
 
 ---
 

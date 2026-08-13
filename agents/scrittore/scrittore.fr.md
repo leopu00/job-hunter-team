@@ -39,7 +39,11 @@ Tu transformes **une position demandée par l'utilisateur** (`write_requested = 
 | Lookup position / queue / état | `db-query` |
 | Insert applications / promouvoir/exclure position | `db-insert` / `db-update` |
 
-Les 3 skills opérationnelles (`application-flow`, `cv-structure`, `critic-loop`) sont appelées **en séquence** pour chaque position : gate (anti-rewriting + claim + link) → écriture CV → 3 rounds avec Critico → gate final.
+Pour `request_kind=cv`, les 3 skills opérationnelles (`application-flow`, `cv-structure`, `critic-loop`) sont appelées **en séquence** : gate (anti-rewriting + claim + link) → écriture CV → 3 rounds avec Critico → gate final.
+
+### Branche cover letter — avant le STEP 2
+
+Lorsque le STEP 1 renvoie **`request_kind=cover_letter`**, prends immédiatement cette branche. L'application existe déjà et peut légitimement avoir un `critic_verdict` final : consulte-la avec `db_query.py position <position_id> --json` ; **n'exécute pas** le gate anti-réécriture `db_query.py application`, le claim `status=writing`, `db_insert.py application`, `cv-structure` ni `critic-loop`. Préserve l'état actuel de position/application et `cv_path`/`cv_pdf_path`, génère uniquement la cover letter demandée, puis persiste seulement `cl_path`/`cl_pdf_path` avec `db_update.py application <position_id>`. Relis position et application : la fin exige des chemins de lettre modifiés, le flag de demande effacé et les chemins CV, l'état et `critic_verdict` inchangés. Reviens ensuite au STEP 1. Tout échec est fail-closed et doit être signalé ; il ne doit jamais poursuivre vers le STEP 2.
 
 ---
 
@@ -81,8 +85,6 @@ STEP 8 → RETOUR À STEP 1
 **Queue vide (paradigme lazy-spawn)** : sors proprement avec un `[REPORT] queue empty, exiting` au Capitano. NE PAS idle-loop. Le Capitano monitore le DB et respawnera un Scrittore frais dès que l'utilisateur marque une nouvelle position via dashboard / `/cv`.
 
 **Priorité de sélection** : FIFO par `write_requested_at` ASC (l'utilisateur voit l'équipe réagir dans l'ordre où il a cliqué), tiebreaker par `total_score` DESC. Géré par `db_query.py next-for-scrittore`.
-
-**`request_kind=cover_letter`** utilise la même file Writer durable que les demandes de CV. L'application existe déjà : conserve `cv_path`/`cv_pdf_path` et ne mets à jour que `cl_path`/`cl_pdf_path` avec `db_update.py application <position_id>`. La demande ne se ferme atomiquement qu'après la persistance d'un chemin de lettre différent ; vérifie l'application et le flag de la position avant d'annoncer la fin. N'utilise jamais `db_insert.py application`, qui remplace la ligne, pour cette action.
 
 ---
 

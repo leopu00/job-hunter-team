@@ -35,8 +35,9 @@ def box(tmp_path, monkeypatch):
     )
     conn.execute(
         "INSERT INTO applications "
-        "(position_id, cv_path, cv_pdf_path, cl_path, cl_pdf_path) "
-        "VALUES (7, '/synthetic/cv.md', '/synthetic/cv.pdf', "
+        "(position_id, status, critic_verdict, cv_path, cv_pdf_path, "
+        "cl_path, cl_pdf_path) "
+        "VALUES (7, 'ready', 'PASS', '/synthetic/cv.md', '/synthetic/cv.pdf', "
         "'/synthetic/old-cl.md', '/synthetic/old-cl.pdf')"
     )
     conn.commit()
@@ -120,12 +121,23 @@ def test_only_a_changed_cover_letter_effect_closes_the_request(box):
         "SELECT write_requested FROM positions WHERE id = 7"
     ).fetchone()[0] == 1
 
-    # Il nuovo artefatto e la chiusura del flag vivono nella stessa transazione.
-    conn.execute(
-        "UPDATE applications SET cl_path = '/synthetic/new-cl.md' "
-        "WHERE position_id = 7"
+    # Il percorso agente reale deve poter aggiornare una application già
+    # revisionata senza riaprire il CV o il suo stato.
+    env = {**os.environ, "JHT_HOME": str(home)}
+    update = subprocess.run(
+        [
+            sys.executable,
+            str(SKILLS / "db_update.py"),
+            "application",
+            "7",
+            "--cl-path",
+            "/synthetic/new-cl.md",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
     )
-    conn.commit()
+    assert update.returncode == 0, update.stderr or update.stdout
     position = conn.execute(
         "SELECT write_requested, write_requested_at, write_request_kind "
         "FROM positions WHERE id = 7"
@@ -134,10 +146,13 @@ def test_only_a_changed_cover_letter_effect_closes_the_request(box):
     assert position[1] > requested_at
     assert position[2] is None
     application = conn.execute(
-        "SELECT cv_path, cv_pdf_path, cl_path, cl_pdf_path "
+        "SELECT status, critic_verdict, cv_path, cv_pdf_path, "
+        "cl_path, cl_pdf_path "
         "FROM applications WHERE position_id = 7"
     ).fetchone()
     assert tuple(application) == (
+        "ready",
+        "PASS",
         "/synthetic/cv.md",
         "/synthetic/cv.pdf",
         "/synthetic/new-cl.md",

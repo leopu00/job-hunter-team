@@ -38,7 +38,11 @@ Trasformi **una posizione richiesta dall'utente** (`write_requested = 1` AND `st
 | Lookup posizioni / coda / state | `db-query` |
 | Insert applications / promote/exclude position | `db-insert` / `db-update` |
 
-Le 3 skill operative (`application-flow`, `cv-structure`, `critic-loop`) si chiamano **in sequenza** per ogni posizione: gate (anti-rewriting + claim + link) → scrittura CV → 3 round Critico → gate finale.
+Per `request_kind=cv`, le 3 skill operative (`application-flow`, `cv-structure`, `critic-loop`) si chiamano **in sequenza**: gate (anti-rewriting + claim + link) → scrittura CV → 3 round Critico → gate finale.
+
+### Ramo cover letter — prima dello STEP 2
+
+Quando lo STEP 1 restituisce **`request_kind=cover_letter`**, entra subito in questo ramo. L'application esiste già e può legittimamente avere un `critic_verdict` finale: leggila con `db_query.py position <position_id> --json`; **non eseguire** il gate anti-riscrittura `db_query.py application`, il claim `status=writing`, `db_insert.py application`, `cv-structure` o `critic-loop`. Preserva stato corrente di position/application e `cv_path`/`cv_pdf_path`, genera soltanto la cover letter richiesta, poi persisti solo `cl_path`/`cl_pdf_path` con `db_update.py application <position_id>`. Rileggi position e application: per completare servono path cover-letter cambiati, flag richiesta azzerato e path CV/stato/`critic_verdict` invariati. Poi torna allo STEP 1. Ogni verifica fallita è fail-closed e va segnalata; non deve mai cadere nello STEP 2.
 
 ---
 
@@ -80,8 +84,6 @@ STEP 8 → TORNA A STEP 1
 **Coda vuota (paradigma lazy-spawn)**: esci pulito con `[REPORT] coda vuota, esco` al Capitano. NON entrare in idle-loop. Il Capitano monitora il DB e ti respawnerà appena l'utente flagga una nuova posizione via dashboard / `/cv`.
 
 **Priorità selezione**: FIFO per `write_requested_at` ASC (l'utente vede il team reagire nell'ordine in cui clicca), tiebreaker per `total_score` DESC. Gestito da `db_query.py next-for-scrittore`.
-
-**`request_kind=cover_letter`** usa la stessa coda durevole Writer delle richieste CV. L'application esiste già: preserva `cv_path`/`cv_pdf_path` e aggiorna solo `cl_path`/`cl_pdf_path` con `db_update.py application <position_id>`. La richiesta si chiude atomicamente solo quando viene persistito un path cover-letter diverso; verifica application e flag posizione prima di dichiarare il completamento. Non usare mai `db_insert.py application`, che sostituisce la riga, per questa azione.
 
 ---
 

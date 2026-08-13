@@ -719,7 +719,13 @@ export async function POST(req: NextRequest) {
                 ? p.write_requested
                 : p.write_requested === 1,
           write_requested_at: p.write_requested_at ?? null,
-          write_request_kind: p.write_request_kind ?? null,
+          // Compat pre-078: assente significa "client non conosce il campo",
+          // non "azzera il desired state cloud". Con defaultToNull=false
+          // PostgREST preserva il valore concorrente su UPDATE; un NULL
+          // esplicito dei client aggiornati continua invece a risolverlo.
+          ...(Object.prototype.hasOwnProperty.call(p, "write_request_kind")
+            ? { write_request_kind: p.write_request_kind ?? null }
+            : {}),
           geocode_requested:
             p.geocode_requested == null
               ? false
@@ -760,7 +766,7 @@ export async function POST(req: NextRequest) {
         return deferred;
       });
     for (const batch of [
-      { rows: regularPayload, defaultToNull: true },
+      { rows: regularPayload, defaultToNull: false },
       { rows: deferredAppliedPayload, defaultToNull: false },
     ]) {
       if (batch.rows.length === 0) continue;

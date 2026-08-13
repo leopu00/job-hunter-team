@@ -317,8 +317,23 @@ describe("mapping, lingue e iconografia O-82/O-83", () => {
       );
       expect(prompt).toContain("request_kind=cover_letter");
       expect(prompt).toContain("db_update.py application");
+      expect(prompt).toContain("db_query.py position");
+      expect(prompt).toContain("db_query.py application");
       expect(prompt).toContain("cl_path");
       expect(prompt).toContain("cv_path");
+      expect(prompt).toContain("critic_verdict");
+      expect(prompt).toContain("status=writing");
+      expect(prompt.indexOf("request_kind=cover_letter")).toBeLessThan(
+        prompt.indexOf("STEP 2 —"),
+      );
+    }
+    const pushRoute = readFileSync(join(repo, paths[2]), "utf8");
+    const localRoute = readFileSync(join(repo, paths[4]), "utf8");
+    for (const syncSource of [pushRoute, localRoute]) {
+      expect(syncSource).toContain(
+        'hasOwnProperty.call(p, "write_request_kind")',
+      );
+      expect(syncSource).toContain("defaultToNull: false");
     }
   });
 });
