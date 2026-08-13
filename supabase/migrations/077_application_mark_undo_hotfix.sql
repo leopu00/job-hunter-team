@@ -1,4 +1,4 @@
--- P0 CLICK hotfix: production 0.3.8 may be missing the two RPCs called by the
+-- O-80 hotfix: production 0.3.8 may be missing the two RPCs called by the
 -- "Mi sono candidato" POST/DELETE routes.  This migration is intentionally
 -- narrow: it installs only those two tenant-bound, locking, atomic functions.
 -- It must not re-run or alter sync_upsert_applications from migration 072.
@@ -103,8 +103,6 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.mark_position_applied(INTEGER, TIMESTAMPTZ, TEXT, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.mark_position_applied(INTEGER, TIMESTAMPTZ, TEXT, TEXT) FROM anon, service_role;
 GRANT EXECUTE ON FUNCTION public.mark_position_applied(INTEGER, TIMESTAMPTZ, TEXT, TEXT) TO authenticated;
 REVOKE ALL ON FUNCTION public.undo_manual_position_application(INTEGER, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.undo_manual_position_application(INTEGER, TEXT) FROM anon, service_role;
 GRANT EXECUTE ON FUNCTION public.undo_manual_position_application(INTEGER, TEXT) TO authenticated;

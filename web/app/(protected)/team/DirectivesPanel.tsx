@@ -84,6 +84,9 @@ export default function DirectivesPanel({
   const [editId, setEditId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [eventStatus, setEventStatus] = useState<
+    Record<string, "queued" | "error">
+  >({});
 
   const load = useCallback(async () => {
     try {
@@ -116,7 +119,21 @@ export default function DirectivesPanel({
         toast(data.error || t("errGeneric"), "error");
         return false;
       }
-      if (okMsg) toast(okMsg, "success");
+      const event = data.captain_event as
+        | { status?: "queued" | "error" }
+        | undefined;
+      if ("id" in payload && event)
+        setEventStatus((old) => ({
+          ...old,
+          [String(payload.id)]: event.status === "queued" ? "queued" : "error",
+        }));
+      else if (event && data.id)
+        setEventStatus((old) => ({
+          ...old,
+          [String(data.id)]: event.status === "queued" ? "queued" : "error",
+        }));
+      if (event?.status === "error") toast(t("captainError"), "error");
+      else if (okMsg) toast(okMsg, "success");
       await load();
       return true;
     } catch {
@@ -247,6 +264,20 @@ export default function DirectivesPanel({
                 <p className="flex-1 whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--color-white)]">
                   {d.body}
                 </p>
+                <div className="shrink-0 text-right text-[10px] text-[var(--color-dim)]">
+                  <div>{new Date(d.created_at).toLocaleString(locale)}</div>
+                  <div>
+                    {d.status} · {d.created_by}
+                  </div>
+                  {eventStatus[String(d.id)] === "queued" && (
+                    <div className="text-[var(--color-blue)]">
+                      {t("captainQueued")}
+                    </div>
+                  )}
+                  {eventStatus[String(d.id)] === "error" && (
+                    <div className="text-red-400">{t("captainError")}</div>
+                  )}
+                </div>
                 {!readOnly && (
                   <div className="flex shrink-0 gap-2">
                     <button

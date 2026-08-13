@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
+import { createHash } from "crypto";
 import { resolveUser } from "@/lib/team-state/auth";
 import { requireAuth } from "@/lib/auth";
 import {
@@ -23,6 +24,28 @@ export const dynamic = "force-dynamic";
 
 const KINDS = new Set(["order", "strategy", "formation", "note"]);
 const MAX_LEN = 2000;
+
+type CaptainEvent = { ok: boolean; status: "queued" | "error"; error?: string };
+
+function enqueueCaptainEvent(
+  db: Database.Database,
+  event: { action: string; id: number; fingerprint?: string },
+): CaptainEvent {
+  const sourceId = `team-directive:${event.id}:${event.action}:${event.fingerprint || ""}`;
+  const text = `[TEAM-DIRECTIVE] ${event.action} #${event.id}`;
+  try {
+    db.prepare(
+      "INSERT OR IGNORE INTO pending_user_messages (agent, body, kind, author, source_id, delivered_via) VALUES (?, ?, 'notification', 'user', ?, NULL)",
+    ).run("capitano", text, sourceId);
+    return { ok: true, status: "queued" };
+  } catch (error) {
+    return {
+      ok: false,
+      status: "error",
+      error: error instanceof Error ? error.message : "enqueue_failed",
+    };
+  }
+}
 
 interface DirectiveRow {
   id: number;
@@ -89,7 +112,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (guard) return guard;
   const resolved = await resolveUser(req);
   if (!resolved.ok) return resolved.res;
-  const { userId, supabase } = resolved.user;
+  const { supabase } = resolved.user;
   const { data, error } = await supabase
     .from("team_directives")
     .select(
@@ -140,16 +163,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           "SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM team_directives WHERE status = 'active'",
         )
         .get() as { n: number };
-      const info = db
-        .prepare(
-          "INSERT INTO team_directives (body, kind, status, sort_order, created_by) " +
-            "VALUES (?, ?, 'active', ?, 'user')",
-        )
-        .run(text, kind, nxt?.n ?? 1);
+      const result = db.transaction(() => {
+        const info = db
+          .prepare(
+            "INSERT INTO team_directives (body, kind, status, sort_order, created_by) VALUES (?, ?, 'active', ?, 'user')",
+          )
+          .run(text, kind, nxt?.n ?? 1);
+        const id = Number(info.lastInsertRowid);
+        const captainEvent = enqueueCaptainEvent(db, {
+          action: "created",
+          id,
+          fingerprint: createHash("sha256").update(text).digest("hex"),
+        });
+        if (!captainEvent.ok)
+          throw new Error(captainEvent.error || "enqueue_failed");
+        return { id, captainEvent };
+      })();
       return NextResponse.json({
-        id: String(info.lastInsertRowid),
+        id: String(result.id),
         source: "local",
+        captain_event: result.captainEvent,
       });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: "directive_not_queued",
+          detail: error instanceof Error ? error.message : "enqueue_failed",
+        },
+        { status: 503 },
+      );
     } finally {
       db.close();
     }
@@ -165,18 +207,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       { status: 403 },
     );
   }
-  const { userId, supabase } = resolved.user;
-  const { data, error } = await supabase
-    .from("team_directives")
-    .insert({
-      user_id: userId,
-      body: text,
-      kind,
-      status: "active",
-      created_by: "user",
-    })
-    .select("id")
-    .single();
+  const { supabase } = resolved.user;
+  const sourceId = `team-directive:create:${createHash("sha256").update(text).digest("hex")}`;
+  const { data, error } = await supabase.rpc(
+    "mutate_team_directive_with_event",
+    {
+      p_id: 0,
+      p_action: "created",
+      p_body: text,
+      p_source_id: sourceId,
+    },
+  );
   if (error) {
     return sanitizedError(error, {
       status: 500,
@@ -184,7 +225,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       publicMessage: "insert_failed",
     });
   }
-  return NextResponse.json({ id: String(data.id), source: "cloud" });
+  return NextResponse.json({
+    id: String(data.id),
+    source: "cloud",
+    captain_event: { ok: true, status: "queued" },
+  });
 }
 
 // ── PATCH: modifica il testo o archivia una direttiva ──────────────────────
@@ -218,18 +263,43 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
   const db = localDbOrNull();
   if (db) {
     try {
-      if (archive) {
-        db.prepare(
-          "UPDATE team_directives SET status = 'archived', " +
-            "archived_at = datetime('now','localtime'), updated_at = datetime('now','localtime') " +
-            "WHERE id = ?",
-        ).run(id);
-      } else {
-        db.prepare(
-          "UPDATE team_directives SET body = ?, updated_at = datetime('now','localtime') WHERE id = ?",
-        ).run(text, id);
-      }
-      return NextResponse.json({ ok: true, source: "local" });
+      const result = db.transaction(() => {
+        const changed = archive
+          ? db
+              .prepare(
+                "UPDATE team_directives SET status = 'archived', archived_at = datetime('now','localtime'), updated_at = datetime('now','localtime') WHERE id = ? AND status = 'active'",
+              )
+              .run(id)
+          : db
+              .prepare(
+                "UPDATE team_directives SET body = ?, updated_at = datetime('now','localtime') WHERE id = ? AND status = 'active'",
+              )
+              .run(text, id);
+        if (changed.changes !== 1) throw new Error("directive_not_found");
+        const captainEvent = enqueueCaptainEvent(db, {
+          action: archive ? "archived" : "edited",
+          id,
+          fingerprint: text
+            ? createHash("sha256").update(text).digest("hex")
+            : undefined,
+        });
+        if (!captainEvent.ok)
+          throw new Error(captainEvent.error || "enqueue_failed");
+        return captainEvent;
+      })();
+      return NextResponse.json({
+        ok: true,
+        source: "local",
+        captain_event: result,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: "directive_not_queued",
+          detail: error instanceof Error ? error.message : "enqueue_failed",
+        },
+        { status: 503 },
+      );
     } finally {
       db.close();
     }
@@ -245,19 +315,17 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       { status: 403 },
     );
   }
-  const { userId, supabase } = resolved.user;
-  const patch = archive
-    ? {
-        status: "archived",
-        archived_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-    : { body: text, updated_at: new Date().toISOString() };
-  const { error } = await supabase
-    .from("team_directives")
-    .update(patch)
-    .eq("id", id)
-    .eq("user_id", userId);
+  const { supabase } = resolved.user;
+  const sourceId = `team-directive:${id}:${archive ? "archived" : "edited"}:${text ? createHash("sha256").update(text).digest("hex") : ""}`;
+  const { data, error } = await supabase.rpc(
+    "mutate_team_directive_with_event",
+    {
+      p_id: id,
+      p_action: archive ? "archived" : "edited",
+      p_body: text,
+      p_source_id: sourceId,
+    },
+  );
   if (error) {
     return sanitizedError(error, {
       status: 500,
@@ -265,5 +333,9 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       publicMessage: "update_failed",
     });
   }
-  return NextResponse.json({ ok: true, source: "cloud" });
+  return NextResponse.json({
+    ok: true,
+    source: "cloud",
+    captain_event: { ok: true, status: "queued" },
+  });
 }

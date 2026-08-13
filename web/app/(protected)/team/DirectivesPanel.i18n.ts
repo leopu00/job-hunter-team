@@ -126,4 +126,22 @@ export const T = {
     hu: "A művelet sikertelen",
     pt: "Operação falhou",
   },
+  captainQueued: {
+    it: "In coda per il Capitano",
+    en: "Queued for the Captain",
+    es: "En cola para el Capitán",
+    fr: "En file pour le Capitaine",
+    de: "Für den Kapitän eingereiht",
+    hu: "A Kapitány sorába állítva",
+    pt: "Em fila para o Capitão",
+  },
+  captainError: {
+    it: "Invio al Capitano non confermato",
+    en: "Captain delivery not confirmed",
+    es: "Entrega al Capitán no confirmada",
+    fr: "Envoi au Capitaine non confirmé",
+    de: "Zustellung an den Kapitän nicht bestätigt",
+    hu: "A Kapitány kézbesítése nem igazolt",
+    pt: "Entrega ao Capitão não confirmada",
+  },
 } satisfies Dictionary;
