@@ -96,4 +96,5 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.mutate_team_directive_with_event(BIGINT, TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.mutate_team_directive_with_event(BIGINT, TEXT, TEXT, TEXT) FROM anon, service_role;
 GRANT EXECUTE ON FUNCTION public.mutate_team_directive_with_event(BIGINT, TEXT, TEXT, TEXT) TO authenticated;
