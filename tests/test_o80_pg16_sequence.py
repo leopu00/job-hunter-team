@@ -1,4 +1,5 @@
 """Executable PG16 gate for the 076 -> 077 -> 079 migration sequence."""
+import json
 import shutil
 import subprocess
 import time
@@ -60,10 +61,13 @@ def test_sequence_reapply_and_tenant_event(psql):
     owner = "11111111-1111-1111-1111-111111111111"
     psql(f"INSERT INTO positions VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','{owner}',73,'ready',NULL);")
     result = psql(f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.mutate_team_directive_with_event(0,'created','synthetic','stable-source'); SELECT public.mutate_team_directive_with_event(1,'archived',NULL,'stable-source-archive');").stdout
-    assert 'queued' in result
+    result_rows = [json.loads(line) for line in result.splitlines() if line.startswith('{')]
+    created_id = result_rows[0]['id']
+    assert result_rows[0]['status'] == result_rows[1]['status'] == 'queued'
     assert psql("SELECT count(*) FROM pending_user_messages WHERE source_id='stable-source';").stdout.strip() == '1'
     repeat = psql(f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.mutate_team_directive_with_event(0,'created','synthetic','stable-source');").stdout
-    assert repeat.strip().splitlines()[-1] == '{"id": 1, "status": "queued"}'
+    repeat_row = json.loads([line for line in repeat.splitlines() if line.startswith('{')][-1])
+    assert repeat_row == {'id': created_id, 'status': 'queued'}
     assert psql("SELECT count(*) FROM pending_user_messages WHERE source_id='stable-source';").stdout.strip() == '1'
     assert psql("SELECT count(*) FROM team_directives WHERE source_id='stable-source';").stdout.strip() == '1'
     denied = psql("RESET ROLE; SELECT public.mutate_team_directive_with_event(1,'edited','bad','other');", check=False)
