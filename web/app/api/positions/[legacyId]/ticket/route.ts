@@ -9,6 +9,7 @@ import {
   isLocalTokenAuthenticated,
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 import { sanitizedError } from "@/lib/error-response";
 import { RESCORE_TICKET_KIND } from "@/lib/rescore-ticket";
 import { ticketRequestWithAttachment } from "@/lib/ticket-attachment";
@@ -90,7 +91,7 @@ export async function POST(
     );
   }
 
-  const hasLocal = fs.existsSync(JHT_DB_PATH);
+  const hasLocal = !isCloudDeploy() && fs.existsSync(JHT_DB_PATH);
 
   if (attachment && !hasLocal) {
     return NextResponse.json(

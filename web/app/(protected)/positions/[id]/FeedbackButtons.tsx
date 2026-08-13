@@ -116,7 +116,8 @@ const T: Record<
     removeExclusion: "Annulla esclusione",
     markApplied: "Mi sono candidato",
     markAppliedDone: "Candidatura segnata",
-    markAppliedError: "Non è riuscito a segnare la candidatura",
+    markAppliedError:
+      "Candidatura non registrata. Riprova tra poco e segnalalo se continua.",
     markAppliedUndoHint: "tocca per annullare",
     markAppliedUndoError: "Non è riuscito ad annullare la candidatura",
     markAppliedByTeam:
@@ -144,7 +145,8 @@ const T: Record<
     removeExclusion: "Remove exclusion",
     markApplied: "I applied myself",
     markAppliedDone: "Application recorded",
-    markAppliedError: "Could not record the application",
+    markAppliedError:
+      "Application not recorded. Try again shortly and report it if it continues.",
     markAppliedUndoHint: "tap to undo",
     markAppliedUndoError: "Could not undo the application",
     markAppliedByTeam:
@@ -172,7 +174,8 @@ const T: Record<
     removeExclusion: "Kizárás visszavonása",
     markApplied: "Jelentkeztem",
     markAppliedDone: "Jelentkezés rögzítve",
-    markAppliedError: "A jelentkezést nem sikerült rögzíteni",
+    markAppliedError:
+      "A jelentkezés nincs rögzítve. Próbáld újra rövidesen, és jelezd, ha továbbra is fennáll.",
     markAppliedUndoHint: "koppints a visszavonáshoz",
     markAppliedUndoError: "A jelentkezést nem sikerült visszavonni",
     markAppliedByTeam:
@@ -200,7 +203,8 @@ const T: Record<
     removeExclusion: "Anular exclusión",
     markApplied: "Me he postulado",
     markAppliedDone: "Candidatura registrada",
-    markAppliedError: "No se pudo registrar la candidatura",
+    markAppliedError:
+      "La candidatura no se ha registrado. Inténtalo de nuevo en breve y avisa si continúa.",
     markAppliedUndoHint: "toca para deshacer",
     markAppliedUndoError: "No se pudo deshacer la candidatura",
     markAppliedByTeam:
@@ -228,7 +232,8 @@ const T: Record<
     removeExclusion: "Ausschluss aufheben",
     markApplied: "Ich habe mich beworben",
     markAppliedDone: "Bewerbung vermerkt",
-    markAppliedError: "Bewerbung konnte nicht vermerkt werden",
+    markAppliedError:
+      "Bewerbung nicht registriert. Bitte gleich erneut versuchen und melden, wenn das Problem bleibt.",
     markAppliedUndoHint: "zum Rückgängigmachen tippen",
     markAppliedUndoError: "Bewerbung konnte nicht rückgängig gemacht werden",
     markAppliedByTeam:
@@ -256,7 +261,8 @@ const T: Record<
     removeExclusion: "Annuler l'exclusion",
     markApplied: "J'ai postulé moi-même",
     markAppliedDone: "Candidature enregistrée",
-    markAppliedError: "Impossible d'enregistrer la candidature",
+    markAppliedError:
+      "Candidature non enregistrée. Réessayez dans un instant et signalez-le si le problème persiste.",
     markAppliedUndoHint: "touchez pour annuler",
     markAppliedUndoError: "Impossible d’annuler la candidature",
     markAppliedByTeam:
@@ -284,7 +290,8 @@ const T: Record<
     removeExclusion: "Anular exclusão",
     markApplied: "Candidatei-me",
     markAppliedDone: "Candidatura registada",
-    markAppliedError: "Não foi possível registar a candidatura",
+    markAppliedError:
+      "Candidatura não registada. Tente novamente daqui a pouco e avise se continuar.",
     markAppliedUndoHint: "toque para anular",
     markAppliedUndoError: "Não foi possível anular a candidatura",
     markAppliedByTeam:
