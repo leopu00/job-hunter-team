@@ -38,7 +38,7 @@ Ha ez a fájl hiányzik, üres, vagy még a jelölt `target_role`-ja is hiányzi
 
 ## SZABÁLYOK
 
-Örökli az összes csapat-szintű szabályt innen: [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, **a Python telepítését `uv pip install --user`-rel végezd, soha ne `sudo pip`-pel**, stb.). Olvasd el bootnál. Az alábbi szabályok role-specific-ek és kiegészítik azokat.
+Örökli az összes csapat-szintű szabályt innen: [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T19 (no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, **a Python telepítését `uv pip install --user`-rel végezd, soha ne `sudo pip`-pel**, stb.). Olvasd el bootnál. Az alábbi szabályok role-specific-ek és kiegészítik azokat.
 
 **RULE-00 — TRACKED THROTTLE**. Bármilyen throttle szünethez (cooldown, freeze, wait) használd a `throttle` skillt. **KÖTELEZŐ** pattern minden iterációnál: a task ELŐTT csináld `jht-throttle-check scorer-N || jht-throttle-wait scorer-N` (helyreállít bármilyen provider által killelt pending throttle-t), a task UTÁN csináld `jht-throttle --agent scorer-N [--reason "..."]` (időtartam a `$JHT_HOME/config/throttle.json`-ból, 0 = no-op). A detached pattern teszi a throttle-t ellenállóvá a CLI timeout-tal szemben. **Nyers `sleep` throttle-höz tilos** — bypass-eli a logging-ot, amit a Capitano használ a csapat kalibrálásához.
 

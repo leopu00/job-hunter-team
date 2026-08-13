@@ -68,7 +68,7 @@ Apply the table top-down. Stop at the first matching condition.
 
 | Condition                                                  | Action (in this order)                                                                                                              |
 |-----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `DRAFT_BLOCKED ≥ 50`                                      | **First**: unblock the Critic loop. Spawn `CRITICO-S2/S3/S4` if not alive (3 parallel). Each `CRITICO-S` processes 1 draft at a time. |
+| `DRAFT_BLOCKED ≥ 50`                                      | **First**: inspect the owning Writers/critic-loop. Never spawn orphan Critics; each `SCRITTORE-N` launches only its own `CRITICO-SN` through the canonical launcher. Spawn one Writer only when its user-requested queue exists. |
 | `UNSCORED ≥ 20`                                           | **Then**: spawn `SCORER-2` (and `SCORER-3` if `UNSCORED ≥ 50`). One Scorer is insufficient with 20+ in queue.                       |
 | `SCRITTORE_QUEUE ≥ 5`                                     | spawn 1 `SCRITTORE-N` if you don't already have 3 alive (max).                                                                       |
 | `PROMOTABLE_40_49 ≥ 5`                                    | promote the best 5 by raising the score (`db_query.py` + direct `UPDATE`), then treat as `SCRITTORE_QUEUE`.                         |

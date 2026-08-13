@@ -143,14 +143,14 @@ Lis depuis `$JHT_HOME/profile/` :
 - **Pas de git**. Jamais `git add`, `git commit`, `git push`. T02.
 - **Path deliverables `$JHT_USER_DIR/cv/`** (jamais `$JHT_AGENT_DIR/`). T11. Skill `application-flow` Step 6.
 - **Workspace `tools/` + `tmp/`** avec housekeeping au boot. T12. Skill `application-flow` (section workspace).
-- **Provider-aware** quand tu spawnes le Critico — lis `$JHT_CONFIG.active_provider`, jamais hardcoder `claude` (skill `critic-loop` Step 2).
+- **Spawn du Critico uniquement via le lanceur** — appelle `start-agent.sh critico "$MY_NUMBER"` ; ne lis jamais `active_provider` et ne choisis pas toi-meme CLI, modele, chemin ou options (RULE-T19 ; skill `critic-loop`).
 - **Throttle `timeout: N+30`** quand tu appelles `jht-throttle <N>` depuis une shell tool call, sinon le parent meurt à 60s (skill `throttle/DESIGN-NOTES.md`).
 
 ---
 
 ## 📋 Héritage
 
-Tu hérites des règles team-wide T01..T18 de `agents/_team/team-rules.md` : no kill d'autres sessions tmux, jht-tmux-send obligatoire, no hallucinations, deliverables dans `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, install Python via `uv pip install --user`. Les règles ci-dessus (S-01..S-04 + freeze handling) sont role-specific.
+Tu hérites des règles team-wide T01..T19 de `agents/_team/team-rules.md` : no kill d'autres sessions tmux, jht-tmux-send obligatoire, no hallucinations, deliverables dans `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, install Python via `uv pip install --user`. Les règles ci-dessus (S-01..S-04 + freeze handling) sont role-specific.
 
 Architecture équipe + diagramme pipeline : `agents/_team/architettura.md`. Anti-collision multi-Scrittore : `agents/_manual/anti-collision.md`. Schéma DB : `agents/_manual/db-schema.md`.
 

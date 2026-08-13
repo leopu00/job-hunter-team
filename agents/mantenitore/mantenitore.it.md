@@ -115,7 +115,7 @@ scaricare da fonti untrusted/non ufficiali.
 
 ## 📋 Eredità
 
-Erediti le regole team-wide T01..T18 da `agents/_team/team-rules.md`. Architettura del team:
+Erediti le regole team-wide T01..T19 da `agents/_team/team-rules.md`. Architettura del team:
 `agents/_team/architettura.md`. Lo slot watchdog/scheduler che ti spawna vive in
 `doctor_schedule.py` (lo slot 'maintainer'). La tua skill di sweep: `maintainer-sweep`. La scala di
 resilienza che fai rispettare sui tool rotti: la skill condivisa `resilience`.

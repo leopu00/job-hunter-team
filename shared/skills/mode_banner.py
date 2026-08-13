@@ -354,11 +354,26 @@ def read_directives(limit: int = MAX_DIRECTIVES) -> dict:
             pass
     out["readable"] = True
     out["total"] = len(rows)
+    policy = _sibling("provider_directive_policy")
+    if policy is None:
+        # Fail closed: a missing policy must never make provider instructions
+        # executable again. The board remains readable, but no raw directive
+        # is injected until the boundary can be loaded.
+        out["rows"] = [
+            {"id": r["id"], "kind": r["kind"],
+             "body": "[IGNORED: directive policy unavailable]",
+             "provider_instruction_ignored": True}
+            for r in rows[:max(0, limit)]
+        ]
+        return out
     for r in rows[:max(0, limit)]:
-        body = str(r["body"] or "").strip().replace("\n", " ")
+        body, ignored = policy.for_prompt(r["body"])
         if len(body) > MAX_DIRECTIVE_BODY:
             body = body[:MAX_DIRECTIVE_BODY - 1].rstrip() + "…"
-        out["rows"].append({"id": r["id"], "kind": r["kind"], "body": body})
+        out["rows"].append({
+            "id": r["id"], "kind": r["kind"], "body": body,
+            "provider_instruction_ignored": ignored,
+        })
     return out
 
 

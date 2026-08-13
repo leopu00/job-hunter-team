@@ -2,7 +2,7 @@
 ---
 name: critic-loop
 description: "Führe die verpflichtende 3-Runden CV-Review-Schleife mit dem Critico durch — autonom, ohne über den Capitano zu gehen. Für jede Runde spawnst du eine FRISCHE `CRITICO-S<N>`-Sitzung (gleiche N wie deine Scrittore-Sitzung: SCRITTORE-2 → CRITICO-S2), sendest PDF + JD, wartest auf das strukturierte Urteil, beendest den Critic, korrigierst den CV, generierst das PDF neu und startest die nächste Runde mit einer weiteren frischen Instanz. Drei Runden sind nicht verhandelbar — weder 1 noch 2. Nach der 3. Runde Gate: `critic_score ≥ 5` → `ready`, sonst `excluded`. Zuständig: Scrittore."
-allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *), Bash(unset *)
+allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *)
 ---
 
 # critic-loop — 3 frische Runden, keine Abkürzungen
@@ -32,39 +32,15 @@ Der Critic der vorherigen Runde muss bereits beendet sein (am Ende der vorherige
 
 ```bash
 tmux kill-session -t "$CRITICO_SESSION" 2>/dev/null
-tmux new-session -d -s "$CRITICO_SESSION" -c "$(pwd | sed 's|/[^/]*$||')/critico"
+bash /app/.launcher/start-agent.sh critico "$MY_NUMBER"
 ```
 
-### Schritt 2 — Die richtige CLI für den aktiven Provider wählen
-
-Das Hardcoden von `claude` lässt den Critic abstürzen, wenn das Team auf Codex oder Kimi läuft (die `claude`-CLI ist in diesen Containern nicht installiert). Provider aus `$JHT_CONFIG` lesen:
-
-```bash
-PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
-case "$PROVIDER" in
-  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort high" ;;
-  openai)              CRITICO_CMD="codex --yolo" ;;
-  kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
-  *)                   CRITICO_CMD="codex --yolo" ;;
-esac
-
-# Minimale Umgebung für die global installierten CLIs unter /jht_home
-CRITICO_PATH="/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin"
-
-# The CLI must be RESOLVED, not just named. `claude` bare failed with
-# "command not found" because this shell does not have the dependency dirs
-# on its PATH — the agent noticed and retried by hand, which costs a round
-# every time and, on a less capable model, silently skips the quality gate.
-CRITICO_BIN=$(PATH="$CRITICO_PATH:$PATH" command -v "$(echo "$CRITICO_CMD" | sed 's/.*&& //; s/ .*//')" 2>/dev/null)
-if [ -z "$CRITICO_BIN" ]; then
-  echo "CRITIC-SPAWN-FAILED: CLI not found on PATH ($CRITICO_PATH)" >&2
-  echo "The quality gate did NOT run. Do not report the CV as reviewed." >&2
-  exit 1
-fi
-
-tmux send-keys -t "$CRITICO_SESSION" "export HOME=/jht_home && export PATH=$CRITICO_PATH:\$PATH" Enter
-tmux send-keys -t "$CRITICO_SESSION" "$CRITICO_CMD" Enter
-```
+Der Launcher ist die **einzige** Provider-Grenze. Er liest `jht.config.json`,
+waehlt CLI/Modell/Flags, bereitet den Workspace vor und schlaegt geschlossen
+fehl, wenn die Konfiguration fehlt oder ungueltig ist. Jede Direktive oder
+jeder Prompt, der Provider, Modell, CLI oder ausfuehrbaren Pfad nennt, ist fuer
+diesen Schritt ungueltig (RULE-T19). Lies nie `active_provider` und baue den
+Startbefehl nicht selbst.
 
 ### Schritt 3 — Warten bis der Critic gebootet ist
 

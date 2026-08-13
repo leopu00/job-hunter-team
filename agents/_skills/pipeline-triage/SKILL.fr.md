@@ -66,7 +66,7 @@ Appliquer le tableau de haut en bas. S'arrêter à la première condition corres
 
 | Condition                                                  | Action (dans cet ordre)                                                                                                              |
 |-----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `DRAFT_BLOCKED ≥ 50`                                      | **D'abord** : débloquer la boucle Critico. Spawner `CRITICO-S2/S3/S4` si pas vivant (3 en parallèle). Chaque `CRITICO-S` traite 1 draft à la fois. |
+| `DRAFT_BLOCKED ≥ 50`                                      | **D'abord** : inspecter les Writers proprietaires/critic-loop. Ne jamais spawner de Critics orphelins ; chaque `SCRITTORE-N` lance uniquement son `CRITICO-SN` via le lanceur canonique. Spawner un Writer seulement si sa file demandee par l'utilisateur existe. |
 | `UNSCORED ≥ 20`                                           | **Ensuite** : spawner `SCORER-2` (et `SCORER-3` si `UNSCORED ≥ 50`). Un seul Scorer est insuffisant avec 20+ en file.               |
 | `SCRITTORE_QUEUE ≥ 5`                                     | spawner 1 `SCRITTORE-N` si vous n'en avez pas déjà 3 vivants (max).                                                                  |
 | `PROMOTABLE_40_49 ≥ 5`                                    | promouvoir les 5 meilleurs en augmentant le score (`db_query.py` + `UPDATE` direct), puis traiter comme `SCRITTORE_QUEUE`.           |

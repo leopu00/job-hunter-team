@@ -3,7 +3,8 @@
 # Uso: ./start-agent.sh <ruolo> [istanza] [mode]
 #
 # Ruoli: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente
-# Istanza: numero per agenti multipli (es: scout 1 → SCOUT-1)
+# Istanza: numero per agenti multipli (es: scout 1 → SCOUT-1) e per il
+# Critico effimero posseduto dallo Scrittore (critico 1 → CRITICO-S1)
 # Mode: default|fast (default se omesso)
 #
 # Il template CLAUDE.md viene copiato da agents/<ruolo>/<ruolo>.md nel workspace.
@@ -37,7 +38,7 @@ if [ -z "${1:-}" ]; then
   echo "  analista    → ANALISTA-N   (Analyzes job descriptions and companies)"
   echo "  scorer      → SCORER-N     (Calculates match scores)"
   echo "  scrittore   → SCRITTORE-N  (Writes CVs and cover letters)"
-  echo "  critico     → CRITICO      (CV quality review)"
+  echo "  critico     → CRITICO[-SN] (CV quality review; SN is Writer-owned)"
   echo "  sentinella  → SENTINELLA   (Monitors token usage and rate limits)"
   echo "  assistente  → ASSISTENTE   (Helps the user navigate the platform)"
   echo ""
@@ -45,6 +46,7 @@ if [ -z "${1:-}" ]; then
   echo "  $0 capitano              → start CAPITANO"
   echo "  $0 scout 1           → start SCOUT-1"
   echo "  $0 scrittore 2 fast  → start SCRITTORE-2 in fast mode"
+  echo "  $0 critico 2         → start CRITICO-S2 via configured provider"
   echo "  $0 assistente        → start ASSISTENTE"
   exit 1
 fi
@@ -517,21 +519,20 @@ fi
 
 IFS='|' read -r session_prefix effort model_override <<< "$AGENT_INFO"
 
-# Costruisci nome sessione tmux
-# Agenti singoli (multi:false in AGENTS): tmux ha nome = prefix (no
-# suffix). Il tg-bridge per assistente/capitano/mentor punta a queste
-# session esatte, senza -1, quindi mentor DEVE essere qui.
+# Costruisci nome sessione tmux. I singleton restano senza suffisso; il
+# Critico con istanza e' la sola eccezione, perche' SCRITTORE-N possiede una
+# sessione effimera CRITICO-SN. Questa scelta NON riguarda il provider.
+if ! SESSION="$(jht_spawn_session_name "$ROLE" "$session_prefix" "$INSTANCE")"; then
+  echo "Error: instance must be a positive numeric identifier." >&2
+  exit 1
+fi
 case "$ROLE" in
-  capitano|critico|sentinella|assistente|mentor)
-    SESSION="$session_prefix"
-    ;;
+  capitano|critico|sentinella|assistente|mentor) ;;
   *)
-    # Agenti multipli — richiede istanza
     if [ -z "$INSTANCE" ]; then
       INSTANCE="1"
       echo "Note: no instance specified; using $ROLE $INSTANCE"
     fi
-    SESSION="${session_prefix}-${INSTANCE}"
     ;;
 esac
 
@@ -615,13 +616,16 @@ PYEOF
 
 IFS='|' read -r PROVIDER AUTH_METHOD API_KEY <<< "$(extract_provider_info "$JHT_CONFIG_FILE")"
 
-# Default: Claude subscription
-CLI_BIN="claude"
-CLI_ARGS="--dangerously-skip-permissions --effort $effort"
+# Nessun default implicito: il provider e' configurazione utente. Se il file
+# manca, e' illeggibile o contiene un valore sconosciuto, avviare un CLI
+# diverso trasformerebbe un errore di configurazione in consumo e lavoro sul
+# provider sbagliato.
+CLI_BIN=""
+CLI_ARGS=""
 CLI_ENV_PREFIX=""
 
 case "$PROVIDER" in
-  ""|anthropic|claude)
+  anthropic|claude)
     CLI_BIN="claude"
     CLI_ARGS="--dangerously-skip-permissions --effort $effort"
     # Override modello per ruolo. I ruoli "Opus high" (capitano/scrittore/
@@ -695,7 +699,9 @@ case "$PROVIDER" in
     fi
     ;;
   *)
-    echo "Warning: provider '$PROVIDER' is not recognized in jht.config.json; falling back to claude."
+    echo "Error: active_provider is missing or unsupported in '$JHT_CONFIG_FILE'." >&2
+    echo "Configure it with jht setup or jht config before starting the team." >&2
+    exit 1
     ;;
 esac
 
@@ -726,7 +732,7 @@ fi
 
 # Verifica prerequisiti della CLI scelta
 if ! command -v "$CLI_BIN" &>/dev/null; then
-  echo "Error: command '$CLI_BIN' not found (configured provider: ${PROVIDER:-claude})."
+  echo "Error: command '$CLI_BIN' not found (configured provider: $PROVIDER)."
   case "$CLI_BIN" in
     claude) echo "Install the Claude CLI: https://claude.ai/download" ;;
     codex)  echo "Install the Codex CLI: https://github.com/openai/codex" ;;
@@ -786,19 +792,14 @@ fi
 mkdir -p "$JHT_HOME" "$JHT_AGENTS_DIR" "$JHT_LOGS_DIR"
 mkdir -p "$JHT_USER_DIR/cv" "$JHT_USER_DIR/critiche" "$JHT_USER_DIR/allegati" "$JHT_USER_DIR/output"
 
-# Directory di lavoro dell'agente nella zona nascosta. Stesso set di
-# "agenti singoli" usato sopra per il SESSION name — devono restare
-# allineati (multi:false in AGENTS).
-case "$ROLE" in
-  capitano|critico|sentinella|assistente|mentor)
-    AGENT_DIR="$JHT_AGENTS_DIR/$ROLE"
-    AGENT_NAME="$ROLE"
-    ;;
-  *)
-    AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
-    AGENT_NAME="${ROLE}-${INSTANCE}"
-    ;;
-esac
+# Directory di lavoro dell'agente nella zona nascosta. La stessa funzione che
+# risolve il nome sessione rende CRITICO-SN anche un workspace separato: due
+# Writer non condividono identita', tmp o skill durante review concorrenti.
+if ! AGENT_NAME="$(jht_spawn_agent_name "$ROLE" "$INSTANCE")"; then
+  echo "Error: invalid agent instance '$INSTANCE'." >&2
+  exit 1
+fi
+AGENT_DIR="$JHT_AGENTS_DIR/$AGENT_NAME"
 mkdir -p "$AGENT_DIR"
 
 # ── DB di coordinamento Scout (issue #132) ───────────────────────────────────
@@ -856,7 +857,7 @@ fi
 #   - Codex + Kimi leggono AGENTS.md (standard OpenAI / Moonshot)
 # Il contenuto è identico, cambia solo il nome del file.
 case "$PROVIDER" in
-  ""|anthropic|claude) IDENTITY_FILE="CLAUDE.md" ;;
+  anthropic|claude) IDENTITY_FILE="CLAUDE.md" ;;
   *)                   IDENTITY_FILE="AGENTS.md" ;;
 esac
 IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
@@ -1168,7 +1169,7 @@ case "$STAGGER_SEC" in
   ''|*[!0-9]*) STAGGER_SEC=0 ;;
 esac
 
-echo "✓ $SESSION started (cli: $CLI_BIN, provider: ${PROVIDER:-claude}, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
+echo "✓ $SESSION started (cli: $CLI_BIN, provider: $PROVIDER, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
 
 # ── Roster atteso ───────────────────────────────────────────────────────────
 # Registra lo spawn nello STATO CONDIVISO letto da agent-watchdog.sh per

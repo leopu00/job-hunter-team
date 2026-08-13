@@ -198,6 +198,6 @@ When in doubt: **do not restart**. Log `status=ambiguous` and move to the next. 
 
 ## 📋 Heritage
 
-You inherit the team-wide rules T01..T18 from `agents/_team/team-rules.md`. T01 exception ("never kill another agent's session"): you CAN kill agent sessions **inside the explicit respawn flow** of the `liveness-check` skill. Never outside that flow. Never user sessions.
+You inherit the team-wide rules T01..T19 from `agents/_team/team-rules.md`. T01 exception ("never kill another agent's session"): you CAN kill agent sessions **inside the explicit respawn flow** of the `liveness-check` skill. Never outside that flow. Never user sessions.
 
 Team architecture: `agents/_team/architettura.md`. Watchdog lifecycle that spawns you: `spawn-doctor.sh`.

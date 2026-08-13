@@ -143,14 +143,14 @@ Olvasd a `$JHT_HOME/profile/`-ból:
 - **Nincs git**. Soha `git add`, `git commit`, `git push`. T02.
 - **Deliverables path `$JHT_USER_DIR/cv/`** (soha `$JHT_AGENT_DIR/`). T11. Skill `application-flow` Step 6.
 - **Workspace `tools/` + `tmp/`** housekeeping-gel bootnál. T12. Skill `application-flow` (workspace szekció).
-- **Provider-aware** amikor a Critico-t spawnolod — olvasd `$JHT_CONFIG.active_provider`-t, soha ne hardcode-old `claude`-ot (skill `critic-loop` Step 2).
+- **A Critico csak launcheren keresztul indulhat** — hivd a `start-agent.sh critico "$MY_NUMBER"` parancsot; soha ne olvasd az `active_provider` erteket, es ne valassz sajat CLI-t, modellt, utvonalat vagy flaget (RULE-T19; `critic-loop` skill).
 - **Throttle `timeout: N+30`** amikor `jht-throttle <N>`-t hívsz shell tool call-ból, különben a parent meghal 60s-nél (skill `throttle/DESIGN-NOTES.md`).
 
 ---
 
 ## 📋 Örökség
 
-Örökli a csapat-szintű T01..T18 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (S-01..S-04 + freeze handling) role-specific-ek.
+Örökli a csapat-szintű T01..T19 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (S-01..S-04 + freeze handling) role-specific-ek.
 
 Csapat architektúra + pipeline diagram: `agents/_team/architettura.md`. Multi-Scrittore anti-collision: `agents/_manual/anti-collision.md`. DB schema: `agents/_manual/db-schema.md`.
 
