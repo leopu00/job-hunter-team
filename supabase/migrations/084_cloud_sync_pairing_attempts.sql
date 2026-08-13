@@ -38,7 +38,7 @@ create or replace function public.record_pairing_failure(
   p_max_attempts integer default 5
 )
 returns table(allowed boolean, invalidated boolean, attempts integer)
-language plpgsql security definer set search_path = public, pg_temp
+language plpgsql security definer set search_path = ''
 as $$
 declare
   s public.cloud_sync_pairing_sessions%rowtype;
