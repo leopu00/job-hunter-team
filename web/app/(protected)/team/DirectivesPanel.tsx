@@ -160,7 +160,9 @@ export default function DirectivesPanel({
       if (event?.status === "error") toast(t("captainError"), "error");
       else if (event?.status === "queued") toast(t("captainQueued"), "success");
       else if (okMsg) toast(okMsg, "success");
-      await load();
+      // L'ACK conclude l'operazione. Un refresh best-effort fallito non deve
+      // trasformarlo in un retry con un nuovo request_id e un secondo effetto.
+      await load().catch(() => undefined);
       return true;
     } catch {
       toast(t("errGeneric"), "error");

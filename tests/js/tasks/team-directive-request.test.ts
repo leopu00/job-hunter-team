@@ -73,6 +73,7 @@ describe("directive client request lifetime", () => {
     expect(source).toContain("retainDirectiveRequest(");
     expect(source).toContain("isDirectiveAcknowledgement(");
     expect(source).toContain("pendingRequests.current.delete(key)");
+    expect(source).toContain("await load().catch(() => undefined)");
     expect(source).not.toContain("request_id: crypto.randomUUID()");
   });
 
