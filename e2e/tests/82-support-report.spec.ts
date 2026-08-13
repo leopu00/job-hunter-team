@@ -203,12 +203,17 @@ async function apriDialogo(page: Page, da = "/dashboard") {
 }
 
 test.describe("pagina pubblica /contact", () => {
-  test("il modulo chiede solo il problema e mostra i dati inviati", async ({
+  test("il modulo chiede il problema, un recapito facoltativo e mostra i dati inviati", async ({
     page,
   }) => {
     await page.goto("/contact", { waitUntil: "domcontentloaded" });
     await expect(page.locator("#c-msg")).toBeVisible();
-    await expect(page.locator("#c-nome, #c-email, #c-oggetto")).toHaveCount(0);
+    await expect(page.locator("#c-nome, #c-oggetto")).toHaveCount(0);
+    const email = page.locator("#c-email");
+    await expect(email).toBeVisible();
+    await expect(email).toHaveAttribute("name", "reply_to");
+    await expect(email).not.toHaveAttribute("required", "");
+    await expect(page.locator("#c-email-help")).toBeVisible();
     await expect(
       page.getByText(/dati inviati|data being sent|datos enviados/i),
     ).toBeVisible();
