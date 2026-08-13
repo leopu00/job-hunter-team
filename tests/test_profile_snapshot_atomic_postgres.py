@@ -197,6 +197,9 @@ def postgres16():
             );
             GRANT USAGE ON SCHEMA public TO service_role;
             GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO service_role;
+            GRANT USAGE ON SCHEMA public TO authenticated;
+            GRANT SELECT, UPDATE, DELETE ON public.candidate_profiles,
+              public.candidate_skills TO authenticated;
             """
         )
         # Exercise the real release order itself, not migration 080 in
@@ -214,6 +217,7 @@ def postgres16():
               PRIMARY KEY (user_id, table_name, operation)
             );
             GRANT SELECT, INSERT, UPDATE ON public.profile_effect_counts TO service_role;
+            GRANT SELECT, INSERT, UPDATE ON public.profile_effect_counts TO authenticated;
             CREATE FUNCTION public.count_profile_effect() RETURNS trigger
             LANGUAGE plpgsql AS $$
             DECLARE owner UUID := COALESCE(NEW.user_id, OLD.user_id);
@@ -280,12 +284,19 @@ def _hash(snapshot: dict) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _rpc_sql(user_id: str, snapshot: dict, content_hash: str | None = None) -> str:
+def _rpc_sql(
+    user_id: str,
+    snapshot: dict,
+    content_hash: str | None = None,
+    *,
+    force: bool = False,
+) -> str:
     payload = json.dumps(snapshot, separators=(",", ":"))
     digest = content_hash or _hash(snapshot)
     return (
         "SELECT public.sync_candidate_profile_atomic("
-        f"'{user_id}', '{digest}', $json${payload}$json$::jsonb);"
+        f"'{user_id}', '{digest}', $json${payload}$json$::jsonb, "
+        f"{'TRUE' if force else 'FALSE'});"
     )
 
 
@@ -303,8 +314,10 @@ def _state(psql, user_id: str) -> str:
         f"""
         SELECT jsonb_build_object(
           'profile', (SELECT jsonb_build_object(
-              'name', name, 'hash', sync_hash, 'updated_at', updated_at
+              'name', name, 'updated_at', updated_at
             ) FROM public.candidate_profiles WHERE user_id = '{user_id}'),
+          'hash', (SELECT content_hash
+            FROM public.candidate_profile_sync_state WHERE user_id = '{user_id}'),
           'skills', (SELECT COALESCE(jsonb_agg(jsonb_build_object(
               'id', id, 'name', name, 'category', category, 'ord', ord
             ) ORDER BY ord), '[]') FROM public.candidate_skills
@@ -351,6 +364,42 @@ def test_failure_rolls_back_core_and_every_child(postgres16):
     assert failed.returncode != 0
     assert _state(psql, USER_1) == before_state
     assert _effects(psql, USER_1) == before_effects
+
+
+def test_full_repairs_owner_drift_and_marker_is_private(postgres16):
+    psql = postgres16
+    snapshot = _snapshot("Force Baseline")
+    assert json.loads(psql(_rpc_sql(USER_1, snapshot), role="service_role").stdout)[
+        "changed"
+    ] is True
+
+    psql(
+        f"UPDATE public.candidate_profiles SET name='External Edit' "
+        f"WHERE user_id='{USER_1}'; "
+        f"DELETE FROM public.candidate_skills WHERE user_id='{USER_1}';",
+        role="authenticated",
+    )
+    assert "External Edit" in _state(psql, USER_1)
+    assert json.loads(psql(_rpc_sql(USER_1, snapshot), role="service_role").stdout) == {
+        "changed": False
+    }
+    assert "External Edit" in _state(psql, USER_1)
+
+    forced = json.loads(
+        psql(_rpc_sql(USER_1, snapshot, force=True), role="service_role").stdout
+    )
+    assert forced == {"changed": True}
+    repaired = json.loads(_state(psql, USER_1))
+    assert repaired["profile"]["name"] == "Force Baseline"
+    assert [skill["name"] for skill in repaired["skills"]] == ["Python"]
+
+    for statement in (
+        "SELECT * FROM public.candidate_profile_sync_state;",
+        "UPDATE public.candidate_profile_sync_state SET content_hash=repeat('0',64);",
+    ):
+        denied = psql(statement, role="authenticated", check=False)
+        assert denied.returncode != 0
+        assert "permission denied" in denied.stderr.lower()
 
 
 def test_overlapping_same_snapshot_writes_once(postgres16):
@@ -434,7 +483,7 @@ def test_release_migration_sequence_and_prefix_census(postgres16):
                  'public.mutate_team_directive_with_event(bigint,text,text,text,text)'
                ) IS NOT NULL,
                to_regprocedure(
-                 'public.sync_candidate_profile_atomic(uuid,text,jsonb)'
+                 'public.sync_candidate_profile_atomic(uuid,text,jsonb,boolean)'
                ) IS NOT NULL;
         """
     ).stdout.strip()

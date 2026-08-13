@@ -39,6 +39,9 @@ export const CASCADE_TABLES = [
   "candidate_files",
   "candidate_languages",
   "candidate_location_preferences",
+  // Attestazione tecnica del contenuto sincronizzato. È privata in scrittura
+  // ma resta parte dei dati cancellati/esportati con l'account.
+  "candidate_profile_sync_state",
   "candidate_skills",
   "candidate_work_authorization",
   "cloud_sync_pairing_sessions",

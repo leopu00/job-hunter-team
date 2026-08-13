@@ -86,9 +86,15 @@ describe("profile push cursor — effect", () => {
       JSON.parse(readFileSync(join(home, ".cloud-sync-cursor.json"), "utf8")),
     ).toMatchObject({ profile_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
 
+    await expect(handlePush({ full: true })).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1].profile).toMatchObject({ force: true });
+
     writeFileSync(join(profileDir, "summaries", "about.md"), "Changed summary");
     await expect(handlePush({})).resolves.toMatchObject({ ok: true });
-    expect(bodies).toHaveLength(2);
+    expect(bodies).toHaveLength(3);
   });
 
   it("non avanza il fingerprint su failure e ritenta lo stesso snapshot", async () => {

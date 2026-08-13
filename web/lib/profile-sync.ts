@@ -468,6 +468,7 @@ export async function syncProfileToSupabase(
   admin: SupabaseClient,
   userId: string,
   c: CanonicalProfile,
+  force = false,
 ): Promise<{
   ok: boolean;
   changed: boolean;
@@ -482,6 +483,7 @@ export async function syncProfileToSupabase(
     const { data, error } = await admin.rpc("sync_candidate_profile_atomic", {
       p_user_id: userId,
       p_content_hash: contentHash,
+      p_force: force,
       p_snapshot: {
         profile: c.profileRow,
         skills: c.skills,

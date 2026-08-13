@@ -1,14 +1,26 @@
 -- Migration 080 / O-85: profile sync is one idempotent snapshot, not seven replace-all gaps.
 --
--- Existing rows intentionally keep sync_hash NULL. Their first post-upgrade
--- push establishes the baseline; subsequent identical pushes perform no DML.
-ALTER TABLE public.candidate_profiles
-  ADD COLUMN IF NOT EXISTS sync_hash TEXT;
+-- The hash is an internal attestation, not profile data. Keeping it on
+-- candidate_profiles would let the owner preserve/forge it through the
+-- existing FOR ALL profile policy and turn a drifted snapshot into a false
+-- no-op. This private table is writable only by the service-role RPC caller.
+CREATE TABLE IF NOT EXISTS public.candidate_profile_sync_state (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    content_hash TEXT NOT NULL CHECK (content_hash ~ '^[0-9a-f]{64}$'),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.candidate_profile_sync_state ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.candidate_profile_sync_state
+  FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.candidate_profile_sync_state
+  TO service_role;
 
+DROP FUNCTION IF EXISTS public.sync_candidate_profile_atomic(UUID, TEXT, JSONB);
 CREATE OR REPLACE FUNCTION public.sync_candidate_profile_atomic(
     p_user_id UUID,
     p_content_hash TEXT,
-    p_snapshot JSONB
+    p_snapshot JSONB,
+    p_force BOOLEAN DEFAULT FALSE
 ) RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY INVOKER
@@ -43,17 +55,17 @@ BEGIN
         RAISE EXCEPTION 'profile_snapshot_invalid';
     END IF;
 
-    -- The lock covers the absent-row case too. Two first pushes therefore
-    -- cannot both replace the same tenant after observing sync_hash = NULL.
+    -- The lock covers the absent-state case too. Two first pushes therefore
+    -- cannot both replace the same tenant after observing no attestation.
     PERFORM pg_advisory_xact_lock(
         hashtextextended('profile-sync:' || p_user_id::TEXT, 0)
     );
-    SELECT candidate_profiles.sync_hash
+    SELECT candidate_profile_sync_state.content_hash
       INTO current_hash
-      FROM public.candidate_profiles
-     WHERE candidate_profiles.user_id = p_user_id
+      FROM public.candidate_profile_sync_state
+     WHERE candidate_profile_sync_state.user_id = p_user_id
      FOR UPDATE;
-    IF FOUND AND current_hash = p_content_hash THEN
+    IF NOT p_force AND FOUND AND current_hash = p_content_hash THEN
         RETURN jsonb_build_object('changed', FALSE);
     END IF;
 
@@ -63,7 +75,7 @@ BEGIN
         work_authorization, target_role, experience_months,
         experience_years, has_degree, languages, skills, seniority_target,
         job_titles, location_preferences, positioning, timezone, industry,
-        schema_version, sync_hash, updated_at
+        schema_version, updated_at
     ) VALUES (
         p_user_id,
         profile->>'name',
@@ -85,7 +97,6 @@ BEGIN
         profile->>'timezone',
         profile->>'industry',
         COALESCE(NULLIF(profile->>'schema_version', '')::SMALLINT, 1),
-        p_content_hash,
         now()
     )
     ON CONFLICT (user_id) DO UPDATE SET
@@ -108,7 +119,6 @@ BEGIN
         timezone = EXCLUDED.timezone,
         industry = EXCLUDED.industry,
         schema_version = EXCLUDED.schema_version,
-        sync_hash = EXCLUDED.sync_hash,
         updated_at = EXCLUDED.updated_at;
 
     DELETE FROM public.candidate_skills WHERE user_id = p_user_id;
@@ -191,11 +201,18 @@ BEGIN
         );
     END IF;
 
+    INSERT INTO public.candidate_profile_sync_state (
+        user_id, content_hash, updated_at
+    ) VALUES (p_user_id, p_content_hash, now())
+    ON CONFLICT (user_id) DO UPDATE SET
+        content_hash = EXCLUDED.content_hash,
+        updated_at = EXCLUDED.updated_at;
+
     RETURN jsonb_build_object('changed', TRUE);
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.sync_candidate_profile_atomic(UUID, TEXT, JSONB)
+REVOKE ALL ON FUNCTION public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.sync_candidate_profile_atomic(UUID, TEXT, JSONB)
+GRANT EXECUTE ON FUNCTION public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN)
   TO service_role;

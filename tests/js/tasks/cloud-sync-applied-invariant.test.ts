@@ -252,6 +252,7 @@ describe("push sync di una candidatura", () => {
       expect.objectContaining({
         kind: "rpc",
         name: "sync_candidate_profile_atomic",
+        args: expect.objectContaining({ p_force: false }),
       }),
     );
     expect(
@@ -275,6 +276,25 @@ describe("push sync di una candidatura", () => {
       profile: { upserted: false, error: null },
       receipts: { profile: [profileReceipt] },
     });
+
+    calls = [];
+    profileRpcData = { changed: true };
+    const forced = await pushBody({
+      profile: {
+        yaml: "name: Synthetic candidate\ntarget_role: Engineer\n",
+        summaries: {},
+        force: true,
+        _receipt_id: profileReceipt,
+      },
+    });
+    expect(forced.status).toBe(200);
+    expect(calls).toContainEqual(
+      expect.objectContaining({
+        kind: "rpc",
+        name: "sync_candidate_profile_atomic",
+        args: expect.objectContaining({ p_force: true }),
+      }),
+    );
   });
 
   it("non emette la receipt se la RPC non attesta changed", async () => {

@@ -1496,7 +1496,10 @@ async function performPush(options) {
     const profileChanged = profilePayload &&
       (options.full || cursor.profile_hash !== profilePayload.source_hash);
     profilePartition = profileChanged
-      ? partitionQuarantinedRows('profile', [profilePayload], quarantineState)
+      ? partitionQuarantinedRows('profile', [{
+        ...profilePayload,
+        force: options.full === true,
+      }], quarantineState)
       : { send: [], held: [] };
   } catch {
     console.error(pc.red('Cloud push source identity is invalid; no rows were sent.'));
@@ -1790,6 +1793,7 @@ async function performPush(options) {
         yaml: rows[0].yaml,
         summaries: rows[0].summaries,
         _receipt_id: rows[0]._receipt_id,
+        ...(rows[0].force ? { force: true } : {}),
       },
     }));
     if (profileRes.confirmed.includes(sendProfile)) {

@@ -197,6 +197,14 @@ describe("sync atomico del profilo", () => {
     assert.equal(calls.length, 2);
     assert.equal(calls[0].name, "sync_candidate_profile_atomic");
     assert.match(String(calls[0].args.p_content_hash), /^[a-f0-9]{64}$/);
+    assert.equal(calls[0].args.p_force, false);
+
+    changed = true;
+    assert.deepEqual(
+      await syncProfileToSupabase(admin as never, "u", canonical, true),
+      { ok: true, changed: true, error: null, warnings: [] },
+    );
+    assert.equal(calls[2].args.p_force, true);
   });
 
   it("fallisce chiuso se la RPC non attesta l'effetto", async () => {
