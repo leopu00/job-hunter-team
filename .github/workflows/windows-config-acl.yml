@@ -9,6 +9,10 @@ on:
       - 'scripts/windows-private-acl.ps1'
       - 'web/public/install.ps1'
       - '.github/workflows/windows-config-acl.yml'
+
+permissions:
+  contents: read
+
 jobs:
   acl:
     runs-on: windows-2022
