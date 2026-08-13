@@ -218,6 +218,7 @@ def ensure_schema(conn: sqlite3.Connection):
         last_open_check TIMESTAMP,
         write_requested INTEGER DEFAULT 0,
         write_requested_at TIMESTAMP,
+        write_request_kind TEXT,
         geocode_requested INTEGER DEFAULT 0,
         geocode_requested_at TIMESTAMP,
         salary_precise_requested INTEGER DEFAULT 0,
@@ -846,6 +847,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_structured_location(conn)
     _migrate_positions_office_geocoding(conn)
     _migrate_positions_write_requested(conn)
+    _migrate_positions_write_request_kind(conn)
+    _migrate_cover_letter_request_effect(conn)
     _migrate_v6_to_v7_tombstones(conn)
     _migrate_positions_geocode_requested(conn)
     _migrate_positions_expiry(conn)
@@ -1914,6 +1917,68 @@ def _migrate_positions_write_requested(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_positions_write_requested "
         "ON positions(write_requested) WHERE write_requested = 1"
     )
+
+
+def _migrate_positions_write_request_kind(conn: sqlite3.Connection) -> None:
+    """Distingue CV iniziale e cover letter nella stessa coda Writer.
+
+    ``NULL`` resta il valore legacy equivalente a ``cv``: un box non ancora
+    aggiornato può continuare a sincronizzare il flag senza rompere il cloud.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if not _column_exists(conn, 'positions', 'write_request_kind'):
+        conn.execute(
+            "ALTER TABLE positions ADD COLUMN write_request_kind TEXT"
+        )
+
+
+def _migrate_cover_letter_request_effect(conn: sqlite3.Connection) -> None:
+    """Chiude la richiesta solo insieme a un nuovo artefatto cover letter.
+
+    Il trigger è il seam comune a skill e agenti: una risposta testuale o un
+    UPDATE no-op non possono dichiarare completato il lavoro. Un INSERT non
+    basta perché la cover letter è richiedibile solo su application esistente.
+    """
+    if not (_table_exists(conn, 'positions') and
+            _table_exists(conn, 'applications') and
+            _column_exists(conn, 'positions', 'write_request_kind')):
+        return
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS cover_letter_request_effect
+        AFTER UPDATE OF cl_path, cl_pdf_path ON applications
+        WHEN EXISTS (
+            SELECT 1 FROM positions p
+             WHERE p.id = NEW.position_id
+               AND p.write_requested = 1
+               AND p.write_request_kind = 'cover_letter'
+        ) AND (
+            NEW.cl_path IS NOT OLD.cl_path OR
+            NEW.cl_pdf_path IS NOT OLD.cl_pdf_path
+        )
+        BEGIN
+            UPDATE positions
+               SET write_requested = 0,
+                   write_requested_at = CASE
+                     WHEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') >
+                          COALESCE(write_requested_at, '')
+                     THEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')
+                     ELSE strftime('%Y-%m-%d %H:%M:%f', write_requested_at,
+                                   '+0.001 seconds')
+                   END,
+                   write_request_kind = NULL,
+                   updated_at = CASE
+                     WHEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') >
+                          COALESCE(updated_at, '')
+                     THEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')
+                     ELSE strftime('%Y-%m-%d %H:%M:%f', updated_at,
+                                   '+0.001 seconds')
+                   END
+             WHERE id = NEW.position_id
+               AND write_requested = 1
+               AND write_request_kind = 'cover_letter';
+        END
+    """)
 
 
 def _migrate_positions_geocode_requested(conn: sqlite3.Connection) -> None:

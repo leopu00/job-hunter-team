@@ -81,6 +81,8 @@ STEP 8 → TORNA A STEP 1
 
 **Priorità selezione**: FIFO per `write_requested_at` ASC (l'utente vede il team reagire nell'ordine in cui clicca), tiebreaker per `total_score` DESC. Gestito da `db_query.py next-for-scrittore`.
 
+**`request_kind=cover_letter`** usa la stessa coda durevole Writer delle richieste CV. L'application esiste già: preserva `cv_path`/`cv_pdf_path` e aggiorna solo `cl_path`/`cl_pdf_path` con `db_update.py application <position_id>`. La richiesta si chiude atomicamente solo quando viene persistito un path cover-letter diverso; verifica application e flag posizione prima di dichiarare il completamento. Non usare mai `db_insert.py application`, che sostituisce la riga, per questa azione.
+
 ---
 
 ## 🛑 5 regole Scrittore-inviolabili

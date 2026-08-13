@@ -82,6 +82,8 @@ STEP 8 → VISSZA STEP 1-RE
 
 **Választási priorítás**: FIFO `write_requested_at` ASC szerint (a felhasználó látja a csapatot reagálni abban a sorrendben, ahogy klikkelt), tiebreaker `total_score` DESC szerint. A `db_query.py next-for-scrittore` kezeli.
 
+**`request_kind=cover_letter`** ugyanazt a tartós Writer-sort használja, mint a CV-kérések. Az application már létezik: őrizd meg a `cv_path`/`cv_pdf_path` mezőket, és csak a `cl_path`/`cl_pdf_path` mezőket frissítsd a `db_update.py application <position_id>` paranccsal. A kérés csak akkor zárul le atomikusan, ha eltérő motivációslevél-útvonal lett mentve; a készre jelentés előtt ellenőrizd az applicationt és a pozíció jelzőjét. Ehhez a művelethez soha ne használd a sort lecserélő `db_insert.py application` parancsot.
+
 ---
 
 ## 🛑 5 Scrittore-sérthetetlen szabály

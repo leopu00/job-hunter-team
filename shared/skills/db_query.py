@@ -1039,23 +1039,29 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         label = "Checked positions without a score"
 
     elif role == 'scrittore':
-        # Writer-on-demand (V6, 2026-05-29): filtro `write_requested = 1`.
-        # Il CV viene scritto solo per le posizioni che l'utente ha
-        # esplicitamente selezionato dal dashboard web o via Telegram
-        # (`/cv <id>`). Vedi BACKLOG [JHT-WRITER-ON-DEMAND].
+        # Una sola coda Writer-on-demand, con intent esplicito: il tipo legacy
+        # NULL equivale a `cv`; `cover_letter` riusa la stessa FIFO ma richiede
+        # una application esistente. Nessuna seconda corsia da sincronizzare.
         rows = conn.execute("""
-            SELECT p.id, p.title, p.company, s.total_score, COUNT(*) OVER () AS _total
+            SELECT p.id, p.title, p.company, s.total_score,
+                   COALESCE(p.write_request_kind, 'cv') AS request_kind,
+                   COUNT(*) OVER () AS _total
             FROM positions p
             JOIN scores s ON s.position_id = p.id
             LEFT JOIN applications a ON a.position_id = p.id
             WHERE p.write_requested = 1
-              AND s.total_score >= 50
-              AND a.id IS NULL
-              AND p.status = 'scored'
+              AND (
+                (COALESCE(p.write_request_kind, 'cv') = 'cv'
+                 AND s.total_score >= 50
+                 AND a.id IS NULL
+                 AND p.status = 'scored')
+                OR
+                (p.write_request_kind = 'cover_letter' AND a.id IS NOT NULL)
+              )
             ORDER BY p.write_requested_at ASC, s.total_score DESC
             LIMIT ?
         """, (lim,)).fetchall()
-        label = "Positions with a user-requested CV (scored >= 50, no application)"
+        label = "Positions with a user-requested CV or cover letter"
 
     elif role == 'critico':
         rows = conn.execute("""

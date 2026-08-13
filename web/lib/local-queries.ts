@@ -41,8 +41,9 @@ function hasColumn(
   column: string,
 ): boolean {
   try {
-    return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[])
-      .some((r) => r.name === column);
+    return (
+      db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+    ).some((r) => r.name === column);
   } catch {
     return false;
   }
@@ -461,8 +462,7 @@ function readUserNote(
 ): { body: string; updated_at: string } | null {
   const read = (sql: string) =>
     db.prepare(sql).get(positionId) as
-      | { body: string; updated_at: string }
-      | undefined;
+      { body: string; updated_at: string } | undefined;
   try {
     return (
       read(
@@ -1722,6 +1722,7 @@ function mapPositionFull(r: any): Position {
     last_checked: r.last_checked ?? null,
     write_requested: r.write_requested === 1 || r.write_requested === true,
     write_requested_at: r.write_requested_at ?? null,
+    write_request_kind: r.write_request_kind ?? null,
     geocode_requested:
       r.geocode_requested === 1 || r.geocode_requested === true,
     geocode_requested_at: r.geocode_requested_at ?? null,

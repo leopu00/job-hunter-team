@@ -135,6 +135,7 @@ interface PositionIn {
   // a BOOLEAN sul payload upsert.
   write_requested?: number | boolean | null;
   write_requested_at?: string | null;
+  write_request_kind?: "cv" | "cover_letter" | null;
   // Geocoding-on-demand (V8): user-driven flag per office-geocoding
   // precision. Mig Supabase 027. Stesso pattern di write_requested.
   geocode_requested?: number | boolean | null;
@@ -718,6 +719,7 @@ export async function POST(req: NextRequest) {
                 ? p.write_requested
                 : p.write_requested === 1,
           write_requested_at: p.write_requested_at ?? null,
+          write_request_kind: p.write_request_kind ?? null,
           geocode_requested:
             p.geocode_requested == null
               ? false

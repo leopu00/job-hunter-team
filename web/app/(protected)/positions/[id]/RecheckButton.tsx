@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
-import { ActionRow, IconRefresh } from "./ActionRow";
+import { ActionRow, IconOpenCheck } from "./ActionRow";
 
 // Recheck/liveness ON-DEMAND. Il recheck NON è più autonomo: l'utente clicca
 // qui per chiedere all'Analista di ri-verificare se l'offerta è ancora attiva
@@ -153,7 +153,7 @@ export function RecheckButton({
 
   return (
     <ActionRow
-      icon={<IconRefresh />}
+      icon={<IconOpenCheck />}
       title={t.title}
       description={description}
       accent="var(--color-purple)"

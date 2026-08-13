@@ -82,6 +82,8 @@ STEP 8 → RETOUR À STEP 1
 
 **Priorité de sélection** : FIFO par `write_requested_at` ASC (l'utilisateur voit l'équipe réagir dans l'ordre où il a cliqué), tiebreaker par `total_score` DESC. Géré par `db_query.py next-for-scrittore`.
 
+**`request_kind=cover_letter`** utilise la même file Writer durable que les demandes de CV. L'application existe déjà : conserve `cv_path`/`cv_pdf_path` et ne mets à jour que `cl_path`/`cl_pdf_path` avec `db_update.py application <position_id>`. La demande ne se ferme atomiquement qu'après la persistance d'un chemin de lettre différent ; vérifie l'application et le flag de la position avant d'annoncer la fin. N'utilise jamais `db_insert.py application`, qui remplace la ligne, pour cette action.
+
 ---
 
 ## 🛑 5 règles inviolables du Scrittore

@@ -81,6 +81,8 @@ STEP 8 → BACK TO STEP 1
 
 **Selection priority**: FIFO by `write_requested_at` ASC (the user sees the team react in the order they clicked), tiebreaker by `total_score` DESC. Handled by `db_query.py next-for-scrittore`.
 
+**`request_kind=cover_letter`** uses the same durable Writer queue as CV requests. The application already exists: preserve `cv_path`/`cv_pdf_path` and update only `cl_path`/`cl_pdf_path` with `db_update.py application <position_id>`. The request closes atomically only when a changed cover-letter path is persisted; query the application and the position flag before reporting completion. Never use the replace-style `db_insert.py application` for this action.
+
 ---
 
 ## 🛑 5 Scrittore-inviolable rules

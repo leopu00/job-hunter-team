@@ -423,6 +423,10 @@ async function handleRestore(options) {
     const urlConflictStmt = db.prepare(
       'SELECT id FROM positions WHERE url = ? AND id <> ?'
     );
+    const restoreWriteKind = sqliteHasColumn(db, 'positions', 'write_request_kind');
+    const restoreWriteKindStmt = restoreWriteKind
+      ? db.prepare('UPDATE positions SET write_request_kind = ? WHERE id = ?')
+      : null;
     const posStmt = db.prepare(`
       INSERT OR REPLACE INTO positions (
         id, title, company, company_id, location, remote_type,
@@ -476,6 +480,7 @@ async function handleRestore(options) {
           p.geocode_requested ? 1 : 0, p.geocode_requested_at ?? null,
           p.created_at ?? null, p.updated_at ?? null,
         );
+        restoreWriteKindStmt?.run(p.write_request_kind ?? null, legacyId);
         inserted.positions++;
       }
 
@@ -1292,6 +1297,8 @@ async function performPush(options) {
         // Writer-on-demand (V6, 2026-05-29): l'utente seleziona da
         // dashboard/Telegram, il flag viaggia a cloud per UI cross-device.
         'write_requested', 'write_requested_at',
+        ...(sqliteHasColumn(db, 'positions', 'write_request_kind')
+          ? ['write_request_kind'] : []),
         // Geocoding-on-demand (V8, 2026-05-31): stesso pattern,
         // l'utente seleziona via UI quali posizioni geocodare con
         // precisione ufficio; il flag viaggia a cloud per UI cross-device.
@@ -2281,6 +2288,7 @@ async function handlePullDesiredState(options = {}) {
       UPDATE positions
          SET write_requested = ?,
              write_requested_at = ?,
+             write_request_kind = ?,
              geocode_requested = ?,
              geocode_requested_at = ?,
              recheck_requested = ?,
@@ -2293,7 +2301,7 @@ async function handlePullDesiredState(options = {}) {
     // sync NARROW dell'esclusione utente (sotto).
     const checkStmt = db.prepare(
       'SELECT status, user_excluded_at, user_excluded_prev_status, ' +
-        'write_requested, write_requested_at, geocode_requested, geocode_requested_at, ' +
+        'write_requested, write_requested_at, write_request_kind, geocode_requested, geocode_requested_at, ' +
         'recheck_requested, recheck_requested_at, salary_precise_requested, salary_precise_requested_at ' +
         'FROM positions WHERE id = ?'
     );
@@ -2326,6 +2334,7 @@ async function handlePullDesiredState(options = {}) {
       if (!local) { missing++; continue; }
       const writeFlag = p.write_requested === true || p.write_requested === 1 ? 1 : 0;
       const writeAt = p.write_requested_at || null;
+      const writeKind = p.write_request_kind || null;
       const geoFlag = p.geocode_requested === true || p.geocode_requested === 1 ? 1 : 0;
       const geoAt = p.geocode_requested_at || null;
       const rcFlag = p.recheck_requested === true || p.recheck_requested === 1 ? 1 : 0;
@@ -2341,6 +2350,7 @@ async function handlePullDesiredState(options = {}) {
       const flagsChanged =
         (local.write_requested ?? 0) !== writeFlag ||
         (local.write_requested_at ?? null) !== writeAt ||
+        (local.write_request_kind ?? null) !== writeKind ||
         (local.geocode_requested ?? 0) !== geoFlag ||
         (local.geocode_requested_at ?? null) !== geoAt ||
         (local.recheck_requested ?? 0) !== rcFlag ||
@@ -2348,7 +2358,7 @@ async function handlePullDesiredState(options = {}) {
         (local.salary_precise_requested ?? 0) !== spFlag ||
         (local.salary_precise_requested_at ?? null) !== spAt;
       if (flagsChanged) {
-        stmt.run(writeFlag, writeAt, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
+        stmt.run(writeFlag, writeAt, writeKind, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
         updated++;
       }
 
