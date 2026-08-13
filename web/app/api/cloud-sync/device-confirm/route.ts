@@ -18,7 +18,8 @@ const UNAUTH = NextResponse.json({ error: "Non autenticato" }, { status: 401 });
 
 // Confirm e' chiamato dall'utente loggato sul web — UNA volta per pairing.
 // Cap a 20 tentativi/10 min per user: user_code ha circa 1,15 miliardi di
-// combinazioni (36^6); il bucket persistente limita i tentativi cross-instance.
+// combinazioni (23^4 * 8^4); il bucket persistente limita i tentativi
+// cross-instance.
 const CONFIRM_LIMIT_PER_MIN = 20;
 
 /**
@@ -38,7 +39,7 @@ const CONFIRM_LIMIT_PER_MIN = 20;
  * 5. Ritorna success — il token sara' consegnato al CLI via device-poll
  *
  * Sicurezza:
- * - User_code ha ~18B entropy nominali, ma con rate limit 20/min per user
+ * - User_code ha ~1.15B combinazioni nominali, ma con rate limit 20/min per user
  *   e cap 30/min globali sul polling, brute-force impraticabile in 10min TTL.
  * - Solo l'utente loggato puo' confermare → il VPS riceve un token associato
  *   all'account giusto, no token squatting.

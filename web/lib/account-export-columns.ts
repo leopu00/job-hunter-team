@@ -433,7 +433,7 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
   // Contatore tecnico: non esporta device/user identity, ma conserva lo
   // stato auditabile dell'account-bound throttling.
   cloud_sync_pairing_attempts: [
-    "failed_attempts",
+    "attempts",
     "locked_until",
     "invalidated_at",
     "created_at",

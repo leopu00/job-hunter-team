@@ -5,9 +5,16 @@
 begin;
 do $$
 begin
-  if to_regclass('public.cloud_sync_pairing_attempts') is not null
-     and not exists (select 1 from pg_attribute where attrelid = 'public.cloud_sync_pairing_attempts'::regclass and attname = 'user_id' and not attisdropped) then
-    raise exception '084 collision: cloud_sync_pairing_attempts';
+  if to_regclass('public.cloud_sync_pairing_attempts') is not null then
+    if not exists (
+      select 1
+        from pg_attribute
+       where attrelid = to_regclass('public.cloud_sync_pairing_attempts')
+         and attname = 'user_id'
+         and not attisdropped
+    ) then
+      raise exception '084 collision: cloud_sync_pairing_attempts';
+    end if;
   end if;
 end $$;
 
