@@ -1,4 +1,4 @@
--- O-85: profile sync is one idempotent snapshot, not seven replace-all gaps.
+-- Migration 080 / O-85: profile sync is one idempotent snapshot, not seven replace-all gaps.
 --
 -- Existing rows intentionally keep sync_hash NULL. Their first post-upgrade
 -- push establishes the baseline; subsequent identical pushes perform no DML.

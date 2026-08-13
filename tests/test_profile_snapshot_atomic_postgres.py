@@ -14,7 +14,9 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase/migrations/079_profile_snapshot_atomic.sql"
+WRITER_MIGRATION = ROOT / "supabase/migrations/078_positions_write_request_kind.sql"
+DIRECTIVE_MIGRATION = ROOT / "supabase/migrations/079_team_directive_events_atomic.sql"
+MIGRATION = ROOT / "supabase/migrations/080_profile_snapshot_atomic.sql"
 IMAGE = "postgres:16-alpine"
 USER_1 = "00000000-0000-0000-0000-000000000085"
 USER_2 = "00000000-0000-0000-0000-000000000086"
@@ -101,6 +103,23 @@ def postgres16():
             CREATE SCHEMA auth;
             CREATE TABLE auth.users (id UUID PRIMARY KEY);
             INSERT INTO auth.users VALUES ('{USER_1}'), ('{USER_2}');
+            CREATE FUNCTION auth.uid() RETURNS UUID LANGUAGE sql STABLE AS $$
+              SELECT NULLIF(current_setting('request.jwt.claim.sub', TRUE), '')::UUID
+            $$;
+
+            CREATE TABLE public.positions (id UUID PRIMARY KEY);
+            CREATE TABLE public.pending_user_messages (
+              id BIGSERIAL PRIMARY KEY, user_id UUID, agent TEXT, body TEXT,
+              kind TEXT, author TEXT, created_at TIMESTAMPTZ
+            );
+            CREATE TABLE public.team_directives (
+              id BIGSERIAL PRIMARY KEY, user_id UUID, body TEXT, kind TEXT,
+              status TEXT, created_by TEXT, archived_at TIMESTAMPTZ,
+              updated_at TIMESTAMPTZ
+            );
+            CREATE TABLE public.team_state (
+              user_id UUID PRIMARY KEY, chat_requested_at TIMESTAMPTZ
+            );
 
             CREATE TABLE public.candidate_profiles (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -172,6 +191,13 @@ def postgres16():
             GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO service_role;
             """
         )
+        # Exercise the release order itself. Migration 079 is optional only
+        # while O-80 is still awaiting integration; the final O-85 candidate
+        # requires it and the sequence oracle below stops skipping.
+        psql(WRITER_MIGRATION.read_text(encoding="utf-8"))
+        directive_applied = DIRECTIVE_MIGRATION.exists()
+        if directive_applied:
+            psql(DIRECTIVE_MIGRATION.read_text(encoding="utf-8"))
         # Reapplication is part of the contract: release retries must be safe.
         psql(MIGRATION.read_text(encoding="utf-8"))
         psql(MIGRATION.read_text(encoding="utf-8"))
@@ -213,6 +239,7 @@ def postgres16():
             """
         )
         psql.container_name = name
+        psql.directive_migration_applied = directive_applied
         yield psql
     finally:
         _run(["docker", "rm", "--force", name], check=False)
@@ -381,3 +408,32 @@ def test_rpc_is_service_role_only(postgres16):
     )
     assert denied.returncode != 0
     assert "permission denied" in denied.stderr.lower()
+
+
+def test_release_migration_sequence_and_prefix_census(postgres16):
+    migrations = sorted((ROOT / "supabase/migrations").glob("[0-9][0-9][0-9]_*.sql"))
+    by_prefix: dict[str, list[str]] = {}
+    for migration in migrations:
+        by_prefix.setdefault(migration.name[:3], []).append(migration.name)
+    collisions = {prefix: names for prefix, names in by_prefix.items() if len(names) > 1}
+    assert collisions == {}
+    assert MIGRATION.name == "080_profile_snapshot_atomic.sql"
+
+    if not postgres16.directive_migration_applied:
+        pytest.skip("migration O-80/079 non ancora presente sulla base")
+    contracts = postgres16(
+        """
+        SELECT EXISTS (
+                 SELECT 1 FROM information_schema.columns
+                  WHERE table_schema='public' AND table_name='positions'
+                    AND column_name='write_request_kind'
+               ),
+               to_regprocedure(
+                 'public.mutate_team_directive_with_event(bigint,text,text,text)'
+               ) IS NOT NULL,
+               to_regprocedure(
+                 'public.sync_candidate_profile_atomic(uuid,text,jsonb)'
+               ) IS NOT NULL;
+        """
+    ).stdout.strip()
+    assert contracts == "t|t|t"
