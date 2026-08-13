@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir, chmod, unlink, stat } from 'node:fs/promises';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import pc from 'picocolors';
 import * as clack from '@clack/prompts';
@@ -117,7 +118,15 @@ function readProfilePayload() {
     } catch { /* directory unreadable, skip */ }
   }
 
-  return { yaml: yamlRaw, summaries };
+  const orderedSummaries = Object.fromEntries(
+    Object.entries(summaries).sort(([left], [right]) => left.localeCompare(right))
+  );
+  const sourceHash = createHash('sha256')
+    .update(yamlRaw)
+    .update('\0')
+    .update(JSON.stringify(orderedSummaries))
+    .digest('hex');
+  return { yaml: yamlRaw, summaries: orderedSummaries, source_hash: sourceHash };
 }
 
 async function loadCloudConfig() {
@@ -1111,9 +1120,9 @@ function readSqliteTableDelta(db, table, columns, cursor) {
 }
 
 /**
- * Carica il cursor di sync. Ritorna oggetto { positions, scores,
- * applications } dove ogni valore e' l'ISO string dell'ultimo updated_at
- * pushato per quella tabella. Missing keys = first push (legge tutto).
+ * Carica il cursor di sync. Le tabelle usano l'ISO dell'ultimo updated_at;
+ * `profile_hash` è invece il fingerprint raw dell'ultimo snapshot confermato.
+ * Missing keys = first push (legge tutto).
  */
 function loadCloudCursor() {
   if (!existsSync(CLOUD_CURSOR_FILE)) return {};
@@ -1480,8 +1489,17 @@ async function performPush(options) {
     transitions = partition('position_transitions', transitions);
     tombstones = partition('tombstones', tombstones);
     pendingMessages = partition('pending_user_messages', pendingMessages);
-    profilePartition = profilePayload
-      ? partitionQuarantinedRows('profile', [profilePayload], quarantineState)
+    // Il profilo non ha updated_at SQLite: il suo cursore è l'hash del
+    // contenuto raw confermato dal server. Un'apertura del sito che chiede un
+    // push non deve quindi rimandare lo stesso snapshot. `--full` resta la via
+    // esplicita per ricostruire il cloud dopo un intervento esterno.
+    const profileChanged = profilePayload &&
+      (options.full || cursor.profile_hash !== profilePayload.source_hash);
+    profilePartition = profileChanged
+      ? partitionQuarantinedRows('profile', [{
+        ...profilePayload,
+        force: options.full === true,
+      }], quarantineState)
       : { send: [], held: [] };
   } catch {
     console.error(pc.red('Cloud push source identity is invalid; no rows were sent.'));
@@ -1769,7 +1787,25 @@ async function performPush(options) {
   const tombRes = await sendChunked('tombstones', tombstones.slice().sort(byAsc('deleted_at')), ROW_CHUNK, (r) => ({ tombstones: r }));
   await checkpointTable('tombstones', 'tombstones', cursorRows.tombstones, tombRes, 'deleted_at');
   await sendChunked('pending_user_messages', pendingMessages, ROW_CHUNK, (r) => ({ pending_user_messages: r }));
-  if (sendProfile) await sendChunked('profile', [sendProfile], 1, (r) => ({ profile: r[0] }));
+  if (sendProfile) {
+    const profileRes = await sendChunked('profile', [sendProfile], 1, (rows) => ({
+      profile: {
+        yaml: rows[0].yaml,
+        summaries: rows[0].summaries,
+        _receipt_id: rows[0]._receipt_id,
+        ...(rows[0].force ? { force: true } : {}),
+      },
+    }));
+    if (profileRes.confirmed.includes(sendProfile)) {
+      checkpointCursor.profile_hash = sendProfile.source_hash;
+      if (!(await saveCloudCursor(checkpointCursor))) {
+        outcome.aborted = true;
+        console.error(pc.red(
+          'Profile cursor checkpoint failed; the confirmed snapshot remains safe to retry.'
+        ));
+      }
+    }
+  }
 
   // ── Report + cursore ────────────────────────────────────────────────────
   if (outcome.aborted) {

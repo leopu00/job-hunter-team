@@ -170,6 +170,7 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "timezone",
     "industry",
   ],
+  candidate_profile_sync_state: ["content_hash", "updated_at"],
   candidate_contacts: [
     "email",
     "phone",

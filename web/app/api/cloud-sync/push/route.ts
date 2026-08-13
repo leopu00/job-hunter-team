@@ -245,6 +245,7 @@ interface ProfileIn {
   yaml: string;
   _receipt_id?: string;
   summaries?: Record<string, string>;
+  force?: boolean;
 }
 
 interface PendingMessageIn {
@@ -1563,11 +1564,16 @@ export async function POST(req: NextRequest) {
             userId,
             body.profile.summaries ?? {},
           );
-          const sync = await syncProfileToSupabase(admin, userId, canonical);
+          const sync = await syncProfileToSupabase(
+            admin,
+            userId,
+            canonical,
+            body.profile.force === true,
+          );
           if (!sync.ok) {
             profileError = sync.error;
           } else {
-            profileUpserted = true;
+            profileUpserted = sync.changed;
             rowReceipts.profile.push(
               sourceReceiptId("profile", "candidate_profile"),
             );
