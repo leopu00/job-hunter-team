@@ -112,7 +112,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (guard) return guard;
   const resolved = await resolveUser(req);
   if (!resolved.ok) return resolved.res;
-  const { supabase } = resolved.user;
+  const { supabase, userId } = resolved.user;
   const { data, error } = await supabase
     .from("team_directives")
     .select(
