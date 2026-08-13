@@ -2046,6 +2046,8 @@ var _hours_estimate_lbl: Label
 var _hours_status: Label
 var _hours_save_btn: Button
 var _hours_loaded := false
+var _hours_pending_raw: Dictionary = {}
+var _hours_save_in_flight := false
 
 ## Giorni della settimana: chiave stabile che va nel config (mon…sun) e chiave
 ## i18n dell'etichetta di una lettera mostrata sui sette pulsanti.
@@ -2220,6 +2222,27 @@ static func _hours_has_day(win: Dictionary, day: String) -> bool:
 	return _hours_day_list(win).has(day)
 
 
+## La conferma del backend può arrivare prima del refresh periodico del config.
+## Si può quindi promuovere nel cache-state soltanto il payload che questa
+## pagina ha davvero inviato, e soltanto se conserva la forma già validata.
+static func _hours_payload_valid(raw: Dictionary) -> bool:
+	if not raw.has("timezone") or not raw.get("windows") is Array:
+		return false
+	for item in raw["windows"]:
+		if not item is Dictionary:
+			return false
+		var win := item as Dictionary
+		if not win.get("days") is Array or (win["days"] as Array).is_empty():
+			return false
+		for day in win["days"]:
+			if not ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].has(str(day)):
+				return false
+		if not str(win.get("start", "")).contains(":") \
+				or not str(win.get("end", "")).contains(":"):
+			return false
+	return true
+
+
 ## Accende o spegne un giorno mantenendo l'ordine della settimana, così la
 ## riga non si rimescola sotto le dita a ogni click.
 static func _hours_toggle_day(win: Dictionary, day: String) -> void:
@@ -2319,20 +2342,38 @@ func _save_hours() -> void:
 	_hours_save_btn.disabled = true
 	_hours_status.text = UIStrings.t("prof.saving")
 	_hours_status.add_theme_color_override("font_color", Palette.DIM)
-	BackendBus.save_working_hours({
-		"timezone": _hours_tz.text.strip_edges(), "windows": windows})
+	var requested := {
+		"timezone": _hours_tz.text.strip_edges(), "windows": windows}
+	_hours_pending_raw = requested.duplicate(true)
+	_hours_save_in_flight = true
+	BackendBus.save_working_hours(requested)
 
 func _on_hours_saved(ok: bool, error: String) -> void:
+	# `ok` da solo non basta: un segnale vecchio o spurio non può inventare uno
+	# stato persistito. La richiesta in-flight correla la risposta al form.
+	var committed := ok and _hours_save_in_flight \
+			and _hours_payload_valid(_hours_pending_raw)
+	var persisted := _hours_pending_raw.duplicate(true) if committed else {}
+	_hours_pending_raw.clear()
+	_hours_save_in_flight = false
+	if committed:
+		var settings := BackendBus.live_settings.duplicate(true)
+		settings["hours_raw"] = persisted
+		BackendBus.publish_settings(settings)
+		_hours_loaded = false
+		if section == "hours" and is_instance_valid(_content):
+			_build()
 	if not is_instance_valid(_hours_status):
 		return
-	_hours_status.text = UIStrings.t("hours.saved") if ok \
-			else UIStrings.t("prof.save_err") % error
+	var visible_error := error.strip_edges()
+	if visible_error == "":
+		visible_error = UIStrings.t("common.unknown_error")
+	_hours_status.text = UIStrings.t("hours.saved") if committed \
+			else UIStrings.t("prof.save_err") % visible_error
 	_hours_status.add_theme_color_override("font_color",
-			Palette.MINT if ok else Palette.RED)
+			Palette.MINT if committed else Palette.RED)
 	if is_instance_valid(_hours_save_btn):
 		_hours_save_btn.disabled = false
-	if ok:
-		_hours_loaded = false  # al prossimo build ricarica dal config vero
 
 ## Il PROFILO dell'utente: editabile QUI (paradigma desktop app 21:26).
 ## I campi arrivano da profile_raw (chiavi vere del candidate_profile),
