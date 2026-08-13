@@ -873,10 +873,10 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
     if mode in (MODE_SEARCH, MODE_UNKNOWN) or not maintenance.get("since"):
         return []
     mode_words = {
-        MODE_HARVEST: ("harvest", "cv", "resume"),
-        MODE_CARE: ("care", "maintenance", "recheck"),
-        MODE_CALIBRATION: ("calibration", "feedback"),
-        MODE_SAVING: ("saving", "spend", "autonomous"),
+        MODE_HARVEST: ("harvest", "cv", "resume", "sourcing", "scout"),
+        MODE_CARE: ("care", "maintenance", "recheck", "geocode", "logo"),
+        MODE_CALIBRATION: ("calibration", "feedback", "priority"),
+        MODE_SAVING: ("saving", "spend", "autonomous", "budget"),
     }.get(mode, ())
     conflicts = []
     for row in directives:
