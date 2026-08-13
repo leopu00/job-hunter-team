@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { readTeamDirectivesForUser } from "@/lib/team-directives-cloud";
+import {
+  readTeamDirectivesForUser,
+  validateDirectiveMutationResult,
+} from "@/lib/team-directives-cloud";
 
 describe("team directives cloud tenant seam", () => {
   it("filters by authenticated user and cannot return another tenant", async () => {
@@ -30,5 +33,22 @@ describe("team directives cloud tenant seam", () => {
     );
     expect(result.data).toBeNull();
     expect(result.error).toBeInstanceOf(Error);
+  });
+
+  it("accepts only the RPC success shape", () => {
+    expect(
+      validateDirectiveMutationResult({ id: 7, status: "queued" }),
+    ).toEqual({
+      id: 7,
+      status: "queued",
+    });
+    expect(validateDirectiveMutationResult(null)).toBeNull();
+    expect(validateDirectiveMutationResult({ id: 7 })).toBeNull();
+    expect(
+      validateDirectiveMutationResult({ id: "7", status: "queued" }),
+    ).toBeNull();
+    expect(
+      validateDirectiveMutationResult({ id: 7, status: "error" }),
+    ).toBeNull();
   });
 });

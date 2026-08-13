@@ -25,3 +25,13 @@ export async function readTeamDirectivesForUser(
     .order("created_at", { ascending: true });
   return await ordered;
 }
+
+export function validateDirectiveMutationResult(
+  data: unknown,
+): { id: number; status: "queued" } | null {
+  if (!data || typeof data !== "object") return null;
+  const value = data as { id?: unknown; status?: unknown };
+  if (!Number.isInteger(value.id) || Number(value.id) <= 0) return null;
+  if (value.status !== "queued") return null;
+  return { id: Number(value.id), status: "queued" };
+}

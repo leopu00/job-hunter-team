@@ -11,7 +11,10 @@ import {
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
 import { sanitizedError } from "@/lib/error-response";
-import { readTeamDirectivesForUser } from "@/lib/team-directives-cloud";
+import {
+  readTeamDirectivesForUser,
+  validateDirectiveMutationResult,
+} from "@/lib/team-directives-cloud";
 
 export const dynamic = "force-dynamic";
 
@@ -218,8 +221,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       publicMessage: "insert_failed",
     });
   }
+  const mutation = validateDirectiveMutationResult(data);
+  if (!mutation) {
+    return NextResponse.json({ error: "insert_unconfirmed" }, { status: 502 });
+  }
   return NextResponse.json({
-    id: String(data.id),
+    id: String(mutation.id),
     source: "cloud",
     captain_event: { ok: true, status: "queued" },
   });
@@ -325,6 +332,10 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       scope: "team-directives",
       publicMessage: "update_failed",
     });
+  }
+  const mutation = validateDirectiveMutationResult(data);
+  if (!mutation) {
+    return NextResponse.json({ error: "update_unconfirmed" }, { status: 502 });
   }
   return NextResponse.json({
     ok: true,
