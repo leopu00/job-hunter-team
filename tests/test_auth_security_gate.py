@@ -253,6 +253,50 @@ def test_runtime_transport_failure_never_echoes_raw_output_or_credentials(tmp_pa
         assert secret not in output
 
 
+def test_fixture_cli_reduces_extra_remote_fields_to_versioned_codes(tmp_path):
+    config = auth_config(
+        external_email_enabled=True,
+        synthetic_private_url="https://synthetic-secret-host/private",
+    )
+    advisor_rows = disabled_control_advisors()
+    advisor_rows[0]["description"] = "synthetic-session /private/synthetic-path"
+    config_path = tmp_path / "synthetic-secret-config.json"
+    advisors_path = tmp_path / "synthetic-secret-advisors.json"
+    config_path.write_text(json.dumps(config))
+    advisors_path.write_text(json.dumps(advisor_rows))
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "evaluate",
+            "--config",
+            str(config_path),
+            "--advisors",
+            str(advisors_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    output = completed.stdout + completed.stderr
+
+    assert completed.returncode == 1
+    assert "mode=email" in output
+    assert (
+        "codes=email_autoconfirm_enabled,leaked_password_protection_disabled"
+        in output
+    )
+    for raw_value in (
+        "synthetic-secret-host",
+        "synthetic-session",
+        "/private/synthetic-path",
+        str(config_path),
+        str(advisors_path),
+    ):
+        assert raw_value not in output
+
+
 def test_contract_is_pinned_and_cannot_be_selected_by_cli(capsys):
     contract = gate.load_contract()
     assert contract.contract_id == "f-02-f-08-auth-posture-v1"
