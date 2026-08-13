@@ -68,7 +68,10 @@ export type LocalFirstResponse<T> = T & {
 };
 
 /** Cloud deploys never select an incidental mounted SQLite file. */
-export function shouldUseLocalFirst(hasDb: boolean, cloudDeploy: boolean): boolean {
+export function shouldUseLocalFirst(
+  hasDb: boolean,
+  cloudDeploy: boolean,
+): boolean {
   return hasDb && !cloudDeploy;
 }
 

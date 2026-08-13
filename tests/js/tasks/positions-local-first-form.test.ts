@@ -53,24 +53,30 @@ describe("forma local-first delle scritture su posizione", () => {
   });
 
   it("il branch cloud con SQLite presente seleziona il trasporto cloud", async () => {
-    const { shouldUseLocalFirst } = await import(
-      "@/lib/positions/local-first-write"
-    );
+    const { shouldUseLocalFirst } =
+      await import("@/lib/positions/local-first-write");
     expect(shouldUseLocalFirst(true, true)).toBe(false);
     expect(shouldUseLocalFirst(true, false)).toBe(true);
   });
 
   it("un 2xx local-first senza mirror confermato non è un successo", async () => {
-    const { applicationAckAccepted } = await import(
-      "@/lib/positions/application-ack"
-    );
+    const { applicationAckAccepted } =
+      await import("@/lib/positions/application-ack");
     expect(applicationAckAccepted({})).toBe(false);
     expect(applicationAckAccepted(null)).toBe(false);
     expect(applicationAckAccepted({ source: "cloud" })).toBe(false);
-    expect(applicationAckAccepted({ source: "cloud", cloud_synced: false })).toBe(false);
-    expect(applicationAckAccepted({ source: "local", cloud_synced: false })).toBe(false);
-    expect(applicationAckAccepted({ source: "cloud", cloud_synced: true })).toBe(true);
-    expect(applicationAckAccepted({ source: "local", cloud_synced: null })).toBe(true);
+    expect(
+      applicationAckAccepted({ source: "cloud", cloud_synced: false }),
+    ).toBe(false);
+    expect(
+      applicationAckAccepted({ source: "local", cloud_synced: false }),
+    ).toBe(false);
+    expect(
+      applicationAckAccepted({ source: "cloud", cloud_synced: true }),
+    ).toBe(true);
+    expect(
+      applicationAckAccepted({ source: "local", cloud_synced: null }),
+    ).toBe(true);
   });
 
   it.each(WRITERS)("%s usa la forma invece di ricopiarla", (rel) => {
