@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Call = {
@@ -11,6 +12,7 @@ type Call = {
 
 let calls: Call[] = [];
 let rpcError: string | null = null;
+let applicationReceipts: unknown[] | null = null;
 
 function fakeAdmin() {
   return {
@@ -57,9 +59,18 @@ function fakeAdmin() {
     },
     rpc: vi.fn(async (name: string, args: any) => {
       calls.push({ kind: "rpc", name, args });
-      return rpcError
-        ? { data: null, error: { message: rpcError } }
-        : { data: 1, error: null };
+      if (rpcError) return { data: null, error: { message: rpcError } };
+      if (name === "sync_upsert_applications") {
+        return {
+          data:
+            applicationReceipts ??
+            args.p_applications.map(
+              (application: any) => application._receipt_id,
+            ),
+          error: null,
+        };
+      }
+      return { data: 1, error: null };
     }),
   };
 }
@@ -93,6 +104,13 @@ vi.mock("@/lib/team-state/sync-freshness", () => ({
 
 const { POST } = await import("@/app/api/cloud-sync/push/route");
 
+function receiptId(table: "applications" | "scores", legacyId: number) {
+  return `q_${createHash("sha256")
+    .update(`${table}\0${JSON.stringify([legacyId])}`)
+    .digest("hex")
+    .slice(0, 24)}`;
+}
+
 function push(application: Record<string, unknown>, includePosition = true) {
   return POST(
     new Request("http://localhost/api/cloud-sync/push", {
@@ -109,7 +127,9 @@ function push(application: Record<string, unknown>, includePosition = true) {
               },
             ]
           : [],
-        applications: [{ position_id: 73, ...application }],
+        applications: [
+          { legacy_id: 193, position_legacy_id: 73, ...application },
+        ],
       }),
     }) as any,
   );
@@ -118,6 +138,7 @@ function push(application: Record<string, unknown>, includePosition = true) {
 beforeEach(() => {
   calls = [];
   rpcError = null;
+  applicationReceipts = null;
   admin = fakeAdmin();
 });
 
@@ -147,6 +168,14 @@ describe("push sync di una candidatura", () => {
         call.kind === "rpc" && call.name === "sync_confirm_positions_applied",
     );
     expect(applicationAt).toBeGreaterThan(-1);
+    expect(calls[applicationAt].args.p_applications[0]).toMatchObject({
+      legacy_id: 193,
+      position_legacy_id: 73,
+      _receipt_id: receiptId("applications", 193),
+    });
+    expect(calls[applicationAt].args.p_applications[0]).not.toHaveProperty(
+      "position_id",
+    );
     expect(confirmAt).toBeGreaterThan(applicationAt);
     expect(calls[confirmAt].args).toEqual({
       p_user_id: "00000000-0000-0000-0000-000000000073",
@@ -187,5 +216,156 @@ describe("push sync di una candidatura", () => {
       kind: "rpc",
       name: "sync_confirm_positions_applied",
     });
+  });
+
+  it("non conferma una application se la RPC non restituisce la sua identita'", async () => {
+    applicationReceipts = ["q_999999999999999999999999"];
+    const response = await push(
+      {
+        status: "draft",
+      },
+      false,
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "applications_receipt_mismatch",
+    });
+  });
+
+  it("verifica il multiset delle receipt senza dipendere dall'ordine", async () => {
+    applicationReceipts = [
+      receiptId("applications", 194),
+      receiptId("applications", 193),
+    ];
+    const response = await POST(
+      new Request("http://localhost/api/cloud-sync/push", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          applications: [
+            {
+              legacy_id: 193,
+              position_legacy_id: 73,
+              _receipt_id: receiptId("applications", 193),
+              status: "draft",
+            },
+            {
+              legacy_id: 194,
+              position_legacy_id: 74,
+              _receipt_id: receiptId("applications", 194),
+              status: "draft",
+            },
+          ],
+        }),
+      }) as any,
+    );
+
+    expect(response.status).toBe(200);
+    const applicationCall = calls.find(
+      (call) => call.kind === "rpc" && call.name === "sync_upsert_applications",
+    );
+    expect(applicationCall?.args.p_applications).toHaveLength(2);
+  });
+
+  it("rifiuta una sostituzione nel multiset anche quando il count coincide", async () => {
+    applicationReceipts = [
+      receiptId("applications", 193),
+      receiptId("applications", 193),
+    ];
+    const response = await POST(
+      new Request("http://localhost/api/cloud-sync/push", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          applications: [
+            {
+              legacy_id: 193,
+              position_legacy_id: 73,
+              _receipt_id: receiptId("applications", 193),
+              status: "draft",
+            },
+            {
+              legacy_id: 194,
+              position_legacy_id: 74,
+              _receipt_id: receiptId("applications", 194),
+              status: "draft",
+            },
+          ],
+        }),
+      }) as any,
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "applications_receipt_mismatch",
+    });
+  });
+
+  it("rifiuta identita' application incomplete prima della RPC", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/cloud-sync/push", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          applications: [{ legacy_id: 193, status: "draft" }],
+        }),
+      }) as any,
+    );
+
+    expect(response.status).toBe(400);
+    expect(
+      calls.some(
+        (call) =>
+          call.kind === "rpc" && call.name === "sync_upsert_applications",
+      ),
+    ).toBe(false);
+  });
+
+  it("rifiuta receipt application e score non derivate dalla source identity", async () => {
+    const application = await POST(
+      new Request("http://localhost/api/cloud-sync/push", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          applications: [
+            {
+              legacy_id: 193,
+              position_legacy_id: 73,
+              _receipt_id: receiptId("applications", 999),
+              status: "draft",
+            },
+          ],
+        }),
+      }) as any,
+    );
+    expect(application.status).toBe(400);
+
+    const score = await POST(
+      new Request("http://localhost/api/cloud-sync/push", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          scores: [
+            {
+              legacy_id: 88,
+              position_id: 73,
+              _receipt_id: receiptId("scores", 999),
+              total_score: 81,
+            },
+          ],
+        }),
+      }) as any,
+    );
+    expect(score.status).toBe(400);
+    expect(
+      calls.some(
+        (call) =>
+          call.kind === "rpc" && call.name === "sync_upsert_applications",
+      ),
+    ).toBe(false);
+    expect(
+      calls.some((call) => call.kind === "upsert" && call.table === "scores"),
+    ).toBe(false);
   });
 });
