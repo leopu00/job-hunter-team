@@ -80,6 +80,42 @@ describe("desktop directive API boundary", () => {
     expect(dbPath).toBe(join(temporary, "jobs.db"));
   });
 
+  it("rejects a hostile CORS-simple JSON body without any database effect", async () => {
+    const { POST } = await import(pathToFileURL(routePath).href);
+    const before = new Database(dbPath, { readonly: true })
+      .prepare("SELECT count(*) n FROM team_directives")
+      .get().n;
+    const response = await POST(
+      new Request("http://localhost:3000/api/team-directives", {
+        method: "POST",
+        headers: {
+          host: "localhost:3000",
+          origin: "https://evil.example",
+          "Content-Type": "text/plain",
+          "Sec-Fetch-Site": "cross-site",
+        },
+        body: JSON.stringify({
+          body: "must not be written",
+          request_id: "csrf-simple-request",
+        }),
+      }),
+    );
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "forbidden" });
+    const verification = new Database(dbPath, { readonly: true });
+    expect(
+      verification.prepare("SELECT count(*) n FROM team_directives").get().n,
+    ).toBe(before);
+    expect(
+      verification
+        .prepare(
+          "SELECT count(*) n FROM team_directive_request_ledger WHERE request_id='csrf-simple-request'",
+        )
+        .get().n,
+    ).toBe(0);
+    verification.close();
+  });
+
   it("honors JHT_DB before JHT_HOME and rejects forwarded remote hops", async () => {
     const boundary = await import(pathToFileURL(boundaryPath).href);
     expect(
@@ -94,6 +130,16 @@ describe("desktop directive API boundary", () => {
           host: "localhost:3000",
           "x-forwarded-for": "192.0.2.40",
         }),
+      ),
+    ).toBe(false);
+    expect(
+      boundary.isAllowedDesktopBrowserRequest(
+        new Headers({
+          host: "localhost:3000",
+          origin: "http://localhost:3000",
+          "content-type": "text/plain",
+        }),
+        "POST",
       ),
     ).toBe(false);
   });

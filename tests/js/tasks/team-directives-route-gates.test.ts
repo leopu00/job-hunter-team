@@ -38,6 +38,7 @@ describe("team directive route deployment and identity gates", () => {
     );
     expect(route).toContain("authorizeDesktopRequest(req)");
     expect(route.match(/authorizeDesktopRequest\(req\)/g)).toHaveLength(3);
+    expect(route).toContain("isAllowedDesktopBrowserRequest");
     expect(route).toContain("DESKTOP_DB_PATH");
     expect(route).not.toContain('"databases", "jobs.db"');
 

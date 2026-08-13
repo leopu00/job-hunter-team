@@ -10,6 +10,7 @@ import {
 } from "@/lib/team-directives-local";
 import {
   DESKTOP_DB_PATH,
+  isAllowedDesktopBrowserRequest,
   isTrustedDesktopRequest,
 } from "../../../lib/desktop-api-boundary";
 
@@ -25,6 +26,9 @@ async function authorizeDesktopRequest(
   // loopback-only desktop server, never a LAN-facing Next instance.
   if (!isTrustedDesktopRequest(req.headers)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (!isAllowedDesktopBrowserRequest(req.headers, req.method)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   return await requireAuth();
 }
