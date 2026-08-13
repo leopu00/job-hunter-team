@@ -92,6 +92,7 @@ import json
 import os
 import sqlite3
 import sys
+import hashlib
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
@@ -899,6 +900,20 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
             conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True})
         else:
             conflicts.append({"directive_id": row.get("id"), "winner": "directive" if dt > mt else "mode", "notify": True})
+    # Persist only a digest per instance so restart/repeated heartbeats do not
+    # spam the user; a new conflict (or a changed winner) gets one notice.
+    try:
+        marker = _home() / "profile" / "directive-mode-notifications.json"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        seen = json.loads(marker.read_text(encoding="utf-8")) if marker.exists() else {}
+        if not isinstance(seen, dict): seen = {}
+        for item in conflicts:
+            key = hashlib.sha256(json.dumps(item, sort_keys=True).encode()).hexdigest()
+            item["notify"] = not bool(seen.get(key))
+            seen[key] = True
+        marker.write_text(json.dumps(seen, sort_keys=True) + "\n", encoding="utf-8")
+    except (OSError, ValueError, TypeError):
+        for item in conflicts: item["notify"] = True
     return conflicts
 
 
@@ -1058,6 +1073,8 @@ def _lines(snap: dict) -> list:
                       f"; (+{extra} on the board)" if extra > 0 else ""))
 
     for conflict in snap.get("conflicts", []):
+        if not conflict.get("notify", True):
+            continue
         winner = conflict.get("winner")
         if winner == "unknown":
             out.append("DIRECTIVE/MODE CONFLICT: timestamp missing or tied — fail-closed; ask the user which choice governs.")
