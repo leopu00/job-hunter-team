@@ -6,6 +6,7 @@ set -euo pipefail
 umask 077
 
 script_dir="$(cd -P -- "$(dirname -- "$0")" && pwd)"
+repo_root="$(cd -P -- "$script_dir/.." && pwd)"
 capture_dir="$(mktemp -d "${TMPDIR:-/tmp}/jht-migration-history.XXXXXX")"
 cleanup() {
   rm -f -- "$capture_dir/stdout" "$capture_dir/stderr"
@@ -19,7 +20,7 @@ if ! command -v supabase >/dev/null 2>&1; then
 fi
 
 # Fixed read-only argv: no passthrough flags, database URL, repair, push or link.
-if ! supabase migration list --linked --output json \
+if ! (cd -- "$repo_root" && supabase migration list --linked --output json) \
   >"$capture_dir/stdout" 2>"$capture_dir/stderr"; then
   printf '%s\n' 'migration_gate status=fail stage=linked codes=linked_cli_failed:1'
   exit 1

@@ -245,6 +245,7 @@ def _fake_supabase(tmp_path: Path, stdout: str, stderr: str = "", code: int = 0)
         "#!/usr/bin/env python3\n"
         "import os, sys\n"
         "open(os.environ['FAKE_ARGV'], 'w').write('\\n'.join(sys.argv[1:]))\n"
+        "open(os.environ['FAKE_CWD'], 'w').write(os.getcwd())\n"
         f"sys.stdout.write({stdout!r})\n"
         f"sys.stderr.write({stderr!r})\n"
         f"raise SystemExit({code})\n",
@@ -258,36 +259,47 @@ def _run_wrapper(
     tmp_path: Path, stdout: str, stderr: str = "", code: int = 0, xtrace=False
 ):
     argv_log = tmp_path / "argv"
+    cwd_log = tmp_path / "cwd"
     fake_bin = _fake_supabase(tmp_path, stdout, stderr, code)
     env = {
         **os.environ,
         "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
         "FAKE_ARGV": str(argv_log),
+        "FAKE_CWD": str(cwd_log),
     }
+    caller = tmp_path / "unrelated-linked-project"
+    caller.mkdir()
     argv = ["bash"]
     if xtrace:
         argv.append("-x")
     argv.append(str(WRAPPER))
-    result = subprocess.run(argv, text=True, capture_output=True, env=env, check=False)
-    return result, argv_log.read_text(encoding="utf-8")
+    result = subprocess.run(
+        argv, text=True, capture_output=True, env=env, cwd=caller, check=False
+    )
+    return (
+        result,
+        argv_log.read_text(encoding="utf-8"),
+        cwd_log.read_text(encoding="utf-8"),
+    )
 
 
 def test_linked_wrapper_uses_only_read_only_argv_and_accepts_exact_history(
     tmp_path: Path,
 ):
     versions = gate._local_versions(ROOT)
-    result, argv = _run_wrapper(tmp_path, _linked_table(versions, versions))
+    result, argv, cwd = _run_wrapper(tmp_path, _linked_table(versions, versions))
 
     assert result.returncode == 0
     assert "status=pass stage=linked" in result.stdout
     assert argv.splitlines() == ["migration", "list", "--linked", "--output", "json"]
     assert not ({"repair", "push", "db-url", "link"} & set(argv.splitlines()))
+    assert Path(cwd).resolve() == ROOT.resolve()
 
 
 def test_linked_history_fails_when_local_and_remote_diverge_both_ways(tmp_path: Path):
     versions = gate._local_versions(ROOT)
     remote = versions[:-1] + ["20260813000000"]
-    result, _ = _run_wrapper(tmp_path, _linked_table(versions, remote))
+    result, _, _ = _run_wrapper(tmp_path, _linked_table(versions, remote))
 
     assert result.returncode == 1
     assert "history_diverged" in result.stdout
@@ -333,7 +345,7 @@ def test_linked_wrapper_never_exposes_raw_cli_output_or_diagnostics(
     tmp_path: Path, xtrace: bool
 ):
     secret = "synthetic-token@private-host.invalid/session/private/path"
-    result, _ = _run_wrapper(
+    result, _, _ = _run_wrapper(
         tmp_path,
         f"unparseable {secret}\n",
         f"connection failed: {secret}\n",
@@ -348,7 +360,7 @@ def test_linked_wrapper_never_exposes_raw_cli_output_or_diagnostics(
 
 def test_linked_wrapper_sanitizes_cli_failure(tmp_path: Path):
     secret = "synthetic-token@private-host.invalid/session/private/path"
-    result, _ = _run_wrapper(tmp_path, secret, secret, code=7)
+    result, _, _ = _run_wrapper(tmp_path, secret, secret, code=7)
     rendered = result.stdout + result.stderr
 
     assert result.returncode == 1
