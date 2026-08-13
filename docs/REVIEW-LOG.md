@@ -30,7 +30,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-08-08 | ✅ |
 | [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-08-12 | ✅ |
-| [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-08-12 | ✅ |
+| [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-08-13 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `support@jobhunterteam.ai` | — | 2026-07-26 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Policy di disclosure, trust model corrente, copertura e stato hardening | — | 2026-08-04 | ✅ |
 
@@ -85,7 +85,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/db-query/SKILL.md](../agents/_skills/db-query/SKILL.md) | SELECT helper read-only sul DB jobs | — | 2026-08-03 | ✅ |
 | [agents/_skills/db-update/SKILL.md](../agents/_skills/db-update/SKILL.md) | UPDATE stato/score di righe esistenti | — | 2026-08-08 | ✅ |
 | [agents/_skills/rate-budget/SKILL.md](../agents/_skills/rate-budget/SKILL.md) | Calcolo budget rate-limit per provider | — | 2026-06-30 | ✅ |
-| [agents/_skills/tmux-send/SKILL.md](../agents/_skills/tmux-send/SKILL.md) | Invio messaggi inter-agent via tmux send-keys | — | 2026-07-30 | ✅ |
+| [agents/_skills/tmux-send/SKILL.md](../agents/_skills/tmux-send/SKILL.md) | Invio messaggi inter-agent via tmux send-keys | — | 2026-08-13 | ✅ |
 | [agents/_skills/throttle/SKILL.md](../agents/_skills/throttle/SKILL.md) | Throttle azioni agente per restare in budget | — | 2026-07-30 | ✅ |
 | [agents/_skills/throttle/DESIGN-NOTES.md](../agents/_skills/throttle/DESIGN-NOTES.md) | Design throttle "blocco hard" — ⚠️ da rivedere prima rollout | — | 2026-07-30 | ✅ |
 | [agents/_skills/application-flow/SKILL.md](../agents/_skills/application-flow/SKILL.md) | Gates DB Scrittore (anti-rewriting + claim) + path $JHT_USER_DIR + housekeeping | — | 2026-07-11 | ✅ |
@@ -111,14 +111,14 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/daily-restart-wave/SKILL.md](../agents/_skills/daily-restart-wave/SKILL.md) | Pre-emptive mass-restart of every team agent once per 24h for context freshness. | — | 2026-06-04 | ✅ |
 | [agents/_skills/email-monitor/SKILL.md](../agents/_skills/email-monitor/SKILL.md) | Day-start sourcing dalla casella email DEDICATA del team (l'utente vi inoltra i propri job alert). | — | 2026-07-30 | ✅ |
 | [agents/_skills/expiration-tracking/SKILL.md](../agents/_skills/expiration-tracking/SKILL.md) | Estrae deadline dal JD (helper deadline_extract) e produce alert utente quando una candidatura READY sta per… | — | 2026-08-04 | ✅ |
-| [agents/_skills/feedback-query/SKILL.md](../agents/_skills/feedback-query/SKILL.md) | Read user feedback (like/dislike/hide/star) for a given position from the cloud. | — | 2026-07-28 | ✅ |
+| [agents/_skills/feedback-query/SKILL.md](../agents/_skills/feedback-query/SKILL.md) | Read user feedback (like/dislike/hide/star) for a given position from the cloud. | — | 2026-08-13 | ✅ |
 | [agents/_skills/format-time/SKILL.md](../agents/_skills/format-time/SKILL.md) | Convert UTC timestamps to the user's timezone before showing them in chat, charts, Telegram, or any user-facing… | — | 2026-07-03 | ✅ |
 | [agents/_skills/game-reply-options/SKILL.md](../agents/_skills/game-reply-options/SKILL.md) | Offer 2-5 context-specific clickable reply buttons in the JHT game chat when they genuinely make the user's next… | — | 2026-07-19 | ✅ |
 | [agents/_skills/location-enrichment/SKILL.md](../agents/_skills/location-enrichment/SKILL.md) | Standardize positions.location free-text into structured loc_/work_/role_family columns BEFORE marking any… | — | 2026-07-30 | ✅ |
 | [agents/_skills/logo-extraction/SKILL.md](../agents/_skills/logo-extraction/SKILL.md) | Extract the company logo for a company in the companies table and store it as a small base64 data-URI (max ~35KB,… | — | 2026-07-30 | ✅ |
 | [agents/_skills/maintainer-sweep/SKILL.md](../agents/_skills/maintainer-sweep/SKILL.md) | Lo sweep di manutenzione INFRA del Mantenitore 👷‍♂️ (gemello del Dottore, scope infrastruttura non agenti). | — | 2026-08-10 | ✅ |
 | [agents/_skills/mentor-output/SKILL.md](../agents/_skills/mentor-output/SKILL.md) | How the Mentor speaks once a pattern from mentor-patterns has crossed the threshold. | — | 2026-05-13 | ✅ |
-| [agents/_skills/mentor-patterns/SKILL.md](../agents/_skills/mentor-patterns/SKILL.md) | The five patterns the Mentor hunts in the records to decide WHEN to speak. | — | 2026-07-28 | ✅ |
+| [agents/_skills/mentor-patterns/SKILL.md](../agents/_skills/mentor-patterns/SKILL.md) | The five patterns the Mentor hunts in the records to decide WHEN to speak. | — | 2026-08-13 | ✅ |
 | [agents/_skills/notify-user/SKILL.md](../agents/_skills/notify-user/SKILL.md) | Notify the user with automatic fallback. | — | 2026-08-11 | ✅ |
 | [agents/_skills/office-geocoding/SKILL.md](../agents/_skills/office-geocoding/SKILL.md) | Geocode the precise office building (lat/lon/address) for a position AFTER location-enrichment has populated… | — | 2026-08-03 | ✅ |
 | [agents/_skills/parse-cv/SKILL.md](../agents/_skills/parse-cv/SKILL.md) | Pre-process a CV/profile file (PDF, DOCX, ODT, RTF) into plain text BEFORE feeding it to the LLM context. | — | 2026-05-18 | ✅ |
@@ -212,7 +212,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI | — | 2026-08-11 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali | — | 2026-08-04 | ✅ |
 | [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-08-12 | ✅ |
-| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-08-12 | ✅ |
+| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-08-13 | ✅ |
 | [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-08-11 | ✅ |
 | [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-07-25 | ✅ |
 | [docs/guides/FEEDBACK-TICKETING.md](./guides/FEEDBACK-TICKETING.md) | Runbook delle superfici correnti e dell'endpoint /api/feedback | — | 2026-08-05 | ✅ |
@@ -220,7 +220,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/README.md](./guides/README.md) | 📘 docs/guides — user & operator guides — How to install, run, and operate Job Hunter Team. | — | 2026-08-08 | ✅ |
 | [docs/guides/VPS-SETUP-WIZARD.md](./guides/VPS-SETUP-WIZARD.md) | VPS setup from the native office — This is the current non-terminal path for running Job Hunter Team on an | — | 2026-08-08 | ✅ |
 | [docs/guides/ADDING-A-PROVIDER.md](./guides/ADDING-A-PROVIDER.md) | Guida contributor: gate ADR-0002, touchpoint runtime/provider, evidenza live richiesta e check anti-drift | — | 2026-08-08 | ✅ |
-| [docs/guides/LOCAL-SCORER.md](./guides/LOCAL-SCORER.md) | Experimental role-scoped Local Scorer setup, quality harness, hardware evidence requirements, and explicit zero-cloud limits | 2026-08-03 | 2026-08-03 | 🟢 |
+| [docs/guides/LOCAL-SCORER.md](./guides/LOCAL-SCORER.md) | Experimental role-scoped Local Scorer setup, quality harness, hardware evidence requirements, and explicit zero-cloud limits | 2026-08-03 | 2026-08-13 | ✅ |
 | [docs/guides/M4-EVIDENCE-BUNDLES.md](./guides/M4-EVIDENCE-BUNDLES.md) | Versioned M4 evidence-bundle operator guide: scrubbed export boundary, hashes, provenance classes, fixture/live fail-closed rules, and external-validation limits | — | 2026-08-03 | ✅ |
 | [docs/guides/TUTORIALS.md](./guides/TUTORIALS.md) | Text-first game and web tutorials: prerequisites, ordered actions, expected results, and optional video alternatives | — | 2026-08-05 | ✅ |
 | [docs/guides/TUTORIALS-LOCALIZATIONS.md](./guides/TUTORIALS-LOCALIZATIONS.md) | Localized source copy for the public text-first game and web tutorials in Italian, Spanish, French, German, Portuguese and Hungarian | — | 2026-08-05 | ✅ |
@@ -251,7 +251,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/architecture/bot-telegram.md](./internal/architecture/bot-telegram.md) | 💬 JHT bot Telegram — design, scelta canale, ingest documenti — Doc consolidato il 2026-05-13 unificando | — | 2026-08-12 | ✅ |
 | [docs/internal/architecture/bridges.md](./internal/architecture/bridges.md) | I tre bridge deterministici (role-map) — Mappa autorevole dei bridge Python deterministici (no-LLM) che girano setsid | — | 2026-07-30 | ✅ |
 | [docs/internal/architecture/candidate-profile-cloud-sync-redesign.md](./internal/architecture/candidate-profile-cloud-sync-redesign.md) | 🧬 Candidate profile — cloud sync redesign — Design doc — da validare prima di implementare. | — | 2026-07-03 | ✅ |
-| [docs/internal/architecture/cloud-sync-architecture.md](./internal/architecture/cloud-sync-architecture.md) | ☁️ Cloud sync — architecture & status — Living doc. | — | 2026-07-30 | ✅ |
+| [docs/internal/architecture/cloud-sync-architecture.md](./internal/architecture/cloud-sync-architecture.md) | ☁️ Cloud sync — architecture & status — Living doc. | — | 2026-08-13 | ✅ |
 | [docs/internal/architecture/context-watchdog-spec.md](./internal/architecture/context-watchdog-spec.md) | 🩺 Agent context saturation + reboot periodico via Dottore — Status: MVP SHIPPED 2026-05-31 (daily-restart-wave) — PoC validato 2026-05-20. | — | 2026-08-12 | ✅ |
 | [docs/internal/architecture/daemon-sync-redesign.md](./internal/architecture/daemon-sync-redesign.md) | 🔌 Daemon sync — da polling Vercel a Supabase diretto + event-driven — Documento consolidato del redesign del sync daemon↔cloud (tre note datate 24–26/06, qui integrate senza modifiche al contenuto). | — | 2026-07-30 | ✅ |
 | [docs/internal/architecture/dottore-redesign-design.md](./internal/architecture/dottore-redesign-design.md) | 🩺 Design-doc — Ridisegno ruolo DOTTORE (context-refresh) — Stato: DRAFT — schema/flow da lockare prima di codare (design-doc-first). | — | 2026-08-12 | ✅ |
@@ -343,7 +343,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md](./internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md) | [PROMO-VIDEO-NOW-PLAYABLE]: stato sospeso, asset esterni, fix salvati e passi per completare i due montaggi | — | 2026-08-03 | ✅ |
 | [docs/internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md](./internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md) | Missione M4: protocollo riproducibile per varianza Kimi 88→92 e confronto parametrico PAYG/subscription, con gap dati live | — | 2026-08-03 | ✅ |
 | [docs/internal/architecture/2026-08-03-local-vault-design.md](./internal/architecture/2026-08-03-local-vault-design.md) | [JHT-LOCAL-VAULT]: envelope encryption, broker runtime, migrazione senza plaintext persistente e decisioni ADR prima della crypto | — | 2026-08-03 | ✅ |
-| [docs/internal/architecture/provider-touchpoint-inventory.md](./internal/architecture/provider-touchpoint-inventory.md) | Machine-checked inventory of provider-specific seams and the narrow M5 Local Scorer architecture boundary | 2026-08-03 | 2026-08-03 | 🟢 |
+| [docs/internal/architecture/provider-touchpoint-inventory.md](./internal/architecture/provider-touchpoint-inventory.md) | Machine-checked inventory of provider-specific seams and the narrow M5 Local Scorer architecture boundary | 2026-08-03 | 2026-08-13 | ✅ |
 | [docs/internal/ops/recording-profiles.md](./internal/ops/recording-profiles.md) | Procedura interna per generare e verificare profili sintetici deterministici destinati alle registrazioni web e gioco | — | 2026-08-04 | ✅ |
 | [docs/internal/2026-08-07-setup-guide-content-contract.md](./internal/2026-08-07-setup-guide-content-contract.md) | Contratto P0 della guida setup non pubblicata: naming, copy EN, fasi e requisiti screenshot per tre OS, local-web e censimento riuso | 2026-08-07 | 2026-08-07 | 🟢 |
 | [docs/internal/2026-08-07-setup-guide-web-scaffolding.md](./internal/2026-08-07-setup-guide-web-scaffolding.md) | Handoff web della guida setup non pubblicata: route noindex, contratto canonico, registro schermate, test e stato traduzioni | 2026-08-07 | 2026-08-07 | 🟢 |
@@ -365,13 +365,14 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/security/README.md](./security/README.md) | Indice security review pre-launch | — | 2026-07-25 | ✅ |
+| [docs/security/README.md](./security/README.md) | Indice security review pre-launch | — | 2026-08-14 | ✅ |
 | [docs/security/01-pre-launch-review.md](./security/01-pre-launch-review.md) | Review pre-launch (33/35 task chiusi) | — | 2026-07-03 | ✅ |
 | [docs/security/02-openclaw-comparison.md](./security/02-openclaw-comparison.md) | Confronto sicurezza con OpenClaw | — | 2026-04-30 | ✅ |
 | [docs/security/03-implementation-tradeoffs.md](./security/03-implementation-tradeoffs.md) | Tradeoff implementativi delle mitigation | — | 2026-04-30 | ✅ |
 | [docs/security/04-threat-model.md](./security/04-threat-model.md) | Threat model completo del progetto | — | 2026-08-04 | ✅ |
-| [docs/security/05-checklist.md](./security/05-checklist.md) | Checklist sicurezza pre-public-release | — | 2026-07-30 | ✅ |
+| [docs/security/05-checklist.md](./security/05-checklist.md) | Checklist sicurezza pre-public-release | — | 2026-08-14 | ✅ |
 | [docs/security/06-post-fix-comparison.md](./security/06-post-fix-comparison.md) | Snapshot post-fix (score 30% → 74%) | — | 2026-07-30 | ✅ |
+| [docs/security/07-auth-posture-remediation.md](./security/07-auth-posture-remediation.md) | Runbook fail-closed per verificare e correggere la postura Supabase Auth senza esporre token o dettagli sensibili | — | 2026-08-14 | ✅ |
 
 
 ## 🧪 docs/sessions
@@ -401,7 +402,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [supabase/README.md](../supabase/README.md) | Schema multi-tenant Postgres + RLS (BYO backend) | — | 2026-08-07 | ✅ |
+| [supabase/README.md](../supabase/README.md) | Schema multi-tenant Postgres + RLS (BYO backend) | — | 2026-08-13 | ✅ |
 
 
 ## ❓ Altri
