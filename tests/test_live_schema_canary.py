@@ -23,6 +23,7 @@ MANIFEST = ROOT / "supabase/live-schema/078-083.v2.json"
 QUERY = ROOT / "supabase/live-schema/078-083.v2.sql"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
+POSTGRES_READY_MARKER = "database system is ready to accept connections"
 MIGRATIONS = [
     ROOT / "supabase/migrations/078_positions_write_request_kind.sql",
     ROOT / "supabase/migrations/079_team_directive_events_atomic.sql",
@@ -197,6 +198,11 @@ assert spec and spec.loader
 canary = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = canary
 spec.loader.exec_module(canary)
+
+
+def _final_postgres_server_is_ready(logs: str) -> bool:
+    """Reject initdb's temporary server and accept only the final restart."""
+    return logs.count(POSTGRES_READY_MARKER) >= 2
 
 
 class FakeResponse:
@@ -426,6 +432,14 @@ def test_snapshot_attestation_does_not_accept_caller_supplied_hash():
     )
 
 
+def test_pg16_readiness_rejects_the_temporary_initdb_server():
+    first_start = f"{POSTGRES_READY_MARKER}\n"
+    final_restart = f"{first_start}{POSTGRES_READY_MARKER}\n"
+
+    assert not _final_postgres_server_is_ready(first_start)
+    assert _final_postgres_server_is_ready(final_restart)
+
+
 def test_preflight_synthetic_anomalies_are_row_scoped_and_non_mutating_contract():
     """The fixture matrix names every seeded anomaly, including orphan/tenant edges.
 
@@ -610,17 +624,22 @@ def pg16_schema_clone(
         )
 
     try:
-        stable = 0
         for _ in range(100):
-            if psql("SELECT 1", check=False).returncode == 0:
-                stable += 1
-            else:
-                stable = 0
-            if stable == 2:
-                break
-            time.sleep(0.1)
+            logs_result = subprocess.run(
+                ["docker", "logs", name], text=True, capture_output=True
+            )
+            logs = logs_result.stdout + logs_result.stderr
+            if _final_postgres_server_is_ready(logs):
+                probe = psql(
+                    "CREATE TEMP TABLE live_schema_readiness_probe(id integer); "
+                    "DROP TABLE live_schema_readiness_probe;",
+                    check=False,
+                )
+                if probe.returncode == 0:
+                    break
+            time.sleep(0.2)
         else:
-            pytest.fail("PostgreSQL 16 schema clone non pronto")
+            pytest.fail("PostgreSQL 16 final server non pronto")
         psql(
             "DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE service_role NOLOGIN BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$; CREATE SCHEMA IF NOT EXISTS auth; CREATE TABLE IF NOT EXISTS auth.users(id uuid PRIMARY KEY, created_at timestamptz); CREATE TABLE IF NOT EXISTS auth.sessions(user_id uuid, updated_at timestamptz); CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $$; GRANT USAGE ON SCHEMA public, auth TO anon, authenticated, service_role;"
         )
