@@ -30,6 +30,7 @@ import {
   isLocalTokenAuthenticated,
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type WriteSource = "local" | "cloud";
@@ -65,6 +66,14 @@ export type LocalFirstResponse<T> = T & {
   source: WriteSource;
   cloud_synced: boolean | null;
 };
+
+/** Cloud deploys never select an incidental mounted SQLite file. */
+export function shouldUseLocalFirst(
+  hasDb: boolean,
+  cloudDeploy: boolean,
+): boolean {
+  return hasDb && !cloudDeploy;
+}
 
 function openLocalDb(): Database.Database {
   const db = new Database(JHT_DB_PATH);
@@ -114,7 +123,11 @@ export async function localFirstWrite<T>(
   const { userId, supabase } = resolved.user;
 
   // ── 2. Browser col box acceso: SQLite decide, il cloud segue ────────
-  if (fs.existsSync(JHT_DB_PATH)) {
+  // A cloud deployment is authoritative in Supabase even if a stale or
+  // accidentally mounted SQLite file happens to be present.  Local-first is
+  // reserved for the co-located runtime; otherwise an ephemeral Vercel file
+  // could report a successful local write that never reached the cloud.
+  if (shouldUseLocalFirst(fs.existsSync(JHT_DB_PATH), isCloudDeploy())) {
     const local = runLocal(spec);
     if (!local.ok)
       return NextResponse.json(local.body, { status: local.status });
