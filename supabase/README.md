@@ -53,7 +53,7 @@ psql $DATABASE_URL -f supabase/seed.sql
 
 ```
 supabase/
-├── migrations/     # 001–062 — full, ordered schema history: core schema + RLS (001),
+├── migrations/     # Full, ordered schema history: core schema + RLS (001),
 │                   #   feedback tickets (005), cloud-sync tokens + expiry (006, 036),
 │                   #   companies/highlights sync, position tickets, jd_summary,
 │                   #   function hardening (031/032), RLS/index tuning (053),
@@ -62,7 +62,30 @@ supabase/
 └── README.md
 ```
 
-> Apply them **in order** — each migration is idempotent-safe to re-run via `supabase migration up`. The filename says what it does; the header comment in each file says why.
+> Apply migrations **once and in order**. Historical files are immutable, but
+> that does not make every old migration safe to replay against an already
+> advanced schema. The filename says what it does; the header comment in each
+> file says why.
+
+## Migration history gate
+
+Migration identity is immutable once it reaches the integrator: its number,
+path and Git blob must not be changed or reused. CI compares every proposed
+migration with the exact base and with all freshly fetched remote branches,
+then applies the new sequence to a disposable PostgreSQL 16 database.
+
+Maintainers can separately inspect an already-linked project's version ledger
+without changing it:
+
+```bash
+scripts/check-linked-migration-history.sh
+```
+
+The wrapper runs only `supabase migration list --linked`, captures the raw CLI
+streams privately, and reports aggregate counts. Any local-only, remote-only or
+malformed history fails closed. Reconciliation is intentionally a manual,
+reviewed operation: this gate never runs migration repair, database push, link,
+dump, or remote SQL.
 
 ## Differences from SQLite (schema V2)
 
