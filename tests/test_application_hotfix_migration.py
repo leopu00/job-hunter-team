@@ -33,3 +33,4 @@ def test_hotfix_preserves_double_click_and_undo_guards():
     assert "applied_via = NULL" in sql
     assert "GRANT EXECUTE" in sql
     assert "REVOKE ALL" in sql
+    assert "FROM anon, service_role" in sql
