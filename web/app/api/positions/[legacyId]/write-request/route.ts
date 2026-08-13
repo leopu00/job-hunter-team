@@ -9,6 +9,7 @@ import {
   isLocalTokenAuthenticated,
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -342,7 +343,7 @@ async function handleToggle(
   // SQLite presente → local primary (poi best-effort cloud).
   // SQLite assente → cloud only; il container chiuderà il loop con
   // `jht cloud pull-desired-state` al prossimo boot (P0 [JHT-CLOUDSYNC-01]).
-  const hasLocal = fs.existsSync(JHT_DB_PATH);
+  const hasLocal = !isCloudDeploy() && fs.existsSync(JHT_DB_PATH);
 
   if (hasLocal) {
     const local = toggleViaLocal(legacyId, requested);

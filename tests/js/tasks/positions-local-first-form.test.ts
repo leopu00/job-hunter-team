@@ -25,6 +25,13 @@ const WRITERS = [
   "web/app/api/positions/[legacyId]/mark-applied/route.ts",
 ];
 
+const CLOUD_GUARDED_ENDPOINTS = [
+  "web/app/api/positions/[legacyId]/ticket/route.ts",
+  "web/app/api/positions/[legacyId]/write-request/route.ts",
+  "web/app/api/positions/[legacyId]/geocode-request/route.ts",
+  "web/app/api/positions/[legacyId]/recheck-request/route.ts",
+];
+
 /**
  * Ancora fuori, e dichiarato: è il difetto O-15, non una svista di questo
  * lavoro. Quando verrà convertita, esce da qui — e se qualcuno la converte
@@ -50,6 +57,57 @@ describe("forma local-first delle scritture su posizione", () => {
     const src = read(FORM);
     expect(src).toContain("isCloudDeploy");
     expect(src).toContain("shouldUseLocalFirst");
+  });
+
+  it.each(CLOUD_GUARDED_ENDPOINTS)(
+    "%s non sceglie SQLite su deploy cloud",
+    (rel) => {
+      const src = read(rel);
+      expect(src).toContain("isCloudDeploy");
+      expect(src).toMatch(
+        /!isCloudDeploy\(\)\s*&&\s*fs\.existsSync\(JHT_DB_PATH\)/,
+      );
+    },
+  );
+
+  it("gli endpoint non espongono dettagli architetturali nelle risposte", () => {
+    for (const rel of CLOUD_GUARDED_ENDPOINTS) {
+      expect(read(rel).toLowerCase()).not.toContain("team locale");
+      expect(read(rel).toLowerCase()).not.toContain("localhost");
+    }
+    const panel = read("web/app/(protected)/positions/[id]/TicketPanel.tsx");
+    expect(panel).toContain("attachmentUnavailable");
+    expect(panel.match(/attachmentUnavailable:/g)).toHaveLength(8);
+    expect(panel).toContain("ticketErrorMessage(b?.error, t)");
+  });
+
+  it("non rende mai errori server grezzi", async () => {
+    const { ticketErrorMessage } = await import("@/lib/ticket-error");
+    const copy = {
+      networkError: "Errore di rete",
+      attachmentUnavailable: "Allegato non disponibile",
+    };
+    const secret = "team localhost session path code segreto";
+    expect(ticketErrorMessage(secret, copy)).toBe(copy.networkError);
+    expect(ticketErrorMessage("attachment_unavailable", copy)).toBe(
+      copy.attachmentUnavailable,
+    );
+  });
+
+  it("l'errore candidatura è azionabile e non espone dettagli interni", () => {
+    const src = read("web/app/(protected)/positions/[id]/FeedbackButtons.tsx");
+    const messages = [
+      ...src.matchAll(/markAppliedError:\s*(?:\n\s*)?"([^"]+)"/g),
+    ].map(([, message]) => message);
+    expect(messages).toHaveLength(7);
+    for (const message of messages) {
+      expect(message.toLowerCase()).toMatch(
+        /riprova|try again|prób|inténtalo|erneut|réessay|tente/,
+      );
+      expect(message.toLowerCase()).not.toMatch(
+        /team|localhost|session|path|code|db/,
+      );
+    }
   });
 
   it("il branch cloud con SQLite presente seleziona il trasporto cloud", async () => {
