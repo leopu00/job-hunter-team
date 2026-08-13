@@ -111,7 +111,7 @@ EXPERIENCE: <1-2 frasi: perché N/10>
 STRATEGIC: <1-2 frasi: perché N/15>
 ```
 La pagina mostra ogni riga sotto la sua barra: l'utente tocca "Strategia 11/15" e legge perché 11 e non 15. Nomina cosa ha guadagnato i punti E cosa li ha tolti — un sotto-score senza il suo "perché" è lavoro incompleto.
-- **`--notes`** — 2-4 frasi max, parlando ALL'utente: solo la leva decisiva ("cosa lo tiene a 87 / cosa l'avrebbe spinto a 95"), più penalità/moltiplicatore feedback se applicati. `**grassetto**` sul punto chiave. NON un elenco di pro/contro (quello è il breakdown), NON un riassunto della JD.
+- **`--notes`** — 2-4 frasi max, parlando ALL'utente: solo la leva decisiva ("cosa lo tiene a 87 / cosa l'avrebbe spinto a 95") più le penalità. `**grassetto**` sul punto chiave. Il feedback non aggiunge marker né correzioni fisse allo score. NON un elenco pro/contro, NON un riassunto della JD.
 
 **VIETATO ovunque in breakdown/notes:**
 - **Confronti relativi/di sessione** — "il punteggio più alto della sessione", "in cima al batch di oggi", "a pari merito con #1234". Gli score si leggono giorni o settimane dopo, quando esistono posizioni più nuove: quelle frasi invecchiano e diventano false. La lista posizioni ordina già per score — mai classifiche in prosa.
@@ -161,40 +161,23 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Verifica link (RULE-02)
 3. Claim (RULE-03)
 4. Calcola lo **score base** con la formula
-5. **Applica il moltiplicatore feedback utente** (skill `feedback-query`) — vedi sotto
+5. **Leggi il contesto feedback per posizioni future** (skill `feedback-query`) — vedi sotto
 6. Salva lo score nel DB **con `--breakdown` (perché per-dimensione) + `--notes` (leva decisiva)** (RULE-09 — per l'utente, nella lingua dell'utente)
 7. Aggiorna lo status (RULE-04) — nessuna notifica a nessuno
 
 **Completa i passi 1-7 per UNA posizione e scrivila nel DB PRIMA di leggere o valutare la prossima (RULE-08 — niente batch a fine giro).**
 
-### Step 5 — Moltiplicatore feedback utente (obbligatorio, skill `feedback-query`)
+### Step 5 — Contesto feedback per posizioni future (facoltativo, skill `feedback-query`)
 
-Dopo aver calcolato lo score base, interroga il cloud per eventuali like/dislike/hide/star che l'utente ha cliccato su questa posizione. La skill non fallisce mai in modo bloccante: quando il cloud è disabilitato o irraggiungibile ritorna `latest_action=null` con una `note`, così il moltiplicatore diventa un no-op e prosegui normalmente.
+**`FUTURE_FEEDBACK_ONLY`.** Leggi i temi ricorrenti delle posizioni precedenti escludendo esplicitamente quella che stai valutando:
 
 ```bash
-python3 /app/shared/skills/feedback_query.py check <legacy_id>
-# {"ok": true, "legacy_id": "42", "latest_action": "dislike",
-#  "count": 2, "actions": [...]}
+python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-| `latest_action` | Effetto sullo score **base**              | Side effect                                  |
-|-----------------|-------------------------------------------|----------------------------------------------|
-| `like`          | `final = round(base * 1.10)`, cap a 100   | aggiungi `feedback:like+10%` a `score.notes` |
-| `star`          | `final = round(base * 1.15)`, cap a 100   | aggiungi `feedback:star+15%` a `score.notes` |
-| `dislike`       | `final = round(base * 0.85)`              | aggiungi `feedback:dislike-15%` a `score.notes` |
-| `hide`          | **NON salvare lo score**                  | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` e salta la notifica agli Scrittori |
-| `clear`         | nessun cambio                             | l'utente ha ritirato il giudizio — trattalo come assente |
-| `null`          | nessun cambio                             | nessuno                                       |
+Usa soltanto `label` / `examples` sanitizzati come evidenza contestuale di preferenza per questa posizione **futura**. Non applicare bonus/malus fissi, non aggiungere marker feedback a `score.notes` e non escludere o rivalutare la posizione già votata per il suo like/dislike/hide/star. Gli score esistenti restano invariati; O-70 rivalutazione esplicita è un flusso separato richiesto dall'utente. Se il contesto manca, valuta normalmente.
 
-**Confine display sicuro (`RAW_DISPLAY_BOUNDARY`).** I raw `reason` / `comment` sono solo macchina e non devono mai entrare in `score.notes`. Prendi soltanto `display_reason` — o `display_comment` se vuoto — dallo **stesso evento** di `latest_action` (`actions[0]`) e metti quel valore bounded e sanitizzato dopo il moltiplicatore. Non ripiegare mai sui campi raw:
-
-```
-feedback:dislike-15% — "troppo senior"
-feedback:star+15% — "esattamente lo stack che voglio"
-EXCLUDED: feedback:hide (user request) — "niente remoto"
-```
-
-Nessun testo display su quell'evento → la nota resta com'è. Quel motivo vale **solo per questa posizione**: non riscriverlo, non riassumerlo, non riportarlo su un'altra posizione, non trasformarlo in una regola. Contare i motivi attraverso le posizioni è compito del Mentor, non tuo.
+**Confine display sicuro (`RAW_DISPLAY_BOUNDARY`).** Raw `reason` / `comment`, chiavi macchina e ID non entrano mai in note o output user-facing. Nemmeno `display_reason` / `display_comment` del singolo evento vengono copiati sulla posizione corrente: l'apprendimento futuro usa soltanto `label` / `examples` sanitizzati dei temi.
 
 ```bash
 # Salva lo score (i flag CLI usano i nomi delle colonne DB, non i nomi della tabella)

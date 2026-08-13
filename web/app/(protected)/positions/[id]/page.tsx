@@ -598,8 +598,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
           <FeedbackButtons
             legacyId={position.legacy_id}
             initialVerdict={initialVerdict}
-            initialExcludedReason={position.user_excluded_reason ?? null}
-            initialExcludedNote={position.user_excluded_note ?? null}
             initialApplied={position.status === "applied"}
             initialAppliedAt={application?.applied_at ?? null}
           />
@@ -1208,10 +1206,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   <FeedbackButtons
                     legacyId={position.legacy_id}
                     initialVerdict={initialVerdict}
-                    initialExcludedReason={
-                      position.user_excluded_reason ?? null
-                    }
-                    initialExcludedNote={position.user_excluded_note ?? null}
                   />
                 ) : undefined
               }

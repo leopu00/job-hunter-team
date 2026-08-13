@@ -112,7 +112,7 @@ EXPERIENCE: <1-2 Sätze: warum N/10>
 STRATEGIC: <1-2 Sätze: warum N/15>
 ```
 Die Seite zeigt jede Zeile unter ihrem Balken: der Nutzer tippt auf „Strategie 11/15" und liest, warum 11 und nicht 15. Benenne, was die Punkte gebracht hat UND was sie gekostet hat — ein Teil-Score ohne sein „Warum" ist unvollständige Arbeit.
-- **`--notes`** — max. 2-4 Sätze, direkt ZUM Nutzer: nur der entscheidende Hebel („was ihn bei 87 hält / was ihn auf 95 gebracht hätte"), plus Strafen/Feedback-Multiplikator falls angewandt. `**Fett**` auf den Kernpunkt. KEINE Pro/Contra-Liste (das ist der Breakdown), KEIN JD-Resümee.
+- **`--notes`** — max. 2-4 Sätze direkt ZUM Nutzer: nur der entscheidende Hebel („was ihn bei 87 hält / was ihn auf 95 gebracht hätte“) plus Strafen. `**Fett**` auf den Kernpunkt. Feedback fügt weder Marker noch feste Score-Anpassungen hinzu. KEINE Pro/Contra-Liste und KEIN JD-Resümee.
 
 **VERBOTEN überall in breakdown/notes:**
 - **Relative/Session-Aussagen** — „höchster Score der Session", „Spitze des heutigen Batches", „gleichauf mit #1234". Scores werden Tage oder Wochen später gelesen, wenn neuere Positionen existieren: solche Aussagen veralten und werden falsch. Die Positionsliste sortiert bereits nach Score — nie Rankings in Prosa.
@@ -162,40 +162,23 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Link-Verifikation (RULE-02)
 3. Claim (RULE-03)
 4. Berechne **Base-Score** mit der Formel
-5. **Wende User-Feedback-Multiplier an** (Skill `feedback-query`) — siehe unten
+5. **Lies Feedback-Kontext für künftige Positionen** (Skill `feedback-query`) — siehe unten
 6. Speichere den Score im DB **mit `--breakdown` (Warum pro Dimension) + `--notes` (entscheidender Hebel)** (RULE-09 — für den Nutzer, in seiner Sprache)
 7. Status aktualisieren (RULE-04) — niemanden benachrichtigen
 
 **Führe die Schritte 1-7 für EINE Position aus und schreibe sie in die DB, BEVOR du die nächste liest oder bewertest (RULE-08 — kein Batching am Ende der Runde).**
 
-### Step 5 — User-Feedback-Multiplier (obligatorisch, Skill `feedback-query`)
+### Step 5 — Feedback-Kontext für künftige Positionen (optional, Skill `feedback-query`)
 
-Nach Berechnung des Base-Scores frage die Cloud nach eventuellen Like/Dislike/Hide/Star, die der User auf dieser Position geklickt hat. Die Skill hard-failt nie: wenn die Cloud deaktiviert oder nicht erreichbar ist, gibt sie `latest_action=null` mit einer `note` zurück, sodass der Multiplier zu einem No-Op wird und du normal fortfährst.
+**`FUTURE_FEEDBACK_ONLY`.** Lies wiederkehrende Themen früherer Positionen und schließe die aktuell bewertete Position ausdrücklich aus:
 
 ```bash
-python3 /app/shared/skills/feedback_query.py check <legacy_id>
-# {"ok": true, "legacy_id": "42", "latest_action": "dislike",
-#  "count": 2, "actions": [...]}
+python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-| `latest_action` | Effekt auf den **Base**-Score             | Side Effect                                  |
-|-----------------|-------------------------------------------|----------------------------------------------|
-| `like`          | `final = round(base * 1.10)`, Cap bei 100 | füge `feedback:like+10%` zu `score.notes` hinzu |
-| `star`          | `final = round(base * 1.15)`, Cap bei 100 | füge `feedback:star+15%` zu `score.notes` hinzu |
-| `dislike`       | `final = round(base * 0.85)`              | füge `feedback:dislike-15%` zu `score.notes` hinzu |
-| `hide`          | **Score NICHT speichern**                  | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` und Scrittori-Notify überspringen |
-| `clear`         | keine Änderung                            | der Nutzer hat sein Urteil zurückgezogen — behandle es als nicht vorhanden |
-| `null`          | keine Änderung                            | keine                                        |
+Nutze nur sanitizte `label` / `examples` als kontextuellen Präferenzhinweis für diese **künftige** Position. Wende nie feste Boni/Mali an, füge keine Feedback-Marker zu `score.notes` hinzu und schließe oder bewerte die bereits beurteilte Position nie wegen ihres like/dislike/hide/star neu. Bestehende Scores bleiben unverändert; O-70 explizite Neubewertung ist ein separater, vom Nutzer angeforderter Ablauf. Ohne Kontext normal bewerten.
 
-**Sichere Display-Grenze (`RAW_DISPLAY_BOUNDARY`).** Rohe `reason` / `comment` sind nur für Maschinen und dürfen nie in `score.notes` gelangen. Nimm ausschließlich `display_reason` — oder `display_comment`, wenn leer — aus **demselben Event** wie `latest_action` (`actions[0]`) und hänge diesen begrenzten, sanitizten Wert hinter den Multiplikator. Falle nie auf rohe Felder zurück:
-
-```
-feedback:dislike-15% — "zu senior"
-feedback:star+15% — "genau der Stack, den ich will"
-EXCLUDED: feedback:hide (user request) — "kein Remote"
-```
-
-Kein Display-Text in diesem Event → die Notiz bleibt, wie sie ist. Dieser Grund gilt **nur für diese Position**: nicht umschreiben, nicht zusammenfassen, nicht auf eine andere Position übertragen, nicht zur Regel machen. Gründe über Positionen hinweg zu zählen ist Aufgabe des Mentors, nicht deine.
+**Sichere Display-Grenze (`RAW_DISPLAY_BOUNDARY`).** Rohe `reason` / `comment`, Maschinenschlüssel und IDs gelangen nie in Notizen oder user-facing Ausgaben. Auch eventbezogene `display_reason` / `display_comment` werden nicht auf die aktuelle Position kopiert; künftiges Lernen nutzt nur sanitizte Themen-`label` / `examples`.
 
 ```bash
 # Speichere Score (die CLI-Flags nutzen DB-Spaltennamen, keine Tabellennamen)

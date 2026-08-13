@@ -233,6 +233,6 @@ If you have nothing pattern-grade to say, **say nothing**. Silence is an answer.
 
 - `mentor-output` — HOW to phrase the message once a pattern is confirmed.
 - `db-query` — wrapper internals.
-- `feedback-query` — the reader for the user's feedback in the cloud (Pattern F); the Scorer queries the same source one position at a time.
+- `feedback-query` — the reader for the user's feedback in the cloud (Pattern F); the Scorer uses sanitized aggregate themes only for future positions, excluding the current one.
 - `agents/mentor/mentor.md` — orchestrator prompt + cadence.
 - `agents/_team/team-rules.md` T10 — profile is read-only, also for the Mentor.

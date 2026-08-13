@@ -34,13 +34,13 @@ export const VERDICT_ORDER: Verdict[] = [
 /**
  * Cosa viene spedito al backend quando l'utente sceglie un verdetto:
  * l'azione e il punteggio registrati su `position_feedback`, il segnale
- * di direzione per lo Scout e se la posizione va esclusa.
+ * di direzione per lo Scorer sulle posizioni future. L'esclusione esplicita
+ * e' un'azione separata: un giudizio non cambia lo stato della posizione.
  */
 export type VerdictSignal = {
   action: "like" | "dislike" | "star";
   score: number;
   direction: "more_like_this" | "less_like_this" | null;
-  exclude?: boolean;
 };
 
 /**
@@ -54,7 +54,7 @@ export type VerdictSignal = {
  * lo stesso giudizio scrive dati diversi a seconda di dove viene dato.
  */
 export const VERDICT_SIGNAL: Record<Verdict, VerdictSignal> = {
-  no: { action: "dislike", score: 1, direction: "less_like_this", exclude: true },
+  no: { action: "dislike", score: 1, direction: "less_like_this" },
   // 'Poco interessante' NON è un dislike (scelta utente 18/07): la
   // posizione resta tenuta (niente esclusione) e non manda un segnale
   // less_like_this allo Scout — è un keep con entusiasmo basso.

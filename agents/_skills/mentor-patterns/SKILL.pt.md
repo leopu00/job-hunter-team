@@ -234,6 +234,6 @@ Se não tem nada de grau-padrão para dizer, **não diga nada**. Silêncio é um
 
 - `mentor-output` — COMO formular a mensagem uma vez que um padrão é confirmado.
 - `db-query` — internos do wrapper.
-- `feedback-query` — o leitor do feedback do utilizador na cloud (Padrão F); o Scorer consulta a mesma fonte uma posição de cada vez.
+- `feedback-query` — o leitor do feedback do utilizador na cloud (Padrão F); o Scorer usa temas agregados sanitizados apenas para posições futuras, excluindo a atual.
 - `agents/mentor/mentor.md` — prompt orquestrador + cadência.
 - `agents/_team/team-rules.md` T10 — perfil é read-only, também para o Mentor.

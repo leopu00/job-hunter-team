@@ -1,6 +1,6 @@
 ---
 name: feedback-query
-description: Read user feedback (like/dislike/hide/star) from the cloud — one position at a time, or aggregated over a window. Used by the Scorer to apply a multiplier on the final score and carry the user's reason into the note, by the Mentor to count recurring reasons (Pattern F), and by the Scout as a contextual signal. Returns a neutral "no signal" payload when cloud is disabled or unreachable, so callers never hard-fail.
+description: Read user feedback (like/dislike/hide/star) from the cloud — one position at a time, or aggregated over a window. Used by the Scorer as contextual preference evidence for future positions while excluding the current position, by the Mentor to count recurring reasons (Pattern F), and by the Scout as a contextual signal. Returns a neutral "no signal" payload when cloud is disabled or unreachable, so callers never hard-fail.
 allowed-tools: Bash(python3 *)
 ---
 
@@ -110,23 +110,7 @@ When the payload carries a closed `note` enum (`no-signal:*`), there is no aggre
 
 ## How agents use it
 
-**Scorer** (mandatory at scoring time):
-1. After computing the base score (sum of weighted components), call `feedback_query check <legacy_id>`.
-2. Apply multiplier based on `latest_action`:
-   - `like` → final_score = round(base * 1.10), add note `feedback:like+10%`
-   - `star` → final_score = round(base * 1.15), add note `feedback:star+15%`
-   - `dislike` → final_score = round(base * 0.85), add note `feedback:dislike-15%`
-   - `hide` → status=`excluded`, note `feedback:hide`, skip writing score
-   - `clear` / `null` → no change (a withdrawn judgement is not a judgement)
-3. **Carry the safe display reason into the note**, when present. Take `display_reason` (or, if empty, `display_comment`) from the **same event** as `latest_action` — `actions[0]` — and append it to the note. Never fall back to raw `reason` / `comment`:
-
-   ```
-   feedback:dislike-15% — "too senior"
-   feedback:star+15% — "exactly the stack I want"
-   ```
-
-   No text on that event → the note stays as it is. The reason belongs to **this position only**: never carry it over to another position, never turn it into a rule, never rewrite or summarise it — those are the user's words and they will read them back. Aggregating reasons across positions is the Mentor's job (Pattern F), not the Scorer's.
-4. Cap final score at 100 after multiplier.
+**Scorer — `FUTURE_FEEDBACK_ONLY`:** call `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>`. Use sanitized `label` / `examples` only as contextual preference evidence when evaluating that future position. The feedback attached to an already-voted position never changes its score, status, or notes: no fixed bonus/malus, no feedback marker, no backfill. Existing scores remain unchanged. O-70 explicit re-evaluation is a separate user-requested flow.
 
 **Mentor** (Pattern F, read-only): `themes` over the last 30 days to count the reasons the user writes. Thresholds and interpretation live in the `mentor-patterns` skill. The Mentor speaks **to the user** — never issues search instructions off the back of this data.
 

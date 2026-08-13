@@ -1,7 +1,7 @@
 <!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: feedback-query
-description: Nutzer-Feedback (like/dislike/hide/star) aus der Cloud lesen — eine Position auf einmal, oder aggregiert über ein Zeitfenster. Vom Scorer verwendet, um einen Multiplikator auf den Endscore anzuwenden und den Grund des Nutzers in die Notiz zu tragen, vom Mentor, um wiederkehrende Gründe zu zählen (Pattern F), und vom Scout als kontextuelles Signal. Gibt einen neutralen "kein Signal"-Payload zurück, wenn die Cloud deaktiviert oder nicht erreichbar ist, damit Aufrufer niemals hart fehlschlagen.
+description: Liest Nutzer-Feedback (like/dislike/hide/star) aus der Cloud — pro Position oder aggregiert über ein Zeitfenster. Der Scorer nutzt es nur als kontextuellen Präferenzhinweis für künftige Positionen und schließt die aktuelle aus; der Mentor zählt wiederkehrende Gründe (Pattern F), der Scout nutzt es als Kontextsignal. Bei nicht erreichbarer Cloud wird ein neutraler "kein Signal"-Payload zurückgegeben.
 allowed-tools: Bash(python3 *)
 ---
 
@@ -111,23 +111,7 @@ Trägt der Payload eine geschlossene `note`-Enum (`no-signal:*`), gibt es kein A
 
 ## Wie Agenten es verwenden
 
-**Scorer** (verpflichtend beim Scoring):
-1. Nach der Berechnung des Basis-Scores (Summe gewichteter Komponenten), `feedback_query check <legacy_id>` aufrufen.
-2. Multiplikator basierend auf `latest_action` anwenden:
-   - `like` → final_score = round(base * 1.10), Notiz `feedback:like+10%` hinzufügen
-   - `star` → final_score = round(base * 1.15), Notiz `feedback:star+15%` hinzufügen
-   - `dislike` → final_score = round(base * 0.85), Notiz `feedback:dislike-15%` hinzufügen
-   - `hide` → status=`excluded`, Notiz `feedback:hide`, Score-Schreiben überspringen
-   - `clear` / `null` → keine Änderung (ein zurückgezogenes Urteil ist kein Urteil)
-3. **Trage den sicheren Display-Grund in die Notiz**, wenn vorhanden. Nimm `display_reason` (oder, wenn leer, `display_comment`) aus **demselben Event** wie `latest_action` — `actions[0]` — und hänge ihn an die Notiz. Falle nie auf rohe `reason` / `comment` zurück:
-
-   ```
-   feedback:dislike-15% — "zu senior"
-   feedback:star+15% — "genau der Stack, den ich will"
-   ```
-
-   Kein Text in diesem Event → die Notiz bleibt, wie sie ist. Der Grund gilt **nur für diese Position**: übertrage ihn nie auf eine andere, mache keine Regel daraus, schreibe ihn nicht um und fasse ihn nicht zusammen — das sind die Worte des Nutzers, und der Nutzer liest sie wieder. Gründe über Positionen hinweg zu aggregieren ist Aufgabe des Mentors (Pattern F), nicht des Scorers.
-4. Endscore nach Multiplikator auf 100 begrenzen.
+**Scorer — `FUTURE_FEEDBACK_ONLY`:** rufe `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>` auf. Nutze nur sanitizte `label` / `examples` als kontextuellen Präferenzhinweis für diese künftige Position. Feedback einer bereits beurteilten Position ändert nie Score, Status oder Notizen: keine festen Boni/Mali, Feedback-Marker oder Backfills. Bestehende Scores bleiben unverändert. O-70 explizite Neubewertung ist ein separater, vom Nutzer angeforderter Ablauf.
 
 **Mentor** (Pattern F, nur lesend): `themes` über die letzten 30 Tage, um die vom Nutzer geschriebenen Gründe zu zählen. Schwellen und Deutung stehen im Skill `mentor-patterns`. Der Mentor spricht **zum Nutzer** — er erteilt aus diesen Daten niemals Suchanweisungen.
 
