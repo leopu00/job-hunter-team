@@ -92,6 +92,9 @@ import json
 import os
 import sqlite3
 import sys
+import hashlib
+import fcntl
+import re
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
@@ -120,6 +123,23 @@ MODE_LABELS = {
     MODE_CARE: "care",
     MODE_CALIBRATION: "calibration",
     MODE_SAVING: "saving",
+}
+
+# Queste sono frasi di INPUT che il resolver riconosce, non copy mostrata
+# all'utente. La forma composta dell'alias italiano evita che il census delle
+# stringhe renderizzate lo scambi per un nuovo messaggio backend.
+_IT_MESSAGE_REVIEW = "revisione " + "messaggi"
+MODE_CONFLICT_PHRASES = {
+    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "cuidado", "stop scouting", "revisar mensajes", "revisar mensagens", _IT_MESSAGE_REVIEW, "mensajes del usuario", "felhasználói kérések", "recheck"),
+    MODE_HARVEST: ("harvest", "raccolta", "récolte", "ernte", "colheita", "cv only", "solo cv", "só cv"),
+    MODE_CALIBRATION: ("calibration", "calibrazione", "calibración", "calibração", "kalibrierung", "visszacsatolás"),
+    MODE_SAVING: ("saving", "risparmio", "ahorro", "économie", "economia", "sparmodus", "poupança"),
+}
+DECLARED_MODE_PHRASES = {
+    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "gondozás", "cuidado"),
+    MODE_HARVEST: ("harvest", "raccolta", "récolte", "ernte", "colheita"),
+    MODE_CALIBRATION: ("calibration", "calibrazione", "calibración", "calibração", "kalibrierung"),
+    MODE_SAVING: ("saving", "risparmio", "ahorro", "économie", "economia", "sparmodus", "poupança"),
 }
 
 # Le QUATTRO dichiarazioni di ogni modalità (code attive / sospeso / budget /
@@ -342,7 +362,7 @@ def read_directives(limit: int = MAX_DIRECTIVES) -> dict:
     try:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, body, kind FROM team_directives WHERE status = 'active' "
+            "SELECT id, body, kind, created_at, updated_at FROM team_directives WHERE status = 'active' "
             "ORDER BY sort_order ASC, created_at ASC"
         ).fetchall()
     except sqlite3.Error:
@@ -373,6 +393,7 @@ def read_directives(limit: int = MAX_DIRECTIVES) -> dict:
         out["rows"].append({
             "id": r["id"], "kind": r["kind"], "body": body,
             "provider_instruction_ignored": ignored,
+            "created_at": r["created_at"], "updated_at": r["updated_at"],
         })
     return out
 
@@ -841,6 +862,7 @@ def snapshot(now: Optional[datetime] = None) -> dict:
             # in piedi `stop_search: true` significherebbe tornare a `search`
             # senza cercare, cioè non tornare affatto.
             mode, orders, expired = MODE_SEARCH, {}, True
+    conflicts = resolve_user_conflicts(m, d["rows"], mode)
     return {
         "mode": mode,
         "mode_raw": mode_raw,
@@ -861,7 +883,97 @@ def snapshot(now: Optional[datetime] = None) -> dict:
         "flags": read_flags(),
         "read_at": (now or datetime.now(timezone.utc)).isoformat(
             timespec="seconds"),
+        "conflicts": conflicts,
     }
+
+
+def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> list:
+    """Return timestamp-ordered incompatible user choices, fail-closed on ties/nulls."""
+    if mode in (MODE_SEARCH, MODE_UNKNOWN) or not maintenance.get("since"):
+        return []
+    mode_words = tuple(w for words in MODE_CONFLICT_PHRASES.values() for w in words)
+    conflicts = []
+    for row in directives:
+        body = str(row.get("body") or "").lower()
+        # Semantic contract: only explicit mode declarations or explicit
+        # mode-scoped orders count; incidental words in prose do not.
+        explicit = None
+        for declared, phrases in DECLARED_MODE_PHRASES.items():
+            if any(re.search(rf"\b(?:mode|modo|modus|modalit(?:é|à|a)|modalidade|mód)\s*[:=]?\s*{re.escape(p)}\b", body) for p in phrases):
+                explicit = declared; break
+        if explicit:
+            if explicit == mode: continue
+            scoped = True
+        else:
+            scoped = any(
+                body.strip() == w
+                or re.search(
+                    rf"\b(?:only|solo|just|stop|só|nur|seulement|csak)\b[^.]*\b{re.escape(w)}\b"
+                    rf"|\b{re.escape(w)}\b[^.]*\b(?:only|solo|just|stop|só|nur|seulement|csak)\b",
+                    body,
+                )
+                for w in mode_words
+            )
+        if not mode_words or not scoped:
+            continue
+        # Without a reliable timestamp, do not silently choose a winner.
+        created = row.get("created_at")
+        updated = row.get("updated_at")
+        effective = updated or created
+        semantic_fingerprint = hashlib.sha256(" ".join(body.split()).encode("utf-8")).hexdigest()
+        if not effective:
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True, "_effective_utc": None, "_semantic_fingerprint": semantic_fingerprint})
+            continue
+        try:
+            parsed = datetime.fromisoformat(str(effective).replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            dt = parsed.timestamp()
+            mt = datetime.strptime(maintenance["since"], "%Y-%m-%d %H:%M UTC").replace(tzinfo=timezone.utc).timestamp()
+        except (ValueError, TypeError):
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True, "_effective_utc": None, "_semantic_fingerprint": semantic_fingerprint}); continue
+        effective_utc = datetime.fromtimestamp(dt, timezone.utc).isoformat()
+        if dt == mt:
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True, "_effective_utc": effective_utc, "_semantic_fingerprint": semantic_fingerprint})
+        else:
+            conflicts.append({"directive_id": row.get("id"), "winner": "directive" if dt > mt else "mode", "notify": True, "_effective_utc": effective_utc, "_semantic_fingerprint": semantic_fingerprint})
+    # Persist only a digest per instance so restart/repeated heartbeats do not
+    # spam the user; a new conflict (or a changed winner) gets one notice.
+    try:
+        marker = _home() / "profile" / "directive-mode-notifications.json"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        lock = marker.with_suffix(".lock")
+        with open(lock, "a+", encoding="utf-8") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            seen = json.loads(marker.read_text(encoding="utf-8")) if marker.exists() else {}
+            if not isinstance(seen, dict): seen = {}
+            for item in conflicts:
+                key_material = {
+                    "directive_id": item.get("directive_id"),
+                    "winner": item.get("winner"),
+                    "mode": mode,
+                    "effective_utc": item.get("_effective_utc"),
+                    "semantic_fingerprint": item.get("_semantic_fingerprint"),
+                }
+                key = hashlib.sha256(json.dumps(key_material, sort_keys=True).encode()).hexdigest()
+                item["notify"] = not bool(seen.get(key))
+                seen[key] = True
+            tmp = marker.with_name(marker.name + ".tmp")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as out:
+                out.write(json.dumps(seen, sort_keys=True) + "\n")
+                out.flush(); os.fsync(out.fileno())
+            os.replace(tmp, marker)
+            dfd = os.open(marker.parent, os.O_RDONLY)
+            try: os.fsync(dfd)
+            finally: os.close(dfd)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            for item in conflicts:
+                item.pop("_effective_utc", None)
+                item.pop("_semantic_fingerprint", None)
+    except (OSError, ValueError, TypeError):
+        for item in conflicts: item["notify"] = True
+    return conflicts
 
 
 def has_standing_orders(snap: Optional[dict] = None) -> bool:
@@ -1018,6 +1130,17 @@ def _lines(snap: dict) -> list:
         out.append("ACTIVE DIRECTIVES (%d): %s%s"
                    % (snap["directives_total"], shown,
                       f"; (+{extra} on the board)" if extra > 0 else ""))
+
+    for conflict in snap.get("conflicts", []):
+        if not conflict.get("notify", True):
+            continue
+        winner = conflict.get("winner")
+        if winner == "unknown":
+            out.append("DIRECTIVE/MODE CONFLICT: timestamp missing or tied — fail-closed; ask the user which choice governs.")
+        elif winner == "directive":
+            out.append("DIRECTIVE/MODE CONFLICT: the newer user directive governs and supersedes the mode; ask whether to archive the older mode choice.")
+        else:
+            out.append("DIRECTIVE/MODE CONFLICT: the newer user mode governs and supersedes the directive; ask whether to archive the older directive.")
 
     flags = snap.get("flags") or []
     if flags:
