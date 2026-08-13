@@ -101,13 +101,12 @@ export async function POST(req: NextRequest) {
     );
     return NextResponse.json({ ok: true, removed: outcome.removed });
   } catch (err) {
-    // La RPC PostgreSQL fa rollback integrale; Storage è però un sistema
-    // esterno e viene svuotato prima, quindi un suo effetto già verificato
-    // non è reversibile se il database fallisce dopo. Va detto com'è, non
-    // mascherato da successo. Ciò che esce è un CODICE STABILE e la fase,
-    // mai un messaggio libero: quello dello storage conterrebbe nomi di file
-    // scelti dall'utente, quello di Postgres può riportare il valore che ha
-    // violato un vincolo. Vale per client e log allo stesso modo.
+    // La RPC PostgreSQL è il primo effetto: se manca o fallisce, Storage non
+    // viene toccato. Dopo un ACK DB, però, il cleanup Storage resta un sistema
+    // esterno e può fallire: va detto com'è, non mascherato da successo. Ciò
+    // che esce è un CODICE STABILE e la fase, mai un messaggio libero: quello
+    // dello storage conterrebbe nomi di file scelti dall'utente, quello di
+    // Postgres può riportare il valore che ha violato un vincolo.
     const known = err instanceof DeletionError;
     const code = known ? err.code : "unknown_error";
     const stage = known ? err.stage : "unknown";
