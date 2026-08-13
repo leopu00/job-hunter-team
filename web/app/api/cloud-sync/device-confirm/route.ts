@@ -123,6 +123,16 @@ export async function POST(req: NextRequest) {
       { status: 404 },
     );
   }
+  const recordPairingFailure = async () => {
+    // The RPC is deliberately fail-closed and returns only counters/booleans;
+    // its database errors never cross this route's response boundary.
+    await admin
+      .rpc("record_pairing_failure", {
+        p_device_code: session.device_code,
+        p_user_id: user.id,
+      })
+      .catch(() => undefined);
+  };
   if (new Date(session.expires_at).getTime() < Date.now()) {
     await admin
       .from("cloud_sync_pairing_sessions")
@@ -151,6 +161,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (tokenErr) {
+    await recordPairingFailure();
     return sanitizedError(tokenErr, {
       status: 500,
       scope: "cloud-sync/device-confirm",
@@ -175,6 +186,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (approveErr) {
+    await recordPairingFailure();
     // Rollback del token che abbiamo gia' inserito
     await admin
       .from("cloud_sync_tokens")
