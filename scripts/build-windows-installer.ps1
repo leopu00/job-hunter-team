@@ -127,7 +127,7 @@ if ($Smoke) {
       } else { '' }
       $sourceMatches = @($sourceOutput -split "`r?`n" | Where-Object { $_ -ceq $expectedCensus })
       if ($sourceProbe.ExitCode -ne 0 -or $sourceMatches.Count -ne 1) {
-        throw 'Exported PCK instance guard census mismatch.'
+        throw "Exported PCK instance guard census mismatch: exit=$($sourceProbe.ExitCode) count=$($sourceMatches.Count)."
       }
       Start-Sleep -Milliseconds 500
 
