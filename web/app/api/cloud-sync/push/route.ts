@@ -1207,26 +1207,49 @@ export async function POST(req: NextRequest) {
       }
       pendingMessagesUpserted =
         typeof upsertedCount === "number" ? upsertedCount : payload.length;
-      const { data: persisted, error: receiptError } = await admin
-        .from("pending_user_messages")
-        .select("legacy_id")
-        .eq("user_id", userId)
-        .in(
-          "legacy_id",
-          payload.map((message) => message.legacy_id),
-        );
-      if (receiptError) {
-        return sanitizedError(receiptError, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "pending_user_messages_receipt_failed",
-        });
-      }
-      for (const row of persisted ?? []) {
-        if (row.legacy_id != null) {
-          rowReceipts.pending_user_messages.push(
-            sourceReceiptId("pending_user_messages", row.legacy_id),
+      if (pendingMessagesUpserted !== payload.length) {
+        // The client will bisect this explicit partial receipt. Do not let
+        // pre-existing rows turn a short RPC result into a false ACK.
+        pendingMessagesUpserted = Math.max(0, pendingMessagesUpserted);
+      } else {
+        const { data: persisted, error: receiptError } = await admin
+          .from("pending_user_messages")
+          .select(
+            "legacy_id,agent,body,kind,author,chat_ts,related_position_id,delivered_via,delivered_at,agent_seen_reply_at",
+          )
+          .eq("user_id", userId)
+          .in(
+            "legacy_id",
+            payload.map((message) => message.legacy_id),
           );
+        if (receiptError) {
+          return sanitizedError(receiptError, {
+            status: 500,
+            scope: "cloud-sync/push",
+            publicMessage: "pending_user_messages_receipt_failed",
+          });
+        }
+        const expectedById = new Map(
+          payload.map((message) => [message.legacy_id, message]),
+        );
+        for (const row of persisted ?? []) {
+          const expected = expectedById.get(row.legacy_id);
+          if (
+            expected &&
+            row.agent === expected.agent &&
+            row.body === expected.body &&
+            row.kind === expected.kind &&
+            row.author === expected.author &&
+            row.chat_ts === expected.chat_ts &&
+            row.related_position_id === expected.related_position_id &&
+            row.delivered_via === expected.delivered_via &&
+            row.delivered_at === expected.delivered_at &&
+            row.agent_seen_reply_at === expected.agent_seen_reply_at
+          ) {
+            rowReceipts.pending_user_messages.push(
+              sourceReceiptId("pending_user_messages", row.legacy_id),
+            );
+          }
         }
       }
     }

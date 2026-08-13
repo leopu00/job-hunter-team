@@ -17,6 +17,8 @@ let applicationReceipts: unknown[] | null = null;
 let selectedPositions: { id: string; legacy_id: number }[] = [];
 let scorePersistedParents: string[] | null = null;
 let scorePersistedLegacyOverride: number | null = null;
+let pendingPersistedRows: any[] = [];
+let pendingRpcCountOverride: number | null = null;
 
 function fakeAdmin() {
   return {
@@ -95,8 +97,10 @@ function fakeAdmin() {
                             ? [{ position_id: equalFilters.get("position_id") }]
                             : operation === "select" &&
                                 table === "pending_user_messages"
-                              ? (inFilters.get("legacy_id") ?? []).map(
-                                  (legacy_id) => ({ legacy_id }),
+                              ? pendingPersistedRows.filter((row) =>
+                                  (inFilters.get("legacy_id") ?? []).includes(
+                                    row.legacy_id,
+                                  ),
                                 )
                               : operation === "select" && table === "positions"
                                 ? selectedPositions
@@ -125,6 +129,13 @@ function fakeAdmin() {
             args.p_applications.map(
               (application: any) => application._receipt_id,
             ),
+          error: null,
+        };
+      }
+      if (name === "upsert_pending_user_messages_merge") {
+        pendingPersistedRows = args.p_rows.map((row: any) => ({ ...row }));
+        return {
+          data: pendingRpcCountOverride ?? args.p_rows.length,
           error: null,
         };
       }
@@ -212,6 +223,8 @@ beforeEach(() => {
   selectedPositions = [{ id: "position-uuid-73", legacy_id: 73 }];
   scorePersistedParents = null;
   scorePersistedLegacyOverride = null;
+  pendingPersistedRows = [];
+  pendingRpcCountOverride = null;
   admin = fakeAdmin();
 });
 
@@ -286,6 +299,21 @@ describe("push sync di una candidatura", () => {
         ],
         tombstones: [receiptId("tombstones", ["positions", 73, deletedAt])],
       },
+    });
+  });
+
+  it("non trasforma un count parziale pending in receipt di righe preesistenti", async () => {
+    pendingRpcCountOverride = 1;
+    const response = await pushBody({
+      pending_user_messages: [
+        { id: 11, agent: "SCOUT", body: "Synthetic first" },
+        { id: 12, agent: "SCOUT", body: "Synthetic second" },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: { pending_user_messages: [] },
     });
   });
 
