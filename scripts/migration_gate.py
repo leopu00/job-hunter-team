@@ -48,6 +48,108 @@ LEGACY_REPLAY_EXCEPTIONS = {
     "018": ("c42783f0c750c386929d19cc00ca7d33a480a510", "025"),
 }
 
+# Replay-only equivalent of migration 018 for a fresh PostgreSQL 16 build.
+# The published file's text-based sanity check does not understand PG16's
+# ``AS uid`` deparse alias, so the immutable historical blob cannot execute.
+# This private disposable-DB patch runs at the same point in the sequence,
+# records the exact pre-018 policy identities, and requires all 40 historical
+# policies to be rewritten. It is never sent to a linked database.
+LEGACY_018_REPLAY_SQL = rb"""
+CREATE SCHEMA jht_migration_gate;
+CREATE TABLE jht_migration_gate.pre018_policies (
+  schemaname text NOT NULL,
+  tablename text NOT NULL,
+  policyname text NOT NULL,
+  PRIMARY KEY (schemaname, tablename, policyname)
+);
+
+INSERT INTO jht_migration_gate.pre018_policies
+SELECT n.nspname, c.relname, p.polname
+  FROM pg_policy p
+  JOIN pg_class c ON p.polrelid = c.oid
+  JOIN pg_namespace n ON c.relnamespace = n.oid
+ WHERE n.nspname = 'public'
+   AND (
+     COALESCE(pg_get_expr(p.polqual, c.oid), '') ~* '\mauth\.uid\(\)'
+     OR COALESCE(pg_get_expr(p.polwithcheck, c.oid), '') ~* '\mauth\.uid\(\)'
+   );
+
+DO $$
+DECLARE
+  pol record;
+  new_using text;
+  new_check text;
+  alter_sql text;
+  fixed_count integer := 0;
+BEGIN
+  FOR pol IN
+    SELECT n.nspname AS schemaname,
+           c.relname AS tablename,
+           p.polname AS policyname,
+           pg_get_expr(p.polqual, c.oid) AS qual,
+           pg_get_expr(p.polwithcheck, c.oid) AS with_check
+      FROM pg_policy p
+      JOIN pg_class c ON p.polrelid = c.oid
+      JOIN pg_namespace n ON c.relnamespace = n.oid
+      JOIN jht_migration_gate.pre018_policies expected
+        ON expected.schemaname = n.nspname
+       AND expected.tablename = c.relname
+       AND expected.policyname = p.polname
+  LOOP
+    new_using := regexp_replace(
+      COALESCE(pol.qual, ''), '\mauth\.uid\(\)', '(select auth.uid())', 'g'
+    );
+    new_check := regexp_replace(
+      COALESCE(pol.with_check, ''), '\mauth\.uid\(\)', '(select auth.uid())', 'g'
+    );
+    alter_sql := format(
+      'ALTER POLICY %I ON %I.%I',
+      pol.policyname, pol.schemaname, pol.tablename
+    );
+    IF pol.qual IS NOT NULL AND pol.qual <> '' THEN
+      alter_sql := alter_sql || format(' USING (%s)', new_using);
+    END IF;
+    IF pol.with_check IS NOT NULL AND pol.with_check <> '' THEN
+      alter_sql := alter_sql || format(' WITH CHECK (%s)', new_check);
+    END IF;
+    EXECUTE alter_sql;
+    fixed_count := fixed_count + 1;
+  END LOOP;
+  IF fixed_count <> 40 THEN
+    RAISE EXCEPTION 'unexpected pre-018 policy census';
+  END IF;
+END $$;
+"""
+
+LEGACY_018_VERIFY_SQL = rb"""
+WITH surviving AS (
+  SELECT pg_get_expr(p.polqual, c.oid) AS qual,
+         pg_get_expr(p.polwithcheck, c.oid) AS with_check
+    FROM jht_migration_gate.pre018_policies expected
+    JOIN pg_namespace n ON n.nspname = expected.schemaname
+    JOIN pg_class c ON c.relnamespace = n.oid
+                   AND c.relname = expected.tablename
+    JOIN pg_policy p ON p.polrelid = c.oid
+                    AND p.polname = expected.policyname
+), without_cached_calls AS (
+  SELECT regexp_replace(
+           COALESCE(qual, ''),
+           '\(\s*select\s+auth\.uid\(\)(\s+as\s+[a-z_][a-z0-9_]*)?\s*\)',
+           '', 'gi'
+         ) AS qual,
+         regexp_replace(
+           COALESCE(with_check, ''),
+           '\(\s*select\s+auth\.uid\(\)(\s+as\s+[a-z_][a-z0-9_]*)?\s*\)',
+           '', 'gi'
+         ) AS with_check
+    FROM surviving
+)
+SELECT count(*)
+  FROM without_cached_calls
+ WHERE qual ~* '\mauth\.uid\(\)'
+    OR with_check ~* '\mauth\.uid\(\)';
+"""
+
 
 @dataclass(frozen=True)
 class Migration:
@@ -810,6 +912,7 @@ def command_pg16(args: argparse.Namespace) -> int:
             return emit_issues("pg16", [Issue("database_create_failed", "local")])
         apply_issue: Issue | None = None
         applied = 0
+        legacy_018_replayed = False
         try:
             if _psql(target_url, BOOTSTRAP_SQL).returncode:
                 apply_issue = Issue("bootstrap_failed", "local")
@@ -830,6 +933,16 @@ def command_pg16(args: argparse.Namespace) -> int:
                                 (migration.oid,),
                             )
                             break
+                        if migration.version == "018":
+                            if _psql(target_url, LEGACY_018_REPLAY_SQL).returncode:
+                                apply_issue = Issue(
+                                    "legacy_replay_failed",
+                                    "BASE",
+                                    migration.version,
+                                    (migration.oid,),
+                                )
+                                break
+                            legacy_018_replayed = True
                         continue
                     if _psql(target_url, _blob(repo, migration)).returncode:
                         apply_issue = Issue(
@@ -851,6 +964,15 @@ def command_pg16(args: argparse.Namespace) -> int:
                             break
                         if not migration.is_anchor:
                             applied += 1
+                if apply_issue is None and legacy_018_replayed:
+                    verification = _psql(target_url, LEGACY_018_VERIFY_SQL, tuples=True)
+                    if verification.returncode or verification.stdout.strip() != b"0":
+                        apply_issue = Issue(
+                            "legacy_effect_missing",
+                            "BASE",
+                            "018",
+                            (base_versions["018"].oid,),
+                        )
         finally:
             dropped = _psql(
                 admin_url,

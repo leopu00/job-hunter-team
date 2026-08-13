@@ -474,6 +474,35 @@ def test_real_project_history_builds_before_a_new_migration_on_pg16(
     assert f"base={len(current)} new=1 anchors=0 applied=1" in output
 
 
+def test_pg16_full_history_rejects_skipping_the_pinned_018_effect(
+    tmp_path: Path, postgres16_url: str, monkeypatch, capsys
+):
+    repo = tmp_path / "full-history-without-018-effect"
+    directory = repo / "supabase/migrations"
+    directory.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", repo], check=True)
+    current = sorted((ROOT / "supabase/migrations").glob("[0-9][0-9][0-9]_*.sql"))
+    for source in current:
+        (directory / source.name).write_bytes(source.read_bytes())
+    base = _commit(repo, "real base")
+    next_number = int(current[-1].name[:3]) + 1
+    (directory / f"{next_number:03d}_gate_probe.sql").write_text(
+        "SELECT 1;\n", encoding="utf-8"
+    )
+    head = _commit(repo, "probe migration")
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", postgres16_url)
+    # Reproduce the old gate's skip-only exception while preserving the
+    # immutable 018 blob and every other part of the full-history replay.
+    monkeypatch.setattr(gate, "LEGACY_018_REPLAY_SQL", b"")
+
+    result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
+
+    assert result == 1
+    output = capsys.readouterr().out
+    assert "legacy_effect_missing" in output
+    assert "base_apply_failed" not in output
+
+
 def test_pg16_executes_manifested_anchor_without_counting_it_as_ddl(
     tmp_path: Path, postgres16_url: str, monkeypatch, capsys
 ):
