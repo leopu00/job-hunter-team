@@ -147,6 +147,16 @@ function pushPending(relatedPositionId: number) {
   );
 }
 
+function pushBody(body: Record<string, unknown>) {
+  return POST(
+    new Request("http://localhost/api/cloud-sync/push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }) as any,
+  );
+}
+
 beforeEach(() => {
   calls = [];
   rpcError = null;
@@ -263,5 +273,55 @@ describe("push sync di una candidatura", () => {
           call.kind === "rpc" && call.name === "upsert_pending_user_messages_merge",
       ),
     ).toBe(false);
+  });
+
+  it("dichiara zero ACK per ogni figlio privo del mapping parent", async () => {
+    positionLookupRows = [];
+    const response = await pushBody({
+      applications: [{ position_id: 404, status: "draft" }],
+      scores: [{ position_id: 404, total_score: 80 }],
+      position_highlights: [
+        { id: 7, position_id: 404, type: "pro", text: "Synthetic benefit" },
+      ],
+      pending_user_messages: [
+        {
+          id: 91,
+          agent: "SCOUT",
+          body: "Synthetic notification",
+          related_position_id: 404,
+        },
+      ],
+    });
+
+    await expect(response.json()).resolves.toMatchObject({
+      accepted: {
+        applications: 0,
+        scores: 0,
+        position_highlights: 0,
+        pending_user_messages: 0,
+      },
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("rende esplicita una accettazione parziale invece di confermare il batch", async () => {
+    positionLookupRows = [{ id: "position-uuid-73", legacy_id: 73 }];
+    const response = await pushBody({
+      scores: [
+        { position_id: 73, total_score: 81 },
+        { position_id: 404, total_score: 82 },
+      ],
+    });
+
+    await expect(response.json()).resolves.toMatchObject({
+      accepted: { scores: 1 },
+    });
+    const write = calls.find(
+      (call) => call.kind === "upsert" && call.table === "scores",
+    );
+    expect(write?.payload).toHaveLength(1);
+    expect(write?.payload[0]).toMatchObject({
+      position_id: "position-uuid-73",
+    });
   });
 });
