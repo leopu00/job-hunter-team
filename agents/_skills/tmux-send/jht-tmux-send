@@ -285,20 +285,28 @@ submit_tries="${JHT_TMUX_SUBMIT_TRIES:-3}"
 attempts=3
 for try in $(seq 1 "$attempts"); do
   pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
+  busy_typed=0
 
   # Busy non e' un prerequisito per digitare: accoda subito e non droppa.
   if _pane_busy "$pane"; then
     tmux send-keys -t "$session" -l "$message"
-    tmux send-keys -t "$session" Enter
-    if [ "$provider" = "kimi" ]; then
-      sleep 0.2; tmux send-keys -t "$session" C-s
-    fi
-    _record_stuck
-    echo "jht-tmux-send: $session queued/delivery unverified (pane busy)" >&2
-    exit 6
+    sleep 1
+    pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
+    case "$pane" in
+      *"$signature_tail"*|*"$signature_head"*|*"Pasted text"*|*"Pasted Content"*)
+        busy_typed=1
+        ;;
+      *)
+        _record_stuck
+        echo "jht-tmux-send: $session queued/delivery unverified (pane busy)" >&2
+        exit 6
+        ;;
+    esac
   fi
 
-  tmux send-keys -t "$session" -l "$message"
+  if [ "$busy_typed" -eq 0 ]; then
+    tmux send-keys -t "$session" -l "$message"
+  fi
   sleep 1
   pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
   # Che cosa cercare nel composer per sapere se il testo e' ancora li'. Il

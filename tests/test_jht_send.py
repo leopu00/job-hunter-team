@@ -63,3 +63,4 @@ def test_tmux_sender_queues_busy_without_wait_drop() -> None:
     assert 'queued/delivery unverified' in src
     assert 'exit 6' in src
     assert 'while [ "$waited" -lt "$busy_budget" ]' not in src
+    assert 'busy_typed=1' in src
