@@ -81,3 +81,6 @@ Types standards (voir `agents/_manual/communication-rules.md` pour la taxonomie 
 - **JAMAIS** terminer la session tmux d'un autre agent (regle #0 du Capitaine).
 - Si `tmux ls` montre que la session cible n'existe pas, **ne la creez pas** — demandez au Capitaine (ou utilisez `start-agent.sh` si vous *etes* le Capitaine).
 - Par defaut, utilisez la **coordination via DB** pour les transferts de pipeline (Scout→Analyst→Scorer→Writer) ; utilisez ce skill uniquement pour les signaux en temps reel listes ci-dessus. Voir `agents/_manual/communication-rules.md`.
+# Communication pendant un tour occupé
+
+Le message est mis en file immédiatement. Si la livraison est invérifiable, le résultat est `queued/delivery unverified` (exit 6) avec une file durable. Ne jamais supprimer ni dupliquer lors d'un nouvel essai.

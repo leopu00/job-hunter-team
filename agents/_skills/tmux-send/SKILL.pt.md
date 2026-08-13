@@ -81,3 +81,6 @@ Tipos padrao (veja `agents/_manual/communication-rules.md` para a taxonomia comp
 - **NUNCA** encerre a sessao tmux de outro agente (regra #0 do Capitao).
 - Se `tmux ls` mostrar que a sessao de destino nao existe, **nao a crie** — pergunte ao Capitao (ou use `start-agent.sh` se voce *for* o Capitao).
 - Por padrao, use a **coordenacao via DB** para as transferencias de pipeline (Scout→Analyst→Scorer→Writer); use este skill apenas para os sinais em tempo real listados acima. Veja `agents/_manual/communication-rules.md`.
+# Comunicação durante um turno ocupado
+
+A mensagem é colocada na fila imediatamente. Se a entrega não puder ser verificada, o resultado é `queued/delivery unverified` (exit 6) com fila durável. Nunca descartar nem duplicar ao repetir.
