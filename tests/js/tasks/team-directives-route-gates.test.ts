@@ -41,6 +41,12 @@ describe("team directive route deployment and identity gates", () => {
     expect(route).toContain("DESKTOP_DB_PATH");
     expect(route).not.toContain('"databases", "jobs.db"');
 
+    const desktopPackage = JSON.parse(
+      read("desktop/app-payload/web/package.json"),
+    );
+    expect(desktopPackage.scripts.dev).toContain("-H 127.0.0.1");
+    expect(desktopPackage.scripts.start).toContain("-H 127.0.0.1");
+
     for (const launcher of [
       "desktop/app-payload/scripts/launchers/start-mac.sh",
       "desktop/app-payload/scripts/launchers/start-linux.sh",
