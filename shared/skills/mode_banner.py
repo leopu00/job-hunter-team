@@ -131,6 +131,12 @@ MODE_CONFLICT_PHRASES = {
     MODE_CALIBRATION: ("calibration", "calibrazione", "calibración", "calibração", "kalibrierung", "visszacsatolás"),
     MODE_SAVING: ("saving", "risparmio", "ahorro", "économie", "economia", "sparmodus", "poupança"),
 }
+DECLARED_MODE_PHRASES = {
+    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "cuidado"),
+    MODE_HARVEST: ("harvest", "raccolta", "récolte", "ernte", "colheita"),
+    MODE_CALIBRATION: ("calibration", "calibrazione", "calibración", "calibração", "kalibrierung"),
+    MODE_SAVING: ("saving", "risparmio", "ahorro", "économie", "economia", "sparmodus", "poupança"),
+}
 
 # Le QUATTRO dichiarazioni di ogni modalità (code attive / sospeso / budget /
 # uscita) in forma compatta: è la specifica che il battito orario trasmette.
@@ -887,9 +893,24 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
         body = str(row.get("body") or "").lower()
         # Semantic contract: only explicit mode declarations or explicit
         # mode-scoped orders count; incidental words in prose do not.
-        explicit = re.search(r"(?:mode|modalit(?:à|a))\s*[:=]?\s*(search|harvest|care|maintenance|calibration|saving)", body)
-        scoped = any(re.search(rf"\b(?:only|solo|just|stop)\b[^.]*\b{re.escape(w)}\b|\b{re.escape(w)}\b[^.]*\b(?:only|solo|just|stop)\b|^\s*{re.escape(w)}\s*$|{re.escape(w)}", body) for w in mode_words)
-        if not mode_words or (not explicit and not scoped):
+        explicit = None
+        for declared, phrases in DECLARED_MODE_PHRASES.items():
+            if any(re.search(rf"\b(?:mode|modo|modalit(?:à|a)|modalidade)\s*[:=]?\s*{re.escape(p)}\b", body) for p in phrases):
+                explicit = declared; break
+        if explicit:
+            if explicit == mode: continue
+            scoped = True
+        else:
+            scoped = any(
+                body.strip() == w
+                or re.search(
+                    rf"\b(?:only|solo|just|stop|só|nur)\b[^.]*\b{re.escape(w)}\b"
+                    rf"|\b{re.escape(w)}\b[^.]*\b(?:only|solo|just|stop|só|nur)\b",
+                    body,
+                )
+                for w in mode_words
+            )
+        if not mode_words or not scoped:
             continue
         # Without a reliable timestamp, do not silently choose a winner.
         created = row.get("created_at")
