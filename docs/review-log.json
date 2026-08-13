@@ -1559,6 +1559,11 @@
       "path": "agents/_skills/cloud-push-quarantine/SKILL.md",
       "description": "Il Mantenitore diagnostica e risolve gli elementi che il cloud ha messo in quarantena senza fermare il resto del convoglio, preservando identita', motivi sanificati e retry espliciti.",
       "last_review": null
+    },
+    {
+      "path": "docs/security/07-auth-posture-remediation.md",
+      "description": "Runbook fail-closed per verificare e correggere la postura Supabase Auth senza esporre token o dettagli sensibili",
+      "last_review": null
     }
   ]
 }

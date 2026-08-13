@@ -15,6 +15,9 @@ on:
   schedule:
     - cron: "17 6 * * *"
 
+permissions:
+  contents: read
+
 jobs:
   # Suite vitest completa — l'UNICO posto in cui gira. Fino al 2026-07-26 il
   # job viveva anche in ci.yml (stesso trigger, stesso codice, due esecuzioni)
