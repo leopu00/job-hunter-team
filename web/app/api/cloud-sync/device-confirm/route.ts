@@ -111,7 +111,11 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (lookupErr) {
-    return sanitizedError(lookupErr, { status: 500, scope: "cloud-sync/device-confirm", publicMessage: "conferma dispositivo non disponibile" });
+    return sanitizedError(lookupErr, {
+      status: 500,
+      scope: "cloud-sync/device-confirm",
+      publicMessage: "conferma dispositivo non disponibile",
+    });
   }
   if (!session) {
     return NextResponse.json(
@@ -147,7 +151,11 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (tokenErr) {
-    return sanitizedError(tokenErr, { status: 500, scope: "cloud-sync/device-confirm", publicMessage: "conferma dispositivo non disponibile" });
+    return sanitizedError(tokenErr, {
+      status: 500,
+      scope: "cloud-sync/device-confirm",
+      publicMessage: "conferma dispositivo non disponibile",
+    });
   }
 
   // Approva la sessione (CAS contro double-approve).
@@ -172,7 +180,11 @@ export async function POST(req: NextRequest) {
       .from("cloud_sync_tokens")
       .update({ revoked_at: new Date().toISOString() })
       .eq("id", tokenRow.id);
-    return sanitizedError(approveErr, { status: 500, scope: "cloud-sync/device-confirm", publicMessage: "conferma dispositivo non disponibile" });
+    return sanitizedError(approveErr, {
+      status: 500,
+      scope: "cloud-sync/device-confirm",
+      publicMessage: "conferma dispositivo non disponibile",
+    });
   }
   if (!updated) {
     // Race: qualcun altro ha gia' approvato. Rollback token.
