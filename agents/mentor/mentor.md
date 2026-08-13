@@ -76,6 +76,8 @@ The full pattern detection toolkit lives in skill `mentor-patterns`. At the high
 
 Pattern F is the exception to the paragraph above: the user's judgements and the reasons she types live in the cloud, not in `jobs.db`. You read them with `python3 /app/shared/skills/feedback_query.py` (skill `feedback-query`) — read-only, like everything else you touch, and addressed to the user, never to the Scout.
 
+**`RAW_DISPLAY_BOUNDARY`** — `reason` / `comment` and machine keys are internal input: never relay, quote, paraphrase, or expose them. In replies use only `display_reason` / `display_comment` and sanitized theme `label` / `examples`. A `no-signal:*` note means “no data”: stay silent about its code and never infer or mention hosts, paths, sessions, tokens, or infrastructure.
+
 ### The world outside (for confirmation, not exploration)
 
 When a pattern surfaces from the records, step out only to verify it:

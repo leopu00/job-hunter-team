@@ -5,6 +5,10 @@ description: Ler feedback do utilizador (like/dislike/hide/star) a partir da clo
 allowed-tools: Bash(python3 *)
 ---
 
+## Fronteira raw/display (`RAW_DISPLAY_BOUNDARY`)
+
+`reason` e `comment` são input raw apenas para a máquina. Nunca os cites, retransmitas, resumas ou mostres ao utilizador. Toda nota ou mensagem user-facing deve usar somente `display_reason` / `display_comment`; `label` / `examples` dos temas já passaram pelo mesmo sanitizer partilhado. Uma `note` é apenas um enum fechado `no-signal:*`: trata-a como estado de disponibilidade, nunca como detalhe de infraestrutura.
+
 # feedback-query — Feedback do utilizador por posição
 
 O utilizador pode clicar like/dislike/hide/star em qualquer posição a partir do dashboard web. Esses cliques são armazenados no Supabase `position_feedback` (mig 019 base + mig 028 extendida) e expostos aos agentes via esta skill. Schema:
@@ -39,9 +43,11 @@ Output (JSON em stdout):
   "actions": [
     {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
      "reason": "too senior", "comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
+     "display_reason": "too senior", "display_comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
      "score": 2, "direction": "less_like_this"},
     {"action": "like", "created_at": "2026-05-28T09:00:00Z",
-     "reason": null, "comment": null, "score": null, "direction": null}
+     "reason": null, "comment": null, "display_reason": null,
+     "display_comment": null, "score": null, "direction": null}
   ]
 }
 ```
@@ -58,7 +64,7 @@ Quando a cloud está desativada ou o endpoint inalcançável, a skill retorna:
 ```json
 {"ok": true, "legacy_id": "...", "latest_action": null,
  "latest_direction": null, "count": 0, "actions": [],
- "note": "no-signal (cloud-disabled)"}
+ "note": "no-signal:cloud-disabled"}
 ```
 
 ## Leitura agregada (janela sobre todas as posições)
@@ -93,7 +99,7 @@ Saída de `themes`:
 Como funciona o agrupamento (nenhuma correspondência exata exigida, nenhuma dependência nova): minúsculas → acentos fora → pontuação fora → palavras funcionais fora → cada palavra cortada aos primeiros 5 caracteres (`senior` / `seniority` / `seniore` / `séniorité` caem numa só chave) → contam-se palavras isoladas e **pares adjacentes**, por **posições distintas**, não por eventos. Um par absorve as suas partes quando cobre ≥ 80% das mesmas posições, por isso "demasiado senior" ganha a "senior"; os intensificadores ficam no fluxo de propósito. `reason` e `comment` são tokenizados em separado, portanto nenhum par é inventado a cavalo dos dois.
 
 Limites deliberados, declarados para que ninguém leia nos números mais do que lá está:
-- Sinónimos distantes ficam separados (`salário` e `RAL` são dois temas) — isto é contagem de palavras, não semântica. Lê os `examples` (verbatim, máx. 3) e junta com a cabeça.
+- Sinónimos distantes ficam separados (`salário` e `RAL` são dois temas) — isto é contagem de palavras, não semântica. Lê os `examples` display sanitizados (máx. 3) e junta com a cabeça.
 - As posições cujo **último** evento é `clear` ficam de fora (o juízo foi retirado); `--include-cleared` traz-nas de volta.
 - `share` = posições do tema / `positions_with_text`.
 - `--field reason|comment|both` (padrão `both`), `--top N`, `--days 0` para todo o histórico.
@@ -101,7 +107,7 @@ Limites deliberados, declarados para que ninguém leia nos números mais do que 
 
 Flags: `--days` (padrão 30, `0` = tudo), `--limit` (padrão 500 eventos), `--min-positions` (padrão 3), `--text-chars` em `recent` (padrão 300, trunca comentários longos).
 
-Quando o payload traz uma `note` (`no-signal (...)`), não há agregado: cloud desligada, endpoint ausente ou rede em baixo. Trata isso como "sem dados", nunca como "sem feedback".
+Quando o payload traz uma `note` enum fechada (`no-signal:*`), não há agregado. Trata-a como "sem dados", nunca como "sem feedback", e não retransmitas o código.
 
 ## Como os agentes a usam
 
@@ -113,7 +119,7 @@ Quando o payload traz uma `note` (`no-signal (...)`), não há agregado: cloud d
    - `dislike` → final_score = round(base * 0.85), adicionar nota `feedback:dislike-15%`
    - `hide` → status=`excluded`, nota `feedback:hide`, pular escrita de pontuação
    - `clear` / `null` → sem alteração (um juízo retirado não é um juízo)
-3. **Leva o motivo para a nota**, quando o utilizador escreveu um. Pega em `reason` (ou, se vazio, `comment`) do **mesmo evento** de `latest_action` — `actions[0]` — cita-o literalmente, corta a ~80 caracteres e acrescenta-o à nota:
+3. **Leva para a nota o motivo display seguro**, quando existir. Pega em `display_reason` (ou, se vazio, `display_comment`) do **mesmo evento** de `latest_action` — `actions[0]` — e acrescenta-o à nota. Nunca recuas para os raw `reason` / `comment`:
 
    ```
    feedback:dislike-15% — "demasiado senior"

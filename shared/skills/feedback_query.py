@@ -29,7 +29,7 @@ ok=false / unexpected error). Schema esteso (mig 028, 2026-05-31):
   {"ok": true, "legacy_id": "99", "latest_action": null,
    "latest_direction": null, "count": 0, "actions": []}
   {"ok": true, "legacy_id": "...", "latest_action": null,
-   "latest_direction": null, "note": "no-signal (cloud-disabled)"}
+   "latest_direction": null, "note": "no-signal:cloud-disabled"}
 
 Campi opzionali (NULL su righe pre-mig-028 o quando l'utente non li
 valorizza): `comment` (free text <=2000 char), `score` (intero 1-5),
@@ -68,6 +68,34 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from feedback_display import DISPLAY_TEXT_MAX_CHARS, sanitize_feedback_display
+
+
+NO_SIGNAL_CLOUD_DISABLED = "no-signal:cloud-disabled"
+NO_SIGNAL_MISSING_CREDENTIALS = "no-signal:missing-credentials"
+NO_SIGNAL_REMOTE_UNAVAILABLE = "no-signal:remote-unavailable"
+NO_SIGNAL_NO_READABLE_POSITIONS = "no-signal:no-readable-positions"
+NO_SIGNAL_NOTES = frozenset({
+    NO_SIGNAL_CLOUD_DISABLED,
+    NO_SIGNAL_MISSING_CREDENTIALS,
+    NO_SIGNAL_REMOTE_UNAVAILABLE,
+    NO_SIGNAL_NO_READABLE_POSITIONS,
+})
+
+
+def _log_internal(kind: str, exc=None) -> None:
+    """Diagnostics stay on stderr and never carry exception text/payloads."""
+    suffix = f" ({type(exc).__name__})" if exc is not None else ""
+    print(f"[feedback_query] {kind}{suffix}", file=sys.stderr)
+
+
+def _no_signal_note(reason) -> str:
+    if reason == "cloud-disabled":
+        return NO_SIGNAL_CLOUD_DISABLED
+    if reason == "missing-credentials":
+        return NO_SIGNAL_MISSING_CREDENTIALS
+    return NO_SIGNAL_REMOTE_UNAVAILABLE
+
 
 def _jht_home() -> Path:
     raw = os.environ.get("JHT_HOME")
@@ -82,7 +110,8 @@ def _load_cloud_config():
         return json.loads(cf.read_text())
     except FileNotFoundError:
         return None
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        _log_internal("cloud-config-unreadable", exc)
         return None
 
 
@@ -117,16 +146,17 @@ def api_request(method: str, path: str, body=None, timeout: float = 10.0):
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return True, json.loads(resp.read().decode("utf-8"))
+            try:
+                return True, json.loads(resp.read().decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                _log_internal("invalid-response", exc)
+                return False, "invalid-response"
     except urllib.error.HTTPError as e:
-        body_text = ""
-        try:
-            body_text = e.read().decode("utf-8")[:200]
-        except Exception:
-            pass
-        return False, f"http-{e.code}: {body_text}"
+        _log_internal(f"http-error:{e.code}")
+        return False, "http-error"
     except (urllib.error.URLError, TimeoutError, OSError) as e:
-        return False, f"network: {e}"
+        _log_internal("network-error", e)
+        return False, "network-error"
 
 
 def _api_get(path: str, timeout: float = 10.0):
@@ -146,7 +176,8 @@ def _local_events(legacy_id: str):
     try:
         import _db
         conn = _db.get_db()
-    except Exception:
+    except Exception as exc:
+        _log_internal("local-feedback-unavailable", exc)
         return None
     try:
         conn.row_factory = sqlite3.Row
@@ -160,7 +191,8 @@ def _local_events(legacy_id: str):
             (int(legacy_id),),
         ).fetchall()
         return [dict(r) for r in rows]
-    except Exception:
+    except Exception as exc:
+        _log_internal("local-feedback-query-failed", exc)
         return None
     finally:
         conn.close()
@@ -187,7 +219,7 @@ def check_position(legacy_id: str) -> dict:
             "latest_direction": None,
             "count": 0,
             "actions": [],
-            "note": f"no-signal ({payload})",
+            "note": _no_signal_note(payload),
         }
     return _shape_events(legacy_id, payload.get("feedback") or [], source="cloud")
 
@@ -207,6 +239,8 @@ def _shape_events(legacy_id: str, feedback, source: str) -> dict:
             "created_at": f.get("created_at"),
             "reason": f.get("reason"),
             "comment": f.get("comment"),
+            "display_reason": sanitize_feedback_display(f.get("reason")),
+            "display_comment": sanitize_feedback_display(f.get("comment")),
             "score": f.get("score"),
             "direction": f.get("direction"),
         }
@@ -339,13 +373,13 @@ def fetch_events(days=DEFAULT_WINDOW_DAYS, limit=DEFAULT_EVENT_LIMIT,
                 ev["legacy_id"] = str(lid)
                 events.append(ev)
         if failures and failures == len(legacy_ids):
-            return [], "no-signal (no readable positions)"
+            return [], NO_SIGNAL_NO_READABLE_POSITIONS
         return _within_window(_sorted_desc(events), days), None
 
     q = urllib.parse.urlencode({"days": int(days), "limit": int(limit)})
     ok, payload = _api_get(f"/api/positions/feedback?{q}", timeout=20.0)
     if not ok:
-        return [], f"no-signal ({payload})"
+        return [], _no_signal_note(payload)
     rows = payload.get("feedback") or []
     events = [_normalize_row(r) for r in rows]
     return _within_window(_sorted_desc(events), days), None
@@ -365,10 +399,21 @@ def recent_feedback(days=DEFAULT_WINDOW_DAYS, limit=DEFAULT_EVENT_LIMIT,
     by_action = Counter(e.get("action") for e in events if e.get("action"))
     with_text = sum(1 for e in events if _event_text(e, "both").strip())
     items = []
+    display_chars = (
+        min(text_chars, DISPLAY_TEXT_MAX_CHARS)
+        if text_chars and text_chars > 0
+        else DISPLAY_TEXT_MAX_CHARS
+    )
     for e in events[:limit]:
         item = dict(e)
         item["reason"] = _truncate(item.get("reason"), text_chars)
         item["comment"] = _truncate(item.get("comment"), text_chars)
+        item["display_reason"] = sanitize_feedback_display(
+            item.get("reason"), max_chars=display_chars
+        )
+        item["display_comment"] = sanitize_feedback_display(
+            item.get("comment"), max_chars=display_chars
+        )
         items.append(item)
     out = {
         "ok": True,
@@ -408,7 +453,7 @@ def recent_feedback(days=DEFAULT_WINDOW_DAYS, limit=DEFAULT_EVENT_LIMIT,
 #
 # Non è clustering semantico e non pretende di esserlo: sinonimi lontani
 # ("stipendio" / "RAL") restano temi separati. Il Mentor legge le etichette
-# e gli esempi verbatim, e li unisce con la testa se serve.
+# e gli esempi già sanitizzati, e li unisce con la testa se serve.
 
 PREFIX_LEN = 5
 MIN_TOKEN_LEN = 3
@@ -536,19 +581,32 @@ def aggregate_themes(events, field="both", min_positions=3,
         lid = e["legacy_id"]
         text = _event_text(e, field)
         candidates = []
+        safe_labels = {}
         for chunk in _event_fields(e, field):
             candidates.extend(_candidate_themes(_words(chunk)))
+            safe_labels.update({
+                safe_key: safe_label
+                for safe_key, safe_label in _candidate_themes(
+                    _words(sanitize_feedback_display(chunk))
+                )
+            })
         seen_here = set()
         for key, label in candidates:
             th = themes.setdefault(key, {
                 "key": key,
                 "positions": set(),
                 "events": 0,
-                "labels": Counter(),
+                "display_labels": Counter(),
                 "actions": Counter(),
                 "examples": [],
             })
-            th["labels"][label] += 1
+            # Il key continua a derivare dal raw per non cambiare clustering.
+            # La label è eleggibile al display solo quando lo stesso candidato
+            # sopravvive al sanitizer condiviso. Un frammento di path, host o
+            # token non può così riapparire dopo la tokenizzazione.
+            safe_label = safe_labels.get(key)
+            if safe_label:
+                th["display_labels"][safe_label] += 1
             if key in seen_here:
                 continue  # la stessa parola due volte nello stesso testo
                           # non vale doppio
@@ -585,15 +643,21 @@ def aggregate_themes(events, field="both", min_positions=3,
         if key in absorbed:
             continue
         ids = sorted(i for i in th["positions"] if i)
+        display_label = (
+            th["display_labels"].most_common(1)[0][0]
+            if th["display_labels"]
+            else "[redacted]"
+        )
         rows.append({
             "key": key,
-            "label": th["labels"].most_common(1)[0][0],
+            "label": display_label,
             "positions": len(th["positions"]),
             "events": th["events"],
             "share": round(len(th["positions"]) / denom, 3),
             "actions": dict(sorted(th["actions"].items())),
             "legacy_ids": ids[:MAX_THEME_IDS],
-            "examples": th["examples"],
+            "examples": [sanitize_feedback_display(example)
+                         for example in th["examples"]],
         })
     rows.sort(key=lambda r: (-r["positions"], -r["events"], r["key"]))
     if top:
@@ -691,7 +755,8 @@ def main() -> None:
         else:
             result = {"ok": False, "error": f"unknown command: {args.cmd}"}
     except Exception as e:
-        result = {"ok": False, "error": str(e)}
+        _log_internal("unexpected-error", e)
+        result = {"ok": False, "error": "feedback-query-failed"}
 
     print(json.dumps(result, ensure_ascii=False))
     sys.exit(0 if result.get("ok") else 1)
