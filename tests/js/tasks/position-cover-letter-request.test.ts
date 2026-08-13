@@ -137,6 +137,128 @@ describe("cover letter nella pipeline Writer-on-demand", () => {
   });
 });
 
+function cloudClient(
+  row: Record<string, unknown>,
+  updateResult: Record<string, unknown> | null = {
+    write_requested: true,
+    write_requested_at: "2026-01-02T00:00:00.000Z",
+    write_request_kind: "cover_letter",
+  },
+) {
+  const writes: Array<Record<string, unknown>> = [];
+  let phase: "read" | "write" = "read";
+  const query: Record<string, unknown> = {};
+  query.select = () => query;
+  query.eq = () => query;
+  query.is = () => query;
+  query.update = (payload: Record<string, unknown>) => {
+    phase = "write";
+    writes.push(payload);
+    return query;
+  };
+  query.maybeSingle = async () => ({
+    data: phase === "read" ? row : updateResult,
+    error: null,
+  });
+  return {
+    client: { from: () => query },
+    writes,
+  };
+}
+
+describe("ack causale nel path cloud", () => {
+  const cloudRow = {
+    id: "synthetic-position",
+    title: "Synthetic role",
+    company: "Synthetic company",
+    status: "ready",
+    write_requested: false,
+    write_requested_at: null,
+    write_request_kind: null,
+    scores: [{ total_score: 80 }],
+    applications: [{ id: "synthetic-application" }],
+  };
+
+  it("conferma solo il tipo persistito dalla UPDATE condizionale", async () => {
+    const fake = cloudClient(cloudRow);
+    await expect(
+      route.toggleViaCloud(
+        fake.client as never,
+        "synthetic-user",
+        643,
+        true,
+        "cover_letter",
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      outcome: {
+        position: {
+          write_requested: true,
+          write_request_kind: "cover_letter",
+        },
+      },
+    });
+    expect(fake.writes).toHaveLength(1);
+    expect(fake.writes[0]).toMatchObject({
+      write_requested: true,
+      write_request_kind: "cover_letter",
+    });
+  });
+
+  it("fallisce chiuso se il compare-and-set non restituisce la riga", async () => {
+    const fake = cloudClient(cloudRow, null);
+    await expect(
+      route.toggleViaCloud(
+        fake.client as never,
+        "synthetic-user",
+        643,
+        true,
+        "cover_letter",
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 409,
+      body: { error: "request_state_changed" },
+    });
+  });
+
+  it("deduplica il POST e ignora la DELETE stantia senza I/O di scrittura", async () => {
+    const activeCover = cloudClient({
+      ...cloudRow,
+      write_requested: true,
+      write_requested_at: "2026-01-01T00:00:00.000Z",
+      write_request_kind: "cover_letter",
+    });
+    const activeCv = cloudClient({
+      ...cloudRow,
+      write_requested: true,
+      write_requested_at: "2026-01-01T00:00:00.000Z",
+      write_request_kind: null,
+    });
+    const dedup = await route.toggleViaCloud(
+      activeCover.client as never,
+      "synthetic-user",
+      643,
+      true,
+      "cover_letter",
+    );
+    const staleDelete = await route.toggleViaCloud(
+      activeCv.client as never,
+      "synthetic-user",
+      643,
+      false,
+      "cover_letter",
+    );
+    expect(dedup).toMatchObject({ ok: true });
+    expect(staleDelete).toMatchObject({
+      ok: true,
+      outcome: { position: { write_requested: true } },
+    });
+    expect(activeCover.writes).toHaveLength(0);
+    expect(activeCv.writes).toHaveLength(0);
+  });
+});
+
 describe("mapping, lingue e iconografia O-82/O-83", () => {
   it("espone testo completo EN+6", () => {
     const source = readFileSync(

@@ -256,7 +256,7 @@ export function toggleViaLocal(
 }
 
 // Path B: Supabase e' l'unica source disponibile (cloud-mode, container offline).
-async function toggleViaCloud(
+export async function toggleViaCloud(
   supabase: SupabaseClient,
   userId: string,
   legacyId: number,
