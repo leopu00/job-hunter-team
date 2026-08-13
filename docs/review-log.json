@@ -1554,6 +1554,11 @@
       "path": "docs/adr/0006-provider-selection-is-configuration.md",
       "description": "Decisione architetturale: provider, modello, CLI e flag sono configurazione governata dal launcher canonico, mai istruzioni naturali; le direttive conservano l'intento di lavoro ma non possono selezionare il runtime.",
       "last_review": null
+    },
+    {
+      "path": "agents/_skills/cloud-push-quarantine/SKILL.md",
+      "description": "Il Mantenitore diagnostica e risolve gli elementi che il cloud ha messo in quarantena senza fermare il resto del convoglio, preservando identita', motivi sanificati e retry espliciti.",
+      "last_review": null
     }
   ]
 }

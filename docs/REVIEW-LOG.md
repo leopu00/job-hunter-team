@@ -143,6 +143,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/team-modes/SKILL.md](../agents/_skills/team-modes/SKILL.md) | Le modalita' operative del team e cosa cambia in ciascuna | — | 2026-08-12 | ✅ |
 | [agents/_skills/throttle-ack/SKILL.md](../agents/_skills/throttle-ack/SKILL.md) | L'agente firma la propria sveglia: un risveglio non firmato e' prova di stallo | — | 2026-08-03 | ✅ |
 | [agents/_skills/throttle-set/SKILL.md](../agents/_skills/throttle-set/SKILL.md) | L'agente registra la pausa nel motore esterno, non nel proprio processo | — | 2026-07-30 | ✅ |
+| [agents/_skills/cloud-push-quarantine/SKILL.md](../agents/_skills/cloud-push-quarantine/SKILL.md) | Il Mantenitore diagnostica e risolve gli elementi che il cloud ha messo in quarantena senza fermare il resto del convoglio, preservando identita', motivi sanificati e retry espliciti. | — | 2026-08-13 | ✅ |
 
 
 ## 💂 Skill Sentinella
