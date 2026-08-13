@@ -147,7 +147,10 @@ export function parseReport(raw: unknown): Report | null {
   const client = safeClient(body.client);
   return {
     client,
-    replyTo: field(body.reply_to, 254),
+    // `validReplyEmail` misura il valore già trimmato: conservarlo nello
+    // stesso ordine evita di troncare l'ultimo carattere di un indirizzo al
+    // limite quando il client ha aggiunto spazi esterni.
+    replyTo: typeof body.reply_to === "string" ? body.reply_to.trim() : "",
     subject: safeSubject(body.subject),
     kind: safeKind(body.kind),
     appVersion: safeVersion(body.app_version),

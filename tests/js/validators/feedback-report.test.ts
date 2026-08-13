@@ -81,6 +81,14 @@ describe("parseReport — cosa entra", () => {
     expect(parseReport(VALID)?.replyTo).toBe("");
   });
 
+  it("trimma prima di conservare un recapito valido al limite", () => {
+    const maxEmail = `${"a".repeat(242)}@example.com`;
+    expect(maxEmail).toHaveLength(254);
+    expect(
+      parseReport({ ...VALID, reply_to: `  ${maxEmail}  ` })?.replyTo,
+    ).toBe(maxEmail);
+  });
+
   it("rifiuta reply_to non valido e tentativi di header injection", () => {
     for (const reply_to of [
       "not-an-address",
