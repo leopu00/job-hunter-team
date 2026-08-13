@@ -109,16 +109,24 @@ def postgres16():
 
             CREATE TABLE public.positions (id UUID PRIMARY KEY);
             CREATE TABLE public.pending_user_messages (
-              id BIGSERIAL PRIMARY KEY, user_id UUID, agent TEXT, body TEXT,
-              kind TEXT, author TEXT, created_at TIMESTAMPTZ
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+              legacy_id BIGINT NOT NULL, agent TEXT NOT NULL, body TEXT NOT NULL,
+              kind TEXT NOT NULL DEFAULT 'notification', delivered_via TEXT,
+              delivered_at TIMESTAMPTZ, acknowledged_at TIMESTAMPTZ,
+              user_reply TEXT, user_reply_at TIMESTAMPTZ,
+              author TEXT NOT NULL DEFAULT 'agent',
+              created_at TIMESTAMPTZ DEFAULT now(), UNIQUE (user_id, legacy_id)
             );
             CREATE TABLE public.team_directives (
-              id BIGSERIAL PRIMARY KEY, user_id UUID, body TEXT, kind TEXT,
-              status TEXT, created_by TEXT, archived_at TIMESTAMPTZ,
-              updated_at TIMESTAMPTZ
+              id BIGSERIAL PRIMARY KEY,
+              user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+              body TEXT NOT NULL, kind TEXT, status TEXT, created_by TEXT,
+              archived_at TIMESTAMPTZ, updated_at TIMESTAMPTZ DEFAULT now()
             );
             CREATE TABLE public.team_state (
-              user_id UUID PRIMARY KEY, chat_requested_at TIMESTAMPTZ
+              user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+              chat_requested_at TIMESTAMPTZ
             );
 
             CREATE TABLE public.candidate_profiles (
@@ -191,13 +199,10 @@ def postgres16():
             GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO service_role;
             """
         )
-        # Exercise the release order itself. Migration 079 is optional only
-        # while O-80 is still awaiting integration; the final O-85 candidate
-        # requires it and the sequence oracle below stops skipping.
+        # Exercise the real release order itself, not migration 080 in
+        # isolation: O-80 owns 079 and O-85 must remain applicable after it.
         psql(WRITER_MIGRATION.read_text(encoding="utf-8"))
-        directive_applied = DIRECTIVE_MIGRATION.exists()
-        if directive_applied:
-            psql(DIRECTIVE_MIGRATION.read_text(encoding="utf-8"))
+        psql(DIRECTIVE_MIGRATION.read_text(encoding="utf-8"))
         # Reapplication is part of the contract: release retries must be safe.
         psql(MIGRATION.read_text(encoding="utf-8"))
         psql(MIGRATION.read_text(encoding="utf-8"))
@@ -239,7 +244,6 @@ def postgres16():
             """
         )
         psql.container_name = name
-        psql.directive_migration_applied = directive_applied
         yield psql
     finally:
         _run(["docker", "rm", "--force", name], check=False)
@@ -419,8 +423,6 @@ def test_release_migration_sequence_and_prefix_census(postgres16):
     assert collisions == {}
     assert MIGRATION.name == "080_profile_snapshot_atomic.sql"
 
-    if not postgres16.directive_migration_applied:
-        pytest.skip("migration O-80/079 non ancora presente sulla base")
     contracts = postgres16(
         """
         SELECT EXISTS (
@@ -429,7 +431,7 @@ def test_release_migration_sequence_and_prefix_census(postgres16):
                     AND column_name='write_request_kind'
                ),
                to_regprocedure(
-                 'public.mutate_team_directive_with_event(bigint,text,text,text)'
+                 'public.mutate_team_directive_with_event(bigint,text,text,text,text)'
                ) IS NOT NULL,
                to_regprocedure(
                  'public.sync_candidate_profile_atomic(uuid,text,jsonb)'
