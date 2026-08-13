@@ -33,6 +33,7 @@ def main() -> None:
     workflow = (ROOT / ".github/workflows/windows-installer-smoke.yml").read_text(
         encoding="utf-8"
     )
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
 
     require(0 < len(raw) < 10_000, f"guard source size={len(raw)}")
     require(not raw.startswith(b"\xef\xbb\xbf"), "guard source has UTF-8 BOM")
@@ -41,6 +42,10 @@ def main() -> None:
         "guard source is not LF/no-NUL canonical",
     )
     require(all(byte < 128 for byte in raw), "guard source must remain ASCII/UTF-8")
+    require(
+        attributes.splitlines().count("*.ps1 text eol=lf") == 1,
+        "Windows checkout can rewrite the pinned PowerShell source to CRLF",
+    )
     source = raw.decode("utf-8", errors="strict")
     digest = hashlib.sha256(raw).hexdigest()
     pins = re.findall(r'const SOURCE_SHA256 := "([0-9a-f]{64})"', consumer)
