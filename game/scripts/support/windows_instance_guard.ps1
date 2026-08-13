@@ -136,7 +136,7 @@ try{
   $Mutex=New-Object Threading.Mutex($false,$mutexName,[ref]$created,$mutexAcl)
   Assert-Mutex $Mutex $mutexAcl
   $abandoned=$false
-  try{$Held=$Mutex.WaitOne(0)}catch[Threading.AbandonedMutexException]{$Held=$true;$abandoned=$true}
+  try{$Held=$Mutex.WaitOne(0)}catch [Threading.AbandonedMutexException]{$Held=$true;$abandoned=$true}
   if(-not $Held){throw 'mutex_busy'}
   Assert-Mutex $Mutex $mutexAcl
   if($abandoned){while(-not$Desktop.WaitForExit(250)){};throw 'mutex_abandoned'}
