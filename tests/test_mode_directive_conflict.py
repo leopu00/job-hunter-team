@@ -39,3 +39,13 @@ def test_same_mode_and_incidental_words_are_not_conflicts():
         "mód: gondozás", "modalité: soin",
     ):
         assert mod.resolve_user_conflicts(m, [{"id": 1, "body": body, "created_at": "2026-08-13 11:00:00"}], mod.MODE_CARE) == []
+
+def test_notification_digest_distinguishes_edit_and_mode(monkeypatch, tmp_path):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    maintenance = {"since": "2026-08-13 10:00 UTC"}
+    first = {"id": 9, "body": "mód: gondozás", "created_at": "2026-08-13 11:00:00"}
+    second = {"id": 9, "body": "csak felhasználói kérések", "created_at": "2026-08-13 11:00:00"}
+    assert mod.resolve_user_conflicts(maintenance, [first], mod.MODE_HARVEST)[0]["notify"] is True
+    assert mod.resolve_user_conflicts(maintenance, [second], mod.MODE_HARVEST)[0]["notify"] is True
+    assert mod.resolve_user_conflicts(maintenance, [second], mod.MODE_HARVEST)[0]["notify"] is False
+    assert mod.resolve_user_conflicts(maintenance, [second], mod.MODE_CARE)[0]["notify"] is True

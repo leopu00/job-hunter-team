@@ -916,8 +916,9 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
         created = row.get("created_at")
         updated = row.get("updated_at")
         effective = updated or created
+        semantic_fingerprint = hashlib.sha256(" ".join(body.split()).encode("utf-8")).hexdigest()
         if not effective:
-            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True})
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True, "_effective_utc": None, "_semantic_fingerprint": semantic_fingerprint})
             continue
         try:
             parsed = datetime.fromisoformat(str(effective).replace("Z", "+00:00"))
@@ -926,11 +927,12 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
             dt = parsed.timestamp()
             mt = datetime.strptime(maintenance["since"], "%Y-%m-%d %H:%M UTC").replace(tzinfo=timezone.utc).timestamp()
         except (ValueError, TypeError):
-            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True}); continue
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True, "_effective_utc": None, "_semantic_fingerprint": semantic_fingerprint}); continue
+        effective_utc = datetime.fromtimestamp(dt, timezone.utc).isoformat()
         if dt == mt:
-            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True})
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True, "_effective_utc": effective_utc, "_semantic_fingerprint": semantic_fingerprint})
         else:
-            conflicts.append({"directive_id": row.get("id"), "winner": "directive" if dt > mt else "mode", "notify": True})
+            conflicts.append({"directive_id": row.get("id"), "winner": "directive" if dt > mt else "mode", "notify": True, "_effective_utc": effective_utc, "_semantic_fingerprint": semantic_fingerprint})
     # Persist only a digest per instance so restart/repeated heartbeats do not
     # spam the user; a new conflict (or a changed winner) gets one notice.
     try:
@@ -942,7 +944,14 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
             seen = json.loads(marker.read_text(encoding="utf-8")) if marker.exists() else {}
             if not isinstance(seen, dict): seen = {}
             for item in conflicts:
-                key = hashlib.sha256(json.dumps(item, sort_keys=True).encode()).hexdigest()
+                key_material = {
+                    "directive_id": item.get("directive_id"),
+                    "winner": item.get("winner"),
+                    "mode": mode,
+                    "effective_utc": item.get("_effective_utc"),
+                    "semantic_fingerprint": item.get("_semantic_fingerprint"),
+                }
+                key = hashlib.sha256(json.dumps(key_material, sort_keys=True).encode()).hexdigest()
                 item["notify"] = not bool(seen.get(key))
                 seen[key] = True
             tmp = marker.with_name(marker.name + ".tmp")
@@ -955,6 +964,9 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
             try: os.fsync(dfd)
             finally: os.close(dfd)
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            for item in conflicts:
+                item.pop("_effective_utc", None)
+                item.pop("_semantic_fingerprint", None)
     except (OSError, ValueError, TypeError):
         for item in conflicts: item["notify"] = True
     return conflicts
