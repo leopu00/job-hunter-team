@@ -19,6 +19,7 @@ let scorePersistedParents: string[] | null = null;
 let scorePersistedLegacyOverride: number | null = null;
 let pendingPersistedRows: any[] = [];
 let pendingRpcCountOverride: number | null = null;
+let profileRpcData: unknown = { changed: true };
 
 function fakeAdmin() {
   return {
@@ -139,6 +140,9 @@ function fakeAdmin() {
           error: null,
         };
       }
+      if (name === "sync_candidate_profile_atomic") {
+        return { data: profileRpcData, error: null };
+      }
       return { data: 1, error: null };
     }),
   };
@@ -225,10 +229,69 @@ beforeEach(() => {
   scorePersistedLegacyOverride = null;
   pendingPersistedRows = [];
   pendingRpcCountOverride = null;
+  profileRpcData = { changed: true };
   admin = fakeAdmin();
 });
 
 describe("push sync di una candidatura", () => {
+  it("acka il profilo solo dopo la RPC atomica e rende visibile il no-op", async () => {
+    const profileReceipt = receiptId("profile", "candidate_profile");
+    const first = await pushBody({
+      profile: {
+        yaml: "name: Synthetic candidate\ntarget_role: Engineer\n",
+        summaries: {},
+        _receipt_id: profileReceipt,
+      },
+    });
+    expect(first.status).toBe(200);
+    await expect(first.json()).resolves.toMatchObject({
+      profile: { upserted: true, error: null },
+      receipts: { profile: [profileReceipt] },
+    });
+    expect(calls).toContainEqual(
+      expect.objectContaining({
+        kind: "rpc",
+        name: "sync_candidate_profile_atomic",
+      }),
+    );
+    expect(
+      calls.some(
+        (call) =>
+          call.kind === "upsert" && String(call.table).startsWith("candidate_"),
+      ),
+    ).toBe(false);
+
+    calls = [];
+    profileRpcData = { changed: false };
+    const repeated = await pushBody({
+      profile: {
+        yaml: "name: Synthetic candidate\ntarget_role: Engineer\n",
+        summaries: {},
+        _receipt_id: profileReceipt,
+      },
+    });
+    expect(repeated.status).toBe(200);
+    await expect(repeated.json()).resolves.toMatchObject({
+      profile: { upserted: false, error: null },
+      receipts: { profile: [profileReceipt] },
+    });
+  });
+
+  it("non emette la receipt se la RPC non attesta changed", async () => {
+    profileRpcData = null;
+    const response = await pushBody({
+      profile: {
+        yaml: "name: Synthetic candidate\ntarget_role: Engineer\n",
+        _receipt_id: receiptId("profile", "candidate_profile"),
+      },
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      profile: { upserted: false, error: "profile_sync_result_invalid" },
+      receipts: { profile: [] },
+    });
+  });
+
   it("preserva il tipo richiesta cloud quando un client legacy non lo invia", async () => {
     const legacy = await pushBody({
       positions: [

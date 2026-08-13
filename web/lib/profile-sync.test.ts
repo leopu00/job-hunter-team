@@ -9,8 +9,10 @@
 import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import {
+  canonicalProfileContentHash,
   mapYamlToCanonical,
   reconstructCanonicalProfile,
+  syncProfileToSupabase,
 } from "./profile-sync.ts";
 
 const RAW_LEGACY = {
@@ -151,5 +153,66 @@ describe("round-trip map → reconstruct conserva i campi chiave", () => {
         ),
       /target_specialty is not valid/,
     );
+  });
+});
+
+describe("sync atomico del profilo", () => {
+  it("deriva lo stesso hash canonico indipendentemente dall'ordine delle chiavi", () => {
+    const canonical = mapYamlToCanonical(RAW_LEGACY, "u");
+    const reordered = {
+      ...canonical,
+      profileRow: Object.fromEntries(
+        Object.entries(canonical.profileRow).reverse(),
+      ),
+    };
+    assert.equal(
+      canonicalProfileContentHash(canonical),
+      canonicalProfileContentHash(reordered),
+    );
+  });
+
+  it("usa una sola RPC e distingue write reale da no-op", async () => {
+    const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+    let changed = true;
+    const admin = {
+      rpc: async (name: string, args: Record<string, unknown>) => {
+        calls.push({ name, args });
+        return { data: { changed }, error: null };
+      },
+      from: () => {
+        throw new Error("profile sync must not issue piecemeal writes");
+      },
+    };
+    const canonical = mapYamlToCanonical(RAW_LEGACY, "u");
+
+    assert.deepEqual(
+      await syncProfileToSupabase(admin as never, "u", canonical),
+      { ok: true, changed: true, error: null, warnings: [] },
+    );
+    changed = false;
+    assert.deepEqual(
+      await syncProfileToSupabase(admin as never, "u", canonical),
+      { ok: true, changed: false, error: null, warnings: [] },
+    );
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].name, "sync_candidate_profile_atomic");
+    assert.match(String(calls[0].args.p_content_hash), /^[a-f0-9]{64}$/);
+  });
+
+  it("fallisce chiuso se la RPC non attesta l'effetto", async () => {
+    const admin = {
+      rpc: async () => ({ data: null, error: null }),
+    };
+    const result = await syncProfileToSupabase(
+      admin as never,
+      "u",
+      mapYamlToCanonical(RAW_LEGACY, "u"),
+    );
+    assert.deepEqual(result, {
+      ok: false,
+      changed: false,
+      error: "profile_sync_result_invalid",
+      warnings: [],
+    });
   });
 });

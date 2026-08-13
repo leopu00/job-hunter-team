@@ -1567,7 +1567,7 @@ export async function POST(req: NextRequest) {
           if (!sync.ok) {
             profileError = sync.error;
           } else {
-            profileUpserted = true;
+            profileUpserted = sync.changed;
             rowReceipts.profile.push(
               sourceReceiptId("profile", "candidate_profile"),
             );
