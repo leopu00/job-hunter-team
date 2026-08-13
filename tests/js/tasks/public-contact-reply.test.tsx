@@ -58,6 +58,50 @@ const STRINGS: ContactStrings = {
   error_rate: "Rate limited",
 };
 
+async function submitLiveForm(replyTo: string) {
+  const fetchMock = vi.fn(async () =>
+    Response.json({ ok: true, ticket: "JHT-E2E" }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+  await act(async () => {
+    root.render(createElement(ContactForm, { t: STRINGS, locale: "en" }));
+  });
+  const email = container.querySelector<HTMLInputElement>("#c-email")!;
+  const message = container.querySelector<HTMLTextAreaElement>("#c-msg")!;
+  const setInput = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!;
+  const setTextarea = Object.getOwnPropertyDescriptor(
+    HTMLTextAreaElement.prototype,
+    "value",
+  )!.set!;
+  await act(async () => {
+    setInput.call(email, replyTo);
+    email.dispatchEvent(new Event("input", { bubbles: true }));
+    setTextarea.call(message, "The public page stays blank");
+    message.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    container
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+
+  return {
+    container,
+    fetchMock,
+    cleanup: async () => {
+      await act(async () => root.unmount());
+      vi.unstubAllGlobals();
+    },
+  };
+}
+
 describe("O-87 — recapito del modulo pubblico", () => {
   it("rende un campo email facoltativo con il nome del contratto server", () => {
     const document = new JSDOM(
@@ -118,40 +162,7 @@ describe("O-87 — recapito del modulo pubblico", () => {
   });
 
   it("la submit reale inoltra il recapito al confine HTTP", async () => {
-    const fetchMock = vi.fn(async () =>
-      Response.json({ ok: true, ticket: "JHT-E2E" }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-
-    await act(async () => {
-      root.render(createElement(ContactForm, { t: STRINGS, locale: "en" }));
-    });
-    const email = container.querySelector<HTMLInputElement>("#c-email")!;
-    const message = container.querySelector<HTMLTextAreaElement>("#c-msg")!;
-    const setInput = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!;
-    const setTextarea = Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      "value",
-    )!.set!;
-    await act(async () => {
-      setInput.call(email, "reporter@example.com");
-      email.dispatchEvent(new Event("input", { bubbles: true }));
-      setTextarea.call(message, "The public page stays blank");
-      message.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      container
-        .querySelector("form")!
-        .dispatchEvent(
-          new Event("submit", { bubbles: true, cancelable: true }),
-        );
-    });
+    const { fetchMock, cleanup } = await submitLiveForm("reporter@example.com");
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
@@ -160,8 +171,20 @@ describe("O-87 — recapito del modulo pubblico", () => {
       reply_to: "reporter@example.com",
     });
 
-    await act(async () => root.unmount());
-    vi.unstubAllGlobals();
+    await cleanup();
+  });
+
+  it("un recapito invalido ferma davvero la submit prima della rete", async () => {
+    const { container, fetchMock, cleanup } = await submitLiveForm(
+      "reporter@example.com\nBcc: other@example.com",
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      STRINGS.error_email,
+    );
+
+    await cleanup();
   });
 
   it("preserva l'invio anonimo e rifiuta recapiti non validi prima della rete", () => {
