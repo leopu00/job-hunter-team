@@ -27,6 +27,10 @@ const MIGRATION = readFileSync(
   path.join(REPO, "supabase/migrations/063_download_clicks.sql"),
   "utf8",
 );
+const SOURCE_MIGRATION = readFileSync(
+  path.join(REPO, "supabase/migrations/082_download_clicks_tiktok_source.sql"),
+  "utf8",
+);
 const ROUTE = readFileSync(
   path.join(REPO, "web/app/go/[slug]/route.ts"),
   "utf8",
@@ -144,6 +148,39 @@ describe("B8 download funnel", () => {
       utm_medium: "paid",
       utm_campaign: "lancio-2026-08",
     });
+  });
+
+  it("attributes an allowlisted TikTok download end-to-end", async () => {
+    const state = testDependencies();
+    const response = handleDownloadRedirect(
+      new Request(
+        "https://jobhunterteam.ai/go/mac?utm_source=tiktok&utm_medium=paid&utm_campaign=lancio-2026-08",
+      ),
+      "mac",
+      state.dependencies,
+    );
+
+    expect(response.status).toBe(302);
+    await state.tasks[0]();
+    expect(state.record).toHaveBeenCalledWith({
+      ts_hour: "2026-08-09T14",
+      slug: "mac",
+      utm_source: "tiktok",
+      utm_medium: "paid",
+      utm_campaign: "lancio-2026-08",
+    });
+    expect(
+      downloadHref(
+        "mac",
+        attributionFromPage({
+          utm_source: "tiktok",
+          utm_medium: "paid",
+          utm_campaign: "lancio-2026-08",
+        }),
+      ),
+    ).toBe(
+      "/go/mac?utm_source=tiktok&utm_medium=paid&utm_campaign=lancio-2026-08",
+    );
   });
 
   it("T5 handles HEAD without a body and rejects non-read methods", async () => {
@@ -335,11 +372,16 @@ describe("B8 download funnel", () => {
 
   it("bounds anonymous bucket cardinality with matching app and DB allowlists", async () => {
     expect(DOWNLOAD_ATTRIBUTION_ALLOWLIST).toEqual({
-      utm_source: ["reddit"],
+      utm_source: ["reddit", "tiktok"],
       utm_medium: ["paid"],
       utm_campaign: ["lancio-2026-08"],
     });
     expect(MIGRATION).toContain("utm_source IN ('none', 'reddit')");
+    expect(SOURCE_MIGRATION).toContain(
+      "utm_source IN ('none', 'reddit', 'tiktok')",
+    );
+    expect(SOURCE_MIGRATION).not.toContain("utm_medium");
+    expect(SOURCE_MIGRATION).not.toContain("utm_campaign");
     expect(MIGRATION).toContain("utm_medium IN ('none', 'paid')");
     expect(MIGRATION).toContain("utm_campaign IN ('none', 'lancio-2026-08')");
 
