@@ -132,7 +132,8 @@ export default function DirectivesPanel({
           ...old,
           [String(data.id)]: event.status === "queued" ? "queued" : "error",
         }));
-      if (okMsg) toast(okMsg, "success");
+      if (event?.status === "error") toast(t("captainError"), "error");
+      else if (okMsg) toast(okMsg, "success");
       await load();
       return true;
     } catch {
