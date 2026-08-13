@@ -16,8 +16,8 @@ import { verdictOf, type Verdict } from "@/lib/position-verdict";
 export const dynamic = "force-dynamic";
 
 // Slim mapping: il path locale ritorna p.* (incluso jd_text intero) — al
-// client servono solo i campi della card. legacy_id è la chiave delle API
-// di swipe (user-exclude/feedback): senza, la carta non è azionabile.
+// client servono solo i campi della card. legacy_id è la chiave dell'API
+// feedback di swipe: senza, la carta non è azionabile.
 // Gli stipendi vengono convertiti QUI nella valuta di visualizzazione
 // (preferenza Impostazioni): così chip, filtro, istogramma e ordinamento
 // per stipendio del deck lavorano tutti su una scala omogenea — prima le

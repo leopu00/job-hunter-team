@@ -234,6 +234,6 @@ Ha nincs minta-szintű mondanivalód, **ne szólalj meg**. A csend válasz.
 
 - `mentor-output` — HOGYAN fogalmazd meg az üzenetet, miután egy minta megerősítve van.
 - `db-query` — wrapper belső működés.
-- `feedback-query` — a felhasználói visszajelzés olvasója a felhőben (F minta); a Scorer ugyanezt a forrást kérdezi pozíciónként.
+- `feedback-query` — a felhasználói visszajelzés olvasója a felhőben (F minta); a Scorer sanitizált összesített témákat csak jövőbeli pozíciókhoz használ, az aktuálisat kizárva.
 - `agents/mentor/mentor.md` — irányító prompt + ütem.
 - `agents/_team/team-rules.md` T10 — a profil csak olvasható, a Mentornak is.

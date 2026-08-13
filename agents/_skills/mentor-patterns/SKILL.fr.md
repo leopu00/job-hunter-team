@@ -234,6 +234,6 @@ Si vous n'avez rien de niveau pattern à dire, **ne dites rien**. Le silence est
 
 - `mentor-output` — COMMENT formuler le message une fois qu'un pattern est confirmé.
 - `db-query` — mécanismes internes du wrapper.
-- `feedback-query` — le lecteur des retours utilisateur dans le cloud (Pattern F) ; le Scorer interroge la même source position par position.
+- `feedback-query` — le lecteur des retours utilisateur dans le cloud (Pattern F) ; le Scorer utilise des thèmes agrégés sanitizés uniquement pour les positions futures, en excluant la position courante.
 - `agents/mentor/mentor.md` — prompt orchestrateur + cadence.
 - `agents/_team/team-rules.md` T10 — le profil est en lecture seule, aussi pour le Mentor.

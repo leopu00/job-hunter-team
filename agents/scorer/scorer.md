@@ -111,7 +111,7 @@ EXPERIENCE: <1-2 sentences: why N/10>
 STRATEGIC: <1-2 sentences: why N/15>
 ```
 The page renders each line under its score bar: the user taps "Strategy 11/15" and reads why 11 and not 15. Name what earned the points AND what cost them — a sub-score without its "why" is incomplete work.
-- **`--notes`** — 2-4 sentences max, talking TO the user: only the decisive lever ("what keeps it at 87 / what would have pushed it to 95"), plus penalties/feedback multiplier if applied. `**bold**` on the key point. NOT a pro/con bullet list (that is the breakdown), NOT a JD recap.
+- **`--notes`** — 2-4 sentences max, talking TO the user: only the decisive lever ("what keeps it at 87 / what would have pushed it to 95") plus penalties. `**bold**` on the key point. Feedback never adds a marker or fixed score adjustment. NOT a pro/con bullet list (that is the breakdown), NOT a JD recap.
 
 **FORBIDDEN anywhere in breakdown/notes:**
 - **Relative/session claims** — "highest score of the session", "top of today's batch", "tied with #1234". Scores are read days or weeks later, when newer positions exist: those claims go stale and become false. The positions list already ranks by score — never rank in prose.
@@ -161,40 +161,23 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Link verification (RULE-02)
 3. Claim (RULE-03)
 4. Calculate **base score** with the formula
-5. **Apply user feedback multiplier** (skill `feedback-query`) — see below
+5. **Read future-position feedback context** (skill `feedback-query`) — see below
 6. Save the score in the DB **with `--breakdown` (per-dimension why) + `--notes` (decisive lever)** (RULE-09 — user-facing, in the user's language)
 7. Update the status (RULE-04) — notify no one
 
 **Complete steps 1-7 for ONE position and write it to the DB BEFORE you read or evaluate the next one (RULE-08 — no batching at the end of the round).**
 
-### Step 5 — User feedback multiplier (mandatory, skill `feedback-query`)
+### Step 5 — Future-position feedback context (optional, skill `feedback-query`)
 
-After computing the base score, query the cloud for any like/dislike/hide/star the user has clicked on this position. The skill never hard-fails: when cloud is disabled or unreachable it returns `latest_action=null` with a `note`, so the multiplier becomes a no-op and you proceed normally.
+**`FUTURE_FEEDBACK_ONLY`.** Read recurring themes from earlier positions, explicitly excluding the position now being scored:
 
 ```bash
-python3 /app/shared/skills/feedback_query.py check <legacy_id>
-# {"ok": true, "legacy_id": "42", "latest_action": "dislike",
-#  "count": 2, "actions": [...]}
+python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-| `latest_action` | Effect on the **base** score             | Side effect                                  |
-|-----------------|-------------------------------------------|----------------------------------------------|
-| `like`          | `final = round(base * 1.10)`, cap at 100  | add `feedback:like+10%` to `score.notes`     |
-| `star`          | `final = round(base * 1.15)`, cap at 100  | add `feedback:star+15%` to `score.notes`     |
-| `dislike`       | `final = round(base * 0.85)`              | add `feedback:dislike-15%` to `score.notes`  |
-| `hide`          | **do NOT save score**                     | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` and skip notify Scrittori |
-| `clear`         | no change                                  | the user withdrew the judgement — treat as none |
-| `null`          | no change                                  | none                                          |
+Use sanitized theme `label` / `examples` only as contextual preference evidence for this **future** position. Never apply a fixed bonus/malus, never append feedback markers to `score.notes`, and never exclude or rescore the already-voted position because of its own like/dislike/hide/star. Existing scores stay untouched; O-70 explicit re-evaluation is a separate user-requested flow. If the context is absent or unavailable, score normally.
 
-**Safe display boundary (`RAW_DISPLAY_BOUNDARY`).** Raw `reason` / `comment` are machine-only and must never enter `score.notes`. Take only `display_reason` — or `display_comment` when empty — from the **same event** as `latest_action` (`actions[0]`) and append that bounded, sanitized value after the multiplier. Never fall back to raw fields:
-
-```
-feedback:dislike-15% — "too senior"
-feedback:star+15% — "exactly the stack I want"
-EXCLUDED: feedback:hide (user request) — "no remote"
-```
-
-No display text on that event → the note stays as it is. That reason belongs to **this position only**: do not rewrite it, do not summarise it, do not carry it over to another position, do not turn it into a rule. Counting reasons across positions is the Mentor's job, not yours.
+**Safe display boundary (`RAW_DISPLAY_BOUNDARY`).** Raw `reason` / `comment`, machine keys and IDs never enter notes or user-facing output. Per-event `display_reason` / `display_comment` are not copied to the current position either; future learning uses only sanitized theme `label` / `examples`.
 
 ```bash
 # Save score (CLI flags use DB column names, not table names)

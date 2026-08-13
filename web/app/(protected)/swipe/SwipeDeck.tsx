@@ -36,14 +36,12 @@ import {
 // card, a destra = precedente — nessuna scrittura, si sfoglia e basta
 // (←/→ da tastiera). Una card già giudicata resta al suo posto col
 // TIMBRO e si può ri-giudicare: il ri-giudizio scrive un nuovo evento
-// feedback (append-only, l'ultimo prevale) e riconcilia l'esclusione
-// (no→altro DELETE, altro→no POST).
+// feedback (append-only, l'ultimo prevale).
 //
 // Scritture — corsie ESISTENTI, nessuna route nuova:
-//   ogni giudizio      → POST /api/positions/[legacyId]/feedback
-//   'non interessante' → in più POST /api/positions/[legacyId]/user-exclude
-//     (reason 'not_interested': status → excluded, il team ci smette di
-//      lavorare; reversibile con DELETE)
+//   ogni giudizio → POST /api/positions/[legacyId]/feedback
+// Nessun giudizio chiama il writer di esclusione: l'azione esplicita e' una corsia
+// separata e il feedback resta apprendimento per posizioni future (O-76).
 // Ottimistico: la carta vola subito, le POST viaggiano dietro; su errore
 // toast non bloccante.
 
@@ -79,8 +77,8 @@ import { T } from "./SwipeDeck.i18n";
 import { Chip, DualRange, FilterSection } from "./SwipeDeckParts";
 export type { Verdict };
 
-// Mappatura giudizio → payload feedback (mig 028). 'no' aggiunge anche
-// l'esclusione. Score 3 lasciato libero come neutro non usato. fly: solo
+// Mappatura giudizio → payload feedback (mig 028). Score 3 lasciato libero
+// come neutro non usato. fly: solo
 // 'no' esce a sinistra, gli altri tre a destra.
 // Segnale (che cosa si spedisce) da lib/position-verdict; qui sopra solo
 // icona, colore e il lato da cui la card esce.
@@ -680,15 +678,9 @@ export default function SwipeDeck({
     rec.start();
   }, [comment, locale, showToast, t.voiceDenied, t.voiceError]);
 
-  // Scrive il giudizio; se la card era già stata giudicata riconcilia
-  // l'esclusione con la transizione (no→altro: DELETE; altro→no: POST).
+  // Scrive il giudizio nella sola pipeline feedback.
   const persist = useCallback(
-    async (
-      card: SwipeCardData,
-      verdict: Verdict,
-      prev: Verdict | undefined,
-      note: string,
-    ) => {
+    async (card: SwipeCardData, verdict: Verdict, note: string) => {
       const v = VERDICTS[verdict];
       try {
         const res = await fetch(`/api/positions/${card.legacy_id}/feedback`, {
@@ -702,24 +694,6 @@ export default function SwipeDeck({
           }),
         });
         if (!res.ok) throw new Error(String(res.status));
-        const wasExcluded = prev ? Boolean(VERDICTS[prev].exclude) : false;
-        if (v.exclude && !wasExcluded) {
-          const ex = await fetch(
-            `/api/positions/${card.legacy_id}/user-exclude`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ reason: "not_interested" }),
-            },
-          );
-          if (!ex.ok) throw new Error(String(ex.status));
-        } else if (!v.exclude && wasExcluded) {
-          const ex = await fetch(
-            `/api/positions/${card.legacy_id}/user-exclude`,
-            { method: "DELETE" },
-          );
-          if (!ex.ok) throw new Error(String(ex.status));
-        }
       } catch {
         showToast(`${t.saveError} «${card.title}»`);
       }
@@ -731,7 +705,6 @@ export default function SwipeDeck({
     (verdict: Verdict) => {
       if (flyingRef.current || finished) return;
       const card = cards[idx];
-      const prev = given[card.id];
       flyingRef.current = true;
       stopVoice();
       const note = comment.trim().slice(0, 2000);
@@ -748,10 +721,10 @@ export default function SwipeDeck({
         flyingRef.current = false;
       }, FLY_MS);
       // Se il giudizio non cambia, registra comunque l'evento (magari col
-      // commento nuovo); la riconciliazione esclusione è un no-op.
-      void persist(card, verdict, prev, note);
+      // commento nuovo), sempre senza effetti sullo stato corrente.
+      void persist(card, verdict, note);
     },
-    [cards, idx, given, finished, comment, persist, stopVoice, setIdxCur],
+    [cards, idx, finished, comment, persist, stopVoice, setIdxCur],
   );
 
   // Navigazione: nessuna scrittura, si sfoglia e basta. delta = +1
