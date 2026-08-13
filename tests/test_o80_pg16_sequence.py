@@ -13,6 +13,12 @@ ROOT = Path(__file__).parents[1]
 OWNER = "11111111-1111-1111-1111-111111111111"
 OTHER = "22222222-2222-2222-2222-222222222222"
 RPC = "public.mutate_team_directive_with_event"
+POSTGRES_READY_MARKER = "database system is ready to accept connections"
+
+
+def _final_postgres_server_is_ready(logs):
+    """Reject the temporary initdb server and wait for the final restart."""
+    return logs.count(POSTGRES_READY_MARKER) >= 2
 
 
 @pytest.fixture(scope="module")
@@ -43,7 +49,9 @@ def pg16_server():
 
     try:
         for _ in range(100):
-            if sql("select 1;", check=False).returncode == 0:
+            logs_result = run(["docker", "logs", name], check=False)
+            logs = logs_result.stdout + logs_result.stderr
+            if _final_postgres_server_is_ready(logs):
                 sql(
                     "CREATE ROLE authenticated NOLOGIN; CREATE ROLE anon NOLOGIN; "
                     "CREATE ROLE service_role NOLOGIN BYPASSRLS;"
@@ -51,10 +59,17 @@ def pg16_server():
                 yield sql
                 return
             time.sleep(.2)
-        logs = run(["docker", "logs", name], check=False).stderr
         pytest.fail(f"postgres:16 non pronto: {logs}")
     finally:
         run(["docker", "rm", "-f", name], check=False)
+
+
+def test_pg16_readiness_rejects_the_temporary_initdb_server():
+    first_start = f"{POSTGRES_READY_MARKER}\n"
+    final_restart = f"{first_start}{POSTGRES_READY_MARKER}\n"
+
+    assert not _final_postgres_server_is_ready(first_start)
+    assert _final_postgres_server_is_ready(final_restart)
 
 
 SCHEMA = f"""
