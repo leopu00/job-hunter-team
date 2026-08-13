@@ -45,6 +45,7 @@ export const CASCADE_TABLES = [
   "candidate_skills",
   "candidate_work_authorization",
   "cloud_sync_pairing_sessions",
+  "cloud_sync_pairing_attempts",
   "cloud_sync_tokens",
   "encrypted_user_blobs",
   "file_bridge_requests",
