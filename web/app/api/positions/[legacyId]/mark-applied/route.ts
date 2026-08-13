@@ -6,7 +6,10 @@ import {
   localFirstWrite,
   type StepResult,
 } from "@/lib/positions/local-first-write";
-import { publicPositionState, type PublicPositionState } from "@/lib/position-state";
+import {
+  publicPositionState,
+  type PublicPositionState,
+} from "@/lib/position-state";
 
 export const dynamic = "force-dynamic";
 

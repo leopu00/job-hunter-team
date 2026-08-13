@@ -116,9 +116,10 @@ export async function POST(
       db.exec("BEGIN IMMEDIATE");
       transactionOpen = true;
       const exists = db
-        .prepare<[number], { id: number; status: string }>(
-          "SELECT id, status FROM positions WHERE id = ?",
-        )
+        .prepare<
+          [number],
+          { id: number; status: string }
+        >("SELECT id, status FROM positions WHERE id = ?")
         .get(legacyId);
       if (!exists) {
         db.exec("ROLLBACK");
@@ -157,12 +158,7 @@ export async function POST(
           .prepare<
             [number, string],
             { id: number; status: "open" | "assigned" }
-          >(
-            "SELECT id, status FROM position_tickets " +
-              "WHERE position_id = ? AND kind = ? " +
-              "AND status IN ('open','assigned') " +
-              "ORDER BY created_at ASC, id ASC LIMIT 1",
-          )
+          >("SELECT id, status FROM position_tickets " + "WHERE position_id = ? AND kind = ? " + "AND status IN ('open','assigned') " + "ORDER BY created_at ASC, id ASC LIMIT 1")
           .get(legacyId, RESCORE_TICKET_KIND);
         if (active) {
           ticketId = active.id;
