@@ -87,6 +87,14 @@ malformed history fails closed. Reconciliation is intentionally a manual,
 reviewed operation: this gate never runs migration repair, database push, link,
 dump, or remote SQL.
 
+Historical linked versions with 14-digit timestamps are represented only by
+comment-only anchor migrations declared in `migration-anchors.v1.json`. Each
+manifest record pins the remote name, exact path, byte SHA-256, statement MD5,
+and the canonical forward migration that owns the final effect. An undeclared,
+changed, executable, or incorrectly mapped anchor fails the same gate. Anchors
+participate in global identity collision checks, but never count as new DDL in
+the PostgreSQL 16 sequence.
+
 ## Differences from SQLite (schema V2)
 
 The local agent team uses SQLite (`shared/data/jobs.db`); Supabase is the optional multi-tenant cloud mirror.

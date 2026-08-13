@@ -14,6 +14,8 @@ random disposable database there.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import secrets
@@ -28,7 +30,10 @@ from urllib.parse import unquote, urlparse, urlunparse
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION_PREFIX = "supabase/migrations/"
-MIGRATION_RE = re.compile(r"^supabase/migrations/([0-9]{3})_[a-z0-9_]+\.sql$")
+MANIFEST_PATH = "supabase/migration-anchors.v1.json"
+MIGRATION_RE = re.compile(
+    r"^supabase/migrations/([0-9]{3}|[0-9]{14})_([a-z0-9_]+)\.sql$"
+)
 HASH_RE = re.compile(r"^[0-9a-f]{40,64}$")
 REF_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
 ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -48,8 +53,13 @@ LEGACY_REPLAY_EXCEPTIONS = {
 class Migration:
     version: str
     number: int
+    name: str
     path: str
     oid: str
+
+    @property
+    def is_anchor(self) -> bool:
+        return len(self.version) == 14
 
 
 @dataclass(frozen=True)
@@ -118,8 +128,234 @@ def inventory(repo: Path, ref: str) -> tuple[list[Migration], list[Issue]]:
             issues.append(Issue("invalid_path", _safe_ref(ref), hashes=(oid,)))
         else:
             version = match.group(1)
-            migrations.append(Migration(version, int(version), path, oid))
+            migrations.append(
+                Migration(version, int(version), match.group(2), path, oid)
+            )
     return sorted(migrations, key=lambda item: (item.number, item.path)), issues
+
+
+def _tree_blob(repo: Path, ref: str, path: str) -> tuple[str, bytes] | None:
+    commit = _resolve_commit(repo, ref)
+    raw = _run_git(repo, ["ls-tree", "-z", commit, "--", path])
+    records = [record for record in raw.split(b"\0") if record]
+    if not records:
+        return None
+    if len(records) != 1:
+        raise GateInvalid("ambiguous tree path")
+    try:
+        metadata, actual_path = records[0].split(b"\t", 1)
+        mode, object_type, oid = metadata.decode("ascii").split(" ", 2)
+    except (ValueError, UnicodeDecodeError):
+        raise GateInvalid("invalid tree record") from None
+    if (
+        actual_path.decode("utf-8", "strict") != path
+        or mode != "100644"
+        or object_type != "blob"
+        or not HASH_RE.fullmatch(oid)
+    ):
+        raise GateInvalid("invalid tree blob")
+    return oid, _run_git(repo, ["cat-file", "blob", oid])
+
+
+def _json_without_duplicate_keys(raw: bytes) -> object:
+    def object_pairs(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise GateInvalid("duplicate manifest key")
+            result[key] = value
+        return result
+
+    if len(raw) > 1024 * 1024:
+        raise GateInvalid("manifest too large")
+    try:
+        return json.loads(raw.decode("utf-8", "strict"), object_pairs_hook=object_pairs)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise GateInvalid("invalid manifest JSON") from None
+
+
+def _comment_only_sql(raw: bytes) -> bool:
+    """Accept whitespace and PostgreSQL line/nested block comments only."""
+
+    try:
+        text = raw.decode("utf-8", "strict")
+    except UnicodeDecodeError:
+        return False
+    index = 0
+    length = len(text)
+    while index < length:
+        if text[index].isspace():
+            index += 1
+            continue
+        if text.startswith("--", index):
+            newline = text.find("\n", index + 2)
+            index = length if newline < 0 else newline + 1
+            continue
+        if text.startswith("/*", index):
+            depth = 1
+            index += 2
+            while index < length and depth:
+                if text.startswith("/*", index):
+                    depth += 1
+                    index += 2
+                elif text.startswith("*/", index):
+                    depth -= 1
+                    index += 2
+                else:
+                    index += 1
+            if depth:
+                return False
+            continue
+        return False
+    return True
+
+
+ANCHOR_KEYS = {
+    "version",
+    "path",
+    "blob_sha256",
+    "canonical_versions",
+    "remote_name",
+    "statement_md5",
+}
+
+
+def _validate_anchor_records(
+    raw_manifest: bytes | None,
+    migrations: Sequence[Migration],
+    ref: str,
+    read_bytes,
+) -> tuple[dict[str, dict[str, object]], list[Issue]]:
+    anchors = {
+        migration.version: migration for migration in migrations if migration.is_anchor
+    }
+    canonical = {
+        migration.version for migration in migrations if not migration.is_anchor
+    }
+    if raw_manifest is None:
+        if anchors:
+            return {}, [Issue("anchor_manifest_missing", _safe_ref(ref))]
+        return {}, []
+    try:
+        document = _json_without_duplicate_keys(raw_manifest)
+    except GateInvalid:
+        return {}, [Issue("anchor_manifest_invalid", _safe_ref(ref))]
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"schema_version", "anchors"}
+        or document.get("schema_version") != 1
+        or not isinstance(document.get("anchors"), list)
+    ):
+        return {}, [Issue("anchor_manifest_invalid", _safe_ref(ref))]
+
+    records: dict[str, dict[str, object]] = {}
+    issues: list[Issue] = []
+    for value in document["anchors"]:
+        if not isinstance(value, dict) or set(value) != ANCHOR_KEYS:
+            issues.append(Issue("anchor_manifest_invalid", _safe_ref(ref)))
+            continue
+        version = value.get("version")
+        path = value.get("path")
+        remote_name = value.get("remote_name")
+        blob_sha256 = value.get("blob_sha256")
+        statement_md5 = value.get("statement_md5")
+        mappings = value.get("canonical_versions")
+        if (
+            not isinstance(version, str)
+            or not re.fullmatch(r"[0-9]{14}", version)
+            or version in records
+            or not isinstance(path, str)
+            or not isinstance(remote_name, str)
+            or not re.fullmatch(r"[a-z0-9_]+", remote_name)
+            or path != f"{MIGRATION_PREFIX}{version}_{remote_name}.sql"
+            or not isinstance(blob_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", blob_sha256)
+            or not isinstance(statement_md5, str)
+            or not re.fullmatch(r"[0-9a-f]{32}", statement_md5)
+            or not isinstance(mappings, list)
+            or not mappings
+            or any(
+                not isinstance(mapping, str) or not re.fullmatch(r"[0-9]{3}", mapping)
+                for mapping in mappings
+            )
+            or len(mappings) != len(set(mappings))
+            or not set(mappings) <= canonical
+        ):
+            issues.append(
+                Issue(
+                    "anchor_manifest_invalid",
+                    _safe_ref(ref),
+                    (
+                        version
+                        if isinstance(version, str) and version.isdigit()
+                        else "none"
+                    ),
+                )
+            )
+            continue
+        migration = anchors.get(version)
+        if migration is None or migration.path != path or migration.name != remote_name:
+            issues.append(Issue("anchor_manifest_mismatch", _safe_ref(ref), version))
+            continue
+        try:
+            anchor_bytes = read_bytes(migration)
+        except (GateInvalid, OSError):
+            issues.append(Issue("anchor_unreadable", _safe_ref(ref), version))
+            continue
+        actual_sha256 = hashlib.sha256(anchor_bytes).hexdigest()
+        if actual_sha256 != blob_sha256:
+            issues.append(
+                Issue(
+                    "anchor_hash_mismatch",
+                    _safe_ref(ref),
+                    version,
+                    (blob_sha256, actual_sha256),
+                )
+            )
+            continue
+        if not _comment_only_sql(anchor_bytes):
+            issues.append(
+                Issue("anchor_not_noop", _safe_ref(ref), version, (actual_sha256,))
+            )
+            continue
+        records[version] = value
+
+    for version, migration in anchors.items():
+        if version not in records and not any(
+            issue.version == version for issue in issues
+        ):
+            issues.append(
+                Issue(
+                    "anchor_manifest_mismatch",
+                    _safe_ref(ref),
+                    version,
+                    (migration.oid,),
+                )
+            )
+    for version, record in records.items():
+        if version not in anchors:
+            issues.append(
+                Issue(
+                    "anchor_manifest_extra",
+                    _safe_ref(ref),
+                    version,
+                    (str(record["blob_sha256"]),),
+                )
+            )
+    return records, issues
+
+
+def anchor_manifest(
+    repo: Path, ref: str, migrations: Sequence[Migration]
+) -> tuple[dict[str, dict[str, object]], list[Issue]]:
+    manifest_blob = _tree_blob(repo, ref, MANIFEST_PATH)
+    raw_manifest = manifest_blob[1] if manifest_blob else None
+    return _validate_anchor_records(
+        raw_manifest,
+        migrations,
+        ref,
+        lambda migration: _run_git(repo, ["cat-file", "blob", migration.oid]),
+    )
 
 
 def validate_inventory(migrations: Sequence[Migration], ref: str) -> list[Issue]:
@@ -149,7 +385,9 @@ def validate_inventory(migrations: Sequence[Migration], ref: str) -> list[Issue]
                     (oid,),
                 )
             )
-    numbers = sorted({migration.number for migration in migrations})
+    numbers = sorted(
+        {migration.number for migration in migrations if not migration.is_anchor}
+    )
     if numbers:
         missing = sorted(set(range(1, numbers[-1] + 1)) - set(numbers))
         issues.extend(
@@ -223,6 +461,23 @@ def compare_git(
     issues.extend(head_issues)
     issues.extend(validate_inventory(base, "BASE"))
     issues.extend(validate_inventory(head, "HEAD"))
+    base_anchors, base_anchor_issues = anchor_manifest(repo, base_commit, base)
+    head_anchors, head_anchor_issues = anchor_manifest(repo, head_commit, head)
+    issues.extend(base_anchor_issues)
+    issues.extend(head_anchor_issues)
+    for version, record in base_anchors.items():
+        current = head_anchors.get(version)
+        if current != record:
+            old_hash = str(record.get("blob_sha256", ""))
+            new_hash = str(current.get("blob_sha256", "")) if current else ""
+            issues.append(
+                Issue(
+                    "anchor_manifest_modified",
+                    "HEAD",
+                    version,
+                    tuple(value for value in (old_hash, new_hash) if value),
+                )
+            )
 
     base_by_path = {migration.path: migration for migration in base}
     head_by_path = {migration.path: migration for migration in head}
@@ -237,10 +492,13 @@ def compare_git(
             )
 
     new = [migration for migration in head if migration.path not in base_by_path]
-    base_max = max((migration.number for migration in base), default=0)
-    expected_new = list(range(base_max + 1, base_max + 1 + len(new)))
-    if [migration.number for migration in new] != expected_new:
-        for migration in new:
+    new_canonical = [migration for migration in new if not migration.is_anchor]
+    base_max = max(
+        (migration.number for migration in base if not migration.is_anchor), default=0
+    )
+    expected_new = list(range(base_max + 1, base_max + 1 + len(new_canonical)))
+    if [migration.number for migration in new_canonical] != expected_new:
+        for migration in new_canonical:
             if migration.number <= base_max:
                 issues.append(
                     Issue(
@@ -265,7 +523,8 @@ def compare_git(
 
     for ref in sorted(set(cross_refs)):
         remote, remote_issues = inventory(repo, ref)
-        if remote_issues:
+        _, remote_anchor_issues = anchor_manifest(repo, ref, remote)
+        if remote_issues or remote_anchor_issues:
             issues.append(Issue("cross_ref_invalid", _safe_ref(ref)))
             continue
         by_version: dict[str, list[Migration]] = defaultdict(list)
@@ -358,15 +617,35 @@ def command_git(args: argparse.Namespace) -> int:
 
 def _local_versions(repo: Path) -> list[str]:
     directory = repo / MIGRATION_PREFIX
-    versions: list[str] = []
+    migrations: list[Migration] = []
     for path in sorted(directory.iterdir()):
         relative = path.relative_to(repo).as_posix()
         match = MIGRATION_RE.fullmatch(relative)
         if not path.is_file() or match is None:
             raise GateInvalid("invalid local migration path")
-        versions.append(match.group(1))
+        raw = path.read_bytes()
+        migrations.append(
+            Migration(
+                match.group(1),
+                int(match.group(1)),
+                match.group(2),
+                relative,
+                hashlib.sha256(raw).hexdigest(),
+            )
+        )
+    versions = [migration.version for migration in migrations]
     if len(versions) != len(set(versions)):
         raise GateInvalid("duplicate local version")
+    manifest_path = repo / MANIFEST_PATH
+    raw_manifest = manifest_path.read_bytes() if manifest_path.is_file() else None
+    _, issues = _validate_anchor_records(
+        raw_manifest,
+        migrations,
+        "WORKTREE",
+        lambda migration: (repo / migration.path).read_bytes(),
+    )
+    if issues:
+        raise GateInvalid("invalid worktree anchor manifest")
     return versions
 
 
@@ -512,11 +791,12 @@ def command_pg16(args: argparse.Namespace) -> int:
             raise GateInvalid("invalid inventory")
         base_paths = {migration.path for migration in base}
         new = [migration for migration in head if migration.path not in base_paths]
+        new_anchors = [migration for migration in new if migration.is_anchor]
+        new_ddl = [migration for migration in new if not migration.is_anchor]
         if not new:
             print(
-                "migration_gate status=pass stage=pg16 base={} new=0 applied=0".format(
-                    len(base)
-                )
+                "migration_gate status=pass stage=pg16 "
+                f"base={len(base)} new=0 anchors=0 applied=0"
             )
             return 0
         raw_url = os.environ.get("JHT_TEST_POSTGRES_URL", "")
@@ -569,7 +849,8 @@ def command_pg16(args: argparse.Namespace) -> int:
                                 (migration.oid,),
                             )
                             break
-                        applied += 1
+                        if not migration.is_anchor:
+                            applied += 1
         finally:
             dropped = _psql(
                 admin_url,
@@ -578,12 +859,19 @@ def command_pg16(args: argparse.Namespace) -> int:
         if dropped.returncode:
             return emit_issues("pg16", [Issue("database_cleanup_failed", "local")])
         if apply_issue is not None:
-            return emit_issues("pg16", [apply_issue], applied=applied, new=len(new))
+            return emit_issues(
+                "pg16",
+                [apply_issue],
+                anchors=len(new_anchors),
+                applied=applied,
+                new=len(new_ddl),
+            )
     except (GateInvalid, OSError, UnicodeError):
         return emit_issues("pg16", [Issue("postgres_unavailable", "local")])
     print(
         "migration_gate status=pass stage=pg16 "
-        f"base={len(base)} new={len(new)} applied={applied}"
+        f"base={len(base)} new={len(new_ddl)} "
+        f"anchors={len(new_anchors)} applied={applied}"
     )
     return 0
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import json
 import os
 import shutil
 import socket
@@ -71,6 +73,40 @@ def _repo(tmp_path: Path, migrations: dict[str, str]) -> tuple[Path, str]:
 
 def _codes(issues) -> set[str]:
     return {issue.code for issue in issues}
+
+
+def _write_anchor_manifest(
+    repo: Path,
+    *,
+    version: str = "20260813000001",
+    remote_name: str = "historical_alias",
+    canonical_versions: list[str] | None = None,
+    body: str | None = None,
+    blob_sha256: str | None = None,
+) -> Path:
+    anchor = repo / f"supabase/migrations/{version}_{remote_name}.sql"
+    anchor.write_text(
+        body if body is not None else f"-- Anchor for {version}_{remote_name}.\n",
+        encoding="utf-8",
+    )
+    digest = blob_sha256 or hashlib.sha256(anchor.read_bytes()).hexdigest()
+    manifest = {
+        "schema_version": 1,
+        "anchors": [
+            {
+                "version": version,
+                "path": anchor.relative_to(repo).as_posix(),
+                "blob_sha256": digest,
+                "canonical_versions": canonical_versions or ["001"],
+                "remote_name": remote_name,
+                "statement_md5": "0" * 32,
+            }
+        ],
+    }
+    (repo / gate.MANIFEST_PATH).write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return anchor
 
 
 def test_clean_additive_sequence_and_cross_ref_number_collision(tmp_path: Path):
@@ -157,6 +193,42 @@ def test_exact_base_not_merge_base_rejects_a_branch_behind(tmp_path: Path):
     assert _codes(issues) == {"history_not_ancestor"}
 
 
+def test_timestamp_anchor_requires_exact_manifest_hash_mapping_and_noop(
+    tmp_path: Path,
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    anchor = repo / "supabase/migrations/20260813000001_alias.sql"
+    anchor.write_text("-- unmanifested\n", encoding="utf-8")
+    unmanifested = _commit(repo, "unmanifested anchor")
+    issues, *_ = gate.compare_git(repo, base, unmanifested, [])
+    assert "anchor_manifest_missing" in _codes(issues)
+    assert "sequence_gap" not in _codes(issues)
+
+    _write_anchor_manifest(
+        repo,
+        remote_name="alias",
+        body="-- Exact, comment-only historical anchor.\n",
+    )
+    valid = _commit(repo, "manifest anchor")
+    issues, *_ = gate.compare_git(repo, base, valid, [])
+    assert issues == []
+
+    _write_anchor_manifest(repo, remote_name="alias", blob_sha256="f" * 64)
+    wrong_hash = _commit(repo, "wrong hash")
+    issues, *_ = gate.compare_git(repo, valid, wrong_hash, [])
+    assert "anchor_hash_mismatch" in _codes(issues)
+    assert "anchor_manifest_modified" in _codes(issues)
+
+
+def test_manifested_anchor_must_be_comment_only(tmp_path: Path):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    _write_anchor_manifest(repo, body="CREATE TABLE forbidden(id int);\n")
+    head = _commit(repo, "not a no-op")
+
+    issues, *_ = gate.compare_git(repo, base, head, [])
+    assert "anchor_not_noop" in _codes(issues)
+
+
 def _linked_table(local: list[str], remote: list[str]) -> str:
     rows = ["Local | Remote | Time (UTC)", "------|--------|-----------"]
     for index in range(max(len(local), len(remote))):
@@ -225,7 +297,27 @@ def test_linked_history_fails_when_local_and_remote_diverge_both_ways(tmp_path: 
 
 def test_linked_parser_classifies_the_sanitized_real_drift_fixture(tmp_path: Path):
     fixture = ROOT / "tests/fixtures/supabase-migration-list-linked-drift.txt"
-    result, _ = _run_wrapper(tmp_path, fixture.read_text(encoding="utf-8"))
+    repo, _ = _repo(
+        tmp_path,
+        {
+            f"{number:03d}_migration_{number:03d}.sql": f"SELECT {number};\n"
+            for number in range(1, 81)
+        },
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(GATE_PATH),
+            "linked",
+            "--repo",
+            str(repo),
+            "--input",
+            str(fixture),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
 
     assert result.returncode == 1
     assert "history_diverged" in result.stdout
@@ -367,7 +459,25 @@ def test_real_project_history_builds_before_a_new_migration_on_pg16(
 
     assert result == 0
     output = capsys.readouterr().out
-    assert f"base={len(current)} new=1 applied=1" in output
+    assert f"base={len(current)} new=1 anchors=0 applied=1" in output
+
+
+def test_pg16_executes_manifested_anchor_without_counting_it_as_ddl(
+    tmp_path: Path, postgres16_url: str, monkeypatch, capsys
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    (repo / "supabase/migrations/002_forward.sql").write_text(
+        "CREATE TABLE public.forward_effect(id integer PRIMARY KEY);\n",
+        encoding="utf-8",
+    )
+    _write_anchor_manifest(repo, canonical_versions=["002"])
+    head = _commit(repo, "forward migration plus historical anchor")
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", postgres16_url)
+
+    result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
+
+    assert result == 0
+    assert "new=1 anchors=1 applied=1" in capsys.readouterr().out
 
 
 def test_pg16_gate_rejects_non_loopback_without_exposing_target(
