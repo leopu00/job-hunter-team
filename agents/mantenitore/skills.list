@@ -7,6 +7,10 @@
 # repair/escalate, deps audit, orphan GC, script de-dup, disk/RAM trend.
 maintainer-sweep
 
+# Privacy-safe recovery of rows isolated by cloud push. The sweep opens this
+# only when sync_health reports push_quarantine.
+cloud-push-quarantine
+
 # The fallback ladder the Mantenitore enforces on broken mission-critical
 # tools (retry → repair via jht-install → alt method → canonical source).
 resilience
