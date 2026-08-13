@@ -39,6 +39,7 @@ SAFE_CODES = frozenset(
         "force_push_allowed",
         "input_invalid",
         "live_read_failed",
+        "pull_request_rule_not_atomic",
         "required_checks_drift",
         "review_count_drift",
         "signatures_not_required",
@@ -93,7 +94,7 @@ def _decode_json(raw: str, error_code: str) -> Any:
         return json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
     except GateError:
         raise
-    except (TypeError, UnicodeError, ValueError) as exc:
+    except (RecursionError, TypeError, UnicodeError, ValueError) as exc:
         raise GateError(error_code) from exc
 
 
@@ -173,10 +174,12 @@ def load_live_snapshot(runner: Runner = subprocess.run) -> dict[str, Any]:
     return {"schema_version": 1, "protection": protection, "rulesets": rulesets}
 
 
-def _enabled(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    return isinstance(value, dict) and value.get("enabled") is True
+def _has_enabled_state(container: dict[str, Any], key: str, expected: bool) -> bool:
+    value = container.get(key)
+    if not isinstance(value, dict) or "enabled" not in value:
+        return False
+    enabled = value["enabled"]
+    return type(enabled) is bool and enabled is expected
 
 
 def _targets_master(ruleset: dict[str, Any]) -> bool:
@@ -229,18 +232,20 @@ def evaluate(snapshot: dict[str, Any]) -> GateResult:
         issues.add("status_checks_not_strict")
     if _actual_checks(protection) != _expected_checks():
         issues.add("required_checks_drift")
-    if not _enabled(protection.get("enforce_admins")):
+    if not _has_enabled_state(protection, "enforce_admins", True):
         issues.add("admins_not_enforced")
-    if not _enabled(protection.get("required_signatures")):
+    if not _has_enabled_state(protection, "required_signatures", True):
         issues.add("signatures_not_required")
-    if _enabled(protection.get("allow_force_pushes")):
+    if not _has_enabled_state(protection, "allow_force_pushes", False):
         issues.add("force_push_allowed")
-    if _enabled(protection.get("allow_deletions")):
+    if not _has_enabled_state(protection, "allow_deletions", False):
         issues.add("delete_allowed")
 
     review_counts: list[int] = []
     codeowner_review = False
     dismiss_stale_reviews = False
+    atomic_pull_request_rule = False
+    malformed_pull_request_rule = False
     for ruleset in rulesets:
         if not isinstance(ruleset, dict):
             issues.add("review_count_drift")
@@ -248,7 +253,7 @@ def evaluate(snapshot: dict[str, Any]) -> GateResult:
         if ruleset.get("target") != "branch" or ruleset.get("enforcement") != "active":
             continue
 
-        bypass_actors = ruleset.get("bypass_actors", [])
+        bypass_actors = ruleset.get("bypass_actors")
         if not isinstance(bypass_actors, list):
             issues.add("admin_always_bypass")
         else:
@@ -258,10 +263,21 @@ def evaluate(snapshot: dict[str, Any]) -> GateResult:
                     continue
                 actor_type = actor.get("actor_type")
                 actor_id = actor.get("actor_id")
+                bypass_mode = actor.get("bypass_mode")
+                if (
+                    not isinstance(actor_type, str)
+                    or not actor_type
+                    or not isinstance(actor_id, int)
+                    or isinstance(actor_id, bool)
+                    or not isinstance(bypass_mode, str)
+                    or not bypass_mode
+                ):
+                    issues.add("admin_always_bypass")
+                    continue
                 if (
                     actor_type == "RepositoryRole"
                     and actor_id == ADMIN_REPOSITORY_ROLE_ID
-                    and actor.get("bypass_mode") == "always"
+                    and bypass_mode == "always"
                 ):
                     issues.add("admin_always_bypass")
 
@@ -273,19 +289,44 @@ def evaluate(snapshot: dict[str, Any]) -> GateResult:
             issues.add("review_count_drift")
             continue
         for rule in rule_list:
-            if not isinstance(rule, dict) or rule.get("type") != "pull_request":
+            if not isinstance(rule, dict):
+                malformed_pull_request_rule = True
+                continue
+            rule_type = rule.get("type")
+            if not isinstance(rule_type, str) or not rule_type:
+                malformed_pull_request_rule = True
+                continue
+            if rule_type != "pull_request":
                 continue
             parameters = rule.get("parameters")
             if not isinstance(parameters, dict):
                 issues.add("review_count_drift")
+                malformed_pull_request_rule = True
                 continue
             review_count = parameters.get("required_approving_review_count")
             if not isinstance(review_count, int) or isinstance(review_count, bool):
                 issues.add("review_count_drift")
+                malformed_pull_request_rule = True
             else:
                 review_counts.append(review_count)
-            codeowner_review |= parameters.get("require_code_owner_review") is True
-            dismiss_stale_reviews |= parameters.get("dismiss_stale_reviews_on_push") is True
+            codeowner_value = parameters.get("require_code_owner_review")
+            if type(codeowner_value) is not bool:
+                issues.add("codeowner_review_not_required")
+                malformed_pull_request_rule = True
+            stale_value = parameters.get("dismiss_stale_reviews_on_push")
+            if type(stale_value) is not bool:
+                issues.add("dismiss_stale_reviews_not_required")
+                malformed_pull_request_rule = True
+            requires_codeowner = codeowner_value is True
+            dismisses_stale = stale_value is True
+            codeowner_review |= requires_codeowner
+            dismiss_stale_reviews |= dismisses_stale
+            atomic_pull_request_rule |= (
+                type(review_count) is int
+                and review_count == 1
+                and requires_codeowner
+                and dismisses_stale
+            )
 
     if not review_counts or max(review_counts) != 1:
         issues.add("review_count_drift")
@@ -293,6 +334,8 @@ def evaluate(snapshot: dict[str, Any]) -> GateResult:
         issues.add("codeowner_review_not_required")
     if not dismiss_stale_reviews:
         issues.add("dismiss_stale_reviews_not_required")
+    if malformed_pull_request_rule or not atomic_pull_request_rule:
+        issues.add("pull_request_rule_not_atomic")
 
     return GateResult(tuple(sorted(issues)))
 
