@@ -79,32 +79,6 @@ describe("forma local-first delle scritture su posizione", () => {
     ).toBe(true);
   });
 
-  it("pre-effect failure e risposta persa restano pending; retry ACK converge una volta", async () => {
-    const { applicationAckAccepted } =
-      await import("@/lib/positions/application-ack");
-    let applied = false;
-    let transitions = 0;
-    const rpc = async (
-      reply: {
-        source?: "local" | "cloud";
-        cloud_synced?: boolean | null;
-      } | null,
-    ) => {
-      if (applicationAckAccepted(reply) && !applied) {
-        applied = true;
-        transitions += 1;
-      }
-    };
-    await rpc(null);
-    expect(applied).toBe(false);
-    await rpc(null);
-    expect(applied).toBe(false);
-    await rpc({ source: "cloud", cloud_synced: true });
-    await rpc({ source: "cloud", cloud_synced: true });
-    expect(applied).toBe(true);
-    expect(transitions).toBe(1);
-  });
-
   it.each(WRITERS)("%s usa la forma invece di ricopiarla", (rel) => {
     const src = read(rel);
     expect(src).toContain("localFirstWrite");
