@@ -155,6 +155,37 @@ describe("policy del push periodico", () => {
     });
     expect(JSON.stringify(observation)).not.toContain("positions");
   });
+
+  it("pubblica solo il conteggio aggregato delle quarantene e non lo perde a riposo", () => {
+    const partial = nextPeriodicPushState({
+      state: {},
+      now: T0,
+      signature: signature(42),
+      result: { ok: true, skipped: 2, quarantined: 2 },
+      source: "periodic",
+    });
+    expect(partial).toMatchObject({
+      status: "partial",
+      quarantined_count: 2,
+    });
+    const idleCheck = nextPeriodicCheckState({
+      state: partial,
+      now: T0 + MIN,
+      signature: signature(42),
+      reason: "nothing_new",
+    });
+    expect(idleCheck.status).toBe("partial");
+    expect(periodicPushObservation({ state: idleCheck })).toEqual({
+      cloud_push_status: "quarantined:2",
+      cloud_push_checked_at: iso(T0 + MIN),
+    });
+    expect(
+      JSON.stringify(periodicPushObservation({ state: idleCheck })),
+    ).not.toContain("signature");
+    expect(periodicPushStatusLine(idleCheck)).toContain(
+      "2 quarantined record(s)",
+    );
+  });
 });
 
 describe("esecuzione bounded", () => {
@@ -183,6 +214,45 @@ describe("esecuzione bounded", () => {
       consecutive_failures: 1,
     });
     expect(saved).toHaveLength(1);
+  });
+
+  it("pubblica il recovery quando la quarantena sparisce senza nuovi dati", async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    const saved: Array<Record<string, unknown>> = [];
+    const { maybePeriodicPush } =
+      await import("../../../cli/src/commands/cloud.js");
+    const outcome = await maybePeriodicPush({
+      now: T0,
+      limits,
+      state: {
+        status: "partial",
+        quarantined_count: 2,
+        last_check_at: iso(T0 - 1_000),
+      },
+      readQuarantineCount: async () => 0,
+      save: async (state: Record<string, unknown>) => {
+        saved.push(state);
+        return true;
+      },
+      publishObservation: async (value: Record<string, unknown>) => {
+        observations.push(value);
+        return true;
+      },
+      silent: true,
+    });
+
+    expect(outcome.state).toMatchObject({
+      status: "idle",
+      quarantined_count: 0,
+      last_reason: "quarantine_recovered",
+    });
+    expect(saved).toHaveLength(1);
+    expect(observations).toEqual([
+      {
+        cloud_push_status: "current",
+        cloud_push_checked_at: iso(T0),
+      },
+    ]);
   });
 });
 

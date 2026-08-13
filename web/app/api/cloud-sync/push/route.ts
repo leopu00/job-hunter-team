@@ -408,6 +408,21 @@ export async function POST(req: NextRequest) {
   let sentinelTicksUpserted = 0;
   let tombstonesApplied = 0;
   let positionTransitionsUpserted = 0;
+  // Explicit receipt counts let the client distinguish "HTTP 200" from
+  // "every requested row was accepted".  Invalid filtered rows become an ACK
+  // mismatch and are isolated/quarantined instead of disappearing silently.
+  const accepted = {
+    companies: 0,
+    positions: 0,
+    scores: 0,
+    applications: 0,
+    position_highlights: 0,
+    pending_user_messages: 0,
+    sentinel_ticks: 0,
+    tombstones: 0,
+    position_transitions: 0,
+    profile: 0,
+  };
   const legacyToUuid = new Map<number, string>();
   const appliedPositionIds = new Set<number>();
   // companies.id locale (int) → companies.id cloud (UUID). Popolata
@@ -440,6 +455,7 @@ export async function POST(req: NextRequest) {
       }));
 
     if (payload.length > 0) {
+      accepted.companies = payload.length;
       const { data: upserted, error } = await admin
         .from("companies")
         .upsert(payload, { onConflict: "user_id,legacy_id" })
@@ -613,6 +629,7 @@ export async function POST(req: NextRequest) {
         if (status !== "applied") throw new Error("unreachable_status");
         return deferred;
       });
+    accepted.positions = payload.length;
     for (const batch of [
       { rows: regularPayload, defaultToNull: true },
       { rows: deferredAppliedPayload, defaultToNull: false },
@@ -643,8 +660,36 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 2. Upsert scores via position_id UUID
-  if (scores.length > 0 && legacyToUuid.size > 0) {
+  // 2. Upsert scores via position_id UUID.  Scores travel in their own batch
+  // so a rejected score can be attributed without quarantining its position;
+  // resolve unchanged parent positions explicitly, like applications.
+  if (scores.length > 0) {
+    const needsLookup = new Set<number>();
+    for (const score of scores) {
+      if (
+        typeof score.position_id === "number" &&
+        !legacyToUuid.has(score.position_id)
+      ) {
+        needsLookup.add(score.position_id);
+      }
+    }
+    if (needsLookup.size > 0) {
+      const { data: rows, error } = await admin
+        .from("positions")
+        .select("id, legacy_id")
+        .eq("user_id", userId)
+        .in("legacy_id", Array.from(needsLookup));
+      if (error) {
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "score_positions_lookup_failed",
+        });
+      }
+      for (const row of rows ?? []) {
+        if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
+      }
+    }
     const payload = scores
       .map((s) => {
         const uuid = legacyToUuid.get(s.position_id);
@@ -667,6 +712,7 @@ export async function POST(req: NextRequest) {
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (payload.length > 0) {
+      accepted.scores = payload.length;
       const { data: upserted, error } = await admin
         .from("scores")
         .upsert(payload, { onConflict: "position_id" })
@@ -755,6 +801,7 @@ export async function POST(req: NextRequest) {
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (payload.length > 0) {
+      accepted.applications = payload.length;
       // L'RPC prende il lock della position prima di valutare l'application.
       // Un push stale non può quindi retrocedere la candidatura dopo che una
       // mark_position_applied concorrente l'ha resa visibile come applied.
@@ -839,6 +886,7 @@ export async function POST(req: NextRequest) {
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (payload.length > 0) {
+      accepted.position_highlights = payload.length;
       const { data: upserted, error } = await admin
         .from("position_highlights")
         .upsert(payload, { onConflict: "user_id,legacy_id" })
@@ -856,19 +904,50 @@ export async function POST(req: NextRequest) {
   }
 
   // 3b. Upsert pending_user_messages via (user_id, legacy_id).
-  // related_position_id (numero locale) -> UUID cloud via legacyToUuid se
-  // disponibile. Se non lo conosciamo (push parziale o push successivo dove
-  // la position esiste gia' cloud ma non in questo batch), passiamo NULL —
-  // la dashboard mostra il messaggio senza link alla posizione, che e' un
-  // degrado accettabile. Una soluzione completa farebbe un lookup
-  // server-side per legacy_id mancanti, e' rimandata.
+  // related_position_id (numero locale) -> UUID cloud via legacyToUuid. Il
+  // messaggio viaggia in un request autonomo, quindi risolviamo anche parent
+  // invariati: perdere il link e rispondere 200 sarebbe uno skip silenzioso.
   if (pendingMessages.length > 0) {
+    const pendingNeedsLookup = new Set<number>();
+    for (const message of pendingMessages) {
+      if (
+        typeof message.related_position_id === "number" &&
+        !legacyToUuid.has(message.related_position_id)
+      ) {
+        pendingNeedsLookup.add(message.related_position_id);
+      }
+    }
+    if (pendingNeedsLookup.size > 0) {
+      const { data: rows, error } = await admin
+        .from("positions")
+        .select("id, legacy_id")
+        .eq("user_id", userId)
+        .in("legacy_id", Array.from(pendingNeedsLookup));
+      if (error) {
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "message_positions_lookup_failed",
+        });
+      }
+      for (const row of rows ?? []) {
+        if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
+      }
+    }
+
     const payload = pendingMessages
-      .filter((m) => typeof m.id === "number" && m.agent && m.body)
+      .filter(
+        (m) =>
+          typeof m.id === "number" &&
+          m.agent &&
+          m.body &&
+          (m.related_position_id == null ||
+            legacyToUuid.has(m.related_position_id)),
+      )
       .map((m) => {
         const relatedUuid =
           m.related_position_id != null
-            ? (legacyToUuid.get(m.related_position_id) ?? null)
+            ? legacyToUuid.get(m.related_position_id)!
             : null;
         return {
           user_id: userId,
@@ -902,6 +981,7 @@ export async function POST(req: NextRequest) {
       });
 
     if (payload.length > 0) {
+      accepted.pending_user_messages = payload.length;
       // [JHT-MSG-BACKFLOW] Merge lato DB (mig 057) invece di upsert cieco:
       // i campi utente (acknowledged_at, user_reply, user_reply_at) scritti
       // dal web NON vengono più sovrascritti dai NULL della SQLite locale
@@ -973,6 +1053,7 @@ export async function POST(req: NextRequest) {
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (payload.length > 0) {
+      accepted.sentinel_ticks = payload.length;
       const { data: upserted, error } = await admin
         .from("sentinel_ticks")
         .upsert(payload, { onConflict: "user_id,sample_key" })
@@ -1018,7 +1099,6 @@ export async function POST(req: NextRequest) {
         byTable[t.table_name].push(t);
       }
     }
-
     // Risolvi legacy_id → UUID per scores/applications. Riusa il mapping
     // già popolato dai positions upsert quando possibile; integra con
     // lookup esplicito per i legacy_id che non sono passati dal push.
@@ -1066,6 +1146,10 @@ export async function POST(req: NextRequest) {
         .is("deleted_at", null);
       if (!error) tombstonesApplied++;
     }
+    // Acknowledge effects, not input shape: missing legacy mappings and
+    // failed updates must be bisected/quarantined by the client, never
+    // silently counted as delivered merely because the request was HTTP 200.
+    accepted.tombstones = tombstonesApplied;
   }
 
   // 3e. Position transitions (event-log per-istanza → feed "Attività recente").
@@ -1094,6 +1178,7 @@ export async function POST(req: NextRequest) {
       }));
 
     if (payload.length > 0) {
+      accepted.position_transitions = payload.length;
       const { data: upserted, error } = await admin
         .from("position_transitions")
         .upsert(payload, {
@@ -1137,6 +1222,7 @@ export async function POST(req: NextRequest) {
             profileError = sync.error;
           } else {
             profileUpserted = true;
+            accepted.profile = 1;
             if (sync.warnings.length) {
               console.warn(
                 "[cloud-sync/push] profile sync warnings:",
@@ -1262,6 +1348,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    accepted,
     positions: { upserted: positionsUpserted },
     scores: { upserted: scoresUpserted, out_of_range: scoresOutOfRange },
     applications: { upserted: applicationsUpserted },
