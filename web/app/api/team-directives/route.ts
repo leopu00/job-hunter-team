@@ -51,6 +51,17 @@ function enqueueCaptainEvent(
   }
 }
 
+function requestIdOrNew(value: unknown): string {
+  if (value === undefined) return randomUUID();
+  if (
+    typeof value !== "string" ||
+    value.trim().length === 0 ||
+    value.trim().length > 200
+  )
+    throw new Error("invalid request id");
+  return value.trim();
+}
+
 interface DirectiveRow {
   id: number;
   body: string;
@@ -151,10 +162,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
   const kind = body.kind && KINDS.has(body.kind) ? body.kind : "order";
-  const requestId =
-    typeof body.request_id === "string" && body.request_id.trim()
-      ? body.request_id.trim()
-      : randomUUID();
+  let requestId: string;
+  try {
+    requestId = requestIdOrNew(body.request_id);
+  } catch {
+    return NextResponse.json({ error: "invalid request id" }, { status: 400 });
+  }
 
   const db = localDbOrNull();
   if (db) {
@@ -252,10 +265,12 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "id non valido" }, { status: 400 });
   }
   const archive = body.action === "archive";
-  const requestId =
-    typeof body.request_id === "string" && body.request_id.trim()
-      ? body.request_id.trim()
-      : randomUUID();
+  let requestId: string;
+  try {
+    requestId = requestIdOrNew(body.request_id);
+  } catch {
+    return NextResponse.json({ error: "invalid request id" }, { status: 400 });
+  }
   const text = typeof body.body === "string" ? body.body.trim() : null;
   if (!archive && !text) {
     return NextResponse.json(

@@ -42,7 +42,7 @@ CREATE TABLE positions(id uuid primary key,user_id uuid not null,legacy_id int u
 CREATE TABLE applications(id serial primary key,user_id uuid not null,position_id uuid unique,status text,applied boolean,applied_at timestamptz,applied_via text,critic_notes text);
 CREATE TABLE scores(id serial primary key,user_id uuid not null,position_id uuid not null);
 CREATE TABLE position_transitions(id serial primary key,user_id uuid not null,position_legacy_id int,from_state text,to_state text,ts timestamptz,by_agent text,notes text,unique(user_id,position_legacy_id,ts,by_agent,to_state));
-CREATE TABLE pending_user_messages(id serial primary key,user_id uuid,agent text,body text,kind text,author text,source_id text,created_at timestamptz);
+CREATE TABLE pending_user_messages(id serial primary key,user_id uuid,agent text,body text,kind text,author text,source_id text,source_action text,source_payload text,source_directive_id bigint,created_at timestamptz);
 CREATE UNIQUE INDEX pending_user_messages_source_id_unique ON pending_user_messages(user_id, source_id);
 CREATE TABLE team_directives(id bigserial primary key,user_id uuid,body text,kind text,status text,created_by text,source_id text,archived_at timestamptz,updated_at timestamptz);
 CREATE UNIQUE INDEX team_directives_source_id_unique ON team_directives(user_id, source_id);

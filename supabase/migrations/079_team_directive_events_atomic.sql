@@ -1,6 +1,12 @@
 -- O-80: directive mutation and Captain handoff are one tenant-bound event.
 ALTER TABLE public.pending_user_messages
   ADD COLUMN IF NOT EXISTS source_id TEXT;
+ALTER TABLE public.pending_user_messages
+  ADD COLUMN IF NOT EXISTS source_action TEXT;
+ALTER TABLE public.pending_user_messages
+  ADD COLUMN IF NOT EXISTS source_payload TEXT;
+ALTER TABLE public.pending_user_messages
+  ADD COLUMN IF NOT EXISTS source_directive_id BIGINT;
 ALTER TABLE public.team_directives
   ADD COLUMN IF NOT EXISTS source_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS team_directives_source_id_unique
@@ -19,9 +25,21 @@ DECLARE
   v_user UUID := auth.uid();
   v_changed INTEGER;
   v_existing BIGINT;
+  v_existing_action TEXT;
+  v_existing_payload TEXT;
+  v_existing_directive BIGINT;
 BEGIN
   IF v_user IS NULL OR p_action NOT IN ('created','edited','archived') THEN
     RAISE EXCEPTION 'invalid directive event';
+  END IF;
+  IF p_source_id IS NULL OR length(p_source_id) < 1 OR length(p_source_id) > 200 THEN
+    RAISE EXCEPTION 'invalid directive request id';
+  END IF;
+  SELECT source_action, source_payload, source_directive_id
+    INTO v_existing_action, v_existing_payload, v_existing_directive
+    FROM pending_user_messages WHERE user_id = v_user AND source_id = p_source_id;
+  IF v_existing_action IS NOT NULL AND (v_existing_action <> p_action OR v_existing_payload IS DISTINCT FROM p_body OR v_existing_directive IS DISTINCT FROM p_id) THEN
+    RAISE EXCEPTION 'request id payload mismatch';
   END IF;
   SELECT id INTO v_existing FROM team_directives
     WHERE user_id = v_user AND source_id = p_source_id;
@@ -44,9 +62,9 @@ BEGIN
     GET DIAGNOSTICS v_changed = ROW_COUNT;
     IF v_changed <> 1 THEN RAISE EXCEPTION 'directive not found'; END IF;
   END IF;
-  INSERT INTO pending_user_messages (user_id, agent, body, kind, author, source_id, created_at)
+  INSERT INTO pending_user_messages (user_id, agent, body, kind, author, source_id, source_action, source_payload, source_directive_id, created_at)
     VALUES (v_user, 'capitano', '[TEAM-DIRECTIVE] ' || p_action || ' #' || p_id,
-            'notification', 'user', p_source_id, now())
+            'notification', 'user', p_source_id, p_action, p_body, p_id, now())
     ON CONFLICT (user_id, source_id) DO NOTHING;
   INSERT INTO team_state (user_id, chat_requested_at) VALUES (v_user, now())
     ON CONFLICT (user_id) DO UPDATE SET chat_requested_at=EXCLUDED.chat_requested_at;
