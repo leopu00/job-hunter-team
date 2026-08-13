@@ -93,6 +93,15 @@ def test_cover_letter_request_is_deduplicated_in_the_existing_writer_queue(box):
     assert payload["rows"][0]["id"] == 7
     assert payload["rows"][0]["total_score"] == 80
     assert payload["rows"][0]["request_kind"] == "cover_letter"
+    human_queue = subprocess.run(
+        [sys.executable, str(SKILLS / "db_query.py"),
+         "next-for-scrittore"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert human_queue.returncode == 0, human_queue.stderr
+    assert "[request_kind=cover_letter]" in human_queue.stdout
 
 
 def test_only_a_changed_cover_letter_effect_closes_the_request(box):

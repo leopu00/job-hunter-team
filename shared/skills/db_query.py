@@ -803,6 +803,8 @@ def _emit_queue(conn, role, label, rows, sql_limit, as_json):
         # Le code di feedback (calibration) portano il TIPO e il testo
         # dell'utente: senza, la riga dice "quale posizione" ma non "perché".
         prefix = f"[{r['kind']}] " if 'kind' in r.keys() else ""
+        if 'request_kind' in r.keys():
+            prefix = f"[request_kind={r['request_kind']}] "
         detail = ""
         if 'detail' in r.keys() and r['detail']:
             detail = f" — {str(r['detail'])[:60]}"
