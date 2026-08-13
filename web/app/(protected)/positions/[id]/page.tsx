@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
@@ -53,6 +52,7 @@ import { activeRescoreTicket } from "@/lib/rescore-ticket";
 import { RescoreRequestButton } from "./RescoreRequestButton";
 import { ScoreAssessedAt } from "./ScoreAssessedAt";
 import { OverviewScoreBadge } from "./OverviewScoreBadge";
+import { OverviewFactRow, OverviewFacts } from "./OverviewFacts";
 
 // Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
 // inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
@@ -487,27 +487,34 @@ export default async function PositionDetailPage({ params }: PageProps) {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-4 md:gap-6 min-w-0">
+        <div
+          className={`grid w-full min-w-0 items-center gap-4 md:w-auto md:gap-6 ${
+            score
+              ? "grid-cols-[3.5rem_minmax(0,1fr)] md:grid-cols-[3.5rem_minmax(15rem,auto)]"
+              : "grid-cols-1 md:min-w-60"
+          }`}
+        >
           {score && <OverviewScoreBadge score={score.total_score} />}
-          {/* Fatti: label e valore su due colonne adiacenti, niente vuoto
-              tra label e valore (feedback 22/07). */}
-          <div className="ml-auto md:ml-0 grid grid-cols-[auto_auto] gap-x-5 gap-y-1.5 items-baseline min-w-0">
+          {/* Fatti: ogni label e' legata strutturalmente alla propria cella;
+              la colonna valore conserva spazio utile anche su mobile. */}
+          <OverviewFacts>
             {(salaryDecl || salaryEst) && (
-              <OverviewRow
+              <OverviewFactRow
+                factId="salary"
                 label={t(
                   salaryDecl ? "d_salary_declared" : "d_salary_estimated",
                 )}
               >
                 {(salaryDecl ?? salaryEst)!}
-              </OverviewRow>
+              </OverviewFactRow>
             )}
             {position.remote_type && (
-              <OverviewRow label={t("o_mode")}>
+              <OverviewFactRow factId="work-mode" label={t("o_mode")}>
                 {t(`rt_${position.remote_type}`)}
-              </OverviewRow>
+              </OverviewFactRow>
             )}
             {position.role_family && (
-              <OverviewRow label={t("o_category")}>
+              <OverviewFactRow factId="category" label={t("o_category")}>
                 <span className="inline-flex items-center gap-1.5 max-w-full">
                   <span
                     className="w-2 h-2 rounded-full shrink-0"
@@ -518,10 +525,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   />
                   <span className="truncate">{position.role_family}</span>
                 </span>
-              </OverviewRow>
+              </OverviewFactRow>
             )}
             {position.source && (
-              <OverviewRow label={t("d_source")}>
+              <OverviewFactRow factId="source" label={t("d_source")}>
                 {position.url ? (
                   <a
                     href={position.url}
@@ -534,12 +541,12 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 ) : (
                   sourceDisplayName(position.source)
                 )}
-              </OverviewRow>
+              </OverviewFactRow>
             )}
-            <OverviewRow label={t("d_found")}>
+            <OverviewFactRow factId="found" label={t("d_found")}>
               {`${foundDate} (${foundAge})`}
-            </OverviewRow>
-          </div>
+            </OverviewFactRow>
+          </OverviewFacts>
         </div>
       </div>
       {/* Banner motivo esclusione: sempre presente su una posizione
@@ -1302,25 +1309,5 @@ function InfoRow({ label, value }: { label: string; value: string }) {
         {value}
       </span>
     </div>
-  );
-}
-
-// Riga della card Panoramica: due celle (label + valore) del grid a due
-// colonne — il fragment si appiattisce nelle colonne del grid padre, così
-// label e valore restano adiacenti qualunque sia la larghezza della card.
-function OverviewRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <>
-      <span className="text-[10px] text-[var(--color-dim)]">{label}</span>
-      <span className="text-[11px] text-[var(--color-base)] text-right min-w-0 break-words">
-        {children}
-      </span>
-    </>
   );
 }
