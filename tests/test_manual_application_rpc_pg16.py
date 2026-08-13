@@ -79,6 +79,9 @@ def test_pg16_apply_reapply_click_undo_tenant_and_privileges(pg16):
     assert before == "t"
     sql = MIGRATION.read_text()
     pg16(sql)
+    # Supabase grants newly-created public RPCs to every API role. The
+    # migration must remove those explicit grants as well as PUBLIC on reapply.
+    pg16("GRANT EXECUTE ON FUNCTION public.mark_position_applied(integer,timestamptz,text,text), public.undo_manual_position_application(integer,text) TO anon, service_role;")
     pg16(sql)  # reapply must be harmless
     privileges = pg16("SELECT has_function_privilege('anon','public.mark_position_applied(integer,timestamptz,text,text)','execute'), has_function_privilege('authenticated','public.mark_position_applied(integer,timestamptz,text,text)','execute'), has_function_privilege('service_role','public.mark_position_applied(integer,timestamptz,text,text)','execute');").stdout.strip()
     assert privileges == "f|t|f"

@@ -103,6 +103,8 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.mark_position_applied(INTEGER, TIMESTAMPTZ, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.mark_position_applied(INTEGER, TIMESTAMPTZ, TEXT, TEXT) FROM anon, service_role;
 GRANT EXECUTE ON FUNCTION public.mark_position_applied(INTEGER, TIMESTAMPTZ, TEXT, TEXT) TO authenticated;
 REVOKE ALL ON FUNCTION public.undo_manual_position_application(INTEGER, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.undo_manual_position_application(INTEGER, TEXT) FROM anon, service_role;
 GRANT EXECUTE ON FUNCTION public.undo_manual_position_application(INTEGER, TEXT) TO authenticated;
