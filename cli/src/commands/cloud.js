@@ -1593,11 +1593,14 @@ async function performPush(options) {
     if (res.network || res.timedOut) return false;
     if ([401, 403, 429].includes(res.status)) return false;
     if (res.status === 409 && res.body?.error === 'not_active_device') return false;
-    if (res.status === 413 || [400, 409, 422].includes(res.status)) return true;
-    // A sanitized code says what failed, not whether one row caused it.  A
-    // 5xx stays convoy-wide unless the server explicitly attests row scope.
-    return res.status >= 500 && res.status < 600 &&
-      res.body?.rejection_scope === 'row';
+    // A status/code says what failed, not whether one row caused it. Every
+    // status requires an explicit route attestation; 413 is the sole
+    // exception because halving the payload is itself the diagnostic.
+    if (res.status === 413) return true;
+    return [400, 409, 422].includes(res.status) ||
+      (res.status >= 500 && res.status < 600)
+      ? res.body?.rejection_scope === 'row'
+      : false;
   };
 
   const sameReceiptMultiset = (expected, received) => {
@@ -1672,7 +1675,10 @@ async function performPush(options) {
           continue;
         }
         if (canIsolate(res)) {
-          const reason = sanitizedQuarantineReason(res.status, res.body);
+          const reason = sanitizedQuarantineReason(
+            res.status,
+            res.status === 413 ? { error: 'payload_too_large' } : res.body,
+          );
           try {
             const identity = quarantineRow({
               table, row: items[s], reason, path: quarantinePath,

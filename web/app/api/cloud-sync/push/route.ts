@@ -64,6 +64,14 @@ function rowAttributableWriteError(error: unknown, publicMessage: string) {
   });
 }
 
+function rowRejection(error: string, status = 422) {
+  return NextResponse.json({ error, rejection_scope: "row" }, { status });
+}
+
+function protocolError(error: string, status = 400) {
+  return NextResponse.json({ error }, { status });
+}
+
 interface PositionIn {
   id: number;
   _receipt_id?: string;
@@ -214,6 +222,15 @@ function validReceipt(
 ) {
   return (
     supplied === undefined || supplied === sourceReceiptId(table, sourceKey)
+  );
+}
+
+function sameNullableInstant(left: unknown, right: unknown) {
+  if (left == null || right == null) return left == null && right == null;
+  const leftMs = Date.parse(String(left));
+  const rightMs = Date.parse(String(right));
+  return (
+    Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs
   );
 }
 
@@ -527,10 +544,7 @@ export async function POST(req: NextRequest) {
           !validReceipt("companies", company.id, company._receipt_id),
       )
     ) {
-      return NextResponse.json(
-        { error: "invalid_companies_receipt_id" },
-        { status: 400 },
-      );
+      return protocolError("invalid_companies_receipt_id");
     }
     const payload = companies
       .filter((c) => typeof c.id === "number" && cleanText(c.name))
@@ -552,6 +566,10 @@ export async function POST(req: NextRequest) {
         logo_source: c.logo_source ?? null,
         logo_fetched: !!c.logo_fetched,
       }));
+
+    if (payload.length !== companies.length) {
+      return rowRejection("companies_row_rejected");
+    }
 
     if (payload.length > 0) {
       const { data: upserted, error } = await admin
@@ -582,10 +600,7 @@ export async function POST(req: NextRequest) {
           !validReceipt("positions", position.id, position._receipt_id),
       )
     ) {
-      return NextResponse.json(
-        { error: "invalid_positions_receipt_id" },
-        { status: 400 },
-      );
+      return protocolError("invalid_positions_receipt_id");
     }
     // Risolvi company_id (int locale) → UUID cloud. Riusa companyLegacyToUuid
     // dall'upsert companies; per i company_id referenziati da una position ma
@@ -730,6 +745,10 @@ export async function POST(req: NextRequest) {
         };
       });
 
+    if (payload.length !== positions.length) {
+      return rowRejection("positions_row_rejected");
+    }
+
     const regularPayload = payload.filter((p) => p.status !== "applied");
     const deferredAppliedPayload = payload
       .filter((p) => p.status === "applied")
@@ -775,29 +794,20 @@ export async function POST(req: NextRequest) {
   const scoreLegacyIds = new Set<number>();
   for (const score of scores) {
     if (!Number.isInteger(score.legacy_id) || score.legacy_id <= 0) {
-      return NextResponse.json(
-        { error: "invalid_score_identity" },
-        { status: 400 },
-      );
+      return protocolError("invalid_score_identity");
     }
     const derivedReceiptId = sourceReceiptId("scores", score.legacy_id);
     if (
       score._receipt_id !== undefined &&
       score._receipt_id !== derivedReceiptId
     ) {
-      return NextResponse.json(
-        { error: "invalid_score_receipt_id" },
-        { status: 400 },
-      );
+      return protocolError("invalid_score_receipt_id");
     }
     if (
       scoreParents.has(score.position_id) ||
       scoreLegacyIds.has(score.legacy_id)
     ) {
-      return NextResponse.json(
-        { error: "score_identity_collision" },
-        { status: 400 },
-      );
+      return protocolError("score_identity_collision");
     }
     scoreParents.add(score.position_id);
     scoreLegacyIds.add(score.legacy_id);
@@ -856,10 +866,7 @@ export async function POST(req: NextRequest) {
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (payload.length !== scores.length) {
-      return NextResponse.json(
-        { error: "scores_identity_unresolved" },
-        { status: 400 },
-      );
+      return rowRejection("scores_identity_unresolved", 400);
     }
 
     if (payload.length > 0) {
@@ -909,10 +916,7 @@ export async function POST(req: NextRequest) {
         !Number.isInteger(application.position_legacy_id) ||
         application.position_legacy_id <= 0
       ) {
-        return NextResponse.json(
-          { error: "invalid_application_identity" },
-          { status: 400 },
-        );
+        return protocolError("invalid_application_identity");
       }
       const expectedReceiptId = sourceReceiptId(
         "applications",
@@ -922,10 +926,7 @@ export async function POST(req: NextRequest) {
         application._receipt_id !== undefined &&
         application._receipt_id !== expectedReceiptId
       ) {
-        return NextResponse.json(
-          { error: "invalid_application_receipt_id" },
-          { status: 400 },
-        );
+        return protocolError("invalid_application_receipt_id");
       }
     }
 
@@ -1033,10 +1034,7 @@ export async function POST(req: NextRequest) {
           ),
       )
     ) {
-      return NextResponse.json(
-        { error: "invalid_position_highlights_receipt_id" },
-        { status: 400 },
-      );
+      return protocolError("invalid_position_highlights_receipt_id");
     }
     const hlNeedsLookup = new Set<number>();
     for (const h of highlights) {
@@ -1076,6 +1074,10 @@ export async function POST(req: NextRequest) {
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
+    if (payload.length !== highlights.length) {
+      return rowRejection("position_highlights_row_rejected");
+    }
+
     if (payload.length > 0) {
       const { data: upserted, error } = await admin
         .from("position_highlights")
@@ -1113,10 +1115,7 @@ export async function POST(req: NextRequest) {
           ),
       )
     ) {
-      return NextResponse.json(
-        { error: "invalid_pending_user_messages_receipt_id" },
-        { status: 400 },
-      );
+      return protocolError("invalid_pending_user_messages_receipt_id");
     }
     const pendingNeedsLookup = new Set<number>();
     for (const message of pendingMessages) {
@@ -1189,6 +1188,10 @@ export async function POST(req: NextRequest) {
         };
       });
 
+    if (payload.length !== pendingMessages.length) {
+      return rowRejection("pending_user_messages_row_rejected");
+    }
+
     if (payload.length > 0) {
       // [JHT-MSG-BACKFLOW] Merge lato DB (mig 057) invece di upsert cieco:
       // i campi utente (acknowledged_at, user_reply, user_reply_at) scritti
@@ -1243,8 +1246,11 @@ export async function POST(req: NextRequest) {
             row.chat_ts === expected.chat_ts &&
             row.related_position_id === expected.related_position_id &&
             row.delivered_via === expected.delivered_via &&
-            row.delivered_at === expected.delivered_at &&
-            row.agent_seen_reply_at === expected.agent_seen_reply_at
+            sameNullableInstant(row.delivered_at, expected.delivered_at) &&
+            sameNullableInstant(
+              row.agent_seen_reply_at,
+              expected.agent_seen_reply_at,
+            )
           ) {
             rowReceipts.pending_user_messages.push(
               sourceReceiptId("pending_user_messages", row.legacy_id),
@@ -1341,10 +1347,7 @@ export async function POST(req: NextRequest) {
           ),
       )
     ) {
-      return NextResponse.json(
-        { error: "invalid_tombstones_receipt_id" },
-        { status: 400 },
-      );
+      return protocolError("invalid_tombstones_receipt_id");
     }
     const byTable = {
       positions: [] as TombstoneIn[],
@@ -1360,6 +1363,13 @@ export async function POST(req: NextRequest) {
       ) {
         byTable[t.table_name].push(t);
       }
+    }
+    const classifiedTombstones =
+      byTable.positions.length +
+      byTable.scores.length +
+      byTable.applications.length;
+    if (classifiedTombstones !== tombstones.length) {
+      return rowRejection("tombstone_row_rejected");
     }
 
     // Risolvi legacy_id → UUID per scores/applications. Riusa il mapping
@@ -1403,7 +1413,7 @@ export async function POST(req: NextRequest) {
     }
     for (const t of byTable.scores) {
       const uuid = legacyToUuid.get(t.legacy_id);
-      if (!uuid) continue;
+      if (!uuid) return rowRejection("tombstone_position_not_found");
       const { data, error } = await admin
         .from("scores")
         .update({ deleted_at: t.deleted_at })
@@ -1425,7 +1435,7 @@ export async function POST(req: NextRequest) {
     }
     for (const t of byTable.applications) {
       const uuid = legacyToUuid.get(t.legacy_id);
-      if (!uuid) continue;
+      if (!uuid) return rowRejection("tombstone_position_not_found");
       const { data, error } = await admin
         .from("applications")
         .update({ deleted_at: t.deleted_at })
@@ -1469,10 +1479,7 @@ export async function POST(req: NextRequest) {
           ),
       )
     ) {
-      return NextResponse.json(
-        { error: "invalid_position_transitions_receipt_id" },
-        { status: 400 },
-      );
+      return protocolError("invalid_position_transitions_receipt_id");
     }
     const payload = positionTransitions
       .filter(
@@ -1491,6 +1498,10 @@ export async function POST(req: NextRequest) {
         by_agent: t.by_agent,
         notes: t.notes ?? null,
       }));
+
+    if (payload.length !== positionTransitions.length) {
+      return rowRejection("position_transition_row_rejected");
+    }
 
     if (payload.length > 0) {
       const { data: upserted, error } = await admin
@@ -1527,10 +1538,7 @@ export async function POST(req: NextRequest) {
     if (
       !validReceipt("profile", "candidate_profile", body.profile._receipt_id)
     ) {
-      return NextResponse.json(
-        { error: "invalid_profile_receipt_id" },
-        { status: 400 },
-      );
+      return protocolError("invalid_profile_receipt_id");
     }
     const yamlRaw = body.profile.yaml;
     if (yamlRaw.length > 64 * 1024) {

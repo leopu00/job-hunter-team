@@ -583,6 +583,31 @@ describe("push sync di una candidatura", () => {
     expect(calls).toEqual([]);
   });
 
+  it("classifica una receipt score forgiata come errore di protocollo", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/cloud-sync/push", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          scores: [
+            {
+              legacy_id: 88,
+              position_id: 73,
+              _receipt_id: "q_ffffffffffffffffffffffff",
+              total_score: 81,
+            },
+          ],
+        }),
+      }) as any,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid_score_receipt_id",
+    });
+    expect(calls).toEqual([]);
+  });
+
   it("esporta la receipt score solo dopo l'upsert osservato", async () => {
     const response = await POST(
       new Request("http://localhost/api/cloud-sync/push", {
@@ -652,6 +677,7 @@ describe("push sync di una candidatura", () => {
     expect(missing.status).toBe(400);
     await expect(missing.json()).resolves.toEqual({
       error: "scores_identity_unresolved",
+      rejection_scope: "row",
     });
     expect(
       calls.some((call) => call.kind === "upsert" && call.table === "scores"),

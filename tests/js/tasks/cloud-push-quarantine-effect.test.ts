@@ -161,6 +161,7 @@ describe("cloud push record isolation — real writer path", () => {
           return jsonResponse(
             {
               error: "applications_upsert_failed",
+              rejection_scope: "row",
               detail: "synthetic server detail must not be persisted",
             },
             422,
@@ -204,7 +205,7 @@ describe("cloud push record isolation — real writer path", () => {
     expect(quarantine).not.toContain("synthetic server detail");
   });
 
-  it("bisects an HTTP 200 acknowledgement mismatch instead of silently skipping", async () => {
+  it("fails closed without quarantine on an exact receipt mismatch", async () => {
     const { home, dbPath } = fixture();
     const acceptedApplications: number[] = [];
     vi.stubGlobal(
@@ -239,14 +240,127 @@ describe("cloud push record isolation — real writer path", () => {
 
     await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject(
       {
+        ok: false,
+        skipped: 0,
+      },
+    );
+    expect(acceptedApplications).toEqual([]);
+    expect(() =>
+      readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
+    ).toThrow();
+    const cursor = JSON.parse(
+      readFileSync(join(home, ".cloud-sync-cursor.json"), "utf8"),
+    );
+    expect(cursor.positions).toBe("2026-08-13 10:02:00");
+    expect(cursor.applications).toBeUndefined();
+  });
+
+  it("does not quarantine a generic HTTP 400 without row attestation", async () => {
+    const { home, dbPath } = fixture();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}"));
+        const table = Object.keys(body)[0];
+        const rows = body[table] as any[];
+        if (table === "applications") {
+          return jsonResponse({ error: "generic_bad_request" }, 400);
+        }
+        return jsonResponse(acknowledged(table, rows));
+      }),
+    );
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.resetModules();
+    const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+
+    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject(
+      {
+        ok: false,
+        skipped: 0,
+      },
+    );
+    expect(() =>
+      readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
+    ).toThrow();
+  });
+
+  it("treats an invalid receipt response as protocol failure, not a bad row", async () => {
+    const { home, dbPath } = fixture();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}"));
+        const table = Object.keys(body)[0];
+        const rows = body[table] as Array<{ _receipt_id?: string }>;
+        if (table === "applications") {
+          return jsonResponse({ error: "invalid_application_receipt_id" }, 400);
+        }
+        return jsonResponse(acknowledged(table, rows));
+      }),
+    );
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.resetModules();
+    const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+
+    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject(
+      {
+        ok: false,
+        skipped: 0,
+      },
+    );
+    expect(() =>
+      readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
+    ).toThrow();
+    const cursor = JSON.parse(
+      readFileSync(join(home, ".cloud-sync-cursor.json"), "utf8"),
+    );
+    expect(cursor.positions).toBe("2026-08-13 10:02:00");
+    expect(cursor.applications).toBeUndefined();
+  });
+
+  it("bisects 413 and gives a singleton oversize an explicit quarantine reason", async () => {
+    const { home, dbPath } = fixture();
+    const acceptedApplications: number[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}"));
+        const table = Object.keys(body)[0];
+        const rows = body[table] as Array<{ position_legacy_id?: number }>;
+        if (
+          table === "applications" &&
+          rows.some((row) => row.position_legacy_id === 2)
+        ) {
+          return jsonResponse({ error: "request_too_large" }, 413);
+        }
+        if (table === "applications") {
+          acceptedApplications.push(
+            ...rows.map((row) => row.position_legacy_id!),
+          );
+        }
+        return jsonResponse(acknowledged(table, rows));
+      }),
+    );
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.resetModules();
+    const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+
+    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject(
+      {
         ok: true,
         quarantined: 1,
       },
     );
     expect(acceptedApplications).toEqual([1, 3]);
-    expect(
-      readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
-    ).toContain("acknowledgement_mismatch");
+    const quarantine = readFileSync(
+      join(home, ".cloud-push-quarantine.json"),
+      "utf8",
+    );
+    expect(quarantine).toContain("http_413:payload_too_large");
+    expect(quarantine).not.toContain("request_too_large");
   });
 
   it("aborts without quarantine when a successful server omits row receipts", async () => {
@@ -288,7 +402,10 @@ describe("cloud push record isolation — real writer path", () => {
         const table = Object.keys(body)[0];
         const rows = body[table] as Array<unknown>;
         if (table === "applications")
-          return jsonResponse({ error: "application_row_rejected" }, 422);
+          return jsonResponse(
+            { error: "application_row_rejected", rejection_scope: "row" },
+            422,
+          );
         return jsonResponse(acknowledged(table, rows as any[]));
       }),
     );
@@ -354,7 +471,10 @@ describe("cloud push record isolation — real writer path", () => {
         const table = Object.keys(body)[0];
         const rows = body[table] as Array<{ position_legacy_id?: number }>;
         if (table === "applications" && rows.length > 1)
-          return jsonResponse({ error: "application_row_rejected" }, 422);
+          return jsonResponse(
+            { error: "application_row_rejected", rejection_scope: "row" },
+            422,
+          );
         if (table === "applications" && rows[0]?.position_legacy_id === 2)
           return jsonResponse(
             { detail: "synthetic infrastructure failure" },
