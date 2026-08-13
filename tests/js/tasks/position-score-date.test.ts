@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ScoreAssessedAt } from "../../../web/app/(protected)/positions/[id]/ScoreAssessedAt";
+import { OverviewScoreBadge } from "../../../web/app/(protected)/positions/[id]/OverviewScoreBadge";
 import { formatPositionEventStamp } from "../../../web/lib/position-event-stamp";
 import { T } from "../../../web/app/(protected)/positions/[id]/page.i18n";
 
@@ -25,12 +26,10 @@ describe("data della valutazione nella pagina posizione", () => {
     expect(formatPositionEventStamp("non-una-data", "it")).toBeNull();
   });
 
-  it("lega semanticamente il testo visibile e time alla colonna scores.scored_at", () => {
+  it("lega il dettaglio alla colonna scores.scored_at senza fallback", () => {
     expect(page).toContain(
       "formatPositionEventStamp(score?.scored_at, locale)",
     );
-    expect(page).toContain("<time dateTime={score.scored_at}>");
-    expect(page).toContain('t("score_assessed_at")');
     expect(page).toContain("<ScoreAssessedAt");
     expect(page).toContain("scoredAt={score.scored_at}");
     expect(page).toContain("formatted={scoreAssessedAt}");
@@ -43,6 +42,17 @@ describe("data della valutazione nella pagina posizione", () => {
         .toBeTypeOf("string")
         .not.toHaveLength(0);
     }
+  });
+
+  it("mostra solo il numero nella Panoramica, senza data di valutazione", () => {
+    const html = renderToStaticMarkup(
+      createElement(OverviewScoreBadge, { score: 71 }),
+    );
+
+    expect(html).toContain('data-overview-score=""');
+    expect(html).toContain(">71</div>");
+    expect(html).not.toContain("<time");
+    expect(html).not.toContain(T.score_assessed_at.it);
   });
 
   it("mostra scored_at nel dettaglio punteggio quando il dato esiste", () => {

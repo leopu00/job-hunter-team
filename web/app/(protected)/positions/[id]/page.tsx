@@ -26,7 +26,6 @@ import {
 } from "@/lib/parse-analysis";
 import { colorForFamily } from "@/lib/position-classifier";
 import { sourceDisplayName } from "@/lib/case-study-sources";
-import { scoreSpectrumCss } from "@/lib/score-color";
 import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
@@ -53,6 +52,7 @@ import { resolveCoverLetterPdfFileName } from "@/lib/position-document-file.serv
 import { activeRescoreTicket } from "@/lib/rescore-ticket";
 import { RescoreRequestButton } from "./RescoreRequestButton";
 import { ScoreAssessedAt } from "./ScoreAssessedAt";
+import { OverviewScoreBadge } from "./OverviewScoreBadge";
 
 // Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
 // inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
@@ -130,13 +130,6 @@ const VERDICT_COLORS: Record<string, string> = {
   NEEDS_WORK: "var(--color-yellow)",
   REJECT: "var(--color-red)",
 };
-
-// Ultimo evento feedback → giudizio della scala a 4 (stessa mappatura
-// inversa della pagina /swipe; i vecchi eventi senza score cadono sul
-// giudizio più vicino all'action).
-function scoreColor(s: number | null) {
-  return scoreSpectrumCss(s);
-}
 
 // Colore di un sotto-punteggio relativo al SUO massimo (stack /40, remote
 // /25, …): un 26/40 (65%) è "buono", non "rosso". Il colore precedente
@@ -495,25 +488,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
           </div>
         </div>
         <div className="flex items-center gap-4 md:gap-6 min-w-0">
-          {score && (
-            <div className="flex shrink-0 flex-col items-center gap-1.5">
-              <div
-                className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl"
-                style={{
-                  borderColor: scoreColor(score.total_score),
-                  color: scoreColor(score.total_score),
-                }}
-              >
-                {score.total_score}
-              </div>
-              {scoreAssessedAt && (
-                <span className="max-w-36 text-center text-[9.5px] leading-tight text-[var(--color-dim)]">
-                  {t("score_assessed_at")}{" "}
-                  <time dateTime={score.scored_at}>{scoreAssessedAt}</time>
-                </span>
-              )}
-            </div>
-          )}
+          {score && <OverviewScoreBadge score={score.total_score} />}
           {/* Fatti: label e valore su due colonne adiacenti, niente vuoto
               tra label e valore (feedback 22/07). */}
           <div className="ml-auto md:ml-0 grid grid-cols-[auto_auto] gap-x-5 gap-y-1.5 items-baseline min-w-0">
