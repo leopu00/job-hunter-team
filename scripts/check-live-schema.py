@@ -23,7 +23,7 @@ from typing import Callable, ContextManager, Protocol
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MANIFEST = ROOT / "supabase/live-schema/078-081.v1.json"
+DEFAULT_MANIFEST = ROOT / "supabase/live-schema/078-083.v2.json"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 PREFLIGHT_MANIFEST = ROOT / "supabase/live-schema/081-preflight.v1.json"
 API_ORIGIN = "https://api.supabase.com"
@@ -256,12 +256,14 @@ def load_contract(manifest_path: Path = DEFAULT_MANIFEST) -> Contract:
             "supabase/migrations/079_team_directive_events_atomic.sql",
             "supabase/migrations/080_profile_snapshot_atomic.sql",
             "supabase/migrations/081_live_schema_reconciliation.sql",
+            "supabase/migrations/082_download_clicks_tiktok_source.sql",
+            "supabase/migrations/083_position_ticket_state_model.sql",
         ],
     }:
         raise CanaryError("manifest_invalid")
 
     migrations = manifest.get("migrations")
-    if not isinstance(migrations, list) or len(migrations) != 4:
+    if not isinstance(migrations, list) or len(migrations) != 6:
         raise CanaryError("manifest_invalid")
     migration_paths: list[str] = []
     for entry in migrations:

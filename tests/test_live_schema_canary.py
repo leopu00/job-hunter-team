@@ -19,15 +19,18 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/check-live-schema.py"
-MANIFEST = ROOT / "supabase/live-schema/078-081.v1.json"
-QUERY = ROOT / "supabase/live-schema/078-081.v1.sql"
+MANIFEST = ROOT / "supabase/live-schema/078-083.v2.json"
+QUERY = ROOT / "supabase/live-schema/078-083.v2.sql"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
+POSTGRES_READY_MARKER = "database system is ready to accept connections"
 MIGRATIONS = [
     ROOT / "supabase/migrations/078_positions_write_request_kind.sql",
     ROOT / "supabase/migrations/079_team_directive_events_atomic.sql",
     ROOT / "supabase/migrations/080_profile_snapshot_atomic.sql",
     ROOT / "supabase/migrations/081_live_schema_reconciliation.sql",
+    ROOT / "supabase/migrations/082_download_clicks_tiktok_source.sql",
+    ROOT / "supabase/migrations/083_position_ticket_state_model.sql",
 ]
 
 PREFLIGHT_BASE_ROWS = """
@@ -197,6 +200,11 @@ sys.modules[spec.name] = canary
 spec.loader.exec_module(canary)
 
 
+def _final_postgres_server_is_ready(logs: str) -> bool:
+    """Reject initdb's temporary server and accept only the final restart."""
+    return logs.count(POSTGRES_READY_MARKER) >= 2
+
+
 class FakeResponse:
     def __init__(self, payload: object, status: int = 201):
         self.body = json.dumps(payload).encode()
@@ -226,8 +234,8 @@ def test_manifest_pins_clone_order_migrations_query_and_check_set():
     contract = canary.load_contract(MANIFEST)
     manifest = json.loads(MANIFEST.read_text())
 
-    assert contract.contract_id == "release-0.3.9-schema-078-081"
-    assert len(contract.expected_checks) == 42
+    assert contract.contract_id == "release-0.3.9-schema-078-083"
+    assert len(contract.expected_checks) == 50
     assert manifest["clone_contract"] == {
         "baseline": "live-schema-only-pg-dump",
         "contains_user_rows": False,
@@ -237,6 +245,8 @@ def test_manifest_pins_clone_order_migrations_query_and_check_set():
             "supabase/migrations/079_team_directive_events_atomic.sql",
             "supabase/migrations/080_profile_snapshot_atomic.sql",
             "supabase/migrations/081_live_schema_reconciliation.sql",
+            "supabase/migrations/082_download_clicks_tiktok_source.sql",
+            "supabase/migrations/083_position_ticket_state_model.sql",
         ],
     }
     assert [entry["path"] for entry in manifest["migrations"]] == manifest[
@@ -422,6 +432,14 @@ def test_snapshot_attestation_does_not_accept_caller_supplied_hash():
     )
 
 
+def test_pg16_readiness_rejects_the_temporary_initdb_server():
+    first_start = f"{POSTGRES_READY_MARKER}\n"
+    final_restart = f"{first_start}{POSTGRES_READY_MARKER}\n"
+
+    assert not _final_postgres_server_is_ready(first_start)
+    assert _final_postgres_server_is_ready(final_restart)
+
+
 def test_preflight_synthetic_anomalies_are_row_scoped_and_non_mutating_contract():
     """The fixture matrix names every seeded anomaly, including orphan/tenant edges.
 
@@ -536,7 +554,12 @@ def test_cli_output_sanitizes_transport_details(monkeypatch, capsys):
 
 
 @contextmanager
-def pg16_schema_clone(*, migrated: bool, include_081: bool = True):
+def pg16_schema_clone(
+    *,
+    migrated: bool,
+    through_version: int = 83,
+    omit_versions: tuple[int, ...] = (),
+):
     snapshot = os.environ.get("JHT_H08_SCHEMA_SNAPSHOT")
     if not snapshot:
         pytest.skip("dump schema-only H-08 attestato non disponibile")
@@ -601,24 +624,31 @@ def pg16_schema_clone(*, migrated: bool, include_081: bool = True):
         )
 
     try:
-        stable = 0
         for _ in range(100):
-            if psql("SELECT 1", check=False).returncode == 0:
-                stable += 1
-            else:
-                stable = 0
-            if stable == 2:
-                break
-            time.sleep(0.1)
+            logs_result = subprocess.run(
+                ["docker", "logs", name], text=True, capture_output=True
+            )
+            logs = logs_result.stdout + logs_result.stderr
+            if _final_postgres_server_is_ready(logs):
+                probe = psql(
+                    "CREATE TEMP TABLE live_schema_readiness_probe(id integer); "
+                    "DROP TABLE live_schema_readiness_probe;",
+                    check=False,
+                )
+                if probe.returncode == 0:
+                    break
+            time.sleep(0.2)
         else:
-            pytest.fail("PostgreSQL 16 schema clone non pronto")
+            pytest.fail("PostgreSQL 16 final server non pronto")
         psql(
             "DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE service_role NOLOGIN BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$; CREATE SCHEMA IF NOT EXISTS auth; CREATE TABLE IF NOT EXISTS auth.users(id uuid PRIMARY KEY, created_at timestamptz); CREATE TABLE IF NOT EXISTS auth.sessions(user_id uuid, updated_at timestamptz); CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $$; GRANT USAGE ON SCHEMA public, auth TO anon, authenticated, service_role;"
         )
         psql(snapshot_path.read_text(encoding="utf-8"))
         if migrated:
-            for migration in MIGRATIONS if include_081 else MIGRATIONS[:3]:
-                psql(migration.read_text())
+            for migration in MIGRATIONS:
+                version = int(migration.name[:3])
+                if version <= through_version and version not in omit_versions:
+                    psql(migration.read_text())
         yield psql
     finally:
         subprocess.run(["docker", "rm", "-f", name], text=True, capture_output=True)
@@ -643,7 +673,7 @@ def query_results_in_transaction(psql, mutation: str):
     return receipt_rows(result.stdout)
 
 
-def test_pg16_schema_only_clone_passes_after_ordered_078_079_080():
+def test_pg16_schema_only_clone_passes_after_ordered_078_through_083():
     contract = canary.load_contract(MANIFEST)
     with pg16_schema_clone(migrated=True) as psql:
         observed = query_results(psql)
@@ -662,22 +692,179 @@ def test_pg16_schema_only_clone_fails_before_the_ordered_migrations():
     assert not observed["078.positions.write_request_kind.column"]
 
 
-def test_pg16_078_080_without_081_fails_reconciliation_receipt():
+def test_pg16_078_080_without_081_through_083_fails_reconciliation_receipt():
     contract = canary.load_contract(MANIFEST)
-    with pg16_schema_clone(migrated=True, include_081=False) as psql:
+    with pg16_schema_clone(migrated=True, through_version=80) as psql:
         observed = query_results(psql)
     assert tuple(sorted(observed)) == contract.expected_checks
     assert not observed["081.reconciliation.present"]
     assert all(
         observed[check]
         for check in contract.expected_checks
-        if not check.startswith("081.")
+        if check[:3] <= "080"
     )
     assert any(
         not observed[check]
         for check in contract.expected_checks
-        if check.startswith("081.")
+        if check[:3] >= "081"
     )
+
+
+@pytest.mark.parametrize(
+    ("missing_version", "failed_prefix", "surviving_prefix"),
+    ((82, "082.", "083."), (83, "083.", "082.")),
+)
+def test_pg16_missing_082_or_083_fails_only_that_versioned_receipt(
+    missing_version, failed_prefix, surviving_prefix
+):
+    contract = canary.load_contract(MANIFEST)
+    with pg16_schema_clone(
+        migrated=True, omit_versions=(missing_version,)
+    ) as psql:
+        observed = query_results(psql)
+
+    assert tuple(sorted(observed)) == contract.expected_checks
+    assert any(
+        not ok for check, ok in observed.items() if check.startswith(failed_prefix)
+    )
+    assert all(
+        ok for check, ok in observed.items() if check.startswith(surviving_prefix)
+    )
+    assert not all(observed.values())
+
+
+def test_pg16_082_and_083_catalog_receipts_fail_on_independent_drift():
+    drifts = (
+        (
+            "082.download_clicks.source_constraint",
+            """
+ALTER TABLE public.download_clicks
+  DROP CONSTRAINT download_clicks_utm_source_check;
+ALTER TABLE public.download_clicks
+  ADD CONSTRAINT download_clicks_utm_source_check
+  CHECK (utm_source IN ('none', 'reddit'));
+""",
+        ),
+        (
+            "083.position_ticket.column",
+            "ALTER TABLE public.position_tickets ALTER COLUMN position_id DROP NOT NULL;",
+        ),
+        (
+            "083.position_ticket.fk",
+            """
+ALTER TABLE public.position_tickets
+  DROP CONSTRAINT position_tickets_position_tenant_fkey;
+""",
+        ),
+        (
+            "083.position_ticket.indexes",
+            "DROP INDEX public.idx_position_tickets_user_position;",
+        ),
+        (
+            "083.create_ticket.definition",
+            """
+UPDATE pg_catalog.pg_proc AS procedure
+SET prosrc = procedure.prosrc || E'\n-- synthetic body drift'
+FROM pg_catalog.pg_namespace AS namespace
+WHERE namespace.oid = procedure.pronamespace
+  AND namespace.nspname = 'public'
+  AND procedure.proname = 'create_position_ticket';
+""",
+        ),
+        (
+            "083.sync_ticket.definition",
+            """
+UPDATE pg_catalog.pg_proc AS procedure
+SET prosrc = procedure.prosrc || E'\n-- synthetic body drift'
+FROM pg_catalog.pg_namespace AS namespace
+WHERE namespace.oid = procedure.pronamespace
+  AND namespace.nspname = 'public'
+  AND procedure.proname = 'sync_create_position_ticket';
+""",
+        ),
+        (
+            "083.create_ticket.acl",
+            """
+GRANT EXECUTE ON FUNCTION public.create_position_ticket(integer,text,text)
+TO service_role;
+""",
+        ),
+        (
+            "083.sync_ticket.acl",
+            """
+GRANT EXECUTE ON FUNCTION public.sync_create_position_ticket(
+  uuid,integer,text,text,text,text,text,timestamptz,timestamptz,timestamptz
+) TO authenticated;
+""",
+        ),
+    )
+    with pg16_schema_clone(migrated=True) as psql:
+        for target, mutation in drifts:
+            observed = query_results_in_transaction(psql, mutation)
+            assert not observed[target], target
+
+
+def test_pg16_083_reapply_preserves_the_exact_catalog_receipt():
+    contract = canary.load_contract(MANIFEST)
+    with pg16_schema_clone(migrated=True) as psql:
+        before = query_results(psql)
+        psql(MIGRATIONS[-1].read_text())
+        after = query_results(psql)
+
+    assert tuple(sorted(before)) == contract.expected_checks
+    assert before == after
+    assert all(after.values())
+
+
+def test_pg16_083_rpc_resolves_tenant_parent_and_fk_rejects_cross_tenant():
+    user_a = "00000000-0000-0000-0000-000000008301"
+    user_b = "00000000-0000-0000-0000-000000008302"
+    position_a = "00000000-0000-0000-0000-000000008311"
+    position_b = "00000000-0000-0000-0000-000000008312"
+    legacy_id = 83001
+    with pg16_schema_clone(migrated=True) as psql:
+        psql(
+            f"""
+INSERT INTO auth.users(id, created_at)
+VALUES ('{user_a}', now()), ('{user_b}', now());
+INSERT INTO public.positions(id, user_id, title, company, legacy_id)
+VALUES
+  ('{position_a}', '{user_a}', 'Synthetic A', 'Synthetic A', {legacy_id}),
+  ('{position_b}', '{user_b}', 'Synthetic B', 'Synthetic B', {legacy_id});
+SELECT pg_catalog.set_config('request.jwt.claim.sub', '{user_a}', false);
+SELECT public.create_position_ticket(
+  {legacy_id}, 'Synthetic tenant-bound request', 'custom'
+);
+"""
+        )
+        identity = psql(
+            """
+SELECT user_id::text, position_id::text, position_legacy_id::text
+FROM public.position_tickets
+WHERE request_text = 'Synthetic tenant-bound request';
+"""
+        ).stdout.strip()
+        rejected = psql(
+            f"""
+INSERT INTO public.position_tickets(
+  user_id, position_id, position_legacy_id, request_text
+) VALUES (
+  '{user_a}', '{position_b}', {legacy_id}, 'Synthetic cross-tenant request'
+);
+""",
+            check=False,
+        )
+        cross_tenant_count = psql(
+            """
+SELECT pg_catalog.count(*)
+FROM public.position_tickets
+WHERE request_text = 'Synthetic cross-tenant request';
+"""
+        ).stdout.strip()
+
+    assert identity == f"{user_a}|{position_a}|{legacy_id}"
+    assert rejected.returncode != 0
+    assert cross_tenant_count == "0"
 
 
 def test_pg16_076_077_function_identity_rejects_each_metadata_drift():
@@ -932,7 +1119,7 @@ ON public.pending_user_messages FOR SELECT USING (true);
 
 def test_pg16_preflight_proves_each_seed_causal_and_preserves_row_fingerprint():
     expected = tuple(sorted(PREFLIGHT_ANOMALY_SEEDS))
-    with pg16_schema_clone(migrated=True, include_081=False) as psql:
+    with pg16_schema_clone(migrated=True, through_version=80) as psql:
         baseline = receipt_rows(psql(PREFLIGHT_QUERY.read_text()).stdout)
         assert tuple(sorted(baseline)) == expected
         assert all(baseline.values())
