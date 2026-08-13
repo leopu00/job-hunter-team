@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "contract_id": "f-02-f-08-auth-posture-v1",
+  "approved_oauth_provider_fields": [
+    "external_github_enabled",
+    "external_google_enabled"
+  ],
+  "required_boolean_fields": [
+    "disable_signup",
+    "external_email_enabled",
+    "mailer_autoconfirm",
+    "mfa_totp_enroll_enabled",
+    "mfa_totp_verify_enabled",
+    "password_hibp_enabled"
+  ],
+  "required_integer_fields": [
+    "password_min_length"
+  ],
+  "minimum_password_length": 8,
+  "advisor_config_contract": {
+    "auth_insufficient_mfa_options": "totp_unavailable",
+    "auth_leaked_password_protection": "hibp_disabled"
+  }
+}
