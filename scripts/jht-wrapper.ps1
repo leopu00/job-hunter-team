@@ -442,8 +442,10 @@ function Get-LiveGameState {
     if ($guard.HasExited -or $guard.SessionId -ne $process.SessionId) {
       throw 'stale instance guard'
     }
-    $expectedPowerShell = ([IO.Path]::GetFullPath((Join-Path $env:SystemRoot
-      'System32\WindowsPowerShell\v1.0\powershell.exe'))).Replace('\', '/').ToLowerInvariant()
+    $expectedPowerShellPath = Join-Path -Path $env:SystemRoot `
+      -ChildPath 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $expectedPowerShell = ([IO.Path]::GetFullPath(
+      $expectedPowerShellPath)).Replace('\', '/').ToLowerInvariant()
     if ((Get-CanonicalGameProcessPath $guard) -cne $expectedPowerShell -or
         [string]$state.guard.executable -cne $expectedPowerShell -or
         [string]$state.guard.desktop_executable -cne $processExecutable -or
