@@ -342,7 +342,7 @@ def read_directives(limit: int = MAX_DIRECTIVES) -> dict:
     try:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, body, kind FROM team_directives WHERE status = 'active' "
+            "SELECT id, body, kind, created_at, updated_at FROM team_directives WHERE status = 'active' "
             "ORDER BY sort_order ASC, created_at ASC"
         ).fetchall()
     except sqlite3.Error:
@@ -373,6 +373,7 @@ def read_directives(limit: int = MAX_DIRECTIVES) -> dict:
         out["rows"].append({
             "id": r["id"], "kind": r["kind"], "body": body,
             "provider_instruction_ignored": ignored,
+            "created_at": r["created_at"], "updated_at": r["updated_at"],
         })
     return out
 
@@ -841,6 +842,7 @@ def snapshot(now: Optional[datetime] = None) -> dict:
             # in piedi `stop_search: true` significherebbe tornare a `search`
             # senza cercare, cioè non tornare affatto.
             mode, orders, expired = MODE_SEARCH, {}, True
+    conflicts = resolve_user_conflicts(m, d["rows"], mode)
     return {
         "mode": mode,
         "mode_raw": mode_raw,
@@ -861,7 +863,43 @@ def snapshot(now: Optional[datetime] = None) -> dict:
         "flags": read_flags(),
         "read_at": (now or datetime.now(timezone.utc)).isoformat(
             timespec="seconds"),
+        "conflicts": conflicts,
     }
+
+
+def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> list:
+    """Return timestamp-ordered incompatible user choices, fail-closed on ties/nulls."""
+    if mode in (MODE_SEARCH, MODE_UNKNOWN) or not maintenance.get("since"):
+        return []
+    mode_words = {
+        MODE_HARVEST: ("harvest", "cv", "resume"),
+        MODE_CARE: ("care", "maintenance", "recheck"),
+        MODE_CALIBRATION: ("calibration", "feedback"),
+        MODE_SAVING: ("saving", "spend", "autonomous"),
+    }.get(mode, ())
+    conflicts = []
+    for row in directives:
+        body = str(row.get("body") or "").lower()
+        if not mode_words or not any(w in body for w in mode_words):
+            continue
+        # Without a reliable timestamp, do not silently choose a winner.
+        created = row.get("created_at")
+        if not created:
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True})
+            continue
+        try:
+            parsed = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            dt = parsed.timestamp()
+            mt = datetime.strptime(maintenance["since"], "%Y-%m-%d %H:%M UTC").replace(tzinfo=timezone.utc).timestamp()
+        except (ValueError, TypeError):
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True}); continue
+        if dt == mt:
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True})
+        else:
+            conflicts.append({"directive_id": row.get("id"), "winner": "directive" if dt > mt else "mode", "notify": True})
+    return conflicts
 
 
 def has_standing_orders(snap: Optional[dict] = None) -> bool:
@@ -1018,6 +1056,15 @@ def _lines(snap: dict) -> list:
         out.append("ACTIVE DIRECTIVES (%d): %s%s"
                    % (snap["directives_total"], shown,
                       f"; (+{extra} on the board)" if extra > 0 else ""))
+
+    for conflict in snap.get("conflicts", []):
+        winner = conflict.get("winner")
+        if winner == "unknown":
+            out.append("DIRECTIVE/MODE CONFLICT: timestamp missing or tied — fail-closed; ask the user which choice governs.")
+        elif winner == "directive":
+            out.append("DIRECTIVE/MODE CONFLICT: the newer user directive governs and supersedes the mode; ask whether to archive the older mode choice.")
+        else:
+            out.append("DIRECTIVE/MODE CONFLICT: the newer user mode governs and supersedes the directive; ask whether to archive the older directive.")
 
     flags = snap.get("flags") or []
     if flags:
