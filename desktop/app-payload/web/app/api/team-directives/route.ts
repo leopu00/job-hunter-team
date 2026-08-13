@@ -1,23 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import Database from "better-sqlite3";
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { requireAuth } from "@/lib/auth";
 import {
   MAX_DIRECTIVE_REQUEST_ID_LENGTH,
   ensureLocalDirectiveMutationSchema,
   mutateLocalTeamDirective,
   publicDirectiveError,
 } from "@/lib/team-directives-local";
+import {
+  DESKTOP_DB_PATH,
+  isTrustedDesktopRequest,
+} from "../../../lib/desktop-api-boundary";
 
 export const dynamic = "force-dynamic";
 
-const dbPath = path.join(os.homedir(), ".jht", "databases", "jobs.db");
 const kinds = new Set(["order", "strategy", "formation", "note"]);
 
+async function authorizeDesktopRequest(
+  req: NextRequest,
+): Promise<NextResponse | null> {
+  // This route mutates the machine-local jobs.db. A Supabase session (when
+  // configured) is necessary but not sufficient: the socket must also be the
+  // loopback-only desktop server, never a LAN-facing Next instance.
+  if (!isTrustedDesktopRequest(req.headers)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  return await requireAuth();
+}
+
 function openDb(): Database.Database | null {
-  if (!fs.existsSync(dbPath)) return null;
-  const db = new Database(dbPath);
+  if (!fs.existsSync(DESKTOP_DB_PATH)) return null;
+  const db = new Database(DESKTOP_DB_PATH);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   ensureLocalDirectiveMutationSchema(db);
@@ -35,7 +49,9 @@ function requireRequestId(value: unknown): string {
   return value.trim();
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = await authorizeDesktopRequest(req);
+  if (denied) return denied;
   const db = openDb();
   if (!db) return NextResponse.json({ directives: [], source: "local" });
   try {
@@ -51,6 +67,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await authorizeDesktopRequest(req);
+  if (denied) return denied;
   const input = (await req.json().catch(() => ({}))) as {
     body?: string;
     kind?: string;
@@ -95,6 +113,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const denied = await authorizeDesktopRequest(req);
+  if (denied) return denied;
   const input = (await req.json().catch(() => ({}))) as {
     id?: number;
     body?: string;

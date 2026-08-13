@@ -48,7 +48,7 @@ async function findWebDir() {
 }
 
 function startNextDev(webDir, port) {
-  const child = spawn('npm', ['run', 'dev', '--', '-p', String(port)], {
+  const child = spawn('npm', ['run', 'dev', '--', '-H', '127.0.0.1', '-p', String(port)], {
     cwd: webDir,
     detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],

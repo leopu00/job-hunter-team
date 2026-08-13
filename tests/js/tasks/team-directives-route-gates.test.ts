@@ -32,6 +32,26 @@ describe("team directive route deployment and identity gates", () => {
     expect(route).not.toContain("if (value === undefined)");
   });
 
+  it("keeps the desktop directive API on the authenticated loopback boundary", () => {
+    const route = read(
+      "desktop/app-payload/web/app/api/team-directives/route.ts",
+    );
+    expect(route).toContain("authorizeDesktopRequest(req)");
+    expect(route.match(/authorizeDesktopRequest\(req\)/g)).toHaveLength(3);
+    expect(route).toContain("DESKTOP_DB_PATH");
+    expect(route).not.toContain('"databases", "jobs.db"');
+
+    for (const launcher of [
+      "desktop/app-payload/scripts/launchers/start-mac.sh",
+      "desktop/app-payload/scripts/launchers/start-linux.sh",
+      "desktop/app-payload/scripts/launchers/start-windows.ps1",
+      "desktop/app-payload/scripts/launchers/start-windows.bat",
+      "desktop/app-payload/cli/src/commands/dashboard.js",
+    ]) {
+      expect(read(launcher), launcher).toContain("127.0.0.1");
+    }
+  });
+
   it.each([
     "web/app/api/team-directives/route.ts",
     "desktop/app-payload/web/app/api/team-directives/route.ts",
