@@ -127,7 +127,15 @@ if ($Smoke) {
       } else { '' }
       $sourceMatches = @($sourceOutput -split "`r?`n" | Where-Object { $_ -ceq $expectedCensus })
       if ($sourceProbe.ExitCode -ne 0 -or $sourceMatches.Count -ne 1) {
-        throw "Exported PCK instance guard census mismatch: exit=$($sourceProbe.ExitCode) count=$($sourceMatches.Count)."
+        $sourceError = if (Test-Path -LiteralPath $guardStderr) {
+          Get-Content -LiteralPath $guardStderr -Raw
+        } else { '' }
+        $sidecarCode = [regex]::Match($sourceError, 'JHT-INSTANCE-GUARD ([a-z_]+)')
+        $godotCode = [regex]::Match($sourceError, 'WINDOWS-INSTANCE-GUARD FAIL code=([a-z_]+)')
+        $failure = if ($sidecarCode.Success) { $sidecarCode.Groups[1].Value }
+          elseif ($godotCode.Success) { $godotCode.Groups[1].Value }
+          else { 'unknown' }
+        throw "Exported PCK instance guard census mismatch: exit=$($sourceProbe.ExitCode) count=$($sourceMatches.Count) code=$failure."
       }
       Start-Sleep -Milliseconds 500
 
