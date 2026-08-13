@@ -62,7 +62,9 @@ jobs:
             $errors = $null
             [void][Management.Automation.Language.Parser]::ParseFile(
               (Resolve-Path -LiteralPath $file), [ref]$tokens, [ref]$errors)
-            if ($errors.Count -ne 0) { throw 'PowerShell syntax validation failed.' }
+            if ($errors.Count -ne 0) {
+              throw "PowerShell syntax validation failed: $file count=$($errors.Count)"
+            }
           }
 
       - uses: chickensoft-games/setup-godot@v2.4.1
