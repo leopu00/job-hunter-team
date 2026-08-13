@@ -93,6 +93,8 @@ import os
 import sqlite3
 import sys
 import hashlib
+import fcntl
+import re
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
@@ -881,15 +883,23 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
     conflicts = []
     for row in directives:
         body = str(row.get("body") or "").lower()
-        if not mode_words or not any(w in body for w in mode_words):
+        # Semantic contract: only explicit mode declarations or explicit
+        # mode-scoped orders count; incidental words in prose do not.
+        explicit = re.search(r"(?:mode|modalit(?:à|a))\s*[:=]?\s*(search|harvest|care|maintenance|calibration|saving)", body)
+        scoped = any(re.search(rf"\b(?:only|solo|just|stop)\b[^.]*\b{re.escape(w)}\b|\b{re.escape(w)}\b[^.]*\b(?:only|solo|just|stop)\b|^\s*{re.escape(w)}\s*$", body) for w in mode_words)
+        if not mode_words or (not explicit and not scoped):
+            continue
+        if explicit and explicit.group(1) in (mode, LEGACY_MODES.get(mode, mode)):
             continue
         # Without a reliable timestamp, do not silently choose a winner.
         created = row.get("created_at")
-        if not created:
+        updated = row.get("updated_at")
+        effective = updated or created
+        if not effective:
             conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True})
             continue
         try:
-            parsed = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(str(effective).replace("Z", "+00:00"))
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=timezone.utc)
             dt = parsed.timestamp()
@@ -905,13 +915,19 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
     try:
         marker = _home() / "profile" / "directive-mode-notifications.json"
         marker.parent.mkdir(parents=True, exist_ok=True)
-        seen = json.loads(marker.read_text(encoding="utf-8")) if marker.exists() else {}
-        if not isinstance(seen, dict): seen = {}
-        for item in conflicts:
-            key = hashlib.sha256(json.dumps(item, sort_keys=True).encode()).hexdigest()
-            item["notify"] = not bool(seen.get(key))
-            seen[key] = True
-        marker.write_text(json.dumps(seen, sort_keys=True) + "\n", encoding="utf-8")
+        lock = marker.with_suffix(".lock")
+        with open(lock, "a+", encoding="utf-8") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            seen = json.loads(marker.read_text(encoding="utf-8")) if marker.exists() else {}
+            if not isinstance(seen, dict): seen = {}
+            for item in conflicts:
+                key = hashlib.sha256(json.dumps(item, sort_keys=True).encode()).hexdigest()
+                item["notify"] = not bool(seen.get(key))
+                seen[key] = True
+            tmp = marker.with_name(marker.name + ".tmp")
+            tmp.write_text(json.dumps(seen, sort_keys=True) + "\n", encoding="utf-8")
+            os.replace(tmp, marker)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
     except (OSError, ValueError, TypeError):
         for item in conflicts: item["notify"] = True
     return conflicts
