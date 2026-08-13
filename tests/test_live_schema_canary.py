@@ -906,6 +906,29 @@ FOR SELECT USING (true);
         )
         assert not observed["081.team_directives.policies"]
 
+        observed = query_results_in_transaction(
+            psql,
+            "ALTER TABLE public.team_directives DISABLE ROW LEVEL SECURITY;",
+        )
+        assert not observed["081.team_directives.policies"]
+
+        observed = query_results_in_transaction(
+            psql,
+            "ALTER TABLE public.pending_user_messages DISABLE ROW LEVEL SECURITY;",
+        )
+        assert not observed["079.pending_messages.column_acl"]
+
+        observed = query_results_in_transaction(
+            psql,
+            """
+DROP POLICY "Users can view own pending messages"
+ON public.pending_user_messages;
+CREATE POLICY "Users can view own pending messages"
+ON public.pending_user_messages FOR SELECT USING (true);
+""",
+        )
+        assert not observed["079.pending_messages.column_acl"]
+
 
 def test_pg16_preflight_proves_each_seed_causal_and_preserves_row_fingerprint():
     expected = tuple(sorted(PREFLIGHT_ANOMALY_SEEDS))

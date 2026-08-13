@@ -90,6 +90,24 @@ expected_team_directive_policies(
       '(( SELECT auth.uid() AS uid) = user_id)'
     )
 ),
+expected_pending_message_policies(
+  policy_name, policy_command, role_name, using_expression, check_expression
+) AS (
+  VALUES
+    (
+      'Users can insert own chat turns', 'a', 'authenticated', NULL::text,
+      '((( SELECT auth.uid() AS uid) = user_id) AND (author = ''user''::text) AND (legacy_id < 0))'
+    ),
+    (
+      'Users can update own pending messages', 'w', 'PUBLIC',
+      '(( SELECT auth.uid() AS uid) = user_id)',
+      '(( SELECT auth.uid() AS uid) = user_id)'
+    ),
+    (
+      'Users can view own pending messages', 'r', 'PUBLIC',
+      '(( SELECT auth.uid() AS uid) = user_id)', NULL::text
+    )
+),
 directive_rpc AS (
   SELECT procedure.*
   FROM pg_catalog.pg_proc AS procedure
@@ -444,6 +462,56 @@ checks(check_id, ok) AS (
             pg_catalog.to_regclass('public.pending_user_messages')
           AND attribute.attnum > 0
           AND NOT attribute.attisdropped
+      ), false)
+      AND COALESCE((
+        SELECT table_row.relkind = 'r'
+          AND table_row.relrowsecurity
+          AND NOT table_row.relforcerowsecurity
+        FROM pg_catalog.pg_class AS table_row
+        WHERE table_row.oid =
+          pg_catalog.to_regclass('public.pending_user_messages')
+      ), false)
+      AND COALESCE((
+        SELECT pg_catalog.count(*) = 3
+          AND (
+            SELECT pg_catalog.count(*) = 3
+            FROM pg_catalog.pg_policy AS actual
+            WHERE actual.polrelid =
+              pg_catalog.to_regclass('public.pending_user_messages')
+          )
+          AND pg_catalog.bool_and(policy_row.polpermissive)
+          AND pg_catalog.bool_and(
+            policy_row.polcmd = expected.policy_command::"char"
+          )
+          AND pg_catalog.bool_and(
+            policy_row.polroles = CASE
+              WHEN expected.role_name = 'PUBLIC' THEN ARRAY[0::oid]
+              ELSE ARRAY[pg_catalog.to_regrole(expected.role_name)::oid]
+            END
+          )
+          AND pg_catalog.bool_and(
+            pg_catalog.pg_get_expr(
+              policy_row.polqual, policy_row.polrelid
+            ) = expected.using_expression
+            OR (
+              policy_row.polqual IS NULL
+              AND expected.using_expression IS NULL
+            )
+          )
+          AND pg_catalog.bool_and(
+            pg_catalog.pg_get_expr(
+              policy_row.polwithcheck, policy_row.polrelid
+            ) = expected.check_expression
+            OR (
+              policy_row.polwithcheck IS NULL
+              AND expected.check_expression IS NULL
+            )
+          )
+        FROM expected_pending_message_policies AS expected
+        JOIN pg_catalog.pg_policy AS policy_row
+          ON policy_row.polrelid =
+            pg_catalog.to_regclass('public.pending_user_messages')
+          AND policy_row.polname = expected.policy_name
       ), false)
     ),
     (
@@ -907,6 +975,14 @@ checks(check_id, ok) AS (
       '081.team_directives.policies',
       COALESCE((
         SELECT pg_catalog.count(*) = 3
+          AND (
+            SELECT table_row.relkind = 'r'
+              AND table_row.relrowsecurity
+              AND NOT table_row.relforcerowsecurity
+            FROM pg_catalog.pg_class AS table_row
+            WHERE table_row.oid =
+              pg_catalog.to_regclass('public.team_directives')
+          )
           AND (
             SELECT pg_catalog.count(*) = 3
             FROM pg_catalog.pg_policy AS actual
