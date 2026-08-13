@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parents[1]
+IDENTITY_MIGRATION = ROOT / "supabase/migrations/076_application_sync_identity.sql"
 MIGRATION = ROOT / "supabase/migrations/077_application_mark_undo_hotfix.sql"
 IMAGE = "postgres:16-alpine"
 
@@ -33,10 +34,13 @@ def pg16():
         return _run(["docker", "exec", "-i", name, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-At", "-F", "|"], input_text=sql, check=check)
 
     try:
-        for _ in range(60):
-            if _run(["docker", "exec", name, "pg_isready", "-U", "postgres"], check=False).returncode == 0:
+        stable = 0
+        for _ in range(100):
+            ready = psql("SELECT 1;", check=False)
+            stable = stable + 1 if ready.returncode == 0 else 0
+            if stable == 2:
                 break
-            time.sleep(0.2)
+            time.sleep(0.1)
         else:
             pytest.skip("postgres non pronto")
         yield psql
@@ -77,12 +81,15 @@ def test_pg16_apply_reapply_click_undo_tenant_and_privileges(pg16):
     pg16(SCHEMA)
     before = pg16("SELECT to_regprocedure('public.mark_position_applied(integer,timestamptz,text,text)') IS NULL;").stdout.strip()
     assert before == "t"
+    identity_sql = IDENTITY_MIGRATION.read_text()
     sql = MIGRATION.read_text()
+    pg16(identity_sql)
     pg16(sql)
     # Supabase grants newly-created public RPCs to every API role. The
     # migration must remove those explicit grants as well as PUBLIC on reapply.
     pg16("GRANT EXECUTE ON FUNCTION public.mark_position_applied(integer,timestamptz,text,text), public.undo_manual_position_application(integer,text) TO anon, service_role;")
-    pg16(sql)  # reapply must be harmless
+    pg16(identity_sql)
+    pg16(sql)  # 076 -> 077 and the same sequence reapply must be harmless
     privileges = pg16("SELECT has_function_privilege('anon','public.mark_position_applied(integer,timestamptz,text,text)','execute'), has_function_privilege('authenticated','public.mark_position_applied(integer,timestamptz,text,text)','execute'), has_function_privilege('service_role','public.mark_position_applied(integer,timestamptz,text,text)','execute');").stdout.strip()
     assert privileges == "f|t|f"
     pg16(f"INSERT INTO public.positions VALUES ('{pos}','{owner}',73,'ready',NULL), ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','{other}',73+1,'ready',NULL);")

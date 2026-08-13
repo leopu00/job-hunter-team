@@ -107,7 +107,10 @@ function fakeSupabase() {
           applied_at: row.applied_at,
           applied_via: row.applied_via,
         };
-        return { data: 1, error: null };
+        return {
+          data: args.p_applications.map((row) => row._receipt_id),
+          error: null,
+        };
       }
       if (name === "mark_position_applied") {
         state.application = {
@@ -186,7 +189,14 @@ it("rifiuta il push stale che arriva dopo una mark concorrente", async () => {
         positions: [
           { id: 73, title: "Synthetic", company: "Example", status: "ready" },
         ],
-        applications: [{ position_id: 73, status: "draft", applied: false }],
+        applications: [
+          {
+            legacy_id: 193,
+            position_legacy_id: 73,
+            status: "draft",
+            applied: false,
+          },
+        ],
       }),
     }) as any,
   );

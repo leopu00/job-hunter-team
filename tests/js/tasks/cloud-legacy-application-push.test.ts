@@ -13,7 +13,8 @@ function createLegacyDatabase() {
   const db = new DatabaseSync(dbPath);
   db.exec(`
     CREATE TABLE applications (
-      position_id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      position_id INTEGER NOT NULL UNIQUE,
       cv_path TEXT, cv_pdf_path TEXT, cl_path TEXT, cl_pdf_path TEXT,
       status TEXT, critic_score REAL, critic_verdict TEXT, critic_notes TEXT,
       written_at TEXT, applied_at TEXT, applied_via TEXT,
@@ -21,6 +22,14 @@ function createLegacyDatabase() {
       critic_reviewed_at TEXT, applied INTEGER,
       cv_drive_id TEXT, cl_drive_id TEXT,
       created_at TEXT, updated_at TEXT
+    );
+    CREATE TABLE scores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      position_id INTEGER NOT NULL UNIQUE,
+      total_score INTEGER NOT NULL,
+      experience_fit INTEGER, salary_fit INTEGER, stack_match INTEGER,
+      remote_fit INTEGER, strategic_fit INTEGER, breakdown TEXT, notes TEXT,
+      scored_by TEXT, scored_at TEXT, updated_at TEXT
     );
     INSERT INTO applications (
       position_id, status, critic_score, critic_verdict, critic_notes,
@@ -30,6 +39,8 @@ function createLegacyDatabase() {
       '2026-08-11 00:58:00', 'critico-test', '2026-07-14 16:20:00',
       '2026-08-11 00:58:00'
     );
+    INSERT INTO scores (position_id, total_score, scored_at, updated_at)
+    VALUES (42, 81, '2026-08-11 00:57:00', '2026-08-11 00:57:00');
   `);
   db.close();
 }
@@ -90,8 +101,20 @@ describe("jht cloud push — applications legacy", () => {
     expect(applications).toHaveLength(1);
     expect(applications[0]).not.toHaveProperty("critic_round");
     expect(applications[0]).toMatchObject({
-      position_id: 42,
+      legacy_id: 1,
+      position_legacy_id: 42,
       critic_verdict: "PASS",
+    });
+    const scores = bodies.flatMap((body) =>
+      Array.isArray(body.scores)
+        ? (body.scores as Record<string, unknown>[])
+        : [],
+    );
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toMatchObject({
+      legacy_id: 1,
+      position_id: 42,
+      total_score: 81,
     });
   });
 });

@@ -1293,12 +1293,14 @@ async function performPush(options) {
         'expires_at', 'is_open', 'last_open_check',
       ], cursor.positions);
       scores = readSqliteTableDelta(db, 'scores', [
-        'position_id', 'total_score', 'experience_fit', 'salary_fit',
+        'id AS legacy_id', 'position_id', 'total_score',
+        'experience_fit', 'salary_fit',
         'stack_match', 'remote_fit', 'strategic_fit', 'breakdown', 'notes',
         'scored_by', 'scored_at',
       ], cursor.scores);
       const applicationCols = [
-        'position_id', 'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
+        'id AS legacy_id', 'position_id AS position_legacy_id',
+        'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
         'status', 'critic_score', 'critic_verdict', 'critic_notes',
         'written_at', 'applied_at', 'applied_via', 'response', 'response_at',
         'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',
@@ -1576,12 +1578,12 @@ async function performPush(options) {
   };
 
   // Bundle position→figli: evita lookup cloud e conserva una sola conferma
-  // HTTP per la famiglia. Scores richiede ancora la position nello stesso
-  // request; applications e highlights hanno anche un lookup server-side.
+  // HTTP per la famiglia. Scores, applications e highlights hanno anche un
+  // lookup server-side quando il parent non è nel delta di questo tick.
   // Per applications è obbligatorio: perderla può rendere visibile uno
   // status applied senza timestamp.
   const scoresByPos = groupBy(scores, 'position_id');
-  const appsByPos = groupBy(applications, 'position_id');
+  const appsByPos = groupBy(applications, 'position_legacy_id');
   const hlByPos = groupBy(highlights, 'position_id');
   const posIds = new Set(positions.map((p) => p.id));
   const bundles = positions.slice().sort(byAsc('updated_at')).map((p) => ({
@@ -1595,7 +1597,8 @@ async function performPush(options) {
   // applications/highlights vengono risolte dal server via legacy_id. La
   // prima deve risultare davvero persistita prima che il cursore avanzi.
   const orphanScores = scores.filter((s) => !posIds.has(s.position_id));
-  const orphanApps = applications.filter((a) => !posIds.has(a.position_id));
+  const orphanApps = applications.filter((a) =>
+    !posIds.has(a.position_legacy_id));
   const orphanHls = highlights.filter((h) => !posIds.has(h.position_id));
 
   // 1) Companies PRIMA delle positions: le positions risolvono company_id via
@@ -1618,8 +1621,7 @@ async function performPush(options) {
   const sentHls = posRes.confirmed.flatMap((b) => b.hls);
   const skipHls = posRes.skipped.flatMap((b) => b.hls);
 
-  // 3) Figli orfani. Applications/highlights hanno lookup server-side; scores
-  // conserva il comportamento legacy finché il suo contratto non cambia.
+  // 3) Figli orfani: tutti risolvono il parent server-side.
   const oSco = await sendChunked(orphanScores.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], scores: r }));
   const oApp = await sendChunked(orphanApps.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], applications: r }));
   const oHl = await sendChunked(orphanHls.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], position_highlights: r }));
