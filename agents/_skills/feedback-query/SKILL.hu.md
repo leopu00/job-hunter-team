@@ -1,7 +1,7 @@
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: feedback-query
-description: Felhasználói visszajelzés olvasása (like/dislike/hide/star) a felhőből — egy pozícióra, vagy egy időablakra összesítve. A Scorer használja szorzó alkalmazásához a végső pontszámon és a felhasználó indokának a jegyzetbe emeléséhez, a Mentor a visszatérő indokok számolásához (F minta), a Scout pedig kontextuális jelként. Semleges "nincs jel" payloadot ad vissza, ha a felhő le van tiltva vagy nem érhető el, így a hívók soha nem buknak el keményen.
+description: Felhasználói visszajelzést olvas (like/dislike/hide/star) a felhőből — pozíciónként vagy időablakra összesítve. A Scorer csak jövőbeli pozíciók kontextuális preferenciajeleként használja, az aktuálisat kizárva; a Mentor visszatérő indokokat számol (F minta), a Scout kontextuális jelként használja. Elérhetetlen felhőnél semleges "nincs jel" payloadot ad.
 allowed-tools: Bash(python3 *)
 ---
 
@@ -111,23 +111,7 @@ Ha a payload zárt `note` enumot hoz (`no-signal:*`), nincs összesítés. Kezel
 
 ## Hogyan használják az ágensek
 
-**Scorer** (kötelező pontozáskor):
-1. Az alap pontszám kiszámítása után (súlyozott komponensek összege), hívd meg a `feedback_query check <legacy_id>`-t.
-2. Alkalmazz szorzót a `latest_action` alapján:
-   - `like` → final_score = round(base * 1.10), adj megjegyzést `feedback:like+10%`
-   - `star` → final_score = round(base * 1.15), adj megjegyzést `feedback:star+15%`
-   - `dislike` → final_score = round(base * 0.85), adj megjegyzést `feedback:dislike-15%`
-   - `hide` → status=`excluded`, megjegyzés `feedback:hide`, hagyj ki pontszám írást
-   - `clear` / `null` → nincs változás (a visszavont ítélet nem ítélet)
-3. **A biztonságos display indokot vidd a jegyzetbe**, ha van. Vedd a `display_reason`-t (vagy ha üres, a `display_comment`-et) a `latest_action` **ugyanazon eseményéből** — `actions[0]` —, és fűzd a jegyzethez. Soha ne ess vissza a nyers `reason` / `comment` mezőkre:
-
-   ```
-   feedback:dislike-15% — "túl senior"
-   feedback:star+15% — "pontosan ez a stack kell"
-   ```
-
-   Ha azon az eseményen nincs szöveg → a jegyzet marad, ahogy van. Az indok **csak erre a pozícióra** érvényes: soha ne vidd át másikra, ne csinálj belőle szabályt, ne írd át és ne foglald össze — ezek a felhasználó szavai, és a felhasználó visszaolvassa őket. Az indokok pozíciókon átívelő összesítése a Mentor dolga (F minta), nem a Scoreré.
-4. Korlátozzd a végső pontszámot 100-ra a szorzó után.
+**Scorer — `FUTURE_FEEDBACK_ONLY`:** hívd a `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>` parancsot. Csak a sanitizált `label` / `examples` mezőket használd kontextuális preferenciajelként ehhez a jövőbeli pozícióhoz. A már értékelt pozíció feedbackje soha nem módosít score-t, statust vagy jegyzetet: nincs fix bónusz/malusz, feedback marker vagy backfill. A meglévő score-ok változatlanok. Az O-70 explicit újraértékelés külön, felhasználó által kért folyamat.
 
 **Mentor** (F minta, csak olvasás): `themes` az elmúlt 30 napra, hogy megszámolja a felhasználó által írt indokokat. A küszöbök és az értelmezés a `mentor-patterns` skillben élnek. A Mentor **a felhasználóhoz** beszél — ebből az adatból soha nem ad keresési utasítást.
 

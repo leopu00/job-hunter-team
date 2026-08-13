@@ -678,9 +678,16 @@ def aggregate_themes(events, field="both", min_positions=3,
 
 def themes_report(days=DEFAULT_WINDOW_DAYS, limit=DEFAULT_EVENT_LIMIT,
                   field="both", min_positions=3, include_cleared=False,
-                  top=None, legacy_ids=None) -> dict:
+                  top=None, legacy_ids=None, exclude_legacy_ids=None) -> dict:
     events, note = fetch_events(days=days, limit=limit, legacy_ids=legacy_ids)
+    excluded = {str(value) for value in (exclude_legacy_ids or [])}
+    if excluded:
+        events = [e for e in events if str(e.get("legacy_id")) not in excluded]
     out = {"ok": True, "window_days": days, "field": field}
+    if excluded:
+        # Attestazione machine-readable per i chiamanti che devono dimostrare
+        # che il feedback della posizione corrente non influenza se stesso.
+        out["excluded_legacy_ids"] = sorted(excluded)
     out.update(aggregate_themes(
         events, field=field, min_positions=min_positions,
         include_cleared=include_cleared, top=top,
@@ -732,6 +739,12 @@ def main() -> None:
                      help="Keep only the top N themes.")
     thm.add_argument("--include-cleared", action="store_true",
                      help="Also count positions whose vote was cleared.")
+    thm.add_argument(
+        "--exclude-legacy-id",
+        action="append",
+        default=[],
+        help="Exclude one position from the aggregate (repeatable).",
+    )
 
     args = p.parse_args()
     ids = None
@@ -751,6 +764,7 @@ def main() -> None:
                 days=args.days, limit=args.limit, field=args.field,
                 min_positions=args.min_positions, top=args.top,
                 include_cleared=args.include_cleared, legacy_ids=ids,
+                exclude_legacy_ids=args.exclude_legacy_id,
             )
         else:
             result = {"ok": False, "error": f"unknown command: {args.cmd}"}

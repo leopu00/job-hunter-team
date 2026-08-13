@@ -322,6 +322,25 @@ def test_legacy_ids_fallback_all_unreadable_is_still_neutral(monkeypatch):
     assert rep['note'] == fq.NO_SIGNAL_NO_READABLE_POSITIONS
 
 
+def test_themes_exclude_current_position_but_keep_future_learning(monkeypatch):
+    events = [
+        ev(42, action='star', reason='automatic bonus'),
+        ev(41, action='dislike', reason='too much travel'),
+    ]
+    monkeypatch.setattr(fq, 'fetch_events', lambda **_kwargs: (events, None))
+
+    rep = fq.themes_report(
+        days=30,
+        min_positions=1,
+        exclude_legacy_ids=['42'],
+    )
+
+    assert rep['excluded_legacy_ids'] == ['42']
+    assert all('42' not in item['legacy_ids'] for item in rep['themes'])
+    assert not any(item['label'] in {'automatic', 'bonus'} for item in rep['themes'])
+    assert any('travel' in item['label'] for item in rep['themes'])
+
+
 def test_recent_truncates_long_comments(monkeypatch):
     monkeypatch.setattr(fq, '_api_get', lambda *a, **k: (True, {'feedback': [
         {'position_legacy_id': '1', 'action': 'dislike', 'reason': 'x' * 40,
@@ -360,3 +379,15 @@ def test_cli_check_still_works(tmp_path):
     payload = json.loads(res.stdout)
     assert payload['legacy_id'] == '42'
     assert payload['latest_action'] is None
+
+
+def test_cli_themes_attests_current_position_exclusion(tmp_path):
+    res = run_cli(
+        'themes',
+        '--days', '30',
+        '--exclude-legacy-id', '42',
+        home=tmp_path,
+    )
+    assert res.returncode == 0, res.stderr
+    payload = json.loads(res.stdout)
+    assert payload['excluded_legacy_ids'] == ['42']
