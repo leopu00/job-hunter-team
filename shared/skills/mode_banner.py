@@ -125,6 +125,13 @@ MODE_LABELS = {
     MODE_SAVING: "saving",
 }
 
+MODE_CONFLICT_PHRASES = {
+    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "cuidado", "stop scouting", "revisar mensajes", "revisar mensagens", "revisione messaggi", "mensajes del usuario"),
+    MODE_HARVEST: ("harvest", "raccolta", "récolte", "ernte", "colheita", "cv only", "solo cv", "só cv"),
+    MODE_CALIBRATION: ("calibration", "calibrazione", "calibración", "calibração", "kalibrierung", "visszacsatolás"),
+    MODE_SAVING: ("saving", "risparmio", "ahorro", "économie", "economia", "sparmodus", "poupança"),
+}
+
 # Le QUATTRO dichiarazioni di ogni modalità (code attive / sospeso / budget /
 # uscita) in forma compatta: è la specifica che il battito orario trasmette.
 # Il testo lungo — cosa assegnare, cosa spawnare, come si compone con C-25 —
@@ -874,22 +881,15 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
     """Return timestamp-ordered incompatible user choices, fail-closed on ties/nulls."""
     if mode in (MODE_SEARCH, MODE_UNKNOWN) or not maintenance.get("since"):
         return []
-    mode_words = {
-        MODE_HARVEST: ("harvest", "cv", "resume", "sourcing", "scout"),
-        MODE_CARE: ("care", "maintenance", "recheck", "geocode", "logo"),
-        MODE_CALIBRATION: ("calibration", "feedback", "priority"),
-        MODE_SAVING: ("saving", "spend", "autonomous", "budget"),
-    }.get(mode, ())
+    mode_words = tuple(w for words in MODE_CONFLICT_PHRASES.values() for w in words)
     conflicts = []
     for row in directives:
         body = str(row.get("body") or "").lower()
         # Semantic contract: only explicit mode declarations or explicit
         # mode-scoped orders count; incidental words in prose do not.
         explicit = re.search(r"(?:mode|modalit(?:à|a))\s*[:=]?\s*(search|harvest|care|maintenance|calibration|saving)", body)
-        scoped = any(re.search(rf"\b(?:only|solo|just|stop)\b[^.]*\b{re.escape(w)}\b|\b{re.escape(w)}\b[^.]*\b(?:only|solo|just|stop)\b|^\s*{re.escape(w)}\s*$", body) for w in mode_words)
+        scoped = any(re.search(rf"\b(?:only|solo|just|stop)\b[^.]*\b{re.escape(w)}\b|\b{re.escape(w)}\b[^.]*\b(?:only|solo|just|stop)\b|^\s*{re.escape(w)}\s*$|{re.escape(w)}", body) for w in mode_words)
         if not mode_words or (not explicit and not scoped):
-            continue
-        if explicit and explicit.group(1) in (mode, LEGACY_MODES.get(mode, mode)):
             continue
         # Without a reliable timestamp, do not silently choose a winner.
         created = row.get("created_at")
@@ -925,8 +925,14 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
                 item["notify"] = not bool(seen.get(key))
                 seen[key] = True
             tmp = marker.with_name(marker.name + ".tmp")
-            tmp.write_text(json.dumps(seen, sort_keys=True) + "\n", encoding="utf-8")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as out:
+                out.write(json.dumps(seen, sort_keys=True) + "\n")
+                out.flush(); os.fsync(out.fileno())
             os.replace(tmp, marker)
+            dfd = os.open(marker.parent, os.O_RDONLY)
+            try: os.fsync(dfd)
+            finally: os.close(dfd)
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
     except (OSError, ValueError, TypeError):
         for item in conflicts: item["notify"] = True

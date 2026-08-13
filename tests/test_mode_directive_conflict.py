@@ -23,3 +23,8 @@ def test_null_and_tie_fail_closed():
     m = {"since": "2026-08-13 10:00 UTC"}
     assert mod.resolve_user_conflicts(m, [{"id": 1, "body": "harvest", "created_at": None}], mod.MODE_HARVEST)[0]["winner"] == "unknown"
     assert mod.resolve_user_conflicts(m, [{"id": 1, "body": "harvest", "created_at": "2026-08-13 10:00:00"}], mod.MODE_HARVEST)[0]["winner"] == "unknown"
+
+def test_localized_semantic_catalog_catches_real_phrases():
+    m = {"since": "2026-08-13 10:00 UTC"}
+    for body in ("modalità: cura", "modo: ahorro", "nur stop scouting", "solo revisar mensajes del usuario"):
+        assert mod.resolve_user_conflicts(m, [{"id": 1, "body": body, "created_at": "2026-08-13 11:00:00"}], mod.MODE_CARE)
