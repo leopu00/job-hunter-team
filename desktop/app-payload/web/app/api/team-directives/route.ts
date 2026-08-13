@@ -3,6 +3,7 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -17,14 +18,15 @@ function captainEvent(
   db: Database.Database,
   action: string,
   id: number,
-  body?: string,
+  fingerprint = "",
 ) {
   try {
     db.prepare(
-      "INSERT INTO pending_user_messages (agent, body, kind, delivered_via) VALUES (?, ?, 'notification', NULL)",
+      "INSERT OR IGNORE INTO pending_user_messages (agent, body, kind, author, source_id, delivered_via) VALUES (?, ?, 'notification', 'user', ?, NULL)",
     ).run(
       "capitano",
-      `[TEAM-DIRECTIVE] ${action} #${id}${body ? `: ${body}` : ""}`,
+      `[TEAM-DIRECTIVE] ${action} #${id}`,
+      `team-directive:${id}:${action}:${fingerprint}`,
     );
     return { status: "queued" as const };
   } catch {
@@ -74,21 +76,34 @@ export async function POST(req: NextRequest) {
         )
         .get() as { n: number }
     ).n;
-    const info = db
-      .prepare(
-        "INSERT INTO team_directives (body, kind, status, sort_order, created_by) VALUES (?, ?, 'active', ?, 'user')",
-      )
-      .run(text, kind, n);
-    return NextResponse.json({
-      id: Number(info.lastInsertRowid),
-      source: "local",
-      captain_event: captainEvent(
+    const result = db.transaction(() => {
+      const info = db
+        .prepare(
+          "INSERT INTO team_directives (body, kind, status, sort_order, created_by) VALUES (?, ?, 'active', ?, 'user')",
+        )
+        .run(text, kind, n);
+      const id = Number(info.lastInsertRowid);
+      const event = captainEvent(
         db,
         "created",
-        Number(info.lastInsertRowid),
-        text,
-      ),
+        id,
+        createHash("sha256").update(text).digest("hex"),
+      );
+      if (event.status === "error") throw new Error("enqueue_failed");
+      return { id, event };
+    })();
+    return NextResponse.json({
+      id: result.id,
+      source: "local",
+      captain_event: result.event,
     });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "directive_not_queued",
+      },
+      { status: 503 },
+    );
   } finally {
     db.close();
   }
@@ -110,25 +125,47 @@ export async function PATCH(req: NextRequest) {
       { status: 503 },
     );
   try {
-    if (body.action === "archive")
-      db.prepare(
-        "UPDATE team_directives SET status='archived', archived_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-      ).run(id);
-    else if (typeof body.body === "string" && body.body.trim())
-      db.prepare(
-        "UPDATE team_directives SET body=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-      ).run(body.body.trim(), id);
-    else return NextResponse.json({ error: "invalid update" }, { status: 400 });
-    return NextResponse.json({
-      ok: true,
-      source: "local",
-      captain_event: captainEvent(
+    const result = db.transaction(() => {
+      const changed =
+        body.action === "archive"
+          ? db
+              .prepare(
+                "UPDATE team_directives SET status='archived', archived_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'",
+              )
+              .run(id)
+          : typeof body.body === "string" && body.body.trim()
+            ? db
+                .prepare(
+                  "UPDATE team_directives SET body=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'",
+                )
+                .run(body.body.trim(), id)
+            : null;
+      if (!changed || changed.changes !== 1)
+        throw new Error("directive_not_found");
+      const fp = body.body
+        ? createHash("sha256").update(body.body.trim()).digest("hex")
+        : "";
+      const event = captainEvent(
         db,
         body.action === "archive" ? "archived" : "edited",
         id,
-        body.action === "archive" ? undefined : body.body,
-      ),
+        fp,
+      );
+      if (event.status === "error") throw new Error("enqueue_failed");
+      return event;
+    })();
+    return NextResponse.json({
+      ok: true,
+      source: "local",
+      captain_event: result,
     });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "directive_not_queued",
+      },
+      { status: 503 },
+    );
   } finally {
     db.close();
   }
