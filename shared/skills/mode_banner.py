@@ -126,13 +126,13 @@ MODE_LABELS = {
 }
 
 MODE_CONFLICT_PHRASES = {
-    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "cuidado", "stop scouting", "revisar mensajes", "revisar mensagens", "revisione messaggi", "mensajes del usuario"),
+    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "cuidado", "stop scouting", "revisar mensajes", "revisar mensagens", "revisione messaggi", "mensajes del usuario", "felhasználói kérések", "recheck"),
     MODE_HARVEST: ("harvest", "raccolta", "récolte", "ernte", "colheita", "cv only", "solo cv", "só cv"),
     MODE_CALIBRATION: ("calibration", "calibrazione", "calibración", "calibração", "kalibrierung", "visszacsatolás"),
     MODE_SAVING: ("saving", "risparmio", "ahorro", "économie", "economia", "sparmodus", "poupança"),
 }
 DECLARED_MODE_PHRASES = {
-    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "cuidado"),
+    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "gondozás", "cuidado"),
     MODE_HARVEST: ("harvest", "raccolta", "récolte", "ernte", "colheita"),
     MODE_CALIBRATION: ("calibration", "calibrazione", "calibración", "calibração", "kalibrierung"),
     MODE_SAVING: ("saving", "risparmio", "ahorro", "économie", "economia", "sparmodus", "poupança"),
@@ -895,7 +895,7 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
         # mode-scoped orders count; incidental words in prose do not.
         explicit = None
         for declared, phrases in DECLARED_MODE_PHRASES.items():
-            if any(re.search(rf"\b(?:mode|modo|modalit(?:à|a)|modalidade)\s*[:=]?\s*{re.escape(p)}\b", body) for p in phrases):
+            if any(re.search(rf"\b(?:mode|modo|modus|modalit(?:é|à|a)|modalidade|mód)\s*[:=]?\s*{re.escape(p)}\b", body) for p in phrases):
                 explicit = declared; break
         if explicit:
             if explicit == mode: continue
@@ -904,8 +904,8 @@ def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> li
             scoped = any(
                 body.strip() == w
                 or re.search(
-                    rf"\b(?:only|solo|just|stop|só|nur)\b[^.]*\b{re.escape(w)}\b"
-                    rf"|\b{re.escape(w)}\b[^.]*\b(?:only|solo|just|stop|só|nur)\b",
+                    rf"\b(?:only|solo|just|stop|só|nur|seulement|csak)\b[^.]*\b{re.escape(w)}\b"
+                    rf"|\b{re.escape(w)}\b[^.]*\b(?:only|solo|just|stop|só|nur|seulement|csak)\b",
                     body,
                 )
                 for w in mode_words

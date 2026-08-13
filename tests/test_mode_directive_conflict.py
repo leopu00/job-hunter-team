@@ -26,10 +26,16 @@ def test_null_and_tie_fail_closed():
 
 def test_localized_semantic_catalog_catches_real_phrases():
     m = {"since": "2026-08-13 10:00 UTC"}
-    for body in ("modo: ahorro", "nur stop scouting", "solo revisar mensajes del usuario", "mode: harvest"):
-        assert mod.resolve_user_conflicts(m, [{"id": 1, "body": body, "created_at": "2026-08-13 11:00:00"}], mod.MODE_CARE)
+    for body in (
+        "modo: ahorro", "nur stop scouting", "solo revisar mensajes del usuario",
+        "mód: gondozás", "csak felhasználói kérések", "modalité: soin", "seulement recheck",
+    ):
+        assert mod.resolve_user_conflicts(m, [{"id": 1, "body": body, "created_at": "2026-08-13 11:00:00"}], mod.MODE_HARVEST)
 
 def test_same_mode_and_incidental_words_are_not_conflicts():
     m = {"since": "2026-08-13 10:00 UTC"}
-    for body in ("modalità: cura", "mode: care", "careful discussion of care", "ahorro de costes"):
+    for body in (
+        "modalità: cura", "mode: care", "careful discussion of care", "ahorro de costes",
+        "mód: gondozás", "modalité: soin",
+    ):
         assert mod.resolve_user_conflicts(m, [{"id": 1, "body": body, "created_at": "2026-08-13 11:00:00"}], mod.MODE_CARE) == []
