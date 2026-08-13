@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "protection": {
+    "required_status_checks": {
+      "strict": false,
+      "checks": [
+        {"context": "Build Web", "app_id": 15368},
+        {"context": "Untrusted replacement", "app_id": 0}
+      ]
+    },
+    "enforce_admins": {"enabled": true},
+    "required_signatures": {"enabled": false},
+    "allow_force_pushes": {"enabled": true},
+    "allow_deletions": {"enabled": true}
+  },
+  "rulesets": [
+    {
+      "id": 14820393,
+      "target": "branch",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "include": ["refs/heads/master"],
+          "exclude": []
+        }
+      },
+      "bypass_actors": [
+        {
+          "actor_id": 5,
+          "actor_type": "RepositoryRole",
+          "bypass_mode": "always"
+        }
+      ],
+      "rules": [
+        {
+          "type": "pull_request",
+          "parameters": {
+            "required_approving_review_count": 2,
+            "require_code_owner_review": false,
+            "dismiss_stale_reviews_on_push": false
+          }
+        }
+      ]
+    }
+  ]
+}
