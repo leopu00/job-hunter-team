@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import { getServerLocale } from "@/lib/server-locale";
 
 // /swipe è il triage rapido a carte (stile Tinder) del backlog posizioni:
-// swipe a destra = mi interessa (position_feedback like → il team impara il
-// gusto), swipe a sinistra = scarta (user-exclude → il team smette di
-// lavorarci). Pensata mobile-first: smaltire la coda dal telefono senza
-// aprire le posizioni una a una.
+// I quattro giudizi scrivono position_feedback: sono segnali di gusto per le
+// posizioni future e non cambiano score/status della posizione corrente.
+// Pensata mobile-first: recensire la coda dal telefono senza aprire le
+// posizioni una a una.
 const META: Record<string, { title: string; description: string }> = {
   it: {
     title: "Swipe — Job Hunter",
