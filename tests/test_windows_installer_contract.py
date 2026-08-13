@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+GIT_ATTRIBUTES = ROOT / ".gitattributes"
 NSI = ROOT / "game" / "installer" / "windows.nsi"
 BUILDER = ROOT / "scripts" / "build-windows-installer.ps1"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
@@ -94,3 +95,7 @@ def test_native_windows_smoke_attests_pck_and_rejects_second_instance() -> None:
         assert workflow.count(watched) == 2
     assert "Management.Automation.Language.Parser]::ParseFile" in workflow
     assert "PowerShell syntax validation failed" in workflow
+    assert GIT_ATTRIBUTES.read_text(encoding="utf-8").splitlines().count(
+        "*.ps1 text eol=lf"
+    ) == 1
+    assert workflow.count('".gitattributes"') == 2
