@@ -23,6 +23,7 @@ var _stderr_bytes := PackedByteArray()
 var _binding := {}
 var _source_byte_count := 0
 var _command_length := 0
+var _bootstrap_code := "entry"
 
 
 func _enter_tree() -> void:
@@ -33,7 +34,7 @@ func _enter_tree() -> void:
 		_allowed = true
 		return
 	if not _start_guard():
-		_fail_closed("bootstrap")
+		_fail_closed("bootstrap_" + _bootstrap_code)
 	elif OS.get_environment("JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST") == "1":
 		print("WINDOWS-INSTANCE-GUARD-PCK source=exported-pck bytes=",
 				_source_byte_count, " argv_utf16=", _command_length,
@@ -75,13 +76,16 @@ func binding() -> Dictionary:
 
 
 func _start_guard() -> bool:
+	_bootstrap_code = "source"
 	var raw := FileAccess.get_file_as_bytes(SOURCE_PATH)
 	if not source_bytes_valid(raw, SOURCE_SHA256):
 		return false
 	_source_byte_count = raw.size()
+	_bootstrap_code = "encode"
 	var encoded := encoded_command(raw)
 	if encoded.is_empty():
 		return false
+	_bootstrap_code = "powershell"
 	var powershell := _powershell_path()
 	var args := PackedStringArray([
 		"-NoLogo", "-NoProfile", "-NonInteractive",
@@ -90,15 +94,18 @@ func _start_guard() -> bool:
 	_command_length = command_utf16_length(powershell, args)
 	if powershell.is_empty() or _command_length >= ARGV_MAX_UTF16:
 		return false
+	_bootstrap_code = "request"
 	var request := _request_line()
 	if request.is_empty() or request.to_utf8_buffer().size() > REQUEST_MAX_BYTES:
 		return false
+	_bootstrap_code = "execute"
 	var process := OS.execute_with_pipe(powershell, args, false)
 	if process.is_empty():
 		return false
 	_stdio = process["stdio"]
 	_stderr = process["stderr"]
 	_guard_pid = int(process["pid"])
+	_bootstrap_code = "pipe"
 	if _guard_pid <= 0:
 		_close_pipes()
 		return false
@@ -107,11 +114,13 @@ func _start_guard() -> bool:
 		_close_pipes()
 		return false
 	_stdio.flush()
+	_bootstrap_code = "ready"
 	var ready_line := _read_ready_line()
 	if ready_line.is_empty() or not _accept_ready(ready_line, request, powershell):
 		_close_pipes()
 		return false
 	_allowed = true
+	_bootstrap_code = "complete"
 	_last_heartbeat_msec = Time.get_ticks_msec()
 	return true
 

@@ -102,6 +102,7 @@ def main() -> None:
         '(request + "\\n").to_utf8_buffer()',
         "OS.is_process_running(_guard_pid)",
         "HEARTBEAT_TIMEOUT_MSEC",
+        '"bootstrap_" + _bootstrap_code',
     ]
     for seam in required_consumer:
         require(seam in consumer, f"missing consumer seam: {seam}")
