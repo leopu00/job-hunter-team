@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 import subprocess
@@ -53,12 +54,137 @@ def test_drift_fixture_fails_with_finite_codes() -> None:
         "delete_allowed",
         "dismiss_stale_reviews_not_required",
         "force_push_allowed",
+        "pull_request_rule_not_atomic",
         "required_checks_drift",
         "review_count_drift",
         "signatures_not_required",
         "status_checks_not_strict",
     )
     assert set(result.issues) <= gate.SAFE_CODES
+
+
+@pytest.mark.parametrize(
+    ("field", "mutation", "expected_issue"),
+    (
+        ("enforce_admins", "missing", "admins_not_enforced"),
+        ("enforce_admins", "malformed", "admins_not_enforced"),
+        ("required_signatures", "missing", "signatures_not_required"),
+        ("required_signatures", "malformed", "signatures_not_required"),
+        ("allow_force_pushes", "missing", "force_push_allowed"),
+        ("allow_force_pushes", "malformed", "force_push_allowed"),
+        ("allow_deletions", "missing", "delete_allowed"),
+        ("allow_deletions", "malformed", "delete_allowed"),
+    ),
+)
+def test_required_protection_toggles_fail_closed(
+    field: str,
+    mutation: str,
+    expected_issue: str,
+) -> None:
+    snapshot = copy.deepcopy(_snapshot("target-pass.json"))
+    protection = snapshot["protection"]
+    if mutation == "missing":
+        protection.pop(field)
+    else:
+        protection[field] = {"enabled": 0}
+
+    result = gate.evaluate(snapshot)
+
+    assert expected_issue in result.issues
+    assert not result.ok
+
+
+@pytest.mark.parametrize(
+    "bypass_actors",
+    (
+        pytest.param(None, id="missing"),
+        pytest.param({}, id="not-a-list"),
+        pytest.param(
+            [
+                {
+                    "actor_id": True,
+                    "actor_type": "RepositoryRole",
+                    "bypass_mode": "always",
+                }
+            ],
+            id="malformed-actor",
+        ),
+    ),
+)
+def test_bypass_actors_fail_closed_when_missing_or_malformed(bypass_actors: Any) -> None:
+    snapshot = copy.deepcopy(_snapshot("target-pass.json"))
+    ruleset = snapshot["rulesets"][0]
+    if bypass_actors is None:
+        ruleset.pop("bypass_actors")
+    else:
+        ruleset["bypass_actors"] = bypass_actors
+
+    result = gate.evaluate(snapshot)
+
+    assert "admin_always_bypass" in result.issues
+    assert not result.ok
+
+
+def test_pull_request_requirements_cannot_be_aggregated_across_rules() -> None:
+    snapshot = copy.deepcopy(_snapshot("target-pass.json"))
+    snapshot["rulesets"][0]["rules"] = [
+        {
+            "type": "pull_request",
+            "parameters": {
+                "required_approving_review_count": 1,
+                "require_code_owner_review": False,
+                "dismiss_stale_reviews_on_push": False,
+            },
+        },
+        {
+            "type": "pull_request",
+            "parameters": {
+                "required_approving_review_count": 0,
+                "require_code_owner_review": True,
+                "dismiss_stale_reviews_on_push": False,
+            },
+        },
+        {
+            "type": "pull_request",
+            "parameters": {
+                "required_approving_review_count": 0,
+                "require_code_owner_review": False,
+                "dismiss_stale_reviews_on_push": True,
+            },
+        },
+    ]
+
+    result = gate.evaluate(snapshot)
+
+    assert result.issues == ("pull_request_rule_not_atomic",)
+
+
+@pytest.mark.parametrize(
+    ("field", "malformed_value", "expected_issue"),
+    (
+        ("required_approving_review_count", True, "review_count_drift"),
+        ("require_code_owner_review", 1, "codeowner_review_not_required"),
+        (
+            "dismiss_stale_reviews_on_push",
+            1,
+            "dismiss_stale_reviews_not_required",
+        ),
+    ),
+)
+def test_pull_request_required_fields_use_exact_types(
+    field: str,
+    malformed_value: Any,
+    expected_issue: str,
+) -> None:
+    snapshot = copy.deepcopy(_snapshot("target-pass.json"))
+    parameters = snapshot["rulesets"][0]["rules"][0]["parameters"]
+    parameters[field] = malformed_value
+
+    result = gate.evaluate(snapshot)
+
+    assert expected_issue in result.issues
+    assert "pull_request_rule_not_atomic" in result.issues
+    assert not result.ok
 
 
 def test_live_reader_uses_only_get_and_fetches_ruleset_details() -> None:
@@ -96,6 +222,22 @@ def test_invalid_snapshot_output_does_not_echo_path_or_contents(
     assert captured.out == ""
     assert captured.err == "GITHUB-PROTECTION ERROR code=input_invalid\n"
     assert synthetic_secret not in captured.err
+    assert str(snapshot_path) not in captured.err
+
+
+def test_deeply_nested_json_returns_finite_sanitized_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    snapshot_path = tmp_path / "deeply-nested.json"
+    depth = 2_000
+    snapshot_path.write_text("[" * depth + "0" + "]" * depth, encoding="utf-8")
+
+    assert gate.main(["--snapshot", str(snapshot_path)]) == 2
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert captured.err == "GITHUB-PROTECTION ERROR code=input_invalid\n"
     assert str(snapshot_path) not in captured.err
 
 
