@@ -70,6 +70,17 @@ describe("forma local-first delle scritture su posizione", () => {
     },
   );
 
+  it("gli endpoint non espongono dettagli architetturali nelle risposte", () => {
+    for (const rel of CLOUD_GUARDED_ENDPOINTS) {
+      expect(read(rel).toLowerCase()).not.toContain("team locale");
+      expect(read(rel).toLowerCase()).not.toContain("localhost");
+    }
+    const panel = read("web/app/(protected)/positions/[id]/TicketPanel.tsx");
+    expect(panel).toContain("attachmentUnavailable");
+    expect(panel.match(/attachmentUnavailable:/g)).toHaveLength(8);
+    expect(panel).toContain('b?.error === "attachment_unavailable"');
+  });
+
   it("l'errore candidatura è azionabile e non espone dettagli interni", () => {
     const src = read("web/app/(protected)/positions/[id]/FeedbackButtons.tsx");
     const messages = [

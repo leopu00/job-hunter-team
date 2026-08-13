@@ -95,7 +95,7 @@ export async function POST(
 
   if (attachment && !hasLocal) {
     return NextResponse.json(
-      { error: "L'allegato richiede un team locale collegato" },
+      { error: "attachment_unavailable" },
       { status: 503 },
     );
   }

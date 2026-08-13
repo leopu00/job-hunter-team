@@ -39,6 +39,7 @@ const T: Record<
     removeFile: string;
     pasteTooLarge: string;
     pasteUnsupported: string;
+    attachmentUnavailable: string;
   }
 > = {
   it: {
@@ -64,6 +65,8 @@ const T: Record<
     removeFile: "Rimuovi allegato",
     pasteTooLarge: "L'immagine incollata supera il limite di 10 MB",
     pasteUnsupported: "Formato immagine incollato non supportato",
+    attachmentUnavailable:
+      "Allegato non disponibile. Caricalo dal desktop e riprova.",
   },
   en: {
     statusLabel: {
@@ -88,6 +91,8 @@ const T: Record<
     removeFile: "Remove attachment",
     pasteTooLarge: "The pasted image exceeds the 10 MB limit",
     pasteUnsupported: "The pasted image format is not supported",
+    attachmentUnavailable:
+      "Attachment unavailable. Upload it from desktop and try again.",
   },
   es: {
     statusLabel: {
@@ -112,6 +117,8 @@ const T: Record<
     removeFile: "Quitar archivo",
     pasteTooLarge: "La imagen pegada supera el límite de 10 MB",
     pasteUnsupported: "El formato de imagen pegado no es compatible",
+    attachmentUnavailable:
+      "Adjunto no disponible. Súbelo desde el escritorio y vuelve a intentarlo.",
   },
   fr: {
     statusLabel: {
@@ -136,6 +143,8 @@ const T: Record<
     removeFile: "Retirer le fichier",
     pasteTooLarge: "L'image collée dépasse la limite de 10 Mo",
     pasteUnsupported: "Le format d'image collée n'est pas pris en charge",
+    attachmentUnavailable:
+      "Pièce jointe indisponible. Importez-la depuis le bureau et réessayez.",
   },
   de: {
     statusLabel: {
@@ -160,6 +169,8 @@ const T: Record<
     removeFile: "Anhang entfernen",
     pasteTooLarge: "Das eingefügte Bild überschreitet das 10-MB-Limit",
     pasteUnsupported: "Das eingefügte Bildformat wird nicht unterstützt",
+    attachmentUnavailable:
+      "Anhang nicht verfügbar. Lade ihn vom Desktop hoch und versuche es erneut.",
   },
   hu: {
     statusLabel: {
@@ -184,6 +195,8 @@ const T: Record<
     removeFile: "Melléklet eltávolítása",
     pasteTooLarge: "A beillesztett kép meghaladja a 10 MB-os korlátot",
     pasteUnsupported: "A beillesztett képformátum nem támogatott",
+    attachmentUnavailable:
+      "A melléklet nem érhető el. Töltsd fel az asztali alkalmazásból, majd próbáld újra.",
   },
   pt: {
     statusLabel: {
@@ -208,6 +221,8 @@ const T: Record<
     removeFile: "Remover anexo",
     pasteTooLarge: "A imagem colada excede o limite de 10 MB",
     pasteUnsupported: "O formato da imagem colada não é suportado",
+    attachmentUnavailable:
+      "Anexo indisponível. Carregue-o a partir do desktop e tente novamente.",
   },
 };
 
@@ -264,7 +279,11 @@ export function TicketPanel({
       });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
-        setError(b?.error ?? `HTTP ${res.status}`);
+        setError(
+          b?.error === "attachment_unavailable"
+            ? t.attachmentUnavailable
+            : (b?.error ?? t.networkError),
+        );
         setBusy(false);
         return;
       }
