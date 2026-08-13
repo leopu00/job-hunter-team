@@ -7,10 +7,10 @@ MIGRATION = ROOT / "supabase/migrations/084_cloud_sync_pairing_attempts.sql"
 def test_f06_migration_is_collision_gated_and_tenant_bound():
     sql = MIGRATION.read_text(encoding="utf-8")
     assert "084 collision" in sql
-    assert "primary key (device_code, user_id)" in sql
+    assert "user_id uuid primary key" in sql
     assert "for update" in sql.lower()
     assert "invalidated_at" in sql
-    assert "record_pairing_failure" in sql
+    assert "consume_pairing_attempt" in sql
     assert "grant execute" in sql and "service_role" in sql
 
 

@@ -17,7 +17,8 @@ const NOT_CLOUD = NextResponse.json(
 const UNAUTH = NextResponse.json({ error: "Non autenticato" }, { status: 401 });
 
 // Confirm e' chiamato dall'utente loggato sul web — UNA volta per pairing.
-// Cap a 20/min per user, sufficiente per UX retry su typo del codice.
+// Cap a 20 tentativi/10 min per user: user_code ha circa 1,15 miliardi di
+// combinazioni (36^6); il bucket persistente limita i tentativi cross-instance.
 const CONFIRM_LIMIT_PER_MIN = 20;
 
 /**
@@ -72,6 +73,35 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return NextResponse.json(
+      { error: "server misconfigured: SUPABASE_SERVICE_ROLE_KEY mancante" },
+      { status: 500 },
+    );
+  }
+
+  // Consume the durable bucket before parsing or looking up user_code. An RPC
+  // error is fail-closed: malformed/non-existent codes count too.
+  const { data: attempt, error: attemptErr } = await admin.rpc(
+    "consume_pairing_attempt",
+    { p_user_id: user.id },
+  );
+  const attemptRow = Array.isArray(attempt) ? attempt[0] : attempt;
+  if (attemptErr || !attemptRow?.allowed) {
+    return NextResponse.json(
+      { error: "Troppi tentativi. Riprova più tardi." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(attemptRow?.retry_after_seconds ?? 60),
+        },
+      },
+    );
+  }
+
   let body: { user_code?: string; token_name?: string } = {};
   try {
     body = await req.json();
@@ -91,16 +121,6 @@ export async function POST(req: NextRequest) {
     body.token_name?.trim() ||
     `cli-pairing-${new Date().toISOString().slice(0, 10)}`
   ).slice(0, 100);
-
-  let admin;
-  try {
-    admin = createAdminClient();
-  } catch {
-    return NextResponse.json(
-      { error: "server misconfigured: SUPABASE_SERVICE_ROLE_KEY mancante" },
-      { status: 500 },
-    );
-  }
 
   // Cerca la sessione pending con quel user_code.
   const { data: session, error: lookupErr } = await admin
@@ -123,16 +143,6 @@ export async function POST(req: NextRequest) {
       { status: 404 },
     );
   }
-  const recordPairingFailure = async () => {
-    // The RPC is deliberately fail-closed and returns only counters/booleans;
-    // its database errors never cross this route's response boundary.
-    await admin
-      .rpc("record_pairing_failure", {
-        p_device_code: session.device_code,
-        p_user_id: user.id,
-      })
-      .catch(() => undefined);
-  };
   if (new Date(session.expires_at).getTime() < Date.now()) {
     await admin
       .from("cloud_sync_pairing_sessions")
@@ -161,7 +171,6 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (tokenErr) {
-    await recordPairingFailure();
     return sanitizedError(tokenErr, {
       status: 500,
       scope: "cloud-sync/device-confirm",
@@ -186,7 +195,6 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (approveErr) {
-    await recordPairingFailure();
     // Rollback del token che abbiamo gia' inserito
     await admin
       .from("cloud_sync_tokens")
