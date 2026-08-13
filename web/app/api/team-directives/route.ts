@@ -11,6 +11,7 @@ import {
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
 import { sanitizedError } from "@/lib/error-response";
+import { readTeamDirectivesForUser } from "@/lib/team-directives-cloud";
 
 export const dynamic = "force-dynamic";
 
@@ -113,15 +114,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const resolved = await resolveUser(req);
   if (!resolved.ok) return resolved.res;
   const { supabase, userId } = resolved.user;
-  const { data, error } = await supabase
-    .from("team_directives")
-    .select(
-      "id, body, kind, status, sort_order, created_by, created_at, updated_at, archived_at",
-    )
-    .eq("user_id", userId)
-    .order("status", { ascending: true })
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true });
+  const { data, error } = await readTeamDirectivesForUser(supabase, userId);
   if (error) {
     return sanitizedError(error, {
       status: 500,
