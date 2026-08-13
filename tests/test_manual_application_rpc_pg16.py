@@ -1,11 +1,13 @@
 """Executable PostgreSQL-16 oracle for the manual-application RPC hotfix."""
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 import pytest
 
@@ -21,6 +23,44 @@ def _run(args, *, input_text=None, check=True):
 
 @pytest.fixture(scope="module")
 def pg16():
+    external_url = os.environ.get("JHT_TEST_POSTGRES_URL")
+    if external_url:
+        psql_client = shutil.which("psql")
+        parsed = urlparse(external_url)
+        if not psql_client or not parsed.hostname:
+            pytest.fail("JHT_TEST_POSTGRES_URL requires psql and a valid host")
+        database = f"jht_click_oracle_{uuid.uuid4().hex[:12]}"
+
+        def external_psql(sql: str, *, target=external_url, check=True):
+            return _run(
+                [
+                    psql_client,
+                    "-X",
+                    "-q",
+                    "-v",
+                    "ON_ERROR_STOP=1",
+                    "-d",
+                    target,
+                    "-At",
+                    "-F",
+                    "|",
+                ],
+                input_text=sql,
+                check=check,
+            )
+
+        external_psql(f'CREATE DATABASE "{database}";')
+        database_url = urlunparse(parsed._replace(path=f"/{database}"))
+
+        def psql(sql: str, *, check=True):
+            return external_psql(sql, target=database_url, check=check)
+
+        try:
+            yield psql
+        finally:
+            external_psql(f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE);', check=False)
+        return
+
     if not shutil.which("docker"):
         pytest.skip("docker non disponibile")
     if _run(["docker", "image", "inspect", IMAGE], check=False).returncode:
@@ -50,9 +90,12 @@ def pg16():
 
 SCHEMA = """
 CREATE SCHEMA auth;
-CREATE ROLE authenticated NOLOGIN;
-CREATE ROLE anon NOLOGIN;
-CREATE ROLE service_role NOLOGIN;
+DO $$ BEGIN CREATE ROLE authenticated NOLOGIN;
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE ROLE anon NOLOGIN;
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE ROLE service_role NOLOGIN;
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 CREATE TABLE public.positions (id uuid PRIMARY KEY, user_id uuid NOT NULL, legacy_id integer UNIQUE NOT NULL, status text, last_actor text);
 CREATE TABLE public.applications (id serial PRIMARY KEY, user_id uuid NOT NULL, position_id uuid UNIQUE NOT NULL, status text, applied boolean, applied_at timestamptz, applied_via text, critic_notes text, cv_path text, cv_pdf_path text);
