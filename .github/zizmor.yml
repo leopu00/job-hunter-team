@@ -13,11 +13,6 @@ rules:
   unpinned-uses:
     disable: true
 
-  # Permessi minimali per ogni workflow: richiede review per-workflow
-  # delle GITHUB_TOKEN scopes. Da fare nel prossimo round CI hardening.
-  excessive-permissions:
-    disable: true
-
   # `persist-credentials: false` su actions/checkout: low-confidence,
   # spesso non necessario per le nostre pipeline locali.
   artipacked:
