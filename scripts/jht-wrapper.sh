@@ -408,6 +408,18 @@ serve_help_without_docker() {
   return 0
 }
 
+# I comandi implementati dal wrapper non esistono nel CLI Node. Se Docker e'
+# gia' attivo, inoltrare per esempio `jht up --help` al container darebbe un
+# falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
+host_command_uses_local_help() {
+  case "$1" in
+    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 # Allinea l'owner delle dir bind-mountate all'UID che il container usa
 # internamente (jht = 1001). Senza questo, su VPS root (uid 0) il
 # container 'jht' non puo' scrivere in /jht_home: EACCES su jht.config.json,
@@ -1383,6 +1395,24 @@ fi
 # ── Dispatcher ────────────────────────────────────────────────────────────
 SUB="${1:-}"
 
+# Il gate informativo precede TUTTI i rami, inclusi quelli host-side. Tenerlo
+# solo nel catch-all lascia `up --help`, `setup --help`, ecc. liberi di entrare
+# nei rispettivi path Docker prima che il wrapper legga `--help`.
+if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ]; then
+  for arg in "${@:2}"; do
+    case "$arg" in
+      -h|--help)
+        if host_command_uses_local_help "$SUB"; then
+          local_help
+          exit 0
+        fi
+        serve_help_without_docker "$@"
+        exit $?
+        ;;
+    esac
+  done
+fi
+
 # ⚠️ ORDINE: si guarda COSA e' stato chiesto PRIMA di decidere se serve Docker.
 # Il contrario — chiamare ensure_up in cima al catch-all — faceva si' che un
 # semplice `jht --help` scaricasse l'immagine (~300 MB) e creasse container e
@@ -1399,7 +1429,7 @@ case "$SUB" in
     if docker_reachable && container_up; then
       docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" --version
     else
-      printf '%s\n' "${JHT_IMAGE_TAG:-$(basename "${JHT_IMAGE:-jht}" | sed 's/.*://')}"
+      printf '%s\n' "${JHT_IMAGE_TAG:-$(basename "${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.9}" | sed 's/.*://')}"
       info "Versione dell'immagine configurata. Per quella del CLI in esecuzione: 'jht up' e poi 'jht --version'."
     fi
     exit 0
@@ -1539,16 +1569,6 @@ case "$SUB" in
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
   *)
-    # Anche qui: se l'utente sta solo chiedendo aiuto su un sottocomando, non
-    # si accende nulla per rispondergli.
-    for arg in "$@"; do
-      case "$arg" in
-        -h|--help)
-          serve_help_without_docker "$@"
-          exit $?
-          ;;
-      esac
-    done
     require_compose_file
     require_docker
     ensure_up
