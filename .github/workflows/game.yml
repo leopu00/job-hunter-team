@@ -31,6 +31,9 @@ on:
       - ".github/workflows/release.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test-export:
     name: ${{ matrix.label }} — test, export, smoke

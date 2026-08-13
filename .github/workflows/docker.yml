@@ -30,6 +30,9 @@ on:
       - ".github/workflows/docker.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: leopu00/jht
