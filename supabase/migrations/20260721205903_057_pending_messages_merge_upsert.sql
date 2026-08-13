@@ -1,0 +1,8 @@
+-- H-08 migration-history anchor: intentionally no executable SQL.
+-- Remote identity: 20260721205903 / 057_pending_messages_merge_upsert
+-- Canonical effect: supabase/migrations/057_pending_messages_merge_upsert.sql
+-- Remote statements MD5: 13cb2bd86b39f5686b2a7a65571ca8ec
+--
+-- The linked database already records this timestamped migration. Keeping
+-- the exact identity locally reconciles history without replaying old DDL;
+-- the canonical migration (or forward-only 081) owns the final schema.

@@ -1,0 +1,8 @@
+-- H-08 migration-history anchor: intentionally no executable SQL.
+-- Remote identity: 20260523141100 / team_state_touch_clock_timestamp
+-- Canonical effect: supabase/migrations/022_team_state_touch_clock_timestamp.sql
+-- Remote statements MD5: 8aee1754a7accbac65afe970584daa2d
+--
+-- The linked database already records this timestamped migration. Keeping
+-- the exact identity locally reconciles history without replaying old DDL;
+-- the canonical migration (or forward-only 081) owns the final schema.
