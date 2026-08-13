@@ -29,10 +29,14 @@ export function generateUserCode(): string {
 }
 
 function pickRandomFrom(alphabet: string, count: number): string {
-  const bytes = randomBytes(count);
+  const limit = 256 - (256 % alphabet.length);
   let out = "";
-  for (let i = 0; i < count; i++) {
-    out += alphabet[bytes[i] % alphabet.length];
+  while (out.length < count) {
+    for (const byte of randomBytes(Math.max(16, count * 2))) {
+      if (byte >= limit) continue;
+      out += alphabet[byte % alphabet.length];
+      if (out.length === count) break;
+    }
   }
   return out;
 }
