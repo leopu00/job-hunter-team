@@ -6,6 +6,10 @@ import {
   localFirstWrite,
   type StepResult,
 } from "@/lib/positions/local-first-write";
+import {
+  publicPositionState,
+  type PublicPositionState,
+} from "@/lib/position-state";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +50,7 @@ function derivedPreviousState(hasCv: boolean, hasScore: boolean): string {
 interface AppliedOutcome {
   id: string;
   status: string | null;
+  public_state: PublicPositionState;
   applied_at: string | null;
   applied_via: string | null;
 }
@@ -66,7 +71,10 @@ function cloudOutcome(data: unknown): AppliedOutcome | null {
   ) {
     return null;
   }
-  return value as AppliedOutcome;
+  return {
+    ...(value as Omit<AppliedOutcome, "public_state">),
+    public_state: publicPositionState(value.status),
+  };
 }
 
 function cloudUndoOutcome(data: unknown): AppliedOutcome | null {
@@ -80,7 +88,10 @@ function cloudUndoOutcome(data: unknown): AppliedOutcome | null {
   ) {
     return null;
   }
-  return value as AppliedOutcome;
+  return {
+    ...(value as Omit<AppliedOutcome, "public_state">),
+    public_state: publicPositionState(value.status),
+  };
 }
 
 function rpcFailure(
@@ -115,6 +126,7 @@ export async function POST(
     return NextResponse.json({
       id: `demo-${legacyIdParam}`,
       status: "applied",
+      public_state: "applied",
       applied_at: nowIso(),
       applied_via: APPLIED_VIA_USER,
       source: "cloud",
@@ -193,6 +205,7 @@ export async function POST(
         outcome: {
           id: String(legacyId),
           status: "applied",
+          public_state: "applied",
           applied_at: appliedAt,
           applied_via: APPLIED_VIA_USER,
         },
@@ -249,6 +262,7 @@ export async function DELETE(
     return NextResponse.json({
       id: `demo-${legacyIdParam}`,
       status: FALLBACK_STATE,
+      public_state: publicPositionState(FALLBACK_STATE),
       applied_at: null,
       applied_via: null,
       source: "cloud",
@@ -361,6 +375,7 @@ export async function DELETE(
         outcome: {
           id: String(legacyId),
           status: restored,
+          public_state: publicPositionState(restored),
           applied_at: null,
           applied_via: null,
         },

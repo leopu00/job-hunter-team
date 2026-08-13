@@ -43,6 +43,11 @@ import { CvDownloadButton } from "./CvDownloadButton";
 import MarkSeenAfterView from "@/app/components/MarkSeenAfterView";
 import { Avatar } from "@/app/components/Avatar";
 import { isLocalRequest } from "@/lib/auth";
+import {
+  PUBLIC_STATE_COLORS,
+  publicApplicationState,
+  publicPositionStateLabel,
+} from "@/lib/position-state";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { makeT } from "@/lib/i18n-dict";
 import { formatPositionEventStamp } from "@/lib/position-event-stamp";
@@ -114,17 +119,6 @@ const VAL: Record<string, Record<string, string>> = {
     fr: "souhaitée",
     pt: "preferida",
   },
-};
-
-// Colori dello stato della CANDIDATURA (applications.status), distinto dallo
-// stato della posizione. 'ready' = CV finito e approvato dal Critico.
-const APP_STATUS_COLORS: Record<string, string> = {
-  draft: "var(--color-yellow)",
-  review: "var(--color-orange)",
-  ready: "var(--color-ready)",
-  approved: "var(--color-green)",
-  applied: "var(--color-green)",
-  response: "#58a6ff",
 };
 
 const VERDICT_COLORS: Record<string, string> = {
@@ -817,8 +811,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
               {/* Stato candidatura + verdetto + voto del Critico in evidenza */}
               <div className="flex items-center gap-2.5 flex-wrap mb-4">
                 {(() => {
-                  const c =
-                    APP_STATUS_COLORS[application.status] ?? "var(--color-dim)";
+                  const publicState = publicApplicationState(
+                    application.status,
+                  );
+                  const c = PUBLIC_STATE_COLORS[publicState];
                   return (
                     <span
                       className="text-[10px] font-semibold px-3 py-1 rounded-full border"
@@ -828,9 +824,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                         background: `${c}18`,
                       }}
                     >
-                      {T[`as_${application.status}`]
-                        ? t(`as_${application.status}`)
-                        : application.status}
+                      {publicPositionStateLabel(publicState, locale)}
                     </span>
                   );
                 })()}

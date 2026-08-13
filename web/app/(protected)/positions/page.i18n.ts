@@ -189,27 +189,6 @@ export const T = {
     fr: "Statut",
     pt: "Estado",
   },
-  // O-31 — la colonna stato è larga 104px: l'etichetta è CORTA e il testo
-  // per esteso vive nel tooltip. «ticket in corso» non ci sta senza
-  // spingere la tabella nello scroll orizzontale.
-  status_ticket_pending: {
-    it: "ticket",
-    en: "ticket",
-    hu: "ticket",
-    es: "ticket",
-    de: "Ticket",
-    fr: "ticket",
-    pt: "ticket",
-  },
-  status_ticket_pending_full: {
-    it: "Ticket in corso: stai aspettando una risposta dal team",
-    en: "Ticket open: you are waiting for an answer from the team",
-    hu: "Nyitott ticket: válaszra vársz a csapattól",
-    es: "Ticket en curso: esperas una respuesta del equipo",
-    de: "Offenes Ticket: du wartest auf eine Antwort des Teams",
-    fr: "Ticket en cours : vous attendez une réponse de l'équipe",
-    pt: "Ticket em curso: está à espera de uma resposta da equipa",
-  },
   col_applied_at: {
     it: "Candidatura",
     en: "Applied",

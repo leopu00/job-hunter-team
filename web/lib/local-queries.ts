@@ -2,6 +2,7 @@ import { getDb } from "./db";
 import { resolveCityPins } from "./city-coords";
 import { salaryPreference } from "./salary-source";
 import { likePattern, parsePositionQuery } from "./position-search";
+import { publicPositionState } from "./position-state";
 import {
   aggregateRoleFamilies,
   type RoleFamilyCount,
@@ -281,6 +282,7 @@ export function getPositionsLocal(
     ]);
     return {
       ...mapPosition(r),
+      public_state: publicPositionState(r.status),
       salary_min,
       salary_max,
       salary_currency,
@@ -289,6 +291,10 @@ export function getPositionsLocal(
       // `positions`, quindi il join con `applications` va riportato a mano.
       written_at: r.written_at ?? null,
       has_open_ticket: Number(r.open_tickets ?? 0) > 0,
+      ticket_indicator:
+        Number(r.open_tickets ?? 0) > 0
+          ? ("pending" as const)
+          : ("none" as const),
       last_action_at: la.at,
       last_action_by: la.by,
       last_action_actor: la.actor,

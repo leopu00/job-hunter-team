@@ -113,7 +113,8 @@ export const POSITIONS_COL_MIN_WIDTH: Record<PositionsColumnKey, number> = {
   // "KRITIKUS PONTSZÁM" (hu) chiede 171. È il salto più grosso — la colonna
   // mostra un numero di tre caratteri e la larghezza la detta l'etichetta.
   critic: 171,
-  status: 104,
+  // Stato e indicatore ticket sono due segnali distinti, impilati.
+  status: 170,
   // Quando lo Scrittore ha prodotto il CV. Accanto ad `applied_at` racconta
   // la coda: scritto il 3, ancora non inviato.
   // 178 e non 122 come le altre date: "ÖNÉLETRAJZ MEGÍRVA" (hu) è

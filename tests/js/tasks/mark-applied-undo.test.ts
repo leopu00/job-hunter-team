@@ -99,7 +99,10 @@ describe("annullare la candidatura manuale", () => {
     seed({ status: "applied", transitionFrom: "review" });
     const res = await call();
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ status: "review" });
+    await expect(res.json()).resolves.toMatchObject({
+      status: "review",
+      public_state: "preparing",
+    });
     expect(db.prepare("SELECT status FROM positions WHERE id=1").get()).toEqual(
       {
         status: "review",
