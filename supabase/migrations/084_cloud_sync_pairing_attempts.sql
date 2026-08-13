@@ -2,6 +2,9 @@
 -- Every authenticated confirmation attempt consumes this bucket before any
 -- body parsing or session lookup. The row lock makes window/max decisions
 -- atomic across concurrent requests and re-applying the migration is safe.
+-- Historical correction: migration 008 described the AAAA-1234 user_code
+-- space as ~36^8/~2.8T. The generator uses 23 letters and 8 digits, so the
+-- actual space is 23^4 * 8^4 ~= 1.15B; 008 stays byte-for-byte immutable.
 begin;
 do $$
 begin
