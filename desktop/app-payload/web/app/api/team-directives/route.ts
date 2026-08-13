@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ function captainEvent(
   db: Database.Database,
   action: string,
   id: number,
-  fingerprint = "",
+  requestId: string,
 ) {
   try {
     db.prepare(
@@ -26,7 +26,7 @@ function captainEvent(
     ).run(
       "capitano",
       `[TEAM-DIRECTIVE] ${action} #${id}`,
-      `team-directive:${id}:${action}:${fingerprint}`,
+      `team-directive:${requestId}`,
     );
     return { status: "queued" as const };
   } catch {
@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as {
     body?: string;
     kind?: string;
+    request_id?: string;
   };
   const text = typeof body.body === "string" ? body.body.trim() : "";
   if (!text || text.length > 2000)
@@ -62,6 +63,10 @@ export async function POST(req: NextRequest) {
   )
     ? body.kind
     : "order";
+  const requestId =
+    typeof body.request_id === "string" && body.request_id.trim()
+      ? body.request_id.trim()
+      : randomUUID();
   const db = openDb();
   if (!db)
     return NextResponse.json(
@@ -83,12 +88,7 @@ export async function POST(req: NextRequest) {
         )
         .run(text, kind, n);
       const id = Number(info.lastInsertRowid);
-      const event = captainEvent(
-        db,
-        "created",
-        id,
-        createHash("sha256").update(text).digest("hex"),
-      );
+      const event = captainEvent(db, "created", id, requestId);
       if (event.status === "error") throw new Error("enqueue_failed");
       return { id, event };
     })();
@@ -114,7 +114,12 @@ export async function PATCH(req: NextRequest) {
     id?: number;
     body?: string;
     action?: string;
+    request_id?: string;
   };
+  const requestId =
+    typeof body.request_id === "string" && body.request_id.trim()
+      ? body.request_id.trim()
+      : randomUUID();
   const id = Number(body.id);
   if (!Number.isInteger(id) || id <= 0)
     return NextResponse.json({ error: "invalid id" }, { status: 400 });
@@ -142,14 +147,11 @@ export async function PATCH(req: NextRequest) {
             : null;
       if (!changed || changed.changes !== 1)
         throw new Error("directive_not_found");
-      const fp = body.body
-        ? createHash("sha256").update(body.body.trim()).digest("hex")
-        : "";
       const event = captainEvent(
         db,
         body.action === "archive" ? "archived" : "edited",
         id,
-        fp,
+        requestId,
       );
       if (event.status === "error") throw new Error("enqueue_failed");
       return event;

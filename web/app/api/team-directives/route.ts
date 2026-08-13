@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
-import { createHash } from "crypto";
+import { randomUUID } from "crypto";
 import { resolveUser } from "@/lib/team-state/auth";
 import { requireAuth } from "@/lib/auth";
 import {
@@ -33,9 +33,9 @@ type CaptainEvent = { ok: boolean; status: "queued" | "error"; error?: string };
 
 function enqueueCaptainEvent(
   db: Database.Database,
-  event: { action: string; id: number; fingerprint?: string },
+  event: { action: string; id: number; requestId: string },
 ): CaptainEvent {
-  const sourceId = `team-directive:${event.id}:${event.action}:${event.fingerprint || ""}`;
+  const sourceId = `team-directive:${event.requestId}`;
   const text = `[TEAM-DIRECTIVE] ${event.action} #${event.id}`;
   try {
     db.prepare(
@@ -135,6 +135,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const body = (await req.json().catch(() => ({}))) as {
     body?: string;
     kind?: string;
+    request_id?: string;
   };
   const text = typeof body.body === "string" ? body.body.trim() : "";
   if (!text) {
@@ -150,6 +151,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
   const kind = body.kind && KINDS.has(body.kind) ? body.kind : "order";
+  const requestId =
+    typeof body.request_id === "string" && body.request_id.trim()
+      ? body.request_id.trim()
+      : randomUUID();
 
   const db = localDbOrNull();
   if (db) {
@@ -169,7 +174,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         const captainEvent = enqueueCaptainEvent(db, {
           action: "created",
           id,
-          fingerprint: createHash("sha256").update(text).digest("hex"),
+          requestId,
         });
         if (!captainEvent.ok)
           throw new Error(captainEvent.error || "enqueue_failed");
@@ -204,7 +209,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
   const { supabase } = resolved.user;
-  const sourceId = `team-directive:create:${createHash("sha256").update(text).digest("hex")}`;
+  const sourceId = `team-directive:${requestId}`;
   const { data, error } = await supabase.rpc(
     "mutate_team_directive_with_event",
     {
@@ -240,12 +245,17 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     id?: number | string;
     body?: string;
     action?: string;
+    request_id?: string;
   };
   const id = Number(body.id);
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ error: "id non valido" }, { status: 400 });
   }
   const archive = body.action === "archive";
+  const requestId =
+    typeof body.request_id === "string" && body.request_id.trim()
+      ? body.request_id.trim()
+      : randomUUID();
   const text = typeof body.body === "string" ? body.body.trim() : null;
   if (!archive && !text) {
     return NextResponse.json(
@@ -279,9 +289,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         const captainEvent = enqueueCaptainEvent(db, {
           action: archive ? "archived" : "edited",
           id,
-          fingerprint: text
-            ? createHash("sha256").update(text).digest("hex")
-            : undefined,
+          requestId,
         });
         if (!captainEvent.ok)
           throw new Error(captainEvent.error || "enqueue_failed");
@@ -316,7 +324,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     );
   }
   const { supabase } = resolved.user;
-  const sourceId = `team-directive:${id}:${archive ? "archived" : "edited"}:${text ? createHash("sha256").update(text).digest("hex") : ""}`;
+  const sourceId = `team-directive:${requestId}`;
   const { data, error } = await supabase.rpc(
     "mutate_team_directive_with_event",
     {
