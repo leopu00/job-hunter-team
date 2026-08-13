@@ -6,11 +6,17 @@
 // come policy che vince sui default. CRUD via /api/team-directives (SQLite
 // locale nel container; il daemon `jht cloud sync-directives` fa il mirror cloud).
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocale } from "@/lib/use-locale";
 import { useToast } from "../../components/Toast";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./DirectivesPanel.i18n";
+import {
+  type DirectiveAction,
+  directiveErrorTranslationKey,
+  isDirectiveAcknowledgement,
+  retainDirectiveRequest,
+} from "@/lib/team-directive-request";
 
 type Directive = {
   id: number;
@@ -87,6 +93,7 @@ export default function DirectivesPanel({
   const [eventStatus, setEventStatus] = useState<
     Record<string, "queued" | "error">
   >({});
+  const pendingRequests = useRef(new Map());
 
   const load = useCallback(async () => {
     try {
@@ -105,23 +112,41 @@ export default function DirectivesPanel({
     load();
   }, [load]);
 
-  const post = async (payload: object, okMsg?: string) => {
+  const post = async (
+    payload: object,
+    key: string,
+    action: DirectiveAction,
+    expectedId?: number,
+    okMsg?: string,
+  ) => {
+    const pending = retainDirectiveRequest(
+      pendingRequests.current,
+      key,
+      payload,
+    );
     setBusy(true);
     try {
       const method = "id" in payload ? "PATCH" : "POST";
       const res = await fetch("/api/team-directives", {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, request_id: pending.requestId }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast(data.error || t("errGeneric"), "error");
+      if (
+        !res.ok ||
+        !isDirectiveAcknowledgement(data, {
+          requestId: pending.requestId,
+          action,
+          id: expectedId,
+        })
+      ) {
+        toast(t(directiveErrorTranslationKey(data)), "error");
         return false;
       }
+      pendingRequests.current.delete(key);
       const event = data.captain_event as
-        | { status?: "queued" | "error" }
-        | undefined;
+        { status?: "queued" | "error" } | undefined;
       if ("id" in payload && event)
         setEventStatus((old) => ({
           ...old,
@@ -150,7 +175,10 @@ export default function DirectivesPanel({
     if (!body) return;
     if (
       await post(
-        { body, kind: newKind, request_id: crypto.randomUUID() },
+        { body, kind: newKind },
+        "create",
+        "created",
+        undefined,
         t("added"),
       )
     ) {
@@ -162,7 +190,7 @@ export default function DirectivesPanel({
   const saveEdit = async (id: number) => {
     const body = editText.trim();
     if (!body) return;
-    if (await post({ id, body, request_id: crypto.randomUUID() })) {
+    if (await post({ id, body }, `edit:${id}`, "edited", id)) {
       setEditId(null);
       setEditText("");
     }
@@ -170,7 +198,10 @@ export default function DirectivesPanel({
 
   const archive = (id: number) =>
     post(
-      { id, action: "archive", request_id: crypto.randomUUID() },
+      { id, action: "archive" },
+      `archive:${id}`,
+      "archived",
+      id,
       t("archivedMsg"),
     );
 
@@ -189,13 +220,14 @@ export default function DirectivesPanel({
         {t("subtitle")}
       </p>
 
-      {/* Su /team cloud la bacheca è una vista: gli edit restano nel cockpit
-          desktop, coerentemente con l'interaction-plane. */}
+      {/* `readOnly` resta per gli embed informativi; la pagina /team monta il
+          pannello editabile sia in locale sia sul cloud. */}
       {!readOnly && (
         <div className="mb-5 flex flex-col gap-2 sm:flex-row">
           <textarea
             value={newBody}
             onChange={(e) => setNewBody(e.target.value)}
+            disabled={busy}
             placeholder={t("addPlaceholder")}
             rows={2}
             maxLength={2000}
@@ -205,6 +237,7 @@ export default function DirectivesPanel({
             <select
               value={newKind}
               onChange={(e) => setNewKind(e.target.value)}
+              disabled={busy}
               className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-2 text-[12px] text-[var(--color-white)]"
             >
               {KINDS.map((k) => (
@@ -240,6 +273,7 @@ export default function DirectivesPanel({
                 <textarea
                   value={editText}
                   onChange={(e) => setEditText(e.target.value)}
+                  disabled={busy}
                   rows={2}
                   maxLength={2000}
                   className="w-full resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-[13px] text-[var(--color-white)]"

@@ -3,51 +3,36 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import {
+  MAX_DIRECTIVE_REQUEST_ID_LENGTH,
+  ensureLocalDirectiveMutationSchema,
+  mutateLocalTeamDirective,
+  publicDirectiveError,
+} from "@/lib/team-directives-local";
 
 export const dynamic = "force-dynamic";
 
 const dbPath = path.join(os.homedir(), ".jht", "databases", "jobs.db");
+const kinds = new Set(["order", "strategy", "formation", "note"]);
 
 function openDb(): Database.Database | null {
   if (!fs.existsSync(dbPath)) return null;
-  return new Database(dbPath);
+  const db = new Database(dbPath);
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  ensureLocalDirectiveMutationSchema(db);
+  return db;
 }
 
-function captainEvent(
-  db: Database.Database,
-  action: string,
-  id: number,
-  requestId: string,
-) {
-  try {
-    db.prepare(
-      "INSERT OR IGNORE INTO pending_user_messages (agent, body, kind, author, source_id, delivered_via) VALUES (?, ?, 'notification', 'user', ?, NULL)",
-    ).run(
-      "capitano",
-      `[TEAM-DIRECTIVE] ${action} #${id}`,
-      `team-directive:${requestId}`,
-    );
-    return { status: "queued" as const };
-  } catch {
-    return { status: "error" as const };
+function requireRequestId(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value.trim().length > MAX_DIRECTIVE_REQUEST_ID_LENGTH
+  ) {
+    throw new Error("invalid request id");
   }
-}
-
-function replayId(
-  db: Database.Database,
-  requestId: string,
-  action: string,
-  id = 0,
-) {
-  const row = db
-    .prepare("SELECT body FROM pending_user_messages WHERE source_id = ?")
-    .get(`team-directive:${requestId}`) as { body?: string } | undefined;
-  if (!row) return null;
-  const match = row.body?.match(/^\[TEAM-DIRECTIVE\] (\w+) #(\d+)$/);
-  if (!match || match[1] !== action || (id && Number(match[2]) !== id))
-    throw new Error("request id payload mismatch");
-  return Number(match[2]);
+  return value.trim();
 }
 
 export async function GET() {
@@ -66,66 +51,43 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as {
+  const input = (await req.json().catch(() => ({}))) as {
     body?: string;
     kind?: string;
     request_id?: string;
   };
-  const text = typeof body.body === "string" ? body.body.trim() : "";
-  if (!text || text.length > 2000)
+  const body = typeof input.body === "string" ? input.body.trim() : "";
+  if (!body || body.length > 2000) {
     return NextResponse.json({ error: "invalid directive" }, { status: 400 });
-  const kind = ["order", "strategy", "formation", "note"].includes(
-    body.kind || "",
-  )
-    ? body.kind
-    : "order";
-  const requestId =
-    typeof body.request_id === "string" && body.request_id.trim()
-      ? body.request_id.trim()
-      : randomUUID();
+  }
+  let requestId: string;
+  try {
+    requestId = requireRequestId(input.request_id);
+  } catch {
+    return NextResponse.json({ error: "invalid request id" }, { status: 400 });
+  }
   const db = openDb();
-  if (!db)
+  if (!db) {
     return NextResponse.json(
       { error: "database unavailable" },
       { status: 503 },
     );
+  }
   try {
-    const prior = replayId(db, requestId, "created");
-    if (prior)
-      return NextResponse.json({
-        id: prior,
-        source: "local",
-        captain_event: { status: "queued" },
-      });
-    const n = (
-      db
-        .prepare(
-          "SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM team_directives WHERE status='active'",
-        )
-        .get() as { n: number }
-    ).n;
-    const result = db.transaction(() => {
-      const info = db
-        .prepare(
-          "INSERT INTO team_directives (body, kind, status, sort_order, created_by) VALUES (?, ?, 'active', ?, 'user')",
-        )
-        .run(text, kind, n);
-      const id = Number(info.lastInsertRowid);
-      const event = captainEvent(db, "created", id, requestId);
-      if (event.status === "error") throw new Error("enqueue_failed");
-      return { id, event };
-    })();
-    return NextResponse.json({
-      id: result.id,
-      source: "local",
-      captain_event: result.event,
-    });
-  } catch (error) {
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "directive_not_queued",
-      },
-      { status: 503 },
+      mutateLocalTeamDirective(db, {
+        requestId,
+        action: "created",
+        id: 0,
+        body,
+        kind: input.kind && kinds.has(input.kind) ? input.kind : "order",
+      }),
+    );
+  } catch (error) {
+    const failure = publicDirectiveError(error);
+    return NextResponse.json(
+      { error: failure.error },
+      { status: failure.status },
     );
   } finally {
     db.close();
@@ -133,75 +95,48 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as {
+  const input = (await req.json().catch(() => ({}))) as {
     id?: number;
     body?: string;
     action?: string;
     request_id?: string;
   };
-  const requestId =
-    typeof body.request_id === "string" && body.request_id.trim()
-      ? body.request_id.trim()
-      : randomUUID();
-  const id = Number(body.id);
-  if (!Number.isInteger(id) || id <= 0)
+  const id = Number(input.id);
+  if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ error: "invalid id" }, { status: 400 });
+  }
+  const archive = input.action === "archive";
+  const body = typeof input.body === "string" ? input.body.trim() : "";
+  if (!archive && (!body || body.length > 2000)) {
+    return NextResponse.json({ error: "invalid directive" }, { status: 400 });
+  }
+  let requestId: string;
+  try {
+    requestId = requireRequestId(input.request_id);
+  } catch {
+    return NextResponse.json({ error: "invalid request id" }, { status: 400 });
+  }
   const db = openDb();
-  if (!db)
+  if (!db) {
     return NextResponse.json(
       { error: "database unavailable" },
       { status: 503 },
     );
+  }
   try {
-    const prior = replayId(
-      db,
-      requestId,
-      body.action === "archive" ? "archived" : "edited",
-      id,
-    );
-    if (prior)
-      return NextResponse.json({
-        id: prior,
-        source: "local",
-        captain_event: { status: "queued" },
-      });
-    const result = db.transaction(() => {
-      const changed =
-        body.action === "archive"
-          ? db
-              .prepare(
-                "UPDATE team_directives SET status='archived', archived_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'",
-              )
-              .run(id)
-          : typeof body.body === "string" && body.body.trim()
-            ? db
-                .prepare(
-                  "UPDATE team_directives SET body=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'",
-                )
-                .run(body.body.trim(), id)
-            : null;
-      if (!changed || changed.changes !== 1)
-        throw new Error("directive_not_found");
-      const event = captainEvent(
-        db,
-        body.action === "archive" ? "archived" : "edited",
-        id,
-        requestId,
-      );
-      if (event.status === "error") throw new Error("enqueue_failed");
-      return event;
-    })();
-    return NextResponse.json({
-      ok: true,
-      source: "local",
-      captain_event: result,
-    });
-  } catch (error) {
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "directive_not_queued",
-      },
-      { status: 503 },
+      mutateLocalTeamDirective(db, {
+        requestId,
+        action: archive ? "archived" : "edited",
+        id,
+        body: archive ? null : body,
+      }),
+    );
+  } catch (error) {
+    const failure = publicDirectiveError(error);
+    return NextResponse.json(
+      { error: failure.error },
+      { status: failure.status },
     );
   } finally {
     db.close();

@@ -150,6 +150,15 @@ export function chatEnvelope(agent, text) {
 
 /** Telegram entra nello stesso storico, ma conserva il marker che governa la risposta. */
 export function paneEnvelope(agent, text, channel = null) {
+  if (channel === "team-directive") {
+    const body = String(text || "").trim();
+    if (
+      String(agent || "").toLowerCase() === "capitano" &&
+      /^\[TEAM-DIRECTIVE\] (created|edited|archived)$/.test(body)
+    ) {
+      return `[@sistema -> @capitano] ${body}`;
+    }
+  }
   if (channel !== "telegram") return chatEnvelope(agent, text);
   const body = String(text || "").trim();
   // Gli allegati portano gia' il loro protocollo ([TG-DOC], reject/error,
@@ -848,16 +857,48 @@ export function importCloudUserTurns(
     "pending_user_messages",
     "cloud_legacy_id",
   );
+  const keepsDirectiveMetadata = [
+    "source_id",
+    "source_action",
+    "source_payload",
+    "source_directive_id",
+  ].every((column) => hasColumn(db, "pending_user_messages", column));
+  const insertColumns = [
+    "agent",
+    "body",
+    "kind",
+    "author",
+    "chat_ts",
+    "delivered_via",
+    "cloud_synced_at",
+    "created_at",
+  ];
+  const insertValues = [
+    "?",
+    "?",
+    "'notification'",
+    "'user'",
+    "?",
+    "'web'",
+    "CURRENT_TIMESTAMP",
+    "?",
+  ];
+  if (keepsCloudId) {
+    insertColumns.push("cloud_legacy_id");
+    insertValues.push("?");
+  }
+  if (keepsDirectiveMetadata) {
+    insertColumns.push(
+      "source_id",
+      "source_action",
+      "source_payload",
+      "source_directive_id",
+    );
+    insertValues.push("?", "?", "?", "?");
+  }
   const insert = db.prepare(
-    keepsCloudId
-      ? `INSERT INTO pending_user_messages
-           (agent, body, kind, author, chat_ts, delivered_via, cloud_synced_at,
-            created_at, cloud_legacy_id)
-         VALUES (?, ?, 'notification', 'user', ?, 'web', CURRENT_TIMESTAMP, ?, ?)`
-      : `INSERT INTO pending_user_messages
-           (agent, body, kind, author, chat_ts, delivered_via, cloud_synced_at,
-            created_at)
-         VALUES (?, ?, 'notification', 'user', ?, 'web', CURRENT_TIMESTAMP, ?)`,
+    `INSERT INTO pending_user_messages (${insertColumns.join(", ")})
+     VALUES (${insertValues.join(", ")})`,
   );
   const already = db.prepare(
     "SELECT 1 AS hit FROM pending_user_messages WHERE agent = ? AND chat_ts = ? LIMIT 1",
@@ -895,8 +936,19 @@ export function importCloudUserTurns(
       const cloudLegacyId = Number.isFinite(row.legacy_id)
         ? row.legacy_id
         : null;
-      if (keepsCloudId) insert.run(agent, body, ts, at, cloudLegacyId);
-      else insert.run(agent, body, ts, at);
+      const values = [agent, body, ts, at];
+      if (keepsCloudId) values.push(cloudLegacyId);
+      if (keepsDirectiveMetadata) {
+        values.push(
+          typeof row.source_id === "string" ? row.source_id : null,
+          typeof row.source_action === "string" ? row.source_action : null,
+          typeof row.source_payload === "string" ? row.source_payload : null,
+          Number.isSafeInteger(Number(row.source_directive_id))
+            ? Number(row.source_directive_id)
+            : null,
+        );
+      }
+      insert.run(...values);
       // …e SUBITO nel file che legge il gioco. Non può farlo il mirror
       // (passo 3): quello lavora sulle righe con `chat_ts` NULL, e qui il
       // valore è già impostato perché è la chiave di dedup dell'import.
@@ -1002,9 +1054,18 @@ export async function deliverPendingUserTurns(
   ).run();
 
   const placeholders = agents.map(() => "?").join(", ");
+  // A daemon can start once against a database created by the previous
+  // bundle, before the additive schema migration has run. Keep ordinary chat
+  // deliverable in that window; only the trusted directive lane needs these
+  // correlation columns.
+  const directiveColumns = ["source_id", "source_action"].every((column) =>
+    hasColumn(db, "pending_user_messages", column),
+  )
+    ? ", source_id, source_action"
+    : ", NULL AS source_id, NULL AS source_action";
   const rows = db
     .prepare(
-      `SELECT id, agent, body, delivered_via
+      `SELECT id, agent, body, delivered_via${directiveColumns}
         FROM pending_user_messages
         WHERE author = 'user' AND delivered_at IS NULL AND agent IN (${placeholders})
           AND NOT EXISTS (
@@ -1038,8 +1099,14 @@ export async function deliverPendingUserTurns(
 
     let res;
     try {
+      const directiveWake =
+        row.agent === "capitano" &&
+        typeof row.source_id === "string" &&
+        row.source_id.startsWith("team-directive:") &&
+        ["created", "edited", "archived"].includes(row.source_action) &&
+        row.body === `[TEAM-DIRECTIVE] ${row.source_action}`;
       res = await sendFn(row.agent, row.body, {
-        channel: row.delivered_via,
+        channel: directiveWake ? "team-directive" : row.delivered_via,
       });
     } catch (err) {
       // Il sender non ha restituito un esito: per il contratto di sendToPane

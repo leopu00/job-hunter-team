@@ -58,6 +58,7 @@ export const CASCADE_TABLES = [
   "position_views",
   "sentinel_ticks",
   "team_commands",
+  "team_directive_request_ledger",
   "team_directives",
   "team_state",
   "team_state_history",

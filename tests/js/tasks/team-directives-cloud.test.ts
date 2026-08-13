@@ -36,19 +36,35 @@ describe("team directives cloud tenant seam", () => {
   });
 
   it("accepts only the RPC success shape", () => {
+    const expected = { requestId: "opaque", action: "created" };
     expect(
-      validateDirectiveMutationResult({ id: 7, status: "queued" }),
+      validateDirectiveMutationResult(
+        {
+          id: 7,
+          status: "queued",
+          request_id: "opaque",
+          action: "created",
+        },
+        expected,
+      ),
     ).toEqual({
       id: 7,
       status: "queued",
+      request_id: "opaque",
+      action: "created",
     });
-    expect(validateDirectiveMutationResult(null)).toBeNull();
-    expect(validateDirectiveMutationResult({ id: 7 })).toBeNull();
+    expect(validateDirectiveMutationResult(null, expected)).toBeNull();
+    expect(validateDirectiveMutationResult({ id: 7 }, expected)).toBeNull();
     expect(
-      validateDirectiveMutationResult({ id: "7", status: "queued" }),
+      validateDirectiveMutationResult({ id: "7", status: "queued" }, expected),
     ).toBeNull();
     expect(
-      validateDirectiveMutationResult({ id: 7, status: "error" }),
+      validateDirectiveMutationResult({ id: 7, status: "error" }, expected),
     ).toBeNull();
+    for (const mismatch of [
+      { id: 7, status: "queued", request_id: "other", action: "created" },
+      { id: 7, status: "queued", request_id: "opaque", action: "edited" },
+    ])
+      expect(validateDirectiveMutationResult(mismatch, expected)).toBeNull();
   });
 });
