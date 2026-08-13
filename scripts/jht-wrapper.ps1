@@ -313,6 +313,15 @@ function Invoke-HelpWithoutDocker {
   return 0
 }
 
+function Test-HostCommandUsesLocalHelp {
+  param([string]$Command)
+  return $Command -in @(
+    'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
+    'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
+    'setup', 'download'
+  )
+}
+
 function Test-ContainerUp {
   $running = & docker ps --format '{{.Names}}' 2>$null
   return ($running -split "`n") -contains $Container
@@ -1156,6 +1165,18 @@ $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
 # corretto anche con 1 solo arg di coda.
 $Rest = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
 
+# Questo gate deve precedere tutti i rami host-side: nel solo default non vede
+# `up --help`, `setup --help`, ecc. e quei comandi toccherebbero Docker prima
+# di accorgersi che l'utente ha chiesto soltanto aiuto.
+$HelpRequested = @($Rest | Where-Object { $_ -in @('-h', '--help') }).Count -gt 0
+if ($HelpRequested -and $Sub -notin @('game', 'gui')) {
+  if (Test-HostCommandUsesLocalHelp $Sub) {
+    Write-LocalHelp
+    exit 0
+  }
+  exit (Invoke-HelpWithoutDocker $Sub @Rest)
+}
+
 # ORDINE: si guarda COSA e' stato chiesto PRIMA di decidere se serve Docker.
 # Il contrario - Ensure-Up in cima al default - faceva si' che un semplice
 # `jht --help` scaricasse l'immagine (~300 MB) e creasse container e volumi,
@@ -1169,6 +1190,15 @@ switch ($Sub) {
     if ((Test-DockerReachable) -and (Test-ContainerUp)) {
       & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry --version
     } else {
+      $ConfiguredImage = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht:0.3.9' }
+      $ConfiguredVersion = if ($env:JHT_IMAGE_TAG) {
+        $env:JHT_IMAGE_TAG
+      } elseif ($ConfiguredImage -match ':([^/:]+)$') {
+        $Matches[1]
+      } else {
+        $ConfiguredImage
+      }
+      Write-Output $ConfiguredVersion
       Write-Info "Per la versione del CLI in esecuzione serve il container attivo: 'jht up'."
     }
     exit 0
@@ -1277,11 +1307,6 @@ switch ($Sub) {
 
   # Tutto il resto: delegato al CLI Node nel container.
   default {
-    # Anche qui: se l'utente sta solo chiedendo aiuto su un sottocomando, non
-    # si accende nulla per rispondergli.
-    if ($Rest | Where-Object { $_ -in @('-h', '--help') }) {
-      exit (Invoke-HelpWithoutDocker $Sub @Rest)
-    }
     Require-ComposeFile
     Require-Docker
     Ensure-Up
