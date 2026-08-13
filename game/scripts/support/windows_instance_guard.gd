@@ -99,7 +99,11 @@ func _start_guard() -> bool:
 	_stdio = process["stdio"]
 	_stderr = process["stderr"]
 	_guard_pid = int(process["pid"])
-	if _guard_pid <= 0 or not _stdio.store_buffer((request + "\n").to_utf8_buffer()):
+	if _guard_pid <= 0:
+		_close_pipes()
+		return false
+	_stdio.store_buffer((request + "\n").to_utf8_buffer())
+	if _stdio.get_error() != OK:
 		_close_pipes()
 		return false
 	_stdio.flush()
