@@ -2,8 +2,7 @@
 ALTER TABLE public.pending_user_messages
   ADD COLUMN IF NOT EXISTS source_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS pending_user_messages_source_id_unique
-  ON public.pending_user_messages(user_id, source_id)
-  WHERE source_id IS NOT NULL;
+  ON public.pending_user_messages(user_id, source_id);
 
 CREATE OR REPLACE FUNCTION public.mutate_team_directive_with_event(
   p_id BIGINT,
