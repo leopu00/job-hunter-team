@@ -149,10 +149,9 @@ signature_head=$(printf '%s' "$message" | head -c 30)
 signature_tail=$(printf '%s' "$message" | tail -c 30)
 
 # Busy-detection: codex / claude / kimi mostrano "esc to interrupt" mentre
-# l'agente e' a meta' turno. In quello stato il composer NON eco-a il testo
-# digitato → la signature non comparirebbe mai e concluderemmo a torto che la
-# TUI e' irricettiva (morta). Un pane occupato e' un agente VIVO: aspettiamo
-# che torni idle prima di typeare, MAI typeare dentro un turno in corso.
+# l'agente e' a meta' turno. Un pane occupato e' un agente VIVO: il messaggio
+# viene comunque digitato/accodato subito; se la verifica non e' possibile,
+# il record durable dichiara queued/delivery-unverified, mai drop.
 # Causa radice dell'overspawn del 07/06: 6→16 agenti in 3 giorni, weekly Codex
 # al 100%, halt forzato di ~3,5 giorni.
 #
@@ -215,10 +214,7 @@ EOF
   return 1
 }
 
-# Quanto attendere che un turno in corso finisca prima di rinunciare (exit 4,
-# VIVO). I turni codex lunghi (parsing, edit grossi) durano minuti: budget alto
-# abbastanza da cavalcare un turno normale, ma bounded per non bloccare il
-# mittente (Capitano) all'infinito. Override via env JHT_TMUX_BUSY_WAIT.
+# Legacy budget retained for callers/tests; busy no longer gates typing.
 busy_budget="${JHT_TMUX_BUSY_WAIT:-90}"
 
 # Riga corrente del composer: l'ULTIMA che inizia col marker di input della TUI
@@ -290,22 +286,16 @@ attempts=3
 for try in $(seq 1 "$attempts"); do
   pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
 
-  # Se la TUI e' a meta' turno, aspetta l'idle PRIMA di digitare.
+  # Busy non e' un prerequisito per digitare: accoda subito e non droppa.
   if _pane_busy "$pane"; then
-    waited=0
-    while [ "$waited" -lt "$busy_budget" ]; do
-      sleep 3
-      waited=$((waited + 3))
-      pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
-      _pane_busy "$pane" || break
-    done
-    if _pane_busy "$pane"; then
-      # Ancora occupato dopo tutto il budget → agente VIVO, solo su un turno
-      # molto lungo. Segnala VIVO-occupato (exit 4), NON morto (exit 3): il
-      # chiamante deve riprovare piu' tardi, mai spawnare un rimpiazzo.
-      echo "jht-tmux-send: $session occupato (turno in corso) dopo ${busy_budget}s — VIVO, riprova piu' tardi" >&2
-      exit 4
+    tmux send-keys -t "$session" -l "$message"
+    tmux send-keys -t "$session" Enter
+    if [ "$provider" = "kimi" ]; then
+      sleep 0.2; tmux send-keys -t "$session" C-s
     fi
+    _record_stuck
+    echo "jht-tmux-send: $session queued/delivery unverified (pane busy)" >&2
+    exit 6
   fi
 
   tmux send-keys -t "$session" -l "$message"

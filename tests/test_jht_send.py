@@ -56,3 +56,10 @@ def test_real_newlines_survive_the_round_trip(tmp_path: Path) -> None:
     entry = _send(tmp_path, "prima\nseconda")
     assert entry["text"] == "prima\nseconda"
     assert len((tmp_path / "chat.jsonl").read_text().strip().split("\n")) == 1
+
+
+def test_tmux_sender_queues_busy_without_wait_drop() -> None:
+    src = (ROOT / "agents/_skills/tmux-send/jht-tmux-send").read_text()
+    assert 'queued/delivery unverified' in src
+    assert 'exit 6' in src
+    assert 'while [ "$waited" -lt "$busy_budget" ]' not in src
