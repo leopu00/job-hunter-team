@@ -52,6 +52,18 @@ describe("forma local-first delle scritture su posizione", () => {
     expect(src).toMatch(/if \(!isCloudDeploy\(\) && fs\.existsSync\(JHT_DB_PATH\)\)/);
   });
 
+  it("un 2xx local-first senza mirror confermato non è un successo", async () => {
+    const { applicationAckAccepted } = await import(
+      "@/lib/positions/application-ack"
+    );
+    expect(
+      applicationAckAccepted({ source: "local", cloud_synced: false }),
+    ).toBe(false);
+    expect(
+      applicationAckAccepted({ source: "cloud", cloud_synced: true }),
+    ).toBe(true);
+  });
+
   it.each(WRITERS)("%s usa la forma invece di ricopiarla", (rel) => {
     const src = read(rel);
     expect(src).toContain("localFirstWrite");

@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { applicationAckAccepted } from "@/lib/positions/application-ack";
 import { useLocale } from "@/lib/use-locale";
 import { intlTag } from "@/lib/locale-tag";
 import type { Locale } from "@/i18n/config";
@@ -629,10 +630,7 @@ export function FeedbackButtons({
       } | null;
       // A local write whose cloud mirror was not acknowledged is not a
       // confirmed click: keep the UI pending/error and never claim applied.
-      if (
-        !saved ||
-        (saved.source === "local" && saved.cloud_synced === false)
-      ) {
+      if (!applicationAckAccepted(saved)) {
         throw new Error("cloud_sync_unconfirmed");
       }
       setApplied(true);
