@@ -24,6 +24,54 @@ export const dynamic = "force-dynamic";
 const KINDS = new Set(["order", "strategy", "formation", "note"]);
 const MAX_LEN = 2000;
 
+type CaptainEvent = { ok: boolean; status: "queued" | "error"; error?: string };
+
+async function enqueueCaptainCloud(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  event: { action: string; id: number | string; body?: string },
+): Promise<CaptainEvent> {
+  const text = `[TEAM-DIRECTIVE] ${event.action} #${event.id}${event.body ? `: ${event.body}` : ""}`;
+  const now = new Date().toISOString();
+  const { error } = await supabase.from("pending_user_messages").insert({
+    user_id: userId,
+    legacy_id: -Date.now(),
+    agent: "capitano",
+    body: text,
+    kind: "notification",
+    author: "user",
+    delivered_via: null,
+    created_at: now,
+  });
+  if (error) return { ok: false, status: "error", error: "enqueue_failed" };
+  await supabase
+    .from("team_state")
+    .upsert(
+      { user_id: userId, chat_requested_at: now },
+      { onConflict: "user_id" },
+    );
+  return { ok: true, status: "queued" };
+}
+
+function enqueueCaptainEvent(
+  db: Database.Database,
+  event: { action: string; id: number; body?: string },
+): CaptainEvent {
+  const text = `[TEAM-DIRECTIVE] ${event.action} #${event.id}${event.body ? `: ${event.body}` : ""}`;
+  try {
+    db.prepare(
+      "INSERT INTO pending_user_messages (agent, body, kind, delivered_via) VALUES (?, ?, 'notification', NULL)",
+    ).run("capitano", text);
+    return { ok: true, status: "queued" };
+  } catch (error) {
+    return {
+      ok: false,
+      status: "error",
+      error: error instanceof Error ? error.message : "enqueue_failed",
+    };
+  }
+}
+
 interface DirectiveRow {
   id: number;
   body: string;
@@ -146,9 +194,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             "VALUES (?, ?, 'active', ?, 'user')",
         )
         .run(text, kind, nxt?.n ?? 1);
+      const captainEvent = enqueueCaptainEvent(db, {
+        action: "created",
+        id: Number(info.lastInsertRowid),
+        body: text,
+      });
       return NextResponse.json({
         id: String(info.lastInsertRowid),
         source: "local",
+        captain_event: captainEvent,
       });
     } finally {
       db.close();
@@ -184,7 +238,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       publicMessage: "insert_failed",
     });
   }
-  return NextResponse.json({ id: String(data.id), source: "cloud" });
+  const captainEvent = await enqueueCaptainCloud(supabase, userId, {
+    action: "created",
+    id: data.id,
+    body: text,
+  });
+  return NextResponse.json({
+    id: String(data.id),
+    source: "cloud",
+    captain_event: captainEvent,
+  });
 }
 
 // ── PATCH: modifica il testo o archivia una direttiva ──────────────────────
@@ -229,7 +292,16 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
           "UPDATE team_directives SET body = ?, updated_at = datetime('now','localtime') WHERE id = ?",
         ).run(text, id);
       }
-      return NextResponse.json({ ok: true, source: "local" });
+      const captainEvent = enqueueCaptainEvent(db, {
+        action: archive ? "archived" : "edited",
+        id,
+        body: archive ? undefined : (text ?? undefined),
+      });
+      return NextResponse.json({
+        ok: true,
+        source: "local",
+        captain_event: captainEvent,
+      });
     } finally {
       db.close();
     }
@@ -265,5 +337,14 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       publicMessage: "update_failed",
     });
   }
-  return NextResponse.json({ ok: true, source: "cloud" });
+  const captainEvent = await enqueueCaptainCloud(supabase, userId, {
+    action: archive ? "archived" : "edited",
+    id,
+    body: archive ? undefined : (text ?? undefined),
+  });
+  return NextResponse.json({
+    ok: true,
+    source: "cloud",
+    captain_event: captainEvent,
+  });
 }
