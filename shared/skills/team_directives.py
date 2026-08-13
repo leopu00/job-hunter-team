@@ -24,13 +24,17 @@ import argparse
 import sys
 
 from _db import get_db, ensure_schema
+from provider_directive_policy import for_prompt, is_provider_instruction
 
 KINDS = ("order", "strategy", "formation", "note")
 AUTHORS = ("user", "capitano", "assistente")
 
 
-def _fmt(d, indent="  ") -> str:
-    return f"{indent}#{d['id']} [{d['kind']}] {d['body']}"
+def _fmt(d, indent="  ", prompt_safe: bool = False) -> str:
+    body = d["body"]
+    if prompt_safe:
+        body, _ignored = for_prompt(body)
+    return f"{indent}#{d['id']} [{d['kind']}] {body}"
 
 
 def _active_rows(conn):
@@ -48,7 +52,7 @@ def cmd_active(conn) -> None:
         return
     print(f"📋 TEAM BOARD — ACTIVE directives ({len(rows)}), valid until the user changes them:")
     for d in rows:
-        print(_fmt(d))
+        print(_fmt(d, prompt_safe=True))
 
 
 def cmd_list(conn, show_all: bool) -> None:
@@ -82,6 +86,8 @@ def cmd_add(conn, body: str, kind: str, by: str) -> None:
     )
     conn.commit()
     print(f"Directive #{cur.lastrowid} added [{kind}].")
+    if is_provider_instruction(body):
+        print("Ignored for agent prompts: provider/model/CLI selection is configuration-only.")
 
 
 def cmd_edit(conn, directive_id: int, body: str) -> None:
@@ -99,6 +105,8 @@ def cmd_edit(conn, directive_id: int, body: str) -> None:
         print(f"Directive #{directive_id} not found.", file=sys.stderr)
         sys.exit(1)
     print(f"Directive #{directive_id} updated.")
+    if is_provider_instruction(body):
+        print("Ignored for agent prompts: provider/model/CLI selection is configuration-only.")
 
 
 def cmd_archive(conn, directive_id: int) -> None:

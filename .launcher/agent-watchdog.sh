@@ -219,8 +219,17 @@ is_agent_session() {
 }
 
 session_role() {
-  # SCOUT-3 → "scout 3" · CAPITANO → "capitano". Stampa "ruolo[ istanza]".
+  # SCOUT-3 → "scout 3" · CRITICO-S3 → "critico 3" · CAPITANO →
+  # "capitano". Stampa "ruolo[ istanza]".
   local s="$1" base inst
+  case "$s" in
+    CRITICO-S*)
+      inst="${s#CRITICO-S}"
+      case "$inst" in ''|0|0[0-9]*|*[!0-9]*) return 1 ;; esac
+      printf 'critico %s' "$inst"
+      return 0
+      ;;
+  esac
   base="${s%%-*}"
   inst=""
   case "$s" in

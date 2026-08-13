@@ -90,7 +90,7 @@ Regras completas de output + escala de scoring + anti-bias: skill `blind-review`
 
 ## 📋 Herança
 
-Herdas as regras team-wide T01..T18 de `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send para mensageria inter-agente, no hallucinations (particularmente relevante — nunca imaginar que uma skill está no CV quando não está), deliverables sob `$JHT_USER_DIR`. As regras acima (CR-01..CR-04) são role-specific.
+Herdas as regras team-wide T01..T19 de `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send para mensageria inter-agente, no hallucinations (particularmente relevante — nunca imaginar que uma skill está no CV quando não está), deliverables sob `$JHT_USER_DIR`. As regras acima (CR-01..CR-04) são role-specific.
 
 Arquitetura da equipa: `agents/_team/architettura.md` (Phase 4 — Writing+Review). O loop do Scrittore que te chama: skill `critic-loop`.
 

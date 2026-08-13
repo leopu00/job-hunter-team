@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 // js-yaml 5 espone solo named export: il default non esiste piu'.
 import * as yaml from "js-yaml";
 import { isSupabaseConfigured } from "@/lib/workspace";
@@ -102,6 +103,10 @@ interface PositionIn {
 }
 
 interface ScoreIn {
+  // Identità della riga score, distinta dal parent position_id. Il write cloud
+  // resta UNIQUE(position_id), ma receipt/quarantine devono nominare la riga.
+  legacy_id: number;
+  _receipt_id?: string;
   position_id: number;
   total_score: number;
   experience_fit?: number | null;
@@ -116,7 +121,12 @@ interface ScoreIn {
 }
 
 interface ApplicationIn {
-  position_id: number;
+  // Identità distinte nel DB SQLite: applications.id non è positions.id.
+  legacy_id: number;
+  position_legacy_id: number;
+  // Il client quarantine aggiunge un hash opaco. Per i client precedenti la
+  // route lo deriva dalla stessa source identity e lo esporta senza ID raw.
+  _receipt_id?: string;
   cv_path?: string | null;
   cv_pdf_path?: string | null;
   cl_path?: string | null;
@@ -137,6 +147,19 @@ interface ApplicationIn {
   applied?: boolean | null;
   cv_drive_id?: string | null;
   cl_drive_id?: string | null;
+}
+
+function sourceReceiptId(table: "applications" | "scores", legacyId: number) {
+  return `q_${createHash("sha256")
+    .update(`${table}\0${JSON.stringify([legacyId])}`)
+    .digest("hex")
+    .slice(0, 24)}`;
+}
+
+function applicationReceiptId(application: ApplicationIn): string {
+  // Compatibilità con client pre-quarantine: stessa derivazione opaca che il
+  // nuovo client applica alla chiave sorgente. Non esponiamo l'intero locale.
+  return sourceReceiptId("applications", application.legacy_id);
 }
 
 interface ProfileIn {
@@ -401,28 +424,15 @@ export async function POST(req: NextRequest) {
     byColumn: {},
     worst: null,
   };
+  let scoreReceiptIds: string[] = [];
   let applicationsUpserted = 0;
+  let applicationReceiptIds: string[] = [];
   let companiesUpserted = 0;
   let highlightsUpserted = 0;
   let pendingMessagesUpserted = 0;
   let sentinelTicksUpserted = 0;
   let tombstonesApplied = 0;
   let positionTransitionsUpserted = 0;
-  // Explicit receipt counts let the client distinguish "HTTP 200" from
-  // "every requested row was accepted".  Invalid filtered rows become an ACK
-  // mismatch and are isolated/quarantined instead of disappearing silently.
-  const accepted = {
-    companies: 0,
-    positions: 0,
-    scores: 0,
-    applications: 0,
-    position_highlights: 0,
-    pending_user_messages: 0,
-    sentinel_ticks: 0,
-    tombstones: 0,
-    position_transitions: 0,
-    profile: 0,
-  };
   const legacyToUuid = new Map<number, string>();
   const appliedPositionIds = new Set<number>();
   // companies.id locale (int) → companies.id cloud (UUID). Popolata
@@ -455,7 +465,6 @@ export async function POST(req: NextRequest) {
       }));
 
     if (payload.length > 0) {
-      accepted.companies = payload.length;
       const { data: upserted, error } = await admin
         .from("companies")
         .upsert(payload, { onConflict: "user_id,legacy_id" })
@@ -629,7 +638,6 @@ export async function POST(req: NextRequest) {
         if (status !== "applied") throw new Error("unreachable_status");
         return deferred;
       });
-    accepted.positions = payload.length;
     for (const batch of [
       { rows: regularPayload, defaultToNull: true },
       { rows: deferredAppliedPayload, defaultToNull: false },
@@ -660,43 +668,78 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 2. Upsert scores via position_id UUID.  Scores travel in their own batch
-  // so a rejected score can be attributed without quarantining its position;
-  // resolve unchanged parent positions explicitly, like applications.
+  // 2. Upsert scores via position_id UUID. L'identità dell'ACK è però sempre
+  // scores.legacy_id: il parent serve solo a risolvere la FK cloud.
+  const scoreParents = new Set<number>();
+  const scoreLegacyIds = new Set<number>();
+  for (const score of scores) {
+    if (!Number.isInteger(score.legacy_id) || score.legacy_id <= 0) {
+      return NextResponse.json(
+        { error: "invalid_score_identity" },
+        { status: 400 },
+      );
+    }
+    const derivedReceiptId = sourceReceiptId("scores", score.legacy_id);
+    if (
+      score._receipt_id !== undefined &&
+      score._receipt_id !== derivedReceiptId
+    ) {
+      return NextResponse.json(
+        { error: "invalid_score_receipt_id" },
+        { status: 400 },
+      );
+    }
+    if (
+      scoreParents.has(score.position_id) ||
+      scoreLegacyIds.has(score.legacy_id)
+    ) {
+      return NextResponse.json(
+        { error: "score_identity_collision" },
+        { status: 400 },
+      );
+    }
+    scoreParents.add(score.position_id);
+    scoreLegacyIds.add(score.legacy_id);
+  }
   if (scores.length > 0) {
-    const needsLookup = new Set<number>();
+    const scoreParentsToResolve = new Set<number>();
     for (const score of scores) {
-      if (
-        typeof score.position_id === "number" &&
-        !legacyToUuid.has(score.position_id)
-      ) {
-        needsLookup.add(score.position_id);
+      if (!legacyToUuid.has(score.position_id)) {
+        scoreParentsToResolve.add(score.position_id);
       }
     }
-    if (needsLookup.size > 0) {
+    if (scoreParentsToResolve.size > 0) {
       const { data: rows, error } = await admin
         .from("positions")
         .select("id, legacy_id")
         .eq("user_id", userId)
-        .in("legacy_id", Array.from(needsLookup));
+        .in("legacy_id", Array.from(scoreParentsToResolve));
       if (error) {
         return sanitizedError(error, {
           status: 500,
           scope: "cloud-sync/push",
-          publicMessage: "score_positions_lookup_failed",
+          publicMessage: "scores_positions_lookup_failed",
         });
       }
       for (const row of rows ?? []) {
-        if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
+        if (row.legacy_id != null) {
+          legacyToUuid.set(row.legacy_id, row.id as string);
+        }
       }
     }
+
+    const scoreReceiptByUuid = new Map<string, string>();
+    const scoreLegacyByUuid = new Map<string, number>();
     const payload = scores
       .map((s) => {
         const uuid = legacyToUuid.get(s.position_id);
         if (!uuid || typeof s.total_score !== "number") return null;
+        scoreReceiptByUuid.set(uuid, sourceReceiptId("scores", s.legacy_id));
+        scoreLegacyByUuid.set(uuid, s.legacy_id);
         return {
           user_id: userId,
           position_id: uuid,
+          legacy_id: s.legacy_id,
           total_score: Math.max(0, Math.min(100, Math.round(s.total_score))),
           experience_fit: s.experience_fit ?? null,
           salary_fit: s.salary_fit ?? null,
@@ -711,12 +754,18 @@ export async function POST(req: NextRequest) {
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
+    if (payload.length !== scores.length) {
+      return NextResponse.json(
+        { error: "scores_identity_unresolved" },
+        { status: 400 },
+      );
+    }
+
     if (payload.length > 0) {
-      accepted.scores = payload.length;
       const { data: upserted, error } = await admin
         .from("scores")
         .upsert(payload, { onConflict: "position_id" })
-        .select("id");
+        .select("position_id, legacy_id");
 
       if (error) {
         return sanitizedError(error, {
@@ -725,6 +774,24 @@ export async function POST(req: NextRequest) {
           publicMessage: "scores_upsert_failed",
         });
       }
+      const persistedReceiptIds = Array.isArray(upserted)
+        ? upserted.map((row) =>
+            row.legacy_id === scoreLegacyByUuid.get(row.position_id)
+              ? (scoreReceiptByUuid.get(row.position_id) ?? null)
+              : null,
+          )
+        : [];
+      const completeReceipt =
+        persistedReceiptIds.length === payload.length &&
+        persistedReceiptIds.every((receiptId) => receiptId !== null) &&
+        new Set(persistedReceiptIds).size === payload.length;
+      if (!completeReceipt) {
+        return NextResponse.json(
+          { error: "scores_receipt_mismatch" },
+          { status: 500 },
+        );
+      }
+      scoreReceiptIds = (persistedReceiptIds as string[]).sort();
       scoresUpserted = upserted?.length ?? 0;
       // Il cloud non ha CHECK sulle dimensioni (mig 001/003): quello che passa
       // da qui torna identico a ogni restore. Non lo tocchiamo — i punteggi
@@ -734,78 +801,74 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 3. Upsert applications via position_id UUID. Nei delta storici il figlio
-  // può arrivare senza la position: risolviamo anche quel legame, invece di
-  // scartare la riga e lasciare avanzare il cursore come se fosse persistita.
+  // 3. L'RPC risolve position_legacy_id nel tenant e conserva separatamente
+  // applications.legacy_id. Nessuna riga viene filtrata qui: identità invalida,
+  // parent mancante o ricevuta incompleta devono fallire l'intero request.
   if (applications.length > 0) {
-    const needsLookup = new Set<number>();
     for (const application of applications) {
       if (
-        typeof application.position_id === "number" &&
-        !legacyToUuid.has(application.position_id)
+        !Number.isInteger(application.legacy_id) ||
+        application.legacy_id <= 0 ||
+        !Number.isInteger(application.position_legacy_id) ||
+        application.position_legacy_id <= 0
       ) {
-        needsLookup.add(application.position_id);
+        return NextResponse.json(
+          { error: "invalid_application_identity" },
+          { status: 400 },
+        );
       }
-    }
-    if (needsLookup.size > 0) {
-      const { data: rows, error } = await admin
-        .from("positions")
-        .select("id, legacy_id")
-        .eq("user_id", userId)
-        .in("legacy_id", Array.from(needsLookup));
-      if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "application_positions_lookup_failed",
-        });
-      }
-      for (const row of rows ?? []) {
-        if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
+      const expectedReceiptId = sourceReceiptId(
+        "applications",
+        application.legacy_id,
+      );
+      if (
+        application._receipt_id !== undefined &&
+        application._receipt_id !== expectedReceiptId
+      ) {
+        return NextResponse.json(
+          { error: "invalid_application_receipt_id" },
+          { status: 400 },
+        );
       }
     }
 
-    const payload = applications
-      .map((a) => {
-        const uuid = legacyToUuid.get(a.position_id);
-        if (!uuid) return null;
-        const status = normalizeApplicationStatus(a.status);
-        if (status === "applied") appliedPositionIds.add(a.position_id);
-        return invalidateStaleCriticVerdict({
-          user_id: userId,
-          position_id: uuid,
-          cv_path: a.cv_path ?? null,
-          cv_pdf_path: a.cv_pdf_path ?? null,
-          cl_path: a.cl_path ?? null,
-          cl_pdf_path: a.cl_pdf_path ?? null,
-          status,
-          critic_score: a.critic_score ?? null,
-          critic_verdict: normalizeCriticVerdict(a.critic_verdict),
-          critic_notes: a.critic_notes ?? null,
-          // `undefined` resta assente per i client pre-O-64 e non cancella il
-          // round cloud; i client aggiornati inviano invece number o null.
-          critic_round: a.critic_round,
-          written_at: a.written_at ?? null,
-          applied_at: a.applied_at ?? null,
-          applied_via: a.applied_via ?? null,
-          response: a.response ?? null,
-          response_at: a.response_at ?? null,
-          written_by: a.written_by ?? null,
-          reviewed_by: a.reviewed_by ?? null,
-          critic_reviewed_at: a.critic_reviewed_at ?? null,
-          applied: a.applied ?? null,
-          cv_drive_id: a.cv_drive_id ?? null,
-          cl_drive_id: a.cl_drive_id ?? null,
-        });
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null);
+    const payload = applications.map((a) => {
+      const status = normalizeApplicationStatus(a.status);
+      if (status === "applied") appliedPositionIds.add(a.position_legacy_id);
+      return invalidateStaleCriticVerdict({
+        legacy_id: a.legacy_id,
+        position_legacy_id: a.position_legacy_id,
+        _receipt_id: applicationReceiptId(a),
+        cv_path: a.cv_path ?? null,
+        cv_pdf_path: a.cv_pdf_path ?? null,
+        cl_path: a.cl_path ?? null,
+        cl_pdf_path: a.cl_pdf_path ?? null,
+        status,
+        critic_score: a.critic_score ?? null,
+        critic_verdict: normalizeCriticVerdict(a.critic_verdict),
+        critic_notes: a.critic_notes ?? null,
+        // `undefined` resta assente per i client pre-O-64 e non cancella il
+        // round cloud; i client aggiornati inviano invece number o null.
+        critic_round: a.critic_round,
+        written_at: a.written_at ?? null,
+        applied_at: a.applied_at ?? null,
+        applied_via: a.applied_via ?? null,
+        response: a.response ?? null,
+        response_at: a.response_at ?? null,
+        written_by: a.written_by ?? null,
+        reviewed_by: a.reviewed_by ?? null,
+        critic_reviewed_at: a.critic_reviewed_at ?? null,
+        applied: a.applied ?? null,
+        cv_drive_id: a.cv_drive_id ?? null,
+        cl_drive_id: a.cl_drive_id ?? null,
+      });
+    });
 
     if (payload.length > 0) {
-      accepted.applications = payload.length;
       // L'RPC prende il lock della position prima di valutare l'application.
       // Un push stale non può quindi retrocedere la candidatura dopo che una
       // mark_position_applied concorrente l'ha resa visibile come applied.
-      const { data: upserted, error } = await admin.rpc(
+      const { data: receipts, error } = await admin.rpc(
         "sync_upsert_applications",
         {
           p_user_id: userId,
@@ -820,7 +883,28 @@ export async function POST(req: NextRequest) {
           publicMessage: "applications_upsert_failed",
         });
       }
-      applicationsUpserted = typeof upserted === "number" ? upserted : 0;
+      const expectedReceiptIds = payload
+        .map((application) => application._receipt_id)
+        .sort();
+      const receivedReceiptIds = Array.isArray(receipts)
+        ? receipts
+            .map((receipt) => (typeof receipt === "string" ? receipt : null))
+            .sort()
+        : [];
+      const completeReceipt =
+        receivedReceiptIds.length === expectedReceiptIds.length &&
+        receivedReceiptIds.every(
+          (receiptId, index) =>
+            receiptId !== null && receiptId === expectedReceiptIds[index],
+        );
+      if (!completeReceipt) {
+        return NextResponse.json(
+          { error: "applications_receipt_mismatch" },
+          { status: 500 },
+        );
+      }
+      applicationReceiptIds = receivedReceiptIds as string[];
+      applicationsUpserted = receipts.length;
     }
   }
 
@@ -886,7 +970,6 @@ export async function POST(req: NextRequest) {
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (payload.length > 0) {
-      accepted.position_highlights = payload.length;
       const { data: upserted, error } = await admin
         .from("position_highlights")
         .upsert(payload, { onConflict: "user_id,legacy_id" })
@@ -904,50 +987,19 @@ export async function POST(req: NextRequest) {
   }
 
   // 3b. Upsert pending_user_messages via (user_id, legacy_id).
-  // related_position_id (numero locale) -> UUID cloud via legacyToUuid. Il
-  // messaggio viaggia in un request autonomo, quindi risolviamo anche parent
-  // invariati: perdere il link e rispondere 200 sarebbe uno skip silenzioso.
+  // related_position_id (numero locale) -> UUID cloud via legacyToUuid se
+  // disponibile. Se non lo conosciamo (push parziale o push successivo dove
+  // la position esiste gia' cloud ma non in questo batch), passiamo NULL —
+  // la dashboard mostra il messaggio senza link alla posizione, che e' un
+  // degrado accettabile. Una soluzione completa farebbe un lookup
+  // server-side per legacy_id mancanti, e' rimandata.
   if (pendingMessages.length > 0) {
-    const pendingNeedsLookup = new Set<number>();
-    for (const message of pendingMessages) {
-      if (
-        typeof message.related_position_id === "number" &&
-        !legacyToUuid.has(message.related_position_id)
-      ) {
-        pendingNeedsLookup.add(message.related_position_id);
-      }
-    }
-    if (pendingNeedsLookup.size > 0) {
-      const { data: rows, error } = await admin
-        .from("positions")
-        .select("id, legacy_id")
-        .eq("user_id", userId)
-        .in("legacy_id", Array.from(pendingNeedsLookup));
-      if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "message_positions_lookup_failed",
-        });
-      }
-      for (const row of rows ?? []) {
-        if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
-      }
-    }
-
     const payload = pendingMessages
-      .filter(
-        (m) =>
-          typeof m.id === "number" &&
-          m.agent &&
-          m.body &&
-          (m.related_position_id == null ||
-            legacyToUuid.has(m.related_position_id)),
-      )
+      .filter((m) => typeof m.id === "number" && m.agent && m.body)
       .map((m) => {
         const relatedUuid =
           m.related_position_id != null
-            ? legacyToUuid.get(m.related_position_id)!
+            ? (legacyToUuid.get(m.related_position_id) ?? null)
             : null;
         return {
           user_id: userId,
@@ -981,7 +1033,6 @@ export async function POST(req: NextRequest) {
       });
 
     if (payload.length > 0) {
-      accepted.pending_user_messages = payload.length;
       // [JHT-MSG-BACKFLOW] Merge lato DB (mig 057) invece di upsert cieco:
       // i campi utente (acknowledged_at, user_reply, user_reply_at) scritti
       // dal web NON vengono più sovrascritti dai NULL della SQLite locale
@@ -1053,7 +1104,6 @@ export async function POST(req: NextRequest) {
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (payload.length > 0) {
-      accepted.sentinel_ticks = payload.length;
       const { data: upserted, error } = await admin
         .from("sentinel_ticks")
         .upsert(payload, { onConflict: "user_id,sample_key" })
@@ -1099,6 +1149,7 @@ export async function POST(req: NextRequest) {
         byTable[t.table_name].push(t);
       }
     }
+
     // Risolvi legacy_id → UUID per scores/applications. Riusa il mapping
     // già popolato dai positions upsert quando possibile; integra con
     // lookup esplicito per i legacy_id che non sono passati dal push.
@@ -1146,10 +1197,6 @@ export async function POST(req: NextRequest) {
         .is("deleted_at", null);
       if (!error) tombstonesApplied++;
     }
-    // Acknowledge effects, not input shape: missing legacy mappings and
-    // failed updates must be bisected/quarantined by the client, never
-    // silently counted as delivered merely because the request was HTTP 200.
-    accepted.tombstones = tombstonesApplied;
   }
 
   // 3e. Position transitions (event-log per-istanza → feed "Attività recente").
@@ -1178,7 +1225,6 @@ export async function POST(req: NextRequest) {
       }));
 
     if (payload.length > 0) {
-      accepted.position_transitions = payload.length;
       const { data: upserted, error } = await admin
         .from("position_transitions")
         .upsert(payload, {
@@ -1222,7 +1268,6 @@ export async function POST(req: NextRequest) {
             profileError = sync.error;
           } else {
             profileUpserted = true;
-            accepted.profile = 1;
             if (sync.warnings.length) {
               console.warn(
                 "[cloud-sync/push] profile sync warnings:",
@@ -1348,10 +1393,13 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    accepted,
     positions: { upserted: positionsUpserted },
     scores: { upserted: scoresUpserted, out_of_range: scoresOutOfRange },
     applications: { upserted: applicationsUpserted },
+    receipts: {
+      applications: applicationReceiptIds,
+      scores: scoreReceiptIds,
+    },
     companies: { upserted: companiesUpserted },
     position_highlights: { upserted: highlightsUpserted },
     pending_user_messages: { upserted: pendingMessagesUpserted },

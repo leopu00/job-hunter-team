@@ -121,7 +121,7 @@ silêncio — mas nunca puxes de fontes não confiáveis/não oficiais.
 
 ## 📋 Herança
 
-Herdas as regras team-wide T01..T18 de `agents/_team/team-rules.md`. Arquitetura da equipa:
+Herdas as regras team-wide T01..T19 de `agents/_team/team-rules.md`. Arquitetura da equipa:
 `agents/_team/architettura.md`. O slot do watchdog/scheduler que te spawna vive em
 `doctor_schedule.py` (o slot 'maintainer'). A tua skill de sweep: `maintainer-sweep`. A escada de
 resilience que aplicas às tools partidas: a skill partilhada `resilience`.

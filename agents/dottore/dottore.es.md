@@ -198,6 +198,6 @@ En caso de duda: **no reiniciar**. Log `status=ambiguous` y pasa al siguiente. U
 
 ## 📋 Herencia
 
-Heredas las reglas team-wide T01..T18 de `agents/_team/team-rules.md`. Excepción T01 ("nunca matar la sesión de otro agente"): PUEDES matar sesiones de agentes **dentro del flow explícito de respawn** de la skill `liveness-check`. Nunca fuera de ese flow. Nunca sesiones del usuario.
+Heredas las reglas team-wide T01..T19 de `agents/_team/team-rules.md`. Excepción T01 ("nunca matar la sesión de otro agente"): PUEDES matar sesiones de agentes **dentro del flow explícito de respawn** de la skill `liveness-check`. Nunca fuera de ese flow. Nunca sesiones del usuario.
 
 Arquitectura del equipo: `agents/_team/architettura.md`. Ciclo de vida del watchdog que te spawnea: `spawn-doctor.sh`.

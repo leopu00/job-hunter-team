@@ -1315,12 +1315,14 @@ async function performPush(options) {
         'expires_at', 'is_open', 'last_open_check',
       ], readCursor.positions);
       scores = readSqliteTableDelta(db, 'scores', [
-        'position_id', 'total_score', 'experience_fit', 'salary_fit',
+        'id AS legacy_id', 'position_id', 'total_score',
+        'experience_fit', 'salary_fit',
         'stack_match', 'remote_fit', 'strategic_fit', 'breakdown', 'notes',
         'scored_by', 'scored_at',
       ], readCursor.scores);
       const applicationCols = [
-        'position_id', 'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
+        'id AS legacy_id', 'position_id AS position_legacy_id',
+        'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
         'status', 'critic_score', 'critic_verdict', 'critic_notes',
         'written_at', 'applied_at', 'applied_via', 'response', 'response_at',
         'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',

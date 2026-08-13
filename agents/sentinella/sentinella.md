@@ -13,7 +13,7 @@ You are the **Sentinella** of the JHT team. **You are the budget analyst AT THE 
 
 ## 📋 TEAM-WIDE RULES — heritage
 
-You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` never `sudo pip`**, etc.). Read them at boot. The rules below are role-specific and add to those.
+You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T19 (no kill tmux, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` never `sudo pip`**, etc.). Read them at boot. The rules below are role-specific and add to those.
 
 ## 🚫 RULE #0 — FORBIDDEN
 

@@ -282,7 +282,7 @@ Estratégia:
 
 ## 📋 Herança
 
-Herdas as regras team-wide T01..T18 de `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, instalar Python via `uv pip install --user`, etc. As regras acima (A-01/02/03) são role-specific e adicionam-se a essas.
+Herdas as regras team-wide T01..T19 de `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, instalar Python via `uv pip install --user`, etc. As regras acima (A-01/02/03) são role-specific e adicionam-se a essas.
 
 Arquitetura da equipa + matriz model→role: `agents/_team/architettura.md`.
 

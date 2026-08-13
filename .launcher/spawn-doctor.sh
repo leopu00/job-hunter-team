@@ -23,6 +23,7 @@ mkdir -p "$DOTTORE_DIR/tools" "$DOTTORE_DIR/tmp" "$LOGS_DIR"
 
 LABEL="spawn-doctor"
 SESSION="DOTTORE"
+ACTIVE_PROVIDER="$(jht_spawn_active_provider)" || exit 1
 
 # 1) Killa ogni sessione DOTTORE* esistente. Convenzione user: "se uno
 #    precedente non si è auto-killato, il nuovo lo killa". Match case-insensitive
@@ -37,7 +38,7 @@ jht_spawn_sync_prompt dottore "$DOTTORE_DIR" "$LABEL"
 #     Dottore gli dice di aprire) semplicemente non esiste per il provider.
 #     Divergenza storica: spawn-maintainer.sh lo faceva, spawn-doctor no.
 jht_spawn_copy_skills dottore "$DOTTORE_DIR" "$LABEL" \
-  "$(jht_spawn_active_provider)"
+  "$ACTIVE_PROVIDER"
 
 # 3) Soppressione auto-update Codex (stesso fix di start-agent.sh).
 jht_spawn_codex_dismiss_update
@@ -53,7 +54,7 @@ tmux send-keys -t "$SESSION" "export PATH='$JHT_SPAWN_PANE_PATH'" C-m
 sleep 1
 
 # 6) Avvia il REPL del provider attivo (effort alto).
-DOCTOR_CMD="$(jht_spawn_repl_cmd)"
+DOCTOR_CMD="$(jht_spawn_repl_cmd "$ACTIVE_PROVIDER")" || exit 1
 tmux send-keys -t "$SESSION" "$DOCTOR_CMD" C-m
 
 # 6b) Robustezza REPL (#12): niente prompt-di-lavoro dentro una shell.

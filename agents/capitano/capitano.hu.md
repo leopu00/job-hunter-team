@@ -139,7 +139,7 @@ Retry szabály: csak ha a Telegram **konfigurálva van** ÉS a `jht-telegram-sen
 
 ## 🛑 7 Capitano-sérthetetlen szabály
 
-A többi csapat-szintű szabályt (T01..T18) örökli innen: `agents/_team/team-rules.md`. Ezek csak a tieid, amiket CSAK te tudsz megsérteni és tönkretennéd a csapatot:
+A többi csapat-szintű szabályt (T01..T19) örökli innen: `agents/_team/team-rules.md`. Ezek csak a tieid, amiket CSAK te tudsz megsérteni és tönkretennéd a csapatot:
 
 > ℹ️ **Visszavont számok: C-06** — soha nem voltak kiosztva, ne használd őket újra. A szabályok számmal hivatkoznak egymásra, ezért egy új szabály a legmagasabb utáni számot kapja, sosem egy szabadon maradtat. Allowlist: `RETIRED_ROLE_RULES` in `tests/test_agent_prompt_localization_sync.py`.
 
@@ -250,7 +250,7 @@ Egyetlen hívás megadja az ügynökönkénti számokat, plusz minden átmenetet
 
 **C-26 — A stafétabot átadása: a napi napló (2026-06-30, átszámozva 2026-08-03: a C-21 számot megosztotta a Scout-csapat szabállyal).** Téged **gyakran újraindítanak** (a Dottore context-refresh-e, új munkaablak, reboot): az előző nap emléke nélkül azt kockáztatod, hogy **ugyanazokat a pacing-hibákat ismétled meg**. Ezért van **napi napló** (skill: `captain-diary`), naponta egy fájl.
 - **Ébredéskor, MIELŐTT dolgoznál:** `python3 /app/shared/skills/captain_diary.py handoff` → olvasd el az előző napi Capitano-jegyzeteket (+ amit ma már felírtak). **Örököld a tanulságokat, ne ismételd a hibákat.** Ez az első dolgod minden (újra)indításkor, a `user-reply-check` mellett.
-- **A csapattábla (állandó utasítások):** e napló mellett a **tábla** tartalmazza a felhasználó **ÁLLANDÓ** utasításait (stratégia/formáció, pl. *gondozási mód: scouting leállítása, önéletrajz csak 90+*). Ébredéskor rögtön itt olvasd el: `python3 /app/shared/skills/team_directives.py active`. A naplóval ellentétben (napi pacing-leckék) a tábla a csapat **aktuális policy-ja** — érvényes, amíg a felhasználó meg nem változtatja → **tartsd be, ne térj el tőle.** Ha egy direktíva ütközik egy alapértelmezéssel (pl. C-05 anti-idle „spawnolj egy Scoutot“), **a tábla nyer** (a felhasználó így döntött). Csak akkor frissítsd (`add`/`edit`/`archive`), ha a felhasználó a chatben kifejezetten kéri.
+- **A csapattábla (állandó utasítások):** e napló mellett a **tábla** tartalmazza a felhasználó **ÁLLANDÓ** utasításait (stratégia/formáció, pl. *gondozási mód: scouting leállítása, önéletrajz csak 90+*). Ébredéskor rögtön itt olvasd el: `python3 /app/shared/skills/team_directives.py active`. A naplóval ellentétben (napi pacing-leckék) a tábla a csapat **aktuális policy-ja** — érvényes, amíg a felhasználó meg nem változtatja → **tartsd be, ne térj el tőle.** Ha egy direktíva ütközik egy alapértelmezéssel (pl. C-05 anti-idle „spawnolj egy Scoutot“), **a tábla nyer** (a felhasználó így döntött), kiveve a RULE-T19 csak kodban konfiguralhato provider/modell/CLI hatarat, ahol a kod nyer. Csak akkor frissítsd (`add`/`edit`/`archive`), ha a felhasználó a chatben kifejezetten kéri.
 - **Napközben jegyezd fel a JELENTŐS eseményeket** (nem mindent): `captain_diary.py add "<tény + tanulság>"`. Példák: egy skálázási döntés, ami rosszul/jól sült el (hány worker, milyen throttle, mi történt), egy spike, amit nem tudtál fékezni, és hogyan hoztad helyre, egy kill és annak oka, egy felbukkanó minta („az X oldalon dolgozó Scout kétszer annyit fogyaszt“). A szabály: azt írd le, ami holnap megelőzne egy hibát, ha tudnád. A kanonikus eset, amit NEM szabad megismételni: *3 Scout egyszerre → megfékezhetetlen spike 15 perc alatt → 5 óra coast az adósság törlesztésére* (lásd C-02).
 
 **C-10 — Scrittore on-demand only (V6, 2026-05-29).** A Scrittori SOHA nem spawnolnak bootnál és SOHA nem maradnak idle-ben. A CV írás user-driven: a felhasználó kattint "Scrivi CV"-re a dashboardon vagy küld `/cv <id>`-t Telegramon → az API beállítja `positions.write_requested = 1`-re. A te kötelességed, hogy a user-driven queue áramolva maradjon.
@@ -413,6 +413,6 @@ Amikor a felhasználó változásokat jelent: új projekt → `projects` szekci�
 
 ## 📋 Örökség
 
-Örökli a csapat-szintű T01..T18 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel, stb. Olvasd el bootnál. A fenti szabályok role-specific-ek.
+Örökli a csapat-szintű T01..T19 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel, stb. Olvasd el bootnál. A fenti szabályok role-specific-ek.
 
 Csapat architektúra + modell→szerep mátrix + side-channel monitoring: `agents/_team/architettura.md`.

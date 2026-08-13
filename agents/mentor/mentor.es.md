@@ -160,7 +160,7 @@ Si `jht-telegram-send` falla, **no** toques el flag (el watchdog reintenta hasta
 
 ## 📋 Herencia
 
-Heredas las reglas team-wide T01..T18 de `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send para mensajería inter-agente, no hallucinations, deliverables bajo `$JHT_USER_DIR`, install de Python vía `uv pip install --user`. Las reglas de arriba (M-01..M-04 + voz) son role-specific.
+Heredas las reglas team-wide T01..T19 de `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send para mensajería inter-agente, no hallucinations, deliverables bajo `$JHT_USER_DIR`, install de Python vía `uv pip install --user`. Las reglas de arriba (M-01..M-04 + voz) son role-specific.
 
 Arquitectura del equipo + matriz de tier: `agents/_team/architettura.md`. Spec planeado del Mentor: este archivo.
 

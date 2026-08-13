@@ -69,6 +69,60 @@ jht_spawn_pane_path() {
 # fa uscire il chiamante — e un PATH cosmetico non deve mai poterlo fare.
 JHT_SPAWN_PANE_PATH="$(jht_spawn_pane_path)" || true
 
+# jht_spawn_session_name <role> <prefix> [instance]
+# jht_spawn_agent_name   <role>          [instance]
+#
+# Il Critico e' l'unico ruolo normalmente singleton che ammette istanze
+# effimere: ogni SCRITTORE-N possiede CRITICO-SN. La scelta del provider resta
+# comunque nel launcher; l'istanza decide soltanto identita' e workspace.
+# Tenere questa risoluzione in funzioni sourceable permette un controtest senza
+# avviare tmux o un CLI reale.
+jht_spawn_session_name() {
+  local role="$1" prefix="$2" instance="${3:-}"
+  if [ "$role" = "critico" ] && [ -n "$instance" ]; then
+    case "$instance" in
+      0|0[0-9]*|*[!0-9]*|"") return 2 ;;
+    esac
+    printf '%s' "${prefix}-S${instance}"
+    return 0
+  fi
+  case "$role" in
+    capitano|critico|sentinella|assistente|mentor)
+      printf '%s' "$prefix"
+      ;;
+    *)
+      [ -n "$instance" ] || instance="1"
+      case "$instance" in
+        0|0[0-9]*|*[!0-9]*|"") return 2 ;;
+      esac
+      printf '%s' "${prefix}-${instance}"
+      ;;
+  esac
+}
+
+jht_spawn_agent_name() {
+  local role="$1" instance="${2:-}"
+  if [ "$role" = "critico" ] && [ -n "$instance" ]; then
+    case "$instance" in
+      0|0[0-9]*|*[!0-9]*|"") return 2 ;;
+    esac
+    printf '%s' "${role}-S${instance}"
+    return 0
+  fi
+  case "$role" in
+    capitano|critico|sentinella|assistente|mentor)
+      printf '%s' "$role"
+      ;;
+    *)
+      [ -n "$instance" ] || instance="1"
+      case "$instance" in
+        0|0[0-9]*|*[!0-9]*|"") return 2 ;;
+      esac
+      printf '%s' "${role}-${instance}"
+      ;;
+  esac
+}
+
 # jht_spawn_user_locale
 #   Locale dell'utente, con la cascata canonica (in ordine di priorità):
 #     1. $JHT_HOME/i18n-prefs.json::locale — scelta persistente canonica
@@ -248,12 +302,15 @@ PYEOF
 #   per diagnosi/sweep non superficiali. Per claude pre-seed dell'onboarding
 #   (skip del wizard TUI) + IS_SANDBOX.
 jht_spawn_repl_cmd() {
-  local home="${JHT_HOME:-/jht_home}" provider
-  provider=$(python3 -c "import json;print(json.load(open('$home/jht.config.json')).get('active_provider','claude'))" 2>/dev/null || echo claude)
+  local provider="${1:-}"
+  if [ -z "$provider" ]; then
+    provider="$(jht_spawn_active_provider)" || return 2
+  fi
   case "$provider" in
     openai|codex) printf '%s\n' "codex --yolo -c model_reasoning_effort=high" ;;
-    kimi)         printf '%s\n' "kimi --yolo" ;;
-    *)
+    kimi|moonshot) printf '%s\n' "kimi --yolo" ;;
+    claude|anthropic)
+      local home="${JHT_HOME:-/jht_home}"
       python3 - "$home/.claude.json" <<'PYDOC' 2>/dev/null || true
 import json, sys, os
 f = sys.argv[1]
@@ -266,13 +323,32 @@ os.makedirs(os.path.dirname(f), exist_ok=True)
 json.dump(d, open(f, "w"), indent=2)
 PYDOC
       printf '%s\n' "IS_SANDBOX=1 claude --dangerously-skip-permissions --effort high --model sonnet" ;;
+    *)
+      echo "[spawn-lib] ERROR: unsupported configured provider '$provider'" >&2
+      return 2
+      ;;
   esac
 }
 
 # jht_spawn_active_provider — nome del provider attivo (per i messaggi d'errore).
 jht_spawn_active_provider() {
-  local home="${JHT_HOME:-/jht_home}"
-  python3 -c "import json;print(json.load(open('$home/jht.config.json')).get('active_provider','claude'))" 2>/dev/null || echo claude
+  local home="${JHT_HOME:-/jht_home}" provider
+  provider="$(python3 - "$home/jht.config.json" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        value = str(json.load(handle).get("active_provider") or "").strip().lower()
+except Exception:
+    raise SystemExit(2)
+if value not in {"claude", "anthropic", "openai", "codex", "kimi", "moonshot"}:
+    raise SystemExit(2)
+print(value)
+PYEOF
+  )" || {
+    echo "[spawn-lib] ERROR: active_provider is missing, unreadable or unsupported in '$home/jht.config.json'" >&2
+    return 2
+  }
+  printf '%s\n' "$provider"
 }
 
 # jht_spawn_wait_repl <sessione> <cmd> <label> <ruolo> <logs_dir> <src>

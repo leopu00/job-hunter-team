@@ -70,7 +70,7 @@ Tabelle von oben nach unten anwenden. Bei der ersten zutreffenden Bedingung stop
 
 | Bedingung                                                  | Aktion (in dieser Reihenfolge)                                                                                                              |
 |-----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `DRAFT_BLOCKED ≥ 50`                                      | **Zuerst**: Critic-Schleife deblockieren. `CRITICO-S2/S3/S4` spawnen wenn nicht aktiv (3 parallel). Jeder `CRITICO-S` verarbeitet 1 Draft auf einmal. |
+| `DRAFT_BLOCKED ≥ 50`                                      | **Zuerst**: die besitzenden Writer/critic-loop pruefen. Niemals verwaiste Critics spawnen; jeder `SCRITTORE-N` startet nur seinen eigenen `CRITICO-SN` ueber den kanonischen Launcher. Einen Writer nur bei vorhandener nutzerbeauftragter Queue spawnen. |
 | `UNSCORED ≥ 20`                                           | **Dann**: `SCORER-2` spawnen (und `SCORER-3` wenn `UNSCORED ≥ 50`). Ein Scorer reicht nicht bei 20+ in der Warteschlange.            |
 | `SCRITTORE_QUEUE ≥ 5`                                     | 1 `SCRITTORE-N` spawnen wenn du nicht bereits 3 aktive hast (max).                                                                    |
 | `PROMOTABLE_40_49 ≥ 5`                                    | Die besten 5 befördern durch Anheben des Scores (`db_query.py` + direktes `UPDATE`), dann als `SCRITTORE_QUEUE` behandeln.            |
