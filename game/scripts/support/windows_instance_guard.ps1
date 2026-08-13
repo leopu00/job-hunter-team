@@ -10,7 +10,8 @@ using System;using System.Text;using System.Runtime.InteropServices;
 public static class JhtGuardPath{
 [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern uint GetFinalPathNameByHandle(IntPtr h,StringBuilder b,uint n,uint f);
 public static string Final(IntPtr h){var b=new StringBuilder(32768);uint n=GetFinalPathNameByHandle(h,b,(uint)b.Capacity,0);if(n==0||n>=b.Capacity)throw new InvalidOperationException("final_path");string s=b.ToString();return s.StartsWith(@"\\?\")?s.Substring(4):s;}}
-'@}
+'@
+}
 
 function Fail([string]$Code){[Console]::Error.WriteLine('JHT-INSTANCE-GUARD '+$Code);exit 1}
 function Hex([byte[]]$Bytes){([BitConverter]::ToString($Bytes)).Replace('-','').ToLowerInvariant()}

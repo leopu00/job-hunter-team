@@ -121,7 +121,7 @@ if ($Smoke) {
       $sourceProbe = Start-Process -FilePath $installedExe `
         -ArgumentList '--headless', '--quit-after', '10' -Wait -PassThru `
         -RedirectStandardOutput $guardStdout -RedirectStandardError $guardStderr
-      $expectedCensus = 'WINDOWS-INSTANCE-GUARD-PCK source=exported-pck bytes=9813 argv_utf16=26288 sha256=3f5c9ec40f3d27428b54a5a30a4df63a9ae6921a21ff7a84b044ba4c220efafa'
+      $expectedCensus = 'WINDOWS-INSTANCE-GUARD-PCK source=exported-pck bytes=9814 argv_utf16=26292 sha256=5a0a3bc554239c4d3022d634cd9d5a58dfc401aad6ba87cf135b863a3f975b5a'
       $sourceOutput = if (Test-Path -LiteralPath $guardStdout) {
         Get-Content -LiteralPath $guardStdout -Raw
       } else { '' }
