@@ -146,7 +146,8 @@ export default function DirectivesPanel({
       }
       pendingRequests.current.delete(key);
       const event = data.captain_event as
-        { status?: "queued" | "error" } | undefined;
+        | { status?: "queued" | "error" }
+        | undefined;
       if ("id" in payload && event)
         setEventStatus((old) => ({
           ...old,
