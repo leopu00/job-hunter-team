@@ -104,7 +104,7 @@ function parseDatabaseDeletion(data: unknown): Record<string, number> {
 }
 
 /**
- * Cancella file, righe PostgreSQL e utente Auth senza successi ottimistici.
+ * Cancella righe PostgreSQL, utente Auth e file senza successi ottimistici.
  *
  * `userId` arriva SEMPRE dalla sessione del chiamante, mai dal corpo della
  * richiesta: è così che si rende impossibile cancellare l'account di
@@ -118,40 +118,12 @@ export async function deleteAccountData(
   // in cui deve indovinare cosa è successo.
   if (!userId) throw new DeletionError("missing_user_id", "input");
 
-  // ── Prima i file, poi le righe ──────────────────────────────────────
-  // Gli oggetti nel bucket `file-transit` non cadono per cascata: senza
-  // questo passo sopravvivrebbero alla cancellazione. E non ci si può
-  // appoggiare a un purge automatico — nel bucket è stato trovato un
-  // oggetto rimasto per otto giorni.
-  //
-  // I percorsi si leggono dal BUCKET, non dalle righe: vedi
-  // `deleteStorageObjects` per il perché.
-  const storage = await deleteStorageObjects(admin, userId);
-  if (storage.failed.length > 0) {
-    // Un file che resta è una cancellazione incompleta, e va detto invece
-    // di dichiarare completato: l'operatore ha scelto la cancellazione
-    // immediata proprio perché fosse vera.
-    // Nessun percorso nel messaggio, nemmeno a campione.
-    //
-    // Una versione precedente ne includeva cinque «per capire dove
-    // guardare», subito sotto un commento che diceva che i nomi dei file
-    // sono dati dell'utente: commento e codice si contraddicevano nello
-    // stesso blocco. E l'errore finisce nei log del server e nel corpo
-    // della risposta, quindi cinque nomi di CV erano cinque nomi di CV
-    // usciti da una funzione il cui scopo è cancellarli.
-    //
-    // Per diagnosticare bastano il codice, la fase e il numero: il bucket
-    // si ispeziona a parte, con i permessi giusti.
-    throw new DeletionError(
-      "storage_incomplete",
-      STORAGE_BUCKET,
-      storage.failed.length,
-    );
-  }
-
   // Una sola chiamata = una sola transazione PostgreSQL privilegiata. Non
   // esiste fallback alla vecchia sequenza REST: se la RPC manca o fallisce,
-  // fermarsi è l'unico comportamento che non dichiara cancellati dati rimasti.
+  // fermarsi PRIMA di Storage è l'unico comportamento fail-closed. Questo
+  // ordine protegge anche il periodo fra il deploy web e la migration: una
+  // funzione non ancora live non può più far cancellare i file lasciando
+  // intatti database e account.
   const { data, error } = await admin.rpc("delete_account_data", {
     p_user_id: userId,
   });
@@ -161,6 +133,24 @@ export async function deleteAccountData(
     throw new DeletionError("database_delete_failed", "database");
   }
   const databaseRemoved = parseDatabaseDeletion(data);
+
+  // ── Solo dopo l'ACK autoritativo DB, i file ──────────────────────────
+  // Gli oggetti nel bucket `file-transit` non cadono per cascata. I percorsi
+  // si leggono dal BUCKET, non dalle righe ormai eliminate: vedi
+  // `deleteStorageObjects` per il perché. La funzione rienumera il namespace
+  // dopo `remove`, quindi il successo attesta il cleanup invece di fidarsi
+  // della sola risposta del provider.
+  const storage = await deleteStorageObjects(admin, userId);
+  if (storage.failed.length > 0) {
+    // Un file che resta è una cancellazione incompleta, e va detto invece
+    // di dichiarare completato. Nessun percorso nel messaggio: per
+    // diagnosticare bastano il codice, la fase e il numero.
+    throw new DeletionError(
+      "storage_incomplete",
+      STORAGE_BUCKET,
+      storage.failed.length,
+    );
+  }
 
   return {
     removed: {
