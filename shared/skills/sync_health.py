@@ -66,6 +66,7 @@ LOG_TAIL = _env_num("JHT_SYNC_LOG_TAIL", 500, int)
 
 PUSH_CURSOR = ".cloud-sync-cursor.json"   # push locale→cloud (per-tabella)
 PULL_CURSOR = ".cloud-pull-cursor.json"   # pull desired-state ({since})
+QUARANTINE = ".cloud-push-quarantine.json"  # metadata opaca, mai payload
 
 
 def _cloud_enabled():
@@ -174,7 +175,9 @@ def _tail(path, n):
         return []
 
 
-PUSH_FAIL_RE = re.compile(r"Push fallito|Push interrotto|HTTP 413|413 su riga")
+PUSH_FAIL_RE = re.compile(
+    r"Push fallito|Push interrotto|HTTP 413|413 su riga|Cloud push quarantined"
+)
 PULL_APPLIED_RE = re.compile(r"Pull desired-state applicato:\s*(\d+)\s+positions")
 
 
@@ -211,6 +214,13 @@ def scan():
     pull = _cursor_state(PULL_CURSOR)
     db_max = _db_max_updated()
     logs = _scan_daemon_log()
+    quarantine_raw = _read_json(os.path.join(_home(), QUARANTINE)) or {}
+    quarantine_entries = [
+        entry for entry in quarantine_raw.get("entries", [])
+        if isinstance(entry, dict)
+        and entry.get("status") in ("active", "retry")
+        and isinstance(entry.get("table"), str)
+    ]
 
     problems = []
 
@@ -244,8 +254,19 @@ def scan():
             f"{logs['push_fail_hits']} push-fail/413 occurrences in the last "
             f"{LOG_TAIL} lines of daemon.log",
             "Push is failing. For 413 errors, chunking should drain the backlog; "
-            "if a single row is discarded, one unusual position exceeds the "
-            "server limit and must be investigated. Escalate the count to the Captain.")
+            "a rejected singleton is quarantined and must be investigated. "
+            "Escalate only the privacy-safe count to the Captain.")
+
+    # 2b) Quarantine is a durable, named partial outcome.  Report aggregate
+    # metadata only: the CLI can inspect opaque identities without exposing rows.
+    if working and quarantine_entries:
+        tables = sorted(set(entry["table"] for entry in quarantine_entries))
+        add("push_quarantine", "HIGH",
+            f"{len(quarantine_entries)} cloud-push record(s) quarantined "
+            f"across {', '.join(tables)}; valid rows continue syncing",
+            "Run `jht cloud quarantine list`, fix the local source, then "
+            "`jht cloud quarantine retry <opaque-id>`. Resolve without retry "
+            "only after explicit verification.")
 
     # 3) PULL CHURN — il pull riapplica troppe righe per tick, ripetutamente.
     if working and logs["pull_churn_ticks"] >= CHURN_TICKS:
@@ -278,6 +299,10 @@ def scan():
     return {
         "cloud_enabled": enabled,
         "weekly_halt": halted,
+        "quarantine": {
+            "active": len(quarantine_entries),
+            "tables": sorted(set(e["table"] for e in quarantine_entries)),
+        },
         "team_working": working,
         "push_cursor": push,
         "pull_cursor": pull,
@@ -305,6 +330,8 @@ def main():
         print(f"  pull cursor : since={plc.get('since')} "
               f"(file {'ok' if plc.get('exists') else 'MISSING'}, "
               f"age {plc.get('mtime_age_h')}h)")
+        print(f"  quarantine  : active={res['quarantine']['active']} "
+              f"tables={','.join(res['quarantine']['tables']) or '-'}")
         print(f"  db max upd  : {res['db_positions_max_updated']}")
         lg = res["log"]
         print(f"  daemon.log  : push_fail={lg['push_fail_hits']} "

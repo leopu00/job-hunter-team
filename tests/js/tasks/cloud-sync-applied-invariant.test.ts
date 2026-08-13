@@ -11,28 +11,35 @@ type Call = {
 };
 
 let calls: Call[] = [];
-let rpcError: string | null = null;
+let rpcError: string | { code: string; message: string } | null = null;
+let upsertError: { code: string; message: string } | null = null;
 let applicationReceipts: unknown[] | null = null;
 let selectedPositions: { id: string; legacy_id: number }[] = [];
 let scorePersistedParents: string[] | null = null;
 let scorePersistedLegacyOverride: number | null = null;
+let pendingPersistedRows: any[] = [];
+let pendingRpcCountOverride: number | null = null;
 
 function fakeAdmin() {
   return {
     from(table: string) {
       let operation = "select";
       let writtenPayload: any = null;
+      const equalFilters = new Map<string, unknown>();
+      const inFilters = new Map<string, unknown[]>();
       const builder: Record<string, any> = {
         select() {
           return builder;
         },
-        eq() {
+        eq(column: string, value: unknown) {
+          equalFilters.set(column, value);
           return builder;
         },
         is() {
           return builder;
         },
-        in() {
+        in(column: string, values: unknown[]) {
+          inFilters.set(column, values);
           return builder;
         },
         update() {
@@ -52,31 +59,69 @@ function fakeAdmin() {
           const data =
             operation === "upsert" && table === "positions"
               ? [{ id: "position-uuid-73", legacy_id: 73 }]
-              : operation === "upsert" && table === "scores"
-                ? (scorePersistedParents ??
-                  writtenPayload.map((row: any) => row.position_id)).map(
-                    (position_id: string) => ({
+              : operation === "upsert" && table === "companies"
+                ? writtenPayload.map((row: any) => ({
+                    id: `company-uuid-${row.legacy_id}`,
+                    legacy_id: row.legacy_id,
+                  }))
+                : operation === "upsert" && table === "scores"
+                  ? (
+                      scorePersistedParents ??
+                      writtenPayload.map((row: any) => row.position_id)
+                    ).map((position_id: string) => ({
                       position_id,
                       legacy_id:
                         scorePersistedLegacyOverride ??
                         writtenPayload.find(
                           (row: any) => row.position_id === position_id,
                         )?.legacy_id,
-                    }),
-                  )
-                : operation === "upsert" && table === "applications"
-                  ? [{ id: "application-uuid-73" }]
-                  : operation === "select" && table === "positions"
-                    ? selectedPositions
-                    : null;
-          return Promise.resolve({ data, error: null }).then(ok, ko);
+                    }))
+                  : operation === "upsert" && table === "applications"
+                    ? [{ id: "application-uuid-73" }]
+                    : operation === "upsert" && table === "position_highlights"
+                      ? writtenPayload.map((row: any) => ({
+                          legacy_id: row.legacy_id,
+                        }))
+                      : operation === "upsert" &&
+                          table === "position_transitions"
+                        ? writtenPayload.map((row: any) => ({
+                            position_legacy_id: row.position_legacy_id,
+                            ts: row.ts,
+                            by_agent: row.by_agent,
+                            to_state: row.to_state,
+                          }))
+                        : operation === "update" && table === "positions"
+                          ? [{ legacy_id: equalFilters.get("legacy_id") }]
+                          : operation === "update" &&
+                              (table === "scores" || table === "applications")
+                            ? [{ position_id: equalFilters.get("position_id") }]
+                            : operation === "select" &&
+                                table === "pending_user_messages"
+                              ? pendingPersistedRows.filter((row) =>
+                                  (inFilters.get("legacy_id") ?? []).includes(
+                                    row.legacy_id,
+                                  ),
+                                )
+                              : operation === "select" && table === "positions"
+                                ? selectedPositions
+                                : null;
+          return Promise.resolve({
+            data: upsertError ? null : data,
+            error: operation === "upsert" ? upsertError : null,
+          }).then(ok, ko);
         },
       };
       return builder;
     },
     rpc: vi.fn(async (name: string, args: any) => {
       calls.push({ kind: "rpc", name, args });
-      if (rpcError) return { data: null, error: { message: rpcError } };
+      if (rpcError) {
+        return {
+          data: null,
+          error:
+            typeof rpcError === "string" ? { message: rpcError } : rpcError,
+        };
+      }
       if (name === "sync_upsert_applications") {
         return {
           data:
@@ -84,6 +129,13 @@ function fakeAdmin() {
             args.p_applications.map(
               (application: any) => application._receipt_id,
             ),
+          error: null,
+        };
+      }
+      if (name === "upsert_pending_user_messages_merge") {
+        pendingPersistedRows = args.p_rows.map((row: any) => ({ ...row }));
+        return {
+          data: pendingRpcCountOverride ?? args.p_rows.length,
           error: null,
         };
       }
@@ -121,9 +173,10 @@ vi.mock("@/lib/team-state/sync-freshness", () => ({
 
 const { POST } = await import("@/app/api/cloud-sync/push/route");
 
-function receiptId(table: "applications" | "scores", legacyId: number) {
+function receiptId(table: string, sourceKey: unknown | unknown[]) {
+  const key = Array.isArray(sourceKey) ? sourceKey : [sourceKey];
   return `q_${createHash("sha256")
-    .update(`${table}\0${JSON.stringify([legacyId])}`)
+    .update(`${table}\0${JSON.stringify(key)}`)
     .digest("hex")
     .slice(0, 24)}`;
 }
@@ -152,17 +205,137 @@ function push(application: Record<string, unknown>, includePosition = true) {
   );
 }
 
+function pushBody(body: Record<string, unknown>) {
+  return POST(
+    new Request("http://localhost/api/cloud-sync/push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }) as any,
+  );
+}
+
 beforeEach(() => {
   calls = [];
   rpcError = null;
+  upsertError = null;
   applicationReceipts = null;
   selectedPositions = [{ id: "position-uuid-73", legacy_id: 73 }];
   scorePersistedParents = null;
   scorePersistedLegacyOverride = null;
+  pendingPersistedRows = [];
+  pendingRpcCountOverride = null;
   admin = fakeAdmin();
 });
 
 describe("push sync di una candidatura", () => {
+  it("classifica solo SQLSTATE row-data come rifiuto isolabile", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    upsertError = { code: "22P02", message: "synthetic invalid data" };
+    admin = fakeAdmin();
+    const rowData = await pushBody({
+      positions: [{ id: 73, title: "Synthetic", company: "Example" }],
+    });
+    expect(rowData.status).toBe(500);
+    await expect(rowData.json()).resolves.toMatchObject({
+      error: "positions_upsert_failed",
+      rejection_scope: "row",
+    });
+    expect(logged.mock.calls.flat().join(" ")).not.toContain(
+      "synthetic invalid data",
+    );
+
+    calls = [];
+    upsertError = { code: "42P01", message: "synthetic schema failure" };
+    admin = fakeAdmin();
+    const schema = await pushBody({
+      positions: [{ id: 73, title: "Synthetic", company: "Example" }],
+    });
+    expect(schema.status).toBe(500);
+    await expect(schema.json()).resolves.not.toHaveProperty("rejection_scope");
+  });
+
+  it("emette receipt causali per ogni tabella del convoglio", async () => {
+    const deletedAt = "2026-08-13T10:00:00.000Z";
+    const transitionAt = "2026-08-13T10:01:00.000Z";
+    const response = await pushBody({
+      companies: [{ id: 5, name: "Synthetic company" }],
+      positions: [
+        { id: 73, title: "Synthetic", company: "Example", company_id: 5 },
+      ],
+      position_highlights: [
+        { id: 9, position_id: 73, type: "pro", text: "Synthetic benefit" },
+      ],
+      pending_user_messages: [
+        { id: 11, agent: "SCOUT", body: "Synthetic notification" },
+      ],
+      position_transitions: [
+        {
+          position_legacy_id: 73,
+          ts: transitionAt,
+          by_agent: "SCOUT",
+          to_state: "review",
+        },
+      ],
+      tombstones: [
+        { table_name: "positions", legacy_id: 73, deleted_at: deletedAt },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: {
+        companies: [receiptId("companies", 5)],
+        positions: [receiptId("positions", 73)],
+        position_highlights: [receiptId("position_highlights", 9)],
+        pending_user_messages: [receiptId("pending_user_messages", 11)],
+        position_transitions: [
+          receiptId("position_transitions", [
+            73,
+            transitionAt,
+            "SCOUT",
+            "review",
+          ]),
+        ],
+        tombstones: [receiptId("tombstones", ["positions", 73, deletedAt])],
+      },
+    });
+  });
+
+  it("non trasforma un count parziale pending in receipt di righe preesistenti", async () => {
+    pendingRpcCountOverride = 1;
+    const response = await pushBody({
+      pending_user_messages: [
+        { id: 11, agent: "SCOUT", body: "Synthetic first" },
+        { id: 12, agent: "SCOUT", body: "Synthetic second" },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: { pending_user_messages: [] },
+    });
+  });
+
+  it("isola solo i token P0001 row-data definiti dalla RPC 076", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    rpcError = { code: "P0001", message: "position_not_found" };
+    const known = await push({ status: "draft" }, false);
+    expect(known.status).toBe(500);
+    await expect(known.json()).resolves.toMatchObject({
+      error: "applications_upsert_failed",
+      rejection_scope: "row",
+    });
+    expect(logged.mock.calls.flat().join(" ")).not.toContain(
+      "position_not_found",
+    );
+
+    rpcError = { code: "P0001", message: "synthetic_unknown_failure" };
+    const unknown = await push({ status: "draft" }, false);
+    expect(unknown.status).toBe(500);
+    await expect(unknown.json()).resolves.not.toHaveProperty("rejection_scope");
+  });
+
   it("persiste application prima di pubblicare positions.status=applied", async () => {
     const response = await push({
       status: "applied",
@@ -410,6 +583,31 @@ describe("push sync di una candidatura", () => {
     expect(calls).toEqual([]);
   });
 
+  it("classifica una receipt score forgiata come errore di protocollo", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/cloud-sync/push", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          scores: [
+            {
+              legacy_id: 88,
+              position_id: 73,
+              _receipt_id: "q_ffffffffffffffffffffffff",
+              total_score: 81,
+            },
+          ],
+        }),
+      }) as any,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid_score_receipt_id",
+    });
+    expect(calls).toEqual([]);
+  });
+
   it("esporta la receipt score solo dopo l'upsert osservato", async () => {
     const response = await POST(
       new Request("http://localhost/api/cloud-sync/push", {
@@ -479,6 +677,7 @@ describe("push sync di una candidatura", () => {
     expect(missing.status).toBe(400);
     await expect(missing.json()).resolves.toEqual({
       error: "scores_identity_unresolved",
+      rejection_scope: "row",
     });
     expect(
       calls.some((call) => call.kind === "upsert" && call.table === "scores"),
@@ -494,7 +693,12 @@ describe("push sync di una candidatura", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           positions: [
-            { id: 73, title: "Synthetic", company: "Example", status: "scored" },
+            {
+              id: 73,
+              title: "Synthetic",
+              company: "Example",
+              status: "scored",
+            },
           ],
           scores: [
             {
@@ -523,7 +727,12 @@ describe("push sync di una candidatura", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           positions: [
-            { id: 73, title: "Synthetic", company: "Example", status: "scored" },
+            {
+              id: 73,
+              title: "Synthetic",
+              company: "Example",
+              status: "scored",
+            },
           ],
           scores: [{ legacy_id: 88, position_id: 73, total_score: 81 }],
         }),

@@ -14,6 +14,7 @@ import {
 } from "@/lib/sync-rendezvous";
 import {
   CLOUD_SYNC_STALE_AFTER_MS,
+  cloudPushQuarantineCount,
   cloudSyncIsBehind,
   freshnessRowFromRead,
 } from "@/lib/team-state/sync-freshness";
@@ -59,6 +60,7 @@ const T: Record<
     title: string;
     updatedNow: string;
     behind: string;
+    quarantined: (n: number) => string;
     vpsSlow: string;
     syncTimedOut: string;
     syncPushFailed: string;
@@ -81,6 +83,8 @@ const T: Record<
     updatedNow: "Dati aggiornati",
     behind:
       "I dati cloud potrebbero essere indietro. La sync automatica riproverà.",
+    quarantined: (n) =>
+      `${n} record locali richiedono attenzione. Gli altri dati continuano a sincronizzarsi.`,
     vpsSlow:
       "Nessuna conferma entro tre minuti. Controlla che il team sia online e riprova.",
     syncTimedOut:
@@ -106,6 +110,8 @@ const T: Record<
     title: "Ask the VPS for a data refresh now",
     updatedNow: "Data updated",
     behind: "Cloud data may be behind. Automatic sync will retry.",
+    quarantined: (n) =>
+      `${n} local record${n === 1 ? "" : "s"} need attention. Other data continues syncing.`,
     vpsSlow:
       "No confirmation arrived within three minutes. Check that the team is online and try again.",
     syncTimedOut: "The sync took too long and was stopped. Try again.",
@@ -131,6 +137,8 @@ const T: Record<
     updatedNow: "Datos actualizados",
     behind:
       "Los datos en la nube pueden estar atrasados. La sincronización automática volverá a intentarlo.",
+    quarantined: (n) =>
+      `${n} registro${n === 1 ? " local requiere" : "s locales requieren"} atención. Los demás datos siguen sincronizándose.`,
     vpsSlow:
       "No llegó ninguna confirmación en tres minutos. Comprueba que el equipo esté conectado e inténtalo de nuevo.",
     syncTimedOut:
@@ -157,6 +165,8 @@ const T: Record<
     updatedNow: "Données mises à jour",
     behind:
       "Les données cloud sont peut-être en retard. La synchronisation automatique va réessayer.",
+    quarantined: (n) =>
+      `${n} enregistrement${n === 1 ? " local nécessite" : "s locaux nécessitent"} une attention. Les autres données continuent à se synchroniser.`,
     vpsSlow:
       "Aucune confirmation après trois minutes. Vérifiez que l'équipe est en ligne et réessayez.",
     syncTimedOut:
@@ -183,6 +193,8 @@ const T: Record<
     updatedNow: "Daten aktualisiert",
     behind:
       "Die Cloud-Daten könnten veraltet sein. Die automatische Synchronisierung versucht es erneut.",
+    quarantined: (n) =>
+      `${n} lokale${n === 1 ? "r Datensatz braucht" : " Datensätze brauchen"} Aufmerksamkeit. Andere Daten werden weiter synchronisiert.`,
     vpsSlow:
       "Innerhalb von drei Minuten kam keine Bestätigung. Prüfe, ob das Team online ist, und versuche es erneut.",
     syncTimedOut:
@@ -209,6 +221,8 @@ const T: Record<
     updatedNow: "Adatok frissítve",
     behind:
       "A felhőadatok lemaradhattak. Az automatikus szinkronizálás újrapróbálkozik.",
+    quarantined: (n) =>
+      `${n} helyi rekord figyelmet igényel. A többi adat szinkronizálása folytatódik.`,
     vpsSlow:
       "Három percen belül nem érkezett megerősítés. Ellenőrizd, hogy a csapat online van-e, majd próbáld újra.",
     syncTimedOut:
@@ -235,6 +249,8 @@ const T: Record<
     updatedNow: "Dados atualizados",
     behind:
       "Os dados na nuvem podem estar atrasados. A sincronização automática tentará novamente.",
+    quarantined: (n) =>
+      `${n} registo${n === 1 ? " local precisa" : "s locais precisam"} de atenção. Os outros dados continuam a sincronizar.`,
     vpsSlow:
       "Nenhuma confirmação chegou em três minutos. Verifique se a equipe está online e tente novamente.",
     syncTimedOut:
@@ -273,9 +289,30 @@ const REQUEST_POLL_MS = 1_000;
 const REQUEST_START_TIMEOUT_MS = 15_000;
 const REQUEST_READ_TIMEOUT_MS = 10_000;
 
+export function CloudPushQuarantineWarning({
+  locale,
+  status,
+}: {
+  locale: Locale;
+  status: string | null;
+}) {
+  const count = cloudPushQuarantineCount(status);
+  if (count === 0) return null;
+  return (
+    <span
+      role="alert"
+      data-cloud-push-quarantine-warning
+      style={{ color: "var(--color-yellow)" }}
+    >
+      {T[locale].quarantined(count)}
+    </span>
+  );
+}
+
 export default function CloudRefreshButton() {
   const router = useRouter();
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   const [remote, setRemote] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -699,6 +736,7 @@ export default function CloudRefreshButton() {
   const behind =
     freshnessKnown &&
     cloudSyncIsBehind(pushStatus, pushCheckedAt, freshnessClock);
+  const quarantineCount = cloudPushQuarantineCount(pushStatus);
 
   return (
     <div
@@ -715,7 +753,10 @@ export default function CloudRefreshButton() {
       {flash && (
         <span style={{ color: "var(--color-green)" }}>{t.updatedNow}</span>
       )}
-      {!flash && behind && !syncing && (
+      {!flash && quarantineCount > 0 && !syncing && (
+        <CloudPushQuarantineWarning locale={locale} status={pushStatus} />
+      )}
+      {!flash && quarantineCount === 0 && behind && !syncing && (
         <span style={{ color: "var(--color-yellow)" }}>{t.behind}</span>
       )}
       {!flash && !behind && lastSync && !syncing && (

@@ -10,6 +10,14 @@ export interface SyncFreshnessState {
 // una sincronizzazione normale.
 export const CLOUD_SYNC_STALE_AFTER_MS = 20 * 60 * 1000;
 
+/** Sanitized aggregate published by the box; no table, row or error detail. */
+export function cloudPushQuarantineCount(status: string | null): number {
+  const match = /^quarantined:(\d{1,6})$/.exec(status ?? "");
+  if (!match) return 0;
+  const count = Number(match[1]);
+  return Number.isSafeInteger(count) && count > 0 ? count : 0;
+}
+
 /**
  * Supabase restituisce gli errori nel risultato, non necessariamente come
  * eccezioni. `undefined` significa "lettura sconosciuta" e non deve diventare
