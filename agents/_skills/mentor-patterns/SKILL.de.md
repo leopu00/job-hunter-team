@@ -234,6 +234,6 @@ Wenn du nichts Muster-würdiges zu sagen hast, **sag nichts**. Stille ist eine A
 
 - `mentor-output` — WIE die Nachricht formuliert wird, sobald ein Muster bestätigt ist.
 - `db-query` — Wrapper-Interna.
-- `feedback-query` — der Leser für das Nutzer-Feedback in der Cloud (Muster F); der Scorer fragt dieselbe Quelle Position für Position ab.
+- `feedback-query` — der Leser für das Nutzer-Feedback in der Cloud (Muster F); der Scorer nutzt sanitizte aggregierte Themen nur für künftige Positionen und schließt die aktuelle aus.
 - `agents/mentor/mentor.md` — Orchestrator-Prompt + Kadenz.
 - `agents/_team/team-rules.md` T10 — Profil ist nur lesend, auch für den Mentor.

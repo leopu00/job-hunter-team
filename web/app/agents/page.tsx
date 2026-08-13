@@ -145,37 +145,37 @@ const ROLES: Role[] = [
     it: {
       title: "Lo Scorer",
       p1: "Lo Scorer dà a ogni offerta un voto da 0 a 100: quanto si avvicina davvero a ciò che cerchi. Non guarda solo profilo, competenze, luogo e stipendio, ma anche i tuoi obiettivi e le tue ambizioni — il lavoro che vorresti davvero. Il suo compito è trovare, tra tutte, le posizioni più vicine a quello che desideri.",
-      p2: "Impara dai tuoi riscontri: quando segnali «questa mi piace» o «questa mai», ricalibra il punteggio di conseguenza. Il suo voto è il verdetto finale su quanto quell'offerta è giusta per te: le più deboli restano in fondo, le migliori salgono in cima alla tua lista.",
+      p2: "Impara dai tuoi riscontri: «questa mi piace» o «questa mai» diventano preferenze per le offerte che valuterà in futuro. Il riscontro non cambia il punteggio già assegnato all'offerta votata; per aggiornarlo serve una rivalutazione esplicita.",
     },
     en: {
       title: "The Scorer",
       p1: "The Scorer gives every opening a score from 0 to 100: how close it really is to what you're after. It weighs not just your profile, skills, location and salary, but also your goals and ambitions — the job you'd truly want. Its task is to find, among them all, the positions closest to what you're looking for.",
-      p2: "It learns from your feedback: when you mark one “I like this” or “never”, it recalibrates the score accordingly. Its score is the final verdict on how right an opening is for you: the weakest stay at the bottom, the best rise to the top of your list.",
+      p2: "It learns from your feedback: “I like this” or “never” becomes preference context for openings it evaluates in the future. Feedback never changes the score already assigned to the opening you voted on; updating it requires an explicit re-evaluation.",
     },
     es: {
       title: "El Scorer",
       p1: "El Scorer da a cada oferta una nota de 0 a 100: cuánto se acerca de verdad a lo que buscas. No mira solo tu perfil, tus competencias, el lugar y el salario, sino también tus objetivos y tus ambiciones — el trabajo que de verdad querrías. Su tarea es encontrar, entre todas, las posiciones más cercanas a lo que deseas.",
-      p2: "Aprende de tus valoraciones: cuando marcas «esta me gusta» o «esta nunca», recalibra la nota en consecuencia. Su nota es el veredicto final sobre cuánto encaja esa oferta contigo: las más débiles se quedan al fondo, las mejores suben a lo alto de tu lista.",
+      p2: "Aprende de tus valoraciones: «esta me gusta» o «esta nunca» se convierte en contexto de preferencia para las ofertas que evaluará en el futuro. La valoración nunca cambia la nota ya asignada a la oferta votada; actualizarla requiere una reevaluación explícita.",
     },
     fr: {
       title: "L'Évaluateur",
       p1: "L'Évaluateur attribue à chaque offre une note de 0 à 100 : à quel point elle se rapproche vraiment de ce que tu cherches. Il ne regarde pas seulement ton profil, tes compétences, le lieu et le salaire, mais aussi tes objectifs et tes ambitions — le travail que tu voudrais vraiment. Sa tâche est de trouver, parmi toutes, les positions les plus proches de ce que tu désires.",
-      p2: "Il apprend de tes retours : quand tu signales « celle-ci me plaît » ou « jamais », il recalibre la note en conséquence. Sa note est le verdict final sur à quel point cette offre est faite pour toi : les plus faibles restent en bas, les meilleures remontent en tête de ta liste.",
+      p2: "Il apprend de tes retours : « celle-ci me plaît » ou « jamais » devient un contexte de préférence pour les offres qu'il évaluera à l'avenir. Le retour ne change jamais la note déjà attribuée à l'offre jugée ; sa mise à jour exige une réévaluation explicite.",
     },
     de: {
       title: "Der Bewerter",
       p1: "Der Bewerter gibt jeder Stelle eine Note von 0 bis 100: wie nah sie wirklich an dem ist, was du suchst. Er betrachtet nicht nur dein Profil, deine Fähigkeiten, den Ort und das Gehalt, sondern auch deine Ziele und Ambitionen — den Job, den du dir wirklich wünschst. Seine Aufgabe ist es, unter allen die Stellen zu finden, die dem am nächsten kommen, was du willst.",
-      p2: "Er lernt aus deinen Rückmeldungen: Markierst du eine mit „die gefällt mir“ oder „nie“, kalibriert er die Note entsprechend neu. Seine Note ist das endgültige Urteil darüber, wie gut eine Stelle zu dir passt: die schwächsten bleiben unten, die besten steigen an die Spitze deiner Liste.",
+      p2: "Er lernt aus deinen Rückmeldungen: „die gefällt mir“ oder „nie“ wird zum Präferenzkontext für Stellen, die er künftig bewertet. Die Rückmeldung ändert niemals die bereits vergebene Note der bewerteten Stelle; dafür ist eine ausdrückliche Neubewertung nötig.",
     },
     pt: {
       title: "O Scorer",
       p1: "O Scorer dá a cada oferta uma nota de 0 a 100: o quanto ela realmente se aproxima do que você procura. Não olha só o seu perfil, as competências, o lugar e o salário, mas também os seus objetivos e ambições — o trabalho que você realmente gostaria. A sua tarefa é encontrar, entre todas, as posições mais próximas do que você deseja.",
-      p2: "Aprende com os seus retornos: quando marca «esta eu gosto» ou «esta nunca», recalibra a nota de acordo. A sua nota é o veredito final sobre o quanto aquela oferta é certa para você: as mais fracas ficam no fim, as melhores sobem ao topo da sua lista.",
+      p2: "Aprende com os seus retornos: «esta eu gosto» ou «esta nunca» torna-se contexto de preferência para as ofertas que avaliará no futuro. O retorno nunca altera a nota já atribuída à oferta avaliada; para a atualizar é necessária uma reavaliação explícita.",
     },
     hu: {
       title: "A Pontozó",
       p1: "A Pontozó minden ajánlatnak 0-tól 100-ig ad pontszámot: mennyire áll közel valójában ahhoz, amit keresel. Nemcsak a profilodat, a készségeidet, a helyet és a fizetést nézi, hanem a céljaidat és az ambícióidat is — azt a munkát, amelyet igazán szeretnél. A feladata, hogy mind közül megtalálja azokat a pozíciókat, amelyek a legközelebb állnak ahhoz, amit szeretnél.",
-      p2: "Tanul a visszajelzéseidből: amikor azt jelzed, „ez tetszik” vagy „soha”, ennek megfelelően igazítja a pontszámot. A pontszáma a végső ítélet arról, mennyire való neked az adott ajánlat: a leggyengébbek a lista aljára kerülnek, a legjobbak a tetejére.",
+      p2: "Tanul a visszajelzéseidből: az „ez tetszik” vagy „soha” preferenciakontextussá válik a jövőben értékelt pozíciókhoz. A visszajelzés soha nem módosítja a már értékelt ajánlat pontszámát; ehhez kifejezett újraértékelés kell.",
     },
   },
   {

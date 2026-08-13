@@ -50,4 +50,51 @@ describe("O-76 feedback future-only boundary", () => {
     expect(detail).toHaveLength(7);
     expect(detail).toEqual(swipe);
   });
+
+  it("describes future-only learning in all seven public Scorer locales", () => {
+    const scorer = read("web/app/agents/page.tsx")
+      .split('slug: "scorer"')[1]
+      .split('slug: "scrittore"')[0];
+    const paragraphs = [...scorer.matchAll(/p2:\s*"([^"]+)"/g)].map(
+      ([, copy]) => copy,
+    );
+    const futureTerms = [
+      "futuro",
+      "future",
+      "futuro",
+      "avenir",
+      "künftig",
+      "futuro",
+      "jövőben",
+    ];
+    expect(paragraphs).toHaveLength(7);
+    paragraphs.forEach((copy, index) =>
+      expect(copy.toLowerCase()).toContain(futureTerms[index]),
+    );
+    expect(scorer.toLowerCase()).not.toMatch(
+      /ricalibra|recalibrates|recalibra|recalibre|kalibriert|igazítja a pontszámot/,
+    );
+  });
+
+  it("keeps the Mentor cross-reference on aggregate future themes in EN+6", () => {
+    const locales = ["", ".it", ".es", ".fr", ".de", ".pt", ".hu"];
+    for (const locale of locales) {
+      const source = read(`agents/_skills/mentor-patterns/SKILL${locale}.md`);
+      const crossReference = source
+        .split("\n")
+        .find((line) => line.startsWith("- `feedback-query`"));
+      expect(crossReference).toBeDefined();
+      expect(crossReference).not.toMatch(
+        /one position at a time|una posizione alla volta|una posición a la vez|position par position|Position für Position|uma posição de cada vez|pozíciónként/,
+      );
+    }
+  });
+
+  it("does not advertise a feedback verdict as discard in swipe metadata", () => {
+    const metadata = read("web/app/(protected)/swipe/layout.tsx");
+    expect(metadata.match(/^    description:/gm)).toHaveLength(7);
+    expect(metadata).not.toMatch(
+      /sinistra per scartare|left to discard|balra, ha nem|izquierda para descartar|links zum Aussortieren|gauche pour écarter|esquerda para descartar/,
+    );
+  });
 });

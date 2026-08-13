@@ -10,37 +10,37 @@ const META: Record<string, { title: string; description: string }> = {
   it: {
     title: "Swipe — Job Hunter",
     description:
-      "Triage rapido delle posizioni: scorri a destra se ti interessa, a sinistra per scartare — il tuo team di agenti AI impara i tuoi gusti",
+      "Recensisci rapidamente le posizioni dal telefono: assegna un giudizio e il tuo team di agenti AI impara i tuoi gusti per le offerte future",
   },
   en: {
     title: "Swipe — Job Hunter",
     description:
-      "Quick position triage: swipe right if interested, left to discard — your AI agent team learns your taste",
+      "Quickly review positions from your phone: give a verdict and your AI agent team learns your taste for future openings",
   },
   hu: {
     title: "Swipe — Job Hunter",
     description:
-      "Gyors állás-válogatás: húzd jobbra, ha érdekel, balra, ha nem — az AI-ügynökcsapatod tanulja az ízlésedet",
+      "Értékeld gyorsan a pozíciókat telefonról: adj véleményt, és az AI-ügynökcsapatod tanul belőle a jövőbeli ajánlatokhoz",
   },
   es: {
     title: "Swipe — Job Hunter",
     description:
-      "Selección rápida de posiciones: desliza a la derecha si te interesa, a la izquierda para descartar — tu equipo de agentes de IA aprende tus gustos",
+      "Valora rápidamente posiciones desde el móvil: da tu opinión y tu equipo de agentes de IA aprende tus gustos para ofertas futuras",
   },
   de: {
     title: "Swipe — Job Hunter",
     description:
-      "Schnelles Stellen-Triage: nach rechts wischen bei Interesse, nach links zum Aussortieren — dein KI-Agenten-Team lernt deinen Geschmack",
+      "Bewerte Stellen schnell auf dem Handy: Gib dein Urteil ab, damit dein KI-Agenten-Team deine Vorlieben für künftige Angebote lernt",
   },
   fr: {
     title: "Swipe — Job Hunter",
     description:
-      "Tri rapide des postes : balayez à droite si intéressé, à gauche pour écarter — votre équipe d'agents IA apprend vos goûts",
+      "Évaluez rapidement les postes depuis votre téléphone : donnez votre avis et votre équipe d'agents IA apprend vos goûts pour les offres futures",
   },
   pt: {
     title: "Swipe — Job Hunter",
     description:
-      "Triagem rápida de vagas: deslize para a direita se interessar, para a esquerda para descartar — sua equipe de agentes de IA aprende seu gosto",
+      "Avalie rapidamente as vagas pelo telemóvel: dê a sua opinião e a sua equipa de agentes de IA aprende os seus gostos para ofertas futuras",
   },
 };
 
