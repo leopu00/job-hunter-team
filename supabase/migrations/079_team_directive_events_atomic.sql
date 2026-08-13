@@ -1,6 +1,10 @@
 -- O-80: directive mutation and Captain handoff are one tenant-bound event.
 ALTER TABLE public.pending_user_messages
   ADD COLUMN IF NOT EXISTS source_id TEXT;
+ALTER TABLE public.team_directives
+  ADD COLUMN IF NOT EXISTS source_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS team_directives_source_id_unique
+  ON public.team_directives(user_id, source_id);
 CREATE UNIQUE INDEX IF NOT EXISTS pending_user_messages_source_id_unique
   ON public.pending_user_messages(user_id, source_id);
 
@@ -14,13 +18,21 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_user UUID := auth.uid();
   v_changed INTEGER;
+  v_existing BIGINT;
 BEGIN
   IF v_user IS NULL OR p_action NOT IN ('created','edited','archived') THEN
     RAISE EXCEPTION 'invalid directive event';
   END IF;
+  SELECT id INTO v_existing FROM team_directives
+    WHERE user_id = v_user AND source_id = p_source_id;
+  IF v_existing IS NOT NULL THEN
+    RETURN jsonb_build_object('id', v_existing, 'status', 'queued');
+  END IF;
   IF p_action = 'created' THEN
-    INSERT INTO team_directives (user_id, body, kind, status, created_by)
-    VALUES (v_user, p_body, 'order', 'active', 'user') RETURNING id INTO p_id;
+    INSERT INTO team_directives (user_id, body, kind, status, created_by, source_id)
+    VALUES (v_user, p_body, 'order', 'active', 'user', p_source_id)
+    ON CONFLICT (user_id, source_id) DO UPDATE SET source_id = EXCLUDED.source_id
+    RETURNING id INTO p_id;
   ELSIF p_action = 'archived' THEN
     UPDATE team_directives SET status='archived', archived_at=now(), updated_at=now()
       WHERE id=p_id AND user_id=v_user AND status='active';

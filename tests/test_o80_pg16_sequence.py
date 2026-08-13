@@ -43,7 +43,8 @@ CREATE TABLE scores(id serial primary key,user_id uuid not null,position_id uuid
 CREATE TABLE position_transitions(id serial primary key,user_id uuid not null,position_legacy_id int,from_state text,to_state text,ts timestamptz,by_agent text,notes text,unique(user_id,position_legacy_id,ts,by_agent,to_state));
 CREATE TABLE pending_user_messages(id serial primary key,user_id uuid,agent text,body text,kind text,author text,source_id text,created_at timestamptz);
 CREATE UNIQUE INDEX pending_user_messages_source_id_unique ON pending_user_messages(user_id, source_id);
-CREATE TABLE team_directives(id bigserial primary key,user_id uuid,body text,kind text,status text,created_by text,archived_at timestamptz,updated_at timestamptz);
+CREATE TABLE team_directives(id bigserial primary key,user_id uuid,body text,kind text,status text,created_by text,source_id text,archived_at timestamptz,updated_at timestamptz);
+CREATE UNIQUE INDEX team_directives_source_id_unique ON team_directives(user_id, source_id);
 CREATE TABLE team_state(user_id uuid primary key,chat_requested_at timestamptz);
 GRANT USAGE ON SCHEMA public,auth TO authenticated; GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
 GRANT SELECT,INSERT,UPDATE ON positions,applications,scores,position_transitions,pending_user_messages,team_directives,team_state TO authenticated;
@@ -62,7 +63,8 @@ def test_sequence_reapply_and_tenant_event(psql):
     assert 'queued' in result
     assert psql("SELECT count(*) FROM pending_user_messages WHERE source_id='stable-source';").stdout.strip() == '1'
     repeat = psql(f"SET ROLE authenticated; SET request.jwt.claim.sub='{owner}'; SELECT public.mutate_team_directive_with_event(0,'created','synthetic','stable-source');").stdout
-    assert 'queued' in repeat
+    assert repeat.strip().splitlines()[-1] == '{"id": 1, "status": "queued"}'
     assert psql("SELECT count(*) FROM pending_user_messages WHERE source_id='stable-source';").stdout.strip() == '1'
+    assert psql("SELECT count(*) FROM team_directives WHERE source_id='stable-source';").stdout.strip() == '1'
     denied = psql("RESET ROLE; SELECT public.mutate_team_directive_with_event(1,'edited','bad','other');", check=False)
     assert denied.returncode != 0 and "invalid directive event" in denied.stderr
