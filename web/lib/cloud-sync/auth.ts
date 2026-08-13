@@ -20,7 +20,8 @@ export interface VerifiedToken {
 }
 
 export type VerifyResult =
-  { ok: true; data: VerifiedToken } | { ok: false; res: NextResponse };
+  | { ok: true; data: VerifiedToken }
+  | { ok: false; res: NextResponse };
 
 // Throttle write su last_used_at: una sola UPDATE/ora per token, anche
 // se il cloud daemon fa decine di request/min. Il campo era usato solo
