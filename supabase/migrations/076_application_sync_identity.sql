@@ -28,14 +28,15 @@ BEGIN
     IF NEW.legacy_id IS NOT NULL AND NEW.legacy_id <= 0 THEN
         RAISE EXCEPTION 'invalid_score_identity';
     END IF;
-    IF TG_OP = 'UPDATE'
-       AND OLD.legacy_id IS NOT NULL
-       AND (
-           NEW.legacy_id IS DISTINCT FROM OLD.legacy_id
-           OR NEW.user_id IS DISTINCT FROM OLD.user_id
+    IF TG_OP = 'UPDATE' THEN
+        IF NEW.user_id IS DISTINCT FROM OLD.user_id
            OR NEW.position_id IS DISTINCT FROM OLD.position_id
-       ) THEN
-        RAISE EXCEPTION 'score_identity_mismatch';
+           OR (
+               OLD.legacy_id IS NOT NULL
+               AND NEW.legacy_id IS DISTINCT FROM OLD.legacy_id
+           ) THEN
+            RAISE EXCEPTION 'score_identity_mismatch';
+        END IF;
     END IF;
     RETURN NEW;
 END;

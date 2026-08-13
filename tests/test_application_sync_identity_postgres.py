@@ -507,6 +507,39 @@ def test_score_identity_mismatch_and_collision_fail_closed(postgres16):
     ).stdout.strip() == "1"
 
 
+def test_first_score_identity_claim_cannot_move_the_parent(postgres16):
+    psql = postgres16
+    psql(
+        f"""
+        INSERT INTO public.scores (user_id, position_id, total_score)
+        SELECT '{USER_1}', id, 60 FROM public.positions
+         WHERE user_id = '{USER_1}' AND legacy_id = 46;
+        """,
+        role="service_role",
+    )
+    moved = psql(
+        f"""
+        UPDATE public.scores
+           SET legacy_id = 94,
+               position_id = '10000000-0000-0000-0000-000000000047'
+         WHERE user_id = '{USER_1}'
+           AND position_id = '10000000-0000-0000-0000-000000000046';
+        """,
+        role="service_role",
+        check=False,
+    )
+    assert moved.returncode != 0
+    assert "score_identity_mismatch" in moved.stderr
+    assert psql(
+        f"SELECT legacy_id, position_id FROM public.scores "
+        f"WHERE user_id = '{USER_1}' AND total_score = 60;"
+    ).stdout.strip() == "|10000000-0000-0000-0000-000000000046"
+    claimed = _score_upsert(psql, legacy_id=94, position_legacy_id=46)
+    assert claimed.stdout.strip().startswith(
+        "94|10000000-0000-0000-0000-000000000046"
+    )
+
+
 def test_concurrent_score_ids_for_same_position_have_one_winner(postgres16):
     first_rc, second_rc, results = _overlap_sql(
         postgres16,
