@@ -61,6 +61,9 @@ because an agent is busy.**
   overview stays concise. Overview facts now use stable semantic rows and
   responsive column widths so labels and values remain aligned on narrow
   screens.
+- Exclusion reasons now show when the exclusion decision was made, without
+  substituting unrelated update or discovery timestamps when that date is
+  unavailable.
 
 ### Updating
 
