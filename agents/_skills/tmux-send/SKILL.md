@@ -84,7 +84,8 @@ Pipeline hand-offs (Scout→Analyst→Scorer→Writer) are **status flips**, not
 - `1` — missing arguments
 - `2` — target session does not exist (check the name with `tmux ls`)
 - `3` — text never appeared and the pane is not busy → unreceptive TUI. **The only code that suggests dead/wedged.**
-- `4` — peer busy on a long turn beyond the wait budget → **alive**. Retry later, never respawn.
+- `4` — legacy busy result (new sender queues immediately; callers should not drop messages).
+- `6` — message queued while peer busy, delivery unverified; durable pending record exists. Never drop or duplicate on retry.
 - `5` — text accepted but never submitted ("alive but mute") → **alive**. Retry later, never respawn.
 
 > Only `3` may lead to a liveness check and respawn. `4` and `5` both mean the peer is alive: treating them as death is how over-spawning starts.
