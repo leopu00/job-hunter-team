@@ -148,23 +148,25 @@ Attenzione alla differenza col Pattern B: lì le esclusioni sono degli **agenti*
 
 Questo feedback vive nel cloud (`position_feedback`), non in `jobs.db`: è l'unico pattern che non passa da `db_query.py`.
 
+**`RAW_DISPLAY_BOUNDARY`** — raggruppa sui raw `reason` / `comment`, ma non inoltrarli mai. Ogni interpretazione user-facing può usare soltanto `display_reason` / `display_comment` e `label` / `examples` sanitizzati dei temi; chiavi macchina, ID e note `no-signal:*` restano interni.
+
 ### Rilevazione
 
 ```bash
 # I temi nei motivi scritti dall'utente, ultimi 30 giorni
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# Lo stesso feedback non aggregato, per leggere le sue parole esatte
+# Lo stesso feedback non aggregato; leggi solo display_reason/display_comment
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
 `themes` raggruppa il testo libero per somiglianza semplice — nessun match esatto richiesto. Mette in minuscolo, toglie accenti, punteggiatura e parole di servizio, taglia ogni parola ai primi 5 caratteri (`senior` / `seniority` / `seniore` / `séniorité` finiscono sulla stessa chiave), poi conta parole singole e coppie adiacenti per **posizioni distinte**. Una coppia vince sulle sue parti quando copre le stesse posizioni: "troppo senior" dice più di "senior", e gli intensificatori sono tenuti apposta per questo.
 
-Per ogni tema ritorna `positions`, `events`, `share` (frazione delle posizioni che portano testo), `actions` (come il tema si divide fra like / dislike / hide / star), `legacy_ids` e fino a 3 `examples` verbatim.
+Per ogni tema ritorna `positions`, `events`, `share` (frazione delle posizioni che portano testo), `actions` (come il tema si divide fra like / dislike / hide / star), `legacy_ids` interni e fino a 3 `examples` display sanitizzati.
 
 È grezzo per costruzione e si vede: i sinonimi lontani restano separati (`stipendio` e `RAL` sono due temi). Leggi gli `examples` e unisci con la testa quello che lo strumento non poteva.
 
-Se il payload porta una `note` (`no-signal (...)`), il cloud è spento o irraggiungibile e l'aggregato non c'è: taci, non ricostruire il quadro con chiamate `check` posizione per posizione.
+Se il payload porta una `note` enum chiusa (`no-signal:*`), l'aggregato non c'è: taci, non inoltrare il codice e non ricostruire il quadro con chiamate `check` posizione per posizione.
 
 ### Soglia
 
@@ -226,7 +228,7 @@ Se non hai nulla di livello pattern da dire, **non dire nulla**. Il silenzio è 
 - ❌ Catastrofismo ("questo non porta da nessuna parte") O cheerleading ("ce la puoi fare!") — entrambi violano la voce del Mentor. Numeri, poi una domanda. Vedi skill `mentor-output`.
 - ❌ **Trasformare il Pattern F in un'istruzione di ricerca.** Non passare mai allo Scout o al Capitano un "smetti di portare X" ricavato da quello che piace all'utente. Una pipeline che pesca solo ciò che piace si gonfia i punteggi da sola, e l'utente finisce per credere che il mercato sia ricco quando è stata la pipeline a scegliere per lei. Il Pattern F è rivolto **all'utente**: cosa cambia nel suo profilo lo decide lei, e tu sei comunque read-only (T10).
 - ❌ Rinfacciare un giudizio che l'utente ha ritirato. `themes` lascia già fuori le posizioni il cui ultimo evento è `clear`; non rimetterle dentro con `--include-cleared` per arrivare a una soglia.
-- ❌ Citare un singolo commento verbatim come se fosse un pattern. Gli `examples` danno voce a un tema **dopo** che ha superato la soglia; non sono il rilievo.
+- ❌ Citare un singolo commento raw come se fosse un pattern. Gli `examples` sanitizzati danno voce a un tema **dopo** che ha superato la soglia; non sono il rilievo.
 
 ## Vedi anche
 

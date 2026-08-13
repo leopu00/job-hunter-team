@@ -147,23 +147,25 @@ Note the difference from Pattern B: there the exclusions are the **agents'** (`E
 
 This feedback lives in the cloud (`position_feedback`), not in `jobs.db`: it is the one pattern that does not go through `db_query.py`.
 
+**`RAW_DISPLAY_BOUNDARY`** — cluster on raw `reason` / `comment`, but never relay them. Any user-facing interpretation may use only `display_reason` / `display_comment` and sanitized theme `label` / `examples`; machine keys, IDs and `no-signal:*` notes stay internal.
+
 ### Detection
 
 ```bash
 # Themes in the reasons the user typed, last 30 days
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# The same feedback unaggregated, to read her exact words
+# The same feedback unaggregated; read only display_reason/display_comment
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
 `themes` groups free text by plain similarity — no exact match required. It lowercases, strips accents, drops punctuation and service words, cuts every word to its first 5 characters (`senior` / `seniority` / `seniore` / `séniorité` land on the same key), then counts single words and adjacent word pairs by **distinct positions**. A pair wins over its parts when it covers the same positions: "too senior" says more than "senior", and intensifiers are kept on purpose for exactly that reason.
 
-Per theme it returns `positions`, `events`, `share` (fraction of the positions that carry text), `actions` (how the theme splits across like / dislike / hide / star), `legacy_ids`, and up to 3 verbatim `examples`.
+Per theme it returns `positions`, `events`, `share` (fraction of the positions that carry text), `actions` (how the theme splits across like / dislike / hide / star), internal `legacy_ids`, and up to 3 sanitized display `examples`.
 
 It is cheap by construction and it shows: distant synonyms stay apart (`salary` and `RAL` are two themes). Read the `examples` and join with your head what the tool could not.
 
-If the payload carries a `note` (`no-signal (...)`), the cloud is off or unreachable and there is no aggregate: stay silent, do not rebuild the picture out of single-position `check` calls.
+If the payload carries a closed `note` enum (`no-signal:*`), there is no aggregate: stay silent, never relay its code, and do not rebuild the picture out of single-position `check` calls.
 
 ### Threshold
 
@@ -225,7 +227,7 @@ If you have nothing pattern-grade to say, **say nothing**. Silence is an answer.
 - ❌ Doomsaying ("this leads nowhere") OR cheerleading ("you can do it!") — both violate the Mentor's voice. Numbers, then a question. See `mentor-output` skill.
 - ❌ **Turning Pattern F into a search instruction.** Never hand the Scout or the Capitano a "stop bringing X" derived from what the user likes. A pipeline that only fetches what pleases inflates its own scores, and the user ends up believing the market is rich when it was the pipeline that chose for her. Pattern F is addressed **to the user**: what changes in her profile is her decision, and the Mentor is read-only anyway (T10).
 - ❌ Quoting back a judgement the user has withdrawn. `themes` already leaves out positions whose last event is `clear`; do not put them back with `--include-cleared` to reach a threshold.
-- ❌ Quoting one verbatim comment as if it were a pattern. `examples` give a theme a voice **after** it crosses the threshold; they are not the finding.
+- ❌ Quoting one raw comment as if it were a pattern. Sanitized `examples` give a theme a voice **after** it crosses the threshold; they are not the finding.
 
 ## See also
 

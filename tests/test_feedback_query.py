@@ -289,7 +289,8 @@ def test_missing_bulk_endpoint_degrades_to_no_signal(monkeypatch):
     """Cloud vivo ma route non ancora deployata: nessun segnale, non un crash."""
     monkeypatch.setattr(fq, '_api_get', lambda *a, **k: (False, 'http-404: '))
     rep = fq.themes_report(days=30)
-    assert rep['ok'] is True and 'http-404' in rep['note']
+    assert rep['ok'] is True
+    assert rep['note'] == fq.NO_SIGNAL_REMOTE_UNAVAILABLE
 
 
 def test_legacy_ids_fallback_reads_one_position_at_a_time(monkeypatch):
@@ -315,10 +316,10 @@ def test_legacy_ids_fallback_all_unreadable_is_still_neutral(monkeypatch):
     monkeypatch.setattr(fq, 'check_position', lambda lid: {
         'ok': True, 'legacy_id': str(lid), 'latest_action': None,
         'latest_direction': None, 'count': 0, 'actions': [],
-        'note': 'no-signal (cloud-disabled)'})
+        'note': fq.NO_SIGNAL_CLOUD_DISABLED})
     rep = fq.themes_report(days=30, legacy_ids=['7'])
     assert rep['ok'] is True and 'note' in rep
-    assert rep['note'] == 'no-signal (no readable positions)'
+    assert rep['note'] == fq.NO_SIGNAL_NO_READABLE_POSITIONS
 
 
 def test_recent_truncates_long_comments(monkeypatch):

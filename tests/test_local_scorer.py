@@ -251,6 +251,8 @@ def feedback_payload(action=None, reason=None, *, note=None):
                 "action": action,
                 "reason": reason,
                 "comment": None,
+                "display_reason": reason,
+                "display_comment": None,
                 "created_at": "2026-08-03T12:00:00Z",
             }
         )
@@ -297,6 +299,16 @@ def test_feedback_multiplier_matches_canonical_contract(
     }
 
 
+def test_feedback_note_uses_only_the_sanitized_display_twin():
+    payload = feedback_payload("dislike", "/synthetic/private/jobs.db")
+    payload["actions"][0]["display_reason"] = "[path]"
+    adjusted, audit = local_scorer.apply_feedback(VALID, payload, 42)
+    assert adjusted is not None
+    assert "/synthetic/private" not in adjusted["notes"]
+    assert '— "[path]"' in adjusted["notes"]
+    assert "/synthetic/private" not in audit["marker"]
+
+
 def test_feedback_like_caps_at_100_and_recomputes_decision():
     high = {**VALID, "total_score": 100}
     adjusted, audit = local_scorer.apply_feedback(
@@ -333,7 +345,7 @@ def test_feedback_hide_excludes_without_returning_a_score():
     [
         feedback_payload(),
         feedback_payload("clear"),
-        feedback_payload(note="no-signal (cloud-disabled)"),
+        feedback_payload(note="no-signal:cloud-disabled"),
     ],
 )
 def test_no_feedback_clear_and_no_signal_leave_the_score_unchanged(payload):

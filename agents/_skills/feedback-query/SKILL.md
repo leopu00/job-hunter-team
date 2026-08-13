@@ -4,6 +4,10 @@ description: Read user feedback (like/dislike/hide/star) from the cloud — one 
 allowed-tools: Bash(python3 *)
 ---
 
+## Raw/display boundary (`RAW_DISPLAY_BOUNDARY`)
+
+`reason` and `comment` are raw machine input. Never quote, relay, summarize, or expose them to the user. Any user-facing note or message must use only `display_reason` / `display_comment`; theme `label` / `examples` have already crossed the same shared sanitizer. A `note` is only a closed `no-signal:*` enum: treat it as availability state and never turn it into infrastructure detail.
+
 # feedback-query — User feedback per position
 
 The user can click like/dislike/hide/star on any position from the web dashboard. Those clicks are stored in Supabase `position_feedback` (mig 019 base + mig 028 extended) and surfaced to agents via this skill. Schema:
@@ -38,9 +42,11 @@ Output (JSON on stdout):
   "actions": [
     {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
      "reason": "too senior", "comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
+     "display_reason": "too senior", "display_comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
      "score": 2, "direction": "less_like_this"},
     {"action": "like", "created_at": "2026-05-28T09:00:00Z",
-     "reason": null, "comment": null, "score": null, "direction": null}
+     "reason": null, "comment": null, "display_reason": null,
+     "display_comment": null, "score": null, "direction": null}
   ]
 }
 ```
@@ -57,7 +63,7 @@ When cloud is disabled or the endpoint is unreachable, the skill returns:
 ```json
 {"ok": true, "legacy_id": "...", "latest_action": null,
  "latest_direction": null, "count": 0, "actions": [],
- "note": "no-signal (cloud-disabled)"}
+ "note": "no-signal:cloud-disabled"}
 ```
 
 ## Aggregate lookup (window over all positions)
@@ -92,7 +98,7 @@ python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 How the grouping works (no exact match required, no new dependencies): lowercase → accents stripped → punctuation dropped → service words removed → every word cut to its first 5 characters (`senior` / `seniority` / `seniore` / `séniorité` collapse onto one key) → count single words and **adjacent pairs**, by **distinct positions**, not by events. A pair absorbs its parts when it covers ≥ 80% of the same positions, so "too senior" wins over "senior"; intensifiers are kept in the stream on purpose. `reason` and `comment` are tokenised separately, so no pair is invented across the two.
 
 Deliberate limits, stated so nobody over-reads the numbers:
-- Distant synonyms stay apart (`salary` and `RAL` are two themes) — this is word counting, not semantics. Read `examples` (verbatim, up to 3) and join with your head.
+- Distant synonyms stay apart (`salary` and `RAL` are two themes) — this is word counting, not semantics. Read the sanitized display `examples` (up to 3) and join with your head.
 - Positions whose **latest** event is `clear` are left out (the judgement was withdrawn); `--include-cleared` puts them back.
 - `share` = theme positions / `positions_with_text`.
 - `--field reason|comment|both` (default `both`), `--top N`, `--days 0` for the whole history.
@@ -100,7 +106,7 @@ Deliberate limits, stated so nobody over-reads the numbers:
 
 Flags: `--days` (default 30, `0` = everything), `--limit` (default 500 events), `--min-positions` (default 3), `--text-chars` on `recent` (default 300, truncates long comments).
 
-When the payload carries a `note` (`no-signal (...)`), there is no aggregate: cloud off, endpoint absent, or network down. Treat it as "no data", never as "no feedback".
+When the payload carries a closed `note` enum (`no-signal:*`), there is no aggregate. Treat it as "no data", never as "no feedback", and never relay the code.
 
 ## How agents use it
 
@@ -112,7 +118,7 @@ When the payload carries a `note` (`no-signal (...)`), there is no aggregate: cl
    - `dislike` → final_score = round(base * 0.85), add note `feedback:dislike-15%`
    - `hide` → status=`excluded`, note `feedback:hide`, skip writing score
    - `clear` / `null` → no change (a withdrawn judgement is not a judgement)
-3. **Carry the reason into the note**, when the user wrote one. Take `reason` (or, if empty, `comment`) from the **same event** as `latest_action` — `actions[0]` — quote it verbatim, trimmed to ~80 characters, and append it to the note:
+3. **Carry the safe display reason into the note**, when present. Take `display_reason` (or, if empty, `display_comment`) from the **same event** as `latest_action` — `actions[0]` — and append it to the note. Never fall back to raw `reason` / `comment`:
 
    ```
    feedback:dislike-15% — "too senior"

@@ -5,6 +5,10 @@ description: Felhasználói visszajelzés olvasása (like/dislike/hide/star) a f
 allowed-tools: Bash(python3 *)
 ---
 
+## Raw/display határ (`RAW_DISPLAY_BOUNDARY`)
+
+A `reason` és `comment` nyers, csak gépi bemenet. Soha ne idézd, továbbítsd, foglald össze vagy mutasd meg őket a felhasználónak. Minden user-facing jegyzet vagy üzenet kizárólag a `display_reason` / `display_comment` mezőket használhatja; a témák `label` / `examples` mezői már ugyanazon közös sanitizeren mentek át. A `note` csak zárt `no-signal:*` enum: elérhetőségi állapotként kezeld, soha ne infrastruktúra-részletként.
+
 # feedback-query — Felhasználói visszajelzés pozíciónként
 
 A felhasználó like/dislike/hide/star-t kattinthat bármelyik pozícióra a webes dashboardról. Ezek a kattintások a Supabase `position_feedback`-ben tárolódnak (mig 019 alap + mig 028 kiterjesztett) és ezen a skill-en keresztül érhetők el az ágensek számára. Séma:
@@ -39,9 +43,11 @@ Kimenet (JSON stdout-ra):
   "actions": [
     {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
      "reason": "too senior", "comment": "5+ evi Java szükseges, nem erdekel a legacy stack",
+     "display_reason": "too senior", "display_comment": "5+ evi Java szükseges, nem erdekel a legacy stack",
      "score": 2, "direction": "less_like_this"},
     {"action": "like", "created_at": "2026-05-28T09:00:00Z",
-     "reason": null, "comment": null, "score": null, "direction": null}
+     "reason": null, "comment": null, "display_reason": null,
+     "display_comment": null, "score": null, "direction": null}
   ]
 }
 ```
@@ -58,7 +64,7 @@ Ha a felhő letiltva van vagy a végpont nem érhető el, a skill visszaadja:
 ```json
 {"ok": true, "legacy_id": "...", "latest_action": null,
  "latest_direction": null, "count": 0, "actions": [],
- "note": "no-signal (cloud-disabled)"}
+ "note": "no-signal:cloud-disabled"}
 ```
 
 ## Összesített olvasás (időablak az összes pozícióra)
@@ -93,7 +99,7 @@ A `themes` kimenete:
 Hogyan működik a csoportosítás (nem kell pontos egyezés, nincs új függőség): kisbetűsítés → ékezetek le → írásjelek ki → funkciószavak ki → minden szó az első 5 karakterére vágva (`senior` / `seniority` / `seniore` / `séniorité` egyetlen kulcsra esik) → egyedülálló szavakat és **szomszédos párokat** számolunk, **külön pozíciónként**, nem események szerint. Egy pár elnyeli a részeit, ha ugyanazon pozíciók ≥ 80%-át lefedi, így a "túl senior" nyer a "senior" ellen; az erősítő szavak szándékosan bennmaradnak a folyamban. A `reason` és a `comment` külön tokenizálódik, így nem születik pár a kettő határán.
 
 Szándékos korlátok, kimondva, hogy senki ne olvasson többet a számokba, mint ami bennük van:
-- A távoli szinonimák külön maradnak (a `fizetés` és a `RAL` két téma) — ez szószámolás, nem szemantika. Olvasd az `examples`-t (szó szerint, max. 3), és fejjel kösd össze.
+- A távoli szinonimák külön maradnak (a `fizetés` és a `RAL` két téma) — ez szószámolás, nem szemantika. A sanitizált display `examples` mezőket olvasd (max. 3), és fejjel kösd össze.
 - Azok a pozíciók, amelyek **utolsó** eseménye `clear`, kimaradnak (az ítéletet visszavonták); az `--include-cleared` visszahozza őket.
 - `share` = a téma pozíciói / `positions_with_text`.
 - `--field reason|comment|both` (alapértelmezés `both`), `--top N`, `--days 0` a teljes történetre.
@@ -101,7 +107,7 @@ Szándékos korlátok, kimondva, hogy senki ne olvasson többet a számokba, min
 
 Kapcsolók: `--days` (alap 30, `0` = minden), `--limit` (alap 500 esemény), `--min-positions` (alap 3), `--text-chars` a `recent`-en (alap 300, vágja a hosszú megjegyzéseket).
 
-Ha a payload `note`-ot hoz (`no-signal (...)`), nincs összesítés: a felhő ki van kapcsolva, a végpont hiányzik vagy a hálózat halott. Kezeld úgy, hogy "nincs adat", soha ne úgy, hogy "nincs visszajelzés".
+Ha a payload zárt `note` enumot hoz (`no-signal:*`), nincs összesítés. Kezeld úgy, hogy "nincs adat", soha ne úgy, hogy "nincs visszajelzés", és a kódot ne továbbítsd.
 
 ## Hogyan használják az ágensek
 
@@ -113,7 +119,7 @@ Ha a payload `note`-ot hoz (`no-signal (...)`), nincs összesítés: a felhő ki
    - `dislike` → final_score = round(base * 0.85), adj megjegyzést `feedback:dislike-15%`
    - `hide` → status=`excluded`, megjegyzés `feedback:hide`, hagyj ki pontszám írást
    - `clear` / `null` → nincs változás (a visszavont ítélet nem ítélet)
-3. **Vidd az indokot a jegyzetbe**, ha a felhasználó írt egyet. Vedd a `reason`-t (vagy ha üres, a `comment`-et) a `latest_action` **ugyanazon eseményéből** — `actions[0]` —, idézd szó szerint, vágd ~80 karakterre, és fűzd a jegyzethez:
+3. **A biztonságos display indokot vidd a jegyzetbe**, ha van. Vedd a `display_reason`-t (vagy ha üres, a `display_comment`-et) a `latest_action` **ugyanazon eseményéből** — `actions[0]` —, és fűzd a jegyzethez. Soha ne ess vissza a nyers `reason` / `comment` mezőkre:
 
    ```
    feedback:dislike-15% — "túl senior"

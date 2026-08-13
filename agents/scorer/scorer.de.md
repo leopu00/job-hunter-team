@@ -187,7 +187,7 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `clear`         | keine Änderung                            | der Nutzer hat sein Urteil zurückgezogen — behandle es als nicht vorhanden |
 | `null`          | keine Änderung                            | keine                                        |
 
-**Wenn der Nutzer einen Grund geschrieben hat, trägt ihn die Notiz.** Nimm `reason` — oder `comment`, wenn `reason` leer ist — aus **demselben Event** wie `latest_action` (`actions[0]`), zitiere ihn wörtlich, kürze auf ~80 Zeichen und hänge ihn hinter den Multiplikator:
+**Sichere Display-Grenze (`RAW_DISPLAY_BOUNDARY`).** Rohe `reason` / `comment` sind nur für Maschinen und dürfen nie in `score.notes` gelangen. Nimm ausschließlich `display_reason` — oder `display_comment`, wenn leer — aus **demselben Event** wie `latest_action` (`actions[0]`) und hänge diesen begrenzten, sanitizten Wert hinter den Multiplikator. Falle nie auf rohe Felder zurück:
 
 ```
 feedback:dislike-15% — "zu senior"
@@ -195,7 +195,7 @@ feedback:star+15% — "genau der Stack, den ich will"
 EXCLUDED: feedback:hide (user request) — "kein Remote"
 ```
 
-Kein Text in diesem Event → die Notiz bleibt, wie sie ist. Dieser Grund gilt **nur für diese Position**: nicht umschreiben, nicht zusammenfassen, nicht auf eine andere Position übertragen, nicht zur Regel machen. Das sind die Worte des Nutzers, und der Nutzer liest sie auf der Positionsseite wieder. Gründe über Positionen hinweg zu zählen ist Aufgabe des Mentors, nicht deine.
+Kein Display-Text in diesem Event → die Notiz bleibt, wie sie ist. Dieser Grund gilt **nur für diese Position**: nicht umschreiben, nicht zusammenfassen, nicht auf eine andere Position übertragen, nicht zur Regel machen. Gründe über Positionen hinweg zu zählen ist Aufgabe des Mentors, nicht deine.
 
 ```bash
 # Speichere Score (die CLI-Flags nutzen DB-Spaltennamen, keine Tabellennamen)
