@@ -37,3 +37,25 @@ def test_runtime_has_no_current_position_feedback_adjuster():
     assert "FEEDBACK_MULTIPLIERS" not in source
     assert "feedback:star+15%" not in source
     assert '"--exclude-legacy-id"' in source
+
+
+def test_active_runtime_inventory_and_guides_do_not_restore_the_old_contract():
+    active_contracts = (
+        "agents/scorer/skills.list",
+        "docs/guides/LOCAL-SCORER.md",
+        "docs/internal/architecture/provider-touchpoint-inventory.md",
+        "docs/internal/architecture/cloud-sync-architecture.md",
+    )
+    forbidden = (
+        "multiplier on final score",
+        "Scorer step 5 multiplier",
+        "like ×1.10",
+        "star ×1.15",
+        "dislike ×0.85",
+        "canonical latest-feedback lookup",
+    )
+
+    for relative in active_contracts:
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        for stale in forbidden:
+            assert stale not in source, f"{relative}: stale {stale!r}"
