@@ -53,6 +53,7 @@ import { RescoreRequestButton } from "./RescoreRequestButton";
 import { ScoreAssessedAt } from "./ScoreAssessedAt";
 import { OverviewScoreBadge } from "./OverviewScoreBadge";
 import { OverviewFactRow, OverviewFacts } from "./OverviewFacts";
+import { ExclusionDecidedAt } from "./ExclusionDecidedAt";
 
 // Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
 // inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
@@ -291,6 +292,13 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // insieme alla valutazione. Non usare `positions.updated_at`: cambia anche
   // per azioni estranee allo score e farebbe sembrare fresca una misura vecchia.
   const scoreAssessedAt = formatPositionEventStamp(score?.scored_at, locale);
+  // La decisione manuale ha già il proprio timestamp atomico. Non usare
+  // `updated_at`, `found_at` o altre date della posizione: cambiano per eventi
+  // diversi e farebbero sembrare recente un'esclusione vecchia.
+  const exclusionDecidedAt = formatPositionEventStamp(
+    position.user_excluded_at,
+    locale,
+  );
   const rescoreTicket = activeRescoreTicket(tickets);
 
   // Analisi semi-strutturata dell'Analista (campo notes) → metadati,
@@ -562,6 +570,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
           <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-red)] mb-1">
             {exclusionByUser ? t("excl_by_user") : t("excl_by_team")}
           </div>
+          <ExclusionDecidedAt
+            label={t("exclusion_decided_at")}
+            excludedAt={position.user_excluded_at}
+            formatted={exclusionDecidedAt}
+          />
           <p className="text-[11px] text-[var(--color-base)] leading-relaxed">
             {exclusionText}
           </p>
