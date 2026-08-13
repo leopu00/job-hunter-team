@@ -39,11 +39,11 @@ REF_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
 ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 # Migration 018 rewrites policy expressions and then checks PostgreSQL's
-# pretty-printed expression text.  PostgreSQL 16 adds an ``AS uid`` alias, so
-# that historical check fails even though migration 025 explicitly replaces
-# the same policy definitions.  An already-published migration cannot be
-# edited: replay may skip only this exact blob, and only if its replacement is
-# present in the base being built.
+# pretty-printed expression text. PostgreSQL 16 adds an ``AS uid`` alias, so
+# that historical check fails after performing its rewrite. An already-
+# published migration cannot be edited: its raw execution may be replaced only
+# for this exact blob and only in the known history containing migration 025.
+# The pinned substitute below must still reproduce 018's complete effect.
 LEGACY_REPLAY_EXCEPTIONS = {
     "018": ("c42783f0c750c386929d19cc00ca7d33a480a510", "025"),
 }
