@@ -33,7 +33,7 @@ const CHATTER := [
 	["analista-2", "scorer-1", "Queued 3 analysed roles for you: only one is missing its salary range."],
 	["scorer-1", "all", "Morning average score 71: the best is at 88, near-full stack match."],
 	["scorer-1", "user", "Found a role at 88/100: full stack match, remote, salary above your median."],
-	["critico-1", "all", "Recensione CV: 8/10, PASS. Registro coerente, taglio le due ripetizioni e chiudo."],
+	["critico-1", "all", "CV review: 8/10, PASS. The tone is consistent; I'll cut the two repetitions and close it."],
 	["coordinatore-1", "all", "Weekly at 64%: steady pacing, nothing to intervene on."],
 	["coordinatore-1", "scout-2", "Start another pass over the boards: the analyst queue is nearly empty."],
 	["mentor-1", "user", "Tip of the day: in remote EU applications, mention your timezone and overlap hours."],
@@ -86,11 +86,11 @@ func stop() -> void:
 	_running = false
 
 func _boot() -> void:
-	bus.publish_state(BackendBus.CONNECTING, "simulatore locale")
+	bus.publish_state_key(BackendBus.CONNECTING, "backend.mock_connecting")
 	await _sleep(0.9)
 	if not _running:
 		return
-	bus.publish_state(BackendBus.CONNECTED, "VPS simulata (mock)")
+	bus.publish_state_key(BackendBus.CONNECTED, "backend.mock_connected")
 	bus.publish_agents(_published_roster())
 	# baseline del registro attività (contratto: transitions sul bus
 	# PRIMA di positions_updated) — le reazioni partono dal refresh dopo
@@ -109,13 +109,13 @@ func _apply_scenario(scenario: String) -> void:
 		return
 	match scenario:
 		"working":
-			_roster = [_sim("scout-1", "scout", "working", 0.0, "turno in corso")]
+			_roster = [_sim("scout-1", "scout", "working", 0.0, "turn in progress")]
 		"idle":
 			_roster = [_sim("analista-1", "analista", "idle", 0.0,
 					"session active, no turn in progress")]
 		"paused":
 			_roster = [_sim("scorer-1", "scorer", "paused", 0.0,
-					"in attesa di ripresa")]
+					"waiting to resume")]
 		"throttle_short":
 			_roster = [_sim("scrittore-1", "scrittore", "throttled", 45.0,
 					"pacing: timed pause")]
@@ -124,9 +124,9 @@ func _apply_scenario(scenario: String) -> void:
 					"pacing: timed pause")]
 		"mixed":
 			_roster = [
-				_sim("scout-1", "scout", "working", 0.0, "turno in corso"),
+				_sim("scout-1", "scout", "working", 0.0, "turn in progress"),
 				_sim("analista-1", "analista", "idle", 0.0, "no turn in progress"),
-				_sim("scorer-1", "scorer", "paused", 0.0, "in attesa di ripresa"),
+				_sim("scorer-1", "scorer", "paused", 0.0, "waiting to resume"),
 				_sim("scrittore-1", "scrittore", "throttled", 45.0, "pacing"),
 				_sim("critico-1", "critico", "throttled", 240.0, "pacing"),
 			]
@@ -144,9 +144,9 @@ func _apply_scenario(scenario: String) -> void:
 			for role in ["scout", "analista", "scorer", "scrittore", "critico"]:
 				for i in range(1, 7):
 					_roster.append(_sim("%s-%d" % [role, i], role, "working", 0.0,
-							"audit seduta"))
+							"seated audit"))
 		"minimal":
-			_roster = [_sim("mentor-1", "mentor", "idle", 0.0, "in attesa")]
+			_roster = [_sim("mentor-1", "mentor", "idle", 0.0, "waiting")]
 		_:
 			_roster = []
 
@@ -217,6 +217,17 @@ func _published_roster() -> Array:
 	for a: Dictionary in out:
 		a["name"] = AgentNames.display_name(
 				str(a.get("uid", a.get("slug", ""))), str(a.get("name", "")))
+		# `activity_detail` arriva fino a scheda agente, NPC e pannello del
+		# Coordinatore. Nel mock il testo grezzo e' solo scenografia: lo stato e'
+		# il fatto stabile, quindi la presentazione usa lo stesso catalogo del
+		# backend live e non puo' ereditare la lingua in cui fu scritta la fixture.
+		var detail_key := str({
+			"working": "vps.activity.working",
+			"idle": "vps.activity.idle",
+			"paused": "vps.activity.paused",
+			"throttled": "vps.activity.throttled",
+		}.get(str(a.get("status", "idle")), "vps.activity.unobserved"))
+		a["activity_detail"] = UIStrings.t(detail_key)
 	return out
 
 ## Una transizione nuova in testa al registro ogni 12-20 secondi (la
@@ -396,13 +407,13 @@ func _mock_terminal_loop(agent: String, generation: int) -> void:
 		"$ tmux attach -t %s" % agent.to_upper(),
 		"Job Hunter Team · agent session active",
 		"────────────────────────────────────────────────────────────",
-		"[09:41:02] carico il contesto e controllo la coda assegnata",
-		"[09:41:05] jobs.db: snapshot ricevuto, 12 elementi candidati",
+		"[09:41:02] loading context and checking the assigned queue",
+		"[09:41:05] jobs.db: snapshot received, 12 candidate items",
 		"[09:41:07] applying profile constraints and pacing rules",
 	])
 	if OS.get_environment("JHT_AGENT_UI_TEST") == "1":
 		for i in range(1, 141):
-			lines.append("[%03d] riga storica della sessione per test scrollback" % i)
+			lines.append("[%03d] historical session line for the scrollback test" % i)
 	var tick := 0
 	while _running and _terminal_agent == agent and generation == _terminal_generation:
 		bus.publish_agent_terminal(agent, "\n".join(lines), "")
@@ -410,7 +421,7 @@ func _mock_terminal_loop(agent: String, generation: int) -> void:
 		tick += 1
 		lines.append("[%s] tick %02d · %s" % [
 				Time.get_time_string_from_system(), tick,
-				["analisi in corso", "check complete", "attendo il prossimo evento"][tick % 3]])
+				["analysis in progress", "check complete", "waiting for the next event"][tick % 3]])
 		if lines.size() > 80:
 			lines.remove_at(3)
 
@@ -419,13 +430,13 @@ func send_chat(agent: String, text: String) -> void:
 			"ts": Time.get_unix_time_from_system(), "done": true})
 	bus.user_chat_sent.emit(agent, true, "")
 	_publish_chat_state(agent)
-	_mock_reply(agent)
+	_mock_reply(agent, text.contains("[FILE ALLEGATI]"))
 
-func _mock_reply(agent: String) -> void:
+func _mock_reply(agent: String, profile_attachment := false) -> void:
 	await _sleep(randf_range(1.0, 2.0))
 	if not _running or _chat_agent != agent:
 		return
-	_chat_msgs.append({"role": "assistant", "text": "ci sto lavorando…",
+	_chat_msgs.append({"role": "assistant", "text": "I'm working on it…",
 			"ts": Time.get_unix_time_from_system(), "partial": true})
 	_publish_chat_state(agent)
 	await _sleep(randf_range(2.0, 3.0))
@@ -433,18 +444,38 @@ func _mock_reply(agent: String) -> void:
 		return
 	# il checkpoint intermedio viene sostituito dalla risposta vera
 	_chat_msgs.pop_back()
-	var reply: String = REPLIES.get(agent, "Ricevuto.")
+	var reply: String = REPLIES.get(agent, "Got it.")
 	# Onboarding: la risposta segue il passo del profilo (e lo avanza),
 	# così la conversazione col mock ricalca il flusso dell'assistente vero.
+	# Un allegato invece prepara una revisione: fino al click dell'utente il
+	# badge persistito non si muove di un solo campo.
 	if _profile_watch and agent.begins_with("assistente"):
-		_wiz_advance(1)
-		reply = WIZ_REPLIES[mini(_wiz_step, WIZ_REPLIES.size() - 1)]
+		if profile_attachment:
+			_mock_profile_review = {
+				"review_id": "a".repeat(64),
+				"changes": [
+					{"field": "seniority_target", "value": "mid"},
+					{"field": "has_degree", "value": false},
+					{"field": "contacts.phone", "value": "+00 000 000"},
+					{"field": "skills", "value": ["Team leadership", "Budgeting",
+							"Public speaking"]},
+				],
+				"required": {"name": true, "email": true, "target_role": true,
+						"location": true, "experience_years": true,
+						"seniority_target": true, "skills": true, "languages": true},
+				"missing": [], "stale": false,
+			}
+			_publish_profile_status()
+			reply = "I extracted the CV fields. Review them and confirm the save."
+		else:
+			_wiz_advance(1)
+			reply = WIZ_REPLIES[mini(_wiz_step, WIZ_REPLIES.size() - 1)]
 	var response := {"role": "assistant", "text": reply,
 			"ts": Time.get_unix_time_from_system(), "done": true}
 	if agent.begins_with("assistente") or agent.begins_with("coordinatore") \
 			or agent.begins_with("capitano") or agent.begins_with("mentor"):
 		response["choices"] = [
-			{"label": "Approfondiamo questo punto", "value": "Approfondiamo questo punto"},
+			{"label": "Tell me more about this", "value": "Tell me more about this"},
 			{"label": "Show me the next step", "value": "Show me the next step"},
 		]
 	_chat_msgs.append(response)
@@ -462,9 +493,9 @@ func _publish_chat_state(agent: String) -> void:
 ## ── Onboarding simulato (wizard senza VPS) ───────────────────────────
 ## Contratto opzionale dell'adapter (open_profile_watch / ensure_assistant
 ## / upload_document) come sul backend vero. Il profilo si riempie a passi
-## deterministici: ogni messaggio all'assistente vale 1 passo, un upload
-## CV ne vale 2; a 4 passi il profilo è completo (ready). Così il flusso
-## intero si prova in un paio di minuti, senza rete.
+## deterministici: ogni messaggio all'assistente vale 1 passo; il CV prepara
+## una revisione che vale gli ultimi 2 passi SOLO dopo la conferma. Così il
+## test distingue davvero parsing, review e persistenza senza rete.
 
 const WIZ_READY_STEP := 4
 
@@ -481,13 +512,14 @@ const WIZ_PROFILE_STEPS := [
 	{},
 	{"name": "Mario Rossi", "target_role": "Project Manager"},
 	{"location": "Firenze, IT", "experience_years": "5",
-			"languages": ["Italiano C2", "Inglese B2"], "email": "mario@example.com"},
+			"languages": ["Italian C2", "English B2"], "email": "mario@example.com"},
 	{"seniority_target": "mid", "skills": ["Team leadership", "Budgeting"]},
 	{"skills": ["Team leadership", "Budgeting", "Public speaking"]},
 ]
 
 var _profile_watch := false
 var _wiz_step := 0
+var _mock_profile_review := {}
 
 ## Storico usage sintetico ma plausibile: curva 5h a dente di sega sui
 ## reset, weekly che cresce nella settimana, consumi per-agente con
@@ -589,7 +621,15 @@ func ensure_assistant() -> void:
 func upload_document(local_path: String, request_id := 0) -> void:
 	bus.publish_document_upload(request_id, true,
 			"/jht_user/allegati/" + local_path.get_file(), "")
+
+func confirm_profile_review(review_id: String) -> void:
+	var expected := str(_mock_profile_review.get("review_id", ""))
+	if expected == "" or review_id != expected:
+		bus.profile_review_confirmed.emit(review_id, false, "review_mismatch")
+		return
+	_mock_profile_review = {}
 	_wiz_advance(2)
+	bus.profile_review_confirmed.emit(review_id, true, "")
 
 func create_ticket(position_id: int, _text: String, _attachment_path := "") -> void:
 	bus.ticket_created.emit(position_id, true, "")
@@ -617,7 +657,8 @@ func _publish_profile_status() -> void:
 		"languages": (profile["languages"] as Array).size() >= 1,
 	}
 	bus.publish_profile_status({"profile": profile, "required": required,
-			"ready": _wiz_step >= WIZ_READY_STEP})
+			"ready": _wiz_step >= WIZ_READY_STEP,
+			"review": _mock_profile_review.duplicate(true), "review_error": ""})
 
 func _is_active(slug: String) -> bool:
 	for a in _roster:

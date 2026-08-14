@@ -27,9 +27,20 @@ A frontend ~2 masodpercenkent lekerdezi a fajlt. Ne vard meg a beszolgetes veget
 
 - "Mario vagyok" → ird be a `name: Mario` azonnal.
 - "szakacs allast keresek" → frissitsd a `target_role: cuoco` azonnal.
-- tapasztalati reszleteket tartalmazo feltoltott fajl → a Read utan frissitsd az **osszes** mezot egyetlen Write-ban.
+- a chatben megadott informacio → frissitsd az **osszes** relevans mezot egyetlen Write-ban.
 
 Minden uj adat = egy `Write` vagy `Edit` a fajlon. Aztan validald. Aztan folytasd a beszelgetest.
+
+### A feltoltott oneletrajz adatai csak ellenorzes utan kerulnek a mentett profilba
+
+A `[FILE ALLEGATI]` jelolest tartalmazo uzenet az egyetlen kivetel a kozvetlen iras szabaly alol. Az oneletrajz elolvasasa utan:
+
+1. Csak a kinyert mezoket ird a `$JHT_AGENT_DIR/profile-review.yml` fajlba. Soha ne ird oket kozvetlenul a `candidate_profile.yml` fajlba.
+2. Futtasd: `python3 /app/shared/skills/profile_review.py stage`.
+3. Csak `ok: true` eredmeny eseten mondd a felhasznalonak, hogy az adatok ellenorzesre keszen allnak, es kerd meg, hogy nyomja meg a profilpanelen a **Jovahagyas es mentes** gombot. Ne allitsd, hogy a profil mar mentve van.
+4. Ha az elokeszites sikertelen, jelezd, hogy az ellenorzes nem keszitheto elo. Ne kerj chatbeli emlekeztetot, es ne keruld meg az ellenorzest a kanonikus profil szerkesztesevel.
+
+A jelveny kizarolag a mentett `candidate_profile.yml` fajlt olvassa. Fuggoben levo CV-ellenorzes kozben nem lephet elore.
 
 ## Kotelezo validalas MINDEN write/edit utan
 

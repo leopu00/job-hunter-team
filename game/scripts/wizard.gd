@@ -21,6 +21,10 @@ const FIELDS := ["name", "email", "target_role", "location",
 var _status: Label
 var _badge: Label
 var _profile_box: VBoxContainer
+var _review_box: VBoxContainer
+var _review_status: Label
+var _review_btn: Button
+var _active_review_id := ""
 var _progress: Label
 var _list: VBoxContainer
 var _scroll: ScrollContainer
@@ -55,6 +59,7 @@ func _ready() -> void:
 	BackendBus.agent_chat_updated.connect(_on_chat)
 	BackendBus.chat_waiting_changed.connect(_on_waiting)
 	BackendBus.profile_status_updated.connect(_on_profile)
+	BackendBus.profile_review_confirmed.connect(_on_profile_review_confirmed)
 	BackendBus.document_uploaded.connect(_on_uploaded)
 	BackendBus.user_chat_sent.connect(_on_chat_sent)
 
@@ -212,6 +217,11 @@ func _build_profile_panel(body: HBoxContainer) -> void:
 	_profile_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_profile_box.add_theme_constant_override("separation", 6)
 	scroll.add_child(_profile_box)
+	col.add_child(HSeparator.new())
+	_review_box = VBoxContainer.new()
+	_review_box.add_theme_constant_override("separation", 6)
+	_review_box.visible = false
+	col.add_child(_review_box)
 
 func _build_chat_panel(body: HBoxContainer) -> void:
 	var panel := BracketPanel.new()
@@ -296,6 +306,110 @@ static func _field_value(profile: Dictionary, field: String) -> String:
 			parts.append(str(x))
 		return ", ".join(PackedStringArray(parts))
 	return str(v)
+
+## Review values deliberately use JSON for every type: unlike the compact
+## badge renderer this preserves false/null, nested objects and ordered lists.
+## If the value cannot be rendered, the entire review remains unconfirmable.
+static func _review_value(value: Variant) -> String:
+	return JSON.stringify(value)
+
+## La revisione del CV è deliberatamente separata dal badge: i valori qui
+## sono una proposta locale, mentre il badge sopra continua a rappresentare
+## esclusivamente candidate_profile.yml. Solo la ricevuta opaca del poll può
+## abilitare il salvataggio; review malformate o stantie restano fail-closed.
+func _redraw_review(review: Dictionary, error: String) -> void:
+	for child in _review_box.get_children():
+		child.queue_free()
+	_active_review_id = ""
+	_review_btn = null
+	_review_status = null
+	if review.is_empty() and error == "":
+		_review_box.visible = false
+		return
+	_review_box.visible = true
+	_review_box.add_child(TerminalTheme.label(
+			UIStrings.t("wizard.review_title"), 14, Palette.YELLOW, "bold"))
+	if error != "":
+		_review_box.add_child(_review_note("wizard.review_unavailable", Palette.RED))
+		return
+	var review_id := str(review.get("review_id", ""))
+	var id_re := RegEx.create_from_string("^[0-9a-f]{64}$")
+	var changes: Variant = review.get("changes", [])
+	if id_re.search(review_id) == null or not changes is Array or changes.is_empty():
+		_review_box.add_child(_review_note("wizard.review_unavailable", Palette.RED))
+		return
+	# Non basta che l'array esista: se anche una riga non è visualizzabile,
+	# l'utente non sta confermando lo stesso insieme che il backend salverebbe.
+	# La revisione intera diventa quindi non confermabile, senza saltare righe.
+	var seen_fields := {}
+	for item in changes:
+		if not item is Dictionary:
+			_review_box.add_child(_review_note("wizard.review_unavailable", Palette.RED))
+			return
+		var item_field := str(item.get("field", ""))
+		if item_field == "" or seen_fields.has(item_field) or not item.has("value") \
+				or _review_value(item.get("value")) == "":
+			_review_box.add_child(_review_note("wizard.review_unavailable", Palette.RED))
+			return
+		seen_fields[item_field] = true
+	_review_box.add_child(_review_note("wizard.review_body", Palette.MUTED))
+	for item in changes:
+		var field := str(item.get("field", ""))
+		var value := _review_value(item.get("value"))
+		var label := UIStrings.t("wizard.f." + field) if FIELDS.has(field) else field
+		var line := TerminalTheme.label(
+				"%s: %s" % [label, value],
+				12, Palette.BRIGHT, "medium")
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_review_box.add_child(line)
+	var missing: Variant = review.get("missing", [])
+	if missing is Array and not missing.is_empty():
+		var labels := PackedStringArray()
+		for field in missing:
+			if FIELDS.has(str(field)):
+				labels.append(UIStrings.t("wizard.f." + str(field)))
+		if not labels.is_empty():
+			_review_box.add_child(_review_note_text(
+					UIStrings.t("wizard.review_missing") % ", ".join(labels),
+					Palette.MUTED))
+	_review_status = TerminalTheme.label("", 12, Palette.DIM)
+	_review_box.add_child(_review_status)
+	if bool(review.get("stale", true)):
+		_review_status.text = UIStrings.t("wizard.review_stale")
+		_review_status.add_theme_color_override("font_color", Palette.RED)
+		return
+	_active_review_id = review_id
+	_review_btn = Button.new()
+	_review_btn.text = UIStrings.t("wizard.review_confirm")
+	_review_btn.add_theme_color_override("font_color", Palette.GREEN)
+	_review_btn.pressed.connect(_confirm_profile_review)
+	_review_box.add_child(_review_btn)
+
+func _review_note(key: String, color: Color) -> Label:
+	return _review_note_text(UIStrings.t(key), color)
+
+func _review_note_text(text: String, color: Color) -> Label:
+	var note := TerminalTheme.label(text, 12, color)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return note
+
+func _confirm_profile_review() -> void:
+	if _active_review_id == "" or not is_instance_valid(_review_btn):
+		return
+	_review_btn.disabled = true
+	_review_status.text = UIStrings.t("wizard.review_saving")
+	_review_status.add_theme_color_override("font_color", Palette.DIM)
+	BackendBus.confirm_profile_review(_active_review_id)
+
+func _on_profile_review_confirmed(review_id: String, ok: bool, _error: String) -> void:
+	if review_id != _active_review_id or not is_instance_valid(_review_status):
+		return
+	_review_status.text = UIStrings.t("wizard.review_saved") if ok \
+			else UIStrings.t("wizard.review_save_failed")
+	_review_status.add_theme_color_override("font_color",
+			Palette.GREEN if ok else Palette.RED)
+	if not ok and is_instance_valid(_review_btn):
+		_review_btn.disabled = false
 
 ## ── Chat con l'assistente ────────────────────────────────────────────
 
@@ -455,6 +569,9 @@ func _refresh_status() -> void:
 func _on_profile(profile: Dictionary, required: Dictionary, ready: bool) -> void:
 	_ready_flag = ready
 	_redraw_profile(profile, required)
+	var review: Variant = BackendBus.profile_status.get("review", {})
+	_redraw_review(review if review is Dictionary else {},
+			str(BackendBus.profile_status.get("review_error", "")))
 	_enter_btn.disabled = false
 	_enter_btn.text = UIStrings.t("wizard.profile_done_back") if ready \
 			else UIStrings.t("wizard.back_office")
@@ -492,14 +609,28 @@ func _selftest() -> void:
 	f.store_string("cv di prova")
 	f.close()
 	_on_cv_selected(tmp)
-	await get_tree().create_timer(4.5).timeout
+	await get_tree().create_timer(5.5).timeout
+	var staged_before_save := _active_review_id != "" and not _ready_flag
+	var review_text := ""
+	for child in _review_box.get_children():
+		if child is Label:
+			review_text += str(child.text) + "\n"
+	var complete_review_visible := review_text.contains("has_degree: false") \
+			and review_text.contains("contacts.phone: \"+00 000 000\"")
+	var review_id := _active_review_id
+	BackendBus.confirm_profile_review(review_id)
+	await get_tree().create_timer(0.5).timeout
 	DirAccess.remove_absolute(tmp)
 	var ok := _ready_flag and not _enter_btn.disabled \
-			and _list.get_child_count() >= 5
+			and _list.get_child_count() >= 5 and staged_before_save \
+			and complete_review_visible and _active_review_id == ""
 	print("WIZARD-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"ready": _ready_flag,
 					"enter_enabled": not _enter_btn.disabled,
-					"chat_rows": _list.get_child_count()}))
+					"chat_rows": _list.get_child_count(),
+					"staged_before_save": staged_before_save,
+					"complete_review_visible": complete_review_visible,
+					"review_cleared": _active_review_id == ""}))
 	get_tree().quit()
 
 func _enter_office() -> void:

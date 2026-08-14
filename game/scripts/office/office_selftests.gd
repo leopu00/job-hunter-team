@@ -71,6 +71,7 @@ const FLAG_HOOKS := {
 	"JHT_CHATMENU": "_arm_chat_menu",
 	"JHT_CHAT_UI_TEST": "_chat_ui_selftest",
 	"JHT_COMIC_CHAT_TEST": "_arm_comic_chat_selftest",
+	"JHT_ENGLISH_SETUP_TEAM_TEST": "_arm_english_setup_team_selftest",
 	"JHT_THROTTLE_TEST": "_throttle_selftest",
 	"JHT_BACKEND_SWITCH_TEST": "_backend_switch_selftest",
 	"JHT_SETUP_BUSY_TEST": "_setup_busy_selftest",
@@ -636,6 +637,12 @@ func _arm_chat_menu() -> void:
 ## (tools/comic_chat_selftest.gd): il corpo del test è lungo quanto la feature.
 func _arm_comic_chat_selftest() -> void:
 	office.add_child(load("res://tools/comic_chat_selftest.gd").new())
+
+
+## Il percorso EN deve attraversare il bus reale del mock: un audit solo dei
+## cataloghi non vede dettagli roster, terminale o risposte del Coordinatore.
+func _arm_english_setup_team_selftest() -> void:
+	office.add_child(load("res://tools/english_setup_team_selftest.gd").new())
 
 
 ## Regressione trackpad/overlay: una gesture consegnata direttamente alla

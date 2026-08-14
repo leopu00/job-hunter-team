@@ -84,6 +84,10 @@ signal profile_saved(ok: bool, error: String)
 ## (lib/profile-completion.ts); ready = ready.flag esiste OPPURE tutti
 ## i required ok — identico a GET /api/profile del web.
 signal profile_status_updated(profile: Dictionary, required: Dictionary, ready: bool)
+## Esito della conferma della revisione estratta dal CV. `review_id` è la
+## ricevuta opaca mostrata dal poll precedente: il backend salva soltanto se
+## quella ricevuta e la baseline del profilo coincidono ancora.
+signal profile_review_confirmed(review_id: String, ok: bool, error: String)
 ## Esito dell'upload di un documento utente (CV) verso la drop-zone
 ## allegati del container (/jht_user/allegati): il wizard poi passa il
 ## path remoto all'assistente dentro il messaggio chat, come il web.
@@ -164,6 +168,8 @@ var _backend: BackendAdapter
 ## JHT_VPS_IP/JHT_VPS_KEY forzano una config, JHT_NOVPS=1 spegne tutto
 ## (per gli shot grafici che non devono toccare la rete).
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	# Il harness tutorial deve essere integralmente locale: nessun fetch FX,
 	# lettura VPS o container può far dipendere il take dallo stato della rete.
 	var offline_only := OS.get_environment("JHT_NOVPS") == "1" or TutorialHarness.enabled()
@@ -769,6 +775,13 @@ func save_user_profile(fields: Dictionary) -> void:
 		_backend.save_profile(fields)
 	else:
 		profile_saved.emit(false, UIStrings.t("common.backend_not_connected"))
+
+func confirm_profile_review(review_id: String) -> void:
+	if _backend and _backend.has_method("confirm_profile_review"):
+		_backend.confirm_profile_review(review_id)
+	else:
+		profile_review_confirmed.emit(review_id, false,
+				UIStrings.t("common.backend_not_connected"))
 
 func save_working_hours(wh: Dictionary) -> void:
 	if _backend and _backend.has_method("save_working_hours"):

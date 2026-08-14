@@ -12,6 +12,7 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.toml text eol=lf
+*.ps1 text eol=lf
 Dockerfile text eol=lf
 
 # Extensionless executables (python/bash/node wrappers)

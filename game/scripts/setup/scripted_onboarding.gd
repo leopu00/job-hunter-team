@@ -58,6 +58,8 @@ var _dismissed := false
 
 
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	TutorialHarness.reset_file_if_requested(_state_path())
 	TutorialHarness.reset_file_if_requested(context_json_path())
 	TutorialHarness.reset_file_if_requested(context_markdown_path())

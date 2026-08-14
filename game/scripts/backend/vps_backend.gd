@@ -1032,6 +1032,41 @@ func _fetch_profile_status() -> void:
 				bus.call_deferred("publish_profile_status", d)
 			return
 
+## Conferma il candidato esatto osservato dal poll. Il helper dentro il
+## container esegue lock + compare-and-swap sulla baseline: un profilo cambiato
+## nel frattempo non viene mai sovrascritto. Qui la risposta è una ricevuta,
+## non un semplice exit 0: successo solo se echo e hash hanno forma esatta.
+func confirm_profile_review(review_id: String) -> void:
+	var receipt_re := RegEx.create_from_string("^[0-9a-f]{64}$")
+	if receipt_re.search(review_id) == null:
+		bus.profile_review_confirmed.emit(review_id, false, "review_id_invalid")
+		return
+	_queue_worker(_do_confirm_profile_review.bind(review_id))
+
+func _do_confirm_profile_review(review_id: String) -> void:
+	var res := _ssh("docker exec jht python3 " \
+			+ "/app/shared/skills/profile_review.py confirm " + review_id)
+	var payload: Dictionary = {}
+	if res["code"] == 0:
+		for line in str(res["out"]).split("\n"):
+			if line.begins_with("{"):
+				var parsed: Variant = JSON.parse_string(line)
+				if parsed is Dictionary:
+					payload = parsed
+				break
+	var receipt: Variant = payload.get("receipt", {})
+	var hash_re := RegEx.create_from_string("^[0-9a-f]{64}$")
+	var ok: bool = res["code"] == 0 and payload.get("ok") == true \
+			and receipt is Dictionary \
+			and str(receipt.get("review_id", "")) == review_id \
+			and hash_re.search(str(receipt.get("profile_hash", ""))) != null
+	var error := ""
+	if not ok:
+		error = str(payload.get("error", "review_confirm_failed"))
+	bus.call_deferred("emit_signal", "profile_review_confirmed", review_id, ok, error)
+	if ok:
+		_fetch_profile_status()
+
 ## Avvio idempotente dell'assistente (equivalente di POST
 ## /api/assistente/start): se la sessione ASSISTENTE non c'è, lancia
 ## start-agent.sh dentro il container. Il || e il detach (setsid -f al

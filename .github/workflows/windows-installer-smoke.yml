@@ -5,20 +5,36 @@ on:
     branches:
       - master
     paths:
+      - ".gitattributes"
       - ".github/workflows/windows-installer-smoke.yml"
       - "game/export_presets.cfg"
       - "game/installer/**"
       - "game/project.godot"
+      - "game/scripts/client_control.gd"
+      - "game/scripts/support/windows_instance_guard.*"
+      - "game/tools/windows_instance_guard_selftest.py"
+      - "game/tools/windows_instance_guard_windows_selftest.ps1"
       - "scripts/build-windows-installer.ps1"
+      - "scripts/jht-wrapper.ps1"
+      - "tests/test_cli_game_host_contract.py"
+      - "tests/test_windows_installer_contract.py"
   pull_request:
     branches:
       - master
     paths:
+      - ".gitattributes"
       - ".github/workflows/windows-installer-smoke.yml"
       - "game/export_presets.cfg"
       - "game/installer/**"
       - "game/project.godot"
+      - "game/scripts/client_control.gd"
+      - "game/scripts/support/windows_instance_guard.*"
+      - "game/tools/windows_instance_guard_selftest.py"
+      - "game/tools/windows_instance_guard_windows_selftest.ps1"
       - "scripts/build-windows-installer.ps1"
+      - "scripts/jht-wrapper.ps1"
+      - "tests/test_cli_game_host_contract.py"
+      - "tests/test_windows_installer_contract.py"
   workflow_dispatch:
 
 permissions:
@@ -36,6 +52,29 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+
+      - name: Validate Windows PowerShell syntax
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($file in @(
+            'game/scripts/support/windows_instance_guard.ps1',
+            'game/tools/windows_instance_guard_windows_selftest.ps1',
+            'scripts/build-windows-installer.ps1',
+            'scripts/jht-wrapper.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path -LiteralPath $file), [ref]$tokens, [ref]$errors)
+            if ($errors.Count -ne 0) {
+              throw "PowerShell syntax validation failed: $file count=$($errors.Count) id=$($errors[0].ErrorId) line=$($errors[0].Extent.StartLineNumber)"
+            }
+          }
+
+      - name: Exercise instance guard directly in Windows PowerShell
+        shell: pwsh
+        run: ./game/tools/windows_instance_guard_windows_selftest.ps1
 
       - uses: chickensoft-games/setup-godot@v2.4.1
         with:

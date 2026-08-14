@@ -16,6 +16,8 @@ var _pool: Array[AudioStreamPlayer] = []
 var _next := 0
 
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_tick = _tone([[1500.0, 0.014]], -18.0)
 	_blip = _tone([[880.0, 0.05]], -12.0)
