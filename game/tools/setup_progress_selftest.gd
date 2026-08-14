@@ -13,6 +13,8 @@ extends SceneTree
 ## totale di download; "Download complete" blocca il livello sul suo totale.
 
 var _fails: Array[String] = []
+var _sections := 0
+const EVENT_SENTINEL := -123456789
 
 
 func _check(what: String, ok: bool, detail := "") -> void:
@@ -47,13 +49,13 @@ func _run() -> void:
 	# Pull partito, docker dichiara le dimensioni: percentuale reale.
 	w.apply_phase("container", "image")
 	w.apply_progress({"got_mb": 0.0, "total_mb": 3200.0,
-			"fraction": 0.0, "layers": 12})
+			"fraction": 0.0, "layers": 12, "advanced": true})
 	_check("pull 0%: barra a zero", is_equal_approx(w._bar.fraction, 0.0))
 	_check("pull 0%: percentuale a video", w._detail_lbl.text.contains("0%"),
 			w._detail_lbl.text)
 	w.apply_progress({"got_mb": 1280.0, "total_mb": 3200.0,
 			"fraction": 0.4, "layers": 12,
-			"done_layers": 7, "phase": "downloading"})
+			"done_layers": 7, "phase": "downloading", "advanced": true})
 	_check("pull 40%: barra a 0.4", is_equal_approx(w._bar.fraction, 0.4))
 	_check("pull 40%: percentuale a video", w._detail_lbl.text.contains("40%"),
 			w._detail_lbl.text)
@@ -66,27 +68,41 @@ func _run() -> void:
 
 	# Una ristampa identica non e' un evento di vita; la transizione di stage
 	# agli stessi byte invece deve aggiornare subito testo e heartbeat UI.
-	var event_before_duplicate := w._last_event_ms
+	w._last_event_ms = EVENT_SENTINEL
 	w.apply_progress({"got_mb": 1280.0, "total_mb": 3200.0,
 			"fraction": 0.4, "layers": 12,
-			"done_layers": 7, "phase": "downloading"})
+			"done_layers": 7, "phase": "downloading", "advanced": true})
 	_check("duplicato UI: heartbeat invariato",
-			w._last_event_ms == event_before_duplicate, str(w._last_event_ms))
-	w._last_event_ms = 0
+			w._last_event_ms == EVENT_SENTINEL, str(w._last_event_ms))
+	# Anche un redraw reale (totale appena scoperto) non e' un heartbeat.
+	w.apply_progress({"got_mb": 1280.0, "total_mb": 3300.0,
+			"fraction": 1280.0 / 3300.0, "layers": 12,
+			"done_layers": 7, "phase": "downloading", "advanced": false})
+	_check("redraw total-only: heartbeat sentinella invariato",
+			w._last_event_ms == EVENT_SENTINEL, str(w._last_event_ms))
+
+	w.apply_progress({"got_mb": 1280.0, "total_mb": 3300.0,
+			"fraction": 1280.0 / 3300.0, "layers": 12,
+			"done_layers": 7, "phase": "downloaded", "advanced": true})
+	_check("stage UI: downloaded resta non terminale",
+			w._bar.fraction < 0.0 and w._detail_lbl.text.contains(
+					UIStrings.t("setup.pull_phase_downloaded")), w._detail_lbl.text)
+	w._last_event_ms = EVENT_SENTINEL
+	w.apply_progress({"got_mb": 1280.0, "total_mb": 3300.0,
+			"fraction": 1280.0 / 3300.0, "layers": 12,
+			"done_layers": 7, "phase": "verifying", "advanced": true})
+	_check("stage UI: downloaded -> verifying rinnova heartbeat",
+			w._last_event_ms != EVENT_SENTINEL, str(w._last_event_ms))
+	w._last_event_ms = EVENT_SENTINEL
 	w.apply_progress({"got_mb": 1280.0, "total_mb": 3200.0,
 			"fraction": 0.4, "layers": 12,
-			"done_layers": 7, "phase": "extracting"})
-	_check("stage UI: stessi byte ma heartbeat rinnovato", w._last_event_ms > 0)
+			"done_layers": 7, "phase": "extracting", "advanced": true})
+	_check("stage UI: stessi byte ma heartbeat rinnovato",
+			w._last_event_ms != EVENT_SENTINEL, str(w._last_event_ms))
 	_check("stage UI: extracting visibile",
 			w._detail_lbl.text.contains(UIStrings.t("setup.pull_phase_extracting")),
 			w._detail_lbl.text)
 	_check("stage UI: extracting usa barra attivita", w._bar.fraction < 0.0)
-	w.apply_progress({"got_mb": 1280.0, "total_mb": 0.0,
-			"fraction": -1.0, "layers": 12,
-			"done_layers": 12, "phase": "complete"})
-	_check("stage UI: complete riempie la barra anche senza totale byte",
-			is_equal_approx(w._bar.fraction, 1.0))
-
 	# 40 secondi senza eventi: la barra DEVE dirlo, non restare immobile.
 	w._last_event_ms -= 40000
 	w._tick()
@@ -96,7 +112,8 @@ func _run() -> void:
 
 	# Un nuovo evento riparte il contatore e spegne l'avviso.
 	w.apply_progress({"got_mb": 1300.0, "total_mb": 3200.0,
-			"fraction": 0.406, "layers": 12})
+			"fraction": 0.406, "layers": 12,
+			"done_layers": 7, "phase": "extracting", "advanced": true})
 	_check("ripresa: avviso di stallo spento", not w._stall_lbl.visible)
 
 	# ETA solo con rate misurato davvero: finestra corta → niente numero.
@@ -108,8 +125,17 @@ func _run() -> void:
 
 	# 100% e passaggio di fase: il pieno NON si eredita.
 	w.apply_progress({"got_mb": 3200.0, "total_mb": 3200.0,
-			"fraction": 1.0, "layers": 12})
+			"fraction": 1.0, "layers": 12,
+			"done_layers": 12, "phase": "complete", "advanced": true})
 	_check("pull 100%: barra piena", is_equal_approx(w._bar.fraction, 1.0))
+	w.apply_progress({"got_mb": 1300.0, "total_mb": 3200.0,
+			"fraction": 0.406, "layers": 12,
+			"done_layers": 7, "phase": "downloading", "advanced": false})
+	_check("snapshot stale: terminale high-water resta visibile",
+			is_equal_approx(w._bar.fraction, 1.0)
+			and w._detail_lbl.text.contains(UIStrings.t("setup.pull_phase_complete"))
+			and w._detail_lbl.text.contains("12/12")
+			and w._detail_lbl.text.contains("100%"), w._detail_lbl.text)
 	w.apply_phase("container", "container")
 	_check("fase nuova: barra di nuovo indeterminata", w._bar.fraction < 0.0)
 
@@ -118,7 +144,7 @@ func _run() -> void:
 	# "890 MB scaricati" batte una barra muta.
 	w.apply_phase("container", "image")
 	w.apply_progress({"got_mb": 890.0, "total_mb": 0.0,
-			"fraction": -1.0, "layers": 14})
+			"fraction": -1.0, "layers": 14, "advanced": true})
 	_check("pull cieco: barra indeterminata", w._bar.fraction < 0.0)
 	_check("pull cieco: i byte scaricati sono a video",
 			w._detail_lbl.text.contains("890 MB"), w._detail_lbl.text)
@@ -130,7 +156,7 @@ func _run() -> void:
 			w._detail_lbl.text)
 	# Col rate misurato (due campioni oltre la finestra) compare anche il MB/s.
 	w.apply_progress({"got_mb": 950.0, "total_mb": 0.0,
-			"fraction": -1.0, "layers": 14})
+			"fraction": -1.0, "layers": 14, "advanced": true})
 	w._samples = [[0, 100.0], [10000, 200.0]]
 	w._refresh()
 	_check("pull cieco: rate misurato a video",
@@ -138,6 +164,8 @@ func _run() -> void:
 
 	_bytes_accounting()
 	_formats()
+	_check("sezioni helper arrivate in fondo", _sections == 2,
+			"%d/2" % _sections)
 
 	if _fails.is_empty():
 		print("SETUP-PROGRESS-TEST PASS")
@@ -167,6 +195,7 @@ func _bytes_accounting() -> void:
 	_check("frazione reale", is_equal_approx(float(info["fraction"]), 0.7),
 			str(info))
 	_check("conteggio livelli", int(info["layers"]) == 3, str(info))
+	_sections += 1
 
 
 func _formats() -> void:
@@ -178,3 +207,4 @@ func _formats() -> void:
 			SetupProgress._fmt_time(161))
 	_check("h:mm:ss", SetupProgress._fmt_time(3723) == "1:02:03",
 			SetupProgress._fmt_time(3723))
+	_sections += 1

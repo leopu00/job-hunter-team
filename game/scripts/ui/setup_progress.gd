@@ -27,7 +27,8 @@ const STALL_AFTER_S := 10
 ## Finestra minima per considerare misurato il rate di download (ms).
 const RATE_WINDOW_MS := 8000
 const ACTIVE_PULL_PHASES := [
-	"queued", "waiting", "verifying", "extracting", "other", "unknown",
+	"queued", "waiting", "downloaded", "verifying", "extracting", "other",
+	"unknown",
 ]
 
 var _action := ""
@@ -101,14 +102,35 @@ func apply_progress(info: Dictionary) -> void:
 	if fingerprint == _progress_fingerprint:
 		return
 	_progress_fingerprint = fingerprint
-	_info = info
-	var got := float(info.get("got_mb", 0.0))
-	if got > 0.0:
+	var advanced := bool(info.get("advanced", false))
+	var next_info := info.duplicate(true)
+	if not advanced and not _info.is_empty():
+		# Un redraw (per esempio un totale appena scoperto) non autorizza uno
+		# snapshot stale a far regredire fase o completati gia mostrati.
+		for key in ["phase", "done_layers"]:
+			if _info.has(key):
+				next_info[key] = _info[key]
+		next_info["layers"] = maxi(int(info.get("layers", 0)),
+				int(_info.get("layers", 0)))
+		next_info["got_mb"] = maxf(float(info.get("got_mb", 0.0)),
+				float(_info.get("got_mb", 0.0)))
+		next_info["total_mb"] = maxf(float(info.get("total_mb", 0.0)),
+				float(_info.get("total_mb", 0.0)))
+		var known_meter := float(info.get("fraction", -1.0)) >= 0.0 \
+				or float(_info.get("fraction", -1.0)) >= 0.0
+		next_info["fraction"] = clampf(
+				float(next_info["got_mb"]) / float(next_info["total_mb"]),
+				0.0, 1.0) if known_meter and float(next_info["total_mb"]) > 0.0 \
+				else -1.0
+	_info = next_info
+	var got := float(_info.get("got_mb", 0.0))
+	if advanced and got > 0.0:
 		_samples.append([Time.get_ticks_msec(), got])
 		while _samples.size() > 2 \
 				and Time.get_ticks_msec() - int(_samples[0][0]) > 60000:
 			_samples.pop_front()
-	_note_event()
+	if advanced:
+		_note_event()
 	_refresh()
 
 
