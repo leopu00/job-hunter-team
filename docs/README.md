@@ -27,13 +27,18 @@ Setup, usage and operations (see the [index](guides/README.md)). All in English,
 - ☁️ **VPS:** `VPS-SETUP-WIZARD` · `VPS-SETUP`
 - 🧪 **Testing & feedback:** `BETA` · `FEEDBACK-TICKETING` · `EMAIL-FORWARDING`
 
+## 📄 [`examples/`](examples/) — annotated profile templates
+`candidate_profile.yml.example` and its HR variant: the commented schema the
+agent skills point at. They document the *structure* — never a source of values
+for a real profile.
+
 ## 🏛️ [`adr/`](adr/) — architecture decision records
 The binding choices and their rationale.
-`0001` Colima · `0002` 3 agent CLIs · `0003` single-writer · `0004` no-API-keys · `0005` provider-risk · `0006` user-choice container runtime *(supersedes 0001)*
+`0001` Colima · `0002` 3 agent CLIs · `0003` single-writer · `0004` no-API-keys · `0005` provider-risk · `0006` user-choice container runtime *(supersedes 0001)* · `0007` provider selection is configuration
 
 ## 🔒 [`security/`](security/) — security
 Historical security audit, current threat model, checklist and comparisons.
-`01`→`06` + `README`
+`01`→`07` + `README`
 
 ## 📊 [`sessions/`](sessions/) — real-run logs
 One folder per agent run (Codex/Kimi/long-session) with a README + data dumps.
@@ -45,7 +50,9 @@ Living architecture notes, postmortems, experiments, roadmap, ops. See
 
 ## 🗄️ [`archive/`](archive/) — retired material
 Historical onboarding, feature and release-planning documents. These are not
-current instructions and are retained only for traceability.
+current instructions and are retained only for traceability. [`launch/`](launch/)
+holds the same kind of material for launch assets: today a single retired demo
+storyboard that points back at its archived original.
 
 ---
 

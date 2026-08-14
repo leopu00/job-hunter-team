@@ -1551,7 +1551,7 @@
       "last_review": null
     },
     {
-      "path": "docs/adr/0006-provider-selection-is-configuration.md",
+      "path": "docs/adr/0007-provider-selection-is-configuration.md",
       "description": "Decisione architetturale: provider, modello, CLI e flag sono configurazione governata dal launcher canonico, mai istruzioni naturali; le direttive conservano l'intento di lavoro ma non possono selezionare il runtime.",
       "last_review": null
     },

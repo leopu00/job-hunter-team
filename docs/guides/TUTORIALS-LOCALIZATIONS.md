@@ -32,7 +32,9 @@ variare il risultato, ma non è un'operazione da cinque minuti.
    è già selezionato: clicca una volta macOS, Windows o Linux per avviare il
    download della release corrente per quella piattaforma.
 2. **Apri il download per il tuo sistema.** Su Windows avvia
-   `job-hunter-team.exe`; su macOS estrai `job-hunter-team.zip` e apri l'app;
+   `job-hunter-team-windows-x64-setup.exe` per installare l'app, oppure apri
+   direttamente `job-hunter-team-windows-x64-portable.exe` se preferisci non
+   installarla; su macOS estrai `job-hunter-team.zip` e apri l'app;
    su Linux estrai `job-hunter-team-linux-x64.tar.gz`, verifica che
    `job-hunter-team.x86_64` sia autorizzato all'esecuzione e, se necessario,
    abilita il permesso di esecuzione prima di avviarlo. Windows e Linux possono
@@ -207,7 +209,9 @@ no es una tarea de cinco minutos.
    ya está seleccionado: haz clic una vez en macOS, Windows o Linux para iniciar
    la descarga de la versión actual para esa plataforma.
 2. **Abre la descarga para tu sistema.** En Windows ejecuta
-   `job-hunter-team.exe`; en macOS descomprime `job-hunter-team.zip` y abre la
+   `job-hunter-team-windows-x64-setup.exe` para instalar la aplicación, o abre
+   directamente `job-hunter-team-windows-x64-portable.exe` si prefieres no
+   instalarla; en macOS descomprime `job-hunter-team.zip` y abre la
    aplicación; en Linux extrae `job-hunter-team-linux-x64.tar.gz`, comprueba
    que `job-hunter-team.x86_64` tenga permiso para ejecutarse y, si hace falta,
    activa su permiso de ejecución antes de ejecutarlo. Windows y Linux pueden
@@ -386,7 +390,9 @@ Docker font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.
    est déjà sélectionné : cliquez une fois sur macOS, Windows ou Linux pour
    lancer le téléchargement de la version actuelle pour cette plateforme.
 2. **Ouvrez le téléchargement pour votre système.** Sous Windows, lancez
-   `job-hunter-team.exe` ; sous macOS, décompressez `job-hunter-team.zip` et
+   `job-hunter-team-windows-x64-setup.exe` pour installer l'application, ou
+   ouvrez directement `job-hunter-team-windows-x64-portable.exe` si vous
+   préférez ne pas l'installer ; sous macOS, décompressez `job-hunter-team.zip` et
    ouvrez l'application ; sous Linux, extrayez
    `job-hunter-team-linux-x64.tar.gz`, vérifiez que
    `job-hunter-team.x86_64` est autorisé à s'exécuter et, si nécessaire,
@@ -572,7 +578,9 @@ Fünf-Minuten-Aufgabe.
    ist bereits ausgewählt: Klicke einmal auf macOS, Windows oder Linux, um den
    Download der aktuellen Version für diese Plattform zu starten.
 2. **Öffne den Download für dein System.** Starte unter Windows
-   `job-hunter-team.exe`; entpacke unter macOS `job-hunter-team.zip` und öffne
+   `job-hunter-team-windows-x64-setup.exe`, um die App zu installieren, oder
+   öffne `job-hunter-team-windows-x64-portable.exe` direkt, wenn du sie nicht
+   installieren möchtest; entpacke unter macOS `job-hunter-team.zip` und öffne
    die App; entpacke unter Linux `job-hunter-team-linux-x64.tar.gz`, prüfe, ob
    `job-hunter-team.x86_64` ausgeführt werden darf, und aktiviere bei Bedarf
    seine Ausführungsberechtigung, bevor du es ausführst. Windows und Linux
@@ -758,7 +766,9 @@ de cinco minutos.
    já está selecionado: clica uma vez em macOS, Windows ou Linux para iniciar
    a transferência da versão atual para essa plataforma.
 2. **Abre o download para o teu sistema.** No Windows executa
-   `job-hunter-team.exe`; no macOS descomprime `job-hunter-team.zip` e abre a
+   `job-hunter-team-windows-x64-setup.exe` para instalar a aplicação, ou abre
+   diretamente `job-hunter-team-windows-x64-portable.exe` se preferires não a
+   instalar; no macOS descomprime `job-hunter-team.zip` e abre a
    aplicação; no Linux extrai `job-hunter-team-linux-x64.tar.gz`, confirma que
    `job-hunter-team.x86_64` tem permissão para executar e, se necessário,
    ativa a respetiva permissão de execução antes de o executar. Windows e Linux
@@ -936,7 +946,9 @@ eredményt, de ez nem ötperces feladat.
    **Desktop** már ki van jelölve: kattints egyszer a macOS, Windows vagy Linux
    lehetőségre az adott platform aktuális kiadásának letöltéséhez.
 2. **Nyisd meg a rendszeredhez való letöltést.** Windowson futtasd a
-   `job-hunter-team.exe` fájlt; macOS-en csomagold ki a
+   `job-hunter-team-windows-x64-setup.exe` fájlt az alkalmazás telepítéséhez,
+   vagy nyisd meg közvetlenül a `job-hunter-team-windows-x64-portable.exe`
+   fájlt, ha nem szeretnéd telepíteni; macOS-en csomagold ki a
    `job-hunter-team.zip` fájlt és nyisd meg az alkalmazást; Linuxon csomagold
    ki a `job-hunter-team-linux-x64.tar.gz` fájlt, ellenőrizd, hogy a
    `job-hunter-team.x86_64` fájl futtatható-e, és ha kell, engedélyezd a

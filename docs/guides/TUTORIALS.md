@@ -27,7 +27,9 @@ but this is not a five-minute task.
    is already selected: click macOS, Windows, or Linux once to start the
    current release download for that platform.
 2. **Open the download for your system.** On Windows, run
-   `job-hunter-team.exe`; on macOS, unzip `job-hunter-team.zip` and open the
+   `job-hunter-team-windows-x64-setup.exe` to install the app, or open
+   `job-hunter-team-windows-x64-portable.exe` directly if you would rather not
+   install it; on macOS, unzip `job-hunter-team.zip` and open the
    app; on Linux, extract `job-hunter-team-linux-x64.tar.gz`, verify that
    `job-hunter-team.x86_64` is allowed to run, and enable its executable
    permission before running it if needed. Windows and Linux can display a

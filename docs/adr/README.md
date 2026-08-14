@@ -19,6 +19,7 @@ Short records of architecturally-significant decisions — what we chose, why, a
 | [0004](./0004-subscription-only-no-api-keys.md) | Subscription-only: no pay-per-use API keys | Accepted |
 | [0005](./0005-provider-risk-and-mitigation.md) | Provider risk and mitigation | Accepted |
 | [0006](./0006-user-choice-container-runtime-macos.md) | User chooses the container runtime on macOS (Colima or Docker Desktop) | Accepted |
+| [0007](./0007-provider-selection-is-configuration.md) | Provider selection is configuration, not instruction | Accepted |
 
 ## When to add an ADR
 

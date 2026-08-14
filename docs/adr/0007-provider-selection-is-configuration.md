@@ -1,4 +1,4 @@
-# ADR 0006: Provider selection is configuration, not instruction
+# ADR 0007: Provider selection is configuration, not instruction
 
 - Status: Accepted
 - Date: 2026-08-13
