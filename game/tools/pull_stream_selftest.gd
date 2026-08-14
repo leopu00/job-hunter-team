@@ -20,6 +20,7 @@ extends SceneTree
 ## i byte devono arrivare comunque dal parser testuale.
 
 const FIXTURES := "res://tools/fixtures"
+const ProgressState := preload("res://scripts/setup/pull_progress_state.gd")
 
 ## Ancore misurate sulle fixture (replay di riferimento, vedi intestazioni
 ## dei file): pull testuale 19 livelli/14 tracciati/847.8 MB in 105.1 s;
@@ -52,10 +53,11 @@ func _run() -> void:
 	_svc_script = load("res://scripts/setup/setup_service.gd")
 	_check("setup_service.gd caricabile", _svc_script != null
 			and _svc_script.can_instantiate())
-	var expected := 3
+	var expected := 4
 	_json_replay()
 	_text_replay()
 	_legacy_text_format()
+	_material_heartbeat_contract()
 	if OS.get_name() != "Windows":
 		expected += 1
 		await _fallback_end_to_end()
@@ -203,6 +205,58 @@ func _legacy_text_format() -> void:
 	info = _svc_script._pull_progress_info(layers, layer_bytes)
 	_check("misto: complete senza totale conserva l'ultimo conteggio",
 			absf(float(info["got_mb"]) - 3.097) < 0.001, str(info))
+	_sections += 1
+
+
+## Il seam del timeout, senza attendere tre minuti: righe duplicate/reverse
+## cambiano al piu lo snapshot, non la deadline. Una fase successiva vera la
+## rinnova anche se i byte di download sono fermi.
+func _material_heartbeat_contract() -> void:
+	var observer := ProgressState.new()
+	var high_water_bytes := {}
+	var raw_bytes := {"aa": {"got": 10.0, "total": 20.0}}
+	_svc_script._merge_layer_byte_high_water(high_water_bytes, raw_bytes)
+	var event: Dictionary = observer.observe(
+			{"aa": "Downloading 10 MB"}, high_water_bytes)
+	var deadline: int = _svc_script._material_deadline(1000, 2000,
+			bool(event["advanced"]))
+	_check("heartbeat: primo avanzamento sposta deadline", deadline == 2000,
+			str(event))
+
+	event = observer.observe({"aa": "Downloading 10.0 MB"}, high_water_bytes)
+	deadline = _svc_script._material_deadline(deadline, 182001,
+			bool(event["advanced"]))
+	_check("heartbeat: duplicato non sposta deadline", deadline == 2000,
+			str(event))
+	_check("heartbeat: duplicati continui arrivano al timeout",
+			_svc_script._pull_stalled(deadline, 182001))
+
+	# Anche il parser puo ristampare byte inferiori: il servizio pubblica il
+	# massimo gia visto e l'osservatore non lo considera progresso.
+	raw_bytes["aa"]["got"] = 9.0
+	_svc_script._merge_layer_byte_high_water(high_water_bytes, raw_bytes)
+	_check("heartbeat: byte reverse non regrediscono high-water",
+			is_equal_approx(float(high_water_bytes["aa"]["got"]), 10.0),
+			str(high_water_bytes))
+	event = observer.observe({"aa": "Downloading 9 MB"}, high_water_bytes)
+	_check("heartbeat: byte reverse non avanzano", not bool(event["advanced"]),
+			str(event))
+
+	# Downloaded e Verifying sono fasi successive reali: la seconda rinnova
+	# anche con lo stesso high-water byte.
+	observer.observe({"aa": "Download complete"}, high_water_bytes)
+	event = observer.observe({"aa": "Verifying Checksum"}, high_water_bytes)
+	deadline = _svc_script._material_deadline(deadline, 182001,
+			bool(event["advanced"]))
+	_check("heartbeat: verifying rinnova a byte fermi",
+			bool(event["advanced"]) and deadline == 182001, str(event))
+	_check("heartbeat: dopo progresso vero non e in stallo",
+			not _svc_script._pull_stalled(deadline, 182001))
+	var info: Dictionary = _svc_script._pull_progress_info(
+			{"aa": "Verifying Checksum"}, high_water_bytes, event["state"])
+	_check("heartbeat: info UI usa stato high-water",
+			str(info["phase"]) == ProgressState.PHASE_VERIFYING
+			and int(info["done_layers"]) == 0, str(info))
 	_sections += 1
 
 

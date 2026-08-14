@@ -26,6 +26,10 @@ const ACTION_PHASES := {
 const STALL_AFTER_S := 10
 ## Finestra minima per considerare misurato il rate di download (ms).
 const RATE_WINDOW_MS := 8000
+const ACTIVE_PULL_PHASES := [
+	"queued", "waiting", "downloaded", "verifying", "extracting", "other",
+	"unknown",
+]
 
 var _action := ""
 var _phase := ""
@@ -33,6 +37,7 @@ var _action_started_ms := 0
 var _last_event_ms := 0
 var _info := {}           # ultimo pull_progress ricevuto ({} = nessun dato)
 var _samples: Array = []  # [ms, got_mb] per il rate misurato
+var _progress_fingerprint := ""
 
 var _phase_lbl: Label
 var _elapsed_lbl: Label
@@ -70,6 +75,7 @@ func _ready() -> void:
 		_action_started_ms = int(svc.action_started_ms)
 		if not (svc.last_pull as Dictionary).is_empty():
 			_info = svc.last_pull
+			_progress_fingerprint = _info_fingerprint(_info)
 	var timer := Timer.new()
 	timer.wait_time = 1.0
 	timer.autostart = true
@@ -85,25 +91,57 @@ func apply_phase(action: String, phase: String) -> void:
 	_phase = phase
 	_info = {}
 	_samples = []
+	_progress_fingerprint = ""
 	_note_event()
 	_refresh()
 
 
 ## Avanzamento strutturato del pull (got_mb/total_mb/fraction).
 func apply_progress(info: Dictionary) -> void:
-	_info = info
-	var got := float(info.get("got_mb", 0.0))
-	if got > 0.0:
+	var fingerprint := _info_fingerprint(info)
+	if fingerprint == _progress_fingerprint:
+		return
+	_progress_fingerprint = fingerprint
+	var advanced := bool(info.get("advanced", false))
+	var next_info := info.duplicate(true)
+	if not advanced and not _info.is_empty():
+		# Un redraw (per esempio un totale appena scoperto) non autorizza uno
+		# snapshot stale a far regredire fase o completati gia mostrati.
+		for key in ["phase", "done_layers"]:
+			if _info.has(key):
+				next_info[key] = _info[key]
+		next_info["layers"] = maxi(int(info.get("layers", 0)),
+				int(_info.get("layers", 0)))
+		next_info["got_mb"] = maxf(float(info.get("got_mb", 0.0)),
+				float(_info.get("got_mb", 0.0)))
+		next_info["total_mb"] = maxf(float(info.get("total_mb", 0.0)),
+				float(_info.get("total_mb", 0.0)))
+		var known_meter := float(info.get("fraction", -1.0)) >= 0.0 \
+				or float(_info.get("fraction", -1.0)) >= 0.0
+		next_info["fraction"] = clampf(
+				float(next_info["got_mb"]) / float(next_info["total_mb"]),
+				0.0, 1.0) if known_meter and float(next_info["total_mb"]) > 0.0 \
+				else -1.0
+	_info = next_info
+	var got := float(_info.get("got_mb", 0.0))
+	if advanced and got > 0.0:
 		_samples.append([Time.get_ticks_msec(), got])
 		while _samples.size() > 2 \
 				and Time.get_ticks_msec() - int(_samples[0][0]) > 60000:
 			_samples.pop_front()
-	_note_event()
+	if advanced:
+		_note_event()
 	_refresh()
 
 
 func _on_action_changed(_action_name: String, _running: bool,
 		_message: String, _ok: bool) -> void:
+	# Durante il pull SetupService pubblica anche il testo leggibile ogni tick.
+	# Quel segnale puo ridisegnare, ma non dimostra progresso: soltanto il dato
+	# strutturato con advanced=true puo rinnovare il timer di stallo.
+	if _running and _action == "container" and _phase == "image":
+		_refresh()
+		return
 	# Anche i messaggi testuali (es. il poll del motore ogni 2s) contano come
 	# segno di vita: il contatore di stallo riparte.
 	_note_event()
@@ -139,13 +177,20 @@ func _refresh() -> void:
 	_phase_lbl.text = phase_name if phases.size() <= 1 or idx < 0 \
 			else UIStrings.t("setup.progress_phase") % [idx + 1, phases.size(), phase_name]
 	var fraction := float(_info.get("fraction", -1.0))
-	_bar.fraction = fraction
+	var pull_phase := str(_info.get("phase", ""))
+	# Il metro misura byte scaricati, non verifica/estrazione. In quelle fasi
+	# torna barra di attivita: un 100% pieno mentre Docker estrae era proprio
+	# l'ambiguita del 17/18 segnalato.
+	_bar.fraction = 1.0 if pull_phase == "complete" \
+			else (-1.0 if pull_phase in ACTIVE_PULL_PHASES else fraction)
 	_tick()  # il tempo trascorso è aggiornato SUBITO, non al prossimo secondo
+	var stage := _pull_stage_text()
 	var got := float(_info.get("got_mb", 0.0))
 	if fraction < 0.0:
 		if got <= 0.0:
 			# Nessun dato di nessun tipo: barra di attività e la ragione.
-			_detail_lbl.text = UIStrings.t("setup.progress_no_meter")
+			_detail_lbl.text = _join_detail(stage,
+					UIStrings.t("setup.progress_no_meter"))
 			return
 		# I docker moderni su pipe non dichiarano MAI il totale: percentuale
 		# ed ETA non esistono, ma i byte scaricati e il rate misurato sì —
@@ -154,7 +199,7 @@ func _refresh() -> void:
 		var dl_rate := _measured_rate()
 		if dl_rate > 0.0:
 			partial += " · %.1f MB/s" % dl_rate
-		_detail_lbl.text = partial
+		_detail_lbl.text = _join_detail(stage, partial)
 		return
 	var total := float(_info.get("total_mb", 0.0))
 	var text := "%s / %s · %d%%" % [_fmt_mb(got), _fmt_mb(total),
@@ -165,7 +210,33 @@ func _refresh() -> void:
 		if total > got:
 			text += " · " + UIStrings.t("setup.progress_eta") \
 					% _fmt_time(int((total - got) / rate))
-	_detail_lbl.text = text
+	_detail_lbl.text = _join_detail(stage, text)
+
+
+func _pull_stage_text() -> String:
+	var phase := str(_info.get("phase", ""))
+	var done := int(_info.get("done_layers", -1))
+	var total := int(_info.get("layers", -1))
+	if phase == "" or done < 0 or total < 0:
+		return ""
+	return UIStrings.t("setup.progress_pull_stage") % [
+		UIStrings.t("setup.pull_phase_" + phase), done, total,
+	]
+
+
+static func _join_detail(stage: String, detail: String) -> String:
+	return detail if stage == "" else stage + " · " + detail
+
+
+static func _info_fingerprint(info: Dictionary) -> String:
+	# Unita intere evitano heartbeat cosmetici da rappresentazioni float.
+	return JSON.stringify([
+		str(info.get("phase", "")),
+		int(info.get("done_layers", -1)),
+		int(info.get("layers", -1)),
+		int(round(float(info.get("got_mb", 0.0)) * 1048576.0)),
+		int(round(float(info.get("total_mb", 0.0)) * 1048576.0)),
+	])
 
 
 ## MB/s misurati sui campioni del pull: 0.0 finché la finestra è troppo corta
