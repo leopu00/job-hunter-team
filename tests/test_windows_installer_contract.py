@@ -87,8 +87,11 @@ def test_native_windows_smoke_attests_pck_and_rejects_second_instance() -> None:
         "$second.ExitCode -ne 1",
         "$first.HasExited",
         "Concurrent installed application did not fail closed",
+        "Primary instance guard survived its desktop process",
     ):
         assert seam in builder
+    assert "-ArgumentList '--headless' -PassThru" in builder
+    assert "-ArgumentList '--headless', '--quit-after', '20'" not in builder
     for watched in (
         '"game/scripts/support/windows_instance_guard.*"',
         '"game/tools/windows_instance_guard_selftest.py"',
