@@ -50,9 +50,9 @@ esac
 
 info "Import e test del gioco…"
 if [ "$TARGET" = "windows" ]; then
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$GAME_DIR/tools/run.ps1" test
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$GAME_DIR/tools/run.ps1" test gate
 else
-  "$GAME_DIR/tools/run.sh" test
+  "$GAME_DIR/tools/run.sh" test gate
 fi
 info "Export $PRESET → game/$OUTPUT"
 mkdir -p "$GAME_DIR/$(dirname "$OUTPUT")"
