@@ -36,7 +36,11 @@ func _ready() -> void:
 	if UIStrings.needs_initial_language_choice():
 		_show_language_picker()
 		if OS.get_environment("JHT_LANGUAGE_PICKER_TEST") == "1":
-			_language_picker_selftest.call_deferred()
+			var layout_shot := OS.get_environment("JHT_LANGUAGE_PICKER_SHOT")
+			if layout_shot != "":
+				_language_picker_screenshot.call_deferred(layout_shot)
+			else:
+				_language_picker_selftest.call_deferred()
 		elif persistence_test == "write":
 			_language_persistence_write_selftest.call_deferred()
 		elif persistence_test == "save_failure":
@@ -63,6 +67,18 @@ func _show_language_picker() -> void:
 		"language": UIStrings.DEFAULT_LANG,
 		"selected": _language_picker.selected_language,
 	})
+
+
+## Hook di audit visuale, isolato dallo stesso gate del selftest: fotografa la
+## prima superficie senza confermare una lingua e senza scrivere preferenze.
+func _language_picker_screenshot(path: String) -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var image := get_viewport().get_texture().get_image()
+	var ok := is_instance_valid(_language_picker) and image.save_png(path) == OK \
+			and FileAccess.file_exists(path)
+	print("LANGUAGE-PICKER-SCREENSHOT %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
 
 
 func _on_language_confirmed(language: String) -> void:
