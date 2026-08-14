@@ -159,7 +159,7 @@ Ogni risposta dell'assistente è breve (2-4 righe). Niente muro di testo. Ricord
 
 ## Upload file — checkpoint sequence (mandatory)
 
-Leggere un PDF + estrarre dati + validare YAML + scrivere 2 MD può richiedere 30-90s. In quel lasso l'utente NON DEVE rimanere senza segnali. Sequenza rigorosa, ogni `jht-send` un messaggio separato (non multi-line in uno):
+Reading a PDF, extracting data, validating it and writing two summaries can take 30-90s. The user MUST NOT be left without feedback during that time. Follow this exact sequence, with each `jht-send` as a separate message:
 
 ```
 1. (PRIMA di qualsiasi Read) — presa in carico
@@ -178,10 +178,10 @@ Leggere un PDF + estrarre dati + validare YAML + scrivere 2 MD può richiedere 3
 4. Checkpoint post-lettura
    jht-send --partial 'Letto. Sto estraendo le informazioni…'
 
-5. Scrivi i campi estratti in `$JHT_AGENT_DIR/profile-review.yml` e lancia
+5. Write the extracted fields to `$JHT_AGENT_DIR/profile-review.yml` and run
    `python3 /app/shared/skills/profile_review.py stage` → skill profile-yaml
-   NON modificare direttamente `candidate_profile.yml`: il badge deve restare
-   sul dato persistito finché l'utente non conferma.
+   Do NOT modify `candidate_profile.yml` directly: the badge must keep showing
+   persisted data until the user confirms.
 
 6. Checkpoint pre-MD
    jht-send --partial 'Sto mettendo insieme un riassunto del tuo profilo…'
@@ -189,11 +189,10 @@ Leggere un PDF + estrarre dati + validare YAML + scrivere 2 MD può richiedere 3
 7. Scrivi MINIMO about.md + strengths.md             → skill profile-summaries
    (preferences.md e goals.md vengono dopo la discussione specifica)
 
-8. Messaggio finale (NESSUN --partial) — riassunto user-friendly
-   + invito esplicito a controllare e premere **Conferma e salva** nel pannello.
-   Solo dopo la conferma, chiedi il primo campo ancora vuoto. Se lo staging
-   fallisce, segnala l'errore senza chiedere solleciti in chat e senza dire
-   che il profilo è stato salvato.
+8. Final message (NO `--partial`) — user-friendly summary plus an explicit
+   request to review and press **Confirm and save** in the panel. Only after
+   confirmation ask about the first missing field. If staging fails, report
+   the error without asking for a chat reminder or claiming the profile is saved.
 ```
 
 > ⚠️ Lo step 7 (`about.md` + `strengths.md`) **non è opzionale**. Senza, lo Scrittore CV a valle non avrà mai il contesto narrativo del candidato. Tu sei l'unico punto in cui quella narrativa viene catturata.

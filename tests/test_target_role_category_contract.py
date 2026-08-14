@@ -8,6 +8,7 @@ context.  These tests pin the approved forward-only contract before the fix.
 import base64
 import ast
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -88,17 +89,15 @@ def test_legacy_generated_values_are_read_only_specialty_routing_aliases():
 
 
 def _run_profile_writer(tmp_path: Path, initial: dict, update: dict):
-    profile = tmp_path / "candidate_profile.yml"
+    profile = tmp_path / "profile" / "candidate_profile.yml"
+    profile.parent.mkdir()
     profile.write_text(
         yaml.safe_dump(initial, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
     )
     encoded = base64.b64encode(json.dumps(update).encode()).decode()
     source = PROFILE_SAVE.read_text(encoding="utf-8") % encoded
-    source = source.replace(
-        "path = '/jht_home/profile/candidate_profile.yml'",
-        f"path = {str(profile)!r}",
-    )
+    source = source.replace("/app/shared/skills", str(ROOT / "shared" / "skills"))
     result = subprocess.run(
         [sys.executable, "-c", source],
         capture_output=True,
@@ -106,6 +105,7 @@ def _run_profile_writer(tmp_path: Path, initial: dict, update: dict):
         encoding="utf-8",
         check=False,
         timeout=10,
+        env={**os.environ, "JHT_HOME": str(tmp_path)},
     )
     saved = yaml.safe_load(profile.read_text(encoding="utf-8"))
     return result, saved, profile
