@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { JHT_HOME } from "@/lib/jht-paths";
-import { requireAuth, requireLocalSecretAccess } from "@/lib/auth";
+import { requireAuth, requireLocalMachine } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,7 @@ const SECRETS_PATH = path.join(JHT_HOME, "secrets.json");
  * che confermerebbe l'esistenza di un secret con quell'id.
  */
 export async function POST(req: NextRequest) {
-  const remote = await requireLocalSecretAccess();
+  const remote = requireLocalMachine(req);
   if (remote) return remote;
   const denied = await requireAuth();
   if (denied) return denied;

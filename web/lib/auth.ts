@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { isCloudDeploy } from "@/lib/deploy-mode";
 import { headers, cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   LOCAL_TOKEN_COOKIE,
   isLocalTokenAuthenticated,
@@ -97,9 +97,21 @@ export function isLocalRequestFromHeaders(hdrs: Headers): boolean {
   // classe di bug intera, non caso singolo. In produzione Vercel è già
   // così di fatto (host = dominio); qui diventa deterministico.
   if (isCloudDeploy()) return false;
-  // Header `Host` deve essere localhost. Su deploy pubblico questo è
-  // riscritto al dominio reale dal reverse proxy, quindi un attaccante
-  // remoto che setta `Host: localhost` viene comunque bloccato qui.
+  // Header `Host` deve essere localhost.
+  //
+  // ⚠️ Fin dove regge: DIETRO UN REVERSE PROXY. Lì un attaccante remoto che
+  // setta `Host: localhost` viene comunque bloccato, perché il proxy aggiunge
+  // `x-forwarded-for` con un indirizzo non-loopback e il controllo sotto lo
+  // rifiuta. Su un deploy locale esposto in rete SENZA proxy davanti la stessa
+  // richiesta passa: `curl -H "Host: localhost" http://<ip>:3000/...` non manda
+  // forwarded header, quindi non c'è niente da rifiutare. Il compose non
+  // pubblica la porta web, per cui oggi quella configurazione non esiste — ma
+  // è una proprietà del deploy, non di questa funzione.
+  //
+  // Conseguenza: questo verdetto sceglie la CORSIA (locale vs cloud) e alza il
+  // tetto del rate limit; non è una prova di località, e non va usato da solo
+  // per decidere chi legge roba che vive sul box. Per quello c'è
+  // `requireLocalMachine`, che chiede il local-token (#161).
   const host = hdrs.get("host") ?? "";
   if (!isLocalhostHost(host)) return false;
 
@@ -184,45 +196,45 @@ export async function requireLocalWrite(): Promise<NextResponse | null> {
 }
 
 /**
- * Gate di LOCALITÀ per le superfici che LEGGONO segreti dal filesystem del
- * box (`~/.jht/secrets.json`: il codice che li scrive li descrive come token
- * VPS e chiavi SSH).
+ * Gate di LOCALITÀ per le superfici che espongono il filesystem del box:
+ * i segreti (`~/.jht/secrets.json`, che il codice attorno descrive come token
+ * VPS e chiavi SSH) e i metadati che dicono cosa quel filesystem contiene.
  *
  * Perché non basta `requireAuth`: quello accerta CHI SEI, mai che la macchina
  * sia la tua. Una sessione Supabase valida è sufficiente ad arrivare in fondo
- * a una route, e finora `GET /api/secrets` e `POST /api/secrets/reveal` — che
- * restituisce il valore IN CHIARO — non avevano altro. A difenderle era la
- * TOPOLOGIA di deploy (sul cloud quel file non esiste, il container non serve
- * più la dashboard dal 23/07), non il codice: la topologia cambia, il codice
- * resta. È la forma del caso local-first di #154, al contrario — lì si
- * sceglieva il locale dove non doveva, qui si serve il locale a chi non è lì.
+ * a una route.
  *
- * Fail-closed: si passa SOLO da una richiesta locale su un deploy non-cloud.
- * Ogni altro caso — cloud, host non-localhost, forwarded header non fidato —
- * è un 403, incluso quando la valutazione non è concludente.
+ * Perché non basta nemmeno l'header `Host`, che era la prima versione di
+ * questo gate (#158): su un deploy locale raggiungibile in rete SENZA reverse
+ * proxy davanti, `curl -H "Host: localhost" http://<ip>:3000/...` la supera —
+ * curl non manda forwarded header, quindi `hasUntrustedForwardedHeaders` non
+ * trova niente da rifiutare. Per "sei su questa macchina" un header non è una
+ * prova: è un campo che scrive il client.
+ *
+ * La prova è il POSSESSO DEL LOCAL-TOKEN: 32 byte random in
+ * `~/.jht/.local-token`, leggibili solo da chi è su quel filesystem. Non si
+ * falsifica scrivendo un header, e dal #154 è fail-closed su deploy cloud
+ * (`getOrCreateLocalToken` ritorna `null` lì, quindi nessun confronto può
+ * riuscire) — per questo qui non serve un secondo guard su `isCloudDeploy`.
+ *
+ * ⚠️ Conseguenza dichiarata: un BROWSER non presenta il token, perché il
+ * cookie `jht_local_token` oggi non lo scrive nessuno (#158 punto 2). Queste
+ * superfici sono quindi raggiungibili da CLI/curl sul box, non dalle pagine —
+ * che per `/secrets`, `/credentials` e `/backup` sono già desktop-only nel
+ * layout `(protected)` e sul deploy cloud vengono rediratte. Il giorno che il
+ * launcher vorrà autenticare il browser locale, il ponte è il setter Node del
+ * cookie descritto in `lib/local-token.ts`, non un ritorno all'header.
  *
  * Distinta da `requireLocalWrite` di proposito: quella parla di scritture e
  * risponde "si fa dall'app desktop", che per una lettura sarebbe un consiglio
- * sbagliato. Qui la risposta non racconta dove vivono i segreti.
+ * sbagliato. Qui la risposta non racconta cosa c'è dall'altra parte.
  */
-export async function requireLocalSecretAccess(): Promise<NextResponse | null> {
-  const cloud = isCloudDeploy();
-  // Su cloud la risposta è già decisa: non si guarda nemmeno l'header, che è
-  // client-controllabile e non ha voce in capitolo su questa scelta.
-  const local = cloud ? false : await isLocalRequest();
-  return secretsAreReadable(local, cloud) ? null : secretsUnavailableResponse();
-}
-
-/**
- * La decisione, senza il contesto di richiesta attorno — la parte che si
- * sbaglia, isolata perché un test possa enumerarne le quattro combinazioni
- * (stessa forma di `shouldUseLocalFirst` in `lib/positions/local-first-write`).
- */
-export function secretsAreReadable(
-  localRequest: boolean,
-  cloudDeploy: boolean,
-): boolean {
-  return localRequest && !cloudDeploy;
+export function requireLocalMachine(req: NextRequest): NextResponse | null {
+  const proven = isLocalTokenAuthenticated(
+    req.headers.get("authorization"),
+    req.cookies.get(LOCAL_TOKEN_COOKIE)?.value,
+  );
+  return proven ? null : secretsUnavailableResponse();
 }
 
 function secretsUnavailableResponse(): NextResponse {

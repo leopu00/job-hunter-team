@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { JHT_HOME } from "@/lib/jht-paths";
 import {
   requireAuth,
-  requireLocalSecretAccess,
+  requireLocalMachine,
   requireLocalWrite,
 } from "@/lib/auth";
 
@@ -59,12 +59,12 @@ function mask(value: string): string {
  * nello stesso endpoint, sufficiente a estrarre tutti i secret con due
  * GET una volta superato il check auth).
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   // Località PRIMA dell'identità: questa lista vive in `~/.jht/secrets.json`,
   // cioè su una macchina sola. Una sessione Supabase valida dice chi sei, non
   // che sei su quella macchina — e il mascheramento qui sotto riduce il danno,
   // non lo annulla (nomi e tipi dicono già quali chiavi possiede l'utente).
-  const remote = await requireLocalSecretAccess();
+  const remote = requireLocalMachine(req);
   if (remote) return remote;
   const denied = await requireAuth();
   if (denied) return denied;
@@ -82,6 +82,11 @@ export async function GET() {
 
 /** POST — crea nuovo secret */
 export async function POST(req: NextRequest) {
+  // Anche le mutazioni: chiudere la lettura e lasciare che un `Host` forgiato
+  // CANCELLI i secrets sarebbe una porta girevole. `requireLocalWrite` resta
+  // sotto — è la policy WEB-READONLY, che vale per tutte le sue 22 route.
+  const remote = requireLocalMachine(req);
+  if (remote) return remote;
   const ro = await requireLocalWrite();
   if (ro) return ro;
   const denied = await requireAuth();
@@ -120,6 +125,8 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — rimuove secret per ID */
 export async function DELETE(req: NextRequest) {
+  const remote = requireLocalMachine(req);
+  if (remote) return remote;
   const ro = await requireLocalWrite();
   if (ro) return ro;
   const denied = await requireAuth();
