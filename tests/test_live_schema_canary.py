@@ -26,6 +26,10 @@ WEB_QUERY = ROOT / "supabase/live-schema/078-084.web.v4.sql"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
 POSTGRES_READY_MARKER = "database system is ready to accept connections"
+POSTGRES_IMAGE = "postgres:16-alpine"
+# 17 is what the live project runs and the first release with MAINTAIN: the
+# same receipt has to be green on both, or a server upgrade reads as drift.
+POSTGRES_NEXT_IMAGE = "postgres:17-alpine"
 MIGRATIONS = [
     ROOT / "supabase/migrations/078_positions_write_request_kind.sql",
     ROOT / "supabase/migrations/079_team_directive_events_atomic.sql",
@@ -50,10 +54,10 @@ LEGACY_ARTIFACT_SHA256 = {
         "2a5aed82aac8c7f129d7cc5d74bf875bd77750b1917a10aecbcf65a201336971"
     ),
     "supabase/live-schema/078-084.v3.json": (
-        "7b095bfdb21d2ac2a499288982b6d0ad080b19c25d4441f8f8222eabaac26be7"
+        "0dfcfbb3e7e95ed90f253df047ded1b7286a5b8223c15ec4f173c2fea39e3a27"
     ),
     "supabase/live-schema/078-084.v3.sql": (
-        "a5d9957b2d9a884cf70d8d47bee40cfd1ef7312770301d85462e1a62c8c770d7"
+        "7de4f4baf09131a50c3967fa3895fc1fe85c4e15af33f43e59c1e5e745730eba"
     ),
 }
 
@@ -73,6 +77,86 @@ INSERT INTO public.positions(
   '00000000-0000-0000-0000-00000000b201', 62002
 );
 """
+
+# The two tables whose entire ACL the canary pins, and the only grantees
+# allowed on them. 'OWNER' is whoever owns the table.
+GUARDED_TABLE_GRANTEES = {
+    "user_settings": ("OWNER", "anon", "authenticated", "service_role"),
+    "cloud_sync_pairing_attempts": ("OWNER", "service_role"),
+}
+
+ACL_CTE_NAMES = (
+    "durable_table_privileges",
+    "expected_table_grantees",
+    "guarded_table_acl",
+    "observed_table_acl",
+    "expected_table_acl",
+    "table_acl_matches",
+)
+
+# Enough of the live shape to carry the real grants: the ACL receipt reads
+# relacl and role names, not columns.
+TABLE_ACL_FIXTURE = """
+CREATE ROLE anon NOLOGIN;
+CREATE ROLE authenticated NOLOGIN;
+CREATE ROLE service_role NOLOGIN BYPASSRLS;
+CREATE TABLE public.user_settings(user_id uuid PRIMARY KEY, theme text NOT NULL);
+CREATE TABLE public.cloud_sync_pairing_attempts(
+  user_id uuid PRIMARY KEY, attempts integer NOT NULL DEFAULT 0
+);
+GRANT ALL ON public.user_settings TO anon, authenticated, service_role;
+GRANT ALL ON public.cloud_sync_pairing_attempts TO service_role;
+"""
+
+ACL_RECEIPT_PROJECTION = """
+SELECT matched.table_name, matched.ok
+FROM table_acl_matches AS matched
+ORDER BY matched.table_name
+"""
+
+# What a red receipt is made of: the grants that are on one side only, each
+# one named instead of counted.
+ACL_DRIFT_PROJECTION = """
+SELECT pg_catalog.format(
+  '%s %s %s', drift.side, drift.table_name, drift.acl_key
+)
+FROM (
+  (
+    SELECT 'missing' AS side, expected.table_name, expected.acl_key
+    FROM expected_table_acl AS expected
+    EXCEPT
+    SELECT 'missing', observed.table_name, observed.acl_key
+    FROM observed_table_acl AS observed
+  )
+  UNION ALL
+  (
+    SELECT 'extra', observed.table_name, observed.acl_key
+    FROM observed_table_acl AS observed
+    EXCEPT
+    SELECT 'extra', expected.table_name, expected.acl_key
+    FROM expected_table_acl AS expected
+  )
+) AS drift
+ORDER BY 1
+"""
+
+# What GRANT ALL on a table meant before 17, and still means on every
+# release: the canary's floor, and the ACL a pre-17 database carries into an
+# upgraded server unchanged.
+DURABLE_TABLE_PRIVILEGES = (
+    "DELETE",
+    "INSERT",
+    "REFERENCES",
+    "SELECT",
+    "TRIGGER",
+    "TRUNCATE",
+    "UPDATE",
+)
+PG17_TABLE_PRIVILEGES = DURABLE_TABLE_PRIVILEGES + ("MAINTAIN",)
+
+# No PostgreSQL release grants this: it stands for the privilege that will
+# exist one day, the way MAINTAIN did not exist before 17.
+HYPOTHETICAL_PRIVILEGE = "SUPERVISE"
 
 PREFLIGHT_ANOMALY_SEEDS = {
     "071.rescore.rows_ranked": """
@@ -227,6 +311,59 @@ spec.loader.exec_module(canary)
 def _final_postgres_server_is_ready(logs: str) -> bool:
     """Reject initdb's temporary server and accept only the final restart."""
     return logs.count(POSTGRES_READY_MARKER) >= 2
+
+
+def acl_cte(name: str) -> str:
+    """Lift one ACL definition out of the canary, verbatim.
+
+    The oracles below run the shipped SQL against synthetic catalogs; a copy
+    pasted into the test would only prove that the copy still works.
+    """
+    source = QUERY.read_text()
+    start = source.index(f"\n{name}(") + 1
+    end = source.index("\n),\n", start)
+    return source[start:end] + "\n)"
+
+
+def acl_query(projection: str, overrides: dict[str, str] | None = None) -> str:
+    overrides = overrides or {}
+    parts = [overrides.get(name) or acl_cte(name) for name in ACL_CTE_NAMES]
+    return "WITH\n" + ",\n".join(parts) + "\n" + projection
+
+
+def acl_key(grantee: str, privilege: str, *, grantable: bool = False) -> str:
+    """The canary's name for a single grant."""
+    return f"{grantee}|{privilege}|{'t' if grantable else 'f'}"
+
+
+def simulated_table_acl(
+    privileges: tuple[str, ...],
+    *,
+    without: tuple[tuple[str, str, str], ...] = (),
+    extra: tuple[tuple[str, str, str], ...] = (),
+) -> str:
+    """The catalog of a server whose privilege set is what the test says.
+
+    Owner and grantees hold the same privileges, which is what a table carries
+    after ``GRANT ALL`` on any release: the list itself is the only thing a
+    new PostgreSQL version changes.
+    """
+    observed = [
+        (table_name, grantee, privilege)
+        for table_name, grantees in GUARDED_TABLE_GRANTEES.items()
+        for grantee in grantees
+        for privilege in privileges
+        if (table_name, grantee, privilege) not in without
+    ]
+    rows = ",\n    ".join(
+        f"('{table_name}', '{grantee}', '{privilege}', false)"
+        for table_name, grantee, privilege in observed + list(extra)
+    )
+    return (
+        "guarded_table_acl(\n"
+        "  table_name, grantee_name, privilege_type, is_grantable\n"
+        f") AS (\n  VALUES\n    {rows}\n)"
+    )
 
 
 class FakeResponse:
@@ -649,28 +786,19 @@ def test_cli_output_sanitizes_transport_details(monkeypatch, capsys):
 
 
 @contextmanager
-def pg16_schema_clone(
-    *,
-    migrated: bool,
-    through_version: int = 84,
-    omit_versions: tuple[int, ...] = (),
-):
-    snapshot = os.environ.get("JHT_H08_SCHEMA_SNAPSHOT")
-    if not snapshot:
-        pytest.skip("dump schema-only H-08 attestato non disponibile")
-    snapshot_path = Path(snapshot)
-    if not snapshot_path.is_file() or snapshot_path.stat().st_size > 32 * 1024 * 1024:
-        pytest.fail("attested schema snapshot unavailable")
-    actual_sha = __import__("hashlib").sha256(snapshot_path.read_bytes()).hexdigest()
-    if actual_sha != SNAPSHOT_SHA256:
-        pytest.fail("attested schema snapshot hash mismatch")
+def postgres_container(image: str = POSTGRES_IMAGE):
+    """A throwaway server of the requested PostgreSQL version.
+
+    The ACL oracles need more than one version to say anything: the set of
+    table privileges is a property of the server, not of our schema.
+    """
     if not shutil.which("docker"):
         pytest.skip("docker non disponibile")
     if subprocess.run(
-        ["docker", "image", "inspect", "postgres:16-alpine"],
+        ["docker", "image", "inspect", image],
         capture_output=True,
     ).returncode:
-        pytest.skip("postgres:16-alpine non disponibile localmente")
+        pytest.skip(f"{image} non disponibile localmente")
     name = f"jht-live-schema-{uuid.uuid4().hex[:10]}"
     started = subprocess.run(
         [
@@ -684,15 +812,15 @@ def pg16_schema_clone(
             "/var/lib/postgresql/data:rw,size=256m",
             "-e",
             "POSTGRES_PASSWORD=synthetic-test-only",
-            "postgres:16-alpine",
+            image,
         ],
         text=True,
         capture_output=True,
     )
     if started.returncode:
-        pytest.fail("PostgreSQL 16 schema clone non avviabile")
+        pytest.fail(f"{image} non avviabile")
 
-    def psql(sql: str, *, check: bool = True):
+    def psql(sql: str, *, check: bool = True, database: str = "postgres"):
         return subprocess.run(
             [
                 "docker",
@@ -707,7 +835,7 @@ def pg16_schema_clone(
                 "-U",
                 "postgres",
                 "-d",
-                "postgres",
+                database,
                 "-At",
                 "-F",
                 "|",
@@ -734,7 +862,29 @@ def pg16_schema_clone(
                     break
             time.sleep(0.2)
         else:
-            pytest.fail("PostgreSQL 16 final server non pronto")
+            pytest.fail(f"{image} final server non pronto")
+        yield psql
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], text=True, capture_output=True)
+
+
+@contextmanager
+def pg16_schema_clone(
+    *,
+    migrated: bool,
+    through_version: int = 84,
+    omit_versions: tuple[int, ...] = (),
+):
+    snapshot = os.environ.get("JHT_H08_SCHEMA_SNAPSHOT")
+    if not snapshot:
+        pytest.skip("dump schema-only H-08 attestato non disponibile")
+    snapshot_path = Path(snapshot)
+    if not snapshot_path.is_file() or snapshot_path.stat().st_size > 32 * 1024 * 1024:
+        pytest.fail("attested schema snapshot unavailable")
+    actual_sha = __import__("hashlib").sha256(snapshot_path.read_bytes()).hexdigest()
+    if actual_sha != SNAPSHOT_SHA256:
+        pytest.fail("attested schema snapshot hash mismatch")
+    with postgres_container() as psql:
         psql(
             "DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE service_role NOLOGIN BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$; CREATE SCHEMA IF NOT EXISTS auth; CREATE TABLE IF NOT EXISTS auth.users(id uuid PRIMARY KEY, created_at timestamptz); CREATE TABLE IF NOT EXISTS auth.sessions(user_id uuid, updated_at timestamptz); CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $$; GRANT USAGE ON SCHEMA public, auth TO anon, authenticated, service_role;"
         )
@@ -745,8 +895,6 @@ def pg16_schema_clone(
                 if version <= through_version and version not in omit_versions:
                     psql(migration.read_text())
         yield psql
-    finally:
-        subprocess.run(["docker", "rm", "-f", name], text=True, capture_output=True)
 
 
 def query_results(psql):
@@ -1333,6 +1481,208 @@ ALTER TABLE public.scores ADD CONSTRAINT scores_position_tenant_fkey
         )
 
     assert not observed["081.tenant_fk.count"]
+
+
+def acl_receipts_and_drift(psql, mutation: str = "", overrides=None, **psql_kwargs):
+    """Both ACL projections, over a rolled-back mutation or a simulated catalog."""
+    prologue = f"BEGIN;\n{mutation}\n" if mutation else ""
+    epilogue = ";\nROLLBACK;" if mutation else ""
+
+    def rows(projection: str):
+        result = psql(
+            f"{prologue}{acl_query(projection, overrides)}{epilogue}",
+            **psql_kwargs,
+        )
+        return [line for line in result.stdout.splitlines() if line]
+
+    return (
+        receipt_rows("\n".join(rows(ACL_RECEIPT_PROJECTION))),
+        rows(ACL_DRIFT_PROJECTION),
+    )
+
+
+@pytest.mark.parametrize("image", (POSTGRES_IMAGE, POSTGRES_NEXT_IMAGE))
+def test_table_acl_receipt_is_green_on_every_server_privilege_set(image):
+    """A privilege the server gains is not schema drift.
+
+    16 knows seven table privileges, 17 knows eight (MAINTAIN), and ``GRANT
+    ALL`` means whatever the server supports on the day it runs. The receipt
+    has to be green on both: a version that counted rows could only ever be
+    right on one of the two.
+    """
+    with postgres_container(image) as psql:
+        psql(TABLE_ACL_FIXTURE)
+        privileges = psql(
+            acl_query(
+                "SELECT entry.privilege_type FROM guarded_table_acl AS entry "
+                "WHERE entry.table_name = 'user_settings' "
+                "AND entry.grantee_name = 'anon'"
+            )
+        ).stdout.split()
+        receipts, drift = acl_receipts_and_drift(psql)
+
+    assert ("MAINTAIN" in privileges) == (image == POSTGRES_NEXT_IMAGE)
+    assert receipts == {"user_settings": True, "cloud_sync_pairing_attempts": True}
+    assert drift == []
+
+
+def test_table_acl_receipt_ignores_the_database_collation():
+    """The live project does not sort text the way a fresh container does.
+
+    Grantee names arrive as pg_catalog.name, collation C, while the expected
+    side is built from literals carrying the database collation: under en-US
+    'anon' sorts before 'OWNER' and under C after it, so two identical lists
+    compare unequal. Measured on the live project before it was pinned.
+    """
+    with postgres_container() as psql:
+        psql(
+            "CREATE DATABASE acl_en_us TEMPLATE template0 ENCODING 'UTF8'"
+            " LOCALE 'C' LOCALE_PROVIDER icu ICU_LOCALE 'en-US';"
+        )
+        psql(TABLE_ACL_FIXTURE, database="acl_en_us")
+        owner_sorts_first = psql(
+            "SELECT 'OWNER' < 'anon';", database="acl_en_us"
+        ).stdout.strip()
+        receipts, drift = acl_receipts_and_drift(psql, database="acl_en_us")
+
+    assert owner_sorts_first == "f"
+    assert receipts == {"user_settings": True, "cloud_sync_pairing_attempts": True}
+    assert drift == []
+
+
+def test_table_acl_receipt_reads_an_acl_written_before_the_server_grew():
+    """An upgrade does not rewrite the grants a table already carries.
+
+    pg_upgrade keeps relacl verbatim, so a table granted before 17 still shows
+    seven privileges on a server that knows eight. Expecting "whatever this
+    server supports" would read that as drift; the receipt anchors on the
+    owner's own entry instead, which was frozen at the same moment.
+    """
+    with postgres_container(POSTGRES_NEXT_IMAGE) as psql:
+        psql(TABLE_ACL_FIXTURE)
+        receipts, drift = acl_receipts_and_drift(
+            psql,
+            "REVOKE MAINTAIN ON public.user_settings"
+            " FROM postgres, anon, authenticated, service_role;"
+            "\nREVOKE MAINTAIN ON public.cloud_sync_pairing_attempts"
+            " FROM postgres, service_role;",
+        )
+
+    assert receipts == {"user_settings": True, "cloud_sync_pairing_attempts": True}
+    assert drift == []
+
+
+def test_table_acl_receipt_names_the_grant_that_is_missing_or_extra():
+    with postgres_container() as psql:
+        psql(TABLE_ACL_FIXTURE)
+        revoked = acl_receipts_and_drift(
+            psql, "REVOKE UPDATE ON public.user_settings FROM anon;"
+        )
+        widened = acl_receipts_and_drift(
+            psql,
+            "GRANT SELECT ON public.cloud_sync_pairing_attempts TO authenticated;",
+        )
+        published = acl_receipts_and_drift(
+            psql, "GRANT SELECT ON public.user_settings TO PUBLIC;"
+        )
+        delegated = acl_receipts_and_drift(
+            psql,
+            "GRANT SELECT ON public.user_settings TO anon WITH GRANT OPTION;",
+        )
+
+    assert revoked == (
+        {"user_settings": False, "cloud_sync_pairing_attempts": True},
+        [f"missing user_settings {acl_key('anon', 'UPDATE')}"],
+    )
+    assert widened == (
+        {"user_settings": True, "cloud_sync_pairing_attempts": False},
+        [
+            "extra cloud_sync_pairing_attempts "
+            f"{acl_key('authenticated', 'SELECT')}"
+        ],
+    )
+    assert published == (
+        {"user_settings": False, "cloud_sync_pairing_attempts": True},
+        [f"extra user_settings {acl_key('PUBLIC', 'SELECT')}"],
+    )
+    assert delegated == (
+        {"user_settings": False, "cloud_sync_pairing_attempts": True},
+        [
+            f"extra user_settings {acl_key('anon', 'SELECT', grantable=True)}",
+            f"missing user_settings {acl_key('anon', 'SELECT')}",
+        ],
+    )
+
+
+def test_table_acl_receipt_survives_a_privilege_no_release_has_yet():
+    """The PG18 rehearsal, run on a simulated catalog instead of a wait.
+
+    The whole ACL is fed a server that knows one privilege more than any
+    release does: the grants still match, so the receipt stays green, while a
+    single named grant taken away or added still turns it red.
+    """
+    future = PG17_TABLE_PRIVILEGES + (HYPOTHETICAL_PRIVILEGE,)
+    with postgres_container() as psql:
+
+        def simulated(privileges=future, **mutation):
+            return acl_receipts_and_drift(
+                psql,
+                overrides={
+                    "guarded_table_acl": simulated_table_acl(
+                        privileges, **mutation
+                    )
+                },
+            )
+
+        intact = simulated()
+        frozen = simulated(DURABLE_TABLE_PRIVILEGES)
+        missing = simulated(
+            without=(("user_settings", "anon", HYPOTHETICAL_PRIVILEGE),)
+        )
+        extra = simulated(
+            extra=(("cloud_sync_pairing_attempts", "anon", "SELECT"),)
+        )
+        stripped = simulated(
+            without=tuple(
+                ("user_settings", grantee, "SELECT")
+                for grantee in GUARDED_TABLE_GRANTEES["user_settings"]
+            )
+        )
+
+    assert intact == (
+        {"user_settings": True, "cloud_sync_pairing_attempts": True},
+        [],
+    )
+    # The other side of an upgrade: an ACL stored before the new privilege
+    # existed keeps its old set, and that is not drift either.
+    assert frozen == (
+        {"user_settings": True, "cloud_sync_pairing_attempts": True},
+        [],
+    )
+    assert missing == (
+        {"user_settings": False, "cloud_sync_pairing_attempts": True},
+        [f"missing user_settings {acl_key('anon', HYPOTHETICAL_PRIVILEGE)}"],
+    )
+    assert extra == (
+        {"user_settings": True, "cloud_sync_pairing_attempts": False},
+        [f"extra cloud_sync_pairing_attempts {acl_key('anon', 'SELECT')}"],
+    )
+    # Owner and grantees agree on a table nobody can read any more: the sets
+    # match, the floor does not.
+    assert stripped == (
+        {"user_settings": False, "cloud_sync_pairing_attempts": True},
+        [],
+    )
+
+
+def test_table_acl_receipts_pin_no_privilege_count_or_release_name():
+    source = QUERY.read_text()
+
+    assert source.count("FROM table_acl_matches AS matched") == 2
+    assert "count(DISTINCT privilege.privilege_type)" not in source
+    assert "'MAINTAIN'" not in source
+    pinned = re.findall(r"\('([A-Z]+)'\)", acl_cte("durable_table_privileges"))
+    assert sorted(pinned) == sorted(DURABLE_TABLE_PRIVILEGES)
 
 
 def test_pg16_081_user_settings_and_team_directive_policies_are_exact():
