@@ -1724,7 +1724,7 @@ func _stream_compose(argv: PackedStringArray, json_mode: bool) -> Dictionary:
 			OS.kill(pid)
 			var stalled_phase := str(observed_state.get("phase", "unknown"))
 			Log.call_deferred("warn", "setup",
-					"compose senza progresso materiale da 3 minuti (fase %s), interrotto"
+					"compose made no material progress for 3 minutes (phase %s); stopped"
 					% stalled_phase)
 			return {"ok": false, "spawned": true, "timeout": true,
 					"tail": UIStrings.t("setup.action.download_timeout")}
