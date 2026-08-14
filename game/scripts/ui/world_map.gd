@@ -51,7 +51,7 @@ func _ready() -> void:
 	_fit_initial_overview.call_deferred()
 
 func _fit_initial_overview() -> void:
-	if _initial_fit_done or BackendBus.positions.is_empty():
+	if _initial_fit_done or SimBadge.visible_positions().is_empty():
 		return
 	_initial_fit_done = true
 	_flat.fit_all()
@@ -173,8 +173,9 @@ func _apply_filters() -> void:
 func _refresh_filter_panel() -> void:
 	for child in _filter_box.get_children():
 		child.queue_free()
-	if BackendBus.positions.is_empty():
-		_filter_box.add_child(TerminalTheme.label(UIStrings.t("pos.need_vps"),
+	var visible_positions := SimBadge.visible_positions()
+	if visible_positions.is_empty():
+		_filter_box.add_child(TerminalTheme.label(SimBadge.positions_empty_copy(),
 				13, Palette.MUTED))
 		return
 	var head := HBoxContainer.new()
@@ -202,7 +203,7 @@ func _refresh_filter_panel() -> void:
 ## Una riga di chip per un gruppo, con conteggi cross-filtrati.
 func _chip_row(key: String, title: String) -> void:
 	var counts := {}
-	for p in BackendBus.positions:
+	for p in SimBadge.visible_positions():
 		if not MapPins.passes(p, filters, key):
 			continue
 		var v := MapPins.value_of(p, key)

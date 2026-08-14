@@ -25,6 +25,25 @@ var _agent_ui_test_started := false
 var _coordinator_test_started := false
 var _traffic_demo_started := false
 
+
+## Adapter inerte usato soltanto dall'oracle di provenienza. Dichiara LIVE ma
+## non apre processi, file o rete; risponde alle letture che la UI scatena al
+## cambio di stato con payload vuoti e tipizzati, senza errori su stderr.
+class TruthfulnessBackend:
+	extends BackendAdapter
+
+	func open_profile_watch() -> void:
+		pass
+
+	func save_ui_language(_locale: String) -> void:
+		pass
+
+	func fetch_usage_history(_from_ts: float, _to_ts: float, _bucket_sec: int,
+			_request_id := "") -> void:
+		# L'oracle consegna manualmente risposte correnti e tardive per provare
+		# il token di correlazione; l'adapter non anticipa nessuna risposta.
+		pass
+
 ## Ganci a interruttore: scattano quando la variabile vale esattamente "1".
 const FLAG_HOOKS := {
 	"JHT_CENSUS": "_scene_census",
@@ -59,6 +78,7 @@ const FLAG_HOOKS := {
 	"JHT_SETUP_GATING_TEST": "_setup_gating_selftest",
 	"JHT_BUBBLE_LAYOUT_TEST": "_bubble_layout_selftest",
 	"JHT_SIM_BADGE_TEST": "_sim_badge_selftest",
+	"JHT_TRUTHFULNESS_TEST": "_truthfulness_selftest",
 	"JHT_LIVE_PROFILE_TEST": "_live_profile_selftest",
 }
 
@@ -131,26 +151,272 @@ func _sim_badge_selftest() -> void:
 	await get_tree().process_frame
 	var ok := true
 	var cases := [
-		[false, false, true],
-		[false, true, true],
-		[true, true, true],
-		[true, false, false],
+		[false, false, false, SimBadge.DataState.UNAVAILABLE],
+		[false, true, false, SimBadge.DataState.UNAVAILABLE],
+		[true, true, false, SimBadge.DataState.UNAVAILABLE],
+		[true, false, false, SimBadge.DataState.LIVE],
+		[false, false, true, SimBadge.DataState.DEMO],
+		[true, false, true, SimBadge.DataState.DEMO],
 	]
 	for case in cases:
-		ok = ok and SimBadge.warning_needed(bool(case[0]), bool(case[1])) \
-				== bool(case[2])
+		ok = ok and SimBadge.classify(bool(case[0]), bool(case[1]), bool(case[2])) \
+				== case[3]
 	var badges: Array[Node] = office.find_children("*", "SimBadge", true, false)
 	if badges.size() == 1:
 		var badge := badges[0] as SimBadge
 		ok = ok and badge.visible
-		badge._apply_state(true, false)
+		badge._apply_state(SimBadge.DataState.UNAVAILABLE)
 		ok = ok and not badge.visible
-		badge._apply_state(true, true)
+		badge._apply_state(SimBadge.DataState.LIVE)
+		ok = ok and not badge.visible
+		badge._apply_state(SimBadge.DataState.DEMO)
 		ok = ok and badge.visible
 		badge._refresh()
 	else:
 		ok = false
 	print("SIM-BADGE-TEST %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
+
+
+## Controfattuale di release: il dispatcher dei test e' armato, ma questo
+## flag e' esplicitamente escluso dal gate demo. Verifica l'effetto visibile,
+## non soltanto la funzione pura, senza stampare testo UI o dati del backend.
+func _truthfulness_selftest() -> void:
+	# Snapshot sintetico ostile: esiste sul bus, ma senza gate e backend non
+	# deve raggiungere nessuna superficie. L'oracle parte dal percorso reale
+	# del dispatcher e poi prova anche la transizione della UI gia' montata.
+	BackendBus._backend = null
+	BackendBus.state = BackendBus.DISCONNECTED
+	office._on_setup_status_changed({
+		"provider_authenticated": false,
+		"team_running": false,
+	})
+	var counterfeit := [{
+		"id": 9137, "title": "Truth Probe", "company": "Fixture",
+		"loc_city": "Roma", "loc_country": "Italy",
+		"office_lat": 41.9, "office_lon": 12.5,
+		"status": "new", "found_at": Time.get_datetime_string_from_system(),
+	}, {
+		"id": 9138, "title": "Shelf Probe", "company": "Fixture",
+		"loc_city": "Roma", "loc_country": "Italy",
+		"office_lat": 41.9, "office_lon": 12.5,
+		"status": "ready", "critic_verdict": "PASS",
+		"found_at": Time.get_datetime_string_from_system(),
+	}]
+	BackendBus.positions_are_demo = true
+	BackendBus.positions = counterfeit
+	BackendBus.positions_updated.emit(counterfeit)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var badges: Array[Node] = office.find_children("*", "SimBadge", true, false)
+	var unavailable: bool = SimBadge.current_state() == SimBadge.DataState.UNAVAILABLE
+	var roster_empty: bool = office.agents.is_empty()
+	var counterfeit_present: bool = BackendBus.positions_are_demo \
+			and BackendBus.positions.size() == 2
+	var badge_hidden: bool = badges.size() == 1 and not (badges[0] as SimBadge).visible
+	var piles_empty := true
+	var piles_static := true
+	for dept_id in PaperPile.inbox:
+		var pile: PaperPile = PaperPile.inbox[dept_id]
+		var snapshot := pile.debug_snapshot()
+		piles_empty = piles_empty and int(snapshot["count"]) == 0 \
+				and int(snapshot["visual_sheets"]) == 0
+		piles_static = piles_static and pile.restock == 0.0 \
+				and int(snapshot["target"]) == 0
+	var dept_panel := DepartmentPanel.new("scout")
+	office.add_child(dept_panel)
+	await get_tree().process_frame
+	var inbox_hidden := not _visible_ui_has_any_text(dept_panel,
+			[UIStrings.t("dept.inbox") % 0])
+	var map_hidden := (MapPins.build({})["clusters"] as Array).is_empty()
+	var search_probe := GlobalSearch.new()
+	office.add_child(search_probe)
+	await get_tree().process_frame
+	var search_hidden := search_probe._search("truth").is_empty()
+	var pipeline_hidden := PipelineQueueDefs.positions_for(
+			"scout", SimBadge.visible_positions()).is_empty()
+	var timeline := PositionsTimeline.new()
+	timeline.set_positions(counterfeit)
+	var unavailable_timeline_total := 0
+	for count in timeline._counts:
+		unavailable_timeline_total += count
+	var timeline_hidden := unavailable_timeline_total == 0
+	var chat := SectionPanel.new("chat", 0.0)
+	office.add_child(chat)
+	var usage := UsageHistoryView.new()
+	office.add_child(usage)
+	var agent_usage := AgentUsageView.new()
+	office.add_child(agent_usage)
+	await get_tree().process_frame
+	var unavailable_copy := UIStrings.t("common.connect_team")
+	var empty_copy_unavailable := SimBadge.positions_empty_copy() == unavailable_copy \
+			and _visible_ui_has_any_text(search_probe, [unavailable_copy])
+	var chat_unavailable := _visible_ui_has_any_text(chat, [unavailable_copy])
+	var usage_unavailable := usage._provenance_note.visible \
+			and usage._provenance_note.text == unavailable_copy \
+			and agent_usage._provenance_note.visible \
+			and agent_usage._provenance_note.text == unavailable_copy
+
+	# Adapter minimo marcato live: niente rete e nessun payload. La variazione
+	# passa davvero dai segnali osservati dalle viste gia' aperte.
+	var live_adapter := TruthfulnessBackend.new()
+	live_adapter.live = true
+	live_adapter.bus = BackendBus
+	BackendBus._backend = live_adapter
+	BackendBus.state = BackendBus.CONNECTED
+	BackendBus.connection_changed.emit(BackendBus.CONNECTED, "")
+	BackendBus.positions_are_demo = false
+	BackendBus.positions = counterfeit
+	BackendBus.positions_updated.emit(counterfeit)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var map_live := not (MapPins.build({})["clusters"] as Array).is_empty()
+	var search_live := search_probe._search("truth").size() == 1
+	var pipeline_live := PipelineQueueDefs.positions_for(
+			"scout", SimBadge.visible_positions()).size() == 1
+	timeline.set_positions(counterfeit)
+	var live_timeline_total := 0
+	for count in timeline._counts:
+		live_timeline_total += count
+	var timeline_live := live_timeline_total == 2
+	var chat_copy_removed := not _visible_ui_has_any_text(chat, [unavailable_copy])
+	var chat_live_state := chat._last_data_state == int(SimBadge.DataState.LIVE)
+	var chat_live_content := chat._content.get_child_count() > 0
+	var chat_live := chat_copy_removed and chat_live_state and chat_live_content
+	var usage_live := not usage._provenance_note.visible \
+			and not agent_usage._provenance_note.visible
+	var piles_seeded: bool = PaperPile.inbox.has("scout") \
+			and PaperPile.inbox["scout"].count == 1 \
+			and OutputShelf.instance != null and OutputShelf.instance._real == 1
+
+	# Risposta valida per l'ultima richiesta delle due viste: i grafici si
+	# popolano, poi la stessa risposta diventera' il controfattuale tardivo.
+	var now := Time.get_unix_time_from_system()
+	var usage_payload := {"ok": true, "error": "",
+			"sentinel": [{"t": now, "usage": 42.0, "weekly": 18.0,
+			"velocity": 3.0, "velocity_ideal": 4.0, "projection": 45.0}],
+			"meter": [{"t": now, "weighted_kt": 2.0, "events": 1}],
+			"throttle": [], "agents": {"names": ["scout-1"],
+			"series": [{"t": now, "scout-1": 2.0}],
+			"totals_kt": {"scout-1": 2.0}}}
+	var usage_old_query: Dictionary = usage._pending_query.duplicate(true)
+	var agent_usage_old_query: Dictionary = agent_usage._pending_query.duplicate(true)
+	usage._on_history(usage_old_query, usage_payload)
+	agent_usage._on_history(agent_usage_old_query, usage_payload)
+	await get_tree().process_frame
+	var usage_seeded := not usage._data.is_empty() \
+			and not usage._main_chart._series.is_empty() \
+			and not agent_usage._data.is_empty() \
+			and not agent_usage._stacked._series.is_empty()
+
+	BackendBus.publish_agents([{"slug": "scout", "uid": "scout-99",
+			"role": "scout", "name": "Probe", "active": true,
+			"status": "working", "desk_hint": ""}])
+	await get_tree().process_frame
+	var roster_seeded: bool = not BackendBus.agents.is_empty() \
+			and office.agents.any(func(a: AgentNPC) -> bool: return a.uid == "scout-99")
+
+	# LIVE vuoto deve azzerare di colpo la rappresentazione fisica e usare un
+	# messaggio di snapshot vuoto, non invitare a collegare un backend gia' live.
+	BackendBus.publish_positions([])
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var piles_live_empty := OutputShelf.instance != null \
+			and OutputShelf.instance._real == 0 and OutputShelf.instance._visual == 0
+	for dept_id in PaperPile.inbox:
+		var empty_snapshot := (PaperPile.inbox[dept_id] as PaperPile).debug_snapshot()
+		piles_live_empty = piles_live_empty and int(empty_snapshot["count"]) == 0 \
+				and int(empty_snapshot["target"]) == 0
+	var positions_panel := SectionPanel.new("positions", 0.0)
+	office.add_child(positions_panel)
+	await get_tree().process_frame
+	var live_empty_copy := UIStrings.t("common.positions_empty")
+	var copy_live_empty := SimBadge.positions_empty_copy() == live_empty_copy \
+			and _visible_ui_has_any_text(search_probe, [live_empty_copy]) \
+			and _visible_ui_has_any_text(positions_panel, [live_empty_copy])
+
+	# Il cambio adapter revoca anche il roster. Il segnale del bus e la difesa
+	# office.backend_reset sono entrambi attraversati dall'oracle.
+	BackendBus._reset_connection_snapshots()
+	await get_tree().process_frame
+	var roster_reset: bool = roster_seeded and BackendBus.agents.is_empty() \
+			and not office.agents.any(func(a: AgentNPC) -> bool: return a.uid != "")
+
+	# UNAVAILABLE cancella dati e grafici; la risposta vecchia resta respinta
+	# sia durante il gap sia dopo una nuova generazione LIVE con lo stesso range.
+	BackendBus.state = BackendBus.DISCONNECTED
+	BackendBus.connection_changed.emit(BackendBus.DISCONNECTED, "")
+	await get_tree().process_frame
+	usage._on_history(usage_old_query, usage_payload)
+	agent_usage._on_history(agent_usage_old_query, usage_payload)
+	await get_tree().process_frame
+	var usage_cleared := usage._data.is_empty() and usage._main_chart._series.is_empty() \
+			and usage._mini_velocity._series.is_empty() \
+			and usage._mini_tokens._series.is_empty() \
+			and usage._mini_throttle._series.is_empty() \
+			and agent_usage._data.is_empty() \
+			and agent_usage._stacked._series.is_empty() \
+			and agent_usage._donut.slices.is_empty() \
+			and agent_usage._heatmap._cells.is_empty()
+	BackendBus.state = BackendBus.CONNECTED
+	BackendBus.connection_changed.emit(BackendBus.CONNECTED, "")
+	var usage_new_id := str(usage._pending_query.get("request_id", ""))
+	var agent_usage_new_id := str(agent_usage._pending_query.get("request_id", ""))
+	usage._on_history(usage_old_query, usage_payload)
+	agent_usage._on_history(agent_usage_old_query, usage_payload)
+	BackendBus.publish_usage_history(usage_old_query, usage_payload)
+	await get_tree().process_frame
+	var usage_late_rejected := usage_new_id != "" \
+			and usage_new_id != str(usage_old_query.get("request_id", "")) \
+			and agent_usage_new_id != "" \
+			and agent_usage_new_id != str(agent_usage_old_query.get("request_id", "")) \
+			and usage._data.is_empty() and agent_usage._data.is_empty() \
+			and BackendBus.usage_history.is_empty()
+	var forbidden_visible: bool = _visible_ui_has_any_text(get_tree().root,
+			["PROTOTYPE", "MOCK", "SIMULATION", "SIMULAZIONE",
+			"DEMO MODE", "SHOWROOM"])
+	var ok: bool = unavailable and roster_empty and counterfeit_present and badge_hidden \
+			and piles_empty and piles_static and inbox_hidden \
+			and map_hidden and search_hidden and pipeline_hidden and timeline_hidden \
+			and chat_unavailable and usage_unavailable and empty_copy_unavailable \
+			and map_live and search_live and pipeline_live and timeline_live \
+			and chat_live and usage_live and piles_seeded and usage_seeded \
+			and piles_live_empty and copy_live_empty and roster_reset \
+			and usage_cleared and usage_late_rejected and not forbidden_visible
+	print(("TRUTHFULNESS-TEST %s unavailable=%s roster_empty=%s " \
+			+ "counterfeit_present=%s badge_hidden=%s piles_empty=%s piles_static=%s " \
+			+ "inbox_hidden=%s map_hidden=%s search_hidden=%s pipeline_hidden=%s " \
+			+ "timeline_hidden=%s chat_unavailable=%s usage_unavailable=%s " \
+			+ "map_live=%s search_live=%s pipeline_live=%s " \
+			+ "timeline_live=%s chat_copy_removed=%s chat_live_state=%s " \
+			+ "chat_live_content=%s " \
+			+ "usage_live=%s piles_live_empty=%s copy_live_empty=%s " \
+			+ "roster_reset=%s usage_cleared=%s usage_late_rejected=%s " \
+			+ "forbidden_visible=%s") % [
+			"PASS" if ok else "FAIL", unavailable, roster_empty,
+			counterfeit_present, badge_hidden, piles_empty, piles_static, inbox_hidden,
+			map_hidden, search_hidden, pipeline_hidden, timeline_hidden,
+			chat_unavailable, usage_unavailable,
+			map_live, search_live, pipeline_live, timeline_live,
+			chat_copy_removed, chat_live_state, chat_live_content, usage_live,
+			piles_live_empty, copy_live_empty, roster_reset, usage_cleared,
+			usage_late_rejected,
+			forbidden_visible])
+	dept_panel.queue_free()
+	chat.queue_free()
+	usage.queue_free()
+	agent_usage.queue_free()
+	search_probe.queue_free()
+	positions_panel.queue_free()
+	timeline.free()
+	BackendBus._backend = null
+	for player in Sfx._pool:
+		player.stop()
+		player.stream = null
+	for ambient in office.find_children("*", "AudioStreamPlayer", true, false):
+		ambient.stop()
+		ambient.stream = null
+	await get_tree().process_frame
 	get_tree().quit(0 if ok else 1)
 
 
@@ -176,7 +442,8 @@ func _live_profile_selftest() -> void:
 	var badges: Array[Node] = office.find_children("*", "SimBadge", true, false)
 	var badge_hidden := badges.size() == 1 and not (badges[0] as SimBadge).visible
 	var forbidden_visible := _visible_ui_has_any_text(get_tree().root,
-			["SIMULATION", "SIMULAZIONE", "DEMO MODE"])
+			["PROTOTYPE", "MOCK", "SIMULATION", "SIMULAZIONE",
+			"DEMO MODE", "SHOWROOM"])
 	var loading_visible := _visible_ui_has_any_text(get_tree().root,
 			["CARICAMENTO", "LOADING"])
 	var frame_ok := true
@@ -209,7 +476,7 @@ func _visible_ui_has_any_text(node: Node, tokens: Array) -> bool:
 		text = (node as LineEdit).text
 	var upper := text.to_upper()
 	for token in tokens:
-		if str(token) in upper:
+		if str(token).to_upper() in upper:
 			return true
 	for child in node.get_children():
 		if _visible_ui_has_any_text(child, tokens):

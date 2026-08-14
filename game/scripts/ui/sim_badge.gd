@@ -1,9 +1,12 @@
 class_name SimBadge
 extends PanelContainer
-## Badge di verità dei dati (ordine Leone 18:0x): finché in scena NON
-## scorrono i dati veri della VPS l'utente deve vederlo a colpo d'occhio.
-## In alto al centro: ambra "SIMULAZIONE — dati non reali". Quando backend e
-## posizioni sono davvero live il warning scompare: non e' un watermark.
+## Provenienza unica per tutte le superfici dell'ufficio.
+##
+## UNAVAILABLE non equivale a DEMO: senza un gate esplicito i consumer devono
+## mostrare stati vuoti, mai fixture. Il badge compare soltanto in DEMO;
+## LIVE e UNAVAILABLE restano privi di diciture sintetiche.
+
+enum DataState { LIVE, DEMO, UNAVAILABLE }
 
 var _label: Label
 
@@ -29,18 +32,11 @@ func _notification(what: int) -> void:
 		position = Vector2((get_parent_area_size().x - size.x) / 2.0, 14)
 
 func _refresh() -> void:
-	# Un collegamento vero puo' convivere per qualche secondo con le posizioni
-	# showroom. Finche' il bus le marca demo, il badge deve continuare a dire
-	# SIMULAZIONE; "connesso" non rende reali quei numeri.
-	var live_positions: bool = BackendBus.is_live() and not BackendBus.positions_are_demo
-	_apply_state(live_positions, false)
+	_apply_state(current_state())
 
 
-func _apply_state(backend_live: bool, positions_demo: bool) -> void:
-	# Questo nodo e' un AVVISO, non un watermark permanente: quando backend e
-	# posizioni sono entrambi reali non c'e' piu' nulla da segnalare. Nasconderlo
-	# prima (solo perche' la socket e' connessa) sarebbe invece ingannevole.
-	visible = warning_needed(backend_live, positions_demo)
+func _apply_state(state: DataState) -> void:
+	visible = state == DataState.DEMO
 	if not visible:
 		return
 	var color: Color = Palette.YELLOW
@@ -53,6 +49,59 @@ func _apply_state(backend_live: bool, positions_demo: bool) -> void:
 	add_theme_stylebox_override("panel", style)
 
 
-## Tabella di verita' separata dalla scena: usata anche dal selftest headless.
-static func warning_needed(backend_live: bool, positions_demo: bool) -> bool:
-	return not backend_live or positions_demo
+## Classificazione pura, coperta dal selftest headless. Il flag demo ha
+## precedenza anche su un MockBackend che dichiara la connessione attiva.
+## Una posizione marcata demo senza autorizzazione non puo' diventare LIVE.
+static func classify(backend_live: bool, positions_demo: bool,
+		demo_gate: bool) -> DataState:
+	if demo_gate:
+		return DataState.DEMO
+	if backend_live and not positions_demo:
+		return DataState.LIVE
+	return DataState.UNAVAILABLE
+
+
+static func current_state() -> DataState:
+	return classify(BackendBus.is_live(), BackendBus.positions_are_demo,
+			explicit_demo_requested())
+
+
+static func synthetic_data_allowed() -> bool:
+	return current_state() == DataState.DEMO
+
+
+## Unico rubinetto per le superfici che consumano lo snapshot posizioni.
+## Un array presente sul bus non prova la provenienza: un MockBackend o una
+## fixture rimasta in memoria devono diventare invisibili finche' manca un
+## gate DEMO esplicito o un backend LIVE non-demo.
+static func visible_positions() -> Array:
+	return [] if current_state() == DataState.UNAVAILABLE else BackendBus.positions
+
+
+## Uno snapshot LIVE vuoto e un backend assente chiedono azioni diverse.
+## Le tre superfici positions/search/map usano questa stessa decisione per
+## non invitare a collegare un team che e' gia' collegato e semplicemente non
+## ha ancora posizioni.
+static func positions_empty_copy() -> String:
+	return UIStrings.t("common.positions_empty") \
+			if current_state() == DataState.LIVE \
+			else UIStrings.t("common.connect_team")
+
+
+## La release normale non soddisfa nessuno di questi rami. JHT_DEMO e' il
+## gate pubblico intenzionale; mock, tutorial e OfficeSelftests sono fixture
+## avviate esplicitamente dai rispettivi runner. Il profilo live e' escluso
+## anche se usa il dispatcher dei selftest.
+static func explicit_demo_requested() -> bool:
+	if OS.get_environment("JHT_LIVE_PROFILE_TEST") == "1" \
+			or OS.get_environment("JHT_TRUTHFULNESS_TEST") == "1":
+		return false
+	if OS.get_environment("JHT_DEMO") == "1" \
+			or OS.get_environment("JHT_WIZARD_TEST") == "1" \
+			or OS.get_environment("JHT_MOCK_SETUP") == "1" \
+			or OS.get_environment("JHT_TUTORIAL_HARNESS") == "1" \
+			or OS.get_environment("JHT_SEAT_AUDIT") != "" \
+			or OS.get_environment("JHT_ALL_SEATED_PREVIEW") == "1" \
+			or OS.get_environment("JHT_PILE_PREVIEW") != "":
+		return true
+	return OfficeSelftests.armed()

@@ -1236,9 +1236,9 @@ func _bubble_tick(delta: float) -> void:
 	if speech and speech.is_speaking():
 		bubble.hide_now()
 		return
-	# coi dati VERI il chatter di ambientazione tace: sotto il badge
-	# "DATI REALI" parlano solo i messaggi autentici (SpeechBubble)
-	if BackendBus.is_live():
+	# Il chatter authored appartiene soltanto alla fixture DEMO. LIVE parla
+	# con eventi autentici; UNAVAILABLE resta silenzioso.
+	if not SimBadge.synthetic_data_allowed():
 		bubble.hide_now()
 		return
 	_bubble_timer -= delta

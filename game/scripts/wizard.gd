@@ -539,7 +539,8 @@ func _on_connection(state: int, detail: String) -> void:
 			_input.editable = false
 			_send_btn.disabled = true
 			_upload_btn.disabled = true
-	_badge.text = "" if BackendBus.is_live() else UIStrings.t("wizard.sim_badge")
+	_badge.text = UIStrings.t("wizard.sim_badge") \
+			if SimBadge.current_state() == SimBadge.DataState.DEMO else ""
 
 func _on_agents(_agents: Array) -> void:
 	# Il roster risolve lo slug nell'uid vero (mock: assistente-1): la
@@ -560,7 +561,8 @@ func _refresh_status() -> void:
 	if BackendBus.state != BackendBus.CONNECTED:
 		return
 	_status.text = "" if reachable else UIStrings.t("wizard.booting_assistant")
-	_badge.text = "" if BackendBus.is_live() else UIStrings.t("wizard.sim_badge")
+	_badge.text = UIStrings.t("wizard.sim_badge") \
+			if SimBadge.current_state() == SimBadge.DataState.DEMO else ""
 
 ## ── Profilo pronto → ufficio ─────────────────────────────────────────
 
