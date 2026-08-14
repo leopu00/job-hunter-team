@@ -38,10 +38,11 @@ def test_release_check_rejects_a_moving_compose_image(tmp_path: Path) -> None:
 
     compose = sandbox / "docker-compose.yml"
     shutil.copy2(ROOT / "docker-compose.yml", compose)
-    version = json.loads((ROOT / "package.json").read_text())["version"]
+    manifest = json.loads((ROOT / "release/runtime-image.v1.json").read_text())
+    immutable_ref = f'{manifest["repository"]}@{manifest["digest"]}'
     compose.write_text(
         compose.read_text().replace(
-            f"image: ${{JHT_IMAGE:-ghcr.io/leopu00/jht:{version}}}",
+            f"image: ${{JHT_IMAGE:-{immutable_ref}}}",
             "image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}",
         )
     )
@@ -49,4 +50,4 @@ def test_release_check_rejects_a_moving_compose_image(tmp_path: Path) -> None:
     result = run_release_check(sandbox)
     output = result.stdout + result.stderr
     assert result.returncode != 0
-    assert "docker-compose.yml" in output
+    assert "runtime image consumers" in output

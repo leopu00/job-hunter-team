@@ -171,6 +171,8 @@ def test_release_workflow_verifies_and_publishes_integrity_files() -> None:
     assert "${{ matrix.artifact_path }}.provenance.json" in workflow
     assert "release-assets/SHA256SUMS" in workflow
     assert "release-assets/RELEASE-PROVENANCE.json" in workflow
+    assert "release-assets/RUNTIME-IMAGE.json" in workflow
+    assert "--expected-asset RUNTIME-IMAGE.json" in workflow
     assert "release_artifacts.py notes" in workflow
     assert "body_path: release-assets/RELEASE-NOTES.md" in workflow
     assert "draft: true" in workflow

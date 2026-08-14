@@ -85,23 +85,6 @@ VERSIONED_PACKAGES=(
   desktop/app-payload/shared/tools/package.json
 )
 
-# Questi file vengono eseguiti o consegnati agli utenti. Il canale dev
-# scripts/dev-up.sh resta deliberatamente su latest e non appartiene al tag.
-PINNED_IMAGE_ASSERTIONS=(
-  'docker-compose.yml|image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:__VERSION__}'
-  'game/scripts/backend/payloads/runtime_compose.yml|image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:__VERSION__}'
-  'game/scripts/setup/setup_service.gd|const DEFAULT_RUNTIME_IMAGE := "ghcr.io/leopu00/jht:__VERSION__"'
-  "cli/src/commands/container.js|'ghcr.io/leopu00/jht:__VERSION__'"
-  'scripts/install.sh|IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:__VERSION__}"'
-  'web/public/install.sh|IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:__VERSION__}"'
-  "scripts/install.ps1|else { 'ghcr.io/leopu00/jht:__VERSION__' }"
-  "web/public/install.ps1|else { 'ghcr.io/leopu00/jht:__VERSION__' }"
-  'scripts/jht-wrapper.sh|${candidate_ref:-${JHT_IMAGE:-ghcr.io/leopu00/jht:__VERSION__}}'
-  "scripts/jht-wrapper.ps1|else { 'ghcr.io/leopu00/jht:__VERSION__' }"
-  'docs/guides/CLI-INSTALL.md|`ghcr.io/leopu00/jht:__VERSION__`'
-  '.env.example|# {ghcr.io/leopu00/jht:__VERSION__}'
-)
-
 # Copie legacy del payload desktop che mostrano la versione senza poter
 # importare il package.json al build time.
 PAYLOAD_VERSION_FILES=(
@@ -133,7 +116,9 @@ GAME_WIN_FILE="$(awk -F'=' '/^application\/file_version=/{gsub(/"/, "", $2); pri
 GAME_WIN_PRODUCT="$(awk -F'=' '/^application\/product_version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PRESETS")"
 GAME_NUMERIC_VERSION="${TAG_VERSION%%-*}.0"
 NSIS_VERSION="$(awk -F'"' '/^[[:space:]]*!define VERSION /{print $2; exit}' "$NSIS_INSTALLER")"
-CONTAINER_IMAGE="ghcr.io/leopu00/jht:$TAG_VERSION"
+RUNTIME_PIN_TOOL="$ROOT/scripts/runtime_image_pin.py"
+RUNTIME_PIN_MANIFEST="$ROOT/release/runtime-image.v1.json"
+CONTAINER_IMAGE="$(python3 "$RUNTIME_PIN_TOOL" --manifest "$RUNTIME_PIN_MANIFEST" show --field image_ref)"
 
 info "tag:      $TAG (version $TAG_VERSION)"
 info "root:     $ROOT_VERSION  ($ROOT_PKG)"
@@ -189,15 +174,11 @@ if [ "$NSIS_VERSION" != "$TAG_VERSION" ]; then
   mismatch=1
 fi
 
-for assertion in "${PINNED_IMAGE_ASSERTIONS[@]}"; do
-  relative="${assertion%%|*}"
-  expected="${assertion#*|}"
-  expected="${expected//__VERSION__/$TAG_VERSION}"
-  if ! grep -Fq "$expected" "$ROOT/$relative"; then
-    error "$relative does not contain the pinned runtime field for $CONTAINER_IMAGE"
-    mismatch=1
-  fi
-done
+if ! python3 "$RUNTIME_PIN_TOOL" --manifest "$RUNTIME_PIN_MANIFEST" \
+    verify-tree --root "$ROOT" --version "$TAG_VERSION"; then
+  error "runtime image consumers do not match the immutable release manifest"
+  mismatch=1
+fi
 
 for relative in "${PAYLOAD_VERSION_FILES[@]}"; do
   if ! grep -Fq "$TAG_VERSION" "$ROOT/$relative"; then

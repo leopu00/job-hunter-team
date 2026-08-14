@@ -74,7 +74,7 @@ function Protect-JhtHomeAcl {
   }
   if (-not (Get-Acl -LiteralPath $Path).AreAccessRulesProtected) { throw "ACL inheritance remains enabled: $Path" }
 }
-$Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht:0.3.9' }
+$Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598' }
 $env:JHT_IMAGE = $Image
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 
