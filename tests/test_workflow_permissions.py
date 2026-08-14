@@ -1,7 +1,9 @@
 """Executable least-privilege census for every GitHub Actions workflow."""
 
+from copy import deepcopy
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -31,6 +33,7 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     "release.yml": {
         "check-version": READ_CONTENTS,
         "build-game": READ_CONTENTS,
+        "publish-runtime": {"contents": "read", "packages": "write"},
         "release": {"contents": "write"},
     },
     "security.yml": {
@@ -57,6 +60,18 @@ def _load_workflow(path: Path) -> dict:
     return yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
 
+def _assert_exact_job_permissions(name: str, workflow: dict, expected_jobs: dict) -> None:
+    workflow_permissions = workflow.get("permissions")
+
+    assert workflow_permissions == READ_CONTENTS, name
+    assert set(workflow["jobs"]) == set(expected_jobs), name
+
+    for job_name, expected_permissions in expected_jobs.items():
+        job = workflow["jobs"][job_name]
+        effective_permissions = job.get("permissions", workflow_permissions)
+        assert effective_permissions == expected_permissions, f"{name}:{job_name}"
+
+
 def test_all_workflows_have_only_the_minimum_explicit_permissions():
     workflow_paths = {path.name: path for path in WORKFLOW_DIR.glob("*.yml")}
 
@@ -65,12 +80,25 @@ def test_all_workflows_have_only_the_minimum_explicit_permissions():
 
     for name, expected_jobs in EXPECTED_EFFECTIVE_PERMISSIONS.items():
         workflow = _load_workflow(workflow_paths[name])
-        workflow_permissions = workflow.get("permissions")
+        _assert_exact_job_permissions(name, workflow, expected_jobs)
 
-        assert workflow_permissions == READ_CONTENTS, name
-        assert set(workflow["jobs"]) == set(expected_jobs), name
 
-        for job_name, expected_permissions in expected_jobs.items():
-            job = workflow["jobs"][job_name]
-            effective_permissions = job.get("permissions", workflow_permissions)
-            assert effective_permissions == expected_permissions, f"{name}:{job_name}"
+@pytest.mark.parametrize(
+    "drifted_permissions",
+    [
+        {"contents": "read"},
+        {"contents": "read", "packages": "write", "id-token": "write"},
+    ],
+    ids=("missing-package-write", "unexpected-id-token-write"),
+)
+def test_publish_runtime_rejects_permission_subset_and_superset(drifted_permissions):
+    name = "release.yml"
+    workflow = deepcopy(_load_workflow(WORKFLOW_DIR / name))
+    workflow["jobs"]["publish-runtime"]["permissions"] = drifted_permissions
+
+    with pytest.raises(AssertionError, match=r"release\.yml:publish-runtime"):
+        _assert_exact_job_permissions(
+            name,
+            workflow,
+            EXPECTED_EFFECTIVE_PERMISSIONS[name],
+        )
