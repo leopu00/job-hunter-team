@@ -194,10 +194,16 @@ func _observer_high_water_contract() -> void:
 
 	event = observer.observe({"aa": "Pull complete"}, bytes)
 	_check("osservatore: complete avanza", bool(event["advanced"]), str(event))
+	_check("osservatore: complete espone done monotono",
+			int((event["state"] as Dictionary)["done"]) == 1, str(event))
 	event = observer.observe({"aa": "Downloading 19 MB"},
 			{"aa": {"got": 19.0, "total": 20.0}})
 	_check("osservatore: complete -> downloading e' stale",
 			bool(event["changed"]) and not bool(event["advanced"]), str(event))
+	_check("osservatore: stato UI non regredisce dopo complete",
+			int((event["state"] as Dictionary)["done"]) == 1
+			and str((event["state"] as Dictionary)["phase"])
+			== ProgressState.PHASE_COMPLETE, str(event))
 
 	event = observer.observe({"aa": "messaggio opaco A"}, bytes)
 	_check("osservatore: OTHER variabile resta fail-closed",
@@ -205,4 +211,19 @@ func _observer_high_water_contract() -> void:
 	event = observer.observe({"aa": "messaggio opaco B"}, bytes)
 	_check("osservatore: OTHER oscillante non rinnova",
 			bool(event["changed"]) and not bool(event["advanced"]), str(event))
+	_check("osservatore: OTHER non regredisce lo stato UI",
+			int((event["state"] as Dictionary)["done"]) == 1, str(event))
+
+	# Il producer puo annunciare la verifica dopo Download complete: e' una
+	# fase causale successiva, anche se i byte di download sono gia' al totale.
+	var phase_observer := ProgressState.new()
+	phase_observer.observe({"bb": "Download complete"},
+			{"bb": {"got": 20.0, "total": 20.0}})
+	event = phase_observer.observe({"bb": "Verifying Checksum"},
+			{"bb": {"got": 20.0, "total": 20.0}})
+	_check("osservatore: Download complete -> Verifying avanza",
+			bool(event["changed"]) and bool(event["advanced"]), str(event))
+	_check("osservatore: stato high-water espone verifying",
+			str((event["state"] as Dictionary)["phase"])
+			== ProgressState.PHASE_VERIFYING, str(event))
 	_sections += 1

@@ -41,8 +41,8 @@ const PHASE_STAGE := {
 	PHASE_QUEUED: 10,
 	PHASE_WAITING: 20,
 	PHASE_DOWNLOADING: 30,
-	PHASE_VERIFYING: 40,
-	PHASE_DOWNLOADED: 50,
+	PHASE_DOWNLOADED: 40,
+	PHASE_VERIFYING: 50,
 	PHASE_EXTRACTING: 60,
 	PHASE_COMPLETE: 70,
 }
@@ -68,13 +68,11 @@ func observe(layers: Dictionary, layer_bytes: Dictionary) -> Dictionary:
 		var id := str(raw_id)
 		var status := _normalized_status(str(layers[raw_id]))
 		var phase := classify_status(status)
-		if phase == PHASE_UNKNOWN or phase == PHASE_OTHER:
-			continue
 		var candidate := _high_water_candidate(
 				phase, status, layer_bytes.get(id, {}))
 		if not _high_water.has(id):
 			_high_water[id] = candidate
-			advanced = true
+			advanced = int(candidate["stage"]) > 0
 			continue
 		var previous: Dictionary = _high_water[id]
 		var candidate_stage := int(candidate["stage"])
@@ -91,7 +89,7 @@ func observe(layers: Dictionary, layer_bytes: Dictionary) -> Dictionary:
 		"changed": changed,
 		"advanced": advanced,
 		"fingerprint": fingerprint,
-		"state": classify(layers),
+		"state": _high_water_state(),
 	}
 
 
@@ -126,12 +124,19 @@ static func classify_status(status: String) -> String:
 ## Riassunto deterministico dello stato corrente. `done` conta soltanto i
 ## livelli realmente conclusi, mai quelli che hanno finito il solo download.
 static func classify(layers: Dictionary) -> Dictionary:
+	var phases := {}
+	for id: Variant in layers:
+		phases[str(id)] = classify_status(str(layers[id]))
+	return _classify_phases(phases)
+
+
+static func _classify_phases(phases: Dictionary) -> Dictionary:
 	var counts := {}
 	var active_phase := PHASE_UNKNOWN
 	var active_priority := -1
 	var done := 0
-	for id: Variant in layers:
-		var phase := classify_status(str(layers[id]))
+	for id: Variant in phases:
+		var phase := str(phases[id])
 		counts[phase] = int(counts.get(phase, 0)) + 1
 		if phase == PHASE_COMPLETE:
 			done += 1
@@ -140,14 +145,14 @@ static func classify(layers: Dictionary) -> Dictionary:
 		if priority > active_priority:
 			active_priority = priority
 			active_phase = phase
-	if layers.is_empty():
+	if phases.is_empty():
 		active_phase = PHASE_UNKNOWN
-	elif done == layers.size():
+	elif done == phases.size():
 		active_phase = PHASE_COMPLETE
 	return {
 		"phase": active_phase,
 		"done": done,
-		"total": layers.size(),
+		"total": phases.size(),
 		"counts": counts,
 	}
 
@@ -221,7 +226,18 @@ static func _high_water_candidate(phase: String, status: String,
 			sizes.append(_size_to_bytes(found.get_string(1), found.get_string(2)))
 		if not sizes.is_empty():
 			work = sizes[0]
-	return {"stage": int(PHASE_STAGE[phase]), "work": work}
+	return {
+		"phase": phase,
+		"stage": int(PHASE_STAGE.get(phase, 0)),
+		"work": work,
+	}
+
+
+func _high_water_state() -> Dictionary:
+	var phases := {}
+	for id: Variant in _high_water:
+		phases[str(id)] = str((_high_water[id] as Dictionary)["phase"])
+	return _classify_phases(phases)
 
 
 ## I parser esistenti conservano MB come float. Riportarli a byte interi evita
