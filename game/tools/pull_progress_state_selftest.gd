@@ -213,6 +213,11 @@ func _observer_high_water_contract() -> void:
 			bool(event["changed"]) and not bool(event["advanced"]), str(event))
 	_check("osservatore: OTHER non regredisce lo stato UI",
 			int((event["state"] as Dictionary)["done"]) == 1, str(event))
+	event = observer.observe({}, {})
+	_check("osservatore: snapshot vuoto non cancella l'high-water",
+			bool(event["changed"]) and not bool(event["advanced"])
+			and int((event["state"] as Dictionary)["done"]) == 1
+			and int((event["state"] as Dictionary)["total"]) == 1, str(event))
 
 	# Il producer puo annunciare la verifica dopo Download complete: e' una
 	# fase causale successiva, anche se i byte di download sono gia' al totale.
