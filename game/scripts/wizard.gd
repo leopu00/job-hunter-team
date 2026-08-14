@@ -307,6 +307,12 @@ static func _field_value(profile: Dictionary, field: String) -> String:
 		return ", ".join(PackedStringArray(parts))
 	return str(v)
 
+## Review values deliberately use JSON for every type: unlike the compact
+## badge renderer this preserves false/null, nested objects and ordered lists.
+## If the value cannot be rendered, the entire review remains unconfirmable.
+static func _review_value(value: Variant) -> String:
+	return JSON.stringify(value)
+
 ## La revisione del CV è deliberatamente separata dal badge: i valori qui
 ## sono una proposta locale, mentre il badge sopra continua a rappresentare
 ## esclusivamente candidate_profile.yml. Solo la ricevuta opaca del poll può
@@ -335,24 +341,24 @@ func _redraw_review(review: Dictionary, error: String) -> void:
 	# Non basta che l'array esista: se anche una riga non è visualizzabile,
 	# l'utente non sta confermando lo stesso insieme che il backend salverebbe.
 	# La revisione intera diventa quindi non confermabile, senza saltare righe.
+	var seen_fields := {}
 	for item in changes:
 		if not item is Dictionary:
 			_review_box.add_child(_review_note("wizard.review_unavailable", Palette.RED))
 			return
 		var item_field := str(item.get("field", ""))
-		var item_profile := {}
-		item_profile[item_field] = item.get("value")
-		if not FIELDS.has(item_field) or _field_value(item_profile, item_field) == "":
+		if item_field == "" or seen_fields.has(item_field) or not item.has("value") \
+				or _review_value(item.get("value")) == "":
 			_review_box.add_child(_review_note("wizard.review_unavailable", Palette.RED))
 			return
+		seen_fields[item_field] = true
 	_review_box.add_child(_review_note("wizard.review_body", Palette.MUTED))
 	for item in changes:
 		var field := str(item.get("field", ""))
-		var item_profile := {}
-		item_profile[field] = item.get("value")
-		var value := _field_value(item_profile, field)
+		var value := _review_value(item.get("value"))
+		var label := UIStrings.t("wizard.f." + field) if FIELDS.has(field) else field
 		var line := TerminalTheme.label(
-				"%s: %s" % [UIStrings.t("wizard.f." + field), value],
+				"%s: %s" % [label, value],
 				12, Palette.BRIGHT, "medium")
 		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_review_box.add_child(line)
@@ -603,18 +609,25 @@ func _selftest() -> void:
 	_on_cv_selected(tmp)
 	await get_tree().create_timer(5.5).timeout
 	var staged_before_save := _active_review_id != "" and not _ready_flag
+	var review_text := ""
+	for child in _review_box.get_children():
+		if child is Label:
+			review_text += str(child.text) + "\n"
+	var complete_review_visible := review_text.contains("has_degree: false") \
+			and review_text.contains("contacts.phone: \"+00 000 000\"")
 	var review_id := _active_review_id
 	BackendBus.confirm_profile_review(review_id)
 	await get_tree().create_timer(0.5).timeout
 	DirAccess.remove_absolute(tmp)
 	var ok := _ready_flag and not _enter_btn.disabled \
 			and _list.get_child_count() >= 5 and staged_before_save \
-			and _active_review_id == ""
+			and complete_review_visible and _active_review_id == ""
 	print("WIZARD-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"ready": _ready_flag,
 					"enter_enabled": not _enter_btn.disabled,
 					"chat_rows": _list.get_child_count(),
 					"staged_before_save": staged_before_save,
+					"complete_review_visible": complete_review_visible,
 					"review_cleared": _active_review_id == ""}))
 	get_tree().quit()
 

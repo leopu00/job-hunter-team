@@ -33,7 +33,7 @@ import yaml
 
 MAX_PROFILE_BYTES = 64 * 1024
 MAX_REVIEW_BYTES = 128 * 1024
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 REVIEW_ID_RE = re.compile(r"^[0-9a-f]{64}$")
 FIELDS = (
     "name",
@@ -236,9 +236,39 @@ def _required(view: dict[str, Any]) -> dict[str, bool]:
     }
 
 
-def _review_id(base_hash: str, profile: dict[str, Any]) -> str:
+_MISSING = object()
+
+
+def _changes(
+    before: Any, after: Any, path: tuple[str, ...] = ()
+) -> list[dict[str, Any]]:
+    """Return every persisted difference in a deterministic, displayable form.
+
+    Dictionaries are expanded recursively so nested CV fields cannot hide behind
+    one of the eight badge rows.  Lists stay whole: showing the final ordered
+    value is the only unambiguous review for experience/education entries.
+    """
+
+    if isinstance(after, dict) and (isinstance(before, dict) or before is _MISSING):
+        prior = before if isinstance(before, dict) else {}
+        if not after and prior != after:
+            return [{"field": ".".join(path), "value": {}}]
+        changes: list[dict[str, Any]] = []
+        for key in sorted(after):
+            changes.extend(
+                _changes(prior.get(key, _MISSING), after[key], (*path, key))
+            )
+        return changes
+    if before is not _MISSING and before == after:
+        return []
+    return [{"field": ".".join(path), "value": copy.deepcopy(after)}]
+
+
+def _review_id(
+    base_hash: str, profile: dict[str, Any], changes: list[dict[str, Any]]
+) -> str:
     canonical = json.dumps(
-        {"base_hash": base_hash, "profile": profile},
+        {"base_hash": base_hash, "changes": changes, "profile": profile},
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -328,10 +358,26 @@ def _read_envelope() -> dict[str, Any]:
         raise ProfileReviewError("review_invalid")
     if not isinstance(envelope.get("profile"), dict):
         raise ProfileReviewError("review_invalid")
-    expected = _review_id(str(envelope.get("base_hash", "")), envelope["profile"])
-    if expected != envelope["review_id"]:
+    changes = envelope.get("changes")
+    if not isinstance(changes, list) or not changes:
         raise ProfileReviewError("review_invalid")
-    if not isinstance(envelope.get("changes"), list) or not isinstance(envelope.get("missing"), list):
+    fields: set[str] = set()
+    for item in changes:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"field", "value"}
+            or not isinstance(item["field"], str)
+            or not item["field"]
+            or item["field"] in fields
+        ):
+            raise ProfileReviewError("review_invalid")
+        fields.add(item["field"])
+    if not isinstance(envelope.get("missing"), list):
+        raise ProfileReviewError("review_invalid")
+    expected = _review_id(
+        str(envelope.get("base_hash", "")), envelope["profile"], changes
+    )
+    if expected != envelope["review_id"]:
         raise ProfileReviewError("review_invalid")
     return envelope
 
@@ -346,20 +392,15 @@ def stage() -> dict[str, Any]:
         encoded = json.dumps(merged, ensure_ascii=False, allow_nan=False).encode("utf-8")
         if len(encoded) > MAX_PROFILE_BYTES:
             raise ProfileReviewError("too_large")
-        before = _view(base)
         after = _view(merged)
-        changes = [
-            {"field": field, "value": after[field]}
-            for field in FIELDS
-            if before[field] != after[field]
-        ]
+        changes = _changes(base, merged)
         if not changes:
             raise ProfileReviewError("no_changes")
         required = _required(after)
         base_hash = _hash(base_raw)
         envelope = {
             "schema_version": SCHEMA_VERSION,
-            "review_id": _review_id(base_hash, merged),
+            "review_id": _review_id(base_hash, merged, changes),
             "base_hash": base_hash,
             "profile": merged,
             "changes": changes,
@@ -381,8 +422,11 @@ def status() -> dict[str, Any] | None:
         if exc.code == "missing":
             return None
         raise
-    _, current_raw = _read_profile()
-    return _public_review(envelope, stale=_hash(current_raw) != envelope["base_hash"])
+    current, current_raw = _read_profile()
+    stale = _hash(current_raw) != envelope["base_hash"]
+    if not stale and _changes(current, envelope["profile"]) != envelope["changes"]:
+        raise ProfileReviewError("review_invalid")
+    return _public_review(envelope, stale=stale)
 
 
 def confirm(review_id: str) -> dict[str, Any]:
@@ -392,9 +436,14 @@ def confirm(review_id: str) -> dict[str, Any]:
         envelope = _read_envelope()
         if envelope["review_id"] != review_id:
             raise ProfileReviewError("review_mismatch")
-        _, current_raw = _read_profile()
+        current, current_raw = _read_profile()
         if _hash(current_raw) != envelope["base_hash"]:
             raise ProfileReviewError("profile_changed")
+        # The click is valid only for the complete set shown by status.  This
+        # comparison runs under the same lock as the write, so neither omitted
+        # nested fields nor a concurrent base change can cross the boundary.
+        if _changes(current, envelope["profile"]) != envelope["changes"]:
+            raise ProfileReviewError("review_invalid")
         if os.environ.get("JHT_PROFILE_REVIEW_FAIL_BEFORE_REPLACE") == "1":
             raise ProfileReviewError("write_failed")
         profile_hash = write_profile(envelope["profile"])

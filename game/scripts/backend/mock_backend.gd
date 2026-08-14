@@ -444,6 +444,8 @@ func _mock_reply(agent: String, profile_attachment := false) -> void:
 				"review_id": "a".repeat(64),
 				"changes": [
 					{"field": "seniority_target", "value": "mid"},
+					{"field": "has_degree", "value": false},
+					{"field": "contacts.phone", "value": "+00 000 000"},
 					{"field": "skills", "value": ["Team leadership", "Budgeting",
 							"Public speaking"]},
 				],
