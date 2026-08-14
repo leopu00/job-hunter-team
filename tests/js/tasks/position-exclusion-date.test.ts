@@ -47,15 +47,22 @@ describe("data della decisione nel motivo di esclusione", () => {
     }
   });
 
-  it("lega il riquadro solo al timestamp atomico dell'esclusione", () => {
+  it("lega il riquadro alle sole date della decisione, in quest'ordine", () => {
+    // Due mani, due sorgenti: il timbro atomico dell'utente, e — quando a
+    // escludere è il team — la transizione a «esclusa» dell'event-log. La
+    // precedenza è dell'utente: se ha deciso lui, quella è LA decisione.
     expect(page).toMatch(
-      /const exclusionDecidedAt = formatPositionEventStamp\(\s*position\.user_excluded_at,\s*locale,\s*\);/,
+      /const exclusionStamp =\s*position\.user_excluded_at \?\? data\.exclusionEventAt;/,
+    );
+    expect(page).toMatch(
+      /const exclusionDecidedAt = formatPositionEventStamp\(\s*exclusionStamp,\s*locale,?\s*\);/,
     );
     expect(page).toContain("<ExclusionDecidedAt");
-    expect(page).toContain("excludedAt={position.user_excluded_at}");
+    expect(page).toContain("excludedAt={exclusionStamp}");
     expect(page).toContain("formatted={exclusionDecidedAt}");
+    // Nessun ripiego su date che cambiano per altri eventi.
     expect(page).not.toMatch(
-      /exclusionDecidedAt\s*=\s*formatPositionEventStamp\(position\.(?:updated_at|found_at|last_checked)/,
+      /exclusionStamp\s*=[^;]*position\.(?:updated_at|found_at|last_checked)/,
     );
   });
 

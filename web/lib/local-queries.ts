@@ -382,6 +382,7 @@ export function getPositionByIdLocal(
   application: Application | null;
   tickets: PositionTicket[];
   userNote: { body: string; updated_at: string } | null;
+  exclusionEventAt: string | null;
 } | null {
   const db = getDb(ws);
   const numId = Number(id);
@@ -441,7 +442,39 @@ export function getPositionByIdLocal(
     application: app ? mapApplication(app) : null,
     tickets,
     userNote: readUserNote(db, numId),
+    exclusionEventAt: readExclusionEventAt(db, numId),
   };
+}
+
+/** Quando la posizione è stata portata a «esclusa», secondo l'event-log.
+ *
+ * Serve per le esclusioni decise dal TEAM: quelle dell'utente hanno il proprio
+ * timbro atomico su `user_excluded_at`, l'Analista no — scrive lo stato e il
+ * motivo, e la riga con l'ora finisce in `position_state_transitions`. È
+ * l'unica data che descrive QUESTO evento: `updated_at`, `last_checked` e
+ * `found_at` cambiano per altri motivi e farebbero sembrare recente
+ * un'esclusione vecchia.
+ *
+ * L'ultima transizione, non la prima: una posizione può essere riaperta e
+ * riesclusa, e la decisione che vale è quella in vigore. Tabella assente
+ * (workspace più vecchio del codice) o nessuna riga → `null`, e il riquadro
+ * resta senza data invece di inventarne una. */
+function readExclusionEventAt(
+  db: ReturnType<typeof getDb>,
+  positionId: number,
+): string | null {
+  try {
+    const row = db
+      .prepare(
+        "SELECT ts FROM position_state_transitions " +
+          "WHERE position_id = ? AND to_state = 'excluded' " +
+          "ORDER BY ts DESC, id DESC LIMIT 1",
+      )
+      .get(positionId) as { ts?: string } | undefined;
+    return row?.ts ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Nota privata dell'utente (O-22), se il DB la conosce già.
@@ -468,7 +501,8 @@ function readUserNote(
 ): { body: string; updated_at: string } | null {
   const read = (sql: string) =>
     db.prepare(sql).get(positionId) as
-      { body: string; updated_at: string } | undefined;
+      | { body: string; updated_at: string }
+      | undefined;
   try {
     return (
       read(

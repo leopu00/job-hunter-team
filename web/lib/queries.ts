@@ -565,6 +565,11 @@ export async function getPositionById(id: string): Promise<{
   // (riga `origin = 'web'`, mig 069). Il pannello mostra sempre e solo la nota
   // della superficie che quel Salva sovrascriverebbe.
   userNote?: { body: string; updated_at: string } | null;
+  // Ora della transizione a «esclusa» nell'event-log (`position_transitions`
+  // sul cloud, `position_state_transitions` nel jobs.db). È la data delle
+  // esclusioni decise dal TEAM: quelle dell'utente hanno `user_excluded_at`
+  // sulla posizione. Assente sulle personas demo, che non hanno event-log.
+  exclusionEventAt?: string | null;
 } | null> {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoPositionById(dp, id);
@@ -656,6 +661,28 @@ export async function getPositionById(id: string): Promise<{
     .eq("origin", "web")
     .maybeSingle();
 
+  // Quando la posizione è stata portata a «esclusa», secondo l'event-log
+  // sincronizzato dal box (mig 044). Serve alle esclusioni decise dal TEAM:
+  // quelle dell'utente hanno il proprio timbro su `user_excluded_at`, l'Analista
+  // scrive stato e motivo e lascia l'ora qui. L'ULTIMA transizione, non la
+  // prima: una posizione riaperta e riesclusa vale per la decisione in vigore.
+  //
+  // La chiave è `position_legacy_id` (vedi la migrazione): senza `legacy_id`
+  // non c'è modo di raggiungere le righe, e il riquadro resta senza data —
+  // preferibile a prendere `updated_at`, che cambia per eventi estranei.
+  let exclusionEventAt: string | null = null;
+  if (position.legacy_id != null) {
+    const { data: xrRow } = await supabase
+      .from("position_transitions")
+      .select("ts")
+      .eq("position_legacy_id", position.legacy_id)
+      .eq("to_state", "excluded")
+      .order("ts", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    exclusionEventAt = (xrRow as { ts?: string } | null)?.ts ?? null;
+  }
+
   return {
     position,
     score: scoreRes.data ?? null,
@@ -664,6 +691,7 @@ export async function getPositionById(id: string): Promise<{
     application: appRes.data ?? null,
     tickets,
     userNote: (noteRow as { body: string; updated_at: string } | null) ?? null,
+    exclusionEventAt,
   };
 }
 
