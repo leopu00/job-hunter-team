@@ -63,6 +63,39 @@ const GAME_MATRIX = readFileSync(
 );
 const GAME_RUNNER = readFileSync(resolve(ROOT, "game/tools/run.sh"), "utf-8");
 
+const TRUTHFULNESS_REQUIREMENTS = [
+  "search_hidden",
+  "search_live",
+  "copy_live_empty",
+] as const;
+
+const extractTruthfulnessVerdict = (source: string): string => {
+  const functionStart = source.indexOf(
+    "func _truthfulness_selftest() -> void:",
+  );
+  if (functionStart < 0) throw new Error("truthfulness function missing");
+  const functionEnd = source.indexOf(
+    "func _live_profile_selftest() -> void:",
+    functionStart,
+  );
+  if (functionEnd < 0 || functionEnd <= functionStart) {
+    throw new Error("truthfulness function end missing");
+  }
+  const body = source.slice(functionStart, functionEnd);
+  const verdictStart = body.indexOf("var ok: bool =");
+  if (verdictStart < 0) throw new Error("truthfulness verdict missing");
+  const verdictEnd = body.indexOf('print(("TRUTHFULNESS-TEST', verdictStart);
+  if (verdictEnd < 0 || verdictEnd <= verdictStart) {
+    throw new Error("truthfulness verdict end missing");
+  }
+  return body.slice(verdictStart, verdictEnd);
+};
+
+const verdictAttestsSearchStates = (verdict: string): boolean =>
+  TRUTHFULNESS_REQUIREMENTS.every((requirement) =>
+    verdict.includes(requirement),
+  );
+
 const row = (over: Record<string, unknown> = {}) => ({
   legacy_id: 42,
   title: "AI Automations Product Engineer",
@@ -258,15 +291,20 @@ describe("la stessa ricerca nel gioco", () => {
     expect(TRUTHFULNESS_ORACLE).toContain(
       "var copy_live_empty := SimBadge.positions_empty_copy() == live_empty_copy",
     );
-    const verdict = TRUTHFULNESS_ORACLE.slice(
-      TRUTHFULNESS_ORACLE.indexOf("var ok :="),
-      TRUTHFULNESS_ORACLE.indexOf('print(("TRUTHFULNESS-TEST'),
-    );
-    expect(verdict).toContain("search_hidden");
-    expect(verdict).toContain("search_live");
-    expect(verdict).toContain("copy_live_empty");
+    const verdict = extractTruthfulnessVerdict(TRUTHFULNESS_ORACLE);
+    expect(verdictAttestsSearchStates(verdict)).toBe(true);
     expect(GAME_MATRIX).toContain("truthfulness|run|gate");
   });
+
+  it.each(TRUTHFULNESS_REQUIREMENTS)(
+    "l'oracolo fallisce se il verdetto omette %s",
+    (omitted) => {
+      const verdict = extractTruthfulnessVerdict(TRUTHFULNESS_ORACLE);
+      expect(verdictAttestsSearchStates(verdict.replace(omitted, ""))).toBe(
+        false,
+      );
+    },
+  );
 
   it("accetta le stesse forme dell'ID del web", () => {
     // Che le due regex si comportino davvero uguale lo dimostra il selftest
