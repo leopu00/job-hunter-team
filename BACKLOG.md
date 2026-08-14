@@ -55,7 +55,7 @@
 - ⬜ Tabella posizioni **sfasata** (colonne disallineate): l'utente la vede a ogni apertura.
 - ⬜ Manca la **data di esclusione** nel riquadro «perché è esclusa».
 - ⬜ **Censimento dei 5 `fs.existsSync(JHT_DB_PATH)`**: stessa scelta local-first che faceva fallire il pulsante candidatura ⇒ può rientrare da un'altra porta.
-- ⬜ **La 0.3.9 non è mai stata provata da utente**: 9 migrazioni applicate in produzione (`076`→`084`; la `075` era già uscita con la 0.3.8), verifiche solo read-only. **Misurato 14/08:** conteggio letto dalla cronologia migrazioni del progetto cloud, non dai file del repo.
+- ⬜ **La 0.3.9 non è mai stata provata da utente**: verifiche solo read-only. **Misurato 14/08 — due conteggi, entrambi veri, di cose diverse.** La release porta **9 migrazioni nuove** rispetto alla 0.3.8 (`076`→`084`, lette dal tag). Al cloud ne sono state applicate **8 il 14/08** (`075`, `078`→`084`): la `075` era spedita con la 0.3.8 ma applicata solo ora, mentre `076` e `077` erano già live dal 13/08 perché nate come fix P0 del pulsante candidatura. ⚠️ Chi conta i file del tag e conclude «applicate oggi» sbaglia di due, in due direzioni opposte.
 
 **Registrazione / OCR**
 - 🟡 Il ROI assume che l'origin del `contentRect` mappi sul crop: testato solo con `origin=0`, mai un frame reale con origin diverso.
