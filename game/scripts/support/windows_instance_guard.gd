@@ -24,6 +24,7 @@ var _binding := {}
 var _source_byte_count := 0
 var _command_length := 0
 var _bootstrap_code := "entry"
+var _ready_code := "entry"
 
 
 func _enter_tree() -> void:
@@ -120,6 +121,8 @@ func _start_guard() -> bool:
 		var sidecar_code := _sidecar_failure_code()
 		if not sidecar_code.is_empty():
 			_bootstrap_code = "ready_" + sidecar_code
+		elif not ready_line.is_empty():
+			_bootstrap_code = "ready_" + _ready_code
 		_close_pipes()
 		return false
 	_allowed = true
@@ -149,6 +152,7 @@ func _read_ready_line() -> String:
 
 
 func _accept_ready(line: String, request_line: String, powershell: String) -> bool:
+	_ready_code = "json"
 	var ready: Variant = JSON.parse_string(line)
 	var request: Variant = JSON.parse_string(request_line)
 	if not ready is Dictionary or not request is Dictionary \
@@ -158,26 +162,34 @@ func _accept_ready(line: String, request_line: String, powershell: String) -> bo
 		"guard_exe_path", "guard_pid", "guard_started", "instance_id", "mode",
 		"mutex_fingerprint", "nonce", "request_id", "request_token", "schema",
 		"source_sha256", "type"]
+	_ready_code = "keys"
 	if not _exact_keys(ready, expected_keys):
 		return false
 	var executable := OS.get_executable_path().replace("\\", "/").to_lower()
 	var guard_executable := powershell.replace("\\", "/").to_lower()
-	if int(ready.get("schema", 0)) != 1 or str(ready.get("type", "")) != "ready" \
-			or int(ready.get("desktop_pid", 0)) != OS.get_process_id() \
-			or str(ready.get("desktop_exe_path", "")) != executable \
-			or int(ready.get("guard_pid", 0)) != _guard_pid \
-			or str(ready.get("guard_exe_path", "")) != guard_executable \
-			or str(ready.get("instance_id", "")) != str(request.get("instance_id", "")) \
-			or str(ready.get("mode", "")) != str(request.get("mode", "")) \
-			or str(ready.get("nonce", "")) != str(request.get("nonce", "")) \
-			or str(ready.get("request_id", "")) != str(request.get("request_id", "")) \
-			or str(ready.get("request_token", "")) != str(request.get("request_token", "")) \
-			or str(ready.get("source_sha256", "")) != SOURCE_SHA256 \
-			or not _decimal(str(ready.get("desktop_started", ""))) \
-			or not _decimal(str(ready.get("guard_started", ""))) \
-			or not _lower_hex(str(ready.get("mutex_fingerprint", "")), 64):
-		return false
+	var checks := [
+		["schema", int(ready.get("schema", 0)) == 1],
+		["type", str(ready.get("type", "")) == "ready"],
+		["desktop_pid", int(ready.get("desktop_pid", 0)) == OS.get_process_id()],
+		["desktop_exe", str(ready.get("desktop_exe_path", "")) == executable],
+		["guard_pid", int(ready.get("guard_pid", 0)) == _guard_pid],
+		["guard_exe", str(ready.get("guard_exe_path", "")) == guard_executable],
+		["instance", str(ready.get("instance_id", "")) == str(request.get("instance_id", ""))],
+		["mode", str(ready.get("mode", "")) == str(request.get("mode", ""))],
+		["nonce", str(ready.get("nonce", "")) == str(request.get("nonce", ""))],
+		["request_id", str(ready.get("request_id", "")) == str(request.get("request_id", ""))],
+		["request_token", str(ready.get("request_token", "")) == str(request.get("request_token", ""))],
+		["source", str(ready.get("source_sha256", "")) == SOURCE_SHA256],
+		["desktop_started", _decimal(str(ready.get("desktop_started", "")))],
+		["guard_started", _decimal(str(ready.get("guard_started", "")))],
+		["fingerprint", _lower_hex(str(ready.get("mutex_fingerprint", "")), 64)],
+	]
+	for check: Array in checks:
+		_ready_code = str(check[0])
+		if not bool(check[1]):
+			return false
 	_binding = ready
+	_ready_code = "complete"
 	return true
 
 
