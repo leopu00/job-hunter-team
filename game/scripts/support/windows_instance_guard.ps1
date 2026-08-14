@@ -2,16 +2,10 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 $MaxInput=2048
 $Utf8=New-Object Text.UTF8Encoding($false,$true)
+$Lf=[char]10
 $Mutex=$null
 $Desktop=$null
 $Held=$false
-if(-not('JhtGuardPath' -as [type])){Add-Type @'
-using System;using System.Text;using System.Runtime.InteropServices;
-public static class JhtGuardPath{
-[DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern uint GetFinalPathNameByHandle(IntPtr h,StringBuilder b,uint n,uint f);
-public static string Final(IntPtr h){var b=new StringBuilder(32768);uint n=GetFinalPathNameByHandle(h,b,(uint)b.Capacity,0);if(n==0||n>=b.Capacity)throw new InvalidOperationException("final_path");string s=b.ToString();return s.StartsWith(@"\\?\")?s.Substring(4):s;}}
-'@
-}
 
 function Fail([string]$Code){[Console]::Error.WriteLine('JHT-INSTANCE-GUARD '+$Code);exit 1}
 function Hex([byte[]]$Bytes){([BitConverter]::ToString($Bytes)).Replace('-','').ToLowerInvariant()}
@@ -91,7 +85,6 @@ function MutexAcl([Security.Principal.SecurityIdentifier]$Sid){
 function Assert-Mutex($Value,$Expected){
   if((Sddl ($Value.GetAccessControl())) -cne (Sddl $Expected)){throw 'mutex_acl'}
 }
-
 try{
   $raw=Read-RequestBounded
   try{$input=$raw|ConvertFrom-Json -ErrorAction Stop}catch{throw 'input_json'}
@@ -100,6 +93,14 @@ try{
   if($input.mode -cnotin @('normal','update') -or -not (Token $input.instance_id '^instance-[0-9a-f]{24}$') -or -not (Token $input.nonce '^[0-9a-f]{32}$') -or -not (Token $input.request_id '^(normal|verify|apply|recover)-[0-9a-f]{24}$') -or -not (Token $input.request_token '^guard-[0-9a-f]{32}$') -or -not (Token $input.source_sha256 '^[0-9a-f]{64}$')){throw 'input_value'}
   $canonical=([ordered]@{desktop_pid=[int]$input.desktop_pid;instance_id=[string]$input.instance_id;mode=[string]$input.mode;nonce=[string]$input.nonce;request_id=[string]$input.request_id;request_token=[string]$input.request_token;schema=1;source_sha256=[string]$input.source_sha256}|ConvertTo-Json -Compress)
   if($raw -cne $canonical){throw 'input_canonical'}
+
+  if(-not('JhtGuardPath' -as [type])){Add-Type @'
+using System;using System.Text;using System.Runtime.InteropServices;
+public static class JhtGuardPath{
+[DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern uint GetFinalPathNameByHandle(IntPtr h,StringBuilder b,uint n,uint f);
+public static string Final(IntPtr h){var b=new StringBuilder(32768);uint n=GetFinalPathNameByHandle(h,b,(uint)b.Capacity,0);if(n==0||n>=b.Capacity)throw new InvalidOperationException("final_path");string s=b.ToString();return s.StartsWith(@"\\?\")?s.Substring(4):s;}}
+'@
+  }
 
   $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
   if($null -eq $sid){throw 'identity'}
@@ -143,8 +144,8 @@ try{
   $ackPath=Join-Path $root ('ack-'+$input.request_token+'.json')
   Write-New $ackPath $json $fileAcl
   [Console]::OutputEncoding=$Utf8
-  [Console]::Out.WriteLine($json);[Console]::Out.Flush()
-  while(-not$Desktop.WaitForExit(250)){[Console]::Out.WriteLine('ALIVE');[Console]::Out.Flush()}
+  [Console]::Out.Write($json+$Lf);[Console]::Out.Flush()
+  while(-not$Desktop.WaitForExit(250)){[Console]::Out.Write('ALIVE'+$Lf);[Console]::Out.Flush()}
   exit 0
 }catch{Fail ([string]$_.Exception.Message)}finally{
   if($Held -and $Mutex){try{$Mutex.ReleaseMutex()}catch{}}

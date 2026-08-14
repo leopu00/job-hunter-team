@@ -13,6 +13,7 @@ on:
       - "game/scripts/client_control.gd"
       - "game/scripts/support/windows_instance_guard.*"
       - "game/tools/windows_instance_guard_selftest.py"
+      - "game/tools/windows_instance_guard_windows_selftest.ps1"
       - "scripts/build-windows-installer.ps1"
       - "scripts/jht-wrapper.ps1"
       - "tests/test_cli_game_host_contract.py"
@@ -29,6 +30,7 @@ on:
       - "game/scripts/client_control.gd"
       - "game/scripts/support/windows_instance_guard.*"
       - "game/tools/windows_instance_guard_selftest.py"
+      - "game/tools/windows_instance_guard_windows_selftest.ps1"
       - "scripts/build-windows-installer.ps1"
       - "scripts/jht-wrapper.ps1"
       - "tests/test_cli_game_host_contract.py"
@@ -57,6 +59,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           foreach ($file in @(
             'game/scripts/support/windows_instance_guard.ps1',
+            'game/tools/windows_instance_guard_windows_selftest.ps1',
             'scripts/build-windows-installer.ps1',
             'scripts/jht-wrapper.ps1'
           )) {
@@ -68,6 +71,10 @@ jobs:
               throw "PowerShell syntax validation failed: $file count=$($errors.Count) id=$($errors[0].ErrorId) line=$($errors[0].Extent.StartLineNumber)"
             }
           }
+
+      - name: Exercise instance guard directly in Windows PowerShell
+        shell: pwsh
+        run: ./game/tools/windows_instance_guard_windows_selftest.ps1
 
       - uses: chickensoft-games/setup-godot@v2.4.1
         with:

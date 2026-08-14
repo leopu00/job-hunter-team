@@ -3,7 +3,7 @@ extends Node
 ## sidecar attestato nel PCK non possiede la lease kernel per questa sessione.
 
 const SOURCE_PATH := "res://scripts/support/windows_instance_guard.ps1"
-const SOURCE_SHA256 := "0b31330e2d097d1e6bb6ca1f17b6e556b1c5fab9294220b35df2a08271fc430e"
+const SOURCE_SHA256 := "bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b"
 const SOURCE_MAX_BYTES := 10_000
 const ARGV_MAX_UTF16 := 30_000
 const REQUEST_MAX_BYTES := 2_048
@@ -57,7 +57,9 @@ func _process(_delta: float) -> void:
 	_drain_stderr()
 	if _failed:
 		return
-	var chunk := _stdio.get_buffer(512)
+	var available := int(_stdio.get_length())
+	var chunk := _stdio.get_buffer(mini(available, 512)) \
+			if available > 0 else PackedByteArray()
 	if not chunk.is_empty():
 		_heartbeat_bytes.append_array(chunk)
 		if _heartbeat_bytes.size() > READY_MAX_BYTES:
@@ -155,6 +157,9 @@ func _read_ready_line() -> String:
 		_drain_stderr()
 		if _failed or _guard_pid <= 0 or not OS.is_process_running(_guard_pid):
 			return ""
+		if _stdio.get_length() < 1:
+			OS.delay_msec(2)
+			continue
 		var one := _stdio.get_buffer(1)
 		if one.is_empty():
 			OS.delay_msec(2)
@@ -266,7 +271,9 @@ func _consume_heartbeats() -> void:
 func _drain_stderr() -> void:
 	if not is_instance_valid(_stderr):
 		return
-	var chunk := _stderr.get_buffer(512)
+	var available := int(_stderr.get_length())
+	var chunk := _stderr.get_buffer(mini(available, 512)) \
+			if available > 0 else PackedByteArray()
 	if chunk.is_empty():
 		return
 	_stderr_bytes.append_array(chunk)
