@@ -177,8 +177,7 @@ func _accept_ready(line: String, request_line: String, powershell: String) -> bo
 	_ready_code = "json"
 	var ready: Variant = JSON.parse_string(line)
 	var request: Variant = JSON.parse_string(request_line)
-	if not ready is Dictionary or not request is Dictionary \
-			or JSON.stringify(ready, "", true, false) != line:
+	if not ready is Dictionary or not request is Dictionary:
 		return false
 	var expected_keys := ["desktop_exe_path", "desktop_pid", "desktop_started",
 		"guard_exe_path", "guard_pid", "guard_started", "instance_id", "mode",
@@ -186,6 +185,29 @@ func _accept_ready(line: String, request_line: String, powershell: String) -> bo
 		"source_sha256", "type"]
 	_ready_code = "keys"
 	if not _exact_keys(ready, expected_keys):
+		return false
+	# JSON.parse rappresenta tutti i numeri come float. Ricostruire la forma
+	# tipata impedisce duplicati, whitespace e 1.0 senza rendere impossibile il
+	# confronto con gli interi canonici prodotti dal sidecar.
+	_ready_code = "canonical"
+	var canonical_ready := {
+		"desktop_exe_path": str(ready.get("desktop_exe_path", "")),
+		"desktop_pid": int(ready.get("desktop_pid", 0)),
+		"desktop_started": str(ready.get("desktop_started", "")),
+		"guard_exe_path": str(ready.get("guard_exe_path", "")),
+		"guard_pid": int(ready.get("guard_pid", 0)),
+		"guard_started": str(ready.get("guard_started", "")),
+		"instance_id": str(ready.get("instance_id", "")),
+		"mode": str(ready.get("mode", "")),
+		"mutex_fingerprint": str(ready.get("mutex_fingerprint", "")),
+		"nonce": str(ready.get("nonce", "")),
+		"request_id": str(ready.get("request_id", "")),
+		"request_token": str(ready.get("request_token", "")),
+		"schema": int(ready.get("schema", 0)),
+		"source_sha256": str(ready.get("source_sha256", "")),
+		"type": str(ready.get("type", "")),
+	}
+	if JSON.stringify(canonical_ready, "", true, false) != line:
 		return false
 	var executable := OS.get_executable_path().replace("\\", "/").to_lower()
 	var guard_executable := powershell.replace("\\", "/").to_lower()
