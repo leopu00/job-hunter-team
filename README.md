@@ -108,8 +108,9 @@ before installing.
 
 **Native office (recommended):** download the current build from
 [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest).
-The release contains `job-hunter-team.exe` for Windows,
-`job-hunter-team.zip` for macOS, and
+The release contains `job-hunter-team-windows-x64-setup.exe` for Windows
+(with `job-hunter-team-windows-x64-portable.exe` as the no-install
+alternative), `job-hunter-team.zip` for macOS, and
 `job-hunter-team-linux-x64.tar.gz` for Linux. The macOS build is signed and
 notarized; Windows and Linux builds are currently unsigned. Open the office and
 select **Activate team**: the checklist requires all four gates — team runtime,
