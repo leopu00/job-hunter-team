@@ -136,6 +136,9 @@ func _start_guard() -> bool:
 			_bootstrap_code = "ready_" + sidecar_code
 		elif not ready_line.is_empty():
 			_bootstrap_code = "ready_" + _ready_code
+		elif _bootstrap_code == "ready":
+			_bootstrap_code = "ready_timeout" if OS.is_process_running(_guard_pid) \
+					else "ready_exit"
 		_close_pipes()
 		return false
 	_allowed = true
