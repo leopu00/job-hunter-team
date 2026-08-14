@@ -70,10 +70,10 @@ def test_truthfulness_oracle_is_executed_by_matrix_and_release_workflow():
     matrix = _src("game/tools/test-matrix.txt")
     release = _src(".github/workflows/release.yml")
     assert matrix.splitlines().count(row) == 1
-    assert release.count(
-        "JHT_SCENE=office JHT_TRUTHFULNESS_TEST=1 godot --headless --path game"
-    ) == 1
-    assert release.count('grep "TRUTHFULNESS-TEST PASS"') == 1
+    # La release non replica piu' il comando del singolo selftest: entrambi i
+    # runner consumano la riga sopra dalla matrice canonica.
+    assert release.count("bash game/tools/run.sh test gate") == 1
+    assert release.count("./game/tools/run.ps1 test gate") == 1
 
 
 def test_unavailable_paper_piles_are_empty_static_and_not_reported():
