@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 JHT = ROOT / "cli" / "bin" / "jht.js"
 PS = ROOT / "scripts" / "jht-wrapper.ps1"
 BASH = ROOT / "scripts" / "jht-wrapper.sh"
+CLIENT_CONTROL = ROOT / "game" / "scripts" / "client_control.gd"
+WINDOWS_GUARD = ROOT / "game" / "scripts" / "support" / "windows_instance_guard.gd"
 
 
 def _terminate(pid: int, timeout: float = 5.0) -> None:
@@ -126,6 +128,11 @@ def test_windows_wrapper_uses_nonce_control_plane_without_forced_kill():
         "timeout richiesta",
         "TASK_LOGON_INTERACTIVE_TOKEN",
         "Remove-GameRequestIfOwned",
+        "$WindowsInstanceGuardSha256",
+        "Get-InstanceGuardFingerprint",
+        "Get-GameProcessStartTicks $guard",
+        "$guard.SessionId -ne $process.SessionId",
+        "instance guard binding mismatch",
     ):
         assert seam in source
     forbidden = ("taskkill", "Stop-Process", "docker stop", "Invoke-Compose down")
@@ -134,6 +141,37 @@ def test_windows_wrapper_uses_nonce_control_plane_without_forced_kill():
     )]
     for command in forbidden:
         assert command not in lifecycle
+
+
+def test_windows_state_binds_live_desktop_to_attested_guard() -> None:
+    state = CLIENT_CONTROL.read_text(encoding="utf-8")
+    guard = WINDOWS_GUARD.read_text(encoding="utf-8")
+    wrapper = PS.read_text(encoding="utf-8")
+
+    assert 'state["schema"] = 2' in state
+    for field in (
+        "desktop_executable",
+        "desktop_started",
+        "executable",
+        "instance_id",
+        "mode",
+        "mutex_fingerprint",
+        "pid",
+        "source_sha256",
+        "started",
+    ):
+        assert f'"{field}"' in state
+    digest = re.search(r'SOURCE_SHA256 := "([0-9a-f]{64})"', guard).group(1)
+    assert f"$WindowsInstanceGuardSha256 = '{digest}'" in wrapper
+    for rejection in (
+        "$guardPid -eq $statePid",
+        "$guard.SessionId -ne $process.SessionId",
+        "Get-CanonicalGameProcessPath $guard",
+        "Get-GameProcessStartTicks $process",
+        "Get-GameProcessStartTicks $guard",
+        "Get-InstanceGuardFingerprint",
+    ):
+        assert rejection in wrapper
 
 
 def test_invalid_host_options_are_fail_closed_before_effects():
