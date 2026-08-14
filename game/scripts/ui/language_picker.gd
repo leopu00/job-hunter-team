@@ -5,6 +5,10 @@ extends Control
 
 signal language_confirmed(language: String)
 
+const KEY_ART := "res://assets/gen-art/environment/title_screen.png"
+const PANEL_MIN_WIDTH := 680.0
+const SAFE_MARGIN := 24.0
+
 var selected_language := UIStrings.DEFAULT_LANG
 var _language_buttons := {}
 var _continue: Button
@@ -37,69 +41,163 @@ func supported_language_count() -> int:
 
 
 func _build() -> void:
+	# Il gate e' la prima schermata del prodotto: deve avere un fondale completo
+	# anche prima che Title costruisca la propria UI. Il TextureRect copre ogni
+	# aspect ratio supportato; il velo mantiene leggibili testo e focus senza
+	# trasformare il resto della finestra in un rettangolo nero vuoto.
+	var art_tex: Texture2D = load(KEY_ART) if ResourceLoader.exists(KEY_ART) else null
+	if art_tex != null:
+		var art := TextureRect.new()
+		art.name = "LanguageGateArtwork"
+		art.texture = art_tex
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(art)
+		art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	else:
+		var fallback := ColorRect.new()
+		fallback.name = "LanguageGateArtwork"
+		fallback.color = Palette.DEEP
+		fallback.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(fallback)
+		fallback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var veil := ColorRect.new()
+	veil.name = "LanguageGateVeil"
+	veil.color = Color(Palette.DEEP.r, Palette.DEEP.g, Palette.DEEP.b, 0.72)
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(veil)
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
 	var bg := GridBackground.new()
+	bg.name = "LanguageGateGrid"
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
+	# GridBackground assegna Palette.VOID al trasparente nel proprio _ready;
+	# impostiamo l'alpha dopo l'ingresso nell'albero per lasciare visibile l'art.
+	bg.bg_color = Color(0, 0, 0, 0)
+	bg.queue_redraw()
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	var center := CenterContainer.new()
+	center.name = "LanguageGateCenter"
 	add_child(center)
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var panel := BracketPanel.new()
+	panel.name = "LanguageGatePanel"
 	panel.bracket_len = 22
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.97)
+	panel_style.border_color = Palette.BORDER_GLOW
+	panel_style.set_border_width_all(TerminalTheme.hairline())
+	panel_style.set_corner_radius_all(0)
+	panel.add_theme_stylebox_override("panel", panel_style)
 	center.add_child(panel)
 	var padding := MarginContainer.new()
+	padding.name = "LanguageGatePadding"
 	for side in ["left", "right"]:
-		padding.add_theme_constant_override("margin_" + side, 42)
+		padding.add_theme_constant_override("margin_" + side, 50)
 	for side in ["top", "bottom"]:
-		padding.add_theme_constant_override("margin_" + side, 34)
+		padding.add_theme_constant_override("margin_" + side, 38)
 	panel.add_child(padding)
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(520, 0)
+	box.name = "LanguageGateContent"
+	box.custom_minimum_size = Vector2(PANEL_MIN_WIDTH, 0)
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 14)
+	box.add_theme_constant_override("separation", 16)
 	padding.add_child(box)
 
 	var eyebrow := TerminalTheme.label(UIStrings.t("language_picker.eyebrow"),
-			13, Palette.MINT, "bold")
+			14, Palette.MINT, "bold")
+	eyebrow.name = "LanguageGateEyebrow"
 	eyebrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(eyebrow)
 	var title := TerminalTheme.label(UIStrings.t("language_picker.title"),
-			30, Palette.WHITE, "xbold")
+			36, Palette.WHITE, "xbold")
+	title.name = "LanguageGateTitle"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 	var subtitle := TerminalTheme.label(UIStrings.t("language_picker.subtitle"),
-			15, Palette.BASE)
+			16, Palette.BASE)
+	subtitle.name = "LanguageGateSubtitle"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(subtitle)
 	box.add_child(HSeparator.new())
 
 	var grid := GridContainer.new()
+	grid.name = "LanguageGateLanguages"
 	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 8)
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 10)
 	box.add_child(grid)
+	var ordered_buttons: Array[Button] = []
 	for language: String in UIStrings.LANGS:
 		var button := Button.new()
-		button.flat = true
+		button.name = "Language_%s" % language
+		button.focus_mode = Control.FOCUS_ALL
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		button.custom_minimum_size = Vector2(220, 42)
+		button.custom_minimum_size = Vector2(320, 48)
 		button.add_theme_font_size_override("font_size", 17)
 		button.add_theme_color_override("font_hover_color", Palette.MINT)
-		button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		button.add_theme_color_override("font_focus_color", Palette.MINT)
+		# Non cancellare il focus: al primo avvio la tastiera deve mostrare
+		# chiaramente dove andra' INVIO. Il bordo da 2 px resta visibile anche
+		# dopo lo scaling 1366x768 del canvas 1920x1080.
+		var focus_style := StyleBoxFlat.new()
+		focus_style.bg_color = Palette.ROW
+		focus_style.border_color = Palette.MINT
+		focus_style.set_border_width_all(2)
+		focus_style.set_corner_radius_all(0)
+		focus_style.content_margin_left = 18
+		focus_style.content_margin_right = 18
+		focus_style.content_margin_top = 8
+		focus_style.content_margin_bottom = 8
+		button.add_theme_stylebox_override("focus", focus_style)
 		button.pressed.connect(choose_language.bind(language))
 		grid.add_child(button)
 		_language_buttons[language] = button
+		ordered_buttons.append(button)
 
 	box.add_child(HSeparator.new())
 	_continue = Button.new()
-	_continue.custom_minimum_size = Vector2(0, 44)
-	_continue.add_theme_font_size_override("font_size", 16)
+	_continue.name = "LanguageGateContinue"
+	_continue.focus_mode = Control.FOCUS_ALL
+	_continue.custom_minimum_size = Vector2(0, 52)
+	_continue.add_theme_font_size_override("font_size", 18)
+	_continue.add_theme_color_override("font_color", Palette.GREEN)
+	_continue.add_theme_color_override("font_focus_color", Palette.MINT)
 	_continue.pressed.connect(confirm)
 	box.add_child(_continue)
+	_configure_keyboard_path(ordered_buttons)
 	_refresh_selection()
 	(_language_buttons[selected_language] as Button).grab_focus.call_deferred()
+
+
+func _configure_keyboard_path(buttons: Array[Button]) -> void:
+	# Tab percorre le lingue nell'ordine visivo e termina sull'azione primaria;
+	# Shift+Tab compie il percorso inverso. I vicini verticali seguono le due
+	# colonne e portano all'azione quando non esiste un'altra riga.
+	var path: Array[Button] = buttons.duplicate()
+	path.append(_continue)
+	for i in path.size():
+		var current := path[i]
+		var next := path[(i + 1) % path.size()]
+		var previous := path[(i - 1 + path.size()) % path.size()]
+		current.focus_next = current.get_path_to(next)
+		current.focus_previous = current.get_path_to(previous)
+	for i in buttons.size():
+		var current := buttons[i]
+		if i % 2 == 1:
+			current.focus_neighbor_left = current.get_path_to(buttons[i - 1])
+		elif i + 1 < buttons.size():
+			current.focus_neighbor_right = current.get_path_to(buttons[i + 1])
+		if i >= 2:
+			current.focus_neighbor_top = current.get_path_to(buttons[i - 2])
+		current.focus_neighbor_bottom = current.get_path_to(
+				buttons[i + 2] if i + 2 < buttons.size() else _continue)
+	_continue.focus_neighbor_top = _continue.get_path_to(buttons[buttons.size() - 1])
 
 
 func _refresh_selection() -> void:
