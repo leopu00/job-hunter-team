@@ -35,6 +35,10 @@ def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
     ):
         assert seam in source
 
+    observation = source.split("function Get-FileObservation", 1)[1].split("\n}", 1)[0]
+    assert "LastWriteTimeUtc.Ticks" in observation and ".Length" in observation
+    assert "Get-FileHash" not in observation
+
 
 def test_release_publishes_setup_primary_and_portable_secondary() -> None:
     workflow = RELEASE_WORKFLOW.read_text()
