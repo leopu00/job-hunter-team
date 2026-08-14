@@ -15,8 +15,11 @@ REVOKE ALL ON public.candidate_profile_sync_state
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.candidate_profile_sync_state
   TO service_role;
 
-DROP FUNCTION IF EXISTS public.sync_candidate_profile_atomic(UUID, TEXT, JSONB);
-DROP FUNCTION IF EXISTS public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN);
+DO $migration$
+BEGIN
+    EXECUTE 'DROP FUNCTION IF EXISTS public.sync_candidate_profile_atomic(UUID, TEXT, JSONB)';
+    EXECUTE 'DROP FUNCTION IF EXISTS public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN)';
+    EXECUTE $ddl$
 CREATE FUNCTION public.sync_candidate_profile_atomic(
     p_user_id UUID,
     p_content_hash TEXT,
@@ -26,7 +29,7 @@ CREATE FUNCTION public.sync_candidate_profile_atomic(
 LANGUAGE plpgsql
 SECURITY INVOKER
 SET search_path = public, pg_temp
-AS $$
+AS $body$
 DECLARE
     current_hash TEXT;
     profile JSONB;
@@ -211,9 +214,10 @@ BEGIN
 
     RETURN jsonb_build_object('changed', TRUE);
 END;
-$$;
+$body$;
+$ddl$;
 
-REVOKE ALL ON FUNCTION public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN)
-  FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN)
-  TO service_role;
+    EXECUTE 'REVOKE ALL ON FUNCTION public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN) FROM PUBLIC, anon, authenticated';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN) TO service_role';
+END;
+$migration$;
