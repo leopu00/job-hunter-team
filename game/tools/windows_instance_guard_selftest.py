@@ -119,6 +119,10 @@ def main() -> None:
         "pipe write must inspect FileAccess error, not the void store_buffer result",
     )
     require(
+        "const READY_TIMEOUT_MSEC := 30_000" in consumer,
+        "cold Windows PowerShell bootstrap timeout is not pinned",
+    )
+    require(
         "ExecutionPolicy" not in consumer and "Bypass" not in consumer,
         "consumer must not override PowerShell policy",
     )

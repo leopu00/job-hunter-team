@@ -9,7 +9,10 @@ const ARGV_MAX_UTF16 := 30_000
 const REQUEST_MAX_BYTES := 2_048
 const READY_MAX_BYTES := 2_048
 const STDERR_MAX_BYTES := 2_048
-const READY_TIMEOUT_MSEC := 8_000
+# Windows PowerShell 5.1 compila il piccolo helper C# al primo avvio. Sul
+# runner Windows pulito richiede piu di otto secondi: il bootstrap deve restare
+# sincrono/fail-closed, ma il limite deve coprire un cold start reale.
+const READY_TIMEOUT_MSEC := 30_000
 const HEARTBEAT_TIMEOUT_MSEC := 1_500
 
 var _allowed := false
