@@ -220,6 +220,7 @@ def validate_read_only_query(
         raise CanaryError("query_not_read_only")
     if (
         ";" in executable
+        or "\\" in executable
         or MUTATING_SQL_RE.search(executable)
         or NON_CATALOG_FUNCTION_RE.search(executable)
         or (not allow_public_relations and NON_CATALOG_RELATION_RE.search(executable))

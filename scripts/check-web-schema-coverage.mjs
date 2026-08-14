@@ -68,6 +68,9 @@ const ORPHAN_METHODS = new Set([
   "not",
   "or",
   "order",
+  "insert",
+  "update",
+  "upsert",
 ]);
 
 class GateError extends Error {
@@ -430,6 +433,33 @@ async function census({ sourceRoot = DEFAULT_SOURCE_ROOT, repoRoot = ROOT } = {}
       return false;
     }
 
+    function schemaTable(node, seen = new Set()) {
+      if (!node || seen.has(node)) return null;
+      seen.add(node);
+      if (
+        ts.isParenthesizedExpression(node) ||
+        ts.isAwaitExpression(node) ||
+        ts.isAsExpression(node) ||
+        ts.isTypeAssertionExpression(node)
+      ) {
+        return schemaTable(node.expression, seen);
+      }
+      if (ts.isConditionalExpression(node)) {
+        const left = schemaTable(node.whenTrue, seen);
+        const right = schemaTable(node.whenFalse, seen);
+        return left && left === right ? left : null;
+      }
+      if (ts.isIdentifier(node)) return schemaTable(declarationFor(node), seen);
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+        if (node.expression.name.text === "from") {
+          const table = staticString(ts, node.arguments[0]);
+          return table && /^[a-z][a-z0-9_]*$/.test(table) ? table : null;
+        }
+        return schemaTable(node.expression.expression, seen);
+      }
+      return null;
+    }
+
     function addAmbiguous(kind, node) {
       ambiguous.add(ambiguityId(ts, kind, node, sourceFile, relativePath));
     }
@@ -510,7 +540,15 @@ async function census({ sourceRoot = DEFAULT_SOURCE_ROOT, repoRoot = ROOT } = {}
         !handled.has(node) &&
         isSchemaExpression(node.expression.expression)
       ) {
-        addAmbiguous("detached_query", node);
+        const method = node.expression.name.text;
+        const table = schemaTable(node.expression.expression);
+        if (WRITE_METHODS.has(method) && table && node.arguments[0]) {
+          const parsed = objectColumns(ts, node.arguments[0], table);
+          for (const column of parsed.columns) columns.add(column);
+          if (parsed.ambiguous) addAmbiguous("write_columns", node);
+        } else {
+          addAmbiguous("detached_query", node);
+        }
       }
       ts.forEachChild(node, findOrphans);
     }

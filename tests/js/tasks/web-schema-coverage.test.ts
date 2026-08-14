@@ -169,6 +169,23 @@ describe("web code → live-schema receipt coverage", () => {
     );
   });
 
+  it.each(["insert", "update", "upsert"])(
+    "censuses columns in a detached %s builder",
+    (method) => {
+      const target = fixture();
+      fs.appendFileSync(
+        path.join(target.sourceRoot, "app/query.ts"),
+        `\nconst detached = supabase.from("positions"); ` +
+          `detached.${method}({ totally_new_unreceipted_column: "x" });\n`,
+      );
+      const result = target.run();
+      expect(result.status).toBe(1);
+      expect(result.stderr).toBe(
+        "WEB-SCHEMA-COVERAGE FAIL code=column_uncovered\n",
+      );
+    },
+  );
+
   it("fails closed on a dynamic table alias", () => {
     const target = fixture();
     fs.appendFileSync(

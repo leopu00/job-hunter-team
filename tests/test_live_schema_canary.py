@@ -308,6 +308,7 @@ def test_additive_web_contract_exactly_receipts_every_mapped_rpc_and_column():
     assert contract.contract_id == "release-0.3.9-web-schema-078-084"
     assert len(contract.expected_checks) == 40
     assert manifest["query"]["path"] == "supabase/live-schema/078-084.web.v4.sql"
+    assert "\\n" not in WEB_QUERY.read_text()
 
     mapped_receipts = {
         receipt
@@ -330,6 +331,11 @@ def test_cli_validates_only_the_pinned_additive_web_contract(capsys):
         "LIVE-SCHEMA MANIFEST OK "
         "contract=release-0.3.9-web-schema-078-084 checks=40\n"
     )
+
+
+def test_read_only_validator_rejects_literal_backslash_newline_tokens():
+    with pytest.raises(canary.CanaryError, match="query_not_read_only"):
+        canary.validate_read_only_query(r"SELECT 1\nSELECT 2")
 
 
 def test_v1_v2_and_v3_artifacts_remain_byte_for_byte_immutable():

@@ -6,7 +6,7 @@
   ],
   "canary": {
     "path": "supabase/live-schema/078-084.web.v4.json",
-    "sha256": "410786ab4ed49d451b9da24aa0b6f74554ac28ba37f90f83f42993814c32a8a5",
+    "sha256": "e8642b2ffa8c924d90382a4a20266022e18a5b6c4898089ae3f45ce64d5ccf3c",
     "contract_id": "release-0.3.9-web-schema-078-084"
   },
   "coverage": {
