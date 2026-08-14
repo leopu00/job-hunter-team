@@ -136,6 +136,12 @@ async function startActionContainer(agentArg, options = {}) {
   let started = 0;
   let skipped = 0;
   let errored = 0;
+  // La UI definisce il team operativo dalla presenza del CAPITANO. Tenere
+  // separato questo esito dal conteggio aggregato evita il falso successo
+  // osservato in #129: Assistente/Sentinella partivano, CAPITANO falliva, ma
+  // `started > 0` lasciava exit 0 e il pulsante tornava inattivo mentre il
+  // watchdog tentava ancora il recupero.
+  let coordinatorReady = !useBootstrap;
 
   if (useBootstrap) {
     // Un secondo click su "Avvia team" mentre il core e' gia' operativo non
@@ -220,6 +226,7 @@ async function startActionContainer(agentArg, options = {}) {
       if (result === 'started') started++;
       else if (result === 'skipped') skipped++;
       else errored++;
+      if (item.role === 'capitano') coordinatorReady = result !== 'error';
       previousStarted = result === 'started';
     }
   } else {
@@ -242,6 +249,10 @@ async function startActionContainer(agentArg, options = {}) {
   }
   console.log('');
 
+  // Il bootstrap globale è riuscito soltanto quando il suo marker operativo
+  // (CAPITANO) è partito o era già attivo. Un avvio parziale resta utile al
+  // watchdog, ma NON è un successo da mostrare all'utente. Per lo start di un
+  // singolo agente resta il contratto storico: started/skipped sono successi.
   // Exit 1 quando nessun agente è stato avviato e nessuno era già attivo:
   // il poller (cli/src/lib/team-commands-poller.js) usa l'exit code per
   // marcare team_commands.status='error' invece di 'done' silent. Skipped
@@ -252,7 +263,8 @@ async function startActionContainer(agentArg, options = {}) {
   // l'output con un'uscita immediata gli toglierebbe proprio le righe d'errore
   // che registra. Il codice osservato non cambia: questa è l'ultima istruzione
   // della funzione. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
-  if (started === 0 && skipped === 0) {
+  if ((useBootstrap && !coordinatorReady)
+      || (!useBootstrap && started === 0 && skipped === 0)) {
     process.exitCode = 1;
   }
 }

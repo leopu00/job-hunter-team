@@ -75,6 +75,7 @@ const FLAG_HOOKS := {
 	"JHT_THROTTLE_TEST": "_throttle_selftest",
 	"JHT_BACKEND_SWITCH_TEST": "_backend_switch_selftest",
 	"JHT_SETUP_BUSY_TEST": "_setup_busy_selftest",
+	"JHT_TEAM_START_UI_TEST": "_team_start_ui_selftest",
 	"JHT_SETUP_GATING_TEST": "_setup_gating_selftest",
 	"JHT_BUBBLE_LAYOUT_TEST": "_bubble_layout_selftest",
 	"JHT_SIM_BADGE_TEST": "_sim_badge_selftest",
@@ -849,6 +850,164 @@ func _setup_busy_selftest() -> void:
 	for key in result:
 		ok = ok and bool(result[key])
 	print("SETUP-BUSY-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify(result)])
+	get_tree().quit(0 if ok else 1)
+
+
+## #129 — il comando può finire prima che CAPITANO sia osservabile. Questo
+## oracle attraversa i consumer veri Attivazione e Team: fallimento iniziale,
+## tentativo watchdog e recupero tardivo devono restare distinti anche quando
+## SetupService.busy() è già falso. Il pulsante di retry è l'unica uscita dal
+## fallimento; durante il recupero resta spento per non creare due tentativi.
+func _team_start_ui_selftest() -> void:
+	await get_tree().process_frame
+	var old_status: Dictionary = SetupService.status.duplicate(true)
+	var old_state: RefCounted = SetupService.team_start_state
+	var old_running: bool = SetupService._action_running
+	var old_action: String = SetupService.current_action
+	var old_probe_running: bool = SetupService._probe_running
+	var old_state_path: String = SetupService._team_start_state_path
+	var test_state_path := OS.get_cache_dir().path_join(
+			"jht-team-start-ui-%d.json" % OS.get_process_id())
+	SetupService._remove_team_start_state_at(test_state_path)
+	SetupService._team_start_state_path = test_state_path
+	# `_finish_action` avvia il probe successivo in produzione. Qui lo teniamo
+	# occupato: l'oracolo controlla precisamente il confine prima del probe.
+	SetupService._probe_running = true
+	SetupService.status = {
+		"ready": true, "completed": 4, "team_running": false,
+		"container_running": true, "provider_authenticated": true,
+		"plan_ready": true, "profile_ready": true, "hours_ready": true,
+	}
+	SetupService._action_running = false
+	SetupService.current_action = ""
+	SetupService.team_start_state = TeamStartState.new()
+	SetupService.team_start_state.begin(1000)
+
+	var activation := SectionPanel.new("activation", 24.0)
+	var team := SectionPanel.new("team", 24.0)
+	office.add_child(activation)
+	office.add_child(team)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var result := {}
+	var starting_activation := _panel_button(
+			activation, UIStrings.t("setup.team_starting"))
+	var starting_team := _panel_button(team, UIStrings.t("setup.team_starting"))
+	result["starting_distinto_e_spento"] = starting_activation != null \
+			and starting_activation.disabled and starting_team != null \
+			and starting_team.disabled and _panel_has_label(
+					activation, UIStrings.t("team.start_waiting"))
+
+	var attempt: int = SetupService.team_start_state.attempt
+	# Attraversa il percorso reale che aveva il falso verde: il worker termina
+	# con exit 0, `_finish_action` applica il responso e `action_changed` arriva
+	# ai due pannelli. Prima del probe CAPITANO deve restare giallo/in attesa.
+	SetupService._action_running = true
+	SetupService.current_action = "team"
+	SetupService.action_changed.emit("team", true,
+			UIStrings.t("setup.action.in_progress"), true)
+	SetupService._finish_action("team", {
+		"ok": true,
+		"team_operation": "start",
+		"team_start_attempt": attempt,
+		"command_output": "CAPITANO command accepted",
+		"watchdog_cursor": 0,
+		"watchdog_identity": "synthetic-log",
+		"watchdog_fingerprint": "a".repeat(64),
+		# Controfattuale esplicito: era il testo verde emesso dal prodotto.
+		"message": UIStrings.t("team.action.started"),
+	})
+	await get_tree().process_frame
+	await get_tree().process_frame
+	result["exit0_attende_senza_verde"] = \
+			str(SetupService.team_start_state.phase) == TeamStartState.STARTING \
+			and not SetupService.busy() \
+			and is_instance_valid(activation._setup_message) \
+			and activation._setup_message.text.begins_with("◌ ") \
+			and activation._setup_message.text.contains(
+					UIStrings.t("team.start_waiting")) \
+			and not activation._setup_message.text.contains(
+					UIStrings.t("team.action.started")) \
+			and activation._setup_message.get_theme_color("font_color") \
+					== Palette.YELLOW \
+			and is_instance_valid(team._setup_message) \
+			and team._setup_message.get_theme_color("font_color") == Palette.YELLOW
+
+	# Un secondo tentativo fallito attraversa lo stesso `_finish_action`, non
+	# chiama direttamente il modello: così l'oracolo morde sul wiring causale.
+	SetupService.team_start_state.begin(3000)
+	attempt = SetupService.team_start_state.attempt
+	SetupService._action_running = true
+	SetupService.current_action = "team"
+	var raw := "✓ MENTOR started\n✗ CAPITANO — provider boot failed\nResult: 1 started, 6 errors"
+	SetupService._finish_action("team", {
+		"ok": false,
+		"team_operation": "start",
+		"team_start_attempt": attempt,
+		"command_output": raw,
+		"watchdog_cursor": 0,
+		"watchdog_identity": "synthetic-log",
+		"watchdog_fingerprint": "a".repeat(64),
+		"message": UIStrings.t("team.action.start_failed") % raw,
+	})
+	result["failure_applicata"] = \
+			str(SetupService.team_start_state.phase) == TeamStartState.FAILED
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var retry_activation := _panel_button(
+			activation, UIStrings.t("team.start_retry"))
+	var retry_team := _panel_button(team, UIStrings.t("team.start_retry"))
+	result["failed_con_retry_e_causa"] = retry_activation != null \
+			and not retry_activation.disabled and retry_team != null \
+			and not retry_team.disabled \
+			and _panel_has_label(activation, UIStrings.t("team.start_failed_title")) \
+			and _panel_has_label(activation, "provider boot failed") \
+			and _panel_has_label(activation, UIStrings.t("team.start_log")) \
+			and _panel_has_label(activation, "Result: 1 started, 6 errors")
+
+	result["watchdog_applicato"] = SetupService.team_start_state.observe(
+			attempt, false, TeamStartState.WATCHDOG_ATTEMPT, 3000)
+	SetupService.team_start_state_changed.emit(SetupService.team_start_snapshot())
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var recovery_activation := _panel_button(
+			activation, UIStrings.t("team.start_recovering"))
+	var recovery_team := _panel_button(team, UIStrings.t("team.start_recovering"))
+	result["recovering_distinto_e_spento"] = recovery_activation != null \
+			and recovery_activation.disabled and recovery_team != null \
+			and recovery_team.disabled and _panel_has_label(
+					activation, UIStrings.t("team.start_recovery_detail"))
+
+	result["capitano_tardivo_applicato"] = SetupService.team_start_state.observe(
+			attempt, true, "", 4000)
+	SetupService.status["team_running"] = true
+	SetupService.team_start_state_changed.emit(SetupService.team_start_snapshot())
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var running_activation := _panel_button(
+			activation, UIStrings.t("setup.team_running"))
+	var stop_team := _panel_button(team, UIStrings.t("team.stop"))
+	result["running_distinto_senza_errore"] = running_activation != null \
+			and running_activation.disabled and stop_team != null \
+			and not stop_team.disabled \
+			and not _panel_has_label(activation, UIStrings.t("team.start_failed_title")) \
+			and not _panel_has_label(activation, UIStrings.t("team.start_recovery_detail"))
+
+	activation.queue_free()
+	team.queue_free()
+	await get_tree().process_frame
+	SetupService.status = old_status
+	SetupService.team_start_state = old_state
+	SetupService._action_running = old_running
+	SetupService.current_action = old_action
+	SetupService._probe_running = old_probe_running
+	SetupService._team_start_state_path = old_state_path
+	SetupService._remove_team_start_state_at(test_state_path)
+	var ok := true
+	for key in result:
+		ok = ok and bool(result[key])
+	print("TEAM-START-UI-TEST %s %s" % ["PASS" if ok else "FAIL",
 			JSON.stringify(result)])
 	get_tree().quit(0 if ok else 1)
 

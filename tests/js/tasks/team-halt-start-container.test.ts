@@ -80,7 +80,10 @@ if (command[0] === "bash" && command[1] === "-c") {
 if (command[0] === "tmux" && command[1] === "kill-session") process.exit(0);
 if (command[0] === "bash" && command[1] === "/app/.launcher/start-agent.sh") {
   const role = command[2] || "";
-  if (role === process.env.FAKE_START_SUCCESS_ROLE) process.exit(0);
+  const successful = (process.env.FAKE_START_SUCCESS_ROLES || "")
+    .split(",")
+    .filter(Boolean);
+  if (successful.includes(role)) process.exit(0);
   console.error("synthetic launch failure");
   process.exit(1);
 }
@@ -152,7 +155,7 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(existsSync(sb.flag)).toBe(true);
 
     const started = run(sb, ["start"], {
-      FAKE_START_SUCCESS_ROLE: "capitano",
+      FAKE_START_SUCCESS_ROLES: "capitano",
     });
     expect(started.status, `${started.stdout}\n${started.stderr}`).toBe(0);
     expect(existsSync(sb.flag)).toBe(false);
@@ -174,7 +177,7 @@ describe("team halt gate — CLI host verso runtime container", () => {
       writeFileSync(sb.flag, "halted");
       const result = run(sb, ["start"], {
         FAKE_RM_MODE: mode,
-        FAKE_START_SUCCESS_ROLE: "capitano",
+        FAKE_START_SUCCESS_ROLES: "capitano",
       });
 
       expect(result.status).toBe(1);
@@ -194,13 +197,44 @@ describe("team halt gate — CLI host verso runtime container", () => {
     const sb = sandbox();
     writeFileSync(sb.flag, "halted");
     const result = run(sb, ["start", "scout"], {
-      FAKE_START_SUCCESS_ROLE: "scout",
+      FAKE_START_SUCCESS_ROLES: "scout",
     });
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stdout).toContain("1 started");
     expect(existsSync(sb.flag)).toBe(true);
     expect(dockerLog(sb).some((row) => row.command[0] === "rm")).toBe(false);
+  });
+
+  it("bootstrap parziale con CAPITANO fallito non dichiara successo", () => {
+    const sb = sandbox();
+    const result = run(sb, ["start"], {
+      // Riproduzione #129: altri componenti core partono, il marker minimo
+      // operativo no. Il watchdog potrà recuperarli, ma questo comando deve
+      // restituire l'errore e il suo output al chiamante.
+      FAKE_START_SUCCESS_ROLES: "mentor",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("1 started");
+    expect(result.stdout).toContain("CAPITANO — synthetic launch failure");
+    expect(result.stdout).toContain("6 errors");
+  }, 15_000);
+
+  it("CAPITANO già attivo attesta il bootstrap anche se lo spawn è skipped", () => {
+    const sb = sandbox();
+    const result = run(sb, ["start"], {
+      // Non bastano tutti gli altri errori a negare un fatto già osservato:
+      // CAPITANO esiste nel runtime ed è il marker operativo canonico usato
+      // anche dal probe del gioco.
+      FAKE_CONTAINER_SESSIONS: "CAPITANO",
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain("CAPITANO — already active");
+    expect(result.stdout).toContain("0 started");
+    expect(result.stdout).toContain("1 already active");
+    expect(result.stdout).toContain("6 errors");
   });
 
   it("in modalità locale rimuove solo il gate sotto JHT_HOME", () => {

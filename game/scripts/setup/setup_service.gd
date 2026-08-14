@@ -6,6 +6,9 @@ const PullProgressState := preload("res://scripts/setup/pull_progress_state.gd")
 
 signal status_changed(status: Dictionary)
 signal action_changed(action: String, running: bool, message: String, ok: bool)
+## Stato causale dell'avvio team. Vive nel servizio, non nel pannello: un
+## rebuild della UI non può cancellare fallimento o recupero in corso.
+signal team_start_state_changed(state: Dictionary)
 ## Fase dell'azione lunga in corso ("engine" → "image" → "container", "team").
 ## L'attivazione è un processo a più fasi dietro UN pulsante: senza questo
 ## segnale la UI sa solo che "qualcosa gira", non a che punto è — e l'utente
@@ -20,6 +23,12 @@ signal pull_progress(info: Dictionary)
 ## La UI del gioco ospita il processo in una console modale. Il servizio non
 ## deve mai aprire Terminal.app/cmd/xterm fuori dall'applicazione.
 signal terminal_requested(context: String, spec: Dictionary)
+
+const TeamStartStateModel := preload("res://scripts/setup/team_start_state.gd")
+const TEAM_WATCHDOG_LOG := "/jht_home/logs/agent-watchdog.log"
+const TEAM_START_STATE_PATH := "user://team_start_state.json"
+const EMPTY_SHA256 := "e3b0c44298fc1c149afbf4c8996fb924" \
+		+ "27ae41e4649b934ca495991b7852b855"
 
 const PROVIDERS := {
 	"claude": {
@@ -100,6 +109,13 @@ var last_upgrade := {}
 ## in `status`: un check non cambia il runtime e non deve fingersi un probe
 ## del container. La sidebar la usa per il badge, mai per avviare un polling.
 var last_upgrade_check := {}
+## Stato separato da `_action_running`: il comando può essere finito mentre il
+## watchdog sta ancora recuperando CAPITANO. Esposto come snapshot per i
+## consumer UI, che verranno collegati dopo la fusione dei rami concorrenti.
+var team_start_state := TeamStartStateModel.new()
+## Sostituibile dagli oracle che attraversano `_finish_action`: il test deve
+## provare la persistenza reale senza toccare l'eventuale tentativo dell'utente.
+var _team_start_state_path := TEAM_START_STATE_PATH
 var _timer: Timer
 
 
@@ -110,6 +126,63 @@ func busy() -> bool:
 	return _action_running
 
 
+func team_start_snapshot() -> Dictionary:
+	return team_start_state.snapshot().duplicate(true)
+
+
+func _persist_team_start_state() -> void:
+	var phase := str(team_start_state.phase)
+	if phase in [TeamStartStateModel.IDLE, TeamStartStateModel.RUNNING]:
+		_remove_team_start_state_at(_team_start_state_path)
+		return
+	if not _write_team_start_state_at(
+			team_start_state, _team_start_state_path):
+		Log.warn("setup", "impossibile salvare lo stato causale dell'avvio team")
+
+
+func _restore_team_start_state() -> void:
+	if not FileAccess.file_exists(_team_start_state_path):
+		return
+	if not _read_team_start_state_at(team_start_state,
+			_team_start_state_path, Time.get_ticks_msec()):
+		team_start_state.fail_restore(Time.get_ticks_msec())
+		_persist_team_start_state()
+
+
+## Helper con path esplicito: il selftest ricrea davvero un secondo modello
+## dallo stesso file senza toccare lo stato dell'utente che esegue il gate.
+static func _write_team_start_state_at(model: RefCounted, path: String) -> bool:
+	var target := ProjectSettings.globalize_path(path)
+	DirAccess.make_dir_recursive_absolute(target.get_base_dir())
+	var temporary := "%s.tmp-%d" % [target, OS.get_process_id()]
+	var file := FileAccess.open(temporary, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(JSON.stringify(model.persistent_snapshot()) + "\n")
+	file.flush()
+	file.close()
+	if not JhtFs._replace_file(temporary, target):
+		DirAccess.remove_absolute(temporary)
+		return false
+	return true
+
+
+static func _read_team_start_state_at(model: RefCounted, path: String,
+		now_ms: int) -> bool:
+	var file := FileAccess.open(ProjectSettings.globalize_path(path), FileAccess.READ)
+	if file == null:
+		return false
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	return parsed is Dictionary and model.restore(parsed, now_ms)
+
+
+static func _remove_team_start_state_at(path: String) -> bool:
+	var target := ProjectSettings.globalize_path(path)
+	return not FileAccess.file_exists(target) \
+			or DirAccess.remove_absolute(target) == OK
+
+
 func _ready() -> void:
 	if not WindowsInstanceGuard.normal_work_allowed():
 		return
@@ -117,6 +190,7 @@ func _ready() -> void:
 	if OS.get_environment("JHT_VPS_SETUP_TEST") == "1":
 		_self_test_vps_setup.call_deferred()
 		return
+	_restore_team_start_state()
 	terminal_requested.connect(_show_embedded_terminal)
 	# Su VPS il jht.config.json non è su questo disco: le finestre di lavoro
 	# arrivano con le impostazioni live pubblicate dal backend.
@@ -452,15 +526,24 @@ func refresh() -> void:
 	_probe_running = true
 	# La VPS si legge sul thread principale (BackendBus non è thread-safe) e
 	# viaggia col task: il worker non deve chiedere al bus com'è connesso.
-	WorkerThreadPool.add_task(_probe.bind(_connected_vps()))
+	var start_probe := team_start_state.snapshot()
+	WorkerThreadPool.add_task(_probe.bind(_connected_vps(), start_probe))
 
 
-func _probe(vps: Dictionary) -> void:
+func _probe(vps: Dictionary, start_probe: Dictionary) -> void:
 	var next := _probe_host(_jht_home())
 	# Passi 02/03/04 chiesti ALLA MACCHINA CONNESSA, sullo stesso trasporto del
 	# passo 01. Blocca solo questo worker, mai il thread della UI.
 	if not vps.is_empty():
 		next["vps_probe"] = _probe_vps(vps)
+	var cursor := int(start_probe.get("watchdog_cursor", -1))
+	var identity := str(start_probe.get("watchdog_identity", ""))
+	var fingerprint := str(start_probe.get("watchdog_fingerprint", ""))
+	var deadline := int(start_probe.get("recovery_deadline_ms", 0))
+	if cursor >= 0 and deadline > Time.get_ticks_msec():
+		next["team_watchdog_delta"] = _watchdog_log_delta(
+				vps, cursor, identity, fingerprint)
+	next["team_start_attempt"] = int(start_probe.get("attempt", -1))
 	# Alcuni self-test Godot chiudono l'albero subito dopo l'assert mentre il
 	# probe Docker è ancora nel worker. Non accodare callback su un autoload
 	# già smontato durante il teardown.
@@ -502,7 +585,16 @@ func _apply_probe(next: Dictionary) -> void:
 		_apply_vps_probe(next, next["vps_probe"])
 		next.erase("vps_probe")
 	_finalize(next)
+	var watchdog_delta := str(next.get("team_watchdog_delta", ""))
+	var observed_attempt := int(next.get("team_start_attempt", -1))
+	next.erase("team_watchdog_delta")
+	next.erase("team_start_attempt")
 	status = next
+	if team_start_state.observe(observed_attempt,
+			bool(status.get("team_running", false)), watchdog_delta,
+			Time.get_ticks_msec()):
+		_persist_team_start_state()
+		team_start_state_changed.emit(team_start_snapshot())
 	status_changed.emit(status.duplicate(true))
 	if bool(status.get("container_running", false)) \
 			and BackendBus.state == BackendBus.DISCONNECTED:
@@ -2927,7 +3019,9 @@ func _apply_archive_to_local(archive: String, stamp: String,
 		_rollback_local_destination(tx, true)
 		return checked
 	if team_was_running:
-		var team := _do_start_team({})
+		# Ripristino interno alla transazione di migrazione: non appartiene a un
+		# tentativo UI e il suo frame non viene consegnato a _finish_action.
+		var team := _do_start_team({}, -1)
 		if not bool(team.get("ok", false)):
 			_rollback_local_destination(tx, true)
 			return {"ok": false, "message": UIStrings.t("vps.action.local_team_restart_failed")}
@@ -3490,7 +3584,11 @@ func start_team() -> void:
 		action_changed.emit("team", false,
 				UIStrings.t("team.action.not_ready"), false)
 		return
-	_start_action("team", _do_start_team.bind(_vps_config()))
+	team_start_state.begin(Time.get_ticks_msec())
+	_persist_team_start_state()
+	team_start_state_changed.emit(team_start_snapshot())
+	_start_action("team", _do_start_team.bind(
+			_vps_config(), team_start_state.attempt))
 
 
 func stop_team() -> void:
@@ -3507,19 +3605,29 @@ func control_agent(role: String, restart: bool) -> void:
 	_start_action("agent", _do_control_agent.bind(normalized, restart, _vps_config()))
 
 
-func _do_start_team(vps: Dictionary) -> Dictionary:
+func _do_start_team(vps: Dictionary, start_attempt: int) -> Dictionary:
 	_set_phase("team")
+	# Offset E identità PRIMA del comando: soltanto un append allo stesso file
+	# può attestare che il watchdog sta recuperando QUESTO tentativo. Un log
+	# ruotato e ricresciuto oltre l'offset non è la stessa osservazione.
+	var watchdog_boundary := _watchdog_log_boundary(vps)
 	var res := _run_ssh(vps, "docker exec jht node /app/cli/bin/jht.js team start") \
 			if not vps.is_empty() else _run("docker", PackedStringArray([
 					"exec", "jht", "node", "/app/cli/bin/jht.js", "team", "start"] ))
 	return {"ok": res["code"] == 0,
+			"team_operation": "start", "command_output": str(res.get("out", "")),
+			"team_start_attempt": start_attempt,
+			"watchdog_cursor": int(watchdog_boundary.get("cursor", -1)),
+			"watchdog_identity": str(watchdog_boundary.get("identity", "")),
+			"watchdog_fingerprint": str(
+					watchdog_boundary.get("fingerprint", "")),
 			"message": UIStrings.t("team.action.started") if res["code"] == 0 \
 			else UIStrings.t("team.action.start_failed") % str(res["out"]).right(240)}
 
 
 static func _do_stop_team(vps: Dictionary) -> Dictionary:
 	var result := _run_cli(vps, PackedStringArray(["team", "stop", "--all"]))
-	return {"ok": result["code"] == 0,
+	return {"ok": result["code"] == 0, "team_operation": "stop",
 			"message": UIStrings.t("team.action.stopped") if result["code"] == 0 \
 			else UIStrings.t("team.action.stop_failed") % str(result.get("out", "")).right(240)}
 
@@ -3550,6 +3658,67 @@ static func _run_cli(vps: Dictionary, args: PackedStringArray) -> Dictionary:
 	for arg in args:
 		command += " " + _shell_quote(arg)
 	return _run_ssh(vps, command)
+
+
+## Esegue argv costanti dentro al runtime scelto. Il percorso remoto quota ogni
+## argomento separatamente; nessun dato utente entra negli script qui sotto.
+static func _run_container(vps: Dictionary, args: PackedStringArray) -> Dictionary:
+	if vps.is_empty():
+		var local := PackedStringArray(["exec", "jht"])
+		local.append_array(args)
+		return _run("docker", local)
+	var command := "docker exec jht"
+	for arg in args:
+		command += " " + _shell_quote(arg)
+	return _run_ssh(vps, command)
+
+
+## Byte, identità e hash del prefisso già presenti prima dello start.
+## L'hash è necessario oltre all'inode: copytruncate conserva l'inode e può
+## ricrescere oltre il vecchio offset. Gli script evitano `$` perché su POSIX
+## Godot interpola gli argv di OS.execute nella shell host prima di passarli a
+## `docker exec`; il confine deve essere misurato soltanto nel container.
+static func _watchdog_log_boundary(vps: Dictionary) -> Dictionary:
+	var path := _shell_quote(TEAM_WATCHDOG_LOG)
+	var script := "if [ -f " + path + " ]; then " \
+			+ "stat -c '%s %d:%i' " + path + " || exit 5; " \
+			+ "sha256sum " + path + " || exit 6; " \
+			+ "else printf '0 missing\\n" + EMPTY_SHA256 + "  -\\n'; fi"
+	var result := _run_container(vps, PackedStringArray(["sh", "-c", script]))
+	var raw := str(result.get("out", "")).strip_edges()
+	var lines := raw.split("\n", false)
+	var header := PackedStringArray() if lines.is_empty() \
+			else str(lines[0]).split(" ", false)
+	var digest := PackedStringArray() if lines.size() <= 1 \
+			else str(lines[1]).split(" ", false)
+	if int(result.get("code", -1)) != 0 or header.size() != 2 \
+			or digest.is_empty() or not str(header[0]).is_valid_int() \
+			or str(header[1]) == "" or str(digest[0]).length() != 64:
+		return {"cursor": -1, "identity": "", "fingerprint": ""}
+	return {"cursor": maxi(int(header[0]), 0),
+			"identity": str(header[1]), "fingerprint": str(digest[0])}
+
+
+## Legge soltanto l'append successivo al cursor e ne limita il volume. Se il
+## file è stato troncato/ruotato, il rapporto causale è perso: ritorno vuoto,
+## quindi mai `recovering` per deduzione.
+static func _watchdog_log_delta(vps: Dictionary, cursor: int,
+		identity: String, fingerprint: String) -> String:
+	if cursor < 0 or identity == "" or fingerprint.length() != 64:
+		return ""
+	var first_byte := cursor + 1
+	var path := _shell_quote(TEAM_WATCHDOG_LOG)
+	var script := "[ -f " + path + " ] || { [ " + _shell_quote(identity) \
+			+ " = missing ] && exit 0; exit 4; }; " \
+			+ "{ [ " + _shell_quote(identity) + " = missing ] || " \
+			+ "stat -c '%d:%i' " + path + " | grep -Fqx -- " \
+			+ _shell_quote(identity) + "; } || exit 5; " \
+			+ "head -c " + str(cursor) + " " + path \
+			+ " | sha256sum | grep -Fq -- " \
+			+ _shell_quote(fingerprint + "  -") + " || exit 6; " \
+			+ "tail -c +" + str(first_byte) + " " + path + " | tail -c 16384"
+	var result := _run_container(vps, PackedStringArray(["sh", "-c", script]))
+	return str(result.get("out", "")) if int(result.get("code", -1)) == 0 else ""
 
 
 func _start_action(action: String, callable: Callable, start_message := "") -> void:
@@ -3598,12 +3767,35 @@ func _finish_action(action: String, result: Dictionary) -> void:
 	current_action = ""
 	action_phase = ""
 	last_pull = {}
+	var team_start_pending_confirmation := false
+	if action == "team" and str(result.get("team_operation", "")) == "start":
+		if team_start_state.finish_command(
+				int(result.get("team_start_attempt", -1)),
+				bool(result.get("ok", false)),
+				str(result.get("command_output", "")),
+				int(result.get("watchdog_cursor", -1)),
+				str(result.get("watchdog_identity", "")),
+				str(result.get("watchdog_fingerprint", "")),
+				Time.get_ticks_msec()):
+			_persist_team_start_state()
+			team_start_state_changed.emit(team_start_snapshot())
+			# Exit 0 attesta soltanto il comando. Finché il probe non osserva
+			# CAPITANO, anche il log/action signal deve restare neutro: il verde
+			# "Team avviato" sarebbe un esito che nessuno ha ancora misurato.
+			team_start_pending_confirmation = bool(result.get("ok", false))
+	elif action == "team" and str(result.get("team_operation", "")) == "stop" \
+			and bool(result.get("ok", false)):
+		team_start_state.stopped(Time.get_ticks_msec())
+		_persist_team_start_state()
+		team_start_state_changed.emit(team_start_snapshot())
 	if action == "upgrade":
 		last_upgrade = result.duplicate(true)
 		result["message"] = _upgrade_ui_message(result)
 	elif action == "upgrade-check":
 		last_upgrade_check = result.duplicate(true)
 		result["message"] = _upgrade_check_ui_message(result)
+	if team_start_pending_confirmation:
+		result["message"] = UIStrings.t("team.start_waiting")
 	Log.info("setup", "azione %s → %s: %s" % [action,
 			"ok" if bool(result.get("ok", false)) else "FALLITA",
 			str(result.get("message", ""))])

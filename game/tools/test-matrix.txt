@@ -151,6 +151,10 @@ pull_progress_state|script|gate|any|-|tools/pull_progress_state_selftest.gd|-
 # livello). Su POSIX prova anche il ripiego con un finto docker che rifiuta
 # il flag come i compose meno recenti.
 pull_stream|script|gate|any|-|tools/pull_stream_selftest.gd|-
+# Il comando, il probe CAPITANO e il watchdog sono osservazioni diverse:
+# generation stale, riavvio del servizio, timeout e rotazione del log non
+# devono far tornare idle né promuovere un recupero che nessuno ha osservato.
+team_start_state|script|gate|any|-|tools/team_start_state_selftest.gd|TEAM-START-STATE-TEST PASS
 # Il rilevamento Docker del probe: assente / spento / attivo sono tre schermate
 # (installa · avvia il motore · procedi). Su POSIX un binario assente esce 127
 # via shell, mai -1: senza questa riga il collasso "assente ⇒ presente" — cioè
@@ -213,6 +217,9 @@ agent_frame|run|gate|any|JHT_SCENE=office JHT_ALL_SEATED_PREVIEW=1 JHT_AGENT_FRA
 world_text|run|gate|any|JHT_SCENE=office JHT_WORLD_TEXT_TEST=1|-|WORLD-TEXT-TEST PASS
 graphics_panel|run|gate|any|JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1|-|GRAPHICS-PANEL-TEST PASS
 setup_busy|run|gate|any|JHT_SCENE=office JHT_SETUP_BUSY_TEST=1|-|SETUP-BUSY-TEST PASS
+# #129: il comando finisce, CAPITANO fallisce e il watchdog recupera dopo.
+# Attivazione e Team devono mostrare i quattro stati senza ricadere su idle.
+team_start_ui|run|gate|any|JHT_SCENE=office JHT_TEAM_START_UI_TEST=1|-|TEAM-START-UI-TEST PASS
 # O-13: le schermate del setup che l'operatore ha trovato rotte a mano sulla
 # v0.3.6 e che nessun collaudo prendeva — runtime assente, solo Colima, step
 # saltato. Lo stato e' iniettato, quindi il verdetto non dipende da cosa e'
