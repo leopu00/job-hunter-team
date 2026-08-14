@@ -54,6 +54,42 @@ PINNED_CONSUMERS = (
     Path("docs/guides/CLI-INSTALL.md"),
     Path(".env.example"),
 )
+# Ogni copia distribuita ha un punto operativo preciso. Cercare il digest in
+# qualunque punto del file era un falso verde: una riga commentata poteva
+# attestare il valore corretto mentre l'assegnazione eseguita usava altro.
+# Ogni pattern estrae il valore effettivo dal costrutto canonico; i due esempi
+# della guida sono contratti separati perché vengono copiati dagli utenti.
+CONSUMER_VALUE_PATTERNS: dict[Path, tuple[str, ...]] = {
+    Path("docker-compose.yml"): (
+        r"^[ \t]*image: \$\{JHT_IMAGE:-(?P<image>[^}\s]+)\}[ \t]*$",
+    ),
+    Path("game/scripts/backend/payloads/runtime_compose.yml"): (
+        r"^[ \t]*image: \$\{JHT_IMAGE:-(?P<image>[^}\s]+)\}[ \t]*$",
+    ),
+    Path("game/scripts/setup/setup_service.gd"): (
+        r'^const DEFAULT_RUNTIME_IMAGE := "(?P<image>[^"]+)"$',
+    ),
+    Path("cli/src/commands/container.js"): (
+        r"^const DEFAULT_RUNTIME_IMAGE = '(?P<image>[^']+)';$",
+    ),
+    Path("scripts/install.sh"): (r'^IMAGE="\$\{JHT_IMAGE:-(?P<image>[^}\s]+)\}"$',),
+    Path("web/public/install.sh"): (r'^IMAGE="\$\{JHT_IMAGE:-(?P<image>[^}\s]+)\}"$',),
+    Path("scripts/install.ps1"): (
+        r"^\$Image\s+= if \(\$env:JHT_IMAGE\).*else \{ '(?P<image>[^']+)' \}$",
+    ),
+    Path("web/public/install.ps1"): (
+        r"^\$Image\s+= if \(\$env:JHT_IMAGE\).*else \{ '(?P<image>[^']+)' \}$",
+    ),
+    Path("scripts/jht-wrapper.sh"): (r'^DEFAULT_RUNTIME_IMAGE="(?P<image>[^"]+)"$',),
+    Path("scripts/jht-wrapper.ps1"): (r"^\$DefaultRuntimeImage = '(?P<image>[^']+)'$",),
+    Path("docs/guides/CLI-INSTALL.md"): (
+        r"^\| `JHT_IMAGE` \| `(?P<image>[^`]+)` \| Content-addressed container image referenced by the compose \|$",
+        r"^[ \t]*image:[ \t]+(?P<image>ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64})[ \t]*$",
+    ),
+    Path(".env.example"): (
+        r"^# \{(?P<image>ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64})\}$",
+    ),
+}
 INDEX_ACCEPT = ", ".join(
     (
         "application/vnd.oci.image.index.v1+json",
@@ -100,7 +136,12 @@ def load_manifest(path: Path) -> RuntimeImagePin:
         raise RuntimeImagePinError("manifest_invalid") from exc
     if not isinstance(data, dict) or set(data) != EXPECTED_KEYS:
         raise RuntimeImagePinError("manifest_shape")
-    if data.get("schema_version") != SCHEMA_VERSION:
+    # bool e' una sottoclasse di int in Python: `True == 1` non deve poter
+    # selezionare uno schema che non e' stato dichiarato come intero JSON.
+    if (
+        type(data.get("schema_version")) is not int
+        or data["schema_version"] != SCHEMA_VERSION
+    ):
         raise RuntimeImagePinError("manifest_schema")
     if not isinstance(data.get("release_version"), str) or not VERSION_RE.fullmatch(
         data["release_version"]
@@ -145,13 +186,20 @@ def verify_tree(
     ):
         raise RuntimeImagePinError("release_version_mismatch")
 
+    if set(CONSUMER_VALUE_PATTERNS) != set(PINNED_CONSUMERS):
+        raise RuntimeImagePinError("consumer_contract_invalid")
     for relative in PINNED_CONSUMERS:
         try:
             text = (root / relative).read_text(encoding="utf-8")
         except (OSError, UnicodeError) as exc:
             raise RuntimeImagePinError("consumer_missing") from exc
-        if pin.image_ref not in text:
-            raise RuntimeImagePinError("consumer_digest_drift")
+        for pattern in CONSUMER_VALUE_PATTERNS[relative]:
+            values = [
+                match.group("image")
+                for match in re.finditer(pattern, text, flags=re.MULTILINE)
+            ]
+            if values != [pin.image_ref]:
+                raise RuntimeImagePinError("consumer_digest_drift")
         if MUTABLE_RELEASE_REF_RE.search(text):
             raise RuntimeImagePinError("consumer_mutable_ref")
     return pin
@@ -314,7 +362,12 @@ def verify_source_labels(pin: RuntimeImagePin) -> None:
             raise RuntimeImagePinError("source_revision_mismatch")
 
 
-def publish_release_tag(pin: RuntimeImagePin) -> str:
+def publish_release_tag(pin: RuntimeImagePin, claim: str) -> str:
+    # Il claim e' valido solo dentro il workflow Release, la cui concurrency
+    # group e' il medesimo ref. Questo rende seriale la finestra registry
+    # check->create->readback; il post-check resta la prova dell'effetto.
+    if claim != f"refs/tags/v{pin.release_version}":
+        raise RuntimeImagePinError("release_claim_invalid")
     verify_source_labels(pin)
     existing = registry_tag_digest(pin, pin.release_version)
     if existing is not None:
@@ -366,7 +419,8 @@ def _parser() -> argparse.ArgumentParser:
     remote = subparsers.add_parser("verify-tag")
     remote.add_argument("--tag", required=True, choices=("master", "release"))
     subparsers.add_parser("verify-source")
-    subparsers.add_parser("publish")
+    publish = subparsers.add_parser("publish")
+    publish.add_argument("--claim", required=True)
     return parser
 
 
@@ -394,7 +448,7 @@ def main(argv: list[str] | None = None) -> int:
             verify_source_labels(pin)
             print("runtime-image-pin result=pass code=source_verified")
         elif args.command == "publish":
-            code = publish_release_tag(pin)
+            code = publish_release_tag(pin, args.claim)
             print(f"runtime-image-pin result=pass code={code}")
         return 0
     except RuntimeImagePinError as exc:

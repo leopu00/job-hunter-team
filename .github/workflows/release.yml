@@ -5,6 +5,14 @@ on:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]*"
 
+# Il ref Git e' il claim immutabile della versione. Due rerun dello stesso tag
+# non possono attraversare insieme il check-then-publish del registry; il
+# secondo entra solo dopo che il primo ha pubblicato e verifica lo stesso
+# digest. Un tag divergente resta un errore e non viene sovrascritto.
+concurrency:
+  group: release-runtime-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -466,7 +474,7 @@ jobs:
           python scripts/runtime_image_pin.py verify-tree --root . --version "$version"
           source_revision="$(python scripts/runtime_image_pin.py show --field source_revision)"
           git merge-base --is-ancestor "$source_revision" HEAD
-          python scripts/runtime_image_pin.py publish
+          python scripts/runtime_image_pin.py publish --claim "$GITHUB_REF"
 
   release:
     name: GitHub Release

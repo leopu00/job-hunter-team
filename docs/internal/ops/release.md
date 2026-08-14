@@ -112,7 +112,10 @@ git push origin v0.2.1
 multi-arch index and both amd64/arm64 OCI `revision` labels, then handles the
 semver tag. An absent tag is created from the digest; an existing identical
 tag is accepted; an existing different tag stops the release without being
-overwritten. `.github/workflows/docker.yml` never publishes semver tags.
+overwritten. The full Git ref is the publication claim: workflow concurrency
+serializes the registry check/create/readback window for every rerun of that
+release, with cancellation disabled. `.github/workflows/docker.yml` never
+publishes semver tags.
 
 **4 · `release`** — re-checks that the tag is `origin/production` HEAD, builds the web app (`npm ci` in `web/` **and** `shared/`, because the web build imports `shared/config/schema.ts` which needs `zod`), extracts the release notes from `CHANGELOG.md`, downloads the four platform artifacts, adds `RUNTIME-IMAGE.json`, verifies their provenance and hashes, generates `SHA256SUMS` plus `RELEASE-PROVENANCE.json`, and then creates the GitHub Release as a **draft**. The release body prints the same SHA-256 lines under the human-readable notes: `scripts/release_artifacts.py notes` consumes the already-verified `RELEASE-PROVENANCE.json`, so it cannot drift into a second platform-asset list. A tag containing `-` (e.g. `v0.3.0-rc1`) is marked as a **prerelease** when published.
 

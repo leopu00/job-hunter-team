@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -35,6 +36,7 @@ def test_canonical_manifest_pins_every_distributed_consumer() -> None:
     ("field", "value", "code"),
     [
         ("schema_version", 2, "manifest_schema"),
+        ("schema_version", True, "manifest_schema"),
         ("release_version", "latest", "version_invalid"),
         ("repository", "example.invalid/jht", "repository_invalid"),
         ("digest", "sha256:short", "digest_invalid"),
@@ -65,11 +67,45 @@ def test_tree_rejects_a_semver_fallback_even_when_digest_is_still_present(
     manifest.write_text(MANIFEST.read_text())
     consumer = tmp_path / "consumer.txt"
     consumer.write_text(f"{pin.image_ref}\nghcr.io/leopu00/jht:{pin.release_version}\n")
-    monkeypatch.setattr(runtime_image_pin, "PINNED_CONSUMERS", (Path("consumer.txt"),))
+    path = Path("consumer.txt")
+    monkeypatch.setattr(runtime_image_pin, "PINNED_CONSUMERS", (path,))
+    monkeypatch.setattr(
+        runtime_image_pin,
+        "CONSUMER_VALUE_PATTERNS",
+        {path: (rf"^(?P<image>{re.escape(pin.image_ref)})$",)},
+    )
 
     with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
         runtime_image_pin.verify_tree(tmp_path)
     assert raised.value.code == "consumer_mutable_ref"
+
+
+def test_tree_reads_the_operational_value_not_a_correct_comment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pin = _pin()
+    (tmp_path / "package.json").write_text(
+        json.dumps({"version": pin.release_version}) + "\n"
+    )
+    manifest = tmp_path / runtime_image_pin.MANIFEST_PATH
+    manifest.parent.mkdir()
+    manifest.write_text(MANIFEST.read_text())
+    consumer = tmp_path / "consumer.js"
+    consumer.write_text(
+        f"// const DEFAULT_RUNTIME_IMAGE = '{pin.image_ref}';\n"
+        "const DEFAULT_RUNTIME_IMAGE = 'ghcr.io/leopu00/jht@sha256:" + "f" * 64 + "';\n"
+    )
+    path = Path("consumer.js")
+    monkeypatch.setattr(runtime_image_pin, "PINNED_CONSUMERS", (path,))
+    monkeypatch.setattr(
+        runtime_image_pin,
+        "CONSUMER_VALUE_PATTERNS",
+        {path: (r"^const DEFAULT_RUNTIME_IMAGE = '(?P<image>[^']+)';$",)},
+    )
+
+    with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
+        runtime_image_pin.verify_tree(tmp_path)
+    assert raised.value.code == "consumer_digest_drift"
 
 
 def test_source_attestation_requires_both_platforms_and_exact_revision(
@@ -154,8 +190,25 @@ def test_publish_refuses_to_overwrite_a_moved_release_tag(
     )
 
     with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
-        runtime_image_pin.publish_release_tag(pin)
+        runtime_image_pin.publish_release_tag(pin, f"refs/tags/v{pin.release_version}")
     assert raised.value.code == "release_tag_mismatch"
+    assert calls == []
+
+
+def test_publish_requires_the_exact_serialized_release_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pin = _pin()
+    calls: list[str] = []
+    monkeypatch.setattr(
+        runtime_image_pin,
+        "verify_source_labels",
+        lambda _pin: calls.append("source"),
+    )
+
+    with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
+        runtime_image_pin.publish_release_tag(pin, "refs/tags/v0.0.0")
+    assert raised.value.code == "release_claim_invalid"
     assert calls == []
 
 
@@ -177,7 +230,10 @@ def test_publish_creates_an_absent_tag_from_the_digest_then_reads_it_back(
         return subprocess.CompletedProcess(command, 0, b"", b"")
 
     monkeypatch.setattr(runtime_image_pin.subprocess, "run", run)
-    assert runtime_image_pin.publish_release_tag(pin) == "tag_published"
+    assert (
+        runtime_image_pin.publish_release_tag(pin, f"refs/tags/v{pin.release_version}")
+        == "tag_published"
+    )
     assert commands == [
         [
             "docker",
@@ -197,7 +253,14 @@ def test_release_workflow_is_the_only_semver_tag_publisher() -> None:
     assert 'tags:\n      - "v[0-9]+.[0-9]+.[0-9]*"' not in docker_workflow
     assert "type=semver" not in docker_workflow
     assert "publish-runtime:" in release_workflow
-    assert "runtime_image_pin.py publish" in release_workflow
+    assert 'runtime_image_pin.py publish --claim "$GITHUB_REF"' in release_workflow
+    claim_block = (
+        "\nconcurrency:\n"
+        "  group: release-runtime-${{ github.ref }}\n"
+        "  cancel-in-progress: false\n\n"
+        "permissions:\n"
+    )
+    assert release_workflow.count(claim_block) == 1
     assert "git merge-base --is-ancestor" in release_workflow
     assert release_workflow.index("publish-runtime:") < release_workflow.index(
         "release:\n"
