@@ -82,7 +82,7 @@ func _run() -> void:
 	w._last_event_ms = EVENT_SENTINEL
 	w.apply_progress({"got_mb": 1280.0, "total_mb": 3200.0,
 			"fraction": 0.4, "layers": 12,
-			"done_layers": 7, "phase": "downloading", "advanced": true})
+			"done_layers": 7, "phase": "downloading", "advanced": false})
 	_check("duplicato UI: heartbeat invariato",
 			w._last_event_ms == EVENT_SENTINEL, str(w._last_event_ms))
 	# Anche un redraw reale (totale appena scoperto) non e' un heartbeat.
@@ -114,6 +114,15 @@ func _run() -> void:
 			w._detail_lbl.text.contains(UIStrings.t("setup.pull_phase_extracting")),
 			w._detail_lbl.text)
 	_check("stage UI: extracting usa barra attivita", w._bar.fraction < 0.0)
+	# I byte di estrazione non entrano nei conteggi di download: il payload
+	# visibile resta identico, ma advanced=true prova lavoro materiale e deve
+	# impedire un falso avviso di stallo.
+	w._last_event_ms = EVENT_SENTINEL
+	w.apply_progress({"got_mb": 1280.0, "total_mb": 3200.0,
+			"fraction": 0.4, "layers": 12,
+			"done_layers": 7, "phase": "extracting", "advanced": true})
+	_check("extracting same-phase: heartbeat rinnovato a render invariato",
+			w._last_event_ms != EVENT_SENTINEL, str(w._last_event_ms))
 	# 40 secondi senza eventi: la barra DEVE dirlo, non restare immobile.
 	w._last_event_ms -= 40000
 	w._tick()

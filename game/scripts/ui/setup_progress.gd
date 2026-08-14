@@ -98,11 +98,17 @@ func apply_phase(action: String, phase: String) -> void:
 
 ## Avanzamento strutturato del pull (got_mb/total_mb/fraction).
 func apply_progress(info: Dictionary) -> void:
+	var advanced := bool(info.get("advanced", false))
 	var fingerprint := _info_fingerprint(info)
 	if fingerprint == _progress_fingerprint:
+		# Il fingerprint descrive soltanto cio che viene renderizzato. Durante
+		# verify/extract l'observer puo provare lavoro materiale senza cambiare
+		# fase, layer o byte di download: quel segnale rinnova comunque il
+		# watchdog, mentre duplicati e snapshot stale arrivano advanced=false.
+		if advanced:
+			_note_event()
 		return
 	_progress_fingerprint = fingerprint
-	var advanced := bool(info.get("advanced", false))
 	var next_info := info.duplicate(true)
 	if not advanced and not _info.is_empty():
 		# Un redraw (per esempio un totale appena scoperto) non autorizza uno
