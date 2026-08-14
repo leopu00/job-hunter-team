@@ -21,6 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/check-live-schema.py"
 MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
 QUERY = ROOT / "supabase/live-schema/078-084.v3.sql"
+WEB_MANIFEST = ROOT / "supabase/live-schema/078-084.web.v4.json"
+WEB_QUERY = ROOT / "supabase/live-schema/078-084.web.v4.sql"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
 POSTGRES_READY_MARKER = "database system is ready to accept connections"
@@ -46,6 +48,12 @@ LEGACY_ARTIFACT_SHA256 = {
     ),
     "supabase/live-schema/078-083.v2.sql": (
         "2a5aed82aac8c7f129d7cc5d74bf875bd77750b1917a10aecbcf65a201336971"
+    ),
+    "supabase/live-schema/078-084.v3.json": (
+        "80df5deb1407874ecac409bbc090d27e9ad91cde8126ccd8d2f5e9fdd873df9d"
+    ),
+    "supabase/live-schema/078-084.v3.sql": (
+        "2ea51c8261b7c4967c4a4000df364e4d2a7059517b1c6a55d86c70b7c7e209e8"
     ),
 }
 
@@ -289,7 +297,42 @@ def test_manifest_pins_clone_order_migrations_query_and_check_set():
     )
 
 
-def test_v1_and_v2_artifacts_remain_byte_for_byte_immutable():
+def test_additive_web_contract_exactly_receipts_every_mapped_rpc_and_column():
+    contract = canary.load_web_contract()
+    manifest = json.loads(WEB_MANIFEST.read_text())
+    coverage = json.loads(
+        (ROOT / "supabase/live-schema/web-code-coverage.v1.json").read_text()
+    )
+
+    assert contract.phase == "web"
+    assert contract.contract_id == "release-0.3.9-web-schema-078-084"
+    assert len(contract.expected_checks) == 40
+    assert manifest["query"]["path"] == "supabase/live-schema/078-084.web.v4.sql"
+
+    mapped_receipts = {
+        receipt
+        for kind in ("rpcs", "tables", "columns")
+        for entry in coverage["coverage"][kind].values()
+        for receipt in entry["receipts"]
+    }
+    assert mapped_receipts == set(contract.expected_checks)
+    assert all(
+        entry == {"exception": "reviewed_dynamic_schema_use"}
+        for entry in coverage["coverage"]["ambiguous_sites"].values()
+    )
+
+
+def test_cli_validates_only_the_pinned_additive_web_contract(capsys):
+    assert canary.main(["--phase", "web", "--validate-only"]) == 0
+    output = capsys.readouterr()
+    assert output.err == ""
+    assert output.out == (
+        "LIVE-SCHEMA MANIFEST OK "
+        "contract=release-0.3.9-web-schema-078-084 checks=40\n"
+    )
+
+
+def test_v1_v2_and_v3_artifacts_remain_byte_for_byte_immutable():
     import hashlib
 
     observed = {
@@ -726,6 +769,34 @@ def test_pg16_schema_only_clone_passes_after_ordered_078_through_084():
 
     assert tuple(sorted(observed)) == contract.expected_checks
     assert all(observed.values())
+
+
+def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():
+    contract = canary.load_web_contract()
+    with pg16_schema_clone(migrated=True) as psql:
+        baseline = receipt_rows(psql(WEB_QUERY.read_text()).stdout)
+        column_drift = receipt_rows(
+            psql(
+                "BEGIN; ALTER TABLE public.positions RENAME COLUMN title "
+                f"TO title_drift;\n{WEB_QUERY.read_text()};\nROLLBACK;"
+            ).stdout
+        )
+        rpc_drift = receipt_rows(
+            psql(
+                "BEGIN; ALTER FUNCTION public.increment_landing_hits(text, text) "
+                f"RENAME TO increment_landing_hits_drift;\n{WEB_QUERY.read_text()};"
+                "\nROLLBACK;"
+            ).stdout
+        )
+
+    assert tuple(sorted(baseline)) == contract.expected_checks
+    assert all(baseline.values())
+    assert [check for check, ok in column_drift.items() if not ok] == [
+        "084.web.columns.positions"
+    ]
+    assert [check for check, ok in rpc_drift.items() if not ok] == [
+        "084.web.rpc.increment_landing_hits"
+    ]
 
 
 def test_pg16_schema_only_clone_fails_before_the_ordered_migrations():

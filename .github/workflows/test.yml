@@ -58,6 +58,12 @@ jobs:
         working-directory: web
         run: npm ci
 
+      # Static causal bridge only: scans the checked-in web TypeScript and the
+      # versioned receipt manifests. It has no credentials and makes no network
+      # request, so PRs cannot silently add an RPC/column outside the canary.
+      - name: Verify web schema receipt coverage (offline)
+        run: node scripts/check-web-schema-coverage.mjs
+
       # tasks/team-directives-desktop-boundary.test.ts imports the real desktop
       # route, which depends on next/server from the shipped payload.
       - name: Install desktop payload dependencies for imported routes
