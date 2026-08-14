@@ -13,6 +13,7 @@ const STARTING := "starting"
 const RUNNING := "running"
 const FAILED := "failed"
 const RECOVERING := "recovering"
+const PERSISTENCE_VERSION := 1
 
 ## start-agent.sh ha già restituito, quindi CAPITANO deve comparire al primo
 ## probe utile. Quindici secondi lasciano cinque probe da 3 s senza mascherare
@@ -32,6 +33,8 @@ var command_finished := false
 var confirm_deadline_ms := 0
 var recovery_deadline_ms := 0
 var watchdog_cursor := -1
+var watchdog_identity := ""
+var watchdog_fingerprint := ""
 var output := ""
 var cause := ""
 var error_code := ""
@@ -45,6 +48,8 @@ func begin(now_ms: int) -> void:
 	confirm_deadline_ms = 0
 	recovery_deadline_ms = 0
 	watchdog_cursor = -1
+	watchdog_identity = ""
+	watchdog_fingerprint = ""
 	output = ""
 	cause = ""
 	error_code = ""
@@ -53,19 +58,25 @@ func begin(now_ms: int) -> void:
 ## L'exit code descrive il comando, non il runtime: anche `ok` attende il
 ## probe CAPITANO. In caso di errore la causa resta disponibile mentre il
 ## watchdog tenta il recupero e dopo un eventuale timeout.
-func finish_command(ok: bool, raw_output: String, cursor: int,
-		now_ms: int) -> void:
+func finish_command(observed_attempt: int, ok: bool, raw_output: String,
+		cursor: int, identity: String, fingerprint: String,
+		now_ms: int) -> bool:
+	if observed_attempt != attempt:
+		return false
 	command_finished = true
 	watchdog_cursor = cursor
+	watchdog_identity = identity
+	watchdog_fingerprint = fingerprint
 	output = _bounded_output(raw_output)
 	confirm_deadline_ms = now_ms + CONFIRM_TIMEOUT_MS
 	recovery_deadline_ms = now_ms + RECOVERY_TIMEOUT_MS
 	if ok:
 		phase = STARTING
-		return
+		return true
 	phase = FAILED
 	error_code = "bootstrap_failed"
 	cause = _cause_line(output)
+	return true
 
 
 ## Applica una osservazione dello stesso tentativo. Un probe partito prima di
@@ -109,6 +120,8 @@ func stopped(now_ms: int) -> void:
 	confirm_deadline_ms = 0
 	recovery_deadline_ms = 0
 	watchdog_cursor = -1
+	watchdog_identity = ""
+	watchdog_fingerprint = ""
 	output = ""
 	cause = ""
 	error_code = ""
@@ -128,10 +141,63 @@ func snapshot() -> Dictionary:
 		"confirm_deadline_ms": confirm_deadline_ms,
 		"recovery_deadline_ms": recovery_deadline_ms,
 		"watchdog_cursor": watchdog_cursor,
+		"watchdog_identity": watchdog_identity,
+		"watchdog_fingerprint": watchdog_fingerprint,
 		"output": output,
 		"cause": cause,
 		"error_code": error_code,
 	}
+
+
+## Il servizio persiste soltanto questo frame. Le deadline monotone non
+## attraversano un riavvio di processo: al restore un tentativo non concluso
+## diventa un fallimento esplicito, mai un falso `idle` o un timer ereditato.
+func persistent_snapshot() -> Dictionary:
+	var frame := snapshot()
+	frame["version"] = PERSISTENCE_VERSION
+	return frame
+
+
+func restore(frame: Dictionary, now_ms: int) -> bool:
+	if int(frame.get("version", 0)) != PERSISTENCE_VERSION:
+		return false
+	var stored_phase := str(frame.get("phase", ""))
+	if not stored_phase in [STARTING, FAILED, RECOVERING]:
+		return false
+	attempt = maxi(int(frame.get("attempt", 0)), 0)
+	started_ms = int(frame.get("started_ms", now_ms))
+	command_finished = true
+	confirm_deadline_ms = 0
+	recovery_deadline_ms = 0
+	watchdog_cursor = -1
+	watchdog_identity = ""
+	watchdog_fingerprint = ""
+	output = _bounded_output(str(frame.get("output", "")))
+	cause = str(frame.get("cause", "")).right(320)
+	error_code = str(frame.get("error_code", ""))
+	phase = FAILED
+	if stored_phase != FAILED:
+		error_code = "service_restarted"
+		if cause == "":
+			cause = "Team start observation was interrupted by an app restart"
+	elif error_code == "":
+		error_code = "bootstrap_failed"
+	return true
+
+
+func fail_restore(now_ms: int) -> void:
+	attempt += 1
+	phase = FAILED
+	started_ms = now_ms
+	command_finished = true
+	confirm_deadline_ms = 0
+	recovery_deadline_ms = 0
+	watchdog_cursor = -1
+	watchdog_identity = ""
+	watchdog_fingerprint = ""
+	output = ""
+	cause = "Saved team start state could not be read"
+	error_code = "startup_state_unreadable"
 
 
 static func watchdog_attempted(delta: String) -> bool:

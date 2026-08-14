@@ -146,6 +146,10 @@ setup_progress|script|gate|any|-|tools/setup_progress_selftest.gd|-
 # livello). Su POSIX prova anche il ripiego con un finto docker che rifiuta
 # il flag come i compose meno recenti.
 pull_stream|script|gate|any|-|tools/pull_stream_selftest.gd|-
+# Il comando, il probe CAPITANO e il watchdog sono osservazioni diverse:
+# generation stale, riavvio del servizio, timeout e rotazione del log non
+# devono far tornare idle né promuovere un recupero che nessuno ha osservato.
+team_start_state|script|gate|any|-|tools/team_start_state_selftest.gd|TEAM-START-STATE-TEST PASS
 # Il rilevamento Docker del probe: assente / spento / attivo sono tre schermate
 # (installa · avvia il motore · procedi). Su POSIX un binario assente esce 127
 # via shell, mai -1: senza questa riga il collasso "assente ⇒ presente" — cioè
