@@ -51,6 +51,8 @@ RUNTIME_MANIFEST="$RUNTIME_DIR/.runtime-integrity"
 RAW_BASE_OVERRIDE="${JHT_RAW_BASE:-}"
 RELEASE_REF="${JHT_BRANCH:-production}"
 WRAPPER_PATH="${JHT_WRAPPER_PATH:-$0}"
+DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598"
+DEFAULT_RUNTIME_VERSION="0.3.9"
 GAME_EXECUTABLE_OVERRIDE="${JHT_GAME_EXECUTABLE:-}"
 if [ -n "${JHT_GAME_CONTROL_DIR:-}" ]; then
   GAME_CONTROL_DIR="$JHT_GAME_CONTROL_DIR"
@@ -1320,7 +1322,7 @@ handle_runtime_upgrade() {
   # Il compose nuovo e' la fonte di verita': non assumere che l'immagine
   # resti per sempre latest o che un override JHT_IMAGE punti allo stesso ref.
   candidate_ref="$(upgrade_compose "$candidate_compose" config --images 2>/dev/null | head -n 1)"
-  candidate_image="$(docker image inspect "${candidate_ref:-${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.9}}" --format '{{.Id}}' 2>/dev/null || true)"
+  candidate_image="$(docker image inspect "${candidate_ref:-${JHT_IMAGE:-$DEFAULT_RUNTIME_IMAGE}}" --format '{{.Id}}' 2>/dev/null || true)"
   candidate_image="${candidate_image:-sconosciuta}"
   upgrade_write_journal pulled "$old_image" "$was_running" || {
     upgrade_result false false pull "$old_version" "$old_image" "$old_version" "$old_image" false "Impossibile aggiornare il journal" false
@@ -1428,8 +1430,14 @@ case "$SUB" in
   -V|--version|version)
     if docker_reachable && container_up; then
       docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" --version
+    elif [ -n "${JHT_IMAGE_TAG:-}" ]; then
+      printf '%s\n' "$JHT_IMAGE_TAG"
+      info "Versione dell'immagine configurata. Per quella del CLI in esecuzione: 'jht up' e poi 'jht --version'."
+    elif [ -n "${JHT_IMAGE:-}" ]; then
+      printf '%s\n' "$(basename "$JHT_IMAGE" | sed 's/.*://')"
+      info "Versione dell'immagine configurata. Per quella del CLI in esecuzione: 'jht up' e poi 'jht --version'."
     else
-      printf '%s\n' "${JHT_IMAGE_TAG:-$(basename "${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.9}" | sed 's/.*://')}"
+      printf '%s\n' "$DEFAULT_RUNTIME_VERSION"
       info "Versione dell'immagine configurata. Per quella del CLI in esecuzione: 'jht up' e poi 'jht --version'."
     fi
     exit 0

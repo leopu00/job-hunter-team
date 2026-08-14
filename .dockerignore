@@ -25,6 +25,10 @@ game/
 docs/
 tests/
 e2e/
+# Il pin OCI nasce dopo il build runtime attestato. Escluderlo dal contesto
+# rompe il ciclo digest->commit->digest: aggiornare solo il manifest non
+# ricostruisce byte runtime diversi da quelli che il manifest identifica.
+release/
 docker-compose.yml
 Dockerfile
 .dockerignore

@@ -8,8 +8,6 @@ on:
       # resta nei quattro workflow CI; l'immagine si pubblica una volta sola
       # quando il candidato confluisce in master.
       - master
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]*"
     paths:
       - "Dockerfile"
       - ".dockerignore"
@@ -70,8 +68,6 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build & push

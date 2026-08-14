@@ -20,6 +20,7 @@ const __dirname = dirname(__filename);
 
 // Repo root: cli/src/commands → up 3 livelli
 const REPO_ROOT = resolve(__dirname, '..', '..', '..');
+const DEFAULT_RUNTIME_IMAGE = 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598';
 
 function dockerCompose(args, { cwd = REPO_ROOT, inherit = true } = {}) {
   const r = spawnSync('docker', ['compose', ...args], {
@@ -40,7 +41,7 @@ function fixNextOwnership() {
   const r = spawnSync('docker', [
     'run', '--rm', '--user', 'root', '--entrypoint', '/bin/sh',
     '--volumes-from', CONTAINER_NAME,
-    'ghcr.io/leopu00/jht:0.3.9',
+    process.env.JHT_IMAGE || DEFAULT_RUNTIME_IMAGE,
     '-c', 'chown -R 1001:1001 /app/web/.next 2>/dev/null || true',
   ], {
     stdio: 'ignore',

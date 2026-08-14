@@ -2,7 +2,7 @@
 # Copia funzionale di docker-compose.yml del repo (image-only, GHCR).
 services:
   jht:
-    image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.9}
+    image: ${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598}
     container_name: jht
     command: ["pid1"]
     environment:

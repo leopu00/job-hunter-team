@@ -16,6 +16,12 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Require the current production commit
+        run: |
+          git fetch origin production --depth=1
+          test "$(git rev-list -n 1 "$GITHUB_REF_NAME")" = "$(git rev-parse origin/production)"
       - name: Verify tag matches package.json versions
         run: scripts/check-release-version.sh "$GITHUB_REF_NAME"
 
@@ -418,12 +424,53 @@ jobs:
             ${{ matrix.additional_artifact_path }}
             ${{ matrix.additional_artifact_path }}.provenance.json
 
+  publish-runtime:
+    name: Publish immutable runtime tag
+    runs-on: ubuntu-latest
+    needs:
+      - check-version
+      - build-game
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Il runtime viene costruito e collaudato sul push master precedente.
+      # Il manifest registra quel digest e la sua label revision. Il tag
+      # release non ricostruisce byte diversi: promuove il digest attestato,
+      # oppure fallisce senza sovrascrivere un tag omonimo divergente.
+      - name: Verify source image and publish release tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          python scripts/runtime_image_pin.py verify-tree --root . --version "$version"
+          source_revision="$(python scripts/runtime_image_pin.py show --field source_revision)"
+          git merge-base --is-ancestor "$source_revision" HEAD
+          python scripts/runtime_image_pin.py publish
+
   release:
     name: GitHub Release
     runs-on: ubuntu-latest
     needs:
       - check-version
       - build-game
+      - publish-runtime
     permissions:
       contents: write
 
@@ -518,6 +565,19 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Record the runtime manifest as a release asset
+        env:
+          TAG_SHA: ${{ steps.source.outputs.tag_sha }}
+        run: |
+          cp release/runtime-image.v1.json release-assets/RUNTIME-IMAGE.json
+          python scripts/release_artifacts.py record \
+            --asset release-assets/RUNTIME-IMAGE.json \
+            --output release-assets/RUNTIME-IMAGE.json.provenance.json \
+            --tag "$GITHUB_REF_NAME" \
+            --commit "$TAG_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-root .
+
       - name: Verify tagged artifact provenance and write SHA-256 checksums
         env:
           TAG_SHA: ${{ steps.source.outputs.tag_sha }}
@@ -528,6 +588,7 @@ jobs:
             --expected-asset job-hunter-team-windows-x64-portable.exe \
             --expected-asset job-hunter-team.zip \
             --expected-asset job-hunter-team-linux-x64.tar.gz \
+            --expected-asset RUNTIME-IMAGE.json \
             --tag "$GITHUB_REF_NAME" \
             --commit "$TAG_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -560,6 +621,7 @@ jobs:
             release-assets/*.exe
             release-assets/*.zip
             release-assets/*.tar.gz
+            release-assets/RUNTIME-IMAGE.json
             release-assets/SHA256SUMS
             release-assets/RELEASE-PROVENANCE.json
         env:

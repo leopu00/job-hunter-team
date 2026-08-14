@@ -5,9 +5,10 @@ Cutting a release means pushing a `vX.Y.Z` tag that points at the **`production`
 Every platform runner also records the exact tag commit, byte size and SHA-256
 of its final asset **after** signing and packaging. The release job recomputes
 those hashes after downloading the artifacts and refuses publication unless
-all four sidecars name the same tag commit. The published release includes
-`SHA256SUMS` and `RELEASE-PROVENANCE.json`; checksums prepared before the tag
-are never reused because signing changes the final bytes.
+all five sidecars name the same tag commit. The published release includes
+`SHA256SUMS`, `RELEASE-PROVENANCE.json` and the versioned
+`RUNTIME-IMAGE.json`; checksums prepared before the tag are never reused
+because signing changes the final bytes.
 
 > 🖥️ **The desktop application is the Godot office in [`game/`](../../../game/).** The Electron launcher (`desktop/`) was removed with the native migration on 2026-07-19 — nothing in the release pipeline uses electron-builder any more. If a doc still mentions `desktop/package.json`, it predates that change.
 
@@ -59,8 +60,10 @@ scripts/check-release-version.sh vX.Y.Z
 
 `tests/js` is the only package deliberately excluded: it is a repository test
 runner and is not shipped. `scripts/dev-up.sh` likewise stays on the moving
-`latest` development image; every installer, production compose and runtime
-fallback is pinned to `ghcr.io/leopu00/jht:X.Y.Z`.
+`latest` development image. Every installer, production compose and runtime
+fallback repeats the content-addressed identity in
+`release/runtime-image.v1.json`; `runtime_image_pin.py verify-tree` rejects a
+semver or `latest` fallback even when the digest copy is still present.
 
 ---
 
@@ -68,6 +71,14 @@ fallback is pinned to `ghcr.io/leopu00/jht:X.Y.Z`.
 
 - [ ] **Bump every checked version field and regenerate every lockfile** for the new `X.Y.Z`.
 - [ ] **Update `CHANGELOG.md`** — rename the `[Unreleased]` heading to `[X.Y.Z] — YYYY-MM-DD` and open a fresh empty `[Unreleased]` block above it. The release job extracts the body of `## [X.Y.Z]` as the GitHub Release notes; if that block is missing it silently falls back to a `git log` dump, which is how a release ends up with unreadable notes.
+- [ ] **Freeze the runtime before the pin commit.** Wait for the green Docker
+  workflow of the chosen master commit, record its multi-arch digest plus OCI
+  `revision` in `release/runtime-image.v1.json`, and update every consumer to
+  the resulting `repository@sha256:…`. The source revision must be an ancestor
+  of the release commit. The pin commit is host/release metadata and does not
+  redefine the already-built runtime bytes. Run
+  `python scripts/runtime_image_pin.py verify-source` to attest the recorded
+  digest directly, without depending on the moving `master` tag.
 - [ ] Run `scripts/check-release-version.sh vX.Y.Z` locally — it must print `OK`.
 - [ ] **Decide the provider CLI versions** this release installs — `shared/config/provider-versions.json` (issue #130). Leaving them as they are is a decision too, and the right one unless a bump has been tested: the setup installs exactly what that file declares, so a machine on `vX.Y.Z` runs the same provider CLI as every other. If you do bump one, change `version`, `pinned_at` and `note` together (the diff is the release trace), and run the e2e of the affected platform: the pin is the only thing standing between a release and an untested runtime. `jht providers versions` prints expected vs installed on any machine.
 - [ ] Run the test suites: `npm test` (vitest + pytest) and, if the game changed, `npm run app:test`.
@@ -97,9 +108,15 @@ git push origin v0.2.1
   commit and its SHA-256;
 - uploads the artifact.
 
-**3 · `release`** — re-checks that the tag is `origin/production` HEAD, builds the web app (`npm ci` in `web/` **and** `shared/`, because the web build imports `shared/config/schema.ts` which needs `zod`), extracts the release notes from `CHANGELOG.md`, downloads the four platform artifacts, verifies their provenance and hashes, generates `SHA256SUMS` plus `RELEASE-PROVENANCE.json`, and then creates the GitHub Release as a **draft**. The release body prints the same SHA-256 lines under the human-readable notes: `scripts/release_artifacts.py notes` consumes the already-verified `RELEASE-PROVENANCE.json`, so it cannot drift into a second platform-asset list. A tag containing `-` (e.g. `v0.3.0-rc1`) is marked as a **prerelease** when published.
+**3 · `publish-runtime`** — reads the canonical manifest, verifies the pinned
+multi-arch index and both amd64/arm64 OCI `revision` labels, then handles the
+semver tag. An absent tag is created from the digest; an existing identical
+tag is accepted; an existing different tag stops the release without being
+overwritten. `.github/workflows/docker.yml` never publishes semver tags.
 
-**4 · independent draft audit and publication** — download the assets back from
+**4 · `release`** — re-checks that the tag is `origin/production` HEAD, builds the web app (`npm ci` in `web/` **and** `shared/`, because the web build imports `shared/config/schema.ts` which needs `zod`), extracts the release notes from `CHANGELOG.md`, downloads the four platform artifacts, adds `RUNTIME-IMAGE.json`, verifies their provenance and hashes, generates `SHA256SUMS` plus `RELEASE-PROVENANCE.json`, and then creates the GitHub Release as a **draft**. The release body prints the same SHA-256 lines under the human-readable notes: `scripts/release_artifacts.py notes` consumes the already-verified `RELEASE-PROVENANCE.json`, so it cannot drift into a second platform-asset list. A tag containing `-` (e.g. `v0.3.0-rc1`) is marked as a **prerelease** when published.
+
+**5 · independent draft audit and publication** — download the assets back from
 GitHub, verify the exact public bytes and only then publish:
 
 ```bash
@@ -125,6 +142,7 @@ fix forward; never publish or replace one file by hand.
 | Windows x64       | `Windows Desktop` | `job-hunter-team-windows-x64-setup.exe` (primary per-user installer) + `job-hunter-team-windows-x64-portable.exe` |
 | macOS Universal 2 | `macOS`           | `job-hunter-team.zip` (signed, notarized, stapled)                                                                |
 | Linux x64         | `Linux`           | `job-hunter-team-linux-x64.tar.gz`                                                                                |
+| Runtime identity  | —                 | `RUNTIME-IMAGE.json` (repository, release version, digest, source revision)                                      |
 | All assets        | —                 | `SHA256SUMS` + `RELEASE-PROVENANCE.json` (tag commit, byte size, SHA-256)                                         |
 
 Asset names do **not** carry the version — the GitHub Release tag is the version. There is no separate Windows ARM64 installer any more (the Electron pipeline produced one; the Godot export targets x64, which runs under Windows-on-ARM emulation).
@@ -168,6 +186,10 @@ git push origin vX.Y.Z
 Same rule for any other failure: fix forward, delete the tag, re-tag the new `production` HEAD. A release that failed does not get a bumped version number — keep the one that failed (memory `feedback_fix_release_no_bump`).
 
 **Tag ≠ production HEAD.** The `release` job stops with `Tag releases only from the current production HEAD`. Merge `master` into `production`, push, then re-tag.
+
+**Runtime tag mismatch.** Do not repair or overwrite it. Confirm the manifest
+against the intended green master build. If the registry tag moved, leave the
+release red and investigate; the digest remains runnable and is the authority.
 
 **macOS credentials missing.** `macOS game releases require signing and notarization credentials` — configure the five secrets listed in [`MAINTAINERS.md`](MAINTAINERS.md#-macos-code-signing--notarization). There is no unsigned fallback: an unsigned build would be blocked by Gatekeeper on the user's machine.
 
