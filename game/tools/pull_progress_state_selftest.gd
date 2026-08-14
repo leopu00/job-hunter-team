@@ -10,6 +10,7 @@ extends SceneTree
 const ProgressState := preload("res://scripts/setup/pull_progress_state.gd")
 
 var _fails: Array[String] = []
+var _sections := 0
 
 
 func _check(what: String, ok: bool, detail := "") -> void:
@@ -21,6 +22,9 @@ func _init() -> void:
 	_classifier_contract()
 	_seventeen_of_eighteen_contract()
 	_fingerprint_contract()
+	_observer_high_water_contract()
+	_check("tutte le sezioni arrivate in fondo", _sections == 4,
+			"%d/4" % _sections)
 	if _fails.is_empty():
 		print("PULL-PROGRESS-STATE-TEST PASS")
 		quit(0)
@@ -46,6 +50,7 @@ func _classifier_contract() -> void:
 	_check("Download complete non è Pull complete",
 			ProgressState.classify_status("Download complete")
 			!= ProgressState.PHASE_COMPLETE)
+	_sections += 1
 
 
 func _seventeen_of_eighteen_contract() -> void:
@@ -75,6 +80,7 @@ func _seventeen_of_eighteen_contract() -> void:
 	_check("17/18: fase visibile extracting",
 			str(state["phase"]) == ProgressState.PHASE_EXTRACTING,
 			str(state))
+	_sections += 1
 
 
 func _fingerprint_contract() -> void:
@@ -93,7 +99,7 @@ func _fingerprint_contract() -> void:
 			ProgressState.material_fingerprint(
 					{"aa": "Downloading 10.0MB"}, duplicate_bytes) == initial)
 
-	bytes["aa"]["got"] = 11.0
+	bytes["aa"]["got"] = 10.0 + 1.0 / 1048576.0
 	var advanced := ProgressState.material_fingerprint(layers, bytes)
 	_check("download: un byte materiale cambia fingerprint", advanced != initial)
 
@@ -135,3 +141,68 @@ func _fingerprint_contract() -> void:
 	_check("ordine dizionario: fingerprint stabile",
 			ProgressState.material_fingerprint(ordered_a, {})
 			== ProgressState.material_fingerprint(ordered_b, {}))
+	_sections += 1
+
+
+func _observer_high_water_contract() -> void:
+	var observer := ProgressState.new()
+	var layers := {"aa": "Downloading 10 MB"}
+	var bytes := {"aa": {"got": 10.0, "total": 20.0}}
+	var event: Dictionary = observer.observe(layers, bytes)
+	_check("osservatore: il primo stato strutturato avanza",
+			bool(event["changed"]) and bool(event["advanced"]), str(event))
+
+	event = observer.observe({"aa": " Downloading 10.0MB "},
+			{"aa": {"got": 10.0, "total": 20.0}})
+	_check("osservatore: duplicato non cambia e non avanza",
+			not bool(event["changed"]) and not bool(event["advanced"]), str(event))
+	event = observer.observe(layers,
+			{"aa": {"got": 10.0, "total": 21.0}})
+	_check("osservatore: totale scoperto cambia ma non avanza",
+			bool(event["changed"]) and not bool(event["advanced"]), str(event))
+
+	# Un byte, non un megabyte: e' il minimo avanzamento misurabile dal parser.
+	bytes["aa"]["got"] = 10.0 + 1.0 / 1048576.0
+	event = observer.observe(layers, bytes)
+	_check("osservatore: un byte supera l'high-water",
+			bool(event["changed"]) and bool(event["advanced"]), str(event))
+
+	bytes["aa"]["got"] = 10.0
+	event = observer.observe(layers, bytes)
+	_check("osservatore: byte in calo cambiano ma non avanzano",
+			bool(event["changed"]) and not bool(event["advanced"]), str(event))
+	bytes["aa"]["got"] = 10.0 + 1.0 / 1048576.0
+	event = observer.observe(layers, bytes)
+	_check("osservatore: ritorno allo stesso massimo e' stale",
+			bool(event["changed"]) and not bool(event["advanced"]), str(event))
+
+	# Entrare e avanzare in estrazione e' lavoro; oscillare sotto o sul massimo
+	# gia visto non puo tenere vivo il timeout.
+	bytes["aa"] = {"got": 20.0, "total": 20.0}
+	event = observer.observe({"aa": "Extracting 2 MB/20 MB"}, bytes)
+	_check("osservatore: ingresso extracting avanza", bool(event["advanced"]),
+			str(event))
+	event = observer.observe({"aa": "Extracting 1 MB/20 MB"}, bytes)
+	_check("osservatore: extracting reverse non avanza",
+			bool(event["changed"]) and not bool(event["advanced"]), str(event))
+	event = observer.observe({"aa": "Extracting 2 MB/20 MB"}, bytes)
+	_check("osservatore: oscillazione sul massimo non avanza",
+			bool(event["changed"]) and not bool(event["advanced"]), str(event))
+	event = observer.observe({"aa": "Extracting 3 MB/20 MB"}, bytes)
+	_check("osservatore: extracting oltre il massimo avanza",
+			bool(event["advanced"]), str(event))
+
+	event = observer.observe({"aa": "Pull complete"}, bytes)
+	_check("osservatore: complete avanza", bool(event["advanced"]), str(event))
+	event = observer.observe({"aa": "Downloading 19 MB"},
+			{"aa": {"got": 19.0, "total": 20.0}})
+	_check("osservatore: complete -> downloading e' stale",
+			bool(event["changed"]) and not bool(event["advanced"]), str(event))
+
+	event = observer.observe({"aa": "messaggio opaco A"}, bytes)
+	_check("osservatore: OTHER variabile resta fail-closed",
+			bool(event["changed"]) and not bool(event["advanced"]), str(event))
+	event = observer.observe({"aa": "messaggio opaco B"}, bytes)
+	_check("osservatore: OTHER oscillante non rinnova",
+			bool(event["changed"]) and not bool(event["advanced"]), str(event))
+	_sections += 1
