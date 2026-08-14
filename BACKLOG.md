@@ -29,9 +29,41 @@
 > waiting on an operator decision were left untouched on purpose, so they can be
 > taken to them in one batch instead of a few at a time.
 
+## 🔴 APERTO DOPO LA RELEASE v0.3.9 (14 Aug 2026)
+
+> Raccolto interrogando ogni agente su **ciò che sapeva e non era scritto**.
+> Dettaglio operativo (percorsi, macchine) nel backlog interno di HQ.
+
+**Blocca il rilascio agli utenti**
+- 🔴 **Aggiornare le due VPS alla `0.3.9`** — contiene il fix `id AS legacy_id` che sblocca il push verso il cloud, fermo dal 12/08. *Finché non parte, **161 cancellazioni ordinate restano in coda** e l'utente vede ancora posizioni che aveva eliminato.* Serve una finestra fuori orario: l'upgrade riavvia i container.
+
+**Windows / provider `#124`** *(3 blocker + 1 rischio)*
+- 🔴 Parità Windows V3 incompleta: handle/reparse/SID-ACL, `last-error` PS5.1, dispatch Attest/Cleanup V3, Python ≥3.9 + UTF-8 — non provati su PS5.1 reale.
+- 🔴 Delete POSIX a quarantena: verdi solo gli oracle unitari; integrazione shell/fake e retry end-to-end non completati.
+- 🔴 Fault matrix 3OS e suite completa **non rieseguite** dopo gli ultimi cambi.
+- ⚠️ **Il lavoro vive in commit locali senza remote** ⇒ rischio di perdita, non blocker tecnico.
+- 🟡 T0–T5 di prodotto **non misurati** su nessuno dei 3 OS.
+
+**Debiti aperti dalla release**
+- 🟡 **Il canary ACL hardcoda le cardinalità** (8 privilegi / 32+16 righe): corretto oggi su PG17 con `MAINTAIN`, **si romperà al prossimo privilegio**. Va verificato per *relazioni*, non per *conteggi*.
+- 🟡 **`#151` ha rimosso il retry Godot POSIX**: `run.sh` non ritenta più ⇒ macOS e Linux più sensibili ai flake del motore.
+- 🟡 **La full pytest locale non è tutta verde**: 2199 pass + 33 errori Docker/PG non-ready + 5 fail branch-census. CI 3OS verde ⇒ è infrastruttura locale, ma **non è «tutto verde»**.
+- 🟡 **Audit di sicurezza della release: web e desktop non coperti** — perimetro dichiarato, non buco trovato.
+- 🟡 **`game` WIP su `origin/game`**: lavoro valido ma **932 commit indietro**, serve oracle Windows prima del merge.
+
+**Prodotto — non assegnati**
+- ⬜ Tabella posizioni **sfasata** (colonne disallineate): l'utente la vede a ogni apertura.
+- ⬜ Manca la **data di esclusione** nel riquadro «perché è esclusa».
+- ⬜ **Censimento dei 5 `fs.existsSync(JHT_DB_PATH)`**: stessa scelta local-first che faceva fallire il pulsante candidatura ⇒ può rientrare da un'altra porta.
+- ⬜ **La 0.3.9 non è mai stata provata da utente**: 8 migrazioni applicate in produzione, verifiche solo read-only.
+
+**Registrazione / OCR**
+- 🟡 Il ROI assume che l'origin del `contentRect` mappi sul crop: testato solo con `origin=0`, mai un frame reale con origin diverso.
+- 🟡 L'oracle manifest-tamper non esegue il runner completo sul manifest alterato.
+
 ## 🔁 Repository hygiene
 
-- 🔴 **[CROSS-BOUNDARY-CONTRACT-FREEZE]** — quando due owner producono e consumano lo stesso artefatto o protocollo, prima di scrivere codice devono congelare una specifica unica e versionata: nomi file, schema e tipi esatti, valori ammessi, canonicalizzazione, limiti, semantica fail-closed e vettori di test condivisi. Producer e consumer implementano e revisionano contro quella stessa fonte; varianti concorrenti non entrano nei branch e ogni modifica al contratto richiede una correzione esplicita che supersede le precedenti prima di riprendere il lavoro. **Measured 2026-08-10 — not verifiable from a worktree.** This is a rule about how two owners agree before writing code: there is no artefact to grep for and no command to run. It can only be judged on the next cross-boundary piece of work, by whoever integrates it. **Stato 2026-08-12 — l'artefatto ora esiste**: `docs/internal/2026-08-12-cross-boundary-contract.md` (versione 1) congela ruoli dei branch, forma del claim, verifica via `scripts/branch_census.py --claim`, semantica fail-closed e regola di modifica; le decisioni che spettano a Leone (riconciliazione `hq-master`↔`integration`, promozione a `production`, destino di `game`) sono elencate come aperte, non inventate. Resta vero che il contratto si giudica solo sul prossimo lavoro a cavallo del confine: l'owner HQ non l'ha ancora letto né confermato, e il documento stesso lo dichiara (§8).
+- 🔴 **[CROSS-BOUNDARY-CONTRACT-FREEZE]** — quando due owner producono e consumano lo stesso artefatto o protocollo, prima di scrivere codice devono congelare una specifica unica e versionata: nomi file, schema e tipi esatti, valori ammessi, canonicalizzazione, limiti, semantica fail-closed e vettori di test condivisi. Producer e consumer implementano e revisionano contro quella stessa fonte; varianti concorrenti non entrano nei branch e ogni modifica al contratto richiede una correzione esplicita che supersede le precedenti prima di riprendere il lavoro. **Measured 2026-08-10 — not verifiable from a worktree.** This is a rule about how two owners agree before writing code: there is no artefact to grep for and no command to run. It can only be judged on the next cross-boundary piece of work, by whoever integrates it. **Stato 2026-08-12 — l'artefatto ora esiste**: `docs/internal/2026-08-12-cross-boundary-contract.md` (versione 1) congela ruoli dei branch, forma del claim, verifica via `scripts/branch_census.py --claim`, semantica fail-closed e regola di modifica; le decisioni che spettano all'operatore (riconciliazione `hq-master`↔`integration`, promozione a `production`, destino di `game`) sono elencate come aperte, non inventate. Resta vero che il contratto si giudica solo sul prossimo lavoro a cavallo del confine: l'owner HQ non l'ha ancora letto né confermato, e il documento stesso lo dichiara (§8).
 > `[BRANCH-LIFECYCLE-CLEANUP]` è stato **chiuso per implementazione** il 2026-08-12 su `dev2`. La misura del 2026-08-10 diceva la cosa che contava — «la regola è scritta ma nessuno la esegue» — e adesso qualcosa la esegue: `scripts/branch_census.py`, 66 test in `tests/test_branch_census.py`.
 >
 > **Cosa esegue davvero, oggi.** `python3 scripts/branch_census.py` stampa un verdetto con **tre categorie tenute separate**, perché confonderle è il difetto: (1) ref remoti già antenati della base — merge fatto, ref rimasto; (2) ref con **commit unici** non integrati — merge-ready o abbandonati, serve una decisione; (3) worktree registrate **senza sessione**. Più due liste che non sono categorie di ciclo di vita: i **protetti** (`master`, `production`, `game`) e i **da guardare**. Un ref è proposto per la cancellazione solo se supera **tre gate**: è integrato, la sua worktree non è viva né ignota, e `git ls-remote` conferma che esiste ancora su origin **allo stesso sha** del ref di tracking. Un quarto uso, dal protocollo del 2026-08-12: `--claim <ID-TICKET>` cerca chi ha già dichiarato un ticket, con cinque verdetti — `free` · `mine` · `taken` (branch altrui, non integrato → fermati) · `done` (tutti i commit che lo nominano sono già nella base: fatto, non occupato) · `unknown`. Uscite: `0` pulito · `1` fail-closed, qualcosa non è classificabile · `2` il census non è potuto girare · `3` con `--strict` se restano candidati · `4` ticket preso da altri · `5` ticket già fatto.
