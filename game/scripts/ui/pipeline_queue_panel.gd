@@ -78,7 +78,7 @@ func _on_positions_updated(_positions: Array) -> void:
 func _rebuild() -> void:
 	for child in _content.get_children():
 		child.queue_free()
-	_rows = PipelineQueueDefs.positions_for(source_dept, BackendBus.positions)
+	_rows = PipelineQueueDefs.positions_for(source_dept, SimBadge.visible_positions())
 	if _selected_id == 0 and not _rows.is_empty():
 		_selected_id = int((_rows[0] as Dictionary).get("id", 0))
 	elif _selected_id != 0 and not _contains(_selected_id):

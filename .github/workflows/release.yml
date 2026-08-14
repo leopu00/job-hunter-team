@@ -191,6 +191,10 @@ jobs:
           printf '%s\n' "$FEEDBACK_OUT" | grep "FEEDBACK-PANEL-TEST PASS"
           GUIDED_OUT="$(retry_godot JHT_SCENE=office JHT_GUIDED_TEST=1 godot --headless --path game)"
           printf '%s\n' "$GUIDED_OUT" | grep "GUIDED-ONBOARDING-TEST PASS"
+          # Fail-closed sulla provenienza visibile: il dispatcher da solo non
+          # basta, il run deve attestare il marker finito dell'oracle runtime.
+          TRUTHFULNESS_OUT="$(retry_godot JHT_SCENE=office JHT_TRUTHFULNESS_TEST=1 godot --headless --path game)"
+          printf '%s\n' "$TRUTHFULNESS_OUT" | grep "TRUTHFULNESS-TEST PASS"
           # Pausa/ripresa del giro guidato: chi va dritto al setup non deve
           # avere agenti sopra il menu e deve poter tornare alla stessa tappa.
           # Il harness verifica su file sia il gate sia l'indice persistito.

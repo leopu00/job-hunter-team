@@ -83,7 +83,7 @@ func _ready() -> void:
 				label = UIStrings.t("dept.agent_status.resting")
 				color = Color("#a855f7")
 		status = {"status": label, "detail": _agent.activity_detail, "color": color}
-	else:
+	elif SimBadge.synthetic_data_allowed():
 		status = TeamData.agent_status().get(_agent.slug, {})
 	if status.has("status"):
 		var srow := HBoxContainer.new()
@@ -120,7 +120,7 @@ func _ready() -> void:
 							str(transition.get("to_state", "?"))]})
 			if activity.size() >= 5:
 				break
-	else:
+	elif SimBadge.synthetic_data_allowed():
 		activity = TeamData.agent_activity(_agent.slug)
 	if activity.is_empty():
 		box.add_child(TerminalTheme.label(UIStrings.t("agent.activity_none"), 15, Palette.DIM))

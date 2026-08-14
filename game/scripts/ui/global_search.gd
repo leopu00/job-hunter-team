@@ -57,6 +57,12 @@ func _ready() -> void:
 	_list.add_theme_constant_override("separation", 4)
 	box.add_child(_list)
 	_edit.grab_focus.call_deferred()
+	BackendBus.positions_updated.connect(func(_positions: Array) -> void:
+		if is_instance_valid(_list):
+			_refresh())
+	BackendBus.connection_changed.connect(func(_state: int, _detail: String) -> void:
+		if is_instance_valid(_list):
+			_refresh())
 	_refresh()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -73,8 +79,8 @@ func _refresh() -> void:
 	for child in _list.get_children():
 		child.queue_free()
 	_results = _search(_edit.text.strip_edges())
-	if BackendBus.positions.is_empty():
-		_list.add_child(TerminalTheme.label(UIStrings.t("search.need_vps"),
+	if SimBadge.visible_positions().is_empty():
+		_list.add_child(TerminalTheme.label(SimBadge.positions_empty_copy(),
 				13, Palette.DIM))
 		return
 	if _results.is_empty():
@@ -107,4 +113,4 @@ func _refresh() -> void:
 ## superfici non rispondono due cose diverse alla stessa domanda, e il selftest
 ## headless può eseguirla senza montare la UI (O-60).
 func _search(query: String) -> Array:
-	return PositionSearch.filter(BackendBus.positions, query, MAX_RESULTS)
+	return PositionSearch.filter(SimBadge.visible_positions(), query, MAX_RESULTS)
