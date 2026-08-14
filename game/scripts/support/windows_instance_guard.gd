@@ -121,6 +121,10 @@ func _start_guard() -> bool:
 	_bootstrap_code = "ready"
 	var ready_line := _read_ready_line()
 	if ready_line.is_empty() or not _accept_ready(ready_line, request, powershell):
+		# Il processo puo aver scritto stderr negli ultimi millisecondi prima di
+		# uscire o chiudere stdout: raccoglierlo qui rende il codice diagnostico
+		# causale senza esporre il messaggio PowerShell originale.
+		_drain_stderr()
 		var sidecar_code := _sidecar_failure_code()
 		if not sidecar_code.is_empty():
 			_bootstrap_code = "ready_" + sidecar_code
