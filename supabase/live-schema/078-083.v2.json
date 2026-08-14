@@ -25,7 +25,7 @@
     },
     {
       "path": "supabase/migrations/080_profile_snapshot_atomic.sql",
-      "sha256": "5709fd6a44c5cc746570db26c6eeadd9b3cabb697d191f045434ed582d481f78"
+      "sha256": "7d63d60cd191f172641778e5010708d8b535865c7696b947bb2ab3c2f9f116c7"
     },
     {
       "path": "supabase/migrations/081_live_schema_reconciliation.sql",
