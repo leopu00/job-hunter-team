@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconFilters } from "./icons";
 import PositionsFilterSidebar from "./PositionsFilterSidebar";
 import PositionsSearch from "./PositionsSearch";
 import SortPicker from "./SortPicker";
@@ -56,7 +57,7 @@ export default function PositionsShell({
                   background: "var(--color-card)",
                 }}
               >
-                <span aria-hidden>⚙</span>
+                <IconFilters />
                 {filtersLabel}
               </button>
             ) : (

@@ -13,7 +13,11 @@
 // formula. Se cambia il font dell'header, o la sua dimensione, o il padding
 // della cella, vanno rimisurati: è una misura, non una costante di natura.
 const CELL_PADDING_PX = 32; // px-4 a sinistra + px-4 a destra
-const SORT_ARROW_PX = 16; // freccia ↕/↑/↓ + gap dal testo
+// Icona di ordinamento (IconSort, 12px) + gap-1 (4px) dal testo. Da O-42 è
+// un SVG e non più una freccia di testo: prima questi 16px erano la larghezza
+// che il sistema operativo dava a un glifo fuori dal font del sito (misurato:
+// 31px contro i 27,6 della cella mono), cioè una misura che non decidevamo noi.
+const SORT_ARROW_PX = 16;
 const PX_PER_CHAR = 7.2; // glifo + tracking, maiuscolo
 
 export function headerMinWidth(label: string): number {

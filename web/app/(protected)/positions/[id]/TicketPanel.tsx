@@ -21,6 +21,28 @@ const STATUS_COLOR: Record<string, string> = {
   resolved: "var(--color-green)",
 };
 
+// Graffetta dell'allegato: SVG stroke come le altre icone del prodotto, al
+// posto della 📎 (niente emoji nella UI — scelta dell'utente del 18/07).
+// Decorativa: il nome del file la segue sempre.
+function IconPaperclip({ size = 11 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="inline-block shrink-0 align-[-0.1em]"
+    >
+      <path d="M20 11.5 12 19.5a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" />
+    </svg>
+  );
+}
+
 const T: Record<
   Locale,
   {
@@ -355,8 +377,12 @@ export function TicketPanel({
             </label>
             {attachment && (
               <>
-                <span style={{ color: "var(--color-dim)" }}>
-                  📎 {attachment.name}
+                <span
+                  className="inline-flex items-center gap-1.5"
+                  style={{ color: "var(--color-dim)" }}
+                >
+                  <IconPaperclip />
+                  {attachment.name}
                 </span>
                 <button
                   type="button"
@@ -444,10 +470,11 @@ export function TicketPanel({
                 </p>
                 {request.attachmentName && (
                   <p
-                    className="text-[11px] mt-1"
+                    className="text-[11px] mt-1 inline-flex items-center gap-1.5"
                     style={{ color: "var(--color-purple)" }}
                   >
-                    📎 {request.attachmentName}
+                    <IconPaperclip />
+                    {request.attachmentName}
                   </p>
                 )}
                 {tk.response_text && (
