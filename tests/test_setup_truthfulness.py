@@ -13,11 +13,87 @@ import subprocess
 import time
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
+SETUP_REFRESH_SECTIONS = frozenset(
+    {"activation", "provider", "docker", "account", "team"}
+)
 
 
 def _src(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
+
+
+def _gd_function(source: str, name: str) -> str:
+    """Extract one GDScript function without depending on its line layout."""
+    header = re.search(rf"(?m)^(?:static )?func {re.escape(name)}\b", source)
+    assert header is not None, f"missing GDScript function: {name}"
+    following = re.search(r"(?m)^(?:static )?func ", source[header.end() :])
+    end = header.end() + following.start() if following is not None else len(source)
+    return source[header.start() : end]
+
+
+def _gd_membership_strings(function: str, subject: str) -> tuple[str, ...]:
+    """Parse one complete GDScript membership guard/continuation line."""
+    matches = re.findall(
+        rf"(?m)^[ \t]+(?:if|and)[ \t]+{re.escape(subject)}[ \t]+in[ \t]+"
+        rf"\[([^\]\r\n]*)\][ \t]*:[ \t]*$",
+        function,
+    )
+    assert len(matches) == 1, f"expected one membership guard for {subject}"
+    try:
+        values = json.loads(f"[{matches[0]}]")
+    except json.JSONDecodeError as error:
+        raise AssertionError(
+            f"membership guard for {subject} must contain only string literals"
+        ) from error
+    assert isinstance(values, list)
+    assert all(type(value) is str for value in values), (
+        f"membership guard for {subject} must contain only canonical strings"
+    )
+    assert len(values) == len(set(values)), (
+        f"membership guard for {subject} contains duplicate strings"
+    )
+    return tuple(values)
+
+
+def _assert_exact_membership(
+    function: str, subject: str, required: frozenset[str]
+) -> None:
+    values = _gd_membership_strings(function, subject)
+    assert len(values) == len(required), (
+        f"membership guard for {subject} has the wrong cardinality: {values}"
+    )
+    assert frozenset(values) == required, (
+        f"membership guard for {subject} differs: {values}"
+    )
+
+
+@pytest.mark.parametrize(
+    "members",
+    (
+        '"activation", "provider", "docker", "account"',
+        '"activation", "provider", "docker", "account", "team", "team"',
+        '"activation", "provider", "docker", "account", SOME_OTHER_SECTION',
+        '# if section in ["activation", "provider", "docker", "account", "team"]:',
+        'if section in ["activation", "provider", "docker", "account", "team"] + EXTRA:',
+        'if section in ["activation", "provider", "docker", "account", "team"] or true:',
+    ),
+    ids=(
+        "omission",
+        "duplicate",
+        "expression",
+        "comment-only",
+        "trailing-expression",
+        "or-true",
+    ),
+)
+def test_setup_refresh_membership_parser_rejects_non_exact_contract(members: str):
+    line = members if members.startswith(("# ", "if ")) else f"if section in [{members}]:"
+    synthetic = f"func _on_setup_refresh():\n\t{line}\n\tpass\n"
+    with pytest.raises(AssertionError):
+        _assert_exact_membership(synthetic, "section", SETUP_REFRESH_SECTIONS)
 
 
 def test_setup_cta_does_not_cover_truth_badge():
@@ -378,7 +454,8 @@ def test_cloud_login_uses_native_browser_pairing_without_terminal_copy():
     assert '"--no-push"' in cloud_login
     assert '"cloud_pairing": true' in cloud_login
     assert '"prefer_google": prefer_google' in cloud_login
-    assert 'section in ["activation", "provider", "docker", "account"]' in panel
+    refresh = _gd_function(panel, "_on_setup_refresh")
+    _assert_exact_membership(refresh, "section", SETUP_REFRESH_SECTIONS)
     assert "return OS.shell_open(uri)" in terminal
     assert 'UIStrings.t("cloud_pairing.fallback")' in terminal
     assert 'UIStrings.t("term.copy_link")' in terminal
