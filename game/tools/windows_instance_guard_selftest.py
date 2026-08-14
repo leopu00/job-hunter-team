@@ -104,7 +104,8 @@ def main() -> None:
         "Marshalls.raw_to_base64(utf16le)",
         '"-EncodedCommand", encoded',
         "OS.execute_with_pipe(powershell, args, false)",
-        '(request + "\\n").to_utf8_buffer()',
+        "OS.set_environment(REQUEST_ENV, request)",
+        "OS.unset_environment(REQUEST_ENV)",
         "OS.is_process_running(_guard_pid)",
         "HEARTBEAT_TIMEOUT_MSEC",
         '"bootstrap_" + _bootstrap_code',
@@ -113,11 +114,7 @@ def main() -> None:
     ]
     for seam in required_consumer:
         require(seam in consumer, f"missing consumer seam: {seam}")
-    require(
-        "not _stdio.store_buffer" not in consumer
-        and "_stdio.get_error() != OK" in consumer,
-        "pipe write must inspect FileAccess error, not the void store_buffer result",
-    )
+    require("_stdio.store_buffer" not in consumer, "request must not use blocking stdin")
     require(
         "const READY_TIMEOUT_MSEC := 30_000" in consumer,
         "cold Windows PowerShell bootstrap timeout is not pinned",
@@ -132,7 +129,9 @@ def main() -> None:
     )
 
     required_source = [
-        "Read-LineBounded",
+        "Read-RequestBounded",
+        "GetEnvironmentVariable('JHT_INSTANCE_GUARD_REQUEST','Process')",
+        "SetEnvironmentVariable('JHT_INSTANCE_GUARD_REQUEST',$null,'Process')",
         "ConvertFrom-Json",
         "input_canonical",
         "Security.AccessControl.MutexSecurity",
