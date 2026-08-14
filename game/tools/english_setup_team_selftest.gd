@@ -36,6 +36,8 @@ func _ready() -> void:
 
 func _run() -> void:
 	var previous_lang := UIStrings.lang
+	_check(previous_lang == "en",
+			"l'ufficio non e' partito in EN: locale iniziale " + previous_lang)
 	UIStrings.lang = "en"
 	BackendBus.connection_changed.connect(_on_connection)
 	BackendBus.agent_chat_updated.connect(_on_chat)
