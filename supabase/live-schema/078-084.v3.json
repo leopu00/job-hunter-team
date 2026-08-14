@@ -47,7 +47,7 @@
   ],
   "query": {
     "path": "supabase/live-schema/078-084.v3.sql",
-    "sha256": "a5d9957b2d9a884cf70d8d47bee40cfd1ef7312770301d85462e1a62c8c770d7"
+    "sha256": "7de4f4baf09131a50c3967fa3895fc1fe85c4e15af33f43e59c1e5e745730eba"
   },
   "expected_checks": [
     "076.sync_upsert_applications.definition",

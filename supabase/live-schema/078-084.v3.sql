@@ -209,6 +209,118 @@ expected_081_functions(
       '43529b967d2c16f4ca23e96e653ddf54'
     )
 ),
+durable_table_privileges(privilege_type) AS (
+  -- The table privileges PostgreSQL has always had. Releases add to this list
+  -- and have never taken anything away, so it is the floor every guarded
+  -- grantee has to clear -- never the total it has to match. Pinning the
+  -- total is what made 17 adding MAINTAIN look like a schema defect.
+  VALUES
+    ('DELETE'), ('INSERT'), ('REFERENCES'), ('SELECT'), ('TRIGGER'),
+    ('TRUNCATE'), ('UPDATE')
+),
+expected_table_grantees(table_name, qualified_name, grantee_name) AS (
+  -- Who may hold privileges on each guarded table, and nobody else: 'OWNER'
+  -- stands for whoever owns the table, so the contract survives a rename of
+  -- the owning role.
+  VALUES
+    ('user_settings', 'public.user_settings', 'OWNER'),
+    ('user_settings', 'public.user_settings', 'anon'),
+    ('user_settings', 'public.user_settings', 'authenticated'),
+    ('user_settings', 'public.user_settings', 'service_role'),
+    (
+      'cloud_sync_pairing_attempts',
+      'public.cloud_sync_pairing_attempts', 'OWNER'
+    ),
+    (
+      'cloud_sync_pairing_attempts',
+      'public.cloud_sync_pairing_attempts', 'service_role'
+    )
+),
+guarded_table_acl(
+  table_name, grantee_name, privilege_type, is_grantable
+) AS (
+  -- Every grant on the guarded tables, read by name instead of counted:
+  -- who holds it, what it is, whether it can be handed on.
+  SELECT target.table_name,
+    CASE
+      WHEN privilege.grantee = table_class.relowner THEN 'OWNER'
+      WHEN privilege.grantee = 0 THEN 'PUBLIC'
+      ELSE COALESCE(grantee_role.rolname::text, privilege.grantee::text)
+    END,
+    privilege.privilege_type,
+    privilege.is_grantable
+  FROM (
+    SELECT DISTINCT grantee.table_name, grantee.qualified_name
+    FROM expected_table_grantees AS grantee
+  ) AS target
+  JOIN pg_catalog.pg_class AS table_class
+    ON table_class.oid = pg_catalog.to_regclass(target.qualified_name)
+  CROSS JOIN LATERAL pg_catalog.aclexplode(
+    COALESCE(
+      table_class.relacl,
+      pg_catalog.acldefault('r', table_class.relowner)
+    )
+  ) AS privilege
+  LEFT JOIN pg_catalog.pg_roles AS grantee_role
+    ON grantee_role.oid = privilege.grantee
+),
+observed_table_acl(table_name, acl_key) AS (
+  -- COLLATE "C" on both sides of the comparison, not decoration: a role name
+  -- reaches here as pg_catalog.name (collation C) and a literal carries the
+  -- database collation, so the two lists would sort differently on a live
+  -- project and match nowhere.
+  SELECT entry.table_name,
+    pg_catalog.format(
+      '%s|%s|%s', entry.grantee_name, entry.privilege_type, entry.is_grantable
+    ) COLLATE "C"
+  FROM guarded_table_acl AS entry
+),
+expected_table_acl(table_name, acl_key) AS (
+  -- The exact set of expected grants, one named row per
+  -- grantee/privilege/grantable triple. The reference is the owner's own
+  -- entry, not the privileges this server happens to know: whatever GRANT ALL
+  -- meant the day the migration ran, it meant the same for the owner, and a
+  -- later server that knows one privilege more does not rewrite either side.
+  SELECT grantee.table_name,
+    pg_catalog.format(
+      '%s|%s|%s', grantee.grantee_name, owner_entry.privilege_type, false
+    ) COLLATE "C"
+  FROM expected_table_grantees AS grantee
+  JOIN guarded_table_acl AS owner_entry
+    ON owner_entry.table_name = grantee.table_name
+    AND owner_entry.grantee_name = 'OWNER'
+),
+table_acl_matches(table_name, ok) AS (
+  -- Set equality, not cardinality: a grant that is missing, extra, held by an
+  -- unexpected grantee or re-grantable shows up as its own key on one side
+  -- only. The floor keeps that equality from being satisfied by a table
+  -- everyone was revoked from.
+  SELECT target.table_name,
+    (
+      SELECT pg_catalog.array_agg(observed.acl_key ORDER BY observed.acl_key)
+      FROM observed_table_acl AS observed
+      WHERE observed.table_name = target.table_name
+    ) = (
+      SELECT pg_catalog.array_agg(expected.acl_key ORDER BY expected.acl_key)
+      FROM expected_table_acl AS expected
+      WHERE expected.table_name = target.table_name
+    )
+    AND (
+      SELECT pg_catalog.count(*) = 0
+      FROM (
+        SELECT durable.privilege_type
+        FROM durable_table_privileges AS durable
+        EXCEPT
+        SELECT owner_entry.privilege_type
+        FROM guarded_table_acl AS owner_entry
+        WHERE owner_entry.table_name = target.table_name
+          AND owner_entry.grantee_name = 'OWNER'
+      ) AS uncovered
+    )
+  FROM (
+    SELECT DISTINCT grantee.table_name FROM expected_table_grantees AS grantee
+  ) AS target
+),
 checks(check_id, ok) AS (
   VALUES
     (
@@ -940,30 +1052,9 @@ checks(check_id, ok) AS (
               AND policy_row.polname = 'Users manage own settings'
           )
           AND (
-            SELECT pg_catalog.count(*) = 32
-              AND pg_catalog.count(DISTINCT privilege.privilege_type) = 8
-              AND pg_catalog.bool_and(NOT privilege.is_grantable)
-              AND pg_catalog.count(*) FILTER (
-                WHERE privilege.grantee = table_row.relowner
-              ) = 8
-              AND pg_catalog.count(*) FILTER (
-                WHERE privilege.grantee = pg_catalog.to_regrole('anon')
-              ) = 8
-              AND pg_catalog.count(*) FILTER (
-                WHERE privilege.grantee = pg_catalog.to_regrole('authenticated')
-              ) = 8
-              AND pg_catalog.count(*) FILTER (
-                WHERE privilege.grantee = pg_catalog.to_regrole('service_role')
-              ) = 8
-              AND pg_catalog.count(*) FILTER (
-                WHERE privilege.grantee = 0
-              ) = 0
-            FROM pg_catalog.aclexplode(
-              COALESCE(
-                table_row.relacl,
-                pg_catalog.acldefault('r', table_row.relowner)
-              )
-            ) AS privilege
+            SELECT matched.ok
+            FROM table_acl_matches AS matched
+            WHERE matched.table_name = 'user_settings'
           )
         FROM pg_catalog.pg_class AS table_row
         WHERE table_row.oid = pg_catalog.to_regclass('public.user_settings')
@@ -1703,26 +1794,9 @@ checks(check_id, ok) AS (
             WHERE policy_row.polrelid = table_class.oid
           ))
           AND pg_catalog.bool_and((
-            SELECT pg_catalog.count(*) = 16
-              AND pg_catalog.count(*) FILTER (
-                WHERE privilege.grantee = table_class.relowner
-              ) = 8
-              AND pg_catalog.count(*) FILTER (
-                WHERE privilege.grantee = pg_catalog.to_regrole('service_role')
-              ) = 8
-              AND pg_catalog.bool_and(NOT privilege.is_grantable)
-              AND pg_catalog.bool_and(
-                privilege.privilege_type = ANY(ARRAY[
-                  'DELETE', 'INSERT', 'MAINTAIN', 'REFERENCES', 'SELECT',
-                  'TRIGGER', 'TRUNCATE', 'UPDATE'
-                ]::text[])
-              )
-            FROM pg_catalog.aclexplode(
-              COALESCE(
-                table_class.relacl,
-                pg_catalog.acldefault('r', table_class.relowner)
-              )
-            ) AS privilege
+            SELECT matched.ok
+            FROM table_acl_matches AS matched
+            WHERE matched.table_name = 'cloud_sync_pairing_attempts'
           ))
         FROM pg_catalog.pg_class AS table_class
         JOIN pg_catalog.pg_namespace AS namespace
