@@ -115,6 +115,7 @@ if ($Smoke) {
     $userDataRuntimeLogBefore = Get-FileObservation $userDataRuntimeLog
     $userDataRuntimeLogAfter = $null
     $first = $null
+    $firstGuardPid = $null
     try {
       # Il source eseguito viene letto dal PCK dell'artefatto, non dal checkout:
       # il census esatto lega byte, hash e argv alla guardia che verra pubblicata.
@@ -143,8 +144,9 @@ if ($Smoke) {
       # Un primo processo deve completare l'handshake e iniziare lavoro normale;
       # il secondo, concorrente e identico, deve fallire mentre il primo vive.
       $env:JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST = $null
+      $primaryStartedUtc = [DateTime]::UtcNow
       $first = Start-Process -FilePath $installedExe `
-        -ArgumentList '--headless', '--quit-after', '20' -PassThru
+        -ArgumentList '--headless' -PassThru
       try {
         $normalWorkDeadline = [DateTime]::UtcNow.AddSeconds(12)
         do {
@@ -158,18 +160,49 @@ if ($Smoke) {
             $userDataRuntimeLogAfter -eq $userDataRuntimeLogBefore) {
           throw 'Primary installed application did not reach normal work after guard handshake.'
         }
+        $guardRoot = Join-Path $env:LOCALAPPDATA 'Job Hunter Team/host-runtime/instance-guard'
+        $guardAcks = @()
+        if (Test-Path -LiteralPath $guardRoot -PathType Container) {
+          foreach ($candidate in Get-ChildItem -LiteralPath $guardRoot -Filter 'ack-guard-*.json' -File) {
+            if ($candidate.LastWriteTimeUtc -lt $primaryStartedUtc.AddSeconds(-1)) { continue }
+            try { $guardAck = Get-Content -LiteralPath $candidate.FullName -Raw | ConvertFrom-Json -ErrorAction Stop }
+            catch { continue }
+            if ($guardAck.schema -eq 1 -and $guardAck.type -ceq 'ready' -and
+                $guardAck.desktop_pid -eq $first.Id -and
+                $guardAck.source_sha256 -ceq 'bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b') {
+              $guardAcks += @($guardAck)
+            }
+          }
+        }
+        if ($guardAcks.Count -ne 1 -or [int]$guardAcks[0].guard_pid -le 0) {
+          throw 'Primary installed application did not publish one bound guard ACK.'
+        }
+        $firstGuardPid = [int]$guardAcks[0].guard_pid
+        if (-not (Get-Process -Id $firstGuardPid -ErrorAction SilentlyContinue)) {
+          throw 'Primary installed application guard was not alive before concurrency probe.'
+        }
         $second = Start-Process -FilePath $installedExe `
           -ArgumentList '--headless', '--quit-after', '3' -Wait -PassThru
-        if ($second.ExitCode -ne 1 -or $first.HasExited) {
-          throw 'Concurrent installed application did not fail closed behind the live instance.'
+        if ($second.ExitCode -ne 1) {
+          throw "Concurrent installed application did not fail closed: exit=$($second.ExitCode)."
         }
-        if (-not $first.WaitForExit(30000) -or $first.ExitCode -ne 0) {
-          throw 'Primary installed application did not remain healthy through singleton probe.'
+        if ($first.HasExited) {
+          throw 'Primary installed application exited during singleton probe.'
         }
       } finally {
         if ($first -and -not $first.HasExited) {
           $first.Kill()
           $first.WaitForExit()
+        }
+        if ($firstGuardPid) {
+          $guardExitDeadline = [DateTime]::UtcNow.AddSeconds(3)
+          while ((Get-Process -Id $firstGuardPid -ErrorAction SilentlyContinue) -and
+                 [DateTime]::UtcNow -lt $guardExitDeadline) {
+            Start-Sleep -Milliseconds 50
+          }
+          if (Get-Process -Id $firstGuardPid -ErrorAction SilentlyContinue) {
+            throw 'Primary instance guard survived its desktop process.'
+          }
         }
       }
     } finally {
