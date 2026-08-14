@@ -221,6 +221,22 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(result.stdout).toContain("6 errors");
   }, 15_000);
 
+  it("CAPITANO già attivo attesta il bootstrap anche se lo spawn è skipped", () => {
+    const sb = sandbox();
+    const result = run(sb, ["start"], {
+      // Non bastano tutti gli altri errori a negare un fatto già osservato:
+      // CAPITANO esiste nel runtime ed è il marker operativo canonico usato
+      // anche dal probe del gioco.
+      FAKE_CONTAINER_SESSIONS: "CAPITANO",
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain("CAPITANO — already active");
+    expect(result.stdout).toContain("0 started");
+    expect(result.stdout).toContain("1 already active");
+    expect(result.stdout).toContain("6 errors");
+  });
+
   it("in modalità locale rimuove solo il gate sotto JHT_HOME", () => {
     const sb = sandbox();
     const localFlag = path.join(sb.home, ".team-halted.flag");
