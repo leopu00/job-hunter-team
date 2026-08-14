@@ -35,6 +35,17 @@ const POISONED_TITLES = {
   "\r": "\r=1+1",
 } as const;
 
+/**
+ * La formula che NON è in prima posizione, e proprio per questo passa: fuori
+ * dalle virgolette un CR chiude la riga, quindi `=1+1` diventa la prima
+ * cella di una riga nuova — una cella che il neutralizzatore non ha mai
+ * visto, perché il campo di partenza cominciava per `B`.
+ */
+const SPLIT_TITLES = {
+  "\r": "Backend Engineer\r=1+1",
+  "\t": "Backend Engineer\t=2+2",
+} as const;
+
 const FORMULA_LEADERS = ["=", "+", "-", "@", "\t", "\r"];
 const PLAIN_NUMBER = /^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 
@@ -42,6 +53,10 @@ const PLAIN_NUMBER = /^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
  * Il minimo RFC 4180 che serve per rileggere quello che abbiamo scritto.
  * Un parser vero è esattamente ciò che sta fra il nostro file e il motore di
  * calcolo: se la difesa vive solo nelle virgolette, qui sparisce.
+ *
+ * **Fuori dalle virgolette un CR chiude la riga**, da solo o seguito da LF:
+ * è quello che fanno Excel, LibreOffice e Sheets, ed è il motivo per cui un
+ * CR in mezzo a un titolo non è un carattere qualunque.
  */
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [[]];
@@ -61,7 +76,8 @@ function parseCsv(text: string): string[][] {
     else if (char === ",") {
       rows[rows.length - 1].push(field);
       field = "";
-    } else if (char === "\n") {
+    } else if (char === "\n" || char === "\r") {
+      if (char === "\r" && text[i + 1] === "\n") i += 1;
       rows[rows.length - 1].push(field);
       field = "";
       rows.push([]);
@@ -116,6 +132,21 @@ describe("neutralizzatore condiviso", () => {
     );
   });
 
+  it("un CR o un TAB in MEZZO al campo non aprono una riga nuova", () => {
+    // Il neutralizzatore guarda il primo carattere: qui è `B`, e non c'è
+    // niente da marcare. A difendere è il virgolettamento — RFC 4180 lo
+    // prescrive per i campi che contengono CR, e senza quello un titolo così
+    // non sposta soltanto le colonne: apre una riga la cui prima cella è una
+    // formula.
+    const rows = [{ title: SPLIT_TITLES["\r"], note: SPLIT_TITLES["\t"] }];
+
+    const parsed = parseCsv(toCsv(rows));
+
+    expect(parsed).toHaveLength(2);
+    expect(parsed[1]).toEqual([rows[0].title, rows[0].note]);
+    expect(parsed.flat().filter(reachesFormulaEngine)).toEqual([]);
+  });
+
   it("round-trip: un titolo ordinario con virgole e virgolette torna identico", () => {
     const rows = [
       { title: 'Senior "Full Stack" Developer, remote', company: "Acme, Inc." },
@@ -147,7 +178,11 @@ describe("GET /api/export?format=csv — la strada del sito", () => {
   });
 
   it("un titolo scrapato che apre una formula esce inerte", async () => {
-    const rows = Object.values(POISONED_TITLES).map((title, index) => ({
+    const titles = [
+      ...Object.values(POISONED_TITLES),
+      ...Object.values(SPLIT_TITLES),
+    ];
+    const rows = titles.map((title, index) => ({
       title,
       company: "=1+1",
       createdAt: Date.now() - 1000 * (index + 1),
@@ -160,9 +195,12 @@ describe("GET /api/export?format=csv — la strada del sito", () => {
     } as never);
     const csv = await response.text();
 
-    const cells = cellsOf(csv);
-    expect(cells).toContain(`'${POISONED_TITLES["="]}`);
-    expect(cells.filter(reachesFormulaEngine)).toEqual([]);
+    const parsed = parseCsv(csv);
+    // Intestazione più una riga per annuncio: nessun campo ha aperto righe
+    // che nessuno ha esportato.
+    expect(parsed).toHaveLength(rows.length + 1);
+    expect(parsed.flat()).toContain(`'${POISONED_TITLES["="]}`);
+    expect(parsed.flat().filter(reachesFormulaEngine)).toEqual([]);
   });
 });
 
@@ -191,14 +229,15 @@ describe("jht export --csv — la strada del terminale", () => {
     // analytics), ma il file lo apre lo stesso foglio di calcolo e la
     // funzione è la stessa: la copia CLI è quella che usa chi lavora dal
     // terminale.
+    const titles = [
+      ...Object.values(POISONED_TITLES),
+      ...Object.values(SPLIT_TITLES),
+    ];
     mkdirSync(join(home, "tasks"), { recursive: true });
     writeFileSync(
       join(home, "tasks/tasks.json"),
       JSON.stringify({
-        tasks: Object.values(POISONED_TITLES).map((title) => ({
-          title,
-          note: "Acme, Inc.",
-        })),
+        tasks: titles.map((title) => ({ title, note: "Acme, Inc." })),
       }),
     );
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -208,9 +247,10 @@ describe("jht export --csv — la strada del terminale", () => {
     await handleExport("tasks", { csv: true, output });
     const csv = readFileSync(output, "utf-8");
 
-    const cells = cellsOf(csv);
-    expect(cells).toContain(`'${POISONED_TITLES["@"]}`);
-    expect(cells.filter(reachesFormulaEngine)).toEqual([]);
+    const parsed = parseCsv(csv);
+    expect(parsed).toHaveLength(titles.length + 1);
+    expect(parsed.flat()).toContain(`'${POISONED_TITLES["@"]}`);
+    expect(parsed.flat().filter(reachesFormulaEngine)).toEqual([]);
     expect(process.exitCode).toBeUndefined();
   });
 });

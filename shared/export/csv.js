@@ -57,6 +57,24 @@ export function neutralizeFormula(text) {
 }
 
 /**
+ * Quello che, dentro un campo non virgolettato, non è più un carattere del
+ * dato ma una struttura del file.
+ *
+ * Il CR è il motivo per cui questo elenco non è solo `,"` e `\n`: RFC 4180
+ * prescrive di virgolettare i campi che lo contengono, e i fogli di calcolo
+ * un CR isolato lo leggono come **fine riga**. Un titolo
+ * `Backend Engineer<CR>=1+1` senza virgolette non sposta soltanto le
+ * colonne: apre una riga nuova la cui prima cella è `=1+1`, una cella che il
+ * neutralizzatore non ha mai visto — lui guarda il primo carattere del campo
+ * di partenza, e quello era `B`.
+ *
+ * Il TAB ci sta per la stessa ragione un passo più in là: non separa niente
+ * in un CSV a virgole, ma separa le celle appena lo stesso testo viene
+ * incollato o riletto come TSV.
+ */
+const STRUCTURAL = /[",\n\r\t]/;
+
+/**
  * Una cella pronta per il file: prima resa inerte, poi protetta secondo
  * RFC 4180.
  *
@@ -76,9 +94,7 @@ export function csvCell(value) {
         ? JSON.stringify(value)
         : String(value);
   const text = neutralizeFormula(raw);
-  return text.includes(',') || text.includes('"') || text.includes('\n')
-    ? `"${text.replace(/"/g, '""')}"`
-    : text;
+  return STRUCTURAL.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 /**
