@@ -18,9 +18,11 @@ try {
   $tokens = $null; $errors = $null
   $ast = [System.Management.Automation.Language.Parser]::ParseFile($standalone, [ref]$tokens, [ref]$errors)
   if ($errors.Count) { throw "standalone parse failed: $($errors[0])" }
-  $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Protect-JhtHomeAcl' }, $true)
-  if (-not $fn) { throw 'standalone Protect-JhtHomeAcl function missing' }
-  . ([scriptblock]::Create($fn.Extent.Text))
+  foreach ($installerFunctionName in @('Protect-JhtHomeAcl', 'Set-JhtNodeOwner')) {
+    $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $installerFunctionName }, $true)
+    if (-not $fn) { throw "standalone $installerFunctionName function missing" }
+    . ([scriptblock]::Create($fn.Extent.Text))
+  }
   $standaloneFixture = Join-Path $root 'standalone-fixture'
   New-Item -ItemType Directory -Path $standaloneFixture -Force | Out-Null
   $foreignRule = New-Object System.Security.AccessControl.FileSystemAccessRule($foreign, 'FullControl', 'Allow')
