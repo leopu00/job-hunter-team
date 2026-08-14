@@ -189,11 +189,13 @@ func save_ui_language(locale: String) -> void:
 
 ## Storico aggregato per bucket_sec sull'intervallo [from_ts, to_ts] (unix
 ## UTC). Esito su bus.publish_usage_history(); la query fa da correlazione.
-func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
+func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int,
+		request_id := "") -> void:
 	var msg := _unsupported("fetch_usage_history")
 	if bus:
 		bus.usage_history_updated.emit(
-				{"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec},
+				{"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec,
+				"request_id": request_id},
 				{"ok": false, "error": msg})
 
 ## Come sopra ma per il singolo ruolo (scheda agente); agent = slug minuscolo.

@@ -85,7 +85,7 @@ static func _salary_eur(p: Dictionary) -> float:
 ## L'universo attivo: mai le escluse.
 func _rows() -> Array:
 	var out: Array = []
-	for p in BackendBus.positions:
+	for p in SimBadge.visible_positions():
 		if str(p.get("status", "")) != "excluded":
 			out.append(p)
 	return out

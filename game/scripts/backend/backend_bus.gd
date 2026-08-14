@@ -138,6 +138,9 @@ var telemetry_history: Array = []
 ## l'eco della query che l'ha prodotto.
 var usage_history: Dictionary = {}
 var usage_history_query: Dictionary = {}
+## Correlazioni ancora valide per la connessione corrente. Il reset le
+## revoca prima che una risposta worker tardiva possa ripopolare la cache.
+var _active_usage_requests: Dictionary = {}
 var coordinator_state: Dictionary = {}
 ## Ultima lettura del flag di deroga alla spesa. Vuoto = mai letto: NON è
 ## "spenta", ed è per questo che l'interruttore parte da "stato sconosciuto".
@@ -411,6 +414,7 @@ func set_backend(backend: BackendAdapter, config: Dictionary = {}) -> void:
 ## vengono da nessuna macchina, e sparirebbero lasciando l'ufficio vuoto a
 ## chi sta ancora configurando il prodotto.
 func _reset_connection_snapshots() -> void:
+	agents = []
 	transitions = []
 	telemetry = {}
 	telemetry_history = []
@@ -421,6 +425,7 @@ func _reset_connection_snapshots() -> void:
 	burn_intent = {}
 	usage_history = {}
 	usage_history_query = {}
+	_active_usage_requests.clear()
 	profile_status = {}
 	chat_log = []
 	if not positions_are_demo:
@@ -431,6 +436,7 @@ func _reset_connection_snapshots() -> void:
 		chat_waiting_changed.emit(str(agent), false)
 	chat_waiting = {}
 	clear_chat_unread()
+	agents_updated.emit(agents)
 	positions_updated.emit(positions)
 	# backend_reset per ULTIMO: chi lo usa per riseminare deve trovare il bus
 	# già svuotato e gli altri segnali già consegnati.
@@ -783,16 +789,25 @@ func save_ui_language(locale: String) -> void:
 ## Chiede al backend lo storico usage per [from_ts, to_ts] (unix UTC)
 ## aggregato per bucket_sec. Risposta asincrona su usage_history_updated;
 ## il backend può impiegare secondi (ricostruzione per-agente dai log CLI).
-func request_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
-	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec}
+func request_usage_history(from_ts: float, to_ts: float, bucket_sec: int,
+		request_id := "") -> void:
+	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec,
+			"request_id": request_id}
 	if _backend and _backend.has_method("fetch_usage_history"):
-		_backend.fetch_usage_history(from_ts, to_ts, bucket_sec)
+		if str(request_id) != "":
+			_active_usage_requests[str(request_id)] = true
+		_backend.fetch_usage_history(from_ts, to_ts, bucket_sec, request_id)
 	else:
 		usage_history_updated.emit(query,
 				{"ok": false, "error": UIStrings.t("common.backend_not_connected")})
 
 ## Il backend risponde da qui (thread → call_deferred).
 func publish_usage_history(query: Dictionary, data: Dictionary) -> void:
+	var request_id := str(query.get("request_id", ""))
+	if request_id != "":
+		if not _active_usage_requests.has(request_id):
+			return
+		_active_usage_requests.erase(request_id)
 	usage_history_query = query
 	usage_history = data
 	usage_history_updated.emit(query, data)

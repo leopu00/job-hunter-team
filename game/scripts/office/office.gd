@@ -174,9 +174,15 @@ func _ready() -> void:
 				handoff_to[dept_id], dept_color)
 		world.add_child(station)
 		var p := PaperPile.new(station.pile_spot())
-		# gli Scout producono e basta: il loro inbox si riempie più svelto
-		p.restock = 90.0 if DepartmentDefs.FETCH_FROM.has(dept_id) else 45.0
-		p.add_sheets(randi_range(1, 6))
+		# Restock e seme sono scenografia DEMO. In UNAVAILABLE (e nel LIVE
+		# ancora vuoto) la pila nasce davvero vuota e senza animazione; il primo
+		# snapshot live la aggancia poi al suo target reale con _sync_piles().
+		if SimBadge.synthetic_data_allowed():
+			# gli Scout producono e basta: il loro inbox si riempie più svelto
+			p.restock = 90.0 if DepartmentDefs.FETCH_FROM.has(dept_id) else 45.0
+			p.add_sheets(randi_range(1, 6))
+		else:
+			p.set_target(0, true)
 		world.add_child(p)
 		PaperPile.inbox[dept_id] = p
 	# L'anteprima va applicata anche prima del primo snapshot del backend:
@@ -187,14 +193,13 @@ func _ready() -> void:
 		PaperPile.inbox[pile_preview[0]].set_target(
 				maxi(0, int(pile_preview[1])), true)
 
-	# Primo avvio come showroom: tutti i ruoli fondamentali e due persone per
-	# reparto. Il primo snapshot reale li sostituisce senza mai presentare un
-	# ufficio vuoto a chi sta ancora configurando il prodotto.
+	# Le fixture entrano in scena soltanto con un gate demo/test esplicito.
+	# Il percorso normale senza backend resta vuoto: UNAVAILABLE non e' DEMO.
 	var initial_defs: Array = []
 	var all_seated_preview := OS.get_environment("JHT_ALL_SEATED_PREVIEW") == "1"
 	if _seat_audit != "" or _doctor_test != "" or all_seated_preview:
 		initial_defs = CharacterDefs.spawn_list()
-	elif BackendBus.agents.is_empty():
+	elif BackendBus.agents.is_empty() and SimBadge.synthetic_data_allowed():
 		initial_defs = CharacterDefs.showroom_list()
 	for def in initial_defs:
 		if _seat_audit != "":
@@ -1257,6 +1262,16 @@ var _last_ready := -1
 var _piles_synced := false
 
 func _sync_piles(hold_seconds := 0.0) -> void:
+	# Un payload presente ma non attestato non puo' accendere pile, scaffale o
+	# viaggi. L'azzeramento immediato chiude anche il frame di transizione in
+	# cui un backend sintetico si disconnette lasciando lo snapshot sul bus.
+	if SimBadge.current_state() == SimBadge.DataState.UNAVAILABLE:
+		for dept_id in PILE_PHASE:
+			if PaperPile.inbox.has(dept_id):
+				PaperPile.inbox[dept_id].set_target(0, true)
+		OutputShelf.set_ready(0, true)
+		_piles_synced = false
+		return
 	var counts: Dictionary = BackendBus.pipeline_counts()
 	# Hook esclusivamente visivo per gli screenshot di regressione: permette di
 	# verificare l'ingombro/prospettiva di una coda grande senza dipendere dai
@@ -1295,6 +1310,9 @@ func _sync_piles(hold_seconds := 0.0) -> void:
 ## che le ha firmate. Il primo snapshot fa solo da baseline: lo storico
 ## non va recitato all'avvio.
 func _on_transitions(_positions: Array) -> void:
+	if SimBadge.current_state() == SimBadge.DataState.UNAVAILABLE:
+		_sync_piles()
+		return
 	var fresh: Array = []
 	for t in BackendBus.transitions:
 		var key := "%s|%s|%s|%s" % [str(t.get("position_id", "")),
@@ -1307,7 +1325,11 @@ func _on_transitions(_positions: Array) -> void:
 	# Il primo snapshot allinea subito le pile. In seguito il nuovo target
 	# resta sospeso mentre gli agenti compiono davvero ritiro e consegna;
 	# dopo un minuto riconcilia eventuali raffiche o eventi senza attore.
-	if not BackendBus.positions.is_empty():
+	if BackendBus.positions.is_empty():
+		# Uno snapshot LIVE vuoto e' un valore autoritativo, non assenza di
+		# risposta: cancella immediatamente code e scaffale della lettura prima.
+		_reseed_piles()
+	else:
 		_sync_piles(65.0 if _tr_baseline and not fresh.is_empty() else 0.0)
 	if not _tr_baseline:
 		_tr_baseline = true
@@ -1375,6 +1397,9 @@ func _on_backend_reset() -> void:
 	_tr_baseline = false
 	_last_ready = -1
 	_reseed_piles()
+	# Difesa locale oltre al contratto del bus: nessun NPC live della macchina
+	# precedente sopravvive a un adapter che dimenticasse il roster vuoto.
+	sync_agents([])
 	# LED di attività: senza campione fresco nessun agente resta verde con la
 	# CPU misurata sulla macchina di prima.
 	_on_agent_cpu_telemetry({}, [])
@@ -1418,7 +1443,7 @@ func _stage_agent_entry(agent: AgentNPC) -> void:
 	agent.enter_through(ENTRY_SPOT, float(wave) * 0.9, float(lane))
 
 func _spawn_showroom() -> void:
-	if world == null:
+	if world == null or not SimBadge.synthetic_data_allowed():
 		return
 	for def in CharacterDefs.showroom_list():
 		var exists := false
@@ -1460,8 +1485,12 @@ func _on_setup_status_changed(status: Dictionary) -> void:
 			if child is DialogueUI:
 				(child as DialogueUI)._close()
 		BackendBus.clear_demo_positions()
-	elif BackendBus.positions.is_empty() or BackendBus.positions_are_demo:
+	elif SimBadge.synthetic_data_allowed() \
+			and (BackendBus.positions.is_empty() or BackendBus.positions_are_demo):
 		BackendBus.show_demo_positions()
+	elif BackendBus.positions_are_demo:
+		# Un residuo sintetico senza gate non deve raggiungere alcun consumer.
+		BackendBus.clear_demo_positions()
 
 func _despawn_agent(agent: AgentNPC, refill_pool := true, instant := false) -> void:
 	agents.erase(agent)

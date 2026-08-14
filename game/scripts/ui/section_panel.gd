@@ -99,6 +99,13 @@ func _ready() -> void:
 	_content.add_theme_constant_override("separation", 10)
 	_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(_content)
+	# Le pagine restano montate mentre il backend locale o remoto cambia
+	# stato. Ricostruire sul cambio rende osservabile UNAVAILABLE -> LIVE
+	# senza obbligare l'utente a chiudere e riaprire la sezione.
+	if not BackendBus.connection_changed.is_connected(_on_provenance_refresh):
+		BackendBus.connection_changed.connect(_on_provenance_refresh)
+	if not BackendBus.positions_updated.is_connected(_on_positions_provenance_refresh):
+		BackendBus.positions_updated.connect(_on_positions_provenance_refresh)
 	# TEST-AUTO: JHT_POS_DETAIL=<id> apre il dettaglio di quella posizione
 	# appena lo snapshot arriva (il refresh del bus rientra da solo);
 	# JHT_AGENT_PAGE=<slug> apre la pagina del singolo agente.
@@ -117,6 +124,22 @@ func _ready() -> void:
 		_build("agent")
 		return
 	_build("detail" if _pos_detail_id != 0 else "")
+
+
+func _on_provenance_refresh(_state: int, _detail: String) -> void:
+	# Non buttare via form/config che l'utente sta compilando: il refresh di
+	# provenienza riguarda soltanto pagine che rendono dati del team.
+	if is_instance_valid(_content) and section in [
+			"stats", "map", "team", "agents", "agent_metrics",
+			"usage_history", "usage_agents", "activity", "apps", "dashboard",
+			"notifs", "chat", "positions"]:
+		_build(_current_page)
+
+
+func _on_positions_provenance_refresh(_positions: Array) -> void:
+	if is_instance_valid(_content) \
+			and _last_data_state != int(SimBadge.current_state()):
+		_build(_current_page)
 
 
 ## Briciola di ritorno per le pagine di configurazione: in sidebar non hanno
@@ -197,9 +220,11 @@ var _content: VBoxContainer
 ## "agent", "usage", "preview"). Serve a ricostruire il contenuto senza
 ## rifare il guscio quando un refresh del bus arriva mentre si è in dettaglio.
 var _current_page := ""
+var _last_data_state := -1
 
 func _build(page := "") -> void:
 	_current_page = page
+	_last_data_state = int(SimBadge.current_state())
 	for child in _content.get_children():
 		child.queue_free()
 	match section:
@@ -213,7 +238,7 @@ func _build(page := "") -> void:
 		"map":
 			# l'esperienza mappa del web privato: globo → mappa piatta,
 			# filtri cross e schede pin che aprono il dettaglio posizione
-			if BackendBus.positions_are_demo:
+			if SimBadge.current_state() == SimBadge.DataState.DEMO:
 				_content.add_child(TerminalTheme.label(
 						UIStrings.t("demo.map"),
 						13, Palette.YELLOW, "medium"))
@@ -285,13 +310,14 @@ func _build(page := "") -> void:
 			_build_placeholder()
 
 ## Sezioni config: coppie etichetta/valore, SOLA LETTURA — in linea col
-## modello desktop-first. Con la VPS collegata mostrano la config VERA
-## del team (campi safe da jht.config.json), altrimenti il mock.
+## modello desktop-first. LIVE legge la config safe del bus, DEMO la fixture;
+## UNAVAILABLE non inventa valori.
 func _build_config() -> void:
 	if not BackendBus.live_settings_updated.is_connected(_on_config_refresh):
 		BackendBus.live_settings_updated.connect(_on_config_refresh)
 	var rows: Array = []
-	if BackendBus.is_live():
+	var data_state := SimBadge.current_state()
+	if data_state == SimBadge.DataState.LIVE:
 		# connessi: mostra la config VERA — mai il mock spacciato per reale
 		rows = BackendBus.live_settings.get(section, [])
 		if rows.is_empty():
@@ -299,8 +325,11 @@ func _build_config() -> void:
 					UIStrings.t("config.incoming") if BackendBus.live_settings.is_empty()
 					else UIStrings.t("config.not_exposed"), 14, Palette.DIM))
 			return
-	else:
+	elif data_state == SimBadge.DataState.DEMO:
 		rows = TeamData.settings().get(section, [])
+	else:
+		_add_data_unavailable()
+		return
 	if rows.is_empty():
 		_build_placeholder()
 		return
@@ -2310,7 +2339,7 @@ func _refresh_hours_estimate() -> void:
 				"start": str(w.get("start", "")), "end": str(w.get("end", ""))})
 	var week_ago := Time.get_unix_time_from_system() - 7 * 86400
 	var found7 := 0
-	for p in BackendBus.positions:
+	for p in SimBadge.visible_positions():
 		var ts := Time.get_unix_time_from_datetime_string(
 				str(p.get("found_at", "")).left(19))
 		if ts > 0 and float(ts) >= week_ago:
@@ -2782,16 +2811,17 @@ func _build_positions() -> void:
 		_pos_filters["status"] = chosen
 		pending_status = []
 		_pos_page = 1
-	var all: Array = BackendBus.positions
+	var data_state := SimBadge.current_state()
+	var all: Array = SimBadge.visible_positions()
 	if all.is_empty():
-		_content.add_child(TerminalTheme.label(UIStrings.t("pos.need_vps"),
+		_content.add_child(TerminalTheme.label(SimBadge.positions_empty_copy(),
 				15, Palette.MUTED))
 		if not BackendBus.positions_updated.is_connected(_on_positions_refresh):
 			BackendBus.positions_updated.connect(_on_positions_refresh)
 		return
 	if not BackendBus.positions_updated.is_connected(_on_positions_refresh):
 		BackendBus.positions_updated.connect(_on_positions_refresh)
-	if BackendBus.positions_are_demo:
+	if data_state == SimBadge.DataState.DEMO:
 		var demo_box := _pos_card_box(_content, Palette.YELLOW,
 				Palette.PANEL, 12, 0)
 		var demo_note := TerminalTheme.label(UIStrings.t("demo.positions"),
@@ -3500,7 +3530,8 @@ var _pos_detail_id := 0
 
 func _build_pos_detail() -> void:
 	var p := {}
-	for row in BackendBus.positions:
+	var visible_positions: Array = SimBadge.visible_positions()
+	for row in visible_positions:
 		if int(row.get("id", 0)) == _pos_detail_id:
 			p = row
 			break
@@ -4285,6 +4316,11 @@ func _build_placeholder() -> void:
 			UIStrings.t("section.migrating_body")
 			% SidebarDefs.label_for(section), 15, Palette.MUTED))
 
+
+func _add_data_unavailable() -> void:
+	_content.add_child(TerminalTheme.label(UIStrings.t("common.connect_team"),
+			15, Palette.MUTED))
+
 # ── Team / Agenti / Attività / Candidature / Dashboard ────────────────
 
 ## Il team per reparto: organico e postazioni libere, più i core.
@@ -4349,15 +4385,17 @@ func _build_team() -> void:
 	if SetupService.busy() and SetupService.current_action != "team":
 		_busy_hint(_content)
 	_content.add_child(HSeparator.new())
+	var data_state := SimBadge.current_state()
 	for dept_id in DepartmentDefs.DEPT_ORDER:
 		var dept: Dictionary = DepartmentDefs.DEPARTMENTS[dept_id]
 		var occupied := 0
-		if not BackendBus.agents.is_empty():
+		if data_state != SimBadge.DataState.UNAVAILABLE \
+				and not BackendBus.agents.is_empty():
 			# postazioni = agenti VERI del ruolo attivi in questo momento
 			for a in BackendBus.agents:
 				if str(a.get("slug", "")) == str(DEPT_ROLE.get(dept_id, "")):
 					occupied += 1
-		else:
+		elif data_state == SimBadge.DataState.DEMO:
 			for i in (dept["desks"] as Array).size():
 				if CharacterDefs.desk_occupant_name(dept_id, i) != "":
 					occupied += 1
@@ -4389,7 +4427,9 @@ func _build_team() -> void:
 func _build_agents() -> void:
 	if not BackendBus.agents_updated.is_connected(_on_agents_refresh):
 		BackendBus.agents_updated.connect(_on_agents_refresh)
-	if not BackendBus.agents.is_empty():
+	var data_state := SimBadge.current_state()
+	if data_state != SimBadge.DataState.UNAVAILABLE \
+			and not BackendBus.agents.is_empty():
 		_content.add_child(TerminalTheme.label(
 				UIStrings.t("agents.active_count") % BackendBus.agents.size(),
 				14, Palette.MUTED, "medium"))
@@ -4418,6 +4458,11 @@ func _build_agents() -> void:
 			st.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			st.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			row.add_child(st)
+		return
+	if data_state != SimBadge.DataState.DEMO:
+		_content.add_child(TerminalTheme.label(
+				UIStrings.t("vps.agents_none") if data_state == SimBadge.DataState.LIVE
+				else UIStrings.t("common.connect_team"), 15, Palette.DIM))
 		return
 	for def in CharacterDefs.spawn_list():
 		var row := HBoxContainer.new()
@@ -4466,8 +4511,9 @@ static func _role_icon(slug: String, side: float) -> SidebarIcon:
 func _build_activity() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_activity_refresh):
 		BackendBus.positions_updated.connect(_on_activity_refresh)
+	var data_state := SimBadge.current_state()
 	var transitions: Array = BackendBus.transitions
-	if not transitions.is_empty():
+	if data_state == SimBadge.DataState.LIVE and not transitions.is_empty():
 		var scroll := ScrollContainer.new()
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -4505,6 +4551,11 @@ func _build_activity() -> void:
 			pad.custom_minimum_size = Vector2(14, 0)
 			row.add_child(pad)
 		return
+	if data_state != SimBadge.DataState.DEMO:
+		_content.add_child(TerminalTheme.label(
+				UIStrings.t("agent.activity_none") if data_state == SimBadge.DataState.LIVE
+				else UIStrings.t("common.connect_team"), 15, Palette.DIM))
+		return
 	for slug in ["scout", "analista", "scorer", "scrittore", "critico", "coordinatore"]:
 		for entry in TeamData.agent_activity(slug):
 			var row := HBoxContainer.new()
@@ -4536,10 +4587,11 @@ const APP_STAGES := {"ready": "apps.ready", "applied": "apps.applied",
 func _build_apps() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_apps_refresh):
 		BackendBus.positions_updated.connect(_on_apps_refresh)
-	# con la VPS: le candidature VERE (CV pronti, inviate, con risposta)
-	if not BackendBus.positions.is_empty():
+	var data_state := SimBadge.current_state()
+	# LIVE usa anche lo snapshot vuoto come dato vero, mai come via al mock.
+	if data_state == SimBadge.DataState.LIVE:
 		var rows: Array = []
-		for p in BackendBus.positions:
+		for p in SimBadge.visible_positions():
 			if APP_STAGES.has(str(p.get("status", ""))):
 				rows.append(p)
 		if rows.is_empty():
@@ -4579,6 +4631,9 @@ func _build_apps() -> void:
 				row.add_child(TerminalTheme.label(verdict, 13,
 						_verdict_color(verdict), "bold"))
 		return
+	if data_state == SimBadge.DataState.UNAVAILABLE:
+		_add_data_unavailable()
+		return
 	var apps: Array = TeamData.applications()
 	if apps.is_empty():
 		_content.add_child(TerminalTheme.label(UIStrings.t("registry.empty"), 15, Palette.DIM))
@@ -4609,8 +4664,9 @@ func _on_apps_refresh(_list: Array) -> void:
 func _build_dashboard() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_dash_refresh):
 		BackendBus.positions_updated.connect(_on_dash_refresh)
+	var data_state := SimBadge.current_state()
 	_build_dash_pipeline()
-	if not BackendBus.positions.is_empty():
+	if data_state == SimBadge.DataState.LIVE:
 		var kpi: Dictionary = BackendBus.kpi_summary()
 		_kpi_row(UIStrings.t("kpi.positions_today"), str(kpi["found_today"]), Palette.MINT)
 		_kpi_row(UIStrings.t("kpi.avg_score"), str(kpi["avg_score"]), Palette.MINT)
@@ -4628,6 +4684,9 @@ func _build_dashboard() -> void:
 			pending_detail = pid
 			navigate.emit("positions"))
 		scroll.add_child(charts)
+		return
+	if data_state == SimBadge.DataState.UNAVAILABLE:
+		_add_data_unavailable()
 		return
 	var s: Dictionary = TeamData.summary()
 	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
@@ -4656,7 +4715,8 @@ func _build_dashboard() -> void:
 ## Da analizzare → Analizzate → Con lo score → Da scrivere → Scritte.
 ## Ogni box conta dallo snapshot vero e apre le posizioni pre-filtrate.
 func _build_dash_pipeline() -> void:
-	if BackendBus.positions.is_empty():
+	if SimBadge.current_state() != SimBadge.DataState.LIVE \
+			or SimBadge.visible_positions().is_empty():
 		return
 	# il mapping status→fase vive in UN posto solo (lo usa anche la
 	# scena per il flusso fisico dei fogli)
@@ -4712,9 +4772,10 @@ const NOTIF_MAX := 15
 func _build_notifs() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_notifs_refresh):
 		BackendBus.positions_updated.connect(_on_notifs_refresh)
-	if not BackendBus.positions.is_empty():
+	var data_state := SimBadge.current_state()
+	if data_state == SimBadge.DataState.LIVE:
 		var items: Array = []  # {ts, icon, color, text}
-		for t_pos in BackendBus.positions:
+		for t_pos in SimBadge.visible_positions():
 			for t in t_pos.get("tickets", []):
 				var status := str(t.get("status", ""))
 				var req := str(t.get("request_text", "")).left(70)
@@ -4755,6 +4816,9 @@ func _build_notifs() -> void:
 			txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			row.add_child(txt)
 		return
+	if data_state == SimBadge.DataState.UNAVAILABLE:
+		_add_data_unavailable()
+		return
 	for n in TeamData.notifications():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 14)
@@ -4776,8 +4840,9 @@ func _on_notifs_refresh(_list: Array) -> void:
 func _build_chat() -> void:
 	if not BackendBus.chat_message.is_connected(_on_teamchat_refresh):
 		BackendBus.chat_message.connect(_on_teamchat_refresh)
+	var data_state := SimBadge.current_state()
 	var live: Array = BackendBus.chat_log
-	if not live.is_empty():
+	if data_state == SimBadge.DataState.LIVE and not live.is_empty():
 		var scroll := ScrollContainer.new()
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -4809,6 +4874,11 @@ func _build_chat() -> void:
 			row.add_child(pad)
 		scroll.set_deferred("scroll_vertical", 999999)  # parte dal fondo
 		return
+	if data_state != SimBadge.DataState.DEMO:
+		_content.add_child(TerminalTheme.label(
+				UIStrings.t("chat.empty") if data_state == SimBadge.DataState.LIVE
+				else UIStrings.t("common.connect_team"), 15, Palette.DIM))
+		return
 	for msg in TeamData.chat():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
@@ -4836,11 +4906,12 @@ func _build_stats() -> void:
 	# (mai il mock spacciato per reale)
 	if not BackendBus.positions_updated.is_connected(_on_stats_refresh):
 		BackendBus.positions_updated.connect(_on_stats_refresh)
-	if BackendBus.is_live() and BackendBus.positions.is_empty():
+	var data_state := SimBadge.current_state()
+	if data_state == SimBadge.DataState.LIVE and SimBadge.visible_positions().is_empty():
 		_content.add_child(TerminalTheme.label(
 				UIStrings.t("common.data_incoming"), 14, Palette.DIM))
 		return
-	if not BackendBus.positions.is_empty():
+	if data_state == SimBadge.DataState.LIVE:
 		var scroll := ScrollContainer.new()
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -4857,6 +4928,9 @@ func _build_stats() -> void:
 		usage_link.add_theme_color_override("font_color", Palette.GREEN)
 		usage_link.pressed.connect(func() -> void: _build("usage"))
 		_content.add_child(usage_link)
+		return
+	if data_state == SimBadge.DataState.UNAVAILABLE:
+		_add_data_unavailable()
 		return
 	var s: Dictionary = TeamData.summary()
 	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
@@ -4893,7 +4967,8 @@ func _build_stats() -> void:
 func _build_usage() -> void:
 	# con la VPS collegata: consumo VERO per agente (kt nella finestra)
 	var live: Dictionary = BackendBus.live_settings.get("usage", {})
-	if not live.is_empty():
+	var data_state := SimBadge.current_state()
+	if data_state == SimBadge.DataState.LIVE and not live.is_empty():
 		_content.add_child(TerminalTheme.label(UIStrings.t("usage.title_window")
 				% str(live.get("window_h", "?")), 16, Palette.WHITE, "bold"))
 		var per_agent: Dictionary = live.get("per_agent_kt", {})
@@ -4921,6 +4996,11 @@ func _build_usage() -> void:
 		back_live.add_theme_color_override("font_color", Palette.MUTED)
 		back_live.pressed.connect(func() -> void: _build())
 		_content.add_child(back_live)
+		return
+	if data_state != SimBadge.DataState.DEMO:
+		_content.add_child(TerminalTheme.label(
+				UIStrings.t("usage.none") if data_state == SimBadge.DataState.LIVE
+				else UIStrings.t("common.connect_team"), 14, Palette.DIM))
 		return
 	var u: Dictionary = TeamData.usage()
 	_content.add_child(TerminalTheme.label(UIStrings.t("usage.title"), 16, Palette.WHITE, "bold"))

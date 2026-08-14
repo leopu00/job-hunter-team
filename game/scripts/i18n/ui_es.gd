@@ -595,6 +595,8 @@ const S := {
 	"common.updated": "actualizado: %s",
 	"common.backend_unsupported": "El backend conectado no ofrece esta función.",
 	"common.backend_not_connected": "Backend no conectado.",
+	"common.connect_team": "Inicia o conecta el equipo para ver datos reales.",
+	"common.positions_empty": "No hay posiciones en la instantánea actual.",
 
 	"backend.this_computer": "este ordenador",
 	"backend.local_connecting": "conectando al contenedor local…",

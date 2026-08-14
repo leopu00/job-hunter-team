@@ -1,6 +1,6 @@
 class_name TeamHud
 extends BracketPanel
-## Pannello terminale in alto a sinistra: stato del team (mock via TeamData).
+## Pannello terminale: LIVE dal bus, DEMO da TeamData, altrimenti indisponibile.
 
 var _positions: Label
 var _score: Label
@@ -59,16 +59,20 @@ func _process(delta: float) -> void:
 	if _accum < 5.0:
 		return
 	_accum = 0.0
-	# Con un backend vero anche un database VUOTO e' un dato: 0 posizioni, non
-	# il fallback showroom 3/72. La simulazione resta ammessa soltanto quando
-	# il backend non e' live o le posizioni sono esplicitamente marcate demo.
-	# La barra budget è solo del mock (il consumo reale vive in Utilizzo).
-	if BackendBus.is_live() and not BackendBus.positions_are_demo:
+	var data_state := SimBadge.current_state()
+	# Con un backend vero anche un database VUOTO e' un dato: 0 posizioni.
+	if data_state == SimBadge.DataState.LIVE:
 		var kpi: Dictionary = BackendBus.kpi_summary()
 		_positions.text = str(kpi["found_today"])
 		_score.text = str(kpi["avg_score"])
 		_budget_row.visible = false
 		return
+	if data_state == SimBadge.DataState.UNAVAILABLE:
+		_positions.text = "—"
+		_score.text = "—"
+		_budget_row.visible = false
+		return
+	# La barra budget appartiene esclusivamente alla fixture DEMO.
 	_budget_row.visible = true
 	var s: Dictionary = TeamData.summary()
 	_positions.text = str(s["positions_today"])

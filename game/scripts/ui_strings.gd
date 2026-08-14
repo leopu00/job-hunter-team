@@ -1875,6 +1875,8 @@ const S := {
 	"feedback.report.expected": "Cosa mi aspettavo", "feedback.report.diagnostics": "Diagnostica",
 	"feedback.report.redacted": "Dati rimossi prima dell’invio",
 	"common.backend_not_connected": "Backend non collegato.",
+	"common.connect_team": "Avvia o collega il team per vedere i dati reali.",
+	"common.positions_empty": "Nessuna posizione nello snapshot corrente.",
 	"time.yesterday": "ieri",
 	"vps.upload.file_missing": "file non trovato: %s",
 	"vps.upload.extension_denied": "estensione non ammessa: .%s",

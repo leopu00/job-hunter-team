@@ -51,8 +51,10 @@ func _ready() -> void:
 	title_row.add_child(TerminalTheme.label(
 			DepartmentDefs.display_name(dept_id).to_upper(), 26, Palette.WHITE, "xbold"))
 	box.add_child(TerminalTheme.label(DepartmentDefs.display_tagline(dept_id), 16, Palette.MUTED))
-	# l'inbox com'è ADESSO (pila condivisa della simulazione)
-	if PaperPile.inbox.has(dept_id):
+	# Il numero e' mostrabile soltanto quando la sorgente e' attestata. In
+	# UNAVAILABLE perfino uno zero suggerirebbe una coda osservata davvero.
+	if PaperPile.inbox.has(dept_id) \
+			and SimBadge.current_state() != SimBadge.DataState.UNAVAILABLE:
 		box.add_child(TerminalTheme.label(
 				UIStrings.t("dept.inbox") % PaperPile.inbox[dept_id].count,
 				14, Palette.MUTED))
@@ -65,7 +67,8 @@ func _ready() -> void:
 
 	# Gli Scout producono l'ingresso dell'intera pipeline: il pannello mostra
 	# l'andamento temporale reale delle posizioni trovate sulla VPS.
-	if dept_id == "scout":
+	if dept_id == "scout" \
+			and SimBadge.current_state() != SimBadge.DataState.UNAVAILABLE:
 		box.add_child(HSeparator.new())
 		box.add_child(TerminalTheme.label(UIStrings.t("dept.scout.positions_timeline"),
 				15, Palette.MUTED, "medium"))
@@ -73,10 +76,12 @@ func _ready() -> void:
 		box.add_child(timeline)
 		BackendBus.positions_updated.connect(timeline.set_positions)
 
-	# tutto ciò che riguarda il reparto: stato del ruolo + ultime attività
+	# Le righe TeamData appartengono esclusivamente alla fixture DEMO.
 	var role_slug: String = CharacterDefs.DEPT_ROLES[dept_id]["slug"]
 	box.add_child(HSeparator.new())
-	var status: Dictionary = TeamData.agent_status().get(role_slug, {})
+	var demo_data := SimBadge.synthetic_data_allowed()
+	var status: Dictionary = TeamData.agent_status().get(role_slug, {}) \
+			if demo_data else {}
 	if status.has("detail"):
 		var srow := HBoxContainer.new()
 		srow.add_theme_constant_override("separation", 10)
@@ -88,7 +93,11 @@ func _ready() -> void:
 		det.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		srow.add_child(det)
 	box.add_child(TerminalTheme.label(UIStrings.t("agent.activity"), 15, Palette.MUTED, "medium"))
-	for entry in TeamData.agent_activity(role_slug):
+	var activity: Array = TeamData.agent_activity(role_slug) if demo_data else []
+	if activity.is_empty():
+		box.add_child(TerminalTheme.label(UIStrings.t("agent.activity_none"),
+				15, Palette.DIM))
+	for entry in activity:
 		var arow := HBoxContainer.new()
 		arow.add_theme_constant_override("separation", 14)
 		box.add_child(arow)
@@ -113,6 +122,12 @@ func _desk_row(index: int, accent: Color) -> Control:
 	var num := TerminalTheme.label("%02d" % (index + 1), 18, accent, "bold")
 	num.custom_minimum_size = Vector2(36, 0)
 	row.add_child(num)
+	# I nomi assegnati staticamente alle postazioni sono una fixture authored.
+	# Fuori da DEMO non dichiariamo nemmeno la scrivania libera: senza un
+	# mapping live per banco la sola risposta veritiera e' indisponibile.
+	if not SimBadge.synthetic_data_allowed():
+		row.add_child(TerminalTheme.label("—", 16, Palette.DIM))
+		return row
 	var occupant := CharacterDefs.desk_occupant_name(dept_id, index)
 	if occupant.is_empty():
 		row.add_child(TerminalTheme.label(UIStrings.t("dept.desk_free"), 16, Palette.DIM))
@@ -127,7 +142,8 @@ func _desk_row(index: int, accent: Color) -> Control:
 		var plate := AgentNames.short_name(
 				"%s-%d" % [role_slug, index + 1], occupant)
 		row.add_child(TerminalTheme.label(plate, 17, Palette.BRIGHT, "medium"))
-		var status: Dictionary = TeamData.agent_status().get(role_slug, {})
+		var status: Dictionary = TeamData.agent_status().get(role_slug, {}) \
+				if SimBadge.synthetic_data_allowed() else {}
 		if status.has("status"):
 			var detail := TerminalTheme.label(status["status"], 14, Palette.MUTED)
 			detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL

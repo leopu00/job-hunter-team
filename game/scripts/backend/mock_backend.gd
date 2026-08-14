@@ -493,7 +493,8 @@ var _wiz_step := 0
 ## reset, weekly che cresce nella settimana, consumi per-agente con
 ## turni alternati. Deterministico (seed dal bucket): stessi grafici a
 ## ogni apertura, niente sfarfallio da showroom.
-func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
+func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int,
+		request_id := "") -> void:
 	var data := {"ok": true, "sentinel": [], "meter": [], "throttle": [],
 			"agents": {}}
 	var names := ["scout-1", "scout-2", "analista-1", "scorer-1",
@@ -530,7 +531,8 @@ func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
 		series.append(row)
 		t += bucket_sec
 	data["agents"] = {"names": names, "series": series, "totals_kt": totals}
-	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec}
+	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec,
+			"request_id": request_id}
 	_deliver_usage_history.call_deferred(query, data)
 
 func _deliver_usage_history(query: Dictionary, data: Dictionary) -> void:
