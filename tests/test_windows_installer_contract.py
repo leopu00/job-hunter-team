@@ -88,6 +88,7 @@ def test_native_windows_smoke_attests_pck_and_rejects_second_instance() -> None:
     for watched in (
         '"game/scripts/support/windows_instance_guard.*"',
         '"game/tools/windows_instance_guard_selftest.py"',
+        '"game/tools/windows_instance_guard_windows_selftest.ps1"',
         '"scripts/jht-wrapper.ps1"',
         '"tests/test_cli_game_host_contract.py"',
         '"tests/test_windows_installer_contract.py"',
@@ -95,6 +96,7 @@ def test_native_windows_smoke_attests_pck_and_rejects_second_instance() -> None:
         assert workflow.count(watched) == 2
     assert "Management.Automation.Language.Parser]::ParseFile" in workflow
     assert "PowerShell syntax validation failed" in workflow
+    assert "Exercise instance guard directly in Windows PowerShell" in workflow
     assert GIT_ATTRIBUTES.read_text(encoding="utf-8").splitlines().count(
         "*.ps1 text eol=lf"
     ) == 1

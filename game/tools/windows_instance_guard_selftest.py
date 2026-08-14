@@ -104,6 +104,8 @@ def main() -> None:
         "Marshalls.raw_to_base64(utf16le)",
         '"-EncodedCommand", encoded',
         "OS.execute_with_pipe(powershell, args, false)",
+        "if _stdio.get_length() < 1:",
+        "var available := int(_stderr.get_length())",
         "OS.set_environment(REQUEST_ENV, request)",
         "OS.unset_environment(REQUEST_ENV)",
         "OS.is_process_running(_guard_pid)",
@@ -141,12 +143,22 @@ def main() -> None:
         "[Diagnostics.Process]::GetProcessById",
         "[void]$Desktop.Handle",
         "Write-New $ackPath $json $fileAcl",
-        "[Console]::Out.WriteLine('ALIVE')",
         "request_binding",
         "request_squat",
     ]
     for seam in required_source:
         require(seam in source, f"missing source seam: {seam}")
+    require(
+        source.index("$raw=Read-RequestBounded") < source.index("Add-Type @'"),
+        "request must be cleared before Add-Type can spawn a compiler",
+    )
+    require(
+        "$Lf=[char]10" in source
+        and "[Console]::Out.Write($json+$Lf)" in source
+        and "[Console]::Out.Write('ALIVE'+$Lf)" in source
+        and "[Console]::Out.WriteLine" not in source,
+        "READY and heartbeat frames must remain LF-only",
+    )
     require(
         source.index("$Mutex.WaitOne(0)") < source.index("Write-New $ackPath"),
         "ACK can be written before mutex acquisition",
@@ -191,7 +203,8 @@ def main() -> None:
         require(seam in installer, f"installer omits real guard oracle: {seam}")
     require(
         "game/scripts/support/windows_instance_guard.*" in workflow
-        and "game/tools/windows_instance_guard_selftest.py" in workflow,
+        and "game/tools/windows_instance_guard_selftest.py" in workflow
+        and "game/tools/windows_instance_guard_windows_selftest.ps1" in workflow,
         "Windows artifact workflow does not watch guard changes",
     )
 
