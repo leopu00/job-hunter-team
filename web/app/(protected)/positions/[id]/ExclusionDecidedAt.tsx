@@ -5,9 +5,13 @@ interface ExclusionDecidedAtProps {
 }
 
 /**
- * Presenta il timestamp della decisione manuale già conservato sulla posizione.
- * Un dato assente o invalido resta invisibile: altre date della posizione
- * descrivono eventi diversi e non possono sostituire `user_excluded_at`.
+ * Presenta l'ora in cui l'esclusione è stata decisa. La sceglie il chiamante,
+ * perché le mani sono due: `user_excluded_at` se ha deciso l'utente, la
+ * transizione a «esclusa» dell'event-log se ha deciso il team.
+ *
+ * Un dato assente o invalido resta invisibile: le altre date della posizione
+ * (`updated_at`, `found_at`, `last_checked`) descrivono eventi diversi e non
+ * possono sostituire quella della decisione.
  */
 export function ExclusionDecidedAt({
   label,

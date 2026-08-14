@@ -287,13 +287,20 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // insieme alla valutazione. Non usare `positions.updated_at`: cambia anche
   // per azioni estranee allo score e farebbe sembrare fresca una misura vecchia.
   const scoreAssessedAt = formatPositionEventStamp(score?.scored_at, locale);
-  // La decisione manuale ha già il proprio timestamp atomico. Non usare
-  // `updated_at`, `found_at` o altre date della posizione: cambiano per eventi
-  // diversi e farebbero sembrare recente un'esclusione vecchia.
-  const exclusionDecidedAt = formatPositionEventStamp(
-    position.user_excluded_at,
-    locale,
-  );
+  // Quando è stata decisa l'esclusione. Due sorgenti, una per mano: la
+  // decisione manuale ha il proprio timestamp atomico su `user_excluded_at`;
+  // quella del team no — l'Analista scrive stato e motivo, e l'ora della
+  // transizione a «esclusa» sta nell'event-log (`exclusionEventAt`, letto da
+  // `getPositionById`). Fino a O-41 il riquadro sapeva dire QUANDO solo nel
+  // primo caso, cioè quasi mai: escludere è soprattutto mestiere del team.
+  //
+  // L'ordine non è arbitrario: se l'utente ha escluso, quella è LA decisione,
+  // e l'event-log potrebbe portare una transizione automatica successiva.
+  // Nessuna delle due? Nessuna data. Non si ripiega su `updated_at`,
+  // `found_at` o `last_checked`: cambiano per eventi diversi e farebbero
+  // sembrare recente un'esclusione vecchia.
+  const exclusionStamp = position.user_excluded_at ?? data.exclusionEventAt;
+  const exclusionDecidedAt = formatPositionEventStamp(exclusionStamp, locale);
   const rescoreTicket = activeRescoreTicket(tickets);
 
   // Analisi semi-strutturata dell'Analista (campo notes) → metadati,
@@ -567,7 +574,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
           </div>
           <ExclusionDecidedAt
             label={t("exclusion_decided_at")}
-            excludedAt={position.user_excluded_at}
+            excludedAt={exclusionStamp}
             formatted={exclusionDecidedAt}
           />
           <p className="text-[11px] text-[var(--color-base)] leading-relaxed">
