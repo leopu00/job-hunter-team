@@ -144,6 +144,7 @@ sidebar_nav|script|gate|any|-|tools/sidebar_nav_selftest.gd|-
 # dichiarato, contabilita' dei byte del pull. (Mancava dalla matrice: il
 # selftest esisteva dal 30/07 ma non girava in NESSUNA CI.)
 setup_progress|script|gate|any|-|tools/setup_progress_selftest.gd|-
+pull_progress_state|script|gate|any|-|tools/pull_progress_state_selftest.gd|-
 # Il parser dello stream di `docker compose pull` sui due pull REALI di
 # tools/fixtures/: modalita' testo (dove docker NON dichiara mai il totale:
 # byte e rate si', percentuale no) e `--progress json` (byte veri per

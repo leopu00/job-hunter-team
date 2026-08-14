@@ -2,6 +2,8 @@ extends Node
 ## Stato e azioni del primo setup. L'ufficio non viene mai bloccato: questo
 ## servizio espone i tre prerequisiti che rendono operativo il team locale.
 
+const PullProgressState := preload("res://scripts/setup/pull_progress_state.gd")
+
 signal status_changed(status: Dictionary)
 signal action_changed(action: String, running: bool, message: String, ok: bool)
 ## Fase dell'azione lunga in corso ("engine" → "image" → "container", "team").
@@ -1661,11 +1663,16 @@ func _stream_compose(argv: PackedStringArray, json_mode: bool) -> Dictionary:
 	# "Extracting" sono DECOMPRESSI: sommarli ai conteggi di download
 	# gonfierebbe la barra. Vedi _parse_json_pull_line/_parse_text_pull_line.
 	var layer_bytes := {}
-	var last_output_ms := Time.get_ticks_msec()
+	var high_water_bytes := {}
+	var observer := PullProgressState.new()
+	var last_material_ms := Time.get_ticks_msec()
 	# "Mai emesso": il primo avanzamento parte col primo dato utile, non
 	# dopo il primo intervallo (ticks_msec riparte da zero a ogni avvio: 0
 	# qui NON significa "tanto tempo fa").
 	var last_ui_ms := -100000
+	var pending_ui := false
+	var pending_advanced := false
+	var observed_state := {}
 	while true:
 		var got_data := false
 		for pipe: FileAccess in [stdio, stderr]:
@@ -1676,7 +1683,6 @@ func _stream_compose(argv: PackedStringArray, json_mode: bool) -> Dictionary:
 				got_data = true
 				pending += chunk.get_string_from_utf8()
 		if got_data:
-			last_output_ms = Time.get_ticks_msec()
 			var lines: PackedStringArray = pending.split("\n")
 			pending = lines[lines.size() - 1]
 			for i in lines.size() - 1:
@@ -1705,22 +1711,42 @@ func _stream_compose(argv: PackedStringArray, json_mode: bool) -> Dictionary:
 				if pending.strip_edges() != "":
 					tail += pending.strip_edges() + "\n"
 				break
-			if Time.get_ticks_msec() - last_output_ms > 180000:
-				OS.kill(pid)
-				Log.call_deferred("warn", "setup", "compose fermo da 3 minuti, interrotto")
-				return {"ok": false, "spawned": true, "timeout": true,
-						"tail": UIStrings.t("setup.action.download_timeout")}
 			OS.delay_msec(80)
-		if Time.get_ticks_msec() - last_ui_ms > 1500 and not layers.is_empty():
+
+		_merge_layer_byte_high_water(high_water_bytes, layer_bytes)
+		var event: Dictionary = observer.observe(layers, high_water_bytes)
+		observed_state = event["state"]
+		if bool(event["changed"]):
+			pending_ui = true
+			pending_advanced = pending_advanced or bool(event["advanced"])
+		last_material_ms = _material_deadline(last_material_ms,
+				Time.get_ticks_msec(), bool(event["advanced"]))
+		if _pull_stalled(last_material_ms, Time.get_ticks_msec()):
+			OS.kill(pid)
+			var stalled_phase := str(observed_state.get("phase", "unknown"))
+			Log.call_deferred("warn", "setup",
+					"compose made no material progress for 3 minutes (phase %s); stopped"
+					% stalled_phase)
+			return {"ok": false, "spawned": true, "timeout": true,
+					"tail": UIStrings.t("setup.action.download_timeout")}
+		if pending_ui and Time.get_ticks_msec() - last_ui_ms > 1500 \
+				and not observed_state.is_empty():
 			last_ui_ms = Time.get_ticks_msec()
-			_progress("container", _pull_progress_text(layers, layer_bytes))
-			call_deferred("_apply_pull_progress",
-					_pull_progress_info(layers, layer_bytes))
+			var info := _pull_progress_info(
+					layers, high_water_bytes, observed_state)
+			info["advanced"] = pending_advanced
+			_progress("container", _pull_progress_text(
+					layers, high_water_bytes, observed_state))
+			call_deferred("_apply_pull_progress", info)
+			pending_ui = false
+			pending_advanced = false
 	# L'ultimo stato VERO arriva sempre alla barra: senza questa emissione lo
 	# stato finale (tipicamente il 100%) resterebbe indietro di un tick.
-	if not layers.is_empty():
-		call_deferred("_apply_pull_progress",
-				_pull_progress_info(layers, layer_bytes))
+	if not observed_state.is_empty():
+		var final_info := _pull_progress_info(
+				layers, high_water_bytes, observed_state)
+		final_info["advanced"] = pending_advanced
+		call_deferred("_apply_pull_progress", final_info)
 	# `--progress json` sconosciuto: i compose meno recenti muoiono subito con
 	# "unknown flag: --progress" (verificato su compose reale). Non è un
 	# errore del pull: è il segnale di rilanciare in modalità testo.
@@ -1817,14 +1843,14 @@ static func _parse_text_pull_line(line: String, layers: Dictionary,
 
 ## Riassunto leggibile del pull: parti completate e byte scaricati (col
 ## totale accanto solo quando i livelli l'hanno davvero dichiarato).
-static func _pull_progress_text(layers: Dictionary, layer_bytes: Dictionary) -> String:
-	var done := 0
-	for id in layers:
-		var status := str(layers[id]).to_lower()
-		if status.contains("complete") or status.contains("exists"):
-			done += 1
-	var info := _pull_progress_info(layers, layer_bytes)
-	var text := UIStrings.t("setup.action.image_progress") % [done, layers.size()]
+static func _pull_progress_text(layers: Dictionary, layer_bytes: Dictionary,
+		state := {}) -> String:
+	var info := _pull_progress_info(layers, layer_bytes, state)
+	var phase := str(info["phase"])
+	var text := UIStrings.t("setup.progress_pull_stage") % [
+		UIStrings.t("setup.pull_phase_" + phase),
+		int(info["done_layers"]), int(info["layers"]),
+	]
 	if float(info["fraction"]) >= 0.0:
 		text += " · %.0f/%.0f MB" % [float(info["got_mb"]), float(info["total_mb"])]
 	elif float(info["got_mb"]) > 0.0:
@@ -1840,7 +1866,8 @@ static func _pull_progress_text(layers: Dictionary, layer_bytes: Dictionary) -> 
 ## rate misurato, non una percentuale inventata. Il totale può CRESCERE
 ## mentre docker scopre le dimensioni degli altri livelli: è il dato reale,
 ## non un difetto da mascherare.
-static func _pull_progress_info(layers: Dictionary, layer_bytes: Dictionary) -> Dictionary:
+static func _pull_progress_info(layers: Dictionary, layer_bytes: Dictionary,
+		state := {}) -> Dictionary:
 	var got := 0.0
 	var total := 0.0
 	var total_known := not layer_bytes.is_empty()
@@ -1850,12 +1877,41 @@ static func _pull_progress_info(layers: Dictionary, layer_bytes: Dictionary) -> 
 		total += layer_total
 		if layer_total <= 0.0:
 			total_known = false
+	var classified: Dictionary = state if not state.is_empty() \
+			else PullProgressState.classify(layers)
 	return {
 		"got_mb": got, "total_mb": total,
 		"fraction": clampf(got / total, 0.0, 1.0) \
 				if total_known and total > 0.0 else -1.0,
-		"layers": layers.size(),
+		"layers": int(classified["total"]),
+		"done_layers": int(classified["done"]),
+		"phase": str(classified["phase"]),
 	}
+
+
+## I parser conservano l'ultima riga, ma Docker puo ristamparne una vecchia.
+## Il consumer riceve solo massimi per-layer: byte e totale non regrediscono.
+static func _merge_layer_byte_high_water(high_water: Dictionary,
+		observed: Dictionary) -> void:
+	for raw_id: Variant in observed:
+		var id := str(raw_id)
+		var current: Dictionary = observed[raw_id]
+		var previous: Dictionary = high_water.get(id,
+				{"got": 0.0, "total": 0.0})
+		high_water[id] = {
+			"got": maxf(float(previous["got"]), float(current.get("got", 0.0))),
+			"total": maxf(float(previous["total"]),
+					float(current.get("total", 0.0))),
+		}
+
+
+static func _pull_stalled(last_material_ms: int, now_ms: int) -> bool:
+	return now_ms - last_material_ms > 180000
+
+
+static func _material_deadline(last_material_ms: int, now_ms: int,
+		advanced: bool) -> int:
+	return now_ms if advanced else last_material_ms
 
 
 static func _to_mb(value: String, unit: String) -> float:
