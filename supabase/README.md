@@ -95,6 +95,40 @@ changed, executable, or incorrectly mapped anchor fails the same gate. Anchors
 participate in global identity collision checks, but never count as new DDL in
 the PostgreSQL 16 sequence.
 
+## Web code → live-schema canary
+
+The web query surface has an offline, deterministic census of Supabase RPC
+names and table columns under `web/app` and `web/lib`:
+
+```bash
+npm ci --prefix web
+node scripts/check-web-schema-coverage.mjs
+```
+
+`supabase/live-schema/web-code-coverage.v1.json` maps each discovered symbol
+to an exact receipt in the additive `078-084.web.v4` live-schema contract.
+Query-builder sites that cannot be resolved statically are listed one by one
+and pinned to their exact source-file hash; they are not wildcard exceptions.
+A new, removed, dynamic, ambiguous or unreceipted use fails closed. This CI
+command is offline and does not read Supabase credentials.
+
+Before a deployment that changes this mapping, an authorised maintainer runs
+the versioned canary separately from a secure environment:
+
+```bash
+python scripts/check-live-schema.py --validate-only
+python scripts/check-live-schema.py
+python scripts/check-live-schema.py --phase web --validate-only
+python scripts/check-live-schema.py --phase web
+```
+
+The `--validate-only` commands validate only local hashes and receipts. The two
+live commands use credentials already present in the maintainer environment
+and send the pinned catalog queries only through Supabase's read-only
+database-query endpoint. They report finite receipt counts, never response
+payloads or credentials, and perform no migration apply, repair, push, link or
+database write.
+
 ## Differences from SQLite (schema V2)
 
 The local agent team uses SQLite (`shared/data/jobs.db`); Supabase is the optional multi-tenant cloud mirror.

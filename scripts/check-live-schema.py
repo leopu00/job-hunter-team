@@ -24,6 +24,7 @@ from typing import Callable, ContextManager, Protocol
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
+WEB_MANIFEST = ROOT / "supabase/live-schema/078-084.web.v4.json"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 PREFLIGHT_MANIFEST = ROOT / "supabase/live-schema/081-preflight.v1.json"
 API_ORIGIN = "https://api.supabase.com"
@@ -219,6 +220,7 @@ def validate_read_only_query(
         raise CanaryError("query_not_read_only")
     if (
         ";" in executable
+        or "\\" in executable
         or MUTATING_SQL_RE.search(executable)
         or NON_CATALOG_FUNCTION_RE.search(executable)
         or (not allow_public_relations and NON_CATALOG_RELATION_RE.search(executable))
@@ -226,7 +228,9 @@ def validate_read_only_query(
         raise CanaryError("query_not_read_only")
 
 
-def load_contract(manifest_path: Path = DEFAULT_MANIFEST) -> Contract:
+def load_contract(
+    manifest_path: Path = DEFAULT_MANIFEST, *, phase: str = "catalog"
+) -> Contract:
     manifest = _load_manifest(manifest_path)
     if (
         set(manifest)
@@ -314,7 +318,13 @@ def load_contract(manifest_path: Path = DEFAULT_MANIFEST) -> Contract:
     if sorted(query_checks) != checks or len(query_checks) != len(set(query_checks)):
         raise CanaryError("manifest_invalid")
 
-    return Contract(contract_id, tuple(checks), query)
+    return Contract(contract_id, tuple(checks), query, phase)
+
+
+def load_web_contract() -> Contract:
+    """Load the one pinned additive web-surface contract."""
+
+    return load_contract(WEB_MANIFEST, phase="web")
 
 
 def load_preflight_contract() -> Contract:
@@ -451,7 +461,9 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="verify local hashes and query safety without claiming the live gate",
     )
-    parser.add_argument("--phase", choices=("catalog", "preflight"), default="catalog")
+    parser.add_argument(
+        "--phase", choices=("catalog", "preflight", "web"), default="catalog"
+    )
     return parser
 
 
@@ -461,11 +473,12 @@ def main(argv: list[str] | None = None) -> int:
         # The release entrypoint is deliberately pinned. Supporting an
         # arbitrary manifest path here would let a caller select an easier
         # contract while still printing the canonical PASS banner.
-        contract = (
-            load_contract(DEFAULT_MANIFEST)
-            if args.phase == "catalog"
-            else load_preflight_contract()
-        )
+        if args.phase == "catalog":
+            contract = load_contract(DEFAULT_MANIFEST)
+        elif args.phase == "preflight":
+            contract = load_preflight_contract()
+        else:
+            contract = load_web_contract()
         if args.validate_only:
             print(
                 f"LIVE-SCHEMA MANIFEST OK contract={contract.contract_id} "
