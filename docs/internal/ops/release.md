@@ -100,10 +100,24 @@ git push origin v0.2.1
 
 **2 · `build-game`** — one job per platform (`windows-2022`, `macos-14`, `ubuntu-22.04`), Godot **4.7.0** with export templates:
 
-- imports the project headless, then runs the Godot self-tests: `nav_grid_selftest`, `speech_bubble_selftest`, `pipeline_queue_selftest`, `embedded_terminal_selftest`, plus four scripted scenarios that must print their PASS marker (`VPS-CONTRACT-TEST`, `PIPELINE-FORCE-TEST`, `BACKEND-SWITCH-TEST`, `SIMULATION-DOCTOR-TEST`);
+- runs the **canonical `gate` tier** — `game/tools/run.sh test gate`, or
+  `game/tools/run.ps1 test gate` on Windows — *before* the export, so the
+  heaviest step never runs behind a red gate. Until 2026-08-14 this step
+  carried its own copy of the self-test list, which had to be kept in step with
+  `game.yml` by hand; the list now lives only in
+  [`game/tools/test-matrix.txt`](../../../game/tools/test-matrix.txt) and adding
+  a `gate` row there makes the test blocking for the release too, with no
+  parallel list to update. The single declared exclusion is causal: `run.ps1`
+  skips the `posix` rows out loud, because they cannot execute on Windows. The
+  `watch` tier is reported but never blocks;
 - exports the release preset;
 - **macOS only**: signs with the Developer ID identity, submits to `notarytool --wait`, staples the ticket and asserts `spctl --assess`. The five Apple secrets are **mandatory** — the job fails fast with an explicit error when they are missing (see the playbook in [`MAINTAINERS.md`](MAINTAINERS.md#-macos-code-signing--notarization));
 - smoke-tests the exported binary (`--headless --quit-after 3` with `JHT_NOVPS=1`), so a build that cannot even boot never reaches a release;
+- gates the **packaged** title footer on the bytes that become the assets — the
+  Windows portable after NSIS packaging, the binary extracted from the Linux
+  tarball, the app extracted from the signed and notarized macOS zip. It builds
+  the real title screen and refuses a mismatch between the version it displays
+  and the tag being released;
 - records a provenance sidecar for the final asset, tied to the resolved tag
   commit and its SHA-256;
 - uploads the artifact.
@@ -166,11 +180,13 @@ are covered by the same tag-bound provenance and checksum gate.
 ## 🧪 Building locally before tagging
 
 ```bash
-npm run app:test          # game/tools/run.sh test — import + self-tests
+npm run app:test          # game/tools/run.sh test — the full matrix, gate + watch
 npm run app:dist          # scripts/build-release.sh auto — export for the host OS
 ```
 
-`build-release.sh` only builds for the host platform (macOS builds need macOS, and so on); `all` is deliberately rejected — use the Release workflow for the three-runner matrix. The local export is **unsigned**: only CI has the Apple credentials.
+`build-release.sh` runs `run.sh test gate` / `run.ps1 test gate` before
+exporting, the same tier CI blocks on, so a local build cannot skip a gate the
+release would have failed on. It only builds for the host platform (macOS builds need macOS, and so on); `all` is deliberately rejected — use the Release workflow for the three-runner matrix. The local export is **unsigned**: only CI has the Apple credentials.
 
 ---
 
@@ -203,3 +219,4 @@ release red and investigate; the digest remains runnable and is the authority.
 - 📋 [`CHANGELOG.md`](../../../CHANGELOG.md) — release-by-release history (and the source of the release notes)
 - 🔒 [`MAINTAINERS.md`](MAINTAINERS.md) — Apple signing playbook, Vercel env vars, OAuth setup, contact
 - 🚢 [BACKLOG · Docs & launch assets](../../../BACKLOG.md#-docs--launch-assets-maintainer) — what blocks the public 1.0 launch
+- 🗄️ [`supabase/README.md`](../../../supabase/README.md) — the live-schema canary and the offline web coverage gate, if the release changes the cloud schema or the web query surface
