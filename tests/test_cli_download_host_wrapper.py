@@ -144,6 +144,12 @@ def test_powershell_wrapper_has_same_no_clobber_bridge_contract():
         assert seam in source
 
 
+def test_powershell_wrapper_forwards_detached_compose_flag_as_a_literal():
+    source = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
+    assert "Invoke-Compose up -d" not in source
+    assert source.count("Invoke-Compose 'up' '-d'") == 3
+
+
 def test_powershell_download_progress_cannot_turn_failure_into_exit_zero():
     source = POWERSHELL_WRAPPER.read_text()
     function = source[source.index("function Invoke-HostDownload") : source.index(

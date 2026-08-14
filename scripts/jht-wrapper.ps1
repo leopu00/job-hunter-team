@@ -333,7 +333,7 @@ function Test-ContainerUp {
 function Ensure-Up {
   if (-not (Test-ContainerUp)) {
     Write-Info "Container '$Container' non attivo, lo avvio..."
-    Invoke-Compose up -d
+    Invoke-Compose 'up' '-d'
     # Attendi che il container sia in stato running.
     $tries = 20
     while (-not (Test-ContainerUp)) {
@@ -1274,7 +1274,7 @@ switch ($Sub) {
   { $_ -in @('up', 'start-container') } {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose up -d
+    Invoke-Compose 'up' '-d'
     break
   }
 
@@ -1296,7 +1296,7 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     Invoke-Compose down
-    Invoke-Compose up -d
+    Invoke-Compose 'up' '-d'
     break
   }
 
