@@ -1086,7 +1086,67 @@ func _listen_setup() -> void:
 		SetupService.action_changed.connect(_on_setup_action)
 	if not SetupService.phase_changed.is_connected(_on_setup_phase):
 		SetupService.phase_changed.connect(_on_setup_phase)
+	if not SetupService.team_start_state_changed.is_connected(_on_team_start_state):
+		SetupService.team_start_state_changed.connect(_on_team_start_state)
 	_setup_busy_ui = SetupService.busy()
+
+
+## Lo stato del comando e la liveness del team sono osservazioni distinte. Il
+## probe resta autoritativo per RUNNING; negli altri casi la macchina causale
+## impedisce alla UI di ricadere su idle appena il processo `team start` esce.
+static func _team_start_phase(snapshot: Dictionary, running: bool) -> String:
+	if running:
+		return "running"
+	var phase := str(snapshot.get("phase", "idle"))
+	return phase if phase in ["starting", "failed", "recovering"] else "idle"
+
+
+static func _team_start_failure_cause(snapshot: Dictionary) -> String:
+	var code := str(snapshot.get("error_code", ""))
+	var cause := str(snapshot.get("cause", "")).strip_edges()
+	if code == "bootstrap_failed" and cause != "":
+		return cause
+	var localized := {
+		"captain_not_observed": "team.start_cause_captain_not_observed",
+		"recovery_timeout": "team.start_cause_recovery_timeout",
+		"service_restarted": "team.start_cause_service_restarted",
+		"startup_state_unreadable": "team.start_cause_state_unreadable",
+	}
+	if localized.has(code):
+		return UIStrings.t(str(localized[code]))
+	return cause if cause != "" else UIStrings.t("team.start_cause_unknown")
+
+
+## Responso persistito, non una copia dell'ultimo toast. FAILED conserva causa
+## e log essenziale finche l'utente ritenta; RECOVERING dichiara il watchdog e
+## il suo limite finito invece di mostrare di nuovo un innocuo pulsante idle.
+static func _add_team_start_feedback(parent: VBoxContainer,
+		snapshot: Dictionary, phase: String) -> void:
+	if phase in ["idle", "running"]:
+		return
+	var title_key: String = str({
+		"starting": "team.start_waiting",
+		"recovering": "team.start_recovery_detail",
+		"failed": "team.start_failed_title",
+	}.get(phase, ""))
+	var color := Palette.RED if phase == "failed" else Palette.YELLOW
+	var title := TerminalTheme.label(UIStrings.t(str(title_key)), 13, color, "bold")
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(title)
+	if phase != "failed":
+		return
+	var cause := TerminalTheme.label(_team_start_failure_cause(snapshot),
+			13, Palette.YELLOW)
+	cause.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(cause)
+	var output := str(snapshot.get("output", "")).strip_edges()
+	if output == "":
+		return
+	parent.add_child(TerminalTheme.label(
+			UIStrings.t("team.start_log"), 12, Palette.DIM, "bold"))
+	var log_line := TerminalTheme.label(output, 12, Palette.MUTED)
+	log_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(log_line)
 
 
 func _build_activation() -> void:
@@ -1172,28 +1232,36 @@ func _build_activation() -> void:
 	summary.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bottom.add_child(summary)
 	var start := Button.new()
-	# Tre stati, tre etichette: attivo (●), avvio in corso (◌, mentre il
-	# comando gira), pronto da premere (▶). Prima il pulsante restava "ATTIVA
-	# IL TEAM" anche durante l'avvio e non diceva se il click era passato.
-	if bool(s.get("team_running", false)):
+	var team_state := SetupService.team_start_snapshot()
+	var team_phase := _team_start_phase(
+			team_state, bool(s.get("team_running", false)))
+	# Il comando puo essere gia finito mentre il watchdog sta ancora recuperando:
+	# in quel tratto l'etichetta viene dallo stato persistito, non da busy().
+	if team_phase == "running":
 		start.text = UIStrings.t("setup.team_running")
-	elif SetupService.busy() and SetupService.current_action == "team":
+	elif team_phase == "recovering":
+		start.text = UIStrings.t("team.start_recovering")
+	elif team_phase == "failed":
+		start.text = UIStrings.t("team.start_retry")
+	elif team_phase == "starting":
 		start.text = UIStrings.t("setup.team_starting")
 	else:
 		start.text = UIStrings.t("setup.start_team")
 	start.disabled = not bool(s.get("ready", false)) \
-			or bool(s.get("team_running", false)) or SetupService.busy()
+			or team_phase in ["running", "starting", "recovering"] \
+			or SetupService.busy()
 	start.add_theme_font_size_override("font_size", 17)
 	start.add_theme_color_override("font_color", Palette.GREEN)
 	# Il tema tiene VERDE anche il disabilitato (serve alle tab attive): qui lo
 	# stato deve vedersi — verde se il team è ATTIVO (disabled usato come
 	# distintivo), giallo se sta lavorando lui, muto se aspetta altro.
 	start.add_theme_color_override("font_disabled_color",
-			Palette.GREEN if bool(s.get("team_running", false)) \
-			else (Palette.YELLOW if SetupService.busy() \
-			and SetupService.current_action == "team" else Palette.MUTED))
+			Palette.GREEN if team_phase == "running" \
+			else (Palette.YELLOW if team_phase in ["starting", "recovering"] \
+			else Palette.MUTED))
 	start.pressed.connect(SetupService.start_team)
 	bottom.add_child(start)
+	_add_team_start_feedback(_content, team_state, team_phase)
 	# ATTIVA IL TEAM spento perché gira UN'ALTRA azione (es. l'attivazione del
 	# container): la ragione va detta. Quando l'azione è proprio il team,
 	# l'etichetta "AVVIO IN CORSO" parla già da sola.
@@ -1773,8 +1841,13 @@ func _plan_picker(col: VBoxContainer, provider: String, s: Dictionary) -> void:
 
 func _on_setup_refresh(_status: Dictionary) -> void:
 	if is_instance_valid(_content) \
-			and section in ["activation", "provider", "docker", "account"]:
+			and section in ["activation", "provider", "docker", "account", "team"]:
 		_build()
+
+
+func _on_team_start_state(_state: Dictionary) -> void:
+	if is_instance_valid(_content) and section in ["activation", "team"]:
+		_build(_current_page)
 
 
 func _on_setup_action(action: String, running: bool, message: String, ok: bool) -> void:
@@ -4354,21 +4427,30 @@ func _build_team() -> void:
 	controls.add_theme_constant_override("separation", 10)
 	_content.add_child(controls)
 	var team_busy := SetupService.busy() and SetupService.current_action == "team"
+	var team_state := SetupService.team_start_snapshot()
+	var team_phase := _team_start_phase(team_state, running)
 	var primary := Button.new()
 	# Mentre il comando gira l'etichetta dice COSA sta succedendo (avvio o
 	# arresto, dedotto dallo stato di partenza) e il pulsante non è premibile.
-	if team_busy:
-		primary.text = UIStrings.t("setup.team_stopping") if running \
-				else UIStrings.t("setup.team_starting")
+	if team_busy and running:
+		primary.text = UIStrings.t("setup.team_stopping")
+	elif team_phase == "recovering":
+		primary.text = UIStrings.t("team.start_recovering")
+	elif team_phase == "failed":
+		primary.text = UIStrings.t("team.start_retry")
+	elif team_phase == "starting":
+		primary.text = UIStrings.t("setup.team_starting")
 	else:
 		primary.text = UIStrings.t("team.stop") if running else UIStrings.t("team.start")
 	primary.disabled = (not bool(SetupService.status.get("ready", false)) \
-			and not running) or SetupService.busy()
+			and not running) or SetupService.busy() \
+			or team_phase in ["starting", "recovering"]
 	primary.add_theme_color_override("font_color", Palette.RED if running else Palette.GREEN)
 	# Spento perché lavora lui → giallo; spento per un'altra ragione → muto
 	# (il verde-da-disabilitato del tema qui sarebbe una bugia).
 	primary.add_theme_color_override("font_disabled_color",
-			Palette.YELLOW if team_busy else Palette.MUTED)
+			Palette.YELLOW if team_busy \
+			or team_phase in ["starting", "recovering"] else Palette.MUTED)
 	primary.pressed.connect(SetupService.stop_team if running else SetupService.start_team)
 	controls.add_child(primary)
 	var setup := Button.new()
@@ -4379,6 +4461,7 @@ func _build_team() -> void:
 	_setup_message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	controls.add_child(_setup_message)
 	_restore_action_note()
+	_add_team_start_feedback(_content, team_state, team_phase)
 	# Pulsante spento perché gira un'ALTRA azione di setup (attivazione
 	# container, migrazione…): la ragione va detta. Quando l'azione è il team,
 	# parla già l'etichetta AVVIO/ARRESTO IN CORSO.

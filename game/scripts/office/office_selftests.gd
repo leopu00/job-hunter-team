@@ -75,6 +75,7 @@ const FLAG_HOOKS := {
 	"JHT_THROTTLE_TEST": "_throttle_selftest",
 	"JHT_BACKEND_SWITCH_TEST": "_backend_switch_selftest",
 	"JHT_SETUP_BUSY_TEST": "_setup_busy_selftest",
+	"JHT_TEAM_START_UI_TEST": "_team_start_ui_selftest",
 	"JHT_SETUP_GATING_TEST": "_setup_gating_selftest",
 	"JHT_BUBBLE_LAYOUT_TEST": "_bubble_layout_selftest",
 	"JHT_SIM_BADGE_TEST": "_sim_badge_selftest",
@@ -849,6 +850,103 @@ func _setup_busy_selftest() -> void:
 	for key in result:
 		ok = ok and bool(result[key])
 	print("SETUP-BUSY-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify(result)])
+	get_tree().quit(0 if ok else 1)
+
+
+## #129 — il comando può finire prima che CAPITANO sia osservabile. Questo
+## oracle attraversa i consumer veri Attivazione e Team: fallimento iniziale,
+## tentativo watchdog e recupero tardivo devono restare distinti anche quando
+## SetupService.busy() è già falso. Il pulsante di retry è l'unica uscita dal
+## fallimento; durante il recupero resta spento per non creare due tentativi.
+func _team_start_ui_selftest() -> void:
+	await get_tree().process_frame
+	var old_status: Dictionary = SetupService.status.duplicate(true)
+	var old_state: RefCounted = SetupService.team_start_state
+	var old_running: bool = SetupService._action_running
+	var old_action: String = SetupService.current_action
+	SetupService.status = {
+		"ready": true, "completed": 4, "team_running": false,
+		"container_running": true, "provider_authenticated": true,
+		"plan_ready": true, "profile_ready": true, "hours_ready": true,
+	}
+	SetupService._action_running = false
+	SetupService.current_action = ""
+	SetupService.team_start_state = TeamStartState.new()
+	SetupService.team_start_state.begin(1000)
+
+	var activation := SectionPanel.new("activation", 24.0)
+	var team := SectionPanel.new("team", 24.0)
+	office.add_child(activation)
+	office.add_child(team)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var result := {}
+	var starting_activation := _panel_button(
+			activation, UIStrings.t("setup.team_starting"))
+	var starting_team := _panel_button(team, UIStrings.t("setup.team_starting"))
+	result["starting_distinto_e_spento"] = starting_activation != null \
+			and starting_activation.disabled and starting_team != null \
+			and starting_team.disabled and _panel_has_label(
+					activation, UIStrings.t("team.start_waiting"))
+
+	var attempt: int = SetupService.team_start_state.attempt
+	var raw := "✓ MENTOR started\n✗ CAPITANO — provider boot failed\nResult: 1 started, 6 errors"
+	result["failure_applicata"] = SetupService.team_start_state.finish_command(
+			attempt, false, raw, 0, "synthetic-log", "a".repeat(64), 2000)
+	SetupService.team_start_state_changed.emit(SetupService.team_start_snapshot())
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var retry_activation := _panel_button(
+			activation, UIStrings.t("team.start_retry"))
+	var retry_team := _panel_button(team, UIStrings.t("team.start_retry"))
+	result["failed_con_retry_e_causa"] = retry_activation != null \
+			and not retry_activation.disabled and retry_team != null \
+			and not retry_team.disabled \
+			and _panel_has_label(activation, UIStrings.t("team.start_failed_title")) \
+			and _panel_has_label(activation, "provider boot failed") \
+			and _panel_has_label(activation, UIStrings.t("team.start_log")) \
+			and _panel_has_label(activation, "Result: 1 started, 6 errors")
+
+	result["watchdog_applicato"] = SetupService.team_start_state.observe(
+			attempt, false, TeamStartState.WATCHDOG_ATTEMPT, 3000)
+	SetupService.team_start_state_changed.emit(SetupService.team_start_snapshot())
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var recovery_activation := _panel_button(
+			activation, UIStrings.t("team.start_recovering"))
+	var recovery_team := _panel_button(team, UIStrings.t("team.start_recovering"))
+	result["recovering_distinto_e_spento"] = recovery_activation != null \
+			and recovery_activation.disabled and recovery_team != null \
+			and recovery_team.disabled and _panel_has_label(
+					activation, UIStrings.t("team.start_recovery_detail"))
+
+	result["capitano_tardivo_applicato"] = SetupService.team_start_state.observe(
+			attempt, true, "", 4000)
+	SetupService.status["team_running"] = true
+	SetupService.team_start_state_changed.emit(SetupService.team_start_snapshot())
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var running_activation := _panel_button(
+			activation, UIStrings.t("setup.team_running"))
+	var stop_team := _panel_button(team, UIStrings.t("team.stop"))
+	result["running_distinto_senza_errore"] = running_activation != null \
+			and running_activation.disabled and stop_team != null \
+			and not stop_team.disabled \
+			and not _panel_has_label(activation, UIStrings.t("team.start_failed_title")) \
+			and not _panel_has_label(activation, UIStrings.t("team.start_recovery_detail"))
+
+	activation.queue_free()
+	team.queue_free()
+	await get_tree().process_frame
+	SetupService.status = old_status
+	SetupService.team_start_state = old_state
+	SetupService._action_running = old_running
+	SetupService.current_action = old_action
+	var ok := true
+	for key in result:
+		ok = ok and bool(result[key])
+	print("TEAM-START-UI-TEST %s %s" % ["PASS" if ok else "FAIL",
 			JSON.stringify(result)])
 	get_tree().quit(0 if ok else 1)
 

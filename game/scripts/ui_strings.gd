@@ -987,6 +987,17 @@ const S := {
 	"team.stop": "FERMA TEAM",
 	"team.start": "AVVIA TEAM",
 	"team.setup": "SETUP E STATO",
+	"team.start_recovering": "◌ WATCHDOG IN RECUPERO…",
+	"team.start_retry": "↻ RIPROVA AVVIO TEAM",
+	"team.start_waiting": "Il comando di avvio è terminato. Attendo che CAPITANO diventi osservabile.",
+	"team.start_recovery_detail": "Il watchdog sta riavviando CAPITANO. Il recupero termina entro tre minuti.",
+	"team.start_failed_title": "▲ AVVIO TEAM FALLITO",
+	"team.start_log": "LOG ESSENZIALE",
+	"team.start_cause_captain_not_observed": "CAPITANO non è stato osservato dopo il comando di avvio.",
+	"team.start_cause_recovery_timeout": "Il watchdog non è riuscito a recuperare CAPITANO entro tre minuti.",
+	"team.start_cause_service_restarted": "L’osservazione si è interrotta perché l’app è stata riavviata.",
+	"team.start_cause_state_unreadable": "Lo stato di avvio salvato non può essere letto in sicurezza.",
+	"team.start_cause_unknown": "Il team non ha fornito un esito di avvio verificabile.",
 
 	# ── Setup iniziale aperto ─────────────────────────────────────
 	"setup.cta": "SETUP TEAM · %d/4 COMPLETATO  →",
