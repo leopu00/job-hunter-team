@@ -75,6 +75,16 @@ function Protect-JhtHomeAcl {
   }
   if (-not (Get-Acl -LiteralPath $Path).AreAccessRulesProtected) { throw "ACL inheritance remains enabled: $Path" }
 }
+function Set-JhtNodeOwner {
+  param([Parameter(Mandatory)][string]$Path)
+  $ownerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
+  $acl.SetOwner($ownerSid)
+  Set-Acl -LiteralPath $Path -AclObject $acl
+  $actualOwner = (Get-Acl -LiteralPath $Path -ErrorAction Stop).Owner
+  $actualSid = ([Security.Principal.NTAccount]$actualOwner).Translate([Security.Principal.SecurityIdentifier])
+  if ($actualSid.Value -ne $ownerSid.Value) { throw "Owner is not the current user: $Path" }
+}
 $Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598' }
 $env:JHT_IMAGE = $Image
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
@@ -251,6 +261,7 @@ function Get-RuntimeFiles {
       'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
     $acl.SetAccessRule($rule)
     Set-Acl -LiteralPath $RuntimeDir -AclObject $acl
+    Set-JhtNodeOwner -Path $RuntimeDir
   }
 
   Write-Info "Downloading docker-compose.yml..."
@@ -259,7 +270,10 @@ function Get-RuntimeFiles {
   if (-not $DryRun -and -not (Select-String -LiteralPath $composeTemp -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) {
     Write-Fail 'Downloaded compose does not enforce the protected runtime boundary.'
   }
-  if (-not $DryRun) { Move-Item -LiteralPath $composeTemp -Destination $composeDest -Force }
+  if (-not $DryRun) {
+    Move-Item -LiteralPath $composeTemp -Destination $composeDest -Force
+    Set-JhtNodeOwner -Path $composeDest
+  }
   Write-Ok "compose: $composeDest"
 
   # The wrapper dot-sources this sibling before dispatching any command. Keep
@@ -276,6 +290,7 @@ function Get-RuntimeFiles {
       }
     }
     Move-Item -LiteralPath $helperTemp -Destination $helperDest -Force
+    Set-JhtNodeOwner -Path $helperDest
   }
   Write-Ok "ACL helper: $helperDest"
 
@@ -288,6 +303,7 @@ function Get-RuntimeFiles {
       Write-Fail 'Downloaded wrapper does not implement the protected runtime protocol.'
     }
     Move-Item -LiteralPath $wrapperTemp -Destination $wrapperDest -Force
+    Set-JhtNodeOwner -Path $wrapperDest
   }
   Write-Ok "wrapper: $wrapperDest"
 
@@ -303,6 +319,7 @@ function Get-RuntimeFiles {
       $manifestDest,
       "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`nwindows-private-acl.ps1=$helperHash`n",
       [Text.UTF8Encoding]::new($false))
+    Set-JhtNodeOwner -Path $manifestDest
     $shimContent = @"
 @echo off
 where pwsh.exe >nul 2>&1

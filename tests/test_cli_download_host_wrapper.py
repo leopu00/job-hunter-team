@@ -200,6 +200,8 @@ def test_windows_clean_install_publishes_acl_helper_and_attests_exact_bytes_befo
     assert source.index("windows-private-acl.ps1=$helperHash") < source.index(
         "Invoke-Onboard", source.index("# ── Main")
     )
+    for protected_node in ("$RuntimeDir", "$composeDest", "$helperDest", "$wrapperDest", "$manifestDest"):
+        assert f"Set-JhtNodeOwner -Path {protected_node}" in source
 
 
 def test_windows_acl_gate_smokes_e03_clean_start_through_docker_dispatch():
