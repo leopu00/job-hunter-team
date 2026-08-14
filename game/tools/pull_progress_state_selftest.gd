@@ -231,4 +231,29 @@ func _observer_high_water_contract() -> void:
 	_check("osservatore: stato high-water espone verifying",
 			str((event["state"] as Dictionary)["phase"])
 			== ProgressState.PHASE_VERIFYING, str(event))
+
+	# L'esito non dipende dall'ordine Dictionary: un UNKNOWN visto dopo un layer
+	# avanzato non puo sovrascrivere `advanced=true`. Se poi sparisce, essendo
+	# provvisorio non gonfia per sempre il totale high-water.
+	var multi_observer := ProgressState.new()
+	event = multi_observer.observe({
+		"material": "Downloading 1 MB",
+		"unknown": "",
+	}, {"material": {"got": 1.0, "total": 2.0}})
+	_check("osservatore multi-layer: advanced sopravvive a UNKNOWN successivo",
+			bool(event["advanced"]), str(event))
+	_check("osservatore multi-layer: UNKNOWN presente entra nel totale",
+			int((event["state"] as Dictionary)["total"]) == 2, str(event))
+	event = multi_observer.observe({"material": "Downloading 1 MB"},
+			{"material": {"got": 1.0, "total": 2.0}})
+	_check("osservatore multi-layer: UNKNOWN scomparso viene potato",
+			not bool(event["advanced"])
+			and int((event["state"] as Dictionary)["total"]) == 1, str(event))
+	var reversed_observer := ProgressState.new()
+	event = reversed_observer.observe({
+		"unknown": "",
+		"material": "Downloading 1 MB",
+	}, {"material": {"got": 1.0, "total": 2.0}})
+	_check("osservatore multi-layer: ordine inverso resta advanced",
+			bool(event["advanced"]), str(event))
 	_sections += 1

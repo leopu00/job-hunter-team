@@ -64,15 +64,17 @@ func observe(layers: Dictionary, layer_bytes: Dictionary) -> Dictionary:
 	var fingerprint := material_fingerprint(layers, layer_bytes)
 	var changed := fingerprint != _last_fingerprint
 	var advanced := false
+	var seen_ids := {}
 	for raw_id: Variant in layers:
 		var id := str(raw_id)
+		seen_ids[id] = true
 		var status := _normalized_status(str(layers[raw_id]))
 		var phase := classify_status(status)
 		var candidate := _high_water_candidate(
 				phase, status, layer_bytes.get(id, {}))
 		if not _high_water.has(id):
 			_high_water[id] = candidate
-			advanced = int(candidate["stage"]) > 0
+			advanced = advanced or int(candidate["stage"]) > 0
 			continue
 		var previous: Dictionary = _high_water[id]
 		var candidate_stage := int(candidate["stage"])
@@ -84,6 +86,17 @@ func observe(layers: Dictionary, layer_bytes: Dictionary) -> Dictionary:
 				and int(candidate["work"]) > int(previous["work"]):
 			_high_water[id] = candidate
 			advanced = true
+	# UNKNOWN/OTHER non hanno ancora dimostrato l'esistenza di un layer
+	# materiale: si mostrano finche presenti, ma non diventano high-water
+	# immortali. Gli stati riconosciuti invece sopravvivono ai gap dello stream.
+	var vanished_provisional: Array[String] = []
+	for raw_id: Variant in _high_water:
+		var id := str(raw_id)
+		if not seen_ids.has(id) \
+				and int((_high_water[id] as Dictionary)["stage"]) == 0:
+			vanished_provisional.append(id)
+	for id: String in vanished_provisional:
+		_high_water.erase(id)
 	_last_fingerprint = fingerprint
 	return {
 		"changed": changed,
@@ -157,10 +170,10 @@ static func _classify_phases(phases: Dictionary) -> Dictionary:
 	}
 
 
-## Firma soltanto lo stato materiale: ordine dei dizionari e spaziatura dello
-## stream non la cambiano; fase, testo normalizzato o byte sì. La firma non
-## viene mostrata né persistita: serve solo come confronto fail-closed nel
-## processo che legge compose.
+## Firma i cambiamenti osservati: ordine dei dizionari e spaziatura dello
+## stream non la cambiano; fase, testo normalizzato o byte sì. Non è un gate
+## di heartbeat: regressioni e OTHER possono cambiare firma. Quel gate è
+## esclusivamente `observe().advanced`, protetto dall'high-water.
 static func material_fingerprint(layers: Dictionary,
 		layer_bytes: Dictionary) -> String:
 	var ids: Array[String] = []
