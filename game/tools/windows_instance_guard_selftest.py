@@ -108,6 +108,8 @@ def main() -> None:
         "OS.is_process_running(_guard_pid)",
         "HEARTBEAT_TIMEOUT_MSEC",
         '"bootstrap_" + _bootstrap_code',
+        '"ready_" + sidecar_code',
+        'var marker := "JHT-INSTANCE-GUARD "',
     ]
     for seam in required_consumer:
         require(seam in consumer, f"missing consumer seam: {seam}")

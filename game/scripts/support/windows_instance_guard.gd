@@ -117,6 +117,9 @@ func _start_guard() -> bool:
 	_bootstrap_code = "ready"
 	var ready_line := _read_ready_line()
 	if ready_line.is_empty() or not _accept_ready(ready_line, request, powershell):
+		var sidecar_code := _sidecar_failure_code()
+		if not sidecar_code.is_empty():
+			_bootstrap_code = "ready_" + sidecar_code
 		_close_pipes()
 		return false
 	_allowed = true
@@ -240,6 +243,21 @@ func _drain_stderr() -> void:
 	_stderr_bytes.append_array(chunk)
 	if _stderr_bytes.size() > STDERR_MAX_BYTES or _allowed:
 		_fail_closed("guard_stderr")
+
+
+func _sidecar_failure_code() -> String:
+	var text := _stderr_bytes.get_string_from_ascii()
+	var marker := "JHT-INSTANCE-GUARD "
+	var start := text.find(marker)
+	if start < 0:
+		return ""
+	var code := text.substr(start + marker.length()).strip_edges()
+	if code.length() < 1 or code.length() > 48:
+		return ""
+	for character: String in code:
+		if not ((character >= "a" and character <= "z") or character == "_"):
+			return ""
+	return code
 
 
 func _fail_closed(code: String) -> void:
