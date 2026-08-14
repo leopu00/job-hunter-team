@@ -69,6 +69,8 @@ var _target_ready := false
 
 
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var cfg := ConfigFile.new()
 	if cfg.load(UpdateCheck.CONFIG_PATH) == OK:

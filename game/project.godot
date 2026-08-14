@@ -23,6 +23,7 @@ config/icon="res://assets/icon.png"
 
 [autoload]
 
+WindowsInstanceGuard="*res://scripts/support/windows_instance_guard.gd"
 Log="*res://scripts/log.gd"
 Game="*res://scripts/game.gd"
 TeamData="*res://scripts/data/team_data.gd"
