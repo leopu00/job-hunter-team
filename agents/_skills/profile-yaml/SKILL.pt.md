@@ -27,9 +27,20 @@ O frontend consulta o ficheiro a cada ~2s. Nao espere ate ao fim da conversa; **
 
 - "chamo-me Mario" → escreva `name: Mario` imediatamente.
 - "procuro um cargo de cozinheiro" → atualize `target_role: cuoco` imediatamente.
-- ficheiro carregado com detalhes de experiencia → apos o Read, atualize **todos** os campos num unico Write.
+- informacao escrita no chat → atualize **todos** os campos pertinentes num unico Write.
 
 Cada novo dado = um `Write` ou `Edit` no ficheiro. Depois valide. Depois continue a conversa.
+
+### Os CV carregados são revistos antes de se tornarem dados persistidos
+
+Uma mensagem que contenha `[FILE ALLEGATI]` é a única exceção à escrita direta. Depois de ler o CV:
+
+1. Escreva apenas os campos extraídos em `$JHT_AGENT_DIR/profile-review.yml`. Nunca os escreva diretamente em `candidate_profile.yml`.
+2. Execute `python3 /app/shared/skills/profile_review.py stage`.
+3. Só quando devolver `ok: true`, diga ao utilizador que os dados extraídos estão prontos para revisão e peça que pressione **Confirmar e guardar** no painel do perfil. Não afirme que o perfil já foi guardado.
+4. Se a preparação falhar, diga que não foi possível preparar a revisão. Não peça lembretes no chat nem contorne a revisão editando o perfil canónico.
+
+O crachá lê apenas o `candidate_profile.yml` persistido. Não deve avançar enquanto houver uma revisão de CV pendente.
 
 ## Validacao obrigatoria apos CADA write/edit
 

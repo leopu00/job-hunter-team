@@ -1,4 +1,10 @@
-import json, os
+import json, os, sys
+
+sys.path.insert(0, '/app/shared/skills')
+try:
+    import profile_review
+except Exception:
+    profile_review = None
 prof = {}
 try:
     import yaml
@@ -44,5 +50,18 @@ view = dict(
     experience_years=s(prof.get('experience_years')),
     seniority_target=seniority, skills=skill_list[:12], languages=langs[:8],
 )
-print(json.dumps(dict(profile=view, required=required, ready=ready),
+review = None
+review_error = ''
+if profile_review is not None:
+    try:
+        review = profile_review.status()
+    except Exception:
+        # A malformed or unreadable review must never become a confirmable UI
+        # action.  Keep the persisted badge available and fail the review lane
+        # closed with a finite, non-sensitive error.
+        review_error = 'review_unavailable'
+else:
+    review_error = 'review_helper_unavailable'
+print(json.dumps(dict(profile=view, required=required, ready=ready,
+                       review=review, review_error=review_error),
                  ensure_ascii=False))

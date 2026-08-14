@@ -27,9 +27,20 @@ Das Frontend fragt die Datei alle ~2s ab. Warten Sie nicht bis zum Ende des Gesp
 
 - "ich heiße Mario" → schreiben Sie `name: Mario` sofort.
 - "ich suche eine Stelle als Koch" → aktualisieren Sie `target_role: cuoco` sofort.
-- Datei mit Erfahrungsdetails hochgeladen → nach dem Read aktualisieren Sie **alle** Felder in einem einzigen Write.
+- im Chat geschriebene Informationen → aktualisieren Sie **alle** relevanten Felder in einem einzigen Write.
 
 Jedes neue Datum = ein `Write` oder `Edit` auf der Datei. Dann validieren. Dann die Konversation fortsetzen.
+
+### Hochgeladene Lebensläufe werden vor dem Speichern geprüft
+
+Eine Nachricht mit `[FILE ALLEGATI]` ist die einzige Ausnahme von der direkten Schreibregel. Nach dem Lesen des Lebenslaufs:
+
+1. Nur die extrahierten Felder nach `$JHT_AGENT_DIR/profile-review.yml` schreiben. Niemals direkt nach `candidate_profile.yml` schreiben.
+2. `python3 /app/shared/skills/profile_review.py stage` ausführen.
+3. Nur wenn `ok: true` zurückgegeben wird, dem Nutzer sagen, dass die extrahierten Daten zur Prüfung bereitstehen, und ihn bitten, im Profilbereich **Bestätigen und speichern** zu drücken. Nicht behaupten, das Profil sei bereits gespeichert.
+4. Wenn die Vorbereitung fehlschlägt, mitteilen, dass die Prüfung nicht vorbereitet werden konnte. Keine Erinnerung im Chat verlangen und die Prüfung nicht durch Bearbeiten des kanonischen Profils umgehen.
+
+Das Abzeichen liest nur die persistierte Datei `candidate_profile.yml`. Während eine CV-Prüfung aussteht, darf es nicht fortschreiten.
 
 ## Pflichtvalidierung nach JEDEM Write/Edit
 

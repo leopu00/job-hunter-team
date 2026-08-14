@@ -81,6 +81,9 @@ NOT_APPLICABLE = {
     'chat_unread_count': 'UI', 'total_chat_unread': 'UI',
     'can_chat_with': 'UI', 'chat_replies': 'UI', 'is_live': 'UI',
     'to_eur': 'UI',
+    # Conferma esplicita dell'utente su una proposta CV visibile. Esporla al
+    # CLI permetterebbe proprio all'agente che l'ha preparata di auto-approvarla.
+    'confirm_profile_review': 'UI user consent',
     # `is_remote`: dice se il bus parla con la VPS o col container locale, e la
     # leggono il badge della simulazione e il pannello di setup. Da CLI non ha
     # senso chiederlo — il CLI gira DENTRO il container di cui è la risposta.

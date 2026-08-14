@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import sys
 import types
 from pathlib import Path
@@ -15,26 +16,45 @@ PAYLOAD = ROOT / "game/scripts/backend/payloads/profile_save.py"
 
 
 def _run_payload(tmp_path: Path, fields: dict, initial: dict) -> dict:
-    profile = tmp_path / "candidate_profile.yml"
+    profile = tmp_path / "profile" / "candidate_profile.yml"
+    profile.parent.mkdir()
     # JSON è un sottoinsieme valido di YAML. Un modulo minimo evita di
     # rendere PyYAML una dipendenza della suite host: nel container reale il
     # payload continua a usare la libreria vera.
     profile.write_text(json.dumps(initial, ensure_ascii=False), encoding="utf-8")
     fake_yaml = types.ModuleType("yaml")
-    fake_yaml.safe_load = lambda stream: json.load(stream)
+    def safe_load(value):
+        if hasattr(value, "read"):
+            return json.load(value)
+        if isinstance(value, bytes):
+            value = value.decode("utf-8")
+        return json.loads(value)
 
-    def safe_dump(data, stream, **_kwargs):
-        json.dump(data, stream, ensure_ascii=False)
+    def safe_dump(data, stream=None, **_kwargs):
+        encoded = json.dumps(data, ensure_ascii=False)
+        if stream is None:
+            return encoded
+        stream.write(encoded)
+        return None
+
+    fake_yaml.safe_load = safe_load
+    fake_yaml.safe_dump = safe_dump
+    fake_yaml.YAMLError = ValueError
 
     fake_yaml.safe_dump = safe_dump
     encoded = base64.b64encode(json.dumps(fields).encode()).decode()
     source = PAYLOAD.read_text(encoding="utf-8") % encoded
-    source = source.replace(
-        "path = '/jht_home/profile/candidate_profile.yml'",
-        f"path = {str(profile)!r}",
-    )
-    with patch.dict(sys.modules, {"yaml": fake_yaml}):
+    source = source.replace("/app/shared/skills", str(ROOT / "shared" / "skills"))
+    # The helper is imported by the embedded payload. Force a fresh import so
+    # this test still proves the shipped no-PyYAML host seam with its fake
+    # module, while production continues to use the pinned container package.
+    sys.modules.pop("profile_review", None)
+    with (
+        patch.dict(sys.modules, {"yaml": fake_yaml}),
+        patch.dict(os.environ, {"JHT_HOME": str(tmp_path)}),
+    ):
         exec(compile(source, str(PAYLOAD), "exec"), {})
+    sys.modules.pop("profile_review", None)
     return json.loads(profile.read_text(encoding="utf-8"))
 
 

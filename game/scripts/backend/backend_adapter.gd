@@ -174,6 +174,11 @@ func save_profile(_fields: Dictionary) -> void:
 	if bus:
 		bus.profile_saved.emit(false, msg)
 
+func confirm_profile_review(review_id: String) -> void:
+	var msg := _unsupported("confirm_profile_review")
+	if bus:
+		bus.profile_review_confirmed.emit(review_id, false, msg)
+
 func save_working_hours(_wh: Dictionary) -> void:
 	var msg := _unsupported("save_working_hours")
 	if bus:
