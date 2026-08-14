@@ -15,7 +15,6 @@ REVOKE ALL ON public.candidate_profile_sync_state
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.candidate_profile_sync_state
   TO service_role;
 
-DROP FUNCTION IF EXISTS public.sync_candidate_profile_atomic(UUID, TEXT, JSONB);
 CREATE OR REPLACE FUNCTION public.sync_candidate_profile_atomic(
     p_user_id UUID,
     p_content_hash TEXT,
@@ -211,6 +210,11 @@ BEGIN
     RETURN jsonb_build_object('changed', TRUE);
 END;
 $$;
+
+-- Keep the legacy-signature cleanup after the dollar-quoted definition.
+-- Supabase's migration runner otherwise groups the leading DROP with the
+-- CREATE FUNCTION and PostgreSQL rejects the prepared multi-command query.
+DROP FUNCTION IF EXISTS public.sync_candidate_profile_atomic(UUID, TEXT, JSONB);
 
 REVOKE ALL ON FUNCTION public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN)
   FROM PUBLIC, anon, authenticated;
