@@ -24,9 +24,10 @@ $numericVersion = (($Version -split '-', 2)[0]) + '.0'
 function Get-FileObservation {
   param([string]$Path)
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+  # Il logger Godot mantiene il file aperto durante il probe. Metadata e size
+  # attestano l'avanzamento senza contendere il file handle al processo vivo.
   $item = Get-Item -LiteralPath $Path
-  $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
-  return '{0}:{1}:{2}' -f $item.LastWriteTimeUtc.Ticks, $item.Length, $hash
+  return '{0}:{1}' -f $item.LastWriteTimeUtc.Ticks, $item.Length
 }
 
 if (-not $IsWindows) {
