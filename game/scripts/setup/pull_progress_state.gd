@@ -3,11 +3,11 @@ extends RefCounted
 ## Stato puro del progresso `docker compose pull`.
 ##
 ## Lo stream ripete spesso la stessa riga per uno stesso livello. Ricevere
-## output non significa quindi aver fatto progresso: il chiamante deve
-## confrontare `material_fingerprint()` e aggiornare il proprio heartbeat solo
-## quando cambia. Il fingerprint include anche la fase del livello, perché il
-## passaggio da download a verifica/estrazione è progresso reale pur lasciando
-## invariati i byte scaricati.
+## output non significa quindi aver fatto progresso. Il fingerprint descrive
+## ogni cambiamento osservato; solo `observe().advanced`, protetto da high-water
+## monotono, autorizza invece a rinnovare l'heartbeat. La fase e' parte dello
+## stato perché il passaggio da download a verifica/estrazione è progresso reale
+## pur lasciando invariati i byte scaricati.
 
 const PHASE_UNKNOWN := "unknown"
 const PHASE_QUEUED := "queued"
