@@ -48,7 +48,7 @@ $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
 $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
 $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
-$WindowsInstanceGuardSha256 = '929fd6258a2d7272fdd2e49e37b7313c4c2848bd7c90bedf772be68847aab1c2'
+$WindowsInstanceGuardSha256 = '0b31330e2d097d1e6bb6ca1f17b6e556b1c5fab9294220b35df2a08271fc430e'
 $JhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
 . (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
 

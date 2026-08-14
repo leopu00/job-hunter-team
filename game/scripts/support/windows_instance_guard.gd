@@ -3,7 +3,7 @@ extends Node
 ## sidecar attestato nel PCK non possiede la lease kernel per questa sessione.
 
 const SOURCE_PATH := "res://scripts/support/windows_instance_guard.ps1"
-const SOURCE_SHA256 := "929fd6258a2d7272fdd2e49e37b7313c4c2848bd7c90bedf772be68847aab1c2"
+const SOURCE_SHA256 := "0b31330e2d097d1e6bb6ca1f17b6e556b1c5fab9294220b35df2a08271fc430e"
 const SOURCE_MAX_BYTES := 10_000
 const ARGV_MAX_UTF16 := 30_000
 const REQUEST_MAX_BYTES := 2_048
@@ -14,6 +14,7 @@ const STDERR_MAX_BYTES := 2_048
 # sincrono/fail-closed, ma il limite deve coprire un cold start reale.
 const READY_TIMEOUT_MSEC := 30_000
 const HEARTBEAT_TIMEOUT_MSEC := 1_500
+const REQUEST_ENV := "JHT_INSTANCE_GUARD_REQUEST"
 
 var _allowed := false
 var _failed := false
@@ -103,7 +104,12 @@ func _start_guard() -> bool:
 	if request.is_empty() or request.to_utf8_buffer().size() > REQUEST_MAX_BYTES:
 		return false
 	_bootstrap_code = "execute"
+	# Il request contiene solo token casuali e identita di processo, non segreti.
+	# L'env viene ereditato atomicamente dal child e rimosso subito dal desktop;
+	# evita il deadlock osservato sul FileAccess bidirezionale dell'export Windows.
+	OS.set_environment(REQUEST_ENV, request)
 	var process := OS.execute_with_pipe(powershell, args, false)
+	OS.unset_environment(REQUEST_ENV)
 	if process.is_empty():
 		return false
 	_stdio = process["stdio"]
@@ -113,11 +119,6 @@ func _start_guard() -> bool:
 	if _guard_pid <= 0:
 		_close_pipes()
 		return false
-	_stdio.store_buffer((request + "\n").to_utf8_buffer())
-	if _stdio.get_error() != OK:
-		_close_pipes()
-		return false
-	_stdio.flush()
 	_bootstrap_code = "ready"
 	var ready_line := _read_ready_line()
 	if ready_line.is_empty() or not _accept_ready(ready_line, request, powershell):

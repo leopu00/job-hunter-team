@@ -25,15 +25,12 @@ function Keys([object]$Value,[string[]]$Expected){
   for($i=0;$i -lt $actual.Count;$i++){if($actual[$i] -cne $wanted[$i]){return $false}}
   return $true
 }
-function Read-LineBounded {
-  $b=New-Object Text.StringBuilder
-  while($b.Length -le $MaxInput){
-    $c=[Console]::In.Read()
-    if($c -eq 10){return $b.ToString()}
-    if($c -lt 32 -or $c -gt 126){throw 'input_character'}
-    [void]$b.Append([char]$c)
-  }
-  throw 'input_oversize'
+function Read-RequestBounded {
+  $value=[Environment]::GetEnvironmentVariable('JHT_INSTANCE_GUARD_REQUEST','Process')
+  [Environment]::SetEnvironmentVariable('JHT_INSTANCE_GUARD_REQUEST',$null,'Process')
+  if([string]::IsNullOrEmpty($value)-or $value.Length -gt $MaxInput){throw 'input_size'}
+  foreach($c in $value.ToCharArray()){if([int]$c -lt 32 -or [int]$c -gt 126){throw 'input_character'}}
+  return $value
 }
 function FileAcl([Security.Principal.SecurityIdentifier]$Sid){
   $s=New-Object Security.AccessControl.FileSecurity
@@ -96,7 +93,7 @@ function Assert-Mutex($Value,$Expected){
 }
 
 try{
-  $raw=Read-LineBounded
+  $raw=Read-RequestBounded
   try{$input=$raw|ConvertFrom-Json -ErrorAction Stop}catch{throw 'input_json'}
   if(-not(Keys $input @('desktop_pid','instance_id','mode','nonce','request_id','request_token','schema','source_sha256'))){throw 'input_schema'}
   if($input.schema -isnot [int] -or $input.schema -ne 1 -or $input.desktop_pid -isnot [int] -or $input.desktop_pid -le 0){throw 'input_type'}
