@@ -2,6 +2,10 @@ import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { isRetiredStore, retiredStoreNotice } from './_retired-stores.js';
+// Stesso neutralizzatore della route web: il file esportato qui finisce
+// nello stesso Excel, e una cella che comincia per `=` viene valutata
+// all'apertura. Vedi shared/export/csv.js.
+import { toCsv } from '../../../shared/export/csv.js';
 
 const JHT_DIR = JHT_HOME;
 
@@ -36,17 +40,7 @@ async function resolveSourcePath(rel) {
   return { path: canonical, legacy: false, missing: true };
 }
 
-function toCsv(rows) {
-  if (rows.length === 0) return '';
-  const keys = [...new Set(rows.flatMap(r => Object.keys(r)))];
-  const esc = v => {
-    const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
-    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  return [keys.map(esc).join(','), ...rows.map(r => keys.map(k => esc(r[k])).join(','))].join('\n');
-}
-
-async function handleExport(source, options) {
+export async function handleExport(source, options) {
   const src = SOURCES[source];
   if (!src) {
     console.error(`  Invalid source: ${source}`);
