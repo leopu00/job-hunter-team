@@ -30,6 +30,8 @@ import {
   POSITIONS_COLUMNS,
   POSITIONS_COLS_COOKIE,
   POSITIONS_COL_MIN_WIDTH,
+  columnAlignClass,
+  columnFlexAlignClass,
   parseColumnsCookie,
   type PositionsColumnKey,
 } from "./columns";
@@ -673,7 +675,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       col: "score",
                       label: tr("col_score"),
                       sortable: true,
-                      center: true,
                     },
                     {
                       col: "monthly",
@@ -685,39 +686,34 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       col: "last_action_by",
                       label: tr("col_updated_by"),
                       sortable: true,
-                      center: true,
                     },
                     {
                       col: "critic",
                       label: tr("col_voto"),
                       sortable: true,
-                      center: true,
                     },
                     {
                       col: "status",
                       label: tr("col_status"),
                       sortable: true,
-                      center: true,
                     },
                     {
                       col: "written_at",
                       label: tr("col_written_at"),
                       sortable: true,
-                      center: true,
                     },
                     {
                       col: "applied_at",
                       label: tr("col_applied_at"),
                       sortable: true,
-                      center: true,
                     },
                   ]
                     .filter(({ col }) => show(col as PositionsColumnKey))
-                    .map(({ col, label, sortable, center }) => (
+                    .map(({ col, label, sortable }) => (
                       <th
                         key={col}
                         scope="col"
-                        className={`px-4 py-3 ${center ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase truncate`}
+                        className={`px-4 py-3 ${columnAlignClass(col as PositionsColumnKey)} text-[9.5px] font-semibold tracking-[0.15em] uppercase truncate`}
                         style={{
                           color:
                             sortable && sortCol === col
@@ -771,7 +767,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     >
                       {/* ID */}
                       {show("id") && (
-                        <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("id")} text-[10px] text-[var(--color-dim)] whitespace-nowrap`}
+                        >
                           {p.legacy_id
                             ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
                             : p.id.slice(0, 8)}
@@ -779,7 +777,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       )}
                       {/* Aggiornato (ultima azione, fallback rilevazione) */}
                       {show("last_action_at") && (
-                        <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("last_action_at")} text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums`}
+                        >
                           {formatFoundAt(
                             p.last_action_at || p.found_at,
                             locale,
@@ -790,14 +790,18 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           crescente mette in cima le più vecchie, cioè quelle
                           ferme in coda da più tempo. */}
                       {show("found_at") && (
-                        <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("found_at")} text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums`}
+                        >
                           {formatPositionEventStamp(p.found_at, locale) ?? (
                             <span className="text-[var(--color-dim)]">—</span>
                           )}
                         </td>
                       )}
                       {/* Titolo — una riga, troncato con … se troppo lungo */}
-                      <td className="px-4 py-3 font-medium">
+                      <td
+                        className={`px-4 py-3 ${columnAlignClass("title")} font-medium`}
+                      >
                         <span className="flex items-center gap-2 min-w-0">
                           <Link
                             href={`/positions/${p.id}`}
@@ -830,7 +834,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Azienda */}
                       {show("company") && (
                         <td
-                          className="px-4 py-3 text-[var(--color-base)] truncate"
+                          className={`px-4 py-3 ${columnAlignClass("company")} text-[var(--color-base)] truncate`}
                           title={p.company}
                         >
                           {p.company}
@@ -839,11 +843,16 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Categoria */}
                       {show("role_family") && (
                         <td
-                          className="px-4 py-3 text-[11px] text-[var(--color-base)] truncate"
+                          className={`px-4 py-3 ${columnAlignClass("role_family")} text-[11px] text-[var(--color-base)] truncate`}
                           title={p.role_family ?? undefined}
                         >
                           {p.role_family && p.role_family.trim() ? (
-                            <span className="inline-flex items-center gap-1.5">
+                            // `truncate` sulla cella non basta: il figlio è un
+                            // inline-flex, e l'ellissi salta il box flex — la
+                            // categoria finiva tagliata a metà parola contro il
+                            // bordo, come se sconfinasse nella colonna accanto.
+                            // L'ellissi va chiesta al testo, dentro il flex.
+                            <span className="inline-flex items-center gap-1.5 max-w-full min-w-0">
                               <span
                                 aria-hidden
                                 style={{
@@ -856,7 +865,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                                   flexShrink: 0,
                                 }}
                               />
-                              {p.role_family.trim()}
+                              <span className="truncate">
+                                {p.role_family.trim()}
+                              </span>
                             </span>
                           ) : (
                             <span className="text-[var(--color-dim)]">—</span>
@@ -866,7 +877,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Paese (Remote in corsivo se senza paese ma full remote) */}
                       {show("loc_country") && (
                         <td
-                          className="px-4 py-3 text-[11px] truncate"
+                          className={`px-4 py-3 ${columnAlignClass("loc_country")} text-[11px] truncate`}
                           title={p.loc_country ?? undefined}
                         >
                           {p.loc_country && p.loc_country.trim() ? (
@@ -885,7 +896,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Città */}
                       {show("loc_city") && (
                         <td
-                          className="px-4 py-3 text-[11px] text-[var(--color-muted)] truncate"
+                          className={`px-4 py-3 ${columnAlignClass("loc_city")} text-[11px] text-[var(--color-muted)] truncate`}
                           title={p.loc_city ?? undefined}
                         >
                           {p.loc_city && p.loc_city.trim() ? (
@@ -897,7 +908,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       )}
                       {/* Remote */}
                       {show("remote") && (
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("remote")} whitespace-nowrap`}
+                        >
                           <span className="text-[10px] text-[var(--color-muted)]">
                             {p.remote_type?.replace("_", " ") ?? "—"}
                           </span>
@@ -905,8 +918,12 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       )}
                       {/* Score */}
                       {show("score") && (
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 justify-center">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("score")}`}
+                        >
+                          <div
+                            className={`flex items-center gap-2 ${columnFlexAlignClass("score")}`}
+                          >
                             <span
                               className="text-[12px] font-semibold w-6 text-right tabular-nums"
                               style={{ color: scoreSpectrumCss(p.score) }}
@@ -930,7 +947,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       )}
                       {/* Stima lorda mensile */}
                       {show("monthly") && (
-                        <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-right">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("monthly")} text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums`}
+                        >
                           {formatMonthly(
                             p.salary_min,
                             p.salary_max,
@@ -942,7 +961,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       )}
                       {/* Fonte */}
                       {show("source") && (
-                        <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] truncate">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("source")} text-[10px] text-[var(--color-muted)] truncate`}
+                        >
                           {p.source ? (
                             <span className="capitalize">
                               {p.source.replace(/[-_]/g, " ")}
@@ -954,7 +975,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       )}
                       {/* Aggiornato da */}
                       {show("last_action_by") && (
-                        <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono text-center">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("last_action_by")} text-[10px] whitespace-nowrap font-mono`}
+                        >
                           {p.last_action_actor ? (
                             <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
                               <span aria-hidden="true">
@@ -969,7 +992,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       )}
                       {/* Voto critico */}
                       {show("critic") && (
-                        <td className="px-4 py-3 whitespace-nowrap tabular-nums text-center">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("critic")} whitespace-nowrap tabular-nums`}
+                        >
                           {p.critic_score != null ? (
                             <span
                               className="text-[12px] font-semibold"
@@ -990,7 +1015,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       )}
                       {/* Stato */}
                       {show("status") && (
-                        <td className="px-4 py-3 text-center">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("status")}`}
+                        >
                           <PositionStateCell
                             status={p.status}
                             hasOpenTicket={p.has_open_ticket}
@@ -1002,7 +1029,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           CV aspetta — con un filtro su 'In revisione' o
                           'Pronte da inviare' è la coda vera e propria. */}
                       {show("written_at") && (
-                        <td className="px-4 py-3 text-center">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("written_at")}`}
+                        >
                           {formatPositionEventStamp(p.written_at, locale) ? (
                             <span className="font-mono tabular-nums text-[11px] text-[var(--color-base)] whitespace-nowrap">
                               {formatPositionEventStamp(p.written_at, locale)}
@@ -1018,7 +1047,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           dice 'applied', questa colonna dice l'ora esatta —
                           è ciò che serve scorrendo cinquanta righe. */}
                       {show("applied_at") && (
-                        <td className="px-4 py-3 text-center">
+                        <td
+                          className={`px-4 py-3 ${columnAlignClass("applied_at")}`}
+                        >
                           {formatPositionEventStamp(p.applied_at, locale) ? (
                             <span className="font-mono tabular-nums text-[11px] text-[var(--color-base)] whitespace-nowrap">
                               {formatPositionEventStamp(p.applied_at, locale)}

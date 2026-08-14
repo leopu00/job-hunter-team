@@ -60,6 +60,73 @@ export const POSITIONS_COL_LABEL_KEY: Record<
   applied_at: "col_applied_at",
 };
 
+// Allineamento di UNA colonna: vale per l'intestazione E per le celle.
+//
+// ⚠️ Perché una mappa e non due classi scritte a mano nel JSX: fino a O-40
+// l'allineamento dell'header stava in un flag (`center: true`) dentro
+// l'array delle intestazioni, e quello delle celle in una classe Tailwind
+// scritta riga per riga trecento righe più sotto. Le due liste si sono
+// separate: «LORDO/MESE» era intestazione a sinistra sopra numeri allineati
+// a destra (34px di scarto, e cresce con la colonna), e lo SCORE aveva
+// l'etichetta centrata sulla colonna mentre il numero — l'unica cosa che si
+// legge — restava 28px più a sinistra, perché a essere centrato era il
+// gruppo numero+barra. Misurato nel browser, non dedotto.
+//
+// Con una mappa sola l'etichetta non può più scollarsi dal suo dato: header
+// e cella leggono la stessa voce, e `positions-column-alignment.test.ts`
+// fallisce se qualcuno torna a scrivere l'allineamento a mano nel JSX.
+export type PositionsColumnAlign = "left" | "center" | "right";
+
+export const POSITIONS_COL_ALIGN: Record<
+  PositionsColumnKey,
+  PositionsColumnAlign
+> = {
+  id: "left",
+  last_action_at: "left",
+  found_at: "left",
+  title: "left",
+  company: "left",
+  role_family: "left",
+  loc_country: "left",
+  loc_city: "left",
+  remote: "left",
+  // A sinistra, non al centro: la cella è numero + barra, e centrare il
+  // GRUPPO sposta il numero fuori dall'etichetta. Ancorati a sinistra,
+  // "SCORE" sta esattamente sopra il punteggio a ogni larghezza e in tutte
+  // e sette le lingue; la barra lo segue.
+  score: "left",
+  // Importi: si leggono incolonnati a destra, e l'intestazione ci va sopra.
+  monthly: "right",
+  source: "left",
+  last_action_by: "center",
+  critic: "center",
+  status: "center",
+  written_at: "center",
+  applied_at: "center",
+};
+
+const TEXT_ALIGN_CLASS: Record<PositionsColumnAlign, string> = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+};
+
+const FLEX_ALIGN_CLASS: Record<PositionsColumnAlign, string> = {
+  left: "justify-start",
+  center: "justify-center",
+  right: "justify-end",
+};
+
+/** Classe di allineamento per l'intestazione e per la cella: la stessa. */
+export function columnAlignClass(col: PositionsColumnKey): string {
+  return TEXT_ALIGN_CLASS[POSITIONS_COL_ALIGN[col]];
+}
+
+/** Come sopra, per le celle il cui contenuto è una riga flex (es. lo score). */
+export function columnFlexAlignClass(col: PositionsColumnKey): string {
+  return FLEX_ALIGN_CLASS[POSITIONS_COL_ALIGN[col]];
+}
+
 // Larghezza MINIMA leggibile (px) per colonna. La tabella /positions usa
 // `table-fixed` con un <colgroup> le cui larghezze sono percentuali
 // PROPORZIONALI a questi minimi, e un `min-width` di tabella pari alla loro
