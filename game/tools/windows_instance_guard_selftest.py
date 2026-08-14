@@ -113,6 +113,9 @@ def main() -> None:
         '"bootstrap_" + _bootstrap_code',
         '"ready_" + sidecar_code',
         'var marker := "JHT-INSTANCE-GUARD "',
+        'var canonical_ready := {',
+        '"desktop_pid": int(ready.get("desktop_pid", 0))',
+        'JSON.stringify(canonical_ready, "", true, false) != line',
     ]
     for seam in required_consumer:
         require(seam in consumer, f"missing consumer seam: {seam}")
