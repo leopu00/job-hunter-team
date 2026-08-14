@@ -141,6 +141,10 @@ function fakeClient() {
         select: () => builder,
         eq: () => builder,
         is: () => builder,
+        // Il lettore della pagina chiede anche l'ultima transizione a
+        // «esclusa», e quella query è limitata a una riga: senza `limit` qui
+        // il finto client fallisce dove quello vero funziona.
+        limit: () => builder,
         order: (column: string, options: { ascending?: boolean } = {}) => {
           call.orders.push({ column, ascending: options.ascending !== false });
           return builder;
