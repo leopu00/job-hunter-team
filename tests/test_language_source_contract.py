@@ -35,7 +35,7 @@ def _fake_jq(bin_dir: Path) -> None:
     jq = bin_dir / "jq"
     jq.write_text(
         "#!/usr/bin/env sh\n"
-        "printf fr\n",
+        "sed -n 's/.*\"locale\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' \"$3\"\n",
         encoding="utf-8",
     )
     jq.chmod(0o755)
@@ -85,6 +85,61 @@ def test_agent_spawn_prefers_canonical_file_over_stale_bootstrap(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == "fr"
+
+
+def test_coordinator_prompt_uses_the_persisted_setup_locale(tmp_path):
+    """The selected locale must change the prompt the Coordinator receives."""
+    home = tmp_path / "jht-home"
+    prompts = home / "agents" / "capitano"
+    prompts.mkdir(parents=True)
+    (prompts / "capitano.md").write_text("COORDINATOR PROMPT EN\n", encoding="utf-8")
+    (prompts / "capitano.fr.md").write_text(
+        "COORDINATOR PROMPT FR\n", encoding="utf-8"
+    )
+    prefs = home / "i18n-prefs.json"
+    destination = tmp_path / "runtime-capitano"
+    destination.mkdir()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake_jq(bin_dir)
+    env = {
+        **os.environ,
+        "JHT_HOME": _bash_path(home),
+        "JHT_LANG": "it",
+        "PATH": f"{_bash_path(bin_dir)}:/usr/local/bin:/usr/bin:/bin",
+    }
+
+    def sync_prompt() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                "bash",
+                "-c",
+                f"source '{_bash_path(SPAWN_LIB)}'; "
+                f"jht_spawn_sync_prompt capitano '{_bash_path(destination)}' TEST",
+            ],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+
+    prefs.write_text(json.dumps({"locale": "fr"}), encoding="utf-8")
+    first = sync_prompt()
+    assert first.returncode == 0, first.stderr
+    assert (destination / "AGENTS.md").read_text(encoding="utf-8") == (
+        "COORDINATOR PROMPT FR\n"
+    )
+
+    # A later setup choice replaces the runtime identity on the next spawn;
+    # a stale environment value cannot keep the Coordinator in French/Italian.
+    prefs.write_text(json.dumps({"locale": "en"}), encoding="utf-8")
+    second = sync_prompt()
+    assert second.returncode == 0, second.stderr
+    assert (destination / "AGENTS.md").read_text(encoding="utf-8") == (
+        "COORDINATOR PROMPT EN\n"
+    )
 
 
 def _divergent_language_home(tmp_path: Path) -> Path:

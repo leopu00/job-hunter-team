@@ -100,6 +100,10 @@ terminal_selection|script|gate|posix|-|tools/terminal_selection_selftest.gd|-
 # duplicate in ui_en.gd passavano in verde e rompevano l'avvio in tutte le
 # lingue tranne una.
 i18n_parity|script|gate|any|-|tools/i18n_parity_selftest.gd|-
+# Il run Windows EN aveva cinque etichette italiane e una risposta del
+# Coordinatore nella lingua sbagliata. Qui il backend setup/showroom gira
+# davvero: dettagli connessione, roster, terminale e chat attraversano il bus.
+english_setup_team|run|gate|any|JHT_LANG=en JHT_SCENE=office JHT_ENGLISH_SETUP_TEAM_TEST=1|-|ENGLISH-SETUP-TEAM-TEST PASS
 # I 367 testi narrativi hanno ID semantici e sei overlay completi: il fallback
 # inglese resta una rete di sicurezza, non il modo normale in cui un utente
 # italiano/ungherese/spagnolo/tedesco/francese/portoghese legge la storia.
