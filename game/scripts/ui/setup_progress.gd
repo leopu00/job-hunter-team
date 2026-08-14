@@ -136,6 +136,12 @@ func apply_progress(info: Dictionary) -> void:
 
 func _on_action_changed(_action_name: String, _running: bool,
 		_message: String, _ok: bool) -> void:
+	# Durante il pull SetupService pubblica anche il testo leggibile ogni tick.
+	# Quel segnale puo ridisegnare, ma non dimostra progresso: soltanto il dato
+	# strutturato con advanced=true puo rinnovare il timer di stallo.
+	if _running and _action == "container" and _phase == "image":
+		_refresh()
+		return
 	# Anche i messaggi testuali (es. il poll del motore ogni 2s) contano come
 	# segno di vita: il contatore di stallo riparte.
 	_note_event()

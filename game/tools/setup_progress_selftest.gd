@@ -35,6 +35,7 @@ func _init() -> void:
 func _run() -> void:
 	var w := SetupProgress.new()
 	root.add_child(w)
+	var setup_service: Node = root.get_node("SetupService")
 
 	# Fase motore: nessun dato di avanzamento → attività, non percentuale.
 	w.apply_phase("container", "engine")
@@ -45,6 +46,11 @@ func _run() -> void:
 	_check("motore: contatore fase 1 di 3",
 			w._phase_lbl.text.contains("1") and w._phase_lbl.text.contains("3"),
 			w._phase_lbl.text)
+	w._last_event_ms = EVENT_SENTINEL
+	setup_service.emit_signal("action_changed",
+			"container", true, "motore vivo", true)
+	_check("signal action_changed: fuori pull rinnova heartbeat",
+			w._last_event_ms != EVENT_SENTINEL, str(w._last_event_ms))
 
 	# Pull partito, docker dichiara le dimensioni: percentuale reale.
 	w.apply_phase("container", "image")
@@ -65,6 +71,11 @@ func _run() -> void:
 			w._detail_lbl.text.contains(
 					UIStrings.t("setup.pull_phase_downloading"))
 			and w._detail_lbl.text.contains("7/12"), w._detail_lbl.text)
+	w._last_event_ms = EVENT_SENTINEL
+	setup_service.emit_signal("action_changed",
+			"container", true, "snapshot duplicato", true)
+	_check("signal action_changed: durante pull non rinnova heartbeat",
+			w._last_event_ms == EVENT_SENTINEL, str(w._last_event_ms))
 
 	# Una ristampa identica non e' un evento di vita; la transizione di stage
 	# agli stessi byte invece deve aggiornare subito testo e heartbeat UI.
