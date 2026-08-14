@@ -1,13 +1,13 @@
 /**
  * API Backup — Lista, crea, ripristina, elimina backup
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { JHT_HOME } from "@/lib/jht-paths";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireLocalMachine } from "@/lib/auth";
 import { blockIfRemote } from "@/lib/team-bus";
 import { sanitizedError } from "@/lib/error-response";
 
@@ -66,7 +66,12 @@ async function loadBackupRunner() {
 }
 
 // GET — lista backup
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Il catalogo elenca PERCORSI ASSOLUTI e dimensioni: descrive il filesystem
+  // di quella macchina a chi non ci è sopra. Stesso gate dei secrets — vedi
+  // `requireLocalMachine`.
+  const remote = requireLocalMachine(req);
+  if (remote) return remote;
   const denied = await requireAuth();
   if (denied) return denied;
   const entries = loadCatalog().sort((a, b) => b.createdAt - a.createdAt);
