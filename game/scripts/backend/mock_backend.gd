@@ -419,9 +419,9 @@ func send_chat(agent: String, text: String) -> void:
 			"ts": Time.get_unix_time_from_system(), "done": true})
 	bus.user_chat_sent.emit(agent, true, "")
 	_publish_chat_state(agent)
-	_mock_reply(agent)
+	_mock_reply(agent, text.contains("[FILE ALLEGATI]"))
 
-func _mock_reply(agent: String) -> void:
+func _mock_reply(agent: String, profile_attachment := false) -> void:
 	await _sleep(randf_range(1.0, 2.0))
 	if not _running or _chat_agent != agent:
 		return
@@ -436,9 +436,27 @@ func _mock_reply(agent: String) -> void:
 	var reply: String = REPLIES.get(agent, "Ricevuto.")
 	# Onboarding: la risposta segue il passo del profilo (e lo avanza),
 	# così la conversazione col mock ricalca il flusso dell'assistente vero.
+	# Un allegato invece prepara una revisione: fino al click dell'utente il
+	# badge persistito non si muove di un solo campo.
 	if _profile_watch and agent.begins_with("assistente"):
-		_wiz_advance(1)
-		reply = WIZ_REPLIES[mini(_wiz_step, WIZ_REPLIES.size() - 1)]
+		if profile_attachment:
+			_mock_profile_review = {
+				"review_id": "a".repeat(64),
+				"changes": [
+					{"field": "seniority_target", "value": "mid"},
+					{"field": "skills", "value": ["Team leadership", "Budgeting",
+							"Public speaking"]},
+				],
+				"required": {"name": true, "email": true, "target_role": true,
+						"location": true, "experience_years": true,
+						"seniority_target": true, "skills": true, "languages": true},
+				"missing": [], "stale": false,
+			}
+			_publish_profile_status()
+			reply = "I extracted the CV fields. Review them and confirm the save."
+		else:
+			_wiz_advance(1)
+			reply = WIZ_REPLIES[mini(_wiz_step, WIZ_REPLIES.size() - 1)]
 	var response := {"role": "assistant", "text": reply,
 			"ts": Time.get_unix_time_from_system(), "done": true}
 	if agent.begins_with("assistente") or agent.begins_with("coordinatore") \
@@ -462,9 +480,9 @@ func _publish_chat_state(agent: String) -> void:
 ## ── Onboarding simulato (wizard senza VPS) ───────────────────────────
 ## Contratto opzionale dell'adapter (open_profile_watch / ensure_assistant
 ## / upload_document) come sul backend vero. Il profilo si riempie a passi
-## deterministici: ogni messaggio all'assistente vale 1 passo, un upload
-## CV ne vale 2; a 4 passi il profilo è completo (ready). Così il flusso
-## intero si prova in un paio di minuti, senza rete.
+## deterministici: ogni messaggio all'assistente vale 1 passo; il CV prepara
+## una revisione che vale gli ultimi 2 passi SOLO dopo la conferma. Così il
+## test distingue davvero parsing, review e persistenza senza rete.
 
 const WIZ_READY_STEP := 4
 
@@ -488,6 +506,7 @@ const WIZ_PROFILE_STEPS := [
 
 var _profile_watch := false
 var _wiz_step := 0
+var _mock_profile_review := {}
 
 ## Storico usage sintetico ma plausibile: curva 5h a dente di sega sui
 ## reset, weekly che cresce nella settimana, consumi per-agente con
@@ -587,7 +606,15 @@ func ensure_assistant() -> void:
 func upload_document(local_path: String, request_id := 0) -> void:
 	bus.publish_document_upload(request_id, true,
 			"/jht_user/allegati/" + local_path.get_file(), "")
+
+func confirm_profile_review(review_id: String) -> void:
+	var expected := str(_mock_profile_review.get("review_id", ""))
+	if expected == "" or review_id != expected:
+		bus.profile_review_confirmed.emit(review_id, false, "review_mismatch")
+		return
+	_mock_profile_review = {}
 	_wiz_advance(2)
+	bus.profile_review_confirmed.emit(review_id, true, "")
 
 func create_ticket(position_id: int, _text: String, _attachment_path := "") -> void:
 	bus.ticket_created.emit(position_id, true, "")
@@ -615,7 +642,8 @@ func _publish_profile_status() -> void:
 		"languages": (profile["languages"] as Array).size() >= 1,
 	}
 	bus.publish_profile_status({"profile": profile, "required": required,
-			"ready": _wiz_step >= WIZ_READY_STEP})
+			"ready": _wiz_step >= WIZ_READY_STEP,
+			"review": _mock_profile_review.duplicate(true), "review_error": ""})
 
 func _is_active(slug: String) -> bool:
 	for a in _roster:

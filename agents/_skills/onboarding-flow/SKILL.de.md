@@ -176,10 +176,10 @@ Ein PDF lesen + Daten extrahieren + YAML validieren + 2 MDs schreiben kann 30-90
 4. Checkpoint nach dem Lesen
    jht-send --partial 'Gelesen. Ich extrahiere die Informationen…'
 
-5. YAML aktualisieren (1 einziges vollständiges Write)              → Skill profile-yaml
-   Validierung starten. Wenn INVALID, NICHT mit dem Nutzer fortfahren:
-   jht-send --partial 'Einen Moment, ich korrigiere ein Formatierungsdetail…'
-   korrigieren, erneut validieren, bis VALID_YAML.
+5. Die extrahierten Felder nach `$JHT_AGENT_DIR/profile-review.yml` schreiben und
+   `python3 /app/shared/skills/profile_review.py stage` ausführen → Skill profile-yaml
+   `candidate_profile.yml` NICHT direkt ändern: Das Abzeichen darf bis zur
+   Bestätigung nur persistierte Daten anzeigen.
 
 6. Checkpoint vor MD
    jht-send --partial 'Ich stelle eine Zusammenfassung deines Profils zusammen…'
@@ -188,7 +188,10 @@ Ein PDF lesen + Daten extrahieren + YAML validieren + 2 MDs schreiben kann 30-90
    (preferences.md und goals.md kommen nach der spezifischen Diskussion)
 
 8. Finale Nachricht (KEIN --partial) — nutzerfreundliche Zusammenfassung
-   + EINE offene Frage zum ersten noch leeren Feld der Checkliste
+   + klare Aufforderung, die Daten zu prüfen und **Bestätigen und speichern**
+   zu drücken. Erst danach das erste leere Feld erfragen. Bei fehlgeschlagener
+   Vorbereitung den Fehler melden, ohne Chat-Erinnerung und ohne zu behaupten,
+   das Profil sei gespeichert.
 ```
 
 > ⚠️ Schritt 7 (`about.md` + `strengths.md`) **ist nicht optional**. Ohne hat der CV-Scrittore nachgelagert nie den narrativen Kontext des Kandidaten. Du bist der einzige Punkt, an dem diese Narration erfasst wird.

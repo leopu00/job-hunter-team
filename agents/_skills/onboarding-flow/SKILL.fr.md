@@ -176,10 +176,10 @@ Lire un PDF + extraire les données + valider le YAML + écrire 2 MD peut prendr
 4. Checkpoint post-lecture
    jht-send --partial 'Lu. J'extrais les informations…'
 
-5. Mettre à jour le YAML (1 seul Write complet)              → skill profile-yaml
-   Lancer la validation. Si INVALID, NE PAS continuer avec l'utilisateur :
-   jht-send --partial 'Un instant, je corrige un détail de formatage…'
-   corriger, revalider, jusqu'à VALID_YAML.
+5. Écrire les champs extraits dans `$JHT_AGENT_DIR/profile-review.yml` puis exécuter
+   `python3 /app/shared/skills/profile_review.py stage` → skill profile-yaml
+   NE PAS modifier directement `candidate_profile.yml` : le badge doit rester
+   fondé sur les données persistées jusqu'à la confirmation.
 
 6. Checkpoint pré-MD
    jht-send --partial 'Je mets en forme un résumé de votre profil…'
@@ -188,7 +188,10 @@ Lire un PDF + extraire les données + valider le YAML + écrire 2 MD peut prendr
    (preferences.md et goals.md viennent après la discussion spécifique)
 
 8. Message final (PAS de --partial) — résumé user-friendly
-   + UNE question ouverte sur le premier champ encore vide de la checklist
+   + invitation explicite à vérifier puis appuyer sur **Confirmer et enregistrer**.
+   Après la confirmation seulement, demander le premier champ vide. Si la
+   préparation échoue, signaler l'erreur sans demander de relance dans le chat
+   ni annoncer que le profil est enregistré.
 ```
 
 > ⚠️ L'étape 7 (`about.md` + `strengths.md`) **n'est pas optionnelle**. Sans elle, le Scrittore CV en aval n'aura jamais le contexte narratif du candidat. Vous êtes le seul point où cette narration est capturée.

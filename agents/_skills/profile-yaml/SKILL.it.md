@@ -27,9 +27,20 @@ Il frontend polla il file ogni ~2s. Non aspettare la fine della conversazione; *
 
 - "mi chiamo Mario" → scrivi `name: Mario` immediatamente.
 - "cerco un ruolo da cuoco" → aggiorna `target_role: cuoco` immediatamente.
-- file caricato con dettagli di esperienza → dopo il Read, aggiorna **tutti** i campi in un solo Write.
+- informazioni scritte in chat → aggiorna **tutti** i campi pertinenti in un solo Write.
 
 Ogni nuovo dato = una `Write` o `Edit` sul file. Poi valida. Poi continua la conversazione.
+
+### I CV caricati vanno revisionati prima di diventare dati persistiti
+
+Un messaggio che contiene `[FILE ALLEGATI]` è l'unica eccezione alla scrittura diretta. Dopo aver letto il CV:
+
+1. Scrivi solo i campi estratti in `$JHT_AGENT_DIR/profile-review.yml`. Non scriverli mai direttamente in `candidate_profile.yml`.
+2. Esegui `python3 /app/shared/skills/profile_review.py stage`.
+3. Solo se restituisce `ok: true`, di' all'utente che i dati estratti sono pronti da controllare e chiedigli di premere **Conferma e salva** nel pannello profilo. Non dire che il profilo è già salvato.
+4. Se lo staging fallisce, comunica che non è stato possibile preparare la revisione. Non chiedere solleciti in chat e non aggirare la revisione modificando il profilo canonico.
+
+Il badge legge soltanto `candidate_profile.yml` persistito. Non deve avanzare mentre una revisione CV è in attesa.
 
 ## Validazione obbligatoria dopo OGNI write/edit
 

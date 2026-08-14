@@ -176,10 +176,10 @@ Ler um PDF + extrair dados + validar YAML + escrever 2 MDs pode requerer 30-90s.
 4. Checkpoint pós-leitura
    jht-send --partial 'Lido. Estou a extrair as informações…'
 
-5. Atualizar YAML (1 só Write completo)                → skill profile-yaml
-   Lançar validação. Se INVALID, NÃO prosseguir com o utilizador:
-   jht-send --partial 'Um momento, ajusto um detalhe de formatação…'
-   corrigir, revalidar, até VALID_YAML.
+5. Escrever os campos extraídos em `$JHT_AGENT_DIR/profile-review.yml` e executar
+   `python3 /app/shared/skills/profile_review.py stage` → skill profile-yaml
+   NÃO modificar diretamente `candidate_profile.yml`: o crachá deve continuar
+   a mostrar apenas os dados persistidos até à confirmação.
 
 6. Checkpoint pré-MD
    jht-send --partial 'Estou a montar um resumo do teu perfil…'
@@ -188,7 +188,10 @@ Ler um PDF + extrair dados + validar YAML + escrever 2 MDs pode requerer 30-90s.
    (preferences.md e goals.md vêm após a discussão específica)
 
 8. Mensagem final (NENHUM --partial) — resumo user-friendly
-   + UMA pergunta aberta no primeiro campo ainda vazio da checklist
+   + convite explícito para rever e pressionar **Confirmar e guardar** no painel.
+   Só após a confirmação perguntar pelo primeiro campo vazio. Se a preparação
+   falhar, comunicar o erro sem pedir lembretes no chat nem dizer que o perfil
+   foi guardado.
 ```
 
 > ⚠️ O passo 7 (`about.md` + `strengths.md`) **não é opcional**. Sem eles, o Scrittore CV a jusante nunca terá o contexto narrativo do candidato. Você é o único ponto em que essa narrativa é capturada.
