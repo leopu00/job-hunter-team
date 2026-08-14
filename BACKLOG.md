@@ -64,6 +64,9 @@
 **Registrazione / OCR**
 - 🟡 Il ROI assume che l'origin del `contentRect` mappi sul crop: testato solo con `origin=0`, mai un frame reale con origin diverso.
 - 🟡 L'oracle manifest-tamper non esegue il runner completo sul manifest alterato.
+- ☠️ **Queste due non le sblocca una macchina: il codice non è in `master`.** Vivono in commit locali su un repo **senza remote**, quindi non è una verifica che manca — è che il lavoro non è raggiungibile da nessuno tranne chi ha quella macchina accesa. ⇒ **la prima azione non è misurare, è farsi mandare un push**; finché non arriva, ogni altra pianificazione su questo fronte è aria.
+
+> 📐 **Cosa sbloccherebbe davvero una misura su macchina viva** *(censito 14/08 sulle 17 voci dichiarate incerte)*: **quattro**, e nessuna delle altre tredici. Sono `GEOCODE-NEW-VPS` (una query su una VPS appena creata), `JHT-CLI-WIN-NATIVE` (una passata E2E su Windows), la full pytest locale (una run su un box con Docker e PostgreSQL su) e `PACK-INSTALLER-SIZE` (un export per OS: tre misure, ciascuna però singola e definitiva). Le altre aspettano protocolli, settimane di osservazione, decisioni o lavoro da scrivania — chiedere una macchina per quelle non le muove di un millimetro.
 
 ## 🔁 Repository hygiene
 
