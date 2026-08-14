@@ -97,7 +97,17 @@ def test_empty_profile_stays_empty_until_exact_review_is_confirmed(tmp_path: Pat
     assert staged.returncode == 0, staged.stderr
     review = payload["review"]
     assert payload["ok"] is True
-    assert len(review["changes"]) == 8
+    assert {change["field"] for change in review["changes"]} == {
+        "name",
+        "email",
+        "target_role",
+        "location",
+        "experience_years",
+        "has_degree",
+        "seniority_target",
+        "skills.primary",
+        "languages",
+    }
     assert review["missing"] == []
     assert not (home / "profile" / "candidate_profile.yml").exists()
     assert not (agent / "profile-review.yml").exists()
@@ -268,6 +278,69 @@ def test_wrong_or_tampered_receipt_never_persists(tmp_path: Path):
     assert tampered.returncode == 1
     assert tampered_payload == {"ok": False, "error": "review_invalid"}
     assert not (home / "profile" / "candidate_profile.yml").exists()
+
+
+def test_nested_and_boolean_cv_values_are_visible_and_bound_to_confirmation(
+    tmp_path: Path,
+):
+    home = tmp_path / "home"
+    agent = home / "agents" / "assistente"
+    patch = {
+        "has_degree": False,
+        "contacts": {"phone": "+00 000 000"},
+        "experience": [{"company": "Example", "role": "Operator"}],
+        "education": [{"institution": "Example School", "degree": "Diploma"}],
+        "preferences": {"work_mode": "remote", "relocation": False},
+    }
+    _write_patch(agent, patch)
+
+    staged, payload = _run(home, agent, "stage")
+    assert staged.returncode == 0, staged.stderr
+    changes = {item["field"]: item["value"] for item in payload["review"]["changes"]}
+    assert changes == {
+        "contacts.phone": "+00 000 000",
+        "education": [{"institution": "Example School", "degree": "Diploma"}],
+        "experience": [{"company": "Example", "role": "Operator"}],
+        "has_degree": False,
+        "preferences.relocation": False,
+        "preferences.work_mode": "remote",
+    }
+
+    envelope_path = home / "profile" / "pending-profile-review.json"
+    envelope = json.loads(envelope_path.read_text(encoding="utf-8"))
+    envelope["changes"] = [
+        item for item in envelope["changes"] if item["field"] != "has_degree"
+    ]
+    envelope_path.write_text(json.dumps(envelope), encoding="utf-8")
+    rejected, rejected_payload = _run(
+        home, agent, "confirm", payload["review"]["review_id"]
+    )
+    assert rejected.returncode == 1
+    assert rejected_payload == {"ok": False, "error": "review_invalid"}
+    assert not (home / "profile" / "candidate_profile.yml").exists()
+
+    _write_patch(agent, patch)
+    _, restaged = _run(home, agent, "stage")
+    confirmed, receipt = _run(home, agent, "confirm", restaged["review"]["review_id"])
+    assert confirmed.returncode == 0, confirmed.stderr
+    assert receipt["ok"] is True
+    assert (
+        yaml.safe_load(
+            (home / "profile" / "candidate_profile.yml").read_text(encoding="utf-8")
+        )
+        == patch
+    )
+
+
+def test_wizard_accepts_every_bound_review_row_instead_of_eight_field_subset():
+    source = (ROOT / "game" / "scripts" / "wizard.gd").read_text(encoding="utf-8")
+    review_source = source[
+        source.index("func _redraw_review") : source.index("func _review_note")
+    ]
+    assert "not FIELDS.has(item_field)" not in review_source
+    assert 'item.has("value")' in review_source
+    assert "seen_fields.has(item_field)" in review_source
+    assert '_review_value(item.get("value"))' in review_source
 
 
 def test_stage_rejects_symlink_patch(tmp_path: Path):
