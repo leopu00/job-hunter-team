@@ -3,6 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 
 declare const globalThis: {
   __jht_db_cache?: {
@@ -62,6 +63,17 @@ function resolveReadablePath(): { dbPath: string; sourceMtimeMs: number } {
 }
 
 export function getDb(_workspacePath?: string): Database.Database {
+  // Un deploy cloud non legge MAI SQLite: la source of truth e' Supabase.
+  // Oggi tutti i chiamanti passano da `workspaceHasDb()`/`localWorkspace()`,
+  // gia' cloud-guarded — ma quel guard vive nei chiamanti, e i chiamanti si
+  // aggiungono. Se un domani uno se lo dimentica e sull'istanza esiste un
+  // jobs.db qualsiasi (bind mount di sviluppo, immagine costruita male,
+  // residuo effimero), qui si aprirebbe quel file e si servirebbero dati
+  // stantii CREDENDOLI quelli dell'utente: nessun errore, solo numeri
+  // sbagliati. L'ultima porta la chiude questo throw, che e' rumoroso.
+  if (isCloudDeploy()) {
+    throw new Error("SQLite non disponibile: deploy cloud (fonte = Supabase)");
+  }
   if (!fs.existsSync(JHT_DB_PATH)) {
     throw new Error(`Database non trovato: ${JHT_DB_PATH}`);
   }
