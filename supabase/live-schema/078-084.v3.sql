@@ -940,21 +940,21 @@ checks(check_id, ok) AS (
               AND policy_row.polname = 'Users manage own settings'
           )
           AND (
-            SELECT pg_catalog.count(*) = 28
-              AND pg_catalog.count(DISTINCT privilege.privilege_type) = 7
+            SELECT pg_catalog.count(*) = 32
+              AND pg_catalog.count(DISTINCT privilege.privilege_type) = 8
               AND pg_catalog.bool_and(NOT privilege.is_grantable)
               AND pg_catalog.count(*) FILTER (
                 WHERE privilege.grantee = table_row.relowner
-              ) = 7
+              ) = 8
               AND pg_catalog.count(*) FILTER (
                 WHERE privilege.grantee = pg_catalog.to_regrole('anon')
-              ) = 7
+              ) = 8
               AND pg_catalog.count(*) FILTER (
                 WHERE privilege.grantee = pg_catalog.to_regrole('authenticated')
-              ) = 7
+              ) = 8
               AND pg_catalog.count(*) FILTER (
                 WHERE privilege.grantee = pg_catalog.to_regrole('service_role')
-              ) = 7
+              ) = 8
               AND pg_catalog.count(*) FILTER (
                 WHERE privilege.grantee = 0
               ) = 0
@@ -1703,17 +1703,17 @@ checks(check_id, ok) AS (
             WHERE policy_row.polrelid = table_class.oid
           ))
           AND pg_catalog.bool_and((
-            SELECT pg_catalog.count(*) = 14
+            SELECT pg_catalog.count(*) = 16
               AND pg_catalog.count(*) FILTER (
                 WHERE privilege.grantee = table_class.relowner
-              ) = 7
+              ) = 8
               AND pg_catalog.count(*) FILTER (
                 WHERE privilege.grantee = pg_catalog.to_regrole('service_role')
-              ) = 7
+              ) = 8
               AND pg_catalog.bool_and(NOT privilege.is_grantable)
               AND pg_catalog.bool_and(
                 privilege.privilege_type = ANY(ARRAY[
-                  'DELETE', 'INSERT', 'REFERENCES', 'SELECT',
+                  'DELETE', 'INSERT', 'MAINTAIN', 'REFERENCES', 'SELECT',
                   'TRIGGER', 'TRUNCATE', 'UPDATE'
                 ]::text[])
               )

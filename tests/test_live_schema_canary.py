@@ -38,22 +38,22 @@ MIGRATIONS = [
 
 LEGACY_ARTIFACT_SHA256 = {
     "supabase/live-schema/078-081.v1.json": (
-        "5996737996ecd61bb64896eaee7c3c810c424de98230be76489ae57b97e32045"
+        "f69b987bf06d1e479eef725e446eee97685686e7a07bdd1b7ad8c234295133d2"
     ),
     "supabase/live-schema/078-081.v1.sql": (
         "7b9995f0fe494427e73cfcba852b51e33a893b4c63aa07ddb2f742e13d4d8270"
     ),
     "supabase/live-schema/078-083.v2.json": (
-        "1b95d97a1f3b8bbbb8d44d61dd6062c2da1bc215cde3fb2b9651f9e1a3c07ceb"
+        "763db73f031a1e6b4105582b01a2c32adcc4ef839df2649e979baa8a6b627b9b"
     ),
     "supabase/live-schema/078-083.v2.sql": (
         "2a5aed82aac8c7f129d7cc5d74bf875bd77750b1917a10aecbcf65a201336971"
     ),
     "supabase/live-schema/078-084.v3.json": (
-        "80df5deb1407874ecac409bbc090d27e9ad91cde8126ccd8d2f5e9fdd873df9d"
+        "7b095bfdb21d2ac2a499288982b6d0ad080b19c25d4441f8f8222eabaac26be7"
     ),
     "supabase/live-schema/078-084.v3.sql": (
-        "2ea51c8261b7c4967c4a4000df364e4d2a7059517b1c6a55d86c70b7c7e209e8"
+        "a5d9957b2d9a884cf70d8d47bee40cfd1ef7312770301d85462e1a62c8c770d7"
     ),
 }
 
