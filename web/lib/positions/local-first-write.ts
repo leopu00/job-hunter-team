@@ -102,6 +102,11 @@ export async function localFirstWrite<T>(
       (await cookies()).get(LOCAL_TOKEN_COOKIE)?.value,
     )
   ) {
+    // Sito local-only DICHIARATO: qui ci si arriva solo con un local-token
+    // valido, e su deploy cloud `isLocalTokenAuthenticated()` e' false per
+    // costruzione (lib/local-token.ts). Quindi "file assente" significa box a
+    // meta', non deploy senza SQLite: 503 e' la risposta giusta, e non esiste
+    // un ramo cloud da preferire.
     if (!fs.existsSync(JHT_DB_PATH)) {
       return NextResponse.json({ error: "DB locale assente" }, { status: 503 });
     }

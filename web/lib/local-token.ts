@@ -9,14 +9,22 @@
  * successive, attraversando `requireAuth`.
  *
  * Header `Authorization: Bearer <token>` resta accettato come
- * fallback per dev manuali (curl). Su deploy cloud (Vercel) la
- * directory home tipicamente non e' scrivibile: la creazione
- * fallisce silenziosamente e il flusso Supabase rimane l'unica via.
+ * fallback per dev manuali (curl).
+ *
+ * Su deploy CLOUD questa corsia non esiste per definizione: il token
+ * significa "il browser sta parlando col box co-locato", e su Vercel un
+ * box non c'e'. Prima ci si affidava al fatto che la home "tipicamente"
+ * non e' scrivibile — una proprieta' dell'ambiente, non del codice: se
+ * un giorno lo diventasse, il token nascerebbe da solo e riaprirebbe i
+ * rami local-first (scrivi su SQLite, rispondi `source: "local"`, il
+ * cloud non vede nulla). E' la stessa scelta local-first che ha rotto il
+ * pulsante candidatura. Ora la porta la chiude `isCloudDeploy()`.
  */
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { JHT_HOME } from "@/lib/jht-paths";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 
 const TOKEN_FILE = path.join(JHT_HOME, ".local-token");
 const TOKEN_BYTES = 32;
@@ -52,8 +60,15 @@ function createToken(): string | null {
   }
 }
 
-/** Ritorna il token corrente; lo crea se manca. `null` se il filesystem e' read-only (cloud). */
+/**
+ * Ritorna il token corrente; lo crea se manca. `null` su deploy cloud (dove
+ * la corsia locale non esiste) o se il filesystem e' read-only.
+ *
+ * Il guard cloud sta PRIMA della cache: un processo che avesse gia' letto un
+ * token non deve poterlo servire a un deploy cloud.
+ */
 export function getOrCreateLocalToken(): string | null {
+  if (isCloudDeploy()) return null;
   if (cached) return cached;
   cached = readToken() ?? createToken();
   return cached;
@@ -89,6 +104,9 @@ function timingSafeEquals(a: string, b: string): boolean {
  * Verifica se la richiesta presenta un local-token valido, sia via
  * header `Authorization: Bearer <hex>` (curl manuale) sia via cookie
  * `jht_local_token` (browser). Confronto in tempo costante.
+ *
+ * Su deploy cloud e' SEMPRE `false`: senza token atteso non c'e' confronto
+ * possibile, quindi nessun chiamante puo' entrare nel ramo "solo SQLite".
  */
 export function isLocalTokenAuthenticated(
   headerValue: string | null | undefined,
@@ -102,4 +120,3 @@ export function isLocalTokenAuthenticated(
   if (fromCookie && timingSafeEquals(fromCookie, expected)) return true;
   return false;
 }
-

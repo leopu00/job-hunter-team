@@ -252,6 +252,9 @@ async function handleToggle(
       (await cookies()).get(LOCAL_TOKEN_COOKIE)?.value,
     )
   ) {
+    // Sito local-only DICHIARATO: dentro il ramo local-token, che su deploy
+    // cloud non si apre mai (`isLocalTokenAuthenticated()` e' false per
+    // costruzione, lib/local-token.ts). DB assente = box a meta' → 503.
     if (!fs.existsSync(JHT_DB_PATH)) {
       return NextResponse.json({ error: "DB locale assente" }, { status: 503 });
     }
