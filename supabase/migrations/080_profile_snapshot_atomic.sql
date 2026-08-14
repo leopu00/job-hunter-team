@@ -4,11 +4,6 @@
 -- candidate_profiles would let the owner preserve/forge it through the
 -- existing FOR ALL profile policy and turn a drifted snapshot into a false
 -- no-op. This private table is writable only by the service-role RPC caller.
--- Keep the function definition and its privilege changes in one explicit
--- transaction. This also makes the Supabase runner use the multi-statement
--- execution path required by dollar-quoted function bodies plus grants.
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS public.candidate_profile_sync_state (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     content_hash TEXT NOT NULL CHECK (content_hash ~ '^[0-9a-f]{64}$'),
@@ -20,7 +15,9 @@ REVOKE ALL ON public.candidate_profile_sync_state
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.candidate_profile_sync_state
   TO service_role;
 
-CREATE OR REPLACE FUNCTION public.sync_candidate_profile_atomic(
+DROP FUNCTION IF EXISTS public.sync_candidate_profile_atomic(UUID, TEXT, JSONB);
+DROP FUNCTION IF EXISTS public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN);
+CREATE FUNCTION public.sync_candidate_profile_atomic(
     p_user_id UUID,
     p_content_hash TEXT,
     p_snapshot JSONB,
@@ -216,14 +213,7 @@ BEGIN
 END;
 $$;
 
--- Keep the legacy-signature cleanup after the dollar-quoted definition.
--- Supabase's migration runner otherwise groups the leading DROP with the
--- CREATE FUNCTION and PostgreSQL rejects the prepared multi-command query.
-DROP FUNCTION IF EXISTS public.sync_candidate_profile_atomic(UUID, TEXT, JSONB);
-
 REVOKE ALL ON FUNCTION public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.sync_candidate_profile_atomic(UUID, TEXT, JSONB, BOOLEAN)
   TO service_role;
-
-COMMIT;
