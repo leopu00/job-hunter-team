@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 BASH_WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 WINDOWS_INSTALLER = ROOT / "scripts" / "install.ps1"
+WINDOWS_ACL_SELFTEST = ROOT / "scripts" / "windows-config-acl-selftest.ps1"
+WINDOWS_ACL_WORKFLOW = ROOT / ".github" / "workflows" / "windows-config-acl.yml"
 
 
 def make_fake_docker(tmp_path: Path) -> tuple[Path, Path]:
@@ -171,6 +173,54 @@ def test_windows_cmd_shim_propagates_powershell_exit_code_on_both_paths():
     assert "if errorlevel 1 goto jht_windows_powershell" in shim
     assert ":jht_windows_powershell" in shim
     assert shim.count("exit /b %errorlevel%") == 2
+
+
+def test_windows_clean_install_publishes_acl_helper_and_attests_exact_bytes_before_up():
+    source = WINDOWS_INSTALLER.read_text(encoding="utf-8")
+    runtime_files = source[source.index("function Get-RuntimeFiles") : source.index(
+        "# ── Step 4:", source.index("function Get-RuntimeFiles")
+    )]
+    # jht-wrapper.ps1 dot-sources this sibling before dispatching `up`: a clean
+    # installer must publish the helper from the same immutable release and
+    # attest the exact bytes before the first automatic setup can reach Docker.
+    for seam in (
+        '$helperUrl   = "$releaseBase/scripts/windows-private-acl.ps1"',
+        "$helperDest = Join-Path $BinDir 'windows-private-acl.ps1'",
+        "Get-File -Url $helperUrl -Dest $helperTemp",
+        "[scriptblock]::Create((Get-Content -LiteralPath $helperTemp -Raw))",
+        "Move-Item -LiteralPath $helperTemp -Destination $helperDest -Force",
+        "Get-FileHash -Algorithm SHA256 -LiteralPath $helperDest",
+        "windows-private-acl.ps1=$helperHash",
+    ):
+        assert seam in runtime_files
+
+    assert runtime_files.index("Get-File -Url $helperUrl") < runtime_files.index(
+        "Move-Item -LiteralPath $wrapperTemp -Destination $wrapperDest"
+    )
+    assert source.index("windows-private-acl.ps1=$helperHash") < source.index(
+        "Invoke-Onboard", source.index("# ── Main")
+    )
+
+
+def test_windows_acl_gate_smokes_e03_clean_start_through_docker_dispatch():
+    smoke = WINDOWS_ACL_SELFTEST.read_text(encoding="utf-8")
+    workflow = WINDOWS_ACL_WORKFLOW.read_text(encoding="utf-8")
+
+    for seam in (
+        "Get-RuntimeFiles",
+        "$installedHelperHash -ne $sourceHelperHash",
+        "$manifestValues.'windows-private-acl.ps1' -ne $installedHelperHash",
+        "-File $installedWrapper up",
+        "E03 CLEAN_START installer-helper-smoke PASS",
+    ):
+        assert seam in smoke
+    assert "./scripts/windows-config-acl-selftest.ps1" in workflow
+    for watched in (
+        "scripts/install.ps1",
+        "scripts/windows-private-acl.ps1",
+        "web/public/install.ps1",
+    ):
+        assert watched in workflow
 
 
 def test_bash_wrapper_forwards_release_base_url_only_for_download():

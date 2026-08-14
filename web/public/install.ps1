@@ -15,6 +15,7 @@
 # ║  Downloads:                                                              ║
 # ║    - $env:LOCALAPPDATA\Job Hunter Team\host-runtime\docker-compose.yml   ║
 # ║    - $env:USERPROFILE\.local\bin\jht.ps1 (PowerShell wrapper)            ║
+# ║    - $env:USERPROFILE\.local\bin\windows-private-acl.ps1 (ACL helper)    ║
 # ║    - $env:USERPROFILE\.local\bin\jht.cmd (shim for CMD)                  ║
 # ║                                                                          ║
 # ║  The Node CLI, Python, tmux and the agents ALL run inside the long-      ║
@@ -183,7 +184,7 @@ function Get-File {
 }
 
 function Get-RuntimeFiles {
-  Write-Step 3 $TotalSteps "Downloading wrapper + docker-compose.yml"
+  Write-Step 3 $TotalSteps "Downloading wrapper + ACL helper + docker-compose.yml"
 
   if ($RawBaseOverride) {
     $releaseBase = $RawBaseOverride
@@ -199,8 +200,10 @@ function Get-RuntimeFiles {
   }
   $composeUrl  = "$releaseBase/docker-compose.yml"
   $wrapperUrl  = "$releaseBase/scripts/jht-wrapper.ps1"
+  $helperUrl   = "$releaseBase/scripts/windows-private-acl.ps1"
   $composeDest = Join-Path $RuntimeDir 'docker-compose.yml'
   $wrapperDest = Join-Path $BinDir 'jht.ps1'
+  $helperDest = Join-Path $BinDir 'windows-private-acl.ps1'
   $shimDest    = Join-Path $BinDir 'jht.cmd'
   $manifestDest = Join-Path $RuntimeDir '.runtime-integrity'
 
@@ -259,6 +262,23 @@ function Get-RuntimeFiles {
   if (-not $DryRun) { Move-Item -LiteralPath $composeTemp -Destination $composeDest -Force }
   Write-Ok "compose: $composeDest"
 
+  # The wrapper dot-sources this sibling before dispatching any command. Keep
+  # the helper download ahead of the wrapper publication so a clean install
+  # can never expose a jht.ps1 whose first instruction points at a missing file.
+  Write-Info "Downloading windows-private-acl.ps1..."
+  $helperTemp = Join-Path $BinDir ('.windows-private-acl-' + [guid]::NewGuid().ToString('N') + '.ps1')
+  Get-File -Url $helperUrl -Dest $helperTemp
+  if (-not $DryRun) {
+    [scriptblock]::Create((Get-Content -LiteralPath $helperTemp -Raw)) | Out-Null
+    foreach ($requiredFunction in @('function Protect-JhtHomeAcl', 'function Test-PrivateJhtHomeAcl')) {
+      if (-not (Select-String -LiteralPath $helperTemp -SimpleMatch $requiredFunction -Quiet)) {
+        Write-Fail "Downloaded ACL helper is missing $requiredFunction."
+      }
+    }
+    Move-Item -LiteralPath $helperTemp -Destination $helperDest -Force
+  }
+  Write-Ok "ACL helper: $helperDest"
+
   Write-Info "Downloading jht-wrapper.ps1..."
   $wrapperTemp = Join-Path $BinDir ('.jht-' + [guid]::NewGuid().ToString('N') + '.ps1')
   Get-File -Url $wrapperUrl -Dest $wrapperTemp
@@ -278,9 +298,10 @@ function Get-RuntimeFiles {
   if (-not $DryRun) {
     $composeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $composeDest).Hash.ToLowerInvariant()
     $wrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $wrapperDest).Hash.ToLowerInvariant()
+    $helperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $helperDest).Hash.ToLowerInvariant()
     [IO.File]::WriteAllText(
       $manifestDest,
-      "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`n",
+      "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`nwindows-private-acl.ps1=$helperHash`n",
       [Text.UTF8Encoding]::new($false))
     $shimContent = @"
 @echo off
@@ -434,7 +455,7 @@ function Show-Final {
 
   Write-Host "  To uninstall (keeps the data in ~/.jht and ~/Documents/Job Hunter Team):" -ForegroundColor DarkGray
   Write-Host "    jht down" -ForegroundColor DarkGray
-  Write-Host "    Remove-Item -Recurse -Force '$RuntimeDir', '$BinDir\jht.ps1', '$BinDir\jht.cmd'" -ForegroundColor DarkGray
+  Write-Host "    Remove-Item -Recurse -Force '$RuntimeDir', '$BinDir\jht.ps1', '$BinDir\windows-private-acl.ps1', '$BinDir\jht.cmd'" -ForegroundColor DarkGray
   Write-Host "    docker rmi $Image" -ForegroundColor DarkGray
   Write-Host "  To delete the data as well (config, db, CVs, output):" -ForegroundColor DarkGray
   Write-Host "    Remove-Item -Recurse -Force '$JhtHome', '$env:USERPROFILE\Documents\Job Hunter Team'" -ForegroundColor DarkGray
