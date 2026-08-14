@@ -865,6 +865,15 @@ func _team_start_ui_selftest() -> void:
 	var old_state: RefCounted = SetupService.team_start_state
 	var old_running: bool = SetupService._action_running
 	var old_action: String = SetupService.current_action
+	var old_probe_running: bool = SetupService._probe_running
+	var old_state_path: String = SetupService._team_start_state_path
+	var test_state_path := OS.get_cache_dir().path_join(
+			"jht-team-start-ui-%d.json" % OS.get_process_id())
+	SetupService._remove_team_start_state_at(test_state_path)
+	SetupService._team_start_state_path = test_state_path
+	# `_finish_action` avvia il probe successivo in produzione. Qui lo teniamo
+	# occupato: l'oracolo controlla precisamente il confine prima del probe.
+	SetupService._probe_running = true
 	SetupService.status = {
 		"ready": true, "completed": 4, "team_running": false,
 		"container_running": true, "provider_authenticated": true,
@@ -891,10 +900,59 @@ func _team_start_ui_selftest() -> void:
 					activation, UIStrings.t("team.start_waiting"))
 
 	var attempt: int = SetupService.team_start_state.attempt
+	# Attraversa il percorso reale che aveva il falso verde: il worker termina
+	# con exit 0, `_finish_action` applica il responso e `action_changed` arriva
+	# ai due pannelli. Prima del probe CAPITANO deve restare giallo/in attesa.
+	SetupService._action_running = true
+	SetupService.current_action = "team"
+	SetupService.action_changed.emit("team", true,
+			UIStrings.t("setup.action.in_progress"), true)
+	SetupService._finish_action("team", {
+		"ok": true,
+		"team_operation": "start",
+		"team_start_attempt": attempt,
+		"command_output": "CAPITANO command accepted",
+		"watchdog_cursor": 0,
+		"watchdog_identity": "synthetic-log",
+		"watchdog_fingerprint": "a".repeat(64),
+		# Controfattuale esplicito: era il testo verde emesso dal prodotto.
+		"message": UIStrings.t("team.action.started"),
+	})
+	await get_tree().process_frame
+	await get_tree().process_frame
+	result["exit0_attende_senza_verde"] = \
+			str(SetupService.team_start_state.phase) == TeamStartState.STARTING \
+			and not SetupService.busy() \
+			and is_instance_valid(activation._setup_message) \
+			and activation._setup_message.text.begins_with("◌ ") \
+			and activation._setup_message.text.contains(
+					UIStrings.t("team.start_waiting")) \
+			and not activation._setup_message.text.contains(
+					UIStrings.t("team.action.started")) \
+			and activation._setup_message.get_theme_color("font_color") \
+					== Palette.YELLOW \
+			and is_instance_valid(team._setup_message) \
+			and team._setup_message.get_theme_color("font_color") == Palette.YELLOW
+
+	# Un secondo tentativo fallito attraversa lo stesso `_finish_action`, non
+	# chiama direttamente il modello: così l'oracolo morde sul wiring causale.
+	SetupService.team_start_state.begin(3000)
+	attempt = SetupService.team_start_state.attempt
+	SetupService._action_running = true
+	SetupService.current_action = "team"
 	var raw := "✓ MENTOR started\n✗ CAPITANO — provider boot failed\nResult: 1 started, 6 errors"
-	result["failure_applicata"] = SetupService.team_start_state.finish_command(
-			attempt, false, raw, 0, "synthetic-log", "a".repeat(64), 2000)
-	SetupService.team_start_state_changed.emit(SetupService.team_start_snapshot())
+	SetupService._finish_action("team", {
+		"ok": false,
+		"team_operation": "start",
+		"team_start_attempt": attempt,
+		"command_output": raw,
+		"watchdog_cursor": 0,
+		"watchdog_identity": "synthetic-log",
+		"watchdog_fingerprint": "a".repeat(64),
+		"message": UIStrings.t("team.action.start_failed") % raw,
+	})
+	result["failure_applicata"] = \
+			str(SetupService.team_start_state.phase) == TeamStartState.FAILED
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var retry_activation := _panel_button(
@@ -943,6 +1001,9 @@ func _team_start_ui_selftest() -> void:
 	SetupService.team_start_state = old_state
 	SetupService._action_running = old_running
 	SetupService.current_action = old_action
+	SetupService._probe_running = old_probe_running
+	SetupService._team_start_state_path = old_state_path
+	SetupService._remove_team_start_state_at(test_state_path)
 	var ok := true
 	for key in result:
 		ok = ok and bool(result[key])

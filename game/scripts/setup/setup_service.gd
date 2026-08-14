@@ -112,6 +112,9 @@ var last_upgrade_check := {}
 ## watchdog sta ancora recuperando CAPITANO. Esposto come snapshot per i
 ## consumer UI, che verranno collegati dopo la fusione dei rami concorrenti.
 var team_start_state := TeamStartStateModel.new()
+## Sostituibile dagli oracle che attraversano `_finish_action`: il test deve
+## provare la persistenza reale senza toccare l'eventuale tentativo dell'utente.
+var _team_start_state_path := TEAM_START_STATE_PATH
 var _timer: Timer
 
 
@@ -129,18 +132,18 @@ func team_start_snapshot() -> Dictionary:
 func _persist_team_start_state() -> void:
 	var phase := str(team_start_state.phase)
 	if phase in [TeamStartStateModel.IDLE, TeamStartStateModel.RUNNING]:
-		_remove_team_start_state_at(TEAM_START_STATE_PATH)
+		_remove_team_start_state_at(_team_start_state_path)
 		return
 	if not _write_team_start_state_at(
-			team_start_state, TEAM_START_STATE_PATH):
+			team_start_state, _team_start_state_path):
 		Log.warn("setup", "impossibile salvare lo stato causale dell'avvio team")
 
 
 func _restore_team_start_state() -> void:
-	if not FileAccess.file_exists(TEAM_START_STATE_PATH):
+	if not FileAccess.file_exists(_team_start_state_path):
 		return
 	if not _read_team_start_state_at(team_start_state,
-			TEAM_START_STATE_PATH, Time.get_ticks_msec()):
+			_team_start_state_path, Time.get_ticks_msec()):
 		team_start_state.fail_restore(Time.get_ticks_msec())
 		_persist_team_start_state()
 
@@ -3763,6 +3766,7 @@ func _finish_action(action: String, result: Dictionary) -> void:
 	current_action = ""
 	action_phase = ""
 	last_pull = {}
+	var team_start_pending_confirmation := false
 	if action == "team" and str(result.get("team_operation", "")) == "start":
 		if team_start_state.finish_command(
 				int(result.get("team_start_attempt", -1)),
@@ -3774,6 +3778,10 @@ func _finish_action(action: String, result: Dictionary) -> void:
 				Time.get_ticks_msec()):
 			_persist_team_start_state()
 			team_start_state_changed.emit(team_start_snapshot())
+			# Exit 0 attesta soltanto il comando. Finché il probe non osserva
+			# CAPITANO, anche il log/action signal deve restare neutro: il verde
+			# "Team avviato" sarebbe un esito che nessuno ha ancora misurato.
+			team_start_pending_confirmation = bool(result.get("ok", false))
 	elif action == "team" and str(result.get("team_operation", "")) == "stop" \
 			and bool(result.get("ok", false)):
 		team_start_state.stopped(Time.get_ticks_msec())
@@ -3785,6 +3793,8 @@ func _finish_action(action: String, result: Dictionary) -> void:
 	elif action == "upgrade-check":
 		last_upgrade_check = result.duplicate(true)
 		result["message"] = _upgrade_check_ui_message(result)
+	if team_start_pending_confirmation:
+		result["message"] = UIStrings.t("team.start_waiting")
 	Log.info("setup", "azione %s → %s: %s" % [action,
 			"ok" if bool(result.get("ok", false)) else "FALLITA",
 			str(result.get("message", ""))])

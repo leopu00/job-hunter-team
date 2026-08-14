@@ -1855,8 +1855,18 @@ func _on_setup_action(action: String, running: bool, message: String, ok: bool) 
 	# senza questo il pannello resterebbe su "non disponibile" fino a riaprirlo.
 	if action == "vps-key" and not running:
 		_refresh_vps_fingerprint()
-	_action_note = ("◌ " if running else ("✓ " if ok else "⚠ ")) + message
-	_action_note_color = Palette.YELLOW if running \
+	# Il successo del processo `team start` non è ancora il successo del team:
+	# il solo verde autorevole arriva dal probe CAPITANO. Neutralizziamo anche
+	# un eventuale messaggio legacy positivo, così il consumer non dipende dal
+	# testo restituito dal worker per rispettare il confine causale.
+	var team_confirmation_pending := action == "team" and not running and ok \
+			and _team_start_phase(SetupService.team_start_snapshot(),
+					bool(SetupService.status.get("team_running", false))) != "running"
+	var visible_message := UIStrings.t("team.start_waiting") \
+			if team_confirmation_pending else message
+	_action_note = ("◌ " if running or team_confirmation_pending \
+			else ("✓ " if ok else "⚠ ")) + visible_message
+	_action_note_color = Palette.YELLOW if running or team_confirmation_pending \
 			else (Palette.GREEN if ok else Palette.RED)
 	# Avvio o fine di un'azione di setup: i pulsanti devono cambiare stato
 	# (disabilitati + etichetta "in corso") SUBITO, non al prossimo probe.
