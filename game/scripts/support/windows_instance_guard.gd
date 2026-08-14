@@ -125,6 +125,12 @@ func _start_guard() -> bool:
 		# uscire o chiudere stdout: raccoglierlo qui rende il codice diagnostico
 		# causale senza esporre il messaggio PowerShell originale.
 		_drain_stderr()
+		# FileAccess non promette che get_buffer non bloccante abbia consegnato
+		# subito gli ultimi byte di stderr dopo l'uscita del child.
+		if ready_line.is_empty() and _guard_pid > 0 \
+				and not OS.is_process_running(_guard_pid):
+			OS.delay_msec(50)
+			_drain_stderr()
 		var sidecar_code := _sidecar_failure_code()
 		if not sidecar_code.is_empty():
 			_bootstrap_code = "ready_" + sidecar_code
