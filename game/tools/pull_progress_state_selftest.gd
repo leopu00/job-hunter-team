@@ -49,6 +49,22 @@ func _classifier_contract() -> void:
 
 
 func _seventeen_of_eighteen_contract() -> void:
+	# Il vecchio contatore cercava la sottostringa "complete": diciassette
+	# "Download complete" diventavano quindi 17/18 anche se nessun layer aveva
+	# ancora terminato verifica ed estrazione.
+	var downloaded_layers := {}
+	for index in 17:
+		downloaded_layers["download-%02d" % index] = "Download complete"
+	downloaded_layers["download-17"] = "Extracting 768MB/1024MB"
+	var downloaded_state := ProgressState.classify(downloaded_layers)
+	_check("17/18 opaco: Download complete non gonfia done",
+			int(downloaded_state["done"]) == 0, str(downloaded_state))
+	_check("17/18 opaco: extracting resta la fase materiale",
+			str(downloaded_state["phase"]) == ProgressState.PHASE_EXTRACTING,
+			str(downloaded_state))
+
+	# Se diciassette layer sono invece davvero a Pull complete, il conteggio
+	# resta corretto ma la fase dell'ultimo spiega perché il pull non è finito.
 	var layers := {}
 	for index in 17:
 		layers["layer-%02d" % index] = "Pull complete"
