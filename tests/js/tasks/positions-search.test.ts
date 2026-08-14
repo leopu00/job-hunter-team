@@ -49,6 +49,14 @@ const GAME_RULE = readFileSync(
   resolve(ROOT, "game/scripts/ui/position_search.gd"),
   "utf-8",
 );
+const SIM_BADGE = readFileSync(
+  resolve(ROOT, "game/scripts/ui/sim_badge.gd"),
+  "utf-8",
+);
+const TRUTHFULNESS_ORACLE = readFileSync(
+  resolve(ROOT, "game/scripts/office/office_selftests.gd"),
+  "utf-8",
+);
 const GAME_MATRIX = readFileSync(
   resolve(ROOT, "game/tools/test-matrix.txt"),
   "utf-8",
@@ -216,8 +224,48 @@ describe("la stessa ricerca nel gioco", () => {
   it("cerca anche per ID, non solo per titolo e azienda", () => {
     expect(GAME_RULE).toContain("static func parse_id");
     expect(GAME_RULE).toContain("id_hit");
-    // La UI non tiene una sua copia della regola: la chiede a quel file.
-    expect(GAME).toContain("PositionSearch.filter(BackendBus.positions");
+    // La UI non tiene una sua copia della regola e non legge direttamente il
+    // bus: filtra soltanto lo snapshot che il gate di provenienza ha attestato.
+    expect(GAME).toContain(
+      "PositionSearch.filter(SimBadge.visible_positions(), query, MAX_RESULTS)",
+    );
+    expect(GAME).not.toContain("PositionSearch.filter(BackendBus.positions");
+  });
+
+  it("nasconde UNAVAILABLE e distingue uno snapshot LIVE vuoto", () => {
+    // La funzione usata dalla ricerca deve chiudere il rubinetto quando il bus
+    // contiene dati senza provenienza; in LIVE può invece restituire anche un
+    // array autorevolmente vuoto.
+    expect(SIM_BADGE).toMatch(
+      /static func visible_positions\(\) -> Array:[\s\S]*?DataState\.UNAVAILABLE[\s\S]*?BackendBus\.positions/,
+    );
+    expect(SIM_BADGE).toMatch(
+      /static func positions_empty_copy\(\) -> String:[\s\S]*?common\.positions_empty[\s\S]*?DataState\.LIVE[\s\S]*?common\.connect_team/,
+    );
+    expect(GAME).toContain("if SimBadge.visible_positions().is_empty()");
+    expect(GAME).toContain("SimBadge.positions_empty_copy()");
+
+    // Non basta congelare le stringhe sopra: l'oracolo Godot monta davvero la
+    // GlobalSearch, prova un payload ostile in UNAVAILABLE, poi LIVE e infine
+    // LIVE-empty. Tutti e tre i risultati partecipano al verdetto PASS del gate.
+    expect(TRUTHFULNESS_ORACLE).toContain(
+      'var search_hidden := search_probe._search("truth").is_empty()',
+    );
+    expect(TRUTHFULNESS_ORACLE).toContain(
+      'var search_live := search_probe._search("truth").size() == 1',
+    );
+    expect(TRUTHFULNESS_ORACLE).toContain("BackendBus.publish_positions([])");
+    expect(TRUTHFULNESS_ORACLE).toContain(
+      "var copy_live_empty := SimBadge.positions_empty_copy() == live_empty_copy",
+    );
+    const verdict = TRUTHFULNESS_ORACLE.slice(
+      TRUTHFULNESS_ORACLE.indexOf("var ok :="),
+      TRUTHFULNESS_ORACLE.indexOf('print(("TRUTHFULNESS-TEST'),
+    );
+    expect(verdict).toContain("search_hidden");
+    expect(verdict).toContain("search_live");
+    expect(verdict).toContain("copy_live_empty");
+    expect(GAME_MATRIX).toContain("truthfulness|run|gate");
   });
 
   it("accetta le stesse forme dell'ID del web", () => {
