@@ -82,6 +82,38 @@ try {
   if ($installedHelperHash -ne $sourceHelperHash -or $manifestValues.'windows-private-acl.ps1' -ne $installedHelperHash) {
     throw 'clean-start ACL helper bytes are not exactly attested'
   }
+  $installedWrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installedWrapper).Hash.ToLowerInvariant()
+  $installedCompose = Join-Path $RuntimeDir 'docker-compose.yml'
+  $installedComposeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installedCompose).Hash.ToLowerInvariant()
+  if ($manifestValues.'jht-wrapper.ps1' -ne $installedWrapperHash -or $manifestValues.'docker-compose.yml' -ne $installedComposeHash) {
+    throw 'clean-start wrapper or compose bytes are not exactly attested'
+  }
+
+  # Name the failed trust predicate instead of collapsing every native CI
+  # failure into the wrapper's intentionally generic production error.
+  $wrapperTokens = $null; $wrapperErrors = $null
+  $wrapperAst = [System.Management.Automation.Language.Parser]::ParseFile($installedWrapper, [ref]$wrapperTokens, [ref]$wrapperErrors)
+  if ($wrapperErrors.Count) { throw "installed wrapper parse failed: $($wrapperErrors[0])" }
+  foreach ($functionName in @('Test-RuntimePathAuthority', 'Test-RuntimeAncestorsWithoutReparsePoint', 'Test-ProtectedRuntimeNode', 'Test-RuntimeDirectoryAcl')) {
+    $functionAst = $wrapperAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $functionName }, $true)
+    if (-not $functionAst) { throw "installed wrapper trust predicate missing: $functionName" }
+    . ([scriptblock]::Create($functionAst.Extent.Text))
+  }
+  $ComposeFile = $installedCompose
+  $RuntimeManifest = $manifest
+  $WrapperPath = $installedWrapper
+  $trustChecks = [ordered]@{
+    path_authority = (Test-RuntimePathAuthority)
+    runtime_ancestors = (Test-RuntimeAncestorsWithoutReparsePoint $RuntimeDir)
+    wrapper_ancestors = (Test-RuntimeAncestorsWithoutReparsePoint $WrapperPath)
+    runtime_node = (Test-ProtectedRuntimeNode $RuntimeDir -Directory)
+    runtime_acl = (Test-RuntimeDirectoryAcl)
+    compose_node = (Test-ProtectedRuntimeNode $ComposeFile)
+    manifest_node = (Test-ProtectedRuntimeNode $RuntimeManifest)
+    wrapper_node = (Test-ProtectedRuntimeNode $WrapperPath)
+  }
+  $failedTrustChecks = @($trustChecks.Keys | Where-Object { -not $trustChecks[$_] })
+  if ($failedTrustChecks.Count) { throw "clean-start trust predicate failed: $($failedTrustChecks -join ', ')" }
 
   $fakeBin = Join-Path $cleanRoot 'fake-bin'
   $dockerLog = Join-Path $cleanRoot 'docker.log'
