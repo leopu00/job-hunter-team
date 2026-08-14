@@ -2129,6 +2129,60 @@ func _guided_onboarding_selftest() -> void:
 			and int(rescaled["budget_percent"]) == 100,
 			"una finestra invariata non mantiene il budget al 100%")
 
+	# Regressione #136: il backend conferma la persistenza prima che il fetch
+	# periodico ripubblichi il config. La stessa pagina e una nuova apertura
+	# devono vedere subito il payload confermato; un fallimento successivo non
+	# può sostituirlo né mostrare una falsa conferma.
+	var previous_settings := BackendBus.live_settings.duplicate(true)
+	var empty_hours_settings := previous_settings.duplicate(true)
+	empty_hours_settings["hours_raw"] = {}
+	BackendBus.publish_settings(empty_hours_settings)
+	var hours_panel := SectionPanel.new("hours", 24.0)
+	office.add_child(hours_panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var persisted_hours := {"timezone": "Europe/Rome", "windows": [
+			{"days": ["mon", "tue"], "start": "09:00", "end": "17:00"}]}
+	hours_panel._hours_pending_raw = persisted_hours.duplicate(true)
+	hours_panel._hours_save_in_flight = true
+	hours_panel._on_hours_saved(true, "")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var current_hours_text := ""
+	for node in hours_panel.find_children("*", "", true, false):
+		if node is Label:
+			current_hours_text += (node as Label).text + "\n"
+	check.call(BackendBus.live_settings.get("hours_raw", {}) == persisted_hours,
+			"il successo non pubblica subito gli orari persistiti")
+	check.call(not current_hours_text.contains(UIStrings.t("hours.first_time")),
+			"il placeholder primo avvio resta visibile dopo il salvataggio")
+	check.call(current_hours_text.contains(UIStrings.t("hours.saved")),
+			"la pagina ricostruita perde la conferma di salvataggio")
+	var failed_hours := {"timezone": "UTC", "windows": [
+			{"days": ["sun"], "start": "10:00", "end": "11:00"}]}
+	hours_panel._hours_pending_raw = failed_hours.duplicate(true)
+	hours_panel._hours_save_in_flight = true
+	hours_panel._on_hours_saved(false, "synthetic-save-error")
+	check.call(BackendBus.live_settings.get("hours_raw", {}) == persisted_hours,
+			"un salvataggio fallito sostituisce gli orari persistiti")
+	check.call(hours_panel._hours_status.text.contains("synthetic-save-error")
+			and not hours_panel._hours_status.text.contains(UIStrings.t("hours.saved")),
+			"un salvataggio fallito produce una falsa conferma")
+	var reopened_hours := SectionPanel.new("hours", 24.0)
+	office.add_child(reopened_hours)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var reopened_text := ""
+	for node in reopened_hours.find_children("*", "", true, false):
+		if node is Label:
+			reopened_text += (node as Label).text + "\n"
+	check.call(reopened_hours._hours_tz.text == "Europe/Rome"
+			and not reopened_text.contains(UIStrings.t("hours.first_time")),
+			"una nuova apertura non rilegge gli orari appena persistiti")
+	hours_panel.queue_free()
+	reopened_hours.queue_free()
+	BackendBus.publish_settings(previous_settings)
+
 	# ── Ogni agente al suo banco ────────────────────────────────────────
 	# Il volto è legato alla sedia, e la sedia ora discende dal numero: due
 	# Scout attivi mostravano sempre le stesse due facce perché si pescava in

@@ -17,6 +17,8 @@
  * SDK nuovi: il REST API si chiama via fetch.
  */
 
+import { getUpstashConfigStatus } from "./upstash-config";
+
 const STORE = new Map<string, { count: number; windowStart: number }>();
 const CLEANUP_AT_MOST_EVERY_MS = 5 * 60_000;
 let lastCleanup = Date.now();
@@ -74,7 +76,8 @@ async function upstashCheck(
 ): Promise<RateLimitResult | null> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
+  const config = getUpstashConfigStatus();
+  if (!url || !token || !config.configured) return null;
 
   // INCR + EXPIRE atomici via Upstash pipeline REST. Se la prima call
   // restituisce 1, settiamo la finestra; altrimenti leggiamo PTTL.
