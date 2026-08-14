@@ -2,14 +2,25 @@
  * Local token: auth per il browser caricato dal desktop launcher.
  *
  * Il file `~/.jht/.local-token` contiene 32 byte random in hex (64
- * caratteri). Generato lazy al primo accesso del server. Il
- * middleware setta il valore in un cookie HttpOnly+SameSite=Strict
- * quando rileva una richiesta `localhost` diretta (niente forwarded
- * headers): il browser lo rinvia automaticamente sulle chiamate
- * successive, attraversando `requireAuth`.
+ * caratteri). Generato lazy al primo accesso del server.
  *
- * Header `Authorization: Bearer <token>` resta accettato come
- * fallback per dev manuali (curl).
+ * L'unico canale VIVO è l'header `Authorization: Bearer <token>`, usato
+ * dalle chiamate da CLI/curl sul box.
+ *
+ * 🚫 Il cookie `jht_local_token` viene LETTO ma NON viene scritto da
+ * nessuno. Qui c'era scritto che lo setta il middleware: falso, e falso
+ * per costruzione — il middleware gira su Edge runtime, dove `node:fs`
+ * non esiste e questo file non è importabile (vedi il commento in testa
+ * a `middleware.ts`). Nessun altro punto della codebase lo scrive: cercato
+ * `jht_local_token` in tutto il repo, sono tutte letture. Una frase
+ * sbagliata dentro il codice di autenticazione costa più che altrove —
+ * fa contare una via d'accesso che non esiste, e la fa contare a chi sta
+ * ragionando su chi può entrare. Il ramo cookie resta perché il giorno
+ * che un setter lato Node servirà (browser del desktop nativo) è lì
+ * pronto; finché non nasce, è inerte, e `local-token-cookie-claim.test.ts`
+ * fallisce se qualcuno lo scrive senza aggiornare questo commento.
+ * Precedente: `app/api/profile/route.ts` ha tolto del tutto la sua corsia
+ * cookie il 24/07, per lo stesso motivo.
  *
  * Su deploy CLOUD questa corsia non esiste per definizione: il token
  * significa "il browser sta parlando col box co-locato", e su Vercel un
@@ -83,7 +94,10 @@ export function extractBearerToken(
   return match ? match[1].toLowerCase() : null;
 }
 
-/** Estrae il token dal cookie `jht_local_token`, se presente e ben formato. */
+/**
+ * Estrae il token dal cookie `jht_local_token`, se presente e ben formato.
+ * Nessuno scrive quel cookie oggi: vedi la nota in testa al file.
+ */
 export function extractCookieToken(
   cookieValue: string | null | undefined,
 ): string | null {
@@ -101,9 +115,9 @@ function timingSafeEquals(a: string, b: string): boolean {
 }
 
 /**
- * Verifica se la richiesta presenta un local-token valido, sia via
- * header `Authorization: Bearer <hex>` (curl manuale) sia via cookie
- * `jht_local_token` (browser). Confronto in tempo costante.
+ * Verifica se la richiesta presenta un local-token valido, via header
+ * `Authorization: Bearer <hex>` (l'unico canale vivo) o via cookie
+ * `jht_local_token` (che nessuno scrive). Confronto in tempo costante.
  *
  * Su deploy cloud e' SEMPRE `false`: senza token atteso non c'e' confronto
  * possibile, quindi nessun chiamante puo' entrare nel ramo "solo SQLite".
