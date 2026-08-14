@@ -4,7 +4,11 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { randomUUID } from "node:crypto";
 import { JHT_HOME } from "@/lib/jht-paths";
-import { requireAuth, requireLocalWrite } from "@/lib/auth";
+import {
+  requireAuth,
+  requireLocalSecretAccess,
+  requireLocalWrite,
+} from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +60,12 @@ function mask(value: string): string {
  * GET una volta superato il check auth).
  */
 export async function GET() {
+  // Località PRIMA dell'identità: questa lista vive in `~/.jht/secrets.json`,
+  // cioè su una macchina sola. Una sessione Supabase valida dice chi sei, non
+  // che sei su quella macchina — e il mascheramento qui sotto riduce il danno,
+  // non lo annulla (nomi e tipi dicono già quali chiavi possiede l'utente).
+  const remote = await requireLocalSecretAccess();
+  if (remote) return remote;
   const denied = await requireAuth();
   if (denied) return denied;
   const store = load();

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { JHT_HOME } from "@/lib/jht-paths";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireLocalSecretAccess } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +16,16 @@ const SECRETS_PATH = path.join(JHT_HOME, "secrets.json");
  * true }`. Senza `confirm:true` la richiesta viene rifiutata: e' un
  * doppio click esplicito dell'utente, non un effetto collaterale di una
  * GET ad un URL conoscibile.
+ *
+ * È la superficie più sensibile del web — restituisce il valore in chiaro di
+ * quelli che il resto del codice chiama token VPS e chiavi SSH — quindi il
+ * primo controllo è la LOCALITÀ, prima ancora dell'identità e prima di
+ * toccare il file: fuori dal box non c'è risposta da dare, nemmeno un 404
+ * che confermerebbe l'esistenza di un secret con quell'id.
  */
 export async function POST(req: NextRequest) {
+  const remote = await requireLocalSecretAccess();
+  if (remote) return remote;
   const denied = await requireAuth();
   if (denied) return denied;
 

@@ -121,14 +121,18 @@ export async function isLocalRequest(): Promise<boolean> {
  *
  * Tre vie d'accesso, in ordine:
  *   1. Senza Supabase configurato: pass-through (deploy puramente locale).
- *   2. Local-token valido (cookie HttpOnly settato dal middleware su
- *      richieste localhost dirette, oppure header `Authorization: Bearer`
- *      per chiamate manuali da CLI/curl): pass-through.
+ *   2. Local-token valido, via header `Authorization: Bearer` (chiamate da
+ *      CLI/curl sul box). Il cookie `jht_local_token` viene ancora LETTO, ma
+ *      nessuno lo scrive: vedi `lib/local-token.ts`.
  *   3. Sessione Supabase autenticata: pass-through.
  *
  * Negli altri casi 401. La vecchia bypass "l'host e' localhost" non
  * basta: gli header `Host`/`X-Forwarded-Host` sono client-controllabili
  * e venivano sfruttati per l'auth bypass (vedi finding C1).
+ *
+ * ⚠️ Accerta l'IDENTITÀ, non la LOCALITÀ della macchina. Chi espone roba che
+ * esiste solo sul box aggiunge `requireLocalWrite` (scritture) o
+ * `requireLocalSecretAccess` (segreti in lettura).
  */
 export async function requireAuth(): Promise<NextResponse | null> {
   if (!isSupabaseConfigured) return null;
@@ -177,6 +181,52 @@ export async function requireLocalWrite(): Promise<NextResponse | null> {
   if (isCloudDeploy()) return readOnlyResponse();
   if (await isLocalRequest()) return null;
   return readOnlyResponse();
+}
+
+/**
+ * Gate di LOCALITÀ per le superfici che LEGGONO segreti dal filesystem del
+ * box (`~/.jht/secrets.json`: il codice che li scrive li descrive come token
+ * VPS e chiavi SSH).
+ *
+ * Perché non basta `requireAuth`: quello accerta CHI SEI, mai che la macchina
+ * sia la tua. Una sessione Supabase valida è sufficiente ad arrivare in fondo
+ * a una route, e finora `GET /api/secrets` e `POST /api/secrets/reveal` — che
+ * restituisce il valore IN CHIARO — non avevano altro. A difenderle era la
+ * TOPOLOGIA di deploy (sul cloud quel file non esiste, il container non serve
+ * più la dashboard dal 23/07), non il codice: la topologia cambia, il codice
+ * resta. È la forma del caso local-first di #154, al contrario — lì si
+ * sceglieva il locale dove non doveva, qui si serve il locale a chi non è lì.
+ *
+ * Fail-closed: si passa SOLO da una richiesta locale su un deploy non-cloud.
+ * Ogni altro caso — cloud, host non-localhost, forwarded header non fidato —
+ * è un 403, incluso quando la valutazione non è concludente.
+ *
+ * Distinta da `requireLocalWrite` di proposito: quella parla di scritture e
+ * risponde "si fa dall'app desktop", che per una lettura sarebbe un consiglio
+ * sbagliato. Qui la risposta non racconta dove vivono i segreti.
+ */
+export async function requireLocalSecretAccess(): Promise<NextResponse | null> {
+  const cloud = isCloudDeploy();
+  // Su cloud la risposta è già decisa: non si guarda nemmeno l'header, che è
+  // client-controllabile e non ha voce in capitolo su questa scelta.
+  const local = cloud ? false : await isLocalRequest();
+  return secretsAreReadable(local, cloud) ? null : secretsUnavailableResponse();
+}
+
+/**
+ * La decisione, senza il contesto di richiesta attorno — la parte che si
+ * sbaglia, isolata perché un test possa enumerarne le quattro combinazioni
+ * (stessa forma di `shouldUseLocalFirst` in `lib/positions/local-first-write`).
+ */
+export function secretsAreReadable(
+  localRequest: boolean,
+  cloudDeploy: boolean,
+): boolean {
+  return localRequest && !cloudDeploy;
+}
+
+function secretsUnavailableResponse(): NextResponse {
+  return NextResponse.json({ error: "local_only" }, { status: 403 });
 }
 
 function readOnlyResponse(): NextResponse {
