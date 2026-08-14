@@ -52,12 +52,40 @@ func _run() -> void:
 	_check("pull 0%: percentuale a video", w._detail_lbl.text.contains("0%"),
 			w._detail_lbl.text)
 	w.apply_progress({"got_mb": 1280.0, "total_mb": 3200.0,
-			"fraction": 0.4, "layers": 12})
+			"fraction": 0.4, "layers": 12,
+			"done_layers": 7, "phase": "downloading"})
 	_check("pull 40%: barra a 0.4", is_equal_approx(w._bar.fraction, 0.4))
 	_check("pull 40%: percentuale a video", w._detail_lbl.text.contains("40%"),
 			w._detail_lbl.text)
 	_check("pull 40%: GB scaricati/totali a video",
 			w._detail_lbl.text.contains("GB"), w._detail_lbl.text)
+	_check("pull 40%: fase e layer reali a video",
+			w._detail_lbl.text.contains(
+					UIStrings.t("setup.pull_phase_downloading"))
+			and w._detail_lbl.text.contains("7/12"), w._detail_lbl.text)
+
+	# Una ristampa identica non e' un evento di vita; la transizione di stage
+	# agli stessi byte invece deve aggiornare subito testo e heartbeat UI.
+	var event_before_duplicate := w._last_event_ms
+	w.apply_progress({"got_mb": 1280.0, "total_mb": 3200.0,
+			"fraction": 0.4, "layers": 12,
+			"done_layers": 7, "phase": "downloading"})
+	_check("duplicato UI: heartbeat invariato",
+			w._last_event_ms == event_before_duplicate, str(w._last_event_ms))
+	w._last_event_ms = 0
+	w.apply_progress({"got_mb": 1280.0, "total_mb": 3200.0,
+			"fraction": 0.4, "layers": 12,
+			"done_layers": 7, "phase": "extracting"})
+	_check("stage UI: stessi byte ma heartbeat rinnovato", w._last_event_ms > 0)
+	_check("stage UI: extracting visibile",
+			w._detail_lbl.text.contains(UIStrings.t("setup.pull_phase_extracting")),
+			w._detail_lbl.text)
+	_check("stage UI: extracting usa barra attivita", w._bar.fraction < 0.0)
+	w.apply_progress({"got_mb": 1280.0, "total_mb": 0.0,
+			"fraction": -1.0, "layers": 12,
+			"done_layers": 12, "phase": "complete"})
+	_check("stage UI: complete riempie la barra anche senza totale byte",
+			is_equal_approx(w._bar.fraction, 1.0))
 
 	# 40 secondi senza eventi: la barra DEVE dirlo, non restare immobile.
 	w._last_event_ms -= 40000
