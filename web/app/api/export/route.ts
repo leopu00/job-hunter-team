@@ -3,6 +3,11 @@ import * as path from "node:path";
 import { JHT_HOME } from "@/lib/jht-paths";
 import { readJsonSafe } from "@/lib/json-files";
 import { requireAuth } from "@/lib/auth";
+// Titoli e nomi azienda arrivano dagli annunci: chi li pubblica sceglie il
+// primo carattere, e in un CSV il primo carattere decide se la cella è un
+// dato o una formula. Il neutralizzatore sta in `shared/` perché il comando
+// `jht export` ha lo stesso problema e non deve avere una risposta diversa.
+import { toCsv } from "../../../../shared/export/csv.js";
 
 export const dynamic = "force-dynamic";
 
@@ -71,21 +76,6 @@ const LOADERS: Record<
   companies: loadWrapped("companies.json"),
   interviews: loadWrapped("interviews.json"),
 };
-
-function toCsv(rows: Record<string, unknown>[]): string {
-  if (rows.length === 0) return "";
-  const keys = [...new Set(rows.flatMap((r) => Object.keys(r)))];
-  const escape = (v: unknown): string => {
-    const s =
-      v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
-    return s.includes(",") || s.includes('"') || s.includes("\n")
-      ? `"${s.replace(/"/g, '""')}"`
-      : s;
-  };
-  const header = keys.map(escape).join(",");
-  const lines = rows.map((r) => keys.map((k) => escape(r[k])).join(","));
-  return [header, ...lines].join("\n");
-}
 
 /** GET /api/export?source=tasks&format=csv&from=2026-01-01&to=2026-12-31 */
 export async function GET(req: NextRequest) {
