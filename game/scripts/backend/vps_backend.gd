@@ -917,14 +917,18 @@ static var PROFILE_SAVE_PY := payload("profile_save.py")
 ## scartate — il pannello riprova al prossimo cambio di finestra.
 var _usage_history_busy := false
 
-func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
+func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int,
+		request_id := "") -> void:
 	if _usage_history_busy:
 		return
 	_usage_history_busy = true
-	_queue_worker(_do_fetch_usage_history.bind(from_ts, to_ts, bucket_sec))
+	_queue_worker(_do_fetch_usage_history.bind(from_ts, to_ts, bucket_sec,
+			request_id))
 
-func _do_fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
-	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec}
+func _do_fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int,
+		request_id := "") -> void:
+	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec,
+			"request_id": request_id}
 	var res := _ssh_python(USAGE_HISTORY_PY % [int(from_ts), int(to_ts), bucket_sec])
 	_usage_history_busy = false
 	if _stop:

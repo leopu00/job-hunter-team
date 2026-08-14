@@ -343,7 +343,7 @@ func _paragraph(text: String, color: Color) -> RichTextLabel:
 
 func _written_positions() -> Array:
 	var result: Array = []
-	for raw in BackendBus.positions:
+	for raw in SimBadge.visible_positions():
 		var p: Dictionary = raw
 		var status := _text(p.get("status"))
 		if _text(p.get("written_at")) != "" or status in ["ready", "applied", "response"]:

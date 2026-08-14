@@ -604,6 +604,8 @@ const S := {
 	"common.updated": "frissítve: %s",
 	"common.backend_unsupported": "A csatlakoztatott backend nem kínálja ezt a funkciót.",
 	"common.backend_not_connected": "A háttérrendszer nincs csatlakoztatva.",
+	"common.connect_team": "Indítsd el vagy csatlakoztasd a csapatot a valós adatok megtekintéséhez.",
+	"common.positions_empty": "A jelenlegi pillanatképben nincsenek pozíciók.",
 
 	"backend.this_computer": "ez a számítógép",
 	"backend.local_connecting": "kapcsolódás a helyi konténerhez…",

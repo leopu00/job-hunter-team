@@ -35,11 +35,12 @@ func _ready() -> void:
 	var title := TerminalTheme.label(UIStrings.t("registry.title"), 26, Palette.WHITE, "xbold")
 	box.add_child(title)
 
-	# con la VPS: le candidature VERE (CV pronto → inviata → risposta).
-	if not BackendBus.positions.is_empty():
+	var data_state := SimBadge.current_state()
+	# LIVE usa soltanto candidature vere, anche quando lo snapshot e' vuoto.
+	if data_state == SimBadge.DataState.LIVE:
 		box.add_child(HSeparator.new())
 		var live_rows := 0
-		for p in BackendBus.positions:
+		for p in SimBadge.visible_positions():
 			if not LIVE_STAGES.has(str(p.get("status", ""))):
 				continue
 			box.add_child(_live_row(p))
@@ -47,12 +48,15 @@ func _ready() -> void:
 		if live_rows == 0:
 			box.add_child(TerminalTheme.label(UIStrings.t("apps.empty_live"),
 					17, Palette.DIM))
-	else:
+	elif data_state == SimBadge.DataState.DEMO:
 		var apps: Array = TeamData.applications()
 		if apps.is_empty():
 			box.add_child(TerminalTheme.label(UIStrings.t("registry.empty"), 17, Palette.DIM))
 		for app in apps:
 			box.add_child(_app_row(app))
+	else:
+		box.add_child(TerminalTheme.label(UIStrings.t("common.connect_team"),
+				17, Palette.DIM))
 
 	var hint := TerminalTheme.label(UIStrings.t("registry.close"), 14, Palette.DIM)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

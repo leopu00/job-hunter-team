@@ -93,7 +93,7 @@ static func is_exact(p: Dictionary) -> bool:
 static func build(filters: Dictionary) -> Dictionary:
 	var clusters := {}
 	var no_coords: Array = []
-	for p in BackendBus.positions:
+	for p in SimBadge.visible_positions():
 		if not passes(p, filters):
 			continue
 		var coord := coord_of(p)

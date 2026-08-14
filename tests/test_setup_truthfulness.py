@@ -27,16 +27,256 @@ def test_setup_cta_does_not_cover_truth_badge():
     assert "position = Vector2((get_parent_area_size().x - size.x) / 2.0, 14)" in badge
 
 
-def test_truth_badge_tracks_demo_data_not_only_connection():
+def test_truth_badge_uses_fail_closed_three_state_provenance():
     badge = _src("game/scripts/ui/sim_badge.gd")
     assert "BackendBus.positions_updated.connect" in badge
-    assert "BackendBus.is_live() and not BackendBus.positions_are_demo" in badge
+    assert "enum DataState { LIVE, DEMO, UNAVAILABLE }" in badge
+    assert "static func classify(" in badge
+    assert "if demo_gate:" in badge
+    assert "if backend_live and not positions_demo:" in badge
+    assert "return DataState.UNAVAILABLE" in badge
+    assert "visible = state == DataState.DEMO" in badge
+    assert 'OS.get_environment("JHT_DEMO") == "1"' in badge
+
+
+def test_untrusted_demo_marker_cannot_enable_synthetic_data():
+    selftest = _src("game/scripts/office/office_selftests.gd")
+    assert "[false, true, false, SimBadge.DataState.UNAVAILABLE]" in selftest
+    assert "[true, true, false, SimBadge.DataState.UNAVAILABLE]" in selftest
+    assert "[false, false, true, SimBadge.DataState.DEMO]" in selftest
+
+
+def test_release_truthfulness_selftest_excludes_its_own_demo_fixture():
+    badge = _src("game/scripts/ui/sim_badge.gd")
+    selftest = _src("game/scripts/office/office_selftests.gd")
+    assert 'OS.get_environment("JHT_TRUTHFULNESS_TEST") == "1"' in badge
+    assert '"JHT_TRUTHFULNESS_TEST": "_truthfulness_selftest"' in selftest
+    assert "func _truthfulness_selftest()" in selftest
+    assert "var roster_empty: bool = office.agents.is_empty()" in selftest
+    assert "var counterfeit_present: bool = BackendBus.positions_are_demo" in selftest
+    assert "piles_empty" in selftest
+    assert "piles_static" in selftest
+    assert "inbox_hidden" in selftest
+    assert "chat_live_state" in selftest
+    assert "usage_live" in selftest
+    assert '"PROTOTYPE", "MOCK", "SIMULATION", "SIMULAZIONE"' in selftest
+
+
+def test_truthfulness_oracle_is_executed_by_matrix_and_release_workflow():
+    row = (
+        "truthfulness|run|gate|any|JHT_SCENE=office "
+        "JHT_TRUTHFULNESS_TEST=1|-|TRUTHFULNESS-TEST PASS"
+    )
+    matrix = _src("game/tools/test-matrix.txt")
+    release = _src(".github/workflows/release.yml")
+    assert matrix.splitlines().count(row) == 1
+    assert release.count(
+        "JHT_SCENE=office JHT_TRUTHFULNESS_TEST=1 godot --headless --path game"
+    ) == 1
+    assert release.count('grep "TRUTHFULNESS-TEST PASS"') == 1
+
+
+def test_unavailable_paper_piles_are_empty_static_and_not_reported():
+    office = _src("game/scripts/office/office.gd")
+    creation = office[
+        office.index("var p := PaperPile.new(station.pile_spot())") :
+        office.index("PaperPile.inbox[dept_id] = p")
+    ]
+    assert creation.count("if SimBadge.synthetic_data_allowed():") == 1
+    assert creation.count("p.restock =") == 1
+    assert creation.count("p.add_sheets(randi_range(1, 6))") == 1
+    assert "else:\n\t\t\tp.set_target(0, true)" in creation
+    sync = office[office.index("func _sync_piles(") : office.index("func _on_transitions(")]
+    assert "SimBadge.DataState.UNAVAILABLE" in sync
+    assert "PaperPile.inbox[dept_id].set_target(0, true)" in sync
+
+    transitions = office[
+        office.index("func _on_transitions(") :
+        office.index("func _react_to_transition(")
+    ]
+    assert "if BackendBus.positions.is_empty():" in transitions
+    assert transitions.index("if BackendBus.positions.is_empty():") < transitions.index(
+        "_reseed_piles()"
+    )
+    assert "else:\n\t\t_sync_piles(" in transitions
+
+    department = _src("game/scripts/ui/department_panel.gd")
+    inbox = department[
+        department.index("if PaperPile.inbox.has(dept_id)") :
+        department.index("box.add_child(HSeparator.new())")
+    ]
+    assert "SimBadge.DataState.UNAVAILABLE" in inbox
+
+
+def test_every_position_ui_consumer_uses_the_fail_closed_visible_snapshot():
+    raw = re.compile(r"\bBackendBus\.positions\b")
+    direct = {}
+    for path in (ROOT / "game/scripts/ui").glob("*.gd"):
+        code = "\n".join(
+            line for line in path.read_text(encoding="utf-8").splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        count = len(raw.findall(code))
+        if count:
+            direct[path.name] = count
+    # Solo il rubinetto centrale puo' leggere lo snapshot grezzo.
+    assert direct == {"sim_badge.gd": 1}
+
+    for relative in (
+        "game/scripts/ui/map_pins.gd",
+        "game/scripts/ui/map_view.gd",
+        "game/scripts/ui/world_map.gd",
+        "game/scripts/ui/global_search.gd",
+        "game/scripts/ui/positions_timeline.gd",
+        "game/scripts/ui/pipeline_queue_panel.gd",
+        "game/scripts/ui/output_archive_panel.gd",
+        "game/scripts/ui/stats_charts.gd",
+        "game/scripts/ui/registry_panel.gd",
+        "game/scripts/ui/section_panel.gd",
+    ):
+        assert "SimBadge.visible_positions()" in _src(relative), relative
+
+
+def test_open_chat_and_usage_views_react_to_provenance_changes():
+    section = _src("game/scripts/ui/section_panel.gd")
+    assert "BackendBus.connection_changed.connect(_on_provenance_refresh)" in section
+    assert "BackendBus.positions_updated.connect(_on_positions_provenance_refresh)" in section
+    for relative in (
+        "game/scripts/ui/usage_history_view.gd",
+        "game/scripts/ui/agent_usage_view.gd",
+    ):
+        source = _src(relative)
+        assert "BackendBus.connection_changed.connect(_on_connection_changed)" in source
+        assert "BackendBus.positions_updated.connect(_on_positions_provenance_changed)" in source
+        assert 'UIStrings.t("common.connect_team")' in source
+        assert "previous == int(SimBadge.DataState.UNAVAILABLE)" in source
+
+
+def test_usage_responses_are_generation_bound_and_cleared_fail_closed():
+    bus = _src("game/scripts/backend/backend_bus.gd")
+    assert "var _active_usage_requests: Dictionary = {}" in bus
+    assert "_active_usage_requests.clear()" in bus
+    assert "_active_usage_requests[str(request_id)] = true" in bus
+    assert "if not _active_usage_requests.has(request_id):" in bus
+
+    for relative in (
+        "game/scripts/backend/backend_adapter.gd",
+        "game/scripts/backend/mock_backend.gd",
+        "game/scripts/backend/vps_backend.gd",
+    ):
+        source = _src(relative)
+        assert "request_id" in source, relative
+
+    for relative in (
+        "game/scripts/ui/usage_history_view.gd",
+        "game/scripts/ui/agent_usage_view.gd",
+    ):
+        source = _src(relative)
+        assert "var _provenance_generation := 0" in source
+        assert "var _request_serial := 0" in source
+        assert 'str(query.get("request_id", ""))' in source
+        assert "SimBadge.current_state() == SimBadge.DataState.UNAVAILABLE" in source
+        assert "func _clear_usage()" in source
+        assert "_data = {}" in source
+
+
+def test_live_empty_copy_is_distinct_and_shared_by_all_position_surfaces():
+    badge = _src("game/scripts/ui/sim_badge.gd")
+    assert "static func positions_empty_copy() -> String:" in badge
+    assert 'UIStrings.t("common.positions_empty")' in badge
+    for relative in (
+        "game/scripts/ui/section_panel.gd",
+        "game/scripts/ui/global_search.gd",
+        "game/scripts/ui/world_map.gd",
+    ):
+        assert "SimBadge.positions_empty_copy()" in _src(relative), relative
+
+
+def test_backend_reset_revokes_roster_in_bus_and_office():
+    bus = _src("game/scripts/backend/backend_bus.gd")
+    reset = bus[
+        bus.index("func _reset_connection_snapshots()") :
+        bus.index("func disconnect_backend()")
+    ]
+    assert "agents = []" in reset
+    assert "agents_updated.emit(agents)" in reset
+    assert reset.index("agents_updated.emit(agents)") < reset.index("backend_reset.emit()")
+
+    office = _src("game/scripts/office/office.gd")
+    reset_office = office[
+        office.index("func _on_backend_reset()") :
+        office.index("func _reseed_piles()")
+    ]
+    assert "sync_agents([])" in reset_office
+
+
+def test_unavailable_copy_is_backend_neutral_in_every_locale():
+    catalogs = [ROOT / "game/scripts/ui_strings.gd"]
+    catalogs.extend(sorted((ROOT / "game/scripts/i18n").glob("ui_*.gd")))
+    assert len(catalogs) == 7
+    for path in catalogs:
+        source = path.read_text(encoding="utf-8")
+        assert source.count('"common.connect_team"') == 1, path.name
+        assert source.count('"common.positions_empty"') == 1, path.name
 
 
 def test_live_empty_database_never_falls_back_to_mock_kpis():
     hud = _src("game/scripts/office/team_hud.gd")
-    assert "BackendBus.is_live() and not BackendBus.positions_are_demo" in hud
+    assert "data_state == SimBadge.DataState.LIVE" in hud
+    assert "data_state == SimBadge.DataState.UNAVAILABLE" in hud
+    assert '_positions.text = "—"' in hud
     assert "BackendBus.kpi_summary()" in hud
+
+
+def test_normal_office_never_materializes_showroom_or_demo_positions():
+    office = _src("game/scripts/office/office.gd")
+    assert (
+        "BackendBus.agents.is_empty() and SimBadge.synthetic_data_allowed()"
+        in office
+    )
+    assert "world == null or not SimBadge.synthetic_data_allowed()" in office
+    assert "elif SimBadge.synthetic_data_allowed()" in office
+    assert "elif BackendBus.positions_are_demo:" in office
+    assert "BackendBus.clear_demo_positions()" in office
+
+
+def test_wizard_declares_simulation_only_in_explicit_demo_state():
+    wizard = _src("game/scripts/wizard.gd")
+    assert wizard.count("SimBadge.current_state() == SimBadge.DataState.DEMO") == 2
+    assert '"" if BackendBus.is_live() else UIStrings.t("wizard.sim_badge")' not in wizard
+
+
+def test_teamdata_consumers_are_gated_by_demo_state():
+    panel = _src("game/scripts/ui/section_panel.gd")
+    assert "elif data_state == SimBadge.DataState.DEMO:" in panel
+    assert "if data_state == SimBadge.DataState.UNAVAILABLE:" in panel
+    assert "func _add_data_unavailable()" in panel
+
+    for relative in (
+        "game/scripts/ui/map_view.gd",
+        "game/scripts/ui/registry_panel.gd",
+        "game/scripts/ui/department_panel.gd",
+        "game/scripts/ui/agent_card.gd",
+        "game/scripts/characters/agent_npc.gd",
+    ):
+        source = _src(relative)
+        assert "SimBadge." in source, relative
+
+
+def test_every_teamdata_callsite_has_a_local_provenance_gate():
+    call = re.compile(r"\bTeamData\.\w+\(")
+    consumers = 0
+    for path in (ROOT / "game/scripts").rglob("*.gd"):
+        source = path.read_text(encoding="utf-8")
+        for match in call.finditer(source):
+            start = source.rfind("\nfunc ", 0, match.start())
+            end = source.find("\nfunc ", match.end())
+            function = source[start : len(source) if end < 0 else end]
+            assert "SimBadge." in function, (
+                f"TeamData consumer without provenance gate: {path.relative_to(ROOT)}"
+            )
+            consumers += 1
+    assert consumers == 20
 
 
 def test_showroom_agents_wait_until_operational_team_exists():

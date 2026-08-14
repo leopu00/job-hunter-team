@@ -220,6 +220,9 @@ setup_busy|run|gate|any|JHT_SCENE=office JHT_SETUP_BUSY_TEST=1|-|SETUP-BUSY-TEST
 setup_gating|run|gate|any|JHT_SCENE=office JHT_SETUP_GATING_TEST=1|-|SETUP-GATING-TEST PASS
 bubble_layout|run|gate|any|JHT_SCENE=office JHT_BUBBLE_LAYOUT_TEST=1|-|BUBBLE-LAYOUT-TEST PASS
 sim_badge|run|gate|any|JHT_SCENE=office JHT_SIM_BADGE_TEST=1|-|SIM-BADGE-TEST PASS
+# Oracle release della provenienza: fixture presente ma non autorizzata deve
+# restare invisibile, poi le viste gia' aperte reagiscono a UNAVAILABLE->LIVE.
+truthfulness|run|gate|any|JHT_SCENE=office JHT_TRUTHFULNESS_TEST=1|-|TRUTHFULNESS-TEST PASS
 promo_agent_review|run|gate|any|JHT_SCENE=office JHT_PROMO=agent-review JHT_PROMO_AGENT=scout JHT_PROMO_DIRECTIONS=1|--fixed-fps 30 --quit-after 1200|PROMO-AGENT-REVIEW PASS scout
 
 # ------------------------------------------------------------------- watch

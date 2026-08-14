@@ -612,6 +612,8 @@ const S := {
 	"common.updated": "updated: %s",
 	"common.backend_unsupported": "The connected backend does not provide this feature.",
 	"common.backend_not_connected": "Backend not connected.",
+	"common.connect_team": "Start or connect the team to see live data.",
+	"common.positions_empty": "There are no positions in the current snapshot.",
 
 	"backend.this_computer": "this computer",
 	"backend.local_connecting": "connecting to the local container…",
