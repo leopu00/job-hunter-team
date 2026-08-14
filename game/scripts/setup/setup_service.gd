@@ -4,6 +4,9 @@ extends Node
 
 signal status_changed(status: Dictionary)
 signal action_changed(action: String, running: bool, message: String, ok: bool)
+## Stato causale dell'avvio team. Vive nel servizio, non nel pannello: un
+## rebuild della UI non può cancellare fallimento o recupero in corso.
+signal team_start_state_changed(state: Dictionary)
 ## Fase dell'azione lunga in corso ("engine" → "image" → "container", "team").
 ## L'attivazione è un processo a più fasi dietro UN pulsante: senza questo
 ## segnale la UI sa solo che "qualcosa gira", non a che punto è — e l'utente
@@ -18,6 +21,9 @@ signal pull_progress(info: Dictionary)
 ## La UI del gioco ospita il processo in una console modale. Il servizio non
 ## deve mai aprire Terminal.app/cmd/xterm fuori dall'applicazione.
 signal terminal_requested(context: String, spec: Dictionary)
+
+const TeamStartStateModel := preload("res://scripts/setup/team_start_state.gd")
+const TEAM_WATCHDOG_LOG := "/jht_home/logs/agent-watchdog.log"
 
 const PROVIDERS := {
 	"claude": {
@@ -97,6 +103,10 @@ var last_upgrade := {}
 ## in `status`: un check non cambia il runtime e non deve fingersi un probe
 ## del container. La sidebar la usa per il badge, mai per avviare un polling.
 var last_upgrade_check := {}
+## Stato separato da `_action_running`: il comando può essere finito mentre il
+## watchdog sta ancora recuperando CAPITANO. Esposto come snapshot per i
+## consumer UI, che verranno collegati dopo la fusione dei rami concorrenti.
+var team_start_state := TeamStartStateModel.new()
 var _timer: Timer
 
 
@@ -105,6 +115,10 @@ var _timer: Timer
 ## non può saperlo).
 func busy() -> bool:
 	return _action_running
+
+
+func team_start_snapshot() -> Dictionary:
+	return team_start_state.snapshot().duplicate(true)
 
 
 func _ready() -> void:
@@ -447,15 +461,21 @@ func refresh() -> void:
 	_probe_running = true
 	# La VPS si legge sul thread principale (BackendBus non è thread-safe) e
 	# viaggia col task: il worker non deve chiedere al bus com'è connesso.
-	WorkerThreadPool.add_task(_probe.bind(_connected_vps()))
+	var start_probe := team_start_state.snapshot()
+	WorkerThreadPool.add_task(_probe.bind(_connected_vps(), start_probe))
 
 
-func _probe(vps: Dictionary) -> void:
+func _probe(vps: Dictionary, start_probe: Dictionary) -> void:
 	var next := _probe_host(_jht_home())
 	# Passi 02/03/04 chiesti ALLA MACCHINA CONNESSA, sullo stesso trasporto del
 	# passo 01. Blocca solo questo worker, mai il thread della UI.
 	if not vps.is_empty():
 		next["vps_probe"] = _probe_vps(vps)
+	var cursor := int(start_probe.get("watchdog_cursor", -1))
+	var deadline := int(start_probe.get("recovery_deadline_ms", 0))
+	if cursor >= 0 and deadline > Time.get_ticks_msec():
+		next["team_watchdog_delta"] = _watchdog_log_delta(vps, cursor)
+	next["team_start_attempt"] = int(start_probe.get("attempt", -1))
 	# Alcuni self-test Godot chiudono l'albero subito dopo l'assert mentre il
 	# probe Docker è ancora nel worker. Non accodare callback su un autoload
 	# già smontato durante il teardown.
@@ -497,7 +517,15 @@ func _apply_probe(next: Dictionary) -> void:
 		_apply_vps_probe(next, next["vps_probe"])
 		next.erase("vps_probe")
 	_finalize(next)
+	var watchdog_delta := str(next.get("team_watchdog_delta", ""))
+	var observed_attempt := int(next.get("team_start_attempt", -1))
+	next.erase("team_watchdog_delta")
+	next.erase("team_start_attempt")
 	status = next
+	if team_start_state.observe(observed_attempt,
+			bool(status.get("team_running", false)), watchdog_delta,
+			Time.get_ticks_msec()):
+		team_start_state_changed.emit(team_start_snapshot())
 	status_changed.emit(status.duplicate(true))
 	if bool(status.get("container_running", false)) \
 			and BackendBus.state == BackendBus.DISCONNECTED:
@@ -3431,6 +3459,8 @@ func start_team() -> void:
 		action_changed.emit("team", false,
 				UIStrings.t("team.action.not_ready"), false)
 		return
+	team_start_state.begin(Time.get_ticks_msec())
+	team_start_state_changed.emit(team_start_snapshot())
 	_start_action("team", _do_start_team.bind(_vps_config()))
 
 
@@ -3450,17 +3480,22 @@ func control_agent(role: String, restart: bool) -> void:
 
 func _do_start_team(vps: Dictionary) -> Dictionary:
 	_set_phase("team")
+	# Cursor PRIMA del comando: soltanto le righe aggiunte dopo questo punto
+	# possono attestare che il watchdog sta recuperando QUESTO tentativo.
+	var watchdog_cursor := _watchdog_log_cursor(vps)
 	var res := _run_ssh(vps, "docker exec jht node /app/cli/bin/jht.js team start") \
 			if not vps.is_empty() else _run("docker", PackedStringArray([
 					"exec", "jht", "node", "/app/cli/bin/jht.js", "team", "start"] ))
 	return {"ok": res["code"] == 0,
+			"team_operation": "start", "command_output": str(res.get("out", "")),
+			"watchdog_cursor": watchdog_cursor,
 			"message": UIStrings.t("team.action.started") if res["code"] == 0 \
 			else UIStrings.t("team.action.start_failed") % str(res["out"]).right(240)}
 
 
 static func _do_stop_team(vps: Dictionary) -> Dictionary:
 	var result := _run_cli(vps, PackedStringArray(["team", "stop", "--all"]))
-	return {"ok": result["code"] == 0,
+	return {"ok": result["code"] == 0, "team_operation": "stop",
 			"message": UIStrings.t("team.action.stopped") if result["code"] == 0 \
 			else UIStrings.t("team.action.stop_failed") % str(result.get("out", "")).right(240)}
 
@@ -3491,6 +3526,48 @@ static func _run_cli(vps: Dictionary, args: PackedStringArray) -> Dictionary:
 	for arg in args:
 		command += " " + _shell_quote(arg)
 	return _run_ssh(vps, command)
+
+
+## Esegue argv costanti dentro al runtime scelto. Il percorso remoto quota ogni
+## argomento separatamente; nessun dato utente entra negli script qui sotto.
+static func _run_container(vps: Dictionary, args: PackedStringArray) -> Dictionary:
+	if vps.is_empty():
+		var local := PackedStringArray(["exec", "jht"])
+		local.append_array(args)
+		return _run("docker", local)
+	var command := "docker exec jht"
+	for arg in args:
+		command += " " + _shell_quote(arg)
+	return _run_ssh(vps, command)
+
+
+## Byte già presenti prima dello start. -1 significa che il confine non è
+## osservabile: in quel caso la state machine resta fail-closed su `failed` e
+## non inventa un recupero.
+static func _watchdog_log_cursor(vps: Dictionary) -> int:
+	var script := "p=" + _shell_quote(TEAM_WATCHDOG_LOG) \
+			+ "; if [ -f \"$p\" ]; then wc -c < \"$p\"; else printf '0\\n'; fi"
+	var result := _run_container(vps, PackedStringArray(["sh", "-c", script]))
+	var raw := str(result.get("out", "")).strip_edges()
+	if int(result.get("code", -1)) != 0 or not raw.is_valid_int():
+		return -1
+	return maxi(int(raw), 0)
+
+
+## Legge soltanto l'append successivo al cursor e ne limita il volume. Se il
+## file è stato troncato/ruotato, il rapporto causale è perso: ritorno vuoto,
+## quindi mai `recovering` per deduzione.
+static func _watchdog_log_delta(vps: Dictionary, cursor: int) -> String:
+	if cursor < 0:
+		return ""
+	var first_byte := cursor + 1
+	var script := "p=" + _shell_quote(TEAM_WATCHDOG_LOG) \
+			+ "; [ -f \"$p\" ] || exit 4" \
+			+ "; size=$(wc -c < \"$p\") || exit 5" \
+			+ "; [ \"$size\" -ge " + str(cursor) + " ] || exit 6" \
+			+ "; tail -c +" + str(first_byte) + " \"$p\" | tail -c 16384"
+	var result := _run_container(vps, PackedStringArray(["sh", "-c", script]))
+	return str(result.get("out", "")) if int(result.get("code", -1)) == 0 else ""
 
 
 func _start_action(action: String, callable: Callable, start_message := "") -> void:
@@ -3539,6 +3616,15 @@ func _finish_action(action: String, result: Dictionary) -> void:
 	current_action = ""
 	action_phase = ""
 	last_pull = {}
+	if action == "team" and str(result.get("team_operation", "")) == "start":
+		team_start_state.finish_command(bool(result.get("ok", false)),
+				str(result.get("command_output", "")),
+				int(result.get("watchdog_cursor", -1)), Time.get_ticks_msec())
+		team_start_state_changed.emit(team_start_snapshot())
+	elif action == "team" and str(result.get("team_operation", "")) == "stop" \
+			and bool(result.get("ok", false)):
+		team_start_state.stopped(Time.get_ticks_msec())
+		team_start_state_changed.emit(team_start_snapshot())
 	if action == "upgrade":
 		last_upgrade = result.duplicate(true)
 		result["message"] = _upgrade_ui_message(result)
