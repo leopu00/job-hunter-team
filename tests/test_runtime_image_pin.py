@@ -29,7 +29,16 @@ def test_canonical_manifest_pins_every_distributed_consumer() -> None:
     )
     assert pin.image_ref.startswith("ghcr.io/leopu00/jht@sha256:")
     assert len(pin.digest) == len("sha256:") + 64
-    assert (ROOT / ".dockerignore").read_text().splitlines().count("release/") == 1
+    # `release/` resta fuori dal contesto — la riga dice ORA `**/release/`,
+    # perche' #177 ha reso le esclusioni valide anche in profondita'. La
+    # proprieta' e' la stessa (il pin OCI non deve rientrare nel build e
+    # rompere il ciclo digest->commit->digest), la scrittura no, e contare una
+    # stringa letterale la legava alla scrittura. Che l'immagine sia davvero
+    # senza `release/` lo misura `tests/test_image_context.py` sul layer.
+    excludes = (ROOT / ".dockerignore").read_text().splitlines()
+    assert [line for line in excludes if line in ("release/", "**/release/")] == [
+        "**/release/"
+    ]
 
 
 @pytest.mark.parametrize(
