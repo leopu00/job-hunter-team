@@ -14,6 +14,14 @@ import {
  * differenza fra «la pagina risponde» e «la pagina funziona» — la stessa
  * che separa queste spec dalle 75 in quarantena.
  *
+ * ⚠️ Aggiornato con #172, che ha reso obsoleto lo scarto in un tempo solo:
+ * ora il gesto apre il pannello del motivo e la scrittura parte SOLO dopo
+ * averlo scelto. Il test attraversa i due tempi invece di aspettare al click
+ * una POST che non parte più — e ne approfitta per fissare la proprietà
+ * nuova: fra il gesto e il motivo non dev'essere partita nessuna scrittura.
+ * Il conteggio del mazzo avanza al GESTO, non alla conferma: le asserzioni
+ * sull'avanzamento restano quindi le stesse.
+ *
  * Meccanica verificata con sonda headless prima di scrivere (2026-08-08):
  * lo stack rende la card corrente + le 2 successive, quindi la prova
  * dell'avanzamento non è «il titolo compare» (c'è già) ma:
@@ -48,6 +56,10 @@ const DISCARD_RE =
   /non interessante|not interesting|nem érdekes|no interesante|uninteressant|pas intéressant|não interessante/i;
 const LIKE_RE =
   /molto interessante|very interesting|nagyon érdekes|muy interesante|sehr interessant|très intéressant|muito interessante/i;
+// Conferma del pannello del motivo, per un motivo di GUSTO (`whyConfirmTaste`
+// nei sette cataloghi). Con un motivo FATTUALE il bottone direbbe «escludi»
+// e la scrittura andrebbe su un'altra route: qui si resta sul giudizio.
+const CONFIRM_TASTE_RE = /^(salva|save|mentés|guardar|speichern|enregistrer)$/i;
 
 /** Il contatore del mazzo: l'unico testo della pagina nella forma `1/25`
  * (ancorato ^…$ perché date e stipendi contengono slash e cifre). */
@@ -86,14 +98,49 @@ test.describe("area riservata — swipe interattivo", () => {
       "la quarta card è già nel DOM: lo stack rende più di tre card",
     ).toBe(0);
 
-    // Click su scarta: il giudizio deve anche PERSISTERE (in demo: cookie
-    // overlay) — se la POST fallisse, il toast d'errore citerebbe il titolo
-    // e le asserzioni sotto fallirebbero.
+    // Da #172 lo scarto è in DUE tempi, e il test attraversa entrambi invece
+    // di aspettare una POST che non parte più al click: il gesto apre il
+    // pannello del motivo, la scrittura avviene solo alla conferma. Un
+    // «non interessante» senza motivo insegnava allo Scout a evitare azienda,
+    // famiglia di ruolo e località anche quando la posizione era solo scaduta.
+    const writes: string[] = [];
+    page.on("request", (r) => {
+      if (r.method() === "POST" && /\/(feedback|user-exclude)$/.test(r.url()))
+        writes.push(r.url());
+    });
+
+    await page.getByRole("button", { name: DISCARD_RE }).click();
+    // Il pannello si riconosce dal selettore dei motivi: la schermata filtri
+    // è anch'essa `role="dialog"` (chiusa, qui) e senza questo filtro un
+    // domani basterebbe un secondo dialogo per far fallire lo strict mode
+    // con un messaggio che non c'entra.
+    const why = page
+      .getByRole("dialog")
+      .filter({ has: page.locator("select") });
+    await expect(
+      why,
+      "il gesto non ha aperto il pannello del motivo",
+    ).toBeVisible({ timeout: 15_000 });
+    // Il cuore di #172: finché il motivo non c'è, non è partito NIENTE.
+    expect(writes, "una scrittura è partita prima del motivo").toEqual([]);
+
+    // Motivo di gusto → resta un giudizio, col motivo attaccato, e persiste
+    // (in demo: cookie overlay). Se la POST fallisse, il toast d'errore
+    // citerebbe il titolo e le asserzioni sotto fallirebbero.
+    await why.locator("select").selectOption("not_interested");
     const [feedback] = await Promise.all([
       page.waitForResponse((r) => r.url().includes("/feedback")),
-      page.getByRole("button", { name: DISCARD_RE }).click(),
+      why.getByRole("button", { name: CONFIRM_TASTE_RE }).click(),
     ]);
     expect(feedback.ok(), "il giudizio non è stato accettato").toBe(true);
+    expect(
+      feedback.request().postDataJSON(),
+      "il giudizio è arrivato senza il motivo che l'utente ha scelto",
+    ).toMatchObject({ action: "dislike", reason: "not_interested" });
+    await expect(
+      why,
+      "il pannello non si è chiuso dopo la conferma",
+    ).toBeHidden({ timeout: 15_000 });
 
     // Avanzamento reale: contatore, uscita della giudicata, ingresso della
     // quarta. I retry di Playwright coprono da sé i 280ms del volo.
