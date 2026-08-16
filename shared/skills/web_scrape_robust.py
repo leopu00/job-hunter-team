@@ -28,8 +28,20 @@ JSON output on stdout:
 
 Exit codes:
     0 fetch succeeded (including blocked:true, which is reported in the JSON)
-    1 invalid URL / unexpected error
+    1 invalid URL / refused by the guard / unexpected error
     2 all levels failed (network down, unreachable host, etc.)
+
+Network boundary: the URL arrives from outside (a scraped ad, a forwarded
+email), and from inside the container private, loopback and link-local
+addresses answer while the public internet does not. `fetch()` refuses those
+through `url_guard` before any level runs, and level 1 walks redirects with
+`safe_fetch`, re-checking every hop instead of letting the remote server pick
+the final destination.
+
+⚠️ Known residue, levels 2 and 3: Playwright is a real browser and follows
+redirects itself, so on those levels only the starting URL is checked. Level
+1 is the one that carries the full chain check; a page that needs a browser
+is fetched with the entry check alone.
 """
 from __future__ import annotations
 
@@ -41,6 +53,11 @@ import sys
 import time
 import urllib.parse
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from safe_fetch import walk as safe_walk  # noqa: E402  (dopo sys.path, per costruzione)
+from url_guard import UrlRejected, check_url  # noqa: E402
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 CACHE_DIR = JHT_HOME / ".cache" / "web-scrape"
@@ -117,18 +134,32 @@ def fetch_level1(url: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
         "Upgrade-Insecure-Requests": "1",
     }
 
+    def hop(hop_url: str, address: str):
+        """Un salto solo, senza seguire redirect: a percorrerli e' `walk`.
+
+        Il trasporto resta `requests` perche' a questo livello servono gli
+        header e la rotazione dello UA — quello che cambia e' chi decide dove
+        si va: `allow_redirects=True` lasciava la destinazione finale al
+        server remoto, che e' esattamente il salto con cui un URL pubblico
+        arriva a `169.254.169.254`.
+        """
+        resp = requests.get(
+            hop_url, headers=headers, timeout=timeout, allow_redirects=False
+        )
+        return resp.status_code, resp.headers.get("Location", ""), resp.content
+
     start = _now_ms()
     try:
-        r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-        text = r.text
-        blocked = _detect_block(text) or r.status_code in (403, 429, 503)
+        status, final_url, body = safe_walk(url, hop=hop)
+        text = body.decode("utf-8", errors="replace")
+        blocked = _detect_block(text) or status in (403, 429, 503)
         return {
             "level": 1,
-            "status": r.status_code,
+            "status": status,
             "html": text,
             "blocked": blocked,
             "elapsed_ms": _now_ms() - start,
-            "url_final": r.url,
+            "url_final": final_url,
         }
     except Exception as e:
         return {
@@ -259,6 +290,25 @@ def fetch(url: str, max_level: int = 3, profile_dir: Path | None = None,
     `max_level=2` → escalation a Playwright stealth.
     `max_level=3` → escalation a persistent profile (richiede profile_dir).
     """
+    # Prima di qualunque livello: l'URL arriva da fuori (annuncio scrapato,
+    # email inoltrata), e da dentro il container gli indirizzi privati
+    # rispondono mentre la rete pubblica non li vede. Il guard sta QUI e non
+    # solo nel livello 1 perche' i livelli 2 e 3 navigano con Playwright, che
+    # e' un browser vero: nessun controllo lo attraverserebbe.
+    try:
+        url = check_url(url)
+    except UrlRejected as exc:
+        return {
+            "level": 0,
+            "status": 0,
+            "html": "",
+            "blocked": True,
+            "error": f"refused: {exc}",
+            "refused": True,
+            "elapsed_ms": 0,
+            "url_final": url,
+        }
+
     results = []
     last = None
 
@@ -315,6 +365,11 @@ def main(argv):
     result["text_chars"] = text_chars
 
     print(json.dumps(result, indent=2))
+    # Un URL rifiutato non e' «la rete non ha risposto»: e' un indirizzo che
+    # non si scarica, e riprovarlo non cambia nulla. Esce 1, come gli altri
+    # URL non validi, cosi' il chiamante non lo mette in coda di retry.
+    if result.get("refused"):
+        return 1
     return 0 if not result.get("error") and result.get("status", 0) > 0 else 2
 
 
