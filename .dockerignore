@@ -15,28 +15,53 @@
 **/.env
 **/.env.*
 !**/.env.example
+# Il payload dell'app desktop: NON viene buildato qui e non lo invoca niente
+# dentro il container — `PATH` non tocca `/app/desktop`, l'entrypoint e'
+# altrove, e fuori da `desktop/` quell'albero e' nominato solo dai test, da
+# `scripts/check-release-version.sh` e da un fallback del gioco, che girano
+# tutti e tre SULL'HOST. Restava nel contesto, quindi `COPY . .` lo copiava:
+# 1249 voci, con dentro una copia del codice di autorizzazione precedente a
+# #158 — cioe' il difetto che #158 aveva chiuso, spedito agli utenti dentro
+# l'immagine. Non serve un job di build per finire in un'immagine: basta stare
+# nel contesto (#177).
+desktop/
 # Client host-side e artefatti non-runtime: il container esegue SOLO gli
 # agenti (cli/shared/agents). Il gioco Godot (game/) gira sull'host e i suoi
 # asset stanno nell'exe/installer (embed_pck) — NON qui. Includerlo in
 # `COPY . .` gonfiava l'immagine di centinaia di MB (game/assets ~369MB,
 # game/builds fino a ~690MB) senza che il container li tocchi mai
 # (Leone 24/07).
-game/
-docs/
-tests/
-e2e/
+#
+# ⚠️ Il doppio asterisco NON e' cosmetico: senza, la riga vale SOLO alla
+# radice. Questo file era scritto per un albero solo e il repo ne ha due,
+# quindi `docs/`, `tests/` e `shared/data/*.txt` erano esclusi in cima e
+# rientravano tutti dentro il payload. Le esclusioni ora valgono in
+# profondita', e dove una cartella con lo stesso nome e' contenuto vero la si
+# rimette dentro per nome, in fondo, invece di indebolire la regola.
+**/game/
+**/docs/
+**/tests/
+**/e2e/
 # Il pin OCI nasce dopo il build runtime attestato. Escluderlo dal contesto
 # rompe il ciclo digest->commit->digest: aggiornare solo il manifest non
 # ricostruisce byte runtime diversi da quelli che il manifest identifica.
-release/
+**/release/
 docker-compose.yml
 Dockerfile
 .dockerignore
-tests/__pycache__
 **/__pycache__
 **/*.pyc
 **/*.pyo
-shared/data/*.txt
-shared/data/*.log
+**/.pytest_cache
+**/shared/data/*.txt
+**/shared/data/*.log
 candidate_profile.yml
 candidate_profile.hr.yml
+# Le tre eccezioni, e sono contenuto che serve — non deroghe di comodo.
+# `shared/release/version.js` lo importa `cli/src/lib/release-check.js`, che
+# gira DENTRO il container: escluderlo romperebbe l'immagine invece di
+# ripulirla. Le altre due sono file dell'albero `web/`, dove `docs` e `game`
+# sono una route e degli asset, non documentazione e non un gioco.
+!shared/release/
+!web/app/docs/
+!web/public/tutorials/game/
