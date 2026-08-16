@@ -82,10 +82,24 @@ _ASSIGNED_HOURS = (
 # tabella ha già: l'euristica diventa un contratto (O-173).
 #
 # ⚠️ `updated_at` ha il DEFAULT CURRENT_TIMESTAMP (UTC), ma qui si legge come
-# ORA LOCALE — ed è corretto nel perimetro in cui la usiamo: si guardano solo
-# ticket in stato 'assigned', e per arrivarci sono passati da `assign()`, che
-# riscrive `updated_at` con `datetime('now','localtime')`. Il valore UTC del
-# DEFAULT sopravvive solo su un ticket mai assegnato, che di qui non passa.
+# ORA LOCALE. È corretto per UNA ragione sola, e va scritta con precisione
+# perché è ciò che il prossimo lettore erediterà: `assign()` è **l'unico punto
+# del repo** che porta `status` a 'assigned', e riscrive sia `assigned_at` sia
+# `updated_at` con `datetime('now','localtime')`. Non esiste quindi un ticket
+# 'assigned' che non sia passato di lì — invariante che si verifica con un grep.
+#
+# 🚫 NON è vero, e non va usato come ragione, che «nessun altro scrive
+# `updated_at`»: il pull dei ticket dal cloud inserisce righe senza nominarla,
+# che nascono quindi col DEFAULT in UTC. Quelle righe non falsano il conto
+# perché lo stesso INSERT forza `status` a 'open', e qui si guardano solo gli
+# 'assigned'.
+#
+# ⚠️ Chi aggiunge una SECONDA via verso 'assigned' — un import che preserva lo
+# stato, una migrazione — rompe questo calcolo senza vedere nulla fallire. E il
+# verso dell'errore è sleale: un valore UTC letto come locale dà idle maggiore
+# in un fuso positivo (reclamo anticipato, fastidioso ma visibile) e idle
+# NEGATIVO in un fuso negativo, cioè un ticket fermo che non rientra mai — un
+# difetto che si manifesta solo per metà del mondo, e lo scopre un utente.
 #
 # `MAX()` propaga NULL, quindi ogni ramo passa da IFNULL: senza, una posizione
 # senza punteggi renderebbe muto anche il resto.
