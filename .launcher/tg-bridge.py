@@ -448,6 +448,26 @@ def flush_inbound_queue(db_path: Path | None = None) -> int:
     return len(records)
 
 
+def _inbox_leaf(dest_name: str, file_id: str) -> str:
+    """Il nome proposto dal chiamante diventa una FOGLIA della inbox, mai un path.
+
+    `file_name` di un documento e' un campo del messaggio, quindi lo sceglie chi
+    invia: senza basename un `../../.claude/CLAUDE.md` esce dalla inbox e scrive
+    nel bind mount di ~/.jht sull'host, dove vivono le credenziali. E cercare
+    `..` non basterebbe — in pathlib un componente **assoluto** non si appende
+    alla base, la SOSTITUISCE (`Path('/a/inbox') / '/etc/x'` e' `/etc/x`).
+
+    Il guard sta qui e non nel chiamante perche' e' fetch_file a possedere
+    INBOX_DIR: cosi' anche un chiamante futuro nasce protetto. Il nome
+    dichiarato non si perde, resta l'etichetta `name=` nella busta.
+    """
+    leaf = os.path.basename(str(dest_name or "").strip())
+    if leaf in ("", ".", ".."):
+        stem = "".join(c for c in str(file_id) if c.isalnum())[:8]
+        leaf = f"file-{stem or 'unnamed'}"
+    return leaf
+
+
 def fetch_file(token: str, file_id: str, dest_name: str) -> Path | None:
     """Bot API getFile + download via file_path. Restituisce Path locale o None.
 
@@ -455,6 +475,8 @@ def fetch_file(token: str, file_id: str, dest_name: str) -> Path | None:
     dichiarato: l'API puo' omettere il campo, e un campo assente non e' un file
     piccolo. Se lo supera solleva DocumentTooLarge (il parziale viene rimosso),
     cosi' il chiamante puo' dire all'utente *perche'* e non solo che e' fallito.
+
+    Il nome di destinazione non e' mai un percorso: vedi `_inbox_leaf`.
     """
     local: Path | None = None
     try:
@@ -475,10 +497,11 @@ def fetch_file(token: str, file_id: str, dest_name: str) -> Path | None:
         except OSError:
             pass
         # Anti-clobber: prefisso timestamp se nome gia' presente
-        local = INBOX_DIR / dest_name
+        leaf = _inbox_leaf(dest_name, file_id)
+        local = INBOX_DIR / leaf
         if local.exists():
             ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-            local = INBOX_DIR / f"{ts}-{dest_name}"
+            local = INBOX_DIR / f"{ts}-{leaf}"
         written = 0
         fd = os.open(local, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with urllib.request.urlopen(dl_url, timeout=60) as r, os.fdopen(fd, "wb") as f:
