@@ -63,9 +63,11 @@ GAME_PROJECT="$ROOT/game/project.godot"
 GAME_PRESETS="$ROOT/game/export_presets.cfg"
 NSIS_INSTALLER="$ROOT/game/installer/windows.nsi"
 
-# Ogni componente che può finire in un artefatto o nel payload segue la
-# versione della release. tests/js è intenzionalmente escluso: è un runner
-# interno, non viene distribuito.
+# Ogni componente che può finire in un artefatto segue la versione della
+# release. tests/js è intenzionalmente escluso: è un runner interno, non viene
+# distribuito. Le voci `desktop/app-payload/...` sono cadute con l'albero
+# (#177): era il residuo dell'app Electron, e allineargli le versioni teneva in
+# vita la manutenzione di qualcosa che nessuno buildava.
 VERSIONED_PACKAGES=(
   package.json
   web/package.json
@@ -74,29 +76,13 @@ VERSIONED_PACKAGES=(
   shared/package.json
   shared/cron/package.json
   e2e/package.json
-  desktop/app-payload/package.json
-  desktop/app-payload/cli/package.json
-  desktop/app-payload/cli/wizard/package.json
-  desktop/app-payload/web/package.json
-  desktop/app-payload/shared/cron/package.json
-  desktop/app-payload/shared/deploy/package.json
-  desktop/app-payload/shared/providers/package.json
-  desktop/app-payload/shared/telegram/package.json
-  desktop/app-payload/shared/tools/package.json
 )
 
-# Copie legacy del payload desktop che mostrano la versione senza poter
-# importare il package.json al build time.
+# Pagine che mostrano la versione senza poter importare il package.json al
+# build time, quindi la portano scritta.
 PAYLOAD_VERSION_FILES=(
   web/app/\(protected\)/cron/page.tsx
   web/app/\(protected\)/setup/page.tsx
-  desktop/app-payload/web/app/cron/page.tsx
-  desktop/app-payload/web/app/page.tsx
-  desktop/app-payload/web/app/setup/page.tsx
-  desktop/app-payload/web/app/download/page.tsx
-  desktop/app-payload/web/app/download/layout.tsx
-  desktop/app-payload/web/app/api/download/route.ts
-  desktop/app-payload/web/app/demo/page.tsx
 )
 
 STABLE_SOURCE_ASSERTIONS=(

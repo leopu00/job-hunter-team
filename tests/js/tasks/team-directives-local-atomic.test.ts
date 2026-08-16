@@ -13,12 +13,11 @@ const Database = requireFromWeb(
 ) as typeof import("better-sqlite3");
 const worker = join(root, "tests/js/fixtures/o80-sqlite-worker.ts");
 const tsx = join(root, "web/node_modules/tsx/dist/cli.mjs");
+// C'era anche una riga `desktop`, sulla copia in `desktop/app-payload/`:
+// #177 l'ha rimossa (residuo dell'app Electron, non buildato). I casi restano
+// tutti, sull'helper che gira davvero.
 const helpers = [
   ["web", join(root, "web/lib/team-directives-local.ts")],
-  [
-    "desktop",
-    join(root, "desktop/app-payload/web/lib/team-directives-local.ts"),
-  ],
 ] as const;
 const temporary: string[] = [];
 

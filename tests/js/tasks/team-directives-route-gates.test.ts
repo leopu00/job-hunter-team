@@ -22,52 +22,29 @@ describe("team directive route deployment and identity gates", () => {
     );
   });
 
-  it.each([
-    "web/app/api/team-directives/route.ts",
-    "desktop/app-payload/web/app/api/team-directives/route.ts",
-  ])("requires a client request_id in %s", (path) => {
-    const route = read(path);
-    expect(route).toContain("function requireRequestId(value: unknown)");
-    expect(route).not.toContain("randomUUID");
-    expect(route).not.toContain("if (value === undefined)");
-  });
+  it.each(["web/app/api/team-directives/route.ts"])(
+    "requires a client request_id in %s",
+    (path) => {
+      const route = read(path);
+      expect(route).toContain("function requireRequestId(value: unknown)");
+      expect(route).not.toContain("randomUUID");
+      expect(route).not.toContain("if (value === undefined)");
+    },
+  );
 
-  it("keeps the desktop directive API on the authenticated loopback boundary", () => {
-    const route = read(
-      "desktop/app-payload/web/app/api/team-directives/route.ts",
-    );
-    expect(route).toContain("authorizeDesktopRequest(req)");
-    expect(route.match(/authorizeDesktopRequest\(req\)/g)).toHaveLength(3);
-    expect(route).toContain("isAllowedDesktopBrowserRequest");
-    expect(route).toContain("DESKTOP_DB_PATH");
-    expect(route).not.toContain('"databases", "jobs.db"');
-
-    const desktopPackage = JSON.parse(
-      read("desktop/app-payload/web/package.json"),
-    );
-    expect(desktopPackage.scripts.dev).toContain("-H 127.0.0.1");
-    expect(desktopPackage.scripts.start).toContain("-H 127.0.0.1");
-
-    for (const launcher of [
-      "desktop/app-payload/scripts/launchers/start-mac.sh",
-      "desktop/app-payload/scripts/launchers/start-linux.sh",
-      "desktop/app-payload/scripts/launchers/start-windows.ps1",
-      "desktop/app-payload/scripts/launchers/start-windows.bat",
-      "desktop/app-payload/cli/src/commands/dashboard.js",
-    ]) {
-      expect(read(launcher), launcher).toContain("127.0.0.1");
-    }
-  });
-
-  it.each([
-    "web/app/api/team-directives/route.ts",
-    "desktop/app-payload/web/app/api/team-directives/route.ts",
-  ])("returns only allowlisted errors from %s", (path) => {
-    const route = read(path);
-    expect(route).toContain("publicDirectiveError(error)");
-    expect(route).not.toContain("detail:");
-    expect(route).not.toContain("error instanceof Error");
-  });
+  // Le due liste avevano una seconda riga, la route dentro
+  // `desktop/app-payload/`: #177 ha rimosso quell'albero — residuo dell'app
+  // Electron, non buildato e divergente dal vivo. Con lui se n'e' andato il
+  // caso «loopback autenticato», che valeva solo per quel server.
+  it.each(["web/app/api/team-directives/route.ts"])(
+    "returns only allowlisted errors from %s",
+    (path) => {
+      const route = read(path);
+      expect(route).toContain("publicDirectiveError(error)");
+      expect(route).not.toContain("detail:");
+      expect(route).not.toContain("error instanceof Error");
+    },
+  );
 
   it("never renders a server-provided error string in the web panel", () => {
     const panel = read("web/app/(protected)/team/DirectivesPanel.tsx");
