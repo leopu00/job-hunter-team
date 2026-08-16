@@ -47,14 +47,40 @@ describe("O-76 feedback future-only boundary", () => {
   //
   // La regola vive in `negativeSignalFor`, pura e testata a parte: qui si
   // verifica che il sorgente non possa raggiungere l'esclusione scavalcandola.
+  //
+  // ⚠️ Come questo caso era stato svuotato, perché non ricapiti: diceva «se
+  // il sorgente contiene /user-exclude allora deve contenere
+  // negativeSignalFor», ma il caso qui sotto pretende che TUTTE le superfici
+  // contengano `negativeSignalFor`. Con il conseguente sempre vero
+  // l'implicazione non vincola niente: un ramo futuro poteva chiamare la
+  // route scavalcando la regola con la suite verde. Una clausola falsa era
+  // stata sostituita da una tautologia.
+  //
+  // Ora si guarda il PUNTO DI CHIAMATA: uno solo per superficie, dopo la
+  // regola pura, dentro il ramo che quella regola ha scelto, e con un corpo
+  // costruito dal SEGNALE — non dal verdetto. Due punti di chiamata sono due
+  // regole, e la seconda è quella che nessuno ha letto.
   it.each(FEEDBACK_SURFACES)(
-    "%s reaches the exclusion writer only through the pure rule",
+    "%s reaches the exclusion writer from one guarded call site",
     (path) => {
       const source = read(path);
       expect(source).toContain("/feedback");
-      if (source.includes("/user-exclude")) {
-        expect(source).toContain("negativeSignalFor");
-      }
+      expect(source.match(/\/user-exclude/g) ?? []).toHaveLength(1);
+      const rule = source.indexOf("negativeSignalFor(");
+      const guard = source.indexOf('signal.kind === "exclude"');
+      const call = source.indexOf("/user-exclude");
+      expect(rule, "la regola pura non viene nemmeno chiamata").toBeGreaterThan(
+        -1,
+      );
+      expect(
+        guard,
+        "l'esclusione non è dietro il ramo del segnale",
+      ).toBeGreaterThan(rule);
+      expect(call, "si scrive prima di aver deciso").toBeGreaterThan(guard);
+      // Il motivo spedito è quello che la regola ha validato: prenderlo da
+      // un'altra parte rimetterebbe in giro un codice che nessuno ha
+      // controllato.
+      expect(source.slice(call, call + 400)).toContain("signal.reason");
     },
   );
 

@@ -85,4 +85,21 @@ describe("il mazzo non scrive prima di sapere il perché", () => {
     // E il pannello si apre DOPO il volo della carta, dentro il timeout.
     expect(judge).toMatch(/if \(needsWhy\) \{\s*setWhyReason/);
   });
+
+  it("col motivo in volo il pannello non si abbandona", () => {
+    // La finestra vera: i due pulsanti in fondo avevano `disabled`, ma il
+    // fondo scuro e la X no. Chiudere mentre la POST viaggia avrebbe detto
+    // «scartato, niente registrato» e poi la scrittura sarebbe arrivata lo
+    // stesso, col timbro DOPO il messaggio che diceva il contrario: non una
+    // scrittura a metà, una promessa falsa.
+    const source = read(SWIPE);
+    // Un solo abbandono possibile, ed è quello con la guardia.
+    expect(source.match(/closeWhy\(true\)/g)).toHaveLength(1);
+    const start = source.indexOf("const dismissWhy = useCallback");
+    expect(start, "l'abbandono guardato non esiste").toBeGreaterThan(-1);
+    const dismiss = source.slice(start, source.indexOf("closeWhy(true)") + 20);
+    expect(dismiss).toMatch(/if \(whyBusy\) return;\s*closeWhy\(true\);/);
+    // Tutte le vie di uscita passano di lì: fondo, X, Annulla.
+    expect(source.match(/onClick=\{dismissWhy\}/g)).toHaveLength(3);
+  });
 });

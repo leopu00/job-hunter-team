@@ -815,6 +815,17 @@ export default function SwipeDeck({
     [showToast, t.whyDiscarded],
   );
 
+  // Abbandono su richiesta dell'utente (fondo, X, Annulla). Con la POST in
+  // volo NON si chiude: chiudere direbbe «scartato, niente registrato»
+  // mentre la scrittura sta arrivando — il timbro comparirebbe dopo il
+  // toast che dice il contrario. Non è una scrittura a metà, è una
+  // promessa falsa. Finché `whyBusy` è vero il pannello non si abbandona:
+  // l'esito arriva da solo, in un verso o nell'altro.
+  const dismissWhy = useCallback(() => {
+    if (whyBusy) return;
+    closeWhy(true);
+  }, [whyBusy, closeWhy]);
+
   // Conferma del motivo. Due strade, ed è il punto del ticket:
   //  · motivo FATTUALE (scaduta, già gestita) → la posizione esce dal giro
   //    con la route dell'esclusione manuale e NESSUN `less_like_this` parte;
@@ -1568,7 +1579,7 @@ export default function SwipeDeck({
             <div
               className="absolute inset-0"
               style={{ background: "rgba(0,0,0,0.6)" }}
-              onClick={() => closeWhy(true)}
+              onClick={dismissWhy}
             />
             <div
               className="relative w-full max-w-sm rounded-xl border p-4 flex flex-col gap-2.5"
@@ -1599,8 +1610,9 @@ export default function SwipeDeck({
                   type="button"
                   aria-label={t.whyCancel}
                   title={t.whyCancel}
-                  onClick={() => closeWhy(true)}
-                  className="shrink-0 rounded-full border flex items-center justify-center"
+                  onClick={dismissWhy}
+                  disabled={whyBusy}
+                  className="shrink-0 rounded-full border flex items-center justify-center disabled:opacity-60 disabled:cursor-wait"
                   style={{
                     width: 24,
                     height: 24,
@@ -1664,7 +1676,7 @@ export default function SwipeDeck({
                 </button>
                 <button
                   type="button"
-                  onClick={() => closeWhy(true)}
+                  onClick={dismissWhy}
                   disabled={whyBusy}
                   className="rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
                   style={{
