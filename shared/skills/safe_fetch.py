@@ -94,6 +94,13 @@ def curl_hop(url: str, address: str, user_agent: str = USER_AGENT) -> tuple[int,
     e un fetcher condiviso che la maggior parte del codice non puo' usare
     non e' un fetcher condiviso.
     """
+    # Uno UA con un a capo dentro non e' uno UA: `curl` lo passa com'e', e la
+    # riga dopo l'a capo diventa un header in piu' nella richiesta verso il
+    # terzo. Chi sceglie lo UA e' la skill, ma questa funzione e' quella che
+    # possiede la richiesta — stesso motivo per cui il guard sull'URL sta qui
+    # e non nel chiamante.
+    if any(not ch.isprintable() for ch in user_agent):
+        raise UrlRejected("user-agent contains control characters")
     parts = urlsplit(url)
     port = parts.port or (443 if parts.scheme == "https" else 80)
     command = [

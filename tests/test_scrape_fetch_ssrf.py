@@ -227,6 +227,81 @@ def test_lo_scraper_rifiuta_prima_di_qualunque_livello(scraper, monkeypatch):
     assert eseguiti == []
 
 
+def test_un_nome_che_risolve_dentro_la_rete_non_arriva_al_browser(
+    scraper, monkeypatch
+):
+    """Il caso che il controllo sulla STRINGA non copre, ed e' il piu' reale:
+    `boards.example.com` e' un URL pubblico irreprensibile, e il DNS risponde
+    169.254.169.254.
+
+    `check_url` per costruzione non risolve i nomi — dove punta un nome lo sa
+    solo il DNS al momento della richiesta. I livelli 2 e 3 guidano un browser
+    vero, che risolve per conto suo: se l'indirizzo non viene deciso
+    all'ingresso, li' dentro non c'e' piu' niente che guardi.
+    """
+    eseguiti = []
+    for level in (1, 2, 3):
+        monkeypatch.setattr(
+            scraper,
+            f"fetch_level{level}",
+            lambda *a, _l=level, **k: eseguiti.append(_l) or {"status": 200},
+        )
+    monkeypatch.setattr(
+        safe_fetch.socket, "getaddrinfo", _resolves("169.254.169.254")
+    )
+
+    result = scraper.fetch("https://boards.example.com/jobs/1")
+
+    assert result["refused"] is True
+    assert "internal address" in result["error"]
+    assert eseguiti == []
+
+
+def test_un_rifiuto_non_fa_salire_di_livello(scraper, monkeypatch):
+    """Il difetto misurato dalla sicurezza: `UrlRejected` dentro il livello 1
+    finiva nell'except generico, diventava un dict d'errore, non era 200 —
+    e il ciclo saliva. Con `--level` a 3 di default, la difesa consegnava la
+    richiesta proprio alla strada dove non c'e'.
+
+    Qui il livello 1 rifiuta e i livelli 2 e 3 non devono partire: la reazione
+    a un livello fallito e' provare quello dopo, e un indirizzo che non si
+    scarica non e' un livello fallito.
+    """
+    saliti = []
+    # Il dict e' scritto qui per esteso, non preso dal modulo: cosi' il test
+    # descrive il CONTRATTO — «un esito con refused ferma la cascata» — e resta
+    # rosso contro il codice di prima invece di rompersi per una funzione che
+    # non esiste ancora.
+    rifiuto_del_livello_1 = {
+        "level": 1,
+        "status": 0,
+        "html": "",
+        "blocked": True,
+        "error": "refused: internal address",
+        "refused": True,
+        "elapsed_ms": 3,
+    }
+    monkeypatch.setattr(scraper, "fetch_level1", lambda *a, **k: rifiuto_del_livello_1)
+    for level in (2, 3):
+        monkeypatch.setattr(
+            scraper,
+            f"fetch_level{level}",
+            lambda *a, _l=level, **k: saliti.append(_l)
+            or {"status": 200, "blocked": False, "html": "<html>segreto</html>"},
+        )
+    monkeypatch.setattr(safe_fetch.socket, "getaddrinfo", _resolves(PUBLIC_ADDRESS))
+    monkeypatch.setattr(
+        safe_fetch, "address_is_reachable_from_outside", lambda address: True
+    )
+
+    result = scraper.fetch("https://boards.example.com/1")
+
+    assert saliti == []
+    assert result["refused"] is True
+    assert result["status"] == 0
+    assert result.get("html", "") == ""
+
+
 def test_lo_scraper_livello1_ricontrolla_ogni_redirect(scraper, monkeypatch):
     """Il difetto era `requests.get(..., allow_redirects=True)`: la libreria
     percorreva la catena da sola, e nessuno guardava dove finiva."""
@@ -349,6 +424,36 @@ def test_lo_user_agent_richiesto_da_nominatim_arriva_a_curl(monkeypatch):
 
 def _resolves(address):
     return lambda host, port, **kwargs: [(0, 0, 0, "", (address, port))]
+
+
+@pytest.mark.parametrize(
+    "ostile",
+    [
+        "jht/1.0\r\nX-Forwarded-For: 127.0.0.1",
+        "jht/1.0\nAuthorization: Bearer x",
+        "jht/1.0\x00",
+    ],
+)
+def test_uno_user_agent_con_a_capo_non_diventa_un_header_in_piu(monkeypatch, ostile):
+    """`curl` passa lo UA com'e': la riga dopo l'a capo e' un header nuovo
+    nella richiesta verso il terzo.
+
+    Il rifiuto sta in `curl_hop` e non nel chiamante perche' e' quella la
+    funzione che costruisce la richiesta — stesso motivo per cui il guard
+    sull'URL sta li'.
+    """
+    chiamate = []
+    monkeypatch.setattr(
+        safe_fetch.subprocess, "run", lambda *a, **k: chiamate.append(a)
+    )
+
+    with pytest.raises(url_guard.UrlRejected) as rifiutato:
+        safe_fetch.curl_hop(
+            "https://jobs.example.com/1", PUBLIC_ADDRESS, user_agent=ostile
+        )
+
+    assert "control characters" in str(rifiutato.value)
+    assert chiamate == []
 
 
 def test_nessuno_dei_due_moduli_segue_piu_i_redirect_da_solo():
