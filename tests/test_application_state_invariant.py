@@ -16,9 +16,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "shared" / "skills"
 DB_UPDATE = SKILLS / "db_update.py"
-DESKTOP_DB_UPDATE = (
-    ROOT / "desktop" / "app-payload" / "shared" / "skills" / "db_update.py"
-)
 sys.path.insert(0, str(SKILLS))
 
 
@@ -131,8 +128,7 @@ def test_status_shortcut_materializes_timestamp_but_requires_via(box):
     assert application["applied_via"] == "manual"
 
 
-@pytest.mark.parametrize("script", [DB_UPDATE, DESKTOP_DB_UPDATE])
-def test_bare_applied_false_cannot_create_a_half_undo(box, script):
+def test_bare_applied_false_cannot_create_a_half_undo(box):
     db_path, home = box
     marked = run_update(
         db_path,
@@ -143,7 +139,6 @@ def test_bare_applied_false_cannot_create_a_half_undo(box, script):
         "2026-08-12 15:30:00",
         "--applied-via",
         "manual",
-        script=script,
     )
     assert marked.returncode == 0, marked.stdout + marked.stderr
 
@@ -154,7 +149,6 @@ def test_bare_applied_false_cannot_create_a_half_undo(box, script):
         "73",
         "--applied",
         "false",
-        script=script,
     )
     assert rejected.returncode == 1
     assert "APPLIED UNDO REJECTED" in rejected.stderr
@@ -164,8 +158,7 @@ def test_bare_applied_false_cannot_create_a_half_undo(box, script):
     assert application["applied_at"] == "2026-08-12 15:30:00"
 
 
-@pytest.mark.parametrize("script", [DB_UPDATE, DESKTOP_DB_UPDATE])
-def test_applied_application_status_cannot_be_downgraded_alone(box, script):
+def test_applied_application_status_cannot_be_downgraded_alone(box):
     db_path, home = box
     marked = run_update(
         db_path,
@@ -176,7 +169,6 @@ def test_applied_application_status_cannot_be_downgraded_alone(box, script):
         "2026-08-12 15:30:00",
         "--applied-via",
         "manual",
-        script=script,
     )
     assert marked.returncode == 0, marked.stdout + marked.stderr
 
@@ -187,7 +179,6 @@ def test_applied_application_status_cannot_be_downgraded_alone(box, script):
         "73",
         "--status",
         "draft",
-        script=script,
     )
     assert rejected.returncode == 1
     assert "APPLIED STATUS CHANGE REJECTED" in rejected.stderr
@@ -196,9 +187,8 @@ def test_applied_application_status_cannot_be_downgraded_alone(box, script):
     assert application["status"] == "applied"
 
 
-@pytest.mark.parametrize("script", [DB_UPDATE, DESKTOP_DB_UPDATE])
-def test_downgrade_update_rechecks_position_under_write_lock(script):
-    source = script.read_text(encoding="utf-8")
+def test_downgrade_update_rechecks_position_under_write_lock():
+    source = DB_UPDATE.read_text(encoding="utf-8")
     function = source[source.index("def update_application(args):"):]
     guard_read = function.index("SELECT status FROM positions")
     guarded_predicate = function.index(
@@ -208,8 +198,7 @@ def test_downgrade_update_rechecks_position_under_write_lock(script):
     assert guard_read < guarded_predicate < application_write
 
 
-@pytest.mark.parametrize("script", [DB_UPDATE, DESKTOP_DB_UPDATE])
-def test_concurrent_applied_write_wins_over_stale_downgrade(box, script):
+def test_concurrent_applied_write_wins_over_stale_downgrade(box):
     db_path, home = box
     conn = sqlite3.connect(db_path)
     conn.execute(
@@ -248,7 +237,7 @@ def test_concurrent_applied_write_wins_over_stale_downgrade(box, script):
         return guarded
 
     spec = importlib.util.spec_from_file_location(
-        f"o73_db_update_{script.parent.name}_{id(script)}", script
+        "o73_db_update", DB_UPDATE
     )
     assert spec and spec.loader
     update_module = importlib.util.module_from_spec(spec)
@@ -287,7 +276,6 @@ def test_concurrent_applied_write_wins_over_stale_downgrade(box, script):
         "2026-08-12 15:30:00",
         "--applied-via",
         "manual",
-        script=script,
     )
     release.set()
     thread.join(10)
@@ -336,80 +324,17 @@ def test_failure_after_application_write_rolls_back_everything(box):
     assert transition is None
 
 
-def test_packaged_desktop_copy_enforces_the_same_applied_contract(box):
-    db_path, home = box
+def test_a_fresh_schema_records_undo_provenance(tmp_path):
+    """Uno schema creato adesso, non quello della fixture.
 
-    incomplete = run_update(
-        db_path,
-        home,
-        "position",
-        "73",
-        "--status",
-        "applied",
-        script=DESKTOP_DB_UPDATE,
-    )
-    assert incomplete.returncode == 1
-    assert read_state(db_path)[0]["status"] == "ready"
-
-    complete = run_update(
-        db_path,
-        home,
-        "application",
-        "73",
-        "--applied-at",
-        "2026-08-12 15:30:00",
-        "--applied-via",
-        "desktop_manual",
-        script=DESKTOP_DB_UPDATE,
-    )
-    assert complete.returncode == 0, complete.stdout + complete.stderr
-    position, application, transition = read_state(db_path)
-    assert position["status"] == "applied"
-    assert dict(application) == {
-        "status": "applied",
-        "applied": 1,
-        "applied_at": "2026-08-12 15:30:00",
-        "applied_via": "desktop_manual",
-    }
-    assert dict(transition) == {"from_state": "ready", "to_state": "applied"}
-
-
-def test_packaged_desktop_copy_rolls_back_a_partial_application(box):
-    db_path, home = box
-    conn = sqlite3.connect(db_path)
-    conn.executescript("""
-        CREATE TRIGGER synthetic_reject_desktop_applied
-        BEFORE UPDATE OF status ON positions
-        WHEN NEW.status = 'applied'
-        BEGIN
-          SELECT RAISE(ABORT, 'synthetic desktop position failure');
-        END;
-    """)
-    conn.close()
-
-    result = run_update(
-        db_path,
-        home,
-        "application",
-        "73",
-        "--applied-at",
-        "now",
-        "--applied-via",
-        "desktop_manual",
-        script=DESKTOP_DB_UPDATE,
-    )
-
-    assert result.returncode != 0
-    position, application, transition = read_state(db_path)
-    assert position["status"] == "ready"
-    assert application is None
-    assert transition is None
-
-
-def test_packaged_desktop_fresh_schema_records_undo_provenance(tmp_path):
-    home = tmp_path / "desktop-fresh"
+    Girava sulla copia impacchettata in `desktop/app-payload/`, rimossa da
+    #177 perche' residuo dell'app Electron. Il caso pero' non e' della copia:
+    e' un DB nato da `ensure_schema` in una home nuova, che gli altri test qui
+    non attraversano — quindi cambia il percorso, non sparisce.
+    """
+    home = tmp_path / "fresh"
     db_path = home / "jobs.db"
-    skills = DESKTOP_DB_UPDATE.parent
+    skills = SKILLS
     seed = subprocess.run(
         [
             sys.executable,
@@ -438,8 +363,7 @@ def test_packaged_desktop_fresh_schema_records_undo_provenance(tmp_path):
         "--applied-at",
         "2026-08-12 15:30:00",
         "--applied-via",
-        "desktop_manual",
-        script=DESKTOP_DB_UPDATE,
+        "manual",
     )
     assert result.returncode == 0, result.stdout + result.stderr
     position, application, transition = read_state(db_path)

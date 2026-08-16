@@ -65,17 +65,19 @@ describe("directive client request lifetime", () => {
       expect(isDirectiveAcknowledgement(response, expected)).toBe(false);
   });
 
-  it.each([
-    "../../../web/app/(protected)/team/DirectivesPanel.tsx",
-    "../../../desktop/app-payload/web/app/(protected)/team/DirectivesPanel.tsx",
-  ])("wires the retained id and exact ACK gate into %s", (relativePath) => {
-    const source = readFileSync(resolve(__dirname, relativePath), "utf8");
-    expect(source).toContain("retainDirectiveRequest(");
-    expect(source).toContain("isDirectiveAcknowledgement(");
-    expect(source).toContain("pendingRequests.current.delete(key)");
-    expect(source).toContain("await load().catch(() => undefined)");
-    expect(source).not.toContain("request_id: crypto.randomUUID()");
-  });
+  // La seconda riga era il pannello dentro `desktop/app-payload/`, rimosso da
+  // #177: era il residuo dell'app Electron, non buildato e gia' divergente.
+  it.each(["../../../web/app/(protected)/team/DirectivesPanel.tsx"])(
+    "wires the retained id and exact ACK gate into %s",
+    (relativePath) => {
+      const source = readFileSync(resolve(__dirname, relativePath), "utf8");
+      expect(source).toContain("retainDirectiveRequest(");
+      expect(source).toContain("isDirectiveAcknowledgement(");
+      expect(source).toContain("pendingRequests.current.delete(key)");
+      expect(source).toContain("await load().catch(() => undefined)");
+      expect(source).not.toContain("request_id: crypto.randomUUID()");
+    },
+  );
 
   it("maps unknown server text to localized generic UI without echoing it", () => {
     const secret =

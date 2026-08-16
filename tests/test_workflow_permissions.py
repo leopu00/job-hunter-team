@@ -24,8 +24,9 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     },
     "game.yml": {"test-export": READ_CONTENTS},
     "lint.yml": {
+        # `eslint-desktop-payload` e' caduto con l'albero che lintava:
+        # `desktop/app-payload/` non esiste piu' (#177).
         "eslint-web": READ_CONTENTS,
-        "eslint-desktop-payload": READ_CONTENTS,
         "prettier": READ_CONTENTS,
         "review-log": READ_CONTENTS,
         "workflow-gates": READ_CONTENTS,

@@ -43,7 +43,6 @@ jobs:
           cache-dependency-path: |
             tests/js/package-lock.json
             web/package-lock.json
-            desktop/app-payload/web/package-lock.json
             cli/package-lock.json
             shared/package-lock.json
             shared/cron/package-lock.json
@@ -63,12 +62,6 @@ jobs:
       # request, so PRs cannot silently add an RPC/column outside the canary.
       - name: Verify web schema receipt coverage (offline)
         run: node scripts/check-web-schema-coverage.mjs
-
-      # tasks/team-directives-desktop-boundary.test.ts imports the real desktop
-      # route, which depends on next/server from the shipped payload.
-      - name: Install desktop payload dependencies for imported routes
-        working-directory: desktop/app-payload/web
-        run: npm ci
 
       # wizard/setup.test.js importa cli/wizard/setup.js e lancia cli/bin/jht.js.
       - name: Install CLI dependencies for imported commands

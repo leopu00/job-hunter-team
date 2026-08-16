@@ -63,7 +63,6 @@ describe("invalidazione verdetto Critico al confine sync", () => {
     const paths = [
       "cli/src/commands/cloud.js",
       "shared/skills/db_to_supabase.py",
-      "desktop/app-payload/shared/skills/db_to_supabase.py",
       "web/app/api/cloud-sync/push/route.ts",
       "web/app/api/local/sync/route.ts",
     ];

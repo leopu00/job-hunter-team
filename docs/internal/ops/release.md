@@ -41,12 +41,16 @@ Exit codes: `1` no tag resolvable · `2` malformed tag · `3` version mismatch.
 
 ### The other `package.json` files and lockfiles
 
-`web/`, `cli/`, `cli/wizard/`, `shared/`, `shared/cron/`, `e2e/` and the
-packages under `desktop/app-payload/` follow the root release version. Some are
-private packages. The `desktop/app-payload/` tree is a retained legacy/internal
-payload and is not built by `release.yml`; keeping its metadata aligned avoids
-shipping or inspecting a tree that falsely identifies itself as another
-release.
+`web/`, `cli/`, `cli/wizard/`, `shared/`, `shared/cron/` and `e2e/` follow the
+root release version. Some are private packages.
+
+The rule used to cover `desktop/app-payload/` as well — a legacy tree that
+`release.yml` did not build, kept version-aligned so it would not identify
+itself as another release. **That tree was removed in #177**: it was the
+residue of the Electron app, the thin launcher had already dropped it from
+`extraResources`, and it was riding into the runtime image through the build
+context with a copy of the authorisation code from before #158. A tree nobody
+builds does not need a version; it needs to not be there.
 
 **Rule (updated 2026-08-04): manifests and both version fields in every matching
 `package-lock.json` follow the root version.** Regenerate locks with

@@ -23,13 +23,11 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SKILL_VARIANTS = (
-    pytest.param(REPO_ROOT / "shared" / "skills", id="container"),
-    pytest.param(
-        REPO_ROOT / "desktop" / "app-payload" / "shared" / "skills",
-        id="desktop-payload",
-    ),
-)
+# Restava una variante `desktop-payload`, che girava sulla copia impacchettata
+# in `desktop/app-payload/`: #177 l'ha rimossa perche' era il residuo dell'app
+# Electron, non buildata da nessuno e divergente dal vivo. I casi restano tutti,
+# sulla copia che gira davvero.
+SKILL_VARIANTS = (pytest.param(REPO_ROOT / "shared" / "skills", id="container"),)
 
 
 def _run(db: Path, script: Path, *args: str) -> subprocess.CompletedProcess[str]:
