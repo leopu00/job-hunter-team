@@ -25,10 +25,39 @@ describe("O-76 feedback future-only boundary", () => {
     }
   });
 
-  it.each(FEEDBACK_SURFACES)("%s cannot call the exclusion writer", (path) => {
-    const source = read(path);
-    expect(source).toContain("/feedback");
-    expect(source).not.toContain("/user-exclude");
+  // Il confine di O-76 è che un GIUDIZIO non tolga di mezzo la posizione: un
+  // «non mi interessa» insegna, non cancella. Fino a #167 quel confine si
+  // leggeva come «il file non nomina la route di esclusione», che era un buon
+  // proxy finché il pulsante faceva una cosa sola.
+  //
+  // #167 lo ha reso falso per una ragione voluta: «scaduta» e «già gestita»
+  // sono FATTI sulla posizione, non gusti, e devono toglierla dal giro SENZA
+  // insegnare allo Scout a evitare quel tipo di posizione. Il pulsante quindi
+  // sceglie fra due azioni invece di farne una — e la proprietà da proteggere
+  // non è più l'assenza di una stringa, è CHI può arrivare a quella route.
+  //
+  // La regola vive in `negativeSignalFor`, pura e testata a parte: qui si
+  // verifica che il sorgente non possa raggiungere l'esclusione scavalcandola.
+  it.each(FEEDBACK_SURFACES)(
+    "%s reaches the exclusion writer only through the pure rule",
+    (path) => {
+      const source = read(path);
+      expect(source).toContain("/feedback");
+      if (source.includes("/user-exclude")) {
+        expect(source).toContain("negativeSignalFor");
+      }
+    },
+  );
+
+  it("keeps every taste verdict out of the exclusion path", () => {
+    const source = read(FEEDBACK_SURFACES[0]);
+    // Un verdetto resta un segnale di preferenza: se un giorno qualcuno gli
+    // attaccasse un'esclusione, VERDICT_SIGNAL lo direbbe e il primo caso
+    // sopra fallirebbe. Qui si chiude l'altra metà: la superficie dello swipe
+    // non ha ancora un selettore di motivi (#172), quindi lì l'esclusione non
+    // deve comparire affatto.
+    expect(read(FEEDBACK_SURFACES[1])).not.toContain("/user-exclude");
+    expect(source).toContain("negativeSignalFor");
   });
 
   it("keeps explicit exclusion as a separate action", () => {

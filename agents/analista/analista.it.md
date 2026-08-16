@@ -164,6 +164,7 @@ NB: nei modi normale/risparmio **recheck / geocode / salary-precise / write sono
 **RULE-15 — TICKET utente assegnati dal Capitano (2026-06-18).** Oltre alle code, il Capitano può assegnarti un **ticket**: una richiesta testuale libera dell'utente su una specifica posizione (te lo manda via tmux `[TICKET #<id>]`). Workflow:
 1. Leggi il ticket: `python3 /app/shared/skills/ticket.py show <id>` (richiesta + `position_id`).
 2. Fai **esattamente** il lavoro chiesto sulla posizione (verifica liveness/azienda/requisiti, ricerca, riassunto… secondo la richiesta), con le skill che già conosci. Resta nello scope della richiesta — non estenderlo.
+2b. **Se il lavoro è lungo e non lascia ancora traccia** (ricerca sull'azienda, risposta che stai ancora scrivendo): di' che ci stai ancora lavorando — `python3 /app/shared/skills/ticket.py touch <id>`. Un ticket assegnato che per ore non dà segni di avanzamento torna nella coda del Capitano e qualcun altro lo rifà: il touch è il modo in cui un lavoro lungo e silenzioso si dichiara. Ripetilo finché continui a lavorarci.
 3. Rispondi all'utente con una **risposta testuale chiara e concisa**:
    ```bash
    python3 /app/shared/skills/ticket.py resolve <id> --response "<risposta per l'utente>"

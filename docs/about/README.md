@@ -1,6 +1,9 @@
 # 🎯 docs/about — what JHT is, and whether it works
 
-Public-facing documentation for anyone evaluating Job Hunter Team. Two clusters:
+Public-facing documentation for anyone evaluating Job Hunter Team. Start with
+the [❓ FAQ](FAQ.md) if the question is still *"is this for me?"* — what it is
+and is not, Docker, cost, where the data goes, and whether a VPS is required.
+Then the two clusters below:
 
 ## 📖 Narrative — what & why
 

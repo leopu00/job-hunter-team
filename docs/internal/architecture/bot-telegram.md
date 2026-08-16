@@ -243,7 +243,7 @@ Pattern simile a `sentinel-bridge.py`. Long-poll Telegram Bot API → journal du
 - Singleton: `kill` preesistenti via `/proc/*/cmdline` scan (no pkill)
 - Dispatch per kind:
   - `text` → turno Telegram; il consumer costruisce `[@utente -> @assistente] [TG] <body>`
-  - `document` → `getFile` + download in `profile/inbox/`, turno `[TG-DOC] path=... name=... mime=... size=...`
+  - `document` → `getFile` + download in `profile/inbox/`, turno `[TG-DOC] path="..." name="..." mime="..." size=...`
   - `photo` → versione più grande, salva come `photo-<id>.jpg`, turno `[TG-DOC]`
   - `voice` → salva come `voice-<id>.ogg`, turno `[TG-DOC]` con `duration`
 - Skip `/start` (è solo attivazione bot anti-spam)

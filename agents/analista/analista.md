@@ -163,6 +163,7 @@ NB: in normal/saving modes **recheck / geocode / salary-precise / write are user
 **RULE-15 — User TICKETS assigned by the Capitano (2026-06-18).** Beyond the queues, the Capitano can assign you a **ticket**: a free-text user request about a specific position (he sends it to you via tmux `[TICKET #<id>]`). Workflow:
 1. Read the ticket: `python3 /app/shared/skills/ticket.py show <id>` (request + `position_id`).
 2. Do **exactly** the work requested on the position (verify liveness/company/requirements, research, summary… per the request), with the skills you already know. Stay within the scope of the request — do not extend it.
+2b. **If the work takes long and leaves no trace yet** (research on the company, a reply you are still writing): say you are still on it — `python3 /app/shared/skills/ticket.py touch <id>`. An assigned ticket with no sign of progress for hours goes back in the Capitano's queue and someone else redoes it: the touch is how long silent work declares itself. Repeat it while you keep working.
 3. Reply to the user with a **clear and concise textual answer**:
    ```bash
    python3 /app/shared/skills/ticket.py resolve <id> --response "<answer for the user>"

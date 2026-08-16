@@ -12,6 +12,12 @@ import {
   IconThumbsUp,
   IconStar,
 } from "@/app/(protected)/swipe/icons";
+import { ReasonPicker } from "./ReasonPicker";
+import {
+  PICKER_T,
+  isFactualReason,
+  negativeSignalFor,
+} from "./exclusion-reasons";
 
 // Giudizio a 4 livelli dalla pagina posizione — stessa semantica della
 // pagina /swipe (event-log position_feedback, l'ultimo evento prevale):
@@ -59,6 +65,13 @@ const T: Record<
   Locale,
   {
     verdicts: Record<Verdict, string>;
+    whyNo: string;
+    pickPlaceholder: string;
+    hintTaste: string;
+    hintFactual: string;
+    confirmTaste: string;
+    confirmFactual: string;
+    cancel: string;
     networkError: string;
     markApplied: string;
     markAppliedDone: string;
@@ -75,6 +88,14 @@ const T: Record<
       review_ok: "Interessante",
       top: "Molto interessante",
     },
+    whyNo: "Perché non ti interessa?",
+    pickPlaceholder: "Scegli un motivo…",
+    hintTaste: "Il team lo userà per cercarti offerte più adatte.",
+    hintFactual:
+      "La posizione esce dal giro e basta: una scaduta non dice cosa ti piace, quindi il team non impara niente da qui.",
+    confirmTaste: "Salva",
+    confirmFactual: "Escludi",
+    cancel: "Annulla",
     networkError: "Errore di rete",
     markApplied: "Mi sono candidato",
     markAppliedDone: "Candidatura segnata",
@@ -92,6 +113,14 @@ const T: Record<
       review_ok: "Interesting",
       top: "Very interesting",
     },
+    whyNo: "Why is it not interesting?",
+    pickPlaceholder: "Pick a reason…",
+    hintTaste: "The team will use it to look for offers that fit you better.",
+    hintFactual:
+      "The position simply leaves the pipeline: an expired one says nothing about your taste, so the team learns nothing from this.",
+    confirmTaste: "Save",
+    confirmFactual: "Exclude",
+    cancel: "Cancel",
     networkError: "Network error",
     markApplied: "I applied myself",
     markAppliedDone: "Application recorded",
@@ -109,6 +138,15 @@ const T: Record<
       review_ok: "Érdekes",
       top: "Nagyon érdekes",
     },
+    whyNo: "Miért nem érdekes?",
+    pickPlaceholder: "Válassz okot…",
+    hintTaste:
+      "A csapat ezt használja majd, hogy hozzád jobban illő ajánlatokat keressen.",
+    hintFactual:
+      "Az állás egyszerűen kikerül a körből: egy lejárt hirdetés nem árul el semmit az ízlésedről, így a csapat nem tanul belőle.",
+    confirmTaste: "Mentés",
+    confirmFactual: "Kizárás",
+    cancel: "Mégse",
     networkError: "Hálózati hiba",
     markApplied: "Jelentkeztem",
     markAppliedDone: "Jelentkezés rögzítve",
@@ -126,6 +164,14 @@ const T: Record<
       review_ok: "Interesante",
       top: "Muy interesante",
     },
+    whyNo: "¿Por qué no te interesa?",
+    pickPlaceholder: "Elige un motivo…",
+    hintTaste: "El equipo lo usará para buscarte ofertas que encajen mejor.",
+    hintFactual:
+      "La posición sale del circuito y ya está: una caducada no dice qué te gusta, así que el equipo no aprende nada de aquí.",
+    confirmTaste: "Guardar",
+    confirmFactual: "Excluir",
+    cancel: "Cancelar",
     networkError: "Error de red",
     markApplied: "Me he postulado",
     markAppliedDone: "Candidatura registrada",
@@ -143,6 +189,14 @@ const T: Record<
       review_ok: "Interessant",
       top: "Sehr interessant",
     },
+    whyNo: "Warum ist sie nicht interessant?",
+    pickPlaceholder: "Grund auswählen…",
+    hintTaste: "Das Team nutzt ihn, um passendere Stellen für dich zu suchen.",
+    hintFactual:
+      "Die Stelle fällt einfach aus dem Umlauf: Eine abgelaufene sagt nichts über deinen Geschmack, das Team lernt hier also nichts.",
+    confirmTaste: "Speichern",
+    confirmFactual: "Ausschließen",
+    cancel: "Abbrechen",
     networkError: "Netzwerkfehler",
     markApplied: "Ich habe mich beworben",
     markAppliedDone: "Bewerbung vermerkt",
@@ -160,6 +214,15 @@ const T: Record<
       review_ok: "Intéressant",
       top: "Très intéressant",
     },
+    whyNo: "Pourquoi ne vous intéresse-t-il pas ?",
+    pickPlaceholder: "Choisissez un motif…",
+    hintTaste:
+      "L'équipe s'en servira pour chercher des offres qui vous vont mieux.",
+    hintFactual:
+      "Le poste sort simplement du circuit : une offre expirée ne dit rien de vos goûts, l'équipe n'apprend donc rien d'ici.",
+    confirmTaste: "Enregistrer",
+    confirmFactual: "Exclure",
+    cancel: "Annuler",
     networkError: "Erreur réseau",
     markApplied: "J'ai postulé moi-même",
     markAppliedDone: "Candidature enregistrée",
@@ -177,6 +240,15 @@ const T: Record<
       review_ok: "Interessante",
       top: "Muito interessante",
     },
+    whyNo: "Porque não te interessa?",
+    pickPlaceholder: "Escolhe um motivo…",
+    hintTaste:
+      "A equipa vai usá-lo para procurar ofertas que te encaixem melhor.",
+    hintFactual:
+      "A vaga sai do circuito e pronto: uma vaga expirada não diz o que gostas, por isso a equipa não aprende nada daqui.",
+    confirmTaste: "Guardar",
+    confirmFactual: "Excluir",
+    cancel: "Cancelar",
     networkError: "Erro de rede",
     markApplied: "Candidatei-me",
     markAppliedDone: "Candidatura registada",
@@ -218,6 +290,7 @@ export function FeedbackButtons({
 }) {
   const locale = useLocale();
   const t = T[locale];
+  const pickerT = PICKER_T[locale];
   // O-24: candidatura mandata a mano dall'utente. Stato separato dal giudizio
   // — non è un voto sull'offerta, è un fatto sul suo stato.
   const [applied, setApplied] = useState(initialApplied);
@@ -229,8 +302,22 @@ export function FeedbackButtons({
   const [verdict, setVerdict] = useState<Verdict | null>(initialVerdict);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // O-43 — «Non interessante» non scrive più niente al primo click: apre il
+  // motivo. Finché questo pannello è aperto non è stato registrato nulla.
+  const [askWhy, setAskWhy] = useState(false);
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
+  const factual = isFactualReason(reason);
 
-  const give = async (v: Verdict) => {
+  // `why` accompagna il giudizio negativo: `reason` è il codice del
+  // vocabolario condiviso (lo stesso di `user_excluded_reason`), `comment` il
+  // testo che l'utente ha scritto. Il Mentor raggruppa proprio quel testo
+  // (pattern F), lo Scout legge la direction: senza motivo il segnale dice
+  // «meno cose così» e basta, e non c'è modo di sapere di cosa parlasse.
+  const give = async (
+    v: Verdict,
+    why?: { reason?: string; comment?: string },
+  ) => {
     if (busy) return false;
     const prev = verdict;
     setError(null);
@@ -245,6 +332,8 @@ export function FeedbackButtons({
           action: cfg.action,
           score: cfg.score,
           ...(cfg.direction ? { direction: cfg.direction } : {}),
+          ...(why?.reason ? { reason: why.reason } : {}),
+          ...(why?.comment ? { comment: why.comment } : {}),
         }),
       });
       if (!res.ok) throw new Error(String(res.status));
@@ -291,6 +380,71 @@ export function FeedbackButtons({
       );
     }
     setBusy(false);
+  };
+
+  // Conferma del pannello «perché». Due strade, e la differenza è il punto
+  // del ticket:
+  //  · motivo FATTUALE (scaduta, già gestita) → non è un gusto. La posizione
+  //    esce dal giro con la stessa route dell'esclusione manuale, e NESSUN
+  //    `less_like_this` parte: `agents/scout/scout.md` deprioritizza azienda,
+  //    famiglia di ruolo e località quando lo vede, e su una posizione ottima
+  //    ma scaduta sarebbe la lezione sbagliata;
+  //  · motivo di GUSTO → giudizio negativo come prima, ma con il motivo
+  //    attaccato, così quello che arriva allo scoring dice anche di cosa
+  //    parlava.
+  const confirmWhy = async () => {
+    if (busy) return;
+    // La regola sta in `negativeSignalFor`, che è pura e testata: qui resta
+    // solo l'esecuzione.
+    const signal = negativeSignalFor(reason, note);
+    if (signal.kind === "invalid") {
+      setError(
+        signal.missing === "reason" ? pickerT.pickReason : pickerT.writeReason,
+      );
+      return;
+    }
+    if (signal.kind === "exclude") {
+      setError(null);
+      setBusy(true);
+      try {
+        const res = await fetch(`/api/positions/${legacyId}/user-exclude`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reason: signal.reason,
+            ...(signal.note ? { note: signal.note } : {}),
+          }),
+        });
+        if (!res.ok) {
+          const b = (await res.json().catch(() => ({}))) as { error?: string };
+          setError(b?.error ?? `HTTP ${res.status}`);
+          setBusy(false);
+          return;
+        }
+        closeWhy();
+        startTransition(() => router.refresh());
+      } catch (e) {
+        setError(
+          e instanceof Error
+            ? `${t.networkError} (${e.message})`
+            : t.networkError,
+        );
+      }
+      setBusy(false);
+      return;
+    }
+    const ok = await give("no", {
+      reason: signal.reason,
+      comment: signal.comment,
+    });
+    if (ok) closeWhy();
+  };
+
+  const closeWhy = () => {
+    setAskWhy(false);
+    setReason("");
+    setNote("");
+    setError(null);
   };
 
   // Segna la candidatura come inviata dall'utente. Senza questo il team non
@@ -377,6 +531,12 @@ export function FeedbackButtons({
                 if (selected) {
                   // Riclick sul voto attivo = lo ritira (nessun giudizio).
                   void clearVerdict();
+                } else if (v === "no") {
+                  // Il solo giudizio che chiede il perché: è quello che
+                  // insegna al team cosa evitare, e senza motivo insegnava
+                  // la cosa sbagliata. Qui non parte ancora nessuna scrittura.
+                  setError(null);
+                  setAskWhy(true);
                 } else {
                   void give(v);
                 }
@@ -400,7 +560,74 @@ export function FeedbackButtons({
           );
         })}
       </div>
-      {error && (
+      {/* Il perché del «Non interessante». Finché è aperto non è stato
+          scritto niente: si conferma o si annulla. */}
+      {askWhy && (
+        <div
+          className="mt-2 rounded-lg border p-3 flex flex-col gap-2"
+          style={{
+            borderColor: "var(--color-border)",
+            background: "var(--color-panel)",
+          }}
+        >
+          <p className="text-[11px] font-semibold text-[var(--color-base)]">
+            {t.whyNo}
+          </p>
+          <ReasonPicker
+            value={reason}
+            onChange={(next) => {
+              setReason(next);
+              setError(null);
+            }}
+            note={note}
+            onNoteChange={setNote}
+            disabled={busy}
+            placeholder={t.pickPlaceholder}
+            className="flex flex-wrap items-center gap-1.5"
+          />
+          {/* Che cosa succede DAVVERO con questo motivo: sono due esiti
+              diversi, e l'utente lo legge prima di confermare, non dopo. */}
+          {reason && (
+            <p className="text-[10px] leading-snug text-[var(--color-dim)]">
+              {factual ? t.hintFactual : t.hintTaste}
+            </p>
+          )}
+          {/* L'errore vive DENTRO il pannello: riguarda questa scelta, e
+              fuori si leggeva come un guasto della fila dei giudizi. */}
+          {error && (
+            <p className="text-[10px]" style={{ color: "var(--color-red)" }}>
+              {error}
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void confirmWhy()}
+              disabled={busy}
+              className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-60"
+              style={{
+                color: "var(--color-red)",
+                borderColor: "var(--color-red)",
+              }}
+            >
+              {factual ? t.confirmFactual : t.confirmTaste}
+            </button>
+            <button
+              type="button"
+              onClick={closeWhy}
+              disabled={busy}
+              className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-60"
+              style={{
+                color: "var(--color-muted)",
+                borderColor: "var(--color-border)",
+              }}
+            >
+              {t.cancel}
+            </button>
+          </div>
+        </div>
+      )}
+      {error && !askWhy && (
         <p className="mt-2 text-[10px]" style={{ color: "var(--color-red)" }}>
           {error}
         </p>
