@@ -23,7 +23,30 @@ sys.path.insert(0, os.path.dirname(__file__))
 from _db import get_db, ensure_schema, resolve_company_id
 from profile_gate import check_minimum_viable_profile
 from score_ranges import COMPONENT_LIMITS, SCORE_COMPONENT_LABELS, TOTAL_LIMIT
+from external_content import (
+    EXTERNAL_BLOCK_FIELDS,
+    EXTERNAL_INLINE_FIELDS,
+    normalize_external_inline_fields,
+)
 import maintenance_log
+
+# I flag di `db_insert.py position` che NON vengono dalla pagina: li sceglie
+# un agente nostro (o argparse, con `choices`/`type=int`). Gli altri sono
+# elencati in `external_content.EXTERNAL_*`, e insieme devono coprire TUTTI i
+# flag del comando: `tests/test_external_content_fencing.py` lo verifica, così
+# un campo nuovo non può entrare senza che qualcuno abbia deciso da dove viene.
+POSITION_INTERNAL_FIELDS = (
+    "remote_type",
+    "salary_declared_min",
+    "salary_declared_max",
+    "salary_declared_currency",
+    "salary_estimated_min",
+    "salary_estimated_max",
+    "salary_estimated_currency",
+    "salary_estimated_source",
+    "found_by",
+    "notes",
+)
 
 # Campi di uno score che, cambiando, dicono che la rivalutazione è avvenuta.
 # `scored_by` e i timestamp restano fuori: cambiano anche quando il giudizio
@@ -268,6 +291,13 @@ def _rollback_quietly(conn):
 
 
 def insert_position(args):
+    # Prima di tutto il resto, compreso il dedup: titolo, azienda, location,
+    # URL, fonte e scadenza arrivano dalla pagina scrapata, e da qui in avanti
+    # devono essere una riga sola. Un a capo dentro un titolo non è un dettaglio
+    # di formattazione — è il pezzo che permette a un annuncio di ridisegnare
+    # l'intestazione che l'agente legge come testo nostro.
+    normalize_external_inline_fields(args)
+
     conn = get_db()
     ensure_schema(conn)
 
@@ -486,7 +516,14 @@ def insert_highlight(args):
     conn.close()
 
 
-def main():
+def build_parser():
+    """Il parser, separato da `main` perché non serve solo a `main`.
+
+    `tests/test_external_content_fencing.py` lo interroga per verificare che
+    ogni flag di `position` sia classificato: da fuori o nostro. Senza un
+    parser raggiungibile, quel controllo diventerebbe una lista scritta a
+    mano nel test — cioè la copia che si disallinea al primo campo nuovo.
+    """
     parser = argparse.ArgumentParser(description='Insert data into jobs.db')
     sub = parser.add_subparsers(dest='entity', required=True)
 
@@ -561,6 +598,11 @@ def main():
     h.add_argument('--type', required=True, choices=['pro', 'con'])
     h.add_argument('--text', required=True)
 
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
 
     if args.entity == 'position':
