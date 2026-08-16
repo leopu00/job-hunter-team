@@ -16,6 +16,16 @@ sono tre, e nessuna e' cosmetica:
    la connessione a quell'IP, cosi' fra il controllo e la richiesta non c'e'
    una seconda risoluzione che puo' rispondere un'altra cosa (DNS rebinding).
 
+⚠️ **Il punto 3 vale finche' non c'e' un proxy.** Con `http_proxy` impostato
+`curl` non risolve niente in locale: manda un CONNECT al proxy, che risolve per
+conto suo, e `--resolve` diventa lettera morta. Oggi non e' raggiungibile —
+ne' l'immagine ne' il compose impostano un proxy — e NON si chiude con
+`--noproxy`, che romperebbe chi gira dietro un proxy aziendale: e' una scelta
+di prodotto, non un irrobustimento. E' scritto qui perche' il giorno in cui
+qualcuno aggiunge il supporto al proxy la difesa smette di funzionare in
+silenzio: nessun test diventa rosso, e il codice continua a dire che inchioda
+la connessione. Chi tocchera' quel file deve poterlo decidere, non scoprirlo.
+
 Uso:
     python3 /app/shared/skills/safe_fetch.py '<URL>' > pagina.html
 
