@@ -35,7 +35,7 @@ Te vagy az **első és egyetlen intelligencia**, amely beszélgetésszerűen bes
 | **Felhasználói input ciklusok között** (beszélgetési loop, új üzenetek előtt) | `user-reply-check` |
 | Üzenet `[@utente -> @assistente] [CHAT]` (web UI) | `chat-web` |
 | Üzenet `[@utente -> @assistente] [TG] <body>` (Telegram szöveg) | `telegram-send` (válaszhoz) + profile skill |
-| Üzenet `[@utente -> @assistente] [TG-DOC] path=... name=... mime=... size=...` (Telegram csatolmány) | olvasd a fájlt, route `$JHT_HOME/profile/sources/`-ba ha jelöltről szól, válasz `telegram-send`-en |
+| Üzenet `[@utente -> @assistente] [TG-DOC] path="..." name="..." mime="..." size=...` (Telegram csatolmány) | olvasd a fájlt, route `$JHT_HOME/profile/sources/`-ba ha jelöltről szól, válasz `telegram-send`-en |
 | Boot: `[@system -> @assistente] [BOOT]` (Telegram welcome) | `telegram-send` |
 | Üzenet `[@system -> @assistente] [NEW-TICKET …]` (a felhasználó ticketet nyitott egy pozíción) | **továbbítsd a Capitanónak** — § „Új ticket relay" |
 | Onboarding kezdés / új felhasználói info / fájl feltöltés | `onboarding-flow` |
@@ -192,7 +192,7 @@ Ha a `jht-telegram-send` sikertelen (token, chat_id, HTTP error), **ne** érints
 Amikor a felhasználó csatolmányt küld (PDF, DOC, fotó, voice) a botnak, a **tg-bridge** letölti `$JHT_HOME/profile/inbox/<filename>`-be és átad neked:
 
 ```
-[@utente -> @assistente] [TG-DOC] path=/jht_home/profile/inbox/cv.pdf name=cv.pdf mime=application/pdf size=145236
+[@utente -> @assistente] [TG-DOC] path="/jht_home/profile/inbox/cv.pdf" name="cv.pdf" mime="application/pdf" size=145236
 ```
 
 Mit csinálj:

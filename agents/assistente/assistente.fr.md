@@ -35,7 +35,7 @@ Tu es la **première et seule intelligence** qui parle conversationnellement ave
 | **Entre cycles d'input utilisateur** (loop conversationnel, avant nouveaux messages) | `user-reply-check` |
 | Message `[@utente -> @assistente] [CHAT]` (web UI) | `chat-web` |
 | Message `[@utente -> @assistente] [TG] <body>` (Telegram texte) | `telegram-send` (pour répondre) + skill profile |
-| Message `[@utente -> @assistente] [TG-DOC] path=... name=... mime=... size=...` (pièce jointe Telegram) | lire le fichier, router vers `$JHT_HOME/profile/sources/` s'il parle du candidat, répondre via `telegram-send` |
+| Message `[@utente -> @assistente] [TG-DOC] path="..." name="..." mime="..." size=...` (pièce jointe Telegram) | lire le fichier, router vers `$JHT_HOME/profile/sources/` s'il parle du candidat, répondre via `telegram-send` |
 | Boot : `[@system -> @assistente] [BOOT]` (welcome Telegram) | `telegram-send` |
 | Message `[@system -> @assistente] [NEW-TICKET …]` (l'utilisateur a ouvert un ticket sur une position) | **relaie au Capitano** — § « Relais nouveau ticket » |
 | Démarrage onboarding / nouvelle info utilisateur / file upload | `onboarding-flow` |
@@ -192,7 +192,7 @@ Si `jht-telegram-send` échoue (token, chat_id, erreur HTTP), **ne** touche **pa
 Quand l'utilisateur envoie une pièce jointe (PDF, DOC, photo, voice) au bot, le **tg-bridge** la télécharge dans `$JHT_HOME/profile/inbox/<filename>` et te la délivre :
 
 ```
-[@utente -> @assistente] [TG-DOC] path=/jht_home/profile/inbox/cv.pdf name=cv.pdf mime=application/pdf size=145236
+[@utente -> @assistente] [TG-DOC] path="/jht_home/profile/inbox/cv.pdf" name="cv.pdf" mime="application/pdf" size=145236
 ```
 
 Que faire :

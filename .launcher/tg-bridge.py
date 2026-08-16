@@ -448,6 +448,62 @@ def flush_inbound_queue(db_path: Path | None = None) -> int:
     return len(records)
 
 
+def _one_line(value) -> str:
+    """Un campo scelto da chi invia sta su UNA riga, sempre.
+
+    Non e' una questione di lunghezza ma di provenienza: `file_name` e
+    `mime_type` li sceglie chi invia, e finiscono in un testo STRUTTURATO che
+    un agente legge (`[TG-DOC] path=... name=...`). Un a-capo dentro il nome
+    simula righe della busta, cioe' fabbrica struttura che nessuno ha scritto.
+
+    `isprintable()` e' piu' largo di un `replace("\\n")`: cade anche su \\r, \\t,
+    NUL, DEL, i separatori di riga Unicode (U+2028/U+2029) e gli invisibili di
+    categoria Cf, che un modello puo' rendere come a-capo o non vedere affatto.
+    """
+    flat = "".join(ch if ch.isprintable() else " " for ch in str(value))
+    return " ".join(flat.split())
+
+
+def _quoted(value) -> str:
+    """Campo delimitato: senza virgolette il valore puo' fingersi un campo.
+
+    Gli spazi in un nome di file sono legittimi («CV Mario Rossi.pdf»), quindi
+    lo spazio non puo' fare da confine: `name=x mime=text/plain` sarebbe
+    indistinguibile da due campi veri. Le virgolette lo chiudono, e quelle
+    contenute nel valore vengono neutralizzate invece di poterlo riaprire.
+    """
+    text = _one_line(value).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{text}"'
+
+
+def _int_field(value, default: int = 0) -> int:
+    """Un numero nella busta e' un numero.
+
+    `file_size` e `duration` li dichiara chi invia: una stringa al posto di un
+    intero sarebbe l'ennesimo campo libero dentro un testo strutturato.
+    """
+    return value if isinstance(value, int) and not isinstance(value, bool) else default
+
+
+def _doc_envelope(local: Path, name: str, mime: str, size, extra: str = "") -> str:
+    """La busta [TG-DOC] si costruisce QUI, non in ogni handler.
+
+    Come per `_inbox_leaf`: la neutralizzazione sta dove la struttura viene
+    prodotta, cosi' foto, vocali e ogni allegato futuro la ereditano anche se
+    oggi passano nomi che il programma sceglie da se'.
+    """
+    label = _one_line(name) or local.name
+    # Regola unica e leggibile: i campi di testo sono delimitati, i numeri no.
+    # `mime` lo sceglie chi invia esattamente come il nome; il path lo sceglie
+    # il programma, ma la sua foglia nasce dal nome dell'utente.
+    body = (
+        f"[TG-DOC] "
+        f"path={_quoted(local)} name={_quoted(label)} "
+        f"mime={_quoted(mime)} size={_int_field(size, _size_on_disk(local))}"
+    )
+    return f"{body} {extra}".rstrip()
+
+
 def _inbox_leaf(dest_name: str, file_id: str) -> str:
     """Il nome proposto dal chiamante diventa una FOGLIA della inbox, mai un path.
 
@@ -461,7 +517,9 @@ def _inbox_leaf(dest_name: str, file_id: str) -> str:
     INBOX_DIR: cosi' anche un chiamante futuro nasce protetto. Il nome
     dichiarato non si perde, resta l'etichetta `name=` nella busta.
     """
-    leaf = os.path.basename(str(dest_name or "").strip())
+    # `_one_line` dopo il basename: il file su disco non deve portarsi dentro
+    # a-capo o invisibili, che finirebbero nel `path=` della busta e nei log.
+    leaf = _one_line(os.path.basename(str(dest_name or "").strip()))
     if leaf in ("", ".", ".."):
         stem = "".join(c for c in str(file_id) if c.isalnum())[:8]
         leaf = f"file-{stem or 'unnamed'}"
@@ -560,11 +618,20 @@ def declared_size(payload: dict) -> int | None:
 
 def reject_too_large(name: str, size_bytes: int | None) -> str:
     quanto = f"{size_bytes // 1024 // 1024} MB" if size_bytes is not None else "over the limit"
-    log(f"doc {name} exceeds the limit ({size_bytes}B) — skipping")
+    etichetta = _quoted(name)
+    log(f"doc {etichetta} exceeds the limit ({size_bytes}B) — skipping")
     return (
         f"[TG-DOC-REJECT] "
-        f"file '{name}' exceeds 20 MB ({quanto}). "
+        f"file {etichetta} exceeds 20 MB ({quanto}). "
         f"Ask the user to send it again in a smaller format."
+    )
+
+
+def download_failed(name: str) -> str:
+    """Anche il messaggio d'errore e' testo che un agente legge: stesso confine."""
+    return (
+        f"[TG-DOC-ERROR] "
+        f"download of {_quoted(name)} failed — ask the user to try again."
     )
 
 
@@ -582,17 +649,11 @@ def handle_document(token: str, msg: dict) -> str:
     except DocumentTooLarge as e:
         return reject_too_large(name, e.downloaded)
     if not local:
-        return (
-            f"[TG-DOC-ERROR] "
-            f"download of '{name}' failed — ask the user to try again."
-        )
+        return download_failed(name)
     if size is None:
         size = _size_on_disk(local)
-    body = (
-        f"[TG-DOC] "
-        f"path={local} name={name} mime={mime} size={size}"
-    )
-    log(f"doc {name} → {local} ({size}B)")
+    body = _doc_envelope(local, name, mime, size)
+    log(f"doc {_quoted(name)} → {local} ({size}B)")
     return body
 
 
@@ -608,18 +669,15 @@ def handle_photo(token: str, msg: dict) -> str | None:
     photos = msg.get("photo", [])
     if not photos:
         return None
-    largest = max(photos, key=lambda p: p.get("file_size", 0))
+    largest = max(photos, key=lambda p: _int_field(p.get("file_size")))
     name = f"photo-{largest['file_id'][:10]}.jpg"
     try:
         local = fetch_file(token, largest["file_id"], name)
     except DocumentTooLarge as e:
         return reject_too_large(name, e.downloaded)
     if not local:
-        return f"[TG-DOC-ERROR] download of '{name}' failed — ask the user to try again."
-    body = (
-        f"[TG-DOC] "
-        f"path={local} name={name} mime=image/jpeg size={largest.get('file_size', 0)}"
-    )
+        return download_failed(name)
+    body = _doc_envelope(local, name, "image/jpeg", largest.get("file_size", 0))
     log(f"photo → {local}")
     return body
 
@@ -632,11 +690,10 @@ def handle_voice(token: str, msg: dict) -> str:
     except DocumentTooLarge as e:
         return reject_too_large(name, e.downloaded)
     if not local:
-        return f"[TG-DOC-ERROR] download of '{name}' failed — ask the user to try again."
-    body = (
-        f"[TG-DOC] "
-        f"path={local} name={name} mime=audio/ogg size={v.get('file_size', 0)} "
-        f"duration={v.get('duration', 0)}s"
+        return download_failed(name)
+    body = _doc_envelope(
+        local, name, "audio/ogg", v.get("file_size", 0),
+        extra=f"duration={_int_field(v.get('duration'))}s",
     )
     log(f"voice → {local}")
     return body

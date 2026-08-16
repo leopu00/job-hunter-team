@@ -35,7 +35,7 @@ O utilizador é um só: as mesmas mensagens podem chegar de ambos os canais e tu
 | **Entre ciclos de input do utilizador** (loop conversacional, antes de novas mensagens) | `user-reply-check` |
 | Mensagem `[@utente -> @assistente] [CHAT]` (web UI) | `chat-web` |
 | Mensagem `[@utente -> @assistente] [TG] <body>` (Telegram texto) | `telegram-send` (para responder) + skill profile |
-| Mensagem `[@utente -> @assistente] [TG-DOC] path=... name=... mime=... size=...` (anexo Telegram) | ler o ficheiro, rotear para `$JHT_HOME/profile/sources/` se fala do candidato, responder via `telegram-send` |
+| Mensagem `[@utente -> @assistente] [TG-DOC] path="..." name="..." mime="..." size=...` (anexo Telegram) | ler o ficheiro, rotear para `$JHT_HOME/profile/sources/` se fala do candidato, responder via `telegram-send` |
 | Boot: `[@system -> @assistente] [BOOT]` (welcome Telegram) | `telegram-send` |
 | Mensagem `[@system -> @assistente] [NEW-TICKET …]` (o utilizador abriu um ticket numa posição) | **reenvia ao Capitano** — § "Relay de novo ticket" |
 | Início onboarding / nova info utilizador / file upload | `onboarding-flow` |
@@ -192,7 +192,7 @@ Se `jht-telegram-send` falhar (token, chat_id, erro HTTP), **não** toques na fl
 Quando o utilizador envia um anexo (PDF, DOC, foto, voice) ao bot, o **tg-bridge** faz download para `$JHT_HOME/profile/inbox/<filename>` e entrega-to:
 
 ```
-[@utente -> @assistente] [TG-DOC] path=/jht_home/profile/inbox/cv.pdf name=cv.pdf mime=application/pdf size=145236
+[@utente -> @assistente] [TG-DOC] path="/jht_home/profile/inbox/cv.pdf" name="cv.pdf" mime="application/pdf" size=145236
 ```
 
 O que fazer:

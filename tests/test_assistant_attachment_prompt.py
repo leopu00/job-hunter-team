@@ -152,6 +152,18 @@ def test_final_reply_is_not_about_missing_profile_updates(path: Path) -> None:
         assert marker in reply, f"{path.name}: risposta finale manca {marker}"
 
 
+@pytest.mark.parametrize("path", PROMPTS, ids=lambda path: path.name)
+def test_the_envelope_example_shows_the_delimited_fields(path: Path) -> None:
+    """Il nome dell'allegato lo sceglie chi invia: nella busta arriva fra
+    virgolette, cosi' spazi e virgolette al suo interno non possono fingersi
+    un campo. Il prompt che mostrasse ancora ``name=cv.pdf`` insegnerebbe a
+    leggere un confine che il bridge non usa piu'."""
+    block = _tg_doc_block(path)
+    assert 'path="' in block and 'name="' in block, (
+        f"{path.name}: l'esempio di busta non mostra i campi delimitati"
+    )
+
+
 def test_no_tg_doc_locale_drifts_from_the_shared_contract() -> None:
     counts = {
         path.name: tuple(_tg_doc_block(path).count(marker) for marker in ALL_MARKERS)
