@@ -299,6 +299,58 @@ def _walk_with_fake_dns():
     return walk
 
 
+def test_lo_user_agent_richiesto_da_nominatim_arriva_a_curl(monkeypatch):
+    """#176: senza questo, office-geocoding resterebbe su `curl` nudo.
+
+    Nominatim pretende un User-Agent che identifichi il chiamante e rifiuta
+    quelli generici. Un fetcher condiviso che quelle skill non possono usare
+    non e' condiviso: sarebbero tornate al comando di prima, che i redirect
+    non li controlla.
+    """
+    catturato = {}
+
+    class _Result:
+        returncode = 0
+        stdout = b"{}\n200 "
+        stderr = b""
+
+    def fake_run(command, **kwargs):
+        catturato["command"] = command
+        return _Result()
+
+    monkeypatch.setattr(safe_fetch.subprocess, "run", fake_run)
+    monkeypatch.setattr(safe_fetch.socket, "getaddrinfo", _resolves(PUBLIC_ADDRESS))
+    # La rete di documentazione non e' `is_global`, e qui l'indirizzo fa da
+    # indirizzo pubblico finto: cio' che si prova e' l'User-Agent, e nel repo
+    # pubblico un indirizzo vero non entra. Il giudizio sugli indirizzi ha i
+    # suoi test, in test_url_guard_ssrf.
+    monkeypatch.setattr(
+        safe_fetch, "address_is_reachable_from_outside", lambda address: True
+    )
+
+    exit_code = safe_fetch.main(
+        [
+            "--user-agent",
+            "jht-analyst/1.0 (+https://github.com/leopu00/job-hunter-team)",
+            "https://nominatim.openstreetmap.org/search?q=roma&format=json",
+        ]
+    )
+
+    command = catturato["command"]
+    assert exit_code == 0
+    assert command[command.index("--user-agent") + 1] == (
+        "jht-analyst/1.0 (+https://github.com/leopu00/job-hunter-team)"
+    )
+    # E il resto della difesa resta dov'era: un UA su misura non e' il permesso
+    # di seguire i redirect da soli.
+    assert command[command.index("--max-redirs") + 1] == "0"
+    assert "--resolve" in command
+
+
+def _resolves(address):
+    return lambda host, port, **kwargs: [(0, 0, 0, "", (address, port))]
+
+
 def test_nessuno_dei_due_moduli_segue_piu_i_redirect_da_solo():
     """La chiamata, non la parola: l'AST invece di un grep.
 

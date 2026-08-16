@@ -1,7 +1,7 @@
 ---
 name: circles-and-sources
 description: Strategy map for what to search WHERE, derived entirely from the candidate profile. The 5 concentric circles (work_mode + relocation) tell you the geographic scope; the 4 source tiers (LinkedIn → ATS aggregators → niche → web) tell you which platforms to drain in order. A scout that searches the wrong tier in the wrong circle wastes its quota and its `scout-coord` partition. Open this skill at boot (after `scout-coord`) and again whenever a circle is exhausted or a `[FEEDBACK]` from the Analyst suggests changing source.
-allowed-tools: Bash(curl *), Bash(python3 /app/shared/skills/linkedin_check.py *)
+allowed-tools: Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(python3 /app/shared/skills/linkedin_check.py *)
 ---
 
 # circles-and-sources — read the profile, build the map
@@ -67,7 +67,7 @@ Drain a tier completely before moving to the next.
 
 | Tier | Type                                | Sources                                                                                                       | Notes                                                                                          |
 |------|-------------------------------------|--------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
-| 1    | **LinkedIn**                        | `linkedin_check.py` (authenticated profile), `curl` with browser UA                                          | Universal: covers remote, on-site, hybrid. Mandatory first step for every circle. **NEVER `fetch` MCP** — blocked by robots.txt. |
+| 1    | **LinkedIn**                        | `linkedin_check.py` (authenticated profile), `safe_fetch.py`                                          | Universal: covers remote, on-site, hybrid. Mandatory first step for every circle. **NEVER `fetch` MCP** — blocked by robots.txt. |
 | 2    | **ATS aggregators**                 | Greenhouse boards, Lever boards, Indeed, Wellfound (ex AngelList)                                            | Work for any work_mode. Cover many companies in one scrape.                                    |
 | 3    | **Niche boards (profile-specific)** | Pick by `work_mode` AND domain                                                                              | (see table below)                                                                              |
 | 4    | **WebSearch + career pages**        | `WebSearch` queries + scrape of company career pages                                                        | Last resort only after tier 1-3 are drained.                                                   |
@@ -169,7 +169,7 @@ Example: Analyst says "4 of last 5 from greenhouse.io require senior+, switch so
 - ❌ Searching circle 2 before exhausting circle 1 — wastes scope, dilutes results.
 - ❌ Going to tier 4 (WebSearch) before tier 1-3 are drained — `WebSearch` is the noisiest source, save it for last.
 - ❌ Inferring `relocation = "ovunque"` for a candidate whose profile says `false` — read the profile, don't project.
-- ❌ Using LinkedIn via `fetch` MCP — blocked by robots.txt; always `linkedin_check.py` (authenticated) or `curl` with browser UA.
+- ❌ Using LinkedIn via `fetch` MCP — blocked by robots.txt; always `linkedin_check.py` (authenticated) or `safe_fetch.py`.
 - ❌ Including senior-titled JDs hoping the Scorer will filter them — wastes Scorer budget, adds noise. The 4 SCOUT-level filters above are the right place.
 - ❌ Anti-bias check forgotten — one greedy company swamps your batch.
 

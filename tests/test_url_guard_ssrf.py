@@ -282,6 +282,22 @@ def test_curl_is_told_not_to_follow_and_which_address_to_use(monkeypatch):
     assert command[command.index("--proto-redir") + 1] == "=http,https"
 
 
+# Le skill che la rete la toccano e devono dire da dove passa (#169, #176).
+FETCHING_SKILLS = (
+    "position-insert",
+    "application-flow",
+    "blind-review",         # scarica il JD: l'URL viene dalla riga posizione
+    "circles-and-sources",  # LinkedIn e job board
+    "office-geocoding",     # Nominatim e Photon
+)
+
+# Queste due la rete non la toccano piu' direttamente — delegano a script
+# Python che passano dal guard (`logo_fetch.py`) — ma tenevano `Bash(curl *)`
+# fra gli allowed-tools. Un permesso che resta e' una strada che chi modifica
+# la skill domani puo' riprendere senza accorgersi di aggirare niente.
+SKILLS_WITHOUT_THEIR_OWN_FETCH = ("logo-extraction", "location-enrichment")
+
+
 def test_the_skills_no_longer_reach_the_network_with_bare_curl():
     """Il comando documentato E il permesso, non solo il comando.
 
@@ -289,9 +305,34 @@ def test_the_skills_no_longer_reach_the_network_with_bare_curl():
     allowed-tools lascia aperta la strada vecchia: la difesa tornerebbe a
     dipendere da cosa si ricorda l'agente.
     """
-    for skill in ("position-insert", "application-flow"):
+    for skill in FETCHING_SKILLS:
         for path in sorted((ROOT / "agents" / "_skills" / skill).glob("SKILL*.md")):
             text = path.read_text(encoding="utf-8")
             assert "Bash(curl" not in text, path
             assert "curl -s -L" not in text, path
             assert "safe_fetch.py" in text, path
+
+
+def test_a_skill_that_no_longer_fetches_does_not_keep_the_permission():
+    for skill in SKILLS_WITHOUT_THEIR_OWN_FETCH:
+        for path in sorted((ROOT / "agents" / "_skills" / skill).glob("SKILL*.md")):
+            text = path.read_text(encoding="utf-8")
+            assert "Bash(curl" not in text, path
+            assert "curl" not in text, path
+
+
+def test_every_locale_of_a_converted_skill_says_the_same_thing():
+    """Sette lingue, una decisione.
+
+    Il runtime preferisce `SKILL.<locale>.md` all'inglese: una conversione
+    presente solo in EN lascerebbe sei utenti su sette con la strada vecchia,
+    e il permesso `Bash(curl *)` che la rende percorribile.
+    """
+    for skill in FETCHING_SKILLS + SKILLS_WITHOUT_THEIR_OWN_FETCH:
+        paths = sorted((ROOT / "agents" / "_skills" / skill).glob("SKILL*.md"))
+        assert len(paths) == 7, f"{skill}: {len(paths)} varianti invece di 7"
+        counts = {
+            path.name: path.read_text(encoding="utf-8").count("safe_fetch.py")
+            for path in paths
+        }
+        assert len(set(counts.values())) == 1, f"{skill}: locale divergenti {counts}"

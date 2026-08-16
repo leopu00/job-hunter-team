@@ -28,6 +28,8 @@ la connessione. Chi tocchera' quel file deve poterlo decidere, non scoprirlo.
 
 Uso:
     python3 /app/shared/skills/safe_fetch.py '<URL>' > pagina.html
+    python3 /app/shared/skills/safe_fetch.py --status '<URL>'
+    python3 /app/shared/skills/safe_fetch.py --user-agent 'jht-analyst/1.0' '<URL>'
 
 Exit code: 0 pagina su stdout · 1 rifiutata dal guard (il motivo su stderr) ·
 2 errore di rete o di `curl`.
@@ -40,6 +42,7 @@ import os
 import socket
 import subprocess
 import sys
+from functools import partial
 from urllib.parse import urljoin, urlsplit
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -78,12 +81,18 @@ def resolve_public_address(host: str, port: int) -> str:
     return addresses[0]
 
 
-def curl_hop(url: str, address: str) -> tuple[int, str, bytes]:
+def curl_hop(url: str, address: str, user_agent: str = USER_AGENT) -> tuple[int, str, bytes]:
     """Un solo salto: nessun redirect seguito, connessione inchiodata a `address`.
 
     Ritorna `(status, location, body)`. `--proto` e `--proto-redir` tengono
     fuori `file:`, `gopher:` e compagnia anche se il server prova a mandarci
     li' con un `Location:`.
+
+    `user_agent` esiste perche' alcuni servizi lo richiedono per policy e
+    rifiutano quelli generici — Nominatim vuole un UA che identifichi chi
+    chiama. Senza questo parametro quelle skill resterebbero su `curl` nudo,
+    e un fetcher condiviso che la maggior parte del codice non puo' usare
+    non e' un fetcher condiviso.
     """
     parts = urlsplit(url)
     port = parts.port or (443 if parts.scheme == "https" else 80)
@@ -96,7 +105,7 @@ def curl_hop(url: str, address: str) -> tuple[int, str, bytes]:
         "--max-redirs", "0",
         "--max-time", str(MAX_SECONDS),
         "--max-filesize", str(MAX_BYTES),
-        "--user-agent", USER_AGENT,
+        "--user-agent", user_agent,
         "--resolve", f"{parts.hostname}:{port}:{address}",
         # L'a capo davanti rende separabile l'uscita: il corpo e' tutto quello
         # che sta prima dell'ULTIMO a capo, il resto e' questa riga.
@@ -153,9 +162,17 @@ def main(argv=None):
         action="store_true",
         help="stato HTTP e URL finale invece del corpo (verifica del link)",
     )
+    parser.add_argument(
+        "--user-agent",
+        default=USER_AGENT,
+        help="User-Agent for the request (Nominatim and similar services "
+             "require one that identifies the caller)",
+    )
     args = parser.parse_args(argv)
     try:
-        status, final_url, body = walk(args.url)
+        status, final_url, body = walk(
+            args.url, hop=partial(curl_hop, user_agent=args.user_agent)
+        )
         if args.status:
             # Stessa forma del `curl -w` che sostituisce: le tabelle di
             # decisione nelle skill leggono queste due parole.
