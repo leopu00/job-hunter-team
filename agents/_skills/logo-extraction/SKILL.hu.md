@@ -2,7 +2,7 @@
 ---
 name: logo-extraction
 description: Nyerd ki a cég logóját a companies tábla egy vállalatához, és mentsd el kis base64 data-URI-ként (max ~35KB, min 32px). Az elsődleges út teljesen automatizált a logo_fetch.py-jal a hivatalos weboldal ellen (apple-touch-icon → icon → og:image → favicon); ha az oldal blokkolja a botokat vagy nincs használható ikonja, keresd meg webkereséssel egy logókép közvetlen URL-jét, és add át --from-url-lel. A fetch ELŐTT ellenőrizd, hogy a weboldal TÉNYLEG a cégé. Beállítja: companies.logo, logo_source, logo_fetched.
-allowed-tools: Bash(python3 *), Bash(curl *), Bash(jq *), WebSearch, WebFetch
+allowed-tools: Bash(python3 *), Bash(jq *), WebSearch, WebFetch
 ---
 
 # logo-extraction — céglogó a pozícióoldalhoz

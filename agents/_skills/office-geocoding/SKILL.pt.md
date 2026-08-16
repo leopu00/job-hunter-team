@@ -2,7 +2,7 @@
 ---
 name: office-geocoding
 description: Geocodificar o edifício preciso do escritório (lat/lon/endereço) para uma posição APÓS location-enrichment ter populado loc_city/loc_country. Usar web search agressivamente (3+ tentativas) para encontrar o endereço do HQ/escritório da empresa, depois resolver coordenadas via Nominatim/Photon. Pular APENAS após busca exaustiva falhar ou quando múltiplos escritórios ambíguos existem. Define office_lat, office_lon, office_address, office_geocoded, office_verified.
-allowed-tools: Bash(python3 *), Bash(curl *), Bash(jq *), WebSearch, WebFetch
+allowed-tools: Bash(python3 *), Bash(jq *), WebSearch, WebFetch
 ---
 
 # office-geocoding — coordenadas precisas do escritório
@@ -122,9 +122,9 @@ Para JDs italianos em particular procurar também:
 # URL-encode a query
 Q=$(jq -nr --arg s "<endereço encontrado> <city>" '$s | @uri')
 
-curl -sS "https://nominatim.openstreetmap.org/search?q=${Q}&format=json&limit=1" \
-  -H 'User-Agent: jht-analyst/1.0 (analista@jht.local)' \
-  --max-time 15
+python3 /app/shared/skills/safe_fetch.py \
+  --user-agent 'jht-analyst/1.0 (+https://github.com/leopu00/job-hunter-team)' \
+  "https://nominatim.openstreetmap.org/search?q=${Q}&format=json&limit=1"
 ```
 
 Resposta JSON: `[{"lat": "...", "lon": "...", "display_name": "..."}]`.
@@ -136,8 +136,9 @@ Extrair `lat`, `lon`, `display_name` (= `office_address`).
 
 ```bash
 Q=$(jq -nr --arg s "<Company> <City>" '$s | @uri')
-curl -sS "https://photon.komoot.io/api?q=${Q}&limit=1" \
-  -H 'User-Agent: jht-analyst/1.0' --max-time 15
+python3 /app/shared/skills/safe_fetch.py \
+  --user-agent 'jht-analyst/1.0' \
+  "https://photon.komoot.io/api?q=${Q}&limit=1"
 ```
 
 GeoJSON: `features[0].geometry.coordinates = [lon, lat]` (NB ordem

@@ -2,7 +2,7 @@
 ---
 name: location-enrichment
 description: A positions.location szabad szöveg szabványosítása strukturált loc_*/work_*/role_family oszlopokba MIELŐTT bármely pozíciót `checked`-nek jelölnéd. 10 speciális esetet fed le (Europe Remote, Italy+remote, több helyszín, US-entity-in-EU). Érvényesíti az egyszerre-egy-pozíció, peer-igazított szókincs, soha-NULL work_country szabályokat. Használd, amikor az Analyst `status=checked`-et fog beállítani egy pozíción.
-allowed-tools: Bash(python3 *), Bash(curl *), Bash(jq *), WebSearch
+allowed-tools: Bash(python3 *), Bash(jq *), WebSearch
 ---
 
 # location-enrichment — helyszín + role_family strukturálás playbook

@@ -2,7 +2,7 @@
 ---
 name: office-geocoding
 description: Az iroda épület pontos geokódolása (lat/lon/cím) egy pozícióhoz MIUTÁN a location-enrichment feltöltötte a loc_city/loc_country-t. Agresszívan használj web keresést (3+ kísérlet) a cég HQ/iroda cím megtalálásához, majd oldd fel a koordinátákat Nominatim/Photon-on. Csak kimerítő keresés sikertelensége VAGY több kétértelmű iroda esetén hagyd ki. Beállítja: office_lat, office_lon, office_address, office_geocoded, office_verified.
-allowed-tools: Bash(python3 *), Bash(curl *), Bash(jq *), WebSearch, WebFetch
+allowed-tools: Bash(python3 *), Bash(jq *), WebSearch, WebFetch
 ---
 
 # office-geocoding — az iroda pontos koordinátái
@@ -122,9 +122,9 @@ Különösen olasz JD-khez keresd ezeket is:
 # URL-encode-old a lekérdezést
 Q=$(jq -nr --arg s "<talált cím> <city>" '$s | @uri')
 
-curl -sS "https://nominatim.openstreetmap.org/search?q=${Q}&format=json&limit=1" \
-  -H 'User-Agent: jht-analyst/1.0 (analista@jht.local)' \
-  --max-time 15
+python3 /app/shared/skills/safe_fetch.py \
+  --user-agent 'jht-analyst/1.0 (+https://github.com/leopu00/job-hunter-team)' \
+  "https://nominatim.openstreetmap.org/search?q=${Q}&format=json&limit=1"
 ```
 
 JSON válasz: `[{"lat": "...", "lon": "...", "display_name": "..."}]`.
@@ -136,8 +136,9 @@ Vond ki a `lat`, `lon`, `display_name` (= `office_address`) értékeket.
 
 ```bash
 Q=$(jq -nr --arg s "<Company> <City>" '$s | @uri')
-curl -sS "https://photon.komoot.io/api?q=${Q}&limit=1" \
-  -H 'User-Agent: jht-analyst/1.0' --max-time 15
+python3 /app/shared/skills/safe_fetch.py \
+  --user-agent 'jht-analyst/1.0' \
+  "https://photon.komoot.io/api?q=${Q}&limit=1"
 ```
 
 GeoJSON: `features[0].geometry.coordinates = [lon, lat]` (FIGYELEM, fordított
