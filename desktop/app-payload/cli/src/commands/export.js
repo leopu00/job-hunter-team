@@ -1,6 +1,9 @@
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+// Il file lo apre lo stesso foglio di calcolo che apre l'export del sito, e
+// la funzione era la stessa: una risposta sola. Vedi shared/export/csv.js.
+import { toCsv } from '../../../shared/export/csv.js';
 
 const JHT_DIR = join(homedir(), '.jht');
 
@@ -15,17 +18,7 @@ async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }
 }
 
-function toCsv(rows) {
-  if (rows.length === 0) return '';
-  const keys = [...new Set(rows.flatMap(r => Object.keys(r)))];
-  const esc = v => {
-    const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
-    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  return [keys.map(esc).join(','), ...rows.map(r => keys.map(k => esc(r[k])).join(','))].join('\n');
-}
-
-async function handleExport(source, options) {
+export async function handleExport(source, options) {
   const src = SOURCES[source];
   if (!src) {
     console.error(`  Sorgente non valida: ${source}`);

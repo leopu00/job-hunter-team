@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+// Un CSV esportato non deve poter eseguire niente all'apertura: il primo
+// carattere di una cella decide se è un dato o una formula, e i valori qui
+// vengono dai file dell'utente, non da noi. Vedi shared/export/csv.js.
+import { toCsv } from '../../../../shared/export/csv.js'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,18 +53,6 @@ const LOADERS: Record<DataSource, (since: number, until: number) => Record<strin
   contacts: loadWrapped('contacts.json'),
   companies: loadWrapped('companies.json'),
   interviews: loadWrapped('interviews.json'),
-}
-
-function toCsv(rows: Record<string, unknown>[]): string {
-  if (rows.length === 0) return ''
-  const keys = [...new Set(rows.flatMap(r => Object.keys(r)))]
-  const escape = (v: unknown): string => {
-    const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)
-    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
-  }
-  const header = keys.map(escape).join(',')
-  const lines = rows.map(r => keys.map(k => escape(r[k])).join(','))
-  return [header, ...lines].join('\n')
 }
 
 /** GET /api/export?source=tasks&format=csv&from=2026-01-01&to=2026-12-31 */
