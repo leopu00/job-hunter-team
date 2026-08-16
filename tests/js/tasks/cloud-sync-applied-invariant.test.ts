@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+// La funzione del CLIENT, non una sua copia: e' l'altra meta' del seam che in
+// #163 si e' rotto, e un test che ricalcola l'id per conto suo non lo vede.
+import { quarantineIdentity } from "../../../cli/src/lib/cloud-push-quarantine.js";
 
 type Call = {
   kind: "upsert" | "rpc";
@@ -19,6 +22,22 @@ let scorePersistedParents: string[] | null = null;
 let scorePersistedLegacyOverride: number | null = null;
 let pendingPersistedRows: any[] = [];
 let pendingRpcCountOverride: number | null = null;
+// Cosa il cloud RESTITUISCE quando la route rilegge le righe per verificarle.
+// Di default e' quello che la RPC ha ricevuto — cioe' la riga c'e' ed e'
+// identica; i test di #163 lo sostituiscono per fare mancare una riga o per
+// farla tornare diversa.
+let pendingPersistedOverride: ((rows: any[]) => any[]) | null = null;
+// I `position_legacy_id` che il finto cloud NON restituisce dopo l'upsert.
+let transitionsMissing: number[] = [];
+
+/** La resa di un `timestamptz` da parte di PostgREST: `2026-08-16T18:24:28+00:00`. */
+function postgrestInstant(value: string) {
+  const naive = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(
+    value,
+  );
+  const ms = Date.parse(naive ? `${value.replace(" ", "T")}Z` : value);
+  return new Date(ms).toISOString().replace("Z", "+00:00");
+}
 let profileRpcData: unknown = { changed: true };
 
 function fakeAdmin() {
@@ -85,12 +104,26 @@ function fakeAdmin() {
                         }))
                       : operation === "upsert" &&
                           table === "position_transitions"
-                        ? writtenPayload.map((row: any) => ({
-                            position_legacy_id: row.position_legacy_id,
-                            ts: row.ts,
-                            by_agent: row.by_agent,
-                            to_state: row.to_state,
-                          }))
+                        ? writtenPayload
+                            .filter(
+                              (row: any) =>
+                                !transitionsMissing.includes(
+                                  row.position_legacy_id,
+                                ),
+                            )
+                            .map((row: any) => ({
+                              position_legacy_id: row.position_legacy_id,
+                              // Come rende un timestamptz il driver, non come
+                              // gliel'abbiamo passato: e' la differenza che ha
+                              // fermato 271 transizioni (#163), e un finto
+                              // database che restituisce la stringa in
+                              // ingresso non l'avrebbe mai fatta vedere.
+                              ts: postgrestInstant(row.ts),
+                              by_agent: row.by_agent,
+                              to_state: row.to_state,
+                              from_state: row.from_state ?? null,
+                              notes: row.notes ?? null,
+                            }))
                         : operation === "update" && table === "positions"
                           ? [{ legacy_id: equalFilters.get("legacy_id") }]
                           : operation === "update" &&
@@ -135,6 +168,9 @@ function fakeAdmin() {
       }
       if (name === "upsert_pending_user_messages_merge") {
         pendingPersistedRows = args.p_rows.map((row: any) => ({ ...row }));
+        if (pendingPersistedOverride) {
+          pendingPersistedRows = pendingPersistedOverride(pendingPersistedRows);
+        }
         return {
           data: pendingRpcCountOverride ?? args.p_rows.length,
           error: null,
@@ -229,6 +265,8 @@ beforeEach(() => {
   scorePersistedLegacyOverride = null;
   pendingPersistedRows = [];
   pendingRpcCountOverride = null;
+  pendingPersistedOverride = null;
+  transitionsMissing = [];
   profileRpcData = { changed: true };
   admin = fakeAdmin();
 });
@@ -424,7 +462,22 @@ describe("push sync di una candidatura", () => {
     });
   });
 
-  it("non trasforma un count parziale pending in receipt di righe preesistenti", async () => {
+  /**
+   * #163 — il push si fermava su 334 messaggi con `acknowledgement_mismatch`.
+   *
+   * La RPC di merge salta i no-op DI PROPOSITO (mig 060), quindi a regime
+   * ritorna meno righe del payload su righe che sul cloud ci sono, identiche.
+   * Le ricevute erano legate a quel numero: non ne usciva NESSUNA, e il push
+   * falliva per sempre — anche bisezionando fino al singleton.
+   *
+   * ⚠️ La proprieta' che il test di prima difendeva («un count parziale non
+   * diventa una ricevuta») resta, ma va detta sul fatto giusto: la ricevuta
+   * non la autorizza il CONTEGGIO delle scritture, la autorizza la PROVA che
+   * la riga e' sul cloud identica a quella mandata. Per questo i tre casi
+   * stanno insieme: senza il secondo e il terzo, il primo sarebbe
+   * indistinguibile da un ACK compiacente.
+   */
+  it("emette receipt per la riga verificata anche se la RPC non l'ha riscritta", async () => {
     pendingRpcCountOverride = 1;
     const response = await pushBody({
       pending_user_messages: [
@@ -435,7 +488,108 @@ describe("push sync di una candidatura", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      receipts: { pending_user_messages: [] },
+      receipts: {
+        pending_user_messages: [
+          quarantineIdentity("pending_user_messages", { id: 11 }),
+          quarantineIdentity("pending_user_messages", { id: 12 }),
+        ],
+      },
+    });
+  });
+
+  it("nega la receipt alla riga che dal cloud non torna affatto", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.filter((row) => row.legacy_id !== 12);
+    const response = await pushBody({
+      pending_user_messages: [
+        { id: 11, agent: "SCOUT", body: "Synthetic first" },
+        { id: 12, agent: "SCOUT", body: "Synthetic second" },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: {
+        pending_user_messages: [receiptId("pending_user_messages", 11)],
+      },
+    });
+  });
+
+  it("nega la receipt alla riga che torna diversa da quella mandata", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.map((row) =>
+        row.legacy_id === 12 ? { ...row, body: "Altro testo" } : row,
+      );
+    const response = await pushBody({
+      pending_user_messages: [
+        { id: 11, agent: "SCOUT", body: "Synthetic first" },
+        { id: 12, agent: "SCOUT", body: "Synthetic second" },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: {
+        pending_user_messages: [receiptId("pending_user_messages", 11)],
+      },
+    });
+  });
+
+  /**
+   * #163, l'altra meta': 271 transizioni ferme per il FORMATO di una data.
+   *
+   * SQLite scrive `2026-08-16 18:24:28` con CURRENT_TIMESTAMP, il cloud rende
+   * lo stesso istante come `2026-08-16T18:24:28+00:00`. La ricevuta si
+   * derivava da come lo rendeva il driver, quindi non coincideva MAI con
+   * quella del client — che e' il vero motivo per cui riprovare non serviva a
+   * niente.
+   */
+  it("la receipt di una transizione parla la lingua del client, non del driver", async () => {
+    const sqliteTs = "2026-08-16 18:24:28";
+    const response = await pushBody({
+      positions: [{ id: 73, title: "Synthetic", company: "Example" }],
+      position_transitions: [
+        {
+          position_legacy_id: 73,
+          ts: sqliteTs,
+          by_agent: "SCOUT",
+          to_state: "review",
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: {
+        position_transitions: [
+          quarantineIdentity("position_transitions", {
+            position_legacy_id: 73,
+            ts: sqliteTs,
+            by_agent: "SCOUT",
+            to_state: "review",
+          }),
+        ],
+      },
+    });
+  });
+
+  it("nega la receipt alla transizione che dal cloud non torna", async () => {
+    transitionsMissing = [73];
+    const response = await pushBody({
+      positions: [{ id: 73, title: "Synthetic", company: "Example" }],
+      position_transitions: [
+        {
+          position_legacy_id: 73,
+          ts: "2026-08-16 18:24:28",
+          by_agent: "SCOUT",
+          to_state: "review",
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: { position_transitions: [] },
     });
   });
 
