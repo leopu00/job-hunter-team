@@ -578,8 +578,28 @@ def test_strict_esce_tre_solo_se_non_c_e_niente_da_guardare():
 
 
 def _git(args, cwd):
+    """git su un repo usa-e-getta, isolato dalla configurazione della macchina.
+
+    `core.hooksPath` punta a un percorso che non esiste, quindi **nessun hook
+    gira** su questi repo. Non è una scorciatoia: è la differenza fra un test
+    che fallisce quando il census sbaglia e uno che fallisce quando la macchina
+    di chi lo esegue ha un hook in più.
+
+    Il caso reale: su questa macchina un hook globale `prepare-commit-msg`
+    accetta solo l'identità dell'operatore, e rifiutava il `t <t@t>` di questa
+    fixture. Il commit non nasceva, il census rispondeva su un repo vuoto e
+    cinque test morivano in `json.loads` — con un messaggio che parlava di JSON
+    e non diceva niente dell'identità. In CI l'hook non c'è, quindi la suite
+    era verde sul server e rossa in locale: la direzione che insegna a
+    ignorare il rosso locale.
+
+    Restano l'identità e la mail fittizie: qui i commit sono spazzatura di un
+    `tmp_path`, e legarli all'identità vera dell'operatore rimetterebbe la
+    macchina dentro il test dall'altra porta.
+    """
     return subprocess.run(
-        ['git', '-c', 'user.email=t@t', '-c', 'user.name=t', *args],
+        ['git', '-c', 'core.hooksPath=/dev/null',
+         '-c', 'user.email=t@t', '-c', 'user.name=t', *args],
         cwd=cwd, capture_output=True, text=True, encoding='utf-8', errors='replace',
     )
 
@@ -733,3 +753,47 @@ def test_un_branch_cancellato_su_origin_non_e_piu_un_candidato(repo_con_remote):
     con_deroga = _run_census(repo_con_remote, '--no-remote-check')
     assert json.loads(con_deroga.stdout)['candidates'] == ['origin/integrata']
     assert con_deroga.returncode == 0
+
+
+def test_la_fixture_committa_anche_con_un_hook_ostile(tmp_path, monkeypatch):
+    """O-171 — il test deve fallire quando sbaglia il census, non la macchina.
+
+    Qui l'hook ostile è ricostruito invece che descritto: una config globale
+    finta che punta `core.hooksPath` a un `prepare-commit-msg` che rifiuta
+    sempre, cioè la forma esatta dell'hook di identità che su una macchina vera
+    bloccava questa fixture. Se qualcuno togliesse la neutralizzazione da
+    `_git`, questo test tornerebbe rosso QUI — con un messaggio che parla di
+    hook — invece che altrove, dentro un `json.loads` che parla di JSON e non
+    dice niente di quello che è successo davvero.
+    """
+    hooks = tmp_path / 'hooks-ostili'
+    hooks.mkdir()
+    rifiuta = hooks / 'prepare-commit-msg'
+    rifiuta.write_text('#!/bin/sh\necho "no" >&2\nexit 1\n', encoding='utf-8')
+    rifiuta.chmod(0o755)
+    config = tmp_path / 'gitconfig'
+    config.write_text(f'[core]\n\thooksPath = {hooks}\n', encoding='utf-8')
+    monkeypatch.setenv('GIT_CONFIG_GLOBAL', str(config))
+
+    lavoro = tmp_path / 'lavoro'
+    lavoro.mkdir()
+    _git(['init', '-q', '-b', 'master', '.'], str(lavoro))
+    (lavoro / 'a.txt').write_text('a', encoding='utf-8')
+    _git(['add', '.'], str(lavoro))
+    fatto = _git(['commit', '-m', 'primo'], str(lavoro))
+
+    assert fatto.returncode == 0, (
+        'la fixture non riesce a committare con un hook globale ostile: '
+        f'{fatto.stderr}'
+    )
+    log = _git(['log', '--oneline'], str(lavoro))
+    assert 'primo' in log.stdout
+
+    # Controprova: senza la neutralizzazione l'hook morde davvero, quindi lo
+    # scenario è reale e non un finto pericolo.
+    bloccato = subprocess.run(
+        ['git', '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit',
+         '--allow-empty', '-m', 'secondo'],
+        cwd=str(lavoro), capture_output=True, text=True,
+    )
+    assert bloccato.returncode != 0
