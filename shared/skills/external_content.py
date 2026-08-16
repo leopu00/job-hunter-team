@@ -51,18 +51,57 @@ ESCAPED_CLOSE = "⟦/MARCATORE_ESTERNO_ESCAPED⟧"
 # inerte, non solo la stringa esatta: il nonce da solo basterebbe a impedire la
 # chiusura, ma un annuncio che stampa un finto confine resta un tentativo di
 # inganno e va letto come tale da chi rilegge l'output.
+# Le parentesi che valgono come le nostre. Il nonce basterebbe — un confine
+# che non lo porta non e' un confine — ma il modello ci arriva DOPO aver letto
+# la riga, e una riga che sembra una chiusura ha gia' fatto il suo lavoro. Le
+# doppie quadre, le quadre singole e le due coppie CJK sono la stessa cosa
+# vista da un lettore.
+_MARKER_BRACKETS = (
+    ("⟦", "⟧"),
+    ("[[", "]]"),
+    ("[", "]"),
+    ("〔", "〕"),
+    ("【", "】"),
+)
 _MARKER_SHAPE = re.compile(
-    r"⟦\s*/?\s*(?:DATI[_\s]*ESTERNI|EXT)\b[^⟧]*⟧",
+    "|".join(
+        re.escape(opening)
+        + r"\s*/?\s*(?:DATI[_\s]*ESTERNI|EXT)\b[^"
+        + re.escape(closing[0])
+        + r"]*"
+        + re.escape(closing)
+        for opening, closing in _MARKER_BRACKETS
+    ),
     re.IGNORECASE,
 )
 
-# Le categorie Unicode che rifanno la struttura dell'output invece di dire
-# qualcosa: controlli (a capo, ritorno carrello, tabulazione), separatori di
-# riga e di paragrafo, e i caratteri di formattazione — fra cui gli override
-# di direzione, che riscrivono l'ordine di lettura senza lasciare traccia. Un
-# titolo di annuncio non ha bisogno di nessuno di questi, e con dentro un a
-# capo può disegnarsi intorno un'intestazione che sembra nostra.
-_STRUCTURAL_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
+# Quello che rifà la struttura dell'output invece di dire qualcosa: controlli
+# (a capo, ritorno carrello, tabulazione) e separatori di riga e di paragrafo.
+# Diventano uno spazio, perché al loro posto una parola finisce e un'altra
+# comincia davvero.
+_STRUCTURAL_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
+
+# I caratteri invisibili che vanno TOLTI, non sostituiti con uno spazio: in
+# mezzo a una parola uno spazio la spezza, e spezzare una parola è un errore di
+# ortografia, non una formattazione persa.
+#
+# ⚠️ L'elenco è per singolo carattere, e non è la categoria `Cf` intera. Dentro
+# `Cf` ci sono anche i caratteri con cui si SCRIVE: `U+200C` (ZWNJ) separa i
+# grafemi in persiano — toglierlo o spaziarlo cambia le parole — e `U+200D`
+# (ZWJ) tiene insieme le legature in hindi e le sequenze emoji (👨‍👩‍👧 senza ZWJ
+# diventa tre emoji). Siccome qui si appiattisce alla SCRITTURA, l'originale
+# non esiste più: il nome di un'azienda iraniana o indiana resterebbe storpiato
+# per sempre. Passano intatti, quindi, insieme all'arabo e all'ebraico, che
+# sono lettere e non hanno mai avuto nulla a che vedere con questo filtro.
+#
+# Restano fuori solo i comandi bidirezionali — override e isolate — che
+# riscrivono l'ordine di lettura senza lasciare traccia, e il soft hyphen, che
+# in un titolo è un a capo tipografico e basta.
+_REMOVED_CHARACTERS = frozenset(
+    "\u00ad"  # SOFT HYPHEN: `Back<SHY>end` deve tornare `Backend`, non `Back end`
+    "\u202a\u202b\u202c\u202d\u202e"  # LRE RLE PDF LRO RLO
+    "\u2066\u2067\u2068\u2069"  # LRI RLI FSI PDI
+)
 
 
 def _defang_markers(text):
@@ -90,7 +129,11 @@ def flatten_external_value(value):
     """
     text = str(value or "")
     text = "".join(
-        " " if unicodedata.category(ch) in _STRUCTURAL_CATEGORIES else ch
+        ""
+        if ch in _REMOVED_CHARACTERS
+        else " "
+        if unicodedata.category(ch) in _STRUCTURAL_CATEGORIES
+        else ch
         for ch in text
     )
     return _defang_markers(" ".join(text.split()))
