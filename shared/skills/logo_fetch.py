@@ -47,8 +47,15 @@ Output (single JSON line su stdout, exit 0 ok / 1 failure):
    "mime": "image/png", "bytes": 8123, "width": 180, "height": 180,
    "written": true}
   {"ok": false, "error": "...", "status_code": "NOT_FOUND" | "NO_WEBSITE"
-   | "NO_CANDIDATE" | "FETCH_ERROR" | "DB_ERROR"
+   | "NO_CANDIDATE" | "FETCH_ERROR" | "DB_ERROR" | "URL_REFUSED"
    | "POLICY_DISABLED" | "POLICY_SCORE_GATE"}
+
+Rete: ogni download passa da `safe_fetch.py` (guard `url_guard.py`). Il
+`website` viene dalla riga companies, cioe' da un annuncio scrapato: e' un
+indirizzo scelto da fuori, e da dentro il container gli indirizzi privati
+rispondono. `URL_REFUSED` e' quel rifiuto, tenuto distinto da `NO_CANDIDATE`
+perche' «non si scarica» e «non ha un logo» portano l'agente a fare due cose
+diverse.
 """
 
 import argparse
@@ -60,21 +67,17 @@ import sys
 from html import unescape
 from urllib.parse import urljoin, urlparse
 
-import requests
-
 from _db import get_db, ensure_schema
+from safe_fetch import walk as safe_walk
+from url_guard import UrlRejected, check_url
 from enrichment_policy import disabled_reason, is_enabled, logo_min_score
 
 MAX_LOGO_BYTES = 35_000     # cap rigido: la riga companies resta piccola
 MIN_LOGO_BYTES = 200        # sotto: pixel-tracker / favicon vuota
 MIN_LOGO_DIM = 32           # px, lato minimo (16x16 = pixelato → scarta)
 MAX_HTML_BYTES = 512_000    # cap lettura homepage
-TIMEOUT = 15
-
-UA = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-)
+# Timeout, User-Agent e tetto sui byte scaricati li porta `safe_fetch`: sono
+# proprieta' della richiesta, e la richiesta ora la fa lui.
 
 MAGIC = (
     (b"\x89PNG\r\n\x1a\n", "image/png"),
@@ -127,25 +130,27 @@ def image_dims(data: bytes, mime: str) -> tuple[int, int] | None:
 
 
 def fetch_bytes(url: str, cap: int) -> bytes | None:
-    """GET in streaming con cap: oltre `cap` byte interrompe e scarta."""
+    """Scarica un candidato dal fetcher condiviso; oltre `cap` byte scarta.
+
+    Il `website` da cui nascono questi URL viene dalla riga companies, cioe'
+    da un annuncio scrapato: la destinazione la sceglie chi ha pubblicato
+    l'annuncio, e da dentro il container `192.168.x`, `127.0.0.1` e
+    `169.254.169.254` rispondono mentre la rete pubblica non li vede.
+
+    `safe_fetch` invece di `requests.get(allow_redirects=True)`: con i
+    redirect seguiti dalla libreria la destinazione finale la sceglie il
+    server remoto, e un URL pubblico che rimanda a un indirizzo interno passa
+    qualunque controllo fatto sulla partenza. Qui ogni salto ripassa dal
+    guard, il nome viene risolto e la connessione inchiodata all'indirizzo
+    verificato.
+    """
     try:
-        r = requests.get(
-            url,
-            headers={"User-Agent": UA, "Accept": "image/*,*/*;q=0.8"},
-            timeout=TIMEOUT,
-            stream=True,
-            allow_redirects=True,
-        )
-        if r.status_code != 200:
-            return None
-        buf = b""
-        for chunk in r.iter_content(8192):
-            buf += chunk
-            if len(buf) > cap:
-                return None
-        return buf
-    except requests.RequestException:
+        status, _final_url, body = safe_walk(url)
+    except (UrlRejected, RuntimeError, OSError):
         return None
+    if status != 200 or len(body) > cap:
+        return None
+    return body
 
 
 # (regex, priorità, size di default se non dichiarata)
@@ -186,28 +191,49 @@ def collect_candidates(html: str, base_url: str) -> list[tuple[int, int, str]]:
     return out
 
 
+def with_scheme(website: str) -> str:
+    """`wizzair.com` → `https://wizzair.com`.
+
+    La colonna `companies.website` non sempre porta lo schema, e senza schema
+    non c'e' un URL da controllare: la normalizzazione deve avvenire una volta
+    sola, prima del guard e prima del fetch, o i due giudicano stringhe diverse.
+    """
+    if not re.match(r"^https?://", website, re.IGNORECASE):
+        return "https://" + website.lstrip("/")
+    return website
+
+
+def refusal(url: str) -> dict | None:
+    """Il rifiuto detto all'agente, o `None` se l'URL si puo' scaricare.
+
+    Il guard che conta e' dentro `fetch_bytes`, che e' la funzione che va in
+    rete. Questo serve a non far passare un sito interno per «azienda senza
+    logo»: con `NO_CANDIDATE` l'agente riproverebbe domani, con `URL_REFUSED`
+    sa che il problema e' l'indirizzo, non il logo.
+    """
+    try:
+        check_url(url)
+    except UrlRejected as exc:
+        return {
+            "ok": False,
+            "error": f"URL refused before any fetch: {exc}",
+            "status_code": "URL_REFUSED",
+        }
+    return None
+
+
 def pick_logo(website: str) -> tuple[bytes, str, str] | None:
     """Prova i candidati in ordine; ritorna (bytes, mime, source_url)."""
-    if not re.match(r"^https?://", website, re.IGNORECASE):
-        website = "https://" + website.lstrip("/")
+    website = with_scheme(website)
     html = ""
     try:
-        r = requests.get(
-            website,
-            headers={"User-Agent": UA},
-            timeout=TIMEOUT,
-            stream=True,
-            allow_redirects=True,
-        )
-        if r.status_code == 200:
-            buf = b""
-            for chunk in r.iter_content(8192):
-                buf += chunk
-                if len(buf) > MAX_HTML_BYTES:
-                    break
-            html = buf.decode(r.encoding or "utf-8", errors="replace")
-            website = str(r.url)  # base post-redirect per gli href relativi
-    except requests.RequestException:
+        status, final_url, body = safe_walk(website)
+        if status == 200:
+            html = body[:MAX_HTML_BYTES].decode("utf-8", errors="replace")
+            # Base post-redirect per gli href relativi: la da' il fetcher, che
+            # i redirect li ha percorsi controllandoli uno per uno.
+            website = final_url
+    except (UrlRejected, RuntimeError, OSError):
         pass  # niente home raggiungibile → restano i path convenzionali
 
     candidates = collect_candidates(html, website) if html else []
@@ -299,6 +325,9 @@ def run(args: argparse.Namespace) -> dict:
 
     picked: tuple[bytes, str, str] | None = None
     if args.from_url:
+        refused = refusal(with_scheme(args.from_url))
+        if refused:
+            return refused
         raw = validate_image(fetch_bytes(args.from_url, MAX_LOGO_BYTES))
         if raw:
             picked = (raw[0], raw[1], args.from_url)
@@ -311,6 +340,11 @@ def run(args: argparse.Namespace) -> dict:
                          "or --from-url, or update companies",
                 "status_code": "NO_WEBSITE",
             }
+        # `website` arriva da un annuncio scrapato: e' un indirizzo scelto da
+        # fuori, e va giudicato prima di provare gli otto candidati.
+        refused = refusal(with_scheme(website))
+        if refused:
+            return refused
         picked = pick_logo(website)
 
     if picked is None:

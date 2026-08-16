@@ -2,7 +2,7 @@
 ---
 name: logo-extraction
 description: Estrai il logo aziendale per un'azienda della tabella companies e salvalo come piccolo data-URI base64 (max ~35KB, min 32px). Il percorso primario è completamente automatizzato via logo_fetch.py sul sito ufficiale (apple-touch-icon → icon → og:image → favicon); quando il sito blocca i bot o non ha icone usabili, trova l'URL diretto di un'immagine logo via web search e passalo con --from-url. Verifica che il sito appartenga DAVVERO all'azienda PRIMA del fetch. Imposta companies.logo, logo_source, logo_fetched.
-allowed-tools: Bash(python3 *), Bash(curl *), Bash(jq *), WebSearch, WebFetch
+allowed-tools: Bash(python3 *), Bash(jq *), WebSearch, WebFetch
 ---
 
 # logo-extraction — logo aziendale per la pagina posizione
