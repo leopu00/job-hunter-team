@@ -74,23 +74,38 @@ def box(tmp_path, monkeypatch):
 
 
 def _add(conn, *, status="open", agent=None, created_days_ago=0.0,
-         assigned_hours_ago=None, ticket_id=None):
+         assigned_hours_ago=None, touched_hours_ago=None, ticket_id=None):
     """Un ticket con l'anzianità che serve al caso.
 
     ⚠️ `created_at` si scrive in UTC e `assigned_at` in ora locale, perché è
     così che li scrivono il DEFAULT della tabella e `assign()`. Allinearli qui
     "per comodità" renderebbe il test cieco proprio all'errore di fuso che il
     codice deve evitare.
+
+    `updated_at` segue l'assegnazione se non si chiede altro, perché è ciò che
+    fa `assign()`: un ticket assegnato tre giorni fa e mai toccato ha lì il
+    timestamp di allora, non quello di adesso. Lasciare il DEFAULT (che vale
+    «adesso») descriverebbe uno stato che nel prodotto non esiste, e il test
+    direbbe di sì a un codice rotto.
     """
     created = f"datetime('now','-{created_days_ago} days')"
     assigned = (
         "NULL" if assigned_hours_ago is None
         else f"datetime('now','localtime','-{assigned_hours_ago} hours')"
     )
+    touched_at = (
+        touched_hours_ago if touched_hours_ago is not None else assigned_hours_ago
+    )
+    updated = (
+        "datetime('now','localtime')" if touched_at is None
+        else f"datetime('now','localtime','-{touched_at} hours')"
+    )
     cur = conn.execute(
         f"INSERT INTO position_tickets "
-        f"(id, position_id, request_text, status, assigned_agent, created_at, assigned_at) "
-        f"VALUES (?, 5, 'verifica questa offerta', ?, ?, {created}, {assigned})",
+        f"(id, position_id, request_text, status, assigned_agent, created_at, "
+        f" assigned_at, updated_at) "
+        f"VALUES (?, 5, 'verifica questa offerta', ?, ?, {created}, {assigned}, "
+        f"        {updated})",
         (ticket_id, status, agent),
     )
     conn.commit()
@@ -375,3 +390,110 @@ def test_the_command_line_reclaims_and_shows(box, tmp_path):
     assert "back in the queue" in result.stdout
     assert _status(box, stuck)[0] == "open"
     assert _status(box, fresh) == ("assigned", "scorer-2")
+
+
+# ── 6. O-173: la convenzione e il lavoro silenzioso ────────────────────────
+
+def test_a_lowercase_session_does_not_make_every_agent_look_dead(box):
+    """La convenzione che reggeva il confronto, tolta di mezzo.
+
+    `live_sessions()` restituisce i nomi tmux GREZZI, e il confronto funzionava
+    perché le sessioni si chiamano `SCORER-2` e gli agenti stanno in minuscolo
+    nel DB. Il giorno che una sessione nascesse minuscola, ogni assegnatario
+    risulterebbe morto e le assegnazioni si svuoterebbero in blocco — lo stesso
+    disastro che il `None` fail-closed evita, entrato da un'altra porta.
+    """
+    import ticket
+
+    held = _add(box, status="assigned", agent="scorer-2", assigned_hours_ago=1)
+
+    for live in ({"scorer-2"}, {"Scorer-2"}, {"SCORER-2"}, {" scorer-2 "}):
+        assert ticket.reclaim_stale(box, live=live) == [], f"live={live!r}"
+        assert _status(box, held) == ("assigned", "scorer-2"), f"live={live!r}"
+
+    # E il verso opposto continua a funzionare: chi non c'è resta non-vivo.
+    assert [r[0] for r in ticket.reclaim_stale(box, live={"analista-1"})] == [held]
+
+
+def test_the_liveness_answer_is_yes_when_nobody_can_say(box):
+    import ticket
+
+    assert ticket._agent_is_live("scorer-2", None) is True
+    assert ticket._agent_is_live("scorer-2", {"scorer-2"}) is True
+    assert ticket._agent_is_live("scorer-2", {"ANALISTA-1"}) is False
+
+
+def test_touching_a_ticket_buys_time_for_silent_work(box):
+    """Il contratto che sostituisce l'euristica.
+
+    L'Analista che passa ore sull'azienda non tocca nessuna delle tre tabelle,
+    e lo Scrittore scrive la riga solo alla fine: senza un modo esplicito di
+    dire «ci sto ancora», quel lavoro si vedrebbe strappare il ticket.
+    """
+    import ticket
+
+    silent = _add(box, status="assigned", agent="analista-2",
+                  created_days_ago=2, assigned_hours_ago=40)
+    # Prima del touch: fermo da 40 ore, rientra.
+    fermi = ticket.stale_assignments(box, live={"ANALISTA-2"})
+    assert [row["id"] for row, _ in fermi] == [silent]
+
+    ticket.touch(box, silent)
+
+    assert ticket.reclaim_stale(box, live={"ANALISTA-2"}) == []
+    assert _status(box, silent) == ("assigned", "analista-2")
+
+
+def test_only_the_holder_of_an_assigned_ticket_can_touch_it(box, capsys):
+    import ticket
+
+    queued = _add(box, status="open")
+    with pytest.raises(SystemExit) as exit_code:
+        ticket.touch(box, queued)
+    assert exit_code.value.code == 1
+    # Un 'open' toccato resterebbe assegnabile mentre qualcuno lo lavora.
+    assert _status(box, queued) == ("open", None)
+
+
+def test_the_touch_is_reachable_from_the_command_line(box, tmp_path):
+    """Deve essere raggiungibile da una skill, non solo dal database."""
+    held = _add(box, status="assigned", agent="analista-2", assigned_hours_ago=40)
+
+    done = subprocess.run(
+        [sys.executable, str(TICKET_CLI), "touch", str(held)],
+        env={"JHT_HOME": str(tmp_path), "PATH": str(tmp_path / "no-tools")},
+        capture_output=True, text=True,
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert "still in progress" in done.stdout
+    assert _status(box, held) == ("assigned", "analista-2")
+
+    listed = subprocess.run(
+        [sys.executable, str(TICKET_CLI), "list-open"],
+        env={"JHT_HOME": str(tmp_path), "PATH": str(tmp_path / "no-tools")},
+        capture_output=True, text=True,
+    )
+    assert "back in the queue" not in listed.stdout, listed.stdout
+    assert _status(box, held) == ("assigned", "analista-2")
+
+
+def test_every_language_tells_the_agent_how_to_declare_long_work():
+    """Il contratto esiste solo se l'agente sa che esiste — in tutte le lingue.
+
+    Una skill raggiungibile citata in un prompt solo non è un contratto: è un
+    contratto per chi legge l'inglese. La regola del repo è che una stringa
+    nuova nasce in tutte e sette le lingue, e qui vale doppio, perché il prezzo
+    di non sapere è il proprio lavoro rifatto da un altro.
+    """
+    prompts = sorted((ROOT / "agents" / "analista").glob("analista*.md"))
+    assert len(prompts) == 7, [p.name for p in prompts]
+    for prompt in prompts:
+        text = prompt.read_text(encoding="utf-8")
+        assert "ticket.py touch <id>" in text, (
+            f"{prompt.name}: l'Analista non sa come dire «ci sto ancora lavorando»"
+        )
+        # Dev'essere nel workflow del ticket, non in una nota sciolta a fondo
+        # pagina: si legge dove si lavora.
+        assert text.index("ticket.py touch <id>") > text.index("ticket.py show <id>")
+        assert text.index("ticket.py touch <id>") < text.index("ticket.py resolve <id>")

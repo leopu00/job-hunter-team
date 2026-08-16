@@ -7,6 +7,7 @@ L'utente crea un ticket dalla pagina posizione (via web API → tabella
     python3 ticket.py list-open                      # coda del Capitano (aperti + assegnati)
     python3 ticket.py count-open                      # solo il numero di azionabili (heartbeat/monitor)
     python3 ticket.py assign <id> <agente>           # il Capitano assegna ('assigned')
+    python3 ticket.py touch <id>                      # l'agente: "ci sto ancora lavorando"
     python3 ticket.py resolve <id> --response "..."  # l'agente risolve ('resolved')
     python3 ticket.py show <id>                       # ispezione singolo ticket
     python3 ticket.py for-position <position_id>      # tutti i ticket di una posizione
@@ -68,8 +69,24 @@ _ASSIGNED_HOURS = (
 # tiene un ticket senza toccarlo è il caso che ha smontato la diagnosi ovvia —
 # JHT-1173 era di scorer-3, sessione attiva, fermo 98 ore.
 #
-# Le tre tracce sono quelle che il team lascia lavorando una posizione, le
-# stesse che `team_roster.PRODUCTION` usa per dire se un worker produce.
+# Tre tracce sono quelle che il team lascia lavorando una posizione, le stesse
+# che `team_roster.PRODUCTION` usa per dire se un worker produce. La quarta è
+# il ticket stesso.
+#
+# Perché serve la quarta: esiste lavoro legittimo che non tocca le altre tre —
+# l'Analista che passa ore sull'AZIENDA, lo Scrittore che scrive la riga
+# `applications` solo alla fine. Inseguire una a una le tabelle che quel lavoro
+# tocca è una rincorsa senza fine, e ogni tabella dimenticata è un ticket
+# strappato a chi ci stava lavorando. `ticket.py touch <id>` dà invece
+# all'agente un modo ESPLICITO di dire «ci sto ancora», su una colonna che la
+# tabella ha già: l'euristica diventa un contratto (O-173).
+#
+# ⚠️ `updated_at` ha il DEFAULT CURRENT_TIMESTAMP (UTC), ma qui si legge come
+# ORA LOCALE — ed è corretto nel perimetro in cui la usiamo: si guardano solo
+# ticket in stato 'assigned', e per arrivarci sono passati da `assign()`, che
+# riscrive `updated_at` con `datetime('now','localtime')`. Il valore UTC del
+# DEFAULT sopravvive solo su un ticket mai assegnato, che di qui non passa.
+#
 # `MAX()` propaga NULL, quindi ogni ramo passa da IFNULL: senza, una posizione
 # senza punteggi renderebbe muto anche il resto.
 _LAST_PROGRESS = f"""(
@@ -88,6 +105,7 @@ _LAST_PROGRESS = f"""(
 # un ticket appena assegnato non nasce già scaduto.
 _IDLE_HOURS = f"""(julianday('now') - MAX(
     IFNULL({_LOCAL_TO_UTC.format(col='assigned_at')}, 0),
+    IFNULL({_LOCAL_TO_UTC.format(col='updated_at')}, 0),
     IFNULL({_LAST_PROGRESS}, 0)
 )) * 24.0"""
 
@@ -133,6 +151,27 @@ def _age_text(hours) -> str:
     return f"{int(hours * 60)}m"
 
 
+def _session_of(agent: str) -> str:
+    """Il nome di sessione tmux di un agente, normalizzato per il confronto."""
+    return (agent or "").strip().upper()
+
+
+def _agent_is_live(agent: str, live) -> bool:
+    """`True` se quell'agente ha una sessione viva. Con `live=None` (liveness
+    non stabilibile) la risposta è `True`: chi non sa non dichiara morto nessuno.
+
+    Normalizza ENTRAMBI i lati. Prima confrontava `agent.upper()` con i nomi
+    grezzi di `tmux list-sessions`, e funzionava per convenzione — le sessioni
+    si chiamano `SCRITTORE-5`, gli agenti stanno in minuscolo nel DB. Una sola
+    sessione creata minuscola avrebbe fatto risultare morti TUTTI gli
+    assegnatari e svuotato le assegnazioni in blocco: esattamente il disastro
+    che il `None` fail-closed evita, entrato da un'altra porta (O-173).
+    """
+    if live is None:
+        return True
+    return _session_of(agent) in {_session_of(s) for s in live}
+
+
 def live_agents():
     """Sessioni tmux vive, o ``None`` se la liveness non è stabilibile.
 
@@ -166,7 +205,7 @@ def _reason_for(row, live, stale_hours: float):
     if idle is not None and idle >= stale_hours:
         return f"no progress for {_age_text(idle)}"
     agent = (row['assigned_agent'] or "").strip()
-    if live is not None and agent and agent.upper() not in live:
+    if agent and not _agent_is_live(agent, live):
         return f"{agent} is no longer alive"
     return None
 
@@ -355,7 +394,7 @@ def assign(conn, ticket_id: int, agent: str, live=None) -> None:
     # errori: è così che sono nati i due ticket orfani di O-164. Non blocca —
     # `live` può essere `None` (liveness non stabilibile) e un Capitano fermato
     # da un falso negativo sarebbe peggio del difetto — ma lo dice.
-    if live is not None and agent.strip().upper() not in live:
+    if not _agent_is_live(agent, live):
         print(f"⚠ {agent} has no live session: the ticket would sit there "
               f"unnoticed until list-open reclaims it.", file=sys.stderr)
     cur = conn.execute(
@@ -370,6 +409,34 @@ def assign(conn, ticket_id: int, agent: str, live=None) -> None:
         print(f"Ticket #{ticket_id} not found or already resolved.", file=sys.stderr)
         sys.exit(1)
     print(f"Ticket #{ticket_id} assigned to {agent}.")
+
+
+def touch(conn, ticket_id: int) -> None:
+    """«Ci sto ancora lavorando» — l'unico modo per un lavoro lungo e silenzioso
+    di non farsi rimettere in coda.
+
+    Serve perché il lavoro vero non lascia sempre una traccia dove il team la
+    cerca: l'Analista che passa ore sull'AZIENDA non tocca la posizione, lo
+    Scrittore scrive la riga `applications` soltanto alla fine. Senza questo
+    comando l'unica difesa sarebbe inseguire una a una le tabelle che quel
+    lavoro sfiora, e ogni tabella dimenticata sarebbe un ticket strappato a chi
+    ci stava lavorando.
+
+    Vale solo su un ticket ASSEGNATO: dire «ci sto» su un ticket che nessuno ti
+    ha dato non significa niente, e un `open` toccato resterebbe assegnabile
+    mentre qualcuno lo lavora di nascosto.
+    """
+    cur = conn.execute(
+        "UPDATE position_tickets SET updated_at = datetime('now','localtime') "
+        "WHERE id = ? AND status = 'assigned'",
+        (ticket_id,),
+    )
+    conn.commit()
+    if cur.rowcount == 0:
+        print(f"Ticket #{ticket_id} not found or not assigned: only a ticket "
+              f"you are holding can be touched.", file=sys.stderr)
+        sys.exit(1)
+    print(f"Ticket #{ticket_id} still in progress (idle clock reset).")
 
 
 def resolve(conn, ticket_id: int, response: str) -> None:
@@ -450,6 +517,8 @@ def main() -> None:
     a = sub.add_parser("assign")
     a.add_argument("id", type=int)
     a.add_argument("agent")
+    t = sub.add_parser("touch", help="say you are still working on it")
+    t.add_argument("id", type=int)
     r = sub.add_parser("resolve")
     r.add_argument("id", type=int)
     r.add_argument("--response", required=True)
@@ -477,6 +546,8 @@ def main() -> None:
             count_open(conn, live_agents())
         elif args.cmd == "assign":
             assign(conn, args.id, args.agent, live_agents())
+        elif args.cmd == "touch":
+            touch(conn, args.id)
         elif args.cmd == "resolve":
             resolve(conn, args.id, args.response)
         elif args.cmd == "show":

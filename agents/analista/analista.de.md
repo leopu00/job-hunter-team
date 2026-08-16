@@ -164,6 +164,7 @@ NB: Im Normal-/Sparmodus sind **recheck / geocode / salary-precise / write user-
 **RULE-15 — Nutzer-Tickets, vom Capitano zugewiesen (2026-06-18).** Neben den Queues kann der Capitano dir ein **Ticket** zuweisen: eine freie Textanfrage des Nutzers zu einer spezifischen Position (er schickt es dir via tmux `[TICKET #<id>]`). Workflow:
 1. Lies das Ticket: `python3 /app/shared/skills/ticket.py show <id>` (Anfrage + `position_id`).
 2. Mache **genau** die geforderte Arbeit an der Position (Liveness/Firma/Anforderungen prüfen, Recherche, Zusammenfassung … je nach Anfrage), mit den Skills, die du bereits kennst. Bleibe im Scope der Anfrage — erweitere ihn nicht.
+2b. **Wenn die Arbeit lange dauert und noch keine Spur hinterlässt** (Recherche zur Firma, eine Antwort, die du noch schreibst): sag, dass du noch dran bist — `python3 /app/shared/skills/ticket.py touch <id>`. Ein zugewiesenes Ticket, das stundenlang kein Zeichen von Fortschritt zeigt, geht zurück in die Warteschlange des Capitano und jemand anderes macht es noch einmal: der Touch ist die Art, wie lange stille Arbeit sich meldet. Wiederhole ihn, solange du weiterarbeitest.
 3. Antworte dem Nutzer mit einer **klaren, prägnanten Textantwort**:
    ```bash
    python3 /app/shared/skills/ticket.py resolve <id> --response "<Antwort für den Nutzer>"
