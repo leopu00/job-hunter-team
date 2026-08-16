@@ -32,7 +32,9 @@ let transitionsMissing: number[] = [];
 
 /** La resa di un `timestamptz` da parte di PostgREST: `2026-08-16T18:24:28+00:00`. */
 function postgrestInstant(value: string) {
-  const naive = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value);
+  const naive = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(
+    value,
+  );
   const ms = Date.parse(naive ? `${value.replace(" ", "T")}Z` : value);
   return new Date(ms).toISOString().replace("Z", "+00:00");
 }

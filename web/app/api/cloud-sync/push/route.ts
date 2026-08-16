@@ -246,7 +246,9 @@ const NAIVE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
 
 function instantMs(value: unknown) {
   const text = String(value);
-  return Date.parse(NAIVE_TIMESTAMP.test(text) ? `${text.replace(" ", "T")}Z` : text);
+  return Date.parse(
+    NAIVE_TIMESTAMP.test(text) ? `${text.replace(" ", "T")}Z` : text,
+  );
 }
 
 function sameInstant(left: unknown, right: unknown) {
@@ -1469,9 +1471,7 @@ export async function POST(req: NextRequest) {
       }
       if ((data?.length ?? 0) > 0) {
         tombstonesApplied++;
-        rowReceipts.tombstones.push(
-          wireReceipt("tombstones", t),
-        );
+        rowReceipts.tombstones.push(wireReceipt("tombstones", t));
       }
     }
     for (const t of byTable.scores) {
@@ -1487,9 +1487,7 @@ export async function POST(req: NextRequest) {
       }
       if ((data?.length ?? 0) > 0) {
         tombstonesApplied++;
-        rowReceipts.tombstones.push(
-          wireReceipt("tombstones", t),
-        );
+        rowReceipts.tombstones.push(wireReceipt("tombstones", t));
       }
     }
     for (const t of byTable.applications) {
@@ -1505,9 +1503,7 @@ export async function POST(req: NextRequest) {
       }
       if ((data?.length ?? 0) > 0) {
         tombstonesApplied++;
-        rowReceipts.tombstones.push(
-          wireReceipt("tombstones", t),
-        );
+        rowReceipts.tombstones.push(wireReceipt("tombstones", t));
       }
     }
   }
