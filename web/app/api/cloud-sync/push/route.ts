@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash } from "node:crypto";
 // js-yaml 5 espone solo named export: il default non esiste piu'.
 import * as yaml from "js-yaml";
 import { isSupabaseConfigured } from "@/lib/workspace";
@@ -23,6 +22,10 @@ import {
   type OutOfRangeSummary,
 } from "@/lib/score-ranges";
 import { syncRequestIsPending } from "@/lib/team-state/sync-freshness";
+import {
+  receiptId as wireReceiptId,
+  receiptIdForKey,
+} from "../../../../../shared/cloud/receipt-ids.js";
 
 export const dynamic = "force-dynamic";
 
@@ -208,12 +211,20 @@ type ReceiptTable =
   | "position_transitions"
   | "profile";
 
+// ⚠️ La derivazione NON sta qui: sta in `shared/cloud/receipt-ids.js`, e la
+// importa anche il client. Averne due copie e' costato #163 — stesso
+// algoritmo, due implementazioni, divergenza silenziosa quando una delle due
+// ha cominciato a leggere la chiave da un'altra parte.
 function sourceReceiptId(table: ReceiptTable, sourceKey: unknown | unknown[]) {
-  const key = Array.isArray(sourceKey) ? sourceKey : [sourceKey];
-  return `q_${createHash("sha256")
-    .update(`${table}\0${JSON.stringify(key)}`)
-    .digest("hex")
-    .slice(0, 24)}`;
+  return receiptIdForKey(table, sourceKey);
+}
+
+// La ricevuta di una riga COSI' COME IL CLIENT L'HA MANDATA. Il ritorno del
+// driver non entra mai nell'identita': serve a provare che la riga e' sul
+// cloud, che e' un'altra domanda e ha un'altra risposta (il confronto sui
+// valori, poco piu' sotto in ogni blocco).
+function wireReceipt(table: ReceiptTable, row: unknown) {
+  return wireReceiptId(table, row);
 }
 
 function validReceipt(
@@ -226,19 +237,35 @@ function validReceipt(
   );
 }
 
-function sameNullableInstant(left: unknown, right: unknown) {
-  if (left == null || right == null) return left == null && right == null;
-  const leftMs = Date.parse(String(left));
-  const rightMs = Date.parse(String(right));
+// `2026-08-16 18:24:28` — la forma che scrive SQLite con CURRENT_TIMESTAMP:
+// niente `T`, niente fuso. Quel valore E' UTC (lo dice SQLite), ma `Date.parse`
+// su una stringa cosi' non e' specificato e V8 la legge come ora LOCALE: su una
+// macchina che non gira a UTC lo stesso istante darebbe due millisecondi
+// diversi, e un confronto corretto direbbe «diverso».
+const NAIVE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+
+function instantMs(value: unknown) {
+  const text = String(value);
+  return Date.parse(NAIVE_TIMESTAMP.test(text) ? `${text.replace(" ", "T")}Z` : text);
+}
+
+function sameInstant(left: unknown, right: unknown) {
+  const leftMs = instantMs(left);
+  const rightMs = instantMs(right);
   return (
     Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs
   );
 }
 
+function sameNullableInstant(left: unknown, right: unknown) {
+  if (left == null || right == null) return left == null && right == null;
+  return sameInstant(left, right);
+}
+
 function applicationReceiptId(application: ApplicationIn): string {
   // Compatibilità con client pre-quarantine: stessa derivazione opaca che il
   // nuovo client applica alla chiave sorgente. Non esponiamo l'intero locale.
-  return sourceReceiptId("applications", application.legacy_id);
+  return wireReceipt("applications", application);
 }
 
 interface ProfileIn {
@@ -583,12 +610,19 @@ export async function POST(req: NextRequest) {
         return rowAttributableWriteError(error, "companies_upsert_failed");
       }
       companiesUpserted = upserted?.length ?? 0;
+      const written = new Set<number>();
       for (const row of upserted ?? []) {
         if (row.legacy_id != null) {
           companyLegacyToUuid.set(row.legacy_id, row.id);
-          rowReceipts.companies.push(
-            sourceReceiptId("companies", row.legacy_id),
-          );
+          written.add(Number(row.legacy_id));
+        }
+      }
+      // La prova che la riga e' sul cloud e' il RETURNING della scrittura
+      // stessa: quello che torna e' lo stato POST-write della riga con quel
+      // legacy_id. L'identita', invece, viene dalla riga del client.
+      for (const company of companies) {
+        if (written.has(Number(company.id))) {
+          rowReceipts.companies.push(wireReceipt("companies", company));
         }
       }
     }
@@ -786,12 +820,16 @@ export async function POST(req: NextRequest) {
       }
 
       positionsUpserted += upserted?.length ?? 0;
+      const written = new Set<number>();
       for (const row of upserted ?? []) {
         if (row.legacy_id != null) {
           legacyToUuid.set(row.legacy_id, row.id);
-          rowReceipts.positions.push(
-            sourceReceiptId("positions", row.legacy_id),
-          );
+          written.add(Number(row.legacy_id));
+        }
+      }
+      for (const position of positions) {
+        if (written.has(Number(position.id))) {
+          rowReceipts.positions.push(wireReceipt("positions", position));
         }
       }
     }
@@ -854,7 +892,7 @@ export async function POST(req: NextRequest) {
       .map((s) => {
         const uuid = legacyToUuid.get(s.position_id);
         if (!uuid || typeof s.total_score !== "number") return null;
-        scoreReceiptByUuid.set(uuid, sourceReceiptId("scores", s.legacy_id));
+        scoreReceiptByUuid.set(uuid, wireReceipt("scores", s));
         scoreLegacyByUuid.set(uuid, s.legacy_id);
         return {
           user_id: userId,
@@ -1100,10 +1138,14 @@ export async function POST(req: NextRequest) {
         );
       }
       highlightsUpserted = upserted?.length ?? 0;
+      const written = new Set<number>();
       for (const row of upserted ?? []) {
-        if (row.legacy_id != null) {
+        if (row.legacy_id != null) written.add(Number(row.legacy_id));
+      }
+      for (const highlight of highlights) {
+        if (written.has(Number(highlight.id))) {
           rowReceipts.position_highlights.push(
-            sourceReceiptId("position_highlights", row.legacy_id),
+            wireReceipt("position_highlights", highlight),
           );
         }
       }
@@ -1219,52 +1261,68 @@ export async function POST(req: NextRequest) {
       }
       pendingMessagesUpserted =
         typeof upsertedCount === "number" ? upsertedCount : payload.length;
-      if (pendingMessagesUpserted !== payload.length) {
-        // The client will bisect this explicit partial receipt. Do not let
-        // pre-existing rows turn a short RPC result into a false ACK.
-        pendingMessagesUpserted = Math.max(0, pendingMessagesUpserted);
-      } else {
-        const { data: persisted, error: receiptError } = await admin
-          .from("pending_user_messages")
-          .select(
-            "legacy_id,agent,body,kind,author,chat_ts,related_position_id,delivered_via,delivered_at,agent_seen_reply_at",
-          )
-          .eq("user_id", userId)
-          .in(
-            "legacy_id",
-            payload.map((message) => message.legacy_id),
-          );
-        if (receiptError) {
-          return sanitizedError(receiptError, {
-            status: 500,
-            scope: "cloud-sync/push",
-            publicMessage: "pending_user_messages_receipt_failed",
-          });
-        }
-        const expectedById = new Map(
-          payload.map((message) => [message.legacy_id, message]),
+
+      // ⚠️ Quante righe la RPC ha SCRITTO non dice quante ne ha ACCETTATE.
+      // La merge salta i no-op di proposito (mig 060: senza quella guardia il
+      // full-push riscriverebbe ogni riga identica a ogni tick), quindi a
+      // regime ritorna 0 su righe che sul cloud ci sono, identiche. Legare le
+      // ricevute a quel numero — com'era fino a #163 — voleva dire non
+      // emetterne nessuna e far fallire il push per sempre: 334 messaggi
+      // fermi su due macchine, mentre le righe erano gia' arrivate.
+      //
+      // La domanda giusta non e' «l'ho riscritta adesso?» ma «c'e', ed e'
+      // quella che il client ha mandato?». Si risponde rileggendola e
+      // confrontandola campo per campo, riga per riga: chi passa prende la
+      // ricevuta, chi non torna o torna diverso NON la prende e continua a
+      // fermare il push.
+      const { data: persisted, error: receiptError } = await admin
+        .from("pending_user_messages")
+        .select(
+          "legacy_id,agent,body,kind,author,chat_ts,related_position_id,delivered_via,delivered_at,agent_seen_reply_at",
+        )
+        .eq("user_id", userId)
+        .in(
+          "legacy_id",
+          payload.map((message) => message.legacy_id),
         );
-        for (const row of persisted ?? []) {
-          const expected = expectedById.get(row.legacy_id);
-          if (
-            expected &&
-            row.agent === expected.agent &&
-            row.body === expected.body &&
-            row.kind === expected.kind &&
-            row.author === expected.author &&
-            row.chat_ts === expected.chat_ts &&
-            row.related_position_id === expected.related_position_id &&
-            row.delivered_via === expected.delivered_via &&
-            sameNullableInstant(row.delivered_at, expected.delivered_at) &&
-            sameNullableInstant(
-              row.agent_seen_reply_at,
-              expected.agent_seen_reply_at,
-            )
-          ) {
-            rowReceipts.pending_user_messages.push(
-              sourceReceiptId("pending_user_messages", row.legacy_id),
-            );
-          }
+      if (receiptError) {
+        return sanitizedError(receiptError, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "pending_user_messages_receipt_failed",
+        });
+      }
+      const persistedById = new Map(
+        (persisted ?? []).map((row) => [Number(row.legacy_id), row]),
+      );
+      // La riga com'e' arrivata dal client, per derivarne l'identita': quella
+      // rimessa in fila dal database ha altre rese (per esempio le date) e
+      // non e' la stessa stringa, che e' l'altra meta' di #163.
+      const wireByLegacyId = new Map(
+        pendingMessages.map((message) => [Number(message.id), message]),
+      );
+      for (const expected of payload) {
+        const row = persistedById.get(Number(expected.legacy_id));
+        const wire = wireByLegacyId.get(Number(expected.legacy_id));
+        if (
+          row &&
+          wire &&
+          row.agent === expected.agent &&
+          row.body === expected.body &&
+          row.kind === expected.kind &&
+          row.author === expected.author &&
+          row.chat_ts === expected.chat_ts &&
+          row.related_position_id === expected.related_position_id &&
+          row.delivered_via === expected.delivered_via &&
+          sameNullableInstant(row.delivered_at, expected.delivered_at) &&
+          sameNullableInstant(
+            row.agent_seen_reply_at,
+            expected.agent_seen_reply_at,
+          )
+        ) {
+          rowReceipts.pending_user_messages.push(
+            wireReceipt("pending_user_messages", wire),
+          );
         }
       }
     }
@@ -1412,11 +1470,7 @@ export async function POST(req: NextRequest) {
       if ((data?.length ?? 0) > 0) {
         tombstonesApplied++;
         rowReceipts.tombstones.push(
-          sourceReceiptId("tombstones", [
-            t.table_name,
-            t.legacy_id,
-            t.deleted_at,
-          ]),
+          wireReceipt("tombstones", t),
         );
       }
     }
@@ -1434,11 +1488,7 @@ export async function POST(req: NextRequest) {
       if ((data?.length ?? 0) > 0) {
         tombstonesApplied++;
         rowReceipts.tombstones.push(
-          sourceReceiptId("tombstones", [
-            t.table_name,
-            t.legacy_id,
-            t.deleted_at,
-          ]),
+          wireReceipt("tombstones", t),
         );
       }
     }
@@ -1456,11 +1506,7 @@ export async function POST(req: NextRequest) {
       if ((data?.length ?? 0) > 0) {
         tombstonesApplied++;
         rowReceipts.tombstones.push(
-          sourceReceiptId("tombstones", [
-            t.table_name,
-            t.legacy_id,
-            t.deleted_at,
-          ]),
+          wireReceipt("tombstones", t),
         );
       }
     }
@@ -1518,7 +1564,7 @@ export async function POST(req: NextRequest) {
         .upsert(payload, {
           onConflict: "user_id,position_legacy_id,ts,by_agent,to_state",
         })
-        .select("position_legacy_id,ts,by_agent,to_state");
+        .select("position_legacy_id,ts,by_agent,to_state,from_state,notes");
 
       if (error) {
         return rowAttributableWriteError(
@@ -1527,15 +1573,30 @@ export async function POST(req: NextRequest) {
         );
       }
       positionTransitionsUpserted = upserted?.length ?? 0;
-      for (const row of upserted ?? []) {
-        rowReceipts.position_transitions.push(
-          sourceReceiptId("position_transitions", [
-            row.position_legacy_id,
-            row.ts,
-            row.by_agent,
-            row.to_state,
-          ]),
+      // ⚠️ Qui la ricevuta si derivava da `row.ts`, cioe' da come il driver
+      // rende un `timestamptz`: `2026-08-16T18:24:28+00:00`. Il client la
+      // deriva da quello che ha letto da SQLite, `2026-08-16 18:24:28`. Stesso
+      // istante, due stringhe, due hash — e 271 transizioni ferme per sempre
+      // (#163). Il ritorno del database prova che la riga c'e'; l'identita' la
+      // da' la riga che il client ha mandato.
+      for (const wire of positionTransitions) {
+        const row = (upserted ?? []).find(
+          (candidate) =>
+            Number(candidate.position_legacy_id) ===
+              Number(wire.position_legacy_id) &&
+            candidate.by_agent === wire.by_agent &&
+            candidate.to_state === wire.to_state &&
+            sameInstant(candidate.ts, wire.ts),
         );
+        if (
+          row &&
+          (row.from_state ?? null) === (wire.from_state ?? null) &&
+          (row.notes ?? null) === (wire.notes ?? null)
+        ) {
+          rowReceipts.position_transitions.push(
+            wireReceipt("position_transitions", wire),
+          );
+        }
       }
     }
   }

@@ -6,7 +6,6 @@
  * never stores the row itself, so titles, message bodies and infrastructure
  * details cannot leak through diagnostics or support bundles.
  */
-import { createHash } from "node:crypto";
 import {
   closeSync,
   existsSync,
@@ -16,6 +15,10 @@ import {
   unlinkSync,
 } from "node:fs";
 import { join } from "node:path";
+import {
+  RECEIPT_TABLES,
+  receiptId,
+} from "../../../shared/cloud/receipt-ids.js";
 import { JHT_HOME } from "../jht-paths.js";
 import { writePrivateJson } from "./secure-config-io.js";
 
@@ -24,17 +27,9 @@ export const CLOUD_PUSH_QUARANTINE_FILE = join(
   ".cloud-push-quarantine.json",
 );
 
-export const QUARANTINE_TABLES = Object.freeze([
-  "companies",
-  "positions",
-  "scores",
-  "applications",
-  "position_highlights",
-  "position_transitions",
-  "tombstones",
-  "pending_user_messages",
-  "profile",
-]);
+// La stessa lista che usa la route del push: una tabella che viaggia con una
+// ricevuta e' una tabella che puo' finire in quarantena.
+export const QUARANTINE_TABLES = RECEIPT_TABLES;
 
 const TABLE_SET = new Set(QUARANTINE_TABLES);
 const SAFE_REASON = /^[a-z0-9][a-z0-9_:-]{0,119}$/;
@@ -83,61 +78,14 @@ function withStateLock(path, action) {
   }
 }
 
-function positiveInteger(value, label) {
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`invalid cloud push source identity: ${label}`);
-  }
-  return value;
-}
-
-function nonEmptyString(value, label) {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`invalid cloud push source identity: ${label}`);
-  }
-  return value;
-}
-
-function stableKey(table, row) {
-  switch (table) {
-    case "companies":
-    case "positions":
-    case "position_highlights":
-    case "pending_user_messages":
-      return [positiveInteger(row?.id, `${table}.id`)];
-    case "scores":
-    case "applications":
-      return [positiveInteger(row?.legacy_id, `${table}.legacy_id`)];
-    case "position_transitions":
-      return [
-        positiveInteger(
-          row?.position_legacy_id,
-          "position_transitions.position_legacy_id",
-        ),
-        nonEmptyString(row?.ts, "position_transitions.ts"),
-        nonEmptyString(row?.by_agent, "position_transitions.by_agent"),
-        nonEmptyString(row?.to_state, "position_transitions.to_state"),
-      ];
-    case "tombstones":
-      return [
-        nonEmptyString(row?.table_name, "tombstones.table_name"),
-        positiveInteger(row?.legacy_id, "tombstones.legacy_id"),
-        nonEmptyString(row?.deleted_at, "tombstones.deleted_at"),
-      ];
-    case "profile":
-      return ["candidate_profile"];
-    default:
-      throw new Error(`unsupported quarantine table: ${table}`);
-  }
-}
-
 /** Opaque and stable: usable for support without exposing a local primary key. */
 export function quarantineIdentity(table, row) {
   if (!TABLE_SET.has(table))
     throw new Error(`unsupported quarantine table: ${table}`);
-  return `q_${createHash("sha256")
-    .update(`${table}\0${JSON.stringify(stableKey(table, row))}`)
-    .digest("hex")
-    .slice(0, 24)}`;
+  // La derivazione sta in shared/ e la usa anche la route del push: due
+  // implementazioni dello stesso id sono divergute in silenzio una volta
+  // (#163) e non c'e' motivo di dare loro un'altra occasione.
+  return receiptId(table, row);
 }
 
 export function sanitizedQuarantineReason(status, body) {
