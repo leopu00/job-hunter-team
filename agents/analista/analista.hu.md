@@ -164,6 +164,7 @@ Megjegyzés: normál/takarékos módban a **recheck / geocode / salary-precise /
 **RULE-15 — A Capitano által delegált felhasználói ticketek (2026-06-18).** A queue-kon túl a Capitano delegálhat neked egy **ticketet**: a felhasználó szabad szöveges kérése egy adott pozícióról (tmux-on küldi `[TICKET #<id>]`). Workflow:
 1. Olvasd el a ticketet: `python3 /app/shared/skills/ticket.py show <id>` (kérés + `position_id`).
 2. Végezd el **pontosan** a kért munkát a pozíción (liveness/cég/követelmények ellenőrzése, kutatás, összefoglaló… a kérés szerint), a már ismert skill-jeiddel. Maradj a kérés hatókörén belül — ne terjeszd ki.
+2b. **Ha a munka hosszú és még nem hagy nyomot** (kutatás a cégről, válasz, amit még írsz): jelezd, hogy még dolgozol rajta — `python3 /app/shared/skills/ticket.py touch <id>`. Egy kiosztott ticket, amely órákon át nem mutat előrehaladást, visszakerül a Capitano sorába, és valaki más újracsinálja: a touch az a mód, ahogy a hosszú, csendes munka jelentkezik. Ismételd, amíg dolgozol rajta.
 3. Válaszolj a felhasználónak **világos és tömör szöveges válasszal**:
    ```bash
    python3 /app/shared/skills/ticket.py resolve <id> --response "<válasz a felhasználónak>"
