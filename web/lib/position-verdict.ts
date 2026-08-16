@@ -62,3 +62,21 @@ export const VERDICT_SIGNAL: Record<Verdict, VerdictSignal> = {
   review_ok: { action: "like", score: 4, direction: "more_like_this" },
   top: { action: "star", score: 5, direction: "more_like_this" },
 };
+
+/**
+ * Un verdetto che non si può registrare senza sapere PERCHÉ.
+ *
+ * Il criterio non è una seconda lista da tenere allineata a mano: è il
+ * segnale stesso. `less_like_this` è l'unica direzione che insegna al team
+ * cosa EVITARE — `agents/scout/scout.md` deprioritizza azienda, famiglia di
+ * ruolo e località quando la vede — e senza motivo insegna la cosa
+ * sbagliata: una posizione ottima ma scaduta diventa «meno cose così».
+ *
+ * Le due superfici che raccolgono giudizi (pagina dettaglio e swipe) la
+ * usano per sapere quali richiedono il selettore dei motivi; la decisione su
+ * COSA farne di quel motivo — esclusione o giudizio — è l'altra funzione
+ * pura, `negativeSignalFor` in `positions/[id]/exclusion-reasons.ts`.
+ */
+export function needsReason(verdict: Verdict): boolean {
+  return VERDICT_SIGNAL[verdict].direction === "less_like_this";
+}

@@ -2,7 +2,16 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { VERDICT_SIGNAL } from "@/lib/position-verdict";
+import {
+  VERDICT_ORDER,
+  VERDICT_SIGNAL,
+  needsReason,
+} from "@/lib/position-verdict";
+import {
+  FACTUAL_REASONS,
+  REASON_ORDER,
+  negativeSignalFor,
+} from "@/app/(protected)/positions/[id]/exclusion-reasons";
 
 const ROOT = resolve(import.meta.dirname, "../../..");
 const read = (relative: string) =>
@@ -49,15 +58,34 @@ describe("O-76 feedback future-only boundary", () => {
     },
   );
 
+  // #172 — la clausola «lo swipe non deve nominare l'esclusione» valeva
+  // finché lo swipe non aveva un selettore: era il modo di dire «lì il
+  // giudizio è secco, quindi non può che essere un gusto». Ora il selettore
+  // c'è, chiesto DOPO il gesto, e quella formulazione vieterebbe proprio la
+  // correzione che il ticket chiedeva.
+  //
+  // La proprietà da proteggere non cambia: un VERDETTO non toglie di mezzo
+  // la posizione. Cambia chi la garantisce — non l'assenza di una stringa in
+  // un file, ma il fatto che alla route ci si arrivi solo da un MOTIVO, e
+  // solo se quel motivo è un fatto sulla posizione. Le due metà si
+  // verificano insieme: la regola pura qui sotto, e sopra (`it.each`) che
+  // nessuna delle due superfici raggiunga la route scavalcandola.
   it("keeps every taste verdict out of the exclusion path", () => {
-    const source = read(FEEDBACK_SURFACES[0]);
+    for (const path of FEEDBACK_SURFACES) {
+      expect(read(path)).toContain("negativeSignalFor");
+    }
     // Un verdetto resta un segnale di preferenza: se un giorno qualcuno gli
     // attaccasse un'esclusione, VERDICT_SIGNAL lo direbbe e il primo caso
-    // sopra fallirebbe. Qui si chiude l'altra metà: la superficie dello swipe
-    // non ha ancora un selettore di motivi (#172), quindi lì l'esclusione non
-    // deve comparire affatto.
-    expect(read(FEEDBACK_SURFACES[1])).not.toContain("/user-exclude");
-    expect(source).toContain("negativeSignalFor");
+    // sopra fallirebbe.
+    for (const reason of REASON_ORDER) {
+      const signal = negativeSignalFor(reason, "un testo qualsiasi");
+      expect(signal.kind, reason).toBe(
+        FACTUAL_REASONS.includes(reason) ? "exclude" : "feedback",
+      );
+    }
+    // E il gesto che ci arriva è sempre e solo quello che ha chiesto il
+    // perché: gli altri tre verdetti non hanno un motivo da valutare.
+    expect(VERDICT_ORDER.filter(needsReason)).toEqual(["no"]);
   });
 
   it("keeps explicit exclusion as a separate action", () => {

@@ -37,6 +37,18 @@ export function IconX({ size }: { size?: number }) {
   );
 }
 
+// Timbro «esclusa»: cerchio sbarrato. Distinto dalla X del verdetto
+// «non interessante» di proposito — sono due esiti diversi e sullo stesso
+// mazzo si vedono uno dopo l'altro.
+export function IconBan({ size }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m5.6 5.6 12.8 12.8" />
+    </Svg>
+  );
+}
+
 export function IconStar({
   size,
   filled,

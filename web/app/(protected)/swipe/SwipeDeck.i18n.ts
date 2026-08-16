@@ -13,6 +13,19 @@ export const T: Record<
   {
     title: string;
     verdicts: Record<Verdict, string>;
+    // O-77 — il pannello del motivo, chiesto DOPO il gesto negativo.
+    // `whyDiscarded` è quello che si legge abbandonandolo: senza questa riga
+    // un gesto non registrato sembrerebbe registrato.
+    whyNo: string;
+    whyPickPlaceholder: string;
+    whyHintTaste: string;
+    whyHintFactual: string;
+    whyConfirmTaste: string;
+    whyConfirmFactual: string;
+    whyCancel: string;
+    whySaveError: string;
+    whyDiscarded: string;
+    excludedStamp: string;
     btnPrev: string;
     commentPh: string;
     commentClose: string;
@@ -59,6 +72,18 @@ export const T: Record<
       review_ok: "Interessante",
       top: "Molto interessante",
     },
+    whyNo: "Perché non ti interessa?",
+    whyPickPlaceholder: "Scegli un motivo…",
+    whyHintTaste: "Il team lo userà per cercarti offerte più adatte.",
+    whyHintFactual:
+      "La posizione esce dal giro e basta: una scaduta non dice cosa ti piace, quindi il team non impara niente da qui.",
+    whyConfirmTaste: "Salva",
+    whyConfirmFactual: "Escludi",
+    whySaveError: "Non è stato registrato: riprova fra un momento.",
+    whyCancel: "Annulla",
+    whyDiscarded:
+      "Senza motivo non registriamo niente: la posizione resta da giudicare.",
+    excludedStamp: "Esclusa",
     btnPrev: "Precedente",
     commentPh: "Aggiungi un commento (facoltativo)…",
     commentClose: "Chiudi il commento",
@@ -112,6 +137,19 @@ export const T: Record<
       review_ok: "Interesting",
       top: "Very interesting",
     },
+    whyNo: "Why is it not interesting?",
+    whyPickPlaceholder: "Pick a reason…",
+    whyHintTaste:
+      "The team will use it to look for offers that fit you better.",
+    whyHintFactual:
+      "The position simply leaves the pipeline: an expired one says nothing about your taste, so the team learns nothing from this.",
+    whyConfirmTaste: "Save",
+    whyConfirmFactual: "Exclude",
+    whySaveError: "It was not recorded: try again in a moment.",
+    whyCancel: "Cancel",
+    whyDiscarded:
+      "Without a reason nothing is recorded: the position is still waiting for your verdict.",
+    excludedStamp: "Excluded",
     btnPrev: "Previous",
     commentPh: "Add a comment (optional)…",
     commentClose: "Close the comment",
@@ -164,6 +202,19 @@ export const T: Record<
       review_ok: "Érdekes",
       top: "Nagyon érdekes",
     },
+    whyNo: "Miért nem érdekes?",
+    whyPickPlaceholder: "Válassz okot…",
+    whyHintTaste:
+      "A csapat ezt használja majd, hogy hozzád jobban illő ajánlatokat keressen.",
+    whyHintFactual:
+      "Az állás egyszerűen kikerül a körből: egy lejárt hirdetés nem árul el semmit az ízlésedről, így a csapat nem tanul belőle.",
+    whyConfirmTaste: "Mentés",
+    whyConfirmFactual: "Kizárás",
+    whySaveError: "Nem lett rögzítve: próbáld újra egy pillanat múlva.",
+    whyCancel: "Mégse",
+    whyDiscarded:
+      "Ok nélkül semmit sem rögzítünk: az állás továbbra is megítélésre vár.",
+    excludedStamp: "Kizárva",
     btnPrev: "Előző",
     commentPh: "Megjegyzés hozzáadása (opcionális)…",
     commentClose: "Megjegyzés bezárása",
@@ -217,6 +268,18 @@ export const T: Record<
       review_ok: "Interesante",
       top: "Muy interesante",
     },
+    whyNo: "¿Por qué no te interesa?",
+    whyPickPlaceholder: "Elige un motivo…",
+    whyHintTaste: "El equipo lo usará para buscarte ofertas que encajen mejor.",
+    whyHintFactual:
+      "La posición sale del circuito y ya está: una caducada no dice qué te gusta, así que el equipo no aprende nada de aquí.",
+    whyConfirmTaste: "Guardar",
+    whyConfirmFactual: "Excluir",
+    whySaveError: "No se ha registrado: inténtalo de nuevo en un momento.",
+    whyCancel: "Cancelar",
+    whyDiscarded:
+      "Sin motivo no registramos nada: la posición sigue pendiente de tu juicio.",
+    excludedStamp: "Excluida",
     btnPrev: "Anterior",
     commentPh: "Añade un comentario (opcional)…",
     commentClose: "Cerrar el comentario",
@@ -270,6 +333,19 @@ export const T: Record<
       review_ok: "Interessant",
       top: "Sehr interessant",
     },
+    whyNo: "Warum ist sie nicht interessant?",
+    whyPickPlaceholder: "Grund auswählen…",
+    whyHintTaste:
+      "Das Team nutzt ihn, um passendere Stellen für dich zu suchen.",
+    whyHintFactual:
+      "Die Stelle fällt einfach aus dem Umlauf: Eine abgelaufene sagt nichts über deinen Geschmack, das Team lernt hier also nichts.",
+    whyConfirmTaste: "Speichern",
+    whyConfirmFactual: "Ausschließen",
+    whySaveError: "Es wurde nicht gespeichert: Bitte gleich erneut versuchen.",
+    whyCancel: "Abbrechen",
+    whyDiscarded:
+      "Ohne Grund wird nichts gespeichert: Die Stelle wartet weiter auf dein Urteil.",
+    excludedStamp: "Ausgeschlossen",
     btnPrev: "Zurück",
     commentPh: "Kommentar hinzufügen (optional)…",
     commentClose: "Kommentar schließen",
@@ -322,6 +398,19 @@ export const T: Record<
       review_ok: "Intéressant",
       top: "Très intéressant",
     },
+    whyNo: "Pourquoi ne vous intéresse-t-il pas ?",
+    whyPickPlaceholder: "Choisissez un motif…",
+    whyHintTaste:
+      "L'équipe s'en servira pour chercher des offres qui vous vont mieux.",
+    whyHintFactual:
+      "Le poste sort simplement du circuit : une offre expirée ne dit rien de vos goûts, l'équipe n'apprend donc rien d'ici.",
+    whyConfirmTaste: "Enregistrer",
+    whyConfirmFactual: "Exclure",
+    whySaveError: "Rien n'a été enregistré : réessayez dans un instant.",
+    whyCancel: "Annuler",
+    whyDiscarded:
+      "Sans motif, rien n'est enregistré : le poste attend toujours votre jugement.",
+    excludedStamp: "Exclu",
     btnPrev: "Précédent",
     commentPh: "Ajouter un commentaire (facultatif)…",
     commentClose: "Fermer le commentaire",
@@ -379,6 +468,19 @@ export const T: Record<
       review_ok: "Interessante",
       top: "Muito interessante",
     },
+    whyNo: "Porque não te interessa?",
+    whyPickPlaceholder: "Escolhe um motivo…",
+    whyHintTaste:
+      "A equipa vai usá-lo para procurar ofertas que te encaixem melhor.",
+    whyHintFactual:
+      "A vaga sai do circuito e pronto: uma vaga expirada não diz o que gostas, por isso a equipa não aprende nada daqui.",
+    whyConfirmTaste: "Guardar",
+    whyConfirmFactual: "Excluir",
+    whySaveError: "Não foi registado: tenta novamente dentro de instantes.",
+    whyCancel: "Cancelar",
+    whyDiscarded:
+      "Sem motivo não registamos nada: a vaga continua à espera do teu juízo.",
+    excludedStamp: "Excluída",
     btnPrev: "Anterior",
     commentPh: "Adicione um comentário (opcional)…",
     commentClose: "Fechar o comentário",

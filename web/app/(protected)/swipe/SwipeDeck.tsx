@@ -8,6 +8,7 @@ import { currencySymbol, formatMoneyCompact } from "@/lib/exchange-rates";
 import { scoreSpectrumCss } from "@/lib/score-color";
 import type { Locale } from "@/i18n/config";
 import {
+  IconBan,
   IconCalendar,
   IconCards,
   IconChat,
@@ -39,11 +40,25 @@ import {
 // feedback (append-only, l'ultimo prevale).
 //
 // Scritture — corsie ESISTENTI, nessuna route nuova:
-//   ogni giudizio → POST /api/positions/[legacyId]/feedback
-// Nessun giudizio chiama il writer di esclusione: l'azione esplicita e' una corsia
-// separata e il feedback resta apprendimento per posizioni future (O-76).
+//   giudizio positivo   → POST /api/positions/[legacyId]/feedback
+//   giudizio negativo   → prima il MOTIVO, poi feedback OPPURE user-exclude
 // Ottimistico: la carta vola subito, le POST viaggiano dietro; su errore
 // toast non bloccante.
+//
+// O-77 — il «non interessante» NON è più ottimistico, ed è voluto: era
+// l'unico gesto che scriveva `less_like_this` senza sapere perché, e lo
+// Scout con quel segnale deprioritizza azienda, famiglia di ruolo e località
+// (`agents/scout/scout.md`). Su una posizione ottima ma SCADUTA è la lezione
+// sbagliata. Un selettore PRIMA del gesto però rovinerebbe lo swipe rapido,
+// quindi: la carta vola, il mazzo avanza, e SUBITO DOPO si chiede il motivo.
+// Finché il pannello è aperto non è stato scritto niente — e se l'utente lo
+// abbandona non resta niente, né riga né timbro (il timbro prometterebbe un
+// giudizio che nel database non c'è).
+//
+// Il confine di O-76 resta, riformulato: un GIUDIZIO non toglie di mezzo la
+// posizione. Ci arriva solo un MOTIVO fattuale (scaduta, già gestita) — e
+// quella strada non emette nessun segnale di gusto. A decidere quale delle
+// due è `negativeSignalFor`, la stessa funzione pura della pagina dettaglio.
 
 export type SwipeCardData = {
   id: string;
@@ -70,9 +85,16 @@ export type SwipeCardData = {
 import {
   VERDICT_ORDER,
   VERDICT_SIGNAL,
+  needsReason,
   type Verdict,
   type VerdictSignal,
 } from "@/lib/position-verdict";
+import { ReasonPicker } from "@/app/(protected)/positions/[id]/ReasonPicker";
+import {
+  PICKER_T,
+  isFactualReason,
+  negativeSignalFor,
+} from "@/app/(protected)/positions/[id]/exclusion-reasons";
 import { T } from "./SwipeDeck.i18n";
 import { Chip, DualRange, FilterSection } from "./SwipeDeckParts";
 export type { Verdict };
@@ -277,6 +299,7 @@ export default function SwipeDeck({
 }) {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
+  const pickerT = PICKER_T[locale] ?? PICKER_T.en;
 
   // Due mazzi (scelta utente 19/07): 'pending' = da giudicare (le già
   // recensite NON ricompaiono in sessione nuova), 'reviewed' = già
@@ -563,6 +586,20 @@ export default function SwipeDeck({
   const [toast, setToast] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [commentOpen, setCommentOpen] = useState(false);
+  // Giudizio negativo SOSPESO: la carta è già volata via, ma niente è stato
+  // scritto. `note` è il commento che l'utente aveva già digitato prima del
+  // gesto — viaggia col motivo, non si perde per strada.
+  const [pendingNo, setPendingNo] = useState<{
+    card: SwipeCardData;
+    note: string;
+  } | null>(null);
+  const [whyReason, setWhyReason] = useState("");
+  const [whyNote, setWhyNote] = useState("");
+  const [whyError, setWhyError] = useState<string | null>(null);
+  const [whyBusy, setWhyBusy] = useState(false);
+  // Le posizioni uscite dal giro per un motivo FATTUALE: non hanno un
+  // giudizio (nessun evento di feedback), quindi non stanno in `given`.
+  const [excluded, setExcluded] = useState<Record<string, true>>({});
   const [speechOk, setSpeechOk] = useState(false);
   const [recording, setRecording] = useState(false);
   const flyingRef = useRef(false);
@@ -678,9 +715,16 @@ export default function SwipeDeck({
     rec.start();
   }, [comment, locale, showToast, t.voiceDenied, t.voiceError]);
 
-  // Scrive il giudizio nella sola pipeline feedback.
+  // Scrive il giudizio nella sola pipeline feedback. Ritorna se la riga è
+  // andata: chi chiama decide come dirlo (toast per i gesti secchi, errore
+  // dentro il pannello per il giudizio che sta aspettando il motivo).
   const persist = useCallback(
-    async (card: SwipeCardData, verdict: Verdict, note: string) => {
+    async (
+      card: SwipeCardData,
+      verdict: Verdict,
+      note: string,
+      reason?: string,
+    ): Promise<boolean> => {
       const v = VERDICTS[verdict];
       try {
         const res = await fetch(`/api/positions/${card.legacy_id}/feedback`, {
@@ -690,48 +734,166 @@ export default function SwipeDeck({
             action: v.action,
             score: v.score,
             ...(v.direction ? { direction: v.direction } : {}),
+            ...(reason ? { reason } : {}),
             ...(note ? { comment: note } : {}),
           }),
         });
-        if (!res.ok) throw new Error(String(res.status));
+        return res.ok;
       } catch {
-        showToast(`${t.saveError} «${card.title}»`);
+        return false;
       }
     },
-    [showToast, t.saveError],
+    [],
   );
 
   const judge = useCallback(
     (verdict: Verdict) => {
-      if (flyingRef.current || finished) return;
+      if (flyingRef.current || finished || pendingNo) return;
       const card = cards[idx];
       flyingRef.current = true;
       stopVoice();
       const note = comment.trim().slice(0, 2000);
+      // Il verdetto che insegna cosa EVITARE non si registra al buio: la
+      // carta vola lo stesso (il gesto resta rapido), ma la scrittura
+      // aspetta il motivo — e senza motivo non avviene.
+      const needsWhy = needsReason(verdict);
       const dir = VERDICTS[verdict].fly;
       const width = typeof window !== "undefined" ? window.innerWidth : 800;
       setFly({ x: dir * (width + 200), rot: dir * 22 });
       setTimeout(() => {
-        setGiven((g) => ({ ...g, [card.id]: verdict }));
+        // Il timbro è la promessa che qualcosa è stato registrato: lo mette
+        // solo un giudizio davvero scritto.
+        if (!needsWhy) setGiven((g) => ({ ...g, [card.id]: verdict }));
         setIdxCur((i) => i + 1);
         setFly(null);
         setDrag(0);
         setComment("");
         setCommentOpen(false);
         flyingRef.current = false;
+        // Il motivo si chiede DOPO il gesto, a carta uscita.
+        if (needsWhy) {
+          setWhyReason("");
+          setWhyNote("");
+          setWhyError(null);
+          setPendingNo({ card, note });
+        }
       }, FLY_MS);
       // Se il giudizio non cambia, registra comunque l'evento (magari col
       // commento nuovo), sempre senza effetti sullo stato corrente.
-      void persist(card, verdict, note);
+      if (!needsWhy) {
+        void persist(card, verdict, note).then((ok) => {
+          if (!ok) showToast(`${t.saveError} «${card.title}»`);
+        });
+      }
     },
-    [cards, idx, finished, comment, persist, stopVoice, setIdxCur],
+    [
+      cards,
+      idx,
+      finished,
+      comment,
+      pendingNo,
+      persist,
+      showToast,
+      stopVoice,
+      setIdxCur,
+      t.saveError,
+    ],
   );
+
+  // Chiude il pannello del motivo. `abandoned` = l'utente se n'è andato
+  // senza sceglierlo: non c'è niente da annullare, perché non era stato
+  // scritto niente — ma va DETTO, altrimenti il gesto sembra registrato.
+  const closeWhy = useCallback(
+    (abandoned: boolean) => {
+      setPendingNo(null);
+      setWhyReason("");
+      setWhyNote("");
+      setWhyError(null);
+      setWhyBusy(false);
+      if (abandoned) showToast(t.whyDiscarded);
+    },
+    [showToast, t.whyDiscarded],
+  );
+
+  // Conferma del motivo. Due strade, ed è il punto del ticket:
+  //  · motivo FATTUALE (scaduta, già gestita) → la posizione esce dal giro
+  //    con la route dell'esclusione manuale e NESSUN `less_like_this` parte;
+  //  · motivo di GUSTO → giudizio negativo, ma col motivo attaccato.
+  // La regola sta in `negativeSignalFor`, pura e testata a parte: qui resta
+  // solo l'esecuzione.
+  const confirmWhy = useCallback(async () => {
+    if (!pendingNo || whyBusy) return;
+    const card = pendingNo.card;
+    const signal = negativeSignalFor(
+      whyReason,
+      whyNote.trim() || pendingNo.note,
+    );
+    if (signal.kind === "invalid") {
+      setWhyError(
+        signal.missing === "reason" ? pickerT.pickReason : pickerT.writeReason,
+      );
+      return;
+    }
+    setWhyError(null);
+    setWhyBusy(true);
+    if (signal.kind === "exclude") {
+      try {
+        const res = await fetch(
+          `/api/positions/${card.legacy_id}/user-exclude`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              reason: signal.reason,
+              ...(signal.note ? { note: signal.note } : {}),
+            }),
+          },
+        );
+        if (!res.ok) {
+          // Il dettaglio del server va in console, non in faccia a chi cerca
+          // lavoro: `query_failed` non gli dice cosa fare (W02).
+          const b = (await res.json().catch(() => ({}))) as { error?: string };
+          console.error(`[swipe] user-exclude ${res.status} ${b?.error ?? ""}`);
+          setWhyError(t.whySaveError);
+          setWhyBusy(false);
+          return;
+        }
+      } catch {
+        setWhyError(t.whySaveError);
+        setWhyBusy(false);
+        return;
+      }
+      setExcluded((e) => ({ ...e, [card.id]: true }));
+      closeWhy(false);
+      return;
+    }
+    const ok = await persist(card, "no", signal.comment ?? "", signal.reason);
+    if (!ok) {
+      setWhyError(t.whySaveError);
+      setWhyBusy(false);
+      return;
+    }
+    setGiven((g) => ({ ...g, [card.id]: "no" }));
+    closeWhy(false);
+  }, [
+    pendingNo,
+    whyBusy,
+    whyReason,
+    whyNote,
+    pickerT.pickReason,
+    pickerT.writeReason,
+    persist,
+    closeWhy,
+    t.whySaveError,
+  ]);
 
   // Navigazione: nessuna scrittura, si sfoglia e basta. delta = +1
   // (prossima, card esce a sinistra) o -1 (precedente, esce a destra).
   const nav = useCallback(
     (delta: 1 | -1) => {
-      if (flyingRef.current) return;
+      // Col motivo in sospeso il mazzo sta fermo: sfogliare mentre una
+      // domanda aspetta risposta è il modo più veloce per perderla.
+      if (flyingRef.current || pendingNo) return;
       if (delta === 1 && finished) return;
       if (delta === -1 && idx === 0) return;
       flyingRef.current = true;
@@ -747,7 +909,7 @@ export default function SwipeDeck({
         flyingRef.current = false;
       }, FLY_MS);
     },
-    [finished, idx, stopVoice, setIdxCur],
+    [finished, idx, pendingNo, stopVoice, setIdxCur],
   );
 
   navRef.current = nav;
@@ -838,6 +1000,10 @@ export default function SwipeDeck({
   // Tastiera per il desktop: 1-4 = giudizi, ←/→ = precedente/prossima.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Il pannello del motivo si prende la tastiera: la sua `<select>` non
+      // è INPUT/TEXTAREA, e senza questo un '1' scelto col tasto passava
+      // anche al mazzo sotto.
+      if (pendingNo) return;
       const el = document.activeElement;
       if (
         el instanceof HTMLElement &&
@@ -856,7 +1022,7 @@ export default function SwipeDeck({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [judge, nav]);
+  }, [judge, nav, pendingNo]);
 
   return (
     // overflowX clip: la carta in volo esce dal viewport — senza clip
@@ -1043,6 +1209,23 @@ export default function SwipeDeck({
               .map((card, i) => {
                 const isTop = i === 0;
                 const verdictGiven = given[card.id];
+                // Due timbri diversi perché sono due esiti diversi: un
+                // giudizio (che il team impara) e un'uscita dal giro (che
+                // non insegna niente). Mostrarne uno solo direbbe il falso
+                // sull'altro.
+                const stamp = excluded[card.id]
+                  ? {
+                      label: t.excludedStamp,
+                      color: "var(--color-red)",
+                      Icon: IconBan,
+                    }
+                  : verdictGiven
+                    ? {
+                        label: t.verdicts[verdictGiven],
+                        color: VERDICTS[verdictGiven].color,
+                        Icon: VERDICTS[verdictGiven].Icon,
+                      }
+                    : null;
                 const transform = isTop
                   ? fly
                     ? `translate(${fly.x}px, 0) rotate(${fly.rot}deg)`
@@ -1074,23 +1257,20 @@ export default function SwipeDeck({
                     onPointerCancel={isTop ? onPointerEnd : undefined}
                   >
                     {/* Timbro del giudizio già dato (ri-giudicabile) */}
-                    {isTop && verdictGiven && (
+                    {isTop && stamp && (
                       <div
                         className="absolute top-[68px] right-2 px-2 py-1 rounded border-2 text-[10px] font-black tracking-widest flex items-center gap-1.5"
                         style={{
-                          color: VERDICTS[verdictGiven].color,
-                          borderColor: VERDICTS[verdictGiven].color,
+                          color: stamp.color,
+                          borderColor: stamp.color,
                           background: "var(--color-card)",
                           transform: "rotate(6deg)",
                           zIndex: 20,
                           opacity: 0.95,
                         }}
                       >
-                        {(() => {
-                          const { Icon } = VERDICTS[verdictGiven];
-                          return <Icon size={12} />;
-                        })()}
-                        {t.verdicts[verdictGiven].toUpperCase()}
+                        <stamp.Icon size={12} />
+                        {stamp.label.toUpperCase()}
                       </div>
                     )}
 
@@ -1370,6 +1550,137 @@ export default function SwipeDeck({
           </div>
         </div>
       )}
+
+      {/* Il perché del «non interessante», CHIESTO DOPO IL GESTO. Finché è
+          aperto non è stato scritto niente: si conferma o si abbandona, e
+          abbandonare non lascia nessun segnale a metà. Portal su body come
+          la schermata filtri (il wrapper di pagina è animato con transform
+          e intrappolerebbe il fixed). */}
+      {pendingNo &&
+        mounted &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[95] flex items-end justify-center p-4 sm:items-center"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.whyNo}
+          >
+            <div
+              className="absolute inset-0"
+              style={{ background: "rgba(0,0,0,0.6)" }}
+              onClick={() => closeWhy(true)}
+            />
+            <div
+              className="relative w-full max-w-sm rounded-xl border p-4 flex flex-col gap-2.5"
+              style={{
+                background: "var(--color-panel)",
+                borderColor: "var(--color-border-glow)",
+                boxShadow: "0 18px 48px rgba(0,0,0,0.5)",
+              }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p
+                    className="text-[13px] font-bold"
+                    style={{ color: "var(--color-white)" }}
+                  >
+                    {t.whyNo}
+                  </p>
+                  {/* Di QUALE posizione: la carta è già uscita di scena, e
+                      senza il titolo la domanda arriva senza soggetto. */}
+                  <p
+                    className="text-[11px] font-semibold truncate"
+                    style={{ color: "var(--color-muted)" }}
+                  >
+                    {pendingNo.card.title} · {pendingNo.card.company}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label={t.whyCancel}
+                  title={t.whyCancel}
+                  onClick={() => closeWhy(true)}
+                  className="shrink-0 rounded-full border flex items-center justify-center"
+                  style={{
+                    width: 24,
+                    height: 24,
+                    color: "var(--color-muted)",
+                    borderColor: "var(--color-border)",
+                    background: "var(--color-card)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <IconX size={12} />
+                </button>
+              </div>
+              <ReasonPicker
+                value={whyReason}
+                onChange={(next) => {
+                  setWhyReason(next);
+                  setWhyError(null);
+                }}
+                note={whyNote}
+                onNoteChange={setWhyNote}
+                disabled={whyBusy}
+                placeholder={t.whyPickPlaceholder}
+                className="flex flex-wrap items-center gap-1.5"
+              />
+              {/* Che cosa succede DAVVERO con questo motivo: due esiti
+                  diversi, letti prima di confermare e non dopo. */}
+              {whyReason && (
+                <p
+                  className="text-[10px] leading-snug"
+                  style={{ color: "var(--color-dim)" }}
+                >
+                  {isFactualReason(whyReason)
+                    ? t.whyHintFactual
+                    : t.whyHintTaste}
+                </p>
+              )}
+              {whyError && (
+                <p
+                  className="text-[10px]"
+                  style={{ color: "var(--color-red)" }}
+                >
+                  {whyError}
+                </p>
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void confirmWhy()}
+                  disabled={whyBusy}
+                  className="rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
+                  style={{
+                    color: "var(--color-red)",
+                    borderColor: "var(--color-red)",
+                    background: "transparent",
+                    cursor: "pointer",
+                  }}
+                >
+                  {isFactualReason(whyReason)
+                    ? t.whyConfirmFactual
+                    : t.whyConfirmTaste}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => closeWhy(true)}
+                  disabled={whyBusy}
+                  className="rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
+                  style={{
+                    color: "var(--color-muted)",
+                    borderColor: "var(--color-border)",
+                    background: "transparent",
+                    cursor: "pointer",
+                  }}
+                >
+                  {t.whyCancel}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {/* Schermata filtri — portal su body (il wrapper di pagina è animato
           con transform e intrappolerebbe il fixed, vedi TeamActionsSheet).
@@ -1661,20 +1972,38 @@ export default function SwipeDeck({
           document.body,
         )}
 
-      {/* Toast errori rete (non bloccante) */}
-      {toast && (
-        <div
-          className="fixed bottom-5 left-1/2 -translate-x-1/2 px-4 py-2 rounded text-[12px] font-semibold max-w-[90vw] truncate"
-          style={{
-            background: "var(--color-panel)",
-            color: "var(--color-red)",
-            border: "1px solid var(--color-red)",
-            zIndex: 100,
-          }}
-        >
-          {toast}
-        </div>
-      )}
+      {/* Toast (non bloccante) — portal su body come la schermata filtri.
+          MISURATO il 16/08: senza portal un antenato con `transform` fa da
+          blocco contenitore al `fixed`, e il toast finiva a top 953 su un
+          viewport alto 900 — fuori schermo, cioè mai letto. Vale doppio da
+          quando ci passa «senza motivo non registriamo niente»: è l'unica
+          cosa che dice all'utente che il suo gesto non ha lasciato traccia. */}
+      {toast &&
+        mounted &&
+        createPortal(
+          // La larghezza la limita il contenitore, non `max-w-[90vw]`: col
+          // `zoom` del body i vw non tornano (misurati 404px di toast su un
+          // viewport di 390) e a 390px sbordava di 7px per lato.
+          <div
+            className="fixed bottom-5 left-0 right-0 flex justify-center px-4"
+            style={{ zIndex: 100 }}
+          >
+            <div
+              // Niente `truncate`: qui passa anche il messaggio che spiega
+              // perché non è stato registrato niente, e mezzo messaggio non
+              // spiega niente. Va a capo, al massimo occupa due righe.
+              className="px-4 py-2 rounded text-[12px] font-semibold max-w-full text-center break-words"
+              style={{
+                background: "var(--color-panel)",
+                color: "var(--color-red)",
+                border: "1px solid var(--color-red)",
+              }}
+            >
+              {toast}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
