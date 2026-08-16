@@ -17,6 +17,7 @@ Also there: `ROADMAP` · `ASSETS` · `SPRITES` · `ANALISI-GIOCHI` · `RESEARCH-
 
 ## 🎯 [`about/`](about/) — what JHT is and whether it works
 Public docs for anyone evaluating JHT, in two clusters (see the [index](about/README.md)):
+- ❓ **Start here:** [`FAQ`](about/FAQ.md) — what it is and is not, Docker, cost, data, VPS
 - 📖 **Narrative:** `VISION` · `STORY` · `ROADMAP`
 - 🔬 **Evidence & economics:** `PROVIDERS` · `MONITORING` · `RESULTS`
 

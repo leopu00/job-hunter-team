@@ -1564,6 +1564,11 @@
       "path": "docs/security/07-auth-posture-remediation.md",
       "description": "Runbook fail-closed per verificare e correggere la postura Supabase Auth senza esporre token o dettagli sensibili",
       "last_review": null
+    },
+    {
+      "path": "docs/about/FAQ.md",
+      "description": "Sei domande di valutazione con risposte verificate nel codice: cos'e' e cosa NON e' (nessun invio automatico di candidature), Docker come confine di runtime, struttura del costo e chi lo guida, cosa esce dalla macchina e quando, differenza da un framework generico, uso senza VPS.",
+      "last_review": null
     }
   ]
 }
