@@ -15,6 +15,8 @@ trasferisce in `pending_user_messages`, da cui parte l'unico consumer
   • i turni durevoli per testo, documento, foto e vocale;
   • il rifiuto di un documento oltre i 20 MB e il fallimento del download,
     che devono comunque avvisare l'agente invece di sparire;
+  • il nome dell'allegato come etichetta e mai come percorso: traversal, path
+    assoluti e nomi degeneri restano dentro la inbox;
   • il loop principale: whitelist sul chat_id, `/start` non inoltrato,
     avanzamento dell'offset, e sopravvivenza a un handler che solleva;
   • il confine crash/restart: journal prima dell'offset, identità stabile,
@@ -886,6 +888,65 @@ def test_foto_e_vocale_oltre_limite_avvisano_invece_di_sparire(bridge, monkeypat
 
     assert "[TG-DOC-REJECT]" in photo
     assert "[TG-DOC-REJECT]" in voice
+
+
+def test_documento_con_nome_traversal_resta_nella_inbox(bridge, monkeypatch, tmp_path):
+    """Il difetto: `file_name` e' scelto da chi invia e finiva in `INBOX_DIR /
+    dest_name` senza basename. La inbox sta sotto la home del container, che e'
+    il bind mount di ~/.jht sull'host: uscirne significa scrivere fra le
+    credenziali. Qui `.claude/` esiste davvero, come nella home vera — senza il
+    guard il file ci finirebbe dentro."""
+    (tmp_path / ".claude").mkdir()
+    _fake_download(bridge, monkeypatch, b"istruzioni permanenti")
+
+    body = bridge.handle_document("tok", {"document": {
+        "file_id": "AAA", "file_name": "../../.claude/CLAUDE.md",
+    }})
+
+    assert not (tmp_path / ".claude" / "CLAUDE.md").exists()
+    assert (bridge.INBOX_DIR / "CLAUDE.md").read_bytes() == b"istruzioni permanenti"
+    assert f"path={bridge.INBOX_DIR / 'CLAUDE.md'}" in body
+    # Il nome dichiarato serve all'utente: sopravvive come etichetta.
+    assert "name=../../.claude/CLAUDE.md" in body
+
+
+def test_documento_con_nome_assoluto_resta_nella_inbox(bridge, monkeypatch, tmp_path):
+    """La trappola che inganna chi rilegge: in pathlib un componente assoluto
+    non si appende alla base, la sostituisce. Cercare `..` non troverebbe
+    niente di sospetto in questo nome."""
+    fuori = tmp_path / "fuori"
+    fuori.mkdir()
+    _fake_download(bridge, monkeypatch, b"payload")
+
+    bridge.handle_document("tok", {"document": {
+        "file_id": "AAA", "file_name": f"{fuori}/CLAUDE.md",
+    }})
+
+    assert list(fuori.iterdir()) == []
+    assert (bridge.INBOX_DIR / "CLAUDE.md").exists()
+
+
+@pytest.mark.parametrize("nome", ["", ".", "..", "/", "../..", "   "])
+def test_nomi_degeneri_ricadono_su_un_nome_sicuro(bridge, monkeypatch, nome):
+    """Un basename puo' restare vuoto o valere `.`/`..`: sono directory, non
+    file. Il ripiego lo decide il programma, dal file_id."""
+    _fake_download(bridge, monkeypatch, b"q")
+
+    local = bridge.fetch_file("tok", "AAA-bbb-999", nome)
+
+    assert local is not None
+    assert local.parent == bridge.INBOX_DIR
+    assert local.name == "file-AAAbbb99"
+
+
+def test_il_guard_e_nella_funzione_che_possiede_la_inbox(bridge, monkeypatch):
+    """Non nel chiamante: fetch_file si fidava di chi la chiama, e un chiamante
+    futuro sarebbe nato senza protezione."""
+    _fake_download(bridge, monkeypatch, b"k")
+
+    local = bridge.fetch_file("tok", "AAA", "../../../etc/passwd")
+
+    assert local == bridge.INBOX_DIR / "passwd"
 
 
 def test_download_fallito_non_lascia_parziali(bridge, monkeypatch):
