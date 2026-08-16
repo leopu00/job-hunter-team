@@ -68,6 +68,12 @@ INTERNAL_URLS = [
     "http://0x7f.0.0.1/jobs",
     "http://127.1/jobs",
     "http://good.example.com@192.168.1.1/jobs",
+    # Il punto finale e' la radice del DNS scritta per esteso: per `getaddrinfo`
+    # e' lo stesso nome, per `endswith` e per l'ultima etichetta no.
+    "http://localhost./jobs",
+    "http://db.internal./jobs",
+    "http://127.0.0.1./jobs",
+    "http://./jobs",
 ]
 
 PUBLIC_URLS = [
@@ -76,6 +82,9 @@ PUBLIC_URLS = [
     "https://jobs.example.co.uk/vacancy/1",
     "https://acme.workable.com/j/ABC123",
     "http://abc.de/jobs",
+    # Un punto finale su un dominio vero e' legittimo — e' la stessa pagina:
+    # il filtro lo normalizza, non lo rifiuta.
+    "https://boards.greenhouse.io./acme/jobs/1",
 ]
 
 

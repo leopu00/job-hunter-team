@@ -59,7 +59,17 @@ def _host_of(url: str):
         raise UrlRejected("host unparsable") from exc
     if not host:
         raise UrlRejected("no host")
-    return host.lower(), parts
+    # Il punto finale e' la radice del DNS scritta per esteso: `localhost.` e
+    # `localhost` sono lo stesso nome per il resolver, ma non per noi. Con il
+    # punto l'ultima etichetta e' la stringa vuota — quindi non sembra
+    # numerica — e `endswith` sui suffissi interni non trova piu' niente:
+    # `http://localhost./jobs` e `http://db.internal./jobs` passerebbero
+    # entrambi. Toglierlo PRIMA dei controlli e' l'unico posto in cui la
+    # normalizzazione vale per tutti e tre.
+    host = host.lower().rstrip(".")
+    if not host:
+        raise UrlRejected("no host")
+    return host, parts
 
 
 def address_is_reachable_from_outside(address) -> bool:
