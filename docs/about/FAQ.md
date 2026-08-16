@@ -96,19 +96,32 @@ What leaves the machine, and only that:
 | The cloud dashboard | **Only if you enable it** | Mirrored positions, scores and applications, plus the candidate profile file (capped at 64 KB) |
 | Telegram | **Only if you configure a bot** | Notifications, and the messages you send back as commands |
 
-Cloud sync is off until you run `jht cloud enable --token …` with a token you
-generate yourself; without it every cloud command answers *"Cloud not
-configured"* (`cli/src/commands/cloud.js`). Your CV and cover-letter files stay
-on the host: the browser reaches them through an on-demand bridge, not a
-permanent upload.
+Cloud sync is off until you turn it on, and there are three ways to do that
+(`cli/src/commands/cloud.js`): `jht cloud login` pairs the CLI with your browser
+session and the server issues the token once you approve — no manual paste;
+`jht cloud enable --token …` takes a token you generated yourself on the site;
+and `jht cloud pair` is the non-interactive path, used automatically on a VPS's
+first boot when provisioning left a pairing token behind. Until one of them
+runs, every cloud command answers *"Cloud not configured"*.
 
-Secrets never sync. `~/.jht/secrets.json` — VPS tokens, SSH keys — is
-local-only by design, and the hosted dashboard refuses control, configuration
-and data writes outright with a 403, decided at build time rather than inferred
-from the request. The exceptions are deliberate and narrow: light position
-actions (like/dislike, tickets, recheck or rewrite requests, excluding a
-position) travel through cloud sync to the team, because people want those from
-a phone (`web/lib/auth.ts`).
+Your CV and cover-letter files stay on the host: the browser reaches them
+through an on-demand bridge, not a permanent upload.
+
+Secrets never sync: `~/.jht/secrets.json` — VPS tokens, SSH keys — is
+local-only by design.
+
+The hosted dashboard is not a control panel, but it is worth being precise
+about *why*, because two different mechanisms are at work. Control and
+configuration writes that go through the shared write-guard are refused with a
+403 decided at build time, not inferred from the request headers
+(`web/lib/auth.ts`). The declared exceptions are the light position actions —
+like/dislike, tickets, recheck or rewrite requests, excluding a position, notes
+and marking one as applied — plus the emergency stop and account deletion,
+which have to work from a browser by definition. Everything else that mutates
+the team is unreachable on the cloud because that environment simply is not
+there: no tmux, no team filesystem. That is a real limit, but it is a different
+guarantee from a gate that says no, and it is worth knowing which one you are
+relying on.
 
 ## How is this different from a general-purpose agent framework?
 
