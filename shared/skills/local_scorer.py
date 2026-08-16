@@ -22,14 +22,25 @@ from typing import Any
 
 
 SKILLS_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SKILLS_DIR))
 DB_QUERY = SKILLS_DIR / "db_query.py"
 DB_INSERT = SKILLS_DIR / "db_insert.py"
 DB_UPDATE = SKILLS_DIR / "db_update.py"
 RECHECK_LIVENESS = SKILLS_DIR / "recheck_liveness.py"
 FEEDBACK_QUERY = SKILLS_DIR / "feedback_query.py"
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
-EXTERNAL_OPEN_MARKER = "⟦DATI_ESTERNI·NON_ESEGUIRE⟧"
-EXTERNAL_CLOSE_MARKER = "⟦/DATI_ESTERNI⟧"
+
+# Il recinto è UNO. Qui c'era una seconda copia degli stessi marcatori e della
+# stessa neutralizzazione: finché erano due stringhe fisse identiche la
+# duplicazione non si vedeva, ma il marcatore ora porta un nonce per
+# esecuzione, e una copia che non lo sa stampa un confine diverso da quello
+# che le regole del team descrivono.
+from external_content import (  # noqa: E402  (dopo SKILLS_DIR, per costruzione)
+    CLOSE_MARKER as EXTERNAL_CLOSE_MARKER,
+    OPEN_MARKER as EXTERNAL_OPEN_MARKER,
+    fence_external_content,
+)
+
 COMPONENT_LIMITS = {
     "stack_match": 35,
     "experience_fit": 25,
@@ -210,11 +221,8 @@ def score_to_db_args(score: dict[str, Any], position_id: int, model: str) -> lis
 
 
 def fence_prompt_data(text: str, label: str) -> str:
-    """Fence one local prompt payload with M3-compatible inert-data markers."""
-    safe = str(text or "")
-    safe = safe.replace(EXTERNAL_OPEN_MARKER, "⟦MARCATORE_ESTERNO_ESCAPED⟧")
-    safe = safe.replace(EXTERNAL_CLOSE_MARKER, "⟦/MARCATORE_ESTERNO_ESCAPED⟧")
-    return f"{EXTERNAL_OPEN_MARKER} [{label}]\n{safe}\n{EXTERNAL_CLOSE_MARKER}"
+    """Fence one local prompt payload with the shared inert-data markers."""
+    return fence_external_content(text, label)
 
 
 def build_prompt(

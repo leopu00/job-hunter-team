@@ -67,7 +67,11 @@ from _db import get_db, ensure_schema, active_categories
 # stale di `check_duplicate` dentro tests/test_scoring_logic.py.
 from db_insert import extract_linkedin_job_id
 import maintenance_log
-from external_content import fence_external_content
+from external_content import (
+    fence_external_content,
+    flatten_external_value,
+    inline_external_value,
+)
 
 
 # ── Output macchina ─────────────────────────────────────────────────────
@@ -175,7 +179,9 @@ def query_positions(args):
         remote = r['remote_type'] or '-'
         source = r['source'] or '-'
         status = r['status'] or '-'
-        print(f"{r['id']:>4} {score:>5} {status:>10} {r['company'][:20]:<20} {r['title'][:35]:<35} {remote:<12} {source:<10}")
+        company = flatten_external_value(r['company'])[:20]
+        title = flatten_external_value(r['title'])[:35]
+        print(f"{r['id']:>4} {score:>5} {status:>10} {company:<20} {title:<35} {remote:<12} {source:<10}")
 
     print(f"\nTotal: {len(rows)} positions")
     conn.close()
@@ -212,15 +218,19 @@ def query_position_detail(position_id, as_json=False):
         return
 
     print(f"\n{'='*60}")
-    print(f"  POSITION #{r['id']}: {r['title']}")
-    print(f"  Company: {r['company']} (company_id={r['company_id'] or 'NULL'})")
+    # Titolo, azienda, location, URL e fonte vengono dalla stessa pagina di
+    # `jd_text`: sono dati, non testo nostro, e qui stanno nell'intestazione che
+    # l'agente legge per prima. Il recinto in linea dice la provenienza senza
+    # spezzare la riga; a togliere gli a capo ci ha già pensato chi ha scritto.
+    print(f"  POSITION #{r['id']}: {inline_external_value(r['title'])}")
+    print(f"  Company: {inline_external_value(r['company'])} (company_id={r['company_id'] or 'NULL'})")
     print(f"{'='*60}")
-    print(f"  Location: {r['location'] or 'N/A'}")
+    print(f"  Location: {inline_external_value(r['location']) or 'N/A'}")
     print(f"  Company HQ: {r['c_hq_country'] or 'N/A'}")
     print(f"  Remote: {r['remote_type'] or 'N/A'}")
     print(f"  Salary: {format_salary_v2(r)}")
-    print(f"  URL: {r['url'] or 'N/A'}")
-    print(f"  Source: {r['source'] or 'N/A'}")
+    print(f"  URL: {inline_external_value(r['url']) or 'N/A'}")
+    print(f"  Source: {inline_external_value(r['source']) or 'N/A'}")
     print(f"  Status: {r['status']}")
     print(f"  Found by: {r['found_by'] or 'N/A'}")
     print(f"  Date: {r['found_at'] or 'N/A'}")
@@ -351,7 +361,8 @@ def query_company_detail(name, as_json=False):
         print(f"\n  Positions ({len(positions)}):")
         for p in positions:
             score = f" [score: {p['total_score']}]" if p['total_score'] else ""
-            print(f"    #{p['id']} {p['title'][:40]} [{p['status']}]{score}")
+            title = flatten_external_value(p['title'])[:40]
+            print(f"    #{p['id']} {title} [{p['status']}]{score}")
 
     conn.close()
 
@@ -417,7 +428,9 @@ def dashboard(as_json=False):
     if top:
         print(f"\n  TOP 10 by score:")
         for r in top:
-            print(f"    {r['total_score']:>3}/100  {r['company'][:20]:<20} {r['title'][:30]:<30} [{r['status']}]")
+            company = flatten_external_value(r['company'])[:20]
+            title = flatten_external_value(r['title'])[:30]
+            print(f"    {r['total_score']:>3}/100  {company:<20} {title:<30} [{r['status']}]")
 
     # Candidature attive
     apps = conn.execute("""
@@ -431,7 +444,9 @@ def dashboard(as_json=False):
         for r in apps:
             verdict = f" [{r['critic_verdict']}]" if r['critic_verdict'] else ""
             applied = f" | Inviata {r['applied_at']}" if r['applied_at'] else ""
-            print(f"    {r['company'][:20]:<20} {r['title'][:25]:<25} {r['status']}{verdict}{applied}")
+            company = flatten_external_value(r['company'])[:20]
+            title = flatten_external_value(r['title'])[:25]
+            print(f"    {company:<20} {title:<25} {r['status']}{verdict}{applied}")
 
     # Aziende per verdict
     verdicts = conn.execute("""
@@ -497,7 +512,8 @@ def check_history(position_id, as_json=False):
         conn.close()
         return
 
-    print(f"\n#{position_id} {pos['title']} — {pos['company']}")
+    print(f"\n#{position_id} {inline_external_value(pos['title'])} — "
+          f"{inline_external_value(pos['company'])}")
     print(f"   found:          {pos['found_at'] or pos['created_at']}")
     print(f"   last check:     {pos['last_checked'] or '—'}")
     print(f"   status:         {pos['status']} · is_open={pos['is_open']}")
@@ -808,8 +824,10 @@ def _emit_queue(conn, role, label, rows, sql_limit, as_json):
         detail = ""
         if 'detail' in r.keys() and r['detail']:
             detail = f" — {str(r['detail'])[:60]}"
-        print(f"  #{r['id']} {prefix}{r['company'][:20]:<20} "
-              f"{r['title'][:35]}{extra}{detail}")
+        company = flatten_external_value(r['company'])[:20]
+        title = flatten_external_value(r['title'])[:35]
+        print(f"  #{r['id']} {prefix}{company:<20} "
+              f"{title}{extra}{detail}")
     if shown < total:
         print(f"  … {total - shown} more in the queue. The limit is a default, not "
               f"a cap: use --limit N to see more, or --all to see everything.")
@@ -1352,7 +1370,8 @@ def query_application(position_id):
         conn.close()
         return 0
 
-    print(f"\n  APPLICATION for position #{position_id}: {r['company']} — {r['title']}")
+    print(f"\n  APPLICATION for position #{position_id}: "
+          f"{inline_external_value(r['company'])} — {inline_external_value(r['title'])}")
     print(f"  Status:        {r['status']}")
     print(f"  Written by:    {r['written_by'] or 'N/A'} ({r['written_at'] or 'N/A'})")
     print(f"  Critic verdict:{r['critic_verdict'] or 'PENDING'}")
@@ -1403,7 +1422,8 @@ def check_url(url_or_id):
         ).fetchone()
 
     if r:
-        print(f"FOUND: #{r['id']} {r['company']} — {r['title']} [{r['status']}]")
+        print(f"FOUND: #{r['id']} {inline_external_value(r['company'])} — "
+              f"{inline_external_value(r['title'])} [{r['status']}]")
     else:
         print("NOT FOUND")
 
@@ -1628,8 +1648,8 @@ def main():
               f"then: role_registry.py promote --name \"<family>\" --ids <id,id,...>")
         for r in rows:
             prop = r['role_family_proposed'] or '—'
-            title = (r['title'] or '')[:48]
-            comp = (r['company'] or '')[:22]
+            title = flatten_external_value(r['title'])[:48]
+            comp = flatten_external_value(r['company'])[:22]
             print(f"  #{r['id']}\t{prop}\t| {title} @ {comp}")
         conn.close()
     elif args.cmd == 'category-sizes':
