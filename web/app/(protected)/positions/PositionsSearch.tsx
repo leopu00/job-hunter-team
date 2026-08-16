@@ -126,7 +126,12 @@ export default function PositionsSearch() {
         aria-label={t.label}
         // `search` nativo disegna la sua X su alcuni browser: la togliamo per
         // averne una sola, la nostra, che sa anche ripulire l'URL.
-        className="min-w-0 flex-1 bg-transparent text-[11px] text-[var(--color-base)] placeholder:text-[var(--color-dim)] outline-none [&::-webkit-search-cancel-button]:appearance-none"
+        // `h-full border-0 p-0`: il bordo e la cornice li disegna il <form>
+        // qui sopra (h-8, px-2), il campo ci vive dentro. Erano i valori di
+        // default dell'elemento — padding 8/12 e bordo 1px — a farlo venire
+        // più alto del suo contenitore; finché la regola globale stava fuori
+        // da ogni layer, scriverli qui non sarebbe servito a niente.
+        className="min-w-0 flex-1 h-full border-0 p-0 bg-transparent text-[11px] text-[var(--color-base)] placeholder:text-[var(--color-dim)] outline-none [&::-webkit-search-cancel-button]:appearance-none"
       />
       {value && (
         <button

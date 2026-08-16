@@ -289,37 +289,52 @@ a.contrib-title:hover {
    CSS qui creava conflitti di specificity con `mx-auto` e simili utility. */
 
 /* ── Forms ───────────────────────────────────────────────────────── */
-input,
-textarea,
-select {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  background: var(--color-deep);
-  color: var(--color-bright);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 8px 12px;
-  width: 100%;
-  outline: none;
-  transition: border-color 0.15s;
-}
+/* In @layer base per la stessa ragione dei titoli qui sopra, e va detta per
+   intero perché qui il costo era invisibile: una regola di ELEMENTO fuori da
+   ogni layer batte OGNI utility Tailwind, a parità di specificity e senza
+   `!important`. Finché è stata qui fuori, `text-[11px]`, `px-3`, `py-2`,
+   `bg-transparent` scritte su un input erano codice morto — non "poco
+   efficaci": ignorate. Il campo di ricerca di /positions veniva 44px dentro
+   un contenitore da 37 e usciva dal proprio bordo arrotondato; ma il danno
+   più grande era il prossimo: chiunque scriva una classe su un input da qui
+   in avanti se la vede sparire senza capire perché, e la aggira con un
+   `!important` o con uno style inline.
+   Dentro il layer questi valori restano il DEFAULT dell'elemento — chi non
+   scrive niente ottiene esattamente quello di prima — e perdono contro chi
+   una classe la scrive, che è il senso della cascata a layer. */
+@layer base {
+  input,
+  textarea,
+  select {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    background: var(--color-deep);
+    color: var(--color-bright);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
 
-input:hover,
-textarea:hover,
-select:hover {
-  border-color: var(--color-border-glow);
-}
+  input:hover,
+  textarea:hover,
+  select:hover {
+    border-color: var(--color-border-glow);
+  }
 
-input:focus,
-textarea:focus,
-select:focus {
-  border-color: var(--color-green);
-  box-shadow: 0 0 0 2px #00e87a12;
-}
+  input:focus,
+  textarea:focus,
+  select:focus {
+    border-color: var(--color-green);
+    box-shadow: 0 0 0 2px #00e87a12;
+  }
 
-input::placeholder,
-textarea::placeholder {
-  color: var(--color-dim);
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-dim);
+  }
 }
 
 label {
