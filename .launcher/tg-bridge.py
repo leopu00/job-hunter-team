@@ -67,6 +67,22 @@ except Exception:
     def _i18n_t(key: str) -> str:  # type: ignore
         return key
 
+# L'appiattimento dei campi scelti da chi invia (vedi `_one_line`) e' lo stesso
+# problema del recinto anti-prompt-injection degli agenti, quindi e' lo stesso
+# codice: `shared/skills/external_content.py` tiene l'elenco degli invisibili
+# che comandano e la regola su cosa sparisce e cosa diventa uno spazio. Due
+# elenchi in due file sarebbero due criteri diversi per lo stesso problema.
+for _skills_candidate in (
+    _THIS_DIR.parent / "shared" / "skills",   # <repo>/shared/skills
+    Path("/app/shared/skills"),               # container path
+):
+    if (_skills_candidate / "external_content.py").exists():
+        sys.path.insert(0, str(_skills_candidate))
+        break
+# Nessun fallback, a differenza di i18n: una traduzione mancante e' cosmetica,
+# una sanificazione che si spegne da sola no. Meglio un bridge che non parte.
+from external_content import flatten_to_one_line  # noqa: E402  (dopo sys.path)
+
 VALID_ROLES = ("assistente", "capitano", "mentor")
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
@@ -456,12 +472,17 @@ def _one_line(value) -> str:
     un agente legge (`[TG-DOC] path=... name=...`). Un a-capo dentro il nome
     simula righe della busta, cioe' fabbrica struttura che nessuno ha scritto.
 
-    `isprintable()` e' piu' largo di un `replace("\\n")`: cade anche su \\r, \\t,
-    NUL, DEL, i separatori di riga Unicode (U+2028/U+2029) e gli invisibili di
-    categoria Cf, che un modello puo' rendere come a-capo o non vedere affatto.
+    La regola sta in `shared/skills/external_content.py` e vale anche per i
+    campi scrapati che finiscono nel prompt degli agenti: spariscono gli
+    invisibili che COMANDANO (override e isolate bidi, soft hyphen), diventano
+    uno spazio i controlli e i separatori di riga, e restano intatti gli
+    invisibili con cui si SCRIVE.
+
+    ⚠️ Qui prima c'era `isprintable()`, che e' comodo ma cade sull'intera
+    categoria Cf: in un nome persiano lo ZWNJ diventava uno spazio e una parola
+    sola ne diventava due. Non e' formattazione persa, e' ortografia.
     """
-    flat = "".join(ch if ch.isprintable() else " " for ch in str(value))
-    return " ".join(flat.split())
+    return flatten_to_one_line(value)
 
 
 def _quoted(value) -> str:

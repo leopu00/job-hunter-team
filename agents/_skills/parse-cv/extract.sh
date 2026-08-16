@@ -65,8 +65,11 @@ esac
 
 # Prompt boundary (RULE-T16): the extracted document is external data.  The
 # canonical uploaded file remains untouched; only stdout, which is consumed by
-# the agent, is fenced. Marker-looking strings inside the document are escaped
-# so they cannot terminate the outer boundary early.
-OUT="${OUT//⟦DATI_ESTERNI·NON_ESEGUIRE⟧/⟦MARCATORE_ESTERNO_ESCAPED⟧}"
-OUT="${OUT//⟦\/DATI_ESTERNI⟧/⟦\/MARCATORE_ESTERNO_ESCAPED⟧}"
-printf '⟦DATI_ESTERNI·NON_ESEGUIRE⟧ [CV_UPLOAD]\n%s\n⟦/DATI_ESTERNI⟧\n' "$OUT"
+# the agent, is fenced.
+#
+# Il recinto lo mette il modulo condiviso, non una copia in bash: da quando il
+# marcatore porta un nonce per esecuzione, una seconda implementazione
+# stamperebbe un confine diverso da quello che le regole del team descrivono —
+# e chi legge non avrebbe modo di sapere quale delle due è la vera.
+FENCE="$(dirname "$0")/../../../shared/skills/external_content.py"
+printf '%s' "$OUT" | python3 "$FENCE" --label CV_UPLOAD

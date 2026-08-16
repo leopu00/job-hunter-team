@@ -2,7 +2,7 @@
 ---
 name: position-insert
 description: "Az 5 kapus szekvencia, amelyet a Scout MINDEN jelolt poziciohoz vegrehajt, mielott INSERTelne a `positions` tablaba: dedup → link-ellenorzes → JD lekerdezes → megenged szurok → INSERT. Barmely kapu kihagyasa duplikatumokkal, halott linkekkel vagy hatalytalanul szurt sorokkal tolti meg az adatbazist, amelyeket aztan az Analistanak kell eldobnia — elpazarolt Sonnet-koltsegvetes downstream. A Scout szerephez tartozik; parja a `circles-and-sources` (meghatározza, HOL keresunk) es a `scout-coord` (meghatározza, KI hol keres)."
-allowed-tools: Bash(curl *), Bash(python3 *), Bash(grep *)
+allowed-tools: Bash(python3 *), Bash(grep *)
 ---
 
 # position-insert — 5 kapu pozicionkent
@@ -22,13 +22,12 @@ A dedup-kulcs a kanonikus URL (vagy LinkedIn allasjegyzek-ID LinkedIn eseten). H
 
 ## Gate 2 — Link-ellenorzes (HTTP + URL)
 
-Ketlepcsos `curl` a halott hirdeteesek ES a csendes atiranyitasok felismeresere egy generikus `/careers` oldalra (= allas eltavolitva, de az oldal 200-at ad vissza).
+Ketlepcsos ellenorzes a halott hirdeteesek ES a csendes atiranyitasok felismeresere egy generikus `/careers` oldalra (= allas eltavolitva, de az oldal 200-at ad vissza).
 
 ### 2a lepes — statuszkod + vegleges URL
 
 ```bash
-curl -s -o /dev/null -w "HTTP:%{http_code} URL_FINALE:%{url_effective}" \
-  -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' '<URL>'
+python3 /app/shared/skills/safe_fetch.py --status '<URL>'
 ```
 
 | Eredmeny                                      | Teendo                                         |
@@ -40,7 +39,7 @@ curl -s -o /dev/null -w "HTTP:%{http_code} URL_FINALE:%{url_effective}" \
 ### 2b lepes — tartalmi jelek
 
 ```bash
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' '<URL>' \
+python3 /app/shared/skills/safe_fetch.py '<URL>' \
   | grep -i 'no longer accepting\|closed-job\|position has been filled\|expired\|job not found'
 ```
 
@@ -60,18 +59,23 @@ Mindig a **kanonikus** oldalt (`jobs.workable.com`) ellenorizd, nem a jelentkeze
 Az adatbazis-szerzodes megkoveteli, hogy a `--jd-text` es a `--requirements` TELJES legyen — a reszleges scrape-ek elrontjak az Analistat downstream.
 
 ```bash
-# 1. szint — curl bongeszo UA-val (a legtobb eset)
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' '<URL>' > $JHT_AGENT_DIR/tmp/jd-raw.html
+# 1. szint — ellenorzott fetch bongeszo UA-val (a legtobb eset)
+python3 /app/shared/skills/safe_fetch.py '<URL>' > $JHT_AGENT_DIR/tmp/jd-raw.html
 
 # 2. szint — JS-nehez oldalak (Wellfound, egyes egyedi karrieroldalak): playwright MCP hasznalata
 # 3. szint — tartalek: WebFetch / WebSearch
 ```
 
+> A `safe_fetch.py` szandekosan valtja le a `curl -L`-t: **minden**
+> atiranyitasi ugrast ellenoriz, es elutasitja a kontener halozatan
+> beluli cimeket. Ne terj vissza a csupasz `curl`-hoz — egy hirdetes
+> oldala, ami a `169.254.169.254`-re iranyit at, nem hirdetes oldala.
+
 Nyerd ki a **teljes szovegtorzset** (nem csak a cimet) es a **kovetelmenyek reszt** (keszsegek, tapasztalati evek, nyelvek). Ha az oldalnak van egyertelmu "Requirements" / "Must have" / "What you'll bring" szekcioja, maskold le szo szerint a `--requirements`-be.
 
 Blokkolt oldalak (NE hasznald a `fetch` MCP-t, a robots.txt blokkolja):
-- `linkedin.com` → hasznald a `linkedin_check.py`-t (hitelesitett) vagy `curl`-t bongeszo UA-val
-- `wellfound.com` → hasznald a `playwright`-ot vagy `curl`-t
+- `linkedin.com` → hasznald a `linkedin_check.py`-t (hitelesitett) vagy `safe_fetch.py`-t
+- `wellfound.com` → hasznald a `playwright`-ot vagy a `safe_fetch.py`-t
 
 ## Gate 4 — Megenged Scout-szintu szurok
 
@@ -138,7 +142,7 @@ Ha 2 Analistad van, valtogasd a ping celpontot a terheles elosztasa erdekeben (a
 
 - ❌ Gate 1 kihagyasa, "mert ujnak tunt" — a `check-url` olcso, mindig futtasd le.
 - ❌ Ures `--jd-text`-tel beszuras, "majd kesobb kitoltom" — nincs kesobb, az Analista kovetkezokent dolgozza fel.
-- ❌ Ellenorzes `curl`-lel `-L` nelkul — egy 302-es atiranyitas egy generikus `/careers` oldalra kovetesi atiranyitas nelkul elonek tunik; halott JD-t szurnal be.
+- ❌ Megallni az elso statusznal, az atiranyitasok kovetese nelkul — egy 302-es atiranyitas egy generikus `/careers` oldalra elonek tunik; a `safe_fetch.py --status` koveti oket, minden ugrast ellenorizve.
 - ❌ A jelentkezesi urlap ellenorzese Workable-on a kanonikus JD-oldal helyett — hamis pozitiv halott linkek.
 - ❌ `fetch` MCP hasznalata `linkedin.com` / `wellfound.com` oldalon — blokkolt, 403-as bannert kapsz a JD helyett.
 - ❌ A wrapper megkerulese `python3 -c "import sqlite3; INSERT ..."`-vel — megtoeri a dedup-invariansokat es a `found-by` koveteset, es most mar az adatbazis is visszautasitja: a `positions.url` UNIQUE. A `UNIQUE constraint failed: positions.url` azt jelenti, hogy a hirdetes mar bent van — vissza az 1. kapuhoz, ne probald ujra modositott URL-lel.

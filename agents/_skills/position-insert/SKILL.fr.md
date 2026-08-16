@@ -2,7 +2,7 @@
 ---
 name: position-insert
 description: "La séquence à 5 portes que le Scout exécute pour CHAQUE position candidate avant d'INSÉRER dans `positions` : dédup → vérification de lien → fetch JD → filtres permissifs → INSERT. Sauter une porte remplit la DB de doublons, liens morts ou lignes hors périmètre que l'Analista doit ensuite supprimer — budget Sonnet gaspillé en aval. Propriété du rôle Scout ; à associer avec `circles-and-sources` (décide OÙ chercher) et `scout-coord` (décide QUI cherche où)."
-allowed-tools: Bash(curl *), Bash(python3 *), Bash(grep *)
+allowed-tools: Bash(python3 *), Bash(grep *)
 ---
 
 # position-insert — 5 portes par position
@@ -22,13 +22,12 @@ La clé de dédup est l'URL canonique (ou l'ID de job LinkedIn pour LinkedIn). S
 
 ## Porte 2 — Vérification de lien (HTTP + URL)
 
-`curl` en deux étapes pour détecter les offres mortes ET les redirections silencieuses vers une page `/careers` générique (= job supprimé mais la page retourne 200).
+Vérification en deux étapes pour détecter les offres mortes ET les redirections silencieuses vers une page `/careers` générique (= job supprimé mais la page retourne 200).
 
 ### Étape 2a — code de statut + URL finale
 
 ```bash
-curl -s -o /dev/null -w "HTTP:%{http_code} URL_FINALE:%{url_effective}" \
-  -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' '<URL>'
+python3 /app/shared/skills/safe_fetch.py --status '<URL>'
 ```
 
 | Résultat                                      | Action                                         |
@@ -40,7 +39,7 @@ curl -s -o /dev/null -w "HTTP:%{http_code} URL_FINALE:%{url_effective}" \
 ### Étape 2b — signaux de contenu
 
 ```bash
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' '<URL>' \
+python3 /app/shared/skills/safe_fetch.py '<URL>' \
   | grep -i 'no longer accepting\|closed-job\|position has been filled\|expired\|job not found'
 ```
 
@@ -60,18 +59,23 @@ Toujours vérifier la page **canonique** (`jobs.workable.com`), pas le formulair
 Le contrat DB exige que `--jd-text` et `--requirements` soient COMPLETS — les scrapes partiels cassent l'Analista en aval.
 
 ```bash
-# niveau 1 — curl avec UA navigateur (la plupart des cas)
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' '<URL>' > $JHT_AGENT_DIR/tmp/jd-raw.html
+# niveau 1 — fetch contrôlé avec UA navigateur (la plupart des cas)
+python3 /app/shared/skills/safe_fetch.py '<URL>' > $JHT_AGENT_DIR/tmp/jd-raw.html
 
 # niveau 2 — pages JS-heavy (Wellfound, certaines pages carrières custom) : utiliser playwright MCP
 # niveau 3 — fallback : WebFetch / WebSearch
 ```
 
+> `safe_fetch.py` remplace `curl -L` volontairement : il contrôle **chaque**
+> saut de redirection et refuse les adresses internes au réseau du
+> conteneur. Ne revenez pas au `curl` nu — une page d'offre qui redirige
+> vers `169.254.169.254` n'est pas une page d'offre.
+
 Extraire le **corps de texte complet** (pas seulement le titre) et la **section exigences** (compétences, années d'expérience, langues). Si la page a une section "Requirements" / "Must have" / "What you'll bring" claire, la scraper verbatim dans `--requirements`.
 
 Sites bloqués (NE PAS utiliser `fetch` MCP, bloqué par robots.txt) :
-- `linkedin.com` → utiliser `linkedin_check.py` (authentifié) ou `curl` avec UA navigateur
-- `wellfound.com` → utiliser `playwright` ou `curl`
+- `linkedin.com` → utiliser `linkedin_check.py` (authentifié) ou `safe_fetch.py`
+- `wellfound.com` → utiliser `playwright` ou `safe_fetch.py`
 
 ## Porte 4 — Filtres permissifs au niveau Scout
 
@@ -138,7 +142,7 @@ Si vous avez 2 Analystes, alterner la cible du ping pour équilibrer la charge (
 
 - ❌ Sauter la Porte 1 "parce que ça semblait nouveau" — `check-url` est bon marché, toujours l'exécuter.
 - ❌ Insérer avec `--jd-text` vide "je le remplirai plus tard" — il n'y a pas de plus tard, l'Analista le traite ensuite.
-- ❌ Vérifier avec `curl` sans `-L` — un 302 vers un `/careers` générique semble vivant sans suivi de redirection ; vous inséreriez un JD mort.
+- ❌ S'arrêter au premier statut sans suivre les redirections — un 302 vers un `/careers` générique semble vivant ; `safe_fetch.py --status` les suit, en contrôlant chaque saut.
 - ❌ Vérifier le formulaire de candidature sur Workable au lieu de la page JD canonique — liens morts faux positifs.
 - ❌ Utiliser `fetch` MCP sur `linkedin.com` / `wellfound.com` — bloqué, vous obtenez une bannière 403 au lieu du JD.
 - ❌ Contourner le wrapper avec `python3 -c "import sqlite3; INSERT ..."` — casse les invariants de dédup et le suivi `found-by`, et la DB le refuse désormais : `positions.url` est UNIQUE. `UNIQUE constraint failed: positions.url` veut dire que l'annonce est déjà dans la DB — retour au Gate 1, ne pas réessayer avec une URL retouchée.

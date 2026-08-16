@@ -1,7 +1,7 @@
 ---
 name: application-flow
 description: DB + filesystem contract every Scrittore follows when taking a position from `scored` (≥50) to `ready`/`excluded`. Three gates BEFORE writing a single line of CV (anti-rewriting, anti-collision, link verification), one canonical path for deliverables, one final gate after the 3rd Critic round. Skipping any of these produces duplicate work, overwrites another Writer's claim, or — worst — pushes an `excluded`-grade CV to the user as `ready`. Owned by the Scrittore.
-allowed-tools: Bash(python3 *), Bash(curl *), Bash(mkdir -p *), Bash(find *), Bash(test *)
+allowed-tools: Bash(python3 *), Bash(mkdir -p *), Bash(find *), Bash(test *)
 ---
 
 # application-flow — claim, write, gate
@@ -67,8 +67,8 @@ Anti-collision contract details: `agents/_manual/anti-collision.md`.
 A JD that died between Phase 2 (Analyst) and now should NOT consume Critic budget. Two-level check:
 
 ```bash
-# Level 1 — curl with browser UA
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' "<JD-URL>" \
+# Level 1 — guarded fetch with browser UA
+python3 /app/shared/skills/safe_fetch.py "<JD-URL>" \
   | grep -i 'no longer accepting\|closed-job\|position has been filled\|expired\|job not found'
 ```
 

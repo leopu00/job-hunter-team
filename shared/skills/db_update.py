@@ -24,6 +24,7 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema, resolve_company_id, _column_exists
+from external_content import normalize_external_inline_fields
 import role_taxonomy
 import maintenance_log
 
@@ -171,6 +172,12 @@ def interpret_escapes(text):
 
 
 def update_position(args):
+    # Stessa regola della INSERT: i campi che vengono dalla pagina restano una
+    # riga sola. Una correzione dell'Analista al titolo passa da qui, e senza
+    # questa riga rientrerebbe dalla porta di servizio quello che la INSERT
+    # aveva tolto.
+    normalize_external_inline_fields(args)
+
     conn = get_db()
     ensure_schema(conn)
 

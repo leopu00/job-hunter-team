@@ -2,7 +2,7 @@
 ---
 name: application-flow
 description: DB + fájlrendszer-szerződés, amelyet minden Scrittore követ, amikor egy pozíciót `scored` (≥50) állapotból `ready`/`excluded` állapotba visz. Három kapu a CV írása ELŐTT (anti-újraírás, anti-ütközés, link-ellenőrzés), egy kanonikus útvonal a végtermékeknek, egy záró kapu a 3. Critic kör után. Bármelyik kihagyása dupla munkát, másik Író foglalásának felülírását eredményezi — vagy ami a legrosszabb — egy `excluded` szintű CV-t küld el a felhasználónak `ready` státuszban. A Scrittore felelőssége.
-allowed-tools: Bash(python3 *), Bash(curl *), Bash(mkdir -p *), Bash(find *), Bash(test *)
+allowed-tools: Bash(python3 *), Bash(mkdir -p *), Bash(find *), Bash(test *)
 ---
 
 # application-flow — foglalás, írás, kapu
@@ -68,8 +68,8 @@ Az anti-ütközés szerződés részletei: `agents/_manual/anti-collision.md`.
 Egy JD, ami a Phase 2 (Analyst) és most között elhalt, NEM szabad, hogy Critic költségvetést fogyasszon. Kétszintű ellenőrzés:
 
 ```bash
-# 1. szint — curl böngésző UA-val
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' "<JD-URL>" \
+# 1. szint — ellenorzott fetch bongeszo UA-val
+python3 /app/shared/skills/safe_fetch.py "<JD-URL>" \
   | grep -i 'no longer accepting\|closed-job\|position has been filled\|expired\|job not found'
 ```
 
