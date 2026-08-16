@@ -163,7 +163,7 @@ def test_il_filtro_non_stampa_niente_se_le_regole_non_si_caricano(tmp_path):
 
     assert done.returncode == 1
     assert FAKE_GITHUB not in done.stdout
-    assert "regole non trovate" in done.stderr
+    assert "rules not found" in done.stderr
 
 
 def test_le_regole_sono_quelle_del_web_non_una_seconda_copia():
@@ -185,7 +185,7 @@ def test_le_regole_sono_quelle_del_web_non_una_seconda_copia():
     )
     assert quante.returncode == 0, quante.stderr
     dichiarate = condivise.read_text(encoding="utf-8").count('key: "')
-    assert f"{dichiarate} regole" in quante.stdout, quante.stdout
+    assert f"{dichiarate} rules" in quante.stdout, quante.stdout
 
 
 def test_lo_stub_di_curl_registra_davvero(box):

@@ -53,11 +53,11 @@ async function loadRules() {
     }
     const mod = await import(`file://${candidate}`);
     if (!Array.isArray(mod.REDACTION_RULES) || mod.REDACTION_RULES.length === 0) {
-      throw new Error(`regole vuote in ${candidate}`);
+      throw new Error(`empty rule set in ${candidate}`);
     }
     return mod.REDACTION_RULES;
   }
-  throw new Error(`regole non trovate; cercate in: ${tried.join(", ")}`);
+  throw new Error(`rules not found; looked in: ${tried.join(", ")}`);
 }
 
 function readStdin() {
@@ -95,10 +95,10 @@ async function main() {
     const sample = "Authorization: Bearer abcdefghijklmnop";
     const cleaned = apply(rules, sample, true);
     if (cleaned.includes("abcdefghijklmnop")) {
-      process.stderr.write("redact-cli: selftest FALLITO (nulla è stato redatto)\n");
+      process.stderr.write("redact-cli: selftest FAILED (nothing was redacted)\n");
       process.exit(1);
     }
-    process.stdout.write(`redact-cli ok — ${rules.length} regole\n`);
+    process.stdout.write(`redact-cli ok — ${rules.length} rules\n`);
     return;
   }
 
