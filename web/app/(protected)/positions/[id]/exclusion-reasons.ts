@@ -58,6 +58,39 @@ export function needsFreeText(reason: string | null | undefined): boolean {
   return reason === "other";
 }
 
+/**
+ * Che cosa deve succedere quando l'utente dice «non mi interessa» e sceglie
+ * un motivo. È una funzione pura di proposito: la regola che separa un fatto
+ * da un gusto è IL contenuto di questo ticket, e va potuta verificare senza
+ * un browser.
+ *
+ *  · `exclude`  → la posizione esce dal giro (route user-exclude) e nessun
+ *                 segnale di gusto viene registrato;
+ *  · `feedback` → giudizio negativo con il motivo attaccato;
+ *  · `invalid`  → non c'è abbastanza per registrare niente. Nessuna delle tre
+ *                 strade scrive un segnale negativo senza motivo.
+ */
+export type NegativeSignal =
+  | { kind: "exclude"; reason: ReasonKey; note?: string }
+  | { kind: "feedback"; reason: ReasonKey; comment?: string }
+  | { kind: "invalid"; missing: "reason" | "text" };
+
+export function negativeSignalFor(
+  reason: string | null | undefined,
+  note: string | null | undefined,
+): NegativeSignal {
+  const key = (reason ?? "").trim() as ReasonKey;
+  if (!key || !REASON_ORDER.includes(key)) {
+    return { kind: "invalid", missing: "reason" };
+  }
+  const text = (note ?? "").trim();
+  if (needsFreeText(key) && !text) return { kind: "invalid", missing: "text" };
+  if (isFactualReason(key)) {
+    return { kind: "exclude", reason: key, ...(text ? { note: text } : {}) };
+  }
+  return { kind: "feedback", reason: key, ...(text ? { comment: text } : {}) };
+}
+
 export const REASON_LABELS: Record<Locale, Record<ReasonKey, string>> = {
   it: {
     closed: "Chiusa / non più attiva",
