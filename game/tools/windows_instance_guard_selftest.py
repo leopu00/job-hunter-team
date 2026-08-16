@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 GAME = Path(__file__).resolve().parents[1]
+ROOT = GAME.parent
 SOURCE = GAME / "scripts/support/windows_instance_guard.ps1"
 CONSUMER = GAME / "scripts/support/windows_instance_guard.gd"
 
@@ -28,12 +29,17 @@ def main() -> None:
     game = (GAME / "scripts/game.gd").read_text(encoding="utf-8")
     pck_gate = (GAME / "tools/windows_update_health_pck_test.ps1").read_text(
         encoding="utf-8")
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
 
     require(0 < len(raw) < 10_000, f"guard source size={len(raw)}")
     require(not raw.startswith(b"\xef\xbb\xbf"), "guard source has UTF-8 BOM")
     require(raw.endswith(b"\n") and b"\r" not in raw and b"\0" not in raw,
             "guard source is not LF/no-NUL canonical")
     require(all(byte < 128 for byte in raw), "guard source must remain ASCII/UTF-8")
+    require(
+        attributes.splitlines().count("*.ps1 text eol=lf") == 1,
+        "Windows checkout can rewrite the pinned PowerShell source to CRLF",
+    )
     source = raw.decode("utf-8", errors="strict")
     digest = hashlib.sha256(raw).hexdigest()
     pins = re.findall(r'const SOURCE_SHA256 := "([0-9a-f]{64})"', consumer)
