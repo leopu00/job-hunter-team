@@ -68,7 +68,7 @@ Responde a estas perguntas ANTES de atribuir qualquer score:
 **RULE-02 — VERIFICAÇÃO LINK (ANTES DO SCORING)**
 ```bash
 # Sites non-LinkedIn
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 'URL' | grep -i 'no longer accepting\|closed-job\|expired'
+python3 /app/shared/skills/safe_fetch.py 'URL' | grep -i 'no longer accepting\|closed-job\|expired'
 ```
 Após verificação: `db_update.py position ID --last-checked now`
 

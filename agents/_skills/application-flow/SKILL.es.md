@@ -2,7 +2,7 @@
 ---
 name: application-flow
 description: Contrato de DB + filesystem que cada Scrittore sigue cuando lleva una posición de `scored` (≥50) a `ready`/`excluded`. Tres puertas ANTES de escribir una sola línea de CV (anti-reescritura, anti-colisión, verificación de enlace), una ruta canónica para entregables, una puerta final después de la 3.ª ronda del Critic. Saltarse cualquiera de estas produce trabajo duplicado, sobrescribe la reclamación de otro Writer, o — peor — envía un CV de grado `excluded` al usuario como `ready`. Propiedad del Scrittore.
-allowed-tools: Bash(python3 *), Bash(curl *), Bash(mkdir -p *), Bash(find *), Bash(test *)
+allowed-tools: Bash(python3 *), Bash(mkdir -p *), Bash(find *), Bash(test *)
 ---
 
 # application-flow — reclamar, escribir, validar
@@ -68,8 +68,8 @@ Detalles del contrato anti-colisión: `agents/_manual/anti-collision.md`.
 Un JD que murió entre la Fase 2 (Analyst) y ahora NO debería consumir presupuesto del Critic. Verificación de dos niveles:
 
 ```bash
-# Nivel 1 — curl con UA de navegador
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' "<JD-URL>" \
+# Nivel 1 — fetch verificado con UA de navegador
+python3 /app/shared/skills/safe_fetch.py "<JD-URL>" \
   | grep -i 'no longer accepting\|closed-job\|position has been filled\|expired\|job not found'
 ```
 
