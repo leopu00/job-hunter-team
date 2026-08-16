@@ -95,8 +95,13 @@ _STRUCTURAL_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
 # sono lettere e non hanno mai avuto nulla a che vedere con questo filtro.
 #
 # Restano fuori i comandi bidirezionali — override e isolate — che riscrivono
-# l'ordine di lettura senza lasciare traccia, e gli invisibili che dicono DOVE
-# SI PUÒ ANDARE A CAPO: soft hyphen, zero-width space, word joiner, ZWNBSP.
+# l'ordine di lettura senza lasciare traccia, gli invisibili che dicono DOVE SI
+# PUÒ ANDARE A CAPO (soft hyphen, zero-width space, word joiner, ZWNBSP) e i
+# caratteri che portano un testo nascosto: tag e annotazioni interlineari.
+#
+# ⚠️ La distinzione è OVERRIDE contro MARCA, non «tutto ciò che è invisibile».
+# `U+200E` (LRM) e `U+200F` (RLM) restano: sono marche di direzione, servono a
+# rendere correttamente l'arabo e non riscrivono l'ordine di nulla.
 # La differenza con ZWNJ e ZWJ non è di categoria ma di lingua: questi non
 # cambiano nessuna parola in nessuna scrittura, e infatti si tolgono senza
 # metterci uno spazio — `cv<ZWSP>.pdf` deve tornare `cv.pdf`, non `cv .pdf`.
@@ -106,17 +111,35 @@ _STRUCTURAL_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
 # lo stesso motivo, e li prende da qui: due elenchi in due file sono due criteri
 # diversi per lo stesso problema, che è il difetto chiuso in questo modulo
 # quando i marcatori del recinto stavano in tre copie.
-INVISIBLE_COMMANDS = frozenset(
-    "\u00ad"  # SOFT HYPHEN: `Back<SHY>end` deve tornare `Backend`, non `Back end`
-    "\u200b\u2060\ufeff"  # ZWSP, WORD JOINER, ZWNBSP: dove si può andare a capo
-    "\u202a\u202b\u202c\u202d\u202e"  # LRE RLE PDF LRO RLO
-    "\u2066\u2067\u2068\u2069"  # LRI RLI FSI PDI
+def _codepoints(first, last):
+    """Un intervallo di codepoint come insieme di caratteri, estremi inclusi."""
+    return frozenset(chr(code) for code in range(first, last + 1))
+
+
+INVISIBLE_COMMANDS = (
+    frozenset(
+        "\u00ad"  # SOFT HYPHEN: `Back<SHY>end` deve tornare `Backend`, non `Back end`
+        "\u200b\u2060\ufeff"  # ZWSP, WORD JOINER, ZWNBSP: dove si può andare a capo
+        "\u202a\u202b\u202c\u202d\u202e"  # LRE RLE PDF LRO RLO
+        "\u2066\u2067\u2068\u2069"  # LRI RLI FSI PDI
+    )
+    # ANNOTAZIONI INTERLINEARI: aprono, separano e chiudono un testo che sta
+    # "sopra" un altro. Non è una lettera, è una struttura.
+    | _codepoints(0xFFF9, 0xFFFB)
+    # TAG CHARACTERS. Ognuno ha un ASCII corrispondente che il modello legge e
+    # che l'umano non vede: `U+E0049` è una `I`. Non è un carattere sospetto in
+    # mezzo a una parola — con questi si scrive una FRASE INTERA invisibile
+    # («IGNORE ALL PREVIOUS INSTRUCTIONS» appesa a un titolo normale), e il
+    # recinto proteggerebbe un testo di cui chi rilegge vede solo metà.
+    # Toglierli cancella la frase per intero, perché il carattere tag È la
+    # lettera: non resta un buco, resta il titolo vero.
+    | _codepoints(0xE0000, 0xE007F)
 )
 
 # Invisibili sì, comandi no: con questi si scrive. Stanno qui per poter essere
 # citati da un test — la garanzia che sopravvivano è che NON siano in
 # `INVISIBLE_COMMANDS` e che la loro categoria non sia fra quelle strutturali.
-WRITING_INVISIBLES = frozenset("\u200c\u200d")  # ZWNJ, ZWJ
+WRITING_INVISIBLES = frozenset("\u200c\u200d\u200e\u200f")  # ZWNJ, ZWJ, LRM, RLM
 
 
 def _defang_markers(text):
