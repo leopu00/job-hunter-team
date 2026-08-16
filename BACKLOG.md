@@ -253,7 +253,7 @@
 - ⬜ **[JHT-LAUNCH-05]** monitoring freeze window · **[JHT-LAUNCH-06]** awesome-lists submissions · **[JHT-LAUNCH-07]** beta recruitment · **[JHT-LAUNCH-10]** press kit.
 - ⬜ **[JHT-TEST-CAMPAIGN]** — publish the remaining documented runs (see the matrix in [`docs/guides/BETA.md`](docs/guides/BETA.md)).
 - ✅ **[JHT-VPS-COMPARISON-DOC]** *(chiuso — riverificato 14/08)* — `docs/guides/CHOOSE-WHERE-TO-RUN.md` (`d438c4a87`) ha la sezione «Decision tree» coi tre percorsi e dichiara i limiti di quello dedicato. ⤷ *voce storica:* — honest decision tree: local PC vs dedicated PC vs VPS.
-- ⬜ **[JHT-DOCS-FAQ]** — FAQ ("why not LangChain/AutoGen/CrewAI?") · **[JHT-AI-AGENT-EXAMPLES]** — example prompts for AI assistants driving `jht`.
+- 🟡 **[JHT-DOCS-FAQ]** — FAQ ("why not LangChain/AutoGen/CrewAI?"). **Misurato 16/08:** consegnata come `docs/about/FAQ.md` sul branch `docs` (`aa1434709`), linkata dai due indici, in attesa di merge — la chiusura resta al direttore. · ⬜ **[JHT-AI-AGENT-EXAMPLES]** — example prompts for AI assistants driving `jht`.
 - ⬜ Phase-5 leftovers — subdomains (app/docs/api), launcher screenshots, visual FAQ, short video tutorials.
 
 ## 🆕 Aperti dal 2026-08-10 (dal registro operativo)
