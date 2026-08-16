@@ -60,6 +60,7 @@ import { ScoreAssessedAt } from "./ScoreAssessedAt";
 import { OverviewScoreBadge } from "./OverviewScoreBadge";
 import { OverviewFactRow, OverviewFacts } from "./OverviewFacts";
 import { ExclusionDecidedAt } from "./ExclusionDecidedAt";
+import { IconAlert, IconExternal } from "../icons";
 
 // Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
 // inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
@@ -546,7 +547,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     rel="noopener noreferrer"
                     className="text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
                   >
-                    {sourceDisplayName(position.source)} ↗
+                    {sourceDisplayName(position.source)} <IconExternal />
                   </a>
                 ) : (
                   sourceDisplayName(position.source)
@@ -646,7 +647,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
             title={t("open_in_maps")}
             className="max-w-[55%] shrink-0 text-right text-[10px] leading-snug text-[var(--color-blue)] no-underline transition-colors hover:text-[var(--color-bright)]"
           >
-            {exactAddress} ↗
+            {exactAddress} <IconExternal />
           </a>
         )}
       </div>
@@ -734,7 +735,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       rel="noopener noreferrer"
                       className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
                     >
-                      {t("original_listing")} ↗
+                      {t("original_listing")} <IconExternal />
                     </a>
                   )}
                 </>
@@ -940,7 +941,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       color: "var(--color-green)",
                     }}
                   >
-                    {t("cv_drive")} ↗
+                    {t("cv_drive")} <IconExternal />
                   </a>
                 )}
                 {application.cl_drive_id && (
@@ -954,7 +955,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       color: "var(--color-blue)",
                     }}
                   >
-                    {t("cover_letter_drive")} ↗
+                    {t("cover_letter_drive")} <IconExternal />
                   </a>
                 )}
               </div>
@@ -1064,7 +1065,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     className="text-[11px] leading-relaxed mt-2"
                     style={{ color: "var(--color-red)" }}
                   >
-                    <span aria-hidden="true">⚠</span> {company.red_flags}
+                    <IconAlert /> {company.red_flags}
                   </p>
                 )}
               </div>
@@ -1075,7 +1076,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   rel="noopener noreferrer"
                   className="mt-3 flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
                 >
-                  {t("company_website")} ↗
+                  {t("company_website")} <IconExternal />
                 </a>
               )}
             </div>
@@ -1308,7 +1309,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   color: "var(--color-blue)",
                 }}
               >
-                {t("original_listing")} ↗
+                {t("original_listing")} <IconExternal />
               </a>
             )}
           </div>

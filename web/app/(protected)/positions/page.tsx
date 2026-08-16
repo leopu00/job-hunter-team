@@ -23,6 +23,7 @@ import {
 import { getServerLocale } from "@/lib/server-locale";
 import type { PositionWithScore } from "@/lib/types";
 import { cookies } from "next/headers";
+import ActorIcon from "@/app/components/ActorIcon";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
 import UnseenDot from "@/app/components/UnseenDot";
 import ColumnsPicker from "./ColumnsPicker";
@@ -35,6 +36,7 @@ import {
   parseColumnsCookie,
   type PositionsColumnKey,
 } from "./columns";
+import { IconSort } from "./icons";
 import PositionsShell from "./PositionsShell";
 import TableScrollSync from "./TableScrollSync";
 import { intlTag } from "@/lib/locale-tag";
@@ -154,17 +156,6 @@ const CRITIC_COLORS: Record<string, string> = {
   PASS: "var(--color-green)",
   NEEDS_WORK: "var(--color-yellow)",
   REJECT: "var(--color-red)",
-};
-
-// Emoji per ruolo dell'ultima azione (colonna "Aggiornato da"). Allineato a
-// RecentPositionsTable per coerenza tra dashboard e /positions.
-const ACTOR_EMOJI: Record<string, string> = {
-  scout: "🔍",
-  analista: "🔬",
-  scorer: "🎯",
-  scrittore: "✍️",
-  critico: "⚖️",
-  user: "👤",
 };
 
 // Range stipendio annuo compatto in "k", convertito nella valuta scelta
@@ -400,8 +391,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
 
   // Freccetta su OGNI colonna: attiva = ↑/↓, inattiva = ↕ (segnala che è
   // ordinabile). Lo stile dim/bright lo dà già il colore del th.
-  const sortIndicator = (col: string) =>
-    sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : " ↕";
+  const sortIndicator = (col: string) => (
+    <IconSort dir={sortCol === col ? sortDir : "none"} />
+  );
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
@@ -723,15 +715,18 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       >
                         <span className="inline-flex items-center gap-1.5">
                           {sortable ? (
+                            // gap-1 (4px) + icona 12px = i 16px che
+                            // `SORT_ARROW_PX` mette in conto nella larghezza
+                            // minima della colonna: ora è una misura vera e
+                            // non la larghezza che il sistema operativo dà a
+                            // una freccia di testo.
                             <Link
                               href={sortHref(col)}
-                              className="no-underline hover:text-[var(--color-green)] transition-colors"
+                              className="inline-flex items-center gap-1 no-underline hover:text-[var(--color-green)] transition-colors"
                               style={{ color: "inherit" }}
                             >
                               {label}
-                              <span aria-hidden="true">
-                                {sortIndicator(col)}
-                              </span>
+                              {sortIndicator(col)}
                             </Link>
                           ) : (
                             <span>{label}</span>
@@ -980,9 +975,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         >
                           {p.last_action_actor ? (
                             <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
-                              <span aria-hidden="true">
-                                {ACTOR_EMOJI[p.last_action_by ?? ""] ?? "🤖"}
-                              </span>
+                              <ActorIcon role={p.last_action_by} />
                               {p.last_action_actor}
                             </span>
                           ) : (

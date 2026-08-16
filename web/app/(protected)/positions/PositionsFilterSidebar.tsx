@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { UNCATEGORIZED_LABEL, colorForFamily } from "@/lib/position-classifier";
 import { useLocale } from "@/lib/use-locale";
 import RangeHistogram, { buildBins, type Range } from "./RangeHistogram";
+import { IconChevron, IconFilters } from "./icons";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./PositionsFilterSidebar.i18n";
 import {
@@ -440,7 +441,7 @@ export default function PositionsFilterSidebar({
           className="text-[10px] font-semibold tracking-[0.16em] uppercase flex items-center gap-2 cursor-pointer transition-colors hover:text-[var(--color-base)]"
           style={{ color: "var(--color-dim)" }}
         >
-          <span aria-hidden>⚙</span>
+          <IconFilters />
           {tr("filters")}
           {totalActive > 0 ? ` · ${totalActive}` : ""}
           <span aria-hidden className="text-[12px] leading-none">
@@ -595,7 +596,7 @@ export default function PositionsFilterSidebar({
                           lineHeight: 1,
                         }}
                       >
-                        {isOpen ? "▼" : "▶"}
+                        <IconChevron open={isOpen} size={9} />
                       </button>
                       {country.country}
                     </span>
@@ -731,12 +732,8 @@ function ChipSection({
           onClick={() => setOpen((o) => !o)}
           className="flex items-baseline gap-1.5 cursor-pointer min-w-0"
         >
-          <span
-            className="text-[8px]"
-            style={{ color: "var(--color-dim)" }}
-            aria-hidden
-          >
-            {open ? "▼" : "▶"}
+          <span style={{ color: "var(--color-dim)" }}>
+            <IconChevron open={open} size={10} />
           </span>
           <span
             className="text-[9.5px] font-semibold tracking-[0.16em] uppercase"
@@ -892,12 +889,8 @@ function Section({
           onClick={() => setOpen((o) => !o)}
           className="flex items-baseline gap-1.5 cursor-pointer min-w-0"
         >
-          <span
-            className="text-[8px]"
-            style={{ color: "var(--color-dim)" }}
-            aria-hidden
-          >
-            {open ? "▼" : "▶"}
+          <span style={{ color: "var(--color-dim)" }}>
+            <IconChevron open={open} size={10} />
           </span>
           <span
             className="text-[9.5px] font-semibold tracking-[0.16em] uppercase"

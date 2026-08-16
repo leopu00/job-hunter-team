@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconFilters } from "./icons";
 import PositionsFilterSidebar from "./PositionsFilterSidebar";
 import PositionsSearch from "./PositionsSearch";
 import SortPicker from "./SortPicker";
@@ -39,9 +40,14 @@ export default function PositionsShell({
       )}
       <div className="flex-1 min-w-0">
         {/* Toolbar: pulsante Filtri (solo da chiuso) a sinistra, righe per
-            pagina a destra. h-8 + mb-4 = stessa altezza/margine della header
-            sidebar, così la tabella si allinea con la prima card. */}
-        <div className="mb-4 h-8 flex items-center justify-between gap-3">
+            pagina a destra. Da md: h-8 + mb-4 = stessa altezza/margine della
+            header sidebar, così la tabella si allinea con la prima card.
+            Sotto md la riga singola non ci sta — a 390px i chip 100/200
+            uscivano dal viewport — e va a capo: lì la sidebar è impilata,
+            quindi non c'è nessun allineamento da rispettare e l'altezza può
+            crescere. `flex-nowrap` esplicito da md perché il desktop resti
+            esattamente com'era. */}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 md:h-8 md:flex-nowrap md:gap-3">
           <span className="flex items-center gap-2">
             {collapsed ? (
               <button
@@ -56,7 +62,7 @@ export default function PositionsShell({
                   background: "var(--color-card)",
                 }}
               >
-                <span aria-hidden>⚙</span>
+                <IconFilters />
                 {filtersLabel}
               </button>
             ) : (
