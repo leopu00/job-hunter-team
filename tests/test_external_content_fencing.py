@@ -287,6 +287,47 @@ def test_a_fake_boundary_is_defanged_whatever_brackets_it_uses():
         assert shape not in module.flatten_external_value(f"a {shape} b"), shape
 
 
+
+# ── Un solo elenco, due strade ──────────────────────────────────────────
+
+
+def _bridge(monkeypatch, tmp_path):
+    """Il bridge Telegram, importato come lo importano i suoi test."""
+    monkeypatch.setenv("JHT_TG_BOT_ROLE", "assistente")
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    path = Path(__file__).resolve().parent.parent / ".launcher" / "tg-bridge.py"
+    spec = importlib.util.spec_from_file_location("tg_bridge_invisibles", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_envelope_and_the_fence_remove_the_same_invisibles(monkeypatch, tmp_path):
+    """Due elenchi sarebbero due criteri, e uno dei due invecchierebbe.
+
+    La busta del bridge appiattisce un nome di allegato, il recinto appiattisce
+    un titolo scrapato: problema identico, quindi codice identico. Il test non
+    confronta due liste — segue le due strade sullo stesso carattere, così si
+    rompe anche se una delle due smette di chiamare la funzione condivisa.
+    """
+    module = _module()
+    bridge = _bridge(monkeypatch, tmp_path)
+
+    for ch in sorted(module.INVISIBLE_COMMANDS):
+        assert module.flatten_external_value(f"Back{ch}end") == "Backend", repr(ch)
+        assert bridge._one_line(f"Back{ch}end.pdf") == "Backend.pdf", repr(ch)
+
+    for ch in sorted(module.WRITING_INVISIBLES):
+        assert module.flatten_external_value(f"Back{ch}end") == f"Back{ch}end"
+        assert bridge._one_line(f"Back{ch}end.pdf") == f"Back{ch}end.pdf"
+
+    # E i due invisibili che comandano non sono gli stessi con cui si scrive:
+    # se qualcuno spostasse ZWNJ fra i pericolosi, il test sopra passerebbe a
+    # vuoto perché il ciclo non avrebbe più nulla da provare.
+    assert module.INVISIBLE_COMMANDS.isdisjoint(module.WRITING_INVISIBLES)
+    assert module.WRITING_INVISIBLES
+
+
 # ── La prova: lo stesso payload nei due campi ───────────────────────────
 
 

@@ -94,14 +94,29 @@ _STRUCTURAL_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
 # per sempre. Passano intatti, quindi, insieme all'arabo e all'ebraico, che
 # sono lettere e non hanno mai avuto nulla a che vedere con questo filtro.
 #
-# Restano fuori solo i comandi bidirezionali — override e isolate — che
-# riscrivono l'ordine di lettura senza lasciare traccia, e il soft hyphen, che
-# in un titolo è un a capo tipografico e basta.
-_REMOVED_CHARACTERS = frozenset(
+# Restano fuori i comandi bidirezionali — override e isolate — che riscrivono
+# l'ordine di lettura senza lasciare traccia, e gli invisibili che dicono DOVE
+# SI PUÒ ANDARE A CAPO: soft hyphen, zero-width space, word joiner, ZWNBSP.
+# La differenza con ZWNJ e ZWJ non è di categoria ma di lingua: questi non
+# cambiano nessuna parola in nessuna scrittura, e infatti si tolgono senza
+# metterci uno spazio — `cv<ZWSP>.pdf` deve tornare `cv.pdf`, non `cv .pdf`.
+#
+# 📌 Questa lista è UNA SOLA per tutto il repo, e sta qui. La busta del bridge
+# Telegram (`.launcher/tg-bridge.py`) toglie gli invisibili dai nomi di file per
+# lo stesso motivo, e li prende da qui: due elenchi in due file sono due criteri
+# diversi per lo stesso problema, che è il difetto chiuso in questo modulo
+# quando i marcatori del recinto stavano in tre copie.
+INVISIBLE_COMMANDS = frozenset(
     "\u00ad"  # SOFT HYPHEN: `Back<SHY>end` deve tornare `Backend`, non `Back end`
+    "\u200b\u2060\ufeff"  # ZWSP, WORD JOINER, ZWNBSP: dove si può andare a capo
     "\u202a\u202b\u202c\u202d\u202e"  # LRE RLE PDF LRO RLO
     "\u2066\u2067\u2068\u2069"  # LRI RLI FSI PDI
 )
+
+# Invisibili sì, comandi no: con questi si scrive. Stanno qui per poter essere
+# citati da un test — la garanzia che sopravvivano è che NON siano in
+# `INVISIBLE_COMMANDS` e che la loro categoria non sia fra quelle strutturali.
+WRITING_INVISIBLES = frozenset("\u200c\u200d")  # ZWNJ, ZWJ
 
 
 def _defang_markers(text):
@@ -120,6 +135,28 @@ def fence_external_content(text, label=None):
     return f"{header}\n{safe}\n{CLOSE_MARKER}"
 
 
+def flatten_to_one_line(value):
+    """Una riga sola, senza invisibili che comandano — e niente di più.
+
+    Fuori dal recinto perché serve anche a chi il recinto non lo mette: la
+    busta del bridge Telegram deve appiattire un nome di file, non marcarlo
+    come dato esterno. Condividere la funzione, e non solo l'elenco, tiene
+    identico anche il CRITERIO: quali invisibili spariscono, quali diventano
+    uno spazio e quali sono lettere.
+    """
+    text = "".join(
+        ""
+        if ch in INVISIBLE_COMMANDS
+        else " "
+        if unicodedata.category(ch) in _STRUCTURAL_CATEGORIES
+        else ch
+        for ch in str(value or "")
+    )
+    # `split()` senza argomenti taglia su tutti gli spazi Unicode, quindi lo
+    # spazio unificatore e i suoi parenti finiscono qui senza doverli elencare.
+    return " ".join(text.split())
+
+
 def flatten_external_value(value):
     """One line, no control characters, markers defanged — still the value.
 
@@ -127,16 +164,7 @@ def flatten_external_value(value):
     listing cannot carry markers without stopping being a table, but it must
     not carry line breaks either.
     """
-    text = str(value or "")
-    text = "".join(
-        ""
-        if ch in _REMOVED_CHARACTERS
-        else " "
-        if unicodedata.category(ch) in _STRUCTURAL_CATEGORIES
-        else ch
-        for ch in text
-    )
-    return _defang_markers(" ".join(text.split()))
+    return _defang_markers(flatten_to_one_line(value))
 
 
 # ── Quali campi vengono da fuori ────────────────────────────────────────
