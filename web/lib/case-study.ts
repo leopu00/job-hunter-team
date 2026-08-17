@@ -55,7 +55,12 @@ export interface CaseStudyRun {
   // count = posizioni nella famiglia; scored = quante hanno uno score; avg =
   // media total_score sulle scorate (null/assente se nessuna). scored/avg sono
   // opzionali: snapshot precedenti all'aggiunta non li hanno.
-  categories: { name: string; count: number; scored?: number; avg?: number | null }[];
+  categories: {
+    name: string;
+    count: number;
+    scored?: number;
+    avg?: number | null;
+  }[];
   // Fonti da cui sono arrivate le posizioni (top-N + "Altre"). Opzionale:
   // assente negli snapshot generati prima dell'aggiunta del campo.
   sources?: { name: string; count: number }[];

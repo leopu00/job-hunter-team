@@ -6,7 +6,9 @@ export type PendingDirectiveRequest = {
 };
 
 export type DirectiveErrorTranslationKey =
-  "errGeneric" | "errMismatch" | "errNotFound";
+  | "errGeneric"
+  | "errMismatch"
+  | "errNotFound";
 
 export function directiveErrorTranslationKey(
   value: unknown,

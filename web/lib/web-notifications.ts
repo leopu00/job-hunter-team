@@ -84,18 +84,23 @@ function asRule(v: unknown): NotificationRule | null {
   if (typeof r.id !== "string" || !r.id) return null;
   const trigger: RuleTrigger = r.trigger === "new" ? "new" : "scored";
   const workMode: RuleWorkMode =
-    r.workMode === "remote" || r.workMode === "hybrid" || r.workMode === "onsite"
+    r.workMode === "remote" ||
+    r.workMode === "hybrid" ||
+    r.workMode === "onsite"
       ? r.workMode
       : "any";
   const minScoreRaw = typeof r.minScore === "number" ? r.minScore : null;
   const minCountRaw = typeof r.minCount === "number" ? r.minCount : 1;
   return {
     id: r.id,
-    name: typeof r.name === "string" && r.name.trim() ? r.name.trim() : "Regola",
+    name:
+      typeof r.name === "string" && r.name.trim() ? r.name.trim() : "Regola",
     enabled: r.enabled !== false,
     trigger,
     minScore:
-      minScoreRaw == null ? null : Math.min(100, Math.max(0, Math.round(minScoreRaw))),
+      minScoreRaw == null
+        ? null
+        : Math.min(100, Math.max(0, Math.round(minScoreRaw))),
     locations: asStringArray(r.locations),
     countries: asStringArray(r.countries).map((c) => c.toUpperCase()),
     keywords: asStringArray(r.keywords),
@@ -108,7 +113,10 @@ export function normalizePrefs(raw: unknown): WebNotificationPrefs {
   if (typeof raw !== "object" || raw === null) return { ...DEFAULT_PREFS };
   const p = raw as Record<string, unknown>;
   const rules = Array.isArray(p.rules)
-    ? p.rules.map(asRule).filter((r): r is NotificationRule => r !== null).slice(0, 30)
+    ? p.rules
+        .map(asRule)
+        .filter((r): r is NotificationRule => r !== null)
+        .slice(0, 30)
     : [];
   return {
     enabled: p.enabled === true,
@@ -126,7 +134,10 @@ function containsAny(haystack: string, needles: string[]): boolean {
   return needles.some((n) => h.includes(n.toLowerCase()));
 }
 
-function matchesWorkMode(rule: NotificationRule, row: PositionEventRow): boolean {
+function matchesWorkMode(
+  rule: NotificationRule,
+  row: PositionEventRow,
+): boolean {
   if (rule.workMode === "any") return true;
   const wm = (row.work_mode ?? "").toLowerCase().replace("-", "");
   if (wm) {

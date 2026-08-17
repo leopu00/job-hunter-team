@@ -58,12 +58,7 @@ type LockedEvent = Pick<
 >;
 
 export function attachTouchAxisLock(target: TouchAxisLockTarget): () => void {
-  const {
-    el,
-    setDragPanEnabled,
-    onHorizontalStart,
-    onHorizontalEnd,
-  } = target;
+  const { el, setDragPanEnabled, onHorizontalStart, onHorizontalEnd } = target;
   let startX = 0;
   let startY = 0;
   // null = ancora indeciso. "x" = il gesto è del globo. "y" = della pagina.

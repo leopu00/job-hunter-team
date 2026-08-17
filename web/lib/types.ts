@@ -146,7 +146,12 @@ export interface Company {
 
 // ── Application ────────────────────────────────────────────────────
 export type ApplicationStatus =
-  "draft" | "review" | "approved" | "applied" | "response" | "ready";
+  | "draft"
+  | "review"
+  | "approved"
+  | "applied"
+  | "response"
+  | "ready";
 
 export interface Application {
   id: string;
@@ -278,7 +283,10 @@ export interface PositionWithScore extends Position {
 // su Supabase e mostrato sulla dashboard quando `delivered_via = 'web'`
 // (Telegram non configurato/down). L'utente puo' ack-are o rispondere.
 export type PendingMessageKind =
-  "notification" | "question" | "digest" | "alert";
+  | "notification"
+  | "question"
+  | "digest"
+  | "alert";
 export type PendingMessageDelivery = "telegram" | "web" | null;
 
 // [JHT-CHAT-UNIFY] Chi ha scritto il turno. 'agent' e' il default storico
