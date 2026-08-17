@@ -32,6 +32,13 @@ cli/bin/** text eol=lf
 # rule ogni reimport su Windows produce centinaia di "M" fantasma.
 *.import text eol=lf
 *.gd text eol=lf
+# `*.uid` mancava per lo stesso motivo per cui mancava `*.tsx` (#181): e' un
+# tipo di file nato dopo la regola — Godot 4.4 ne scrive uno per ogni script.
+# Misurato qui il 17/08: 173 dei 176 tracciati erano CRLF nel working tree, e
+# i 3 LF erano quelli che Godot aveva appena riscritto. Cioe' il primo che
+# tocca uno script si trova una "M" su un file il cui contenuto non e'
+# cambiato.
+*.uid text eol=lf
 *.tscn text eol=lf
 *.tres text eol=lf
 *.godot text eol=lf
