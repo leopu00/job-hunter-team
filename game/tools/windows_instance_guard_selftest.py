@@ -119,8 +119,6 @@ def main() -> None:
     )
     for path in consumers:
         target = path.read_text(encoding="utf-8")
-        if "func mark_windows_health_normal_work" in target:
-            continue  # game.gd dichiara la funzione: il suo gate e' gia' sopra
         require(
             "WindowsInstanceGuard.normal_work_allowed()" in target,
             "normal work is declared without the guard's refusal: "
