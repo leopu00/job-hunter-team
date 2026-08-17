@@ -58,6 +58,9 @@ privato viene cancellato del tutto.
 | **G4** roster | `cli/src/lib/api/tmux-read.js` | 18 ✅ |
 | **G2** auth | `shared/auth/local-token.js` · `cli/src/lib/api/auth.js` | 39 ✅ |
 | **G3** letture | `shared/queries/readonly-sqlite.js` · `shared/queries/schema-census.js` | 23 + 9 ✅ |
+| **G5** server | `cli/src/lib/api/handler.js` · `cli/src/lib/api/server.js` | 15 + 15 + 6 ✅ |
+
+**Totale: 125 test verdi su cinque gruppi di dieci.**
 
 Eseguiti **un file alla volta** (`cd tests/js && npx vitest run tasks/<f>.test.ts`),
 mai `npm test` lì dentro: `tests/js/package.json:7` ha un `pretest` che lancia
@@ -85,21 +88,22 @@ finisce in `logs/api.log` a ogni boot); e su Windows un handle lasciato aperto d
 ramo che eccepisce rende il file temporaneo `EBUSY` e non cancellabile — i test che
 aprono un DB su file devono chiudere in `finally`.
 
-## 4. Cosa è sul disco SENZA commit
+## 4. G5 recuperato — l'albero è pulito
 
-Il gruppo G5 stava scrivendo quando il lavoro si è fermato. Questi file esistono ma
-**non sono committati, non sono stati letti da me, non sono verificati**:
+Alla prima stesura di questo documento i cinque file di G5 erano sul disco senza
+commit, scritti mentre il workflow veniva fermato, e la nota diceva che potevano
+essere troncati. **Riletti e verificati poco dopo: erano completi**, e i tre file di
+test passano (15 + 15 + 6). Committati in `c78b143712`.
 
-```
-cli/src/lib/api/handler.js
-cli/src/lib/api/server.js
-tests/js/tasks/api-handler-auth-host.test.ts
-tests/js/tasks/api-handler-routes.test.ts
-tests/js/tasks/api-schema-census-route.test.ts
-```
+`git status` è vuoto. Non resta nulla di non committato da questo lavoro.
 
-`git status --short` li mostra. Vanno letti prima di fidarsene: potrebbero essere
-completi o troncati a metà.
+Nello stesso giro sono stati tracciati tre `.uid` di Godot che mancavano su questo
+branch mentre i `.gd` corrispondenti erano tracciati (`24a76e935a`). I blob sono
+**identici per SHA** a quelli di `c2a36a547e` su `origin/dev1`, quindi la
+confluenza non può confliggere. Nota per chi guarda i line ending: i blob sono LF,
+ma la regola `.gitattributes` per `*.uid` (`29cb6df632`) **non è ancora su questo
+branch** — arriverà con master, e fino a lì git avverte che la working copy passerà
+a CRLF. Non è un problema del repo.
 
 ## 5. Cosa resta da scrivere
 
@@ -110,7 +114,7 @@ rigenerato**: è il sintetizzato di 12 agenti e non vive nel repo.
 
 | Gruppo | Cosa | Nota di ripresa |
 |---|---|---|
-| **G5** server | handler puro Request→Response + `node:http` | in corso, vedi §4 |
+| ~~**G5** server~~ | ~~handler + `node:http`~~ | **fatto**, vedi §4 |
 | **G6** CLI | client con handshake, `jht api serve\|status`, registrazione | `resolveApiAccess()` è l'**unico** codice location-aware: rilocazione argv via `docker exec`, non un secondo percorso dati |
 | **G7** consumatori | le cancellazioni in `team/list.js` e `positions.js` | non cancellare `getActiveSessions`, `runSkill`, `runSkillCaptured`: hanno chiamanti vivi |
 | **G8** supervisione | `pid1.js`, undicesimo figlio | mai toccare il keep-alive a `pid1.js:1186`; due righe in `forwardSignal` |
