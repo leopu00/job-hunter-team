@@ -18,6 +18,9 @@ export const dynamic = "force-dynamic";
 // `positions.geocode_requested[_at]` (V8, mig 027). Pattern desired-state
 // per-row, estendibile a futuri flag user-driven mantenendo la stessa
 // shape della response (campi opzionali, client UPDATE solo le presenti).
+// Dal 2026-08-17 anche le CANDIDATURE decise sul web (#186): stesso pattern,
+// cursore proprio, ed e' la sola azione-utente che ha una tabella tutta sua
+// invece di una colonna su `positions`.
 //
 // Volume atteso: invocato al boot del team (jht team start) + opzionale
 // tick nel daemon. Pull "tutto modificato in finestra" cap default 7gg
@@ -150,6 +153,68 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // #186 — candidature decise dall'utente sul web. Il click «mi sono
+  // candidato» in cloud-mode scrive solo su Supabase; senza questo ritorno il
+  // box non lo sa mai. Non e' un difetto di vista: il team LEGGE quella
+  // tabella, quindi consiglia e pianifica su una fotografia in cui quelle
+  // candidature non ci sono. Misurato su una VPS: 19 sul cloud, 2 sul box.
+  //
+  // Cursore dedicato su `applications.updated_at`: una colonna sola su cui si
+  // filtra e si ordina (quindi la finestra converge sotto truncation, cosa che
+  // il filtro OR a 5 colonne dei flag posizione non garantisce), e sopravvive
+  // all'annullamento, che azzera `applied_at`. Best-effort come le reply: un
+  // errore qui non deve far cadere il pull dei flag.
+  //
+  // `applications` non ha `legacy_id` — la chiave e' `position_id` (UUID) —
+  // quindi l'id che il box conosce arriva dall'embed su `positions`, con
+  // `!inner` perche' una candidatura senza posizione non e' applicabile.
+  const appliedSinceParam = url.searchParams.get("applied_since");
+  const appliedSince = appliedSinceParam
+    ? new Date(appliedSinceParam)
+    : new Date(Date.now() - DEFAULT_LOOKBACK_MS);
+  let applications: Record<string, unknown>[] = [];
+  let appliedCursor = Number.isNaN(appliedSince.getTime())
+    ? null
+    : appliedSince.toISOString();
+  if (appliedCursor) {
+    const { data: appData, error: appError } = await admin
+      .from("applications")
+      .select(
+        "applied, applied_at, applied_via, status, updated_at, positions!inner(legacy_id)",
+      )
+      .eq("user_id", userId)
+      .gt("updated_at", appliedCursor)
+      .order("updated_at", { ascending: true })
+      .limit(500);
+    if (!appError && appData) {
+      applications = appData.map((row) => {
+        const embedded = row.positions as unknown;
+        const parent = Array.isArray(embedded) ? embedded[0] : embedded;
+        return {
+          legacy_id:
+            (parent as { legacy_id?: number } | null)?.legacy_id ?? null,
+          applied: row.applied ?? false,
+          applied_at: row.applied_at ?? null,
+          applied_via: row.applied_via ?? null,
+          status: row.status ?? null,
+          updated_at: row.updated_at ?? null,
+        };
+      });
+      // Confronto fra DATE e non fra stringhe, per la stessa trappola di
+      // sopra: Postgres emette `+00:00`, toISOString emette `Z`.
+      let maxMs = Date.parse(appliedCursor);
+      for (const a of applications) {
+        const ts = a.updated_at;
+        if (typeof ts !== "string") continue;
+        const ms = Date.parse(ts);
+        if (!Number.isNaN(ms) && ms > maxMs) {
+          maxMs = ms;
+          appliedCursor = ts;
+        }
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     positions,
@@ -157,5 +222,7 @@ export async function GET(req: NextRequest) {
     has_more: hasMore,
     pending_replies: pendingReplies,
     messages_cursor: messagesCursor,
+    applications,
+    applied_cursor: appliedCursor,
   });
 }

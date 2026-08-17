@@ -185,7 +185,11 @@ export function parseAnalysisNotes(
 // (preambolo + chiavi).
 
 export type ScoreDimensionKey =
-  "stack" | "remote" | "salary" | "experience" | "strategic";
+  | "stack"
+  | "remote"
+  | "salary"
+  | "experience"
+  | "strategic";
 
 export interface ParsedScoreBreakdown {
   // Razionale per dimensione: alimenta il dropdown sotto ogni barra.

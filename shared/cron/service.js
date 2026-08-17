@@ -1,8 +1,14 @@
 /**
  * JHT Cron — CronService: CRUD job + timer scheduling loop
  */
-import { loadCronStore, saveCronStore, resolveCronStorePath } from './store.js';
-import { createJob, applyJobPatch, isJobDue, recomputeNextRuns, nextWakeAtMs } from './jobs.js';
+import { loadCronStore, saveCronStore, resolveCronStorePath } from "./store.js";
+import {
+  createJob,
+  applyJobPatch,
+  isJobDue,
+  recomputeNextRuns,
+  nextWakeAtMs,
+} from "./jobs.js";
 
 export class CronService {
   #storePath;
@@ -39,7 +45,10 @@ export class CronService {
   }
 
   #armTimer() {
-    if (this.#timer) { clearTimeout(this.#timer); this.#timer = null; }
+    if (this.#timer) {
+      clearTimeout(this.#timer);
+      this.#timer = null;
+    }
     if (!this.#store) return;
     const wake = nextWakeAtMs(this.#store.jobs);
     if (wake === null) return;
@@ -58,13 +67,13 @@ export class CronService {
 
       for (const job of dueJobs) {
         job.state.runningAtMs = now;
-        this.#emit({ jobId: job.id, action: 'started', runAtMs: now });
+        this.#emit({ jobId: job.id, action: "started", runAtMs: now });
 
         let result;
         try {
           result = await this.#onExecute(job);
         } catch (err) {
-          result = { status: 'error', error: err.message || String(err) };
+          result = { status: "error", error: err.message || String(err) };
         }
 
         const endMs = Date.now();
@@ -74,7 +83,7 @@ export class CronService {
         job.state.lastDurationMs = endMs - now;
         job.state.lastError = result.error;
 
-        if (result.status === 'ok') {
+        if (result.status === "ok") {
           job.state.consecutiveErrors = 0;
         } else {
           job.state.consecutiveErrors = (job.state.consecutiveErrors || 0) + 1;
@@ -83,12 +92,15 @@ export class CronService {
         // One-shot: elimina dopo esecuzione
         if (job.deleteAfterRun) {
           this.#store.jobs = this.#store.jobs.filter((j) => j.id !== job.id);
-          this.#emit({ jobId: job.id, action: 'removed' });
+          this.#emit({ jobId: job.id, action: "removed" });
         }
 
         this.#emit({
-          jobId: job.id, action: 'finished', status: result.status,
-          error: result.error, durationMs: job.state.lastDurationMs,
+          jobId: job.id,
+          action: "finished",
+          status: result.status,
+          error: result.error,
+          durationMs: job.state.lastDurationMs,
         });
       }
 
@@ -108,7 +120,10 @@ export class CronService {
   }
 
   stop() {
-    if (this.#timer) { clearTimeout(this.#timer); this.#timer = null; }
+    if (this.#timer) {
+      clearTimeout(this.#timer);
+      this.#timer = null;
+    }
   }
 
   async status() {
@@ -125,7 +140,9 @@ export class CronService {
     const jobs = includeDisabled
       ? this.#store.jobs
       : this.#store.jobs.filter((j) => j.enabled);
-    return jobs.toSorted((a, b) => (a.state.nextRunAtMs ?? 0) - (b.state.nextRunAtMs ?? 0));
+    return jobs.toSorted(
+      (a, b) => (a.state.nextRunAtMs ?? 0) - (b.state.nextRunAtMs ?? 0),
+    );
   }
 
   async add(input) {
@@ -134,7 +151,11 @@ export class CronService {
     this.#store.jobs.push(job);
     await this.#persist();
     this.#armTimer();
-    this.#emit({ jobId: job.id, action: 'added', nextRunAtMs: job.state.nextRunAtMs });
+    this.#emit({
+      jobId: job.id,
+      action: "added",
+      nextRunAtMs: job.state.nextRunAtMs,
+    });
     return job;
   }
 
@@ -145,7 +166,11 @@ export class CronService {
     applyJobPatch(job, patch);
     await this.#persist();
     this.#armTimer();
-    this.#emit({ jobId: id, action: 'updated', nextRunAtMs: job.state.nextRunAtMs });
+    this.#emit({
+      jobId: id,
+      action: "updated",
+      nextRunAtMs: job.state.nextRunAtMs,
+    });
     return job;
   }
 
@@ -157,17 +182,20 @@ export class CronService {
     if (removed) {
       await this.#persist();
       this.#armTimer();
-      this.#emit({ jobId: id, action: 'removed' });
+      this.#emit({ jobId: id, action: "removed" });
     }
     return { removed };
   }
 
-  async run(id, mode = 'due') {
+  async run(id, mode = "due") {
     await this.#ensureLoaded();
     const job = this.#store.jobs.find((j) => j.id === id);
     if (!job) throw new Error(`Job not found: ${id}`);
-    if (!isJobDue(job, Date.now(), { forced: mode === 'force' })) {
-      return { ran: false, reason: mode === 'force' ? 'already-running' : 'not-due' };
+    if (!isJobDue(job, Date.now(), { forced: mode === "force" })) {
+      return {
+        ran: false,
+        reason: mode === "force" ? "already-running" : "not-due",
+      };
     }
     // Esegui inline nel prossimo tick
     await this.#tick();

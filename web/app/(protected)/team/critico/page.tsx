@@ -9,6 +9,7 @@ import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { intlTag } from "@/lib/locale-tag";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";
+import ActorIcon from "@/app/components/ActorIcon";
 
 // ── Types ──────────────────────────────────────────────────────────
 interface LiveStats {
@@ -211,8 +212,9 @@ export default function CriticoPage() {
         </nav>
         <div className="mt-3 flex items-end justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-              ⚖️ {tr("critic")}
+            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-[var(--color-white)]">
+              <ActorIcon role="critico" size={22} />
+              {tr("critic")}
             </h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
               {tr("subtitle")}

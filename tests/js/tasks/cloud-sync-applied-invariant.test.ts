@@ -39,6 +39,9 @@ function postgrestInstant(value: string) {
   return new Date(ms).toISOString().replace("Z", "+00:00");
 }
 let profileRpcData: unknown = { changed: true };
+// La candidatura che il cloud oppone a un downgrade: `maybeSingle()` la
+// restituisce come farebbe la SELECT con la join sulle applications.
+let stalePositionRow: unknown = null;
 
 function fakeAdmin() {
   return {
@@ -73,7 +76,13 @@ function fakeAdmin() {
           return builder;
         },
         maybeSingle() {
-          return Promise.resolve({ data: null, error: null });
+          return Promise.resolve({
+            data:
+              operation === "select" && table === "positions"
+                ? stalePositionRow
+                : null,
+            error: null,
+          });
         },
         then(ok: (value: any) => unknown, ko?: (error: unknown) => unknown) {
           const data =
@@ -259,6 +268,7 @@ beforeEach(() => {
   calls = [];
   rpcError = null;
   upsertError = null;
+  stalePositionRow = null;
   applicationReceipts = null;
   selectedPositions = [{ id: "position-uuid-73", legacy_id: 73 }];
   scorePersistedParents = null;
@@ -591,6 +601,73 @@ describe("push sync di una candidatura", () => {
     await expect(response.json()).resolves.toMatchObject({
       receipts: { position_transitions: [] },
     });
+  });
+
+  /**
+   * O-97 — il rifiuto che insegna, invece di dire soltanto no.
+   *
+   * Il trigger `reject_stale_applied_position_downgrade` rifiuta di riportare
+   * indietro una posizione che sul cloud ha una candidatura vera: il box ha una
+   * fotografia più vecchia perché l'utente si è candidato dal sito. Senza la
+   * fotografia nella risposta il box può solo riprovare identico, e il push
+   * sbatte sullo stesso trigger a ogni tick.
+   */
+  it("la posizione rifiutata torna con la candidatura che il cloud conosce", async () => {
+    upsertError = { code: "P0001", message: "stale_position_downgrade" };
+    stalePositionRow = {
+      legacy_id: 73,
+      applications: {
+        applied: true,
+        applied_at: "2026-08-16T09:30:00+00:00",
+        applied_via: "user_manual",
+      },
+    };
+
+    const response = await pushBody({
+      positions: [{ id: 73, title: "Synthetic", company: "Example" }],
+    });
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "positions_upsert_failed",
+      rejection_scope: "row",
+      stale_position: {
+        legacy_id: 73,
+        applied: true,
+        applied_at: "2026-08-16T09:30:00+00:00",
+        applied_via: "user_manual",
+      },
+    });
+  });
+
+  it("con più righe nel batch la fotografia non c'è: quale sia la colpevole non si sa", async () => {
+    /**
+     * Il costo di indovinare sarebbe una riga corretta con i dati di un'altra.
+     * La colpevole la trova la bisezione del client, che arriva sempre a una
+     * riga sola — e allora la fotografia c'è.
+     */
+    upsertError = { code: "P0001", message: "stale_position_downgrade" };
+    stalePositionRow = {
+      legacy_id: 73,
+      applications: {
+        applied: true,
+        applied_at: "x",
+        applied_via: "user_manual",
+      },
+    };
+
+    const response = await pushBody({
+      positions: [
+        { id: 73, title: "Synthetic", company: "Example" },
+        { id: 74, title: "Synthetic two", company: "Example" },
+      ],
+    });
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body).not.toHaveProperty("stale_position");
+    // Resta comunque isolabile: è la voce nell'allow-list a dirlo.
+    expect(body.rejection_scope).toBe("row");
   });
 
   it("isola solo i token P0001 row-data definiti dalla RPC 076", async () => {

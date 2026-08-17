@@ -52,7 +52,10 @@ async function loadRules() {
       continue;
     }
     const mod = await import(`file://${candidate}`);
-    if (!Array.isArray(mod.REDACTION_RULES) || mod.REDACTION_RULES.length === 0) {
+    if (
+      !Array.isArray(mod.REDACTION_RULES) ||
+      mod.REDACTION_RULES.length === 0
+    ) {
       throw new Error(`empty rule set in ${candidate}`);
     }
     return mod.REDACTION_RULES;
@@ -95,7 +98,9 @@ async function main() {
     const sample = "Authorization: Bearer abcdefghijklmnop";
     const cleaned = apply(rules, sample, true);
     if (cleaned.includes("abcdefghijklmnop")) {
-      process.stderr.write("redact-cli: selftest FAILED (nothing was redacted)\n");
+      process.stderr.write(
+        "redact-cli: selftest FAILED (nothing was redacted)\n",
+      );
       process.exit(1);
     }
     process.stdout.write(`redact-cli ok — ${rules.length} rules\n`);

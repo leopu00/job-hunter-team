@@ -600,4 +600,129 @@ describe("cloud push record isolation — real writer path", () => {
     );
     expect(repaired).toMatchObject({ version: 1, entries: [] });
   });
+
+  /**
+   * O-97 — il rifiuto che insegna, e la prova che il locale cambia davvero.
+   *
+   * Il cloud rifiuta di riportare indietro una posizione candidata e allega
+   * cio' che sa. Prima, il box ripresentava lo stesso downgrade a ogni tick e
+   * il push non drenava piu': smettere di fallire non basta, deve cambiare
+   * idea. Qui si guarda il DATABASE LOCALE dopo il push, non il codice di
+   * ritorno — un push «ok» con lo stato locale immutato e' il difetto, non la
+   * sua assenza.
+   */
+  function conStoricoCandidature(dbPath: string) {
+    const db = new DatabaseSync(dbPath);
+    db.exec(`
+      CREATE TABLE scores (
+        id INTEGER PRIMARY KEY, position_id INTEGER, total_score INTEGER,
+        experience_fit INTEGER, salary_fit INTEGER, stack_match INTEGER,
+        remote_fit INTEGER, strategic_fit INTEGER, breakdown TEXT,
+        notes TEXT, scored_by TEXT, scored_at TEXT, updated_at TEXT
+      );
+      CREATE TABLE position_state_transitions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, position_id INTEGER,
+        from_state TEXT, to_state TEXT, ts TEXT, by_agent TEXT, notes TEXT
+      );
+    `);
+    db.close();
+  }
+
+  const rifiutoDowngrade = (conFotografia: boolean) =>
+    vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || "{}"));
+      const table = Object.keys(body)[0];
+      const rows = body[table] as Array<{ id?: number }>;
+      if (table === "positions" && rows.some((row) => row.id === 2)) {
+        // Il 500 opaco che PostgREST produce da un RAISE EXCEPTION senza
+        // SQLSTATE: e' il caso vero, non un 422 di comodo.
+        return jsonResponse(
+          {
+            error: "positions_upsert_failed",
+            rejection_scope: "row",
+            ...(conFotografia && rows.length === 1
+              ? {
+                  stale_position: {
+                    legacy_id: 2,
+                    applied: true,
+                    applied_at: "2026-08-16T09:30:00+00:00",
+                    applied_via: "user_manual",
+                  },
+                }
+              : {}),
+          },
+          500,
+        );
+      }
+      return jsonResponse(acknowledged(table, rows));
+    });
+
+  const candidaturaLocale = (dbPath: string, positionId: number) => {
+    const db = new DatabaseSync(dbPath);
+    const riga = db
+      .prepare(
+        "SELECT a.applied AS applied, a.applied_via AS applied_via, " +
+          "p.status AS status FROM positions p " +
+          "LEFT JOIN applications a ON a.position_id = p.id WHERE p.id = ?",
+      )
+      .get(positionId) as Record<string, unknown>;
+    db.close();
+    return riga;
+  };
+
+  it("impara dalla fotografia del cloud e rimette la riga in coda", async () => {
+    const { home, dbPath } = fixture();
+    conStoricoCandidature(dbPath);
+    expect(candidaturaLocale(dbPath, 2).applied).toBeFalsy();
+    vi.stubGlobal("fetch", rifiutoDowngrade(true));
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.resetModules();
+    const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+
+    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject(
+      { ok: true, quarantinedNew: 1 },
+    );
+
+    // (1) Il locale ha imparato: e' questo che rompe il ciclo, non il fatto
+    // che la richiesta sia finita senza errori.
+    expect(candidaturaLocale(dbPath, 2)).toMatchObject({
+      applied: 1,
+      applied_via: "user_manual",
+      status: "applied",
+    });
+    // (2) La riga corretta torna in coda da sola: senza il retry il box
+    // imparerebbe e resterebbe zitto fino a un comando dato a mano.
+    const quarantena = JSON.parse(
+      readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
+    );
+    expect(quarantena.entries).toHaveLength(1);
+    expect(quarantena.entries[0]).toMatchObject({
+      table: "positions",
+      status: "retry",
+    });
+  });
+
+  it("senza fotografia non inventa niente e la riga resta ferma", async () => {
+    // Il controllo negativo: stesso rifiuto, stessa bisezione, ma il server
+    // non dice cosa sa. Il box non deve dedurre lo stato da un errore — un
+    // apprendimento immaginato sarebbe peggio del difetto che chiude.
+    const { home, dbPath } = fixture();
+    conStoricoCandidature(dbPath);
+    vi.stubGlobal("fetch", rifiutoDowngrade(false));
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.resetModules();
+    const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+
+    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject(
+      { ok: true, quarantinedNew: 1 },
+    );
+
+    expect(candidaturaLocale(dbPath, 2).applied).toBeFalsy();
+    const quarantena = JSON.parse(
+      readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
+    );
+    expect(quarantena.entries[0]).toMatchObject({ status: "active" });
+  });
 });

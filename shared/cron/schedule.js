@@ -1,13 +1,13 @@
 /**
  * JHT Cron — Calcolo prossima esecuzione per schedule cron/every/at
  */
-import { Cron } from 'croner';
+import { Cron } from "croner";
 
 const CRON_EVAL_CACHE_MAX = 512;
 const cronEvalCache = new Map();
 
 function resolveCronTimezone(tz) {
-  const trimmed = typeof tz === 'string' ? tz.trim() : '';
+  const trimmed = typeof tz === "string" ? tz.trim() : "";
   return trimmed || Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
@@ -30,8 +30,9 @@ function resolveCachedCron(expr, timezone) {
  * @returns {number|null} — ms since epoch, o null se non valido
  */
 export function parseAbsoluteTimeMs(value) {
-  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
-  if (typeof value === 'string') {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0)
+    return value;
+  if (typeof value === "string") {
     const ms = Date.parse(value);
     return Number.isFinite(ms) ? ms : null;
   }
@@ -45,16 +46,17 @@ export function parseAbsoluteTimeMs(value) {
  * @returns {number|undefined}
  */
 export function computeNextRunAtMs(schedule, nowMs) {
-  if (schedule.kind === 'at') {
+  if (schedule.kind === "at") {
     const atMs = parseAbsoluteTimeMs(schedule.at);
     if (atMs === null) return undefined;
     return atMs > nowMs ? atMs : undefined;
   }
 
-  if (schedule.kind === 'every') {
-    const everyMs = typeof schedule.everyMs === 'number' && Number.isFinite(schedule.everyMs)
-      ? Math.max(1, Math.floor(schedule.everyMs))
-      : undefined;
+  if (schedule.kind === "every") {
+    const everyMs =
+      typeof schedule.everyMs === "number" && Number.isFinite(schedule.everyMs)
+        ? Math.max(1, Math.floor(schedule.everyMs))
+        : undefined;
     if (everyMs === undefined) return undefined;
     const anchor = Math.max(0, Math.floor(schedule.anchorMs ?? nowMs));
     if (nowMs < anchor) return anchor;
@@ -64,8 +66,12 @@ export function computeNextRunAtMs(schedule, nowMs) {
   }
 
   // kind === 'cron'
-  if (typeof schedule.expr !== 'string' || !schedule.expr.trim()) return undefined;
-  const cron = resolveCachedCron(schedule.expr.trim(), resolveCronTimezone(schedule.tz));
+  if (typeof schedule.expr !== "string" || !schedule.expr.trim())
+    return undefined;
+  const cron = resolveCachedCron(
+    schedule.expr.trim(),
+    resolveCronTimezone(schedule.tz),
+  );
 
   let next = cron.nextRun(new Date(nowMs));
   if (!next) return undefined;
@@ -100,9 +106,13 @@ export function computeNextRunAtMs(schedule, nowMs) {
  * @returns {number|undefined}
  */
 export function computePreviousRunAtMs(schedule, nowMs) {
-  if (schedule.kind !== 'cron') return undefined;
-  if (typeof schedule.expr !== 'string' || !schedule.expr.trim()) return undefined;
-  const cron = resolveCachedCron(schedule.expr.trim(), resolveCronTimezone(schedule.tz));
+  if (schedule.kind !== "cron") return undefined;
+  if (typeof schedule.expr !== "string" || !schedule.expr.trim())
+    return undefined;
+  const cron = resolveCachedCron(
+    schedule.expr.trim(),
+    resolveCronTimezone(schedule.tz),
+  );
   const previousRuns = cron.previousRuns(1, new Date(nowMs));
   const previous = previousRuns[0];
   if (!previous) return undefined;

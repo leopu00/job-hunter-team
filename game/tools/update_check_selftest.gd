@@ -173,8 +173,13 @@ func _pacchetti() -> void:
 			UpdateCheck.asset_url(assets, "macOS", "0.4.0").ends_with(
 					UpdateCheck.MACOS_ASSET),
 			UpdateCheck.asset_url(assets, "macOS", "0.4.0"))
+	# ATTENZIONE a come si legge questo blocco: il payload qui sopra e' SINTETICO
+	# e contiene manifest e firma, che nessuna release vera pubblica (#156). Cio'
+	# che segue prova il contratto Windows DORMIENTE — come si comporterebbe se
+	# un giorno lo si accendesse — non una funzione che oggi qualcuno usa. Il
+	# comportamento di oggi e' quello provato da «release vera» piu sotto.
 	var windows := UpdateCheck.asset_bundle(assets, "Windows", "0.4.0")
-	_check("Windows: pacchetto, manifest e firma detached obbligatori",
+	_check("Windows (dormiente): pacchetto, manifest e firma sarebbero obbligatori",
 			str(windows.get("package", "")).ends_with(UpdateCheck.WINDOWS_ASSET)
 			and str(windows.get("manifest", "")).ends_with(
 					UpdateCheck.WINDOWS_MANIFEST_ASSET)
@@ -226,6 +231,28 @@ func _pacchetti() -> void:
 	senza_firma.pop_back()
 	_check("Windows: firma detached mancante rifiutata",
 			UpdateCheck.asset_bundle(senza_firma, "Windows", "0.4.0").is_empty(), "")
+	# Il caso di OGGI, e non un caso di guasto: una release vera porta i binari
+	# e i file di provenienza, mai il manifest firmato. Su quel payload Windows
+	# non risolve alcun pacchetto, quindi `asset_url` resta vuoto e l'unica
+	# strada e' la pagina della release. Se un giorno questa riga diventa rossa
+	# significa che qualcuno ha acceso meta' percorso: si legge #156 prima di
+	# «aggiustare» il test.
+	var release_vera := [
+		{"name": UpdateCheck.WINDOWS_ASSET, "size": 222,
+			"digest": "sha256:" + win_sha,
+			"browser_download_url": UpdateCheck._release_asset_url(
+					"0.4.0", UpdateCheck.WINDOWS_ASSET)},
+		{"name": UpdateCheck.MACOS_ASSET,
+			"browser_download_url": UpdateCheck._release_asset_url(
+					"0.4.0", UpdateCheck.MACOS_ASSET)},
+		{"name": "SHA256SUMS"},
+		{"name": "RELEASE-PROVENANCE.json"},
+	]
+	_check("Windows su una release vera: nessun pacchetto installabile",
+			UpdateCheck.asset_url(release_vera, "Windows", "0.4.0") == "", "")
+	_check("macOS su una release vera: lo zip firmato si risolve lo stesso",
+			UpdateCheck.asset_url(release_vera, "macOS", "0.4.0").ends_with(
+					UpdateCheck.MACOS_ASSET), "")
 	_check("nessun asset", UpdateCheck.asset_url([], "macOS", "0.4.0") == "", "")
 
 	# Il triplo confronto same-origin non compare piu nel contratto. La policy

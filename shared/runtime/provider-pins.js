@@ -65,7 +65,8 @@ export function resetPinsCache() {
  */
 export function pinnedVersion(target) {
   const pin = loadPins()[target];
-  const version = pin && typeof pin.version === "string" ? pin.version.trim() : "";
+  const version =
+    pin && typeof pin.version === "string" ? pin.version.trim() : "";
   return SEMVER_RE.test(version) ? version : null;
 }
 

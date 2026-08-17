@@ -7,6 +7,7 @@ import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import { intlTag } from "@/lib/locale-tag";
+import ActorIcon from "@/app/components/ActorIcon";
 
 const T: Record<
   Locale,
@@ -316,7 +317,7 @@ function CriticoActiveTag({ label }: { label: string }) {
         fontWeight: 700,
       }}
     >
-      <span aria-hidden="true">⚖️</span> {label}
+      <ActorIcon role="critico" size={11} /> {label}
     </span>
   );
 }

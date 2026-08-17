@@ -27,7 +27,7 @@
 
 /** Ordine significativo: dalla regola più specifica alla più generica.
  *  @type {RedactRule[]} */
-export const REDACTION_RULES = [] = [
+export const REDACTION_RULES = ([] = [
   // ── Segreti ──────────────────────────────────────────────────────────
   {
     key: "private_key",
@@ -183,4 +183,4 @@ export const REDACTION_RULES = [] = [
     pattern: /\b[\w %+-]{1,80}\.(pdf|docx|doc|odt|rtf)\b/gi,
     replace: "[document].$1",
   },
-];
+]);

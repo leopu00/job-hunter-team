@@ -21,8 +21,8 @@ const T: Record<
     dashboard: "Dashboard",
     team: "Team",
     log: "Registro",
-    titleActivity: "📊 Attività del team",
-    titleLog: "📋 Registro attività",
+    titleActivity: "Attività del team",
+    titleLog: "Registro attività",
     subtitleActivity: (from, to, total) =>
       `Chi ha lavorato e quanto · dal ${from} al ${to} · ${total} azioni totali`,
     subtitleLog: (total) =>
@@ -34,8 +34,8 @@ const T: Record<
     dashboard: "Dashboard",
     team: "Team",
     log: "Log",
-    titleActivity: "📊 Team activity",
-    titleLog: "📋 Activity log",
+    titleActivity: "Team activity",
+    titleLog: "Activity log",
     subtitleActivity: (from, to, total) =>
       `Who worked and how much · from ${from} to ${to} · ${total} total actions`,
     subtitleLog: (total) =>
@@ -47,8 +47,8 @@ const T: Record<
     dashboard: "Panel",
     team: "Equipo",
     log: "Registro",
-    titleActivity: "📊 Actividad del equipo",
-    titleLog: "📋 Registro de actividad",
+    titleActivity: "Actividad del equipo",
+    titleLog: "Registro de actividad",
     subtitleActivity: (from, to, total) =>
       `Quién ha trabajado y cuánto · del ${from} al ${to} · ${total} acciones totales`,
     subtitleLog: (total) =>
@@ -60,8 +60,8 @@ const T: Record<
     dashboard: "Tableau de bord",
     team: "Équipe",
     log: "Journal",
-    titleActivity: "📊 Activité de l'équipe",
-    titleLog: "📋 Journal d'activité",
+    titleActivity: "Activité de l'équipe",
+    titleLog: "Journal d'activité",
     subtitleActivity: (from, to, total) =>
       `Qui a travaillé et combien · du ${from} au ${to} · ${total} actions au total`,
     subtitleLog: (total) =>
@@ -73,8 +73,8 @@ const T: Record<
     dashboard: "Dashboard",
     team: "Team",
     log: "Protokoll",
-    titleActivity: "📊 Team-Aktivität",
-    titleLog: "📋 Aktivitätsprotokoll",
+    titleActivity: "Team-Aktivität",
+    titleLog: "Aktivitätsprotokoll",
     subtitleActivity: (from, to, total) =>
       `Wer wie viel gearbeitet hat · vom ${from} bis ${to} · ${total} Aktionen insgesamt`,
     subtitleLog: (total) =>
@@ -86,8 +86,8 @@ const T: Record<
     dashboard: "Irányítópult",
     team: "Csapat",
     log: "Napló",
-    titleActivity: "📊 Csapat tevékenysége",
-    titleLog: "📋 Tevékenységnapló",
+    titleActivity: "Csapat tevékenysége",
+    titleLog: "Tevékenységnapló",
     subtitleActivity: (from, to, total) =>
       `Ki dolgozott és mennyit · ${from} – ${to} · összesen ${total} művelet`,
     subtitleLog: (total) =>
@@ -99,8 +99,8 @@ const T: Record<
     dashboard: "Painel",
     team: "Equipe",
     log: "Registo",
-    titleActivity: "📊 Atividade da equipa",
-    titleLog: "📋 Registo de atividade",
+    titleActivity: "Atividade da equipa",
+    titleLog: "Registo de atividade",
     subtitleActivity: (from, to, total) =>
       `Quem trabalhou e quanto · de ${from} a ${to} · ${total} ações no total`,
     subtitleLog: (total) =>

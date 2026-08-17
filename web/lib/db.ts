@@ -1,3 +1,15 @@
+// Porta di sola LETTURA sul jobs.db del box. Il database lo crea e lo migra il
+// container (`shared/skills/_db.py`, oggi `PRAGMA user_version = 7`): qui non
+// vive alcuno schema, e non deve tornarci.
+//
+// Fino a #157 il modulo esportava anche `initDb()` — apertura in scrittura piu'
+// ~180 righe di DDL — senza un solo chiamante in tutto il repo. Il costo non era
+// il codice morto: quello schema era fermo alla versione 5 e, se qualcuno lo
+// avesse eseguito su un jobs.db vero, avrebbe timbrato la 5 su un database che
+// non l'ha mai visto. Nessun test lo copriva, quindi la distanza dalla sorgente
+// di verita' non aveva modo di farsi notare.
+//
+// Il guard vive in tests/js/tasks/web-schema-authority.test.ts.
 import Database from "better-sqlite3";
 import fs from "fs";
 import os from "os";
@@ -100,193 +112,4 @@ export function getDb(_workspacePath?: string): Database.Database {
   db.pragma("foreign_keys = ON");
   globalThis.__jht_db_cache = { path: dbPath, sourceMtimeMs, db };
   return db;
-}
-
-const SCHEMA_SQL = `
-CREATE TABLE IF NOT EXISTS companies (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
-  website TEXT,
-  hq_country TEXT,
-  sector TEXT,
-  size TEXT,
-  glassdoor_rating REAL,
-  red_flags TEXT,
-  culture_notes TEXT,
-  analyzed_by TEXT,
-  analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  verdict TEXT,
-  logo TEXT,
-  logo_source TEXT,
-  logo_fetched INTEGER DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS positions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  company TEXT NOT NULL,
-  company_id INTEGER,
-  location TEXT,
-  remote_type TEXT,
-  salary_declared_min INTEGER,
-  salary_declared_max INTEGER,
-  salary_declared_currency TEXT DEFAULT 'EUR',
-  salary_estimated_min INTEGER,
-  salary_estimated_max INTEGER,
-  salary_estimated_currency TEXT DEFAULT 'EUR',
-  salary_estimated_source TEXT,
-  url TEXT,
-  source TEXT,
-  jd_text TEXT,
-  requirements TEXT,
-  found_by TEXT,
-  found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  deadline TEXT,
-  status TEXT DEFAULT 'new' CHECK (status IN (
-    'new','checked','scored','writing','ready','applied','response','excluded'
-  )),
-  notes TEXT,
-  last_checked TIMESTAMP,
-  role_family TEXT,
-  write_requested INTEGER DEFAULT 0,
-  write_requested_at TIMESTAMP,
-  write_request_kind TEXT,
-  geocode_requested INTEGER DEFAULT 0,
-  geocode_requested_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (company_id) REFERENCES companies(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
-CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
-CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
-CREATE INDEX IF NOT EXISTS idx_positions_role_family ON positions(role_family) WHERE role_family IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_positions_write_requested ON positions(write_requested) WHERE write_requested = 1;
-CREATE INDEX IF NOT EXISTS idx_positions_geocode_requested ON positions(geocode_requested) WHERE geocode_requested = 1;
-
-CREATE TABLE IF NOT EXISTS position_highlights (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  position_id INTEGER NOT NULL,
-  type TEXT NOT NULL,
-  text TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (position_id) REFERENCES positions(id)
-);
-
-CREATE TABLE IF NOT EXISTS scores (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  position_id INTEGER NOT NULL UNIQUE,
-  total_score INTEGER NOT NULL,
-  stack_match INTEGER,
-  remote_fit INTEGER,
-  salary_fit INTEGER,
-  experience_fit INTEGER,
-  strategic_fit INTEGER,
-  breakdown TEXT,
-  notes TEXT,
-  scored_by TEXT,
-  scored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (position_id) REFERENCES positions(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
-
-CREATE TABLE IF NOT EXISTS applications (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  position_id INTEGER NOT NULL UNIQUE,
-  cv_path TEXT,
-  cl_path TEXT,
-  cv_pdf_path TEXT,
-  cl_pdf_path TEXT,
-  critic_verdict TEXT,
-  critic_score REAL,
-  critic_notes TEXT,
-  critic_round INTEGER,
-  status TEXT DEFAULT 'draft',
-  written_at TIMESTAMP,
-  applied_at TIMESTAMP,
-  applied_via TEXT,
-  response TEXT,
-  response_at TIMESTAMP,
-  written_by TEXT,
-  reviewed_by TEXT,
-  critic_reviewed_at TIMESTAMP,
-  applied BOOLEAN DEFAULT 0,
-  interview_round INTEGER DEFAULT NULL,
-  cv_drive_id TEXT,
-  cl_drive_id TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (position_id) REFERENCES positions(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
-
-CREATE TABLE IF NOT EXISTS pending_user_messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  agent TEXT NOT NULL,
-  body TEXT NOT NULL,
-  kind TEXT NOT NULL DEFAULT 'notification' CHECK (kind IN (
-    'notification','question','digest','alert'
-  )),
-  related_position_id INTEGER,
-  delivered_via TEXT CHECK (delivered_via IN ('telegram','web') OR delivered_via IS NULL),
-  delivered_at TIMESTAMP,
-  acknowledged_at TIMESTAMP,
-  user_reply TEXT,
-  user_reply_at TIMESTAMP,
-  agent_seen_reply_at TIMESTAMP,
-  cloud_synced_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (related_position_id) REFERENCES positions(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
-CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
-CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
-
--- Touch trigger su tutte le tabelle: aggiorna updated_at quando una UPDATE
--- non lo tocca esplicitamente. La WHEN-clause evita la ricorsione
--- (l'UPDATE del trigger stesso fa cambiare NEW.updated_at, quindi non
--- rientra). Allineato a shared/skills/_db.py (single source of truth).
-CREATE TRIGGER IF NOT EXISTS companies_touch_updated_at
-AFTER UPDATE ON companies FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
-BEGIN UPDATE companies SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
-
-CREATE TRIGGER IF NOT EXISTS positions_touch_updated_at
-AFTER UPDATE ON positions FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
-BEGIN UPDATE positions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
-
-CREATE TRIGGER IF NOT EXISTS position_highlights_touch_updated_at
-AFTER UPDATE ON position_highlights FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
-BEGIN UPDATE position_highlights SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
-
-CREATE TRIGGER IF NOT EXISTS scores_touch_updated_at
-AFTER UPDATE ON scores FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
-BEGIN UPDATE scores SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
-
-CREATE TRIGGER IF NOT EXISTS applications_touch_updated_at
-AFTER UPDATE ON applications FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
-BEGIN UPDATE applications SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
-
-CREATE TRIGGER IF NOT EXISTS pending_user_messages_touch_updated_at
-AFTER UPDATE ON pending_user_messages FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
-BEGIN UPDATE pending_user_messages SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
-
-PRAGMA user_version = 5;
-`;
-
-export function initDb(_workspacePath?: string): void {
-  const db = new Database(JHT_DB_PATH);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  db.exec(SCHEMA_SQL);
-  db.close();
 }
