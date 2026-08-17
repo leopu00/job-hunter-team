@@ -25,6 +25,19 @@ const ROOT = resolve(__dirname, "../../..");
 const SURFACES = [
   join(ROOT, "web/app/(protected)/positions"),
   join(ROOT, "web/app/components/ActorIcon.tsx"),
+  // #166 — O-42 aveva ripulito /positions e basta, ma le stesse faccine degli
+  // attori vivevano ancora nella loro sorgente (`ROLE_META`) e in tutto cio'
+  // che la legge: la pagina /team e le due legende dei grafici nei case study.
+  // Una direttiva applicata a una superficie sola non e' una direttiva: e'
+  // un'eccezione che sembra una regola.
+  join(ROOT, "web/lib/team-activity-meta.ts"),
+  join(ROOT, "web/app/(protected)/team"),
+  join(ROOT, "web/app/components/activity-format.tsx"),
+  // Solo i due grafici, non tutta `case-studies/`: quelle pagine sono prosa,
+  // e un'emoji in un racconto non e' un glifo di larghezza variabile dentro
+  // una tabella. Confine dichiarato, non dimenticato.
+  join(ROOT, "web/app/case-studies/WorkBudgetChart.tsx"),
+  join(ROOT, "web/app/case-studies/IntradayBudgetChart.tsx"),
 ];
 
 function sources(entry: string): string[] {

@@ -16,6 +16,7 @@ import { ROLE_META } from "@/lib/team-activity-meta";
 import { useLocale } from "@/lib/use-locale";
 import { useTheme } from "@/app/theme-provider";
 import type { Locale } from "@/i18n/config";
+import ActorIcon from "@/app/components/ActorIcon";
 
 // Colore "linea/asse budget AI": LITERAL hex applicato direttamente agli
 // attributi SVG / style inline — MAI via classe CSS o var(), che la build
@@ -360,8 +361,9 @@ export default function IntradayBudgetChart({
               className="inline-block w-2.5 h-2.5 rounded-sm"
               style={{ background: ROLE_META[r].color }}
             />
-            <span className="text-[10px] text-[var(--color-muted)]">
-              {ROLE_META[r].emoji} {ROLE_META[r].label}
+            <span className="flex items-center gap-1 text-[10px] text-[var(--color-muted)]">
+              <ActorIcon role={r} size={10} />
+              {ROLE_META[r].label}
             </span>
           </span>
         ))}

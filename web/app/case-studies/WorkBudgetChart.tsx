@@ -16,6 +16,8 @@ import { ROLE_META } from "@/lib/team-activity-meta";
 import { useLocale } from "@/lib/use-locale";
 import { useTheme } from "@/app/theme-provider";
 import type { Locale } from "@/i18n/config";
+import ActorIcon from "@/app/components/ActorIcon";
+import { IconClock } from "@/app/components/PanelIcons";
 
 // Colore "linea/asse budget AI": giallo su dark, ambra scuro in light. Tenuto
 // come LITERAL hex applicato direttamente agli attributi SVG (stroke/fill) e
@@ -292,9 +294,7 @@ export default function WorkBudgetChart({
     <div ref={wrapRef} className="relative">
       {workingHoursText && (
         <div className="mb-4 flex items-center gap-2 border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
-          <span aria-hidden className="text-[13px]">
-            🕗
-          </span>
+          <IconClock size={13} />
           <span className="text-[10px] uppercase tracking-wide text-[var(--color-dim)]">
             {t.workingHours}
           </span>
@@ -535,8 +535,9 @@ export default function WorkBudgetChart({
               className="inline-block w-2.5 h-2.5 rounded-sm"
               style={{ background: ROLE_META[r].color }}
             />
-            <span className="text-[10px] text-[var(--color-muted)]">
-              {ROLE_META[r].emoji} {ROLE_META[r].label}
+            <span className="flex items-center gap-1 text-[10px] text-[var(--color-muted)]">
+              <ActorIcon role={r} size={10} />
+              {ROLE_META[r].label}
             </span>
           </span>
         ))}
