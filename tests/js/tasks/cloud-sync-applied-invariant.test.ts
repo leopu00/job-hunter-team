@@ -548,33 +548,121 @@ describe("push sync di una candidatura", () => {
    * La ricevuta deve attestare ciò che il client può attestare — la SUA riga
    * è arrivata e persiste — non che il cloud non sappia niente di più.
    */
-  it.fails(
-    "emette receipt anche se il cloud sa più del box su quella riga",
-    async () => {
-      pendingPersistedOverride = (rows) =>
-        rows.map((row) => ({
-          ...row,
-          delivered_via: "telegram",
-          delivered_at: "2026-08-17T20:44:09+00:00",
-        }));
-      const response = await pushBody({
-        pending_user_messages: [
-          { id: 11, agent: "SCOUT", body: "Synthetic first" },
-          { id: 12, agent: "SCOUT", body: "Synthetic second" },
-        ],
-      });
+  it("emette receipt anche se il cloud sa più del box su quella riga", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.map((row) => ({
+        ...row,
+        delivered_via: "telegram",
+        delivered_at: "2026-08-17T20:44:09+00:00",
+      }));
+    const response = await pushBody({
+      pending_user_messages: [
+        { id: 11, agent: "SCOUT", body: "Synthetic first" },
+        { id: 12, agent: "SCOUT", body: "Synthetic second" },
+      ],
+    });
 
-      expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toMatchObject({
-        receipts: {
-          pending_user_messages: [
-            receiptId("pending_user_messages", 11),
-            receiptId("pending_user_messages", 12),
-          ],
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: {
+        pending_user_messages: [
+          receiptId("pending_user_messages", 11),
+          receiptId("pending_user_messages", 12),
+        ],
+      },
+    });
+  });
+
+  /**
+   * La causa che teneva ferma la coda OGGI, misurata da HQ-VPS sulla macchina
+   * e riprodotta qui: `chat_ts` è `double precision` e PostgREST legge con
+   * `extra_float_digits = 0`, quindi il cloud rende quindici cifre
+   * significative. `1786999449.694782` torna `1786999449.69478`, e non è lo
+   * stesso double. Sul campo: 14 righe su 20 campionate, 223 su 384 nella
+   * popolazione a rischio.
+   */
+  it("emette receipt quando il cloud rende chat_ts con meno cifre", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.map((row) => ({ ...row, chat_ts: 1786999449.69478 }));
+    const response = await pushBody({
+      pending_user_messages: [
+        {
+          id: 11,
+          agent: "SCOUT",
+          body: "Synthetic first",
+          chat_ts: 1786999449.694782,
         },
-      });
-    },
-  );
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: {
+        pending_user_messages: [receiptId("pending_user_messages", 11)],
+      },
+    });
+  });
+
+  /**
+   * I tre controlli negativi che tengono onesto il fix appena fatto: allargare
+   * un confronto è pericoloso proprio perché fa passare tutto, e una ricevuta
+   * compiacente è peggio di nessuna ricevuta — il push direbbe «arrivata» a
+   * una riga che sul cloud non c'è o è un'altra.
+   */
+  it("nega la receipt se chat_ts è un altro istante, non un'altra resa", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.map((row) => ({ ...row, chat_ts: 1786999450.694782 }));
+    const response = await pushBody({
+      pending_user_messages: [
+        {
+          id: 11,
+          agent: "SCOUT",
+          body: "Synthetic first",
+          chat_ts: 1786999449.694782,
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: { pending_user_messages: [] },
+    });
+  });
+
+  it("nega la receipt se il cloud contraddice un valore che il client ha mandato", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.map((row) => ({ ...row, delivered_via: "web" }));
+    const response = await pushBody({
+      pending_user_messages: [
+        {
+          id: 11,
+          agent: "SCOUT",
+          body: "Synthetic first",
+          delivered_via: "telegram",
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: { pending_user_messages: [] },
+    });
+  });
+
+  it("nega la receipt se l'autore sul cloud non è né il suo né l'utente", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.map((row) => ({ ...row, author: "sconosciuto" }));
+    const response = await pushBody({
+      pending_user_messages: [
+        { id: 11, agent: "SCOUT", body: "Synthetic first" },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: { pending_user_messages: [] },
+    });
+  });
 
   /**
    * L'indizio di HQ-VPS, chiuso per misura: il cloud ha 11 righe in più del

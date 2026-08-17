@@ -334,6 +334,54 @@ function sameNullableInstant(left: unknown, right: unknown) {
   return sameInstant(left, right);
 }
 
+/**
+ * Un istante epoch in secondi sopravvive al giro, la sua RESA no.
+ *
+ * `pending_user_messages.chat_ts` è `double precision`, e PostgREST apre la
+ * sessione con `extra_float_digits = 0`: Postgres rende allora quindici cifre
+ * significative invece della forma che ritorna identica. Misurato sul vivo,
+ * `1786999449.694782` torna `1786999449.69478`, e i due NON sono lo stesso
+ * double — a volte per troncamento, a volte per arrotondamento
+ * (`1783904198.586839` → `1783904198.58684`). Il valore scritto è giusto: è la
+ * lettura ad avere meno cifre di quante gliene abbiamo date.
+ *
+ * Confrontarli con `===` è la stessa trappola dei timestamp di #163, in un
+ * altro tipo: una ricevuta non deve MAI confrontare la resa di un driver.
+ * Sul campo, 14 righe su 20 campionate divergevano così, e 223 su 384 sono
+ * nella popolazione a rischio.
+ *
+ * La tolleranza è cento microsecondi: tre ordini di grandezza sopra l'errore
+ * massimo di quella resa (circa un microsecondo su un epoch di oggi) e senza
+ * alcun rischio di confondere due righe, visto che il confronto avviene a
+ * `legacy_id` già fissato.
+ */
+/**
+ * Il confronto per i campi che la merge protegge con COALESCE.
+ *
+ * Una ricevuta attesta ciò che il CLIENT può attestare — «la mia riga è
+ * arrivata e persiste» — non che il cloud non sappia niente di più. Quando il
+ * client manda NULL su uno di questi campi non sta dicendo «deve essere
+ * vuoto»: sta dicendo «io non lo so». Pretendere uguaglianza lì rendeva la
+ * condizione falsa per costruzione su ogni riga consegnata dal web, e il
+ * client si fabbricava un 422 da un 200 del server.
+ */
+function cloudMayKnowMore(
+  onCloud: unknown,
+  fromClient: unknown,
+  same: (a: unknown, b: unknown) => boolean,
+) {
+  if (fromClient == null) return true;
+  return same(onCloud, fromClient);
+}
+
+function sameNullableEpochSeconds(left: unknown, right: unknown) {
+  if (left == null || right == null) return left == null && right == null;
+  const a = Number(left);
+  const b = Number(right);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  return Math.abs(a - b) <= 1e-4;
+}
+
 function applicationReceiptId(application: ApplicationIn): string {
   // Compatibilità con client pre-quarantine: stessa derivazione opaca che il
   // nuovo client applica alla chiave sorgente. Non esponiamo l'intero locale.
@@ -1401,17 +1449,42 @@ export async function POST(req: NextRequest) {
         if (
           row &&
           wire &&
+          // I campi che il client governa: la merge li sovrascrive sempre,
+          // quindi qui l'uguaglianza è la prova che la SUA riga è quella
+          // persistita e non un'altra con lo stesso legacy_id.
           row.agent === expected.agent &&
           row.body === expected.body &&
           row.kind === expected.kind &&
-          row.author === expected.author &&
-          row.chat_ts === expected.chat_ts &&
-          row.related_position_id === expected.related_position_id &&
-          row.delivered_via === expected.delivered_via &&
-          sameNullableInstant(row.delivered_at, expected.delivered_at) &&
-          sameNullableInstant(
+          // `author` sale a 'user' e non torna più indietro (la merge tiene
+          // il valore del cloud quando il client manda 'agent'): pretendere
+          // uguaglianza qui bloccherebbe per sempre ogni riga a cui l'utente
+          // ha risposto dal sito.
+          (row.author === expected.author || row.author === "user") &&
+          // Campi che il cloud può sapere e il box no. La merge fa
+          // COALESCE(in arrivo, presente) DI PROPOSITO — chi consegna sul web
+          // timbra là — quindi un valore sul cloud dove il client manda NULL
+          // non è una divergenza: è l'unica cosa che poteva succedere. Se
+          // invece il client un valore ce l'ha, quello deve combaciare.
+          cloudMayKnowMore(
+            row.related_position_id,
+            expected.related_position_id,
+            (a, b) => a === b,
+          ) &&
+          cloudMayKnowMore(
+            row.delivered_via,
+            expected.delivered_via,
+            (a, b) => a === b,
+          ) &&
+          cloudMayKnowMore(row.chat_ts, expected.chat_ts, (a, b) =>
+            sameNullableEpochSeconds(a, b),
+          ) &&
+          cloudMayKnowMore(row.delivered_at, expected.delivered_at, (a, b) =>
+            sameNullableInstant(a, b),
+          ) &&
+          cloudMayKnowMore(
             row.agent_seen_reply_at,
             expected.agent_seen_reply_at,
+            (a, b) => sameNullableInstant(a, b),
           )
         ) {
           rowReceipts.pending_user_messages.push(
