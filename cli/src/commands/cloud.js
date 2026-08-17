@@ -2145,10 +2145,41 @@ async function handleDisable(options = {}) {
  *
  * options:
  *   --dry-run        non applica le UPDATE, solo report
- *   --full           ignora cursor (lookback 7gg server-side)
+ *   --full           ignora cursor; per le CANDIDATURE sfonda anche la
+ *                    finestra dei 7gg (vedi FULL_PULL_SINCE)
  *   --limit <n>      override limit server (default 500)
  *   --silent         logga solo errori (uso al boot, evita rumore)
  */
+
+/**
+ * La finestra che `--full` chiede per le candidature: nessuna.
+ *
+ * `--full` azzerava il cursore LOCALE, ma la finestra e' dell'ALTRO LATO:
+ * senza `applied_since` il server applica il suo lookback di 7 giorni fissi, e
+ * sul percorso Supabase-diretto ci ricade il client con la stessa costante. Il
+ * risultato e' che una candidatura piu' vecchia di una settimana non tornava
+ * MAI alla macchina e non esisteva comando per riprenderla: misurato il 17/08,
+ * quattro righe (`applied_at` del 10 e 12/08) allineate a mano sul box.
+ *
+ * Il pavimento resta dov'e' per i pull NORMALI — protegge la prima
+ * sincronizzazione assoluta da una scansione dell'intera tabella. `--full` e'
+ * la porta di servizio dell'operatore, ed e' l'unico posto in cui deve cedere.
+ *
+ * Vale per le sole candidature. I flag posizione e le reply hanno lo stesso
+ * pavimento, ma la loro paginazione e' una domanda aperta (`has_more` per le
+ * posizioni, nessuna per le reply) che non si risolve di straforo qui dentro.
+ */
+const FULL_PULL_SINCE = '1970-01-01T00:00:00.000Z';
+
+/** Il piu' recente fra due istanti ISO, ignorando quelli illeggibili. */
+function laterInstant(a, b) {
+  const ma = Date.parse(a ?? '');
+  const mb = Date.parse(b ?? '');
+  if (Number.isNaN(ma)) return Number.isNaN(mb) ? null : b;
+  if (Number.isNaN(mb)) return a;
+  return mb > ma ? b : a;
+}
+
 async function handlePullDesiredState(options = {}) {
   const silent = options.silent === true;
   const log = (msg) => { if (!silent) console.log(msg); };
@@ -2179,9 +2210,17 @@ async function handlePullDesiredState(options = {}) {
     return;
   }
 
+  // Il cursore su disco si legge SEMPRE, anche con `--full`: serve dopo, per
+  // non salvare all'indietro una finestra allargata apposta (un cursore che
+  // arretra rifarebbe la stessa scansione a ogni tick successivo).
+  const savedCursor = loadPullCursor();
   const cursor = options.full
     ? { since: null, messages_since: null, applied_since: null }
-    : loadPullCursor();
+    : savedCursor;
+  // La finestra CHIESTA per le candidature. Distinta dal cursore perche' con
+  // `--full` domanda e memoria dicono due cose diverse: chiedi tutto, ma cio'
+  // che ricordi resta il punto piu' avanti che hai gia' visto.
+  const appliedWindowSince = options.full ? FULL_PULL_SINCE : cursor.applied_since;
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
 
   // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: leggi i flag desired-state da Supabase
@@ -2244,9 +2283,15 @@ async function handlePullDesiredState(options = {}) {
       let appRows = [];
       let appCursor = cursor.applied_since || null;
       try {
-        const appSinceVal = cursor.applied_since
+        const appSinceVal = appliedWindowSince
           || new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
         appRows = await reader.readAppliedChanges({ since: appSinceVal, limit: 500 });
+        // Nessun tetto silenzioso: se il lotto e' pieno il server puo' averne
+        // altre, e con `--full` e' proprio il caso che l'operatore sta
+        // cercando di recuperare.
+        if (appRows.length >= 500) {
+          console.error(pc.yellow('  applied-backflow: batch full (500) — run again to fetch the rest'));
+        }
         let appMaxMs = Date.parse(appSinceVal);
         let appMaxTs = appSinceVal;
         for (const a of appRows) {
@@ -2272,7 +2317,7 @@ async function handlePullDesiredState(options = {}) {
     const params = new URLSearchParams();
     if (cursor.since) params.set('since', cursor.since);
     if (cursor.messages_since) params.set('messages_since', cursor.messages_since);
-    if (cursor.applied_since) params.set('applied_since', cursor.applied_since);
+    if (appliedWindowSince) params.set('applied_since', appliedWindowSince);
     if (options.limit) params.set('limit', String(options.limit));
     const pullUrl = `${baseUrl}/api/cloud-sync/pull-desired-state?${params.toString()}`;
     let res;
@@ -2371,7 +2416,14 @@ async function handlePullDesiredState(options = {}) {
   // caso NORMALE, non l'eccezione. Metterle dopo significherebbe consegnarle
   // solo quando qualcos'altro si muove — cioe' quasi mai.
   const cloudApplications = Array.isArray(body.applications) ? body.applications : [];
-  const appliedCursorNext = body.applied_cursor || cursor.applied_since || null;
+  // Il cursore non arretra MAI, nemmeno dopo un `--full`: la finestra
+  // allargata e' una domanda una-tantum, non una memoria nuova. Senza questa
+  // riga un `--full` a vuoto salverebbe l'epoca come cursore, e ogni tick
+  // successivo del daemon riscandirebbe l'intera tabella per sempre.
+  const appliedCursorNext = laterInstant(
+    savedCursor.applied_since,
+    body.applied_cursor || cursor.applied_since || null,
+  );
   if (cloudApplications.length > 0) {
     try {
       const adb = new DatabaseSync(dbPath);
@@ -4275,7 +4327,7 @@ export function registerCloudCommand(program) {
     .command('pull-desired-state')
     .description('Retrieve user-driven write_requested flags from the cloud into local SQLite')
     .option('--db <path>', 'SQLite database path (default: ~/.jht/jobs.db)')
-    .option('--full', 'ignore cursors (server-side 7-day lookback)')
+    .option('--full', 'ignore cursors (applications: no time limit; flags/replies: 7-day server lookback)')
     .option('--limit <n>', 'maximum rows per call (default 500, max 2000)')
     .option('--dry-run', 'Show what would be applied without UPDATE')
     .option('--silent', 'Minimum output (for boot)')
