@@ -1,0 +1,329 @@
+name: Publish signed release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Successful Release workflow run containing release-candidate
+        required: true
+        type: string
+      tag:
+        description: Stable release tag (vX.Y.Z)
+        required: true
+        type: string
+      signature_base64:
+        description: Base64 of the independently produced raw 384-byte signature
+        required: true
+        type: string
+
+# Il minimo al workflow, l'escalation dichiarata dal job che la usa: tutti e
+# tre i job nominano gia' `actions: read` per conto proprio, quindi toglierlo
+# da qui non cambia un permesso effettivo — allinea la forma al contratto
+# verificato da tests/test_workflow_permissions.py.
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-signed-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Verify offline signature and immutable source
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      tag_sha: ${{ steps.source.outputs.tag_sha }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Verify tag, production and source-run identity
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          case "$SOURCE_RUN_ID" in
+            ''|*[!0-9]*) echo "::error::source_run_id must be numeric"; exit 1 ;;
+          esac
+          TAG_SHA="$(git rev-list -n 1 "$RELEASE_TAG")"
+          git fetch origin production --depth=1
+          test "$TAG_SHA" = "$(git rev-parse origin/production)"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" \
+            > source-run.json
+          python - "$TAG_SHA" "$RELEASE_TAG" <<'PY'
+          import json
+          import os
+          import re
+          import sys
+
+          if re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", sys.argv[2]) is None:
+              raise SystemExit("tag must be a stable semantic version")
+          run = json.load(open("source-run.json", encoding="utf-8"))
+          expected = {
+              "conclusion": "success",
+              "event": "push",
+              "head_sha": sys.argv[1],
+              "path": ".github/workflows/release.yml",
+          }
+          actual = {key: run.get(key) for key in expected}
+          if actual != expected:
+              raise SystemExit("source workflow identity mismatch")
+          if run.get("repository", {}).get("full_name") != os.environ["GITHUB_REPOSITORY"]:
+              raise SystemExit("source workflow repository mismatch")
+          PY
+          rm source-run.json
+          echo "tag_sha=$TAG_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Download exact immutable release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-candidate
+          path: release-assets
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decode and verify detached signature before publication
+        env:
+          RELEASE_SIGNATURE_BASE64: ${{ inputs.signature_base64 }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          TAG_SHA: ${{ steps.source.outputs.tag_sha }}
+        run: |
+          test -s scripts/release-keys/production-spki.pem
+          test "$(wc -c < scripts/release-keys/production-spki.pem)" -eq 625
+          if grep -q PRIVATE scripts/release-keys/production-spki.pem; then
+            echo "::error::production SPKI contains private key material"
+            exit 1
+          fi
+          test "$(python scripts/release_signing.py fingerprint \
+            --public-key scripts/release-keys/production-spki.pem)" = \
+            "3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
+          python - <<'PY'
+          import base64
+          import binascii
+          import os
+          from pathlib import Path
+
+          try:
+              signature = base64.b64decode(
+                  os.environ["RELEASE_SIGNATURE_BASE64"], validate=True
+              )
+          except (binascii.Error, ValueError) as exc:
+              raise SystemExit("detached signature is not strict base64") from exc
+          if len(signature) != 384:
+              raise SystemExit("detached signature is not exactly 384 bytes")
+          Path("release-assets/RELEASE-MANIFEST.json.sig").write_bytes(signature)
+          PY
+          mkdir release-sidecars
+          mv release-assets/*.provenance.json release-sidecars/
+          python scripts/release_artifacts.py audit \
+            --directory release-assets \
+            --tag "$RELEASE_TAG" \
+            --commit "$TAG_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-public-key scripts/release-keys/production-spki.pem
+          mv release-sidecars/*.provenance.json release-assets/
+          rmdir release-sidecars
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: signed-release-candidate
+          path: release-assets
+          if-no-files-found: error
+          retention-days: 3
+
+  installer:
+    name: Build installer from signed authority
+    runs-on: windows-2022
+    needs: authorize
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.authorize.outputs.tag_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: signed-release-candidate
+          path: release-assets
+
+      - name: Build and smoke-test installer containing exact signed authority
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          New-Item -ItemType Directory -Force game/builds/windows | Out-Null
+          Copy-Item release-assets/job-hunter-team-windows-x64-portable.exe `
+            game/builds/windows/job-hunter-team.exe
+          $version = $env:RELEASE_TAG -replace '^v', ''
+          ./scripts/build-windows-installer.ps1 -Version $version `
+            -AuthorityDirectory release-assets -Smoke
+          Copy-Item game/builds/windows/job-hunter-team-windows-x64-setup.exe release-assets/
+
+      - name: Rebuild secondary audit records including the installer
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
+        run: |
+          python scripts/release_artifacts.py record \
+            --asset release-assets/job-hunter-team-windows-x64-setup.exe \
+            --output release-assets/job-hunter-team-windows-x64-setup.exe.provenance.json \
+            --tag "$RELEASE_TAG" --commit "$TAG_SHA" \
+            --repository "$GITHUB_REPOSITORY" --source-root .
+          rm -f release-assets/SHA256SUMS release-assets/RELEASE-PROVENANCE.json
+          python scripts/release_artifacts.py verify \
+            --directory release-assets \
+            --expected-asset job-hunter-team-windows-x64-setup.exe \
+            --expected-asset job-hunter-team-windows-x64-portable.exe \
+            --expected-asset job-hunter-team.zip \
+            --expected-asset job-hunter-team-linux-x64.tar.gz \
+            --expected-asset jht-windows-update.ps1 \
+            --expected-asset RUNTIME-IMAGE.json \
+            --tag "$RELEASE_TAG" --commit "$TAG_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --checksums release-assets/SHA256SUMS \
+            --provenance release-assets/RELEASE-PROVENANCE.json
+          rm release-assets/*.provenance.json
+          python scripts/release_artifacts.py audit \
+            --directory release-assets --tag "$RELEASE_TAG" \
+            --commit "$TAG_SHA" --repository "$GITHUB_REPOSITORY" \
+            --release-public-key scripts/release-keys/production-spki.pem
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: signed-release-ready
+          path: release-assets
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    name: Publish only audited signed release
+    runs-on: ubuntu-latest
+    needs: [authorize, installer]
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.authorize.outputs.tag_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: signed-release-ready
+          path: release-assets
+
+      - name: Refuse overwrite and audit final bytes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
+        run: |
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$TAG_SHA"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::release already exists; refusing to overwrite it"
+            exit 1
+          fi
+          python scripts/release_artifacts.py audit \
+            --directory release-assets --tag "$RELEASE_TAG" \
+            --commit "$TAG_SHA" --repository "$GITHUB_REPOSITORY" \
+            --release-public-key scripts/release-keys/production-spki.pem
+
+      - name: Generate release notes
+        id: changelog
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          TAG_VERSION="${RELEASE_TAG#v}"
+          NOTES="$(awk -v version="$TAG_VERSION" '
+            $0 ~ "^## \\[" version "\\]" { capture=1; next }
+            capture && /^## \[/ { exit }
+            capture { print }
+          ' CHANGELOG.md)"
+          [ -n "$NOTES" ] || NOTES="- Release prepared without curated notes."
+          { echo "notes<<EOF"; echo "$NOTES"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+
+      # Il body consuma RELEASE-PROVENANCE.json, gia' verificato qui sopra:
+      # nessuna quinta lista di nomi asset da mantenere nelle release notes.
+      - name: Render verified SHA-256 checksums into release notes
+        env:
+          RELEASE_NOTES: ${{ steps.changelog.outputs.notes }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python scripts/release_artifacts.py notes \
+            --notes "$RELEASE_NOTES" \
+            --provenance release-assets/RELEASE-PROVENANCE.json \
+            --output release-assets/RELEASE-NOTES.md \
+            --tag "$RELEASE_TAG" \
+            --repository "$GITHUB_REPOSITORY"
+
+      - name: Create signed GitHub Release draft
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: "Job Hunter Team ${{ inputs.tag }}"
+          body_path: release-assets/RELEASE-NOTES.md
+          draft: true
+          prerelease: false
+          files: |
+            release-assets/*.exe
+            release-assets/*.zip
+            release-assets/*.tar.gz
+            release-assets/RUNTIME-IMAGE.json
+            release-assets/SHA256SUMS
+            release-assets/RELEASE-PROVENANCE.json
+            release-assets/RELEASE-MANIFEST.json
+            release-assets/RELEASE-MANIFEST.json.sig
+            release-assets/jht-windows-update.ps1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Re-download and audit the exact signed draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
+        run: |
+          mkdir release-audit
+          gh release download "$RELEASE_TAG" --dir release-audit
+          python scripts/release_artifacts.py audit \
+            --directory release-audit --tag "$RELEASE_TAG" \
+            --commit "$TAG_SHA" --repository "$GITHUB_REPOSITORY" \
+            --release-public-key scripts/release-keys/production-spki.pem
+
+      - name: Publish only the audited immutable draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          TAG_SHA: ${{ needs.authorize.outputs.tag_sha }}
+        run: |
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$TAG_SHA"
+          gh release edit "$RELEASE_TAG" --draft=false

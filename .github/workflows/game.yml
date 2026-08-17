@@ -19,6 +19,7 @@ on:
     paths:
       - "game/**"
       - "shared/skills/burn_intent.py"
+      - ".gitattributes"
       - ".github/workflows/game.yml"
       - ".github/workflows/release.yml"
   pull_request:
@@ -27,6 +28,7 @@ on:
     paths:
       - "game/**"
       - "shared/skills/burn_intent.py"
+      - ".gitattributes"
       - ".github/workflows/game.yml"
       - ".github/workflows/release.yml"
   workflow_dispatch:
@@ -73,6 +75,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+
+      - name: Census Windows trust root bytes before Godot import
+        if: runner.os == 'Windows'
+        run: python game/tools/windows_trust_root_selftest.py --source windows-runner-pre-import
 
       - uses: chickensoft-games/setup-godot@v2.4.1
         with:
@@ -188,6 +194,39 @@ jobs:
               JHT_NOVPS=1 "$GAME_BIN" --headless --quit-after 3
               ;;
           esac
+
+      - name: Gate production trust root inside exported Windows PCK
+        if: runner.os == 'Windows'
+        working-directory: game
+        run: |
+          set +e
+          trust_out="$(env JHT_NOVPS=1 JHT_WINDOWS_UPDATE_TRUST_TEST=1 \
+            "${{ matrix.output }}" --headless 2>&1)"
+          trust_rc=$?
+          set -e
+          printf '%s\n' "$trust_out"
+          test "$trust_rc" -eq 0
+          clean_out="$(printf '%s\n' "$trust_out" | tr -d '\r')"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-SOURCE exported-pck"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-BYTES path=res://release-keys/production-spki.pem present=1 size=625 cr=0 lf=11 final_lf=1"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-KEYRING size=1"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-FINGERPRINT 3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST 3ab73bd9203a2e4f5d01a61bfecbb2bd891663164732a647af8c9164da97a0b2"
+          printf '%s\n' "$clean_out" | grep -Fx \
+            "WINDOWS-UPDATE-TRUST-TEST PASS"
+
+      - name: Gate exported Windows health capability consumer
+        if: runner.os == 'Windows'
+        shell: powershell
+        working-directory: game
+        run: |
+          ./tools/windows_update_health_pck_test.ps1 `
+            -Executable '${{ matrix.output }}'
 
       - name: Preserve Linux executable permissions
         if: runner.os == 'Linux'

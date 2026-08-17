@@ -9,28 +9,49 @@ asset again and only then writes the public checksum/provenance files.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import subprocess
 from pathlib import Path
 
+try:
+    from scripts.release_manifest import (
+        ReleaseManifestError,
+        artifact_identity,
+        verify_artifact_files,
+    )
+    from scripts.release_signing import ReleaseSigningError, verify_release_signature
+except ModuleNotFoundError:  # direct ``python scripts/release_artifacts.py``
+    from release_manifest import (  # type: ignore[no-redef]
+        ReleaseManifestError,
+        artifact_identity,
+        verify_artifact_files,
+    )
+    from release_signing import (  # type: ignore[no-redef]
+        ReleaseSigningError,
+        verify_release_signature,
+    )
+
 
 TAG_RE = re.compile(r"^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SCHEMA_VERSION = 1
+SIGNED_RELEASE_BASELINE = (0, 3, 6)
+SIGNED_UPDATE_FILENAMES = {
+    "job-hunter-team-windows-x64-portable.exe",
+    "jht-windows-update.ps1",
+}
 
 
 class ReleaseArtifactError(RuntimeError):
     """Raised when an asset cannot be tied to the requested release."""
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def _identity(path: Path, directory: Path) -> tuple[int, str]:
+    try:
+        return artifact_identity(path, directory)
+    except ReleaseManifestError as exc:
+        raise ReleaseArtifactError(str(exc)) from exc
 
 
 def _git(root: Path, *args: str) -> str:
@@ -52,6 +73,15 @@ def _validate_identity(tag: str, commit: str, repository: str) -> None:
         raise ReleaseArtifactError(f"invalid repository identity: {repository}")
 
 
+def _stable_tag_version(tag: str) -> tuple[int, int, int]:
+    match = re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag)
+    if not match:
+        raise ReleaseArtifactError(
+            "signed release tag must be a stable semantic version"
+        )
+    return tuple(int(match.group(index)) for index in range(1, 4))
+
+
 def record_asset(
     *,
     asset: Path,
@@ -62,10 +92,9 @@ def record_asset(
     source_root: Path,
 ) -> dict[str, object]:
     _validate_identity(tag, commit, repository)
-    asset = asset.resolve()
+    asset = asset.parent.resolve() / asset.name
     source_root = source_root.resolve()
-    if not asset.is_file() or asset.stat().st_size == 0:
-        raise ReleaseArtifactError(f"release asset is missing or empty: {asset}")
+    asset_size, asset_sha256 = _identity(asset, asset.parent)
 
     head = _git(source_root, "rev-parse", "HEAD")
     tag_commit = _git(source_root, "rev-list", "-n", "1", tag)
@@ -84,8 +113,8 @@ def record_asset(
         "tag": tag,
         "commit": commit,
         "asset": asset.name,
-        "size": asset.stat().st_size,
-        "sha256": _sha256(asset),
+        "size": asset_size,
+        "sha256": asset_sha256,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
@@ -124,21 +153,21 @@ def verify_assets(
     for name in expected_assets:
         asset = directory / name
         sidecar = directory / f"{name}.provenance.json"
-        if not asset.is_file() or asset.stat().st_size == 0:
-            raise ReleaseArtifactError(f"release asset is missing or empty: {asset}")
         try:
             manifest = json.loads(sidecar.read_text())
         except (OSError, json.JSONDecodeError) as exc:
-            raise ReleaseArtifactError(f"invalid provenance sidecar: {sidecar}") from exc
+            raise ReleaseArtifactError(
+                f"invalid provenance sidecar: {sidecar}"
+            ) from exc
 
-        actual_hash = _sha256(asset)
+        actual_size, actual_hash = _identity(asset, directory)
         expected = {
             "schema_version": SCHEMA_VERSION,
             "repository": repository,
             "tag": tag,
             "commit": commit,
             "asset": name,
-            "size": asset.stat().st_size,
+            "size": actual_size,
             "sha256": actual_hash,
         }
         if manifest != expected:
@@ -146,9 +175,7 @@ def verify_assets(
                 f"asset provenance mismatch for {name}: {manifest!r} != {expected!r}"
             )
         checksum_lines.append(f"{actual_hash}  {name}")
-        verified.append(
-            {"asset": name, "size": asset.stat().st_size, "sha256": actual_hash}
-        )
+        verified.append({"asset": name, "size": actual_size, "sha256": actual_hash})
 
     checksums.write_text("\n".join(checksum_lines) + "\n")
     release_provenance: dict[str, object] = {
@@ -165,11 +192,41 @@ def verify_assets(
 
 
 def audit_published_release(
-    *, directory: Path, tag: str, commit: str, repository: str
+    *,
+    directory: Path,
+    tag: str,
+    commit: str,
+    repository: str,
+    release_public_key: Path | None = None,
+    allow_legacy_unsigned: bool = False,
 ) -> dict[str, object]:
     """Re-verify assets downloaded from the GitHub Release draft."""
     _validate_identity(tag, commit, repository)
     directory = directory.resolve()
+    manifest_path = directory / "RELEASE-MANIFEST.json"
+    signature_path = directory / "RELEASE-MANIFEST.json.sig"
+    tag_version = _stable_tag_version(tag)
+    signed: dict[str, object] | None = None
+    if tag_version >= SIGNED_RELEASE_BASELINE:
+        if release_public_key is None:
+            raise ReleaseArtifactError("signed release public key is required")
+        try:
+            signed = verify_release_signature(
+                manifest=manifest_path,
+                signature=signature_path,
+                public_key=release_public_key,
+            )
+        except (ReleaseManifestError, ReleaseSigningError) as exc:
+            raise ReleaseArtifactError("signed release authority audit failed") from exc
+        if (
+            signed["tag"] != tag
+            or signed["commit"] != commit
+            or signed["repository"] != repository
+        ):
+            raise ReleaseArtifactError("signed release identity mismatch")
+    elif not allow_legacy_unsigned:
+        raise ReleaseArtifactError("legacy unsigned audit requires explicit opt-in")
+
     checksums_path = directory / "SHA256SUMS"
     provenance_path = directory / "RELEASE-PROVENANCE.json"
     try:
@@ -195,7 +252,9 @@ def audit_published_release(
     provenance_by_name: dict[str, dict[str, object]] = {}
     for entry in assets:
         if not isinstance(entry, dict):
-            raise ReleaseArtifactError("public release provenance asset is not an object")
+            raise ReleaseArtifactError(
+                "public release provenance asset is not an object"
+            )
         name = entry.get("asset")
         if not isinstance(name, str) or Path(name).name != name:
             raise ReleaseArtifactError(f"invalid public release asset name: {name!r}")
@@ -204,12 +263,16 @@ def audit_published_release(
         expected_names.append(name)
         provenance_by_name[name] = entry
     if expected_names != sorted(expected_names):
-        raise ReleaseArtifactError("public release assets are not deterministically sorted")
+        raise ReleaseArtifactError(
+            "public release assets are not deterministically sorted"
+        )
 
     try:
         checksum_lines = checksums_path.read_text().splitlines()
     except OSError as exc:
-        raise ReleaseArtifactError(f"missing public checksums: {checksums_path}") from exc
+        raise ReleaseArtifactError(
+            f"missing public checksums: {checksums_path}"
+        ) from exc
     checksum_by_name: dict[str, str] = {}
     for line in checksum_lines:
         match = re.fullmatch(r"([0-9a-f]{64})  ([^/\\]+)", line)
@@ -223,7 +286,13 @@ def audit_published_release(
         path.name
         for path in directory.iterdir()
         if path.is_file()
-        and path.name not in {"SHA256SUMS", "RELEASE-PROVENANCE.json"}
+        and path.name
+        not in {
+            "SHA256SUMS",
+            "RELEASE-PROVENANCE.json",
+            "RELEASE-MANIFEST.json",
+            "RELEASE-MANIFEST.json.sig",
+        }
     }
     if actual_files != set(expected_names):
         raise ReleaseArtifactError(
@@ -233,15 +302,41 @@ def audit_published_release(
 
     for name in expected_names:
         asset = directory / name
+        actual_size, actual_sha256 = _identity(asset, directory)
         actual = {
             "asset": name,
-            "size": asset.stat().st_size,
-            "sha256": _sha256(asset),
+            "size": actual_size,
+            "sha256": actual_sha256,
         }
         if provenance_by_name[name] != actual:
-            raise ReleaseArtifactError(f"downloaded asset differs from provenance: {name}")
+            raise ReleaseArtifactError(
+                f"downloaded asset differs from provenance: {name}"
+            )
         if checksum_by_name[name] != actual["sha256"]:
-            raise ReleaseArtifactError(f"downloaded asset differs from SHA256SUMS: {name}")
+            raise ReleaseArtifactError(
+                f"downloaded asset differs from SHA256SUMS: {name}"
+            )
+
+    if signed is not None:
+        try:
+            verify_artifact_files(directory=directory, manifest=signed)
+        except (ReleaseManifestError, ReleaseSigningError) as exc:
+            raise ReleaseArtifactError("signed release authority audit failed") from exc
+        signed_assets = {
+            entry["filename"]: {
+                "asset": entry["filename"],
+                "size": entry["size"],
+                "sha256": entry["sha256"],
+            }
+            for entry in signed["artifacts"]  # type: ignore[union-attr]
+        }
+        signed_provenance = {
+            name: provenance_by_name.get(name) for name in SIGNED_UPDATE_FILENAMES
+        }
+        if signed_assets != signed_provenance:
+            raise ReleaseArtifactError(
+                "signed update assets differ from release provenance"
+            )
     return release_provenance
 
 
@@ -364,6 +459,8 @@ def _parser() -> argparse.ArgumentParser:
     audit.add_argument("--tag", required=True)
     audit.add_argument("--commit", required=True)
     audit.add_argument("--repository", required=True)
+    audit.add_argument("--release-public-key", type=Path)
+    audit.add_argument("--allow-legacy-unsigned", action="store_true")
 
     notes = subparsers.add_parser(
         "notes", help="render a GitHub Release body from verified provenance"
@@ -404,6 +501,8 @@ def main() -> int:
                 tag=args.tag,
                 commit=args.commit,
                 repository=args.repository,
+                release_public_key=args.release_public_key,
+                allow_legacy_unsigned=args.allow_legacy_unsigned,
             )
         else:
             result = render_release_notes(

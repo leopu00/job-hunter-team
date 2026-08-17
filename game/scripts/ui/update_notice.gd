@@ -37,8 +37,7 @@ func _ready() -> void:
 	_later = Button.new()
 	_later.text = UIStrings.t("update.later")
 	_later.add_theme_color_override("font_color", Palette.MUTED)
-	_later.pressed.connect(func() -> void:
-		UpdateService.defer())
+	_later.pressed.connect(_on_later)
 	row.add_child(_later)
 	UpdateService.state_changed.connect(_refresh)
 	_refresh(UpdateService.state())
@@ -55,7 +54,9 @@ func _refresh(state: Dictionary) -> void:
 	var phase := str(state.get("phase", ""))
 	# Il defer appartiene al servizio ed e legato alla versione: sopravvive al
 	# riavvio senza nascondere una release successiva.
-	if bool(state.get("deferred", false)) and phase != UpdateService.PHASE_DONE:
+	if phase == UpdateService.PHASE_DEFERRED \
+			or (bool(state.get("deferred", false)) \
+			and phase not in [UpdateService.PHASE_DONE, UpdateService.PHASE_READY]):
 		visible = false
 		return
 	var latest := str(state.get("latest", ""))
@@ -72,11 +73,19 @@ func _refresh(state: Dictionary) -> void:
 		UpdateService.PHASE_DOWNLOADING:
 			_label.text = UIStrings.t("update.downloading") % int(state.get("progress", 0))
 		UpdateService.PHASE_INSTALLING:
-			_label.text = UIStrings.t("update.installing")
+			_label.text = UIStrings.t("update.verifying" if OS.get_name() == "Windows"
+					else "update.installing")
 		UpdateService.PHASE_DONE:
 			_label.text = UIStrings.t("update.installed") % latest
 			_act.text = UIStrings.t("update.restart")
 			acting = true
+		UpdateService.PHASE_READY:
+			_label.text = UIStrings.t("update.ready") % latest
+			_act.text = UIStrings.t("update.restart")
+			acting = true
+			closable = true
+		UpdateService.PHASE_EXIT_PREPARING:
+			_label.text = UIStrings.t("update.exit_preparing")
 		UpdateService.PHASE_FAILED:
 			# Fallito non vuol dire perso: resta la strada che l'utente avrebbe
 			# comunque, cioè la pagina da cui scaricare a mano.
@@ -85,11 +94,18 @@ func _refresh(state: Dictionary) -> void:
 			_act.text = UIStrings.t("update.open_page")
 			acting = true
 			closable = true
+		UpdateService.PHASE_RECOVERED:
+			_label.text = UIStrings.t("update.recovered")
+			_act.text = UIStrings.t("update.open_page")
+			acting = true
+			closable = true
 		_:
 			visible = false
 			return
 	_act.visible = acting
 	_later.visible = closable
+	_later.text = UIStrings.t("update.dismiss" if phase in [UpdateService.PHASE_FAILED,
+			UpdateService.PHASE_RECOVERED] else "update.later")
 	_paint(Palette.RED if phase == UpdateService.PHASE_FAILED else Palette.BLUE)
 	visible = true
 
@@ -108,7 +124,14 @@ func _on_act() -> void:
 	match UpdateService.phase:
 		UpdateService.PHASE_AVAILABLE:
 			UpdateService.install()
-		UpdateService.PHASE_DONE:
+		UpdateService.PHASE_DONE, UpdateService.PHASE_READY:
 			UpdateService.restart()
 		_:
 			UpdateService.open_release_page()
+
+
+func _on_later() -> void:
+	if UpdateService.phase in [UpdateService.PHASE_FAILED, UpdateService.PHASE_RECOVERED]:
+		UpdateService.dismiss()
+	else:
+		UpdateService.defer()

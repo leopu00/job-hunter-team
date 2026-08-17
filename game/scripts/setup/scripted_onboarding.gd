@@ -60,6 +60,9 @@ var _dismissed := false
 func _ready() -> void:
 	if not WindowsInstanceGuard.normal_work_allowed():
 		return
+	if not await Game.windows_health_boot_allowed():
+		return
+	Game.mark_windows_health_normal_work("onboarding")
 	TutorialHarness.reset_file_if_requested(_state_path())
 	TutorialHarness.reset_file_if_requested(context_json_path())
 	TutorialHarness.reset_file_if_requested(context_markdown_path())

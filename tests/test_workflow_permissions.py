@@ -35,7 +35,18 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
         "check-version": READ_CONTENTS,
         "build-game": READ_CONTENTS,
         "publish-runtime": {"contents": "read", "packages": "write"},
-        "release": {"contents": "write"},
+        # `release` non scrive piu': prepara il candidato e lo consegna come
+        # artifact. La scrittura vive solo in publish-signed-release.yml, dopo
+        # la verifica della firma detached.
+        "release": READ_CONTENTS,
+    },
+    # La pubblicazione firmata e' un workflow a parte proprio perche' e' l'unico
+    # che scrive: `publish` alza `contents: write` da solo, gli altri due job
+    # restano in lettura.
+    "publish-signed-release.yml": {
+        "authorize": {"actions": "read", "contents": "read"},
+        "installer": {"actions": "read", "contents": "read"},
+        "publish": {"actions": "read", "contents": "write"},
     },
     "security.yml": {
         "audit": READ_CONTENTS,
@@ -53,6 +64,7 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     "windows-config-acl.yml": {"acl": READ_CONTENTS},
     "windows-dev-smoke.yml": {"next-dev": READ_CONTENTS},
     "windows-installer-smoke.yml": {"nsis": READ_CONTENTS},
+    "windows-update-helper.yml": {"powershell51": READ_CONTENTS},
 }
 
 
@@ -77,7 +89,7 @@ def test_all_workflows_have_only_the_minimum_explicit_permissions():
     workflow_paths = {path.name: path for path in WORKFLOW_DIR.glob("*.yml")}
 
     assert set(workflow_paths) == set(EXPECTED_EFFECTIVE_PERMISSIONS)
-    assert len(workflow_paths) == 12
+    assert len(workflow_paths) == 14
 
     for name, expected_jobs in EXPECTED_EFFECTIVE_PERMISSIONS.items():
         workflow = _load_workflow(workflow_paths[name])

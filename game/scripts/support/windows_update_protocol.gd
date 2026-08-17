@@ -14,6 +14,16 @@ const SHA256_HEX_LENGTH := 64
 const FRAME_READY := "ready"
 const FRAME_HEALTHY := "healthy"
 
+const RESULT_PHASES: Array[String] = ["ready", "committed", "recovered", "rollback",
+		"failed"]
+const RESULT_CODES: Array[String] = ["verified", "updated",
+		"interrupted_commit_completed", "old_version_intact", "health_ack_failed",
+		"interrupted_update_recovered", "recovery_restart_failed",
+		"recovery_restart_handoff_ready_failed", "recovery_restart_release_failed",
+		"recovery_result_write_failed", "recovery_handoff_identity_failed",
+		"recovery_handoff_ready_failed", "recovery_handoff_wait_failed",
+		"recovery_target_process_count_failed", "old_process_timeout", "update_failed"]
+
 const JOURNAL_PREPARED := "prepared"
 const JOURNAL_SWAP_INTENT := "swap_intent"
 const JOURNAL_CANDIDATE_INSTALLED := "candidate_installed"
@@ -27,6 +37,18 @@ const RECOVERY_COMMIT := "commit"
 const RECOVERY_RESTORE_OLD := "restore_old"
 const RECOVERY_CLEANUP_OWNED := "cleanup_owned"
 const RECOVERY_FAIL_CLOSED := "fail_closed"
+
+const HEALTH_BOOT_PENDING := 0
+const HEALTH_BOOT_ALLOW := 1
+const HEALTH_BOOT_DENY := -1
+
+
+static func health_boot_gate(requested: bool, completed: bool, ok: bool) -> int:
+	if not requested:
+		return HEALTH_BOOT_ALLOW
+	if not completed:
+		return HEALTH_BOOT_PENDING
+	return HEALTH_BOOT_ALLOW if ok else HEALTH_BOOT_DENY
 
 
 static func is_lower_hex(value: String, expected_length: int) -> bool:
@@ -70,6 +92,14 @@ static func _decimal(value: String) -> bool:
 	return true
 
 
+static func _canonical_windows_executable(value: String) -> String:
+	var path := value.replace("\\", "/")
+	if path.length() < 4 or path[1] != ":" or path[2] != "/" \
+			or path.split("/").has("..") or "\n" in path or "\r" in path:
+		return ""
+	return path.to_lower()
+
+
 static func _has_exact_keys(value: Dictionary, expected: Array[String]) -> bool:
 	if value.size() != expected.size():
 		return false
@@ -79,17 +109,60 @@ static func _has_exact_keys(value: Dictionary, expected: Array[String]) -> bool:
 	return true
 
 
+static func _has_type(value: Dictionary, key: String, expected_type: int) -> bool:
+	return value.has(key) and typeof(value[key]) == expected_type
+
+
+## JSON non distingue integer e float e il parser Godot materializza ogni
+## numero come TYPE_FLOAT. Accettiamo quindi soltanto un numero JSON finito,
+## integrale e nel range esatto IEEE-754 (oppure l'int nativo prodotto in
+## memoria); stringhe e booleani non vengono mai coercizzati.
+static func _json_integer(value: Dictionary, key: String, minimum: int) -> bool:
+	if not value.has(key) or typeof(value[key]) not in [TYPE_INT, TYPE_FLOAT]:
+		return false
+	var number := float(value[key])
+	return is_finite(number) and number >= float(minimum) \
+			and number <= 9007199254740991.0 and floor(number) == number
+
+
 ## Frame emesso dal helper DOPO la propria verifica indipendente, ma prima che
 ## il processo vecchio esca. Serve al gioco solo per sapere che puo chiudersi;
 ## non viene mai riusato dal helper come prova della firma.
 static func ready_frame_matches(frame: Dictionary, expected: Dictionary) -> bool:
 	return _has_exact_keys(frame, ["schema", "type", "ok", "nonce",
-			"request_id", "instance_id", "old_pid", "old_started",
+			"request_id", "instance_id", "old_pid", "old_started", "old_exe_path",
+			"handoff_pid", "handoff_started", "handoff_exe_path",
 			"manifest_sha256", "candidate_sha256"]) \
+			and _json_integer(frame, "schema", 1) \
+			and _has_type(frame, "type", TYPE_STRING) \
+			and _has_type(frame, "ok", TYPE_BOOL) \
+			and _has_type(frame, "nonce", TYPE_STRING) \
+			and _has_type(frame, "request_id", TYPE_STRING) \
+			and _has_type(frame, "instance_id", TYPE_STRING) \
+			and _json_integer(frame, "old_pid", 1) \
+			and _has_type(frame, "old_started", TYPE_STRING) \
+			and _has_type(frame, "old_exe_path", TYPE_STRING) \
+			and _json_integer(frame, "handoff_pid", 1) \
+			and _has_type(frame, "handoff_started", TYPE_STRING) \
+			and _has_type(frame, "handoff_exe_path", TYPE_STRING) \
+			and _has_type(frame, "manifest_sha256", TYPE_STRING) \
+			and _has_type(frame, "candidate_sha256", TYPE_STRING) \
+			and _has_type(expected, "nonce", TYPE_STRING) \
+			and _has_type(expected, "request_id", TYPE_STRING) \
+			and _has_type(expected, "instance_id", TYPE_STRING) \
+			and _has_type(expected, "old_pid", TYPE_INT) \
+			and _has_type(expected, "old_exe_path", TYPE_STRING) \
+			and _has_type(expected, "handoff_exe_path", TYPE_STRING) \
+			and not expected.has("old_started") \
+			and not expected.has("handoff_pid") \
+			and not expected.has("handoff_started") \
+			and _has_type(expected, "manifest_sha256", TYPE_STRING) \
+			and _has_type(expected, "candidate_sha256", TYPE_STRING) \
 			and _valid_token(str(expected.get("request_id", ""))) \
 			and _valid_token(str(expected.get("instance_id", ""))) \
 			and int(expected.get("old_pid", 0)) > 0 \
-			and _decimal(str(expected.get("old_started", ""))) \
+			and _decimal(str(frame.get("old_started", ""))) \
+			and _decimal(str(frame.get("handoff_started", ""))) \
 			and int(frame.get("schema", 0)) == SCHEMA \
 			and str(frame.get("type", "")) == FRAME_READY \
 			and bool(frame.get("ok", false)) \
@@ -98,7 +171,19 @@ static func ready_frame_matches(frame: Dictionary, expected: Dictionary) -> bool
 			and str(frame.get("request_id", "")) == str(expected.get("request_id", "")) \
 			and str(frame.get("instance_id", "")) == str(expected.get("instance_id", "")) \
 			and int(frame.get("old_pid", 0)) == int(expected.get("old_pid", -1)) \
-			and str(frame.get("old_started", "")) == str(expected.get("old_started", "")) \
+			and _canonical_windows_executable(str(expected.get("old_exe_path", ""))) != "" \
+			and _canonical_windows_executable(str(frame.get("old_exe_path", ""))) \
+					== _canonical_windows_executable(str(expected.get("old_exe_path", ""))) \
+			and str(frame.get("old_exe_path", "")) \
+					== _canonical_windows_executable(str(frame.get("old_exe_path", ""))) \
+			and int(frame.get("handoff_pid", 0)) > 0 \
+			and _canonical_windows_executable( \
+					str(expected.get("handoff_exe_path", ""))) != "" \
+			and _canonical_windows_executable(str(frame.get("handoff_exe_path", ""))) \
+					== _canonical_windows_executable( \
+							str(expected.get("handoff_exe_path", ""))) \
+			and str(frame.get("handoff_exe_path", "")) \
+					== _canonical_windows_executable(str(frame.get("handoff_exe_path", ""))) \
 			and valid_sha256(str(frame.get("manifest_sha256", ""))) \
 			and str(frame.get("manifest_sha256", "")) \
 					== str(expected.get("manifest_sha256", "")) \
@@ -109,42 +194,158 @@ static func ready_frame_matches(frame: Dictionary, expected: Dictionary) -> bool
 
 ## Il processo nuovo emette questo frame soltanto dopo due frame del motore.
 ## Versione e hash vengono misurati dal processo nuovo, non copiati dal journal.
-static func health_frame(nonce: String, version: String, exe_sha256: String) -> Dictionary:
+static func health_frame(nonce: String, version: String, exe_path: String,
+		exe_sha256: String, pid: int, process_started_utc_ticks: String) -> Dictionary:
 	if not valid_nonce(nonce) or UpdateCheck.parse_version(version).is_empty() \
-			or not valid_sha256(exe_sha256):
+			or exe_path.is_empty() or not valid_sha256(exe_sha256) or pid <= 0 \
+			or not _decimal(process_started_utc_ticks):
 		return {}
 	return {
 		"schema": SCHEMA,
 		"type": FRAME_HEALTHY,
 		"nonce": nonce,
 		"version": version,
+		"exe_path": exe_path,
 		"exe_sha256": exe_sha256,
+		"pid": pid,
+		"process_started_utc_ticks": process_started_utc_ticks,
 	}
 
 
+static func recovery_handoff_matches(frame: Dictionary, ready: Dictionary,
+		nonce: String, pid: int, started: String, executable: String) -> bool:
+	var canonical_executable := _canonical_windows_executable(executable)
+	var ready_expected := {
+		"nonce": nonce,
+		"request_id": str(ready.get("request_id", "")),
+		"instance_id": str(ready.get("instance_id", "")),
+		"old_pid": int(ready.get("old_pid", 0)),
+		"old_exe_path": canonical_executable,
+		"handoff_exe_path": canonical_executable,
+		"manifest_sha256": str(ready.get("manifest_sha256", "")),
+		"candidate_sha256": str(ready.get("candidate_sha256", "")),
+	}
+	return canonical_executable != "" \
+			and ready_frame_matches(ready, ready_expected) \
+			and int(ready.get("handoff_pid", 0)) == pid \
+			and str(ready.get("handoff_started", "")) == started \
+			and _has_exact_keys(frame, ["schema", "action", "nonce", "request_id",
+					"instance_id", "exe_path", "pid",
+				"process_started_utc_ticks"]) \
+			and _json_integer(frame, "schema", 1) \
+			and _has_type(frame, "action", TYPE_STRING) \
+			and _has_type(frame, "nonce", TYPE_STRING) \
+			and _has_type(frame, "request_id", TYPE_STRING) \
+			and _has_type(frame, "instance_id", TYPE_STRING) \
+			and _has_type(frame, "exe_path", TYPE_STRING) \
+			and _json_integer(frame, "pid", 1) \
+			and _has_type(frame, "process_started_utc_ticks", TYPE_STRING) \
+			and int(frame.get("schema", 0)) == SCHEMA \
+			and str(frame.get("action", "")) == "quit" \
+			and valid_nonce(nonce) and str(frame.get("nonce", "")) == nonce \
+			and str(frame.get("request_id", "")) == str(ready.get("request_id", "")) \
+			and str(frame.get("instance_id", "")) == str(ready.get("instance_id", "")) \
+			and str(frame.get("exe_path", "")) == canonical_executable \
+			and pid > 0 and int(frame.get("pid", 0)) == pid \
+			and _decimal(started) \
+			and str(frame.get("process_started_utc_ticks", "")) == started
+
+
 static func health_frame_matches(frame: Dictionary, nonce: String,
-		version: String, exe_sha256: String) -> bool:
-	return frame == health_frame(nonce, version, exe_sha256)
+		version: String, exe_sha256: String, exe_path := "", pid := 0,
+		process_started_utc_ticks := "") -> bool:
+	return _has_exact_keys(frame, ["schema", "type", "nonce", "version",
+			"exe_path", "exe_sha256", "pid", "process_started_utc_ticks"]) \
+			and _json_integer(frame, "schema", 1) \
+			and _has_type(frame, "type", TYPE_STRING) \
+			and _has_type(frame, "nonce", TYPE_STRING) \
+			and _has_type(frame, "version", TYPE_STRING) \
+			and _has_type(frame, "exe_path", TYPE_STRING) \
+			and _has_type(frame, "exe_sha256", TYPE_STRING) \
+			and _json_integer(frame, "pid", 1) \
+			and _has_type(frame, "process_started_utc_ticks", TYPE_STRING) \
+			and valid_nonce(nonce) \
+			and not UpdateCheck.parse_version(version).is_empty() \
+			and valid_sha256(exe_sha256) \
+			and not str(frame.get("exe_path", "")).is_empty() \
+			and _decimal(str(frame.get("process_started_utc_ticks", ""))) \
+			and int(frame.get("schema", 0)) == SCHEMA \
+			and str(frame.get("type", "")) == FRAME_HEALTHY \
+			and str(frame.get("nonce", "")) == nonce \
+			and str(frame.get("version", "")) == version \
+			and str(frame.get("exe_sha256", "")) == exe_sha256 \
+			and (exe_path == "" or str(frame.get("exe_path", "")) == exe_path) \
+			and (pid <= 0 or int(frame.get("pid", 0)) == pid) \
+			and (process_started_utc_ticks == "" \
+					or str(frame.get("process_started_utc_ticks", "")) \
+							== process_started_utc_ticks)
 
 
-## Cartella ACK deterministica: nessun path arriva dal manifest o da argv. Il
-## helper crea e protegge la directory e, dopo la lettura, ne riverifica owner,
-## ACL e assenza di reparse point. Il gioco scrive soltanto il frame di salute.
-static func health_dir(local_app_data: String, nonce: String) -> String:
-	var root := local_app_data.replace("\\", "/").trim_suffix("/")
-	var drive := root[0].to_upper() if not root.is_empty() else ""
-	if root.length() < 3 or root[1] != ":" or root[2] != "/" \
+## Esito non-autoritativo ma esatto del helper. Il gioco lo usa soltanto per
+## mostrare commit/rollback/recovery; firma, floor e journal restano helper-owned.
+static func result_frame_matches(frame: Dictionary, nonce: String) -> bool:
+	var shape_ok := _has_exact_keys(frame, ["schema", "ok", "phase", "code", "nonce",
+			"rolled_back"]) \
+			and _json_integer(frame, "schema", 1) \
+			and _has_type(frame, "ok", TYPE_BOOL) \
+			and _has_type(frame, "phase", TYPE_STRING) \
+			and _has_type(frame, "code", TYPE_STRING) \
+			and _has_type(frame, "nonce", TYPE_STRING) \
+			and _has_type(frame, "rolled_back", TYPE_BOOL) \
+			and int(frame.get("schema", 0)) == SCHEMA \
+			and valid_nonce(nonce) and str(frame.get("nonce", "")) == nonce \
+			and str(frame.get("phase", "")) in RESULT_PHASES \
+			and str(frame.get("code", "")) in RESULT_CODES
+	if not shape_ok:
+		return false
+	var phase := str(frame["phase"])
+	var code := str(frame["code"])
+	var ok := bool(frame["ok"])
+	var rollback := bool(frame["rolled_back"])
+	return (phase == "ready" and code == "verified" and ok and not rollback) \
+			or (phase == "ready" and code == "old_process_timeout" \
+					and not ok and not rollback) \
+			or (phase == "committed" and code in ["updated",
+					"interrupted_commit_completed"] and ok and not rollback) \
+			or (phase == "recovered" and code == "old_version_intact" and ok) \
+			or (phase == "rollback" and code in ["health_ack_failed",
+					"interrupted_update_recovered", "recovery_restart_failed",
+					"recovery_restart_handoff_ready_failed",
+					"recovery_restart_release_failed",
+					"recovery_target_process_count_failed",
+					"recovery_result_write_failed"] and not ok and rollback) \
+			or (phase == "failed" and code in ["update_failed",
+					"recovery_handoff_identity_failed", "recovery_handoff_ready_failed",
+					"recovery_handoff_wait_failed"] and not ok \
+					and not rollback)
+
+
+## Il helper consegna al processo nuovo una capability esplicita gia creata e
+## protetta. Qui si rifiutano soltanto forme palesemente ambigue/traversal: NON
+## e path authority. Dopo la scrittura il helper deve ancora verificare percorso
+## canonico, owner, ACL e assenza di reparse point prima di fidarsi dell'ACK.
+static func health_capability_path(capability: String, nonce: String) -> String:
+	var path := capability.replace("\\", "/")
+	var drive := path[0].to_upper() if not path.is_empty() else ""
+	if path.length() < 3 or path[1] != ":" or path[2] != "/" \
 			or drive not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
-			or "\n" in root or "\r" in root \
-			or root.split("/").has("..") or not valid_nonce(nonce):
+			or "\n" in path or "\r" in path or path.split("/").has("..") \
+			or not valid_nonce(nonce):
 		return ""
-	return root.path_join("Job Hunter Team").path_join(
-			"host-runtime").path_join("updates").path_join(nonce)
+	var expected_suffix := "/host-runtime/%s/health.json" % nonce
+	return path if path.ends_with(expected_suffix) else ""
 
 
-static func health_path(local_app_data: String, nonce: String) -> String:
-	var directory := health_dir(local_app_data, nonce)
-	return "" if directory == "" else directory.path_join("health.json")
+static func recovery_handoff_capability_path(capability: String, nonce: String) -> String:
+	var path := capability.replace("\\", "/")
+	var drive := path[0].to_upper() if not path.is_empty() else ""
+	if path.length() < 3 or path[1] != ":" or path[2] != "/" \
+			or drive not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
+			or "\n" in path or "\r" in path or path.split("/").has("..") \
+			or not valid_nonce(nonce):
+		return ""
+	var expected_suffix := "/host-runtime/%s/handoff.json" % nonce
+	return path if path.to_lower().ends_with(expected_suffix) else ""
 
 
 ## Recovery conservativa e idempotente. Non restituisce mai "apply": dopo un
@@ -190,6 +391,13 @@ static func recovery_action(journal: Dictionary, target_sha256: String,
 static func _valid_journal(journal: Dictionary) -> bool:
 	if not _has_exact_keys(journal, ["schema", "nonce", "installed_version",
 			"target_version", "old_sha256", "candidate_sha256", "state"]) \
+			or not _json_integer(journal, "schema", 1) \
+			or not _has_type(journal, "nonce", TYPE_STRING) \
+			or not _has_type(journal, "installed_version", TYPE_STRING) \
+			or not _has_type(journal, "target_version", TYPE_STRING) \
+			or not _has_type(journal, "old_sha256", TYPE_STRING) \
+			or not _has_type(journal, "candidate_sha256", TYPE_STRING) \
+			or not _has_type(journal, "state", TYPE_STRING) \
 			or int(journal.get("schema", 0)) != SCHEMA \
 			or not valid_nonce(str(journal.get("nonce", ""))) \
 			or UpdateCheck.parse_version(str(journal.get("installed_version", ""))).is_empty() \
@@ -197,7 +405,9 @@ static func _valid_journal(journal: Dictionary) -> bool:
 			or not UpdateCheck.is_newer(str(journal.get("target_version", "")),
 					str(journal.get("installed_version", ""))) \
 			or not valid_sha256(str(journal.get("old_sha256", ""))) \
-			or not valid_sha256(str(journal.get("candidate_sha256", ""))):
+			or not valid_sha256(str(journal.get("candidate_sha256", ""))) \
+			or str(journal.get("old_sha256", "")) \
+					== str(journal.get("candidate_sha256", "")):
 		return false
 	return str(journal.get("state", "")) in [JOURNAL_PREPARED,
 			JOURNAL_SWAP_INTENT, JOURNAL_CANDIDATE_INSTALLED,

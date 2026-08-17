@@ -83,6 +83,14 @@ matrix_run() {
 			skipped=$((skipped + 1))
 			continue
 		fi
+		# I gate Windows richiedono il PCK e le primitive del runner Windows
+		# (fra cui la trust root materializzata dal job). run.ps1 li esegue;
+		# il runner POSIX li salta a voce, come run.ps1 fa per i test posix.
+		if [ "$platform" = "windows" ]; then
+			skipped=$((skipped + 1))
+			printf '[run.sh] SKIP %s -- dichiarato Windows-only in test-matrix.txt\n' "$id" >&2
+			continue
+		fi
 		ran=$((ran + 1))
 		printf '[run.sh] %-22s (%s/%s) …\n' "$id" "$tier" "$kind" >&2
 		if matrix_run_one "$kind" "$envs" "$target" "$marker"; then

@@ -83,6 +83,13 @@ while IFS= read -r file; do
         continue
     fi
 
+    # Uniche PEM ammesse: la stessa root PUBBLICA RSA canonica e la copia nel
+    # progetto Godot esportata nel PCK. I gate impongono byte identici,
+    # byte-count e fingerprint DER; tutte le private key restano vietate.
+    if [[ "$file" == "scripts/release-keys/production-spki.pem" || "$file" == "game/release-keys/production-spki.pem" ]]; then
+        continue
+    fi
+
     # Estrai estensione
     ext="${basename##*.}"
     if [[ "$ext" == "$basename" ]]; then

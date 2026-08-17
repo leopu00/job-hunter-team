@@ -101,6 +101,9 @@ var _visited := {}
 func _ready() -> void:
 	if not WindowsInstanceGuard.normal_work_allowed():
 		return
+	if not await Game.windows_health_boot_allowed():
+		return
+	Game.mark_windows_health_normal_work("tour")
 	# TEST-AUTO: JHT_TOUR_TEST=1 (selftest) e JHT_TOUR_PREVIEW=1 (shot)
 	# partono sempre da zero e non toccano il salvataggio dell'utente.
 	_test_mode = OS.get_environment("JHT_TOUR_TEST") == "1" \

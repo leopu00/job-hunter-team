@@ -17,6 +17,21 @@ RELEASE_OS = {WINDOWS_OS, *POSIX_OS}
 POSIX_COMMAND = "bash game/tools/run.sh test gate"
 WINDOWS_COMMAND = "./game/tools/run.ps1 test gate"
 
+# Nominati uno per uno, e per la sola ragione che li rende necessari: censire
+# una FASE che la matrice non sa esprimere. windows_trust_root_checkout misura
+# i byte della trust root PRIMA dell'import di Godot — dopo l'import quei byte
+# non sono piu' osservabili, e un gate della matrice gira sempre dopo.
+# Aggiungere un ID qui e' una decisione da motivare; senza, resta il divieto.
+PHASE_CENSUS_EXCEPTIONS = {"windows_trust_root_checkout"}
+
+
+def continued_lines(source: str) -> list[str]:
+    # Le invocazioni possono andare a capo: le ricompongo prima di cercare,
+    # altrimenti un a capo aggiunto domani fa rosso senza che nulla sia
+    # peggiorato. `\` per bash/sh, backtick per PowerShell.
+    joined = source.replace("\\\n", " ").replace("`\n", " ")
+    return joined.splitlines()
+
 
 def _load_release() -> dict:
     # BaseLoader conserva `on` come testo e le espressioni Actions intatte.
@@ -106,7 +121,19 @@ def test_release_consumes_every_applicable_gate_from_the_canonical_matrix():
         # possono comparire legittimamente negli smoke dell'artefatto. Sono i
         # path dei selftest a costituire una seconda lista della suite.
         if "tools/" in row["target"]:
-            assert row["target"] not in release_source, row["id"]
+            if row["id"] not in PHASE_CENSUS_EXCEPTIONS:
+                assert row["target"] not in release_source, row["id"]
+                continue
+            # L'eccezione e' legata all'ID, non alla presenza di un flag: un
+            # secondo selftest nel workflow torna cosi' a essere una decisione
+            # da prendere QUI, non un flag da aggiungere la'. La fase va
+            # comunque nominata nell'invocazione.
+            occurrences = [
+                line for line in continued_lines(release_source)
+                if row["target"] in line
+            ]
+            assert occurrences, row["id"]
+            assert all("--source " in line for line in occurrences), row["id"]
 
 
 def test_a_new_gate_enters_all_applicable_release_jobs_without_workflow_changes():

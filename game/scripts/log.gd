@@ -16,7 +16,11 @@ func _enter_tree() -> void:
 	# La sessione precedente sopravvive in .prev.log: dopo un crash il log
 	# corrente riparte vuoto e la diagnosi andrebbe persa (crash Docker 21/07).
 	var live := ProjectSettings.globalize_path("user://jht-game.log")
-	if FileAccess.file_exists(live):
+	# Il gate exported-PCK precrea questo output con owner/DACL attestati. In quel
+	# protocollo soltanto, aprilo in-place invece di rinominarlo e ricrearlo con
+	# il default owner del token Windows.
+	var health_gate := OS.get_environment("JHT_WINDOWS_UPDATE_HEALTH_BOOT_TEST") == "1"
+	if FileAccess.file_exists(live) and not health_gate:
 		DirAccess.rename_absolute(live,
 				ProjectSettings.globalize_path("user://jht-game.prev.log"))
 	_file = FileAccess.open("user://jht-game.log", FileAccess.WRITE)

@@ -1506,6 +1506,11 @@
       "last_review": "2026-08-07"
     },
     {
+      "path": "scripts/release-keys/README.md",
+      "description": "Contratto di custodia e rotazione delle chiavi pubbliche per i manifest release Windows firmati",
+      "last_review": null
+    },
+    {
       "path": "docs/guides/CHOOSE-WHERE-TO-RUN.md",
       "description": "Guida pubblica per scegliere fra runtime sul PC locale, PC Linux dedicato in LAN via SSH e VPS, con requisiti, confini dati, disponibilità, costi operativi e limiti correnti",
       "last_review": null

@@ -19,6 +19,9 @@ func _ready() -> void:
 	if not WindowsInstanceGuard.normal_work_allowed():
 		return
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if not await Game.windows_health_boot_allowed():
+		return
+	Game.mark_windows_health_normal_work("sfx")
 	_tick = _tone([[1500.0, 0.014]], -18.0)
 	_blip = _tone([[880.0, 0.05]], -12.0)
 	_confirm = _tone([[660.0, 0.05], [990.0, 0.07]], -10.0)

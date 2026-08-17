@@ -155,9 +155,14 @@ def test_installare_sopra_dati_esistenti_non_cambia():
     """Nessuna pagina nuova nel percorso di INSTALLAZIONE, nessun reset."""
     src = nsi()
     install_pages = re.findall(r"!insertmacro\s+(MUI_PAGE_[A-Z_]+)", src)
+    # MUI_PAGE_DIRECTORY e' stata TOLTA di proposito: l'updater e' una
+    # capability host e AssertSafeInstallDir accetta un solo percorso, quello
+    # protetto sotto LOCALAPPDATA. Lasciare la pagina significherebbe offrire
+    # una scelta che l'installer poi rifiuta. La proprieta' misurata qui resta
+    # la stessa — nessuna pagina NUOVA nel percorso di installazione e nessun
+    # reset dei dati utente.
     assert install_pages == [
         "MUI_PAGE_WELCOME",
-        "MUI_PAGE_DIRECTORY",
         "MUI_PAGE_INSTFILES",
         "MUI_PAGE_FINISH",
     ], install_pages
