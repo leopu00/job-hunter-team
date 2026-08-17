@@ -1006,8 +1006,13 @@ function Invoke-HealthCase {
       @()
     }
     if (($normalWork -join ',') -cne ($expectedNormalWork -join ',')) {
+      # I due elenchi, non solo il fatto che differiscano: senza, il rosso dice
+      # che qualcuno ha proseguito ma non chi, e il componente da correggere si
+      # ricava per censimento invece che dal log.
       throw ('health case normal-work mismatch mode=' + $Mode +
-        ' native_rc=' + $nativeExitCode + ' managed_rc=' + $managedExitCode)
+        ' native_rc=' + $nativeExitCode + ' managed_rc=' + $managedExitCode +
+        ' observed=[' + ($normalWork -join ',') +
+        '] expected=[' + ($expectedNormalWork -join ',') + ']')
     }
     $expectedExitCode = if ($Mode -in @('guard-source','normal','positive')) { 0 } else { 1 }
     if ($nativeExitCode -ne $expectedExitCode) {
