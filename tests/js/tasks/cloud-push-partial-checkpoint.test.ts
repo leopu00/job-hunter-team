@@ -34,7 +34,7 @@ const POSITIONS = [
   { id: 4, updated_at: "2026-08-15 09:00:00" },
 ];
 
-function fixture() {
+function fixture(chunk = "2") {
   previousHome = process.env.JHT_HOME;
   previousChunk = process.env.JHT_PUSH_POS_CHUNK;
   const home = mkdtempSync(join(tmpdir(), "jht-partial-checkpoint-"));
@@ -42,7 +42,7 @@ function fixture() {
   process.env.JHT_HOME = home;
   // Il taglio del chunk è il cuore del difetto: qui è due invece di
   // settantacinque per poterlo scrivere in quattro righe di dati.
-  process.env.JHT_PUSH_POS_CHUNK = "2";
+  process.env.JHT_PUSH_POS_CHUNK = chunk;
   writeFileSync(
     join(home, "cloud.json"),
     JSON.stringify({
@@ -276,6 +276,60 @@ describe("O-97 — checkpoint fino all'ultimo chunk confermato", () => {
     // E il cursore arriva in fondo: la riga isolata e' «sistemata», non pendente.
     expect(cursor(home)?.positions).toBe("2026-08-15 09:00:00");
   });
+
+  it.each([
+    ["1", 1],
+    ["2", 2],
+    ["3", 3],
+    ["4", 4],
+    ["3", 1],
+    ["4", 2],
+  ])(
+    "con chunk %s e colpevole %i la bisezione finisce sempre su un singleton",
+    async (chunk, colpevole) => {
+      /**
+       * La proprietà su cui poggia tutto il resto del pezzo 2: la fotografia
+       * che il cloud allega al rifiuto esiste SOLO quando il batch è una riga
+       * sola — con più righe il server non sa quale sia la colpevole, e
+       * risponderne una a caso sarebbe peggio che non risponderne.
+       *
+       * Se esistesse un cammino che si ferma prima del singleton, quella
+       * posizione resterebbe divergente e ogni push futuro la rifiuterebbe di
+       * nuovo: difetto silenzioso e perpetuo, la forma che O-97 ha già avuto
+       * una volta. Qui si prova sul writer vero, per ogni taglio di chunk e
+       * per il colpevole in testa, in mezzo e in coda.
+       */
+      const { dbPath } = fixture(chunk);
+      const rifiutate: number[][] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (_url: unknown, init?: RequestInit) => {
+          const body = JSON.parse(String(init?.body || "{}"));
+          const table = Object.keys(body)[0];
+          const rows = body[table] as Array<{ id?: number }>;
+          if (table === "positions" && rows.some((r) => r.id === colpevole)) {
+            rifiutate.push(rows.map((r) => r.id!));
+            return jsonResponse(
+              { error: "positions_upsert_failed", rejection_scope: "row" },
+              500,
+            );
+          }
+          return jsonResponse(acknowledged(table, rows));
+        }),
+      );
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.resetModules();
+      const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+
+      await handlePush({ db: dbPath });
+
+      // L'ultima richiesta rifiutata è una riga sola, ed è la colpevole:
+      // è lì che il server può allegare la fotografia, e ci si arriva sempre.
+      expect(rifiutate.at(-1)).toEqual([colpevole]);
+      expect(rifiutate.filter((r) => r.length === 1)).toHaveLength(1);
+    },
+  );
 
   it("non scavalca una riga non tentata che condivide il timestamp", async () => {
     /**

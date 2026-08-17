@@ -2,7 +2,7 @@
 -- Generated identifiers are versioned in web-code-coverage.v1.json; no user rows are read.
 WITH expected_web_tables(check_id, table_name, column_names) AS (
   VALUES
-    ('084.web.columns.applications', 'applications', ARRAY['applied_at', 'critic_reviewed_at', 'critic_round', 'critic_score', 'critic_verdict', 'deleted_at', 'id', 'position_id', 'response_at', 'reviewed_by', 'status', 'written_at', 'written_by']::text[]),
+    ('084.web.columns.applications', 'applications', ARRAY['applied', 'applied_at', 'applied_via', 'critic_reviewed_at', 'critic_round', 'critic_score', 'critic_verdict', 'deleted_at', 'id', 'position_id', 'response_at', 'reviewed_by', 'status', 'written_at', 'written_by']::text[]),
     ('084.web.columns.candidate_blocks', 'candidate_blocks', ARRAY['content', 'key', 'kind', 'ord', 'title', 'user_id']::text[]),
     ('084.web.columns.candidate_contacts', 'candidate_contacts', ARRAY['address', 'email', 'github', 'linkedin', 'phone', 'user_id', 'website']::text[]),
     ('084.web.columns.candidate_files', 'candidate_files', ARRAY['name', 'size', 'updated_at', 'user_id']::text[]),

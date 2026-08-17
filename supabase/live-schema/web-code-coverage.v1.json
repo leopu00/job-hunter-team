@@ -3,7 +3,7 @@
   "source_roots": ["web/app", "web/lib"],
   "canary": {
     "path": "supabase/live-schema/078-084.web.v4.json",
-    "sha256": "d33281edb45bb81bcf9948d615987083c2b081eb7751f4b28b13de8168773201",
+    "sha256": "fe185b013e24f7fb16de32dfdc0b7b043877b8607851d939d35c3ccabb279437",
     "contract_id": "release-0.3.9-web-schema-078-084"
   },
   "coverage": {
@@ -132,7 +132,13 @@
       }
     },
     "columns": {
+      "applications.applied": {
+        "receipts": ["084.web.columns.applications"]
+      },
       "applications.applied_at": {
+        "receipts": ["084.web.columns.applications"]
+      },
+      "applications.applied_via": {
         "receipts": ["084.web.columns.applications"]
       },
       "applications.critic_reviewed_at": {
@@ -863,9 +869,6 @@
       "sha256:1e3180d51d1dff51826f4b75a38b8a0f5f7c9d2f5d38eefde4fcf26afb95db45": {
         "exception": "reviewed_dynamic_schema_use"
       },
-      "sha256:2481101efe8eab7f9e4ff50facd11eb8ec815723d7abaf94fec1494ea38a5761": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
       "sha256:267a95a401a5cacd6beb5a532cab0b6caa25c73089830edf545ef42baf400c74": {
         "exception": "reviewed_dynamic_schema_use"
       },
@@ -884,6 +887,12 @@
       "sha256:2d9bf11b9be8bd4f96b25fdff5ee6d598b8e3fe57601a1e26ab95c410f2bf94b": {
         "exception": "reviewed_dynamic_schema_use"
       },
+      "sha256:2f8e2412dd6d248fc7e813fe456c7b05db25a99965c50daefc5bb1ec271242f0": {
+        "exception": "reviewed_dynamic_schema_use"
+      },
+      "sha256:2fd96300946f4394f8efc8d402d3c1cc557c910623cf68e2c09961fded90399c": {
+        "exception": "reviewed_dynamic_schema_use"
+      },
       "sha256:35e9f2984eeb90b0ab1fc9bff68f9f5bc2c7fe8938ecd3b14a345571755a9f9b": {
         "exception": "reviewed_dynamic_schema_use"
       },
@@ -891,12 +900,6 @@
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:386f23b46420e548d6c4e9ea17228e8abc9c30de520c1744bdb0b4d36d0438e3": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
-      "sha256:3b377c899fd0ae4e58e92ce8635e340cbb795add91a6116d7bd778a06c211bd3": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
-      "sha256:3b45416c7a0d1e8df08931ae805b1c14958b6d1ba977e0b564bbed8e1a18e26c": {
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:3eaa82ea964c6a2205456f4143db8c2649c612a667d8ab2e5c0b6cf5cdaa367e": {
@@ -923,9 +926,6 @@
       "sha256:484749312906631762183f2b56a4da38c735d426d36a8b9ce3f0f580da08a997": {
         "exception": "reviewed_dynamic_schema_use"
       },
-      "sha256:4d3afea0018e704c363ce6590d213917ec2c888b996582106be657d8fd336a66": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
       "sha256:4d91376fd48afd9563269d33e6a895ab401a356057ba246b0b141fb69f5efbea": {
         "exception": "reviewed_dynamic_schema_use"
       },
@@ -941,13 +941,16 @@
       "sha256:5db1c45703e52bf6e3a45207d32c3ed3071c04fa7910c6bd18338cd8f9e8e75c": {
         "exception": "reviewed_dynamic_schema_use"
       },
+      "sha256:5dfe1d77e606f469cd00d239da0f6df1b2c40a828cfe70af72cc66dbc015f7cf": {
+        "exception": "reviewed_dynamic_schema_use"
+      },
       "sha256:622932a8cb495a24b00d6d9ba65ea0a38efbdca058b010b53d08d44cafd504fd": {
         "exception": "reviewed_dynamic_schema_use"
       },
-      "sha256:630d4591d7d51f2a314adcd6f768533c2b63a5363cf2f048da9cad9595370656": {
+      "sha256:62dbc26269525d9cbcad51506c1bd1dced2a81d76061ebacc66ea5896648c8a1": {
         "exception": "reviewed_dynamic_schema_use"
       },
-      "sha256:66247109ed8c741e1dfa8193e8270441bf795edbcfc856ce8fca9758539a0ea7": {
+      "sha256:630d4591d7d51f2a314adcd6f768533c2b63a5363cf2f048da9cad9595370656": {
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:6f9b4d0b66833b80f625a5956218133df4f3c61d8d67e9be6e4fcd96541ad032": {
@@ -980,13 +983,28 @@
       "sha256:8bf3c6fb21d93705e0e0b607896ad1213b3920513e10d09257de8a187190b160": {
         "exception": "reviewed_dynamic_schema_use"
       },
+      "sha256:8e9e46b265bf563eb0e9504c170b7e234afe39ec5ee991528c905280fea7fb98": {
+        "exception": "reviewed_dynamic_schema_use"
+      },
       "sha256:8ef2bdeff54539414312898b364ae7934f435e9ee00bc4d04bb1c1f77a223e5e": {
+        "exception": "reviewed_dynamic_schema_use"
+      },
+      "sha256:94282969bed049ec29c9595385d1206f16f579c95fb0cffb58d174d809e7ac57": {
+        "exception": "reviewed_dynamic_schema_use"
+      },
+      "sha256:94d834ec18f6ddfb4938571321715e8dd7c5c89c6dd0a61145b43a938946ed8a": {
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:96966e7c182b9d8a507f85d62e8e08a749b44d399b2ebb1685908cc6cbdf6c89": {
         "exception": "reviewed_dynamic_schema_use"
       },
+      "sha256:9726562057b1ace98acf77624f527fa29dfa70fba253f7741e78d33ab2fb4b1d": {
+        "exception": "reviewed_dynamic_schema_use"
+      },
       "sha256:99db5897aafb15e3c9f5bd2cfbadc8b398b3d0b3f415419ce1fa2c85b0825a8c": {
+        "exception": "reviewed_dynamic_schema_use"
+      },
+      "sha256:9c4ce7bc165481ec3b1071a6e846d9c02c51a8c15a4135d9f7b916b6b1f25ddb": {
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:9df343f1d8eded8c10584dc7ed731345c8da00f9fca77b110f805adcfc2020da": {
@@ -1034,12 +1052,6 @@
       "sha256:c39bbb01109b926ddca47620676c0d153dfce5d6aadb118751a29636d142c303": {
         "exception": "reviewed_dynamic_schema_use"
       },
-      "sha256:c5ef30d6f5a31d1e1b67e064628a593bcc33398ca0e8bd3d6625634409f7fe9b": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
-      "sha256:c89834e71ee88b5ce3a0f4e6295a4c1961ecabe7abb45109635664b9bd5dd9b0": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
       "sha256:ca00c341d27b48a909df41610c85501e00d04064da6b23e429a4add82e5722dc": {
         "exception": "reviewed_dynamic_schema_use"
       },
@@ -1077,12 +1089,6 @@
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:eed331cfd04d7d85d3a659e15ce096a056ef555998f0d7a8dacc018f57c1cbbb": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
-      "sha256:eef37672d4f64dea351ec46c42adb78f7681ab7587fbee3550e1fab1866705be": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
-      "sha256:f6ed1da68c711e64c602ddd5273baf20f84496cebe906a0a95a6e678ec0164dd": {
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:fcc0b2985b3e6a8ed265f422b89f50ea1cbf63e0ef7df5b6f8c63af086f3ce1c": {
