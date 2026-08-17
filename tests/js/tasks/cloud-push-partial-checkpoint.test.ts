@@ -223,6 +223,60 @@ describe("O-97 — checkpoint fino all'ultimo chunk confermato", () => {
     expect(cursor(home)?.positions).toBeUndefined();
   });
 
+  it("con un rifiuto dichiarato di riga, la bisezione isola la posizione colpevole", async () => {
+    /**
+     * Cosa cambia appena la route riconosce `stale_position_downgrade` fra i
+     * token P0001: il 500 arriva con `rejection_scope: 'row'`, e da li' in poi
+     * NON serve scrivere un isolamento — quello che c'e' gia' dimezza il chunk
+     * finche' resta una riga sola e la mette da parte, e il resto del convoglio
+     * passa.
+     *
+     * Il test lo prova sul writer vero: e' la meta' di O-97 che il client
+     * sapeva gia' fare e che nessuno vedeva, perche' senza quel campo nel body
+     * `canIsolate` risponde false e il push aborta intero.
+     */
+    const { home, dbPath } = fixture();
+    const accettate: number[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}"));
+        const table = Object.keys(body)[0];
+        const rows = body[table] as Array<{ id?: number }>;
+        if (table === "positions" && rows.some((row) => row.id === 3)) {
+          return jsonResponse(
+            {
+              error: "positions_upsert_failed",
+              rejection_scope: "row",
+            },
+            500,
+          );
+        }
+        if (table === "positions")
+          accettate.push(...rows.map((row) => row.id!));
+        return jsonResponse(acknowledged(table, rows));
+      }),
+    );
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.resetModules();
+    const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+
+    await handlePush({ db: dbPath });
+
+    // Passano tutte tranne la colpevole, che viene isolata da sola.
+    expect(accettate.sort()).toEqual([1, 2, 4]);
+    const quarantena = JSON.parse(
+      readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
+    );
+    const isolate = quarantena.entries.filter(
+      (voce: { table: string }) => voce.table === "positions",
+    );
+    expect(isolate).toHaveLength(1);
+    // E il cursore arriva in fondo: la riga isolata e' «sistemata», non pendente.
+    expect(cursor(home)?.positions).toBe("2026-08-15 09:00:00");
+  });
+
   it("non scavalca una riga non tentata che condivide il timestamp", async () => {
     /**
      * Il delta si rilegge con `updated_at > cursore`: se il cursore arrivasse

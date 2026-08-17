@@ -30,6 +30,22 @@ import {
 export const dynamic = "force-dynamic";
 
 const ROW_DATA_SQLSTATE = /^(?:22[A-Z0-9]{3}|2350[235]|23514|23P01)$/;
+// ⚠️ CONTRATTO CON I TRIGGER: queste stringhe sono il messaggio che
+// `RAISE EXCEPTION` alza nelle migrazioni, e sono identificatori scelti da chi
+// ha scritto il trigger — non prosa. Senza SQLSTATE dedicato PostgreSQL le
+// classifica P0001, che PostgREST rende 500: qui le riconosciamo per dire al
+// client che il rifiuto riguarda UNA RIGA e non il server, cosi' la bisezione
+// puo' isolarla invece di far abortire il convoglio.
+//
+// `stale_position_downgrade` (mig 081, funzione
+// reject_stale_applied_position_downgrade) mancava, e il gemello
+// `stale_application_downgrade` c'era: il push di una macchina con una
+// fotografia vecchia riceveva un 500 opaco, nessuna riga finiva in quarantena
+// e il convoglio si fermava a ogni tick, per sempre (O-97).
+//
+// Il giorno che un trigger cambia messaggio, il client smette di capire senza
+// che nessuno se ne accorga: `tests/js/tasks/cloud-push-trigger-tokens.test.ts`
+// tiene le due parti allineate leggendo le migrazioni.
 const ROW_P0001_MESSAGES = new Set([
   "application_identity_mismatch",
   "application_not_persisted",
@@ -40,6 +56,7 @@ const ROW_P0001_MESSAGES = new Set([
   "position_not_found",
   "score_identity_mismatch",
   "stale_application_downgrade",
+  "stale_position_downgrade",
 ]);
 
 function rowAttributableWriteError(error: unknown, publicMessage: string) {
