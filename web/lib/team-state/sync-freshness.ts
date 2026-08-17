@@ -49,6 +49,7 @@ export function cloudSyncIsBehind(
 const TERMINAL_SYNC_ACTIONS = new Set([
   "sync:completed",
   "sync:timeout",
+  "sync:push_partial",
   "sync:push_failed",
   "sync:ack_failed",
 ]);
