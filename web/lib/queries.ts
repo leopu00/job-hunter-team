@@ -370,7 +370,7 @@ export async function getPositions(
   let query = supabase
     .from("positions")
     .select(
-      "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, found_by, last_checked, deadline, status, notes, score, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
+      "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, found_by, last_checked, deadline, status, notes, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
     )
     .is("deleted_at", null)
     .order("found_at", { ascending: false })
@@ -443,7 +443,7 @@ export async function getPositions(
       public_state: publicPositionState(p.status),
       has_open_ticket: false,
       ticket_indicator: "none" as const,
-      score: p.score ?? s?.total_score ?? undefined,
+      score: s?.total_score ?? undefined,
       scores: p.scores ?? undefined,
       critic_score: app?.critic_score ?? null,
       critic_verdict: app?.critic_verdict ?? null,
@@ -720,7 +720,7 @@ export async function getScoreDistribution() {
   const supabase = await createClient();
   const query = supabase
     .from("positions")
-    .select("score, scores(total_score)")
+    .select("scores(total_score)")
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
     .order("id", { ascending: true });
@@ -728,8 +728,7 @@ export async function getScoreDistribution() {
   if (error || !data) return empty;
 
   const scores = data.map(
-    (r: any) =>
-      (r.score as number | null) ?? (r as any).scores?.total_score ?? null,
+    (r: any) => ((r as any).scores?.total_score as number | null) ?? null,
   );
   const withScore = scores.filter((s: any): s is number => s != null && s > 0);
   const buckets = [
@@ -823,7 +822,7 @@ export async function getPositionFacets(): Promise<PositionFacet[]> {
   const query = supabase
     .from("positions")
     .select(
-      "id, title, company, status, role_family, loc_country, loc_city, score, scores ( total_score ), applications ( critic_score )",
+      "id, title, company, status, role_family, loc_country, loc_city, scores ( total_score ), applications ( critic_score )",
     )
     .is("deleted_at", null)
     .order("id", { ascending: true });
@@ -831,9 +830,7 @@ export async function getPositionFacets(): Promise<PositionFacet[]> {
   if (error || !data) return [];
   return (data as any[]).map((p) => {
     const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
-    const score =
-      (p.score as number | null) ??
-      (typeof s?.total_score === "number" ? s.total_score : null);
+    const score = typeof s?.total_score === "number" ? s.total_score : null;
     const app = Array.isArray(p.applications)
       ? p.applications[0]
       : p.applications;
@@ -1063,7 +1060,7 @@ export async function getSwipeDecks(limit = 1000): Promise<{
     const salary = salaryPreference(p);
     return {
       ...p,
-      score: p.score ?? sc?.total_score ?? undefined,
+      score: sc?.total_score ?? undefined,
       scores: undefined,
       salary_min: salary.min,
       salary_max: salary.max,
@@ -1133,7 +1130,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
   const query = supabase
     .from("positions")
     .select(
-      "id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, source, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
+      "id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, source, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
     )
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
@@ -1146,9 +1143,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
     const a = Array.isArray(p.applications)
       ? p.applications[0]
       : p.applications;
-    const score =
-      (p.score as number | null) ??
-      (typeof s?.total_score === "number" ? s.total_score : null);
+    const score = typeof s?.total_score === "number" ? s.total_score : null;
     // last_action_at + chi: stesso mapping ruolo/attore di
     // pickLastAction, ma derivato inline per riga.
     const {
@@ -1484,9 +1479,7 @@ export async function getPositionTypeDistribution(): Promise<
   // Critic: applications.critic_score.
   const query = supabase
     .from("positions")
-    .select(
-      "role_family, score, scores(total_score), applications(critic_score)",
-    )
+    .select("role_family, scores(total_score), applications(critic_score)")
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
     .order("id", { ascending: true });
@@ -1499,7 +1492,7 @@ export async function getPositionTypeDistribution(): Promise<
       : r.applications;
     return {
       role_family: r.role_family as string | null,
-      score: (r.score as number | null) ?? scoresRel?.total_score ?? null,
+      score: (scoresRel?.total_score as number | null) ?? null,
       critic: (appRel?.critic_score as number | null) ?? null,
     };
   });
