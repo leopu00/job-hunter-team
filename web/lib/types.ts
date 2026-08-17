@@ -171,6 +171,11 @@ export interface Application {
   applied_via: string | null;
   response: string | null;
   response_at: string | null;
+  // O-105 — perché hanno detto di no. Due campi separati di proposito: il
+  // motivo si conta (il Mentor ne ricava i pattern), il testo si legge.
+  // Opzionali perché un jobs.db precedente non ha ancora le colonne.
+  rejection_reason?: string | null;
+  rejection_note?: string | null;
   written_by: string | null;
   reviewed_by: string | null;
   applied: boolean;

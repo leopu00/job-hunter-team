@@ -281,6 +281,8 @@ def ensure_schema(conn: sqlite3.Connection):
         applied_via TEXT,
         response TEXT,
         response_at TIMESTAMP,
+        rejection_reason TEXT,
+        rejection_note TEXT,
         written_by TEXT,
         reviewed_by TEXT,
         critic_reviewed_at TIMESTAMP,
@@ -882,6 +884,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_position_user_notes(conn)
     _migrate_position_user_notes_origin(conn)
     _migrate_applications_critic_round(conn)
+    _migrate_applications_rejection_reason(conn)
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
@@ -970,6 +973,28 @@ def _migrate_applications_critic_round(conn: sqlite3.Connection) -> None:
         return
     if not _column_exists(conn, 'applications', 'critic_round'):
         conn.execute("ALTER TABLE applications ADD COLUMN critic_round INTEGER")
+
+
+def _migrate_applications_rejection_reason(conn: sqlite3.Connection) -> None:
+    """O-105: perche' hanno detto di no, in due colonne separate.
+
+    ``rejection_reason`` e' uno dei quattro motivi predefiniti e SI CONTA;
+    ``rejection_note`` e' il testo libero dell'utente e SI LEGGE. Due colonne
+    perche' sono due cose: fonderle in una sola darebbe una colonna che a volte
+    contiene una parola nota e a volte una frase, e nessun conteggio.
+
+    Niente CHECK sul motivo, come per ``response``: la lista la fa rispettare
+    il codice (``web/lib/applications/outcome.ts``) perche' un motivo nuovo
+    deve costare una riga e non una migrazione.
+
+    Idempotente (guard ``PRAGMA table_info``): gira a ogni ``ensure_schema`` su
+    database creati da immagini precedenti.
+    """
+    if not _table_exists(conn, 'applications'):
+        return
+    for colonna in ('rejection_reason', 'rejection_note'):
+        if not _column_exists(conn, 'applications', colonna):
+            conn.execute(f"ALTER TABLE applications ADD COLUMN {colonna} TEXT")
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:

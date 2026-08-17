@@ -82,6 +82,8 @@ const APPLICATIONS_COLUMNS = [
   "applied_via",
   "response",
   "response_at",
+  "rejection_reason",
+  "rejection_note",
   "written_by",
   "reviewed_by",
   "critic_reviewed_at",
@@ -152,6 +154,10 @@ interface ApplicationRow {
   applied_via: string | null;
   response: string | null;
   response_at: string | null;
+  // Opzionali come `critic_round`: un jobs.db creato prima di O-105 non le ha
+  // finché `ensure_schema` non gira, e la lettura compatibile le salta.
+  rejection_reason?: string | null;
+  rejection_note?: string | null;
   written_by: string | null;
   reviewed_by: string | null;
   critic_reviewed_at: string | null;
@@ -221,7 +227,9 @@ export async function POST() {
       db,
       "applications",
       APPLICATIONS_COLUMNS,
-      new Set(["critic_round"]),
+      // Colonne che un jobs.db precedente può non avere: la lettura le salta
+      // invece di far cadere l'intera sincronizzazione.
+      new Set(["critic_round", "rejection_reason", "rejection_note"]),
     );
   } catch (err) {
     return sanitizedError(err, {
@@ -383,6 +391,8 @@ export async function POST() {
           applied_via: a.applied_via,
           response: a.response,
           response_at: a.response_at,
+          rejection_reason: a.rejection_reason,
+          rejection_note: a.rejection_note,
           written_by: a.written_by,
           reviewed_by: a.reviewed_by,
           critic_reviewed_at: a.critic_reviewed_at,
