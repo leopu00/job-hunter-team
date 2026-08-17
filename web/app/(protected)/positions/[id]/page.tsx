@@ -48,6 +48,10 @@ import {
   publicApplicationState,
   publicPositionStateLabel,
 } from "@/lib/position-state";
+import {
+  isDeclarableOutcome,
+  type DeclarableOutcome,
+} from "@/lib/applications/outcome";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { makeT } from "@/lib/i18n-dict";
 import { formatPositionEventStamp } from "@/lib/position-event-stamp";
@@ -61,6 +65,18 @@ import { OverviewScoreBadge } from "./OverviewScoreBadge";
 import { OverviewFactRow, OverviewFacts } from "./OverviewFacts";
 import { ExclusionDecidedAt } from "./ExclusionDecidedAt";
 import { IconAlert, IconExternal } from "../icons";
+
+/**
+ * `applications.response` è TEXT libero: solo i valori DICHIARABILI accendono
+ * un pulsante. `ghosted` non ne accende nessuno — lo deriva il Mentor dal
+ * silenzio, non lo clicca l'utente — e un valore fuori vocabolario non deve
+ * far sembrare selezionato un esito che non è quello.
+ */
+function declaredOutcome(
+  value: string | null | undefined,
+): DeclarableOutcome | null {
+  return isDeclarableOutcome(value) ? value : null;
+}
 
 // Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
 // inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
@@ -600,8 +616,15 @@ export default async function PositionDetailPage({ params }: PageProps) {
           <FeedbackButtons
             legacyId={position.legacy_id}
             initialVerdict={initialVerdict}
-            initialApplied={position.status === "applied"}
+            // O-102: `response` è la progressione di `applied`, non il suo
+            // contrario. Guardare solo 'applied' spegnerebbe il bottone della
+            // candidatura appena l'utente dichiara com'è andata — e la
+            // candidatura, quella, è comunque partita.
+            initialApplied={
+              position.status === "applied" || position.status === "response"
+            }
             initialAppliedAt={application?.applied_at ?? null}
+            initialOutcome={declaredOutcome(application?.response)}
           />
         </div>
       )}
