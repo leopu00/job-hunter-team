@@ -81,9 +81,38 @@ def _is_off_hours() -> bool:
         return False
 
 
+# I tre ruoli che hanno un bot Telegram loro (schema 2026-05-13 rev2). Chi
+# notifica non e' per forza uno di questi — Scout, Analista, Scorer e gli altri
+# notificano l'utente e un bot non ce l'hanno — e per loro il canale resta
+# quello dell'Assistente, che e' l'interlocutore generale.
+BOT_ROLES = ("assistente", "capitano", "mentor")
+DEFAULT_BOT_ROLE = "assistente"
+
+
+def bot_role_for(agent: str) -> str:
+    """Il bot da cui esce il messaggio di questo agente.
+
+    Chi non ha un bot suo parla da quello dell'Assistente: e' il
+    comportamento che c'era gia', ma per scelta e non per omissione. Passare
+    `--from scout` farebbe uscire `jht-telegram-send` con exit 1, cioe'
+    trasformerebbe un'attribuzione sbagliata in un messaggio non consegnato.
+    """
+    role = (agent or "").strip().lower()
+    return role if role in BOT_ROLES else DEFAULT_BOT_ROLE
+
+
 def try_telegram(agent: str, body: str) -> bool:
-    """Best-effort send via jht-telegram-send. Return True on exit 0."""
-    cmd = ["jht-telegram-send", body]
+    """Best-effort send via jht-telegram-send. Return True on exit 0.
+
+    ⚠️ `--from` non c'era: il ruolo veniva passato solo in `JHT_NOTIFY_AGENT`,
+    che `jht-telegram-send` non leggeva. Il ruolo restava quello di default e
+    OGNI agente scriveva dal bot dell'Assistente — l'utente ha scritto tre
+    volte al Mentor credendo che non rispondesse, e il registro invii dice
+    `from=assistente` sullo stesso secondo in cui il DB dice `agent=mentor`
+    (O-96). Il canale sbagliato non e' un dettaglio di etichetta: e' la
+    conversazione sbagliata.
+    """
+    cmd = ["jht-telegram-send", "--from", bot_role_for(agent), body]
     try:
         # Timeout corto: il bridge accetta o rifiuta entro pochi secondi.
         # Se la rete e' giu', meglio fallback su web subito che bloccare il loop agente.

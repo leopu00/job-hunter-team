@@ -30,7 +30,21 @@ set -euo pipefail
 
 parse_mode=""
 chat_id_override=""
-role="${JHT_TG_BOT_ROLE:-assistente}"
+# Ordine: `--from` (esplicito) > `JHT_TG_BOT_ROLE` > `JHT_NOTIFY_AGENT` >
+# assistente. `JHT_NOTIFY_AGENT` lo scrive `jht-notify-user`, che per anni l'ha
+# passato senza che nessuno lo leggesse: era una variabile con l'aria di una
+# configurazione e l'effetto di un commento (O-96). Ora vale, ma per ULTIMA e
+# in modo indulgente — un valore ereditato dall'ambiente non deve poter far
+# fallire un invio, quindi un ruolo senza bot proprio (scout, analista, …)
+# scivola sull'assistente invece di uscire con exit 1. Un `--from` sbagliato,
+# che e' una richiesta esplicita, resta un errore.
+role="${JHT_TG_BOT_ROLE:-}"
+if [ -z "$role" ]; then
+  case "${JHT_NOTIFY_AGENT:-}" in
+    assistente|capitano|mentor) role="$JHT_NOTIFY_AGENT" ;;
+    *) role="assistente" ;;
+  esac
+fi
 keyboard_role=""
 photo_path=""
 
