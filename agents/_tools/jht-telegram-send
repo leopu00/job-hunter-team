@@ -352,5 +352,49 @@ for _i in "${!_chunks[@]}"; do
   fi
 done
 
+# ── Cronologia (O-100) ────────────────────────────────────────────────
+# Il testo di un messaggio all'utente deve esistere anche fuori da Telegram:
+# la dashboard, la chat del gioco e il prossimo agente leggono da
+# `pending_user_messages`, e il registro invii accanto tiene SOLO metadati
+# per non conservare contenuti privati in un log. Chi chiama questo strumento
+# direttamente — ed e' quello che fanno gli agenti quando mandano un saluto o
+# un riepilogo — finora scriveva su Telegram e basta: il testo esisteva solo
+# nella chat dell'utente, quindi per il sistema non era mai stato detto.
+#
+# La conservazione sta QUI e non nel manuale degli agenti perche' una regola
+# scritta nei prompt e' un promemoria, non una difesa: chi la dimentica non
+# se ne accorge, e nemmeno noi.
+#
+# ⚠️ Best-effort DICHIARATO: il messaggio e' gia' partito. Se il database non
+# c'e' o e' occupato, fallire adesso direbbe all'agente «non consegnato» ed e'
+# falso — quindi si perde la riga, non la verita' sull'invio.
+_store_history() {
+  # `jht-notify-user` la riga l'ha gia' scritta e ci passa il suo id: qui non
+  # si duplica. Senza questo, ogni notifica comparirebbe due volte in chat.
+  [ -n "${JHT_MESSAGE_ROW_ID:-}" ] && return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  local db="${JHT_DB:-$jht_home/jobs.db}"
+  [ -f "$db" ] || return 0
+  JHT_HISTORY_DB="$db" JHT_HISTORY_AGENT="$role" JHT_HISTORY_BODY="$text" \
+  python3 - <<'PYHIST' 2>/dev/null || true
+import os, sqlite3
+try:
+    conn = sqlite3.connect(os.environ["JHT_HISTORY_DB"], timeout=5)
+    try:
+        conn.execute(
+            "INSERT INTO pending_user_messages "
+            "(agent, body, kind, author, delivered_via, delivered_at) "
+            "VALUES (?, ?, 'notification', 'agent', 'telegram', CURRENT_TIMESTAMP)",
+            (os.environ["JHT_HISTORY_AGENT"], os.environ["JHT_HISTORY_BODY"]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+except Exception:
+    pass
+PYHIST
+}
+_store_history
+
 echo "jht-telegram-send: ok (${#text} chars to chat $chat_id)"
 exit 0

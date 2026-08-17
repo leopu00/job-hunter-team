@@ -110,7 +110,7 @@ describe("la Sentinella vede i turni che nessuno ha raccolto", () => {
       '{"ts":"2026-08-17T13:58:05Z","from":"capitano","kind":"text","ok":true}\n',
     );
 
-    const uscita = sentinella(home, ["turni-fermi"]);
+    const uscita = sentinella(home, ["stalled-turns"]);
 
     expect(uscita).toContain("mentor");
     expect(uscita).toContain("369");
@@ -129,7 +129,7 @@ describe("la Sentinella vede i turni che nessuno ha raccolto", () => {
     );
     db.close();
 
-    const verdetti = JSON.parse(sentinella(home, ["turni-fermi", "--json"]));
+    const verdetti = JSON.parse(sentinella(home, ["stalled-turns", "--json"]));
     const scout = verdetti.find((v: { agent: string }) => v.agent === "scout");
 
     expect(scout).toMatchObject({
@@ -142,6 +142,6 @@ describe("la Sentinella vede i turni che nessuno ha raccolto", () => {
     const home = mkdtempSync(join(tmpdir(), "jht-turni-vuoto-"));
     dirs.push(home);
 
-    expect(sentinella(home, ["turni-fermi"])).toContain("Nessun turno");
+    expect(sentinella(home, ["stalled-turns"])).toContain("No delivered turn");
   });
 });

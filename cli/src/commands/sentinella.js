@@ -4,7 +4,7 @@
 //   jht sentinella status              ultimo tick (una riga formattata)
 //   jht sentinella tail [-n 20]        ultimi N tick
 //   jht sentinella graph [-n 40]       sparkline ASCII dell'usage
-//   jht sentinella turni-fermi         turni consegnati che nessuno ha raccolto
+//   jht sentinella stalled-turns       turni consegnati che nessuno ha raccolto
 //
 // Sorgente dati: $JHT_HOME/logs/sentinel-data.jsonl (scritto dal bridge).
 // Nessuna dipendenza dal container: legge direttamente il bind-mount.
@@ -206,18 +206,18 @@ function turniFermiAction(options = {}) {
   const fermi = stalledTurns(input);
   console.log('');
   if (!fermi.length) {
-    console.log(col.green('Nessun turno consegnato senza presa in carico.'));
-    console.log(col.dim('  Un turno e\' «fermo» solo se dopo la consegna quell\'agente non ha'));
-    console.log(col.dim('  scritto nulla: chi non ha un bot suo resta indecidibile, non accusato.'));
+    console.log(col.green('No delivered turn is waiting to be picked up.'));
+    console.log(col.dim('  A turn counts as stalled only if that agent sent nothing after the'));
+    console.log(col.dim('  delivery: agents without a bot of their own stay undecided, not blamed.'));
     console.log('');
     return;
   }
-  console.log(col.yellow(`${fermi.length} turno/i consegnato/i e mai raccolto/i:`));
+  console.log(col.yellow(`${fermi.length} delivered turn(s) nobody picked up:`));
   for (const turno of fermi) {
     console.log(`  ${col.bold(turno.agent)} · turno ${turno.legacyId}`);
   }
-  console.log(col.dim('  Il testo e\' arrivato al pane, ma quell\'agente non ha scritto piu\' niente:'));
-  console.log(col.dim('  il suo turno puo\' essere morto (limite di sessione) e il messaggio va rimandato.'));
+  console.log(col.dim('  The text reached the pane, but that agent has written nothing since:'));
+  console.log(col.dim('  its turn may have died (session limit) and the message needs resending.'));
   console.log('');
 }
 
@@ -237,9 +237,9 @@ export function registerSentinellaCommand(program) {
     .action(tailAction);
 
   sent
-    .command('turni-fermi')
-    .description('Turni consegnati a un agente che nessuno ha raccolto')
-    .option('--json', 'output completo con i verdetti di ogni turno', false)
+    .command('stalled-turns')
+    .description('Turns delivered to an agent that nobody picked up')
+    .option('--json', 'full output with the verdict of every turn', false)
     .action(turniFermiAction);
 
   sent
