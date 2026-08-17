@@ -201,59 +201,56 @@ describe("pull prima, click dopo — l'esito deve arrivare al box", () => {
     });
   });
 
-  it(
-    "il push non rimanda su uno stato più vecchio dell'esito",
-    async () => {
-      const { dbPath } = box();
-      pull(dbPath, DOPO_LA_CANDIDATURA);
-      pull(dbPath, DOPO_L_ESITO);
+  it("il push non rimanda su uno stato più vecchio dell'esito", async () => {
+    const { dbPath } = box();
+    pull(dbPath, DOPO_LA_CANDIDATURA);
+    pull(dbPath, DOPO_L_ESITO);
 
-      const posizioni: Array<Record<string, unknown>> = [];
-      const candidature: Array<Record<string, unknown>> = [];
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (_url: unknown, init?: RequestInit) => {
-          const body = JSON.parse(String(init?.body || "{}"));
-          const table = Object.keys(body)[0];
-          const rows = body[table] as Array<Record<string, unknown>>;
-          if (table === "positions") posizioni.push(...rows);
-          if (table === "applications") candidature.push(...rows);
-          return new Response(
-            JSON.stringify({
-              receipts: { [table]: rows.map((row) => row._receipt_id) },
-              [table]: { upserted: rows.length },
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }),
-      );
-      vi.spyOn(console, "log").mockImplementation(() => {});
-      vi.resetModules();
-      const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+    const posizioni: Array<Record<string, unknown>> = [];
+    const candidature: Array<Record<string, unknown>> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}"));
+        const table = Object.keys(body)[0];
+        const rows = body[table] as Array<Record<string, unknown>>;
+        if (table === "positions") posizioni.push(...rows);
+        if (table === "applications") candidature.push(...rows);
+        return new Response(
+          JSON.stringify({
+            receipts: { [table]: rows.map((row) => row._receipt_id) },
+            [table]: { upserted: rows.length },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.resetModules();
+    const { handlePush } = await import("../../../cli/src/commands/cloud.js");
 
-      await handlePush({ db: dbPath, full: true });
-      process.stdout.write(
-        "MISURA-CANDIDATURE " +
-          JSON.stringify(
-            candidature.map((r) => ({
-              legacy_id: r.position_legacy_id,
-              status: r.status,
-              response: r.response,
-              applied: r.applied,
-            })),
-          ) +
-          "\n",
-      );
+    await handlePush({ db: dbPath, full: true });
+    process.stdout.write(
+      "MISURA-CANDIDATURE " +
+        JSON.stringify(
+          candidature.map((r) => ({
+            legacy_id: r.position_legacy_id,
+            status: r.status,
+            response: r.response,
+            applied: r.applied,
+          })),
+        ) +
+        "\n",
+    );
 
-      // Il terzo anello parte da qui: il box rimanda `applied` e una
-      // candidatura con `response` vuota. Che poi il cloud accetti davvero
-      // quella cancellazione lo misura il test PostgreSQL.
-      expect(posizioni.find((row) => row.legacy_id === 7)?.status).not.toBe(
-        "applied",
-      );
-      expect(
-        candidature.find((row) => row.position_legacy_id === 7),
-      ).not.toMatchObject({ response: null, status: "applied" });
-    },
-  );
+    // Il terzo anello parte da qui: il box rimanda `applied` e una
+    // candidatura con `response` vuota. Che poi il cloud accetti davvero
+    // quella cancellazione lo misura il test PostgreSQL.
+    expect(posizioni.find((row) => row.legacy_id === 7)?.status).not.toBe(
+      "applied",
+    );
+    expect(
+      candidature.find((row) => row.position_legacy_id === 7),
+    ).not.toMatchObject({ response: null, status: "applied" });
+  });
 });
