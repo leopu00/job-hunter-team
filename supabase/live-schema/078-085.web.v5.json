@@ -52,7 +52,7 @@
   ],
   "query": {
     "path": "supabase/live-schema/078-085.web.v5.sql",
-    "sha256": "d01cdd6e3d5fd5af5f1b20bfa4b319c1b0d1730847ae007471c4c49ea562599e"
+    "sha256": "a8605413d702c66779743ddd7a4a9401ac4d5ce82c456214219f0e31592e0f34"
   },
   "expected_checks": [
     "085.web.columns.applications",

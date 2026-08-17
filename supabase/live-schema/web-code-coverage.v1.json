@@ -3,7 +3,7 @@
   "source_roots": ["web/app", "web/lib"],
   "canary": {
     "path": "supabase/live-schema/078-085.web.v5.json",
-    "sha256": "8711193ff55dc7bbf221ff527ae59fbe980856bd9526704387703d16f7825b2b",
+    "sha256": "71cfa14b3a0857d9d39f1a79522dee5f5809547a6896ec170cf7d7c4fca25774",
     "contract_id": "release-0.3.9-web-schema-078-085"
   },
   "coverage": {
@@ -169,6 +169,12 @@
         "receipts": ["085.web.columns.applications"]
       },
       "applications.status": {
+        "receipts": ["085.web.columns.applications"]
+      },
+      "applications.updated_at": {
+        "receipts": ["085.web.columns.applications"]
+      },
+      "applications.user_id": {
         "receipts": ["085.web.columns.applications"]
       },
       "applications.written_at": {
@@ -935,9 +941,6 @@
       "sha256:5656ed5fdf9a9d0c72deced8b1acb9096deec8a26205283980e245cfba66f226": {
         "exception": "reviewed_dynamic_schema_use"
       },
-      "sha256:5b3d525e2697e3ae524592b894ebcf5b29389fd1f6195c56cda51f161266338a": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
       "sha256:5db1c45703e52bf6e3a45207d32c3ed3071c04fa7910c6bd18338cd8f9e8e75c": {
         "exception": "reviewed_dynamic_schema_use"
       },
@@ -1089,6 +1092,9 @@
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:eed331cfd04d7d85d3a659e15ce096a056ef555998f0d7a8dacc018f57c1cbbb": {
+        "exception": "reviewed_dynamic_schema_use"
+      },
+      "sha256:f958f653cc0de53a845ce49332005c4988a344f447702ccbeb5d43c5f5eb7602": {
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:fcc0b2985b3e6a8ed265f422b89f50ea1cbf63e0ef7df5b6f8c63af086f3ce1c": {

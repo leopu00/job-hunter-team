@@ -1,5 +1,10 @@
 -- Additive read-only contract linking the shipped web query surface to live catalog receipts.
 -- Generated identifiers are versioned in web-code-coverage.v1.json; no user rows are read.
+-- Taken on 2026-08-17 against the production Supabase project, after migration
+-- 085 was applied there: all 40 receipts run, all 40 green, none red. The
+-- checks below are what was executed; only the final projection was aggregated
+-- to read the outcome, and comments take no part in the result. A receipt
+-- answers "verified against what, and when" or it is only a declaration.
 WITH expected_web_tables(check_id, table_name, column_names) AS (
   VALUES
     ('085.web.columns.applications', 'applications', ARRAY['applied', 'applied_at', 'applied_via', 'critic_reviewed_at', 'critic_round', 'critic_score', 'critic_verdict', 'deleted_at', 'id', 'position_id', 'response_at', 'reviewed_by', 'status', 'updated_at', 'user_id', 'written_at', 'written_by']::text[]),
