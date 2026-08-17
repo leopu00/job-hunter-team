@@ -2075,7 +2075,7 @@ function Start-RecoveryHealthProbe {
   return @{ Suspended = $owner; Process = $process; Started = $started }
 }
 function Update-JournalState {
-  param([object]$Journal, [string]$State, [int]$Pid, [string]$Started)
+  param([object]$Journal, [string]$State, [int]$CandidatePid = 0, [string]$CandidateStarted = '')
   $script:FailurePhase = 'journal'
   $script:FailureCode = if ($State -ceq 'helper_intent') {
     'journal_helper_intent_write_failed'
@@ -2268,8 +2268,8 @@ if ($written -or $script:FailurePhase -cne 'result' -or
 
 
 def test_helper_source_has_no_remote_or_shell_bootstrap() -> None:
-    source = HELPER_SOURCE.read_text()
-    producer = (ROOT / "scripts" / "release_manifest.py").read_text()
+    source = HELPER_SOURCE.read_text(encoding="utf-8")
+    producer = (ROOT / "scripts" / "release_manifest.py").read_text(encoding="utf-8")
     assert "__JHT_RELEASE_PUBLIC_KEYS_SPKI_PEM__" in source
     assert "$pair.Actual" in source
     assert "$pair[0]" not in source
@@ -2776,12 +2776,12 @@ def test_powershell_command_fixture_stops_on_nonterminating_error(
 
 
 def test_consumer_uses_file_without_execution_policy_bypass() -> None:
-    source = (ROOT / "game/scripts/support/windows_update_client.gd").read_text()
+    source = (ROOT / "game/scripts/support/windows_update_client.gd").read_text(encoding="utf-8")
     argv = source[source.index("static func helper_argv"):]
     assert '"-File"' in argv
     assert "ExecutionPolicy" not in argv
     assert "Bypass" not in argv
-    service = (ROOT / "game/scripts/support/update_service.gd").read_text()
+    service = (ROOT / "game/scripts/support/update_service.gd").read_text(encoding="utf-8")
     health = service[
         service.index("func _write_windows_health_ack") : service.index(
             "func _join_thread"
@@ -2791,7 +2791,7 @@ def test_consumer_uses_file_without_execution_policy_bypass() -> None:
     assert 'get_tree().quit(1)' in service
     assert 'print("WINDOWS-UPDATE-HEALTH code=", code)' in service
     assert 'Game.mark_windows_health_normal_work("update")' in service
-    game = (ROOT / "game/scripts/game.gd").read_text()
+    game = (ROOT / "game/scripts/game.gd").read_text(encoding="utf-8")
     assert 'print("WINDOWS-UPDATE-HEALTH-NORMAL-WORK component=", component)' in game
     assert "HEALTH_ACK_ENV_PARTIAL" in health
     assert "HEALTH_ACK_NONCE_INVALID" in health
@@ -2812,7 +2812,7 @@ def test_consumer_uses_file_without_execution_policy_bypass() -> None:
 
 
 def test_windows_health_failure_codes_are_closed_and_path_free() -> None:
-    service = (ROOT / "game/scripts/support/update_service.gd").read_text()
+    service = (ROOT / "game/scripts/support/update_service.gd").read_text(encoding="utf-8")
     codes = set(
         re.findall(r'^const HEALTH_ACK_[A-Z_]+ := "([a-z_]+)"$', service, re.M)
     )
@@ -2848,20 +2848,20 @@ def test_windows_health_boot_blocks_normal_autoload_work_until_ack() -> None:
         "game/scripts/title.gd": "title",
     }
     for relative, component in guarded_components.items():
-        source = (ROOT / relative).read_text()
+        source = (ROOT / relative).read_text(encoding="utf-8")
         assert "await Game.windows_health_boot_allowed()" in source, relative
         assert (
             f'Game.mark_windows_health_normal_work("{component}")' in source
         ), relative
 
-    game = (ROOT / "game/scripts/game.gd").read_text()
+    game = (ROOT / "game/scripts/game.gd").read_text(encoding="utf-8")
     assert "signal windows_health_boot_completed(ok: bool)" in game
     assert "func windows_health_boot_allowed() -> bool:" in game
     protocol = (
         ROOT / "game/scripts/support/windows_update_protocol.gd"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     assert "static func health_boot_gate(requested: bool, completed: bool," in protocol
-    service = (ROOT / "game/scripts/support/update_service.gd").read_text()
+    service = (ROOT / "game/scripts/support/update_service.gd").read_text(encoding="utf-8")
     assert "Game.complete_windows_health_boot(false)" in service
     assert "Game.complete_windows_health_boot(true)" in service
     assert service.index("Game.complete_windows_health_boot(false)") < service.index(
@@ -3353,7 +3353,7 @@ def _run_verify(
         public_key=public,
         additional_public_keys=additional,
     )
-    shutil.copy2(notepad, installed_build / DESKTOP)
+    shutil.copy2(ping, installed_build / DESKTOP)
     shutil.copy2(helper, installed_build / HELPER)
     _write_signed_manifest(
         directory=installed_build,
@@ -3425,11 +3425,12 @@ def _run_verify(
                     "nonce": nonce,
                     "rolled_back": False,
                 }
-            )
+            ),
+            encoding="utf-8",
         )
     elif mutation in EXTRA_ARTIFACTS:
         manifest_path = transaction / "RELEASE-MANIFEST.json"
-        manifest = json.loads(manifest_path.read_text())
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         entry = dict(EXTRA_ARTIFACTS[mutation])
         entry.update(size=1, sha256="4" * 64)
         manifest["artifacts"].append(entry)
@@ -4192,7 +4193,7 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
             env=recovery_env,
             caller_quit_path=caller_quit,
         )
-        result = json.loads((transaction / "result.json").read_text())
+        result = json.loads((transaction / "result.json").read_text(encoding="utf-8"))
         if commit_floor:
             assert recovered.returncode == 0, _helper_result_diagnostic(
                 transaction, recovered.stderr
@@ -4200,12 +4201,12 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
             assert result["phase"] == "committed"
             assert target.read_bytes() == candidate_bytes
             assert installed_helper.read_bytes() == candidate_helper_bytes
-            assert json.loads(journal_path.read_text())["state"] == "committed"
+            assert json.loads(journal_path.read_text(encoding="utf-8"))["state"] == "committed"
             assert len(_target_process_identities(target)) == 1
             final_pid, final_started = _target_process_identities(target)[0]
-            committed_journal = json.loads(journal_path.read_text())
-            health = json.loads((transaction / "health.json").read_text())
-            ready = json.loads((transaction / "ready.json").read_text())
+            committed_journal = json.loads(journal_path.read_text(encoding="utf-8"))
+            health = json.loads((transaction / "health.json").read_text(encoding="utf-8"))
+            ready = json.loads((transaction / "ready.json").read_text(encoding="utf-8"))
             assert (final_pid, final_started) == (
                 int(committed_journal["candidate_pid"]),
                 str(committed_journal["candidate_started"]),
@@ -4245,7 +4246,7 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
                 assert retried.returncode == 0, _helper_result_diagnostic(
                     transaction, retried.stderr
                 )
-                retry_result = json.loads((transaction / "result.json").read_text())
+                retry_result = json.loads((transaction / "result.json").read_text(encoding="utf-8"))
                 assert retry_result["phase"] == "committed"
                 assert retry_result["code"] == "interrupted_commit_completed"
                 assert _cleanup_targets_snapshot(stable_nodes) == stable_before
@@ -4268,11 +4269,11 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
             }
             assert target.read_bytes() == old_bytes
             assert installed_helper.read_bytes() == old_helper_bytes
-            assert json.loads(journal_path.read_text())["state"] == "rolled_back"
+            assert json.loads(journal_path.read_text(encoding="utf-8"))["state"] == "rolled_back"
             assert len(_target_process_identities(target)) == 1
             rollback_pid, rollback_started = _target_process_identities(target)[0]
-            rollback_journal = json.loads(journal_path.read_text())
-            rollback_ready = json.loads((transaction / "ready.json").read_text())
+            rollback_journal = json.loads(journal_path.read_text(encoding="utf-8"))
+            rollback_ready = json.loads((transaction / "ready.json").read_text(encoding="utf-8"))
             assert (rollback_pid, rollback_started) == (
                 int(rollback_journal["candidate_pid"]),
                 str(rollback_journal["candidate_started"]),
@@ -4301,7 +4302,7 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
             assert retried.returncode == 0, _helper_result_diagnostic(
                 transaction, retried.stderr
             )
-            retry_result = json.loads((transaction / "result.json").read_text())
+            retry_result = json.loads((transaction / "result.json").read_text(encoding="utf-8"))
             assert retry_result == {
                 "schema": 1,
                 "ok": True,
@@ -4313,8 +4314,8 @@ def test_reboot_recovery_is_idempotent_at_every_promotion_boundary(
             assert _cleanup_targets_snapshot(stable_nodes) == stable_before
             assert len(_target_process_identities(target)) == 1
             retry_pid, retry_started = _target_process_identities(target)[0]
-            retry_journal = json.loads(journal_path.read_text())
-            retry_ready = json.loads((transaction / "ready.json").read_text())
+            retry_journal = json.loads(journal_path.read_text(encoding="utf-8"))
+            retry_ready = json.loads((transaction / "ready.json").read_text(encoding="utf-8"))
             assert (retry_pid, retry_started) == (
                 int(retry_journal["candidate_pid"]),
                 str(retry_journal["candidate_started"]),
@@ -4344,7 +4345,7 @@ def test_windows_powershell51_verifies_signed_bundle(
         transaction, result.stderr
     )
     assert (transaction / "ready.json").is_file()
-    ready = json.loads((transaction / "ready.json").read_text())
+    ready = json.loads((transaction / "ready.json").read_text(encoding="utf-8"))
     assert ready["old_pid"] > 0
     assert str(ready["old_started"]).isdigit()
     assert ready["request_id"] == "verify-" + "9" * 24
@@ -4385,8 +4386,8 @@ def test_windows_powershell51_rotation_overlap_accepts_new_signed_new_only_helpe
     assert (transaction / "ready.json").is_file()
     installed_helper = target.parent / HELPER
     candidate_helper = transaction / HELPER
-    assert installed_helper.read_text().count("-----BEGIN PUBLIC KEY-----") == (
-        candidate_helper.read_text().count("-----BEGIN PUBLIC KEY-----") + 1
+    assert installed_helper.read_text(encoding="utf-8").count("-----BEGIN PUBLIC KEY-----") == (
+        candidate_helper.read_text(encoding="utf-8").count("-----BEGIN PUBLIC KEY-----") + 1
     )
 
 
@@ -5864,9 +5865,9 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
             if journal_path.exists():
-                journal = json.loads(journal_path.read_text())
+                journal = json.loads(journal_path.read_text(encoding="utf-8"))
                 try:
-                    health = json.loads((transaction / "health.json").read_text())
+                    health = json.loads((transaction / "health.json").read_text(encoding="utf-8"))
                 except (OSError, ValueError):
                     health = {}
                 if (
@@ -5893,9 +5894,9 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
             transaction, recovered.stderr
         )
         assert target.read_bytes() == old_bytes
-        assert json.loads(journal_path.read_text())["state"] == "rolled_back"
+        assert json.loads(journal_path.read_text(encoding="utf-8"))["state"] == "rolled_back"
         assert not (state / ".update.lock").exists()
-        result = json.loads((transaction / "result.json").read_text())
+        result = json.loads((transaction / "result.json").read_text(encoding="utf-8"))
         assert result == {
             "schema": 1,
             "ok": False,
@@ -5913,8 +5914,8 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         assert process_check.returncode == 0
         assert len(_target_process_identities(target)) == 1
         rollback_pid, rollback_started = _target_process_identities(target)[0]
-        rollback_journal = json.loads(journal_path.read_text())
-        handoff = json.loads((transaction / "ready.json").read_text())
+        rollback_journal = json.loads(journal_path.read_text(encoding="utf-8"))
+        handoff = json.loads((transaction / "ready.json").read_text(encoding="utf-8"))
         assert (rollback_pid, rollback_started) == (
             int(rollback_journal["candidate_pid"]),
             str(rollback_journal["candidate_started"]),
@@ -5940,7 +5941,7 @@ def test_windows_recovery_reclaims_stale_lock_and_rolls_back_post_switch_crash(
         assert retried.returncode == 0, _helper_result_diagnostic(
             transaction, retried.stderr
         )
-        retry_result = json.loads((transaction / "result.json").read_text())
+        retry_result = json.loads((transaction / "result.json").read_text(encoding="utf-8"))
         assert retry_result == {
             "schema": 1,
             "ok": True,
