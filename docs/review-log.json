@@ -1569,6 +1569,26 @@
       "path": "docs/about/FAQ.md",
       "description": "Sei domande di valutazione con risposte verificate nel codice: cos'e' e cosa NON e' (nessun invio automatico di candidature), Docker come confine di runtime, struttura del costo e chi lo guida, cosa esce dalla macchina e quando, differenza da un framework generico, uso senza VPS.",
       "last_review": null
+    },
+    {
+      "path": "docs/adr/0008-podman-evaluated-behind-a-shim.md",
+      "description": "ADR proposto: valutare Podman dietro uno shim `docker` invece di riscrivere i punti di chiamata — estende 0006 e riapre le alternative scartate in 0001.",
+      "last_review": null
+    },
+    {
+      "path": "docs/adr/0009-team-exposes-one-loopback-api.md",
+      "description": "ADR proposto: il team espone UNA API di loopback e ogni client (Godot, web, CLI, TUI) diventa sottile — riprende una decisione presa di fatto ritirando la dashboard locale, che non aveva un ADR suo.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-08-17-ticket-container-runtime-podman.md",
+      "description": "Ticket aperto, decisione non presa: cosa toglierebbe all'utente e cosa costerebbe a noi sostituire Docker con Podman. Misurato su master dbd6369d6.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-08-17-ticket-team-api-boundary.md",
+      "description": "Ticket aperto, direzione approvata e forma tecnica da decidere misurando: una piattaforma sola su web, desktop e telefono — il problema misurato non è quale framework, è il confine caduto fra il team e i suoi client.",
+      "last_review": null
     }
   ]
 }
