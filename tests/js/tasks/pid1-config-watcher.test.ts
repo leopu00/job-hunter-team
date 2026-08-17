@@ -41,7 +41,23 @@ describe("pid1 config watcher", () => {
         log,
       }),
     ).resolves.toBe("local");
-    expect(log).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(
+      "host type resolved: local (host.env missing)",
+    );
+  });
+
+  it("registra al boot una decisione VPS letta da host.env", async () => {
+    const log = vi.fn();
+
+    await expect(
+      readHostType({
+        env: {},
+        accessFile: vi.fn().mockResolvedValue(undefined),
+        readHostFile: vi.fn().mockResolvedValue("JHT_HOST_TYPE=vps\n"),
+        log,
+      }),
+    ).resolves.toBe("vps");
+    expect(log).toHaveBeenCalledWith("host type resolved: vps (host.env)");
   });
 
   it("serializza gli eventi fs.watch sovrapposti e conserva l'ultimo", async () => {
