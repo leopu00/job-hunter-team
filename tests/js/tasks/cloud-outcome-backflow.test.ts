@@ -226,38 +226,63 @@ describe("l'esito dichiarato sul sito arriva al box", () => {
     expect(after.application.response).toBe("interview");
   });
 
-  // Il caso VERO, misurato il 17/08 box contro cloud sulla posizione 1362 —
-  // e non un caso inventato, perche' l'abbiamo armato noi: `updated_at` locale
-  // segnava le 15:54:39, l'ora esatta del pull di quel giorno, mentre il click
-  // dell'operatore era delle 16:03. Prima di quel pull la riga in locale non
-  // esisteva. Il difetto non era latente: la corsia l'ha creato.
-  it("posizione 1362: il box dice applied, il cloud dice rejected → vince l'esito", async () => {
+  // IL CASO VERO — posizione 1362, valori presi dal prima/dopo misurato da
+  // @vps il 17/08 (box contro cloud), non inventati.
+  //
+  // La forma del difetto, con le parole di chi l'ha misurato: «il backflow
+  // scrive applied/NULL sopra una riga il cui esito esiste solo sul cloud, e
+  // lo fa SENZA GUARDARE se il cloud è più avanti. Qui il locale ha vinto pur
+  // avendo updated_at più vecchio di nove minuti.»
+  //
+  // Sta scritto qui perché impedisce di ripararlo male: non bastava aggiungere
+  // `response` alla select e all'upsert — serviva che la corsia CONFRONTASSE.
+  //
+  // I timestamp sono quelli veri, nei formati veri: il cloud manda
+  // `+00:00`, il box scrive `YYYY-MM-DD HH:MM:SS` senza fuso. Un confronto
+  // fra stringhe direbbe sempre che il cloud è più recente.
+  it("posizione 1362: il box dice applied/NULL, il cloud sa che è rejected", async () => {
     const { applyAppliedBackflow } = await import(
       "../../../cli/src/lib/applied-backflow.js"
     );
-    // Lo stato locale come l'ha lasciato il pull delle 15:54.
+    // BOX PRIMA: quello che ci aveva scritto il pull delle 15:54:39 — nove
+    // minuti PRIMA del click dell'operatore.
     db.prepare(
       "INSERT INTO positions (id, title, company, status) VALUES (1362, 'Ruolo', 'Azienda', 'applied')",
     ).run();
     db.prepare(
-      `INSERT INTO applications (position_id, status, applied, applied_at, applied_via, updated_at)
-       VALUES (1362, 'applied', 1, '2026-08-17T13:54:39.000Z', ?, '2026-08-17T13:54:39.000Z')`,
+      `INSERT INTO applications
+         (position_id, status, applied, applied_at, applied_via, response, response_at, updated_at)
+       VALUES (1362, 'applied', 1, '2026-08-16 17:06:38.517+00', ?, NULL, NULL, '2026-08-17 15:54:39')`,
     ).run(APPLIED_VIA_USER);
 
-    // Quello che il cloud ha dalle 16:03, dopo il click dell'operatore.
+    // CLOUD: la verità, scritta dal click delle 16:03:34.
     applyAppliedBackflow(db, [
-      cloudRow(1362, {
+      {
+        legacy_id: 1362,
+        applied: true,
+        applied_at: "2026-08-16T17:06:38.517+00:00",
+        applied_via: APPLIED_VIA_USER,
         status: "response",
         response: "rejected",
-        response_at: "2026-08-17T14:03:00.000Z",
-        updated_at: "2026-08-17T14:03:00.000Z",
-      }),
+        response_at: "2026-08-17T16:03:34.265+00:00",
+        updated_at: "2026-08-17T16:03:34.287+00:00",
+      },
     ]);
 
+    // BOX DOPO, come l'ha allineato @vps a mano: l'esito c'è, e `applied_at`
+    // resta quello vero e non la data di oggi.
     const after = state(1362);
     expect(after.application.response).toBe("rejected");
+    expect(after.application.response_at).toBe("2026-08-17T16:03:34.265+00:00");
     expect(after.application.status).toBe("response");
     expect(after.position.status).toBe("response");
+    expect(
+      (
+        db
+          .prepare("SELECT applied_at FROM applications WHERE position_id = 1362")
+          .get() as { applied_at: string }
+      ).applied_at,
+    ).toBe("2026-08-16 17:06:38.517+00");
   });
 
   it("una candidatura che il box non ha resta fuori, come per gli altri campi", async () => {
