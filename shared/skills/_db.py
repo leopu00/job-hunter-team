@@ -1968,13 +1968,17 @@ def _migrate_cover_letter_request_effect(conn: sqlite3.Connection) -> None:
     Il trigger è il seam comune a skill e agenti: una risposta testuale o un
     UPDATE no-op non possono dichiarare completato il lavoro. Un INSERT non
     basta perché la cover letter è richiedibile solo su application esistente.
+    Viene ricreato a ogni migrazione perché il suo corpo è schema persistito:
+    CREATE TRIGGER IF NOT EXISTS lascerebbe ai database già inizializzati la
+    versione precedente.
     """
     if not (_table_exists(conn, 'positions') and
             _table_exists(conn, 'applications') and
             _column_exists(conn, 'positions', 'write_request_kind')):
         return
+    conn.execute("DROP TRIGGER IF EXISTS cover_letter_request_effect")
     conn.execute("""
-        CREATE TRIGGER IF NOT EXISTS cover_letter_request_effect
+        CREATE TRIGGER cover_letter_request_effect
         AFTER UPDATE OF cl_path, cl_pdf_path ON applications
         WHEN EXISTS (
             SELECT 1 FROM positions p
@@ -1996,13 +2000,7 @@ def _migrate_cover_letter_request_effect(conn: sqlite3.Connection) -> None:
                                    '+0.001 seconds')
                    END,
                    write_request_kind = NULL,
-                   updated_at = CASE
-                     WHEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') >
-                          COALESCE(updated_at, '')
-                     THEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')
-                     ELSE strftime('%Y-%m-%d %H:%M:%f', updated_at,
-                                   '+0.001 seconds')
-                   END
+                   updated_at = CURRENT_TIMESTAMP
              WHERE id = NEW.position_id
                AND write_requested = 1
                AND write_request_kind = 'cover_letter';
