@@ -1,8 +1,8 @@
 /**
  * JHT Cron — Utility per gestione job (create, patch, find, due check)
  */
-import { randomUUID } from 'node:crypto';
-import { computeNextRunAtMs } from './schedule.js';
+import { randomUUID } from "node:crypto";
+import { computeNextRunAtMs } from "./schedule.js";
 
 /**
  * Crea un nuovo CronJob da un CronJobCreate input.
@@ -22,7 +22,10 @@ export function createJob(input) {
     schedule: input.schedule,
     payload: input.payload,
     state: {
-      nextRunAtMs: input.enabled !== false ? computeNextRunAtMs(input.schedule, now) : undefined,
+      nextRunAtMs:
+        input.enabled !== false
+          ? computeNextRunAtMs(input.schedule, now)
+          : undefined,
     },
   };
   return job;
@@ -38,13 +41,16 @@ export function applyJobPatch(job, patch) {
   if (patch.name !== undefined) job.name = patch.name;
   if (patch.description !== undefined) job.description = patch.description;
   if (patch.enabled !== undefined) job.enabled = patch.enabled;
-  if (patch.deleteAfterRun !== undefined) job.deleteAfterRun = patch.deleteAfterRun;
+  if (patch.deleteAfterRun !== undefined)
+    job.deleteAfterRun = patch.deleteAfterRun;
   if (patch.schedule !== undefined) job.schedule = patch.schedule;
   if (patch.payload !== undefined) job.payload = patch.payload;
   job.updatedAtMs = now;
 
   if (patch.schedule !== undefined || patch.enabled !== undefined) {
-    job.state.nextRunAtMs = job.enabled ? computeNextRunAtMs(job.schedule, now) : undefined;
+    job.state.nextRunAtMs = job.enabled
+      ? computeNextRunAtMs(job.schedule, now)
+      : undefined;
     if (!job.enabled) job.state.runningAtMs = undefined;
   }
 }
@@ -67,10 +73,10 @@ export function isJobEnabled(job) {
  */
 export function isJobDue(job, nowMs, opts) {
   if (!isJobEnabled(job)) return false;
-  if (typeof job.state.runningAtMs === 'number') return false;
+  if (typeof job.state.runningAtMs === "number") return false;
   if (opts?.forced) return true;
   const nextRun = job.state.nextRunAtMs;
-  return typeof nextRun === 'number' && nextRun <= nowMs;
+  return typeof nextRun === "number" && nextRun <= nowMs;
 }
 
 /**
@@ -101,7 +107,7 @@ export function nextWakeAtMs(jobs) {
   let earliest = null;
   for (const job of jobs) {
     const next = job.state.nextRunAtMs;
-    if (typeof next === 'number' && (earliest === null || next < earliest)) {
+    if (typeof next === "number" && (earliest === null || next < earliest)) {
       earliest = next;
     }
   }

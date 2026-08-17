@@ -1,13 +1,13 @@
 /**
  * JHT Cron — Persistenza jobs in ~/.jht/cron/jobs.json
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import { randomBytes } from 'node:crypto';
-import { JHT_HOME } from '../paths.js';
+import fs from "node:fs";
+import path from "node:path";
+import { randomBytes } from "node:crypto";
+import { JHT_HOME } from "../paths.js";
 
-const JHT_CRON_DIR = path.join(JHT_HOME, 'cron');
-const JHT_CRON_STORE_PATH = path.join(JHT_CRON_DIR, 'jobs.json');
+const JHT_CRON_DIR = path.join(JHT_HOME, "cron");
+const JHT_CRON_STORE_PATH = path.join(JHT_CRON_DIR, "jobs.json");
 
 const serializedCache = new Map();
 
@@ -30,9 +30,11 @@ export function resolveCronStorePath(storePath) {
  */
 export async function loadCronStore(storePath) {
   try {
-    const raw = await fs.promises.readFile(storePath, 'utf-8');
+    const raw = await fs.promises.readFile(storePath, "utf-8");
     let parsed;
-    try { parsed = JSON.parse(raw); } catch {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
       throw new Error(`Invalid JSON in ${storePath}`);
     }
     const jobs = Array.isArray(parsed?.jobs) ? parsed.jobs.filter(Boolean) : [];
@@ -40,7 +42,7 @@ export async function loadCronStore(storePath) {
     serializedCache.set(storePath, JSON.stringify(store, null, 2));
     return store;
   } catch (err) {
-    if (err.code === 'ENOENT') {
+    if (err.code === "ENOENT") {
       serializedCache.delete(storePath);
       return { version: 1, jobs: [] };
     }
@@ -66,23 +68,27 @@ export async function saveCronStore(storePath, store) {
   try {
     await fs.promises.access(storePath);
     previousExists = true;
-  } catch { /* non esiste */ }
+  } catch {
+    /* non esiste */
+  }
 
   if (previousExists) {
     try {
       await fs.promises.copyFile(storePath, `${storePath}.bak`);
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
 
   // Scrittura atomica: scrivi su .tmp, poi rinomina
-  const tmp = `${storePath}.${process.pid}.${randomBytes(8).toString('hex')}.tmp`;
-  await fs.promises.writeFile(tmp, json, { encoding: 'utf-8', mode: 0o600 });
+  const tmp = `${storePath}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
+  await fs.promises.writeFile(tmp, json, { encoding: "utf-8", mode: 0o600 });
 
   try {
     await fs.promises.rename(tmp, storePath);
   } catch (err) {
     // Windows fallback: copy + unlink
-    if (err.code === 'EPERM' || err.code === 'EEXIST') {
+    if (err.code === "EPERM" || err.code === "EEXIST") {
       await fs.promises.copyFile(tmp, storePath);
       await fs.promises.unlink(tmp).catch(() => {});
     } else {
