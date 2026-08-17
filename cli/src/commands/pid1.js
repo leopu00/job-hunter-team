@@ -78,17 +78,29 @@ export function coalesceAsyncCalls(handler) {
   };
 }
 
-async function readHostType() {
-  const fromEnv = (process.env.JHT_HOST_TYPE || '').trim().toLowerCase();
+export async function readHostType({
+  env = process.env,
+  hostEnvPath = HOST_ENV_PATH,
+  accessFile = access,
+  readHostFile = readFile,
+  log = pid1Log,
+} = {}) {
+  const fromEnv = (env.JHT_HOST_TYPE || '').trim().toLowerCase();
   if (fromEnv) return fromEnv;
 
   try {
-    await access(HOST_ENV_PATH);
-    const content = await readFile(HOST_ENV_PATH, 'utf-8');
+    await accessFile(hostEnvPath);
+    const content = await readHostFile(hostEnvPath, 'utf-8');
     const m = /^JHT_HOST_TYPE=(.*)$/m.exec(content);
     if (m) return m[1].trim().toLowerCase();
-  } catch {
-    // file mancante e' normale (utente che salta host-setup)
+  } catch (err) {
+    // Il file assente è normale (utente che salta host-setup). Qualunque
+    // altro errore non può mascherarsi da host locale: spegnere in silenzio
+    // il ramo VPS significa spegnere i canali che l'utente si aspetta vivi.
+    if (err?.code !== 'ENOENT') {
+      log(`cannot read host type from ${hostEnvPath} (${err?.code ?? 'unknown'}): ${err?.message ?? err}`);
+      throw err;
+    }
   }
   return 'local';
 }
