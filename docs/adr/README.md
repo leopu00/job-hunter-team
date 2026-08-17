@@ -21,6 +21,7 @@ Short records of architecturally-significant decisions — what we chose, why, a
 | [0006](./0006-user-choice-container-runtime-macos.md) | User chooses the container runtime on macOS (Colima or Docker Desktop) | Accepted |
 | [0007](./0007-provider-selection-is-configuration.md) | Provider selection is configuration, not instruction | Accepted |
 | [0008](./0008-podman-evaluated-behind-a-shim.md) | Evaluate Podman behind a `docker` shim, not by rewriting call sites | Proposed |
+| [0009](./0009-team-exposes-one-loopback-api.md) | The team exposes one loopback API; every client is thin | Proposed |
 
 ## When to add an ADR
 
