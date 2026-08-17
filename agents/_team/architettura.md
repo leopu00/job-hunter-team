@@ -309,7 +309,7 @@ When the Sentinel flags rate-limit saturation, the Captain sends `[URG] FREEZE` 
 
 **Why the apply step is fully manual.** The user reads the CV, judges fit themselves, sends feedback to the Captain (`tone is off` · `missing this experience` · `good — I'll apply` · …), and **only then decides whether to apply** — using the link they already have. This human checkpoint is intentional: it keeps JHT a coach for the worker, not a slop cannon spraying low-effort applications at recruiters. Volume on the recruiter side is meaningful only if the worker chose it.
 
-**Status update.** When the user applies, the position is flagged `status = applied` manually (Telegram reply or the web dashboard's "I applied" button), with `applied_via = telegram | web | manual`. Optional `response` lifecycle (interview · rejection · ghosted) is user-tracked too.
+**Status update.** When the user applies, the position is flagged `status = applied` manually (Telegram reply or the web dashboard's "I applied" button), with `applied_via = telegram | web | manual`. Optional `response` lifecycle (`interview` · `rejected` · `ghosted`) is user-tracked too.
 
 ### 🛠️ Skills / tools
 

@@ -289,4 +289,4 @@ new → checked → scored → writing → ready → applied → response
 - `writing` — le Rédacteur l'a pris en charge (Phase 4) — claim coordonné entre pairs
 - `ready` — le Round 3 du Critique a donné un score ≥ 5 (Phase 4) · `excluded` si score < 5
 - `applied` — l'utilisateur a confirmé l'envoi (Phase 5) — manuel, jamais par l'équipe
-- `response` — réponse reçue (entretien/refus/ghosted) — flag géré par l'utilisateur
+- `response` — réponse reçue (`interview`/`rejected`/`ghosted`) — flag géré par l'utilisateur

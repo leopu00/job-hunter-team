@@ -18,6 +18,10 @@ import {
   isFactualReason,
   negativeSignalFor,
 } from "./exclusion-reasons";
+import {
+  DECLARABLE_OUTCOMES,
+  type DeclarableOutcome,
+} from "@/lib/applications/outcome";
 
 // Giudizio a 4 livelli dalla pagina posizione — stessa semantica della
 // pagina /swipe (event-log position_feedback, l'ultimo evento prevale):
@@ -79,6 +83,13 @@ const T: Record<
     markAppliedUndoHint: string;
     markAppliedUndoError: string;
     markAppliedByTeam: string;
+    outcomeQuestion: string;
+    outcomeRejected: string;
+    outcomeInterview: string;
+    outcomeUndoHint: string;
+    outcomeError: string;
+    outcomeUndoError: string;
+    outcomeNotApplied: string;
   }
 > = {
   it: {
@@ -105,6 +116,14 @@ const T: Record<
     markAppliedUndoError: "Non è riuscito ad annullare la candidatura",
     markAppliedByTeam:
       "Questa candidatura l’ha inviata il team: da qui non si annulla",
+    outcomeQuestion: "Com’è andata?",
+    outcomeRejected: "Respinta",
+    outcomeInterview: "Vogliono un colloquio",
+    outcomeUndoHint: "tocca di nuovo per annullare",
+    outcomeError:
+      "Esito non registrato. Riprova tra poco e segnalalo se continua.",
+    outcomeUndoError: "Non è riuscito ad annullare l’esito",
+    outcomeNotApplied: "Segna prima la candidatura come inviata",
   },
   en: {
     verdicts: {
@@ -130,6 +149,14 @@ const T: Record<
     markAppliedUndoError: "Could not undo the application",
     markAppliedByTeam:
       "The team sent this application: it cannot be undone from here",
+    outcomeQuestion: "How did it go?",
+    outcomeRejected: "Rejected",
+    outcomeInterview: "They want an interview",
+    outcomeUndoHint: "tap again to undo",
+    outcomeError:
+      "Outcome not recorded. Try again shortly and report it if it continues.",
+    outcomeUndoError: "Could not undo the outcome",
+    outcomeNotApplied: "Mark the application as sent first",
   },
   hu: {
     verdicts: {
@@ -156,6 +183,14 @@ const T: Record<
     markAppliedUndoError: "A jelentkezést nem sikerült visszavonni",
     markAppliedByTeam:
       "Ezt a jelentkezést a csapat küldte: innen nem vonható vissza",
+    outcomeQuestion: "Hogy sikerült?",
+    outcomeRejected: "Elutasítva",
+    outcomeInterview: "Interjúra hívtak",
+    outcomeUndoHint: "koppints újra a visszavonáshoz",
+    outcomeError:
+      "Az eredményt nem sikerült rögzíteni. Próbáld újra hamarosan, és jelezd, ha továbbra is fennáll.",
+    outcomeUndoError: "Nem sikerült visszavonni az eredményt",
+    outcomeNotApplied: "Előbb jelöld elküldöttként a jelentkezést",
   },
   es: {
     verdicts: {
@@ -181,6 +216,14 @@ const T: Record<
     markAppliedUndoError: "No se pudo deshacer la candidatura",
     markAppliedByTeam:
       "Esta candidatura la envió el equipo: no se puede deshacer desde aquí",
+    outcomeQuestion: "¿Cómo ha ido?",
+    outcomeRejected: "Rechazada",
+    outcomeInterview: "Quieren una entrevista",
+    outcomeUndoHint: "toca otra vez para deshacer",
+    outcomeError:
+      "Resultado no registrado. Inténtalo de nuevo en un momento y avísanos si continúa.",
+    outcomeUndoError: "No se pudo deshacer el resultado",
+    outcomeNotApplied: "Marca antes la candidatura como enviada",
   },
   de: {
     verdicts: {
@@ -206,6 +249,14 @@ const T: Record<
     markAppliedUndoError: "Bewerbung konnte nicht rückgängig gemacht werden",
     markAppliedByTeam:
       "Diese Bewerbung hat das Team gesendet: von hier nicht widerrufbar",
+    outcomeQuestion: "Wie ist es gelaufen?",
+    outcomeRejected: "Abgelehnt",
+    outcomeInterview: "Sie wollen ein Gespräch",
+    outcomeUndoHint: "zum Rückgängigmachen erneut tippen",
+    outcomeError:
+      "Ergebnis nicht gespeichert. Versuch es gleich noch einmal und melde es, wenn es weiterhin auftritt.",
+    outcomeUndoError: "Das Ergebnis konnte nicht rückgängig gemacht werden",
+    outcomeNotApplied: "Markiere die Bewerbung zuerst als gesendet",
   },
   fr: {
     verdicts: {
@@ -232,6 +283,14 @@ const T: Record<
     markAppliedUndoError: "Impossible d’annuler la candidature",
     markAppliedByTeam:
       "Cette candidature a été envoyée par l’équipe : impossible de l’annuler ici",
+    outcomeQuestion: "Comment ça s’est passé ?",
+    outcomeRejected: "Refusée",
+    outcomeInterview: "Ils veulent un entretien",
+    outcomeUndoHint: "touche à nouveau pour annuler",
+    outcomeError:
+      "Résultat non enregistré. Réessaie dans un instant et signale-le si cela persiste.",
+    outcomeUndoError: "Impossible d’annuler le résultat",
+    outcomeNotApplied: "Marque d’abord la candidature comme envoyée",
   },
   pt: {
     verdicts: {
@@ -258,6 +317,14 @@ const T: Record<
     markAppliedUndoError: "Não foi possível anular a candidatura",
     markAppliedByTeam:
       "Esta candidatura foi enviada pela equipa: não se anula aqui",
+    outcomeQuestion: "Como correu?",
+    outcomeRejected: "Rejeitada",
+    outcomeInterview: "Querem uma entrevista",
+    outcomeUndoHint: "toca outra vez para anular",
+    outcomeError:
+      "Resultado não registado. Tenta novamente daqui a pouco e comunica se continuar.",
+    outcomeUndoError: "Não foi possível anular o resultado",
+    outcomeNotApplied: "Marca primeiro a candidatura como enviada",
   },
 };
 
@@ -280,6 +347,7 @@ export function FeedbackButtons({
   initialVerdict,
   initialApplied = false,
   initialAppliedAt = null,
+  initialOutcome = null,
 }: {
   legacyId: number;
   initialVerdict: Verdict | null;
@@ -287,6 +355,8 @@ export function FeedbackButtons({
   initialApplied?: boolean;
   /** Quando: l'ora esatta, non "candidata" e basta (O-25). */
   initialAppliedAt?: string | null;
+  /** L'esito già dichiarato, se c'è (`applications.response`). */
+  initialOutcome?: DeclarableOutcome | null;
 }) {
   const locale = useLocale();
   const t = T[locale];
@@ -297,6 +367,14 @@ export function FeedbackButtons({
   const [appliedAt, setAppliedAt] = useState<string | null>(initialAppliedAt);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applyPending, setApplyPending] = useState(false);
+  // O-102: com'è andata. Compare solo a candidatura inviata, perché l'esito è
+  // la progressione dell'invio e non uno stato alternativo.
+  const [outcome, setOutcome] = useState<DeclarableOutcome | null>(
+    initialOutcome,
+  );
+  const [outcomeError, setOutcomeError] = useState<string | null>(null);
+  const [outcomePending, setOutcomePending] =
+    useState<DeclarableOutcome | null>(null);
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [verdict, setVerdict] = useState<Verdict | null>(initialVerdict);
@@ -517,6 +595,64 @@ export function FeedbackButtons({
     }
   }
 
+  // O-102 — «respinta» / «vogliono un colloquio».
+  //
+  // Il campo `applications.response` esisteva da sempre e non lo scriveva
+  // nessuno: il Mentor ci calcola sopra i suoi tassi e trovava una colonna
+  // vuota. Un click qui è l'unico modo perché quel conto esista.
+  //
+  // Cliccare l'esito già attivo lo ANNULLA, come il bottone della candidatura:
+  // l'utente che sbaglia bersaglio non deve restare inchiodato a una risposta
+  // che non è arrivata.
+  async function declareOutcome(value: DeclarableOutcome) {
+    if (outcomePending) return;
+    setOutcomeError(null);
+    setOutcomePending(value);
+    const undoing = outcome === value;
+    try {
+      const res = await fetch(`/api/positions/${legacyId}/outcome`, {
+        method: undoing ? "DELETE" : "POST",
+        ...(undoing
+          ? {}
+          : {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ outcome: value }),
+            }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        // 409: il server dice che qui e ora la scrittura direbbe una cosa
+        // falsa. Non è un guasto e non si racconta come tale.
+        if (body.error === "not_applied") {
+          setOutcomeError(t.outcomeNotApplied);
+          return;
+        }
+        if (body.error === "no_outcome") {
+          // Nel frattempo è cambiato altro: la pagina si riallinea al vero.
+          router.refresh();
+          return;
+        }
+        throw new Error(String(res.status));
+      }
+      const saved = (await res.json().catch(() => null)) as {
+        response?: string | null;
+        source?: "local" | "cloud";
+        cloud_synced?: boolean | null;
+      } | null;
+      // Stessa regola della candidatura: una scrittura locale il cui mirror
+      // cloud non è confermato NON è un click andato a buon fine.
+      if (!applicationAckAccepted(saved)) {
+        throw new Error("cloud_sync_unconfirmed");
+      }
+      setOutcome(undoing ? null : value);
+      router.refresh();
+    } catch {
+      setOutcomeError(undoing ? t.outcomeUndoError : t.outcomeError);
+    } finally {
+      setOutcomePending(null);
+    }
+  }
+
   return (
     <div>
       <div className="grid grid-cols-4 gap-2">
@@ -668,6 +804,65 @@ export function FeedbackButtons({
         <p className="mt-2 text-[10px]" style={{ color: "var(--color-red)" }}>
           {applyError}
         </p>
+      )}
+      {/* L'esito viene DOPO l'invio e solo dopo: prima non è una domanda che
+          si può fare. Due pulsanti e non tre — «nessuna risposta» non si
+          dichiara, lo deriva il Mentor dopo 30 giorni di silenzio. */}
+      {applied && (
+        <div
+          className="mt-3 border-t pt-2"
+          style={{ borderColor: "var(--color-border)" }}
+        >
+          <p className="mb-1.5 text-[10px] text-[var(--color-dim)]">
+            {t.outcomeQuestion}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {DECLARABLE_OUTCOMES.map((value) => {
+              const selected = outcome === value;
+              const color =
+                value === "interview"
+                  ? "var(--color-green)"
+                  : "var(--color-red)";
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => void declareOutcome(value)}
+                  disabled={outcomePending !== null}
+                  aria-pressed={selected}
+                  className="rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
+                  style={{
+                    color: selected ? color : "var(--color-muted)",
+                    borderColor: selected ? color : "var(--color-border)",
+                    background: selected
+                      ? `color-mix(in srgb, ${color} 12%, transparent)`
+                      : "transparent",
+                  }}
+                >
+                  {value === "interview"
+                    ? t.outcomeInterview
+                    : t.outcomeRejected}
+                </button>
+              );
+            })}
+          </div>
+          {/* Che si possa tornare indietro va DETTO, come per la candidatura:
+              un bottone già premuto, senza questa riga, si legge come
+              definitivo. */}
+          {outcome && (
+            <p className="mt-1 text-center text-[9px] text-[var(--color-dim)]">
+              {t.outcomeUndoHint}
+            </p>
+          )}
+          {outcomeError && (
+            <p
+              className="mt-2 text-[10px]"
+              style={{ color: "var(--color-red)" }}
+            >
+              {outcomeError}
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

@@ -310,7 +310,7 @@ Wenn der Sentinel Rate-Limit-Saettigung meldet, sendet der Captain `[URG] FREEZE
 
 **Warum der Bewerbungsschritt vollstaendig manuell ist.** Der Benutzer liest den CV, beurteilt die Passung selbst, sendet Feedback an den Captain (`Ton passt nicht` · `diese Erfahrung fehlt` · `gut — ich bewerbe mich` · ...) und **entscheidet erst dann, ob er sich bewirbt** — ueber den Link, den er bereits hat. Dieser menschliche Checkpoint ist beabsichtigt: Er haelt JHT als Coach fuer den Arbeitnehmer, nicht als Kanone, die halbherzige Bewerbungen auf Recruiter feuert. Volumen auf Recruiter-Seite ist nur dann sinnvoll, wenn der Arbeitnehmer es gewaehlt hat.
 
-**Status-Update.** Wenn der Benutzer sich bewirbt, wird die Position manuell als `status = applied` markiert (Telegram-Antwort oder "Ich habe mich beworben"-Button im Web-Dashboard), mit `applied_via = telegram | web | manual`. Der optionale `response`-Lebenszyklus (Vorstellungsgespraech · Absage · Ghosted) wird ebenfalls vom Benutzer nachverfolgt.
+**Status-Update.** Wenn der Benutzer sich bewirbt, wird die Position manuell als `status = applied` markiert (Telegram-Antwort oder "Ich habe mich beworben"-Button im Web-Dashboard), mit `applied_via = telegram | web | manual`. Der optionale `response`-Lebenszyklus (`interview` · `rejected` · `ghosted`) wird ebenfalls vom Benutzer nachverfolgt.
 
 ### 🛠️ Skills / tools
 

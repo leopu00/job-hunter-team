@@ -1,850 +1,1419 @@
 {
   "schema_version": 1,
-  "source_roots": ["web/app", "web/lib"],
+  "source_roots": [
+    "web/app",
+    "web/lib"
+  ],
   "canary": {
-    "path": "supabase/live-schema/078-085.web.v5.json",
-    "sha256": "71cfa14b3a0857d9d39f1a79522dee5f5809547a6896ec170cf7d7c4fca25774",
-    "contract_id": "release-0.3.9-web-schema-078-085"
+    "path": "supabase/live-schema/078-086.web.v6.json",
+    "sha256": "7507095fb74fead51307426b779c8b6870587075d129565afd299bae63a7536d",
+    "contract_id": "release-0.3.9-web-schema-078-086"
   },
   "coverage": {
     "rpcs": {
       "consume_pairing_attempt": {
-        "receipts": ["085.web.rpc.consume_pairing_attempt"]
+        "receipts": [
+          "086.web.rpc.consume_pairing_attempt"
+        ]
       },
       "create_position_ticket": {
-        "receipts": ["085.web.rpc.create_position_ticket"]
+        "receipts": [
+          "086.web.rpc.create_position_ticket"
+        ]
       },
       "delete_account_data": {
-        "receipts": ["085.web.rpc.delete_account_data"]
+        "receipts": [
+          "086.web.rpc.delete_account_data"
+        ]
       },
       "increment_download_clicks": {
-        "receipts": ["085.web.rpc.increment_download_clicks"]
+        "receipts": [
+          "086.web.rpc.increment_download_clicks"
+        ]
       },
       "increment_landing_hits": {
-        "receipts": ["085.web.rpc.increment_landing_hits"]
+        "receipts": [
+          "086.web.rpc.increment_landing_hits"
+        ]
       },
       "mark_position_applied": {
-        "receipts": ["085.web.rpc.mark_position_applied"]
+        "receipts": [
+          "086.web.rpc.mark_position_applied"
+        ]
+      },
+      "mark_position_outcome": {
+        "receipts": [
+          "086.web.rpc.mark_position_outcome"
+        ]
       },
       "mutate_team_directive_with_event": {
-        "receipts": ["085.web.rpc.mutate_team_directive_with_event"]
+        "receipts": [
+          "086.web.rpc.mutate_team_directive_with_event"
+        ]
       },
       "redeem_cloud_sync_pairing": {
-        "receipts": ["085.web.rpc.redeem_cloud_sync_pairing"]
+        "receipts": [
+          "086.web.rpc.redeem_cloud_sync_pairing"
+        ]
       },
       "sync_candidate_profile_atomic": {
-        "receipts": ["085.web.rpc.sync_candidate_profile_atomic"]
+        "receipts": [
+          "086.web.rpc.sync_candidate_profile_atomic"
+        ]
       },
       "sync_confirm_positions_applied": {
-        "receipts": ["085.web.rpc.sync_confirm_positions_applied"]
+        "receipts": [
+          "086.web.rpc.sync_confirm_positions_applied"
+        ]
       },
       "sync_create_position_ticket": {
-        "receipts": ["085.web.rpc.sync_create_position_ticket"]
+        "receipts": [
+          "086.web.rpc.sync_create_position_ticket"
+        ]
       },
       "sync_upsert_applications": {
-        "receipts": ["085.web.rpc.sync_upsert_applications"]
+        "receipts": [
+          "086.web.rpc.sync_upsert_applications"
+        ]
       },
       "undo_manual_position_application": {
-        "receipts": ["085.web.rpc.undo_manual_position_application"]
+        "receipts": [
+          "086.web.rpc.undo_manual_position_application"
+        ]
+      },
+      "undo_position_outcome": {
+        "receipts": [
+          "086.web.rpc.undo_position_outcome"
+        ]
       },
       "upsert_pending_user_messages_merge": {
-        "receipts": ["085.web.rpc.upsert_pending_user_messages_merge"]
+        "receipts": [
+          "086.web.rpc.upsert_pending_user_messages_merge"
+        ]
       }
     },
     "tables": {
       "applications": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "candidate_blocks": {
-        "receipts": ["085.web.columns.candidate_blocks"]
+        "receipts": [
+          "086.web.columns.candidate_blocks"
+        ]
       },
       "candidate_contacts": {
-        "receipts": ["085.web.columns.candidate_contacts"]
+        "receipts": [
+          "086.web.columns.candidate_contacts"
+        ]
       },
       "candidate_files": {
-        "receipts": ["085.web.columns.candidate_files"]
+        "receipts": [
+          "086.web.columns.candidate_files"
+        ]
       },
       "candidate_profiles": {
-        "receipts": ["085.web.columns.candidate_profiles"]
+        "receipts": [
+          "086.web.columns.candidate_profiles"
+        ]
       },
       "cloud_sync_pairing_sessions": {
-        "receipts": ["085.web.columns.cloud_sync_pairing_sessions"]
+        "receipts": [
+          "086.web.columns.cloud_sync_pairing_sessions"
+        ]
       },
       "cloud_sync_tokens": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "companies": {
-        "receipts": ["085.web.columns.companies"]
+        "receipts": [
+          "086.web.columns.companies"
+        ]
       },
       "file_bridge_requests": {
-        "receipts": ["085.web.columns.file_bridge_requests"]
+        "receipts": [
+          "086.web.columns.file_bridge_requests"
+        ]
       },
       "notification_prefs": {
-        "receipts": ["085.web.columns.notification_prefs"]
+        "receipts": [
+          "086.web.columns.notification_prefs"
+        ]
       },
       "pending_user_messages": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "position_feedback": {
-        "receipts": ["085.web.columns.position_feedback"]
+        "receipts": [
+          "086.web.columns.position_feedback"
+        ]
       },
       "position_highlights": {
-        "receipts": ["085.web.columns.position_highlights"]
+        "receipts": [
+          "086.web.columns.position_highlights"
+        ]
       },
       "position_tickets": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_transitions": {
-        "receipts": ["085.web.columns.position_transitions"]
+        "receipts": [
+          "086.web.columns.position_transitions"
+        ]
       },
       "position_user_notes": {
-        "receipts": ["085.web.columns.position_user_notes"]
+        "receipts": [
+          "086.web.columns.position_user_notes"
+        ]
       },
       "position_views": {
-        "receipts": ["085.web.columns.position_views"]
+        "receipts": [
+          "086.web.columns.position_views"
+        ]
       },
       "positions": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "scores": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "sentinel_ticks": {
-        "receipts": ["085.web.columns.sentinel_ticks"]
+        "receipts": [
+          "086.web.columns.sentinel_ticks"
+        ]
       },
       "team_commands": {
-        "receipts": ["085.web.columns.team_commands"]
+        "receipts": [
+          "086.web.columns.team_commands"
+        ]
       },
       "team_directives": {
-        "receipts": ["085.web.columns.team_directives"]
+        "receipts": [
+          "086.web.columns.team_directives"
+        ]
       },
       "team_state": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "user_onboarding_state": {
-        "receipts": ["085.web.columns.user_onboarding_state"]
+        "receipts": [
+          "086.web.columns.user_onboarding_state"
+        ]
       },
       "user_settings": {
-        "receipts": ["085.web.columns.user_settings"]
+        "receipts": [
+          "086.web.columns.user_settings"
+        ]
       },
       "user_to_agent_messages": {
-        "receipts": ["085.web.columns.user_to_agent_messages"]
+        "receipts": [
+          "086.web.columns.user_to_agent_messages"
+        ]
       }
     },
     "columns": {
       "applications.applied": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.applied_at": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.applied_via": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.critic_reviewed_at": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.critic_round": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.critic_score": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.critic_verdict": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.deleted_at": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.id": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.position_id": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.response_at": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.reviewed_by": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.status": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.updated_at": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.user_id": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.written_at": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "applications.written_by": {
-        "receipts": ["085.web.columns.applications"]
+        "receipts": [
+          "086.web.columns.applications"
+        ]
       },
       "candidate_blocks.content": {
-        "receipts": ["085.web.columns.candidate_blocks"]
+        "receipts": [
+          "086.web.columns.candidate_blocks"
+        ]
       },
       "candidate_blocks.key": {
-        "receipts": ["085.web.columns.candidate_blocks"]
+        "receipts": [
+          "086.web.columns.candidate_blocks"
+        ]
       },
       "candidate_blocks.kind": {
-        "receipts": ["085.web.columns.candidate_blocks"]
+        "receipts": [
+          "086.web.columns.candidate_blocks"
+        ]
       },
       "candidate_blocks.ord": {
-        "receipts": ["085.web.columns.candidate_blocks"]
+        "receipts": [
+          "086.web.columns.candidate_blocks"
+        ]
       },
       "candidate_blocks.title": {
-        "receipts": ["085.web.columns.candidate_blocks"]
+        "receipts": [
+          "086.web.columns.candidate_blocks"
+        ]
       },
       "candidate_blocks.user_id": {
-        "receipts": ["085.web.columns.candidate_blocks"]
+        "receipts": [
+          "086.web.columns.candidate_blocks"
+        ]
       },
       "candidate_contacts.address": {
-        "receipts": ["085.web.columns.candidate_contacts"]
+        "receipts": [
+          "086.web.columns.candidate_contacts"
+        ]
       },
       "candidate_contacts.email": {
-        "receipts": ["085.web.columns.candidate_contacts"]
+        "receipts": [
+          "086.web.columns.candidate_contacts"
+        ]
       },
       "candidate_contacts.github": {
-        "receipts": ["085.web.columns.candidate_contacts"]
+        "receipts": [
+          "086.web.columns.candidate_contacts"
+        ]
       },
       "candidate_contacts.linkedin": {
-        "receipts": ["085.web.columns.candidate_contacts"]
+        "receipts": [
+          "086.web.columns.candidate_contacts"
+        ]
       },
       "candidate_contacts.phone": {
-        "receipts": ["085.web.columns.candidate_contacts"]
+        "receipts": [
+          "086.web.columns.candidate_contacts"
+        ]
       },
       "candidate_contacts.user_id": {
-        "receipts": ["085.web.columns.candidate_contacts"]
+        "receipts": [
+          "086.web.columns.candidate_contacts"
+        ]
       },
       "candidate_contacts.website": {
-        "receipts": ["085.web.columns.candidate_contacts"]
+        "receipts": [
+          "086.web.columns.candidate_contacts"
+        ]
       },
       "candidate_files.name": {
-        "receipts": ["085.web.columns.candidate_files"]
+        "receipts": [
+          "086.web.columns.candidate_files"
+        ]
       },
       "candidate_files.size": {
-        "receipts": ["085.web.columns.candidate_files"]
+        "receipts": [
+          "086.web.columns.candidate_files"
+        ]
       },
       "candidate_files.updated_at": {
-        "receipts": ["085.web.columns.candidate_files"]
+        "receipts": [
+          "086.web.columns.candidate_files"
+        ]
       },
       "candidate_files.user_id": {
-        "receipts": ["085.web.columns.candidate_files"]
+        "receipts": [
+          "086.web.columns.candidate_files"
+        ]
       },
       "candidate_profiles.user_id": {
-        "receipts": ["085.web.columns.candidate_profiles"]
+        "receipts": [
+          "086.web.columns.candidate_profiles"
+        ]
       },
       "cloud_sync_pairing_sessions.approved_at": {
-        "receipts": ["085.web.columns.cloud_sync_pairing_sessions"]
+        "receipts": [
+          "086.web.columns.cloud_sync_pairing_sessions"
+        ]
       },
       "cloud_sync_pairing_sessions.approved_token": {
-        "receipts": ["085.web.columns.cloud_sync_pairing_sessions"]
+        "receipts": [
+          "086.web.columns.cloud_sync_pairing_sessions"
+        ]
       },
       "cloud_sync_pairing_sessions.approved_token_id": {
-        "receipts": ["085.web.columns.cloud_sync_pairing_sessions"]
+        "receipts": [
+          "086.web.columns.cloud_sync_pairing_sessions"
+        ]
       },
       "cloud_sync_pairing_sessions.device_code": {
-        "receipts": ["085.web.columns.cloud_sync_pairing_sessions"]
+        "receipts": [
+          "086.web.columns.cloud_sync_pairing_sessions"
+        ]
       },
       "cloud_sync_pairing_sessions.expires_at": {
-        "receipts": ["085.web.columns.cloud_sync_pairing_sessions"]
+        "receipts": [
+          "086.web.columns.cloud_sync_pairing_sessions"
+        ]
       },
       "cloud_sync_pairing_sessions.status": {
-        "receipts": ["085.web.columns.cloud_sync_pairing_sessions"]
+        "receipts": [
+          "086.web.columns.cloud_sync_pairing_sessions"
+        ]
       },
       "cloud_sync_pairing_sessions.user_code": {
-        "receipts": ["085.web.columns.cloud_sync_pairing_sessions"]
+        "receipts": [
+          "086.web.columns.cloud_sync_pairing_sessions"
+        ]
       },
       "cloud_sync_pairing_sessions.user_id": {
-        "receipts": ["085.web.columns.cloud_sync_pairing_sessions"]
+        "receipts": [
+          "086.web.columns.cloud_sync_pairing_sessions"
+        ]
       },
       "cloud_sync_tokens.client_capabilities": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "cloud_sync_tokens.client_platform": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "cloud_sync_tokens.client_seen_at": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "cloud_sync_tokens.client_version": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "cloud_sync_tokens.created_at": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "cloud_sync_tokens.expires_at": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "cloud_sync_tokens.id": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "cloud_sync_tokens.name": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "cloud_sync_tokens.revoked_at": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "cloud_sync_tokens.token_hash": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "cloud_sync_tokens.token_prefix": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "cloud_sync_tokens.user_id": {
-        "receipts": ["085.web.columns.cloud_sync_tokens"]
+        "receipts": [
+          "086.web.columns.cloud_sync_tokens"
+        ]
       },
       "companies.id": {
-        "receipts": ["085.web.columns.companies"]
+        "receipts": [
+          "086.web.columns.companies"
+        ]
       },
       "companies.legacy_id": {
-        "receipts": ["085.web.columns.companies"]
+        "receipts": [
+          "086.web.columns.companies"
+        ]
       },
       "companies.user_id": {
-        "receipts": ["085.web.columns.companies"]
+        "receipts": [
+          "086.web.columns.companies"
+        ]
       },
       "file_bridge_requests.created_at": {
-        "receipts": ["085.web.columns.file_bridge_requests"]
+        "receipts": [
+          "086.web.columns.file_bridge_requests"
+        ]
       },
       "file_bridge_requests.error": {
-        "receipts": ["085.web.columns.file_bridge_requests"]
+        "receipts": [
+          "086.web.columns.file_bridge_requests"
+        ]
       },
       "file_bridge_requests.expires_at": {
-        "receipts": ["085.web.columns.file_bridge_requests"]
+        "receipts": [
+          "086.web.columns.file_bridge_requests"
+        ]
       },
       "file_bridge_requests.file_name": {
-        "receipts": ["085.web.columns.file_bridge_requests"]
+        "receipts": [
+          "086.web.columns.file_bridge_requests"
+        ]
       },
       "file_bridge_requests.id": {
-        "receipts": ["085.web.columns.file_bridge_requests"]
+        "receipts": [
+          "086.web.columns.file_bridge_requests"
+        ]
       },
       "file_bridge_requests.status": {
-        "receipts": ["085.web.columns.file_bridge_requests"]
+        "receipts": [
+          "086.web.columns.file_bridge_requests"
+        ]
       },
       "file_bridge_requests.updated_at": {
-        "receipts": ["085.web.columns.file_bridge_requests"]
+        "receipts": [
+          "086.web.columns.file_bridge_requests"
+        ]
       },
       "file_bridge_requests.user_id": {
-        "receipts": ["085.web.columns.file_bridge_requests"]
+        "receipts": [
+          "086.web.columns.file_bridge_requests"
+        ]
       },
       "notification_prefs.prefs": {
-        "receipts": ["085.web.columns.notification_prefs"]
+        "receipts": [
+          "086.web.columns.notification_prefs"
+        ]
       },
       "notification_prefs.user_id": {
-        "receipts": ["085.web.columns.notification_prefs"]
+        "receipts": [
+          "086.web.columns.notification_prefs"
+        ]
       },
       "pending_user_messages.acknowledged_at": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.agent": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.agent_seen_reply_at": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.author": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.body": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.chat_ts": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.created_at": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.delivered_at": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.delivered_via": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.id": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.kind": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.legacy_id": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.related_position_id": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.source_action": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.source_directive_id": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.source_id": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.source_payload": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.user_id": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.user_reply": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "pending_user_messages.user_reply_at": {
-        "receipts": ["085.web.columns.pending_user_messages"]
+        "receipts": [
+          "086.web.columns.pending_user_messages"
+        ]
       },
       "position_feedback.action": {
-        "receipts": ["085.web.columns.position_feedback"]
+        "receipts": [
+          "086.web.columns.position_feedback"
+        ]
       },
       "position_feedback.comment": {
-        "receipts": ["085.web.columns.position_feedback"]
+        "receipts": [
+          "086.web.columns.position_feedback"
+        ]
       },
       "position_feedback.created_at": {
-        "receipts": ["085.web.columns.position_feedback"]
+        "receipts": [
+          "086.web.columns.position_feedback"
+        ]
       },
       "position_feedback.direction": {
-        "receipts": ["085.web.columns.position_feedback"]
+        "receipts": [
+          "086.web.columns.position_feedback"
+        ]
       },
       "position_feedback.position_legacy_id": {
-        "receipts": ["085.web.columns.position_feedback"]
+        "receipts": [
+          "086.web.columns.position_feedback"
+        ]
       },
       "position_feedback.reason": {
-        "receipts": ["085.web.columns.position_feedback"]
+        "receipts": [
+          "086.web.columns.position_feedback"
+        ]
       },
       "position_feedback.score": {
-        "receipts": ["085.web.columns.position_feedback"]
+        "receipts": [
+          "086.web.columns.position_feedback"
+        ]
       },
       "position_feedback.user_id": {
-        "receipts": ["085.web.columns.position_feedback"]
+        "receipts": [
+          "086.web.columns.position_feedback"
+        ]
       },
       "position_highlights.legacy_id": {
-        "receipts": ["085.web.columns.position_highlights"]
+        "receipts": [
+          "086.web.columns.position_highlights"
+        ]
       },
       "position_highlights.position_id": {
-        "receipts": ["085.web.columns.position_highlights"]
+        "receipts": [
+          "086.web.columns.position_highlights"
+        ]
       },
       "position_highlights.type": {
-        "receipts": ["085.web.columns.position_highlights"]
+        "receipts": [
+          "086.web.columns.position_highlights"
+        ]
       },
       "position_tickets.assigned_agent": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_tickets.assigned_at": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_tickets.created_at": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_tickets.id": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_tickets.kind": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_tickets.position_legacy_id": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_tickets.request_text": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_tickets.resolved_at": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_tickets.response_text": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_tickets.status": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_tickets.updated_at": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_tickets.user_id": {
-        "receipts": ["085.web.columns.position_tickets"]
+        "receipts": [
+          "086.web.columns.position_tickets"
+        ]
       },
       "position_transitions.by_agent": {
-        "receipts": ["085.web.columns.position_transitions"]
+        "receipts": [
+          "086.web.columns.position_transitions"
+        ]
       },
       "position_transitions.from_state": {
-        "receipts": ["085.web.columns.position_transitions"]
+        "receipts": [
+          "086.web.columns.position_transitions"
+        ]
       },
       "position_transitions.id": {
-        "receipts": ["085.web.columns.position_transitions"]
+        "receipts": [
+          "086.web.columns.position_transitions"
+        ]
       },
       "position_transitions.notes": {
-        "receipts": ["085.web.columns.position_transitions"]
+        "receipts": [
+          "086.web.columns.position_transitions"
+        ]
       },
       "position_transitions.position_legacy_id": {
-        "receipts": ["085.web.columns.position_transitions"]
+        "receipts": [
+          "086.web.columns.position_transitions"
+        ]
       },
       "position_transitions.to_state": {
-        "receipts": ["085.web.columns.position_transitions"]
+        "receipts": [
+          "086.web.columns.position_transitions"
+        ]
       },
       "position_transitions.ts": {
-        "receipts": ["085.web.columns.position_transitions"]
+        "receipts": [
+          "086.web.columns.position_transitions"
+        ]
       },
       "position_user_notes.body": {
-        "receipts": ["085.web.columns.position_user_notes"]
+        "receipts": [
+          "086.web.columns.position_user_notes"
+        ]
       },
       "position_user_notes.origin": {
-        "receipts": ["085.web.columns.position_user_notes"]
+        "receipts": [
+          "086.web.columns.position_user_notes"
+        ]
       },
       "position_user_notes.position_id": {
-        "receipts": ["085.web.columns.position_user_notes"]
+        "receipts": [
+          "086.web.columns.position_user_notes"
+        ]
       },
       "position_user_notes.updated_at": {
-        "receipts": ["085.web.columns.position_user_notes"]
+        "receipts": [
+          "086.web.columns.position_user_notes"
+        ]
       },
       "position_user_notes.user_id": {
-        "receipts": ["085.web.columns.position_user_notes"]
+        "receipts": [
+          "086.web.columns.position_user_notes"
+        ]
       },
       "position_views.position_id": {
-        "receipts": ["085.web.columns.position_views"]
+        "receipts": [
+          "086.web.columns.position_views"
+        ]
       },
       "position_views.user_id": {
-        "receipts": ["085.web.columns.position_views"]
+        "receipts": [
+          "086.web.columns.position_views"
+        ]
       },
       "positions.company": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.created_at": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.deadline": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.deleted_at": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.found_at": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.found_by": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.geocode_requested": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.geocode_requested_at": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.id": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.is_remote": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.jd_summary": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.jd_text": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.last_checked": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.legacy_id": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.loc_city": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.loc_country": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.loc_country_code": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.location": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.notes": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.office_address": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.office_geocoded": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.office_lat": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.office_lon": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.recheck_requested": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.recheck_requested_at": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.remote_type": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.role_family": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.salary_declared_currency": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.salary_declared_max": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.salary_declared_min": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.salary_estimated_currency": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.salary_estimated_max": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.salary_estimated_min": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.salary_precise_requested": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.salary_precise_requested_at": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.score": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.source": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.status": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.title": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.updated_at": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.url": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.user_excluded_at": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.user_excluded_note": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.user_excluded_prev_status": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.user_excluded_reason": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.user_id": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.write_request_kind": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.write_requested": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "positions.write_requested_at": {
-        "receipts": ["085.web.columns.positions"]
+        "receipts": [
+          "086.web.columns.positions"
+        ]
       },
       "scores.deleted_at": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "scores.id": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "scores.legacy_id": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "scores.position_id": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "scores.remote_fit": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "scores.salary_fit": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "scores.scored_at": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "scores.scored_by": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "scores.stack_match": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "scores.strategic_fit": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "scores.total_score": {
-        "receipts": ["085.web.columns.scores"]
+        "receipts": [
+          "086.web.columns.scores"
+        ]
       },
       "sentinel_ticks.id": {
-        "receipts": ["085.web.columns.sentinel_ticks"]
+        "receipts": [
+          "086.web.columns.sentinel_ticks"
+        ]
       },
       "team_commands.action": {
-        "receipts": ["085.web.columns.team_commands"]
+        "receipts": [
+          "086.web.columns.team_commands"
+        ]
       },
       "team_commands.error": {
-        "receipts": ["085.web.columns.team_commands"]
+        "receipts": [
+          "086.web.columns.team_commands"
+        ]
       },
       "team_commands.id": {
-        "receipts": ["085.web.columns.team_commands"]
+        "receipts": [
+          "086.web.columns.team_commands"
+        ]
       },
       "team_commands.payload": {
-        "receipts": ["085.web.columns.team_commands"]
+        "receipts": [
+          "086.web.columns.team_commands"
+        ]
       },
       "team_commands.processed_at": {
-        "receipts": ["085.web.columns.team_commands"]
+        "receipts": [
+          "086.web.columns.team_commands"
+        ]
       },
       "team_commands.requested_at": {
-        "receipts": ["085.web.columns.team_commands"]
+        "receipts": [
+          "086.web.columns.team_commands"
+        ]
       },
       "team_commands.status": {
-        "receipts": ["085.web.columns.team_commands"]
+        "receipts": [
+          "086.web.columns.team_commands"
+        ]
       },
       "team_commands.user_id": {
-        "receipts": ["085.web.columns.team_commands"]
+        "receipts": [
+          "086.web.columns.team_commands"
+        ]
       },
       "team_directives.archived_at": {
-        "receipts": ["085.web.columns.team_directives"]
+        "receipts": [
+          "086.web.columns.team_directives"
+        ]
       },
       "team_directives.body": {
-        "receipts": ["085.web.columns.team_directives"]
+        "receipts": [
+          "086.web.columns.team_directives"
+        ]
       },
       "team_directives.created_at": {
-        "receipts": ["085.web.columns.team_directives"]
+        "receipts": [
+          "086.web.columns.team_directives"
+        ]
       },
       "team_directives.created_by": {
-        "receipts": ["085.web.columns.team_directives"]
+        "receipts": [
+          "086.web.columns.team_directives"
+        ]
       },
       "team_directives.id": {
-        "receipts": ["085.web.columns.team_directives"]
+        "receipts": [
+          "086.web.columns.team_directives"
+        ]
       },
       "team_directives.kind": {
-        "receipts": ["085.web.columns.team_directives"]
+        "receipts": [
+          "086.web.columns.team_directives"
+        ]
       },
       "team_directives.sort_order": {
-        "receipts": ["085.web.columns.team_directives"]
+        "receipts": [
+          "086.web.columns.team_directives"
+        ]
       },
       "team_directives.status": {
-        "receipts": ["085.web.columns.team_directives"]
+        "receipts": [
+          "086.web.columns.team_directives"
+        ]
       },
       "team_directives.updated_at": {
-        "receipts": ["085.web.columns.team_directives"]
+        "receipts": [
+          "086.web.columns.team_directives"
+        ]
       },
       "team_directives.user_id": {
-        "receipts": ["085.web.columns.team_directives"]
+        "receipts": [
+          "086.web.columns.team_directives"
+        ]
       },
       "team_state.active_device_claimed_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.active_device_id": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.agents_enabled": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.chat_delivered_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.chat_requested_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.cloud_push_checked_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.cloud_push_status": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.emergency_stop_completed_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.emergency_stop_requested_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.is_running": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.last_action": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.last_action_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.last_error": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.last_error_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.last_heartbeat_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.last_user_activity_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.should_run": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.sync_completed_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.sync_requested_at": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "team_state.user_id": {
-        "receipts": ["085.web.columns.team_state"]
+        "receipts": [
+          "086.web.columns.team_state"
+        ]
       },
       "user_onboarding_state.first_team_run_at": {
-        "receipts": ["085.web.columns.user_onboarding_state"]
+        "receipts": [
+          "086.web.columns.user_onboarding_state"
+        ]
       },
       "user_onboarding_state.profile_configured_at": {
-        "receipts": ["085.web.columns.user_onboarding_state"]
+        "receipts": [
+          "086.web.columns.user_onboarding_state"
+        ]
       },
       "user_onboarding_state.tour_done_at": {
-        "receipts": ["085.web.columns.user_onboarding_state"]
+        "receipts": [
+          "086.web.columns.user_onboarding_state"
+        ]
       },
       "user_onboarding_state.updated_at": {
-        "receipts": ["085.web.columns.user_onboarding_state"]
+        "receipts": [
+          "086.web.columns.user_onboarding_state"
+        ]
       },
       "user_onboarding_state.user_id": {
-        "receipts": ["085.web.columns.user_onboarding_state"]
+        "receipts": [
+          "086.web.columns.user_onboarding_state"
+        ]
       },
       "user_onboarding_state.vps_setup_completed_at": {
-        "receipts": ["085.web.columns.user_onboarding_state"]
+        "receipts": [
+          "086.web.columns.user_onboarding_state"
+        ]
       },
       "user_settings.theme": {
-        "receipts": ["085.web.columns.user_settings"]
+        "receipts": [
+          "086.web.columns.user_settings"
+        ]
       },
       "user_settings.user_id": {
-        "receipts": ["085.web.columns.user_settings"]
+        "receipts": [
+          "086.web.columns.user_settings"
+        ]
       },
       "user_to_agent_messages.agent": {
-        "receipts": ["085.web.columns.user_to_agent_messages"]
+        "receipts": [
+          "086.web.columns.user_to_agent_messages"
+        ]
       },
       "user_to_agent_messages.id": {
-        "receipts": ["085.web.columns.user_to_agent_messages"]
+        "receipts": [
+          "086.web.columns.user_to_agent_messages"
+        ]
       },
       "user_to_agent_messages.message": {
-        "receipts": ["085.web.columns.user_to_agent_messages"]
+        "receipts": [
+          "086.web.columns.user_to_agent_messages"
+        ]
       },
       "user_to_agent_messages.payload": {
-        "receipts": ["085.web.columns.user_to_agent_messages"]
+        "receipts": [
+          "086.web.columns.user_to_agent_messages"
+        ]
       },
       "user_to_agent_messages.sent_at": {
-        "receipts": ["085.web.columns.user_to_agent_messages"]
+        "receipts": [
+          "086.web.columns.user_to_agent_messages"
+        ]
       },
       "user_to_agent_messages.user_id": {
-        "receipts": ["085.web.columns.user_to_agent_messages"]
+        "receipts": [
+          "086.web.columns.user_to_agent_messages"
+        ]
       }
     },
     "ambiguous_sites": {

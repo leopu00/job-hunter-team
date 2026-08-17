@@ -310,7 +310,7 @@ Quando o Sentinel sinaliza saturacao de rate-limit, o Captain envia `[URG] FREEZ
 
 **Porque o passo de candidatura e totalmente manual.** O utilizador le o CV, avalia a compatibilidade por si mesmo, envia feedback ao Captain (`o tom nao bate` · `falta esta experiencia` · `bem — vou candidatar-me` · ...), e **so entao decide se se candidata** — usando o link que ja tem. Este checkpoint humano e intencional: mantem o JHT como um coach para o trabalhador, nao um canhao que dispara candidaturas de baixo esforco contra recrutadores. O volume do lado do recrutador so faz sentido se o trabalhador o escolheu.
 
-**Atualizacao de status.** Quando o utilizador se candidata, a posicao e marcada `status = applied` manualmente (resposta Telegram ou botao "Candidatei-me" no web dashboard), com `applied_via = telegram | web | manual`. O ciclo opcional `response` (entrevista · rejeicao · ghosted) tambem e rastreado pelo utilizador.
+**Atualizacao de status.** Quando o utilizador se candidata, a posicao e marcada `status = applied` manualmente (resposta Telegram ou botao "Candidatei-me" no web dashboard), com `applied_via = telegram | web | manual`. O ciclo opcional `response` (`interview` · `rejected` · `ghosted`) tambem e rastreado pelo utilizador.
 
 ### 🛠️ Skills / tools
 

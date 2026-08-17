@@ -26,7 +26,7 @@ function fixture() {
   fs.writeFileSync(
     path.join(sourceRoot, "app/query.ts"),
     [
-      'const supabase = {} as any;',
+      "const supabase = {} as any;",
       'supabase.from("positions").select("id").eq("user_id", "fixture");',
       'supabase.rpc("known_rpc", {});',
     ].join("\n"),
@@ -118,7 +118,11 @@ describe("web code → live-schema receipt coverage", () => {
     });
     expect(first).toBe(second);
     expect(first).toMatch(
-      /^WEB-SCHEMA-COVERAGE PASS rpcs=\d+ tables=\d+ columns=\d+ ambiguous=\d+ receipts=40\n$/,
+      // 40 → 42 con la ricevuta 078-086.web.v6, che aggiunge le due RPC
+      // dell'esito (#187). Il pin è sul CONTEGGIO e non su `\d+` di proposito:
+      // deve muoversi solo quando qualcuno emette una ricevuta nuova e lo
+      // dichiara, non ogni volta che il censimento cambia da sé.
+      /^WEB-SCHEMA-COVERAGE PASS rpcs=\d+ tables=\d+ columns=\d+ ambiguous=\d+ receipts=42\n$/,
     );
   });
 

@@ -25,6 +25,11 @@ Uso:
   python3 db_query.py calibration-consume    # segna il feedback come consumato (watermark)
   python3 db_query.py application 42        # check anti-riscrittura (REGOLA-02)
                                             # exit 1 se critic_verdict NOT NULL → SKIP
+  python3 db_query.py applications --applied true --order-by applied_at:desc --limit 30
+                                            # funnel degli esiti post-invio (Pattern D
+                                            # del Mentor): interview/rejected/ghosted,
+                                            # con `ghosted` DERIVATO (nessuna risposta
+                                            # oltre i 30 giorni), non scritto da nessuno
   python3 db_query.py check-url 4361788825  # cerca per job ID numerico
   python3 db_query.py check-url "https://..."  # cerca per URL esatto
 
@@ -1393,6 +1398,202 @@ def query_application(position_id):
     return 0
 
 
+# ── Pattern D del Mentor: il funnel post-invio (#187) ───────────────────
+#
+# `applications.response` esiste da sempre e ha UN solo lettore: il Mentor,
+# `agents/_skills/mentor-patterns/SKILL.md` (Pattern D), che ci calcola sopra
+# interview rate, rejection rate e ghost rate. Il comando che quella skill
+# documenta non esisteva: `db_query.py applications` rispondeva `invalid
+# choice` — c'era solo `application` al singolare, che prende un position_id e
+# non aggrega. Quindi il Pattern D non è mai girato, e non per mancanza di
+# candidature (46 inviate, soglia superata) ma di query.
+#
+# `ghosted` non lo scrive nessuno: è DERIVATO qui, e questa è l'unica
+# definizione che ne esiste nel prodotto. È anche il motivo per cui l'esito
+# «nessuna risposta» NON ha un pulsante nel web: due definizioni della stessa
+# cosa divergono al primo ripensamento sulla soglia.
+GHOST_AFTER_DAYS = 30
+APPLICATIONS_WINDOW_DAYS = 60
+DEFAULT_APPLICATIONS_LIMIT = 30
+# Sotto questa soglia il Pattern D tace ("sample too small"): il numero è del
+# Mentor, non nostro — qui lo riportiamo perché chi legge sappia se il funnel
+# che sta guardando ha diritto di parola.
+MENTOR_SAMPLE_FLOOR = 10
+# Whitelist dell'ordinamento: `--order-by` arriva da un prompt, non da un menu.
+APPLICATIONS_ORDER_COLUMNS = (
+    'applied_at', 'response_at', 'written_at', 'created_at', 'updated_at',
+)
+# I due secchielli derivati. Se qualcuno scrive queste stesse parole DENTRO
+# `response`, il conteggio scritto e quello derivato finirebbero nello stesso
+# secchiello: sotto lo diciamo invece di sommarli in silenzio.
+DERIVED_BUCKETS = ('ghosted', 'pending')
+
+
+def parse_order_by(order_by):
+    """`applied_at:desc` → `('applied_at', 'DESC')`. Rifiuta il resto.
+
+    Rifiuta anche una colonna sconosciuta invece di ripiegare sul default: un
+    ordinamento ignorato in silenzio fa leggere le prime 30 righe sbagliate
+    credendole le più recenti.
+    """
+    raw = (order_by or '').strip()
+    column, _, direction = raw.partition(':')
+    column = column or 'applied_at'
+    direction = (direction or 'desc').lower()
+    if column not in APPLICATIONS_ORDER_COLUMNS:
+        raise ValueError(
+            f"unknown --order-by column {column!r}; "
+            f"allowed: {', '.join(APPLICATIONS_ORDER_COLUMNS)}"
+        )
+    if direction not in ('asc', 'desc'):
+        raise ValueError(f"unknown --order-by direction {direction!r}; use asc or desc")
+    return column, direction.upper()
+
+
+def query_applications(applied=None, days=APPLICATIONS_WINDOW_DAYS,
+                       order_by='applied_at:desc',
+                       limit=DEFAULT_APPLICATIONS_LIMIT, as_json=False):
+    """Funnel degli esiti + elenco delle candidature (Pattern D del Mentor).
+
+    Il funnel descrive SEMPRE le candidature INVIATE nella finestra: è la
+    domanda del Pattern D. `--applied` filtra l'elenco, non il funnel — così
+    `--applied false` resta utile (cosa non è ancora partito) senza cambiare
+    di nascosto il significato delle percentuali stampate sopra.
+    """
+    conn = get_db()
+    ensure_schema(conn)
+
+    column, direction = parse_order_by(order_by)
+    window = int(days or 0)
+    # La finestra si misura sull'invio, non sulla creazione della riga: una
+    # candidatura scritta a marzo e mandata ieri è di ieri.
+    window_sql = ''
+    window_params = []
+    if window > 0:
+        window_sql = ' AND julianday(\'now\') - julianday(a.applied_at) <= ?'
+        window_params = [window]
+
+    sent_where = ("a.applied = 1 AND a.applied_at IS NOT NULL" + window_sql)
+
+    # Un secchiello per riga: il valore scritto se c'è, altrimenti il derivato.
+    # GROUP BY sul valore REALE, non su una lista di valori attesi: un esito
+    # scritto con una parola che non conosciamo deve comparire, non sparire.
+    funnel_rows = conn.execute(
+        f"""
+        SELECT COALESCE(
+                   NULLIF(TRIM(a.response), ''),
+                   CASE WHEN julianday('now') - julianday(a.applied_at) > ?
+                        THEN 'ghosted' ELSE 'pending' END
+               ) AS bucket,
+               COUNT(*) AS cnt
+          FROM applications a
+         WHERE {sent_where}
+         GROUP BY bucket
+         ORDER BY cnt DESC
+        """,
+        [GHOST_AFTER_DAYS] + window_params,
+    ).fetchall()
+
+    sent = conn.execute(
+        f"SELECT COUNT(*) FROM applications a WHERE {sent_where}", window_params
+    ).fetchone()[0]
+
+    # Conflazione: `response` scritto con una delle due parole derivate.
+    written_derived = conn.execute(
+        f"""
+        SELECT COUNT(*) FROM applications a
+         WHERE {sent_where}
+           AND LOWER(TRIM(COALESCE(a.response, ''))) IN ({','.join('?' * len(DERIVED_BUCKETS))})
+        """,
+        window_params + list(DERIVED_BUCKETS),
+    ).fetchone()[0]
+
+    funnel = [
+        {
+            'outcome': r['bucket'],
+            'count': r['cnt'],
+            'rate': round(r['cnt'] / sent, 4) if sent else 0.0,
+        }
+        for r in funnel_rows
+    ]
+
+    list_where = ['1=1']
+    list_params = []
+    if applied is not None:
+        list_where.append('a.applied = ?')
+        list_params.append(1 if applied else 0)
+    if window > 0 and applied is not False:
+        list_where.append("julianday('now') - julianday(a.applied_at) <= ?")
+        list_params.append(window)
+
+    rows = conn.execute(
+        f"""
+        SELECT a.position_id, a.status, a.applied, a.applied_at, a.applied_via,
+               a.response, a.response_at, a.interview_round,
+               p.title, p.company, p.status AS position_status
+          FROM applications a
+          JOIN positions p ON p.id = a.position_id
+         WHERE {' AND '.join(list_where)}
+         ORDER BY a.{column} {direction}
+         LIMIT ?
+        """,
+        list_params + [_sql_limit(limit) if limit is not None else DEFAULT_APPLICATIONS_LIMIT],
+    ).fetchall()
+
+    if as_json:
+        emit_json({
+            'window_days': window,
+            'ghost_after_days': GHOST_AFTER_DAYS,
+            'sent': sent,
+            'sample_floor': MENTOR_SAMPLE_FLOOR,
+            'enough_sample': sent >= MENTOR_SAMPLE_FLOOR,
+            'response_written_as_derived': written_derived,
+            'funnel': funnel,
+            'applications': rows_to_dicts(rows),
+        })
+        conn.close()
+        return
+
+    window_label = f"the last {window} days" if window > 0 else "all time"
+    print(f"\n  APPLICATIONS — {sent} sent in {window_label}")
+    print(f"\n  Outcome funnel (Mentor Pattern D):")
+    if not funnel:
+        print("    (nothing sent in this window)")
+    # Larghezza dalla riga più lunga, non da una costante: un esito scritto con
+    # una parola fuori vocabolario è già una sorpresa, non deve anche sfasare
+    # la colonna delle percentuali di chi la legge.
+    label_width = max([14] + [len(e['outcome']) for e in funnel])
+    for entry in funnel:
+        note = ''
+        if entry['outcome'] == 'ghosted':
+            note = f"  (no response, sent more than {GHOST_AFTER_DAYS} days ago)"
+        elif entry['outcome'] == 'pending':
+            note = f"  (no response yet, within {GHOST_AFTER_DAYS} days)"
+        print(f"    {entry['outcome']:<{label_width}} {entry['count']:>4}  "
+              f"{entry['rate'] * 100:5.1f}%{note}")
+    if sent < MENTOR_SAMPLE_FLOOR:
+        print(f"\n  ⚠ Sample too small: Pattern D speaks from "
+              f"{MENTOR_SAMPLE_FLOOR} sent applications ({sent} here).")
+    if written_derived:
+        print(f"\n  ⚠ {written_derived} row(s) carry '{'/'.join(DERIVED_BUCKETS)}' "
+              "written INTO `response`: written and derived outcomes are being "
+              "counted in the same bucket.")
+
+    if rows:
+        print(f"\n  Applications ({len(rows)}):")
+        for r in rows:
+            company = flatten_external_value(r['company'])[:20]
+            title = flatten_external_value(r['title'])[:28]
+            sent_at = f"sent {r['applied_at']}" if r['applied_at'] else 'not sent'
+            via = f" via {r['applied_via']}" if r['applied_via'] else ''
+            outcome = f" → {r['response']} ({r['response_at'] or 'N/A'})" if r['response'] else ''
+            rnd = f" [round {r['interview_round']}]" if r['interview_round'] else ''
+            print(f"    #{r['position_id']:<5} {company:<20} {title:<28} "
+                  f"{sent_at}{via}{outcome}{rnd}")
+
+    conn.close()
+
+
 def check_url(url_or_id):
     """Cerca una posizione per URL o job ID LinkedIn."""
     conn = get_db()
@@ -1560,6 +1761,26 @@ def main():
     ap = sub.add_parser('application')
     ap.add_argument('position_id', type=int)
 
+    # applications (Pattern D del Mentor, #187): funnel degli esiti + elenco.
+    # La firma è quella che la skill del Mentor documenta da sempre — è il
+    # comando che non esisteva, non un comando nuovo: cambiarla qui vorrebbe
+    # dire riscrivere la skill in 7 lingue per far tornare i conti al codice.
+    aps = sub.add_parser('applications')
+    aps.add_argument(
+        '--applied', choices=['true', 'false'],
+        help='Filter the LIST (not the funnel): true = sent, false = not sent yet.'
+    )
+    aps.add_argument(
+        '--days', type=int, default=APPLICATIONS_WINDOW_DAYS,
+        help=f'Window measured on applied_at (default {APPLICATIONS_WINDOW_DAYS}); 0 = all time.'
+    )
+    aps.add_argument(
+        '--order-by', default='applied_at:desc',
+        help='column:asc|desc — one of ' + ', '.join(APPLICATIONS_ORDER_COLUMNS)
+    )
+    aps.add_argument('--limit', type=int, default=DEFAULT_APPLICATIONS_LIMIT)
+    aps.add_argument('--json', action='store_true', help=JSON_HELP)
+
     # check-url
     cu = sub.add_parser('check-url')
     cu.add_argument('url', help='URL or numeric LinkedIn job ID')
@@ -1612,6 +1833,18 @@ def main():
         recent_activity(args.minutes, args.limit, as_json=args.json)
     elif args.cmd == 'application':
         return query_application(args.position_id)
+    elif args.cmd == 'applications':
+        applied = None if args.applied is None else (args.applied == 'true')
+        try:
+            query_applications(
+                applied=applied, days=args.days, order_by=args.order_by,
+                limit=args.limit, as_json=args.json,
+            )
+        except ValueError as err:
+            # Un ordinamento sbagliato è un errore dell'invocazione, non un
+            # risultato vuoto: chi l'ha scritto deve accorgersene.
+            print(f"db_query.py applications: {err}", file=sys.stderr)
+            return 2
     elif args.cmd == 'check-url':
         check_url(args.url)
     elif args.cmd == 'cv-pdf-paths':
