@@ -2,9 +2,9 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c463qsfv7godn"
-path.s3tc="res://.godot/imported/maintainer_workbench_down.png-1648fcf6a754c79c155cab41e9332bf5.s3tc.ctex"
-path.etc2="res://.godot/imported/maintainer_workbench_down.png-1648fcf6a754c79c155cab41e9332bf5.etc2.ctex"
+uid="uid://d2pmub8hxlt11"
+path.s3tc="res://.godot/imported/assistente_desk_down_seated_v2.png-573f8bd09794918a54bd808fd110415d.s3tc.ctex"
+path.etc2="res://.godot/imported/assistente_desk_down_seated_v2.png-573f8bd09794918a54bd808fd110415d.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -12,8 +12,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/gen-art/furniture/maintainer_workbench_down.png"
-dest_files=["res://.godot/imported/maintainer_workbench_down.png-1648fcf6a754c79c155cab41e9332bf5.s3tc.ctex", "res://.godot/imported/maintainer_workbench_down.png-1648fcf6a754c79c155cab41e9332bf5.etc2.ctex"]
+source_file="res://assets/gen-art/furniture/assistente_desk_down_seated_v2.png"
+dest_files=["res://.godot/imported/assistente_desk_down_seated_v2.png-573f8bd09794918a54bd808fd110415d.s3tc.ctex", "res://.godot/imported/assistente_desk_down_seated_v2.png-573f8bd09794918a54bd808fd110415d.etc2.ctex"]
 
 [params]
 

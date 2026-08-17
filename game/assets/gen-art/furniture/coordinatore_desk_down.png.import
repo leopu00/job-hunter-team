@@ -2,9 +2,9 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://xyepy7nuoboe"
-path.s3tc="res://.godot/imported/doctor_armchair_seated_v2.png-f32d1f58ace68e39186f3299cdd3e2ee.s3tc.ctex"
-path.etc2="res://.godot/imported/doctor_armchair_seated_v2.png-f32d1f58ace68e39186f3299cdd3e2ee.etc2.ctex"
+uid="uid://gthufjcohcym"
+path.s3tc="res://.godot/imported/coordinatore_desk_down.png-18ff6e250e6f79494d644bc9772ca770.s3tc.ctex"
+path.etc2="res://.godot/imported/coordinatore_desk_down.png-18ff6e250e6f79494d644bc9772ca770.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -12,8 +12,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/gen-art/furniture/doctor_armchair_seated_v2.png"
-dest_files=["res://.godot/imported/doctor_armchair_seated_v2.png-f32d1f58ace68e39186f3299cdd3e2ee.s3tc.ctex", "res://.godot/imported/doctor_armchair_seated_v2.png-f32d1f58ace68e39186f3299cdd3e2ee.etc2.ctex"]
+source_file="res://assets/gen-art/furniture/coordinatore_desk_down.png"
+dest_files=["res://.godot/imported/coordinatore_desk_down.png-18ff6e250e6f79494d644bc9772ca770.s3tc.ctex", "res://.godot/imported/coordinatore_desk_down.png-18ff6e250e6f79494d644bc9772ca770.etc2.ctex"]
 
 [params]
 

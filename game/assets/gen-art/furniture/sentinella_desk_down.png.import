@@ -2,9 +2,9 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://gthufjcohcym"
-path.s3tc="res://.godot/imported/captain_desk_down.png-087b357d83fe183162579c60bcfa14d0.s3tc.ctex"
-path.etc2="res://.godot/imported/captain_desk_down.png-087b357d83fe183162579c60bcfa14d0.etc2.ctex"
+uid="uid://bff1717dfebju"
+path.s3tc="res://.godot/imported/sentinella_desk_down.png-0bf6248136a5bc4c1165cc9ac952572f.s3tc.ctex"
+path.etc2="res://.godot/imported/sentinella_desk_down.png-0bf6248136a5bc4c1165cc9ac952572f.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -12,8 +12,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/gen-art/furniture/captain_desk_down.png"
-dest_files=["res://.godot/imported/captain_desk_down.png-087b357d83fe183162579c60bcfa14d0.s3tc.ctex", "res://.godot/imported/captain_desk_down.png-087b357d83fe183162579c60bcfa14d0.etc2.ctex"]
+source_file="res://assets/gen-art/furniture/sentinella_desk_down.png"
+dest_files=["res://.godot/imported/sentinella_desk_down.png-0bf6248136a5bc4c1165cc9ac952572f.s3tc.ctex", "res://.godot/imported/sentinella_desk_down.png-0bf6248136a5bc4c1165cc9ac952572f.etc2.ctex"]
 
 [params]
 

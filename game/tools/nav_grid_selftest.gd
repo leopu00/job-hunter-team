@@ -309,12 +309,12 @@ func _test_department_character_variants() -> void:
 ## altrimenti lo swap durante la ronda produce un salto visibile.
 func _test_core_workstations() -> void:
 	var expected := {
-		"core:coordinatore": {"stem": "captain_desk_down", "facing": "down"},
-		"core:sentinella": {"stem": "budgeteer_desk_down", "facing": "down"},
+		"core:coordinatore": {"stem": "coordinatore_desk_down", "facing": "down"},
+		"core:sentinella": {"stem": "sentinella_desk_down", "facing": "down"},
 		"core:mentor": {"stem": "mentor_armchair", "facing": "down"},
-		"core:assistente": {"stem": "assistant_desk_down", "facing": "down"},
-		"core:mantenitore": {"stem": "maintainer_workbench_down", "facing": "down"},
-		"core:dottore": {"stem": "doctor_armchair", "facing": "down"},
+		"core:assistente": {"stem": "assistente_desk_down", "facing": "down"},
+		"core:mantenitore": {"stem": "mantenitore_workbench_down", "facing": "down"},
+		"core:dottore": {"stem": "dottore_armchair", "facing": "down"},
 	}
 	var found: Dictionary = {}
 	for item in FurnitureDefsScript.ITEMS:

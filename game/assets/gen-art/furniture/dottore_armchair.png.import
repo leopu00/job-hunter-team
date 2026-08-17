@@ -2,9 +2,9 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dsyo5bt6dtkh8"
-path.s3tc="res://.godot/imported/budgeteer_desk_down_seated_v2.png-a56d747689e61fd46d280b2f03a6c80c.s3tc.ctex"
-path.etc2="res://.godot/imported/budgeteer_desk_down_seated_v2.png-a56d747689e61fd46d280b2f03a6c80c.etc2.ctex"
+uid="uid://bq7rfnumd0057"
+path.s3tc="res://.godot/imported/dottore_armchair.png-e950953d10fa80351f305b32c4fd55f4.s3tc.ctex"
+path.etc2="res://.godot/imported/dottore_armchair.png-e950953d10fa80351f305b32c4fd55f4.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -12,8 +12,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/gen-art/furniture/budgeteer_desk_down_seated_v2.png"
-dest_files=["res://.godot/imported/budgeteer_desk_down_seated_v2.png-a56d747689e61fd46d280b2f03a6c80c.s3tc.ctex", "res://.godot/imported/budgeteer_desk_down_seated_v2.png-a56d747689e61fd46d280b2f03a6c80c.etc2.ctex"]
+source_file="res://assets/gen-art/furniture/dottore_armchair.png"
+dest_files=["res://.godot/imported/dottore_armchair.png-e950953d10fa80351f305b32c4fd55f4.s3tc.ctex", "res://.godot/imported/dottore_armchair.png-e950953d10fa80351f305b32c4fd55f4.etc2.ctex"]
 
 [params]
 

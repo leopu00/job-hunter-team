@@ -2,9 +2,9 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bff1717dfebju"
-path.s3tc="res://.godot/imported/budgeteer_desk_down.png-4a49e37e1a9ad2971d13d0cb4c58442c.s3tc.ctex"
-path.etc2="res://.godot/imported/budgeteer_desk_down.png-4a49e37e1a9ad2971d13d0cb4c58442c.etc2.ctex"
+uid="uid://bsvi3167i8qwg"
+path.s3tc="res://.godot/imported/coordinatore_desk_down_seated_v2.png-58ec7b2ddf88f8360a1192b0b813c367.s3tc.ctex"
+path.etc2="res://.godot/imported/coordinatore_desk_down_seated_v2.png-58ec7b2ddf88f8360a1192b0b813c367.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -12,8 +12,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/gen-art/furniture/budgeteer_desk_down.png"
-dest_files=["res://.godot/imported/budgeteer_desk_down.png-4a49e37e1a9ad2971d13d0cb4c58442c.s3tc.ctex", "res://.godot/imported/budgeteer_desk_down.png-4a49e37e1a9ad2971d13d0cb4c58442c.etc2.ctex"]
+source_file="res://assets/gen-art/furniture/coordinatore_desk_down_seated_v2.png"
+dest_files=["res://.godot/imported/coordinatore_desk_down_seated_v2.png-58ec7b2ddf88f8360a1192b0b813c367.s3tc.ctex", "res://.godot/imported/coordinatore_desk_down_seated_v2.png-58ec7b2ddf88f8360a1192b0b813c367.etc2.ctex"]
 
 [params]
 
