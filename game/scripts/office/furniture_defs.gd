@@ -14,7 +14,7 @@ const ITEMS := [
 	# ── Supporto operativo, lato OVEST degli Scorer ──
 	# Il Mantenitore lavora a una console tecnica frontale: monitor, utensili,
 	# ricambi e sedia sono un unico composito quando la postazione è occupata.
-	{"id": "maintainer_workbench", "kind": "maintainer_workbench",
+	{"id": "maintainer_workbench", "kind": "mantenitore_workbench",
 			# Ingrandita rispetto ai ricambi: la console deve restare chiaramente
 			# il mobile principale, mentre le scatole sono un accessorio minuto.
 			"rect": Rect2(580, 900, 245, 106), "facing": "down",
@@ -27,7 +27,7 @@ const ITEMS := [
 	# diventano un solo elemento grafico durante il lavoro.
 	{"id": "doctor_lab_desk", "kind": "lab_bench", "rect": Rect2(490, 1160, 220, 90)},
 	{"id": "doctor_drawers", "kind": "nc_drawer_unit", "rect": Rect2(720, 1182, 52, 68)},
-	{"id": "doctor_armchair", "kind": "doctor_armchair",
+	{"id": "doctor_armchair", "kind": "dottore_armchair",
 			"rect": Rect2(780, 1200, 140, 133), "facing": "down",
 			"registry_key": "core:dottore"},
 
@@ -61,12 +61,12 @@ const ITEMS := [
 	{"id": "hologram", "kind": "hologram", "rect": Rect2(675, 435, 200, 180)},
 
 	# ── Direzione, fascia nord: Capitano e Tesoriere guardano in camera ──
-	{"id": "desk_coordinator", "kind": "captain_desk", "rect": Rect2(1365, 455, 260, 108),
+	{"id": "desk_coordinator", "kind": "coordinatore_desk", "rect": Rect2(1365, 455, 260, 108),
 			"facing": "down", "registry_key": "core:coordinatore"},
 	# Il canvas del Budgeteer contiene una sagoma più piena: 280 px rendono
 	# l'agente alto ~149 px, uguale ai ~150 px del Capitano. Centro e baseline
 	# restano fermi, si riduce l'intero composito senza spostarlo.
-	{"id": "desk_sentinella", "kind": "budgeteer_desk", "rect": Rect2(1765, 513, 280, 95),
+	{"id": "desk_sentinella", "kind": "sentinella_desk", "rect": Rect2(1765, 513, 280, 95),
 			"facing": "down", "registry_key": "core:sentinella"},
 
 	# ── Area comune: lavagna score board ──
@@ -89,7 +89,7 @@ const ITEMS := [
 	# ── Reception all'uscita sud, tra Scrittori e Critici ──
 	# La texture occupata integra Assistente+sedia+scrivania in un solo elemento
 	# frontale; quando si alza resta visibile la stessa postazione vuota.
-	{"id": "desk_assistant", "kind": "assistant_desk",
+	{"id": "desk_assistant", "kind": "assistente_desk",
 			"rect": Rect2(1550, 1800, 230, 100), "facing": "down",
 			"registry_key": "core:assistente"},
 

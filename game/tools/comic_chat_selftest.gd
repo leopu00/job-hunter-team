@@ -110,12 +110,26 @@ func _check_bubbles() -> void:
 	# Il lotto per istanza e' completo: ogni scrivania deve risolvere la propria
 	# cartella prima del fallback di ruolo. Questo controlla insieme naming,
 	# import Godot e ordine di precedenza di ComicChat.portrait_slug().
+	#
+	# Cinque scrivanie fanno eccezione, e per un motivo: ritraggono la variante
+	# che il ritratto DI RUOLO gia' e'. La copia sotto <ruolo>-<n> era byte per
+	# byte lo stesso PNG (stesso blob git), quindi non aggiungeva una faccia — e
+	# anzi ne toglieva, perche' PortraitView._set_full() ripiega su full_neutro
+	# DENTRO la cartella risolta: da scout-2/ il "caldo" non si poteva vedere,
+	# da scout/ si', e da critico/ si vedono anche "divertito" e "severo".
+	# Risolvere sul ruolo qui e' la risposta giusta, non un fallback mancato.
+	var role_is_the_portrait := {
+		"scout-2": "scout", "scorer-2": "scorer", "analista-2": "analista",
+		"critico-1": "critico", "scrittore-2": "scrittore",
+	}
 	for role in ["scout", "analista", "scorer", "scrittore", "critico"]:
 		for number in range(1, 7):
 			var uid := "%s-%d" % [role, number]
+			var expected: String = str(role_is_the_portrait.get(uid, uid))
 			var resolved := ComicChat.portrait_slug(uid)
-			_check(resolved == uid,
-					"ritratto di %s risolto in %s" % [uid, resolved])
+			_check(resolved == expected,
+					"ritratto di %s risolto in %s invece di %s"
+							% [uid, resolved, expected])
 	# Gli uid del sistema vero non sono tutti "ruolo-numero": la sessione che
 	# lo Scrittore apre al Critico è CRITICO-S1, la Sentinella ha un worker, e
 	# il Coordinatore sulla VPS si chiama capitano. Nessuno di questi deve

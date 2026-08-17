@@ -1589,6 +1589,11 @@
       "path": "docs/internal/roadmap/2026-08-17-ticket-team-api-boundary.md",
       "description": "Ticket aperto, direzione approvata e forma tecnica da decidere misurando: una piattaforma sola su web, desktop e telefono — il problema misurato non è quale framework, è il confine caduto fra il team e i suoi client.",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-08-17-fetta1-stato-e-ripresa.md",
+      "description": "Punto di ripresa della fetta 1 di JHT-TEAM-API-BOUNDARY: la forma scelta (server node:http in ESM puro nel container, zero dipendenze e zero build step), i due scostamenti dichiarati dall'ADR-0009 con il loro piano di ritiro, e la separazione fra ciò che è committato e ciò che resta da scrivere.",
+      "last_review": null
     }
   ]
 }

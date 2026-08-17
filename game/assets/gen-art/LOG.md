@@ -399,3 +399,55 @@ ritratti richiesti.
 - Esteso `audit_character_sheets.py` per respingere frammenti verticali
   staccati nei frame di camminata. Il vecchio foglio fallisce la nuova
   regressione; quello corretto passa.
+
+### 2026-08-17 — Deduplica: cinque istanze tornano al ritratto di ruolo
+
+Un audit per hash su `game/assets` ha trovato 25 gruppi di file byte-identici.
+Dieci stavano nell'arte attiva: in `scout-2`, `scorer-2`, `analista-2`,
+`critico-1` e `scrittore-2` sia `full_neutro.png` sia `full_pensieroso.png`
+erano lo **stesso blob git** del ritratto di ruolo corrispondente.
+
+Non era uno spreco di spazio — git deduplica i blob identici, quindi nella
+storia occupavano già zero — ma un **danno all'espressività**. Quelle cinque
+scrivanie ritraggono la variante che il ritratto di ruolo già è, e
+`PortraitView._set_full()` ripiega su `full_neutro` *dentro la cartella
+risolta*: da `scout-2/`, che aveva solo neutro e pensieroso, il `full_caldo`
+non era raggiungibile; da `scout/` sì. Per `critico-1` il divario era di tre
+espressioni (`critico/` ha anche `divertito` e `severo`).
+
+Rimosse le cinque cartelle: `ComicChat.portrait_slug()` le fa ora ripiegare sul
+ruolo, che è la risposta giusta e non un fallback mancato. Le 25 cartelle con
+arte propria restano e continuano a risolvere su sé stesse.
+`comic_chat_selftest.gd` verifica entrambi i casi invece di pretendere che
+tutte e 30 risolvano su sé.
+
+Il gap d'arte resta quello di sempre: le 25 istanze con faccia propria hanno
+solo `neutro` e `pensieroso`.
+
+### 2026-08-17 — `furniture/`: nomi di ruolo allineati all'italiano
+
+Cinque `kind` di arredo nominavano il ruolo in inglese mentre tutto il resto
+del progetto lo dice in italiano (`portraits/`, `sheets/`, gli `id` delle
+scrivanie). Rinominati file, `.import` e `kind`:
+
+| prima | dopo |
+|---|---|
+| `assistant_desk_down` | `assistente_desk_down` |
+| `budgeteer_desk_down` | `sentinella_desk_down` |
+| `captain_desk_down` | `coordinatore_desk_down` |
+| `doctor_armchair` | `dottore_armchair` |
+| `maintainer_workbench_down` | `mantenitore_workbench_down` |
+
+Il sostantivo resta inglese (`desk`, `armchair`, `workbench`) come in
+`mentor_armchair`, che era già coerente. Aggiornati `furniture_defs.gd` e
+`nav_grid_selftest.gd`.
+
+Gli `id` in `furniture_defs.gd` sono rimasti come stavano di proposito:
+`furniture_node.gd:295` fa `rng.seed = hash(item["id"])`, quindi rinominarli
+cambierebbe la decorazione procedurale dei mobili senza texture. `kind` mappa
+sul nome file, `id` no.
+
+Non toccati i plurali di reparto (`analisti_`, `critici_`, `scrittori_`):
+nominano il reparto a cui la postazione appartiene, non la persona, e in
+`portraits/`/`sheets/` il singolare nomina la persona. Le due forme dicono due
+cose diverse ed è giusto che restino distinte.
