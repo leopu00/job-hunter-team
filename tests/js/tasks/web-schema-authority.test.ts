@@ -55,6 +55,16 @@ const SKIP = new Set([
   ".turbo",
 ]);
 
+/** I commenti escono dal perimetro prima del confronto: la regola vieta il
+ * DDL, non la frase che spiega perché non c'è più. Un guard che rende
+ * impronunciabile il nome di ciò che sorveglia costringe a documentare il
+ * difetto altrove — cioè da nessuna parte. Il prezzo dichiarato: viene tolto
+ * anche ciò che segue un `//` dentro una stringa (un URL), che nel materiale
+ * che qui si cerca — blob DDL su più righe — non nasconde niente. */
+function stripComments(body: string): string {
+  return body.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
+
 function sources(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     if (SKIP.has(entry)) continue;
@@ -71,7 +81,7 @@ function sources(dir: string, found: string[] = []): string[] {
  * `.js`/`.mjs` sono nella scansione di proposito: la seconda copia dello schema
  * viveva in uno script `.js`, cioè fuori dal perimetro che si guarda di solito. */
 const WEB_SOURCES: { path: string; body: string }[] = sources(WEB).map(
-  (path) => ({ path, body: readFileSync(path, "utf-8") }),
+  (path) => ({ path, body: stripComments(readFileSync(path, "utf-8")) }),
 );
 
 function offenders(pattern: RegExp): string[] {
@@ -103,7 +113,7 @@ describe("web/ non porta una copia dello schema del container", () => {
 
 describe("web/lib/db.ts resta una porta di sola lettura", () => {
   const DB = join(WEB, "lib/db.ts");
-  const body = () => readFileSync(DB, "utf-8");
+  const body = () => stripComments(readFileSync(DB, "utf-8"));
 
   it("non espone una funzione che inizializza il database", () => {
     // Il web non crea il DB: lo crea il container. Un `initDb` che torna
