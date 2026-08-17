@@ -123,9 +123,8 @@ function state(id: number) {
 
 describe("l'esito registrato sul box sopravvive alla corsia di ritorno", () => {
   it("un pull che dice solo «inviata» non riporta indietro un esito già arrivato", async () => {
-    const { applyAppliedBackflow } = await import(
-      "../../../cli/src/lib/applied-backflow.js"
-    );
+    const { applyAppliedBackflow } =
+      await import("../../../cli/src/lib/applied-backflow.js");
     seedOutcome(7);
 
     const res = applyAppliedBackflow(db, [cloudRow(7)]);
@@ -145,9 +144,8 @@ describe("l'esito registrato sul box sopravvive alla corsia di ritorno", () => {
   });
 
   it("la corsia resta idempotente: due giri di fila non cambiano niente", async () => {
-    const { applyAppliedBackflow } = await import(
-      "../../../cli/src/lib/applied-backflow.js"
-    );
+    const { applyAppliedBackflow } =
+      await import("../../../cli/src/lib/applied-backflow.js");
     seedOutcome(8, "interview");
     applyAppliedBackflow(db, [cloudRow(8)]);
     applyAppliedBackflow(db, [cloudRow(8)]);
@@ -161,9 +159,8 @@ describe("l'esito registrato sul box sopravvive alla corsia di ritorno", () => {
 
 describe("l'esito dichiarato sul sito arriva al box", () => {
   it("porta a casa la risposta e il suo istante", async () => {
-    const { applyAppliedBackflow } = await import(
-      "../../../cli/src/lib/applied-backflow.js"
-    );
+    const { applyAppliedBackflow } =
+      await import("../../../cli/src/lib/applied-backflow.js");
     seedApplied(9);
 
     applyAppliedBackflow(db, [
@@ -192,9 +189,8 @@ describe("l'esito dichiarato sul sito arriva al box", () => {
   });
 
   it("un esito già identico non riscrive niente", async () => {
-    const { applyAppliedBackflow } = await import(
-      "../../../cli/src/lib/applied-backflow.js"
-    );
+    const { applyAppliedBackflow } =
+      await import("../../../cli/src/lib/applied-backflow.js");
     seedOutcome(10, "rejected");
 
     applyAppliedBackflow(db, [
@@ -209,9 +205,8 @@ describe("l'esito dichiarato sul sito arriva al box", () => {
   });
 
   it("un esito che cambia idea (respinta → colloquio) arriva anche se il box ne ha già uno", async () => {
-    const { applyAppliedBackflow } = await import(
-      "../../../cli/src/lib/applied-backflow.js"
-    );
+    const { applyAppliedBackflow } =
+      await import("../../../cli/src/lib/applied-backflow.js");
     seedOutcome(11, "rejected");
 
     applyAppliedBackflow(db, [
@@ -241,9 +236,8 @@ describe("l'esito dichiarato sul sito arriva al box", () => {
   // `+00:00`, il box scrive `YYYY-MM-DD HH:MM:SS` senza fuso. Un confronto
   // fra stringhe direbbe sempre che il cloud è più recente.
   it("posizione 1362: il box dice applied/NULL, il cloud sa che è rejected", async () => {
-    const { applyAppliedBackflow } = await import(
-      "../../../cli/src/lib/applied-backflow.js"
-    );
+    const { applyAppliedBackflow } =
+      await import("../../../cli/src/lib/applied-backflow.js");
     // BOX PRIMA: quello che ci aveva scritto il pull delle 15:54:39 — nove
     // minuti PRIMA del click dell'operatore.
     db.prepare(
@@ -279,16 +273,17 @@ describe("l'esito dichiarato sul sito arriva al box", () => {
     expect(
       (
         db
-          .prepare("SELECT applied_at FROM applications WHERE position_id = 1362")
+          .prepare(
+            "SELECT applied_at FROM applications WHERE position_id = 1362",
+          )
           .get() as { applied_at: string }
       ).applied_at,
     ).toBe("2026-08-16 17:06:38.517+00");
   });
 
   it("una candidatura che il box non ha resta fuori, come per gli altri campi", async () => {
-    const { applyAppliedBackflow } = await import(
-      "../../../cli/src/lib/applied-backflow.js"
-    );
+    const { applyAppliedBackflow } =
+      await import("../../../cli/src/lib/applied-backflow.js");
     const res = applyAppliedBackflow(db, [
       cloudRow(99, { status: "response", response: "rejected" }),
     ]);
