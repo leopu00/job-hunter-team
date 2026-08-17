@@ -179,12 +179,24 @@ BEGIN
 END;
 $$;
 
+-- `FROM PUBLIC` da solo fa quello che dice e NON quello che intende: su
+-- Supabase una funzione nuova eredita i default privileges verso `anon`,
+-- `authenticated` e `service_role`, e `PUBLIC` è lo pseudo-ruolo — revocarlo
+-- non tocca quei tre. Scritta così, la revoca si legge come una restrizione e
+-- non restringe niente.
+--
+-- Non era sfruttabile (SECURITY INVOKER + rifiuto immediato con `auth.uid()`
+-- NULL: una chiamata anon prende `not_authenticated`), ma una difesa che non
+-- fa ciò che dichiara è un difetto anche quando non è una falla. I nomi sono
+-- espliciti perché il file e la produzione dicano la stessa cosa: la gemella
+-- `mark_position_applied` della 072 vive con `authenticated` + `postgres`, e
+-- queste due ora hanno gli stessi ACL.
 REVOKE ALL ON FUNCTION public.mark_position_outcome(INTEGER, TEXT, TIMESTAMPTZ)
-    FROM PUBLIC;
+    FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.mark_position_outcome(INTEGER, TEXT, TIMESTAMPTZ)
     TO authenticated;
 
 REVOKE ALL ON FUNCTION public.undo_position_outcome(INTEGER)
-    FROM PUBLIC;
+    FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.undo_position_outcome(INTEGER)
     TO authenticated;
