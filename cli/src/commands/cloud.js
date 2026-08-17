@@ -20,6 +20,7 @@ import {
 import { clientIdentity, clientHeaderValue, cloudSyncHeaders } from '../lib/client-identity.js';
 import { summarizeOutOfRange } from '../lib/score-ranges.js';
 import { createHaltGate, guardedLane } from '../lib/halt-gate.js';
+import { applyAppliedBackflow } from '../lib/applied-backflow.js';
 import { createExclusiveRunner } from '../lib/exclusive-runner.js';
 import {
   CLOUD_PUSH_QUARANTINE_FILE,
@@ -1155,7 +1156,9 @@ async function saveCloudCursor(cursor) {
  * Missing/corrupt = null → endpoint server applica default lookback 7gg.
  */
 function loadPullCursor() {
-  if (!existsSync(CLOUD_PULL_CURSOR_FILE)) return { since: null, messages_since: null };
+  if (!existsSync(CLOUD_PULL_CURSOR_FILE)) {
+    return { since: null, messages_since: null, applied_since: null };
+  }
   try {
     const parsed = JSON.parse(readFileSync(CLOUD_PULL_CURSOR_FILE, 'utf-8'));
     return {
@@ -1163,9 +1166,13 @@ function loadPullCursor() {
       // [JHT-MSG-BACKFLOW] cursore dedicato reply/ack chat web (timeline
       // diversa dai flag posizione).
       messages_since: typeof parsed?.messages_since === 'string' ? parsed.messages_since : null,
+      // #186 cursore dedicato candidature: `applications.updated_at` e' una
+      // timeline sua, e deve poter avanzare anche in un tick in cui nessun
+      // flag posizione e' cambiato.
+      applied_since: typeof parsed?.applied_since === 'string' ? parsed.applied_since : null,
     };
   } catch {
-    return { since: null, messages_since: null };
+    return { since: null, messages_since: null, applied_since: null };
   }
 }
 
@@ -1628,6 +1635,39 @@ async function performPush(options) {
       : false;
   };
 
+  // O-97 — un rifiuto che insegna invece di ripetersi.
+  //
+  // Il trigger del cloud rifiuta di riportare indietro una posizione per cui
+  // esiste una candidatura vera. Il box che manda quel downgrade ha una
+  // fotografia piu' vecchia, e finora ripresentava lo stesso downgrade a ogni
+  // tick: il push non drenava piu'. La route allega al rifiuto cio' che il
+  // cloud sa (`stale_position`), e qui quel dato diventa lo stato locale —
+  // perche' smettere di fallire non basta, il box deve DAVVERO cambiare idea.
+  //
+  // Solo sul singleton: e' l'unico caso in cui la fotografia riguarda per
+  // certo la riga che stiamo isolando, e la bisezione ci arriva sempre.
+  const learnFromStalePosition = (body) => {
+    const snapshot = body?.stale_position;
+    if (!snapshot || typeof snapshot !== 'object') return false;
+    if (!Number.isInteger(snapshot.legacy_id) || snapshot.legacy_id <= 0) return false;
+    try {
+      const adb = new DatabaseSync(dbPath);
+      adb.exec('PRAGMA foreign_keys = ON');
+      adb.exec('PRAGMA busy_timeout = 5000');
+      const res = applyAppliedBackflow(adb, [snapshot]);
+      adb.close();
+      if (res.applied === 0 && res.undone === 0) return false;
+      console.log(pc.green(
+        `✓ Cloud application state learned for position ${snapshot.legacy_id}: `
+        + `${res.applied} applied, ${res.undone} undone`
+      ));
+      return true;
+    } catch (err) {
+      console.error(pc.yellow(`  stale-position learn warn: ${err.message}`));
+      return false;
+    }
+  };
+
   const sameReceiptMultiset = (expected, received) => {
     if (!Array.isArray(received) || received.length !== expected.length) return false;
     const counts = new Map();
@@ -1713,6 +1753,17 @@ async function performPush(options) {
             console.error(pc.yellow(
               `Cloud push quarantined ${table}/${identity} (${reason}); the remaining convoy continues.`
             ));
+            if (learnFromStalePosition(res.body)) {
+              // Lo stato locale adesso e' quello del cloud: la riga in
+              // quarantena non e' piu' quella che e' stata rifiutata, quindi
+              // torna in coda. Senza questo il box imparerebbe e resterebbe
+              // comunque zitto fino a un retry chiesto a mano.
+              try {
+                requestQuarantineRetry(identity, { path: quarantinePath });
+              } catch (err) {
+                console.error(pc.yellow(`  quarantine retry warn: ${err.message}`));
+              }
+            }
             continue;
           } catch {
             outcome.aborted = true;
@@ -2129,7 +2180,7 @@ async function handlePullDesiredState(options = {}) {
   }
 
   const cursor = options.full
-    ? { since: null, messages_since: null }
+    ? { since: null, messages_since: null, applied_since: null }
     : loadPullCursor();
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
 
@@ -2187,7 +2238,30 @@ async function handlePullDesiredState(options = {}) {
       } catch (err) {
         console.error(pc.yellow(`  reply-backflow (direct) warn: ${err.message}`));
       }
-      body = { positions: rows, cursor: maxTs, pending_replies: msgRows, messages_cursor: msgCursor };
+      // #186 candidature decise sul web. try separato per la stessa ragione
+      // delle reply: se il cloud fa i capricci su questa lettura, i flag
+      // posizione devono arrivare lo stesso.
+      let appRows = [];
+      let appCursor = cursor.applied_since || null;
+      try {
+        const appSinceVal = cursor.applied_since
+          || new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+        appRows = await reader.readAppliedChanges({ since: appSinceVal, limit: 500 });
+        let appMaxMs = Date.parse(appSinceVal);
+        let appMaxTs = appSinceVal;
+        for (const a of appRows) {
+          const ms = Date.parse(a.updated_at);
+          if (!Number.isNaN(ms) && ms > appMaxMs) { appMaxMs = ms; appMaxTs = a.updated_at; }
+        }
+        appCursor = appMaxTs;
+      } catch (err) {
+        console.error(pc.yellow(`  applied-backflow (direct) warn: ${err.message}`));
+      }
+      body = {
+        positions: rows, cursor: maxTs,
+        pending_replies: msgRows, messages_cursor: msgCursor,
+        applications: appRows, applied_cursor: appCursor,
+      };
     } catch (err) {
       const auth = err instanceof SupabaseAuthError;
       console.error(pc.yellow(`  pull (direct) ${auth ? 'auth' : 'warn'}: ${err.message}${auth ? '' : ' — fallback Vercel'}`));
@@ -2198,6 +2272,7 @@ async function handlePullDesiredState(options = {}) {
     const params = new URLSearchParams();
     if (cursor.since) params.set('since', cursor.since);
     if (cursor.messages_since) params.set('messages_since', cursor.messages_since);
+    if (cursor.applied_since) params.set('applied_since', cursor.applied_since);
     if (options.limit) params.set('limit', String(options.limit));
     const pullUrl = `${baseUrl}/api/cloud-sync/pull-desired-state?${params.toString()}`;
     let res;
@@ -2290,12 +2365,44 @@ async function handlePullDesiredState(options = {}) {
     }
   }
 
+  // ── #186 Candidature decise sul web → SQLite locale ──
+  // Sta PRIMA dell'uscita anticipata qui sotto: le candidature hanno una
+  // timeline loro, e un tick in cui nessun flag posizione e' cambiato e' il
+  // caso NORMALE, non l'eccezione. Metterle dopo significherebbe consegnarle
+  // solo quando qualcos'altro si muove — cioe' quasi mai.
+  const cloudApplications = Array.isArray(body.applications) ? body.applications : [];
+  const appliedCursorNext = body.applied_cursor || cursor.applied_since || null;
+  if (cloudApplications.length > 0) {
+    try {
+      const adb = new DatabaseSync(dbPath);
+      adb.exec('PRAGMA foreign_keys = ON');
+      adb.exec('PRAGMA busy_timeout = 5000');
+      const res = applyAppliedBackflow(adb, cloudApplications);
+      adb.close();
+      // Loggato anche in silent, come le reply: e' il segnale «l'utente si e'
+      // candidato dal sito», e il team ci ragiona sopra.
+      if (res.applied > 0 || res.undone > 0) {
+        console.log(pc.green(
+          `✓ Applications from the web applied locally: ${res.applied} applied, ${res.undone} undone`
+        ));
+      }
+    } catch (err) {
+      console.error(pc.yellow(`  applied-backflow warn: ${err.message}`));
+    }
+  }
+
   if (positions.length === 0) {
     // Aggiorniamo comunque i cursor al server-side value (no-op se uguali,
     // ma riallinea dopo un eventuale --full).
     const nextSince = body.cursor || cursor.since;
-    if (nextSince !== cursor.since || messagesCursorNext !== cursor.messages_since) {
-      await savePullCursor({ since: nextSince, messages_since: messagesCursorNext });
+    if (nextSince !== cursor.since
+      || messagesCursorNext !== cursor.messages_since
+      || appliedCursorNext !== cursor.applied_since) {
+      await savePullCursor({
+        since: nextSince,
+        messages_since: messagesCursorNext,
+        applied_since: appliedCursorNext,
+      });
     }
     return;
   }
@@ -2444,10 +2551,13 @@ async function handlePullDesiredState(options = {}) {
     console.log(successMsg);
   }
 
-  if (body.cursor || messagesCursorNext !== cursor.messages_since) {
+  if (body.cursor
+    || messagesCursorNext !== cursor.messages_since
+    || appliedCursorNext !== cursor.applied_since) {
     await savePullCursor({
       since: body.cursor || cursor.since,
       messages_since: messagesCursorNext,
+      applied_since: appliedCursorNext,
     });
   }
   if (body.has_more) {

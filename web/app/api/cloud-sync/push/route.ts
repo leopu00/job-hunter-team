@@ -22,6 +22,7 @@ import {
   type OutOfRangeSummary,
 } from "@/lib/score-ranges";
 import { syncRequestIsPending } from "@/lib/team-state/sync-freshness";
+import type { createAdminClient } from "@/lib/supabase/admin";
 import {
   receiptId as wireReceiptId,
   receiptIdForKey,
@@ -82,6 +83,58 @@ function rowAttributableWriteError(error: unknown, publicMessage: string) {
     publicMessage,
     ...(rowAttributable ? { rejectionScope: "row" as const } : {}),
   });
+}
+
+/**
+ * La fotografia della candidatura che il cloud oppone a un downgrade.
+ *
+ * Il trigger `reject_stale_applied_position_downgrade` rifiuta di riportare
+ * indietro una posizione candidata quando qui esiste una candidatura vera. Il
+ * box che ha mandato quel downgrade ha una fotografia piu' vecchia: il rifiuto
+ * da solo gli dice «no», questo campo gli dice ANCHE cosa sa il cloud, cosi'
+ * puo' imparare invece di riprovare identico al tick successivo (O-97).
+ *
+ * ⚠️ Solo sul SINGLETON. Con piu' righe nel batch non sappiamo quale sia la
+ * colpevole — lo scopre la bisezione del client, che a forza di dimezzare
+ * arriva sempre a una riga sola. Rispondere con la fotografia sbagliata
+ * sarebbe peggio che non rispondere.
+ *
+ * ⚠️ NON contiene lo `status` della posizione, e non e' una dimenticanza: la
+ * corsia che porta il dato dal cloud al box prende l'AZIONE DELL'UTENTE
+ * (`applied_via = user_manual`) e mai lo stato generico, che resta autoritativo
+ * sul box. Un campo `status` qui sarebbe un invito a usarlo.
+ */
+async function staleDowngradeSnapshot(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  rows: Array<{ legacy_id?: number }>,
+  error: unknown,
+) {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : "";
+  if (message !== "stale_position_downgrade") return null;
+  if (rows.length !== 1) return null;
+  const legacyId = Number(rows[0]?.legacy_id);
+  if (!Number.isInteger(legacyId) || legacyId <= 0) return null;
+
+  const { data } = await admin
+    .from("positions")
+    .select("legacy_id, applications(applied, applied_at, applied_via)")
+    .eq("user_id", userId)
+    .eq("legacy_id", legacyId)
+    .maybeSingle();
+  const application = Array.isArray(data?.applications)
+    ? data?.applications[0]
+    : data?.applications;
+  if (!application) return null;
+  return {
+    legacy_id: legacyId,
+    applied: Boolean(application.applied),
+    applied_at: application.applied_at ?? null,
+    applied_via: application.applied_via ?? null,
+  };
 }
 
 function rowRejection(error: string, status = 422) {
@@ -835,6 +888,28 @@ export async function POST(req: NextRequest) {
         .select("id, legacy_id");
 
       if (error) {
+        const snapshot = await staleDowngradeSnapshot(
+          admin,
+          userId,
+          batch.rows,
+          error,
+        );
+        if (snapshot) {
+          // Ramo esplicito, e non un helper che «a volte» allega dati:
+          // `sanitizedError` esiste per TOGLIERE, e appenderci un payload lo
+          // metterebbe contro il suo mestiere per ogni route che lo usa.
+          console.error(
+            "[cloud-sync/push] 500 row write rejected (stale_position_downgrade)",
+          );
+          return NextResponse.json(
+            {
+              error: "positions_upsert_failed",
+              rejection_scope: "row",
+              stale_position: snapshot,
+            },
+            { status: 500 },
+          );
+        }
         return rowAttributableWriteError(error, "positions_upsert_failed");
       }
 

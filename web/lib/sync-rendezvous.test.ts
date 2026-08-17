@@ -11,20 +11,13 @@ describe("timestamp del rendezvous sync", () => {
     expect(timestampAdvanced(null, baseline)).toBe(false);
     expect(timestampAdvanced("non-una-data", baseline)).toBe(false);
     expect(timestampAdvanced(baseline, baseline)).toBe(false);
-    expect(timestampAdvanced("2026-08-04T13:59:59.999Z", baseline)).toBe(
-      false,
-    );
-    expect(timestampAdvanced("2026-08-04T14:00:00.001Z", baseline)).toBe(
-      true,
-    );
+    expect(timestampAdvanced("2026-08-04T13:59:59.999Z", baseline)).toBe(false);
+    expect(timestampAdvanced("2026-08-04T14:00:00.001Z", baseline)).toBe(true);
   });
 
   it("confronta gli istanti, non la forma testuale del fuso", () => {
     expect(
-      timestampAdvanced(
-        "2026-08-04T14:00:01+00:00",
-        "2026-08-04T14:00:00Z",
-      ),
+      timestampAdvanced("2026-08-04T14:00:01+00:00", "2026-08-04T14:00:00Z"),
     ).toBe(true);
   });
 });

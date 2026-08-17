@@ -130,7 +130,8 @@ async function createPrivateAccount(
     email_confirm: true,
     user_metadata: { purpose: "recording-profile", alias },
   });
-  if (error) throw new Error(`creazione account ${alias} fallita: ${error.message}`);
+  if (error)
+    throw new Error(`creazione account ${alias} fallita: ${error.message}`);
   atomicPrivateWrite(
     credentialPath(alias),
     `RECORDING_EMAIL=${credentials.email}\nRECORDING_PASSWORD=${credentials.password}\n`,
@@ -145,7 +146,9 @@ async function credentialsFor(alias: RecordingProfileAlias) {
 function existingCredentialsFor(alias: RecordingProfileAlias): Credentials {
   const credentials = parseEnvFile(credentialPath(alias));
   if (!credentials) {
-    throw new Error(`${alias}: credenziali locali assenti; verify non crea account`);
+    throw new Error(
+      `${alias}: credenziali locali assenti; verify non crea account`,
+    );
   }
   return credentials;
 }
@@ -237,9 +240,9 @@ function insertRows(
 ): void {
   if (rows.length === 0) return;
   const allowed = new Set(
-    (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(
-      (c) => c.name,
-    ),
+    (
+      db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+    ).map((c) => c.name),
   );
   for (const row of rows) {
     const entries = Object.entries(row).filter(
@@ -362,7 +365,8 @@ function materializeLocal(dataset: RecordingProfileDataset): void {
   tx();
   const integrity = db.pragma("integrity_check", { simple: true });
   db.close();
-  if (integrity !== "ok") throw new Error(`SQLite non integro per ${dataset.alias}`);
+  if (integrity !== "ok")
+    throw new Error(`SQLite non integro per ${dataset.alias}`);
 
   fs.writeFileSync(
     path.join(stage, "profile", "candidate_profile.yml"),
@@ -372,11 +376,9 @@ function materializeLocal(dataset: RecordingProfileDataset): void {
   fs.writeFileSync(path.join(stage, "profile", "ready.flag"), READY_CONTENT, {
     mode: 0o600,
   });
-  fs.writeFileSync(
-    path.join(stage, "preferences.json"),
-    PREFERENCES_CONTENT,
-    { mode: 0o600 },
-  );
+  fs.writeFileSync(path.join(stage, "preferences.json"), PREFERENCES_CONTENT, {
+    mode: 0o600,
+  });
   fs.writeFileSync(path.join(stage, "host.env"), HOST_ENV_CONTENT, {
     mode: 0o600,
   });
@@ -388,9 +390,13 @@ function materializeLocal(dataset: RecordingProfileDataset): void {
   for (const agent of ["assistente", "mentor", "capitano"]) {
     const agentRoot = path.join(stage, "agents", agent);
     fs.mkdirSync(agentRoot, { recursive: true, mode: 0o700 });
-    fs.writeFileSync(path.join(agentRoot, "chat.jsonl"), localChatJsonl(dataset, agent), {
-      mode: 0o600,
-    });
+    fs.writeFileSync(
+      path.join(agentRoot, "chat.jsonl"),
+      localChatJsonl(dataset, agent),
+      {
+        mode: 0o600,
+      },
+    );
   }
 
   fs.rmSync(previous, { recursive: true, force: true });
@@ -431,7 +437,8 @@ async function signIn(credentials: Credentials) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data, error } = await client.auth.signInWithPassword(credentials);
-  if (error || !data.session) throw new Error(`login account riprese fallito: ${error?.message}`);
+  if (error || !data.session)
+    throw new Error(`login account riprese fallito: ${error?.message}`);
   return { client, session: data.session, config };
 }
 
@@ -476,7 +483,11 @@ async function materializeCloud(
     `${dataset.alias}: elimina transizioni`,
     client.from("position_transitions").delete().eq("user_id", userId),
   );
-  for (const table of ["position_highlights", "applications", "scores"] as const) {
+  for (const table of [
+    "position_highlights",
+    "applications",
+    "scores",
+  ] as const) {
     await assertOk(
       `${dataset.alias}: elimina ${table}`,
       client.from(table).delete().eq("user_id", userId),
@@ -510,12 +521,17 @@ async function materializeCloud(
     created_at: row.created_at,
   }));
   for (const rows of chunk(companies)) {
-    await assertOk(`${dataset.alias}: inserisce aziende`, client.from("companies").insert(rows));
+    await assertOk(
+      `${dataset.alias}: inserisce aziende`,
+      client.from("companies").insert(rows),
+    );
   }
   for (const rows of chunk(dataset.positions)) {
     await assertOk(
       `${dataset.alias}: inserisce posizioni`,
-      client.from("positions").insert(rows.map((row) => ({ ...row, user_id: userId }))),
+      client
+        .from("positions")
+        .insert(rows.map((row) => ({ ...row, user_id: userId }))),
     );
   }
   for (const [table, rows] of [
@@ -539,14 +555,16 @@ async function materializeCloud(
   const profile = { ...dataset.candidateProfile, user_id: userId };
   await assertOk(
     `${dataset.alias}: salva profilo`,
-    client.from("candidate_profiles").upsert(profile, { onConflict: "user_id" }),
+    client
+      .from("candidate_profiles")
+      .upsert(profile, { onConflict: "user_id" }),
   );
 
   await assertOk(
     `${dataset.alias}: inserisce thread`,
-    admin.from("pending_user_messages").insert(
-      dataset.chatTurns.map((row) => ({ ...row, user_id: userId })),
-    ),
+    admin
+      .from("pending_user_messages")
+      .insert(dataset.chatTurns.map((row) => ({ ...row, user_id: userId }))),
   );
   await assertOk(
     `${dataset.alias}: chiude onboarding`,
@@ -569,7 +587,10 @@ function base64Url(value: string): string {
   return Buffer.from(value, "utf8").toString("base64url");
 }
 
-function writeStorageState(alias: RecordingProfileAlias, session: Session): void {
+function writeStorageState(
+  alias: RecordingProfileAlias,
+  session: Session,
+): void {
   const config = getSupabaseConfig();
   if (!config.configured) throw new Error("configurazione Supabase assente");
   const ref = new URL(config.url).hostname.split(".")[0];
@@ -653,12 +674,17 @@ function verifyLocal(dataset: RecordingProfileDataset): void {
   }
   for (const [file, expected] of artifacts) {
     if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== expected) {
-      throw new Error(`${dataset.alias}: artifact locale mancante o alterato: ${file}`);
+      throw new Error(
+        `${dataset.alias}: artifact locale mancante o alterato: ${file}`,
+      );
     }
   }
   const db = new Database(dbPath, { readonly: true });
   const count = (table: string) =>
-    Number((db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n);
+    Number(
+      (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number })
+        .n,
+    );
   if (db.pragma("integrity_check", { simple: true }) !== "ok") {
     throw new Error(`${dataset.alias}: integrity_check fallito`);
   }
@@ -682,7 +708,9 @@ function verifyLocal(dataset: RecordingProfileDataset): void {
       !fs.existsSync(chatPath) ||
       fs.readFileSync(chatPath, "utf8") !== localChatJsonl(dataset, agent)
     ) {
-      throw new Error(`${dataset.alias}: thread locale ${agent} mancante o alterato`);
+      throw new Error(
+        `${dataset.alias}: thread locale ${agent} mancante o alterato`,
+      );
     }
   }
   for (const directory of [
@@ -702,7 +730,9 @@ function verifyLocal(dataset: RecordingProfileDataset): void {
   }
   for (const forbidden of ["cloud.json", ".pairing-token"]) {
     if (fs.existsSync(path.join(root, forbidden))) {
-      throw new Error(`${dataset.alias}: pairing cloud presente nel profilo locale`);
+      throw new Error(
+        `${dataset.alias}: pairing cloud presente nel profilo locale`,
+      );
     }
   }
   verifyResolvedCompose(root);
@@ -711,8 +741,15 @@ function verifyLocal(dataset: RecordingProfileDataset): void {
 function recordingBaseCompose(): string {
   const explicit = process.env.JHT_RECORDING_BASE_COMPOSE;
   if (explicit) return path.resolve(explicit);
-  const installed = path.join(os.homedir(), ".jht", "runtime", "docker-compose.yml");
-  return fs.existsSync(installed) ? installed : path.join(REPO, "docker-compose.yml");
+  const installed = path.join(
+    os.homedir(),
+    ".jht",
+    "runtime",
+    "docker-compose.yml",
+  );
+  return fs.existsSync(installed)
+    ? installed
+    : path.join(REPO, "docker-compose.yml");
 }
 
 function verifyResolvedCompose(root: string): void {
@@ -758,11 +795,17 @@ function verifyResolvedCompose(root: string): void {
   ]);
   const mountsAreIsolated = [...expectedSources].every(([target, expected]) => {
     const volume = volumeByTarget.get(target);
-    if (volume?.type !== "bind" || path.resolve(volume.source ?? "") !== expected) {
+    if (
+      volume?.type !== "bind" ||
+      path.resolve(volume.source ?? "") !== expected
+    ) {
       return false;
     }
     const relative = path.relative(root, path.resolve(volume.source ?? ""));
-    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    return (
+      relative === "" ||
+      (!relative.startsWith("..") && !path.isAbsolute(relative))
+    );
   });
   const environment = service?.environment ?? {};
   const isolatedEnvironment = [
@@ -872,15 +915,17 @@ async function verifyCloud(
       (field) =>
         Date.parse(
           String((onboarding as unknown as Record<string, unknown>)[field]),
-        ) !==
-        Date.parse(dataset.anchor),
+        ) !== Date.parse(dataset.anchor),
     )
   ) {
     throw new Error(`${dataset.alias}: onboarding cloud incompleto o alterato`);
   }
 
   const state = JSON.parse(
-    fs.readFileSync(path.join(profileRoot(dataset.alias), "auth-state.json"), "utf8"),
+    fs.readFileSync(
+      path.join(profileRoot(dataset.alias), "auth-state.json"),
+      "utf8",
+    ),
   ) as {
     cookies?: Array<{ name: string }>;
     origins?: Array<{
@@ -890,12 +935,10 @@ async function verifyCloud(
   };
   const cookies = state.cookies ?? [];
   const hasAuth = cookies.some(
-    (cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"),
+    (cookie) =>
+      cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"),
   );
-  const expectedOrigins = [
-    "https://jobhunterteam.ai",
-    "http://localhost:3008",
-  ];
+  const expectedOrigins = ["https://jobhunterteam.ai", "http://localhost:3008"];
   const browserStateReady = expectedOrigins.every((expectedOrigin) => {
     const origin = state.origins?.find(
       (candidate) => candidate.origin === expectedOrigin,
@@ -904,8 +947,7 @@ async function verifyCloud(
       origin?.localStorage?.map((entry) => [entry.name, entry.value]) ?? [],
     );
     return (
-      stored.get("jht-tour-done") === "1" &&
-      stored.get("jht-theme") === "light"
+      stored.get("jht-tour-done") === "1" && stored.get("jht-theme") === "light"
     );
   });
   if (

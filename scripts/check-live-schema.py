@@ -24,9 +24,24 @@ from typing import Callable, ContextManager, Protocol
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
-WEB_MANIFEST = ROOT / "supabase/live-schema/078-084.web.v4.json"
+WEB_MANIFEST = ROOT / "supabase/live-schema/078-085.web.v5.json"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 PREFLIGHT_MANIFEST = ROOT / "supabase/live-schema/081-preflight.v1.json"
+CATALOG_ORDERED_MIGRATIONS = [
+    "supabase/migrations/078_positions_write_request_kind.sql",
+    "supabase/migrations/079_team_directive_events_atomic.sql",
+    "supabase/migrations/080_profile_snapshot_atomic.sql",
+    "supabase/migrations/081_live_schema_reconciliation.sql",
+    "supabase/migrations/082_download_clicks_tiktok_source.sql",
+    "supabase/migrations/083_position_ticket_state_model.sql",
+    "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
+]
+# Il contratto web arriva una migrazione più in là del catalog: verifica
+# applications.updated_at, che nasce nella 085. Le due fasi hanno contratti
+# distinti proprio perché possono coprire finestre diverse.
+WEB_ORDERED_MIGRATIONS = CATALOG_ORDERED_MIGRATIONS + [
+    "supabase/migrations/085_applications_updated_at.sql",
+]
 API_ORIGIN = "https://api.supabase.com"
 MAX_RESPONSE_BYTES = 64 * 1024
 MAX_MANIFEST_BYTES = 64 * 1024
@@ -250,25 +265,18 @@ def load_contract(
     if not isinstance(contract_id, str) or not CONTRACT_ID_RE.fullmatch(contract_id):
         raise CanaryError("manifest_invalid")
 
+    ordered = WEB_ORDERED_MIGRATIONS if phase == "web" else CATALOG_ORDERED_MIGRATIONS
     clone = manifest.get("clone_contract")
     if not isinstance(clone, dict) or clone != {
         "baseline": "live-schema-only-pg-dump",
         "contains_user_rows": False,
         "postgres_major": 16,
-        "ordered_migrations": [
-            "supabase/migrations/078_positions_write_request_kind.sql",
-            "supabase/migrations/079_team_directive_events_atomic.sql",
-            "supabase/migrations/080_profile_snapshot_atomic.sql",
-            "supabase/migrations/081_live_schema_reconciliation.sql",
-            "supabase/migrations/082_download_clicks_tiktok_source.sql",
-            "supabase/migrations/083_position_ticket_state_model.sql",
-            "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
-        ],
+        "ordered_migrations": ordered,
     }:
         raise CanaryError("manifest_invalid")
 
     migrations = manifest.get("migrations")
-    if not isinstance(migrations, list) or len(migrations) != 7:
+    if not isinstance(migrations, list) or len(migrations) != len(ordered):
         raise CanaryError("manifest_invalid")
     migration_paths: list[str] = []
     for entry in migrations:

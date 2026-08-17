@@ -38,7 +38,9 @@ export function redactRecordingError(
   privateRoots: readonly string[] = [],
 ): string {
   let text = String(value);
-  for (const root of [...privateRoots].filter(Boolean).sort((a, b) => b.length - a.length)) {
+  for (const root of [...privateRoots]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)) {
     text = text.split(root).join("<private-root>");
   }
   return text
@@ -112,10 +114,12 @@ export function recordingUuid(namespace: string, value: string): string {
   );
   const hex = words.map((n) => n.toString(16).padStart(8, "0")).join("");
   // Versione 5 + variant RFC 4122, così Postgres lo accetta come UUID.
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-` +
+  return (
+    `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-` +
     `${((parseInt(hex.slice(16, 18), 16) & 0x3f) | 0x80)
       .toString(16)
-      .padStart(2, "0")}${hex.slice(18, 20)}-${hex.slice(20, 32)}`;
+      .padStart(2, "0")}${hex.slice(18, 20)}-${hex.slice(20, 32)}`
+  );
 }
 
 function clone<T>(value: T): T {
@@ -127,7 +131,11 @@ function clone<T>(value: T): T {
  * processo dello script e' monouso; il finally evita comunque di contaminare
  * chi importa questa funzione nei test.
  */
-function anchoredPositions(alias: DemoPersonaKey, locale: Locale, anchor: string) {
+function anchoredPositions(
+  alias: DemoPersonaKey,
+  locale: Locale,
+  anchor: string,
+) {
   const realNow = Date.now;
   Date.now = () => Date.parse(anchor);
   try {
@@ -199,7 +207,8 @@ export function buildRecordingProfileDataset(
     }
 
     const positionCreatedAt = p.found_at ?? anchor;
-    const positionUpdatedAt = p.last_action_at ?? p.last_checked ?? positionCreatedAt;
+    const positionUpdatedAt =
+      p.last_action_at ?? p.last_checked ?? positionCreatedAt;
 
     positions.push({
       id: positionId,

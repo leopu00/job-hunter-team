@@ -9,6 +9,7 @@ import { ROLE_META } from "@/lib/team-activity-meta";
 import { ActivityRow } from "@/app/components/activity-format";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import ActorIcon from "@/app/components/ActorIcon";
 
 const T: Record<
   Locale,
@@ -175,7 +176,7 @@ export default function ActivityLogTable({
                 border: `1px solid ${active ? meta.color : "var(--color-border)"}`,
               }}
             >
-              {meta.emoji} {meta.label}{" "}
+              <ActorIcon role={r} size={11} /> {meta.label}{" "}
               <span className="opacity-60 tabular-nums">{counts[r] ?? 0}</span>
             </button>
           );

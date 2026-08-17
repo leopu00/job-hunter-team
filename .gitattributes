@@ -8,6 +8,11 @@
 *.mjs text eol=lf
 *.cjs text eol=lf
 *.ts text eol=lf
+# `*.tsx` mancava, e la mancanza si vedeva solo da Windows: con i .ts in LF e i
+# .tsx in CRLF, `prettier --check "web/**"` segnalava in locale TUTTI e 263 i
+# .tsx e nessun .ts — cioè un gate che sembra rosso qui e verde in CI, che è il
+# modo migliore per imparare a non fidarsi del gate (#181).
+*.tsx text eol=lf
 *.rs text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf

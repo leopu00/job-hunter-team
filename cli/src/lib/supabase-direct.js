@@ -218,6 +218,46 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
   }
 
   /**
+   * #186 — candidature decise dall'utente sul web (`applications`, campi
+   * user-side). Il click in cloud-mode scrive solo su Supabase: senza questa
+   * lettura il box non lo sa mai, e il team pianifica su una fotografia in cui
+   * quelle candidature non esistono.
+   *
+   * Il cursore e' `updated_at` della candidatura, e a differenza di quello dei
+   * flag posizione e' UNA colonna sola: quindi si puo' ordinare per la stessa
+   * chiave su cui si filtra, e la finestra converge anche quando il numero di
+   * cambi supera `limit`. Regge anche l'annullamento, che azzera `applied_at`
+   * — un cursore su quel campo perderebbe per sempre le righe annullate.
+   *
+   * `applications` sul cloud non ha `legacy_id`: la chiave e' `position_id`
+   * (UUID). L'id che il box conosce arriva dall'embed su `positions`, con
+   * `!inner` perche' una candidatura orfana non e' applicabile da nessuna
+   * parte. Lo appiattiamo qui, cosi' chi applica vede la stessa forma di riga
+   * delle altre corsie.
+   * @param {object} [o] { since?: ISO string, limit?: number }
+   */
+  async function readAppliedChanges({ since, limit = 500 } = {}) {
+    const params = new URLSearchParams();
+    params.set(
+      'select',
+      'applied,applied_at,applied_via,status,updated_at,positions!inner(legacy_id)'
+    );
+    if (since) params.set('updated_at', `gt.${since}`);
+    params.set('order', 'updated_at.asc');
+    params.set('limit', String(limit));
+    const rows = await rest(`applications?${params.toString()}`);
+    if (!Array.isArray(rows)) return [];
+    return rows.map((r) => ({
+      legacy_id: r?.positions?.legacy_id ?? null,
+      applied: r?.applied ?? false,
+      applied_at: r?.applied_at ?? null,
+      applied_via: r?.applied_via ?? null,
+      status: r?.status ?? null,
+      updated_at: r?.updated_at ?? null,
+    }));
+  }
+
+  /**
    * [JHT-CHAT-UNIFY] Turni scritti dall'utente dalla chat web e non ancora
    * consegnati al pane dell'agente (`author='user'`, `delivered_at IS NULL`).
    * Sono righe NATIVE del cloud: legacy_id negativo, nessun gemello in SQLite
@@ -298,6 +338,7 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
     readOpenTickets,
     readDesiredStateChanges,
     readPendingReplyChanges,
+    readAppliedChanges,
     readUndeliveredUserChat,
     markUserChatDelivered,
     readTeamState,

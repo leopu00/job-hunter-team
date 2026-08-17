@@ -52,11 +52,25 @@ jobs:
         # Allineata alla 3.8.3 contro cui il repo è già formattato.
         run: npm install --no-save prettier@3.8.3
 
+      # I due glob coprono OGNI estensione di sorgente che esiste sotto la
+      # cartella che il passo nomina. Fino a #181 il passo «shared/» guardava
+      # solo `**/*.ts` mentre in `shared/` il codice condiviso è quasi tutto
+      # `.js`: 11 file su 14 non erano mai stati controllati, e non per colpa
+      # loro — nessuno gliel'aveva mai chiesto. Il guard che tiene i glob
+      # allineati all'albero è `tests/test_prettier_perimeter.py`.
+      #
+      # I due `--ignore-path` di `web/` non sono ridondanti: nominare il primo
+      # disattiva il default, e il secondo serve a `web/next-env.d.ts`, che
+      # genera Next e che solo `web/.gitignore` esclude. In CI quel file non
+      # esiste (il checkout non lo porta), ma senza la seconda riga chi lancia
+      # lo stesso comando in locale dopo un `next dev` vede un rosso che non
+      # può correggere — e un gate rosso per un motivo non azionabile insegna
+      # a ignorare i rossi.
       - name: Prettier check — web/
-        run: npx prettier --check "web/app/**/*.{ts,tsx}"
+        run: npx prettier --check "web/**/*.{ts,tsx,js,mjs}" --ignore-path .gitignore --ignore-path web/.gitignore
 
       - name: Prettier check — shared/
-        run: npx prettier --check "shared/**/*.ts" --ignore-path /dev/null
+        run: npx prettier --check "shared/**/*.{ts,js,mjs}" --ignore-path /dev/null
 
   # `scripts/review-log.py sync` non era agganciato a niente: il registro è
   # stato riallineato a mano il 2026-07-30 (49 date, 22 file) e da lì in poi

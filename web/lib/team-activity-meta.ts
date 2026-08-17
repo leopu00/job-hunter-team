@@ -1,43 +1,46 @@
 // Metadati di presentazione degli agenti + formatter condivisi tra la pagina
-// /team (ActivityCharts) e la card Attività recente in dashboard.
-// Emoji/colori canonici della GUI (stessi di RecentPositionsTable / positions).
+// /team (ActivityCharts), la card Attività recente in dashboard e le legende
+// dei grafici nei case study.
+//
+// Le facce degli attori NON stanno qui: le disegna `components/ActorIcon.tsx`,
+// un <svg> per ruolo. Fino a #166 questo file portava anche un campo `emoji`,
+// e con lui il commento — sbagliato — che quelle faccine fossero «le stesse di
+// RecentPositionsTable / positions»: quella tabella non ha nemmeno una colonna
+// attore, e l'affermazione era finita pari pari nel testo di #160. Un commento
+// che dichiara una parentela inesistente non e' un dettaglio: e' la fonte da
+// cui la parentela viene poi citata come fatto.
 import type { TeamActivityRole } from "./team-activity";
 
 export const ROLE_META: Record<
   TeamActivityRole,
-  { label: string; emoji: string; color: string; verb: string; action: string }
+  { label: string; color: string; verb: string; action: string }
 > = {
   scout: {
     label: "Scout",
-    emoji: "🔍",
     color: "#2196f3",
     verb: "posizioni trovate",
     action: "ha trovato una posizione",
   },
   analista: {
     label: "Analista",
-    emoji: "🔬",
     color: "#00e676",
     verb: "posizioni analizzate",
     action: "ha analizzato una posizione",
   },
   scorer: {
     label: "Scorer",
-    emoji: "🎯",
     color: "#b388ff",
     verb: "score assegnati",
     action: "ha assegnato uno score",
   },
   scrittore: {
     label: "Scrittore",
-    emoji: "✍️",
     color: "#ffd600",
     verb: "CV scritti",
     action: "ha scritto un CV",
   },
   critico: {
     label: "Critico",
-    emoji: "⚖️",
     color: "#ff6ac1",
     verb: "review completate",
     action: "ha completato una review",

@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/check-live-schema.py"
 MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
 QUERY = ROOT / "supabase/live-schema/078-084.v3.sql"
-WEB_MANIFEST = ROOT / "supabase/live-schema/078-084.web.v4.json"
-WEB_QUERY = ROOT / "supabase/live-schema/078-084.web.v4.sql"
+WEB_MANIFEST = ROOT / "supabase/live-schema/078-085.web.v5.json"
+WEB_QUERY = ROOT / "supabase/live-schema/078-085.web.v5.sql"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
 POSTGRES_READY_MARKER = "database system is ready to accept connections"
@@ -38,7 +38,11 @@ MIGRATIONS = [
     ROOT / "supabase/migrations/082_download_clicks_tiktok_source.sql",
     ROOT / "supabase/migrations/083_position_ticket_state_model.sql",
     ROOT / "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
+    ROOT / "supabase/migrations/085_applications_updated_at.sql",
 ]
+# I test di ri-applicazione parlano della 084: nominarla per posizione la
+# faceva cambiare sotto ai piedi al primo numero nuovo.
+MIGRATION_084 = MIGRATIONS[6]
 
 LEGACY_ARTIFACT_SHA256 = {
     "supabase/live-schema/078-081.v1.json": (
@@ -58,6 +62,12 @@ LEGACY_ARTIFACT_SHA256 = {
     ),
     "supabase/live-schema/078-084.v3.sql": (
         "7de4f4baf09131a50c3967fa3895fc1fe85c4e15af33f43e59c1e5e745730eba"
+    ),
+    "supabase/live-schema/078-084.web.v4.json": (
+        "d33281edb45bb81bcf9948d615987083c2b081eb7751f4b28b13de8168773201"
+    ),
+    "supabase/live-schema/078-084.web.v4.sql": (
+        "4c42e7770efb2cc1e8cdf4fba221c52012dbd7ecd610fb31909a5bb201cb8b58"
     ),
 }
 
@@ -442,9 +452,9 @@ def test_additive_web_contract_exactly_receipts_every_mapped_rpc_and_column():
     )
 
     assert contract.phase == "web"
-    assert contract.contract_id == "release-0.3.9-web-schema-078-084"
+    assert contract.contract_id == "release-0.3.9-web-schema-078-085"
     assert len(contract.expected_checks) == 40
-    assert manifest["query"]["path"] == "supabase/live-schema/078-084.web.v4.sql"
+    assert manifest["query"]["path"] == "supabase/live-schema/078-085.web.v5.sql"
     assert "\\n" not in WEB_QUERY.read_text()
 
     mapped_receipts = {
@@ -466,7 +476,7 @@ def test_cli_validates_only_the_pinned_additive_web_contract(capsys):
     assert output.err == ""
     assert output.out == (
         "LIVE-SCHEMA MANIFEST OK "
-        "contract=release-0.3.9-web-schema-078-084 checks=40\n"
+        "contract=release-0.3.9-web-schema-078-085 checks=40\n"
     )
 
 
@@ -927,7 +937,9 @@ def test_pg16_schema_only_clone_passes_after_ordered_078_through_084():
 
 def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():
     contract = canary.load_web_contract()
-    with pg16_schema_clone(migrated=True) as psql:
+    # Il contratto web copre 078-085: il clone deve arrivare alla 085, dove
+    # nasce applications.updated_at. Il contratto catalog resta fermo alla 084.
+    with pg16_schema_clone(migrated=True, through_version=85) as psql:
         baseline = receipt_rows(psql(WEB_QUERY.read_text()).stdout)
         column_drift = receipt_rows(
             psql(
@@ -946,10 +958,10 @@ def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():
     assert tuple(sorted(baseline)) == contract.expected_checks
     assert all(baseline.values())
     assert [check for check, ok in column_drift.items() if not ok] == [
-        "084.web.columns.positions"
+        "085.web.columns.positions"
     ]
     assert [check for check, ok in rpc_drift.items() if not ok] == [
-        "084.web.rpc.increment_landing_hits"
+        "085.web.rpc.increment_landing_hits"
     ]
 
 
@@ -1081,7 +1093,7 @@ def test_pg16_084_reapply_preserves_every_exact_receipt():
     contract = canary.load_contract(MANIFEST)
     with pg16_schema_clone(migrated=True) as psql:
         before = query_results(psql)
-        psql(MIGRATIONS[-1].read_text())
+        psql(MIGRATION_084.read_text())
         after = query_results(psql)
 
     assert tuple(sorted(before)) == contract.expected_checks
@@ -1223,7 +1235,7 @@ def test_pg16_083_reapply_preserves_the_exact_catalog_receipt():
     contract = canary.load_contract(MANIFEST)
     with pg16_schema_clone(migrated=True) as psql:
         before = query_results(psql)
-        psql(MIGRATIONS[-1].read_text())
+        psql(MIGRATION_084.read_text())
         after = query_results(psql)
 
     assert tuple(sorted(before)) == contract.expected_checks

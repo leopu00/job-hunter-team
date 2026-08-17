@@ -22,7 +22,7 @@
  * arriva alla cella come `=HYPERLINK(...)`. Sono il modo classico di passare
  * sotto un filtro che guarda solo i quattro simboli.
  */
-const FORMULA_LEADERS = ['=', '+', '-', '@', '\t', '\r'];
+const FORMULA_LEADERS = ["=", "+", "-", "@", "\t", "\r"];
 
 /**
  * L'apostrofo iniziale è il marcatore di testo dei fogli di calcolo: la
@@ -50,7 +50,7 @@ const PLAIN_NUMBER = /^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
  * @returns {string}
  */
 export function neutralizeFormula(text) {
-  if (typeof text !== 'string' || text.length === 0) return text;
+  if (typeof text !== "string" || text.length === 0) return text;
   if (!FORMULA_LEADERS.includes(text[0])) return text;
   if (PLAIN_NUMBER.test(text)) return text;
   return TEXT_MARKER + text;
@@ -89,8 +89,8 @@ const STRUCTURAL = /[",\n\r\t]/;
 export function csvCell(value) {
   const raw =
     value == null
-      ? ''
-      : typeof value === 'object'
+      ? ""
+      : typeof value === "object"
         ? JSON.stringify(value)
         : String(value);
   const text = neutralizeFormula(raw);
@@ -107,9 +107,9 @@ export function csvCell(value) {
  * @returns {string}
  */
 export function toCsv(rows) {
-  if (rows.length === 0) return '';
+  if (rows.length === 0) return "";
   const keys = [...new Set(rows.flatMap((r) => Object.keys(r)))];
-  const header = keys.map(csvCell).join(',');
-  const lines = rows.map((r) => keys.map((k) => csvCell(r[k])).join(','));
-  return [header, ...lines].join('\n');
+  const header = keys.map(csvCell).join(",");
+  const lines = rows.map((r) => keys.map((k) => csvCell(r[k])).join(","));
+  return [header, ...lines].join("\n");
 }

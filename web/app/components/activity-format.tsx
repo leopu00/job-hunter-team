@@ -8,6 +8,7 @@ import type { RecentActivityEvent } from "@/lib/team-activity";
 import { ROLE_META, timeAgo, dmhm } from "@/lib/team-activity-meta";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import ActorIcon from "@/app/components/ActorIcon";
 
 // Frasi d'azione localizzate (verbo per ruolo + frammenti score/source) e il
 // title del link "Apri la posizione". Sempre 7 lingue.
@@ -188,7 +189,7 @@ export function ActivityRow({ ev }: { ev: RecentActivityEvent }) {
       <span className="text-[10px] text-[var(--color-dim)] w-14 shrink-0 tabular-nums">
         {timeAgo(ev.ts)}
       </span>
-      <span className="text-[13px] leading-none shrink-0">{meta.emoji}</span>
+      <ActorIcon role={ev.role} size={13} />
       <span
         className="text-[11px] font-bold w-24 shrink-0 truncate tabular-nums"
         style={{ color: meta.color }}
