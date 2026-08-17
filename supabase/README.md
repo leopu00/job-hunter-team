@@ -106,7 +106,7 @@ node scripts/check-web-schema-coverage.mjs
 ```
 
 `supabase/live-schema/web-code-coverage.v1.json` maps each discovered symbol
-to an exact receipt in the additive `078-085.web.v5` live-schema contract.
+to an exact receipt in the additive `078-086.web.v6` live-schema contract.
 Query-builder sites that cannot be resolved statically are listed one by one
 and pinned to their exact source-file hash; they are not wildcard exceptions.
 A new, removed, dynamic, ambiguous or unreceipted use fails closed. This CI
