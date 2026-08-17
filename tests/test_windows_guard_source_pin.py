@@ -13,9 +13,12 @@ esisteva su un solo ramo, quindi non era conteso affatto. Il risultato e' il
 peggiore possibile: il merge sembra pulito e il gate cade dopo, lontano dalla
 causa.
 
-Questo test non elenca i posti: **li cerca**. Se domani l'impronta viene incisa
-in un terzo file, la copertura arriva da sola invece di aspettare un altro
-audit — elencarli sarebbe stato aggiungere una terza copia dello stesso dato.
+Questo test non elenca i posti: **li cerca**, e li cerca in tutti i file che
+spediamo, non in alcune cartelle. Se domani l'impronta viene incisa in un
+terzo file — ovunque nel repo — la copertura arriva da sola invece di
+aspettare un altro audit; elencarli sarebbe stato aggiungere una terza copia
+dello stesso dato, e limitare le cartelle avrebbe reso questa frase vera solo
+dentro quelle.
 
 ⚠️ Il limite, detto qui perche' non si scopra da soli: `argv_utf16` viaggia
 accanto a `bytes` e `sha256` nella riga di censimento, ma dipende dal path
@@ -28,6 +31,7 @@ Eseguire:
 
 import hashlib
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -42,10 +46,20 @@ GUARD_PS1 = ROOT / "game/scripts/support/windows_instance_guard.ps1"
 HASH = re.compile(r"\b[0-9a-f]{64}\b")
 ABOUT_THE_GUARD = ("SOURCE_SHA256", "instance_guard", "INSTANCE-GUARD")
 
-# Dove cercare. Il repo intero meno le cartelle che non sono sorgente nostro.
-SEARCHED = ("game", "scripts", "tests", ".github")
-SKIP_DIRS = {".git", "node_modules", "builds", "assets", ".cache", "__pycache__"}
-SKIP_SUFFIXES = {".png", ".jpg", ".webp", ".ico", ".pck", ".exe", ".zip", ".pem"}
+# Dove cercare: TUTTI i file tracciati. Limitare la ricerca ad alcune cartelle
+# avrebbe reso la promessa qui sopra vera solo dentro quelle — un'impronta
+# incisa in `cli/`, `shared/` o `web/` non sarebbe stata vista e il test
+# sarebbe passato verde, cioe' la forma esatta che questo file esiste per
+# impedire. `git ls-files` da' il perimetro giusto senza elencare niente:
+# scandisce quello che spediamo e ignora build, cache e dipendenze.
+# Costo misurato: ~0,2 s per ~3800 file, il filtro sotto fa la parte grossa.
+SKIP_SUFFIXES = {
+    ".png", ".jpg", ".jpeg", ".webp", ".ico", ".svg", ".pck", ".exe", ".zip",
+    ".pem", ".ttf", ".otf", ".wav", ".ogg", ".mp3", ".lock",
+}
+# Un'impronta incisa a mano vive in un sorgente, non in un file da mezzo mega:
+# quelli sono lockfile e dati generati, e leggerli e' il costo, non la resa.
+MAX_SEARCHED_BYTES = 512_000
 
 # Se la ricerca non trova niente, il test passerebbe senza aver guardato
 # niente. I punti noti oggi sono due; il minimo tiene il test onesto se un
@@ -54,13 +68,23 @@ MINIMUM_KNOWN_SITES = 2
 
 
 def _candidate_files():
-    for area in SEARCHED:
-        for path in (ROOT / area).rglob("*"):
-            if not path.is_file() or path.suffix in SKIP_SUFFIXES:
+    listed = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True
+    )
+    # Se qui non esce niente la ricerca e' vuota, e il test lo dichiara invece
+    # di passare: vedi MINIMUM_KNOWN_SITES.
+    for name in listed.stdout.split("\0"):
+        if not name:
+            continue
+        path = ROOT / name
+        if path.suffix.lower() in SKIP_SUFFIXES or not path.is_file():
+            continue
+        try:
+            if path.stat().st_size > MAX_SEARCHED_BYTES:
                 continue
-            if SKIP_DIRS & set(path.relative_to(ROOT).parts):
-                continue
-            yield path
+        except OSError:
+            continue
+        yield path
 
 
 def _lines_pinning_the_guard():
