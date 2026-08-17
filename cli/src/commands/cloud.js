@@ -1635,6 +1635,39 @@ async function performPush(options) {
       : false;
   };
 
+  // O-97 — un rifiuto che insegna invece di ripetersi.
+  //
+  // Il trigger del cloud rifiuta di riportare indietro una posizione per cui
+  // esiste una candidatura vera. Il box che manda quel downgrade ha una
+  // fotografia piu' vecchia, e finora ripresentava lo stesso downgrade a ogni
+  // tick: il push non drenava piu'. La route allega al rifiuto cio' che il
+  // cloud sa (`stale_position`), e qui quel dato diventa lo stato locale —
+  // perche' smettere di fallire non basta, il box deve DAVVERO cambiare idea.
+  //
+  // Solo sul singleton: e' l'unico caso in cui la fotografia riguarda per
+  // certo la riga che stiamo isolando, e la bisezione ci arriva sempre.
+  const learnFromStalePosition = (body) => {
+    const snapshot = body?.stale_position;
+    if (!snapshot || typeof snapshot !== 'object') return false;
+    if (!Number.isInteger(snapshot.legacy_id) || snapshot.legacy_id <= 0) return false;
+    try {
+      const adb = new DatabaseSync(dbPath);
+      adb.exec('PRAGMA foreign_keys = ON');
+      adb.exec('PRAGMA busy_timeout = 5000');
+      const res = applyAppliedBackflow(adb, [snapshot]);
+      adb.close();
+      if (res.applied === 0 && res.undone === 0) return false;
+      console.log(pc.green(
+        `✓ Cloud application state learned for position ${snapshot.legacy_id}: `
+        + `${res.applied} applied, ${res.undone} undone`
+      ));
+      return true;
+    } catch (err) {
+      console.error(pc.yellow(`  stale-position learn warn: ${err.message}`));
+      return false;
+    }
+  };
+
   const sameReceiptMultiset = (expected, received) => {
     if (!Array.isArray(received) || received.length !== expected.length) return false;
     const counts = new Map();
@@ -1720,6 +1753,17 @@ async function performPush(options) {
             console.error(pc.yellow(
               `Cloud push quarantined ${table}/${identity} (${reason}); the remaining convoy continues.`
             ));
+            if (learnFromStalePosition(res.body)) {
+              // Lo stato locale adesso e' quello del cloud: la riga in
+              // quarantena non e' piu' quella che e' stata rifiutata, quindi
+              // torna in coda. Senza questo il box imparerebbe e resterebbe
+              // comunque zitto fino a un retry chiesto a mano.
+              try {
+                requestQuarantineRetry(identity, { path: quarantinePath });
+              } catch (err) {
+                console.error(pc.yellow(`  quarantine retry warn: ${err.message}`));
+              }
+            }
             continue;
           } catch {
             outcome.aborted = true;
