@@ -310,7 +310,7 @@ Quand le Sentinel signale une saturation de rate-limit, le Captain envoie `[URG]
 
 **Pourquoi l'etape de candidature est entierement manuelle.** L'utilisateur lit le CV, juge lui-meme la compatibilite, envoie du feedback au Captain (`le ton ne convient pas` · `il manque cette experience` · `bien — je postule` · ...), et **decide ensuite seulement s'il postule** — en utilisant le lien qu'il a deja. Ce checkpoint humain est intentionnel : il maintient JHT comme un coach pour le travailleur, pas un canon qui bombarde les recruteurs de candidatures a faible effort. Le volume cote recruteur n'a de sens que si le travailleur l'a choisi.
 
-**Mise a jour du status.** Quand l'utilisateur postule, la position est marquee `status = applied` manuellement (reponse Telegram ou bouton "J'ai postule" dans le web dashboard), avec `applied_via = telegram | web | manual`. Le cycle optionnel `response` (entretien · refus · ghosted) est egalement suivi par l'utilisateur.
+**Mise a jour du status.** Quand l'utilisateur postule, la position est marquee `status = applied` manuellement (reponse Telegram ou bouton "J'ai postule" dans le web dashboard), avec `applied_via = telegram | web | manual`. Le cycle optionnel `response` (`interview` · `rejected` · `ghosted`) est egalement suivi par l'utilisateur.
 
 ### 🛠️ Skills / tools
 

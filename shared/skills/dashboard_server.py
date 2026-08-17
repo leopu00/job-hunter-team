@@ -1454,7 +1454,12 @@ def get_api_data():
     for r in conn.execute("SELECT response, COUNT(*) as cnt FROM applications WHERE response IS NOT NULL GROUP BY response").fetchall():
         response_breakdown[r['response']] = r['cnt']
 
-    # Interviews/meetings
+    # Interviews/meetings — vocabolario dell'esito allineato al Mentor (#187).
+    # Questa query cercava quattro valori che nessuno ha mai scritto (`response`
+    # è NULL su tutte le righe in produzione): erano un vocabolario privato di
+    # questa dashboard, non uno stato del prodotto. I nomi vecchi stanno nel
+    # commit che li ha tolti — qui non si ripetono, così il gate del
+    # vocabolario può pretenderne l'assenza senza eccezioni.
     meetings = []
     for r in conn.execute("""
         SELECT p.id, p.title, p.company, p.location, p.remote_type, p.url,
@@ -1464,7 +1469,7 @@ def get_api_data():
         JOIN applications a ON a.position_id = p.id
         LEFT JOIN scores s ON s.position_id = p.id
         LEFT JOIN companies c ON c.id = p.company_id
-        WHERE a.response IN ('interview_scheduled', 'interview_done', 'call_scheduled', 'acknowledged')
+        WHERE a.response = 'interview'
         ORDER BY a.response_at DESC
     """).fetchall():
         meetings.append(dict(r))

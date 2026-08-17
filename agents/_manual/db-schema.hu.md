@@ -289,4 +289,4 @@ new → checked → scored → writing → ready → applied → response
 - `writing` — az Író átvette (4. fázis) — társak között koordinált claim
 - `ready` — a Kritikus 3. körében a pontszám ≥ 5 (4. fázis) · `excluded` ha score < 5
 - `applied` — a felhasználó megerősítette a küldést (5. fázis) — manuális, soha nem a csapat által
-- `response` — válasz érkezett (interjú/elutasítás/ghosted) — felhasználó által kezelt flag
+- `response` — válasz érkezett (`interview`/`rejected`/`ghosted`) — felhasználó által kezelt flag

@@ -88,7 +88,7 @@ python3 /app/shared/skills/db_update.py application 42 --status ready
 python3 /app/shared/skills/db_update.py application 42 --applied-at "2026-02-28" --applied-via linkedin
 python3 /app/shared/skills/db_update.py application 42 --applied true
 
-# Resposta recebida (entrevista / rejeição / ghosted)
+# Resposta recebida (`interview` / `rejected` / `ghosted`)
 python3 /app/shared/skills/db_update.py application 42 --response "rejected" --response-at now
 ```
 

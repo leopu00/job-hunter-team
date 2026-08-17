@@ -290,4 +290,4 @@ new → checked → scored → writing → ready → applied → response
 - `writing` — Scrittore l'ha presa in carico (Phase 4) — claim peer-coordinated
 - `ready` — Round 3 del Critico ha dato score ≥ 5 (Phase 4) · `excluded` se score < 5
 - `applied` — l'utente ha confermato l'invio (Phase 5) — manuale, mai dal team
-- `response` — risposta ricevuta (interview/rejection/ghosted) — flag user-tracked
+- `response` — risposta ricevuta (`interview`/`rejected`/`ghosted`) — flag user-tracked

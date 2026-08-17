@@ -310,7 +310,7 @@ Amikor a Sentinel rate-limit teliteodest jelez, a Captain `[URG] FREEZE`-t kuld 
 
 **Miert teljes egeszeben kezzel toertenoe a jelontkezes.** A felhasznalo elolvassa a CV-t, maga iteli meg a megfelelest, visszajelzest kuld a Captainnek (`a hangnem nem jo` · `hianyozeik ez a tapasztalat` · `jo — jelentkezem` · ...), es **csak ezutan donti el, hogy jelentkezik-e** — a mar meglevo link hasznalataval. Ez a humaan ellenoerzesi pont szandekos: a JHT-t coachkent tartja a munkavallalo szamara, nem egy gyenge palyazatokat szoro agyukent a toborzok fele. A toborzoi oldalon a mennyiseg csak akkor ertelmes, ha a munkavallalo valasztotta.
 
-**Statusz frissites.** Amikor a felhasznalo jelentkezik, a poziciot kezzel `status = applied`-kent jeloelik (Telegram valasz vagy a web dashboard "Jelentkeztem" gombja), `applied_via = telegram | web | manual` ertekkel. Az opcionalis `response` eletciklust (interjue · elutasitas · ghosted) szinten a felhasznalo koeveti.
+**Statusz frissites.** Amikor a felhasznalo jelentkezik, a poziciot kezzel `status = applied`-kent jeloelik (Telegram valasz vagy a web dashboard "Jelentkeztem" gombja), `applied_via = telegram | web | manual` ertekkel. Az opcionalis `response` eletciklust (`interview` · `rejected` · `ghosted`) szinten a felhasznalo koeveti.
 
 ### 🛠️ Skills / tools
 
