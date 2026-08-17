@@ -617,7 +617,22 @@ def update_application(args):
     marks_applied = bool(
         args.status == 'applied' or args.applied_at or applied_flag
     )
-    guards_applied_downgrade = bool(not marks_applied and args.status)
+    # ── L'esito è simmetrico all'invio (#187) ───────────────────────────
+    #
+    # Fino a oggi `--applied` eseguiva tre statement in una transazione
+    # (applications, positions.status, event-log) mentre `--response` scriveva
+    # SOLO la colonna: niente stato dell'application, niente stato della
+    # posizione, nessuna transizione. È così che in produzione sono nate 8
+    # posizioni in stato 'response' con `response` NULL su tutte e 428 le
+    # righe — le due metà scritte da due comandi che non sapevano l'uno
+    # dell'altro. Riparare solo il web avrebbe lasciato aperta questa porta,
+    # che è quella da cui passano gli agenti e il bridge Telegram.
+    marks_response = bool(
+        args.response or args.response_at or args.status == 'response'
+    )
+    guards_applied_downgrade = bool(
+        not marks_applied and not marks_response and args.status
+    )
     if guards_applied_downgrade:
         # Fast path per un errore già persistito. La garanzia concorrente non
         # dipende da questa lettura: il predicato dell'UPDATE sotto conserva
@@ -653,8 +668,43 @@ def update_application(args):
         args.status = 'applied'
         args.applied_at = args.applied_at or 'now'
 
+    if marks_response:
+        # Un istante senza l'esito è la riga muta che abbiamo trovato in
+        # produzione otto volte: `response_at` valorizzato, `response` NULL —
+        # sappiamo CHE hanno risposto e non sapremo mai COSA hanno risposto.
+        if not (args.response or '').strip():
+            print(
+                "⚠️  RESPONSE REJECTED: --response is required whenever an "
+                "outcome is recorded (say WHICH answer arrived, not just that "
+                "one did).",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+        # Un esito su una candidatura mai inviata non è un dato, è un errore
+        # di battitura: `response` è la progressione POST-invio (vedi la
+        # migrazione 072 lato cloud, che la dichiara l'unica ammessa).
+        sent = conn.execute(
+            "SELECT applied FROM applications WHERE position_id = ?",
+            (args.position_id,),
+        ).fetchone()
+        was_sent = bool(
+            sent and (sent['applied'] if hasattr(sent, 'keys') else sent[0])
+        )
+        if not was_sent and not marks_applied:
+            print(
+                "⚠️  RESPONSE REJECTED: this application is not marked as "
+                "sent. Record the submission first (--applied true "
+                "--applied-via <channel>), then its outcome.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+        args.status = 'response'
+        args.response_at = args.response_at or 'now'
+
     previous_position_status = None
-    if marks_applied:
+    if marks_applied or marks_response:
         position = conn.execute(
             "SELECT status FROM positions WHERE id = ?", (args.position_id,)
         ).fetchone()
@@ -836,28 +886,32 @@ def update_application(args):
     else:
         created = False
 
-    if marks_applied:
+    if marks_applied or marks_response:
         # La stessa transazione che pubblica applied_at aggiorna lo stato
         # operativo e il suo event-log. Se uno dei tre statement fallisce,
         # nessuna superficie può osservare una candidatura a metà.
-        conn.execute(
-            "UPDATE positions SET status = 'applied', last_actor = ? "
-            "WHERE id = ?",
-            (
-                os.environ.get('JHT_AGENT_NAME')
-                or os.environ.get('JHT_AGENT_DIR', '').split('/')[-1]
-                or 'user',
-                args.position_id,
-            ),
+        #
+        # L'esito viene dopo l'invio anche quando arrivano insieme nello stesso
+        # comando: `response` è la progressione, non un'alternativa.
+        target_state = 'response' if marks_response else 'applied'
+        actor = (
+            os.environ.get('JHT_AGENT_NAME')
+            or os.environ.get('JHT_AGENT_DIR', '').split('/')[-1]
+            or 'user'
         )
-        if previous_position_status != 'applied':
+        conn.execute(
+            "UPDATE positions SET status = ?, last_actor = ? WHERE id = ?",
+            (target_state, actor, args.position_id),
+        )
+        if previous_position_status != target_state:
             conn.execute(
                 "INSERT INTO position_state_transitions "
                 "(position_id, from_state, to_state, by_agent) "
-                "VALUES (?, ?, 'applied', ?)",
+                "VALUES (?, ?, ?, ?)",
                 (
                     args.position_id,
                     previous_position_status,
+                    target_state,
                     os.environ.get('JHT_AGENT_NAME') or 'user',
                 ),
             )
