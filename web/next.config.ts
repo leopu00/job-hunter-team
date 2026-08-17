@@ -1,31 +1,32 @@
-import type { NextConfig } from 'next'
-import { PHASE_PRODUCTION_BUILD } from 'next/constants'
-import withBundleAnalyzerInit from '@next/bundle-analyzer';
-import path from 'node:path'
-import { readFileSync } from 'node:fs'
+import type { NextConfig } from "next";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
+import withBundleAnalyzerInit from "@next/bundle-analyzer";
+import path from "node:path";
+import { readFileSync } from "node:fs";
 
 // Bundle analyzer: attivo solo con ANALYZE=true per non rallentare le
 // build normali. `npm run analyze` da web/ apre i report HTML in
 // .next/analyze/client.html e server.html (vedi
 // docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md insight #10).
 const withBundleAnalyzer = withBundleAnalyzerInit({
-  enabled: process.env.ANALYZE === 'true',
+  enabled: process.env.ANALYZE === "true",
   openAnalyzer: false,
 });
 
 // Locale: build parte da web/ (cwd termina con /web). Vercel: build parte dalla repo root.
-const CWD = process.cwd()
+const CWD = process.cwd();
 const MONOREPO_ROOT =
-  CWD.endsWith(`${path.sep}web`) || CWD.endsWith('/web') ? path.dirname(CWD) : CWD
+  CWD.endsWith(`${path.sep}web`) || CWD.endsWith("/web")
+    ? path.dirname(CWD)
+    : CWD;
 
 // Versione app dalla single source di verità (root package.json): la footer la
 // legge via NEXT_PUBLIC_APP_VERSION e si aggiorna da sola a ogni bump.
-let APP_VERSION = '0.0.0'
+let APP_VERSION = "0.0.0";
 try {
   APP_VERSION =
-    (JSON.parse(
-      readFileSync(path.join(MONOREPO_ROOT, 'package.json'), 'utf8'),
-    ).version as string) || APP_VERSION
+    (JSON.parse(readFileSync(path.join(MONOREPO_ROOT, "package.json"), "utf8"))
+      .version as string) || APP_VERSION;
 } catch {
   /* fallback al default */
 }
@@ -34,19 +35,25 @@ try {
 // here: it carries a per-request nonce and is therefore set by
 // `web/middleware.ts`, which runs on every HTML response.
 const securityHeaders = [
-  { key: 'X-Frame-Options', value: 'DENY' },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
-  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=31536000; includeSubDomains",
+  },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   // microphone=(self) permette al nostro origin di richiedere
   // l'accesso via navigator.mediaDevices.getUserMedia (serve per il
   // bottone "detta a voce" nell'onboarding). Camera e geolocation
   // restano disabilitate: nessuna pagina le usa al momento.
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
-]
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(self), geolocation=()",
+  },
+];
 
 const baseNextConfig: NextConfig = {
-  output: 'standalone',
+  output: "standalone",
   env: { NEXT_PUBLIC_APP_VERSION: APP_VERSION },
   // Pattern path-assoluti relativi al MONOREPO_ROOT: i glob `../X/**`
   // erano relativi a CWD (web/) e funzionavano in build locale ma su
@@ -54,23 +61,23 @@ const baseNextConfig: NextConfig = {
   // e Turbopack rifiuta con "glob navigates out of project root".
   // Path assoluti rendono il pattern equivalente in entrambi gli env.
   outputFileTracingExcludes: {
-    '*': [
-      path.join(MONOREPO_ROOT, 'cli/**'),
-      path.join(MONOREPO_ROOT, 'agents/**'),
+    "*": [
+      path.join(MONOREPO_ROOT, "cli/**"),
+      path.join(MONOREPO_ROOT, "agents/**"),
       // Il gioco Godot: la cartella più pesante del monorepo (centinaia di
       // MB tra scene, asset e export) e il web non ne importa niente — le
       // uniche occorrenze di `game/` sotto web/ sono commenti che indicano
       // dove vive l'onboarding. Restava tracciata solo perché escluderla
       // cambia la build Vercel, che è una decisione e non una pulizia.
-      path.join(MONOREPO_ROOT, 'game/**'),
-      path.join(MONOREPO_ROOT, 'e2e/**'),
-      path.join(MONOREPO_ROOT, 'tests/**'),
-      path.join(MONOREPO_ROOT, 'docs/**'),
-      path.join(MONOREPO_ROOT, 'scripts/**'),
-      path.join(MONOREPO_ROOT, 'assets/**'),
-      path.join(MONOREPO_ROOT, '.githooks/**'),
-      path.join(MONOREPO_ROOT, 'node_modules/.cache/**'),
-      '**/*.map',
+      path.join(MONOREPO_ROOT, "game/**"),
+      path.join(MONOREPO_ROOT, "e2e/**"),
+      path.join(MONOREPO_ROOT, "tests/**"),
+      path.join(MONOREPO_ROOT, "docs/**"),
+      path.join(MONOREPO_ROOT, "scripts/**"),
+      path.join(MONOREPO_ROOT, "assets/**"),
+      path.join(MONOREPO_ROOT, ".githooks/**"),
+      path.join(MONOREPO_ROOT, "node_modules/.cache/**"),
+      "**/*.map",
     ],
   },
   // Turbopack root: lasciamo sempre cwd (web/). Usare MONOREPO_ROOT scatena
@@ -81,18 +88,18 @@ const baseNextConfig: NextConfig = {
   turbopack: {},
   // Sposta il devtools indicator a bottom-right per liberare bottom-left
   // ai widget custom dell'app (es. ProfileAssistantFab).
-  devIndicators: { position: 'bottom-right' },
+  devIndicators: { position: "bottom-right" },
   poweredByHeader: false,
-  serverExternalPackages: ['better-sqlite3', 'node:sqlite'],
+  serverExternalPackages: ["better-sqlite3", "node:sqlite"],
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: 'lh3.googleusercontent.com', // Avatar Google OAuth
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com", // Avatar Google OAuth
       },
       {
-        protocol: 'https',
-        hostname: 'avatars.githubusercontent.com', // Avatar GitHub OAuth
+        protocol: "https",
+        hostname: "avatars.githubusercontent.com", // Avatar GitHub OAuth
       },
     ],
   },
@@ -101,32 +108,40 @@ const baseNextConfig: NextConfig = {
       // Il form manuale /profile/edit è stato rimosso: la modifica del profilo
       // passa dalla chat con l'Assistente (vedi ProfileAssistantFab). Vecchi
       // bookmark/link → pagina profilo.
-      { source: '/profile/edit', destination: '/profile', permanent: false },
-    ]
+      { source: "/profile/edit", destination: "/profile", permanent: false },
+    ];
   },
   async headers() {
     return [
       {
-        source: '/(.*)',
+        source: "/(.*)",
         headers: securityHeaders,
       },
       {
-        source: '/install.sh',
+        source: "/install.sh",
         headers: [
-          { key: 'content-type', value: 'application/x-sh; charset=utf-8' },
-          { key: 'cache-control', value: 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400' },
+          { key: "content-type", value: "application/x-sh; charset=utf-8" },
+          {
+            key: "cache-control",
+            value:
+              "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
+          },
         ],
       },
       {
-        source: '/install.ps1',
+        source: "/install.ps1",
         headers: [
-          { key: 'content-type', value: 'text/plain; charset=utf-8' },
-          { key: 'cache-control', value: 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400' },
+          { key: "content-type", value: "text/plain; charset=utf-8" },
+          {
+            key: "cache-control",
+            value:
+              "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
+          },
         ],
       },
-    ]
+    ];
   },
-}
+};
 
 export function createNextConfig(phase: string): NextConfig {
   // `outputFileTracingRoot` serve a `next build --output=standalone`. In dev,
@@ -134,11 +149,11 @@ export function createNextConfig(phase: string): NextConfig {
   // node_modules del monorepo, saturando CPU/IO al primo GET.
   return phase === PHASE_PRODUCTION_BUILD
     ? { ...baseNextConfig, outputFileTracingRoot: MONOREPO_ROOT }
-    : baseNextConfig
+    : baseNextConfig;
 }
 
 function configureNext(phase: string): NextConfig {
-  return withBundleAnalyzer(createNextConfig(phase))
+  return withBundleAnalyzer(createNextConfig(phase));
 }
 
-export default configureNext
+export default configureNext;

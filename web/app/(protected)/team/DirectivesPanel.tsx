@@ -11,6 +11,7 @@ import { useLocale } from "@/lib/use-locale";
 import { useToast } from "../../components/Toast";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./DirectivesPanel.i18n";
+import { IconClipboard } from "@/app/components/PanelIcons";
 import {
   type DirectiveAction,
   directiveErrorTranslationKey,
@@ -214,7 +215,7 @@ export default function DirectivesPanel({
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 sm:p-6">
       <div className="mb-1 flex items-center gap-2">
-        <span aria-hidden>📋</span>
+        <IconClipboard size={15} />
         <h3 className="text-[15px] font-bold text-[var(--color-white)]">
           {t("title")}
         </h3>

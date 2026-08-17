@@ -19,9 +19,29 @@ const API_LATEST := "https://api.github.com/repos/leopu00/job-hunter-team/releas
 const RELEASES_PAGE := "https://github.com/leopu00/job-hunter-team/releases/latest"
 const WINDOWS_ASSET := "job-hunter-team-windows-x64-portable.exe"
 const MACOS_ASSET := "job-hunter-team.zip"
-## Contratto futuro Windows: il manifest sara firmato fuori dal canale GitHub
-## e verificato con una root gia incorporata nella 0.3.6. La sola presenza di
-## questi asset non abilita mai l'installazione.
+## Contratto Windows DORMIENTE, e va letto sapendolo (#156). Il manifest sara
+## firmato fuori dal canale GitHub e verificato con una root gia incorporata
+## nella 0.3.6 — al futuro, perche' oggi non ne esiste nemmeno un pezzo vivo:
+##
+##  1. nessun workflow pubblica questi due asset. La release 0.3.9 porta i due
+##     .exe, lo zip macOS, il tar.gz Linux, RUNTIME-IMAGE.json, SHA256SUMS e
+##     RELEASE-PROVENANCE.json, e basta;
+##  2. `can_self_install()` risponde macOS e solo macOS;
+##  3. `windows_forward_allowed()` piu sotto non ha un solo chiamante nel
+##     prodotto: la interroga unicamente il proprio self-test.
+##
+## Quindi `asset_bundle(..., "Windows", ...)` torna VUOTO su ogni release vera,
+## e l'aggiornamento su Windows apre la pagina — che e' il comportamento giusto
+## per un binario non firmato, non un ripiego. La porta resta chiusa apposta:
+## `can_install()` sarebbe falso comunque (`install_target()` interroga il
+## MacUpdater, vuoto fuori da macOS), ma una seconda porta su un percorso che
+## finisce per SCARICARE ED ESEGUIRE non si toglie perche' e' ridondante.
+##
+## Cosa deve succedere perche' si svegli — tutte e tre, non una:
+## pubblicare i due asset dal workflow di release, distribuire helper e trust
+## root, e accendere Windows in `can_self_install()`. Il giorno in cui una sola
+## di queste parti si muove da sola, `tests/test_update_release_assets.py`
+## diventa rosso e lo dice: e' li' che vive la sorveglianza, non qui.
 const WINDOWS_MANIFEST_ASSET := "WINDOWS-UPDATE-MANIFEST.json"
 const WINDOWS_SIGNATURE_ASSET := "WINDOWS-UPDATE-MANIFEST.sig"
 const WINDOWS_AUTO_BASELINE := "0.3.6"
@@ -134,10 +154,15 @@ static func release_info(payload: Dictionary) -> Dictionary:
 	}
 
 
-## I file necessari all'installazione, accettati soltanto dalla release/tag
-## attesi e con nomi fissi. Su Windows il binario da solo NON basta: manifest e
-## firma detached sono inseparabili. Trovarli non li rende attendibili: il
-## helper deve verificare la firma con la root locale prima dell'apply.
+## I file necessari all'INSTALLAZIONE — non «il link da dare all'utente».
+## Accettati soltanto dalla release/tag attesi e con nomi fissi.
+##
+## Su Windows il binario da solo non basta mai: manifest e firma detached sono
+## inseparabili, e siccome nessuno li pubblica (vedi la nota sulle costanti)
+## questa funzione torna vuota su Windows per ogni release reale. Non e' un
+## caso da correggere: e' il contratto dormiente che si comporta da chiuso.
+## Trovarli non li renderebbe comunque attendibili — il helper deve verificare
+## la firma con la root locale prima dell'apply.
 static func asset_bundle(assets: Array, os_name: String, version: String) -> Dictionary:
 	if os_name not in ["macOS", "Windows"] or parse_version(version).is_empty():
 		return {}

@@ -15,6 +15,8 @@ import {
 } from "@/app/components/ChartTooltip";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import ActorIcon from "@/app/components/ActorIcon";
+import { IconAsleep, IconChevronRight } from "@/app/components/PanelIcons";
 
 const T: Record<
   Locale,
@@ -48,12 +50,12 @@ const T: Record<
   }
 > = {
   it: {
-    whenWhoWhat: "🗓️ Quando, chi e cosa",
+    whenWhoWhat: "Quando, chi e cosa",
     zoomBack: "Zoom indietro",
     zoomFwd: "Zoom avanti",
     scatterHint:
       "Ogni segno è un'azione all'ora esatta · una corsia per ruolo. Zooma per separare giorni e minuti, poi scorri orizzontalmente.",
-    workDistribution: "🍩 Distribuzione del lavoro",
+    workDistribution: "Distribuzione del lavoro",
     allRoles: "← tutti i ruoli",
     actions: "AZIONI",
     unattributed: "non attribuito",
@@ -67,15 +69,15 @@ const T: Record<
     noActivity: "Nessuna attività nel periodo selezionato",
     noActivityHint:
       "Prova ad allargare il range, oppure avvia il team perché i grafici si popolino — i dati arrivano da SQLite locale (o da Supabase quando sincronizzato).",
-    leaderboard: "🏅 Leaderboard · nel periodo",
+    leaderboard: "Leaderboard · nel periodo",
     leaderboardHint:
       "Per ruolo e per singola istanza (es. scout-1), sul range selezionato.",
     nInstances: (n) => `${n} istanze`,
     last: (ago) => `ultimo ${ago}`,
-    volume: "📈 Volume di lavoro nel tempo",
+    volume: "Volume di lavoro nel tempo",
     volumeHint: (days) =>
       `Azioni totali al giorno, scomposte per ruolo · ${days} giorni.`,
-    heatmap: "📅 Heatmap attività",
+    heatmap: "Heatmap attività",
     heatmapHint:
       "Una riga per istanza. L'intensità è relativa al picco giornaliero di ciascuna istanza.",
     noActivityShort: "nessuna attività",
@@ -84,12 +86,12 @@ const T: Record<
     dayActions: (date, n) => `${date} · ${n} azioni`,
   },
   en: {
-    whenWhoWhat: "🗓️ When, who and what",
+    whenWhoWhat: "When, who and what",
     zoomBack: "Zoom out",
     zoomFwd: "Zoom in",
     scatterHint:
       "Each mark is an action at the exact time · one lane per role. Zoom to separate days and minutes, then scroll horizontally.",
-    workDistribution: "🍩 Work distribution",
+    workDistribution: "Work distribution",
     allRoles: "← all roles",
     actions: "ACTIONS",
     unattributed: "unattributed",
@@ -102,15 +104,15 @@ const T: Record<
     noActivity: "No activity in the selected period",
     noActivityHint:
       "Try widening the range, or start the team to populate the charts — data comes from local SQLite (or from Supabase when synced).",
-    leaderboard: "🏅 Leaderboard · in period",
+    leaderboard: "Leaderboard · in period",
     leaderboardHint:
       "By role and by single instance (e.g. scout-1), over the selected range.",
     nInstances: (n) => `${n} instances`,
     last: (ago) => `last ${ago}`,
-    volume: "📈 Work volume over time",
+    volume: "Work volume over time",
     volumeHint: (days) =>
       `Total actions per day, broken down by role · ${days} days.`,
-    heatmap: "📅 Activity heatmap",
+    heatmap: "Activity heatmap",
     heatmapHint:
       "One row per instance. Intensity is relative to each instance's daily peak.",
     noActivityShort: "no activity",
@@ -119,12 +121,12 @@ const T: Record<
     dayActions: (date, n) => `${date} · ${n} actions`,
   },
   es: {
-    whenWhoWhat: "🗓️ Cuándo, quién y qué",
+    whenWhoWhat: "Cuándo, quién y qué",
     zoomBack: "Alejar",
     zoomFwd: "Acercar",
     scatterHint:
       "Cada marca es una acción a la hora exacta · un carril por rol. Haz zoom para separar días y minutos, luego desplázate horizontalmente.",
-    workDistribution: "🍩 Distribución del trabajo",
+    workDistribution: "Distribución del trabajo",
     allRoles: "← todos los roles",
     actions: "ACCIONES",
     unattributed: "sin atribuir",
@@ -138,15 +140,15 @@ const T: Record<
     noActivity: "Sin actividad en el periodo seleccionado",
     noActivityHint:
       "Prueba a ampliar el rango, o inicia el equipo para que los gráficos se llenen — los datos vienen de SQLite local (o de Supabase cuando está sincronizado).",
-    leaderboard: "🏅 Clasificación · en el periodo",
+    leaderboard: "Clasificación · en el periodo",
     leaderboardHint:
       "Por rol y por instancia individual (p. ej. scout-1), sobre el rango seleccionado.",
     nInstances: (n) => `${n} instancias`,
     last: (ago) => `última ${ago}`,
-    volume: "📈 Volumen de trabajo en el tiempo",
+    volume: "Volumen de trabajo en el tiempo",
     volumeHint: (days) =>
       `Acciones totales por día, desglosadas por rol · ${days} días.`,
-    heatmap: "📅 Mapa de calor de actividad",
+    heatmap: "Mapa de calor de actividad",
     heatmapHint:
       "Una fila por instancia. La intensidad es relativa al pico diario de cada instancia.",
     noActivityShort: "sin actividad",
@@ -155,12 +157,12 @@ const T: Record<
     dayActions: (date, n) => `${date} · ${n} acciones`,
   },
   fr: {
-    whenWhoWhat: "🗓️ Quand, qui et quoi",
+    whenWhoWhat: "Quand, qui et quoi",
     zoomBack: "Dézoomer",
     zoomFwd: "Zoomer",
     scatterHint:
       "Chaque marque est une action à l'heure exacte · une voie par rôle. Zoomez pour séparer les jours et les minutes, puis faites défiler horizontalement.",
-    workDistribution: "🍩 Répartition du travail",
+    workDistribution: "Répartition du travail",
     allRoles: "← tous les rôles",
     actions: "ACTIONS",
     unattributed: "non attribué",
@@ -174,15 +176,15 @@ const T: Record<
     noActivity: "Aucune activité sur la période sélectionnée",
     noActivityHint:
       "Essayez d'élargir la plage, ou démarrez l'équipe pour remplir les graphiques — les données proviennent de SQLite local (ou de Supabase une fois synchronisé).",
-    leaderboard: "🏅 Classement · sur la période",
+    leaderboard: "Classement · sur la période",
     leaderboardHint:
       "Par rôle et par instance individuelle (ex. scout-1), sur la plage sélectionnée.",
     nInstances: (n) => `${n} instances`,
     last: (ago) => `dernière ${ago}`,
-    volume: "📈 Volume de travail dans le temps",
+    volume: "Volume de travail dans le temps",
     volumeHint: (days) =>
       `Actions totales par jour, ventilées par rôle · ${days} jours.`,
-    heatmap: "📅 Carte de chaleur d'activité",
+    heatmap: "Carte de chaleur d'activité",
     heatmapHint:
       "Une ligne par instance. L'intensité est relative au pic quotidien de chaque instance.",
     noActivityShort: "aucune activité",
@@ -191,12 +193,12 @@ const T: Record<
     dayActions: (date, n) => `${date} · ${n} actions`,
   },
   de: {
-    whenWhoWhat: "🗓️ Wann, wer und was",
+    whenWhoWhat: "Wann, wer und was",
     zoomBack: "Verkleinern",
     zoomFwd: "Vergrößern",
     scatterHint:
       "Jede Markierung ist eine Aktion zur genauen Uhrzeit · eine Spur pro Rolle. Zoomen Sie, um Tage und Minuten zu trennen, und scrollen Sie dann horizontal.",
-    workDistribution: "🍩 Arbeitsverteilung",
+    workDistribution: "Arbeitsverteilung",
     allRoles: "← alle Rollen",
     actions: "AKTIONEN",
     unattributed: "nicht zugeordnet",
@@ -210,15 +212,15 @@ const T: Record<
     noActivity: "Keine Aktivität im ausgewählten Zeitraum",
     noActivityHint:
       "Versuchen Sie, den Bereich zu erweitern, oder starten Sie das Team, damit sich die Diagramme füllen — die Daten stammen aus lokalem SQLite (oder aus Supabase bei Synchronisierung).",
-    leaderboard: "🏅 Bestenliste · im Zeitraum",
+    leaderboard: "Bestenliste · im Zeitraum",
     leaderboardHint:
       "Nach Rolle und nach einzelner Instanz (z. B. scout-1), über den ausgewählten Bereich.",
     nInstances: (n) => `${n} Instanzen`,
     last: (ago) => `letzte ${ago}`,
-    volume: "📈 Arbeitsvolumen im Zeitverlauf",
+    volume: "Arbeitsvolumen im Zeitverlauf",
     volumeHint: (days) =>
       `Gesamtaktionen pro Tag, aufgeschlüsselt nach Rolle · ${days} Tage.`,
-    heatmap: "📅 Aktivitäts-Heatmap",
+    heatmap: "Aktivitäts-Heatmap",
     heatmapHint:
       "Eine Zeile pro Instanz. Die Intensität ist relativ zum täglichen Spitzenwert jeder Instanz.",
     noActivityShort: "keine Aktivität",
@@ -227,12 +229,12 @@ const T: Record<
     dayActions: (date, n) => `${date} · ${n} Aktionen`,
   },
   hu: {
-    whenWhoWhat: "🗓️ Mikor, ki és mit",
+    whenWhoWhat: "Mikor, ki és mit",
     zoomBack: "Kicsinyítés",
     zoomFwd: "Nagyítás",
     scatterHint:
       "Minden jel egy művelet a pontos időpontban · egy sáv szerepenként. Nagyíts a napok és percek elkülönítéséhez, majd görgess vízszintesen.",
-    workDistribution: "🍩 Munkamegoszlás",
+    workDistribution: "Munkamegoszlás",
     allRoles: "← minden szerep",
     actions: "MŰVELETEK",
     unattributed: "nincs hozzárendelve",
@@ -246,15 +248,15 @@ const T: Record<
     noActivity: "Nincs tevékenység a kiválasztott időszakban",
     noActivityHint:
       "Próbáld bővíteni a tartományt, vagy indítsd el a csapatot, hogy a diagramok feltöltődjenek — az adatok a helyi SQLite-ból (vagy szinkronizáláskor a Supabase-ből) érkeznek.",
-    leaderboard: "🏅 Ranglista · az időszakban",
+    leaderboard: "Ranglista · az időszakban",
     leaderboardHint:
       "Szerepenként és egyedi példányonként (pl. scout-1), a kiválasztott tartományon.",
     nInstances: (n) => `${n} példány`,
     last: (ago) => `utolsó ${ago}`,
-    volume: "📈 Munkamennyiség az idő során",
+    volume: "Munkamennyiség az idő során",
     volumeHint: (days) =>
       `Napi összes művelet, szerepenként bontva · ${days} nap.`,
-    heatmap: "📅 Tevékenység-hőtérkép",
+    heatmap: "Tevékenység-hőtérkép",
     heatmapHint:
       "Soronként egy példány. Az intenzitás az egyes példányok napi csúcsához viszonyított.",
     noActivityShort: "nincs tevékenység",
@@ -263,12 +265,12 @@ const T: Record<
     dayActions: (date, n) => `${date} · ${n} művelet`,
   },
   pt: {
-    whenWhoWhat: "🗓️ Quando, quem e o quê",
+    whenWhoWhat: "Quando, quem e o quê",
     zoomBack: "Reduzir zoom",
     zoomFwd: "Ampliar zoom",
     scatterHint:
       "Cada marca é uma ação na hora exata · uma faixa por função. Amplie para separar dias e minutos, depois role horizontalmente.",
-    workDistribution: "🍩 Distribuição do trabalho",
+    workDistribution: "Distribuição do trabalho",
     allRoles: "← todas as funções",
     actions: "AÇÕES",
     unattributed: "não atribuído",
@@ -282,15 +284,15 @@ const T: Record<
     noActivity: "Sem atividade no período selecionado",
     noActivityHint:
       "Tente alargar o intervalo, ou inicie a equipa para preencher os gráficos — os dados vêm do SQLite local (ou do Supabase quando sincronizado).",
-    leaderboard: "🏅 Classificação · no período",
+    leaderboard: "Classificação · no período",
     leaderboardHint:
       "Por função e por instância individual (ex. scout-1), sobre o intervalo selecionado.",
     nInstances: (n) => `${n} instâncias`,
     last: (ago) => `última ${ago}`,
-    volume: "📈 Volume de trabalho ao longo do tempo",
+    volume: "Volume de trabalho ao longo do tempo",
     volumeHint: (days) =>
       `Ações totais por dia, divididas por função · ${days} dias.`,
-    heatmap: "📅 Mapa de calor de atividade",
+    heatmap: "Mapa de calor de atividade",
     heatmapHint:
       "Uma linha por instância. A intensidade é relativa ao pico diário de cada instância.",
     noActivityShort: "sem atividade",
@@ -438,9 +440,7 @@ function TemporalScatter({
                 className="flex items-center gap-1.5"
                 style={{ height: laneH }}
               >
-                <span className="text-[12px] leading-none">
-                  {ROLE_META[r].emoji}
-                </span>
+                <ActorIcon role={r} size={12} />
                 <span
                   className="text-[10px] font-semibold"
                   style={{ color: ROLE_META[r].color }}
@@ -487,7 +487,7 @@ function TemporalScatter({
                       opacity={0.6}
                       className="cursor-default"
                       onMouseEnter={(e) =>
-                        onShow(e, `${meta.emoji} ${label} · ${dmhm(ev.ts)}`, [
+                        onShow(e, `${label} · ${dmhm(ev.ts)}`, [
                           {
                             color: meta.color,
                             label: meta.action,
@@ -551,7 +551,6 @@ function WorkDonut({
   type Slice = {
     key: string;
     label: string;
-    emoji: string;
     color: string;
     opacity: number;
     value: number;
@@ -578,14 +577,13 @@ function WorkDonut({
       return {
         key: a.actor,
         label: lbl,
-        emoji: meta.emoji,
         color: meta.color,
         opacity: Math.max(0.32, 1 - k * 0.16),
         value: a.total,
         pct: Math.round((a.total / sum) * 100),
         clickable: false,
         last: a.lastActiveAt,
-        tipTitle: `${meta.emoji} ${lbl}`,
+        tipTitle: lbl,
       };
     });
     centerMain = roleTotals[sel];
@@ -599,14 +597,13 @@ function WorkDonut({
     slices = rs.map(({ r, value }) => ({
       key: r,
       label: ROLE_META[r].label,
-      emoji: ROLE_META[r].emoji,
       color: ROLE_META[r].color,
       opacity: 0.9,
       value,
       pct: Math.round((value / sum) * 100),
       clickable: roleHasInstances(r),
       role: r,
-      tipTitle: `${ROLE_META[r].emoji} ${ROLE_META[r].label}`,
+      tipTitle: ROLE_META[r].label,
     }));
     centerMain = totalAll;
     centerSub = t.actions;
@@ -711,9 +708,7 @@ function WorkDonut({
                 className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
                 style={{ background: s.color, opacity: s.opacity }}
               />
-              {!sel && (
-                <span className="text-[11px] leading-none">{s.emoji}</span>
-              )}
+              {!sel && <ActorIcon role={s.role} size={11} />}
               <span
                 className="text-[11px] font-semibold shrink-0 truncate"
                 style={{
@@ -755,7 +750,7 @@ function WorkDonut({
                     visibility: s.clickable ? "visible" : "hidden",
                   }}
                 >
-                  ▶
+                  <IconChevronRight size={9} />
                 </span>
               )}
             </div>
@@ -897,7 +892,9 @@ export default function ActivityCharts({
   if (totalAll === 0) {
     return (
       <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-10 text-center">
-        <div className="text-3xl mb-3">😴</div>
+        <div className="mb-3 flex justify-center text-[var(--color-dim)]">
+          <IconAsleep size={28} />
+        </div>
         <div className="text-[13px] text-[var(--color-muted)] font-semibold mb-1">
           {t.noActivity}
         </div>
@@ -956,11 +953,9 @@ export default function ActivityCharts({
                         }}
                         aria-hidden="true"
                       >
-                        ▶
+                        <IconChevronRight size={9} />
                       </span>
-                      <span className="text-[15px] leading-none">
-                        {meta.emoji}
-                      </span>
+                      <ActorIcon role={g.role} size={15} />
                       <span
                         className="text-[13px] font-bold"
                         style={{ color: meta.color }}
@@ -1091,8 +1086,9 @@ export default function ActivityCharts({
                     className="inline-block w-2.5 h-2.5 rounded-sm"
                     style={{ background: ROLE_META[r].color }}
                   />
-                  <span className="text-[10px] text-[var(--color-muted)]">
-                    {ROLE_META[r].emoji} {ROLE_META[r].label}
+                  <span className="flex items-center gap-1 text-[10px] text-[var(--color-muted)]">
+                    <ActorIcon role={r} size={10} />
+                    {ROLE_META[r].label}
                   </span>
                 </span>
               ))}
@@ -1205,9 +1201,7 @@ export default function ActivityCharts({
                         : `${meta.label} · ${a.actor}`
                     }
                   >
-                    <span className="text-[12px] leading-none">
-                      {meta.emoji}
-                    </span>
+                    <ActorIcon role={a.role} size={12} />
                     <span
                       className="text-[10px] font-semibold truncate tabular-nums"
                       style={{
@@ -1231,17 +1225,13 @@ export default function ActivityCharts({
                             opacity: c > 0 ? intensity : 0.25,
                           }}
                           onMouseEnter={(e) =>
-                            showTip(
-                              e,
-                              `${meta.emoji} ${label} · ${dm(dates[di])}`,
-                              [
-                                {
-                                  color: meta.color,
-                                  label: c === 1 ? t.action : t.actionsLabel,
-                                  value: String(c),
-                                },
-                              ],
-                            )
+                            showTip(e, `${label} · ${dm(dates[di])}`, [
+                              {
+                                color: meta.color,
+                                label: c === 1 ? t.action : t.actionsLabel,
+                                value: String(c),
+                              },
+                            ])
                           }
                           onMouseMove={moveTip}
                           onMouseLeave={hideTip}

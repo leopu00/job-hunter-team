@@ -1,7 +1,8 @@
 export const EMERGENCY_STOP_CONFIRMATION = "STOP";
 
 export type EmergencyStopBodyResult =
-  { ok: true } | { ok: false; error: string };
+  | { ok: true }
+  | { ok: false; error: string };
 
 /**
  * Contratto volutamente minuscolo della corsia mobile d'emergenza.

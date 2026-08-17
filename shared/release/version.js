@@ -30,7 +30,7 @@
  * @returns {boolean}
  */
 export function updateCheckDisabled(env) {
-  return String(env?.JHT_UPDATE_CHECK ?? '').trim() === '0';
+  return String(env?.JHT_UPDATE_CHECK ?? "").trim() === "0";
 }
 
 /** Massima lunghezza di un tag credibile: oltre, è rumore da rete. */
@@ -44,8 +44,8 @@ const MAX_TAG_LENGTH = 32;
  * @returns {number[] | null}
  */
 export function parseVersion(raw) {
-  if (typeof raw !== 'string' || raw.length > MAX_TAG_LENGTH) return null;
-  const cleaned = raw.trim().replace(/^[vV]/, '');
+  if (typeof raw !== "string" || raw.length > MAX_TAG_LENGTH) return null;
+  const cleaned = raw.trim().replace(/^[vV]/, "");
   // Solo `X.Y.Z` con tre numeri: i suffissi di prerelease (`-rc.1`) sono
   // scartati di proposito, perché non è roba che proponiamo a un utente.
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(cleaned);
@@ -96,15 +96,15 @@ export function updateAvailable(latest, current) {
  * @returns {{ version: string, page: string } | null}
  */
 export function latestReleaseInfo(payload, repo) {
-  if (!payload || typeof payload !== 'object') return null;
+  if (!payload || typeof payload !== "object") return null;
   const data = /** @type {Record<string, unknown>} */ (payload);
   if (data.draft === true || data.prerelease === true) return null;
   const parsed = parseVersion(/** @type {string} */ (data.tag_name));
   if (!parsed) return null;
   const fallback = `https://github.com/${repo}/releases/latest`;
-  const page = typeof data.html_url === 'string' ? data.html_url : '';
+  const page = typeof data.html_url === "string" ? data.html_url : "";
   return {
-    version: parsed.join('.'),
+    version: parsed.join("."),
     page: page.startsWith(`https://github.com/${repo}/`) ? page : fallback,
   };
 }
