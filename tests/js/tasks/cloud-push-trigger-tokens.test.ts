@@ -41,6 +41,9 @@ const ROW_REFUSAL_FAMILY = /^stale_[a-z0-9_]+_downgrade$/;
 const FUNCTION_HEADER =
   /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?([a-z0-9_]+)\s*\(/gi;
 
+/** L'apertura del corpo: `$$`, ma anche `$body$` e ogni altro tag. */
+const DOLLAR_QUOTE = /\$[a-zA-Z_][a-zA-Z0-9_]*\$|\$\$/;
+
 interface LiveFunction {
   migration: string;
   body: string;
@@ -63,12 +66,20 @@ function liveFunctions(): Map<string, LiveFunction> {
     const sql = readFileSync(join(migrationsDir, file), "utf8");
     for (const header of sql.matchAll(FUNCTION_HEADER)) {
       const name = header[1];
-      // Il corpo è delimitato da `$$ … $$`: prendiamo dalla prima apertura
-      // dopo l'intestazione alla chiusura successiva.
-      const open = sql.indexOf("$$", header.index! + header[0].length);
-      if (open === -1) continue;
-      const close = sql.indexOf("$$", open + 2);
-      const body = sql.slice(open + 2, close === -1 ? sql.length : close);
+      // Il corpo è delimitato da un dollar-quote, e il delimitatore NON è
+      // sempre `$$`: dove il DDL è avvolto per atomicità (la 080 usa
+      // `DO $migration$ … EXECUTE $ddl$ … AS $body$`) assumere `$$` fa
+      // saltare la funzione INTERA, e con lei ogni RAISE che contiene. Il
+      // tag si legge dall'intestazione invece di darlo per scontato.
+      const opening = DOLLAR_QUOTE.exec(
+        sql.slice(header.index! + header[0].length),
+      );
+      if (!opening) continue;
+      const tag = opening[0];
+      const open =
+        header.index! + header[0].length + opening.index + tag.length;
+      const close = sql.indexOf(tag, open);
+      const body = sql.slice(open, close === -1 ? sql.length : close);
       // I file sono ordinati per numero, quindi l'ultimo che passa di qui è
       // quello che vince.
       live.set(name, { migration: file, body });
@@ -134,6 +145,15 @@ describe("O-97 — i token P0001 stanno allineati fra trigger vivi e route", () 
     expect(funzioni.get("sync_upsert_applications")?.migration).toBe(
       "076_application_sync_identity.sql",
     );
+    // Il DDL avvolto per atomicità: `DO $migration$ … EXECUTE $ddl$ … AS
+    // $body$`. Assumere `$$` come delimitatore faceva saltare questa
+    // funzione INTERA — i suoi cinque RAISE erano invisibili, e il giorno che
+    // un rifiuto della famiglia nascesse scritto così il verso che morde
+    // sarebbe restato muto e verde. Misurato piantandone uno: quattro verdi.
+    const avvolta = funzioni.get("sync_candidate_profile_atomic");
+    expect(avvolta?.migration).toBe("080_profile_snapshot_atomic.sql");
+    expect(avvolta?.body).toContain("profile_hash_invalid");
+
     expect(liveRefusalTokens().size).toBeGreaterThan(0);
   });
 
