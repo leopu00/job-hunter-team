@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -158,6 +159,62 @@ def test_only_a_changed_cover_letter_effect_closes_the_request(box):
         "/synthetic/new-cl.md",
         "/synthetic/old-cl.pdf",
     )
+
+
+def test_cover_letter_effect_keeps_updated_at_at_sync_precision(box):
+    """O-99 — la coda può ordinare al millisecondo, il delta sync no.
+
+    Ricreiamo un trigger del formato precedente e rilanciamo ensure_schema:
+    il test copre sia il valore senza `%f` sia l'upgrade dei jobs.db già
+    inizializzati, dove CREATE TRIGGER IF NOT EXISTS non sostituirebbe il
+    corpo persistito.
+    """
+    conn, home = box
+    conn.execute("DROP TRIGGER cover_letter_request_effect")
+    conn.execute("""
+        CREATE TRIGGER cover_letter_request_effect
+        AFTER UPDATE OF cl_path ON applications
+        BEGIN
+            UPDATE positions
+               SET write_requested = 0,
+                   write_requested_at = strftime('%Y-%m-%d %H:%M:%f',
+                                                 'now', 'localtime'),
+                   write_request_kind = NULL,
+                   updated_at = strftime('%Y-%m-%d %H:%M:%f',
+                                         'now', 'localtime')
+             WHERE id = NEW.position_id
+               AND write_requested = 1
+               AND write_request_kind = 'cover_letter';
+        END
+    """)
+    conn.commit()
+
+    import _db
+
+    _db.ensure_schema(conn)
+    _request(home)
+    env = {**os.environ, "JHT_HOME": str(home)}
+    update = subprocess.run(
+        [
+            sys.executable,
+            str(SKILLS / "db_update.py"),
+            "application",
+            "7",
+            "--cl-path",
+            "/synthetic/new-cl.md",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert update.returncode == 0, update.stderr or update.stdout
+
+    write_requested_at, updated_at = conn.execute(
+        "SELECT write_requested_at, updated_at FROM positions WHERE id = 7"
+    ).fetchone()
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}",
+                        write_requested_at)
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", updated_at)
 
 
 def test_cover_letter_requires_an_existing_application(box):

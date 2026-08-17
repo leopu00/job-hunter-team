@@ -26,8 +26,9 @@ export const dynamic = "force-dynamic";
 //     IS NULL) — è una sostituzione, non un merge per-row.
 //
 // Safety cap: 10000 righe per tabella. Oltre, ritorna 413 con istruzioni
-// per usare push delta inverso (out-of-scope MVP). Tipica session beta è
-// <1000 positions, quindi 10000 è ampiamente sufficiente.
+// per usare push delta inverso (out-of-scope MVP). Il servizio può anche
+// imporre un suo cap più basso: il conteggio esatto sotto impedisce di
+// dichiarare completo un risultato troncato prima di questa soglia.
 //
 // Auth: Bearer jht_sync_ token (stesso schema di push/pull). Rate limit
 // 5/min/token: il restore è operazione rara, ma cap basso protegge da
@@ -55,9 +56,9 @@ export async function GET(req: NextRequest) {
   const totals: Record<string, number> = {};
 
   for (const table of tables) {
-    const { data, error } = await admin
+    const { data, error, count } = await admin
       .from(table)
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("user_id", userId)
       .is("deleted_at", null)
       .limit(ROW_CAP_PER_TABLE + 1);
@@ -69,11 +70,24 @@ export async function GET(req: NextRequest) {
       });
     }
     const rows = data || [];
-    if (rows.length > ROW_CAP_PER_TABLE) {
+    // Il cap configurato da PostgREST viene applicato dopo la nostra query e
+    // può fermarla molto prima di ROW_CAP_PER_TABLE. Il totale è l'unica
+    // evidenza che tutte le righe richieste siano arrivate: senza, un restore
+    // ricostruirebbe un database parziale credendolo uno snapshot completo.
+    if (count === null) {
+      return NextResponse.json(
+        { ok: false, error: `${table}_dump_count_unavailable` },
+        { status: 503 },
+      );
+    }
+    if (count > ROW_CAP_PER_TABLE || rows.length !== count) {
       return NextResponse.json(
         {
           ok: false,
-          error: `${table} oltre cap di ${ROW_CAP_PER_TABLE} righe (full-dump non supporta paginazione in MVP)`,
+          error:
+            count > ROW_CAP_PER_TABLE
+              ? `${table} oltre cap di ${ROW_CAP_PER_TABLE} righe (full-dump non supporta paginazione in MVP)`
+              : `${table} dump troncato (${rows.length} di ${count} righe ricevute)`,
         },
         { status: 413 },
       );
