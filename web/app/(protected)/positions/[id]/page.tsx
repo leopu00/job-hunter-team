@@ -625,6 +625,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
             }
             initialAppliedAt={application?.applied_at ?? null}
             initialOutcome={declaredOutcome(application?.response)}
+            // O-105: il perché già dato, così il campo si riapre com'era
+            // invece di sembrare vuoto e farlo riscrivere.
+            initialRejectionReason={application?.rejection_reason ?? null}
+            initialRejectionNote={application?.rejection_note ?? null}
           />
         </div>
       )}

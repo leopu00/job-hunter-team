@@ -124,7 +124,30 @@ export function decideAppliedBackflow({ cloud, local }) {
  * @typedef {object} OutcomeSide
  * @property {string|null} [response]   l'esito: interview · rejected · ghosted
  * @property {string|null} [responseAt] quando è stato registrato
+ * @property {string|null} [rejectionReason] il motivo predefinito (O-105)
+ * @property {string|null} [rejectionNote]   il testo libero che lo accompagna
  */
+
+/** Due lati raccontano lo stesso esito solo se coincidono in tutto. */
+function stessoEsito(a, b) {
+  return (
+    (a.response ?? null) === (b.response ?? null) &&
+    (a.rejectionReason ?? null) === (b.rejectionReason ?? null) &&
+    (a.rejectionNote ?? null) === (b.rejectionNote ?? null)
+  );
+}
+
+/** Il cloud sa qualcosa che il box non ha: prenderlo non costa niente. */
+function aggiungeSenzaTogliere(cloud, local) {
+  const guadagna = (c, l) => (c ?? null) !== null && (l ?? null) === null;
+  const perde = (c, l) => (c ?? null) === null && (l ?? null) !== null;
+  if (perde(cloud.rejectionReason, local.rejectionReason)) return false;
+  if (perde(cloud.rejectionNote, local.rejectionNote)) return false;
+  return (
+    guadagna(cloud.rejectionReason, local.rejectionReason) ||
+    guadagna(cloud.rejectionNote, local.rejectionNote)
+  );
+}
 
 /**
  * Cosa deve fare il box dell'ESITO che gli arriva dal cloud (#187).
@@ -150,8 +173,22 @@ export function decideOutcomeBackflow({ cloud, local }) {
   if (!local.response) {
     return { action: "write", reason: "outcome_declared_on_web" };
   }
-  if (local.response === outcome) {
+  if (stessoEsito(cloud, local)) {
     return { action: "skip", reason: "already_recorded" };
+  }
+  // Il PERCHÉ arriva quasi sempre dopo il verdetto: dichiarare «rifiutata» è
+  // un clic, spiegarlo richiede di pensarci. Al giro dopo `response` è
+  // identico, e una domanda posta solo su quello risponderebbe «già
+  // registrato» — il motivo non scenderebbe MAI, senza nessun errore. È il
+  // difetto di #186×#187 un piano più su, e la domanda giusta è di nuovo la
+  // stessa: non «l'esito è cambiato?» ma «il cloud sa qualcosa in più?».
+  //
+  // Solo IN PIÙ: un pull che arriva senza motivo non cancella quello che il
+  // team ha scritto dalla CLI. A parità di dubbio non si scrive.
+  if (local.response === outcome) {
+    if (aggiungeSenzaTogliere(cloud, local)) {
+      return { action: "write", reason: "reason_arrived_later" };
+    }
   }
 
   // ⚠️ I due istanti arrivano in formati diversi — il cloud in ISO con la `T`,

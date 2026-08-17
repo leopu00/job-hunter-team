@@ -185,8 +185,11 @@ export async function GET(req: NextRequest) {
       // hanno risposto — la riga muta, ricreata un piano piu' sopra. Il
       // Mentor conta `applications.response`: un campo che non scende non lo
       // conta nessuno.
+      // `rejection_reason`/`rejection_note` (O-105) viaggiano con l'esito per
+      // la stessa ragione: il Mentor conta i motivi, e un motivo che resta sul
+      // cloud non lo conta nessuno.
       .select(
-        "applied, applied_at, applied_via, status, response, response_at, updated_at, positions!inner(legacy_id)",
+        "applied, applied_at, applied_via, status, response, response_at, rejection_reason, rejection_note, updated_at, positions!inner(legacy_id)",
       )
       .eq("user_id", userId)
       .gt("updated_at", appliedCursor)
@@ -205,6 +208,8 @@ export async function GET(req: NextRequest) {
           status: row.status ?? null,
           response: row.response ?? null,
           response_at: row.response_at ?? null,
+          rejection_reason: row.rejection_reason ?? null,
+          rejection_note: row.rejection_note ?? null,
           updated_at: row.updated_at ?? null,
         };
       });

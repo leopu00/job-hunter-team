@@ -1357,6 +1357,14 @@ async function performPush(options) {
       if (sqliteHasColumn(db, 'applications', 'critic_round')) {
         applicationCols.push('critic_round');
       }
+      // O-105: il perche' del rifiuto. Stessa guardia di sopra — un box che
+      // non e' ancora passato da ensure_schema continua a pushare il resto
+      // invece di far cadere il daemon.
+      for (const colonna of ['rejection_reason', 'rejection_note']) {
+        if (sqliteHasColumn(db, 'applications', colonna)) {
+          applicationCols.push(colonna);
+        }
+      }
       applications = readSqliteTableDelta(db, 'applications', applicationCols, readCursor.applications);
       // Companies + position_highlights (mig 046): erano OMESSE dal push →
       // Company card e blocchi Pro/Contro sempre vuoti sul cloud. `id` (int

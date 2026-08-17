@@ -14,7 +14,9 @@ import {
   FIRST_INTERVIEW_ROUND,
   isDeclarableOutcome,
   type DeclarableOutcome,
+  rejectionDetailFor,
 } from "@/lib/applications/outcome";
+import { hasSqliteColumn } from "@/lib/sqlite-compatible-read";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +96,11 @@ export async function POST(
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
   const { legacyId: legacyIdParam } = await params;
-  const body = (await req.json().catch(() => ({}))) as { outcome?: unknown };
+  const body = (await req.json().catch(() => ({}))) as {
+    outcome?: unknown;
+    rejection_reason?: unknown;
+    rejection_note?: unknown;
+  };
 
   // Il vocabolario si controlla PRIMA di qualunque ramo, demo compresa: un
   // esito inventato non deve poter tornare indietro come se fosse valido
@@ -104,6 +110,29 @@ export async function POST(
     return NextResponse.json({ error: "invalid_outcome" }, { status: 400 });
   }
   const outcome: DeclarableOutcome = body.outcome;
+
+  // Il perché (O-105) si valida QUI, con la stessa regola pura che gira nei
+  // test senza browser, e prima di ogni ramo — demo compresa — per la stessa
+  // ragione del vocabolario dell'esito: un motivo che il database rifiuterebbe
+  // non deve tornare indietro come valido da nessuna superficie.
+  const dettaglio = rejectionDetailFor(
+    body.rejection_reason,
+    body.rejection_note,
+  );
+  if (dettaglio.kind === "invalid") {
+    return NextResponse.json(
+      { error: `invalid_${dettaglio.field}` },
+      { status: 400 },
+    );
+  }
+  // Il perché appartiene al rifiuto. Su un colloquio non c'è una domanda a cui
+  // risponderebbe, e accettarlo darebbe righe che nessun lettore sa contare.
+  if (outcome !== "rejected" && (dettaglio.reason || dettaglio.note)) {
+    return NextResponse.json(
+      { error: "reason_only_on_rejection" },
+      { status: 400 },
+    );
+  }
 
   // [JHT-WEB-DEMO] Le posizioni demo non cambiano stato: dataset statico.
   if (isDemoLegacyId(legacyIdParam) && (await activeDemoPersona())) {
@@ -164,19 +193,50 @@ export async function POST(
           ? (application.interview_round ?? FIRST_INTERVIEW_ROUND)
           : application.interview_round;
 
+      // Un jobs.db creato prima di O-105 non ha le due colonne finché
+      // `ensure_schema` non gira. Nominarle comunque farebbe fallire il click:
+      // l'utente dichiarerebbe «rifiutata» e si vedrebbe un errore per una
+      // colonna che non gli serve. Si scrive l'esito senza il perché, e il
+      // perché torna dal cloud al primo pull utile — la corsia sa portare a
+      // casa un motivo che arriva DOPO l'esito, ed è il caso normale.
+      const conMotivo =
+        hasSqliteColumn(db, "applications", "rejection_reason") &&
+        hasSqliteColumn(db, "applications", "rejection_note");
+
       // Una transazione sola, come il POST di mark-applied: la posizione e la
       // candidatura non devono poter raccontare due storie diverse — è
       // esattamente così che sono nate le 8 righe mute in produzione.
       db.transaction(() => {
-        db.prepare(
-          `UPDATE applications
-              SET status = 'response',
-                  response = ?,
-                  response_at = ?,
-                  interview_round = ?,
-                  updated_at = CURRENT_TIMESTAMP
-            WHERE position_id = ?`,
-        ).run(outcome, responseAt, round ?? null, legacyId);
+        if (conMotivo) {
+          db.prepare(
+            `UPDATE applications
+                SET status = 'response',
+                    response = ?,
+                    response_at = ?,
+                    interview_round = ?,
+                    rejection_reason = ?,
+                    rejection_note = ?,
+                    updated_at = CURRENT_TIMESTAMP
+              WHERE position_id = ?`,
+          ).run(
+            outcome,
+            responseAt,
+            round ?? null,
+            dettaglio.reason,
+            dettaglio.note,
+            legacyId,
+          );
+        } else {
+          db.prepare(
+            `UPDATE applications
+                SET status = 'response',
+                    response = ?,
+                    response_at = ?,
+                    interview_round = ?,
+                    updated_at = CURRENT_TIMESTAMP
+              WHERE position_id = ?`,
+          ).run(outcome, responseAt, round ?? null, legacyId);
+        }
 
         db.prepare(
           `UPDATE positions SET status = 'response', last_actor = 'user'
@@ -210,6 +270,8 @@ export async function POST(
         p_position_legacy_id: legacyId,
         p_outcome: outcome,
         p_response_at: result.response_at,
+        p_rejection_reason: dettaglio.reason,
+        p_rejection_note: dettaglio.note,
       });
       if (error) throw new Error(error.message);
       void userId;
@@ -220,6 +282,8 @@ export async function POST(
         p_position_legacy_id: legacyId,
         p_outcome: outcome,
         p_response_at: nowIso(),
+        p_rejection_reason: dettaglio.reason,
+        p_rejection_note: dettaglio.note,
       });
       if (error) return rpcFailure(error.message, legacyId);
       const result = cloudOutcome(data);
@@ -305,13 +369,26 @@ export async function DELETE(
 
       db.transaction(() => {
         db.prepare(
-          `UPDATE applications
-              SET status = 'applied',
-                  response = NULL,
-                  response_at = NULL,
-                  interview_round = ?,
-                  updated_at = CURRENT_TIMESTAMP
-            WHERE position_id = ?`,
+          hasSqliteColumn(db, "applications", "rejection_reason")
+            ? // Annullare porta via anche il perché: un motivo rimasto senza il
+              // rifiuto a cui apparteneva è un dato che il Mentor conterebbe e
+              // nessuno saprebbe spiegare.
+              `UPDATE applications
+                  SET status = 'applied',
+                      response = NULL,
+                      response_at = NULL,
+                      interview_round = ?,
+                      rejection_reason = NULL,
+                      rejection_note = NULL,
+                      updated_at = CURRENT_TIMESTAMP
+                WHERE position_id = ?`
+            : `UPDATE applications
+                  SET status = 'applied',
+                      response = NULL,
+                      response_at = NULL,
+                      interview_round = ?,
+                      updated_at = CURRENT_TIMESTAMP
+                WHERE position_id = ?`,
         ).run(keptRound, legacyId);
 
         db.prepare(

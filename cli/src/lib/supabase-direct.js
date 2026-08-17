@@ -249,7 +249,7 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
     const params = new URLSearchParams();
     params.set(
       'select',
-      'applied,applied_at,applied_via,status,response,response_at,updated_at,positions!inner(legacy_id)'
+      'applied,applied_at,applied_via,status,response,response_at,rejection_reason,rejection_note,updated_at,positions!inner(legacy_id)'
     );
     if (since) params.set('updated_at', `gt.${since}`);
     params.set('order', 'updated_at.asc');
@@ -266,6 +266,9 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
       // hanno risposto sta qui — ed e' il campo che il Mentor conta.
       response: r?.response ?? null,
       response_at: r?.response_at ?? null,
+      // Il perche' del rifiuto (O-105): il motivo si conta, il testo si legge.
+      rejection_reason: r?.rejection_reason ?? null,
+      rejection_note: r?.rejection_note ?? null,
       updated_at: r?.updated_at ?? null,
     }));
   }

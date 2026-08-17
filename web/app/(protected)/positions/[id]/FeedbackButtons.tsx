@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { applicationAckAccepted } from "@/lib/positions/application-ack";
 import { useLocale } from "@/lib/use-locale";
+import { RejectionReasonPicker } from "./RejectionReasonPicker";
 import { intlTag } from "@/lib/locale-tag";
 import type { Locale } from "@/i18n/config";
 import {
@@ -20,6 +21,7 @@ import {
 } from "./exclusion-reasons";
 import {
   DECLARABLE_OUTCOMES,
+  outcomeClickIntent,
   type DeclarableOutcome,
 } from "@/lib/applications/outcome";
 
@@ -348,6 +350,8 @@ export function FeedbackButtons({
   initialApplied = false,
   initialAppliedAt = null,
   initialOutcome = null,
+  initialRejectionReason = null,
+  initialRejectionNote = null,
 }: {
   legacyId: number;
   initialVerdict: Verdict | null;
@@ -357,6 +361,9 @@ export function FeedbackButtons({
   initialAppliedAt?: string | null;
   /** L'esito già dichiarato, se c'è (`applications.response`). */
   initialOutcome?: DeclarableOutcome | null;
+  /** O-105: il perché del rifiuto, se l'utente l'ha già dato. */
+  initialRejectionReason?: string | null;
+  initialRejectionNote?: string | null;
 }) {
   const locale = useLocale();
   const t = T[locale];
@@ -372,6 +379,20 @@ export function FeedbackButtons({
   const [outcome, setOutcome] = useState<DeclarableOutcome | null>(
     initialOutcome,
   );
+  // O-105: il perché. Due stati separati perché sono due campi separati — il
+  // motivo si conta, il testo si legge — e uno non è mai il ripiego dell'altro.
+  const [rejectionReason, setRejectionReason] = useState(
+    initialRejectionReason ?? "",
+  );
+  const [rejectionNote, setRejectionNote] = useState(
+    initialRejectionNote ?? "",
+  );
+  // Cosa risulta già scritto sul server: senza questo il bottone «Salva»
+  // comparirebbe sempre, e comparire sempre è lo stesso che non dire niente.
+  const [salvato, setSalvato] = useState({
+    reason: initialRejectionReason ?? "",
+    note: initialRejectionNote ?? "",
+  });
   const [outcomeError, setOutcomeError] = useState<string | null>(null);
   const [outcomePending, setOutcomePending] =
     useState<DeclarableOutcome | null>(null);
@@ -604,11 +625,25 @@ export function FeedbackButtons({
   // Cliccare l'esito già attivo lo ANNULLA, come il bottone della candidatura:
   // l'utente che sbaglia bersaglio non deve restare inchiodato a una risposta
   // che non è arrivata.
-  async function declareOutcome(value: DeclarableOutcome) {
+  //
+  // `soloIlMotivo` distingue le due cose che il bottone «Salva» e il pulsante
+  // dell'esito chiedono alla stessa funzione. Senza, salvare il perché di un
+  // rifiuto già dichiarato passerebbe per `outcome === value` e ANNULLEREBBE
+  // il rifiuto: un utente che spiega perché l'hanno scartato si vedrebbe
+  // cancellare il fatto che l'hanno scartato.
+  async function declareOutcome(
+    value: DeclarableOutcome,
+    { soloIlMotivo = false }: { soloIlMotivo?: boolean } = {},
+  ) {
     if (outcomePending) return;
     setOutcomeError(null);
     setOutcomePending(value);
-    const undoing = outcome === value;
+    const intento = outcomeClickIntent({
+      current: outcome,
+      clicked: value,
+      reasonOnly: soloIlMotivo,
+    });
+    const undoing = intento === "undo";
     try {
       const res = await fetch(`/api/positions/${legacyId}/outcome`, {
         method: undoing ? "DELETE" : "POST",
@@ -616,7 +651,17 @@ export function FeedbackButtons({
           ? {}
           : {
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ outcome: value }),
+              body: JSON.stringify({
+                outcome: value,
+                // Il perché viaggia solo col rifiuto: su un colloquio il
+                // server lo rifiuterebbe, ed è giusto che lo faccia.
+                ...(value === "rejected"
+                  ? {
+                      rejection_reason: rejectionReason || null,
+                      rejection_note: rejectionNote.trim() || null,
+                    }
+                  : {}),
+              }),
             }),
       });
       if (!res.ok) {
@@ -645,6 +690,14 @@ export function FeedbackButtons({
         throw new Error("cloud_sync_unconfirmed");
       }
       setOutcome(undoing ? null : value);
+      // Annullare, o correggere un rifiuto in colloquio, porta via anche il
+      // perché — sul database lo fa la funzione, qui lo si fa vedere subito
+      // invece di lasciare a schermo un motivo che non esiste più.
+      if (undoing || value !== "rejected") {
+        setRejectionReason("");
+        setRejectionNote("");
+      }
+      setSalvato({ reason: rejectionReason, note: rejectionNote });
       router.refresh();
     } catch {
       setOutcomeError(undoing ? t.outcomeUndoError : t.outcomeError);
@@ -846,6 +899,27 @@ export function FeedbackButtons({
               );
             })}
           </div>
+          {/* Il perché (O-105) compare solo col rifiuto: su un colloquio non
+              c'è una domanda a cui risponderebbe. Motivo e testo sono due
+              campi ACCANTO, mai uno al posto dell'altro — la lista di oggi non
+              copre «hanno preso un altro», e quel caso deve poter essere
+              scritto senza inventarsi una categoria. */}
+          {outcome === "rejected" && (
+            <RejectionReasonPicker
+              reason={rejectionReason}
+              note={rejectionNote}
+              onReasonChange={setRejectionReason}
+              onNoteChange={setRejectionNote}
+              onSave={() =>
+                void declareOutcome("rejected", { soloIlMotivo: true })
+              }
+              disabled={outcomePending !== null}
+              dirty={
+                rejectionReason !== salvato.reason ||
+                rejectionNote.trim() !== salvato.note.trim()
+              }
+            />
+          )}
           {/* Che si possa tornare indietro va DETTO, come per la candidatura:
               un bottone già premuto, senza questa riga, si legge come
               definitivo. */}

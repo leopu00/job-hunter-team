@@ -110,7 +110,12 @@ beforeEach(() => {
       status TEXT, last_actor TEXT);
     CREATE TABLE applications (position_id INTEGER PRIMARY KEY, status TEXT,
       applied INTEGER, applied_at TEXT, applied_via TEXT, response TEXT,
-      response_at TEXT, interview_round INTEGER, updated_at TEXT);
+      response_at TEXT, interview_round INTEGER,
+      -- O-105: lo schema d'ombra segue quello vero. La corsia sa funzionare
+      -- anche senza queste due (un jobs.db precedente non le ha), e quel caso
+      -- ha il suo test in rejection-reason-round-trip: qui si misura lo
+      -- schema attuale, non la compatibilita'.
+      rejection_reason TEXT, rejection_note TEXT, updated_at TEXT);
     CREATE TABLE position_state_transitions (id INTEGER PRIMARY KEY AUTOINCREMENT,
       position_id INTEGER, from_state TEXT, to_state TEXT, by_agent TEXT, notes TEXT);
   `);

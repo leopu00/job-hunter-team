@@ -6,7 +6,7 @@ export type SqliteReadConnection = {
   };
 };
 
-function hasColumn(
+export function hasSqliteColumn(
   db: SqliteReadConnection,
   table: string,
   column: string,
@@ -15,6 +15,8 @@ function hasColumn(
     db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
   ).some((row) => row.name === column);
 }
+
+const hasColumn = hasSqliteColumn;
 
 /**
  * Reads a table while omitting explicitly additive columns that an older

@@ -25,13 +25,30 @@ import {
   derivedPreviousState,
 } from "../../../shared/cloud/applied-action.js";
 
-/** Lo stato locale che serve a decidere, in una lettura sola. */
-const LOCAL_SQL = `
+/**
+ * Lo stato locale che serve a decidere, in una lettura sola.
+ *
+ * Le colonne del perche' (O-105) sono OPZIONALI nella query, e non per
+ * eleganza: un `jobs.db` creato da un'immagine precedente non le ha finche'
+ * `ensure_schema` non gira, e nominarle comunque farebbe fallire la SELECT.
+ * Fallendo quella, cadrebbe l'INTERA corsia — candidature comprese — dentro un
+ * `catch` che stampa un warning e prosegue. Un box vecchio smetterebbe di
+ * ricevere le candidature dal sito per via di una colonna che non gli serve.
+ * Stessa guardia che il push usa per `critic_round`.
+ */
+function localSql(conColonneDelMotivo) {
+  const motivo = conColonneDelMotivo
+    ? `a.rejection_reason AS rejection_reason,
+         a.rejection_note   AS rejection_note,`
+    : `NULL AS rejection_reason,
+         NULL AS rejection_note,`;
+  return `
   SELECT p.status        AS status,
          a.applied       AS applied,
          a.applied_via   AS applied_via,
          a.response      AS response,
          a.response_at   AS response_at,
+         ${motivo}
          a.cv_path       AS cv_path,
          a.cv_pdf_path   AS cv_pdf_path,
          (SELECT COUNT(*) FROM scores s WHERE s.position_id = p.id) AS n_scores
@@ -39,6 +56,18 @@ const LOCAL_SQL = `
     LEFT JOIN applications a ON a.position_id = p.id
    WHERE p.id = ?
 `;
+}
+
+/** `PRAGMA table_info` funziona uguale su node:sqlite e better-sqlite3. */
+function haColonneDelMotivo(db) {
+  try {
+    const righe = db.prepare("PRAGMA table_info(applications)").all();
+    const nomi = new Set(righe.map((r) => r.name));
+    return nomi.has("rejection_reason") && nomi.has("rejection_note");
+  } catch {
+    return false;
+  }
+}
 
 // La riga `applications` la scriviamo con lo stesso statement della route che
 // serve il click locale (`mark-applied`): stessa ON CONFLICT, stessi campi.
@@ -61,7 +90,26 @@ const UPSERT_APPLICATION_SQL = `
 // successo dopo — ne' `interview_round`, che il round lo scrive chi lo
 // conosce (il team dalla CLI) e portarlo qui allargherebbe il perimetro di
 // una riparazione che deve arrivare prima di quella di O-97.
+// `rejection_reason`/`rejection_note` (O-105) si scrivono qui e non altrove:
+// sono parte dello stesso fatto — «hanno risposto, e questo e' il perche'» —
+// e separarli darebbe una finestra in cui il box conosce il rifiuto e non il
+// suo motivo. Si azzerano quando l'esito non e' un rifiuto: chi corregge un
+// rifiuto in colloquio non deve lasciarsi dietro il motivo di prima.
 const WRITE_OUTCOME_SQL = `
+  UPDATE applications
+     SET status           = 'response',
+         response         = ?,
+         response_at      = ?,
+         rejection_reason = ?,
+         rejection_note   = ?,
+         updated_at       = CURRENT_TIMESTAMP
+   WHERE position_id = ?
+`;
+
+// La variante per un box che le colonne non le ha ancora: l'esito scende, il
+// perche' aspetta il prossimo `ensure_schema`. Meglio un dato in ritardo che
+// una corsia ferma.
+const WRITE_OUTCOME_SENZA_MOTIVO_SQL = `
   UPDATE applications
      SET status      = 'response',
          response    = ?,
@@ -69,6 +117,12 @@ const WRITE_OUTCOME_SQL = `
          updated_at  = CURRENT_TIMESTAMP
    WHERE position_id = ?
 `;
+
+/** Il perche' appartiene al rifiuto: su ogni altro esito e' NULL. */
+function motivoDelRifiuto(row) {
+  if (row.response !== 'rejected') return [null, null];
+  return [row.rejection_reason ?? null, row.rejection_note ?? null];
+}
 
 const CLEAR_APPLICATION_SQL = `
   UPDATE applications
@@ -109,10 +163,13 @@ export function applyAppliedBackflow(db, rows) {
   const outcome = { applied: 0, undone: 0, outcomes: 0, skipped: 0 };
   if (!Array.isArray(rows) || rows.length === 0) return outcome;
 
-  const readLocal = db.prepare(LOCAL_SQL);
+  const conMotivo = haColonneDelMotivo(db);
+  const readLocal = db.prepare(localSql(conMotivo));
   const upsertApplication = db.prepare(UPSERT_APPLICATION_SQL);
   const clearApplication = db.prepare(CLEAR_APPLICATION_SQL);
-  const writeOutcome = db.prepare(WRITE_OUTCOME_SQL);
+  const writeOutcome = db.prepare(
+    conMotivo ? WRITE_OUTCOME_SQL : WRITE_OUTCOME_SENZA_MOTIVO_SQL,
+  );
   const readPrevious = db.prepare(PREVIOUS_STATE_SQL);
   const writeTransition = db.prepare(TRANSITION_SQL);
   const setStatus = db.prepare(
@@ -145,9 +202,19 @@ export function applyAppliedBackflow(db, rows) {
     // «niente da fare» — anzi, e' proprio il caso normale, perche' la
     // candidatura il box ce l'ha gia' e cambia solo cio' che e' successo dopo.
     const outcomeVerdict = decideOutcomeBackflow({
-      cloud: { response: row.response ?? null, responseAt: row.response_at ?? null },
+      cloud: {
+        response: row.response ?? null,
+        responseAt: row.response_at ?? null,
+        rejectionReason: row.rejection_reason ?? null,
+        rejectionNote: row.rejection_note ?? null,
+      },
       local: local
-        ? { response: local.response ?? null, responseAt: local.response_at ?? null }
+        ? {
+            response: local.response ?? null,
+            responseAt: local.response_at ?? null,
+            rejectionReason: local.rejection_reason ?? null,
+            rejectionNote: local.rejection_note ?? null,
+          }
         : null,
     });
 
@@ -155,7 +222,12 @@ export function applyAppliedBackflow(db, rows) {
       const previousState = local.status ?? null;
       db.exec("BEGIN");
       try {
-        writeOutcome.run(row.response, row.response_at ?? null, legacyId);
+        const [motivo, nota] = motivoDelRifiuto(row);
+        if (conMotivo) {
+          writeOutcome.run(row.response, row.response_at ?? null, motivo, nota, legacyId);
+        } else {
+          writeOutcome.run(row.response, row.response_at ?? null, legacyId);
+        }
         if (previousState !== "response") {
           writeTransition.run(
             legacyId,
@@ -206,7 +278,12 @@ export function applyAppliedBackflow(db, rows) {
         // vorrebbe dire mettere in coda al team una candidatura che aspetta
         // una risposta gia' arrivata.
         if (outcomeVerdict.action === "write") {
+          const [motivo, nota] = motivoDelRifiuto(row);
+        if (conMotivo) {
+          writeOutcome.run(row.response, row.response_at ?? null, motivo, nota, legacyId);
+        } else {
           writeOutcome.run(row.response, row.response_at ?? null, legacyId);
+        }
           writeTransition.run(
             legacyId,
             "applied",
