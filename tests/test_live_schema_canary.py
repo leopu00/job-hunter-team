@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/check-live-schema.py"
 MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
 QUERY = ROOT / "supabase/live-schema/078-084.v3.sql"
-WEB_MANIFEST = ROOT / "supabase/live-schema/078-086.web.v6.json"
-WEB_QUERY = ROOT / "supabase/live-schema/078-086.web.v6.sql"
+WEB_MANIFEST = ROOT / "supabase/live-schema/078-086.web.v7.json"
+WEB_QUERY = ROOT / "supabase/live-schema/078-086.web.v7.sql"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
 POSTGRES_READY_MARKER = "database system is ready to accept connections"
@@ -452,9 +452,9 @@ def test_additive_web_contract_exactly_receipts_every_mapped_rpc_and_column():
     )
 
     assert contract.phase == "web"
-    assert contract.contract_id == "release-0.3.9-web-schema-078-086"
+    assert contract.contract_id == "release-0.3.9-web-schema-078-086-outcome"
     assert len(contract.expected_checks) == 42
-    assert manifest["query"]["path"] == "supabase/live-schema/078-086.web.v6.sql"
+    assert manifest["query"]["path"] == "supabase/live-schema/078-086.web.v7.sql"
     assert "\\n" not in WEB_QUERY.read_text()
 
     mapped_receipts = {
@@ -476,7 +476,7 @@ def test_cli_validates_only_the_pinned_additive_web_contract(capsys):
     assert output.err == ""
     assert output.out == (
         "LIVE-SCHEMA MANIFEST OK "
-        "contract=release-0.3.9-web-schema-078-086 checks=42\n"
+        "contract=release-0.3.9-web-schema-078-086-outcome checks=42\n"
     )
 
 

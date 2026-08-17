@@ -1656,10 +1656,10 @@ async function performPush(options) {
       adb.exec('PRAGMA busy_timeout = 5000');
       const res = applyAppliedBackflow(adb, [snapshot]);
       adb.close();
-      if (res.applied === 0 && res.undone === 0) return false;
+      if (res.applied === 0 && res.undone === 0 && res.outcomes === 0) return false;
       console.log(pc.green(
         `✓ Cloud application state learned for position ${snapshot.legacy_id}: `
-        + `${res.applied} applied, ${res.undone} undone`
+        + `${res.applied} applied, ${res.undone} undone, ${res.outcomes} outcomes`
       ));
       return true;
     } catch (err) {
@@ -2381,9 +2381,10 @@ async function handlePullDesiredState(options = {}) {
       adb.close();
       // Loggato anche in silent, come le reply: e' il segnale «l'utente si e'
       // candidato dal sito», e il team ci ragiona sopra.
-      if (res.applied > 0 || res.undone > 0) {
+      if (res.applied > 0 || res.undone > 0 || res.outcomes > 0) {
         console.log(pc.green(
-          `✓ Applications from the web applied locally: ${res.applied} applied, ${res.undone} undone`
+          `✓ Applications from the web applied locally: ${res.applied} applied, `
+          + `${res.undone} undone, ${res.outcomes} outcomes`
         ));
       }
     } catch (err) {

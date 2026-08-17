@@ -49,7 +49,8 @@ function fixture() {
       cv_path TEXT, cv_pdf_path TEXT, cl_path TEXT, cl_pdf_path TEXT,
       status TEXT, critic_score REAL, critic_verdict TEXT, critic_notes TEXT,
       critic_round INTEGER, written_at TEXT, applied_at TEXT, applied_via TEXT,
-      response TEXT, response_at TEXT, written_by TEXT, reviewed_by TEXT,
+      response TEXT, response_at TEXT, interview_round INTEGER,
+      written_by TEXT, reviewed_by TEXT,
       critic_reviewed_at TEXT, applied INTEGER, cv_drive_id TEXT,
       cl_drive_id TEXT, created_at TEXT, updated_at TEXT
     );
