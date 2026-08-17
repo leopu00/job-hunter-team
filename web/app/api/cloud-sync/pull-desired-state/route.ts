@@ -179,8 +179,14 @@ export async function GET(req: NextRequest) {
   if (appliedCursor) {
     const { data: appData, error: appError } = await admin
       .from("applications")
+      // `response` e `response_at` viaggiano con la candidatura (#187):
+      // l'esito e' l'azione dell'utente che viene DOPO
+      // l'invio, e senza queste due il box sa che hanno risposto e non cosa
+      // hanno risposto — la riga muta, ricreata un piano piu' sopra. Il
+      // Mentor conta `applications.response`: un campo che non scende non lo
+      // conta nessuno.
       .select(
-        "applied, applied_at, applied_via, status, updated_at, positions!inner(legacy_id)",
+        "applied, applied_at, applied_via, status, response, response_at, updated_at, positions!inner(legacy_id)",
       )
       .eq("user_id", userId)
       .gt("updated_at", appliedCursor)
@@ -197,6 +203,8 @@ export async function GET(req: NextRequest) {
           applied_at: row.applied_at ?? null,
           applied_via: row.applied_via ?? null,
           status: row.status ?? null,
+          response: row.response ?? null,
+          response_at: row.response_at ?? null,
           updated_at: row.updated_at ?? null,
         };
       });

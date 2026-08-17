@@ -24,6 +24,16 @@
 export const APPLIED_VIA_USER = "user_manual";
 
 /**
+ * Gli stati in cui una candidatura è già partita.
+ *
+ * `response` è la progressione di `applied`, non il suo contrario: la
+ * candidatura è stata mandata davvero, e l'azienda ha risposto. Una corsia che
+ * chiede «lo stato è applied?» invece di «il box è almeno a questo punto?»
+ * tratta il secondo come un ritardo da recuperare e riporta indietro il primo.
+ */
+export const POST_SUBMISSION_STATES = ["applied", "response"];
+
+/**
  * Lo stato plausibile a cui tornare quando la transizione non c'e'.
  *
  * Si usa SOLO come ripiego: lo stato vero e' quello registrato nella
@@ -84,7 +94,17 @@ export function decideAppliedBackflow({ cloud, local }) {
     if (localAppliedByTeam) {
       return { action: "skip", reason: "applied_by_team" };
     }
-    if (localAppliedByUser && local.status === "applied") {
+    // `response` sta qui accanto a `applied` e NON è un caso in più: è lo
+    // stato in cui la stessa candidatura si trova DOPO, quando l'azienda ha
+    // risposto (#187). Senza, il verdetto cadeva su `apply` e la corsia
+    // riportava indietro a `applied` un esito che il box aveva già registrato
+    // — cancellando lo stato su entrambi i lati, perché poi il push lo
+    // rimanda al cloud e il trigger dell'invariante lascia passare `applied`.
+    //
+    // Chi domani aggiunge un altro stato post-invio deve aggiungerlo QUI: la
+    // domanda che questa riga pone non è «è applied?» ma «il box è già almeno
+    // avanti quanto il cloud?».
+    if (localAppliedByUser && POST_SUBMISSION_STATES.includes(local.status)) {
       return { action: "skip", reason: "already_applied" };
     }
     return { action: "apply", reason: "user_applied_on_web" };
@@ -98,4 +118,54 @@ export function decideAppliedBackflow({ cloud, local }) {
     return { action: "undo", reason: "user_undid_on_web" };
   }
   return { action: "skip", reason: "nothing_to_undo" };
+}
+
+/**
+ * @typedef {object} OutcomeSide
+ * @property {string|null} [response]   l'esito: interview · rejected · ghosted
+ * @property {string|null} [responseAt] quando è stato registrato
+ */
+
+/**
+ * Cosa deve fare il box dell'ESITO che gli arriva dal cloud (#187).
+ *
+ * Vive accanto alla decisione sulla candidatura perché è la stessa corsia e la
+ * stessa regola — dal cloud si prende l'azione dell'utente — ma è un giudizio
+ * separato: la candidatura risponde a «è partita?», l'esito a «com'è andata?»,
+ * e confonderli è come sono nate le righe che sanno la data di una risposta
+ * che non sanno nominare.
+ *
+ * Il caso che decide la forma: il box può avere un esito PIÙ RECENTE del
+ * cloud, scritto dal team via CLI. Riportare indietro quello vecchio sarebbe
+ * lo stesso difetto al contrario, quindi a parità di dubbio non si scrive.
+ *
+ * @param {{cloud: OutcomeSide, local: (OutcomeSide|null)}} sides
+ * @returns {{action: 'write'|'skip', reason: string}}
+ */
+export function decideOutcomeBackflow({ cloud, local }) {
+  if (!local) return { action: "skip", reason: "position_not_local" };
+
+  const outcome = cloud?.response ?? null;
+  if (!outcome) return { action: "skip", reason: "no_outcome_on_cloud" };
+  if (!local.response) {
+    return { action: "write", reason: "outcome_declared_on_web" };
+  }
+  if (local.response === outcome) {
+    return { action: "skip", reason: "already_recorded" };
+  }
+
+  // ⚠️ I due istanti arrivano in formati diversi — il cloud in ISO con la `T`,
+  // il box in `YYYY-MM-DD HH:MM:SS` di `datetime('now','localtime')` — e un
+  // confronto fra stringhe direbbe SEMPRE che il cloud è più recente, perché
+  // 'T' > ' '. Si confrontano come istanti, e se uno dei due non è leggibile
+  // non si tocca niente: un esito sbagliato è peggio di un esito in ritardo.
+  const cloudAt = Date.parse(cloud.responseAt ?? "");
+  const localAt = Date.parse(local.responseAt ?? "");
+  if (Number.isNaN(cloudAt) || Number.isNaN(localAt)) {
+    return { action: "skip", reason: "outcome_age_unknown" };
+  }
+  if (cloudAt > localAt) {
+    return { action: "write", reason: "newer_outcome_on_web" };
+  }
+  return { action: "skip", reason: "local_outcome_not_older" };
 }

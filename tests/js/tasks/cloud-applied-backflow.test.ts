@@ -38,6 +38,10 @@ const SCHEMA = `
     id INTEGER PRIMARY KEY, position_id INTEGER UNIQUE,
     status TEXT DEFAULT 'draft', applied INTEGER DEFAULT 0,
     applied_at TEXT, applied_via TEXT, cv_path TEXT, cv_pdf_path TEXT,
+    -- L'esito (#187): il DDL vero le ha da sempre, e da quando la corsia le
+    -- legge l'ombra deve averle anche qui — un'ombra piu' stretta del
+    -- lettore fa fallire il test per il motivo sbagliato.
+    response TEXT, response_at TEXT, interview_round INTEGER,
     critic_notes TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
   CREATE TABLE scores (position_id INTEGER UNIQUE, total_score INTEGER);

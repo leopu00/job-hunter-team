@@ -21,6 +21,7 @@
 import {
   APPLIED_VIA_USER,
   decideAppliedBackflow,
+  decideOutcomeBackflow,
   derivedPreviousState,
 } from "../../../shared/cloud/applied-action.js";
 
@@ -29,6 +30,8 @@ const LOCAL_SQL = `
   SELECT p.status        AS status,
          a.applied       AS applied,
          a.applied_via   AS applied_via,
+         a.response      AS response,
+         a.response_at   AS response_at,
          a.cv_path       AS cv_path,
          a.cv_pdf_path   AS cv_pdf_path,
          (SELECT COUNT(*) FROM scores s WHERE s.position_id = p.id) AS n_scores
@@ -51,6 +54,20 @@ const UPSERT_APPLICATION_SQL = `
     applied_at  = excluded.applied_at,
     applied_via = excluded.applied_via,
     updated_at  = CURRENT_TIMESTAMP
+`;
+
+// L'esito (#187): due colonne e lo stato che ne consegue. Non tocca
+// `applied`/`applied_at` — l'esito non e' un secondo invio, e' cosa e'
+// successo dopo — ne' `interview_round`, che il round lo scrive chi lo
+// conosce (il team dalla CLI) e portarlo qui allargherebbe il perimetro di
+// una riparazione che deve arrivare prima di quella di O-97.
+const WRITE_OUTCOME_SQL = `
+  UPDATE applications
+     SET status      = 'response',
+         response    = ?,
+         response_at = ?,
+         updated_at  = CURRENT_TIMESTAMP
+   WHERE position_id = ?
 `;
 
 const CLEAR_APPLICATION_SQL = `
@@ -89,12 +106,13 @@ function toLegacyId(row) {
  * @returns {{applied: number, undone: number, skipped: number}}
  */
 export function applyAppliedBackflow(db, rows) {
-  const outcome = { applied: 0, undone: 0, skipped: 0 };
+  const outcome = { applied: 0, undone: 0, outcomes: 0, skipped: 0 };
   if (!Array.isArray(rows) || rows.length === 0) return outcome;
 
   const readLocal = db.prepare(LOCAL_SQL);
   const upsertApplication = db.prepare(UPSERT_APPLICATION_SQL);
   const clearApplication = db.prepare(CLEAR_APPLICATION_SQL);
+  const writeOutcome = db.prepare(WRITE_OUTCOME_SQL);
   const readPrevious = db.prepare(PREVIOUS_STATE_SQL);
   const writeTransition = db.prepare(TRANSITION_SQL);
   const setStatus = db.prepare(
@@ -122,6 +140,40 @@ export function applyAppliedBackflow(db, rows) {
         : null,
     });
 
+    // L'esito e' un giudizio SUO: «e' partita?» e «com'e' andata?» sono due
+    // domande, e la seconda ha una risposta anche quando la prima dice
+    // «niente da fare» — anzi, e' proprio il caso normale, perche' la
+    // candidatura il box ce l'ha gia' e cambia solo cio' che e' successo dopo.
+    const outcomeVerdict = decideOutcomeBackflow({
+      cloud: { response: row.response ?? null, responseAt: row.response_at ?? null },
+      local: local
+        ? { response: local.response ?? null, responseAt: local.response_at ?? null }
+        : null,
+    });
+
+    if (verdict.action === "skip" && outcomeVerdict.action === "write") {
+      const previousState = local.status ?? null;
+      db.exec("BEGIN");
+      try {
+        writeOutcome.run(row.response, row.response_at ?? null, legacyId);
+        if (previousState !== "response") {
+          writeTransition.run(
+            legacyId,
+            previousState,
+            "response",
+            "esito registrato dall'utente sul web",
+          );
+          setStatus.run("response", legacyId);
+        }
+        db.exec("COMMIT");
+      } catch (err) {
+        db.exec("ROLLBACK");
+        throw err;
+      }
+      outcome.outcomes++;
+      continue;
+    }
+
     if (verdict.action === "skip") {
       outcome.skipped++;
       continue;
@@ -148,6 +200,22 @@ export function applyAppliedBackflow(db, rows) {
         }
         setStatus.run("applied", legacyId);
         outcome.applied++;
+        // Candidatura ED esito nello stesso giro: succede quando il box
+        // scopre la riga in ritardo (spento, o mai sincronizzato) e nel
+        // frattempo l'azienda ha gia' risposto. Fermarsi a `applied` qui
+        // vorrebbe dire mettere in coda al team una candidatura che aspetta
+        // una risposta gia' arrivata.
+        if (outcomeVerdict.action === "write") {
+          writeOutcome.run(row.response, row.response_at ?? null, legacyId);
+          writeTransition.run(
+            legacyId,
+            "applied",
+            "response",
+            "esito registrato dall'utente sul web",
+          );
+          setStatus.run("response", legacyId);
+          outcome.outcomes++;
+        }
       } else {
         const previous = readPrevious.get(legacyId);
         const restored =

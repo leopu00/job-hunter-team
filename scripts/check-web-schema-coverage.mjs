@@ -20,7 +20,7 @@ const DEFAULT_COVERAGE = path.join(
 );
 const DEFAULT_CANARY = path.join(
   ROOT,
-  "supabase/live-schema/078-086.web.v6.json",
+  "supabase/live-schema/078-086.web.v7.json",
 );
 const DEFAULT_SOURCE_ROOT = path.join(ROOT, "web");
 
