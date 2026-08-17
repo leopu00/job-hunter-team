@@ -85,14 +85,20 @@ export async function readHostType({
   readHostFile = readFile,
   log = pid1Log,
 } = {}) {
+  const resolved = (hostType, source) => {
+    // Il ramo VPS abilita daemon e watcher cloud, quindi la decisione deve
+    // restare nel log di boot anche quando non c'è alcun errore da mostrare.
+    log(`host type resolved: ${hostType} (${source})`);
+    return hostType;
+  };
   const fromEnv = (env.JHT_HOST_TYPE || '').trim().toLowerCase();
-  if (fromEnv) return fromEnv;
+  if (fromEnv) return resolved(fromEnv, 'JHT_HOST_TYPE');
 
   try {
     await accessFile(hostEnvPath);
     const content = await readHostFile(hostEnvPath, 'utf-8');
     const m = /^JHT_HOST_TYPE=(.*)$/m.exec(content);
-    if (m) return m[1].trim().toLowerCase();
+    if (m) return resolved(m[1].trim().toLowerCase(), 'host.env');
   } catch (err) {
     // Il file assente è normale (utente che salta host-setup). Qualunque
     // altro errore non può mascherarsi da host locale: spegnere in silenzio
@@ -102,7 +108,7 @@ export async function readHostType({
       throw err;
     }
   }
-  return 'local';
+  return resolved('local', 'host.env missing');
 }
 
 /**
