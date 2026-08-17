@@ -1969,8 +1969,16 @@ def _migrate_cover_letter_request_effect(conn: sqlite3.Connection) -> None:
     UPDATE no-op non possono dichiarare completato il lavoro. Un INSERT non
     basta perché la cover letter è richiedibile solo su application esistente.
     Viene ricreato a ogni migrazione perché il suo corpo è schema persistito:
-    CREATE TRIGGER IF NOT EXISTS lascerebbe ai database già inizializzati la
-    versione precedente.
+    il solo CREATE TRIGGER IF NOT EXISTS lascerebbe ai database già
+    inizializzati la versione precedente.
+
+    ⚠️ Il DROP va accoppiato a un CREATE **IF NOT EXISTS**, non a un CREATE
+    nudo. `_run_migrations` gira a ogni `ensure_schema`, quindi due bootstrap
+    concorrenti sullo stesso file si intrecciano: A droppa, B droppa, A crea,
+    e il CREATE nudo di B fallisce con «trigger already exists» — un avvio in
+    meno per una migrazione che si dichiara idempotente. Con IF NOT EXISTS
+    tutti gli ordini convergono allo stesso corpo nuovo, perché il DROP viene
+    comunque prima e tutti i processi creano lo stesso testo.
     """
     if not (_table_exists(conn, 'positions') and
             _table_exists(conn, 'applications') and
@@ -1978,7 +1986,7 @@ def _migrate_cover_letter_request_effect(conn: sqlite3.Connection) -> None:
         return
     conn.execute("DROP TRIGGER IF EXISTS cover_letter_request_effect")
     conn.execute("""
-        CREATE TRIGGER cover_letter_request_effect
+        CREATE TRIGGER IF NOT EXISTS cover_letter_request_effect
         AFTER UPDATE OF cl_path, cl_pdf_path ON applications
         WHEN EXISTS (
             SELECT 1 FROM positions p
