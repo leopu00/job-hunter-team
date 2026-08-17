@@ -98,6 +98,35 @@ def main() -> None:
             f"autoload can perform normal work before handshake: {relative}",
         )
 
+    # La lista sopra e' scritta a mano e copre gli autoload; `title.gd` non lo
+    # e' — e' la scena principale — quindi non ci sarebbe mai entrato. E' cosi'
+    # che e' rimasto l'unico dei nove consumatori senza il ritorno fail-closed:
+    # il gate dell'health boot da solo non basta, perche' nel censimento del
+    # PCK l'health non e' nemmeno richiesto e quindi non blocca.
+    #
+    # Questo secondo controllo non elenca: CERCA chiunque dichiari lavoro
+    # normale. Un consumatore nuovo entra nella copertura per arrivo, non al
+    # prossimo audit — e le due regole si sommano, perche' la prima copre
+    # anche autoload che lavorano senza dichiararlo (log.gd).
+    consumers = sorted(
+        path
+        for path in (GAME / "scripts").rglob("*.gd")
+        if "mark_windows_health_normal_work(" in path.read_text(encoding="utf-8")
+    )
+    require(
+        len(consumers) >= 9,
+        f"normal-work consumers not found where expected: {len(consumers)}",
+    )
+    for path in consumers:
+        target = path.read_text(encoding="utf-8")
+        if "func mark_windows_health_normal_work" in target:
+            continue  # game.gd dichiara la funzione: il suo gate e' gia' sopra
+        require(
+            "WindowsInstanceGuard.normal_work_allowed()" in target,
+            "normal work is declared without the guard's refusal: "
+            f"{path.relative_to(GAME)}",
+        )
+
     required_consumer = [
         "FileAccess.get_file_as_bytes(SOURCE_PATH)",
         "HashingContext.HASH_SHA256",

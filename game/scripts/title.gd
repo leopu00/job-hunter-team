@@ -17,6 +17,15 @@ var _language_picker: Control
 var _language_test_choice := ""
 
 func _ready() -> void:
+	# La guardia PRIMA dell'attesa, come negli altri otto consumatori: e'
+	# sincrona e decide se questa istanza puo' esistere, mentre l'health boot
+	# decide solo se l'aggiornamento le permette di lavorare adesso. Con il
+	# solo gate dell'health il titolo proseguiva quando la guardia aveva gia'
+	# detto di no — in `guard-source` l'health non e' nemmeno richiesto, quindi
+	# non blocca nulla, e questa schermata era l'unica delle nove a lavorare
+	# dopo un rifiuto.
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	if not await Game.windows_health_boot_allowed():
 		return
 	_start_normal_title_boot()
