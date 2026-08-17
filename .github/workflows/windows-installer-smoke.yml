@@ -5,28 +5,42 @@ on:
     branches:
       - master
     paths:
+      - ".gitattributes"
       - ".github/workflows/windows-installer-smoke.yml"
       - ".github/workflows/publish-signed-release.yml"
       - "game/export_presets.cfg"
       - "game/installer/**"
       - "game/project.godot"
+      - "game/scripts/client_control.gd"
+      - "game/scripts/support/windows_instance_guard.*"
+      - "game/tools/windows_instance_guard_selftest.py"
+      - "game/tools/windows_instance_guard_windows_selftest.ps1"
       - "scripts/build-windows-installer.ps1"
       - "scripts/jht-windows-install-preflight.ps1"
+      - "scripts/jht-wrapper.ps1"
       - "scripts/release-keys/**"
+      - "tests/test_cli_game_host_contract.py"
       - "tests/test_windows_installer_contract.py"
       - "tests/test_windows_update_helper.py"
   pull_request:
     branches:
       - master
     paths:
+      - ".gitattributes"
       - ".github/workflows/windows-installer-smoke.yml"
       - ".github/workflows/publish-signed-release.yml"
       - "game/export_presets.cfg"
       - "game/installer/**"
       - "game/project.godot"
+      - "game/scripts/client_control.gd"
+      - "game/scripts/support/windows_instance_guard.*"
+      - "game/tools/windows_instance_guard_selftest.py"
+      - "game/tools/windows_instance_guard_windows_selftest.ps1"
       - "scripts/build-windows-installer.ps1"
       - "scripts/jht-windows-install-preflight.ps1"
+      - "scripts/jht-wrapper.ps1"
       - "scripts/release-keys/**"
+      - "tests/test_cli_game_host_contract.py"
       - "tests/test_windows_installer_contract.py"
       - "tests/test_windows_update_helper.py"
   workflow_dispatch:
@@ -47,9 +61,70 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Validate Windows PowerShell syntax
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($file in @(
+            'game/scripts/support/windows_instance_guard.ps1',
+            'game/tools/windows_instance_guard_windows_selftest.ps1',
+            'scripts/build-windows-installer.ps1',
+            'scripts/jht-wrapper.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path -LiteralPath $file), [ref]$tokens, [ref]$errors)
+            if ($errors.Count -ne 0) {
+              throw "PowerShell syntax validation failed: $file count=$($errors.Count) id=$($errors[0].ErrorId) line=$($errors[0].Extent.StartLineNumber)"
+            }
+          }
+
+      - name: Exercise instance guard directly in Windows PowerShell
+        shell: pwsh
+        run: ./game/tools/windows_instance_guard_windows_selftest.ps1
+
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
+
+      - uses: chickensoft-games/setup-godot@v2.4.1
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: true
+
+      - name: Export portable Windows application
+        # `setup-godot` exposes `godot` as a Bash shim on Windows. Invoking it
+        # from PowerShell does not reliably populate `$LASTEXITCODE` (the first
+        # live run returned an empty value after a successful executable
+        # lookup), so use the same shell and project-relative export contract
+        # already proven by game.yml/release.yml.
+        shell: bash
+        working-directory: game
+        run: |
+          set -euo pipefail
+          mkdir -p builds/windows
+          godot --headless --path . --import
+          # [WIN-USERDIR-ORPHANED-BY-RENAME] L'export collauda un nome
+          # visibile diverso da quello storico. Il binario deve continuare a
+          # scrivere user:// nella cartella esistente, verificata dopo il
+          # launch da build-windows-installer.ps1.
+          python - <<'PY'
+          from pathlib import Path
+
+          project = Path("project.godot")
+          source = project.read_text(encoding="utf-8")
+          old = 'config/name="Job Hunter Team"'
+          new = 'config/name="Job Hunter Team Rename Probe"'
+          if source.count(old) != 1:
+              raise SystemExit("project name seam changed: rename probe not applied")
+          project.write_text(source.replace(old, new), encoding="utf-8")
+          PY
+          godot --headless --path . \
+            --export-release 'Windows Desktop' \
+            builds/windows/job-hunter-team.exe
+          test -s builds/windows/job-hunter-team.exe
 
       # Senza la firma offline production non si costruisce neppure un installer
       # di prova. Il vero smoke install/launch/uninstall gira nel workflow

@@ -10,7 +10,14 @@ Multiple Scouts run in parallel (max 2 instances by team policy). The team works
 - which **circles** each owns (1 = primary preference, 2 = geo neighbours, 3 = relocation, 4 = satellite, 5 = frontier)
 - which **source tiers** each owns (LinkedIn / ATS aggregators / niche / WebSearch)
 
-The state lives in a small JSON managed by `scout_coord.py`; the scouts negotiate via tmux at boot and persist the agreement there.
+The state lives in the **shared SQLite database** managed by `scout_coord.py`; the scouts negotiate via tmux at boot and persist the agreement there.
+
+**One database, or no coordination at all.** All Scouts must be on the same database — the team's own `jobs.db`, the same `JHT_DB` every other skill uses (the launcher already exports it to your pane). There is no separate coordination file to resolve anymore; an old `scout_coordination.db`, if one exists, is imported once at bootstrap and left in place, read-only from then on. If it exits **3**, the database is unusable: report the message it printed and STOP. Never create a database of your own, never point the tool at another path.
+
+```bash
+# Which database am I actually on?
+python3 /app/shared/skills/scout_coord.py doctor
+```
 
 ## Step 1 — Discover peers
 
@@ -102,8 +109,8 @@ jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [INFO] scout-coord: tier 'niche-r
 ## Anti-patterns
 
 - ❌ Skipping Step 1 ("there's only me") without checking — a peer might have just been respawned by the Dottore.
-- ❌ Reset performed by every scout in parallel — race condition, the JSON ends up corrupted. Lowest-numbered scout only.
-- ❌ Negotiating then forgetting Step 4 — the JSON is empty, peers can't see your claim, two scouts hit the same source.
+- ❌ Reset performed by every scout in parallel — race condition, the database ends up corrupted. Lowest-numbered scout only.
+- ❌ Negotiating then forgetting Step 4 — the database is empty, peers can't see your claim, two scouts hit the same source.
 - ❌ Claiming both `linkedin` AND `greenhouse` AND `lever` AND `remoteok` AND `weworkremotely` AND `webresearch` "to be safe" — nothing to share with the peer, they have nothing to do.
 - ❌ Re-negotiating mid-loop without a trigger — the partition is boot-time. If a peer dies the Dottore respawns them with the same role; only the SCOUT itself reads its `cerchi`/`fonti` again at boot.
 

@@ -60,7 +60,7 @@ export const T: Record<Locale, BetaCopy> = {
     whoH: "Who we're looking for",
     whoLead: "You're a good fit if:",
     who1: "You're actively looking for a job (or about to start) — the team needs a real pipeline to work on.",
-    who2: "You can afford at least one supported subscription. Kimi (~€40/mo) is the easiest entry point.",
+    who2: "You can afford at least one supported subscription. Kimi's entry plan is the simplest starting point.",
     who3: "You're willing to report back honestly — what worked, what didn't, what was confusing.",
     whoNoTech:
       "No technical background required. One copy-pasted command in the terminal installs everything, and the team's Assistant walks you through anything you don't understand. A one-click desktop app is on its way. If you can follow on-screen steps, you can run it.",
@@ -106,7 +106,7 @@ export const T: Record<Locale, BetaCopy> = {
     whoH: "Chi cerchiamo",
     whoLead: "Fai al caso nostro se:",
     who1: "Stai cercando lavoro attivamente (o stai per iniziare) — al team serve una pipeline reale su cui lavorare.",
-    who2: "Puoi permetterti almeno un abbonamento supportato. Kimi (~€40/mese) è il punto d'ingresso più semplice.",
+    who2: "Puoi permetterti almeno un abbonamento supportato. Il piano base di Kimi è il punto d'ingresso più semplice.",
     who3: "Sei disposto a darci un riscontro onesto — cosa ha funzionato, cosa no, cosa era poco chiaro.",
     whoNoTech:
       "Non serve alcuna competenza tecnica. Un comando copia-incollato nel terminale installa tutto, e l'Assistente del team ti guida in tutto ciò che non capisci. È in arrivo anche l'app desktop con installazione a un clic. Se sai seguire i passaggi a schermo, sai usarlo.",
@@ -152,7 +152,7 @@ export const T: Record<Locale, BetaCopy> = {
     whoH: "A quién buscamos",
     whoLead: "Encajas bien si:",
     who1: "Estás buscando trabajo activamente (o estás a punto de empezar) — el equipo necesita una pipeline real sobre la que trabajar.",
-    who2: "Puedes permitirte al menos una suscripción compatible. Kimi (~€40/mes) es el punto de entrada más sencillo.",
+    who2: "Puedes permitirte al menos una suscripción compatible. El plan base de Kimi es el punto de entrada más sencillo.",
     who3: "Estás dispuesto a darnos una opinión honesta — qué funcionó, qué no, qué resultaba confuso.",
     whoNoTech:
       "No hace falta ningún conocimiento técnico. Job Hunter Team funciona desde una app de escritorio: la instalación es un clic, y el Asistente del equipo te guía en todo lo que no entiendas. Si sabes instalar una app normal y seguir los pasos en pantalla, sabes usarlo.",
@@ -198,7 +198,7 @@ export const T: Record<Locale, BetaCopy> = {
     whoH: "Qui nous recherchons",
     whoLead: "Vous êtes la bonne personne si :",
     who1: "Vous cherchez activement un emploi (ou vous êtes sur le point de commencer) — l’équipe a besoin d’un vrai pipeline sur lequel travailler.",
-    who2: "Vous pouvez vous permettre au moins l’un des abonnements pris en charge. Kimi (~40 €/mois) est le point d’entrée le plus simple.",
+    who2: "Vous pouvez vous permettre au moins l’un des abonnements pris en charge. La formule de base de Kimi est le point d’entrée le plus simple.",
     who3: "Vous acceptez de nous faire un retour honnête — ce qui a fonctionné, ce qui n’a pas fonctionné, ce qui n’était pas clair.",
     whoNoTech:
       "Aucune compétence technique n’est requise. Job Hunter Team tourne depuis une application de bureau : l’installation se fait en un clic, et l’Assistant de l’équipe vous guide pour tout ce que vous ne comprenez pas. Si vous savez installer une application normale et suivre les étapes à l’écran, vous savez l’utiliser.",
@@ -245,7 +245,7 @@ export const T: Record<Locale, BetaCopy> = {
     whoH: "Wen wir suchen",
     whoLead: "Du passt zu uns, wenn:",
     who1: "Du bist aktiv auf Jobsuche (oder stehst kurz davor) — das Team braucht eine echte Pipeline, an der es arbeiten kann.",
-    who2: "Du kannst dir mindestens eines der unterstützten Abos leisten. Kimi (~€40/Monat) ist der einfachste Einstieg.",
+    who2: "Du kannst dir mindestens eines der unterstützten Abos leisten. Der Basistarif von Kimi ist der einfachste Einstieg.",
     who3: "Du bist bereit, uns ehrlich Rückmeldung zu geben — was funktioniert hat, was nicht, was unklar war.",
     whoNoTech:
       "Technische Vorkenntnisse sind nicht nötig. Job Hunter Team läuft über eine Desktop-App: Die Installation ist ein Klick, und der Assistent des Teams führt dich durch alles, was du nicht verstehst. Wenn du eine normale App installieren und den Schritten auf dem Bildschirm folgen kannst, kannst du es bedienen.",
@@ -291,7 +291,7 @@ export const T: Record<Locale, BetaCopy> = {
     whoH: "Quem procuramos",
     whoLead: "És a pessoa certa se:",
     who1: "Estás ativamente à procura de emprego (ou prestes a começar) — a equipa precisa de um pipeline real para trabalhar.",
-    who2: "Podes pagar pelo menos uma subscrição suportada. O Kimi (~€40/mês) é o ponto de entrada mais simples.",
+    who2: "Podes pagar pelo menos uma subscrição suportada. O plano base do Kimi é o ponto de entrada mais simples.",
     who3: "Estás disposto a dar-nos um feedback honesto — o que funcionou, o que não, o que era pouco claro.",
     whoNoTech:
       "Não é precisa nenhuma competência técnica. O Job Hunter Team corre a partir de uma app de ambiente de trabalho: a instalação é um clique, e o Assistente da equipa guia-te em tudo o que não perceberes. Se sabes instalar uma app normal e seguir os passos no ecrã, sabes usá-lo.",
@@ -337,7 +337,7 @@ export const T: Record<Locale, BetaCopy> = {
     whoH: "Kit keresünk",
     whoLead: "Téged keresünk, ha:",
     who1: "Aktívan keresel állást (vagy hamarosan elkezded) — a csapatnak valódi pipeline-ra van szüksége, amin dolgozhat.",
-    who2: "Meg tudsz engedni magadnak legalább egy támogatott előfizetést. A Kimi (~40 €/hó) a legegyszerűbb belépési pont.",
+    who2: "Meg tudsz engedni magadnak legalább egy támogatott előfizetést. A Kimi alapcsomagja a legegyszerűbb belépési pont.",
     who3: "Hajlandó vagy őszinte visszajelzést adni — mi működött, mi nem, mi volt zavaros.",
     whoNoTech:
       "Semmiféle technikai tudás nem kell. A Job Hunter Team egy asztali alkalmazásból fut: a telepítés egyetlen kattintás, és a csapat Asszisztense végigvezet mindenen, amit nem értesz. Ha fel tudsz telepíteni egy átlagos alkalmazást, és követni tudod a képernyőn megjelenő lépéseket, akkor ezt is tudod használni.",

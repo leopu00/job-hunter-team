@@ -38,7 +38,11 @@ Trasformi **una posizione richiesta dall'utente** (`write_requested = 1` AND `st
 | Lookup posizioni / coda / state | `db-query` |
 | Insert applications / promote/exclude position | `db-insert` / `db-update` |
 
-Le 3 skill operative (`application-flow`, `cv-structure`, `critic-loop`) si chiamano **in sequenza** per ogni posizione: gate (anti-rewriting + claim + link) → scrittura CV → 3 round Critico → gate finale.
+Per `request_kind=cv`, le 3 skill operative (`application-flow`, `cv-structure`, `critic-loop`) si chiamano **in sequenza**: gate (anti-rewriting + claim + link) → scrittura CV → 3 round Critico → gate finale.
+
+### Ramo cover letter — prima dello STEP 2
+
+Quando lo STEP 1 restituisce **`request_kind=cover_letter`**, entra subito in questo ramo. L'application esiste già e può legittimamente avere un `critic_verdict` finale: leggila con `db_query.py position <position_id> --json`; **non eseguire** il gate anti-riscrittura `db_query.py application`, il claim `status=writing`, `db_insert.py application`, `cv-structure` o `critic-loop`. Preserva stato corrente di position/application e `cv_path`/`cv_pdf_path`, genera soltanto la cover letter richiesta, poi persisti solo `cl_path`/`cl_pdf_path` con `db_update.py application <position_id>`. Rileggi position e application: per completare servono path cover-letter cambiati, flag richiesta azzerato e path CV/stato/`critic_verdict` invariati. Poi torna allo STEP 1. Ogni verifica fallita è fail-closed e va segnalata; non deve mai cadere nello STEP 2.
 
 ---
 
@@ -142,14 +146,14 @@ Scrivi **SOLO** in:
 - **No git**. Mai `git add`, `git commit`, `git push`. T02.
 - **Path deliverables `$JHT_USER_DIR/cv/`** (mai `$JHT_AGENT_DIR/`). T11. Skill `application-flow` Step 6.
 - **Workspace `tools/` + `tmp/`** con housekeeping al boot. T12. Skill `application-flow` (workspace section).
-- **Provider-aware** quando spawni il Critico — leggi `$JHT_CONFIG.active_provider`, mai hardcodare `claude` (skill `critic-loop` Step 2).
+- **Spawn del Critico solo via launcher** — chiama `start-agent.sh critico "$MY_NUMBER"`; non leggere mai `active_provider` e non scegliere tu CLI, modello, percorso o flag (RULE-T19; skill `critic-loop`).
 - **Throttle `timeout: N+30`** quando chiami `jht-throttle <N>` da una shell tool call, altrimenti il parent muore a 60s (skill `throttle/DESIGN-NOTES.md`).
 
 ---
 
 ## 📋 Eredità
 
-Erediti le regole team-wide T01..T18 da `agents/_team/team-rules.md`: no kill tmux altrui, jht-tmux-send obbligatorio, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`. Le regole sopra (S-01..S-04 + freeze handling) sono role-specific.
+Erediti le regole team-wide T01..T19 da `agents/_team/team-rules.md`: no kill tmux altrui, jht-tmux-send obbligatorio, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`. Le regole sopra (S-01..S-04 + freeze handling) sono role-specific.
 
 Architettura del team + diagramma pipeline: `agents/_team/architettura.md`. Anti-collisione multi-Scrittore: `agents/_manual/anti-collision.md`. Schema DB: `agents/_manual/db-schema.md`.
 

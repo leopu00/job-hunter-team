@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { applicationAckAccepted } from "@/lib/positions/application-ack";
 import { useLocale } from "@/lib/use-locale";
+import { intlTag } from "@/lib/locale-tag";
 import type { Locale } from "@/i18n/config";
 import {
   IconX,
@@ -11,18 +12,21 @@ import {
   IconThumbsUp,
   IconStar,
 } from "@/app/(protected)/swipe/icons";
+import { ReasonPicker } from "./ReasonPicker";
+import {
+  PICKER_T,
+  isFactualReason,
+  negativeSignalFor,
+} from "./exclusion-reasons";
 
 // Giudizio a 4 livelli dalla pagina posizione — stessa semantica della
 // pagina /swipe (event-log position_feedback, l'ultimo evento prevale):
-//   no         → "Escludi": popup con causa OBBLIGATORIA (regola 22/07:
-//                mai un'esclusione senza motivo) → dislike/1 + esclusione
+//   no         → dislike/1/less_like_this (solo apprendimento futuro)
 //   review_low → like/2 (keep con entusiasmo basso, NIENTE esclusione)
 //   review_ok  → like/4/more_like_this
 //   top        → star/5/more_like_this
-// Il ri-giudizio riconcilia l'esclusione (no→altro: DELETE; altro→no: POST).
-// Il popup è renderizzato in un PORTAL su document.body: la pagina ha
-// un'animazione con transform che diventa containing block per i fixed —
-// senza portal il popup si ancorava alla card, non al viewport (bug 22/07).
+// L'esclusione esplicita resta nell'azione ExcludeButton separata: i giudizi
+// non mutano status/user_excluded_note della posizione che li riceve (O-76).
 import {
   VERDICT_ORDER,
   VERDICT_SIGNAL,
@@ -30,22 +34,6 @@ import {
   type VerdictSignal,
 } from "@/lib/position-verdict";
 export type { Verdict };
-
-type ReasonKey =
-  | "closed"
-  | "not_interested"
-  | "mismatch"
-  | "company"
-  | "conditions";
-
-// 5 cause pronte, un tap e via; il motivo libero passa come 'other' + nota.
-const REASON_ORDER: ReasonKey[] = [
-  "not_interested",
-  "mismatch",
-  "conditions",
-  "company",
-  "closed",
-];
 
 // Segnale (che cosa si spedisce) da lib/position-verdict; qui sopra solo
 // icona e colore, che sono presentazione.
@@ -77,197 +65,259 @@ const T: Record<
   Locale,
   {
     verdicts: Record<Verdict, string>;
-    networkError: string;
-    reasons: Record<ReasonKey, string>;
-    popupTitle: string;
-    customPlaceholder: string;
+    whyNo: string;
+    pickPlaceholder: string;
+    hintTaste: string;
+    hintFactual: string;
+    confirmTaste: string;
+    confirmFactual: string;
     cancel: string;
-    confirm: string;
-    removeExclusion: string;
+    networkError: string;
+    markApplied: string;
+    markAppliedDone: string;
+    markAppliedError: string;
+    markAppliedUndoHint: string;
+    markAppliedUndoError: string;
+    markAppliedByTeam: string;
   }
 > = {
   it: {
     verdicts: {
-      no: "Escludi",
+      no: "Non interessante",
       review_low: "Poco interessante",
       review_ok: "Interessante",
       top: "Molto interessante",
     },
-    networkError: "Errore di rete",
-    reasons: {
-      closed: "Chiusa / non più attiva",
-      not_interested: "Non mi interessa",
-      mismatch: "Non in linea col mio profilo",
-      company: "Azienda non desiderata",
-      conditions: "Condizioni inadatte (stipendio/sede)",
-    },
-    popupTitle: "Perché escludi questa offerta?",
-    customPlaceholder: "Oppure scrivi il motivo…",
+    whyNo: "Perché non ti interessa?",
+    pickPlaceholder: "Scegli un motivo…",
+    hintTaste: "Il team lo userà per cercarti offerte più adatte.",
+    hintFactual:
+      "La posizione esce dal giro e basta: una scaduta non dice cosa ti piace, quindi il team non impara niente da qui.",
+    confirmTaste: "Salva",
+    confirmFactual: "Escludi",
     cancel: "Annulla",
-    confirm: "Escludi",
-    removeExclusion: "Annulla esclusione",
+    networkError: "Errore di rete",
+    markApplied: "Mi sono candidato",
+    markAppliedDone: "Candidatura segnata",
+    markAppliedError:
+      "Candidatura non registrata. Riprova tra poco e segnalalo se continua.",
+    markAppliedUndoHint: "tocca per annullare",
+    markAppliedUndoError: "Non è riuscito ad annullare la candidatura",
+    markAppliedByTeam:
+      "Questa candidatura l’ha inviata il team: da qui non si annulla",
   },
   en: {
     verdicts: {
-      no: "Exclude",
+      no: "Not interesting",
       review_low: "Slightly interesting",
       review_ok: "Interesting",
       top: "Very interesting",
     },
-    networkError: "Network error",
-    reasons: {
-      closed: "Closed / no longer active",
-      not_interested: "Not interested",
-      mismatch: "Not a match for my profile",
-      company: "Unwanted company",
-      conditions: "Unsuitable conditions (salary/location)",
-    },
-    popupTitle: "Why are you excluding this offer?",
-    customPlaceholder: "Or write the reason…",
+    whyNo: "Why is it not interesting?",
+    pickPlaceholder: "Pick a reason…",
+    hintTaste: "The team will use it to look for offers that fit you better.",
+    hintFactual:
+      "The position simply leaves the pipeline: an expired one says nothing about your taste, so the team learns nothing from this.",
+    confirmTaste: "Save",
+    confirmFactual: "Exclude",
     cancel: "Cancel",
-    confirm: "Exclude",
-    removeExclusion: "Remove exclusion",
+    networkError: "Network error",
+    markApplied: "I applied myself",
+    markAppliedDone: "Application recorded",
+    markAppliedError:
+      "Application not recorded. Try again shortly and report it if it continues.",
+    markAppliedUndoHint: "tap to undo",
+    markAppliedUndoError: "Could not undo the application",
+    markAppliedByTeam:
+      "The team sent this application: it cannot be undone from here",
   },
   hu: {
     verdicts: {
-      no: "Kizárás",
+      no: "Nem érdekes",
       review_low: "Kevéssé érdekes",
       review_ok: "Érdekes",
       top: "Nagyon érdekes",
     },
-    networkError: "Hálózati hiba",
-    reasons: {
-      closed: "Lezárva / már nem aktív",
-      not_interested: "Nem érdekel",
-      mismatch: "Nem illik a profilomhoz",
-      company: "Nem kívánt cég",
-      conditions: "Nem megfelelő feltételek (fizetés/helyszín)",
-    },
-    popupTitle: "Miért zárod ki ezt az ajánlatot?",
-    customPlaceholder: "Vagy írd le az okot…",
+    whyNo: "Miért nem érdekes?",
+    pickPlaceholder: "Válassz okot…",
+    hintTaste:
+      "A csapat ezt használja majd, hogy hozzád jobban illő ajánlatokat keressen.",
+    hintFactual:
+      "Az állás egyszerűen kikerül a körből: egy lejárt hirdetés nem árul el semmit az ízlésedről, így a csapat nem tanul belőle.",
+    confirmTaste: "Mentés",
+    confirmFactual: "Kizárás",
     cancel: "Mégse",
-    confirm: "Kizárás",
-    removeExclusion: "Kizárás visszavonása",
+    networkError: "Hálózati hiba",
+    markApplied: "Jelentkeztem",
+    markAppliedDone: "Jelentkezés rögzítve",
+    markAppliedError:
+      "A jelentkezés nincs rögzítve. Próbáld újra rövidesen, és jelezd, ha továbbra is fennáll.",
+    markAppliedUndoHint: "koppints a visszavonáshoz",
+    markAppliedUndoError: "A jelentkezést nem sikerült visszavonni",
+    markAppliedByTeam:
+      "Ezt a jelentkezést a csapat küldte: innen nem vonható vissza",
   },
   es: {
     verdicts: {
-      no: "Excluir",
+      no: "No interesante",
       review_low: "Poco interesante",
       review_ok: "Interesante",
       top: "Muy interesante",
     },
-    networkError: "Error de red",
-    reasons: {
-      closed: "Cerrada / ya no activa",
-      not_interested: "No me interesa",
-      mismatch: "No encaja con mi perfil",
-      company: "Empresa no deseada",
-      conditions: "Condiciones inadecuadas (salario/ubicación)",
-    },
-    popupTitle: "¿Por qué excluyes esta oferta?",
-    customPlaceholder: "O escribe el motivo…",
+    whyNo: "¿Por qué no te interesa?",
+    pickPlaceholder: "Elige un motivo…",
+    hintTaste: "El equipo lo usará para buscarte ofertas que encajen mejor.",
+    hintFactual:
+      "La posición sale del circuito y ya está: una caducada no dice qué te gusta, así que el equipo no aprende nada de aquí.",
+    confirmTaste: "Guardar",
+    confirmFactual: "Excluir",
     cancel: "Cancelar",
-    confirm: "Excluir",
-    removeExclusion: "Anular exclusión",
+    networkError: "Error de red",
+    markApplied: "Me he postulado",
+    markAppliedDone: "Candidatura registrada",
+    markAppliedError:
+      "La candidatura no se ha registrado. Inténtalo de nuevo en breve y avisa si continúa.",
+    markAppliedUndoHint: "toca para deshacer",
+    markAppliedUndoError: "No se pudo deshacer la candidatura",
+    markAppliedByTeam:
+      "Esta candidatura la envió el equipo: no se puede deshacer desde aquí",
   },
   de: {
     verdicts: {
-      no: "Ausschließen",
+      no: "Uninteressant",
       review_low: "Wenig interessant",
       review_ok: "Interessant",
       top: "Sehr interessant",
     },
-    networkError: "Netzwerkfehler",
-    reasons: {
-      closed: "Geschlossen / nicht mehr aktiv",
-      not_interested: "Kein Interesse",
-      mismatch: "Passt nicht zu meinem Profil",
-      company: "Unerwünschtes Unternehmen",
-      conditions: "Ungeeignete Bedingungen (Gehalt/Standort)",
-    },
-    popupTitle: "Warum schließt du dieses Angebot aus?",
-    customPlaceholder: "Oder schreib den Grund…",
+    whyNo: "Warum ist sie nicht interessant?",
+    pickPlaceholder: "Grund auswählen…",
+    hintTaste: "Das Team nutzt ihn, um passendere Stellen für dich zu suchen.",
+    hintFactual:
+      "Die Stelle fällt einfach aus dem Umlauf: Eine abgelaufene sagt nichts über deinen Geschmack, das Team lernt hier also nichts.",
+    confirmTaste: "Speichern",
+    confirmFactual: "Ausschließen",
     cancel: "Abbrechen",
-    confirm: "Ausschließen",
-    removeExclusion: "Ausschluss aufheben",
+    networkError: "Netzwerkfehler",
+    markApplied: "Ich habe mich beworben",
+    markAppliedDone: "Bewerbung vermerkt",
+    markAppliedError:
+      "Bewerbung nicht registriert. Bitte gleich erneut versuchen und melden, wenn das Problem bleibt.",
+    markAppliedUndoHint: "zum Rückgängigmachen tippen",
+    markAppliedUndoError: "Bewerbung konnte nicht rückgängig gemacht werden",
+    markAppliedByTeam:
+      "Diese Bewerbung hat das Team gesendet: von hier nicht widerrufbar",
   },
   fr: {
     verdicts: {
-      no: "Exclure",
+      no: "Pas intéressant",
       review_low: "Peu intéressant",
       review_ok: "Intéressant",
       top: "Très intéressant",
     },
-    networkError: "Erreur réseau",
-    reasons: {
-      closed: "Fermée / plus active",
-      not_interested: "Pas intéressé",
-      mismatch: "Pas adapté à mon profil",
-      company: "Entreprise non souhaitée",
-      conditions: "Conditions inadaptées (salaire/lieu)",
-    },
-    popupTitle: "Pourquoi excluez-vous cette offre ?",
-    customPlaceholder: "Ou écrivez le motif…",
+    whyNo: "Pourquoi ne vous intéresse-t-il pas ?",
+    pickPlaceholder: "Choisissez un motif…",
+    hintTaste:
+      "L'équipe s'en servira pour chercher des offres qui vous vont mieux.",
+    hintFactual:
+      "Le poste sort simplement du circuit : une offre expirée ne dit rien de vos goûts, l'équipe n'apprend donc rien d'ici.",
+    confirmTaste: "Enregistrer",
+    confirmFactual: "Exclure",
     cancel: "Annuler",
-    confirm: "Exclure",
-    removeExclusion: "Annuler l'exclusion",
+    networkError: "Erreur réseau",
+    markApplied: "J'ai postulé moi-même",
+    markAppliedDone: "Candidature enregistrée",
+    markAppliedError:
+      "Candidature non enregistrée. Réessayez dans un instant et signalez-le si le problème persiste.",
+    markAppliedUndoHint: "touchez pour annuler",
+    markAppliedUndoError: "Impossible d’annuler la candidature",
+    markAppliedByTeam:
+      "Cette candidature a été envoyée par l’équipe : impossible de l’annuler ici",
   },
   pt: {
     verdicts: {
-      no: "Excluir",
+      no: "Não interessante",
       review_low: "Pouco interessante",
       review_ok: "Interessante",
       top: "Muito interessante",
     },
-    networkError: "Erro de rede",
-    reasons: {
-      closed: "Fechada / já não ativa",
-      not_interested: "Não tenho interesse",
-      mismatch: "Não se adequa ao meu perfil",
-      company: "Empresa indesejada",
-      conditions: "Condições inadequadas (salário/local)",
-    },
-    popupTitle: "Porque excluis esta oferta?",
-    customPlaceholder: "Ou escreve o motivo…",
+    whyNo: "Porque não te interessa?",
+    pickPlaceholder: "Escolhe um motivo…",
+    hintTaste:
+      "A equipa vai usá-lo para procurar ofertas que te encaixem melhor.",
+    hintFactual:
+      "A vaga sai do circuito e pronto: uma vaga expirada não diz o que gostas, por isso a equipa não aprende nada daqui.",
+    confirmTaste: "Guardar",
+    confirmFactual: "Excluir",
     cancel: "Cancelar",
-    confirm: "Excluir",
-    removeExclusion: "Anular exclusão",
+    networkError: "Erro de rede",
+    markApplied: "Candidatei-me",
+    markAppliedDone: "Candidatura registada",
+    markAppliedError:
+      "Candidatura não registada. Tente novamente daqui a pouco e avise se continuar.",
+    markAppliedUndoHint: "toque para anular",
+    markAppliedUndoError: "Não foi possível anular a candidatura",
+    markAppliedByTeam:
+      "Esta candidatura foi enviada pela equipa: não se anula aqui",
   },
 };
+
+// Data + ora della candidatura, nello stesso formato della colonna in lista
+// (`04/08, 13:13`): la richiesta era l'orario ESATTO, e le due superfici
+// devono dire la stessa cosa nello stesso modo.
+function formatAppliedAt(ts: string, locale: string): string {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(intlTag(locale), {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export function FeedbackButtons({
   legacyId,
   initialVerdict,
-  initialExcludedReason = null,
-  initialExcludedNote = null,
+  initialApplied = false,
+  initialAppliedAt = null,
 }: {
   legacyId: number;
   initialVerdict: Verdict | null;
-  // Esclusione utente corrente (user_excluded_reason/note): serve al popup
-  // per evidenziare la causa attiva e permettere il toggle-off.
-  initialExcludedReason?: string | null;
-  initialExcludedNote?: string | null;
+  /** La posizione risulta già candidata (dal team o dall'utente). */
+  initialApplied?: boolean;
+  /** Quando: l'ora esatta, non "candidata" e basta (O-25). */
+  initialAppliedAt?: string | null;
 }) {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
+  const pickerT = PICKER_T[locale];
+  // O-24: candidatura mandata a mano dall'utente. Stato separato dal giudizio
+  // — non è un voto sull'offerta, è un fatto sul suo stato.
+  const [applied, setApplied] = useState(initialApplied);
+  const [appliedAt, setAppliedAt] = useState<string | null>(initialAppliedAt);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [applyPending, setApplyPending] = useState(false);
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [verdict, setVerdict] = useState<Verdict | null>(initialVerdict);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Popup causa esclusione (pulsante "Escludi") — portal su body.
-  const [popupOpen, setPopupOpen] = useState(false);
-  const [customText, setCustomText] = useState("");
-  const [popupError, setPopupError] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  // Causa/nota dell'esclusione ATTIVA (null = non esclusa dall'utente):
-  // guida evidenziazione, toggle-off e "Annulla esclusione" nel popup.
-  const [curReason, setCurReason] = useState<string | null>(
-    initialExcludedReason,
-  );
-  const [curNote, setCurNote] = useState<string | null>(initialExcludedNote);
+  // O-43 — «Non interessante» non scrive più niente al primo click: apre il
+  // motivo. Finché questo pannello è aperto non è stato registrato nulla.
+  const [askWhy, setAskWhy] = useState(false);
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
+  const factual = isFactualReason(reason);
 
-  const give = async (v: Verdict, excl?: { reason: string; note?: string }) => {
+  // `why` accompagna il giudizio negativo: `reason` è il codice del
+  // vocabolario condiviso (lo stesso di `user_excluded_reason`), `comment` il
+  // testo che l'utente ha scritto. Il Mentor raggruppa proprio quel testo
+  // (pattern F), lo Scout legge la direction: senza motivo il segnale dice
+  // «meno cose così» e basta, e non c'è modo di sapere di cosa parlasse.
+  const give = async (
+    v: Verdict,
+    why?: { reason?: string; comment?: string },
+  ) => {
     if (busy) return false;
     const prev = verdict;
     setError(null);
@@ -282,27 +332,11 @@ export function FeedbackButtons({
           action: cfg.action,
           score: cfg.score,
           ...(cfg.direction ? { direction: cfg.direction } : {}),
+          ...(why?.reason ? { reason: why.reason } : {}),
+          ...(why?.comment ? { comment: why.comment } : {}),
         }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      const wasExcluded = prev ? Boolean(VERDICTS[prev].exclude) : false;
-      if (cfg.exclude && excl) {
-        // Sempre POST (anche se già esclusa): l'utente può correggere la causa.
-        const ex = await fetch(`/api/positions/${legacyId}/user-exclude`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reason: excl.reason,
-            ...(excl.note ? { note: excl.note } : {}),
-          }),
-        });
-        if (!ex.ok) throw new Error(String(ex.status));
-      } else if (!cfg.exclude && wasExcluded) {
-        const ex = await fetch(`/api/positions/${legacyId}/user-exclude`, {
-          method: "DELETE",
-        });
-        if (!ex.ok) throw new Error(String(ex.status));
-      }
       startTransition(() => router.refresh());
       setBusy(false);
       return true;
@@ -315,27 +349,6 @@ export function FeedbackButtons({
       );
       setBusy(false);
       return false;
-    }
-  };
-
-  const closePopup = () => {
-    if (busy) return;
-    setPopupOpen(false);
-    setCustomText("");
-    setPopupError(null);
-  };
-
-  // Un tap su una causa pronta = esclusione immediata.
-  const excludeWithReason = async (reason: string, note?: string) => {
-    setPopupError(null);
-    const ok = await give("no", { reason, note });
-    if (ok) {
-      setCurReason(reason);
-      setCurNote(note ?? null);
-      setPopupOpen(false);
-      setCustomText("");
-    } else {
-      setPopupError(t.networkError);
     }
   };
 
@@ -369,162 +382,140 @@ export function FeedbackButtons({
     setBusy(false);
   };
 
-  // Toglie l'esclusione (tap sulla causa attiva o "Annulla esclusione"):
-  // la posizione torna allo stato precedente e il giudizio si azzera
-  // ANCHE nel log feedback (evento 'clear').
-  const removeExclusion = async () => {
+  // Conferma del pannello «perché». Due strade, e la differenza è il punto
+  // del ticket:
+  //  · motivo FATTUALE (scaduta, già gestita) → non è un gusto. La posizione
+  //    esce dal giro con la stessa route dell'esclusione manuale, e NESSUN
+  //    `less_like_this` parte: `agents/scout/scout.md` deprioritizza azienda,
+  //    famiglia di ruolo e località quando lo vede, e su una posizione ottima
+  //    ma scaduta sarebbe la lezione sbagliata;
+  //  · motivo di GUSTO → giudizio negativo come prima, ma con il motivo
+  //    attaccato, così quello che arriva allo scoring dice anche di cosa
+  //    parlava.
+  const confirmWhy = async () => {
     if (busy) return;
-    setPopupError(null);
-    setBusy(true);
-    try {
-      const ex = await fetch(`/api/positions/${legacyId}/user-exclude`, {
-        method: "DELETE",
-      });
-      if (!ex.ok) throw new Error(String(ex.status));
-      const res = await postClear();
-      if (!res.ok) throw new Error(String(res.status));
-      setCurReason(null);
-      setCurNote(null);
-      setVerdict(null);
-      setPopupOpen(false);
-      setCustomText("");
-      startTransition(() => router.refresh());
-    } catch (e) {
-      setPopupError(
-        e instanceof Error
-          ? `${t.networkError} (${e.message})`
-          : t.networkError,
+    // La regola sta in `negativeSignalFor`, che è pura e testata: qui resta
+    // solo l'esecuzione.
+    const signal = negativeSignalFor(reason, note);
+    if (signal.kind === "invalid") {
+      setError(
+        signal.missing === "reason" ? pickerT.pickReason : pickerT.writeReason,
       );
+      return;
     }
-    setBusy(false);
+    if (signal.kind === "exclude") {
+      setError(null);
+      setBusy(true);
+      try {
+        const res = await fetch(`/api/positions/${legacyId}/user-exclude`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reason: signal.reason,
+            ...(signal.note ? { note: signal.note } : {}),
+          }),
+        });
+        if (!res.ok) {
+          const b = (await res.json().catch(() => ({}))) as { error?: string };
+          setError(b?.error ?? `HTTP ${res.status}`);
+          setBusy(false);
+          return;
+        }
+        closeWhy();
+        startTransition(() => router.refresh());
+      } catch (e) {
+        setError(
+          e instanceof Error
+            ? `${t.networkError} (${e.message})`
+            : t.networkError,
+        );
+      }
+      setBusy(false);
+      return;
+    }
+    const ok = await give("no", {
+      reason: signal.reason,
+      comment: signal.comment,
+    });
+    if (ok) closeWhy();
   };
 
-  const popup =
-    popupOpen && mounted
-      ? createPortal(
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-            style={{ background: "rgba(0,0,0,0.55)" }}
-            onClick={closePopup}
-          >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label={t.popupTitle}
-              className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="text-[12px] font-semibold text-[var(--color-white)] mb-3">
-                {t.popupTitle}
-              </div>
-              {/* Cause pronte: un tap esclude subito. La causa ATTIVA è
-                  evidenziata e un tap su di lei ANNULLA l'esclusione. */}
-              <div className="flex flex-col gap-1.5 mb-3">
-                {REASON_ORDER.map((k) => {
-                  const active = curReason === k;
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      disabled={busy}
-                      aria-pressed={active}
-                      onClick={() =>
-                        active
-                          ? void removeExclusion()
-                          : void excludeWithReason(k)
-                      }
-                      className="w-full rounded-lg border px-3 py-2 text-left text-[11px] font-medium transition-colors hover:border-[var(--color-red)] hover:text-[var(--color-red)] disabled:opacity-60"
-                      style={
-                        active
-                          ? {
-                              borderColor: "var(--color-red)",
-                              color: "var(--color-red)",
-                              background:
-                                "color-mix(in srgb, var(--color-red) 10%, transparent)",
-                            }
-                          : {
-                              borderColor: "var(--color-border)",
-                              color: "var(--color-base)",
-                            }
-                      }
-                    >
-                      {t.reasons[k]}
-                    </button>
-                  );
-                })}
-              </div>
-              {/* Motivo libero: testo → 'other' + nota. */}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={customText}
-                  onChange={(e) => setCustomText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && customText.trim())
-                      void excludeWithReason("other", customText.trim());
-                  }}
-                  placeholder={t.customPlaceholder}
-                  maxLength={200}
-                  className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-2 text-[11px] text-[var(--color-base)] placeholder:text-[var(--color-dim)]"
-                />
-                <button
-                  type="button"
-                  disabled={busy || !customText.trim()}
-                  onClick={() =>
-                    void excludeWithReason("other", customText.trim())
-                  }
-                  className="shrink-0 rounded-lg border px-3.5 py-2 text-[11px] font-semibold transition-colors disabled:opacity-40"
-                  style={{
-                    borderColor: "var(--color-red)",
-                    color: "var(--color-red)",
-                    background:
-                      "color-mix(in srgb, var(--color-red) 10%, transparent)",
-                  }}
-                >
-                  {busy ? "…" : t.confirm}
-                </button>
-              </div>
-              {popupError && (
-                <p
-                  className="mt-2 text-[10px]"
-                  style={{ color: "var(--color-red)" }}
-                >
-                  {popupError}
-                </p>
-              )}
-              <div className="mt-3 flex justify-between gap-2">
-                {/* Già esclusa (anche con motivo personalizzato) → via
-                    esplicita per togliere l'esclusione. */}
-                {curReason ? (
-                  <button
-                    type="button"
-                    onClick={() => void removeExclusion()}
-                    disabled={busy}
-                    className="rounded-lg border px-3.5 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
-                    style={{
-                      borderColor: "var(--color-red)",
-                      color: "var(--color-red)",
-                    }}
-                  >
-                    {t.removeExclusion}
-                  </button>
-                ) : (
-                  <span />
-                )}
-                <button
-                  type="button"
-                  onClick={closePopup}
-                  disabled={busy}
-                  className="rounded-lg border border-[var(--color-border)] px-3.5 py-2 text-[11px] font-semibold text-[var(--color-muted)] transition-colors hover:bg-[var(--color-row)] disabled:opacity-60"
-                >
-                  {t.cancel}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )
-      : null;
+  const closeWhy = () => {
+    setAskWhy(false);
+    setReason("");
+    setNote("");
+    setError(null);
+  };
+
+  // Segna la candidatura come inviata dall'utente. Senza questo il team non
+  // sa che la posizione è già andata: continua a scriverci sopra e a
+  // riproporla, spendendo token su qualcosa di già fatto.
+  async function markApplied() {
+    setApplyError(null);
+    setApplyPending(true);
+    try {
+      const res = await fetch(`/api/positions/${legacyId}/mark-applied`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const saved = (await res.json().catch(() => null)) as {
+        applied_at?: string | null;
+        source?: "local" | "cloud";
+        cloud_synced?: boolean | null;
+      } | null;
+      // A local write whose cloud mirror was not acknowledged is not a
+      // confirmed click: keep the UI pending/error and never claim applied.
+      if (!applicationAckAccepted(saved)) {
+        throw new Error("cloud_sync_unconfirmed");
+      }
+      setApplied(true);
+      // L'ora la decide chi scrive, non il browser: così quella mostrata è
+      // quella registrata, anche a orologi disallineati.
+      setAppliedAt(saved?.applied_at ?? null);
+      router.refresh();
+    } catch {
+      setApplyError(t.markAppliedError);
+    } finally {
+      setApplyPending(false);
+    }
+  }
+
+  // O-36 — l'inverso. Un click per sbaglio lasciava la posizione 'applied'
+  // per sempre e il team smetteva di lavorarci: era più facile candidarsi
+  // che disdirlo. Stessa forma di RecheckButton: una route, POST e DELETE.
+  async function undoApplied() {
+    setApplyError(null);
+    try {
+      const res = await fetch(`/api/positions/${legacyId}/mark-applied`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        // Il 409 non è un guasto: è il server che dice che annullare, ora,
+        // direbbe una cosa falsa. I due casi si spiegano in modo diverso.
+        if (body.error === "applied_by_team") {
+          setApplyError(t.markAppliedByTeam);
+          return;
+        }
+        if (body.error === "not_applied") {
+          // Nel frattempo è cambiato qualcos'altro: la pagina si riallinea
+          // al vero invece di discutere.
+          router.refresh();
+          return;
+        }
+        throw new Error(String(res.status));
+      }
+      setApplied(false);
+      setAppliedAt(null);
+      router.refresh();
+    } catch {
+      setApplyError(t.markAppliedUndoError);
+    }
+  }
 
   return (
     <div>
@@ -537,15 +528,15 @@ export function FeedbackButtons({
               key={v}
               type="button"
               onClick={() => {
-                if (v === "no") {
-                  // Esclusione: MAI senza causa → popup, non azione diretta.
-                  // Motivo personalizzato attivo → prefill per correggerlo.
-                  setPopupError(null);
-                  setCustomText(curReason === "other" ? (curNote ?? "") : "");
-                  setPopupOpen(true);
-                } else if (selected) {
+                if (selected) {
                   // Riclick sul voto attivo = lo ritira (nessun giudizio).
                   void clearVerdict();
+                } else if (v === "no") {
+                  // Il solo giudizio che chiede il perché: è quello che
+                  // insegna al team cosa evitare, e senza motivo insegnava
+                  // la cosa sbagliata. Qui non parte ancora nessuna scrittura.
+                  setError(null);
+                  setAskWhy(true);
                 } else {
                   void give(v);
                 }
@@ -569,12 +560,115 @@ export function FeedbackButtons({
           );
         })}
       </div>
-      {error && (
+      {/* Il perché del «Non interessante». Finché è aperto non è stato
+          scritto niente: si conferma o si annulla. */}
+      {askWhy && (
+        <div
+          className="mt-2 rounded-lg border p-3 flex flex-col gap-2"
+          style={{
+            borderColor: "var(--color-border)",
+            background: "var(--color-panel)",
+          }}
+        >
+          <p className="text-[11px] font-semibold text-[var(--color-base)]">
+            {t.whyNo}
+          </p>
+          <ReasonPicker
+            value={reason}
+            onChange={(next) => {
+              setReason(next);
+              setError(null);
+            }}
+            note={note}
+            onNoteChange={setNote}
+            disabled={busy}
+            placeholder={t.pickPlaceholder}
+            className="flex flex-wrap items-center gap-1.5"
+          />
+          {/* Che cosa succede DAVVERO con questo motivo: sono due esiti
+              diversi, e l'utente lo legge prima di confermare, non dopo. */}
+          {reason && (
+            <p className="text-[10px] leading-snug text-[var(--color-dim)]">
+              {factual ? t.hintFactual : t.hintTaste}
+            </p>
+          )}
+          {/* L'errore vive DENTRO il pannello: riguarda questa scelta, e
+              fuori si leggeva come un guasto della fila dei giudizi. */}
+          {error && (
+            <p className="text-[10px]" style={{ color: "var(--color-red)" }}>
+              {error}
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void confirmWhy()}
+              disabled={busy}
+              className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-60"
+              style={{
+                color: "var(--color-red)",
+                borderColor: "var(--color-red)",
+              }}
+            >
+              {factual ? t.confirmFactual : t.confirmTaste}
+            </button>
+            <button
+              type="button"
+              onClick={closeWhy}
+              disabled={busy}
+              className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-60"
+              style={{
+                color: "var(--color-muted)",
+                borderColor: "var(--color-border)",
+              }}
+            >
+              {t.cancel}
+            </button>
+          </div>
+        </div>
+      )}
+      {error && !askWhy && (
         <p className="mt-2 text-[10px]" style={{ color: "var(--color-red)" }}>
           {error}
         </p>
       )}
-      {popup}
+      {/* Fuori dalla fila dei giudizi di proposito: non è un voto
+          sull'offerta, è lo stato della candidatura. */}
+      <button
+        type="button"
+        onClick={() => {
+          void (applied ? undoApplied() : markApplied());
+        }}
+        disabled={busy || applyPending}
+        aria-pressed={applied}
+        className="mt-2 w-full rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
+        style={{
+          color: applied ? "var(--color-green)" : "var(--color-muted)",
+          borderColor: applied ? "var(--color-green)" : "var(--color-border)",
+          background: applied
+            ? "color-mix(in srgb, var(--color-green) 12%, transparent)"
+            : "transparent",
+        }}
+      >
+        {applied ? (
+          <span className="flex flex-col items-center gap-0.5">
+            <span>{`✓ ${t.markAppliedDone}${appliedAt ? ` · ${formatAppliedAt(appliedAt, locale)}` : ""}`}</span>
+            {/* Che si possa tornare indietro va DETTO: un bottone già
+                premuto, senza questa riga, si legge come definitivo — ed è
+                esattamente come l'operatore c'è cascato. */}
+            <span className="text-[9px] font-normal text-[var(--color-dim)]">
+              {t.markAppliedUndoHint}
+            </span>
+          </span>
+        ) : (
+          t.markApplied
+        )}
+      </button>
+      {applyError && (
+        <p className="mt-2 text-[10px]" style={{ color: "var(--color-red)" }}>
+          {applyError}
+        </p>
+      )}
     </div>
   );
 }

@@ -82,7 +82,7 @@ async function probeSupabase(): Promise<ProbeResult> {
         return {
           status: "error",
           latency_ms: latency,
-          error: error.message,
+          error: "database probe failed",
         };
       }
       return {
@@ -90,11 +90,10 @@ async function probeSupabase(): Promise<ProbeResult> {
         latency_ms: latency,
       };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
       return {
         status: "error",
         latency_ms: Date.now() - t0,
-        error: message,
+        error: "database probe failed",
       };
     }
   })();

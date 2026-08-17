@@ -169,7 +169,7 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
    * @param {object} [o] { since?: ISO string, limit?: number }
    */
   async function readDesiredStateChanges({ since, limit = 500 } = {}) {
-    const cols = 'legacy_id,write_requested,write_requested_at,geocode_requested,' +
+    const cols = 'legacy_id,write_requested,write_requested_at,write_request_kind,geocode_requested,' +
       'geocode_requested_at,recheck_requested,recheck_requested_at,salary_precise_requested,' +
       'salary_precise_requested_at,status,user_excluded_reason,user_excluded_note,' +
       'user_excluded_at,user_excluded_prev_status';
@@ -229,8 +229,18 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
    */
   async function readUndeliveredUserChat({ limit = 50 } = {}) {
     const params = new URLSearchParams();
-    params.set('select', 'id,legacy_id,agent,body,created_at');
+    params.set(
+      'select',
+      'id,legacy_id,agent,body,source_id,source_action,source_payload,source_directive_id,created_at',
+    );
     params.set('author', 'eq.user');
+    // NATIVE DEL CLOUD, cioe' scritte dal browser: `legacy_id` negativo (mig
+    // 060). Il filtro era dichiarato nel commento e non nella query, e senza
+    // di esso il box si ripescava i PROPRI turni — quelli che aveva appena
+    // pushato, con id positivo — reimportandoli come nuovi. Il gemello
+    // nasceva con `chat_ts` troncato al secondo (frazione .000), che e' la
+    // firma vista sulla coppia 291/292.
+    params.set('legacy_id', 'lt.0');
     params.set('delivered_at', 'is.null');
     params.set('order', 'created_at.asc');
     params.set('limit', String(limit));

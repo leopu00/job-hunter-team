@@ -129,15 +129,15 @@ static func _load_land() -> void:
 				var idx := Geometry2D.triangulate_polygon(pts)
 				_land.append({"pts": pts, "idx": idx})
 
-## Pin dai dati VERI quando la VPS è collegata: office_lat/lon se il
-## geocode c'è, altrimenti la città (cluster per città con conteggio,
-## come i pin del web). Senza VPS resta la demo col mock.
+## LIVE e DEMO usano la sorgente corrispondente; UNAVAILABLE resta vuoto.
 func _rebuild_pins() -> void:
 	_pins.clear()
 	_no_coords.clear()
-	if not BackendBus.positions.is_empty():
+	var data_state := SimBadge.current_state()
+	var visible_positions := SimBadge.visible_positions()
+	if not visible_positions.is_empty():
 		var clusters := {}  # città → {coord, count, best_score}
-		for p in BackendBus.positions:
+		for p in visible_positions:
 			var coord := Vector2.INF
 			if p.get("office_lat") != null and p.get("office_lon") != null:
 				coord = Vector2(float(p["office_lon"]), float(p["office_lat"]))
@@ -166,7 +166,7 @@ func _rebuild_pins() -> void:
 				"label": "%s (%d)" % [city, c["count"]] if c["count"] > 1 else city,
 				"score": int(c["best"]),
 			})
-	else:
+	elif data_state == SimBadge.DataState.DEMO:
 		for p in TeamData.positions_today():
 			var city: String = str(p.get("location", "")).split(" · ")[0]
 			var c := _city_coord(city)

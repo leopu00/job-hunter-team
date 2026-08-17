@@ -60,6 +60,12 @@ export const de: Record<string, string> = {
   dl_copy_cmd: "Befehl kopieren",
   dl_mode_desktop_title: "Desktop",
   dl_mode_terminal_title: "CLI",
+  dl_mode_prompt_title: "Prompt",
+  dl_prompt_intro:
+    "Du möchtest dich nicht selbst darum kümmern? Kopiere diesen Prompt und gib ihn deinem KI-Assistenten: Er liest die Dokumentation, wählt mit dir den Weg und installiert das Team auf diesem Rechner.",
+  dl_copy_prompt: "Prompt kopieren",
+  dl_prompt_note:
+    "Funktioniert mit jedem Assistenten, der das Terminal bedienen kann.",
   dl_desktop_beta_desc:
     "Die Desktop-App ist das Büro, in dem du dem Team bei der Arbeit zusiehst. Sie ist in der Beta: wir nutzen sie täglich, aber sie ändert sich häufig. Wer einen gesetzteren Weg bevorzugt, nimmt weiterhin die CLI.",
   dl_desktop_beta_badge: "Beta",
@@ -105,7 +111,7 @@ export const de: Record<string, string> = {
   home_setup_kicker: "Starte es",
   home_setup_title: "Wie du willst, wo du willst",
   home_setup_body:
-    "Es läuft auf einem dauerhaft eingeschalteten dedizierten Computer oder einem günstigen VPS und arbeitet Tag und Nacht für dich. Du verwaltest es über die Desktop-App: starten, stoppen und das Team mit einem Klick im Blick behalten. Und du bist nicht an diesen Computer gebunden: Über das Web kannst du die Ergebnisse verfolgen und mit dem Team auch von einem anderen PC oder deinem Handy sprechen.",
+    "Beginne auf deinem lokalen PC: Das ist der einfachste vollständige Weg, und das Team arbeitet, solange PC, Docker und Netzwerk verfügbar sind. Für einen durchgängigen Betrieb bei ausgeschaltetem PC kannst du einen VPS nutzen, den du selbst bereitstellst und verwaltest. Die Web-Synchronisierung ist optional und bestimmt nicht, wo das Team läuft.",
   home_setup_cta: "Wie man es startet →",
   home_pricing_kicker: "Preise",
   home_pricing_title: "Open Source. Die Plattform ist kostenlos.",

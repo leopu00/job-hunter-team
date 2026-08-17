@@ -154,8 +154,16 @@ continuar o sourcing com a mira antiga.
    utilizador são mortos ou não são spawnados.
 3. **Prioridade de orçamento**: quase zero. A única despesa é responder ao
    utilizador.
-4. **Condição de saída**: nenhuma — dura até o utilizador o levantar. Nada para
-   esgotar; o banner di-lo.
+4. **Condição de saída**: `mode_until`, se o utilizador a deu — nessa data o
+   modo expira **sozinho**, ordens incluídas, e a equipa volta a `search` (o
+   ficheiro continua a dizer `saving`: ganha o prazo, e o banner declara-o).
+   Sem `mode_until` dura até o utilizador o levantar, e vale a pena dizê-lo: o
+   budget semanal é uma **janela, não um saldo** — o que não se gasta no reset
+   é destruído, portanto uma poupança deixada por inércia não conserva o ciclo,
+   deita-o fora. Diz ao utilizador que lhe pode dar um fim, e onde: a Consola tem o campo
+   «Até quando» (dias e horas, ao lado do seletor), e a partir de uma shell é
+   `jht coordinator set-mode saving --until <iso>`. Escrevem a mesma chave no
+   mesmo ficheiro.
 
 **O que fazes**: mantém Capitano/Assistente/Mentor reativos; mais nada se mexe
 sem um pedido direto do utilizador. **Com C-25**: poupança É uma proibição
@@ -180,7 +188,9 @@ outra metade de C-25), não o gastas. **NÃO faças**: reinterpretar "mínimo" c
   doseado.
 - **Saída ≠ mudança.** Quando um modo reporta o seu trabalho esgotado, avisa o
   utilizador e continua a respeitar o modo até que seja ELE a mudá-lo. O
-  ficheiro é escrito pela consola do jogo em nome do utilizador — nunca por ti.
+  ficheiro é escrito em nome do utilizador — pela Consola do jogo (prazo
+  incluído) ou com `jht coordinator` se ele o pedir — e nunca por tua
+  iniciativa.
 
 ## Ver também
 

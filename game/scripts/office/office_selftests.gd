@@ -25,6 +25,25 @@ var _agent_ui_test_started := false
 var _coordinator_test_started := false
 var _traffic_demo_started := false
 
+
+## Adapter inerte usato soltanto dall'oracle di provenienza. Dichiara LIVE ma
+## non apre processi, file o rete; risponde alle letture che la UI scatena al
+## cambio di stato con payload vuoti e tipizzati, senza errori su stderr.
+class TruthfulnessBackend:
+	extends BackendAdapter
+
+	func open_profile_watch() -> void:
+		pass
+
+	func save_ui_language(_locale: String) -> void:
+		pass
+
+	func fetch_usage_history(_from_ts: float, _to_ts: float, _bucket_sec: int,
+			_request_id := "") -> void:
+		# L'oracle consegna manualmente risposte correnti e tardive per provare
+		# il token di correlazione; l'adapter non anticipa nessuna risposta.
+		pass
+
 ## Ganci a interruttore: scattano quando la variabile vale esattamente "1".
 const FLAG_HOOKS := {
 	"JHT_CENSUS": "_scene_census",
@@ -39,8 +58,10 @@ const FLAG_HOOKS := {
 	"JHT_MAP_PANEL_TEST": "_map_panel_selftest",
 	"JHT_USAGE_PANEL_TEST": "_usage_panel_selftest",
 	"JHT_FEEDBACK_PANEL_TEST": "_feedback_panel_selftest",
+	"JHT_TARGET_ROLE_CATEGORY_TEST": "_target_role_category_selftest",
 	"JHT_GUIDED_TEST": "_guided_onboarding_selftest",
 	"JHT_TOUR_TEST": "_tour_selftest",
+	"JHT_TOUR_EXIT_TEST": "_tour_exit_selftest",
 	"JHT_REGISTRY": "_arm_registry",
 	"JHT_CV_SHELF": "_arm_cv_shelf",
 	# il simulatore va montato PRIMA dei test che ne consumano gli eventi:
@@ -50,11 +71,15 @@ const FLAG_HOOKS := {
 	"JHT_CHATMENU": "_arm_chat_menu",
 	"JHT_CHAT_UI_TEST": "_chat_ui_selftest",
 	"JHT_COMIC_CHAT_TEST": "_arm_comic_chat_selftest",
+	"JHT_ENGLISH_SETUP_TEAM_TEST": "_arm_english_setup_team_selftest",
 	"JHT_THROTTLE_TEST": "_throttle_selftest",
 	"JHT_BACKEND_SWITCH_TEST": "_backend_switch_selftest",
 	"JHT_SETUP_BUSY_TEST": "_setup_busy_selftest",
+	"JHT_TEAM_START_UI_TEST": "_team_start_ui_selftest",
+	"JHT_SETUP_GATING_TEST": "_setup_gating_selftest",
 	"JHT_BUBBLE_LAYOUT_TEST": "_bubble_layout_selftest",
 	"JHT_SIM_BADGE_TEST": "_sim_badge_selftest",
+	"JHT_TRUTHFULNESS_TEST": "_truthfulness_selftest",
 	"JHT_LIVE_PROFILE_TEST": "_live_profile_selftest",
 }
 
@@ -127,26 +152,272 @@ func _sim_badge_selftest() -> void:
 	await get_tree().process_frame
 	var ok := true
 	var cases := [
-		[false, false, true],
-		[false, true, true],
-		[true, true, true],
-		[true, false, false],
+		[false, false, false, SimBadge.DataState.UNAVAILABLE],
+		[false, true, false, SimBadge.DataState.UNAVAILABLE],
+		[true, true, false, SimBadge.DataState.UNAVAILABLE],
+		[true, false, false, SimBadge.DataState.LIVE],
+		[false, false, true, SimBadge.DataState.DEMO],
+		[true, false, true, SimBadge.DataState.DEMO],
 	]
 	for case in cases:
-		ok = ok and SimBadge.warning_needed(bool(case[0]), bool(case[1])) \
-				== bool(case[2])
+		ok = ok and SimBadge.classify(bool(case[0]), bool(case[1]), bool(case[2])) \
+				== case[3]
 	var badges: Array[Node] = office.find_children("*", "SimBadge", true, false)
 	if badges.size() == 1:
 		var badge := badges[0] as SimBadge
 		ok = ok and badge.visible
-		badge._apply_state(true, false)
+		badge._apply_state(SimBadge.DataState.UNAVAILABLE)
 		ok = ok and not badge.visible
-		badge._apply_state(true, true)
+		badge._apply_state(SimBadge.DataState.LIVE)
+		ok = ok and not badge.visible
+		badge._apply_state(SimBadge.DataState.DEMO)
 		ok = ok and badge.visible
 		badge._refresh()
 	else:
 		ok = false
 	print("SIM-BADGE-TEST %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
+
+
+## Controfattuale di release: il dispatcher dei test e' armato, ma questo
+## flag e' esplicitamente escluso dal gate demo. Verifica l'effetto visibile,
+## non soltanto la funzione pura, senza stampare testo UI o dati del backend.
+func _truthfulness_selftest() -> void:
+	# Snapshot sintetico ostile: esiste sul bus, ma senza gate e backend non
+	# deve raggiungere nessuna superficie. L'oracle parte dal percorso reale
+	# del dispatcher e poi prova anche la transizione della UI gia' montata.
+	BackendBus._backend = null
+	BackendBus.state = BackendBus.DISCONNECTED
+	office._on_setup_status_changed({
+		"provider_authenticated": false,
+		"team_running": false,
+	})
+	var counterfeit := [{
+		"id": 9137, "title": "Truth Probe", "company": "Fixture",
+		"loc_city": "Roma", "loc_country": "Italy",
+		"office_lat": 41.9, "office_lon": 12.5,
+		"status": "new", "found_at": Time.get_datetime_string_from_system(),
+	}, {
+		"id": 9138, "title": "Shelf Probe", "company": "Fixture",
+		"loc_city": "Roma", "loc_country": "Italy",
+		"office_lat": 41.9, "office_lon": 12.5,
+		"status": "ready", "critic_verdict": "PASS",
+		"found_at": Time.get_datetime_string_from_system(),
+	}]
+	BackendBus.positions_are_demo = true
+	BackendBus.positions = counterfeit
+	BackendBus.positions_updated.emit(counterfeit)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var badges: Array[Node] = office.find_children("*", "SimBadge", true, false)
+	var unavailable: bool = SimBadge.current_state() == SimBadge.DataState.UNAVAILABLE
+	var roster_empty: bool = office.agents.is_empty()
+	var counterfeit_present: bool = BackendBus.positions_are_demo \
+			and BackendBus.positions.size() == 2
+	var badge_hidden: bool = badges.size() == 1 and not (badges[0] as SimBadge).visible
+	var piles_empty := true
+	var piles_static := true
+	for dept_id in PaperPile.inbox:
+		var pile: PaperPile = PaperPile.inbox[dept_id]
+		var snapshot := pile.debug_snapshot()
+		piles_empty = piles_empty and int(snapshot["count"]) == 0 \
+				and int(snapshot["visual_sheets"]) == 0
+		piles_static = piles_static and pile.restock == 0.0 \
+				and int(snapshot["target"]) == 0
+	var dept_panel := DepartmentPanel.new("scout")
+	office.add_child(dept_panel)
+	await get_tree().process_frame
+	var inbox_hidden := not _visible_ui_has_any_text(dept_panel,
+			[UIStrings.t("dept.inbox") % 0])
+	var map_hidden := (MapPins.build({})["clusters"] as Array).is_empty()
+	var search_probe := GlobalSearch.new()
+	office.add_child(search_probe)
+	await get_tree().process_frame
+	var search_hidden := search_probe._search("truth").is_empty()
+	var pipeline_hidden := PipelineQueueDefs.positions_for(
+			"scout", SimBadge.visible_positions()).is_empty()
+	var timeline := PositionsTimeline.new()
+	timeline.set_positions(counterfeit)
+	var unavailable_timeline_total := 0
+	for count in timeline._counts:
+		unavailable_timeline_total += count
+	var timeline_hidden := unavailable_timeline_total == 0
+	var chat := SectionPanel.new("chat", 0.0)
+	office.add_child(chat)
+	var usage := UsageHistoryView.new()
+	office.add_child(usage)
+	var agent_usage := AgentUsageView.new()
+	office.add_child(agent_usage)
+	await get_tree().process_frame
+	var unavailable_copy := UIStrings.t("common.connect_team")
+	var empty_copy_unavailable := SimBadge.positions_empty_copy() == unavailable_copy \
+			and _visible_ui_has_any_text(search_probe, [unavailable_copy])
+	var chat_unavailable := _visible_ui_has_any_text(chat, [unavailable_copy])
+	var usage_unavailable := usage._provenance_note.visible \
+			and usage._provenance_note.text == unavailable_copy \
+			and agent_usage._provenance_note.visible \
+			and agent_usage._provenance_note.text == unavailable_copy
+
+	# Adapter minimo marcato live: niente rete e nessun payload. La variazione
+	# passa davvero dai segnali osservati dalle viste gia' aperte.
+	var live_adapter := TruthfulnessBackend.new()
+	live_adapter.live = true
+	live_adapter.bus = BackendBus
+	BackendBus._backend = live_adapter
+	BackendBus.state = BackendBus.CONNECTED
+	BackendBus.connection_changed.emit(BackendBus.CONNECTED, "")
+	BackendBus.positions_are_demo = false
+	BackendBus.positions = counterfeit
+	BackendBus.positions_updated.emit(counterfeit)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var map_live := not (MapPins.build({})["clusters"] as Array).is_empty()
+	var search_live := search_probe._search("truth").size() == 1
+	var pipeline_live := PipelineQueueDefs.positions_for(
+			"scout", SimBadge.visible_positions()).size() == 1
+	timeline.set_positions(counterfeit)
+	var live_timeline_total := 0
+	for count in timeline._counts:
+		live_timeline_total += count
+	var timeline_live := live_timeline_total == 2
+	var chat_copy_removed := not _visible_ui_has_any_text(chat, [unavailable_copy])
+	var chat_live_state := chat._last_data_state == int(SimBadge.DataState.LIVE)
+	var chat_live_content := chat._content.get_child_count() > 0
+	var chat_live := chat_copy_removed and chat_live_state and chat_live_content
+	var usage_live := not usage._provenance_note.visible \
+			and not agent_usage._provenance_note.visible
+	var piles_seeded: bool = PaperPile.inbox.has("scout") \
+			and PaperPile.inbox["scout"].count == 1 \
+			and OutputShelf.instance != null and OutputShelf.instance._real == 1
+
+	# Risposta valida per l'ultima richiesta delle due viste: i grafici si
+	# popolano, poi la stessa risposta diventera' il controfattuale tardivo.
+	var now := Time.get_unix_time_from_system()
+	var usage_payload := {"ok": true, "error": "",
+			"sentinel": [{"t": now, "usage": 42.0, "weekly": 18.0,
+			"velocity": 3.0, "velocity_ideal": 4.0, "projection": 45.0}],
+			"meter": [{"t": now, "weighted_kt": 2.0, "events": 1}],
+			"throttle": [], "agents": {"names": ["scout-1"],
+			"series": [{"t": now, "scout-1": 2.0}],
+			"totals_kt": {"scout-1": 2.0}}}
+	var usage_old_query: Dictionary = usage._pending_query.duplicate(true)
+	var agent_usage_old_query: Dictionary = agent_usage._pending_query.duplicate(true)
+	usage._on_history(usage_old_query, usage_payload)
+	agent_usage._on_history(agent_usage_old_query, usage_payload)
+	await get_tree().process_frame
+	var usage_seeded := not usage._data.is_empty() \
+			and not usage._main_chart._series.is_empty() \
+			and not agent_usage._data.is_empty() \
+			and not agent_usage._stacked._series.is_empty()
+
+	BackendBus.publish_agents([{"slug": "scout", "uid": "scout-99",
+			"role": "scout", "name": "Probe", "active": true,
+			"status": "working", "desk_hint": ""}])
+	await get_tree().process_frame
+	var roster_seeded: bool = not BackendBus.agents.is_empty() \
+			and office.agents.any(func(a: AgentNPC) -> bool: return a.uid == "scout-99")
+
+	# LIVE vuoto deve azzerare di colpo la rappresentazione fisica e usare un
+	# messaggio di snapshot vuoto, non invitare a collegare un backend gia' live.
+	BackendBus.publish_positions([])
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var piles_live_empty := OutputShelf.instance != null \
+			and OutputShelf.instance._real == 0 and OutputShelf.instance._visual == 0
+	for dept_id in PaperPile.inbox:
+		var empty_snapshot := (PaperPile.inbox[dept_id] as PaperPile).debug_snapshot()
+		piles_live_empty = piles_live_empty and int(empty_snapshot["count"]) == 0 \
+				and int(empty_snapshot["target"]) == 0
+	var positions_panel := SectionPanel.new("positions", 0.0)
+	office.add_child(positions_panel)
+	await get_tree().process_frame
+	var live_empty_copy := UIStrings.t("common.positions_empty")
+	var copy_live_empty := SimBadge.positions_empty_copy() == live_empty_copy \
+			and _visible_ui_has_any_text(search_probe, [live_empty_copy]) \
+			and _visible_ui_has_any_text(positions_panel, [live_empty_copy])
+
+	# Il cambio adapter revoca anche il roster. Il segnale del bus e la difesa
+	# office.backend_reset sono entrambi attraversati dall'oracle.
+	BackendBus._reset_connection_snapshots()
+	await get_tree().process_frame
+	var roster_reset: bool = roster_seeded and BackendBus.agents.is_empty() \
+			and not office.agents.any(func(a: AgentNPC) -> bool: return a.uid != "")
+
+	# UNAVAILABLE cancella dati e grafici; la risposta vecchia resta respinta
+	# sia durante il gap sia dopo una nuova generazione LIVE con lo stesso range.
+	BackendBus.state = BackendBus.DISCONNECTED
+	BackendBus.connection_changed.emit(BackendBus.DISCONNECTED, "")
+	await get_tree().process_frame
+	usage._on_history(usage_old_query, usage_payload)
+	agent_usage._on_history(agent_usage_old_query, usage_payload)
+	await get_tree().process_frame
+	var usage_cleared := usage._data.is_empty() and usage._main_chart._series.is_empty() \
+			and usage._mini_velocity._series.is_empty() \
+			and usage._mini_tokens._series.is_empty() \
+			and usage._mini_throttle._series.is_empty() \
+			and agent_usage._data.is_empty() \
+			and agent_usage._stacked._series.is_empty() \
+			and agent_usage._donut.slices.is_empty() \
+			and agent_usage._heatmap._cells.is_empty()
+	BackendBus.state = BackendBus.CONNECTED
+	BackendBus.connection_changed.emit(BackendBus.CONNECTED, "")
+	var usage_new_id := str(usage._pending_query.get("request_id", ""))
+	var agent_usage_new_id := str(agent_usage._pending_query.get("request_id", ""))
+	usage._on_history(usage_old_query, usage_payload)
+	agent_usage._on_history(agent_usage_old_query, usage_payload)
+	BackendBus.publish_usage_history(usage_old_query, usage_payload)
+	await get_tree().process_frame
+	var usage_late_rejected := usage_new_id != "" \
+			and usage_new_id != str(usage_old_query.get("request_id", "")) \
+			and agent_usage_new_id != "" \
+			and agent_usage_new_id != str(agent_usage_old_query.get("request_id", "")) \
+			and usage._data.is_empty() and agent_usage._data.is_empty() \
+			and BackendBus.usage_history.is_empty()
+	var forbidden_visible: bool = _visible_ui_has_any_text(get_tree().root,
+			["PROTOTYPE", "MOCK", "SIMULATION", "SIMULAZIONE",
+			"DEMO MODE", "SHOWROOM"])
+	var ok: bool = unavailable and roster_empty and counterfeit_present and badge_hidden \
+			and piles_empty and piles_static and inbox_hidden \
+			and map_hidden and search_hidden and pipeline_hidden and timeline_hidden \
+			and chat_unavailable and usage_unavailable and empty_copy_unavailable \
+			and map_live and search_live and pipeline_live and timeline_live \
+			and chat_live and usage_live and piles_seeded and usage_seeded \
+			and piles_live_empty and copy_live_empty and roster_reset \
+			and usage_cleared and usage_late_rejected and not forbidden_visible
+	print(("TRUTHFULNESS-TEST %s unavailable=%s roster_empty=%s " \
+			+ "counterfeit_present=%s badge_hidden=%s piles_empty=%s piles_static=%s " \
+			+ "inbox_hidden=%s map_hidden=%s search_hidden=%s pipeline_hidden=%s " \
+			+ "timeline_hidden=%s chat_unavailable=%s usage_unavailable=%s " \
+			+ "map_live=%s search_live=%s pipeline_live=%s " \
+			+ "timeline_live=%s chat_copy_removed=%s chat_live_state=%s " \
+			+ "chat_live_content=%s " \
+			+ "usage_live=%s piles_live_empty=%s copy_live_empty=%s " \
+			+ "roster_reset=%s usage_cleared=%s usage_late_rejected=%s " \
+			+ "forbidden_visible=%s") % [
+			"PASS" if ok else "FAIL", unavailable, roster_empty,
+			counterfeit_present, badge_hidden, piles_empty, piles_static, inbox_hidden,
+			map_hidden, search_hidden, pipeline_hidden, timeline_hidden,
+			chat_unavailable, usage_unavailable,
+			map_live, search_live, pipeline_live, timeline_live,
+			chat_copy_removed, chat_live_state, chat_live_content, usage_live,
+			piles_live_empty, copy_live_empty, roster_reset, usage_cleared,
+			usage_late_rejected,
+			forbidden_visible])
+	dept_panel.queue_free()
+	chat.queue_free()
+	usage.queue_free()
+	agent_usage.queue_free()
+	search_probe.queue_free()
+	positions_panel.queue_free()
+	timeline.free()
+	BackendBus._backend = null
+	for player in Sfx._pool:
+		player.stop()
+		player.stream = null
+	for ambient in office.find_children("*", "AudioStreamPlayer", true, false):
+		ambient.stop()
+		ambient.stream = null
+	await get_tree().process_frame
 	get_tree().quit(0 if ok else 1)
 
 
@@ -172,7 +443,8 @@ func _live_profile_selftest() -> void:
 	var badges: Array[Node] = office.find_children("*", "SimBadge", true, false)
 	var badge_hidden := badges.size() == 1 and not (badges[0] as SimBadge).visible
 	var forbidden_visible := _visible_ui_has_any_text(get_tree().root,
-			["SIMULATION", "SIMULAZIONE", "DEMO MODE"])
+			["PROTOTYPE", "MOCK", "SIMULATION", "SIMULAZIONE",
+			"DEMO MODE", "SHOWROOM"])
 	var loading_visible := _visible_ui_has_any_text(get_tree().root,
 			["CARICAMENTO", "LOADING"])
 	var frame_ok := true
@@ -205,7 +477,7 @@ func _visible_ui_has_any_text(node: Node, tokens: Array) -> bool:
 		text = (node as LineEdit).text
 	var upper := text.to_upper()
 	for token in tokens:
-		if str(token) in upper:
+		if str(token).to_upper() in upper:
 			return true
 	for child in node.get_children():
 		if _visible_ui_has_any_text(child, tokens):
@@ -366,6 +638,12 @@ func _arm_chat_menu() -> void:
 ## (tools/comic_chat_selftest.gd): il corpo del test è lungo quanto la feature.
 func _arm_comic_chat_selftest() -> void:
 	office.add_child(load("res://tools/comic_chat_selftest.gd").new())
+
+
+## Il percorso EN deve attraversare il bus reale del mock: un audit solo dei
+## cataloghi non vede dettagli roster, terminale o risposte del Coordinatore.
+func _arm_english_setup_team_selftest() -> void:
+	office.add_child(load("res://tools/english_setup_team_selftest.gd").new())
 
 
 ## Regressione trackpad/overlay: una gesture consegnata direttamente alla
@@ -576,6 +854,164 @@ func _setup_busy_selftest() -> void:
 	get_tree().quit(0 if ok else 1)
 
 
+## #129 — il comando può finire prima che CAPITANO sia osservabile. Questo
+## oracle attraversa i consumer veri Attivazione e Team: fallimento iniziale,
+## tentativo watchdog e recupero tardivo devono restare distinti anche quando
+## SetupService.busy() è già falso. Il pulsante di retry è l'unica uscita dal
+## fallimento; durante il recupero resta spento per non creare due tentativi.
+func _team_start_ui_selftest() -> void:
+	await get_tree().process_frame
+	var old_status: Dictionary = SetupService.status.duplicate(true)
+	var old_state: RefCounted = SetupService.team_start_state
+	var old_running: bool = SetupService._action_running
+	var old_action: String = SetupService.current_action
+	var old_probe_running: bool = SetupService._probe_running
+	var old_state_path: String = SetupService._team_start_state_path
+	var test_state_path := OS.get_cache_dir().path_join(
+			"jht-team-start-ui-%d.json" % OS.get_process_id())
+	SetupService._remove_team_start_state_at(test_state_path)
+	SetupService._team_start_state_path = test_state_path
+	# `_finish_action` avvia il probe successivo in produzione. Qui lo teniamo
+	# occupato: l'oracolo controlla precisamente il confine prima del probe.
+	SetupService._probe_running = true
+	SetupService.status = {
+		"ready": true, "completed": 4, "team_running": false,
+		"container_running": true, "provider_authenticated": true,
+		"plan_ready": true, "profile_ready": true, "hours_ready": true,
+	}
+	SetupService._action_running = false
+	SetupService.current_action = ""
+	SetupService.team_start_state = TeamStartState.new()
+	SetupService.team_start_state.begin(1000)
+
+	var activation := SectionPanel.new("activation", 24.0)
+	var team := SectionPanel.new("team", 24.0)
+	office.add_child(activation)
+	office.add_child(team)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var result := {}
+	var starting_activation := _panel_button(
+			activation, UIStrings.t("setup.team_starting"))
+	var starting_team := _panel_button(team, UIStrings.t("setup.team_starting"))
+	result["starting_distinto_e_spento"] = starting_activation != null \
+			and starting_activation.disabled and starting_team != null \
+			and starting_team.disabled and _panel_has_label(
+					activation, UIStrings.t("team.start_waiting"))
+
+	var attempt: int = SetupService.team_start_state.attempt
+	# Attraversa il percorso reale che aveva il falso verde: il worker termina
+	# con exit 0, `_finish_action` applica il responso e `action_changed` arriva
+	# ai due pannelli. Prima del probe CAPITANO deve restare giallo/in attesa.
+	SetupService._action_running = true
+	SetupService.current_action = "team"
+	SetupService.action_changed.emit("team", true,
+			UIStrings.t("setup.action.in_progress"), true)
+	SetupService._finish_action("team", {
+		"ok": true,
+		"team_operation": "start",
+		"team_start_attempt": attempt,
+		"command_output": "CAPITANO command accepted",
+		"watchdog_cursor": 0,
+		"watchdog_identity": "synthetic-log",
+		"watchdog_fingerprint": "a".repeat(64),
+		# Controfattuale esplicito: era il testo verde emesso dal prodotto.
+		"message": UIStrings.t("team.action.started"),
+	})
+	await get_tree().process_frame
+	await get_tree().process_frame
+	result["exit0_attende_senza_verde"] = \
+			str(SetupService.team_start_state.phase) == TeamStartState.STARTING \
+			and not SetupService.busy() \
+			and is_instance_valid(activation._setup_message) \
+			and activation._setup_message.text.begins_with("◌ ") \
+			and activation._setup_message.text.contains(
+					UIStrings.t("team.start_waiting")) \
+			and not activation._setup_message.text.contains(
+					UIStrings.t("team.action.started")) \
+			and activation._setup_message.get_theme_color("font_color") \
+					== Palette.YELLOW \
+			and is_instance_valid(team._setup_message) \
+			and team._setup_message.get_theme_color("font_color") == Palette.YELLOW
+
+	# Un secondo tentativo fallito attraversa lo stesso `_finish_action`, non
+	# chiama direttamente il modello: così l'oracolo morde sul wiring causale.
+	SetupService.team_start_state.begin(3000)
+	attempt = SetupService.team_start_state.attempt
+	SetupService._action_running = true
+	SetupService.current_action = "team"
+	var raw := "✓ MENTOR started\n✗ CAPITANO — provider boot failed\nResult: 1 started, 6 errors"
+	SetupService._finish_action("team", {
+		"ok": false,
+		"team_operation": "start",
+		"team_start_attempt": attempt,
+		"command_output": raw,
+		"watchdog_cursor": 0,
+		"watchdog_identity": "synthetic-log",
+		"watchdog_fingerprint": "a".repeat(64),
+		"message": UIStrings.t("team.action.start_failed") % raw,
+	})
+	result["failure_applicata"] = \
+			str(SetupService.team_start_state.phase) == TeamStartState.FAILED
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var retry_activation := _panel_button(
+			activation, UIStrings.t("team.start_retry"))
+	var retry_team := _panel_button(team, UIStrings.t("team.start_retry"))
+	result["failed_con_retry_e_causa"] = retry_activation != null \
+			and not retry_activation.disabled and retry_team != null \
+			and not retry_team.disabled \
+			and _panel_has_label(activation, UIStrings.t("team.start_failed_title")) \
+			and _panel_has_label(activation, "provider boot failed") \
+			and _panel_has_label(activation, UIStrings.t("team.start_log")) \
+			and _panel_has_label(activation, "Result: 1 started, 6 errors")
+
+	result["watchdog_applicato"] = SetupService.team_start_state.observe(
+			attempt, false, TeamStartState.WATCHDOG_ATTEMPT, 3000)
+	SetupService.team_start_state_changed.emit(SetupService.team_start_snapshot())
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var recovery_activation := _panel_button(
+			activation, UIStrings.t("team.start_recovering"))
+	var recovery_team := _panel_button(team, UIStrings.t("team.start_recovering"))
+	result["recovering_distinto_e_spento"] = recovery_activation != null \
+			and recovery_activation.disabled and recovery_team != null \
+			and recovery_team.disabled and _panel_has_label(
+					activation, UIStrings.t("team.start_recovery_detail"))
+
+	result["capitano_tardivo_applicato"] = SetupService.team_start_state.observe(
+			attempt, true, "", 4000)
+	SetupService.status["team_running"] = true
+	SetupService.team_start_state_changed.emit(SetupService.team_start_snapshot())
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var running_activation := _panel_button(
+			activation, UIStrings.t("setup.team_running"))
+	var stop_team := _panel_button(team, UIStrings.t("team.stop"))
+	result["running_distinto_senza_errore"] = running_activation != null \
+			and running_activation.disabled and stop_team != null \
+			and not stop_team.disabled \
+			and not _panel_has_label(activation, UIStrings.t("team.start_failed_title")) \
+			and not _panel_has_label(activation, UIStrings.t("team.start_recovery_detail"))
+
+	activation.queue_free()
+	team.queue_free()
+	await get_tree().process_frame
+	SetupService.status = old_status
+	SetupService.team_start_state = old_state
+	SetupService._action_running = old_running
+	SetupService.current_action = old_action
+	SetupService._probe_running = old_probe_running
+	SetupService._team_start_state_path = old_state_path
+	SetupService._remove_team_start_state_at(test_state_path)
+	var ok := true
+	for key in result:
+		ok = ok and bool(result[key])
+	print("TEAM-START-UI-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify(result)])
+	get_tree().quit(0 if ok else 1)
+
+
 ## Scatto opzionale per l'audit visivo del test qui sopra (solo con finestra:
 ## headless non disegna). JHT_SETUP_BUSY_SHOTS=<cartella> per attivarlo.
 func _busy_shot(name: String) -> void:
@@ -600,6 +1036,151 @@ static func _panel_button(panel: Node, needle: String) -> Button:
 		if (node as Button).text.contains(needle):
 			return node
 	return null
+
+
+## Quanti pulsanti portano questa scritta. Serve dove la stessa etichetta
+## compare più volte per disegno — i passi bloccati della checklist — e
+## contarli è il solo modo di distinguere "uno solo" da "tutti".
+static func _panel_button_count(panel: Node, needle: String) -> int:
+	var found := 0
+	for node in panel.find_children("*", "Button", true, false):
+		if (node as Button).text.contains(needle):
+			found += 1
+	return found
+
+
+## O-13 — i quattro difetti d'uso trovati dall'operatore sul setup macOS della
+## v0.3.6, tutti nella stessa famiglia: la UI offre azioni che non possono
+## riuscire, e tace sul perché.
+##
+## Le tre schermate del ticket, provate qui una per una:
+##  · «runtime assente» → «ATTIVA CONTAINER» spento, motivo a schermo e
+##    INSTALLA DOCKER come unica strada;
+##  · «solo Colima» → motore riconosciuto, pulsante vivo e NESSUNA proposta di
+##    installare Docker (il difetto raccontato: colima girava davvero);
+##  · «step saltato» → il profilo non si apre col container spento.
+##
+## Lo stato si inietta in SetupService.status invece di dipendere dal computer
+## che esegue il test: le tre schermate devono valere su un runner senza
+## Docker come sulla macchina dell'operatore, che ha Colima acceso.
+func _setup_gating_selftest() -> void:
+	await get_tree().process_frame
+	var result := {}
+	var original: Dictionary = SetupService.status.duplicate(true)
+	var colima: String = SetupService.RUNTIME_COLIMA
+	var desktop: String = SetupService.RUNTIME_DOCKER_DESKTOP
+
+	# ── (a) Nessun motore installato ────────────────────────────────────
+	SetupService.status["remote"] = false
+	SetupService.status["runtimes"] = PackedStringArray()
+	SetupService.status["runtime_selected"] = ""
+	SetupService.status["docker_available"] = false
+	SetupService.status["docker_running"] = false
+	SetupService.status["container_running"] = false
+	var none := SectionPanel.new("docker", 24.0)
+	office.add_child(none)
+	await get_tree().process_frame
+	var start := _panel_button(none, UIStrings.t("setup.container_start"))
+	result["assente_attiva_spento"] = start != null and start.disabled
+	result["assente_motivo_a_schermo"] = _panel_has_label(none,
+			UIStrings.t("setup.container_needs_runtime"))
+	result["assente_offre_installazione"] = _panel_button(none,
+			UIStrings.t("setup.docker_install")) != null
+	result["assente_nessuna_scelta_motore"] = not _panel_has_label(none,
+			UIStrings.t("setup.runtime_choice"))
+	none.queue_free()
+	await get_tree().process_frame
+
+	# ── (b) Solo Colima, installato ma spento ───────────────────────────
+	SetupService.status["runtimes"] = PackedStringArray([colima])
+	SetupService.status["runtime_selected"] = colima
+	SetupService.status["docker_available"] = true
+	var only_colima := SectionPanel.new("docker", 24.0)
+	office.add_child(only_colima)
+	await get_tree().process_frame
+	start = _panel_button(only_colima, UIStrings.t("setup.container_start"))
+	result["colima_attiva_premibile"] = start != null and not start.disabled
+	# Il difetto O-13b in una riga: con un motore installato, "installa Docker"
+	# è una proposta senza senso.
+	result["colima_niente_installa_docker"] = _panel_button(only_colima,
+			UIStrings.t("setup.docker_install")) == null
+	result["colima_motore_nominato"] = _panel_has_label(only_colima,
+			UIStrings.t("setup.runtime_installed_off")
+			% UIStrings.t("setup.runtime_colima"))
+	result["colima_nessuna_scelta_inutile"] = not _panel_has_label(only_colima,
+			UIStrings.t("setup.runtime_choice"))
+	only_colima.queue_free()
+	await get_tree().process_frame
+
+	# ── (c) Due motori: la scelta va CHIESTA ────────────────────────────
+	SetupService.status["runtimes"] = PackedStringArray([colima, desktop])
+	SetupService.status["runtime_selected"] = colima
+	var both := SectionPanel.new("docker", 24.0)
+	office.add_child(both)
+	await get_tree().process_frame
+	result["due_motori_scelta_offerta"] = _panel_has_label(both,
+			UIStrings.t("setup.runtime_choice"))
+	result["due_motori_colima_selezionabile"] = _panel_button(both,
+			UIStrings.t("setup.runtime_colima")) != null
+	result["due_motori_desktop_selezionabile"] = _panel_button(both,
+			UIStrings.t("setup.runtime_docker_desktop")) != null
+	both.queue_free()
+	await get_tree().process_frame
+
+	# ── (e) Gli step sono una catena, non quattro schede ─────────────────
+	SetupService.status["provider_authenticated"] = false
+	SetupService.status["plan_ready"] = false
+	SetupService.status["profile_ready"] = false
+	SetupService.status["unknown_steps"] = []
+	var locked := SectionPanel.new("activation", 24.0)
+	office.add_child(locked)
+	await get_tree().process_frame
+	# Container spento: 02, 03 e 04 sono bloccati, 01 no.
+	result["catena_tre_passi_bloccati"] = _panel_button_count(locked,
+			UIStrings.t("setup.gate_locked")) == 3
+	result["catena_motivo_container"] = _panel_has_label(locked,
+			UIStrings.t("setup.gate_needs_container"))
+	# Il difetto raccontato dall'operatore: il profilo si apriva col container
+	# ancora inesistente, e il colloquio finiva contro un interlocutore spento.
+	var profile_gate := _panel_button(locked, UIStrings.t("setup.gate_locked"))
+	result["catena_bloccato_non_premibile"] = profile_gate != null \
+			and profile_gate.disabled
+	locked.queue_free()
+	await get_tree().process_frame
+
+	# Container acceso: si sblocca SOLO il passo successivo.
+	SetupService.status["container_running"] = true
+	SetupService.status["docker_running"] = true
+	var partial := SectionPanel.new("activation", 24.0)
+	office.add_child(partial)
+	await get_tree().process_frame
+	result["catena_sblocca_uno_alla_volta"] = _panel_button_count(partial,
+			UIStrings.t("setup.gate_locked")) == 2
+	result["catena_motivo_provider"] = _panel_has_label(partial,
+			UIStrings.t("setup.gate_needs_provider"))
+	partial.queue_free()
+	await get_tree().process_frame
+
+	# Setup completo: nessun passo bloccato, nessuna spiegazione da dare.
+	SetupService.status["provider_authenticated"] = true
+	SetupService.status["plan_ready"] = true
+	SetupService.status["profile_ready"] = true
+	SetupService.status["hours_ready"] = true
+	var open_all := SectionPanel.new("activation", 24.0)
+	office.add_child(open_all)
+	await get_tree().process_frame
+	result["catena_completa_tutto_aperto"] = _panel_button_count(open_all,
+			UIStrings.t("setup.gate_locked")) == 0
+	open_all.queue_free()
+	await get_tree().process_frame
+
+	SetupService.status = original
+	var ok := true
+	for key in result:
+		ok = ok and bool(result[key])
+	print("SETUP-GATING-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify(result)])
+	get_tree().quit(0 if ok else 1)
 
 
 ## Il contenuto grezzo di un file in `user://`, o un array vuoto se non c'è.
@@ -1228,6 +1809,237 @@ func _tour_selftest() -> void:
 	await get_tree().create_timer(0.3).timeout
 	get_tree().quit(0 if ok else 1)
 
+## O-14 + WIN-TOUR-DRAWS-OVER-SETUP — «l'utente interrompe all'inizio,
+## va dritto al setup e poi riprende dallo stesso punto».
+##
+## Il difetto non era che mancasse un pulsante: era che l'interruzione esisteva per
+## il TOUR e non per il GIRO. Chi la premeva si fermava a metà — la regia
+## taceva, ma le chat guidate continuavano a parlare e ad aprire pannelli
+## sopra quello che stava facendo. Da qui i controlli sotto: dopo l'uscita si
+## verifica che TACCIANO ANCHE LORO, ma senza marcare concluso il progresso:
+## la ripresa deve riusare l'indice già persistito, non ricominciare.
+##
+## Gira con il TutorialHarness acceso, quindi scrive sul config sintetico:
+## la persistenza è metà del contratto e va verificata su file vero, mai su
+## quello della persona che sta usando il gioco.
+func _tour_exit_selftest() -> void:
+	var failures: Array[String] = []
+	var check := func(ok: bool, message: String) -> void:
+		if not ok:
+			failures.append(message)
+	# Primo avvio: né provider né container, come chi apre il gioco la prima
+	# volta e vuole andare dritto alla configurazione.
+	ScriptedOnboarding.set_provider_test_override(0)
+	SetupService.status["provider_authenticated"] = false
+	SetupService.status["container_running"] = false
+	SetupService.status["profile_ready"] = false
+	SetupService.status["ready"] = false
+	office._on_setup_status_changed(SetupService.status)
+	await get_tree().create_timer(0.6).timeout
+	office._refresh_tour_markers()
+
+	check.call(office._tour_enabled and TourGuide.active(),
+			"il giro non è attivo: il test non starebbe provando nulla")
+	check.call(not ScriptedOnboarding.is_dismissed(),
+			"il giro risulta già chiuso prima di uscirne")
+	check.call(TourGuide.current_slug() == "assistente",
+			"l'uscita non viene provata all'INIZIO del giro")
+	var guided_before := ScriptedOnboarding.use_scripted_chat("assistente")
+	check.call(guided_before, "le chat guidate non sono attive prima dell'uscita")
+
+	# Le azioni che aprivano pannelli da sole: dopo l'uscita non ne deve
+	# partire più nessuna, ed è il motivo per cui si registrano da qui.
+	var actions: Array[String] = []
+	var capture := func(action: String, _payload: Dictionary) -> void:
+		actions.append(action)
+	ScriptedOnboarding.action_requested.connect(capture)
+
+	# ── Il pulsante esiste ed è VISIBILE, non solo istanziato ─────────
+	var sidebar: GameSidebar = null
+	for child in office.get_children():
+		if child is GameSidebar:
+			sidebar = child
+			break
+	check.call(sidebar != null, "sidebar assente: l'uscita non ha una casa stabile")
+	if sidebar:
+		var exit_row: Control = sidebar._exit_tour.get_parent() as Control
+		check.call(is_instance_valid(sidebar._exit_tour) and exit_row.visible,
+				"il menu laterale non mostra l'uscita mentre il giro è in corso")
+		check.call(sidebar._exit_tour.text != "" \
+				and sidebar._exit_tour.text != "tour.exit",
+				"l'uscita nel menu non è tradotta")
+	check.call(is_instance_valid(office._tour_tracker),
+			"la to-do list del tour, che ospita l'altro pulsante, non c'è")
+
+	# ── L'uscita col TASTO, dal percorso vero ─────────────────────────
+	# Chiamare exit_guided_onboarding() proverebbe la funzione, non la via
+	# che l'utente ha davvero: qui passa dal ramo ESC di Game.
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.physical_keycode = KEY_ESCAPE
+	esc.pressed = true
+	Game._unhandled_input(esc)
+	await get_tree().process_frame
+	check.call(not get_tree().paused,
+			"ESC ha messo in pausa invece di chiudere il giro")
+
+	check.call(ScriptedOnboarding.is_dismissed(), "l'interruzione non silenzia il giro")
+	check.call(not TourGuide.active(), "l'interruzione lascia attiva la regia")
+	for agent in ScriptedOnboarding.AGENTS:
+		check.call(not ScriptedOnboarding.use_scripted_chat(agent),
+				"la chat guidata di %s parla ancora dopo l'uscita" % agent)
+		check.call((ScriptedOnboarding.options(agent) as Array).is_empty(),
+				"%s propone ancora opzioni guidate dopo l'uscita" % agent)
+
+	# Nessun messaggio nuovo: il container che si accende è proprio l'evento
+	# che faceva parlare il Coordinatore sopra il menu.
+	var history_before := (ScriptedOnboarding.messages("coordinatore") as Array).size()
+	SetupService.status["container_running"] = true
+	SetupService.status["provider_authenticated"] = true
+	ScriptedOnboarding._reconcile_with_status(SetupService.status)
+	await get_tree().process_frame
+	check.call((ScriptedOnboarding.messages("coordinatore") as Array).size() \
+			== history_before,
+			"un agente parla ancora a giro chiuso")
+	check.call(actions.is_empty(),
+			"a giro chiuso si aprono ancora pannelli da soli: " + JSON.stringify(actions))
+	ScriptedOnboarding.action_requested.disconnect(capture)
+
+	# ── Va dritto al setup: niente regia, niente marker che lo chiamano ──
+	office._refresh_tour_markers()
+	await get_tree().process_frame
+	var tour_markers := 0
+	for a in office.agents:
+		if a.quest_marker != null and a.quest_marker.visible \
+				and ScriptedOnboarding.normalize_agent(a.slug) == "assistente":
+			tour_markers += 1
+	check.call(TourGuide.step_index() == 0 and TourGuide.current_slug() == "assistente" \
+			and not TourGuide.stop_open("scout"),
+			"l'interruzione ha perso o avanzato la tappa persistita")
+	check.call(tour_markers == 0 or not TourGuide.active(),
+			"l'Assistente chiama ancora l'utente dopo l'uscita")
+	# La configurazione è raggiungibile: è il punto dell'uscita.
+	check.call(SetupService.status.has("ready"),
+			"lo stato del setup non è consultabile dopo l'uscita")
+
+	# ── Persiste al riavvio ──────────────────────────────────────────
+	var cfg := ConfigFile.new()
+	var saved := cfg.load(TutorialHarness.ONBOARDING_CFG) == OK \
+			and bool(cfg.get_value("guided", "dismissed", false))
+	check.call(saved, "l'interruzione non è finita su file: al riavvio riparte da sola")
+	# Riavvio simulato: stato in memoria azzerato, ricaricato da file.
+	ScriptedOnboarding._dismissed = false
+	ScriptedOnboarding._load_state()
+	check.call(ScriptedOnboarding.is_dismissed(),
+			"l'interruzione non viene riletta al riavvio")
+	var tour_cfg := ConfigFile.new()
+	check.call(tour_cfg.load(TutorialHarness.TOUR_CFG) == OK \
+			and not bool(tour_cfg.get_value("tour", "done", true)) \
+			and int(tour_cfg.get_value("tour", "index", -1)) == 0,
+			"l'interruzione ha scritto un completamento o perso l'indice su file")
+
+	# ── Ripresa dal pulsante vero: stesso indice, tracker rimontato ─────
+	if sidebar:
+		var resume_row: Control = sidebar._exit_tour.get_parent() as Control
+		check.call(resume_row.visible and sidebar._exit_tour.text != "" \
+				and sidebar._exit_tour.text != "tour.resume",
+				"la sidebar non offre la ripresa persistita")
+		sidebar._exit_tour.pressed.emit()
+		await get_tree().process_frame
+		check.call(not ScriptedOnboarding.is_dismissed(),
+				"il pulsante non riapre il gate del giro")
+		check.call(TourGuide.active() and TourGuide.step_index() == 0 \
+				and TourGuide.current_slug() == "assistente",
+				"la ripresa non torna alla stessa tappa")
+		check.call(is_instance_valid(office._tour_tracker),
+				"la ripresa non rimonta il tracker")
+		check.call(ScriptedOnboarding.use_scripted_chat("assistente"),
+				"la ripresa non riattiva la chat guidata")
+		var resumed_cfg := ConfigFile.new()
+		check.call(resumed_cfg.load(TutorialHarness.ONBOARDING_CFG) == OK \
+				and not bool(resumed_cfg.get_value("guided", "dismissed", true)),
+				"la ripresa non è persistita: al riavvio tornerebbe in pausa")
+
+	var ok := failures.is_empty()
+	print("TOUR-EXIT-TEST ", "PASS " if ok else "FAIL ",
+			JSON.stringify({"failures": failures}))
+	await get_tree().create_timer(0.3).timeout
+	get_tree().quit(0 if ok else 1)
+
+
+func _target_role_category_selftest() -> void:
+	await get_tree().process_frame
+	var failures: Array[String] = []
+	var check := func(ok: bool, message: String) -> void:
+		if not ok:
+			failures.append(message)
+	UIStrings.set_lang("de", false)
+	ScriptedOnboarding.set_provider_test_override(0)
+	ScriptedOnboarding.reset_for_test()
+	ScriptedOnboarding.choose("assistente", "start")
+	var localized_label := UIStrings.t("onb.a.role.design")
+	ScriptedOnboarding.choose("assistente", "design")
+
+	var draft := ScriptedOnboarding.profile_draft()
+	check.call(draft.get("target_role_category_id", "") == "design",
+			"nuova scelta non conserva l'ID categoria")
+	check.call(not draft.has("target_role"),
+			"nuova scelta crea target_role dalla label")
+	var specialty_options := ScriptedOnboarding.options("assistente")
+	check.call(not specialty_options.is_empty() \
+			and str(specialty_options[0].get("id", "")) == "specialist",
+			"categoria design non apre le specialty generiche")
+	ScriptedOnboarding.choose("assistente", "specialist")
+
+	var model := ScriptedOnboarding.llm_context()
+	var model_text := ScriptedOnboarding.llm_context_text()
+	var role_answers: Array = []
+	for answer in model.get("answers", []):
+		if answer is Dictionary and str(answer.get("step", "")) == "role":
+			role_answers.append(answer)
+	check.call(model.get("schema_version", 0) == 3,
+			"schema contesto non incrementato")
+	check.call(role_answers.size() == 1 \
+			and str(role_answers[0].get("value", "")) == "design",
+			"risposta ruolo non strutturata")
+	check.call(role_answers.size() == 1 \
+			and not (role_answers[0] as Dictionary).has("label"),
+			"label localizzata ancora nella risposta modello")
+	check.call(model_text.contains("target_role_category_id: design") \
+			and model_text.contains("target_specialty: specialist"),
+			"prompt senza categoria o specialty canoniche")
+	check.call(not model_text.contains(localized_label),
+			"prompt contaminato dalla label localizzata")
+
+	var enriched := ScriptedOnboarding.enrich_profile_fields({
+		"target_role": "Senior Product Designer",
+	})
+	check.call(enriched.get("target_role", "") == "Senior Product Designer",
+			"testo target_role libero modificato")
+	check.call(enriched.get("target_role_category_id", "") == "design" \
+			and enriched.get("target_specialty", "") == "specialist",
+			"profilo strutturato senza gli ID canonici")
+
+	# Il vecchio valore instrada in sola lettura, senza riscrivere il draft.
+	ScriptedOnboarding.reset_for_test()
+	ScriptedOnboarding._steps["assistente"] = "specialty"
+	ScriptedOnboarding._draft["target_role"] = "Data / AI"
+	var legacy_options := ScriptedOnboarding.options("assistente")
+	var legacy_draft := ScriptedOnboarding.profile_draft()
+	check.call(not legacy_options.is_empty() \
+			and str(legacy_options[0].get("id", "")) == "data_science",
+			"legacy non instrada le specialty data")
+	check.call(legacy_draft.get("target_role", "") == "Data / AI",
+			"target_role legacy modificato")
+	check.call(not legacy_draft.has("target_role_category_id"),
+			"target_role legacy migrato")
+
+	var ok := failures.is_empty()
+	print("TARGET-ROLE-CATEGORY-TEST ", "PASS" if ok else "FAIL ",
+			"" if ok else JSON.stringify({"failures": failures}))
+	get_tree().quit(0 if ok else 1)
+
+
 func _guided_onboarding_selftest() -> void:
 	var failures: Array[String] = []
 	var original_setup := SetupService.status.duplicate(true)
@@ -1331,7 +2143,12 @@ func _guided_onboarding_selftest() -> void:
 			"remote_first", "europe", "depends", "permanent", "improve", "scaleup"]:
 		ScriptedOnboarding.choose("assistente", choice)
 	var draft := ScriptedOnboarding.profile_draft()
-	check.call(draft.get("target_role") == "Software Engineering", "ruolo non raccolto")
+	check.call(draft.get("target_role_category_id") == "software",
+			"ID categoria ruolo non raccolto")
+	check.call(not draft.has("target_role"),
+			"la label ruolo ha contaminato target_role")
+	check.call(ScriptedOnboarding.preferences().get("target_specialty") == "backend",
+			"ID specialty non raccolto")
 	check.call(draft.get("experience_years") == "3", "esperienza non raccolta")
 	check.call(draft.get("location") == "Europa", "località non raccolta")
 	check.call(ScriptedOnboarding.options("assistente").size() == 3,
@@ -1454,17 +2271,33 @@ func _guided_onboarding_selftest() -> void:
 	draft = ScriptedOnboarding.profile_draft()
 	check.call(ScriptedOnboarding.answers().size() >= 12,
 			"le risposte onboarding non sono state strutturate")
-	check.call(ScriptedOnboarding.llm_context_text().contains("target_role") \
-			and ScriptedOnboarding.llm_context_text().contains("Software Engineering") \
-			and ScriptedOnboarding.llm_context().get("schema_version", 0) == 2,
+	var role_context := ScriptedOnboarding.llm_context()
+	var role_context_text := ScriptedOnboarding.llm_context_text()
+	var role_answer := (role_context.get("answers", []) as Array).filter(
+			func(item: Dictionary) -> bool: return str(item.get("step", "")) == "role")
+	check.call(role_context_text.contains("target_role_category_id") \
+			and role_context_text.contains("software") \
+			and role_context_text.contains("fullstack") \
+			and not role_context_text.contains(UIStrings.t("onb.a.role.software")) \
+			and role_context.get("schema_version", 0) == 3 \
+			and role_answer.size() == 1 \
+			and not (role_answer[0] as Dictionary).has("label"),
 			"contesto LLM onboarding incompleto")
 	ScriptedOnboarding.remember_profile_fields({"name": "Ada Test",
 			"email": "ada@example.com", "languages": "Italiano, English"})
 	ScriptedOnboarding.record_dialogue_choice("tour_scout", "n2",
-			"Posso indicare aziende o tipi di lavoro preferiti?", "sources")
-	check.call(ScriptedOnboarding.llm_context_text().contains("Ada Test") \
+			"Posso indicare aziende o tipi di lavoro preferiti?", "sources",
+			"dialogue.tour_scout.n2.choice.sources")
+	var dialogue_context := ScriptedOnboarding.llm_context_text()
+	var dialogue_answer := (ScriptedOnboarding.llm_context().get("answers", []) \
+			as Array).filter(func(item: Dictionary) -> bool:
+				return str(item.get("kind", "")) == "dialogue_choice")
+	check.call(dialogue_context.contains("Ada Test") \
 			and ScriptedOnboarding.profile_draft().get("email", "") == "ada@example.com" \
-			and ScriptedOnboarding.llm_context_text().contains("lavoro preferiti"),
+			and dialogue_context.contains("sources") \
+			and not dialogue_context.contains("lavoro preferiti") \
+			and dialogue_answer.size() == 1 \
+			and not (dialogue_answer[0] as Dictionary).has("label"),
 			"dati del profilo nativo non sincronizzati nel contesto LLM")
 
 	BackendBus.set_backend(MockBackend.new())
@@ -1503,8 +2336,8 @@ func _guided_onboarding_selftest() -> void:
 		]) == "Italiano (madrelingua), Inglese (C1)",
 			"le lingue strutturate vengono mostrate come dizionari interni")
 	check.call(profile_panel._prof_edits.has("target_role") \
-			and profile_panel._prof_edits["target_role"].text == "Software Engineering",
-			"bozza scripted non precompila il profilo")
+			and profile_panel._prof_edits["target_role"].text == "",
+			"la categoria scripted ha contaminato il target_role libero")
 
 	# Regressione 24/07 — provider GIÀ configurato e container ancora spento:
 	# prima i dialoghi authored si spegnevano al solo vedere il token e la
@@ -1536,6 +2369,9 @@ func _guided_onboarding_selftest() -> void:
 	# Pannello Docker: deve mostrare la versione del runtime e l'azione di
 	# aggiornamento, altrimenti l'utente resta su un'immagine vecchia senza
 	# nemmeno saperlo (il gioco si aggiorna con l'installer, il container no).
+	# Il MockBackend serve agli assert chat sopra ma rappresenta una macchina
+	# remota: questo controtest dichiara esplicitamente lo stato Docker locale.
+	SetupService.status["remote"] = false
 	SetupService.status["docker_running"] = true
 	SetupService.status["docker_available"] = true
 	SetupService.status["container_exists"] = true
@@ -1725,6 +2561,60 @@ func _guided_onboarding_selftest() -> void:
 	check.call(bool(rescaled["has_baseline"])
 			and int(rescaled["budget_percent"]) == 100,
 			"una finestra invariata non mantiene il budget al 100%")
+
+	# Regressione #136: il backend conferma la persistenza prima che il fetch
+	# periodico ripubblichi il config. La stessa pagina e una nuova apertura
+	# devono vedere subito il payload confermato; un fallimento successivo non
+	# può sostituirlo né mostrare una falsa conferma.
+	var previous_settings := BackendBus.live_settings.duplicate(true)
+	var empty_hours_settings := previous_settings.duplicate(true)
+	empty_hours_settings["hours_raw"] = {}
+	BackendBus.publish_settings(empty_hours_settings)
+	var hours_panel := SectionPanel.new("hours", 24.0)
+	office.add_child(hours_panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var persisted_hours := {"timezone": "Europe/Rome", "windows": [
+			{"days": ["mon", "tue"], "start": "09:00", "end": "17:00"}]}
+	hours_panel._hours_pending_raw = persisted_hours.duplicate(true)
+	hours_panel._hours_save_in_flight = true
+	hours_panel._on_hours_saved(true, "")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var current_hours_text := ""
+	for node in hours_panel.find_children("*", "", true, false):
+		if node is Label:
+			current_hours_text += (node as Label).text + "\n"
+	check.call(BackendBus.live_settings.get("hours_raw", {}) == persisted_hours,
+			"il successo non pubblica subito gli orari persistiti")
+	check.call(not current_hours_text.contains(UIStrings.t("hours.first_time")),
+			"il placeholder primo avvio resta visibile dopo il salvataggio")
+	check.call(current_hours_text.contains(UIStrings.t("hours.saved")),
+			"la pagina ricostruita perde la conferma di salvataggio")
+	var failed_hours := {"timezone": "UTC", "windows": [
+			{"days": ["sun"], "start": "10:00", "end": "11:00"}]}
+	hours_panel._hours_pending_raw = failed_hours.duplicate(true)
+	hours_panel._hours_save_in_flight = true
+	hours_panel._on_hours_saved(false, "synthetic-save-error")
+	check.call(BackendBus.live_settings.get("hours_raw", {}) == persisted_hours,
+			"un salvataggio fallito sostituisce gli orari persistiti")
+	check.call(hours_panel._hours_status.text.contains("synthetic-save-error")
+			and not hours_panel._hours_status.text.contains(UIStrings.t("hours.saved")),
+			"un salvataggio fallito produce una falsa conferma")
+	var reopened_hours := SectionPanel.new("hours", 24.0)
+	office.add_child(reopened_hours)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var reopened_text := ""
+	for node in reopened_hours.find_children("*", "", true, false):
+		if node is Label:
+			reopened_text += (node as Label).text + "\n"
+	check.call(reopened_hours._hours_tz.text == "Europe/Rome"
+			and not reopened_text.contains(UIStrings.t("hours.first_time")),
+			"una nuova apertura non rilegge gli orari appena persistiti")
+	hours_panel.queue_free()
+	reopened_hours.queue_free()
+	BackendBus.publish_settings(previous_settings)
 
 	# ── Ogni agente al suo banco ────────────────────────────────────────
 	# Il volto è legato alla sedia, e la sedia ora discende dal numero: due
@@ -2061,8 +2951,16 @@ func _feedback_panel_selftest() -> void:
 	panel._fb_form["happened"] = "la finestra resta ferma su collegamento"
 	panel._refresh_feedback_send()
 	gate_ok = gate_ok and send != null and not send.disabled
-	var no_contact_control: bool = not _ui_has_text(panel,
+	var contact_control: bool = _ui_has_text(panel,
 			UIStrings.t("feedback.q_contact"))
+	# Assente è accettato; un valore invalido ferma l'invio; un indirizzo
+	# sintetico valido abilita di nuovo il gate.
+	panel._fb_form["reply_to"] = "not-an-address"
+	panel._refresh_feedback_send()
+	var email_gate := send != null and send.disabled
+	panel._fb_form["reply_to"] = "reporter@example.com"
+	panel._refresh_feedback_send()
+	email_gate = email_gate and send != null and not send.disabled
 
 	# La raccolta gira su un thread (docker, file): si attende l'esito.
 	var collected := false
@@ -2101,31 +2999,34 @@ func _feedback_panel_selftest() -> void:
 	# Tornando indietro il racconto è ancora lì: farlo riscrivere sarebbe il
 	# modo più rapido per non ricevere più segnalazioni.
 	var persist_ok := str(panel._fb_form["happened"]).contains("collegamento")
-	# Quattro invarianti del contratto privacy: il recapito non esce mai dal
-	# desktop, i racconti hanno la stessa redazione dei log, l'anteprima è il
-	# documento che verrà spedito e il contatore include anche ciò che l'utente
-	# ha scritto, non solo gli allegati tecnici.
+	# Il recapito dedicato esce soltanto col nome `reply_to`; il vecchio contact
+	# e gli indirizzi incollati nel racconto restano redatti. Anteprima e copia
+	# locale non mostrano il recapito, che non fa parte del report tecnico.
 	var fake_token := "ghp" + "_ABCdefGHIjklMNOpqrSTUvwxYZ0123456789"
 	var private_form := {
-		"doing": "CV in /Users/mariorossi/CV_Mario_Rossi.pdf",
-		"happened": "scrivi a user@example.com con token=" + fake_token,
+		"doing": "CV in /Users/local-account/Documents/resume.pdf",
+		"happened": "scrivi a narrative@example.com con token=" + fake_token,
 		"expected": "nessun contatto o segreto deve lasciare il computer",
-		"contact": "user@example.com", # client vecchio: deve essere ignorato
+		"reply_to": "reporter@example.com",
+		"contact": "legacy@example.com", # client vecchio: ignorato
 	}
 	var private_bundle := {"redaction": {}, "logs": {}}
 	var payload := FeedbackService._payload(private_form, private_bundle,
 			"diagnostica senza dati personali")
 	var payload_redaction: Dictionary = payload.get("redaction", {})
-	var no_contact := not payload.has("contact") \
-			and not JSON.stringify(payload).contains("user@example.com")
+	var reply_contract := not payload.has("contact") \
+			and str(payload.get("reply_to", "")) == "reporter@example.com" \
+			and not JSON.stringify(payload).contains("legacy@example.com") \
+			and not JSON.stringify(payload).contains("narrative@example.com")
 	var redacted_story := not JSON.stringify(payload).contains(fake_token) \
-			and not JSON.stringify(payload).contains("mariorossi") \
+			and not JSON.stringify(payload).contains("local-account") \
 			and int(payload.get("redaction", {}).size()) >= 3
 	var exact_preview := FeedbackService._to_markdown(payload)
 	var preview_matches_payload := exact_preview.contains("[email]") \
 			and exact_preview.contains("[document].pdf") \
 			and exact_preview.contains(UIStrings.t("feedback.report.redacted")) \
-			and not exact_preview.contains("user@example.com") \
+			and not exact_preview.contains("reporter@example.com") \
+			and not exact_preview.contains("narrative@example.com") \
 			and not exact_preview.contains(fake_token)
 	var counts_include_story: bool = int(payload_redaction.get("email", 0)) > 0 \
 			and not payload_redaction.is_empty()
@@ -2147,13 +3048,14 @@ func _feedback_panel_selftest() -> void:
 			FeedbackService.last_saved_path = ""
 		if not send_ok:
 			print("FEEDBACK-PANEL-TEST send esito=", result)
-	var ok: bool = gate_ok and no_contact_control and collected and preview_ok and persist_ok and no_contact \
+	var ok: bool = gate_ok and contact_control and email_gate and collected \
+			and preview_ok and persist_ok and reply_contract \
 			and redacted_story and preview_matches_payload and counts_include_story and send_ok
 	if not ok:
 		print("FEEDBACK-PANEL-TEST details gate=", gate_ok, " collected=", collected,
 				" preview=", preview_ok, " persist=", persist_ok,
-				" no_contact_control=", no_contact_control,
-				" no_contact=", no_contact, " redacted_story=", redacted_story,
+				" contact_control=", contact_control, " email_gate=", email_gate,
+				" reply_contract=", reply_contract, " redacted_story=", redacted_story,
 				" preview_matches_payload=", preview_matches_payload,
 				" counts_include_story=", counts_include_story)
 	print("FEEDBACK-PANEL-TEST ", "PASS" if ok else "FAIL")
@@ -2655,18 +3557,46 @@ func _coordinator_selftest() -> void:
 			.get("mode", "")) == "care" \
 			and int(BackendBus.coordinator_state.get("enrichment", {}) \
 			.get("geocode_min_score", 0)) == 72
+	# «Fino a quando» ([MODE-DEADLINE-UNREACHABLE-AND-ERASED]): la scadenza si
+	# scegli dalla Console, e — soprattutto — salvare un'ALTRA impostazione non
+	# la porta via. Il secondo salvataggio qui sotto non tocca il campo: se la
+	# scadenza sparisse, sarebbe di nuovo il difetto del ticket.
+	var deadline_ok := false
+	if panel_ok:
+		var panel: CoordinatorPanel = office._coordinator_panel
+		panel._until_toggle.button_pressed = true
+		panel._until_days.value = 2
+		panel._until_hours.value = 0
+		panel._save_settings()
+		await get_tree().process_frame
+		var armed: Dictionary = BackendBus.coordinator_state.get("maintenance", {})
+		deadline_ok = int(armed.get("mode_until_sec", 0)) > 47 * 3600 \
+				and armed.get("mode_until") != null \
+				and panel._until_toggle.button_pressed
+		panel._cv_score.value = 77
+		panel._save_settings()
+		await get_tree().process_frame
+		var kept: Dictionary = BackendBus.coordinator_state.get("maintenance", {})
+		deadline_ok = deadline_ok and kept.get("mode_until") != null \
+				and int(kept.get("cv_min_score", 0)) == 77
+		# E toglierla resta una scelta esplicita.
+		panel._until_toggle.button_pressed = false
+		panel._save_settings()
+		await get_tree().process_frame
+		deadline_ok = deadline_ok and BackendBus.coordinator_state \
+				.get("maintenance", {}).get("mode_until") == null
 	var before: int = BackendBus.coordinator_state.get("directives", []).size()
 	BackendBus.add_team_directive("Test direttiva console", "order")
 	await get_tree().process_frame
 	var directive_ok: bool = BackendBus.coordinator_state.get("directives", []).size() \
 			== before + 1
 	var ok: bool = panel_ok and navigation_ok and chat_ok and thinking_ok \
-			and controls_ok and save_ok and directive_ok
+			and controls_ok and save_ok and directive_ok and deadline_ok
 	print("COORDINATOR-CONSOLE-TEST ", "PASS" if ok else "FAIL", " ",
 			JSON.stringify({"panel": panel_ok, "controls": controls_ok,
 				"navigation": navigation_ok, "chat": chat_ok,
 				"thinking": thinking_ok, "save": save_ok,
-				"directive": directive_ok}))
+				"directive": directive_ok, "deadline": deadline_ok}))
 	get_tree().quit(0 if ok else 1)
 ## Regressione del cambio macchina (JHT_BACKEND_SWITCH_TEST=1). Riproduce la
 ## misura del 27/07 senza due VPS: box A con 694 righe `scored`, cambio di

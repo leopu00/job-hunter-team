@@ -73,6 +73,11 @@ def make_db(home):
         CREATE TABLE positions (
             id INTEGER PRIMARY KEY, company_id INTEGER,
             status TEXT DEFAULT 'scored', last_checked TIMESTAMP,
+            -- `last_open_check` sta qui per lo stesso motivo di `expires_at` e
+            -- `is_open`: stessa espansione Analista (2026-06-13), e da
+            -- [RECHECK-MUST-UPDATE-LAST-CHECKED] la cadenza della cura si
+            -- misura sulla PIÙ RECENTE fra le due date di verifica.
+            last_open_check TIMESTAMP,
             expires_at TIMESTAMP, office_lat REAL,
             office_geocoded INTEGER DEFAULT 0, work_mode TEXT,
             is_open INTEGER);
@@ -295,6 +300,25 @@ def test_care_pending_con_lavoro_residuo_e_done_a_code_vuote(mb):
     snap = mb.snapshot()
     assert snap["exit"]["kind"] == mb.EXIT_DONE
     assert "CARE COMPLETE" in snap["exit"]["detail"]
+
+
+def test_care_recheck_guarda_la_verifica_piu_recente(mb):
+    """La stima della cura conta come la coda che la cura fa lavorare.
+
+    [RECHECK-MUST-UPDATE-LAST-CHECKED]: la liveness on-demand scrive
+    `last_open_check`, e se il banner guardasse solo `last_checked`
+    dichiarerebbe da ricontrollare una posizione che `next-for-recheck-due`
+    non serve più — cioè una cura che non finisce mai.
+    """
+    conn = make_db(mb._home())
+    add_position(conn, 1, score=80, last_checked="2026-06-04 09:00:00")
+    conn.execute("UPDATE positions SET last_open_check = datetime('now')")
+    conn.commit()
+    conn.close()
+
+    set_mode(mb._home(), "care")
+    snap = mb.snapshot()
+    assert "recheck=0" in snap["exit"]["detail"]
 
 
 def test_care_conta_le_scadute(mb):

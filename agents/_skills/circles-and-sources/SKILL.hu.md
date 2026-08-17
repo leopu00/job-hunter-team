@@ -2,7 +2,7 @@
 ---
 name: circles-and-sources
 description: Stratégiai térkép arról, mit hol keress, teljes egészében a jelölt profiljából származtatva. Az 5 koncentrikus kör (work_mode + relocation) megadja a földrajzi hatókört; a 4 forrás szint (LinkedIn → ATS aggregátorok → niche → web) megadja, mely platformokat ürítsed ki sorrendben. Egy scout, aki rossz szintben keres rossz körben, elpazarolja a kvótáját és a `scout-coord` partícióját. Nyisd meg ezt a skill-t boot-kor (a `scout-coord` után) és újra, amikor egy kör kimerül vagy az Analyst `[FEEDBACK]`-je forrásváltást javasol.
-allowed-tools: Bash(curl *), Bash(python3 /app/shared/skills/linkedin_check.py *)
+allowed-tools: Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(python3 /app/shared/skills/linkedin_check.py *)
 ---
 
 # circles-and-sources — olvasd a profilt, építsd a térképet
@@ -68,7 +68,7 @@ Meríts ki teljesen egy szintet, mielőtt a következőre lépnél.
 
 | Szint | Típus                               | Források                                                                                                     | Megjegyzések                                                                                   |
 |-------|-------------------------------------|--------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
-| 1     | **LinkedIn**                        | `linkedin_check.py` (hitelesített profil), `curl` böngésző UA-val                                            | Univerzális: lefedi a remote, on-site, hybrid módokat. Kötelező első lépés minden körben. **SOHA NE `fetch` MCP** — a robots.txt blokkolja. |
+| 1     | **LinkedIn**                        | `linkedin_check.py` (hitelesített profil), `safe_fetch.py`                                            | Univerzális: lefedi a remote, on-site, hybrid módokat. Kötelező első lépés minden körben. **SOHA NE `fetch` MCP** — a robots.txt blokkolja. |
 | 2     | **ATS aggregátorok**                | Greenhouse boardok, Lever boardok, Indeed, Wellfound (korábban AngelList)                                    | Bármely work_mode-hoz működik. Sok céget lefed egyetlen scrape-ben.                            |
 | 3     | **Niche boardok (profil-specifikus)** | Válassz `work_mode` ÉS szakterület alapján                                                                 | (lásd alábbi táblázat)                                                                         |
 | 4     | **WebSearch + karrieroldalak**      | `WebSearch` lekérdezések + cég karrieroldalak scrape-elése                                                  | Végső megoldás, csak az 1-3. szintek kiürítése után.                                           |
@@ -170,7 +170,7 @@ Példa: Analyst azt mondja "az utolsó 5-ből 4 a greenhouse.io-ról senior+-t i
 - ❌ A 2. körben keresés az 1. kör kimerítése előtt — pazarolja a hatókört, hígítja az eredményeket.
 - ❌ A 4. szintre (WebSearch) ugrás az 1-3. szintek kimerítése előtt — a `WebSearch` a legzajosabb forrás, tartsd utoljára.
 - ❌ `relocation = "ovunque"` kikövetkeztetése egy jelöltnek, akinek profilja `false`-t mond — olvasd a profilt, ne vetítsd ki.
-- ❌ LinkedIn használata `fetch` MCP-n keresztül — a robots.txt blokkolja; mindig `linkedin_check.py` (hitelesített) vagy `curl` böngésző UA-val.
+- ❌ LinkedIn használata `fetch` MCP-n keresztül — a robots.txt blokkolja; mindig `linkedin_check.py` (hitelesített) vagy `safe_fetch.py`.
 - ❌ Senior címkéjű JD-k befoglalása, hátha a Scorer kiszűri — pazarolja a Scorer költségvetést, zajt ad. A 4 SCOUT-szintű szűrő fent a helyes szűrőpont.
 - ❌ Anti-torzítási ellenőrzés elfelejtése — egy mohó cég elárasztja a kötegdet.
 

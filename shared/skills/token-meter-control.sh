@@ -37,13 +37,13 @@ _find_pids() {
 
 _cmd_start() {
   if [ ! -f "$METER_SCRIPT" ]; then
-    echo "✗ token-meter script non trovato: $METER_SCRIPT" >&2
+    echo "✗ token-meter script not found: $METER_SCRIPT" >&2
     return 1
   fi
   # Singleton: se già up, no-op (idempotente per integrazione launcher).
   _existing="$(_find_pids | head -1 || true)"
   if [ -n "$_existing" ]; then
-    echo "✓ token-meter già attivo (pid=$_existing)"
+    echo "✓ token-meter already running (pid=$_existing)"
     return 0
   fi
   # setsid esiste sul container Linux (busybox) ma non su macOS host.
@@ -64,13 +64,13 @@ _cmd_start() {
   if [ -z "$_new" ] && [ -f "$PID_FILE" ]; then
     _new="$(cat "$PID_FILE" 2>/dev/null)"
   fi
-  echo "✓ token-meter partito (pid=${_new:-?}, log $LOG_FILE)"
+  echo "✓ token-meter started (pid=${_new:-?}, log $LOG_FILE)"
 }
 
 _cmd_stop() {
   _pids="$(_find_pids)"
   if [ -z "$_pids" ]; then
-    echo "○ token-meter non attivo"
+    echo "○ token-meter not running"
     return 0
   fi
   for _pid in $_pids; do
@@ -83,7 +83,7 @@ _cmd_stop() {
     kill -0 "$_pid" 2>/dev/null && kill -9 "$_pid" 2>/dev/null || true
   done
   rm -f "$PID_FILE"
-  echo "✓ token-meter stop completato"
+  echo "✓ token-meter stopped"
 }
 
 _cmd_status() {

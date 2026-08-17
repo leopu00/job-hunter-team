@@ -148,23 +148,25 @@ Atenção à diferença face ao Padrão B: lá as exclusões são dos **agentes*
 
 Este feedback vive na cloud (`position_feedback`), não em `jobs.db`: é o único padrão que não passa por `db_query.py`.
 
+**`RAW_DISPLAY_BOUNDARY`** — agrupa sobre os raw `reason` / `comment`, mas nunca os retransmitas. Toda interpretação user-facing pode usar apenas `display_reason` / `display_comment` e `label` / `examples` sanitizados dos temas; chaves de máquina, IDs e notes `no-signal:*` ficam internos.
+
 ### Deteção
 
 ```bash
 # Os temas nos motivos escritos pelo utilizador, últimos 30 dias
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# O mesmo feedback sem agregar, para ler as palavras exatas
+# O mesmo feedback sem agregar; lê apenas display_reason/display_comment
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
 `themes` agrupa o texto livre por semelhança simples — não exige correspondência exata. Passa a minúsculas, retira acentos, pontuação e palavras funcionais, corta cada palavra aos primeiros 5 caracteres (`senior` / `seniority` / `seniore` / `séniorité` caem na mesma chave), e depois conta palavras isoladas e pares adjacentes por **posições distintas**. Um par ganha às suas partes quando cobre as mesmas posições: "demasiado senior" diz mais do que "senior", e é por isso que os intensificadores são mantidos.
 
-Por cada tema devolve `positions`, `events`, `share` (fração das posições que levam texto), `actions` (como o tema se reparte por like / dislike / hide / star), `legacy_ids` e até 3 `examples` verbatim.
+Por cada tema devolve `positions`, `events`, `share` (fração das posições que levam texto), `actions` (como o tema se reparte por like / dislike / hide / star), `legacy_ids` internos e até 3 `examples` display sanitizados.
 
 É tosco por construção e nota-se: sinónimos distantes ficam separados (`salário` e `RAL` são dois temas). Lê os `examples` e junta com a cabeça o que a ferramenta não conseguiu.
 
-Se o payload trouxer uma `note` (`no-signal (...)`), a cloud está desligada ou inalcançável e não há agregado: cala-te, não reconstruas o quadro com chamadas `check` posição a posição.
+Se o payload trouxer uma `note` enum fechada (`no-signal:*`), não há agregado: cala-te, não retransmitas o código e não reconstruas o quadro com chamadas `check` posição a posição.
 
 ### Limiar
 
@@ -226,12 +228,12 @@ Se não tem nada de grau-padrão para dizer, **não diga nada**. Silêncio é um
 - ❌ Catastrofismo ("isto não leva a lado nenhum") OU cheerleading ("consegue!") — ambos violam a voz do Mentor. Números, depois uma pergunta. Ver skill `mentor-output`.
 - ❌ **Transformar o Padrão F numa instrução de pesquisa.** Nunca entregues ao Scout ou ao Capitano um "para de trazer X" derivado do que agrada ao utilizador. Uma pipeline que só pesca o que agrada inflaciona as suas próprias pontuações, e o utilizador acaba a acreditar que o mercado é rico quando foi a pipeline a escolher por ele. O Padrão F é dirigido **ao utilizador**: o que muda no perfil dele decide ele, e tu és read-only de qualquer forma (T10).
 - ❌ Atirar à cara um juízo que o utilizador retirou. `themes` já deixa de fora as posições cujo último evento é `clear`; não as tragas de volta com `--include-cleared` para atingir um limiar.
-- ❌ Citar um único comentário verbatim como se fosse um padrão. Os `examples` dão voz a um tema **depois** de cruzar o limiar; não são o achado.
+- ❌ Citar um único comentário raw como se fosse um padrão. Os `examples` sanitizados dão voz a um tema **depois** de cruzar o limiar; não são o achado.
 
 ## Ver também
 
 - `mentor-output` — COMO formular a mensagem uma vez que um padrão é confirmado.
 - `db-query` — internos do wrapper.
-- `feedback-query` — o leitor do feedback do utilizador na cloud (Padrão F); o Scorer consulta a mesma fonte uma posição de cada vez.
+- `feedback-query` — o leitor do feedback do utilizador na cloud (Padrão F); o Scorer usa temas agregados sanitizados apenas para posições futuras, excluindo a atual.
 - `agents/mentor/mentor.md` — prompt orquestrador + cadência.
 - `agents/_team/team-rules.md` T10 — perfil é read-only, também para o Mentor.

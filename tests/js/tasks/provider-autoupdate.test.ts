@@ -21,6 +21,11 @@ import path from "node:path";
 const REPO = path.resolve(__dirname, "../../..");
 const JHT_BIN = path.join(REPO, "cli", "bin", "jht.js");
 const PID1_SRC = readFileSync(path.join(REPO, "cli", "src", "commands", "pid1.js"), "utf-8");
+// Le versioni le decide la release (issue #130): i test leggono lo stesso
+// manifest del codice, così un bump del pin non li fa mentire.
+const PINS = JSON.parse(
+  readFileSync(path.join(REPO, "shared", "config", "provider-versions.json"), "utf-8"),
+).pins as Record<string, { package: string; version: string }>;
 
 const posixOnly = process.platform === "win32" ? describe.skip : describe;
 
@@ -130,20 +135,23 @@ function runAutoUpdate(sb: Sandbox, extraEnv: Record<string, string> = {}) {
 
 posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   it("aggiorna e logga la versione prima → dopo (criterio 2)", () => {
-    const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "bump", newVersion: "2.4.0" });
+    const sb = makeSandbox({
+      provider: "claude", version: "2.1.220", update: "bump",
+      newVersion: PINS.claude.version,
+    });
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
-    expect(r.out).toContain("2.1.220 → 2.4.0");
+    expect(r.out).toContain(`2.1.220 → ${PINS.claude.version}`);
     expect(r.out).toContain("UPDATED");
   });
 
   it("dice ESPLICITAMENTE quando la versione non è cambiata (criterio 2 + 7)", () => {
-    const sb = makeSandbox({ provider: "claude", version: "2.4.0", update: "ok" });
+    const sb = makeSandbox({ provider: "claude", version: PINS.claude.version, update: "ok" });
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
-    expect(r.out).toContain("2.4.0 → 2.4.0");
+    expect(r.out).toContain(`${PINS.claude.version} → ${PINS.claude.version}`);
     expect(r.out).toContain("UNCHANGED");
-    expect(r.out).toContain("already at the latest version");
+    expect(r.out).toContain("already at the pinned version");
     expect(r.out).toContain("installation skipped");
     expect(sb.calls("npm").some((c) => c.startsWith("install "))).toBe(false);
     // Nessun rumore al Capitano quando non è successo niente.
@@ -176,12 +184,12 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   });
 
   it("provider attivo kimi: tocca SOLO i pacchetti di kimi, mai npm (criterio 4)", () => {
-    const sb = makeSandbox({ provider: "kimi", version: "1.36.0", update: "bump", newVersion: "1.42.0" });
+    const sb = makeSandbox({ provider: "kimi", version: "1.20.0", update: "bump", newVersion: PINS.kimi.version });
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
     expect(sb.calls("npm")).toHaveLength(0);
     const shCalls = sb.calls("sh").join("\n");
-    expect(shCalls).toContain("uv tool install --force --python 3.13 kimi-cli");
+    expect(shCalls).toContain(`uv tool install --force --python 3.13 kimi-cli==${PINS.kimi.version}`);
     expect(shCalls).not.toContain("@anthropic-ai/claude-code");
     expect(shCalls).not.toContain("@openai/codex");
   });
@@ -190,16 +198,19 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "ok" });
     runAutoUpdate(sb);
     const npmCalls = sb.calls("npm").join("\n");
-    expect(npmCalls).toContain("@anthropic-ai/claude-code@latest");
+    // Il pacchetto è quello pinnato dalla release, mai un riferimento
+    // mutabile (issue #130): due macchine con la stessa release installano
+    // lo stesso runtime.
+    expect(npmCalls).toContain(`@anthropic-ai/claude-code@${PINS.claude.version}`);
+    expect(npmCalls).not.toContain("@latest");
     expect(npmCalls).not.toContain("@openai/codex");
-    expect(npmCalls).not.toContain("install -g");
     expect(sb.calls("sh")).toHaveLength(0);
   });
 
   it("il modello non viene toccato: la CLI nuova diventa un FINDING per il Capitano (criterio 5)", () => {
     const sb = makeSandbox({
       provider: "kimi", model: "kimi-k2-0905-preview",
-      version: "1.36.0", update: "bump", newVersion: "1.42.0",
+      version: "1.20.0", update: "bump", newVersion: PINS.kimi.version,
     });
     runAutoUpdate(sb);
 
@@ -211,7 +222,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     expect(inbox[0].kind).toBe("provider-cli");
     const msg = String(inbox[0].msg);
     expect(msg).toContain("FINDING");
-    expect(msg).toContain("1.36.0 → 1.42.0");
+    expect(msg).toContain(`1.20.0 → ${PINS.kimi.version}`);
     expect(msg).toContain("kimi-k2-0905-preview");
     expect(msg).toContain("The MODEL was NOT changed");
 
@@ -232,13 +243,16 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
   });
 
   it("secondo riavvio consecutivo: riconosce che è già aggiornata (criterio 7)", () => {
-    const sb = makeSandbox({ provider: "claude", version: "2.1.220", update: "bump", newVersion: "2.4.0" });
+    const sb = makeSandbox({
+      provider: "claude", version: "2.1.220", update: "bump",
+      newVersion: PINS.claude.version,
+    });
     const first = runAutoUpdate(sb);
-    expect(first.out).toContain("2.1.220 → 2.4.0");
+    expect(first.out).toContain(`2.1.220 → ${PINS.claude.version}`);
     // Secondo boot: l'install è persistente (prefisso su volume), la versione
-    // resta 2.4.0 e non c'è nessun finding nuovo da mandare al Capitano.
+    // resta quella pinnata e non c'è nessun finding nuovo per il Capitano.
     const second = runAutoUpdate(sb);
-    expect(second.out).toContain("2.4.0 → 2.4.0");
+    expect(second.out).toContain(`${PINS.claude.version} → ${PINS.claude.version}`);
     expect(second.out).toContain("UNCHANGED");
     expect(sb.mailbox()).toHaveLength(1);
   });

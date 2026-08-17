@@ -3,7 +3,8 @@
 # Uso: ./start-agent.sh <ruolo> [istanza] [mode]
 #
 # Ruoli: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente
-# Istanza: numero per agenti multipli (es: scout 1 → SCOUT-1)
+# Istanza: numero per agenti multipli (es: scout 1 → SCOUT-1) e per il
+# Critico effimero posseduto dallo Scrittore (critico 1 → CRITICO-S1)
 # Mode: default|fast (default se omesso)
 #
 # Il template CLAUDE.md viene copiato da agents/<ruolo>/<ruolo>.md nel workspace.
@@ -37,7 +38,7 @@ if [ -z "${1:-}" ]; then
   echo "  analista    → ANALISTA-N   (Analyzes job descriptions and companies)"
   echo "  scorer      → SCORER-N     (Calculates match scores)"
   echo "  scrittore   → SCRITTORE-N  (Writes CVs and cover letters)"
-  echo "  critico     → CRITICO      (CV quality review)"
+  echo "  critico     → CRITICO[-SN] (CV quality review; SN is Writer-owned)"
   echo "  sentinella  → SENTINELLA   (Monitors token usage and rate limits)"
   echo "  assistente  → ASSISTENTE   (Helps the user navigate the platform)"
   echo ""
@@ -45,6 +46,7 @@ if [ -z "${1:-}" ]; then
   echo "  $0 capitano              → start CAPITANO"
   echo "  $0 scout 1           → start SCOUT-1"
   echo "  $0 scrittore 2 fast  → start SCRITTORE-2 in fast mode"
+  echo "  $0 critico 2         → start CRITICO-S2 via configured provider"
   echo "  $0 assistente        → start ASSISTENTE"
   exit 1
 fi
@@ -61,7 +63,10 @@ MODE="${3:-default}"
 # Idempotente. IS_SANDBOX=1 (esportato sotto) salta anche il warning bypass.
 _ensure_claude_onboarding() {
   local home="${1:-${JHT_HOME:-/jht_home}}"
-  python3 - "$home/.claude.json" <<'PY' 2>/dev/null || true
+  local _out
+  # stderr catturato invece che buttato: qui dentro ora passa anche l'avviso
+  # sull'effort sganciato (O-19), e un avviso in `2>/dev/null` non è un avviso.
+  _out="$(python3 - "$home/.claude.json" <<'PY' 2>&1 || true
 import json, sys, os
 f = sys.argv[1]
 try:
@@ -71,9 +76,44 @@ except Exception:
 d["hasCompletedOnboarding"] = True
 d.setdefault("theme", "dark")
 d["bypassPermissionsModeAccepted"] = True
+
+# O-19 — `--effort` dichiarato ma non applicato.
+#
+# Un tocco dell'utente sul selettore della TUI scrive qui dei flag
+# `unpin<Modello>LaunchEffort`. Sganciano l'effort DI LANCIO: il processo
+# nasce col suo `--effort high` (`ps` lo mostra) e gira lo stesso al default
+# del modello. Gli agenti funzionano, quindi non se ne accorge nessuno —
+# l'unico segnale e' la bolletta, ed e' denaro dell'utente.
+#
+# Il file e' UNO per container (HOME=/jht_home): un tocco vale per tutti gli
+# agenti insieme, e resta vero a ogni riavvio finche' qualcuno non lo toglie.
+# Qui si toglie, allo stesso punto in cui gia' normalizziamo l'onboarding.
+#
+# Per PREFISSO e non per elenco: i tre nomi noti oggi sono legati a modelli
+# specifici (Opus 4.7, Opus 4.8, Fable 5) e il prossimo modello portera' il
+# suo. Un elenco fisso tornerebbe muto proprio quando cambia il modello.
+unpinned = sorted(
+    k for k, v in d.items()
+    if k.startswith("unpin") and k.endswith("LaunchEffort") and v
+)
+for k in unpinned:
+    d[k] = False
 os.makedirs(os.path.dirname(f), exist_ok=True)
 json.dump(d, open(f, "w"), indent=2)
+# Il disallineamento deve essere VISIBILE: dichiararlo e correggerlo in
+# silenzio ripeterebbe il difetto in forma piu' educata.
+if unpinned:
+    print("effort-unpin cleared: " + ", ".join(unpinned), file=sys.stderr)
 PY
+)"
+  # Solo l'avviso arriva a schermo: gli errori del normalizzatore restano
+  # fail-open come prima (un .claude.json illeggibile non blocca lo spawn).
+  case "$_out" in
+    *effort-unpin*)
+      echo "  ⚠ $_out — launch effort was unpinned in .claude.json:" \
+           "agents were running at the model default, not at the effort" \
+           "requested on the command line. Re-pinned for this start." ;;
+  esac
 }
 
 # ── Worker sentinel (fallback /usage per bridge) ─────────────────────
@@ -300,24 +340,82 @@ fi
 # singleton via /proc cmdline). Lanciato dopo che le 3 sessioni tmux sono
 # partite, cosi' i primi messaggi trovano gia' sessione pronta a ricevere.
 if [ "$ROLE" = "tg-bridge" ]; then
-  TG_SCRIPT="/app/.launcher/tg-bridge.py"
+  # Accanto a questo script, non un path assoluto al container: in /app è la
+  # stessa cosa, e fuori (test, host) lo script diventa eseguibile davvero
+  # invece di fallire su una directory che non esiste.
+  TG_SCRIPT="$DEV_TEAM_DIR/tg-bridge.py"
   if [ ! -f "$TG_SCRIPT" ]; then
     echo "✗ $TG_SCRIPT not found — tg-bridge did NOT start"
     exit 1
   fi
-  # Kill TUTTE le istanze esistenti (di qualsiasi ruolo): rispawnamo 3 fresche.
-  jht_kill_by_marker tg-bridge.py 0 1
+
+  # O-58 — un solo ruolo, se richiesto: `start-agent.sh tg-bridge mentor`.
+  # Prima esisteva solo il rispawn di tutti e tre, e chi voleva rianimarne uno
+  # ammazzava gli altri due che stavano lavorando. Il watchdog ora chiede il
+  # ruolo mancante e basta; senza argomento il comportamento è quello storico
+  # (tutti e tre), che serve al boot.
+  TG_ROLES="assistente capitano mentor"
+  if [ -n "$INSTANCE" ]; then
+    case " $TG_ROLES " in
+      *" $INSTANCE "*) TG_ROLES="$INSTANCE" ;;
+      *)
+        echo "Error: unknown tg-bridge role '$INSTANCE' (valid: assistente, capitano, mentor)." >&2
+        exit 1
+        ;;
+    esac
+  fi
+
+  # O-58 — LOCK, come per le sessioni agente (vedi più sotto, stessa
+  # motivazione: watchdog, Capitano e operatore chiedono lo stesso spawn quasi
+  # nello stesso istante). Questo ramo ne era escluso, e senza lock due start
+  # concorrenti si intrecciano così: A uccide, B uccide, A spawna 3, B spawna
+  # 3 → SEI poller sugli stessi tre bot. Telegram risponde 409 a raffica a
+  # getUpdates concorrenti, e da lì un messaggio dell'operatore è stato
+  # ricevuto e mai consegnato (jht-tmux-send rc=141), per trenta ore.
+  # UNA chiave sola, non una per ruolo: il boot chiede tutti e tre mentre il
+  # watchdog può chiedere il mentor, e con due lock diversi quelle due
+  # sequenze si intreccerebbero di nuovo. Serializzare costa l'attesa di uno
+  # spawn (il python parte staccato, sono millisecondi) e toglie la classe
+  # intera.
+  if command -v flock >/dev/null 2>&1; then
+    mkdir -p "${JHT_HOME:-/jht_home}/locks"
+    exec 9>"${JHT_HOME:-/jht_home}/locks/start-tg-bridge.lock"
+    if ! flock -w 30 9; then
+      echo "Error: timed out waiting for the concurrent spawn of tg-bridge [$TG_ROLES]." >&2
+      exit 1
+    fi
+  fi
+
+  # Kill MIRATO: il marker include il ruolo, che compare nel cmdline grazie a
+  # `--role` (vedi tg-bridge.py). Prima si uccideva per marker `tg-bridge.py`,
+  # cioè tutti e tre, anche quando ne serviva uno solo — ed è così che la
+  # morte del mentor si portava dietro assistente e capitano.
+  for _role in $TG_ROLES; do
+    jht_kill_by_marker "tg-bridge.py --role $_role" 0 0
+  done
+  # UN solo settle per l'intera raffica, come quando il kill era uno solo:
+  # tre attese da un secondo allungherebbero ogni boot senza motivo.
+  sleep 1
+
   # JHT_TG_OFFSET_RESET=1 → al primo poll skippa il backlog (utile in fresh
   # install per non rifare replay di vecchi /start dell'utente).
-  for _role in assistente capitano mentor; do
+  #
+  # `9>&-` NON è decorativo: il lock di flock vive nella *open file
+  # description*, che i figli EREDITANO. I bridge sono detached e restano vivi
+  # per giorni, quindi senza questa chiusura il fd 9 resta aperto in loro e il
+  # lock non viene mai rilasciato: il primo spawn della vita del container
+  # bloccherebbe ogni respawn successivo, che andrebbe in timeout dopo 30s. Il
+  # rimedio sarebbe stato peggiore del difetto — il watchdog non avrebbe più
+  # potuto rianimare niente. Trovato dal test della race, non a occhio.
+  for _role in $TG_ROLES; do
     _target=$(echo "$_role" | tr '[:lower:]' '[:upper:]')
     _log="$(jht_daemon_log "tg-bridge-${_role}.log")"
     setsid sh -c "
       JHT_TG_BOT_ROLE='$_role' \
       JHT_TG_TARGET_SESSION='$_target' \
       JHT_TG_OFFSET_RESET='${JHT_TG_OFFSET_RESET:-}' \
-        python3 -u $TG_SCRIPT >> '$_log' 2>&1
-    " >/dev/null 2>&1 < /dev/null &
+        python3 -u $TG_SCRIPT --role $_role >> '$_log' 2>&1
+    " >/dev/null 2>&1 < /dev/null 9>&- &
     echo "✓ tg-bridge[$_role] started (target=$_target, log $_log)"
   done
   exit 0
@@ -421,21 +519,20 @@ fi
 
 IFS='|' read -r session_prefix effort model_override <<< "$AGENT_INFO"
 
-# Costruisci nome sessione tmux
-# Agenti singoli (multi:false in AGENTS): tmux ha nome = prefix (no
-# suffix). Il tg-bridge per assistente/capitano/mentor punta a queste
-# session esatte, senza -1, quindi mentor DEVE essere qui.
+# Costruisci nome sessione tmux. I singleton restano senza suffisso; il
+# Critico con istanza e' la sola eccezione, perche' SCRITTORE-N possiede una
+# sessione effimera CRITICO-SN. Questa scelta NON riguarda il provider.
+if ! SESSION="$(jht_spawn_session_name "$ROLE" "$session_prefix" "$INSTANCE")"; then
+  echo "Error: instance must be a positive numeric identifier." >&2
+  exit 1
+fi
 case "$ROLE" in
-  capitano|critico|sentinella|assistente|mentor)
-    SESSION="$session_prefix"
-    ;;
+  capitano|critico|sentinella|assistente|mentor) ;;
   *)
-    # Agenti multipli — richiede istanza
     if [ -z "$INSTANCE" ]; then
       INSTANCE="1"
       echo "Note: no instance specified; using $ROLE $INSTANCE"
     fi
-    SESSION="${session_prefix}-${INSTANCE}"
     ;;
 esac
 
@@ -519,13 +616,16 @@ PYEOF
 
 IFS='|' read -r PROVIDER AUTH_METHOD API_KEY <<< "$(extract_provider_info "$JHT_CONFIG_FILE")"
 
-# Default: Claude subscription
-CLI_BIN="claude"
-CLI_ARGS="--dangerously-skip-permissions --effort $effort"
+# Nessun default implicito: il provider e' configurazione utente. Se il file
+# manca, e' illeggibile o contiene un valore sconosciuto, avviare un CLI
+# diverso trasformerebbe un errore di configurazione in consumo e lavoro sul
+# provider sbagliato.
+CLI_BIN=""
+CLI_ARGS=""
 CLI_ENV_PREFIX=""
 
 case "$PROVIDER" in
-  ""|anthropic|claude)
+  anthropic|claude)
     CLI_BIN="claude"
     CLI_ARGS="--dangerously-skip-permissions --effort $effort"
     # Override modello per ruolo. I ruoli "Opus high" (capitano/scrittore/
@@ -599,7 +699,9 @@ case "$PROVIDER" in
     fi
     ;;
   *)
-    echo "Warning: provider '$PROVIDER' is not recognized in jht.config.json; falling back to claude."
+    echo "Error: active_provider is missing or unsupported in '$JHT_CONFIG_FILE'." >&2
+    echo "Configure it with jht setup or jht config before starting the team." >&2
+    exit 1
     ;;
 esac
 
@@ -630,10 +732,10 @@ fi
 
 # Verifica prerequisiti della CLI scelta
 if ! command -v "$CLI_BIN" &>/dev/null; then
-  echo "Error: command '$CLI_BIN' not found (configured provider: ${PROVIDER:-claude})."
+  echo "Error: command '$CLI_BIN' not found (configured provider: $PROVIDER)."
   case "$CLI_BIN" in
-    claude) echo "Installa Claude CLI: https://claude.ai/download" ;;
-    codex)  echo "Installa Codex CLI: https://github.com/openai/codex" ;;
+    claude) echo "Install the Claude CLI: https://claude.ai/download" ;;
+    codex)  echo "Install the Codex CLI: https://github.com/openai/codex" ;;
     kimi)   echo "Install the Kimi CLI from provider Moonshot." ;;
   esac
   echo "Alternatively, edit ~/.jht/jht.config.json to use another provider."
@@ -690,20 +792,35 @@ fi
 mkdir -p "$JHT_HOME" "$JHT_AGENTS_DIR" "$JHT_LOGS_DIR"
 mkdir -p "$JHT_USER_DIR/cv" "$JHT_USER_DIR/critiche" "$JHT_USER_DIR/allegati" "$JHT_USER_DIR/output"
 
-# Directory di lavoro dell'agente nella zona nascosta. Stesso set di
-# "agenti singoli" usato sopra per il SESSION name — devono restare
-# allineati (multi:false in AGENTS).
-case "$ROLE" in
-  capitano|critico|sentinella|assistente|mentor)
-    AGENT_DIR="$JHT_AGENTS_DIR/$ROLE"
-    AGENT_NAME="$ROLE"
-    ;;
-  *)
-    AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
-    AGENT_NAME="${ROLE}-${INSTANCE}"
-    ;;
-esac
+# Directory di lavoro dell'agente nella zona nascosta. La stessa funzione che
+# risolve il nome sessione rende CRITICO-SN anche un workspace separato: due
+# Writer non condividono identita', tmp o skill durante review concorrenti.
+if ! AGENT_NAME="$(jht_spawn_agent_name "$ROLE" "$INSTANCE")"; then
+  echo "Error: invalid agent instance '$INSTANCE'." >&2
+  exit 1
+fi
+AGENT_DIR="$JHT_AGENTS_DIR/$AGENT_NAME"
 mkdir -p "$AGENT_DIR"
+
+# ── DB di coordinamento Scout (issue #132) ───────────────────────────────────
+# Nel run Windows del 2026-08-05 il primo Scout non è riuscito ad aprire il
+# database di coordinamento — `$JHT_HOME/data/` non esisteva e nessuno la
+# creava — e ha proseguito scegliendosi un fallback scrivibile: due agenti
+# possono così credere di coordinarsi mentre guardano due file diversi. La
+# cartella e il file si creano e si VERIFICANO qui, prima dello spawn, perché
+# il primo a scoprire il problema non deve essere un agente a metà
+# negoziazione. Un fallimento NON blocca lo Scout (sorgere si può anche da
+# soli) ma resta a schermo: da lì in poi `scout_coord.py` esce 3 con un
+# messaggio azionabile invece di inventarsi un secondo database.
+if [ "$ROLE" = "scout" ] && command -v python3 >/dev/null 2>&1; then
+  COORD_SCRIPT="/app/shared/skills/scout_coord.py"
+  [ -f "$COORD_SCRIPT" ] || COORD_SCRIPT="$DEV_TEAM_DIR/../shared/skills/scout_coord.py"
+  if [ -f "$COORD_SCRIPT" ]; then
+    python3 "$COORD_SCRIPT" bootstrap || \
+      echo "⚠️  scout coordination db NOT ready — see the message above (issue #132)"
+  fi
+fi
+
 # Workspace layout (RULE-T12): agents must use these subdirs instead of
 # scattering files at the root of $AGENT_DIR. tools/ holds helper
 # scripts the agent wrote for itself; tmp/ holds throwaway intermediate
@@ -740,14 +857,14 @@ fi
 #   - Codex + Kimi leggono AGENTS.md (standard OpenAI / Moonshot)
 # Il contenuto è identico, cambia solo il nome del file.
 case "$PROVIDER" in
-  ""|anthropic|claude) IDENTITY_FILE="CLAUDE.md" ;;
+  anthropic|claude) IDENTITY_FILE="CLAUDE.md" ;;
   *)                   IDENTITY_FILE="AGENTS.md" ;;
 esac
 IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 
 # Risoluzione locale del template d'identità.
 # Convenzione: agents/<role>/<role>.<locale>.md → fallback agents/<role>/<role>.md.
-# La cascata ($JHT_LANG → i18n-prefs.json → host.env → 'en') vive in
+# La cascata (i18n-prefs.json → $JHT_LANG → host.env → 'en') vive in
 # .launcher/spawn-lib.sh::jht_spawn_user_locale, sourceata in testa a questo
 # file: era codice locale a start-agent.sh, e i due agenti che NON passano da
 # qui (Dottore e Mantenitore, spawnati da spawn-doctor.sh/spawn-maintainer.sh)
@@ -823,71 +940,11 @@ if [ -d "$TEAM_SRC" ]; then
 fi
 
 # ── Skill distribution ──────────────────────────────────────────────────────
-# Per-agent skill discovery: each agent only sees the skills it actually
-# uses. The shared library lives at agents/_skills/; the manifest at
-# agents/<role>/skills.list declares which ones the agent consumes.
-# Private skills under agents/<role>/_skills/ are always copied (no
-# manifest needed — they are role-specific by definition).
-#
-# Claude Code reads .claude/skills/ in the cwd; Codex/Kimi read
-# .agents/skills/ — we populate both so the agent works regardless of
-# which CLI start-agent.sh selects via PROVIDER. Each spawn rewrites
-# the workspace skill folders so a manifest change between spawns is
-# picked up cleanly.
-SKILLS_LIB="$REPO_ROOT/agents/_skills"
-SKILL_MANIFEST="$REPO_ROOT/agents/$ROLE/skills.list"
-PRIVATE_SKILLS_DIR="$REPO_ROOT/agents/$ROLE/_skills"
-CLAUDE_SKILLS_DIR="$AGENT_DIR/.claude/skills"
-AGENTS_SKILLS_DIR="$AGENT_DIR/.agents/skills"
-
-rm -rf "$CLAUDE_SKILLS_DIR" "$AGENTS_SKILLS_DIR"
-mkdir -p "$CLAUDE_SKILLS_DIR" "$AGENTS_SKILLS_DIR"
-
-_copy_skill() {
-  local src="$1"
-  local name="$2"
-  cp -R "$src" "$CLAUDE_SKILLS_DIR/$name"
-  cp -R "$src" "$AGENTS_SKILLS_DIR/$name"
-  # Locale-aware: if SKILL.<locale>.md exists, use it as SKILL.md
-  local localized="$src/SKILL.$USER_LOCALE.md"
-  if [ "$USER_LOCALE" != "en" ] && [ -f "$localized" ]; then
-    cp "$localized" "$CLAUDE_SKILLS_DIR/$name/SKILL.md"
-    cp "$localized" "$AGENTS_SKILLS_DIR/$name/SKILL.md"
-  fi
-  # Remove locale variants from workspace (agent sees only SKILL.md)
-  rm -f "$CLAUDE_SKILLS_DIR/$name"/SKILL.*.md
-  rm -f "$AGENTS_SKILLS_DIR/$name"/SKILL.*.md
-}
-
-_skills_count=0
-if [ -f "$SKILL_MANIFEST" ]; then
-  while IFS= read -r _line || [ -n "$_line" ]; do
-    # Strip comments and surrounding whitespace
-    _name="${_line%%#*}"
-    _name="$(echo "$_name" | tr -d '[:space:]')"
-    [ -z "$_name" ] && continue
-    _src="$SKILLS_LIB/$_name"
-    if [ ! -d "$_src" ]; then
-      echo "  ⚠ skill '$_name' listed in $SKILL_MANIFEST but not found at $_src" >&2
-      continue
-    fi
-    _copy_skill "$_src" "$_name"
-    _skills_count=$((_skills_count + 1))
-  done < "$SKILL_MANIFEST"
-fi
-
-if [ -d "$PRIVATE_SKILLS_DIR" ]; then
-  for _skill in "$PRIVATE_SKILLS_DIR"/*/; do
-    [ -d "$_skill" ] || continue
-    _name="$(basename "$_skill")"
-    [ "$_name" = "_lib" ] && continue
-    _copy_skill "$_skill" "$_name"
-    _skills_count=$((_skills_count + 1))
-  done
-fi
-
-echo "  → $_skills_count skill(s) installed in $CLAUDE_SKILLS_DIR + $AGENTS_SKILLS_DIR"
-unset _line _name _src _skill _skills_count
+# Unica implementazione condivisa con gli spawn speciali. skills.list resta
+# la source of truth delle shared; agents/<role>/_skills aggiunge solo le
+# private del ruolo. CLI_BIN e' gia' la selezione provider normalizzata.
+JHT_APP_ROOT="$REPO_ROOT" jht_spawn_copy_skills \
+  "$ROLE" "$AGENT_DIR" "start-agent" "$CLI_BIN"
 
 # ── Warmup ~/.claude.json se manca ──────────────────────────────────────────
 # Bug osservato 2026-05-12: Claude Code 2.1.139 considera "loggato" solo se
@@ -918,6 +975,37 @@ if [ "$CLI_BIN" = "claude" ] && [ -n "${JHT_HOME:-}" ]; then
 fi
 
 FULL_CMD="${CLI_ENV_PREFIX}${CLI_BIN}${CLI_ARGS:+ $CLI_ARGS}"
+
+# Env OPZIONALI che, quando esistono, devono arrivare all'agente. Le liste di
+# export qui sotto sono esplicite per costruzione — una tmux nuova non eredita
+# l'ambiente di questo processo, e sul ramo PowerShell (WSL) non eredita
+# proprio niente da bash — quindi una variabile che non è in lista, per
+# l'agente non esiste.
+#
+# Il caso che ha aperto questa lista (issue #132, 2026-08-08):
+# `JHT_SCOUT_COORD_DB` è l'UNICA deroga ammessa quando il percorso canonico del
+# database di coordinamento non è scrivibile. Il bootstrap pre-spawn la vedeva
+# (gira in questo processo) e lo Scout no: la deroga non raggiungeva chi la
+# doveva usare, e l'agente usciva 3 proprio sulla piattaforma dell'incidente.
+#
+# Si propagano SOLO se valorizzate: esportare una stringa vuota renderebbe
+# indistinguibile "non dichiarata" da "dichiarata male".
+OPTIONAL_AGENT_ENV=(JHT_SCOUT_COORD_DB)
+
+send_optional_env() {
+  # $1 = "bash" | "powershell" — la sintassi cambia, la lista no.
+  local _name _value
+  for _name in "${OPTIONAL_AGENT_ENV[@]}"; do
+    _value="${!_name:-}"
+    if [ -n "$_value" ]; then
+      if [ "$1" = "powershell" ]; then
+        tmux send-keys -t "$SESSION" "\$env:$_name='$_value'" Enter
+      else
+        tmux send-keys -t "$SESSION" "export $_name='$_value'" C-m
+      fi
+    fi
+  done
+}
 
 send_env_vars() {
   # Inside the JHT container a fresh tmux bash resets HOME to the OS
@@ -964,6 +1052,7 @@ send_env_vars() {
   tmux send-keys -t "$SESSION" "export JHT_CONFIG='$JHT_CONFIG'" C-m
   tmux send-keys -t "$SESSION" "export JHT_AGENT_DIR='$AGENT_DIR'" C-m
   tmux send-keys -t "$SESSION" "export JHT_AGENT_NAME='$AGENT_NAME'" C-m
+  send_optional_env bash
 }
 
 # Rileva se siamo in WSL nativo (non dentro un container Docker Desktop, che
@@ -981,6 +1070,10 @@ if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/nu
   tmux send-keys -t "$SESSION" "\$env:JHT_CONFIG='$JHT_CONFIG'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_DIR='$AGENT_DIR'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_NAME='$AGENT_NAME'" Enter
+  # Le stesse deroghe del ramo bash: qui una env dell'ambiente bash non
+  # attraversa PowerShell in nessun modo implicito, quindi se non la si
+  # scrive a mano, per l'agente Windows non esiste (issue #132).
+  send_optional_env powershell
   tmux send-keys -t "$SESSION" "$FULL_CMD" Enter
   if [ "$CLI_BIN" != "python3" ]; then
     # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
@@ -1076,7 +1169,7 @@ case "$STAGGER_SEC" in
   ''|*[!0-9]*) STAGGER_SEC=0 ;;
 esac
 
-echo "✓ $SESSION started (cli: $CLI_BIN, provider: ${PROVIDER:-claude}, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
+echo "✓ $SESSION started (cli: $CLI_BIN, provider: $PROVIDER, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
 
 # ── Roster atteso ───────────────────────────────────────────────────────────
 # Registra lo spawn nello STATO CONDIVISO letto da agent-watchdog.sh per

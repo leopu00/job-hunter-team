@@ -7,16 +7,38 @@ extends Node
 
 signal conversation_changed(agent: String)
 signal action_requested(action: String, payload: Dictionary)
+## L'utente ha interrotto il giro guidato: chi mostra qualcosa per conto degli
+## agenti deve smettere, adesso e ai riavvii successivi, fino alla ripresa.
+signal dismissed
+## Il giro interrotto riparte dallo stato già persistito: nessuna seconda
+## macchina di avanzamento, solo il gate `dismissed` che torna aperto.
+signal resumed
 
 const SAVE_PATH := "user://guided_onboarding.cfg"
 const CONTEXT_JSON_PATH := "user://onboarding_context.json"
 const CONTEXT_MARKDOWN_PATH := "user://onboarding_context.md"
-const CONTEXT_SCHEMA_VERSION := 2
+const CONTEXT_SCHEMA_VERSION := 3
 const AGENTS := ["assistente", "coordinatore", "mentor"]
 const PROFILE_CONTEXT_FIELDS := ["name", "email", "target_role", "location",
 		"experience_years", "seniority_target", "industry", "nationality",
 		"skills_primary", "languages", "salary_min", "salary_max",
-		"salary_currency"]
+		"salary_currency", "target_role_category_id"]
+## Gli ID sono dati; le label vivono soltanto nelle chiavi
+## `onb.a.role.<id>`. Vedi il contratto forward-only del 2026-08-12.
+const TARGET_ROLE_CATEGORY_IDS := [
+	"software", "data", "product", "design", "business", "security", "other",
+]
+## Sola lettura per riprendere un wizard già fermo al passo specialty. Non
+## viene mai usata per riscrivere target_role o inventare il nuovo campo.
+const LEGACY_TARGET_ROLE_CATEGORIES := {
+	"Software Engineering": "software",
+	"Data / AI": "data",
+	"Product / Project Management": "product",
+	"Design / UX": "design",
+	"Business / Operations": "business",
+	"Security / Infrastructure": "security",
+	"Da definire / multidisciplinare": "other",
+}
 
 var _steps := {
 	"assistente": "intro", "coordinatore": "intro", "mentor": "intro",
@@ -29,9 +51,15 @@ var _completed := {}
 var _reconciled := {}
 var _provider_choice := ""
 var _provider_test_override := -1
+## Pausa esplicita del giro guidato. È uno stato, non un evento: sopravvive al
+## riavvio e silenzia insieme chat, azioni e regia, ma non duplica l'indice del
+## tour — quello resta nella sua fonte di verità, TourGuide.
+var _dismissed := false
 
 
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	if not await Game.windows_health_boot_allowed():
 		return
 	Game.mark_windows_health_normal_work("onboarding")
@@ -50,10 +78,44 @@ func _ready() -> void:
 		_reconcile_with_status(SetupService.status)
 
 
+## Il giro è stato interrotto dall'utente? Chi disegna messaggi, opzioni o
+## marker per conto degli agenti guidati deve chiedersi questo per primo.
+func is_dismissed() -> bool:
+	return _dismissed
+
+
+## Pausa esplicita: interrompe il giro guidato per intero — chat scriptate,
+## azioni che aprono pannelli da sole e tour fisico dei reparti.
+##
+## Un solo gate per le due macchine perché interrompere soltanto il tour
+## lasciava viva la chat guidata (O-14). Non chiama `TourGuide.finish()`:
+## completamento e pausa non sono sinonimi, e TourGuide ha già indice,
+## modalità e visite persistiti per ripartire dal punto esatto.
+func dismiss() -> void:
+	if _dismissed:
+		return
+	_dismissed = true
+	Log.info("onboarding", "giro guidato interrotto dall'utente")
+	TourGuide.checkpoint()
+	_save_state()
+	dismissed.emit()
+
+
+## Riapre lo stesso gate persistito. Il progresso non viene copiato né
+## ricostruito: TourGuide espone di nuovo la tappa che aveva già salvato.
+func resume() -> void:
+	if not _dismissed or not TourGuide.incomplete():
+		return
+	_dismissed = false
+	Log.info("onboarding", "giro guidato ripreso dall'utente")
+	_save_state()
+	resumed.emit()
+
+
 ## Allinea il passo corrente ai prerequisiti già soddisfatti. Idempotente:
 ## ogni salto lo annuncia una volta sola e non torna mai indietro.
 func _reconcile_with_status(s: Dictionary) -> void:
-	if is_complete("coordinatore"):
+	if _dismissed or is_complete("coordinatore"):
 		return
 	var container := bool(s.get("container_running", false))
 	var provider := bool(s.get("provider_authenticated", false))
@@ -168,6 +230,22 @@ func answers() -> Array:
 	return _answers.duplicate(true)
 
 
+## Le label servono alla cronologia visibile, non al modello. I record legacy
+## le conservano nel config locale, ma l'export strutturato del topic ruolo le
+## rimuove e lascia il `value` canonico.
+func _model_answers() -> Array:
+	var out: Array = []
+	for item in _answers:
+		if not item is Dictionary:
+			continue
+		var clean: Dictionary = item.duplicate(true)
+		if str(clean.get("step", "")) == "role" \
+				or str(clean.get("kind", "")) == "dialogue_choice":
+			clean.erase("label")
+		out.append(clean)
+	return out
+
+
 func context_json_path() -> String:
 	var path := TutorialHarness.CONTEXT_JSON if TutorialHarness.enabled() else CONTEXT_JSON_PATH
 	return ProjectSettings.globalize_path(path)
@@ -184,7 +262,7 @@ func llm_context() -> Dictionary:
 		"updated_at": Time.get_datetime_string_from_system(false, true),
 		"profile": _draft.duplicate(true),
 		"preferences": _preferences.duplicate(true),
-		"answers": _answers.duplicate(true),
+		"answers": _model_answers(),
 		"onboarding_complete": _completed.duplicate(true),
 		"provider_preference": _provider_choice,
 	}
@@ -207,7 +285,7 @@ func llm_context_text() -> String:
 			lines.append("- %s: %s" % [str(key), _display_value(_preferences[key])])
 	if not _answers.is_empty():
 		lines.append("\n## Risposte onboarding")
-		for item in _answers:
+		for item in _model_answers():
 			if item is Dictionary:
 				lines.append("- [%s/%s] %s" % [str(item.get("agent", "")),
 						str(item.get("topic", item.get("step", ""))),
@@ -238,11 +316,12 @@ func set_preference(key: String, value: String) -> void:
 ## memoria strutturata. Non tutte sono preferenze operative, ma raccontano
 ## quali dubbi e risorse interessano di più all'utente.
 func record_dialogue_choice(tree_id: String, node_id: String,
-		choice_text: String, next_id: String) -> void:
+		choice_text: String, next_id: String, choice_id := "") -> void:
 	if not tree_id.begins_with("tour_"):
 		return
 	_record_answer(tree_id.trim_prefix("tour_"), node_id, next_id,
-			{"label": choice_text})
+			{"label": choice_text, "kind": "dialogue_choice",
+			"label_key": choice_id})
 	_save_state()
 
 
@@ -270,7 +349,7 @@ func set_provider_test_override(value: int) -> void:
 ## non esistono e i marker/story devono restare, altrimenti l'utente clicca
 ## agenti muti (24/07).
 func story_mode() -> bool:
-	return not (provider_authenticated() \
+	return not _dismissed and not (provider_authenticated() \
 			and bool(SetupService.status.get("container_running", false)))
 
 
@@ -282,7 +361,9 @@ func use_scripted_chat(value: String) -> bool:
 	# `provider_authenticated` lasciava senza interlocutore chi arriva con un
 	# provider già configurato (token sul disco, container ancora spento) —
 	# scriptato spento e live non ancora disponibile (24/07).
-	return supports(agent) and not is_complete(agent) \
+	# Giro in pausa: le chat authored si spengono in blocco. La finestra
+	# resta aperta e la storia leggibile — quello che sparisce è il seguito.
+	return supports(agent) and not _dismissed and not is_complete(agent) \
 			and not live_text_available(agent)
 
 
@@ -332,6 +413,7 @@ func reset_for_test() -> void:
 	_completed.clear()
 	_reconciled.clear()
 	_provider_choice = ""
+	_dismissed = false
 	for agent in AGENTS:
 		_ensure_started(agent)
 	_save_state()
@@ -450,8 +532,8 @@ func _assistant_options(step: String) -> Array:
 
 
 func _assistant_specialty_options() -> Array:
-	match str(_draft.get("target_role", "")):
-		"Software Engineering": return _opts([
+	match _target_role_category_id():
+		"software": return _opts([
 			["backend", UIStrings.t("onb.a.spec.sw.backend")],
 			["frontend", UIStrings.t("onb.a.spec.sw.frontend")],
 			["fullstack", UIStrings.t("onb.a.spec.sw.fullstack")],
@@ -459,7 +541,7 @@ func _assistant_specialty_options() -> Array:
 			["embedded", UIStrings.t("onb.a.spec.sw.embedded")],
 			["open", UIStrings.t("onb.a.spec.sw.open")],
 		])
-		"Data / AI": return _opts([
+		"data": return _opts([
 			["data_science", UIStrings.t("onb.a.spec.data.data_science")],
 			["ml", UIStrings.t("onb.a.spec.data.ml")],
 			["genai", UIStrings.t("onb.a.spec.data.genai")],
@@ -467,7 +549,7 @@ func _assistant_specialty_options() -> Array:
 			["research", UIStrings.t("onb.a.spec.data.research")],
 			["open", UIStrings.t("onb.a.spec.data.open")],
 		])
-		"Product / Project Management": return _opts([
+		"product": return _opts([
 			["product", UIStrings.t("onb.a.spec.pm.product")],
 			["project", UIStrings.t("onb.a.spec.pm.project")],
 			["technical_pm", UIStrings.t("onb.a.spec.pm.technical_pm")],
@@ -483,12 +565,20 @@ func _assistant_specialty_options() -> Array:
 	])
 
 
+func _target_role_category_id() -> String:
+	var category := str(_draft.get("target_role_category_id", ""))
+	if TARGET_ROLE_CATEGORY_IDS.has(category):
+		return category
+	return str(LEGACY_TARGET_ROLE_CATEGORIES.get(
+			str(_draft.get("target_role", "")), ""))
+
+
 func _choose_assistant(id: String) -> void:
 	match str(_steps["assistente"]):
 		"intro":
 			if id == "profile":
 				_reply("assistente", UIStrings.t("onb.a.intro.reply_profile"))
-				action_requested.emit("open_section", {"section": "profile"})
+				_request_action("open_section", {"section": "profile"})
 				_steps["assistente"] = "finish"
 			elif id == "later":
 				_reply("assistente", UIStrings.t("onb.a.intro.reply_later"))
@@ -496,11 +586,10 @@ func _choose_assistant(id: String) -> void:
 				_reply("assistente", UIStrings.t("onb.a.intro.reply_start"))
 				_steps["assistente"] = "role"
 		"role":
-			var roles := {"software": "Software Engineering", "data": "Data / AI",
-					"product": "Product / Project Management", "design": "Design / UX",
-					"business": "Business / Operations", "security": "Security / Infrastructure",
-					"other": "Da definire / multidisciplinare"}
-			_draft["target_role"] = roles.get(id, "Da definire")
+			if not TARGET_ROLE_CATEGORY_IDS.has(id):
+				return
+			_draft["target_role_category_id"] = id
+			_preferences.erase("target_specialty")
 			_reply("assistente", UIStrings.t("onb.a.role.reply"))
 			_steps["assistente"] = "specialty"
 		"specialty":
@@ -553,11 +642,11 @@ func _choose_assistant(id: String) -> void:
 			_steps["assistente"] = "finish"
 		"finish":
 			if id == "complete_profile":
-				action_requested.emit("open_section", {"section": "profile"})
+				_request_action("open_section", {"section": "profile"})
 			elif id == "mentor":
-				action_requested.emit("open_scripted_chat", {"agent": "mentor"})
+				_request_action("open_scripted_chat", {"agent": "mentor"})
 			else:
-				action_requested.emit("open_scripted_chat", {"agent": "coordinatore"})
+				_request_action("open_scripted_chat", {"agent": "coordinatore"})
 			_completed["assistente"] = true
 			_reply("assistente", UIStrings.t("onb.a.finish.reply"))
 
@@ -641,14 +730,23 @@ func _choose_coordinator(id: String) -> void:
 				_preferences["runtime_location"] = id
 				if id == "vps":
 					_reply("coordinatore", UIStrings.t("onb.c.intro.reply_vps"))
-					action_requested.emit("open_section", {"section": "vps"})
+					_request_action("open_section", {"section": "vps"})
 				else:
 					_reply("coordinatore", UIStrings.t("onb.c.intro.reply_local"))
 				_steps["coordinatore"] = "runtime"
 		"runtime":
 			if id == "start":
-				SetupService.start_container()
-				_reply("coordinatore", UIStrings.t("onb.c.runtime.reply_start"))
+				# Stessa regola del pulsante nel pannello (O-13a): senza motore
+				# l'avvio fallirebbe e basta. Qui non c'è un pulsante da
+				# spegnere, quindi il Coordinatore lo dice e porta l'utente
+				# dove si installa, invece di annunciare un controllo che non
+				# è mai partito.
+				if SetupService.runtime_missing(SetupService.status):
+					_reply("coordinatore", UIStrings.t("onb.c.runtime.reply_no_runtime"))
+					action_requested.emit("open_section", {"section": "docker"})
+				else:
+					SetupService.start_container()
+					_reply("coordinatore", UIStrings.t("onb.c.runtime.reply_start"))
 			elif id == "repair":
 				SetupService.open_runtime_install()
 				_reply("coordinatore", UIStrings.t("onb.c.runtime.reply_repair"))
@@ -672,7 +770,7 @@ func _choose_coordinator(id: String) -> void:
 			elif id == "login":
 				if not bool(SetupService.status.get("container_running", false)):
 					_reply("coordinatore", UIStrings.t("onb.c.login.reply_no_container"))
-					action_requested.emit("open_section", {"section": "docker"})
+					_request_action("open_section", {"section": "docker"})
 				elif _provider_choice != "":
 					SetupService.open_provider_login(_provider_choice)
 					_reply("coordinatore", UIStrings.t("onb.c.login.reply_opened"))
@@ -684,7 +782,7 @@ func _choose_coordinator(id: String) -> void:
 				_steps["coordinatore"] = "provider"
 		"profile":
 			if id == "open_profile":
-				action_requested.emit("open_section", {"section": "profile"})
+				_request_action("open_section", {"section": "profile"})
 			_reply("coordinatore", UIStrings.t("onb.c.profile.reply"))
 			_steps["coordinatore"] = "autonomy"
 		"autonomy":
@@ -702,7 +800,7 @@ func _choose_coordinator(id: String) -> void:
 		"availability":
 			_preferences["team_availability"] = id
 			if id == "custom":
-				action_requested.emit("open_section", {"section": "hours"})
+				_request_action("open_section", {"section": "hours"})
 			_reply("coordinatore", _coordinator_policy_reply())
 			_steps["coordinatore"] = "channels"
 		"channels":
@@ -711,7 +809,7 @@ func _choose_coordinator(id: String) -> void:
 				_reply("coordinatore", UIStrings.t("onb.c.channels.reply_skip"))
 			else:
 				var sections := {"telegram": "telegram", "email": "email", "cloud": "account"}
-				action_requested.emit("open_section", {"section": sections.get(id, "activation")})
+				_request_action("open_section", {"section": sections.get(id, "activation")})
 				_reply("coordinatore", UIStrings.t("onb.c.channels.reply_open"))
 		"team":
 			if id == "start_team":
@@ -721,11 +819,11 @@ func _choose_coordinator(id: String) -> void:
 					_reply("coordinatore", UIStrings.t("onb.c.team.reply_start"))
 				else:
 					_reply("coordinatore", UIStrings.t("onb.c.team.reply_missing"))
-					action_requested.emit("open_section", {"section": "activation"})
+					_request_action("open_section", {"section": "activation"})
 			elif id == "overview":
-				action_requested.emit("open_section", {"section": "activation"})
+				_request_action("open_section", {"section": "activation"})
 			elif id == "mentor":
-				action_requested.emit("open_scripted_chat", {"agent": "mentor"})
+				_request_action("open_scripted_chat", {"agent": "mentor"})
 			else:
 				_steps["coordinatore"] = "autonomy"
 				_reply("coordinatore", UIStrings.t("onb.c.team.reply_review"))
@@ -838,7 +936,7 @@ func _choose_mentor(id: String) -> void:
 			_steps["mentor"] = "finish"
 		"finish":
 			if id == "hours":
-				action_requested.emit("open_section", {"section": "hours"})
+				_request_action("open_section", {"section": "hours"})
 				_reply("mentor", UIStrings.t("onb.m.finish.reply_hours"))
 			elif id == "restart":
 				_history["mentor"] = []
@@ -849,14 +947,28 @@ func _choose_mentor(id: String) -> void:
 				_steps["mentor"] = "intro"
 				_append("mentor", "assistant", _opening("mentor"))
 			elif id == "assistant":
-				action_requested.emit("open_scripted_chat", {"agent": "assistente"})
+				_request_action("open_scripted_chat", {"agent": "assistente"})
 			else:
 				_completed["mentor"] = true
 				_reply("mentor", UIStrings.t("onb.m.finish.reply_done"))
 
 
+## Battuta di un agente guidato. A giro in pausa non ne nascono più: è la
+## regola che tiene fede al «nessun messaggio compare più» di O-14, presa
+## qui sotto invece che in ogni chiamante.
 func _reply(agent: String, text: String) -> void:
+	if _dismissed:
+		return
 	_append(agent, "assistant", text)
+
+
+## Richiesta di aprire una superficie nativa (sezione, chat). A giro in pausa
+## resta inascoltata: erano queste ad aprirsi sopra ciò che l'utente stava
+## facendo, e un'uscita che non le ferma non è un'uscita.
+func _request_action(action: String, payload: Dictionary) -> void:
+	if _dismissed:
+		return
+	action_requested.emit(action, payload)
 
 
 func _assistant_finish_reply() -> String:
@@ -932,14 +1044,19 @@ func _record_answer(agent: String, step: String, option_id: String,
 		var old: Variant = _answers[i]
 		if old is Dictionary and str(old.get("topic", "")) == topic:
 			_answers.remove_at(i)
-	_answers.append({
+	var answer := {
 		"agent": agent,
 		"step": step,
 		"topic": topic,
 		"value": option_id,
 		"label": str(selected.get("label", option_id)),
 		"updated_at": Time.get_datetime_string_from_system(false, true),
-	})
+	}
+	if str(selected.get("kind", "")) != "":
+		answer["kind"] = str(selected["kind"])
+	if str(selected.get("label_key", "")) != "":
+		answer["label_key"] = str(selected["label_key"])
+	_answers.append(answer)
 
 
 static func _display_value(value: Variant) -> String:
@@ -957,6 +1074,7 @@ func _save_state() -> void:
 	# Anche il selftest del tour salva preferenze e nome: mai sporcare il
 	# config reale della macchina di sviluppo.
 	if OS.get_environment("JHT_GUIDED_TEST") == "1" \
+			or OS.get_environment("JHT_TARGET_ROLE_CATEGORY_TEST") == "1" \
 			or OS.get_environment("JHT_TOUR_TEST") == "1":
 		return
 	var cfg := ConfigFile.new()
@@ -968,6 +1086,7 @@ func _save_state() -> void:
 	cfg.set_value("guided", "completed", JSON.stringify(_completed))
 	cfg.set_value("guided", "reconciled", JSON.stringify(_reconciled))
 	cfg.set_value("guided", "provider", _provider_choice)
+	cfg.set_value("guided", "dismissed", _dismissed)
 	var err := cfg.save(_state_path())
 	if err != OK:
 		push_warning("Impossibile salvare onboarding: %s" % error_string(err))
@@ -992,7 +1111,8 @@ func _export_context() -> void:
 
 
 func _load_state() -> void:
-	if OS.get_environment("JHT_GUIDED_TEST") == "1":
+	if OS.get_environment("JHT_GUIDED_TEST") == "1" \
+			or OS.get_environment("JHT_TARGET_ROLE_CATEGORY_TEST") == "1":
 		return
 	var cfg := ConfigFile.new()
 	if cfg.load(_state_path()) != OK:
@@ -1006,6 +1126,7 @@ func _load_state() -> void:
 	_completed = _json_dict(str(cfg.get_value("guided", "completed", "{}")), {})
 	_reconciled = _json_dict(str(cfg.get_value("guided", "reconciled", "{}")), {})
 	_provider_choice = str(cfg.get_value("guided", "provider", ""))
+	_dismissed = bool(cfg.get_value("guided", "dismissed", false))
 
 
 func _state_path() -> String:

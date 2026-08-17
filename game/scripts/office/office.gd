@@ -174,9 +174,15 @@ func _ready() -> void:
 				handoff_to[dept_id], dept_color)
 		world.add_child(station)
 		var p := PaperPile.new(station.pile_spot())
-		# gli Scout producono e basta: il loro inbox si riempie più svelto
-		p.restock = 90.0 if DepartmentDefs.FETCH_FROM.has(dept_id) else 45.0
-		p.add_sheets(randi_range(1, 6))
+		# Restock e seme sono scenografia DEMO. In UNAVAILABLE (e nel LIVE
+		# ancora vuoto) la pila nasce davvero vuota e senza animazione; il primo
+		# snapshot live la aggancia poi al suo target reale con _sync_piles().
+		if SimBadge.synthetic_data_allowed():
+			# gli Scout producono e basta: il loro inbox si riempie più svelto
+			p.restock = 90.0 if DepartmentDefs.FETCH_FROM.has(dept_id) else 45.0
+			p.add_sheets(randi_range(1, 6))
+		else:
+			p.set_target(0, true)
 		world.add_child(p)
 		PaperPile.inbox[dept_id] = p
 	# L'anteprima va applicata anche prima del primo snapshot del backend:
@@ -187,14 +193,13 @@ func _ready() -> void:
 		PaperPile.inbox[pile_preview[0]].set_target(
 				maxi(0, int(pile_preview[1])), true)
 
-	# Primo avvio come showroom: tutti i ruoli fondamentali e due persone per
-	# reparto. Il primo snapshot reale li sostituisce senza mai presentare un
-	# ufficio vuoto a chi sta ancora configurando il prodotto.
+	# Le fixture entrano in scena soltanto con un gate demo/test esplicito.
+	# Il percorso normale senza backend resta vuoto: UNAVAILABLE non e' DEMO.
 	var initial_defs: Array = []
 	var all_seated_preview := OS.get_environment("JHT_ALL_SEATED_PREVIEW") == "1"
 	if _seat_audit != "" or _doctor_test != "" or all_seated_preview:
 		initial_defs = CharacterDefs.spawn_list()
-	elif BackendBus.agents.is_empty():
+	elif BackendBus.agents.is_empty() and SimBadge.synthetic_data_allowed():
 		initial_defs = CharacterDefs.showroom_list()
 	for def in initial_defs:
 		if _seat_audit != "":
@@ -286,19 +291,25 @@ func _ready() -> void:
 		# Tour del primo avvio: attivo solo nel flusso reale (titolo → ufficio;
 		# ogni test/shot headless imposta JHT_SCENE e resta fuori) o quando il
 		# selftest lo forza. Il tour guida con marker mirati, camera e to-do.
+		# JHT_TOUR_EXIT_TEST accende il tour come i due precedenti ma NON
+		# spegne la persistenza: il test di pausa/ripresa verifica file veri.
 		_tour_enabled = OS.get_environment("JHT_TOUR_TEST") == "1" \
 				or OS.get_environment("JHT_TOUR_PREVIEW") == "1" \
-				or (OS.get_environment("JHT_SCENE") == "" and TourGuide.active() \
-					and ScriptedOnboarding.story_mode())
+				or OS.get_environment("JHT_TOUR_EXIT_TEST") == "1" \
+				or (OS.get_environment("JHT_SCENE") == "" and TourGuide.incomplete())
 		if _tour_enabled:
-			Log.info("tour", "tour primo avvio attivo dal passo %d" % TourGuide.step_index())
-			_tour_tracker = TourTracker.new()
-			add_child(_tour_tracker)
 			TourGuide.changed.connect(_on_tour_changed)
-			_refresh_tour_markers()
-			# Un breve respiro dopo il primo frame, poi la regia riprende il
-			# tour dal punto giusto (primo saluto o tappa interrotta).
-			get_tree().create_timer(1.2).timeout.connect(_tour_resume_entry)
+			ScriptedOnboarding.dismissed.connect(_on_tour_paused)
+			ScriptedOnboarding.resumed.connect(_on_tour_resumed)
+			if TourGuide.active():
+				Log.info("tour", "tour primo avvio attivo dal passo %d" % TourGuide.step_index())
+				_mount_tour_tracker()
+				_refresh_tour_markers()
+				# Un breve respiro dopo il primo frame, poi la regia riprende il
+				# tour dal punto giusto (primo saluto o tappa interrotta).
+				get_tree().create_timer(1.2).timeout.connect(_tour_resume_entry)
+			else:
+				_refresh_tour_markers()
 
 	Log.info("scene", "ufficio pronto: %d agenti, %d postazioni reparto, mondo %v" % [
 			agents.size(), DepartmentDefs.all_desks().size(), FurnitureDefs.WORLD.size])
@@ -811,6 +822,30 @@ func _on_tour_changed() -> void:
 		return
 	_tour_go_to_stop()
 
+## La pausa spegne la presentazione, i marker e il tracker, ma non tocca il
+## progresso. I timer già in volo consultano `TourGuide.active()` e decadono.
+func _on_tour_paused() -> void:
+	_tour_release_guide()
+	_refresh_tour_markers()
+	if is_instance_valid(_tour_tracker):
+		_tour_tracker.queue_free()
+	_tour_tracker = null
+
+## La ripresa rimonta soltanto la vista e richiama la regia sulla tappa che
+## TourGuide aveva già persistito. Nessun indice parallelo nella UI.
+func _on_tour_resumed() -> void:
+	if not _tour_enabled or not TourGuide.active():
+		return
+	_mount_tour_tracker()
+	_refresh_tour_markers()
+	get_tree().create_timer(0.2).timeout.connect(_tour_resume_entry)
+
+func _mount_tour_tracker() -> void:
+	if is_instance_valid(_tour_tracker):
+		return
+	_tour_tracker = TourTracker.new()
+	add_child(_tour_tracker)
+
 ## Ripresa all'avvio scena: primo saluto o tappa dove si era rimasti.
 func _tour_resume_entry() -> void:
 	if not _tour_enabled or not TourGuide.active() or TourGuide.in_launch_phase():
@@ -957,9 +992,9 @@ func _tour_begin_presentation(stop: String, guide: AgentNPC,
 func _tour_open_stop_dialogue(stop: String, preferred_host: AgentNPC = null) -> void:
 	if not _tour_enabled or not TourGuide.stop_open(stop):
 		return
-	if Game.dialogue_active or _registry or _dept_panel or _agent_card \
-			or _chat_panel or _cv_shelf_panel or _queue_panel \
-			or _thinking_panel or _coordinator_panel:
+	# FreeCamera e tutte le superfici native condividono già questo contratto.
+	# Consultarlo evita l'elenco privato che dimenticava SectionPanel/setup.
+	if Game.dialogue_active or get_tree().has_group(&"camera_blocking_overlay"):
 		get_tree().create_timer(0.8).timeout.connect(func() -> void:
 			_tour_open_stop_dialogue(stop, preferred_host))
 		return
@@ -1010,8 +1045,22 @@ func _on_tour_dialogue_action(action: String) -> void:
 	elif action == "tour:free":
 		TourGuide.set_free_mode()
 	elif action == "open_setup":
-		ScriptedOnboarding.action_requested.emit("open_section",
-				{"section": "activation"})
+		_open_section_after_dialogue("activation")
+
+## Un pannello nativo non nasce sotto DialogueUI (layer 60). La battuta finale
+## resta leggibile; quando l'utente la chiude, lo stesso evento `closed` apre
+## il setup. È il ciclo di vita UI esistente, non un flag di attesa parallelo.
+func _open_section_after_dialogue(section: String) -> void:
+	var dialogues := get_tree().get_nodes_in_group(&"dialogue_ui")
+	if dialogues.is_empty():
+		if not ScriptedOnboarding.is_dismissed():
+			ScriptedOnboarding.action_requested.emit("open_section", {"section": section})
+		return
+	var dialogue := dialogues[0]
+	var open_after_close := func() -> void:
+		if not ScriptedOnboarding.is_dismissed():
+			ScriptedOnboarding.action_requested.emit("open_section", {"section": section})
+	dialogue.closed.connect(open_after_close, CONNECT_ONE_SHOT)
 
 func _tour_release_guide() -> void:
 	_camera.stop_follow()
@@ -1213,6 +1262,16 @@ var _last_ready := -1
 var _piles_synced := false
 
 func _sync_piles(hold_seconds := 0.0) -> void:
+	# Un payload presente ma non attestato non puo' accendere pile, scaffale o
+	# viaggi. L'azzeramento immediato chiude anche il frame di transizione in
+	# cui un backend sintetico si disconnette lasciando lo snapshot sul bus.
+	if SimBadge.current_state() == SimBadge.DataState.UNAVAILABLE:
+		for dept_id in PILE_PHASE:
+			if PaperPile.inbox.has(dept_id):
+				PaperPile.inbox[dept_id].set_target(0, true)
+		OutputShelf.set_ready(0, true)
+		_piles_synced = false
+		return
 	var counts: Dictionary = BackendBus.pipeline_counts()
 	# Hook esclusivamente visivo per gli screenshot di regressione: permette di
 	# verificare l'ingombro/prospettiva di una coda grande senza dipendere dai
@@ -1251,6 +1310,9 @@ func _sync_piles(hold_seconds := 0.0) -> void:
 ## che le ha firmate. Il primo snapshot fa solo da baseline: lo storico
 ## non va recitato all'avvio.
 func _on_transitions(_positions: Array) -> void:
+	if SimBadge.current_state() == SimBadge.DataState.UNAVAILABLE:
+		_sync_piles()
+		return
 	var fresh: Array = []
 	for t in BackendBus.transitions:
 		var key := "%s|%s|%s|%s" % [str(t.get("position_id", "")),
@@ -1263,7 +1325,11 @@ func _on_transitions(_positions: Array) -> void:
 	# Il primo snapshot allinea subito le pile. In seguito il nuovo target
 	# resta sospeso mentre gli agenti compiono davvero ritiro e consegna;
 	# dopo un minuto riconcilia eventuali raffiche o eventi senza attore.
-	if not BackendBus.positions.is_empty():
+	if BackendBus.positions.is_empty():
+		# Uno snapshot LIVE vuoto e' un valore autoritativo, non assenza di
+		# risposta: cancella immediatamente code e scaffale della lettura prima.
+		_reseed_piles()
+	else:
 		_sync_piles(65.0 if _tr_baseline and not fresh.is_empty() else 0.0)
 	if not _tr_baseline:
 		_tr_baseline = true
@@ -1331,6 +1397,9 @@ func _on_backend_reset() -> void:
 	_tr_baseline = false
 	_last_ready = -1
 	_reseed_piles()
+	# Difesa locale oltre al contratto del bus: nessun NPC live della macchina
+	# precedente sopravvive a un adapter che dimenticasse il roster vuoto.
+	sync_agents([])
 	# LED di attività: senza campione fresco nessun agente resta verde con la
 	# CPU misurata sulla macchina di prima.
 	_on_agent_cpu_telemetry({}, [])
@@ -1374,7 +1443,7 @@ func _stage_agent_entry(agent: AgentNPC) -> void:
 	agent.enter_through(ENTRY_SPOT, float(wave) * 0.9, float(lane))
 
 func _spawn_showroom() -> void:
-	if world == null:
+	if world == null or not SimBadge.synthetic_data_allowed():
 		return
 	for def in CharacterDefs.showroom_list():
 		var exists := false
@@ -1416,8 +1485,12 @@ func _on_setup_status_changed(status: Dictionary) -> void:
 			if child is DialogueUI:
 				(child as DialogueUI)._close()
 		BackendBus.clear_demo_positions()
-	elif BackendBus.positions.is_empty() or BackendBus.positions_are_demo:
+	elif SimBadge.synthetic_data_allowed() \
+			and (BackendBus.positions.is_empty() or BackendBus.positions_are_demo):
 		BackendBus.show_demo_positions()
+	elif BackendBus.positions_are_demo:
+		# Un residuo sintetico senza gate non deve raggiungere alcun consumer.
+		BackendBus.clear_demo_positions()
 
 func _despawn_agent(agent: AgentNPC, refill_pool := true, instant := false) -> void:
 	agents.erase(agent)

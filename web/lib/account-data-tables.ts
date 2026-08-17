@@ -9,9 +9,9 @@
 // L'ordine qui NON è quello di cancellazione: quello vive in
 // `MANUAL_DELETE_ORDER` ed è vincolato dalle chiavi esterne.
 
-/** Tabelle senza `ON DELETE CASCADE` verso `auth.users`: vanno svuotate a
- *  mano, in quest'ordine, prima di cancellare l'utente. Verificato sul
- *  catalogo di produzione il 7 agosto 2026. */
+/** Tabelle senza `ON DELETE CASCADE` verso `auth.users`: la RPC privilegiata
+ *  le svuota esplicitamente, in quest'ordine, prima di cancellare l'utente.
+ *  Verificato sul catalogo di produzione il 7 agosto 2026. */
 export const MANUAL_DELETE_ORDER = [
   "applications",
   "position_highlights",
@@ -39,9 +39,13 @@ export const CASCADE_TABLES = [
   "candidate_files",
   "candidate_languages",
   "candidate_location_preferences",
+  // Attestazione tecnica del contenuto sincronizzato. È privata in scrittura
+  // ma resta parte dei dati cancellati/esportati con l'account.
+  "candidate_profile_sync_state",
   "candidate_skills",
   "candidate_work_authorization",
   "cloud_sync_pairing_sessions",
+  "cloud_sync_pairing_attempts",
   "cloud_sync_tokens",
   "encrypted_user_blobs",
   "file_bridge_requests",
@@ -50,13 +54,20 @@ export const CASCADE_TABLES = [
   "position_feedback",
   "position_tickets",
   "position_transitions",
+  // O-33/mig 069: la nota privata, una riga per `origin` (la superficie che
+  // l'ha scritta). Cascata doppia (auth.users e positions), quindi qui e non
+  // in MANUAL_DELETE_ORDER. «Privata dagli agenti» non vuol dire esclusa
+  // dall'export: è un testo scritto dall'utente, ed è suo.
+  "position_user_notes",
   "position_views",
   "sentinel_ticks",
   "team_commands",
+  "team_directive_request_ledger",
   "team_directives",
   "team_state",
   "team_state_history",
   "user_onboarding_state",
+  "user_settings",
   "user_to_agent_messages",
 ] as const;
 

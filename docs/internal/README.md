@@ -39,6 +39,8 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 
 | File | Topic |
 |---|---|
+| [`2026-08-12-execution-host-vocabulary-contract.md`](architecture/2026-08-12-execution-host-vocabulary-contract.md) | 🖥️ Contratto del luogo di esecuzione: PC locale e VPS come host supportati, cloud opzionale separato dal runtime e capacità da non promettere |
+| [`2026-08-12-dialogue-i18n-contract.md`](architecture/2026-08-12-dialogue-i18n-contract.md) | 🌍 Contratto eseguibile dei dialoghi authored EN+6: parità degli ID, resolver runtime, contesto LLM canonico e gate contro residui inglesi |
 | [`2026-08-03-local-vault-design.md`](architecture/2026-08-03-local-vault-design.md) | 🔐 Design del vault locale: envelope encryption, broker runtime e migrazione fail-closed; richiede ADR e dependency review prima dell'implementazione |
 | [`provider-touchpoint-inventory.md`](architecture/provider-touchpoint-inventory.md) | 🧭 Machine-checked map of provider-specific seams and the role-scoped M5 Local Scorer boundary |
 | [`2026-08-03-maintenance-evidence-log-design.md`](architecture/2026-08-03-maintenance-evidence-log-design.md) | 🔬 `maintenance_events` append-only: oggi i campi di manutenzione sono stato last-write-wins, quindi chi scrive il timestamp senza lavorare è indistinguibile da chi lavora — evidenza ri-derivabile (status + hash), aggancio unico in `db_update.py`, tasso di no-op come metrica |
@@ -152,6 +154,7 @@ Piani tecnici, backlog, tracker e idee parcheggiate. Aggiornati finché aperti.
 | [`2026-07-30-ticket-throttle-engine-external.md`](roadmap/2026-07-30-ticket-throttle-engine-external.md) | `[THROTTLE-ENGINE-EXTERNAL]`: il timer esce dal processo dell'agente — `until` assoluti su disco, ack firmato dall'agente |
 | [`2026-07-30-ticket-mode-injection-hourly-prompt.md`](roadmap/2026-07-30-ticket-mode-injection-hourly-prompt.md) | `[MODE-INJECTION-HOURLY-PROMPT]`: la modalità corrente iniettata ogni ora nel prompt del Capitano, letta da disco a ogni chiamata |
 | [`2026-07-30-db-audit-observations.md`](roadmap/2026-07-30-db-audit-observations.md) | Audit del DB: code senza limite, dedup URL, e cosa ne è seguito |
+| [`2026-08-08-scout-coordination-observations.md`](roadmap/2026-08-08-scout-coordination-observations.md) | Perché C-21 non si vede all'opera: misure su cinque squadre (la divisione è scritta ma non vissuta, e l'ufficio non la legge) |
 | [`2026-07-29-ticket-team-standby-zero-spend.md`](roadmap/2026-07-29-ticket-team-standby-zero-spend.md) | `[TEAM-STANDBY-ZERO-SPEND]`: nessuna leva attuale azzera il costo di un team acceso — fermare anche i ruoli core |
 | [`2026-07-29-ticket-doctor-unblock-and-session-ttl.md`](roadmap/2026-07-29-ticket-doctor-unblock-and-session-ttl.md) | `[DOCTOR-UNBLOCK-AND-TTL]`: il Dottore deve sbloccare, sessioni con TTL 12h — dall'incidente delle undici ore ferme con quota abbondante |
 | [`2026-07-28-ticket-stepcap-throttle-resume.md`](roadmap/2026-07-28-ticket-stepcap-throttle-resume.md) | `[STEPCAP-THROTTLE-RESUME]`: ripresa automatica degli agenti fermi sul cap di step (`stepcap-watchdog.py`, implementato; resta la verifica su container vero) |

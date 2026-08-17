@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "contract_id": "release-0.3.9-schema-078-081",
+  "clone_contract": {
+    "baseline": "live-schema-only-pg-dump",
+    "contains_user_rows": false,
+    "postgres_major": 16,
+    "ordered_migrations": [
+      "supabase/migrations/078_positions_write_request_kind.sql",
+      "supabase/migrations/079_team_directive_events_atomic.sql",
+      "supabase/migrations/080_profile_snapshot_atomic.sql",
+      "supabase/migrations/081_live_schema_reconciliation.sql"
+    ]
+  },
+  "migrations": [
+    {
+      "path": "supabase/migrations/078_positions_write_request_kind.sql",
+      "sha256": "2cb2a780c2a3c8ad23ac57d9c8274e1b2247a8cf973917f2de48b492b41b6e4e"
+    },
+    {
+      "path": "supabase/migrations/079_team_directive_events_atomic.sql",
+      "sha256": "81f6892a63d8e4c371aff6279788194a8b814e49a4065f48be52b52d441565eb"
+    },
+    {
+      "path": "supabase/migrations/080_profile_snapshot_atomic.sql",
+      "sha256": "7d63d60cd191f172641778e5010708d8b535865c7696b947bb2ab3c2f9f116c7"
+    },
+    {
+      "path": "supabase/migrations/081_live_schema_reconciliation.sql",
+      "sha256": "f3b04aa2ab769101fcb4ec38bc6b1748e2dc59776ca2f2881b03f14638f583d7"
+    }
+  ],
+  "query": {
+    "path": "supabase/live-schema/078-081.v1.sql",
+    "sha256": "7b9995f0fe494427e73cfcba852b51e33a893b4c63aa07ddb2f742e13d4d8270"
+  },
+  "expected_checks": [
+    "076.sync_upsert_applications.definition",
+    "077.mark_position_applied.definition",
+    "077.undo_manual_position_application.definition",
+    "078.positions.write_request_kind.column",
+    "078.positions.write_request_kind.constraint",
+    "079.directive_rpc.acl",
+    "079.directive_rpc.definition",
+    "079.directive_rpc.security",
+    "079.directive_rpc.signature",
+    "079.event_columns.shape",
+    "079.pending_messages.column_acl",
+    "079.pending_messages.source_index",
+    "079.request_ledger.acl",
+    "079.request_ledger.columns",
+    "079.request_ledger.primary_key",
+    "079.request_ledger.rls",
+    "079.request_ledger.user_fk",
+    "079.team_directives.mutation_acl",
+    "079.team_directives.source_index",
+    "080.profile_rpc.acl",
+    "080.profile_rpc.definition",
+    "080.profile_rpc.security",
+    "080.profile_rpc.signature",
+    "080.sync_state.acl",
+    "080.sync_state.columns",
+    "080.sync_state.constraints",
+    "080.sync_state.rls",
+    "081.cleanup.acl",
+    "081.cleanup.definition",
+    "081.delete_account.definition",
+    "081.position_location.columns",
+    "081.position_role_family.column",
+    "081.reconciliation.present",
+    "081.redeem_pairing.definition",
+    "081.reject_stale_applied.definition",
+    "081.reject_stale_applied.trigger",
+    "081.sync_confirm.acl",
+    "081.sync_confirm.definition",
+    "081.team_directives.policies",
+    "081.team_state_stamp.definition",
+    "081.team_state_stamp.trigger",
+    "081.tenant_fk.count"
+  ]
+}

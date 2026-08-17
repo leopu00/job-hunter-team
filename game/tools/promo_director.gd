@@ -1698,9 +1698,9 @@ func _prepare_promo_agents() -> void:
 			agent.quest_marker = null
 
 
-## Targa inglese sopra lo scaffale output: copre la targa «CV PRONTI»
-## (non ancora localizzata) con la stessa grafica e il contatore VERO.
-## Solo scenografia del ciak: il gioco vero non cambia.
+## Targa sopra lo scaffale output: replica la targa runtime con la stessa
+## chiave localizzata e il contatore VERO. Il ciak EN non deve avere una
+## seconda traduzione scritta a mano che possa divergere dal gioco.
 class ShelfDub extends Node2D:
 	func _ready() -> void:
 		z_index = 60
@@ -1717,5 +1717,6 @@ class ShelfDub extends Node2D:
 		draw_rect(plate, Palette.PANEL)
 		draw_rect(plate, Color(Palette.GREEN, 0.7), false, 1.2)
 		draw_string(ThemeDB.fallback_font, Vector2(-45, -half.y - 14),
-				"CV READY  %d" % shelf._real, HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
+				UIStrings.t("office.ready_cvs_count") % shelf._real,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
 				Palette.GREEN)

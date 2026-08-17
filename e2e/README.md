@@ -18,16 +18,37 @@ playwright.config.ts
 **What runs: 50 tests in 5 files** — `npx playwright test --list` is the source
 of this number, not this paragraph:
 
-| Spec                   | Tests | What it covers                                                                                                 |
-| ---------------------- | ----- | -------------------------------------------------------------------------------------------------------------- |
-| `39-og-twitter-image`  | 21    | social/PWA metadata: OG and Twitter images, icons, manifest                                                    |
-| `80-welcome-wizard`    | 10    | `/welcome`, the new cloud user's first run                                                                     |
-| `81-demo-mode`         | 6     | the protected area serving the demo dataset                                                                    |
-| `82-support-report`    | 12    | reporting a problem: `/contact` and the dashboard dialog, including privacy, delivery and offline truthfulness |
-| `83-recording-profile` | 1     | private opt-in gate: real seeded account, no demo banner                                                       |
+| Spec                        | Tests | What it covers                                                                                                 |
+| --------------------------- | ----- | -------------------------------------------------------------------------------------------------------------- |
+| `39-og-twitter-image`       | 21    | social/PWA metadata: OG and Twitter images, icons, manifest                                                    |
+| `80-welcome-wizard`         | 10    | `/welcome`, the new cloud user's first run                                                                     |
+| `81-demo-mode`              | 6     | the protected area serving the demo dataset                                                                    |
+| `82-support-report`         | 12    | reporting a problem: `/contact` and the dashboard dialog, including privacy, delivery and offline truthfulness |
+| `83-recording-profile`      | 1     | private opt-in gate: real seeded account, no demo banner                                                       |
+| `88-protected-positions`    | 3     | the protected area's positions: list content, detail content, a filter that actually filters                   |
+| `89-protected-profile-team` | 5     | profile (data + cloud read-only), team activity, swipe deck, map reachable                                     |
+| `90-protected-swipe`        | 2     | the swipe deck actually plays: discard/like advance the deck, the judgment survives a reload                   |
 
 They run on every push and PR (`.github/workflows/test.yml`, job `e2e`) against
 `next start` in cloud mode with a real session.
+
+**`88-` and `89-` (added 2026-08-08)** close part of what [JHT-E2E-STALE]
+left open: the protected area was almost uncovered, because quarantining
+removed the specs that _claimed_ to cover it. **`90-`** (same day, T-028)
+goes one step further on the swipe deck: it clicks the verdict buttons and
+asserts the deck advances (counter, cards leaving/entering the three-card
+stack) and that the judgment persists across a reload via the demo overlay
+cookie. They are written against the
+pages that ship today and assert on the **content** of the demo dataset
+(`web/lib/demo/seeds/`, `web/lib/demo/profile.ts`) — a named position, a
+named company, the candidate's name — precisely because that dataset is
+versioned in the repo. «At least one row exists» is the assertion that let
+seventy-five useless specs pass; a page answering 200 with its loading
+skeleton would satisfy it.
+
+Still open in that ticket: `/map` cannot be verified beyond reachability
+(WebGL is absent in headless), and the 11 API routes exercised only by
+quarantined specs remain without a caller.
 
 ⚠️ **These specs are meant to be able to fail.** Until 2026-07-30
 `39-og-twitter-image` guarded all 21 of its tests with

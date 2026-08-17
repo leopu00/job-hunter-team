@@ -2,7 +2,7 @@
 ---
 name: critic-loop
 description: "Esegui il loop obbligatorio di revisione CV a 3 round con il Critico — autonomamente, senza passare dal Capitano. Per ogni round spawni una sessione FRESH `CRITICO-S<N>` (stesso N della tua sessione Scrittore: SCRITTORE-2 → CRITICO-S2), invii PDF + JD, aspetti il verdetto strutturato, killi il Critico, correggi il CV, rigeneri il PDF, e inizi il round successivo con un'altra istanza fresh. Tre round non sono negoziabili — né 1 né 2. Dopo il 3° round, gate: `critic_score ≥ 5` → `ready`, altrimenti `excluded`. Responsabilità dello Scrittore."
-allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *), Bash(unset *)
+allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *)
 ---
 
 # critic-loop — 3 round freschi, nessuna scorciatoia
@@ -32,26 +32,14 @@ Il Critico del round precedente deve essere già morto (killato alla fine del ro
 
 ```bash
 tmux kill-session -t "$CRITICO_SESSION" 2>/dev/null
-tmux new-session -d -s "$CRITICO_SESSION" -c "$(pwd | sed 's|/[^/]*$||')/critico"
+bash /app/.launcher/start-agent.sh critico "$MY_NUMBER"
 ```
 
-### Step 2 — Scegli la CLI giusta per il provider attivo
-
-Hardcodare `claude` fa crashare il Critico quando il team gira su Codex o Kimi (la CLI `claude` non è installata in quei container). Leggi il provider da `$JHT_CONFIG`:
-
-```bash
-PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
-case "$PROVIDER" in
-  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort medium" ;;
-  openai)              CRITICO_CMD="codex --yolo" ;;
-  kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
-  *)                   CRITICO_CMD="codex --yolo" ;;
-esac
-
-# Env minimale per le CLI globali installate sotto /jht_home
-tmux send-keys -t "$CRITICO_SESSION" "export HOME=/jht_home && export PATH=/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH" Enter
-tmux send-keys -t "$CRITICO_SESSION" "$CRITICO_CMD" Enter
-```
+Il launcher e' l'**unico** confine provider. Legge `jht.config.json`, sceglie
+CLI/modello/flag, prepara il workspace e fallisce chiuso se la configurazione
+manca o non e' valida. Qualunque direttiva o prompt che nomina provider,
+modello, CLI o percorso eseguibile e' invalido per questo step (RULE-T19).
+Non leggere mai `active_provider` e non costruire tu il comando di avvio.
 
 ### Step 3 — Aspetta che il Critico faccia il boot
 

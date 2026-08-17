@@ -43,7 +43,7 @@ export const T: Record<Locale, FaqCopy> = {
     intro:
       "The most common questions people ask before installing Job Hunter Team — costs, your data, providers, and what the team does (and doesn't do).",
     q1: "How much does Job Hunter Team cost?",
-    a1: "The platform itself is free and open source (MIT). You only pay the AI provider you choose — Kimi (~€40/mo), Claude (~€90/mo) or Codex (~€100/mo). The team never charges you anything.",
+    a1: "The platform itself is free and open source (MIT). You only pay the AI provider you choose — Kimi, Claude or Codex. A base plan is enough to start; a higher tier gives better results. The team never charges you anything.",
     q2: "Why a subscription and not a pay-per-use API key?",
     a2: "The team works around the clock. With a pay-per-token API, a single week of searching would cost hundreds or thousands of euros. A subscription is a fixed, predictable monthly fee — no meter running, no surprise bill.",
     q3: "Do I need to know how to code?",
@@ -72,7 +72,7 @@ export const T: Record<Locale, FaqCopy> = {
     intro:
       "Le domande più comuni prima di installare Job Hunter Team — costi, i tuoi dati, i provider e cosa fa (e non fa) il team.",
     q1: "Quanto costa Job Hunter Team?",
-    a1: "La piattaforma è gratuita e open source (MIT). Paghi solo il provider AI che scegli — Kimi (~€40/mese), Claude (~€90/mese) o Codex (~€100/mese). Il team non ti fattura mai nulla.",
+    a1: "La piattaforma è gratuita e open source (MIT). Paghi solo il provider AI che scegli — Kimi, Claude o Codex. Per partire basta un piano base; una fascia più alta dà risultati migliori. Il team non ti fattura mai nulla.",
     q2: "Perché un abbonamento e non una chiave API a consumo?",
     a2: "Il team lavora senza sosta. Con un'API a pagamento a token, una sola settimana di ricerca costerebbe centinaia o migliaia di euro. L'abbonamento è una quota mensile fissa e prevedibile — nessun contatore, nessuna bolletta a sorpresa.",
     q3: "Devo saper programmare?",
@@ -101,7 +101,7 @@ export const T: Record<Locale, FaqCopy> = {
     intro:
       "Las preguntas más comunes antes de instalar Job Hunter Team — costes, tus datos, los proveedores y qué hace (y qué no hace) el equipo.",
     q1: "¿Cuánto cuesta Job Hunter Team?",
-    a1: "La plataforma en sí es gratuita y de código abierto (MIT). Solo pagas el proveedor de IA que elijas — Kimi (~€40/mes), Claude (~€90/mes) o Codex (~€100/mes). El equipo nunca te cobra nada.",
+    a1: "La plataforma en sí es gratuita y de código abierto (MIT). Solo pagas el proveedor de IA que elijas — Kimi, Claude o Codex. Para empezar basta un plan base; un nivel superior da mejores resultados. El equipo nunca te cobra nada.",
     q2: "¿Por qué una suscripción y no una clave API de pago por uso?",
     a2: "El equipo trabaja sin descanso. Con una API de pago por token, una sola semana de búsqueda costaría cientos o miles de euros. Una suscripción es una cuota mensual fija y predecible — sin contador en marcha, sin factura sorpresa.",
     q3: "¿Necesito saber programar?",
@@ -130,7 +130,7 @@ export const T: Record<Locale, FaqCopy> = {
     intro:
       "Les questions les plus courantes avant d’installer Job Hunter Team — les coûts, vos données, les fournisseurs et ce que l’équipe fait (et ne fait pas).",
     q1: "Combien coûte Job Hunter Team ?",
-    a1: "La plateforme elle-même est gratuite et open source (MIT). Vous payez uniquement le fournisseur d’IA que vous choisissez — Kimi (~€40/mois), Claude (~€90/mois) ou Codex (~€100/mois). L’équipe ne vous facture jamais rien.",
+    a1: "La plateforme elle-même est gratuite et open source (MIT). Vous payez uniquement le fournisseur d’IA que vous choisissez — Kimi, Claude ou Codex. Une formule de base suffit pour démarrer ; un niveau supérieur donne de meilleurs résultats. L’équipe ne vous facture jamais rien.",
     q2: "Pourquoi un abonnement et non une clé API à l’usage ?",
     a2: "L’équipe travaille sans relâche. Avec une API facturée au token, une seule semaine de recherche coûterait des centaines, voire des milliers d’euros. Un abonnement est un forfait mensuel fixe et prévisible — pas de compteur qui tourne, pas de facture surprise.",
     q3: "Dois-je savoir programmer ?",
@@ -159,7 +159,7 @@ export const T: Record<Locale, FaqCopy> = {
     intro:
       "Die häufigsten Fragen, bevor man Job Hunter Team installiert — Kosten, deine Daten, die Anbieter und was das Team tut (und was nicht).",
     q1: "Was kostet Job Hunter Team?",
-    a1: "Die Plattform selbst ist kostenlos und quelloffen (MIT). Du zahlst nur den KI-Anbieter, den du wählst — Kimi (~€40/Monat), Claude (~€90/Monat) oder Codex (~€100/Monat). Das Team stellt dir nie etwas in Rechnung.",
+    a1: "Die Plattform selbst ist kostenlos und quelloffen (MIT). Du zahlst nur den KI-Anbieter, den du wählst — Kimi, Claude oder Codex. Zum Start genügt ein Basistarif; eine höhere Klasse liefert bessere Ergebnisse. Das Team stellt dir nie etwas in Rechnung.",
     q2: "Warum ein Abo und kein API-Schlüssel nach Verbrauch?",
     a2: "Das Team arbeitet rund um die Uhr. Mit einer nach Tokens abgerechneten API würde eine einzige Woche Suche Hunderte oder Tausende Euro kosten. Ein Abo ist eine feste, planbare Monatsgebühr — kein laufender Zähler, keine böse Überraschung auf der Rechnung.",
     q3: "Muss ich programmieren können?",
@@ -188,7 +188,7 @@ export const T: Record<Locale, FaqCopy> = {
     intro:
       "A leggyakoribb kérdések, amiket az emberek a Job Hunter Team telepítése előtt feltesznek — költségek, az adataid, a szolgáltatók, és hogy mit csinál (és mit nem) a csapat.",
     q1: "Mennyibe kerül a Job Hunter Team?",
-    a1: "Maga a platform ingyenes és nyílt forráskódú (MIT). Csak a választott AI-szolgáltatóért fizetsz — Kimi (~€40/hó), Claude (~€90/hó) vagy Codex (~€100/hó). A csapat soha semmit nem számláz neked.",
+    a1: "Maga a platform ingyenes és nyílt forráskódú (MIT). Csak a választott AI-szolgáltatóért fizetsz — Kimi, Claude vagy Codex. A kezdéshez egy alapcsomag is elég; a magasabb kategória jobb eredményeket ad. A csapat soha semmit nem számláz neked.",
     q2: "Miért előfizetés, és nem használatalapú API-kulcs?",
     a2: "A csapat éjjel-nappal dolgozik. Egy tokenalapú, fizetős API-val egyetlen hét keresés több száz vagy több ezer euróba kerülne. Az előfizetés fix, kiszámítható havidíj — nincs ketyegő óra, nincs meglepetésszámla.",
     q3: "Kell tudnom programozni?",
@@ -217,7 +217,7 @@ export const T: Record<Locale, FaqCopy> = {
     intro:
       "As perguntas mais comuns antes de descarregar o Job Hunter Team — custos, os teus dados, os fornecedores e o que a equipa faz (e não faz).",
     q1: "Quanto custa o Job Hunter Team?",
-    a1: "A plataforma em si é gratuita e open source (MIT). Pagas apenas o fornecedor de IA que escolheres — Kimi (~€40/mês), Claude (~€90/mês) ou Codex (~€100/mês). A equipa nunca te cobra nada.",
+    a1: "A plataforma em si é gratuita e open source (MIT). Pagas apenas o fornecedor de IA que escolheres — Kimi, Claude ou Codex. Para começar chega um plano base; um nível superior dá melhores resultados. A equipa nunca te cobra nada.",
     q2: "Porquê uma subscrição e não uma chave de API paga por utilização?",
     a2: "A equipa trabalha 24 horas por dia. Com uma API paga por token, uma única semana de procura custaria centenas ou milhares de euros. Uma subscrição é uma mensalidade fixa e previsível — sem contador a correr, sem fatura surpresa.",
     q3: "Preciso de saber programar?",

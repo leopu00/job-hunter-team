@@ -71,6 +71,14 @@ sul DB e il banner dichiara «LAVORO ESAURITO»; dove non lo è, degrada in un
 esplicito «non valutabile» — mai in un falso finito. Il banner non cambia MAI
 modalità: la scelta resta dell'utente, il banner rompe solo il silenzio.
 
+La chiave opzionale `"mode_until"` aggiunge la condizione di uscita che non
+dipende dal lavoro residuo ([SAVING-MODE-HAS-NO-DEADLINE]): passata quella
+data la modalità torna `search` **da sola**, insieme ai suoi `orders`, e il
+banner lo dichiara. Non è il banner a cambiare modalità — la scadenza l'ha
+scelta l'utente, qui si legge un orologio (`mode_deadline.py`, condiviso con
+`enrichment_policy.current_mode()` perché le due letture devono concludere la
+stessa cosa nello stesso istante).
+
 Uso:
   python3 mode_banner.py line          # una riga (per tmux: mai newline)
   python3 mode_banner.py show          # multi-riga, leggibile
@@ -84,6 +92,9 @@ import json
 import os
 import sqlite3
 import sys
+import hashlib
+import fcntl
+import re
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
@@ -112,6 +123,23 @@ MODE_LABELS = {
     MODE_CARE: "care",
     MODE_CALIBRATION: "calibration",
     MODE_SAVING: "saving",
+}
+
+# Queste sono frasi di INPUT che il resolver riconosce, non copy mostrata
+# all'utente. La forma composta dell'alias italiano evita che il census delle
+# stringhe renderizzate lo scambi per un nuovo messaggio backend.
+_IT_MESSAGE_REVIEW = "revisione " + "messaggi"
+MODE_CONFLICT_PHRASES = {
+    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "cuidado", "stop scouting", "revisar mensajes", "revisar mensagens", _IT_MESSAGE_REVIEW, "mensajes del usuario", "felhasználói kérések", "recheck"),
+    MODE_HARVEST: ("harvest", "raccolta", "récolte", "ernte", "colheita", "cv only", "solo cv", "só cv"),
+    MODE_CALIBRATION: ("calibration", "calibrazione", "calibración", "calibração", "kalibrierung", "visszacsatolás"),
+    MODE_SAVING: ("saving", "risparmio", "ahorro", "économie", "economia", "sparmodus", "poupança"),
+}
+DECLARED_MODE_PHRASES = {
+    MODE_CARE: ("care", "cura", "soin", "pflege", "gondoz", "gondozás", "cuidado"),
+    MODE_HARVEST: ("harvest", "raccolta", "récolte", "ernte", "colheita"),
+    MODE_CALIBRATION: ("calibration", "calibrazione", "calibración", "calibração", "kalibrierung"),
+    MODE_SAVING: ("saving", "risparmio", "ahorro", "économie", "economia", "sparmodus", "poupança"),
 }
 
 # Le QUATTRO dichiarazioni di ogni modalità (code attive / sospeso / budget /
@@ -160,7 +188,9 @@ MODE_SPECS = {
                    "(recheck/geocode/logo)",
         "budget": "near zero: no autonomous spending (C-25 does NOT unlock "
                   "sourcing here: report available headroom; do not spend it)",
-        "uscita": "none: lasts until the user removes it",
+        "uscita": "`mode_until` if the user set one; otherwise it lasts until "
+                  "they remove it — and an unspent weekly is destroyed at the "
+                  "reset, not carried over",
     },
 }
 
@@ -218,6 +248,50 @@ def _flag_paths():
     )
 
 
+# ── Scadenza della modalità ([SAVING-MODE-HAS-NO-DEADLINE]) ──────────────
+#
+# La meccanica vive in `mode_deadline.py` e la condivide con
+# `enrichment_policy.current_mode()`: due letture della stessa chiave devono
+# concludere la stessa cosa nello stesso istante, altrimenti il freno di spesa
+# e il banner raccontano al Capitano due modalità diverse. Se il modulo non è
+# caricabile la scadenza semplicemente non si applica (fail-safe: la modalità
+# scritta resta in vigore, che è il comportamento storico).
+
+def _deadline_key() -> str:
+    mod = _sibling("mode_deadline")
+    return getattr(mod, "DEADLINE_KEY", "mode_until") if mod else "mode_until"
+
+
+def _parse_deadline(value):
+    mod = _sibling("mode_deadline")
+    if mod is None:
+        return None
+    try:
+        return mod.parse_deadline(value)
+    except Exception:      # noqa: BLE001 — una scadenza non abbatte un banner
+        return None
+
+
+def _deadline_expired(deadline, now=None) -> bool:
+    mod = _sibling("mode_deadline")
+    if mod is None or deadline is None:
+        return False
+    try:
+        return bool(mod.is_expired(deadline, now))
+    except Exception:      # noqa: BLE001
+        return False
+
+
+def _deadline_remaining(deadline, now=None) -> str:
+    mod = _sibling("mode_deadline")
+    if mod is None or deadline is None:
+        return ""
+    try:
+        return mod.remaining_text(deadline, now)
+    except Exception:      # noqa: BLE001
+        return ""
+
+
 # ── Lettura della modalità ────────────────────────────────────────────────
 
 def read_maintenance() -> dict:
@@ -231,7 +305,8 @@ def read_maintenance() -> dict:
     """
     path = maintenance_file()
     out = {"exists": False, "readable": False, "mode": MODE_SEARCH,
-           "orders": {}, "since": None, "path": str(path)}
+           "orders": {}, "since": None, "path": str(path),
+           "mode_until_raw": None, "mode_until": None}
     try:
         raw = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
@@ -255,6 +330,12 @@ def read_maintenance() -> dict:
     out["mode"] = mode.strip() if isinstance(mode, str) and mode.strip() else MODE_SEARCH
     orders = data.get("orders")
     out["orders"] = orders if isinstance(orders, dict) else {}
+    # `mode_until` GREZZA e interpretata: la seconda è None anche quando la
+    # prima c'è ma non si legge, e le due insieme permettono al banner di dire
+    # «c'è una scadenza che non capisco» invece di ignorarla in silenzio.
+    raw_until = data.get(_deadline_key())
+    out["mode_until_raw"] = raw_until if isinstance(raw_until, str) else None
+    out["mode_until"] = _parse_deadline(raw_until)
     return out
 
 
@@ -281,7 +362,7 @@ def read_directives(limit: int = MAX_DIRECTIVES) -> dict:
     try:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, body, kind FROM team_directives WHERE status = 'active' "
+            "SELECT id, body, kind, created_at, updated_at FROM team_directives WHERE status = 'active' "
             "ORDER BY sort_order ASC, created_at ASC"
         ).fetchall()
     except sqlite3.Error:
@@ -293,11 +374,27 @@ def read_directives(limit: int = MAX_DIRECTIVES) -> dict:
             pass
     out["readable"] = True
     out["total"] = len(rows)
+    policy = _sibling("provider_directive_policy")
+    if policy is None:
+        # Fail closed: a missing policy must never make provider instructions
+        # executable again. The board remains readable, but no raw directive
+        # is injected until the boundary can be loaded.
+        out["rows"] = [
+            {"id": r["id"], "kind": r["kind"],
+             "body": "[IGNORED: directive policy unavailable]",
+             "provider_instruction_ignored": True}
+            for r in rows[:max(0, limit)]
+        ]
+        return out
     for r in rows[:max(0, limit)]:
-        body = str(r["body"] or "").strip().replace("\n", " ")
+        body, ignored = policy.for_prompt(r["body"])
         if len(body) > MAX_DIRECTIVE_BODY:
             body = body[:MAX_DIRECTIVE_BODY - 1].rstrip() + "…"
-        out["rows"].append({"id": r["id"], "kind": r["kind"], "body": body})
+        out["rows"].append({
+            "id": r["id"], "kind": r["kind"], "body": body,
+            "provider_instruction_ignored": ignored,
+            "created_at": r["created_at"], "updated_at": r["updated_at"],
+        })
     return out
 
 
@@ -482,6 +579,11 @@ def _care_queue_counts(conn) -> dict:
         except (TypeError, ValueError):
             ms = CARE_RECHECK_DEFAULT_MIN_SCORE
             days = CARE_RECHECK_DEFAULT_OLDER_THAN_DAYS
+        # Stessa anzianità della coda `recheck_due_rows` (db_query.py): l'ultima
+        # verifica è la PIÙ RECENTE fra `last_checked` e `last_open_check`
+        # ([RECHECK-MUST-UPDATE-LAST-CHECKED]). Guardando solo la prima, il
+        # banner conterebbe come "da ricontrollare" posizioni che la coda non
+        # serve più — e dichiarerebbe la cura mai finita.
         out["recheck"] = _count(conn, """
             SELECT COUNT(*)
             FROM positions p
@@ -489,8 +591,8 @@ def _care_queue_counts(conn) -> dict:
                   FROM scores GROUP BY position_id) s ON s.position_id = p.id
             WHERE p.status != 'excluded'
               AND s.ts >= ?
-              AND (p.last_checked IS NULL
-                   OR p.last_checked < datetime('now', ?))
+              AND MAX(COALESCE(p.last_checked, ''),
+                      COALESCE(p.last_open_check, '')) < datetime('now', ?)
         """, (ms, f"-{days} days"))
 
     gm = pol["geocode_missing"]
@@ -546,14 +648,77 @@ def _care_queue_counts(conn) -> dict:
     return out
 
 
-def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
+def harvest_backlog(orders: Optional[dict] = None):
+    """`(posizioni pronte per un CV, soglia)`. Il conteggio è None se non
+    ottenibile — jobs.db illeggibile o schema vecchio — e in quel caso non si
+    deduce niente: né che il raccolto sia finito, né che sia pieno.
+
+    Sta qui e non dentro `exit_status` perché ha DUE lettori: la condizione di
+    uscita della modalità `harvest` e il consiglio di `burn_mode` del bridge
+    ([BURN-MODE-ADVISES-THE-WRONG-LEVER]), che deve sapere se esiste un
+    raccolto da proporre prima di suggerire di spendere. Una terza copia di
+    questa SQL era il modo più rapido per farle divergere.
+
+    Gli stessi predicati di `next-for-harvest` in db_query.py — la coda è la
+    fonte di verità e la stima deve contare le SUE righe, non un soprainsieme.
+    Senza `status='scored'` finivano nel conto anche le `ready` (122 su una VPS
+    reale) e le posizioni chiuse o scadute: il banner non avrebbe mai
+    dichiarato un falso «finito» — sovrastimare è conservativo — ma il numero
+    mostrato al Capitano era di un'altra coda. Se quei predicati cambiano di
+    là, vanno cambiati qui: la duplicazione è voluta (il banner non importa
+    db_query) ma non è libera.
+    """
+    orders = orders or {}
+    thr = orders.get("cv_min_score")
+    if not isinstance(thr, (int, float)) or isinstance(thr, bool):
+        thr = HARVEST_DEFAULT_CV_MIN_SCORE
+    conn = _db_ro_conn()
+    if conn is None:
+        return None, thr
+    try:
+        n = _count(conn, """
+            SELECT COUNT(*)
+            FROM positions p
+            JOIN (SELECT position_id, MAX(total_score) AS ts
+                  FROM scores GROUP BY position_id) s
+              ON s.position_id = p.id
+            LEFT JOIN applications a ON a.position_id = p.id
+            WHERE a.id IS NULL
+              AND p.status = 'scored'
+              AND s.ts >= ?
+              AND COALESCE(p.is_open, 1) != 0
+              AND (p.expires_at IS NULL OR p.expires_at >= date('now'))
+        """, (thr,))
+    finally:
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
+    return n, thr
+
+
+def exit_status(mode: str, orders: Optional[dict] = None,
+                deadline=None, now: Optional[datetime] = None) -> dict:
     """La condizione di uscita della modalità, valutata ADESSO.
 
     Ritorna `{"kind", "detail"}` con kind ∈ {done, pending, continuous,
     unavailable}. `done` viene dichiarato SOLO su un conteggio riuscito e
     a zero: qualunque guasto degrada a `unavailable`, mai a un falso finito.
+
+    `deadline` (da `mode_until`) è una condizione di uscita che vale per
+    QUALUNQUE modalità e non dipende dal lavoro residuo: quando c'è, la
+    modalità finisce lì anche se il suo lavoro non è esaurito.
     """
     orders = orders or {}
+
+    if deadline is not None and mode != MODE_UNKNOWN:
+        left = _deadline_remaining(deadline, now)
+        return {"kind": EXIT_PENDING,
+                "detail": "expires on its own at %s (%s left) and falls back "
+                          "to `search`; until then the mode's own exit "
+                          "condition also applies"
+                          % (deadline.isoformat(timespec="minutes"),
+                             left or "?")}
 
     if mode == MODE_SEARCH:
         return {"kind": EXIT_CONTINUOUS,
@@ -562,7 +727,12 @@ def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
     if mode == MODE_SAVING:
         return {"kind": EXIT_CONTINUOUS,
                 "detail": "lasts until the user removes it; if budget "
-                          "remains, REPORT IT (C-25), do not spend it"}
+                          "remains, REPORT IT (C-25), do not spend it. "
+                          "No `mode_until` is set: the weekly budget is a "
+                          "WINDOW, not a balance — whatever is unspent at the "
+                          "reset is destroyed, so a saving left by inertia "
+                          "discards the cycle. Tell the user they can give it "
+                          "an end date"}
     if mode == MODE_CALIBRATION:
         return {"kind": EXIT_UNAVAILABLE,
                 "detail": "cannot be evaluated here (feedback lives in the "
@@ -571,46 +741,12 @@ def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
                           "(`feedback-query`)"}
 
     if mode == MODE_HARVEST:
-        conn = _db_ro_conn()
-        if conn is None:
-            return {"kind": EXIT_UNAVAILABLE,
-                    "detail": "jobs.db is unreadable — DO NOT infer that "
-                              "harvest is finished: check with db_query"}
-        thr = orders.get("cv_min_score")
-        if not isinstance(thr, (int, float)) or isinstance(thr, bool):
-            thr = HARVEST_DEFAULT_CV_MIN_SCORE
-        try:
-            # Gli stessi predicati di `next-for-harvest` in db_query.py — la
-            # coda è la fonte di verità e la stima deve contare le SUE righe,
-            # non un soprainsieme. Senza `status='scored'` finivano nel conto
-            # anche le `ready` (122 su una VPS reale) e le posizioni chiuse o
-            # scadute: il banner non avrebbe mai dichiarato un falso «finito»
-            # — sovrastimare è conservativo — ma il numero mostrato al
-            # Capitano era di un'altra coda. Se quei predicati cambiano di là,
-            # vanno cambiati qui: la duplicazione è voluta (il banner non
-            # importa db_query) ma non è libera.
-            n = _count(conn, """
-                SELECT COUNT(*)
-                FROM positions p
-                JOIN (SELECT position_id, MAX(total_score) AS ts
-                      FROM scores GROUP BY position_id) s
-                  ON s.position_id = p.id
-                LEFT JOIN applications a ON a.position_id = p.id
-                WHERE a.id IS NULL
-                  AND p.status = 'scored'
-                  AND s.ts >= ?
-                  AND COALESCE(p.is_open, 1) != 0
-                  AND (p.expires_at IS NULL OR p.expires_at >= date('now'))
-            """, (thr,))
-        finally:
-            try:
-                conn.close()
-            except sqlite3.Error:
-                pass
+        n, thr = harvest_backlog(orders)
         if n is None:
             return {"kind": EXIT_UNAVAILABLE,
-                    "detail": "count failed (schema?) — DO NOT infer that "
-                              "harvest is finished"}
+                    "detail": "count unavailable (jobs.db unreadable, or an "
+                              "older schema) — DO NOT infer that harvest is "
+                              "finished: check with db_query"}
         if n == 0:
             return {"kind": EXIT_DONE,
                     "detail": "0 live positions with score ≥ %s without a "
@@ -710,6 +846,8 @@ def snapshot(now: Optional[datetime] = None) -> dict:
     altre skill (e per i test) ma la modalità non scade col tempo."""
     m = read_maintenance()
     d = read_directives()
+    expired = False
+    orders = m["orders"]
     if m["exists"] and not m["readable"]:
         mode, mode_raw = MODE_UNKNOWN, None
     else:
@@ -718,21 +856,124 @@ def snapshot(now: Optional[datetime] = None) -> dict:
         # produzione con `maintenance` resta riconoscibile.
         mode_raw = m["mode"] if m["exists"] else None
         mode = LEGACY_MODES.get(m["mode"], m["mode"])
+        if _deadline_expired(m["mode_until"], now):
+            # La modalità è FINITA: torna il default. Con lei scadono i suoi
+            # `orders` — «saving fino a venerdì» è un ordine solo, e lasciare
+            # in piedi `stop_search: true` significherebbe tornare a `search`
+            # senza cercare, cioè non tornare affatto.
+            mode, orders, expired = MODE_SEARCH, {}, True
+    conflicts = resolve_user_conflicts(m, d["rows"], mode)
     return {
         "mode": mode,
         "mode_raw": mode_raw,
-        "exit": exit_status(mode, m["orders"]),
+        "mode_until": (m["mode_until"].isoformat() if m["mode_until"]
+                       else None),
+        "mode_until_raw": m["mode_until_raw"],
+        "mode_expired": expired,
+        "exit": exit_status(mode, orders,
+                            deadline=None if expired else m["mode_until"],
+                            now=now),
         "since": m["since"],
         "maintenance_exists": m["exists"],
         "maintenance_readable": m["readable"],
-        "orders": m["orders"],
+        "orders": orders,
         "directives": d["rows"],
         "directives_total": d["total"],
         "directives_readable": d["readable"],
         "flags": read_flags(),
         "read_at": (now or datetime.now(timezone.utc)).isoformat(
             timespec="seconds"),
+        "conflicts": conflicts,
     }
+
+
+def resolve_user_conflicts(maintenance: dict, directives: list, mode: str) -> list:
+    """Return timestamp-ordered incompatible user choices, fail-closed on ties/nulls."""
+    if mode in (MODE_SEARCH, MODE_UNKNOWN) or not maintenance.get("since"):
+        return []
+    mode_words = tuple(w for words in MODE_CONFLICT_PHRASES.values() for w in words)
+    conflicts = []
+    for row in directives:
+        body = str(row.get("body") or "").lower()
+        # Semantic contract: only explicit mode declarations or explicit
+        # mode-scoped orders count; incidental words in prose do not.
+        explicit = None
+        for declared, phrases in DECLARED_MODE_PHRASES.items():
+            if any(re.search(rf"\b(?:mode|modo|modus|modalit(?:é|à|a)|modalidade|mód)\s*[:=]?\s*{re.escape(p)}\b", body) for p in phrases):
+                explicit = declared; break
+        if explicit:
+            if explicit == mode: continue
+            scoped = True
+        else:
+            scoped = any(
+                body.strip() == w
+                or re.search(
+                    rf"\b(?:only|solo|just|stop|só|nur|seulement|csak)\b[^.]*\b{re.escape(w)}\b"
+                    rf"|\b{re.escape(w)}\b[^.]*\b(?:only|solo|just|stop|só|nur|seulement|csak)\b",
+                    body,
+                )
+                for w in mode_words
+            )
+        if not mode_words or not scoped:
+            continue
+        # Without a reliable timestamp, do not silently choose a winner.
+        created = row.get("created_at")
+        updated = row.get("updated_at")
+        effective = updated or created
+        semantic_fingerprint = hashlib.sha256(" ".join(body.split()).encode("utf-8")).hexdigest()
+        if not effective:
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True, "_effective_utc": None, "_semantic_fingerprint": semantic_fingerprint})
+            continue
+        try:
+            parsed = datetime.fromisoformat(str(effective).replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            dt = parsed.timestamp()
+            mt = datetime.strptime(maintenance["since"], "%Y-%m-%d %H:%M UTC").replace(tzinfo=timezone.utc).timestamp()
+        except (ValueError, TypeError):
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True, "_effective_utc": None, "_semantic_fingerprint": semantic_fingerprint}); continue
+        effective_utc = datetime.fromtimestamp(dt, timezone.utc).isoformat()
+        if dt == mt:
+            conflicts.append({"directive_id": row.get("id"), "winner": "unknown", "notify": True, "_effective_utc": effective_utc, "_semantic_fingerprint": semantic_fingerprint})
+        else:
+            conflicts.append({"directive_id": row.get("id"), "winner": "directive" if dt > mt else "mode", "notify": True, "_effective_utc": effective_utc, "_semantic_fingerprint": semantic_fingerprint})
+    # Persist only a digest per instance so restart/repeated heartbeats do not
+    # spam the user; a new conflict (or a changed winner) gets one notice.
+    try:
+        marker = _home() / "profile" / "directive-mode-notifications.json"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        lock = marker.with_suffix(".lock")
+        with open(lock, "a+", encoding="utf-8") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            seen = json.loads(marker.read_text(encoding="utf-8")) if marker.exists() else {}
+            if not isinstance(seen, dict): seen = {}
+            for item in conflicts:
+                key_material = {
+                    "directive_id": item.get("directive_id"),
+                    "winner": item.get("winner"),
+                    "mode": mode,
+                    "effective_utc": item.get("_effective_utc"),
+                    "semantic_fingerprint": item.get("_semantic_fingerprint"),
+                }
+                key = hashlib.sha256(json.dumps(key_material, sort_keys=True).encode()).hexdigest()
+                item["notify"] = not bool(seen.get(key))
+                seen[key] = True
+            tmp = marker.with_name(marker.name + ".tmp")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as out:
+                out.write(json.dumps(seen, sort_keys=True) + "\n")
+                out.flush(); os.fsync(out.fileno())
+            os.replace(tmp, marker)
+            dfd = os.open(marker.parent, os.O_RDONLY)
+            try: os.fsync(dfd)
+            finally: os.close(dfd)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            for item in conflicts:
+                item.pop("_effective_utc", None)
+                item.pop("_semantic_fingerprint", None)
+    except (OSError, ValueError, TypeError):
+        for item in conflicts: item["notify"] = True
+    return conflicts
 
 
 def has_standing_orders(snap: Optional[dict] = None) -> bool:
@@ -786,7 +1027,17 @@ def _lines(snap: dict) -> list:
     legacy = (f' [in file: "{raw}", legacy value]'
               if raw and raw != mode else "")
 
-    if mode == MODE_UNKNOWN:
+    if snap.get("mode_expired"):
+        # La modalità è finita da sé. Il file dice ancora la sua: dirlo qui
+        # evita che il Capitano lo apra, legga `saving` e concluda che il
+        # banner sbaglia.
+        out.append(
+            "MODE: search — the previous mode (`%s`) EXPIRED at %s "
+            "(`mode_until`): it ended on its own and its `orders` ended with "
+            "it. The file still says `%s` — the deadline wins. If the user "
+            "wants it back, they set it again."
+            % (raw or "?", snap.get("mode_until") or "?", raw or "?"))
+    elif mode == MODE_UNKNOWN:
         out.append(
             "MODE: unknown — `profile/capitano-maintenance.json` exists but "
             "is NOT readable%s: treat it as an ACTIVE ORDER and open the file "
@@ -828,6 +1079,19 @@ def _lines(snap: dict) -> list:
                    "details → `stop_search` defaults to TRUE, as read by the "
                    "Coordinator Console. Open the file.)")
 
+    # La scadenza, quando c'è: è la condizione di uscita che non dipende dal
+    # lavoro residuo ([SAVING-MODE-HAS-NO-DEADLINE]).
+    if not snap.get("mode_expired"):
+        until_raw = snap.get("mode_until_raw")
+        until = snap.get("mode_until")
+        if until:
+            out.append("- ENDS: `mode_until` = %s → then it falls back to "
+                       "`search` on its own, orders included" % until)
+        elif until_raw:
+            out.append("- ENDS: `mode_until` = %r is NOT a readable date "
+                       "(ISO 8601 expected): the mode does NOT expire and "
+                       "stays in force. Tell the user." % until_raw)
+
     # La SPECIFICA della modalità (le 4 dichiarazioni), non solo il nome: è
     # il requisito del contratto modalità 2026-08-03 — il Capitano che riceve
     # il battito deve sapere COSA implica, non solo come si chiama.
@@ -866,6 +1130,17 @@ def _lines(snap: dict) -> list:
         out.append("ACTIVE DIRECTIVES (%d): %s%s"
                    % (snap["directives_total"], shown,
                       f"; (+{extra} on the board)" if extra > 0 else ""))
+
+    for conflict in snap.get("conflicts", []):
+        if not conflict.get("notify", True):
+            continue
+        winner = conflict.get("winner")
+        if winner == "unknown":
+            out.append("DIRECTIVE/MODE CONFLICT: timestamp missing or tied — fail-closed; ask the user which choice governs.")
+        elif winner == "directive":
+            out.append("DIRECTIVE/MODE CONFLICT: the newer user directive governs and supersedes the mode; ask whether to archive the older mode choice.")
+        else:
+            out.append("DIRECTIVE/MODE CONFLICT: the newer user mode governs and supersedes the directive; ask whether to archive the older directive.")
 
     flags = snap.get("flags") or []
     if flags:

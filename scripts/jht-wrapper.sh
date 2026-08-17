@@ -51,6 +51,8 @@ RUNTIME_MANIFEST="$RUNTIME_DIR/.runtime-integrity"
 RAW_BASE_OVERRIDE="${JHT_RAW_BASE:-}"
 RELEASE_REF="${JHT_BRANCH:-production}"
 WRAPPER_PATH="${JHT_WRAPPER_PATH:-$0}"
+DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598"
+DEFAULT_RUNTIME_VERSION="0.3.9"
 GAME_EXECUTABLE_OVERRIDE="${JHT_GAME_EXECUTABLE:-}"
 if [ -n "${JHT_GAME_CONTROL_DIR:-}" ]; then
   GAME_CONTROL_DIR="$JHT_GAME_CONTROL_DIR"
@@ -357,6 +359,67 @@ compose() {
 
 container_up() {
   docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"
+}
+
+# Docker c'e' ED e' raggiungibile? A differenza di require_docker NON esce:
+# serve a DECIDERE, non a pretendere.
+docker_reachable() {
+  command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1
+}
+
+# L'aiuto completo vive nel CLI DENTRO il container, quindi senza container si
+# stampa questo. Elenca cio' che il wrapper sa fare da se' sull'host: e' meno
+# dell'aiuto vero, ma e' onesto ed e' gratis.
+local_help() {
+  cat <<'JHTHELP'
+jht — Job Hunter Team
+
+  Comandi dell'host (funzionano da qui):
+    jht up                 avvia il container del team
+    jht down               lo ferma
+    jht restart            lo riavvia
+    jht status             stato di container e team
+    jht logs [-f]          log del container
+    jht upgrade            aggiorna all'immagine piu' recente
+    jht setup              installazione guidata
+    jht download --os X    scarica l'app desktop per un sistema
+    jht game start|stop    avvia o ferma il videogioco
+    jht gui open           apre l'interfaccia grafica
+    jht shell              shell dentro il container
+
+  Tutti gli altri comandi (positions, stats, team, providers, cron,
+  working-hours, cloud...) girano DENTRO il container: per il loro aiuto
+  serve il container attivo.
+
+      jht up && jht --help
+
+JHTHELP
+}
+
+# Richiesta di sola informazione: se il container e' gia' in piedi si serve
+# l'aiuto vero, altrimenti quello locale. In nessun caso si avvia qualcosa.
+serve_help_without_docker() {
+  if docker_reachable && container_up; then
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
+    return $?
+  fi
+  local_help
+  if [ $# -gt 1 ]; then
+    info "Per l'aiuto di '$1' serve il container attivo: 'jht up'."
+  fi
+  return 0
+}
+
+# I comandi implementati dal wrapper non esistono nel CLI Node. Se Docker e'
+# gia' attivo, inoltrare per esempio `jht up --help` al container darebbe un
+# falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
+host_command_uses_local_help() {
+  case "$1" in
+    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download)
+      return 0
+      ;;
+  esac
+  return 1
 }
 
 # Allinea l'owner delle dir bind-mountate all'UID che il container usa
@@ -1259,7 +1322,7 @@ handle_runtime_upgrade() {
   # Il compose nuovo e' la fonte di verita': non assumere che l'immagine
   # resti per sempre latest o che un override JHT_IMAGE punti allo stesso ref.
   candidate_ref="$(upgrade_compose "$candidate_compose" config --images 2>/dev/null | head -n 1)"
-  candidate_image="$(docker image inspect "${candidate_ref:-${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.5}}" --format '{{.Id}}' 2>/dev/null || true)"
+  candidate_image="$(docker image inspect "${candidate_ref:-${JHT_IMAGE:-$DEFAULT_RUNTIME_IMAGE}}" --format '{{.Id}}' 2>/dev/null || true)"
   candidate_image="${candidate_image:-sconosciuta}"
   upgrade_write_journal pulled "$old_image" "$was_running" || {
     upgrade_result false false pull "$old_version" "$old_image" "$old_version" "$old_image" false "Impossibile aggiornare il journal" false
@@ -1334,7 +1397,52 @@ fi
 # ── Dispatcher ────────────────────────────────────────────────────────────
 SUB="${1:-}"
 
+# Il gate informativo precede TUTTI i rami, inclusi quelli host-side. Tenerlo
+# solo nel catch-all lascia `up --help`, `setup --help`, ecc. liberi di entrare
+# nei rispettivi path Docker prima che il wrapper legga `--help`.
+if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ]; then
+  for arg in "${@:2}"; do
+    case "$arg" in
+      -h|--help)
+        if host_command_uses_local_help "$SUB"; then
+          local_help
+          exit 0
+        fi
+        serve_help_without_docker "$@"
+        exit $?
+        ;;
+    esac
+  done
+fi
+
+# ⚠️ ORDINE: si guarda COSA e' stato chiesto PRIMA di decidere se serve Docker.
+# Il contrario — chiamare ensure_up in cima al catch-all — faceva si' che un
+# semplice `jht --help` scaricasse l'immagine (~300 MB) e creasse container e
+# volumi, cioe' il primo comando di chi non ha ancora deciso se installare
+# (P-07, 2026-08-10). Un'eccezione per il solo `--help` avrebbe tappato il buco
+# lasciando la forma: e' il ramo informativo che va prima di tutto.
 case "$SUB" in
+  -h|--help|help|'')
+    serve_help_without_docker --help
+    exit $?
+    ;;
+
+  -V|--version|version)
+    if docker_reachable && container_up; then
+      docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" --version
+    elif [ -n "${JHT_IMAGE_TAG:-}" ]; then
+      printf '%s\n' "$JHT_IMAGE_TAG"
+      info "Versione dell'immagine configurata. Per quella del CLI in esecuzione: 'jht up' e poi 'jht --version'."
+    elif [ -n "${JHT_IMAGE:-}" ]; then
+      printf '%s\n' "$(basename "$JHT_IMAGE" | sed 's/.*://')"
+      info "Versione dell'immagine configurata. Per quella del CLI in esecuzione: 'jht up' e poi 'jht --version'."
+    else
+      printf '%s\n' "$DEFAULT_RUNTIME_VERSION"
+      info "Versione dell'immagine configurata. Per quella del CLI in esecuzione: 'jht up' e poi 'jht --version'."
+    fi
+    exit 0
+    ;;
+
   game)
     handle_game_command "${@:2}"
     ;;
@@ -1468,13 +1576,6 @@ case "$SUB" in
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
-  '')
-    require_compose_file
-    require_docker
-    ensure_up
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" --help
-    ;;
-
   *)
     require_compose_file
     require_docker

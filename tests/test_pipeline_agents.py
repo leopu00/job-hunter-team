@@ -12,6 +12,7 @@ Eseguire con:
 """
 
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -27,13 +28,8 @@ SCOUT_COORD = os.path.join(SKILLS_DIR, 'scout_coord.py')
 
 AGENTS_DIR = os.path.join(REPO_ROOT, 'agents')
 
-SCORER_COMPONENT_RANGES = {
-    'stack_match': 40,
-    'experience_fit': 10,
-    'remote_fit': 25,
-    'salary_fit': 20,
-    'strategic_fit': 15,
-}
+sys.path.insert(0, SKILLS_DIR)
+from score_ranges import COMPONENT_LIMITS as SCORER_COMPONENT_RANGES  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helper (stesso pattern di test_pipeline.py)
@@ -54,8 +50,7 @@ exec(_code, {{'__file__': {repr(script)}, '__name__': '__main__'}})
     return subprocess.run([sys.executable, str(wrapper)], capture_output=True, text=True)
 
 
-def test_scorer_prompts_match_the_database_component_ranges():
-    """Ogni prompt localizzato deve insegnare gli stessi limiti del DB."""
+def _scorer_prompts():
     scorer_dir = os.path.join(AGENTS_DIR, 'scorer')
     prompts = [
         os.path.join(scorer_dir, name)
@@ -63,13 +58,51 @@ def test_scorer_prompts_match_the_database_component_ranges():
         if name == 'scorer.md' or (name.startswith('scorer.') and name.endswith('.md'))
     ]
     assert prompts
-    for prompt in prompts:
+    return prompts
+
+
+def test_scorer_prompts_match_the_database_component_ranges():
+    """Ogni prompt localizzato deve insegnare gli stessi limiti del DB."""
+    for prompt in _scorer_prompts():
         with open(prompt, encoding='utf-8') as handle:
             text = handle.read()
         for column, maximum in SCORER_COMPONENT_RANGES.items():
             assert f'| {maximum} | `{column}` |' in text, (
                 f'{os.path.basename(prompt)} non documenta {column}=0-{maximum}'
             )
+
+
+def test_scorer_prompt_example_stays_inside_the_component_ranges():
+    """L'esempio copiabile deve rispettare i limiti che il prompt insegna.
+
+    La tabella dei pesi e l'esempio `db_insert.py score` sono due righelli
+    distinti nello stesso file: allineare solo il primo lascia all'agente un
+    comando pronto da copiare che il DB rifiuta. È successo davvero — l'esempio
+    è rimasto su `--experience-fit 20` (tetto 10) dopo il riallineamento dei
+    pesi, e nessun test se n'è accorto perché guardavano solo la tabella.
+    """
+    for prompt in _scorer_prompts():
+        with open(prompt, encoding='utf-8') as handle:
+            text = handle.read()
+        name = os.path.basename(prompt)
+        components = {}
+        for column, maximum in SCORER_COMPONENT_RANGES.items():
+            flag = '--' + column.replace('_', '-')
+            found = re.findall(rf'{flag} (\d+)', text)
+            assert found, f'{name}: esempio senza {flag}'
+            for raw in found:
+                value = int(raw)
+                assert value <= maximum, (
+                    f'{name}: {flag} {value} sfonda il tetto {maximum}'
+                )
+            components[column] = int(found[0])
+
+        totals = re.findall(r'--total (\d+)', text)
+        assert totals, f'{name}: esempio senza --total'
+        assert int(totals[0]) == sum(components.values()), (
+            f'{name}: --total {totals[0]} non è la somma delle dimensioni '
+            f'({sum(components.values())})'
+        )
 
 
 @pytest.fixture()
@@ -410,7 +443,11 @@ class TestScrittoreCriticoFlow:
 # ---------------------------------------------------------------------------
 
 class TestScoutCoordination:
-    """scout_coord.py gestisce la distribuzione del lavoro tra scout."""
+    """scout_coord.py gestisce la distribuzione del lavoro tra scout.
+
+    Dal 2026-08-08 le tabelle vivono in jobs.db ([JHT-DB-SCOUT-COORD]):
+    `DB_PATH` punta li', e i test lo dirottano su un file temporaneo.
+    """
 
     def test_scout_assign_records_in_db(self, tmp_path):
         """scout_coord assign deve registrare la distribuzione nel DB."""
@@ -435,7 +472,7 @@ print("OK")
 
         conn = sqlite3.connect(coord_db)
         row = conn.execute(
-            "SELECT scout, cerchi, fonti FROM coordination WHERE superseded_at IS NULL"
+            "SELECT scout, cerchi, fonti FROM scout_coordination WHERE superseded_at IS NULL"
         ).fetchone()
         conn.close()
         assert row is not None, "Nessuna distribuzione registrata"
@@ -468,7 +505,7 @@ mod.cmd_claim({repr(job_id)}, {repr(scout_name)})
         r2 = run_coord('42', 'scout-2', '2')
 
         conn = sqlite3.connect(coord_db)
-        claim = conn.execute("SELECT scout FROM claims WHERE job_id='42'").fetchone()
+        claim = conn.execute("SELECT scout FROM scout_claims WHERE job_id='42'").fetchone()
         conn.close()
 
         assert claim is not None

@@ -73,9 +73,18 @@ export async function GET(req: NextRequest) {
   // è stata scritta. Indice parziale dedicato: idx_..._undelivered_user.
   const { data, error } = await admin
     .from("pending_user_messages")
-    .select("id, legacy_id, agent, body, created_at")
+    .select(
+      "id, legacy_id, agent, body, source_id, source_action, source_payload, source_directive_id, created_at",
+    )
     .eq("user_id", userId)
     .eq("author", "user")
+    // `legacy_id < 0` = nata QUI, dal browser (mig 060). Il filtro era
+    // dichiarato nel commento qui sopra ma non c'era nella query, e senza di
+    // esso il box si ritirava anche i propri turni — quelli che aveva appena
+    // pushato, con id positivo — e li reimportava come nuovi. Il gemello
+    // nasceva con `chat_ts` troncato al secondo, la firma della coppia
+    // 291/292 (659 ms, frazione .000).
+    .lt("legacy_id", 0)
     .is("delivered_at", null)
     .order("created_at", { ascending: true })
     .limit(limit);

@@ -69,11 +69,64 @@ jht_spawn_pane_path() {
 # fa uscire il chiamante — e un PATH cosmetico non deve mai poterlo fare.
 JHT_SPAWN_PANE_PATH="$(jht_spawn_pane_path)" || true
 
+# jht_spawn_session_name <role> <prefix> [instance]
+# jht_spawn_agent_name   <role>          [instance]
+#
+# Il Critico e' l'unico ruolo normalmente singleton che ammette istanze
+# effimere: ogni SCRITTORE-N possiede CRITICO-SN. La scelta del provider resta
+# comunque nel launcher; l'istanza decide soltanto identita' e workspace.
+# Tenere questa risoluzione in funzioni sourceable permette un controtest senza
+# avviare tmux o un CLI reale.
+jht_spawn_session_name() {
+  local role="$1" prefix="$2" instance="${3:-}"
+  if [ "$role" = "critico" ] && [ -n "$instance" ]; then
+    case "$instance" in
+      0|0[0-9]*|*[!0-9]*|"") return 2 ;;
+    esac
+    printf '%s' "${prefix}-S${instance}"
+    return 0
+  fi
+  case "$role" in
+    capitano|critico|sentinella|assistente|mentor)
+      printf '%s' "$prefix"
+      ;;
+    *)
+      [ -n "$instance" ] || instance="1"
+      case "$instance" in
+        0|0[0-9]*|*[!0-9]*|"") return 2 ;;
+      esac
+      printf '%s' "${prefix}-${instance}"
+      ;;
+  esac
+}
+
+jht_spawn_agent_name() {
+  local role="$1" instance="${2:-}"
+  if [ "$role" = "critico" ] && [ -n "$instance" ]; then
+    case "$instance" in
+      0|0[0-9]*|*[!0-9]*|"") return 2 ;;
+    esac
+    printf '%s' "${role}-S${instance}"
+    return 0
+  fi
+  case "$role" in
+    capitano|critico|sentinella|assistente|mentor)
+      printf '%s' "$role"
+      ;;
+    *)
+      [ -n "$instance" ] || instance="1"
+      case "$instance" in
+        0|0[0-9]*|*[!0-9]*|"") return 2 ;;
+      esac
+      printf '%s' "${role}-${instance}"
+      ;;
+  esac
+}
+
 # jht_spawn_user_locale
 #   Locale dell'utente, con la cascata canonica (in ordine di priorità):
-#     1. $JHT_LANG (env) — usata per i test rapidi e dagli altri script i18n
-#        (shared/i18n.sh, shared/i18n.py, cli/wizard/i18n.js)
-#     2. $JHT_HOME/i18n-prefs.json::locale — scritto dal wizard desktop
+#     1. $JHT_HOME/i18n-prefs.json::locale — scelta persistente canonica
+#     2. $JHT_LANG (env) — bootstrap/test, soltanto se la scelta non esiste
 #     3. host.env::JHT_LANG — persistito dal preflight di host-setup.sh
 #     4. 'en' — la lingua master dei template
 #
@@ -86,17 +139,20 @@ JHT_SPAWN_PANE_PATH="$(jht_spawn_pane_path)" || true
 jht_spawn_user_locale() {
   local locale="" prefs host_env home
   home="${JHT_HOME:-$HOME/.jht}"
-  if [ -n "${JHT_LANG:-}" ]; then
-    locale="$JHT_LANG"
-  fi
   prefs="$home/i18n-prefs.json"
-  if [ -z "$locale" ] && [ -f "$prefs" ] && command -v jq >/dev/null 2>&1; then
-    locale="$(jq -r '.locale // "en"' "$prefs" 2>/dev/null || echo en)"
+  if [ -f "$prefs" ] && command -v jq >/dev/null 2>&1; then
+    locale="$(jq -r '.locale // empty' "$prefs" 2>/dev/null || true)"
     [ "$locale" = "null" ] && locale=""
+  fi
+  case "$locale" in en|it|hu|es|de|fr|pt) ;; *) locale="" ;; esac
+  if [ -z "$locale" ]; then
+    locale="${JHT_LANG:-}"
+    case "$locale" in en|it|hu|es|de|fr|pt) ;; *) locale="" ;; esac
   fi
   host_env="$home/host.env"
   if [ -z "$locale" ] && [ -f "$host_env" ]; then
     locale="$(grep -E '^JHT_LANG=' "$host_env" 2>/dev/null | cut -d= -f2 | tr -d '"' | head -1)"
+    case "$locale" in en|it|hu|es|de|fr|pt) ;; *) locale="" ;; esac
   fi
   [ -z "$locale" ] && locale="en"
   printf '%s' "$locale"
@@ -140,42 +196,79 @@ jht_spawn_sync_prompt() {
   fi
 }
 
-# jht_spawn_copy_skills <ruolo> <workdir> <label>
-#   Installa nella workdir le skill dichiarate in agents/<ruolo>/skills.list.
-#   Claude legge .claude/skills/, Codex/Kimi leggono .agents/skills/: popoliamo
-#   entrambe come fa start-agent.sh, così l'agente funziona con ogni provider.
+# jht_spawn_copy_skills <ruolo> <workdir> <label> [provider]
+#   Installa nella workdir le skill condivise dichiarate nel manifest e tutte
+#   le private del ruolo. JHT_APP_ROOT e' configurabile solo per gli scaffold
+#   riproducibili; nel container resta /app.
+#   Claude legge .claude/skills/; Codex legge .agents/skills/; Kimi supporta
+#   entrambi ma usiamo il generico .agents/skills/ per non duplicare la stessa
+#   skill tra scope brand e generic. Se il provider manca/non e' riconosciuto,
+#   il fallback conserva il mirror su entrambi i path.
 #   Ogni spawn riscrive le cartelle → un cambio di manifest è preso al volo.
 #   Locale-aware come start-agent.sh: SKILL.<locale>.md diventa SKILL.md e le
 #   varianti spariscono dalla workspace — l'agente vede UN solo SKILL.md,
 #   nella sua lingua, invece di leggersi 6 traduzioni a ogni giro.
 jht_spawn_copy_skills() {
   local role="$1" workdir="$2" label="$3"
-  local lib="/app/agents/_skills" manifest="/app/agents/$role/skills.list"
-  local dest name line locale localized
-  [ -f "$manifest" ] || return 0
+  local provider="${4:-}"
+  local app_root="${JHT_APP_ROOT:-/app}"
+  local lib="$app_root/agents/_skills"
+  local manifest="$app_root/agents/$role/skills.list"
+  local private="$app_root/agents/$role/_skills"
+  local dest name line locale localized src skill
+  local -a destinations
   locale="$(jht_spawn_user_locale)"
-  for dest in "$workdir/.claude/skills" "$workdir/.agents/skills"; do
+
+  # Puliamo sempre entrambi: dopo un cambio provider nessuna skill del vecchio
+  # scope deve restare visibile al nuovo processo.
+  rm -rf "$workdir/.claude/skills" "$workdir/.agents/skills" 2>/dev/null || true
+  case "$provider" in
+    anthropic|claude) destinations=("$workdir/.claude/skills") ;;
+    openai|codex|kimi) destinations=("$workdir/.agents/skills") ;;
+    *) destinations=("$workdir/.claude/skills" "$workdir/.agents/skills") ;;
+  esac
+
+  for dest in "${destinations[@]}"; do
     mkdir -p "$dest" 2>/dev/null || continue
-    while IFS= read -r line || [ -n "$line" ]; do
-      # strip del commento inline + spazi (il manifest è documentato)
-      name="${line%%#*}"
-      name="$(printf '%s' "$name" | tr -d '[:space:]')"
-      [ -z "$name" ] && continue
-      if [ ! -d "$lib/$name" ]; then
-        echo "[$label] WARN: skill '$name' is listed in skills.list but is missing from $lib" >&2
-        continue
-      fi
-      rm -rf "$dest/$name" 2>/dev/null || true
-      cp -R "$lib/$name" "$dest/$name" 2>/dev/null || true
-      # Locale-aware: SKILL.<locale>.md vince su SKILL.md (fallback silenzioso
-      # sul baseline EN se la traduzione non esiste), poi via le varianti — il
-      # glob SKILL.*.md non matcha SKILL.md, che resta l'unico file letto.
-      localized="$lib/$name/SKILL.$locale.md"
-      if [ "$locale" != "en" ] && [ -f "$localized" ]; then
-        cp "$localized" "$dest/$name/SKILL.md" 2>/dev/null || true
-      fi
-      rm -f "$dest/$name"/SKILL.*.md 2>/dev/null || true
-    done < "$manifest"
+
+    if [ -f "$manifest" ]; then
+      while IFS= read -r line || [ -n "$line" ]; do
+        # strip del commento inline + spazi (il manifest e' documentato)
+        name="${line%%#*}"
+        name="$(printf '%s' "$name" | tr -d '[:space:]')"
+        [ -z "$name" ] && continue
+        # _lib contiene dipendenze delle skill, non una skill discoverable.
+        [ "$name" = "_lib" ] && continue
+        src="$lib/$name"
+        if [ ! -d "$src" ]; then
+          echo "[$label] WARN: skill '$name' is listed in skills.list but is missing from $lib" >&2
+          continue
+        fi
+        cp -R "$src" "$dest/$name" 2>/dev/null || true
+        # Locale-aware: SKILL.<locale>.md vince su SKILL.md (fallback
+        # silenzioso sul baseline EN), poi via le varianti.
+        localized="$src/SKILL.$locale.md"
+        if [ "$locale" != "en" ] && [ -f "$localized" ]; then
+          cp "$localized" "$dest/$name/SKILL.md" 2>/dev/null || true
+        fi
+        rm -f "$dest/$name"/SKILL.*.md 2>/dev/null || true
+      done < "$manifest"
+    fi
+
+    if [ -d "$private" ]; then
+      for skill in "$private"/*/; do
+        [ -d "$skill" ] || continue
+        name="$(basename "$skill")"
+        [ "$name" = "_lib" ] && continue
+        src="${skill%/}"
+        cp -R "$src" "$dest/$name" 2>/dev/null || true
+        localized="$src/SKILL.$locale.md"
+        if [ "$locale" != "en" ] && [ -f "$localized" ]; then
+          cp "$localized" "$dest/$name/SKILL.md" 2>/dev/null || true
+        fi
+        rm -f "$dest/$name"/SKILL.*.md 2>/dev/null || true
+      done
+    fi
   done
 }
 
@@ -209,12 +302,15 @@ PYEOF
 #   per diagnosi/sweep non superficiali. Per claude pre-seed dell'onboarding
 #   (skip del wizard TUI) + IS_SANDBOX.
 jht_spawn_repl_cmd() {
-  local home="${JHT_HOME:-/jht_home}" provider
-  provider=$(python3 -c "import json;print(json.load(open('$home/jht.config.json')).get('active_provider','claude'))" 2>/dev/null || echo claude)
+  local provider="${1:-}"
+  if [ -z "$provider" ]; then
+    provider="$(jht_spawn_active_provider)" || return 2
+  fi
   case "$provider" in
     openai|codex) printf '%s\n' "codex --yolo -c model_reasoning_effort=high" ;;
-    kimi)         printf '%s\n' "kimi --yolo" ;;
-    *)
+    kimi|moonshot) printf '%s\n' "kimi --yolo" ;;
+    claude|anthropic)
+      local home="${JHT_HOME:-/jht_home}"
       python3 - "$home/.claude.json" <<'PYDOC' 2>/dev/null || true
 import json, sys, os
 f = sys.argv[1]
@@ -227,13 +323,32 @@ os.makedirs(os.path.dirname(f), exist_ok=True)
 json.dump(d, open(f, "w"), indent=2)
 PYDOC
       printf '%s\n' "IS_SANDBOX=1 claude --dangerously-skip-permissions --effort high --model sonnet" ;;
+    *)
+      echo "[spawn-lib] ERROR: unsupported configured provider '$provider'" >&2
+      return 2
+      ;;
   esac
 }
 
 # jht_spawn_active_provider — nome del provider attivo (per i messaggi d'errore).
 jht_spawn_active_provider() {
-  local home="${JHT_HOME:-/jht_home}"
-  python3 -c "import json;print(json.load(open('$home/jht.config.json')).get('active_provider','claude'))" 2>/dev/null || echo claude
+  local home="${JHT_HOME:-/jht_home}" provider
+  provider="$(python3 - "$home/jht.config.json" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        value = str(json.load(handle).get("active_provider") or "").strip().lower()
+except Exception:
+    raise SystemExit(2)
+if value not in {"claude", "anthropic", "openai", "codex", "kimi", "moonshot"}:
+    raise SystemExit(2)
+print(value)
+PYEOF
+  )" || {
+    echo "[spawn-lib] ERROR: active_provider is missing, unreadable or unsupported in '$home/jht.config.json'" >&2
+    return 2
+  }
+  printf '%s\n' "$provider"
 }
 
 # jht_spawn_wait_repl <sessione> <cmd> <label> <ruolo> <logs_dir> <src>

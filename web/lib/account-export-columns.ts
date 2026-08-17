@@ -170,6 +170,7 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "timezone",
     "industry",
   ],
+  candidate_profile_sync_state: ["content_hash", "updated_at"],
   candidate_contacts: [
     "email",
     "phone",
@@ -290,6 +291,7 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "updated_at",
   ],
   notification_prefs: ["prefs", "created_at", "updated_at"],
+  user_settings: ["theme", "updated_at"],
   pending_user_messages: [
     "id",
     "agent",
@@ -336,6 +338,15 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "notes",
     "created_at",
   ],
+  // `origin` è nell'export: senza di lui due note della stessa posizione
+  // scritte da superfici diverse sarebbero due righe indistinguibili.
+  position_user_notes: [
+    "position_id",
+    "origin",
+    "body",
+    "created_at",
+    "updated_at",
+  ],
   position_views: ["position_id", "viewed_at"],
   // Senza `restart_token` e `last_restart_token`.
   team_state: [
@@ -372,6 +383,14 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "created_at",
     "updated_at",
     "archived_at",
+  ],
+  team_directive_request_ledger: [
+    "request_id",
+    "action",
+    "target_id",
+    "payload",
+    "kind",
+    "result",
   ],
   user_onboarding_state: [
     "vps_setup_completed_at",
@@ -410,6 +429,15 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "consumed_at",
     "created_at",
     "expires_at",
+  ],
+  // Contatore tecnico: non esporta device/user identity, ma conserva lo
+  // stato auditabile dell'account-bound throttling.
+  cloud_sync_pairing_attempts: [
+    "attempts",
+    "locked_until",
+    "invalidated_at",
+    "created_at",
+    "updated_at",
   ],
   // Senza `token_hash` e `token_prefix`.
   cloud_sync_tokens: [

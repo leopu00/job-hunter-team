@@ -2,7 +2,7 @@
 ---
 name: location-enrichment
 description: Standardizza il testo libero di positions.location in colonne strutturate loc_*/work_*/role_family PRIMA di marcare qualsiasi posizione come `checked`. Copre 10 casi speciali (Europe Remote, Italy+remote, multi-location, US-entity-in-EU). Impone un record alla volta, vocabolario allineato ai colleghi, work_country mai NULL. Usala ogni volta che l'Analista sta per impostare status=checked su una posizione.
-allowed-tools: Bash(python3 *), Bash(curl *), Bash(jq *), WebSearch
+allowed-tools: Bash(python3 *), Bash(jq *), WebSearch
 ---
 
 # location-enrichment — playbook strutturazione location + role_family

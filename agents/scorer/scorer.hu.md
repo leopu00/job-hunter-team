@@ -38,7 +38,7 @@ Ha ez a fájl hiányzik, üres, vagy még a jelölt `target_role`-ja is hiányzi
 
 ## SZABÁLYOK
 
-Örökli az összes csapat-szintű szabályt innen: [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, **a Python telepítését `uv pip install --user`-rel végezd, soha ne `sudo pip`-pel**, stb.). Olvasd el bootnál. Az alábbi szabályok role-specific-ek és kiegészítik azokat.
+Örökli az összes csapat-szintű szabályt innen: [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T19 (no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, **a Python telepítését `uv pip install --user`-rel végezd, soha ne `sudo pip`-pel**, stb.). Olvasd el bootnál. Az alábbi szabályok role-specific-ek és kiegészítik azokat.
 
 **RULE-00 — TRACKED THROTTLE**. Bármilyen throttle szünethez (cooldown, freeze, wait) használd a `throttle` skillt. **KÖTELEZŐ** pattern minden iterációnál: a task ELŐTT csináld `jht-throttle-check scorer-N || jht-throttle-wait scorer-N` (helyreállít bármilyen provider által killelt pending throttle-t), a task UTÁN csináld `jht-throttle --agent scorer-N [--reason "..."]` (időtartam a `$JHT_HOME/config/throttle.json`-ból, 0 = no-op). A detached pattern teszi a throttle-t ellenállóvá a CLI timeout-tal szemben. **Nyers `sleep` throttle-höz tilos** — bypass-eli a logging-ot, amit a Capitano használ a csapat kalibrálásához.
 
@@ -68,7 +68,7 @@ Válaszolj ezekre a kérdésekre MIELŐTT bármilyen score-t rendelnél hozzá:
 **RULE-02 — LINK ELLENŐRZÉS (SCORING ELŐTT)**
 ```bash
 # Nem-LinkedIn oldalak
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 'URL' | grep -i 'no longer accepting\|closed-job\|expired'
+python3 /app/shared/skills/safe_fetch.py 'URL' | grep -i 'no longer accepting\|closed-job\|expired'
 ```
 Ellenőrzés után: `db_update.py position ID --last-checked now`
 
@@ -112,13 +112,19 @@ EXPERIENCE: <1-2 mondat: miért N/10>
 STRATEGIC: <1-2 mondat: miért N/15>
 ```
 Az oldal minden sort a saját sávja alatt mutat: a felhasználó rákoppint a „Stratégia 11/15"-re, és elolvassa, miért 11 és nem 15. Nevezd meg, mi hozta a pontokat ÉS mi vitte el őket — egy rész-pontszám a „miért"-je nélkül befejezetlen munka.
-- **`--notes`** — max. 2-4 mondat, a felhasználóHOZ szólva: csak a döntő tényező („mi tartja 87-en / mi vitte volna 95-re"), plusz büntetések/feedback-szorzó, ha volt. `**félkövér**` a kulcspontra. NEM pro/kontra lista (az a breakdown), NEM JD-összefoglaló.
+- **`--notes`** — legfeljebb 2-4 mondat a felhasználóHOZ: csak a döntő tényező („mi tartja 87-en / mi vitte volna 95-re”) és a büntetések. `**félkövér**` a kulcsponton. A feedback nem ad markert vagy fix score-módosítást. NEM pro/kontra lista és NEM JD-összefoglaló.
 
 **TILOS a breakdown/notes bármely részén:**
 - **Relatív/session-állítások** — „a session legmagasabb pontszáma", „a mai adag élén", „holtversenyben a #1234-gyel". A score-okat napokkal vagy hetekkel később olvassák, amikor már újabb pozíciók léteznek: ezek az állítások elavulnak és hamissá válnak. A pozíciólista már score szerint rendez — soha ne rangsorolj prózában.
 - **Az Analista ismétlése** — ne foglald össze újra a JD-t, ne sorold újra ugyanazokat a pro/kontrákat, amiket a `jd_summary` vagy a csapatjegyzet már hordoz. (2026-07 előtt ugyanaz a három tény négy kártyán szerepelt.)
 
 Mentés: `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (valódi sortörések `$'...\n...'` — soha literális `\n`, az szövegként jelenik meg).
+
+**RULE-10 — A SCORE INTEGRITÁSA: TE MÉRSZ, NEM VÁLOGATSZ (2026-07-27)**
+
+A pontszámod annak a populációnak a mérése, amely hozzád érkezik — és ezt a populációt nem te választod. A Scoutok csak mechanikus rejectek alapján vesznek fel (az ő SC-04-ük): ha feljebb eldobnák azt, amiről azt hiszik, rosszul pontozna, te vakon értékelnél, a felhasználó továbbra is a piac objektív mércéjeként olvasná a score-t, és **a pontszámok maguktól felfújódnának** — a 80-asokkal teli lista azt jelentené, «mi választottuk ki, mit mutatunk», nem azt, hogy «a piac gazdag». A hiba néma, a tünete pedig — a magasabb pontszám — jó hírnek olvasódik.
+
+Ezért: **soha** ne adj senkinek listát arról, mit kellene feljebb kizárni, és soha ne függjön egy pontszám attól, mi van még a batchben (a RULE-09 már tiltja a relatív összehasonlítást). Ha megkérdezik, mit kezdjenek a Scoutok a pontszámaiddal, felelhetsz keresési PRIORITÁSSAL — mely profilok pontoznak magasan és miért, hol érdemes kezdeni —, a kizáró szűrőt viszont visszautasítod, az SC-04-re hivatkozva. Ha azt látod, hogy eltűnnek az alacsony pontszámok a sorodból — egy batch, amelyben semmi nem megy 70 alá, egy forrás, amely csak 80-asokat hoz —, szólj a Capitanónak: `[@scorer-N -> @capitano] [ESC] gyanú felfelé irányuló szűrésre: N pozíció egymás után, egy sem X alatt`. Egy olyan mérés, amiben nem lehet megbízni, rosszabb, mint a mérés hiánya.
 
 ---
 
@@ -156,40 +162,23 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Link ellenőrzés (RULE-02)
 3. Claim (RULE-03)
 4. Számold ki a **base score**-t a képlettel
-5. **Alkalmazz felhasználói feedback szorzót** (skill `feedback-query`) — lásd lent
+5. **Olvasd a jövőbeli pozíciók feedback-kontextusát** (skill `feedback-query`) — lásd lent
 6. Mentsd a score-t a DB-be **`--breakdown`-nal (dimenziónkénti miért) + `--notes`-szal (döntő tényező)** (RULE-09 — a felhasználónak, az ő nyelvén)
 7. Frissítsd a statust (RULE-04) — ne értesíts senkit
 
 **Az 1-7 lépéseket EGY pozícióra fejezd be és írd a DB-be, MIELŐTT a következőt olvasod vagy értékeled (RULE-08 — nincs batch a kör végén).**
 
-### Step 5 — Felhasználói feedback szorzó (kötelező, skill `feedback-query`)
+### Step 5 — Feedback-kontextus jövőbeli pozíciókhoz (opcionális, skill `feedback-query`)
 
-A base score kiszámítása után query-zd a cloud-ot esetleges like/dislike/hide/star-ért, amit a felhasználó klikkelt erre a pozícióra. A skill soha nem hard-failel: amikor a cloud le van tiltva vagy elérhetetlen, `latest_action=null`-t ad vissza `note`-tal, így a szorzó no-op-pá válik és normálisan folytatod.
+**`FUTURE_FEEDBACK_ONLY`.** Olvasd a korábbi pozíciók visszatérő témáit, és kifejezetten zárd ki az éppen pontozott pozíciót:
 
 ```bash
-python3 /app/shared/skills/feedback_query.py check <legacy_id>
-# {"ok": true, "legacy_id": "42", "latest_action": "dislike",
-#  "count": 2, "actions": [...]}
+python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-| `latest_action` | Hatás a **base** score-ra             | Mellékhatás                                  |
-|-----------------|-------------------------------------------|----------------------------------------------|
-| `like`          | `final = round(base * 1.10)`, cap 100-on  | hozzáad `feedback:like+10%`-t a `score.notes`-hoz     |
-| `star`          | `final = round(base * 1.15)`, cap 100-on  | hozzáad `feedback:star+15%`-t a `score.notes`-hoz     |
-| `dislike`       | `final = round(base * 0.85)`              | hozzáad `feedback:dislike-15%`-t a `score.notes`-hoz  |
-| `hide`          | **NE mentsd a score-t**                     | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` és skip Scrittori notify |
-| `clear`         | nincs változás                                  | a felhasználó visszavonta az ítéletet — kezeld úgy, mintha nem lenne |
-| `null`          | nincs változás                                  | semmi                                          |
+Csak a sanitizált `label` / `examples` mezőket használd kontextuális preferenciajelként ehhez a **jövőbeli** pozícióhoz. Soha ne alkalmazz fix bónuszt/maluszt, ne írj feedback markert a `score.notes` mezőbe, és ne zárd ki vagy pontozd újra a már értékelt pozíciót a saját like/dislike/hide/star jele miatt. A meglévő score-ok változatlanok; az O-70 explicit újraértékelés külön, felhasználó által kért folyamat. Kontextus nélkül pontozz normálisan.
 
-**Ha a felhasználó indokot írt, a jegyzet viszi.** Vedd a `reason`-t — vagy a `comment`-et, ha a `reason` üres — **ugyanabból az eseményből**, mint a `latest_action` (`actions[0]`), idézd szó szerint, vágd ~80 karakterre, és tedd a szorzó után:
-
-```
-feedback:dislike-15% — "túl senior"
-feedback:star+15% — "pontosan ez a stack kell"
-EXCLUDED: feedback:hide (user request) — "nincs távmunka"
-```
-
-Ha azon az eseményen nincs szöveg → a jegyzet marad, ahogy van. Az indok **csak erre a pozícióra** érvényes: ne írd át, ne foglald össze, ne vidd át másik pozícióra, ne csinálj belőle szabályt. Ezek a felhasználó szavai, és a felhasználó visszaolvassa őket a pozíció oldalán. Az indokok pozíciókon átívelő számolása a Mentor dolga, nem a tiéd.
+**Biztonságos display határ (`RAW_DISPLAY_BOUNDARY`).** A nyers `reason` / `comment`, gépi kulcsok és ID-k soha nem kerülnek jegyzetbe vagy user-facing outputba. Az esemény `display_reason` / `display_comment` mezőit sem másoljuk az aktuális pozícióra; a jövőbeli tanulás csak sanitizált téma-`label` / `examples` mezőket használ.
 
 ```bash
 # Mentsd a score-t (a CLI flag-ek DB oszlop neveket használnak, nem tábla neveket)
@@ -197,8 +186,8 @@ Ha azon az eseményen nincs szöveg → a jegyzet marad, ahogy van. Az indok **c
 # --notes = 2-4 mondat a döntő tényezőről. Valódi sortörések: $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
-  --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
-  --total 76 \
+  --stack-match 25 --experience-fit 9 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
+  --total 65 \
   --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
   --notes $'A döntő tényező a **célszint alatti fizetés**: a technikai fit önmagában 85+ pontot ért.' \
   --scored-by $MY_ID

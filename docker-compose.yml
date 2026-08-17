@@ -17,7 +17,9 @@ services:
   jht:
     # Override via env var: JHT_IMAGE=ghcr.io/leopu00/jht:dev-1 jht upgrade
     # Utile per testare immagini di branch dev prima del merge a master.
-    image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.5}
+    # Il default release e' content-addressed: reinstallare la stessa versione
+    # non puo' risolvere byte diversi se il tag semver viene spostato.
+    image: ${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598}
     container_name: jht
     # Override del CMD Dockerfile (--help): entry point `pid1` che
     # in base a JHT_HOST_TYPE dispatch tra:
@@ -43,7 +45,20 @@ services:
       # JHT_LANG (en|it) — scelto dall'utente al primo run del wizard.
       # I componenti che hanno bisogno della lingua (wizard, futuri
       # messaggi degli agenti, dashboard intelligence) leggono questa.
+      # NB: `JHT_LANG` e' la lingua del PRODOTTO, `LANG` (sotto) e' la locale
+      # di SISTEMA. Due cose diverse: il nome che le contiene entrambe inganna.
       - JHT_LANG=${JHT_LANG:-en}
+      # LANG — locale di SISTEMA del container. Senza, glibc deriva
+      # LC_CTYPE="POSIX" e chi si attacca a un pane da fuori
+      # (`docker exec -it jht tmux attach`) vede `_` al posto di ogni
+      # lettera accentata: tmux, non sapendosi in UTF-8, rende la coppia di
+      # byte come due caratteri non stampabili. I DATI restano sani (nel
+      # buffer la «e» accentata e' 0xC3 0xA8), e' solo rendering del client
+      # — ma un pane illeggibile e' un pane che nessuno legge. L'immagine ha
+      # gia' `C.utf8` in `locale -a`: qui non si installa niente, si nomina.
+      # Non e' hardcodato it/en apposta: C.UTF-8 e' neutra e vale per tutte
+      # e 7 le lingue del prodotto (misurato il 2026-08-10, O-38).
+      - LANG=C.UTF-8
       # Bug #15: timezone utente (IANA, es. Europe/Rome, Asia/Shanghai).
       # Chiesta nel setup wizard (host-setup.sh), salvata in
       # ~/.jht/host.env. Default UTC: niente assunzione geografica
@@ -55,6 +70,13 @@ services:
       # comandi locali (siamo gia' nel posto giusto). Vedi
       # docs/internal/vps.md.
       - IS_CONTAINER=1
+      # Deroga dell'operatore quando `$JHT_HOME/data/` non è scrivibile
+      # (issue #132): l'UNICO fallback ammesso per il database di
+      # coordinamento Scout, e unico proprio perché sta nell'ambiente che
+      # arriva a tutti gli agenti. Senza questa riga resterebbe sull'host e
+      # nel container non esisterebbe. Vuota = nessuna deroga (il codice
+      # tratta la stringa vuota come assente).
+      - JHT_SCOUT_COORD_DB=${JHT_SCOUT_COORD_DB:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}

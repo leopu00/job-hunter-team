@@ -81,3 +81,6 @@ Standardtypen (siehe `agents/_manual/communication-rules.md` fuer die vollstaend
 - **NIEMALS** die tmux-Sitzung eines anderen Agenten beenden (Regel #0 des Kapitaens).
 - Wenn `tmux ls` zeigt, dass die Zielsitzung nicht existiert, **erstelle sie nicht** — frage den Kapitaen (oder verwende `start-agent.sh`, wenn du *selbst* der Kapitaen bist).
 - Verwende standardmaessig die **DB-basierte Koordination** fuer Pipeline-Uebergaben (Scout→Analyst→Scorer→Writer); nutze diesen Skill nur fuer die oben aufgefuehrten Echtzeit-Signale. Siehe `agents/_manual/communication-rules.md`.
+# Kommunikation bei belegtem Turn
+
+Nachrichten werden sofort eingereiht. Ist die Zustellung nicht prüfbar, lautet das Ergebnis `queued/delivery unverified` (Exit 6) mit dauerhafter Queue. Beim Retry weder verwerfen noch duplizieren.

@@ -2,7 +2,7 @@
  * cli/wizard/i18n.js — Node-side i18n helper
  *
  * Reads shared/locales/<lang>.json — same catalog used by bash i18n.sh.
- * Resolves $JHT_LANG with cascade: env → host.env → default 'en'.
+ * Resolves canonical i18n-prefs.json, then bootstrap env → host.env → 'en'.
  * Missing key: returns the key (visible in dev, doesn't break UI).
  *
  * Designed for CLI wizards / Node scripts that need the same strings
@@ -21,6 +21,7 @@ const LOCALES_DIR = path.resolve(__dirname, '..', '..', 'shared', 'locales');
 
 let _cache = null;
 let _cacheLang = null;
+const VALID_LANGS = new Set(['en', 'it', 'hu', 'es', 'de', 'fr', 'pt']);
 
 function readKvFile(filePath, key) {
   try {
@@ -38,10 +39,13 @@ function readKvFile(filePath, key) {
 }
 
 function resolveLang() {
-  if (process.env.JHT_LANG && process.env.JHT_LANG.trim()) {
-    return process.env.JHT_LANG.trim();
-  }
   const home = process.env.JHT_HOME || '/jht_home';
+  try {
+    const prefs = JSON.parse(fs.readFileSync(path.join(home, 'i18n-prefs.json'), 'utf8'));
+    if (VALID_LANGS.has(prefs?.locale)) return prefs.locale;
+  } catch { /* preference absent/malformed: continue with bootstrap inputs */ }
+  const fromEnv = process.env.JHT_LANG?.trim();
+  if (VALID_LANGS.has(fromEnv)) return fromEnv;
   const candidates = [
     process.env.JHT_HOST_ENV_FILE,
     path.join(home, 'host.env'),
@@ -49,7 +53,7 @@ function resolveLang() {
   ].filter(Boolean);
   for (const p of candidates) {
     const v = readKvFile(p, 'JHT_LANG');
-    if (v) return v;
+    if (VALID_LANGS.has(v)) return v;
   }
   return 'en';
 }

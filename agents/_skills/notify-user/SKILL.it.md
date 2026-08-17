@@ -16,6 +16,20 @@ L'utente ha più canali (bot Telegram, dashboard web, futuro push mobile). Ogni 
 
 L'utente quindi riceve ogni messaggio da qualche parte. L'agente non deve mai gestire branch "Telegram è giù".
 
+## ⚠️ Da quando la corsia chat è unificata: questo messaggio è ANCHE una bolla di chat
+
+`jht-send` e `jht-notify-user` scrivevano in due posti diversi — il thread
+della chat e la coda delle notifiche. Non più. Il box specchia
+`pending_user_messages` dentro `<agente>/chat.jsonl`, quindi quello che scrivi
+qui compare anche come tua bolla nella chat del videogioco e nel thread web,
+accanto alle risposte che mandi con `jht-send`.
+
+La conseguenza è l'unica regola che conta qui: **un messaggio, uno strumento
+solo.** Mai lo stesso contenuto per tutte e due le vie. L'utente lo leggerebbe
+due volte, e nessuna delle due copie sa dell'altra — la corsia non sa
+distinguere un doppione da due battute che dicono la stessa cosa per caso
+(«ok» arriva mille volte), quindi a valle non lo ripulisce nessuno.
+
 ## Quando usarla
 
 - ✅ Il Capitano notifica l'utente ogni N posizioni ready (decisione 2026-05-13, batch).

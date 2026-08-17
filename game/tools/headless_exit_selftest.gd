@@ -50,7 +50,7 @@ func _init() -> void:
 
 func _run() -> void:
 	# Il testo dipende dalla lingua: si fissa l'italiano, altrimenti il test
-	# passa o fallisce a seconda di come ha lasciato lang.cfg chi ha giocato.
+	# passa o fallisce a seconda della preferenza lasciata da chi ha giocato.
 	# È l'UNICA scrittura su `lang`, e vale "it": il ramo italiano di t() legge
 	# la costante S e si ferma lì, senza svegliare la cache dei dizionari.
 	UIStrings.lang = "it"

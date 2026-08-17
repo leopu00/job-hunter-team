@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir, chmod, unlink, stat } from 'node:fs/promises';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import pc from 'picocolors';
 import * as clack from '@clack/prompts';
@@ -7,6 +8,7 @@ import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
 import { SupabaseAuthError } from '../lib/supabase-direct.js';
 import { getDirectReader } from '../lib/cloud-direct.js';
 import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
+import { writePrivateJson } from '../lib/secure-config-io.js';
 import {
   acknowledgeSync,
   publishSyncOutcome,
@@ -15,11 +17,40 @@ import {
   syncRendezvousTerminal,
   timeoutFailure,
 } from '../lib/sync-rendezvous.js';
+import { clientIdentity, clientHeaderValue, cloudSyncHeaders } from '../lib/client-identity.js';
+import { summarizeOutOfRange } from '../lib/score-ranges.js';
+import { createHaltGate, guardedLane } from '../lib/halt-gate.js';
+import { createExclusiveRunner } from '../lib/exclusive-runner.js';
+import {
+  CLOUD_PUSH_QUARANTINE_FILE,
+  activeQuarantineEntries,
+  clearCorruptQuarantine,
+  partitionQuarantinedRows,
+  quarantineIdentity,
+  quarantineRow,
+  readCloudPushQuarantine,
+  requestQuarantineRetry,
+  resolveConfirmedRetries,
+  resolveQuarantine,
+  retryTables,
+  sanitizedQuarantineReason,
+} from '../lib/cloud-push-quarantine.js';
 import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
   BOOTSTRAP_STATE_FILE, FIRST_RUN_STATE_FILE,
 } from '../lib/bootstrap-push.js';
+import {
+  decideBootstrapRestore, readLocalPositionsCount,
+} from '../lib/bootstrap-restore.js';
+import {
+  periodicPushLimits,
+  periodicPushObservation,
+  periodicPushStatusLine,
+  readPeriodicPushState,
+  runPeriodicPushCycle,
+  savePeriodicPushState,
+} from '../lib/periodic-push.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
@@ -87,7 +118,15 @@ function readProfilePayload() {
     } catch { /* directory unreadable, skip */ }
   }
 
-  return { yaml: yamlRaw, summaries };
+  const orderedSummaries = Object.fromEntries(
+    Object.entries(summaries).sort(([left], [right]) => left.localeCompare(right))
+  );
+  const sourceHash = createHash('sha256')
+    .update(yamlRaw)
+    .update('\0')
+    .update(JSON.stringify(orderedSummaries))
+    .digest('hex');
+  return { yaml: yamlRaw, summaries: orderedSummaries, source_hash: sourceHash };
 }
 
 async function loadCloudConfig() {
@@ -100,9 +139,7 @@ async function loadCloudConfig() {
 }
 
 async function saveCloudConfig(config) {
-  await mkdir(JHT_HOME, { recursive: true });
-  await writeFile(CLOUD_FILE, JSON.stringify(config, null, 2) + '\n');
-  await chmod(CLOUD_FILE, 0o600);
+  writePrivateJson(CLOUD_FILE, config);
 }
 
 function parseToken(raw) {
@@ -130,7 +167,7 @@ async function handleEnable(options) {
   let res;
   try {
     res = await fetch(pingUrl, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: cloudSyncHeaders(token),
     });
   } catch (err) {
     console.error(pc.red(`Network error: ${err.message}`));
@@ -164,6 +201,10 @@ async function handleEnable(options) {
 
   // Auto-push: l'utente ha appena collegato il VPS, vuole vedere i dati sul
   // dashboard subito — non ha senso forzarlo a un secondo comando.
+  // [JHT-CLOUD-RESTORE] T-029 — DB locale VUOTO → restore automatico; DB con
+  // dati → push. Mai entrambi. Il gancio e' UNO, in `maybeBootstrapRestore`.
+  if (await maybeBootstrapRestore(options)) return;
+
   if (options.noPush) {
     console.log(pc.dim('  Initial push skipped (--no-push). Run: jht cloud push'));
     return;
@@ -191,6 +232,51 @@ async function handleEnable(options) {
 }
 
 /**
+ * [JHT-CLOUD-RESTORE] T-029 — il gancio bootstrap-restore, in UN punto (T-030:
+ * era duplicato identico in handleEnable e handleLogin, e due copie divergono
+ * al primo cambio).
+ *
+ * Sonda il DB locale (esiste? quante positions?) e lascia la DECISIONE a
+ * `bootstrap-restore.js`: DB vuoto → parte `handleRestore` con la sua
+ * transazione e la guardia anti-DELETE di T-027; qualunque altra forma di DB
+ * → niente. Fail-safe come il ramo push: un restore fallito non invalida il
+ * pairing — warn, recover hint, exitCode preservato.
+ *
+ * Ritorna true se il restore e' partito: il chiamante torna SENZA pushare
+ * (un DB appena tirato giu' non ha nulla di nuovo da dire, e il restore ha
+ * gia' resettato il cursore di sync a "now").
+ */
+async function maybeBootstrapRestore(options = {}) {
+  let dbPresent = true;
+  try {
+    await stat(JHT_DB_PATH);
+  } catch {
+    dbPresent = false;
+  }
+  let localPositions = null;
+  if (dbPresent) {
+    try {
+      const { DatabaseSync } = await import('node:sqlite');
+      localPositions = readLocalPositionsCount(DatabaseSync, JHT_DB_PATH);
+    } catch { /* Node < 22.5: resta null → niente restore automatico */ }
+  }
+  const decision = decideBootstrapRestore({ dbPresent, localPositions });
+  if (!decision.restore) return false;
+  if (!options.uiJson) {
+    console.log('');
+    console.log(pc.dim('Empty local database: pulling the cloud snapshot (automatic bootstrap restore)...'));
+  }
+  emitCloudLoginUi(options, 'bootstrap_restore', { reason: decision.reason });
+  const prevExitCode = process.exitCode;
+  await handleRestore({ confirmRestore: true });
+  if (process.exitCode === 1) {
+    console.log(pc.yellow('  Pairing OK but the automatic restore failed. Recover: jht cloud restore --confirm-restore'));
+    process.exitCode = prevExitCode;
+  }
+  return true;
+}
+
+/**
  * Disaster recovery: scarica lo snapshot completo (positions / scores /
  * applications) dal cloud via GET /api/cloud-sync/full-dump e lo applica
  * a SQLite locale con INSERT OR REPLACE. Distinto dal pull-desired-state
@@ -205,6 +291,14 @@ async function handleEnable(options) {
  *     mapping UUID→legacy_id per highlights, name-match per companies).
  *   - INSERT OR REPLACE su id SQLite = legacy_id cloud. Righe locali con
  *     id mai pushato (legacy_id=NULL cloud-side) restano intatte.
+ *   - Conflitto di URL: mai un DELETE per risolverlo (residuo dichiarato di
+ *     [DEDUP-URL-CORRECTNESS], T-027). Con l'indice UNIQUE parziale su `url`,
+ *     OR REPLACE risolverebbe il conflitto CANCELLANDO la riga locale che
+ *     possiede gia' quell'URL — e il trigger `positions_tombstone`
+ *     propagherebbe la delete al cloud: perdita silenziosa proprio nel
+ *     percorso di disaster-recovery. Una riga cloud il cui URL e' gia' di
+ *     un'altra riga (id diverso) viene SALTATA e dichiarata a video, con
+ *     conteggio dei conflitti nel report finale.
  *   - Cursor di push resettato a "now" per evitare ri-push delle righe
  *     appena scaricate al prossimo daemon tick.
  *
@@ -242,7 +336,7 @@ async function handleRestore(options) {
   try {
     const res = await fetch(dumpUrl, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: cloudSyncHeaders(token),
     });
     body = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -290,6 +384,7 @@ async function handleRestore(options) {
   console.log(pc.dim(`  Cloud:  ${cloudPositions.length} positions, ${cloudScores.length} scores, ${cloudApps.length} applications`));
   console.log('');
   console.log(pc.dim('  Mode: INSERT OR REPLACE using the cloud legacy_id as the SQLite id.'));
+  console.log(pc.dim('  URL conflicts are never resolved by deleting: the cloud row is skipped and reported.'));
   console.log(pc.dim('  Local rows not pushed to the cloud (legacy_id NULL) remain unchanged.'));
   console.log(pc.dim('  companies and position_highlights are not rebuilt (outside the MVP scope).'));
 
@@ -317,6 +412,8 @@ async function handleRestore(options) {
 
   let inserted = { positions: 0, scores: 0, applications: 0 };
   let skipped = { positions: 0, scores: 0, applications: 0 };
+  let outOfRange = { rows: 0, byColumn: {}, worst: null };
+  const urlConflicts = [];
 
   try {
     const db = new DatabaseSync(dbPath);
@@ -325,6 +422,20 @@ async function handleRestore(options) {
     // Positions: INSERT OR REPLACE su id = legacy_id. company_id resettato
     // a NULL (mapping cloud→sqlite non disponibile in MVP — l'Analista lo
     // ricostruisce al prossimo loop quando incontra la company).
+    // Guardia anti-DELETE (residuo [DEDUP-URL-CORRECTNESS], T-027): con
+    // l'indice UNIQUE parziale su `url`, OR REPLACE risolve un conflitto di
+    // URL CANCELLANDO la riga che possiede gia' quell'URL — e il trigger
+    // `positions_tombstone` propagherebbe la delete al cloud. Il restore non
+    // cancella MAI per un URL: conflitto = riga cloud saltata e dichiarata,
+    // con conteggio nel report. La query vede anche le righe appena
+    // ripristinate in questo giro, quindi vale pure fra righe cloud fra loro.
+    const urlConflictStmt = db.prepare(
+      'SELECT id FROM positions WHERE url = ? AND id <> ?'
+    );
+    const restoreWriteKind = sqliteHasColumn(db, 'positions', 'write_request_kind');
+    const restoreWriteKindStmt = restoreWriteKind
+      ? db.prepare('UPDATE positions SET write_request_kind = ? WHERE id = ?')
+      : null;
     const posStmt = db.prepare(`
       INSERT OR REPLACE INTO positions (
         id, title, company, company_id, location, remote_type,
@@ -351,6 +462,14 @@ async function handleRestore(options) {
           skipped.positions++;
           continue;
         }
+        const url = p.url ?? null;
+        if (url) {
+          const clash = urlConflictStmt.get(url, legacyId);
+          if (clash) {
+            urlConflicts.push({ legacyId, url, localId: clash.id });
+            continue;
+          }
+        }
         posStmt.run(
           legacyId,
           p.title ?? '', p.company ?? '',
@@ -370,6 +489,7 @@ async function handleRestore(options) {
           p.geocode_requested ? 1 : 0, p.geocode_requested_at ?? null,
           p.created_at ?? null, p.updated_at ?? null,
         );
+        restoreWriteKindStmt?.run(p.write_request_kind ?? null, legacyId);
         inserted.positions++;
       }
 
@@ -380,9 +500,11 @@ async function handleRestore(options) {
           scored_by, scored_at, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
+      const restoredScores = [];
       for (const s of cloudScores) {
         const legacy = uuidToLegacy.get(s.position_id);
         if (!legacy) { skipped.scores++; continue; }
+        restoredScores.push(s);
         scoreStmt.run(
           legacy,
           s.total_score ?? 0,
@@ -394,15 +516,22 @@ async function handleRestore(options) {
         );
         inserted.scores++;
       }
+      outOfRange = summarizeOutOfRange(restoredScores);
 
+      // O-64 ha reso critic_round parte dello stato locale del Critico. Un
+      // restore puo' partire da un jobs.db creato dall'immagine precedente:
+      // allineiamo solo lo schema, senza modificare righe esistenti.
+      if (!sqliteHasColumn(db, 'applications', 'critic_round')) {
+        db.exec('ALTER TABLE applications ADD COLUMN critic_round INTEGER');
+      }
       const appStmt = db.prepare(`
         INSERT OR REPLACE INTO applications (
           position_id, cv_path, cv_pdf_path, cl_path, cl_pdf_path,
-          status, critic_score, critic_verdict, critic_notes,
+          status, critic_score, critic_verdict, critic_notes, critic_round,
           written_at, applied_at, applied_via, response, response_at,
           written_by, reviewed_by, critic_reviewed_at, applied,
           cv_drive_id, cl_drive_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const a of cloudApps) {
         const legacy = uuidToLegacy.get(a.position_id);
@@ -410,7 +539,8 @@ async function handleRestore(options) {
         appStmt.run(
           legacy,
           a.cv_path ?? null, a.cv_pdf_path ?? null, a.cl_path ?? null, a.cl_pdf_path ?? null,
-          a.status ?? null, a.critic_score ?? null, a.critic_verdict ?? null, a.critic_notes ?? null,
+          a.status ?? null, a.critic_score ?? null, a.critic_verdict ?? null,
+          a.critic_notes ?? null, a.critic_round ?? null,
           a.written_at ?? null, a.applied_at ?? null, a.applied_via ?? null,
           a.response ?? null, a.response_at ?? null,
           a.written_by ?? null, a.reviewed_by ?? null, a.critic_reviewed_at ?? null,
@@ -448,6 +578,29 @@ async function handleRestore(options) {
   console.log(pc.dim(`  Positions:    ${inserted.positions} upserted (${skipped.positions} skipped: missing legacy_id)`));
   console.log(pc.dim(`  Scores:       ${inserted.scores} upserted (${skipped.scores} skipped: orphaned position_id)`));
   console.log(pc.dim(`  Applications: ${inserted.applications} upserted (${skipped.applications} skipped: orphaned position_id)`));
+  // Il cloud non ha CHECK sulle dimensioni (solo su total_score, mig 001): una
+  // riga fuori scala rientra qui a ogni restore. Non la tocchiamo — i punteggi
+  // sono di utenti reali — ma la contiamo, altrimenti il fenomeno resta
+  // invisibile a chi non ha accesso al DB.
+  if (outOfRange.rows > 0) {
+    const detail = Object.entries(outOfRange.byColumn)
+      .map(([column, n]) => `${column} ×${n}`)
+      .join(', ');
+    console.log(pc.yellow(`  Out-of-range:  ${outOfRange.rows} restored score row(s) exceed their own per-dimension cap (${detail})`));
+    if (outOfRange.worst) {
+      const { column, value, max } = outOfRange.worst;
+      console.log(pc.yellow(`    worst: ${column} ${value} on a cap of ${max} — values kept as-is, nothing was rewritten`));
+    }
+  }
+  if (urlConflicts.length > 0) {
+    console.log(pc.yellow(`  URL conflicts: ${urlConflicts.length} cloud row(s) SKIPPED — the URL is already held by another local row; nothing was deleted:`));
+    for (const c of urlConflicts.slice(0, 10)) {
+      console.log(pc.yellow(`    legacy_id ${c.legacyId} skipped: url already held by local id ${c.localId}`));
+    }
+    if (urlConflicts.length > 10) {
+      console.log(pc.yellow(`    ... and ${urlConflicts.length - 10} more`));
+    }
+  }
   console.log(pc.dim(`  Sync cursor reset to ${nowIso}`));
   console.log('');
   void confirmed;
@@ -473,7 +626,7 @@ async function checkActiveDeviceConflict(baseUrl, token) {
   try {
     const res = await fetch(`${baseUrl}/api/team-state`, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: cloudSyncHeaders(token),
     });
     if (!res.ok) return { conflict: false };
     const body = await res.json().catch(() => ({}));
@@ -538,10 +691,7 @@ export async function handleClaim(options = {}) {
   try {
     res = await fetch(`${baseUrl}/api/team-state/claim`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         force: options.force === true,
         device_label: deviceLabel,
@@ -802,6 +952,10 @@ export async function handleLogin(options = {}) {
     );
   }
 
+  // [JHT-CLOUD-RESTORE] T-029 — DB locale VUOTO → restore automatico; DB con
+  // dati → push. Mai entrambi. Il gancio e' UNO, in `maybeBootstrapRestore`.
+  if (await maybeBootstrapRestore(options)) return;
+
   if (options.noPush) {
     if (!options.uiJson) {
       console.log('');
@@ -816,6 +970,7 @@ export async function handleLogin(options = {}) {
       console.log('');
       console.log(pc.dim(`No local database yet (${JHT_DB_PATH}). Initial push skipped.`));
       console.log(pc.dim(`Start the team with 'jht team start' and then 'jht cloud push'.`));
+      console.log(pc.dim(`To pull existing cloud data instead: 'jht cloud restore --confirm-restore' (once the schema exists).`));
     }
     return;
   }
@@ -843,6 +998,72 @@ async function handleStatus() {
   console.log(pc.dim('Token name: ') + (config.token_name ?? 'unnamed'));
   console.log(pc.dim('User ID:    ') + config.user_id);
   console.log(pc.dim('Enabled at: ') + config.enabled_at);
+
+  // Telemetria che questo box dichiara a ogni chiamata cloud-sync. È qui
+  // perché chi la produce deve poterla rileggere: raccogliere un dato che il
+  // suo soggetto non può vedere è esattamente ciò che non vorremmo su di noi.
+  const identity = clientIdentity();
+  console.log('');
+  console.log(pc.dim('Declared to the cloud on every call (technical telemetry only):'));
+  console.log(pc.dim('  Version:      ') + identity.version);
+  console.log(pc.dim('  Platform:     ') + identity.platform);
+  console.log(pc.dim('  Capabilities: ') + identity.capabilities.join(', '));
+
+  const periodic = readPeriodicPushState();
+  console.log('');
+  console.log(pc.dim('Automatic full push: ') + periodicPushStatusLine(periodic));
+  if (periodic.consecutive_failures > 0) {
+    console.log(
+      pc.yellow(
+        `  ${periodic.consecutive_failures} consecutive failure(s); the daemon retries automatically.`,
+      ),
+    );
+  }
+}
+
+function handleQuarantineList(options = {}) {
+  const entries = activeQuarantineEntries(readCloudPushQuarantine());
+  if (options.json) {
+    console.log(JSON.stringify({ quarantined: entries }, null, 2));
+    return;
+  }
+  if (entries.length === 0) {
+    console.log(pc.green('No active cloud push quarantines.'));
+    return;
+  }
+  console.log(pc.yellow(`${entries.length} cloud push record(s) quarantined:`));
+  for (const entry of entries) {
+    console.log(
+      `  ${entry.identity} · ${entry.table} · ${entry.reason} · attempts ${entry.attempts} · ${entry.last_failed_at}`
+    );
+  }
+}
+
+async function handleQuarantineRetry(identity, options = {}) {
+  const result = requestQuarantineRetry(identity);
+  if (result.changed === 0) {
+    console.error(pc.red(`No active quarantine matches ${identity}.`));
+    process.exitCode = 1;
+    return;
+  }
+  console.log(pc.yellow(`${result.changed} quarantine record(s) queued for verified retry.`));
+  if (!options.push) return;
+  await handlePush({});
+}
+
+function handleQuarantineResolve(identity, options = {}) {
+  if (!options.confirm) {
+    console.error(pc.red('Resolution requires --confirm after the local cause has been removed.'));
+    process.exitCode = 1;
+    return;
+  }
+  const result = resolveQuarantine(identity);
+  if (result.changed === 0) {
+    console.error(pc.red(`No active quarantine matches ${identity}.`));
+    process.exitCode = 1;
+    return;
+  }
+  console.log(pc.green(`Resolved quarantine ${identity}; audit metadata retained.`));
 }
 
 function readSqliteTable(db, table, columns) {
@@ -899,9 +1120,9 @@ function readSqliteTableDelta(db, table, columns, cursor) {
 }
 
 /**
- * Carica il cursor di sync. Ritorna oggetto { positions, scores,
- * applications } dove ogni valore e' l'ISO string dell'ultimo updated_at
- * pushato per quella tabella. Missing keys = first push (legge tutto).
+ * Carica il cursor di sync. Le tabelle usano l'ISO dell'ultimo updated_at;
+ * `profile_hash` è invece il fingerprint raw dell'ultimo snapshot confermato.
+ * Missing keys = first push (legge tutto).
  */
 function loadCloudCursor() {
   if (!existsSync(CLOUD_CURSOR_FILE)) return {};
@@ -921,9 +1142,11 @@ function loadCloudCursor() {
  */
 async function saveCloudCursor(cursor) {
   try {
-    await writeFile(CLOUD_CURSOR_FILE, JSON.stringify(cursor, null, 2));
+    writePrivateJson(CLOUD_CURSOR_FILE, cursor);
+    return true;
   } catch (err) {
     console.error(pc.yellow(`  warn: cursor save failed (${err.message})`));
+    return false;
   }
 }
 
@@ -1002,64 +1225,18 @@ async function saveDirectivesCursor(cursor) {
   }
 }
 
-/**
- * Dato un array di righe con campo updated_at, ritorna il MAX(updated_at)
- * come stringa ISO. Null se l'array e' vuoto o nessuna riga ha il campo.
- */
-function maxUpdatedAt(rows) {
+/** Cursor over rows whose outcome is durable (ACK or persisted quarantine). */
+function settledCursor(rows, field) {
   let max = null;
   for (const r of rows) {
-    const u = r?.updated_at;
-    if (u && (max === null || u > max)) max = u;
-  }
-  return max;
-}
-
-/**
- * Raggruppa `rows` per il valore della colonna `key` (Map key→row[]).
- * Righe con key null/undefined vengono ignorate. Usato dal push chunked per
- * legare scores/applications/highlights alla loro position (stesso batch =
- * il server risolve la FK via legacyToUuid in-request).
- */
-function groupBy(rows, key) {
-  const m = new Map();
-  for (const r of rows) {
-    const k = r?.[key];
-    if (k == null) continue;
-    if (!m.has(k)) m.set(k, []);
-    m.get(k).push(r);
-  }
-  return m;
-}
-
-/**
- * Cursore SICURO su invio parziale/chunked. Dato l'insieme di righe CONFERMATE
- * (HTTP 200) e quelle SCARTATE (413 su riga singola), ritorna il massimo
- * `field` tale che TUTTE le righe con field <= esso siano state confermate:
- * ovvero il max sul prefisso confermato che precede la prima riga scartata.
- * Garanzia: il cursore non scavalca mai una riga non ancora sincronizzata →
- * nessuna riga persa. `field` è 'updated_at' | 'deleted_at' | 'ts' a seconda
- * della tabella. Confronto fra stringhe: i timestamp SQLite locali hanno tutti
- * lo stesso formato (come già fa maxUpdatedAt), quindi lessicografico ==
- * cronologico.
- */
-function safeCursor(sent, skipped, field) {
-  let minSkip = null;
-  for (const r of skipped) {
-    const v = r?.[field];
-    if (v && (minSkip === null || v < minSkip)) minSkip = v;
-  }
-  let max = null;
-  for (const r of sent) {
     const v = r?.[field];
     if (!v) continue;
-    if (minSkip !== null && !(v < minSkip)) continue; // non superare il primo skip
     if (max === null || v > max) max = v;
   }
   return max;
 }
 
-async function handlePush(options) {
+async function performPush(options) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
     console.error(pc.red('Cloud sync is not enabled.'));
@@ -1101,11 +1278,19 @@ async function handlePush(options) {
   let pendingMessages = [];
   let tombstones = [];
   let transitions = [];
+  const quarantinePath = options.quarantinePath || CLOUD_PUSH_QUARANTINE_FILE;
+  let quarantineState = readCloudPushQuarantine(quarantinePath);
+  const retryingTables = retryTables(quarantineState);
   // Cursor delta-sync: ad ogni tick leggiamo solo righe con updated_at >
   // ultimo pushato per quella tabella. Prima volta (cursor vuoto): full
   // read. Dopo push HTTP 200: aggiorniamo cursor con MAX(updated_at)
   // delle righe pushate.
   const cursor = options.full ? {} : loadCloudCursor();
+  const readCursor = quarantineState.corrupt === true ? {} : { ...cursor };
+  for (const table of retryingTables) {
+    const cursorKey = table === 'position_transitions' ? 'transitions' : table;
+    delete readCursor[cursorKey];
+  }
   if (dbExists) {
     try {
       const db = new DatabaseSync(dbPath, { readOnly: true });
@@ -1121,6 +1306,8 @@ async function handlePush(options) {
         // Writer-on-demand (V6, 2026-05-29): l'utente seleziona da
         // dashboard/Telegram, il flag viaggia a cloud per UI cross-device.
         'write_requested', 'write_requested_at',
+        ...(sqliteHasColumn(db, 'positions', 'write_request_kind')
+          ? ['write_request_kind'] : []),
         // Geocoding-on-demand (V8, 2026-05-31): stesso pattern,
         // l'utente seleziona via UI quali posizioni geocodare con
         // precisione ufficio; il flag viaggia a cloud per UI cross-device.
@@ -1143,19 +1330,27 @@ async function handlePush(options) {
         // Expiry/lifecycle (mig 038): recheck-liveness scrive is_open/expires_at/
         // last_open_check → dashboard "Scadute/Archivio". Colonne cloud presenti (mig038 applicata 2026-06-14).
         'expires_at', 'is_open', 'last_open_check',
-      ], cursor.positions);
+      ], readCursor.positions);
       scores = readSqliteTableDelta(db, 'scores', [
-        'position_id', 'total_score', 'experience_fit', 'salary_fit',
+        'id AS legacy_id', 'position_id', 'total_score',
+        'experience_fit', 'salary_fit',
         'stack_match', 'remote_fit', 'strategic_fit', 'breakdown', 'notes',
         'scored_by', 'scored_at',
-      ], cursor.scores);
-      applications = readSqliteTableDelta(db, 'applications', [
-        'position_id', 'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
+      ], readCursor.scores);
+      const applicationCols = [
+        'id AS legacy_id', 'position_id AS position_legacy_id',
+        'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
         'status', 'critic_score', 'critic_verdict', 'critic_notes',
         'written_at', 'applied_at', 'applied_via', 'response', 'response_at',
         'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',
         'cv_drive_id', 'cl_drive_id',
-      ], cursor.applications);
+      ];
+      // Compatibilita' con un DB che non e' ancora passato da ensure_schema:
+      // il push continua con i campi disponibili e non rompe il daemon.
+      if (sqliteHasColumn(db, 'applications', 'critic_round')) {
+        applicationCols.push('critic_round');
+      }
+      applications = readSqliteTableDelta(db, 'applications', applicationCols, readCursor.applications);
       // Companies + position_highlights (mig 046): erano OMESSE dal push →
       // Company card e blocchi Pro/Contro sempre vuoti sul cloud. `id` (int
       // locale) → legacy_id cloud; il server risolve le FK (positions.company_id,
@@ -1174,10 +1369,10 @@ async function handlePush(options) {
       for (const c of ['logo', 'logo_source', 'logo_fetched']) {
         if (sqliteHasColumn(db, 'companies', c)) companyCols.push(c);
       }
-      companies = readSqliteTableDelta(db, 'companies', companyCols, cursor.companies);
+      companies = readSqliteTableDelta(db, 'companies', companyCols, readCursor.companies);
       highlights = readSqliteTableDelta(db, 'position_highlights', [
         'id', 'position_id', 'type', 'text',
-      ], cursor.position_highlights);
+      ], readCursor.position_highlights);
       // pending_user_messages e' la coda agente -> utente. Pushiamo TUTTE le
       // righe ad ogni tick: l'upsert lato server e' idempotente su
       // (user_id, legacy_id), e gli ack-time / reply-time vanno comunque
@@ -1197,18 +1392,33 @@ async function handlePush(options) {
       for (const c of ['author', 'chat_ts']) {
         if (sqliteHasColumn(db, 'pending_user_messages', c)) msgCols.push(c);
       }
+      const hasCloudLegacyId = sqliteHasColumn(db, 'pending_user_messages', 'cloud_legacy_id');
+      if (hasCloudLegacyId) msgCols.push('cloud_legacy_id');
       pendingMessages = readSqliteTable(db, 'pending_user_messages', msgCols);
+      // Un turno nato sul web arriva qui con un id LOCALE, ma sul cloud
+      // esiste già con la sua identità (legacy_id negativo). Rimandarlo
+      // com'è lo ripubblicava come riga nuova: era questo percorso — non la
+      // corsia veloce, che salta le righe già sincronizzate — a creare i
+      // gemelli (O-16). Su un DB più vecchio del codice la colonna non c'è:
+      // si comporta come prima, nessuna riga cambia identità.
+      if (hasCloudLegacyId) {
+        pendingMessages = pendingMessages.map((m) => {
+          if (!Number.isFinite(m.cloud_legacy_id)) return m;
+          const { cloud_legacy_id: cloudId, ...rest } = m;
+          return { ...rest, id: cloudId };
+        });
+      }
       // Tombstones delta (SQLite V7): righe (table_name, legacy_id,
       // deleted_at) accumulate dai trigger BEFORE DELETE. Filtro per
       // deleted_at > cursor → solo le nuove cancellazioni nel tick.
       // Lato server, il receive le interpreta come UPDATE soft
       // SET deleted_at = ?. Vedi mig 025 + _migrate_v6_to_v7_tombstones.
       try {
-        if (cursor.tombstones) {
+        if (readCursor.tombstones) {
           tombstones = db.prepare(
             `SELECT table_name, legacy_id, deleted_at
              FROM _tombstones WHERE deleted_at > ?`
-          ).all(cursor.tombstones);
+          ).all(readCursor.tombstones);
         } else {
           tombstones = db.prepare(
             `SELECT table_name, legacy_id, deleted_at FROM _tombstones`
@@ -1229,11 +1439,11 @@ async function handlePush(options) {
       try {
         const tCols =
           'position_id AS position_legacy_id, from_state, to_state, ts, by_agent, notes';
-        if (cursor.transitions) {
+        if (readCursor.transitions) {
           transitions = db.prepare(
             `SELECT ${tCols} FROM position_state_transitions
              WHERE ts > ? ORDER BY ts ASC`
-          ).all(cursor.transitions);
+          ).all(readCursor.transitions);
         } else {
           transitions = db.prepare(
             `SELECT ${tCols} FROM position_state_transitions ORDER BY ts ASC`
@@ -1251,7 +1461,55 @@ async function handlePush(options) {
     }
   }
 
-  const profileChunks = profilePayload
+  // Preserve the complete ordered source for cursor checkpoints. Active
+  // quarantine rows are held out of the convoy; retry rows re-enter it after
+  // a restart even when the table cursor had already advanced past them.
+  const cursorRows = {
+    companies,
+    positions,
+    scores,
+    applications,
+    position_highlights: highlights,
+    position_transitions: transitions,
+    tombstones,
+  };
+  const held = {};
+  const partition = (table, rows) => {
+    const result = partitionQuarantinedRows(table, rows, quarantineState);
+    held[table] = result.held;
+    return result.send;
+  };
+  let profilePartition;
+  try {
+    companies = partition('companies', companies);
+    positions = partition('positions', positions);
+    scores = partition('scores', scores);
+    applications = partition('applications', applications);
+    highlights = partition('position_highlights', highlights);
+    transitions = partition('position_transitions', transitions);
+    tombstones = partition('tombstones', tombstones);
+    pendingMessages = partition('pending_user_messages', pendingMessages);
+    // Il profilo non ha updated_at SQLite: il suo cursore è l'hash del
+    // contenuto raw confermato dal server. Un'apertura del sito che chiede un
+    // push non deve quindi rimandare lo stesso snapshot. `--full` resta la via
+    // esplicita per ricostruire il cloud dopo un intervento esterno.
+    const profileChanged = profilePayload &&
+      (options.full || cursor.profile_hash !== profilePayload.source_hash);
+    profilePartition = profileChanged
+      ? partitionQuarantinedRows('profile', [{
+        ...profilePayload,
+        force: options.full === true,
+      }], quarantineState)
+      : { send: [], held: [] };
+  } catch {
+    console.error(pc.red('Cloud push source identity is invalid; no rows were sent.'));
+    process.exitCode = 1;
+    return { ok: false, authFailed: false, skipped: 0 };
+  }
+  held.profile = profilePartition.held;
+  const sendProfile = profilePartition.send[0] || null;
+
+  const profileChunks = sendProfile
     ? `, profile (${profilePayload.yaml.length}B yaml + ${Object.keys(profilePayload.summaries).length} summaries)`
     : '';
   const companyChunks = companies.length > 0
@@ -1286,12 +1544,21 @@ async function handlePush(options) {
     positions.length === 0 && scores.length === 0 &&
     applications.length === 0 && companies.length === 0 &&
     highlights.length === 0 && pendingMessages.length === 0 &&
-    tombstones.length === 0 && transitions.length === 0 && !profilePayload
+    tombstones.length === 0 && transitions.length === 0 && !sendProfile
   ) {
     console.log(pc.yellow('No data to sync.'));
-    // Già in pari col cloud: niente da spedire = sync di fatto completa →
-    // il chiamante PUÒ ackare (nothingToSync). ok=true, skipped=0.
-    return { ok: true, authFailed: false, skipped: 0, nothingToSync: true };
+    if (quarantineState.corrupt === true) {
+      clearCorruptQuarantine({ path: quarantinePath });
+      quarantineState = readCloudPushQuarantine(quarantinePath);
+    }
+    const unresolved = activeQuarantineEntries(quarantineState).length;
+    return {
+      ok: true,
+      authFailed: false,
+      skipped: unresolved,
+      quarantined: unresolved,
+      nothingToSync: true,
+    };
   }
 
   // ── Push CHUNKED (anti-413) ────────────────────────────────────────────
@@ -1301,13 +1568,10 @@ async function handlePush(options) {
   // ancora più grande → altri 413 (loop irreversibile, dashboard ferma). Ora
   // spezziamo il payload in richieste piccole con halving adattivo sul 413 e
   // avanziamo il cursore per-tabella SOLO sul prefisso di righe confermate
-  // (safeCursor) → nessuna riga persa né saltata, e il backlog già gonfio
+  // (checkpoint per tabella) → nessuna riga persa né saltata, e il backlog già gonfio
   // (>500 positions) si drena in più richieste.
   const pushUrl = `${config.base_url}/api/cloud-sync/push`;
-  const authHeaders = {
-    Authorization: `Bearer ${config.token}`,
-    'Content-Type': 'application/json',
-  };
+  const authHeaders = cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' });
   // Chunk iniziali per tabella (il halving 413 scende sotto se serve). Scelti
   // per stare comodamente sotto il body-limit tipico (~4MB Vercel): le
   // positions sono le righe più pesanti (jd_text/jd_summary), quindi il chunk
@@ -1333,7 +1597,8 @@ async function handlePush(options) {
   }
 
   const outcome = {
-    aborted: false, authFailed: false, timedOut: false, skipped: 0, requests: 0,
+    aborted: false, authFailed: false, timedOut: false, requests: 0,
+    quarantinedNew: 0,
     up: { positions: 0, scores: 0, applications: 0, companies: 0,
           position_highlights: 0, pending_user_messages: 0, tombstones: 0,
           position_transitions: 0 },
@@ -1349,57 +1614,126 @@ async function handlePush(options) {
     outcome.up.position_transitions += b.position_transitions?.upserted ?? 0;
   };
 
-  // Invia `items` (già in ordine cronologico crescente) a chunk di `chunkSize`,
-  // dimezzando ogni chunk che torna 413 fino alla riga singola; una riga
-  // singola che ancora 413 viene scartata (skip) e loggata, per drenare il
-  // resto. Ritorna { confirmed, skipped } (righe, per il cursore). Su
-  // errore non-413 / rete / auth / 409 setta outcome.aborted e ferma tutto.
-  async function sendChunked(items, chunkSize, build) {
+  const canIsolate = (res) => {
+    if (res.network || res.timedOut) return false;
+    if ([401, 403, 429].includes(res.status)) return false;
+    if (res.status === 409 && res.body?.error === 'not_active_device') return false;
+    // A status/code says what failed, not whether one row caused it. Every
+    // status requires an explicit route attestation; 413 is the sole
+    // exception because halving the payload is itself the diagnostic.
+    if (res.status === 413) return true;
+    return [400, 409, 422].includes(res.status) ||
+      (res.status >= 500 && res.status < 600)
+      ? res.body?.rejection_scope === 'row'
+      : false;
+  };
+
+  const sameReceiptMultiset = (expected, received) => {
+    if (!Array.isArray(received) || received.length !== expected.length) return false;
+    const counts = new Map();
+    for (const receipt of expected) counts.set(receipt, (counts.get(receipt) || 0) + 1);
+    for (const receipt of received) {
+      if (typeof receipt !== 'string' || !counts.has(receipt)) return false;
+      const remaining = counts.get(receipt) - 1;
+      if (remaining === 0) counts.delete(receipt);
+      else counts.set(receipt, remaining);
+    }
+    return counts.size === 0;
+  };
+
+  // Bisection makes a final singleton attributable. Only a durable quarantine
+  // record lets the convoy continue; transport/rate/auth failures remain
+  // table-wide and never blame a row.
+  async function sendChunked(table, items, chunkSize, build) {
     const confirmed = [];
-    const skipped = [];
-    if (!items.length || outcome.aborted) return { confirmed, skipped };
+    const quarantined = [];
+    if (!items.length || outcome.aborted) return { confirmed, quarantined };
     for (let base = 0; base < items.length && !outcome.aborted; base += chunkSize) {
-      // Coda FIFO di range [s,e); le metà da 413 rientrano in testa → ordine.
       const queue = [[base, Math.min(base + chunkSize, items.length)]];
       while (queue.length && !outcome.aborted) {
         const [s, e] = queue.shift();
         if (s >= e) continue;
-        const res = await postBatch(build(items.slice(s, e)));
+        const rows = items.slice(s, e);
+        let receiptIds;
+        try {
+          receiptIds = rows.map((row) => quarantineIdentity(table, row));
+        } catch {
+          outcome.aborted = true;
+          console.error(pc.red('Cloud push source identity is invalid; cursor unchanged.'));
+          return { confirmed, quarantined };
+        }
+        const wireRows = rows.map((row, index) => ({
+          ...row,
+          _receipt_id: receiptIds[index],
+        }));
+        let res = await postBatch(build(wireRows));
         outcome.requests += 1;
+        const receivedReceipts = res.body?.receipts?.[table];
+        if (res.ok && !Array.isArray(receivedReceipts)) {
+          // A rolling/old server may have persisted the write but cannot prove
+          // which rows. Retry is safe; blaming a singleton would not be.
+          res = { status: 502, ok: false, body: { error: 'receipt_protocol_missing' } };
+        } else if (res.ok && !sameReceiptMultiset(receiptIds, receivedReceipts)) {
+          res = { status: 422, ok: false, body: { error: 'acknowledgement_mismatch' } };
+        }
         if (res.ok) {
+          try {
+            resolveConfirmedRetries(table, rows, { path: quarantinePath });
+          } catch {
+            outcome.aborted = true;
+            console.error(pc.red('Push quarantine acknowledgement could not be persisted; cursor unchanged.'));
+            return { confirmed, quarantined };
+          }
           addUp(res.body);
-          for (let i = s; i < e; i++) confirmed.push(items[i]);
+          confirmed.push(...rows);
           continue;
         }
         if (res.status === 401 || res.status === 403) {
           outcome.aborted = true; outcome.authFailed = true;
-          console.error(pc.red(`Push auth failed (HTTP ${res.status}): ${res.body.error || 'Token?'}`));
-          return { confirmed, skipped };
+          console.error(pc.red(`Push auth failed (HTTP ${res.status}).`));
+          return { confirmed, quarantined };
         }
-        if (res.status === 413) {
-          if (e - s <= 1) {
-            skipped.push(items[s]); outcome.skipped += 1;
-            console.error(pc.red(`Push 413 for a single row (item #${s}): SKIPPED so the remaining queue can drain; the abnormal row will be retried next tick.`));
-            continue;
-          }
+        if (canIsolate(res) && e - s > 1) {
           const mid = s + Math.floor((e - s) / 2);
           queue.unshift([mid, e]);
-          queue.unshift([s, mid]); // metà sinistra prima → confirmed resta ordinato
+          queue.unshift([s, mid]);
           continue;
         }
-        // 409 not_active_device o 5xx/altro: non recuperabile in questo giro.
+        if (canIsolate(res)) {
+          const reason = sanitizedQuarantineReason(
+            res.status,
+            res.status === 413 ? { error: 'payload_too_large' } : res.body,
+          );
+          try {
+            const identity = quarantineRow({
+              table, row: items[s], reason, path: quarantinePath,
+            });
+            quarantined.push(items[s]);
+            outcome.quarantinedNew += 1;
+            console.error(pc.yellow(
+              `Cloud push quarantined ${table}/${identity} (${reason}); the remaining convoy continues.`
+            ));
+            continue;
+          } catch {
+            outcome.aborted = true;
+            console.error(pc.red('Cloud push quarantine could not be persisted; cursor unchanged.'));
+            return { confirmed, quarantined };
+          }
+        }
+
         outcome.aborted = true;
         if (res.timedOut) outcome.timedOut = true;
         if (res.status === 409 && res.body.error === 'not_active_device') {
-          console.error(pc.red(`Push refused (HTTP 409 not_active_device): another device has the claim (active_device_id=${res.body.active_device_id ?? 'unknown'}).`));
+          console.error(pc.red('Push refused (HTTP 409 not_active_device): another device has the claim.'));
           console.error(pc.dim('  To regain control: jht cloud claim --force'));
         } else {
-          console.error(pc.red(`Push failed (HTTP ${res.status}): ${res.body.error || 'unknown error'}`));
+          const reason = sanitizedQuarantineReason(res.status, res.body);
+          console.error(pc.red(`Push failed (${reason}); no row was quarantined.`));
         }
-        return { confirmed, skipped };
+        return { confirmed, quarantined };
       }
     }
-    return { confirmed, skipped };
+    return { confirmed, quarantined };
   }
 
   // Ordina cronologicamente (updated_at asc) così il cursore avanza sul
@@ -1409,125 +1743,112 @@ async function handlePush(options) {
     return x < y ? -1 : x > y ? 1 : 0;
   };
 
-  // Bundle position→figli: scores/applications/highlights DEVONO viaggiare
-  // nello stesso POST della loro position (il server risolve position_id via
-  // legacyToUuid costruita SOLO dalle positions in-request — nessun lookup di
-  // fallback per scores/applications, vedi route push §2/§3).
-  const scoresByPos = groupBy(scores, 'position_id');
-  const appsByPos = groupBy(applications, 'position_id');
-  const hlByPos = groupBy(highlights, 'position_id');
-  const posIds = new Set(positions.map((p) => p.id));
-  const bundles = positions.slice().sort(byAsc('updated_at')).map((p) => ({
-    p,
-    scores: scoresByPos.get(p.id) || [],
-    apps: appsByPos.get(p.id) || [],
-    hls: hlByPos.get(p.id) || [],
-  }));
-  // Figli "orfani": la loro position non è nel delta di questo tick (position
-  // invariata ma figlio cambiato). Il server li scarterebbe comunque (come nel
-  // push monolitico odierno: position_id non risolvibile → drop), ma li
-  // inviamo lo stesso perché il cursore avanzi coerentemente col comportamento
-  // attuale. Vengono spediti con positions:[] → 200, 0 upsert, cursore avanza.
-  const orphanScores = scores.filter((s) => !posIds.has(s.position_id));
-  const orphanApps = applications.filter((a) => !posIds.has(a.position_id));
-  const orphanHls = highlights.filter((h) => !posIds.has(h.position_id));
-
-  // 1) Companies PRIMA delle positions: le positions risolvono company_id via
-  //    lookup su companies.legacy_id, ma averle già committate evita il
-  //    round-trip e mantiene la Company card popolata.
-  const compRes = await sendChunked(companies.slice().sort(byAsc('updated_at')), ROW_CHUNK,
-    (c) => ({ companies: c }));
-
-  // 2) Positions + figli in bundle.
-  const posRes = await sendChunked(bundles, POS_CHUNK, (slice) => ({
-    positions: slice.map((b) => b.p),
-    scores: slice.flatMap((b) => b.scores),
-    applications: slice.flatMap((b) => b.apps),
-    position_highlights: slice.flatMap((b) => b.hls),
-  }));
-  const sentScores = posRes.confirmed.flatMap((b) => b.scores);
-  const skipScores = posRes.skipped.flatMap((b) => b.scores);
-  const sentApps = posRes.confirmed.flatMap((b) => b.apps);
-  const skipApps = posRes.skipped.flatMap((b) => b.apps);
-  const sentHls = posRes.confirmed.flatMap((b) => b.hls);
-  const skipHls = posRes.skipped.flatMap((b) => b.hls);
-
-  // 3) Figli orfani (positions:[] → dropped server-side, cursore avanza).
-  const oSco = await sendChunked(orphanScores.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], scores: r }));
-  const oApp = await sendChunked(orphanApps.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], applications: r }));
-  const oHl = await sendChunked(orphanHls.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], position_highlights: r }));
-
-  // 4) Transitions (position_legacy_id diretto, indipendenti), ordinate per ts.
-  const transRes = await sendChunked(transitions.slice().sort(byAsc('ts')), ROW_CHUNK, (t) => ({ position_transitions: t }));
-
-  // 5) Tombstones (lookup di fallback lato server), ordinate per deleted_at.
-  const tombRes = await sendChunked(tombstones.slice().sort(byAsc('deleted_at')), ROW_CHUNK, (t) => ({ tombstones: t }));
-
-  // 6) pending_user_messages (full-push, senza cursore) + profile (una volta).
-  //    Piccoli, ma chunkati per robustezza. Il profile viaggia col primo chunk.
-  let profileSent = false;
-  if (pendingMessages.length > 0) {
-    await sendChunked(pendingMessages, ROW_CHUNK, (m) => {
-      const payload = { pending_user_messages: m };
-      if (!profileSent && profilePayload) { payload.profile = profilePayload; profileSent = true; }
-      return payload;
-    });
-  }
-  if (!profileSent && profilePayload && !outcome.aborted) {
-    const r = await postBatch({ profile: profilePayload });
-    outcome.requests += 1;
-    if (r.ok) addUp(r.body);
-    else if (r.status === 401 || r.status === 403) { outcome.aborted = true; outcome.authFailed = true; }
-    else {
+  const checkpointCursor = { ...cursor };
+  async function checkpointTable(table, cursorKey, sourceRows, result, field) {
+    const settled = new Set([
+      ...result.confirmed, ...result.quarantined, ...(held[table] || []),
+    ]);
+    const ordered = sourceRows.slice().sort(byAsc(field));
+    const prefix = [];
+    for (const row of ordered) {
+      if (!settled.has(row)) break;
+      prefix.push(row);
+    }
+    // Delta reads use `field > cursor`: never cross a timestamp shared with
+    // an unsettled row, otherwise that row would be stranded forever.
+    const blockedBoundary = ordered[prefix.length]?.[field] || null;
+    const safePrefix = blockedBoundary
+      ? prefix.filter((row) => row?.[field] < blockedBoundary)
+      : prefix;
+    const next = settledCursor(safePrefix, field);
+    if (!next || (checkpointCursor[cursorKey] && next <= checkpointCursor[cursorKey])) return;
+    checkpointCursor[cursorKey] = next;
+    if (!(await saveCloudCursor(checkpointCursor))) {
       outcome.aborted = true;
-      if (r.timedOut) outcome.timedOut = true;
-      console.error(pc.red(`Push profile failed (HTTP ${r.status})`));
+      console.error(pc.red(
+        `Push cursor checkpoint failed after ${table}; confirmed rows remain safe to retry.`
+      ));
+    }
+  }
+
+  // One table per request is what makes the final singleton attributable.
+  const compRes = await sendChunked('companies', companies.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ companies: r }));
+  await checkpointTable('companies', 'companies', cursorRows.companies, compRes, 'updated_at');
+  const posRes = await sendChunked('positions', positions.slice().sort(byAsc('updated_at')), POS_CHUNK, (r) => ({ positions: r }));
+  await checkpointTable('positions', 'positions', cursorRows.positions, posRes, 'updated_at');
+  const scoreRes = await sendChunked('scores', scores.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ scores: r }));
+  await checkpointTable('scores', 'scores', cursorRows.scores, scoreRes, 'updated_at');
+  const appRes = await sendChunked('applications', applications.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ applications: r }));
+  await checkpointTable('applications', 'applications', cursorRows.applications, appRes, 'updated_at');
+  const hlRes = await sendChunked('position_highlights', highlights.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ position_highlights: r }));
+  await checkpointTable('position_highlights', 'position_highlights', cursorRows.position_highlights, hlRes, 'updated_at');
+  const transRes = await sendChunked('position_transitions', transitions.slice().sort(byAsc('ts')), ROW_CHUNK, (r) => ({ position_transitions: r }));
+  await checkpointTable('position_transitions', 'transitions', cursorRows.position_transitions, transRes, 'ts');
+  const tombRes = await sendChunked('tombstones', tombstones.slice().sort(byAsc('deleted_at')), ROW_CHUNK, (r) => ({ tombstones: r }));
+  await checkpointTable('tombstones', 'tombstones', cursorRows.tombstones, tombRes, 'deleted_at');
+  await sendChunked('pending_user_messages', pendingMessages, ROW_CHUNK, (r) => ({ pending_user_messages: r }));
+  if (sendProfile) {
+    const profileRes = await sendChunked('profile', [sendProfile], 1, (rows) => ({
+      profile: {
+        yaml: rows[0].yaml,
+        summaries: rows[0].summaries,
+        _receipt_id: rows[0]._receipt_id,
+        ...(rows[0].force ? { force: true } : {}),
+      },
+    }));
+    if (profileRes.confirmed.includes(sendProfile)) {
+      checkpointCursor.profile_hash = sendProfile.source_hash;
+      if (!(await saveCloudCursor(checkpointCursor))) {
+        outcome.aborted = true;
+        console.error(pc.red(
+          'Profile cursor checkpoint failed; the confirmed snapshot remains safe to retry.'
+        ));
+      }
     }
   }
 
   // ── Report + cursore ────────────────────────────────────────────────────
   if (outcome.aborted) {
-    // Non avanziamo ALCUN cursore: le richieste già andate a buon fine sono
-    // idempotenti (upsert per legacy_id), verranno ri-chunkate al prossimo
-    // tick. Nessuna riga persa. Segnaliamo il fallimento al chiamante.
-    console.error(pc.yellow(`Push interrupted after ${outcome.requests} requests — cursor unchanged; retrying on the next tick.`));
+    console.error(pc.yellow(
+      `Push interrupted after ${outcome.requests} requests — confirmed checkpoints kept; retrying unsettled rows on the next tick.`
+    ));
     process.exitCode = 1;
     return {
       ok: false,
       authFailed: outcome.authFailed,
-      skipped: outcome.skipped,
+      skipped: activeQuarantineEntries(readCloudPushQuarantine(quarantinePath)).length,
       timedOut: outcome.timedOut === true,
     };
   }
 
   console.log(pc.green(`✓ Push completed in ${outcome.requests} requests`));
   console.log(pc.dim(`  positions: ${outcome.up.positions} · scores: ${outcome.up.scores} · applications: ${outcome.up.applications} · companies: ${outcome.up.companies} · highlights: ${outcome.up.position_highlights} · pending: ${outcome.up.pending_user_messages} · tombstones: ${outcome.up.tombstones} · transitions: ${outcome.up.position_transitions}`));
-  if (outcome.skipped > 0) {
-    // Segnale forte: righe scartate = una riga singola supera il limite server.
-    // L'health-check del Mantenitore (Parte B) lo intercetta.
-    console.error(pc.red(`⚠ ${outcome.skipped} rows skipped (a single row exceeds the server limit); attention required.`));
+  quarantineState = readCloudPushQuarantine(quarantinePath);
+  if (quarantineState.corrupt === true) {
+    clearCorruptQuarantine({ path: quarantinePath });
+    quarantineState = readCloudPushQuarantine(quarantinePath);
   }
-
-  // Cursore SICURO per-tabella: max sul prefisso confermato che precede la
-  // prima riga scartata (safeCursor). Su skip il cursore NON scavalca la riga
-  // → ritentata al tick dopo. Senza skip == max delle righe inviate (identico
-  // al comportamento pre-chunking).
-  const newCursor = { ...cursor };
-  const set = (k, v) => { if (v) newCursor[k] = v; };
-  set('positions', safeCursor(posRes.confirmed.map((b) => b.p), posRes.skipped.map((b) => b.p), 'updated_at'));
-  set('scores', safeCursor([...sentScores, ...oSco.confirmed], [...skipScores, ...oSco.skipped], 'updated_at'));
-  set('applications', safeCursor([...sentApps, ...oApp.confirmed], [...skipApps, ...oApp.skipped], 'updated_at'));
-  set('position_highlights', safeCursor([...sentHls, ...oHl.confirmed], [...skipHls, ...oHl.skipped], 'updated_at'));
-  set('companies', safeCursor(compRes.confirmed, compRes.skipped, 'updated_at'));
-  set('transitions', safeCursor(transRes.confirmed, transRes.skipped, 'ts'));
-  set('tombstones', safeCursor(tombRes.confirmed, tombRes.skipped, 'deleted_at'));
-  await saveCloudCursor(newCursor);
-  // ok=true anche con skipped>0: i chunk sono saliti e il cursore è avanzato in
-  // sicurezza (safeCursor lascia indietro le righe scartate → ritentate). Ma il
-  // sync NON è pieno → il chiamante (rendezvous) NON deve ackare finché
-  // skipped>0. Esponiamo skipped per far decidere il chiamante.
-  return { ok: true, authFailed: false, skipped: outcome.skipped };
+  const unresolved = activeQuarantineEntries(quarantineState).length;
+  if (unresolved > 0) {
+    console.error(pc.yellow(
+      `⚠ ${unresolved} cloud push record(s) are quarantined; valid records were delivered. Run: jht cloud quarantine list`
+    ));
+  }
+  return {
+    ok: true,
+    authFailed: false,
+    skipped: unresolved,
+    quarantined: unresolved,
+    quarantinedNew: outcome.quarantinedNew,
+  };
 }
+
+// Un solo writer locale→cloud per processo. Il daemon è l'owner dello
+// scheduling, ma bootstrap e rendezvous Realtime possono svegliarlo insieme:
+// entrambi passano da questa coda e non possono sovrapporre lettura cursor,
+// upload e avanzamento cursor. Non è un secondo scheduler e non assembla un
+// secondo payload: `performPush` resta l'unico producer.
+export const handlePush = createExclusiveRunner(performPush);
 
 /**
  * Decodifica un pairing-token base64 generato da
@@ -1632,7 +1953,12 @@ async function handlePair(options) {
   try {
     res = await fetch(registerUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // Il device-register è l'unica creazione di token che parte dal box:
+      // firmandola, la riga nasce già con la versione invece di restare
+      // ignota fino al primo push. Nel device-flow (`jht cloud login`) il
+      // token lo crea il browser, quindi lì la versione arriva alla prima
+      // chiamata autenticata — pochi minuti dopo, col bootstrap push.
+      headers: { 'Content-Type': 'application/json', 'X-JHT-Client': clientHeaderValue() },
       body: JSON.stringify({
         user_id: payload.user_id,
         refresh_token: payload.refresh_token,
@@ -1724,7 +2050,7 @@ async function handleDisable(options = {}) {
         `${String(config.base_url).replace(/\/+$/, '')}/api/cloud-sync/revoke`,
         {
           method: 'POST',
-          headers: { Authorization: `Bearer ${config.token}` },
+          headers: cloudSyncHeaders(config.token),
         },
       );
       const body = await res.json().catch(() => ({}));
@@ -1877,7 +2203,7 @@ async function handlePullDesiredState(options = {}) {
     let res;
     try {
       res = await fetch(pullUrl, {
-        headers: { Authorization: `Bearer ${config.token}` },
+        headers: cloudSyncHeaders(config.token),
       });
     } catch (err) {
       console.error(pc.yellow(`  pull warn: network error (${err.message})`));
@@ -1998,6 +2324,7 @@ async function handlePullDesiredState(options = {}) {
       UPDATE positions
          SET write_requested = ?,
              write_requested_at = ?,
+             write_request_kind = ?,
              geocode_requested = ?,
              geocode_requested_at = ?,
              recheck_requested = ?,
@@ -2010,7 +2337,7 @@ async function handlePullDesiredState(options = {}) {
     // sync NARROW dell'esclusione utente (sotto).
     const checkStmt = db.prepare(
       'SELECT status, user_excluded_at, user_excluded_prev_status, ' +
-        'write_requested, write_requested_at, geocode_requested, geocode_requested_at, ' +
+        'write_requested, write_requested_at, write_request_kind, geocode_requested, geocode_requested_at, ' +
         'recheck_requested, recheck_requested_at, salary_precise_requested, salary_precise_requested_at ' +
         'FROM positions WHERE id = ?'
     );
@@ -2043,6 +2370,7 @@ async function handlePullDesiredState(options = {}) {
       if (!local) { missing++; continue; }
       const writeFlag = p.write_requested === true || p.write_requested === 1 ? 1 : 0;
       const writeAt = p.write_requested_at || null;
+      const writeKind = p.write_request_kind || null;
       const geoFlag = p.geocode_requested === true || p.geocode_requested === 1 ? 1 : 0;
       const geoAt = p.geocode_requested_at || null;
       const rcFlag = p.recheck_requested === true || p.recheck_requested === 1 ? 1 : 0;
@@ -2058,6 +2386,7 @@ async function handlePullDesiredState(options = {}) {
       const flagsChanged =
         (local.write_requested ?? 0) !== writeFlag ||
         (local.write_requested_at ?? null) !== writeAt ||
+        (local.write_request_kind ?? null) !== writeKind ||
         (local.geocode_requested ?? 0) !== geoFlag ||
         (local.geocode_requested_at ?? null) !== geoAt ||
         (local.recheck_requested ?? 0) !== rcFlag ||
@@ -2065,7 +2394,7 @@ async function handlePullDesiredState(options = {}) {
         (local.salary_precise_requested ?? 0) !== spFlag ||
         (local.salary_precise_requested_at ?? null) !== spAt;
       if (flagsChanged) {
-        stmt.run(writeFlag, writeAt, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
+        stmt.run(writeFlag, writeAt, writeKind, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
         updated++;
       }
 
@@ -2228,7 +2557,7 @@ async function handleTicketSync(options = {}) {
       try {
         const res = await fetch(
           `${baseUrl}/api/cloud-sync/tickets?${pullParams.toString()}`,
-          { headers: { Authorization: `Bearer ${config.token}` } },
+          { headers: cloudSyncHeaders(config.token) },
         );
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -2242,6 +2571,15 @@ async function handleTicketSync(options = {}) {
     }
     if (pullResult && Array.isArray(pullResult.tickets)) {
       const findByCloud = db.prepare('SELECT id FROM position_tickets WHERE cloud_id = ?');
+      const findActiveRescore = db.prepare(
+        `SELECT id, cloud_id FROM position_tickets
+         WHERE position_id = ? AND kind = 'rescore'
+           AND status IN ('open','assigned')
+         ORDER BY created_at ASC, id ASC LIMIT 1`
+      );
+      const linkActiveRescore = db.prepare(
+        'UPDATE position_tickets SET cloud_id = ? WHERE id = ? AND cloud_id IS NULL'
+      );
       const posExists = db.prepare('SELECT 1 FROM positions WHERE id = ?');
       const ins = db.prepare(
         `INSERT INTO position_tickets (position_id, request_text, kind, status, cloud_id, created_at)
@@ -2272,6 +2610,16 @@ async function handleTicketSync(options = {}) {
           cursorFrozen = true;
           continue;
         }
+        if (ct.kind === 'rescore') {
+          // Stessa richiesta nata offline su entrambe le superfici: conserva
+          // una sola riga attiva e collegala all'identità cloud canonica.
+          const active = findActiveRescore.get(posId);
+          if (active) {
+            if (active.cloud_id == null) linkActiveRescore.run(cloudId, active.id);
+            if (!cursorFrozen && ct.created_at) safeCursor = ct.created_at;
+            continue;
+          }
+        }
         ins.run(posId, ct.request_text || '', ct.kind || 'custom', cloudId, ct.created_at || null);
         imported++;
         importedTickets.push({ cloudId, posId, request: ct.request_text || '' });
@@ -2296,27 +2644,27 @@ async function handleTicketSync(options = {}) {
       try {
         const res = await fetch(`${baseUrl}/api/cloud-sync/tickets`, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${config.token}`,
-            'Content-Type': 'application/json',
-          },
+          headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
           body: JSON.stringify({ tickets: rows }),
         });
         const pb = await res.json().catch(() => ({}));
+        // Anche un batch non-2xx può contenere INSERT confermati prima della
+        // prima riga fallita. Correlali subito: il cursore resta fermo, ma al
+        // retry quelle righe partiranno come UPDATE per cloud_id invece di
+        // essere inserite una seconda volta (custom non ha UNIQUE naturale).
+        if (pb.id_map && typeof pb.id_map === 'object') {
+          const setCloud = db.prepare('UPDATE position_tickets SET cloud_id = ? WHERE id = ?');
+          for (const [localId, cloudId] of Object.entries(pb.id_map)) {
+            const ci = Number(cloudId);
+            const li = Number(localId);
+            if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
+          }
+        }
         if (!res.ok) {
           console.error(pc.yellow(`  ticket push warn: HTTP ${res.status} ${pb.error || ''}`));
         } else {
           pushedUpdates = pb.updated || 0;
           pushedInserts = pb.inserted || 0;
-          // write-back dei cloud_id sugli INSERT → chiude la correlazione.
-          if (pb.id_map && typeof pb.id_map === 'object') {
-            const setCloud = db.prepare('UPDATE position_tickets SET cloud_id = ? WHERE id = ?');
-            for (const [localId, cloudId] of Object.entries(pb.id_map)) {
-              const ci = Number(cloudId);
-              const li = Number(localId);
-              if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
-            }
-          }
           // avanza push cursor = MAX(updated_at) tra le righe inviate.
           let maxU = cursor.push_since || null;
           for (const r of rows) {
@@ -2450,7 +2798,7 @@ async function handleDirectiveSync(options = {}) {
       try {
         const res = await fetch(
           `${baseUrl}/api/cloud-sync/team-directives?${pullParams.toString()}`,
-          { headers: { Authorization: `Bearer ${config.token}` } },
+          { headers: cloudSyncHeaders(config.token) },
         );
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -2504,10 +2852,7 @@ async function handleDirectiveSync(options = {}) {
       try {
         const res = await fetch(`${baseUrl}/api/cloud-sync/team-directives`, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${config.token}`,
-            'Content-Type': 'application/json',
-          },
+          headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
           body: JSON.stringify({ directives: rows }),
         });
         const pb = await res.json().catch(() => ({}));
@@ -2549,7 +2894,7 @@ async function handleDirectiveSync(options = {}) {
   if (total > 0 || !silent) {
     console.log(
       pc.green(
-        `✓ Bacheca sync: ${imported} from cloud↓, ${pushedUpdates} Add to cart , ${pushedInserts} New products`
+        `✓ Directives sync: ${imported} from cloud↓, ${pushedUpdates} Add to cart , ${pushedInserts} New products`
       )
     );
   }
@@ -2617,7 +2962,7 @@ export async function readRendezvousState(config, options = {}) {
   }
   try {
     const res = await fetchFn(`${baseUrl}/api/team-state`, {
-      headers: { Authorization: `Bearer ${config.token}` },
+      headers: cloudSyncHeaders(config.token),
       signal,
     });
     if (!res.ok) return null;
@@ -2680,9 +3025,8 @@ export async function handleSyncRendezvous(options = {}) {
   //   • completato ma con righe scartate (skipped>0)             → NO ack:
   //     il sync NON è integro; lasciando l'ack non scritto il pulsante resta
   //     "in sospeso"/riprovabile e il prossimo tick ritenta le righe scartate
-  //     (che con safeCursor NON sono state superate dal cursore). Le righe
-  //     scartate sono già loggate in rosso da handlePush e intercettate dal
-  //     canary sync_health (Mantenitore) → segnale distinto senza nuovo stato.
+  //     (che senza un ACK durevole non sono superate dal checkpoint). Le righe
+  //     isolate restano visibili nella quarantena e in sync_health.
   const pushOutcome = pushRendezvousOutcome(pushResult);
   if (pushOutcome.status !== 'ready_to_ack') {
     if (!silent) {
@@ -2717,7 +3061,7 @@ export async function handleSyncRendezvous(options = {}) {
   }
   if (!silent) {
     if (ack.status === 'completed') {
-      console.log(pc.green(`✓ Sync now servito: push fresco + ack (${ack.via})`));
+      console.log(pc.green(`✓ Sync now served: fresh push + ack (${ack.via})`));
     } else {
       console.error(pc.yellow(`  sync-rendezvous: ${ack.status}; not confirmed`));
     }
@@ -2923,13 +3267,14 @@ export async function handleChatSync(options = {}) {
       queued: queue.count,
       oldestQueuedAt: queue.oldest,
       deliverFailed: sent.failed,
+      uncertain: queue.uncertain,
     }));
 
     const moved = ingested.inserted + mirrored.mirrored + sent.delivered + pushed;
     if (!silent && (moved > 0 || mirrored.backfilled > 0)) {
       console.log(
         pc.green(
-          `✓ Chat: ${ingested.inserted} from chat.jsonl↓, ${mirrored.mirrored} verso chat.jsonl↑, ` +
+          `✓ Chat: ${ingested.inserted} from chat.jsonl↓, ${mirrored.mirrored} to chat.jsonl↑, ` +
           `${sent.delivered} delivered to the agent, ${pushed} pushed` +
           (mirrored.backfilled > 0 ? ` (${mirrored.backfilled} historical marked without spilling them)` : '')
         )
@@ -2938,13 +3283,15 @@ export async function handleChatSync(options = {}) {
     return {
       status: readError
         ? readError
-        : sent.failed > 0
-          ? 'delivery_pending'
-          : ackFailed
-            ? 'ack_failed'
-            : pending && !acked
-              ? 'delivery_pending'
-              : 'completed',
+        : queue.uncertain > 0
+          ? 'delivery_uncertain'
+          : sent.failed > 0
+            ? 'delivery_pending'
+            : ackFailed
+              ? 'ack_failed'
+              : pending && !acked
+                ? 'delivery_pending'
+                : 'completed',
       pending: !!pending,
       imported: importedIds.length,
       delivered: sent.delivered,
@@ -2995,7 +3342,7 @@ export async function patchTeamStateBestEffort(config, reader, fields, options =
   try {
     const res = await fetchFn(`${baseUrl}/api/team-state`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
+      headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
       signal,
       body: JSON.stringify(fields),
     });
@@ -3048,7 +3395,7 @@ async function reportChatLane(chat, config, reader, stall) {
 async function pushChatRows(config, rows, ids, log) {
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   const pushUrl = `${baseUrl}/api/cloud-sync/push`;
-  const headers = { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' };
+  const headers = cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' });
   const CHUNK = Math.max(1, parseInt(process.env.JHT_CHAT_PUSH_CHUNK || '25', 10) || 25);
   const ok = [];
 
@@ -3065,14 +3412,40 @@ async function pushChatRows(config, rows, ids, log) {
         headers,
         body: JSON.stringify({ pending_user_messages: rows.slice(s, e) }),
       });
-      res = { status: r.status, ok: r.ok };
+      // Il CORPO, non solo lo stato: la route risponde 200 anche quando il
+      // suo filtro ha scartato ogni riga e non ha scritto niente. Fidarsi
+      // del 200 timbrava `cloud_synced_at` su righe mai arrivate, che non
+      // venivano più riprovate — perdita silenziosa, non ritardo (O-16).
+      let upserted = null;
+      try {
+        const payload = await r.json();
+        const count = payload?.pending_user_messages?.upserted;
+        if (typeof count === 'number') upserted = count;
+      } catch {
+        // Corpo illeggibile: sotto si tratta come esito ignoto.
+      }
+      res = { status: r.status, ok: r.ok, upserted };
     } catch (err) {
       log('warn', `chat push: rete (${err.message}) — the next round`);
       return ok;
     }
     if (res.ok) {
-      for (let i = s; i < e; i++) ok.push(ids[i]);
-      continue;
+      const sent = e - s;
+      // Conferma solo se la route dichiara di aver scritto TUTTE le righe
+      // del chunk. Il conteggio non dice QUALI: confermarne una parte a caso
+      // rischierebbe di timbrare proprio quella persa. Riprovare è gratis —
+      // l'upsert è idempotente su (user_id, legacy_id).
+      if (res.upserted === null) {
+        log('warn', 'chat push: risposta senza conteggio — righe da riprovare');
+        return ok;
+      }
+      if (res.upserted >= sent) {
+        for (let i = s; i < e; i++) ok.push(ids[i]);
+        continue;
+      }
+      log('warn',
+        `chat push: ${res.upserted}/${sent} scritte — le altre restano da riprovare`);
+      return ok;
     }
     if (res.status === 413 && e - s > 1) {
       const mid = s + Math.floor((e - s) / 2);
@@ -3105,8 +3478,8 @@ async function pushChatRows(config, rows, ids, log) {
  * `first_run.py` non dichiara `phase: steady`, e poi mai più — vedi
  * `cli/src/lib/bootstrap-push.js` per le tre garanzie di terminazione.
  *
- * Il push è `handlePush` invariato: stesso chunking anti-413, stesso
- * `safeCursor`. Nessun nuovo percorso di assemblaggio del payload = nessun modo
+ * Il push è `handlePush` invariato: stesso chunking anti-413, stessi
+ * checkpoint durevoli. Nessun nuovo percorso di assemblaggio = nessun modo
  * di riaprire l'incidente del 2026-07-15.
  */
 async function maybeBootstrapPush(options = {}) {
@@ -3163,6 +3536,97 @@ async function maybeBootstrapPush(options = {}) {
     console.error(pc.yellow('  bootstrap-push disabled (auth): invalid token; open the browser before retrying.'));
   }
   return { ...decision, result };
+}
+
+/**
+ * Push automatico a regime (O-66). La policy legge soltanto una firma locale;
+ * quando trova modifiche entra nello STESSO `handlePush` di bootstrap e
+ * "Sync now", già serializzato da `createExclusiveRunner`.
+ */
+export async function maybePeriodicPush(options = {}) {
+  const silent = options.silent === true;
+  const now = options.now ?? Date.now();
+  const limits = options.limits || periodicPushLimits();
+  let state = options.state || readPeriodicPushState(options.statePath);
+  const readSignature = options.readSignature || (async () => {
+    let DatabaseSync = null;
+    try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* Node < 22.5 */ }
+    return DatabaseSync
+      ? readLocalSignature(DatabaseSync, options.db || JHT_DB_PATH, options.profilePath || PROFILE_YAML_PATH)
+      : null;
+  });
+  const save = options.save || ((next) => savePeriodicPushState(next, options.statePath));
+  const pushFn = options.pushFn || handlePush;
+  const readQuarantineCount = options.readQuarantineCount || (async () =>
+    activeQuarantineEntries(readCloudPushQuarantine()).length);
+  const quarantineCount = Number(await readQuarantineCount()) || 0;
+  const previousQuarantineCount = Number(state.quarantined_count) || 0;
+  let outcome;
+  if (quarantineCount !== previousQuarantineCount) {
+    state = {
+      ...state,
+      status: quarantineCount > 0 ? 'partial' : 'idle',
+      quarantined_count: quarantineCount,
+      last_check_at: new Date(now).toISOString(),
+      last_reason: quarantineCount > 0 ? 'quarantine_detected' : 'quarantine_recovered',
+      consecutive_failures: quarantineCount > 0
+        ? Math.max(1, Number(state.consecutive_failures) || 0)
+        : 0,
+    };
+    const persisted = await save(state);
+    outcome = { push: false, reason: state.last_reason, state, persisted };
+  } else {
+    outcome = await runPeriodicPushCycle({
+      now, limits, state, readSignature, save, signal: options.signal,
+      push: async ({ signal }) => {
+        const prev = process.exitCode;
+        process.exitCode = 0;
+        try {
+          return await pushFn({ ...(options.db ? { db: options.db } : {}), signal });
+        } finally {
+          process.exitCode = prev;
+        }
+      },
+    });
+  }
+
+  // Il browser non può vedere la firma SQLite. Pubblica soltanto l'esito
+  // minimale del controllo, così distingue "nessuna novità" da "daemon
+  // indietro" senza contatori, titoli o altri dati locali.
+  const observation = periodicPushObservation(outcome);
+  if (observation && options.publishObservation !== false) {
+    const publish = typeof options.publishObservation === 'function'
+      ? options.publishObservation
+      : async (value) => {
+        const config = options.config || (await loadCloudConfig());
+        if (!config?.enabled) return false;
+        // Passa dalla route token (non dal direct reader): lì vive il gate
+        // active_device. Un vecchio box ancora acceso non può sovrascrivere
+        // l'osservazione pubblicata dal device che possiede il claim.
+        try {
+          const res = await (options.fetchFn || fetch)(
+            `${(config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '')}/api/team-state`,
+            {
+              method: 'PATCH',
+              headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
+              signal: AbortSignal.timeout(10_000),
+              body: JSON.stringify(value),
+            }
+          );
+          return res.ok;
+        } catch {
+          return false;
+        }
+      };
+    outcome.observationPublished = await publish(observation);
+  }
+
+  if (!silent && outcome.result && outcome.result.ok !== true) {
+    console.error(pc.yellow(
+      `  periodic-push ${outcome.state?.status || 'failed'}; retry automatico (${outcome.state?.consecutive_failures || 1} fallimenti consecutivi).`
+    ));
+  }
+  return outcome;
 }
 
 /**
@@ -3224,7 +3688,7 @@ async function handleDaemon(options) {
     return;
   }
 
-  console.log(pc.dim(`Cloud sync daemon: user readings→team every ${intervalSec}s (Supabase) + push on-demand su "Sync now" → ${config.base_url}`));
+  console.log(pc.dim(`Cloud sync daemon: user readings→team every ${intervalSec}s (Supabase) + automatic full push bounded + "Sync now" → ${config.base_url}`));
 
   let running = true;
   const shutdown = (sig) => {
@@ -3242,10 +3706,10 @@ async function handleDaemon(options) {
   // (vedi docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md). Logghiamo
   // ogni 10 tick per evitare spam ma confermare che il daemon e' vivo.
   let haltSkipCount = 0;
-  // [PUSH ON-DEMAND 2026-06-25] Niente push automatico per-tick: la dashboard cloud
-  // si aggiorna SOLO quando l'utente preme "Sync now" (sync_requested_at →
-  // handleSyncRendezvous → handlePush). Niente killswitch su push periodico (non
-  // esiste più): gli errori del push on-demand sono best-effort.
+  // Il push automatico NON gira a ogni tick: la policy O-66 calcola la firma
+  // locale al massimo ogni 15 minuti (retry a 1 minuto dopo un errore) e usa
+  // lo stesso `handlePush` del rendezvous. Il fast loop resta una sola lettura
+  // economica di team_state.
   //
   // Cadenza a DUE velocità: il CHECK del flag "Sync now" gira VELOCE (~5s, lettura
   // di 1 riga su Supabase ≈ gratis) così il pulsante risponde in pochi secondi; le
@@ -3367,6 +3831,15 @@ async function handleDaemon(options) {
         } catch (err) {
           console.error(pc.yellow(`  daemon bootstrap-push error: ${err.message}`));
         }
+
+        // ── Push automatico a regime (O-66) ──
+        // La firma evita traffico quando nulla è cambiato; timeout, retry e
+        // ultimo esito sono persistiti e leggibili da `jht cloud status`.
+        try {
+          await maybePeriodicPush({ silent: false, config });
+        } catch (err) {
+          console.error(pc.yellow(`  daemon periodic-push error: ${err.message}`));
+        }
       }
     }
     fastTick += 1;
@@ -3394,52 +3867,49 @@ async function handleDaemon(options) {
 async function runRealtimeLoop({ config, isRunning }) {
   const log = (level, msg) => console.error(pc.dim(`  cloud-realtime ${level}: ${msg}`));
 
+  // [HALT-FLAG-IGNORED-BY-THE-EVENT-DRIVEN-LOOP] Il freno settimanale frenava
+  // solo il loop a poll: qui compariva una volta sola, nella cadenza lenta, e
+  // nessuna delle corsie event-driven lo guardava — così a freno tirato un
+  // UPDATE su team_state faceva partire lo stesso rendezvous e push, cioè la
+  // spesa che il flag esiste per fermare.
+  //
+  // Un cancello all'INGRESSO del ramo non basterebbe: il flag si alza a daemon
+  // acceso (`touch` su un box che gira), e un controllo fatto solo all'avvio
+  // non lo vedrebbe mai. Il punto giusto è il guscio che le corsie già
+  // condividevano: chi ne aggiunge una quinta la fa nascere frenata.
+  const haltGate = createHaltGate({
+    isHalted: () => existsSync(WEEKLY_HALT_FLAG),
+    onHalt: (lane) => console.log(pc.dim(
+      `  HALT-WEEKLY active (${WEEKLY_HALT_FLAG}) Sync suspended.${lane ? ` [${lane}]` : ''}`
+    )),
+    onResume: () => console.log(pc.green('  HALT-WEEKLY removed, resume.')),
+  });
+
   // Debounce per corsia: una raffica di eventi Realtime non deve lanciare letture
-  // concorrenti sovrapposte (push o ticket-sync).
-  let syncing = false;
-  const runSync = async (tag) => {
-    if (syncing) return;
-    syncing = true;
-    try { await handleSyncRendezvous({ silent: true }); }
-    catch { console.error(pc.yellow(`  ${tag} sync-rendezvous error (unexpected_failure)`)); }
-    finally { syncing = false; }
-  };
-  let ticketing = false;
-  const runTicketSync = async (tag) => {
-    if (ticketing) return;
-    ticketing = true;
-    try { await handleTicketSync({ silent: true }); }
-    catch (e) { console.error(pc.yellow(`  ${tag} ticket-sync error: ${e.message}`)); }
-    finally { ticketing = false; }
-  };
+  // concorrenti sovrapposte (push o ticket-sync). Il freno sta nello stesso
+  // guscio del debounce, non accanto a ogni chiamata.
+  const runSync = guardedLane(haltGate, 'sync', async () => {
+    await handleSyncRendezvous({ silent: true });
+  }, () => console.error(pc.yellow('  sync-rendezvous error (unexpected_failure)')));
+
+  const runTicketSync = guardedLane(haltGate, 'ticket', async () => {
+    await handleTicketSync({ silent: true });
+  }, (e) => console.error(pc.yellow(`  ticket-sync error: ${e.message}`)));
   // [JHT-CHAT-UNIFY] La chat ha DUE sorgenti: il cloud (turno scritto dal
   // web → evento su team_state) e il box stesso (l'agente che risponde con
   // `jht-send`, che non produce alcun evento remoto). Serve quindi sia
   // l'aggancio all'evento sia un battito locale corto — che però resta
   // gratis, perché ogni passo di handleChatSync ha una guardia locale.
-  let chatting = false;
-  const runChatSync = async (tag, state) => {
-    if (chatting) return;
-    chatting = true;
-    try { await handleChatSync({ silent: true, config, state }); }
-    catch { console.error(pc.yellow(`  ${tag} chat-sync error (unexpected_failure)`)); }
-    finally { chatting = false; }
-  };
+  const runChatSync = guardedLane(haltGate, 'chat', async (_tag, state) => {
+    await handleChatSync({ silent: true, config, state });
+  }, () => console.error(pc.yellow('  chat-sync error (unexpected_failure)')));
   const chatLocalSec = Math.max(1, parseInt(process.env.JHT_CHAT_LOCAL_SEC || '5', 10) || 5);
   const chatTimer = setInterval(() => { void runChatSync('local', null); }, chatLocalSec * 1000);
-  let emergencyStopping = false;
-  const runEmergencyStop = async (tag, state) => {
-    if (emergencyStopping) return;
-    emergencyStopping = true;
-    try {
-      const { reconcileEmergencyStop } = await import('../lib/team-state-reconciler.js');
-      await reconcileEmergencyStop(config, state);
-    } catch (e) {
-      console.error(pc.yellow(`  ${tag} emergency-stop error: ${e.message}`));
-    } finally {
-      emergencyStopping = false;
-    }
-  };
+
+  const runEmergencyStop = guardedLane(haltGate, 'emergency-stop', async (_tag, state) => {
+    const { reconcileEmergencyStop } = await import('../lib/team-state-reconciler.js');
+    await reconcileEmergencyStop(config, state);
+  }, (e) => console.error(pc.yellow(`  emergency-stop error: ${e.message}`)));
 
   let rt = null;
   try {
@@ -3492,7 +3962,8 @@ async function runRealtimeLoop({ config, isRunning }) {
 
   let tick = 0;
   while (isRunning()) {
-    if (existsSync(WEEKLY_HALT_FLAG)) { await sleepTick(); tick += 1; continue; }
+    // Stesso cancello delle corsie: un solo predicato, un solo annuncio.
+    if (haltGate('slow')) { await sleepTick(); tick += 1; continue; }
 
     // Heartbeat ~ogni 3min (mantiene la VPS "online" sulla dashboard).
     await heartbeat();
@@ -3516,6 +3987,8 @@ async function runRealtimeLoop({ config, isRunning }) {
     // NESSUNO chiede nulla — quindi vive sul tick, con la sua cadenza interna.
     try { await maybeBootstrapPush({ silent: false }); }
     catch (e) { console.error(pc.yellow(`  bootstrap-push error: ${e.message}`)); }
+    try { await maybePeriodicPush({ silent: false, config }); }
+    catch (e) { console.error(pc.yellow(`  periodic-push error: ${e.message}`)); }
 
     tick += 1;
     await sleepTick();
@@ -3529,7 +4002,7 @@ async function runRealtimeLoop({ config, isRunning }) {
 // per recuperare write_requested cliccato via web mentre container era
 // offline). Best-effort: il caller invoca con { silent: true } e ignora
 // process.exitCode così il boot prosegue anche se cloud è giù.
-export { handlePullDesiredState, handleTicketSync, handleDirectiveSync };
+export { handlePullDesiredState, handleTicketSync, handleDirectiveSync, handleRestore };
 
 /**
  * pull-profile — scarica il profilo dal cloud e ricostruisce
@@ -3560,7 +4033,7 @@ async function handlePullProfile(options = {}) {
   let res;
   try {
     res = await fetch(`${baseUrl}/api/cloud-sync/pull-profile`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: cloudSyncHeaders(token),
     });
   } catch (err) {
     if (!options.silent) console.error(pc.red('pull-profile: network error'), err.message);
@@ -3637,6 +4110,25 @@ export function registerCloudCommand(program) {
     .option('--db <path>', 'SQLite database path (default: ~/.jht/jobs.db)')
     .option('--dry-run', 'Show what would be pushed without calling the cloud')
     .action(handlePush);
+
+  const quarantine = cloud
+    .command('quarantine')
+    .description('Inspect and manage durable cloud push quarantines');
+  quarantine
+    .command('list')
+    .description('List privacy-safe quarantine metadata')
+    .option('--json', 'Print machine-readable metadata')
+    .action(handleQuarantineList);
+  quarantine
+    .command('retry <identity>')
+    .description('Retry one opaque identity, or all')
+    .option('--no-push', 'Queue retry without starting a push now')
+    .action(handleQuarantineRetry);
+  quarantine
+    .command('resolve <identity>')
+    .description('Resolve one quarantine after removing the local cause')
+    .requiredOption('--confirm', 'Confirm explicit resolution')
+    .action(handleQuarantineResolve);
 
   // `bootstrap-status` — [CLOUDSYNC-PUSH-ONLY-WHEN-WATCHED] finestra sul push
   // del primo periodo di vita: quanti push restano, quando scade la finestra,

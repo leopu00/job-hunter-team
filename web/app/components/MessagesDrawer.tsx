@@ -8,6 +8,15 @@
 // Niente polling (i poller scalano i costi Vercel): fetch al mount, alla
 // riapertura del drawer e quando il tab torna visibile + eventi LIVE via
 // Supabase Realtime (websocket diretto, zero Vercel) per i nuovi messaggi.
+//
+// [JHT-CHAT-UNIFY] Allineato al modello unificato il 2026-08-08, con un
+// ritardo che si vedeva: qui un turno `author='user'` veniva disegnato come
+// bolla DELL'AGENTE, cioè le parole dell'utente comparivano attribuite a chi
+// non le aveva scritte, e nessuna bolla portava lo stato di consegna. Ora la
+// grammatica è la stessa di /messages — mittente dal campo `author`, segno
+// di consegna sui turni propri, avviso e riprova quando il box non ritira —
+// perché due superfici della stessa conversazione che raccontano cose
+// diverse sono peggio di una superficie sola.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -20,7 +29,14 @@ import {
   KIND_BORDER,
 } from "@/lib/message-display";
 import MessageBody, { stripInlineMarkdown } from "@/app/components/MessageBody";
+import ChatDeliveryMark from "@/app/components/ChatDeliveryMark";
 import { usePendingMessagesLive } from "@/app/hooks/usePendingMessagesLive";
+import { useChatLaneLive } from "@/app/hooks/useChatLaneLive";
+import { useBoxClient } from "@/app/hooks/useBoxClient";
+import { chatComposerBlocked } from "@/lib/box-client";
+import { chatTurnDelivery, hasStalledTurn } from "@/lib/chat-delivery";
+import { noteServerTime, serverNow } from "@/lib/server-clock";
+import { CHAT_DELIVERY_T } from "@/lib/chat-delivery.i18n";
 import {
   optimisticUserTurn,
   postAcks,
@@ -107,6 +123,12 @@ export default function MessagesDrawer() {
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryState, setRetryState] = useState<
+    "idle" | "sending" | "done" | "failed"
+  >("idle");
+  // Orologio interno delle bolle. Sta qui, con gli altri stati, perché
+  // `refresh()` lo riallinea appena il server dice che ore sono.
+  const [clock, setClock] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
 
@@ -121,7 +143,15 @@ export default function MessagesDrawer() {
       const data = (await res.json()) as {
         messages: PendingMessage[];
         unread: number;
+        server_now?: string;
       };
+      // Lo scarto fra i due orologi si aggiorna a ogni giro: il drawer
+      // chiede questi messaggi al mount, alla riapertura e al ritorno del
+      // tab, quindi non serve nessuna chiamata in più per saperlo.
+      noteServerTime(data.server_now);
+      // Riallinea subito: aspettare il battito da 30s vorrebbe dire mezzo
+      // minuto in cui le bolle sono ancora misurate col vecchio scarto.
+      setClock(serverNow());
       setMessages(data.messages ?? []);
       setUnread(data.unread ?? 0);
     } catch {
@@ -201,13 +231,61 @@ export default function MessagesDrawer() {
     };
   }, [open]);
 
+  const td = makeT(CHAT_DELIVERY_T, locale);
+  // Stessa lettura di /messages: la corsia dice se qualcuno sta ancora
+  // rispondendo al campanello, la riga dice se QUESTO turno è arrivato.
+  const { lane, refresh: refreshLane } = useChatLaneLive();
+  const box = useBoxClient();
+  const composerBlocked = chatComposerBlocked(box);
+  const blockedNotice = box?.client_version
+    ? td("blocked_no_chat").replace("{version}", box.client_version)
+    : td("blocked_no_chat_unknown_version");
+
   const conversations = buildConversations(messages);
   const active = conversations.find((c) => c.agent === activeAgent) ?? null;
+
+  // Orologio interno, come nella chat a tutta pagina: parte da 0 così la
+  // prima render del client coincide con quella del server (il drawer vive
+  // in navbar, quindi è renderizzato ovunque) e il tempo vero entra dopo il
+  // mount. Batte solo finché c'è un turno in attesa.
+  const waiting = messages.some(
+    (m) =>
+      m.author === "user" && !m.delivered_at && !m.id.startsWith("pending:"),
+  );
+  useEffect(() => {
+    setClock(serverNow());
+    if (!waiting) return;
+    const id = window.setInterval(() => setClock(serverNow()), 30_000);
+    return () => window.clearInterval(id);
+  }, [waiting]);
+  const stalled = active ? hasStalledTurn(active.messages, lane, clock) : false;
+
+  // Quando la consegna riparte, l'esito dell'ultimo richiamo non ha più
+  // niente da dire: lasciarlo lì significherebbe ritrovarsi «richiesta
+  // rimandata al box» addosso al prossimo turno che si ferma, come se
+  // fosse la risposta a quello.
+  useEffect(() => {
+    if (!stalled) setRetryState("idle");
+  }, [stalled]);
+
+  /** Richiama il box per i turni che non ha ritirato. Vedi MessagesList. */
+  async function handleRetryDelivery() {
+    if (retryState === "sending") return;
+    setRetryState("sending");
+    const ok = await retryChatSignal();
+    setRetryState(ok ? "done" : "failed");
+    // Il campanello è stato riscritto: la corsia va riletta adesso. Con
+    // Realtime attivo l'evento arriverebbe comunque, ma quando non c'è —
+    // socket caduto, websocket bloccati — senza questa rilettura il
+    // messaggio direbbe «fatto» mentre la bolla resta gialla.
+    if (ok) refreshLane();
+  }
 
   // Aprire una chat marca come letti i suoi non letti (stile messenger).
   const openChat = (agent: string) => {
     setActiveAgent(agent);
     setError(null);
+    setRetryState("idle");
     const ids = unreadIdsOf(messages, agent);
     if (ids.length === 0) return;
     const now = new Date().toISOString();
@@ -460,46 +538,11 @@ export default function MessagesDrawer() {
                 <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4 flex flex-col gap-3">
                   {active.messages.map((m) => (
                     <div key={m.id} className="flex flex-col gap-2">
-                      {/* Bolla dell'agente */}
-                      <div
-                        className="max-w-[88%] self-start rounded-lg rounded-tl-sm px-3 py-2 border-l-2"
-                        style={{
-                          background: "var(--color-card)",
-                          borderLeftColor: KIND_BORDER[m.kind],
-                        }}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          {m.kind !== "notification" && (
-                            <span
-                              className="text-[7.5px] font-semibold tracking-[0.14em] uppercase px-1 py-px rounded"
-                              style={{
-                                color: KIND_BORDER[m.kind],
-                                border: `1px solid ${KIND_BORDER[m.kind]}`,
-                              }}
-                            >
-                              {kindLabel(m.kind, locale)}
-                            </span>
-                          )}
-                          <span className="text-[9px] text-[var(--color-dim)]">
-                            {formatRelative(m.created_at, locale)}
-                          </span>
-                        </div>
-                        <MessageBody
-                          text={m.body}
-                          className="m-0 text-[11.5px] leading-relaxed text-[var(--color-base)]"
-                        />
-                        {m.related_position_id && (
-                          <Link
-                            href={`/positions/${m.related_position_id}`}
-                            onClick={() => setOpen(false)}
-                            className="inline-block mt-1 text-[10px] text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
-                          >
-                            {tr("see_position")}
-                          </Link>
-                        )}
-                      </div>
-                      {/* Risposta dell'utente, a destra */}
-                      {m.user_reply && (
+                      {m.author === "user" ? (
+                        /* Turno scritto dall'utente: una riga a sé, a destra
+                           e col suo stato di consegna. Prima finiva nel ramo
+                           qui sotto, cioè disegnato come se l'avesse scritto
+                           l'agente. */
                         <div
                           className="max-w-[88%] self-end rounded-lg rounded-tr-sm px-3 py-2"
                           style={{
@@ -507,23 +550,97 @@ export default function MessagesDrawer() {
                               "color-mix(in srgb, var(--color-green) 10%, var(--color-card))",
                             border:
                               "1px solid color-mix(in srgb, var(--color-green) 30%, transparent)",
+                            opacity: m.id.startsWith("pending:") ? 0.65 : 1,
                           }}
                         >
                           <div className="flex items-center gap-2 mb-1 justify-end">
                             <span className="text-[9px] font-semibold text-[var(--color-green)]">
                               {tr("you")}
                             </span>
-                            {m.user_reply_at && (
-                              <span className="text-[9px] text-[var(--color-dim)]">
-                                {formatRelative(m.user_reply_at, locale)}
-                              </span>
-                            )}
+                            <span className="text-[9px] text-[var(--color-dim)]">
+                              {formatRelative(m.created_at, locale)}
+                            </span>
+                            <ChatDeliveryMark
+                              state={chatTurnDelivery(m, lane, clock)}
+                              locale={locale}
+                            />
                           </div>
                           <MessageBody
-                            text={m.user_reply}
+                            text={m.body}
                             className="m-0 text-[11.5px] leading-relaxed text-[var(--color-base)]"
                           />
                         </div>
+                      ) : (
+                        <>
+                          {/* Bolla dell'agente */}
+                          <div
+                            className="max-w-[88%] self-start rounded-lg rounded-tl-sm px-3 py-2 border-l-2"
+                            style={{
+                              background: "var(--color-card)",
+                              borderLeftColor: KIND_BORDER[m.kind],
+                            }}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              {m.kind !== "notification" && (
+                                <span
+                                  className="text-[7.5px] font-semibold tracking-[0.14em] uppercase px-1 py-px rounded"
+                                  style={{
+                                    color: KIND_BORDER[m.kind],
+                                    border: `1px solid ${KIND_BORDER[m.kind]}`,
+                                  }}
+                                >
+                                  {kindLabel(m.kind, locale)}
+                                </span>
+                              )}
+                              <span className="text-[9px] text-[var(--color-dim)]">
+                                {formatRelative(m.created_at, locale)}
+                              </span>
+                            </div>
+                            <MessageBody
+                              text={m.body}
+                              className="m-0 text-[11.5px] leading-relaxed text-[var(--color-base)]"
+                            />
+                            {m.related_position_id && (
+                              <Link
+                                href={`/positions/${m.related_position_id}`}
+                                onClick={() => setOpen(false)}
+                                className="inline-block mt-1 text-[10px] text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
+                              >
+                                {tr("see_position")}
+                              </Link>
+                            )}
+                          </div>
+                          {/* Risposta appesa al messaggio dell'agente: è il
+                              modello di prima dell'unificazione. Continua a
+                              rendersi perché le conversazioni già salvate
+                              restano leggibili com'erano. */}
+                          {m.user_reply && (
+                            <div
+                              className="max-w-[88%] self-end rounded-lg rounded-tr-sm px-3 py-2"
+                              style={{
+                                background:
+                                  "color-mix(in srgb, var(--color-green) 10%, var(--color-card))",
+                                border:
+                                  "1px solid color-mix(in srgb, var(--color-green) 30%, transparent)",
+                              }}
+                            >
+                              <div className="flex items-center gap-2 mb-1 justify-end">
+                                <span className="text-[9px] font-semibold text-[var(--color-green)]">
+                                  {tr("you")}
+                                </span>
+                                {m.user_reply_at && (
+                                  <span className="text-[9px] text-[var(--color-dim)]">
+                                    {formatRelative(m.user_reply_at, locale)}
+                                  </span>
+                                )}
+                              </div>
+                              <MessageBody
+                                text={m.user_reply}
+                                className="m-0 text-[11.5px] leading-relaxed text-[var(--color-base)]"
+                              />
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   ))}
@@ -544,6 +661,56 @@ export default function MessagesDrawer() {
                       {error}
                     </div>
                   )}
+                  {/* Il box ha dichiarato di non saper ricevere la chat:
+                      stessa regola di /messages, blocca solo la smentita
+                      esplicita e mai il silenzio. */}
+                  {composerBlocked && canWrite && (
+                    <div
+                      className="mb-2 px-2 py-1.5 rounded border text-[10px] leading-relaxed"
+                      style={{
+                        borderColor: "var(--color-yellow)",
+                        color: "var(--color-yellow)",
+                      }}
+                      role="status"
+                    >
+                      {blockedNotice}
+                    </div>
+                  )}
+                  {/* Turno non ritirato dal box: dirlo e dare l'unica azione
+                      utile — richiamarlo, senza rimandare il testo. */}
+                  {stalled && !error && !composerBlocked && (
+                    <div
+                      className="mb-2 px-2 py-1.5 rounded border text-[10px] leading-relaxed"
+                      style={{
+                        borderColor: "var(--color-yellow)",
+                        color: "var(--color-yellow)",
+                      }}
+                      role="status"
+                    >
+                      {td("stalled_hint")}
+                      <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => void handleRetryDelivery()}
+                          disabled={retryState === "sending"}
+                          className="px-2 py-1 rounded border text-[10px] cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ borderColor: "var(--color-yellow)" }}
+                        >
+                          {retryState === "sending"
+                            ? td("retrying")
+                            : td("retry")}
+                        </button>
+                        {retryState === "done" && (
+                          <span>{td("retry_done")}</span>
+                        )}
+                        {retryState === "failed" && (
+                          <span style={{ color: "var(--color-red)" }}>
+                            {td("retry_failed")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-end gap-2">
                     <textarea
                       value={replyText}
@@ -556,7 +723,7 @@ export default function MessagesDrawer() {
                       }}
                       rows={1}
                       maxLength={MAX_CHAT_BODY}
-                      disabled={!canWrite || sending}
+                      disabled={!canWrite || sending || composerBlocked}
                       placeholder={tr("write_to").replace(
                         "{name}",
                         agentInfo(active.agent, locale).name,
@@ -567,7 +734,10 @@ export default function MessagesDrawer() {
                       type="button"
                       onClick={() => void handleSend()}
                       disabled={
-                        !canWrite || sending || replyText.trim().length === 0
+                        !canWrite ||
+                        sending ||
+                        composerBlocked ||
+                        replyText.trim().length === 0
                       }
                       aria-label={tr("send")}
                       className="w-8 h-8 shrink-0 rounded flex items-center justify-center cursor-pointer border transition-colors disabled:opacity-40 disabled:cursor-default"

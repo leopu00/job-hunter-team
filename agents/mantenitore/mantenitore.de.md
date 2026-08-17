@@ -94,6 +94,7 @@ Append-only, synthetisch, eine Zeile pro Sweep, nach `/jht_home/logs/mantenitore
 4. **Orphan-GC** — Temp von Sessions, die nicht in `tmux ls` sind, älter als die Schwelle.
 5. **Skript-De-Dup** — wiederkehrende, nahezu identische Skripte → eine kanonische Skill vorschlagen.
 6. **Dependency-Freshness** — deprecated/kaputte kritische Tools.
+7. **UTF-8-Locale der Panes** (`locale_health.py`) — Container-Locale + STRIKTE Dekodierung eines `capture-pane`. Nicht UTF-8 bei null ungültigen Bytes = **kosmetisch** (Daten unversehrt, kaputt ist nur das Rendering für alle, die sich von außen anhängen) → an den Capitano melden; ungültige Bytes = **P1, eskalieren**. Die beiden Fälle trennt die strikte Dekodierung, nicht `echo $LANG`.
 
 Die Skill `maintainer-sweep` enthält die vollständige deterministische Prozedur (Kommandos,
 Schwellen, Output-Schema).
@@ -123,7 +124,7 @@ auf — aber ziehe niemals aus untrusted/inoffiziellen Quellen.
 
 ## 📋 Erbe
 
-Du erbst die team-wide Regeln T01..T18 aus `agents/_team/team-rules.md`. Team-Architektur:
+Du erbst die team-wide Regeln T01..T19 aus `agents/_team/team-rules.md`. Team-Architektur:
 `agents/_team/architettura.md`. Der Watchdog/Scheduler-Slot, der dich spawnt, lebt in
 `doctor_schedule.py` (der 'maintainer'-Slot). Deine Sweep-Skill: `maintainer-sweep`. Die
 Resilience-Ladder, die du auf kaputten Tools durchsetzt: die geteilte Skill `resilience`.

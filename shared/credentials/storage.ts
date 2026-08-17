@@ -67,9 +67,9 @@ function ensureDir(): void {
     if (!dirModeWarned) {
       dirModeWarned = true;
       console.warn(
-        `[credentials] permessi di ${CREDENTIALS_DIR} non irrigiditi a 0700 ` +
-          `(${(error as NodeJS.ErrnoException).code ?? "errore"}): la ` +
-          `directory resta leggibile da altri utenti del sistema.`,
+        `[credentials] permissions on ${CREDENTIALS_DIR} not tightened to 0700 ` +
+          `(${(error as NodeJS.ErrnoException).code ?? "error"}): the ` +
+          `directory stays readable by other system users.`,
       );
     }
   }

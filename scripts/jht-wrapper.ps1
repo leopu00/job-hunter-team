@@ -46,8 +46,13 @@ $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
 $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
+$DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598'
+$DefaultRuntimeVersion = '0.3.9'
 $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
+$WindowsInstanceGuardSha256 = 'bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b'
+$JhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
+. (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
 
 # Carica la host env (scritta da install.ps1 / setup wizard: JHT_HOST_TYPE=local|vps).
 # Formato file: VAR=value per riga, ignora # e righe vuote.
@@ -129,6 +134,7 @@ function Test-RuntimeDirectoryAcl {
     return $true
   } catch { return $false }
 }
+
 
 function Test-RuntimePathAuthority {
   try {
@@ -230,7 +236,14 @@ if ($env:JHT_RUNTIME_AUTHORITY_SELFTEST -eq '1') {
 }
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
+function Require-PrivateJhtHomeAcl {
+  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) {
+    throw "JHT_HOME ACL is not owner-only: $JhtHome"
+  }
+}
+
 function Require-Docker {
+  Require-PrivateJhtHomeAcl
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     Write-Err "docker non trovato nel PATH. Installa Docker Desktop per Windows."
     exit 127
@@ -243,16 +256,73 @@ function Require-Docker {
 }
 
 function Require-ComposeFile {
+  Require-PrivateJhtHomeAcl
   try { Assert-TrustedRuntime } catch { Write-Err $_.Exception.Message; exit 1 }
 }
 
 function Invoke-Compose {
   param([Parameter(ValueFromRemainingArguments)] $Args)
+  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { throw "JHT_HOME ACL is not owner-only: $JhtHome" }
   Assert-TrustedRuntime
   # Docker Desktop Windows accetta forward-slash o backslash. project-directory
   # punta al runtime dir per bind-mount relativi (anche se compose qui e'
   # image-only, lasciamo per simmetria col bash wrapper).
   & docker compose -f $ComposeFile --project-directory $RuntimeDir @Args
+}
+
+function Test-DockerReachable {
+  # Docker c'e' ED e' raggiungibile? A differenza di Require-Docker NON esce:
+  # serve a DECIDERE, non a pretendere.
+  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return $false }
+  $null = docker info 2>&1
+  return ($LASTEXITCODE -eq 0)
+}
+
+function Write-LocalHelp {
+  # L'aiuto completo vive nel CLI DENTRO il container: senza container si
+  # stampa questo, che elenca cio' che il wrapper sa fare da se' sull'host.
+  @'
+jht - Job Hunter Team
+
+  Comandi dell'host (funzionano da qui):
+    jht up                 avvia il container del team
+    jht down               lo ferma
+    jht restart            lo riavvia
+    jht status             stato di container e team
+    jht logs [-f]          log del container
+    jht upgrade            aggiorna all'immagine piu' recente
+    jht setup              installazione guidata
+    jht download --os X    scarica l'app desktop per un sistema
+    jht game start|stop    avvia o ferma il videogioco
+    jht gui open           apre l'interfaccia grafica
+    jht shell              shell dentro il container
+
+  Tutti gli altri comandi (positions, stats, team, providers, cron,
+  working-hours, cloud...) girano DENTRO il container: per il loro aiuto
+  serve il container attivo.
+
+      jht up ; jht --help
+
+'@ | Write-Host
+}
+
+function Invoke-HelpWithoutDocker {
+  param([Parameter(ValueFromRemainingArguments)] $HelpArgs)
+  if ((Test-DockerReachable) -and (Test-ContainerUp)) {
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @HelpArgs
+    return $LASTEXITCODE
+  }
+  Write-LocalHelp
+  return 0
+}
+
+function Test-HostCommandUsesLocalHelp {
+  param([string]$Command)
+  return $Command -in @(
+    'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
+    'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
+    'setup', 'download'
+  )
 }
 
 function Test-ContainerUp {
@@ -263,7 +333,7 @@ function Test-ContainerUp {
 function Ensure-Up {
   if (-not (Test-ContainerUp)) {
     Write-Info "Container '$Container' non attivo, lo avvio..."
-    Invoke-Compose up -d
+    Invoke-Compose 'up' '-d'
     # Attendi che il container sia in stato running.
     $tries = 20
     while (-not (Test-ContainerUp)) {
@@ -305,6 +375,32 @@ function Write-GameJsonAtomic {
   }
 }
 
+function Get-CanonicalGameProcessPath {
+  param([Diagnostics.Process]$Process)
+  $path = [string]$Process.Path
+  if (-not $path) { $path = [string]$Process.MainModule.FileName }
+  if (-not $path) { throw 'process executable unavailable' }
+  return ([IO.Path]::GetFullPath($path)).Replace('\', '/').ToLowerInvariant()
+}
+
+function Get-GameProcessStartTicks {
+  param([Diagnostics.Process]$Process)
+  return $Process.StartTime.ToUniversalTime().Ticks.ToString(
+    [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-InstanceGuardFingerprint {
+  $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  if (-not $sid) { throw 'current user identity unavailable' }
+  $utf8 = [Text.UTF8Encoding]::new($false, $true)
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try {
+    return ([BitConverter]::ToString(
+      $sha.ComputeHash($utf8.GetBytes('jht-instance-guard-v1|' + $sid.Value))
+    )).Replace('-', '').ToLowerInvariant()
+  } finally { $sha.Dispose() }
+}
+
 function Get-LiveGameState {
   $statePath = Join-Path $GameControlDir 'state.json'
   $state = Read-GameJson $statePath
@@ -317,11 +413,10 @@ function Get-LiveGameState {
   try {
     $process = Get-Process -Id $statePid -ErrorAction Stop
     if ($process.HasExited) { throw 'stale state' }
-    $stateExecutable = [IO.Path]::GetFullPath([string]$state.executable)
-    $processExecutable = [string]$process.Path
-    if (-not $processExecutable) { $processExecutable = [string]$process.MainModule.FileName }
-    if (-not $processExecutable -or
-        [IO.Path]::GetFullPath($processExecutable) -ine $stateExecutable) {
+    $stateExecutable = ([IO.Path]::GetFullPath(
+      [string]$state.executable)).Replace('\', '/').ToLowerInvariant()
+    $processExecutable = Get-CanonicalGameProcessPath $process
+    if ($processExecutable -cne $stateExecutable) {
       throw 'stale state or recycled pid'
     }
     $processStarted = [DateTimeOffset]::new($process.StartTime.ToUniversalTime()).ToUnixTimeSeconds()
@@ -330,6 +425,36 @@ function Get-LiveGameState {
     # molto sotto qualunque riuso credibile dello stesso PID+stesso binario.
     if ([Math]::Abs($processStarted - [double]$state.started_at) -gt 30) {
       throw 'stale state or recycled pid'
+    }
+
+    # Su Windows state.json e' autorevole soltanto se lega anche il sidecar
+    # che possiede il mutex per-user. PID da solo e stato riciclabile; path,
+    # start ticks, sessione, source PCK e SID fingerprint devono coincidere.
+    $guardPid = 0
+    if ([int]$state.schema -ne 2 -or -not $state.guard -or
+        -not [int]::TryParse([string]$state.guard.pid, [ref]$guardPid) -or
+        $guardPid -le 0 -or $guardPid -eq $statePid -or
+        [string]$state.guard.source_sha256 -cne $WindowsInstanceGuardSha256 -or
+        [string]$state.guard.instance_id -cnotmatch '^instance-[0-9a-f]{24}$' -or
+        [string]$state.guard.mode -cnotin @('normal', 'update') -or
+        [string]$state.guard.mutex_fingerprint -cnotmatch '^[0-9a-f]{64}$') {
+      throw 'missing instance guard binding'
+    }
+    $guard = Get-Process -Id $guardPid -ErrorAction Stop
+    if ($guard.HasExited -or $guard.SessionId -ne $process.SessionId) {
+      throw 'stale instance guard'
+    }
+    $expectedPowerShellPath = Join-Path -Path $env:SystemRoot `
+      -ChildPath 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $expectedPowerShell = ([IO.Path]::GetFullPath(
+      $expectedPowerShellPath)).Replace('\', '/').ToLowerInvariant()
+    if ((Get-CanonicalGameProcessPath $guard) -cne $expectedPowerShell -or
+        [string]$state.guard.executable -cne $expectedPowerShell -or
+        [string]$state.guard.desktop_executable -cne $processExecutable -or
+        [string]$state.guard.desktop_started -cne (Get-GameProcessStartTicks $process) -or
+        [string]$state.guard.started -cne (Get-GameProcessStartTicks $guard) -or
+        [string]$state.guard.mutex_fingerprint -cne (Get-InstanceGuardFingerprint)) {
+      throw 'instance guard binding mismatch'
     }
     return $state
   } catch {
@@ -1047,7 +1172,7 @@ function Invoke-RuntimeUpgrade {
     Write-UpgradeNote 'Scarico l immagine piu recente...'
     if (-not (Invoke-UpgradeCompose $newCompose 'pull' $Container)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Download immagine non riuscito' $false; return 1 }
     $candidateRef = ((& docker compose -f $newCompose --project-directory $RuntimeDir config --images 2>$null | Select-Object -First 1) -as [string]).Trim()
-    if (-not $candidateRef) { $candidateRef = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht:0.3.5' } }
+    if (-not $candidateRef) { $candidateRef = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { $DefaultRuntimeImage } }
     $candidateImage = ((& docker image inspect $candidateRef --format '{{.Id}}' 2>$null | Select-Object -First 1) -as [string]).Trim()
     if (-not $candidateImage) { $candidateImage = 'sconosciuta' }
     if (-not (Write-UpgradeJournal 'pulled' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile aggiornare il journal' $false; return 1 }
@@ -1098,7 +1223,44 @@ $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
 # corretto anche con 1 solo arg di coda.
 $Rest = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
 
+# Questo gate deve precedere tutti i rami host-side: nel solo default non vede
+# `up --help`, `setup --help`, ecc. e quei comandi toccherebbero Docker prima
+# di accorgersi che l'utente ha chiesto soltanto aiuto.
+$HelpRequested = @($Rest | Where-Object { $_ -in @('-h', '--help') }).Count -gt 0
+if ($HelpRequested -and $Sub -notin @('game', 'gui')) {
+  if (Test-HostCommandUsesLocalHelp $Sub) {
+    Write-LocalHelp
+    exit 0
+  }
+  exit (Invoke-HelpWithoutDocker $Sub @Rest)
+}
+
+# ORDINE: si guarda COSA e' stato chiesto PRIMA di decidere se serve Docker.
+# Il contrario - Ensure-Up in cima al default - faceva si' che un semplice
+# `jht --help` scaricasse l'immagine (~300 MB) e creasse container e volumi,
+# cioe' il primo comando di chi non ha ancora deciso se installare (P-07).
 switch ($Sub) {
+  { $_ -in @('-h', '--help', 'help', '') } {
+    exit (Invoke-HelpWithoutDocker '--help')
+  }
+
+  { $_ -in @('-V', '--version', 'version') } {
+    if ((Test-DockerReachable) -and (Test-ContainerUp)) {
+      & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry --version
+    } else {
+      $ConfiguredVersion = if ($env:JHT_IMAGE_TAG) {
+        $env:JHT_IMAGE_TAG
+      } elseif ($env:JHT_IMAGE -and $env:JHT_IMAGE -match ':([^/:]+)$') {
+        $Matches[1]
+      } else {
+        $DefaultRuntimeVersion
+      }
+      Write-Output $ConfiguredVersion
+      Write-Info "Per la versione del CLI in esecuzione serve il container attivo: 'jht up'."
+    }
+    exit 0
+  }
+
   'game' {
     $code = Invoke-GameCommand $Rest
     exit $code
@@ -1112,7 +1274,7 @@ switch ($Sub) {
   { $_ -in @('up', 'start-container') } {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose up -d
+    Invoke-Compose 'up' '-d'
     break
   }
 
@@ -1134,7 +1296,7 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     Invoke-Compose down
-    Invoke-Compose up -d
+    Invoke-Compose 'up' '-d'
     break
   }
 
@@ -1198,15 +1360,6 @@ switch ($Sub) {
     Ensure-Up
     Invoke-HostDownload $Rest
     exit $script:HostDownloadExitCode
-  }
-
-  # Default: nessun arg = help.
-  '' {
-    Require-ComposeFile
-    Require-Docker
-    Ensure-Up
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry --help
-    break
   }
 
   # Tutto il resto: delegato al CLI Node nel container.

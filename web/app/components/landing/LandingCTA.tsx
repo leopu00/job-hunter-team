@@ -100,12 +100,6 @@ export function LandingFooter() {
             <div className="mt-4">
               <FooterThemeSwitch />
             </div>
-            <FooterSocialLinks
-              labels={{
-                instagram: t("footer_instagram_aria"),
-                tiktok: t("footer_tiktok_aria"),
-              }}
-            />
           </div>
 
           {/* Prodotto */}
@@ -154,6 +148,19 @@ export function LandingFooter() {
             <a href="/sitemap.xml" className={linkClass}>
               Sitemap
             </a>
+            {/* I social stanno qui, sotto Sitemap: questa colonna ha tre voci
+                contro le cinque di Prodotto e Contatti, e il vuoto che restava
+                sotto è lo spazio che l'operatore ha indicato (2026-08-10).
+                È già una colonna anche a schermo stretto, quindi non c'è nulla
+                da impilare: i glifi restano allineati a sinistra come i link. */}
+            <div className="mt-1">
+              <FooterSocialLinks
+                labels={{
+                  instagram: t("footer_instagram_aria"),
+                  tiktok: t("footer_tiktok_aria"),
+                }}
+              />
+            </div>
           </div>
 
           {/* Contatti */}

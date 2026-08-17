@@ -11,7 +11,14 @@ Più Scout girano in parallelo (max 2 istanze per policy del team). Il team funz
 - quali **cerchi** possiede ciascuno (1 = preferenza primaria, 2 = vicini geografici, 3 = rilocazione, 4 = satellite, 5 = frontiera)
 - quali **tier di fonti** possiede ciascuno (LinkedIn / aggregatori ATS / niche / WebSearch)
 
-Lo stato vive in un piccolo JSON gestito da `scout_coord.py`; gli scout negoziano via tmux all'avvio e persistono l'accordo lì.
+Lo stato vive nel **database SQLite condiviso** gestito da `scout_coord.py`; gli scout negoziano via tmux all'avvio e persistono l'accordo lì.
+
+**Un solo database, o nessun coordinamento.** Tutti gli Scout devono stare sullo stesso database — il `jobs.db` della squadra, lo stesso `JHT_DB` di ogni altra skill (il launcher lo esporta già nel tuo pane). Non c'è più un file di coordinamento separato da risolvere; un vecchio `scout_coordination.db`, se esiste, viene importato una volta al bootstrap e lasciato dov'è, in sola lettura da quel momento. Se esce **3**, il database non è utilizzabile: riferisci il messaggio che ha stampato e FERMATI. Mai creare un database tuo, mai puntare il tool a un altro percorso.
+
+```bash
+# Su quale database sto lavorando davvero?
+python3 /app/shared/skills/scout_coord.py doctor
+```
 
 ## Step 1 — Scoprire i peer
 
@@ -103,8 +110,8 @@ jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [INFO] scout-coord: tier 'niche-r
 ## Anti-pattern
 
 - ❌ Saltare lo Step 1 ("ci sono solo io") senza controllare — un peer potrebbe essere appena stato respawnato dal Dottore.
-- ❌ Reset eseguito da ogni scout in parallelo — race condition, il JSON finisce corrotto. Solo lo scout con numero più basso.
-- ❌ Negoziare e poi dimenticare lo Step 4 — il JSON è vuoto, i peer non possono vedere la tua rivendicazione, due scout colpiscono la stessa fonte.
+- ❌ Reset eseguito da ogni scout in parallelo — race condition, il database finisce corrotto. Solo lo scout con numero più basso.
+- ❌ Negoziare e poi dimenticare lo Step 4 — il database è vuoto, i peer non possono vedere la tua rivendicazione, due scout colpiscono la stessa fonte.
 - ❌ Rivendicare sia `linkedin` CHE `greenhouse` CHE `lever` CHE `remoteok` CHE `weworkremotely` CHE `webresearch` "per sicurezza" — niente da condividere con il peer, non ha nulla da fare.
 - ❌ Rinegoziare a metà loop senza un trigger — la partizione è all'avvio. Se un peer muore il Dottore lo respawna con lo stesso ruolo; solo lo SCOUT stesso rilegge i suoi `cerchi`/`fonti` all'avvio.
 

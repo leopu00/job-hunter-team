@@ -11,7 +11,14 @@ Tobb Scout fut parhuzamosan (csapatszabalyzat szerint maximum 2 peldany). A csap
 - melyik **koroket** birtokolja mindegyik (1 = elsdleges preferencia, 2 = foldrajzi szomszedok, 3 = koltozes, 4 = szatellit, 5 = hatar)
 - melyik **forras-szinteket** birtokolja mindegyik (LinkedIn / ATS aggregatorok / resforgalom / WebSearch)
 
-Az allapot egy kis JSON-fajlban el, amelyet a `scout_coord.py` kezel; a scoutok inditaskor tmux-on keresztul targyalnak es ott rogzitik a megallapodast.
+Az allapot a `scout_coord.py` altal kezelt **kozos SQLite adatbazisban** el; a scoutok inditaskor tmux-on keresztul targyalnak es ott rogzitik a megallapodast.
+
+**Egy adatbazis, vagy semmilyen koordinacio.** Minden Scoutnak ugyanazon az adatbazison kell dolgoznia — a csapat `jobs.db`-jen, ugyanazon a `JHT_DB`-n, mint minden mas skill (a launcher mar exportalja a paneledbe). Nincs tobbe kulon koordinacios fajl, amit fel kellene oldani; egy regi `scout_coordination.db`, ha letezik, egyszer importalodik a bootstrap soran, es helyben marad, onnantol csak olvashato. Ha **3**-mal lep ki, az adatbazis hasznalhatatlan: jelentsd a kiirt uzenetet es ALLJ MEG. Soha ne hozz letre sajat adatbazist, es soha ne iranyitsd az eszkozt mas utvonalra.
+
+```bash
+# Melyik adatbazison dolgozom valojaban?
+python3 /app/shared/skills/scout_coord.py doctor
+```
 
 ## 1. lepes — Tarsak felderitese
 
@@ -103,8 +110,8 @@ jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [INFO] scout-coord: tier 'niche-r
 ## Anti-mintak
 
 - ❌ Az 1. lepes kiagyasa ("csak en vagyok") ellenorzes nelkul — egy tars eppen most lehetett ujraindiva a Dottore altal.
-- ❌ Resetelest minden scout parhuzamosan vegez — versenyhelyzet, a JSON serult lesz. Csak a legalacsonyabb szamu scout.
-- ❌ Targyalas, majd a 4. lepes elfelejtese — a JSON ures, a tarsak nem latjak az igenyedet, ket scout ugyanarra a forrasra megy.
+- ❌ Resetelest minden scout parhuzamosan vegez — versenyhelyzet, az adatbazis serult lesz. Csak a legalacsonyabb szamu scout.
+- ❌ Targyalas, majd a 4. lepes elfelejtese — az adatbazis ures, a tarsak nem latjak az igenyedet, ket scout ugyanarra a forrasra megy.
 - ❌ `linkedin` ES `greenhouse` ES `lever` ES `remoteok` ES `weworkremotely` ES `webresearch` igenyeles "biztonsag kedveert" — semmi marad a tarsnak, annak nincs dolga.
 - ❌ Ujratargyalas a ciklus kozepen kivaito ok nelkul — a felosztas inditaskori. Ha egy tars meghal, a Dottore ugyanazzal a szereppel ujrainditja; csak maga a SCOUT olvassa ujra a `cerchi`/`fonti` erteket inditaskor.
 

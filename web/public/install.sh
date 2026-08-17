@@ -39,8 +39,8 @@
 # ║                            (default: XDG/App Support host-runtime)        ║
 # ║    JHT_BIN_DIR             Where to put the jht wrapper (default:        ║
 # ║                            $HOME/.local/bin)                             ║
-# ║    JHT_IMAGE               Container image override (default:            ║
-# ║                            ghcr.io/leopu00/jht:0.3.5)                    ║
+# ║    JHT_IMAGE               Container image override (default: immutable  ║
+# ║                            release digest)                               ║
 # ║    JHT_RAW_BASE            Base URL override for downloads               ║
 # ║                            (default: https://raw.githubusercontent.com/  ║
 # ║                                      leopu00/job-hunter-team/<BRANCH>)   ║
@@ -79,7 +79,7 @@ elif [ "$(uname -s)" = "Darwin" ]; then
 else
   RUNTIME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
 fi
-IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.5}"
+IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598}"
 # Il compose scaricato può evolvere sul canale production; l'installer di
 # questa release deve comunque avviare l'immagine dichiarata qui.
 export JHT_IMAGE="$IMAGE"

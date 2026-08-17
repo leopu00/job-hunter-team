@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import type { PositionTicket } from "@/lib/types";
+import { splitTicketRequest } from "@/lib/ticket-attachment";
+import { clipboardImageFile } from "@/lib/clipboard-image";
+import { ticketErrorMessage } from "@/lib/ticket-error";
 
 // Sezione "Richieste al team" sulla pagina posizione. L'utente scrive una
 // richiesta testuale libera (popup) → ticket 'open'; il Capitano l'assegna a un
@@ -17,6 +20,28 @@ const STATUS_COLOR: Record<string, string> = {
   assigned: "var(--color-purple)",
   resolved: "var(--color-green)",
 };
+
+// Graffetta dell'allegato: SVG stroke come le altre icone del prodotto, al
+// posto della 📎 (niente emoji nella UI — scelta dell'utente del 18/07).
+// Decorativa: il nome del file la segue sempre.
+function IconPaperclip({ size = 11 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="inline-block shrink-0 align-[-0.1em]"
+    >
+      <path d="M20 11.5 12 19.5a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" />
+    </svg>
+  );
+}
 
 const T: Record<
   Locale,
@@ -33,6 +58,11 @@ const T: Record<
     networkError: string;
     emptyState: string;
     teamResponse: string;
+    attachFile: string;
+    removeFile: string;
+    pasteTooLarge: string;
+    pasteUnsupported: string;
+    attachmentUnavailable: string;
   }
 > = {
   it: {
@@ -54,6 +84,12 @@ const T: Record<
     emptyState:
       "Nessuna richiesta. Usa “Nuova richiesta” per chiedere al team qualcosa su questa offerta.",
     teamResponse: "Risposta del team",
+    attachFile: "Allega un file",
+    removeFile: "Rimuovi allegato",
+    pasteTooLarge: "L'immagine incollata supera il limite di 10 MB",
+    pasteUnsupported: "Formato immagine incollato non supportato",
+    attachmentUnavailable:
+      "Allegato non disponibile. Caricalo dal desktop e riprova.",
   },
   en: {
     statusLabel: {
@@ -74,6 +110,12 @@ const T: Record<
     emptyState:
       "No requests. Use “New request” to ask the team something about this position.",
     teamResponse: "Team response",
+    attachFile: "Attach a file",
+    removeFile: "Remove attachment",
+    pasteTooLarge: "The pasted image exceeds the 10 MB limit",
+    pasteUnsupported: "The pasted image format is not supported",
+    attachmentUnavailable:
+      "Attachment unavailable. Upload it from desktop and try again.",
   },
   es: {
     statusLabel: {
@@ -94,6 +136,12 @@ const T: Record<
     emptyState:
       "Sin solicitudes. Usa “Nueva solicitud” para pedirle algo al equipo sobre esta posición.",
     teamResponse: "Respuesta del equipo",
+    attachFile: "Adjuntar un archivo",
+    removeFile: "Quitar archivo",
+    pasteTooLarge: "La imagen pegada supera el límite de 10 MB",
+    pasteUnsupported: "El formato de imagen pegado no es compatible",
+    attachmentUnavailable:
+      "Adjunto no disponible. Súbelo desde el escritorio y vuelve a intentarlo.",
   },
   fr: {
     statusLabel: {
@@ -114,6 +162,12 @@ const T: Record<
     emptyState:
       "Aucune demande. Utilisez « Nouvelle demande » pour demander quelque chose à l'équipe sur ce poste.",
     teamResponse: "Réponse de l'équipe",
+    attachFile: "Joindre un fichier",
+    removeFile: "Retirer le fichier",
+    pasteTooLarge: "L'image collée dépasse la limite de 10 Mo",
+    pasteUnsupported: "Le format d'image collée n'est pas pris en charge",
+    attachmentUnavailable:
+      "Pièce jointe indisponible. Importez-la depuis le bureau et réessayez.",
   },
   de: {
     statusLabel: {
@@ -134,6 +188,12 @@ const T: Record<
     emptyState:
       "Keine Anfragen. Nutze „Neue Anfrage“, um das Team etwas zu dieser Stelle zu fragen.",
     teamResponse: "Antwort des Teams",
+    attachFile: "Datei anhängen",
+    removeFile: "Anhang entfernen",
+    pasteTooLarge: "Das eingefügte Bild überschreitet das 10-MB-Limit",
+    pasteUnsupported: "Das eingefügte Bildformat wird nicht unterstützt",
+    attachmentUnavailable:
+      "Anhang nicht verfügbar. Lade ihn vom Desktop hoch und versuche es erneut.",
   },
   hu: {
     statusLabel: {
@@ -154,6 +214,12 @@ const T: Record<
     emptyState:
       "Nincs kérés. Használd az „Új kérés” gombot, hogy kérj valamit a csapattól ehhez az álláshoz.",
     teamResponse: "A csapat válasza",
+    attachFile: "Fájl csatolása",
+    removeFile: "Melléklet eltávolítása",
+    pasteTooLarge: "A beillesztett kép meghaladja a 10 MB-os korlátot",
+    pasteUnsupported: "A beillesztett képformátum nem támogatott",
+    attachmentUnavailable:
+      "A melléklet nem érhető el. Töltsd fel az asztali alkalmazásból, majd próbáld újra.",
   },
   pt: {
     statusLabel: {
@@ -174,6 +240,12 @@ const T: Record<
     emptyState:
       "Sem pedidos. Usa “Novo pedido” para pedir algo à equipa sobre esta vaga.",
     teamResponse: "Resposta da equipa",
+    attachFile: "Anexar um ficheiro",
+    removeFile: "Remover anexo",
+    pasteTooLarge: "A imagem colada excede o limite de 10 MB",
+    pasteUnsupported: "O formato da imagem colada não é suportado",
+    attachmentUnavailable:
+      "Anexo indisponível. Carregue-o a partir do desktop e tente novamente.",
   },
 };
 
@@ -195,6 +267,23 @@ export function TicketPanel({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attachment, setAttachment] = useState<File | null>(null);
+
+  const pasteImage = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (busy || isPending) {
+      event.preventDefault();
+      return;
+    }
+    const result = clipboardImageFile(event.clipboardData);
+    if (result.kind === "none") return;
+    event.preventDefault();
+    if (result.kind === "rejected") {
+      setError(result.reason === "size" ? t.pasteTooLarge : t.pasteUnsupported);
+      return;
+    }
+    setAttachment(result.file);
+    setError(null);
+  };
 
   const submit = async () => {
     setError(null);
@@ -204,18 +293,21 @@ export function TicketPanel({
     }
     setBusy(true);
     try {
+      const form = new FormData();
+      form.append("request_text", text.trim());
+      if (attachment) form.append("attachment", attachment);
       const res = await fetch(`/api/positions/${legacyId}/ticket`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ request_text: text.trim() }),
+        body: form,
       });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
-        setError(b?.error ?? `HTTP ${res.status}`);
+        setError(ticketErrorMessage(b?.error, t));
         setBusy(false);
         return;
       }
       setText("");
+      setAttachment(null);
       setOpen(false);
       startTransition(() => router.refresh());
     } catch (e) {
@@ -256,6 +348,8 @@ export function TicketPanel({
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onPaste={pasteImage}
+            disabled={busy || isPending}
             rows={3}
             maxLength={2000}
             placeholder={t.placeholder}
@@ -266,12 +360,47 @@ export function TicketPanel({
               color: "var(--color-text)",
             }}
           />
+          <div className="flex items-center gap-2 text-[11px]">
+            <label
+              className="px-3 py-1.5 rounded-lg border cursor-pointer"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              {t.attachFile}
+              <input
+                type="file"
+                className="sr-only"
+                disabled={busy || isPending}
+                onChange={(event) =>
+                  setAttachment(event.target.files?.[0] ?? null)
+                }
+              />
+            </label>
+            {attachment && (
+              <>
+                <span
+                  className="inline-flex items-center gap-1.5"
+                  style={{ color: "var(--color-dim)" }}
+                >
+                  <IconPaperclip />
+                  {attachment.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAttachment(null)}
+                  style={{ color: "var(--color-red)" }}
+                >
+                  {t.removeFile}
+                </button>
+              </>
+            )}
+          </div>
           <div className="flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => {
                 setOpen(false);
                 setText("");
+                setAttachment(null);
                 setError(null);
               }}
               className="px-3 py-1.5 rounded-lg text-[11px]"
@@ -306,58 +435,70 @@ export function TicketPanel({
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {tickets.map((tk) => (
-            <li
-              key={tk.id}
-              className="p-3 rounded-lg border"
-              style={{ borderColor: "var(--color-border)" }}
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className="text-[10px] uppercase font-semibold tracking-wide"
-                  style={{
-                    color: STATUS_COLOR[tk.status] ?? "var(--color-dim)",
-                  }}
-                >
-                  {t.statusLabel[tk.status as TicketStatus] ?? tk.status}
-                  {tk.assigned_agent ? ` · ${tk.assigned_agent}` : ""}
-                </span>
-                <span
-                  className="text-[10px]"
-                  style={{ color: "var(--color-dim)" }}
-                >
-                  {tk.created_at
-                    ? tk.created_at.slice(0, 16).replace("T", " ")
-                    : ""}
-                </span>
-              </div>
-              <p
-                className="text-[13px] mt-1"
-                style={{ color: "var(--color-text)" }}
+          {tickets.map((tk) => {
+            const request = splitTicketRequest(tk.request_text);
+            return (
+              <li
+                key={tk.id}
+                className="p-3 rounded-lg border"
+                style={{ borderColor: "var(--color-border)" }}
               >
-                {tk.request_text}
-              </p>
-              {tk.response_text && (
-                <div
-                  className="mt-2 pl-3 border-l-2"
-                  style={{ borderColor: "var(--color-green)" }}
-                >
+                <div className="flex items-center justify-between">
                   <span
-                    className="text-[10px] uppercase font-semibold"
-                    style={{ color: "var(--color-green)" }}
+                    className="text-[10px] uppercase font-semibold tracking-wide"
+                    style={{
+                      color: STATUS_COLOR[tk.status] ?? "var(--color-dim)",
+                    }}
                   >
-                    {t.teamResponse}
+                    {t.statusLabel[tk.status as TicketStatus] ?? tk.status}
+                    {tk.assigned_agent ? ` · ${tk.assigned_agent}` : ""}
                   </span>
-                  <p
-                    className="text-[13px]"
-                    style={{ color: "var(--color-text)" }}
+                  <span
+                    className="text-[10px]"
+                    style={{ color: "var(--color-dim)" }}
                   >
-                    {tk.response_text}
-                  </p>
+                    {tk.created_at
+                      ? tk.created_at.slice(0, 16).replace("T", " ")
+                      : ""}
+                  </span>
                 </div>
-              )}
-            </li>
-          ))}
+                <p
+                  className="text-[13px] mt-1"
+                  style={{ color: "var(--color-text)" }}
+                >
+                  {request.text}
+                </p>
+                {request.attachmentName && (
+                  <p
+                    className="text-[11px] mt-1 inline-flex items-center gap-1.5"
+                    style={{ color: "var(--color-purple)" }}
+                  >
+                    <IconPaperclip />
+                    {request.attachmentName}
+                  </p>
+                )}
+                {tk.response_text && (
+                  <div
+                    className="mt-2 pl-3 border-l-2"
+                    style={{ borderColor: "var(--color-green)" }}
+                  >
+                    <span
+                      className="text-[10px] uppercase font-semibold"
+                      style={{ color: "var(--color-green)" }}
+                    >
+                      {t.teamResponse}
+                    </span>
+                    <p
+                      className="text-[13px]"
+                      style={{ color: "var(--color-text)" }}
+                    >
+                      {tk.response_text}
+                    </p>
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

@@ -9,7 +9,10 @@ const LANGS := {
 	"it": "Italiano", "en": "English", "hu": "Magyar", "es": "Español",
 	"de": "Deutsch", "fr": "Français", "pt": "Português",
 }
-const LANG_CFG := "user://lang.cfg"
+## Preferenza persistente condivisa da gioco, web e runtime agenti.
+## Il path assoluto e l'ownership passano da JhtFs: sul container acceso
+## /jht_home appartiene all'utente jht, a container spento è il file host.
+const LANGUAGE_PREFS := "i18n-prefs.json"
 ## Lingua mostrata prima che esista una preferenza esplicita dell'utente.
 ## Non leggiamo il locale del sistema: il video/tutorial e la UI devono partire
 ## dalla stessa lingua prevedibile su ogni installazione nuova.
@@ -29,7 +32,7 @@ static func language_config_path() -> String:
 	# verifica che un save KO non faccia avanzare la UI come se avesse salvato.
 	if persistence_test == "save_failure":
 		return "user://language_persistence_missing/lang.cfg"
-	return LANG_CFG
+	return JhtFs.host_path(LANGUAGE_PREFS)
 
 static func _static_init() -> void:
 	# Il harness registrabile deve partire come prima installazione ma non può
@@ -72,6 +75,10 @@ static func needs_initial_language_choice() -> bool:
 ## scrittura → riapertura senza mai toccare le preferenze di chi sviluppa.
 static func saved_language(config_path := "") -> String:
 	var path := config_path if config_path != "" else language_config_path()
+	if path == JhtFs.host_path(LANGUAGE_PREFS):
+		var prefs := JhtFs.read_json(LANGUAGE_PREFS)
+		var locale := str(prefs.get("locale", ""))
+		return locale if LANGS.has(locale) else ""
 	var cfg := ConfigFile.new()
 	if cfg.load(path) != OK:
 		return ""
@@ -80,6 +87,8 @@ static func saved_language(config_path := "") -> String:
 
 static func _save_language(l: String, config_path := "") -> bool:
 	var path := config_path if config_path != "" else language_config_path()
+	if path == JhtFs.host_path(LANGUAGE_PREFS):
+		return JhtFs.write_json(LANGUAGE_PREFS, {"locale": l})
 	var cfg := ConfigFile.new()
 	cfg.set_value("ui", "lang", l)
 	return cfg.save(path) == OK
@@ -100,6 +109,20 @@ static func t(key: String) -> String:
 	return _translated(key, lang, _translations() if lang != "it" else {})
 
 
+## Copy autoriale su cataloghi sparsi. A differenza della UI, la narrativa ha
+## centinaia di righe e non duplica l'inglese in sette mappe solo per ottenere
+## parità strutturale: se la traduzione non esiste, la sorgente EN esplicita è
+## il fallback. I file opzionali sono scripts/i18n/dialogue_<lang>.gd.
+static func authored(key: String, english_source: String,
+		requested_lang := "") -> String:
+	var locale := requested_lang if requested_lang != "" else lang
+	if locale == DEFAULT_LANG or not LANGS.has(locale):
+		return english_source
+	var translated: String = str(_authored_translations().get(locale, {}).get(
+			key, ""))
+	return translated if translated != "" else english_source
+
+
 ## Snapshot creato sul main thread prima di accodare un worker VPS. Il thread
 ## riceve solo stringhe già risolte e non inizializza mai il catalogo lazy.
 static func vps_presentation_snapshot() -> Dictionary:
@@ -108,7 +131,7 @@ static func vps_presentation_snapshot() -> Dictionary:
 			"vps.upload.file_unreadable", "vps.upload.file_too_large",
 			"vps.response_unreadable", "vps.artifact.path_outside",
 			"vps.artifact.file_missing", "vps.artifact.invalid",
-			"vps.ticket.position_missing",
+			"vps.ticket.position_missing", "vps.ticket.invalid_attachment",
 			"vps.ssh.failed", "vps.terminal.invalid_session",
 			"vps.terminal.output_omitted", "vps.terminal.history_heading",
 			"vps.terminal.live_heading", "vps.coordinator.unreadable",
@@ -142,6 +165,8 @@ static func _translated(key: String, requested_lang: String,
 ## I dizionari tradotti, caricati pigramente (i preload in const
 ## creerebbero un ciclo di parse se un file i18n mancasse in dev).
 static var _tr_cache := {}
+static var _authored_tr_cache := {}
+static var _authored_tr_loaded := false
 
 static func _translations() -> Dictionary:
 	if _tr_cache.is_empty():
@@ -153,6 +178,22 @@ static func _translations() -> Dictionary:
 				var script: GDScript = load(path)
 				_tr_cache[l] = script.get_script_constant_map().get("S", {})
 	return _tr_cache
+
+
+## Overlay narrativi caricati soltanto se esistono. Il catalogo inglese non è
+## un ottavo file: vive accanto alla struttura canonica che gli dà significato.
+static func _authored_translations() -> Dictionary:
+	if not _authored_tr_loaded:
+		for locale in LANGS:
+			if locale == DEFAULT_LANG:
+				continue
+			var path := "res://scripts/i18n/dialogue_%s.gd" % locale
+			if ResourceLoader.exists(path):
+				var script: GDScript = load(path)
+				_authored_tr_cache[locale] = script.get_script_constant_map().get(
+						"S", {})
+		_authored_tr_loaded = true
+	return _authored_tr_cache
 
 const S := {
 	"common.loading": "CARICAMENTO…",
@@ -281,7 +322,9 @@ const S := {
 	"tour.hint_follow": "L'Assistente ti fa strada: seguila, pensa a tutto lei.",
 	"tour.hint_free": "Giro libero: clicca chi ha il diamante, in qualsiasi ordine.",
 	"tour.hint_launch": "Completa i tre requisiti: il pulsante giallo in alto apre la checklist.",
-	"tour.skip": "SALTA IL TOUR",
+	"tour.exit": "ESCI DAL GIRO (ESC)",
+	"tour.pause": "INTERROMPI IL GIRO (ESC)",
+	"tour.resume": "RIPRENDI IL GIRO",
 	"tour.done": "TOUR COMPLETATO ✓",
 	"tour.invite": "%s%s! Vieni, ti presento il tuo nuovo team.",
 	"tour.guide.scout.greet": "Questo è il reparto Ricerca. Ti presento uno dei nostri Ricercatori.",
@@ -382,7 +425,7 @@ const S := {
 	"coord.queues": "Panoramica code",
 	"coord.queues_desc": "Carico reale del team in questo momento",
 	"coord.mode": "Modalità di lavoro",
-	"coord.mode_desc": "Un click cambia l’obiettivo di tutto il team. La modalità resta finché non ne scegli un’altra.",
+	"coord.mode_desc": "Un click cambia l’obiettivo di tutto il team. La modalità resta finché non ne scegli un’altra, o finché non scade.",
 	"coord.mode_search": "Ricerca",
 	"coord.mode_search_what": "Il team accumula: trova nuove posizioni, le analizza e le scora.",
 	"coord.mode_search_when": "La scelta di partenza, quando vuoi ampliare il portafoglio.",
@@ -400,6 +443,14 @@ const S := {
 	"coord.mode_saving": "Risparmio",
 	"coord.mode_saving_what": "Solo il minimo vitale: nessun arricchimento autonomo, nessuna spesa non richiesta.",
 	"coord.mode_saving_when": "Quando vuoi conservare budget: le tue richieste esplicite vengono comunque eseguite.",
+	"coord.until": "Fino a quando",
+	"coord.until_tip": "Alla scadenza la modalità torna da sola a Ricerca: nessuna modalità deve durare per inerzia.",
+	"coord.until_days": "Giorni",
+	"coord.until_hours": "Ore",
+	"coord.until_none": "Senza scadenza: la modalità dura finché non ne scegli un’altra.",
+	"coord.until_set": "Scade il %s (fra %s): poi il team torna da solo a Ricerca.",
+	"coord.until_expired": "«%s» è scaduta (%s): il team è già tornato a Ricerca.",
+	"coord.until_unreadable": "«%s» non è una data leggibile: la modalità non scade.",
 	"coord.stop_search": "Ferma la ricerca di nuove posizioni",
 	"coord.expired": "Scarta le posizioni scadute a rotazione",
 	"coord.cv_score": "Score minimo per scrivere un CV",
@@ -493,6 +544,15 @@ const S := {
 	"wizard.uploading": "carico %s…",
 	"wizard.upload_fail": "upload fallito: %s",
 	"wizard.attach_msg": "Ti ho caricato un documento: puoi estrarre da qui il mio profilo?",
+	"wizard.review_title": "DATI ESTRATTI DAL CV",
+	"wizard.review_body": "Controlla questi dati. Il badge sopra non cambia finché non confermi.",
+	"wizard.review_missing": "Da completare dopo il salvataggio: %s",
+	"wizard.review_unavailable": "La revisione non è verificabile. Ricarica il CV.",
+	"wizard.review_stale": "Il profilo è cambiato nel frattempo. Ricarica il CV per non perdere modifiche.",
+	"wizard.review_confirm": "Conferma e salva",
+	"wizard.review_saving": "salvataggio verificato in corso…",
+	"wizard.review_saved": "Profilo salvato.",
+	"wizard.review_save_failed": "Salvataggio non riuscito: il profilo non è stato modificato.",
 	"wizard.connecting": "connessione al team…",
 	"wizard.booting_assistant": "avvio dell'assistente in corso (può volerci un minuto)…",
 	"wizard.sim_badge": "SIMULAZIONE — nessuna VPS collegata",
@@ -599,6 +659,10 @@ const S := {
 	"pos.tickets": "TICKET APERTI COL TEAM",
 	"pos.ticket_none": "nessun ticket per questa posizione",
 	"pos.ticket_placeholder": "scrivi una richiesta al team su questa posizione…",
+	"pos.ticket_attach": "ALLEGA FILE",
+	"pos.ticket_attached": "📎 %s",
+	"pos.ticket_uploading": "caricamento allegato…",
+	"pos.ticket_upload_in_progress": "un altro allegato ticket è già in caricamento",
 	"pos.ticket_send": "APRI TICKET",
 	"pos.ticket_sending": "invio del ticket alla VPS…",
 	"pos.ticket_ok": "✓ ticket aperto — il Coordinatore lo prenderà in carico",
@@ -629,7 +693,7 @@ const S := {
 	"agents.chat_besteffort": "(risposta non garantita: protocollo chat non nel suo prompt)",
 
 	# ── GlobalSearch (Cmd+K) ──────────────────────────────────────
-	"search.placeholder": "cerca posizioni: titolo, azienda, città…  (ESC chiude)",
+	"search.placeholder": "cerca posizioni: titolo, azienda, ID…  (ESC chiude)",
 	"search.no_match": "nessuna posizione trovata",
 	"search.need_vps": "collega la VPS per cercare tra le posizioni reali",
 
@@ -691,6 +755,8 @@ const S := {
 	"lang.intro": "Lingua dell'interfaccia — le 7 lingue del sito.",
 	"lang.narrative_note": "// nota: il tour narrativo e le sue scelte sono attualmente disponibili in italiano",
 	"lang.note": "// si applica subito ai pannelli; riapri quelli già aperti per vederli tradotti",
+	"lang.syncing": "Sincronizzo la lingua con il team…",
+	"lang.sync_failed": "Lingua non cambiata: sincronizzazione col team fallita (%s)",
 
 	# ── Statistiche: grafici cross-filter (come la dashboard web) ─
 	"stats.hint": "// click su una barra per filtrare: gli altri grafici si aggiornano",
@@ -778,6 +844,8 @@ const S := {
 	"backend.this_computer": "questo computer",
 	"backend.local_connecting": "collegamento al container locale…",
 	"backend.local_unavailable": "container locale non disponibile",
+	"backend.mock_connecting": "collegamento al simulatore locale…",
+	"backend.mock_connected": "simulatore locale collegato",
 	"backend.container_not_running": "il container jht non è in esecuzione",
 	"office.message_for_you": "MESSAGGIO PER TE",
 	"office.message_from": "MESSAGGIO DA %s",
@@ -846,9 +914,10 @@ const S := {
 	"feedback.ph_happened": "es. la schermata è rimasta ferma su «collegamento» per dieci minuti",
 	"feedback.q_expected": "COSA TI ASPETTAVI",
 	"feedback.ph_expected": "es. che il team partisse e comparissero gli agenti",
-	"feedback.q_contact": "EMAIL PER LA RISPOSTA (facoltativa)",
-	"feedback.ph_contact": "senza indirizzo non possiamo farti sapere com'è finita",
-	"feedback.contact_hint": "// usata solo per rispondere a questa segnalazione",
+	"feedback.q_contact": "EMAIL (facoltativa, se vuoi che ti rispondiamo)",
+	"feedback.ph_contact": "es. risposta@example.com",
+	"feedback.contact_hint": "// usata solo come indirizzo di risposta; non entra nel report",
+	"feedback.invalid_email": "Inserisci un indirizzo email valido oppure lascia il campo vuoto.",
 	"feedback.attach_diag": "Allega la diagnostica del computer",
 	"feedback.attach_container": "Allega i log del runtime",
 	"feedback.collecting": "Raccolgo la diagnostica…",
@@ -857,7 +926,7 @@ const S := {
 	"feedback.send": "INVIA SEGNALAZIONE",
 	"feedback.preview_btn": "VEDI COSA STAI INVIANDO",
 	"feedback.open_folder": "APRI CARTELLA REPORT",
-	"feedback.preview_title": "Questo è esattamente il report che parte. Contatti, dati personali e segreti non lasciano il computer.",
+	"feedback.preview_title": "Questo è esattamente il report che parte. L'email facoltativa viene inviata separatamente solo per permetterci di risponderti.",
 	"feedback.back": "◂ TORNA AL MODULO",
 	"feedback.sending": "Invio in corso…",
 	"feedback.sent": "Segnalazione inviata. Grazie: la leggiamo davvero.",
@@ -918,11 +987,22 @@ const S := {
 	"team.stop": "FERMA TEAM",
 	"team.start": "AVVIA TEAM",
 	"team.setup": "SETUP E STATO",
+	"team.start_recovering": "◌ WATCHDOG IN RECUPERO…",
+	"team.start_retry": "↻ RIPROVA AVVIO TEAM",
+	"team.start_waiting": "Il comando di avvio è terminato. Attendo che CAPITANO diventi osservabile.",
+	"team.start_recovery_detail": "Il watchdog sta riavviando CAPITANO. Il recupero termina entro tre minuti.",
+	"team.start_failed_title": "▲ AVVIO TEAM FALLITO",
+	"team.start_log": "LOG ESSENZIALE",
+	"team.start_cause_captain_not_observed": "CAPITANO non è stato osservato dopo il comando di avvio.",
+	"team.start_cause_recovery_timeout": "Il watchdog non è riuscito a recuperare CAPITANO entro tre minuti.",
+	"team.start_cause_service_restarted": "L’osservazione si è interrotta perché l’app è stata riavviata.",
+	"team.start_cause_state_unreadable": "Lo stato di avvio salvato non può essere letto in sicurezza.",
+	"team.start_cause_unknown": "Il team non ha fornito un esito di avvio verificabile.",
 
 	# ── Setup iniziale aperto ─────────────────────────────────────
 	"setup.cta": "SETUP TEAM · %d/4 COMPLETATO  →",
 	"setup.ready_to_start": "SETUP COMPLETO · ATTIVA IL TEAM  →",
-	"setup.intro": "L’ufficio è già tuo. Per mettere davvero al lavoro gli agenti completa questi quattro passaggi, nell’ordine che preferisci.",
+	"setup.intro": "L’ufficio è già tuo. Per mettere davvero al lavoro gli agenti completa questi quattro passaggi, uno dopo l’altro: ognuno si apre quando il precedente è a posto.",
 	"setup.office_open": "Puoi chiudere questa finestra e continuare a esplorare in qualsiasi momento: il setup non blocca l’app.",
 	"setup.container": "Container",
 	"setup.where": "Dove lavora il team",
@@ -957,6 +1037,19 @@ const S := {
 	"setup.container_lead": "Il container isola il team e conserva i dati in ~/.jht. L’ufficio resta visitabile anche quando è spento.",
 	"setup.docker_ready": "runtime disponibile",
 	"setup.docker_missing": "runtime spento o non installato",
+	"setup.runtime_none": "nessun motore installato su questo computer",
+	"setup.runtime_installed_off": "%s installato, motore spento",
+	"setup.runtime_choice": "MOTORE CONTAINER",
+	"setup.runtime_choice_note": "Su questo computer ci sono più motori: scegli quale accendere. La scelta vale dal prossimo avvio del container e si può cambiare quando vuoi.",
+	"setup.runtime_colima": "Colima",
+	"setup.runtime_docker_desktop": "Docker Desktop",
+	"setup.runtime_docker_service": "Docker Engine (servizio di sistema)",
+	"setup.runtime_unknown": "motore sconosciuto",
+	"setup.container_needs_runtime": "Nessun motore container su questo computer: installane uno (Docker Desktop o Colima) e il pulsante si riaccende da solo.",
+	"setup.gate_locked": "PRIMA IL PASSO PRECEDENTE",
+	"setup.gate_needs_container": "Prima accendi il container (passo 01): senza, qui non c'è nessuno con cui parlare.",
+	"setup.gate_needs_provider": "Prima collega il provider e dichiara l'abbonamento (passo 02): l'Assistente lavora con quello.",
+	"setup.gate_needs_profile": "Prima completa il profilo (passo 03): gli orari decidono quando il team lavora, e senza profilo non ha niente da fare.",
 	"setup.container_start": "▶ ATTIVA CONTAINER",
 	"setup.container_recheck": "↻ RICONTROLLA",
 	"setup.runtime_current": "aggiornato",
@@ -1017,8 +1110,18 @@ const S := {
 	"setup.progress_elapsed": "trascorsi %s",
 	"setup.progress_no_meter": "Questa fase non riporta una percentuale di avanzamento: conta il tempo trascorso.",
 	"setup.progress_downloaded": "%s scaricati (dimensione totale non dichiarata)",
+	"setup.progress_pull_stage": "%s · %d/%d parti completate",
+	"setup.pull_phase_unknown": "Inizializzazione",
+	"setup.pull_phase_queued": "Livelli in coda",
+	"setup.pull_phase_waiting": "In attesa",
+	"setup.pull_phase_downloading": "Download",
+	"setup.pull_phase_downloaded": "Download completato",
+	"setup.pull_phase_verifying": "Verifica",
+	"setup.pull_phase_extracting": "Estrazione",
+	"setup.pull_phase_complete": "Completato",
+	"setup.pull_phase_other": "Preparazione immagine",
 	"setup.progress_eta": "~%s rimanenti",
-	"setup.progress_stalled": "Nessun aggiornamento da %d s — la rete potrebbe essere lenta.",
+	"setup.progress_stalled": "Nessun progresso materiale da %d s — questa fase potrebbe essere lenta.",
 	"setup.image_ready": "scaricata e pronta",
 	"setup.image_missing": "da scaricare (qualche GB, dipende dalla rete)",
 	"setup.container_busy": "◌ ATTIVAZIONE IN CORSO…",
@@ -1066,7 +1169,7 @@ const S := {
 	"account.intro": "Sincronizza posizioni, profilo e comandi con jobhunterteam.ai. L'account è opzionale: il team può restare completamente locale.",
 	"account.cloud": "ACCOUNT CLOUD",
 	"account.linked": "collegato",
-	"account.local_mode": "modalità locale / ospite",
+	"account.not_connected": "non collegato",
 	"account.device": "DISPOSITIVO",
 	"account.device_paired": "associato",
 	"account.server": "SERVER",
@@ -1328,7 +1431,7 @@ const S := {
 	"onb.a.finish.part_default": "useremo queste preferenze per scegliere e spiegare ogni opportunità",
 	"onb.a.finish.summary": "Ho preparato un profilo su misura: %s. Nella scheda personale puoi aggiungere nome, contatti, lingue, competenze e cifre esatte.",
 	"onb.c.intro.local": "Il team lavorerà su questo computer",
-	"onb.c.intro.vps": "Il team lavorerà su un computer online sempre acceso",
+	"onb.c.intro.vps": "Il team lavorerà su una VPS",
 	"onb.c.intro.explain": "Spiegami la differenza",
 	"onb.c.runtime.start": "Prepara o controlla lo spazio di lavoro",
 	"onb.c.runtime.repair": "Installa o ripara lo spazio di lavoro",
@@ -1375,6 +1478,7 @@ const S := {
 	"onb.c.intro.reply_local": "Partiamo preparando uno spazio di lavoro riservato alla squadra su questo computer. Posso controllarlo o guidarti nell'installazione.",
 	"onb.c.runtime.reply_start": "Controllo avviato. Lo stato in alto si aggiornerà da solo; intanto scegliamo quale intelligenza assisterà la squadra.",
 	"onb.c.runtime.reply_repair": "Ho aperto qui dentro l'installazione guidata. Segui i passaggi e poi torna da me.",
+	"onb.c.runtime.reply_no_runtime": "Su questo computer non c'è ancora nessun motore container: senza, non ho una stanza in cui far lavorare la squadra. Ti apro la scheda da cui si installa.",
 	"onb.c.runtime.reply_ready": "Ricevuto. Scegli ora quale servizio assisterà la squadra nel suo lavoro.",
 	"onb.c.provider.reply_compare": "Codex è la scelta più collaudata, Claude è apprezzato per la precisione e Kimi tende a essere più economico. Puoi usare il servizio a cui sei già abbonato e cambiare idea in seguito.",
 	"onb.c.provider.reply_chosen": "Scelta registrata. Il collegamento avverrà qui dentro; il browser si aprirà soltanto per confermare il tuo abbonamento.",
@@ -1601,6 +1705,7 @@ const S := {
 	"queue.consumer.analysts": "ANALISI", "queue.consumer.scorers": "COMPATIBILITÀ",
 	"queue.consumer.writers": "CANDIDATURE", "queue.consumer.critics": "CONTROLLO QUALITÀ",
 	"queue.consumer.ready": "PRONTI",
+	"office.ready_cvs_count": "CV PRONTI  %d",
 	"queue.found_by": "TROVATA DA", "queue.verdict": "VERDETTO",
 	"cv.verdict": "VERDETTO", "cv.critic_score": "VOTO CRITICO",
 	"cv.error_cache_unwritable": "Documento non disponibile: cache locale non scrivibile",
@@ -1609,6 +1714,7 @@ const S := {
 	"cv.error_folder_unwritable": "Documento non disponibile: cartella non scrivibile",
 	"agent.activity_position": "posizione", "email.address_ph": "nome.jht@gmail.com",
 	"pos.score_out_of": "%s (su %d)",
+	"pos.score_over_cap": "fuori scala: oltre il massimo della dimensione",
 	"wizard.file_filter": "*.pdf, *.doc, *.docx, *.txt, *.md ; CV / documenti",
 	"dept.demo.role.1.title": "Infermiere di comunità",
 	"dept.demo.role.2.title": "Coordinatrice di servizi clinici",
@@ -1643,7 +1749,7 @@ const S := {
 	"setup.action.compose_start_failed": "Impossibile avviare docker compose",
 	"setup.action.container_start_failed": "Attivazione del container fallita: %s",
 	"setup.action.compose_unavailable": "docker compose non eseguibile",
-	"setup.action.download_timeout": "Il download non procede da 3 minuti. Controlla la connessione e riprova.",
+	"setup.action.download_timeout": "La preparazione dell’immagine non procede da 3 minuti. Controlla connessione e motore Docker, poi riprova.",
 	"setup.runtime.desktop_missing": "Docker Desktop non è installato. Usa INSTALLA / RIPARA RUNTIME qui sotto.",
 	"setup.runtime.desktop_starting": "Docker Desktop avviato: attendo il motore…",
 	"setup.runtime.colima_starting": "Colima avviato: attendo il motore…",
@@ -1814,6 +1920,8 @@ const S := {
 	"feedback.report.expected": "Cosa mi aspettavo", "feedback.report.diagnostics": "Diagnostica",
 	"feedback.report.redacted": "Dati rimossi prima dell’invio",
 	"common.backend_not_connected": "Backend non collegato.",
+	"common.connect_team": "Avvia o collega il team per vedere i dati reali.",
+	"common.positions_empty": "Nessuna posizione nello snapshot corrente.",
 	"time.yesterday": "ieri",
 	"vps.upload.file_missing": "file non trovato: %s",
 	"vps.upload.extension_denied": "estensione non ammessa: .%s",
@@ -1823,6 +1931,7 @@ const S := {
 	"vps.artifact.file_missing": "file non trovato nel container",
 	"vps.artifact.invalid": "documento rifiutato: percorso, tipo o contenuto non valido",
 	"vps.ticket.position_missing": "posizione inesistente",
+	"vps.ticket.invalid_attachment": "percorso allegato non valido",
 	"vps.ssh.failed": "SSH fallita (uscita %s)",
 	"vps.ssh.key_missing": "Chiave SSH non trovata: %s",
 	"vps.ssh.client_missing": "Client OpenSSH non installato o non presente nel PATH",
@@ -1869,6 +1978,7 @@ const S := {
 	"diagnostics.value.screen_window": "%s (finestra %s)",
 	"diagnostics.value.backend_local": "locale", "diagnostics.value.unavailable": "non disponibile",
 	"diagnostics.value.none": "nessuno", "diagnostics.log_title": "Log: %s",
+	"diagnostics.alert_title": "ERROR/WARN da: %s",
 	"diagnostics.redacted": "Dati rimossi prima dell’invio",
 	"diagnostics.container_logs_unavailable": "[log container non disponibili] %s",
 	"diagnostics.truncated": "[…troncato…]\n%s",

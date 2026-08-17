@@ -53,7 +53,7 @@ psql $DATABASE_URL -f supabase/seed.sql
 
 ```
 supabase/
-├── migrations/     # 001–062 — full, ordered schema history: core schema + RLS (001),
+├── migrations/     # Full, ordered schema history: core schema + RLS (001),
 │                   #   feedback tickets (005), cloud-sync tokens + expiry (006, 036),
 │                   #   companies/highlights sync, position tickets, jd_summary,
 │                   #   function hardening (031/032), RLS/index tuning (053),
@@ -62,7 +62,72 @@ supabase/
 └── README.md
 ```
 
-> Apply them **in order** — each migration is idempotent-safe to re-run via `supabase migration up`. The filename says what it does; the header comment in each file says why.
+> Apply migrations **once and in order**. Historical files are immutable, but
+> that does not make every old migration safe to replay against an already
+> advanced schema. The filename says what it does; the header comment in each
+> file says why.
+
+## Migration history gate
+
+Migration identity is immutable once it reaches the integrator: its number,
+path and Git blob must not be changed or reused. CI compares every proposed
+migration with the exact base and with all freshly fetched remote branches,
+then applies the new sequence to a disposable PostgreSQL 16 database.
+
+Maintainers can separately inspect an already-linked project's version ledger
+without changing it:
+
+```bash
+scripts/check-linked-migration-history.sh
+```
+
+The wrapper runs only `supabase migration list --linked`, captures the raw CLI
+streams privately, and reports aggregate counts. Any local-only, remote-only or
+malformed history fails closed. Reconciliation is intentionally a manual,
+reviewed operation: this gate never runs migration repair, database push, link,
+dump, or remote SQL.
+
+Historical linked versions with 14-digit timestamps are represented only by
+comment-only anchor migrations declared in `migration-anchors.v1.json`. Each
+manifest record pins the remote name, exact path, byte SHA-256, statement MD5,
+and the canonical forward migration that owns the final effect. An undeclared,
+changed, executable, or incorrectly mapped anchor fails the same gate. Anchors
+participate in global identity collision checks, but never count as new DDL in
+the PostgreSQL 16 sequence.
+
+## Web code → live-schema canary
+
+The web query surface has an offline, deterministic census of Supabase RPC
+names and table columns under `web/app` and `web/lib`:
+
+```bash
+npm ci --prefix web
+node scripts/check-web-schema-coverage.mjs
+```
+
+`supabase/live-schema/web-code-coverage.v1.json` maps each discovered symbol
+to an exact receipt in the additive `078-084.web.v4` live-schema contract.
+Query-builder sites that cannot be resolved statically are listed one by one
+and pinned to their exact source-file hash; they are not wildcard exceptions.
+A new, removed, dynamic, ambiguous or unreceipted use fails closed. This CI
+command is offline and does not read Supabase credentials.
+
+Before a deployment that changes this mapping, an authorised maintainer runs
+the versioned canary separately from a secure environment:
+
+```bash
+python scripts/check-live-schema.py --validate-only
+python scripts/check-live-schema.py
+python scripts/check-live-schema.py --phase web --validate-only
+python scripts/check-live-schema.py --phase web
+```
+
+The `--validate-only` commands validate only local hashes and receipts. The two
+live commands use credentials already present in the maintainer environment
+and send the pinned catalog queries only through Supabase's read-only
+database-query endpoint. They report finite receipt counts, never response
+payloads or credentials, and perform no migration apply, repair, push, link or
+database write.
 
 ## Differences from SQLite (schema V2)
 

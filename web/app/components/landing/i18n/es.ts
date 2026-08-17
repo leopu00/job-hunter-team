@@ -61,6 +61,11 @@ export const es: Record<string, string> = {
   dl_copy_cmd: "Copiar comando",
   dl_mode_desktop_title: "Escritorio",
   dl_mode_terminal_title: "CLI",
+  dl_mode_prompt_title: "Prompt",
+  dl_prompt_intro:
+    "¿Prefieres no hacerlo tú? Copia este prompt y dáselo a tu asistente de IA: lee la documentación, elige contigo el camino e instala el equipo en este ordenador.",
+  dl_copy_prompt: "Copiar prompt",
+  dl_prompt_note: "Funciona con cualquier asistente que sepa usar la terminal.",
   dl_desktop_beta_desc:
     "La app de escritorio es la oficina donde ves trabajar al equipo. Está en beta: la usamos a diario, pero cambia a menudo. Si prefieres un camino más asentado, la CLI sigue ahí.",
   dl_desktop_beta_badge: "Beta",
@@ -105,7 +110,7 @@ export const es: Record<string, string> = {
   home_setup_kicker: "Ejecútalo",
   home_setup_title: "Como quieras, donde quieras",
   home_setup_body:
-    "Funciona en un ordenador dedicado siempre encendido o en una VPS económica, y trabaja para ti día y noche. Lo gestionas desde la app de escritorio: inicias, detienes y vigilas al equipo con un clic. Y no estás atado a ese ordenador: desde la web puedes seguir los resultados y hablar con el equipo también desde otro PC o el móvil.",
+    "Empieza en tu PC local: es la ruta completa más sencilla y el equipo trabaja mientras el PC, Docker y la red estén disponibles. Para que continúe cuando ese PC esté apagado, puedes usar una VPS que tú proporcionas y administras. La sincronización web es opcional y no decide dónde se ejecuta el equipo.",
   home_setup_cta: "Cómo ejecutarlo →",
   home_pricing_kicker: "Precios",
   home_pricing_title: "Código abierto. La plataforma es gratis.",

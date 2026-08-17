@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import { IconSort } from "./icons";
 
 // "Ordina per" della toolbar mobile (20/07): la vista a card non ha le
 // intestazioni di colonna cliccabili della tabella, quindi l'ordinamento
@@ -173,7 +174,7 @@ export default function SortPicker() {
           background: "var(--color-card)",
         }}
       >
-        <span aria-hidden>↕</span>
+        <IconSort dir="none" />
         {t.label}
       </button>
 

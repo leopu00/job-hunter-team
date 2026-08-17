@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "protection": {
+    "required_status_checks": {
+      "strict": true,
+      "checks": [
+        {"context": "Build Web", "app_id": 15368},
+        {"context": "Gitleaks — secrets check", "app_id": 15368},
+        {"context": "Lint & Type-check", "app_id": 15368},
+        {"context": "SAST — Semgrep", "app_id": 15368},
+        {"context": "npm audit", "app_id": 15368},
+        {"context": "vitest — tests/js", "app_id": 15368}
+      ]
+    },
+    "enforce_admins": {"enabled": true},
+    "required_signatures": {"enabled": true},
+    "allow_force_pushes": {"enabled": false},
+    "allow_deletions": {"enabled": false}
+  },
+  "rulesets": [
+    {
+      "id": 14820393,
+      "target": "branch",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "include": ["refs/heads/master"],
+          "exclude": []
+        }
+      },
+      "bypass_actors": [],
+      "rules": [
+        {
+          "type": "pull_request",
+          "parameters": {
+            "required_approving_review_count": 1,
+            "require_code_owner_review": true,
+            "dismiss_stale_reviews_on_push": true
+          }
+        }
+      ]
+    }
+  ]
+}

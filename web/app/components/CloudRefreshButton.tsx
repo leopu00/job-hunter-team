@@ -12,6 +12,12 @@ import {
   type SyncObservation,
   type SyncTerminalOutcome,
 } from "@/lib/sync-rendezvous";
+import {
+  CLOUD_SYNC_STALE_AFTER_MS,
+  cloudPushQuarantineCount,
+  cloudSyncIsBehind,
+  freshnessRowFromRead,
+} from "@/lib/team-state/sync-freshness";
 
 // "Sync now" lato CLOUD ([JHT-DATA-SYNC] fase 3). Mirror del CloudSyncStatusBanner
 // (che è LOCAL-only): quello pusha SQLite→cloud, questo chiede alla VPS un push
@@ -53,6 +59,8 @@ const T: Record<
     syncNow: string;
     title: string;
     updatedNow: string;
+    behind: string;
+    quarantined: (n: number) => string;
     vpsSlow: string;
     syncTimedOut: string;
     syncPushFailed: string;
@@ -73,6 +81,10 @@ const T: Record<
     syncNow: "Sync now",
     title: "Chiedi alla VPS un aggiornamento dei dati ora",
     updatedNow: "Dati aggiornati",
+    behind:
+      "I dati cloud potrebbero essere indietro. La sync automatica riproverà.",
+    quarantined: (n) =>
+      `${n} record locali richiedono attenzione. Gli altri dati continuano a sincronizzarsi.`,
     vpsSlow:
       "Nessuna conferma entro tre minuti. Controlla che il team sia online e riprova.",
     syncTimedOut:
@@ -97,6 +109,9 @@ const T: Record<
     syncNow: "Sync now",
     title: "Ask the VPS for a data refresh now",
     updatedNow: "Data updated",
+    behind: "Cloud data may be behind. Automatic sync will retry.",
+    quarantined: (n) =>
+      `${n} local record${n === 1 ? "" : "s"} need attention. Other data continues syncing.`,
     vpsSlow:
       "No confirmation arrived within three minutes. Check that the team is online and try again.",
     syncTimedOut: "The sync took too long and was stopped. Try again.",
@@ -120,6 +135,10 @@ const T: Record<
     syncNow: "Sync now",
     title: "Pedir a la VPS una actualización de datos ahora",
     updatedNow: "Datos actualizados",
+    behind:
+      "Los datos en la nube pueden estar atrasados. La sincronización automática volverá a intentarlo.",
+    quarantined: (n) =>
+      `${n} registro${n === 1 ? " local requiere" : "s locales requieren"} atención. Los demás datos siguen sincronizándose.`,
     vpsSlow:
       "No llegó ninguna confirmación en tres minutos. Comprueba que el equipo esté conectado e inténtalo de nuevo.",
     syncTimedOut:
@@ -144,6 +163,10 @@ const T: Record<
     syncNow: "Sync now",
     title: "Demander au VPS une actualisation des données maintenant",
     updatedNow: "Données mises à jour",
+    behind:
+      "Les données cloud sont peut-être en retard. La synchronisation automatique va réessayer.",
+    quarantined: (n) =>
+      `${n} enregistrement${n === 1 ? " local nécessite" : "s locaux nécessitent"} une attention. Les autres données continuent à se synchroniser.`,
     vpsSlow:
       "Aucune confirmation après trois minutes. Vérifiez que l'équipe est en ligne et réessayez.",
     syncTimedOut:
@@ -168,6 +191,10 @@ const T: Record<
     syncNow: "Sync now",
     title: "Den VPS jetzt um eine Datenaktualisierung bitten",
     updatedNow: "Daten aktualisiert",
+    behind:
+      "Die Cloud-Daten könnten veraltet sein. Die automatische Synchronisierung versucht es erneut.",
+    quarantined: (n) =>
+      `${n} lokale${n === 1 ? "r Datensatz braucht" : " Datensätze brauchen"} Aufmerksamkeit. Andere Daten werden weiter synchronisiert.`,
     vpsSlow:
       "Innerhalb von drei Minuten kam keine Bestätigung. Prüfe, ob das Team online ist, und versuche es erneut.",
     syncTimedOut:
@@ -192,6 +219,10 @@ const T: Record<
     syncNow: "Sync now",
     title: "Kérj a VPS-től friss adatfrissítést most",
     updatedNow: "Adatok frissítve",
+    behind:
+      "A felhőadatok lemaradhattak. Az automatikus szinkronizálás újrapróbálkozik.",
+    quarantined: (n) =>
+      `${n} helyi rekord figyelmet igényel. A többi adat szinkronizálása folytatódik.`,
     vpsSlow:
       "Három percen belül nem érkezett megerősítés. Ellenőrizd, hogy a csapat online van-e, majd próbáld újra.",
     syncTimedOut:
@@ -216,6 +247,10 @@ const T: Record<
     syncNow: "Sync now",
     title: "Pedir ao VPS uma atualização dos dados agora",
     updatedNow: "Dados atualizados",
+    behind:
+      "Os dados na nuvem podem estar atrasados. A sincronização automática tentará novamente.",
+    quarantined: (n) =>
+      `${n} registo${n === 1 ? " local precisa" : "s locais precisam"} de atenção. Os outros dados continuam a sincronizar.`,
     vpsSlow:
       "Nenhuma confirmação chegou em três minutos. Verifique se a equipe está online e tente novamente.",
     syncTimedOut:
@@ -254,13 +289,38 @@ const REQUEST_POLL_MS = 1_000;
 const REQUEST_START_TIMEOUT_MS = 15_000;
 const REQUEST_READ_TIMEOUT_MS = 10_000;
 
+export function CloudPushQuarantineWarning({
+  locale,
+  status,
+}: {
+  locale: Locale;
+  status: string | null;
+}) {
+  const count = cloudPushQuarantineCount(status);
+  if (count === 0) return null;
+  return (
+    <span
+      role="alert"
+      data-cloud-push-quarantine-warning
+      style={{ color: "var(--color-yellow)" }}
+    >
+      {T[locale].quarantined(count)}
+    </span>
+  );
+}
+
 export default function CloudRefreshButton() {
   const router = useRouter();
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   const [remote, setRemote] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const [freshnessKnown, setFreshnessKnown] = useState(false);
+  const [freshnessClock, setFreshnessClock] = useState(() => Date.now());
+  const [pushStatus, setPushStatus] = useState<string | null>(null);
+  const [pushCheckedAt, setPushCheckedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
   const mounted = useRef(true);
@@ -285,6 +345,23 @@ export default function CloudRefreshButton() {
   const staleRef = useRef(false);
   const staleTimerRef = useRef<number | null>(null);
   const flashTimerRef = useRef<number | null>(null);
+
+  // Nessun polling: questo timer cambia soltanto l'etichetta quando scade il
+  // bound del daemon. I dati continuano ad arrivare via Realtime/catch-up.
+  useEffect(() => {
+    if (!freshnessKnown || !pushCheckedAt) return;
+    const checkedMs = Date.parse(pushCheckedAt);
+    if (!Number.isFinite(checkedMs)) return;
+    const delay = Math.max(
+      0,
+      checkedMs + CLOUD_SYNC_STALE_AFTER_MS - Date.now() + 50,
+    );
+    const id = window.setTimeout(
+      () => setFreshnessClock(Date.now()),
+      Math.min(delay, 2_147_483_647),
+    );
+    return () => window.clearTimeout(id);
+  }, [freshnessKnown, pushCheckedAt]);
 
   useEffect(() => {
     mounted.current = true;
@@ -555,8 +632,14 @@ export default function CloudRefreshButton() {
       sync_completed_at?: string | null;
       last_action?: string | null;
       last_action_at?: string | null;
+      cloud_push_status?: string | null;
+      cloud_push_checked_at?: string | null;
     };
     const apply = (row: StateRow | null) => {
+      setFreshnessKnown(true);
+      setFreshnessClock(Date.now());
+      setPushStatus(row?.cloud_push_status ?? null);
+      setPushCheckedAt(row?.cloud_push_checked_at ?? null);
       if (pendingRef.current && requestArmedRef.current) {
         const observation: SyncObservation = {
           requestedAt: row?.sync_requested_at ?? null,
@@ -579,13 +662,17 @@ export default function CloudRefreshButton() {
 
     const catchUp = async () => {
       try {
-        const { data } = await supabase
-          .from("team_state")
-          .select(
-            "sync_requested_at,sync_completed_at,last_action,last_action_at",
-          )
-          .maybeSingle();
-        if (mounted.current) apply(data as StateRow | null);
+        const row = freshnessRowFromRead(
+          await supabase
+            .from("team_state")
+            .select(
+              "sync_requested_at,sync_completed_at,last_action,last_action_at,cloud_push_status,cloud_push_checked_at",
+            )
+            .maybeSingle(),
+        );
+        if (mounted.current && row !== undefined) {
+          apply(row as StateRow | null);
+        }
       } catch {
         /* offline: nessun timestamp */
       }
@@ -646,6 +733,11 @@ export default function CloudRefreshButton() {
 
   if (!remote || !loggedIn) return null;
 
+  const behind =
+    freshnessKnown &&
+    cloudSyncIsBehind(pushStatus, pushCheckedAt, freshnessClock);
+  const quarantineCount = cloudPushQuarantineCount(pushStatus);
+
   return (
     <div
       style={{
@@ -661,7 +753,13 @@ export default function CloudRefreshButton() {
       {flash && (
         <span style={{ color: "var(--color-green)" }}>{t.updatedNow}</span>
       )}
-      {!flash && lastSync && !syncing && (
+      {!flash && quarantineCount > 0 && !syncing && (
+        <CloudPushQuarantineWarning locale={locale} status={pushStatus} />
+      )}
+      {!flash && quarantineCount === 0 && behind && !syncing && (
+        <span style={{ color: "var(--color-yellow)" }}>{t.behind}</span>
+      )}
+      {!flash && !behind && lastSync && !syncing && (
         <span>{t.updated(formatRelativeTime(lastSync, t))}</span>
       )}
       {error && <span style={{ color: "var(--color-yellow)" }}>{error}</span>}

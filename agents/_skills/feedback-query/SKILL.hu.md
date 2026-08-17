@@ -1,9 +1,13 @@
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: feedback-query
-description: Felhasználói visszajelzés olvasása (like/dislike/hide/star) a felhőből — egy pozícióra, vagy egy időablakra összesítve. A Scorer használja szorzó alkalmazásához a végső pontszámon és a felhasználó indokának a jegyzetbe emeléséhez, a Mentor a visszatérő indokok számolásához (F minta), a Scout pedig kontextuális jelként. Semleges "nincs jel" payloadot ad vissza, ha a felhő le van tiltva vagy nem érhető el, így a hívók soha nem buknak el keményen.
+description: Felhasználói visszajelzést olvas (like/dislike/hide/star) a felhőből — pozíciónként vagy időablakra összesítve. A Scorer csak jövőbeli pozíciók kontextuális preferenciajeleként használja, az aktuálisat kizárva; a Mentor visszatérő indokokat számol (F minta), a Scout kontextuális jelként használja. Elérhetetlen felhőnél semleges "nincs jel" payloadot ad.
 allowed-tools: Bash(python3 *)
 ---
+
+## Raw/display határ (`RAW_DISPLAY_BOUNDARY`)
+
+A `reason` és `comment` nyers, csak gépi bemenet. Soha ne idézd, továbbítsd, foglald össze vagy mutasd meg őket a felhasználónak. Minden user-facing jegyzet vagy üzenet kizárólag a `display_reason` / `display_comment` mezőket használhatja; a témák `label` / `examples` mezői már ugyanazon közös sanitizeren mentek át. A `note` csak zárt `no-signal:*` enum: elérhetőségi állapotként kezeld, soha ne infrastruktúra-részletként.
 
 # feedback-query — Felhasználói visszajelzés pozíciónként
 
@@ -39,9 +43,11 @@ Kimenet (JSON stdout-ra):
   "actions": [
     {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
      "reason": "too senior", "comment": "5+ evi Java szükseges, nem erdekel a legacy stack",
+     "display_reason": "too senior", "display_comment": "5+ evi Java szükseges, nem erdekel a legacy stack",
      "score": 2, "direction": "less_like_this"},
     {"action": "like", "created_at": "2026-05-28T09:00:00Z",
-     "reason": null, "comment": null, "score": null, "direction": null}
+     "reason": null, "comment": null, "display_reason": null,
+     "display_comment": null, "score": null, "direction": null}
   ]
 }
 ```
@@ -58,7 +64,7 @@ Ha a felhő letiltva van vagy a végpont nem érhető el, a skill visszaadja:
 ```json
 {"ok": true, "legacy_id": "...", "latest_action": null,
  "latest_direction": null, "count": 0, "actions": [],
- "note": "no-signal (cloud-disabled)"}
+ "note": "no-signal:cloud-disabled"}
 ```
 
 ## Összesített olvasás (időablak az összes pozícióra)
@@ -93,7 +99,7 @@ A `themes` kimenete:
 Hogyan működik a csoportosítás (nem kell pontos egyezés, nincs új függőség): kisbetűsítés → ékezetek le → írásjelek ki → funkciószavak ki → minden szó az első 5 karakterére vágva (`senior` / `seniority` / `seniore` / `séniorité` egyetlen kulcsra esik) → egyedülálló szavakat és **szomszédos párokat** számolunk, **külön pozíciónként**, nem események szerint. Egy pár elnyeli a részeit, ha ugyanazon pozíciók ≥ 80%-át lefedi, így a "túl senior" nyer a "senior" ellen; az erősítő szavak szándékosan bennmaradnak a folyamban. A `reason` és a `comment` külön tokenizálódik, így nem születik pár a kettő határán.
 
 Szándékos korlátok, kimondva, hogy senki ne olvasson többet a számokba, mint ami bennük van:
-- A távoli szinonimák külön maradnak (a `fizetés` és a `RAL` két téma) — ez szószámolás, nem szemantika. Olvasd az `examples`-t (szó szerint, max. 3), és fejjel kösd össze.
+- A távoli szinonimák külön maradnak (a `fizetés` és a `RAL` két téma) — ez szószámolás, nem szemantika. A sanitizált display `examples` mezőket olvasd (max. 3), és fejjel kösd össze.
 - Azok a pozíciók, amelyek **utolsó** eseménye `clear`, kimaradnak (az ítéletet visszavonták); az `--include-cleared` visszahozza őket.
 - `share` = a téma pozíciói / `positions_with_text`.
 - `--field reason|comment|both` (alapértelmezés `both`), `--top N`, `--days 0` a teljes történetre.
@@ -101,27 +107,11 @@ Szándékos korlátok, kimondva, hogy senki ne olvasson többet a számokba, min
 
 Kapcsolók: `--days` (alap 30, `0` = minden), `--limit` (alap 500 esemény), `--min-positions` (alap 3), `--text-chars` a `recent`-en (alap 300, vágja a hosszú megjegyzéseket).
 
-Ha a payload `note`-ot hoz (`no-signal (...)`), nincs összesítés: a felhő ki van kapcsolva, a végpont hiányzik vagy a hálózat halott. Kezeld úgy, hogy "nincs adat", soha ne úgy, hogy "nincs visszajelzés".
+Ha a payload zárt `note` enumot hoz (`no-signal:*`), nincs összesítés. Kezeld úgy, hogy "nincs adat", soha ne úgy, hogy "nincs visszajelzés", és a kódot ne továbbítsd.
 
 ## Hogyan használják az ágensek
 
-**Scorer** (kötelező pontozáskor):
-1. Az alap pontszám kiszámítása után (súlyozott komponensek összege), hívd meg a `feedback_query check <legacy_id>`-t.
-2. Alkalmazz szorzót a `latest_action` alapján:
-   - `like` → final_score = round(base * 1.10), adj megjegyzést `feedback:like+10%`
-   - `star` → final_score = round(base * 1.15), adj megjegyzést `feedback:star+15%`
-   - `dislike` → final_score = round(base * 0.85), adj megjegyzést `feedback:dislike-15%`
-   - `hide` → status=`excluded`, megjegyzés `feedback:hide`, hagyj ki pontszám írást
-   - `clear` / `null` → nincs változás (a visszavont ítélet nem ítélet)
-3. **Vidd az indokot a jegyzetbe**, ha a felhasználó írt egyet. Vedd a `reason`-t (vagy ha üres, a `comment`-et) a `latest_action` **ugyanazon eseményéből** — `actions[0]` —, idézd szó szerint, vágd ~80 karakterre, és fűzd a jegyzethez:
-
-   ```
-   feedback:dislike-15% — "túl senior"
-   feedback:star+15% — "pontosan ez a stack kell"
-   ```
-
-   Ha azon az eseményen nincs szöveg → a jegyzet marad, ahogy van. Az indok **csak erre a pozícióra** érvényes: soha ne vidd át másikra, ne csinálj belőle szabályt, ne írd át és ne foglald össze — ezek a felhasználó szavai, és a felhasználó visszaolvassa őket. Az indokok pozíciókon átívelő összesítése a Mentor dolga (F minta), nem a Scoreré.
-4. Korlátozzd a végső pontszámot 100-ra a szorzó után.
+**Scorer — `FUTURE_FEEDBACK_ONLY`:** hívd a `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>` parancsot. Csak a sanitizált `label` / `examples` mezőket használd kontextuális preferenciajelként ehhez a jövőbeli pozícióhoz. A már értékelt pozíció feedbackje soha nem módosít score-t, statust vagy jegyzetet: nincs fix bónusz/malusz, feedback marker vagy backfill. A meglévő score-ok változatlanok. Az O-70 explicit újraértékelés külön, felhasználó által kért folyamat.
 
 **Mentor** (F minta, csak olvasás): `themes` az elmúlt 30 napra, hogy megszámolja a felhasználó által írt indokokat. A küszöbök és az értelmezés a `mentor-patterns` skillben élnek. A Mentor **a felhasználóhoz** beszél — ebből az adatból soha nem ad keresési utasítást.
 

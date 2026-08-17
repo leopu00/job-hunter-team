@@ -16,8 +16,11 @@ on:
         required: true
         type: string
 
+# Il minimo al workflow, l'escalation dichiarata dal job che la usa: tutti e
+# tre i job nominano gia' `actions: read` per conto proprio, quindi toglierlo
+# da qui non cambia un permesso effettivo — allinea la forma al contratto
+# verificato da tests/test_workflow_permissions.py.
 permissions:
-  actions: read
   contents: read
 
 concurrency:
@@ -196,6 +199,7 @@ jobs:
             --expected-asset job-hunter-team.zip \
             --expected-asset job-hunter-team-linux-x64.tar.gz \
             --expected-asset jht-windows-update.ps1 \
+            --expected-asset RUNTIME-IMAGE.json \
             --tag "$RELEASE_TAG" --commit "$TAG_SHA" \
             --repository "$GITHUB_REPOSITORY" \
             --checksums release-assets/SHA256SUMS \
@@ -266,21 +270,33 @@ jobs:
           [ -n "$NOTES" ] || NOTES="- Release prepared without curated notes."
           { echo "notes<<EOF"; echo "$NOTES"; echo "EOF"; } >> "$GITHUB_OUTPUT"
 
+      # Il body consuma RELEASE-PROVENANCE.json, gia' verificato qui sopra:
+      # nessuna quinta lista di nomi asset da mantenere nelle release notes.
+      - name: Render verified SHA-256 checksums into release notes
+        env:
+          RELEASE_NOTES: ${{ steps.changelog.outputs.notes }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python scripts/release_artifacts.py notes \
+            --notes "$RELEASE_NOTES" \
+            --provenance release-assets/RELEASE-PROVENANCE.json \
+            --output release-assets/RELEASE-NOTES.md \
+            --tag "$RELEASE_TAG" \
+            --repository "$GITHUB_REPOSITORY"
+
       - name: Create signed GitHub Release draft
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ inputs.tag }}
           name: "Job Hunter Team ${{ inputs.tag }}"
-          body: |
-            ## What's new in ${{ inputs.tag }}
-            ${{ steps.changelog.outputs.notes }}
-            `RELEASE-MANIFEST.json` and its raw detached signature are the update authority.
+          body_path: release-assets/RELEASE-NOTES.md
           draft: true
           prerelease: false
           files: |
             release-assets/*.exe
             release-assets/*.zip
             release-assets/*.tar.gz
+            release-assets/RUNTIME-IMAGE.json
             release-assets/SHA256SUMS
             release-assets/RELEASE-PROVENANCE.json
             release-assets/RELEASE-MANIFEST.json

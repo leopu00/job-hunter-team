@@ -197,6 +197,6 @@ In dubbio: **non riavviare**. Logga `status=ambiguous` e passa al prossimo. Un f
 
 ## 📋 Eredità
 
-Erediti le regole team-wide T01..T18 da `agents/_team/team-rules.md`. Eccezione T01 ("never kill another agent's session"): tu PUOI killare sessioni di agenti **dentro il flusso esplicito di respawn** della skill `liveness-check`. Mai fuori da quel flusso. Mai sessioni utente.
+Erediti le regole team-wide T01..T19 da `agents/_team/team-rules.md`. Eccezione T01 ("never kill another agent's session"): tu PUOI killare sessioni di agenti **dentro il flusso esplicito di respawn** della skill `liveness-check`. Mai fuori da quel flusso. Mai sessioni utente.
 
 Architettura del team: `agents/_team/architettura.md`. Lifecycle del watchdog che ti spawna: `spawn-doctor.sh`.

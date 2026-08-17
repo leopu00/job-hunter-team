@@ -148,23 +148,25 @@ Attention à la différence avec le Pattern B : là-bas les exclusions sont cell
 
 Ces retours vivent dans le cloud (`position_feedback`), pas dans `jobs.db` : c'est le seul pattern qui ne passe pas par `db_query.py`.
 
+**`RAW_DISPLAY_BOUNDARY`** — regroupe sur les raw `reason` / `comment`, mais ne les relaie jamais. Toute interprétation user-facing utilise seulement `display_reason` / `display_comment` et les `label` / `examples` sanitizés des thèmes ; clés machine, IDs et notes `no-signal:*` restent internes.
+
 ### Détection
 
 ```bash
 # Les thèmes dans les raisons écrites par l'utilisateur, 30 derniers jours
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# Les mêmes retours non agrégés, pour lire ses mots exacts
+# Les mêmes retours non agrégés ; lis uniquement display_reason/display_comment
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
 `themes` regroupe le texte libre par similarité simple — aucune correspondance exacte exigée. Il met en minuscules, retire accents, ponctuation et mots outils, coupe chaque mot à ses 5 premiers caractères (`senior` / `seniority` / `seniore` / `séniorité` tombent sur la même clé), puis compte les mots seuls et les paires adjacentes par **positions distinctes**. Une paire l'emporte sur ses parties quand elle couvre les mêmes positions : "trop senior" dit plus que "senior", et les intensificateurs sont conservés exprès pour cela.
 
-Pour chaque thème il retourne `positions`, `events`, `share` (fraction des positions qui portent du texte), `actions` (comment le thème se répartit entre like / dislike / hide / star), `legacy_ids` et jusqu'à 3 `examples` verbatim.
+Pour chaque thème il retourne `positions`, `events`, `share` (fraction des positions qui portent du texte), `actions` (comment le thème se répartit entre like / dislike / hide / star), des `legacy_ids` internes et jusqu'à 3 `examples` display sanitizés.
 
 C'est grossier par construction et cela se voit : les synonymes éloignés restent séparés (`salaire` et `RAL` sont deux thèmes). Lis les `examples` et rapproche avec ta tête ce que l'outil n'a pas pu.
 
-Si le payload porte une `note` (`no-signal (...)`), le cloud est éteint ou inaccessible et l'agrégat n'existe pas : tais-toi, ne reconstruis pas le tableau à coups de `check` position par position.
+Si le payload porte une `note` enum fermée (`no-signal:*`), l'agrégat n'existe pas : tais-toi, ne relaie pas le code et ne reconstruis pas le tableau à coups de `check` position par position.
 
 ### Seuil
 
@@ -226,12 +228,12 @@ Si vous n'avez rien de niveau pattern à dire, **ne dites rien**. Le silence est
 - ❌ Catastrophisme ("ça ne mène nulle part") OU pom-pom ("vous pouvez le faire !") — les deux violent la voix du Mentor. Des chiffres, puis une question. Voir la skill `mentor-output`.
 - ❌ **Transformer le Pattern F en instruction de recherche.** Ne remets jamais au Scout ou au Capitano un "arrête de ramener X" tiré de ce qui plaît à l'utilisateur. Une pipeline qui ne pêche que ce qui plaît gonfle ses propres scores, et l'utilisateur finit par croire que le marché est riche alors que c'est la pipeline qui a choisi pour lui. Le Pattern F s'adresse **à l'utilisateur** : ce qui change dans son profil, c'est lui qui le décide, et tu es de toute façon en lecture seule (T10).
 - ❌ Renvoyer à l'utilisateur un jugement qu'il a retiré. `themes` laisse déjà dehors les positions dont le dernier événement est `clear` ; ne les ramène pas avec `--include-cleared` pour atteindre un seuil.
-- ❌ Citer un seul commentaire verbatim comme s'il s'agissait d'un pattern. Les `examples` donnent une voix à un thème **après** qu'il a franchi le seuil ; ils ne sont pas le constat.
+- ❌ Citer un seul commentaire raw comme s'il s'agissait d'un pattern. Les `examples` sanitizés donnent une voix à un thème **après** qu'il a franchi le seuil ; ils ne sont pas le constat.
 
 ## Voir aussi
 
 - `mentor-output` — COMMENT formuler le message une fois qu'un pattern est confirmé.
 - `db-query` — mécanismes internes du wrapper.
-- `feedback-query` — le lecteur des retours utilisateur dans le cloud (Pattern F) ; le Scorer interroge la même source position par position.
+- `feedback-query` — le lecteur des retours utilisateur dans le cloud (Pattern F) ; le Scorer utilise des thèmes agrégés sanitizés uniquement pour les positions futures, en excluant la position courante.
 - `agents/mentor/mentor.md` — prompt orchestrateur + cadence.
 - `agents/_team/team-rules.md` T10 — le profil est en lecture seule, aussi pour le Mentor.

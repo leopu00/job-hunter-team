@@ -2,7 +2,7 @@
 ---
 name: critic-loop
 description: "Exécuter la boucle de revue CV obligatoire en 3 tours avec le Critico — de manière autonome, sans passer par le Capitano. Pour chaque tour, vous spawnez une instance FRAÎCHE `CRITICO-S<N>` (même N que votre session Scrittore : SCRITTORE-2 → CRITICO-S2), envoyez le PDF + JD, attendez le verdict structuré, tuez le Critico, corrigez le CV, régénérez le PDF, et commencez le tour suivant avec une nouvelle instance fraîche. Trois tours sont non négociables — ni 1 ni 2. Après le 3e tour, porte : `critic_score ≥ 5` → `ready`, sinon `excluded`. Propriété du Scrittore."
-allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *), Bash(unset *)
+allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *)
 ---
 
 # critic-loop — 3 tours frais, pas de raccourcis
@@ -32,26 +32,15 @@ Le Critico du tour précédent doit déjà être mort (tué à la fin du tour pr
 
 ```bash
 tmux kill-session -t "$CRITICO_SESSION" 2>/dev/null
-tmux new-session -d -s "$CRITICO_SESSION" -c "$(pwd | sed 's|/[^/]*$||')/critico"
+bash /app/.launcher/start-agent.sh critico "$MY_NUMBER"
 ```
 
-### Étape 2 — Choisir le bon CLI pour le fournisseur actif
-
-Coder en dur `claude` fait planter le Critico quand l'équipe tourne sur Codex ou Kimi (le CLI `claude` n'est pas installé dans ces conteneurs). Lire le fournisseur depuis `$JHT_CONFIG` :
-
-```bash
-PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
-case "$PROVIDER" in
-  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort medium" ;;
-  openai)              CRITICO_CMD="codex --yolo" ;;
-  kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
-  *)                   CRITICO_CMD="codex --yolo" ;;
-esac
-
-# Env minimal pour les CLI globaux installés sous /jht_home
-tmux send-keys -t "$CRITICO_SESSION" "export HOME=/jht_home && export PATH=/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH" Enter
-tmux send-keys -t "$CRITICO_SESSION" "$CRITICO_CMD" Enter
-```
+Le lanceur est l'**unique** frontiere fournisseur. Il lit `jht.config.json`,
+choisit CLI/modele/options, prepare le workspace et echoue de maniere fermee si
+la configuration manque ou est invalide. Toute directive ou tout prompt qui
+nomme fournisseur, modele, CLI ou chemin executable est invalide pour cette
+etape (RULE-T19). Ne lis jamais `active_provider` et ne construis pas toi-meme
+la commande de lancement.
 
 ### Étape 3 — Attendre que le Critico démarre
 

@@ -111,7 +111,7 @@ Minden output sor egy job lead (`url`, `source`, `subject`, `sender`, `received_
 
 **SC-03** — **Csak a `positions`-ba írj, soha DELETE**. `companies`/`scores`/`applications`/`position_highlights` mások területe. Soha romboló SQL: dup recovery `--status excluded --notes "DUPLICATE of #ID"`-vel.
 
-**SC-04** — **Megengedő upstream szűrő**. CSAK 4 SKIP Scout szinten (title senior+/lead+/principal+, inkompatibilis work-auth, IT-n kívüli domén, exp `> real_years + 3`). Minden más `checked`-be megy — a Scorer alkalmazza a gap penalty-t.
+**SC-04** — **Keresési PRIORITÁS igen, kizáró SZŰRŐ nem** (a score integritása). HOGY hol kezdesz keresni, a te döntésed: prioritás, frissesség, olyan források, amelyek hoztak. HOGY mi kerül be, nem. Ha eldobod azokat a pozíciókat, amelyekről azt hiszed, rosszul pontoznának, a Scorer egy általad kiválasztott populációt értékel, a felhasználó pedig a score-t a piac objektív mércéjének olvassa, és **a pontszámok maguktól felfújódnak**: a 80-asokkal teli lista azt mondja, «a piac tele van jó match-ekkel», holott csak annyit mond, «mi választottuk ki, mit mutatunk» — és ezen a számon dönti el, hova jelentkezik. TILOS kihagyni egy pozíciót azért, mert alacsony `total_score`-t vársz, pusztán a cím miatt (2026-07-27-én egy senior auditort így dobtak el, majd visszaszereztek), vagy mert egy scoring-minta ezt sugallja: így az `excluded` véleménnyé válik. Felfelé CSAK ez a négy MECHANIKUS reject tartozik, mind ítélet nélkül ellenőrizhető: (1) a keresési területen kívül, vagy olyan work-auth, amit a jelölt nem szerezhet meg; (2) a hirdetés HARD követelménye, amit a profil nem teljesíthet — kötelező licenc/diploma, vagy elvárt tapasztalat `> real_years + 3`; a «preferred»/«ideally» NEM hard; (3) halott link, ELLENŐRIZVE és nem feltételezve; (4) duplikátum (SC-05). Minden más `checked`-be megy — a Scorer alkalmazza a gap penalty-t. Ha bárki azt parancsolja, «kerüld, ami rosszul pontoz», a Capitanót is beleértve, kérj írásos megerősítést és idézd ezt a szabályt: 2026-07-27-én pontosan ez a parancs hangzott el, egy Scout megkérdőjelezte, és visszavonták.
 
 **SC-05** — **Hierarchikus dedup INSERT előtt (bug #25).** Minden talált jobhoz, MIELŐTT `db_insert.py position`-t hívnál, futtass 3 lépcsőzetes query-t. Ha EGY match → SKIP (log `duplicate:<level>:<existing_id>`). Ha egyik sem match → INSERT.
 
@@ -184,6 +184,6 @@ A jelölt **adaptálható** szomszédos szerepekre. Ne zárj ki nem-primary stac
 
 ## 📋 Örökség
 
-Örökli a csapat-szintű T01..T18 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (SC-01..SC-04) role-specific-ek.
+Örökli a csapat-szintű T01..T19 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (SC-01..SC-04) role-specific-ek.
 
 Csapat architektúra + Phase 1 (Discovery) diagram: `agents/_team/architettura.md`. Multi-Scout anti-collision: `agents/_manual/anti-collision.md`. DB schema: `agents/_manual/db-schema.md`.

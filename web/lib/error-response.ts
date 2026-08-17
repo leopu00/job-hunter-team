@@ -19,6 +19,8 @@ export interface SanitizedErrorOptions {
   scope?: string;
   /** Messaggio sicuro da rimandare al client (default: "internal"). */
   publicMessage?: string;
+  /** Attestazione stretta per client che possono isolare una singola riga. */
+  rejectionScope?: "row";
 }
 
 function describeError(err: unknown): string {
@@ -50,8 +52,12 @@ export function sanitizedError(
   // Log strutturato leggibile dai tail del container
   console.error(`[${scope}] ${status} ${detail}`);
 
+  const publicBody = {
+    error: publicMessage,
+    ...(opts.rejectionScope ? { rejection_scope: opts.rejectionScope } : {}),
+  };
   if (IS_DEV) {
-    return NextResponse.json({ error: publicMessage, detail }, { status });
+    return NextResponse.json({ ...publicBody, detail }, { status });
   }
-  return NextResponse.json({ error: publicMessage }, { status });
+  return NextResponse.json(publicBody, { status });
 }

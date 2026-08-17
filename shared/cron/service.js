@@ -141,7 +141,7 @@ export class CronService {
   async update(id, patch) {
     await this.#ensureLoaded();
     const job = this.#store.jobs.find((j) => j.id === id);
-    if (!job) throw new Error(`Job non trovato: ${id}`);
+    if (!job) throw new Error(`Job not found: ${id}`);
     applyJobPatch(job, patch);
     await this.#persist();
     this.#armTimer();
@@ -165,7 +165,7 @@ export class CronService {
   async run(id, mode = 'due') {
     await this.#ensureLoaded();
     const job = this.#store.jobs.find((j) => j.id === id);
-    if (!job) throw new Error(`Job non trovato: ${id}`);
+    if (!job) throw new Error(`Job not found: ${id}`);
     if (!isJobDue(job, Date.now(), { forced: mode === 'force' })) {
       return { ran: false, reason: mode === 'force' ? 'already-running' : 'not-due' };
     }

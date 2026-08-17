@@ -1,8 +1,8 @@
 <!-- @translation: de, ai-translated 2026-08-03 -->
 ---
 name: maintainer-sweep
-description: "Der INFRA-Wartungsdurchgang des Mantenitore 👷‍♂️ (Zwilling des Dottore, jedoch auf die Infrastruktur statt auf die Agenten bezogen). Ein One-shot-Durchgang pro Tag: Liveness-Kanarienvogel der lebenserhaltenden Prozesse des Containers (bridge/daemon/watchdog) via process_health.py, Smoke-Test der mission-critical Tools (browser/LinkedIn) via tool_health.py, Audit/Konsolidierung nicht standardkonformer Abhängigkeiten, GC verwaister Skripte und tmp-Dateien, De-dup wiederkehrender Skripte, Aktualität der Abhängigkeiten, Disk-/RAM-Trend. Single-writer: der Mantenitore ist der EINZIGE, der die Infra repariert; DESTRUKTIVE Aktionen (löschen/archivieren) SCHLÄGT er VOR, entschieden wird vom Capitano. Ergebnis wird an mantenitore-logbook.jsonl angehängt."
-allowed-tools: Bash(python3 /app/shared/skills/process_health.py *), Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /app/shared/skills/sync_health.py *), Bash(python3 /app/shared/skills/host_vitals.py *), Bash(python3 /app/shared/skills/log_archive.py *), Bash(bash /app/.launcher/start-agent.sh *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
+description: "Der INFRA-Wartungsdurchgang des Mantenitore 👷‍♂️ (Zwilling des Dottore, jedoch auf die Infrastruktur statt auf die Agenten bezogen). Ein One-shot-Durchgang pro Tag: Liveness-Kanarienvogel der lebenserhaltenden Prozesse des Containers (bridge/daemon/watchdog) via process_health.py, Smoke-Test der mission-critical Tools (browser/LinkedIn) via tool_health.py, Audit/Konsolidierung nicht standardkonformer Abhängigkeiten, GC verwaister Skripte und tmp-Dateien, De-dup wiederkehrender Skripte, Aktualität der Abhängigkeiten, Disk-/RAM-Trend, UTF-8-Locale-Kanarienvogel der Panes via locale_health.py (kosmetischer Defekt vs korrupte Daten). Single-writer: der Mantenitore ist der EINZIGE, der die Infra repariert; DESTRUKTIVE Aktionen (löschen/archivieren) SCHLÄGT er VOR, entschieden wird vom Capitano. Ergebnis wird an mantenitore-logbook.jsonl angehängt."
+allowed-tools: Bash(python3 /app/shared/skills/process_health.py *), Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /app/shared/skills/sync_health.py *), Bash(python3 /app/shared/skills/host_vitals.py *), Bash(python3 /app/shared/skills/locale_health.py *), Bash(python3 /app/shared/skills/log_archive.py *), Bash(bash /app/.launcher/start-agent.sh *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
 ---
 
 # maintainer-sweep — die INFRA gesund halten, leise und regressionssicher
@@ -116,6 +116,19 @@ von selbst die ÄLTESTEN Zips und listet sie dir unter `pruned` auf.
   andere Löschung außerhalb des Ablaufs gilt weiterhin die Single-writer-Regel.
 - Logge im Eintrag: `log_archive: {archived_rows, weeks, pruned, free_gb}`.
 
+### 7. 🔤 UTF-8-Locale der Panes (kosmetisch ≠ korrupte Daten)
+```bash
+python3 /app/shared/skills/locale_health.py summary        # oder --json
+```
+Zwei Messungen in einer, und die zweite ist die entscheidende. Er liest die Locale des **Containers** (`/proc/1/environ` — NICHT die Umgebung dieses Prozesses: CPython „coerct" `LC_CTYPE` von sich aus zu `C.UTF-8`, ein Check auf `os.environ` würde also einen kaputten Container gesund nennen) und **dekodiert dann STRIKT** ein `capture-pane` jeder lebenden Session. Der Exit-Code trägt das Urteil:
+- **`0` ok** → `locale_health: ok` protokollieren und weiter.
+- **`1` cosmetic** (Locale nicht UTF-8, NULL ungültige Bytes) → die Daten sind **UNVERSEHRT**: kaputt ist das Rendering für alle, die sich von außen anhängen (`_` statt jedes Akzentbuchstabens). **Melde es dem Capitano, behandle es nicht als Notfall** und „repariere" es vor allem nicht: der Fix ist `LANG=C.UTF-8` in der `docker-compose.yml` des Hosts und greift erst beim Neuerstellen des Containers — außerhalb der Reichweite eines Agenten, der DARIN läuft. Sofort-Mitigation für den Operator: `docker exec -it -e LC_ALL=C.UTF-8 jht tmux -u attach -r -t <Session>`.
+- **`2` data_corruption** (ungültige Bytes in einem Pane) → **P1, ESKALIERE** an den Capitano mit den gelisteten Sessions: hier können die Agenten wirklich ein Wort für ein anderes lesen.
+
+**Warum beide Checks und nicht nur der erste**: `echo $LANG` kann „kosmetisch" sagen, aber NIE „korrupt" — die strikte Dekodierung ist die einzige der beiden, die einen Anzeigefehler von beschädigten Daten trennt. Am 2026-08-10 hat genau sie einen Verdacht („die Agenten bekommen abgeschnittene Wörter") in eine Messung verwandelt (392 unversehrte Akzentzeichen, kein einziges ungültiges Byte) und einen Fix am falschen Problem gestoppt.
+
+Protokolliere `locale_health: {verdict, env, panes_scanned, corrupted_sessions}` im Eintrag.
+
 ## Logbook (append-only)
 Jeder Durchgang schreibt EINEN dichten Eintrag nach `/jht_home/logs/mantenitore-logbook.jsonl` (Zwilling des Logbooks des Dottore), damit der nächste Mantenitore den Trend sehen kann:
 ```json
@@ -123,6 +136,7 @@ Jeder Durchgang schreibt EINEN dichten Eintrag nach `/jht_home/logs/mantenitore-
  "processes_respawned":[...],"sync_health":{"healthy":true,"problems":[]},
  "tools_health":{...},"repaired":[...],
  "escalated":[...],"deps_consolidated":[...],"gc_proposed":[...],"dedup_proposed":[...],
+ "locale_health":{"verdict":"ok|cosmetic|data_corruption","panes_scanned":N},
  "disk":{"used_pct":N,"delta_vs_last":N},"ram":{...},"duration_sec":N,"capitano_ack":"..."}
 ```
 Mit `>>` anhängen, niemals überschreiben. Dichte Zusammenfassung (wie die Reisenotizen des Dottore/Capitano): was ich gefunden, was ich repariert, was ich vorgeschlagen habe.
@@ -138,6 +152,7 @@ Mit `>>` anhängen, niemals überschreiben. Dichte Zusammenfassung (wie die Reis
 - `shared/skills/process_health.py` — der in Schritt 0 verwendete Liveness-Kanarienvogel der lebenserhaltenden Prozesse (tägliches Sicherheitsnetz; der Zwilling-für-Prozesse von tool_health).
 - `shared/skills/sync_health.py` — der in Schritt 0.5 verwendete Cloud-Sync-Kanarienvogel (pull churn / push 413 / stale Cursor); nur lesend, der Zwilling-für-SYNC von process_health/tool_health.
 - `shared/skills/tool_health.py` — der in Schritt 1 wiederverwendete Smoke-Test (auch Build-time-Gate + Tick).
+- `shared/skills/locale_health.py` — der Locale-Kanarienvogel aus Schritt 7 (Container-Locale + strikte UTF-8-Dekodierung der Panes); read-only, er unterscheidet einen kosmetischen Defekt von korrupten Daten.
 - `shared/skills/log_archive.py` — der deterministische Archivierer aus Schritt 6.5 (schneidet Wochen >30T → Zip, prunt unter Platzdruck).
 - `.launcher/agent-watchdog.sh` — die SCHNELLE Wiederherstellung (alle 30s, `maybe_respawn_bridges`), für die Schritt 0 das tägliche Sicherheitsnetz ist; Lehre vom 27/06: die Bridges starten `setsid` detached, daher deckt sie weder der Respawn von pid1 noch `agent-watchdog` ab (der tmux-Sitzungen neu startet, keine Python-Prozesse) — stürzen sie ab, bleiben sie unten, bis der Container neu startet.
 - `agents/mantenitore/mantenitore.md` — Persona/Lebenszyklus des Mantenitore (dev3).

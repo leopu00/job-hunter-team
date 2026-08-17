@@ -16,6 +16,7 @@ import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { createSupabaseDirect } from './supabase-direct.js';
+import { writePrivateJson } from './secure-config-io.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 
@@ -59,8 +60,7 @@ export function getDirectReader(config) {
       try {
         const c = JSON.parse(await readFile(CLOUD_FILE, 'utf-8'));
         c.supabase_refresh_token = newToken;
-        await mkdir(JHT_HOME, { recursive: true });
-        await writeFile(CLOUD_FILE, JSON.stringify(c, null, 2) + '\n');
+        writePrivateJson(CLOUD_FILE, c);
         await chmod(CLOUD_FILE, 0o600);
       } catch { /* best-effort: al prossimo refresh riprova */ }
     },

@@ -32,7 +32,8 @@ def contract_failures(
         'test "$title_rc" -eq 0',
         'grep -Fx "LANGUAGE-PICKER-TITLE-VERSION v${expected_version}"',
         'grep -Fx "LANGUAGE-PICKER-TITLE-TEST PASS"',
-        "python game/tools/title_artifact_contract_selftest.py",
+        "bash game/tools/run.sh test gate",
+        "./game/tools/run.ps1 test gate",
     )
     missing = [token for token in (gate, *required) if token not in source]
     publish_required = (

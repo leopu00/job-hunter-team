@@ -69,7 +69,7 @@ Alkalmazd a táblázatot fentről lefelé. Állj meg az első egyező feltételn
 
 | Feltétel                                                   | Művelet (ebben a sorrendben)                                                                                                         |
 |-----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `DRAFT_BLOCKED ≥ 50`                                      | **Először**: oldd fel a Critic hurkot. Indíts `CRITICO-S2/S3/S4`-et, ha nincs életben (3 párhuzamos). Minden `CRITICO-S` egyszerre 1 draft-ot dolgoz fel. |
+| `DRAFT_BLOCKED ≥ 50`                                      | **Eloszor**: vizsgald meg a tulajdonos Writereket/critic-loopot. Soha ne indits arva Criticet; minden `SCRITTORE-N` csak a sajat `CRITICO-SN` munkamenetet inditja a kanonikus launcheren at. Writert csak letezo, felhasznalo altal kert sorhoz indits. |
 | `UNSCORED ≥ 20`                                           | **Azután**: indíts `SCORER-2`-t (és `SCORER-3`-at, ha `UNSCORED ≥ 50`). Egy Scorer nem elegendő 20+ sorban állónál.                  |
 | `SCRITTORE_QUEUE ≥ 5`                                     | indíts 1 `SCRITTORE-N`-t, ha még nincs 3 élő (max).                                                                                  |
 | `PROMOTABLE_40_49 ≥ 5`                                    | léptesd elő a legjobb 5-öt a pontszám emelésével (`db_query.py` + közvetlen `UPDATE`), majd kezeld `SCRITTORE_QUEUE`-ként.            |

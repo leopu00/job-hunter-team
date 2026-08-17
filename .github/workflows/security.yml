@@ -4,12 +4,16 @@ on:
   push:
     branches:
       - master
+      - hq-master
   pull_request:
     branches:
       - master
   schedule:
     # Scansione settimanale ogni lunedì alle 07:00 UTC
     - cron: "0 7 * * 1"
+
+permissions:
+  contents: read
 
 jobs:
   audit:

@@ -43,7 +43,7 @@ function BackLink() {
 // un doppio clic; Windows e Linux non sono firmati e l'avviso di SmartScreen
 // va detto prima, non lasciato scoprire. Sostituisce il "in arrivo" del
 // 2026-07-03 (docs/internal/2026-07-03-desktop-app-status-and-vision.md).
-type InstallMode = "terminal" | "desktop";
+type InstallMode = "terminal" | "desktop" | "prompt";
 
 const DOWNLOAD_SLUG: Record<PlatformId, DownloadSlug> = {
   mac: "mac",
@@ -55,6 +55,7 @@ type DlKey = Parameters<ReturnType<typeof useLandingI18n>["t"]>[0];
 const MODES: { id: InstallMode; labelKey: DlKey }[] = [
   { id: "desktop", labelKey: "dl_mode_desktop_title" },
   { id: "terminal", labelKey: "dl_mode_terminal_title" },
+  { id: "prompt", labelKey: "dl_mode_prompt_title" },
 ];
 
 type PlatformId = "mac" | "windows" | "linux";
@@ -73,6 +74,116 @@ function PlatformIcon({ id }: { id: PlatformId }) {
 }
 
 const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash`;
+
+// Il prompt da consegnare a un assistente AI. Esisteva fino ad `a494c6259`
+// (3 lug 2026), ritirato allora perché «non ha convinto»; rimesso su richiesta
+// dell'operatore il 2026-08-10.
+// ⚠️ NON è il testo di allora: da luglio sono cambiati la pagina, il flusso e
+// i comandi. Un prompt che manda l'assistente a fare cose che non esistono più
+// è peggio del metodo assente, quindi qui si nominano le due strade che
+// esistono davvero oggi — l'app desktop della pagina Download e il one-liner
+// qui sopra — e si rimanda alla guida per il resto.
+// Nessuna cifra né nome di piano commerciale: vale anche qui la regola O-12.
+//
+// TRADOTTO in tutte e 7 le lingue (2026-08-10): il prompt lo legge un
+// assistente, ma lo copia una persona, e leggere intorno nella propria lingua
+// per poi trovare un blocco in inglese è un salto che non serve a nessuno. Gli
+// assistenti gestiscono bene tutte e sette, e col prompt nella sua lingua
+// l'utente si vede rispondere nella sua lingua. Restano invariati, perché non
+// si traducono: URL, nome del prodotto e il comando `curl`.
+const ASSISTANT_PROMPT: Record<Lang, string> = {
+  it: `Vorrei iniziare a usare Job Hunter Team, una squadra open source di agenti AI che cerca lavoro per me. Gira sul mio computer, dentro Docker.
+
+Repository: https://github.com/leopu00/job-hunter-team
+Sito: https://jobhunterteam.ai
+Guida all'installazione: https://jobhunterteam.ai/setup-guide
+
+Leggi prima il repository e la guida, poi guidami nell'installazione e nell'avvio su questo computer, occupandoti tu dei passaggi tecnici.
+
+Ci sono due strade supportate, che portano alla stessa squadra: scegli con me quella che mi conviene.
+1. L'app desktop, scaricabile da https://jobhunterteam.ai/download
+2. Il comando unico: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+
+Due cose che dovrai verificare con me strada facendo: che Docker sia disponibile (Docker Desktop oppure Colima su macOS) e quale abbonamento AI dedicare alla squadra — le serve il suo, separato da quello che uso ogni giorno, perché lo consuma per intero. Chiedimi tutto il resto invece di tirare a indovinare.`,
+  en: `I'd like to start using Job Hunter Team, an open-source team of AI agents that searches for jobs on my behalf. It runs on my own machine, in Docker.
+
+Repository: https://github.com/leopu00/job-hunter-team
+Website: https://jobhunterteam.ai
+Setup guide: https://jobhunterteam.ai/setup-guide
+
+Read the repository and the setup guide first, then walk me through installing and starting it on this computer, handling the technical steps yourself.
+
+There are two supported ways in, and they lead to the same team — pick with me whichever suits me better:
+1. The desktop app, downloaded from https://jobhunterteam.ai/download
+2. The one-liner: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+
+Two things you will need to check with me along the way: that Docker is available (Docker Desktop or Colima on macOS), and which AI provider subscription I want the team to use — it needs one of its own, separate from the one I use day to day, because the team consumes the whole allowance. Ask me whatever else you need instead of guessing.`,
+  es: `Quiero empezar a usar Job Hunter Team, un equipo open source de agentes de IA que busca trabajo por mí. Funciona en mi propio ordenador, dentro de Docker.
+
+Repositorio: https://github.com/leopu00/job-hunter-team
+Sitio web: https://jobhunterteam.ai
+Guía de instalación: https://jobhunterteam.ai/setup-guide
+
+Lee primero el repositorio y la guía, y después acompáñame en la instalación y el arranque en este ordenador, ocupándote tú de los pasos técnicos.
+
+Hay dos caminos soportados, y llevan al mismo equipo: elige conmigo el que más me convenga.
+1. La app de escritorio, descargable desde https://jobhunterteam.ai/download
+2. El comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+
+Dos cosas que tendrás que comprobar conmigo por el camino: que Docker esté disponible (Docker Desktop o Colima en macOS) y qué suscripción de IA dedicar al equipo — necesita una propia, separada de la que uso a diario, porque la consume por completo. Pregúntame todo lo demás en lugar de suponerlo.`,
+  fr: `J'aimerais commencer à utiliser Job Hunter Team, une équipe open source d'agents IA qui cherche du travail pour moi. Elle tourne sur mon ordinateur, dans Docker.
+
+Dépôt : https://github.com/leopu00/job-hunter-team
+Site : https://jobhunterteam.ai
+Guide d'installation : https://jobhunterteam.ai/setup-guide
+
+Lis d'abord le dépôt et le guide, puis accompagne-moi pour l'installer et le démarrer sur cet ordinateur, en te chargeant toi-même des étapes techniques.
+
+Il y a deux voies prises en charge, et elles mènent à la même équipe : choisis avec moi celle qui me convient.
+1. L'application de bureau, à télécharger sur https://jobhunterteam.ai/download
+2. La commande unique : curl -fsSL https://jobhunterteam.ai/install.sh | bash
+
+Deux choses à vérifier avec moi en chemin : que Docker soit disponible (Docker Desktop ou Colima sur macOS) et quel abonnement IA dédier à l'équipe — il lui en faut un à elle, distinct de celui que j'utilise au quotidien, car elle le consomme entièrement. Demande-moi tout le reste au lieu de deviner.`,
+  de: `Ich möchte anfangen, Job Hunter Team zu nutzen — ein Open-Source-Team aus KI-Agenten, das für mich nach Stellen sucht. Es läuft auf meinem eigenen Rechner, in Docker.
+
+Repository: https://github.com/leopu00/job-hunter-team
+Website: https://jobhunterteam.ai
+Einrichtungsanleitung: https://jobhunterteam.ai/setup-guide
+
+Lies zuerst das Repository und die Anleitung, und führe mich dann durch Installation und Start auf diesem Rechner, wobei du die technischen Schritte selbst übernimmst.
+
+Es gibt zwei unterstützte Wege, die zum selben Team führen — wähle mit mir den passenden:
+1. Die Desktop-App, herunterzuladen unter https://jobhunterteam.ai/download
+2. Der Einzeiler: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+
+Zwei Dinge, die du unterwegs mit mir klären musst: dass Docker verfügbar ist (Docker Desktop oder Colima auf macOS) und welches KI-Abo das Team bekommt — es braucht ein eigenes, getrennt von dem, das ich täglich nutze, weil es das Kontingent vollständig verbraucht. Frag mich alles Weitere, statt zu raten.`,
+  pt: `Gostaria de começar a usar o Job Hunter Team, uma equipa open source de agentes de IA que procura emprego por mim. Corre no meu próprio computador, dentro do Docker.
+
+Repositório: https://github.com/leopu00/job-hunter-team
+Site: https://jobhunterteam.ai
+Guia de instalação: https://jobhunterteam.ai/setup-guide
+
+Lê primeiro o repositório e o guia, e depois acompanha-me na instalação e no arranque neste computador, tratando tu dos passos técnicos.
+
+Há dois caminhos suportados, e levam à mesma equipa: escolhe comigo o que me convém.
+1. A app de ambiente de trabalho, transferível em https://jobhunterteam.ai/download
+2. O comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+
+Duas coisas que terás de verificar comigo pelo caminho: que o Docker esteja disponível (Docker Desktop ou Colima no macOS) e qual a subscrição de IA a dedicar à equipa — precisa de uma própria, separada da que uso no dia a dia, porque a consome por inteiro. Pergunta-me tudo o resto em vez de adivinhar.`,
+  hu: `Szeretném elkezdeni használni a Job Hunter Teamet, egy nyílt forráskódú AI-ügynökcsapatot, amely helyettem keres állást. A saját gépemen fut, Dockerben.
+
+Repository: https://github.com/leopu00/job-hunter-team
+Weboldal: https://jobhunterteam.ai
+Telepítési útmutató: https://jobhunterteam.ai/setup-guide
+
+Először olvasd el a repositoryt és az útmutatót, majd vezess végig a telepítésen és az indításon ezen a gépen, a technikai lépéseket te intézve.
+
+Két támogatott út van, és ugyanahhoz a csapathoz vezetnek — válaszd ki velem, melyik illik hozzám jobban:
+1. Az asztali alkalmazás, letölthető innen: https://jobhunterteam.ai/download
+2. Az egysoros parancs: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+
+Két dolgot kell majd velem tisztáznod útközben: hogy elérhető-e a Docker (Docker Desktop vagy Colima macOS-en), és melyik AI-előfizetést szánom a csapatnak — sajátra van szüksége, elkülönítve attól, amit naponta használok, mert teljesen felhasználja. Minden mást kérdezz meg tőlem, ahelyett hogy találgatnál.`,
+};
 
 type ReqOs = {
   reqTitle: string;
@@ -155,6 +266,8 @@ function DownloadContent({
 
   const terminalCommand = CLI_SETUP_CMD;
   const ro = REQ_OS[(REQ_OS[lang as Lang] ? lang : "en") as Lang];
+  const assistantPrompt =
+    ASSISTANT_PROMPT[(ASSISTANT_PROMPT[lang as Lang] ? lang : "en") as Lang];
 
   return (
     <>
@@ -180,7 +293,7 @@ function DownloadContent({
           </div>
 
           <div className="mb-8">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {MODES.map((m) => {
                 const active = installMode === m.id;
                 return (
@@ -236,6 +349,40 @@ function DownloadContent({
               </div>
               <p className="text-[10px] text-[var(--color-dim)] mt-3 text-center">
                 macOS · Linux · WSL
+              </p>
+            </div>
+          )}
+
+          {installMode === "prompt" && (
+            <div className="mb-8">
+              <p className="text-[12px] text-[var(--color-muted)] leading-relaxed mb-4">
+                {t("dl_prompt_intro")}
+              </p>
+              <div
+                className="border overflow-hidden"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "var(--color-card)",
+                }}
+              >
+                <div
+                  className="flex items-center justify-end px-3 py-2"
+                  style={{ borderBottom: "1px solid var(--color-border)" }}
+                >
+                  <CopyButton
+                    text={assistantPrompt}
+                    size="sm"
+                    className="rounded-none"
+                  >
+                    {t("dl_copy_prompt")}
+                  </CopyButton>
+                </div>
+                <pre className="px-4 py-4 overflow-x-auto whitespace-pre-wrap text-[11px] leading-relaxed font-mono text-[var(--color-bright)]">
+                  {assistantPrompt}
+                </pre>
+              </div>
+              <p className="text-[10px] text-[var(--color-dim)] mt-3 text-center">
+                {t("dl_prompt_note")}
               </p>
             </div>
           )}

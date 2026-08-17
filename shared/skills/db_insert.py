@@ -22,7 +22,31 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema, resolve_company_id
 from profile_gate import check_minimum_viable_profile
+from score_ranges import COMPONENT_LIMITS, SCORE_COMPONENT_LABELS, TOTAL_LIMIT
+from external_content import (
+    EXTERNAL_BLOCK_FIELDS,
+    EXTERNAL_INLINE_FIELDS,
+    normalize_external_inline_fields,
+)
 import maintenance_log
+
+# I flag di `db_insert.py position` che NON vengono dalla pagina: li sceglie
+# un agente nostro (o argparse, con `choices`/`type=int`). Gli altri sono
+# elencati in `external_content.EXTERNAL_*`, e insieme devono coprire TUTTI i
+# flag del comando: `tests/test_external_content_fencing.py` lo verifica, così
+# un campo nuovo non può entrare senza che qualcuno abbia deciso da dove viene.
+POSITION_INTERNAL_FIELDS = (
+    "remote_type",
+    "salary_declared_min",
+    "salary_declared_max",
+    "salary_declared_currency",
+    "salary_estimated_min",
+    "salary_estimated_max",
+    "salary_estimated_currency",
+    "salary_estimated_source",
+    "found_by",
+    "notes",
+)
 
 # Campi di uno score che, cambiando, dicono che la rivalutazione è avvenuta.
 # `scored_by` e i timestamp restano fuori: cambiano anche quando il giudizio
@@ -267,6 +291,13 @@ def _rollback_quietly(conn):
 
 
 def insert_position(args):
+    # Prima di tutto il resto, compreso il dedup: titolo, azienda, location,
+    # URL, fonte e scadenza arrivano dalla pagina scrapata, e da qui in avanti
+    # devono essere una riga sola. Un a capo dentro un titolo non è un dettaglio
+    # di formattazione — è il pezzo che permette a un annuncio di ridisegnare
+    # l'intestazione che l'agente legge come testo nostro.
+    normalize_external_inline_fields(args)
+
     conn = get_db()
     ensure_schema(conn)
 
@@ -395,12 +426,12 @@ def insert_score(args):
         print("    Leave the position in 'checked' and escalate to the Captain (RULE-T10 — do not invent).")
         sys.exit(1)
 
-    _validate_score_range(args.total, 'total', 0, 100)
-    _validate_score_range(args.stack_match, 'stack_match', 0, 40)
-    _validate_score_range(args.remote_fit, 'remote_fit', 0, 25)
-    _validate_score_range(args.salary_fit, 'salary_fit', 0, 20)
-    _validate_score_range(args.experience_fit, 'experience_fit', 0, 10)
-    _validate_score_range(args.strategic_fit, 'strategic_fit', 0, 15)
+    # I tetti stanno in score_ranges.py, non qui: erano scritti a mano in questo
+    # file, nei prompt dello Scorer, nella pagina web e nel pannello del gioco,
+    # e hanno divergiuto senza che nessun test lo vedesse.
+    _validate_score_range(args.total, 'total', 0, TOTAL_LIMIT)
+    for column, maximum in COMPONENT_LIMITS.items():
+        _validate_score_range(getattr(args, column), column, 0, maximum)
 
     conn = get_db()
     ensure_schema(conn)
@@ -417,8 +448,9 @@ def insert_score(args):
     cur = conn.execute("""
         INSERT OR REPLACE INTO scores (position_id, total_score, stack_match, remote_fit,
                                         salary_fit, experience_fit, strategic_fit,
-                                        breakdown, notes, scored_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        breakdown, notes, scored_by, scored_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                strftime('%Y-%m-%d %H:%M:%f', 'now'))
     """, (args.position_id, args.total, args.stack_match, args.remote_fit,
           args.salary_fit, args.experience_fit, args.strategic_fit,
           args.breakdown, args.notes, args.scored_by))
@@ -484,7 +516,14 @@ def insert_highlight(args):
     conn.close()
 
 
-def main():
+def build_parser():
+    """Il parser, separato da `main` perché non serve solo a `main`.
+
+    `tests/test_external_content_fencing.py` lo interroga per verificare che
+    ogni flag di `position` sia classificato: da fuori o nostro. Senza un
+    parser raggiungibile, quel controllo diventerebbe una lista scritta a
+    mano nel test — cioè la copia che si disallinea al primo campo nuovo.
+    """
     parser = argparse.ArgumentParser(description='Insert data into jobs.db')
     sub = parser.add_subparsers(dest='entity', required=True)
 
@@ -525,12 +564,15 @@ def main():
     # score
     s = sub.add_parser('score')
     s.add_argument('--position-id', type=int, required=True)
-    s.add_argument('--total', type=int, required=True)
-    s.add_argument('--stack-match', type=int, help='Stack component, range 0-40')
-    s.add_argument('--remote-fit', type=int, help='Remote/location component, range 0-25')
-    s.add_argument('--salary-fit', type=int, help='Salary component, range 0-20')
-    s.add_argument('--experience-fit', type=int, help='Seniority component, range 0-10')
-    s.add_argument('--strategic-fit', type=int, help='Strategic component, range 0-15')
+    s.add_argument('--total', type=int, required=True, help=f'Total, range 0-{TOTAL_LIMIT}')
+    # Il testo di --help dice il tetto che il codice applica davvero: prima erano
+    # due stringhe diverse da tenere allineate a mano.
+    for column, maximum in COMPONENT_LIMITS.items():
+        s.add_argument(
+            '--' + column.replace('_', '-'),
+            type=int,
+            help=f'{SCORE_COMPONENT_LABELS[column]} component, range 0-{maximum}',
+        )
     s.add_argument('--breakdown')
     s.add_argument('--pros')
     s.add_argument('--cons')
@@ -556,6 +598,11 @@ def main():
     h.add_argument('--type', required=True, choices=['pro', 'con'])
     h.add_argument('--text', required=True)
 
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
 
     if args.entity == 'position':

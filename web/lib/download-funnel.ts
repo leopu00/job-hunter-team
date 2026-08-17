@@ -30,7 +30,7 @@ export const DOWNLOAD_ATTRIBUTION_ALLOWLIST: Record<
   AttributionKey,
   readonly string[]
 > = {
-  utm_source: ["reddit"],
+  utm_source: ["reddit", "tiktok"],
   utm_medium: ["paid"],
   utm_campaign: ["lancio-2026-08"],
 };

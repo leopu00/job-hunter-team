@@ -12,14 +12,17 @@
  * certifications/projects/strengths/career_goals/aspirations) → chiude anche il
  * bug "sezioni vuote" senza aspettare il refactor UI.
  *
- * Strategia di sync: candidate_profiles upsert (critico) + replace-all-per-user
- * sulle tabelle figlie (best-effort: un errore su una lista non blocca il core).
+ * Strategia di sync: uno snapshot canonico passa a una RPC PostgreSQL che
+ * serializza per tenant, deduplica per hash e sostituisce core + figli nella
+ * stessa transazione. Un errore non può quindi lasciare un profilo monco.
  *
  * Vedi docs/internal/candidate-profile-cloud-sync-redesign-2026-06-05.md
  */
 
+import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { encryptContacts } from "./pii-crypto";
+import { targetRoleChoiceError } from "../../shared/config/profile-schema";
 
 type Dict = Record<string, unknown>;
 const BLOCK_KINDS = [
@@ -96,6 +99,22 @@ export const CANDIDATE_LIST_TABLES = [
 
 /** Campo del modello canonico che corrisponde a una tabella normalizzata. */
 export type CandidateListField = (typeof CANDIDATE_LIST_TABLES)[number][0];
+
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== "object")
+    return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  return `{${Object.keys(value as Dict)
+    .filter((key) => (value as Dict)[key] !== undefined)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson((value as Dict)[key])}`)
+    .join(",")}}`;
+}
+
+/** Hash del contenuto canonico in chiaro, mai del ciphertext PII randomico. */
+export function canonicalProfileContentHash(c: CanonicalProfile): string {
+  return createHash("sha256").update(stableJson(c)).digest("hex");
+}
 
 // ── block generation ─────────────────────────────────────────────────
 /** Normalizza un valore arbitrario nel kind più adatto. null = niente blocco. */
@@ -176,6 +195,13 @@ export function mapYamlToCanonical(
 ): CanonicalProfile {
   const candidate = isObj(raw.candidate) ? raw.candidate : {};
   const personal = isObj(raw.personal) ? raw.personal : {};
+  const targetRoleCategoryId = str(raw.target_role_category_id);
+  const targetSpecialty = str(raw.target_specialty);
+  const targetRoleError = targetRoleChoiceError(
+    targetRoleCategoryId,
+    targetSpecialty,
+  );
+  if (targetRoleError) throw new Error(targetRoleError);
 
   // skills (dict {primary,secondary} o lista piatta)
   const rawSkills = candidate.skills ?? raw.skills;
@@ -405,6 +431,10 @@ export function mapYamlToCanonical(
     ),
     work_authorization: Array.isArray(rawWa) ? rawWa : [],
     positioning: {
+      ...(targetRoleCategoryId
+        ? { target_role_category_id: targetRoleCategoryId }
+        : {}),
+      ...(targetSpecialty ? { target_specialty: targetSpecialty } : {}),
       seniority_target: str(raw.seniority_target),
       industry: str(raw.industry),
       experience: candidate.experience ?? raw.experience,
@@ -433,64 +463,74 @@ export function mapYamlToCanonical(
 }
 
 // ── sync to Supabase ─────────────────────────────────────────────────
-/**
- * Upsert candidate_profiles (critico) + replace-all-per-user sulle tabelle
- * figlie (best-effort). Ritorna {ok, error, warnings}. `ok=false` solo se il
- * core candidate_profiles fallisce — le liste non bloccano il push.
- */
+/** Applica lo snapshot intero con dedup e rollback dentro PostgreSQL. */
 export async function syncProfileToSupabase(
   admin: SupabaseClient,
   userId: string,
   c: CanonicalProfile,
-): Promise<{ ok: boolean; error: string | null; warnings: string[] }> {
-  const warnings: string[] = [];
-
-  // 1. core (critico)
-  const { error: coreErr } = await admin
-    .from("candidate_profiles")
-    .upsert(c.profileRow, { onConflict: "user_id" });
-  if (coreErr) return { ok: false, error: coreErr.message, warnings };
-
-  // 2. tabelle figlie: replace-all-per-user (best-effort)
-  const replace = async (table: string, rows: Array<Dict>) => {
-    try {
-      const del = await admin.from(table).delete().eq("user_id", userId);
-      if (del.error) throw del.error;
-      if (rows.length) {
-        const ins = await admin.from(table).insert(rows);
-        if (ins.error) throw ins.error;
-      }
-    } catch (e) {
-      warnings.push(`${table}: ${(e as Error).message}`);
+  force = false,
+): Promise<{
+  ok: boolean;
+  changed: boolean;
+  error: string | null;
+  warnings: string[];
+}> {
+  const contentHash = canonicalProfileContentHash(c);
+  const encryptedContacts = encryptContacts(
+    c.contacts as Record<string, string | null | undefined> | null,
+  );
+  try {
+    const { data, error } = await admin.rpc("sync_candidate_profile_atomic", {
+      p_user_id: userId,
+      p_content_hash: contentHash,
+      p_force: force,
+      p_snapshot: {
+        profile: c.profileRow,
+        skills: c.skills,
+        languages: c.languages,
+        experiences: c.experiences,
+        education: c.education,
+        work_auth: c.workAuth,
+        location_preferences: c.locationPrefs,
+        contacts: encryptedContacts
+          ? { user_id: userId, ...encryptedContacts }
+          : null,
+        blocks: c.blocks,
+      },
+    });
+    if (error)
+      return {
+        ok: false,
+        changed: false,
+        error: "profile_sync_failed",
+        warnings: [],
+      };
+    if (
+      !data ||
+      typeof data !== "object" ||
+      typeof (data as { changed?: unknown }).changed !== "boolean"
+    ) {
+      return {
+        ok: false,
+        changed: false,
+        error: "profile_sync_result_invalid",
+        warnings: [],
+      };
     }
-  };
-
-  for (const [field, table] of CANDIDATE_LIST_TABLES) {
-    await replace(table, c[field] as Array<Dict>);
+    return {
+      ok: true,
+      changed: (data as { changed: boolean }).changed,
+      error: null,
+      warnings: [],
+    };
+  } catch {
+    return {
+      ok: false,
+      changed: false,
+      error: "profile_sync_failed",
+      warnings: [],
+    };
   }
-
-  // 3. contacts (1:1 upsert)
-  if (c.contacts) {
-    try {
-      const { error } = await admin
-        .from("candidate_contacts")
-        .upsert(
-          {
-            user_id: userId,
-            ...encryptContacts(
-              c.contacts as Record<string, string | null | undefined>,
-            ),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" },
-        );
-      if (error) throw error;
-    } catch (e) {
-      warnings.push(`candidate_contacts: ${(e as Error).message}`);
-    }
-  }
-
-  return { ok: true, error: null, warnings };
 }
 
 // ── reconstruct (pull-profile: tabelle Supabase → YAML canonico) ─────
@@ -530,6 +570,7 @@ function clean<T extends Dict>(obj: T): Dict {
  */
 export function reconstructCanonicalProfile(d: ProfileTables): Dict {
   const p = d.profile ?? {};
+  const positioning = isObj(p.positioning) ? p.positioning : {};
   const skillsByCat: Record<string, string[]> = {};
   for (const s of d.skills) (skillsByCat[s.category] ??= []).push(s.name);
 
@@ -537,6 +578,8 @@ export function reconstructCanonicalProfile(d: ProfileTables): Dict {
     schema_version: 1,
     name: p.name,
     target_role: p.target_role,
+    target_role_category_id: positioning.target_role_category_id,
+    target_specialty: positioning.target_specialty,
     location: p.location,
     timezone: p.timezone,
     nationality: p.nationality,

@@ -2,6 +2,7 @@
  * JHT Setup Wizard — Costanti, provider, validazione, config IO
  */
 import fs from 'node:fs';
+import { writePrivateJson } from '../src/lib/secure-config-io.js';
 import path from 'node:path';
 import os from 'node:os';
 
@@ -117,8 +118,7 @@ export function writeConfigFile(config) {
   if (!validation.success) {
     throw new Error(`Invalid configuration:\n${validation.errors.join('\n')}`);
   }
-  fs.mkdirSync(JHT_CONFIG_DIR, { recursive: true });
-  fs.writeFileSync(JHT_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  writePrivateJson(JHT_CONFIG_PATH, config);
 }
 
 // --- Validazione ---

@@ -2,7 +2,7 @@
 ---
 name: circles-and-sources
 description: Mapa estratégico de qué buscar DÓNDE, derivado enteramente del perfil del candidato. Los 5 círculos concéntricos (work_mode + reubicación) te indican el alcance geográfico; los 4 niveles de fuentes (LinkedIn → agregadores ATS → nicho → web) te indican qué plataformas drenar en orden. Un scout que busca en el nivel equivocado en el círculo equivocado desperdicia su cuota y su partición de `scout-coord`. Abre esta skill al arranque (después de `scout-coord`) y de nuevo cuando un círculo se agote o un `[FEEDBACK]` del Analyst sugiera cambiar de fuente.
-allowed-tools: Bash(curl *), Bash(python3 /app/shared/skills/linkedin_check.py *)
+allowed-tools: Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(python3 /app/shared/skills/linkedin_check.py *)
 ---
 
 # circles-and-sources — lee el perfil, construye el mapa
@@ -68,7 +68,7 @@ Drena un nivel completamente antes de pasar al siguiente.
 
 | Nivel | Tipo                                | Fuentes                                                                                                      | Notas                                                                                         |
 |-------|-------------------------------------|--------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
-| 1     | **LinkedIn**                        | `linkedin_check.py` (perfil autenticado), `curl` con UA de navegador                                        | Universal: cubre remoto, presencial, híbrido. Primer paso obligatorio para cada círculo. **NUNCA `fetch` MCP** — bloqueado por robots.txt. |
+| 1     | **LinkedIn**                        | `linkedin_check.py` (perfil autenticado), `safe_fetch.py`                                        | Universal: cubre remoto, presencial, híbrido. Primer paso obligatorio para cada círculo. **NUNCA `fetch` MCP** — bloqueado por robots.txt. |
 | 2     | **Agregadores ATS**                 | Tableros Greenhouse, tableros Lever, Indeed, Wellfound (ex AngelList)                                        | Funcionan para cualquier work_mode. Cubren muchas empresas en un scrape.                       |
 | 3     | **Tableros nicho (específicos del perfil)** | Elegir por `work_mode` Y dominio                                                                     | (ver tabla abajo)                                                                              |
 | 4     | **WebSearch + páginas de carreras** | Consultas `WebSearch` + scrape de páginas de carreras de empresas                                            | Último recurso solo después de que los niveles 1-3 estén drenados.                             |
@@ -170,7 +170,7 @@ Ejemplo: el Analyst dice "4 de los últimos 5 de greenhouse.io requieren senior+
 - ❌ Buscar en el círculo 2 antes de agotar el círculo 1 — desperdicia alcance, diluye resultados.
 - ❌ Ir al nivel 4 (WebSearch) antes de que los niveles 1-3 estén drenados — `WebSearch` es la fuente más ruidosa, guárdala para el final.
 - ❌ Inferir `relocation = "ovunque"` para un candidato cuyo perfil dice `false` — lee el perfil, no proyectes.
-- ❌ Usar LinkedIn vía `fetch` MCP — bloqueado por robots.txt; siempre `linkedin_check.py` (autenticado) o `curl` con UA de navegador.
+- ❌ Usar LinkedIn vía `fetch` MCP — bloqueado por robots.txt; siempre `linkedin_check.py` (autenticado) o `safe_fetch.py`.
 - ❌ Incluir JDs con título senior esperando que el Scorer los filtre — desperdicia presupuesto del Scorer, añade ruido. Los 4 filtros a nivel de SCOUT de arriba son el lugar correcto.
 - ❌ Verificación anti-sesgo olvidada — una empresa codiciosa inunda tu lote.
 

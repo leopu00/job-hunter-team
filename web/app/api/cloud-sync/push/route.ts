@@ -4,20 +4,80 @@ import * as yaml from "js-yaml";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import {
+  firstTeamRunPatch,
+  teamProducedWork,
+} from "@/lib/cloud-sync/onboarding-milestones";
 import { mapYamlToCanonical, syncProfileToSupabase } from "@/lib/profile-sync";
 import {
+  invalidateStaleCriticVerdict,
   normalizeApplicationStatus,
   normalizeCriticVerdict,
   normalizePositionStatus,
 } from "@/lib/sync-vocabulary";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
+import {
+  summarizeOutOfRange,
+  type OutOfRangeSummary,
+} from "@/lib/score-ranges";
 import { syncRequestIsPending } from "@/lib/team-state/sync-freshness";
+import {
+  receiptId as wireReceiptId,
+  receiptIdForKey,
+} from "../../../../../shared/cloud/receipt-ids.js";
 
 export const dynamic = "force-dynamic";
 
+const ROW_DATA_SQLSTATE = /^(?:22[A-Z0-9]{3}|2350[235]|23514|23P01)$/;
+const ROW_P0001_MESSAGES = new Set([
+  "application_identity_mismatch",
+  "application_not_persisted",
+  "application_object_required",
+  "invalid_application_identity",
+  "invalid_application_receipt_id",
+  "invalid_score_identity",
+  "position_not_found",
+  "score_identity_mismatch",
+  "stale_application_downgrade",
+]);
+
+function rowAttributableWriteError(error: unknown, publicMessage: string) {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : "";
+  const rowAttributable =
+    ROW_DATA_SQLSTATE.test(code) ||
+    (code === "P0001" && ROW_P0001_MESSAGES.has(message));
+  // PostgreSQL row errors often echo the rejected value. The SQLSTATE is
+  // enough for operators and classification; never copy the value to logs.
+  const loggableError = rowAttributable
+    ? new Error(`row write rejected (${code})`)
+    : error;
+  return sanitizedError(loggableError, {
+    status: 500,
+    scope: "cloud-sync/push",
+    publicMessage,
+    ...(rowAttributable ? { rejectionScope: "row" as const } : {}),
+  });
+}
+
+function rowRejection(error: string, status = 422) {
+  return NextResponse.json({ error, rejection_scope: "row" }, { status });
+}
+
+function protocolError(error: string, status = 400) {
+  return NextResponse.json({ error }, { status });
+}
+
 interface PositionIn {
   id: number;
+  _receipt_id?: string;
   title: string;
   company: string;
   // FK locale (companies.id int) → risolta a companies.id UUID cloud via
@@ -78,6 +138,7 @@ interface PositionIn {
   // a BOOLEAN sul payload upsert.
   write_requested?: number | boolean | null;
   write_requested_at?: string | null;
+  write_request_kind?: "cv" | "cover_letter" | null;
   // Geocoding-on-demand (V8): user-driven flag per office-geocoding
   // precision. Mig Supabase 027. Stesso pattern di write_requested.
   geocode_requested?: number | boolean | null;
@@ -93,6 +154,10 @@ interface PositionIn {
 }
 
 interface ScoreIn {
+  // Identità della riga score, distinta dal parent position_id. Il write cloud
+  // resta UNIQUE(position_id), ma receipt/quarantine devono nominare la riga.
+  legacy_id: number;
+  _receipt_id?: string;
   position_id: number;
   total_score: number;
   experience_fit?: number | null;
@@ -107,7 +172,12 @@ interface ScoreIn {
 }
 
 interface ApplicationIn {
-  position_id: number;
+  // Identità distinte nel DB SQLite: applications.id non è positions.id.
+  legacy_id: number;
+  position_legacy_id: number;
+  // Il client quarantine aggiunge un hash opaco. Per i client precedenti la
+  // route lo deriva dalla stessa source identity e lo esporta senza ID raw.
+  _receipt_id?: string;
   cv_path?: string | null;
   cv_pdf_path?: string | null;
   cl_path?: string | null;
@@ -116,6 +186,7 @@ interface ApplicationIn {
   critic_score?: number | null;
   critic_verdict?: string | null;
   critic_notes?: string | null;
+  critic_round?: number | null;
   written_at?: string | null;
   applied_at?: string | null;
   applied_via?: string | null;
@@ -129,13 +200,86 @@ interface ApplicationIn {
   cl_drive_id?: string | null;
 }
 
+type ReceiptTable =
+  | "applications"
+  | "scores"
+  | "companies"
+  | "positions"
+  | "position_highlights"
+  | "pending_user_messages"
+  | "tombstones"
+  | "position_transitions"
+  | "profile";
+
+// ⚠️ La derivazione NON sta qui: sta in `shared/cloud/receipt-ids.js`, e la
+// importa anche il client. Averne due copie e' costato #163 — stesso
+// algoritmo, due implementazioni, divergenza silenziosa quando una delle due
+// ha cominciato a leggere la chiave da un'altra parte.
+function sourceReceiptId(table: ReceiptTable, sourceKey: unknown | unknown[]) {
+  return receiptIdForKey(table, sourceKey);
+}
+
+// La ricevuta di una riga COSI' COME IL CLIENT L'HA MANDATA. Il ritorno del
+// driver non entra mai nell'identita': serve a provare che la riga e' sul
+// cloud, che e' un'altra domanda e ha un'altra risposta (il confronto sui
+// valori, poco piu' sotto in ogni blocco).
+function wireReceipt(table: ReceiptTable, row: unknown) {
+  return wireReceiptId(table, row);
+}
+
+function validReceipt(
+  table: ReceiptTable,
+  sourceKey: unknown | unknown[],
+  supplied: string | undefined,
+) {
+  return (
+    supplied === undefined || supplied === sourceReceiptId(table, sourceKey)
+  );
+}
+
+// `2026-08-16 18:24:28` — la forma che scrive SQLite con CURRENT_TIMESTAMP:
+// niente `T`, niente fuso. Quel valore E' UTC (lo dice SQLite), ma `Date.parse`
+// su una stringa cosi' non e' specificato e V8 la legge come ora LOCALE: su una
+// macchina che non gira a UTC lo stesso istante darebbe due millisecondi
+// diversi, e un confronto corretto direbbe «diverso».
+const NAIVE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+
+function instantMs(value: unknown) {
+  const text = String(value);
+  return Date.parse(
+    NAIVE_TIMESTAMP.test(text) ? `${text.replace(" ", "T")}Z` : text,
+  );
+}
+
+function sameInstant(left: unknown, right: unknown) {
+  const leftMs = instantMs(left);
+  const rightMs = instantMs(right);
+  return (
+    Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs
+  );
+}
+
+function sameNullableInstant(left: unknown, right: unknown) {
+  if (left == null || right == null) return left == null && right == null;
+  return sameInstant(left, right);
+}
+
+function applicationReceiptId(application: ApplicationIn): string {
+  // Compatibilità con client pre-quarantine: stessa derivazione opaca che il
+  // nuovo client applica alla chiave sorgente. Non esponiamo l'intero locale.
+  return wireReceipt("applications", application);
+}
+
 interface ProfileIn {
   yaml: string;
+  _receipt_id?: string;
   summaries?: Record<string, string>;
+  force?: boolean;
 }
 
 interface PendingMessageIn {
   id: number;
+  _receipt_id?: string;
   agent: string;
   body: string;
   kind?: string | null;
@@ -185,6 +329,7 @@ interface SentinelTickIn {
 // Il receive le interpreta come soft-delete cloud: UPDATE deleted_at.
 // Vedi mig 025 + shared/skills/_db.py _migrate_v6_to_v7_tombstones.
 interface TombstoneIn {
+  _receipt_id?: string;
   table_name: "positions" | "scores" | "applications";
   legacy_id: number;
   deleted_at: string; // ISO timestamp client-side (preserva il "quando")
@@ -197,6 +342,7 @@ interface TombstoneIn {
 // chiave verso le posizioni è `position_legacy_id` (l'int stabile == positions.legacy_id),
 // non l'uuid per-account, così le righe sono portabili tra account/mirror.
 interface PositionTransitionIn {
+  _receipt_id?: string;
   position_legacy_id: number;
   from_state?: string | null;
   to_state: string;
@@ -212,6 +358,7 @@ interface PositionTransitionIn {
 // per risolvere positions.company_id.
 interface CompanyIn {
   id: number;
+  _receipt_id?: string;
   name: string;
   website?: string | null;
   hq_country?: string | null;
@@ -235,6 +382,7 @@ interface CompanyIn {
 // UUID cloud via legacyToUuid (come scores/applications).
 interface HighlightIn {
   id: number;
+  _receipt_id?: string;
   position_id: number;
   type: string;
   text: string;
@@ -386,14 +534,33 @@ export async function POST(req: NextRequest) {
 
   let positionsUpserted = 0;
   let scoresUpserted = 0;
+  let scoresOutOfRange: OutOfRangeSummary = {
+    rows: 0,
+    byColumn: {},
+    worst: null,
+  };
+  let scoreReceiptIds: string[] = [];
   let applicationsUpserted = 0;
+  let applicationReceiptIds: string[] = [];
   let companiesUpserted = 0;
   let highlightsUpserted = 0;
   let pendingMessagesUpserted = 0;
   let sentinelTicksUpserted = 0;
   let tombstonesApplied = 0;
   let positionTransitionsUpserted = 0;
+  const rowReceipts: Record<ReceiptTable, string[]> = {
+    applications: applicationReceiptIds,
+    scores: scoreReceiptIds,
+    companies: [],
+    positions: [],
+    position_highlights: [],
+    pending_user_messages: [],
+    tombstones: [],
+    position_transitions: [],
+    profile: [],
+  };
   const legacyToUuid = new Map<number, string>();
+  const appliedPositionIds = new Set<number>();
   // companies.id locale (int) → companies.id cloud (UUID). Popolata
   // dall'upsert companies, consumata dal mapping positions.company_id.
   const companyLegacyToUuid = new Map<number, string>();
@@ -402,6 +569,14 @@ export async function POST(req: NextRequest) {
   // companyLegacyToUuid è pronta per risolvere positions.company_id. Mapping
   // colonne: nomi SQLite locali → cloud, con hq_country → hq (schemi disallineati).
   if (companies.length > 0) {
+    if (
+      companies.some(
+        (company) =>
+          !validReceipt("companies", company.id, company._receipt_id),
+      )
+    ) {
+      return protocolError("invalid_companies_receipt_id");
+    }
     const payload = companies
       .filter((c) => typeof c.id === "number" && cleanText(c.name))
       .map((c) => ({
@@ -423,6 +598,10 @@ export async function POST(req: NextRequest) {
         logo_fetched: !!c.logo_fetched,
       }));
 
+    if (payload.length !== companies.length) {
+      return rowRejection("companies_row_rejected");
+    }
+
     if (payload.length > 0) {
       const { data: upserted, error } = await admin
         .from("companies")
@@ -430,22 +609,37 @@ export async function POST(req: NextRequest) {
         .select("id, legacy_id");
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "companies_upsert_failed",
-        });
+        return rowAttributableWriteError(error, "companies_upsert_failed");
       }
       companiesUpserted = upserted?.length ?? 0;
+      const written = new Set<number>();
       for (const row of upserted ?? []) {
-        if (row.legacy_id != null)
+        if (row.legacy_id != null) {
           companyLegacyToUuid.set(row.legacy_id, row.id);
+          written.add(Number(row.legacy_id));
+        }
+      }
+      // La prova che la riga e' sul cloud e' il RETURNING della scrittura
+      // stessa: quello che torna e' lo stato POST-write della riga con quel
+      // legacy_id. L'identita', invece, viene dalla riga del client.
+      for (const company of companies) {
+        if (written.has(Number(company.id))) {
+          rowReceipts.companies.push(wireReceipt("companies", company));
+        }
       }
     }
   }
 
   // 1. Upsert positions via (user_id, legacy_id)
   if (positions.length > 0) {
+    if (
+      positions.some(
+        (position) =>
+          !validReceipt("positions", position.id, position._receipt_id),
+      )
+    ) {
+      return protocolError("invalid_positions_receipt_id");
+    }
     // Risolvi company_id (int locale) → UUID cloud. Riusa companyLegacyToUuid
     // dall'upsert companies; per i company_id referenziati da una position ma
     // NON presenti nel batch (delta dove la company non è cambiata), lookup
@@ -473,146 +667,239 @@ export async function POST(req: NextRequest) {
 
     const payload = positions
       .filter((p) => typeof p.id === "number" && p.title && p.company)
-      .map((p) => ({
-        user_id: userId,
-        legacy_id: p.id,
-        title: p.title,
-        company: p.company,
-        // company_id (UUID cloud) risolto via companyLegacyToUuid; null se la
-        // company non è ancora sul cloud (degrada a "no Company card", si
-        // popola al prossimo push completo).
-        company_id:
-          p.company_id != null
-            ? (companyLegacyToUuid.get(p.company_id) ?? null)
-            : null,
-        url: p.url ?? null,
-        location: p.location ?? null,
-        remote_type: p.remote_type ?? null,
-        status: normalizePositionStatus(p.status),
-        notes: p.notes ?? null,
-        source: p.source ?? null,
-        jd_text: p.jd_text ?? null,
-        jd_summary: p.jd_summary ?? null,
-        requirements: p.requirements ?? null,
-        found_by: p.found_by ?? null,
-        found_at: p.found_at ?? null,
-        deadline: p.deadline ?? null,
-        last_checked: p.last_checked ?? null,
-        last_actor: p.last_actor ?? null,
-        // Metadati location/categoria (Parte B sync) — alimentano i grafici
-        // categoria/mappa della dashboard. Text/numeric: passthrough.
-        role_family: p.role_family ?? null,
-        loc_city: p.loc_city ?? null,
-        loc_region: p.loc_region ?? null,
-        loc_country: p.loc_country ?? null,
-        loc_country_code: p.loc_country_code ?? null,
-        loc_continent: p.loc_continent ?? null,
-        work_mode: p.work_mode ?? null,
-        work_country: p.work_country ?? null,
-        work_country_code: p.work_country_code ?? null,
-        location_notes: p.location_notes ?? null,
-        office_address: p.office_address ?? null,
-        office_lat: p.office_lat ?? null,
-        office_lon: p.office_lon ?? null,
-        // boolean: SQLite 0|1 → BOOLEAN (default false se assente), come write_requested.
-        is_multi_location:
-          p.is_multi_location == null
-            ? false
-            : typeof p.is_multi_location === "boolean"
-              ? p.is_multi_location
-              : p.is_multi_location === 1,
-        office_geocoded:
-          p.office_geocoded == null
-            ? false
-            : typeof p.office_geocoded === "boolean"
-              ? p.office_geocoded
-              : p.office_geocoded === 1,
-        office_verified:
-          p.office_verified == null
-            ? false
-            : typeof p.office_verified === "boolean"
-              ? p.office_verified
-              : p.office_verified === 1,
-        // Expiry/lifecycle (mig 038). is_open default TRUE (NOT NULL DEFAULT TRUE).
-        expires_at: p.expires_at ?? null,
-        is_open:
-          p.is_open == null
-            ? true
-            : typeof p.is_open === "boolean"
-              ? p.is_open
-              : p.is_open === 1,
-        last_open_check: p.last_open_check ?? null,
-        salary_declared_min: p.salary_declared_min ?? null,
-        salary_declared_max: p.salary_declared_max ?? null,
-        salary_declared_currency: p.salary_declared_currency ?? null,
-        salary_estimated_min: p.salary_estimated_min ?? null,
-        salary_estimated_max: p.salary_estimated_max ?? null,
-        salary_estimated_currency: p.salary_estimated_currency ?? null,
-        salary_estimated_source: p.salary_estimated_source ?? null,
-        // SQLite invia integer (0|1); Supabase ha BOOLEAN — coerce esplicito.
-        // Default FALSE quando il campo manca (compat con DB pre-V6 / pre-V8
-        // / push legacy).
-        write_requested:
-          p.write_requested == null
-            ? false
-            : typeof p.write_requested === "boolean"
-              ? p.write_requested
-              : p.write_requested === 1,
-        write_requested_at: p.write_requested_at ?? null,
-        geocode_requested:
-          p.geocode_requested == null
-            ? false
-            : typeof p.geocode_requested === "boolean"
-              ? p.geocode_requested
-              : p.geocode_requested === 1,
-        geocode_requested_at: p.geocode_requested_at ?? null,
-        // Recheck on-demand (mig 042). Flag user-driven default FALSE.
-        recheck_requested:
-          p.recheck_requested == null
-            ? false
-            : typeof p.recheck_requested === "boolean"
-              ? p.recheck_requested
-              : p.recheck_requested === 1,
-        recheck_requested_at: p.recheck_requested_at ?? null,
-        // Salary-precise on-demand (V9, mig 040). Flag user-driven default FALSE.
-        salary_precise_requested:
-          p.salary_precise_requested == null
-            ? false
-            : typeof p.salary_precise_requested === "boolean"
-              ? p.salary_precise_requested
-              : p.salary_precise_requested === 1,
-        salary_precise_requested_at: p.salary_precise_requested_at ?? null,
-        salary_precise: p.salary_precise ?? null,
-      }));
-
-    const { data: upserted, error } = await admin
-      .from("positions")
-      .upsert(payload, { onConflict: "user_id,legacy_id" })
-      .select("id, legacy_id");
-
-    if (error) {
-      return sanitizedError(error, {
-        status: 500,
-        scope: "cloud-sync/push",
-        publicMessage: "positions_upsert_failed",
+      .map((p) => {
+        const status = normalizePositionStatus(p.status);
+        if (status === "applied") appliedPositionIds.add(p.id);
+        return {
+          user_id: userId,
+          legacy_id: p.id,
+          title: p.title,
+          company: p.company,
+          // company_id (UUID cloud) risolto via companyLegacyToUuid; null se la
+          // company non è ancora sul cloud (degrada a "no Company card", si
+          // popola al prossimo push completo).
+          company_id:
+            p.company_id != null
+              ? (companyLegacyToUuid.get(p.company_id) ?? null)
+              : null,
+          url: p.url ?? null,
+          location: p.location ?? null,
+          remote_type: p.remote_type ?? null,
+          status,
+          notes: p.notes ?? null,
+          source: p.source ?? null,
+          jd_text: p.jd_text ?? null,
+          jd_summary: p.jd_summary ?? null,
+          requirements: p.requirements ?? null,
+          found_by: p.found_by ?? null,
+          found_at: p.found_at ?? null,
+          deadline: p.deadline ?? null,
+          last_checked: p.last_checked ?? null,
+          last_actor: p.last_actor ?? null,
+          // Metadati location/categoria (Parte B sync) — alimentano i grafici
+          // categoria/mappa della dashboard. Text/numeric: passthrough.
+          role_family: p.role_family ?? null,
+          loc_city: p.loc_city ?? null,
+          loc_region: p.loc_region ?? null,
+          loc_country: p.loc_country ?? null,
+          loc_country_code: p.loc_country_code ?? null,
+          loc_continent: p.loc_continent ?? null,
+          work_mode: p.work_mode ?? null,
+          work_country: p.work_country ?? null,
+          work_country_code: p.work_country_code ?? null,
+          location_notes: p.location_notes ?? null,
+          office_address: p.office_address ?? null,
+          office_lat: p.office_lat ?? null,
+          office_lon: p.office_lon ?? null,
+          // boolean: SQLite 0|1 → BOOLEAN (default false se assente), come write_requested.
+          is_multi_location:
+            p.is_multi_location == null
+              ? false
+              : typeof p.is_multi_location === "boolean"
+                ? p.is_multi_location
+                : p.is_multi_location === 1,
+          office_geocoded:
+            p.office_geocoded == null
+              ? false
+              : typeof p.office_geocoded === "boolean"
+                ? p.office_geocoded
+                : p.office_geocoded === 1,
+          office_verified:
+            p.office_verified == null
+              ? false
+              : typeof p.office_verified === "boolean"
+                ? p.office_verified
+                : p.office_verified === 1,
+          // Expiry/lifecycle (mig 038). is_open default TRUE (NOT NULL DEFAULT TRUE).
+          expires_at: p.expires_at ?? null,
+          is_open:
+            p.is_open == null
+              ? true
+              : typeof p.is_open === "boolean"
+                ? p.is_open
+                : p.is_open === 1,
+          last_open_check: p.last_open_check ?? null,
+          salary_declared_min: p.salary_declared_min ?? null,
+          salary_declared_max: p.salary_declared_max ?? null,
+          salary_declared_currency: p.salary_declared_currency ?? null,
+          salary_estimated_min: p.salary_estimated_min ?? null,
+          salary_estimated_max: p.salary_estimated_max ?? null,
+          salary_estimated_currency: p.salary_estimated_currency ?? null,
+          salary_estimated_source: p.salary_estimated_source ?? null,
+          // SQLite invia integer (0|1); Supabase ha BOOLEAN — coerce esplicito.
+          // Default FALSE quando il campo manca (compat con DB pre-V6 / pre-V8
+          // / push legacy).
+          write_requested:
+            p.write_requested == null
+              ? false
+              : typeof p.write_requested === "boolean"
+                ? p.write_requested
+                : p.write_requested === 1,
+          write_requested_at: p.write_requested_at ?? null,
+          // Compat pre-078: assente significa "client non conosce il campo",
+          // non "azzera il desired state cloud". Con defaultToNull=false
+          // PostgREST preserva il valore concorrente su UPDATE; un NULL
+          // esplicito dei client aggiornati continua invece a risolverlo.
+          ...(Object.prototype.hasOwnProperty.call(p, "write_request_kind")
+            ? { write_request_kind: p.write_request_kind ?? null }
+            : {}),
+          geocode_requested:
+            p.geocode_requested == null
+              ? false
+              : typeof p.geocode_requested === "boolean"
+                ? p.geocode_requested
+                : p.geocode_requested === 1,
+          geocode_requested_at: p.geocode_requested_at ?? null,
+          // Recheck on-demand (mig 042). Flag user-driven default FALSE.
+          recheck_requested:
+            p.recheck_requested == null
+              ? false
+              : typeof p.recheck_requested === "boolean"
+                ? p.recheck_requested
+                : p.recheck_requested === 1,
+          recheck_requested_at: p.recheck_requested_at ?? null,
+          // Salary-precise on-demand (V9, mig 040). Flag user-driven default FALSE.
+          salary_precise_requested:
+            p.salary_precise_requested == null
+              ? false
+              : typeof p.salary_precise_requested === "boolean"
+                ? p.salary_precise_requested
+                : p.salary_precise_requested === 1,
+          salary_precise_requested_at: p.salary_precise_requested_at ?? null,
+          salary_precise: p.salary_precise ?? null,
+        };
       });
+
+    if (payload.length !== positions.length) {
+      return rowRejection("positions_row_rejected");
     }
 
-    positionsUpserted = upserted?.length ?? 0;
-    for (const row of upserted ?? []) {
-      if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
+    const regularPayload = payload.filter((p) => p.status !== "applied");
+    const deferredAppliedPayload = payload
+      .filter((p) => p.status === "applied")
+      .map((p) => {
+        const { status, ...deferred } = p;
+        if (status !== "applied") throw new Error("unreachable_status");
+        return deferred;
+      });
+    for (const batch of [
+      { rows: regularPayload, defaultToNull: false },
+      { rows: deferredAppliedPayload, defaultToNull: false },
+    ]) {
+      if (batch.rows.length === 0) continue;
+      // Su INSERT lo status assente usa il default `new`; su UPDATE resta
+      // quello corrente. Solo l'RPC dopo applications pubblica `applied`.
+      const { data: upserted, error } = await admin
+        .from("positions")
+        .upsert(batch.rows, {
+          onConflict: "user_id,legacy_id",
+          defaultToNull: batch.defaultToNull,
+        })
+        .select("id, legacy_id");
+
+      if (error) {
+        return rowAttributableWriteError(error, "positions_upsert_failed");
+      }
+
+      positionsUpserted += upserted?.length ?? 0;
+      const written = new Set<number>();
+      for (const row of upserted ?? []) {
+        if (row.legacy_id != null) {
+          legacyToUuid.set(row.legacy_id, row.id);
+          written.add(Number(row.legacy_id));
+        }
+      }
+      for (const position of positions) {
+        if (written.has(Number(position.id))) {
+          rowReceipts.positions.push(wireReceipt("positions", position));
+        }
+      }
     }
   }
 
-  // 2. Upsert scores via position_id UUID
-  if (scores.length > 0 && legacyToUuid.size > 0) {
+  // 2. Upsert scores via position_id UUID. L'identità dell'ACK è però sempre
+  // scores.legacy_id: il parent serve solo a risolvere la FK cloud.
+  const scoreParents = new Set<number>();
+  const scoreLegacyIds = new Set<number>();
+  for (const score of scores) {
+    if (!Number.isInteger(score.legacy_id) || score.legacy_id <= 0) {
+      return protocolError("invalid_score_identity");
+    }
+    const derivedReceiptId = sourceReceiptId("scores", score.legacy_id);
+    if (
+      score._receipt_id !== undefined &&
+      score._receipt_id !== derivedReceiptId
+    ) {
+      return protocolError("invalid_score_receipt_id");
+    }
+    if (
+      scoreParents.has(score.position_id) ||
+      scoreLegacyIds.has(score.legacy_id)
+    ) {
+      return protocolError("score_identity_collision");
+    }
+    scoreParents.add(score.position_id);
+    scoreLegacyIds.add(score.legacy_id);
+  }
+  if (scores.length > 0) {
+    const scoreParentsToResolve = new Set<number>();
+    for (const score of scores) {
+      if (!legacyToUuid.has(score.position_id)) {
+        scoreParentsToResolve.add(score.position_id);
+      }
+    }
+    if (scoreParentsToResolve.size > 0) {
+      const { data: rows, error } = await admin
+        .from("positions")
+        .select("id, legacy_id")
+        .eq("user_id", userId)
+        .in("legacy_id", Array.from(scoreParentsToResolve));
+      if (error) {
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "scores_positions_lookup_failed",
+        });
+      }
+      for (const row of rows ?? []) {
+        if (row.legacy_id != null) {
+          legacyToUuid.set(row.legacy_id, row.id as string);
+        }
+      }
+    }
+
+    const scoreReceiptByUuid = new Map<string, string>();
+    const scoreLegacyByUuid = new Map<string, number>();
     const payload = scores
       .map((s) => {
         const uuid = legacyToUuid.get(s.position_id);
         if (!uuid || typeof s.total_score !== "number") return null;
+        scoreReceiptByUuid.set(uuid, wireReceipt("scores", s));
+        scoreLegacyByUuid.set(uuid, s.legacy_id);
         return {
           user_id: userId,
           position_id: uuid,
+          legacy_id: s.legacy_id,
           total_score: Math.max(0, Math.min(100, Math.round(s.total_score))),
           experience_fit: s.experience_fit ?? null,
           salary_fit: s.salary_fit ?? null,
@@ -627,69 +914,156 @@ export async function POST(req: NextRequest) {
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
+    if (payload.length !== scores.length) {
+      return rowRejection("scores_identity_unresolved", 400);
+    }
+
     if (payload.length > 0) {
       const { data: upserted, error } = await admin
         .from("scores")
         .upsert(payload, { onConflict: "position_id" })
-        .select("id");
+        .select("position_id, legacy_id");
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "scores_upsert_failed",
-        });
+        return rowAttributableWriteError(error, "scores_upsert_failed");
       }
+      const persistedReceiptIds = Array.isArray(upserted)
+        ? upserted.map((row) =>
+            row.legacy_id === scoreLegacyByUuid.get(row.position_id)
+              ? (scoreReceiptByUuid.get(row.position_id) ?? null)
+              : null,
+          )
+        : [];
+      const completeReceipt =
+        persistedReceiptIds.length === payload.length &&
+        persistedReceiptIds.every((receiptId) => receiptId !== null) &&
+        new Set(persistedReceiptIds).size === payload.length;
+      if (!completeReceipt) {
+        return NextResponse.json(
+          { error: "scores_receipt_mismatch" },
+          { status: 500 },
+        );
+      }
+      scoreReceiptIds = (persistedReceiptIds as string[]).sort();
       scoresUpserted = upserted?.length ?? 0;
+      // Il cloud non ha CHECK sulle dimensioni (mig 001/003): quello che passa
+      // da qui torna identico a ogni restore. Non lo tocchiamo — i punteggi
+      // sono di utenti reali — ma lo contiamo, così il fenomeno è misurabile
+      // dalla risposta di sync invece che solo interrogando il DB.
+      scoresOutOfRange = summarizeOutOfRange(payload);
     }
   }
 
-  // 3. Upsert applications via position_id UUID
-  if (applications.length > 0 && legacyToUuid.size > 0) {
-    const payload = applications
-      .map((a) => {
-        const uuid = legacyToUuid.get(a.position_id);
-        if (!uuid) return null;
-        return {
-          user_id: userId,
-          position_id: uuid,
-          cv_path: a.cv_path ?? null,
-          cv_pdf_path: a.cv_pdf_path ?? null,
-          cl_path: a.cl_path ?? null,
-          cl_pdf_path: a.cl_pdf_path ?? null,
-          status: normalizeApplicationStatus(a.status),
-          critic_score: a.critic_score ?? null,
-          critic_verdict: normalizeCriticVerdict(a.critic_verdict),
-          critic_notes: a.critic_notes ?? null,
-          written_at: a.written_at ?? null,
-          applied_at: a.applied_at ?? null,
-          applied_via: a.applied_via ?? null,
-          response: a.response ?? null,
-          response_at: a.response_at ?? null,
-          written_by: a.written_by ?? null,
-          reviewed_by: a.reviewed_by ?? null,
-          critic_reviewed_at: a.critic_reviewed_at ?? null,
-          applied: a.applied ?? null,
-          cv_drive_id: a.cv_drive_id ?? null,
-          cl_drive_id: a.cl_drive_id ?? null,
-        };
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null);
+  // 3. L'RPC risolve position_legacy_id nel tenant e conserva separatamente
+  // applications.legacy_id. Nessuna riga viene filtrata qui: identità invalida,
+  // parent mancante o ricevuta incompleta devono fallire l'intero request.
+  if (applications.length > 0) {
+    for (const application of applications) {
+      if (
+        !Number.isInteger(application.legacy_id) ||
+        application.legacy_id <= 0 ||
+        !Number.isInteger(application.position_legacy_id) ||
+        application.position_legacy_id <= 0
+      ) {
+        return protocolError("invalid_application_identity");
+      }
+      const expectedReceiptId = sourceReceiptId(
+        "applications",
+        application.legacy_id,
+      );
+      if (
+        application._receipt_id !== undefined &&
+        application._receipt_id !== expectedReceiptId
+      ) {
+        return protocolError("invalid_application_receipt_id");
+      }
+    }
+
+    const payload = applications.map((a) => {
+      const status = normalizeApplicationStatus(a.status);
+      if (status === "applied") appliedPositionIds.add(a.position_legacy_id);
+      return invalidateStaleCriticVerdict({
+        legacy_id: a.legacy_id,
+        position_legacy_id: a.position_legacy_id,
+        _receipt_id: applicationReceiptId(a),
+        cv_path: a.cv_path ?? null,
+        cv_pdf_path: a.cv_pdf_path ?? null,
+        cl_path: a.cl_path ?? null,
+        cl_pdf_path: a.cl_pdf_path ?? null,
+        status,
+        critic_score: a.critic_score ?? null,
+        critic_verdict: normalizeCriticVerdict(a.critic_verdict),
+        critic_notes: a.critic_notes ?? null,
+        // `undefined` resta assente per i client pre-O-64 e non cancella il
+        // round cloud; i client aggiornati inviano invece number o null.
+        critic_round: a.critic_round,
+        written_at: a.written_at ?? null,
+        applied_at: a.applied_at ?? null,
+        applied_via: a.applied_via ?? null,
+        response: a.response ?? null,
+        response_at: a.response_at ?? null,
+        written_by: a.written_by ?? null,
+        reviewed_by: a.reviewed_by ?? null,
+        critic_reviewed_at: a.critic_reviewed_at ?? null,
+        applied: a.applied ?? null,
+        cv_drive_id: a.cv_drive_id ?? null,
+        cl_drive_id: a.cl_drive_id ?? null,
+      });
+    });
 
     if (payload.length > 0) {
-      const { data: upserted, error } = await admin
-        .from("applications")
-        .upsert(payload, { onConflict: "position_id" })
-        .select("id");
+      // L'RPC prende il lock della position prima di valutare l'application.
+      // Un push stale non può quindi retrocedere la candidatura dopo che una
+      // mark_position_applied concorrente l'ha resa visibile come applied.
+      const { data: receipts, error } = await admin.rpc(
+        "sync_upsert_applications",
+        {
+          p_user_id: userId,
+          p_applications: payload,
+        },
+      );
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "applications_upsert_failed",
-        });
+        return rowAttributableWriteError(error, "applications_upsert_failed");
       }
-      applicationsUpserted = upserted?.length ?? 0;
+      const expectedReceiptIds = payload
+        .map((application) => application._receipt_id)
+        .sort();
+      const receivedReceiptIds = Array.isArray(receipts)
+        ? receipts
+            .map((receipt) => (typeof receipt === "string" ? receipt : null))
+            .sort()
+        : [];
+      const completeReceipt =
+        receivedReceiptIds.length === expectedReceiptIds.length &&
+        receivedReceiptIds.every(
+          (receiptId, index) =>
+            receiptId !== null && receiptId === expectedReceiptIds[index],
+        );
+      if (!completeReceipt) {
+        return NextResponse.json(
+          { error: "applications_receipt_mismatch" },
+          { status: 500 },
+        );
+      }
+      applicationReceiptIds = receivedReceiptIds as string[];
+      applicationsUpserted = receipts.length;
+    }
+  }
+
+  // Il solo passo che rende la posizione visibile nel filtro applied avviene
+  // dopo l'application. L'RPC controlla sotto lock status, flag, timestamp e
+  // canale; se uno manca, fallisce e il client non avanza il cursore.
+  if (appliedPositionIds.size > 0) {
+    const { error } = await admin.rpc("sync_confirm_positions_applied", {
+      p_user_id: userId,
+      p_position_legacy_ids: Array.from(appliedPositionIds),
+    });
+    if (error) {
+      return rowAttributableWriteError(
+        error,
+        "application_state_invariant_failed",
+      );
     }
   }
 
@@ -699,6 +1073,18 @@ export async function POST(req: NextRequest) {
   // pattern di scores/applications). type validato (pro|con), righe fuori enum
   // scartate per non far fallire l'intero upsert.
   if (highlights.length > 0) {
+    if (
+      highlights.some(
+        (highlight) =>
+          !validReceipt(
+            "position_highlights",
+            highlight.id,
+            highlight._receipt_id,
+          ),
+      )
+    ) {
+      return protocolError("invalid_position_highlights_receipt_id");
+    }
     const hlNeedsLookup = new Set<number>();
     for (const h of highlights) {
       if (typeof h.position_id === "number" && !legacyToUuid.has(h.position_id))
@@ -737,37 +1123,92 @@ export async function POST(req: NextRequest) {
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
+    if (payload.length !== highlights.length) {
+      return rowRejection("position_highlights_row_rejected");
+    }
+
     if (payload.length > 0) {
       const { data: upserted, error } = await admin
         .from("position_highlights")
         .upsert(payload, { onConflict: "user_id,legacy_id" })
-        .select("id");
+        .select("legacy_id");
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "position_highlights_upsert_failed",
-        });
+        return rowAttributableWriteError(
+          error,
+          "position_highlights_upsert_failed",
+        );
       }
       highlightsUpserted = upserted?.length ?? 0;
+      const written = new Set<number>();
+      for (const row of upserted ?? []) {
+        if (row.legacy_id != null) written.add(Number(row.legacy_id));
+      }
+      for (const highlight of highlights) {
+        if (written.has(Number(highlight.id))) {
+          rowReceipts.position_highlights.push(
+            wireReceipt("position_highlights", highlight),
+          );
+        }
+      }
     }
   }
 
   // 3b. Upsert pending_user_messages via (user_id, legacy_id).
-  // related_position_id (numero locale) -> UUID cloud via legacyToUuid se
-  // disponibile. Se non lo conosciamo (push parziale o push successivo dove
-  // la position esiste gia' cloud ma non in questo batch), passiamo NULL —
-  // la dashboard mostra il messaggio senza link alla posizione, che e' un
-  // degrado accettabile. Una soluzione completa farebbe un lookup
-  // server-side per legacy_id mancanti, e' rimandata.
+  // related_position_id (numero locale) -> UUID cloud. Un parent dichiarato
+  // non può degradare a NULL: sarebbe un 200 con perdita semantica.
   if (pendingMessages.length > 0) {
+    if (
+      pendingMessages.some(
+        (message) =>
+          !validReceipt(
+            "pending_user_messages",
+            message.id,
+            message._receipt_id,
+          ),
+      )
+    ) {
+      return protocolError("invalid_pending_user_messages_receipt_id");
+    }
+    const pendingNeedsLookup = new Set<number>();
+    for (const message of pendingMessages) {
+      if (
+        typeof message.related_position_id === "number" &&
+        !legacyToUuid.has(message.related_position_id)
+      ) {
+        pendingNeedsLookup.add(message.related_position_id);
+      }
+    }
+    if (pendingNeedsLookup.size > 0) {
+      const { data: rows, error } = await admin
+        .from("positions")
+        .select("id, legacy_id")
+        .eq("user_id", userId)
+        .in("legacy_id", Array.from(pendingNeedsLookup));
+      if (error) {
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "message_positions_lookup_failed",
+        });
+      }
+      for (const row of rows ?? []) {
+        if (row.legacy_id != null) legacyToUuid.set(row.legacy_id, row.id);
+      }
+    }
     const payload = pendingMessages
-      .filter((m) => typeof m.id === "number" && m.agent && m.body)
+      .filter(
+        (m) =>
+          typeof m.id === "number" &&
+          m.agent &&
+          m.body &&
+          (m.related_position_id == null ||
+            legacyToUuid.has(m.related_position_id)),
+      )
       .map((m) => {
         const relatedUuid =
           m.related_position_id != null
-            ? (legacyToUuid.get(m.related_position_id) ?? null)
+            ? legacyToUuid.get(m.related_position_id)!
             : null;
         return {
           user_id: userId,
@@ -800,6 +1241,10 @@ export async function POST(req: NextRequest) {
         };
       });
 
+    if (payload.length !== pendingMessages.length) {
+      return rowRejection("pending_user_messages_row_rejected");
+    }
+
     if (payload.length > 0) {
       // [JHT-MSG-BACKFLOW] Merge lato DB (mig 057) invece di upsert cieco:
       // i campi utente (acknowledged_at, user_reply, user_reply_at) scritti
@@ -811,14 +1256,77 @@ export async function POST(req: NextRequest) {
       );
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "pending_user_messages_upsert_failed",
-        });
+        return rowAttributableWriteError(
+          error,
+          "pending_user_messages_upsert_failed",
+        );
       }
       pendingMessagesUpserted =
         typeof upsertedCount === "number" ? upsertedCount : payload.length;
+
+      // ⚠️ Quante righe la RPC ha SCRITTO non dice quante ne ha ACCETTATE.
+      // La merge salta i no-op di proposito (mig 060: senza quella guardia il
+      // full-push riscriverebbe ogni riga identica a ogni tick), quindi a
+      // regime ritorna 0 su righe che sul cloud ci sono, identiche. Legare le
+      // ricevute a quel numero — com'era fino a #163 — voleva dire non
+      // emetterne nessuna e far fallire il push per sempre: 334 messaggi
+      // fermi su due macchine, mentre le righe erano gia' arrivate.
+      //
+      // La domanda giusta non e' «l'ho riscritta adesso?» ma «c'e', ed e'
+      // quella che il client ha mandato?». Si risponde rileggendola e
+      // confrontandola campo per campo, riga per riga: chi passa prende la
+      // ricevuta, chi non torna o torna diverso NON la prende e continua a
+      // fermare il push.
+      const { data: persisted, error: receiptError } = await admin
+        .from("pending_user_messages")
+        .select(
+          "legacy_id,agent,body,kind,author,chat_ts,related_position_id,delivered_via,delivered_at,agent_seen_reply_at",
+        )
+        .eq("user_id", userId)
+        .in(
+          "legacy_id",
+          payload.map((message) => message.legacy_id),
+        );
+      if (receiptError) {
+        return sanitizedError(receiptError, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "pending_user_messages_receipt_failed",
+        });
+      }
+      const persistedById = new Map(
+        (persisted ?? []).map((row) => [Number(row.legacy_id), row]),
+      );
+      // La riga com'e' arrivata dal client, per derivarne l'identita': quella
+      // rimessa in fila dal database ha altre rese (per esempio le date) e
+      // non e' la stessa stringa, che e' l'altra meta' di #163.
+      const wireByLegacyId = new Map(
+        pendingMessages.map((message) => [Number(message.id), message]),
+      );
+      for (const expected of payload) {
+        const row = persistedById.get(Number(expected.legacy_id));
+        const wire = wireByLegacyId.get(Number(expected.legacy_id));
+        if (
+          row &&
+          wire &&
+          row.agent === expected.agent &&
+          row.body === expected.body &&
+          row.kind === expected.kind &&
+          row.author === expected.author &&
+          row.chat_ts === expected.chat_ts &&
+          row.related_position_id === expected.related_position_id &&
+          row.delivered_via === expected.delivered_via &&
+          sameNullableInstant(row.delivered_at, expected.delivered_at) &&
+          sameNullableInstant(
+            row.agent_seen_reply_at,
+            expected.agent_seen_reply_at,
+          )
+        ) {
+          rowReceipts.pending_user_messages.push(
+            wireReceipt("pending_user_messages", wire),
+          );
+        }
+      }
     }
   }
 
@@ -878,11 +1386,7 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "sentinel_ticks_upsert_failed",
-        });
+        return rowAttributableWriteError(error, "sentinel_ticks_upsert_failed");
       }
       sentinelTicksUpserted = upserted?.length ?? 0;
     }
@@ -902,6 +1406,18 @@ export async function POST(req: NextRequest) {
   // Idempotente: il filter `deleted_at IS NULL` evita di sovrascrivere
   // tombstone già applicati (un re-push dopo cursor reset non rompe nulla).
   if (tombstones.length > 0) {
+    if (
+      tombstones.some(
+        (tombstone) =>
+          !validReceipt(
+            "tombstones",
+            [tombstone.table_name, tombstone.legacy_id, tombstone.deleted_at],
+            tombstone._receipt_id,
+          ),
+      )
+    ) {
+      return protocolError("invalid_tombstones_receipt_id");
+    }
     const byTable = {
       positions: [] as TombstoneIn[],
       scores: [] as TombstoneIn[],
@@ -916,6 +1432,13 @@ export async function POST(req: NextRequest) {
       ) {
         byTable[t.table_name].push(t);
       }
+    }
+    const classifiedTombstones =
+      byTable.positions.length +
+      byTable.scores.length +
+      byTable.applications.length;
+    if (classifiedTombstones !== tombstones.length) {
+      return rowRejection("tombstone_row_rejected");
     }
 
     // Risolvi legacy_id → UUID per scores/applications. Riusa il mapping
@@ -937,33 +1460,51 @@ export async function POST(req: NextRequest) {
     }
 
     for (const t of byTable.positions) {
-      const { error } = await admin
+      const { data, error } = await admin
         .from("positions")
         .update({ deleted_at: t.deleted_at })
         .eq("user_id", userId)
         .eq("legacy_id", t.legacy_id)
-        .is("deleted_at", null);
-      if (!error) tombstonesApplied++;
+        .select("legacy_id");
+      if (error) {
+        return rowAttributableWriteError(error, "tombstones_update_failed");
+      }
+      if ((data?.length ?? 0) > 0) {
+        tombstonesApplied++;
+        rowReceipts.tombstones.push(wireReceipt("tombstones", t));
+      }
     }
     for (const t of byTable.scores) {
       const uuid = legacyToUuid.get(t.legacy_id);
-      if (!uuid) continue;
-      const { error } = await admin
+      if (!uuid) return rowRejection("tombstone_position_not_found");
+      const { data, error } = await admin
         .from("scores")
         .update({ deleted_at: t.deleted_at })
         .eq("position_id", uuid)
-        .is("deleted_at", null);
-      if (!error) tombstonesApplied++;
+        .select("position_id");
+      if (error) {
+        return rowAttributableWriteError(error, "tombstones_update_failed");
+      }
+      if ((data?.length ?? 0) > 0) {
+        tombstonesApplied++;
+        rowReceipts.tombstones.push(wireReceipt("tombstones", t));
+      }
     }
     for (const t of byTable.applications) {
       const uuid = legacyToUuid.get(t.legacy_id);
-      if (!uuid) continue;
-      const { error } = await admin
+      if (!uuid) return rowRejection("tombstone_position_not_found");
+      const { data, error } = await admin
         .from("applications")
         .update({ deleted_at: t.deleted_at })
         .eq("position_id", uuid)
-        .is("deleted_at", null);
-      if (!error) tombstonesApplied++;
+        .select("position_id");
+      if (error) {
+        return rowAttributableWriteError(error, "tombstones_update_failed");
+      }
+      if ((data?.length ?? 0) > 0) {
+        tombstonesApplied++;
+        rowReceipts.tombstones.push(wireReceipt("tombstones", t));
+      }
     }
   }
 
@@ -974,6 +1515,23 @@ export async function POST(req: NextRequest) {
   // count riflette solo le righe davvero nuove. `position_legacy_id` è l'int
   // locale stabile: nessun lookup UUID necessario (a differenza di scores/apps).
   if (positionTransitions.length > 0) {
+    if (
+      positionTransitions.some(
+        (transition) =>
+          !validReceipt(
+            "position_transitions",
+            [
+              transition.position_legacy_id,
+              transition.ts,
+              transition.by_agent,
+              transition.to_state,
+            ],
+            transition._receipt_id,
+          ),
+      )
+    ) {
+      return protocolError("invalid_position_transitions_receipt_id");
+    }
     const payload = positionTransitions
       .filter(
         (t) =>
@@ -992,23 +1550,50 @@ export async function POST(req: NextRequest) {
         notes: t.notes ?? null,
       }));
 
+    if (payload.length !== positionTransitions.length) {
+      return rowRejection("position_transition_row_rejected");
+    }
+
     if (payload.length > 0) {
       const { data: upserted, error } = await admin
         .from("position_transitions")
         .upsert(payload, {
           onConflict: "user_id,position_legacy_id,ts,by_agent,to_state",
-          ignoreDuplicates: true,
         })
-        .select("id");
+        .select("position_legacy_id,ts,by_agent,to_state,from_state,notes");
 
       if (error) {
-        return sanitizedError(error, {
-          status: 500,
-          scope: "cloud-sync/push",
-          publicMessage: "position_transitions_upsert_failed",
-        });
+        return rowAttributableWriteError(
+          error,
+          "position_transitions_upsert_failed",
+        );
       }
       positionTransitionsUpserted = upserted?.length ?? 0;
+      // ⚠️ Qui la ricevuta si derivava da `row.ts`, cioe' da come il driver
+      // rende un `timestamptz`: `2026-08-16T18:24:28+00:00`. Il client la
+      // deriva da quello che ha letto da SQLite, `2026-08-16 18:24:28`. Stesso
+      // istante, due stringhe, due hash — e 271 transizioni ferme per sempre
+      // (#163). Il ritorno del database prova che la riga c'e'; l'identita' la
+      // da' la riga che il client ha mandato.
+      for (const wire of positionTransitions) {
+        const row = (upserted ?? []).find(
+          (candidate) =>
+            Number(candidate.position_legacy_id) ===
+              Number(wire.position_legacy_id) &&
+            candidate.by_agent === wire.by_agent &&
+            candidate.to_state === wire.to_state &&
+            sameInstant(candidate.ts, wire.ts),
+        );
+        if (
+          row &&
+          (row.from_state ?? null) === (wire.from_state ?? null) &&
+          (row.notes ?? null) === (wire.notes ?? null)
+        ) {
+          rowReceipts.position_transitions.push(
+            wireReceipt("position_transitions", wire),
+          );
+        }
+      }
     }
   }
 
@@ -1016,6 +1601,11 @@ export async function POST(req: NextRequest) {
   let profileUpserted = false;
   let profileError: string | null = null;
   if (body.profile && typeof body.profile.yaml === "string") {
+    if (
+      !validReceipt("profile", "candidate_profile", body.profile._receipt_id)
+    ) {
+      return protocolError("invalid_profile_receipt_id");
+    }
     const yamlRaw = body.profile.yaml;
     if (yamlRaw.length > 64 * 1024) {
       profileError = "profile yaml troppo grande (>64 KB)";
@@ -1031,11 +1621,19 @@ export async function POST(req: NextRequest) {
             userId,
             body.profile.summaries ?? {},
           );
-          const sync = await syncProfileToSupabase(admin, userId, canonical);
+          const sync = await syncProfileToSupabase(
+            admin,
+            userId,
+            canonical,
+            body.profile.force === true,
+          );
           if (!sync.ok) {
             profileError = sync.error;
           } else {
-            profileUpserted = true;
+            profileUpserted = sync.changed;
+            rowReceipts.profile.push(
+              sourceReceiptId("profile", "candidate_profile"),
+            );
             if (sync.warnings.length) {
               console.warn(
                 "[cloud-sync/push] profile sync warnings:",
@@ -1114,11 +1712,67 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // [ONBOARDING-STATE-HALF-DEAD] «Il team ha mai girato davvero?»
+  //
+  // `user_onboarding_state.first_team_run_at` era NULL per OGNI account in
+  // produzione, compresi quelli con migliaia di posizioni: la colonna
+  // esisteva dalla migration 011 e nessuno la scriveva né la leggeva. Un
+  // imbuto mezzo popolato è peggio di nessun imbuto, perché qualcuno lo
+  // legge — quindi o si scrive dove il primo run è osservabile, o si toglie.
+  //
+  // Il primo push che porta lavoro del team è il segnale onesto, ed è già
+  // una chiamata cloud: niente meccanismo nuovo. Le righe che contano sono
+  // quelle prodotte dagli agenti; il profilo no — quello lo configura la
+  // persona, e ha già la sua milestone (`profile_configured_at`).
+  const producedWork = teamProducedWork({
+    positions: positionsUpserted,
+    companies: companiesUpserted,
+    scores: scoresUpserted,
+    applications: applicationsUpserted,
+    highlights: highlightsUpserted,
+    positionTransitions: positionTransitionsUpserted,
+    sentinelTicks: sentinelTicksUpserted,
+  });
+
+  if (producedWork) {
+    try {
+      const { data: onboarding } = await admin
+        .from("user_onboarding_state")
+        .select("first_team_run_at")
+        .eq("user_id", userId)
+        .maybeSingle();
+      const patch = firstTeamRunPatch(
+        onboarding,
+        userId,
+        new Date().toISOString(),
+      );
+      if (patch) {
+        await admin
+          .from("user_onboarding_state")
+          .upsert(patch, { onConflict: "user_id" });
+      }
+    } catch {
+      // best-effort come il gemello in device-register: il push è la cosa
+      // che deve riuscire, la milestone la recupera il prossimo.
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     positions: { upserted: positionsUpserted },
-    scores: { upserted: scoresUpserted },
+    scores: { upserted: scoresUpserted, out_of_range: scoresOutOfRange },
     applications: { upserted: applicationsUpserted },
+    receipts: {
+      applications: applicationReceiptIds,
+      scores: scoreReceiptIds,
+      companies: rowReceipts.companies,
+      positions: rowReceipts.positions,
+      position_highlights: rowReceipts.position_highlights,
+      pending_user_messages: rowReceipts.pending_user_messages,
+      tombstones: rowReceipts.tombstones,
+      position_transitions: rowReceipts.position_transitions,
+      profile: rowReceipts.profile,
+    },
     companies: { upserted: companiesUpserted },
     position_highlights: { upserted: highlightsUpserted },
     pending_user_messages: { upserted: pendingMessagesUpserted },

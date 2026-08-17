@@ -49,7 +49,19 @@ COVERED = {
     'disconnect_backend':     'container',
     'pipeline_counts':        'positions',  # jht positions dashboard
     'save_user_profile':      'profile',
+    # Le impostazioni del Capitano — modalità di lavoro e ordini della cura.
+    # Il contratto del file sta in `coordinator_settings.py` (single-writer),
+    # il CLI è un proxy: `jht coordinator show` / `set-mode`.
+    'request_coordinator_state': 'coordinator',
+    'save_coordinator_settings': 'coordinator',
     'ensure_assistant':       'team',
+    # I documenti che attraversano il confine utente↔team. Le regole (aree
+    # dati, no traversal, tipo coerente, attestazione PDF) vivono in
+    # `shared/skills/artifact.py`; `tests/test_artifact_skill.py` le confronta
+    # col payload del client desktop e vieta alla skill di essere più
+    # permissiva.
+    'fetch_artifact':         'artifact',   # jht artifact fetch
+    'upload_user_document':   'artifact',   # jht artifact upload
     # La deroga alla spesa: il gioco pilota la stessa `burn_intent.grant/revoke`
     # che sta dietro `jht burn on|off|status`, non una sua copia.
     'request_burn_intent':    'burn',       # jht burn status
@@ -69,6 +81,9 @@ NOT_APPLICABLE = {
     'chat_unread_count': 'UI', 'total_chat_unread': 'UI',
     'can_chat_with': 'UI', 'chat_replies': 'UI', 'is_live': 'UI',
     'to_eur': 'UI',
+    # Conferma esplicita dell'utente su una proposta CV visibile. Esporla al
+    # CLI permetterebbe proprio all'agente che l'ha preparata di auto-approvarla.
+    'confirm_profile_review': 'UI user consent',
     # `is_remote`: dice se il bus parla con la VPS o col container locale, e la
     # leggono il badge della simulazione e il pannello di setup. Da CLI non ha
     # senso chiederlo — il CLI gira DENTRO il container di cui è la risposta.
@@ -84,6 +99,7 @@ NOT_APPLICABLE = {
     'publish_chat_sent': 'bus', 'publish_profile_status': 'bus',
     'publish_usage_history': 'bus', 'publish_agent_history': 'bus',
     'publish_artifact': 'bus', 'publish_state': 'bus',
+    'publish_document_upload': 'bus',
     'publish_state_key': 'bus',
     'publish_burn_intent': 'bus', 'publish_burn_intent_action': 'bus',
     'publish_agents': 'bus', 'publish_telemetry': 'bus',
@@ -94,6 +110,12 @@ NOT_APPLICABLE = {
 # Verbi scoperti e ancora senza controparte: ognuno con il tag che li traccia.
 # Svuotare questo dizionario è il lavoro; finché non è vuoto, almeno è scritto.
 KNOWN_GAPS = {
+    # Il desktop propaga la preferenza canonica al runtime con questo verbo,
+    # ma `jht` non espone ancora un comando lingua equivalente. Classificarlo
+    # come UI nasconderebbe una vera scrittura di stato condiviso.
+    'save_ui_language':
+        "preferenza lingua canonica: manca il comando CLI equivalente "
+        "— [WIN-TWO-SOURCES-OF-TRUTH-FOR-LANGUAGE]",
     # Stavano in COVERED, mappati su `stats`. Ma `jht stats` legge
     # `tasks.json`, `analytics.json` e `sessions.json`, che nessuno scrive più
     # da quando la TUI è stata rimossa (2026-07-25): rispondeva zeri, e il
@@ -106,14 +128,6 @@ KNOWN_GAPS = {
     'kpi_summary':
         "riepilogo KPI: `jht stats` non ha più una fonte "
         "— [CLI-PHANTOM-DATA-COMMANDS]",
-    'fetch_artifact':
-        "scaricare un CV/allegato prodotto dal team — [JHT-CLI-AGENT-PARITY]",
-    'upload_user_document':
-        "caricare un documento (CV, lettera) — [JHT-CLI-AGENT-PARITY]",
-    'request_coordinator_state':
-        "leggere le impostazioni del Capitano — [JHT-CLI-AGENT-PARITY]",
-    'save_coordinator_settings':
-        "scrivere le impostazioni del Capitano — [JHT-CLI-AGENT-PARITY]",
 }
 
 
@@ -186,8 +200,19 @@ def test_i_verbi_di_decisione_sono_coperti():
     dell'utente devono essere raggiungibili da CLI, altrimenti un agente può
     guardare e comandare ma non decidere."""
     disponibili = cli_commands()
-    for comando in ('positions', 'ticket', 'directives'):
+    for comando in ('positions', 'ticket', 'directives', 'artifact'):
         assert comando in disponibili, f"`jht {comando}` non è registrato"
+
+
+@pytest.mark.parametrize('sub', ['fetch', 'upload'])
+def test_artifact_espone_i_due_versi_del_confine(sub):
+    """Leggere un documento prodotto dal team e consegnargliene uno sono due
+    azioni diverse: coprirne una sola lascia l'agente a metà del giro."""
+    r = subprocess.run(
+        [_node(), JHT, 'artifact', '--help'],
+        capture_output=True, text=True, cwd=REPO_ROOT,
+    )
+    assert sub in r.stdout, f"`jht artifact {sub}` non compare nell'help"
 
 
 @pytest.mark.parametrize('sub', ['exclude', 'restore', 'request-cv'])

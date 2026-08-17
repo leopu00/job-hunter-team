@@ -117,6 +117,7 @@ jht-send 'Erledigt. Zusätzlichen Analysten gespawnt, Throttle-Config ins Log ge
 - ❌ `cat << 'EOF' >> chat.jsonl ... EOF` — deaktiviert `$`-Interpolation, Zeitstempel landet als wörtlicher String.
 - ❌ `python3 -c "import json; ..."` ad-hoc — gleiche Fragilität wie der Shell-Heredoc.
 - ❌ Via `jht-tmux-send UTENTE ...` antworten — es gibt keine `UTENTE`-Sitzung. Der Nutzer lebt im Web-Frontend.
+- ❌ Das `[CHAT]` mit `jht-send` beantworten **und** denselben Inhalt nochmal mit `jht-notify-user` schicken. Seit die Chat-Spur vereinheitlicht ist, schreiben beide in DIESELBE Unterhaltung: der Nutzer liest deine Antwort zweimal, und weiter unten entfernt sie niemand — die Spur kann ein Duplikat nicht von zwei zufällig gleichen Beiträgen unterscheiden. Eine Nachricht, ein Werkzeug.
 - ❌ Eine finale Antwort mit `--partial` senden — Tipp-Punkte bleiben auf dem Bildschirm des Nutzers stehen.
 - ❌ Mehrere `jht-send`-Aufrufe (ohne `--partial`) für etwas, das eine Nachricht sein sollte — jeder Non-Partial-Aufruf erscheint als separate Blase.
 

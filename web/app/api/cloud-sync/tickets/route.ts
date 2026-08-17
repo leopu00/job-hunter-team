@@ -44,6 +44,35 @@ interface TicketPushIn {
   resolved_at?: string | null;
 }
 
+function ticketBatchFailure(
+  cause: unknown,
+  options: {
+    status: number;
+    scope: string;
+    publicMessage: string;
+    failedLocalId: number | null;
+    updated: number;
+    inserted: number;
+    idMap: Record<string, number>;
+  },
+) {
+  // Il dettaglio resta nei log server, mentre al client tornano anche gli ACK
+  // già confermati. Il CLI deve poter correlare un INSERT riuscito prima che
+  // una riga successiva fallisca; senza id_map il retry lo reinserirebbe.
+  console.error(`[${options.scope}] ${options.status}`, cause);
+  return NextResponse.json(
+    {
+      ok: false,
+      error: options.publicMessage,
+      failed_local_id: options.failedLocalId,
+      updated: options.updated,
+      inserted: options.inserted,
+      id_map: options.idMap,
+    },
+    { status: options.status },
+  );
+}
+
 // ── GET: pull dei ticket 'open' creati dall'utente sul cloud ───────────────
 export async function GET(req: NextRequest) {
   const auth = await verifyBearerToken(req);
@@ -136,14 +165,52 @@ export async function POST(req: NextRequest) {
   let inserted = 0;
   const idMap: Record<string, number> = {}; // local_id (string) → cloud_id
 
-  for (const t of tickets) {
-    if (!t || typeof t.position_legacy_id !== "number") continue;
-    const status = ALLOWED_STATUS.has(t.status) ? t.status : "open";
+  const fail = (
+    cause: unknown,
+    status: number,
+    scope: string,
+    publicMessage: string,
+    failedLocalId: number | null,
+  ) =>
+    ticketBatchFailure(cause, {
+      status,
+      scope,
+      publicMessage,
+      failedLocalId,
+      updated,
+      inserted,
+      idMap,
+    });
 
-    if (typeof t.cloud_id === "number") {
+  for (const t of tickets) {
+    if (
+      !t ||
+      !Number.isInteger(t.local_id) ||
+      !Number.isInteger(t.position_legacy_id)
+    ) {
+      return fail(
+        new Error("invalid ticket identity in push payload"),
+        400,
+        "cloud-sync/tickets-payload",
+        "invalid_ticket_payload",
+        Number.isInteger(t?.local_id) ? t.local_id : null,
+      );
+    }
+    if (!ALLOWED_STATUS.has(t.status)) {
+      return fail(
+        new Error("invalid ticket status in push payload"),
+        400,
+        "cloud-sync/tickets-payload",
+        "invalid_ticket_payload",
+        t.local_id,
+      );
+    }
+    const status = t.status;
+
+    if (Number.isInteger(t.cloud_id)) {
       // UPDATE risoluzione/assegnazione. Filtro user_id obbligatorio
       // (service-role → no RLS): impedisce il takeover di ticket altrui.
-      const { error } = await admin
+      const { data: updatedTicket, error } = await admin
         .from("position_tickets")
         .update({
           status,
@@ -154,30 +221,75 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", t.cloud_id)
-        .eq("user_id", userId);
-      if (!error) updated++;
+        .eq("user_id", userId)
+        .select("id")
+        .maybeSingle();
+      if (error) {
+        // Il client avanza push_since soltanto su HTTP 2xx. Un 200 qui
+        // trasformerebbe un errore transitorio in una risoluzione persa per
+        // sempre: il ticket locale non verrebbe più inviato.
+        return fail(
+          error,
+          500,
+          "cloud-sync/tickets-update",
+          "ticket_update_failed",
+          t.local_id,
+        );
+      }
+      if (!updatedTicket) {
+        // Supabase non considera errore un UPDATE che non trova righe. Anche
+        // quello non è un effetto confermato (cloud_id errato/riga rimossa).
+        return fail(
+          new Error("ticket update matched no row"),
+          409,
+          "cloud-sync/tickets-update",
+          "ticket_update_not_applied",
+          t.local_id,
+        );
+      }
+      updated++;
     } else {
       // INSERT di un ticket nato in locale → ritorna l'id per la correlazione.
-      if (typeof t.local_id !== "number" || !t.request_text) continue;
-      const { data, error } = await admin
-        .from("position_tickets")
-        .insert({
-          user_id: userId,
-          position_legacy_id: t.position_legacy_id,
-          request_text: t.request_text,
-          kind: t.kind ?? "custom",
-          status,
-          assigned_agent: t.assigned_agent ?? null,
-          response_text: t.response_text ?? null,
-          ...(t.created_at ? { created_at: t.created_at } : {}),
-          assigned_at: t.assigned_at ?? null,
-          resolved_at: t.resolved_at ?? null,
-        })
-        .select("id")
-        .single();
-      if (!error && data) {
-        idMap[String(t.local_id)] = data.id as number;
-        inserted++;
+      if (!t.request_text) {
+        return fail(
+          new Error("ticket insert has no request text"),
+          400,
+          "cloud-sync/tickets-payload",
+          "invalid_ticket_payload",
+          t.local_id,
+        );
+      }
+      // UUID parent resolution + INSERT/dedup are a single tenant-bound
+      // transaction. The route never writes the relationship directly.
+      const { data, error } = await admin.rpc("sync_create_position_ticket", {
+        p_user_id: userId,
+        p_position_legacy_id: t.position_legacy_id,
+        p_request_text: t.request_text,
+        p_kind: t.kind ?? "custom",
+        p_status: status,
+        p_assigned_agent: t.assigned_agent ?? null,
+        p_response_text: t.response_text ?? null,
+        p_created_at: t.created_at ?? null,
+        p_assigned_at: t.assigned_at ?? null,
+        p_resolved_at: t.resolved_at ?? null,
+      });
+      const receipt = data as Record<string, unknown> | null;
+      if (
+        !error &&
+        receipt &&
+        Number.isInteger(receipt.id) &&
+        typeof receipt.deduplicated === "boolean"
+      ) {
+        idMap[String(t.local_id)] = receipt.id as number;
+        if (!receipt.deduplicated) inserted++;
+      } else {
+        return fail(
+          error ?? new Error("ticket RPC returned invalid receipt"),
+          500,
+          "cloud-sync/tickets-insert",
+          "ticket_insert_failed",
+          t.local_id,
+        );
       }
     }
   }

@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Retry su collisione user_code (raro: ~18 miliardi possibili, MA con
+  // Retry su collisione user_code (raro: ~1,15 miliardi possibili, MA con
   // 1000 sessioni concorrenti la probabilita' diventa non-trascurabile
   // per il birthday problem). Massimo 5 tentativi prima di arrendersi.
   const expiresAt = new Date(Date.now() + PAIRING_TTL_MS).toISOString();

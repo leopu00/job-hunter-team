@@ -1,21 +1,60 @@
 # 🩺 Agent context saturation + reboot periodico via Dottore
 
-> **Status: MVP SHIPPED 2026-05-31 (`daily-restart-wave`) — PoC validato 2026-05-20.**
+> **Status: SUPERSEDED / VERIFIED 2026-08-12.** L'MVP
+> `daily-restart-wave` resta la prova storica, ma non è più il percorso
+> operativo. La copertura autorevole è `session-refresh`, schedulata dal solo
+> `doctor-watchdog`, con il TTL deterministico di `agent-watchdog` come rete di
+> sicurezza. Non aggiungere un secondo cron o un secondo vocabolario di config.
 >
 > | Componente | Status | Riferimento |
 > |---|---|---|
 > | PoC manuale (1 Capitano + 6 operatori) | ✅ DONE 2026-05-20 13:18-14:00 UTC | § PoC results in fondo |
 > | **MVP `daily-restart-wave` skill** (trigger time-based 03:00 UTC ±30min) | ✅ DONE 2026-05-31 | commit `e9f96ceb` · [`agents/_skills/daily-restart-wave/SKILL.md`](../../../agents/_skills/daily-restart-wave/SKILL.md) |
-> | V2 trigger threshold-based (capitano>50M, scrittore>75M, ecc.) | ⬜ open | § Specifica per implementazione automatica più sotto |
-> | Telemetria `reboots.jsonl` | ⬜ open | § Telemetria |
-> | Integrazione Dottore prompt step 0 pre-round | 🟡 partial (daily-restart-wave triggered da skill discovery, non da prompt explicit) | — |
+> | **Percorso primario `session-refresh`** | ✅ SHIPPED | 7 skill + 7 prompt Dottore; worker prima, coordinatori per ultimi; capture + analytics + intervista + sintesi JSONL prima del recreate |
+> | **Scheduler** | ✅ SHIPPED | `.launcher/doctor-watchdog.sh` → `doctor_schedule.py`, claim durevole prima dello spawn per slot +30 min / metà finestra e fallback 6h dei team 24/7 |
+> | **Fail-safe** | ✅ SHIPPED | `.launcher/agent-watchdog.sh`, TTL `JHT_AGENT_MAX_SESSION_AGE_H` (default 12h), oldest-first e massimo una sessione per tick |
+> | V2 trigger threshold-based | ✅ SUPERSEDED | il percorso primario misura il contesto reale `>50%`; il TTL prevale su ogni skip |
+> | Telemetria `reboots.jsonl` | ✅ SUPERSEDED | journal append-only `logs/doctor-retrospective.jsonl` |
+> | Integrazione Dottore prompt | ✅ SHIPPED | `session-refresh` è PRIMARY in tutte le 7 lingue; `daily-restart-wave` è dichiarata superata |
 >
-> **Razionale split MVP→V2**: il time-based daily restart copre l'80% del
-> beneficio osservato (5.5× boost) senza la complessità di lettura
-> `state_5.sqlite` per ogni provider (path/schema diverso per Codex vs
-> Kimi vs Claude). V2 threshold-based ha senso quando il PoC su carichi
-> >24h reali rivelerà se 1×/giorno è troppo poco. Skipping V2 finché non
-> arriva un secondo case study (>=case study #3 Kimi run continuativo).
+> **Contratto operativo congelato (2026-08-12):** il Dottore possiede il rich
+> refresh; `doctor-watchdog` decide soltanto quando spawnarlo;
+> `agent-watchdog` applica soltanto il tetto d'età quando il Dottore non riesce
+> a farlo. I due percorsi condividono `JHT_AGENT_MAX_SESSION_AGE_H` e non sono
+> due scheduler concorrenti. La configurazione di orario resta
+> `working_hours`; il vecchio schema `preferences.json::doctor.daily_restart_*`
+> non è mai diventato runtime e viene ritirato, non cablato come seconda fonte.
+>
+> | Requisito storico | Disposizione corrente |
+> |---|---|
+> | wave ordinata | worker prima, coordinatori ultimi, Capitano ultimo; sequenziale e mai parallela |
+> | snapshot pre-restart | capture completa + analytics + intervista + sintesi densa append-only prima di kill/recreate |
+> | notifica Capitano | il rich refresh invia un solo heads-up prima del primo recreate della round |
+> | config preferences | sostituita dalle fonti canoniche `working_hours` + `JHT_AGENT_MAX_SESSION_AGE_H`; nessun secondo schema |
+
+### Ownership e crash boundary dello scheduler
+
+`doctor-watchdog` è l'unico proprietario degli spawn **schedulati** del rich
+refresh (gli spawn diagnostici espliciti restano on-demand). Prima di chiamare
+`spawn-doctor.sh` chiede a `doctor_schedule.py claim`: un lock POSIX serializza
+il read-modify-write fra processi sovrapposti, poi lo slot viene scritto con
+replace atomico + fsync in `doctor-schedule-state.json`; soltanto dopo il
+watchdog riceve `T30`, `MID` o `FALLBACK`. Lock assente o con esito incerto è
+un errore fail-closed, come una scrittura incerta.
+
+- spawn riuscito → `mark`, claim finalizzato;
+- spawn sicuramente fallito → `release`, il poll successivo può ritentare;
+- errore di persistenza o risultato incerto → nessuno spawn / claim trattenuto,
+  quindi nessun doppio turno LLM.
+
+Se il processo cade fra claim e spawn, quel rich round può essere saltato: è
+il comportamento fail-closed deliberato. Non perde la garanzia di freshness,
+perché il percorso indipendente `agent-watchdog` continua ad applicare il TTL
+age-only. Il medesimo claim possiede anche il fallback 24/7: non esiste più un
+timer solo in RAM che riparte da zero a ogni riavvio del watchdog.
+
+Il resto del documento è conservato come storico del PoC e della proposta
+originaria; quando diverge dal contratto sopra, prevale questa intestazione.
 
 ## Misurazione effettuata (snapshot 2026-05-20 ~10:20 UTC, ~14h dal boot)
 

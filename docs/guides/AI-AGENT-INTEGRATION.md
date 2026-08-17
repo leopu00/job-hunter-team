@@ -32,7 +32,12 @@ Confirm all of the following with the user:
   installer supports it;
 - a dedicated supported provider subscription (see
   [`PROVIDERS.md`](../about/PROVIDERS.md));
-- about 3–4 GB of available RAM for a local team.
+- about 8 GB of RAM available before starting a local team for comfortable
+  use. This is a measured recommendation, not a universal minimum.
+
+Use [Choose where to run Job Hunter Team](CHOOSE-WHERE-TO-RUN.md) with the user
+before selecting the target. In particular, the dedicated-PC SSH topology is
+an advanced path, not a separate guided wizard.
 
 For a new VPS, use the [manual VPS guide](VPS-SETUP.md) or let the user
 provision it through the native office. This guide does not authorize an agent
@@ -111,7 +116,13 @@ Prefer supported JSON output instead of scraping formatted tables:
 ```bash
 jht positions list --json
 jht positions show 42 --json
+jht coordinator show --json
 ```
+
+`jht coordinator show --json` reports the working mode **in force**, not the one
+written on disk: an expired mode reads `search` in `effective_mode` while `mode`
+still says what the file says. Report the first one — the team is already
+following it.
 
 Not every command has a JSON mode. If a command does not advertise `--json`
 in its help, show its output to the user instead of inventing a parser.
@@ -124,8 +135,15 @@ Explain the effect and ask before running commands such as:
 jht positions exclude 42 --reason not_interested
 jht positions restore 42
 jht positions request-cv 42
+jht coordinator set-mode saving --until 2026-08-15T18:00:00Z
 jht team stop --all
 ```
+
+The working mode governs what the team does all day, so it is the user's call —
+and if you set one, give it an end (`--until`): a mode with no exit condition
+lasts by inertia, and `saving` left running discards a whole budget cycle
+instead of conserving it. See
+[`CLI-REFERENCE.md`](CLI-REFERENCE.md#working-mode).
 
 Starting, stopping and inspecting the container use the host wrapper:
 

@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { JHT_HOME } from '../jht-paths.js';
 import { GREEN, RED, YELLOW, DIM, BOLD, RESET } from './_colors.js';
+import { writePrivateJson } from '../lib/secure-config-io.js';
 
 const JHT_DIR      = JHT_HOME;
 const WEBHOOKS_PATH = join(JHT_DIR, 'webhooks', 'webhooks.json');
@@ -18,11 +19,7 @@ async function loadStore() {
 }
 
 async function saveStore(store) {
-  await mkdir(join(WEBHOOKS_PATH, '..'), { recursive: true });
-  const tmp = WEBHOOKS_PATH + '.tmp';
-  await writeFile(tmp, JSON.stringify({ ...store, updatedAt: Date.now() }, null, 2), 'utf-8');
-  const { rename } = await import('node:fs/promises');
-  await rename(tmp, WEBHOOKS_PATH);
+  writePrivateJson(WEBHOOKS_PATH, { ...store, updatedAt: Date.now() });
 }
 
 function fmtDate(ms) {

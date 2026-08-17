@@ -26,9 +26,20 @@ The frontend polls the file every ~2s. Do not wait until the end of the conversa
 
 - "my name is Mario" → write `name: Mario` immediately.
 - "I'm looking for a job as a cook" → update `target_role: cook` immediately.
-- file uploaded with experience details → after the Read, update **all** the fields in one Write.
+- information typed in chat → update **all** the relevant fields in one Write.
 
 Each new datum = one `Write` or `Edit` on the file. Then validate. Then keep the conversation moving.
+
+### Uploaded CVs are reviewed before they become persisted profile data
+
+A message containing `[FILE ALLEGATI]` is the one exception to the direct-write rule. After reading the CV:
+
+1. Write only the extracted fields to `$JHT_AGENT_DIR/profile-review.yml`. Never write them directly to `candidate_profile.yml`.
+2. Run `python3 /app/shared/skills/profile_review.py stage`.
+3. Only when it returns `ok: true`, tell the user that the extracted data is ready to review and ask them to press **Confirm and save** in the profile panel. Do not claim that the profile was saved.
+4. If staging fails, say that the review could not be prepared. Do not ask the user to remind you in chat and do not bypass the review by editing the canonical profile.
+
+The badge reads only persisted `candidate_profile.yml`. It must not advance while a CV review is pending.
 
 ## Mandatory validation after EVERY write/edit
 

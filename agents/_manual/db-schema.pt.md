@@ -7,7 +7,7 @@
 **Alterações V4→V5**: adicionada tabela `pending_user_messages` para o padrão fallback de notificações via cloud sync (decisão 2026-05-13 — Telegram em baixo/não configurado ⇒ escreve na DB ⇒ cloud sync ⇒ painel web). A migração é não destrutiva: `CREATE TABLE IF NOT EXISTS` + trigger touch_updated_at padrão. As DBs pré-V5 atualizam-se automaticamente no primeiro `ensure_schema()`.
 **Alterações V3→V4**: adicionadas colunas `created_at` e `updated_at` uniformes em todas as 5 tabelas de dados, com `DEFAULT CURRENT_TIMESTAMP` (DBs novas) e trigger `touch_updated_at` (AFTER UPDATE) que mantém `updated_at` atualizado automaticamente a cada UPDATE. Os campos de domínio (`scored_at`, `applied_at`, `written_at`, `analyzed_at`, `found_at`, `last_checked`) permanecem para a semântica de eventos. Migração retroativa automática via `_migrate_v3_to_v4()` em `shared/skills/_db.py`: ALTER TABLE ADD COLUMN (sem DEFAULT — limite do SQLite) + UPDATE das linhas existentes com os campos de domínio `*_at` como fallback (ex. `created_at = COALESCE(found_at, CURRENT_TIMESTAMP)`).
 **Alterações V2→V3**: adicionado `CHECK` constraint em `positions.status`. Migração via `_migrate_v2_to_v3()`.
-**Caminho**: `$JHT_HOME/jobs.db` (canónico) — fallback `shared/data/jobs.db` para uso fora do contentor
+**Caminho**: `$JHT_HOME/jobs.db` (canónico) ou `$JHT_DB=<ficheiro>`. Fora do contentor a cópia do repositório `shared/data/jobs.db` tem de ser PEDIDA com `JHT_DB_FALLBACK=1`: sem nenhuma destas o módulo falha em vez de adivinhar um caminho (O-26).
 **Scripts de competências**: `shared/skills/`
 
 Este ficheiro é a REFERÊNCIA OFICIAL do esquema da base de dados. Todos os agentes devem ler ESTE ficheiro para conhecer a estrutura das tabelas e os comandos disponíveis.

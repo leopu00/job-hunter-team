@@ -4,6 +4,8 @@ import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { JHT_HOME } from '../jht-paths.js';
 import { AGENTS, isAgentSession } from './team/agents.js';
+import { fetchLatestRelease, updateNotice } from '../lib/release-check.js';
+import pkg from '../../package.json' with { type: 'json' };
 
 const CONFIG_DIR = JHT_HOME;
 const CONFIG_FILE = join(CONFIG_DIR, 'jht.config.json');
@@ -31,6 +33,7 @@ function getTmuxSessions() {
 
 async function handleStatus() {
   console.log('\n  JHT — System Status\n');
+  console.log(`  Version:   ${pkg.version}`);
 
   // Config
   const hasConfig = await fileExists(CONFIG_FILE);
@@ -83,6 +86,16 @@ async function handleStatus() {
     console.log(`\n  Git:       ${branch} (${shortSha})`);
   } catch {
     console.log('\n  Git: not available');
+  }
+
+  // Una versione più nuova, se c'è e se si riesce a saperlo. In fondo e non
+  // in cima perché non è un allarme: è la cosa che mancava del tutto, non
+  // la più urgente da leggere. Silenzio quando la risposta non arriva —
+  // offline è un giorno in cui non si controlla, non un guasto da annunciare.
+  const notice = updateNotice(pkg.version, await fetchLatestRelease());
+  if (notice) {
+    console.log(`\n  Update:    ${notice.latest} available (you run ${notice.current})`);
+    console.log(`             Run "${notice.command}" ${notice.where}.`);
   }
 
   console.log('');

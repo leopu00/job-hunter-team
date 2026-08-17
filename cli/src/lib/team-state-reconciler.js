@@ -31,6 +31,7 @@ import { join } from 'node:path';
 import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
 import { getDirectReader } from './cloud-direct.js';
+import { cloudSyncHeaders } from './client-identity.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -72,10 +73,7 @@ function stripAnsi(s) {
 async function apiCall(method, baseUrl, token, path, body) {
   const opts = {
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-    },
+    headers: cloudSyncHeaders(token, body ? { 'Content-Type': 'application/json' } : {}),
   };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(`${baseUrl}${path}`, opts);

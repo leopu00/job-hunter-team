@@ -144,7 +144,22 @@ def derive_advice(v):
         return out
 
     if burn:
-        out.append("BURN MODE (below pace + reset near): SATURATE — scale workers and remove weekly throttles.")
+        # [BURN-MODE-ADVISES-THE-WRONG-LEVER] — l'allarme aveva ragione e il
+        # consiglio no. Su P05 (2026-08-02) ha suonato per ore annunciando
+        # ~40% di weekly sprecato, ripetendo «scala worker»: il team aveva 460
+        # posizioni e ZERO candidature, cioè il sourcing era già saturo (è
+        # work-capped, non budget-capped) e la leva ferma era scrivere CV.
+        # Con un raccolto pronto si propone la MODALITÀ — decisione
+        # dell'utente, mai un cambio automatico.
+        backlog = extras.get("harvest_backlog")
+        if isinstance(backlog, int) and backlog > 0:
+            out.append(
+                f"BURN MODE (below pace + reset near): the lever is NOT more "
+                f"scouting — {backlog} positions already found are waiting for "
+                f"a CV. PROPOSE `harvest` mode to the user and let them decide; "
+                f"do not switch it yourself.")
+        else:
+            out.append("BURN MODE (below pace + reset near): SATURATE — scale workers and remove weekly throttles.")
     elif kind == "SOPRA-PACE" or status in ("ATTENZIONE", "SOPRA-PACE-WEEKLY"):
         line = "Above pace: throttle to pace and STOP new spawns until back on target."
         if isinstance(debt, (int, float)) and debt >= 8:

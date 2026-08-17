@@ -150,8 +150,16 @@ continuare il sourcing con la mira vecchia.
    logo). I worker non necessari alle richieste utente pendenti vengono killati
    o non spawnati.
 3. **Priorità di budget**: quasi zero. L'unica spesa è rispondere all'utente.
-4. **Condizione di uscita**: nessuna — dura finché l'utente non la toglie.
-   Niente da esaurire; il banner lo dice.
+4. **Condizione di uscita**: `mode_until`, se l'utente l'ha data — a quella
+   data la modalità scade **da sola**, ordini compresi, e la squadra torna in
+   `search` (il file dice ancora `saving`: vince la scadenza, e il banner lo
+   dichiara). Senza `mode_until` dura finché l'utente non la toglie, e vale la
+   pena dirlo: il budget settimanale è una **finestra, non un saldo** — quello
+   che non si spende al reset viene distrutto, quindi un risparmio lasciato
+   per inerzia non conserva il ciclo, lo butta. Di' all'utente che può darle
+   una fine, e dove: la Console ha il campo «Fino a quando» (giorni e ore,
+   accanto al selettore), e da shell è `jht coordinator set-mode saving --until
+   <iso>`. Scrivono la stessa chiave nello stesso file.
 
 **Cosa fai**: tieni reattivi Capitano/Assistente/Mentor; nient'altro si muove
 senza una richiesta diretta dell'utente. **Con C-25**: risparmio È un divieto
@@ -176,8 +184,9 @@ sourcing non fa male".
   va il budget dosato.
 - **Uscita ≠ cambio.** Quando una modalità dichiara il proprio lavoro
   esaurito, avvisa l'utente e continua a rispettare la modalità finché è LUI a
-  cambiarla. Il file lo scrive la console del gioco per conto dell'utente — mai
-  tu.
+  cambiarla. Il file lo si scrive per conto dell'utente — dalla Console del
+  gioco (scadenza compresa) o con `jht coordinator` se lo chiede lui — e mai di
+  tua iniziativa.
 
 ## Vedi anche
 

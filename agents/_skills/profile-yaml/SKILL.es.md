@@ -27,9 +27,20 @@ El frontend sondea el archivo cada ~2s. No esperes al final de la conversacion; 
 
 - "me llamo Mario" → escribir `name: Mario` inmediatamente.
 - "busco un rol de cocinero" → actualizar `target_role: cocinero` inmediatamente.
-- archivo subido con detalles de experiencia → despues del Read, actualizar **todos** los campos en un solo Write.
+- informacion escrita en el chat → actualizar **todos** los campos pertinentes en un solo Write.
 
 Cada nuevo dato = un `Write` o `Edit` en el archivo. Luego validar. Luego seguir moviendo la conversacion.
+
+### Los CV subidos se revisan antes de convertirse en datos persistidos
+
+Un mensaje que contiene `[FILE ALLEGATI]` es la unica excepcion a la escritura directa. Despues de leer el CV:
+
+1. Escribe solo los campos extraidos en `$JHT_AGENT_DIR/profile-review.yml`. Nunca los escribas directamente en `candidate_profile.yml`.
+2. Ejecuta `python3 /app/shared/skills/profile_review.py stage`.
+3. Solo si devuelve `ok: true`, dile al usuario que los datos extraidos estan listos para revisar y que pulse **Confirmar y guardar** en el panel del perfil. No afirmes que el perfil ya esta guardado.
+4. Si falla la preparacion, comunica que no se pudo preparar la revision. No pidas recordatorios por chat ni evites la revision editando el perfil canonico.
+
+El distintivo solo lee el `candidate_profile.yml` persistido. No debe avanzar mientras haya una revision de CV pendiente.
 
 ## Validacion obligatoria despues de CADA write/edit
 

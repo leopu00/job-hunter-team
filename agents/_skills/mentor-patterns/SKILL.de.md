@@ -148,23 +148,25 @@ Der Unterschied zu Muster B ist wichtig: dort sind es die Ausschlüsse der **Age
 
 Dieses Feedback lebt in der Cloud (`position_feedback`), nicht in `jobs.db`: es ist das einzige Muster, das nicht über `db_query.py` läuft.
 
+**`RAW_DISPLAY_BOUNDARY`** — clustere rohe `reason` / `comment`, aber gib sie niemals weiter. Jede user-facing Deutung darf nur `display_reason` / `display_comment` und sanitizte Themen-`label` / `examples` verwenden; Maschinenschlüssel, IDs und `no-signal:*`-notes bleiben intern.
+
 ### Erkennung
 
 ```bash
 # Die Themen in den vom Nutzer geschriebenen Gründen, letzte 30 Tage
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# Dasselbe Feedback unaggregiert, um seine genauen Worte zu lesen
+# Dasselbe Feedback unaggregiert; nur display_reason/display_comment lesen
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
 `themes` gruppiert Freitext nach einfacher Ähnlichkeit — keine exakte Übereinstimmung nötig. Kleinschreibung, Akzente weg, Interpunktion und Funktionswörter weg, jedes Wort auf die ersten 5 Zeichen gekürzt (`senior` / `seniority` / `seniore` / `séniorité` landen auf demselben Schlüssel), dann werden Einzelwörter und benachbarte Paare nach **verschiedenen Positionen** gezählt. Ein Paar gewinnt gegen seine Teile, wenn es dieselben Positionen abdeckt: "zu senior" sagt mehr als "senior", und genau dafür bleiben Verstärkungswörter erhalten.
 
-Pro Thema kommen zurück: `positions`, `events`, `share` (Anteil der Positionen mit Text), `actions` (wie sich das Thema auf like / dislike / hide / star verteilt), `legacy_ids` und bis zu 3 wörtliche `examples`.
+Pro Thema kommen zurück: `positions`, `events`, `share` (Anteil der Positionen mit Text), `actions` (wie sich das Thema auf like / dislike / hide / star verteilt), interne `legacy_ids` und bis zu 3 sanitizte Display-`examples`.
 
 Es ist grob gebaut, und man sieht es: entfernte Synonyme bleiben getrennt (`Gehalt` und `RAL` sind zwei Themen). Lies die `examples` und verbinde mit dem Kopf, was das Werkzeug nicht konnte.
 
-Trägt der Payload eine `note` (`no-signal (...)`), ist die Cloud aus oder nicht erreichbar und es gibt kein Aggregat: schweige, baue das Bild nicht aus Einzelabfragen mit `check` wieder zusammen.
+Trägt der Payload eine geschlossene `note`-Enum (`no-signal:*`), gibt es kein Aggregat: schweige, gib den Code nie weiter und baue das Bild nicht aus Einzelabfragen mit `check` wieder zusammen.
 
 ### Schwelle
 
@@ -226,12 +228,12 @@ Wenn du nichts Muster-würdiges zu sagen hast, **sag nichts**. Stille ist eine A
 - ❌ Schwarzmalen ("das führt nirgendwohin") ODER Jubeln ("du schaffst das!") — beides verletzt die Stimme des Mentors. Zahlen, dann eine Frage. Siehe `mentor-output`-Skill.
 - ❌ **Muster F in eine Suchanweisung verwandeln.** Gib dem Scout oder dem Capitano niemals ein "hör auf, X zu bringen", das aus den Vorlieben des Nutzers abgeleitet ist. Eine Pipeline, die nur fischt, was gefällt, bläht ihre eigenen Scores auf, und der Nutzer glaubt am Ende, der Markt sei reich, obwohl die Pipeline für ihn ausgewählt hat. Muster F richtet sich **an den Nutzer**: was sich in seinem Profil ändert, entscheidet er, und du bist ohnehin nur lesend (T10).
 - ❌ Ein zurückgezogenes Urteil vorhalten. `themes` lässt Positionen, deren letztes Event `clear` ist, bereits draußen; hol sie nicht mit `--include-cleared` zurück, nur um eine Schwelle zu erreichen.
-- ❌ Einen einzelnen wörtlichen Kommentar zitieren, als wäre er ein Muster. Die `examples` geben einem Thema eine Stimme, **nachdem** es die Schwelle überschritten hat; sie sind nicht der Befund.
+- ❌ Einen einzelnen rohen Kommentar zitieren, als wäre er ein Muster. Sanitizte `examples` geben einem Thema eine Stimme, **nachdem** es die Schwelle überschritten hat; sie sind nicht der Befund.
 
 ## Siehe auch
 
 - `mentor-output` — WIE die Nachricht formuliert wird, sobald ein Muster bestätigt ist.
 - `db-query` — Wrapper-Interna.
-- `feedback-query` — der Leser für das Nutzer-Feedback in der Cloud (Muster F); der Scorer fragt dieselbe Quelle Position für Position ab.
+- `feedback-query` — der Leser für das Nutzer-Feedback in der Cloud (Muster F); der Scorer nutzt sanitizte aggregierte Themen nur für künftige Positionen und schließt die aktuelle aus.
 - `agents/mentor/mentor.md` — Orchestrator-Prompt + Kadenz.
 - `agents/_team/team-rules.md` T10 — Profil ist nur lesend, auch für den Mentor.

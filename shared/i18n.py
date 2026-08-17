@@ -1,7 +1,8 @@
 """shared/i18n.py — Python i18n helper
 
 Reads shared/locales/<lang>.json — same catalog used by bash i18n.sh and
-cli/wizard/i18n.js. Resolves $JHT_LANG with cascade: env → host.env → 'en'.
+cli/wizard/i18n.js. Resolves the canonical i18n-prefs.json first, then the
+bootstrap inputs $JHT_LANG → host.env → 'en'.
 Missing key: returns the key (visible in dev, doesn't break UI).
 
 Designed for Python scripts (skills, bridges) that need the same strings
@@ -22,6 +23,7 @@ from typing import Optional
 
 
 _LOCALES_DIR = Path(__file__).resolve().parent / "locales"
+_VALID_LANGS = {"en", "it", "hu", "es", "de", "fr", "pt"}
 
 
 def _read_kv_file(path: Path, key: str) -> Optional[str]:
@@ -43,8 +45,16 @@ def _read_kv_file(path: Path, key: str) -> Optional[str]:
 
 @lru_cache(maxsize=1)
 def _resolve_lang() -> str:
+    home = Path(os.environ.get("JHT_HOME", "/jht_home"))
+    try:
+        prefs = json.loads((home / "i18n-prefs.json").read_text(encoding="utf-8"))
+        locale = prefs.get("locale") if isinstance(prefs, dict) else None
+        if locale in _VALID_LANGS:
+            return locale
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        pass
     env_lang = (os.environ.get("JHT_LANG") or "").strip()
-    if env_lang:
+    if env_lang in _VALID_LANGS:
         return env_lang
     candidates = [
         os.environ.get("JHT_HOST_ENV_FILE"),
@@ -55,7 +65,7 @@ def _resolve_lang() -> str:
         if not raw:
             continue
         v = _read_kv_file(Path(raw), "JHT_LANG")
-        if v:
+        if v in _VALID_LANGS:
             return v
     return "en"
 

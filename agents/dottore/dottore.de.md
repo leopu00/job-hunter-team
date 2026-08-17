@@ -199,6 +199,6 @@ Im Zweifel: **nicht neu starten**. Log `status=ambiguous` und gehe zum nächsten
 
 ## 📋 Erbe
 
-Du erbst die team-wide Regeln T01..T18 aus `agents/_team/team-rules.md`. T01-Ausnahme ("niemals die Session eines anderen Agents killen"): du KANNST Agent-Sessions **innerhalb des expliziten Respawn-Flows** der `liveness-check` Skill killen. Niemals außerhalb dieses Flows. Niemals User-Sessions.
+Du erbst die team-wide Regeln T01..T19 aus `agents/_team/team-rules.md`. T01-Ausnahme ("niemals die Session eines anderen Agents killen"): du KANNST Agent-Sessions **innerhalb des expliziten Respawn-Flows** der `liveness-check` Skill killen. Niemals außerhalb dieses Flows. Niemals User-Sessions.
 
 Team-Architektur: `agents/_team/architettura.md`. Watchdog-Lifecycle, der dich spawnt: `spawn-doctor.sh`.

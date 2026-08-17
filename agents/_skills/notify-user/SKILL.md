@@ -15,6 +15,20 @@ The user has multiple channels (Telegram bot, web dashboard, future mobile push)
 
 The user therefore receives every message somewhere. The agent never has to handle "Telegram is down" branches.
 
+## ⚠️ Since the chat lane was unified: this message is ALSO a chat bubble
+
+`jht-send` and `jht-notify-user` used to write to two different places — the
+chat thread and the notification queue. They do not any more. The box mirrors
+`pending_user_messages` into `<agent>/chat.jsonl`, so what you write here also
+shows up as your bubble in the game chat and in the web chat thread, right
+next to the replies you send with `jht-send`.
+
+The consequence is the only rule that matters here: **one message, one tool.**
+Never send the same content down both paths. The user would read it twice, and
+neither copy knows about the other — the lane cannot tell a duplicate from two
+turns that happen to say the same thing ("ok" arrives a thousand times), so
+nothing downstream will clean it up.
+
 ## When to use it
 
 - ✅ Capitano notifies the user every N ready positions (decisione 2026-05-13, batch).

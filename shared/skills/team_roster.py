@@ -152,6 +152,8 @@ def session_name(role: str, instance=None) -> str:
     role = role.strip().lower()
     if role in WORKER_ROLES and instance is not None:
         return f"{role.upper()}-{instance}"
+    if role == "critico" and instance not in (None, ""):
+        return f"CRITICO-S{instance}"
     return role.upper()
 
 

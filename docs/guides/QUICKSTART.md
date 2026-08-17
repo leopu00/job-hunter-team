@@ -21,10 +21,16 @@ You need an active subscription to **one** of:
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.
 
-For a local team, also allow about **3–4 GB of available RAM** while the
-agents are running. The desktop releases support Windows x64, Linux x64 and
-macOS (Intel: 11+; Apple silicon: 13+). The team itself runs in Docker; the
-native office guides that runtime setup before activation.
+For comfortable local use, keep about **8 GB of RAM available before starting
+the team**. This is a measured recommendation, not a universal minimum: a
+30-minute Windows run on a 12 GB machine retained more than 4 GB free with the
+team and desktop active. No universal local disk minimum has been measured;
+leave room for the Docker image and persistent data. The desktop releases
+support Windows x64, Linux x64 and macOS (Intel: 11+; Apple silicon: 13+).
+
+Before installing, use [Choose where to run Job Hunter Team](CHOOSE-WHERE-TO-RUN.md)
+to compare a local PC, dedicated Linux PC on the LAN and VPS. The team itself
+runs in Docker; the native office guides that runtime setup before activation.
 
 ---
 

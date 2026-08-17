@@ -189,6 +189,23 @@ SENTINELLA_RECONFIRM_MIN = 45.0
 PACE_ADVICE_COOLDOWN_MIN = 15.0
 _pace_advice_state = {"ts": 0.0, "throttle_s": None, "verdict": None}
 
+# Il gate orario ([PACE-GUARD-IGNORES-WORK-PHASE]) impedisce di SVEGLIARE il
+# Capitano di notte, e va bene per un consiglio di crociera. Non va bene per un
+# LOCKOUT-IMMINENTE: quel verdetto dice che la finestra si sta chiudendo in
+# anticipo e che il freno da solo non basta (serve tagliare il roster), e
+# tacendo spariva anche dalla mailbox — cioè non arrivava nemmeno al mattino,
+# quando il Capitano la drena a inizio turno.
+#
+# La mailbox è asincrona per costruzione: scriverci NON consuma un turno di
+# modello e non sveglia nessuno. Quindi fuori finestra l'emergenza si scrive
+# lì e basta. Lo stato è SEPARATO da `_pace_advice_state` di proposito: quello
+# governa il pane e deve restare intatto durante il silenzio, così alla
+# riapertura il primo consiglio parte come edge invece che come ripetizione.
+_pace_mailbox_state = {"ts": 0.0, "throttle_s": None, "verdict": None}
+# Il solo verdetto che vale una riga di mailbox fuori orario. Gli altri
+# descrivono la velocità di crociera di un team che di notte non sta correndo.
+EMERGENCY_VERDICT = "LOCKOUT-IMMINENTE"
+
 
 # ── Config + tmux helpers (libreria per le skill) ───────────────────────
 
@@ -611,6 +628,147 @@ def _daily_hardstop_disabled():
     finestra, non per sempre.
     """
     return os.environ.get("JHT_DAILY_HARDSTOP", "1").strip() in ("0", "false", "no")
+
+
+# Ogni quanto ripetere l'avviso di deroga permanente. 15 min: abbastanza raro
+# per non sporcare il log, abbastanza spesso perché non si possa scoprire due
+# settimane dopo leggendo una riga di backlog.
+DAILY_HARDSTOP_NOTICE_SEC = float(os.environ.get(
+    "JHT_HARDSTOP_NOTICE_SEC", "900"))
+
+# [HARDSTOP-DEROGATION-EXPIRES-AFTER-ONE-WINDOW] Quanto vale la deroga di
+# configurazione prima che il freno torni da sé: una finestra provider (5h),
+# perché è la durata che la commit che l'ha creata (`f8e32f913b`) dichiarava
+# come intento — «meant for one window, not forever». La deroga dell'utente
+# (BURN-INTENT) era già a termine; questa era l'unica senza scadenza.
+DAILY_HARDSTOP_WINDOW_SEC = float(os.environ.get(
+    "JHT_HARDSTOP_WINDOW_SEC", str(5 * 3600)))
+
+#: Dove vive l'inizio-finestra della deroga. Su FILE e non in memoria: il
+#: bridge riparte (watchdog, FATAL→restart) e un orologio in RAM ripartirebbe
+#: da zero a ogni riavvio, cioè la deroga non scadrebbe mai davvero.
+HARDSTOP_OVERRIDE_STATE_FILE = LOGS_DIR / "daily-hardstop-override.json"
+
+#: Stato dell'avviso, conservato fra i tick del loop del bridge.
+_HARDSTOP_NOTICE_STATE: dict = {"since": None, "announced": None, "phase": None}
+
+HARDSTOP_OFF = "off"           # variabile assente/1: freno inserito
+HARDSTOP_RUNNING = "running"   # deroga onorata, finestra in corso
+HARDSTOP_EXPIRED = "expired"   # variabile ancora a 0, ma la finestra è finita
+
+
+def hardstop_override_phase(disabled, now_ts, started_ts,
+                            window_sec=DAILY_HARDSTOP_WINDOW_SEC):
+    """In che fase è la deroga di configurazione. Pura: l'I/O sta al chiamante.
+
+    La deroga vale UNA finestra e poi il freno torna da sé, fail-closed:
+    `JHT_DAILY_HARDSTOP=0` lasciata nell'ambiente non tiene il freno giù per
+    sempre — dopo `window_sec` viene IGNORATA finché non viene rinnovata, e il
+    rinnovo è esplicito (togliere la variabile, che chiude la finestra, e
+    rimetterla). È la differenza fra una deroga e un default: la seconda non
+    chiede mai niente a nessuno.
+
+    :param started_ts: inizio finestra persistito, ``None`` se non ancora
+        partita. Un valore non finito (stato corrotto) vale «partita da
+        sempre», quindi scaduta: non sapere quando è iniziata non autorizza
+        a tenerla in piedi.
+    :returns: ``(phase, started_ts)`` — la fase e l'inizio da persistere.
+    """
+    if not disabled:
+        return HARDSTOP_OFF, None
+    if started_ts is None:
+        return HARDSTOP_RUNNING, now_ts
+    try:
+        started = float(started_ts)
+    except (TypeError, ValueError):
+        return HARDSTOP_EXPIRED, None
+    if started != started or started in (float("inf"), float("-inf")):
+        return HARDSTOP_EXPIRED, None
+    if now_ts - started < window_sec:
+        return HARDSTOP_RUNNING, started
+    return HARDSTOP_EXPIRED, started
+
+
+def _read_hardstop_override_started():
+    """Inizio finestra dal file di stato. `None` = mai partita.
+
+    File illeggibile o malformato → ``float('nan')``, che la fase tratta come
+    scaduta: se non so quando la deroga è iniziata, il freno torna.
+    """
+    try:
+        raw = HARDSTOP_OVERRIDE_STATE_FILE.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return float("nan")
+    try:
+        value = json.loads(raw).get("started_ts")
+        return float(value)
+    except (ValueError, TypeError, AttributeError, json.JSONDecodeError):
+        return float("nan")
+
+
+def _persist_hardstop_override(phase, started_ts):
+    """Allinea il file di stato alla fase. Best-effort: un write fallito non
+    cambia la decisione del tick, che è già presa in memoria."""
+    try:
+        if phase == HARDSTOP_OFF:
+            HARDSTOP_OVERRIDE_STATE_FILE.unlink(missing_ok=True)
+        elif started_ts is not None:
+            LOGS_DIR.mkdir(parents=True, exist_ok=True)
+            HARDSTOP_OVERRIDE_STATE_FILE.write_text(
+                json.dumps({"started_ts": started_ts}), encoding="utf-8")
+    except OSError as exc:
+        print(f"[bridge V6] WARN hardstop-override persist: {exc}",
+              file=sys.stderr)
+
+
+def daily_hardstop_notice(phase, now_ts, state,
+                          every_sec=DAILY_HARDSTOP_NOTICE_SEC):
+    """Riga da stampare sullo stato della deroga di configurazione.
+
+    [DAILY-SPEND-HARDSTOP-DISABLED-BY-A-LINE-NOBODY-WROTE] Il difetto non era
+    la deroga: era il suo SILENZIO. A `JHT_DAILY_HARDSTOP=0` il ramo che la
+    applica stampava qualcosa solo se c'era un halt da rimuovere; nello stato
+    normale — deroga in piedi, nessun halt — non diceva niente, tick dopo tick.
+    Così l'ultima rete automatica sul tetto di spesa è rimasta giù due
+    settimane e se n'è accorto un rilettore, non il prodotto.
+
+    Funzione pura più uno `state` che il chiamante conserva: nessun I/O, così
+    il test la guida senza bridge. Un cambio di fase parla SUBITO, senza
+    aspettare la finestra dell'annuncio: «la deroga è scaduta» detto 14 minuti
+    dopo è un freno tornato in silenzio.
+
+    :param phase: HARDSTOP_OFF | HARDSTOP_RUNNING | HARDSTOP_EXPIRED.
+    :param state: dict mutabile con `since`, `announced` e `phase`.
+    :returns: il testo da stampare, oppure None se non c'è nulla da dire.
+    """
+    if phase == HARDSTOP_OFF:
+        if state.get("since") is None:
+            return None
+        state["since"] = None
+        state["announced"] = None
+        state["phase"] = None
+        return ("DAILY-HARDSTOP re-enabled — the physical stop on daily spend "
+                "is back on")
+
+    if state.get("since") is None:
+        state["since"] = now_ts
+    phase_changed = state.get("phase") != phase
+    state["phase"] = phase
+    last = state.get("announced")
+    if not phase_changed and last is not None and (now_ts - last) < every_sec:
+        return None
+    state["announced"] = now_ts
+    if phase == HARDSTOP_EXPIRED:
+        return ("DAILY-HARDSTOP derogation EXPIRED — JHT_DAILY_HARDSTOP=0 was "
+                "honored for one window and is now IGNORED: the brake is back "
+                "on. To renew for another window, unset the variable and set "
+                "it again.")
+    return ("DAILY-HARDSTOP DISABLED (JHT_DAILY_HARDSTOP=0) — the last "
+            "AUTOMATIC stop on daily spend is OFF: pace_guard measures and "
+            "advises but does not brake. Valid for ONE window, then the brake "
+            "returns by itself.")
 
 
 # Modulo di intento cachato: l'import per path costa un exec, e qui si legge a
@@ -1310,6 +1468,29 @@ def _write_last_tick(msg):
         pass
 
 
+def _harvest_backlog_count():
+    """Posizioni già trovate e già pagate che aspettano un CV, o None.
+
+    Serve al consiglio di `burn_mode` ([BURN-MODE-ADVISES-THE-WRONG-LEVER]):
+    finché quel numero è > 0 esiste una leva di spesa che produce candidature,
+    mentre "scala worker" spinge sul sourcing, che è work-capped e non satura.
+    La conta la fa `mode_banner.harvest_backlog` — gli stessi predicati di
+    `next-for-harvest`, in sola lettura, senza mai creare il DB.
+
+    None = non contabile (jobs.db assente/illeggibile): il consiglio resta
+    quello storico, perché proporre un raccolto che non sappiamo se esiste
+    sarebbe peggio del consiglio imperfetto.
+    """
+    try:
+        mod = _load_skill_module("mode_banner", "mode_banner.py")
+        if mod is None:
+            return None
+        n, _thr = mod.harvest_backlog()
+        return n if isinstance(n, int) else None
+    except Exception:  # noqa: BLE001 — un consiglio non abbatte il bridge
+        return None
+
+
 def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_target,
                         work_phase, weekly_pace, weekly_locked, now_h, now_ts):
     """Costruisce il dict-valori 3-sezioni (5h/oggi/settimana) + extras e lo
@@ -1361,13 +1542,24 @@ def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_targe
             "ratio": wp.get("ratio"), "kind": kind if kind not in (None, "ND") else None,
             "debt": wp.get("debt_pct"), "early_lockout": wp.get("early_lockout_h"),
             "burn_mode": bool(wp.get("burn_mode")),
-            # Verdetto imperativo Passo A (RALLENTA ~X%/ACCELERA-SATURA/...): la
-            # CONCLUSIONE pronta per un modello debole (Kimi), non solo i numeri.
-            # Il renderer lo mostra come headline della sezione SETTIMANA.
-            "verdict": (_pace_verdict_line(
-                wp, entry.get("weekly_remaining_pct")) or "").strip() or None,
         }
     extras = {}
+    # [BURN-MODE-ADVISES-THE-WRONG-LEVER] — quante posizioni aspettano un CV.
+    # Si conta SOLO in burn_mode: è l'unico momento in cui la risposta cambia
+    # il consiglio, e una query in più a ogni tick non la paga nessuno.
+    harvest_backlog = None
+    if weekly and weekly.get("burn_mode"):
+        harvest_backlog = _harvest_backlog_count()
+        if harvest_backlog is not None:
+            extras["harvest_backlog"] = harvest_backlog
+    if weekly:
+        # Verdetto imperativo Passo A (RALLENTA ~X%/ACCELERA-SATURA/...): la
+        # CONCLUSIONE pronta per un modello debole (Kimi), non solo i numeri.
+        # Il renderer lo mostra come headline della sezione SETTIMANA.
+        weekly["verdict"] = (_pace_verdict_line(
+            weekly_pace if isinstance(weekly_pace, dict) else {},
+            entry.get("weekly_remaining_pct"),
+            harvest_backlog=harvest_backlog) or "").strip() or None
     mrp = parsed.get("monthly_remaining_pct") if isinstance(parsed, dict) else None
     if isinstance(mrp, (int, float)):
         extras["monthly_rem"] = mrp
@@ -1535,7 +1727,41 @@ def _should_advise_captain(result, state, now_ts):
     return (now_ts - (state.get("ts") or 0.0)) >= PACE_ADVICE_COOLDOWN_MIN * 60
 
 
-def _pace_guard_step(entry):
+def _pace_guard_within_hours(within_hours, burn_intent_on):
+    """Il guard può parlare adesso? (gate orario di [PACE-GUARD-IGNORES-WORK-PHASE])
+
+    Il consiglio di pacing costa un TURNO DEL CAPITANO: nella notte 29-30/07 un
+    tick ogni 15 minuti ha tenuto sveglio il coordinatore fino al mattino a
+    ~9%/h di weekly, per frenare un team che fuori finestra non stava correndo.
+    Il guard misurava una curva vera e la consegnava a chi non doveva lavorare.
+
+    Tre sorgenti, in quest'ordine, perché rispondono a domande diverse:
+      • deroga burn-intent → l'utente ha DECISO di lavorare stanotte: si parla
+        (stessa deroga che il tick applica poco sopra a `within_hours`);
+      • `within_hours` del tick (work_phase dal pacing-bridge) → se lì è OFF,
+        nessuna LLM va svegliata e il guard non fa eccezione;
+      • `working_hours.is_within_working_hours()` → la config dell'utente letta
+        DIRETTAMENTE: copre il caso in cui il pacing-bridge non scrive il target
+        (work_phase None = "24/7 per back-compat") mentre la finestra esiste.
+
+    Fail-open: skill non caricabile o errore → True. Un consiglio di troppo
+    costa un turno, un guard muto per un import rotto costa la finestra.
+    """
+    if burn_intent_on:
+        return True
+    if not within_hours:
+        return False
+    mod = _load_skill_module("working_hours", "working_hours.py")
+    fn = getattr(mod, "is_within_working_hours", None) if mod else None
+    if not callable(fn):
+        return True
+    try:
+        return bool(fn())
+    except Exception:  # noqa: BLE001 — vedi fail-open sopra
+        return True
+
+
+def _pace_guard_step(entry, within_hours=True, burn_intent_on=False):
     """Consiglio di pacing sulla curva della finestra (shared/skills/pace_guard.py).
 
     Il bridge MISURA e RACCOMANDA, non tocca il throttle: scrive nel pane del
@@ -1550,6 +1776,18 @@ def _pace_guard_step(entry):
     WORKER_FLOOR di 5 minuti (applicato da throttle-config.py a ogni lettura) e
     il daily hard-stop più sotto in main(). Frenare per stare sulla curva è
     pacing; impedire il disastro è un'altra cosa.
+
+    Fuori dalla finestra di lavoro il campione si scrive nel log e basta: la
+    misura non costa niente, la sveglia del Capitano sì (vedi
+    `_pace_guard_within_hours`). Il consiglio NON si accumula — alla riapertura
+    il primo tick attuabile è di nuovo un edge e parte subito, perché lo stato
+    dell'ultimo consiglio resta intatto mentre si tace.
+
+    UNICA eccezione al silenzio: un `LOCKOUT-IMMINENTE` va comunque scritto in
+    `bridge-mailbox.jsonl`. Non sveglia nessuno (la mailbox si drena a inizio
+    turno) e senza di esso l'emergenza spariva insieme al consiglio ordinario:
+    quel verdetto chiede di ridurre il ROSTER, cioè la cosa che il freno da
+    solo non può fare.
 
     Fail-safe per costruzione: qualunque errore lascia il bridge intatto e il
     throttle dov'era. Disattivabile con JHT_PACE_GUARD=0.
@@ -1574,16 +1812,31 @@ def _pace_guard_step(entry):
         result["applied"] = False
         result["advice"] = mod.advice_line(
             result, workers, mod.advisable_workers(workers))
-        if _should_advise_captain(result, _pace_advice_state, now_ts):
-            result["advised"] = True
+        in_hours = _pace_guard_within_hours(within_hours, burn_intent_on)
+        result["within_working_hours"] = in_hours
+        if in_hours and _should_advise_captain(result, _pace_advice_state, now_ts):
             result["delivered_via_tmux"] = _notify_captain_pace_guard(result)
-            _pace_advice_state.update({
-                "ts": now_ts,
-                "throttle_s": result.get("throttle_recommended_s"),
-                "verdict": result.get("verdict"),
-            })
+            if result.get("suppressed"):
+                # stop_search sul disco + consiglio di accelerazione: trattenuto
+                # (vedi _notify_captain_pace_guard). Non è stato DETTO → non
+                # consuma l'edge: a modalità rientrata il primo consiglio utile
+                # non deve aspettare il cooldown per un consiglio mai partito.
+                result["advised"] = False
+            else:
+                result["advised"] = True
+                _pace_advice_state.update({
+                    "ts": now_ts,
+                    "throttle_s": result.get("throttle_recommended_s"),
+                    "verdict": result.get("verdict"),
+                })
         else:
             result["advised"] = False
+            if not in_hours:
+                # Il sample resta, la sveglia no: è la riga che distingue
+                # "guard silenzioso perché è notte" da "guard morto".
+                result["silenced"] = "outside-working-hours"
+                if _emergency_to_mailbox(result, now_ts):
+                    result["mailbox_only"] = True
             if not result.get("recommends_change"):
                 # Rientrati in pari (spesso perché il Capitano ha applicato):
                 # si dimentica l'ultimo consiglio, così la prossima deriva
@@ -1596,6 +1849,79 @@ def _pace_guard_step(entry):
         pass
 
 
+def _emergency_to_mailbox(result, now_ts):
+    """Fuori orario: il LOCKOUT-IMMINENTE si scrive in mailbox. Ritorna True se
+    la riga è stata scritta.
+
+    Non è una deroga al gate orario, è l'altra metà: il gate protegge dal
+    COSTO di svegliare una LLM, e la mailbox non ne sveglia nessuna — la drena
+    il Capitano quando riprende. Senza questo, l'unico verdetto che chiede di
+    tagliare il roster spariva del tutto per tutta la notte.
+
+    Deliberatamente NON si guarda `recommends_change`: a throttle già al
+    massimo il consiglio numerico non cambia niente, ma la riga sul roster
+    resta l'unica cosa che può salvare la finestra. Il cooldown è quello
+    normale, su uno stato separato, così le ore di silenzio non producono una
+    riga ogni cinque minuti né consumano l'edge del pane.
+    """
+    if result.get("verdict") != EMERGENCY_VERDICT:
+        return False
+    if (now_ts - (_pace_mailbox_state.get("ts") or 0.0)) < PACE_ADVICE_COOLDOWN_MIN * 60:
+        return False
+    advice = result.get("advice") or ""
+    if not advice:
+        return False
+    _append_pace_mailbox(advice, delivered=False, kind="pace-guard-offhours")
+    _pace_mailbox_state.update({
+        "ts": now_ts,
+        "throttle_s": result.get("throttle_recommended_s"),
+        "verdict": result.get("verdict"),
+    })
+    return True
+
+
+def _append_pace_mailbox(advice, delivered, kind="pace-guard"):
+    """Una riga nella mailbox che il Capitano drena a inizio turno."""
+    try:
+        with (LOGS_DIR / "bridge-mailbox.jsonl").open("a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "kind": kind,
+                "delivered_via_tmux": delivered,
+                "msg": advice,
+            }, separators=(",", ":")) + "\n")
+    except OSError as e:
+        print(f"[bridge V6] WARN append mailbox {kind}: {e}", file=sys.stderr)
+
+
+def _pace_mode_section():
+    """(sezione [MODALITÀ CORRENTE], sourcing_stopped) lette DA DISCO adesso.
+
+    T-025, residuo di [MODE-INJECTION-HOURLY-PROMPT]: il consiglio del pace
+    guard era l'unico messaggio periodico al Capitano che non dichiarava gli
+    ordini in vigore. Stesso contratto di `heartbeat-bridge._mode_section`:
+    la sezione si compone via `shared/skills/mode_banner.py` a OGNI invio e
+    non si cacha mai il risultato — un ordine cambiato a caldo deve valere al
+    consiglio successivo, non al riavvio del bridge.
+
+    Fail-open come il battito: modulo non caricabile o errore → ("", False),
+    il consiglio parte comunque e il WARN è il segnale «sezione mancante» —
+    che deve poter significare solo «bridge rotto», mai «modalità normale».
+    """
+    mod = _load_skill_module("mode_banner", "mode_banner.py")
+    if mod is None:
+        print("[bridge V6] WARN mode_banner not loadable: [CURRENT MODE] was "
+              "NOT injected", file=sys.stderr)
+        return ("", False)
+    try:
+        snap = mod.snapshot()
+        return (mod.banner(snap=snap), bool(mod.sourcing_stopped(snap)))
+    except Exception as e:  # noqa: BLE001 — un promemoria non abbatte il guard
+        print(f"[bridge V6] WARN [CURRENT MODE] could not be composed: {e}",
+              file=sys.stderr)
+        return ("", False)
+
+
 def _notify_captain_pace_guard(result):
     """Consegna il consiglio al Capitano. Ritorna True se il tmux-send è andato.
 
@@ -1604,19 +1930,29 @@ def _notify_captain_pace_guard(result):
     Il secondo esiste perché `jht-tmux-send` fallisce quando il Capitano è in
     turno lungo, e da oggi un consiglio perso significa nessuna correzione —
     prima il freno era già stato applicato e il messaggio era solo un'informativa.
+
+    T-025: il messaggio porta in coda la sezione [MODALITÀ CORRENTE], e con
+    `stop_search` sul disco il consiglio che spingerebbe SPESA NUOVA (verdetto
+    INDIETRO = «sei sotto curva, accelera») viene soppresso — come il bridge
+    orario disarma l'ordine C-05: con la coda `new` volutamente vuota per
+    ordine dell'utente, «vai più veloce» è la stessa contraddizione, nello
+    STESSO messaggio, della sezione che gli sta in coda. I consigli PROTETTIVI
+    (AVANTI, LOCKOUT-IMMINENTE: frenare) restano sempre: sono compatibili con
+    qualunque modalità e proteggono la finestra. Un consiglio soppresso è
+    marcato `suppressed` nel result (finisce in pace-guard.jsonl, così un
+    guard silenzioso per stop_search non somiglia a un guard morto) e NON
+    consuma l'edge del gate: a modalità rientrata il consiglio riparte subito.
     """
     advice = result.get("advice") or ""
-    delivered = jht_tmux_send(CAPITANO_SESSION, advice) if advice else False
-    try:
-        with (LOGS_DIR / "bridge-mailbox.jsonl").open("a", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "ts": datetime.now(timezone.utc).isoformat(),
-                "kind": "pace-guard",
-                "delivered_via_tmux": delivered,
-                "msg": advice,
-            }, separators=(",", ":")) + "\n")
-    except OSError as e:
-        print(f"[bridge V6] WARN append mailbox pace-guard: {e}", file=sys.stderr)
+    if not advice:
+        return False
+    mode_section, sourcing_stopped = _pace_mode_section()
+    if sourcing_stopped and result.get("verdict") == "INDIETRO":
+        result["suppressed"] = "sourcing-stopped"
+        return False
+    msg = f"{advice} {mode_section}" if mode_section else advice
+    delivered = jht_tmux_send(CAPITANO_SESSION, msg)
+    _append_pace_mailbox(msg, delivered)
     return delivered
 
 
@@ -1775,7 +2111,7 @@ def _evening_release(now_dt):
     return False
 
 
-def _pace_verdict_line(weekly_pace, wk_remaining_pct):
+def _pace_verdict_line(weekly_pace, wk_remaining_pct, harvest_backlog=None):
     """VERDETTO imperativo del weekly-pace per la Sentinella (Passo A, 2026-06-28).
 
     Visione utente: dare alla Sentinella la CONCLUSIONE pronta, non solo i numeri
@@ -1826,10 +2162,22 @@ def _pace_verdict_line(weekly_pace, wk_remaining_pct):
                  if isinstance(early, (int, float)) and early > 0 else "")
         return head + goal + leash + trend
     if burn:
-        return (f" WEEKLY-PACE→ACCELERATE-SATURATE: current pace ends at ~{proj:.0f}%,"
-                f" wasting ~{wasted:.0f}% of the weekly quota before reset"
+        diag = (f"current pace ends at ~{proj:.0f}%, wasting ~{wasted:.0f}% of "
+                f"the weekly quota before reset"
                 if isinstance(proj, (int, float)) and isinstance(wasted, (int, float))
-                else " WEEKLY-PACE→ACCELERATE-SATURATE: budget at risk of waste")
+                else "budget at risk of waste")
+        # [BURN-MODE-ADVISES-THE-WRONG-LEVER] — misurato su P05 il 2026-08-02:
+        # l'allarme ha suonato per ore su «scala worker» mentre il team aveva
+        # 460 posizioni e ZERO candidature. Più sourcing non satura (è
+        # work-capped); scrivere CV sì, ed è anche il lavoro che manca. Con un
+        # raccolto pronto il verdetto propone la MODALITÀ, che è una scelta
+        # dell'utente: il Capitano la gira, nessuno la cambia da sé.
+        if isinstance(harvest_backlog, int) and harvest_backlog > 0:
+            return (f" WEEKLY-PACE→PROPOSE-HARVEST: {diag}; "
+                    f"{harvest_backlog} positions already found are waiting for "
+                    f"a CV — more scouting cannot spend it. Ask the user to "
+                    f"switch to `harvest` mode; do NOT switch it yourself")
+        return f" WEEKLY-PACE→ACCELERATE-SATURATE: {diag}"
     goal = (f" (~{sust:.2f}%/h)" if isinstance(sust, (int, float)) else "")
     return f" WEEKLY-PACE→MAINTAIN{goal}{leash}"
 
@@ -2271,7 +2619,11 @@ def main():
             entry["source"] = "bridge"
             write_jsonl(entry)
             write_log(entry)
-            _pace_guard_step(entry)
+            # Il gate orario calcolato in testa al tick vale anche qui: il
+            # consiglio di pacing sveglia il Capitano come qualunque altro
+            # messaggio, e fuori finestra nessuna LLM va svegliata.
+            _pace_guard_step(entry, within_hours=within_hours,
+                             burn_intent_on=_bi_on)
 
             # Vitals RAM/CPU (2026-06-18): campiona a OGNI tick su vitals.jsonl
             # (file dedicato — NON nel tick Sentinella, che resta sul flusso quota).
@@ -2362,10 +2714,26 @@ def main():
                 entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
             _hb = _dp.get("budget") if isinstance(_dp, dict) else None
             _hc = _dp.get("consumed") if isinstance(_dp, dict) else None
-            if _daily_hardstop_disabled() or _bi_on:
+            # La deroga di CONFIGURAZIONE si dichiara sempre, anche quando non
+            # c'è nessun halt da rimuovere: era proprio lo stato muto in cui il
+            # freno è rimasto giù due settimane. Il BURN-INTENT non passa da qui
+            # perché è a termine e ha già la sua riga di scadenza.
+            # [HARDSTOP-DEROGATION-EXPIRES-AFTER-ONE-WINDOW] La deroga vale UNA
+            # finestra: dopo, la variabile viene ignorata e il freno torna da
+            # sé. L'inizio-finestra sta su file, così sopravvive ai riavvii del
+            # bridge; il rinnovo è esplicito (togliere la variabile, rimetterla).
+            _hs_phase, _hs_started = hardstop_override_phase(
+                _daily_hardstop_disabled(), now_ts,
+                _read_hardstop_override_started())
+            _persist_hardstop_override(_hs_phase, _hs_started)
+            _hs_msg = daily_hardstop_notice(_hs_phase, now_ts, _HARDSTOP_NOTICE_STATE)
+            if _hs_msg:
+                print(f"[bridge V6] {now_h} {_hs_msg}")
+            if _hs_phase == HARDSTOP_RUNNING or _bi_on:
                 # Due deroghe, stesso effetto: il cap giornaliero NON scatta.
                 #   • JHT_DAILY_HARDSTOP=0 — deroga di configurazione (burst
-                #     dimostrativo: saturare la finestra 5h invece di spalmarla);
+                #     dimostrativo: saturare la finestra 5h invece di spalmarla),
+                #     valida una finestra e poi scaduta;
                 #   • BURN-INTENT — deroga esplicita dell'UTENTE, a termine, letta
                 #     QUI **prima** di scrivere l'halt e non dopo: fra la scrittura
                 #     del flag e la sua rimozione il team è già andato in ESC su

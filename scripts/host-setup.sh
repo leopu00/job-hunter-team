@@ -113,11 +113,20 @@ jht_read_host_env_value() {
   printf '%s' "$result"
 }
 
+I18N_PREFS_PATH="$JHT_HOME_HOST/i18n-prefs.json"
+jht_read_i18n_locale() {
+  local file="$1" value=""
+  [ -f "$file" ] || return 1
+  value="$(sed -n 's/.*"locale"[[:space:]]*:[[:space:]]*"\([a-z][a-z]\)".*/\1/p' "$file" | head -n 1)"
+  case "$value" in en|it|hu|es|de|fr|pt) printf '%s' "$value" ;; *) return 1 ;; esac
+}
+
 JHT_LANG_DEFAULT=en
-# Priorità lookup: env JHT_LANG > host.env > default 'en'. L'env vince
-# perché il setup in-game la passa esplicitamente quando rilancia
-# host-setup non-interactive (la scelta lingua viene fatta nel desktop).
-if [ -n "${JHT_LANG:-}" ]; then
+# La preferenza canonica vince. Env e host.env inizializzano soltanto una
+# macchina che non ha ancora i18n-prefs.json (contratto lingua v1).
+if EXISTING_PREFS_LANG="$(jht_read_i18n_locale "$I18N_PREFS_PATH")"; then
+  JHT_LANG_DEFAULT="$EXISTING_PREFS_LANG"
+elif jht_host_env_value_valid JHT_LANG "${JHT_LANG:-}"; then
   JHT_LANG_DEFAULT="$JHT_LANG"
 elif [ -f "$HOST_ENV_PATH" ]; then
   if EXISTING_LANG="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_LANG)"; then
@@ -167,6 +176,11 @@ ok "Language / Lingua / Nyelv / Idioma / Sprache / Langue / Idioma: $JHT_LANG"
 # JHT_HOST_TYPE allo stesso file.
 mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
 printf 'JHT_LANG=%s\n' "$JHT_LANG" > "$HOST_ENV_PATH"
+if ! jht_read_i18n_locale "$I18N_PREFS_PATH" >/dev/null 2>&1; then
+  I18N_PREFS_TMP="$I18N_PREFS_PATH.tmp-$$"
+  printf '{\n  "locale": "%s"\n}\n' "$JHT_LANG" > "$I18N_PREFS_TMP"
+  mv -f "$I18N_PREFS_TMP" "$I18N_PREFS_PATH"
+fi
 
 # ── i18n: soltanto dati, mai helper shell dal filesystem ─────────────────
 # Questo script gira sull'host. Non importa codice da directory che il
@@ -232,12 +246,12 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
     DEFAULT_NUM=1
   fi
   printf "\n%s\n\n" "$(ts host_setup.where_running 'Where are you running JHT?')"
-  printf "  1) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.local.title 'Local computer')"
-  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.local.line1 'You are using JHT on your own PC, accessible only to you on the local network.')"
-  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.local.line2 'The web dashboard opens automatically.')"
-  printf "  2) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.vps.title 'Remote server / VPS')"
-  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.vps.line1 'JHT runs on a cloud server reachable via public IP.')"
-  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.vps.line2 'Extra steps are needed to expose the dashboard securely.')"
+  printf "  1) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.local.title 'Local PC')"
+  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.local.line1 'The full team runs on this PC; keep it awake with Docker running while the team works.')"
+  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.local.line2 'Shortest guided path; no VPS or cloud account required.')"
+  printf "  2) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.vps.title 'VPS / remote server')"
+  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.vps.line1 'The team runs on a remote Linux server over SSH and can continue when this PC is off.')"
+  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.vps.line2 'You provide and administer the server and its SSH access.')"
   printf "%s [%d]: " "$(ts host_setup.choice_prompt 'Choice')" "$DEFAULT_NUM"
   read -r CHOICE
   case "$CHOICE" in
@@ -311,7 +325,7 @@ if { [ ! -t 0 ] || [ "$NON_INTERACTIVE" -eq 1 ]; } && [ "$JHT_USER_TZ" = "UTC" ]
 fi
 
 # Persisti la scelta in ~/.jht/host.env cosi' il wrapper bash + il wizard
-# Node sanno se siamo su VPS (per attivare step obbligatori cloud + telegram).
+# Node sanno se siamo su VPS (per proporre cloud + Telegram, entrambi opzionali).
 # Riscriviamo l'intero file mantenendo JHT_LANG + JHT_USER_TZ. Se in
 # futuro si aggiungono altre chiavi, usare un piccolo helper di merge
 # invece di sovrascrivere.

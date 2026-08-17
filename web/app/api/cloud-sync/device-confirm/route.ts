@@ -6,6 +6,7 @@ import { generateSyncToken } from "@/lib/cloud-sync/tokens";
 import { normalizeUserCode } from "@/lib/cloud-sync/pairing";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,9 @@ const NOT_CLOUD = NextResponse.json(
 const UNAUTH = NextResponse.json({ error: "Non autenticato" }, { status: 401 });
 
 // Confirm e' chiamato dall'utente loggato sul web — UNA volta per pairing.
-// Cap a 20/min per user, sufficiente per UX retry su typo del codice.
+// Cap a 20 tentativi/10 min per user: user_code ha circa 1,15 miliardi di
+// combinazioni (23^4 * 8^4); il bucket persistente limita i tentativi
+// cross-instance.
 const CONFIRM_LIMIT_PER_MIN = 20;
 
 /**
@@ -36,7 +39,7 @@ const CONFIRM_LIMIT_PER_MIN = 20;
  * 5. Ritorna success — il token sara' consegnato al CLI via device-poll
  *
  * Sicurezza:
- * - User_code ha ~18B entropy nominali, ma con rate limit 20/min per user
+ * - User_code ha ~1.15B combinazioni nominali, ma con rate limit 20/min per user
  *   e cap 30/min globali sul polling, brute-force impraticabile in 10min TTL.
  * - Solo l'utente loggato puo' confermare → il VPS riceve un token associato
  *   all'account giusto, no token squatting.
@@ -71,6 +74,35 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return NextResponse.json(
+      { error: "server misconfigured: SUPABASE_SERVICE_ROLE_KEY mancante" },
+      { status: 500 },
+    );
+  }
+
+  // Consume the durable bucket before parsing or looking up user_code. An RPC
+  // error is fail-closed: malformed/non-existent codes count too.
+  const { data: attempt, error: attemptErr } = await admin.rpc(
+    "consume_pairing_attempt",
+    { p_user_id: user.id },
+  );
+  const attemptRow = Array.isArray(attempt) ? attempt[0] : attempt;
+  if (attemptErr || !attemptRow?.allowed) {
+    return NextResponse.json(
+      { error: "Troppi tentativi. Riprova più tardi." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(attemptRow?.retry_after_seconds ?? 60),
+        },
+      },
+    );
+  }
+
   let body: { user_code?: string; token_name?: string } = {};
   try {
     body = await req.json();
@@ -91,16 +123,6 @@ export async function POST(req: NextRequest) {
     `cli-pairing-${new Date().toISOString().slice(0, 10)}`
   ).slice(0, 100);
 
-  let admin;
-  try {
-    admin = createAdminClient();
-  } catch {
-    return NextResponse.json(
-      { error: "server misconfigured: SUPABASE_SERVICE_ROLE_KEY mancante" },
-      { status: 500 },
-    );
-  }
-
   // Cerca la sessione pending con quel user_code.
   const { data: session, error: lookupErr } = await admin
     .from("cloud_sync_pairing_sessions")
@@ -110,7 +132,11 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (lookupErr) {
-    return NextResponse.json({ error: lookupErr.message }, { status: 500 });
+    return sanitizedError(lookupErr, {
+      status: 500,
+      scope: "cloud-sync/device-confirm",
+      publicMessage: "conferma dispositivo non disponibile",
+    });
   }
   if (!session) {
     return NextResponse.json(
@@ -138,12 +164,19 @@ export async function POST(req: NextRequest) {
       name: tokenName,
       token_prefix: prefix,
       token_hash: hash,
+      // Prima del riscatto il bearer condivide la TTL della sessione. La RPC
+      // lo rende no-expiry soltanto nello stesso commit che consuma il token.
+      expires_at: session.expires_at,
     })
     .select("id, name, token_prefix, created_at")
     .single();
 
   if (tokenErr) {
-    return NextResponse.json({ error: tokenErr.message }, { status: 500 });
+    return sanitizedError(tokenErr, {
+      status: 500,
+      scope: "cloud-sync/device-confirm",
+      publicMessage: "conferma dispositivo non disponibile",
+    });
   }
 
   // Approva la sessione (CAS contro double-approve).
@@ -158,6 +191,7 @@ export async function POST(req: NextRequest) {
     })
     .eq("device_code", session.device_code)
     .eq("status", "pending")
+    .gt("expires_at", new Date().toISOString())
     .select("device_code")
     .maybeSingle();
 
@@ -167,7 +201,11 @@ export async function POST(req: NextRequest) {
       .from("cloud_sync_tokens")
       .update({ revoked_at: new Date().toISOString() })
       .eq("id", tokenRow.id);
-    return NextResponse.json({ error: approveErr.message }, { status: 500 });
+    return sanitizedError(approveErr, {
+      status: 500,
+      scope: "cloud-sync/device-confirm",
+      publicMessage: "conferma dispositivo non disponibile",
+    });
   }
   if (!updated) {
     // Race: qualcun altro ha gia' approvato. Rollback token.

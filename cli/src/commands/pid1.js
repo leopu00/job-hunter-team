@@ -553,8 +553,8 @@ async function cleanupStaleBridgeState() {
  * di importare i moduli dei comandi).
  *
  * SEQUENZIALE, non in parallelo ai bridge. Misurato sui due percorsi reali —
- * `npm install -g @anthropic-ai/claude-code@latest` 1,5s e la coppia
- * `pip install -U uv` + `uv tool install --force kimi-cli` ~6s — l'attesa e'
+ * `npm install -g @anthropic-ai/claude-code@<pin>` 1,5s e la coppia
+ * `pip install -U uv` + `uv tool install --force kimi-cli==<pin>` ~6s — l'attesa e'
  * un'inezia rispetto ai ~48s di stagger che il boot gia' spende sui 4 agenti.
  * Farlo in parallelo avrebbe richiesto di trattenere comunque tutti i percorsi
  * che spawnano agenti (auto-start, agent-watchdog ogni 30s, doctor-watchdog):

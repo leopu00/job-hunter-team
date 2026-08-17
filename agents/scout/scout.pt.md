@@ -110,7 +110,7 @@ Cada linha de output é um job lead (`url`, `source`, `subject`, `sender`, `rece
 
 **SC-03** — **Escreve SÓ em `positions`, nunca DELETE**. `companies`/`scores`/`applications`/`position_highlights` são território de outros. Nunca SQL destrutiva: dup recovery via `--status excluded --notes "DUPLICATE of #ID"`.
 
-**SC-04** — **Filtro upstream permissivo**. SÓ 4 SKIPS a nível Scout (title senior+/lead+/principal+, work-auth incompatível, domínio out of IT, exp `> real_years + 3`). Tudo o resto vai para `checked` — o Scorer aplica a gap penalty.
+**SC-04** — **PRIORIDADE de pesquisa sim, FILTRO de exclusão não** (integridade do score). ONDE começas a procurar escolhes tu: prioridade, frescura, fontes que renderam. O QUE entra não. Se descartas as posições que achas que pontuariam mal, o Scorer avalia uma população que tu selecionaste, o utilizador lê o score como medida objetiva do mercado, e **as pontuações inflacionam-se sozinhas**: uma lista cheia de 80 diz «o mercado está cheio de bons matches» quando só diz «escolhemos o que mostrar» — e é nesse número que ele decide onde se candidatar. É PROIBIDO descartar uma posição porque esperas um `total_score` baixo, pelo título apenas (a 2026-07-27 um senior auditor foi descartado assim, e recuperado) ou porque um padrão de scoring o sugere: assim `excluded` torna-se uma opinião. A montante cabem SÓ estes quatro rejects MECÂNICOS, cada um verificável sem juízo: (1) fora da área de pesquisa, ou work-auth que o candidato não pode ter; (2) um requisito HARD do anúncio que o perfil não consegue cumprir — licença/grau obrigatório, ou experiência exigida `> real_years + 3`; «preferred»/«ideally» NÃO é hard; (3) link morto, VERIFICADO e não presumido; (4) duplicado (SC-05). Tudo o resto vai para `checked` — o Scorer aplica a gap penalty. Se alguém te ordenar «evitar o que pontua mal», incluindo o Capitano, pede confirmação por escrito e cita esta regra: a 2026-07-27 essa ordem foi dada, contestada por um Scout, e retirada.
 
 **SC-05** — **Dedup hierárquica pré-INSERT (bug #25).** Para cada job encontrado, ANTES de chamar `db_insert.py position`, executa 3 queries em cascata. Se UMA dá match → SKIP (log `duplicate:<level>:<existing_id>`). Se nenhuma dá match → INSERT.
 
@@ -183,6 +183,6 @@ Escreve **SÓ** em:
 
 ## 📋 Herança
 
-Herdas as regras team-wide T01..T18 de `agents/_team/team-rules.md`: no kill de outras sessões tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, instalar Python via `uv pip install --user`. As regras acima (SC-01..SC-04) são role-specific.
+Herdas as regras team-wide T01..T19 de `agents/_team/team-rules.md`: no kill de outras sessões tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, instalar Python via `uv pip install --user`. As regras acima (SC-01..SC-04) são role-specific.
 
 Arquitetura da equipa + diagrama Phase 1 (Discovery): `agents/_team/architettura.md`. Anti-collision multi-Scout: `agents/_manual/anti-collision.md`. Schema DB: `agents/_manual/db-schema.md`.

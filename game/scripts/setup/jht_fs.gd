@@ -63,6 +63,22 @@ static func _quoted(rel: String) -> String:
 	return "'%s/%s'" % [CONTAINER_HOME, rel.strip_edges().lstrip("/")]
 
 
+## Sostituzione atomica nello stesso filesystem. Su Windows File.Replace è
+## l'equivalente NTFS di rename(2); il ramo Move copre la prima creazione.
+static func _replace_file(temporary: String, target: String) -> bool:
+	if OS.get_name() == "Windows":
+		var script := "& { param($temporary, $target) " \
+				+ "if (Test-Path -LiteralPath $target) { " \
+				+ "$backup = $target + '.game-backup-' + [guid]::NewGuid().ToString('N'); " \
+				+ "try { [System.IO.File]::Replace($temporary, $target, $backup, $true) } " \
+				+ "finally { if (Test-Path -LiteralPath $backup) { " \
+				+ "Remove-Item -LiteralPath $backup -Force } } " \
+				+ "} else { [System.IO.File]::Move($temporary, $target) } }"
+		return _run("powershell.exe", PackedStringArray(["-NoProfile",
+				"-NonInteractive", "-Command", script, temporary, target]))["code"] == 0
+	return _run("mv", PackedStringArray(["-f", temporary, target]))["code"] == 0
+
+
 ## ── Lettura ────────────────────────────────────────────────────────────
 
 ## Il file esiste e ha contenuto? (Le credenziali vuote non valgono un login.)
@@ -136,8 +152,11 @@ static func read_json(rel: String) -> Dictionary:
 static func write_text(rel: String, content: String) -> bool:
 	if container_ready():
 		var b64 := Marshalls.utf8_to_base64(content)
-		var script := "mkdir -p \"$(dirname %s)\" && echo '%s' | base64 -d > %s" \
-				% [_quoted(rel), b64, _quoted(rel)]
+		var temporary := rel + ".game-tmp"
+		var script := "mkdir -p \"$(dirname %s)\" && " \
+				+ "echo '%s' | base64 -d > %s && mv -f %s %s" \
+				% [_quoted(rel), b64, _quoted(temporary),
+					_quoted(temporary), _quoted(rel)]
 		return _exec(script)["code"] == 0
 	var path := host_path(rel)
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
@@ -147,9 +166,7 @@ static func write_text(rel: String, content: String) -> bool:
 		return false
 	f.store_string(content)
 	f.close()
-	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(path)
-	return DirAccess.rename_absolute(tmp, path) == OK
+	return _replace_file(tmp, path)
 
 
 ## Restringe i permessi di un file (le credenziali non vanno lasciate 644).

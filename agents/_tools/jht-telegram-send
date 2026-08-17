@@ -24,6 +24,7 @@
 #   3 → chat_id assente
 #   4 → errore di rete o HTTP non-200
 #   5 → Bot API ha risposto ok:false
+#   6 → il testo non ha potuto essere ripulito: NON inviato (O-175)
 
 set -euo pipefail
 
@@ -86,6 +87,35 @@ text="$*"
 text="${text//\\n/$'\n'}"
 text="${text//\\t/$'\t'}"
 text="${text//\\r/$'\r'}"
+
+# ── Redazione dell'USCITA (O-175) ─────────────────────────────────────
+# Telegram è un terzo: quello che esce di qui non torna indietro. Il
+# repository aveva già un ripulitore, ma lo applicava solo al testo che
+# arriva A NOI (feedback, diagnostica) — la direzione più debole. Qui si
+# ripulisce quella più forte, prima di ogni uso del testo: vale per
+# sendMessage e per la caption di sendPhoto, che è lo stesso `$text`.
+#
+# SOLO la famiglia `secret`. I dati personali che compaiono qui sono
+# dell'utente a cui stiamo scrivendo — il suo CV si chiama col suo nome,
+# l'annuncio contiene l'email dell'azienda a cui candidarsi: redigerli
+# mutilerebbe messaggi legittimi su un canale che è già suo. Una
+# credenziale, invece, non ha mai un motivo per uscire.
+#
+# FAIL-CLOSED: se il filtro non è disponibile o fallisce NON si invia.
+# Un'uscita non ripulita che parte lo stesso è esattamente il difetto che
+# questo blocco esiste per evitare, e lo renderebbe invisibile.
+# `/app` è il container; il secondo path serve al checkout, dove questo file
+# sta in `agents/_tools/` e `shared/` è due livelli sopra.
+redactor="/app/shared/redact-cli.mjs"
+[ -f "$redactor" ] || redactor="$(dirname "$0")/../../shared/redact-cli.mjs"
+if [ ! -f "$redactor" ]; then
+  echo "jht-telegram-send: redact-cli non trovato: non invio testo non ripulito" >&2
+  exit 6
+fi
+if ! text=$(node "$redactor" --secrets <<<"$text"); then
+  echo "jht-telegram-send: redazione fallita: non invio testo non ripulito" >&2
+  exit 6
+fi
 jht_home="${JHT_HOME:-$HOME/.jht}"
 config_path="$jht_home/jht.config.json"
 creds_path="$jht_home/credentials/telegram_bot.json"

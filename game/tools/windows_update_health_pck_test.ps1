@@ -977,7 +977,7 @@ function Invoke-HealthCase {
     }
     $consumerLog = [IO.File]::ReadAllText($consumerLogPath)
     if ($Mode -ceq 'guard-source' -and $consumerLog -notmatch
-        '(?m)^WINDOWS-INSTANCE-GUARD-PCK source=exported-pck bytes=9813 argv_utf16=26288 sha256=3f5c9ec40f3d27428b54a5a30a4df63a9ae6921a21ff7a84b044ba4c220efafa\r?$') {
+        '(?m)^WINDOWS-INSTANCE-GUARD-PCK source=exported-pck bytes=9965 argv_utf16=26696 sha256=bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b\r?$') {
       throw 'exported PCK guard source census mismatch'
     }
     $codeMatches = @([regex]::Matches(

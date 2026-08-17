@@ -23,15 +23,22 @@ var _pending_query := {}
 var _solo := ""           # agente isolato dalla classifica ("" = tutti)
 var _donut_page := 0      # 0 = totale, 1+ = pagine dentro gli "(altri)"
 var _veil: UsageLoadingVeil
+var _provenance_note: Label
+var _last_data_state := -1
+var _provenance_generation := 0
+var _request_serial := 0
 
 func _ready() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_theme_constant_override("separation", 10)
 	BackendBus.usage_history_updated.connect(_on_history)
-	if not BackendBus.is_live():
-		add_child(TerminalTheme.label(
-				UIStrings.t("usage.showroom"), 13, Palette.YELLOW, "medium"))
+	BackendBus.connection_changed.connect(_on_connection_changed)
+	BackendBus.positions_updated.connect(_on_positions_provenance_changed)
+	var data_state := SimBadge.current_state()
+	_provenance_note = TerminalTheme.label("", 13, Palette.DIM, "medium")
+	add_child(_provenance_note)
+	_apply_provenance(data_state, false)
 
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 14)
@@ -93,25 +100,89 @@ func _ready() -> void:
 	right.add_child(TerminalTheme.label(UIStrings.t("usage.heatmap_hint"),
 			12, Palette.DIM))
 
-	if not BackendBus.usage_history.is_empty():
+	if data_state != SimBadge.DataState.UNAVAILABLE \
+			and not BackendBus.usage_history.is_empty():
 		_data = BackendBus.usage_history
 		_render()
-	_request()
+	if data_state != SimBadge.DataState.UNAVAILABLE:
+		_request()
+
+
+func _on_connection_changed(_state: int, _detail: String) -> void:
+	_apply_provenance(SimBadge.current_state(), true)
+
+
+func _on_positions_provenance_changed(_positions: Array) -> void:
+	var state := SimBadge.current_state()
+	if _last_data_state != int(state):
+		_apply_provenance(state, true)
+
+
+func _apply_provenance(state: int, request_on_live: bool) -> void:
+	var previous := _last_data_state
+	if previous != int(state):
+		_provenance_generation += 1
+	_last_data_state = int(state)
+	_provenance_note.visible = state != SimBadge.DataState.LIVE
+	_provenance_note.text = UIStrings.t("usage.showroom") \
+			if state == SimBadge.DataState.DEMO \
+			else UIStrings.t("common.connect_team")
+	_provenance_note.add_theme_color_override("font_color",
+			Palette.YELLOW if state == SimBadge.DataState.DEMO else Palette.DIM)
+	if state == SimBadge.DataState.UNAVAILABLE:
+		_clear_usage()
+	if request_on_live and previous == int(SimBadge.DataState.UNAVAILABLE) \
+			and state != SimBadge.DataState.UNAVAILABLE:
+		_request()
+
+
+func _clear_usage() -> void:
+	_data = {}
+	_pending_query = {}
+	_solo = ""
+	_donut_page = 0
+	if is_instance_valid(_status):
+		_status.text = ""
+	if is_instance_valid(_veil):
+		_veil.done()
+		_veil = null
+	if not is_instance_valid(_stacked):
+		return
+	var w := UsageRangeBar.window()
+	_stacked.set_series([], w[0], w[1])
+	for child in _rank_box.get_children():
+		child.queue_free()
+	_donut.slices.clear()
+	_donut.queue_redraw()
+	for child in _donut_legend.get_children():
+		child.queue_free()
+	_heatmap.set_cells({}, 0.001)
 
 func _request() -> void:
+	if SimBadge.current_state() == SimBadge.DataState.UNAVAILABLE:
+		return
 	var w := UsageRangeBar.window()
+	_request_serial += 1
+	var request_id := "%s:%d:%d" % [get_instance_id(),
+			_provenance_generation, _request_serial]
 	_pending_query = {"from_ts": w[0], "to_ts": w[1],
-			"bucket_sec": UsageRangeBar.bucket_seconds()}
+			"bucket_sec": UsageRangeBar.bucket_seconds(),
+			"request_id": request_id}
 	_status.text = ""
 	if not is_instance_valid(_veil):
 		_veil = UsageLoadingVeil.cover(_stacked)
-	BackendBus.request_usage_history(w[0], w[1], UsageRangeBar.bucket_seconds())
+	BackendBus.request_usage_history(w[0], w[1], UsageRangeBar.bucket_seconds(),
+			request_id)
 
 func _on_history(query: Dictionary, data: Dictionary) -> void:
 	if not is_instance_valid(self) or not is_inside_tree():
 		return
-	if not _pending_query.is_empty() \
-			and int(query.get("bucket_sec", 0)) != int(_pending_query["bucket_sec"]):
+	if SimBadge.current_state() == SimBadge.DataState.UNAVAILABLE \
+			or _pending_query.is_empty() \
+			or str(query.get("request_id", "")) != str(_pending_query["request_id"]) \
+			or int(query.get("bucket_sec", 0)) != int(_pending_query["bucket_sec"]) \
+			or float(query.get("from_ts", 0.0)) != float(_pending_query["from_ts"]) \
+			or float(query.get("to_ts", 0.0)) != float(_pending_query["to_ts"]):
 		return
 	if is_instance_valid(_veil):
 		_veil.done()
@@ -120,6 +191,7 @@ func _on_history(query: Dictionary, data: Dictionary) -> void:
 		_status.add_theme_color_override("font_color", Palette.RED)
 		return
 	_data = data
+	_pending_query = {}
 	_status.text = ""
 	_render()
 

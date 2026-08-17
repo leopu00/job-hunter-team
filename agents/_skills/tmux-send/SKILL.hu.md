@@ -81,3 +81,6 @@ Standard tipusok (lasd `agents/_manual/communication-rules.md` a teljes taxonomi
 - **SOHA** ne allitsd le masik agens tmux munkamenetet (Kapitan #0 szabaly).
 - Ha a `tmux ls` azt mutatja, hogy a celszessio nem letezik, **ne hozd letre** — kerdezd meg a Kapitant (vagy hasznald a `start-agent.sh`-t, ha *te vagy* a Kapitan).
 - Alapertelmezetten hasznalj **DB-alapu koordinaciot** a pipeline-atadásokhoz (Scout→Analyst→Scorer→Writer); ezt a skillt csak a fent felsorolt valos ideju jelzesekhez hasznald. Lasd `agents/_manual/communication-rules.md`.
+# Kommunikáció foglalt munkamenetben
+
+Az üzenet azonnal sorba kerül. Ha a kézbesítés nem ellenőrizhető, az eredmény `queued/delivery unverified` (6-os kilépés), tartós várólistával. Újrapróbáláskor ne dobd el és ne duplikáld.

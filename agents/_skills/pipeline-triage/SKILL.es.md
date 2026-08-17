@@ -65,7 +65,7 @@ Aplicar la tabla de arriba a abajo. Detenerse en la primera condición que coinc
 
 | Condición                                                 | Acción (en este orden)                                                                                                              |
 |-----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `DRAFT_BLOCKED ≥ 50`                                      | **Primero**: desbloquear el bucle Critic. Generar `CRITICO-S2/S3/S4` si no están vivos (3 en paralelo). Cada `CRITICO-S` procesa 1 draft a la vez. |
+| `DRAFT_BLOCKED ≥ 50`                                      | **Primero**: inspeccionar los Writers propietarios/critic-loop. Nunca generar Critics huerfanos; cada `SCRITTORE-N` inicia solo su `CRITICO-SN` mediante el launcher canonico. Generar un Writer solo si existe su cola pedida por el usuario. |
 | `UNSCORED ≥ 20`                                           | **Luego**: generar `SCORER-2` (y `SCORER-3` si `UNSCORED ≥ 50`). Un Scorer es insuficiente con 20+ en cola.                        |
 | `SCRITTORE_QUEUE ≥ 5`                                     | generar 1 `SCRITTORE-N` si no tienes ya 3 vivos (máximo).                                                                           |
 | `PROMOTABLE_40_49 ≥ 5`                                    | promover los mejores 5 subiendo la puntuación (`db_query.py` + `UPDATE` directo), luego tratar como `SCRITTORE_QUEUE`.              |

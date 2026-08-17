@@ -1,9 +1,13 @@
 <!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: feedback-query
-description: Legge il feedback dell'utente (like/dislike/hide/star) dal cloud — una posizione alla volta, o aggregato su una finestra. Usato dallo Scorer per applicare un moltiplicatore sul punteggio finale e per portare il motivo dell'utente nella nota, dal Mentor per contare i motivi ricorrenti (Pattern F) e dallo Scout come segnale contestuale. Restituisce un payload neutrale "no signal" quando il cloud è disabilitato o irraggiungibile, così i chiamanti non falliscono mai con errore hard.
+description: Legge il feedback dell'utente (like/dislike/hide/star) dal cloud — una posizione alla volta, o aggregato su una finestra. Lo Scorer lo usa come evidenza contestuale di preferenza solo per posizioni future, escludendo quella corrente; il Mentor conta i motivi ricorrenti (Pattern F) e lo Scout lo usa come segnale contestuale. Restituisce un payload neutrale "no signal" quando il cloud è disabilitato o irraggiungibile.
 allowed-tools: Bash(python3 *)
 ---
+
+## Confine raw/display (`RAW_DISPLAY_BOUNDARY`)
+
+`reason` e `comment` sono input raw solo macchina. Non citarli, inoltrarli, riassumerli o mostrarli mai all'utente. Ogni nota o messaggio user-facing deve usare soltanto `display_reason` / `display_comment`; `label` / `examples` dei temi hanno già attraversato lo stesso sanitizer condiviso. Una `note` è soltanto un enum chiuso `no-signal:*`: trattala come stato di disponibilità e non trasformarla mai in dettaglio infrastrutturale.
 
 # feedback-query — Feedback utente per posizione
 
@@ -39,9 +43,11 @@ Output (JSON su stdout):
   "actions": [
     {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
      "reason": "troppo senior", "comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
+     "display_reason": "troppo senior", "display_comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
      "score": 2, "direction": "less_like_this"},
     {"action": "like", "created_at": "2026-05-28T09:00:00Z",
-     "reason": null, "comment": null, "score": null, "direction": null}
+     "reason": null, "comment": null, "display_reason": null,
+     "display_comment": null, "score": null, "direction": null}
   ]
 }
 ```
@@ -58,7 +64,7 @@ Quando il cloud è disabilitato o l'endpoint è irraggiungibile, la skill restit
 ```json
 {"ok": true, "legacy_id": "...", "latest_action": null,
  "latest_direction": null, "count": 0, "actions": [],
- "note": "no-signal (cloud-disabled)"}
+ "note": "no-signal:cloud-disabled"}
 ```
 
 ## Lettura aggregata (finestra su tutte le posizioni)
@@ -93,7 +99,7 @@ Output di `themes`:
 Come funziona il raggruppamento (nessun match esatto richiesto, nessuna dipendenza nuova): minuscolo → accenti via → punteggiatura via → parole di servizio via → ogni parola tagliata ai primi 5 caratteri (`senior` / `seniority` / `seniore` / `séniorité` collassano su una chiave sola) → si contano parole singole e **coppie adiacenti**, per **posizioni distinte**, non per eventi. Una coppia assorbe le sue parti quando copre ≥ 80% delle stesse posizioni, così "troppo senior" vince su "senior"; gli intensificatori restano nel flusso apposta. `reason` e `comment` sono tokenizzati separatamente, così nessuna coppia viene inventata a cavallo dei due.
 
 Limiti voluti, dichiarati perché nessuno legga nei numeri più di quello che c'è:
-- I sinonimi lontani restano separati (`stipendio` e `RAL` sono due temi) — è conteggio di parole, non semantica. Leggi gli `examples` (verbatim, max 3) e unisci con la testa.
+- I sinonimi lontani restano separati (`stipendio` e `RAL` sono due temi) — è conteggio di parole, non semantica. Leggi gli `examples` display sanitizzati (max 3) e unisci con la testa.
 - Le posizioni il cui **ultimo** evento è `clear` restano fuori (il giudizio è stato ritirato); `--include-cleared` le rimette.
 - `share` = posizioni del tema / `positions_with_text`.
 - `--field reason|comment|both` (default `both`), `--top N`, `--days 0` per tutta la storia.
@@ -101,27 +107,11 @@ Limiti voluti, dichiarati perché nessuno legga nei numeri più di quello che c'
 
 Flag: `--days` (default 30, `0` = tutto), `--limit` (default 500 eventi), `--min-positions` (default 3), `--text-chars` su `recent` (default 300, tronca i commenti lunghi).
 
-Quando il payload porta una `note` (`no-signal (...)`), l'aggregato non c'è: cloud spento, endpoint assente o rete giù. Trattalo come "nessun dato", mai come "nessun feedback".
+Quando il payload porta una `note` enum chiusa (`no-signal:*`), l'aggregato non c'è. Trattala come "nessun dato", mai come "nessun feedback", e non inoltrare mai il codice.
 
 ## Come lo usano gli agenti
 
-**Scorer** (obbligatorio al momento dello scoring):
-1. Dopo aver calcolato il punteggio base (somma delle componenti pesate), chiama `feedback_query check <legacy_id>`.
-2. Applica il moltiplicatore basato su `latest_action`:
-   - `like` → final_score = round(base * 1.10), aggiungi nota `feedback:like+10%`
-   - `star` → final_score = round(base * 1.15), aggiungi nota `feedback:star+15%`
-   - `dislike` → final_score = round(base * 0.85), aggiungi nota `feedback:dislike-15%`
-   - `hide` → status=`excluded`, nota `feedback:hide`, salta la scrittura del punteggio
-   - `clear` / `null` → nessuna modifica (un giudizio ritirato non è un giudizio)
-3. **Porta il motivo nella nota**, quando l'utente ne ha scritto uno. Prendi `reason` (o, se vuoto, `comment`) dallo **stesso evento** di `latest_action` — `actions[0]` — citalo alla lettera, taglialo a ~80 caratteri e appendilo alla nota:
-
-   ```
-   feedback:dislike-15% — "troppo senior"
-   feedback:star+15% — "esattamente lo stack che voglio"
-   ```
-
-   Nessun testo su quell'evento → la nota resta com'è. Il motivo vale **solo per questa posizione**: non riportarlo mai su un'altra, non trasformarlo in una regola, non riscriverlo né riassumerlo — sono parole dell'utente e l'utente se le rilegge. Aggregare i motivi attraverso le posizioni è compito del Mentor (Pattern F), non dello Scorer.
-4. Cap del punteggio finale a 100 dopo il moltiplicatore.
+**Scorer — `FUTURE_FEEDBACK_ONLY`:** chiama `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>`. Usa soltanto `label` / `examples` sanitizzati come evidenza contestuale di preferenza per quella posizione futura. Il feedback della posizione già votata non cambia mai score, status o note: niente bonus/malus fisso, marker feedback o backfill. Gli score esistenti restano invariati. O-70 rivalutazione esplicita è un flusso separato richiesto dall'utente.
 
 **Mentor** (Pattern F, read-only): `themes` sugli ultimi 30 giorni per contare i motivi che l'utente scrive. Soglie e interpretazione stanno nella skill `mentor-patterns`. Il Mentor parla **all'utente** — non emette mai istruzioni di ricerca a partire da questo dato.
 

@@ -6,7 +6,7 @@
 #   source ./shared/i18n.sh             # repo-relative
 #   echo "$(t welcome.capitano)"        # lookup by key
 #
-# Reads JHT_LANG from env, falls back to host.env, then 'en'.
+# Reads canonical i18n-prefs.json, then bootstrap JHT_LANG/host.env, then 'en'.
 # Catalog: shared/locales/<lang>.json (master = en).
 # Missing key: returns the key itself (visible in dev, doesn't break UI).
 # Missing catalog file: falls back to en silently.
@@ -16,20 +16,21 @@
 # Resolve catalog dir relative to this script (so it works regardless of CWD).
 _I18N_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/locales"
 
-# Resolve language with cascade lookup (env → host.env → default en).
+# Resolve language with cascade lookup (prefs → env → host.env → default en).
 _i18n_resolve_lang() {
-  if [ -n "${JHT_LANG:-}" ]; then
-    printf '%s' "$JHT_LANG"
-    return
+  local home="${JHT_HOME:-/jht_home}" lang="" prefs
+  prefs="$home/i18n-prefs.json"
+  if [ -f "$prefs" ] && command -v jq >/dev/null 2>&1; then
+    lang="$(jq -r '.locale // empty' "$prefs" 2>/dev/null || true)"
+    case "$lang" in en|it|hu|es|de|fr|pt) printf '%s' "$lang"; return ;; esac
   fi
-  local host_env="${JHT_HOST_ENV_FILE:-${JHT_HOME:-/jht_home}/host.env}"
+  case "${JHT_LANG:-}" in
+    en|it|hu|es|de|fr|pt) printf '%s' "$JHT_LANG"; return ;;
+  esac
+  local host_env="${JHT_HOST_ENV_FILE:-$home/host.env}"
   if [ -f "$host_env" ]; then
-    local lang
     lang="$(grep -E '^JHT_LANG=' "$host_env" 2>/dev/null | cut -d= -f2 | tr -d '"' | head -1)"
-    if [ -n "$lang" ]; then
-      printf '%s' "$lang"
-      return
-    fi
+    case "$lang" in en|it|hu|es|de|fr|pt) printf '%s' "$lang"; return ;; esac
   fi
   printf 'en'
 }

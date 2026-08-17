@@ -1,9 +1,13 @@
 <!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: feedback-query
-description: Nutzer-Feedback (like/dislike/hide/star) aus der Cloud lesen — eine Position auf einmal, oder aggregiert über ein Zeitfenster. Vom Scorer verwendet, um einen Multiplikator auf den Endscore anzuwenden und den Grund des Nutzers in die Notiz zu tragen, vom Mentor, um wiederkehrende Gründe zu zählen (Pattern F), und vom Scout als kontextuelles Signal. Gibt einen neutralen "kein Signal"-Payload zurück, wenn die Cloud deaktiviert oder nicht erreichbar ist, damit Aufrufer niemals hart fehlschlagen.
+description: Liest Nutzer-Feedback (like/dislike/hide/star) aus der Cloud — pro Position oder aggregiert über ein Zeitfenster. Der Scorer nutzt es nur als kontextuellen Präferenzhinweis für künftige Positionen und schließt die aktuelle aus; der Mentor zählt wiederkehrende Gründe (Pattern F), der Scout nutzt es als Kontextsignal. Bei nicht erreichbarer Cloud wird ein neutraler "kein Signal"-Payload zurückgegeben.
 allowed-tools: Bash(python3 *)
 ---
+
+## Raw/Display-Grenze (`RAW_DISPLAY_BOUNDARY`)
+
+`reason` und `comment` sind rohe Eingaben nur für Maschinen. Zitiere, übermittle, fasse oder zeige sie dem Nutzer niemals. Jede user-facing Notiz oder Nachricht darf nur `display_reason` / `display_comment` verwenden; `label` / `examples` der Themen haben bereits denselben gemeinsamen Sanitizer durchlaufen. Eine `note` ist nur ein geschlossenes `no-signal:*`-Enum: behandle sie als Verfügbarkeitsstatus, nie als Infrastrukturdetail.
 
 # feedback-query — Nutzer-Feedback pro Position
 
@@ -39,9 +43,11 @@ Ausgabe (JSON auf stdout):
   "actions": [
     {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
      "reason": "too senior", "comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
+     "display_reason": "too senior", "display_comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
      "score": 2, "direction": "less_like_this"},
     {"action": "like", "created_at": "2026-05-28T09:00:00Z",
-     "reason": null, "comment": null, "score": null, "direction": null}
+     "reason": null, "comment": null, "display_reason": null,
+     "display_comment": null, "score": null, "direction": null}
   ]
 }
 ```
@@ -58,7 +64,7 @@ Wenn die Cloud deaktiviert oder der Endpunkt nicht erreichbar ist, gibt der Skil
 ```json
 {"ok": true, "legacy_id": "...", "latest_action": null,
  "latest_direction": null, "count": 0, "actions": [],
- "note": "no-signal (cloud-disabled)"}
+ "note": "no-signal:cloud-disabled"}
 ```
 
 ## Aggregierte Abfrage (Zeitfenster über alle Positionen)
@@ -93,7 +99,7 @@ Ausgabe von `themes`:
 Wie die Gruppierung arbeitet (keine exakte Übereinstimmung nötig, keine neue Abhängigkeit): Kleinschreibung → Akzente weg → Interpunktion weg → Funktionswörter weg → jedes Wort auf die ersten 5 Zeichen gekürzt (`senior` / `seniority` / `seniore` / `séniorité` fallen auf einen Schlüssel) → gezählt werden Einzelwörter und **benachbarte Paare**, nach **verschiedenen Positionen**, nicht nach Events. Ein Paar schluckt seine Teile, wenn es ≥ 80% derselben Positionen abdeckt, so gewinnt "zu senior" gegen "senior"; Verstärkungswörter bleiben absichtlich im Strom. `reason` und `comment` werden getrennt tokenisiert, also wird kein Paar über die Grenze der beiden hinweg erfunden.
 
 Bewusste Grenzen, benannt, damit niemand mehr in die Zahlen liest, als drinsteht:
-- Entfernte Synonyme bleiben getrennt (`Gehalt` und `RAL` sind zwei Themen) — das ist Wörterzählen, keine Semantik. Lies die `examples` (wörtlich, max. 3) und verbinde mit dem Kopf, was das Werkzeug nicht konnte.
+- Entfernte Synonyme bleiben getrennt (`Gehalt` und `RAL` sind zwei Themen) — das ist Wörterzählen, keine Semantik. Lies die sanitizten Display-`examples` (max. 3) und verbinde mit dem Kopf, was das Werkzeug nicht konnte.
 - Positionen, deren **letztes** Event `clear` ist, bleiben draußen (das Urteil wurde zurückgezogen); `--include-cleared` holt sie zurück.
 - `share` = Positionen des Themas / `positions_with_text`.
 - `--field reason|comment|both` (Standard `both`), `--top N`, `--days 0` für die ganze Historie.
@@ -101,27 +107,11 @@ Bewusste Grenzen, benannt, damit niemand mehr in die Zahlen liest, als drinsteht
 
 Flags: `--days` (Standard 30, `0` = alles), `--limit` (Standard 500 Events), `--min-positions` (Standard 3), `--text-chars` bei `recent` (Standard 300, kürzt lange Kommentare).
 
-Trägt der Payload eine `note` (`no-signal (...)`), gibt es kein Aggregat: Cloud aus, Endpunkt fehlt oder Netz weg. Behandle das als "keine Daten", nie als "kein Feedback".
+Trägt der Payload eine geschlossene `note`-Enum (`no-signal:*`), gibt es kein Aggregat. Behandle sie als "keine Daten", nie als "kein Feedback", und gib den Code nie weiter.
 
 ## Wie Agenten es verwenden
 
-**Scorer** (verpflichtend beim Scoring):
-1. Nach der Berechnung des Basis-Scores (Summe gewichteter Komponenten), `feedback_query check <legacy_id>` aufrufen.
-2. Multiplikator basierend auf `latest_action` anwenden:
-   - `like` → final_score = round(base * 1.10), Notiz `feedback:like+10%` hinzufügen
-   - `star` → final_score = round(base * 1.15), Notiz `feedback:star+15%` hinzufügen
-   - `dislike` → final_score = round(base * 0.85), Notiz `feedback:dislike-15%` hinzufügen
-   - `hide` → status=`excluded`, Notiz `feedback:hide`, Score-Schreiben überspringen
-   - `clear` / `null` → keine Änderung (ein zurückgezogenes Urteil ist kein Urteil)
-3. **Trage den Grund in die Notiz**, wenn der Nutzer einen geschrieben hat. Nimm `reason` (oder, wenn leer, `comment`) aus **demselben Event** wie `latest_action` — `actions[0]` — zitiere ihn wörtlich, kürze auf ~80 Zeichen und hänge ihn an die Notiz:
-
-   ```
-   feedback:dislike-15% — "zu senior"
-   feedback:star+15% — "genau der Stack, den ich will"
-   ```
-
-   Kein Text in diesem Event → die Notiz bleibt, wie sie ist. Der Grund gilt **nur für diese Position**: übertrage ihn nie auf eine andere, mache keine Regel daraus, schreibe ihn nicht um und fasse ihn nicht zusammen — das sind die Worte des Nutzers, und der Nutzer liest sie wieder. Gründe über Positionen hinweg zu aggregieren ist Aufgabe des Mentors (Pattern F), nicht des Scorers.
-4. Endscore nach Multiplikator auf 100 begrenzen.
+**Scorer — `FUTURE_FEEDBACK_ONLY`:** rufe `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>` auf. Nutze nur sanitizte `label` / `examples` als kontextuellen Präferenzhinweis für diese künftige Position. Feedback einer bereits beurteilten Position ändert nie Score, Status oder Notizen: keine festen Boni/Mali, Feedback-Marker oder Backfills. Bestehende Scores bleiben unverändert. O-70 explizite Neubewertung ist ein separater, vom Nutzer angeforderter Ablauf.
 
 **Mentor** (Pattern F, nur lesend): `themes` über die letzten 30 Tage, um die vom Nutzer geschriebenen Gründe zu zählen. Schwellen und Deutung stehen im Skill `mentor-patterns`. Der Mentor spricht **zum Nutzer** — er erteilt aus diesen Daten niemals Suchanweisungen.
 

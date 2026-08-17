@@ -35,7 +35,7 @@ The executable seam is therefore:
 
 ```text
 Scorer launch → canonical liveness probe → local OpenAI-compatible adapter
-              → validated base JSON → canonical latest-feedback lookup
+              → current-excluded sanitized feedback themes → validated JSON
               → shadow output (default)
               → existing db_insert/db_update skills (experimental write mode)
 ```

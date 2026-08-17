@@ -18,13 +18,15 @@ func _init(p_accent := Color("#00e87a")) -> void:
 
 func _ready() -> void:
 	_font = load(TerminalTheme.FONT_REGULAR)
-	set_positions(BackendBus.positions)
+	set_positions(SimBadge.visible_positions())
 
 func set_positions(rows: Array) -> void:
 	_labels.clear()
 	_counts.clear()
 	var by_day := {}
-	for p in rows:
+	var visible_rows: Array = rows \
+			if SimBadge.current_state() != SimBadge.DataState.UNAVAILABLE else []
+	for p in visible_rows:
 		var day := str(p.get("found_at", "")).left(10)
 		if day.length() == 10:
 			by_day[day] = int(by_day.get(day, 0)) + 1

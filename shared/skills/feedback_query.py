@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Query position_feedback (loop user→agenti).
 
-Reads recent like/dislike/hide/star feedback from the cloud per position.
-Used by the Scorer to apply a score multiplier (boost like/star, malus
-dislike, exclude hide). Optionally consulted by the Scout for source
-prioritization.
+Reads like/dislike/hide/star feedback from the cloud per position or as
+sanitized aggregate themes. The Scorer uses only themes from OTHER positions
+as contextual preference evidence for future scoring, explicitly excluding
+the position being evaluated; feedback never rewrites that position's score,
+status, or notes. The Scout may consult the signal for source prioritization.
 
 Reads cloud config from $JHT_HOME/cloud.json (same place as the daemon
 and pollers). If cloud is disabled OR the endpoint is unreachable,
@@ -29,7 +30,7 @@ ok=false / unexpected error). Schema esteso (mig 028, 2026-05-31):
   {"ok": true, "legacy_id": "99", "latest_action": null,
    "latest_direction": null, "count": 0, "actions": []}
   {"ok": true, "legacy_id": "...", "latest_action": null,
-   "latest_direction": null, "note": "no-signal (cloud-disabled)"}
+   "latest_direction": null, "note": "no-signal:cloud-disabled"}
 
 Campi opzionali (NULL su righe pre-mig-028 o quando l'utente non li
 valorizza): `comment` (free text <=2000 char), `score` (intero 1-5),
@@ -58,6 +59,7 @@ import argparse
 import json
 import os
 import re
+import sqlite3
 import sys
 import unicodedata
 import urllib.error
@@ -66,6 +68,34 @@ import urllib.request
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from feedback_display import DISPLAY_TEXT_MAX_CHARS, sanitize_feedback_display
+
+
+NO_SIGNAL_CLOUD_DISABLED = "no-signal:cloud-disabled"
+NO_SIGNAL_MISSING_CREDENTIALS = "no-signal:missing-credentials"
+NO_SIGNAL_REMOTE_UNAVAILABLE = "no-signal:remote-unavailable"
+NO_SIGNAL_NO_READABLE_POSITIONS = "no-signal:no-readable-positions"
+NO_SIGNAL_NOTES = frozenset({
+    NO_SIGNAL_CLOUD_DISABLED,
+    NO_SIGNAL_MISSING_CREDENTIALS,
+    NO_SIGNAL_REMOTE_UNAVAILABLE,
+    NO_SIGNAL_NO_READABLE_POSITIONS,
+})
+
+
+def _log_internal(kind: str, exc=None) -> None:
+    """Diagnostics stay on stderr and never carry exception text/payloads."""
+    suffix = f" ({type(exc).__name__})" if exc is not None else ""
+    print(f"[feedback_query] {kind}{suffix}", file=sys.stderr)
+
+
+def _no_signal_note(reason) -> str:
+    if reason == "cloud-disabled":
+        return NO_SIGNAL_CLOUD_DISABLED
+    if reason == "missing-credentials":
+        return NO_SIGNAL_MISSING_CREDENTIALS
+    return NO_SIGNAL_REMOTE_UNAVAILABLE
 
 
 def _jht_home() -> Path:
@@ -81,14 +111,23 @@ def _load_cloud_config():
         return json.loads(cf.read_text())
     except FileNotFoundError:
         return None
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        _log_internal("cloud-config-unreadable", exc)
         return None
 
 
-def _api_get(path: str, timeout: float = 10.0):
-    """GET su /api con bearer token da cloud.json.
+def api_request(method: str, path: str, body=None, timeout: float = 10.0):
+    """Una chiamata a /api col bearer token di cloud.json.
 
-    Ritorna (ok, payload). payload è dict (parsed JSON) o stringa errore.
+    Ritorna (ok, payload). payload è dict (JSON già interpretato) o una stringa
+    che dice cosa è andato storto.
+
+    Sta qui, e non in due copie, perché la corsia cloud di `position_feedback`
+    è una sola: la lettura la usa per degradare a "nessun segnale", la
+    scrittura (`feedback_record.py`) per fallire in modo dichiarato. Chi
+    interpreta l'esito è il chiamante — questa funzione non decide se
+    un cloud spento sia un guasto o una normalità, perché la risposta cambia
+    fra le due direzioni.
     """
     cfg = _load_cloud_config()
     if not cfg or not cfg.get("enabled"):
@@ -98,25 +137,77 @@ def _api_get(path: str, timeout: float = 10.0):
     if not base_url or not token:
         return False, "missing-credentials"
 
+    headers = {"Authorization": f"Bearer {token}"}
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
     req = urllib.request.Request(
-        f"{base_url}{path}",
-        headers={"Authorization": f"Bearer {token}"},
+        f"{base_url}{path}", data=data, headers=headers, method=method,
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return True, json.loads(resp.read().decode("utf-8"))
+            try:
+                return True, json.loads(resp.read().decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                _log_internal("invalid-response", exc)
+                return False, "invalid-response"
     except urllib.error.HTTPError as e:
-        body = ""
-        try:
-            body = e.read().decode("utf-8")[:200]
-        except Exception:
-            pass
-        return False, f"http-{e.code}: {body}"
+        _log_internal(f"http-error:{e.code}")
+        return False, "http-error"
     except (urllib.error.URLError, TimeoutError, OSError) as e:
-        return False, f"network: {e}"
+        _log_internal("network-error", e)
+        return False, "network-error"
+
+
+def _api_get(path: str, timeout: float = 10.0):
+    """GET su /api con bearer token da cloud.json."""
+    return api_request("GET", path, timeout=timeout)
+
+
+def _local_events(legacy_id: str):
+    """Gli eventi di giudizio nel jobs.db, i più recenti per primi.
+
+    Ritorna None quando il locale non è consultabile (niente DB, tabella non
+    ancora migrata): è diverso da «nessun giudizio», e chi chiama deve poter
+    distinguere i due casi invece di leggere una lista vuota per entrambi.
+    """
+    if not str(legacy_id).lstrip("-").isdigit():
+        return None
+    try:
+        import _db
+        conn = _db.get_db()
+    except Exception as exc:
+        _log_internal("local-feedback-unavailable", exc)
+        return None
+    try:
+        conn.row_factory = sqlite3.Row
+        if not _db._table_exists(conn, "position_feedback"):
+            return None
+        rows = conn.execute(
+            """SELECT action, reason, comment, score, direction, created_at
+                 FROM position_feedback
+                WHERE position_id = ?
+                ORDER BY id DESC""",
+            (int(legacy_id),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        _log_internal("local-feedback-query-failed", exc)
+        return None
+    finally:
+        conn.close()
 
 
 def check_position(legacy_id: str) -> dict:
+    # Local-first (O-15): il giudizio vive nel jobs.db e il cloud è un
+    # riflesso. Si interroga la rete solo quando il locale non è consultabile
+    # — così a cloud spento la lettura RISPONDE invece di degradare, e non si
+    # paga una chiamata HTTP per sapere una cosa che è già in casa.
+    local = _local_events(legacy_id)
+    if local is not None:
+        return _shape_events(legacy_id, local, source="local")
+
     safe_id = urllib.parse.quote(str(legacy_id), safe="")
     ok, payload = _api_get(f"/api/positions/{safe_id}/feedback")
     if not ok:
@@ -129,10 +220,18 @@ def check_position(legacy_id: str) -> dict:
             "latest_direction": None,
             "count": 0,
             "actions": [],
-            "note": f"no-signal ({payload})",
+            "note": _no_signal_note(payload),
         }
-    feedback = payload.get("feedback") or []
-    # La route GET ordina created_at DESC: feedback[0] è l'ultimo.
+    return _shape_events(legacy_id, payload.get("feedback") or [], source="cloud")
+
+
+def _shape_events(legacy_id: str, feedback, source: str) -> dict:
+    """Da elenco di eventi (locale o cloud) alla risposta di check_position.
+
+    Una forma sola per le due sorgenti: se divergessero, lo Scorer leggerebbe
+    due strutture diverse a seconda di dove ha trovato il dato.
+    """
+    # Gli eventi arrivano già dal più recente: feedback[0] è l'ultimo.
     # mig 028: comment / score / direction sono opzionali, possono essere
     # NULL su righe pre-estensione o quando l'utente non li valorizza.
     actions = [
@@ -141,6 +240,8 @@ def check_position(legacy_id: str) -> dict:
             "created_at": f.get("created_at"),
             "reason": f.get("reason"),
             "comment": f.get("comment"),
+            "display_reason": sanitize_feedback_display(f.get("reason")),
+            "display_comment": sanitize_feedback_display(f.get("comment")),
             "score": f.get("score"),
             "direction": f.get("direction"),
         }
@@ -159,6 +260,9 @@ def check_position(legacy_id: str) -> dict:
         "latest_direction": latest_direction,
         "count": len(actions),
         "actions": actions,
+        # Da dove viene la risposta: serve a distinguere «nessun giudizio»
+        # (locale consultato, vuoto) da «non l'ho potuto sapere» (cloud muto).
+        "source": source,
     }
 
 
@@ -270,13 +374,13 @@ def fetch_events(days=DEFAULT_WINDOW_DAYS, limit=DEFAULT_EVENT_LIMIT,
                 ev["legacy_id"] = str(lid)
                 events.append(ev)
         if failures and failures == len(legacy_ids):
-            return [], "no-signal (no readable positions)"
+            return [], NO_SIGNAL_NO_READABLE_POSITIONS
         return _within_window(_sorted_desc(events), days), None
 
     q = urllib.parse.urlencode({"days": int(days), "limit": int(limit)})
     ok, payload = _api_get(f"/api/positions/feedback?{q}", timeout=20.0)
     if not ok:
-        return [], f"no-signal ({payload})"
+        return [], _no_signal_note(payload)
     rows = payload.get("feedback") or []
     events = [_normalize_row(r) for r in rows]
     return _within_window(_sorted_desc(events), days), None
@@ -296,10 +400,21 @@ def recent_feedback(days=DEFAULT_WINDOW_DAYS, limit=DEFAULT_EVENT_LIMIT,
     by_action = Counter(e.get("action") for e in events if e.get("action"))
     with_text = sum(1 for e in events if _event_text(e, "both").strip())
     items = []
+    display_chars = (
+        min(text_chars, DISPLAY_TEXT_MAX_CHARS)
+        if text_chars and text_chars > 0
+        else DISPLAY_TEXT_MAX_CHARS
+    )
     for e in events[:limit]:
         item = dict(e)
         item["reason"] = _truncate(item.get("reason"), text_chars)
         item["comment"] = _truncate(item.get("comment"), text_chars)
+        item["display_reason"] = sanitize_feedback_display(
+            item.get("reason"), max_chars=display_chars
+        )
+        item["display_comment"] = sanitize_feedback_display(
+            item.get("comment"), max_chars=display_chars
+        )
         items.append(item)
     out = {
         "ok": True,
@@ -339,7 +454,7 @@ def recent_feedback(days=DEFAULT_WINDOW_DAYS, limit=DEFAULT_EVENT_LIMIT,
 #
 # Non è clustering semantico e non pretende di esserlo: sinonimi lontani
 # ("stipendio" / "RAL") restano temi separati. Il Mentor legge le etichette
-# e gli esempi verbatim, e li unisce con la testa se serve.
+# e gli esempi già sanitizzati, e li unisce con la testa se serve.
 
 PREFIX_LEN = 5
 MIN_TOKEN_LEN = 3
@@ -467,19 +582,32 @@ def aggregate_themes(events, field="both", min_positions=3,
         lid = e["legacy_id"]
         text = _event_text(e, field)
         candidates = []
+        safe_labels = {}
         for chunk in _event_fields(e, field):
             candidates.extend(_candidate_themes(_words(chunk)))
+            safe_labels.update({
+                safe_key: safe_label
+                for safe_key, safe_label in _candidate_themes(
+                    _words(sanitize_feedback_display(chunk))
+                )
+            })
         seen_here = set()
         for key, label in candidates:
             th = themes.setdefault(key, {
                 "key": key,
                 "positions": set(),
                 "events": 0,
-                "labels": Counter(),
+                "display_labels": Counter(),
                 "actions": Counter(),
                 "examples": [],
             })
-            th["labels"][label] += 1
+            # Il key continua a derivare dal raw per non cambiare clustering.
+            # La label è eleggibile al display solo quando lo stesso candidato
+            # sopravvive al sanitizer condiviso. Un frammento di path, host o
+            # token non può così riapparire dopo la tokenizzazione.
+            safe_label = safe_labels.get(key)
+            if safe_label:
+                th["display_labels"][safe_label] += 1
             if key in seen_here:
                 continue  # la stessa parola due volte nello stesso testo
                           # non vale doppio
@@ -516,15 +644,21 @@ def aggregate_themes(events, field="both", min_positions=3,
         if key in absorbed:
             continue
         ids = sorted(i for i in th["positions"] if i)
+        display_label = (
+            th["display_labels"].most_common(1)[0][0]
+            if th["display_labels"]
+            else "[redacted]"
+        )
         rows.append({
             "key": key,
-            "label": th["labels"].most_common(1)[0][0],
+            "label": display_label,
             "positions": len(th["positions"]),
             "events": th["events"],
             "share": round(len(th["positions"]) / denom, 3),
             "actions": dict(sorted(th["actions"].items())),
             "legacy_ids": ids[:MAX_THEME_IDS],
-            "examples": th["examples"],
+            "examples": [sanitize_feedback_display(example)
+                         for example in th["examples"]],
         })
     rows.sort(key=lambda r: (-r["positions"], -r["events"], r["key"]))
     if top:
@@ -545,9 +679,16 @@ def aggregate_themes(events, field="both", min_positions=3,
 
 def themes_report(days=DEFAULT_WINDOW_DAYS, limit=DEFAULT_EVENT_LIMIT,
                   field="both", min_positions=3, include_cleared=False,
-                  top=None, legacy_ids=None) -> dict:
+                  top=None, legacy_ids=None, exclude_legacy_ids=None) -> dict:
     events, note = fetch_events(days=days, limit=limit, legacy_ids=legacy_ids)
+    excluded = {str(value) for value in (exclude_legacy_ids or [])}
+    if excluded:
+        events = [e for e in events if str(e.get("legacy_id")) not in excluded]
     out = {"ok": True, "window_days": days, "field": field}
+    if excluded:
+        # Attestazione machine-readable per i chiamanti che devono dimostrare
+        # che il feedback della posizione corrente non influenza se stesso.
+        out["excluded_legacy_ids"] = sorted(excluded)
     out.update(aggregate_themes(
         events, field=field, min_positions=min_positions,
         include_cleared=include_cleared, top=top,
@@ -599,6 +740,12 @@ def main() -> None:
                      help="Keep only the top N themes.")
     thm.add_argument("--include-cleared", action="store_true",
                      help="Also count positions whose vote was cleared.")
+    thm.add_argument(
+        "--exclude-legacy-id",
+        action="append",
+        default=[],
+        help="Exclude one position from the aggregate (repeatable).",
+    )
 
     args = p.parse_args()
     ids = None
@@ -618,11 +765,13 @@ def main() -> None:
                 days=args.days, limit=args.limit, field=args.field,
                 min_positions=args.min_positions, top=args.top,
                 include_cleared=args.include_cleared, legacy_ids=ids,
+                exclude_legacy_ids=args.exclude_legacy_id,
             )
         else:
             result = {"ok": False, "error": f"unknown command: {args.cmd}"}
     except Exception as e:
-        result = {"ok": False, "error": str(e)}
+        _log_internal("unexpected-error", e)
+        result = {"ok": False, "error": "feedback-query-failed"}
 
     print(json.dumps(result, ensure_ascii=False))
     sys.exit(0 if result.get("ok") else 1)

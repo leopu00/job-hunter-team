@@ -27,6 +27,12 @@ python3 /app/shared/skills/db_update.py position 42 --status excluded
 # last-checked jelölő (link életben levése megerősítve — anti-ütközés foglalásként is használt)
 python3 /app/shared/skills/db_update.py position 42 --last-checked now
 
+# Liveness: az --is-open / --last-open-check magától előre viszi a
+# last_checked-et is, így az újraellenőrzött pozíció kikerül a gondozási
+# sorból (amely a két dátum közül a frissebbre szűr). A --last-checked csak
+# felülbírálásra kell.
+python3 /app/shared/skills/db_update.py position 42 --is-open false --last-open-check now
+
 # Fizetés a JD-ben deklarálva
 python3 /app/shared/skills/db_update.py position 42 --salary-declared-min 40000 --salary-declared-max 55000
 

@@ -59,6 +59,8 @@ export interface Position {
   // o /cv Telegram. Il Capitano spawna Scrittori solo quando = true.
   write_requested?: boolean;
   write_requested_at?: string | null;
+  // Stessa coda Writer-on-demand: NULL legacy equivale a richiesta CV.
+  write_request_kind?: "cv" | "cover_letter" | null;
   // V8 (2026-05-31) — Geocoding-on-demand: utente seleziona da dashboard
   // per coordinate ufficio precise. L'Analista esegue office-geocoding
   // solo quando = true. office_geocoded indica lo stato di completamento.
@@ -250,6 +252,22 @@ export interface PositionWithScore extends Position {
   // Chi ha eseguito l'ultima azione (ruolo + istanza concreta).
   last_action_by?: string;
   last_action_actor?: string;
+  // Quando la candidatura è stata inviata (applications.applied_at). Non è
+  // ricavabile da `status: 'applied'`, che dice SE ma non QUANDO — ed è la
+  // metà che serve in lista quando le posizioni sono cinquanta (O-25).
+  applied_at?: string | null;
+  // Quando lo Scrittore ha prodotto il CV (applications.written_at). In lista
+  // serve per l'attesa: ordinata crescente, dice quali CV sono fermi da più
+  // tempo in revisione o pronti da inviare (O-34).
+  written_at?: string | null;
+  // O-31: esiste un ticket dell'utente ancora senza risposta (open o
+  // assigned). Deriva dai ticket, non è uno stato salvato: quando il ticket
+  // si chiude la posizione torna a mostrare il proprio stato da sé.
+  has_open_ticket?: boolean;
+  // Proiezione pubblica unica dello stato tecnico. Il ticket resta un
+  // indicatore separato: non può più sostituire o rinominare lo stato.
+  public_state?: import("./position-state").PublicPositionState;
+  ticket_indicator?: import("./position-state").TicketIndicator;
   // true = già aperta dall'utente (position_views, mig 055). undefined in
   // local mode: lì decide il client via localStorage (vedi UnseenDot).
   seen?: boolean;

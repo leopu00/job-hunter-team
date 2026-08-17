@@ -148,23 +148,25 @@ Figyelj a B mintától való különbségre: ott a kizárások az **ágensekéi*
 
 Ez a visszajelzés a felhőben él (`position_feedback`), nem a `jobs.db`-ben: ez az egyetlen minta, amely nem a `db_query.py`-on keresztül megy.
 
+**`RAW_DISPLAY_BOUNDARY`** — a nyers `reason` / `comment` mezőkön csoportosíts, de soha ne továbbítsd őket. User-facing értelmezésben csak a `display_reason` / `display_comment` és a sanitizált téma-`label` / `examples` használható; a gépi kulcsok, ID-k és `no-signal:*` note-ok belsők maradnak.
+
 ### Detektálás
 
 ```bash
 # A felhasználó által írt indokok témái, utolsó 30 nap
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# Ugyanaz a visszajelzés összesítés nélkül, hogy a pontos szavait olvasd
+# Ugyanaz összesítés nélkül; csak display_reason/display_comment olvasható
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
 A `themes` egyszerű hasonlóság alapján csoportosítja a szabad szöveget — nem kell pontos egyezés. Kisbetűsít, leszedi az ékezeteket, az írásjeleket és a funkciószavakat, minden szót az első 5 karakterére vág (`senior` / `seniority` / `seniore` / `séniorité` ugyanarra a kulcsra esik), majd egyedülálló szavakat és szomszédos párokat számol **külön pozíciónként**. Egy pár legyőzi a részeit, ha ugyanazokat a pozíciókat fedi le: a "túl senior" többet mond, mint a "senior" — pontosan ezért maradnak bent az erősítő szavak.
 
-Témánként visszaadja: `positions`, `events`, `share` (a szöveget hordozó pozíciók aránya), `actions` (hogyan oszlik meg a téma a like / dislike / hide / star között), `legacy_ids`, és legfeljebb 3 szó szerinti `examples`.
+Témánként visszaadja: `positions`, `events`, `share` (a szöveget hordozó pozíciók aránya), `actions` (hogyan oszlik meg a téma a like / dislike / hide / star között), belső `legacy_ids`, és legfeljebb 3 sanitizált display `examples`.
 
 Konstrukcióból durva, és ez látszik is: a távoli szinonimák külön maradnak (a `fizetés` és a `RAL` két téma). Olvasd az `examples`-t, és fejjel kösd össze, amit az eszköz nem tudott.
 
-Ha a payload `note`-ot hoz (`no-signal (...)`), a felhő ki van kapcsolva vagy nem érhető el, és nincs összesítés: hallgass, ne rakd össze a képet pozíciónkénti `check` hívásokból.
+Ha a payload zárt `note` enumot hoz (`no-signal:*`), nincs összesítés: hallgass, ne továbbítsd a kódot, és ne rakd össze a képet pozíciónkénti `check` hívásokból.
 
 ### Küszöb
 
@@ -226,12 +228,12 @@ Ha nincs minta-szintű mondanivalód, **ne szólalj meg**. A csend válasz.
 - ❌ Végítélet ("ez sehova nem vezet") VAGY szurkolás ("meg tudod csinálni!") — mindkettő sérti a Mentor hangját. Számok, majd kérdés. Lásd `mentor-output` skill.
 - ❌ **Az F mintát keresési utasítássá alakítani.** Soha ne adj a Scoutnak vagy a Capitanónak olyan "ne hozz több X-et"-et, amit a felhasználó kedveléseiből vezettél le. Az a pipeline, amely csak azt halássza, ami tetszik, magától felfújja a saját pontszámait, és a felhasználó végül azt hiszi, gazdag a piac, holott a pipeline választott helyette. Az F minta **a felhasználónak** szól: hogy mi változik a profiljában, azt ő dönti el, te pedig amúgy is csak olvasol (T10).
 - ❌ Visszavont ítéletet a felhasználó szemére vetni. A `themes` már kihagyja azokat a pozíciókat, amelyek utolsó eseménye `clear`; ne hozd vissza őket az `--include-cleared`-del, hogy elérj egy küszöböt.
-- ❌ Egyetlen szó szerinti megjegyzést mintaként idézni. Az `examples` **azután** ad hangot egy témának, hogy átlépte a küszöböt; nem az `examples` a megállapítás.
+- ❌ Egyetlen nyers megjegyzést mintaként idézni. A sanitizált `examples` **azután** ad hangot egy témának, hogy átlépte a küszöböt; nem az `examples` a megállapítás.
 
 ## Lásd még
 
 - `mentor-output` — HOGYAN fogalmazd meg az üzenetet, miután egy minta megerősítve van.
 - `db-query` — wrapper belső működés.
-- `feedback-query` — a felhasználói visszajelzés olvasója a felhőben (F minta); a Scorer ugyanezt a forrást kérdezi pozíciónként.
+- `feedback-query` — a felhasználói visszajelzés olvasója a felhőben (F minta); a Scorer sanitizált összesített témákat csak jövőbeli pozíciókhoz használ, az aktuálisat kizárva.
 - `agents/mentor/mentor.md` — irányító prompt + ütem.
 - `agents/_team/team-rules.md` T10 — a profil csak olvasható, a Mentornak is.

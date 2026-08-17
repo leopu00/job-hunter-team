@@ -101,12 +101,12 @@ export async function POST(req: NextRequest) {
     );
     return NextResponse.json({ ok: true, removed: outcome.removed });
   } catch (err) {
-    // Un fallimento a metà è lo stato peggiore: va detto com'è, non
-    // mascherato da successo. Ma ciò che esce è un CODICE STABILE e la
-    // fase, mai un messaggio libero: quello dello storage conterrebbe
-    // nomi di file scelti dall'utente, quello di Postgres può riportare
-    // il valore che ha violato un vincolo. Vale per il client e per i
-    // log allo stesso modo — un log è un posto dove i dati restano.
+    // La RPC PostgreSQL è il primo effetto: se manca o fallisce, Storage non
+    // viene toccato. Dopo un ACK DB, però, il cleanup Storage resta un sistema
+    // esterno e può fallire: va detto com'è, non mascherato da successo. Ciò
+    // che esce è un CODICE STABILE e la fase, mai un messaggio libero: quello
+    // dello storage conterrebbe nomi di file scelti dall'utente, quello di
+    // Postgres può riportare il valore che ha violato un vincolo.
     const known = err instanceof DeletionError;
     const code = known ? err.code : "unknown_error";
     const stage = known ? err.stage : "unknown";

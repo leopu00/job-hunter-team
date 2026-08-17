@@ -68,6 +68,13 @@ const P0_FORBIDDEN_ITALIAN := {
 	"res://scripts/backend/local_backend.gd": ["collegamento al container locale"],
 	"res://scripts/backend/backend_bus.gd": ["container locale non disponibile"],
 	"res://scripts/backend/vps_backend.gd": ["container jht non in esecuzione"],
+	"res://scripts/backend/mock_backend.gd": [
+		"simulatore locale", "VPS simulata (mock)", "turno in corso",
+		"in attesa di ripresa", "carico il contesto", "snapshot ricevuto",
+		"elementi candidati", "riga storica della sessione", "analisi in corso",
+		"attendo il prossimo evento", "ci sto lavorando", '"Ricevuto."',
+		"Approfondiamo questo punto", "Recensione CV:", "Registro coerente",
+	],
 	"res://scripts/characters/agent_npc.gd": ["MESSAGGIO DA "],
 	"res://scripts/office/office.gd": [
 		"MESSAGGIO PER TE", "Nuova posizione:", "CV in scrittura:",

@@ -6,6 +6,9 @@
  * risultato — invece che a colpi di grep sul sorgente della route.
  */
 import { redact } from "./redact";
+import { validReplyEmail } from "./feedback-contact";
+
+export { validReplyEmail } from "./feedback-contact";
 
 /** Oltre questa soglia non è una segnalazione: il bundle del client sta sotto
  *  i 200 KB con i log al massimo della coda. */
@@ -15,8 +18,9 @@ export const MAX_DIAGNOSTICS_CHARS = 200_000;
 
 export interface Report {
   client: string;
-  /** Oggetto scritto da chi invia (modulo di contatto del sito). Vuoto per
-   *  l'app desktop, che non lo chiede. */
+  /** Recapito facoltativo dell'app: può diventare soltanto Reply-To della mail. */
+  replyTo: string;
+  /** Oggetto scritto da chi invia (modulo di contatto del sito). */
   subject: string;
   /** Che tipo di messaggio è: "bug", "domanda", "altro". Lo manda il modulo
    *  di contatto del sito; l'app desktop lo lascia vuoto. */
@@ -93,6 +97,16 @@ function safePlatform(value: unknown): string {
   return PLATFORM_ALIASES[field(value, 40).toLowerCase()] ?? "unknown";
 }
 
+/** Un header è sempre una sola riga, anche se arriva da un client terzo. */
+function safeSubject(value: unknown): string {
+  return safeNarrative(value, 1000)
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120)
+    .trim();
+}
+
 function safeDoing(client: string, value: unknown): string {
   if (client !== "web-contact") return safeNarrative(value, MAX_STORY_CHARS);
   // L'unico contesto tecnico pubblico mostrato dal modulo corrente. Lasciarlo
@@ -129,10 +143,15 @@ export function parseReport(raw: unknown): Report | null {
   const body = raw as Record<string, unknown>;
   const happened = field(body.happened, MAX_STORY_CHARS);
   if (happened.length < 5) return null;
+  if (!validReplyEmail(body.reply_to)) return null;
   const client = safeClient(body.client);
   return {
     client,
-    subject: safeNarrative(body.subject, 120),
+    // `validReplyEmail` misura il valore già trimmato: conservarlo nello
+    // stesso ordine evita di troncare l'ultimo carattere di un indirizzo al
+    // limite quando il client ha aggiunto spazi esterni.
+    replyTo: typeof body.reply_to === "string" ? body.reply_to.trim() : "",
+    subject: safeSubject(body.subject),
     kind: safeKind(body.kind),
     appVersion: safeVersion(body.app_version),
     locale: safeLocale(body.locale),
@@ -144,8 +163,6 @@ export function parseReport(raw: unknown): Report | null {
     doing: safeDoing(client, body.doing),
     happened: redact(happened),
     expected: safeNarrative(body.expected, MAX_STORY_CHARS),
-    // Client aggiornati non lo inviano; in un client vecchio resta nel JSON
-    // ricevuto, ma non entra mai nel Report e quindi non lascia l'endpoint.
     diagnostics: safeNarrative(body.diagnostics, MAX_DIAGNOSTICS_CHARS),
   };
 }
@@ -179,8 +196,9 @@ export function emailSubject(report: Report, ticket: string): string {
   // Quello che ha scritto chi invia batte sempre il troncamento automatico
   // del messaggio: sintetizza meglio, e senza si finisce con una casella
   // piena di mail intitolate "Ciao".
-  const summary =
-    report.subject || report.happened.split("\n")[0].slice(0, 80).trim();
+  const summary = safeSubject(
+    report.subject || report.happened.split("\n")[0].slice(0, 80),
+  );
   // Il tipo in oggetto fa la differenza fra una casella che si smista a
   // colpo d'occhio e una in cui bisogna aprire tutto per capire cosa c'è.
   const tipo = report.kind ? `(${report.kind}) ` : "";
@@ -224,6 +242,22 @@ export function emailText(report: Report, ticket: string): string {
     );
   }
   return righe.join("\n");
+}
+
+/** Payload Resend puro e testabile: il recapito compare in un solo campo. */
+export function resendEmailPayload(
+  report: Report,
+  ticket: string,
+  from: string,
+  to: string,
+): Record<string, unknown> {
+  return {
+    from,
+    to: [to],
+    subject: emailSubject(report, ticket),
+    text: emailText(report, ticket),
+    ...(report.replyTo ? { reply_to: report.replyTo } : {}),
+  };
 }
 
 export function issueBody(report: Report, ticket: string): string {

@@ -24,6 +24,7 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema, resolve_company_id, _column_exists
+from external_content import normalize_external_inline_fields
 import role_taxonomy
 import maintenance_log
 
@@ -171,8 +172,29 @@ def interpret_escapes(text):
 
 
 def update_position(args):
+    # Stessa regola della INSERT: i campi che vengono dalla pagina restano una
+    # riga sola. Una correzione dell'Analista al titolo passa da qui, e senza
+    # questa riga rientrerebbe dalla porta di servizio quello che la INSERT
+    # aveva tolto.
+    normalize_external_inline_fields(args)
+
     conn = get_db()
     ensure_schema(conn)
+
+    # `applied` non è soltanto uno stato della posizione: implica una riga
+    # applications completa (flag, timestamp e canale). Scriverlo da qui
+    # produrrebbe due verità perché questo comando non riceve quei dati.
+    # La corsia application più sotto li scrive insieme nella stessa
+    # transazione e resta l'unico ingresso CLI supportato.
+    if args.status == 'applied':
+        print(
+            "⚠️  APPLIED REJECTED: use `db_update.py application <ID> "
+            "--applied-at now --applied-via <channel>` so position and "
+            "application are updated atomically.",
+            file=sys.stderr,
+        )
+        conn.close()
+        sys.exit(1)
 
     # Bug #14: cattura lo stato corrente PRIMA dell'UPDATE per registrare
     # la transizione. Se status non cambia (es. solo notes aggiornate),
@@ -428,6 +450,25 @@ def update_position(args):
             params.append(args.last_open_check)
         changed.append(f"last_open_check={args.last_open_check}")
 
+    # [RECHECK-MUST-UPDATE-LAST-CHECKED] — chi scrive la liveness HA guardato
+    # l'annuncio, quindi la posizione è stata controllata adesso: `last_checked`
+    # avanza con `is_open`/`last_open_check` senza che nessuno debba ricordarsi
+    # di passare anche `--last-checked now`. Il 30/07 la #58 è stata verificata
+    # (terzo 404 di fila, `is_open=0`) alle 08:38 ed era ancora in testa alla
+    # coda alle 10:02: la colonna scritta non era quella su cui la coda gatava.
+    # Un flag esplicito vince sempre — qui si copre la dimenticanza, non si
+    # sovrascrive una decisione.
+    if (args.is_open is not None or args.last_open_check) and not args.last_checked:
+        if args.last_open_check and args.last_open_check != 'now':
+            # Stesso istante dichiarato per la liveness: due timestamp che
+            # raccontano lo stesso controllo non devono divergere.
+            updates.append("last_checked = ?")
+            params.append(args.last_open_check)
+            changed.append(f"last_checked={args.last_open_check} (liveness)")
+        else:
+            updates.append("last_checked = datetime('now', 'localtime')")
+            changed.append("last_checked=now (liveness)")
+
     if not updates:
         print("No fields to update.")
         return
@@ -558,6 +599,77 @@ def update_application(args):
     conn = get_db()
     ensure_schema(conn)
 
+    applied_flag = (
+        args.applied.lower() in ('true', '1', 'yes')
+        if args.applied is not None else False
+    )
+    if args.applied is not None and not applied_flag:
+        # Il flag da solo non sa a quale stato operativo tornare e lascerebbe
+        # applied_at/applied_via sospesi. L'undo web usa invece transizione e
+        # fatti disponibili, nella stessa transazione dei tre campi.
+        print(
+            "⚠️  APPLIED UNDO REJECTED: use the manual-application undo "
+            "action so position and application are restored atomically.",
+            file=sys.stderr,
+        )
+        conn.close()
+        sys.exit(1)
+    marks_applied = bool(
+        args.status == 'applied' or args.applied_at or applied_flag
+    )
+    guards_applied_downgrade = bool(not marks_applied and args.status)
+    if guards_applied_downgrade:
+        # Fast path per un errore già persistito. La garanzia concorrente non
+        # dipende da questa lettura: il predicato dell'UPDATE sotto conserva
+        # la stessa guardia dopo che SQLite ha acquisito il write lock.
+        current = conn.execute(
+            "SELECT status FROM positions WHERE id = ?", (args.position_id,)
+        ).fetchone()
+        current_status = (
+            current['status'] if current and hasattr(current, 'keys')
+            else current[0] if current else None
+        )
+        if current_status == 'applied':
+            print(
+                "⚠️  APPLIED STATUS CHANGE REJECTED: use an atomic undo or "
+                "post-submission action so position and application cannot "
+                "diverge.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+    if marks_applied:
+        # Un timestamp senza canale (o viceversa) non è uno stato completo.
+        # `status=applied` può essere una scorciatoia legittima, ma l'istante
+        # va materializzato adesso, non lasciato implicito nella posizione.
+        if not (args.applied_via or '').strip():
+            print(
+                "⚠️  APPLIED REJECTED: --applied-via is required whenever "
+                "an application is marked as sent.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+        args.status = 'applied'
+        args.applied_at = args.applied_at or 'now'
+
+    previous_position_status = None
+    if marks_applied:
+        position = conn.execute(
+            "SELECT status FROM positions WHERE id = ?", (args.position_id,)
+        ).fetchone()
+        if not position:
+            print(
+                f"⚠️  position_id={args.position_id} does not exist in "
+                "positions. Aborting application update.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+        previous_position_status = (
+            position['status'] if hasattr(position, 'keys') else position[0]
+        )
+
     updates = []
     params = []
 
@@ -650,11 +762,42 @@ def update_application(args):
 
     if not updates:
         print("No fields to update.")
+        conn.close()
         return
 
     params.append(args.position_id)
-    cursor = conn.execute(f"UPDATE applications SET {', '.join(updates)} WHERE position_id = ?", params)
+    guarded_where = "position_id = ?"
+    if guards_applied_downgrade:
+        guarded_where += (
+            " AND NOT EXISTS (SELECT 1 FROM positions "
+            "WHERE id = applications.position_id AND status = 'applied')"
+        )
+    cursor = conn.execute(
+        f"UPDATE applications SET {', '.join(updates)} WHERE {guarded_where}",
+        params,
+    )
     if cursor.rowcount == 0:
+        if guards_applied_downgrade:
+            # L'UPDATE è già una write transaction: questa verifica distingue
+            # un'applicazione assente da un downgrade respinto senza lasciare
+            # spazio a un altro writer fra decisione e INSERT.
+            current = conn.execute(
+                "SELECT status FROM positions WHERE id = ?",
+                (args.position_id,),
+            ).fetchone()
+            current_status = (
+                current['status'] if current and hasattr(current, 'keys')
+                else current[0] if current else None
+            )
+            if current_status == 'applied':
+                print(
+                    "⚠️  APPLIED STATUS CHANGE REJECTED: use an atomic undo "
+                    "or post-submission action so position and application "
+                    "cannot diverge.",
+                    file=sys.stderr,
+                )
+                conn.close()
+                sys.exit(1)
         # UPSERT: nessuna application esistente → INSERT iniziale.
         # Senza questo path, lo Scrittore deve fare INSERT a mano via
         # python3 -c "import sqlite3 ..." e finiva per passare la stringa
@@ -689,12 +832,46 @@ def update_application(args):
             ins_placeholders.append("datetime('now', 'localtime')")
         sql = f"INSERT INTO applications ({', '.join(ins_cols)}) VALUES ({', '.join(ins_placeholders)})"
         conn.execute(sql, ins_vals)
-        conn.commit()
-        print(f"Application for position {args.position_id} CREATED (initial INSERT).")
-        conn.close()
-        return
+        created = True
+    else:
+        created = False
+
+    if marks_applied:
+        # La stessa transazione che pubblica applied_at aggiorna lo stato
+        # operativo e il suo event-log. Se uno dei tre statement fallisce,
+        # nessuna superficie può osservare una candidatura a metà.
+        conn.execute(
+            "UPDATE positions SET status = 'applied', last_actor = ? "
+            "WHERE id = ?",
+            (
+                os.environ.get('JHT_AGENT_NAME')
+                or os.environ.get('JHT_AGENT_DIR', '').split('/')[-1]
+                or 'user',
+                args.position_id,
+            ),
+        )
+        if previous_position_status != 'applied':
+            conn.execute(
+                "INSERT INTO position_state_transitions "
+                "(position_id, from_state, to_state, by_agent) "
+                "VALUES (?, ?, 'applied', ?)",
+                (
+                    args.position_id,
+                    previous_position_status,
+                    os.environ.get('JHT_AGENT_NAME') or 'user',
+                ),
+            )
     conn.commit()
-    print(f"Application for position {args.position_id} updated ({cursor.rowcount} row)")
+    if created:
+        print(
+            f"Application for position {args.position_id} CREATED "
+            "(initial INSERT)."
+        )
+    else:
+        print(
+            f"Application for position {args.position_id} updated "
+            f"({cursor.rowcount} row)"
+        )
     conn.close()
 
 

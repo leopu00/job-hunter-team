@@ -1,5 +1,8 @@
 import { getDb } from "./db";
 import { resolveCityPins } from "./city-coords";
+import { salaryPreference } from "./salary-source";
+import { likePattern, parsePositionQuery } from "./position-search";
+import { publicPositionState } from "./position-state";
 import {
   aggregateRoleFamilies,
   type RoleFamilyCount,
@@ -39,8 +42,9 @@ function hasColumn(
   column: string,
 ): boolean {
   try {
-    return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[])
-      .some((r) => r.name === column);
+    return (
+      db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+    ).some((r) => r.name === column);
   } catch {
     return false;
   }
@@ -158,6 +162,8 @@ type LocalPositionFilterOpts = {
   remoteTypes?: string[];
   sources?: string[];
   verdicts?: string[];
+  /** Testo libero della ricerca (O-60): stessa semantica del ramo cloud. */
+  q?: string;
   limit?: number;
   offset?: number;
   sort?: string;
@@ -192,13 +198,43 @@ export function getPositionsLocal(
     );
     params.push(...opts.verdicts);
   }
+  // O-60 — la ricerca sta nella WHERE, non dopo: cercare fra le righe già
+  // lette risponderebbe "nessun risultato" su un database che ce l'ha.
+  // `ESCAPE` perché % e _ scritti dall'utente sono testo, non jolly.
+  const search = parsePositionQuery(opts?.q);
+  if (search.text) {
+    const like = likePattern(search.text);
+    const cols = [
+      "p.title",
+      "p.company",
+      "p.loc_city",
+      "p.loc_country",
+      "p.role_family",
+      "p.source",
+    ];
+    const ors = cols.map((c) => `LOWER(${c}) LIKE ? ESCAPE '\\'`);
+    params.push(...cols.map(() => like));
+    // L'id è una condizione IN PIÙ, non alternativa: "42" può essere anche
+    // un pezzo di titolo. `legacy_id` può mancare su workspace vecchi, e
+    // allora vale l'id locale, che è lo stesso numero.
+    if (search.legacyId != null) {
+      ors.push("COALESCE(p.legacy_id, p.id) = ?");
+      params.push(search.legacyId);
+    }
+    where.push(`(${ors.join(" OR ")})`);
+  }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
-  const limitClause = opts?.limit ? `LIMIT ?` : "";
-  const offsetClause = opts?.offset ? `OFFSET ?` : "";
-  if (opts?.limit) params.push(opts.limit);
-  if (opts?.offset) params.push(opts.offset);
 
+  // O-37: NIENTE LIMIT/OFFSET in SQL. La ORDER BY qui sotto conosce solo le
+  // colonne di POSITION_SORT_COLUMNS; per tutte le altre (written_at,
+  // applied_at, last_action_at, salary, remote, last_action_by — quelle
+  // derivate, che si ordinano in JS più sotto) cadeva sul default found_at
+  // DESC. Tagliare LÌ e riordinare DOPO significa riordinare le righe
+  // sbagliate: ordinando "CV scritto il" crescente in cima non arrivavano i
+  // più vecchi, ma i più vecchi FRA i primi N per data di rilevazione — e da
+  // pagina 2 in poi le righe si ripetevano. Il taglio ora è in fondo, dopo
+  // il sort, così vale per ogni chiave senza doverla saper esprimere in SQL.
   const sortCol = POSITION_SORT_COLUMNS[opts?.sort ?? ""] ?? "p.found_at";
   const sortDir = opts?.dir === "asc" ? "ASC" : "DESC";
   const nullsLast =
@@ -212,26 +248,28 @@ export function getPositionsLocal(
       s.scored_at, s.scored_by,
       a.critic_score, a.critic_verdict,
       a.written_at, a.written_by, a.critic_reviewed_at, a.reviewed_by,
-      a.applied_at, a.response_at
+      a.applied_at, a.response_at,
+      -- O-31: un ticket aperto O ASSEGNATO è un ticket a cui l'utente non ha
+      -- ancora avuto risposta. 'assigned' significa che un agente ci sta
+      -- lavorando, non che la risposta sia arrivata: lasciarlo fuori
+      -- toglierebbe dalla vista proprio i ticket in lavorazione.
+      (SELECT COUNT(*) FROM position_tickets t
+        WHERE t.position_id = p.id
+          AND t.status IN ('open','assigned')) AS open_tickets
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     LEFT JOIN applications a ON a.position_id = p.id
     ${whereClause}
     ORDER BY ${nullsLast}${sortCol} ${sortDir}
-    ${limitClause} ${offsetClause}
   `;
   const rows = db.prepare(sql).all(...params) as any[];
   const mapped = rows.map((r) => {
-    // Stipendio: stima del team se presente, altrimenti il dichiarato.
-    const useEst =
-      r.salary_estimated_min != null || r.salary_estimated_max != null;
-    const salary_min =
-      (useEst ? r.salary_estimated_min : r.salary_declared_min) ?? null;
-    const salary_max =
-      (useEst ? r.salary_estimated_max : r.salary_declared_max) ?? null;
-    const salary_currency =
-      (useEst ? r.salary_estimated_currency : r.salary_declared_currency) ??
-      "EUR";
+    // Stipendio: il dichiarato vince, la stima è il fallback (O-32).
+    const {
+      min: salary_min,
+      max: salary_max,
+      currency: salary_currency,
+    } = salaryPreference(r);
     const la = pickLastActionLocal([
       { ts: r.found_at, by: "scout", actor: r.found_by },
       { ts: r.last_checked, by: "analista", actor: "analista" },
@@ -244,9 +282,19 @@ export function getPositionsLocal(
     ]);
     return {
       ...mapPosition(r),
+      public_state: publicPositionState(r.status),
       salary_min,
       salary_max,
       salary_currency,
+      applied_at: r.applied_at ?? null,
+      // O-34: colonna "CV scritto il" — `mapPosition` mappa i campi di
+      // `positions`, quindi il join con `applications` va riportato a mano.
+      written_at: r.written_at ?? null,
+      has_open_ticket: Number(r.open_tickets ?? 0) > 0,
+      ticket_indicator:
+        Number(r.open_tickets ?? 0) > 0
+          ? ("pending" as const)
+          : ("none" as const),
       last_action_at: la.at,
       last_action_by: la.by,
       last_action_actor: la.actor,
@@ -292,6 +340,10 @@ export function getPositionsLocal(
           return p.location ?? null;
         case "status":
           return p.status ?? null;
+        case "applied_at":
+          return p.applied_at ?? null;
+        case "written_at":
+          return p.written_at ?? null;
         default:
           return null;
       }
@@ -307,6 +359,14 @@ export function getPositionsLocal(
       return String(va).localeCompare(String(vb)) * mul;
     });
   }
+  // Paginazione DOPO l'ordinamento (O-37): vedi il commento sulla query.
+  // `default:` di `val()` ritorna null per le chiavi che non conosce, quindi
+  // un sort ignoto lascia l'ordine SQL — e il taglio resta comunque corretto
+  // rispetto all'ordine che l'utente sta vedendo.
+  if (opts?.offset || opts?.limit) {
+    const start = opts.offset ?? 0;
+    return mapped.slice(start, opts.limit ? start + opts.limit : undefined);
+  }
   return mapped;
 }
 
@@ -321,6 +381,8 @@ export function getPositionByIdLocal(
   company: Company | null;
   application: Application | null;
   tickets: PositionTicket[];
+  userNote: { body: string; updated_at: string } | null;
+  exclusionEventAt: string | null;
 } | null {
   const db = getDb(ws);
   const numId = Number(id);
@@ -348,7 +410,10 @@ export function getPositionByIdLocal(
   try {
     const tk = db
       .prepare(
-        "SELECT * FROM position_tickets WHERE position_id = ? ORDER BY created_at ASC",
+        // `created_at` è la cronologia della richiesta; `updated_at` cambia
+        // quando il team lavora il ticket. id DESC rende stabili le date uguali.
+        "SELECT * FROM position_tickets WHERE position_id = ? " +
+          "ORDER BY created_at DESC, id DESC",
       )
       .all(numId) as any[];
     tickets = tk.map(mapTicket);
@@ -376,7 +441,87 @@ export function getPositionByIdLocal(
     company,
     application: app ? mapApplication(app) : null,
     tickets,
+    userNote: readUserNote(db, numId),
+    exclusionEventAt: readExclusionEventAt(db, numId),
   };
+}
+
+/** Quando la posizione è stata portata a «esclusa», secondo l'event-log.
+ *
+ * Serve per le esclusioni decise dal TEAM: quelle dell'utente hanno il proprio
+ * timbro atomico su `user_excluded_at`, l'Analista no — scrive lo stato e il
+ * motivo, e la riga con l'ora finisce in `position_state_transitions`. È
+ * l'unica data che descrive QUESTO evento: `updated_at`, `last_checked` e
+ * `found_at` cambiano per altri motivi e farebbero sembrare recente
+ * un'esclusione vecchia.
+ *
+ * L'ultima transizione, non la prima: una posizione può essere riaperta e
+ * riesclusa, e la decisione che vale è quella in vigore. Tabella assente
+ * (workspace più vecchio del codice) o nessuna riga → `null`, e il riquadro
+ * resta senza data invece di inventarne una. */
+function readExclusionEventAt(
+  db: ReturnType<typeof getDb>,
+  positionId: number,
+): string | null {
+  try {
+    const row = db
+      .prepare(
+        "SELECT ts FROM position_state_transitions " +
+          "WHERE position_id = ? AND to_state = 'excluded' " +
+          "ORDER BY ts DESC, id DESC LIMIT 1",
+      )
+      .get(positionId) as { ts?: string } | undefined;
+    return row?.ts ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Nota privata dell'utente (O-22), se il DB la conosce già.
+ *
+ * Tollerante alla tabella assente: un jobs.db più vecchio del codice non ha
+ * ancora `position_user_notes`, e la pagina deve aprirsi lo stesso.
+ *
+ * Filtra su `origin = 'box'` (O-33). Senza il filtro la query tornerebbe una
+ * riga QUALSIASI fra le due che la nuova chiave permette, scelta dall'ordine
+ * fisico della tabella: la pagina mostrerebbe la nota del sito o quella del
+ * box a seconda di quale è stata scritta prima, e il salvataggio — che scrive
+ * sempre la riga del box — sembrerebbe non aver fatto niente. Questa pagina
+ * legge il jobs.db del box, quindi la riga del box è quella che deve vedere.
+ *
+ * Il fallback senza filtro NON è difensivismo: su un jobs.db che il box non ha
+ * ancora migrato la colonna `origin` non esiste, la query filtrata solleva, e
+ * un `catch` che tornasse `null` farebbe SPARIRE dalla pagina una nota che c'è
+ * — che è precisamente il modo in cui O-16 ha già perso il lavoro di qualcuno.
+ * Tabella assente e colonna assente vanno distinte: la prima è «non c'è
+ * niente», la seconda è «c'è, in un'altra forma». */
+function readUserNote(
+  db: ReturnType<typeof getDb>,
+  positionId: number,
+): { body: string; updated_at: string } | null {
+  const read = (sql: string) =>
+    db.prepare(sql).get(positionId) as
+      | { body: string; updated_at: string }
+      | undefined;
+  try {
+    return (
+      read(
+        "SELECT body, updated_at FROM position_user_notes " +
+          "WHERE position_id = ? AND origin = 'box'",
+      ) ?? null
+    );
+  } catch {
+    try {
+      return (
+        read(
+          "SELECT body, updated_at FROM position_user_notes " +
+            "WHERE position_id = ?",
+        ) ?? null
+      );
+    } catch {
+      return null;
+    }
+  }
 }
 
 function mapTicket(r: any): PositionTicket {
@@ -734,6 +879,8 @@ export function getDashboardPositionsLocal(ws: string) {
       { ts: r.applied_at, by: "user", actor: "user" },
       { ts: r.response_at, by: "user", actor: "user" },
     ]);
+    // Dichiarato prima della stima (O-32) — stessa regola della lista.
+    const salary = salaryPreference(r);
     return {
       id: sid(r.id),
       legacy_id: (r.legacy_id as number | null) ?? null,
@@ -747,18 +894,9 @@ export function getDashboardPositionsLocal(ws: string) {
       loc_country: (r.loc_country as string | null) ?? null,
       loc_city: (r.loc_city as string | null) ?? null,
       source: (r.source as string | null) ?? null,
-      salary_min:
-        (((r.salary_estimated_min ?? r.salary_estimated_max) != null
-          ? r.salary_estimated_min
-          : r.salary_declared_min) as number | null) ?? null,
-      salary_max:
-        (((r.salary_estimated_min ?? r.salary_estimated_max) != null
-          ? r.salary_estimated_max
-          : r.salary_declared_max) as number | null) ?? null,
-      salary_currency:
-        (((r.salary_estimated_min ?? r.salary_estimated_max) != null
-          ? r.salary_estimated_currency
-          : r.salary_declared_currency) as string | null) ?? "EUR",
+      salary_min: salary.min,
+      salary_max: salary.max,
+      salary_currency: salary.currency,
       found_at: (r.found_at as string | null) ?? null,
       scored_at: (r.scored_at as string | null) ?? null,
       last_action_at: ((r.last_action_at as string | null) ?? "") || at,
@@ -1624,6 +1762,7 @@ function mapPositionFull(r: any): Position {
     last_checked: r.last_checked ?? null,
     write_requested: r.write_requested === 1 || r.write_requested === true,
     write_requested_at: r.write_requested_at ?? null,
+    write_request_kind: r.write_request_kind ?? null,
     geocode_requested:
       r.geocode_requested === 1 || r.geocode_requested === true,
     geocode_requested_at: r.geocode_requested_at ?? null,
@@ -1699,4 +1838,3 @@ function mapApplication(r: any): Application {
     interview_round: r.interview_round,
   };
 }
-

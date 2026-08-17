@@ -167,6 +167,19 @@ def test_prompt_fence_escapes_embedded_openers_closers_and_legacy_tags():
     assert "<POSITION_DATA>" not in prompt
 
 
+def test_prompt_keeps_future_feedback_as_context_not_a_multiplier():
+    prompt = local_scorer.build_prompt(
+        "target_role: fixture",
+        {"id": 42, "title": "Fixture Engineer"},
+        feedback_context_payload()["themes"],
+    )
+    assert '"feedback_themes_from_other_positions"' in prompt
+    assert '"label": "remote work"' in prompt
+    assert "contextual preference evidence" in prompt
+    assert "arithmetic\nmultiplier" in prompt
+    assert "already-voted position" in prompt
+
+
 def test_persistence_boundary_normalizes_interactive_experience_range():
     args = local_scorer.score_to_db_args(VALID, 42, "fixture-model")
     experience_index = args.index("--experience-fit")
@@ -243,130 +256,75 @@ def test_liveness_adapter_degrades_malformed_probe_to_unverified(
     assert result["method"] == "probe-error"
 
 
-def feedback_payload(action=None, reason=None, *, note=None):
-    actions = []
-    if action is not None:
-        actions.append(
-            {
-                "action": action,
-                "reason": reason,
-                "comment": None,
-                "created_at": "2026-08-03T12:00:00Z",
-            }
-        )
+def feedback_context_payload(*, excluded="42", note=None):
     payload = {
         "ok": True,
-        "legacy_id": "42",
-        "latest_action": action,
-        "actions": actions,
+        "excluded_legacy_ids": [excluded],
+        "themes": [
+            {
+                "label": "remote work",
+                "examples": ["more remote roles"],
+                "actions": {"star": 2},
+                "positions": 2,
+            }
+        ],
     }
     if note is not None:
         payload["note"] = note
     return payload
 
 
-@pytest.mark.parametrize(
-    ("action", "expected_total", "marker"),
-    [
-        ("like", 83, "feedback:like+10%"),
-        ("star", 86, "feedback:star+15%"),
-        ("dislike", 64, "feedback:dislike-15%"),
-    ],
-)
-def test_feedback_multiplier_matches_canonical_contract(
-    action, expected_total, marker
+def test_future_feedback_context_is_bounded_and_excludes_current_position():
+    themes, audit = local_scorer._feedback_context_from_payload(
+        feedback_context_payload(), 42
+    )
+    assert themes == [
+        {
+            "label": "remote work",
+            "examples": ["more remote roles"],
+            "actions": {"star": 2},
+            "positions": 2,
+        }
+    ]
+    assert audit == {"outcome": "available", "themes": 1}
+
+
+def test_future_feedback_context_requires_current_exclusion_attestation():
+    with pytest.raises(local_scorer.LocalScorerError, match="exclusion"):
+        local_scorer._feedback_context_from_payload(
+            feedback_context_payload(excluded="41"), 42
+        )
+
+
+def test_no_signal_feedback_is_optional_future_context():
+    themes, audit = local_scorer._feedback_context_from_payload(
+        feedback_context_payload(note="no-signal:cloud-disabled"), 42
+    )
+    assert themes == []
+    assert audit == {"outcome": "no-signal", "themes": 0}
+
+
+def test_feedback_context_query_requests_current_position_exclusion(monkeypatch):
+    seen = {}
+
+    def fake_run_json(args):
+        seen["args"] = args
+        return feedback_context_payload()
+
+    monkeypatch.setattr(local_scorer, "_run_json", fake_run_json)
+    themes, audit = local_scorer.query_feedback_context(42)
+    assert themes and audit["outcome"] == "available"
+    index = seen["args"].index("--exclude-legacy-id")
+    assert seen["args"][index + 1] == "42"
+
+
+def _run_once_fixture(
+    monkeypatch,
+    liveness,
+    feedback_themes=None,
+    mode="shadow",
+    feedback_audit=None,
 ):
-    adjusted, audit = local_scorer.apply_feedback(
-        VALID, feedback_payload(action, "  user's   exact reason  "), 42
-    )
-
-    assert adjusted is not None
-    assert adjusted["total_score"] == expected_total
-    assert adjusted["decision"] == "scored"
-    assert marker in adjusted["notes"]
-    assert '— "user\'s exact reason"' in adjusted["notes"]
-    assert audit == {
-        "outcome": "applied",
-        "action": action,
-        "base_total": 75,
-        "final_total": expected_total,
-        "multiplier": {"like": "1.10", "star": "1.15", "dislike": "0.85"}[
-            action
-        ],
-        "marker": f'{marker} — "user\'s exact reason"',
-    }
-
-
-def test_feedback_like_caps_at_100_and_recomputes_decision():
-    high = {**VALID, "total_score": 100}
-    adjusted, audit = local_scorer.apply_feedback(
-        high, feedback_payload("star"), 42
-    )
-    assert adjusted is not None
-    assert adjusted["total_score"] == 100
-    assert adjusted["decision"] == "scored"
-    assert audit["final_total"] == 100
-
-
-def test_feedback_dislike_can_cross_the_exclusion_threshold():
-    low = {**VALID, "total_score": 45}
-    adjusted, _audit = local_scorer.apply_feedback(
-        low, feedback_payload("dislike"), 42
-    )
-    assert adjusted is not None
-    assert adjusted["total_score"] == 38
-    assert adjusted["decision"] == "excluded"
-
-
-def test_feedback_hide_excludes_without_returning_a_score():
-    adjusted, audit = local_scorer.apply_feedback(
-        VALID, feedback_payload("hide", "no remote"), 42
-    )
-
-    assert adjusted is None
-    assert audit["outcome"] == "excluded"
-    assert audit["marker"] == 'EXCLUDED: feedback:hide (user request) — "no remote"'
-
-
-@pytest.mark.parametrize(
-    "payload",
-    [
-        feedback_payload(),
-        feedback_payload("clear"),
-        feedback_payload(note="no-signal (cloud-disabled)"),
-    ],
-)
-def test_no_feedback_clear_and_no_signal_leave_the_score_unchanged(payload):
-    adjusted, audit = local_scorer.apply_feedback(VALID, payload, 42)
-
-    assert adjusted == VALID
-    assert adjusted is not VALID
-    assert audit["final_total"] == 75
-    assert audit["outcome"] in {"none", "no-signal"}
-
-
-@pytest.mark.parametrize(
-    "payload",
-    [
-        {"ok": False},
-        {**feedback_payload("like"), "legacy_id": "99"},
-        {**feedback_payload("like"), "actions": []},
-        {**feedback_payload(), "latest_action": "surprise"},
-        {**feedback_payload(), "actions": "not-a-list"},
-        {key: value for key, value in feedback_payload().items() if key != "latest_action"},
-        {**feedback_payload(), "latest_action": []},
-    ],
-)
-def test_malformed_feedback_blocks_persistence(payload):
-    adjusted, audit = local_scorer.apply_feedback(VALID, payload, 42)
-
-    assert adjusted is None
-    assert audit["outcome"] == "unverifiable"
-    assert audit["final_total"] is None
-    assert audit["error"]
-
-
-def _run_once_fixture(monkeypatch, liveness, feedback, mode="shadow"):
     calls = []
     seen = set()
 
@@ -395,7 +353,15 @@ def _run_once_fixture(monkeypatch, liveness, feedback, mode="shadow"):
     monkeypatch.setattr(local_scorer, "_profile_text", lambda: "target_role: fixture")
     monkeypatch.setattr(local_scorer, "request_score", lambda config, prompt: dict(VALID))
     monkeypatch.setattr(
-        local_scorer, "query_feedback", lambda legacy_id: (feedback, None)
+        local_scorer,
+        "query_feedback_context",
+        lambda legacy_id: (
+            feedback_themes or [],
+            feedback_audit or {
+                "outcome": "available",
+                "themes": len(feedback_themes or []),
+            },
+        ),
     )
     monkeypatch.setattr(local_scorer.subprocess, "run", fake_subprocess_run)
     config = local_scorer.LocalScorerConfig(
@@ -408,13 +374,13 @@ def test_shadow_open_is_fully_non_mutating_and_audits_parity(monkeypatch):
     result, calls, seen = _run_once_fixture(
         monkeypatch,
         {"state": "OPEN", "method": "fixture", "http": "200", "evidence": "ok"},
-        feedback_payload("like"),
+        feedback_context_payload()["themes"],
     )
 
     assert result["persisted"] is False
-    assert result["score"]["total_score"] == 83
+    assert result["score"]["total_score"] == 75
     assert result["parity"]["liveness"]["state"] == "OPEN"
-    assert result["parity"]["feedback"]["outcome"] == "applied"
+    assert result["parity"]["feedback"]["outcome"] == "available"
     assert calls == []
     assert seen == {42}
 
@@ -431,7 +397,7 @@ def test_unverified_url_never_scores_or_mutates_even_in_write(
             "http": None,
             "evidence": "browser unavailable",
         },
-        feedback_payload(),
+        [],
         mode=mode,
     )
 
@@ -454,7 +420,7 @@ def test_closed_url_write_excludes_without_writing_a_score(monkeypatch):
             "http": "410",
             "evidence": "HTTP 410",
         },
-        feedback_payload(),
+        [],
         mode="write",
     )
 
@@ -469,11 +435,11 @@ def test_closed_url_write_excludes_without_writing_a_score(monkeypatch):
     assert seen == {42}
 
 
-def test_write_applies_feedback_then_persists_adjusted_score(monkeypatch):
+def test_write_uses_future_feedback_without_automatic_bonus(monkeypatch):
     result, calls, seen = _run_once_fixture(
         monkeypatch,
         {"state": "OPEN", "method": "curl", "http": "200", "evidence": "ok"},
-        feedback_payload("like"),
+        feedback_context_payload()["themes"],
         mode="write",
     )
 
@@ -482,52 +448,53 @@ def test_write_applies_feedback_then_persists_adjusted_score(monkeypatch):
     liveness_command, score_command, status_command = [call[0] for call in calls]
     assert liveness_command[liveness_command.index("--is-open") + 1] == "true"
     assert liveness_command[liveness_command.index("--outcome") + 1] == "confirmed_open"
-    assert score_command[score_command.index("--total") + 1] == "83"
-    assert "feedback:like+10%" in score_command[score_command.index("--notes") + 1]
+    assert score_command[score_command.index("--total") + 1] == "75"
+    notes = score_command[score_command.index("--notes") + 1]
+    assert "feedback:like+10%" not in notes
+    assert "feedback:star+15%" not in notes
     assert status_command[status_command.index("--status") + 1] == "scored"
     assert seen == {42}
 
 
-def test_write_hide_excludes_and_skips_score_insert(monkeypatch):
+def test_current_star_that_was_75_to_86_cannot_change_the_persisted_score(
+    monkeypatch,
+):
+    # Regression reproduction: the retired fixed +15% path turned 75 into 86.
+    assert round(75 * 1.15) == 86
     result, calls, seen = _run_once_fixture(
         monkeypatch,
         {"state": "OPEN", "method": "curl", "http": "200", "evidence": "ok"},
-        feedback_payload("hide", "no remote"),
+        [],
         mode="write",
     )
 
-    assert result["persisted"] is False
-    assert result["score"] is None
-    assert result["base_score"] == VALID
-    assert len(calls) == 2
-    assert not any(str(local_scorer.DB_INSERT) in call[0] for call in calls)
-    hide_command = calls[1][0]
-    assert hide_command[hide_command.index("--status") + 1] == "excluded"
-    assert 'feedback:hide (user request) — "no remote"' in hide_command[
-        hide_command.index("--notes") + 1
-    ]
+    assert result["persisted"] is True
+    assert result["score"] == VALID
+    assert result["score"] == result["base_score"]
+    assert len(calls) == 3
+    score_command = calls[1][0]
+    assert score_command[score_command.index("--total") + 1] == "75"
+    assert "feedback:" not in score_command[score_command.index("--notes") + 1]
     assert seen == {42}
 
 
-def test_write_malformed_feedback_records_liveness_but_never_score_or_status(
+def test_unavailable_future_feedback_does_not_block_current_score(
     monkeypatch,
 ):
-    malformed = {**feedback_payload("like"), "actions": []}
     result, calls, seen = _run_once_fixture(
         monkeypatch,
         {"state": "OPEN", "method": "curl", "http": "200", "evidence": "ok"},
-        malformed,
+        [],
         mode="write",
+        feedback_audit={"outcome": "unavailable", "themes": 0},
     )
 
-    assert result["persisted"] is False
-    assert result["score"] is None
-    assert result["base_score"] == VALID
-    assert result["parity"]["feedback"]["outcome"] == "unverifiable"
-    assert len(calls) == 1
-    assert str(local_scorer.DB_INSERT) not in calls[0][0]
-    assert "--status" not in calls[0][0]
-    assert seen == set()
+    assert result["persisted"] is True
+    assert result["score"] == VALID
+    assert result["parity"]["feedback"]["outcome"] == "unavailable"
+    assert len(calls) == 3
+    assert str(local_scorer.DB_INSERT) in calls[1][0]
+    assert seen == {42}
 
 
 def test_launcher_override_is_role_scoped_and_skips_tui_helper():

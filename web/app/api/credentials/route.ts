@@ -3,7 +3,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { JHT_HOME } from "@/lib/jht-paths";
-import { requireAuth, requireLocalWrite } from "@/lib/auth";
+import {
+  requireAuth,
+  requireLocalMachine,
+  requireLocalWrite,
+} from "@/lib/auth";
 import {
   ALL_PROVIDERS,
   API_KEY_PROVIDERS,
@@ -69,7 +73,13 @@ function validateApiKey(provider: string, key: string): string | null {
 }
 
 /** GET — lista provider con stato credenziali (mai espone chiavi reali) */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Stesso ragionamento del gate su `GET /api/secrets`: qui non escono le
+  // chiavi, ma esce QUALI provider l'utente ha configurato e come — e quello
+  // è già un fatto che vive solo sul suo box. Il criterio non cambia in base
+  // a quanto è grave il dato: cambia in base a dove il dato vive.
+  const remote = requireLocalMachine(req);
+  if (remote) return remote;
   const denied = await requireAuth();
   if (denied) return denied;
   const providers = ALL_PROVIDERS.map((p) => {

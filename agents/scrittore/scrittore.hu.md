@@ -39,7 +39,11 @@ Használd ezeket a változókat a munka során: tmux üzenetek, DB claim-ek, Cri
 | Pozíció lookup / queue / állapot | `db-query` |
 | Application insert / pozíció promoválás/kizárás | `db-insert` / `db-update` |
 
-A 3 működési skill (`application-flow`, `cv-structure`, `critic-loop`) **szekvenciálisan** hívódik minden pozícióhoz: gate (anti-rewriting + claim + link) → CV írás → 3 kör Critico-val → végső gate.
+A `request_kind=cv` esetén a 3 működési skill (`application-flow`, `cv-structure`, `critic-loop`) **szekvenciálisan** hívódik: gate (anti-rewriting + claim + link) → CV írás → 3 kör Critico-val → végső gate.
+
+### Cover-letter ág — a STEP 2 előtt
+
+Ha a STEP 1 **`request_kind=cover_letter`** értéket ad, azonnal ezt az ágat kövesd. Az application már létezik, és jogosan lehet végleges `critic_verdict` értéke: olvasd ki a `db_query.py position <position_id> --json` paranccsal; **ne futtasd** az anti-rewriting `db_query.py application` gate-et, a `status=writing` claimet, a `db_insert.py application`, `cv-structure` vagy `critic-loop` lépést. Őrizd meg a position/application aktuális állapotát és a `cv_path`/`cv_pdf_path` mezőket, csak a kért motivációs levelet készítsd el, majd kizárólag a `cl_path`/`cl_pdf_path` mezőket mentsd a `db_update.py application <position_id>` paranccsal. Olvasd vissza a positiont és applicationt: a befejezéshez megváltozott levélútvonalak, törölt kérésjelző és változatlan CV-útvonalak, állapot és `critic_verdict` szükséges. Ezután térj vissza a STEP 1-hez. Minden sikertelen ellenőrzés fail-closed és jelentendő; soha ne folytassa a STEP 2-vel.
 
 ---
 
@@ -143,14 +147,14 @@ Olvasd a `$JHT_HOME/profile/`-ból:
 - **Nincs git**. Soha `git add`, `git commit`, `git push`. T02.
 - **Deliverables path `$JHT_USER_DIR/cv/`** (soha `$JHT_AGENT_DIR/`). T11. Skill `application-flow` Step 6.
 - **Workspace `tools/` + `tmp/`** housekeeping-gel bootnál. T12. Skill `application-flow` (workspace szekció).
-- **Provider-aware** amikor a Critico-t spawnolod — olvasd `$JHT_CONFIG.active_provider`-t, soha ne hardcode-old `claude`-ot (skill `critic-loop` Step 2).
+- **A Critico csak launcheren keresztul indulhat** — hivd a `start-agent.sh critico "$MY_NUMBER"` parancsot; soha ne olvasd az `active_provider` erteket, es ne valassz sajat CLI-t, modellt, utvonalat vagy flaget (RULE-T19; `critic-loop` skill).
 - **Throttle `timeout: N+30`** amikor `jht-throttle <N>`-t hívsz shell tool call-ból, különben a parent meghal 60s-nél (skill `throttle/DESIGN-NOTES.md`).
 
 ---
 
 ## 📋 Örökség
 
-Örökli a csapat-szintű T01..T18 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (S-01..S-04 + freeze handling) role-specific-ek.
+Örökli a csapat-szintű T01..T19 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (S-01..S-04 + freeze handling) role-specific-ek.
 
 Csapat architektúra + pipeline diagram: `agents/_team/architettura.md`. Multi-Scrittore anti-collision: `agents/_manual/anti-collision.md`. DB schema: `agents/_manual/db-schema.md`.
 

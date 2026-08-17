@@ -81,3 +81,6 @@ Tipi standard (vedi `agents/_manual/communication-rules.md` per la tassonomia co
 - **MAI** terminare la sessione tmux di un altro agente (regola #0 del Capitano).
 - Se `tmux ls` mostra che la sessione di destinazione non esiste, **non crearla** — chiedi al Capitano (o usa `start-agent.sh` se *sei* il Capitano).
 - Di default usa il **coordinamento via DB** per i passaggi di pipeline (Scout→Analyst→Scorer→Writer); usa questo skill solo per i segnali in tempo reale elencati sopra. Vedi `agents/_manual/communication-rules.md`.
+# Comunicazione durante un turno occupato
+
+Il messaggio viene accodato subito: se la consegna non è verificabile, l'esito è `queued/delivery unverified` (exit 6) con coda durevole. Non scartare né duplicare al retry.

@@ -105,7 +105,7 @@ func set_burn_intent(_active: bool, _hours: float) -> void:
 
 ## Apre un ticket 'open' sulla posizione: la richiesta che il
 ## Coordinatore smista sulla VPS. Esito su bus.ticket_created.
-func create_ticket(_position_id: int, _text: String) -> void:
+func create_ticket(_position_id: int, _text: String, _attachment_path := "") -> void:
 	pass
 
 
@@ -161,10 +161,10 @@ func ensure_assistant() -> void:
 	_unsupported("ensure_assistant")
 
 ## Carica un documento locale (CV…) nella drop-zone allegati del container.
-func upload_document(_local_path: String) -> void:
+func upload_document(_local_path: String, request_id := 0) -> void:
 	var msg := _unsupported("upload_document")
 	if bus:
-		bus.document_uploaded.emit(false, "", msg)
+		bus.publish_document_upload(request_id, false, "", msg)
 
 
 ## ── Profilo utente e orari (scrittura dal desktop) ───────────────────
@@ -174,21 +174,33 @@ func save_profile(_fields: Dictionary) -> void:
 	if bus:
 		bus.profile_saved.emit(false, msg)
 
+func confirm_profile_review(review_id: String) -> void:
+	var msg := _unsupported("confirm_profile_review")
+	if bus:
+		bus.profile_review_confirmed.emit(review_id, false, msg)
+
 func save_working_hours(_wh: Dictionary) -> void:
 	var msg := _unsupported("save_working_hours")
 	if bus:
 		bus.hours_saved.emit(false, msg)
+
+func save_ui_language(locale: String) -> void:
+	var msg := _unsupported("save_ui_language")
+	if bus:
+		bus.ui_language_saved.emit(locale, false, msg)
 
 
 ## ── Storico usage (finestre di monitoraggio risorse) ─────────────────
 
 ## Storico aggregato per bucket_sec sull'intervallo [from_ts, to_ts] (unix
 ## UTC). Esito su bus.publish_usage_history(); la query fa da correlazione.
-func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
+func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int,
+		request_id := "") -> void:
 	var msg := _unsupported("fetch_usage_history")
 	if bus:
 		bus.usage_history_updated.emit(
-				{"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec},
+				{"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec,
+				"request_id": request_id},
 				{"ok": false, "error": msg})
 
 ## Come sopra ma per il singolo ruolo (scheda agente); agent = slug minuscolo.

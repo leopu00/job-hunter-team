@@ -77,14 +77,16 @@ called:
 - the `scored`/`excluded` decision matches the existing 40-point threshold;
 - the interactive 0–25 experience component is normalized to the DB's 0–10
   persistence range at one audited boundary;
-- the canonical latest event from `feedback_query.py check` is applied after
-  the validated base score: like ×1.10, star ×1.15, dislike ×0.85, hide skips
-  the score and excludes the position, while clear/no feedback is neutral;
+- sanitized themes from `feedback_query.py themes` may inform future positions
+  only after the current position ID has been explicitly excluded from the
+  aggregate; feedback never applies a multiplier, exclusion, status change, or
+  note to the position that received it;
 - malformed output leaves the position in `checked`.
 
 The one-shot JSON contains a `parity` object with normalized liveness evidence
-and the feedback action, base/final totals, multiplier, and outcome. This is an
-audit result, not a hardware or quality benchmark.
+and the availability/count of filtered feedback themes. `base_score` and
+`score` remain explicitly equal: this is an audit result, not a hardware or
+quality benchmark.
 
 Liveness and feedback fail closed around persistence:
 
@@ -92,12 +94,12 @@ Liveness and feedback fail closed around persistence:
 - `OPEN_UNVERIFIED` writes neither score, status, `is_open`, nor
   `last_checked`, so an uncertain probe cannot make the row disappear from a
   queue/freshness gate;
-- a malformed feedback payload writes no score or status;
-- the feedback skill's explicit `no-signal (...)` response remains neutral, as
-  required by its canonical contract, so an intentionally disabled or
-  unreachable cloud does not block scoring;
+- malformed or unavailable feedback context is optional and cannot block or
+  rewrite the current score;
+- the feedback skill's explicit `no-signal (...)` response remains neutral, so
+  an intentionally disabled or unreachable cloud does not block scoring;
 - shadow mode performs the read-only probes but emits no DB command, including
-  for closed, hidden, or unverifiable positions.
+  for closed or unverifiable positions.
 
 Write mode remains experimental: parity with these two deterministic seams
 does not establish local-model quality, supported hardware, or zero-cloud
@@ -181,6 +183,6 @@ Until a row with that evidence is committed, hardware support remains
 - Adapter, JSON parsing, range checks, persistence mapping, and quality math
   remain green in deterministic tests.
 - A real paired dataset is collected on the target hardware.
-- URL liveness and latest-feedback behavior remain covered by deterministic
-  parity tests against their canonical skill contracts.
+- URL liveness and filtered future-feedback behavior remain covered by
+  deterministic parity tests against their canonical skill contracts.
 - Only then may M5 progress from “one-role spike” toward additional local roles.

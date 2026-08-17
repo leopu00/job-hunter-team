@@ -15,6 +15,7 @@
 
 import { Command } from 'commander';
 import { runSkill } from './positions.js';
+import { reportUploadFailure, uploadFileToTeam } from './artifacts.js';
 
 // L'esito si posa su `process.exitCode` e si lascia terminare il processo da
 // solo. Con `process.exit()` l'uscita era immediata, e l'output della skill —
@@ -31,8 +32,20 @@ export function registerTicketCommand(program) {
     .command('open <position_id> <text>')
     .description('Open a ticket for the Capitano')
     .option('--kind <type>', 'ticket category', 'custom')
-    .action((positionId, text, options) =>
-      run('ticket.py', ['open', String(positionId), text, '--kind', options.kind]));
+    .option('--attach <file>', 'upload this file and attach it to the ticket')
+    .action((positionId, text, options) => {
+      const args = ['open', String(positionId), text, '--kind', options.kind];
+      if (options.attach) {
+        const upload = uploadFileToTeam(options.attach);
+        if (!upload.ok) {
+          reportUploadFailure(upload);
+          process.exitCode = upload.code;
+          return;
+        }
+        args.push('--attachment', upload.parsed.path);
+      }
+      run('ticket.py', args);
+    });
 
   cmd
     .command('list')
@@ -68,6 +81,61 @@ export function registerTicketCommand(program) {
     .requiredOption('--response <text>', 'the answer that the user will read')
     .action((id, options) =>
       run('ticket.py', ['resolve', String(id), '--response', options.response]));
+
+  program.addCommand(cmd);
+}
+
+export function registerFeedbackCommand(program) {
+  const cmd = new Command('feedback')
+    .description('Read the judgements the user gave on positions (proxy to feedback_query.py)');
+
+  // La scrittura è arrivata il 2026-08-10, con l'autorizzazione esplicita
+  // dell'operatore: fino a quel giorno la route rispondeva 403 a un token di
+  // dispositivo, e un `set` qui sarebbe stato un comando che esiste e
+  // fallisce. Il perché della rimozione sta in cima alla POST di
+  // `web/app/api/positions/[legacyId]/feedback/route.ts`.
+  //
+  // UN SOLO verbo di scrittura, `set`: like/dislike/hide/star/clear sono
+  // VALORI dell'azione, non comandi separati. Sei sottocomandi sarebbero sei
+  // superfici da autorizzare invece di una.
+  cmd
+    .command('set <legacy_id> <action>')
+    .description('Record the user judgement: like | dislike | hide | star | clear')
+    .option('--reason <text>', 'short reason (max 500 chars)')
+    .option('--comment <text>', 'free text (max 2000 chars)')
+    .option('--score <n>', 'rating from 1 to 5')
+    .option('--direction <dir>', 'more_like_this | less_like_this')
+    .action((legacyId, action, options) => {
+      const args = ['set', String(legacyId), String(action)];
+      for (const [flag, value] of [['--reason', options.reason],
+        ['--comment', options.comment], ['--score', options.score],
+        ['--direction', options.direction]]) {
+        if (value !== undefined) args.push(flag, String(value));
+      }
+      run('feedback_record.py', args);
+    });
+
+  cmd
+    .command('check <legacy_id>')
+    .description('The most recent judgement on a position (null when there is none)')
+    .action((legacyId) => run('feedback_query.py', ['check', String(legacyId)]));
+
+  cmd
+    .command('recent')
+    .description('Feedback events across all positions in a time window')
+    .option('--days <n>', 'window in days (0 = all)', '30')
+    .option('--limit <n>', 'maximum events read from the cloud', '500')
+    .action((options) =>
+      run('feedback_query.py', ['recent', '--days', options.days, '--limit', options.limit]));
+
+  cmd
+    .command('themes')
+    .description('Recurring reasons, grouped from what the user wrote')
+    .option('--days <n>', 'window in days (0 = all)', '30')
+    .option('--min-positions <n>', 'discard themes below N distinct positions', '3')
+    .action((options) =>
+      run('feedback_query.py',
+        ['themes', '--days', options.days, '--min-positions', options.minPositions]));
 
   program.addCommand(cmd);
 }

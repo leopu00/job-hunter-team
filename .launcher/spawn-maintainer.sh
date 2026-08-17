@@ -26,6 +26,7 @@ mkdir -p "$MANT_DIR/tools" "$MANT_DIR/tmp" "$LOGS_DIR"
 
 LABEL="spawn-maintainer"
 SESSION="MANTENITORE"
+ACTIVE_PROVIDER="$(jht_spawn_active_provider)" || exit 1
 
 # 1) Killa ogni sessione MANTENITORE* esistente (idempotente: ne lascia uno).
 jht_spawn_kill_sessions '^MANTENITORE([-_].*)?$' "$LABEL"
@@ -36,7 +37,8 @@ jht_spawn_sync_prompt mantenitore "$MANT_DIR" "$LABEL"
 # 2b) Skill discovery: le skill di skills.list nella workdir, così
 #     `maintainer-sweep`/`resilience` sono discoverabili come skill vere dal
 #     provider (Claude → .claude/skills, Codex/Kimi → .agents/skills).
-jht_spawn_copy_skills mantenitore "$MANT_DIR" "$LABEL"
+jht_spawn_copy_skills mantenitore "$MANT_DIR" "$LABEL" \
+  "$ACTIVE_PROVIDER"
 
 # 3) Soppressione auto-update Codex (stesso fix di spawn-doctor/start-agent).
 jht_spawn_codex_dismiss_update
@@ -53,7 +55,7 @@ tmux send-keys -t "$SESSION" "export PATH='$JHT_SPAWN_PANE_PATH'" C-m
 sleep 1
 
 # 6) Avvia il REPL del provider attivo (stesso del team).
-MANT_CMD="$(jht_spawn_repl_cmd)"
+MANT_CMD="$(jht_spawn_repl_cmd "$ACTIVE_PROVIDER")" || exit 1
 tmux send-keys -t "$SESSION" "$MANT_CMD" C-m
 
 # 6b) Robustezza REPL: niente prompt-di-lavoro dentro una shell.

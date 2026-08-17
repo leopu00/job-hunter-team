@@ -61,6 +61,12 @@ export const fr: Record<string, string> = {
   dl_copy_cmd: "Copier la commande",
   dl_mode_desktop_title: "Bureau",
   dl_mode_terminal_title: "CLI",
+  dl_mode_prompt_title: "Prompt",
+  dl_prompt_intro:
+    "Vous préférez ne pas vous en occuper ? Copiez ce prompt et donnez-le à votre assistant IA : il lit la documentation, choisit la voie avec vous et installe l'équipe sur cet ordinateur.",
+  dl_copy_prompt: "Copier le prompt",
+  dl_prompt_note:
+    "Fonctionne avec tout assistant capable d'utiliser le terminal.",
   dl_desktop_beta_desc:
     "L'application de bureau est le bureau où vous voyez l'équipe travailler. Elle est en bêta : nous l'utilisons chaque jour, mais elle change souvent. Si vous préférez une voie plus éprouvée, la CLI reste disponible.",
   dl_desktop_beta_badge: "Bêta",
@@ -106,7 +112,7 @@ export const fr: Record<string, string> = {
   home_setup_kicker: "Lancez-le",
   home_setup_title: "Comme vous voulez, où vous voulez",
   home_setup_body:
-    "Elle tourne sur un ordinateur dédié toujours allumé ou sur un VPS économique, et travaille pour vous jour et nuit. Vous la gérez depuis l’app de bureau : vous démarrez, arrêtez et surveillez l’équipe d’un clic. Et vous n’êtes pas lié à cet ordinateur : depuis le web, vous pouvez suivre les résultats et parler à l’équipe aussi depuis un autre PC ou votre téléphone.",
+    "Commencez sur votre PC local : c’est le parcours complet le plus simple, et l’équipe travaille tant que le PC, Docker et le réseau sont disponibles. Pour continuer lorsque ce PC est éteint, vous pouvez utiliser un VPS que vous fournissez et administrez. La synchronisation web est facultative et ne détermine pas où l’équipe s’exécute.",
   home_setup_cta: "Comment le lancer →",
   home_pricing_kicker: "Tarifs",
   home_pricing_title: "Open source. La plateforme est gratuite.",

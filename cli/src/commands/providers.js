@@ -4,8 +4,10 @@ import { spawn, spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { writePrivateJson } from '../lib/secure-config-io.js';
 import { refreshModelPin } from './model-pin.js';
 import { isContainer } from '../../../shared/runtime/container.js';
+import { installSpec, pinnedVersion, pinnedPackage, manifestPath } from '../../../shared/runtime/provider-pins.js';
 import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
 
@@ -122,10 +124,19 @@ async function handleProviders() {
     if (hasEnv) console.log(`     ${DIM}Env: ${known.envKey} ✓${RESET}`);
     if (hasCred) console.log(`     ${DIM}Credentials: encrypted file ✓${RESET}`);
     const ver = getVersionInfo(id);
-    if (ver.installed || ver.latest) {
-      const updateAvail = !!(ver.installed && ver.latest && ver.installed !== ver.latest);
+    // Con un pin di release (issue #130) "aggiornamento disponibile" non è più
+    // "il registry ne ha una più nuova" — quella è una versione che questa
+    // release non ha provato — ma "sei fuori dalla versione dichiarata".
+    const pin = pinnedVersion(resolveUpdateTarget(id) || '');
+    if (ver.installed || ver.latest || pin) {
       let line = `     ${DIM}CLI: ${ver.installed || '—'}`;
-      if (updateAvail) line += ` ${YELLOW}→ ${ver.latest} ⚠ update available${RESET}${DIM}`;
+      if (pin && ver.installed && ver.installed !== pin) {
+        line += ` ${YELLOW}⚠ differs from the release pin ${pin} → jht providers update${RESET}${DIM}`;
+      } else if (pin) {
+        line += ` (release pin ${pin})`;
+      } else if (ver.installed && ver.latest && ver.installed !== ver.latest) {
+        line += ` ${YELLOW}→ ${ver.latest} ⚠ update available${RESET}${DIM}`;
+      }
       line += RESET;
       console.log(line);
     }
@@ -168,7 +179,7 @@ async function handleUse(id) {
   if (!config.providers[normalized]) {
     config.providers[normalized] = { auth_method: 'subscription' };
   }
-  await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  writePrivateJson(CONFIG_PATH, config);
   if (prev === normalized) {
     console.log(`  ${OK} provider already active: ${normalized}`);
   } else {
@@ -189,26 +200,51 @@ const NPM_PREFIX = process.env.NPM_CONFIG_PREFIX || '/jht_home/.npm-global';
 const UV_BIN_DIR = process.env.UV_TOOL_BIN_DIR || `${NPM_PREFIX}/bin`;
 const PY_USER_BASE = '/opt/jht-deps/python';
 const NPM_PREFIX_ENV = { NPM_CONFIG_PREFIX: NPM_PREFIX };
-const UPDATE_SPECS = {
-  claude: [{ entrypoint: 'npm', args: ['install', '-g', '@anthropic-ai/claude-code@latest'], env: NPM_PREFIX_ENV }],
-  codex:  [{ entrypoint: 'npm', args: ['install', '-g', '@openai/codex@latest'], env: NPM_PREFIX_ENV }],
-  // Kimi: uv reinstall è il flusso "update". --force ricrea il venv e pinna
-  // l'ultima versione pubblicata. Lo stesso step di install (senza `uv tool
-  // uninstall kimi-cli` prima, che fallirebbe se assente).
-  kimi: [{
-    entrypoint: 'sh',
-    args: ['-c', [
-      'set -e',
-      // uv finisce nel prefisso veloce SOLO per questa installazione: il
-      // PYTHONUSERBASE globale resta il magazzino condiviso degli agenti
-      // (RULE-T13), che non c'entra con i CLI dei provider.
-      `export PYTHONUSERBASE=${PY_USER_BASE}`,
-      `export PATH="${PY_USER_BASE}/bin:$HOME/.local/bin:$PATH"`,
-      'pip3 install --user --break-system-packages --upgrade uv',
-      `UV_TOOL_BIN_DIR=${UV_BIN_DIR} uv tool install --force --python 3.13 kimi-cli`,
-    ].join(' && ')],
-  }],
-};
+// Le versioni le decide `shared/config/provider-versions.json` (issue #130):
+// il setup installa QUELLE, non `@latest`. `latest: true` è la deroga
+// esplicita dell'operatore (`jht providers update <id> --latest`) e resta una
+// scelta dichiarata a schermo, mai un default silenzioso.
+const UPDATE_TARGETS = ['claude', 'codex', 'kimi'];
+
+function updateSteps(target, { latest = false } = {}) {
+  const spec = installSpec(target, { latest });
+  if (!spec) return null;
+  if (target === 'kimi') {
+    // Kimi: uv reinstall è il flusso "update". --force ricrea il venv e
+    // installa la versione richiesta. Lo stesso step di install (senza `uv
+    // tool uninstall kimi-cli` prima, che fallirebbe se assente).
+    return [{
+      entrypoint: 'sh',
+      args: ['-c', [
+        'set -e',
+        // uv finisce nel prefisso veloce SOLO per questa installazione: il
+        // PYTHONUSERBASE globale resta il magazzino condiviso degli agenti
+        // (RULE-T13), che non c'entra con i CLI dei provider.
+        `export PYTHONUSERBASE=${PY_USER_BASE}`,
+        `export PATH="${PY_USER_BASE}/bin:$HOME/.local/bin:$PATH"`,
+        'pip3 install --user --break-system-packages --upgrade uv',
+        `UV_TOOL_BIN_DIR=${UV_BIN_DIR} uv tool install --force --python 3.13 ${spec}`,
+      ].join(' && ')],
+    }];
+  }
+  return [{ entrypoint: 'npm', args: ['install', '-g', spec], env: NPM_PREFIX_ENV }];
+}
+
+/** Una riga che dice SEMPRE cosa si sta per installare e da dove viene. */
+function announceSpec(target, { latest = false } = {}) {
+  const pin = pinnedVersion(target);
+  if (latest) {
+    console.log(`  ${WARN}  ${target}: installing the LATEST published version on request `
+      + `(--latest) — this leaves the release pin${pin ? ` (${pin})` : ''} behind, `
+      + `and the next boot will bring it back. Bump ${manifestPath()} to make it stick.`);
+  } else if (pin) {
+    console.log(`  ${DIM}${target}: pinned version ${pin} (${manifestPath()})${RESET}`);
+  } else {
+    console.log(`  ${WARN}  ${target}: NO pinned version in the manifest — falling back to `
+      + `the latest published one. The install is not reproducible: restore the pin in `
+      + `${manifestPath()}.`);
+  }
+}
 
 // Tetto duro per singolo step di update in-container. npm e uv non hanno un
 // timeout globale: un registry che accetta la connessione e poi tace terrebbe
@@ -252,10 +288,11 @@ function findRepoRoot(startDir = process.cwd()) {
   return null;
 }
 
-async function handleUpdate(id) {
+async function handleUpdate(id, opts = {}) {
+  const latest = !!opts.latest;
   const targets = id
     ? [resolveUpdateTarget(id)].filter(Boolean)
-    : Object.keys(UPDATE_SPECS); // `jht providers update` senza arg → aggiorna tutti
+    : [...UPDATE_TARGETS]; // `jht providers update` senza arg → aggiorna tutti
 
   if (targets.length === 0) {
     console.error(`${ERR}  provider '${id}' unrecognized. Supported: claude, codex, kimi`);
@@ -273,7 +310,7 @@ async function handleUpdate(id) {
   //   per ottenere un container effimero isolato (evita rename collisions
   //   sui binari npm in uso dal container running).
   if (isContainer()) {
-    const res = await handleUpdateInContainer(targets);
+    const res = await handleUpdateInContainer(targets, { latest });
     if (!res.ok) {
       process.exitCode = 1;
       return;
@@ -294,8 +331,14 @@ async function handleUpdate(id) {
 
   let failed = 0;
   for (const target of targets) {
-    const steps = UPDATE_SPECS[target];
+    const steps = updateSteps(target, { latest });
     console.log(`\n  ${DIM}── Updating ${target} ──${RESET}`);
+    if (!steps) {
+      console.error(`  ${ERR}  ${target}: no package declared in ${manifestPath()} — nothing to install`);
+      failed++;
+      continue;
+    }
+    announceSpec(target, { latest });
     for (const step of steps) {
       const args = ['compose', 'run', '--rm', '--no-deps', '--entrypoint', step.entrypoint];
       for (const [k, v] of Object.entries(step.env || {})) {
@@ -378,12 +421,19 @@ function runUpdateStep(step, timeoutMs) {
  * su /opt/jht-deps (volume Docker) — quindi l'installazione sopravvive al
  * riavvio del container e al secondo boot non c'e' nulla da reinstallare.
  */
-async function handleUpdateInContainer(targets) {
+async function handleUpdateInContainer(targets, { latest = false } = {}) {
   const failed = [];
   let reason = '';
   for (const target of targets) {
-    const steps = UPDATE_SPECS[target];
+    const steps = updateSteps(target, { latest });
     console.log(`\n  ${DIM}── Updating ${target} (in-container) ──${RESET}`);
+    if (!steps) {
+      reason = `no package declared for ${target} in ${manifestPath()}`;
+      console.error(`  ${ERR}  ${reason}`);
+      failed.push(target);
+      continue;
+    }
+    announceSpec(target, { latest });
     let targetFailed = false;
     for (const step of steps) {
       console.log(`  ${DIM}$ ${step.entrypoint} ${step.args.join(' ')}${RESET}`);
@@ -592,15 +642,31 @@ async function autoUpdateOnce() {
   const before = detectInstalledVersion(target);
   console.log(`${AU} active provider '${active.id}' → target ${target} (installed: ${before ?? 'unknown'})`);
 
-  const published = versionFromNpmRegistry(target);
-  const alreadyLatest = !!before && !!published && before === published;
+  // Issue #130 — al boot si CONVERGE SUL PIN, non sull'ultima pubblicata.
+  // Prima di questo, un container riavviato tirava giù `@latest` e il pin non
+  // sarebbe durato un riavvio: la release avrebbe dichiarato una versione e la
+  // macchina ne avrebbe eseguita un'altra. `expected` è quindi la versione
+  // della release; solo in sua assenza si ricade sul registry, dicendolo.
+  const expected = pinnedVersion(target);
   let res;
-  if (alreadyLatest) {
-    console.log(`${AU} ${target}: registry ${published}, installation skipped (already current)`);
-    res = { ok: true, failed: [], reason: '', skipped: true };
+  if (expected) {
+    if (before === expected) {
+      console.log(`${AU} ${target}: pinned ${expected}, installation skipped (already at the release version)`);
+      res = { ok: true, failed: [], reason: '', skipped: true };
+    } else {
+      console.log(`${AU} ${target}: pinned ${expected}, installed ${before ?? 'unknown'} → installation required`);
+      res = await handleUpdateInContainer([target]);
+    }
   } else {
-    if (published) console.log(`${AU} ${target}: registry ${published}, installation required`);
-    res = await handleUpdateInContainer([target]);
+    console.log(`${AU} ${target}: NO pinned version in ${manifestPath()} — falling back to the latest published (not reproducible)`);
+    const published = versionFromNpmRegistry(target);
+    if (!!before && !!published && before === published) {
+      console.log(`${AU} ${target}: registry ${published}, installation skipped (already current)`);
+      res = { ok: true, failed: [], reason: '', skipped: true };
+    } else {
+      if (published) console.log(`${AU} ${target}: registry ${published}, installation required`);
+      res = await handleUpdateInContainer([target]);
+    }
   }
   const after = detectInstalledVersion(target);
 
@@ -616,7 +682,9 @@ async function autoUpdateOnce() {
       ? 'UPDATED'
       : 'UPDATED (the step reported an error, but the version changed)';
   } else if (res.ok) {
-    verdict = 'UNCHANGED — already at the latest version; nothing to reinstall';
+    verdict = expected
+      ? `UNCHANGED — already at the pinned version ${expected}; nothing to reinstall`
+      : 'UNCHANGED — already at the latest version; nothing to reinstall';
   } else {
     verdict = `UNCHANGED — update FAILED (${res.reason || 'unknown cause'}); the team will use the existing CLI`;
   }
@@ -687,18 +755,26 @@ async function handleAutoUpdate() {
   }
 }
 
-// Scriptable: stampa "id installed_version latest_version" per ogni provider
-// con update disponibile. Exit 0 se nessuno, exit 1 se almeno uno.
+// Scriptable: stampa "id installed_version target_version" per ogni provider da
+// riportare in riga. Exit 0 se nessuno, exit 1 se almeno uno.
+//
+// Il bersaglio è il PIN della release quando c'è (issue #130): "aggiornamento
+// disponibile" deve significare "diverso da ciò che questa release dichiara",
+// altrimenti il comando spingerebbe verso una versione che nessuno ha provato
+// e `jht providers update` — che installa il pin — sembrerebbe non funzionare.
+// Senza pin resta il confronto storico con l'ultima pubblicata.
 async function handleCheck() {
   const updates = [];
   for (const id of Object.keys(VERSION_SOURCES)) {
     const ver = getVersionInfo(id);
-    if (ver.installed && ver.latest && ver.installed !== ver.latest) {
-      updates.push({ id, installed: ver.installed, latest: ver.latest });
+    const pin = pinnedVersion(resolveUpdateTarget(id) || '');
+    const target = pin || ver.latest;
+    if (ver.installed && target && ver.installed !== target) {
+      updates.push({ id, installed: ver.installed, latest: target });
     }
   }
   if (updates.length === 0) {
-    console.log(`${OK} all providers are up to date`);
+    console.log(`${OK} all providers are at the version this release declares`);
     return;
   }
   for (const u of updates) {
@@ -710,6 +786,48 @@ async function handleCheck() {
   // righe potevano restare nel buffer — il codice diceva "ci sono update" e
   // l'output non diceva quali. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
   process.exitCode = 1;
+}
+
+/**
+ * `jht providers versions [--json]` — attesa vs installata, per ogni provider.
+ *
+ * È la diagnostica che l'issue #130 chiede e che prima non esisteva: senza di
+ * essa «quale Codex sta girando su quella macchina?» si rispondeva solo
+ * entrando nel container. Exit 1 se almeno un provider è FUORI PIN, così il
+ * comando è anche un gate scriptabile in un e2e — ma non fallisce per un
+ * provider semplicemente non installato: non installato non è drift.
+ */
+async function handleVersions(opts = {}) {
+  const rows = UPDATE_TARGETS.map((target) => {
+    const expected = pinnedVersion(target);
+    const installed = detectInstalledVersion(target);
+    let state;
+    if (!expected) state = 'unpinned';
+    else if (!installed) state = 'not-installed';
+    else if (installed === expected) state = 'ok';
+    else state = 'drift';
+    return { provider: target, package: pinnedPackage(target), expected, installed, state };
+  });
+  const drifted = rows.filter((r) => r.state === 'drift');
+
+  if (opts.json) {
+    console.log(JSON.stringify({ manifest: manifestPath(), providers: rows }));
+  } else {
+    console.log(`\n  ${DIM}Release pins: ${manifestPath()}${RESET}\n`);
+    for (const r of rows) {
+      const mark = r.state === 'ok' ? OK : r.state === 'drift' ? ERR : WARN;
+      const detail = {
+        ok: 'matches the release',
+        drift: 'DRIFT — run `jht providers update` to go back to the release version',
+        'not-installed': 'not installed yet (it will be installed at first boot)',
+        unpinned: `no pin in the manifest — the install is not reproducible`,
+      }[r.state];
+      console.log(`  ${mark}  ${r.provider.padEnd(7)} expected ${String(r.expected ?? '—').padEnd(10)} `
+        + `installed ${String(r.installed ?? '—').padEnd(10)} ${DIM}${detail}${RESET}`);
+    }
+    console.log('');
+  }
+  if (drifted.length > 0) process.exitCode = 1;
 }
 
 async function handleCurrent() {
@@ -748,8 +866,15 @@ export function registerProvidersCommand(program) {
 
   cmd
     .command('update [id]')
-    .description('Update the provider\'s CLI (claude/codex/kimi) to the latest version. Omitted id: updates all supported providers.')
-    .action(handleUpdate);
+    .description('Install the provider\'s CLI (claude/codex/kimi) at the version pinned by this release. Omitted id: all supported providers.')
+    .option('--latest', 'install the latest published version instead of the release pin (explicit, temporary: the next boot restores the pin)')
+    .action((id, opts) => handleUpdate(id, opts));
+
+  cmd
+    .command('versions')
+    .description('Expected (release pin) vs installed version, per provider. Exit 1 if any provider drifted.')
+    .option('--json', 'machine-readable output')
+    .action((opts) => handleVersions(opts));
 
   cmd
     .command('autoupdate')

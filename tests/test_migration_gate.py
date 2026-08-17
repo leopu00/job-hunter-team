@@ -1,0 +1,647 @@
+"""H-08: automatic, read-only guard for Supabase migration history."""
+
+from __future__ import annotations
+
+import importlib.util
+import hashlib
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import time
+import uuid
+from pathlib import Path
+
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+GATE_PATH = ROOT / "scripts/migration_gate.py"
+WRAPPER = ROOT / "scripts/check-linked-migration-history.sh"
+
+
+def _load_gate():
+    spec = importlib.util.spec_from_file_location("migration_gate", GATE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load migration gate")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+gate = _load_gate()
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.check_output(["git", "-C", repo, *args], text=True).strip()
+
+
+def _commit(repo: Path, message: str) -> str:
+    subprocess.run(["git", "-C", repo, "add", "."], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            repo,
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "user.name=Migration Gate",
+            "-c",
+            "user.email=migration-gate@example.invalid",
+            "commit",
+            "-qm",
+            message,
+        ],
+        check=True,
+    )
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def _repo(tmp_path: Path, migrations: dict[str, str]) -> tuple[Path, str]:
+    repo = tmp_path / "repo"
+    directory = repo / "supabase/migrations"
+    directory.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", repo], check=True)
+    for name, sql in migrations.items():
+        (directory / name).write_text(sql, encoding="utf-8")
+    return repo, _commit(repo, "base")
+
+
+def _codes(issues) -> set[str]:
+    return {issue.code for issue in issues}
+
+
+def _write_anchor_manifest(
+    repo: Path,
+    *,
+    version: str = "20260813000001",
+    remote_name: str = "historical_alias",
+    canonical_versions: list[str] | None = None,
+    body: str | None = None,
+    blob_sha256: str | None = None,
+) -> Path:
+    anchor = repo / f"supabase/migrations/{version}_{remote_name}.sql"
+    anchor.write_text(
+        body if body is not None else f"-- Anchor for {version}_{remote_name}.\n",
+        encoding="utf-8",
+    )
+    digest = blob_sha256 or hashlib.sha256(anchor.read_bytes()).hexdigest()
+    manifest = {
+        "schema_version": 1,
+        "anchors": [
+            {
+                "version": version,
+                "path": anchor.relative_to(repo).as_posix(),
+                "blob_sha256": digest,
+                "canonical_versions": canonical_versions or ["001"],
+                "remote_name": remote_name,
+                "statement_md5": "0" * 32,
+            }
+        ],
+    }
+    (repo / gate.MANIFEST_PATH).write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return anchor
+
+
+def test_clean_additive_sequence_and_cross_ref_number_collision(tmp_path: Path):
+    repo, base = _repo(tmp_path, {"001_base.sql": "CREATE TABLE one(id int);\n"})
+    migration = repo / "supabase/migrations/002_feature.sql"
+    migration.write_text("ALTER TABLE one ADD COLUMN label text;\n", encoding="utf-8")
+    head = _commit(repo, "head")
+
+    issues, base_count, head_count, new_count = gate.compare_git(repo, base, head, [])
+    assert issues == []
+    assert (base_count, head_count, new_count) == (1, 2, 1)
+
+    subprocess.run(["git", "-C", repo, "branch", "other", base], check=True)
+    subprocess.run(["git", "-C", repo, "switch", "-q", "other"], check=True)
+    (repo / "supabase/migrations/002_other.sql").write_text(
+        "CREATE TABLE collision(id int);\n", encoding="utf-8"
+    )
+    other = _commit(repo, "parallel migration")
+    subprocess.run(["git", "-C", repo, "switch", "-q", "master"], check=True)
+
+    issues, *_ = gate.compare_git(repo, base, head, [other])
+    assert "cross_number" in _codes(issues)
+
+
+def test_cross_refs_detect_path_and_blob_identity_conflicts(tmp_path: Path):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    candidate = repo / "supabase/migrations/002_feature.sql"
+    candidate.write_text("SELECT 'candidate';\n", encoding="utf-8")
+    head = _commit(repo, "candidate")
+
+    subprocess.run(["git", "-C", repo, "branch", "path-conflict", base], check=True)
+    subprocess.run(["git", "-C", repo, "switch", "-q", "path-conflict"], check=True)
+    candidate.write_text("SELECT 'different';\n", encoding="utf-8")
+    path_conflict = _commit(repo, "path conflict")
+
+    subprocess.run(["git", "-C", repo, "switch", "-q", "master"], check=True)
+    candidate_body = candidate.read_bytes()
+    subprocess.run(["git", "-C", repo, "branch", "blob-conflict", base], check=True)
+    subprocess.run(["git", "-C", repo, "switch", "-q", "blob-conflict"], check=True)
+    (repo / "supabase/migrations/002_feature.sql").unlink(missing_ok=True)
+    (repo / "supabase/migrations/002_other.sql").write_bytes(candidate_body)
+    blob_conflict = _commit(repo, "blob conflict")
+    subprocess.run(["git", "-C", repo, "switch", "-q", "master"], check=True)
+
+    issues, *_ = gate.compare_git(repo, base, head, [path_conflict, blob_conflict])
+    assert "cross_path" in _codes(issues)
+    assert "cross_blob" in _codes(issues)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("modify", "immutable_modified"),
+        ("delete", "immutable_deleted"),
+        ("rename", "immutable_deleted"),
+        ("copy", "historical_blob_reused"),
+    ],
+)
+def test_base_migrations_are_immutable_even_for_byte_identical_moves(
+    tmp_path: Path, mutation: str, expected: str
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "CREATE TABLE one(id int);\n"})
+    original = repo / "supabase/migrations/001_base.sql"
+    if mutation == "modify":
+        original.write_text("CREATE TABLE one(id bigint);\n", encoding="utf-8")
+    elif mutation == "delete":
+        original.unlink()
+    elif mutation == "rename":
+        original.rename(repo / "supabase/migrations/002_base.sql")
+    else:
+        (repo / "supabase/migrations/002_copy.sql").write_bytes(original.read_bytes())
+    head = _commit(repo, mutation)
+
+    issues, *_ = gate.compare_git(repo, base, head, [])
+    assert expected in _codes(issues)
+
+
+def test_exact_base_not_merge_base_rejects_a_branch_behind(tmp_path: Path):
+    repo, old = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    (repo / "supabase/migrations/002_base.sql").write_text("SELECT 2;\n")
+    current_base = _commit(repo, "base advanced")
+
+    issues, *_ = gate.compare_git(repo, current_base, old, [])
+    assert _codes(issues) == {"history_not_ancestor"}
+
+
+def test_ci_base_resolution_handles_pull_request_normal_and_first_branch_push(
+    tmp_path: Path,
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    (repo / "supabase/migrations/002_feature.sql").write_text("SELECT 2;\n")
+    head = _commit(repo, "head")
+
+    assert gate.resolve_migration_base(repo, "pull_request", head, "", base) == base
+    assert gate.resolve_migration_base(repo, "push", head, base, "") == base
+    assert gate.resolve_migration_base(repo, "push", head, "0" * 40, "") == base
+
+
+def test_ci_base_resolution_fails_closed_for_a_first_push_without_parent(
+    tmp_path: Path,
+):
+    repo, root = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+
+    with pytest.raises(gate.GateInvalid):
+        gate.resolve_migration_base(repo, "push", root, "0" * 40, "")
+
+
+def test_timestamp_anchor_requires_exact_manifest_hash_mapping_and_noop(
+    tmp_path: Path,
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    anchor = repo / "supabase/migrations/20260813000001_alias.sql"
+    anchor.write_text("-- unmanifested\n", encoding="utf-8")
+    unmanifested = _commit(repo, "unmanifested anchor")
+    issues, *_ = gate.compare_git(repo, base, unmanifested, [])
+    assert "anchor_manifest_missing" in _codes(issues)
+    assert "sequence_gap" not in _codes(issues)
+
+    _write_anchor_manifest(
+        repo,
+        remote_name="alias",
+        body="-- Exact, comment-only historical anchor.\n",
+    )
+    valid = _commit(repo, "manifest anchor")
+    issues, *_ = gate.compare_git(repo, base, valid, [])
+    assert issues == []
+
+    _write_anchor_manifest(repo, remote_name="alias", blob_sha256="f" * 64)
+    wrong_hash = _commit(repo, "wrong hash")
+    issues, *_ = gate.compare_git(repo, valid, wrong_hash, [])
+    assert "anchor_hash_mismatch" in _codes(issues)
+    assert "anchor_manifest_modified" in _codes(issues)
+
+
+def test_manifested_anchor_must_be_comment_only(tmp_path: Path):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    _write_anchor_manifest(repo, body="CREATE TABLE forbidden(id int);\n")
+    head = _commit(repo, "not a no-op")
+
+    issues, *_ = gate.compare_git(repo, base, head, [])
+    assert "anchor_not_noop" in _codes(issues)
+
+
+def _linked_table(local: list[str], remote: list[str]) -> str:
+    rows = ["Local | Remote | Time (UTC)", "------|--------|-----------"]
+    for index in range(max(len(local), len(remote))):
+        left = local[index] if index < len(local) else ""
+        right = remote[index] if index < len(remote) else ""
+        rows.append(f"{left} | {right} | synthetic")
+    return "\n".join(rows) + "\n"
+
+
+def _fake_supabase(tmp_path: Path, stdout: str, stderr: str = "", code: int = 0):
+    binary = tmp_path / "bin/supabase"
+    binary.parent.mkdir()
+    binary.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, sys\n"
+        "open(os.environ['FAKE_ARGV'], 'w').write('\\n'.join(sys.argv[1:]))\n"
+        "open(os.environ['FAKE_CWD'], 'w').write(os.getcwd())\n"
+        f"sys.stdout.write({stdout!r})\n"
+        f"sys.stderr.write({stderr!r})\n"
+        f"raise SystemExit({code})\n",
+        encoding="utf-8",
+    )
+    binary.chmod(0o755)
+    return binary.parent
+
+
+def _run_wrapper(
+    tmp_path: Path, stdout: str, stderr: str = "", code: int = 0, xtrace=False
+):
+    argv_log = tmp_path / "argv"
+    cwd_log = tmp_path / "cwd"
+    fake_bin = _fake_supabase(tmp_path, stdout, stderr, code)
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+        "FAKE_ARGV": str(argv_log),
+        "FAKE_CWD": str(cwd_log),
+    }
+    caller = tmp_path / "unrelated-linked-project"
+    caller.mkdir()
+    argv = ["bash"]
+    if xtrace:
+        argv.append("-x")
+    argv.append(str(WRAPPER))
+    result = subprocess.run(
+        argv, text=True, capture_output=True, env=env, cwd=caller, check=False
+    )
+    return (
+        result,
+        argv_log.read_text(encoding="utf-8"),
+        cwd_log.read_text(encoding="utf-8"),
+    )
+
+
+def test_linked_wrapper_uses_only_read_only_argv_and_accepts_exact_history(
+    tmp_path: Path,
+):
+    versions = gate._local_versions(ROOT)
+    result, argv, cwd = _run_wrapper(tmp_path, _linked_table(versions, versions))
+
+    assert result.returncode == 0
+    assert "status=pass stage=linked" in result.stdout
+    assert argv.splitlines() == ["migration", "list", "--linked", "--output", "json"]
+    assert not ({"repair", "push", "db-url", "link"} & set(argv.splitlines()))
+    assert Path(cwd).resolve() == ROOT.resolve()
+
+
+def test_linked_history_fails_when_local_and_remote_diverge_both_ways(tmp_path: Path):
+    versions = gate._local_versions(ROOT)
+    remote = versions[:-1] + ["20260813000000"]
+    result, _, _ = _run_wrapper(tmp_path, _linked_table(versions, remote))
+
+    assert result.returncode == 1
+    assert "history_diverged" in result.stdout
+    assert "local_only=1" in result.stdout
+    assert "remote_only=1" in result.stdout
+
+
+def test_linked_parser_classifies_the_sanitized_real_drift_fixture(tmp_path: Path):
+    fixture = ROOT / "tests/fixtures/supabase-migration-list-linked-drift.txt"
+    repo, _ = _repo(
+        tmp_path,
+        {
+            f"{number:03d}_migration_{number:03d}.sql": f"SELECT {number};\n"
+            for number in range(1, 81)
+        },
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(GATE_PATH),
+            "linked",
+            "--repo",
+            str(repo),
+            "--input",
+            str(fixture),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "history_diverged" in result.stdout
+    assert "local=80" in result.stdout
+    assert "remote=69" in result.stdout
+    assert "matched=15" in result.stdout
+    assert "local_only=65" in result.stdout
+    assert "remote_only=54" in result.stdout
+
+
+@pytest.mark.parametrize("xtrace", [False, True])
+def test_linked_wrapper_never_exposes_raw_cli_output_or_diagnostics(
+    tmp_path: Path, xtrace: bool
+):
+    secret = "synthetic-token@private-host.invalid/session/private/path"
+    result, _, _ = _run_wrapper(
+        tmp_path,
+        f"unparseable {secret}\n",
+        f"connection failed: {secret}\n",
+        xtrace=xtrace,
+    )
+    rendered = result.stdout + result.stderr
+
+    assert result.returncode == 1
+    assert secret not in rendered
+    assert "linked_output_invalid" in rendered
+
+
+def test_linked_wrapper_sanitizes_cli_failure(tmp_path: Path):
+    secret = "synthetic-token@private-host.invalid/session/private/path"
+    result, _, _ = _run_wrapper(tmp_path, secret, secret, code=7)
+    rendered = result.stdout + result.stderr
+
+    assert result.returncode == 1
+    assert secret not in rendered
+    assert (
+        rendered.strip()
+        == "migration_gate status=fail stage=linked codes=linked_cli_failed:1"
+    )
+
+
+@pytest.fixture(scope="module")
+def postgres16_url():
+    configured = os.environ.get("JHT_TEST_POSTGRES_URL")
+    if configured:
+        yield configured
+        return
+    if not shutil.which("docker") or not shutil.which("psql"):
+        pytest.skip("PostgreSQL 16 locale non disponibile")
+    if subprocess.run(
+        ["docker", "image", "inspect", "postgres:16-alpine"], capture_output=True
+    ).returncode:
+        pytest.skip("immagine postgres:16-alpine non disponibile")
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    name = "jht-migration-gate-" + uuid.uuid4().hex[:10]
+    started = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--detach",
+            "--rm",
+            "--name",
+            name,
+            "-e",
+            "POSTGRES_PASSWORD=synthetic-test-only",
+            "-p",
+            f"127.0.0.1:{port}:5432",
+            "postgres:16-alpine",
+        ],
+        capture_output=True,
+        check=False,
+    )
+    if started.returncode:
+        pytest.fail("PostgreSQL 16 disposable non avviabile")
+    try:
+        url = f"postgresql://postgres:synthetic-test-only@127.0.0.1:{port}/postgres"
+        for _ in range(200):
+            if (
+                subprocess.run(
+                    ["psql", "-X", "--dbname", url, "-c", "SELECT 1"],
+                    capture_output=True,
+                ).returncode
+                == 0
+            ):
+                break
+            time.sleep(0.1)
+        else:
+            pytest.fail("PostgreSQL 16 disposable non ready")
+        yield url
+    finally:
+        subprocess.run(["docker", "stop", name], capture_output=True, check=False)
+
+
+def test_new_migrations_run_in_order_on_real_postgresql_16(
+    tmp_path: Path, postgres16_url: str, monkeypatch, capsys
+):
+    repo, base = _repo(
+        tmp_path,
+        {
+            "001_base.sql": "CREATE TABLE public.sequence_probe(id integer PRIMARY KEY);\n"
+        },
+    )
+    (repo / "supabase/migrations/002_depends_on_base.sql").write_text(
+        "ALTER TABLE public.sequence_probe ADD COLUMN body text NOT NULL DEFAULT '';\n"
+        "INSERT INTO public.sequence_probe(id, body) VALUES (1, 'applied');\n",
+        encoding="utf-8",
+    )
+    head = _commit(repo, "new migration")
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", postgres16_url)
+
+    result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
+
+    assert result == 0
+    assert "status=pass stage=pg16" in capsys.readouterr().out
+
+
+def test_real_project_history_builds_before_a_new_migration_on_pg16(
+    tmp_path: Path, postgres16_url: str, monkeypatch, capsys
+):
+    repo = tmp_path / "full-history"
+    directory = repo / "supabase/migrations"
+    directory.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", repo], check=True)
+    current = sorted((ROOT / "supabase/migrations").glob("[0-9][0-9][0-9]_*.sql"))
+    for source in current:
+        (directory / source.name).write_bytes(source.read_bytes())
+    base = _commit(repo, "real base")
+    next_number = int(current[-1].name[:3]) + 1
+    (directory / f"{next_number:03d}_gate_probe.sql").write_text(
+        "CREATE TABLE public.h08_pg16_probe(id integer PRIMARY KEY);\n",
+        encoding="utf-8",
+    )
+    head = _commit(repo, "probe migration")
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", postgres16_url)
+
+    result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
+
+    assert result == 0
+    output = capsys.readouterr().out
+    assert f"base={len(current)} new=1 anchors=0 applied=1" in output
+
+
+def test_pg16_full_history_rejects_skipping_the_pinned_018_effect(
+    tmp_path: Path, postgres16_url: str, monkeypatch, capsys
+):
+    repo = tmp_path / "full-history-without-018-effect"
+    directory = repo / "supabase/migrations"
+    directory.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", repo], check=True)
+    current = sorted((ROOT / "supabase/migrations").glob("[0-9][0-9][0-9]_*.sql"))
+    for source in current:
+        (directory / source.name).write_bytes(source.read_bytes())
+    base = _commit(repo, "real base")
+    next_number = int(current[-1].name[:3]) + 1
+    (directory / f"{next_number:03d}_gate_probe.sql").write_text(
+        "SELECT 1;\n", encoding="utf-8"
+    )
+    head = _commit(repo, "probe migration")
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", postgres16_url)
+    # Reproduce the old gate's skip-only exception while preserving the
+    # immutable 018 blob and every other part of the full-history replay.
+    monkeypatch.setattr(gate, "LEGACY_018_REPLAY_SQL", b"")
+
+    result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
+
+    assert result == 1
+    output = capsys.readouterr().out
+    assert "legacy_effect_missing" in output
+    assert "base_apply_failed" not in output
+
+
+def test_pg16_executes_manifested_anchor_without_counting_it_as_ddl(
+    tmp_path: Path, postgres16_url: str, monkeypatch, capsys
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    (repo / "supabase/migrations/002_forward.sql").write_text(
+        "CREATE TABLE public.forward_effect(id integer PRIMARY KEY);\n",
+        encoding="utf-8",
+    )
+    _write_anchor_manifest(repo, canonical_versions=["002"])
+    head = _commit(repo, "forward migration plus historical anchor")
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", postgres16_url)
+
+    result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
+
+    assert result == 0
+    assert "new=1 anchors=1 applied=1" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "postgresql://synthetic-token@private-host.invalid/private",
+        "postgresql://postgres@localhost:5432/postgres",
+        "postgresql://postgres@127.0.0.1:5432,remote.invalid:5432/postgres",
+        "postgresql://postgres@127.0.0.1:99999/postgres",
+    ],
+)
+def test_pg16_gate_rejects_nonliteral_loopback_without_exposing_target(
+    tmp_path: Path, monkeypatch, capsys, target: str
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    (repo / "supabase/migrations/002_new.sql").write_text("SELECT 2;\n")
+    head = _commit(repo, "new")
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", target)
+
+    def unexpected_psql(*_args, **_kwargs):
+        raise AssertionError("psql must not run for a nonliteral loopback host")
+
+    monkeypatch.setattr(gate, "_psql", unexpected_psql)
+
+    result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "postgres_unavailable" in output
+    assert target not in output
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        "host=remote.invalid",
+        "hostaddr=203.0.113.7",
+        "service=synthetic-private",
+        "dbname=private",
+        "port=6543",
+        "user=private",
+        "password=synthetic-private",
+    ],
+)
+def test_pg16_rejects_libpq_uri_overrides_before_psql(
+    tmp_path: Path, monkeypatch, capsys, override: str
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    (repo / "supabase/migrations/002_new.sql").write_text("SELECT 2;\n")
+    head = _commit(repo, "new")
+    target = f"postgresql://postgres@127.0.0.1:5432/postgres?{override}"
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", target)
+
+    def unexpected_psql(*_args, **_kwargs):
+        raise AssertionError("psql must not run for an extended URI")
+
+    monkeypatch.setattr(gate, "_psql", unexpected_psql)
+
+    result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "postgres_unavailable" in output
+    assert target not in output
+
+
+@pytest.mark.parametrize(
+    "encoded_path",
+    ["/postgres%3Fhost=remote.invalid", "/postgres%23host=remote.invalid"],
+)
+def test_pg16_rejects_encoded_path_delimiters_before_psql(
+    tmp_path: Path, monkeypatch, capsys, encoded_path: str
+):
+    repo, base = _repo(tmp_path, {"001_base.sql": "SELECT 1;\n"})
+    (repo / "supabase/migrations/002_new.sql").write_text("SELECT 2;\n")
+    head = _commit(repo, "new")
+    target = f"postgresql://postgres@127.0.0.1:5432{encoded_path}"
+    monkeypatch.setenv("JHT_TEST_POSTGRES_URL", target)
+
+    def unexpected_psql(*_args, **_kwargs):
+        raise AssertionError("psql must not run for an encoded database path")
+
+    monkeypatch.setattr(gate, "_psql", unexpected_psql)
+
+    result = gate.main(["pg16", "--repo", str(repo), "--base", base, "--head", head])
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "postgres_unavailable" in output
+    assert target not in output
+
+
+def test_ci_runs_git_and_real_pg16_gates_with_full_history_checkout():
+    workflow = (ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
+    assert "migration-gate:" in workflow
+    section = workflow.split("  migration-gate:", 1)[1].split("\n  pytest:", 1)[0]
+    assert "postgres:16-alpine" in section
+    assert "fetch-depth: 0" in section
+    assert "migration_gate.py base" in section
+    assert '--push-before "$PUSH_BEFORE_SHA"' in section
+    assert "steps.migration-base.outputs.sha" in section
+    assert "migration_gate.py git" in section
+    assert "--fetch-remote origin" in section
+    assert "migration_gate.py pg16" in section
+    assert "JHT_TEST_POSTGRES_URL" in section

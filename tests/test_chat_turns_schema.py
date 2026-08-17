@@ -3,7 +3,8 @@
 notifiche agente→utente e diventa lo storico della conversazione, condiviso
 fra videogioco e web.
 
-Il cambio è di DUE colonne — `author` e `chat_ts` — ma tocca il pezzo di
+Il cambio iniziale era di DUE colonne — `author` e `chat_ts`; O-67 aggiunge
+`source_id` come identità durevole degli ingressi Telegram — ma tocca il pezzo di
 schema su cui poggiano tre cose diverse: la chat web, la corsia di sync
 (`cli/src/lib/chat-sync.js`) e la lettura diretta di better-sqlite3 dalle
 route Next. Quello che questi test proteggono:
@@ -80,7 +81,7 @@ def columns(db_path, table='pending_user_messages'):
         conn.close()
 
 
-@pytest.mark.parametrize('column', ['author', 'chat_ts'])
+@pytest.mark.parametrize('column', ['author', 'chat_ts', 'source_id'])
 def test_db_nuovo_ha_le_colonne_della_conversazione(tmp_path, column):
     db = ensure_schema_on(tmp_path / 'jobs.db')
     assert column in columns(db), (
@@ -142,7 +143,7 @@ def test_db_vecchio_si_aggiorna_senza_perdere_i_messaggi(tmp_path):
 
     ensure_schema_on(db)
 
-    assert {'author', 'chat_ts'} <= columns(db)
+    assert {'author', 'chat_ts', 'source_id'} <= columns(db)
     conn = sqlite3.connect(db)
     try:
         row = conn.execute(
@@ -180,3 +181,41 @@ def test_indice_dei_turni_da_specchiare(tmp_path):
     finally:
         conn.close()
     assert 'idx_pending_messages_unmirrored' in names
+    # E il verso opposto: l'ingest chiede "di questi ts, quali ho gia'?" a
+    # ogni giro in cui chat.jsonl si muove, ed e' la guardia che impedisce di
+    # reimportare due volte lo stesso turno.
+    assert 'idx_pending_messages_mirrored' in names
+    # Il bridge puo' cadere dopo il COMMIT SQLite ma prima del cleanup del
+    # journal. Al riavvio lo stesso update deve essere un no-op, mentre due
+    # messaggi con testo identico ma source_id diversi restano due turni.
+    assert 'idx_pending_messages_source_id' in names
+
+
+def test_source_id_deduplica_il_replay_non_il_testo(tmp_path):
+    db = ensure_schema_on(tmp_path / 'jobs.db')
+    conn = sqlite3.connect(db)
+    try:
+        insert = (
+            "INSERT INTO pending_user_messages (agent, body, author, source_id) "
+            "VALUES ('assistente', ?, 'user', ?)"
+        )
+        conn.execute(insert, ('ok', 'telegram:assistente:1'))
+        conn.execute(insert, ('ok', 'telegram:assistente:2'))
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(insert, ('testo diverso', 'telegram:assistente:1'))
+    finally:
+        conn.close()
+
+
+def test_schema_crea_la_tabella_dei_claim_senza_testo_privato(tmp_path):
+    db = ensure_schema_on(tmp_path / 'jobs.db')
+    conn = sqlite3.connect(db)
+    try:
+        columns = {
+            row[1] for row in conn.execute(
+                'PRAGMA table_info(pending_user_message_delivery_claims)'
+            )
+        }
+    finally:
+        conn.close()
+    assert columns == {'message_id', 'claimed_at'}

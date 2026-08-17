@@ -105,6 +105,8 @@ var _windows_health_started := ""
 
 
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	if _windows_health_protocol_requested():
 		_run_windows_health_protocol.call_deferred()

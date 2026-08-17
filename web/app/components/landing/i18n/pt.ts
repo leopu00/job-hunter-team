@@ -61,6 +61,11 @@ export const pt: Record<string, string> = {
   dl_copy_cmd: "Copiar comando",
   dl_mode_desktop_title: "Desktop",
   dl_mode_terminal_title: "CLI",
+  dl_mode_prompt_title: "Prompt",
+  dl_prompt_intro:
+    "Preferes não tratar disto? Copia este prompt e dá-o ao teu assistente de IA: lê a documentação, escolhe contigo o caminho e instala a equipa neste computador.",
+  dl_copy_prompt: "Copiar prompt",
+  dl_prompt_note: "Funciona com qualquer assistente que saiba usar o terminal.",
   dl_desktop_beta_desc:
     "A app de ambiente de trabalho é o escritório onde vês a equipa trabalhar. Está em beta: usamo-la todos os dias, mas muda com frequência. Se preferires um caminho mais assente, a CLI continua disponível.",
   dl_desktop_beta_badge: "Beta",
@@ -105,7 +110,7 @@ export const pt: Record<string, string> = {
   home_setup_kicker: "Execute-o",
   home_setup_title: "Como quiser, onde quiser",
   home_setup_body:
-    "Corre num computador dedicado sempre ligado ou numa VPS económica, e trabalha para ti dia e noite. Geres tudo a partir da app de ambiente de trabalho: inicias, paras e vigias a equipa com um clique. E não ficas preso a esse computador: pela web podes acompanhar os resultados e falar com a equipa também a partir de outro PC ou do telemóvel.",
+    "Começa no teu PC local: é o percurso completo mais simples e a equipa trabalha enquanto o PC, o Docker e a rede estiverem disponíveis. Para continuar quando esse PC estiver desligado, podes usar uma VPS fornecida e administrada por ti. A sincronização web é opcional e não decide onde a equipa é executada.",
   home_setup_cta: "Como executá-lo →",
   home_pricing_kicker: "Preços",
   home_pricing_title: "Código aberto. A plataforma é gratuita.",

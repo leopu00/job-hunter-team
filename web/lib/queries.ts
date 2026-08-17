@@ -15,6 +15,9 @@ import * as local from "@/lib/local-queries";
 import { activeDemoPersona } from "@/lib/demo/mode";
 import * as demo from "@/lib/demo/queries";
 import { resolveCityPins } from "@/lib/city-coords";
+import { salaryPreference } from "@/lib/salary-source";
+import { parsePositionQuery } from "@/lib/position-search";
+import { publicPositionState } from "@/lib/position-state";
 import {
   aggregateRoleFamilies,
   UNCATEGORIZED_LABEL,
@@ -60,6 +63,46 @@ async function ws(): Promise<string | null> {
   return p;
 }
 
+// PostgREST applica un massimo server-side (1000 nel progetto) anche quando
+// il chiamante non specifica alcun limite. Una query secca sembra riuscire ma
+// restituisce solo il primo blocco: statistiche, faccette, lista e mappa si
+// ritrovano così con universi diversi. Il builder arriva qui DOPO filtri e
+// order; `.range()` cambia soltanto la finestra, quindi ogni pagina mantiene
+// esattamente la semantica della query del chiamante.
+const POSTGREST_PAGE_SIZE = 1000;
+
+type PostgrestRangeQuery<T> = {
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{ data: T[] | null; error: unknown }>;
+};
+
+async function fetchPostgrestRows<T>(
+  query: PostgrestRangeQuery<T>,
+  opts: { offset?: number; limit?: number } = {},
+): Promise<{ data: T[]; error: unknown | null }> {
+  const rows: T[] = [];
+  let offset = opts.offset ?? 0;
+
+  while (opts.limit == null || rows.length < opts.limit) {
+    const remaining = opts.limit == null ? Infinity : opts.limit - rows.length;
+    const pageSize = Math.min(POSTGREST_PAGE_SIZE, remaining);
+    const { data, error } = await query.range(offset, offset + pageSize - 1);
+    if (error || !data) {
+      return {
+        data: rows,
+        error: error ?? new Error("PostgREST response did not contain data"),
+      };
+    }
+    rows.push(...data);
+    if (data.length < pageSize) break;
+    offset += data.length;
+  }
+
+  return { data: rows, error: null };
+}
+
 // ── Dashboard Stats ────────────────────────────────────────────────
 const EMPTY_STATS: DashboardStats = {
   total: 0,
@@ -90,10 +133,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   if (!isSupabaseConfigured) return EMPTY_STATS;
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select("status, write_requested")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return EMPTY_STATS;
 
   const counts = data.reduce(
@@ -202,6 +247,8 @@ const POSITION_SORT_KEYS = [
   "found_at",
   "last_action_at",
   "status",
+  "written_at",
+  "applied_at",
 ] as const;
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number];
 
@@ -222,6 +269,11 @@ export type PositionFilterOpts = {
   // selezionate; undefined = nessun filtro. Alimenta i deep-link delle card
   // pipeline "Da scrivere" / "Con lo score".
   writeRequested?: boolean;
+  // O-60 — testo libero: titolo, azienda, città, famiglia, fonte e ID
+  // ("42" o "JHT-042"). Scende nella query, non filtra la pagina: cercare
+  // dentro le righe già caricate risponderebbe "nessun risultato" su un
+  // database che quel risultato ce l'ha.
+  q?: string;
   limit?: number;
   offset?: number;
   sort?: string;
@@ -293,7 +345,21 @@ export async function getPositions(
   const w = await ws();
   if (w) {
     try {
-      return applyFacetFilters(local.getPositionsLocal(w, opts), opts);
+      // O-40: limit/offset NON scendono nella lettura. I filtri "intelligenti"
+      // della sidebar (famiglia, paese, città, fasce di score e di voto) li
+      // applica `applyFacetFilters` QUI, dopo, perché la stessa logica valga
+      // per Supabase e per SQLite. Tagliare prima significa scartare righe che
+      // il filtro non ha ancora guardato: una pagina da 50 ne mostrerebbe 31,
+      // e le mancanti non sono finite — sono state buttate prima di essere
+      // lette. Stessa forma di O-37, su un filtro invece che su un ordine.
+      const { limit, offset, ...rest } = opts ?? {};
+      const filtered = applyFacetFilters(
+        local.getPositionsLocal(w, rest),
+        opts,
+      );
+      if (limit == null && offset == null) return filtered;
+      const start = offset ?? 0;
+      return filtered.slice(start, limit != null ? start + limit : undefined);
     } catch {
       return [];
     }
@@ -307,32 +373,57 @@ export async function getPositions(
       "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, found_by, last_checked, deadline, status, notes, score, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
     )
     .is("deleted_at", null)
-    .order("found_at", { ascending: false });
+    .order("found_at", { ascending: false })
+    .order("id", { ascending: true });
 
   if (opts?.statuses?.length) query = query.in("status", opts.statuses);
   if (opts?.remoteTypes?.length)
     query = query.in("remote_type", opts.remoteTypes);
   if (opts?.sources?.length) query = query.in("source", opts.sources);
+  // O-60 — la ricerca scende QUI, prima del limite. Filtrarla dopo il fetch
+  // vorrebbe dire cercare dentro le prime N righe per data e rispondere
+  // "nessun risultato" su un database che quel risultato ce l'ha: è la stessa
+  // forma di O-37 e O-40, tagliare prima di aver deciso cosa serve.
+  const search = parsePositionQuery(opts?.q);
+  if (search.text) {
+    // Il valore va fra doppi apici: senza, una virgola nel testo cercato
+    // spezzerebbe la lista di condizioni di PostgREST e la query direbbe
+    // tutt'altro. I doppi apici stessi non possono starci dentro.
+    const needle = search.text.replace(/"/g, " ");
+    const like = `%${needle}%`;
+    const clauses = [
+      `title.ilike."${like}"`,
+      `company.ilike."${like}"`,
+      `loc_city.ilike."${like}"`,
+      `loc_country.ilike."${like}"`,
+      `role_family.ilike."${like}"`,
+      `source.ilike."${like}"`,
+    ];
+    // L'ID è un OR in più, non un ramo alternativo: "42" può essere sia un
+    // identificativo sia un pezzo di titolo, e chi cerca vuole entrambi.
+    if (search.legacyId != null)
+      clauses.push(`legacy_id.eq.${search.legacyId}`);
+    query = query.or(clauses.join(","));
+  }
   if (opts?.limit) query = query.limit(opts.limit);
-  if (opts?.offset)
-    query = query.range(opts.offset, opts.offset + (opts.limit ?? 50) - 1);
-
-  const { data, error } = await query;
+  const { data, error } = await fetchPostgrestRows<any>(query, {
+    // Mantiene la semantica precedente: offset senza limit implica 50 righe;
+    // zero, come prima, non attiva una finestra esplicita.
+    offset: opts?.offset || 0,
+    limit: opts?.limit || (opts?.offset ? 50 : undefined),
+  });
   if (error || !data) return [];
   let mapped: PositionWithScore[] = data.map((p: any) => {
     const s = firstRelated<any>(p.scores);
     const app = firstRelated<any>(p.applications);
-    // Stipendio: stima del team se presente, fallback sul dichiarato (stessa
-    // fonte per min/max/currency, così non mischiamo valute).
-    const useEst =
-      p.salary_estimated_min != null || p.salary_estimated_max != null;
-    const salary_min =
-      (useEst ? p.salary_estimated_min : p.salary_declared_min) ?? null;
-    const salary_max =
-      (useEst ? p.salary_estimated_max : p.salary_declared_max) ?? null;
-    const salary_currency =
-      (useEst ? p.salary_estimated_currency : p.salary_declared_currency) ??
-      "EUR";
+    // Stipendio: il DICHIARATO vince, la stima è il fallback (O-32). Vedi
+    // `salaryPreference` per il perché; stessa fonte per min/max/currency,
+    // così non mischiamo valute.
+    const {
+      min: salary_min,
+      max: salary_max,
+      currency: salary_currency,
+    } = salaryPreference(p);
     // Ultima azione (stesso mapping di getDashboardPositions).
     const {
       at: last_action_at,
@@ -349,6 +440,9 @@ export async function getPositions(
     ]);
     return {
       ...p,
+      public_state: publicPositionState(p.status),
+      has_open_ticket: false,
+      ticket_indicator: "none" as const,
       score: p.score ?? s?.total_score ?? undefined,
       scores: p.scores ?? undefined,
       critic_score: app?.critic_score ?? null,
@@ -356,6 +450,11 @@ export async function getPositions(
       salary_min,
       salary_max,
       salary_currency,
+      applied_at: app?.applied_at ?? null,
+      // O-34: colonna "CV scritto il". Il campo è già nella select annidata,
+      // ma `...p` porta l'array `applications`, non i suoi campi: senza
+      // questa riga la colonna resterebbe vuota PROPRIO sul cloud.
+      written_at: app?.written_at ?? null,
       last_action_at,
       last_action_by,
       last_action_actor,
@@ -369,6 +468,44 @@ export async function getPositions(
       (p) => p.critic_verdict && set.has(p.critic_verdict),
     );
   }
+  // O-31 (ramo cloud) — quali posizioni hanno un ticket ancora senza
+  // risposta. UNA select in più, non una join: sul cloud i ticket sono
+  // legati per `position_legacy_id`, non da una foreign key annidabile
+  // nella select delle posizioni.
+  //
+  // `assigned` conta quanto `open`: un agente che ci lavora non è una
+  // risposta arrivata. Stesso criterio del ramo locale — se i due
+  // divergono, la stessa posizione dice due cose diverse a seconda di dove
+  // la si guarda.
+  const legacyIds = mapped
+    .map((p) => p.legacy_id)
+    .filter((id): id is number => typeof id === "number");
+  if (legacyIds.length) {
+    const { data: pending } = await supabase
+      .from("position_tickets")
+      .select("position_legacy_id")
+      // Nessun filtro esplicito sull'utente: sul cloud lo applica la RLS,
+      // come per le altre letture di questa funzione.
+      .in("status", ["open", "assigned"])
+      .in("position_legacy_id", legacyIds);
+    if (pending?.length) {
+      const waiting = new Set(
+        (pending as { position_legacy_id: number }[]).map(
+          (t) => t.position_legacy_id,
+        ),
+      );
+      mapped = mapped.map((p) =>
+        p.legacy_id != null && waiting.has(p.legacy_id)
+          ? {
+              ...p,
+              has_open_ticket: true,
+              ticket_indicator: "pending" as const,
+            }
+          : p,
+      );
+    }
+  }
+
   // Filtri "intelligenti" sidebar (family/location/score band).
   mapped = applyFacetFilters(mapped, opts);
 
@@ -422,6 +559,17 @@ export async function getPositionById(id: string): Promise<{
   company: Company | null;
   application: Application | null;
   tickets: PositionTicket[];
+  // Nota privata dell'utente (O-22). Da O-33 ha una casa su entrambe le
+  // sponde: a box acceso la legge `getPositionByIdLocal` dal jobs.db (riga
+  // `origin = 'box'`), a box spento arriva da `position_user_notes` sul cloud
+  // (riga `origin = 'web'`, mig 069). Il pannello mostra sempre e solo la nota
+  // della superficie che quel Salva sovrascriverebbe.
+  userNote?: { body: string; updated_at: string } | null;
+  // Ora della transizione a «esclusa» nell'event-log (`position_transitions`
+  // sul cloud, `position_state_transitions` nel jobs.db). È la data delle
+  // esclusioni decise dal TEAM: quelle dell'utente hanno `user_excluded_at`
+  // sulla posizione. Assente sulle personas demo, che non hanno event-log.
+  exclusionEventAt?: string | null;
 } | null> {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoPositionById(dp, id);
@@ -478,7 +626,11 @@ export async function getPositionById(id: string): Promise<{
       .from("position_tickets")
       .select("*")
       .eq("position_legacy_id", position.legacy_id)
-      .order("created_at", { ascending: true });
+      // La cronologia della richiesta nasce qui: `updated_at` cambia anche
+      // quando il team assegna/risolve un ticket e farebbe risalire richieste
+      // vecchie. L'id identity rende totale l'ordine a parità di timestamp.
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
     tickets = (tkData ?? []).map((t: any) => ({
       id: String(t.id),
       position_id: String(position.id),
@@ -491,6 +643,46 @@ export async function getPositionById(id: string): Promise<{
       resolved_at: t.resolved_at ?? null,
     }));
   }
+
+  // Nota privata (O-33, mig 069). Filtra su `origin = 'web'` per la stessa
+  // ragione per cui il lettore del jobs.db filtra su `'box'`: la chiave tiene
+  // una riga PER SUPERFICIE, e senza il filtro tornerebbe una riga qualsiasi
+  // fra quelle che la chiave permette. Qui la superficie è il sito, ed è la
+  // riga che la route POST/DELETE riscrive — mostrarne un'altra farebbe
+  // sembrare che il salvataggio non abbia fatto niente. La RLS restringe già
+  // alla sessione, come per position_views.
+  //
+  // Errore o tabella non ancora migrata → nessuna nota, e la pagina si apre
+  // comunque: la nota è un riquadro della pagina, non la pagina.
+  const { data: noteRow } = await supabase
+    .from("position_user_notes")
+    .select("body, updated_at")
+    .eq("position_id", position.id)
+    .eq("origin", "web")
+    .maybeSingle();
+
+  // Quando la posizione è stata portata a «esclusa», secondo l'event-log
+  // sincronizzato dal box (mig 044). Serve alle esclusioni decise dal TEAM:
+  // quelle dell'utente hanno il proprio timbro su `user_excluded_at`, l'Analista
+  // scrive stato e motivo e lascia l'ora qui. L'ULTIMA transizione, non la
+  // prima: una posizione riaperta e riesclusa vale per la decisione in vigore.
+  //
+  // La chiave è `position_legacy_id` (vedi la migrazione): senza `legacy_id`
+  // non c'è modo di raggiungere le righe, e il riquadro resta senza data —
+  // preferibile a prendere `updated_at`, che cambia per eventi estranei.
+  let exclusionEventAt: string | null = null;
+  if (position.legacy_id != null) {
+    const { data: xrRow } = await supabase
+      .from("position_transitions")
+      .select("ts")
+      .eq("position_legacy_id", position.legacy_id)
+      .eq("to_state", "excluded")
+      .order("ts", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    exclusionEventAt = (xrRow as { ts?: string } | null)?.ts ?? null;
+  }
+
   return {
     position,
     score: scoreRes.data ?? null,
@@ -498,6 +690,8 @@ export async function getPositionById(id: string): Promise<{
     company,
     application: appRes.data ?? null,
     tickets,
+    userNote: (noteRow as { body: string; updated_at: string } | null) ?? null,
+    exclusionEventAt,
   };
 }
 
@@ -524,11 +718,13 @@ export async function getScoreDistribution() {
   if (!isSupabaseConfigured) return empty;
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select("score, scores(total_score)")
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return empty;
 
   const scores = data.map(
@@ -573,11 +769,13 @@ export async function getSourceDistribution(): Promise<
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select("source")
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const counts: Record<string, number> = {};
   for (const row of data) {
@@ -622,12 +820,14 @@ export async function getPositionFacets(): Promise<PositionFacet[]> {
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select(
       "id, title, company, status, role_family, loc_country, loc_city, score, scores ( total_score ), applications ( critic_score )",
     )
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   return (data as any[]).map((p) => {
     const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
@@ -858,19 +1058,16 @@ export async function getSwipeDecks(limit = 1000): Promise<{
 
   const mapRow = (p: any): PositionWithScore => {
     const sc = firstRelated<any>(p.scores);
-    const useEst =
-      p.salary_estimated_min != null || p.salary_estimated_max != null;
+    // Dichiarato prima della stima (O-32): sullo swipe l'utente decide in un
+    // gesto, quindi il numero sbagliato lì costa ancora meno attenzione.
+    const salary = salaryPreference(p);
     return {
       ...p,
       score: p.score ?? sc?.total_score ?? undefined,
       scores: undefined,
-      salary_min:
-        (useEst ? p.salary_estimated_min : p.salary_declared_min) ?? null,
-      salary_max:
-        (useEst ? p.salary_estimated_max : p.salary_declared_max) ?? null,
-      salary_currency:
-        (useEst ? p.salary_estimated_currency : p.salary_declared_currency) ??
-        "EUR",
+      salary_min: salary.min,
+      salary_max: salary.max,
+      salary_currency: salary.currency,
     } as PositionWithScore;
   };
 
@@ -933,7 +1130,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select(
       "id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, source, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
@@ -941,7 +1138,8 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
     .order("found_at", { ascending: false })
-    .limit(1000);
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   return (data as any[]).map((p) => {
     const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
@@ -971,22 +1169,13 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       { ts: a?.applied_at, by: "user", actor: "user" },
       { ts: a?.response_at, by: "user", actor: "user" },
     ]);
-    // Stipendio: preferisci la stima del team, fallback sul dichiarato.
+    // Stipendio: il dichiarato vince, la stima è il fallback (O-32).
     // min/max/currency provengono dalla STESSA fonte per non mischiare valute.
-    const useEst =
-      p.salary_estimated_min != null || p.salary_estimated_max != null;
-    const salary_min =
-      ((useEst ? p.salary_estimated_min : p.salary_declared_min) as
-        | number
-        | null) ?? null;
-    const salary_max =
-      ((useEst ? p.salary_estimated_max : p.salary_declared_max) as
-        | number
-        | null) ?? null;
-    const salary_currency =
-      ((useEst ? p.salary_estimated_currency : p.salary_declared_currency) as
-        | string
-        | null) ?? "EUR";
+    const {
+      min: salary_min,
+      max: salary_max,
+      currency: salary_currency,
+    } = salaryPreference(p);
     return {
       id: String(p.id),
       legacy_id: (p.legacy_id as number | null) ?? null,
@@ -1030,13 +1219,15 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   const supabase = await createClient();
   // Niente più filtro office_lat: prendiamo TUTTE le non-escluse e risolviamo
   // le coordinate a livello città (ufficio esatto o centro-città).
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select(
       "id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, remote_type, created_at, scores ( total_score )",
     )
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = data as any[];
   const pins = resolveCityPins(
@@ -1165,11 +1356,13 @@ export async function getPositionLocations(): Promise<LocationCountry[]> {
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select("id, title, company, loc_country, loc_city, scores ( total_score )")
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = (data as any[]).map((p) => {
     const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
@@ -1220,13 +1413,15 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
   const supabase = await createClient();
   // Tutte le non-escluse; tieni solo quelle la cui città NON è risolvibile a
   // pin (no città, o città senza alcun sibling geocodificato) → bucket residuo.
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select(
       "id, title, company, status, role_family, office_lat, office_lon, is_remote, remote_type, location, loc_country, loc_city, created_at, scores ( total_score )",
     )
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = data as any[];
   // Qui id/score non servono: interessa solo se il pin è risolvibile
@@ -1287,13 +1482,15 @@ export async function getPositionTypeDistribution(): Promise<
   // Legge `role_family` dalla colonna popolata dal team analyst.
   // Score: preferisci positions.score, fallback su scores.total_score via join.
   // Critic: applications.critic_score.
-  const { data, error } = await supabase
+  const query = supabase
     .from("positions")
     .select(
       "role_family, score, scores(total_score), applications(critic_score)",
     )
     .not("status", "eq", "excluded")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
   const rows = (data as any[]).map((r) => {
     const scoresRel = Array.isArray(r.scores) ? r.scores[0] : r.scores;
@@ -1322,16 +1519,20 @@ export async function getScoutStats() {
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
+  const positionsQuery = supabase
+    .from("positions")
+    .select("id, found_by, status")
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const applicationsQuery = supabase
+    .from("applications")
+    .select("position_id")
+    .or("status.eq.response,response.not.is.null")
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
   const [posRes, appRes] = await Promise.all([
-    supabase
-      .from("positions")
-      .select("id, found_by, status")
-      .is("deleted_at", null),
-    supabase
-      .from("applications")
-      .select("position_id")
-      .or("status.eq.response,response.not.is.null")
-      .is("deleted_at", null),
+    fetchPostgrestRows<any>(positionsQuery),
+    fetchPostgrestRows<any>(applicationsQuery),
   ]);
   if (posRes.error || !posRes.data) return [];
   const respondedPositionIds = new Set(
@@ -1487,26 +1688,17 @@ async function fetchTransitionEvents(
   fromIso?: string,
   untilIso?: string,
 ): Promise<TeamActivityEvent[]> {
-  // PostgREST taglia a ~1000 righe/richiesta: con event-log oltre 1000
-  // transizioni una query secca perderebbe (senza order) le più recenti in
-  // ordine fisico → il feed si fermerebbe a giorni indietro. Pagina per `ts`
-  // DESC con .range() finché la pagina è piena, così la copertura è completa.
-  const PAGE = 1000;
-  const rows: any[] = [];
-  for (let offset = 0; ; offset += PAGE) {
-    let q = supabase
-      .from("position_transitions")
-      .select("position_legacy_id, by_agent, ts")
-      .not("by_agent", "is", null)
-      .order("ts", { ascending: false })
-      .range(offset, offset + PAGE - 1);
-    if (fromIso) q = q.gte("ts", fromIso);
-    if (untilIso) q = q.lt("ts", untilIso);
-    const { data, error } = await q;
-    if (error || !data) break;
-    rows.push(...data);
-    if (data.length < PAGE) break;
-  }
+  let query = supabase
+    .from("position_transitions")
+    .select("position_legacy_id, by_agent, ts")
+    .not("by_agent", "is", null)
+    .order("ts", { ascending: false })
+    .order("id", { ascending: true });
+  if (fromIso) query = query.gte("ts", fromIso);
+  if (untilIso) query = query.lt("ts", untilIso);
+  // Il feed mantiene il comportamento best-effort precedente: se una pagina
+  // successiva fallisce, usa comunque le righe complete già ricevute.
+  const { data: rows } = await fetchPostgrestRows<any>(query);
   return rows.flatMap((r) => {
     const role = String(r.by_agent ?? "").split("-")[0] as TeamActivityRole;
     if (!ROLE_PREFIX_SET.has(role)) return [];
@@ -1833,4 +2025,3 @@ export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
   await enrichRecent(supabase, events);
   return events;
 }
-

@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
@@ -26,16 +25,17 @@ import {
 } from "@/lib/parse-analysis";
 import { colorForFamily } from "@/lib/position-classifier";
 import { sourceDisplayName } from "@/lib/case-study-sources";
-import { scoreSpectrumCss } from "@/lib/score-color";
 import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
+import { CoverLetterRequestButton } from "./CoverLetterRequestButton";
 import { ExcludeButton } from "./ExcludeButton";
 import { RecheckButton } from "./RecheckButton";
 import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
 import { TeamActionsSheet } from "./TeamActionsSheet";
 import { FeedbackButtons } from "./FeedbackButtons";
+import UserNote from "./UserNote";
 import { verdictOf, type Verdict } from "@/lib/position-verdict";
 import PositionMapCardLazy from "./PositionMapCardLazy";
 import PrevNextNav from "./PrevNextNav";
@@ -43,9 +43,24 @@ import { CvDownloadButton } from "./CvDownloadButton";
 import MarkSeenAfterView from "@/app/components/MarkSeenAfterView";
 import { Avatar } from "@/app/components/Avatar";
 import { isLocalRequest } from "@/lib/auth";
+import {
+  PUBLIC_STATE_COLORS,
+  publicApplicationState,
+  publicPositionStateLabel,
+} from "@/lib/position-state";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { makeT } from "@/lib/i18n-dict";
+import { formatPositionEventStamp } from "@/lib/position-event-stamp";
+import { SCORE_COMPONENT_LIMITS, barFill } from "@/lib/score-ranges";
 import { T } from "./page.i18n";
+import { resolveCoverLetterPdfFileName } from "@/lib/position-document-file.server";
+import { activeRescoreTicket } from "@/lib/rescore-ticket";
+import { RescoreRequestButton } from "./RescoreRequestButton";
+import { ScoreAssessedAt } from "./ScoreAssessedAt";
+import { OverviewScoreBadge } from "./OverviewScoreBadge";
+import { OverviewFactRow, OverviewFacts } from "./OverviewFacts";
+import { ExclusionDecidedAt } from "./ExclusionDecidedAt";
+import { IconAlert, IconExternal } from "../icons";
 
 // Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
 // inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
@@ -107,35 +122,37 @@ const VAL: Record<string, Record<string, string>> = {
   },
 };
 
-// Colori dello stato della CANDIDATURA (applications.status), distinto dallo
-// stato della posizione. 'ready' = CV finito e approvato dal Critico.
-const APP_STATUS_COLORS: Record<string, string> = {
-  draft: "var(--color-yellow)",
-  review: "var(--color-orange)",
-  ready: "var(--color-ready)",
-  approved: "var(--color-green)",
-  applied: "var(--color-green)",
-  response: "#58a6ff",
-};
-
 const VERDICT_COLORS: Record<string, string> = {
   PASS: "var(--color-green)",
   NEEDS_WORK: "var(--color-yellow)",
   REJECT: "var(--color-red)",
 };
 
-// Ultimo evento feedback → giudizio della scala a 4 (stessa mappatura
-// inversa della pagina /swipe; i vecchi eventi senza score cadono sul
-// giudizio più vicino all'action).
-function scoreColor(s: number | null) {
-  return scoreSpectrumCss(s);
-}
-
 // Colore di un sotto-punteggio relativo al SUO massimo (stack /40, remote
 // /25, …): un 26/40 (65%) è "buono", non "rosso". Il colore precedente
 // usava soglie assolute → tutte le barre apparivano rosse anche con fit ok.
+// Le cinque dimensioni nell'ordine in cui si leggono. Il massimo viene da
+// `score-ranges.ts`: prima era scritto a mano qui accanto a ogni barra, sesta
+// copia dello stesso righello — e le copie a mano sono il modo in cui i tetti
+// hanno divergiuto senza che nessun test lo vedesse.
+const SCORE_DIMENSIONS = [
+  { column: "stack_match", labelKey: "sb_stack_match", why: "stack" },
+  { column: "remote_fit", labelKey: "sb_remote_fit", why: "remote" },
+  { column: "salary_fit", labelKey: "sb_salary_fit", why: "salary" },
+  {
+    column: "experience_fit",
+    labelKey: "sb_experience_fit",
+    why: "experience",
+  },
+  { column: "strategic_fit", labelKey: "sb_strategic_fit", why: "strategic" },
+] as const;
+
 function ratioColor(value: number | null, max: number) {
   if (value == null || max <= 0) return "var(--color-dim)";
+  // Fuori scala non è "fit eccellente", è una misura rotta: senza questo ramo
+  // un 18/15 fa 120%, cade nel >=70% e si tinge di verde — cioè il caso da
+  // segnalare era quello che sembrava migliore di tutti.
+  if (value > max) return "var(--color-red)";
   const pct = (value / max) * 100;
   if (pct >= 70) return "var(--color-green)";
   if (pct >= 45) return "var(--color-yellow)";
@@ -147,6 +164,7 @@ function ScoreBar({
   value,
   max,
   detail,
+  overCapLabel,
 }: {
   label: string;
   value: number | null;
@@ -155,47 +173,62 @@ function ScoreBar({
   // presente la riga diventa espandibile via <details> nativo — niente
   // JS client, funziona anche nel render server.
   detail?: string;
+  // Frase mostrata quando `value` supera `max`. Arriva dall'esterno perché
+  // questo componente vive fuori dal render della pagina e non ha `t`.
+  overCapLabel: string;
 }) {
-  const pct = value ? Math.round((value / max) * 100) : 0;
+  // La barra si ferma al pieno, e `over` dice che il numero è fuori scala: il
+  // clamp da solo nasconderebbe il difetto invece di chiuderlo. Il numero vero
+  // resta scritto accanto, non normalizzato. Logica in `score-ranges.ts`
+  // perché è quella coperta dai test.
+  const { pct, over } = barFill(value, max);
   const color = ratioColor(value, max);
   const row = (
-    <div className="flex items-center gap-3">
-      <span className="text-[10px] text-[var(--color-dim)] w-28 shrink-0">
-        {label}
-      </span>
-      <div
-        className="flex-1 h-1 rounded-full overflow-hidden"
-        style={{ background: "var(--color-border)" }}
-      >
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-3">
+        <span className="text-[10px] text-[var(--color-dim)] w-28 shrink-0">
+          {label}
+        </span>
         <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${pct}%`, background: color }}
-        />
-      </div>
-      <span
-        className="text-[11px] font-semibold w-12 text-right tabular-nums"
-        style={{ color }}
-      >
-        {value ?? "—"}
-        <span className="text-[var(--color-dim)] font-normal">/{max}</span>
-      </span>
-      {/* Slot fisso per il chevron: mantiene allineate le barre con e
+          className="flex-1 h-1 rounded-full overflow-hidden"
+          style={{ background: "var(--color-border)" }}
+        >
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${pct}%`, background: color }}
+          />
+        </div>
+        <span
+          className="text-[11px] font-semibold w-12 text-right tabular-nums"
+          style={{ color }}
+        >
+          {value ?? "—"}
+          <span className="text-[var(--color-dim)] font-normal">/{max}</span>
+        </span>
+        {/* Slot fisso per il chevron: mantiene allineate le barre con e
           senza razionale. */}
-      <span className="w-3 shrink-0 flex items-center justify-center">
-        {detail && (
-          <svg
-            viewBox="0 0 10 6"
-            className="w-2.5 h-2.5 text-[var(--color-dim)] transition-transform group-open:rotate-180"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M1 1l4 4 4-4" />
-          </svg>
-        )}
-      </span>
+        <span className="w-3 shrink-0 flex items-center justify-center">
+          {detail && (
+            <svg
+              viewBox="0 0 10 6"
+              className="w-2.5 h-2.5 text-[var(--color-dim)] transition-transform group-open:rotate-180"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M1 1l4 4 4-4" />
+            </svg>
+          )}
+        </span>
+      </div>
+      {over && (
+        <div className="flex items-start gap-1.5 pl-28 pr-[3.75rem] text-[10px] leading-snug text-[var(--color-red)]">
+          <span aria-hidden="true">▲</span>
+          <span>{overCapLabel}</span>
+        </div>
+      )}
     </div>
   );
   if (!detail) return row;
@@ -236,11 +269,40 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // agenti (Scorer/Capitano) — la card Pro/Contro duplicava jd_summary,
   // note del team e razionale dello score (contratto contenuti 2026-07-23).
   const { position, score, company, application, tickets } = data;
+  // O-22: nota privata. Da O-33 arriva da entrambe le sponde — dal jobs.db
+  // col box acceso, dalla tabella cloud (mig 069) a box spento — quindi `null`
+  // qui vuol dire «non ne hai ancora scritta una», non «non si può».
+  //
+  // Il nome della tabella NON si scrive qui di proposito: chi lo nomina entra
+  // nella scansione di user-note-origin.test.ts, che pretende consapevolezza
+  // di `origin` da chi tocca quella tabella. Questa pagina non la tocca — la
+  // legge `getPositionById` — e ci passerebbe solo perché la parola «origin»
+  // capita dentro «originale»: un verde che non prova niente.
+  const userNote = data.userNote?.body ?? null;
   // Razionale dello score. `perDimension` (RULE-09) va espandibile sotto la
   // barra corrispondente; `rest` è ciò che non appartiene a una dimensione —
   // i breakdown vecchi, che restano visibili sotto le barre insieme alle
   // note invece di sparire.
   const scoreWhy = parseScoreBreakdown(score?.breakdown);
+  // `scored_at` appartiene alla riga score e viene riscritto dallo Scorer
+  // insieme alla valutazione. Non usare `positions.updated_at`: cambia anche
+  // per azioni estranee allo score e farebbe sembrare fresca una misura vecchia.
+  const scoreAssessedAt = formatPositionEventStamp(score?.scored_at, locale);
+  // Quando è stata decisa l'esclusione. Due sorgenti, una per mano: la
+  // decisione manuale ha il proprio timestamp atomico su `user_excluded_at`;
+  // quella del team no — l'Analista scrive stato e motivo, e l'ora della
+  // transizione a «esclusa» sta nell'event-log (`exclusionEventAt`, letto da
+  // `getPositionById`). Fino a O-41 il riquadro sapeva dire QUANDO solo nel
+  // primo caso, cioè quasi mai: escludere è soprattutto mestiere del team.
+  //
+  // L'ordine non è arbitrario: se l'utente ha escluso, quella è LA decisione,
+  // e l'event-log potrebbe portare una transizione automatica successiva.
+  // Nessuna delle due? Nessuna data. Non si ripiega su `updated_at`,
+  // `found_at` o `last_checked`: cambiano per eventi diversi e farebbero
+  // sembrare recente un'esclusione vecchia.
+  const exclusionStamp = position.user_excluded_at ?? data.exclusionEventAt;
+  const exclusionDecidedAt = formatPositionEventStamp(exclusionStamp, locale);
+  const rescoreTicket = activeRescoreTicket(tickets);
 
   // Analisi semi-strutturata dell'Analista (campo notes) → metadati,
   // motivo esclusione, disallineamenti, prosa. Vedi lib/parse-analysis.
@@ -300,10 +362,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
   const mapsUrl = exactAddress
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(exactAddress)}`
     : null;
-  // basename dei PDF: i path nel DB sono assoluti sul container VPS, ma il
-  // bridge e il file-serving locale risolvono per basename.
+  // Basename dei PDF: i path nel DB sono assoluti sul container VPS, ma il
+  // bridge e il file-serving locale risolvono per basename. Per la cover
+  // letter il file inventory e' il fallback: vecchi Writer potevano lasciare
+  // il PDF sul disco senza collegarlo in applications.cl_pdf_path (O-72).
   const cvFileName = application?.cv_pdf_path?.split("/").pop() || null;
-  const clFileName = application?.cl_pdf_path?.split("/").pop() || null;
+  const clFileName = await resolveCoverLetterPdfFileName({
+    explicitPath: application?.cl_pdf_path,
+    legacyId: position.legacy_id,
+    cloudMode,
+  });
 
   // Valuta di visualizzazione (Impostazioni → Valuta stipendi): valuta
   // diversa da quella dell'annuncio → importo convertito ("≈") con
@@ -340,8 +408,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
     return null;
   }
 
-  // Card Panoramica (prima card in assoluto): score + stipendio stimato +
-  // modalità + categoria — i fatti decisivi tolti dall'header (19/07).
+  // Card Panoramica (prima card in assoluto): score + stipendio + modalità +
+  // categoria — i fatti decisivi tolti dall'header (19/07).
+  //
+  // O-32: quando ci sono ENTRAMBI vince il DICHIARATO. È scritto
+  // nell'annuncio; la stima è un'ipotesi del team e vale solo dove il
+  // dichiarato manca. Mostrare 35-60k su un annuncio che dichiara 12-24k fa
+  // investire tempo su un'offerta che l'utente avrebbe scartato — e un
+  // numero sembra un fatto, quindi nessuno va a controllare. Stessa regola
+  // di `shared/skills/generate_dashboard.py` (has_declared prima di
+  // has_estimated), che la applica da sempre.
   const salaryEst = formatSalary(
     position.salary_estimated_min,
     position.salary_estimated_max,
@@ -422,37 +498,34 @@ export default async function PositionDetailPage({ params }: PageProps) {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-4 md:gap-6 min-w-0">
-          {score && (
-            <div
-              className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
-              style={{
-                borderColor: scoreColor(score.total_score),
-                color: scoreColor(score.total_score),
-              }}
-            >
-              {score.total_score}
-            </div>
-          )}
-          {/* Fatti: label e valore su due colonne adiacenti, niente vuoto
-              tra label e valore (feedback 22/07). */}
-          <div className="ml-auto md:ml-0 grid grid-cols-[auto_auto] gap-x-5 gap-y-1.5 items-baseline min-w-0">
-            {(salaryEst || salaryDecl) && (
-              <OverviewRow
+        <div
+          className={`grid w-full min-w-0 items-center gap-4 md:w-auto md:gap-6 ${
+            score
+              ? "grid-cols-[3.5rem_minmax(0,1fr)] md:grid-cols-[3.5rem_minmax(15rem,auto)]"
+              : "grid-cols-1 md:min-w-60"
+          }`}
+        >
+          {score && <OverviewScoreBadge score={score.total_score} />}
+          {/* Fatti: ogni label e' legata strutturalmente alla propria cella;
+              la colonna valore conserva spazio utile anche su mobile. */}
+          <OverviewFacts>
+            {(salaryDecl || salaryEst) && (
+              <OverviewFactRow
+                factId="salary"
                 label={t(
-                  salaryEst ? "d_salary_estimated" : "d_salary_declared",
+                  salaryDecl ? "d_salary_declared" : "d_salary_estimated",
                 )}
               >
-                {(salaryEst ?? salaryDecl)!}
-              </OverviewRow>
+                {(salaryDecl ?? salaryEst)!}
+              </OverviewFactRow>
             )}
             {position.remote_type && (
-              <OverviewRow label={t("o_mode")}>
+              <OverviewFactRow factId="work-mode" label={t("o_mode")}>
                 {t(`rt_${position.remote_type}`)}
-              </OverviewRow>
+              </OverviewFactRow>
             )}
             {position.role_family && (
-              <OverviewRow label={t("o_category")}>
+              <OverviewFactRow factId="category" label={t("o_category")}>
                 <span className="inline-flex items-center gap-1.5 max-w-full">
                   <span
                     className="w-2 h-2 rounded-full shrink-0"
@@ -463,10 +536,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   />
                   <span className="truncate">{position.role_family}</span>
                 </span>
-              </OverviewRow>
+              </OverviewFactRow>
             )}
             {position.source && (
-              <OverviewRow label={t("d_source")}>
+              <OverviewFactRow factId="source" label={t("d_source")}>
                 {position.url ? (
                   <a
                     href={position.url}
@@ -474,17 +547,17 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     rel="noopener noreferrer"
                     className="text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
                   >
-                    {sourceDisplayName(position.source)} ↗
+                    {sourceDisplayName(position.source)} <IconExternal />
                   </a>
                 ) : (
                   sourceDisplayName(position.source)
                 )}
-              </OverviewRow>
+              </OverviewFactRow>
             )}
-            <OverviewRow label={t("d_found")}>
+            <OverviewFactRow factId="found" label={t("d_found")}>
               {`${foundDate} (${foundAge})`}
-            </OverviewRow>
-          </div>
+            </OverviewFactRow>
+          </OverviewFacts>
         </div>
       </div>
       {/* Banner motivo esclusione: sempre presente su una posizione
@@ -500,6 +573,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
           <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-red)] mb-1">
             {exclusionByUser ? t("excl_by_user") : t("excl_by_team")}
           </div>
+          <ExclusionDecidedAt
+            label={t("exclusion_decided_at")}
+            excludedAt={exclusionStamp}
+            formatted={exclusionDecidedAt}
+          />
           <p className="text-[11px] text-[var(--color-base)] leading-relaxed">
             {exclusionText}
           </p>
@@ -507,13 +585,23 @@ export default async function PositionDetailPage({ params }: PageProps) {
       )}
       {/* Giudizio rapido in coda alla Panoramica: stessa fila di /swipe
             (evidenzia quello già dato; resta anche nel popup). */}
+      {/* L'identità che la route usa è l'id NUMERICO della posizione: in
+          locale `legacy_id` non esiste (è una colonna del cloud), e legare
+          il pannello a quello lo faceva sparire proprio sul box, cioè dove
+          la nota vive. */}
+      <div className="mt-4">
+        <UserNote
+          legacyId={Number(position.legacy_id ?? position.id)}
+          initialNote={userNote}
+        />
+      </div>
       {feedbackEnabled && position.legacy_id != null && (
         <div className="mt-4 border-t border-[var(--color-border)] pt-4">
           <FeedbackButtons
             legacyId={position.legacy_id}
             initialVerdict={initialVerdict}
-            initialExcludedReason={position.user_excluded_reason ?? null}
-            initialExcludedNote={position.user_excluded_note ?? null}
+            initialApplied={position.status === "applied"}
+            initialAppliedAt={application?.applied_at ?? null}
           />
         </div>
       )}
@@ -559,7 +647,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
             title={t("open_in_maps")}
             className="max-w-[55%] shrink-0 text-right text-[10px] leading-snug text-[var(--color-blue)] no-underline transition-colors hover:text-[var(--color-bright)]"
           >
-            {exactAddress} ↗
+            {exactAddress} <IconExternal />
           </a>
         )}
       </div>
@@ -647,7 +735,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       rel="noopener noreferrer"
                       className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
                     >
-                      {t("original_listing")} ↗
+                      {t("original_listing")} <IconExternal />
                     </a>
                   )}
                 </>
@@ -684,37 +772,22 @@ export default async function PositionDetailPage({ params }: PageProps) {
           {score && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="section-label mb-4">{t("score_breakdown")}</div>
+              <ScoreAssessedAt
+                label={t("score_assessed_at")}
+                scoredAt={score.scored_at}
+                formatted={scoreAssessedAt}
+              />
               <div className="space-y-3">
-                <ScoreBar
-                  label={t("sb_stack_match")}
-                  value={score.stack_match}
-                  max={40}
-                  detail={scoreWhy.perDimension.stack}
-                />
-                <ScoreBar
-                  label={t("sb_remote_fit")}
-                  value={score.remote_fit}
-                  max={25}
-                  detail={scoreWhy.perDimension.remote}
-                />
-                <ScoreBar
-                  label={t("sb_salary_fit")}
-                  value={score.salary_fit}
-                  max={20}
-                  detail={scoreWhy.perDimension.salary}
-                />
-                <ScoreBar
-                  label={t("sb_experience_fit")}
-                  value={score.experience_fit}
-                  max={10}
-                  detail={scoreWhy.perDimension.experience}
-                />
-                <ScoreBar
-                  label={t("sb_strategic_fit")}
-                  value={score.strategic_fit}
-                  max={15}
-                  detail={scoreWhy.perDimension.strategic}
-                />
+                {SCORE_DIMENSIONS.map((d) => (
+                  <ScoreBar
+                    key={d.column}
+                    label={t(d.labelKey)}
+                    value={score[d.column]}
+                    max={SCORE_COMPONENT_LIMITS[d.column]}
+                    detail={scoreWhy.perDimension[d.why]}
+                    overCapLabel={t("sb_over_cap")}
+                  />
+                ))}
               </div>
               {/* Sotto le barre: il commento che vale per l'intero score.
                   `rest` è il breakdown non attribuibile a una dimensione —
@@ -746,8 +819,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
               {/* Stato candidatura + verdetto + voto del Critico in evidenza */}
               <div className="flex items-center gap-2.5 flex-wrap mb-4">
                 {(() => {
-                  const c =
-                    APP_STATUS_COLORS[application.status] ?? "var(--color-dim)";
+                  const publicState = publicApplicationState(
+                    application.status,
+                  );
+                  const c = PUBLIC_STATE_COLORS[publicState];
                   return (
                     <span
                       className="text-[10px] font-semibold px-3 py-1 rounded-full border"
@@ -757,9 +832,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                         background: `${c}18`,
                       }}
                     >
-                      {T[`as_${application.status}`]
-                        ? t(`as_${application.status}`)
-                        : application.status}
+                      {publicPositionStateLabel(publicState, locale)}
                     </span>
                   );
                 })()}
@@ -796,17 +869,15 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 <InfoRow
                   label={t("a_written")}
                   value={
-                    application.written_at
-                      ? application.written_at.slice(0, 10)
-                      : "—"
+                    formatPositionEventStamp(application.written_at, locale) ??
+                    "—"
                   }
                 />
                 <InfoRow
                   label={t("a_sent")}
                   value={
-                    application.applied_at
-                      ? application.applied_at.slice(0, 10)
-                      : "—"
+                    formatPositionEventStamp(application.applied_at, locale) ??
+                    "—"
                   }
                 />
                 {application.applied_via && (
@@ -870,7 +941,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       color: "var(--color-green)",
                     }}
                   >
-                    {t("cv_drive")} ↗
+                    {t("cv_drive")} <IconExternal />
                   </a>
                 )}
                 {application.cl_drive_id && (
@@ -884,7 +955,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       color: "var(--color-blue)",
                     }}
                   >
-                    {t("cover_letter_drive")} ↗
+                    {t("cover_letter_drive")} <IconExternal />
                   </a>
                 )}
               </div>
@@ -994,7 +1065,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     className="text-[11px] leading-relaxed mt-2"
                     style={{ color: "var(--color-red)" }}
                   >
-                    <span aria-hidden="true">⚠</span> {company.red_flags}
+                    <IconAlert /> {company.red_flags}
                   </p>
                 )}
               </div>
@@ -1005,7 +1076,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   rel="noopener noreferrer"
                   className="mt-3 flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
                 >
-                  {t("company_website")} ↗
+                  {t("company_website")} <IconExternal />
                 </a>
               )}
             </div>
@@ -1137,10 +1208,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   <FeedbackButtons
                     legacyId={position.legacy_id}
                     initialVerdict={initialVerdict}
-                    initialExcludedReason={
-                      position.user_excluded_reason ?? null
-                    }
-                    initialExcludedNote={position.user_excluded_note ?? null}
                   />
                 ) : undefined
               }
@@ -1163,6 +1230,20 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     initialRequested={position.recheck_requested === true}
                     lastOpenCheck={position.last_open_check}
                   />
+                  {/* Stessa pipeline dei ticket liberi: il kind rende la
+                      destinazione Scorer deterministica e lo stato impedisce
+                      di aprire una seconda rivalutazione mentre la prima è in
+                      attesa o assegnata. */}
+                  <RescoreRequestButton
+                    legacyId={position.legacy_id}
+                    initialStatus={
+                      rescoreTicket?.status === "open" ||
+                      rescoreTicket?.status === "assigned"
+                        ? rescoreTicket.status
+                        : null
+                    }
+                    disabled={score == null}
+                  />
                   {(() => {
                     // Writer-on-demand (V6): il button e' visibile solo se la
                     // posizione e' nello stato giusto. Il Capitano spawna lo
@@ -1182,12 +1263,23 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     return (
                       <WriteRequestButton
                         legacyId={position.legacy_id}
-                        initialRequested={position.write_requested === true}
+                        initialRequested={
+                          position.write_requested === true &&
+                          position.write_request_kind !== "cover_letter"
+                        }
                         disabled={isDisabled}
                         disabledReason={reason}
                       />
                     );
                   })()}
+                  <CoverLetterRequestButton
+                    legacyId={position.legacy_id}
+                    initialRequested={
+                      position.write_requested === true &&
+                      position.write_request_kind === "cover_letter"
+                    }
+                    disabled={application == null}
+                  />
                   {/* Esclusione manuale utente (mig 041): l'utente esclude
                       l'offerta con una causa → status 'excluded', gli agenti
                       smettono di ri-verificarne la liveness. */}
@@ -1217,7 +1309,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   color: "var(--color-blue)",
                 }}
               >
-                {t("original_listing")} ↗
+                {t("original_listing")} <IconExternal />
               </a>
             )}
           </div>
@@ -1230,33 +1322,13 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-2">
+    <div className="flex items-baseline gap-2 min-w-0">
       <span className="text-[10px] text-[var(--color-dim)] shrink-0">
         {label}
       </span>
-      <span className="text-[11px] text-[var(--color-base)] text-right">
+      <span className="text-[11px] text-[var(--color-base)] min-w-0 break-words">
         {value}
       </span>
     </div>
-  );
-}
-
-// Riga della card Panoramica: due celle (label + valore) del grid a due
-// colonne — il fragment si appiattisce nelle colonne del grid padre, così
-// label e valore restano adiacenti qualunque sia la larghezza della card.
-function OverviewRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <>
-      <span className="text-[10px] text-[var(--color-dim)]">{label}</span>
-      <span className="text-[11px] text-[var(--color-base)] text-right min-w-0 break-words">
-        {children}
-      </span>
-    </>
   );
 }

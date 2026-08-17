@@ -14,6 +14,25 @@ ROOT = Path(__file__).resolve().parents[1]
 JHT = ROOT / "cli" / "bin" / "jht.js"
 PS = ROOT / "scripts" / "jht-wrapper.ps1"
 BASH = ROOT / "scripts" / "jht-wrapper.sh"
+CLIENT_CONTROL = ROOT / "game" / "scripts" / "client_control.gd"
+WINDOWS_GUARD = ROOT / "game" / "scripts" / "support" / "windows_instance_guard.gd"
+
+
+def _terminate(pid: int, timeout: float = 5.0) -> None:
+    """Termina un processo e ACCERTA che sia morto, escalando a SIGKILL."""
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            return
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return
+            time.sleep(0.05)
+    raise AssertionError(f"il processo {pid} è sopravvissuto anche a SIGKILL")
 
 
 def make_fake_game(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
@@ -38,7 +57,12 @@ cleanup() {
   current="$(sed -n 's/.*"instance_id":"\([^"]*\)".*/\1/p' "$state" 2>/dev/null || true)"
   if [ "$current" = "$instance" ]; then rm -f "$state"; fi
 }
-trap cleanup EXIT INT TERM
+# `trap ... TERM` da solo NON basta: bash esegue l'handler e RIPRENDE il loop,
+# quindi lo stub sopravvive al SIGTERM che il test gli manda (misurato). Su
+# INT/TERM si esce davvero.
+trap cleanup EXIT
+trap 'cleanup; exit 143' TERM
+trap 'cleanup; exit 130' INT
 while :; do
   request="$control/request.json"
   if [ -f "$request" ]; then
@@ -104,6 +128,11 @@ def test_windows_wrapper_uses_nonce_control_plane_without_forced_kill():
         "timeout richiesta",
         "TASK_LOGON_INTERACTIVE_TOKEN",
         "Remove-GameRequestIfOwned",
+        "$WindowsInstanceGuardSha256",
+        "Get-InstanceGuardFingerprint",
+        "Get-GameProcessStartTicks $guard",
+        "$guard.SessionId -ne $process.SessionId",
+        "instance guard binding mismatch",
     ):
         assert seam in source
     forbidden = ("taskkill", "Stop-Process", "docker stop", "Invoke-Compose down")
@@ -112,6 +141,37 @@ def test_windows_wrapper_uses_nonce_control_plane_without_forced_kill():
     )]
     for command in forbidden:
         assert command not in lifecycle
+
+
+def test_windows_state_binds_live_desktop_to_attested_guard() -> None:
+    state = CLIENT_CONTROL.read_text(encoding="utf-8")
+    guard = WINDOWS_GUARD.read_text(encoding="utf-8")
+    wrapper = PS.read_text(encoding="utf-8")
+
+    assert 'state["schema"] = 2' in state
+    for field in (
+        "desktop_executable",
+        "desktop_started",
+        "executable",
+        "instance_id",
+        "mode",
+        "mutex_fingerprint",
+        "pid",
+        "source_sha256",
+        "started",
+    ):
+        assert f'"{field}"' in state
+    digest = re.search(r'SOURCE_SHA256 := "([0-9a-f]{64})"', guard).group(1)
+    assert f"$WindowsInstanceGuardSha256 = '{digest}'" in wrapper
+    for rejection in (
+        "$guardPid -eq $statePid",
+        "$guard.SessionId -ne $process.SessionId",
+        "Get-CanonicalGameProcessPath $guard",
+        "Get-GameProcessStartTicks $process",
+        "Get-GameProcessStartTicks $guard",
+        "Get-InstanceGuardFingerprint",
+    ):
+        assert rejection in wrapper
 
 
 def test_invalid_host_options_are_fail_closed_before_effects():
@@ -207,10 +267,12 @@ def test_bash_rejects_same_pid_and_executable_with_stale_started_at(tmp_path):
         assert status.stdout.strip() == "game stopped"
         assert not state.exists()
     finally:
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        # Qui `game stop` non servirebbe: il test ha appena verificato che lo
+        # stato è stato rimosso, quindi il wrapper non sa più chi fermare. Si
+        # passa dal pid, ma senza dare per scontato che un segnale basti — è
+        # così che 49 stub sono rimasti accesi sulle macchine di sviluppo, il
+        # più vecchio per due giorni.
+        _terminate(pid)
 
 
 def test_host_subcommand_help_and_invalid_options_have_honest_exit_codes(tmp_path):

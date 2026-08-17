@@ -16,6 +16,8 @@ var _pool: Array[AudioStreamPlayer] = []
 var _next := 0
 
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	if not await Game.windows_health_boot_allowed():
 		return

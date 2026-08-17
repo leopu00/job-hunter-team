@@ -25,9 +25,64 @@ WORK_MODES = ('search', 'harvest', 'care', 'calibration', 'saving')
 raw_mode = maintenance_raw.get('mode') if isinstance(maintenance_raw, dict) else None
 if raw_mode == 'maintenance':
     raw_mode = 'care'
-mode = raw_mode if raw_mode in WORK_MODES else 'search'
+mode_raw = raw_mode if raw_mode in WORK_MODES else 'search'
+
+# Scadenza della modalità ([SAVING-MODE-HAS-NO-DEADLINE]): la chiave opzionale
+# `mode_until` dice fino a quando vale l'ordine, e si valuta IN LETTURA —
+# nessun demone riscrive il file, quindi ogni lettore deve concluderne la
+# stessa cosa nello stesso istante. La meccanica vive in mode_deadline.py e la
+# condividono `enrichment_policy.current_mode()` e `mode_banner`: qui si
+# IMPORTA, non si reimplementa, altrimenti la Console e il freno di spesa
+# raccontano due modalità diverse appena una delle due copie deriva.
+# L'import è tollerante come in mode_banner: durante un rolling deploy il gioco
+# può essere più nuovo dell'immagine container, e senza il modulo la scadenza
+# semplicemente non si applica — resta in vigore la modalità scritta, che è il
+# comportamento storico e la direzione sicura per un ordine di spesa.
+try:
+    import mode_deadline
+except Exception:
+    mode_deadline = None
+mode_until = maintenance_raw.get('mode_until') \
+    if isinstance(maintenance_raw, dict) else None
+if not isinstance(mode_until, str) or not mode_until.strip():
+    mode_until = None
+else:
+    mode_until = mode_until.strip()
+deadline = mode_deadline.parse_deadline(mode_until) \
+    if (mode_until and mode_deadline is not None) else None
+mode, expired = (mode_deadline.effective_mode(mode_raw, deadline)
+                 if mode_deadline is not None else (mode_raw, False))
+if expired:
+    # Scadono anche gli `orders` di quella modalità: «cura fino a venerdì» è UN
+    # ordine con una fine, e lasciare in piedi `stop_search` dopo la scadenza
+    # significherebbe tornare a `search` e non cercare comunque.
+    orders = {}
 maintenance = {
+    # `mode` è quella IN VIGORE ADESSO, non quella scritta sul file: ruoli
+    # invertiti rispetto a `coordinator_settings.read_state()` (dove `mode` è
+    # il grezzo) e di proposito, perché qui il lettore è una UI — anche una
+    # build vecchia del gioco, che conosce solo questa chiave, deve mostrare la
+    # modalità vera invece di una `saving` finita ore prima. Il grezzo resta
+    # accanto, per poter dire all'utente COSA è scaduto.
     'mode': mode,
+    'mode_raw': mode_raw,
+    'expired': expired,
+    'mode_until': mode_until,
+    # None = non c'è scadenza, o questa immagine non sa ancora valutarne una:
+    # in nessuno dei due casi si può dire all'utente che la sua data è
+    # illeggibile.
+    'mode_until_valid': (deadline is not None)
+                        if (mode_until and mode_deadline) else None,
+    'mode_until_in': (mode_deadline.remaining_text(deadline)
+                      if (deadline is not None and mode_deadline) else ''),
+    # Lo stesso dato in secondi, perché la Console precompila con questo il
+    # campo «fino a quando»: un delta non richiede che host e container
+    # concordino sul fuso (la scelta di `remaining_sec` della deroga di spesa).
+    # `getattr`: l'helper è più nuovo del modulo, e un'immagine container a
+    # metà rolling deploy può avere il secondo senza il primo.
+    'mode_until_sec': (getattr(mode_deadline, 'remaining_seconds',
+                               lambda *_a, **_k: 0)(deadline)
+                       if (deadline is not None and mode_deadline) else 0),
     # Compat col vecchio toggle binario (client che leggono ancora 'enabled').
     'enabled': mode == 'care',
     'stop_search': bool(orders.get('stop_search', True)),
@@ -71,65 +126,45 @@ def count(sql, params=()):
     except Exception:
         return 0
 
+# Gli stati della pipeline si contano qui: sono `positions.status`, non code —
+# nessun predicato condiviso da rispettare, nessuna policy che li spenga.
 queue_counts = {
     'new': count("SELECT COUNT(*) FROM positions WHERE status='new'"),
     'analysis': count("SELECT COUNT(*) FROM positions WHERE status='checked'"),
     'scored': count("SELECT COUNT(*) FROM positions WHERE status='scored'"),
     'expired': count("SELECT COUNT(*) FROM positions WHERE status!='excluded' AND expires_at IS NOT NULL AND expires_at < datetime('now')"),
 }
-geo_sql = ("SELECT COUNT(*) FROM positions p "
-           "WHERE p.status!='excluded' "
-           "AND (p.office_lat IS NULL OR p.office_geocoded IS NULL OR p.office_geocoded=0)")
-geo_params = []
-if geo.get('min_score') is not None:
-    geo_sql += " AND EXISTS (SELECT 1 FROM scores s WHERE s.position_id=p.id AND s.total_score>=?)"
-    geo_params.append(int(geo['min_score']))
-if geo.get('non_remote_only', True):
-    geo_sql += " AND LOWER(COALESCE(p.work_mode,''))!='remote'"
-queue_counts['geocode'] = count(geo_sql, tuple(geo_params))
 
-logo_score = logo_min_score(policy)
-logo_sql = ("SELECT COUNT(*) FROM companies c "
-            "WHERE (c.logo_fetched IS NULL OR c.logo_fetched=0) "
-            "AND EXISTS (SELECT 1 FROM positions p WHERE p.company_id=c.id AND p.status!='excluded')")
-logo_params = []
-if logo_score is not None:
-    logo_sql += " AND EXISTS (SELECT 1 FROM positions p JOIN scores s ON s.position_id=p.id WHERE p.company_id=c.id AND p.status!='excluded' AND s.total_score>=?)"
-    logo_params.append(int(logo_score))
-queue_counts['logos'] = count(logo_sql, tuple(logo_params))
-queue_counts['recheck'] = count("SELECT COUNT(DISTINCT p.id) FROM positions p "
-   "JOIN scores s ON s.position_id=p.id "
-   "WHERE p.status!='excluded' AND s.total_score>=? "
-   "AND (p.last_checked IS NULL OR p.last_checked < datetime('now', ?))",
-   (int(recheck['min_score']), '-' + str(int(recheck['older_than_days'])) + ' days'))
-
-# Dati a supporto del selettore modalità (stessa semantica delle code
-# `next-for-harvest` / `next-for-calibration` di db_query.py; soglia 75 =
-# HARVEST_MIN_SCORE, la leva misurata del burn weekly). SQL replicato come
-# per geo/logo/recheck qui sopra: il payload deve girare anche su un'immagine
-# container che non conosce ancora le code nuove.
-queue_counts['harvest'] = count(
-    "SELECT COUNT(*) FROM positions p "
-    "JOIN (SELECT position_id, MAX(total_score) AS total_score "
-    "      FROM scores GROUP BY position_id) s ON s.position_id=p.id "
-    "LEFT JOIN applications a ON a.position_id=p.id "
-    "WHERE a.id IS NULL AND p.status='scored' AND s.total_score>=75 "
-    "AND COALESCE(p.is_open,1)!=0 "
-    "AND (p.expires_at IS NULL OR p.expires_at>=date('now'))")
-calibration_wm = '1970-01-01 00:00:00'
+# Le CODE invece si CHIEDONO, non si ricontano ([CONSOLE-COUNTS-INLINE-SQL]).
+# Qui c'era una copia dell'SQL di ognuna, e le copie divergono: quella del
+# recheck guardava solo `last_checked` e ignorava `last_open_check`, quindi
+# contava come da rifare posizioni già verificate — lo stesso errore che
+# `LAST_VERIFIED_SQL` aveva corretto nella coda vera. E nessuna copia
+# conosceva il gate della policy, quindi in risparmio (o con l'automatismo
+# spento) la Console annunciava lavoro che nessuno avrebbe fatto.
+#
+# `db_query.queue_total` è la risposta della coda stessa: stesso predicato,
+# stesso gate. `None` = coda SPENTA, e vale 0 lavori in attesa.
+#
+# Import tollerante (rolling deploy: il gioco può essere più nuovo
+# dell'immagine): se questa immagine non sa rispondere, la chiave NON viene
+# mandata affatto e la Console mostra «—». Meglio nessun numero che il numero
+# sbagliato — è il motivo per cui questa riga esiste.
 try:
-    _wm = json.load(open(os.path.join(profile, 'calibration-watermark.json'),
-                         encoding='utf-8'))
-    if isinstance(_wm, dict) and isinstance(_wm.get('consumed_through'), str) \
-            and _wm['consumed_through'].strip():
-        calibration_wm = _wm['consumed_through'].strip()
+    import db_query
 except Exception:
-    pass  # file assente/corrotto = epoch: si RIPRESENTA tutto, mai il contrario
-queue_counts['calibration'] = count(
-    "SELECT (SELECT COUNT(*) FROM positions "
-    "        WHERE user_excluded_at IS NOT NULL AND user_excluded_at > ?) "
-    "     + (SELECT COUNT(*) FROM position_tickets WHERE created_at > ?)",
-    (calibration_wm, calibration_wm))
+    db_query = None
+QUEUE_CARDS = (('geocode', 'geocode-missing'), ('logos', 'logo-missing'),
+               ('recheck', 'recheck-due'), ('harvest', 'harvest'),
+               ('calibration', 'calibration'))
+for card, queue in QUEUE_CARDS:
+    if db_query is None or not hasattr(db_query, 'queue_total'):
+        continue
+    try:
+        total = db_query.queue_total(conn, queue)
+    except Exception:
+        continue
+    queue_counts[card] = 0 if total is None else int(total)
 
 directives = []
 for row in conn.execute("SELECT id,body,kind,status,sort_order,created_at,updated_at "

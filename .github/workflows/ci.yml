@@ -4,9 +4,13 @@ on:
   push:
     branches:
       - master
+      - hq-master
   pull_request:
     branches:
       - master
+
+permissions:
+  contents: read
 
 jobs:
   lint-typecheck:

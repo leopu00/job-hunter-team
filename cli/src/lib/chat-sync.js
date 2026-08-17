@@ -7,6 +7,8 @@
  *     (turno utente appeso al file + payload `[@utente -> @X] [CHAT] …`
  *     consegnato al pane tmux con `jht-tmux-send`);
  *   · il WEB scrive e legge `pending_user_messages` (SQLite → cloud).
+ *   · TELEGRAM journalizza prima dell'offset e confluisce nella stessa
+ *     `pending_user_messages`, senza una corsia diretta separata al pane.
  * Scrivere nel gioco non si vedeva sul web e viceversa. E dal web il
  * messaggio non arrivava MAI al pane dell'agente: restava nella SQLite ad
  * aspettare che l'agente si ricordasse di chiamare `jht-check-user-replies`
@@ -32,10 +34,19 @@
  * che il daemon legge GIÀ nel giro veloce insieme a `sync_requested_at`.
  */
 
-import { existsSync, statSync, openSync, readSync, closeSync, appendFileSync, mkdirSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
-import { join, dirname } from 'node:path';
+import {
+  existsSync,
+  statSync,
+  openSync,
+  readSync,
+  closeSync,
+  appendFileSync,
+  mkdirSync,
+} from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { join, dirname } from "node:path";
+import { cloudSyncHeaders } from "./client-identity.js";
 
 /**
  * Le tre figure con cui l'utente conversa. Il web mostra esattamente
@@ -43,7 +54,7 @@ import { join, dirname } from 'node:path';
  * solo queste tre hanno il protocollo di risposta garantito — e sono le
  * uniche che ha senso specchiare sul cloud.
  */
-export const CHAT_AGENTS = ['assistente', 'capitano', 'mentor'];
+export const CHAT_AGENTS = ["assistente", "capitano", "mentor"];
 
 /** Quanti byte di coda leggere da chat.jsonl per giro (i file crescono). */
 const TAIL_BYTES = 96 * 1024;
@@ -60,10 +71,14 @@ export const CLOUD_CHAT_PULL_LIMIT = 50;
  * NULL: senza questo tetto la chat del gioco si riempirebbe di mesi di
  * notifiche vecchie tutte insieme.
  */
-const MIRROR_MAX_AGE_MS = Number(process.env.JHT_CHAT_MIRROR_MAX_AGE_MS || 48 * 3600 * 1000);
+const MIRROR_MAX_AGE_MS = Number(
+  process.env.JHT_CHAT_MIRROR_MAX_AGE_MS || 48 * 3600 * 1000,
+);
 
 /** `jht-tmux-send` fa busy-wait fino a 90s: il cap qui gli lascia margine. */
-const DELIVER_TIMEOUT_MS = Number(process.env.JHT_CHAT_DELIVER_TIMEOUT_MS || 120_000);
+const DELIVER_TIMEOUT_MS = Number(
+  process.env.JHT_CHAT_DELIVER_TIMEOUT_MS || 120_000,
+);
 
 /**
  * Quanto un turno dell'utente può restare in coda prima che l'attesa
@@ -78,13 +93,15 @@ const STALL_AFTER_MS = Number(process.env.JHT_CHAT_STALL_AFTER_MS || 300_000);
 const STALL_REPEAT_MS = Number(process.env.JHT_CHAT_STALL_REPEAT_MS || 900_000);
 
 /** Una richiesta cloud della chat non può bloccare il giro veloce per sempre. */
-const CLOUD_REQUEST_TIMEOUT_MS = Number(process.env.JHT_CHAT_HTTP_TIMEOUT_MS || 15_000);
+const CLOUD_REQUEST_TIMEOUT_MS = Number(
+  process.env.JHT_CHAT_HTTP_TIMEOUT_MS || 15_000,
+);
 
 // ── Funzioni pure (il grosso della logica, testabile senza box) ─────────
 
 /** Directory dell'agente sotto `<JHT_HOME>/agents/`. */
 export function chatFileFor(jhtHome, agent) {
-  return join(jhtHome, 'agents', agent, 'chat.jsonl');
+  return join(jhtHome, "agents", agent, "chat.jsonl");
 }
 
 /**
@@ -93,38 +110,63 @@ export function chatFileFor(jhtHome, agent) {
  * Stessa regola di `resolveTmuxSession` in user-messages-poller.js.
  */
 export function tmuxSessionFor(agent) {
-  return String(agent).trim().toLowerCase().replace(/-\d+$/, '').toUpperCase();
+  return String(agent).trim().toLowerCase().replace(/-\d+$/, "").toUpperCase();
 }
 
 /** `{"role":"user","text":"…","ts":…}` → oggetto normalizzato, o null. */
 export function parseChatLine(line) {
-  const raw = String(line || '').trim();
-  if (!raw.startsWith('{')) return null;
+  const raw = String(line || "").trim();
+  if (!raw.startsWith("{")) return null;
   let obj;
   try {
     obj = JSON.parse(raw);
   } catch {
     return null; // riga corrotta (quoting shell a mano): si salta, non si esplode
   }
-  if (!obj || typeof obj !== 'object') return null;
-  const text = typeof obj.text === 'string' ? obj.text : '';
+  if (!obj || typeof obj !== "object") return null;
+  const text = typeof obj.text === "string" ? obj.text : "";
   const ts = Number(obj.ts);
   if (!text.trim() || !Number.isFinite(ts)) return null;
-  return { role: typeof obj.role === 'string' ? obj.role : 'assistant', text, ts };
+  return {
+    role: typeof obj.role === "string" ? obj.role : "assistant",
+    text,
+    ts,
+  };
 }
 
 /** Il ruolo JSONL diventa l'autore del turno. Solo 'user' è l'utente. */
 export function authorFromRole(role) {
-  return String(role || '').toLowerCase() === 'user' ? 'user' : 'agent';
+  return String(role || "").toLowerCase() === "user" ? "user" : "agent";
 }
 
 /**
  * Busta che l'agente si aspetta nel pane. IDENTICA a quella del gioco
- * (`vps_backend.gd::_do_send_chat`) e a quella del bridge Telegram: gli
- * agenti hanno una sola skill di risposta e un solo formato da riconoscere.
+ * (`vps_backend.gd::_do_send_chat`): gli agenti hanno una sola skill di
+ * risposta e un solo formato da riconoscere.
  */
 export function chatEnvelope(agent, text) {
   return `[@utente -> @${agent}] [CHAT] ${text}`;
+}
+
+/** Telegram entra nello stesso storico, ma conserva il marker che governa la risposta. */
+export function paneEnvelope(agent, text, channel = null) {
+  if (channel === "team-directive") {
+    const body = String(text || "").trim();
+    if (
+      String(agent || "").toLowerCase() === "capitano" &&
+      /^\[TEAM-DIRECTIVE\] (created|edited|archived)$/.test(body)
+    ) {
+      return `[@sistema -> @capitano] ${body}`;
+    }
+  }
+  if (channel !== "telegram") return chatEnvelope(agent, text);
+  const body = String(text || "").trim();
+  // Gli allegati portano gia' il loro protocollo ([TG-DOC], reject/error,
+  // edited): non aggiungere un secondo marker davanti.
+  if (/^\[TG-[A-Z-]+\]/.test(body)) {
+    return `[@utente -> @${agent}] ${body}`;
+  }
+  return `[@utente -> @${agent}] [TG] ${body}`;
 }
 
 /** Riga JSONL nel formato che scrivono `jht-send` e il gioco. */
@@ -132,24 +174,37 @@ export function jsonlLine({ role, text, ts, done = true }) {
   return `${JSON.stringify({ role, text, ts, done })}\n`;
 }
 
+/** Le righe leggibili di una coda di `chat.jsonl`, già parsate e in ordine. */
+export function parseChatLines(lines) {
+  const out = [];
+  for (const line of lines) {
+    const parsed = parseChatLine(line);
+    if (parsed) out.push(parsed);
+  }
+  return out;
+}
+
 /**
- * Le righe del file che la SQLite non ha ancora. Il confronto è sul `ts`
- * (chiave di dedup del mirror, colonna `chat_ts`): l'id locale non esiste
- * nel file e il testo non è univoco ("ok" arriva mille volte).
+ * I turni che la SQLite non ha ancora. Il confronto è sul `ts` (chiave di
+ * dedup del mirror, colonna `chat_ts`): l'id locale non esiste nel file e il
+ * testo non è univoco ("ok" arriva mille volte).
  *
  * `knownTs` è un Set di numeri. Ritorna gli oggetti già parsati, in ordine.
  */
-export function pickUnmirrored(lines, knownTs) {
+export function pickUnmirroredTurns(turns, knownTs) {
   const out = [];
   const seen = new Set();
-  for (const line of lines) {
-    const parsed = parseChatLine(line);
-    if (!parsed) continue;
-    if (knownTs.has(parsed.ts) || seen.has(parsed.ts)) continue;
-    seen.add(parsed.ts);
-    out.push(parsed);
+  for (const turn of turns) {
+    if (knownTs.has(turn.ts) || seen.has(turn.ts)) continue;
+    seen.add(turn.ts);
+    out.push(turn);
   }
   return out;
+}
+
+/** Come sopra, partendo dalle righe grezze del file. */
+export function pickUnmirrored(lines, knownTs) {
+  return pickUnmirroredTurns(parseChatLines(lines), knownTs);
 }
 
 /**
@@ -186,19 +241,19 @@ export function readTailLines(path, maxBytes = TAIL_BYTES) {
   const length = size - start;
   if (length <= 0) return [];
   const buf = Buffer.alloc(length);
-  const fd = openSync(path, 'r');
+  const fd = openSync(path, "r");
   try {
     readSync(fd, buf, 0, length, start);
   } finally {
     closeSync(fd);
   }
-  const text = buf.toString('utf-8');
-  const lines = text.split('\n');
+  const text = buf.toString("utf-8");
+  const lines = text.split("\n");
   // Se abbiamo tagliato a metà, la prima riga è monca: si scarta (la
   // rileggeremo mai — ma è vecchia di 96 KB di conversazione, quindi già
   // specchiata da un pezzo).
   if (start > 0) lines.shift();
-  return lines.filter((l) => l.trim() !== '');
+  return lines.filter((l) => l.trim() !== "");
 }
 
 // ── Cursore del mirror (per non rileggere file fermi) ───────────────────
@@ -206,18 +261,54 @@ export function readTailLines(path, maxBytes = TAIL_BYTES) {
 export async function loadChatCursor(file) {
   if (!existsSync(file)) return {};
   try {
-    const parsed = JSON.parse(await readFile(file, 'utf-8'));
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    const parsed = JSON.parse(await readFile(file, "utf-8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
     return {};
   }
 }
 
 export async function saveChatCursor(file, cursor) {
-  await writeFile(file, JSON.stringify(cursor, null, 2), 'utf-8');
+  await writeFile(file, JSON.stringify(cursor, null, 2), "utf-8");
 }
 
 // ── Passo 1: chat.jsonl → SQLite ────────────────────────────────────────
+
+/**
+ * Quali fra QUESTI `ts` la tabella ha già, per questo agente.
+ *
+ * Si chiede esattamente dei turni appena letti dal file, e non "gli ultimi
+ * N della tabella": la finestra della dedup deve coincidere con la finestra
+ * di lettura, altrimenti l'ingest reimporta il pezzo di coda che la dedup
+ * non copre. È il difetto che questa funzione chiude — vedi il commento
+ * sopra il chiamante.
+ *
+ * La lista si spezza in blocchi perché finisce in una `IN (...)`: una coda
+ * di 96 KB può portare qualche migliaio di righe e il numero di parametri
+ * di una singola query in SQLite non è illimitato.
+ */
+export function mirroredChatTs(
+  db,
+  agent,
+  candidates,
+  { chunkSize = 400 } = {},
+) {
+  const wanted = [
+    ...new Set((candidates || []).filter((t) => Number.isFinite(t))),
+  ];
+  const known = new Set();
+  for (let i = 0; i < wanted.length; i += chunkSize) {
+    const slice = wanted.slice(i, i + chunkSize);
+    const rows = db
+      .prepare(
+        `SELECT chat_ts FROM pending_user_messages
+          WHERE agent = ? AND chat_ts IN (${slice.map(() => "?").join(", ")})`,
+      )
+      .all(agent, ...slice);
+    for (const row of rows) known.add(Number(row.chat_ts));
+  }
+  return known;
+}
 
 /**
  * Importa nella SQLite i turni comparsi in `chat.jsonl` e non ancora
@@ -228,14 +319,29 @@ export async function saveChatCursor(file, cursor) {
  *
  * @returns {{inserted:number, cursor:object}}
  */
-export function ingestChatJsonl(db, { jhtHome, agents = CHAT_AGENTS, cursor = {} } = {}) {
+export function ingestChatJsonl(
+  db,
+  { jhtHome, agents = CHAT_AGENTS, cursor = {} } = {},
+) {
   const nextCursor = { ...cursor };
   let inserted = 0;
 
+  // `WHERE NOT EXISTS` e non un semplice VALUES: la dedup fatta prima del
+  // giro è una lettura, e fra quella lettura e questa scrittura ci può stare
+  // un'altra scrittura. Il caso non è di laboratorio — `jht cloud chat-sync`
+  // è un comando pubblico, e chi indaga sulla chat lo lancia a mano MENTRE il
+  // daemon gira il suo giro da 5 secondi: due processi leggono la stessa coda
+  // di chat.jsonl, nessuno dei due vede l'inserimento dell'altro, e il turno
+  // entra due volte a poche centinaia di millisecondi di distanza. Qui la
+  // condizione viaggia DENTRO la scrittura, che SQLite serializza: il secondo
+  // arrivato non inserisce niente.
   const insert = db.prepare(
     `INSERT INTO pending_user_messages
        (agent, body, kind, author, chat_ts, delivered_via, delivered_at, created_at)
-     VALUES (?, ?, 'notification', ?, ?, 'web', ?, ?)`
+     SELECT ?, ?, 'notification', ?, ?, 'web', ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pending_user_messages WHERE agent = ? AND chat_ts = ?
+      )`,
   );
 
   for (const agent of agents) {
@@ -245,27 +351,45 @@ export function ingestChatJsonl(db, { jhtHome, agents = CHAT_AGENTS, cursor = {}
     if (!fileChanged(cursor[agent], stat)) continue;
     nextCursor[agent] = { size: stat.size, mtimeMs: stat.mtimeMs };
 
-    // Solo i ts recenti: leggiamo la coda del file (96 KB), quindi non
-    // possiamo incontrare turni più vecchi di così. Caricare l'intera
-    // colonna di una conversazione lunga sarebbe sprecato a ogni giro.
-    const known = new Set(
-      db
-        .prepare(
-          `SELECT chat_ts FROM pending_user_messages
-            WHERE agent = ? AND chat_ts IS NOT NULL
-            ORDER BY id DESC LIMIT 1000`
-        )
-        .all(agent)
-        .map((r) => Number(r.chat_ts))
+    // La dedup si chiede dei turni CHE ABBIAMO IN MANO, uno per uno.
+    //
+    // Prima erano due finestre diverse: si leggeva la coda del file (96 KB)
+    // ma si consideravano "già visti" soltanto gli ultimi 1000 turni della
+    // tabella. Le due misure non sono commensurabili — una in byte, una in
+    // righe — e su una conversazione di battute corte (60-90 byte a riga:
+    // «ok», «sì», «vai») in 96 KB ci stanno più di mille turni. Il pezzo di
+    // coda scoperto risultava nuovo a OGNI giro in cui il file si muoveva, e
+    // veniva reimportato: un doppione per riga, nato dentro il box e prima
+    // di qualunque sincronizzazione. Chiedere dei ts letti fa coincidere le
+    // due finestre per costruzione, qualunque sia la lunghezza della chat.
+    const turns = parseChatLines(readTailLines(path));
+    const known = mirroredChatTs(
+      db,
+      agent,
+      turns.map((t) => t.ts),
     );
 
-    for (const turn of pickUnmirrored(readTailLines(path), known)) {
+    for (const turn of pickUnmirroredTurns(turns, known)) {
       const author = authorFromRole(turn.role);
-      const at = new Date(turn.ts * 1000).toISOString().replace('T', ' ').slice(0, 19);
+      const at = new Date(turn.ts * 1000)
+        .toISOString()
+        .replace("T", " ")
+        .slice(0, 19);
       // `delivered_at` valorizzato: il turno è già passato per il pane
       // (l'ha scritto il gioco o l'agente stesso), non va riconsegnato.
-      insert.run(agent, turn.text, author, turn.ts, at, at);
-      inserted += 1;
+      const res = insert.run(
+        agent,
+        turn.text,
+        author,
+        turn.ts,
+        at,
+        at,
+        agent,
+        turn.ts,
+      );
+      // Il contatore dice cosa è ENTRATO: se la guardia ha respinto la riga
+      // (l'ha già scritta un altro processo) non è successo niente da contare.
+      if (Number(res?.changes ?? 1) > 0) inserted += 1;
     }
   }
 
@@ -282,31 +406,67 @@ export function ingestChatJsonl(db, { jhtHome, agents = CHAT_AGENTS, cursor = {}
  *
  * `chat_ts` viene valorizzato subito dopo la scrittura: è la guardia che
  * impedisce a `ingestChatJsonl` di reimportare la stessa riga al giro dopo.
+ *
+ * Fra la scrittura e il timbro c'è una finestra, e non è teorica: un SIGTERM
+ * (`docker stop`, un redeploy) o un lock sulla jobs.db in quell'istante
+ * lasciano la riga nel file e `chat_ts` NULL. Al giro dopo la riga viene
+ * riscritta: stesso testo, due volte nella chat del gioco, per sempre. Il
+ * `ts` è deterministico — `created_at` più l'id nei millesimi — quindi lo
+ * si può cercare nel file: se c'è già, si timbra e non si riscrive. È la
+ * stessa guardia dell'ingest, nel verso opposto.
  */
 export function mirrorDbTurnsToJsonl(
   db,
-  { jhtHome, agents = CHAT_AGENTS, maxAgeMs = MIRROR_MAX_AGE_MS, now = Date.now() } = {},
+  {
+    jhtHome,
+    agents = CHAT_AGENTS,
+    maxAgeMs = MIRROR_MAX_AGE_MS,
+    now = Date.now(),
+  } = {},
 ) {
-  const placeholders = agents.map(() => '?').join(', ');
+  const placeholders = agents.map(() => "?").join(", ");
   const rows = db
     .prepare(
       `SELECT id, agent, body, author, created_at
          FROM pending_user_messages
         WHERE chat_ts IS NULL AND agent IN (${placeholders})
-        ORDER BY id ASC`
+        ORDER BY id ASC`,
     )
     .all(...agents);
   if (rows.length === 0) return { mirrored: 0, backfilled: 0 };
 
-  const stamp = db.prepare('UPDATE pending_user_messages SET chat_ts = ? WHERE id = ?');
+  const stamp = db.prepare(
+    "UPDATE pending_user_messages SET chat_ts = ? WHERE id = ?",
+  );
   let mirrored = 0;
   let backfilled = 0;
+  // I ts già presenti nella coda del file, per agente. È una FOTOGRAFIA di
+  // prima di questo giro, e non si aggiorna man mano di proposito: due righe
+  // dello stesso batch possono derivare lo stesso ts (id a distanza di mille
+  // nello stesso secondo) e vanno scritte entrambe — trasformare un doppione
+  // in una riga persa sarebbe un peggioramento, non una correzione.
+  // Si legge al massimo una volta per agente e solo se c'è davvero qualcosa
+  // da specchiare: a conversazione ferma questo blocco non si raggiunge.
+  const inFile = new Map();
+  const tsInFile = (agent) => {
+    if (!inFile.has(agent)) {
+      inFile.set(
+        agent,
+        new Set(
+          parseChatLines(readTailLines(chatFileFor(jhtHome, agent))).map(
+            (t) => t.ts,
+          ),
+        ),
+      );
+    }
+    return inFile.get(agent);
+  };
 
   for (const row of rows) {
     // Un ts monotono e univoco: `created_at` ha risoluzione al secondo e
     // due notifiche nello stesso secondo collasserebbero sulla stessa
     // chiave di dedup. L'id locale (unico, crescente) va nei millesimi.
-    const base = Date.parse(String(row.created_at).replace(' ', 'T') + 'Z');
+    const base = Date.parse(String(row.created_at).replace(" ", "T") + "Z");
     const baseMs = Number.isFinite(base) ? base : now;
     const ts = baseMs / 1000 + (row.id % 1000) / 1000;
 
@@ -321,10 +481,25 @@ export function mirrorDbTurnsToJsonl(
       continue;
     }
 
+    // Già nel file da un giro precedente morto fra la scrittura e il timbro:
+    // si chiude il lavoro a metà invece di aggiungere un gemello.
+    if (tsInFile(row.agent).has(ts)) {
+      stamp.run(ts, row.id);
+      continue;
+    }
+
     const path = chatFileFor(jhtHome, row.agent);
     try {
       mkdirSync(dirname(path), { recursive: true });
-      appendFileSync(path, jsonlLine({ role: row.author === 'user' ? 'user' : 'assistant', text: row.body, ts }), 'utf-8');
+      appendFileSync(
+        path,
+        jsonlLine({
+          role: row.author === "user" ? "user" : "assistant",
+          text: row.body,
+          ts,
+        }),
+        "utf-8",
+      );
     } catch {
       continue; // file non scrivibile: riprova al giro dopo, chat_ts resta NULL
     }
@@ -333,6 +508,21 @@ export function mirrorDbTurnsToJsonl(
   }
 
   return { mirrored, backfilled };
+}
+
+/**
+ * La colonna esiste su QUESTO jobs.db? Un box può girare con uno schema più
+ * vecchio del codice: il push e l'import devono degradare, non rompersi.
+ */
+function hasColumn(db, table, col) {
+  try {
+    return db
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .some((r) => r.name === col);
+  } catch {
+    return false;
+  }
 }
 
 // ── Passo 3: SQLite → cloud (push veloce, solo il nuovo) ────────────────
@@ -348,20 +538,28 @@ export function mirrorDbTurnsToJsonl(
 export function takeChatRowsToPush(db, { limit = 100 } = {}) {
   return db
     .prepare(
-      `SELECT id, agent, body, kind, author, chat_ts, related_position_id,
+      `SELECT id, ${
+        hasColumn(db, "pending_user_messages", "cloud_legacy_id")
+          ? "cloud_legacy_id"
+          : "NULL AS cloud_legacy_id"
+      },
+              agent, body, kind, author, chat_ts,
+              related_position_id,
               delivered_via, delivered_at, acknowledged_at,
               user_reply, user_reply_at, agent_seen_reply_at, created_at
          FROM pending_user_messages
         WHERE cloud_synced_at IS NULL
         ORDER BY id ASC
-        LIMIT ?`
+        LIMIT ?`,
     )
     .all(limit);
 }
 
 export function markChatRowsPushed(db, ids) {
   if (!ids.length) return;
-  const stamp = db.prepare('UPDATE pending_user_messages SET cloud_synced_at = CURRENT_TIMESTAMP WHERE id = ?');
+  const stamp = db.prepare(
+    "UPDATE pending_user_messages SET cloud_synced_at = CURRENT_TIMESTAMP WHERE id = ?",
+  );
   for (const id of ids) stamp.run(id);
 }
 
@@ -375,16 +573,31 @@ export function toCloudRow(row, userId) {
   const utc = (v) => {
     if (!v) return null;
     const s = String(v);
-    if (s.includes('T') || s.endsWith('Z') || /[+-]\d\d:\d\d$/.test(s)) return s;
-    return `${s.replace(' ', 'T')}Z`;
+    if (s.includes("T") || s.endsWith("Z") || /[+-]\d\d:\d\d$/.test(s))
+      return s;
+    return `${s.replace(" ", "T")}Z`;
   };
+  // L'identità che il cloud già conosce vince sull'id locale: per un turno
+  // nato sul web è il `legacy_id` negativo con cui esiste là. Mandare l'id
+  // locale creava un secondo record dello stesso messaggio, che l'upsert su
+  // (user_id, legacy_id) non poteva riconoscere come lo stesso (O-16).
+  // NULL = nata in locale: l'id locale È la sua identità.
+  const identity = Number.isFinite(row.cloud_legacy_id)
+    ? row.cloud_legacy_id
+    : row.id;
   return {
     user_id: userId,
-    legacy_id: row.id,
+    // `id` E `legacy_id`: la route filtra il payload con
+    // `typeof m.id === 'number'` e ricostruisce lei `legacy_id`. Mandando
+    // solo `legacy_id` ogni riga della corsia rapida veniva scartata dal
+    // filtro, il payload restava vuoto e la POST rispondeva 200 — una
+    // perdita che si dichiarava successo (O-16).
+    id: identity,
+    legacy_id: identity,
     agent: row.agent,
     body: row.body,
-    kind: row.kind || 'notification',
-    author: row.author === 'user' ? 'user' : 'agent',
+    kind: row.kind || "notification",
+    author: row.author === "user" ? "user" : "agent",
     chat_ts: row.chat_ts ?? null,
     delivered_via: row.delivered_via ?? null,
     delivered_at: utc(row.delivered_at),
@@ -399,7 +612,7 @@ export function toCloudRow(row, userId) {
 // ── Il canale col cloud della corsia chat ───────────────────────────────
 
 /** Cloud di default, quando `cloud.json` non porta un `base_url`. */
-const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
+const DEFAULT_BASE_URL = "https://jobhunterteam.ai";
 
 /**
  * Il verso web→agente ha bisogno di due sole cose dal cloud: leggere i turni
@@ -442,11 +655,14 @@ export function directChatChannel(reader, config, options = {}) {
     return { closed: false, superseded: false };
   };
   return {
-    kind: 'direct',
+    kind: "direct",
     readUndeliveredUserChat: (opts) => reader.readUndeliveredUserChat(opts),
     acknowledgeDelivery,
     async closeRendezvous(ids = [], expectedRequestedAt = null) {
-      return acknowledgeDelivery(ids, { closeRendezvous: true, expectedRequestedAt });
+      return acknowledgeDelivery(ids, {
+        closeRendezvous: true,
+        expectedRequestedAt,
+      });
     },
   };
 }
@@ -457,10 +673,11 @@ export function directChatChannel(reader, config, options = {}) {
  * contenere URL, hostname, token o il body restituito dal server.
  */
 export function cloudRequestFailure(error) {
-  const name = String(error?.name || '').toLowerCase();
-  const code = String(error?.code || '').toLowerCase();
-  if (name.includes('timeout') || name === 'aborterror' || code === 'etimedout') return 'timeout';
-  return 'request_failed';
+  const name = String(error?.name || "").toLowerCase();
+  const code = String(error?.code || "").toLowerCase();
+  if (name.includes("timeout") || name === "aborterror" || code === "etimedout")
+    return "timeout";
+  return "request_failed";
 }
 
 /**
@@ -473,19 +690,24 @@ export function vercelChatChannel(
   config,
   { fetchFn = fetch, timeoutMs = CLOUD_REQUEST_TIMEOUT_MS } = {},
 ) {
-  const requestTimeoutMs = Math.max(1_000, Number(timeoutMs) || CLOUD_REQUEST_TIMEOUT_MS);
-  const baseUrl = String(config?.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const requestTimeoutMs = Math.max(
+    1_000,
+    Number(timeoutMs) || CLOUD_REQUEST_TIMEOUT_MS,
+  );
+  const baseUrl = String(config?.base_url || DEFAULT_BASE_URL).replace(
+    /\/+$/,
+    "",
+  );
   const url = `${baseUrl}/api/cloud-sync/chat`;
-  const headers = {
-    Authorization: `Bearer ${config?.token}`,
-    'Content-Type': 'application/json',
-  };
+  const headers = cloudSyncHeaders(config?.token, {
+    "Content-Type": "application/json",
+  });
   const acknowledgeDelivery = async (
     ids = [],
     { closeRendezvous = false, expectedRequestedAt = null } = {},
   ) => {
     const res = await fetchFn(url, {
-      method: 'POST',
+      method: "POST",
       headers,
       signal: AbortSignal.timeout(requestTimeoutMs),
       body: JSON.stringify({
@@ -495,23 +717,28 @@ export function vercelChatChannel(
       }),
     });
     if (res.status === 409) return { closed: false, superseded: true };
-    if (!res.ok) throw new Error(`POST /api/cloud-sync/chat: HTTP ${res.status}`);
+    if (!res.ok)
+      throw new Error(`POST /api/cloud-sync/chat: HTTP ${res.status}`);
     return { closed: closeRendezvous, superseded: false };
   };
   return {
-    kind: 'vercel',
+    kind: "vercel",
     async readUndeliveredUserChat({ limit = 50 } = {}) {
       const res = await fetchFn(`${url}?limit=${encodeURIComponent(limit)}`, {
         headers,
         signal: AbortSignal.timeout(requestTimeoutMs),
       });
-      if (!res.ok) throw new Error(`GET /api/cloud-sync/chat: HTTP ${res.status}`);
+      if (!res.ok)
+        throw new Error(`GET /api/cloud-sync/chat: HTTP ${res.status}`);
       const body = await res.json().catch(() => null);
       return Array.isArray(body?.messages) ? body.messages : [];
     },
     acknowledgeDelivery,
     async closeRendezvous(ids = [], expectedRequestedAt = null) {
-      return acknowledgeDelivery(ids, { closeRendezvous: true, expectedRequestedAt });
+      return acknowledgeDelivery(ids, {
+        closeRendezvous: true,
+        expectedRequestedAt,
+      });
     },
   };
 }
@@ -537,29 +764,52 @@ export function chatChannelFor(config, reader, options = {}) {
  * si lascia la riga non consegnata e si ritenta al giro dopo — mai
  * scartare un messaggio dell'utente.
  */
-export function sendToPane(agent, text, { spawnFn = spawn, timeoutMs = DELIVER_TIMEOUT_MS } = {}) {
+export function sendToPane(
+  agent,
+  text,
+  { spawnFn = spawn, timeoutMs = DELIVER_TIMEOUT_MS, channel = null } = {},
+) {
   return new Promise((resolve) => {
-    const child = spawnFn('jht-tmux-send', [tmuxSessionFor(agent), chatEnvelope(agent, text)], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, JHT_TMUX_SEND_FROM: 'user-chat' },
-    });
-    let stderr = '';
+    const child = spawnFn(
+      "jht-tmux-send",
+      [tmuxSessionFor(agent), paneEnvelope(agent, text, channel)],
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, JHT_TMUX_SEND_FROM: "user-chat" },
+      },
+    );
+    let stderr = "";
     let settled = false;
     const done = (code, err) => {
       if (settled) return;
       settled = true;
-      resolve({ ok: code === 0, code, error: err || stderr.trim().slice(0, 300) });
+      resolve({
+        ok: code === 0,
+        code,
+        error: err || stderr.trim().slice(0, 300),
+      });
     };
     const timer = setTimeout(() => {
-      try { child.kill('SIGKILL'); } catch { /* già morto */ }
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        /* già morto */
+      }
       done(-1, `timed out after ${timeoutMs}ms`);
     }, timeoutMs);
-    child.stderr?.on('data', (d) => { stderr += d.toString(); });
-    child.on('error', (err) => { clearTimeout(timer); done(-1, err.message); });
-    child.on('close', (code) => { clearTimeout(timer); done(code); });
+    child.stderr?.on("data", (d) => {
+      stderr += d.toString();
+    });
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      done(-1, err.message);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      done(code);
+    });
   });
 }
-
 
 /**
  * `ts` deterministico di un turno nato sul cloud. Il web usa
@@ -571,7 +821,7 @@ export function sendToPane(agent, text, { spawnFn = spawn, timeoutMs = DELIVER_T
 export function chatTsOf(row) {
   const legacy = Number(row?.legacy_id);
   if (Number.isFinite(legacy) && legacy < 0) return Math.abs(legacy) / 1000;
-  const created = Date.parse(row?.created_at ?? '');
+  const created = Date.parse(row?.created_at ?? "");
   return Number.isFinite(created) ? created / 1000 : Date.now() / 1000;
 }
 
@@ -589,20 +839,75 @@ export function chatTsOf(row) {
  * @returns id delle righe CLOUD importate (anche quelle già presenti). Una
  *          destinazione senza pane supportato non è importata né ACKata.
  */
-export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS } = {}) {
+export function importCloudUserTurns(
+  db,
+  rows,
+  { jhtHome, agents = CHAT_AGENTS } = {},
+) {
+  // `cloud_legacy_id` conserva l'identità che il messaggio aveva GIÀ sul
+  // cloud (legacy_id negativo, nato dal web). Senza, il box gli sostituiva
+  // il proprio id locale e il full-push lo ripubblicava come riga nuova:
+  // stesso messaggio, due chiavi, un gemello che l'upsert non riconosceva.
+  //
+  // Su un jobs.db più vecchio del codice la colonna non c'è ancora: si
+  // scrive senza, esattamente come prima. Un turno che arriva non deve
+  // dipendere dall'ordine in cui migrazione e aggiornamento si incontrano.
+  const keepsCloudId = hasColumn(
+    db,
+    "pending_user_messages",
+    "cloud_legacy_id",
+  );
+  const keepsDirectiveMetadata = [
+    "source_id",
+    "source_action",
+    "source_payload",
+    "source_directive_id",
+  ].every((column) => hasColumn(db, "pending_user_messages", column));
+  const insertColumns = [
+    "agent",
+    "body",
+    "kind",
+    "author",
+    "chat_ts",
+    "delivered_via",
+    "cloud_synced_at",
+    "created_at",
+  ];
+  const insertValues = [
+    "?",
+    "?",
+    "'notification'",
+    "'user'",
+    "?",
+    "'web'",
+    "CURRENT_TIMESTAMP",
+    "?",
+  ];
+  if (keepsCloudId) {
+    insertColumns.push("cloud_legacy_id");
+    insertValues.push("?");
+  }
+  if (keepsDirectiveMetadata) {
+    insertColumns.push(
+      "source_id",
+      "source_action",
+      "source_payload",
+      "source_directive_id",
+    );
+    insertValues.push("?", "?", "?", "?");
+  }
   const insert = db.prepare(
-    `INSERT INTO pending_user_messages
-       (agent, body, kind, author, chat_ts, delivered_via, cloud_synced_at, created_at)
-     VALUES (?, ?, 'notification', 'user', ?, 'web', CURRENT_TIMESTAMP, ?)`
+    `INSERT INTO pending_user_messages (${insertColumns.join(", ")})
+     VALUES (${insertValues.join(", ")})`,
   );
   const already = db.prepare(
-    'SELECT 1 AS hit FROM pending_user_messages WHERE agent = ? AND chat_ts = ? LIMIT 1'
+    "SELECT 1 AS hit FROM pending_user_messages WHERE agent = ? AND chat_ts = ? LIMIT 1",
   );
 
   const imported = [];
   for (const row of rows) {
-    const agent = String(row.agent || '').toLowerCase();
-    const body = typeof row.body === 'string' ? row.body : '';
+    const agent = String(row.agent || "").toLowerCase();
+    const body = typeof row.body === "string" ? row.body : "";
     if (!body.trim()) continue;
     // Fuori dalle tre figure con cui si chatta dal web: non c'è un pane a
     // cui consegnarlo. Non fingere una consegna: la corsia resta aperta e il
@@ -610,10 +915,40 @@ export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS }
     if (!agents.includes(agent)) {
       continue;
     }
+    // Un turno NATO SUL WEB ha `legacy_id` negativo: lo impone la policy di
+    // INSERT del browser (mig 060), quindi lo spazio positivo può contenere
+    // soltanto righe che ha pushato QUESTO box. Ripescarle è importare da
+    // capo quello che già si ha — e `chatTsOf`, non trovando il negativo,
+    // ricava il ts da `created_at`, che il box scrive troncato al secondo:
+    // il gemello nasce con `chat_ts` a frazione .000 e la dedup non lo
+    // riconosce. È la firma osservata sulla coppia 291/292 (659 ms). Il
+    // filtro vero sta nei due lettori, che non devono nemmeno chiederle;
+    // qui si rifiuta comunque di scriverle, perché è dove nasce il danno.
+    if (!(Number(row.legacy_id) < 0)) {
+      continue;
+    }
     const ts = chatTsOf(row);
     if (already.get(agent, ts)?.hit !== 1) {
-      const at = new Date(ts * 1000).toISOString().replace('T', ' ').slice(0, 19);
-      insert.run(agent, body, ts, at);
+      const at = new Date(ts * 1000)
+        .toISOString()
+        .replace("T", " ")
+        .slice(0, 19);
+      const cloudLegacyId = Number.isFinite(row.legacy_id)
+        ? row.legacy_id
+        : null;
+      const values = [agent, body, ts, at];
+      if (keepsCloudId) values.push(cloudLegacyId);
+      if (keepsDirectiveMetadata) {
+        values.push(
+          typeof row.source_id === "string" ? row.source_id : null,
+          typeof row.source_action === "string" ? row.source_action : null,
+          typeof row.source_payload === "string" ? row.source_payload : null,
+          Number.isSafeInteger(Number(row.source_directive_id))
+            ? Number(row.source_directive_id)
+            : null,
+        );
+      }
+      insert.run(...values);
       // …e SUBITO nel file che legge il gioco. Non può farlo il mirror
       // (passo 3): quello lavora sulle righe con `chat_ts` NULL, e qui il
       // valore è già impostato perché è la chiave di dedup dell'import.
@@ -625,7 +960,11 @@ export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS }
         const path = chatFileFor(jhtHome, agent);
         try {
           mkdirSync(dirname(path), { recursive: true });
-          appendFileSync(path, jsonlLine({ role: 'user', text: body, ts }), 'utf-8');
+          appendFileSync(
+            path,
+            jsonlLine({ role: "user", text: body, ts }),
+            "utf-8",
+          );
         } catch {
           // File non scrivibile: il turno resta comunque in SQLite e viene
           // consegnato al pane. La chat del gioco lo rivedrà al redeploy.
@@ -642,18 +981,26 @@ export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS }
  * consegnato. Importare una riga non equivale a consegnarla: il worker limita
  * intenzionalmente gli invii per tick.
  */
-export function deliveredCloudUserTurnIds(db, rows, { agents = CHAT_AGENTS } = {}) {
+export function deliveredCloudUserTurnIds(
+  db,
+  rows,
+  { agents = CHAT_AGENTS } = {},
+) {
   const delivered = db.prepare(
     `SELECT 1 AS hit
        FROM pending_user_messages
       WHERE agent = ? AND chat_ts = ? AND delivered_at IS NOT NULL
-      LIMIT 1`
+      LIMIT 1`,
   );
   const ids = [];
   for (const row of Array.isArray(rows) ? rows : []) {
-    if (row?.id == null || typeof row.body !== 'string' || !row.body.trim()) continue;
-    const agent = String(row.agent || '').toLowerCase();
-    if (agents.includes(agent) && delivered.get(agent, chatTsOf(row))?.hit === 1) {
+    if (row?.id == null || typeof row.body !== "string" || !row.body.trim())
+      continue;
+    const agent = String(row.agent || "").toLowerCase();
+    if (
+      agents.includes(agent) &&
+      delivered.get(agent, chatTsOf(row))?.hit === 1
+    ) {
       ids.push(row.id);
     }
   }
@@ -677,38 +1024,116 @@ export function deliveredCloudUserTurnIds(db, rows, { agents = CHAT_AGENTS } = {
  */
 export async function deliverPendingUserTurns(
   db,
-  { agents = CHAT_AGENTS, sendFn = sendToPane, log = () => {}, max = MAX_DELIVER_PER_TICK } = {},
+  {
+    agents = CHAT_AGENTS,
+    sendFn = sendToPane,
+    log = () => {},
+    max = MAX_DELIVER_PER_TICK,
+  } = {},
 ) {
-  const placeholders = agents.map(() => '?').join(', ');
+  // L'effetto esterno (submit nel pane) non puo' stare nella stessa
+  // transazione della SQLite. Il claim e' quindi un record DUREVOLE, non un
+  // mutex in memoria: due processi (daemon + comando manuale) non possono
+  // vincere la stessa riga e un crash non cancella l'incertezza sull'effetto.
+  db.prepare(
+    `CREATE TABLE IF NOT EXISTS pending_user_message_delivery_claims (
+      message_id INTEGER PRIMARY KEY,
+      claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (message_id) REFERENCES pending_user_messages(id) ON DELETE CASCADE
+    )`,
+  ).run();
+  // Crash dopo il timbro ma prima del cleanup: qui l'esito e' certo e il
+  // claim e' solo spazzatura. Il caso opposto (claim + delivered_at NULL) non
+  // si elimina mai automaticamente: potrebbe aver gia' raggiunto il pane.
+  db.prepare(
+    `DELETE FROM pending_user_message_delivery_claims
+      WHERE message_id IN (
+        SELECT id FROM pending_user_messages WHERE delivered_at IS NOT NULL
+      )
+         OR message_id NOT IN (SELECT id FROM pending_user_messages)`,
+  ).run();
+
+  const placeholders = agents.map(() => "?").join(", ");
+  // A daemon can start once against a database created by the previous
+  // bundle, before the additive schema migration has run. Keep ordinary chat
+  // deliverable in that window; only the trusted directive lane needs these
+  // correlation columns.
+  const directiveColumns = ["source_id", "source_action"].every((column) =>
+    hasColumn(db, "pending_user_messages", column),
+  )
+    ? ", source_id, source_action"
+    : ", NULL AS source_id, NULL AS source_action";
   const rows = db
     .prepare(
-      `SELECT id, agent, body
-         FROM pending_user_messages
+      `SELECT id, agent, body, delivered_via${directiveColumns}
+        FROM pending_user_messages
         WHERE author = 'user' AND delivered_at IS NULL AND agent IN (${placeholders})
+          AND NOT EXISTS (
+            SELECT 1 FROM pending_user_message_delivery_claims c
+             WHERE c.message_id = pending_user_messages.id
+          )
         ORDER BY id ASC
-        LIMIT ?`
+        LIMIT ?`,
     )
     .all(...agents, max);
   if (rows.length === 0) return { delivered: 0, failed: 0 };
 
   const stamp = db.prepare(
-    'UPDATE pending_user_messages SET delivered_at = CURRENT_TIMESTAMP WHERE id = ?'
+    "UPDATE pending_user_messages SET delivered_at = CURRENT_TIMESTAMP WHERE id = ?",
+  );
+  const claim = db.prepare(
+    `INSERT OR IGNORE INTO pending_user_message_delivery_claims (message_id)
+     VALUES (?)`,
+  );
+  const release = db.prepare(
+    "DELETE FROM pending_user_message_delivery_claims WHERE message_id = ?",
   );
   let delivered = 0;
   let failed = 0;
 
   for (const row of rows) {
-    const res = await sendFn(row.agent, row.body);
-    if (!res.ok) {
+    // La SELECT non e' il claim: un altro processo puo' aver letto la stessa
+    // fotografia. Solo chi inserisce la PK ha il diritto di produrre
+    // l'effetto esterno.
+    if (Number(claim.run(row.id).changes) !== 1) continue;
+
+    let res;
+    try {
+      const directiveWake =
+        row.agent === "capitano" &&
+        typeof row.source_id === "string" &&
+        row.source_id.startsWith("team-directive:") &&
+        ["created", "edited", "archived"].includes(row.source_action) &&
+        row.body === `[TEAM-DIRECTIVE] ${row.source_action}`;
+      res = await sendFn(row.agent, row.body, {
+        channel: directiveWake ? "team-directive" : row.delivered_via,
+      });
+    } catch (err) {
+      // Il sender non ha restituito un esito: per il contratto di sendToPane
+      // questo e' un errore prima della consegna e resta ritentabile.
+      release.run(row.id);
       failed += 1;
       log(
-        'warn',
+        "warn",
+        `chat: delivery to ${tmuxSessionFor(row.agent)} failed (spawn error): ${String(err?.message || err)} — the next round`,
+      );
+      continue;
+    }
+    if (!res.ok) {
+      release.run(row.id);
+      failed += 1;
+      log(
+        "warn",
         `chat: delivery to ${tmuxSessionFor(row.agent)} failed (exit ${res.code}): ${res.error} — the next round`,
       );
       // Un pane morto blocca solo la SUA coda: gli altri agenti proseguono.
       continue;
     }
+    // Ordine intenzionale: timbro PRIMA del cleanup. Se stamp.run solleva o
+    // il processo muore dopo exit 0, il claim resta e impedisce di indovinare
+    // (e duplicare) l'effetto al riavvio. La diagnosi lo rende subito visibile.
     stamp.run(row.id);
+    release.run(row.id);
     delivered += 1;
   }
 
@@ -731,8 +1156,9 @@ export async function deliverPendingUserTurns(
 export function parseStamp(value) {
   if (!value) return NaN;
   const s = String(value);
-  if (s.includes('T') || s.endsWith('Z') || /[+-]\d\d:\d\d$/.test(s)) return Date.parse(s);
-  return Date.parse(`${s.replace(' ', 'T')}Z`);
+  if (s.includes("T") || s.endsWith("Z") || /[+-]\d\d:\d\d$/.test(s))
+    return Date.parse(s);
+  return Date.parse(`${s.replace(" ", "T")}Z`);
 }
 
 /** Attesa leggibile a colpo d'occhio in un log: `6h 12m`, `3m`, `45s`. */
@@ -751,26 +1177,50 @@ export function formatWaited(ms) {
  * significa "l'agente non l'ha mai visto", per qualunque ragione.
  */
 export function undeliveredUserTurns(db, { agents = CHAT_AGENTS } = {}) {
-  const placeholders = agents.map(() => '?').join(', ');
+  const placeholders = agents.map(() => "?").join(", ");
   const row = db
     .prepare(
       `SELECT COUNT(*) AS n, MIN(created_at) AS oldest
          FROM pending_user_messages
-        WHERE author = 'user' AND delivered_at IS NULL AND agent IN (${placeholders})`
+        WHERE author = 'user' AND delivered_at IS NULL AND agent IN (${placeholders})`,
     )
     .get(...agents);
-  return { count: Number(row?.n || 0), oldest: row?.oldest ?? null };
+  let uncertain = 0;
+  try {
+    uncertain = Number(
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n
+             FROM pending_user_message_delivery_claims c
+             JOIN pending_user_messages m ON m.id = c.message_id
+            WHERE m.author = 'user' AND m.delivered_at IS NULL
+              AND m.agent IN (${placeholders})`,
+        )
+        .get(...agents)?.n || 0,
+    );
+  } catch {
+    // Schema precedente al primo giro del nuovo consumer: nessun claim puo'
+    // ancora esistere, quindi zero e' l'unica risposta corretta.
+  }
+  return {
+    count: Number(row?.n || 0),
+    oldest: row?.oldest ?? null,
+    uncertain,
+  };
 }
 
 /**
  * Diagnosi della corsia: `null` se sta lavorando, altrimenti il guasto.
  *
- * Tre modi di essere muti, in ordine di gravità:
+ * Quattro modi di essere muti, in ordine di gravità:
  *   · `no-inbound-channel` — il campanello del web suona (`chat_requested_at`
  *     più recente di `chat_delivered_at`) e il box non ha proprio il canale
  *     per andare a prendersi i turni. Nessuna grazia: aspettare non lo fa
  *     comparire, e finché manca NESSUN messaggio dal web arriverà mai;
  *   · `inbound-read-failed` — il canale c'è ma la lettura è fallita;
+ *   · `delivery-outcome-uncertain` — un processo aveva acquisito il claim
+ *     durevole ma non ha timbrato l'esito. Non si ritenta alla cieca: il
+ *     submit potrebbe essere gia' entrato nel pane;
  *   · `delivery-stuck` — i turni sono entrati in SQLite e nessuno li porta
  *     al pane da più di `graceMs` (pane morto, sessione tmux sbagliata,
  *     agente fermo).
@@ -788,6 +1238,7 @@ export function diagnoseChatLane({
   queued = 0,
   oldestQueuedAt = null,
   deliverFailed = 0,
+  uncertain = 0,
   now = Date.now(),
   graceMs = STALL_AFTER_MS,
 } = {}) {
@@ -797,15 +1248,16 @@ export function diagnoseChatLane({
   };
   // La stessa frase in coda a ogni segnalazione: dice PERCHÉ importa, che
   // è l'informazione che mancava a chi guardava i log del 24/07.
-  const tail = 'the user sees the message as sent and waits for a reply that cannot arrive';
+  const tail =
+    "the user sees the message as sent and waits for a reply that cannot arrive";
 
   if (pending && !canRead) {
     const waitingMs = waitedSince(requestedAt);
     return {
-      reason: 'no-inbound-channel',
+      reason: "no-inbound-channel",
       count: 0,
       waitingMs,
-      summary: 'chat: web turns cannot be retrieved (no cloud read channel)',
+      summary: "chat: web turns cannot be retrieved (no cloud read channel)",
       message:
         `chat: web turns have been waiting for ${formatWaited(waitingMs)} and this machine cannot retrieve them ` +
         `(no cloud read channel) — ${tail}`,
@@ -815,7 +1267,7 @@ export function diagnoseChatLane({
   if (pending && readError) {
     const waitingMs = waitedSince(requestedAt);
     return {
-      reason: 'inbound-read-failed',
+      reason: "inbound-read-failed",
       count: 0,
       waitingMs,
       summary: `chat: failed to read user turns from the cloud (${String(readError).slice(0, 160)})`,
@@ -825,14 +1277,27 @@ export function diagnoseChatLane({
     };
   }
 
+  if (uncertain > 0) {
+    return {
+      reason: "delivery-outcome-uncertain",
+      count: uncertain,
+      waitingMs: waitedSince(oldestQueuedAt),
+      summary: `chat: ${uncertain} pane delivery outcomes are uncertain`,
+      message:
+        `chat: ${uncertain} user turns have a durable delivery claim but no delivered_at; ` +
+        `automatic retry is stopped to prevent duplicate pane delivery — ${tail}`,
+    };
+  }
+
   if (queued > 0) {
     const waitingMs = waitedSince(oldestQueuedAt);
     if (waitingMs >= graceMs) {
-      const why = deliverFailed > 0
-        ? `${deliverFailed} failed pane deliveries in this cycle`
-        : 'no successful deliveries';
+      const why =
+        deliverFailed > 0
+          ? `${deliverFailed} failed pane deliveries in this cycle`
+          : "no successful deliveries";
       return {
-        reason: 'delivery-stuck',
+        reason: "delivery-stuck",
         count: queued,
         waitingMs,
         summary: `chat: ${queued} user turns not delivered to the agent`,
@@ -857,7 +1322,11 @@ export function diagnoseChatLane({
  *
  * @param {{summary:string, at:number}|null} prev ultima segnalazione emessa
  */
-export function shouldAnnounceStall(prev, summary, { now = Date.now(), everyMs = STALL_REPEAT_MS } = {}) {
+export function shouldAnnounceStall(
+  prev,
+  summary,
+  { now = Date.now(), everyMs = STALL_REPEAT_MS } = {},
+) {
   if (!summary) return false;
   if (!prev || prev.summary !== summary) return true;
   return now - Number(prev.at || 0) >= everyMs;

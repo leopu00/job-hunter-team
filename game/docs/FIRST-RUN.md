@@ -78,11 +78,15 @@ no external terminal is launched.
 
 ## Profile without an LLM
 
-The authored Assistant prefills role, experience and location. The native
-Profile panel collects exact personal data. The ready gate requires name,
-email, target role, location, experience, seniority, at least two skills and at
-least one language. `PROFILE_SAVE_PY` persists all eight fields plus guided
-search preferences without invoking an agent.
+The authored Assistant stores the chosen role category and specialty as stable
+IDs, independent of the localized labels shown in chat. It also prefills
+experience and location. `target_role` remains the user's free-text objective:
+the wizard never derives it from a display label, and the ready gate still
+requires that exact text together with name, email, location, experience,
+seniority, at least two skills and at least one language. `PROFILE_SAVE_PY`
+persists those fields plus guided search preferences without invoking an agent.
+Existing free-text roles are not migrated or normalized; see
+`docs/internal/2026-08-12-target-role-category-contract.md`.
 
 ## Tests
 

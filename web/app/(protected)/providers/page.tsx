@@ -234,7 +234,10 @@ type ProviderInfo = {
   activeModel?: string;
   keySource: "config" | "env" | null;
   installedVersion?: string | null;
-  latestVersion?: string | null;
+  // Versione che il bottone installerà davvero: il pin della release, non
+  // l'ultima del registry. Vedi lib/providers/update-target.ts — badge e
+  // azione devono nominare la stessa versione.
+  targetVersion?: string | null;
   updateAvailable?: boolean;
   updatable?: boolean;
 };
@@ -369,7 +372,7 @@ function ProviderCard({
                   background: "rgba(245,158,11,0.08)",
                 }}
               >
-                ⚠ {t.updateBadge} {provider.latestVersion}
+                ⚠ {t.updateBadge} {provider.targetVersion}
               </span>
             )}
           </div>
@@ -457,10 +460,10 @@ function ProviderCard({
               <span className="font-mono text-[var(--color-bright)]">
                 {provider.installedVersion}
               </span>
-              {provider.latestVersion &&
-                provider.latestVersion !== provider.installedVersion && (
+              {provider.targetVersion &&
+                provider.targetVersion !== provider.installedVersion && (
                   <span className="text-[10px]" style={{ color: "#f59e0b" }}>
-                    → {provider.latestVersion}
+                    → {provider.targetVersion}
                   </span>
                 )}
             </div>

@@ -307,6 +307,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("fullscreen"):
 		toggle_fullscreen()
 		return
+	# ESC durante il giro guidato lo INTERROMPE, invece di aprire la pausa. Era il
+	# gesto istintivo di chi voleva andare dritto al setup e non trovava
+	# un'uscita: metteva in pausa il gioco mentre gli agenti continuavano a
+	# parlare sopra il menu (O-14). Vale anche a dialogo aperto, dove ESC
+	# oggi non fa nulla e il dialogo copre ogni pulsante a schermo.
+	# A gioco in pausa ESC chiude il menu, come sempre: chi è nel menu si
+	# aspetta quello, e pausa/ripresa del giro hanno il pulsante nella sidebar.
+	if event.is_action_pressed("pause") and state != State.TITLE \
+			and not get_tree().paused and TourGuide.active():
+		exit_guided_onboarding()
+		return
 	if event.is_action_pressed("pause") and not dialogue_active:
 		if get_tree().paused:
 			close_pause()
@@ -834,6 +845,23 @@ func _reload_ui_theme() -> void:
 		if not sidebars.is_empty():
 			sidebars[0].open_section("appearance")
 
+# ── Giro guidato ──────────────────────────────────────────────────────
+
+## Interrompe il giro guidato di primo avvio, da qualunque punto lo si chieda
+## (ESC, pulsante della to-do list, voce del menu laterale).
+##
+## Prima chiude il gate persistito e POI il dialogo a ritratti: il callback
+## `closed` non deve avanzare la tappa che l'utente sta interrompendo. Indice,
+## modalità e visite restano in TourGuide e la sidebar può riprenderli.
+func exit_guided_onboarding() -> void:
+	if ScriptedOnboarding.is_dismissed():
+		return
+	ScriptedOnboarding.dismiss()
+	for dialogue in get_tree().get_nodes_in_group(&"dialogue_ui"):
+		if dialogue.has_method("close_now"):
+			dialogue.close_now()
+
+
 # ── Pausa ─────────────────────────────────────────────────────────────
 
 func open_pause() -> void:
@@ -894,6 +922,15 @@ func _register_inputs() -> void:
 	_add_key_action("move_right", [KEY_D, KEY_RIGHT])
 	_add_key_action("move_up", [KEY_W, KEY_UP])
 	_add_key_action("move_down", [KEY_S, KEY_DOWN])
+	# Avanza il dialogo (dialogue_ui.gd), sul tasto che aveva dalla nascita
+	# (3bd089ce3c). La rimozione del personaggio giocatore (a9b518dfc1) tolse
+	# questa riga insieme all'interazione in ufficio, ma il consumo nel
+	# dialogo sopravvisse: da allora OGNI input a dialogo aperto loggava
+	# «unknown action» — decine di KB in pochi minuti che seppellivano i
+	# messaggi veri (WIN-INTERACT-ACTION-UNDECLARED). Il test
+	# tests/test_input_actions_declared.py confronta le azioni consumate nei
+	# .gd con quelle dichiarate qui, senza far girare Godot.
+	_add_key_action("interact", [KEY_E])
 	_add_key_action("registry", [KEY_TAB])
 	_add_key_action("pause", [KEY_ESCAPE])
 	_add_key_action("fullscreen", [KEY_F11])

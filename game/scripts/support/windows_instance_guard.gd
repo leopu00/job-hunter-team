@@ -3,14 +3,18 @@ extends Node
 ## sidecar attestato nel PCK non possiede la lease kernel per questa sessione.
 
 const SOURCE_PATH := "res://scripts/support/windows_instance_guard.ps1"
-const SOURCE_SHA256 := "3f5c9ec40f3d27428b54a5a30a4df63a9ae6921a21ff7a84b044ba4c220efafa"
+const SOURCE_SHA256 := "bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b"
 const SOURCE_MAX_BYTES := 10_000
 const ARGV_MAX_UTF16 := 30_000
 const REQUEST_MAX_BYTES := 2_048
 const READY_MAX_BYTES := 2_048
 const STDERR_MAX_BYTES := 2_048
-const READY_TIMEOUT_MSEC := 8_000
+# Windows PowerShell 5.1 compila il piccolo helper C# al primo avvio. Sul
+# runner Windows pulito richiede piu di otto secondi: il bootstrap deve restare
+# sincrono/fail-closed, ma il limite deve coprire un cold start reale.
+const READY_TIMEOUT_MSEC := 30_000
 const HEARTBEAT_TIMEOUT_MSEC := 1_500
+const REQUEST_ENV := "JHT_INSTANCE_GUARD_REQUEST"
 
 var _allowed := false
 var _failed := false
@@ -23,6 +27,8 @@ var _stderr_bytes := PackedByteArray()
 var _binding := {}
 var _source_byte_count := 0
 var _command_length := 0
+var _bootstrap_code := "entry"
+var _ready_code := "entry"
 
 
 func _enter_tree() -> void:
@@ -33,7 +39,7 @@ func _enter_tree() -> void:
 		_allowed = true
 		return
 	if not _start_guard():
-		_fail_closed("bootstrap")
+		_fail_closed("bootstrap_" + _bootstrap_code)
 	elif OS.get_environment("JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST") == "1":
 		print("WINDOWS-INSTANCE-GUARD-PCK source=exported-pck bytes=",
 				_source_byte_count, " argv_utf16=", _command_length,
@@ -51,7 +57,9 @@ func _process(_delta: float) -> void:
 	_drain_stderr()
 	if _failed:
 		return
-	var chunk := _stdio.get_buffer(512)
+	var available := int(_stdio.get_length())
+	var chunk := _stdio.get_buffer(mini(available, 512)) \
+			if available > 0 else PackedByteArray()
 	if not chunk.is_empty():
 		_heartbeat_bytes.append_array(chunk)
 		if _heartbeat_bytes.size() > READY_MAX_BYTES:
@@ -75,13 +83,16 @@ func binding() -> Dictionary:
 
 
 func _start_guard() -> bool:
+	_bootstrap_code = "source"
 	var raw := FileAccess.get_file_as_bytes(SOURCE_PATH)
 	if not source_bytes_valid(raw, SOURCE_SHA256):
 		return false
 	_source_byte_count = raw.size()
+	_bootstrap_code = "encode"
 	var encoded := encoded_command(raw)
 	if encoded.is_empty():
 		return false
+	_bootstrap_code = "powershell"
 	var powershell := _powershell_path()
 	var args := PackedStringArray([
 		"-NoLogo", "-NoProfile", "-NonInteractive",
@@ -90,24 +101,51 @@ func _start_guard() -> bool:
 	_command_length = command_utf16_length(powershell, args)
 	if powershell.is_empty() or _command_length >= ARGV_MAX_UTF16:
 		return false
+	_bootstrap_code = "request"
 	var request := _request_line()
 	if request.is_empty() or request.to_utf8_buffer().size() > REQUEST_MAX_BYTES:
 		return false
+	_bootstrap_code = "execute"
+	# Il request contiene solo token casuali e identita di processo, non segreti.
+	# L'env viene ereditato atomicamente dal child e rimosso subito dal desktop;
+	# evita il deadlock osservato sul FileAccess bidirezionale dell'export Windows.
+	OS.set_environment(REQUEST_ENV, request)
 	var process := OS.execute_with_pipe(powershell, args, false)
+	OS.unset_environment(REQUEST_ENV)
 	if process.is_empty():
 		return false
 	_stdio = process["stdio"]
 	_stderr = process["stderr"]
 	_guard_pid = int(process["pid"])
-	if _guard_pid <= 0 or not _stdio.store_buffer((request + "\n").to_utf8_buffer()):
+	_bootstrap_code = "pipe"
+	if _guard_pid <= 0:
 		_close_pipes()
 		return false
-	_stdio.flush()
+	_bootstrap_code = "ready"
 	var ready_line := _read_ready_line()
 	if ready_line.is_empty() or not _accept_ready(ready_line, request, powershell):
+		# Il processo puo aver scritto stderr negli ultimi millisecondi prima di
+		# uscire o chiudere stdout: raccoglierlo qui rende il codice diagnostico
+		# causale senza esporre il messaggio PowerShell originale.
+		_drain_stderr()
+		# FileAccess non promette che get_buffer non bloccante abbia consegnato
+		# subito gli ultimi byte di stderr dopo l'uscita del child.
+		if ready_line.is_empty() and _guard_pid > 0 \
+				and not OS.is_process_running(_guard_pid):
+			OS.delay_msec(50)
+			_drain_stderr()
+		var sidecar_code := _sidecar_failure_code()
+		if not sidecar_code.is_empty():
+			_bootstrap_code = "ready_" + sidecar_code
+		elif not ready_line.is_empty():
+			_bootstrap_code = "ready_" + _ready_code
+		elif _bootstrap_code == "ready":
+			_bootstrap_code = "ready_timeout" if OS.is_process_running(_guard_pid) \
+					else "ready_exit"
 		_close_pipes()
 		return false
 	_allowed = true
+	_bootstrap_code = "complete"
 	_last_heartbeat_msec = Time.get_ticks_msec()
 	return true
 
@@ -119,6 +157,9 @@ func _read_ready_line() -> String:
 		_drain_stderr()
 		if _failed or _guard_pid <= 0 or not OS.is_process_running(_guard_pid):
 			return ""
+		if _stdio.get_length() < 1:
+			OS.delay_msec(2)
+			continue
 		var one := _stdio.get_buffer(1)
 		if one.is_empty():
 			OS.delay_msec(2)
@@ -133,35 +174,66 @@ func _read_ready_line() -> String:
 
 
 func _accept_ready(line: String, request_line: String, powershell: String) -> bool:
+	_ready_code = "json"
 	var ready: Variant = JSON.parse_string(line)
 	var request: Variant = JSON.parse_string(request_line)
-	if not ready is Dictionary or not request is Dictionary \
-			or JSON.stringify(ready, "", true, false) != line:
+	if not ready is Dictionary or not request is Dictionary:
 		return false
 	var expected_keys := ["desktop_exe_path", "desktop_pid", "desktop_started",
 		"guard_exe_path", "guard_pid", "guard_started", "instance_id", "mode",
 		"mutex_fingerprint", "nonce", "request_id", "request_token", "schema",
 		"source_sha256", "type"]
+	_ready_code = "keys"
 	if not _exact_keys(ready, expected_keys):
+		return false
+	# JSON.parse rappresenta tutti i numeri come float. Ricostruire la forma
+	# tipata impedisce duplicati, whitespace e 1.0 senza rendere impossibile il
+	# confronto con gli interi canonici prodotti dal sidecar.
+	_ready_code = "canonical"
+	var canonical_ready := {
+		"desktop_exe_path": str(ready.get("desktop_exe_path", "")),
+		"desktop_pid": int(ready.get("desktop_pid", 0)),
+		"desktop_started": str(ready.get("desktop_started", "")),
+		"guard_exe_path": str(ready.get("guard_exe_path", "")),
+		"guard_pid": int(ready.get("guard_pid", 0)),
+		"guard_started": str(ready.get("guard_started", "")),
+		"instance_id": str(ready.get("instance_id", "")),
+		"mode": str(ready.get("mode", "")),
+		"mutex_fingerprint": str(ready.get("mutex_fingerprint", "")),
+		"nonce": str(ready.get("nonce", "")),
+		"request_id": str(ready.get("request_id", "")),
+		"request_token": str(ready.get("request_token", "")),
+		"schema": int(ready.get("schema", 0)),
+		"source_sha256": str(ready.get("source_sha256", "")),
+		"type": str(ready.get("type", "")),
+	}
+	if JSON.stringify(canonical_ready, "", true, false) != line:
 		return false
 	var executable := OS.get_executable_path().replace("\\", "/").to_lower()
 	var guard_executable := powershell.replace("\\", "/").to_lower()
-	if int(ready.get("schema", 0)) != 1 or str(ready.get("type", "")) != "ready" \
-			or int(ready.get("desktop_pid", 0)) != OS.get_process_id() \
-			or str(ready.get("desktop_exe_path", "")) != executable \
-			or int(ready.get("guard_pid", 0)) != _guard_pid \
-			or str(ready.get("guard_exe_path", "")) != guard_executable \
-			or str(ready.get("instance_id", "")) != str(request.get("instance_id", "")) \
-			or str(ready.get("mode", "")) != str(request.get("mode", "")) \
-			or str(ready.get("nonce", "")) != str(request.get("nonce", "")) \
-			or str(ready.get("request_id", "")) != str(request.get("request_id", "")) \
-			or str(ready.get("request_token", "")) != str(request.get("request_token", "")) \
-			or str(ready.get("source_sha256", "")) != SOURCE_SHA256 \
-			or not _decimal(str(ready.get("desktop_started", ""))) \
-			or not _decimal(str(ready.get("guard_started", ""))) \
-			or not _lower_hex(str(ready.get("mutex_fingerprint", "")), 64):
-		return false
+	var checks := [
+		["schema", int(ready.get("schema", 0)) == 1],
+		["type", str(ready.get("type", "")) == "ready"],
+		["desktop_pid", int(ready.get("desktop_pid", 0)) == OS.get_process_id()],
+		["desktop_exe", str(ready.get("desktop_exe_path", "")) == executable],
+		["guard_pid", int(ready.get("guard_pid", 0)) == _guard_pid],
+		["guard_exe", str(ready.get("guard_exe_path", "")) == guard_executable],
+		["instance", str(ready.get("instance_id", "")) == str(request.get("instance_id", ""))],
+		["mode", str(ready.get("mode", "")) == str(request.get("mode", ""))],
+		["nonce", str(ready.get("nonce", "")) == str(request.get("nonce", ""))],
+		["request_id", str(ready.get("request_id", "")) == str(request.get("request_id", ""))],
+		["request_token", str(ready.get("request_token", "")) == str(request.get("request_token", ""))],
+		["source", str(ready.get("source_sha256", "")) == SOURCE_SHA256],
+		["desktop_started", _decimal(str(ready.get("desktop_started", "")))],
+		["guard_started", _decimal(str(ready.get("guard_started", "")))],
+		["fingerprint", _lower_hex(str(ready.get("mutex_fingerprint", "")), 64)],
+	]
+	for check: Array in checks:
+		_ready_code = str(check[0])
+		if not bool(check[1]):
+			return false
 	_binding = ready
+	_ready_code = "complete"
 	return true
 
 
@@ -221,12 +293,29 @@ func _consume_heartbeats() -> void:
 func _drain_stderr() -> void:
 	if not is_instance_valid(_stderr):
 		return
-	var chunk := _stderr.get_buffer(512)
+	var available := int(_stderr.get_length())
+	var chunk := _stderr.get_buffer(mini(available, 512)) \
+			if available > 0 else PackedByteArray()
 	if chunk.is_empty():
 		return
 	_stderr_bytes.append_array(chunk)
 	if _stderr_bytes.size() > STDERR_MAX_BYTES or _allowed:
 		_fail_closed("guard_stderr")
+
+
+func _sidecar_failure_code() -> String:
+	var text := _stderr_bytes.get_string_from_ascii()
+	var marker := "JHT-INSTANCE-GUARD "
+	var start := text.find(marker)
+	if start < 0:
+		return ""
+	var code := text.substr(start + marker.length()).strip_edges()
+	if code.length() < 1 or code.length() > 48:
+		return ""
+	for character: String in code:
+		if not ((character >= "a" and character <= "z") or character == "_"):
+			return ""
+	return code
 
 
 func _fail_closed(code: String) -> void:

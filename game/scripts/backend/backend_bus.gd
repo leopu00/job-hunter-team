@@ -84,12 +84,18 @@ signal profile_saved(ok: bool, error: String)
 ## (lib/profile-completion.ts); ready = ready.flag esiste OPPURE tutti
 ## i required ok — identico a GET /api/profile del web.
 signal profile_status_updated(profile: Dictionary, required: Dictionary, ready: bool)
+## Esito della conferma della revisione estratta dal CV. `review_id` è la
+## ricevuta opaca mostrata dal poll precedente: il backend salva soltanto se
+## quella ricevuta e la baseline del profilo coincidono ancora.
+signal profile_review_confirmed(review_id: String, ok: bool, error: String)
 ## Esito dell'upload di un documento utente (CV) verso la drop-zone
 ## allegati del container (/jht_user/allegati): il wizard poi passa il
 ## path remoto all'assistente dentro il messaggio chat, come il web.
 signal document_uploaded(ok: bool, remote_path: String, error: String)
 ## Esito del salvataggio degli orari di lavoro (working_hours).
 signal hours_saved(ok: bool, error: String)
+## Esito della propagazione della preferenza lingua al runtime attivo.
+signal ui_language_saved(locale: String, ok: bool, error: String)
 ## Contenuto di un documento prodotto dal team (CV/cover letter, md o
 ## pdf), letto on-demand dal filesystem del container per l'anteprima
 ## in-game. data = bytes del file (utf-8 per gli md, binari per i pdf).
@@ -136,6 +142,9 @@ var telemetry_history: Array = []
 ## l'eco della query che l'ha prodotto.
 var usage_history: Dictionary = {}
 var usage_history_query: Dictionary = {}
+## Correlazioni ancora valide per la connessione corrente. Il reset le
+## revoca prima che una risposta worker tardiva possa ripopolare la cache.
+var _active_usage_requests: Dictionary = {}
 var coordinator_state: Dictionary = {}
 ## Ultima lettura del flag di deroga alla spesa. Vuoto = mai letto: NON è
 ## "spenta", ed è per questo che l'interruttore parte da "stato sconosciuto".
@@ -159,6 +168,8 @@ var _backend: BackendAdapter
 ## JHT_VPS_IP/JHT_VPS_KEY forzano una config, JHT_NOVPS=1 spegne tutto
 ## (per gli shot grafici che non devono toccare la rete).
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	if not await Game.windows_health_boot_allowed():
 		return
 	Game.mark_windows_health_normal_work("backend")
@@ -389,6 +400,7 @@ func to_eur(amount: float, currency: String) -> float:
 ## Collega la sorgente eventi (MockBackend, VpsBackend). Sostituisce
 ## l'eventuale backend attivo. config passa dritta a start().
 func set_backend(backend: BackendAdapter, config: Dictionary = {}) -> void:
+	_fail_active_document_upload(UIStrings.t("common.backend_not_connected"))
 	if _backend:
 		_backend.stop()
 		publish_state(DISCONNECTED, "")
@@ -411,6 +423,7 @@ func set_backend(backend: BackendAdapter, config: Dictionary = {}) -> void:
 ## vengono da nessuna macchina, e sparirebbero lasciando l'ufficio vuoto a
 ## chi sta ancora configurando il prodotto.
 func _reset_connection_snapshots() -> void:
+	agents = []
 	transitions = []
 	telemetry = {}
 	telemetry_history = []
@@ -421,6 +434,7 @@ func _reset_connection_snapshots() -> void:
 	burn_intent = {}
 	usage_history = {}
 	usage_history_query = {}
+	_active_usage_requests.clear()
 	profile_status = {}
 	chat_log = []
 	if not positions_are_demo:
@@ -431,6 +445,7 @@ func _reset_connection_snapshots() -> void:
 		chat_waiting_changed.emit(str(agent), false)
 	chat_waiting = {}
 	clear_chat_unread()
+	agents_updated.emit(agents)
 	positions_updated.emit(positions)
 	# backend_reset per ULTIMO: chi lo usa per riseminare deve trovare il bus
 	# già svuotato e gli altri segnali già consegnati.
@@ -741,13 +756,13 @@ func ensure_assistant() -> void:
 	if _backend and _backend.has_method("ensure_assistant"):
 		_backend.ensure_assistant()
 
-## Carica un documento locale (CV…) nella drop-zone allegati del
-## container. Esito su document_uploaded.
+## Carica un documento locale (CV…) nella drop-zone allegati del container.
+## Il bus è il single-owner: un secondo upload mentre il primo è in volo
+## fallisce, così nessun esito globale può essere attribuito al file sbagliato.
 func upload_user_document(local_path: String) -> void:
-	if _backend and _backend.has_method("upload_document"):
-		_backend.upload_document(local_path)
-	else:
-		document_uploaded.emit(false, "", UIStrings.t("common.backend_not_connected"))
+	if not _begin_document_upload({"kind": "generic", "path": local_path}):
+		document_uploaded.emit(false, "",
+				UIStrings.t("pos.ticket_upload_in_progress"))
 
 ## Il backend pubblica lo stato profilo da qui (thread → call_deferred).
 func publish_profile_status(status: Dictionary) -> void:
@@ -764,11 +779,25 @@ func save_user_profile(fields: Dictionary) -> void:
 	else:
 		profile_saved.emit(false, UIStrings.t("common.backend_not_connected"))
 
+func confirm_profile_review(review_id: String) -> void:
+	if _backend and _backend.has_method("confirm_profile_review"):
+		_backend.confirm_profile_review(review_id)
+	else:
+		profile_review_confirmed.emit(review_id, false,
+				UIStrings.t("common.backend_not_connected"))
+
 func save_working_hours(wh: Dictionary) -> void:
 	if _backend and _backend.has_method("save_working_hours"):
 		_backend.save_working_hours(wh)
 	else:
 		hours_saved.emit(false, UIStrings.t("common.backend_not_connected"))
+
+func save_ui_language(locale: String) -> void:
+	if _backend and _backend.has_method("save_ui_language"):
+		_backend.save_ui_language(locale)
+	else:
+		ui_language_saved.emit(locale, false,
+				UIStrings.t("common.backend_not_connected"))
 
 
 ## ── Storico usage (finestre di monitoraggio risorse) ─────────────────
@@ -776,16 +805,25 @@ func save_working_hours(wh: Dictionary) -> void:
 ## Chiede al backend lo storico usage per [from_ts, to_ts] (unix UTC)
 ## aggregato per bucket_sec. Risposta asincrona su usage_history_updated;
 ## il backend può impiegare secondi (ricostruzione per-agente dai log CLI).
-func request_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
-	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec}
+func request_usage_history(from_ts: float, to_ts: float, bucket_sec: int,
+		request_id := "") -> void:
+	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec,
+			"request_id": request_id}
 	if _backend and _backend.has_method("fetch_usage_history"):
-		_backend.fetch_usage_history(from_ts, to_ts, bucket_sec)
+		if str(request_id) != "":
+			_active_usage_requests[str(request_id)] = true
+		_backend.fetch_usage_history(from_ts, to_ts, bucket_sec, request_id)
 	else:
 		usage_history_updated.emit(query,
 				{"ok": false, "error": UIStrings.t("common.backend_not_connected")})
 
 ## Il backend risponde da qui (thread → call_deferred).
 func publish_usage_history(query: Dictionary, data: Dictionary) -> void:
+	var request_id := str(query.get("request_id", ""))
+	if request_id != "":
+		if not _active_usage_requests.has(request_id):
+			return
+		_active_usage_requests.erase(request_id)
 	usage_history_query = query
 	usage_history = data
 	usage_history_updated.emit(query, data)
@@ -830,11 +868,81 @@ func publish_artifact(path: String, ok: bool, data: PackedByteArray,
 
 ## ── Ticket utente→team ───────────────────────────────────────────────
 
+## Il caricamento è il primo passo di un'unica intenzione utente. Lo stato vive
+## nell'autoload, non nel pannello: chiudere/cambiare pagina mentre i byte
+## viaggiano non deve lasciare un file caricato senza il ticket richiesto.
+## Tutti gli upload, anche quelli del wizard, attraversano QUESTO owner.
+var _active_document_upload: Dictionary = {}
+var _document_upload_sequence := 0
+
 ## Apre un ticket sulla posizione (async: esito su ticket_created; la
-## lista ticket si aggiorna col prossimo snapshot posizioni).
-func create_position_ticket(position_id: int, text: String) -> void:
-	if _backend and position_id > 0 and text.strip_edges() != "":
-		_backend.create_ticket(position_id, text.strip_edges())
+## lista ticket si aggiorna col prossimo snapshot posizioni). Il path opzionale
+## è LOCALE: il bus lo carica col trasporto documenti esistente e passa al
+## backend solo il path container attestato da document_uploaded(ok=true).
+func create_position_ticket(position_id: int, text: String,
+		local_attachment_path := "") -> void:
+	var clean := text.strip_edges()
+	if not _backend or position_id <= 0 or clean == "":
+		return
+	if local_attachment_path == "":
+		_backend.create_ticket(position_id, clean)
+		return
+	# La UI disabilita il submit, ma il bus resta il confine autorevole: anche
+	# un upload del wizard già attivo rende il ticket fail-closed.
+	if not _begin_document_upload({"kind": "ticket", "path": local_attachment_path,
+			"position_id": position_id, "text": clean}):
+		ticket_created.emit(position_id, false,
+				UIStrings.t("pos.ticket_upload_in_progress"))
+
+func _begin_document_upload(request: Dictionary) -> bool:
+	if not _active_document_upload.is_empty():
+		return false
+	if not _backend or not _backend.has_method("upload_document"):
+		var position_id := int(request.get("position_id", 0))
+		if position_id > 0:
+			ticket_created.emit(position_id, false,
+					UIStrings.t("common.backend_not_connected"))
+		else:
+			document_uploaded.emit(false, "",
+					UIStrings.t("common.backend_not_connected"))
+		return true
+	_document_upload_sequence += 1
+	_active_document_upload = request.duplicate()
+	_active_document_upload["request_id"] = _document_upload_sequence
+	_backend.upload_document(str(request["path"]), _document_upload_sequence)
+	return true
+
+## Unico ingresso degli adapter per completare un upload. L'esito appartiene
+## necessariamente all'unica richiesta attiva; senza owner viene ignorato.
+func publish_document_upload(request_id: int, ok: bool, remote_path: String,
+		error: String) -> void:
+	if _active_document_upload.is_empty() \
+			or int(_active_document_upload.get("request_id", 0)) != request_id:
+		return
+	var request := _active_document_upload.duplicate()
+	_active_document_upload.clear()
+	if str(request["kind"]) == "generic":
+		document_uploaded.emit(ok, remote_path, error)
+		return
+	var position_id := int(request["position_id"])
+	if not ok:
+		ticket_created.emit(position_id, false, error)
+		return
+	if _backend:
+		_backend.create_ticket(position_id, str(request["text"]), remote_path)
+	else:
+		ticket_created.emit(position_id, false,
+				UIStrings.t("common.backend_not_connected"))
+
+func _fail_active_document_upload(error: String) -> void:
+	if _active_document_upload.is_empty():
+		return
+	var request := _active_document_upload.duplicate()
+	_active_document_upload.clear()
+	if str(request["kind"]) == "ticket":
+		ticket_created.emit(int(request["position_id"]), false, error)
+	else:
+		document_uploaded.emit(false, "", error)
 
 
 ## ── Configurazione VPS (voce Impostazioni → Collega VPS) ─────────────

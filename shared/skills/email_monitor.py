@@ -59,6 +59,10 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime, parseaddr
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from url_guard import is_fetchable  # noqa: E402  (dopo sys.path, per costruzione)
+
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 CREDS_PATH = JHT_HOME / "credentials" / "email_monitor.json"
 STATE_PATH = JHT_HOME / "state" / "email_monitor_seen.json"
@@ -188,6 +192,14 @@ def _extract_generic(body: str, domain: str) -> list[dict]:
             continue
         if not JOB_HINT_RE.search(url):
             continue
+        # La barriera d'ingresso di questo canale e' conoscere l'indirizzo
+        # della casella: chi scrive la mail sceglie la destinazione, e chi la
+        # scarica e' lo Scout, da dentro il container, dove `192.168.x`,
+        # `127.0.0.1` e i metadati su `169.254.169.254` esistono. Il filtro
+        # sta qui perche' e' deterministico: non chiede a un modello di
+        # riconoscere un indirizzo interno, e non lo emette proprio.
+        if not is_fetchable(url):
+            continue
         seen_urls.add(url)
         jobs.append({"url": url, "source": f"email:{domain}" if domain else "email"})
         if len(jobs) >= MAX_LINKS_PER_EMAIL:
@@ -204,6 +216,13 @@ def _extract_jobs(body: str, sender: str) -> list[dict]:
 
     def _add(url: str, source: str, **extra):
         if url in seen_urls:
+            return
+        # Anche i rami dei mittenti noti passano di qui. Oggi non ne hanno
+        # bisogno — LinkedIn ricostruisce l'URL dal codice, Glassdoor e Indeed
+        # hanno il dominio dentro la regex — ma la porta d'uscita e' una sola,
+        # e un ramo aggiunto domani eredita il controllo invece di doverselo
+        # ricordare.
+        if not is_fetchable(url):
             return
         seen_urls.add(url)
         rec = {"url": url, "source": source}

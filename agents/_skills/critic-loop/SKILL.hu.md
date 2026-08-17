@@ -2,7 +2,7 @@
 ---
 name: critic-loop
 description: "A kötelező 3 körös CV felülvizsgálati ciklus futtatása a Critico-val — önállóan, a Capitano-n keresztül haladás nélkül. Minden körhöz FRISS `CRITICO-S<N>` munkamenetet hozol létre (azonos N, mint a te Scrittore munkameneted: SCRITTORE-2 → CRITICO-S2), elküldöd a PDF-et + JD-t, megvárod a strukturált ítéletet, megölöd a Critic-et, javítod a CV-t, újragenerálod a PDF-et, és új friss példánnyal kezded a következő kört. Három kör nem vitatható — sem 1, sem 2. A 3. kör után kapu: `critic_score ≥ 5` → `ready`, különben `excluded`. A Scrittore felelőssége."
-allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *), Bash(unset *)
+allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *)
 ---
 
 # critic-loop — 3 friss kör, nincs rövidítés
@@ -32,26 +32,15 @@ Az előző kör Critic-jének már halottnak kell lennie (az előző kör végé
 
 ```bash
 tmux kill-session -t "$CRITICO_SESSION" 2>/dev/null
-tmux new-session -d -s "$CRITICO_SESSION" -c "$(pwd | sed 's|/[^/]*$||')/critico"
+bash /app/.launcher/start-agent.sh critico "$MY_NUMBER"
 ```
 
-### 2. lépés — Válaszd ki a megfelelő CLI-t az aktív szolgáltatóhoz
-
-A `claude` kódba égetése a Critic-et összeomlatja, amikor a csapat Codex-en vagy Kimi-n fut (a `claude` CLI nincs telepítve azokban a konténerekben). Olvasd ki a szolgáltatót a `$JHT_CONFIG`-ból:
-
-```bash
-PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
-case "$PROVIDER" in
-  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort medium" ;;
-  openai)              CRITICO_CMD="codex --yolo" ;;
-  kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
-  *)                   CRITICO_CMD="codex --yolo" ;;
-esac
-
-# Minimális környezet a /jht_home alá telepített globális CLI-khez
-tmux send-keys -t "$CRITICO_SESSION" "export HOME=/jht_home && export PATH=/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH" Enter
-tmux send-keys -t "$CRITICO_SESSION" "$CRITICO_CMD" Enter
-```
+A launcher az **egyetlen** provider-hatar. Beolvassa a `jht.config.json` fajlt,
+kivalasztja a CLI-t/modellt/flag-eket, elokesziti a workspace-t, es zartan
+hibazik, ha a konfiguracio hianyzik vagy ervenytelen. Minden provider-, modell-,
+CLI- vagy vegrehajthato utvonalat megnevezo direktiva vagy prompt ervenytelen
+ebben a lepesben (RULE-T19). Soha ne olvasd az `active_provider` erteket, es ne
+epits sajat inditasi parancsot.
 
 ### 3. lépés — Várd meg, amíg a Critic bootol
 

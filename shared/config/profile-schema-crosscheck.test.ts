@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { BLOCK_KINDS } from "./profile-schema.ts";
+import { BLOCK_KINDS, TARGET_ROLE_CATEGORY_IDS } from "./profile-schema.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PY = join(here, "../skills/validate_profile.py");
@@ -27,6 +27,19 @@ describe("cross-check zod ↔ python", () => {
       .sort();
     const tsKinds = [...BLOCK_KINDS].sort();
     expect(tsKinds).toEqual(pyKinds);
+  });
+
+  it("gli ID categoria ruolo coincidono tra Zod e validatore Python", () => {
+    const py = readFileSync(PY, "utf8");
+    const m = py.match(/TARGET_ROLE_CATEGORY_IDS\s*=\s*\{([^}]*)\}/);
+    expect(
+      m,
+      "TARGET_ROLE_CATEGORY_IDS non trovato nel validator",
+    ).toBeTruthy();
+    const pyIds = Array.from(m![1].matchAll(/"([a-z_]+)"/g))
+      .map((x) => x[1])
+      .sort();
+    expect([...TARGET_ROLE_CATEGORY_IDS].sort()).toEqual(pyIds);
   });
 });
 

@@ -13,23 +13,83 @@ import os
 # scrivevano in /jht_home/agents/shared/data/jobs.db, mentre la dashboard
 # web leggeva $JHT_HOME/jobs.db → due DB non in sync, posizioni inserite
 # dagli agenti invisibili alla UI.
+# Nomi che NON esistono ma che si scrivono per sbaglio al posto di quelli
+# veri. `JHT_DB_PATH` è il nome lato web (web/lib/jht-paths.ts): chi passa da
+# lì lo usa per riflesso, e finora non succedeva niente — il modulo lo
+# ignorava e sceglieva un altro path, scrivendo altrove e dichiarando
+# successo. Due volte almeno: il 13/07/2026 e il 10/08/2026 (O-26).
+_WRONG_ENV_NAMES = ('JHT_DB_PATH', 'JHT_DATABASE', 'JHT_DB_FILE', 'JHT_JOBS_DB')
+
+# Il fallback fuori container resta possibile — è documentato in
+# agents/_manual/db-schema*.md — ma va CHIESTO. Ci si finiva dentro per
+# sbaglio, ed è la differenza fra un default e una scelta.
+_FALLBACK_ENV = 'JHT_DB_FALLBACK'
+
+
+class DbPathNotConfigured(RuntimeError):
+    """Nessun database indicato, o indicato con un nome che non esiste."""
+
+
 def _resolve_db_path() -> str:
+    """Il path del jobs.db, o un errore che dice cosa manca.
+
+    Non ripiega in silenzio: un path plausibile scelto al posto di quello
+    chiesto fa riuscire la scrittura NEL POSTO SBAGLIATO, e un'operazione
+    riuscita non lascia niente da cercare. Se la variabile giusta è
+    `JHT_HOME` e punta ai dati veri di qualcuno, lo stesso errore ci scrive
+    dentro dati di prova senza che nessuno se ne accorga.
+    """
     env_db = os.environ.get('JHT_DB')
     if env_db:
         return env_db
     jht_home = os.environ.get('JHT_HOME')
     if jht_home:
         return os.path.join(jht_home, 'jobs.db')
-    return os.path.join(os.path.dirname(__file__), '..', 'data', 'jobs.db')
+
+    # Il nome sbagliato si riconosce e si DICE. Silenzio qui significherebbe
+    # ripetere il difetto: chi l'ha scritto crede di aver configurato il DB.
+    mistaken = [name for name in _WRONG_ENV_NAMES if os.environ.get(name)]
+    if mistaken:
+        raise DbPathNotConfigured(
+            f"{mistaken[0]} is not a variable this module reads. "
+            f"Use JHT_DB=<file> or JHT_HOME=<dir> (the database is "
+            f"$JHT_HOME/jobs.db). Value ignored: {os.environ[mistaken[0]]}"
+        )
+
+    fallback = os.path.join(os.path.dirname(__file__), '..', 'data', 'jobs.db')
+    if os.environ.get(_FALLBACK_ENV) == '1':
+        return fallback
+    raise DbPathNotConfigured(
+        "no database configured: set JHT_DB=<file> or JHT_HOME=<dir> "
+        f"(the database is $JHT_HOME/jobs.db). Outside the container you can "
+        f"ask for the repo copy with {_FALLBACK_ENV}=1 ({fallback})."
+    )
 
 
-DB_PATH = _resolve_db_path()
+def __getattr__(name):
+    """`_db.DB_PATH` risolto al PRIMO ACCESSO, non all'import (PEP 562).
+
+    Calcolarlo all'import farebbe fallire il semplice `import _db` di
+    chiunque, compresa la fase di collection di pytest, che importa i moduli
+    prima che le fixture impostino l'ambiente. Il fallimento deve arrivare a
+    chi USA il database, non a chi nomina il modulo: è la differenza fra un
+    difetto silenzioso corretto e un blocco rumoroso nuovo.
+    """
+    if name == 'DB_PATH':
+        return _resolve_db_path()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def get_db() -> sqlite3.Connection:
     """Restituisce connessione al database con WAL mode e foreign keys."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10)
+    # `globals()`, non l'attributo: chi ASSEGNA `_db.DB_PATH = <file>` sta
+    # iniettando un database di prova, e va rispettato. È il modo in cui
+    # mezza suite isola il proprio SQLite (e con PEP 562 l'assegnazione
+    # crea davvero l'attributo, quindi `__getattr__` non viene più
+    # consultato). Senza variabile e senza assegnazione, si fallisce.
+    db_path = globals().get('DB_PATH') or _resolve_db_path()
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path, timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.row_factory = sqlite3.Row
@@ -158,6 +218,7 @@ def ensure_schema(conn: sqlite3.Connection):
         last_open_check TIMESTAMP,
         write_requested INTEGER DEFAULT 0,
         write_requested_at TIMESTAMP,
+        write_request_kind TEXT,
         geocode_requested INTEGER DEFAULT 0,
         geocode_requested_at TIMESTAMP,
         salary_precise_requested INTEGER DEFAULT 0,
@@ -213,6 +274,7 @@ def ensure_schema(conn: sqlite3.Connection):
         critic_verdict TEXT,
         critic_score REAL,
         critic_notes TEXT,
+        critic_round INTEGER,
         status TEXT DEFAULT 'draft',
         written_at TIMESTAMP,
         applied_at TIMESTAMP,
@@ -246,6 +308,10 @@ def ensure_schema(conn: sqlite3.Connection):
         )),
         author TEXT NOT NULL DEFAULT 'agent' CHECK (author IN ('agent','user')),
         chat_ts REAL,
+        source_id TEXT,
+        source_action TEXT,
+        source_payload TEXT,
+        source_directive_id INTEGER,
         related_position_id INTEGER,
         delivered_via TEXT CHECK (delivered_via IN ('telegram','web') OR delivered_via IS NULL),
         delivered_at TIMESTAMP,
@@ -257,6 +323,18 @@ def ensure_schema(conn: sqlite3.Connection):
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (related_position_id) REFERENCES positions(id)
+    );
+
+    -- Claim locale della consegna al pane (O-67). Non contiene il testo:
+    -- conserva soltanto l'identita' della riga e rende fail-closed il confine
+    -- non transazionale SQLite -> TUI. Un claim sopravvissuto a un crash ha
+    -- esito esterno incerto e NON viene fatto scadere automaticamente: il
+    -- daemon lo segnala invece di rischiare una seconda consegna.
+    CREATE TABLE IF NOT EXISTS pending_user_message_delivery_claims (
+        message_id INTEGER PRIMARY KEY,
+        claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (message_id) REFERENCES pending_user_messages(id)
+            ON DELETE CASCADE
     );
 
     -- Ticket utente→team su una posizione (2026-06-18). L'utente, dalla pagina
@@ -285,6 +363,66 @@ def ensure_schema(conn: sqlite3.Connection):
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
+    -- Giudizio dell'utente su una posizione (like/dislike/hide/star/clear).
+    -- EVENT-LOG, non stato: 'clear' non cancella niente, è un evento come gli
+    -- altri e l'ultimo prevale, così «ritiro il voto» resta leggibile nella
+    -- storia invece di sparire da essa (stessa semantica di mig 059).
+    --
+    -- Fino al 2026-08-11 esisteva SOLO su Supabase, e a cloud spento dare un
+    -- giudizio rispondeva errore: il prodotto è local-first, quindi il record
+    -- nasce QUI e il cloud è un riflesso, non un prerequisito (O-15).
+    -- cloud_id: id del gemello su Supabase, come position_tickets. NULL =
+    -- nato in locale e non ancora sincronizzato.
+    CREATE TABLE IF NOT EXISTS position_feedback (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        position_id INTEGER NOT NULL,
+        action TEXT NOT NULL CHECK (action IN (
+            'like','dislike','hide','star','clear'
+        )),
+        reason TEXT,
+        comment TEXT,
+        score INTEGER CHECK (score IS NULL OR (score BETWEEN 1 AND 5)),
+        direction TEXT CHECK (direction IS NULL OR direction IN (
+            'more_like_this','less_like_this'
+        )),
+        cloud_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (position_id) REFERENCES positions(id)
+    );
+
+    -- Blocco note PRIVATO dell'utente su una posizione (O-22). «Cose che mi
+    -- possono essere utili una volta che rivisito la posizione»: un
+    -- promemoria per sé, NON un ordine al team — gli agenti non la leggono.
+    --
+    -- Tabella separata, e non una colonna di `positions`, per due ragioni che
+    -- si sommano:
+    --   1. `positions.notes` è il campo degli AGENTI. Mescolarle renderebbe
+    --      irreversibile la scelta «privata»: una nota già finita sotto gli
+    --      occhi del team non si può più rendere privata;
+    --   2. `jht cloud restore` fa INSERT OR REPLACE su `positions` con un
+    --      elenco esplicito di colonne: una colonna in più verrebbe
+    --      AZZERATA a ogni restore. Un campo che perde quello che ci scrivi
+    --      è peggio di un campo che non c'è.
+    --
+    -- Non è un event-log (a differenza di `position_feedback`): è un blocco
+    -- note, l'ultimo testo vale. Da qui la PRIMARY KEY su position_id.
+    -- Una riga per ORIGINE, non una per posizione (O-33): quando la stessa
+    -- nota diverge fra box e sito si tengono ENTRAMBI i testi, e non si
+    -- cancella mai niente. «Vince l'ultima» sembrava più semplice ma
+    -- obbligava a stabilire quale sia «l'ultima» fra due orologi non
+    -- sincronizzati — e il box tronca `created_at` ai secondi mentre il web
+    -- tiene i millisecondi (visto su O-16). Tenendole entrambe quel
+    -- problema non esiste.
+    CREATE TABLE IF NOT EXISTS position_user_notes (
+        position_id INTEGER NOT NULL,
+        origin TEXT NOT NULL DEFAULT 'box' CHECK (origin IN ('box','web')),
+        body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (position_id, origin),
+        FOREIGN KEY (position_id) REFERENCES positions(id)
+    );
+
     -- Bacheca del team: direttive/ordini PERMANENTI dell'utente (strategia,
     -- formazione, policy operative) — es. "modalità mantenimento: CV solo 90+,
     -- stop scouting". A differenza del captain-diary (per-giorno, lezioni di
@@ -307,6 +445,48 @@ def ensure_schema(conn: sqlite3.Connection):
         archived_at TIMESTAMP
     );
 
+    -- O-80: claim e risultato della singola operazione dashboard. Vive nello
+    -- stesso DB di direttiva ed evento perché i quattro write devono fare
+    -- commit oppure rollback insieme.
+    CREATE TABLE IF NOT EXISTS team_directive_request_ledger (
+        request_id TEXT PRIMARY KEY,
+        action TEXT NOT NULL,
+        target_id INTEGER NOT NULL,
+        payload TEXT,
+        result TEXT
+    );
+
+    -- [JHT-DB-SCOUT-COORD] Divisione del territorio fra Scout e claim
+    -- anti-collisione. Vivevano in un SECONDO file sqlite
+    -- (`$JHT_HOME/data/scout_coordination.db`) con un suo risolutore di
+    -- percorso, e quel file è stato la causa dell'issue #132: un percorso in
+    -- più è un percorso che può non esistere, non essere scrivibile, o
+    -- risolversi diverso per due agenti. Qui la coordinazione sta accanto
+    -- alle altre tabelle di stato interno della squadra (`team_directives`,
+    -- `maintenance_events`), con la stessa risoluzione di path che ogni
+    -- agente riceve già (`JHT_DB`), le stesse migrazioni e lo stesso backup.
+    -- NON viaggia verso il cloud: `db_to_supabase` sincronizza una lista
+    -- esplicita di tabelle e questa non c'è.
+    -- Write-ops: shared/skills/scout_coord.py (unico scrittore).
+    CREATE TABLE IF NOT EXISTS scout_coordination (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scout TEXT NOT NULL,
+        cerchi TEXT,
+        fonti TEXT,
+        note TEXT,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        superseded_at TIMESTAMP
+    );
+
+    -- Claim per posizione: due Scout non lavorano lo stesso annuncio. La
+    -- PRIMARY KEY è il lock — l'INSERT del secondo fallisce, e quel
+    -- fallimento è la risposta.
+    CREATE TABLE IF NOT EXISTS scout_claims (
+        job_id TEXT PRIMARY KEY,
+        scout TEXT NOT NULL,
+        claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
     CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
     CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id);
@@ -319,11 +499,19 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_messages_source_id
+      ON pending_user_messages(source_id) WHERE source_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_position_tickets_status ON position_tickets(status);
+    CREATE INDEX IF NOT EXISTS idx_position_feedback_position
+        ON position_feedback(position_id, id DESC);
     CREATE INDEX IF NOT EXISTS idx_position_tickets_position ON position_tickets(position_id);
     CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_team_directives_status ON team_directives(status);
     CREATE INDEX IF NOT EXISTS idx_team_directives_cloud_id ON team_directives(cloud_id) WHERE cloud_id IS NOT NULL;
+    -- La distribuzione ATTIVA è la sola lettura calda: `show` la fa a ogni
+    -- boot di uno Scout, e con la storia di settimane accanto un full scan
+    -- sarebbe l'unica query lenta della coordinazione.
+    CREATE INDEX IF NOT EXISTS idx_scout_coordination_active ON scout_coordination(scout) WHERE superseded_at IS NULL;
 
     -- Bug #14: event-log delle transizioni di stato delle positions.
     -- `positions.status` è una colonna sovrascritta ad ogni UPDATE, quindi
@@ -552,6 +740,33 @@ def ensure_schema(conn: sqlite3.Connection):
       UPDATE applications SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
+    -- O-64: written_at e' il marker persistito della versione del CV. Se
+    -- cambia dopo una revisione, il giudizio riguarda per definizione il
+    -- testo precedente: lo invalidiamo nello stesso statement che pubblica
+    -- la nuova versione. I soli cambi di path/PDF non toccano written_at e
+    -- quindi non fanno decadere un verdetto ancora valido.
+    CREATE TRIGGER IF NOT EXISTS applications_invalidate_critic_after_rewrite
+    AFTER UPDATE OF written_at ON applications FOR EACH ROW
+    WHEN NEW.written_at IS NOT OLD.written_at AND (
+      NEW.critic_verdict IS NOT NULL OR NEW.critic_score IS NOT NULL OR
+      NEW.critic_notes IS NOT NULL OR NEW.critic_round IS NOT NULL OR
+      NEW.reviewed_by IS NOT NULL OR NEW.critic_reviewed_at IS NOT NULL
+    )
+    BEGIN
+      UPDATE applications
+      SET status = CASE
+            WHEN status IN ('ready', 'approved') THEN 'review'
+            ELSE status
+          END,
+          critic_verdict = NULL,
+          critic_score = NULL,
+          critic_notes = NULL,
+          critic_round = NULL,
+          reviewed_by = NULL,
+          critic_reviewed_at = NULL
+      WHERE id = NEW.id;
+    END;
+
     CREATE TRIGGER IF NOT EXISTS applications_default_created_at
     AFTER INSERT ON applications FOR EACH ROW
     WHEN NEW.created_at IS NULL OR NEW.updated_at IS NULL
@@ -646,6 +861,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_structured_location(conn)
     _migrate_positions_office_geocoding(conn)
     _migrate_positions_write_requested(conn)
+    _migrate_positions_write_request_kind(conn)
+    _migrate_cover_letter_request_effect(conn)
     _migrate_v6_to_v7_tombstones(conn)
     _migrate_positions_geocode_requested(conn)
     _migrate_positions_expiry(conn)
@@ -656,9 +873,15 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_jd_summary(conn)
     _migrate_role_family_registry(conn)
     _migrate_position_tickets_cloud_id(conn)
+    _migrate_position_tickets_active_rescore(conn)
     _migrate_companies_logo(conn)
     _migrate_pending_messages_chat_turns(conn)
     _migrate_positions_url_unique(conn)
+    _migrate_scout_coordination_unique(conn)
+    _migrate_position_feedback(conn)
+    _migrate_position_user_notes(conn)
+    _migrate_position_user_notes_origin(conn)
+    _migrate_applications_critic_round(conn)
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
@@ -734,6 +957,19 @@ def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
 def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return any(row['name'] == column for row in rows)
+
+
+def _migrate_applications_critic_round(conn: sqlite3.Connection) -> None:
+    """Rende locale lo stato di round gia' presente nel modello cloud.
+
+    ``db_update.py`` accetta ``--critic-round`` da tempo, ma lo schema SQLite
+    fresco non aveva la colonna. O-64 deve poter invalidare lo stato completo
+    del Critico e sincronizzarlo, non soltanto voto e verdetto.
+    """
+    if not _table_exists(conn, 'applications'):
+        return
+    if not _column_exists(conn, 'applications', 'critic_round'):
+        conn.execute("ALTER TABLE applications ADD COLUMN critic_round INTEGER")
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
@@ -906,6 +1142,190 @@ def _migrate_positions_url_unique(conn: sqlite3.Connection) -> None:
         print(
             f"[migrate] unique index on positions.url was NOT created ({exc}). "
             "Deduplication still relies on the transaction in db_insert.py.",
+            file=sys.stderr,
+        )
+
+
+def _migrate_position_user_notes_origin(conn: sqlite3.Connection) -> None:
+    """Da «una nota per posizione» a «una nota per ORIGINE» (O-33).
+
+    La chiave primaria in SQLite non si cambia con un ALTER: la tabella si
+    ricrea. Ricreare significa poter perdere righe, quindi qui non si copia
+    sperando — si CONTA prima, si copia, si riconta, e se il totale non
+    coincide ci si ferma con un errore PRIMA di toccare la vecchia. Una
+    migrazione senza verifica è un'ipotesi, e l'ipotesi sarebbe sui dati di
+    qualcuno.
+
+    Idempotente: se la colonna `origin` c'è già, non fa niente.
+    """
+    if not _table_exists(conn, 'position_user_notes'):
+        return  # la crea già nella forma nuova lo schema base
+    if _column_exists(conn, 'position_user_notes', 'origin'):
+        return
+
+    before = conn.execute(
+        "SELECT COUNT(*) FROM position_user_notes").fetchone()[0]
+
+    conn.execute("""
+        CREATE TABLE position_user_notes_new (
+            position_id INTEGER NOT NULL,
+            origin TEXT NOT NULL DEFAULT 'box' CHECK (origin IN ('box','web')),
+            body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (position_id, origin),
+            FOREIGN KEY (position_id) REFERENCES positions(id)
+        )
+    """)
+    # Le note esistenti sono nate sul box: è l'unico posto da cui si potevano
+    # scrivere prima di O-33.
+    conn.execute("""
+        INSERT INTO position_user_notes_new
+            (position_id, origin, body, created_at, updated_at)
+        SELECT position_id, 'box', body, created_at, updated_at
+          FROM position_user_notes
+    """)
+
+    after = conn.execute(
+        "SELECT COUNT(*) FROM position_user_notes_new").fetchone()[0]
+    if after != before:
+        # Niente DROP: si lascia tutto com'è e si dice cosa non torna. Meglio
+        # una migrazione che non è passata di una nota che non c'è più.
+        conn.execute("DROP TABLE position_user_notes_new")
+        raise RuntimeError(
+            "position_user_notes migration aborted: "
+            f"{before} rows before, {after} copied. Nothing was dropped."
+        )
+
+    conn.execute("DROP TABLE position_user_notes")
+    conn.execute(
+        "ALTER TABLE position_user_notes_new RENAME TO position_user_notes")
+
+
+def _migrate_position_user_notes(conn: sqlite3.Connection) -> None:
+    """Crea `position_user_notes` sui DB nati prima di O-22.
+
+    Additiva e idempotente. Chi scrive e chi legge controllano che la tabella
+    esista prima di toccarla: fra l'aggiornamento del CLI e il primo giro
+    delle migrazioni c'è una finestra reale, ed è lì che un utente perde
+    quello che ha appena scritto (stesso difetto trovato su O-16).
+
+    La crea nella forma di O-33 — chiave `(position_id, origin)` — e non in
+    quella originale. Su un DB appena creato questa gira nel primo giro di
+    `_run_migrations`, cioè PRIMA del DDL base: se qui nascesse con la vecchia
+    chiave, `_migrate_position_user_notes_origin` la troverebbe subito dopo
+    senza `origin` e proverebbe a ricrearla mentre `positions` ancora non
+    esiste, fallendo con "no such table: main.positions". Nascere già nella
+    forma nuova rende quella migrazione un no-op sul DB nuovo e la lascia
+    lavorare solo dove serve davvero: i jobs.db fra O-22 e O-33.
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS position_user_notes (
+            position_id INTEGER NOT NULL,
+            origin TEXT NOT NULL DEFAULT 'box' CHECK (origin IN ('box','web')),
+            body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (position_id, origin),
+            FOREIGN KEY (position_id) REFERENCES positions(id)
+        );
+    """)
+
+
+def _migrate_position_feedback(conn: sqlite3.Connection) -> None:
+    """Crea `position_feedback` sui DB nati prima di O-15.
+
+    Additiva e idempotente: CREATE TABLE IF NOT EXISTS, nessun rename, nessun
+    drop, nessuna riscrittura di righe esistenti. Un DB che non l'ha ancora
+    continua a funzionare — chi scrive e chi legge controllano la presenza
+    della tabella prima di toccarla, perché un jobs.db più vecchio del codice
+    è la condizione normale fra l'aggiornamento del CLI e il primo giro delle
+    migrazioni (è il difetto trovato su O-16, qui evitato per costruzione).
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS position_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            position_id INTEGER NOT NULL,
+            action TEXT NOT NULL CHECK (action IN (
+                'like','dislike','hide','star','clear'
+            )),
+            reason TEXT,
+            comment TEXT,
+            score INTEGER CHECK (score IS NULL OR (score BETWEEN 1 AND 5)),
+            direction TEXT CHECK (direction IS NULL OR direction IN (
+                'more_like_this','less_like_this'
+            )),
+            cloud_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (position_id) REFERENCES positions(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_position_feedback_position
+            ON position_feedback(position_id, id DESC);
+    """)
+
+
+def _migrate_scout_coordination_unique(conn: sqlite3.Connection) -> None:
+    """`(scout, started_at)` diventa UNIQUE su `scout_coordination`.
+
+    È il vincolo che mancava sotto la dedup dell'import legacy: il
+    controllo-poi-inserisci di `scout_coord.import_legacy`, senza niente
+    sotto, lasciava a due bootstrap concorrenti (ogni Scout ne fa uno
+    pre-spawn) la finestra per importare la stessa storia due volte —
+    misurato: 4 processi, 20 righe invece di 5.
+
+    POLITICA sui duplicati preesistenti: si cancellano SOLO i duplicati
+    ESATTI — stessa chiave E stesso contenuto (`cerchi`, `fonti`, `note`,
+    `superseded_at`): ridondanza pura lasciata dalla doppia importazione,
+    stato interno della squadra, tabella che non sincronizza verso il cloud.
+    Di quelli si tiene la prima copia (MIN(id)) e le altre spariscono, con
+    traccia su stderr. Righe con la STESSA chiave `(scout, started_at)` ma
+    contenuto diverso NON sono ridondanza: sono un conflitto. Non si toccano
+    — il CREATE UNIQUE INDEX qui sotto fallisce, l'errore esce su stderr ben
+    visibile, e quale riga tenere lo decide un umano, non una migrazione che
+    gira da sola a ogni boot.
+
+    Fail-safe come `_migrate_positions_url_unique`: se l'indice non nasce
+    la funzione NON solleva — `ensure_schema` gira a ogni invocazione di
+    ogni agente e romperla per un vincolo di igiene sarebbe peggio del
+    vincolo mancante.
+    """
+    if not _table_exists(conn, 'scout_coordination'):
+        return
+    if _index_exists(conn, 'idx_scout_coordination_scout_started_unique'):
+        return  # già migrato
+    try:
+        # Duplicati ESATTI, su chiave E contenuto: solo quelli si cancellano.
+        _GROUP = "scout, started_at, cerchi, fonti, note, superseded_at"
+        dupes = conn.execute(
+            f"SELECT COUNT(*) FROM (SELECT 1 FROM scout_coordination "
+            f"GROUP BY {_GROUP} HAVING COUNT(*) > 1)"
+        ).fetchone()[0]
+        if dupes:
+            removed = conn.execute(
+                f"DELETE FROM scout_coordination WHERE id NOT IN "
+                f"(SELECT MIN(id) FROM scout_coordination GROUP BY {_GROUP})"
+            ).rowcount
+            import sys
+            print(
+                f"[migrate] scout_coordination: removed {removed} exact "
+                f"duplicate row(s) across {dupes} group(s) before the UNIQUE "
+                "index (double legacy import).",
+                file=sys.stderr,
+            )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS "
+            "idx_scout_coordination_scout_started_unique "
+            "ON scout_coordination(scout, started_at)"
+        )
+    except sqlite3.Error as exc:
+        import sys
+        print(
+            f"[migrate] unique index on scout_coordination(scout, started_at) "
+            f"was NOT created ({exc}). If this is a uniqueness conflict, rows "
+            "share the (scout, started_at) key with DIFFERENT content: they "
+            "were left in place on purpose — inspect and resolve them by "
+            "hand. Until then, legacy-import dedup relies on the in-memory "
+            "check in scout_coord.import_legacy.",
             file=sys.stderr,
         )
 
@@ -1302,11 +1722,58 @@ def _migrate_pending_messages_chat_turns(conn: sqlite3.Connection) -> None:
         )
     if not _column_exists(conn, 'pending_user_messages', 'chat_ts'):
         conn.execute("ALTER TABLE pending_user_messages ADD COLUMN chat_ts REAL")
+    # Identita' del canale inbound (O-67). Per Telegram e'
+    # `telegram:<ruolo>:<update_id>`: sopravvive a restart e replay fra
+    # journal, offset e SQLite senza deduplicare sul testo (due "ok" restano
+    # due turni). Locale soltanto: sul cloud l'identita' continua a essere il
+    # legacy_id della riga, quindi il payload di sync non cambia.
+    if not _column_exists(conn, 'pending_user_messages', 'source_id'):
+        conn.execute("ALTER TABLE pending_user_messages ADD COLUMN source_id TEXT")
+    # O-80 correlation metadata is deliberately separate from `body`: the
+    # Captain receives only a trusted wake marker, while audits can still bind
+    # the event to the exact mutation without parsing or executing user text.
+    if not _column_exists(conn, 'pending_user_messages', 'source_action'):
+        conn.execute(
+            "ALTER TABLE pending_user_messages ADD COLUMN source_action TEXT"
+        )
+    if not _column_exists(conn, 'pending_user_messages', 'source_payload'):
+        conn.execute(
+            "ALTER TABLE pending_user_messages ADD COLUMN source_payload TEXT"
+        )
+    if not _column_exists(conn, 'pending_user_messages', 'source_directive_id'):
+        conn.execute(
+            "ALTER TABLE pending_user_messages ADD COLUMN source_directive_id INTEGER"
+        )
+    # Identità del gemello cloud, quando il messaggio è NATO sul web (O-16).
+    # Stesso patto di `position_tickets.cloud_id`: NULL = nata in locale, ed è
+    # il caso di ogni riga preesistente — nessuna riscrittura, nessun default
+    # da inventare. Serve perché un turno scritto dal web ha già un'identità
+    # (legacy_id negativo) prima che il box lo veda: importandolo il box gli
+    # assegnava un id locale positivo e il full-push lo ripubblicava come se
+    # fosse nato qui, creando un gemello che l'upsert su (user_id, legacy_id)
+    # non poteva riconoscere.
+    if not _column_exists(conn, 'pending_user_messages', 'cloud_legacy_id'):
+        conn.execute(
+            "ALTER TABLE pending_user_messages ADD COLUMN cloud_legacy_id INTEGER"
+        )
     # Il mirror cerca "i turni che non sono ancora in chat.jsonl": indice
     # parziale, a regime quasi vuoto.
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_pending_messages_unmirrored "
         "ON pending_user_messages(agent, id) WHERE chat_ts IS NULL"
+    )
+    # Il verso opposto: l'ingest chiede "di questi ts, quali ho gia'?" per
+    # ogni riga della coda di chat.jsonl che rilegge. E' la guardia contro i
+    # doppioni, quindi gira a ogni giro in cui il file si muove e su liste
+    # lunghe quanto la coda. Senza indice sarebbe una scansione della tabella
+    # per ogni battuta scambiata.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pending_messages_mirrored "
+        "ON pending_user_messages(agent, chat_ts) WHERE chat_ts IS NOT NULL"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_messages_source_id "
+        "ON pending_user_messages(source_id) WHERE source_id IS NOT NULL"
     )
 
 
@@ -1330,6 +1797,52 @@ def _migrate_position_tickets_cloud_id(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id "
         "ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL"
     )
+
+
+def _migrate_position_tickets_active_rescore(conn: sqlite3.Connection) -> None:
+    """Impedisce due rivalutazioni attive senza rompere i DB precedenti.
+
+    ``kind`` è sempre stato testo libero, quindi un database antecedente a
+    O-70 può già contenere più ``rescore`` open/assigned per la stessa
+    posizione. Creare subito l'indice UNIQUE renderebbe ``ensure_schema``
+    inutilizzabile proprio su quei database.
+
+    La sanatoria non cancella ticket né testo: mantiene attivo quello su cui
+    il team ha già iniziato a lavorare (``assigned`` prima di ``open``), poi
+    il più antico e infine l'id minore come spareggio stabile. Gli altri
+    diventano ``resolved`` e restano integralmente leggibili nello storico.
+    UPDATE e CREATE INDEX vivono nella stessa transazione SQLite aperta dalla
+    connessione, quindi non esiste una finestra senza vincolo dopo la cura.
+    """
+    index = 'idx_position_tickets_active_rescore'
+    if not _table_exists(conn, 'position_tickets') or _index_exists(conn, index):
+        return
+
+    conn.execute("""
+        WITH ranked AS (
+            SELECT id,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY position_id
+                       ORDER BY CASE status WHEN 'assigned' THEN 0 ELSE 1 END,
+                                CASE WHEN created_at IS NULL THEN 1 ELSE 0 END,
+                                created_at ASC,
+                                id ASC
+                   ) AS active_rank
+              FROM position_tickets
+             WHERE kind = 'rescore'
+               AND status IN ('open', 'assigned')
+        )
+        UPDATE position_tickets
+           SET status = 'resolved',
+               resolved_at = COALESCE(resolved_at, CURRENT_TIMESTAMP),
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id IN (SELECT id FROM ranked WHERE active_rank > 1)
+    """)
+    conn.execute(f"""
+        CREATE UNIQUE INDEX IF NOT EXISTS {index}
+            ON position_tickets(position_id, kind)
+            WHERE kind = 'rescore' AND status IN ('open', 'assigned')
+    """)
 
 
 def _migrate_positions_user_excluded(conn: sqlite3.Connection) -> None:
@@ -1433,6 +1946,68 @@ def _migrate_positions_write_requested(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_positions_write_requested "
         "ON positions(write_requested) WHERE write_requested = 1"
     )
+
+
+def _migrate_positions_write_request_kind(conn: sqlite3.Connection) -> None:
+    """Distingue CV iniziale e cover letter nella stessa coda Writer.
+
+    ``NULL`` resta il valore legacy equivalente a ``cv``: un box non ancora
+    aggiornato può continuare a sincronizzare il flag senza rompere il cloud.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if not _column_exists(conn, 'positions', 'write_request_kind'):
+        conn.execute(
+            "ALTER TABLE positions ADD COLUMN write_request_kind TEXT"
+        )
+
+
+def _migrate_cover_letter_request_effect(conn: sqlite3.Connection) -> None:
+    """Chiude la richiesta solo insieme a un nuovo artefatto cover letter.
+
+    Il trigger è il seam comune a skill e agenti: una risposta testuale o un
+    UPDATE no-op non possono dichiarare completato il lavoro. Un INSERT non
+    basta perché la cover letter è richiedibile solo su application esistente.
+    """
+    if not (_table_exists(conn, 'positions') and
+            _table_exists(conn, 'applications') and
+            _column_exists(conn, 'positions', 'write_request_kind')):
+        return
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS cover_letter_request_effect
+        AFTER UPDATE OF cl_path, cl_pdf_path ON applications
+        WHEN EXISTS (
+            SELECT 1 FROM positions p
+             WHERE p.id = NEW.position_id
+               AND p.write_requested = 1
+               AND p.write_request_kind = 'cover_letter'
+        ) AND (
+            NEW.cl_path IS NOT OLD.cl_path OR
+            NEW.cl_pdf_path IS NOT OLD.cl_pdf_path
+        )
+        BEGIN
+            UPDATE positions
+               SET write_requested = 0,
+                   write_requested_at = CASE
+                     WHEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') >
+                          COALESCE(write_requested_at, '')
+                     THEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')
+                     ELSE strftime('%Y-%m-%d %H:%M:%f', write_requested_at,
+                                   '+0.001 seconds')
+                   END,
+                   write_request_kind = NULL,
+                   updated_at = CASE
+                     WHEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') >
+                          COALESCE(updated_at, '')
+                     THEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')
+                     ELSE strftime('%Y-%m-%d %H:%M:%f', updated_at,
+                                   '+0.001 seconds')
+                   END
+             WHERE id = NEW.position_id
+               AND write_requested = 1
+               AND write_request_kind = 'cover_letter';
+        END
+    """)
 
 
 def _migrate_positions_geocode_requested(conn: sqlite3.Connection) -> None:

@@ -5,6 +5,17 @@ on:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]*"
 
+# Il ref Git e' il claim immutabile della versione. Due rerun dello stesso tag
+# non possono attraversare insieme il check-then-publish del registry; il
+# secondo entra solo dopo che il primo ha pubblicato e verifica lo stesso
+# digest. Un tag divergente resta un errore e non viene sovrascritto.
+concurrency:
+  group: release-runtime-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
   check-version:
     name: Check tag ↔ package.json versions
@@ -13,6 +24,12 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Require the current production commit
+        run: |
+          git fetch origin production --depth=1
+          test "$(git rev-list -n 1 "$GITHUB_REF_NAME")" = "$(git rev-parse origin/production)"
       - name: Verify tag matches package.json versions
         run: scripts/check-release-version.sh "$GITHUB_REF_NAME"
 
@@ -84,120 +101,14 @@ jobs:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
 
-      # Stessa lista di `game.yml` (step "Run deterministic game tests"), con
-      # UNA sola eccezione, in fondo: terminal_selection_selftest.gd. Un tag non
-      # puo' uscire con meno controlli di quelli che ogni push esegue — chi
-      # aggiunge un self-test la' lo aggiunge anche qui.
-      - name: Import and test game
-        run: |
-          # Il runner Windows non regge la fila di ~26 avvii di Godot di questo
-          # step: il 2026-07-29 e il 2026-07-30 e' uscito in segfault (exit 139)
-          # a meta' lista, con i test verdi sopra e sotto e nessun messaggio di
-          # fallimento — ogni chiusura lascia dietro "ObjectDB instances were
-          # leaked", e prima o poi una di quelle uscite sporche porta giu' il
-          # processo. Non e' un test rotto: al rilancio passa. Ma un rosso
-          # casuale su un tag rende inutile il semaforo della release, e chi lo
-          # legge non ha modo di distinguerlo da un difetto vero.
-          #
-          # Quindi ogni avvio ha diritto a UN ritentativo su processo pulito,
-          # come gia' fanno `game.yml` e `game/tools/run.ps1`. Il ritentativo si
-          # vede nel log: se comincia a servire spesso, questa lista va spezzata
-          # in piu' job e questo commento e' la traccia per farlo.
-          retry_godot() {
-            local out code attempt=0
-            while : ; do
-              attempt=$((attempt + 1))
-              if out="$(env "$@" 2>&1)"; then
-                printf '%s\n' "$out"
-                return 0
-              else
-                # L'`else` non e' decorativo: un `if` bash che non entra nel
-                # ramo `then` e non ha `else` esce con stato 0, quindi qui
-                # fuori `$?` direbbe "0" e il secondo tentativo tornerebbe
-                # VERDE su un test fallito.
-                code=$?
-              fi
-              if [ "$attempt" -ge 2 ]; then
-                printf '%s\n' "$out" >&2
-                echo "::error::Godot uscito con codice $code dopo due tentativi"
-                return "$code"
-              fi
-              printf '%s\n' "$out" >&2
-              echo "::warning::Godot uscito con codice $code — riprovo una volta su processo pulito"
-              sleep 10
-            done
-          }
-          python game/tools/title_artifact_contract_selftest.py
-          retry_godot godot --headless --path game --import
-          retry_godot godot --headless --path game --script res://tools/nav_grid_selftest.gd
-          retry_godot godot --headless --path game --script res://tools/speech_bubble_selftest.gd
-          retry_godot godot --headless --path game --script res://tools/pipeline_queue_selftest.gd
-          retry_godot godot --headless --path game --script res://tools/embedded_terminal_selftest.gd
-          # La redazione dei segreti e il bundle di diagnostica: quello che
-          # l'utente allega a una segnalazione non deve contenere token, path
-          # della sua home o il nome dell'account.
-          retry_godot godot --headless --path game --script res://tools/redactor_selftest.gd
-          retry_godot godot --headless --path game --script res://tools/diagnostics_selftest.gd
-          retry_godot godot --headless --path game --script res://tools/theme_selftest.gd
-          retry_godot godot --headless --path game --script res://tools/budget_notice_selftest.gd
-          # L'avviso della deroga alla spesa NOMINA i freni che non cedono e il
-          # tetto di ore: sono copiati da shared/skills/burn_intent.py, e una
-          # copia rimasta indietro promette reti di sicurezza che il modulo non
-          # ha piu'. Il test confronta la copia col sorgente.
-          retry_godot godot --headless --path game --script res://tools/burn_mode_selftest.gd
-          retry_godot godot --headless --path game --script res://tools/doc_preview_selftest.gd
-          # La terza via all'uscita ("esci, il team continua") e l'attesa del
-          # thread di spegnimento: nessuna delle due si vede a schermo, si
-          # sbagliano in silenzio e si scoprono dal container rimasto acceso.
-          retry_godot godot --headless --path game --script res://tools/headless_exit_selftest.gd
-          # L'aggiornamento automatico, e qui vale doppio: e' il tag che stiamo
-          # costruendo a diventare la versione che le copie gia' installate si
-          # vedranno proporre. Si aggiorna solo in avanti, si installa da solo
-          # solo dove il pacchetto e' firmato, e solo se firmato da chi ha
-          # firmato la copia in esecuzione.
-          retry_godot godot --headless --path game --script res://tools/update_check_selftest.gd
-          # Nessun tag deve uscire con le lingue disallineate: il fallback di
-          # UIStrings.t() e' silenzioso, quindi una chiave persa non si vede
-          # ne' in CI ne' all'avvio in italiano — solo dall'utente straniero.
-          retry_godot godot --headless --path game --script res://tools/i18n_parity_selftest.gd
-          # Il patto del riordino della sidebar: le voci raccolte in schede o
-          # dietro "Impostazioni" restano raggiungibili e tradotte.
-          retry_godot godot --headless --path game --script res://tools/sidebar_nav_selftest.gd
-          # I cognomi degli agenti sono identita', non decorazione: mappa pura
-          # ruolo+numero, niente omonimi e ogni carattere gia' presente nei
-          # font delle 7 lingue (altrimenti a schermo esce un rettangolo).
-          retry_godot godot --headless --path game --script res://tools/agent_names_selftest.gd
-          # Il costo a riposo: finestra senza focus che disegna di meno, tetto
-          # fps del primo piano restituito ALLA LETTERA, passi di fisica che
-          # coprono il frame anche a ritmo lento.
-          retry_godot godot --headless --path game --script res://tools/idle_pace_selftest.gd
-          # (terminal_selection_selftest.gd resta fuori: questo step gira anche
-          # su Windows via Git Bash — game.yml lo salta con `runner.os` — e il
-          # test apre /bin/sh senza il ramo Windows che ha embedded_terminal.)
-          VPS_OUT="$(retry_godot JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3)"
-          printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
-          PIPE_OUT="$(retry_godot JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game)"
-          printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
-          SWITCH_OUT="$(retry_godot JHT_SCENE=office JHT_BACKEND_SWITCH_TEST=1 godot --headless --path game)"
-          printf '%s\n' "$SWITCH_OUT" | grep "BACKEND-SWITCH-TEST PASS"
-          DOCTOR_OUT="$(retry_godot JHT_SCENE=office JHT_DOCTOR_TEST=scout-4 godot --headless --path game)"
-          printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
-          FEEDBACK_OUT="$(retry_godot JHT_SCENE=office JHT_FEEDBACK_PANEL_TEST=1 godot --headless --path game)"
-          printf '%s\n' "$FEEDBACK_OUT" | grep "FEEDBACK-PANEL-TEST PASS"
-          GUIDED_OUT="$(retry_godot JHT_SCENE=office JHT_GUIDED_TEST=1 godot --headless --path game)"
-          printf '%s\n' "$GUIDED_OUT" | grep "GUIDED-ONBOARDING-TEST PASS"
-          # La pagina di chat a fumetti: vignette nell'ordine della storia,
-          # quella dell'agente bianca col testo nero (richiesta esplicita, non
-          # una scelta di tema), il giro utente->canale->risposta che passa dal
-          # bus e la rilettura all'indietro che non viene interrotta.
-          COMIC_OUT="$(retry_godot JHT_SCENE=office JHT_COMIC_CHAT_TEST=1 godot --headless --path game)"
-          printf '%s\n' "$COMIC_OUT" | grep "COMIC-CHAT-TEST PASS"
-          GFX_OUT="$(retry_godot JHT_SCENE=office JHT_GFX_TEST=1 godot --headless --path game)"
-          printf '%s\n' "$GFX_OUT" | grep "GFX-PROFILE-TEST PASS"
-          TEXT_OUT="$(retry_godot JHT_SCENE=office JHT_WORLD_TEXT_TEST=1 godot --headless --path game)"
-          printf '%s\n' "$TEXT_OUT" | grep "WORLD-TEXT-TEST PASS"
-          GFXPANEL_OUT="$(retry_godot JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1 godot --headless --path game)"
-          printf '%s\n' "$GFXPANEL_OUT" | grep "GRAPHICS-PANEL-TEST PASS"
+      # Il tier `gate` vive solo in game/tools/test-matrix.txt. I runner lo
+      # importano e lo eseguono per intero: aggiungere una riga alla matrice la
+      # rende quindi bloccante anche per la release, senza aggiornare una lista
+      # parallela. L'unica esclusione e' causale e dichiarata dalla matrice:
+      # run.ps1 salta a voce i gate `posix`, non eseguibili su Windows.
+      - name: Run canonical desktop release gates
+        if: runner.os != 'Windows'
+        run: bash game/tools/run.sh test gate
 
       - name: Attest the pinned Windows release trust root in the project
         if: runner.os == 'Windows'
@@ -229,7 +140,17 @@ jobs:
           printf '%s\n' "$clean_out" | grep -Fx \
             "WINDOWS-UPDATE-TRUST-TEST PASS"
 
-      # L'export e' il passo piu' pesante e arriva dopo tutta la lista di test:
+      - name: Run canonical desktop release gates through PowerShell
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $GodotExe = Get-ChildItem (Join-Path $HOME "godot") -Filter "Godot*.exe" -File |
+            Select-Object -First 1
+          if (-not $GodotExe) { throw "setup-godot executable not found" }
+          $env:JHT_GODOT_BIN = $GodotExe.FullName
+          ./game/tools/run.ps1 test gate
+
+      # L'export e' il passo piu' pesante e arriva dopo tutti i gate canonici:
       # stessa esposizione dello step precedente, stessa difesa (game.yml la ha
       # dal 2026-07-29). La pausa serve a far chiudere davvero i processi
       # appena usciti prima di aprirne un altro.
@@ -475,12 +396,53 @@ jobs:
             ${{ matrix.additional_artifact_path }}
             ${{ matrix.additional_artifact_path }}.provenance.json
 
+  publish-runtime:
+    name: Publish immutable runtime tag
+    runs-on: ubuntu-latest
+    needs:
+      - check-version
+      - build-game
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Il runtime viene costruito e collaudato sul push master precedente.
+      # Il manifest registra quel digest e la sua label revision. Il tag
+      # release non ricostruisce byte diversi: promuove il digest attestato,
+      # oppure fallisce senza sovrascrivere un tag omonimo divergente.
+      - name: Verify source image and publish release tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          python scripts/runtime_image_pin.py verify-tree --root . --version "$version"
+          source_revision="$(python scripts/runtime_image_pin.py show --field source_revision)"
+          git merge-base --is-ancestor "$source_revision" HEAD
+          python scripts/runtime_image_pin.py publish --claim "$GITHUB_REF"
+
   release:
     name: Prepare signed release candidate
     runs-on: ubuntu-latest
     needs:
       - check-version
       - build-game
+      - publish-runtime
     permissions:
       contents: read
 
@@ -615,6 +577,19 @@ jobs:
             --repository "$GITHUB_REPOSITORY" \
             --source-root .
 
+      - name: Record the runtime manifest as a release asset
+        env:
+          TAG_SHA: ${{ steps.source.outputs.tag_sha }}
+        run: |
+          cp release/runtime-image.v1.json release-assets/RUNTIME-IMAGE.json
+          python scripts/release_artifacts.py record \
+            --asset release-assets/RUNTIME-IMAGE.json \
+            --output release-assets/RUNTIME-IMAGE.json.provenance.json \
+            --tag "$GITHUB_REF_NAME" \
+            --commit "$TAG_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-root .
+
       - name: Verify tagged artifact provenance and write SHA-256 checksums
         env:
           TAG_SHA: ${{ steps.source.outputs.tag_sha }}
@@ -625,6 +600,7 @@ jobs:
             --expected-asset job-hunter-team.zip \
             --expected-asset job-hunter-team-linux-x64.tar.gz \
             --expected-asset jht-windows-update.ps1 \
+            --expected-asset RUNTIME-IMAGE.json \
             --tag "$GITHUB_REF_NAME" \
             --commit "$TAG_SHA" \
             --repository "$GITHUB_REPOSITORY" \

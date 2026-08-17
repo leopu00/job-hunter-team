@@ -118,6 +118,42 @@ the container).
 > 💡 To reload an agent after editing `jht.config.json`:
 > `jht team stop --all && jht team start`.
 
+## Working mode
+
+`jht coordinator <action>` — the **working mode**: the one decision that
+governs what the whole team does all day. Same surface as the Coordinator
+Console in the game, and the same single writer
+(`shared/skills/coordinator_settings.py`): the file
+`$JHT_HOME/profile/capitano-maintenance.json`.
+
+| Command                              | Layer | What it does                                                |
+|--------------------------------------|-------|-------------------------------------------------------------|
+| `jht coordinator show [--json]`       | Python | Current mode, its orders, the deadline and the enrichment policy. Shows the mode **in force** — an expired one reads as `search`, with the date it ended. |
+| `jht coordinator set-mode <mode> [--until <iso>] [--clear-until]` | Python | `search` \| `harvest` \| `care` \| `calibration` \| `saving`. `search` **removes** the file, which IS the default. |
+| `jht coordinator set-mode care [--stop-search <bool>] [--discard-expired <bool>] [--cv-min-score <n>] [--pre-check-liveness <bool>]` | Python | The fine-grained orders belong to `care` alone; on another mode they are refused rather than written and ignored. |
+| `jht coordinator clear-until`          | Python | Remove the deadline, keep the mode.                        |
+
+**`--until` is the exit condition**, and it is the reason to prefer it over
+editing the file: a mode with no end lasts by inertia, and that has already
+cost a whole cycle (`saving` set on a Monday conserves nothing — the weekly
+budget is a *window*, not a balance: what is unspent at the reset is destroyed).
+The deadline is evaluated **on read** by everyone who reads the file, so the
+team is back in `search` at that instant without a daemon having to rewrite
+anything.
+
+A key you do not name is left alone: `set-mode harvest` on a mode that already
+has a deadline keeps that deadline. `clear-until` is how you say "no end".
+
+```bash
+jht coordinator set-mode saving --until 2026-08-15T18:00:00Z
+jht coordinator show                    # → ends 2026-08-15T18:00:00Z (in 3d 4h)
+jht coordinator clear-until             # keeps `saving`, removes the end
+```
+
+> 💡 The same choice lives in the game: **Coordinator Console → Work mode**,
+> where "Until when" is a days/hours field. One surface writes what the other
+> reads — the file is the contract.
+
 ## Spending & pace
 
 Two switches, opposite directions, same shape (`status` / `on` / `off`). They

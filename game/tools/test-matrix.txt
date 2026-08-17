@@ -53,6 +53,7 @@ embedded_terminal|script|gate|any|-|tools/embedded_terminal_selftest.gd|-
 # Il seam fake evita di aprire davvero browser nei runner dei tre sistemi.
 cloud_pairing|script|gate|any|-|tools/cloud_pairing_selftest.gd|CLOUD-PAIRING-TEST PASS
 redactor|script|gate|any|-|tools/redactor_selftest.gd|-
+global_search|script|gate|any|-|tools/global_search_selftest.gd|[search-test] PASS
 diagnostics|script|gate|any|-|tools/diagnostics_selftest.gd|-
 theme|script|gate|any|-|tools/theme_selftest.gd|-
 budget_notice|script|gate|any|-|tools/budget_notice_selftest.gd|-
@@ -72,8 +73,8 @@ headless_exit|script|gate|any|-|tools/headless_exit_selftest.gd|-
 # come il checkout del runner materializza i file.
 windows_trust_root_checkout|python|gate|any|-|tools/windows_trust_root_selftest.py|WINDOWS-UPDATE-TRUST-CHECKOUT-TEST PASS
 # Il singleton Windows nasce da source PS5.1 nel PCK: il gate blocca derive di
-# byte/encoding/pin, autoload dopo Log/Game, policy override e superamento dei
-# limiti CreateProcess prima ancora del test real-process sull'export Windows.
+# byte/encoding/pin, autoload tardivo, avvio pre-handshake, policy override e
+# superamento dei limiti CreateProcess prima del test sull'export Windows.
 windows_instance_guard|python|gate|any|-|tools/windows_instance_guard_selftest.py|WINDOWS-INSTANCE-GUARD-SELFTEST PASS
 # L'aggiornamento automatico. Si sbaglia in tre modi che a schermo si
 # assomigliano tutti a "non succede niente": non avvisare mai, proporre un
@@ -107,6 +108,14 @@ terminal_selection|script|gate|posix|-|tools/terminal_selection_selftest.gd|-
 # duplicate in ui_en.gd passavano in verde e rompevano l'avvio in tutte le
 # lingue tranne una.
 i18n_parity|script|gate|any|-|tools/i18n_parity_selftest.gd|-
+# Il run Windows EN aveva cinque etichette italiane e una risposta del
+# Coordinatore nella lingua sbagliata. Qui il backend setup/showroom gira
+# davvero: dettagli connessione, roster, terminale e chat attraversano il bus.
+english_setup_team|run|gate|any|JHT_LANG=en JHT_SCENE=office JHT_ENGLISH_SETUP_TEAM_TEST=1|-|ENGLISH-SETUP-TEAM-TEST PASS
+# I 367 testi narrativi hanno ID semantici e sei overlay completi: il fallback
+# inglese resta una rete di sicurezza, non il modo normale in cui un utente
+# italiano/ungherese/spagnolo/tedesco/francese/portoghese legge la storia.
+dialogue_i18n|script|gate|any|-|tools/dialogue_i18n_selftest.gd|DIALOGUE-I18N-TEST PASS
 # Il velo fra title/wizard/office dura pochi frame ma finisce nelle riprese:
 # costruisce il vero overlay di Game e ne blocca lingua e fallback sull'inglese.
 loading_english|script|gate|any|-|tools/loading_english_selftest.gd|LOADING-ENGLISH-TEST PASS
@@ -118,7 +127,7 @@ language_picker|script|gate|any|-|tools/language_picker_selftest.gd|LANGUAGE-PIC
 # Nel gate dell'artifact, JHT_EXPECTED_GAME_VERSION riceve il tag senza `v`:
 # l'eseguibile deve stampare versione effettiva e PASS, altrimenti esce 1.
 language_picker_title|run|gate|any|JHT_LANG= JHT_LANGUAGE_PICKER_TEST=1 JHT_EXPECTED_GAME_VERSION=|-|LANGUAGE-PICKER-TITLE-TEST PASS
-windows_update_trust_artifact|run|gate|windows|JHT_NOVPS=1 JHT_WINDOWS_UPDATE_TRUST_TEST=1|--headless|WINDOWS-UPDATE-TRUST-TEST PASS
+windows_update_trust_artifact|run|gate|any|JHT_NOVPS=1 JHT_WINDOWS_UPDATE_TRUST_TEST=1|--headless|WINDOWS-UPDATE-TRUST-TEST PASS
 # Il test health capability richiede invece l'EXE gia esportato: la matrice
 # gira prima dell'export, quindi i gate Windows PR/release invocano direttamente
 # tools/windows_update_health_pck_test.ps1 subito dopo il trust-root del PCK.
@@ -143,12 +152,17 @@ sidebar_nav|script|gate|any|-|tools/sidebar_nav_selftest.gd|-
 # dichiarato, contabilita' dei byte del pull. (Mancava dalla matrice: il
 # selftest esisteva dal 30/07 ma non girava in NESSUNA CI.)
 setup_progress|script|gate|any|-|tools/setup_progress_selftest.gd|-
+pull_progress_state|script|gate|any|-|tools/pull_progress_state_selftest.gd|-
 # Il parser dello stream di `docker compose pull` sui due pull REALI di
 # tools/fixtures/: modalita' testo (dove docker NON dichiara mai il totale:
 # byte e rate si', percentuale no) e `--progress json` (byte veri per
 # livello). Su POSIX prova anche il ripiego con un finto docker che rifiuta
 # il flag come i compose meno recenti.
 pull_stream|script|gate|any|-|tools/pull_stream_selftest.gd|-
+# Il comando, il probe CAPITANO e il watchdog sono osservazioni diverse:
+# generation stale, riavvio del servizio, timeout e rotazione del log non
+# devono far tornare idle né promuovere un recupero che nessuno ha osservato.
+team_start_state|script|gate|any|-|tools/team_start_state_selftest.gd|TEAM-START-STATE-TEST PASS
 # Il rilevamento Docker del probe: assente / spento / attivo sono tre schermate
 # (installa · avvia il motore · procedi). Su POSIX un binario assente esce 127
 # via shell, mai -1: senza questa riga il collasso "assente ⇒ presente" — cioè
@@ -187,6 +201,16 @@ backend_switch|run|gate|any|JHT_SCENE=office JHT_BACKEND_SWITCH_TEST=1|-|BACKEND
 doctor|run|gate|any|JHT_SCENE=office JHT_DOCTOR_TEST=scout-4|-|SIMULATION-DOCTOR-TEST PASS
 feedback_panel|run|gate|any|JHT_SCENE=office JHT_FEEDBACK_PANEL_TEST=1|-|FEEDBACK-PANEL-TEST PASS
 guided|run|gate|any|JHT_SCENE=office JHT_GUIDED_TEST=1|-|GUIDED-ONBOARDING-TEST PASS
+# Scelta ruolo del wizard: ID stabili nei dati/prompt, label soltanto UI e
+# compatibilità legacy in sola lettura, senza migrazione di target_role.
+target_role_category|run|gate|any|JHT_SCENE=office JHT_TARGET_ROLE_CATEGORY_TEST=1|-|TARGET-ROLE-CATEGORY-TEST PASS
+# L'uscita dall'onboarding guidato (O-14): che ESC e il pulsante del cassetto
+# chiudano davvero il giro invece di metterlo in pausa, che a giro chiuso le
+# chat guidate non emettano piu' reply ne' action sopra l'interfaccia, e che
+# lo stato sopravviva al riavvio. Arrivato registrato SOLO in release.yml:
+# cosi' sarebbe girato al tag e in nessun'altra CI, che e' esattamente la
+# deriva per cui questo file e' l'unica fonte di verita' (`@master` 2026-08-10).
+tour_exit|run|gate|any|JHT_TUTORIAL_HARNESS=1 JHT_TUTORIAL_RESET=1 JHT_SCENE=office JHT_TOUR_EXIT_TEST=1|-|TOUR-EXIT-TEST PASS
 # La pagina di chat a fumetti: che le vignette esistano, siano nell'ordine
 # della storia, che quella dell'agente resti bianca col testo nero (e' una
 # richiesta esplicita, non una scelta di tema) con la coda verso il suo
@@ -201,8 +225,19 @@ agent_frame|run|gate|any|JHT_SCENE=office JHT_ALL_SEATED_PREVIEW=1 JHT_AGENT_FRA
 world_text|run|gate|any|JHT_SCENE=office JHT_WORLD_TEXT_TEST=1|-|WORLD-TEXT-TEST PASS
 graphics_panel|run|gate|any|JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1|-|GRAPHICS-PANEL-TEST PASS
 setup_busy|run|gate|any|JHT_SCENE=office JHT_SETUP_BUSY_TEST=1|-|SETUP-BUSY-TEST PASS
+# #129: il comando finisce, CAPITANO fallisce e il watchdog recupera dopo.
+# Attivazione e Team devono mostrare i quattro stati senza ricadere su idle.
+team_start_ui|run|gate|any|JHT_SCENE=office JHT_TEAM_START_UI_TEST=1|-|TEAM-START-UI-TEST PASS
+# O-13: le schermate del setup che l'operatore ha trovato rotte a mano sulla
+# v0.3.6 e che nessun collaudo prendeva — runtime assente, solo Colima, step
+# saltato. Lo stato e' iniettato, quindi il verdetto non dipende da cosa e'
+# installato sul runner.
+setup_gating|run|gate|any|JHT_SCENE=office JHT_SETUP_GATING_TEST=1|-|SETUP-GATING-TEST PASS
 bubble_layout|run|gate|any|JHT_SCENE=office JHT_BUBBLE_LAYOUT_TEST=1|-|BUBBLE-LAYOUT-TEST PASS
 sim_badge|run|gate|any|JHT_SCENE=office JHT_SIM_BADGE_TEST=1|-|SIM-BADGE-TEST PASS
+# Oracle release della provenienza: fixture presente ma non autorizzata deve
+# restare invisibile, poi le viste gia' aperte reagiscono a UNAVAILABLE->LIVE.
+truthfulness|run|gate|any|JHT_SCENE=office JHT_TRUTHFULNESS_TEST=1|-|TRUTHFULNESS-TEST PASS
 promo_agent_review|run|gate|any|JHT_SCENE=office JHT_PROMO=agent-review JHT_PROMO_AGENT=scout JHT_PROMO_DIRECTIONS=1|--fixed-fps 30 --quit-after 1200|PROMO-AGENT-REVIEW PASS scout
 
 # ------------------------------------------------------------------- watch
@@ -227,3 +262,4 @@ coordinator|run|watch|any|JHT_SCENE=office JHT_BACKEND_TEST=1 JHT_COORDINATOR_TE
 # `game/`, e per questo il piu' esposto a un runner pulito.
 coordinator_policy|python|watch|any|-|tools/coordinator_policy_selftest.py|-
 asset_orphans|python|gate|any|-|tools/asset_orphan_audit.py|-
+ticket_attachment_overlap|run|gate|any|-|res://tools/ticket_attachment_overlap_selftest.tscn|TICKET-ATTACHMENT-OVERLAP PASS

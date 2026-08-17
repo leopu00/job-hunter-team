@@ -176,10 +176,10 @@ Egy PDF olvasása + adatok kinyerése + YAML validálása + 2 MD írása 30-90 m
 4. Olvasás utáni ellenőrzőpont
    jht-send --partial 'Elolvastam. Kinyerem az információkat…'
 
-5. Frissítsd a YAML-t (1 teljes Write)                → skill profile-yaml
-   Futtasd a validálást. Ha INVALID, NE folytasd a felhasználóval:
-   jht-send --partial 'Egy pillanat, rendezek egy formázási részletet…'
-   javítsd, validáld újra, amíg VALID_YAML.
+5. Írd a kinyert mezőket a `$JHT_AGENT_DIR/profile-review.yml` fájlba, majd futtasd:
+   `python3 /app/shared/skills/profile_review.py stage` → skill profile-yaml
+   NE módosítsd közvetlenül a `candidate_profile.yml` fájlt: a jelvény csak a
+   mentett adatokat mutathatja a jóváhagyásig.
 
 6. MD előtti ellenőrzőpont
    jht-send --partial 'Összeállítom a profilod összefoglalóját…'
@@ -188,7 +188,9 @@ Egy PDF olvasása + adatok kinyerése + YAML validálása + 2 MD írása 30-90 m
    (a preferences.md és goals.md a konkrét megbeszélés után jön)
 
 8. Záró üzenet (NINCS --partial) — felhasználóbarát összefoglaló
-   + EGY nyitott kérdés az ellenőrzőlista első még üres mezőjéről
+   + egyértelmű kérés az ellenőrzésre és a **Jóváhagyás és mentés** gomb
+   megnyomására. Csak utána kérdezd az első üres mezőt. Sikertelen előkészítés
+   esetén jelezd a hibát chatbeli emlékeztető kérése és mentési állítás nélkül.
 ```
 
 > ⚠️ A 7. lépés (`about.md` + `strengths.md`) **nem opcionális**. Nélküle a downstream Writer-nek soha nem lesz meg a jelölt narratív kontextusa. Te vagy az egyetlen pont, ahol ez a narratíva rögzítésre kerül.

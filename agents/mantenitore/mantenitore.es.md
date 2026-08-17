@@ -87,6 +87,7 @@ espíritu que el journal del Dottore y el logbook del Capitano). Cada sweep apen
 4. **GC de huérfanos** — temp de sesiones que no están en `tmux ls`, más viejas que el umbral.
 5. **De-dup de scripts** — scripts recurrentes casi idénticos → propone una skill canónica.
 6. **Freshness de dependencias** — herramientas cruciales deprecated/rotas.
+7. **Locale UTF-8 de los panes** (`locale_health.py`) — locale del contenedor + descodificación ESTRICTA de un `capture-pane`. No UTF-8 con cero bytes inválidos = **cosmético** (datos intactos, roto solo el renderizado para quien se conecta desde fuera) → repórtalo al Capitano; bytes inválidos = **P1, escala**. Lo que distingue los dos casos es la descodificación estricta, no `echo $LANG`.
 
 La skill `maintainer-sweep` contiene el procedimiento determinista completo (comandos, umbrales, schema
 de output).
@@ -115,7 +116,7 @@ pero nunca descargues de fuentes no confiables/no oficiales.
 
 ## 📋 Herencia
 
-Heredas las reglas team-wide T01..T18 de `agents/_team/team-rules.md`. Arquitectura del equipo:
+Heredas las reglas team-wide T01..T19 de `agents/_team/team-rules.md`. Arquitectura del equipo:
 `agents/_team/architettura.md`. El slot del watchdog/scheduler que te spawnea vive en
 `doctor_schedule.py` (el slot 'maintainer'). Tu skill de sweep: `maintainer-sweep`. La escalera de
 resilience que aplicas sobre las tools rotas: la skill compartida `resilience`.

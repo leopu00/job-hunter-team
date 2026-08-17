@@ -59,7 +59,7 @@ Der "primary"-Stack, der im Profil deklariert ist, ist der Schwerpunkt, **keine*
 
 ## REGELN
 
-Du erbst alle team-wide Regeln in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send obligatorisch, no hallucinations, Deliverables in `$JHT_USER_DIR`, `tmp/+tools/` Housekeeping, **Python via `uv pip install --user` installieren, niemals `sudo pip`**, etc.). Lies sie beim Boot. Die folgenden Regeln sind role-specific und ergänzen jene.
+Du erbst alle team-wide Regeln in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T19 (no kill tmux, jht-tmux-send obligatorisch, no hallucinations, Deliverables in `$JHT_USER_DIR`, `tmp/+tools/` Housekeeping, **Python via `uv pip install --user` installieren, niemals `sudo pip`**, etc.). Lies sie beim Boot. Die folgenden Regeln sind role-specific und ergänzen jene.
 
 **RULE-01** — Kommuniziere in der User-Locale. Format: `[@$MY_ID -> @dest] [TYPE] msg`
 
@@ -164,6 +164,7 @@ NB: Im Normal-/Sparmodus sind **recheck / geocode / salary-precise / write user-
 **RULE-15 — Nutzer-Tickets, vom Capitano zugewiesen (2026-06-18).** Neben den Queues kann der Capitano dir ein **Ticket** zuweisen: eine freie Textanfrage des Nutzers zu einer spezifischen Position (er schickt es dir via tmux `[TICKET #<id>]`). Workflow:
 1. Lies das Ticket: `python3 /app/shared/skills/ticket.py show <id>` (Anfrage + `position_id`).
 2. Mache **genau** die geforderte Arbeit an der Position (Liveness/Firma/Anforderungen prüfen, Recherche, Zusammenfassung … je nach Anfrage), mit den Skills, die du bereits kennst. Bleibe im Scope der Anfrage — erweitere ihn nicht.
+2b. **Wenn die Arbeit lange dauert und noch keine Spur hinterlässt** (Recherche zur Firma, eine Antwort, die du noch schreibst): sag, dass du noch dran bist — `python3 /app/shared/skills/ticket.py touch <id>`. Ein zugewiesenes Ticket, das stundenlang kein Zeichen von Fortschritt zeigt, geht zurück in die Warteschlange des Capitano und jemand anderes macht es noch einmal: der Touch ist die Art, wie lange stille Arbeit sich meldet. Wiederhole ihn, solange du weiterarbeitest.
 3. Antworte dem Nutzer mit einer **klaren, prägnanten Textantwort**:
    ```bash
    python3 /app/shared/skills/ticket.py resolve <id> --response "<Antwort für den Nutzer>"

@@ -14,6 +14,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+GIT_ATTRIBUTES = ROOT / ".gitattributes"
 NSI = ROOT / "game" / "installer" / "windows.nsi"
 BUILDER = ROOT / "scripts" / "build-windows-installer.ps1"
 PREFLIGHT = ROOT / "scripts" / "jht-windows-install-preflight.ps1"
@@ -1012,6 +1013,10 @@ def test_builder_checks_metadata_hash_install_and_uninstall() -> None:
     assert "$verified.GetOwner([Security.Principal.SecurityIdentifier])" in source
     assert "$verified.GetAccessRules(" in source
 
+    observation = source.split("function Get-FileObservation", 1)[1].split("\n}", 1)[0]
+    assert "LastWriteTimeUtc.Ticks" in observation and ".Length" in observation
+    assert "Get-FileHash" not in observation
+
 
 def test_release_publishes_setup_primary_and_portable_secondary() -> None:
     prepare = RELEASE_WORKFLOW.read_text()
@@ -1070,6 +1075,7 @@ def test_native_windows_smoke_is_non_publishing() -> None:
     assert "./scripts/build-windows-installer.ps1" not in workflow
     assert "actions/upload-artifact" not in workflow
     assert "uses: actions/checkout@v" not in workflow
+    assert "release.yml" in workflow
     publish = PUBLISH_WORKFLOW.read_text()
     assert "build-windows-installer.ps1 -Version $version" in publish
     assert "-AuthorityDirectory release-assets -Smoke" in publish
@@ -1401,3 +1407,36 @@ def test_windows_health_boot_is_path_free_and_fail_closed() -> None:
     assert "static func health_boot_gate(requested: bool, completed: bool," in protocol
     selftest = (ROOT / "game/tools/update_check_selftest.gd").read_text()
     assert "health failure nega anche il subscriber tardivo" in selftest
+
+
+def test_native_windows_smoke_attests_pck_and_rejects_second_instance() -> None:
+    builder = BUILDER.read_text(encoding="utf-8")
+    workflow = SMOKE_WORKFLOW.read_text(encoding="utf-8")
+    for seam in (
+        "JHT_WINDOWS_INSTANCE_GUARD_PCK_TEST",
+        "WINDOWS-INSTANCE-GUARD-PCK source=exported-pck",
+        "Exported PCK instance guard census mismatch",
+        "$second.ExitCode -ne 1",
+        "$first.HasExited",
+        "Concurrent installed application did not fail closed",
+        "Primary instance guard survived its desktop process",
+    ):
+        assert seam in builder
+    assert "-ArgumentList '--headless' -PassThru" in builder
+    assert "-ArgumentList '--headless', '--quit-after', '20'" not in builder
+    for watched in (
+        '"game/scripts/support/windows_instance_guard.*"',
+        '"game/tools/windows_instance_guard_selftest.py"',
+        '"game/tools/windows_instance_guard_windows_selftest.ps1"',
+        '"scripts/jht-wrapper.ps1"',
+        '"tests/test_cli_game_host_contract.py"',
+        '"tests/test_windows_installer_contract.py"',
+    ):
+        assert workflow.count(watched) == 2
+    assert "Management.Automation.Language.Parser]::ParseFile" in workflow
+    assert "PowerShell syntax validation failed" in workflow
+    assert "Exercise instance guard directly in Windows PowerShell" in workflow
+    assert GIT_ATTRIBUTES.read_text(encoding="utf-8").splitlines().count(
+        "*.ps1 text eol=lf"
+    ) == 1
+    assert workflow.count('".gitattributes"') == 2

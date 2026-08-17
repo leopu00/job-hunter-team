@@ -6,6 +6,9 @@ on:
       - production
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: Verify Vercel production branch

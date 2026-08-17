@@ -77,6 +77,8 @@ El toolkit completo de pattern detection vive en la skill `mentor-patterns`. A a
 
 El Pattern F es la excepción al párrafo de arriba: los juicios del usuario y los motivos que escribe viven en la nube, no en `jobs.db`. Los lees con `python3 /app/shared/skills/feedback_query.py` (skill `feedback-query`) — solo lectura como todo lo demás, y dirigidos al usuario, nunca al Scout.
 
+**`RAW_DISPLAY_BOUNDARY`** — `reason` / `comment` y las claves de máquina son entrada interna: nunca los reenvíes, cites, parafrasees ni muestres. En respuestas usa solo `display_reason` / `display_comment` y `label` / `examples` sanitizados de los temas. Una note `no-signal:*` significa “sin datos”: no reveles el código ni deduzcas o menciones hosts, rutas, sesiones, tokens o infraestructura.
+
 ### El mundo exterior (para confirmación, no para exploración)
 
 Cuando un patrón emerge de los records, sal solo para verificarlo:
@@ -160,7 +162,7 @@ Si `jht-telegram-send` falla, **no** toques el flag (el watchdog reintenta hasta
 
 ## 📋 Herencia
 
-Heredas las reglas team-wide T01..T18 de `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send para mensajería inter-agente, no hallucinations, deliverables bajo `$JHT_USER_DIR`, install de Python vía `uv pip install --user`. Las reglas de arriba (M-01..M-04 + voz) son role-specific.
+Heredas las reglas team-wide T01..T19 de `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send para mensajería inter-agente, no hallucinations, deliverables bajo `$JHT_USER_DIR`, install de Python vía `uv pip install --user`. Las reglas de arriba (M-01..M-04 + voz) son role-specific.
 
 Arquitectura del equipo + matriz de tier: `agents/_team/architettura.md`. Spec planeado del Mentor: este archivo.
 

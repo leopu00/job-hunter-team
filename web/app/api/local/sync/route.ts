@@ -5,11 +5,17 @@ import { requireAuth } from "@/lib/auth";
 import { getLocalDbPath, localDbExists } from "@/lib/cloud-sync/local";
 import { writeSyncState } from "@/lib/cloud-sync/state";
 import {
+  invalidateStaleCriticVerdict,
   normalizeApplicationStatus,
   normalizeCriticVerdict,
   normalizePositionStatus,
 } from "@/lib/sync-vocabulary";
 import { sanitizedError } from "@/lib/error-response";
+import {
+  summarizeOutOfRange,
+  type OutOfRangeSummary,
+} from "@/lib/score-ranges";
+import { readSqliteTableCompatible } from "@/lib/sqlite-compatible-read";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +46,7 @@ const POSITIONS_COLUMNS = [
   // push CLI in cli/src/commands/cloud.js per parita' tra i due path.
   "write_requested",
   "write_requested_at",
+  "write_request_kind",
   // Geocoding-on-demand (V8): user-driven office-geocoding flag, mig 027.
   "geocode_requested",
   "geocode_requested_at",
@@ -69,6 +76,7 @@ const APPLICATIONS_COLUMNS = [
   "critic_score",
   "critic_verdict",
   "critic_notes",
+  "critic_round",
   "written_at",
   "applied_at",
   "applied_via",
@@ -108,6 +116,7 @@ interface PositionRow {
   // V6 (2026-05-29): SQLite stores INTEGER 0|1, Supabase expects BOOLEAN.
   write_requested: number | null;
   write_requested_at: string | null;
+  write_request_kind?: "cv" | "cover_letter" | null;
   // V8 (2026-05-31): stesso mapping integer→boolean.
   geocode_requested: number | null;
   geocode_requested_at: string | null;
@@ -137,6 +146,7 @@ interface ApplicationRow {
   critic_score: number | null;
   critic_verdict: string | null;
   critic_notes: string | null;
+  critic_round?: number | null;
   written_at: string | null;
   applied_at: string | null;
   applied_via: string | null;
@@ -200,12 +210,18 @@ export async function POST() {
       readonly: true,
       fileMustExist: true,
     });
-    positions = readTable<PositionRow>(db, "positions", POSITIONS_COLUMNS);
+    positions = readSqliteTableCompatible<PositionRow>(
+      db,
+      "positions",
+      POSITIONS_COLUMNS,
+      new Set(["write_request_kind"]),
+    );
     scores = readTable<ScoreRow>(db, "scores", SCORES_COLUMNS);
-    applications = readTable<ApplicationRow>(
+    applications = readSqliteTableCompatible<ApplicationRow>(
       db,
       "applications",
       APPLICATIONS_COLUMNS,
+      new Set(["critic_round"]),
     );
   } catch (err) {
     return sanitizedError(err, {
@@ -233,6 +249,11 @@ export async function POST() {
   const legacyToUuid = new Map<number, string>();
   let positionsUpserted = 0;
   let scoresUpserted = 0;
+  let scoresOutOfRange: OutOfRangeSummary = {
+    rows: 0,
+    byColumn: {},
+    worst: null,
+  };
   let applicationsUpserted = 0;
 
   // 1. Upsert positions via (user_id, legacy_id)
@@ -267,13 +288,21 @@ export async function POST() {
         // pre-V6/pre-V8 -> false (default semantico: nessuna richiesta).
         write_requested: p.write_requested === 1,
         write_requested_at: p.write_requested_at,
+        // Un exporter legacy non conosce questo desired-state: ometterlo deve
+        // preservare la richiesta cloud, mentre NULL esplicito la risolve.
+        ...(Object.prototype.hasOwnProperty.call(p, "write_request_kind")
+          ? { write_request_kind: p.write_request_kind ?? null }
+          : {}),
         geocode_requested: p.geocode_requested === 1,
         geocode_requested_at: p.geocode_requested_at,
       }));
 
     const { data: upserted, error } = await supabase
       .from("positions")
-      .upsert(payload, { onConflict: "user_id,legacy_id" })
+      .upsert(payload, {
+        onConflict: "user_id,legacy_id",
+        defaultToNull: false,
+      })
       .select("id, legacy_id");
 
     if (error) {
@@ -325,6 +354,9 @@ export async function POST() {
         });
       }
       scoresUpserted = upserted?.length ?? 0;
+      // Vedi il gemello in cloud-sync/push: contiamo le dimensioni fuori scala
+      // che attraversano il confine, senza toccarle.
+      scoresOutOfRange = summarizeOutOfRange(payload);
     }
   }
 
@@ -334,7 +366,7 @@ export async function POST() {
       .map((a) => {
         const uuid = legacyToUuid.get(a.position_id);
         if (!uuid) return null;
-        return {
+        return invalidateStaleCriticVerdict({
           user_id: userId,
           position_id: uuid,
           cv_path: a.cv_path,
@@ -345,6 +377,7 @@ export async function POST() {
           critic_score: a.critic_score,
           critic_verdict: normalizeCriticVerdict(a.critic_verdict),
           critic_notes: a.critic_notes,
+          critic_round: a.critic_round,
           written_at: a.written_at,
           applied_at: a.applied_at,
           applied_via: a.applied_via,
@@ -356,7 +389,7 @@ export async function POST() {
           applied: a.applied != null ? Boolean(a.applied) : null,
           cv_drive_id: a.cv_drive_id,
           cl_drive_id: a.cl_drive_id,
-        };
+        });
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
@@ -378,7 +411,11 @@ export async function POST() {
 
   const summary = {
     positions: { upserted: positionsUpserted, payload: positions.length },
-    scores: { upserted: scoresUpserted, payload: scores.length },
+    scores: {
+      upserted: scoresUpserted,
+      payload: scores.length,
+      out_of_range: scoresOutOfRange,
+    },
     applications: {
       upserted: applicationsUpserted,
       payload: applications.length,
@@ -400,7 +437,7 @@ export async function POST() {
   return NextResponse.json({
     empty: false,
     positions: { upserted: positionsUpserted },
-    scores: { upserted: scoresUpserted },
+    scores: { upserted: scoresUpserted, out_of_range: scoresOutOfRange },
     applications: { upserted: applicationsUpserted },
     payload: {
       positions: positions.length,

@@ -9,8 +9,9 @@ import { randomBytes } from "node:crypto";
  * - device_code: bearer-like, 32 char hex, usato dal CLI come identifier
  *   per il polling. Alta entropia (256 bit). Mai mostrato all'utente.
  * - user_code: 8 char in formato AAAA-1234 — 4 lettere uppercase
- *   (esclude I,O,L per leggibilita') + 4 cifre. Entropia ~36^4 * 10^4 ≈
- *   18 miliardi. Sufficiente per finestra 10min con rate limit anti-brute.
+ *   (esclude I,O,L per leggibilita') + 4 cifre (esclude 0,1).
+ *   Combinazioni: 23^4 * 8^4 ≈ 1,15 miliardi. Sufficiente per finestra
+ *   10min con rate limit anti-brute.
  *
  * Esempio user_code: ABCD-1234
  */
@@ -29,10 +30,14 @@ export function generateUserCode(): string {
 }
 
 function pickRandomFrom(alphabet: string, count: number): string {
-  const bytes = randomBytes(count);
+  const limit = 256 - (256 % alphabet.length);
   let out = "";
-  for (let i = 0; i < count; i++) {
-    out += alphabet[bytes[i] % alphabet.length];
+  while (out.length < count) {
+    for (const byte of randomBytes(Math.max(16, count * 2))) {
+      if (byte >= limit) continue;
+      out += alphabet[byte % alphabet.length];
+      if (out.length === count) break;
+    }
   }
   return out;
 }

@@ -11,7 +11,14 @@ Multiplos Scouts correm em paralelo (maximo 2 instancias pela politica da equipa
 - quais **circulos** cada um possui (1 = preferencia primaria, 2 = vizinhos geograficos, 3 = relocacao, 4 = satelite, 5 = fronteira)
 - quais **tiers de fontes** cada um possui (LinkedIn / agregadores ATS / nicho / WebSearch)
 
-O estado reside num pequeno JSON gerido pelo `scout_coord.py`; os scouts negoceiam via tmux no arranque e persistem o acordo la.
+O estado reside na **base de dados SQLite partilhada** gerida pelo `scout_coord.py`; os scouts negoceiam via tmux no arranque e persistem o acordo la.
+
+**Uma so base de dados, ou nenhuma coordenacao.** Todos os Scouts tem de estar na mesma base — o `jobs.db` da equipa, o mesmo `JHT_DB` de qualquer outra skill (o launcher ja o exporta no teu painel). Ja nao ha um ficheiro de coordenacao separado para resolver; um `scout_coordination.db` antigo, se existir, e importado uma vez no bootstrap e deixado onde esta, so de leitura dai em diante. Se sair com **3**, a base de dados nao e utilizavel: reporta a mensagem impressa e PARA. Nunca cries uma base de dados tua, nunca apontes a ferramenta para outro caminho.
+
+```bash
+# Em que base de dados estou realmente?
+python3 /app/shared/skills/scout_coord.py doctor
+```
 
 ## Passo 1 — Descobrir peers
 
@@ -103,8 +110,8 @@ jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [INFO] scout-coord: tier 'niche-r
 ## Anti-padroes
 
 - ❌ Saltar o Passo 1 ("so existo eu") sem verificar — um peer pode ter acabado de ser relancado pelo Dottore.
-- ❌ Reset executado por cada scout em paralelo — condicao de corrida, o JSON acaba corrompido. Apenas o scout com numero mais baixo.
-- ❌ Negociar e depois esquecer o Passo 4 — o JSON esta vazio, os peers nao conseguem ver a tua reivindicacao, dois scouts atingem a mesma fonte.
+- ❌ Reset executado por cada scout em paralelo — condicao de corrida, a base de dados acaba corrompida. Apenas o scout com numero mais baixo.
+- ❌ Negociar e depois esquecer o Passo 4 — a base de dados esta vazia, os peers nao conseguem ver a tua reivindicacao, dois scouts atingem a mesma fonte.
 - ❌ Reivindicar tanto `linkedin` COMO `greenhouse` COMO `lever` COMO `remoteok` COMO `weworkremotely` COMO `webresearch` "para estar seguro" — nada para partilhar com o peer, este nao tem nada para fazer.
 - ❌ Renegociar a meio do loop sem um gatilho — a particao e feita no arranque. Se um peer morre, o Dottore relanca-o com o mesmo papel; apenas o proprio SCOUT le os seus `cerchi`/`fonti` novamente no arranque.
 

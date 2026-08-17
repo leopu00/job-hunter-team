@@ -7,9 +7,9 @@
  * FA, non cosa i commenti promettono.
  *
  * La seconda garanzia ha una forma particolare: non si dimostra provando
- * un id sbagliato e vedendolo rifiutato, ma osservando che ogni singola
- * delete porta il filtro sull'utente della sessione. È la differenza fra
- * «validiamo l'input» e «non esiste un input da validare».
+ * un id sbagliato e vedendolo rifiutato, ma osservando che esiste una sola
+ * RPC e riceve l'id della sessione. È la differenza fra «validiamo l'input»
+ * e «non esiste un input da validare».
  */
 import { describe, it, expect } from "vitest";
 
@@ -27,29 +27,32 @@ interface Call {
   filterValue?: string;
 }
 
-/** Finto client: registra le delete e l'ordine in cui arrivano. */
+/** Finto client: registra Storage e la singola RPC PostgreSQL. */
 function fakeAdmin(
   opts: {
-    failOn?: string;
-    deleteUserFails?: boolean;
+    rpcFails?: boolean;
     storagePaths?: string[];
     storageTree?: Record<string, true>;
     storageRemovesNothing?: boolean;
     /** Numero del lotto (1-based) che deve fallire. */
     failBatch?: number;
+    rpcPayload?: unknown;
   } = {},
 ) {
   const calls: Call[] = [];
   const deletedUsers: string[] = [];
   const removedPaths: string[] = [];
   const batches: number[] = [];
+  const effects: string[] = [];
   const client = {
     storage: {
       from() {
+        effects.push("storage:from");
         return {
           // Simula l'API vera: `list(prefix)` torna file (con `id`) e
           // cartelle immediate (con `id: null`), e NON scende da sola.
           list(prefix: string, o?: { limit?: number; offset?: number }) {
+            effects.push(`storage:list:${prefix}`);
             const tree = opts.storageTree ?? {};
             const children = new Set<string>();
             for (const full of Object.keys(tree)) {
@@ -77,6 +80,7 @@ function fakeAdmin(
           // il fake precedente nascondeva, restituendo qualunque path gli
           // venisse passato.
           remove(paths: string[]) {
+            effects.push(`storage:remove:${paths.length}`);
             // Supabase rifiuta oltre 1000 percorsi per chiamata. Il doppio
             // precedente accettava qualunque dimensione, ed è per questo
             // che il caso da 2500 passava: confermava l'assunzione invece
@@ -109,57 +113,50 @@ function fakeAdmin(
         };
       },
     },
-    from(table: string) {
-      return {
-        select() {
-          return {
-            eq() {
-              return Promise.resolve({
-                data: (opts.storagePaths ?? []).map((storage_path) => ({
-                  storage_path,
-                })),
-                error: null,
-              });
-            },
-          };
+    rpc(name: string, args: { p_user_id?: string }) {
+      effects.push(`database:rpc:${name}`);
+      calls.push({
+        table: `rpc:${name}`,
+        filterColumn: "p_user_id",
+        filterValue: args.p_user_id,
+      });
+      if (opts.rpcFails) {
+        return Promise.resolve({ data: null, error: { message: "boom" } });
+      }
+      if (args.p_user_id) deletedUsers.push(args.p_user_id);
+      return Promise.resolve({
+        data: opts.rpcPayload ?? {
+          removed: Object.fromEntries(
+            MANUAL_DELETE_ORDER.map((table) => [table, 2]),
+          ),
         },
-        delete() {
-          return {
-            eq(column: string, value: string) {
-              calls.push({ table, filterColumn: column, filterValue: value });
-              if (opts.failOn === table) {
-                return Promise.resolve({
-                  count: null,
-                  error: { message: "boom" },
-                });
-              }
-              return Promise.resolve({ count: 2, error: null });
-            },
-          };
-        },
-      };
-    },
-    auth: {
-      admin: {
-        deleteUser(id: string) {
-          deletedUsers.push(id);
-          return Promise.resolve({
-            error: opts.deleteUserFails ? { message: "no" } : null,
-          });
-        },
-      },
+        error: null,
+      });
     },
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { client: client as any, calls, deletedUsers, removedPaths, batches };
+  return {
+    client: client as any,
+    calls,
+    deletedUsers,
+    removedPaths,
+    batches,
+    effects,
+  };
 }
 
 describe("cancellazione account — cancella tutto", () => {
-  it("svuota ogni tabella senza cascata, e poi cancella l'utente", async () => {
+  it("usa una sola RPC privilegiata per database e utente", async () => {
     const { client, calls, deletedUsers } = fakeAdmin();
     const outcome = await deleteAccountData(client, "user-1");
 
-    expect(calls.map((c) => c.table)).toEqual([...MANUAL_DELETE_ORDER]);
+    expect(calls).toEqual([
+      {
+        table: "rpc:delete_account_data",
+        filterColumn: "p_user_id",
+        filterValue: "user-1",
+      },
+    ]);
     expect(deletedUsers).toEqual(["user-1"]);
     // Il resoconto include anche i file su Storage, che non sono una
     // tabella ma vanno contati: una cancellazione che li dimentica non è
@@ -170,13 +167,10 @@ describe("cancellazione account — cancella tutto", () => {
     ]);
   });
 
-  it("rispetta l'ordine delle dipendenze", async () => {
-    // Le tabelle figlie devono cadere prima delle padri: invertire produce
-    // una violazione di chiave a metà cancellazione, cioè dati rimossi
-    // solo in parte con l'utente ancora esistente.
-    const { client, calls } = fakeAdmin();
-    await deleteAccountData(client, "user-1");
-    const order = calls.map((c) => c.table);
+  it("espone l'ordine delle dipendenze restituito dal contratto", async () => {
+    const { client } = fakeAdmin();
+    const outcome = await deleteAccountData(client, "user-1");
+    const order = outcome.order;
     for (const [child, parent] of [
       ["applications", "positions"],
       ["position_highlights", "positions"],
@@ -190,22 +184,22 @@ describe("cancellazione account — cancella tutto", () => {
     }
   });
 
-  it("l'utente cade per ultimo, mai prima dei suoi dati", async () => {
+  it("non conserva il vecchio fallback REST + Admin Auth", async () => {
     const { client, calls, deletedUsers } = fakeAdmin();
     await deleteAccountData(client, "user-1");
-    // Se `deleteUser` fosse chiamata prima, le tabelle NO ACTION
-    // rifiuterebbero e resteremmo con l'utente vivo e i dati orfani.
-    expect(calls.length).toBe(MANUAL_DELETE_ORDER.length);
+    expect(calls.map((call) => call.table)).toEqual([
+      "rpc:delete_account_data",
+    ]);
     expect(deletedUsers.length).toBe(1);
   });
 });
 
 describe("cancellazione account — non tocca l'account sbagliato", () => {
-  it("ogni delete filtra sull'utente della sessione", async () => {
+  it("la RPC riceve soltanto l'utente della sessione", async () => {
     const { client, calls } = fakeAdmin();
     await deleteAccountData(client, "user-1");
     for (const call of calls) {
-      expect(call.filterColumn).toBe("user_id");
+      expect(call.filterColumn).toBe("p_user_id");
       expect(call.filterValue).toBe("user-1");
     }
   });
@@ -237,21 +231,29 @@ describe("cancellazione account — non tocca l'account sbagliato", () => {
 });
 
 describe("cancellazione account — fallimenti detti, non mascherati", () => {
-  it("un errore a metà interrompe e dice dove", async () => {
-    const { client, deletedUsers } = fakeAdmin({ failOn: "positions" });
+  it("RPC assente o fallita interrompe prima di qualunque effetto Storage", async () => {
+    const { client, deletedUsers, removedPaths, batches, effects } = fakeAdmin({
+      rpcFails: true,
+      storageTree: { "user-1/req/cv.pdf": true },
+    });
     await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
-      /table_delete_failed/,
+      /database_delete_failed/,
     );
-    // L'utente NON deve essere cancellato se i suoi dati non lo sono:
-    // sarebbe il caso peggiore, dati orfani senza più un proprietario.
     expect(deletedUsers).toEqual([]);
+    expect(removedPaths).toEqual([]);
+    expect(batches).toEqual([]);
+    expect(effects).toEqual(["database:rpc:delete_account_data"]);
   });
 
-  it("se l'utente non cade, lo dice invece di rispondere ok", async () => {
-    const { client } = fakeAdmin({ deleteUserFails: true });
+  it("una risposta RPC incompleta non autorizza il cleanup Storage", async () => {
+    const { client, effects } = fakeAdmin({
+      rpcPayload: { removed: {} },
+      storageTree: { "user-1/req/cv.pdf": true },
+    });
     await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
-      /auth_user_not_deleted/,
+      /database_delete_invalid_response/,
     );
+    expect(effects).toEqual(["database:rpc:delete_account_data"]);
   });
 });
 
@@ -280,8 +282,8 @@ describe("export e cancellazione parlano dello stesso insieme", () => {
 });
 
 describe("cancellazione account — i file su Storage non sopravvivono", () => {
-  it("rimuove gli oggetti prima di cancellare le righe che li nominano", async () => {
-    const { client, calls, removedPaths } = fakeAdmin({
+  it("rimuove gli oggetti solo dopo una ricevuta DB valida", async () => {
+    const { client, calls, removedPaths, effects } = fakeAdmin({
       storageTree: {
         "user-1/req/cv.pdf": true,
         "user-1/req/lettera.pdf": true,
@@ -292,16 +294,33 @@ describe("cancellazione account — i file su Storage non sopravvivono", () => {
       "user-1/req/cv.pdf",
       "user-1/req/lettera.pdf",
     ]);
+    expect(effects[0]).toBe("database:rpc:delete_account_data");
+    expect(effects.indexOf("storage:remove:2")).toBeGreaterThan(0);
     // I file si enumerano dal bucket sotto `${userId}/`, che è l'unica
     // source: `file_bridge_requests` rows are non-authoritative history.
     // Pre-migration rows accepted unvalidated `storage_path`, and rows survive
-    // purge with paths that may be dead. Enumeration still happens
-    // PRIMA di qualsiasi delete sul database, così un fallimento dello
-    // Storage non lascia righe già cancellate.
+    // purge with paths that may be dead. Il database è invece l'autorità che
+    // deve confermare la cancellazione prima di autorizzare questo effetto.
     expect(calls.length).toBeGreaterThan(0);
   });
 
-  it("se un file resta, la cancellazione si ferma invece di dirsi completa", async () => {
+  it("il successo richiede una rienumerazione che attesti zero residui", async () => {
+    const { client, deletedUsers, effects } = fakeAdmin({
+      storageTree: { "user-1/req/cv.pdf": true },
+    });
+    const outcome = await deleteAccountData(client, "user-1");
+
+    expect(deletedUsers).toEqual(["user-1"]);
+    expect(outcome.removed["storage:file-transit"]).toBe(1);
+    expect(
+      effects.filter((effect) => effect.startsWith("storage:list:")),
+    ).toHaveLength(3);
+    // Dopo la remove la radice è vuota: non esiste più la cartella in cui
+    // scendere, e proprio questa osservazione conclusiva autorizza il 200.
+    expect(effects.at(-1)).toBe("storage:list:user-1");
+  });
+
+  it("se un file resta, non dichiara completa la cancellazione DB già avvenuta", async () => {
     const { client, deletedUsers } = fakeAdmin({
       storageTree: { "user-1/req/cv.pdf": true },
       storageRemovesNothing: true,
@@ -309,7 +328,7 @@ describe("cancellazione account — i file su Storage non sopravvivono", () => {
     await expect(deleteAccountData(client, "user-1")).rejects.toThrow(
       /storage_incomplete/,
     );
-    expect(deletedUsers).toEqual([]);
+    expect(deletedUsers).toEqual(["user-1"]);
   });
 
   it("senza file da cancellare non si inventa un fallimento", async () => {
@@ -530,14 +549,12 @@ describe("cancellazione — un lotto fallito ferma i successivi", () => {
     // Due lotti tentati, il terzo mai: se il bucket sta rifiutando,
     // insistere allarga il danno invece di ridurlo.
     expect(batches).toEqual([1000, 1000]);
-    // E soprattutto: l'utente e i suoi dati NON vengono cancellati, o
-    // resterebbero file orfani senza più un proprietario.
-    expect(deletedUsers).toEqual([]);
-    // Anche le righe devono essere intatte: lo Storage viene PRIMA di
-    // `MANUAL_DELETE_ORDER`, quindi se fallisce non deve essere partita
-    // nemmeno una delete sul database. Asserire solo `deletedUsers`
-    // lasciava scoperta proprio la parte più grossa della promessa.
-    expect(calls).toEqual([]);
+    // Il DB è l'autorità e ha già confermato prima del cleanup esterno. Il
+    // fallimento resta visibile e i lotti successivi non ampliano l'effetto.
+    expect(deletedUsers).toEqual(["user-1"]);
+    expect(calls.map((call) => call.table)).toEqual([
+      "rpc:delete_account_data",
+    ]);
   });
 });
 
@@ -625,10 +642,10 @@ describe("cancellazione — nessun nome di file esce, né in log né in risposta
     expect(everything).toContain("file-transit");
   });
 
-  it("il fallimento su una tabella non riporta il messaggio del database", async () => {
+  it("il fallimento RPC non riporta il messaggio del database", async () => {
     // `error.message` di Postgres può contenere il valore che ha violato
     // il vincolo, cioè dato dell'utente.
-    const { client } = fakeAdmin({ failOn: "positions" });
+    const { client } = fakeAdmin({ rpcFails: true });
     let error: unknown;
     try {
       await deleteAccountData(client, "user-1");
@@ -636,8 +653,8 @@ describe("cancellazione — nessun nome di file esce, né in log né in risposta
       error = err;
     }
     const e = error as InstanceType<typeof DeletionError>;
-    expect(e.code).toBe("table_delete_failed");
-    expect(e.stage).toBe("positions");
+    expect(e.code).toBe("database_delete_failed");
+    expect(e.stage).toBe("database");
     expect(e.message).not.toContain("boom");
   });
 });
@@ -671,6 +688,15 @@ describe("cancellazione — l'enumerazione non rivela cartelle né utente", () =
           remove: () => Promise.resolve({ data: [], error: null }),
         }),
       },
+      rpc: () =>
+        Promise.resolve({
+          data: {
+            removed: Object.fromEntries(
+              MANUAL_DELETE_ORDER.map((table) => [table, 0]),
+            ),
+          },
+          error: null,
+        }),
       from: () => ({
         delete: () => ({
           eq: () => Promise.resolve({ count: 0, error: null }),

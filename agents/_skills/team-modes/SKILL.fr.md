@@ -155,8 +155,17 @@ que le feedback ne montre pas, ou continuer à sourcer avec l'ancienne visée.
    attente sont tués ou laissés non spawnés.
 3. **Priorité de budget** : quasi nulle. La seule dépense est de répondre à
    l'utilisateur.
-4. **Condition de sortie** : aucune — il dure jusqu'à ce que l'utilisateur le
-   lève. Rien à épuiser ; le banner le dit.
+4. **Condition de sortie** : `mode_until`, si l'utilisateur l'a donnée — à
+   cette date le mode expire **tout seul**, ordres compris, et l'équipe revient
+   en `search` (le fichier dit encore `saving` : l'échéance gagne, et le banner
+   le déclare). Sans `mode_until` il dure jusqu'à ce que l'utilisateur le lève,
+   et cela mérite d'être dit : le budget hebdomadaire est une **fenêtre, pas un
+   solde** — ce qui n'est pas dépensé au reset est détruit, donc une économie
+   laissée par inertie ne conserve pas le cycle, elle le jette. Dis à
+   l'utilisateur qu'il peut lui donner une fin, et où : la Console a le champ
+   «Jusqu'à quand» (jours et heures, à côté du sélecteur), et depuis un shell
+   c'est `jht coordinator set-mode saving --until <iso>`. Les deux écrivent la
+   même clé dans le même fichier.
 
 **Ce que tu fais** : garde Capitano/Assistente/Mentor réactifs ; rien d'autre
 ne bouge sans une demande directe de l'utilisateur. **Avec C-25** : l'économie
@@ -181,8 +190,9 @@ PAS** : réinterpréter « minimum » en « un peu de sourcing ne fera pas de ma
   dosé.
 - **Sortie ≠ changement.** Quand un mode rapporte son travail épuisé, préviens
   l'utilisateur et continue d'honorer le mode jusqu'à ce que ce soit LUI qui en
-  change. Le fichier est écrit par la console du jeu au nom de l'utilisateur —
-  jamais par toi.
+  change. Le fichier est écrit au nom de l'utilisateur — par la Console du
+  jeu (échéance comprise) ou avec `jht coordinator` s'il le demande — et jamais
+  de ta propre initiative.
 
 ## Voir aussi
 

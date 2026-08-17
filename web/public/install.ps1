@@ -15,6 +15,7 @@
 # ║  Downloads:                                                              ║
 # ║    - $env:LOCALAPPDATA\Job Hunter Team\host-runtime\docker-compose.yml   ║
 # ║    - $env:USERPROFILE\.local\bin\jht.ps1 (PowerShell wrapper)            ║
+# ║    - $env:USERPROFILE\.local\bin\windows-private-acl.ps1 (ACL helper)    ║
 # ║    - $env:USERPROFILE\.local\bin\jht.cmd (shim for CMD)                  ║
 # ║                                                                          ║
 # ║  The Node CLI, Python, tmux and the agents ALL run inside the long-      ║
@@ -58,7 +59,33 @@ if (-not $LocalAppData) { throw 'LOCALAPPDATA is unavailable: refusing an unprot
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir     = if ($env:JHT_BIN_DIR)     { $env:JHT_BIN_DIR }     else { Join-Path $env:USERPROFILE '.local\bin' }
 $JhtHome    = Join-Path $env:USERPROFILE '.jht'
-$Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht:0.3.5' }
+function Protect-JhtHomeAcl {
+  param([Parameter(Mandatory)][string]$Path)
+  $owner = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+  $nodes = @(Get-Item -LiteralPath $Path) + @(Get-ChildItem -LiteralPath $Path -Force -Recurse)
+  foreach ($node in $nodes) {
+    $acl = Get-Acl -LiteralPath $node.FullName
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($existing in @($acl.Access)) {
+      if ($existing.AccessControlType -eq 'Allow' -and $existing.IdentityReference.Value -ne $owner -and $existing.IdentityReference.Value -notin @('NT AUTHORITY\\SYSTEM','BUILTIN\\Administrators')) { [void]$acl.RemoveAccessRule($existing) }
+    }
+    $inherit = if ($node.PSIsContainer) { 'ContainerInherit,ObjectInherit' } else { 'None' }
+    $acl.SetAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($owner, 'FullControl', $inherit, 'None', 'Allow')))
+    Set-Acl -LiteralPath $node.FullName -AclObject $acl
+  }
+  if (-not (Get-Acl -LiteralPath $Path).AreAccessRulesProtected) { throw "ACL inheritance remains enabled: $Path" }
+}
+function Set-JhtNodeOwner {
+  param([Parameter(Mandatory)][string]$Path)
+  $ownerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
+  $acl.SetOwner($ownerSid)
+  Set-Acl -LiteralPath $Path -AclObject $acl
+  $actualOwner = (Get-Acl -LiteralPath $Path -ErrorAction Stop).Owner
+  $actualSid = ([Security.Principal.NTAccount]$actualOwner).Translate([Security.Principal.SecurityIdentifier])
+  if ($actualSid.Value -ne $ownerSid.Value) { throw "Owner is not the current user: $Path" }
+}
+$Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598' }
 $env:JHT_IMAGE = $Image
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 
@@ -71,6 +98,7 @@ function Write-Info { param([string]$Msg) Write-Host "  > $Msg" -ForegroundColor
 function Write-Fail { param([string]$Msg) Write-Host "  x $Msg" -ForegroundColor Red; exit 1 }
 function Write-Step { param([int]$N, [int]$Total, [string]$Title) Write-Host ""; Write-Host "[$N/$Total] $Title" -ForegroundColor White }
 function Write-Dry  { param([string]$Cmd) Write-Host "  [dry-run] would execute: $Cmd" -ForegroundColor DarkGray }
+
 
 function Invoke-Action {
   param([scriptblock]$Block, [string]$Description)
@@ -166,7 +194,7 @@ function Get-File {
 }
 
 function Get-RuntimeFiles {
-  Write-Step 3 $TotalSteps "Downloading wrapper + docker-compose.yml"
+  Write-Step 3 $TotalSteps "Downloading wrapper + ACL helper + docker-compose.yml"
 
   if ($RawBaseOverride) {
     $releaseBase = $RawBaseOverride
@@ -182,8 +210,10 @@ function Get-RuntimeFiles {
   }
   $composeUrl  = "$releaseBase/docker-compose.yml"
   $wrapperUrl  = "$releaseBase/scripts/jht-wrapper.ps1"
+  $helperUrl   = "$releaseBase/scripts/windows-private-acl.ps1"
   $composeDest = Join-Path $RuntimeDir 'docker-compose.yml'
   $wrapperDest = Join-Path $BinDir 'jht.ps1'
+  $helperDest = Join-Path $BinDir 'windows-private-acl.ps1'
   $shimDest    = Join-Path $BinDir 'jht.cmd'
   $manifestDest = Join-Path $RuntimeDir '.runtime-integrity'
 
@@ -209,6 +239,7 @@ function Get-RuntimeFiles {
     New-Item -ItemType Directory -Force -Path $RuntimeDir | Out-Null
     New-Item -ItemType Directory -Force -Path $BinDir     | Out-Null
     New-Item -ItemType Directory -Force -Path $JhtHome    | Out-Null
+    Protect-JhtHomeAcl -Path $JhtHome
   } | Out-Null
 
   if (-not $DryRun) {
@@ -230,6 +261,7 @@ function Get-RuntimeFiles {
       'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
     $acl.SetAccessRule($rule)
     Set-Acl -LiteralPath $RuntimeDir -AclObject $acl
+    Set-JhtNodeOwner -Path $RuntimeDir
   }
 
   Write-Info "Downloading docker-compose.yml..."
@@ -238,8 +270,29 @@ function Get-RuntimeFiles {
   if (-not $DryRun -and -not (Select-String -LiteralPath $composeTemp -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) {
     Write-Fail 'Downloaded compose does not enforce the protected runtime boundary.'
   }
-  if (-not $DryRun) { Move-Item -LiteralPath $composeTemp -Destination $composeDest -Force }
+  if (-not $DryRun) {
+    Move-Item -LiteralPath $composeTemp -Destination $composeDest -Force
+    Set-JhtNodeOwner -Path $composeDest
+  }
   Write-Ok "compose: $composeDest"
+
+  # The wrapper dot-sources this sibling before dispatching any command. Keep
+  # the helper download ahead of the wrapper publication so a clean install
+  # can never expose a jht.ps1 whose first instruction points at a missing file.
+  Write-Info "Downloading windows-private-acl.ps1..."
+  $helperTemp = Join-Path $BinDir ('.windows-private-acl-' + [guid]::NewGuid().ToString('N') + '.ps1')
+  Get-File -Url $helperUrl -Dest $helperTemp
+  if (-not $DryRun) {
+    [scriptblock]::Create((Get-Content -LiteralPath $helperTemp -Raw)) | Out-Null
+    foreach ($requiredFunction in @('function Protect-JhtHomeAcl', 'function Test-PrivateJhtHomeAcl')) {
+      if (-not (Select-String -LiteralPath $helperTemp -SimpleMatch $requiredFunction -Quiet)) {
+        Write-Fail "Downloaded ACL helper is missing $requiredFunction."
+      }
+    }
+    Move-Item -LiteralPath $helperTemp -Destination $helperDest -Force
+    Set-JhtNodeOwner -Path $helperDest
+  }
+  Write-Ok "ACL helper: $helperDest"
 
   Write-Info "Downloading jht-wrapper.ps1..."
   $wrapperTemp = Join-Path $BinDir ('.jht-' + [guid]::NewGuid().ToString('N') + '.ps1')
@@ -250,6 +303,7 @@ function Get-RuntimeFiles {
       Write-Fail 'Downloaded wrapper does not implement the protected runtime protocol.'
     }
     Move-Item -LiteralPath $wrapperTemp -Destination $wrapperDest -Force
+    Set-JhtNodeOwner -Path $wrapperDest
   }
   Write-Ok "wrapper: $wrapperDest"
 
@@ -260,10 +314,12 @@ function Get-RuntimeFiles {
   if (-not $DryRun) {
     $composeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $composeDest).Hash.ToLowerInvariant()
     $wrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $wrapperDest).Hash.ToLowerInvariant()
+    $helperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $helperDest).Hash.ToLowerInvariant()
     [IO.File]::WriteAllText(
       $manifestDest,
-      "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`n",
+      "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`nwindows-private-acl.ps1=$helperHash`n",
       [Text.UTF8Encoding]::new($false))
+    Set-JhtNodeOwner -Path $manifestDest
     $shimContent = @"
 @echo off
 where pwsh.exe >nul 2>&1
@@ -416,7 +472,7 @@ function Show-Final {
 
   Write-Host "  To uninstall (keeps the data in ~/.jht and ~/Documents/Job Hunter Team):" -ForegroundColor DarkGray
   Write-Host "    jht down" -ForegroundColor DarkGray
-  Write-Host "    Remove-Item -Recurse -Force '$RuntimeDir', '$BinDir\jht.ps1', '$BinDir\jht.cmd'" -ForegroundColor DarkGray
+  Write-Host "    Remove-Item -Recurse -Force '$RuntimeDir', '$BinDir\jht.ps1', '$BinDir\windows-private-acl.ps1', '$BinDir\jht.cmd'" -ForegroundColor DarkGray
   Write-Host "    docker rmi $Image" -ForegroundColor DarkGray
   Write-Host "  To delete the data as well (config, db, CVs, output):" -ForegroundColor DarkGray
   Write-Host "    Remove-Item -Recurse -Force '$JhtHome', '$env:USERPROFILE\Documents\Job Hunter Team'" -ForegroundColor DarkGray

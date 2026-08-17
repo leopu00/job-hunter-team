@@ -2,7 +2,7 @@
 ---
 name: circles-and-sources
 description: Carte stratégique de quoi chercher OÙ, dérivée entièrement du profil candidat. Les 5 cercles concentriques (work_mode + relocation) vous indiquent la portée géographique ; les 4 niveaux de sources (LinkedIn → agrégateurs ATS → niche → web) vous indiquent quelles plateformes drainer dans l'ordre. Un scout qui cherche au mauvais niveau dans le mauvais cercle gaspille son quota et sa partition `scout-coord`. Ouvrez cette skill au démarrage (après `scout-coord`) et à chaque fois qu'un cercle est épuisé ou qu'un `[FEEDBACK]` de l'Analista suggère de changer de source.
-allowed-tools: Bash(curl *), Bash(python3 /app/shared/skills/linkedin_check.py *)
+allowed-tools: Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(python3 /app/shared/skills/linkedin_check.py *)
 ---
 
 # circles-and-sources — lire le profil, construire la carte
@@ -68,7 +68,7 @@ Uniquement si `preferences.relocation` est non-vide :
 
 | Niveau | Type                                | Sources                                                                                                       | Notes                                                                                          |
 |--------|-------------------------------------|--------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
-| 1    | **LinkedIn**                        | `linkedin_check.py` (profil authentifié), `curl` avec UA navigateur                                          | Universel : couvre remote, on-site, hybrid. Première étape obligatoire pour chaque cercle. **JAMAIS `fetch` MCP** — bloqué par robots.txt. |
+| 1    | **LinkedIn**                        | `linkedin_check.py` (profil authentifié), `safe_fetch.py`                                          | Universel : couvre remote, on-site, hybrid. Première étape obligatoire pour chaque cercle. **JAMAIS `fetch` MCP** — bloqué par robots.txt. |
 | 2    | **Agrégateurs ATS**                 | Boards Greenhouse, boards Lever, Indeed, Wellfound (ex AngelList)                                            | Fonctionne pour tout work_mode. Couvre beaucoup d'entreprises en un seul scrape.               |
 | 3    | **Boards niche (spécifiques au profil)** | Choisir par `work_mode` ET domaine                                                                     | (voir tableau ci-dessous)                                                                      |
 | 4    | **WebSearch + pages carrières**     | Requêtes `WebSearch` + scrape de pages carrières d'entreprises                                              | Dernier recours uniquement après avoir drainé les niveaux 1-3.                                 |
@@ -170,7 +170,7 @@ Exemple : l'Analista dit "4 des 5 derniers inserts de greenhouse.io exigent seni
 - ❌ Chercher dans le cercle 2 avant d'épuiser le cercle 1 — gaspille la portée, dilue les résultats.
 - ❌ Aller au niveau 4 (WebSearch) avant d'avoir drainé les niveaux 1-3 — `WebSearch` est la source la plus bruyante, la garder pour la fin.
 - ❌ Inférer `relocation = "ovunque"` pour un candidat dont le profil dit `false` — lire le profil, ne pas projeter.
-- ❌ Utiliser LinkedIn via `fetch` MCP — bloqué par robots.txt ; toujours `linkedin_check.py` (authentifié) ou `curl` avec UA navigateur.
+- ❌ Utiliser LinkedIn via `fetch` MCP — bloqué par robots.txt ; toujours `linkedin_check.py` (authentifié) ou `safe_fetch.py`.
 - ❌ Inclure des JD titrés senior en espérant que le Scorer les filtrera — gaspille le budget du Scorer, ajoute du bruit. Les 4 filtres niveau SCOUT ci-dessus sont le bon endroit.
 - ❌ Vérification anti-biais oubliée — une entreprise gourmande submerge votre lot.
 

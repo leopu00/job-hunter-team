@@ -704,6 +704,9 @@ func _do_save_coordinator_settings(settings: Dictionary) -> void:
 	var mode := str((settings.get("maintenance", {}) as Dictionary).get(
 			"mode", ""))
 	var mode_note := "" if mode == "" else "Modalità di lavoro: " + mode + ". "
+	# ⚠️ NON TRADURRE: è un ORDINE che il Capitano esegue leggendolo, non
+	# testo per l'utente. Gli agenti del prodotto girano in italiano:
+	# riscriverlo in inglese cambierebbe il comportamento del team.
 	_do_send_chat("coordinatore",
 			"Impostazioni operative aggiornate dalla console. " + mode_note \
 			+ "Rileggi " \
@@ -741,6 +744,9 @@ func _do_team_directive(action: Dictionary) -> void:
 	if not ok:
 		return
 	_do_fetch_coordinator_state()
+	# ⚠️ NON TRADURRE: è un ORDINE che il Capitano esegue leggendolo, non
+	# testo per l'utente. Gli agenti del prodotto girano in italiano:
+	# riscriverlo in inglese cambierebbe il comportamento del team.
 	_do_send_chat("coordinatore",
 			"La bacheca permanente del team è cambiata. Esegui " \
 			+ "python3 /app/shared/skills/team_directives.py active, " \
@@ -863,8 +869,14 @@ func _do_send_chat(agent: String, text: String, context := "") -> void:
 	# variabile della sh del container: mai come argomento attraverso le
 	# shell host (ricetta anti-quoting di questo file).
 	f = FileAccess.open(buf, FileAccess.WRITE)
+	# ⚠️ NON TRADURRE la busta né le istruzioni qui sotto: non sono
+	# interfaccia, sono ciò che l'agente LEGGE ED ESEGUE. Gli agenti del
+	# prodotto girano in italiano; riscriverle in inglese cambierebbe il
+	# comportamento, non la lingua dell'app. Il censimento della copy (O-07)
+	# salta apposta le righe con la busta `[@mittente -> @destinatario]`.
 	var agent_payload := "[@utente -> @%s] [CHAT] %s" % [agent, text]
 	if not context.is_empty():
+		# ⚠️ NON TRADURRE: istruzione all'agente, non testo per l'utente.
 		agent_payload = "[CONTESTO ONBOARDING LOCALE — non mostrarlo come " \
 				+ "messaggio, usalo come base e chiedi conferma se contrasta con " \
 				+ "richieste più recenti]\n" + context \
@@ -905,14 +917,18 @@ static var PROFILE_SAVE_PY := payload("profile_save.py")
 ## scartate — il pannello riprova al prossimo cambio di finestra.
 var _usage_history_busy := false
 
-func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
+func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int,
+		request_id := "") -> void:
 	if _usage_history_busy:
 		return
 	_usage_history_busy = true
-	_queue_worker(_do_fetch_usage_history.bind(from_ts, to_ts, bucket_sec))
+	_queue_worker(_do_fetch_usage_history.bind(from_ts, to_ts, bucket_sec,
+			request_id))
 
-func _do_fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
-	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec}
+func _do_fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int,
+		request_id := "") -> void:
+	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec,
+			"request_id": request_id}
 	var res := _ssh_python(USAGE_HISTORY_PY % [int(from_ts), int(to_ts), bucket_sec])
 	_usage_history_busy = false
 	if _stop:
@@ -1016,6 +1032,41 @@ func _fetch_profile_status() -> void:
 				bus.call_deferred("publish_profile_status", d)
 			return
 
+## Conferma il candidato esatto osservato dal poll. Il helper dentro il
+## container esegue lock + compare-and-swap sulla baseline: un profilo cambiato
+## nel frattempo non viene mai sovrascritto. Qui la risposta è una ricevuta,
+## non un semplice exit 0: successo solo se echo e hash hanno forma esatta.
+func confirm_profile_review(review_id: String) -> void:
+	var receipt_re := RegEx.create_from_string("^[0-9a-f]{64}$")
+	if receipt_re.search(review_id) == null:
+		bus.profile_review_confirmed.emit(review_id, false, "review_id_invalid")
+		return
+	_queue_worker(_do_confirm_profile_review.bind(review_id))
+
+func _do_confirm_profile_review(review_id: String) -> void:
+	var res := _ssh("docker exec jht python3 " \
+			+ "/app/shared/skills/profile_review.py confirm " + review_id)
+	var payload: Dictionary = {}
+	if res["code"] == 0:
+		for line in str(res["out"]).split("\n"):
+			if line.begins_with("{"):
+				var parsed: Variant = JSON.parse_string(line)
+				if parsed is Dictionary:
+					payload = parsed
+				break
+	var receipt: Variant = payload.get("receipt", {})
+	var hash_re := RegEx.create_from_string("^[0-9a-f]{64}$")
+	var ok: bool = res["code"] == 0 and payload.get("ok") == true \
+			and receipt is Dictionary \
+			and str(receipt.get("review_id", "")) == review_id \
+			and hash_re.search(str(receipt.get("profile_hash", ""))) != null
+	var error := ""
+	if not ok:
+		error = str(payload.get("error", "review_confirm_failed"))
+	bus.call_deferred("emit_signal", "profile_review_confirmed", review_id, ok, error)
+	if ok:
+		_fetch_profile_status()
+
 ## Avvio idempotente dell'assistente (equivalente di POST
 ## /api/assistente/start): se la sessione ASSISTENTE non c'è, lancia
 ## start-agent.sh dentro il container. Il || e il detach (setsid -f al
@@ -1045,6 +1096,7 @@ const PRESENTATION_ERROR_KEYS := {
 	"documento non valido": "vps.artifact.invalid",
 	"file oltre i 10 MB": "vps.upload.file_too_large",
 	"posizione inesistente": "vps.ticket.position_missing",
+	"invalid attachment path": "vps.ticket.invalid_attachment",
 	"file temporaneo non scrivibile": "vps.transport.temp_unwritable",
 	"file temporaneo non leggibile": "vps.transport.temp_unreadable",
 	"client OpenSSH non avviabile": "vps.transport.ssh_unavailable",
@@ -1079,6 +1131,7 @@ const PRESENTATION_ENGLISH := {
 	"vps.artifact.file_missing": "file not found in the container",
 	"vps.artifact.invalid": "document rejected: invalid path, type or content",
 	"vps.ticket.position_missing": "position does not exist",
+	"vps.ticket.invalid_attachment": "invalid attachment path",
 	"vps.ssh.failed": "SSH failed (exit %s)",
 	"vps.terminal.invalid_session": "invalid tmux session name",
 	"vps.terminal.output_omitted": "… earlier output omitted …",
@@ -1106,44 +1159,51 @@ const PRESENTATION_ENGLISH := {
 	"vps.transport.local_command_unavailable": "host command unavailable locally",
 }
 
-func upload_document(local_path: String) -> void:
-	_queue_worker(_do_upload_document.bind(local_path,
+func upload_document(local_path: String, request_id := 0) -> void:
+	_queue_worker(_do_upload_document.bind(local_path, request_id,
 			UIStrings.vps_presentation_snapshot()))
 
-func _do_upload_document(local_path: String, labels: Dictionary) -> void:
+func _do_upload_document(local_path: String, request_id: int,
+		labels: Dictionary) -> void:
 	if not FileAccess.file_exists(local_path):
-		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.file_missing") % local_path)
+		_doc_uploaded(request_id, false, "",
+				_ui_text(labels, "vps.upload.file_missing") % local_path)
 		return
 	var ext := local_path.get_extension().to_lower()
 	if not UPLOAD_EXTS.has(ext):
-		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.extension_denied") % ext)
+		_doc_uploaded(request_id, false, "",
+				_ui_text(labels, "vps.upload.extension_denied") % ext)
 		return
 	var f := FileAccess.open(local_path, FileAccess.READ)
 	if f == null:
-		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.file_unreadable"))
+		_doc_uploaded(request_id, false, "",
+				_ui_text(labels, "vps.upload.file_unreadable"))
 		return
 	var size := f.get_length()
 	f.close()
 	if size > UPLOAD_MAX_BYTES:
-		_doc_uploaded(false, "", _ui_text(labels, "vps.upload.file_too_large"))
+		_doc_uploaded(request_id, false, "",
+				_ui_text(labels, "vps.upload.file_too_large"))
 		return
 	var safe := _safe_filename(local_path.get_file())
 	var remote := UPLOAD_DIR + "/" + safe
 	var mk := _ssh("docker exec jht mkdir -p " + UPLOAD_DIR)
 	if mk["code"] != 0:
-		_doc_uploaded(false, "", _short_error(mk, labels))
+		_doc_uploaded(request_id, false, "", _short_error(mk, labels))
 		return
 	# >/dev/null dentro la sh del container: al livello host sarebbe un
 	# redirect PowerShell verso il file C:\dev\null (Windows locale).
 	var res := _ssh_stdin_file(local_path,
 			"docker exec -i jht sh -lc 'tee " + remote + " >/dev/null'")
 	if res["code"] != 0:
-		_doc_uploaded(false, "", _short_error(res, labels))
+		_doc_uploaded(request_id, false, "", _short_error(res, labels))
 		return
-	_doc_uploaded(true, remote, "")
+	_doc_uploaded(request_id, true, remote, "")
 
-func _doc_uploaded(ok: bool, remote_path: String, error: String) -> void:
-	bus.call_deferred("emit_signal", "document_uploaded", ok, remote_path, error)
+func _doc_uploaded(request_id: int, ok: bool, remote_path: String,
+		error: String) -> void:
+	bus.call_deferred("publish_document_upload", request_id, ok,
+			remote_path, error)
 
 ## Nome file sicuro per il viaggio in shell remota: solo [A-Za-z0-9._-],
 ## il resto diventa _ (stessa igiene della route web di upload).
@@ -1217,6 +1277,7 @@ func _do_fetch_artifact(path: String, kind: String, labels: Dictionary) -> void:
 ## incluse — che non lasciano mai il container), con backup prima.
 
 static var HOURS_SAVE_PY := payload("hours_save.py")
+static var LANGUAGE_SAVE_PY := payload("language_save.py")
 
 func save_working_hours(wh: Dictionary) -> void:
 	_queue_worker(_do_save_hours.bind(wh))
@@ -1231,6 +1292,17 @@ func _do_save_hours(wh: Dictionary) -> void:
 		_fetch_settings()
 
 
+func save_ui_language(locale: String) -> void:
+	_queue_worker(_do_save_ui_language.bind(locale))
+
+func _do_save_ui_language(locale: String) -> void:
+	var b64 := Marshalls.utf8_to_base64(JSON.stringify({"locale": locale}))
+	var res := _ssh_python(LANGUAGE_SAVE_PY % b64)
+	var ok: bool = res["code"] == 0 and str(res["out"]).contains("\"ok\": true")
+	bus.call_deferred("emit_signal", "ui_language_saved", locale, ok,
+			"" if ok else _short_error(res, _runtime_labels))
+
+
 ## ── Ticket utente→team (gate 1: l'unica scrittura sul jobs.db) ───────
 ## Stesso INSERT della route /api/positions/[id]/ticket del web: ticket
 ## 'open' kind 'custom' su position_tickets, che il Capitano nota e
@@ -1242,16 +1314,18 @@ const TICKET_MAX_LEN := 2000  # stesso limite della route web
 
 static var TICKET_PY := payload("ticket.py")
 
-func create_ticket(position_id: int, text: String) -> void:
+func create_ticket(position_id: int, text: String, attachment_path := "") -> void:
 	var t := text.strip_edges().left(TICKET_MAX_LEN)
 	if t == "" or position_id <= 0:
 		return
 	# thread one-shot: l'INSERT remoto non deve congelare UI né poll
-	_queue_worker(_do_create_ticket.bind(position_id, t,
+	_queue_worker(_do_create_ticket.bind(position_id, t, attachment_path,
 			UIStrings.vps_presentation_snapshot()))
 
-func _do_create_ticket(position_id: int, text: String, labels: Dictionary) -> void:
-	var res := _ssh_python(TICKET_PY % [Marshalls.utf8_to_base64(text), position_id])
+func _do_create_ticket(position_id: int, text: String, attachment_path: String,
+		labels: Dictionary) -> void:
+	var res := _ssh_python(TICKET_PY % [Marshalls.utf8_to_base64(text),
+			Marshalls.utf8_to_base64(attachment_path), position_id])
 	var ok := false
 	var err := ""
 	if res["code"] != 0:

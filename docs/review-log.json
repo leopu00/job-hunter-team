@@ -1509,6 +1509,71 @@
       "path": "scripts/release-keys/README.md",
       "description": "Contratto di custodia e rotazione delle chiavi pubbliche per i manifest release Windows firmati",
       "last_review": null
+    },
+    {
+      "path": "docs/guides/CHOOSE-WHERE-TO-RUN.md",
+      "description": "Guida pubblica per scegliere fra runtime sul PC locale, PC Linux dedicato in LAN via SSH e VPS, con requisiti, confini dati, disponibilità, costi operativi e limiti correnti",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-08-08-scout-coordination-observations.md",
+      "description": "Misure su cinque squadre in produzione: perché la divisione del territorio fra Scout (C-21) non si vede mai all'opera. Smonta due delle tre ipotesi con i dati — la squadra coordinata parte e la skill viene aperta — e nomina la terza: il coordinamento è scritto ma non vissuto. Squadre anonimizzate.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-12-chat-twin-line-removal-proposal.md",
+      "description": "Proposta di rimozione della riga gemella da chat.jsonl — valutata e SCARTATA (perdita muta a team acceso); resta il come, se le condizioni cambiano.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-12-cross-boundary-contract.md",
+      "description": "Contratto fra i due owner del repo: ruoli dei branch, forma del claim WIP(...)(ID), verifica via branch_census.py, semantica fail-closed, versioning.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-12-language-source-contract.md",
+      "description": "Contratto eseguibile della preferenza lingua unica: artefatto canonico i18n-prefs.json, precedenza dei reader, writer autorizzati, non-migrazione di lang.cfg e vettori obbligatori.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-12-target-role-category-contract.md",
+      "description": "Contratto forward-only per separare titolo professionale libero, ID canonico della categoria ruolo e specialty, con persistenza e round-trip cloud senza contaminazione delle label localizzate.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-08-12-theme-cloud-sync-contract.md",
+      "description": "Contratto v1 del tema cloud autenticato: schema e RLS, cache e pending per utente, precedenza al bootstrap, gestione offline fail-closed e vettori di concorrenza.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-08-12-dialogue-i18n-contract.md",
+      "description": "Contratto eseguibile per la localizzazione dei dialoghi authored: parità degli ID EN+6, resolver runtime, contesto LLM canonico e gate contro residui inglesi nelle traduzioni.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-08-12-execution-host-vocabulary-contract.md",
+      "description": "Contratto del luogo di esecuzione: PC locale e VPS come host supportati, cloud opzionale separato dal runtime e capacità da non promettere.",
+      "last_review": null
+    },
+    {
+      "path": "docs/adr/0007-provider-selection-is-configuration.md",
+      "description": "Decisione architetturale: provider, modello, CLI e flag sono configurazione governata dal launcher canonico, mai istruzioni naturali; le direttive conservano l'intento di lavoro ma non possono selezionare il runtime.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/cloud-push-quarantine/SKILL.md",
+      "description": "Il Mantenitore diagnostica e risolve gli elementi che il cloud ha messo in quarantena senza fermare il resto del convoglio, preservando identita', motivi sanificati e retry espliciti.",
+      "last_review": null
+    },
+    {
+      "path": "docs/security/07-auth-posture-remediation.md",
+      "description": "Runbook fail-closed per verificare e correggere la postura Supabase Auth senza esporre token o dettagli sensibili",
+      "last_review": null
+    },
+    {
+      "path": "docs/about/FAQ.md",
+      "description": "Sei domande di valutazione con risposte verificate nel codice: cos'e' e cosa NON e' (nessun invio automatico di candidature), Docker come confine di runtime, struttura del costo e chi lo guida, cosa esce dalla macchina e quando, differenza da un framework generico, uso senza VPS.",
+      "last_review": null
     }
   ]
 }

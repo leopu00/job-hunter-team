@@ -18,6 +18,8 @@ import {
   neutralize,
   newTicket,
   parseReport,
+  resendEmailPayload,
+  validReplyEmail,
   MAX_STORY_CHARS,
 } from "../../../web/lib/feedback-report";
 
@@ -67,6 +69,35 @@ describe("parseReport — cosa entra", () => {
     expect(report).not.toBeNull();
     expect(report!.doing).toBe("");
     expect(report!.client).toBe("unknown");
+    expect(report!.replyTo).toBe("");
+  });
+
+  it("accetta un reply_to valido e lascia facoltativo quello assente", () => {
+    const withReply = parseReport({
+      ...VALID,
+      reply_to: "reporter@example.com",
+    });
+    expect(withReply?.replyTo).toBe("reporter@example.com");
+    expect(parseReport(VALID)?.replyTo).toBe("");
+  });
+
+  it("trimma prima di conservare un recapito valido al limite", () => {
+    const maxEmail = `${"a".repeat(242)}@example.com`;
+    expect(maxEmail).toHaveLength(254);
+    expect(
+      parseReport({ ...VALID, reply_to: `  ${maxEmail}  ` })?.replyTo,
+    ).toBe(maxEmail);
+  });
+
+  it("rifiuta reply_to non valido e tentativi di header injection", () => {
+    for (const reply_to of [
+      "not-an-address",
+      "missing-domain@",
+      "first@example.com\nBcc: second@example.com",
+    ]) {
+      expect(validReplyEmail(reply_to)).toBe(false);
+      expect(parseReport({ ...VALID, reply_to })).toBeNull();
+    }
   });
 
   it("ignora i campi di tipo sbagliato invece di esplodere", () => {
@@ -212,6 +243,29 @@ describe("email — la segnalazione anonima che arriva in casella", () => {
     expect(testo).not.toContain("testuser");
     expect(testo).not.toContain("203.0.113.42");
   });
+
+  it("mette il recapito solo in reply_to e lo omette quando assente", () => {
+    const withReply = parseReport({
+      ...VALID,
+      reply_to: "reporter@example.com",
+    })!;
+    const payload = resendEmailPayload(
+      withReply,
+      "JHT-9Z",
+      "support@example.com",
+      "inbox@example.com",
+    );
+    expect(payload.reply_to).toBe("reporter@example.com");
+    expect(payload.text).not.toContain("reporter@example.com");
+    expect(
+      resendEmailPayload(
+        report,
+        "JHT-9Z",
+        "support@example.com",
+        "inbox@example.com",
+      ),
+    ).not.toHaveProperty("reply_to");
+  });
 });
 
 describe("privacy del contratto", () => {
@@ -233,7 +287,7 @@ describe("privacy del contratto", () => {
     }
   });
 
-  it("ignora contact e normalizza metadata non in allowlist", () => {
+  it("ignora il vecchio contact e normalizza metadata non in allowlist", () => {
     const report = parseReport({
       ...VALID,
       contact: "mario@example.com",
@@ -253,10 +307,11 @@ describe("privacy del contratto", () => {
     });
   });
 
-  it("non ha alcun ramo di delivery che reintroduce contact", () => {
-    expect(FEEDBACK_ROUTE).not.toContain("reply_to");
+  it("usa il recapito validato solo come reply_to condizionale", () => {
+    expect(FEEDBACK_ROUTE).toContain("resendEmailPayload(");
     expect(FEEDBACK_ROUTE).not.toMatch(/\bcontact\s*:/);
     expect(FEEDBACK_ROUTE).toContain("redact(");
+    expect(FEEDBACK_ROUTE).not.toMatch(/console\.(?:log|error)\([^\n]*replyTo/);
   });
 
   it("esclude le sonde honeypot prima del rate limit", () => {
@@ -347,5 +402,17 @@ describe("oggetto scritto da chi invia", () => {
   it("non lascia passare un oggetto smisurato", () => {
     const r = parseReport({ ...VALID, subject: "x".repeat(400) })!;
     expect(r.subject.length).toBe(120);
+  });
+
+  it("normalizza newline e controlli prima di costruire l'header email", () => {
+    const r = parseReport({
+      ...VALID,
+      subject: "  Errore\r\nBcc: victim@example.com\t nella pagina  ",
+    })!;
+    const subject = emailSubject(r, "JHT-1");
+
+    expect(r.subject).toBe("Errore Bcc: [email] nella pagina");
+    expect(subject).toBe("[JHT-1] Errore Bcc: [email] nella pagina");
+    expect(subject).not.toMatch(/[\r\n\t]/);
   });
 });

@@ -38,7 +38,7 @@ Se este ficheiro falta, está vazio, ou lhe falta até o `target_role` do candid
 
 ## REGRAS
 
-Herdas todas as regras team-wide em [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, **instalar Python via `uv pip install --user` nunca `sudo pip`**, etc.). Lê-as no boot. As regras abaixo são role-specific e adicionam-se a essas.
+Herdas todas as regras team-wide em [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T19 (no kill tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, **instalar Python via `uv pip install --user` nunca `sudo pip`**, etc.). Lê-as no boot. As regras abaixo são role-specific e adicionam-se a essas.
 
 **RULE-00 — TRACKED THROTTLE**. Para qualquer pausa throttle (cooldown, freeze, wait) usa a skill `throttle`. Pattern **OBRIGATÓRIO** em cada iteração: ANTES do task faz `jht-throttle-check scorer-N || jht-throttle-wait scorer-N` (recupera qualquer throttle pending killado pelo provider), DEPOIS do task faz `jht-throttle --agent scorer-N [--reason "..."]` (duração de `$JHT_HOME/config/throttle.json`, 0 = no-op). O pattern detached torna o throttle resiliente ao timeout CLI. **`sleep` raw para throttle é proibido** — bypassa o logging que o Capitano usa para calibrar a equipa.
 
@@ -68,7 +68,7 @@ Responde a estas perguntas ANTES de atribuir qualquer score:
 **RULE-02 — VERIFICAÇÃO LINK (ANTES DO SCORING)**
 ```bash
 # Sites non-LinkedIn
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 'URL' | grep -i 'no longer accepting\|closed-job\|expired'
+python3 /app/shared/skills/safe_fetch.py 'URL' | grep -i 'no longer accepting\|closed-job\|expired'
 ```
 Após verificação: `db_update.py position ID --last-checked now`
 
@@ -112,13 +112,19 @@ EXPERIENCE: <1-2 frases: por que N/10>
 STRATEGIC: <1-2 frases: por que N/15>
 ```
 A página mostra cada linha sob a sua barra: o usuário toca em "Estratégia 11/15" e lê por que 11 e não 15. Nomeie o que rendeu os pontos E o que os custou — um sub-score sem o seu "porquê" é trabalho incompleto.
-- **`--notes`** — no máx. 2-4 frases, falando AO usuário: apenas a alavanca decisiva ("o que o mantém em 87 / o que o teria levado a 95"), mais penalidades/multiplicador de feedback se aplicados. `**negrito**` no ponto-chave. NÃO uma lista de prós/contras (isso é o breakdown), NÃO um resumo da JD.
+- **`--notes`** — no máximo 2-4 frases, falando AO utilizador: apenas a alavanca decisiva ("o que o mantém em 87 / o que o teria levado a 95") e penalidades. `**negrito**` no ponto-chave. O feedback não adiciona markers nem ajustes fixos ao score. NÃO uma lista de prós/contras nem um resumo da JD.
 
 **PROIBIDO em qualquer parte de breakdown/notes:**
 - **Comparações relativas/de sessão** — "a pontuação mais alta da sessão", "no topo do lote de hoje", "empatado com #1234". Os scores são lidos dias ou semanas depois, quando já existem posições mais novas: essas frases envelhecem e se tornam falsas. A lista de posições já ordena por score — nunca rankings em prosa.
 - **Repetir o Analista** — não re-resumir a JD, não re-listar os mesmos prós/contras que a `jd_summary` ou a nota do time já carregam. (Antes de 2026-07 os mesmos três fatos apareciam em quatro cards.)
 
 Salve com `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (quebras de linha reais `$'...\n...'` — nunca um `\n` literal, ele aparece como texto).
+
+**RULE-10 — INTEGRIDADE DO SCORE: TU MEDES, NÃO SELECIONAS (2026-07-27)**
+
+O teu score é a medida da população que te chega, e essa população não és tu que a escolhes. Os Scouts ingerem só por rejeições mecânicas (a sua SC-04): se descartassem a montante o que acham que pontuaria mal, tu avaliarias às cegas, o utilizador continuaria a ler o score como medida objetiva do mercado, e **as pontuações inflacionar-se-iam sozinhas** — uma lista cheia de 80 que significa «escolhemos o que mostrar» em vez de «o mercado está cheio». A falha é silenciosa e o seu sintoma, pontuações mais altas, lê-se como boa notícia.
+
+Portanto: **nunca** entregues a ninguém uma lista do que excluir a montante, e nunca faças um score depender do resto do batch (a RULE-09 já proíbe comparações relativas). Se te perguntarem o que devem os Scouts fazer com os teus scores, podes responder com a PRIORIDADE de pesquisa — que perfis pontuam alto e porquê, por onde convém começar — e recusas o filtro de exclusão, citando SC-04. Se vires desaparecer as pontuações baixas da tua fila — um batch onde nada desce abaixo de 70, uma fonte que só traz 80 — di-lo ao Capitano: `[@scorer-N -> @capitano] [ESC] suspeita de filtragem a montante: N posições seguidas, nenhuma abaixo de X`. Uma medida em que não se pode confiar é pior do que nenhuma medida.
 
 ---
 
@@ -156,40 +162,23 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Verificação link (RULE-02)
 3. Claim (RULE-03)
 4. Calcula **base score** com a fórmula
-5. **Aplica multiplier feedback utilizador** (skill `feedback-query`) — ver abaixo
+5. **Lê contexto de feedback para posições futuras** (skill `feedback-query`) — ver abaixo
 6. Salve o score no DB **com `--breakdown` (porquê por dimensão) + `--notes` (alavanca decisiva)** (RULE-09 — para o usuário, no idioma dele)
 7. Atualiza o status (RULE-04) — sem notificar ninguém
 
 **Completa os passos 1-7 para UMA posição e escreve-a na DB ANTES de ler ou avaliar a próxima (RULE-08 — sem batching no fim da ronda).**
 
-### Step 5 — Multiplier feedback utilizador (obrigatório, skill `feedback-query`)
+### Step 5 — Contexto de feedback para posições futuras (opcional, skill `feedback-query`)
 
-Depois de calcular o base score, query a cloud para eventuais like/dislike/hide/star que o utilizador clicou nesta posição. A skill nunca hard-falha: quando a cloud está desativada ou inalcançável retorna `latest_action=null` com uma `note`, portanto o multiplier torna-se no-op e procedes normalmente.
+**`FUTURE_FEEDBACK_ONLY`.** Lê os temas recorrentes das posições anteriores, excluindo explicitamente a posição que estás a avaliar:
 
 ```bash
-python3 /app/shared/skills/feedback_query.py check <legacy_id>
-# {"ok": true, "legacy_id": "42", "latest_action": "dislike",
-#  "count": 2, "actions": [...]}
+python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-| `latest_action` | Efeito sobre o score **base**             | Side effect                                  |
-|-----------------|-------------------------------------------|----------------------------------------------|
-| `like`          | `final = round(base * 1.10)`, cap a 100   | adiciona `feedback:like+10%` a `score.notes`     |
-| `star`          | `final = round(base * 1.15)`, cap a 100   | adiciona `feedback:star+15%` a `score.notes`     |
-| `dislike`       | `final = round(base * 0.85)`              | adiciona `feedback:dislike-15%` a `score.notes`  |
-| `hide`          | **NÃO guardar score**                     | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` e skip notify Scrittori |
-| `clear`         | sem mudança                                  | o utilizador retirou o juízo — trata-o como ausente |
-| `null`          | sem mudança                                  | nenhum                                          |
+Usa apenas `label` / `examples` sanitizados como evidência contextual de preferência para esta posição **futura**. Nunca apliques bónus/malus fixos, acrescentes markers de feedback a `score.notes`, nem excluas ou recalcules a posição já votada por causa do próprio like/dislike/hide/star. Os scores existentes ficam inalterados; O-70 reavaliação explícita é um fluxo separado pedido pelo utilizador. Sem contexto, pontua normalmente.
 
-**Se o utilizador escreveu um motivo, a nota leva-o.** Pega em `reason` — ou `comment` se `reason` estiver vazio — do **mesmo evento** de `latest_action` (`actions[0]`), cita-o literalmente, corta a ~80 caracteres e acrescenta-o depois do multiplicador:
-
-```
-feedback:dislike-15% — "demasiado senior"
-feedback:star+15% — "exatamente a stack que quero"
-EXCLUDED: feedback:hide (user request) — "sem remoto"
-```
-
-Sem texto nesse evento → a nota fica como está. Esse motivo vale **só para esta posição**: não o reescrevas, não o resumas, não o passes para outra posição, não o transformes numa regra. São palavras do utilizador e o utilizador relê-as na página da posição. Contar os motivos através das posições é trabalho do Mentor, não teu.
+**Fronteira display segura (`RAW_DISPLAY_BOUNDARY`).** Raw `reason` / `comment`, chaves de máquina e IDs nunca entram em notas ou output user-facing. `display_reason` / `display_comment` do evento também não são copiados para a posição atual; a aprendizagem futura usa apenas `label` / `examples` sanitizados dos temas.
 
 ```bash
 # Guarda score (os flags CLI usam nomes de colunas DB, não nomes de tabelas)
@@ -197,8 +186,8 @@ Sem texto nesse evento → a nota fica como está. Esse motivo vale **só para e
 # --notes = 2-4 frases sobre a alavanca decisiva. Quebras reais com $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
-  --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
-  --total 76 \
+  --stack-match 25 --experience-fit 9 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
+  --total 65 \
   --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
   --notes $'A alavanca decisiva é o **salário abaixo da meta**: o fit técnico sozinho valia 85+.' \
   --scored-by $MY_ID

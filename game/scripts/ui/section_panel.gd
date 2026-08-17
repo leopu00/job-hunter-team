@@ -99,6 +99,13 @@ func _ready() -> void:
 	_content.add_theme_constant_override("separation", 10)
 	_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(_content)
+	# Le pagine restano montate mentre il backend locale o remoto cambia
+	# stato. Ricostruire sul cambio rende osservabile UNAVAILABLE -> LIVE
+	# senza obbligare l'utente a chiudere e riaprire la sezione.
+	if not BackendBus.connection_changed.is_connected(_on_provenance_refresh):
+		BackendBus.connection_changed.connect(_on_provenance_refresh)
+	if not BackendBus.positions_updated.is_connected(_on_positions_provenance_refresh):
+		BackendBus.positions_updated.connect(_on_positions_provenance_refresh)
 	# TEST-AUTO: JHT_POS_DETAIL=<id> apre il dettaglio di quella posizione
 	# appena lo snapshot arriva (il refresh del bus rientra da solo);
 	# JHT_AGENT_PAGE=<slug> apre la pagina del singolo agente.
@@ -117,6 +124,22 @@ func _ready() -> void:
 		_build("agent")
 		return
 	_build("detail" if _pos_detail_id != 0 else "")
+
+
+func _on_provenance_refresh(_state: int, _detail: String) -> void:
+	# Non buttare via form/config che l'utente sta compilando: il refresh di
+	# provenienza riguarda soltanto pagine che rendono dati del team.
+	if is_instance_valid(_content) and section in [
+			"stats", "map", "team", "agents", "agent_metrics",
+			"usage_history", "usage_agents", "activity", "apps", "dashboard",
+			"notifs", "chat", "positions"]:
+		_build(_current_page)
+
+
+func _on_positions_provenance_refresh(_positions: Array) -> void:
+	if is_instance_valid(_content) \
+			and _last_data_state != int(SimBadge.current_state()):
+		_build(_current_page)
 
 
 ## Briciola di ritorno per le pagine di configurazione: in sidebar non hanno
@@ -197,9 +220,11 @@ var _content: VBoxContainer
 ## "agent", "usage", "preview"). Serve a ricostruire il contenuto senza
 ## rifare il guscio quando un refresh del bus arriva mentre si è in dettaglio.
 var _current_page := ""
+var _last_data_state := -1
 
 func _build(page := "") -> void:
 	_current_page = page
+	_last_data_state = int(SimBadge.current_state())
 	for child in _content.get_children():
 		child.queue_free()
 	match section:
@@ -213,7 +238,7 @@ func _build(page := "") -> void:
 		"map":
 			# l'esperienza mappa del web privato: globo → mappa piatta,
 			# filtri cross e schede pin che aprono il dettaglio posizione
-			if BackendBus.positions_are_demo:
+			if SimBadge.current_state() == SimBadge.DataState.DEMO:
 				_content.add_child(TerminalTheme.label(
 						UIStrings.t("demo.map"),
 						13, Palette.YELLOW, "medium"))
@@ -285,13 +310,14 @@ func _build(page := "") -> void:
 			_build_placeholder()
 
 ## Sezioni config: coppie etichetta/valore, SOLA LETTURA — in linea col
-## modello desktop-first. Con la VPS collegata mostrano la config VERA
-## del team (campi safe da jht.config.json), altrimenti il mock.
+## modello desktop-first. LIVE legge la config safe del bus, DEMO la fixture;
+## UNAVAILABLE non inventa valori.
 func _build_config() -> void:
 	if not BackendBus.live_settings_updated.is_connected(_on_config_refresh):
 		BackendBus.live_settings_updated.connect(_on_config_refresh)
 	var rows: Array = []
-	if BackendBus.is_live():
+	var data_state := SimBadge.current_state()
+	if data_state == SimBadge.DataState.LIVE:
 		# connessi: mostra la config VERA — mai il mock spacciato per reale
 		rows = BackendBus.live_settings.get(section, [])
 		if rows.is_empty():
@@ -299,8 +325,11 @@ func _build_config() -> void:
 					UIStrings.t("config.incoming") if BackendBus.live_settings.is_empty()
 					else UIStrings.t("config.not_exposed"), 14, Palette.DIM))
 			return
-	else:
+	elif data_state == SimBadge.DataState.DEMO:
 		rows = TeamData.settings().get(section, [])
+	else:
+		_add_data_unavailable()
+		return
 	if rows.is_empty():
 		_build_placeholder()
 		return
@@ -395,7 +424,7 @@ func _build_account() -> void:
 			14, Palette.MUTED))
 	_content.add_child(HSeparator.new())
 	_setup_state_row(UIStrings.t("account.cloud"), configured,
-			UIStrings.t("account.linked") if configured else UIStrings.t("account.local_mode"))
+			UIStrings.t("account.linked") if configured else UIStrings.t("account.not_connected"))
 	if configured:
 		_setup_state_row(UIStrings.t("account.device"), true,
 				str(cloud.get("token_name", "")) if str(cloud.get("token_name", "")) != "" \
@@ -817,13 +846,14 @@ func _update_line(state: Dictionary) -> String:
 
 ## I campi sopravvivono al passaggio all'anteprima e ritorno: farglieli
 ## riscrivere sarebbe il modo più veloce per non ricevere più segnalazioni.
-var _fb_form := {"doing": "", "happened": "", "expected": ""}
+var _fb_form := {"doing": "", "happened": "", "expected": "", "reply_to": ""}
 var _fb_include_logs := true
 var _fb_include_container := true
 var _fb_status: Label
 var _fb_redaction: Label
 var _fb_send: Button
 var _fb_preview_body: TextEdit
+var _fb_email_error: Label
 
 const FB_FIELDS := [
 	["doing", "feedback.q_doing", "feedback.ph_doing", 60],
@@ -863,6 +893,27 @@ func _build_feedback() -> void:
 			_refresh_feedback_send()
 			_refresh_feedback_redaction())
 		list.add_child(edit)
+
+	# Il recapito vive fuori dai campi narrativi: questi ultimi vengono redatti,
+	# mentre l'indirizzo validato serve soltanto come Reply-To della mail.
+	list.add_child(TerminalTheme.label(
+			UIStrings.t("feedback.q_contact"), 13, Palette.MUTED, "medium"))
+	var reply := LineEdit.new()
+	reply.text = str(_fb_form["reply_to"])
+	reply.placeholder_text = UIStrings.t("feedback.ph_contact")
+	reply.max_length = 254
+	reply.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reply.text_changed.connect(func(value: String) -> void:
+		_fb_form["reply_to"] = value
+		_refresh_feedback_send())
+	list.add_child(reply)
+	var contact_hint := TerminalTheme.label(
+			UIStrings.t("feedback.contact_hint"), 11, Palette.DIM)
+	contact_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	list.add_child(contact_hint)
+	_fb_email_error = TerminalTheme.label("", 11, Palette.YELLOW)
+	_fb_email_error.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	list.add_child(_fb_email_error)
 
 	list.add_child(HSeparator.new())
 	var attach := HBoxContainer.new()
@@ -956,8 +1007,11 @@ func _collect_feedback_preview() -> void:
 func _refresh_feedback_send() -> void:
 	if not is_instance_valid(_fb_send):
 		return
-	var ready := str(_fb_form["happened"]).strip_edges().length() >= 10
+	var email_ok := FeedbackService.valid_reply_email(_fb_form.get("reply_to", ""))
+	var ready := str(_fb_form["happened"]).strip_edges().length() >= 10 and email_ok
 	_fb_send.disabled = not ready
+	if is_instance_valid(_fb_email_error):
+		_fb_email_error.text = "" if email_ok else UIStrings.t("feedback.invalid_email")
 	# Il colore segue lo stato: un pulsante verde acceso che non risponde al
 	# click si legge come un bug del gioco, proprio nella schermata in cui si
 	# chiede fiducia all'utente. Serve l'override di font_disabled_color e non
@@ -1047,7 +1101,67 @@ func _listen_setup() -> void:
 		SetupService.action_changed.connect(_on_setup_action)
 	if not SetupService.phase_changed.is_connected(_on_setup_phase):
 		SetupService.phase_changed.connect(_on_setup_phase)
+	if not SetupService.team_start_state_changed.is_connected(_on_team_start_state):
+		SetupService.team_start_state_changed.connect(_on_team_start_state)
 	_setup_busy_ui = SetupService.busy()
+
+
+## Lo stato del comando e la liveness del team sono osservazioni distinte. Il
+## probe resta autoritativo per RUNNING; negli altri casi la macchina causale
+## impedisce alla UI di ricadere su idle appena il processo `team start` esce.
+static func _team_start_phase(snapshot: Dictionary, running: bool) -> String:
+	if running:
+		return "running"
+	var phase := str(snapshot.get("phase", "idle"))
+	return phase if phase in ["starting", "failed", "recovering"] else "idle"
+
+
+static func _team_start_failure_cause(snapshot: Dictionary) -> String:
+	var code := str(snapshot.get("error_code", ""))
+	var cause := str(snapshot.get("cause", "")).strip_edges()
+	if code == "bootstrap_failed" and cause != "":
+		return cause
+	var localized := {
+		"captain_not_observed": "team.start_cause_captain_not_observed",
+		"recovery_timeout": "team.start_cause_recovery_timeout",
+		"service_restarted": "team.start_cause_service_restarted",
+		"startup_state_unreadable": "team.start_cause_state_unreadable",
+	}
+	if localized.has(code):
+		return UIStrings.t(str(localized[code]))
+	return cause if cause != "" else UIStrings.t("team.start_cause_unknown")
+
+
+## Responso persistito, non una copia dell'ultimo toast. FAILED conserva causa
+## e log essenziale finche l'utente ritenta; RECOVERING dichiara il watchdog e
+## il suo limite finito invece di mostrare di nuovo un innocuo pulsante idle.
+static func _add_team_start_feedback(parent: VBoxContainer,
+		snapshot: Dictionary, phase: String) -> void:
+	if phase in ["idle", "running"]:
+		return
+	var title_key: String = str({
+		"starting": "team.start_waiting",
+		"recovering": "team.start_recovery_detail",
+		"failed": "team.start_failed_title",
+	}.get(phase, ""))
+	var color := Palette.RED if phase == "failed" else Palette.YELLOW
+	var title := TerminalTheme.label(UIStrings.t(str(title_key)), 13, color, "bold")
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(title)
+	if phase != "failed":
+		return
+	var cause := TerminalTheme.label(_team_start_failure_cause(snapshot),
+			13, Palette.YELLOW)
+	cause.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(cause)
+	var output := str(snapshot.get("output", "")).strip_edges()
+	if output == "":
+		return
+	parent.add_child(TerminalTheme.label(
+			UIStrings.t("team.start_log"), 12, Palette.DIM, "bold"))
+	var log_line := TerminalTheme.label(output, 12, Palette.MUTED)
+	log_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(log_line)
 
 
 func _build_activation() -> void:
@@ -1082,31 +1196,45 @@ func _build_activation() -> void:
 	# la scelta esisteva solo sepolta in Impostazioni → Collega VPS, e
 	# nell'onboarding non compariva affatto (Leone, 26/07).
 	var on_vps: bool = BackendBus.is_remote() and BackendBus.is_live()
-	_setup_gate(progress, "01", UIStrings.t("setup.where"),
-			bool(s.get("container_running", false)) or on_vps,
-			UIStrings.t("setup.where_vps") if on_vps
-			else (UIStrings.t("setup.where_local") if bool(s.get("container_running", false))
-			else UIStrings.t("setup.where_todo")), "docker")
 	# Passi che il team connesso non ha saputo raccontare: si dicono ignoti. Il
 	# valore di questo computer non è una risposta — su una VPS è di un'altra
 	# macchina, e nel caso peggiore di un'altra persona.
 	var unknown: Array = s.get("unknown_steps", [])
-	_setup_gate(progress, "02", UIStrings.t("setup.provider"),
-			bool(s.get("provider_authenticated", false))
-					and bool(s.get("plan_ready", false)),
-			_provider_status_text(s), "provider", unknown.has("provider"))
-	_setup_gate(progress, "03", UIStrings.t("setup.profile"),
-			bool(s.get("profile_ready", false)),
+	# I quattro passi sono una CATENA, non quattro schede indipendenti: il
+	# profilo si costruisce parlando con l'Assistente, che vive nel container e
+	# usa l'abbonamento del provider. Aprirlo prima significava compilare un
+	# colloquio con un interlocutore spento (O-13e). Un passo ignoto non blocca
+	# mai il successivo: non sapere non è sapere di no.
+	var step_container := bool(s.get("container_running", false)) or on_vps
+	var step_provider := bool(s.get("provider_authenticated", false)) \
+			and bool(s.get("plan_ready", false))
+	var step_profile := bool(s.get("profile_ready", false))
+	var lock_provider := "" if step_container \
+			else UIStrings.t("setup.gate_needs_container")
+	var lock_profile := "" if step_provider or unknown.has("provider") \
+			else UIStrings.t("setup.gate_needs_provider")
+	var lock_hours := "" if step_profile or unknown.has("profile") \
+			else UIStrings.t("setup.gate_needs_profile")
+	_setup_gate(progress, "01", UIStrings.t("setup.where"), step_container,
+			UIStrings.t("setup.where_vps") if on_vps
+			else (UIStrings.t("setup.where_local") if bool(s.get("container_running", false))
+			else UIStrings.t("setup.where_todo")), "docker")
+	_setup_gate(progress, "02", UIStrings.t("setup.provider"), step_provider,
+			_provider_status_text(s), "provider", unknown.has("provider"),
+			lock_provider)
+	_setup_gate(progress, "03", UIStrings.t("setup.profile"), step_profile,
 			UIStrings.t("setup.remote_unknown") if unknown.has("profile")
-			else (UIStrings.t("setup.profile_ok") if bool(s.get("profile_ready", false))
-			else UIStrings.t("setup.profile_todo")), "profile", unknown.has("profile"))
+			else (UIStrings.t("setup.profile_ok") if step_profile
+			else UIStrings.t("setup.profile_todo")), "profile",
+			unknown.has("profile"), lock_profile)
 	# Quarto passo, obbligatorio come gli altri: senza finestre di lavoro il
 	# team macina a ogni ora del giorno e il conto arriva dopo.
 	_setup_gate(progress, "04", UIStrings.t("setup.hours"),
 			bool(s.get("hours_ready", false)),
 			UIStrings.t("setup.remote_unknown") if unknown.has("hours")
 			else (UIStrings.t("setup.hours_ok") if bool(s.get("hours_ready", false))
-			else UIStrings.t("setup.hours_todo")), "hours", unknown.has("hours"))
+			else UIStrings.t("setup.hours_todo")), "hours", unknown.has("hours"),
+			lock_hours)
 	_content.add_child(HSeparator.new())
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 14)
@@ -1119,28 +1247,36 @@ func _build_activation() -> void:
 	summary.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bottom.add_child(summary)
 	var start := Button.new()
-	# Tre stati, tre etichette: attivo (●), avvio in corso (◌, mentre il
-	# comando gira), pronto da premere (▶). Prima il pulsante restava "ATTIVA
-	# IL TEAM" anche durante l'avvio e non diceva se il click era passato.
-	if bool(s.get("team_running", false)):
+	var team_state := SetupService.team_start_snapshot()
+	var team_phase := _team_start_phase(
+			team_state, bool(s.get("team_running", false)))
+	# Il comando puo essere gia finito mentre il watchdog sta ancora recuperando:
+	# in quel tratto l'etichetta viene dallo stato persistito, non da busy().
+	if team_phase == "running":
 		start.text = UIStrings.t("setup.team_running")
-	elif SetupService.busy() and SetupService.current_action == "team":
+	elif team_phase == "recovering":
+		start.text = UIStrings.t("team.start_recovering")
+	elif team_phase == "failed":
+		start.text = UIStrings.t("team.start_retry")
+	elif team_phase == "starting":
 		start.text = UIStrings.t("setup.team_starting")
 	else:
 		start.text = UIStrings.t("setup.start_team")
 	start.disabled = not bool(s.get("ready", false)) \
-			or bool(s.get("team_running", false)) or SetupService.busy()
+			or team_phase in ["running", "starting", "recovering"] \
+			or SetupService.busy()
 	start.add_theme_font_size_override("font_size", 17)
 	start.add_theme_color_override("font_color", Palette.GREEN)
 	# Il tema tiene VERDE anche il disabilitato (serve alle tab attive): qui lo
 	# stato deve vedersi — verde se il team è ATTIVO (disabled usato come
 	# distintivo), giallo se sta lavorando lui, muto se aspetta altro.
 	start.add_theme_color_override("font_disabled_color",
-			Palette.GREEN if bool(s.get("team_running", false)) \
-			else (Palette.YELLOW if SetupService.busy() \
-			and SetupService.current_action == "team" else Palette.MUTED))
+			Palette.GREEN if team_phase == "running" \
+			else (Palette.YELLOW if team_phase in ["starting", "recovering"] \
+			else Palette.MUTED))
 	start.pressed.connect(SetupService.start_team)
 	bottom.add_child(start)
+	_add_team_start_feedback(_content, team_state, team_phase)
 	# ATTIVA IL TEAM spento perché gira UN'ALTRA azione (es. l'attivazione del
 	# container): la ragione va detta. Quando l'azione è proprio il team,
 	# l'etichetta "AVVIO IN CORSO" parla già da sola.
@@ -1157,7 +1293,7 @@ func _build_activation() -> void:
 
 func _setup_gate(parent: HBoxContainer, number: String, title: String,
 		done: bool, detail: String, destination: String,
-		unknown := false) -> void:
+		unknown := false, locked_by := "") -> void:
 	var panel := BracketPanel.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.custom_minimum_size = Vector2(260, 180)
@@ -1169,22 +1305,34 @@ func _setup_gate(parent: HBoxContainer, number: String, title: String,
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	pad.add_child(col)
+	# Quarto stato: il passo precedente non è fatto, quindi questo non si può
+	# ancora aprire. Serve un glifo suo — con ○ sarebbe indistinguibile da un
+	# passo semplicemente da fare, e l'utente proverebbe comunque ad aprirlo.
+	var locked := locked_by != ""
 	# Terzo stato accanto a fatto (✓) e da fare (○): il valore vive sulla
 	# macchina connessa e non siamo riusciti a leggerlo. Dirlo con uno degli
 	# altri due sarebbe inventarlo.
-	var tint: Color = Palette.DIM if unknown \
+	var tint: Color = Palette.DIM if unknown or locked \
 			else (Palette.GREEN if done else Palette.YELLOW)
 	col.add_child(TerminalTheme.label(
-			number + "  " + ("?" if unknown else ("✓" if done else "○")),
-			14, tint, "bold"))
-	col.add_child(TerminalTheme.label(title.to_upper(), 19, Palette.WHITE, "bold"))
-	var body := TerminalTheme.label(detail, 13, Palette.MUTED)
+			number + "  " + ("?" if unknown else ("✓" if done
+			else ("⌾" if locked else "○"))), 14, tint, "bold"))
+	col.add_child(TerminalTheme.label(title.to_upper(), 19,
+			Palette.MUTED if locked else Palette.WHITE, "bold"))
+	var body := TerminalTheme.label(locked_by if locked else detail, 13,
+			Palette.YELLOW if locked else Palette.MUTED)
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(body)
 	var open := Button.new()
-	open.text = UIStrings.t("setup.review") if done else UIStrings.t("setup.configure")
+	open.text = UIStrings.t("setup.gate_locked") if locked \
+			else (UIStrings.t("setup.review") if done else UIStrings.t("setup.configure"))
+	# Il passo bloccato non si apre: «se non ho fatto l'uno, non posso fare il
+	# quattro» (operatore, O-13e). Prima si poteva configurare il profilo con
+	# il container ancora inesistente, e il lavoro finiva in un vicolo cieco.
+	open.disabled = locked
 	open.add_theme_color_override("font_color", tint)
+	open.add_theme_color_override("font_disabled_color", Palette.DIM)
 	open.pressed.connect(func() -> void:
 		if destination == "profile":
 			Game.goto_wizard()
@@ -1219,14 +1367,38 @@ func _build_container_setup() -> void:
 	var upgrading := SetupService.busy() and SetupService.current_action == "upgrade"
 	var checking_update := SetupService.busy() and SetupService.current_action == "upgrade-check"
 	var phase: String = SetupService.action_phase if busy else ""
-	_content.add_child(TerminalTheme.label(UIStrings.t("setup.container_lead"),
-			15, Palette.BASE))
+	var remote := bool(s.get("remote", false))
+	var runtimes: PackedStringArray = s.get("runtimes", PackedStringArray())
+	# Nessun motore installato: è lo stato in cui «ATTIVA CONTAINER» non può
+	# riuscire, e finora restava premibile per finire in errore (O-13a).
+	var no_runtime := SetupService.runtime_missing(s)
+	# Il marchio Docker ufficiale sta DOVE si parla di Docker. Prima viveva
+	# solo nel pulsante in cima al menu (O-13d): proprio la finestra che
+	# accende il motore — l'unica in cui l'utente si chiede di che programma
+	# si stia parlando — non lo mostrava.
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 12)
+	_content.add_child(head)
+	var mark := SidebarIcon.new("container", Palette.BASE)
+	mark.custom_minimum_size = Vector2(28, 28)
+	mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(mark)
+	var lead := TerminalTheme.label(UIStrings.t("setup.container_lead"),
+			15, Palette.BASE)
+	lead.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lead.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(lead)
 	_content.add_child(HSeparator.new())
+	# La riga del motore dice anche QUALE motore: "runtime spento" secco, su un
+	# computer con Colima installato, si legge come "Docker non c'è" — ed è
+	# l'equivoco da cui nasce O-13.
 	_setup_phase_row(UIStrings.t("setup.phase_engine"),
 			_phase_state(bool(s.get("docker_running", false)), phase == "engine"),
 			UIStrings.t("setup.phase_running") if phase == "engine"
 			else (UIStrings.t("setup.docker_ready") if bool(s.get("docker_running", false))
-			else UIStrings.t("setup.docker_missing")))
+			else (UIStrings.t("setup.runtime_none") if no_runtime
+			else UIStrings.t("setup.runtime_installed_off")
+					% _runtime_name(str(s.get("runtime_selected", ""))))))
 	_setup_phase_row(UIStrings.t("setup.phase_image"),
 			_phase_state(str(s.get("image_id", "")) != "" or bool(s.get("remote", false)),
 					phase == "image"),
@@ -1263,6 +1435,13 @@ func _build_container_setup() -> void:
 	if busy or team_phase:
 		_content.add_child(SetupProgress.new())
 	_content.add_child(HSeparator.new())
+	# Due motori installati, due macchine virtuali diverse: quale accendere non
+	# è un dettaglio implementativo da indovinare al posto dell'utente (risorse,
+	# licenza e VM sono diverse), ed è la scelta che non gli veniva mai chiesta
+	# (O-13c). Con UN solo motore non c'è niente da chiedere e la riga non
+	# compare: una domanda a risposta unica è rumore.
+	if runtimes.size() > 1 and not remote:
+		_runtime_choice_row(runtimes, str(s.get("runtime_selected", "")))
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	_content.add_child(actions)
@@ -1283,7 +1462,10 @@ func _build_container_setup() -> void:
 	else:
 		start.text = UIStrings.t("setup.container_start")
 		start.pressed.connect(SetupService.start_container)
-	start.disabled = start.disabled or SetupService.busy()
+	# Senza motore installato il pulsante NON è premibile: prima partiva, dopo
+	# due minuti di attesa dichiarava "Docker non risponde" e lasciava l'utente
+	# esattamente dov'era. Il motivo sta scritto sotto, non nascosto in un log.
+	start.disabled = start.disabled or SetupService.busy() or no_runtime
 	start.add_theme_font_size_override("font_size", 16)
 	start.add_theme_color_override("font_color", Palette.GREEN)
 	# Spento perché lavora LUI → giallo (stato vivo); spento perché lavora
@@ -1291,12 +1473,14 @@ func _build_container_setup() -> void:
 	start.add_theme_color_override("font_disabled_color",
 			Palette.YELLOW if busy else Palette.MUTED)
 	actions.add_child(start)
-	# Docker assente: senza motore non si accende niente, e questa è l'unica
-	# azione sensata da offrire. Resta premibile ANCHE mentre un'azione gira:
-	# non passa dalla corsia di SetupService (apre la console incorporata) e
-	# l'unica azione possibile con Docker assente è la fase engine che sta
-	# proprio aspettando che il runtime compaia — installarlo la sblocca.
-	if not bool(s.get("docker_available", false)) and not bool(s.get("remote", false)):
+	# Nessun motore installato: senza di quello non si accende niente, e questa
+	# è l'unica azione sensata da offrire. La condizione è il motore, NON il
+	# client `docker`: con Colima installato il client c'è comunque, e la
+	# domanda "installo Docker?" non ha senso porla (O-13b). Resta premibile
+	# ANCHE mentre un'azione gira: non passa dalla corsia di SetupService (apre
+	# la console incorporata) e l'unica azione possibile senza motore è proprio
+	# installarne uno — è ciò che sblocca la fase engine ferma ad aspettare.
+	if no_runtime:
 		var install := Button.new()
 		install.text = UIStrings.t("setup.docker_install")
 		install.add_theme_color_override("font_color", Palette.YELLOW)
@@ -1330,6 +1514,14 @@ func _build_container_setup() -> void:
 				Palette.YELLOW if upgrading else Palette.MUTED)
 		update.pressed.connect(SetupService.update_runtime)
 		actions.add_child(update)
+	# Un pulsante spento e muto è indistinguibile da uno rotto: se «ATTIVA
+	# CONTAINER» è spento perché manca il motore, il motivo va detto QUI, non
+	# lasciato dedurre dalla riga della filiera.
+	if no_runtime:
+		var why := TerminalTheme.label(
+				UIStrings.t("setup.container_needs_runtime"), 12, Palette.YELLOW)
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(why)
 	# Vale per tutti i pulsanti spenti del pannello, FERMA CONTAINER incluso:
 	# condividono la stessa corsia unica, quindi la stessa ragione.
 	_busy_hint(_content)
@@ -1371,6 +1563,46 @@ func _build_container_setup() -> void:
 		stop.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		stop.pressed.connect(SetupService.stop_container)
 		footer.add_child(stop)
+
+
+## Il nome con cui l'utente conosce un motore container. Gli id interni
+## ("docker-desktop") non compaiono mai a schermo: sono chiavi, non parole.
+static func _runtime_name(id: String) -> String:
+	match id:
+		SetupService.RUNTIME_COLIMA:
+			return UIStrings.t("setup.runtime_colima")
+		SetupService.RUNTIME_DOCKER_DESKTOP:
+			return UIStrings.t("setup.runtime_docker_desktop")
+		SetupService.RUNTIME_DOCKER_SERVICE:
+			return UIStrings.t("setup.runtime_docker_service")
+	return UIStrings.t("setup.runtime_unknown")
+
+
+## La scelta esplicita fra i motori installati. Un pulsante per motore, quello
+## in uso marcato ●: è una preferenza, non un'azione, quindi non passa dalla
+## corsia unica di SetupService e resta viva anche durante un'attivazione —
+## cambiarla adesso vale per l'avvio successivo.
+func _runtime_choice_row(runtimes: PackedStringArray, selected: String) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	_content.add_child(row)
+	var label := TerminalTheme.label(UIStrings.t("setup.runtime_choice"), 13,
+			Palette.MUTED, "medium")
+	label.custom_minimum_size = Vector2(220, 0)
+	row.add_child(label)
+	for id in runtimes:
+		var engine := String(id)
+		var pick := Button.new()
+		var active := engine == selected
+		pick.text = ("● " if active else "○ ") + _runtime_name(engine)
+		pick.add_theme_color_override("font_color",
+				Palette.GREEN if active else Palette.BASE)
+		pick.pressed.connect(SetupService.choose_runtime.bind(engine))
+		row.add_child(pick)
+	var note := TerminalTheme.label(UIStrings.t("setup.runtime_choice_note"), 12,
+			Palette.DIM)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(note)
 
 
 ## Una riga della filiera di attivazione. Quattro stati, quattro letture:
@@ -1624,8 +1856,13 @@ func _plan_picker(col: VBoxContainer, provider: String, s: Dictionary) -> void:
 
 func _on_setup_refresh(_status: Dictionary) -> void:
 	if is_instance_valid(_content) \
-			and section in ["activation", "provider", "docker", "account"]:
+			and section in ["activation", "provider", "docker", "account", "team"]:
 		_build()
+
+
+func _on_team_start_state(_state: Dictionary) -> void:
+	if is_instance_valid(_content) and section in ["activation", "team"]:
+		_build(_current_page)
 
 
 func _on_setup_action(action: String, running: bool, message: String, ok: bool) -> void:
@@ -1633,8 +1870,18 @@ func _on_setup_action(action: String, running: bool, message: String, ok: bool) 
 	# senza questo il pannello resterebbe su "non disponibile" fino a riaprirlo.
 	if action == "vps-key" and not running:
 		_refresh_vps_fingerprint()
-	_action_note = ("◌ " if running else ("✓ " if ok else "⚠ ")) + message
-	_action_note_color = Palette.YELLOW if running \
+	# Il successo del processo `team start` non è ancora il successo del team:
+	# il solo verde autorevole arriva dal probe CAPITANO. Neutralizziamo anche
+	# un eventuale messaggio legacy positivo, così il consumer non dipende dal
+	# testo restituito dal worker per rispettare il confine causale.
+	var team_confirmation_pending := action == "team" and not running and ok \
+			and _team_start_phase(SetupService.team_start_snapshot(),
+					bool(SetupService.status.get("team_running", false))) != "running"
+	var visible_message := UIStrings.t("team.start_waiting") \
+			if team_confirmation_pending else message
+	_action_note = ("◌ " if running or team_confirmation_pending \
+			else ("✓ " if ok else "⚠ ")) + visible_message
+	_action_note_color = Palette.YELLOW if running or team_confirmation_pending \
 			else (Palette.GREEN if ok else Palette.RED)
 	# Avvio o fine di un'azione di setup: i pulsanti devono cambiare stato
 	# (disabilitati + etichetta "in corso") SUBITO, non al prossimo probe.
@@ -1926,6 +2173,8 @@ var _hours_estimate_lbl: Label
 var _hours_status: Label
 var _hours_save_btn: Button
 var _hours_loaded := false
+var _hours_pending_raw: Dictionary = {}
+var _hours_save_in_flight := false
 
 ## Giorni della settimana: chiave stabile che va nel config (mon…sun) e chiave
 ## i18n dell'etichetta di una lettera mostrata sui sette pulsanti.
@@ -2100,6 +2349,27 @@ static func _hours_has_day(win: Dictionary, day: String) -> bool:
 	return _hours_day_list(win).has(day)
 
 
+## La conferma del backend può arrivare prima del refresh periodico del config.
+## Si può quindi promuovere nel cache-state soltanto il payload che questa
+## pagina ha davvero inviato, e soltanto se conserva la forma già validata.
+static func _hours_payload_valid(raw: Dictionary) -> bool:
+	if not raw.has("timezone") or not raw.get("windows") is Array:
+		return false
+	for item in raw["windows"]:
+		if not item is Dictionary:
+			return false
+		var win := item as Dictionary
+		if not win.get("days") is Array or (win["days"] as Array).is_empty():
+			return false
+		for day in win["days"]:
+			if not ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].has(str(day)):
+				return false
+		if not str(win.get("start", "")).contains(":") \
+				or not str(win.get("end", "")).contains(":"):
+			return false
+	return true
+
+
 ## Accende o spegne un giorno mantenendo l'ordine della settimana, così la
 ## riga non si rimescola sotto le dita a ogni click.
 static func _hours_toggle_day(win: Dictionary, day: String) -> void:
@@ -2167,7 +2437,7 @@ func _refresh_hours_estimate() -> void:
 				"start": str(w.get("start", "")), "end": str(w.get("end", ""))})
 	var week_ago := Time.get_unix_time_from_system() - 7 * 86400
 	var found7 := 0
-	for p in BackendBus.positions:
+	for p in SimBadge.visible_positions():
 		var ts := Time.get_unix_time_from_datetime_string(
 				str(p.get("found_at", "")).left(19))
 		if ts > 0 and float(ts) >= week_ago:
@@ -2199,20 +2469,38 @@ func _save_hours() -> void:
 	_hours_save_btn.disabled = true
 	_hours_status.text = UIStrings.t("prof.saving")
 	_hours_status.add_theme_color_override("font_color", Palette.DIM)
-	BackendBus.save_working_hours({
-		"timezone": _hours_tz.text.strip_edges(), "windows": windows})
+	var requested := {
+		"timezone": _hours_tz.text.strip_edges(), "windows": windows}
+	_hours_pending_raw = requested.duplicate(true)
+	_hours_save_in_flight = true
+	BackendBus.save_working_hours(requested)
 
 func _on_hours_saved(ok: bool, error: String) -> void:
+	# `ok` da solo non basta: un segnale vecchio o spurio non può inventare uno
+	# stato persistito. La richiesta in-flight correla la risposta al form.
+	var committed := ok and _hours_save_in_flight \
+			and _hours_payload_valid(_hours_pending_raw)
+	var persisted := _hours_pending_raw.duplicate(true) if committed else {}
+	_hours_pending_raw.clear()
+	_hours_save_in_flight = false
+	if committed:
+		var settings := BackendBus.live_settings.duplicate(true)
+		settings["hours_raw"] = persisted
+		BackendBus.publish_settings(settings)
+		_hours_loaded = false
+		if section == "hours" and is_instance_valid(_content):
+			_build()
 	if not is_instance_valid(_hours_status):
 		return
-	_hours_status.text = UIStrings.t("hours.saved") if ok \
-			else UIStrings.t("prof.save_err") % error
+	var visible_error := error.strip_edges()
+	if visible_error == "":
+		visible_error = UIStrings.t("common.unknown_error")
+	_hours_status.text = UIStrings.t("hours.saved") if committed \
+			else UIStrings.t("prof.save_err") % visible_error
 	_hours_status.add_theme_color_override("font_color",
-			Palette.MINT if ok else Palette.RED)
+			Palette.MINT if committed else Palette.RED)
 	if is_instance_valid(_hours_save_btn):
 		_hours_save_btn.disabled = false
-	if ok:
-		_hours_loaded = false  # al prossimo build ricarica dal config vero
 
 ## Il PROFILO dell'utente: editabile QUI (paradigma desktop app 21:26).
 ## I campi arrivano da profile_raw (chiavi vere del candidate_profile),
@@ -2482,7 +2770,12 @@ func _graphics_key(mode: String) -> String:
 ## Impostazioni → Lingua: le 7 lingue del web. Il cambio ricostruisce la
 ## scena corrente, così HUD, sidebar, pannelli e popup non restano metà
 ## nella vecchia lingua.
+var _language_status: Label
+var _pending_language := ""
+
 func _build_language() -> void:
+	if not BackendBus.ui_language_saved.is_connected(_on_ui_language_saved):
+		BackendBus.ui_language_saved.connect(_on_ui_language_saved)
 	_content.add_child(TerminalTheme.label(UIStrings.t("lang.intro"), 14, Palette.MUTED))
 	for l in UIStrings.LANGS:
 		var selected: bool = UIStrings.lang == l
@@ -2496,13 +2789,38 @@ func _build_language() -> void:
 		btn.add_theme_color_override("font_hover_color", Palette.MINT)
 		var code := str(l)
 		btn.pressed.connect(func() -> void:
-			Game.set_ui_language(code))
+			_request_ui_language(code))
 		_content.add_child(btn)
+	_language_status = TerminalTheme.label("", 13, Palette.DIM)
+	_language_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(_language_status)
 	if UIStrings.lang != "it":
 		_content.add_child(_wrapped_label(
 				UIStrings.t("lang.narrative_note"), 13, Palette.YELLOW))
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(UIStrings.t("lang.note"), 13, Palette.DIM))
+
+
+func _request_ui_language(locale: String) -> void:
+	if BackendBus.is_live() and BackendBus.is_remote():
+		_pending_language = locale
+		_language_status.text = UIStrings.t("lang.syncing")
+		_language_status.add_theme_color_override("font_color", Palette.DIM)
+		BackendBus.save_ui_language(locale)
+		return
+	Game.set_ui_language(locale)
+
+
+func _on_ui_language_saved(locale: String, ok: bool, error: String) -> void:
+	if locale != _pending_language or _pending_language == "":
+		return
+	_pending_language = ""
+	if ok:
+		Game.set_ui_language(locale)
+		return
+	if is_instance_valid(_language_status):
+		_language_status.text = UIStrings.t("lang.sync_failed") % error
+		_language_status.add_theme_color_override("font_color", Palette.RED)
 
 # ── Posizioni: la pagina positions del web privato, dati veri ────────
 
@@ -2591,16 +2909,17 @@ func _build_positions() -> void:
 		_pos_filters["status"] = chosen
 		pending_status = []
 		_pos_page = 1
-	var all: Array = BackendBus.positions
+	var data_state := SimBadge.current_state()
+	var all: Array = SimBadge.visible_positions()
 	if all.is_empty():
-		_content.add_child(TerminalTheme.label(UIStrings.t("pos.need_vps"),
+		_content.add_child(TerminalTheme.label(SimBadge.positions_empty_copy(),
 				15, Palette.MUTED))
 		if not BackendBus.positions_updated.is_connected(_on_positions_refresh):
 			BackendBus.positions_updated.connect(_on_positions_refresh)
 		return
 	if not BackendBus.positions_updated.is_connected(_on_positions_refresh):
 		BackendBus.positions_updated.connect(_on_positions_refresh)
-	if BackendBus.positions_are_demo:
+	if data_state == SimBadge.DataState.DEMO:
 		var demo_box := _pos_card_box(_content, Palette.YELLOW,
 				Palette.PANEL, 12, 0)
 		var demo_note := TerminalTheme.label(UIStrings.t("demo.positions"),
@@ -2679,6 +2998,7 @@ func _on_positions_refresh(_list: Array) -> void:
 		# lo snapshot nuovo non deve buttarti fuori dal dettaglio aperto,
 		# né cancellare il ticket che stai scrivendo o aspettando
 		if is_instance_valid(_ticket_input) and (_ticket_input.text.strip_edges() != ""
+				or _ticket_attachment_local_path != ""
 				or (is_instance_valid(_ticket_send) and _ticket_send.disabled)):
 			return
 		_build("detail" if _pos_detail_id != 0 else "")
@@ -3308,7 +3628,8 @@ var _pos_detail_id := 0
 
 func _build_pos_detail() -> void:
 	var p := {}
-	for row in BackendBus.positions:
+	var visible_positions: Array = SimBadge.visible_positions()
+	for row in visible_positions:
 		if int(row.get("id", 0)) == _pos_detail_id:
 			p = row
 			break
@@ -3479,9 +3800,15 @@ func _build_pos_detail() -> void:
 			bar.max_value = float(w[2])
 			bar.value = float(val)
 			bar.show_percentage = false
+			# ProgressBar clampa `value` da se stesso: un 18 su un tetto di 15 si
+			# disegna pieno e in silenzio, indistinguibile da un 15/15. Il clamp
+			# resta (la barra non puo' fare piu' del pieno) ma il fuori scala si
+			# dichiara: colore e frase accanto al numero vero, non normalizzato.
+			var over_cap: bool = float(val) > float(w[2])
 			var ratio := float(val) / float(w[2])
-			var ratio_color := Palette.GREEN if ratio >= 0.7 \
-					else (Palette.YELLOW if ratio >= 0.45 else Palette.RED)
+			var ratio_color := Palette.RED if over_cap \
+					else (Palette.GREEN if ratio >= 0.7 \
+					else (Palette.YELLOW if ratio >= 0.45 else Palette.RED))
 			# Modulare il ProgressBar verde del tema non cambia davvero fascia
 			# (verde × giallo resta verde nel render). Fill e binario dedicati
 			# rendono il rapporto come sul web e funzionano anche nel tema light.
@@ -3496,8 +3823,16 @@ func _build_pos_detail() -> void:
 			bar.add_theme_stylebox_override("background", track)
 			bar.add_theme_stylebox_override("fill", fill)
 			wrow.add_child(bar)
+			# Il numero resta quello scritto nel DB; a cambiare e' solo cosa dice
+			# la riga. Il denominatore da solo non basta: e' scritto anche oggi e
+			# nessuno lo legge, per questo il fuori scala ha una frase sua.
 			wrow.add_child(TerminalTheme.label("%d/%d" % [int(val), w[2]],
-					13, Palette.BRIGHT, "medium"))
+					13, Palette.RED if over_cap else Palette.BRIGHT, "medium"))
+			if over_cap:
+				var warn := TerminalTheme.label(UIStrings.t("pos.score_over_cap"),
+						12, Palette.RED)
+				warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				score_box.add_child(warn)
 		if p.get("score_notes"):
 			score_box.add_child(TerminalTheme.label(UIStrings.t("pos.score_rationale"),
 					13, Palette.MUTED, "medium"))
@@ -3588,12 +3923,15 @@ func _build_pos_detail() -> void:
 		tickets_box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_none"),
 				13, Palette.MUTED))
 	for t in tickets:
+		var request := _ticket_request_parts(str(t.get("request_text", "")))
 		var trow := HBoxContainer.new()
 		trow.add_theme_constant_override("separation", 12)
 		tickets_box.add_child(trow)
 		trow.add_child(TerminalTheme.label("[%s]" % str(t.get("status", "?")), 13,
 				Palette.MINT if str(t.get("status")) == "resolved" else Palette.YELLOW, "medium"))
-		trow.add_child(_pos_paragraph(str(t.get("request_text", ""))))
+		trow.add_child(_pos_paragraph(str(request["text"])))
+		if str(request["attachment_name"]) != "":
+			tickets_box.add_child(_pos_paragraph("📎 " + str(request["attachment_name"])))
 		if t.get("response_text"):
 			tickets_box.add_child(_pos_paragraph("↳ " + str(t["response_text"])))
 	_build_ticket_form(tickets_box, int(p.get("id", 0)))
@@ -3616,19 +3954,32 @@ func _build_ticket_form(box: VBoxContainer, pid: int) -> void:
 	_ticket_input.max_length = 2000
 	_ticket_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	form.add_child(_ticket_input)
+	_ticket_attach = Button.new()
+	_ticket_attach.text = UIStrings.t("pos.ticket_attach")
+	_ticket_attach.pressed.connect(_browse_ticket_attachment)
+	form.add_child(_ticket_attach)
 	_ticket_send = Button.new()
 	_ticket_send.text = UIStrings.t("pos.ticket_send")
 	form.add_child(_ticket_send)
 	_ticket_status = TerminalTheme.label("", 12, Palette.DIM)
 	box.add_child(_ticket_status)
+	_ticket_attachment_status = TerminalTheme.label("", 12, Palette.DIM)
+	box.add_child(_ticket_attachment_status)
 	var submit := func() -> void:
 		var txt: String = _ticket_input.text.strip_edges()
 		if txt == "" or _ticket_send.disabled:
 			return
 		_ticket_send.disabled = true
-		_ticket_status.text = UIStrings.t("pos.ticket_sending")
+		_ticket_attach.disabled = true
+		_ticket_pending_pid = pid
 		_ticket_status.add_theme_color_override("font_color", Palette.DIM)
-		BackendBus.create_position_ticket(pid, txt)
+		if _ticket_attachment_local_path != "":
+			_ticket_status.text = UIStrings.t("pos.ticket_uploading")
+			BackendBus.create_position_ticket(
+					pid, txt, _ticket_attachment_local_path)
+		else:
+			_ticket_status.text = UIStrings.t("pos.ticket_sending")
+			BackendBus.create_position_ticket(pid, txt)
 	_ticket_send.pressed.connect(submit)
 	_ticket_input.text_submitted.connect(func(_t: String) -> void: submit.call())
 	# TEST-AUTO: JHT_TICKET_TEST=<testo> invia un ticket appena il form
@@ -3642,9 +3993,33 @@ static var _ticket_test_done := false
 
 var _ticket_input: LineEdit
 var _ticket_send: Button
+var _ticket_attach: Button
 var _ticket_status: Label
+var _ticket_attachment_status: Label
+var _ticket_attachment_dialog: FileDialog
+var _ticket_attachment_local_path := ""
+var _ticket_pending_pid := 0
+
+func _browse_ticket_attachment() -> void:
+	if not is_instance_valid(_ticket_attachment_dialog):
+		_ticket_attachment_dialog = FileDialog.new()
+		_ticket_attachment_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+		_ticket_attachment_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_ticket_attachment_dialog.use_native_dialog = true
+		_ticket_attachment_dialog.filters = PackedStringArray([
+				UIStrings.t("wizard.file_filter")])
+		_ticket_attachment_dialog.file_selected.connect(_on_ticket_attachment_selected)
+		add_child(_ticket_attachment_dialog)
+	_ticket_attachment_dialog.popup_centered()
+
+func _on_ticket_attachment_selected(path: String) -> void:
+	_ticket_attachment_local_path = path
+	if is_instance_valid(_ticket_attachment_status):
+		_ticket_attachment_status.text = UIStrings.t("pos.ticket_attached") % path.get_file()
 
 func _on_ticket_created(_pid: int, ok: bool, error: String) -> void:
+	if _ticket_pending_pid > 0 and _pid != _ticket_pending_pid:
+		return
 	if not is_instance_valid(_ticket_status):
 		return
 	if ok:
@@ -3652,11 +4027,30 @@ func _on_ticket_created(_pid: int, ok: bool, error: String) -> void:
 		_ticket_status.add_theme_color_override("font_color", Palette.MINT)
 		if is_instance_valid(_ticket_input):
 			_ticket_input.text = ""
+		_ticket_attachment_local_path = ""
+		if is_instance_valid(_ticket_attachment_status):
+			_ticket_attachment_status.text = ""
 	else:
 		_ticket_status.text = UIStrings.t("pos.ticket_err") % error
 		_ticket_status.add_theme_color_override("font_color", Palette.RED)
 	if is_instance_valid(_ticket_send):
 		_ticket_send.disabled = false
+	if is_instance_valid(_ticket_attach):
+		_ticket_attach.disabled = false
+	_ticket_pending_pid = 0
+
+static func _ticket_request_parts(raw: String) -> Dictionary:
+	const MARKER := "\n\n[FILE ALLEGATI]\n"
+	const PREFIX := "/jht_user/allegati/"
+	var at := raw.rfind(MARKER)
+	if at < 0:
+		return {"text": raw, "attachment_name": ""}
+	var attached := raw.substr(at + MARKER.length())
+	var name := attached.trim_prefix(PREFIX)
+	if not attached.begins_with(PREFIX) or name == "" or name.contains("/") \
+			or name.contains("\\"):
+		return {"text": raw, "attachment_name": ""}
+	return {"text": raw.substr(0, at), "attachment_name": name}
 
 ## Paragrafo a capo automatico con il grassetto Markdown prodotto dal team.
 func _pos_paragraph(text: String) -> RichTextLabel:
@@ -4020,6 +4414,11 @@ func _build_placeholder() -> void:
 			UIStrings.t("section.migrating_body")
 			% SidebarDefs.label_for(section), 15, Palette.MUTED))
 
+
+func _add_data_unavailable() -> void:
+	_content.add_child(TerminalTheme.label(UIStrings.t("common.connect_team"),
+			15, Palette.MUTED))
+
 # ── Team / Agenti / Attività / Candidature / Dashboard ────────────────
 
 ## Il team per reparto: organico e postazioni libere, più i core.
@@ -4053,21 +4452,30 @@ func _build_team() -> void:
 	controls.add_theme_constant_override("separation", 10)
 	_content.add_child(controls)
 	var team_busy := SetupService.busy() and SetupService.current_action == "team"
+	var team_state := SetupService.team_start_snapshot()
+	var team_phase := _team_start_phase(team_state, running)
 	var primary := Button.new()
 	# Mentre il comando gira l'etichetta dice COSA sta succedendo (avvio o
 	# arresto, dedotto dallo stato di partenza) e il pulsante non è premibile.
-	if team_busy:
-		primary.text = UIStrings.t("setup.team_stopping") if running \
-				else UIStrings.t("setup.team_starting")
+	if team_busy and running:
+		primary.text = UIStrings.t("setup.team_stopping")
+	elif team_phase == "recovering":
+		primary.text = UIStrings.t("team.start_recovering")
+	elif team_phase == "failed":
+		primary.text = UIStrings.t("team.start_retry")
+	elif team_phase == "starting":
+		primary.text = UIStrings.t("setup.team_starting")
 	else:
 		primary.text = UIStrings.t("team.stop") if running else UIStrings.t("team.start")
 	primary.disabled = (not bool(SetupService.status.get("ready", false)) \
-			and not running) or SetupService.busy()
+			and not running) or SetupService.busy() \
+			or team_phase in ["starting", "recovering"]
 	primary.add_theme_color_override("font_color", Palette.RED if running else Palette.GREEN)
 	# Spento perché lavora lui → giallo; spento per un'altra ragione → muto
 	# (il verde-da-disabilitato del tema qui sarebbe una bugia).
 	primary.add_theme_color_override("font_disabled_color",
-			Palette.YELLOW if team_busy else Palette.MUTED)
+			Palette.YELLOW if team_busy \
+			or team_phase in ["starting", "recovering"] else Palette.MUTED)
 	primary.pressed.connect(SetupService.stop_team if running else SetupService.start_team)
 	controls.add_child(primary)
 	var setup := Button.new()
@@ -4078,21 +4486,24 @@ func _build_team() -> void:
 	_setup_message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	controls.add_child(_setup_message)
 	_restore_action_note()
+	_add_team_start_feedback(_content, team_state, team_phase)
 	# Pulsante spento perché gira un'ALTRA azione di setup (attivazione
 	# container, migrazione…): la ragione va detta. Quando l'azione è il team,
 	# parla già l'etichetta AVVIO/ARRESTO IN CORSO.
 	if SetupService.busy() and SetupService.current_action != "team":
 		_busy_hint(_content)
 	_content.add_child(HSeparator.new())
+	var data_state := SimBadge.current_state()
 	for dept_id in DepartmentDefs.DEPT_ORDER:
 		var dept: Dictionary = DepartmentDefs.DEPARTMENTS[dept_id]
 		var occupied := 0
-		if not BackendBus.agents.is_empty():
+		if data_state != SimBadge.DataState.UNAVAILABLE \
+				and not BackendBus.agents.is_empty():
 			# postazioni = agenti VERI del ruolo attivi in questo momento
 			for a in BackendBus.agents:
 				if str(a.get("slug", "")) == str(DEPT_ROLE.get(dept_id, "")):
 					occupied += 1
-		else:
+		elif data_state == SimBadge.DataState.DEMO:
 			for i in (dept["desks"] as Array).size():
 				if CharacterDefs.desk_occupant_name(dept_id, i) != "":
 					occupied += 1
@@ -4124,7 +4535,9 @@ func _build_team() -> void:
 func _build_agents() -> void:
 	if not BackendBus.agents_updated.is_connected(_on_agents_refresh):
 		BackendBus.agents_updated.connect(_on_agents_refresh)
-	if not BackendBus.agents.is_empty():
+	var data_state := SimBadge.current_state()
+	if data_state != SimBadge.DataState.UNAVAILABLE \
+			and not BackendBus.agents.is_empty():
 		_content.add_child(TerminalTheme.label(
 				UIStrings.t("agents.active_count") % BackendBus.agents.size(),
 				14, Palette.MUTED, "medium"))
@@ -4153,6 +4566,11 @@ func _build_agents() -> void:
 			st.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			st.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			row.add_child(st)
+		return
+	if data_state != SimBadge.DataState.DEMO:
+		_content.add_child(TerminalTheme.label(
+				UIStrings.t("vps.agents_none") if data_state == SimBadge.DataState.LIVE
+				else UIStrings.t("common.connect_team"), 15, Palette.DIM))
 		return
 	for def in CharacterDefs.spawn_list():
 		var row := HBoxContainer.new()
@@ -4201,8 +4619,9 @@ static func _role_icon(slug: String, side: float) -> SidebarIcon:
 func _build_activity() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_activity_refresh):
 		BackendBus.positions_updated.connect(_on_activity_refresh)
+	var data_state := SimBadge.current_state()
 	var transitions: Array = BackendBus.transitions
-	if not transitions.is_empty():
+	if data_state == SimBadge.DataState.LIVE and not transitions.is_empty():
 		var scroll := ScrollContainer.new()
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -4240,6 +4659,11 @@ func _build_activity() -> void:
 			pad.custom_minimum_size = Vector2(14, 0)
 			row.add_child(pad)
 		return
+	if data_state != SimBadge.DataState.DEMO:
+		_content.add_child(TerminalTheme.label(
+				UIStrings.t("agent.activity_none") if data_state == SimBadge.DataState.LIVE
+				else UIStrings.t("common.connect_team"), 15, Palette.DIM))
+		return
 	for slug in ["scout", "analista", "scorer", "scrittore", "critico", "coordinatore"]:
 		for entry in TeamData.agent_activity(slug):
 			var row := HBoxContainer.new()
@@ -4271,10 +4695,11 @@ const APP_STAGES := {"ready": "apps.ready", "applied": "apps.applied",
 func _build_apps() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_apps_refresh):
 		BackendBus.positions_updated.connect(_on_apps_refresh)
-	# con la VPS: le candidature VERE (CV pronti, inviate, con risposta)
-	if not BackendBus.positions.is_empty():
+	var data_state := SimBadge.current_state()
+	# LIVE usa anche lo snapshot vuoto come dato vero, mai come via al mock.
+	if data_state == SimBadge.DataState.LIVE:
 		var rows: Array = []
-		for p in BackendBus.positions:
+		for p in SimBadge.visible_positions():
 			if APP_STAGES.has(str(p.get("status", ""))):
 				rows.append(p)
 		if rows.is_empty():
@@ -4314,6 +4739,9 @@ func _build_apps() -> void:
 				row.add_child(TerminalTheme.label(verdict, 13,
 						_verdict_color(verdict), "bold"))
 		return
+	if data_state == SimBadge.DataState.UNAVAILABLE:
+		_add_data_unavailable()
+		return
 	var apps: Array = TeamData.applications()
 	if apps.is_empty():
 		_content.add_child(TerminalTheme.label(UIStrings.t("registry.empty"), 15, Palette.DIM))
@@ -4344,8 +4772,9 @@ func _on_apps_refresh(_list: Array) -> void:
 func _build_dashboard() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_dash_refresh):
 		BackendBus.positions_updated.connect(_on_dash_refresh)
+	var data_state := SimBadge.current_state()
 	_build_dash_pipeline()
-	if not BackendBus.positions.is_empty():
+	if data_state == SimBadge.DataState.LIVE:
 		var kpi: Dictionary = BackendBus.kpi_summary()
 		_kpi_row(UIStrings.t("kpi.positions_today"), str(kpi["found_today"]), Palette.MINT)
 		_kpi_row(UIStrings.t("kpi.avg_score"), str(kpi["avg_score"]), Palette.MINT)
@@ -4363,6 +4792,9 @@ func _build_dashboard() -> void:
 			pending_detail = pid
 			navigate.emit("positions"))
 		scroll.add_child(charts)
+		return
+	if data_state == SimBadge.DataState.UNAVAILABLE:
+		_add_data_unavailable()
 		return
 	var s: Dictionary = TeamData.summary()
 	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
@@ -4391,7 +4823,8 @@ func _build_dashboard() -> void:
 ## Da analizzare → Analizzate → Con lo score → Da scrivere → Scritte.
 ## Ogni box conta dallo snapshot vero e apre le posizioni pre-filtrate.
 func _build_dash_pipeline() -> void:
-	if BackendBus.positions.is_empty():
+	if SimBadge.current_state() != SimBadge.DataState.LIVE \
+			or SimBadge.visible_positions().is_empty():
 		return
 	# il mapping status→fase vive in UN posto solo (lo usa anche la
 	# scena per il flusso fisico dei fogli)
@@ -4447,9 +4880,10 @@ const NOTIF_MAX := 15
 func _build_notifs() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_notifs_refresh):
 		BackendBus.positions_updated.connect(_on_notifs_refresh)
-	if not BackendBus.positions.is_empty():
+	var data_state := SimBadge.current_state()
+	if data_state == SimBadge.DataState.LIVE:
 		var items: Array = []  # {ts, icon, color, text}
-		for t_pos in BackendBus.positions:
+		for t_pos in SimBadge.visible_positions():
 			for t in t_pos.get("tickets", []):
 				var status := str(t.get("status", ""))
 				var req := str(t.get("request_text", "")).left(70)
@@ -4490,6 +4924,9 @@ func _build_notifs() -> void:
 			txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			row.add_child(txt)
 		return
+	if data_state == SimBadge.DataState.UNAVAILABLE:
+		_add_data_unavailable()
+		return
 	for n in TeamData.notifications():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 14)
@@ -4511,8 +4948,9 @@ func _on_notifs_refresh(_list: Array) -> void:
 func _build_chat() -> void:
 	if not BackendBus.chat_message.is_connected(_on_teamchat_refresh):
 		BackendBus.chat_message.connect(_on_teamchat_refresh)
+	var data_state := SimBadge.current_state()
 	var live: Array = BackendBus.chat_log
-	if not live.is_empty():
+	if data_state == SimBadge.DataState.LIVE and not live.is_empty():
 		var scroll := ScrollContainer.new()
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -4544,6 +4982,11 @@ func _build_chat() -> void:
 			row.add_child(pad)
 		scroll.set_deferred("scroll_vertical", 999999)  # parte dal fondo
 		return
+	if data_state != SimBadge.DataState.DEMO:
+		_content.add_child(TerminalTheme.label(
+				UIStrings.t("chat.empty") if data_state == SimBadge.DataState.LIVE
+				else UIStrings.t("common.connect_team"), 15, Palette.DIM))
+		return
 	for msg in TeamData.chat():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
@@ -4571,11 +5014,12 @@ func _build_stats() -> void:
 	# (mai il mock spacciato per reale)
 	if not BackendBus.positions_updated.is_connected(_on_stats_refresh):
 		BackendBus.positions_updated.connect(_on_stats_refresh)
-	if BackendBus.is_live() and BackendBus.positions.is_empty():
+	var data_state := SimBadge.current_state()
+	if data_state == SimBadge.DataState.LIVE and SimBadge.visible_positions().is_empty():
 		_content.add_child(TerminalTheme.label(
 				UIStrings.t("common.data_incoming"), 14, Palette.DIM))
 		return
-	if not BackendBus.positions.is_empty():
+	if data_state == SimBadge.DataState.LIVE:
 		var scroll := ScrollContainer.new()
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -4592,6 +5036,9 @@ func _build_stats() -> void:
 		usage_link.add_theme_color_override("font_color", Palette.GREEN)
 		usage_link.pressed.connect(func() -> void: _build("usage"))
 		_content.add_child(usage_link)
+		return
+	if data_state == SimBadge.DataState.UNAVAILABLE:
+		_add_data_unavailable()
 		return
 	var s: Dictionary = TeamData.summary()
 	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
@@ -4628,7 +5075,8 @@ func _build_stats() -> void:
 func _build_usage() -> void:
 	# con la VPS collegata: consumo VERO per agente (kt nella finestra)
 	var live: Dictionary = BackendBus.live_settings.get("usage", {})
-	if not live.is_empty():
+	var data_state := SimBadge.current_state()
+	if data_state == SimBadge.DataState.LIVE and not live.is_empty():
 		_content.add_child(TerminalTheme.label(UIStrings.t("usage.title_window")
 				% str(live.get("window_h", "?")), 16, Palette.WHITE, "bold"))
 		var per_agent: Dictionary = live.get("per_agent_kt", {})
@@ -4656,6 +5104,11 @@ func _build_usage() -> void:
 		back_live.add_theme_color_override("font_color", Palette.MUTED)
 		back_live.pressed.connect(func() -> void: _build())
 		_content.add_child(back_live)
+		return
+	if data_state != SimBadge.DataState.DEMO:
+		_content.add_child(TerminalTheme.label(
+				UIStrings.t("usage.none") if data_state == SimBadge.DataState.LIVE
+				else UIStrings.t("common.connect_team"), 14, Palette.DIM))
 		return
 	var u: Dictionary = TeamData.usage()
 	_content.add_child(TerminalTheme.label(UIStrings.t("usage.title"), 16, Palette.WHITE, "bold"))

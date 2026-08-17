@@ -30,7 +30,7 @@ describe('readConfig', () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     const r = readConfig();
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/non trovato/);
+    expect(r.error).toMatch(/File not found/);
   });
 
   it('ritorna errore se readFileSync lancia eccezione', () => {
@@ -40,7 +40,7 @@ describe('readConfig', () => {
     });
     const r = readConfig();
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/Errore lettura/);
+    expect(r.error).toMatch(/Failed to read file/);
   });
 
   it('ritorna errore per JSON non valido', () => {
@@ -48,7 +48,7 @@ describe('readConfig', () => {
     vi.mocked(fs.readFileSync).mockReturnValue('{ not valid json }');
     const r = readConfig();
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/JSON non valido/);
+    expect(r.error).toMatch(/Invalid JSON/);
   });
 
   it('ritorna errore se config non passa validazione Zod', () => {
@@ -56,7 +56,7 @@ describe('readConfig', () => {
     vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ active_provider: 'unknown' }));
     const r = readConfig();
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/Validazione fallita/);
+    expect(r.error).toMatch(/Validation failed/);
   });
 
   it('ritorna config valida parsata correttamente', () => {
@@ -78,7 +78,7 @@ describe('writeConfig', () => {
   it('ritorna errore per config non valida', () => {
     const r = writeConfig({ active_provider: 'invalid_provider' });
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/Validazione fallita/);
+    expect(r.error).toMatch(/Validation failed/);
   });
 
   it('crea directory e scrive file per config valida', () => {
@@ -88,7 +88,7 @@ describe('writeConfig', () => {
     expect(r.success).toBe(true);
     expect(fs.mkdirSync).toHaveBeenCalledWith(
       expect.stringContaining('.jht'),
-      { recursive: true },
+      { recursive: true, mode: 0o700 },
     );
     expect(fs.writeFileSync).toHaveBeenCalled();
   });
@@ -100,7 +100,7 @@ describe('writeConfig', () => {
     });
     const r = writeConfig(validConfig);
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/Errore scrittura/);
+    expect(r.error).toMatch(/Failed to write file/);
   });
 
   it('persiste i dati parsati (version default = 1)', () => {

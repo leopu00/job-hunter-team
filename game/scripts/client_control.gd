@@ -20,6 +20,8 @@ var _enabled := false
 
 
 func _ready() -> void:
+	if not WindowsInstanceGuard.normal_work_allowed():
+		return
 	if DisplayServer.get_name() == "headless" \
 			or OS.get_environment("JHT_GAME_CONTROL_DISABLED") == "1":
 		return
@@ -36,13 +38,30 @@ func _ready() -> void:
 			OS.get_environment("JHT_GAME_INSTANCE_ID"))).strip_edges()
 	if instance_id == "":
 		instance_id = "%d-%d" % [OS.get_process_id(), Time.get_ticks_usec()]
-	if not _write_json(_path(STATE_FILE), {
+	var state := {
 		"schema": 1,
 		"instance_id": instance_id,
 		"pid": OS.get_process_id(),
 		"executable": OS.get_executable_path(),
 		"started_at": Time.get_unix_time_from_system(),
-	}):
+	}
+	if OS.get_name() == "Windows":
+		var guard := WindowsInstanceGuard.binding()
+		if guard.is_empty():
+			return
+		state["schema"] = 2
+		state["guard"] = {
+			"desktop_executable": guard["desktop_exe_path"],
+			"desktop_started": guard["desktop_started"],
+			"executable": guard["guard_exe_path"],
+			"instance_id": guard["instance_id"],
+			"mode": guard["mode"],
+			"mutex_fingerprint": guard["mutex_fingerprint"],
+			"pid": guard["guard_pid"],
+			"source_sha256": guard["source_sha256"],
+			"started": guard["guard_started"],
+		}
+	if not _write_json(_path(STATE_FILE), state):
 		return
 	# L'archivio macOS e il tar Linux possono essere estratti ovunque. Dopo la
 	# prima apertura manuale ricordiamo quindi il binario reale: i successivi

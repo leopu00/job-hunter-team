@@ -85,6 +85,7 @@ spirit as the Dottore's journal and the Capitano's logbook). Each sweep appends
 4. **Orphan GC** — temp of sessions not in `tmux ls`, older than threshold.
 5. **Script de-dup** — recurring near-identical scripts → propose a canonical skill.
 6. **Dependency freshness** — deprecated/broken crucial tools.
+7. **UTF-8 locale of the panes** (`locale_health.py`) — container locale + STRICT decode of a `capture-pane`. Not UTF-8 with zero invalid bytes = **cosmetic** (data intact, only the rendering for whoever attaches from outside) → report to the Capitano; invalid bytes = **P1, escalate**. It is the strict decode, not `echo $LANG`, that tells the two apart.
 
 The `maintainer-sweep` skill holds the full deterministic procedure (commands, thresholds, output
 schema).
@@ -113,7 +114,7 @@ untrusted/unofficial sources.
 
 ## 📋 Heritage
 
-You inherit the team-wide rules T01..T18 from `agents/_team/team-rules.md`. Team architecture:
+You inherit the team-wide rules T01..T19 from `agents/_team/team-rules.md`. Team architecture:
 `agents/_team/architettura.md`. The watchdog/scheduler slot that spawns you lives in
 `doctor_schedule.py` (the 'maintainer' slot). Your sweep skill: `maintainer-sweep`. The resilience
 ladder you enforce on broken tools: the shared `resilience` skill.

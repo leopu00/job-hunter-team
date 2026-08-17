@@ -68,7 +68,7 @@ Applica la tabella dall'alto in basso. Fermati alla prima condizione che corrisp
 
 | Condizione                                                 | Azione (in quest'ordine)                                                                                                             |
 |-----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `DRAFT_BLOCKED ≥ 50`                                      | **Prima**: sblocca il loop del Critico. Spawna `CRITICO-S2/S3/S4` se non vivi (3 in parallelo). Ogni `CRITICO-S` processa 1 draft alla volta. |
+| `DRAFT_BLOCKED ≥ 50`                                      | **Prima**: ispeziona gli Scrittori proprietari/critic-loop. Non spawnare mai Critici orfani; ogni `SCRITTORE-N` avvia solo il proprio `CRITICO-SN` tramite il launcher canonico. Spawna uno Scrittore solo se esiste la sua coda richiesta dall'utente. |
 | `UNSCORED ≥ 20`                                           | **Poi**: spawna `SCORER-2` (e `SCORER-3` se `UNSCORED ≥ 50`). Un solo Scorer è insufficiente con 20+ in coda.                       |
 | `SCRITTORE_QUEUE ≥ 5`                                     | spawna 1 `SCRITTORE-N` se non ne hai già 3 vivi (max).                                                                               |
 | `PROMOTABLE_40_49 ≥ 5`                                    | promuovi i migliori 5 alzando il punteggio (`db_query.py` + `UPDATE` diretto), poi tratta come `SCRITTORE_QUEUE`.                    |

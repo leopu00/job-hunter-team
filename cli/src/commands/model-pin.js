@@ -42,7 +42,7 @@
  * pin scritto male costa l'intero team.
  */
 import {
-  existsSync, readFileSync, writeFileSync, copyFileSync, mkdtempSync, readdirSync,
+  existsSync, readFileSync, writeFileSync, mkdtempSync, readdirSync,
   renameSync, statSync, chmodSync, mkdirSync, unlinkSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -393,8 +393,10 @@ function readState() {
 
 function writeState(state) {
   try {
-    mkdirSync(dirname(STATE_PATH()), { recursive: true });
-    writeFileSync(STATE_PATH(), JSON.stringify(state, null, 2) + '\n', 'utf-8');
+    mkdirSync(dirname(STATE_PATH()), { recursive: true, mode: 0o700 });
+    chmodSync(dirname(STATE_PATH()), 0o700);
+    writeFileSync(STATE_PATH(), JSON.stringify(state, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600 });
+    chmodSync(STATE_PATH(), 0o600);
   } catch { /* best effort: lo stato e' un'ottimizzazione, non una dipendenza */ }
 }
 
@@ -403,9 +405,9 @@ function writeState(state) {
 /** Backup PRIMA di toccare un file che non e' nostro. Se fallisce, non si scrive. */
 function makeBackup(path) {
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-');
-  const backup = `${path}.bak-model-pin-${stamp}`;
+  const backup = `${path}.bak-model-pin-${stamp}-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
   const original = statSync(path);
-  copyFileSync(path, backup);
+  writeFileSync(backup, readFileSync(path), { mode: 0o600, flag: 'wx' });
   if (!existsSync(backup) || statSync(backup).size !== original.size) {
     throw new Error(`incomplete backup (${backup})`);
   }
@@ -415,9 +417,10 @@ function makeBackup(path) {
 /** Scrittura atomica: temp + rename, cosi' un'interruzione non tronca il config. */
 function atomicWrite(path, text, mode) {
   const tmp = `${path}.jht-model-pin.tmp`;
-  writeFileSync(tmp, text, 'utf-8');
-  try { chmodSync(tmp, mode); } catch { /* fs senza permessi POSIX */ }
+  writeFileSync(tmp, text, { encoding: 'utf-8', mode: 0o600, flag: 'wx' });
+  try { chmodSync(tmp, 0o600); } catch { /* fs senza permessi POSIX */ }
   renameSync(tmp, path);
+  try { chmodSync(path, 0o600); } catch { /* fs senza permessi POSIX */ }
 }
 
 /** Tiene i KEEP_BACKUPS piu' recenti: i .bak non devono accumularsi a ogni boot. */

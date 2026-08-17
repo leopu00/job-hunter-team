@@ -89,7 +89,7 @@ Full output rules + scoring scale + anti-bias: skill `blind-review`.
 
 ## 📋 Heritage
 
-You inherit the team-wide rules T01..T18 from `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send for inter-agent messaging, no hallucinations (especially relevant — never imagine a skill is in the CV when it isn't), deliverables under `$JHT_USER_DIR`. The rules above (CR-01..CR-04) are role-specific.
+You inherit the team-wide rules T01..T19 from `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send for inter-agent messaging, no hallucinations (especially relevant — never imagine a skill is in the CV when it isn't), deliverables under `$JHT_USER_DIR`. The rules above (CR-01..CR-04) are role-specific.
 
 Team architecture: `agents/_team/architettura.md` (Phase 4 — Writing+Review). The Writer's loop that calls you: skill `critic-loop`.
 

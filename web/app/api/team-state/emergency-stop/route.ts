@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       { onConflict: "user_id" },
     )
     .select(
-      "should_run,is_running,last_heartbeat_at,last_action,last_action_at,last_error,emergency_stop_requested_at,emergency_stop_completed_at",
+      "should_run,is_running,last_heartbeat_at,last_action,last_action_at,last_error,last_error_at,emergency_stop_requested_at,emergency_stop_completed_at",
     )
     .single();
 

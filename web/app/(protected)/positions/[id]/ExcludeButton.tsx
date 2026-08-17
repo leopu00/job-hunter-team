@@ -4,33 +4,18 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import { ReasonPicker } from "./ReasonPicker";
+import { REASON_LABELS, type ReasonKey } from "./exclusion-reasons";
 
 // Esclusione MANUALE dell'utente. Mette la posizione in 'excluded' con una causa
-// scelta da dropdown (5 default + 'Altro' testo libero) → gli agenti smettono di
+// scelta da dropdown (sei motivi + 'Altro' testo libero) → gli agenti smettono di
 // ri-controllarne la liveness (esce da next-for-recheck). Reversibile.
-// I CODICI (chiavi REASONS) sono il valore stabile nel DB; le label sono i18n.
-type ReasonKey =
-  | "closed"
-  | "not_interested"
-  | "mismatch"
-  | "already_applied"
-  | "company"
-  | "conditions"
-  | "other";
-
-const REASON_ORDER: ReasonKey[] = [
-  "closed",
-  "not_interested",
-  "mismatch",
-  "company",
-  "conditions",
-  "other",
-];
+// Vocabolario e selettore sono condivisi con il giudizio «Non interessante»
+// (O-43): le etichette e l'ordine vivono in `exclusion-reasons.ts`.
 
 const T: Record<
   Locale,
   {
-    reasons: Record<ReasonKey, string>;
     pickReason: string;
     writeReason: string;
     networkError: string;
@@ -39,21 +24,11 @@ const T: Record<
     undo: string;
     selectPlaceholder: string;
     excludeTitle: string;
-    notePlaceholder: string;
     excluding: string;
     exclude: string;
   }
 > = {
   it: {
-    reasons: {
-      closed: "Chiusa / non più attiva",
-      not_interested: "Non mi interessa",
-      mismatch: "Non in linea col mio profilo",
-      already_applied: "Già candidato / gestita altrove",
-      company: "Azienda non desiderata",
-      conditions: "Condizioni inadatte (stipendio/sede)",
-      other: "Altro…",
-    },
     pickReason: "Scegli una causa",
     writeReason: "Scrivi la causa",
     networkError: "Errore di rete",
@@ -63,20 +38,10 @@ const T: Record<
     undo: "annulla",
     selectPlaceholder: "⊘ Escludi offerta…",
     excludeTitle: "Escludi manualmente questa offerta",
-    notePlaceholder: "Causa…",
     excluding: "Escludo…",
     exclude: "Escludi",
   },
   en: {
-    reasons: {
-      closed: "Closed / no longer active",
-      not_interested: "Not interested",
-      mismatch: "Not a match for my profile",
-      already_applied: "Already applied / handled elsewhere",
-      company: "Unwanted company",
-      conditions: "Unsuitable conditions (salary/location)",
-      other: "Other…",
-    },
     pickReason: "Pick a reason",
     writeReason: "Write the reason",
     networkError: "Network error",
@@ -86,20 +51,10 @@ const T: Record<
     undo: "undo",
     selectPlaceholder: "⊘ Exclude position…",
     excludeTitle: "Manually exclude this position",
-    notePlaceholder: "Reason…",
     excluding: "Excluding…",
     exclude: "Exclude",
   },
   es: {
-    reasons: {
-      closed: "Cerrada / ya no activa",
-      not_interested: "No me interesa",
-      mismatch: "No encaja con mi perfil",
-      already_applied: "Ya inscrito / gestionada en otro sitio",
-      company: "Empresa no deseada",
-      conditions: "Condiciones inadecuadas (salario/ubicación)",
-      other: "Otro…",
-    },
     pickReason: "Elige un motivo",
     writeReason: "Escribe el motivo",
     networkError: "Error de red",
@@ -109,20 +64,10 @@ const T: Record<
     undo: "deshacer",
     selectPlaceholder: "⊘ Excluir posición…",
     excludeTitle: "Excluir manualmente esta posición",
-    notePlaceholder: "Motivo…",
     excluding: "Excluyendo…",
     exclude: "Excluir",
   },
   fr: {
-    reasons: {
-      closed: "Fermée / plus active",
-      not_interested: "Pas intéressé",
-      mismatch: "Pas adapté à mon profil",
-      already_applied: "Déjà postulé / traité ailleurs",
-      company: "Entreprise non souhaitée",
-      conditions: "Conditions inadaptées (salaire/lieu)",
-      other: "Autre…",
-    },
     pickReason: "Choisissez un motif",
     writeReason: "Écrivez le motif",
     networkError: "Erreur réseau",
@@ -132,20 +77,10 @@ const T: Record<
     undo: "annuler",
     selectPlaceholder: "⊘ Exclure le poste…",
     excludeTitle: "Exclure manuellement ce poste",
-    notePlaceholder: "Motif…",
     excluding: "Exclusion…",
     exclude: "Exclure",
   },
   de: {
-    reasons: {
-      closed: "Geschlossen / nicht mehr aktiv",
-      not_interested: "Kein Interesse",
-      mismatch: "Passt nicht zu meinem Profil",
-      already_applied: "Bereits beworben / anderweitig erledigt",
-      company: "Unerwünschtes Unternehmen",
-      conditions: "Ungeeignete Bedingungen (Gehalt/Standort)",
-      other: "Sonstiges…",
-    },
     pickReason: "Grund auswählen",
     writeReason: "Grund eingeben",
     networkError: "Netzwerkfehler",
@@ -155,20 +90,10 @@ const T: Record<
     undo: "rückgängig",
     selectPlaceholder: "⊘ Stelle ausschließen…",
     excludeTitle: "Diese Stelle manuell ausschließen",
-    notePlaceholder: "Grund…",
     excluding: "Wird ausgeschlossen…",
     exclude: "Ausschließen",
   },
   hu: {
-    reasons: {
-      closed: "Lezárva / már nem aktív",
-      not_interested: "Nem érdekel",
-      mismatch: "Nem illik a profilomhoz",
-      already_applied: "Már jelentkeztem / máshol kezelve",
-      company: "Nem kívánt cég",
-      conditions: "Nem megfelelő feltételek (fizetés/helyszín)",
-      other: "Egyéb…",
-    },
     pickReason: "Válassz okot",
     writeReason: "Írd be az okot",
     networkError: "Hálózati hiba",
@@ -178,20 +103,10 @@ const T: Record<
     undo: "mégse",
     selectPlaceholder: "⊘ Állás kizárása…",
     excludeTitle: "Az állás kézi kizárása",
-    notePlaceholder: "Ok…",
     excluding: "Kizárás…",
     exclude: "Kizárás",
   },
   pt: {
-    reasons: {
-      closed: "Fechada / já não ativa",
-      not_interested: "Não tenho interesse",
-      mismatch: "Não se adequa ao meu perfil",
-      already_applied: "Já candidatado / tratado noutro lado",
-      company: "Empresa indesejada",
-      conditions: "Condições inadequadas (salário/local)",
-      other: "Outro…",
-    },
     pickReason: "Escolhe um motivo",
     writeReason: "Escreve o motivo",
     networkError: "Erro de rede",
@@ -201,7 +116,6 @@ const T: Record<
     undo: "anular",
     selectPlaceholder: "⊘ Excluir vaga…",
     excludeTitle: "Excluir manualmente esta vaga",
-    notePlaceholder: "Motivo…",
     excluding: "Excluindo…",
     exclude: "Excluir",
   },
@@ -214,7 +128,8 @@ interface Props {
 }
 
 export function ExcludeButton({ legacyId, status, initialReason }: Props) {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -282,7 +197,8 @@ export function ExcludeButton({ legacyId, status, initialReason }: Props) {
 
   // Già esclusa da te → mostra la causa + annulla.
   if (isUserExcluded) {
-    const reasonLabel = t.reasons[initialReason as ReasonKey] ?? initialReason;
+    const reasonLabel =
+      REASON_LABELS[locale][initialReason as ReasonKey] ?? initialReason;
     return (
       <div className="flex flex-col items-end gap-1">
         <button
@@ -311,41 +227,15 @@ export function ExcludeButton({ legacyId, status, initialReason }: Props) {
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-1.5">
-        <select
+        <ReasonPicker
           value={reason}
-          onChange={(e) => setReason(e.target.value)}
+          onChange={setReason}
+          note={note}
+          onNoteChange={setNote}
           disabled={busy || isPending}
-          className="px-2 py-2 rounded-lg border text-[11px] font-semibold disabled:opacity-60"
-          style={{
-            borderColor: "var(--color-border)",
-            color: "var(--color-text)",
-            background: "var(--color-row)",
-          }}
-          title={t.excludeTitle}
-        >
-          <option value="">{t.selectPlaceholder}</option>
-          {REASON_ORDER.map((k) => (
-            <option key={k} value={k}>
-              {t.reasons[k]}
-            </option>
-          ))}
-        </select>
-        {reason === "other" && (
-          <input
-            type="text"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            maxLength={500}
-            placeholder={t.notePlaceholder}
-            disabled={busy || isPending}
-            className="px-2 py-2 rounded-lg border text-[11px] w-40"
-            style={{
-              borderColor: "var(--color-border)",
-              color: "var(--color-text)",
-              background: "var(--color-row)",
-            }}
-          />
-        )}
+          placeholder={t.selectPlaceholder}
+          selectTitle={t.excludeTitle}
+        />
         {reason && (
           <button
             type="button"

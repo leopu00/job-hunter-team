@@ -28,8 +28,27 @@ JSON output on stdout:
 
 Exit codes:
     0 fetch succeeded (including blocked:true, which is reported in the JSON)
-    1 invalid URL / unexpected error
+    1 invalid URL / refused by the guard / unexpected error
     2 all levels failed (network down, unreachable host, etc.)
+
+Network boundary: the URL arrives from outside (a scraped ad, a forwarded
+email), and from inside the container private, loopback and link-local
+addresses answer while the public internet does not. Before any level runs,
+`fetch()` checks the URL with `url_guard` **and resolves the host** with
+`safe_fetch.resolve_public_address`: the guard judges a string, and where a
+name points is something only the DNS knows. Levels 2 and 3 drive Playwright,
+a real browser that resolves and follows redirects on its own, so the
+resolution at the entrance is the only thing standing between them and an
+internal address.
+
+⚠️ A refusal must never escalate. `fetch()` stops on `refused`, because the
+reaction to a level that failed is to try the next one — and that would hand
+the request to the levels where the chain is not re-checked. A refused
+address is not a level that failed.
+
+Level 1 additionally walks redirects with `safe_fetch`, re-checking every
+hop; on the browser levels the chain is not re-checked, which is why the
+address is settled before they start.
 """
 from __future__ import annotations
 
@@ -41,6 +60,14 @@ import sys
 import time
 import urllib.parse
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from safe_fetch import (  # noqa: E402  (dopo sys.path, per costruzione)
+    resolve_public_address,
+    walk as safe_walk,
+)
+from url_guard import UrlRejected, check_url  # noqa: E402
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 CACHE_DIR = JHT_HOME / ".cache" / "web-scrape"
@@ -102,6 +129,25 @@ def _backoff_sleep(attempt: int) -> None:
     time.sleep(base + random.uniform(0, base * 0.3))
 
 
+def _refused(url: str, exc: Exception, level: int = 0, elapsed_ms: int = 0) -> dict:
+    """L'esito di un indirizzo che non si scarica, nella forma dei livelli.
+
+    `refused` e' il campo su cui il ciclo di `fetch` si ferma: senza un campo
+    suo, un rifiuto e' indistinguibile da un livello che ha fallito, e la
+    reazione a un livello fallito e' provare quello dopo.
+    """
+    return {
+        "level": level,
+        "status": 0,
+        "html": "",
+        "blocked": True,
+        "error": f"refused: {exc}",
+        "refused": True,
+        "elapsed_ms": elapsed_ms,
+        "url_final": url,
+    }
+
+
 # ── Livello 1: requests con UA random ─────────────────────────────────
 def fetch_level1(url: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
     """Fetch via requests + UA rotation. Fallisce su SPA / Cloudflare hard."""
@@ -117,19 +163,38 @@ def fetch_level1(url: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
         "Upgrade-Insecure-Requests": "1",
     }
 
+    def hop(hop_url: str, address: str):
+        """Un salto solo, senza seguire redirect: a percorrerli e' `walk`.
+
+        Il trasporto resta `requests` perche' a questo livello servono gli
+        header e la rotazione dello UA — quello che cambia e' chi decide dove
+        si va: `allow_redirects=True` lasciava la destinazione finale al
+        server remoto, che e' esattamente il salto con cui un URL pubblico
+        arriva a `169.254.169.254`.
+        """
+        resp = requests.get(
+            hop_url, headers=headers, timeout=timeout, allow_redirects=False
+        )
+        return resp.status_code, resp.headers.get("Location", ""), resp.content
+
     start = _now_ms()
     try:
-        r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-        text = r.text
-        blocked = _detect_block(text) or r.status_code in (403, 429, 503)
+        status, final_url, body = safe_walk(url, hop=hop)
+        text = body.decode("utf-8", errors="replace")
+        blocked = _detect_block(text) or status in (403, 429, 503)
         return {
             "level": 1,
-            "status": r.status_code,
+            "status": status,
             "html": text,
             "blocked": blocked,
             "elapsed_ms": _now_ms() - start,
-            "url_final": r.url,
+            "url_final": final_url,
         }
+    except UrlRejected as exc:
+        # Distinto dall'errore di rete PRIMA dell'except generico: un rifiuto
+        # e' una decisione, non un tentativo andato male, e chi legge questo
+        # dict decide se salire di livello.
+        return _refused(url, exc, level=1, elapsed_ms=_now_ms() - start)
     except Exception as e:
         return {
             "level": 1,
@@ -259,6 +324,26 @@ def fetch(url: str, max_level: int = 3, profile_dir: Path | None = None,
     `max_level=2` → escalation a Playwright stealth.
     `max_level=3` → escalation a persistent profile (richiede profile_dir).
     """
+    # Prima di qualunque livello: l'URL arriva da fuori (annuncio scrapato,
+    # email inoltrata), e da dentro il container gli indirizzi privati
+    # rispondono mentre la rete pubblica non li vede. Il guard sta QUI e non
+    # solo nel livello 1 perche' i livelli 2 e 3 navigano con Playwright, che
+    # e' un browser vero: nessun controllo lo attraverserebbe.
+    #
+    # E non basta `check_url`: quello giudica la STRINGA, e per costruzione un
+    # nome non lo risolve — dove punta lo dice il DNS al momento della
+    # richiesta. Sui livelli 2 e 3 non manca solo il ricontrollo dei redirect,
+    # manca la risoluzione: `boards.example.com` che risponde 169.254.169.254
+    # passerebbe il controllo della stringa e verrebbe navigato dal browser.
+    # Qui si risolve una volta sola, all'ingresso, per tutti i livelli.
+    try:
+        url = check_url(url)
+        parts = urllib.parse.urlsplit(url)
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        resolve_public_address(parts.hostname, port)
+    except UrlRejected as exc:
+        return _refused(url, exc)
+
     results = []
     last = None
 
@@ -272,6 +357,14 @@ def fetch(url: str, max_level: int = 3, profile_dir: Path | None = None,
                 if profile_dir is None:
                     profile_dir = JHT_HOME / ".cache" / "playwright" / "default"
                 r = fetch_level3(url, profile_dir)
+            # UN RIFIUTO NON FA SALIRE DI LIVELLO. Senza questa riga il
+            # rifiuto del livello 1 diventa la condizione che manda la stessa
+            # richiesta al livello 2, dove il controllo non c'e': la difesa
+            # consegnerebbe il fetch alla strada scoperta, e il chiamante
+            # riceverebbe 200 con `refused` a False. Un indirizzo che non si
+            # scarica non e' un livello che ha fallito.
+            if r.get("refused"):
+                return r
             results.append({k: v for k, v in r.items() if k != "html"})
             last = r
             if not r.get("blocked") and r.get("status", 0) == 200:
@@ -315,6 +408,11 @@ def main(argv):
     result["text_chars"] = text_chars
 
     print(json.dumps(result, indent=2))
+    # Un URL rifiutato non e' «la rete non ha risposto»: e' un indirizzo che
+    # non si scarica, e riprovarlo non cambia nulla. Esce 1, come gli altri
+    # URL non validi, cosi' il chiamante non lo mette in coda di retry.
+    if result.get("refused"):
+        return 1
     return 0 if not result.get("error") and result.get("status", 0) > 0 else 2
 
 

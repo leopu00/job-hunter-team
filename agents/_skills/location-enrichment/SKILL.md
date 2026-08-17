@@ -1,7 +1,7 @@
 ---
 name: location-enrichment
 description: Standardize positions.location free-text into structured loc_*/work_*/role_family columns BEFORE marking any position as `checked`. Covers 10 special cases (Europe Remote, Italy+remote, multi-location, US-entity-in-EU). Enforces one-position-at-a-time, peer-aligned vocabulary, never-NULL work_country. Use whenever the Analyst is about to set status=checked on a position.
-allowed-tools: Bash(python3 *), Bash(curl *), Bash(jq *), WebSearch
+allowed-tools: Bash(python3 *), Bash(jq *), WebSearch
 ---
 
 # location-enrichment — location + role_family structuring playbook

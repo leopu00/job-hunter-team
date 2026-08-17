@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Locale } from "@/i18n/config";
 import { useLocale } from "@/lib/use-locale";
 
-type TeamState = {
+export type TeamState = {
   should_run: boolean | null;
   is_running: boolean | null;
   last_heartbeat_at: string | null;
   last_action: string | null;
   last_action_at: string | null;
   last_error: string | null;
+  last_error_at: string | null;
   emergency_stop_requested_at: string | null;
   emergency_stop_completed_at: string | null;
 };
@@ -32,6 +33,8 @@ type Copy = {
   requested: string;
   failed: string;
   refresh: string;
+  chatDeliveryWarning: string;
+  detectedAt: string;
 };
 
 const EN: Copy = {
@@ -52,6 +55,9 @@ const EN: Copy = {
   requested: "Stop requested. The paired device is applying it.",
   failed: "The stop request failed. Try again.",
   refresh: "Refresh status",
+  chatDeliveryWarning:
+    "Some messages you sent may not have reached the team yet.",
+  detectedAt: "Detected",
 };
 
 const T: Record<Locale, Copy> = {
@@ -75,6 +81,9 @@ const T: Record<Locale, Copy> = {
     requested: "Stop richiesto. Il dispositivo associato lo sta applicando.",
     failed: "Richiesta di stop fallita. Riprova.",
     refresh: "Aggiorna stato",
+    chatDeliveryWarning:
+      "Alcuni messaggi che hai inviato potrebbero non essere ancora arrivati al team.",
+    detectedAt: "Rilevato",
   },
   es: {
     ...EN,
@@ -96,6 +105,9 @@ const T: Record<Locale, Copy> = {
     requested: "Parada solicitada. El dispositivo vinculado la está aplicando.",
     failed: "La solicitud de parada falló. Inténtalo de nuevo.",
     refresh: "Actualizar estado",
+    chatDeliveryWarning:
+      "Es posible que algunos mensajes que enviaste aún no hayan llegado al equipo.",
+    detectedAt: "Detectado",
   },
   fr: {
     ...EN,
@@ -117,6 +129,9 @@ const T: Record<Locale, Copy> = {
     requested: "Arrêt demandé. L'appareil associé est en train de l'appliquer.",
     failed: "La demande d'arrêt a échoué. Réessayez.",
     refresh: "Actualiser l'état",
+    chatDeliveryWarning:
+      "Certains messages que vous avez envoyés ne sont peut-être pas encore parvenus à l'équipe.",
+    detectedAt: "Détecté",
   },
   de: {
     ...EN,
@@ -138,6 +153,9 @@ const T: Record<Locale, Copy> = {
     requested: "Stopp angefordert. Das verbundene Gerät setzt ihn um.",
     failed: "Die Stopp-Anforderung ist fehlgeschlagen. Versuche es erneut.",
     refresh: "Status aktualisieren",
+    chatDeliveryWarning:
+      "Einige deiner gesendeten Nachrichten haben das Team möglicherweise noch nicht erreicht.",
+    detectedAt: "Erkannt",
   },
   hu: {
     ...EN,
@@ -158,6 +176,9 @@ const T: Record<Locale, Copy> = {
     requested: "Leállítás kérve. A párosított eszköz végrehajtja.",
     failed: "A leállítási kérés sikertelen. Próbáld újra.",
     refresh: "Állapot frissítése",
+    chatDeliveryWarning:
+      "Előfordulhat, hogy néhány elküldött üzeneted még nem érkezett meg a csapathoz.",
+    detectedAt: "Észlelve",
   },
   pt: {
     ...EN,
@@ -178,8 +199,69 @@ const T: Record<Locale, Copy> = {
     requested: "Paragem pedida. O dispositivo associado está a aplicá-la.",
     failed: "O pedido de paragem falhou. Tenta novamente.",
     refresh: "Atualizar estado",
+    chatDeliveryWarning:
+      "Algumas mensagens que enviou poderão ainda não ter chegado à equipa.",
+    detectedAt: "Detetado",
   },
 };
+
+// `last_error` is also used by the team reconciler for unrelated failures.
+// Chat sync writes one of these stable, sanitized summaries. Match the known
+// classification but never render its value: the read-failure variant may
+// carry a bounded transport detail that belongs in logs, not in the UI.
+const CHAT_DELIVERY_ERROR = [
+  /^chat: web turns cannot be retrieved \(no cloud read channel\)$/,
+  /^chat: failed to read user turns from the cloud(?: \(.{0,160}\))?$/,
+  /^chat: [1-9]\d{0,9} pane delivery outcomes are uncertain$/,
+  /^chat: [1-9]\d{0,9} user turns not delivered to the agent$/,
+];
+
+export function mobileChatDeliveryAlert(
+  state: TeamState | null,
+): { detectedAt: string } | null {
+  const summary = state?.last_error;
+  if (!summary || !CHAT_DELIVERY_ERROR.some((pattern) => pattern.test(summary)))
+    return null;
+  const detected = Date.parse(state?.last_error_at ?? "");
+  if (!Number.isFinite(detected)) return null;
+  return { detectedAt: new Date(detected).toISOString() };
+}
+
+function fullTimestamp(value: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+export function MobileChatDeliveryWarning({
+  state,
+  locale,
+}: {
+  state: TeamState | null;
+  locale: Locale;
+}) {
+  const alert = mobileChatDeliveryAlert(state);
+  if (!alert) return null;
+  const t = T[locale] ?? EN;
+  return (
+    <div
+      role="alert"
+      data-chat-delivery-warning
+      className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2.5 text-amber-100"
+    >
+      <p className="text-[12px] font-semibold leading-relaxed">
+        {t.chatDeliveryWarning}
+      </p>
+      <p className="mt-1 text-[10px] text-amber-100/70">
+        {t.detectedAt}:{" "}
+        <time dateTime={alert.detectedAt}>
+          {fullTimestamp(alert.detectedAt, locale)}
+        </time>
+      </p>
+    </div>
+  );
+}
 
 export function mobileTeamStatus(
   state: TeamState | null,
@@ -369,6 +451,8 @@ export default function MobileTeamStatus() {
           </button>
         </div>
       </div>
+
+      <MobileChatDeliveryWarning state={state} locale={locale} />
 
       {notice && (
         <p

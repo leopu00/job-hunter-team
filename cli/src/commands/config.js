@@ -1,7 +1,8 @@
-import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { writePrivateJson } from '../lib/secure-config-io.js';
 
 const CONFIG_DIR = JHT_HOME;
 const CONFIG_FILE = join(CONFIG_DIR, 'jht.config.json');
@@ -16,8 +17,7 @@ async function loadConfig() {
 }
 
 async function saveConfig(config) {
-  await mkdir(CONFIG_DIR, { recursive: true });
-  await writeFile(CONFIG_FILE, JSON.stringify(config, null, 2) + '\n');
+  writePrivateJson(CONFIG_FILE, config);
 }
 
 function getNestedValue(obj, keyPath) {

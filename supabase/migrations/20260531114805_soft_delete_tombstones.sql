@@ -1,0 +1,8 @@
+-- H-08 migration-history anchor: intentionally no executable SQL.
+-- Remote identity: 20260531114805 / soft_delete_tombstones
+-- Canonical effect: supabase/migrations/028_soft_delete_tombstones.sql
+-- Remote statements MD5: cdc0bccb1a68641cc79c2fb4d04abb97
+--
+-- The linked database already records this timestamped migration. Keeping
+-- the exact identity locally reconciles history without replaying old DDL;
+-- the canonical migration (or forward-only 081) owns the final schema.

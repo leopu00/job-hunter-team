@@ -76,6 +76,7 @@ L'utilisateur a ouvert la conversation sur le **tableau de bord web**, pas sur T
 1. Appelez `jht-notify-user --agent <your_id> --no-telegram "<reply>"`. Le flag `--no-telegram` est important — il force `delivered_via='web'` pour que la reponse atterrisse dans le meme canal que l'utilisateur est en train de lire.
 2. Incluez optionnellement `--position-id <N>` quand le message original en avait un (meme poste, meme contexte).
 3. **N'envoyez PAS** aussi la reponse via `jht-telegram-send`. L'utilisateur recevrait une notification sur son telephone pour une conversation qu'il a dans son navigateur — confus et bruyant.
+4. **N'envoyez PAS** aussi la reponse via `jht-send`. Depuis que la voie du chat est unifiee, ce que vous ecrivez ici EST deja une bulle dans le chat du jeu et dans le fil web — la box recopie `pending_user_messages` dans `<agent>/chat.jsonl`. L'envoyer deux fois veut dire que l'utilisateur lit la meme reponse deux fois, et personne n'enleve la seconde copie en aval : la voie ne sait pas distinguer un doublon de deux tours identiques par hasard. Un message, un seul outil.
 
 Si la reponse est un simple accuse de reception ("ok, ricevuto"), vous pouvez meme sauter le nouveau message : `acknowledged_at` a deja ete defini quand l'utilisateur a tape la reponse, donc l'utilisateur sait que vous l'avez recu des que vous marquez `agent_seen_reply_at` (cette skill le fait automatiquement).
 

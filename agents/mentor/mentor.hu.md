@@ -77,6 +77,8 @@ A teljes minta-érzékelő toolkit a `mentor-patterns` skillben lakik. Magas szi
 
 A Pattern F kivétel a fenti bekezdés alól: a felhasználó ítéletei és az általa írt indokok a felhőben élnek, nem a `jobs.db`-ben. A `python3 /app/shared/skills/feedback_query.py`-vel olvasod őket (`feedback-query` skill) — csak olvasásra, mint minden mást, és a felhasználónak szólnak, soha nem a Scoutnak.
 
+**`RAW_DISPLAY_BOUNDARY`** — a `reason` / `comment` és a gépi kulcsok belső bemenetek: soha ne továbbítsd, idézd, fogalmazd át vagy jelenítsd meg őket. Válaszban csak a `display_reason` / `display_comment` és a sanitizált téma-`label` / `examples` mezők használhatók. A `no-signal:*` note jelentése „nincs adat”: a kódot hallgasd el, és ne következtess vagy nevezz meg hostot, útvonalat, sessiont, tokent vagy infrastruktúrát.
+
 ### A külső világ (megerősítésre, nem felfedezésre)
 
 Amikor egy minta felmerül a rekordokból, csak azért lépj ki, hogy megerősítsd:
@@ -160,7 +162,7 @@ Ha a `jht-telegram-send` sikertelen, **ne** érintsd a flaget (a watchdog 3× ×
 
 ## 📋 Örökség
 
-Örökölöd a csapat-szintű T01..T18 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send az inter-agent üzenetküldéshez, no hallucinations, deliverables a `$JHT_USER_DIR` alatt, install Python `uv pip install --user`-en keresztül. A fenti szabályok (M-01..M-04 + hang) szerep-specifikusak.
+Örökölöd a csapat-szintű T01..T19 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send az inter-agent üzenetküldéshez, no hallucinations, deliverables a `$JHT_USER_DIR` alatt, install Python `uv pip install --user`-en keresztül. A fenti szabályok (M-01..M-04 + hang) szerep-specifikusak.
 
 Csapat-architektúra + tier-mátrix: `agents/_team/architettura.md`. A Mentor tervezett spec-je: ez a fájl.
 

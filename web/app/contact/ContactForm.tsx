@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { feedbackDeliveryOutcome } from "@/lib/feedback-delivery";
+import { publicContactPayload } from "@/lib/feedback-contact";
 
 /**
  * Segnalazione tecnica pubblica, intenzionalmente separata dai contatti via
- * email sopra il modulo. Non raccoglie un'identità e non manda allegati: una
- * persona deve poter dire che qualcosa è rotto anche prima di aver creato un
- * account, senza rischiare CV o recapiti.
+ * email sopra il modulo. Il recapito è facoltativo e diventa soltanto il
+ * Reply-To della mail: una persona può restare anonima oppure rendersi
+ * raggiungibile, senza rischiare CV o altri dati personali.
  */
 export interface ContactStrings {
   // Legacy labels retained in the page catalogue while the public contact
@@ -21,6 +22,7 @@ export interface ContactStrings {
   name_ph: string;
   email: string;
   email_ph: string;
+  email_help: string;
   subject: string;
   subject_ph: string;
   report_intro: string;
@@ -61,6 +63,7 @@ export default function ContactForm({
   locale: string;
 }) {
   const [message, setMessage] = useState("");
+  const [replyTo, setReplyTo] = useState("");
   // Campo trappola: fuori dalla vista e dall'albero accessibile. Non è un
   // dato dell'utente: un valore compilato segnala un bot al server.
   const [website, setWebsite] = useState("");
@@ -75,20 +78,22 @@ export default function ContactForm({
       setErrore(t.error_short);
       return;
     }
+    const payload = publicContactPayload({
+      message,
+      email: replyTo,
+      locale,
+      website,
+    });
+    if (!payload) {
+      setErrore(t.error_email);
+      return;
+    }
     setStato("invio");
     try {
       const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client: "web-contact",
-          kind: "bug",
-          happened: message,
-          doing: "Public web report: /contact",
-          platform: "web",
-          locale,
-          website,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = (await res.json().catch(() => null)) as {
         ticket?: unknown;
@@ -132,6 +137,7 @@ export default function ContactForm({
           onClick={() => {
             setStato("idle");
             setMessage("");
+            setReplyTo("");
             setTicket("");
           }}
           className="text-xs underline text-[var(--color-muted)] hover:text-[var(--color-fg)]"
@@ -161,6 +167,31 @@ export default function ContactForm({
           maxLength={4000}
           required
         />
+      </div>
+
+      <div>
+        <label className={LABEL} htmlFor="c-email">
+          {t.email}
+        </label>
+        <input
+          id="c-email"
+          name="reply_to"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          className={INPUT}
+          value={replyTo}
+          onChange={(e) => setReplyTo(e.target.value)}
+          placeholder={t.email_ph}
+          aria-describedby="c-email-help"
+          maxLength={254}
+        />
+        <p
+          id="c-email-help"
+          className="mt-2 text-[11px] text-[var(--color-dim)]"
+        >
+          {t.email_help}
+        </p>
       </div>
 
       <section

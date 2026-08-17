@@ -9,6 +9,7 @@ import {
   isLocalTokenAuthenticated,
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -251,6 +252,9 @@ async function handleToggle(
       (await cookies()).get(LOCAL_TOKEN_COOKIE)?.value,
     )
   ) {
+    // Sito local-only DICHIARATO: dentro il ramo local-token, che su deploy
+    // cloud non si apre mai (`isLocalTokenAuthenticated()` e' false per
+    // costruzione, lib/local-token.ts). DB assente = box a meta' → 503.
     if (!fs.existsSync(JHT_DB_PATH)) {
       return NextResponse.json({ error: "DB locale assente" }, { status: 503 });
     }
@@ -277,7 +281,7 @@ async function handleToggle(
   }
   const { userId, supabase } = resolved.user;
 
-  const hasLocal = fs.existsSync(JHT_DB_PATH);
+  const hasLocal = !isCloudDeploy() && fs.existsSync(JHT_DB_PATH);
 
   if (hasLocal) {
     const local = toggleViaLocal(legacyId, requested);

@@ -11,7 +11,7 @@ const POSITIONS := [
 		"location": "Milano · ibrido",
 		"score": 82,
 		"salary": "~42k EUR",
-		"note": "esperienze molto vicine al tuo CV",
+		"note": "experience very close to your CV",
 	},
 	{
 		"title": "Specialista Marketing Digitale",
@@ -45,10 +45,10 @@ func get_agent_status() -> Dictionary:
 	return {
 		"coordinatore": {"status": _t("dept.mock.status.coordinatore.status", "attivo"), "detail": _t("dept.mock.status.coordinatore.detail", "pacing regolare, weekly al 64%")},
 		"scout": {"status": _t("dept.mock.status.scout.status", "in scansione"), "detail": _t("dept.mock.status.scout.detail", "3 board visitate nell'ultima ora")},
-		"analista": {"status": _t("dept.mock.status.analista.status", "al lavoro"), "detail": _t("dept.mock.status.analista.detail", "2 posizioni in verifica")},
-		"scorer": {"status": _t("dept.mock.status.scorer.status", "in valutazione"), "detail": _t("dept.mock.status.scorer.detail", "coda: 1 posizione")},
+		"analista": {"status": _t("dept.mock.status.analista.status", "working"), "detail": _t("dept.mock.status.analista.detail", "2 roles under review")},
+		"scorer": {"status": _t("dept.mock.status.scorer.status", "in valutazione"), "detail": _t("dept.mock.status.scorer.detail", "queue: 1 role")},
 		"mentor": {"status": _t("dept.mock.status.mentor.status", "disponibile"), "detail": _t("dept.mock.status.mentor.detail", "pronto a consigliarti")},
-		"assistente": {"status": _t("dept.mock.status.assistente.status", "disponibile"), "detail": _t("dept.mock.status.assistente.detail", "onboarding completato")},
+		"assistente": {"status": _t("dept.mock.status.assistente.status", "disponibile"), "detail": _t("dept.mock.status.assistente.detail", "onboarding complete")},
 	}
 
 func get_score_explanation() -> Dictionary:
@@ -59,10 +59,10 @@ func get_score_explanation() -> Dictionary:
 		# Motivazioni CONCRETE e quotidiane (feedback Leone 21/07): meno
 		# percentuali astratte, più vita reale.
 		"reasons": [
-			_t("dept.mock.reason.1", "l'annuncio ricalca due esperienze già nel tuo CV"),
-			_t("dept.mock.reason.2", "la sede è in centro, vicino a una delle tue città prioritarie"),
-			_t("dept.mock.reason.3", "stipendio sopra la soglia che hai indicato"),
-			_t("dept.mock.reason.4", "-8 punti: chiedono disponibilità anche nel weekend"),
+			_t("dept.mock.reason.1", "the listing mirrors two roles already on your CV"),
+			_t("dept.mock.reason.2", "the office is central, near one of your priority cities"),
+			_t("dept.mock.reason.3", "salary above the threshold you set"),
+			_t("dept.mock.reason.4", "-8 points: they expect weekend availability"),
 		],
 	}
 
@@ -95,9 +95,9 @@ func get_streak() -> Dictionary:
 ## Attività recenti per ruolo: righe verosimili, coerenti con lo status.
 const ACTIVITY := {
 	"scout": [
-		{"when": "12 min fa", "text": "trovata posizione: Frontend Engineer @ Lumon"},
-		{"when": "41 min fa", "text": "scansione board: 2 annunci nuovi, 1 duplicato"},
-		{"when": "1 h fa", "text": "pagina careers nuova messa in osservazione"},
+		{"when": "12 min fa", "text": "role found: Frontend Engineer @ Lumon"},
+		{"when": "41 min fa", "text": "board scan: 2 new listings, 1 duplicate"},
+		{"when": "1 h fa", "text": "new careers page added to the watchlist"},
 	],
 	"analista": [
 		{"when": "8 min fa", "text": "verificato range salariale (fonte incrociata)"},
@@ -106,25 +106,25 @@ const ACTIVITY := {
 	],
 	"scorer": [
 		{"when": "5 min fa", "text": "score 85: competenze coperte all'85%"},
-		{"when": "1 h fa", "text": "score 61: salario sotto soglia, segnalato"},
+		{"when": "1 h fa", "text": "score 61: salary below threshold, flagged"},
 	],
 	"scrittore": [
 		{"when": "20 min fa", "text": "bozza CV su misura per Frontend Engineer"},
-		{"when": "1 h fa", "text": "lettera rivista dopo le note del Critico"},
+		{"when": "1 h fa", "text": "cover letter revised after the Reviewer's notes"},
 	],
 	"critico": [
-		{"when": "15 min fa", "text": "revisione CV: 3 note, 1 refuso fermato"},
+		{"when": "15 min fa", "text": "CV review: 3 notes, 1 typo caught"},
 		{"when": "2 h fa", "text": "approvata lettera per Data Analyst"},
 	],
 	"coordinatore": [
-		{"when": "3 min fa", "text": "giro dei reparti completato, ritmo ok"},
+		{"when": "3 min fa", "text": "department round complete, pace is fine"},
 		{"when": "30 min fa", "text": "pacing ricalibrato sul weekly (64%)"},
 	],
 	"mentor": [
 		{"when": "1 h fa", "text": "preparato il consiglio del giorno"},
 	],
 	"assistente": [
-		{"when": "10 min fa", "text": "registro candidature aggiornato"},
+		{"when": "10 min fa", "text": "application log updated"},
 	],
 }
 
@@ -150,18 +150,18 @@ func get_usage() -> Dictionary:
 	}
 
 const NOTIFICATIONS := [
-	{"when": "5 min fa", "level": "info", "text": "Nuova posizione sopra soglia: Frontend Engineer @ Lumon (85)"},
-	{"when": "1 h fa", "level": "warn", "text": "Quota settimanale al 64%: pacing regolare"},
+	{"when": "5 min fa", "level": "info", "text": "New role above threshold: Frontend Engineer @ Lumon (85)"},
+	{"when": "1 h fa", "level": "warn", "text": "Weekly quota at 64%: steady pacing"},
 	{"when": "2 h fa", "level": "info", "text": "CV approvato dal Critico per Data Analyst"},
-	{"when": "ieri", "level": "info", "text": "Candidatura passata allo stadio colloquio"},
+	{"when": "ieri", "level": "info", "text": "Application moved to the interview stage"},
 ]
 
 const CHAT := [
 	{"when": "09:12", "from": "coordinatore", "text": "buongiorno team, weekly al 64%: ritmo buono"},
-	{"when": "09:31", "from": "scout", "text": "2 annunci nuovi da Berlino, li passo agli analisti"},
+	{"when": "09:31", "from": "scout", "text": "2 new listings from Berlin, passing them to the analysts"},
 	{"when": "10:02", "from": "analista", "text": "range salariale verificato su fonte doppia"},
-	{"when": "10:15", "from": "scorer", "text": "score 85 su Lumon: sopra soglia, notifica inviata"},
-	{"when": "10:40", "from": "critico", "text": "CV ok dopo due giri: si spedisce"},
+	{"when": "10:15", "from": "scorer", "text": "score 85 on Lumon: above threshold, notification sent"},
+	{"when": "10:40", "from": "critico", "text": "CV cleared after two passes: sending it out"},
 ]
 
 func get_notifications() -> Array:
@@ -215,20 +215,20 @@ const SETTINGS := {
 	"profile": [
 		["Candidato", "Il Candidato"],
 		["Ruolo target", "Data Analyst / BI"],
-		["Città prioritaria", "Berlino"],
+		["Priority city", "Berlino"],
 		["Seniority", "mid"],
 		["Lingue", "IT · EN · DE"],
-		["Permesso di lavoro", "UE"],
+		["Work permit", "UE"],
 	],
 	"hours": [
-		["Attività team", "08:00 – 20:00"],
-		["Giorni", "lun – ven"],
+		["Team activity", "08:00 – 20:00"],
+		["Days", "lun – ven"],
 		["Pacing", "adattivo sul weekly"],
 		["Hard-stop giornaliero", "attivo"],
 	],
 	"provider": [
 		["Provider", "Kimi K2.7"],
-		["Chiave API", "configurata ✓"],
+		["Chiave API", "configured ✓"],
 		["Tier", "standard"],
 		["Fallback", "—"],
 	],
@@ -241,26 +241,26 @@ const SETTINGS := {
 	],
 	"account": [
 		["Email", "c•••@esempio.dev"],
-		["Piano", "beta"],
+		["Plan", "beta"],
 		["Sync cloud", "attivo"],
 		["Ultimo sync", "2 min fa"],
 	],
 	"email": [
 		["Casella team", "team-c4nd@jht.dev"],
 		["Monitor", "attivo"],
-		["Processate oggi", "6"],
+		["Processed today", "6"],
 		["Ultima email", "1 h fa"],
 	],
 	"language": [
 		["Lingua interfaccia", "Italiano"],
 		["Lingua CV", "segue l'annuncio"],
-		["Disponibili", "IT · EN · DE · FR · ES · PT · NL"],
+		["Available", "IT · EN · DE · FR · ES · PT · NL"],
 	],
 	"advanced": [
 		["Livello log", "info"],
 		["Telemetria", "off"],
 		["Flag sperimentali", "—"],
-		["Cartella dati", "~/.jht"],
+		["Data folder", "~/.jht"],
 	],
 }
 

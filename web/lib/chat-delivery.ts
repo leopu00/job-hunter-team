@@ -112,8 +112,17 @@ export function chatTurnDelivery(
   if (m.delivered_at) return "delivered";
 
   const created = stampMs(m.created_at);
-  if (!Number.isFinite(created) || now - created < staleMs) return "sent";
+  if (!Number.isFinite(created)) return "sent";
   if (lane && !chatLanePending(lane)) return "sent";
+  // L'attesa non si conta dalla nascita del turno ma dall'ultimo campanello
+  // suonato dopo di essa. Il box ritira TUTTI i turni pendenti in un colpo
+  // solo, quindi una richiesta di ritiro fresca — il retry esplicito, o
+  // semplicemente il messaggio successivo — rimette in viaggio anche i turni
+  // vecchi. Senza questo, premere "riprova" non cambierebbe nulla a schermo
+  // e l'utente concluderebbe che il pulsante è finto.
+  const rung = stampMs(lane?.requestedAt);
+  const waitingSince = Number.isFinite(rung) && rung > created ? rung : created;
+  if (now - waitingSince < staleMs) return "sent";
   return "stalled";
 }
 

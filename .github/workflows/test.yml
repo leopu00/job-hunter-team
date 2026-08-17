@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - hq-master
   pull_request:
     branches:
       - master
@@ -13,6 +14,9 @@ on:
   # butta — si sposta dove ha senso, cioè dopo il deploy.
   schedule:
     - cron: "17 6 * * *"
+
+permissions:
+  contents: read
 
 jobs:
   # Suite vitest completa — l'UNICO posto in cui gira. Fino al 2026-07-26 il
@@ -53,6 +57,12 @@ jobs:
         working-directory: web
         run: npm ci
 
+      # Static causal bridge only: scans the checked-in web TypeScript and the
+      # versioned receipt manifests. It has no credentials and makes no network
+      # request, so PRs cannot silently add an RPC/column outside the canary.
+      - name: Verify web schema receipt coverage (offline)
+        run: node scripts/check-web-schema-coverage.mjs
+
       # wizard/setup.test.js importa cli/wizard/setup.js e lancia cli/bin/jht.js.
       - name: Install CLI dependencies for imported commands
         working-directory: cli
@@ -75,6 +85,68 @@ jobs:
         working-directory: tests/js
         run: npm test
 
+  # A migration is an immutable release identity, not merely a SQL file that
+  # parses today.  This gate compares the exact base tree with HEAD and every
+  # freshly fetched remote branch by version/path/Git blob, then applies only
+  # the new sequence to a disposable PostgreSQL 16 database.  It never links,
+  # repairs, pushes or writes to Supabase.
+  migration-gate:
+    name: Supabase migrations — immutable history + PostgreSQL 16
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      JHT_TEST_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Tree/blob comparisons and all active remote refs require complete
+          # history. The gate itself performs a fresh, quiet read-only fetch.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Resolve immutable migration base
+        id: migration-base
+        env:
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          resolved_base="$(python scripts/migration_gate.py base \
+            --event "$GITHUB_EVENT_NAME" \
+            --head "$GITHUB_SHA" \
+            --push-before "$PUSH_BEFORE_SHA" \
+            --pull-request-base "$PULL_REQUEST_BASE_SHA")"
+          printf 'sha=%s\n' "$resolved_base" >> "$GITHUB_OUTPUT"
+
+      - name: Check immutable migration identities
+        run: >-
+          python scripts/migration_gate.py git
+          --base "${{ steps.migration-base.outputs.sha }}"
+          --head "$GITHUB_SHA"
+          --fetch-remote origin
+
+      - name: Apply new migrations on PostgreSQL 16
+        run: >-
+          python scripts/migration_gate.py pg16
+          --base "${{ steps.migration-base.outputs.sha }}"
+          --head "$GITHUB_SHA"
+
   # La suite Python (agenti, skill, sync, installer) girava solo a mano: per
   # tre settimane nessuno ha visto che tests/test_public_installers_sync.py
   # era rosso — il test scritto apposta per fallire in CI sul drift degli
@@ -83,6 +155,24 @@ jobs:
     name: pytest — agents, skills, sync
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
+    # Migration 074 is exercised on PostgreSQL itself: parsing SQL or mocking
+    # Supabase cannot prove composite FKs, RLS privileges, row locks or a full
+    # transaction rollback. A disposable service keeps that gate executable in
+    # CI even when the runner image changes its preinstalled server packages.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      JHT_TEST_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
 
     steps:
       - uses: actions/checkout@v7
@@ -371,4 +461,12 @@ jobs:
       - name: Run production smoke
         env:
           VERCEL_URL: https://jobhunterteam.ai
-        run: python -m pytest tests/ -v -rs -m production
+        # Censimento esplicito: questi sono i due moduli production (38 test).
+        # Raccogliere tutta tests/ importa anche moduli non selezionati dal
+        # marker e rende lo smoke dipendente dalle librerie del container
+        # (per esempio PyYAML) prima ancora di interrogare il sito vivo.
+        run: >-
+          python -m pytest
+          tests/test_vercel_pages.py
+          tests/test_missing_pages.py
+          -v -rs -m production
