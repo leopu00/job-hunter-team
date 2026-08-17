@@ -63,6 +63,7 @@ const T: Record<
     quarantined: (n: number) => string;
     vpsSlow: string;
     syncTimedOut: string;
+    syncPushPartial: string;
     syncPushFailed: string;
     syncAckFailed: string;
     syncSuperseded: string;
@@ -89,8 +90,10 @@ const T: Record<
       "Nessuna conferma entro tre minuti. Controlla che il team sia online e riprova.",
     syncTimedOut:
       "La sincronizzazione ha impiegato troppo ed è stata interrotta. Riprova.",
+    syncPushPartial:
+      "Una parte dei dati non è stata confermata. Il resto è arrivato e il team riprova le righe rimaste.",
     syncPushFailed:
-      "La VPS non è riuscita a inviare i dati. Controlla lo stato del team e riprova.",
+      "L'invio si è interrotto prima della fine. I dati già confermati restano; il team riprova da solo.",
     syncAckFailed:
       "I dati potrebbero essere arrivati, ma manca la conferma. Attendi qualche secondo e riprova.",
     syncSuperseded:
@@ -115,8 +118,10 @@ const T: Record<
     vpsSlow:
       "No confirmation arrived within three minutes. Check that the team is online and try again.",
     syncTimedOut: "The sync took too long and was stopped. Try again.",
+    syncPushPartial:
+      "Some of the data wasn't confirmed. The rest arrived, and the team retries the remaining rows.",
     syncPushFailed:
-      "The VPS couldn't send the data. Check the team status and try again.",
+      "The upload stopped before the end. Data already confirmed stays; the team retries on its own.",
     syncAckFailed:
       "The data may have arrived, but confirmation is missing. Wait a few seconds and try again.",
     syncSuperseded:
@@ -143,8 +148,10 @@ const T: Record<
       "No llegó ninguna confirmación en tres minutos. Comprueba que el equipo esté conectado e inténtalo de nuevo.",
     syncTimedOut:
       "La sincronización tardó demasiado y se detuvo. Inténtalo de nuevo.",
+    syncPushPartial:
+      "Parte de los datos no se confirmó. El resto llegó y el equipo reintenta las filas pendientes.",
     syncPushFailed:
-      "El VPS no pudo enviar los datos. Comprueba el estado del equipo e inténtalo de nuevo.",
+      "El envío se interrumpió antes de terminar. Los datos ya confirmados se mantienen; el equipo reintenta solo.",
     syncAckFailed:
       "Puede que los datos hayan llegado, pero falta la confirmación. Espera unos segundos e inténtalo de nuevo.",
     syncSuperseded:
@@ -171,8 +178,10 @@ const T: Record<
       "Aucune confirmation après trois minutes. Vérifiez que l'équipe est en ligne et réessayez.",
     syncTimedOut:
       "La synchronisation a pris trop de temps et a été arrêtée. Réessayez.",
+    syncPushPartial:
+      "Une partie des données n'a pas été confirmée. Le reste est arrivé et l'équipe réessaie les lignes restantes.",
     syncPushFailed:
-      "Le VPS n'a pas pu envoyer les données. Vérifiez l'état de l'équipe et réessayez.",
+      "L'envoi s'est interrompu avant la fin. Les données déjà confirmées restent ; l'équipe réessaie seule.",
     syncAckFailed:
       "Les données sont peut-être arrivées, mais la confirmation manque. Attendez quelques secondes et réessayez.",
     syncSuperseded:
@@ -199,8 +208,10 @@ const T: Record<
       "Innerhalb von drei Minuten kam keine Bestätigung. Prüfe, ob das Team online ist, und versuche es erneut.",
     syncTimedOut:
       "Die Synchronisierung dauerte zu lange und wurde beendet. Versuche es erneut.",
+    syncPushPartial:
+      "Ein Teil der Daten wurde nicht bestätigt. Der Rest ist angekommen, und das Team wiederholt die übrigen Zeilen.",
     syncPushFailed:
-      "Der VPS konnte die Daten nicht senden. Prüfe den Teamstatus und versuche es erneut.",
+      "Die Übertragung brach vor dem Ende ab. Bereits bestätigte Daten bleiben; das Team versucht es von selbst erneut.",
     syncAckFailed:
       "Die Daten sind möglicherweise angekommen, aber die Bestätigung fehlt. Warte kurz und versuche es erneut.",
     syncSuperseded:
@@ -227,8 +238,10 @@ const T: Record<
       "Három percen belül nem érkezett megerősítés. Ellenőrizd, hogy a csapat online van-e, majd próbáld újra.",
     syncTimedOut:
       "A szinkronizálás túl sokáig tartott, ezért leállt. Próbáld újra.",
+    syncPushPartial:
+      "Az adatok egy része nem lett megerősítve. A többi megérkezett, és a csapat újrapróbálja a maradék sorokat.",
     syncPushFailed:
-      "A VPS nem tudta elküldeni az adatokat. Ellenőrizd a csapat állapotát, majd próbáld újra.",
+      "A küldés a vége előtt megszakadt. A már megerősített adatok megmaradnak; a csapat magától újrapróbálja.",
     syncAckFailed:
       "Az adatok megérkezhettek, de nincs megerősítés. Várj néhány másodpercet, majd próbáld újra.",
     syncSuperseded:
@@ -255,8 +268,10 @@ const T: Record<
       "Nenhuma confirmação chegou em três minutos. Verifique se a equipe está online e tente novamente.",
     syncTimedOut:
       "A sincronização demorou demais e foi interrompida. Tente novamente.",
+    syncPushPartial:
+      "Parte dos dados não foi confirmada. O resto chegou e a equipe repete as linhas restantes.",
     syncPushFailed:
-      "O VPS não conseguiu enviar os dados. Verifique o status da equipe e tente novamente.",
+      "O envio parou antes do fim. Os dados já confirmados permanecem; a equipe tenta de novo sozinha.",
     syncAckFailed:
       "Os dados podem ter chegado, mas falta a confirmação. Aguarde alguns segundos e tente novamente.",
     syncSuperseded:
@@ -481,6 +496,10 @@ export default function CloudRefreshButton() {
     requestTokenRef.current++;
     setSyncing(false);
     if (outcome.status === "timeout") setError(t.syncTimedOut);
+    // Il push arrivato in fondo con righe isolate non e' un invio fallito:
+    // dirlo cosi' mandava l'utente a cercare un guasto che non c'e'. Il
+    // dettaglio di QUANTE righe restano lo da' gia' l'avviso quarantena.
+    else if (outcome.status === "push_partial") setError(t.syncPushPartial);
     else if (outcome.status === "push_failed") setError(t.syncPushFailed);
     else if (outcome.status === "ack_failed") setError(t.syncAckFailed);
     else setError(t.syncSuperseded);

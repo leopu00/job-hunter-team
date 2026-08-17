@@ -9,11 +9,17 @@ export const dynamic = "force-dynamic";
 const TERMINAL_STATUSES = new Set([
   "completed",
   "timeout",
+  "push_partial",
   "push_failed",
   "ack_failed",
 ] as const);
 
-type TerminalStatus = "completed" | "timeout" | "push_failed" | "ack_failed";
+type TerminalStatus =
+  | "completed"
+  | "timeout"
+  | "push_partial"
+  | "push_failed"
+  | "ack_failed";
 
 /**
  * Chiude un rendezvous Sync now soltanto se il device sta ancora servendo la

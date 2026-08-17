@@ -20,7 +20,11 @@ export function timestampAdvanced(
   return Number.isNaN(baselineMs) || candidateMs > baselineMs;
 }
 
-export type SyncFailureStatus = "timeout" | "push_failed" | "ack_failed";
+export type SyncFailureStatus =
+  | "timeout"
+  | "push_partial"
+  | "push_failed"
+  | "ack_failed";
 
 export interface SyncObservation {
   requestedAt: string | null;
@@ -64,6 +68,8 @@ export function syncTerminalOutcome(
   // quel click non diventa verde retroattivamente.
   if (actionIsCurrent && action === "sync:timeout")
     return { status: "timeout" };
+  if (actionIsCurrent && action === "sync:push_partial")
+    return { status: "push_partial" };
   if (actionIsCurrent && action === "sync:push_failed")
     return { status: "push_failed" };
   if (actionIsCurrent && action === "sync:ack_failed")
