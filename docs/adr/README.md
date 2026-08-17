@@ -20,6 +20,7 @@ Short records of architecturally-significant decisions — what we chose, why, a
 | [0005](./0005-provider-risk-and-mitigation.md) | Provider risk and mitigation | Accepted |
 | [0006](./0006-user-choice-container-runtime-macos.md) | User chooses the container runtime on macOS (Colima or Docker Desktop) | Accepted |
 | [0007](./0007-provider-selection-is-configuration.md) | Provider selection is configuration, not instruction | Accepted |
+| [0008](./0008-podman-evaluated-behind-a-shim.md) | Evaluate Podman behind a `docker` shim, not by rewriting call sites | Proposed |
 
 ## When to add an ADR
 
