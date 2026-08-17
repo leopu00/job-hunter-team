@@ -525,6 +525,183 @@ describe("push sync di una candidatura", () => {
     });
   });
 
+  /**
+   * #163, la parte che il fix di ieri non copre — e che rende la condizione
+   * IMPOSSIBILE per costruzione, non «a volte sfortunata».
+   *
+   * `upsert_pending_user_messages_merge` è asimmetrica DI PROPOSITO (mig 057
+   * e 060): sui campi che il cloud sa e il box no —  `delivered_via`,
+   * `delivered_at`, `chat_ts`, `related_position_id`, `agent_seen_reply_at` —
+   * fa `COALESCE(EXCLUDED.x, pending.x)`, cioè NON accetta il NULL del box.
+   * È la scelta giusta: il postino che consegna sul web timbra là, e il box
+   * quel timbro non ce l'ha.
+   *
+   * Ma la ricevuta rilegge la riga e pretende che TUTTI quei campi siano
+   * uguali a quelli mandati. Su una riga consegnata dal web il confronto è
+   * falso per costruzione, la ricevuta non esce mai, e il CLIENT si fabbrica
+   * un 422 da un 200 del server: 4305 fallimenti consecutivi, le stesse righe
+   * rispedite ogni 60 secondi, checkpoint fermo per sempre.
+   *
+   * Misurato sul cloud il 17/08, in aggregato: 698 righe, 698 con
+   * `delivered_via` valorizzato, 686 con `delivered_at`.
+   *
+   * La ricevuta deve attestare ciò che il client può attestare — la SUA riga
+   * è arrivata e persiste — non che il cloud non sappia niente di più.
+   */
+  it("emette receipt anche se il cloud sa più del box su quella riga", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.map((row) => ({
+        ...row,
+        delivered_via: "telegram",
+        delivered_at: "2026-08-17T20:44:09+00:00",
+      }));
+    const response = await pushBody({
+      pending_user_messages: [
+        { id: 11, agent: "SCOUT", body: "Synthetic first" },
+        { id: 12, agent: "SCOUT", body: "Synthetic second" },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: {
+        pending_user_messages: [
+          receiptId("pending_user_messages", 11),
+          receiptId("pending_user_messages", 12),
+        ],
+      },
+    });
+  });
+
+  /**
+   * La causa che teneva ferma la coda OGGI, misurata da HQ-VPS sulla macchina
+   * e riprodotta qui: `chat_ts` è `double precision` e PostgREST legge con
+   * `extra_float_digits = 0`, quindi il cloud rende quindici cifre
+   * significative. `1786999449.694782` torna `1786999449.69478`, e non è lo
+   * stesso double. Sul campo: 14 righe su 20 campionate, 223 su 384 nella
+   * popolazione a rischio.
+   */
+  it("emette receipt quando il cloud rende chat_ts con meno cifre", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.map((row) => ({ ...row, chat_ts: 1786999449.69478 }));
+    const response = await pushBody({
+      pending_user_messages: [
+        {
+          id: 11,
+          agent: "SCOUT",
+          body: "Synthetic first",
+          chat_ts: 1786999449.694782,
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: {
+        pending_user_messages: [receiptId("pending_user_messages", 11)],
+      },
+    });
+  });
+
+  /**
+   * I tre controlli negativi che tengono onesto il fix appena fatto: allargare
+   * un confronto è pericoloso proprio perché fa passare tutto, e una ricevuta
+   * compiacente è peggio di nessuna ricevuta — il push direbbe «arrivata» a
+   * una riga che sul cloud non c'è o è un'altra.
+   */
+  it("nega la receipt se chat_ts è un altro istante, non un'altra resa", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.map((row) => ({ ...row, chat_ts: 1786999450.694782 }));
+    const response = await pushBody({
+      pending_user_messages: [
+        {
+          id: 11,
+          agent: "SCOUT",
+          body: "Synthetic first",
+          chat_ts: 1786999449.694782,
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: { pending_user_messages: [] },
+    });
+  });
+
+  it("nega la receipt se il cloud contraddice un valore che il client ha mandato", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.map((row) => ({ ...row, delivered_via: "web" }));
+    const response = await pushBody({
+      pending_user_messages: [
+        {
+          id: 11,
+          agent: "SCOUT",
+          body: "Synthetic first",
+          delivered_via: "telegram",
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: { pending_user_messages: [] },
+    });
+  });
+
+  it("nega la receipt se l'autore sul cloud non è né il suo né l'utente", async () => {
+    pendingPersistedOverride = (rows) =>
+      rows.map((row) => ({ ...row, author: "sconosciuto" }));
+    const response = await pushBody({
+      pending_user_messages: [
+        { id: 11, agent: "SCOUT", body: "Synthetic first" },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: { pending_user_messages: [] },
+    });
+  });
+
+  /**
+   * L'indizio di HQ-VPS, chiuso per misura: il cloud ha 11 righe in più del
+   * box, nate sul web. Se il server emettesse ricevute anche per quelle, il
+   * multiset non combacerebbe MAI — sarebbe un difetto diverso, con un fix
+   * diverso. Non è così: la rilettura filtra sui `legacy_id` che il client ha
+   * mandato, quindi le righe altrui non entrano né fra le ricevute né nel
+   * confronto.
+   */
+  it("le righe che il client non ha mandato non entrano nelle ricevute", async () => {
+    pendingPersistedOverride = (rows) => [
+      ...rows,
+      {
+        legacy_id: 900,
+        agent: "ASSISTENTE",
+        body: "Synthetic nata sul web",
+        kind: "notification",
+        author: "user",
+        chat_ts: null,
+        related_position_id: null,
+        delivered_via: "web",
+        delivered_at: null,
+        agent_seen_reply_at: null,
+      },
+    ];
+    const response = await pushBody({
+      pending_user_messages: [
+        { id: 11, agent: "SCOUT", body: "Synthetic first" },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      receipts: {
+        pending_user_messages: [receiptId("pending_user_messages", 11)],
+      },
+    });
+  });
+
   it("nega la receipt alla riga che torna diversa da quella mandata", async () => {
     pendingPersistedOverride = (rows) =>
       rows.map((row) =>
