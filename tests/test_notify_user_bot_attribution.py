@@ -198,3 +198,149 @@ def test_un_from_esplicito_sbagliato_resta_un_errore(tmp_path):
 
     assert done.returncode == 1
     assert "assistente|capitano|mentor" in done.stderr
+
+
+# ── O-100 · il testo di un messaggio non deve esistere solo su Telegram ──
+
+
+def _casa_con_db(tmp_path):
+    """Una JHT_HOME con jobs.db vero e uno stub di curl che risponde ok."""
+    home = tmp_path / "home"
+    (home / "logs").mkdir(parents=True)
+    db_path = home / "jobs.db"
+    seed = subprocess.run(
+        [
+            "python3",
+            "-c",
+            "from _db import get_db, ensure_schema; c=get_db(); "
+            "ensure_schema(c); c.commit(); c.close()",
+        ],
+        cwd=SKILLS,
+        env={**os.environ, "JHT_DB": str(db_path), "JHT_HOME": str(home)},
+        capture_output=True,
+        text=True,
+    )
+    assert seed.returncode == 0, seed.stdout + seed.stderr
+
+    (home / "jht.config.json").write_text(
+        json.dumps(
+            {
+                "channels": {
+                    "telegram": {
+                        "bots": {
+                            "mentor": {"bot_token": "111110:AAAmentor", "chat_id": 42}
+                        }
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "curl"
+    stub.write_text(
+        "#!/bin/sh\n"
+        'out=""\n'
+        'while [ $# -gt 0 ]; do [ "$1" = "--output" ] && out="$2"; shift; done\n'
+        "[ -n \"$out\" ] && printf '{\"ok\":true,\"result\":{\"message_id\":1}}' > \"$out\"\n"
+        "printf '200'\n",
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    return {
+        "home": home,
+        "db": db_path,
+        "env": {
+            # ⚠️ `agents/_tools` DEVE stare nel PATH: `jht-notify-user` cerca
+            # il mittente li' dentro, e senza non lo esegue affatto — il test
+            # del doppione passerebbe perche' la seconda scrittura non avviene
+            # mai, non perche' e' impedita. Misurato: togliendo la
+            # soppressione i test restavano tutti verdi.
+            "PATH": f"{bin_dir}:{NOTIFY.parent}:{os.environ.get('PATH', '')}",
+            "HOME": str(home),
+            "JHT_HOME": str(home),
+            "JHT_DB": str(db_path),
+        },
+    }
+
+
+def _cronologia(box):
+    return sqlite3.connect(box["db"]).execute(
+        "SELECT agent, body, author, delivered_via FROM pending_user_messages "
+        "ORDER BY id"
+    ).fetchall()
+
+
+def test_un_invio_diretto_resta_nella_cronologia(tmp_path):
+    """Il caso di O-100: il Mentor manda un saluto col mittente, non con la
+    notifica. Prima il testo esisteva solo nella chat dell'utente — per il
+    sistema quel messaggio non era mai stato detto, e la dashboard, la chat
+    del gioco e il prossimo agente non ne sapevano niente.
+
+    Il registro invii accanto NON basta e non deve bastare: tiene solo
+    metadati, per non conservare contenuti privati in un log.
+    """
+    box = _casa_con_db(tmp_path)
+
+    done = subprocess.run(
+        [str(SENDER), "--from", "mentor", "Ci sono novità sul tuo percorso."],
+        env=box["env"],
+        capture_output=True,
+        text=True,
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert _cronologia(box) == [
+        ("mentor", "Ci sono novità sul tuo percorso.", "agent", "telegram")
+    ]
+
+
+def test_la_notifica_non_scrive_due_volte_lo_stesso_messaggio(tmp_path):
+    """`jht-notify-user` la riga la scrive già lui e passa il suo id.
+
+    Senza quel passaggio la conservazione del mittente aggiungerebbe una
+    seconda riga identica, e la chat dell'utente mostrerebbe ogni notifica
+    doppia — un rimedio peggiore del difetto.
+    """
+    box = _casa_con_db(tmp_path)
+
+    done = subprocess.run(
+        [str(NOTIFY), "--agent", "mentor", "Ci sono novità sul tuo percorso."],
+        env=box["env"],
+        capture_output=True,
+        text=True,
+    )
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    righe = _cronologia(box)
+    assert len(righe) == 1, righe
+    # `delivered_via='telegram'` prova che il mittente e' stato ESEGUITO: se
+    # non fosse nel PATH la notifica ripiegherebbe su 'web' e questo test
+    # direbbe di si' senza aver mai potuto duplicare niente.
+    assert righe[0] == (
+        "mentor",
+        "Ci sono novità sul tuo percorso.",
+        "agent",
+        "telegram",
+    )
+
+
+def test_senza_database_il_messaggio_parte_lo_stesso(tmp_path):
+    """Il messaggio è già su Telegram: fallire adesso direbbe una falsità.
+
+    Una conservazione che può far fallire una consegna è peggio di una
+    conservazione mancante — quindi è best-effort dichiarato, e questo test è
+    il posto dove quella scelta resta scritta.
+    """
+    box = _casa_con_db(tmp_path)
+    box["db"].unlink()
+
+    done = subprocess.run(
+        [str(SENDER), "--from", "mentor", "Ci sono novità sul tuo percorso."],
+        env=box["env"],
+        capture_output=True,
+        text=True,
+    )
+
+    assert done.returncode == 0, done.stderr

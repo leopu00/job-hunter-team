@@ -4,17 +4,27 @@
 //   jht sentinella status              ultimo tick (una riga formattata)
 //   jht sentinella tail [-n 20]        ultimi N tick
 //   jht sentinella graph [-n 40]       sparkline ASCII dell'usage
+//   jht sentinella stalled-turns       turni consegnati che nessuno ha raccolto
 //
 // Sorgente dati: $JHT_HOME/logs/sentinel-data.jsonl (scritto dal bridge).
 // Nessuna dipendenza dal container: legge direttamente il bind-mount.
+//
+// O-101: `turni-fermi` incrocia due sorgenti LOCALI — la coda dei turni in
+// `jobs.db` e il registro degli invii in `logs/telegram-sent.jsonl` — e non
+// tocca ne' rete ne' cloud. La decisione sta in `shared/agents/turn-pickup.js`
+// e qui c'e' solo la lettura: cosi' la regola si collauda senza una macchina.
 
 import { Command } from 'commander';
 import { readFileSync, existsSync, statSync, watchFile } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
-import { JHT_HOME } from '../jht-paths.js';
+import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
 import { c as col } from './_colors.js';
+import { stalledTurns, turnPickupVerdicts } from '../../../shared/agents/turn-pickup.js';
+import { BOT_ROLES, DEFAULT_BOT_ROLE } from '../lib/bot-roles.js';
 
 const JSONL_PATH = join(JHT_HOME, 'logs', 'sentinel-data.jsonl');
+const SENT_LOG_PATH = join(JHT_HOME, 'logs', 'telegram-sent.jsonl');
 
 const STATUS_COLOR = {
   OK: col.green,
@@ -136,6 +146,81 @@ function graphAction(options = {}) {
   console.log('');
 }
 
+/** Da quale bot esce un agente, e se quel bot e' suo soltanto. */
+function botRoleOf(agent) {
+  const role = String(agent || '').toLowerCase();
+  return BOT_ROLES.includes(role)
+    ? { role, exclusive: true }
+    : { role: DEFAULT_BOT_ROLE, exclusive: false };
+}
+
+/** I turni dell'utente che il box ha gia' consegnato a un pane. */
+function readDeliveredTurns(dbPath = JHT_DB_PATH) {
+  if (!existsSync(dbPath)) return [];
+  const db = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    return db
+      .prepare(
+        `SELECT id AS legacyId, agent, delivered_at AS deliveredAt
+           FROM pending_user_messages
+          WHERE author = 'user' AND delivered_at IS NOT NULL
+          ORDER BY delivered_at DESC
+          LIMIT 200`
+      )
+      .all();
+  } catch {
+    // Un jobs.db piu' vecchio del codice non deve far fallire la Sentinella.
+    return [];
+  } finally {
+    db.close();
+  }
+}
+
+/** Il registro degli invii: solo metadati, nessun contenuto. */
+function readSends(path = SENT_LOG_PATH) {
+  if (!existsSync(path)) return [];
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function turniFermiAction(options = {}) {
+  const input = {
+    turns: readDeliveredTurns(),
+    sends: readSends(),
+    now: Date.now(),
+    botRoleOf,
+  };
+  if (options.json) {
+    console.log(JSON.stringify(turnPickupVerdicts(input), null, 2));
+    return;
+  }
+  const fermi = stalledTurns(input);
+  console.log('');
+  if (!fermi.length) {
+    console.log(col.green('No delivered turn is waiting to be picked up.'));
+    console.log(col.dim('  A turn counts as stalled only if that agent sent nothing after the'));
+    console.log(col.dim('  delivery: agents without a bot of their own stay undecided, not blamed.'));
+    console.log('');
+    return;
+  }
+  console.log(col.yellow(`${fermi.length} delivered turn(s) nobody picked up:`));
+  for (const turno of fermi) {
+    console.log(`  ${col.bold(turno.agent)} · turno ${turno.legacyId}`);
+  }
+  console.log(col.dim('  The text reached the pane, but that agent has written nothing since:'));
+  console.log(col.dim('  its turn may have died (session limit) and the message needs resending.'));
+  console.log('');
+}
+
 export function registerSentinellaCommand(program) {
   const sent = new Command('sentinella').description('Sentinella monitoring (rate-limit + host resources)');
 
@@ -150,6 +235,12 @@ export function registerSentinellaCommand(program) {
     .option('-n, --n <num>', 'number of ticks', '20')
     .option('-f, --follow', 'follow new ticks in real time', false)
     .action(tailAction);
+
+  sent
+    .command('stalled-turns')
+    .description('Turns delivered to an agent that nobody picked up')
+    .option('--json', 'full output with the verdict of every turn', false)
+    .action(turniFermiAction);
 
   sent
     .command('graph')

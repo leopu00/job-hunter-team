@@ -101,7 +101,7 @@ def bot_role_for(agent: str) -> str:
     return role if role in BOT_ROLES else DEFAULT_BOT_ROLE
 
 
-def try_telegram(agent: str, body: str) -> bool:
+def try_telegram(agent: str, body: str, row_id: int | None = None) -> bool:
     """Best-effort send via jht-telegram-send. Return True on exit 0.
 
     ⚠️ `--from` non c'era: il ruolo veniva passato solo in `JHT_NOTIFY_AGENT`,
@@ -121,7 +121,14 @@ def try_telegram(agent: str, body: str) -> bool:
             capture_output=True,
             text=True,
             timeout=25,
-            env={**os.environ, "JHT_NOTIFY_AGENT": agent},
+            # `JHT_MESSAGE_ROW_ID` dice al mittente che la cronologia per
+            # questo messaggio esiste gia': senza, dalla sua conservazione
+            # (O-100) uscirebbe una seconda riga identica.
+            env={
+                **os.environ,
+                "JHT_NOTIFY_AGENT": agent,
+                **({"JHT_MESSAGE_ROW_ID": str(row_id)} if row_id else {}),
+            },
         )
         return result.returncode == 0
     except FileNotFoundError:
@@ -229,7 +236,11 @@ def main() -> int:
 
     delivered_via = "web"
     off_hours = _is_off_hours()
-    if not args.no_telegram and not off_hours and try_telegram(args.agent, body):
+    if (
+        not args.no_telegram
+        and not off_hours
+        and try_telegram(args.agent, body, row_id)
+    ):
         delivered_via = "telegram"
     if off_hours:
         print(
