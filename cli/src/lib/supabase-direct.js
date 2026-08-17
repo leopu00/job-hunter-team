@@ -234,13 +234,22 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
    * `!inner` perche' una candidatura orfana non e' applicabile da nessuna
    * parte. Lo appiattiamo qui, cosi' chi applica vede la stessa forma di riga
    * delle altre corsie.
+   *
+   * ⚠️ QUESTA SELECT HA UNA GEMELLA: `web/app/api/cloud-sync/pull-desired-state`
+   * legge le stesse candidature per il fallback Vercel. Le due si sono gia'
+   * separate una volta — #187 aggiunse `response`/`response_at` solo la', e da
+   * questa parte l'esito dichiarato sul sito smise di scendere in silenzio,
+   * perche' `decideOutcomeBackflow` vede `response: null` e risponde
+   * legittimamente «niente esito sul cloud». Chi tocca una delle due tocca
+   * l'altra; il confronto e' verificato da
+   * `tests/js/tasks/cloud-direct-outcome-select.test.ts`.
    * @param {object} [o] { since?: ISO string, limit?: number }
    */
   async function readAppliedChanges({ since, limit = 500 } = {}) {
     const params = new URLSearchParams();
     params.set(
       'select',
-      'applied,applied_at,applied_via,status,updated_at,positions!inner(legacy_id)'
+      'applied,applied_at,applied_via,status,response,response_at,updated_at,positions!inner(legacy_id)'
     );
     if (since) params.set('updated_at', `gt.${since}`);
     params.set('order', 'updated_at.asc');
@@ -253,6 +262,10 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
       applied_at: r?.applied_at ?? null,
       applied_via: r?.applied_via ?? null,
       status: r?.status ?? null,
+      // L'esito (#187): il box sa CHE hanno risposto da `status`, ma COSA
+      // hanno risposto sta qui — ed e' il campo che il Mentor conta.
+      response: r?.response ?? null,
+      response_at: r?.response_at ?? null,
       updated_at: r?.updated_at ?? null,
     }));
   }
