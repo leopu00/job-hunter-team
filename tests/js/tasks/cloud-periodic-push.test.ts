@@ -175,10 +175,15 @@ describe("policy del push periodico", () => {
       reason: "nothing_new",
     });
     expect(idleCheck.status).toBe("partial");
+    // #194 — fuori esce `partial`, che il CHECK del cloud ammette; il numero
+    // resta qui. Prima si pubblicava `quarantined:2`, che quel vincolo non ha
+    // mai accettato: l'UPDATE veniva rifiutato per intero e lo stato non si
+    // muoveva più. Farlo uscire come numero vuole una colonna sua.
     expect(periodicPushObservation({ state: idleCheck })).toEqual({
-      cloud_push_status: "quarantined:2",
+      cloud_push_status: "partial",
       cloud_push_checked_at: iso(T0 + MIN),
     });
+    expect(idleCheck.quarantined_count).toBe(2);
     expect(
       JSON.stringify(periodicPushObservation({ state: idleCheck })),
     ).not.toContain("signature");
