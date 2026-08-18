@@ -54,6 +54,12 @@
 #       RIPROVARE, MAI spawnare un rimpiazzo: il pane non e' morto, ha solo una
 #       riga appesa nel prompt. Distinto da 3 apposta — rc=3 e' l'unico che
 #       autorizza l'escalation-per-morte (pacing-bridge.py:1493).
+#   6 → IMPERSONAZIONE: la busta dichiara un agente diverso da quello in cui
+#       questo processo gira davvero. Il messaggio NON parte. Non e' un guasto
+#       del destinatario e riprovare non serve: e' il mittente a doversi
+#       correggere. Il tentativo resta scritto in messages.jsonl con
+#       delivered=false, cosi' chi indaga trova una traccia invece del nulla
+#       (#198).
 
 set -euo pipefail
 
@@ -72,6 +78,66 @@ message="$*"
 if ! tmux has-session -t "$session" 2>/dev/null; then
   echo "jht-tmux-send: sessione '$session' non esiste" >&2
   exit 2
+fi
+
+# ── #198 · chi manda DAVVERO ────────────────────────────────────────────────
+# L'identita' del mittente viveva SOLO dentro il corpo del messaggio, come
+# busta "[@x -> @y]" scritta da chi lo componeva: una convenzione di
+# visualizzazione messa a fare il lavoro di un'autenticazione. Chiunque avesse
+# una shell nel container poteva firmarsi come chiunque.
+#
+# ⚠️ Il rimedio che viene naturale NON regge, ed e' stato provato prima di
+# scartarlo: `tmux display-message -p '#{session_name}'` con TMUX_PANE=%99
+# davanti risponde il nome di un'ALTRA sessione. Sarebbe stato sostituire una
+# variabile scegliibile (JHT_AGENT_DIR) con un'altra variabile scegliibile.
+# Qui l'origine si deriva dalla PARENTELA DEI PROCESSI: tmux conosce il
+# pane_pid di ogni pane e un processo non puo' mentire su chi lo ha generato.
+#
+# Se il modulo manca o python non c'e', il messaggio parte ma NON eredita
+# fiducia: resta "unverified" e chi legge lo vede addosso al testo. Una difesa
+# che non sa decidere deve dirlo, non tacere.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORIGIN_LIB="/app/shared/skills/message_origin.py"
+[ -f "$ORIGIN_LIB" ] || ORIGIN_LIB="${SCRIPT_DIR}/../../../shared/skills/message_origin.py"
+
+sender_trust="unverified"
+sender_claimed=""
+sender_origin=""
+if [ -f "$ORIGIN_LIB" ] && command -v python3 >/dev/null 2>&1; then
+  if verdict=$(python3 "$ORIGIN_LIB" "$message" 2>/dev/null); then
+    verdict_head=$(printf '%s' "$verdict" | head -n 1)
+    sender_trust=$(printf '%s' "$verdict_head" | cut -f1)
+    sender_claimed=$(printf '%s' "$verdict_head" | cut -f2)
+    sender_origin=$(printf '%s' "$verdict_head" | cut -f3)
+    # Il messaggio torna con il verdetto addosso: il marchio deve arrivare nel
+    # PANE, perche' l'unico consumatore che AGISCE e' l'agente che legge. Un
+    # verdetto che resta in messages.jsonl serve all'analisi a posteriori e non
+    # protegge nessuno mentre sta succedendo.
+    message=$(printf '%s' "$verdict" | tail -n +2)
+  fi
+fi
+
+if [ "$sender_trust" = "impersonation" ]; then
+  # Il tentativo si registra PRIMA di rifiutarlo: una difesa che blocca in
+  # silenzio non lascia niente da guardare a chi indaga.
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$session" "$sender_claimed" "$sender_origin" "$message" <<'REFUSEDEOF' 2>/dev/null || true
+import json, os, sys
+from datetime import datetime, timezone
+session, claimed, origin, msg = sys.argv[1:5]
+log_dir = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
+os.makedirs(log_dir, exist_ok=True)
+with open(os.path.join(log_dir, "messages.jsonl"), "a") as f:
+    f.write(json.dumps({
+        "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "session": session, "from": origin, "to": session.lower(), "type": "",
+        "from_claimed": claimed, "from_verified": origin, "from_trust": "impersonation",
+        "delivered": False, "preview": msg[:80], "body": msg[:4096],
+    }, ensure_ascii=False) + "\n")
+REFUSEDEOF
+  fi
+  echo "jht-tmux-send: refusing to deliver — the envelope claims '@${sender_claimed}' but this process runs in '${sender_origin}'" >&2
+  exit 6
 fi
 
 # Provider attivo: serve a sapere se la TUI di destinazione è Kimi, che
@@ -95,10 +161,11 @@ fi
 # Next legge questo file per animare il pallino tra i nodi del team chart.
 # Fallisce silenziosamente — il logging non deve mai bloccare l'invio.
 if command -v python3 >/dev/null 2>&1; then
-  python3 - "$session" "$message" <<'PYEOF' 2>/dev/null || true
+  python3 - "$session" "$message" "$sender_trust" "$sender_claimed" "$sender_origin" <<'PYEOF' 2>/dev/null || true
 import json, os, re, sys
 from datetime import datetime, timezone
 session, msg = sys.argv[1], sys.argv[2]
+trust, claimed, origin = (sys.argv[3:6] + ["", "", ""])[:3]
 # 1) formato standard agente→agente: "[@from -> @to] [TYPE] ..."
 m = re.match(r'^\s*\[@([a-zA-Z0-9_-]+)\s*->\s*@([a-zA-Z0-9_-]+)\]\s*(?:\[([A-Z]+)\])?', msg)
 if m:
@@ -134,6 +201,20 @@ out = {
     # actually said. Cap at 4kB just to bound the log line size.
     "preview": msg[:80],
     "body": msg[:4096],
+    # #198 — l'identita' DICHIARATA e quella DERIVATA restano due campi
+    # distinti: fonderle rifarebbe il difetto, perche' chi legge non potrebbe
+    # piu' sapere quale delle due sta guardando.
+    #
+    # `from` resta com'era di proposito: e' l'unico campo che i lettori
+    # esistenti conoscono — la UI del team chart e i case studies — e per i
+    # messaggi di sistema (BRIDGE, SENTINELLA, PACING) porta il nodo giusto,
+    # che non e' la sessione da cui il daemon gira. Il caso pericoloso non
+    # arriva comunque fin qui: un'impersonazione viene rifiutata prima, e
+    # registrata con delivered=false.
+    "from_claimed": claimed,
+    "from_verified": origin,
+    "from_trust": trust,
+    "delivered": True,
 }
 with open(os.path.join(log_dir, "messages.jsonl"), "a") as f:
     f.write(json.dumps(out, ensure_ascii=False) + "\n")

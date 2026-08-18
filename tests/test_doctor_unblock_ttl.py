@@ -858,7 +858,13 @@ def test_sender_does_not_claim_success_when_the_text_stayed_in_the_prompt(tmux_f
     # deve respawnare un agente che ha solo una riga appesa nel composer.
     assert "NON lo ha submittato" in r.stderr, r.stderr
     assert "NON respawnare" in r.stderr, r.stderr
-    assert msg in tmux.draft("SCOUT-1")
+    # #198 — si asserisce il CORPO, non la stringa intera: il trasporto marca
+    # ciò che consegna quando il mittente non è verificabile (qui il tmux del
+    # fixture non espone i pane, quindi non c'è origine da derivare) e il
+    # marchio si infila fra la busta e il tipo. Quello che questo test deve
+    # dimostrare non è l'identità byte per byte del testo: è che il messaggio
+    # è rimasto appeso nel composer invece di partire.
+    assert "riprendi la coda" in tmux.draft("SCOUT-1")
     # e il Dottore lo trova dove lo cerca
     pending = [json.loads(l) for l in
                (home / "logs" / "pending-input.jsonl").read_text().splitlines() if l.strip()]
