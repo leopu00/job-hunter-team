@@ -436,21 +436,34 @@ def insert_score(args):
     conn = get_db()
     ensure_schema(conn)
 
-    # `INSERT OR REPLACE` sovrascrive in silenzio: senza fotografare il
-    # punteggio precedente, un re-score che lascia il totale identico è
-    # indistinguibile da un re-score mai eseguito. È lo stesso difetto dei
-    # campi di manutenzione, sulla tabella `scores`.
+    # Un re-score è un aggiornamento della stessa valutazione. `REPLACE`
+    # cancellerebbe la riga sul conflitto di position_id e ne creerebbe una
+    # nuova: con AUTOINCREMENT cambierebbe scores.id, l'identità della riga
+    # verso il cloud. Con recursive_triggers attivo, quella DELETE attiverebbe
+    # anche scores_tombstone per una valutazione ancora viva. L'UPSERT conserva
+    # l'id e non esegue alcuna DELETE.
     # `getattr`: insert_score è chiamata anche con Namespace costruiti a mano
     # (test, dashboard), che non conoscono i flag di evidenza.
     action = getattr(args, 'action', None)
     previous = _snapshot_score(conn, args.position_id) if action else {}
 
     cur = conn.execute("""
-        INSERT OR REPLACE INTO scores (position_id, total_score, stack_match, remote_fit,
-                                        salary_fit, experience_fit, strategic_fit,
-                                        breakdown, notes, scored_by, scored_at)
+        INSERT INTO scores (position_id, total_score, stack_match, remote_fit,
+                            salary_fit, experience_fit, strategic_fit,
+                            breakdown, notes, scored_by, scored_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 strftime('%Y-%m-%d %H:%M:%f', 'now'))
+        ON CONFLICT(position_id) DO UPDATE SET
+            total_score = excluded.total_score,
+            stack_match = excluded.stack_match,
+            remote_fit = excluded.remote_fit,
+            salary_fit = excluded.salary_fit,
+            experience_fit = excluded.experience_fit,
+            strategic_fit = excluded.strategic_fit,
+            breakdown = excluded.breakdown,
+            notes = excluded.notes,
+            scored_by = excluded.scored_by,
+            scored_at = excluded.scored_at
     """, (args.position_id, args.total, args.stack_match, args.remote_fit,
           args.salary_fit, args.experience_fit, args.strategic_fit,
           args.breakdown, args.notes, args.scored_by))

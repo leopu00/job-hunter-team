@@ -20,6 +20,26 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
+const sqliteTestState = vi.hoisted(() => ({ recursiveTriggers: false }));
+
+vi.mock("node:sqlite", async (importOriginal) => {
+  const { DatabaseSync: NativeDatabaseSync } = await importOriginal<typeof import("node:sqlite")>();
+  return {
+    DatabaseSync: class TestDatabaseSync extends NativeDatabaseSync {
+      constructor(...args: ConstructorParameters<typeof NativeDatabaseSync>) {
+        super(...args);
+        if (sqliteTestState.recursiveTriggers) {
+          // #195: il REPLACE precedente attiverebbe scores_tombstone solo con
+          // questo pragma. Vale per ogni connessione, incluso handleRestore.
+          // La fixture non monta scores_touch_updated_at: qui ricorrerebbe se
+          // CURRENT_TIMESTAMP restasse nello stesso secondo.
+          this.exec("PRAGMA recursive_triggers = ON");
+        }
+      }
+    },
+  };
+});
+
 type CloudModule = typeof import("../../../cli/src/commands/cloud.js");
 
 const URL_X = "https://boards.example/jobs/42";
@@ -67,7 +87,8 @@ function createLocalDb() {
     CREATE UNIQUE INDEX idx_positions_url_unique
       ON positions(url) WHERE url IS NOT NULL AND url <> '';
     CREATE TABLE scores (
-      position_id INTEGER PRIMARY KEY, total_score INTEGER,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      position_id INTEGER NOT NULL UNIQUE, total_score INTEGER,
       experience_fit INTEGER, salary_fit INTEGER, stack_match INTEGER,
       remote_fit INTEGER, strategic_fit INTEGER, breakdown TEXT, notes TEXT,
       scored_by TEXT, scored_at TEXT, created_at TEXT, updated_at TEXT
@@ -90,6 +111,11 @@ function createLocalDb() {
       INSERT OR REPLACE INTO _tombstones (table_name, legacy_id, deleted_at)
       VALUES ('positions', OLD.id, CURRENT_TIMESTAMP);
     END;
+    CREATE TRIGGER scores_tombstone BEFORE DELETE ON scores FOR EACH ROW
+    BEGIN
+      INSERT OR REPLACE INTO _tombstones (table_name, legacy_id, deleted_at)
+      VALUES ('scores', OLD.position_id, CURRENT_TIMESTAMP);
+    END;
   `);
   db.close();
 }
@@ -108,9 +134,12 @@ function tableRows(sql: string): unknown[] {
   return rows;
 }
 
-function dumpWith(positions: Record<string, unknown>[]) {
+function dumpWith(
+  positions: Record<string, unknown>[],
+  scores: Record<string, unknown>[] = [],
+) {
   return new Response(
-    JSON.stringify({ dump: { positions, scores: [], applications: [] } }),
+    JSON.stringify({ dump: { positions, scores, applications: [] } }),
     { status: 200, headers: { "Content-Type": "application/json" } },
   );
 }
@@ -124,8 +153,11 @@ async function loadCloud(): Promise<CloudModule> {
   return import("../../../cli/src/commands/cloud.js");
 }
 
-async function runRestore(dumpPositions: Record<string, unknown>[]) {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(dumpWith(dumpPositions)));
+async function runRestore(
+  dumpPositions: Record<string, unknown>[],
+  dumpScores: Record<string, unknown>[] = [],
+) {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(dumpWith(dumpPositions, dumpScores)));
   const stdout = vi.spyOn(console, "log").mockImplementation(() => {});
   const { handleRestore } = await loadCloud();
   await handleRestore({ confirmRestore: true, db: dbPath });
@@ -150,6 +182,7 @@ afterEach(() => {
   if (originalJhtHome === undefined) delete process.env.JHT_HOME;
   else process.env.JHT_HOME = originalJhtHome;
   process.exitCode = undefined;
+  sqliteTestState.recursiveTriggers = false;
 });
 
 describe("jht cloud restore — conflitti di URL (T-027)", () => {
@@ -209,5 +242,46 @@ describe("jht cloud restore — conflitti di URL (T-027)", () => {
     expect(positions).toEqual([{ id: 7, title: "First copy" }]);
     expect(tableRows("SELECT * FROM _tombstones")).toEqual([]);
     expect(out).toContain("URL conflicts: 1 cloud row(s) SKIPPED");
+  });
+
+  it("ripristina due volte lo score della stessa posizione senza cambiarne identità", async () => {
+    sqliteTestState.recursiveTriggers = true;
+    const position = {
+      id: "uuid-score-position", legacy_id: 23,
+      title: "Cloud score", company: "Acme", url: "https://boards.example/jobs/23",
+    };
+    await runRestore([position], [{
+      position_id: position.id, total_score: 61, scored_by: "scorer",
+    }]);
+    const first = tableRows(
+      "SELECT id, total_score FROM scores WHERE position_id = 23",
+    ) as { id: number; total_score: number }[];
+
+    const local = new DatabaseSync(dbPath);
+    local.prepare(
+      "UPDATE scores SET created_at = ?, updated_at = ? WHERE position_id = ?",
+    ).run("2000-01-01 00:00:00", "2000-01-01 00:00:00", 23);
+    local.close();
+
+    await runRestore([position], [{
+      position_id: position.id, total_score: 79, scored_by: "scorer",
+    }]);
+    const second = tableRows(
+      "SELECT id, total_score, created_at, updated_at FROM scores WHERE position_id = 23",
+    ) as {
+      id: number; total_score: number; created_at: string | null; updated_at: string | null;
+    }[];
+
+    expect(first).toHaveLength(1);
+    expect(second[0]).toMatchObject({
+      id: first[0].id,
+      total_score: 79,
+      created_at: "2000-01-01 00:00:00",
+    });
+    expect(second[0].updated_at).not.toBe("2000-01-01 00:00:00");
+    expect(second[0].updated_at).not.toBeNull();
+    expect(tableRows(
+      "SELECT legacy_id FROM _tombstones WHERE table_name = 'scores'",
+    )).toEqual([]);
   });
 });

@@ -495,11 +495,24 @@ async function handleRestore(options) {
       }
 
       const scoreStmt = db.prepare(`
-        INSERT OR REPLACE INTO scores (
+        INSERT INTO scores (
           position_id, total_score, experience_fit, salary_fit,
           stack_match, remote_fit, strategic_fit, breakdown, notes,
           scored_by, scored_at, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(position_id) DO UPDATE SET
+          total_score = excluded.total_score,
+          experience_fit = excluded.experience_fit,
+          salary_fit = excluded.salary_fit,
+          stack_match = excluded.stack_match,
+          remote_fit = excluded.remote_fit,
+          strategic_fit = excluded.strategic_fit,
+          breakdown = excluded.breakdown,
+          notes = excluded.notes,
+          scored_by = excluded.scored_by,
+          scored_at = excluded.scored_at,
+          created_at = COALESCE(excluded.created_at, scores.created_at),
+          updated_at = COALESCE(excluded.updated_at, CURRENT_TIMESTAMP)
       `);
       const restoredScores = [];
       for (const s of cloudScores) {
