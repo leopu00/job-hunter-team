@@ -73,6 +73,18 @@ AGENT_MAX_SESSION_AGE_H="${JHT_AGENT_MAX_SESSION_AGE_H:-12}"
 ROSTER_TOOL="${JHT_ROSTER_TOOL:-/app/shared/skills/team_roster.py}"
 START_AGENT="${JHT_START_AGENT:-/app/.launcher/start-agent.sh}"
 PROCESS_HEALTH_TOOL="${JHT_PROCESS_HEALTH_TOOL:-/app/shared/skills/process_health.py}"
+# Recuperi degli agenti: il watchdog non deve limitarsi a far sparire il
+# problema. Questo registro è una misura append-only, non il log rotante del
+# watchdog: deve poter rispondere a "quante volte è stato recuperato oggi
+# SCOUT-1?" anche dopo che i messaggi al Capitano sono scorsi via.
+# Le tre dipendenze si iniettano nei test: il comportamento si prova con tmux,
+# spawner e sender finti, senza una macchina o una TUI vera.
+RECOVERY_LOG="${JHT_AGENT_RECOVERY_LOG:-$JHT_HOME/logs/agent-recoveries.tsv}"
+NODE_BIN="${JHT_NODE_BIN:-/usr/local/bin/node}"
+TMUX_SENDER="${JHT_TMUX_SENDER:-jht-tmux-send}"
+# TTL e refresh della Sentinella sono ricreazioni DECISIONALI, non morti da
+# misurare. Il prossimo ensure_agent consuma questo singolo marcatore.
+INTENTIONAL_RECREATE_SESSION=""
 
 # ── Bridge suite supervision (2026-06-27) ──────────────────────────────
 # I bridge/daemon ausiliari sono lanciati `setsid` detached da start-agent.sh
@@ -162,6 +174,60 @@ is_session_alive() {
   esac
 }
 
+recovery_today_count() {
+  # TSV, non un contatore in memoria: un crash del watchdog non può azzerare
+  # la storia che serve a capire se un agente è morto dieci volte oggi. I
+  # campi sono prodotti solo qui (timestamp UTC, nome tmux, osservazione),
+  # quindi il separatore non può entrare nei dati.
+  local day="$1" session="$2"
+  [ -f "$RECOVERY_LOG" ] || { echo 0; return 0; }
+  awk -F '\t' -v day="$day" -v session="$session" \
+    '$1 ~ ("^" day "T") && $2 == session { count += 1 } END { print count + 0 }' \
+    "$RECOVERY_LOG" 2>/dev/null
+}
+
+record_recovery() {
+  # Stampa il conteggio giornaliero solo DOPO aver scritto l'evento. Se la
+  # scrittura fallisce non mandiamo un numero inventato al Capitano: log loud,
+  # nessuna misura dichiarata completa.
+  local session="$1" observation="$2" now day count
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  day="${now%%T*}"
+  mkdir -p "$(dirname "$RECOVERY_LOG")" 2>/dev/null || {
+    log "recovery: $session observed inactive, but cannot create durable log $RECOVERY_LOG"
+    return 1
+  }
+  printf '%s\t%s\t%s\n' "$now" "$session" "$observation" >> "$RECOVERY_LOG" || {
+    log "recovery: $session observed inactive, but cannot record durable event in $RECOVERY_LOG"
+    return 1
+  }
+  count="$(recovery_today_count "$day" "$session")"
+  case "$count" in ''|*[!0-9]*)
+    log "recovery: $session recorded, but daily count is undecidable in $RECOVERY_LOG"
+    return 1
+    ;;
+  esac
+  echo "$count"
+}
+
+notify_captain_recovery() {
+  # "morto" sarebbe una causa inventata: tmux ci dice solo che la sessione
+  # era inattiva. Diciamo il fatto osservato, registriamo il recupero riuscito
+  # e rendiamo il conteggio recuperabile dal TSV. Il sender verifica il submit;
+  # un suo fallimento non cancella l'evidenza appena scritta.
+  local session="$1" observation="$2" count rc
+  count="$(record_recovery "$session" "$observation")" || return 1
+  if "$TMUX_SENDER" CAPITANO \
+      "[WATCHDOG] Automatic recovery: $session was $observation and was recreated successfully. Recovery #$count for $session today; durable count: $RECOVERY_LOG. The watchdog observed an inactive session, not the cause of its stop." \
+      >/dev/null 2>&1; then
+    log "recovery: $session recorded as #$count today and notified CAPITANO"
+    return 0
+  fi
+  rc=$?
+  log "recovery: $session recorded as #$count today, but CAPITANO notification failed (rc=$rc); durable event remains in $RECOVERY_LOG"
+  return "$rc"
+}
+
 ensure_agent() {
   local role="$1"
   local session
@@ -170,8 +236,14 @@ ensure_agent() {
     return 0
   fi
   log "agent $role: session $session is inactive — relaunching via jht team start"
-  if /usr/local/bin/node "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
+  if "$NODE_BIN" "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
     log "agent $role: start OK"
+    if [ "$INTENTIONAL_RECREATE_SESSION" = "$session" ]; then
+      log "agent $role: intentional refresh recreated — not counted as an inactive-session recovery"
+      INTENTIONAL_RECREATE_SESSION=""
+    else
+      notify_captain_recovery "$session" "inactive at the watchdog check" || true
+    fi
   else
     log "agent $role: start FAILED (rc=$?) — retrying at the next tick"
   fi
@@ -201,7 +273,9 @@ maybe_refresh_sentinella() {
   age=$(session_age_h SENTINELLA) || return 0
   if [ "$age" -ge "$SENTINELLA_MAX_CTX_AGE_H" ]; then
     log "sentinella: context age ${age}h ≥ ${SENTINELLA_MAX_CTX_AGE_H}h — refreshing (kill+recreate) to clear the context"
-    tmux kill-session -t SENTINELLA 2>/dev/null || true
+    if tmux kill-session -t SENTINELLA 2>/dev/null; then
+      INTENTIONAL_RECREATE_SESSION="SENTINELLA"
+    fi
   fi
 }
 
@@ -259,10 +333,15 @@ worker_kickoff() {
 respawn_worker() {
   # start-agent.sh con lo STESSO numero d'istanza (il dado di
   # roll_worker_number è per gli spawn NUOVI, non per le ricreazioni).
-  local role="$1" inst="$2" session="$3"
+  local role="$1" inst="$2" session="$3" recovery_kind="${4:-unexpected}"
   if JHT_HOME="$JHT_HOME" bash "$START_AGENT" "$role" "$inst" >>"$LOG" 2>&1; then
     log "worker $session: start OK"
     worker_kickoff "$session" "$role"
+    if [ "$recovery_kind" = "unexpected" ]; then
+      notify_captain_recovery "$session" "missing after recent worker activity" || true
+    else
+      log "worker $session: intentional refresh recreated — not counted as an inactive-session recovery"
+    fi
     return 0
   fi
   log "worker $session: start FAILED — retrying at the next tick"
@@ -293,11 +372,15 @@ EOF
 $(session_role "$oldest")
 EOF
   log "ttl: $oldest is ${oldest_age}h old ≥ ${AGENT_MAX_SESSION_AGE_H}h — kill+recreate (age only: context/PARKED/activity do NOT matter)"
-  tmux kill-session -t "$oldest" 2>/dev/null || true
+  if ! tmux kill-session -t "$oldest" 2>/dev/null; then
+    return 0
+  fi
   # I core li ricrea ensure_agent nello stesso tick (subito sotto nel loop);
   # i worker numerati non passano di lì e vanno ricreati qui.
   if [ -n "$inst" ]; then
-    respawn_worker "$role" "$inst" "$oldest"
+    respawn_worker "$role" "$inst" "$oldest" intentional_ttl
+  else
+    INTENTIONAL_RECREATE_SESSION="$oldest"
   fi
   return 0
 }
