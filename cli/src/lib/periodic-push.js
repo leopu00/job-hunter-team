@@ -183,19 +183,64 @@ export function periodicPushStatusLine(state = {}) {
   return `${state.status} at ${last}; retry is automatic`;
 }
 
-/** Stato minimo pubblicabile: nessuna firma/conteggio locale lascia il box. */
+/**
+ * Il vocabolario che il cloud ammette per `cloud_push_status`.
+ *
+ * ⚠️ CONTRATTO CON UN CHECK, non una preferenza di stile: questo è l'elenco
+ * del vincolo `team_state_cloud_push_status_valid` (migrazione 073, ribadito
+ * identico dalla 081). Un valore fuori da qui non arriva sbagliato: non arriva
+ * affatto. PostgreSQL rifiuta l'UPDATE per intero con 23514, quindi non avanza
+ * lo stato e NEMMENO il suo istante — la riga resta viva, aggiornata di
+ * continuo, con dentro una fotografia di ore prima. È peggio di un dato
+ * assente, perché sembra fresco.
+ *
+ * È successo per sedici ore (#194): qui si interpolava `quarantined:N`, che di
+ * là non è mai stato ammesso. Il gate sta dall'altra parte del confine di
+ * linguaggio — si scrive in JavaScript, a rifiutare è un CHECK in SQL — e
+ * nessuna suite JS poteva vederlo: il rifiuto nasce a runtime, in produzione,
+ * e ciò che non arriva È LO STATO, quindi non se ne lamenta nessuno.
+ *
+ * Le due liste le tiene allineate `cloud-push-status-vocabulary.test.ts`
+ * leggendo la migrazione; che ciò che questa funzione produce sia davvero
+ * accettato lo prova `tests/test_cloud_push_status_check_postgres.py`, che lo
+ * scrive contro il CHECK vero su un PostgreSQL vero.
+ */
+export const CLOUD_PUSH_STATUSES = new Set([
+  "current",
+  "failed",
+  "timeout",
+  "partial",
+  "auth_failed",
+  "signature_unavailable",
+]);
+
+/**
+ * Stato minimo pubblicabile: nessuna firma/conteggio locale lascia il box.
+ *
+ * `completed` e `idle` sono stati del ciclo locale e valgono entrambi
+ * «allineato» per chi guarda da fuori. Con righe in quarantena lo stato è già
+ * `partial` da monte — lo scrivono `periodicPushResultStatus` e
+ * `nextPeriodicCheckState` — e `partial` il vocabolario lo ammette: qui non
+ * c'è più niente da fabbricare, basta non buttarlo via.
+ *
+ * Il conteggio resta sul box, come dice la riga sopra. Farlo uscire è il passo
+ * 2 di #194 e vuole una colonna sua: un campo che a volte contiene una parola
+ * nota e a volte una parola con dentro un numero non si conta più, e obbliga
+ * due regex — una in SQL, una in TypeScript — a restare d'accordo per sempre
+ * attraverso il confine che ci ha appena morso. Intanto il numero non si perde:
+ * `periodicPushStatusLine` lo rende per esteso in locale.
+ */
 export function periodicPushObservation(outcome) {
   const state = outcome?.state;
   if (!state?.last_check_at) return null;
-  const current = state.status === "completed" || state.status === "idle";
-  const quarantined = Number(state.quarantined_count) || 0;
+  const status = state.status;
+  const current = status === "completed" || status === "idle";
   return {
-    cloud_push_status:
-      quarantined > 0
-        ? `quarantined:${quarantined}`
-        : current
-          ? "current"
-          : state.status || "failed",
+    cloud_push_status: current
+      ? "current"
+      : CLOUD_PUSH_STATUSES.has(status)
+        ? status
+        : "failed",
     cloud_push_checked_at: state.last_check_at,
   };
 }
