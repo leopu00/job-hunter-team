@@ -175,7 +175,12 @@ def score_db(tmp_path, monkeypatch):
     def _get_db():
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
-        conn.execute("""
+        # #195: con questo pragma REPLACE attiva il DELETE trigger. Così il
+        # controllo sul tombstone fallisce davvero con il writer precedente.
+        # La fixture non monta scores_touch_updated_at: con questo pragma quel
+        # trigger può ricorrere se CURRENT_TIMESTAMP cade nello stesso secondo.
+        conn.execute('PRAGMA recursive_triggers = ON')
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS scores (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 position_id INTEGER NOT NULL UNIQUE,
@@ -189,7 +194,19 @@ def score_db(tmp_path, monkeypatch):
                 notes TEXT,
                 scored_by TEXT,
                 scored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
+            );
+            CREATE TABLE IF NOT EXISTS _tombstones (
+                table_name TEXT NOT NULL,
+                legacy_id INTEGER NOT NULL,
+                deleted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (table_name, legacy_id)
+            );
+            CREATE TRIGGER IF NOT EXISTS scores_tombstone
+            BEFORE DELETE ON scores FOR EACH ROW
+            BEGIN
+                INSERT OR REPLACE INTO _tombstones (table_name, legacy_id, deleted_at)
+                VALUES ('scores', OLD.position_id, CURRENT_TIMESTAMP);
+            END;
         """)
         return conn
 
@@ -273,3 +290,31 @@ class TestInsertScoreGate:
         conn.close()
         assert row['total_score'] == 75
         assert row['scored_at'] != '2000-01-01 00:00:00'
+
+    def test_rescore_keeps_score_identity_and_never_tombstones_it(
+            self, score_db, tmp_path, monkeypatch):
+        """#195: re-score è un UPDATE, non una delete+insert mascherata."""
+        monkeypatch.setenv('JHT_HOME', str(tmp_path))
+        _write_profile(tmp_path, MINIMAL_PROFILE)
+        db_insert.insert_score(_score_args(position_id=4, total=60))
+
+        conn = score_db()
+        original_id = conn.execute(
+            "SELECT id FROM scores WHERE position_id = 4"
+        ).fetchone()['id']
+        conn.close()
+
+        db_insert.insert_score(_score_args(position_id=4, total=75))
+
+        conn = score_db()
+        row = conn.execute(
+            "SELECT id, total_score FROM scores WHERE position_id = 4"
+        ).fetchone()
+        tombstones = conn.execute(
+            "SELECT legacy_id FROM _tombstones WHERE table_name = 'scores'"
+        ).fetchall()
+        conn.close()
+
+        assert row['id'] == original_id
+        assert row['total_score'] == 75
+        assert tombstones == []
