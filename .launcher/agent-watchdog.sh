@@ -237,7 +237,15 @@ ensure_agent() {
   fi
   log "agent $role: session $session is inactive — relaunching via jht team start"
   if "$NODE_BIN" "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
-    log "agent $role: start OK"
+    # Il comando accetta anche il no-op "gia' attivo" e uno spawner può uscire
+    # 0 prima che la TUI sia davvero pronta. Non dichiarare una resurrezione
+    # solo perché l'abbiamo chiesta: la stessa sonda deve vedere la sessione
+    # viva DOPO lo start.
+    if ! is_session_alive "$session"; then
+      log "agent $role: start reported OK but session $session is still inactive — recovery not recorded"
+      return 1
+    fi
+    log "agent $role: start OK and session verified alive"
     if [ "$INTENTIONAL_RECREATE_SESSION" = "$session" ]; then
       log "agent $role: intentional refresh recreated — not counted as an inactive-session recovery"
       INTENTIONAL_RECREATE_SESSION=""
@@ -335,7 +343,11 @@ respawn_worker() {
   # roll_worker_number è per gli spawn NUOVI, non per le ricreazioni).
   local role="$1" inst="$2" session="$3" recovery_kind="${4:-unexpected}"
   if JHT_HOME="$JHT_HOME" bash "$START_AGENT" "$role" "$inst" >>"$LOG" 2>&1; then
-    log "worker $session: start OK"
+    if ! is_session_alive "$session"; then
+      log "worker $session: start reported OK but session is still inactive — recovery not recorded"
+      return 1
+    fi
+    log "worker $session: start OK and session verified alive"
     worker_kickoff "$session" "$role"
     if [ "$recovery_kind" = "unexpected" ]; then
       notify_captain_recovery "$session" "missing after recent worker activity" || true

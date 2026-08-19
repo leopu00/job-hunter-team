@@ -65,7 +65,9 @@ def _rows(path: Path):
 def test_core_recovery_is_durable_and_notified_with_its_daily_count(tmp_path):
     result, journal, node_calls, sender_calls, _ = _run(
         tmp_path,
-        "is_session_alive() { return 1; }\nensure_agent capitano\nensure_agent capitano",
+        "checks=0\n"
+        "is_session_alive() { checks=$((checks + 1)); [ $((checks % 2)) -eq 0 ]; }\n"
+        "ensure_agent capitano\nensure_agent capitano",
     )
 
     assert result.returncode == 0, result.stderr
@@ -90,7 +92,7 @@ def test_core_recovery_is_durable_and_notified_with_its_daily_count(tmp_path):
 def test_worker_recovery_uses_the_same_measure_and_ttl_does_not_pollute_it(tmp_path):
     result, journal, _, sender_calls, start_calls = _run(
         tmp_path,
-        "worker_kickoff() { :; }\n"
+        "is_session_alive() { return 0; }\nworker_kickoff() { :; }\n"
         "respawn_worker scorer 2 SCORER-2 unexpected\n"
         "respawn_worker scorer 2 SCORER-2 intentional_ttl",
     )
@@ -108,7 +110,9 @@ def test_worker_recovery_uses_the_same_measure_and_ttl_does_not_pollute_it(tmp_p
 def test_planned_core_refresh_and_failed_start_do_not_claim_a_recovery(tmp_path):
     planned, journal, _, sender_calls, _ = _run(
         tmp_path,
-        "INTENTIONAL_RECREATE_SESSION=MENTOR\nis_session_alive() { return 1; }\nensure_agent mentor",
+        "INTENTIONAL_RECREATE_SESSION=MENTOR\n"
+        "checks=0\nis_session_alive() { checks=$((checks + 1)); [ $checks -eq 2 ]; }\n"
+        "ensure_agent mentor",
     )
     assert planned.returncode == 0, planned.stderr
     assert _rows(journal) == []
@@ -122,3 +126,14 @@ def test_planned_core_refresh_and_failed_start_do_not_claim_a_recovery(tmp_path)
     assert failed.returncode == 0, failed.stderr
     assert _rows(failed_journal) == []
     assert not failed_sender.exists()
+
+
+def test_start_success_without_a_live_session_is_not_a_recovery(tmp_path):
+    result, journal, _, sender_calls, _ = _run(
+        tmp_path,
+        "is_session_alive() { return 1; }\nensure_agent assistente",
+    )
+
+    assert result.returncode == 1
+    assert _rows(journal) == []
+    assert not sender_calls.exists()
