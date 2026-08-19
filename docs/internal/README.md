@@ -17,6 +17,7 @@ Organizzate per **categoria** in sotto-cartelle. Come scrivere una nuova nota: v
 | [`experiments/`](experiments/) | Simulazioni, studi, playbook, case study |
 | [`roadmap/`](roadmap/) | Piani tecnici, backlog, tracker, idee parcheggiate |
 | [`ops/`](ops/) | Infra, VPS, release, triage, credenziali |
+| [`prototypes/`](prototypes/) | Prototipi isolati e relativi design verificabili |
 | [`assets/`](assets/) | Materiale grafico interno: TODO arte, diagrammi sorgente |
 | [`_archive/`](_archive/) | Note superate, conservate per git-blame |
 
@@ -185,6 +186,12 @@ Infra, deploy, lifecycle, accessi.
 | [`download-funnel.md`](ops/download-funnel.md) | Report aggregato dei click download: query 72 ore, accesso service-role e limiti anonimi fail-closed |
 | [`access-and-credentials.md`](ops/access-and-credentials.md) | Accessi e credenziali |
 | [`MAINTAINERS.md`](ops/MAINTAINERS.md) | Coordinamento maintainer: Supabase, Vercel, OAuth, code signing |
+
+## 🧪 prototypes/
+
+| File | Topic |
+|---|---|
+| [`2026-08-19-scout-api-worker-design.md`](prototypes/2026-08-19-scout-api-worker-design.md) | Scout API TypeScript proposal-only: confini invariati, contratti, guardrail, provider profile e seam futuri tmux/SQLite |
 
 ## 🎨 assets/
 
