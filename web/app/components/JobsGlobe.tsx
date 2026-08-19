@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+import type { Feature } from "geojson";
+import type { Map as MaplibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Link from "next/link";
 import { useTheme } from "@/app/theme-provider";
@@ -472,7 +474,9 @@ function applyProfileToStyle(map: MaplibreMap, profile: MapTierProfile) {
 // Relazioni di luminanza preservate (water più chiaro del land,
 // building leggermente più scuro del land, ecc.) per leggibilità.
 function tintMap(map: MaplibreMap, mode: "dark" | "light") {
-  const tweaks: Array<[string, string, string]> =
+  const tweaks: Array<
+    [string, Parameters<MaplibreMap["setPaintProperty"]>[1], string]
+  > =
     mode === "dark"
       ? [
           // Campionati dal fallback statico: nessuno stacco di palette fra
@@ -1148,7 +1152,7 @@ export default function JobsGlobe({
     };
     map.on("style.load", onStyleLoad);
 
-    map.on("error", (e) => {
+    map.on("error", (e: maplibregl.ErrorEvent) => {
       console.error("[JobsGlobe] map error:", (e as any)?.error?.message ?? e);
     });
 
@@ -1160,7 +1164,7 @@ export default function JobsGlobe({
     //    scompatta nel livello successivo.
     //  • gruppo coincidente (più posizioni sulla STESSA coordinata, es.
     //    stesso hotel) → popup-lista dei membri, ancorato al pin.
-    map.on("click", LAYER_DOT_ID, (e) => {
+    map.on("click", LAYER_DOT_ID, (e: maplibregl.MapLayerMouseEvent) => {
       // I fasci sono icone alte: i loro box di click si sovrappongono,
       // quindi e.features[0] (il top in z-order) NON è quello puntato.
       // Interroghiamo un riquadro attorno al click e scegliamo la
@@ -1251,7 +1255,7 @@ export default function JobsGlobe({
     // Click nel vuoto (vetrina): chiude la card. Il raggio è lo stesso del
     // click sui pin, altrimenti "vuoto" e "pin" non coinciderebbero e un
     // colpo appena fuori centro aprirebbe e richiuderebbe la stessa card.
-    map.on("click", (e) => {
+    map.on("click", (e: maplibregl.MapMouseEvent) => {
       if (!showcaseRef.current || !map.getLayer(LAYER_DOT_ID)) return;
       const R = 44;
       const near = map.queryRenderedFeatures(
@@ -1442,9 +1446,7 @@ export default function JobsGlobe({
   function syncData(map: MaplibreMap) {
     if (!layersReadyRef.current) return;
     const src = map.getSource(SOURCE_ID) as
-      | (maplibregl.GeoJSONSource & {
-          setData: (data: GeoJSON.FeatureCollection) => void;
-        })
+      | maplibregl.GeoJSONSource
       | undefined;
     if (!src) return;
     const groups = clusteredRef.current;
@@ -1490,7 +1492,7 @@ export default function JobsGlobe({
     // count + iconId + label precomputata (count, con " · Da remoto" sui
     // fasci aggregati di sole remote). La lista positions completa è in
     // clusteredRef per il click handler.
-    const features: GeoJSON.Feature[] = groups.map((g) => ({
+    const features: Feature[] = groups.map((g) => ({
       type: "Feature",
       geometry: { type: "Point", coordinates: [g.lon, g.lat] },
       properties: {
