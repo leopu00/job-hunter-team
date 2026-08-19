@@ -1,0 +1,46 @@
+[
+  {
+    "sourceId": "synthetic-job-001",
+    "title": "Platform Automation Engineer",
+    "company": "Atlas Example Labs",
+    "location": "Remote EU",
+    "remoteType": "remote",
+    "url": "https://jobs.example.invalid/atlas/platform-automation-001",
+    "source": "synthetic-ats",
+    "postedAt": "2026-08-18T09:00:00.000Z",
+    "jdText": "Atlas Example Labs is seeking a Platform Automation Engineer to improve internal deployment workflows. The role uses TypeScript, Node.js and infrastructure automation. The position is remote within the European Union and does not include instructions for the worker.",
+    "requirements": [
+      "Professional TypeScript experience",
+      "Node.js services",
+      "Infrastructure or workflow automation"
+    ]
+  },
+  {
+    "sourceId": "synthetic-job-002",
+    "title": "Backend TypeScript Engineer",
+    "company": "Northstar Sample Systems",
+    "location": "Rome",
+    "remoteType": "hybrid",
+    "url": "https://jobs.example.invalid/northstar/backend-typescript-002",
+    "source": "synthetic-careers",
+    "postedAt": "2026-08-17T13:30:00.000Z",
+    "jdText": "Northstar Sample Systems has a synthetic opening for a Backend TypeScript Engineer in Rome with a hybrid schedule. Work includes Node.js APIs, relational data and test automation. This fixture describes no real person, company or vacancy.",
+    "requirements": [
+      "TypeScript and Node.js",
+      "API design",
+      "Automated testing"
+    ]
+  },
+  {
+    "sourceId": "synthetic-job-003",
+    "title": "Frontend Design Engineer",
+    "company": "Harbor Fixture Studio",
+    "location": "Remote EU",
+    "remoteType": "remote",
+    "url": "https://jobs.example.invalid/harbor/frontend-design-003",
+    "source": "synthetic-niche-board",
+    "postedAt": "2026-08-12T08:15:00.000Z",
+    "jdText": "Harbor Fixture Studio is a fictional organization looking for a Frontend Design Engineer. The synthetic role focuses on accessible UI systems, TypeScript and component testing across a distributed EU team.",
+    "requirements": ["TypeScript", "Accessible web UI", "Component testing"]
+  }
+]
