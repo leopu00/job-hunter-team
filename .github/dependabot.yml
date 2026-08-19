@@ -28,6 +28,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    # Il runtime e i workflow sono su Node 24: i tipi Node avanzano solo
+    # insieme al runtime. ESLint 10 resta bloccato finché eslint-plugin-react
+    # (caricato da eslint-config-next) non ne supporta la nuova RuleContext API.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "eslint"
+        update-types:
+          - "version-update:semver-major"
     labels:
       - "dependencies"
       - "frontend"
