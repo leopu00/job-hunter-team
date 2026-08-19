@@ -19,6 +19,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -29,9 +30,13 @@ SKILL = os.path.join(SKILLS_DIR, 'feedback_query.py')
 sys.path.insert(0, SKILLS_DIR)
 import feedback_query as fq  # noqa: E402
 
+RECENT_AT = (
+    datetime.now(timezone.utc) - timedelta(days=1)
+).isoformat(timespec='seconds').replace('+00:00', 'Z')
+
 
 def ev(legacy_id, action='dislike', reason=None, comment=None,
-       created_at='2026-07-20T10:00:00Z'):
+       created_at=RECENT_AT):
     return {
         'legacy_id': str(legacy_id), 'action': action, 'reason': reason,
         'comment': comment, 'score': None, 'direction': None,
@@ -263,7 +268,7 @@ def test_fetch_events_reads_the_bulk_endpoint(monkeypatch):
         return True, {'feedback': [
             {'position_legacy_id': 42, 'action': 'dislike',
              'reason': 'troppo senior', 'comment': None, 'score': 2,
-             'direction': None, 'created_at': '2026-07-20T10:00:00Z'},
+             'direction': None, 'created_at': RECENT_AT},
         ]}
 
     monkeypatch.setattr(fq, '_api_get', fake_get)
@@ -301,7 +306,7 @@ def test_legacy_ids_fallback_reads_one_position_at_a_time(monkeypatch):
         return {
             'ok': True, 'legacy_id': str(legacy_id), 'count': 1,
             'latest_action': 'dislike', 'latest_direction': None,
-            'actions': [{'action': 'dislike', 'created_at': '2026-07-20T10:00:00Z',
+            'actions': [{'action': 'dislike', 'created_at': RECENT_AT,
                          'reason': 'troppo senior', 'comment': None,
                          'score': None, 'direction': None}],
         }
@@ -345,7 +350,7 @@ def test_recent_truncates_long_comments(monkeypatch):
     monkeypatch.setattr(fq, '_api_get', lambda *a, **k: (True, {'feedback': [
         {'position_legacy_id': '1', 'action': 'dislike', 'reason': 'x' * 40,
          'comment': 'y' * 900, 'score': None, 'direction': None,
-         'created_at': '2026-07-20T10:00:00Z'}]}))
+         'created_at': RECENT_AT}]}))
     rec = fq.recent_feedback(days=30, text_chars=50)
     assert len(rec['items'][0]['comment']) == 51  # 50 + ellissi
     assert rec['items'][0]['reason'] == 'x' * 40  # sotto soglia: intatto

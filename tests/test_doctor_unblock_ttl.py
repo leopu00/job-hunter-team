@@ -649,7 +649,18 @@ def test_10_a_dead_worker_comes_back_within_one_watchdog_tick(tmux_factory, home
     tmux = tmux_factory({"CAPITANO": {"created": _hours_ago(1)}})   # SCORER-3 NON c'è
     marker = home / "started.txt"
     fake_start = tmux.bin / "start-agent.sh"
-    fake_start.write_text(f'#!/bin/sh\necho "$@" >> "{marker}"\n')
+    fake_start.write_text(
+        "#!/bin/sh\n"
+        f"echo \"$@\" > {str(marker)!r}\n"
+        f"python3 - {str(tmux.state_file)!r} <<'PY'\n"
+        "import json, sys\n"
+        "from pathlib import Path\n"
+        "state_path = Path(sys.argv[1])\n"
+        "state = json.loads(state_path.read_text())\n"
+        "state['sessions']['SCORER-3'] = {'created': 1, 'cmd': 'claude'}\n"
+        "state_path.write_text(json.dumps(state))\n"
+        "PY\n"
+    )
     fake_start.chmod(0o755)
 
     r = run_watchdog("maybe_respawn_workers", tmux, home,
