@@ -1510,13 +1510,13 @@ export default function JobsGlobe({
     }));
     src.setData({ type: "FeatureCollection", features });
 
-    // Il `load` della mappa arriva prima che source, icone canvas e tile
-    // iniziali siano effettivamente pronti. Il tour della home non deve
-    // iniziare da lì: aspettiamo il primo `idle` DOPO il setData non vuoto,
-    // così il primo zoom trova già globo e pin completi, invece di mostrare
-    // contenuto che arriva a pezzi durante il movimento.
+    // MapLibre 6 rende setData asincrono e, sul globo con style minimale, il
+    // worker può restare pendente oltre la deadline della landing. Il gate
+    // deve decidere se WebGL sta renderizzando, non se ogni pin ha terminato
+    // il caricamento: aspettiamo il primo frame successivo a source, layer,
+    // icone e dati accodati, mentre i pin possono completarsi in background.
     if (groups.length > 0 && showcaseRef.current && !showcaseReadyRef.current) {
-      map.once("idle", () => {
+      map.once("render", () => {
         if (
           showcaseReadyRef.current ||
           mapRef.current !== map ||
@@ -1527,6 +1527,7 @@ export default function JobsGlobe({
         showcaseReadyRef.current = true;
         showcaseRef.current?.onMapReady?.(map);
       });
+      map.triggerRepaint();
     }
   }
 

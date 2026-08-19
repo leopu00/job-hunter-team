@@ -837,7 +837,7 @@ export default function LandingGlobe() {
   // quindi cambiare lingua dalla nav riscrive anche le card del globo.
   const show = useMemo(() => landingShowcaseData(lean, lang), [lean, lang]);
   const familyColors = useMemo(() => landingFamilyColors(lang), [lang]);
-  // onMapReady è un contratto one-shot (parte al primo idle della mappa):
+  // onMapReady è un contratto one-shot (parte al primo frame della mappa):
   // legge il tour dal ref invece di catturarlo, così un cambio di lingua
   // prima di quel momento non gli lascia in mano una lista vecchia.
   const tourRef = useRef(show.tour);

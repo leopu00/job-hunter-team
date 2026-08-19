@@ -399,21 +399,21 @@ describe("globo della home pubblica", () => {
     expect(landingGlobeSource).not.toContain("duration + 300");
   });
 
-  it("consegna l'autopilota solo dopo il primo idle successivo ai pin", () => {
+  it("consegna l'autopilota solo dopo il primo render successivo ai pin", () => {
     const sourceUpdate = jobsGlobeSource.indexOf(
       'src.setData({ type: "FeatureCollection", features });',
     );
-    const idleReady = jobsGlobeSource.indexOf(
-      'map.once("idle", () => {',
+    const rendered = jobsGlobeSource.indexOf(
+      'map.once("render", () => {',
       sourceUpdate,
     );
     const callback = jobsGlobeSource.indexOf(
       "showcaseRef.current?.onMapReady?.(map);",
-      idleReady,
+      rendered,
     );
 
     expect(sourceUpdate).toBeGreaterThan(-1);
-    expect(idleReady).toBeGreaterThan(sourceUpdate);
-    expect(callback).toBeGreaterThan(idleReady);
+    expect(rendered).toBeGreaterThan(sourceUpdate);
+    expect(callback).toBeGreaterThan(rendered);
   });
 });
