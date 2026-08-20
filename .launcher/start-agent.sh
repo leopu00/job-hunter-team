@@ -467,10 +467,9 @@ if [ "$ROLE" = "agent-vitals" ]; then
 fi
 
 # Mappa ruolo → prefisso sessione | effort | model
-# model: "" = default del provider (Opus per claude, gpt-5.4 per codex,
-#   kimi-for-coding per kimi). Altrimenti alias come "sonnet" o nome
-#   completo, passato come --model al CLI claude. Per codex/kimi il
-#   model override non e' ancora cablato (aggiungere quando serve).
+# model: "" = default pesante del provider; altrimenti alias come "sonnet".
+# Claude riceve l'alias direttamente. Codex lo traduce con la mappa sotto;
+# Kimi continua a usare il proprio default e non legge questa colonna.
 #
 # Scelta modelli:
 #   - Assistente: Sonnet high — chat conversazionale con utente,
@@ -616,6 +615,23 @@ PYEOF
 
 IFS='|' read -r PROVIDER AUTH_METHOD API_KEY <<< "$(extract_provider_info "$JHT_CONFIG_FILE")"
 
+# Traduce gli alias semantici della mappa ruoli nei modelli Codex:
+#   opus   == gpt-5.6-sol
+#   sonnet == gpt-5.6-terra
+resolve_codex_model() {
+  local alias="$1"
+  local resolved=""
+  case "$alias" in
+    ""|opus) resolved="gpt-5.6-sol" ;;
+    sonnet) resolved="gpt-5.6-terra" ;;
+  esac
+  if [ -z "$resolved" ]; then
+    echo "Error: no Codex model mapping for role alias '$alias'." >&2
+    return 1
+  fi
+  printf '%s\n' "$resolved"
+}
+
 # Nessun default implicito: il provider e' configurazione utente. Se il file
 # manca, e' illeggibile o contiene un valore sconosciuto, avviare un CLI
 # diverso trasformerebbe un errore di configurazione in consumo e lavoro sul
@@ -644,15 +660,17 @@ case "$PROVIDER" in
     ;;
   openai|codex)
     CLI_BIN="codex"
+    if ! codex_model="$(resolve_codex_model "$model_override")"; then
+      exit 1
+    fi
     # --yolo è alias di --dangerously-bypass-approvals-and-sandbox:
     # salta sia approval che sandbox FS, così l'agente può scrivere
     # chat.jsonl, creare la profile dir, ecc. senza bloccarsi sul
     # prompt di approval (equivalente di claude --dangerously-skip-permissions).
-    # -c model_reasoning_effort=<effort> applica il livello di reasoning
-    # per ruolo (default del config.toml e' "medium"): capitano/scout/
-    # analista/scrittore/critico vanno su "high", scorer/assistente
-    # restano "medium". Codex non ha un --effort flag; si passa via -c.
-    CLI_ARGS="--yolo -c model_reasoning_effort=$effort"
+    # Codex non ha un --effort flag; l'effort passa via -c. Il modello invece
+    # va passato separatamente: senza --model tutti i ruoli ereditavano il
+    # default del CLI (gpt-5.6-sol), inclusi quelli calibrati su Terra.
+    CLI_ARGS="--yolo --model $codex_model -c model_reasoning_effort=$effort"
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="OPENAI_API_KEY='${API_KEY}' "
     fi
