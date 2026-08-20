@@ -1,0 +1,24 @@
+# Podman-on-Windows compatibility override.
+#
+# The production stack contains one container and publishes no ports, so a
+# Compose bridge adds no isolation benefit. On Podman Machine 6 / Netavark 2 a
+# custom rootless bridge can fail while applying nftables rules. Host networking
+# avoids that compatibility seam and exposes the machine-local interop proxy at
+# 127.0.0.1 without exposing JHT services on Windows.
+
+services:
+  jht:
+    # Rootless Podman otherwise maps the image user to a subordinate host UID.
+    # keep-id is required for the owner-only Windows ACL on ~/.jht: the jht
+    # process must reach the bind mount as the Podman machine user (UID 1000).
+    userns_mode: "keep-id:uid=1001,gid=1001"
+    network_mode: host
+    environment:
+      - HTTP_PROXY=${JHT_PODMAN_HTTP_PROXY:-}
+      - HTTPS_PROXY=${JHT_PODMAN_HTTPS_PROXY:-}
+      - ALL_PROXY=${JHT_PODMAN_ALL_PROXY:-}
+      - NO_PROXY=${JHT_PODMAN_NO_PROXY:-localhost,127.0.0.1,::1,host.docker.internal,host.containers.internal}
+      - http_proxy=${JHT_PODMAN_HTTP_PROXY:-}
+      - https_proxy=${JHT_PODMAN_HTTPS_PROXY:-}
+      - all_proxy=${JHT_PODMAN_ALL_PROXY:-}
+      - no_proxy=${JHT_PODMAN_NO_PROXY:-localhost,127.0.0.1,::1,host.docker.internal,host.containers.internal}

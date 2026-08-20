@@ -23,7 +23,11 @@ export function writePrivateJson(path, value) {
     fsyncSync(fd);
     closeSync(fd);
     fd = undefined;
-    chmodSync(tmp, PRIVATE_FILE_MODE);
+    // v9fs/DrvFS bind mounts (rootless Podman on Windows) enforce the host
+    // ACL but reject POSIX chmod with EPERM. The file was already created
+    // with the private mode above; do not abort the atomic rename when the
+    // backing filesystem owns permission enforcement.
+    try { chmodSync(tmp, PRIVATE_FILE_MODE); } catch { /* host ACL is authoritative */ }
     renameSync(tmp, path);
     try { chmodSync(path, PRIVATE_FILE_MODE); } catch { /* best effort on Windows */ }
   } finally {
