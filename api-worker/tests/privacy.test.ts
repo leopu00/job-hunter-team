@@ -24,7 +24,7 @@ afterEach(() => {
 
 describe("privacy-safe diagnostics", () => {
   it("emits only allowlisted provider diagnostics", () => {
-    const marker = "sk-sensitive-provider-message-123456";
+    const marker = "synthetic-sensitive-provider-message-123456";
     const error = Object.assign(new Error(`provider said ${marker}`), {
       name: `AttackerControlled-${marker}`,
       statusCode: 502,
@@ -73,7 +73,7 @@ describe("privacy-safe diagnostics", () => {
   });
 
   it("never exposes raw provider errors or runtime paths from structured roles", async () => {
-    const marker = "sk-structured-private-provider-message";
+    const marker = "synthetic-structured-private-provider-message";
     const runtimeDir = await mkdtemp(join(tmpdir(), "jht-private-role-run-"));
     const envelope = (await loadFixture("prototype-inputs.synthetic.json")) as {
       sharedLimits: unknown;
