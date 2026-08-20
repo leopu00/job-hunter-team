@@ -133,6 +133,21 @@ existing product call sites unchanged. This is adoption evidence for the measure
 host, but the ADR remains **Proposed** until the same chain is repeated from a
 clean Windows machine.
 
+### macOS preparation — 2026-08-20
+
+The canonical installer now accepts explicit `--runtime=podman` on macOS while
+keeping Colima as its unchanged default. The preparation path creates a named
+rootless `jht-podman` machine and an attested JHT-scoped `docker` shim; it does
+not stop, delete or uninstall Colima, nor change another Podman connection's
+default. The desktop exposes Podman only when that JHT adapter, its machine
+marker and their manifest hashes validate. A normal/Colima/Docker Desktop
+install publishes the protected `docker` selection fail-closed and leaves the
+private JHT shim inert; re-entering the preview requires another explicit
+Podman install.
+This is scaffolding, not adoption evidence: Compose, bind mounts, restart
+behavior and clean-machine installation still require macOS E2E on both Apple
+Silicon and Intel before this ADR can promote Podman there.
+
 ## Alternatives considered
 
 - **Adopt Podman by introducing the abstraction first (`DOCKER_BIN` everywhere)** —

@@ -4,6 +4,13 @@
 **Date:** 2026-06-20
 **Supersedes:** [0001](./0001-colima-not-docker-desktop.md)
 
+> **Preparation update — 2026-08-20.** `--runtime=podman` is now an explicit
+> macOS preview path. It does not change this ADR's default: Colima remains the
+> automatic choice, is never stopped or removed by the Podman path, and remains
+> available as rollback until the macOS lifecycle probe is complete. Returning
+> to the default publishes an attested `docker` selection fail-closed. The
+> private JHT adapter remains inert and no `docker` executable is removed.
+
 ## Context
 
 ADR-0001 mandated **Colima** as the only container runtime on macOS, because
@@ -37,13 +44,21 @@ On **macOS**, let the **user choose** the runtime, with a smart default:
 - **If nothing is present**, offer two options in the desktop wizard:
   - 🟢 **Colima** *(recommended / default)* — we install and start it; headless,
     lightweight, zero management for the user.
+  - 🟣 **Podman** *(preview / explicit flag only)* — a dedicated JHT machine and
+    attested compatibility shim are prepared without changing or deleting
+    Colima. It is not the automatic default before macOS E2E.
   - 🔵 **Docker Desktop** — the user installs and starts it; we never manage it,
     it must be running when the team runs.
-- The choice is **persisted** (desktop: `userData/preferences.json` key
-  `containerRuntime`; CLI: `--runtime` flag) and **switchable later** from the
-  desktop settings. Switching is safe for data: the DB/config/CVs live in host
+- The choice is **persisted** (desktop preference plus the protected host-runtime
+  selection; CLI: `--runtime` flag). Colima ↔ Docker Desktop remains a desktop
+  preference; crossing the Podman/Docker boundary is installer-only because the
+  desktop is read-only over the protected host runtime. Switching is safe for
+  data: the DB/config/CVs live in host
   bind-mounts (`~/.jht`, `~/Documents/Job Hunter Team`) and survive a runtime
-  change — only the image is re-pulled and the container recreated.
+  change. Podman is shown only when the installer-created adapter, machine
+  marker and integrity hashes are valid. The installer verifies the destination
+  runtime before switching away and leaves that private adapter inert;
+  opting into Podman again requires rerunning `--runtime=podman`.
 
 CLI install (`curl | bash`) is non-interactive, so there the "question" is
 **detect-first + `--runtime` flag** (default `colima`); the interactive choice

@@ -22,10 +22,10 @@
 # ║                                                                          ║
 # ║  Options (env vars / flags):                                             ║
 # ║    --no-docker             Skip the container, install natively (expert) ║
-# ║    --runtime <r>           macOS: container runtime — colima (default,   ║
-# ║                            headless) or docker-desktop (your Docker).    ║
-# ║                            If a Docker is already running it is reused   ║
-# ║                            (detect-first). Ignored on Linux. ADR-0006.   ║
+# ║    --runtime <r>           macOS: colima (default), podman (preview),     ║
+# ║                            or docker-desktop (your Docker).              ║
+# ║                            Except for explicit Podman, a running Docker  ║
+# ║                            is reused (detect-first). Linux ignores it.   ║
 # ║    --dry-run               Only show the actions that would be executed  ║
 # ║    --branch <name>         Source branch for wrapper+compose             ║
 # ║                            (same as JHT_BRANCH=<name>, default           ║
@@ -49,7 +49,8 @@
 # ║  Design reference:                                                       ║
 # ║    docs/internal/ops/vps.md                      ║
 # ║                                                                          ║
-# ║  Supports: macOS (Colima or Docker Desktop), Linux (Debian/Ubuntu/Fedora/ ║
+# ║  Supports: macOS (Colima, Podman preview, or Docker Desktop), Linux       ║
+# ║  (Debian/Ubuntu/Fedora/                                                  ║
 # ║  Arch), WSL2.                                                             ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
@@ -89,10 +90,13 @@ MIN_NODE_MAJOR=22
 USE_DOCKER=1
 DRY_RUN=0
 PAIRING_TOKEN=""
-# macOS container runtime: '' (= colima default) | 'colima' | 'docker-desktop'.
+# macOS container runtime: '' (= colima default) | colima | podman |
+# docker-desktop. Podman is opt-in until its macOS lifecycle probe is green.
 # Non-interactive (curl | bash) → the choice is a flag, not a prompt; the
 # detect-first still reuses an already running Docker. Ignored on Linux. (ADR-0006)
 RUNTIME_CHOICE=""
+PODMAN_MACHINE_NAME="${JHT_PODMAN_MACHINE:-jht-podman}"
+DOCKER_CLI="docker"
 # Position-based parser: handles both standalone flags (--no-docker) and
 # key/value pairs (--branch dev-1). We do not use `for arg in "$@"` because
 # it loses the link between --branch and the following value.
@@ -101,7 +105,7 @@ while [ $# -gt 0 ]; do
     --no-docker) USE_DOCKER=0; shift ;;
     --with-docker) USE_DOCKER=1; shift ;;  # backwards-compat alias
     --runtime)
-      [ -n "${2:-}" ] || { printf "%s requires an argument (colima|docker-desktop)\n" "$1" >&2; exit 2; }
+      [ -n "${2:-}" ] || { printf "%s requires an argument (colima|podman|docker-desktop)\n" "$1" >&2; exit 2; }
       RUNTIME_CHOICE="$2"
       shift 2
       ;;
@@ -141,8 +145,8 @@ done
 # Normalize/validate the runtime choice: 'auto' (and empty) = colima by default.
 case "$RUNTIME_CHOICE" in
   ""|auto) RUNTIME_CHOICE="" ;;
-  colima|docker-desktop) ;;
-  *) printf "Invalid --runtime value: %s (use colima|docker-desktop)\n" "$RUNTIME_CHOICE" >&2; exit 2 ;;
+  colima|podman|docker-desktop) ;;
+  *) printf "Invalid --runtime value: %s (use colima|podman|docker-desktop)\n" "$RUNTIME_CHOICE" >&2; exit 2 ;;
 esac
 
 # An explicit raw base is a host-authorized private mirror/test seam. Normal
@@ -200,7 +204,11 @@ header() {
   printf "${BOLD}╚══════════════════════════════════════════╝${RESET}\n"
   printf "\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
-    printf "  ${DIM}mode:    ${RESET}${BOLD}Docker (isolated)${RESET}\n"
+    if [ "$RUNTIME_CHOICE" = "podman" ]; then
+      printf "  ${DIM}mode:    ${RESET}${BOLD}Container (Podman preview)${RESET}\n"
+    else
+      printf "  ${DIM}mode:    ${RESET}${BOLD}Docker (isolated)${RESET}\n"
+    fi
     printf "  ${DIM}image:   %s${RESET}\n" "$IMAGE"
     printf "  ${DIM}branch:  %s${RESET}\n" "$BRANCH"
     printf "  ${DIM}runtime: %s${RESET}\n" "$RUNTIME_DIR"
@@ -303,9 +311,14 @@ install_colima_macos() {
   else
     ok "colima already installed"
   fi
-  if ! command -v docker &>/dev/null; then
+  resolve_macos_docker_cli
+  if [ -z "$DOCKER_CLI" ]; then
     info "Installing docker CLI..."
     run brew install docker || fail "docker CLI installation failed"
+    if [ "$DRY_RUN" -ne 1 ]; then
+      resolve_macos_docker_cli
+      [ -n "$DOCKER_CLI" ] || fail "Docker CLI installation completed but no non-JHT client is reachable."
+    fi
   else
     ok "docker CLI already installed"
   fi
@@ -321,6 +334,53 @@ install_colima_macos() {
     colima start || fail "colima start failed. Retry manually with 'colima start'."
     ok "colima started"
   fi
+}
+
+install_podman_macos() {
+  # Preview non distruttiva: non ferma e non rimuove Colima. La macchina e la
+  # connessione hanno un nome JHT dedicato; lo shim pubblicato piu' avanti usa
+  # sempre quella connessione senza cambiare il default Podman dell'utente.
+  install_brew_if_missing
+  if ! command -v podman &>/dev/null; then
+    info "Installing Podman CLI (macOS preview)..."
+    run brew install podman || fail "Podman installation failed"
+  else
+    ok "podman already installed"
+  fi
+  if ! command -v podman-compose &>/dev/null; then
+    info "Installing the Podman Compose provider..."
+    run brew install podman-compose || fail "podman-compose installation failed"
+  else
+    ok "podman-compose already installed"
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would initialize/start Podman machine: %s\n" "$PODMAN_MACHINE_NAME"
+    printf "  ${DIM}[dry-run]${RESET} would leave Colima installed and untouched\n"
+    return 0
+  fi
+  case "$PODMAN_MACHINE_NAME" in
+    ''|*[!A-Za-z0-9_.-]*) fail "Invalid JHT Podman machine name: $PODMAN_MACHINE_NAME" ;;
+  esac
+  if podman machine inspect "$PODMAN_MACHINE_NAME" &>/dev/null; then
+    if ! podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null; then
+      info "Starting Podman machine '$PODMAN_MACHINE_NAME'..."
+      podman machine start --update-connection=false "$PODMAN_MACHINE_NAME" \
+        || fail "Podman machine start failed; Colima was not changed."
+    else
+      ok "Podman machine '$PODMAN_MACHINE_NAME' already running"
+    fi
+  else
+    info "Creating rootless Podman machine '$PODMAN_MACHINE_NAME'..."
+    podman machine init --now --update-connection=false "$PODMAN_MACHINE_NAME" \
+      || fail "Podman machine initialization failed; Colima was not changed."
+  fi
+  PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)" \
+    PODMAN_COMPOSE_WARNING_LOGS=false \
+    podman --connection "$PODMAN_MACHINE_NAME" compose version &>/dev/null \
+    || fail "Podman Compose provider is not reachable."
+  podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
+    || fail "Podman machine '$PODMAN_MACHINE_NAME' is not reachable."
+  ok "Podman ready (Colima retained)"
 }
 
 install_docker_linux() {
@@ -397,11 +457,16 @@ install_docker_desktop_macos() {
   fi
   info "Starting Docker Desktop..."
   open -a Docker || true
+  resolve_macos_docker_cli
   info "Waiting for the Docker daemon (up to 120s)..."
   local i=0
   while [ "$i" -lt 60 ]; do
-    if docker info &>/dev/null; then ok "Docker Desktop ready"; return 0; fi
+    if [ -n "$DOCKER_CLI" ] && "$DOCKER_CLI" info &>/dev/null; then
+      ok "Docker Desktop ready"
+      return 0
+    fi
     sleep 2
+    resolve_macos_docker_cli
     i=$((i + 1))
   done
   fail "Docker Desktop started but the daemon is not responding after 120s. Open it manually and re-run."
@@ -409,16 +474,22 @@ install_docker_desktop_macos() {
 
 install_container_runtime() {
   step 2 "$TOTAL_STEPS_DOCKER" "Container runtime"
+  if [ "$OS" = "macos" ] && [ "$RUNTIME_CHOICE" != "podman" ]; then
+    resolve_macos_docker_cli
+  fi
   # Detect-first: if a Docker daemon already responds (Docker Desktop, an
   # existing Colima, OrbStack, ...), we reuse it — no second installation/VM
   # on top (avoids the two-VM clash, ADR-0006).
-  if [ "$DRY_RUN" -ne 1 ] && docker info &>/dev/null; then
+  if [ "$RUNTIME_CHOICE" != "podman" ] \
+      && [ "$DRY_RUN" -ne 1 ] && [ -n "$DOCKER_CLI" ] \
+      && "$DOCKER_CLI" info &>/dev/null; then
     ok "Docker already running and reachable — reusing this runtime (no installation)"
     return 0
   fi
   case "$OS" in
     macos)
       case "$RUNTIME_CHOICE" in
+        podman) install_podman_macos ;;
         docker-desktop) install_docker_desktop_macos ;;
         *) install_colima_macos ;;
       esac
@@ -427,13 +498,49 @@ install_container_runtime() {
   esac
 }
 
+resolve_macos_docker_cli() {
+  local candidate resolved=""
+  candidate="$(command -v docker 2>/dev/null || true)"
+  if [ -n "$candidate" ] \
+      && ! grep -Fqx '# JHT_PODMAN_DOCKER_SHIM=1' "$candidate" 2>/dev/null; then
+    resolved="$candidate"
+  fi
+  if [ -z "$resolved" ]; then
+    for candidate in /opt/homebrew/bin/docker /usr/local/bin/docker \
+        /Applications/Docker.app/Contents/Resources/bin/docker; do
+      if [ -x "$candidate" ] \
+          && ! grep -Fqx '# JHT_PODMAN_DOCKER_SHIM=1' "$candidate" 2>/dev/null; then
+        resolved="$candidate"
+        break
+      fi
+    done
+  fi
+  DOCKER_CLI="$resolved"
+}
+
 verify_docker_works() {
-  step 3 "$TOTAL_STEPS_DOCKER" "Docker check"
+  step 3 "$TOTAL_STEPS_DOCKER" "Container runtime check"
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf "  ${DIM}[dry-run]${RESET} would execute: docker info\n"
+    if [ "$OS" = "macos" ] && [ "$RUNTIME_CHOICE" = "podman" ]; then
+      printf "  ${DIM}[dry-run]${RESET} would execute: podman --connection %s info\n" "$PODMAN_MACHINE_NAME"
+      printf "  ${DIM}[dry-run]${RESET} would verify: podman compose provider\n"
+    else
+      printf "  ${DIM}[dry-run]${RESET} would execute: docker info\n"
+    fi
     return 0
   fi
-  if ! docker info &>/dev/null; then
+  if [ "$OS" = "macos" ] && [ "$RUNTIME_CHOICE" = "podman" ]; then
+    PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)" \
+      PODMAN_COMPOSE_WARNING_LOGS=false \
+      podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
+      || fail "The JHT Podman machine is not responding."
+    ok "Podman machine reachable"
+    return 0
+  fi
+  if [ "$OS" = "macos" ] && [ -z "$DOCKER_CLI" ]; then
+    fail "No non-JHT Docker CLI is available; the Podman adapter was left active."
+  fi
+  if ! "$DOCKER_CLI" info &>/dev/null; then
     if [ "$OS" = "linux" ] || [ "$OS" = "wsl" ]; then
       warn "docker info fails: you probably need sudo or a re-login for the docker group."
       info "Trying with sudo for the check..."
@@ -444,6 +551,43 @@ verify_docker_works() {
     fi
   fi
   ok "docker daemon reachable"
+}
+
+install_podman_adapter() {
+  [ "$OS" = "macos" ] && [ "$RUNTIME_CHOICE" = "podman" ] || return 0
+  local podman_bin adapter_bin shim_dest shim_tmp selection_file machine_file
+  podman_bin="$(command -v podman)" || fail "podman disappeared from PATH"
+  case "$podman_bin" in *"'"*|*$'\n'*) fail "Unsafe Podman executable path: $podman_bin" ;; esac
+  case "$PODMAN_MACHINE_NAME" in
+    ''|*[!A-Za-z0-9_.-]*) fail "Invalid JHT Podman machine name: $PODMAN_MACHINE_NAME" ;;
+  esac
+  adapter_bin="$RUNTIME_DIR/bin"
+  [ ! -L "$adapter_bin" ] || fail "Podman adapter bin path is a symlink: $adapter_bin"
+  [ ! -e "$adapter_bin" ] || [ -d "$adapter_bin" ] \
+    || fail "Podman adapter bin path is not a directory: $adapter_bin"
+  mkdir -p "$adapter_bin"
+  chmod 700 "$adapter_bin"
+  [ "$(cd -P "$adapter_bin" && pwd -P)" = "$adapter_bin" ] \
+    || fail "Podman adapter bin has a non-canonical ancestor: $adapter_bin"
+  shim_dest="$adapter_bin/docker"
+  if [ -e "$shim_dest" ] || [ -L "$shim_dest" ]; then
+    [ -f "$shim_dest" ] && [ ! -L "$shim_dest" ] \
+      && grep -Fqx '# JHT_PODMAN_DOCKER_SHIM=1' "$shim_dest" 2>/dev/null \
+      || fail "Refusing to overwrite an unsafe or non-JHT executable: $shim_dest"
+  fi
+  shim_tmp="$(mktemp "$adapter_bin/.docker-podman.XXXXXX")"
+  {
+    printf '%s\n' '#!/bin/sh' '# JHT_PODMAN_DOCKER_SHIM=1'
+    printf "exec '%s' --connection '%s' \"\$@\"\n" "$podman_bin" "$PODMAN_MACHINE_NAME"
+  } > "$shim_tmp"
+  chmod 700 "$shim_tmp"
+  mv -f "$shim_tmp" "$shim_dest"
+  selection_file="$RUNTIME_DIR/container-runtime"
+  machine_file="$RUNTIME_DIR/podman-machine"
+  printf 'podman\n' > "$selection_file"
+  printf '%s\n' "$PODMAN_MACHINE_NAME" > "$machine_file"
+  chmod 600 "$selection_file" "$machine_file"
+  ok "Private JHT docker shim: $shim_dest (not added to global PATH; Colima untouched)"
 }
 
 download_runtime_files() {
@@ -470,6 +614,9 @@ download_runtime_files() {
     printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$wrapper_url" "$wrapper_dest"
     printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$hostsetup_url" "$hostsetup_dest"
     printf "  ${DIM}[dry-run]${RESET} would execute: chmod +x %s %s\n" "$wrapper_dest" "$hostsetup_dest"
+    if [ "$RUNTIME_CHOICE" = "podman" ]; then
+      printf "  ${DIM}[dry-run]${RESET} would publish an attested JHT-only docker→podman shim\n"
+    fi
     case ":$PATH:" in
       *":$BIN_DIR:"*) PATH_READY=1 ;;
       *)              PATH_READY=0 ;;
@@ -536,24 +683,65 @@ download_runtime_files() {
   fi
   chmod 700 "$hostsetup_tmp"
   mv -f "$hostsetup_tmp" "$hostsetup_dest"
-  local compose_sha hostsetup_sha wrapper_sha
+  local selection_source="$RUNTIME_DIR/container-runtime" selection_publish=""
+  if [ "$RUNTIME_CHOICE" = "podman" ]; then
+    install_podman_adapter
+  elif [ "$OS" = "macos" ]; then
+    if [ -e "$selection_source" ] || [ -L "$selection_source" ]; then
+      [ -f "$selection_source" ] && [ ! -L "$selection_source" ] \
+        || fail "Unsafe JHT runtime selection marker: $selection_source"
+      case "$(tr -d '\r\n' < "$selection_source")" in docker|podman) ;; *) fail "Invalid JHT runtime selection marker" ;; esac
+    fi
+    selection_publish="$(mktemp "$RUNTIME_DIR/.container-runtime.XXXXXX")"
+    printf 'docker\n' > "$selection_publish"
+    chmod 600 "$selection_publish"
+    selection_source="$selection_publish"
+  fi
+  local compose_sha hostsetup_sha wrapper_sha selection_sha="" machine_sha="" shim_sha=""
   if command -v sha256sum >/dev/null 2>&1; then
     compose_sha="$(sha256sum "$compose_dest" | awk '{print $1}')"
     hostsetup_sha="$(sha256sum "$hostsetup_dest" | awk '{print $1}')"
     wrapper_sha="$(sha256sum "$wrapper_dest" | awk '{print $1}')"
+    if [ -f "$selection_source" ]; then
+      selection_sha="$(sha256sum "$selection_source" | awk '{print $1}')"
+    fi
+    if [ "$RUNTIME_CHOICE" = "podman" ]; then
+      machine_sha="$(sha256sum "$RUNTIME_DIR/podman-machine" | awk '{print $1}')"
+      shim_sha="$(sha256sum "$RUNTIME_DIR/bin/docker" | awk '{print $1}')"
+    fi
   else
     compose_sha="$(shasum -a 256 "$compose_dest" | awk '{print $1}')"
     hostsetup_sha="$(shasum -a 256 "$hostsetup_dest" | awk '{print $1}')"
     wrapper_sha="$(shasum -a 256 "$wrapper_dest" | awk '{print $1}')"
+    if [ -f "$selection_source" ]; then
+      selection_sha="$(shasum -a 256 "$selection_source" | awk '{print $1}')"
+    fi
+    if [ "$RUNTIME_CHOICE" = "podman" ]; then
+      machine_sha="$(shasum -a 256 "$RUNTIME_DIR/podman-machine" | awk '{print $1}')"
+      shim_sha="$(shasum -a 256 "$RUNTIME_DIR/bin/docker" | awk '{print $1}')"
+    fi
   fi
   {
     printf 'version=1\n'
     printf 'docker-compose.yml=%s\n' "$compose_sha"
     printf 'host-setup.sh=%s\n' "$hostsetup_sha"
     printf 'jht-wrapper.sh=%s\n' "$wrapper_sha"
+    if [ -n "$selection_sha" ]; then
+      printf 'container-runtime=%s\n' "$selection_sha"
+    fi
+    if [ "$RUNTIME_CHOICE" = "podman" ]; then
+      printf 'podman-machine=%s\n' "$machine_sha"
+      printf 'docker-shim=%s\n' "$shim_sha"
+    fi
   } > "$manifest_tmp"
   chmod 600 "$manifest_tmp"
+  # Publish manifest first: a crash between the two renames fails closed
+  # (hash mismatch) instead of routing Docker commands to the wrong engine.
   mv -f "$manifest_tmp" "$manifest_dest"
+  if [ -n "$selection_publish" ]; then
+    mv -f "$selection_publish" "$RUNTIME_DIR/container-runtime"
+    ok "JHT container runtime selected: docker (private Podman artifacts kept inert)"
+  fi
   ok "host-setup: $hostsetup_dest"
 
   case ":$PATH:" in
@@ -862,6 +1050,9 @@ final_message() {
   printf "\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
     printf "  ${BOLD}Container mode active.${RESET}\n"
+    if [ "$RUNTIME_CHOICE" = "podman" ]; then
+      printf "  ${DIM}Podman preview selected; Colima remains installed and untouched.${RESET}\n"
+    fi
     printf "  ${DIM}The agents can only see:${RESET}\n"
     printf "  ${DIM}  ~/.jht/                       → /jht_home (config, db, agents)${RESET}\n"
     printf "  ${DIM}  ~/Documents/Job Hunter Team/  → /jht_user (CVs, attachments, output)${RESET}\n"
@@ -903,7 +1094,13 @@ final_message() {
 
   printf "  ${DIM}To uninstall (keeps your data in ~/.jht and ~/Documents/Job Hunter Team):${RESET}\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
-    printf "  ${DIM}  jht down && rm -rf %s %s/jht && docker rmi %s${RESET}\n" "$RUNTIME_DIR" "$BIN_DIR" "$IMAGE"
+    if [ "$RUNTIME_CHOICE" = "podman" ]; then
+      printf "  ${DIM}  jht down && %s/bin/docker rmi %s && rm -rf %s %s/jht${RESET}\n" \
+        "$RUNTIME_DIR" "$IMAGE" "$RUNTIME_DIR" "$BIN_DIR"
+      printf "  ${DIM}  (the Podman machine and Colima are both kept)${RESET}\n"
+    else
+      printf "  ${DIM}  jht down && rm -rf %s %s/jht && docker rmi %s${RESET}\n" "$RUNTIME_DIR" "$BIN_DIR" "$IMAGE"
+    fi
   else
     printf "  ${DIM}  rm -rf %s %s/jht${RESET}\n" "$INSTALL_DIR" "$BIN_DIR"
   fi
@@ -1067,4 +1264,6 @@ main() {
   maybe_onboard
 }
 
-main
+if [ "${JHT_INSTALLER_SOURCE_ONLY:-0}" != "1" ]; then
+  main
+fi

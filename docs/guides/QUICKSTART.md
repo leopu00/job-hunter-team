@@ -166,6 +166,27 @@ You'll end up with two folders:
 > container boundary and requires Node 22+, tmux, git and the provider CLI on
 > the host. Use it only on a dedicated machine or virtual machine.
 
+**macOS Podman preparation preview:** Colima remains the default and is never
+removed. From a reviewed checkout:
+
+```bash
+bash scripts/install.sh --runtime=podman
+```
+
+The preview installs the Podman CLI and Compose provider, uses a dedicated
+rootless `jht-podman` machine and publishes a JHT-scoped, integrity-attested
+`docker` compatibility shim inside the protected host runtime (never on the
+global `PATH`). Existing Colima data and binaries remain intact
+for rollback. This is not the public macOS default until lifecycle tests pass
+on clean Apple Silicon and Intel hosts.
+
+Re-running the installer normally, or with `--runtime=colima` or
+`--runtime=docker-desktop`, publishes an attested Docker selection fail-closed.
+The private JHT Podman adapter and machine marker remain inert; it never removes
+Colima, Podman, its machine, or a `docker` executable. Re-enable the preview by
+running the explicit
+Podman command above again.
+
 ---
 
 ## 🦞 Path 3 — Let your AI agent do it

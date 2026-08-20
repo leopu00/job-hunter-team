@@ -51,6 +51,32 @@ RUNTIME_MANIFEST="$RUNTIME_DIR/.runtime-integrity"
 RAW_BASE_OVERRIDE="${JHT_RAW_BASE:-}"
 RELEASE_REF="${JHT_BRANCH:-production}"
 WRAPPER_PATH="${JHT_WRAPPER_PATH:-$0}"
+WRAPPER_DIR="$(cd -P "$(dirname "$WRAPPER_PATH")" 2>/dev/null && pwd -P)"
+RUNTIME_SELECTION_FILE="$RUNTIME_DIR/container-runtime"
+PODMAN_MACHINE_FILE="$RUNTIME_DIR/podman-machine"
+PODMAN_ADAPTER_BIN="$RUNTIME_DIR/bin"
+DOCKER_SHIM="${JHT_DOCKER_SHIM:-$PODMAN_ADAPTER_BIN/docker}"
+if [ -n "${JHT_CONTAINER_RUNTIME:-}" ]; then
+  CONTAINER_RUNTIME="$(printf '%s' "$JHT_CONTAINER_RUNTIME" | tr '[:upper:]' '[:lower:]')"
+elif [ -f "$RUNTIME_SELECTION_FILE" ]; then
+  CONTAINER_RUNTIME="$(tr -d '\r\n' < "$RUNTIME_SELECTION_FILE" | tr '[:upper:]' '[:lower:]')"
+else
+  CONTAINER_RUNTIME="docker"
+fi
+case "$CONTAINER_RUNTIME" in docker|podman) ;; *) err_runtime="unsupported container runtime: $CONTAINER_RUNTIME" ;; esac
+PODMAN_MACHINE_NAME="${JHT_PODMAN_MACHINE:-}"
+if [ -z "$PODMAN_MACHINE_NAME" ] && [ -f "$PODMAN_MACHINE_FILE" ]; then
+  PODMAN_MACHINE_NAME="$(tr -d '\r\n' < "$PODMAN_MACHINE_FILE")"
+fi
+PODMAN_MACHINE_NAME="${PODMAN_MACHINE_NAME:-jht-podman}"
+if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+  export PATH="$PODMAN_ADAPTER_BIN:$PATH"
+  export CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME"
+  export PODMAN_COMPOSE_WARNING_LOGS=false
+  if command -v podman-compose >/dev/null 2>&1; then
+    export PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)"
+  fi
+fi
 DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598"
 DEFAULT_RUNTIME_VERSION="0.3.9"
 GAME_EXECUTABLE_OVERRIDE="${JHT_GAME_EXECUTABLE:-}"
@@ -212,13 +238,20 @@ runtime_write_manifest() {
     printf 'docker-compose.yml=%s\n' "$(runtime_sha256 "$COMPOSE_FILE")"
     printf 'host-setup.sh=%s\n' "$(runtime_sha256 "$HOST_SETUP_SCRIPT")"
     printf 'jht-wrapper.sh=%s\n' "$(runtime_sha256 "$WRAPPER_PATH")"
+    if [ -f "$RUNTIME_SELECTION_FILE" ]; then
+      printf 'container-runtime=%s\n' "$(runtime_sha256 "$RUNTIME_SELECTION_FILE")"
+    fi
+    if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+      printf 'podman-machine=%s\n' "$(runtime_sha256 "$PODMAN_MACHINE_FILE")"
+      printf 'docker-shim=%s\n' "$(runtime_sha256 "$DOCKER_SHIM")"
+    fi
   } > "$tmp" || return 1
   chmod 600 "$tmp" || { rm -f "$tmp"; return 1; }
   mv -f "$tmp" "$RUNTIME_MANIFEST"
 }
 
 runtime_path_allowed() {
-  local runtime_real runtime_declared wrapper_real bind_real docs_real
+  local runtime_real runtime_declared wrapper_real bind_real docs_real shim_real
   runtime_real="$(cd -P "$RUNTIME_DIR" 2>/dev/null && pwd -P)" || return 1
   runtime_declared="${RUNTIME_DIR%/}"
   # Rifiuta anche symlink in qualunque antenato: il path dichiarato deve gia'
@@ -230,9 +263,16 @@ runtime_path_allowed() {
   case "$runtime_real/" in "$bind_real/"*|"$docs_real/"*) return 1 ;; esac
   [ "$COMPOSE_FILE" = "$RUNTIME_DIR/docker-compose.yml" ] || return 1
   [ "$HOST_SETUP_SCRIPT" = "$RUNTIME_DIR/host-setup.sh" ] || return 1
+  [ "$RUNTIME_SELECTION_FILE" = "$RUNTIME_DIR/container-runtime" ] || return 1
+  [ "$PODMAN_MACHINE_FILE" = "$RUNTIME_DIR/podman-machine" ] || return 1
   wrapper_real="$(cd -P "$(dirname "$WRAPPER_PATH")" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$(basename "$WRAPPER_PATH")")" || return 1
   [ "$wrapper_real" = "$WRAPPER_PATH" ] || return 1
   case "$wrapper_real" in "$bind_real"/*|"$docs_real"/*) return 1 ;; esac
+  if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+    shim_real="$(cd -P "$(dirname "$DOCKER_SHIM")" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$(basename "$DOCKER_SHIM")")" || return 1
+    [ "$shim_real" = "$DOCKER_SHIM" ] || return 1
+    [ "$(dirname "$shim_real")" = "$RUNTIME_DIR/bin" ] || return 1
+  fi
 }
 
 runtime_bundle_trusted() {
@@ -246,6 +286,24 @@ runtime_bundle_trusted() {
   [ "$(runtime_manifest_value docker-compose.yml)" = "$(runtime_sha256 "$COMPOSE_FILE")" ] || return 1
   [ "$(runtime_manifest_value host-setup.sh)" = "$(runtime_sha256 "$HOST_SETUP_SCRIPT")" ] || return 1
   [ "$(runtime_manifest_value jht-wrapper.sh)" = "$(runtime_sha256 "$WRAPPER_PATH")" ] || return 1
+  if [ -f "$RUNTIME_SELECTION_FILE" ]; then
+    runtime_node_safe "$RUNTIME_SELECTION_FILE" file || return 1
+    case "$(tr -d '\r\n' < "$RUNTIME_SELECTION_FILE")" in docker|podman) ;; *) return 1 ;; esac
+    [ "$(runtime_manifest_value container-runtime)" = "$(runtime_sha256 "$RUNTIME_SELECTION_FILE")" ] || return 1
+  elif [ "$CONTAINER_RUNTIME" = "podman" ]; then
+    return 1
+  fi
+  if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+    runtime_node_safe "$PODMAN_MACHINE_FILE" file || return 1
+    runtime_node_safe "$DOCKER_SHIM" file || return 1
+    [ "$(tr -d '\r\n' < "$RUNTIME_SELECTION_FILE")" = "podman" ] || return 1
+    case "$(tr -d '\r\n' < "$PODMAN_MACHINE_FILE")" in
+      ''|*[!A-Za-z0-9_.-]*) return 1 ;;
+    esac
+    [ "$(runtime_manifest_value podman-machine)" = "$(runtime_sha256 "$PODMAN_MACHINE_FILE")" ] || return 1
+    [ "$(runtime_manifest_value docker-shim)" = "$(runtime_sha256 "$DOCKER_SHIM")" ] || return 1
+    grep -Fqx '# JHT_PODMAN_DOCKER_SHIM=1' "$DOCKER_SHIM" || return 1
+  fi
   grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH" || return 1
   grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$HOST_SETUP_SCRIPT" || return 1
   grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$COMPOSE_FILE" || return 1
@@ -333,17 +391,34 @@ require_trusted_runtime() {
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
 require_docker() {
+  if [ -n "${err_runtime:-}" ]; then
+    err "$err_runtime"
+    exit 1
+  fi
   if ! command -v docker >/dev/null 2>&1; then
-    err "docker non trovato nel PATH. Installa Docker Desktop (Mac/Win) o docker.io (Linux)."
+    err "client container non trovato nel PATH. Ripara il runtime JHT."
     exit 127
   fi
   if ! docker info >/dev/null 2>&1; then
-    if [ "$(uname)" = "Darwin" ]; then
+    if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+      local podman_bin=""
+      for candidate in "$(command -v podman 2>/dev/null || true)" \
+          /opt/podman/bin/podman /opt/homebrew/bin/podman /usr/local/bin/podman; do
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then podman_bin="$candidate"; break; fi
+      done
+      [ -n "$podman_bin" ] || { err "Podman non trovato: reinstalla il runtime JHT."; exit 127; }
+      info "Podman machine '$PODMAN_MACHINE_NAME' non attiva, la avvio..."
+      "$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" >/dev/null \
+        || { err "Podman machine non avviabile; Colima non e' stato modificato."; exit 1; }
+    elif [ "$(uname)" = "Darwin" ]; then
       err "Docker daemon non risponde. Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
+      exit 1
     else
       err "Docker daemon non risponde. Avvialo (systemctl start docker / Docker Desktop)."
+      exit 1
     fi
-    exit 1
+    docker info >/dev/null 2>&1 \
+      || { err "Podman machine avviata ma il client JHT non risponde."; exit 1; }
   fi
 }
 
