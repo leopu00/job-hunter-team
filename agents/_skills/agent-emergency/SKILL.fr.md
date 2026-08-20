@@ -2,7 +2,7 @@
 ---
 name: agent-emergency
 description: "Capitano — prend en charge un agent soupçonné d'être BLOQUÉ DANS UNE BOUCLE ACTIVE (vivant et générant des tours, mais répétant le même cycle sans rien produire : ping-loop d'ACK avec un autre agent, même action/requête qui ne mène nulle part). Couvre la faille entre C-08 (mort/silencieux → Dottore) et C-12 (qui brûle à cadence 0.00/min → kill). Échelle graduée, le Dottore D'ABORD → kill+respawn propre seulement si ça persiste ou si ça brûle du budget. Détection déterministe (diff de capture-pane + 0 progrès en base), décision d'escalade laissée au LLM."
-allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # agent-emergency — agent bloqué dans une boucle active
@@ -68,6 +68,21 @@ sleep 10
 jht-tmux-send DOTTORE \
   "[@$MY_ID -> @dottore] [REQ] Tournée ciblée : <SESSION> semble bloquée dans une BOUCLE active (elle répète <quoi>, 0 progrès en base sur N ticks). Diagnostique-la et, si c'est confirmé, rafraîchis/répare la session. Réponds avec [RES]."
 # Attends le [RES] du Dottore — pas de polling.
+```
+
+### Confinement de sécurité — ce n'est PAS un redémarrage
+
+Si la session doit rester arrêtée, ne jamais utiliser `tmux kill-session` brut :
+
+```bash
+jht-agent-contain <SESSION> --by "$JHT_AGENT_NAME" --reason "<raison de sécurité observée>"
+```
+
+La commande capture d'abord le panneau, inscrit l'état persistant `contained`,
+puis arrête la session exacte. Seul un release explicite le révoque :
+
+```bash
+jht-agent-contain <SESSION> --release --by "$JHT_AGENT_NAME" --reason "<pourquoi c'est sûr maintenant>"
 ```
 
 ### Échelon 2 — Kill (+ respawn) — SEULEMENT si nécessaire

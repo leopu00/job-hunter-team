@@ -46,10 +46,12 @@ guardie che ne limitano il costo quando l'inferenza sbaglia.
    (`sentinel-orders`): il watchdog non puo' ricostruire il team che qualcuno ha
    appena smontato.
 
-Limite dichiarato, da non nascondere: finche' il teardown deliberato non viene
-DICHIARATO (`retire`), la distinzione resta un'inferenza. Il costo massimo
-dell'errore e' bounded (tre kick-off in un'ora, uno per sessione), ma non e'
-zero. Chi smonta un worker di proposito dovrebbe chiamare::
+`retire` resta il lifecycle ordinario (scale-down). Un containment di sicurezza
+ha invece uno stato distinto e sticky: `record` non lo cancella, quindi neppure
+uno spawn manuale puo' riattivare per sbaglio una sessione contenuta. Solo
+`release` rimuove esplicitamente quel cancello. Chi contiene usa il wrapper
+`jht-agent-contain`, che cattura il pane PRIMA di scrivere lo stato e fermare la
+sessione; le subcommand qui sotto sono il contratto a basso livello.
 
     python3 team_roster.py retire SCOUT-3 --reason "scale-down deliberato"
 
@@ -57,6 +59,10 @@ CLI::
 
     python3 team_roster.py record scout 3 --src start-agent.sh
     python3 team_roster.py retire SCOUT-3 --reason "scale-down"
+    python3 team_roster.py contain SCRITTORE-2 --by capitano --reason "unsafe output" --evidence /path/to/pane.txt
+    python3 team_roster.py release SCRITTORE-2 --by operatore --reason "incident resolved"
+    python3 team_roster.py is-contained SCRITTORE-2
+    python3 team_roster.py contained-live --tsv
     python3 team_roster.py missing            # JSON: attesi ma senza sessione
     python3 team_roster.py next-respawn       # "<role> <instance> <session>" o nulla
     python3 team_roster.py mark-respawn SCOUT-3
@@ -122,6 +128,35 @@ def roster_path() -> Path:
     return jht_home() / "logs" / "team-roster.json"
 
 
+def containment_marker(session: str, path: Path | None = None) -> Path:
+    """Marker separato dal roster: rende il containment immune a una write
+    concorrente di start-agent che avesse letto il roster appena prima della
+    decisione."""
+    base = (path or roster_path()).parent / "containment"
+    return base / f"{session.strip().upper()}.hold.json"
+
+
+def _load_containment_marker(session: str, path: Path | None = None) -> dict:
+    try:
+        data = json.loads(containment_marker(session, path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_containment_marker(session: str, event: dict,
+                              path: Path | None = None) -> None:
+    marker = containment_marker(session, path)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    tmp = marker.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(event, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(marker)
+    try:
+        marker.chmod(0o600)
+    except OSError:
+        pass
+
+
 def _env_int(name: str, default: int) -> int:
     try:
         return int(os.environ.get(name, "") or default)
@@ -170,15 +205,17 @@ def load(path: Path | None = None) -> dict:
     return data
 
 
-def save(state: dict, path: Path | None = None) -> None:
+def save(state: dict, path: Path | None = None) -> bool:
     p = path or roster_path()
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2))
         tmp.replace(p)
+        return True
     except OSError as e:  # fail-open: il roster non deve mai bloccare uno spawn
         print(f"[team_roster] WARN write failed: {e}", file=sys.stderr)
+        return False
 
 
 def record(role: str, instance=None, src: str = "", path: Path | None = None) -> dict:
@@ -189,18 +226,27 @@ def record(role: str, instance=None, src: str = "", path: Path | None = None) ->
     state = load(path)
     entry = state["agents"].get(sess) or {}
     now = _iso(_now())
+    contained = (entry.get("status") == "contained" or
+                 containment_marker(sess, path).exists())
     entry.update({
         "session": sess,
         "role": role,
         "instance": int(instance) if instance not in (None, "") else None,
-        "status": "active",
+        # Un normale spawn riattiva uno scale-down (`retired`) ma NON revoca
+        # un containment di sicurezza. In quel caso il watchdog vede la
+        # sessione viva, ne salva il pane e la rimette giu'.
+        "status": "contained" if contained else "active",
         "last_spawn": now,
         "last_spawn_src": src or entry.get("last_spawn_src", ""),
     })
     entry.setdefault("first_seen", now)
     entry.setdefault("respawns", [])
-    entry.pop("retired_at", None)
-    entry.pop("retire_reason", None)
+    if not contained:
+        entry.pop("retired_at", None)
+        entry.pop("retire_reason", None)
+    else:
+        entry.setdefault("containment_spawn_attempts", []).append(now)
+        entry["containment_spawn_attempts"] = entry["containment_spawn_attempts"][-20:]
     state["agents"][sess] = entry
     save(state, path)
     return entry
@@ -218,6 +264,122 @@ def retire(session: str, reason: str = "", path: Path | None = None) -> bool:
     entry["retire_reason"] = reason
     save(state, path)
     return True
+
+
+def contain(session: str, by: str, reason: str, evidence: str,
+            path: Path | None = None) -> dict:
+    """Applica un containment sticky. La cattura e' responsabilita' del
+    chiamante e deve gia' esistere: se il roster non e' persistibile, il
+    wrapper NON deve procedere al kill."""
+    sess = session.strip().upper()
+    state = load(path)
+    entry = state["agents"].get(sess)
+    if not entry:
+        raise ValueError(f"{sess} is not in the expected roster")
+    now = _iso(_now())
+    event = {
+        "action": "contained",
+        "at": now,
+        "by": by.strip() or "unknown",
+        "reason": reason.strip(),
+        "evidence": evidence,
+    }
+    marker_preexisted = containment_marker(sess, path).exists()
+    _write_containment_marker(sess, event, path)
+    entry.update({
+        "status": "contained",
+        "contained_at": now,
+        "contained_by": event["by"],
+        "contain_reason": event["reason"],
+        "contain_evidence": evidence,
+    })
+    entry.setdefault("containment_history", []).append(event)
+    entry["containment_history"] = entry["containment_history"][-50:]
+    if not save(state, path):
+        if not marker_preexisted:
+            try:
+                containment_marker(sess, path).unlink()
+            except OSError:
+                pass
+        raise OSError("could not persist containment in the roster")
+    return entry
+
+
+def release(session: str, by: str, reason: str,
+            path: Path | None = None) -> tuple[dict, str]:
+    """Revoca esplicitamente un containment; restituisce anche chi lo aveva
+    deciso, cosi' il wrapper puo' notificargli che la sua decisione cambia."""
+    sess = session.strip().upper()
+    state = load(path)
+    entry = state["agents"].get(sess)
+    marker_data = _load_containment_marker(sess, path)
+    if not entry or (entry.get("status") != "contained" and not marker_data):
+        raise ValueError(f"{sess} is not contained")
+    original_by = str(entry.get("contained_by") or marker_data.get("by") or "")
+    now = _iso(_now())
+    event = {
+        "action": "released",
+        "at": now,
+        "by": by.strip() or "unknown",
+        "reason": reason.strip(),
+    }
+    entry["status"] = "active"
+    entry["released_at"] = now
+    entry["released_by"] = event["by"]
+    entry["release_reason"] = event["reason"]
+    # Una release e' una nuova decisione esplicita: le sonde di recovery
+    # antecedenti non devono auto-ritirarla come "seconda sparizione".
+    entry["respawns"] = []
+    entry.setdefault("containment_history", []).append(event)
+    entry["containment_history"] = entry["containment_history"][-50:]
+    if not save(state, path):
+        raise OSError("could not persist containment release in the roster")
+    try:
+        containment_marker(sess, path).unlink()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        raise OSError("could not remove the sticky containment marker") from exc
+    return entry, original_by
+
+
+def is_contained(session: str, path: Path | None = None) -> bool:
+    sess = session.strip().upper()
+    if containment_marker(sess, path).exists():
+        return True
+    entry = load(path).get("agents", {}).get(sess) or {}
+    return entry.get("status") == "contained"
+
+
+def contained_live(path: Path | None = None,
+                   live: set | None = None) -> list[dict]:
+    state = load(path)
+    contained_by_session = {
+        sess: dict(entry)
+        for sess, entry in sorted(state.get("agents", {}).items())
+        if entry.get("status") == "contained"
+    }
+    marker_dir = containment_marker("placeholder", path).parent
+    try:
+        markers = list(marker_dir.glob("*.hold.json"))
+    except OSError:
+        markers = []
+    for marker in markers:
+        sess = marker.name.removesuffix(".hold.json")
+        data = _load_containment_marker(sess, path)
+        entry = contained_by_session.get(sess) or dict(
+            state.get("agents", {}).get(sess) or {"session": sess})
+        entry["status"] = "contained"
+        entry["contained_by"] = data.get("by") or entry.get("contained_by") or "unknown"
+        entry["contain_evidence"] = data.get("evidence") or entry.get("contain_evidence") or ""
+        contained_by_session[sess] = entry
+    contained = sorted(contained_by_session.items())
+    if not contained:
+        return []
+    alive = live_sessions() if live is None else live
+    return [
+        entry for sess, entry in contained if sess in alive
+    ]
 
 
 # ── osservazione ─────────────────────────────────────────────────────────────
@@ -498,6 +660,23 @@ def main(argv=None) -> int:
     pt.add_argument("session")
     pt.add_argument("--reason", default="")
 
+    pc = sub.add_parser("contain", help="persist a sticky safety containment")
+    pc.add_argument("session")
+    pc.add_argument("--by", required=True)
+    pc.add_argument("--reason", required=True)
+    pc.add_argument("--evidence", required=True)
+
+    prelease = sub.add_parser("release", help="explicitly revoke a containment")
+    prelease.add_argument("session")
+    prelease.add_argument("--by", required=True)
+    prelease.add_argument("--reason", required=True)
+
+    pic = sub.add_parser("is-contained", help="exit 0 only for a contained session")
+    pic.add_argument("session")
+
+    pcl = sub.add_parser("contained-live", help="contained sessions that are alive")
+    pcl.add_argument("--tsv", action="store_true")
+
     pl = sub.add_parser(
         "roles", help="roles with their own tmux session, one per line "
                       "(single source for shell scripts)")
@@ -524,6 +703,34 @@ def main(argv=None) -> int:
         ok = retire(args.session, args.reason)
         print("retired" if ok else "not-in-roster")
         return 0 if ok else 1
+    if args.cmd == "contain":
+        try:
+            entry = contain(args.session, args.by, args.reason, args.evidence)
+        except (ValueError, OSError) as exc:
+            print(f"team_roster: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(entry, ensure_ascii=False))
+        return 0
+    if args.cmd == "release":
+        try:
+            entry, original_by = release(args.session, args.by, args.reason)
+        except (ValueError, OSError) as exc:
+            print(f"team_roster: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps({"entry": entry, "original_by": original_by}, ensure_ascii=False))
+        return 0
+    if args.cmd == "is-contained":
+        return 0 if is_contained(args.session) else 1
+    if args.cmd == "contained-live":
+        entries = contained_live()
+        if args.tsv:
+            for entry in entries:
+                print("\t".join((str(entry.get("session") or ""),
+                                  str(entry.get("contained_by") or "unknown"),
+                                  str(entry.get("contain_evidence") or ""))))
+        else:
+            print(json.dumps(entries, ensure_ascii=False))
+        return 0
     if args.cmd == "roles":
         groups = {"all": ALL_ROLES, "worker": WORKER_ROLES,
                   "core": CORE_ROLES, "ephemeral": EPHEMERAL_ROLES}

@@ -2,7 +2,7 @@
 ---
 name: agent-emergency
 description: "Capitano — behandelt einen Agenten, bei dem der Verdacht besteht, dass er IN EINER AKTIVEN SCHLEIFE FESTHÄNGT (lebendig und Züge generierend, aber denselben Zyklus wiederholend, ohne etwas zu produzieren: ACK-Ping-Schleife mit einem Peer, dieselbe Aktion/Abfrage, die zu nichts führt). Deckt die Lücke zwischen C-08 (tot/still → Dottore) und C-12 (Verbrennen mit cadenza 0.00/min → kill) ab. Abgestufte Leiter, Dottore-ZUERST → kill + sauberer Respawn nur, wenn es anhält oder Budget verbrennt. Deterministische Erkennung (capture-pane-Diff + 0 DB-Fortschritt), Eskalationsentscheidung dem LLM überlassen."
-allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # agent-emergency — Agent in einer aktiven Schleife festgefahren
@@ -68,6 +68,21 @@ sleep 10
 jht-tmux-send DOTTORE \
   "[@$MY_ID -> @dottore] [REQ] Gezielte Runde: <SESSION> scheint in einer aktiven SCHLEIFE festzuhängen (sie wiederholt <was>, 0 DB-Fortschritt über N Ticks). Diagnostiziere sie und, falls bestätigt, frische die Sitzung auf / repariere sie. Melde dich mit [RES] zurück."
 # Warte auf das [RES] des Dottore — kein Polling.
+```
+
+### Sicherheits-Containment — KEIN Neustart
+
+Wenn die Sitzung unten bleiben muss, niemals rohes `tmux kill-session` verwenden:
+
+```bash
+jht-agent-contain <SESSION> --by "$JHT_AGENT_NAME" --reason "<beobachteter Sicherheitsgrund>"
+```
+
+Der Befehl sichert zuerst den Pane, setzt den sticky Zustand `contained` und
+stoppt erst danach die exakte Sitzung. Nur ein explizites Release hebt ihn auf:
+
+```bash
+jht-agent-contain <SESSION> --release --by "$JHT_AGENT_NAME" --reason "<warum jetzt sicher>"
 ```
 
 ### Stufe 2 — Kill (+ Respawn) — NUR wenn nötig

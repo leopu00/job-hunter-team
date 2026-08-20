@@ -2,7 +2,7 @@
 ---
 name: agent-emergency
 description: "Capitano — gestisce un agente sospettato di essere BLOCCATO IN UN LOOP ATTIVO (vivo e genera turni, ma ripete lo stesso ciclo senza produrre nulla: ping-loop di ACK con un altro agente, stessa azione/query che non porta da nessuna parte). Copre la crepa fra C-08 (morto/silenzioso → Dottore) e C-12 (che brucia a cadenza 0.00/min → kill). Scala graduata, prima il Dottore → kill+respawn pulito solo se persiste o brucia budget. Rilevamento deterministico (diff di capture-pane + 0 progresso nel DB), decisione di escalation lasciata all'LLM."
-allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # agent-emergency — agente bloccato in un loop attivo
@@ -66,6 +66,25 @@ sleep 10
 jht-tmux-send DOTTORE \
   "[@$MY_ID -> @dottore] [REQ] Giro mirato: <SESSION> sembra bloccata in un LOOP attivo (ripete <cosa>, 0 progresso nel DB su N tick). Diagnosticala e, se confermato, fai refresh/riparazione della sessione. Rispondi con [RES]."
 # Attendi il [RES] del Dottore — niente polling.
+```
+
+### Containment di sicurezza — NON è un riavvio
+
+Se la decisione è **«questa sessione deve restare giù»**, non usare mai
+`tmux kill-session` crudo: una sessione attiva mancante è un buco e il watchdog
+deve ricrearla. Usa invece il comando atomico:
+
+```bash
+jht-agent-contain <SESSION> --by "$JHT_AGENT_NAME" --reason "<motivo di sicurezza osservato>"
+```
+
+Il comando cattura prima l'intero pane, registra lo stato sticky `contained` e
+solo dopo ferma la sessione esatta. Uno spawn normale non può cancellare lo
+stato. Se qualcuno la riaccende, il watchdog la cattura di nuovo, la ferma e
+avvisa chi aveva deciso. Solo un rilascio esplicito riabilita la supervisione:
+
+```bash
+jht-agent-contain <SESSION> --release --by "$JHT_AGENT_NAME" --reason "<perché ora è sicuro>"
 ```
 
 ### Gradino 2 — Kill (+ respawn) — SOLO se serve

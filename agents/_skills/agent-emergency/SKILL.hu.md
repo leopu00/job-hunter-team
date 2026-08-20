@@ -2,7 +2,7 @@
 ---
 name: agent-emergency
 description: "Capitano — olyan agenst kezel, amelyről feltehető, hogy AKTÍV HUROKBAN RAGADT (él és turnöket generál, de ugyanazt a ciklust ismétli anélkül, hogy bármit előállítana: ACK ping-hurok egy társsal, ugyanaz a művelet/lekérdezés, ami nem vezet sehová). A C-08 (halott/néma → Dottore) és a C-12 (cadenza 0.00/min mellett éget → kill) közötti rést fedi le. Fokozatos létra, Dottore-ELŐSZÖR → kill + tiszta respawn csak akkor, ha kitart vagy budgetet éget. Determinisztikus felismerés (capture-pane diff + 0 DB-előrehaladás), az eszkalációs döntés az LLM-re marad."
-allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # agent-emergency — aktív hurokban ragadt agens
@@ -68,6 +68,21 @@ sleep 10
 jht-tmux-send DOTTORE \
   "[@$MY_ID -> @dottore] [REQ] Célzott kör: a <SESSION> úgy tűnik, aktív HUROKBAN ragadt (ismétli a <mit>-et, 0 DB-előrehaladás N ticken keresztül). Diagnosztizáld, és ha megerősíted, frissítsd/javítsd a munkamenetet. Jelezz vissza [RES]-szel."
 # Várd meg a Dottore [RES]-ét — semmi polling.
+```
+
+### Biztonsági containment — ez NEM újraindítás
+
+Ha a sessionnek leállítva kell maradnia, ne használj nyers `tmux kill-session` parancsot:
+
+```bash
+jht-agent-contain <SESSION> --by "$JHT_AGENT_NAME" --reason "<megfigyelt biztonsági ok>"
+```
+
+A parancs előbb menti a panelt, majd sticky `contained` állapotot ír, és csak
+ezután állítja le a pontos sessiont. Csak explicit release oldhatja fel:
+
+```bash
+jht-agent-contain <SESSION> --release --by "$JHT_AGENT_NAME" --reason "<miért biztonságos most>"
 ```
 
 ### 2. fok — Kill (+ respawn) — CSAK ha szükséges
