@@ -314,16 +314,10 @@ function probeCandidate(spec, configText, alias, log) {
 //            perche' e' anche l'unico dove il file ELENCA le alternative: si
 //            sceglie fra quelle, si prova, si scrive.
 //
-//   codex  — $JHT_HOME/.codex/config.toml. Il login NON scrive un modello; ci
-//            finisce un `model = "..."` solo se qualcuno lo sceglie dalla TUI
-//            (/model) o lo scrive a mano. SOLO RILEVATO, mai modificato:
-//            (a) il suo config non elenca alternative — non c'e' catalogo da
-//                cui scegliere, e un nome inventato da noi lascerebbe la CLI
-//                con un pin che non risolve, cioe' il team fermo;
-//            (b) quel file contiene anche le entry `[projects."…"] trust_level`
-//                che scrive start-agent.sh: senza trust, gli agenti codex si
-//                piantano sul prompt "Do you trust this directory?".
-//            Se il pin c'e', il Capitano lo riceve come finding e decide l'utente.
+//   codex  — NON APPLICABILE. start-agent.sh passa sempre un --model risolto
+//            dalla mappa del ruolo (opus -> gpt-5.6-sol, sonnet ->
+//            gpt-5.6-terra). L'argomento vince su un eventuale `model = "..."`
+//            in config.toml, che non rappresenta piu' il modello degli agenti.
 //
 //   claude — NON APPLICABILE. start-agent.sh passa `--model opus|sonnet` a
 //            OGNI spawn: l'argomento vince su qualunque preferenza salvata, e
@@ -362,14 +356,10 @@ const PIN_SPECS = {
   },
   codex: {
     bin: 'codex',
-    mutable: false,
-    defaultKey: 'model',
-    tableParent: null,
-    configPath: () => join(JHT_HOME, '.codex', 'config.toml'),
-    detectOnlyReason:
-      'its config does not list alternatives (there is no catalog to choose from, and an invented name '
-      + 'would leave the CLI with an unresolved pin), and the same file contains the agents\' '
-      + 'trust_level entries',
+    applicable: false,
+    notApplicableReason:
+      'start-agent.sh passes an explicit role model on every spawn '
+      + '(opus -> gpt-5.6-sol, sonnet -> gpt-5.6-terra), so a config pin cannot drift the agents',
   },
   claude: {
     bin: 'claude',

@@ -475,18 +475,16 @@ posixOnly("model pin — chi lo ferma, e i provider che non si toccano", () => {
     expect(sb.mailbox()).toHaveLength(0);
   });
 
-  it("codex: il pin viene SEGNALATO ma il file non si tocca (contiene anche i trust_level)", () => {
+  it("codex: il pin config e' irrilevante, start-agent passa il modello del ruolo", () => {
     const codex = `model = "gpt-5.4"\nmodel_reasoning_effort = "high"\n\n[projects."/jht_home/agents/capitano"]\ntrust_level = "trusted"\n`;
     const sb = makeSandbox({ provider: "openai", codexConfig: codex });
     const r = runAutoUpdate(sb);
     expect(r.code).toBe(0);
-    expect(r.out).toContain("detected but not modified");
+    expect(r.out).toContain("not applicable");
+    expect(r.out).toContain("gpt-5.6-sol");
+    expect(r.out).toContain("gpt-5.6-terra");
     expect(readFileSync(path.join(sb.home, ".codex", "config.toml"), "utf-8")).toBe(codex);
-
-    const msg = String(sb.mailbox()[0].msg);
-    expect(msg).toContain("gpt-5.4");
-    expect(msg).toContain("user decision");
-    expect(msg).toContain("session STARTS");
+    expect(sb.mailbox()).toHaveLength(0);
   });
 
   it("claude: nessun pin da rivedere, start-agent.sh passa --model a ogni spawn", () => {
