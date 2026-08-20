@@ -116,12 +116,20 @@ class ThreadingProxy(socketserver.ThreadingTCPServer):
         super().__init__(address, ProxyHandler)
 
 
-def main() -> None:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--bind", default="0.0.0.0")
+    parser.add_argument(
+        "--bind",
+        default="127.0.0.1",
+        help="listen address (default: loopback only)",
+    )
     parser.add_argument("--port", type=int, default=3128)
     parser.add_argument("--connector", required=True, help="WSL path to native Windows connector")
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def main() -> None:
+    args = parse_args()
 
     with ThreadingProxy((args.bind, args.port), args.connector) as server:
         print(f"JHT_INTEROP_PROXY_READY http://{args.bind}:{args.port}", flush=True)

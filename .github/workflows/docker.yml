@@ -25,6 +25,15 @@ on:
     paths:
       - "Dockerfile"
       - ".dockerignore"
+      - "package.json"
+      - "package-lock.json"
+      - "cli/**"
+      - "web/**"
+      - "shared/**"
+      - "agents/**"
+      - ".launcher/**"
+      - "scripts/**"
+      - "requirements.txt"
       - ".github/workflows/docker.yml"
   workflow_dispatch:
 

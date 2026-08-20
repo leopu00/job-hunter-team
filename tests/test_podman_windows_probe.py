@@ -1,6 +1,7 @@
 """Contracts for the opt-in Windows Podman compatibility probe."""
 
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
 
@@ -104,6 +105,14 @@ def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
     assert "https://ghcr.io/v2/" in source
     assert "--node" not in proxy
     assert "[self.server.connector, host, str(port)]" in proxy
+
+
+def test_interop_proxy_defaults_to_loopback_when_run_standalone():
+    module = runpy.run_path(str(PROXY))
+    args = module["parse_args"](["--connector", "/unused/test-connector"])
+
+    assert args.bind == "127.0.0.1"
+    assert 'default="0.0.0.0"' not in PROXY.read_text(encoding="utf-8")
 
 
 def test_podman_compose_preserves_private_bind_mount_ownership():
