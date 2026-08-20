@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""Atomically capture, declare and enforce an agent safety containment."""
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+
+SESSION_RE = re.compile(
+    r"^(?:ASSISTENTE|CAPITANO|MENTOR|SENTINELLA|SCOUT-[1-9][0-9]*|"
+    r"ANALISTA-[1-9][0-9]*|SCORER-[1-9][0-9]*|SCRITTORE-[1-9][0-9]*|"
+    r"CRITICO-S[1-9][0-9]*)$"
+)
+
+
+def home() -> Path:
+    return Path(os.environ.get("JHT_HOME") or "/jht_home")
+
+
+def load_roster():
+    candidates = (
+        Path("/app/shared/skills/team_roster.py"),
+        Path(__file__).resolve().parents[2] / "shared" / "skills" / "team_roster.py",
+    )
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        spec = importlib.util.spec_from_file_location("jht_containment_roster", candidate)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+    raise RuntimeError("team_roster.py not found")
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def exact_tmux(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["tmux", *args], capture_output=True, text=True, timeout=15)
+
+
+def session_alive(session: str) -> bool:
+    return exact_tmux("has-session", "-t", f"={session}").returncode == 0
+
+
+def capture(session: str) -> Path:
+    evidence_dir = home() / "logs" / "containment"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    path = evidence_dir / f"{stamp}-{session}.txt"
+    result = exact_tmux("capture-pane", "-t", f"={session}", "-p", "-S", "-")
+    if result.returncode != 0:
+        raise RuntimeError(f"could not capture {session}: {result.stderr.strip() or 'tmux error'}")
+    path.write_text(result.stdout, encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+    return path
+
+
+def journal(event: dict) -> None:
+    path = home() / "logs" / "agent-containments.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
+def notify(session: str, message: str) -> None:
+    sender = shutil.which("jht-tmux-send")
+    if not sender or not session or session == "unknown" or not session_alive(session):
+        return
+    subprocess.run([sender, session, message], capture_output=True, text=True, timeout=30)
+
+
+def actor_name(value: str | None) -> str:
+    raw = value or os.environ.get("JHT_AGENT_NAME") or "operator"
+    return raw.strip().upper().replace("_", "-") or "OPERATOR"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Capture and keep an agent down until an explicit release.")
+    parser.add_argument("session")
+    parser.add_argument("--by", dest="actor")
+    parser.add_argument("--reason", required=True)
+    parser.add_argument("--release", action="store_true")
+    args = parser.parse_args()
+
+    session = args.session.strip().upper()
+    actor = actor_name(args.actor)
+    if not SESSION_RE.fullmatch(session):
+        parser.error(f"unsupported agent session: {session}")
+
+    try:
+        roster = load_roster()
+        if args.release:
+            _, original_by = roster.release(session, actor, args.reason)
+            event = {"ts": now_iso(), "event": "released", "session": session,
+                     "by": actor, "reason": args.reason,
+                     "original_by": original_by}
+            journal(event)
+            message = (f"[CONTAINMENT] {session} was explicitly released by {actor}: "
+                       f"{args.reason}. Your earlier keep-down decision is no longer active.")
+            notify(original_by.upper(), message)
+            if original_by.upper() != "CAPITANO":
+                notify("CAPITANO", message)
+            print(f"released {session}; start it explicitly or let normal supervision resume")
+            return 0
+
+        if not session_alive(session):
+            raise RuntimeError(f"{session} is not alive; no pane exists to capture")
+        evidence = capture(session)  # Evidence MUST precede state change and kill.
+        roster.contain(session, actor, args.reason, str(evidence))
+        killed = exact_tmux("kill-session", "-t", f"={session}")
+        if killed.returncode != 0:
+            raise RuntimeError(
+                f"containment persisted but tmux kill failed: {killed.stderr.strip() or 'tmux error'}")
+        event = {"ts": now_iso(), "event": "contained", "session": session,
+                 "by": actor, "reason": args.reason, "evidence": str(evidence)}
+        journal(event)
+        message = (f"[CONTAINMENT] {session} is captured and held down by {actor}. "
+                   f"Evidence: {evidence}. Release requires jht-agent-contain "
+                   f"{session} --release --reason <reason>.")
+        notify(actor, message)
+        if actor != "CAPITANO":
+            notify("CAPITANO", message)
+        print(f"contained {session}; evidence={evidence}")
+        return 0
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+        print(f"jht-agent-contain: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

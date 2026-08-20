@@ -1,7 +1,7 @@
 ---
 name: agent-emergency
 description: Capitano — handles an agent suspected of being STUCK IN AN ACTIVE LOOP (alive and generating turns, but repeating the same cycle without producing anything: ACK ping-loop with a peer, same action/query going nowhere). Covers the crack between C-08 (dead/silent → Dottore) and C-12 (burning at cadence 0.00/min → kill). Graduated ladder, Dottore-FIRST → kill+clean-respawn only if it persists or burns budget. Deterministic detection (capture-pane diff + 0 DB progress), escalation decision left to the LLM.
-allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # agent-emergency — agent stuck in an active loop
@@ -66,6 +66,25 @@ sleep 10
 jht-tmux-send DOTTORE \
   "[@$MY_ID -> @dottore] [REQ] Targeted round: <SESSION> looks stuck in an active LOOP (it repeats <what>, 0 DB progress over N ticks). Diagnose it and, if confirmed, refresh/repair the session. Report back with [RES]."
 # Wait for the Dottore's [RES] — no polling.
+```
+
+### Safety containment — this is NOT a restart
+
+If the decision is **"this session must stay down"**, never use raw
+`tmux kill-session`: a missing active session is a hole and the watchdog is
+supposed to recreate it. Use the atomic containment command instead:
+
+```bash
+jht-agent-contain <SESSION> --by "$JHT_AGENT_NAME" --reason "<observed safety reason>"
+```
+
+It captures the complete pane first, records a sticky `contained` state, then
+kills the exact session. A normal spawn cannot clear that state. If someone
+starts the session anyway, the watchdog captures it again, stops it, and warns
+the original decision-maker. Only an explicit release re-enables supervision:
+
+```bash
+jht-agent-contain <SESSION> --release --by "$JHT_AGENT_NAME" --reason "<why it is safe now>"
 ```
 
 ### Rung 2 — Kill (+ respawn) — ONLY if needed

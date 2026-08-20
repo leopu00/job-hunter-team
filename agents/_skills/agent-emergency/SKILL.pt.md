@@ -2,7 +2,7 @@
 ---
 name: agent-emergency
 description: "Capitano — trata um agente suspeito de estar PRESO NUM CICLO ATIVO (vivo e a gerar turnos, mas a repetir o mesmo ciclo sem produzir nada: ping-loop de ACK com um par, mesma ação/consulta que não leva a lado nenhum). Cobre a fenda entre C-08 (morto/silencioso → Dottore) e C-12 (a queimar com cadenza 0.00/min → kill). Escada graduada, Dottore-PRIMEIRO → kill + respawn limpo apenas se persistir ou queimar orçamento. Deteção determinística (diff de capture-pane + 0 progresso na DB), decisão de escalada deixada ao LLM."
-allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # agent-emergency — agente preso num ciclo ativo
@@ -65,6 +65,21 @@ sleep 10
 jht-tmux-send DOTTORE \
   "[@$MY_ID -> @dottore] [REQ] Ronda direcionada: <SESSION> parece presa num CICLO ativo (repete <o quê>, 0 progresso na DB ao longo de N ticks). Diagnostica-a e, se confirmado, faz refresh/repara a sessão. Responde com [RES]."
 # Espera pelo [RES] do Dottore — sem polling.
+```
+
+### Contenção de segurança — NÃO é um reinício
+
+Se a sessão deve permanecer desligada, nunca uses `tmux kill-session` diretamente:
+
+```bash
+jht-agent-contain <SESSION> --by "$JHT_AGENT_NAME" --reason "<motivo de segurança observado>"
+```
+
+O comando captura primeiro o painel, grava o estado persistente `contained` e
+só depois para a sessão exata. Apenas um release explícito o revoga:
+
+```bash
+jht-agent-contain <SESSION> --release --by "$JHT_AGENT_NAME" --reason "<por que agora é seguro>"
 ```
 
 ### Degrau 2 — Kill (+ respawn) — SÓ se necessário

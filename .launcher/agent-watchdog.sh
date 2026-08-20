@@ -232,6 +232,11 @@ ensure_agent() {
   local role="$1"
   local session
   session="$(echo "$role" | tr '[:lower:]' '[:upper:]')"
+  # Un containment e' sticky e vale anche per i core: il normale `record`
+  # di start-agent non puo' revocarlo, soltanto `release` puo' farlo.
+  if agent_is_contained "$session"; then
+    return 0
+  fi
   if is_session_alive "$session"; then
     return 0
   fi
@@ -357,6 +362,7 @@ maybe_ttl_refresh() {
     s="${line%%|*}"
     [ -z "$s" ] && continue
     is_agent_session "$s" || continue
+    agent_is_contained "$s" && continue
     age=$(session_age_h "$s") || continue
     [ -z "$age" ] && continue
     if [ "$age" -ge "$AGENT_MAX_SESSION_AGE_H" ] && [ "$age" -gt "$oldest_age" ]; then
@@ -383,6 +389,11 @@ EOF
     INTENTIONAL_RECREATE_SESSION="$oldest"
   fi
   return 0
+}
+
+agent_is_contained() {
+  [ -f "$ROSTER_TOOL" ] || return 1
+  JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" is-contained "$1" >/dev/null 2>&1
 }
 
 maybe_respawn_workers() {
@@ -528,6 +539,51 @@ maybe_respawn_bridges() {
 
 log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no schedule gate, one per tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min)"
 
+# Queste funzioni stanno deliberatamente dopo il marker di bootstrap qui
+# sopra: i test unitari storici estraggono il prelude fino a quel marker.
+capture_for_containment() {
+  local session="$1" evidence_dir stamp evidence
+  evidence_dir="$JHT_HOME/logs/containment"
+  mkdir -p "$evidence_dir" 2>/dev/null || return 1
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  evidence="$evidence_dir/${stamp}-${session}-reenforced.txt"
+  # La scena viene salvata PRIMA del kill. Se la cattura fallisce non
+  # distruggiamo la sola evidenza rimasta: ritentiamo al tick successivo.
+  tmux capture-pane -t "=$session" -p -S - > "$evidence" 2>/dev/null || {
+    rm -f "$evidence" 2>/dev/null || true
+    return 1
+  }
+  chmod 600 "$evidence" 2>/dev/null || true
+  printf '%s' "$evidence"
+}
+
+maybe_enforce_containments() {
+  # Uno spawn ordinario non revoca `contained`: se qualcuno prova a
+  # riaccendere la sessione, salviamo di nuovo il pane, la rimettiamo giu' e
+  # avvisiamo chi aveva deciso (oltre al Capitano). Nessun override silenzioso.
+  [ -f "$ROSTER_TOOL" ] || return 0
+  local plan session actor old_evidence evidence message
+  plan=$(JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" contained-live --tsv 2>/dev/null) || return 0
+  [ -z "$plan" ] && return 0
+  while IFS=$'\t' read -r session actor old_evidence; do
+    [ -z "$session" ] && continue
+    evidence="$(capture_for_containment "$session")" || {
+      log "containment: $session is live but capture failed — NOT killing; retry next tick"
+      continue
+    }
+    if tmux kill-session -t "=$session" 2>/dev/null; then
+      log "containment: $session was live despite sticky containment — captured to $evidence and stopped again"
+      message="[CONTAINMENT] $session was started despite your keep-down decision. The watchdog captured it to $evidence and stopped it again; the containment remains active. Original evidence: $old_evidence"
+      "$TMUX_SENDER" "${actor:-CAPITANO}" "$message" >/dev/null 2>&1 || true
+      if [ "${actor:-CAPITANO}" != "CAPITANO" ]; then
+        "$TMUX_SENDER" CAPITANO "$message" >/dev/null 2>&1 || true
+      fi
+    fi
+  done <<EOF
+$plan
+EOF
+}
+
 # Loop principale: gate sulla config (può non essere ancora pronta al
 # primo boot del container — il wizard la scrive post-pairing). Sleep
 # tra un tick e l'altro anche quando non facciamo niente: non vogliamo
@@ -573,6 +629,9 @@ config_not_ready_tick=0
 CONFIG_NOT_READY_GRACE_TICKS="${JHT_CONFIG_NOT_READY_GRACE_TICKS:-10}"
 
 while true; do
+  # Il containment e' un cancello di sicurezza, non una funzione del provider:
+  # resta applicabile anche con config incompleta o credenziali non pronte.
+  maybe_enforce_containments
   # Team-halted gate (set by team-state-reconciler quando user clicca Stop
   # dalla dashboard). Source of truth: team_state.should_run. Quando
   # presente, NIENTE respawn — l'utente ha esplicitamente fermato.
