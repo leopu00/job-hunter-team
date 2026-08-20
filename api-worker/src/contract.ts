@@ -109,7 +109,20 @@ function isHttpUrl(value: string): boolean {
 
 export const UsageSchema = z.strictObject({
   inputTokens: z.number().int().nonnegative(),
+  inputTokenDetails: z
+    .strictObject({
+      noCacheTokens: z.number().int().nonnegative().optional(),
+      cacheReadTokens: z.number().int().nonnegative().optional(),
+      cacheWriteTokens: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
   outputTokens: z.number().int().nonnegative(),
+  outputTokenDetails: z
+    .strictObject({
+      textTokens: z.number().int().nonnegative().optional(),
+      reasoningTokens: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
   totalTokens: z.number().int().nonnegative(),
 });
 
@@ -118,6 +131,9 @@ export type Usage = z.infer<typeof UsageSchema>;
 export const CostSchema = z.strictObject({
   amountUsd: z.number().nonnegative(),
   estimated: z.boolean(),
+  basis: z
+    .enum(["none", "configured_pricing", "reserved_ceiling", "billing"])
+    .optional(),
 });
 
 export const StopReasonSchema = z.enum([
@@ -146,7 +162,9 @@ export const ScoutWorkerResultSchema = z.strictObject({
   metrics: z.strictObject({
     latencyMs: z.number().int().nonnegative(),
     steps: z.number().int().nonnegative(),
+    providerRequests: z.number().int().nonnegative().optional(),
     toolCalls: z.number().int().nonnegative(),
+    webSearchCalls: z.number().int().nonnegative().optional(),
   }),
 });
 
@@ -247,7 +265,20 @@ export const ProviderStepEventSchema = AuditCommonSchema.extend({
   latencyMs: z.number().int().nonnegative(),
   usage: UsageSchema,
   cost: CostSchema,
+  webSearchCalls: z.number().int().nonnegative().optional(),
+  webSearchCostUsd: z.number().nonnegative().optional(),
+  responseId: SafeIdentifierSchema.optional(),
   stopReason: z.string().trim().min(1).max(80),
+});
+
+export const ProviderRequestEventSchema = AuditCommonSchema.extend({
+  event: z.literal("provider_request"),
+  phase: z.enum(["started", "failed"]),
+  provider: z.enum(["mock", "anthropic", "openai", "kimi"]),
+  model: ShortTextSchema,
+  step: z.number().int().positive(),
+  latencyMs: z.number().int().nonnegative().optional(),
+  failureReason: SafeIdentifierSchema.optional(),
 });
 
 export const RunCompletedEventSchema = AuditCommonSchema.extend({
@@ -258,6 +289,8 @@ export const RunCompletedEventSchema = AuditCommonSchema.extend({
   usage: UsageSchema,
   cost: CostSchema,
   toolCalls: z.number().int().nonnegative(),
+  providerRequests: z.number().int().nonnegative().optional(),
+  webSearchCalls: z.number().int().nonnegative().optional(),
   steps: z.number().int().nonnegative(),
   stopReason: StopReasonSchema,
   proposalCount: z.number().int().nonnegative(),
@@ -271,11 +304,18 @@ export const RunFailedEventSchema = AuditCommonSchema.extend({
   errorCode: WorkerErrorCodeSchema,
   retryable: z.boolean(),
   limit: ScoutWorkerErrorSchema.shape.limit,
+  usage: UsageSchema.optional(),
+  cost: CostSchema.optional(),
+  providerRequests: z.number().int().nonnegative().optional(),
+  pricedProviderRequests: z.number().int().nonnegative().optional(),
+  toolCalls: z.number().int().nonnegative().optional(),
+  webSearchCalls: z.number().int().nonnegative().optional(),
 });
 
 export const AuditEventSchema = z.union([
   ToolEventSchema,
   RunStartedEventSchema,
+  ProviderRequestEventSchema,
   ProviderStepEventSchema,
   RunCompletedEventSchema,
   RunFailedEventSchema,

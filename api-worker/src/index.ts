@@ -6,6 +6,7 @@ export * from "./guardrails.js";
 export * from "./model-profile.js";
 export * from "./providers/provider.js";
 export * from "./tools.js";
+export * from "./usage-report.js";
 export * from "./standalone-db.js";
 export * from "./standalone.js";
 export * from "./web-job-reader.js";

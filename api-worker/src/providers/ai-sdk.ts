@@ -7,6 +7,7 @@ import {
   generateText,
   stepCountIs,
   tool,
+  type LanguageModelUsage,
   type ToolSet,
 } from "ai";
 
@@ -34,6 +35,7 @@ export class AiSdkScoutProvider implements ScoutProviderAdapter {
     const model = createModel(context, this.apiKey);
     const tools = createTools(context, this.apiKey);
     const reservations = new Map<number, StepReservation>();
+    const finishedSteps = new Set<number>();
 
     try {
       const result = await generateText({
@@ -51,15 +53,14 @@ export class AiSdkScoutProvider implements ScoutProviderAdapter {
         maxOutputTokens: context.input.limits.maxOutputTokensPerStep,
         maxRetries: 0,
         abortSignal: context.signal,
-        prepareStep: ({ messages, stepNumber }) => {
+        prepareStep: async ({ messages, stepNumber }) => {
           const serialized = JSON.stringify({
             system: context.systemPrompt,
             messages,
           });
-          reservations.set(
-            stepNumber,
-            context.guard.beforeProviderStep(serialized),
-          );
+          const reservation = context.guard.beforeProviderStep(serialized);
+          reservations.set(stepNumber, reservation);
+          await context.recordRequestStarted(reservation);
           return {};
         },
         onStepFinish: async ({
@@ -67,17 +68,22 @@ export class AiSdkScoutProvider implements ScoutProviderAdapter {
           usage,
           finishReason,
           toolCalls,
+          response,
         }) => {
           const reservation = reservations.get(stepNumber);
           if (!reservation) throw new WorkerFault("INTERNAL_ERROR");
-          context.guard.recordWebSearchCalls(
-            toolCalls.filter((call) => call.toolName === "web_search").length,
-          );
+          const webSearchCalls = toolCalls.filter(
+            (call) => call.toolName === "web_search",
+          ).length;
+          context.guard.recordWebSearchCalls(webSearchCalls);
           await context.recordStep({
             reservation,
             usage: normalizeUsage(usage),
             finishReason,
+            webSearchCalls,
+            responseId: response.id,
           });
+          finishedSteps.add(stepNumber);
         },
       });
 
@@ -86,6 +92,13 @@ export class AiSdkScoutProvider implements ScoutProviderAdapter {
         rawStopReason: result.finishReason,
       };
     } catch (error) {
+      await Promise.all(
+        [...reservations.entries()]
+          .filter(([stepNumber]) => !finishedSteps.has(stepNumber))
+          .map(([, reservation]) =>
+            context.recordRequestFailed(reservation, "provider_error"),
+          ),
+      );
       if (error instanceof WorkerFault) throw error;
       const recovered = recoverGeneratedObject(error);
       if (recovered) return recovered;
@@ -183,16 +196,35 @@ function createModel(context: ProviderExecutionContext, apiKey: string) {
   }
 }
 
-function normalizeUsage(usage: {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-}): Usage {
+function normalizeUsage(usage: LanguageModelUsage): Usage {
   const inputTokens = finiteTokenCount(usage.inputTokens);
   const outputTokens = finiteTokenCount(usage.outputTokens);
+  const cacheReadTokens = finiteTokenCount(
+    usage.inputTokenDetails?.cacheReadTokens,
+  );
+  const cacheWriteTokens = finiteTokenCount(
+    usage.inputTokenDetails?.cacheWriteTokens,
+  );
+  const noCacheTokens =
+    optionalTokenCount(usage.inputTokenDetails?.noCacheTokens) ??
+    Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens);
+  const reasoningTokens = finiteTokenCount(
+    usage.outputTokenDetails?.reasoningTokens,
+  );
   return {
     inputTokens,
+    inputTokenDetails: {
+      noCacheTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+    },
     outputTokens,
+    outputTokenDetails: {
+      textTokens:
+        optionalTokenCount(usage.outputTokenDetails?.textTokens) ??
+        Math.max(0, outputTokens - reasoningTokens),
+      reasoningTokens,
+    },
     totalTokens:
       finiteTokenCount(usage.totalTokens) || inputTokens + outputTokens,
   };
@@ -202,6 +234,10 @@ function finiteTokenCount(value: number | undefined): number {
   return Number.isFinite(value) && value !== undefined
     ? Math.max(0, Math.round(value))
     : 0;
+}
+
+function optionalTokenCount(value: number | undefined): number | undefined {
+  return value === undefined ? undefined : finiteTokenCount(value);
 }
 
 function writeProviderDiagnostic(error: unknown): void {

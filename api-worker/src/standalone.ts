@@ -141,7 +141,7 @@ function defaultLimits(
   maxWebSearches: number,
 ): RunLimits {
   return {
-    maxInputTokensPerStep: 32_000,
+    maxInputTokensPerStep: 128_000,
     maxOutputTokensPerStep: 3_000,
     maxTotalOutputTokens: 12_000,
     maxResultBytes: 200_000,

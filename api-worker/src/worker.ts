@@ -65,6 +65,7 @@ export class ScoutApiWorker {
     let runId: string | undefined;
     let profile: ModelProfile | undefined;
     let lock: ExclusiveRunLock | undefined;
+    let guard: RunGuard | undefined;
 
     try {
       const inputResult = ScoutWorkerInputSchema.safeParse(rawInput);
@@ -89,7 +90,7 @@ export class ScoutApiWorker {
         input,
         this.options.webReader ? "web" : "catalog",
       );
-      const guard = new RunGuard(input.limits, profile, this.now);
+      guard = new RunGuard(input.limits, profile, this.now);
       guard.assertInitialInput(`${systemPrompt}\n${prompt}`);
 
       lock = new ExclusiveRunLock(join(this.options.runtimeDir, "scout.lock"));
@@ -130,8 +131,40 @@ export class ScoutApiWorker {
           guard,
           discoveryMode: this.options.webReader ? "web" : "catalog",
           signal: controller.signal,
-          recordStep: async ({ reservation, usage, finishReason }) => {
-            const recorded = guard.recordProviderStep(reservation, usage);
+          recordRequestStarted: async (reservation) => {
+            await this.audit.write({
+              contractVersion: "1",
+              event: "provider_request",
+              phase: "started",
+              timestamp: new Date(this.now()).toISOString(),
+              runId: input.runId,
+              provider: profile!.provider,
+              model: profile!.model,
+              step: reservation.step,
+            });
+          },
+          recordRequestFailed: async (reservation, failureReason) => {
+            await this.audit.write({
+              contractVersion: "1",
+              event: "provider_request",
+              phase: "failed",
+              timestamp: new Date(this.now()).toISOString(),
+              runId: input.runId,
+              provider: profile!.provider,
+              model: profile!.model,
+              step: reservation.step,
+              latencyMs: elapsed(this.now, reservation.startedAtMs),
+              failureReason,
+            });
+          },
+          recordStep: async ({
+            reservation,
+            usage,
+            finishReason,
+            webSearchCalls = 0,
+            responseId,
+          }) => {
+            const recorded = guard!.recordProviderStep(reservation, usage);
             await this.audit.write({
               contractVersion: "1",
               event: "provider_step",
@@ -143,6 +176,10 @@ export class ScoutApiWorker {
               latencyMs: recorded.latencyMs,
               usage: recorded.usage,
               cost: recorded.cost,
+              webSearchCalls,
+              webSearchCostUsd:
+                webSearchCalls * (profile!.pricing?.webSearchUsdPerCall ?? 0),
+              responseId,
               stopReason: sanitizeStopReason(finishReason),
             });
           },
@@ -182,7 +219,9 @@ export class ScoutApiWorker {
         metrics: {
           latencyMs: elapsed(this.now, startedAt),
           steps: metrics.steps,
+          providerRequests: metrics.providerRequests,
           toolCalls: metrics.toolCalls,
+          webSearchCalls: metrics.webSearchCalls,
         },
       });
 
@@ -197,6 +236,8 @@ export class ScoutApiWorker {
         usage: result.usage,
         cost: result.cost,
         toolCalls: result.metrics.toolCalls,
+        providerRequests: result.metrics.providerRequests,
+        webSearchCalls: result.metrics.webSearchCalls,
         steps: result.metrics.steps,
         stopReason: result.stopReason,
         proposalCount: result.proposals.length,
@@ -206,6 +247,7 @@ export class ScoutApiWorker {
     } catch (error) {
       const fault = mapKnownFault(error);
       const contractError = fault.toContract(runId);
+      const partialMetrics = guard?.metrics;
       await this.writeFailureAudit({
         contractVersion: "1",
         event: "run_failed",
@@ -217,6 +259,12 @@ export class ScoutApiWorker {
         errorCode: contractError.code,
         retryable: contractError.retryable,
         limit: contractError.limit,
+        usage: partialMetrics?.usage,
+        cost: partialMetrics?.cost,
+        providerRequests: partialMetrics?.providerRequests,
+        pricedProviderRequests: partialMetrics?.pricedProviderRequests,
+        toolCalls: partialMetrics?.toolCalls,
+        webSearchCalls: partialMetrics?.webSearchCalls,
       });
       return ScoutWorkerOutcomeSchema.parse({
         ok: false,

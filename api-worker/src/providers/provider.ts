@@ -11,6 +11,8 @@ export type ProviderStepRecord = {
   reservation: StepReservation;
   usage: Usage;
   finishReason: string;
+  webSearchCalls?: number;
+  responseId?: string;
 };
 
 export type ProviderExecutionContext = {
@@ -22,6 +24,11 @@ export type ProviderExecutionContext = {
   guard: RunGuard;
   discoveryMode: "catalog" | "web";
   signal: AbortSignal;
+  recordRequestStarted(reservation: StepReservation): Promise<void>;
+  recordRequestFailed(
+    reservation: StepReservation,
+    failureReason: string,
+  ): Promise<void>;
   recordStep(record: ProviderStepRecord): Promise<void>;
 };
 

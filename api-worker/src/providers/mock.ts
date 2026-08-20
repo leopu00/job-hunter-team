@@ -11,7 +11,8 @@ export class MockScoutProvider implements ScoutProviderAdapter {
   async run(context: ProviderExecutionContext): Promise<ProviderExecution> {
     assertNotAborted(context.signal);
 
-    const searchReservation = context.guard.beforeProviderStep(
+    const searchReservation = await startMockStep(
+      context,
       `${context.systemPrompt}\n${context.prompt}`,
     );
     const search = await searchAcrossBrief(context);
@@ -27,7 +28,8 @@ export class MockScoutProvider implements ScoutProviderAdapter {
     );
 
     assertNotAborted(context.signal);
-    const readReservation = context.guard.beforeProviderStep(
+    const readReservation = await startMockStep(
+      context,
       JSON.stringify({ prompt: context.prompt, search: search.jobs }),
     );
     const jobs = [];
@@ -49,7 +51,8 @@ export class MockScoutProvider implements ScoutProviderAdapter {
     );
 
     assertNotAborted(context.signal);
-    const outputReservation = context.guard.beforeProviderStep(
+    const outputReservation = await startMockStep(
+      context,
       JSON.stringify({ prompt: context.prompt, jobs }),
     );
     const output = ScoutProposalBatchSchema.parse({
@@ -134,6 +137,15 @@ async function finishMockStep(
   finishReason: string,
 ) {
   await context.recordStep({ reservation, usage, finishReason });
+}
+
+async function startMockStep(
+  context: ProviderExecutionContext,
+  serializedRequest: string,
+): Promise<StepReservation> {
+  const reservation = context.guard.beforeProviderStep(serializedRequest);
+  await context.recordRequestStarted(reservation);
+  return reservation;
 }
 
 function matchedCriteria(

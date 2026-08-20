@@ -67,7 +67,9 @@ async function main(): Promise<void> {
           provider: result.worker.result.provider,
           model: result.worker.result.model,
           proposals: result.worker.result.proposals.length,
+          usage: result.worker.result.usage,
           cost: result.worker.result.cost,
+          metrics: result.worker.result.metrics,
           stopReason: result.worker.result.stopReason,
         }
       : result.worker.error,

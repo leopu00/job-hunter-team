@@ -130,6 +130,8 @@ not inferred from the provider brand.
   },
   "pricing": {
     "inputUsdPerMillionTokens": 0.0,
+    "cachedInputUsdPerMillionTokens": 0.0,
+    "cacheWriteUsdPerMillionTokens": 0.0,
     "outputUsdPerMillionTokens": 0.0,
     "webSearchUsdPerCall": 0.0
   }
@@ -181,6 +183,27 @@ remaining USD budget cannot cover that request, the request is not sent. Missing
 or non-priceable provider usage is charged at the reserved ceiling. Step and
 tool-call limits are checked before execution; output and timeout limits stop the
 run with a typed error.
+
+### Usage accounting
+
+Every new provider attempt is recorded before the request, then paired with its
+provider-reported usage when available. Input usage is split into uncached,
+cache-read and cache-write tokens; output usage is split into text and reasoning
+tokens. Provider response IDs and web-search calls are recorded without prompts,
+results or credentials.
+
+Inspect one agent's audit with:
+
+```bash
+npm run scout:usage -- --audit /absolute/path/to/scout-runs.jsonl
+```
+
+`projectedCostUsd` is computed from provider usage and the explicit model
+profile. It is deliberately not called billed cost. `missingUsageRequests`
+identifies attempted provider requests for which the provider did not return
+usage, while legacy runs are reported separately as unknown. Financial truth
+requires later reconciliation with the provider billing/Costs API; until then
+`billingFullyReconciled` remains false.
 
 ## Contract and extension seams
 

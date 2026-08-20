@@ -9,6 +9,7 @@
   "scripts": {
     "demo": "tsx src/cli.ts",
     "scout": "tsx src/standalone-cli.ts",
+    "scout:usage": "tsx src/usage-report-cli.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",

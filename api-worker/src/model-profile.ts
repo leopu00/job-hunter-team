@@ -33,6 +33,8 @@ export const ModelProfileSchema = z
     pricing: z
       .strictObject({
         inputUsdPerMillionTokens: z.number().nonnegative(),
+        cachedInputUsdPerMillionTokens: z.number().nonnegative().optional(),
+        cacheWriteUsdPerMillionTokens: z.number().nonnegative().optional(),
         outputUsdPerMillionTokens: z.number().nonnegative(),
         webSearchUsdPerCall: z.number().nonnegative().optional(),
       })
