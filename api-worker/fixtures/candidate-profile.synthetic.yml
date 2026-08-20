@@ -1,0 +1,25 @@
+profileVersion: "1"
+targets:
+  roles:
+    - Platform Engineer
+    - Backend Engineer
+  locations:
+    - Remote EU
+    - Rome
+  workModes:
+    - remote
+    - hybrid
+skills:
+  - TypeScript
+  - Node.js
+  - automation
+experienceYears: 6
+languages:
+  - Italian C2
+  - English C1
+workAuthorization:
+  - European Union
+relocation: false
+search:
+  postedWithinDays: 7
+  maxCandidates: 2

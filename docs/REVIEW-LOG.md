@@ -365,7 +365,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/roadmap/2026-08-17-ticket-container-runtime-podman.md](./internal/roadmap/2026-08-17-ticket-container-runtime-podman.md) | Ticket aperto, decisione non presa: cosa toglierebbe all'utente e cosa costerebbe a noi sostituire Docker con Podman. Misurato su master dbd6369d6. | — | 2026-08-17 | ✅ |
 | [docs/internal/roadmap/2026-08-17-ticket-team-api-boundary.md](./internal/roadmap/2026-08-17-ticket-team-api-boundary.md) | Ticket aperto, direzione approvata e forma tecnica da decidere misurando: una piattaforma sola su web, desktop e telefono — il problema misurato non è quale framework, è il confine caduto fra il team e i suoi client. | — | 2026-08-17 | ✅ |
 | [docs/internal/roadmap/2026-08-17-fetta1-stato-e-ripresa.md](./internal/roadmap/2026-08-17-fetta1-stato-e-ripresa.md) | Punto di ripresa della fetta 1 di JHT-TEAM-API-BOUNDARY: la forma scelta (server node:http in ESM puro nel container, zero dipendenze e zero build step), i due scostamenti dichiarati dall'ADR-0009 con il loro piano di ritiro, e la separazione fra ciò che è committato e ciò che resta da scrivere. | — | 2026-08-17 | ✅ |
-| [docs/internal/prototypes/2026-08-19-scout-api-worker-design.md](./internal/prototypes/2026-08-19-scout-api-worker-design.md) | Design del prototipo Scout via API del 19/08/2026: perche' un worker provider-neutral fuori dal runtime di produzione, contratto di I/O, guardrail e follow-up esplicitamente fuori scope (prove live, tmux, SQLite). | — | 2026-08-19 | ✅ |
+| [docs/internal/prototypes/2026-08-19-scout-api-worker-design.md](./internal/prototypes/2026-08-19-scout-api-worker-design.md) | Design del worker Scout API proposal-only, guardrail, provider e hardening web | 2026-08-20 | 2026-08-19 | 🟢 |
+| [docs/internal/prototypes/2026-08-20-standalone-scout-runtime.md](./internal/prototypes/2026-08-20-standalone-scout-runtime.md) | Stato e roadmap dello Scout standalone con coordinamento, web evidence e SQLite isolato | 2026-08-20 | — | 🟢 |
+| [docs/internal/prototypes/2026-08-20-all-agents-api-roadmap.md](./internal/prototypes/2026-08-20-all-agents-api-roadmap.md) | Roadmap dei worker API isolati per tutti i ruoli: contratti proposal-only, guardrail condivisi, canary sintetici e percorso di promozione senza effetti operativi impliciti | — | — | ✅ |
 
 
 ## 🔒 docs/security
@@ -432,7 +434,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md](../promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md) | Specifica tipografica e motion del pack overlay 9:16 per l'animatic pubblicitario: safe area, palette JHT, font, CTA e uso editoriale | — | 2026-08-05 | ✅ |
 | [docs/assets/icons/SOURCES.md](./assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale | — | 2026-08-07 | ✅ |
 | [web/public/brand/README.md](../web/public/brand/README.md) | Provenienza, integrità e vincoli d'uso degli asset social ufficiali nel footer pubblico, con Instagram attivo e TikTok mantenuto non pubblicato | — | 2026-08-10 | ✅ |
-| [api-worker/README.md](../api-worker/README.md) | Manuale del worker API Scout: contratto di ruolo, provider intercambiabili (mock e ai-sdk), guardrail e comandi. Dichiara che il modulo e' proposal-only e non e' agganciato a launcher, tmux, Bridge, Sentinella o jobs.db. | — | 2026-08-19 | ✅ |
+| [api-worker/README.md](../api-worker/README.md) | Scout API standalone: confini, avvio, SSRF/DNS pinning, privacy, accounting e verifica | 2026-08-20 | 2026-08-19 | 🟢 |
 
 
 ---

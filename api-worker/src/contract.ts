@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { AgentRoleSchema } from "./agent-role.js";
+
 const ShortTextSchema = z.string().trim().min(1).max(160);
 const SafeIdentifierSchema = z
   .string()
@@ -7,6 +9,21 @@ const SafeIdentifierSchema = z
   .min(1)
   .max(100)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
+const HttpUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2_048)
+  .refine(isHttpUrl, { message: "Only HTTP(S) job URLs are allowed" });
+const IsoDateTimeSchema = z
+  .string()
+  .trim()
+  .min(20)
+  .max(40)
+  .refine(
+    (value) => z.string().datetime({ offset: true }).safeParse(value).success,
+    { message: "Expected an ISO 8601 timestamp with timezone" },
+  );
 
 export const WorkModeSchema = z.enum(["remote", "hybrid", "onsite"]);
 export const RemoteTypeSchema = z.enum([
@@ -32,6 +49,7 @@ export const RunLimitsSchema = z.strictObject({
   maxResultBytes: z.number().int().min(1_024).max(1_000_000),
   maxSteps: z.number().int().min(1).max(20),
   maxToolCalls: z.number().int().min(1).max(50),
+  maxWebSearches: z.number().int().min(1).max(10).default(4),
   timeoutMs: z.number().int().min(100).max(600_000),
   maxCostUsd: z.number().min(0).max(100),
 });
@@ -41,6 +59,14 @@ export const ScoutWorkerInputSchema = z.strictObject({
   runId: z.string().uuid(),
   role: z.literal("scout"),
   search: ScoutSearchBriefSchema,
+  candidate: z
+    .strictObject({
+      experienceYears: z.number().min(0).max(80).optional(),
+      languages: z.array(ShortTextSchema).max(12).default([]),
+      workAuthorization: z.array(ShortTextSchema).max(20).default([]),
+      relocation: z.boolean().default(false),
+    })
+    .optional(),
   limits: RunLimitsSchema,
 });
 
@@ -53,15 +79,9 @@ export const ScoutCandidateProposalSchema = z.strictObject({
   company: ShortTextSchema,
   location: ShortTextSchema,
   remoteType: RemoteTypeSchema,
-  url: z
-    .string()
-    .url()
-    .max(2_048)
-    .refine((value) => ["https:", "http:"].includes(new URL(value).protocol), {
-      message: "Only HTTP(S) job URLs are allowed",
-    }),
+  url: HttpUrlSchema,
   source: ShortTextSchema,
-  postedAt: z.string().datetime({ offset: true }),
+  postedAt: IsoDateTimeSchema,
   jdText: z.string().trim().min(80).max(20_000),
   requirements: z.array(ShortTextSchema).min(1).max(40),
   matchedCriteria: z.array(ShortTextSchema).max(20),
@@ -81,9 +101,30 @@ export const ScoutProposalBatchSchema = z.strictObject({
 
 export type ScoutProposalBatch = z.infer<typeof ScoutProposalBatchSchema>;
 
+function isHttpUrl(value: string): boolean {
+  try {
+    return ["https:", "http:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
 export const UsageSchema = z.strictObject({
   inputTokens: z.number().int().nonnegative(),
+  inputTokenDetails: z
+    .strictObject({
+      noCacheTokens: z.number().int().nonnegative().optional(),
+      cacheReadTokens: z.number().int().nonnegative().optional(),
+      cacheWriteTokens: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
   outputTokens: z.number().int().nonnegative(),
+  outputTokenDetails: z
+    .strictObject({
+      textTokens: z.number().int().nonnegative().optional(),
+      reasoningTokens: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
   totalTokens: z.number().int().nonnegative(),
 });
 
@@ -92,6 +133,9 @@ export type Usage = z.infer<typeof UsageSchema>;
 export const CostSchema = z.strictObject({
   amountUsd: z.number().nonnegative(),
   estimated: z.boolean(),
+  basis: z
+    .enum(["none", "configured_pricing", "reserved_ceiling", "billing"])
+    .optional(),
 });
 
 export const StopReasonSchema = z.enum([
@@ -120,7 +164,9 @@ export const ScoutWorkerResultSchema = z.strictObject({
   metrics: z.strictObject({
     latencyMs: z.number().int().nonnegative(),
     steps: z.number().int().nonnegative(),
+    providerRequests: z.number().int().nonnegative().optional(),
     toolCalls: z.number().int().nonnegative(),
+    webSearchCalls: z.number().int().nonnegative().optional(),
   }),
 });
 
@@ -179,10 +225,15 @@ export const ScoutWorkerOutcomeSchema = z.discriminatedUnion("ok", [
 
 export type ScoutWorkerOutcome = z.infer<typeof ScoutWorkerOutcomeSchema>;
 
-export const ScoutToolNameSchema = z.enum(["search_jobs", "read_job"]);
+export const ScoutToolNameSchema = z.enum([
+  "search_jobs",
+  "read_job",
+  "read_web_job",
+]);
 
 export const ToolEventSchema = z.strictObject({
   contractVersion: z.literal("1"),
+  role: AgentRoleSchema.optional(),
   event: z.literal("tool"),
   phase: z.enum(["started", "completed", "failed"]),
   timestamp: z.string().datetime({ offset: true }),
@@ -190,6 +241,9 @@ export const ToolEventSchema = z.strictObject({
   toolName: ScoutToolNameSchema,
   toolCallId: SafeIdentifierSchema,
   durationMs: z.number().int().nonnegative().optional(),
+  sourceHost: z.string().trim().min(1).max(253).optional(),
+  fetchMethod: z.string().trim().min(1).max(80).optional(),
+  failureReason: SafeIdentifierSchema.optional(),
 });
 
 export type ToolEvent = z.infer<typeof ToolEventSchema>;
@@ -198,6 +252,7 @@ const AuditCommonSchema = z.strictObject({
   contractVersion: z.literal("1"),
   timestamp: z.string().datetime({ offset: true }),
   runId: z.string().uuid().optional(),
+  role: AgentRoleSchema.optional(),
 });
 
 export const RunStartedEventSchema = AuditCommonSchema.extend({
@@ -214,7 +269,20 @@ export const ProviderStepEventSchema = AuditCommonSchema.extend({
   latencyMs: z.number().int().nonnegative(),
   usage: UsageSchema,
   cost: CostSchema,
+  webSearchCalls: z.number().int().nonnegative().optional(),
+  webSearchCostUsd: z.number().nonnegative().optional(),
+  responseId: SafeIdentifierSchema.optional(),
   stopReason: z.string().trim().min(1).max(80),
+});
+
+export const ProviderRequestEventSchema = AuditCommonSchema.extend({
+  event: z.literal("provider_request"),
+  phase: z.enum(["started", "failed"]),
+  provider: z.enum(["mock", "anthropic", "openai", "kimi"]),
+  model: ShortTextSchema,
+  step: z.number().int().positive(),
+  latencyMs: z.number().int().nonnegative().optional(),
+  failureReason: SafeIdentifierSchema.optional(),
 });
 
 export const RunCompletedEventSchema = AuditCommonSchema.extend({
@@ -225,6 +293,8 @@ export const RunCompletedEventSchema = AuditCommonSchema.extend({
   usage: UsageSchema,
   cost: CostSchema,
   toolCalls: z.number().int().nonnegative(),
+  providerRequests: z.number().int().nonnegative().optional(),
+  webSearchCalls: z.number().int().nonnegative().optional(),
   steps: z.number().int().nonnegative(),
   stopReason: StopReasonSchema,
   proposalCount: z.number().int().nonnegative(),
@@ -238,11 +308,18 @@ export const RunFailedEventSchema = AuditCommonSchema.extend({
   errorCode: WorkerErrorCodeSchema,
   retryable: z.boolean(),
   limit: ScoutWorkerErrorSchema.shape.limit,
+  usage: UsageSchema.optional(),
+  cost: CostSchema.optional(),
+  providerRequests: z.number().int().nonnegative().optional(),
+  pricedProviderRequests: z.number().int().nonnegative().optional(),
+  toolCalls: z.number().int().nonnegative().optional(),
+  webSearchCalls: z.number().int().nonnegative().optional(),
 });
 
 export const AuditEventSchema = z.union([
   ToolEventSchema,
   RunStartedEventSchema,
+  ProviderRequestEventSchema,
   ProviderStepEventSchema,
   RunCompletedEventSchema,
   RunFailedEventSchema,

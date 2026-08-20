@@ -192,6 +192,7 @@ Infra, deploy, lifecycle, accessi.
 | File | Topic |
 |---|---|
 | [`2026-08-19-scout-api-worker-design.md`](prototypes/2026-08-19-scout-api-worker-design.md) | Scout API TypeScript proposal-only: confini invariati, contratti, guardrail, provider profile e seam futuri tmux/SQLite |
+| [`2026-08-20-standalone-scout-runtime.md`](prototypes/2026-08-20-standalone-scout-runtime.md) | Scout API standalone: profilo, peer lease/claim, web evidence gate, SQLite dedicato e roadmap fino al canary live |
 
 ## 🎨 assets/
 

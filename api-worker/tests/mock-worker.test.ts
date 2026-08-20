@@ -10,6 +10,7 @@ import {
   readAuditJsonl,
 } from "../src/index.js";
 import { fixtureInput, fixtureProfile, fixtureSource } from "./helpers.js";
+import { cloneInput } from "./helpers.js";
 
 describe("offline mock Scout provider", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -43,5 +44,37 @@ describe("offline mock Scout provider", () => {
     ).toBe(true);
     expect(events.some((event) => event.event === "tool")).toBe(true);
     expect(events.at(-1)?.event).toBe("run_completed");
+  });
+
+  it("stops a broad empty search cleanly at the tool budget", async () => {
+    const runtimeDir = await mkdtemp(join(tmpdir(), "jht-scout-broad-"));
+    const input = cloneInput(await fixtureInput(), {
+      search: {
+        targetRoles: [
+          "Agentic AI Engineer",
+          "AI Orchestration Engineer",
+          "Forward Deployed Engineer",
+          "AI Solutions Engineer",
+          "AI Engineering Lead",
+          "Full-Stack AI Developer",
+          "Python Fintech Developer",
+        ],
+        locations: ["Remote Worldwide", "Major European cities", "Budapest"],
+        workModes: ["remote", "hybrid", "onsite"],
+        maxCandidates: 1,
+      },
+      limits: { maxToolCalls: 20 },
+    });
+    const worker = new ScoutApiWorker(await fixtureProfile(), {
+      runtimeDir,
+      source: await fixtureSource(),
+    });
+
+    const outcome = await worker.run(input);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.result.proposals).toHaveLength(0);
+    expect(outcome.result.exhausted).toBe(false);
+    expect(outcome.result.metrics.toolCalls).toBeLessThanOrEqual(20);
   });
 });

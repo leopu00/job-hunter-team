@@ -1,9 +1,13 @@
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { Output, generateText, stepCountIs, tool } from "ai";
+import {
+  NoObjectGeneratedError,
+  Output,
+  generateText,
+  stepCountIs,
+  tool,
+  type ToolSet,
+} from "ai";
 
-import { ScoutProposalBatchSchema, type Usage } from "../contract.js";
+import { ScoutProposalBatchSchema } from "../contract.js";
 import { WorkerFault } from "../errors.js";
 import type { StepReservation } from "../guardrails.js";
 import {
@@ -11,43 +15,35 @@ import {
   SearchJobsResultSchema,
   ReadJobInputSchema,
   ReadJobResultSchema,
+  ReadWebJobInputSchema,
+  ReadWebJobEvidenceSchema,
 } from "../tools.js";
 import type {
   ProviderExecution,
   ProviderExecutionContext,
   ScoutProviderAdapter,
 } from "./provider.js";
+import {
+  createAiSdkModel,
+  createProviderWebSearchTool,
+  normalizeAiSdkUsage,
+} from "./ai-sdk-runtime.js";
 
 export class AiSdkScoutProvider implements ScoutProviderAdapter {
   constructor(private readonly apiKey: string) {}
 
   async run(context: ProviderExecutionContext): Promise<ProviderExecution> {
-    const model = createModel(context, this.apiKey);
+    const model = createAiSdkModel(context.profile, this.apiKey);
+    const tools = createTools(context, this.apiKey);
     const reservations = new Map<number, StepReservation>();
+    const finishedSteps = new Set<number>();
 
     try {
       const result = await generateText({
         model,
         system: context.systemPrompt,
         prompt: context.prompt,
-        tools: {
-          search_jobs: tool({
-            description:
-              "Search only the configured JHT job source using one target role, location and work mode from the explicit search brief.",
-            inputSchema: SearchJobsInputSchema,
-            outputSchema: SearchJobsResultSchema,
-            execute: (input, options) =>
-              context.tools.searchJobs(input, options.toolCallId),
-          }),
-          read_job: tool({
-            description:
-              "Read one job that was returned by search_jobs in this run. It cannot open arbitrary URLs or identifiers.",
-            inputSchema: ReadJobInputSchema,
-            outputSchema: ReadJobResultSchema,
-            execute: (input, options) =>
-              context.tools.readJob(input, options.toolCallId),
-          }),
-        },
+        tools,
         output: Output.object({
           name: "jht_scout_proposals_v1",
           description:
@@ -58,24 +54,37 @@ export class AiSdkScoutProvider implements ScoutProviderAdapter {
         maxOutputTokens: context.input.limits.maxOutputTokensPerStep,
         maxRetries: 0,
         abortSignal: context.signal,
-        prepareStep: ({ messages, stepNumber }) => {
+        prepareStep: async ({ messages, stepNumber }) => {
           const serialized = JSON.stringify({
             system: context.systemPrompt,
             messages,
           });
-          reservations.set(
-            stepNumber,
-            context.guard.beforeProviderStep(serialized),
-          );
+          const reservation = context.guard.beforeProviderStep(serialized);
+          reservations.set(stepNumber, reservation);
+          await context.recordRequestStarted(reservation);
           return {};
         },
-        onStepFinish: async ({ stepNumber, usage, finishReason }) => {
+        onStepFinish: async ({
+          stepNumber,
+          usage,
+          finishReason,
+          toolCalls,
+          response,
+        }) => {
           const reservation = reservations.get(stepNumber);
           if (!reservation) throw new WorkerFault("INTERNAL_ERROR");
+          const webSearchCalls = toolCalls.filter(
+            (call) => call.toolName === "web_search",
+          ).length;
+          // The provider response already exists at this point. Mark the
+          // attempt finished before post-response accounting can reject it.
+          finishedSteps.add(stepNumber);
           await context.recordStep({
             reservation,
-            usage: normalizeUsage(usage),
+            usage: normalizeAiSdkUsage(usage),
             finishReason,
+            webSearchCalls,
+            responseId: response.id,
           });
         },
       });
@@ -85,7 +94,16 @@ export class AiSdkScoutProvider implements ScoutProviderAdapter {
         rawStopReason: result.finishReason,
       };
     } catch (error) {
+      await Promise.all(
+        [...reservations.entries()]
+          .filter(([stepNumber]) => !finishedSteps.has(stepNumber))
+          .map(([, reservation]) =>
+            context.recordRequestFailed(reservation, "provider_error"),
+          ),
+      );
       if (error instanceof WorkerFault) throw error;
+      const recovered = recoverGeneratedObject(error);
+      if (recovered) return recovered;
       if (context.signal.aborted) {
         throw new WorkerFault("TIMEOUT", {
           retryable: true,
@@ -93,6 +111,7 @@ export class AiSdkScoutProvider implements ScoutProviderAdapter {
           cause: error,
         });
       }
+      writeProviderDiagnostic(error);
       throw new WorkerFault("PROVIDER_ERROR", {
         retryable: true,
         cause: error,
@@ -101,44 +120,195 @@ export class AiSdkScoutProvider implements ScoutProviderAdapter {
   }
 }
 
-function createModel(context: ProviderExecutionContext, apiKey: string) {
-  switch (context.profile.provider) {
-    case "anthropic":
-      return createAnthropic({ apiKey })(context.profile.model);
-    case "openai":
-      return createOpenAI({ apiKey })(context.profile.model);
-    case "kimi": {
-      if (!context.profile.baseUrl) {
-        throw new WorkerFault("PROFILE_VALIDATION");
-      }
-      return createOpenAICompatible({
-        name: "kimi",
-        apiKey,
-        baseURL: context.profile.baseUrl,
-      })(context.profile.model);
-    }
-    case "mock":
-      throw new WorkerFault("INTERNAL_ERROR");
+function createTools(
+  context: ProviderExecutionContext,
+  apiKey: string,
+): ToolSet {
+  if (context.discoveryMode === "web") {
+    return {
+      web_search: createWebSearchTool(context, apiKey),
+      read_web_job: tool({
+        description:
+          "Read one public HTTPS job URL through an adaptive HTTP/browser cascade. It returns either deterministic structured fields or bounded visible page evidence. Call it for every candidate and ground every proposal in its output.",
+        inputSchema: ReadWebJobInputSchema,
+        outputSchema: ReadWebJobEvidenceSchema,
+        execute: (input, options) =>
+          context.tools.readWebJob(input, options.toolCallId),
+      }),
+    };
   }
-}
-
-function normalizeUsage(usage: {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-}): Usage {
-  const inputTokens = finiteTokenCount(usage.inputTokens);
-  const outputTokens = finiteTokenCount(usage.outputTokens);
   return {
-    inputTokens,
-    outputTokens,
-    totalTokens:
-      finiteTokenCount(usage.totalTokens) || inputTokens + outputTokens,
+    search_jobs: tool({
+      description:
+        "Search only the configured JHT job source using one target role, location and work mode from the explicit search brief.",
+      inputSchema: SearchJobsInputSchema,
+      outputSchema: SearchJobsResultSchema,
+      execute: (input, options) =>
+        context.tools.searchJobs(input, options.toolCallId),
+    }),
+    read_job: tool({
+      description:
+        "Read one job that was returned by search_jobs in this run. It cannot open arbitrary URLs or identifiers.",
+      inputSchema: ReadJobInputSchema,
+      outputSchema: ReadJobResultSchema,
+      execute: (input, options) =>
+        context.tools.readJob(input, options.toolCallId),
+    }),
   };
 }
 
-function finiteTokenCount(value: number | undefined): number {
-  return Number.isFinite(value) && value !== undefined
-    ? Math.max(0, Math.round(value))
-    : 0;
+function createWebSearchTool(
+  context: ProviderExecutionContext,
+  apiKey: string,
+): ToolSet[string] {
+  switch (context.profile.provider) {
+    case "anthropic":
+      return createProviderWebSearchTool(
+        context.profile,
+        apiKey,
+        context.input.limits.maxWebSearches,
+      );
+    case "openai":
+      return createProviderWebSearchTool(
+        context.profile,
+        apiKey,
+        context.input.limits.maxWebSearches,
+      );
+    case "kimi":
+    case "mock":
+      throw new WorkerFault("CAPABILITY_UNSUPPORTED");
+  }
+}
+
+export function writeProviderDiagnostic(error: unknown): void {
+  if (process.env.JHT_SCOUT_PROVIDER_DEBUG !== "1") return;
+  process.stderr.write(
+    `[scout-provider-debug] ${JSON.stringify(providerDiagnostic(error))}\n`,
+  );
+}
+
+export function providerDiagnostic(error: unknown): Record<string, unknown> {
+  const diagnostic: Record<string, unknown> = {
+    category: NoObjectGeneratedError.isInstance(error)
+      ? "invalid_structured_output"
+      : providerStatusCode(error) !== undefined
+        ? "provider_http_error"
+        : "provider_error",
+  };
+  const statusCode = providerStatusCode(error);
+  if (statusCode !== undefined) diagnostic.statusCode = statusCode;
+  if (NoObjectGeneratedError.isInstance(error)) {
+    diagnostic.finishReason = allowlistedFinishReason(error.finishReason);
+    diagnostic.validationCodes = generatedObjectValidationCodes(
+      error.text ?? "",
+    );
+  }
+  return diagnostic;
+}
+
+function providerStatusCode(error: unknown): number | undefined {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "statusCode" in error &&
+    typeof error.statusCode === "number" &&
+    Number.isInteger(error.statusCode) &&
+    error.statusCode >= 400 &&
+    error.statusCode <= 599
+  ) {
+    return error.statusCode;
+  }
+  return undefined;
+}
+
+function recoverGeneratedObject(error: unknown): ProviderExecution | undefined {
+  if (!NoObjectGeneratedError.isInstance(error)) return undefined;
+  if (!error.text) return undefined;
+  try {
+    const raw = JSON.parse(error.text) as unknown;
+    normalizeGeneratedDates(raw);
+    const parsed = ScoutProposalBatchSchema.safeParse(raw);
+    if (!parsed.success) return undefined;
+    return { output: parsed.data, rawStopReason: error.finishReason ?? "stop" };
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeGeneratedDates(value: unknown): void {
+  if (typeof value !== "object" || value === null || !("proposals" in value)) {
+    return;
+  }
+  const proposals = (value as { proposals?: unknown }).proposals;
+  if (!Array.isArray(proposals)) return;
+  for (const proposal of proposals) {
+    if (
+      typeof proposal !== "object" ||
+      proposal === null ||
+      !("postedAt" in proposal) ||
+      typeof proposal.postedAt !== "string"
+    ) {
+      continue;
+    }
+    const normalized = normalizeHumanDate(proposal.postedAt);
+    if (normalized) proposal.postedAt = normalized;
+  }
+}
+
+function normalizeHumanDate(value: string): string | undefined {
+  const candidates = [
+    value,
+    value.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0],
+    value.match(
+      /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b/i,
+    )?.[0],
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const timestamp = Date.parse(candidate);
+    if (Number.isFinite(timestamp)) return new Date(timestamp).toISOString();
+  }
+  return undefined;
+}
+
+function allowlistedFinishReason(value: string | undefined): string {
+  const allowed = new Set([
+    "stop",
+    "length",
+    "content-filter",
+    "tool-calls",
+    "error",
+    "other",
+    "unknown",
+  ]);
+  return value && allowed.has(value) ? value : "unknown";
+}
+
+function generatedObjectValidationCodes(text: string): string[] {
+  const allowedCodes = new Set([
+    "custom",
+    "invalid_element",
+    "invalid_format",
+    "invalid_key",
+    "invalid_type",
+    "invalid_union",
+    "invalid_value",
+    "not_multiple_of",
+    "too_big",
+    "too_small",
+    "unrecognized_keys",
+  ]);
+  try {
+    const parsed = ScoutProposalBatchSchema.safeParse(JSON.parse(text));
+    if (parsed.success) return [];
+    return [
+      ...new Set(
+        parsed.error.issues
+          .map((issue) => issue.code)
+          .filter((code) => allowedCodes.has(code)),
+      ),
+    ].slice(0, 12);
+  } catch {
+    return ["invalid_json"];
+  }
 }

@@ -8,6 +8,18 @@
   },
   "scripts": {
     "demo": "tsx src/cli.ts",
+    "analyst": "tsx src/analyst-cli.ts",
+    "analyst:demo": "tsx src/analyst-cli.ts",
+    "writer:demo": "tsx src/prototype-cli.ts writer",
+    "critic:demo": "tsx src/prototype-cli.ts critic",
+    "assistant:demo": "tsx src/prototype-cli.ts assistant",
+    "mentor:demo": "tsx src/prototype-cli.ts mentor",
+    "captain:demo": "tsx src/prototype-cli.ts captain",
+    "sentinel:demo": "tsx src/prototype-cli.ts sentinel",
+    "doctor:demo": "tsx src/prototype-cli.ts doctor",
+    "maintainer:demo": "tsx src/prototype-cli.ts maintainer",
+    "scout": "tsx src/standalone-cli.ts",
+    "scout:usage": "tsx src/usage-report-cli.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
@@ -19,6 +31,8 @@
     "@ai-sdk/openai": "^4.0.43",
     "@ai-sdk/openai-compatible": "^3.0.31",
     "ai": "^7.0.69",
+    "playwright-core": "^1.62.1",
+    "yaml": "^2.8.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -11,7 +11,8 @@ export class MockScoutProvider implements ScoutProviderAdapter {
   async run(context: ProviderExecutionContext): Promise<ProviderExecution> {
     assertNotAborted(context.signal);
 
-    const searchReservation = context.guard.beforeProviderStep(
+    const searchReservation = await startMockStep(
+      context,
       `${context.systemPrompt}\n${context.prompt}`,
     );
     const search = await searchAcrossBrief(context);
@@ -27,8 +28,9 @@ export class MockScoutProvider implements ScoutProviderAdapter {
     );
 
     assertNotAborted(context.signal);
-    const readReservation = context.guard.beforeProviderStep(
-      JSON.stringify({ prompt: context.prompt, search }),
+    const readReservation = await startMockStep(
+      context,
+      JSON.stringify({ prompt: context.prompt, search: search.jobs }),
     );
     const jobs = [];
     for (const summary of search.jobs.slice(
@@ -49,7 +51,8 @@ export class MockScoutProvider implements ScoutProviderAdapter {
     );
 
     assertNotAborted(context.signal);
-    const outputReservation = context.guard.beforeProviderStep(
+    const outputReservation = await startMockStep(
+      context,
       JSON.stringify({ prompt: context.prompt, jobs }),
     );
     const output = ScoutProposalBatchSchema.parse({
@@ -59,10 +62,14 @@ export class MockScoutProvider implements ScoutProviderAdapter {
         disposition: "proposed",
         persistence: "none",
       })),
-      exhausted: jobs.length === 0,
+      exhausted: jobs.length === 0 && !search.truncated,
       notes:
         jobs.length === 0
-          ? ["The synthetic catalog contained no matching fresh listings."]
+          ? [
+              search.truncated
+                ? "The synthetic search stopped at its tool budget before every lane was checked."
+                : "The synthetic catalog contained no matching fresh listings.",
+            ]
           : [
               "Synthetic fixture proposals only; no database hand-off occurred.",
             ],
@@ -92,10 +99,20 @@ async function searchAcrossBrief(context: ProviderExecutionContext) {
       ReturnType<ProviderExecutionContext["tools"]["searchJobs"]>
     >["jobs"][number]
   >();
+  const searchCallBudget = Math.max(
+    1,
+    context.input.limits.maxToolCalls - context.input.search.maxCandidates,
+  );
+  let searchCalls = 0;
+  let truncated = false;
 
   outer: for (const targetRole of context.input.search.targetRoles) {
     for (const location of context.input.search.locations) {
       for (const workMode of context.input.search.workModes) {
+        if (searchCalls >= searchCallBudget) {
+          truncated = true;
+          break outer;
+        }
         const result = await context.tools.searchJobs({
           targetRole,
           location,
@@ -103,13 +120,14 @@ async function searchAcrossBrief(context: ProviderExecutionContext) {
           postedWithinDays: context.input.search.postedWithinDays,
           limit: context.input.search.maxCandidates,
         });
+        searchCalls += 1;
         for (const job of result.jobs) collected.set(job.sourceId, job);
         if (collected.size >= context.input.search.maxCandidates) break outer;
       }
     }
   }
 
-  return { jobs: [...collected.values()] };
+  return { jobs: [...collected.values()], truncated };
 }
 
 async function finishMockStep(
@@ -119,6 +137,15 @@ async function finishMockStep(
   finishReason: string,
 ) {
   await context.recordStep({ reservation, usage, finishReason });
+}
+
+async function startMockStep(
+  context: ProviderExecutionContext,
+  serializedRequest: string,
+): Promise<StepReservation> {
+  const reservation = context.guard.beforeProviderStep(serializedRequest);
+  await context.recordRequestStarted(reservation);
+  return reservation;
 }
 
 function matchedCriteria(

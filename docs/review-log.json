@@ -1597,12 +1597,22 @@
     },
     {
       "path": "api-worker/README.md",
-      "description": "Manuale del worker API Scout: contratto di ruolo, provider intercambiabili (mock e ai-sdk), guardrail e comandi. Dichiara che il modulo e' proposal-only e non e' agganciato a launcher, tmux, Bridge, Sentinella o jobs.db.",
-      "last_review": null
+      "description": "Scout API standalone: confini, avvio, SSRF/DNS pinning, privacy, accounting e verifica",
+      "last_review": "2026-08-20"
     },
     {
       "path": "docs/internal/prototypes/2026-08-19-scout-api-worker-design.md",
-      "description": "Design del prototipo Scout via API del 19/08/2026: perche' un worker provider-neutral fuori dal runtime di produzione, contratto di I/O, guardrail e follow-up esplicitamente fuori scope (prove live, tmux, SQLite).",
+      "description": "Design del worker Scout API proposal-only, guardrail, provider e hardening web",
+      "last_review": "2026-08-20"
+    },
+    {
+      "path": "docs/internal/prototypes/2026-08-20-standalone-scout-runtime.md",
+      "description": "Stato e roadmap dello Scout standalone con coordinamento, web evidence e SQLite isolato",
+      "last_review": "2026-08-20"
+    },
+    {
+      "path": "docs/internal/prototypes/2026-08-20-all-agents-api-roadmap.md",
+      "description": "Roadmap dei worker API isolati per tutti i ruoli: contratti proposal-only, guardrail condivisi, canary sintetici e percorso di promozione senza effetti operativi impliciti",
       "last_review": null
     }
   ]

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   JobCatalogSchema,
+  MemoryAuditSink,
   ScoutApiWorker,
   WorkerFault,
   type ProviderExecutionContext,
@@ -219,5 +220,44 @@ describe("worker safety boundaries", () => {
     const outcome = await worker.run(input);
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) expect(outcome.error.code).toBe("TIMEOUT");
+  });
+
+  it("writes already executed response usage when a web-search limit fails", async () => {
+    const audit = new MemoryAuditSink();
+    const input = cloneInput(await fixtureInput(), {
+      limits: { maxWebSearches: 1 },
+    });
+    const adapter: ScoutProviderAdapter = {
+      async run(context) {
+        const reservation = context.guard.beforeProviderStep(context.prompt);
+        await context.recordRequestStarted(reservation);
+        await context.recordStep({
+          reservation,
+          usage: { inputTokens: 40, outputTokens: 5, totalTokens: 45 },
+          finishReason: "stop",
+          webSearchCalls: 2,
+          responseId: "response-synthetic",
+        });
+        throw new WorkerFault("INTERNAL_ERROR");
+      },
+    };
+    const worker = new ScoutApiWorker(await fixtureProfile(), {
+      runtimeDir: await mkdtemp(join(tmpdir(), "jht-scout-accounting-")),
+      source: await fixtureSource(),
+      adapter,
+      audit,
+    });
+
+    const outcome = await worker.run(input);
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.error.code).toBe("TOOL_CALL_LIMIT");
+    const failed = audit.events.find((event) => event.event === "run_failed");
+    expect(failed).toMatchObject({
+      event: "run_failed",
+      providerRequests: 1,
+      pricedProviderRequests: 1,
+      webSearchCalls: 2,
+      usage: { inputTokens: 40, outputTokens: 5, totalTokens: 45 },
+    });
   });
 });

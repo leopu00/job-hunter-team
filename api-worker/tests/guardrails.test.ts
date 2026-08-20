@@ -97,4 +97,132 @@ describe("run guardrails", () => {
     expect(guard.metrics.cost.estimated).toBe(true);
     expect(guard.metrics.cost.amountUsd).toBe(reservation.ceilingCostUsd);
   });
+
+  it("prices uncached, cache-read, cache-write and output tokens separately", async () => {
+    const input = await fixtureInput();
+    const paidProfile = ModelProfileSchema.parse({
+      ...(await fixtureProfile()),
+      provider: "openai",
+      model: "verified-model-placeholder",
+      pricing: {
+        inputUsdPerMillionTokens: 0.2,
+        cachedInputUsdPerMillionTokens: 0.02,
+        cacheWriteUsdPerMillionTokens: 0.25,
+        outputUsdPerMillionTokens: 1.2,
+      },
+    });
+    const guard = new RunGuard({ ...input.limits, maxCostUsd: 1 }, paidProfile);
+    const reservation = guard.beforeProviderStep("small request");
+    guard.recordProviderStep(reservation, {
+      inputTokens: 1_000,
+      inputTokenDetails: {
+        noCacheTokens: 200,
+        cacheReadTokens: 700,
+        cacheWriteTokens: 100,
+      },
+      outputTokens: 50,
+      outputTokenDetails: { textTokens: 30, reasoningTokens: 20 },
+      totalTokens: 1_050,
+    });
+
+    expect(guard.metrics.cost.amountUsd).toBeCloseTo(0.000139, 10);
+    expect(guard.metrics.cost.estimated).toBe(true);
+    expect(guard.metrics.cost.basis).toBe("configured_pricing");
+    expect(guard.metrics.usage.inputTokenDetails?.cacheReadTokens).toBe(700);
+    expect(guard.metrics.usage.outputTokenDetails?.reasoningTokens).toBe(20);
+  });
+
+  it("accounts for provider usage before rejecting an oversized response", async () => {
+    const input = await fixtureInput();
+    const paidProfile = ModelProfileSchema.parse({
+      ...(await fixtureProfile()),
+      provider: "openai",
+      model: "verified-model-placeholder",
+      pricing: {
+        inputUsdPerMillionTokens: 0.2,
+        outputUsdPerMillionTokens: 1.2,
+      },
+    });
+    const guard = new RunGuard({ ...input.limits, maxCostUsd: 1 }, paidProfile);
+    const reservation = guard.beforeProviderStep("small request");
+
+    expect(() =>
+      guard.recordProviderStep(reservation, {
+        inputTokens: input.limits.maxInputTokensPerStep + 1,
+        outputTokens: 10,
+        totalTokens: input.limits.maxInputTokensPerStep + 11,
+      }),
+    ).toThrowError(WorkerFault);
+
+    expect(guard.metrics.pricedProviderRequests).toBe(1);
+    expect(guard.metrics.usage.inputTokens).toBe(
+      input.limits.maxInputTokensPerStep + 1,
+    );
+    expect(guard.metrics.cost.amountUsd).toBeGreaterThan(0);
+  });
+
+  it("accounts for executed usage and web searches before rejecting their limit", async () => {
+    const input = await fixtureInput();
+    const paidProfile = ModelProfileSchema.parse({
+      ...(await fixtureProfile()),
+      provider: "openai",
+      model: "verified-model-placeholder",
+      pricing: {
+        inputUsdPerMillionTokens: 1,
+        outputUsdPerMillionTokens: 2,
+        webSearchUsdPerCall: 0.01,
+      },
+    });
+    const guard = new RunGuard(
+      { ...input.limits, maxWebSearches: 1, maxCostUsd: 1 },
+      paidProfile,
+    );
+    const reservation = guard.beforeProviderStep("small request");
+
+    expect(() =>
+      guard.recordProviderStep(
+        reservation,
+        { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+        2,
+      ),
+    ).toThrowError(WorkerFault);
+
+    expect(guard.metrics.pricedProviderRequests).toBe(1);
+    expect(guard.metrics.usage.totalTokens).toBe(110);
+    expect(guard.metrics.webSearchCalls).toBe(2);
+    expect(guard.metrics.toolCalls).toBe(2);
+    expect(guard.metrics.cost.amountUsd).toBeCloseTo(0.02012, 10);
+  });
+
+  it("retains executed usage and web cost when the actual response exceeds budget", async () => {
+    const input = await fixtureInput();
+    const paidProfile = ModelProfileSchema.parse({
+      ...(await fixtureProfile()),
+      provider: "openai",
+      model: "verified-model-placeholder",
+      pricing: {
+        inputUsdPerMillionTokens: 100,
+        outputUsdPerMillionTokens: 0,
+        webSearchUsdPerCall: 0.001,
+      },
+    });
+    const guard = new RunGuard(
+      { ...input.limits, maxWebSearches: 1, maxCostUsd: 0.003 },
+      paidProfile,
+    );
+    const reservation = guard.beforeProviderStep("small request");
+
+    expect(() =>
+      guard.recordProviderStep(
+        reservation,
+        { inputTokens: 100, outputTokens: 0, totalTokens: 100 },
+        1,
+      ),
+    ).toThrowError(WorkerFault);
+
+    expect(guard.metrics.pricedProviderRequests).toBe(1);
+    expect(guard.metrics.usage.inputTokens).toBe(100);
+    expect(guard.metrics.webSearchCalls).toBe(1);
+    expect(guard.metrics.cost.amountUsd).toBeCloseTo(0.011, 10);
+  });
 });
