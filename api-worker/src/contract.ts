@@ -7,6 +7,21 @@ const SafeIdentifierSchema = z
   .min(1)
   .max(100)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
+const HttpUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2_048)
+  .refine(isHttpUrl, { message: "Only HTTP(S) job URLs are allowed" });
+const IsoDateTimeSchema = z
+  .string()
+  .trim()
+  .min(20)
+  .max(40)
+  .refine(
+    (value) => z.string().datetime({ offset: true }).safeParse(value).success,
+    { message: "Expected an ISO 8601 timestamp with timezone" },
+  );
 
 export const WorkModeSchema = z.enum(["remote", "hybrid", "onsite"]);
 export const RemoteTypeSchema = z.enum([
@@ -32,6 +47,7 @@ export const RunLimitsSchema = z.strictObject({
   maxResultBytes: z.number().int().min(1_024).max(1_000_000),
   maxSteps: z.number().int().min(1).max(20),
   maxToolCalls: z.number().int().min(1).max(50),
+  maxWebSearches: z.number().int().min(1).max(10).default(4),
   timeoutMs: z.number().int().min(100).max(600_000),
   maxCostUsd: z.number().min(0).max(100),
 });
@@ -41,6 +57,14 @@ export const ScoutWorkerInputSchema = z.strictObject({
   runId: z.string().uuid(),
   role: z.literal("scout"),
   search: ScoutSearchBriefSchema,
+  candidate: z
+    .strictObject({
+      experienceYears: z.number().min(0).max(80).optional(),
+      languages: z.array(ShortTextSchema).max(12).default([]),
+      workAuthorization: z.array(ShortTextSchema).max(20).default([]),
+      relocation: z.boolean().default(false),
+    })
+    .optional(),
   limits: RunLimitsSchema,
 });
 
@@ -53,15 +77,9 @@ export const ScoutCandidateProposalSchema = z.strictObject({
   company: ShortTextSchema,
   location: ShortTextSchema,
   remoteType: RemoteTypeSchema,
-  url: z
-    .string()
-    .url()
-    .max(2_048)
-    .refine((value) => ["https:", "http:"].includes(new URL(value).protocol), {
-      message: "Only HTTP(S) job URLs are allowed",
-    }),
+  url: HttpUrlSchema,
   source: ShortTextSchema,
-  postedAt: z.string().datetime({ offset: true }),
+  postedAt: IsoDateTimeSchema,
   jdText: z.string().trim().min(80).max(20_000),
   requirements: z.array(ShortTextSchema).min(1).max(40),
   matchedCriteria: z.array(ShortTextSchema).max(20),
@@ -80,6 +98,14 @@ export const ScoutProposalBatchSchema = z.strictObject({
 });
 
 export type ScoutProposalBatch = z.infer<typeof ScoutProposalBatchSchema>;
+
+function isHttpUrl(value: string): boolean {
+  try {
+    return ["https:", "http:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
 
 export const UsageSchema = z.strictObject({
   inputTokens: z.number().int().nonnegative(),
@@ -179,7 +205,11 @@ export const ScoutWorkerOutcomeSchema = z.discriminatedUnion("ok", [
 
 export type ScoutWorkerOutcome = z.infer<typeof ScoutWorkerOutcomeSchema>;
 
-export const ScoutToolNameSchema = z.enum(["search_jobs", "read_job"]);
+export const ScoutToolNameSchema = z.enum([
+  "search_jobs",
+  "read_job",
+  "read_web_job",
+]);
 
 export const ToolEventSchema = z.strictObject({
   contractVersion: z.literal("1"),
@@ -190,6 +220,9 @@ export const ToolEventSchema = z.strictObject({
   toolName: ScoutToolNameSchema,
   toolCallId: SafeIdentifierSchema,
   durationMs: z.number().int().nonnegative().optional(),
+  sourceHost: z.string().trim().min(1).max(253).optional(),
+  fetchMethod: z.string().trim().min(1).max(80).optional(),
+  failureReason: SafeIdentifierSchema.optional(),
 });
 
 export type ToolEvent = z.infer<typeof ToolEventSchema>;

@@ -49,6 +49,18 @@ describe("versioned Scout contracts", () => {
     expect(
       ScoutCandidateProposalSchema.safeParse({
         ...valid,
+        url: "file:///tmp/job",
+      }).success,
+    ).toBe(false);
+    expect(
+      ScoutCandidateProposalSchema.safeParse({
+        ...valid,
+        postedAt: "not-a-timestamp",
+      }).success,
+    ).toBe(false);
+    expect(
+      ScoutCandidateProposalSchema.safeParse({
+        ...valid,
         persistence: "sqlite",
       }).success,
     ).toBe(false);

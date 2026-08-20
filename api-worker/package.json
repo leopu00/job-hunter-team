@@ -8,6 +8,7 @@
   },
   "scripts": {
     "demo": "tsx src/cli.ts",
+    "scout": "tsx src/standalone-cli.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
@@ -19,6 +20,8 @@
     "@ai-sdk/openai": "^4.0.43",
     "@ai-sdk/openai-compatible": "^3.0.31",
     "ai": "^7.0.69",
+    "playwright-core": "^1.62.1",
+    "yaml": "^2.8.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

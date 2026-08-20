@@ -20,6 +20,7 @@ export type ProviderExecutionContext = {
   prompt: string;
   tools: GuardedScoutTools;
   guard: RunGuard;
+  discoveryMode: "catalog" | "web";
   signal: AbortSignal;
   recordStep(record: ProviderStepRecord): Promise<void>;
 };

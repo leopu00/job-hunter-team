@@ -17,6 +17,7 @@ import {
   API_KEY_ENV_BY_PROVIDER,
   ModelProfileSchema,
   assertScoutCapabilities,
+  assertWebSearchCapability,
   type ModelProfile,
 } from "./model-profile.js";
 import { AiSdkScoutProvider } from "./providers/ai-sdk.js";
@@ -25,13 +26,19 @@ import type {
   ProviderExecutionContext,
   ScoutProviderAdapter,
 } from "./providers/provider.js";
-import { SCOUT_SYSTEM_PROMPT, buildScoutPrompt } from "./role/scout.js";
+import {
+  SCOUT_SYSTEM_PROMPT,
+  buildScoutPrompt,
+  buildScoutSystemPrompt,
+} from "./role/scout.js";
 import { ExclusiveRunLock } from "./run-lock.js";
 import { GuardedScoutTools, type ScoutJobSource } from "./tools.js";
+import type { ScoutWebJobReader } from "./web-job-reader.js";
 
 export type ScoutWorkerOptions = {
   runtimeDir: string;
   source: ScoutJobSource;
+  webReader?: ScoutWebJobReader;
   liveEnabled?: boolean;
   env?: NodeJS.ProcessEnv;
   audit?: AuditSink;
@@ -69,14 +76,21 @@ export class ScoutApiWorker {
       if (!profileResult.success) throw new WorkerFault("PROFILE_VALIDATION");
       profile = profileResult.data;
       assertCapabilities(profile);
+      if (this.options.webReader) assertWebCapabilities(profile);
       if (profile.provider !== "mock" && !this.options.liveEnabled) {
         throw new WorkerFault("LIVE_NOT_ENABLED");
       }
       assertLiveBudget(profile, input.limits.maxCostUsd);
 
-      const prompt = buildScoutPrompt(input);
+      const systemPrompt = this.options.webReader
+        ? buildScoutSystemPrompt("web")
+        : SCOUT_SYSTEM_PROMPT;
+      const prompt = buildScoutPrompt(
+        input,
+        this.options.webReader ? "web" : "catalog",
+      );
       const guard = new RunGuard(input.limits, profile, this.now);
-      guard.assertInitialInput(`${SCOUT_SYSTEM_PROMPT}\n${prompt}`);
+      guard.assertInitialInput(`${systemPrompt}\n${prompt}`);
 
       lock = new ExclusiveRunLock(join(this.options.runtimeDir, "scout.lock"));
       await lock.acquire(input.runId);
@@ -88,6 +102,7 @@ export class ScoutApiWorker {
         guard,
         this.audit,
         this.now,
+        this.options.webReader,
       );
       const controller = new AbortController();
       const timeout = setTimeout(
@@ -109,10 +124,11 @@ export class ScoutApiWorker {
         const context: ProviderExecutionContext = {
           input,
           profile,
-          systemPrompt: SCOUT_SYSTEM_PROMPT,
+          systemPrompt,
           prompt,
           tools,
           guard,
+          discoveryMode: this.options.webReader ? "web" : "catalog",
           signal: controller.signal,
           recordStep: async ({ reservation, usage, finishReason }) => {
             const recorded = guard.recordProviderStep(reservation, usage);
@@ -240,6 +256,14 @@ export class ScoutApiWorker {
 function assertCapabilities(profile: ModelProfile): void {
   try {
     assertScoutCapabilities(profile);
+  } catch (error) {
+    throw new WorkerFault("CAPABILITY_UNSUPPORTED", { cause: error });
+  }
+}
+
+function assertWebCapabilities(profile: ModelProfile): void {
+  try {
+    assertWebSearchCapability(profile);
   } catch (error) {
     throw new WorkerFault("CAPABILITY_UNSUPPORTED", { cause: error });
   }

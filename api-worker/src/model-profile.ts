@@ -23,11 +23,18 @@ export const ModelProfileSchema = z
         supported: z.boolean(),
         mode: z.enum(["native", "json_schema", "prompted", "none"]),
       }),
+      webSearch: z
+        .strictObject({
+          supported: z.boolean(),
+          mode: z.enum(["provider", "none"]),
+        })
+        .default({ supported: false, mode: "none" }),
     }),
     pricing: z
       .strictObject({
         inputUsdPerMillionTokens: z.number().nonnegative(),
         outputUsdPerMillionTokens: z.number().nonnegative(),
+        webSearchUsdPerCall: z.number().nonnegative().optional(),
       })
       .optional(),
     baseUrl: z
@@ -72,5 +79,17 @@ export function assertScoutCapabilities(profile: ModelProfile): void {
     profile.capabilities.structuredOutput.mode === "none"
   ) {
     throw new Error("CAPABILITY_STRUCTURED_OUTPUT");
+  }
+}
+
+export function assertWebSearchCapability(profile: ModelProfile): void {
+  if (
+    !profile.capabilities.webSearch.supported ||
+    profile.capabilities.webSearch.mode !== "provider" ||
+    !["anthropic", "openai"].includes(profile.provider) ||
+    !profile.pricing?.webSearchUsdPerCall ||
+    profile.pricing.webSearchUsdPerCall <= 0
+  ) {
+    throw new Error("CAPABILITY_WEB_SEARCH");
   }
 }

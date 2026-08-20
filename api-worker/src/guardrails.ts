@@ -19,6 +19,7 @@ export type RecordedStep = {
 export class RunGuard {
   private stepCount = 0;
   private toolCallCount = 0;
+  private webSearchCount = 0;
   private totalInputTokens = 0;
   private totalOutputTokens = 0;
   private totalCostUsd = 0;
@@ -56,7 +57,10 @@ export class RunGuard {
     );
     if (
       this.profile.provider !== "mock" &&
-      this.totalCostUsd + ceilingCostUsd > this.limits.maxCostUsd + 1e-12
+      this.totalCostUsd +
+        ceilingCostUsd +
+        this.remainingWebSearchReservation() >
+        this.limits.maxCostUsd + 1e-12
     ) {
       throw new WorkerFault("BUDGET_EXCEEDED", { limit: "cost_usd" });
     }
@@ -122,6 +126,28 @@ export class RunGuard {
     this.toolCallCount += 1;
   }
 
+  recordWebSearchCalls(count: number): void {
+    if (!Number.isInteger(count) || count < 0) {
+      throw new WorkerFault("INTERNAL_ERROR");
+    }
+    if (this.webSearchCount + count > this.limits.maxWebSearches) {
+      throw new WorkerFault("TOOL_CALL_LIMIT", { limit: "tool_calls" });
+    }
+    if (this.toolCallCount + count > this.limits.maxToolCalls) {
+      throw new WorkerFault("TOOL_CALL_LIMIT", { limit: "tool_calls" });
+    }
+    this.webSearchCount += count;
+    this.toolCallCount += count;
+    this.totalCostUsd +=
+      count * (this.profile.pricing?.webSearchUsdPerCall ?? 0);
+    if (
+      this.profile.provider !== "mock" &&
+      this.totalCostUsd > this.limits.maxCostUsd + 1e-12
+    ) {
+      throw new WorkerFault("BUDGET_EXCEEDED", { limit: "cost_usd" });
+    }
+  }
+
   assertResult(serializedResult: string): void {
     if (
       Buffer.byteLength(serializedResult, "utf8") > this.limits.maxResultBytes
@@ -160,6 +186,13 @@ export class RunGuard {
       (inputTokens * this.profile.pricing.inputUsdPerMillionTokens +
         outputTokens * this.profile.pricing.outputUsdPerMillionTokens) /
       1_000_000
+    );
+  }
+
+  private remainingWebSearchReservation(): number {
+    const price = this.profile.pricing?.webSearchUsdPerCall ?? 0;
+    return (
+      Math.max(0, this.limits.maxWebSearches - this.webSearchCount) * price
     );
   }
 }
