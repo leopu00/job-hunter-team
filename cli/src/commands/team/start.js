@@ -289,6 +289,10 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
   const childEnv = { ...(mode === 'fast' ? { JHT_MODE: 'fast' } : {}), ...(env || {}) };
   const r = execScriptInContainer('/app/.launcher/start-agent.sh', scriptArgs, {
     env: Object.keys(childEnv).length ? childEnv : null,
+    // Cold starts can spend close to 30s in provider/config preflight before
+    // start-agent.sh confirms the tmux session. The generic container helper
+    // default was therefore a race that surfaced as an empty "unknown error".
+    timeoutMs: 90_000,
   });
   if (r.code === 0) {
     console.log(`  ${c.green('✓')} ${sName} started`);

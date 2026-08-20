@@ -90,4 +90,22 @@ describe("team start — retry reattivo", () => {
     expect(source).toContain("if (previousStarted && item.preDelayMs");
     expect(source).toContain("previousStarted = result === 'started'");
   });
+
+  it("lascia al preflight provider il tempo di completare uno start freddo", () => {
+    const source = readFileSync(
+      path.join(REPO, "cli", "src", "commands", "team", "start.js"),
+      "utf-8",
+    );
+    expect(source).toContain("timeoutMs: 90_000");
+  });
+
+  it("il pid1 termina pulitamente entro la grace period del runtime", () => {
+    const source = readFileSync(
+      path.join(REPO, "cli", "src", "commands", "pid1.js"),
+      "utf-8",
+    );
+    expect(source).toContain("clearInterval(keepAlive)");
+    expect(source).toContain("pid1Log('shutdown complete')");
+    expect(source).toContain("process.exit(0)");
+  });
 });
