@@ -1,5 +1,6 @@
 """Contracts for the opt-in Windows Podman compatibility probe."""
 
+import os
 from pathlib import Path
 import runpy
 import shutil
@@ -204,6 +205,7 @@ def test_runtime_enabler_is_valid_powershell():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.skipif(os.name != "nt", reason="native shim compilation requires Windows")
 @pytest.mark.parametrize(
     "shell",
     [candidate for candidate in (shutil.which("powershell"), shutil.which("pwsh")) if candidate],
