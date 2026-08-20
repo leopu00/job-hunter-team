@@ -21,20 +21,20 @@
     "better-sqlite3": "^13.0.3",
     "js-yaml": "^5.2.2",
     "maplibre-gl": "^6.3.0",
-    "next": "^16.3.1",
+    "next": "^16.2.11",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@next/bundle-analyzer": "^16.3.1",
+    "@next/bundle-analyzer": "^16.2.6",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.13.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "^16.3.1",
+    "eslint-config-next": "^16.2.10",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.20.6",
     "typescript": "^6.0.3"
