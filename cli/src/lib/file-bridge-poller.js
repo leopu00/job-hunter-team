@@ -261,15 +261,21 @@ export async function runFileBridgePoller() {
 
     let backoff = tierInterval(lastActivityAt, { allowDeepIdle: false });
     try {
-      // 1. Indice + purge a tempo (~60s), indipendenti dal tier di poll.
+      // 1. Indice + purge a tempo, indipendenti dal tier di poll. Un errore
+      // qui non deve saltare il GET delle richieste pending: l'indice alimenta
+      // la UI, mentre il download on-demand deve restare servibile.
       if (Date.now() - lastIndexAt >= INDEX_EVERY_MS) {
         lastIndexAt = Date.now();
-        const files = await buildIndex();
-        const r = await apiSend('POST', baseUrl, token, '/api/cloud-sync/file-index', { files });
-        log('info', 'index.published', { indexed: r.indexed ?? files.length });
-        await apiSend('POST', baseUrl, token, '/api/cloud-sync/file-bridge/purge')
-          .then((p) => { if (p.purged) log('info', 'purge.done', { purged: p.purged }); })
-          .catch((err) => log('warn', 'purge.failed', { err: err.message }));
+        try {
+          const files = await buildIndex();
+          const r = await apiSend('POST', baseUrl, token, '/api/cloud-sync/file-index', { files });
+          log('info', 'index.published', { indexed: r.indexed ?? files.length });
+          await apiSend('POST', baseUrl, token, '/api/cloud-sync/file-bridge/purge')
+            .then((p) => { if (p.purged) log('info', 'purge.done', { purged: p.purged }); })
+            .catch((err) => log('warn', 'purge.failed', { err: err.message }));
+        } catch (err) {
+          log('error', 'index.failed', { err: err.message });
+        }
       }
 
       // 2. Richieste pending (ogni tick: è la parte reattiva).

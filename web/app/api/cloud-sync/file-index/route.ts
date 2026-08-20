@@ -71,20 +71,40 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Delete dei file spariti dal disco: tutto ciò che non è nello snapshot.
-  const keepNames = rows.map((r) => r.name);
-  let delQuery = admin.from("candidate_files").delete().eq("user_id", userId);
-  if (keepNames.length > 0) {
-    // PostgREST: not-in con lista quotata.
-    const inList = keepNames.map((n) => `"${n.replace(/"/g, '""')}"`).join(",");
-    delQuery = delQuery.not("name", "in", `(${inList})`);
-  }
-  const { error: delErr } = await delQuery;
-  if (delErr) {
+  // Delete dei file spariti dal disco. Non serializzare l'intero snapshot in
+  // un filtro NOT IN: con centinaia di nomi PostgREST costruisce una URL oltre
+  // il limite del proxy e risponde 400 prima di eseguire il DELETE.
+  const { data: existing, error: listErr } = await admin
+    .from("candidate_files")
+    .select("name")
+    .eq("user_id", userId);
+  if (listErr) {
     return NextResponse.json(
-      { ok: false, error: delErr.message },
+      { ok: false, error: listErr.message },
       { status: 500 },
     );
+  }
+
+  const keepNames = new Set(rows.map((r) => r.name));
+  const staleNames = (existing ?? [])
+    .map((file) => file.name)
+    .filter(
+      (name): name is string =>
+        typeof name === "string" && !keepNames.has(name),
+    );
+  const DELETE_CHUNK = 50;
+  for (let i = 0; i < staleNames.length; i += DELETE_CHUNK) {
+    const { error: delErr } = await admin
+      .from("candidate_files")
+      .delete()
+      .eq("user_id", userId)
+      .in("name", staleNames.slice(i, i + DELETE_CHUNK));
+    if (delErr) {
+      return NextResponse.json(
+        { ok: false, error: delErr.message },
+        { status: 500 },
+      );
+    }
   }
 
   return NextResponse.json({ ok: true, indexed: rows.length });
