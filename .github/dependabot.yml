@@ -58,6 +58,23 @@ updates:
       - "dependencies"
       - "tests"
 
+  # Worker API Scout — prototipo fuori dal runtime di produzione, ma con
+  # package-lock proprio: senza questa voce le sue dipendenze (e i loro
+  # avvisi di sicurezza) non verrebbero aggiornate da nessuno.
+  - package-ecosystem: "npm"
+    directory: "/api-worker"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+
   # Dipendenze root
   - package-ecosystem: "npm"
     directory: "/"
