@@ -84,6 +84,15 @@ export function assertScoutCapabilities(profile: ModelProfile): void {
   }
 }
 
+export function assertStructuredOutputCapability(profile: ModelProfile): void {
+  if (
+    !profile.capabilities.structuredOutput.supported ||
+    profile.capabilities.structuredOutput.mode === "none"
+  ) {
+    throw new Error("CAPABILITY_STRUCTURED_OUTPUT");
+  }
+}
+
 export function assertWebSearchCapability(profile: ModelProfile): void {
   if (
     !profile.capabilities.webSearch.supported ||

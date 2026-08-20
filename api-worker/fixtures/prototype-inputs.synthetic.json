@@ -1,0 +1,150 @@
+{
+  "sharedLimits": {
+    "maxInputTokensPerStep": 12000,
+    "maxOutputTokensPerStep": 3000,
+    "maxTotalOutputTokens": 3000,
+    "maxResultBytes": 100000,
+    "maxSteps": 2,
+    "maxToolCalls": 2,
+    "maxWebSearches": 1,
+    "timeoutMs": 15000,
+    "maxCostUsd": 0
+  },
+  "inputs": {
+    "writer": {
+      "contractVersion": "1",
+      "runId": "66666666-6666-4666-8666-666666666666",
+      "role": "writer",
+      "requestKind": "cv",
+      "userRequested": true,
+      "position": {
+        "sourceId": "synthetic-job-001",
+        "url": "https://jobs.example.invalid/atlas/platform-automation-001",
+        "title": "Platform Automation Engineer",
+        "company": "Atlas Example Labs",
+        "jdSummary": "A fictional remote platform role focused on TypeScript, Node.js and workflow automation.",
+        "score": 93
+      },
+      "candidateEvidence": {
+        "headline": "Platform engineer focused on reliable automation",
+        "skills": ["TypeScript", "Node.js", "automation"],
+        "experienceHighlights": [
+          "Built a fictional deployment workflow used as synthetic test evidence."
+        ]
+      }
+    },
+    "critic": {
+      "contractVersion": "1",
+      "runId": "77777777-7777-4777-8777-777777777777",
+      "role": "critic",
+      "sourceId": "synthetic-job-001",
+      "url": "https://jobs.example.invalid/atlas/platform-automation-001",
+      "round": 1,
+      "jobDescription": "A fictional remote platform role focused on TypeScript, Node.js and workflow automation.",
+      "document": {
+        "kind": "cv",
+        "markdown": "# Platform engineer\n\n## Skills\nTypeScript, Node.js, automation.\n\n## Experience\nBuilt a fictional deployment workflow used as synthetic test evidence."
+      }
+    },
+    "assistant": {
+      "contractVersion": "1",
+      "runId": "88888888-8888-4888-8888-888888888888",
+      "role": "assistant",
+      "userMessage": "Vorrei capire quali informazioni mancano al mio profilo sintetico.",
+      "preferredLanguage": "it",
+      "profileSnapshot": {
+        "roles": ["Platform Engineer"],
+        "missingFields": ["salary target"]
+      }
+    },
+    "mentor": {
+      "contractVersion": "1",
+      "runId": "99999999-9999-4999-8999-999999999999",
+      "role": "mentor",
+      "profileGoals": ["Move toward platform engineering"],
+      "pipeline": { "sourced": 8, "scored": 2, "averageScore": 71 },
+      "daysSinceLastCheckIn": 8
+    },
+    "captain": {
+      "contractVersion": "1",
+      "runId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "role": "captain",
+      "workPhase": "ON",
+      "queues": { "new": 2, "checked": 1, "scored": 1 },
+      "activeAgents": [
+        { "id": "scout-1", "role": "scout", "state": "working" }
+      ],
+      "tickets": [
+        {
+          "id": "ticket-synthetic-1",
+          "kind": "question",
+          "summary": "Review a fictional vacancy detail."
+        }
+      ]
+    },
+    "sentinel": {
+      "contractVersion": "1",
+      "runId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "role": "sentinel",
+      "teamBudgetUsd": 10,
+      "spentUsd": 7.5,
+      "agents": [
+        {
+          "id": "scout-1",
+          "role": "scout",
+          "tokens": 120000,
+          "costUsd": 0.4,
+          "rateTokensPerMinute": 12000
+        }
+      ]
+    },
+    "doctor": {
+      "contractVersion": "1",
+      "runId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "role": "doctor",
+      "sessions": [
+        {
+          "id": "analyst-1",
+          "role": "analyst",
+          "ageHours": 13,
+          "responsive": true,
+          "parked": false,
+          "activeTurn": false,
+          "contextPercent": 42,
+          "recentOutputSecondsAgo": null,
+          "recentErrors": 0
+        },
+        {
+          "id": "scorer-1",
+          "role": "scorer",
+          "ageHours": 2,
+          "responsive": false,
+          "parked": false,
+          "activeTurn": false,
+          "contextPercent": 65,
+          "recentOutputSecondsAgo": 300,
+          "recentErrors": 2
+        }
+      ],
+      "maxSessionAgeHours": 12
+    },
+    "maintainer": {
+      "contractVersion": "1",
+      "runId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "role": "maintainer",
+      "checks": [
+        {
+          "name": "api-worker verify",
+          "status": "pass",
+          "evidence": "Synthetic verification passed."
+        },
+        {
+          "name": "review log",
+          "status": "warn",
+          "evidence": "Synthetic documentation entry requires synchronization."
+        }
+      ],
+      "repositoryDirty": true
+    }
+  }
+}

@@ -40,6 +40,7 @@ export class RunGuard {
     readonly limits: RunLimits,
     private readonly profile: ModelProfile,
     private readonly now: () => number = Date.now,
+    private readonly reserveWebSearchBudget = true,
   ) {}
 
   estimateTokens(serializedValue: string): number {
@@ -87,8 +88,12 @@ export class RunGuard {
   recordProviderStep(
     reservation: StepReservation,
     rawUsage: Usage,
+    webSearchCalls = 0,
   ): RecordedStep {
     const usage = UsageSchema.parse(rawUsage);
+    if (!Number.isInteger(webSearchCalls) || webSearchCalls < 0) {
+      throw new WorkerFault("INTERNAL_ERROR");
+    }
     this.totalInputTokens += usage.inputTokens;
     this.totalOutputTokens += usage.outputTokens;
     this.totalNoCacheInputTokens +=
@@ -118,10 +123,18 @@ export class RunGuard {
     this.usedReservedCeiling ||= basis === "reserved_ceiling";
     this.totalCostUsd += amountUsd;
     this.hasEstimatedCost ||= estimated;
+    this.webSearchCount += webSearchCalls;
+    this.toolCallCount += webSearchCalls;
+    const webSearchCostUsd =
+      webSearchCalls * (this.profile.pricing?.webSearchUsdPerCall ?? 0);
+    this.totalCostUsd += webSearchCostUsd;
+    if (webSearchCalls > 0 && this.profile.provider !== "mock") {
+      this.hasEstimatedCost = true;
+    }
 
     // The provider has already performed and billed this request. Account for
-    // its returned usage before enforcing post-response limits so a rejected
-    // oversized response cannot disappear from the run ledger.
+    // its returned usage and native web searches before enforcing any
+    // post-response limit so rejected work cannot disappear from the ledger.
     if (usage.inputTokens > 0) this.assertInputTokens(usage.inputTokens);
     if (usage.outputTokens > this.limits.maxOutputTokensPerStep) {
       throw new WorkerFault("OUTPUT_LIMIT", {
@@ -132,6 +145,12 @@ export class RunGuard {
       throw new WorkerFault("OUTPUT_LIMIT", {
         limit: "total_output_tokens",
       });
+    }
+    if (
+      this.webSearchCount > this.limits.maxWebSearches ||
+      this.toolCallCount > this.limits.maxToolCalls
+    ) {
+      throw new WorkerFault("TOOL_CALL_LIMIT", { limit: "tool_calls" });
     }
     if (
       this.profile.provider !== "mock" &&
@@ -153,32 +172,6 @@ export class RunGuard {
       throw new WorkerFault("TOOL_CALL_LIMIT", { limit: "tool_calls" });
     }
     this.toolCallCount += 1;
-  }
-
-  recordWebSearchCalls(count: number): number {
-    if (!Number.isInteger(count) || count < 0) {
-      throw new WorkerFault("INTERNAL_ERROR");
-    }
-    if (this.webSearchCount + count > this.limits.maxWebSearches) {
-      throw new WorkerFault("TOOL_CALL_LIMIT", { limit: "tool_calls" });
-    }
-    if (this.toolCallCount + count > this.limits.maxToolCalls) {
-      throw new WorkerFault("TOOL_CALL_LIMIT", { limit: "tool_calls" });
-    }
-    this.webSearchCount += count;
-    this.toolCallCount += count;
-    const costUsd = count * (this.profile.pricing?.webSearchUsdPerCall ?? 0);
-    this.totalCostUsd += costUsd;
-    if (count > 0 && this.profile.provider !== "mock") {
-      this.hasEstimatedCost = true;
-    }
-    if (
-      this.profile.provider !== "mock" &&
-      this.totalCostUsd > this.limits.maxCostUsd + 1e-12
-    ) {
-      throw new WorkerFault("BUDGET_EXCEEDED", { limit: "cost_usd" });
-    }
-    return costUsd;
   }
 
   assertResult(serializedResult: string): void {
@@ -276,6 +269,7 @@ export class RunGuard {
   }
 
   private remainingWebSearchReservation(): number {
+    if (!this.reserveWebSearchBudget) return 0;
     const price = this.profile.pricing?.webSearchUsdPerCall ?? 0;
     return (
       Math.max(0, this.limits.maxWebSearches - this.webSearchCount) * price

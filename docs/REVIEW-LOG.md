@@ -28,8 +28,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-08-14 | ✅ |
-| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-08-17 | ✅ |
+| [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-08-19 | ✅ |
+| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-08-19 | ✅ |
 | [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-08-13 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `support@jobhunterteam.ai` | — | 2026-07-26 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Policy di disclosure, trust model corrente, copertura e stato hardening | — | 2026-08-04 | ✅ |
@@ -164,7 +164,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [game/PROMPT.md](../game/PROMPT.md) | PROMPT — Prototipo videogioco "JHT: The Office" (esperienza gamificata di Job Hunter Team) — Il progetto game/ è ora l'unica applicazione desktop di Job Hunter Team. | — | 2026-07-19 | ✅ |
 | [game/README.md](../game/README.md) | Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux. | — | 2026-08-04 | ✅ |
-| [game/assets/gen-art/LOG.md](../game/assets/gen-art/LOG.md) | 🎨 gen-art — log dell'Art Director (host.invalid:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro | — | 2026-08-04 | ✅ |
+| [game/assets/gen-art/LOG.md](../game/assets/gen-art/LOG.md) | 🎨 gen-art — log dell'Art Director (host.invalid:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro | — | 2026-08-17 | ✅ |
 | [game/docs/ANALISI-GIOCHI.md](../game/docs/ANALISI-GIOCHI.md) | Analisi giochi di riferimento — appunti sessione con Leone (2026-07-07) — Analisi guidata, un gioco alla volta: cosa c'è / cosa non c'è / cosa ci piace / cosa non ci piace. | — | 2026-07-07 | ✅ |
 | [game/docs/ASSETS.md](../game/docs/ASSETS.md) | Pipeline asset personaggi — Sprite in-world (SVG a layer componibili) | — | 2026-07-30 | ✅ |
 | [game/docs/DATA-ADAPTER.md](../game/docs/DATA-ADAPTER.md) | Data adapter — contratto fra gioco e dati del team — Il gioco non conosce Supabase né la dashboard: parla solo con l'autoload | — | 2026-07-11 | ✅ |
@@ -234,7 +234,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-08-17 | ✅ |
+| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-08-20 | ✅ |
 | [docs/internal/architecture/2026-05-19-dashboard-routing-cases.md](./internal/architecture/2026-05-19-dashboard-routing-cases.md) | 🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-20-world-globe-feature.md](./internal/architecture/2026-05-20-world-globe-feature.md) | 🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-25-work-hours-design.md](./internal/architecture/2026-05-25-work-hours-design.md) | 🗓️ Work hours UI — design + monitoring settimanale — Sessione di design 2026-05-25. | — | 2026-06-13 | ✅ |
@@ -364,7 +364,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/architecture/2026-08-12-execution-host-vocabulary-contract.md](./internal/architecture/2026-08-12-execution-host-vocabulary-contract.md) | Contratto del luogo di esecuzione: PC locale e VPS come host supportati, cloud opzionale separato dal runtime e capacità da non promettere. | — | 2026-08-12 | ✅ |
 | [docs/internal/roadmap/2026-08-17-ticket-container-runtime-podman.md](./internal/roadmap/2026-08-17-ticket-container-runtime-podman.md) | Ticket aperto, decisione non presa: cosa toglierebbe all'utente e cosa costerebbe a noi sostituire Docker con Podman. Misurato su master dbd6369d6. | — | 2026-08-17 | ✅ |
 | [docs/internal/roadmap/2026-08-17-ticket-team-api-boundary.md](./internal/roadmap/2026-08-17-ticket-team-api-boundary.md) | Ticket aperto, direzione approvata e forma tecnica da decidere misurando: una piattaforma sola su web, desktop e telefono — il problema misurato non è quale framework, è il confine caduto fra il team e i suoi client. | — | 2026-08-17 | ✅ |
-| [docs/internal/roadmap/2026-08-17-fetta1-stato-e-ripresa.md](./internal/roadmap/2026-08-17-fetta1-stato-e-ripresa.md) | Punto di ripresa della fetta 1 di JHT-TEAM-API-BOUNDARY: la forma scelta (server node:http in ESM puro nel container, zero dipendenze e zero build step), i due scostamenti dichiarati dall'ADR-0009 con il loro piano di ritiro, e la separazione fra ciò che è committato e ciò che resta da scrivere. | — | — | ✅ |
+| [docs/internal/roadmap/2026-08-17-fetta1-stato-e-ripresa.md](./internal/roadmap/2026-08-17-fetta1-stato-e-ripresa.md) | Punto di ripresa della fetta 1 di JHT-TEAM-API-BOUNDARY: la forma scelta (server node:http in ESM puro nel container, zero dipendenze e zero build step), i due scostamenti dichiarati dall'ADR-0009 con il loro piano di ritiro, e la separazione fra ciò che è committato e ciò che resta da scrivere. | — | 2026-08-17 | ✅ |
+| [docs/internal/prototypes/2026-08-19-scout-api-worker-design.md](./internal/prototypes/2026-08-19-scout-api-worker-design.md) | Design del worker Scout API proposal-only, guardrail, provider e hardening web | 2026-08-20 | 2026-08-19 | 🟢 |
+| [docs/internal/prototypes/2026-08-20-standalone-scout-runtime.md](./internal/prototypes/2026-08-20-standalone-scout-runtime.md) | Stato e roadmap dello Scout standalone con coordinamento, web evidence e SQLite isolato | 2026-08-20 | 2026-08-20 | 🟢 |
 
 
 ## 🔒 docs/security
@@ -431,6 +433,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md](../promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md) | Specifica tipografica e motion del pack overlay 9:16 per l'animatic pubblicitario: safe area, palette JHT, font, CTA e uso editoriale | — | 2026-08-05 | ✅ |
 | [docs/assets/icons/SOURCES.md](./assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale | — | 2026-08-07 | ✅ |
 | [web/public/brand/README.md](../web/public/brand/README.md) | Provenienza, integrità e vincoli d'uso degli asset social ufficiali nel footer pubblico, con Instagram attivo e TikTok mantenuto non pubblicato | — | 2026-08-10 | ✅ |
+| [api-worker/README.md](../api-worker/README.md) | Scout API standalone: confini, avvio, SSRF/DNS pinning, privacy, accounting e verifica | 2026-08-20 | 2026-08-20 | 🟢 |
 
 
 ---

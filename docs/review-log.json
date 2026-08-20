@@ -1594,6 +1594,21 @@
       "path": "docs/internal/roadmap/2026-08-17-fetta1-stato-e-ripresa.md",
       "description": "Punto di ripresa della fetta 1 di JHT-TEAM-API-BOUNDARY: la forma scelta (server node:http in ESM puro nel container, zero dipendenze e zero build step), i due scostamenti dichiarati dall'ADR-0009 con il loro piano di ritiro, e la separazione fra ciò che è committato e ciò che resta da scrivere.",
       "last_review": null
+    },
+    {
+      "path": "api-worker/README.md",
+      "description": "Scout API standalone: confini, avvio, SSRF/DNS pinning, privacy, accounting e verifica",
+      "last_review": "2026-08-20"
+    },
+    {
+      "path": "docs/internal/prototypes/2026-08-19-scout-api-worker-design.md",
+      "description": "Design del worker Scout API proposal-only, guardrail, provider e hardening web",
+      "last_review": "2026-08-20"
+    },
+    {
+      "path": "docs/internal/prototypes/2026-08-20-standalone-scout-runtime.md",
+      "description": "Stato e roadmap dello Scout standalone con coordinamento, web evidence e SQLite isolato",
+      "last_review": "2026-08-20"
     }
   ]
 }

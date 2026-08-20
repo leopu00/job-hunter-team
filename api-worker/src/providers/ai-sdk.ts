@@ -1,17 +1,13 @@
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
   NoObjectGeneratedError,
   Output,
   generateText,
   stepCountIs,
   tool,
-  type LanguageModelUsage,
   type ToolSet,
 } from "ai";
 
-import { ScoutProposalBatchSchema, type Usage } from "../contract.js";
+import { ScoutProposalBatchSchema } from "../contract.js";
 import { WorkerFault } from "../errors.js";
 import type { StepReservation } from "../guardrails.js";
 import {
@@ -27,12 +23,17 @@ import type {
   ProviderExecutionContext,
   ScoutProviderAdapter,
 } from "./provider.js";
+import {
+  createAiSdkModel,
+  createProviderWebSearchTool,
+  normalizeAiSdkUsage,
+} from "./ai-sdk-runtime.js";
 
 export class AiSdkScoutProvider implements ScoutProviderAdapter {
   constructor(private readonly apiKey: string) {}
 
   async run(context: ProviderExecutionContext): Promise<ProviderExecution> {
-    const model = createModel(context, this.apiKey);
+    const model = createAiSdkModel(context.profile, this.apiKey);
     const tools = createTools(context, this.apiKey);
     const reservations = new Map<number, StepReservation>();
     const finishedSteps = new Set<number>();
@@ -75,15 +76,16 @@ export class AiSdkScoutProvider implements ScoutProviderAdapter {
           const webSearchCalls = toolCalls.filter(
             (call) => call.toolName === "web_search",
           ).length;
-          context.guard.recordWebSearchCalls(webSearchCalls);
+          // The provider response already exists at this point. Mark the
+          // attempt finished before post-response accounting can reject it.
+          finishedSteps.add(stepNumber);
           await context.recordStep({
             reservation,
-            usage: normalizeUsage(usage),
+            usage: normalizeAiSdkUsage(usage),
             finishReason,
             webSearchCalls,
             responseId: response.id,
           });
-          finishedSteps.add(stepNumber);
         },
       });
 
@@ -161,111 +163,62 @@ function createWebSearchTool(
 ): ToolSet[string] {
   switch (context.profile.provider) {
     case "anthropic":
-      return createAnthropic({ apiKey }).tools.webSearch_20260209({
-        maxUses: context.input.limits.maxWebSearches,
-      });
+      return createProviderWebSearchTool(
+        context.profile,
+        apiKey,
+        context.input.limits.maxWebSearches,
+      );
     case "openai":
-      return createOpenAI({ apiKey }).tools.webSearch({
-        externalWebAccess: true,
-        searchContextSize: "high",
-      });
+      return createProviderWebSearchTool(
+        context.profile,
+        apiKey,
+        context.input.limits.maxWebSearches,
+      );
     case "kimi":
     case "mock":
       throw new WorkerFault("CAPABILITY_UNSUPPORTED");
   }
 }
 
-function createModel(context: ProviderExecutionContext, apiKey: string) {
-  switch (context.profile.provider) {
-    case "anthropic":
-      return createAnthropic({ apiKey })(context.profile.model);
-    case "openai":
-      return createOpenAI({ apiKey })(context.profile.model);
-    case "kimi": {
-      if (!context.profile.baseUrl) {
-        throw new WorkerFault("PROFILE_VALIDATION");
-      }
-      return createOpenAICompatible({
-        name: "kimi",
-        apiKey,
-        baseURL: context.profile.baseUrl,
-      })(context.profile.model);
-    }
-    case "mock":
-      throw new WorkerFault("INTERNAL_ERROR");
-  }
-}
-
-function normalizeUsage(usage: LanguageModelUsage): Usage {
-  const inputTokens = finiteTokenCount(usage.inputTokens);
-  const outputTokens = finiteTokenCount(usage.outputTokens);
-  const cacheReadTokens = finiteTokenCount(
-    usage.inputTokenDetails?.cacheReadTokens,
-  );
-  const cacheWriteTokens = finiteTokenCount(
-    usage.inputTokenDetails?.cacheWriteTokens,
-  );
-  const noCacheTokens =
-    optionalTokenCount(usage.inputTokenDetails?.noCacheTokens) ??
-    Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens);
-  const reasoningTokens = finiteTokenCount(
-    usage.outputTokenDetails?.reasoningTokens,
-  );
-  return {
-    inputTokens,
-    inputTokenDetails: {
-      noCacheTokens,
-      cacheReadTokens,
-      cacheWriteTokens,
-    },
-    outputTokens,
-    outputTokenDetails: {
-      textTokens:
-        optionalTokenCount(usage.outputTokenDetails?.textTokens) ??
-        Math.max(0, outputTokens - reasoningTokens),
-      reasoningTokens,
-    },
-    totalTokens:
-      finiteTokenCount(usage.totalTokens) || inputTokens + outputTokens,
-  };
-}
-
-function finiteTokenCount(value: number | undefined): number {
-  return Number.isFinite(value) && value !== undefined
-    ? Math.max(0, Math.round(value))
-    : 0;
-}
-
-function optionalTokenCount(value: number | undefined): number | undefined {
-  return value === undefined ? undefined : finiteTokenCount(value);
-}
-
-function writeProviderDiagnostic(error: unknown): void {
+export function writeProviderDiagnostic(error: unknown): void {
   if (process.env.JHT_SCOUT_PROVIDER_DEBUG !== "1") return;
+  process.stderr.write(
+    `[scout-provider-debug] ${JSON.stringify(providerDiagnostic(error))}\n`,
+  );
+}
+
+export function providerDiagnostic(error: unknown): Record<string, unknown> {
   const diagnostic: Record<string, unknown> = {
-    name: error instanceof Error ? error.name : "UnknownError",
-    message:
-      error instanceof Error
-        ? redactSecrets(error.message).slice(0, 2_000)
-        : "Non-Error provider failure",
+    category: NoObjectGeneratedError.isInstance(error)
+      ? "invalid_structured_output"
+      : providerStatusCode(error) !== undefined
+        ? "provider_http_error"
+        : "provider_error",
   };
+  const statusCode = providerStatusCode(error);
+  if (statusCode !== undefined) diagnostic.statusCode = statusCode;
+  if (NoObjectGeneratedError.isInstance(error)) {
+    diagnostic.finishReason = allowlistedFinishReason(error.finishReason);
+    diagnostic.validationCodes = generatedObjectValidationCodes(
+      error.text ?? "",
+    );
+  }
+  return diagnostic;
+}
+
+function providerStatusCode(error: unknown): number | undefined {
   if (
     typeof error === "object" &&
     error !== null &&
     "statusCode" in error &&
-    typeof error.statusCode === "number"
+    typeof error.statusCode === "number" &&
+    Number.isInteger(error.statusCode) &&
+    error.statusCode >= 400 &&
+    error.statusCode <= 599
   ) {
-    diagnostic.statusCode = error.statusCode;
+    return error.statusCode;
   }
-  if (NoObjectGeneratedError.isInstance(error)) {
-    diagnostic.finishReason = error.finishReason;
-    diagnostic.validationIssues = generatedObjectValidationIssues(
-      error.text ?? "",
-    );
-  }
-  process.stderr.write(
-    `[scout-provider-debug] ${JSON.stringify(diagnostic)}\n`,
-  );
+  return undefined;
 }
 
 function recoverGeneratedObject(error: unknown): ProviderExecution | undefined {
@@ -318,29 +271,44 @@ function normalizeHumanDate(value: string): string | undefined {
   return undefined;
 }
 
-function generatedObjectValidationIssues(text: string): unknown[] {
+function allowlistedFinishReason(value: string | undefined): string {
+  const allowed = new Set([
+    "stop",
+    "length",
+    "content-filter",
+    "tool-calls",
+    "error",
+    "other",
+    "unknown",
+  ]);
+  return value && allowed.has(value) ? value : "unknown";
+}
+
+function generatedObjectValidationCodes(text: string): string[] {
+  const allowedCodes = new Set([
+    "custom",
+    "invalid_element",
+    "invalid_format",
+    "invalid_key",
+    "invalid_type",
+    "invalid_union",
+    "invalid_value",
+    "not_multiple_of",
+    "too_big",
+    "too_small",
+    "unrecognized_keys",
+  ]);
   try {
     const parsed = ScoutProposalBatchSchema.safeParse(JSON.parse(text));
     if (parsed.success) return [];
-    return parsed.error.issues.slice(0, 12).map((issue) => ({
-      path: issue.path.join("."),
-      code: issue.code,
-      message: issue.message,
-    }));
-  } catch (error) {
     return [
-      {
-        path: "",
-        code: "invalid_json",
-        message:
-          error instanceof Error ? error.message.slice(0, 300) : "Invalid JSON",
-      },
-    ];
+      ...new Set(
+        parsed.error.issues
+          .map((issue) => issue.code)
+          .filter((code) => allowedCodes.has(code)),
+      ),
+    ].slice(0, 12);
+  } catch {
+    return ["invalid_json"];
   }
-}
-
-function redactSecrets(value: string): string {
-  return value
-    .replace(/sk-[A-Za-z0-9_-]{8,}/g, "[redacted]")
-    .replace(/Bearer\s+[^\s"']+/gi, "Bearer [redacted]");
 }

@@ -1,4 +1,4 @@
-# JHT API worker — Scout prototype
+# JHT API workers — isolated agent prototypes
 
 This package is the first API-backed agent engine for Job Hunter Team. Its core
 worker remains proposal-only and is not wired into the production launcher,
@@ -9,6 +9,15 @@ leases and SQLite database.
 The architectural rationale and unchanged boundaries are recorded in
 [`docs/internal/prototypes/2026-08-19-scout-api-worker-design.md`](../docs/internal/prototypes/2026-08-19-scout-api-worker-design.md).
 
+The experiment now also exposes bounded experimental TypeScript/Vercel AI SDK
+proposal contracts for several team roles. These snapshots are not replacements
+for the production role prompts, pacing rules, session policy or orchestration
+contracts, and no side-effect consumer is connected to them. The role workers
+share only provider, guardrail, lock and sanitized-audit infrastructure; each
+has its own strict input/output schema, prompt, runtime lock and proposal-only
+result. They do not read or write the product database, files, tmux sessions,
+mail or network tools.
+
 ## Structure
 
 ```text
@@ -18,18 +27,67 @@ src/candidate-profile.ts    minimal standalone candidate/search profile
 src/role/scout.ts           provider-independent Scout prompt
 src/tools.ts                narrow injected search/read tools
 src/web-job-reader.ts       public-HTTPS + Schema.org JobPosting evidence gate
+src/safe-http.ts            public-IP policy + DNS-pinned HTTPS connector
 src/guardrails.ts           step, tool, I/O, timeout and USD limits
 src/run-lock.ts             one-run-at-a-time lock
 src/audit.ts                schema-validated sanitized JSONL audit
 src/providers/mock.ts       deterministic offline provider
 src/providers/ai-sdk.ts     gated Anthropic/OpenAI/Kimi adapter
+src/providers/ai-sdk-runtime.ts common AI SDK model and usage normalization
 src/worker.ts               stable worker boundary
+src/analyst-worker.ts       isolated one-position Analyst boundary
+src/prototype-roles.ts      isolated Writer through Maintainer boundaries
+src/structured-role-worker.ts guarded shared structured-output runtime
 src/standalone-db.ts        isolated coordination, dedup and positions database
 src/standalone.ts           profile-to-search-to-persistence orchestration
 src/standalone-cli.ts       one-command standalone entry point
 fixtures/                   synthetic input, model and job catalog
 tests/                      offline automated tests
 ```
+
+## Isolated API role roster
+
+All demos use synthetic `.invalid` evidence and the deterministic mock model;
+they execute the actual worker, schema, guard, lock, audit and CLI boundaries:
+
+```bash
+npm run scout
+npm run analyst:demo
+npm run writer:demo
+npm run critic:demo
+npm run assistant:demo
+npm run mentor:demo
+npm run captain:demo
+npm run sentinel:demo
+npm run doctor:demo
+npm run maintainer:demo
+```
+
+Scorer is intentionally not exposed in this tranche. The accepted product
+contract simultaneously requires component maxima totalling 110, an exact
+component sum and a total constrained to 0–100. `shared/skills/score_ranges.py`
+marks that contradiction as known and unresolved. An ADR or equivalent product
+decision must resolve it before an API Scorer can be enabled; this package does
+not invent weights, clamp or normalize the result.
+
+The downstream roles are deliberately proposals, not production automation:
+Writer does not create documents, Critic does not save reviews, Captain and
+Sentinel do not issue commands, Doctor does not restart sessions, and
+Maintainer does not edit the repository. Writer is contract-gated to an
+explicit user request and a score of at least 50 for CV work. Critic receives
+only the CV and job description, preserving blind review.
+
+For a paid canary, each non-Scout CLI additionally requires `--live`, explicit
+`--input` and `--profile` files, a positive `--max-cost-usd`, current non-zero
+pricing and the provider's fixed environment key. No test or demo enables that
+path implicitly.
+
+> **Live-provider privacy boundary:** local audit files omit prompts and role
+> evidence, but `--live` sends the serialized role input—including any supplied
+> candidate or profile evidence—to the selected external model provider. Use
+> synthetic or minimized inputs by default. Before sending personal data, the
+> operator must explicitly authorize that transmission and verify the selected
+> provider's applicable data-handling and retention policy.
 
 ## Safe default
 
@@ -107,9 +165,15 @@ uses rotating browser-like HTTP requests, then escalates blocked or client-only
 pages to local headless Chrome. Schema.org `JobPosting` is used when present;
 otherwise the model receives bounded visible-page evidence and must produce an
 extractive, evidence-grounded proposal. Redirects are revalidated, browser
-requests to private/local addresses are blocked, responses are size- and
-time-bounded, and listing text is always treated as hostile data. The audit
-records the source host, fetch method and a sanitized failure reason.
+subrequests pass through the same connector, and every TLS socket is pinned to
+the exact public DNS result that passed validation. IPv4, IPv6, mapped IPv4,
+private, loopback, link-local, CGNAT, metadata, documentation, transition,
+multicast and reserved ranges fail closed. Chromium keeps its process sandbox;
+its own DNS/network path, QUIC, WebSockets and service workers are disabled, so
+it renders only responses proxied through the bounded connector. A sandbox
+launch failure is not retried with weaker flags. Listing text is always treated
+as hostile data. The audit records the source host, fetch method and a sanitized
+failure reason.
 
 ## Provider/model profile
 
@@ -190,13 +254,18 @@ Every new provider attempt is recorded before the request, then paired with its
 provider-reported usage when available. Input usage is split into uncached,
 cache-read and cache-write tokens; output usage is split into text and reasoning
 tokens. Provider response IDs and web-search calls are recorded without prompts,
-results or credentials.
+results or credentials. Once a response has executed, its token usage and native
+web-search cost are committed to the run ledger before post-response output,
+tool or budget limits are enforced, so a failed run cannot hide billed work.
 
 Inspect one agent's audit with:
 
 ```bash
 npm run scout:usage -- --audit /absolute/path/to/scout-runs.jsonl
 ```
+
+The report and standalone command summaries deliberately omit the resolved
+audit and database filesystem paths.
 
 `projectedCostUsd` is computed from provider usage and the explicit model
 profile. It is deliberately not called billed cost. `missingUsageRequests`
@@ -209,9 +278,12 @@ requires later reconciliation with the provider billing/Costs API; until then
 
 `ScoutApiWorker.run(unknown)` returns a `ScoutWorkerOutcome` rather than throwing
 provider details across the boundary. Provider failures are reduced to typed,
-sanitized public errors. `ScoutJobSource` and `ScoutProviderAdapter` are injected,
-so real-source tools and additional model transports can replace the fixtures
-without changing the worker input/result contract.
+sanitized public errors. Optional provider debug output contains only an
+allowlisted category, HTTP status and structured-output reason/code; it never
+copies an exception name, message, body or validation message. `ScoutJobSource`
+and `ScoutProviderAdapter` are injected, so real-source tools and additional
+model transports can replace the fixtures without changing the worker
+input/result contract.
 
 The next production slice must add separate adapters for:
 

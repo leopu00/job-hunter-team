@@ -263,6 +263,7 @@ export class GuardedScoutTools {
     await this.audit.write(
       ToolEventSchema.parse({
         contractVersion: "1",
+        role: "scout",
         event: "tool",
         phase: "started",
         timestamp: new Date(startedAt).toISOString(),
@@ -285,6 +286,7 @@ export class GuardedScoutTools {
       await this.audit.write(
         ToolEventSchema.parse({
           contractVersion: "1",
+          role: "scout",
           event: "tool",
           phase: "completed",
           timestamp: new Date(this.now()).toISOString(),
@@ -301,6 +303,7 @@ export class GuardedScoutTools {
       await this.audit.write(
         ToolEventSchema.parse({
           contractVersion: "1",
+          role: "scout",
           event: "tool",
           phase: "failed",
           timestamp: new Date(this.now()).toISOString(),

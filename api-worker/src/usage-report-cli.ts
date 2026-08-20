@@ -6,9 +6,7 @@ import { buildUsageReport } from "./usage-report.js";
 async function main(): Promise<void> {
   const auditPath = parseAuditPath(process.argv.slice(2));
   const report = buildUsageReport(await readAuditJsonl(auditPath));
-  process.stdout.write(
-    `${JSON.stringify({ auditPath, ...report }, null, 2)}\n`,
-  );
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 }
 
 function parseAuditPath(args: string[]): string {

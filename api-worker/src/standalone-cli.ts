@@ -55,7 +55,6 @@ async function main(): Promise<void> {
   const summary = {
     ok: result.worker.ok,
     runId: result.runId,
-    databasePath: result.databasePath,
     coordination: {
       mode: result.coordination.mode,
       peerCount: result.coordination.peers.length,

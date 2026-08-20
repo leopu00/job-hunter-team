@@ -24,17 +24,25 @@ parte di questo ecosistema.
 3. **Ricerca live** — web search nativa Anthropic/OpenAI, abilitata soltanto con
    `--live`, profili espliciti, capability dichiarata e costo web-search
    dichiarato.
-4. **Evidence pipeline adattiva** — ogni URL passa da fetch HTTPS separato con
-   difese SSRF, redirect ricontrollati, timeout e limite dimensionale. Il reader
-   prova HTTP con user-agent realistici e, se la pagina è bloccata o client-only,
-   scala a Chrome headless. Usa Schema.org `JobPosting` quando disponibile;
+4. **Evidence pipeline adattiva** — ogni URL passa da un client HTTPS che
+   ammette solo indirizzi globali IPv4/IPv6 e lega il socket TLS all'esatto
+   risultato DNS validato, eliminando il secondo lookup vulnerabile a rebinding.
+   Redirect e subrequest sono ricontrollati; timeout, numero richieste e byte
+   trasferiti sono bounded. Il reader prova HTTP con user-agent realistici e,
+   se la pagina è bloccata o client-only, scala a Chrome headless mantenendo la
+   sandbox. Chrome non risolve né apre connessioni proprie: HTTP passa dal client
+   protetto, mentre service worker, WebSocket e QUIC sono bloccati. Usa
+   Schema.org `JobPosting` quando disponibile;
    altrimenti restituisce testo visibile bounded dal quale il modello può fare
    soltanto estrazione grounded, verificata prima della persistenza.
 5. **SQLite dedicato** — `positions(status='new')`, provenance del run e agente,
    eventi append-only e dedup pre-insert a tre livelli: URL normalizzato;
    azienda+titolo+location; azienda+titolo simile+location.
 6. **Guardrail** — step, tool call, web search, byte, timeout, token e budget USD.
-   Chiavi, prompt, profilo e contenuto annunci non entrano nell'audit JSONL.
+   Il consumo di una risposta già eseguita entra nel ledger prima dei check
+   post-risposta. Chiavi, prompt, profilo, contenuto annunci e messaggi raw del
+   provider non entrano nell'audit JSONL; i riepiloghi CLI omettono anche i path
+   assoluti di database e audit.
 7. **Percorso offline E2E** — fixture sintetiche e mock provider esercitano
    coordinamento, worker, dedup e persistenza senza rete o credenziali.
 
@@ -45,7 +53,8 @@ parte di questo ecosistema.
 - Kimi resta disponibile per il catalogo iniettato, ma non per il web standalone:
   l'adapter compatibile non offre un tool web provider-native verificato.
 - Il reader non usa sessioni browser personali o login: Chrome è isolato e
-  headless. Una fonte che richiede autenticazione resta non utilizzabile, ma non
+  headless. Se la sandbox non parte, il reader fallisce chiuso senza riprovare
+  con flag più deboli. Una fonte che richiede autenticazione resta non utilizzabile, ma non
   interrompe il run: lo Scout cambia URL, fonte o query finché i limiti lo
   consentono.
 - L'agente esegue oggi un ciclo finito per invocazione. È una scelta di controllo

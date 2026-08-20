@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { AgentRoleSchema } from "./agent-role.js";
+
 const ShortTextSchema = z.string().trim().min(1).max(160);
 const SafeIdentifierSchema = z
   .string()
@@ -231,6 +233,7 @@ export const ScoutToolNameSchema = z.enum([
 
 export const ToolEventSchema = z.strictObject({
   contractVersion: z.literal("1"),
+  role: AgentRoleSchema.optional(),
   event: z.literal("tool"),
   phase: z.enum(["started", "completed", "failed"]),
   timestamp: z.string().datetime({ offset: true }),
@@ -249,6 +252,7 @@ const AuditCommonSchema = z.strictObject({
   contractVersion: z.literal("1"),
   timestamp: z.string().datetime({ offset: true }),
   runId: z.string().uuid().optional(),
+  role: AgentRoleSchema.optional(),
 });
 
 export const RunStartedEventSchema = AuditCommonSchema.extend({

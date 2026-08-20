@@ -160,4 +160,69 @@ describe("run guardrails", () => {
     );
     expect(guard.metrics.cost.amountUsd).toBeGreaterThan(0);
   });
+
+  it("accounts for executed usage and web searches before rejecting their limit", async () => {
+    const input = await fixtureInput();
+    const paidProfile = ModelProfileSchema.parse({
+      ...(await fixtureProfile()),
+      provider: "openai",
+      model: "verified-model-placeholder",
+      pricing: {
+        inputUsdPerMillionTokens: 1,
+        outputUsdPerMillionTokens: 2,
+        webSearchUsdPerCall: 0.01,
+      },
+    });
+    const guard = new RunGuard(
+      { ...input.limits, maxWebSearches: 1, maxCostUsd: 1 },
+      paidProfile,
+    );
+    const reservation = guard.beforeProviderStep("small request");
+
+    expect(() =>
+      guard.recordProviderStep(
+        reservation,
+        { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+        2,
+      ),
+    ).toThrowError(WorkerFault);
+
+    expect(guard.metrics.pricedProviderRequests).toBe(1);
+    expect(guard.metrics.usage.totalTokens).toBe(110);
+    expect(guard.metrics.webSearchCalls).toBe(2);
+    expect(guard.metrics.toolCalls).toBe(2);
+    expect(guard.metrics.cost.amountUsd).toBeCloseTo(0.02012, 10);
+  });
+
+  it("retains executed usage and web cost when the actual response exceeds budget", async () => {
+    const input = await fixtureInput();
+    const paidProfile = ModelProfileSchema.parse({
+      ...(await fixtureProfile()),
+      provider: "openai",
+      model: "verified-model-placeholder",
+      pricing: {
+        inputUsdPerMillionTokens: 100,
+        outputUsdPerMillionTokens: 0,
+        webSearchUsdPerCall: 0.001,
+      },
+    });
+    const guard = new RunGuard(
+      { ...input.limits, maxWebSearches: 1, maxCostUsd: 0.003 },
+      paidProfile,
+    );
+    const reservation = guard.beforeProviderStep("small request");
+
+    expect(() =>
+      guard.recordProviderStep(
+        reservation,
+        { inputTokens: 100, outputTokens: 0, totalTokens: 100 },
+        1,
+      ),
+    ).toThrowError(WorkerFault);
+
+    expect(guard.metrics.pricedProviderRequests).toBe(1);
+    expect(guard.metrics.usage.inputTokens).toBe(100);
+    expect(guard.metrics.webSearchCalls).toBe(1);
+    expect(guard.metrics.cost.amountUsd).toBeCloseTo(0.011, 10);
+  });
 });

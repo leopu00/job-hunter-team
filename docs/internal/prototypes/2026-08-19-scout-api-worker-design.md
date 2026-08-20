@@ -83,6 +83,15 @@ the remaining run budget cannot cover it, no request is sent. Reported usage is
 then used for the run cost; absent usage is accounted at the reserved ceiling.
 This is intentionally conservative.
 
+The response accounting boundary is deliberately before every post-response
+guard: returned token usage and provider-native web-search charges are added to
+the partial run ledger first, then output, tool and actual-cost limits may stop
+the run. Failed runs therefore retain already executed provider consumption.
+Provider diagnostics expose only allowlisted categories and numeric/status
+codes; raw exception names, messages, response bodies and validation messages
+never cross into logs. Human-facing CLI summaries also omit resolved database
+and audit paths.
+
 The provider profile is configuration, not prompt text, matching ADR-0007.
 Custom base URLs are accepted only for the Kimi/Moonshot OpenAI-compatible
 adapter; Anthropic and OpenAI keys cannot be redirected to arbitrary hosts.
@@ -106,3 +115,16 @@ Before production use, JHT still needs:
 
 MCP, LangGraph/LangChain, RAG, automatic provider routing/fallback, other roles
 and any write to the real database remain out of scope.
+
+## Web evidence hardening added on 2026-08-20
+
+The standalone web slice preserves the proposal-only boundary above. Its
+network gate accepts unauthenticated HTTPS only, rejects non-global IPv4/IPv6
+including mapped IPv4, CGNAT, link-local metadata and reserved/documentation
+ranges, and pins each TLS connection to the exact validated DNS answer. Every
+redirect and Chromium subrequest repeats that admission process.
+
+Chromium retains its OS sandbox and has autonomous hostname resolution, QUIC,
+WebSockets and service workers blocked. Routed HTTP requests are fulfilled only
+by the same DNS-pinned connector; a sandbox launch failure fails closed and is
+never retried with a weaker launch mode.

@@ -3,10 +3,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  AnalystWorkerInputSchema,
   ModelProfileSchema,
   ScoutWorkerInputSchema,
   SyntheticJobSource,
   type ModelProfile,
+  type AnalystWorkerInput,
   type ScoutWorkerInput,
 } from "../src/index.js";
 
@@ -15,6 +17,12 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export async function loadFixture(name: string): Promise<unknown> {
   return JSON.parse(
     await readFile(resolve(packageRoot, "fixtures", name), "utf8"),
+  );
+}
+
+export async function fixtureAnalystInput(): Promise<AnalystWorkerInput> {
+  return AnalystWorkerInputSchema.parse(
+    await loadFixture("analyst-input.synthetic.json"),
   );
 }
 

@@ -1,9 +1,14 @@
 import { createHash } from "node:crypto";
-import { lookup } from "node:dns/promises";
 import { existsSync } from "node:fs";
-import { isIP } from "node:net";
 
 import { chromium } from "playwright-core";
+
+import {
+  SafeHttpsClient,
+  type PinnedHttpsRequest,
+  type ResolveHostname,
+  type SafeHttpResponse,
+} from "./safe-http.js";
 
 import {
   ReadJobResultSchema,
@@ -17,7 +22,8 @@ const MAX_HTML_BYTES = 3_000_000;
 const MAX_PAGE_TEXT = 18_000;
 const HTTP_TIMEOUT_MS = 15_000;
 const BROWSER_TIMEOUT_MS = 25_000;
-const DNS_TIMEOUT_MS = 2_500;
+const MAX_BROWSER_REQUESTS = 96;
+const MAX_BROWSER_BYTES = 12_000_000;
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
@@ -28,6 +34,30 @@ type PageSnapshot = {
   status: number;
   html: string;
   title?: string;
+};
+
+export const CHROMIUM_SECURITY_ARGS = [
+  "--disable-background-networking",
+  "--disable-component-update",
+  "--disable-default-apps",
+  "--disable-dev-shm-usage",
+  "--disable-quic",
+  "--disable-sync",
+  "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+  "--host-resolver-rules=MAP * ~NOTFOUND",
+  "--metrics-recording-only",
+  "--no-first-run",
+] as const;
+
+export const CHROMIUM_CONTEXT_SECURITY = {
+  serviceWorkers: "block" as const,
+};
+
+export type StructuredWebJobReaderOptions = {
+  now?: () => Date;
+  resolveHostname?: ResolveHostname;
+  requestPinned?: PinnedHttpsRequest;
+  chromePath?: string | null;
 };
 
 export interface ScoutWebJobReader {
@@ -44,23 +74,25 @@ export class WebJobReadError extends Error {
 }
 
 export class StructuredWebJobReader implements ScoutWebJobReader {
-  constructor(
-    private readonly fetchImpl: typeof fetch = globalThis.fetch,
-    private readonly now: () => Date = () => new Date(),
-    private readonly resolveHostname: (
-      hostname: string,
-    ) => Promise<string[]> = async (hostname) =>
-      isIP(hostname)
-        ? [hostname]
-        : (await lookup(hostname, { all: true, verbatim: true })).map(
-            ({ address }) => address,
-          ),
-    private readonly chromePath: string | undefined = findChromeExecutable(),
-  ) {}
+  private readonly now: () => Date;
+  private readonly chromePath: string | undefined;
+  private readonly client: SafeHttpsClient;
+
+  constructor(options: StructuredWebJobReaderOptions = {}) {
+    this.now = options.now ?? (() => new Date());
+    this.chromePath =
+      options.chromePath === null
+        ? undefined
+        : (options.chromePath ?? findChromeExecutable());
+    this.client = new SafeHttpsClient({
+      resolveHostname: options.resolveHostname,
+      requestPinned: options.requestPinned,
+    });
+  }
 
   async readUrl(rawUrl: string): Promise<ReadWebJobEvidence | null> {
     const initialUrl = new URL(rawUrl);
-    await assertPublicHttpsUrl(initialUrl, this.resolveHostname);
+    await this.client.assertUrl(initialUrl);
 
     for (let attempt = 0; attempt < USER_AGENTS.length; attempt += 1) {
       try {
@@ -92,28 +124,27 @@ export class StructuredWebJobReader implements ScoutWebJobReader {
   ): Promise<PageSnapshot> {
     let url = initialUrl;
     for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
-      await assertPublicHttpsUrl(url, this.resolveHostname);
-      const response = await this.fetchImpl(url, {
-        redirect: "manual",
-        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+      const response = await this.client.request(url, {
+        maxBytes: MAX_HTML_BYTES,
+        timeoutMs: HTTP_TIMEOUT_MS,
         headers: {
           accept:
             "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+          "accept-encoding": "identity",
           "accept-language": "en-US,en;q=0.8,it;q=0.6",
           "cache-control": "no-cache",
           "user-agent": userAgent,
         },
       });
       if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get("location");
+        const location = response.headers.location;
         if (!location || redirect === MAX_REDIRECTS) {
           return { url, status: response.status, html: "" };
         }
         url = new URL(location, url);
         continue;
       }
-      const contentType =
-        response.headers.get("content-type")?.toLowerCase() ?? "";
+      const contentType = response.headers["content-type"]?.toLowerCase() ?? "";
       if (
         !contentType.includes("text/html") &&
         !contentType.includes("application/xhtml+xml")
@@ -123,7 +154,7 @@ export class StructuredWebJobReader implements ScoutWebJobReader {
       return {
         url,
         status: response.status,
-        html: await readLimitedBody(response, MAX_HTML_BYTES),
+        html: response.body.toString("utf8"),
       };
     }
     return { url, status: 0, html: "" };
@@ -136,38 +167,76 @@ export class StructuredWebJobReader implements ScoutWebJobReader {
     const browser = await chromium.launch({
       executablePath,
       headless: true,
-      args: [
-        "--disable-blink-features=AutomationControlled",
-        "--disable-dev-shm-usage",
-        "--no-sandbox",
-      ],
+      args: [...CHROMIUM_SECURITY_ARGS],
     });
     try {
       const context = await browser.newContext({
         userAgent: USER_AGENTS[0],
         locale: "en-US",
         viewport: { width: 1365, height: 900 },
+        ...CHROMIUM_CONTEXT_SECURITY,
       });
       await context.addInitScript(() => {
         Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+        for (const api of [
+          "RTCPeerConnection",
+          "webkitRTCPeerConnection",
+          "WebTransport",
+          "WebSocket",
+          "Worker",
+          "SharedWorker",
+        ]) {
+          try {
+            Object.defineProperty(globalThis, api, {
+              configurable: false,
+              get: () => undefined,
+            });
+          } catch {
+            // A non-configurable direct-network API stays covered by Chromium's
+            // process-level DNS/UDP blocks and explicit WebSocket routing.
+          }
+        }
       });
       const page = await context.newPage();
-      const checkedHosts = new Map<string, Promise<void>>();
+      let requestCount = 0;
+      let transferredBytes = 0;
+      await page.routeWebSocket("**/*", async (route) => {
+        await route.close({ code: 1008, reason: "network disabled" });
+      });
       await page.route("**/*", async (route) => {
         const request = route.request();
-        if (["image", "media", "font"].includes(request.resourceType())) {
+        if (
+          ["image", "media", "font", "serviceworker"].includes(
+            request.resourceType(),
+          ) ||
+          request.method() !== "GET"
+        ) {
           await route.abort();
           return;
         }
         try {
           const requestUrl = new URL(request.url());
-          let checked = checkedHosts.get(requestUrl.hostname);
-          if (!checked) {
-            checked = assertPublicHttpsUrl(requestUrl, this.resolveHostname);
-            checkedHosts.set(requestUrl.hostname, checked);
+          requestCount += 1;
+          if (requestCount > MAX_BROWSER_REQUESTS) {
+            throw new Error("Rendered page made too many requests");
           }
-          await checked;
-          await route.continue();
+          const response = await this.client.request(requestUrl, {
+            headers: browserProxyHeaders(request.headers()),
+            maxBytes: Math.min(
+              MAX_HTML_BYTES,
+              MAX_BROWSER_BYTES - transferredBytes,
+            ),
+            timeoutMs: HTTP_TIMEOUT_MS,
+          });
+          transferredBytes += response.body.byteLength;
+          if (transferredBytes > MAX_BROWSER_BYTES) {
+            throw new Error("Rendered page transferred too much data");
+          }
+          await route.fulfill({
+            status: response.status,
+            headers: browserResponseHeaders(response),
+            body: response.body,
+          });
         } catch {
           await route.abort();
         }
@@ -178,7 +247,7 @@ export class StructuredWebJobReader implements ScoutWebJobReader {
       });
       await page.waitForTimeout(1_500);
       const finalUrl = new URL(page.url());
-      await assertPublicHttpsUrl(finalUrl, this.resolveHostname);
+      await this.client.assertUrl(finalUrl);
       const html = await page.content();
       if (Buffer.byteLength(html, "utf8") > MAX_HTML_BYTES) {
         throw new Error("Rendered job page is too large");
@@ -265,117 +334,44 @@ function detectBlocked(html: string): boolean {
   ].some((marker) => sample.includes(marker));
 }
 
-async function assertPublicHttpsUrl(
-  url: URL,
-  resolveHostname: (hostname: string) => Promise<string[]>,
-): Promise<void> {
-  if (url.protocol !== "https:" || url.username || url.password) {
-    throw new Error("Only unauthenticated HTTPS job URLs are allowed");
-  }
-  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
-  if (hostname === "localhost" || hostname.endsWith(".localhost")) {
-    throw new Error("Local hosts are not allowed");
-  }
-  const addresses = await withTimeout(
-    resolveHostname(hostname),
-    DNS_TIMEOUT_MS,
-    "DNS resolution timed out",
+function browserProxyHeaders(
+  headers: Record<string, string>,
+): Record<string, string> {
+  const blocked = new Set([
+    "authorization",
+    "connection",
+    "content-length",
+    "host",
+    "proxy-authorization",
+    "transfer-encoding",
+  ]);
+  return Object.fromEntries([
+    ...Object.entries(headers)
+      .filter(([name]) => !blocked.has(name.toLowerCase()))
+      .map(([name, value]) => [name.toLowerCase(), value] as const),
+    ["accept-encoding", "identity"],
+  ]);
+}
+
+function browserResponseHeaders(
+  response: SafeHttpResponse,
+): Record<string, string> {
+  const blocked = new Set([
+    "connection",
+    "content-length",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+  ]);
+  return Object.fromEntries(
+    Object.entries(response.headers).filter(
+      ([name]) => !blocked.has(name.toLowerCase()),
+    ),
   );
-  if (
-    addresses.length === 0 ||
-    addresses.some((address) => !isPublicAddress(address))
-  ) {
-    throw new Error("Job URL did not resolve exclusively to public addresses");
-  }
-}
-
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  message: string,
-): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timeout) clearTimeout(timeout);
-  }
-}
-
-function isPublicAddress(address: string): boolean {
-  if (address.includes(":")) {
-    const normalized = address.toLowerCase();
-    return !(
-      normalized === "::" ||
-      normalized === "::1" ||
-      normalized.startsWith("fc") ||
-      normalized.startsWith("fd") ||
-      normalized.startsWith("fe8") ||
-      normalized.startsWith("fe9") ||
-      normalized.startsWith("fea") ||
-      normalized.startsWith("feb") ||
-      normalized.startsWith("2001:db8:") ||
-      normalized.startsWith("::ffff:127.") ||
-      normalized.startsWith("::ffff:10.") ||
-      normalized.startsWith("::ffff:192.168.")
-    );
-  }
-  const octets = address.split(".").map(Number);
-  if (
-    octets.length !== 4 ||
-    octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
-  ) {
-    return false;
-  }
-  const [a, b] = octets;
-  return !(
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 0) ||
-    (a === 192 && b === 168) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
-  );
-}
-
-async function readLimitedBody(
-  response: Response,
-  limit: number,
-): Promise<string> {
-  const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > limit) {
-    throw new Error("Job page is too large");
-  }
-  if (!response.body) return "";
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > limit) {
-      await reader.cancel();
-      throw new Error("Job page is too large");
-    }
-    chunks.push(value);
-  }
-  const combined = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    combined.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder("utf-8", { fatal: false }).decode(combined);
 }
 
 function parseJobPosting(

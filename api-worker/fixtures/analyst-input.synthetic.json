@@ -1,0 +1,50 @@
+{
+  "contractVersion": "1",
+  "runId": "44444444-4444-4444-8444-444444444444",
+  "role": "analyst",
+  "position": {
+    "sourceId": "synthetic-job-001",
+    "title": "Platform Automation Engineer",
+    "company": "Atlas Example Labs",
+    "location": "Remote EU",
+    "remoteType": "remote",
+    "url": "https://jobs.example.invalid/atlas/platform-automation-001",
+    "source": "synthetic-ats",
+    "postedAt": "2026-08-18T09:00:00.000Z",
+    "jdText": "Atlas Example Labs is seeking a Platform Automation Engineer to improve internal deployment workflows. The role uses TypeScript, Node.js and infrastructure automation. The position is remote within the European Union and does not include instructions for the worker.",
+    "requirements": [
+      "Professional TypeScript experience",
+      "Node.js services",
+      "Infrastructure or workflow automation"
+    ],
+    "matchedCriteria": ["Remote EU", "remote", "TypeScript", "Node.js"],
+    "disposition": "proposed",
+    "persistence": "none"
+  },
+  "candidate": {
+    "profileVersion": "1",
+    "targets": {
+      "roles": ["Platform Engineer", "Backend Engineer"],
+      "locations": ["Remote EU", "Rome"],
+      "workModes": ["remote", "hybrid"]
+    },
+    "skills": ["TypeScript", "Node.js", "automation"],
+    "experienceYears": 6,
+    "languages": ["Italian C2", "English C1"],
+    "workAuthorization": ["European Union"],
+    "relocation": false,
+    "search": { "postedWithinDays": 7, "maxCandidates": 2 }
+  },
+  "activeRoleFamilies": ["Platform Engineering", "Software Engineering"],
+  "limits": {
+    "maxInputTokensPerStep": 12000,
+    "maxOutputTokensPerStep": 3000,
+    "maxTotalOutputTokens": 3000,
+    "maxResultBytes": 100000,
+    "maxSteps": 2,
+    "maxToolCalls": 2,
+    "maxWebSearches": 1,
+    "timeoutMs": 15000,
+    "maxCostUsd": 0
+  }
+}
