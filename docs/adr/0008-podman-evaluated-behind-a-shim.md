@@ -1,6 +1,6 @@
 # 0008 — Evaluate Podman behind a `docker` shim, not by rewriting call sites
 
-**Status:** Proposed
+**Status:** Proposed — implementation proven on an existing Windows host; clean-machine publication gate open
 **Date:** 2026-08-17
 **Extends:** [0006](./0006-user-choice-container-runtime-macos.md)
 **Revisits:** [0001](./0001-colima-not-docker-desktop.md) § Alternatives considered
@@ -77,12 +77,61 @@ through `PATH` — including the Godot app, which drives the container with
 - ⚠️ A shim moves failure from build time to **runtime, inside the product**. The
   surface to exercise is the whole lifecycle, not a file, and `docker compose` (88
   call sites) is a different implementation under Podman.
-- ⚠️ **The proof cannot be run today:** there has been no Windows test bench since
-  2026-08-11 (the VM was removed). The first action is therefore obtaining a
-  Windows machine, not writing code.
-- ⚠️ Nothing in this ADR is verified against a running Podman: none is installed on
-  the machine where it was written, and every Podman-behaviour claim above is a
-  claim about a runtime, not about this repository.
+- ✅ The runtime proof was executed on 2026-08-20 on Windows with Podman 6.0.2
+  rootless (WSL provider) and Docker Compose 5.1.2. The remaining publication
+  gate is repetition from a clean Windows account/machine, not runtime discovery.
+
+### Evaluation update — 2026-08-20
+
+The Windows harness now exists at
+[`scripts/podman-windows-probe.ps1`](../../scripts/podman-windows-probe.ps1).
+It creates a temporary native `docker.exe` shim, because a shell alias would not
+exercise Godot's `OS.execute("docker", …)` path. Installation of the user-scope
+Podman CLI and Compose provider, and creation of the rootless WSL machine, remain
+explicit opt-ins. The harness exercises the production Compose workload, bind
+mounts, named volumes, host-name resolution and restart, with isolated data and
+scoped cleanup.
+
+The shim itself is compiled and executed by automated tests on Windows PowerShell
+5.1 and PowerShell 7. The running lifecycle now passes as well: Compose config,
+create, bind writes in both directions, named volumes, HTTPS egress, restart and
+cleanup. A branch image then started the standard JHT core with Codex 0.147.0.
+Observed process arguments and TUI banners proved both role aliases:
+`gpt-5.6-terra` and `gpt-5.6-sol`, with the configured effort retained. The
+Assistente and Capitano returned the requested probes `PODMAN-TERRA-OK` and
+`PODMAN-SOL-OK`; `jht team status` reported Assistente, Capitano, Mentor and
+Sentinella active. The final reboot proof repeated this on the installed runtime:
+the watchdog restored all four roles and the two agents returned
+`PODMAN-TERRA-FINAL-OK` and `PODMAN-SOL-FINAL-OK`.
+
+Two Windows-specific adaptations were required and are now part of the path:
+
+1. Compose uses host networking because Netavark 2.0.0 failed to create a custom
+   nftables bridge in this rootless WSL machine. JHT publishes no ports, so this
+   does not widen an exposed service surface.
+2. Compose uses `keep-id:uid=1001,gid=1001`. The migration helper also round-trips
+   legacy Docker-created DrvFS nodes whose Linux UID is unmapped, retaining a
+   recoverable backup. The atomic private-config writer treats `chmod` as
+   best-effort on v9fs/DrvFS while the Windows owner-only ACL remains authoritative.
+
+On the managed test network, WSL TCP egress was blocked by Forcepoint. An
+installed system-level service therefore exposes a localhost-only HTTP/CONNECT
+proxy inside the Podman machine and opens the outbound socket through a native
+Windows interop connector. System-level services also run the rootless Podman API
+as `user` with `cgroupfs` and start/stop the JHT container. This deliberately
+avoids the WSL cross-distribution `user@1000.service` cgroup collision observed
+during reboot testing. A named-machine stop/start completed with PID1's clean
+`shutdown complete`, restored API/proxy/container, and left the container at
+exit 0. Both image pull and `podman build --network host` passed through the
+proxy.
+
+The durable migration entry point is
+[`scripts/enable-podman-windows-runtime.ps1`](../../scripts/enable-podman-windows-runtime.ps1).
+It publishes an attested native `docker.exe`, the Compose override, runtime and
+machine markers, persistent network/API/container services, and keeps all
+existing product call sites unchanged. This is adoption evidence for the measured
+host, but the ADR remains **Proposed** until the same chain is repeated from a
+clean Windows machine.
 
 ## Alternatives considered
 

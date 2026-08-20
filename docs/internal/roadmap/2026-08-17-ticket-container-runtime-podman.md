@@ -1,7 +1,7 @@
 # `[JHT-RUNTIME-PODMAN]` — Podman al posto di Docker: cosa toglie all'utente e cosa costa a noi
 
 **Data:** 2026-08-17 · **Base della misura:** worktree `master` a `dbd6369d6f`
-**Stato:** aperto, decisione non presa · **Decide il direttore**
+**Stato:** implementazione e runtime E2E passati su host Windows esistente; resta il gate clean-machine · **Decide il direttore**
 **ADR:** [`0008-podman-evaluated-behind-a-shim.md`](../../adr/0008-podman-evaluated-behind-a-shim.md) (Proposed)
 
 > 📌 **Perché questo documento esiste.** Il tema era stato deciso una volta, di
@@ -181,9 +181,8 @@ Un punto unico che decide il binario, più `--runtime` estesa a un terzo valore.
 
 ## 8. I punti del compose che decidono l'esito
 
-Letti da [`docker-compose.yml`](../../../docker-compose.yml). Nessuno di questi è
-stato provato: **su questa macchina Podman non è installato**, e sono affermazioni
-sul comportamento di un runtime, non sul repo.
+Letti da [`docker-compose.yml`](../../../docker-compose.yml). Questa era la lista
+di rischio iniziale; l'esito runtime misurato è riportato al §12.
 
 | Punto | Perché può mordere |
 |---|---|
@@ -202,11 +201,9 @@ e **zero modifiche** ai 348 call site. Se regge, il resto è manutenzione e la
 strada A è la risposta. Se cade, cade lì — e lo sappiamo in mezza giornata invece
 che dopo aver riscritto `scripts/` e il GDScript.
 
-⚠️ **Il vincolo:** `BACKLOG.md` dichiara che **dal 2026-08-11 non esiste più un
-banco di prova Windows** (la macchina virtuale è stata rimossa). Il guadagno
-principale di Podman è tutto su Windows, quindi **oggi il tema non è
-dimostrabile**: la prima azione non è scrivere codice, è avere una macchina
-Windows. Finché non c'è, ogni altra pianificazione su questo fronte è aria.
+Il vincolo iniziale era l'assenza del banco Windows. La prova è poi stata eseguita
+su un host Windows esistente; resta da ripeterla su un account/macchina puliti
+prima di pubblicare Podman come default.
 
 ## 10. La domanda per il direttore, che decide tutto il resto
 
@@ -219,3 +216,87 @@ Windows. Finché non c'è, ogni altra pianificazione su questo fronte è aria.
 
 Le due risposte non differiscono per costo del 20%: differiscono per quale lavoro
 si fa prima. Per questo la riga resta aperta e l'ADR resta `Proposed`.
+
+## 11. Aggiornamento operativo 2026-08-20 — il probe è eseguibile
+
+Ora esiste [`scripts/podman-windows-probe.ps1`](../../../scripts/podman-windows-probe.ps1).
+Il probe non introduce un runtime switch nel prodotto e non modifica i call site:
+compila in una directory temporanea un vero `docker.exe` che inoltra gli argomenti
+a `podman.exe`. È un eseguibile, non un alias PowerShell, quindi misura anche la
+forma richiesta da `OS.execute("docker", …)` in Godot.
+
+Su Windows il percorso misurato è:
+
+1. Podman CLI (`Podman.CLI` da winget; lo scope è scelto dal manifest applicabile);
+2. macchina WSL rootless dedicata (`jht-podman-probe`);
+3. provider Compose standalone (`Docker.DockerCompose` da winget);
+4. `docker.exe` temporaneo → `podman.exe` → provider Compose;
+5. il `docker-compose.yml` di produzione, con HOME e directory utente isolate.
+
+Preflight, senza installare pacchetti né creare macchine:
+
+```powershell
+pwsh -File scripts/podman-windows-probe.ps1 -PreflightOnly
+```
+
+Prima esecuzione esplicita, con installazione silenziosa e creazione macchina:
+
+```powershell
+pwsh -File scripts/podman-windows-probe.ps1 -InstallDependencies -InitializeMachine
+```
+
+Il secondo comando verifica `info`, `compose version`, `compose config`, avvio
+dell'immagine JHT pinnata, bind mount in entrambe le direzioni, risoluzione di
+`host.docker.internal`, volumi nominati e restart. Il container e i volumi del
+probe vengono rimossi anche in caso di errore; pacchetti e macchina restano
+installati intenzionalmente. Una macchina che contiene già un container `jht`
+viene rifiutata, per non sovrascrivere un ambiente reale.
+
+I test automatici compilano davvero lo shim sia con Windows PowerShell 5.1 sia
+con PowerShell 7 e verificano che l'exit code del backend venga propagato.
+
+## 12. Esito E2E 2026-08-20 — runtime e agenti passati
+
+La parte che al §9 era indicata come non dimostrabile è stata eseguita su un host
+Windows reale, anche se non ancora su un account pulito:
+
+- Podman CLI 6.0.2, macchina WSL rootless, Compose standalone 5.1.2;
+- immagine production pullata per digest e immagine della branch costruita con
+  `podman build --network host`;
+- lifecycle Compose `config/up/restart/down`, bind bidirezionali e named volume;
+- proxy HTTP/CONNECT localhost persistente via systemd e connettore Windows nativo;
+- API rootless `cgroupfs` e lifecycle container in servizi system-level, così il
+  runtime non dipende dal `user@1000.service` condiviso tra distribuzioni WSL;
+- stop/start della sola Podman machine con PID1 `shutdown complete`, exit 0,
+  ripartenza automatica del container e ripristino watchdog dei quattro core;
+- override `network_mode: host` per evitare il guasto nftables di Netavark sulla
+  custom bridge e `keep-id:uid=1001,gid=1001` per i bind owner-only;
+- repair recuperabile dei metadati UID lasciati dal precedente runtime Docker;
+- wrapper installato con shim, override, runtime marker e machine marker tutti
+  inclusi nella `.runtime-integrity` SHA-256;
+- quattro agenti core visibili da `jht team status`: ASSISTENTE, CAPITANO, MENTOR,
+  SENTINELLA.
+
+La prova Codex ha coperto entrambe le classi di modello. I processi reali erano:
+
+```text
+codex --yolo --model gpt-5.6-terra -c model_reasoning_effort=high
+codex --yolo --model gpt-5.6-sol   -c model_reasoning_effort=high
+```
+
+Assistente/Terra ha risposto `PODMAN-TERRA-FINAL-OK`; Capitano/Sol ha risposto
+`PODMAN-SOL-FINAL-OK` dopo il reboot finale. Questo chiude sia l'avvio della TUI
+sia l'uscita HTTPS e il giro di risposta del provider, non soltanto la presenza
+del processo.
+
+Per convertire un'installazione Windows esistente dalla working copy:
+
+```powershell
+pwsh -File scripts/enable-podman-windows-runtime.ps1 `
+  -MachineName jht-podman -InstallDependencies -InitializeMachine
+```
+
+Il comando conserva backup recuperabili quando deve normalizzare metadata DrvFS.
+Il solo punto ancora aperto prima della pubblicazione come default è ripetere la
+stessa catena su macchina/account Windows puliti. Non restano incompatibilità
+runtime note sul percorso misurato.

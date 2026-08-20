@@ -103,6 +103,25 @@ iwr -useb https://jobhunterteam.ai/install.ps1 | iex
 
 > ⚠️ Windows path requires **Docker Desktop** already installed and running. The PowerShell installer doesn't install Docker for you (Docker Desktop is an MSI with its own EULA flow — out of scope for an unattended script).
 
+**Windows Podman migration preview:** the repository also contains a tested,
+headless migration path that leaves the existing `docker` call sites unchanged.
+From a reviewed checkout run:
+
+```powershell
+pwsh -File scripts/enable-podman-windows-runtime.ps1 `
+  -MachineName jht-podman -InstallDependencies -InitializeMachine
+```
+
+It installs/starts a rootless Podman WSL machine, a standalone Compose provider,
+the persistent Windows-interop network service, the native `docker.exe` shim and
+the attested Compose override. System-level services inside the dedicated machine
+run the rootless API with `cgroupfs`, restore the JHT container after a machine
+restart and avoid collisions with user managers from other WSL distributions.
+Existing Docker-created DrvFS metadata is repaired with a recoverable backup when
+needed. The path has passed lifecycle, clean shutdown/reboot, image build, Codex
+agent auto-restore and response tests on Windows; it remains a preview until the
+same chain is repeated on a clean Windows account.
+
 The installer:
 
 1. Detects your OS (macOS / Linux apt+dnf+pacman / WSL2 / Windows PowerShell)
