@@ -62,10 +62,11 @@ func _run() -> void:
 	_svc_script.extra_bin_dirs = [] as Array[String]
 	_root_dir = OS.get_cache_dir().path_join(
 			"jht-docker-probe-selftest-%d" % int(Time.get_ticks_usec()))
-	var expected := 3
+	var expected := 4
 	_which_contract()
 	_exec_present_contract()
 	_runtime_selection_contract()
+	_podman_adapter_contract()
 	if OS.get_name() != "Windows":
 		expected += 3
 		_probe_three_states()
@@ -150,8 +151,10 @@ func _exec_present_contract() -> void:
 ## pura sui dati del probe: gira su tutti e tre i sistemi.
 func _runtime_selection_contract() -> void:
 	var colima: String = _svc_script.RUNTIME_COLIMA
+	var podman: String = _svc_script.RUNTIME_PODMAN
 	var desktop: String = _svc_script.RUNTIME_DOCKER_DESKTOP
 	var both := PackedStringArray([colima, desktop])
+	var all := PackedStringArray([colima, podman, desktop])
 	_check("scelta: nessun motore installato → niente da avviare",
 			str(_svc_script.selected_runtime(PackedStringArray(), "")) == "")
 	_check("scelta: un solo motore, nessuna domanda da fare",
@@ -163,6 +166,8 @@ func _runtime_selection_contract() -> void:
 	# l'app decideva per l'utente. Dichiarata, deve essere rispettata.
 	_check("scelta: la preferenza dell'utente batte l'ordine",
 			str(_svc_script.selected_runtime(both, desktop)) == desktop)
+	_check("scelta: Podman opt-in batte Colima senza rimuoverlo",
+			str(_svc_script.selected_runtime(all, podman)) == podman)
 	# Preferenza per un motore disinstallato: si riparte dal primo disponibile,
 	# non si dichiara l'assenza (sarebbe un setup bloccato da una vecchia
 	# scelta invisibile).
@@ -187,6 +192,57 @@ func _runtime_selection_contract() -> void:
 	_sections += 1
 
 
+## Podman non è una semplice presenza nel PATH: deve esistere il bundle JHT
+## preparato e attestato. Il desktop resta read-only sul runtime host: il
+## passaggio fra la famiglia Podman e la famiglia Docker richiede l'installer.
+func _podman_adapter_contract() -> void:
+	var runtime := _stub_dir("podman-runtime")
+	var bin := runtime.path_join("bin")
+	DirAccess.make_dir_recursive_absolute(bin)
+	var selection := runtime.path_join("container-runtime")
+	var machine := runtime.path_join("podman-machine")
+	var shim := bin.path_join("docker")
+	var manifest := runtime.path_join(".runtime-integrity")
+	_write_stub(selection, "podman\n", false)
+	_write_stub(machine, "jht-podman\n", false)
+	_write_stub(shim, "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\nexit 0\n")
+	_write_stub(manifest, "\n".join([
+		"version=1",
+		"container-runtime=" + FileAccess.get_sha256(selection),
+		"podman-machine=" + FileAccess.get_sha256(machine),
+		"docker-shim=" + FileAccess.get_sha256(shim),
+	]) + "\n", false)
+	_check("adapter Podman: marker e hash validi → disponibile",
+			bool(_svc_script._podman_adapter_ready_at(runtime, bin)))
+	_check("Podman solo installato: senza adapter non è selezionabile",
+			not (_svc_script._macos_runtime_inventory(
+					true, true, false, false) as PackedStringArray).has(
+					_svc_script.RUNTIME_PODMAN))
+	_check("routing Podman: adapter valido → shim JHT",
+			str(_svc_script._macos_container_cli(
+					_svc_script.RUNTIME_PODMAN, true, shim, "/real/docker")) == shim)
+	_check("routing Podman: adapter invalido → fail closed",
+			str(_svc_script._macos_container_cli(
+					_svc_script.RUNTIME_PODMAN, false, shim, "/real/docker")) == "")
+	_check("routing Colima: lo shim stale viene ignorato",
+			str(_svc_script._macos_container_cli(
+					_svc_script.RUNTIME_COLIMA, true, shim, "/real/docker"))
+					== "/real/docker")
+
+	_check("switch Podman→Colima: richiede installer",
+			bool(_svc_script.runtime_switch_requires_installer(
+					_svc_script.RUNTIME_PODMAN, _svc_script.RUNTIME_COLIMA)))
+	_check("switch Podman→Desktop: richiede installer",
+			bool(_svc_script.runtime_switch_requires_installer(
+					_svc_script.RUNTIME_PODMAN,
+					_svc_script.RUNTIME_DOCKER_DESKTOP)))
+	_check("switch Colima→Desktop: resta una preferenza desktop",
+			not bool(_svc_script.runtime_switch_requires_installer(
+					_svc_script.RUNTIME_COLIMA,
+					_svc_script.RUNTIME_DOCKER_DESKTOP)))
+	_sections += 1
+
+
 ## Il PATH ridotto delle app con interfaccia (O-13b). Su macOS un'app aperta
 ## dal Finder eredita /usr/bin:/bin:/usr/sbin:/sbin: `colima` e `docker` di
 ## Homebrew stanno altrove, e senza le cartelle aggiuntive il probe dichiara
@@ -197,6 +253,7 @@ func _gui_path_contract() -> void:
 	_write_stub(brew.path_join("docker"),
 			"#!/bin/sh\necho '29.6.0|29.6.0'\nexit 0\n")
 	_write_stub(brew.path_join("colima"), "#!/bin/sh\nexit 0\n")
+	_write_stub(brew.path_join("podman"), "#!/bin/sh\nexit 0\n")
 	# Il PATH che launchd passa a un'app: nessuna traccia di Homebrew.
 	_set_path(PackedStringArray([_stub_dir("finder-launchd")]))
 	_svc_script.extra_bin_dirs = [] as Array[String]
@@ -217,6 +274,8 @@ func _gui_path_contract() -> void:
 		_check("solo Colima: il motore è riconosciuto, non da installare",
 				installed.has(_svc_script.RUNTIME_COLIMA),
 				str(installed))
+		_check("Podman non preparato: il binario da solo non è selezionabile",
+				not installed.has(_svc_script.RUNTIME_PODMAN), str(installed))
 		_check("solo Colima: INSTALLA DOCKER non deve comparire",
 				not bool(_svc_script.runtime_missing({"runtimes": installed})))
 		# Tolta la rete, lo stesso computer torna a non vedere Colima: è la

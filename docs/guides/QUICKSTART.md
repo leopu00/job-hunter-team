@@ -103,6 +103,25 @@ iwr -useb https://jobhunterteam.ai/install.ps1 | iex
 
 > ⚠️ Windows path requires **Docker Desktop** already installed and running. The PowerShell installer doesn't install Docker for you (Docker Desktop is an MSI with its own EULA flow — out of scope for an unattended script).
 
+**Windows Podman migration preview:** the repository also contains a tested,
+headless migration path that leaves the existing `docker` call sites unchanged.
+From a reviewed checkout run:
+
+```powershell
+pwsh -File scripts/enable-podman-windows-runtime.ps1 `
+  -MachineName jht-podman -InstallDependencies -InitializeMachine
+```
+
+It installs/starts a rootless Podman WSL machine, a standalone Compose provider,
+the persistent Windows-interop network service, the native `docker.exe` shim and
+the attested Compose override. System-level services inside the dedicated machine
+run the rootless API with `cgroupfs`, restore the JHT container after a machine
+restart and avoid collisions with user managers from other WSL distributions.
+Existing Docker-created DrvFS metadata is repaired with a recoverable backup when
+needed. The path has passed lifecycle, clean shutdown/reboot, image build, Codex
+agent auto-restore and response tests on Windows; it remains a preview until the
+same chain is repeated on a clean Windows account.
+
 The installer:
 
 1. Detects your OS (macOS / Linux apt+dnf+pacman / WSL2 / Windows PowerShell)
@@ -146,6 +165,27 @@ You'll end up with two folders:
 > 💡 Expert mode: `bash install.sh --no-docker`. This removes the
 > container boundary and requires Node 22+, tmux, git and the provider CLI on
 > the host. Use it only on a dedicated machine or virtual machine.
+
+**macOS Podman preparation preview:** Colima remains the default and is never
+removed. From a reviewed checkout:
+
+```bash
+bash scripts/install.sh --runtime=podman
+```
+
+The preview installs the Podman CLI and Compose provider, uses a dedicated
+rootless `jht-podman` machine and publishes a JHT-scoped, integrity-attested
+`docker` compatibility shim inside the protected host runtime (never on the
+global `PATH`). Existing Colima data and binaries remain intact
+for rollback. This is not the public macOS default until lifecycle tests pass
+on clean Apple Silicon and Intel hosts.
+
+Re-running the installer normally, or with `--runtime=colima` or
+`--runtime=docker-desktop`, publishes an attested Docker selection fail-closed.
+The private JHT Podman adapter and machine marker remain inert; it never removes
+Colima, Podman, its machine, or a `docker` executable. Re-enable the preview by
+running the explicit
+Podman command above again.
 
 ---
 

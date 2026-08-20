@@ -1556,6 +1556,8 @@ static func _runtime_name(id: String) -> String:
 	match id:
 		SetupService.RUNTIME_COLIMA:
 			return UIStrings.t("setup.runtime_colima")
+		SetupService.RUNTIME_PODMAN:
+			return UIStrings.t("setup.runtime_podman")
 		SetupService.RUNTIME_DOCKER_DESKTOP:
 			return UIStrings.t("setup.runtime_docker_desktop")
 		SetupService.RUNTIME_DOCKER_SERVICE:
@@ -1580,6 +1582,8 @@ func _runtime_choice_row(runtimes: PackedStringArray, selected: String) -> void:
 		var pick := Button.new()
 		var active := engine == selected
 		pick.text = ("● " if active else "○ ") + _runtime_name(engine)
+		pick.disabled = SetupService.runtime_switch_requires_installer(
+				selected, engine)
 		pick.add_theme_color_override("font_color",
 				Palette.GREEN if active else Palette.BASE)
 		pick.pressed.connect(SetupService.choose_runtime.bind(engine))

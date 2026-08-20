@@ -707,6 +707,11 @@ static func _search_dirs() -> PackedStringArray:
 		if not dirs.has(String(dir)):
 			dirs.append(String(dir))
 	if not windows:
+		var user_home := OS.get_environment("HOME").rstrip("/")
+		if user_home != "":
+			var user_bin := user_home.path_join(".local/bin")
+			if not dirs.has(user_bin):
+				dirs.append(user_bin)
 		for dir in extra_bin_dirs:
 			if not dirs.has(String(dir)):
 				dirs.append(String(dir))
@@ -721,6 +726,9 @@ static func _search_dirs() -> PackedStringArray:
 static func _bin(name: String) -> String:
 	if name.contains("/") or name.contains("\\"):
 		return name
+	if name == "docker" and OS.get_name() == "macOS":
+		var container_cli := _macos_container_cli_path()
+		return container_cli if container_cli != "" else name
 	var resolved := _which(name)
 	return resolved if resolved != "" else name
 
@@ -766,7 +774,9 @@ static func _which(exe: String) -> String:
 ##    conto proprio: 127 (comando non trovato) e 126 (trovato ma non
 ##    eseguibile) — con un binario davvero presente li scavalca la prova 1.
 static func _exec_present(exe: String, probe_code: int) -> bool:
-	return _which(exe) != "" \
+	var resolved := _macos_container_cli_path() \
+			if exe == "docker" and OS.get_name() == "macOS" else _which(exe)
+	return resolved != "" \
 			or (probe_code != -1 and probe_code != 126 and probe_code != 127)
 
 
@@ -784,6 +794,7 @@ static func runtime_image() -> String:
 # Docker a chi aveva Colima installato e persino avviato.
 
 const RUNTIME_COLIMA := "colima"
+const RUNTIME_PODMAN := "podman"
 const RUNTIME_DOCKER_DESKTOP := "docker-desktop"
 ## Il daemon di sistema di Linux: c'è o non c'è, e si accende con systemd —
 ## non lo lancia l'app, ma resta un runtime presente da distinguere dal nulla.
@@ -792,6 +803,126 @@ const RUNTIME_DOCKER_SERVICE := "docker-service"
 ## tema e lingua: è una preferenza di QUESTA installazione del gioco, non un
 ## dato del team, e ~/.jht appartiene al container (uid diverso).
 const RUNTIME_CHOICE_CFG := "user://container_runtime.cfg"
+const PODMAN_SHIM_MARKER := "# JHT_PODMAN_DOCKER_SHIM=1"
+
+
+static func _host_runtime_dir() -> String:
+	var overridden := OS.get_environment("JHT_RUNTIME_DIR").rstrip("/")
+	if overridden != "":
+		return overridden
+	var user_home := OS.get_environment("HOME").rstrip("/")
+	return user_home.path_join(
+			"Library/Application Support/Job Hunter Team/host-runtime") \
+			if user_home != "" else ""
+
+
+static func _read_marker(path: String) -> String:
+	return FileAccess.get_file_as_string(path).strip_edges() \
+			if path != "" and FileAccess.file_exists(path) else ""
+
+
+static func _valid_podman_machine_name(value: String) -> bool:
+	if value == "":
+		return false
+	const ALLOWED := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-"
+	for index in range(value.length()):
+		if ALLOWED.find(value.substr(index, 1)) == -1:
+			return false
+	return true
+
+
+static func _manifest_value(path: String, key: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	for line in FileAccess.get_file_as_string(path).split("\n"):
+		if line.begins_with(key + "="):
+			return line.substr(key.length() + 1).strip_edges()
+	return ""
+
+
+static func _is_jht_podman_shim(path: String) -> bool:
+	if path == "" or not FileAccess.file_exists(path):
+		return false
+	return FileAccess.get_file_as_string(path).split("\n").has(PODMAN_SHIM_MARKER)
+
+
+static func _path_is_link(path: String) -> bool:
+	var parent := DirAccess.open(path.get_base_dir())
+	return parent != null and parent.is_link(path.get_file())
+
+
+static func _podman_adapter_ready_at(runtime_dir: String, bin_dir: String) -> bool:
+	if runtime_dir == "" or bin_dir == "":
+		return false
+	var selection := runtime_dir.path_join("container-runtime")
+	var machine := runtime_dir.path_join("podman-machine")
+	var manifest := runtime_dir.path_join(".runtime-integrity")
+	var shim := bin_dir.path_join("docker")
+	if _path_is_link(bin_dir) or _path_is_link(selection) \
+			or _path_is_link(machine) or _path_is_link(shim):
+		return false
+	if _read_marker(selection) != RUNTIME_PODMAN \
+			or not _valid_podman_machine_name(_read_marker(machine)) \
+			or not _is_jht_podman_shim(shim):
+		return false
+	return _manifest_value(manifest, "container-runtime") == FileAccess.get_sha256(selection) \
+			and _manifest_value(manifest, "podman-machine") == FileAccess.get_sha256(machine) \
+			and _manifest_value(manifest, "docker-shim") == FileAccess.get_sha256(shim)
+
+
+static func _podman_adapter_ready() -> bool:
+	var runtime_dir := _host_runtime_dir()
+	return _podman_adapter_ready_at(runtime_dir, runtime_dir.path_join("bin"))
+
+
+static func _macos_runtime_inventory(has_colima: bool, has_podman: bool,
+		adapter_ready: bool, has_desktop: bool) -> PackedStringArray:
+	var found := PackedStringArray()
+	if has_colima:
+		found.append(RUNTIME_COLIMA)
+	if has_podman and adapter_ready:
+		found.append(RUNTIME_PODMAN)
+	if has_desktop:
+		found.append(RUNTIME_DOCKER_DESKTOP)
+	return found
+
+
+static func _which_docker_without_jht_shim() -> String:
+	for dir in _search_dirs():
+		var candidate := String(dir).path_join("docker")
+		if not FileAccess.file_exists(candidate) or _is_jht_podman_shim(candidate):
+			continue
+		if (FileAccess.get_unix_permissions(candidate)
+				& (FileAccess.UNIX_EXECUTE_OWNER | FileAccess.UNIX_EXECUTE_GROUP
+				| FileAccess.UNIX_EXECUTE_OTHER)) != 0:
+			return candidate
+	return ""
+
+
+static func _macos_container_cli(chosen: String, adapter_ready: bool,
+		podman_shim: String, docker_cli: String) -> String:
+	if chosen == RUNTIME_PODMAN:
+		return podman_shim if adapter_ready else ""
+	return docker_cli
+
+
+static func _macos_container_cli_path() -> String:
+	var shim := _host_runtime_dir().path_join("bin/docker")
+	return _macos_container_cli(runtime_choice(), _podman_adapter_ready(), shim,
+			_which_docker_without_jht_shim())
+
+
+## Nome della macchina dedicata scritto dall'installer. L'override serve ai
+## test/operatori e coincide con quello accettato dall'installer; il marker
+## evita che il wizard avvii per errore una macchina diversa da quella scelta.
+static func _podman_machine_name() -> String:
+	var configured := OS.get_environment("JHT_PODMAN_MACHINE").strip_edges()
+	if _valid_podman_machine_name(configured):
+		return configured
+	configured = _read_marker(_host_runtime_dir().path_join("podman-machine"))
+	if _valid_podman_machine_name(configured):
+		return configured
+	return "jht-podman"
 
 
 ## I motori container INSTALLATI su questa macchina, in ordine di preferenza.
@@ -805,10 +936,10 @@ static func installed_runtimes() -> PackedStringArray:
 			if FileAccess.file_exists(DOCKER_DESKTOP_WIN):
 				found.append(RUNTIME_DOCKER_DESKTOP)
 		"macOS":
-			if _which("colima") != "":
-				found.append(RUNTIME_COLIMA)
-			if DirAccess.dir_exists_absolute("/Applications/Docker.app"):
-				found.append(RUNTIME_DOCKER_DESKTOP)
+			found = _macos_runtime_inventory(
+					_which("colima") != "", _which("podman") != "",
+					_podman_adapter_ready(),
+					DirAccess.dir_exists_absolute("/Applications/Docker.app"))
 		_:
 			if _which("docker") != "":
 				found.append(RUNTIME_DOCKER_SERVICE)
@@ -818,9 +949,17 @@ static func installed_runtimes() -> PackedStringArray:
 ## Il motore scelto dall'utente, se ne ha scelto uno ed è ancora installato.
 static func runtime_choice() -> String:
 	var cfg := ConfigFile.new()
-	if cfg.load(RUNTIME_CHOICE_CFG) != OK:
-		return ""
-	return str(cfg.get_value("runtime", "engine", ""))
+	var configured := ""
+	if cfg.load(RUNTIME_CHOICE_CFG) == OK:
+		configured = str(cfg.get_value("runtime", "engine", ""))
+	if OS.get_name() == "macOS":
+		var persisted := _read_marker(
+				_host_runtime_dir().path_join("container-runtime"))
+		if persisted == RUNTIME_PODMAN:
+			return RUNTIME_PODMAN if _podman_adapter_ready() else ""
+		if persisted == "docker" and configured == RUNTIME_PODMAN:
+			return ""
+	return configured
 
 
 ## Il motore da accendere adesso. Con UNO installato non c'è niente da
@@ -851,12 +990,23 @@ static func runtime_missing(s: Dictionary) -> bool:
 ## Registra la scelta del motore. Solo un motore davvero installato: una
 ## preferenza per qualcosa che non c'è produrrebbe un avvio che fallisce e
 ## nessuna spiegazione utile.
+static func runtime_switch_requires_installer(current: String,
+		requested: String) -> bool:
+	return (current == RUNTIME_PODMAN) != (requested == RUNTIME_PODMAN)
+
+
 func choose_runtime(id: String) -> void:
-	if id != "" and not installed_runtimes().has(id):
+	var available := installed_runtimes()
+	if id != "" and not available.has(id):
+		return
+	var current := selected_runtime(available)
+	if OS.get_name() == "macOS" and runtime_switch_requires_installer(current, id):
+		Log.warn("setup", "il cambio Podman/Docker richiede l'installer")
 		return
 	var cfg := ConfigFile.new()
 	cfg.set_value("runtime", "engine", id)
 	cfg.save(RUNTIME_CHOICE_CFG)
+	status["runtimes"] = installed_runtimes()
 	status["runtime_choice"] = id
 	status["runtime_selected"] = selected_runtime(
 			status.get("runtimes", PackedStringArray()))
@@ -2038,6 +2188,13 @@ static func _launch_docker_runtime(runtime: String) -> Dictionary:
 			# falliva in silenzio e la UI annunciava "Colima avviato" a vuoto.
 			OS.create_process(_bin("colima"), PackedStringArray(["start"]))
 			return {"ok": true, "message": UIStrings.t("setup.runtime.colima_starting")}
+		RUNTIME_PODMAN:
+			# La connessione è dedicata a JHT e il flag evita di cambiare il
+			# default Podman globale. Colima resta installato e non viene fermato.
+			OS.create_process(_bin("podman"), PackedStringArray([
+					"machine", "start", "--update-connection=false",
+					_podman_machine_name()]))
+			return {"ok": true, "message": UIStrings.t("setup.runtime.podman_starting")}
 		RUNTIME_DOCKER_SERVICE:
 			# Il daemon di sistema non lo accende l'app: chiederebbe una
 			# password di root dentro un gioco. Si dice il comando e basta.

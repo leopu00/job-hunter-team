@@ -39,13 +39,43 @@ $JHT_HOST_RUNTIME_PROTOCOL = 1
 $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { 'jht' }
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
 if (-not $LocalAppData) { throw 'LOCALAPPDATA non disponibile: runtime host rifiutato' }
+if (-not $env:HOME) { $env:HOME = $env:USERPROFILE }
+if (-not $env:HOME) { throw 'HOME/USERPROFILE non disponibile: bind mount JHT rifiutato' }
 $RuntimeDir  = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $ComposeFile = if ($env:JHT_COMPOSE_FILE)   { $env:JHT_COMPOSE_FILE }   else { Join-Path $RuntimeDir 'docker-compose.yml' }
+$WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
+$RuntimeSelectionFile = Join-Path $RuntimeDir 'container-runtime'
+$PodmanMachineFile = Join-Path $RuntimeDir 'podman-machine'
+$ContainerRuntime = if ($env:JHT_CONTAINER_RUNTIME) {
+  $env:JHT_CONTAINER_RUNTIME.Trim().ToLowerInvariant()
+} elseif (Test-Path -LiteralPath $RuntimeSelectionFile -PathType Leaf) {
+  ([IO.File]::ReadAllText($RuntimeSelectionFile)).Trim().ToLowerInvariant()
+} else { 'docker' }
+if ($ContainerRuntime -notin @('docker', 'podman')) { throw "runtime container non supportato: $ContainerRuntime" }
+$PodmanComposeFile = Join-Path $RuntimeDir 'docker-compose.podman.yml'
+$ContainerUnitFile = Join-Path $RuntimeDir 'jht-container.service'
+$DockerShim = Join-Path (Split-Path -Parent $WrapperPath) 'docker.exe'
+if ($ContainerRuntime -eq 'podman') {
+  # Compose otherwise derives the project from the protected runtime directory
+  # ("host-runtime"), while development runs derive it from the checkout. A
+  # stable project name makes an installed container manageable after migration.
+  $env:COMPOSE_PROJECT_NAME = 'jht'
+  $env:PATH = "$(Split-Path -Parent $WrapperPath)$([IO.Path]::PathSeparator)$env:PATH"
+  $env:CONTAINER_CONNECTION = if ($env:JHT_PODMAN_MACHINE) {
+    $env:JHT_PODMAN_MACHINE
+  } elseif (Test-Path -LiteralPath $PodmanMachineFile -PathType Leaf) {
+    ([IO.File]::ReadAllText($PodmanMachineFile)).Trim()
+  } else { 'jht-podman' }
+  $env:JHT_PODMAN_HTTP_PROXY = if ($env:JHT_PODMAN_HTTP_PROXY) { $env:JHT_PODMAN_HTTP_PROXY } else { 'http://127.0.0.1:3128' }
+  $env:JHT_PODMAN_HTTPS_PROXY = if ($env:JHT_PODMAN_HTTPS_PROXY) { $env:JHT_PODMAN_HTTPS_PROXY } else { 'http://127.0.0.1:3128' }
+  $composeProvider = Get-Command docker-compose.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($composeProvider) { $env:PODMAN_COMPOSE_PROVIDER = $composeProvider.Source }
+  $env:PODMAN_COMPOSE_WARNING_LOGS = 'false'
+}
 $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
-$WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
 $DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598'
 $DefaultRuntimeVersion = '0.3.9'
 $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
@@ -157,7 +187,17 @@ function Write-RuntimeManifest {
   $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
   $wrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
   $temp = "$RuntimeManifest.tmp-$PID-$([guid]::NewGuid().ToString('N'))"
-  [IO.File]::WriteAllText($temp, "version=1`ndocker-compose.yml=$hash`njht-wrapper.ps1=$wrapperHash`n", [Text.UTF8Encoding]::new($false))
+  $content = "version=1`ndocker-compose.yml=$hash`njht-wrapper.ps1=$wrapperHash`n"
+  if ($ContainerRuntime -eq 'podman') {
+    $podmanHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanComposeFile).Hash.ToLowerInvariant()
+    $shimHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $DockerShim).Hash.ToLowerInvariant()
+    $content += "docker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`n"
+    $selectionHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeSelectionFile).Hash.ToLowerInvariant()
+    $machineHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanMachineFile).Hash.ToLowerInvariant()
+    $containerUnitHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ContainerUnitFile).Hash.ToLowerInvariant()
+    $content += "container-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`n"
+  }
+  [IO.File]::WriteAllText($temp, $content, [Text.UTF8Encoding]::new($false))
   Move-Item -LiteralPath $temp -Destination $RuntimeManifest -Force
 }
 
@@ -176,6 +216,21 @@ function Test-RuntimeBundleTrusted {
     $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
     $wrapperActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
     if ($values.'docker-compose.yml' -ne $actual -or $values.'jht-wrapper.ps1' -ne $wrapperActual) { return $false }
+    if ($ContainerRuntime -eq 'podman') {
+      if (-not (Test-ProtectedRuntimeNode $RuntimeSelectionFile)) { return $false }
+      if (-not (Test-ProtectedRuntimeNode $PodmanMachineFile)) { return $false }
+      if (-not (Test-ProtectedRuntimeNode $PodmanComposeFile)) { return $false }
+      if (-not (Test-ProtectedRuntimeNode $ContainerUnitFile)) { return $false }
+      if (-not (Test-ProtectedRuntimeNode $DockerShim)) { return $false }
+      $podmanActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanComposeFile).Hash.ToLowerInvariant()
+      $shimActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $DockerShim).Hash.ToLowerInvariant()
+      $selectionActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeSelectionFile).Hash.ToLowerInvariant()
+      $machineActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanMachineFile).Hash.ToLowerInvariant()
+      $containerUnitActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ContainerUnitFile).Hash.ToLowerInvariant()
+      if ($values.'docker-compose.podman.yml' -ne $podmanActual -or $values.'docker.exe' -ne $shimActual -or $values.'container-runtime' -ne $selectionActual -or $values.'podman-machine' -ne $machineActual -or $values.'jht-container.service' -ne $containerUnitActual) { return $false }
+      if (-not (Select-String -LiteralPath $PodmanComposeFile -SimpleMatch 'network_mode: host' -Quiet)) { return $false }
+      if (-not (Select-String -LiteralPath $PodmanComposeFile -SimpleMatch 'keep-id:uid=1001,gid=1001' -Quiet)) { return $false }
+    }
     if (-not (Select-String -LiteralPath $WrapperPath -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { return $false }
     if (-not (Select-String -LiteralPath $ComposeFile -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { return $false }
     return $true
@@ -267,7 +322,9 @@ function Invoke-Compose {
   # Docker Desktop Windows accetta forward-slash o backslash. project-directory
   # punta al runtime dir per bind-mount relativi (anche se compose qui e'
   # image-only, lasciamo per simmetria col bash wrapper).
-  & docker compose -f $ComposeFile --project-directory $RuntimeDir @Args
+  $files = @('-f', $ComposeFile)
+  if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
+  & docker compose @files --project-directory $RuntimeDir @Args
 }
 
 function Test-DockerReachable {
@@ -963,7 +1020,9 @@ function Invoke-UpgradeCompose {
       return $false
     }
   }
-  $all = @('compose', '-f', $File, '--project-directory', $RuntimeDir) + $ComposeArgs
+  $all = @('compose', '-f', $File)
+  if ($ContainerRuntime -eq 'podman') { $all += @('-f', $PodmanComposeFile) }
+  $all += @('--project-directory', $RuntimeDir) + $ComposeArgs
   if ($script:UpgradeJson) { & docker @all *> $null } else { & docker @all }
   return $LASTEXITCODE -eq 0
 }
@@ -1171,7 +1230,9 @@ function Invoke-RuntimeUpgrade {
     if (-not (Write-UpgradeJournal 'prepared' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile preparare il rollback' $false; return 1 }
     Write-UpgradeNote 'Scarico l immagine piu recente...'
     if (-not (Invoke-UpgradeCompose $newCompose 'pull' $Container)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Download immagine non riuscito' $false; return 1 }
-    $candidateRef = ((& docker compose -f $newCompose --project-directory $RuntimeDir config --images 2>$null | Select-Object -First 1) -as [string]).Trim()
+    $candidateFiles = @('-f', $newCompose)
+    if ($ContainerRuntime -eq 'podman') { $candidateFiles += @('-f', $PodmanComposeFile) }
+    $candidateRef = ((& docker compose @candidateFiles --project-directory $RuntimeDir config --images 2>$null | Select-Object -First 1) -as [string]).Trim()
     if (-not $candidateRef) { $candidateRef = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { $DefaultRuntimeImage } }
     $candidateImage = ((& docker image inspect $candidateRef --format '{{.Id}}' 2>$null | Select-Object -First 1) -as [string]).Trim()
     if (-not $candidateImage) { $candidateImage = 'sconosciuta' }
@@ -1221,7 +1282,7 @@ $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
 # docker exec iterates char-by-char and the inner CLI sees `cloud l o g i n`
 # instead of `cloud login`. Forziamo array via @() per garantire splat
 # corretto anche con 1 solo arg di coda.
-$Rest = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
+[string[]]$Rest = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
 
 # Questo gate deve precedere tutti i rami host-side: nel solo default non vede
 # `up --help`, `setup --help`, ecc. e quei comandi toccherebbero Docker prima

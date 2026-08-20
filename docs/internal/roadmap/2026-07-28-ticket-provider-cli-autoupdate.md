@@ -251,7 +251,7 @@ l'aggiornamento automatico. `JHT_PROVIDER_AUTOUPDATE=0` continua a spegnere tutt
 | Provider | Dove pinna | Cosa fa JHT |
 |---|---|---|
 | kimi | `$JHT_HOME/.kimi/config.toml` — `default_model` + il catalogo `[models."…"]` scritti al login | sceglie dal catalogo, **prova**, **scrive** (backup `*.bak-model-pin-<ts>` + scrittura atomica) |
-| codex | `$JHT_HOME/.codex/config.toml` — `model = "…"`, solo se scelto da TUI/mano | **solo segnalato**: il suo config non elenca alternative (nessun catalogo da cui scegliere, e un nome inventato lascerebbe la CLI con un pin che non risolve), e lo stesso file contiene le entry `trust_level` degli agenti |
+| codex | `$JHT_HOME/.codex/config.toml` — `model = "…"`, solo se scelto da TUI/mano | **non applicabile agli agenti JHT**: il launcher passa sempre il modello del ruolo (`opus → gpt-5.6-sol`, `sonnet → gpt-5.6-terra`), quindi l'argomento prevale sul pin del config |
 | claude | — | **non applicabile**: `start-agent.sh` passa `--model opus\|sonnet` a ogni spawn e gli alias seguono la generazione |
 
 Tre dettagli che valgono per un passo che gira **a ogni boot**: il finding non si ripete finché

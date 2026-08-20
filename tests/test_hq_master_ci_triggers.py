@@ -38,3 +38,8 @@ def test_game_push_is_already_branch_agnostic():
 def test_docker_does_not_publish_hq_integration_images():
     branches = _workflow("docker.yml")["on"]["push"]["branches"]
     assert branches == ["master"]
+
+
+def test_docker_pull_requests_build_every_image_input_path():
+    workflow = _workflow("docker.yml")["on"]
+    assert set(workflow["pull_request"]["paths"]) == set(workflow["push"]["paths"])

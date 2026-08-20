@@ -77,7 +77,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `--no-docker` | off | Skip the container, install natively (expert mode) |
 | `--with-docker` | on | Alias kept for retro-compat (Docker is already the default) |
 | `--dry-run` | off | Print every install/download/mutating action without executing any of them |
-| `--runtime <id>` | `colima` | macOS runtime: `colima` or the user's `docker-desktop` |
+| `--runtime <id>` | `colima` | macOS runtime: `colima`, preview `podman`, or the user's `docker-desktop` |
 | `--branch <name>` | `master` | Source branch for wrapper and Compose downloads |
 | `-h`, `--help` | — | Print the header banner and exit |
 | `JHT_REPO_URL` | `https://github.com/leopu00/job-hunter-team.git` | Repo cloned in native mode |
@@ -105,13 +105,29 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
    - macOS: `--runtime=colima` (default) installs Homebrew if missing →
      `brew install colima docker` → `colima start`. `--runtime=docker-desktop`
      uses your own Docker Desktop (`open -a Docker`; never silent-installed).
+     `--runtime=podman` is an opt-in preparation path: it installs the Podman
+     CLI and Compose provider, creates/starts the dedicated rootless
+     `jht-podman` machine, and publishes an attested JHT-only `docker` shim in
+     `$JHT_RUNTIME_DIR/bin` rather than the user's global `PATH`.
+     It never stops, deletes, or uninstalls Colima. Colima remains the default
+     until bind mounts, Compose lifecycle, restart and clean-machine behavior
+     pass on both Apple Silicon and Intel Macs.
+     This preview uses Homebrew to match the current unattended Colima path;
+     upstream recommends the official Podman installer for stable end-user
+     installation, so the final packaging choice remains a release gate.
+     A later default, `--runtime=colima`, or `--runtime=docker-desktop` run
+     publishes an attested `docker` selection fail-closed. The private JHT
+     Podman adapter and machine marker remain inert; no `docker` file is
+     removed or overwritten.
      See [ADR-0006](../adr/0006-user-choice-container-runtime-macos.md).
    - Linux/WSL: `apt-get install docker.io` (or dnf/pacman equivalent),
      `systemctl enable --now docker` if available, `service docker start`
      on WSL, and `usermod -aG docker $USER` so subsequent runs don't need
      sudo.
-3. **Verify Docker** — `docker info`. On Linux falls back to `sudo docker
-   info` if the user is not yet in the `docker` group.
+3. **Verify the runtime** — `docker info`, or the dedicated Podman connection
+   plus its Compose provider in the opt-in preview. On Linux the Docker path
+   falls back to `sudo docker info` if the user is not yet in the `docker`
+   group.
 4. **Download runtime files and run host preflight** — `curl -fsSL` of:
    - `$JHT_RAW_BASE/docker-compose.yml` → `$JHT_RUNTIME_DIR/docker-compose.yml`
    - `$JHT_RAW_BASE/scripts/jht-wrapper.sh` → `$JHT_BIN_DIR/jht` (chmod +x)

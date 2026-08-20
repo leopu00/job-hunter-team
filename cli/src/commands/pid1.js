@@ -1172,11 +1172,17 @@ async function dispatch() {
     process.on('exit', () => { if (watcher) watcher.close(); });
   }
 
-  // ── Shutdown forwarding: docker stop manda SIGTERM, 10s grace.
+  // ── Keep-alive esplicito. Prima l'ancora del processo era il child
+  // dashboard ("dashboard exit = container exit"); tolta la dashboard,
+  // pid1 deve restare vivo da solo finche' il runtime non manda SIGTERM.
+  const keepAlive = setInterval(() => {}, 2 ** 31 - 1);
+
+  // ── Shutdown forwarding: docker/podman stop manda SIGTERM.
   const forwardSignal = (sig) => {
     if (shuttingDown) return;
     shuttingDown = true;
     pid1Log(`shutdown (${sig}): killing children`);
+    clearInterval(keepAlive);
     if (daemonChild && !daemonChild.killed) daemonChild.kill(sig);
     if (realtimeChild && !realtimeChild.killed) realtimeChild.kill(sig);
     if (teamStateChild && !teamStateChild.killed) teamStateChild.kill(sig);
@@ -1193,15 +1199,17 @@ async function dispatch() {
     if (autoReportChild && !autoReportChild.killed) autoReportChild.kill(sig);
     if (autoReportRespawnTimer) clearTimeout(autoReportRespawnTimer);
     stopTgBridge();
+    // Alcuni figli detached e watcher mantengono handle Node aperti anche
+    // dopo il SIGTERM. Senza un'uscita esplicita il vecchio keep-alive faceva
+    // scadere sempre la grace period del runtime (exit 137). Cinque secondi
+    // lasciano completare i cleanup e poi consegnano un exit 0 a tini.
+    setTimeout(() => {
+      pid1Log('shutdown complete');
+      process.exit(0);
+    }, 5000);
   };
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));
   process.on('SIGINT', () => forwardSignal('SIGINT'));
-
-  // ── Keep-alive esplicito. Prima l'ancora del processo era il child
-  // dashboard ("dashboard exit = container exit"); tolta la dashboard,
-  // pid1 deve restare vivo da solo finche' docker non manda SIGTERM —
-  // senza contare su watcher/child stdio che potrebbero chiudersi tutti.
-  setInterval(() => {}, 2 ** 31 - 1);
 }
 
 export function registerPid1Command(program) {

@@ -170,3 +170,10 @@ def test_an_unmapped_alias_refuses_to_start_instead_of_guessing() -> None:
     assert result.returncode != 0
     assert "NON DOVEVA" not in result.stdout
     assert "no Codex model mapping" in result.stderr
+
+
+def test_codex_command_receives_the_resolved_model() -> None:
+    """Preserva il contratto nominale del branch Fullstack con una prova reale."""
+    test_codex_command_carries_the_model_of_that_role(
+        "capitano", "gpt-5.6-sol"
+    )
