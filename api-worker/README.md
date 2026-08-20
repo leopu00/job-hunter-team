@@ -1,8 +1,10 @@
 # JHT API worker — Scout prototype
 
-This package is the first API-backed agent engine for Job Hunter Team. It is a
-proposal-only Scout and is not wired into the production launcher, tmux, Bridge,
-Sentinel or `jobs.db`.
+This package is the first API-backed agent engine for Job Hunter Team. Its core
+worker remains proposal-only and is not wired into the production launcher,
+tmux, Bridge, Sentinel or `jobs.db`. A second entry point now wraps that core in
+an entirely separate standalone ecosystem with its own profile, coordination
+leases and SQLite database.
 
 The architectural rationale and unchanged boundaries are recorded in
 [`docs/internal/prototypes/2026-08-19-scout-api-worker-design.md`](../docs/internal/prototypes/2026-08-19-scout-api-worker-design.md).
@@ -12,14 +14,19 @@ The architectural rationale and unchanged boundaries are recorded in
 ```text
 src/contract.ts             versioned input/result/tool/error/event schemas
 src/model-profile.ts        provider, model, capability and pricing profile
+src/candidate-profile.ts    minimal standalone candidate/search profile
 src/role/scout.ts           provider-independent Scout prompt
 src/tools.ts                narrow injected search/read tools
+src/web-job-reader.ts       public-HTTPS + Schema.org JobPosting evidence gate
 src/guardrails.ts           step, tool, I/O, timeout and USD limits
 src/run-lock.ts             one-run-at-a-time lock
 src/audit.ts                schema-validated sanitized JSONL audit
 src/providers/mock.ts       deterministic offline provider
 src/providers/ai-sdk.ts     gated Anthropic/OpenAI/Kimi adapter
 src/worker.ts               stable worker boundary
+src/standalone-db.ts        isolated coordination, dedup and positions database
+src/standalone.ts           profile-to-search-to-persistence orchestration
+src/standalone-cli.ts       one-command standalone entry point
 fixtures/                   synthetic input, model and job catalog
 tests/                      offline automated tests
 ```
@@ -54,7 +61,55 @@ The outcome is versioned and explicit:
 ```
 
 Every proposal also carries `disposition: "proposed"` and
-`persistence: "none"`. No code in this package imports SQLite helpers.
+`persistence: "none"`. The standalone wrapper, not the model or core worker,
+performs the authorized write to `api-worker/.standalone/data/scout.db`. It does
+not import the product's SQLite helpers and cannot discover or modify `jobs.db`.
+
+## Standalone Scout
+
+The safe offline path proves the entire lifecycle with synthetic data:
+
+```bash
+npm run scout
+```
+
+It reads `fixtures/candidate-profile.synthetic.yml`, checks the standalone
+database for active colleagues, registers a lease, runs the mock Scout, applies
+the three Scout dedup levels and inserts verified proposals as `status=new`.
+Re-running the command demonstrates idempotency: the existing URLs are skipped.
+On Node 22 the built-in `node:sqlite` module may print an experimental-feature
+warning; the standalone package intentionally uses it here to avoid a native
+SQLite dependency during this fast prototype phase.
+
+The database is also the coordination bus. Active agents publish a renewable
+lease; a new agent sees them and atomically claims a free role/location/work-mode
+lane. Stale leases expire. No tmux session, container, product profile, email
+inbox or product database participates.
+
+For a live web cycle, provide a candidate profile, a provider/model profile and
+a positive per-run budget explicitly:
+
+```bash
+ANTHROPIC_API_KEY="..." npm run scout -- \
+  --live \
+  --candidate-profile /absolute/path/to/candidate-profile.yml \
+  --model-profile /absolute/path/to/model-profile.json \
+  --workspace /absolute/path/to/isolated-scout-workspace \
+  --agent-id scout-1 \
+  --max-web-searches 2 \
+  --max-cost-usd 0.25
+```
+
+Live standalone web discovery currently supports Anthropic and OpenAI. The
+model uses the provider-native web-search tool, but a result is not eligible for
+SQLite until `read_web_job` independently reads its public HTTPS URL. The reader
+uses rotating browser-like HTTP requests, then escalates blocked or client-only
+pages to local headless Chrome. Schema.org `JobPosting` is used when present;
+otherwise the model receives bounded visible-page evidence and must produce an
+extractive, evidence-grounded proposal. Redirects are revalidated, browser
+requests to private/local addresses are blocked, responses are size- and
+time-bounded, and listing text is always treated as hostile data. The audit
+records the source host, fetch method and a sanitized failure reason.
 
 ## Provider/model profile
 
@@ -70,11 +125,13 @@ not inferred from the provider brand.
   "model": "REPLACE_WITH_A_VERIFIED_MODEL_ID",
   "capabilities": {
     "toolCalling": { "supported": true, "parallel": false },
-    "structuredOutput": { "supported": true, "mode": "native" }
+    "structuredOutput": { "supported": true, "mode": "native" },
+    "webSearch": { "supported": true, "mode": "provider" }
   },
   "pricing": {
     "inputUsdPerMillionTokens": 0.0,
-    "outputUsdPerMillionTokens": 0.0
+    "outputUsdPerMillionTokens": 0.0,
+    "webSearchUsdPerCall": 0.0
   }
 }
 ```
@@ -87,7 +144,9 @@ model. Anthropic and OpenAI do not accept custom base URLs, so their keys cannot
 be redirected through profile configuration.
 
 Pricing values above are placeholders and intentionally fail the live budget
-gate. Before a live experiment, replace them with currently verified prices.
+gate. Before a live experiment, replace them with currently verified prices,
+including the provider's web-search tool charge. The guard reserves the
+configured web-search allowance alongside token cost.
 
 ## Explicit future live experiment
 
@@ -141,6 +200,9 @@ The next production slice must add separate adapters for:
 
 Until those adapters and isolated end-to-end tests exist, a proposal is not a
 production Scout hand-off and must not be written to `jobs.db`.
+
+The standalone SQLite writer is deliberately not that production adapter: its
+schema and path belong only to this experiment.
 
 The prototype lock is intentionally fail-closed: an ungraceful process crash can
 leave `scout.lock` behind. Automated stale-lock recovery must wait for the future
