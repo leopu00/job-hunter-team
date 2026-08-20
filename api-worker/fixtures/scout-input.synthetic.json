@@ -1,0 +1,23 @@
+{
+  "contractVersion": "1",
+  "runId": "00000000-0000-4000-8000-000000000001",
+  "role": "scout",
+  "search": {
+    "targetRoles": ["Platform Engineer", "Backend Engineer"],
+    "locations": ["Remote EU", "Rome"],
+    "workModes": ["remote", "hybrid"],
+    "skills": ["TypeScript", "Node.js", "automation"],
+    "postedWithinDays": 7,
+    "maxCandidates": 2
+  },
+  "limits": {
+    "maxInputTokensPerStep": 8000,
+    "maxOutputTokensPerStep": 1200,
+    "maxTotalOutputTokens": 3600,
+    "maxResultBytes": 50000,
+    "maxSteps": 6,
+    "maxToolCalls": 12,
+    "timeoutMs": 10000,
+    "maxCostUsd": 0
+  }
+}

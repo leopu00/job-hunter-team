@@ -1,0 +1,19 @@
+{
+  "profileVersion": "1",
+  "provider": "mock",
+  "model": "jht-scout-fixture-v1",
+  "capabilities": {
+    "toolCalling": {
+      "supported": true,
+      "parallel": false
+    },
+    "structuredOutput": {
+      "supported": true,
+      "mode": "native"
+    }
+  },
+  "pricing": {
+    "inputUsdPerMillionTokens": 0,
+    "outputUsdPerMillionTokens": 0
+  }
+}

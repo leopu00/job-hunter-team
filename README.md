@@ -150,7 +150,7 @@ The `jht` CLI is designed to be driven by AI assistants, not just humans. Alread
 
 **Status** — team, CLI, web dashboard and native Godot application are tested across all three providers; onboarding, operations and settings now live in the office. Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
-Monorepo: [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
+Monorepo: [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`api-worker/`](api-worker/) *(isolated Scout API prototype)* · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
 
 ## Contributing
 

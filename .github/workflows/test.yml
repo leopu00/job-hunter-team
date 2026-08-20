@@ -19,6 +19,28 @@ permissions:
   contents: read
 
 jobs:
+  api-worker:
+    name: API worker — format, types, offline tests
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: api-worker/package-lock.json
+
+      - name: Install API worker dependencies
+        working-directory: api-worker
+        run: npm ci
+
+      - name: Verify API worker
+        working-directory: api-worker
+        run: npm run verify
+
   # Suite vitest completa — l'UNICO posto in cui gira. Fino al 2026-07-26 il
   # job viveva anche in ci.yml (stesso trigger, stesso codice, due esecuzioni)
   # e qui era una matrice `config|tasks|wizard` che si presentava come elenco

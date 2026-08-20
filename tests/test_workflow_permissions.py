@@ -44,6 +44,7 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     },
     "tag-production-release.yml": {"tag": {"contents": "write"}},
     "test.yml": {
+        "api-worker": READ_CONTENTS,
         "vitest": READ_CONTENTS,
         "migration-gate": READ_CONTENTS,
         "pytest": READ_CONTENTS,
