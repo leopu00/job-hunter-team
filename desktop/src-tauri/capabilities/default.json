@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Minimum permissions for the first-run window",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
