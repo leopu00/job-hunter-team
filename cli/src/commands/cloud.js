@@ -22,6 +22,7 @@ import { summarizeOutOfRange } from '../lib/score-ranges.js';
 import { createHaltGate, guardedLane } from '../lib/halt-gate.js';
 import { applyAppliedBackflow } from '../lib/applied-backflow.js';
 import { createExclusiveRunner } from '../lib/exclusive-runner.js';
+import { boundedBackoffDelay } from '../lib/bounded-backoff.js';
 import {
   CLOUD_PUSH_QUARANTINE_FILE,
   activeQuarantineEntries,
@@ -3920,12 +3921,14 @@ async function handleDaemon(options) {
   // [JHT-REALTIME-SYNC] Ramo event-driven (flag JHT_REALTIME_SYNC=1, default OFF):
   // il daemon si iscrive a Supabase Realtime e reagisce agli eventi invece di pollare
   // a ~5s. Con flag OFF resta il loop poll qui sotto (comportamento odierno invariato).
-  if (realtimeSyncEnabled()) {
+  if (realtimeSyncEnabled(config)) {
     await runRealtimeLoop({ config, isRunning: () => running });
     console.log(pc.dim('Daemon stopped (event-driven).'));
     return;
   }
 
+  const chatCycleState = { lastPulledRequestedAt: null };
+  let stoppedPollAttempt = 0;
   while (running) {
     if (existsSync(WEEKLY_HALT_FLAG)) {
       if (haltSkipCount % heavyEvery === 0) {
@@ -3989,7 +3992,12 @@ async function handleDaemon(options) {
       try {
         const prevCh = process.exitCode;
         process.exitCode = 0;
-        await handleChatSync({ silent: true, config, state: rendezvousState });
+        await handleChatSync({
+          silent: true,
+          config,
+          state: rendezvousState,
+          cycleState: chatCycleState,
+        });
         process.exitCode = prevCh;
       } catch (err) {
         console.error(pc.yellow('  daemon chat-sync error (unexpected_failure)'));
@@ -4042,9 +4050,22 @@ async function handleDaemon(options) {
     }
     fastTick += 1;
     if (!running) break;
-    // Sleep interrompibile (~syncCheckSec): chunk da 1s così SIGTERM ferma entro 1s.
-    for (let i = 0; i < syncCheckSec && running; i++) {
-      await new Promise((r) => setTimeout(r, 1000));
+    // Il fallback dei pairing senza Realtime non resta a 5s per sempre quando
+    // il team e' fermo: sale fino a 60s con jitter. La prima osservazione dopo
+    // uno start torna subito alla cadenza chat.
+    const sleepMs = rendezvousState?.is_running === false
+      ? boundedBackoffDelay(stoppedPollAttempt++, {
+          minMs: syncCheckSec * 1000,
+          maxMs: 60_000,
+        })
+      : syncCheckSec * 1000;
+    if (rendezvousState?.is_running !== false) stoppedPollAttempt = 0;
+    // Sleep interrompibile: chunk <=1s così SIGTERM ferma entro 1s.
+    let remaining = sleepMs;
+    while (remaining > 0 && running) {
+      const chunk = Math.min(1000, remaining);
+      await new Promise((r) => setTimeout(r, chunk));
+      remaining -= chunk;
     }
   }
   console.log(pc.dim('Daemon stopped.'));
@@ -4086,8 +4107,8 @@ async function runRealtimeLoop({ config, isRunning }) {
   // Debounce per corsia: una raffica di eventi Realtime non deve lanciare letture
   // concorrenti sovrapposte (push o ticket-sync). Il freno sta nello stesso
   // guscio del debounce, non accanto a ogni chiamata.
-  const runSync = guardedLane(haltGate, 'sync', async () => {
-    await handleSyncRendezvous({ silent: true });
+  const runSync = guardedLane(haltGate, 'sync', async (_tag, state) => {
+    await handleSyncRendezvous({ silent: true, config, state });
   }, () => console.error(pc.yellow('  sync-rendezvous error (unexpected_failure)')));
 
   const runTicketSync = guardedLane(haltGate, 'ticket', async () => {
@@ -4098,11 +4119,22 @@ async function runRealtimeLoop({ config, isRunning }) {
   // `jht-send`, che non produce alcun evento remoto). Serve quindi sia
   // l'aggancio all'evento sia un battito locale corto — che però resta
   // gratis, perché ogni passo di handleChatSync ha una guardia locale.
+  const chatCycleState = { lastPulledRequestedAt: null };
+  let latestChatState = null;
   const runChatSync = guardedLane(haltGate, 'chat', async (_tag, state) => {
-    await handleChatSync({ silent: true, config, state });
+    if (state) latestChatState = state;
+    await handleChatSync({
+      silent: true,
+      config,
+      state: state || latestChatState,
+      cycleState: chatCycleState,
+    });
   }, () => console.error(pc.yellow('  chat-sync error (unexpected_failure)')));
   const chatLocalSec = Math.max(1, parseInt(process.env.JHT_CHAT_LOCAL_SEC || '5', 10) || 5);
-  const chatTimer = setInterval(() => { void runChatSync('local', null); }, chatLocalSec * 1000);
+  const chatTimer = setInterval(
+    () => { void runChatSync('local', latestChatState); },
+    chatLocalSec * 1000,
+  );
 
   const runEmergencyStop = guardedLane(haltGate, 'emergency-stop', async (_tag, state) => {
     const { reconcileEmergencyStop } = await import('../lib/team-state-reconciler.js');
@@ -4110,18 +4142,76 @@ async function runRealtimeLoop({ config, isRunning }) {
   }, (e) => console.error(pc.yellow(`  emergency-stop error: ${e.message}`)));
 
   let rt = null;
+  let realtimeHealthy = false;
+  let fallbackTimer = null;
+  let fallbackAttempt = 0;
+  let fallbackBusy = false;
+  const fallbackMaxMs = Math.max(
+    30_000,
+    (parseInt(process.env.JHT_REALTIME_FALLBACK_MAX_SEC || '60', 10) || 60) * 1000,
+  );
+  const parachuteMs = Math.max(
+    fallbackMaxMs,
+    (parseInt(process.env.JHT_PARACHUTE_SEC || '300', 10) || 300) * 1000,
+  );
+
+  const scheduleFallback = (delayMs) => {
+    if (!isRunning()) return;
+    if (fallbackTimer) clearTimeout(fallbackTimer);
+    fallbackTimer = setTimeout(() => { void pollFallback(); }, Math.max(250, delayMs));
+  };
+  const pollFallback = async () => {
+    if (fallbackBusy || !isRunning()) return;
+    fallbackBusy = true;
+    try {
+      const state = await readRendezvousState(config, { silent: true });
+      if (state) latestChatState = state;
+      await runSync('fallback', state);
+      await runChatSync('fallback', state);
+      await runEmergencyStop('fallback', state);
+    } finally {
+      fallbackBusy = false;
+      const connected = realtimeHealthy && !!rt?.isConnected?.();
+      const delay = connected
+        ? boundedBackoffDelay(0, {
+            minMs: Math.round(parachuteMs * 0.8),
+            maxMs: Math.round(parachuteMs * 1.2),
+          })
+        : boundedBackoffDelay(fallbackAttempt++, {
+            minMs: 5_000,
+            maxMs: fallbackMaxMs,
+          });
+      if (connected) fallbackAttempt = 0;
+      scheduleFallback(delay);
+    }
+  };
+  const realtimeStatus = (status) => {
+    if (status === 'SUBSCRIBED') {
+      realtimeHealthy = true;
+      fallbackAttempt = 0;
+      scheduleFallback(parachuteMs);
+      return;
+    }
+    if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
+      realtimeHealthy = false;
+      fallbackAttempt = 0;
+      scheduleFallback(500);
+    }
+  };
   try {
     const { createRealtimeSync } = await import('../lib/cloud-realtime.js');
     rt = await createRealtimeSync({ config, log });
 
     // ── Tappa 2: sync-flag → Realtime ── UPDATE su team_state (sync_requested_at) → push.
     rt.subscribe('team-state', { table: 'team_state', event: 'UPDATE' }, (payload) => {
-      void runSync('realtime');
+      const state = payload?.new ?? null;
+      if (state) latestChatState = state;
+      void runSync('realtime', state);
       // Stessa riga, stesso evento: `chat_requested_at` viaggia qui dentro.
       void runChatSync('realtime', payload?.new ?? null);
       // E lo STOP mobile viaggia nello stesso evento, senza un altro poller.
       void runEmergencyStop('realtime', payload?.new ?? null);
-    });
+    }, realtimeStatus);
 
     // ── Tappa 3: ticket → Realtime ── cambio su position_tickets → ticket-sync.
     // Richiede mig 048 (position_tickets in publication supabase_realtime + REPLICA
@@ -4132,6 +4222,11 @@ async function runRealtimeLoop({ config, isRunning }) {
   } catch (e) {
     console.error(pc.yellow(`  cloud-realtime failed setup (${e.message}) — degradation to parachute polls only.`));
   }
+
+  // Prima riconciliazione subito dopo la subscribe (o subito dopo il suo
+  // fallimento): chiude la finestra fra boot e primo evento, poi lo scheduler
+  // sceglie paracadute lento o backoff 5→60s a seconda della salute socket.
+  scheduleFallback(250);
 
   // ── Cadenze lente (tappe 4-5-6) ──
   // - heartbeat ~3min (tappa 5): SOTTO la soglia stale della dashboard (5min, vedi
@@ -4167,13 +4262,9 @@ async function runRealtimeLoop({ config, isRunning }) {
     await heartbeat();
     // Paracadute ~ogni 5min: recupero sync + ticket (eventi persi / socket morto).
     if (tick % everyParachute === 0) {
-      await runSync('parachute');
+      // sync/chat/stop hanno il proprio scheduler adattivo sopra; qui resta
+      // il paracadute dei ticket, che non condivide team_state.
       await runTicketSync('parachute');
-      // La chat ha già il suo battito locale corto: qui serve solo a
-      // recuperare il PULL dal cloud se l'evento team_state si è perso.
-      const state = await readRendezvousState(config);
-      await runChatSync('parachute', state);
-      await runEmergencyStop('parachute', state);
     }
     // Desired-state ~ogni 5min (poll lento, niente Realtime).
     if (tick % everyDesired === 0) {
@@ -4193,6 +4284,7 @@ async function runRealtimeLoop({ config, isRunning }) {
   }
 
   clearInterval(chatTimer);
+  if (fallbackTimer) clearTimeout(fallbackTimer);
   if (rt) { try { await rt.close(); } catch { /* ignore */ } }
 }
 
