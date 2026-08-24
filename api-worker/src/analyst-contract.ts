@@ -121,6 +121,108 @@ export const AnalystProposalSchema = z
 
 export type AnalystProposal = z.infer<typeof AnalystProposalSchema>;
 
+// Portable provider transport: every field is required as demanded by strict
+// structured-output APIs, while unavailable optional evidence is represented
+// as null. The full AnalystProposalSchema remains the only worker boundary.
+export const AnalystProviderOutputSchema = z.strictObject({
+  sourceId: z.string(),
+  url: z.string(),
+  decision: z.enum(["checked", "excluded"]),
+  exclusionTag: AnalystExclusionTagSchema.nullable(),
+  structuredRequirements: z.strictObject({
+    experienceRequiredYears: z.number().nullable(),
+    experienceType: z.enum(["mandatory", "preferred", "not_specified"]),
+    degree: z.enum([
+      "mandatory",
+      "preferred",
+      "not_required",
+      "or_equivalent",
+      "not_specified",
+    ]),
+    languagesRequired: z.array(z.string()),
+    seniority: z.enum(["junior", "mid", "senior", "lead", "not_specified"]),
+  }),
+  mismatchTags: z.array(AnalystExclusionTagSchema),
+  teamNote: z.string(),
+  jdSummary: z.string(),
+  roleFamily: z.string(),
+  location: z.strictObject({
+    city: z.string().nullable(),
+    country: z.string(),
+    countryCode: z.string(),
+    workMode: z.enum(["remote", "hybrid", "onsite", "unspecified"]),
+  }),
+  salaryEstimate: z
+    .strictObject({
+      minimum: z.number(),
+      maximum: z.number(),
+      currency: z.string(),
+      period: z.enum(["year", "month", "hour"]),
+      confidence: z.enum(["low", "medium", "high"]),
+    })
+    .nullable(),
+  company: z.strictObject({
+    name: z.string(),
+    hqCountry: z.string().nullable(),
+    sector: z.string().nullable(),
+    reviewRating: z.number().nullable(),
+    redFlags: z.array(z.string()),
+    cultureNotes: z.array(z.string()),
+    verdict: z.enum(["GO", "CAUTIOUS", "NO_GO"]),
+  }),
+  highlights: z.array(
+    z.strictObject({
+      type: z.enum(["pro", "con"]),
+      text: z.string(),
+    }),
+  ),
+  disposition: z.literal("proposed"),
+  persistence: z.literal("none"),
+});
+
+export function parseAnalystProviderOutput(
+  raw: unknown,
+  fallbackCountryCode?: string,
+): AnalystProposal {
+  const transport = AnalystProviderOutputSchema.parse(raw);
+  const { exclusionTag, salaryEstimate, company, ...base } = transport;
+  const { hqCountry, sector, reviewRating, ...companyBase } = company;
+  return AnalystProposalSchema.parse({
+    ...base,
+    ...(exclusionTag === null ? {} : { exclusionTag }),
+    ...(salaryEstimate === null ? {} : { salaryEstimate }),
+    location: {
+      ...base.location,
+      countryCode: /^[A-Z]{2}$/.test(base.location.countryCode)
+        ? base.location.countryCode
+        : fallbackCountryCode,
+    },
+    company: {
+      ...companyBase,
+      ...(hqCountry === null ? {} : { hqCountry }),
+      ...(sector === null ? {} : { sector }),
+      ...(reviewRating === null ? {} : { reviewRating }),
+    },
+  });
+}
+
+export function countryCodeFromScoutLocation(
+  location: string,
+): string | undefined {
+  const mappings: Array<[RegExp, string]> = [
+    [/\b(?:eu|european union)\b/i, "EU"],
+    [/\b(?:italy|italia|rome|roma)\b/i, "IT"],
+    [/\b(?:united kingdom|uk|great britain)\b/i, "GB"],
+    [/\b(?:united states|usa|us)\b/i, "US"],
+    [/\bgermany\b/i, "DE"],
+    [/\bfrance\b/i, "FR"],
+    [/\bspain\b/i, "ES"],
+    [/\bportugal\b/i, "PT"],
+    [/\bhungary\b/i, "HU"],
+  ];
+  return mappings.find(([pattern]) => pattern.test(location))?.[1];
+}
+
 export const AnalystWorkerResultSchema = z.strictObject({
   contractVersion: z.literal("1"),
   runId: z.string().uuid(),

@@ -188,15 +188,21 @@ export function writeProviderDiagnostic(error: unknown): void {
 }
 
 export function providerDiagnostic(error: unknown): Record<string, unknown> {
+  const validationIssues = allowlistedValidationIssues(error);
   const diagnostic: Record<string, unknown> = {
     category: NoObjectGeneratedError.isInstance(error)
       ? "invalid_structured_output"
       : providerStatusCode(error) !== undefined
         ? "provider_http_error"
-        : "provider_error",
+        : validationIssues.length > 0
+          ? "output_validation"
+          : "provider_error",
   };
   const statusCode = providerStatusCode(error);
   if (statusCode !== undefined) diagnostic.statusCode = statusCode;
+  Object.assign(diagnostic, allowlistedProviderErrorFields(error));
+  if (validationIssues.length > 0)
+    diagnostic.validationIssues = validationIssues;
   if (NoObjectGeneratedError.isInstance(error)) {
     diagnostic.finishReason = allowlistedFinishReason(error.finishReason);
     diagnostic.validationCodes = generatedObjectValidationCodes(
@@ -204,6 +210,111 @@ export function providerDiagnostic(error: unknown): Record<string, unknown> {
     );
   }
   return diagnostic;
+}
+
+function allowlistedValidationIssues(
+  error: unknown,
+): Array<{ code: string; path: string }> {
+  if (
+    typeof error !== "object" ||
+    error === null ||
+    !("issues" in error) ||
+    !Array.isArray(error.issues)
+  ) {
+    return [];
+  }
+  const allowedCodes = new Set([
+    "custom",
+    "invalid_element",
+    "invalid_format",
+    "invalid_key",
+    "invalid_type",
+    "invalid_union",
+    "invalid_value",
+    "not_multiple_of",
+    "too_big",
+    "too_small",
+    "unrecognized_keys",
+  ]);
+  const issues: Array<{ code: string; path: string }> = [];
+  for (const rawIssue of error.issues.slice(0, 12)) {
+    if (typeof rawIssue !== "object" || rawIssue === null) continue;
+    const issue = rawIssue as { code?: unknown; path?: unknown };
+    if (typeof issue.code !== "string" || !allowedCodes.has(issue.code)) {
+      continue;
+    }
+    const path = Array.isArray(issue.path)
+      ? issue.path
+          .filter(
+            (part): part is string | number =>
+              typeof part === "number" ||
+              (typeof part === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(part)),
+          )
+          .join(".")
+      : "";
+    issues.push({ code: issue.code, path });
+  }
+  return issues;
+}
+
+function allowlistedProviderErrorFields(
+  error: unknown,
+): Record<string, string> {
+  if (
+    typeof error !== "object" ||
+    error === null ||
+    !("responseBody" in error) ||
+    typeof error.responseBody !== "string"
+  ) {
+    return {};
+  }
+  try {
+    const body = JSON.parse(error.responseBody) as {
+      error?: {
+        type?: unknown;
+        code?: unknown;
+        param?: unknown;
+        message?: unknown;
+      };
+    };
+    const fields: Record<string, string> = {};
+    const type = allowlistedProviderIdentifier(body.error?.type);
+    const code = allowlistedProviderIdentifier(body.error?.code);
+    const param = allowlistedProviderIdentifier(body.error?.param);
+    if (type) fields.providerType = type;
+    if (code) fields.providerCode = code;
+    if (param) fields.providerParam = param;
+    const schemaKeyword = allowlistedSchemaKeyword(body.error?.message);
+    if (schemaKeyword) fields.schemaKeyword = schemaKeyword;
+    return fields;
+  } catch {
+    return {};
+  }
+}
+
+function allowlistedSchemaKeyword(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.toLowerCase();
+  const keywords = [
+    "$schema",
+    "format",
+    "pattern",
+    "minLength",
+    "maxLength",
+    "minimum",
+    "maximum",
+    "minItems",
+    "maxItems",
+    "const",
+    "additionalProperties",
+    "required",
+  ];
+  return keywords.find((keyword) => normalized.includes(keyword.toLowerCase()));
+}
+
+function allowlistedProviderIdentifier(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  return /^[a-zA-Z0-9_.\-[\]]{1,100}$/.test(value) ? value : undefined;
 }
 
 function providerStatusCode(error: unknown): number | undefined {

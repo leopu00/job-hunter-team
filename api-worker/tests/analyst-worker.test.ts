@@ -6,19 +6,95 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   AnalystApiWorker,
+  AnalystProviderOutputSchema,
   AnalystProposalSchema,
   MemoryAuditSink,
   type AnalystProviderAdapter,
+  parseAnalystProviderOutput,
+  countryCodeFromScoutLocation,
 } from "../src/index.js";
+import { ANALYST_SYSTEM_PROMPT } from "../src/role/analyst.js";
 import { fixtureAnalystInput, fixtureProfile } from "./helpers.js";
 
 const run = promisify(execFile);
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Analyst API worker", () => {
+  it("forbids dead-link inference without supplied liveness evidence", () => {
+    expect(ANALYST_SYSTEM_PROMPT).toContain("no network or URL-reading tool");
+    expect(ANALYST_SYSTEM_PROMPT).toContain(
+      "DEAD_LINK requires explicit supplied liveness evidence",
+    );
+    expect(ANALYST_SYSTEM_PROMPT).toContain("reserved .invalid domain");
+  });
+
+  it("uses a portable provider schema and restores nullable optionals locally", () => {
+    const transportJsonSchema = JSON.stringify(
+      z.toJSONSchema(AnalystProviderOutputSchema),
+    );
+    for (const unsupported of [
+      '"format"',
+      '"pattern"',
+      '"minLength"',
+      '"maxLength"',
+      '"minItems"',
+      '"maxItems"',
+    ]) {
+      expect(transportJsonSchema).not.toContain(unsupported);
+    }
+    expect(transportJsonSchema).not.toMatch(/"minimum":-?\d/);
+    expect(transportJsonSchema).not.toMatch(/"maximum":-?\d/);
+    const parsed = parseAnalystProviderOutput(
+      {
+        sourceId: "synthetic-job",
+        url: "https://jobs.example.invalid/synthetic",
+        decision: "checked",
+        exclusionTag: null,
+        structuredRequirements: {
+          experienceRequiredYears: null,
+          experienceType: "not_specified",
+          degree: "not_specified",
+          languagesRequired: [],
+          seniority: "not_specified",
+        },
+        mismatchTags: [],
+        teamNote: "Synthetic grounded note.",
+        jdSummary: "Synthetic grounded summary.",
+        roleFamily: "Software Engineering",
+        location: {
+          city: null,
+          country: "Not specified",
+          countryCode: "European Union",
+          workMode: "unspecified",
+        },
+        salaryEstimate: null,
+        company: {
+          name: "Synthetic Company",
+          hqCountry: null,
+          sector: null,
+          reviewRating: null,
+          redFlags: [],
+          cultureNotes: [],
+          verdict: "CAUTIOUS",
+        },
+        highlights: [],
+        disposition: "proposed",
+        persistence: "none",
+      },
+      "EU",
+    );
+    expect(parsed).not.toHaveProperty("exclusionTag");
+    expect(parsed).not.toHaveProperty("salaryEstimate");
+    expect(parsed.company).not.toHaveProperty("hqCountry");
+    expect(parsed.location.countryCode).toBe("EU");
+    expect(countryCodeFromScoutLocation("Remote EU")).toBe("EU");
+    expect(countryCodeFromScoutLocation("Rome, Italy")).toBe("IT");
+  });
+
   it("runs one synthetic proposal through the real worker boundary", async () => {
     const audit = new MemoryAuditSink();
     const outcome = await new AnalystApiWorker(await fixtureProfile(), {
