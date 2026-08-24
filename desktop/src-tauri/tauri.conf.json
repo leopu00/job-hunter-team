@@ -30,6 +30,15 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": {
+      "../../api-worker/.dockerignore": "runtime/api-worker/.dockerignore",
+      "../../api-worker/Dockerfile": "runtime/api-worker/Dockerfile",
+      "../../api-worker/fixtures/": "runtime/api-worker/fixtures/",
+      "../../api-worker/package-lock.json": "runtime/api-worker/package-lock.json",
+      "../../api-worker/package.json": "runtime/api-worker/package.json",
+      "../../api-worker/src/": "runtime/api-worker/src/",
+      "../../api-worker/tsconfig.json": "runtime/api-worker/tsconfig.json"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
