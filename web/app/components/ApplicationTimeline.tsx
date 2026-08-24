@@ -1,4 +1,8 @@
 import type { ApplicationTimeline as Timeline } from "@/lib/application-timeline";
+import {
+  applicationTimelineScale,
+  projectTimelineY,
+} from "@/lib/application-timeline-chart";
 
 type Props = {
   timeline: Timeline;
@@ -12,19 +16,11 @@ type Props = {
 };
 
 const W = 960;
-const H = 230;
+const H = 270;
 const PAD_LEFT = 36;
 const PAD_RIGHT = 14;
 const PAD_TOP = 18;
-const PAD_BOTTOM = 34;
-
-function niceCeiling(value: number): number {
-  if (value <= 1) return 1;
-  const power = 10 ** Math.floor(Math.log10(value));
-  const normalized = value / power;
-  const nice = normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
-  return nice * power;
-}
+const PAD_BOTTOM = 38;
 
 function tickIndexes(length: number): number[] {
   if (length <= 7) return Array.from({ length }, (_, index) => index);
@@ -42,22 +38,25 @@ export default function ApplicationTimeline({
 }: Props) {
   const chartW = W - PAD_LEFT - PAD_RIGHT;
   const chartH = H - PAD_TOP - PAD_BOTTOM;
-  const maxY = niceCeiling(
-    Math.max(...timeline.points.map((point) => point.count)),
-  );
+  const scale = applicationTimelineScale(timeline.points);
   const x = (index: number) =>
     timeline.points.length === 1
       ? PAD_LEFT + chartW / 2
       : PAD_LEFT + (index / (timeline.points.length - 1)) * chartW;
-  const y = (count: number) => PAD_TOP + chartH - (count / maxY) * chartH;
-  const line = timeline.points
-    .map(
-      (point, index) =>
-        `${index === 0 ? "M" : "L"} ${x(index)} ${y(point.count)}`,
-    )
-    .join(" ");
-  const area = `${line} L ${x(timeline.points.length - 1)} ${PAD_TOP + chartH} L ${x(0)} ${PAD_TOP + chartH} Z`;
-  const yTicks = [...new Set([0, Math.ceil(maxY / 2), maxY])];
+  const y = (value: number) => projectTimelineY(value, scale, PAD_TOP, chartH);
+  const zeroY = y(0);
+  const pathFor = (value: (point: Timeline["points"][number]) => number) =>
+    timeline.points
+      .map(
+        (point, index) =>
+          `${index === 0 ? "M" : "L"} ${x(index)} ${y(value(point))}`,
+      )
+      .join(" ");
+  const submittedLine = pathFor((point) => point.submitted);
+  const acceptedLine = pathFor((point) => point.accepted);
+  const rejectedLine = pathFor((point) => -point.rejected);
+  const submittedArea = `${submittedLine} L ${x(timeline.points.length - 1)} ${zeroY} L ${x(0)} ${zeroY} Z`;
+  const rejectedArea = `${rejectedLine} L ${x(timeline.points.length - 1)} ${zeroY} L ${x(0)} ${zeroY} Z`;
   const xTicks = tickIndexes(timeline.points.length);
   const dateFormatter = new Intl.DateTimeFormat(locale, {
     day: "2-digit",
@@ -97,7 +96,7 @@ export default function ApplicationTimeline({
           {labels.range}. {labels.total}.
         </desc>
 
-        {yTicks.map((tick) => (
+        {scale.ticks.map((tick) => (
           <g key={tick}>
             <line
               x1={PAD_LEFT}
@@ -107,7 +106,7 @@ export default function ApplicationTimeline({
               stroke="var(--color-border)"
               strokeWidth={1}
               strokeDasharray={tick === 0 ? undefined : "2 5"}
-              opacity={tick === 0 ? 0.9 : 0.55}
+              opacity={tick === 0 ? 1 : 0.45}
             />
             <text
               x={PAD_LEFT - 9}
@@ -117,7 +116,7 @@ export default function ApplicationTimeline({
               fill="var(--color-dim)"
               style={{ fontFamily: "inherit" }}
             >
-              {tick}
+              {tick > 0 ? `+${tick}` : tick}
             </text>
           </g>
         ))}
@@ -129,13 +128,13 @@ export default function ApplicationTimeline({
               <line
                 x1={x(index)}
                 x2={x(index)}
-                y1={PAD_TOP + chartH}
-                y2={PAD_TOP + chartH + 4}
+                y1={zeroY - 2}
+                y2={zeroY + 2}
                 stroke="var(--color-dim)"
               />
               <text
                 x={x(index)}
-                y={PAD_TOP + chartH + 18}
+                y={PAD_TOP + chartH + 21}
                 textAnchor="middle"
                 fontSize={9}
                 fill="var(--color-dim)"
@@ -148,14 +147,39 @@ export default function ApplicationTimeline({
         })}
 
         {timeline.points.length > 1 && (
-          <path d={area} fill="var(--color-green)" opacity={0.08} />
+          <path d={submittedArea} fill="var(--color-green)" opacity={0.08} />
         )}
         {timeline.points.length > 1 && (
           <path
-            d={line}
+            d={submittedLine}
             fill="none"
             stroke="var(--color-green)"
             strokeWidth={2.25}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+
+        {timeline.points.length > 1 && (
+          <path d={rejectedArea} fill="var(--color-red)" opacity={0.07} />
+        )}
+        {timeline.points.length > 1 && (
+          <path
+            d={acceptedLine}
+            fill="none"
+            stroke="var(--color-blue)"
+            strokeWidth={1.75}
+            strokeDasharray="5 4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+        {timeline.points.length > 1 && (
+          <path
+            d={rejectedLine}
+            fill="none"
+            stroke="var(--color-red)"
+            strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -165,13 +189,53 @@ export default function ApplicationTimeline({
           <circle
             key={point.date}
             cx={x(index)}
-            cy={y(point.count)}
-            r={point.count > 0 ? 4 : 2.25}
-            fill={point.count > 0 ? "var(--color-green)" : "var(--color-card)"}
+            cy={y(point.submitted)}
+            r={point.submitted > 0 ? 4 : 2.25}
+            fill={
+              point.submitted > 0 ? "var(--color-green)" : "var(--color-card)"
+            }
             stroke="var(--color-green)"
-            strokeWidth={point.count > 0 ? 1.5 : 1}
+            strokeWidth={point.submitted > 0 ? 1.5 : 1}
           >
-            <title>{`${formatDate(point.date)}: ${point.count}`}</title>
+            <title>{`${formatDate(point.date)}: ${point.submitted}`}</title>
+          </circle>
+        ))}
+
+        {timeline.points.map((point, index) => {
+          const centerX = x(index);
+          const centerY = y(point.accepted);
+          const radius = point.accepted > 0 ? 4.5 : 2;
+          return (
+            <rect
+              key={`accepted-${point.date}`}
+              x={centerX - radius}
+              y={centerY - radius}
+              width={radius * 2}
+              height={radius * 2}
+              rx={1}
+              fill={
+                point.accepted > 0 ? "var(--color-blue)" : "var(--color-card)"
+              }
+              stroke="var(--color-blue)"
+              strokeWidth={point.accepted > 0 ? 1.5 : 1}
+              transform={`rotate(45 ${centerX} ${centerY})`}
+            >
+              <title>{`${formatDate(point.date)}: ${point.accepted}`}</title>
+            </rect>
+          );
+        })}
+
+        {timeline.points.map((point, index) => (
+          <circle
+            key={`rejected-${point.date}`}
+            cx={x(index)}
+            cy={y(-point.rejected)}
+            r={point.rejected > 0 ? 4 : 2}
+            fill={point.rejected > 0 ? "var(--color-red)" : "var(--color-card)"}
+            stroke="var(--color-red)"
+            strokeWidth={point.rejected > 0 ? 1.5 : 1}
+          >
+            <title>{`${formatDate(point.date)}: -${point.rejected}`}</title>
           </circle>
         ))}
       </svg>
@@ -180,7 +244,7 @@ export default function ApplicationTimeline({
         {timeline.points.map((point) => (
           <li
             key={point.date}
-          >{`${formatDate(point.date)}: ${point.count}`}</li>
+          >{`${formatDate(point.date)}: ${point.submitted}`}</li>
         ))}
       </ol>
     </section>
