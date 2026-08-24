@@ -148,6 +148,27 @@ npm run team -- \
   --max-agent-cost-usd 0.02
 ```
 
+### Podman one-shot image
+
+The desktop app uses the dedicated [`Dockerfile`](./Dockerfile) instead
+of adding this experimental runtime to the production TUI image. The image has
+one entry point (`team-cli`), runs as the unprivileged `node` user and contains
+neither tests nor TypeScript build tooling in its final stage.
+
+For a manual offline smoke test:
+
+```bash
+podman build -t localhost/jht-api-team:dev -f Dockerfile .
+podman run --rm \
+  --volume ./tmp-team:/workspace \
+  localhost/jht-api-team:dev \
+  --workspace /workspace
+```
+
+Live desktop runs inject `OPENAI_API_KEY` through a temporary Podman secret,
+never through a command-line argument or an image layer. The secret is removed
+after the one-shot container exits.
+
 ### Full-team OpenAI E2E — 2026-08-24
 
 Run `4a4b4735-2039-4f99-b0cd-b7e70d322db4` completed live with

@@ -25,6 +25,22 @@ describe("API team CLI", () => {
     };
 
     expect(stderr).not.toContain("TEAM_CLI_FAILED");
+    const progress = stderr
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("JHT_TEAM_PROGRESS:"))
+      .map(
+        (line) =>
+          JSON.parse(line.slice("JHT_TEAM_PROGRESS:".length)) as {
+            role: string;
+            status: string;
+          },
+      );
+    expect(progress).toContainEqual(
+      expect.objectContaining({ role: "captain", status: "working" }),
+    );
+    expect(progress).toContainEqual(
+      expect.objectContaining({ role: "sentinel", status: "completed" }),
+    );
     expect(result).toMatchObject({
       ok: true,
       summary: { scored: 5, reviewed: 2 },

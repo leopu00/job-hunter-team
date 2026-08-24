@@ -1,0 +1,150 @@
+{
+  "name": "jht-desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Desktop launcher for Job Hunter Team",
+  "author": {
+    "name": "Leone Emanuel Puglisi",
+    "email": "support@jobhunterteam.ai"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leopu00/job-hunter-team.git"
+  },
+  "homepage": "https://jobhunterteam.ai",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron . --enable-logging",
+    "test": "node --test runtime.test.js container.test.js dependencies.test.js deps.test.js payload.test.js disk-space.test.js container-prep.test.js provider-install.test.js provider-store.test.js provider-auth.test.js docker-installer/manifest.test.js docker-installer/check.test.js docker-installer/download-url.test.js docker-installer/install.test.js win-installer/install.test.js",
+    "dist": "electron-builder --publish never",
+    "dist:mac": "npm run dist -- --mac dmg",
+    "predist:mac": "node scripts/ensure-mac-natives.js",
+    "predist:win": "node scripts/ensure-win-natives.js",
+    "dist:win": "npm run dist -- --win nsis --x64 --arm64",
+    "dist:linux": "npm run dist -- --linux AppImage deb"
+  },
+  "dependencies": {
+    "@lydell/node-pty": "^1.2.0-beta.12",
+    "@napi-rs/keyring": "^1.3.0",
+    "@supabase/supabase-js": "^2.105.4",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/xterm": "^5.5.0",
+    "imapflow": "^1.4.2",
+    "nodemailer": "^9.0.1"
+  },
+  "optionalDependencies": {
+    "@lydell/node-pty-win32-arm64": "^1.2.0-beta.12",
+    "@lydell/node-pty-win32-x64": "^1.2.0-beta.12"
+  },
+  "devDependencies": {
+    "electron": "^41.3.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "ai.jobhunterteam.desktop",
+    "productName": "JHT Desktop",
+    "npmRebuild": false,
+    "afterSign": "./build/after-sign.js",
+    "electronLanguages": [
+      "en",
+      "it",
+      "es",
+      "de",
+      "fr",
+      "pt",
+      "hu"
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "logger.js",
+      "runtime.js",
+      "container.js",
+      "container-prep.js",
+      "dependencies.js",
+      "deps.js",
+      "payload.js",
+      "disk-space.js",
+      "email-verify.js",
+      "provider-install.js",
+      "provider-store.js",
+      "provider-auth.js",
+      "terminal.js",
+      "auth/**/*.js",
+      "sync/**/*.js",
+      "vps/**/*.js",
+      "telegram/**/*.js",
+      "docker-installer/**/*.js",
+      "win-installer/**/*.js",
+      "!**/*.test.js",
+      "!**/*.map",
+      "node_modules/@xterm/xterm/lib/**/*",
+      "node_modules/@xterm/xterm/css/**/*",
+      "node_modules/@xterm/addon-fit/lib/**/*",
+      "node_modules/@xterm/addon-web-links/lib/**/*",
+      "node_modules/@lydell/node-pty/**/*",
+      "node_modules/@lydell/node-pty-win32-x64/**/*",
+      "node_modules/@lydell/node-pty-win32-arm64/**/*",
+      "node_modules/@lydell/node-pty-darwin-x64/**/*",
+      "node_modules/@lydell/node-pty-darwin-arm64/**/*",
+      "node_modules/@lydell/node-pty-linux-x64/**/*",
+      "node_modules/@lydell/node-pty-linux-arm64/**/*",
+      "node_modules/@supabase/**/*",
+      "node_modules/@napi-rs/keyring/**/*",
+      "node_modules/@napi-rs/keyring-darwin-arm64/**/*",
+      "node_modules/@napi-rs/keyring-darwin-x64/**/*",
+      "node_modules/@napi-rs/keyring-win32-x64-msvc/**/*",
+      "node_modules/@napi-rs/keyring-win32-arm64-msvc/**/*",
+      "node_modules/@napi-rs/keyring-linux-x64-gnu/**/*",
+      "node_modules/@napi-rs/keyring-linux-arm64-gnu/**/*",
+      "renderer/**/*"
+    ],
+    "directories": {
+      "buildResources": "assets",
+      "output": "dist"
+    },
+    "mac": {
+      "artifactName": "job-hunter-team-${version}-mac.${ext}",
+      "icon": "assets/icon.icns",
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true
+    },
+    "win": {
+      "artifactName": "job-hunter-team-${version}-windows-${arch}.${ext}",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always"
+    },
+    "linux": {
+      "artifactName": "job-hunter-team-${version}-linux.${ext}",
+      "icon": "assets/icon.png",
+      "maintainer": "Leone Emanuel Puglisi <support@jobhunterteam.ai>",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    }
+  }
+}

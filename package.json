@@ -25,7 +25,11 @@
     "recording-profile": "npm --prefix web run recording-profile --",
     "app:test": "./game/tools/run.sh test",
     "app:dev": "./game/tools/run.sh play",
-    "app:dist": "./scripts/build-release.sh auto"
+    "app:dist": "./scripts/build-release.sh auto",
+    "desktop:dev": "npm --prefix desktop run tauri:dev",
+    "desktop:test": "npm --prefix desktop test",
+    "desktop:build": "npm --prefix desktop run build",
+    "desktop:dist": "npm --prefix desktop run tauri:build"
   },
   "keywords": [],
   "author": "Leone Emanuel Puglisi <support@jobhunterteam.ai>",

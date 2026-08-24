@@ -5,10 +5,17 @@ user-facing to the most internal.
 
 ---
 
-## 🎮 [`game/docs/`](../game/docs/) — the native desktop application
-The Godot office is the only desktop client, and its docs stay colocated with the
-code in [`game/docs/`](../game/docs/) — this index points at them, it does not host them.
-Three entry points:
+## 🖥️ Desktop applications
+
+The supported Godot office remains in [`game/`](../game/) while the new Tauri 2
+and React shell is developed incrementally in [`desktop/`](../desktop/). The
+migration plan is
+[`2026-08-24-desktop-tauri-migration.md`](internal/roadmap/2026-08-24-desktop-tauri-migration.md)
+and the setup matrix is
+[`2026-08-24-desktop-setup-modes.md`](internal/architecture/2026-08-24-desktop-setup-modes.md).
+
+Godot product docs stay colocated in [`game/docs/`](../game/docs/). Three entry
+points:
 - 🏛️ [`GDD.md`](../game/docs/GDD.md) — current product design: what the office is, the rooms, what each agent does on screen
 - 👋 [`FIRST-RUN.md`](../game/docs/FIRST-RUN.md) — first-run contract: the token-free showroom conversation, and where the provider boundary sits
 - 🔌 [`DATA-ADAPTER.md`](../game/docs/DATA-ADAPTER.md) — the contract between the game and the team's data (`TeamData` autoload, no Supabase in the scenes)

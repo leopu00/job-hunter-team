@@ -52,6 +52,22 @@ export type ApiTeamRunnerOptions = {
   targetScores?: number;
   targetReviews?: number;
   now?: () => Date;
+  onProgress?: (progress: ApiTeamProgress) => void;
+};
+
+export type ApiTeamProgress = {
+  role:
+    | "captain"
+    | "scout"
+    | "analyst"
+    | "scorer"
+    | "writer"
+    | "critic"
+    | "sentinel";
+  agentId: string;
+  status: "working" | "completed";
+  sourceId?: string;
+  positionTitle?: string;
 };
 
 export type ApiTeamRunResult = {
@@ -192,6 +208,11 @@ export class ApiTeamRunner {
     runId: string,
     agentDirectory: string,
   ): Promise<CaptainProposal> {
+    this.reportProgress({
+      role: "captain",
+      agentId: "captain-1",
+      status: "working",
+    });
     const reservation = db.reserveAgentRun(
       runId,
       "captain",
@@ -234,6 +255,11 @@ export class ApiTeamRunner {
       const outcome = await worker.run(input);
       if (!outcome.ok) throw new TeamAgentError("captain", outcome.error.code);
       db.completeAgentRun(reservation, accounting(outcome.result));
+      this.reportProgress({
+        role: "captain",
+        agentId: "captain-1",
+        status: "completed",
+      });
       return outcome.result.proposal;
     } catch (error) {
       db.releaseAgentRun(reservation, safeErrorCode(error));
@@ -246,6 +272,11 @@ export class ApiTeamRunner {
     runId: string,
     agentDirectory: string,
   ): Promise<void> {
+    this.reportProgress({
+      role: "scout",
+      agentId: "scout-1",
+      status: "working",
+    });
     const reservation = db.reserveAgentRun(
       runId,
       "scout",
@@ -277,6 +308,11 @@ export class ApiTeamRunner {
         throw new TeamAgentError("scout", "TARGET_COUNT_NOT_MET");
       }
       db.ingestScoutProposals(runId, "scout-1", outcome.result.proposals);
+      this.reportProgress({
+        role: "scout",
+        agentId: "scout-1",
+        status: "completed",
+      });
     } catch (error) {
       if (db.summary(runId).reservedUsd > 0) {
         try {
@@ -500,6 +536,11 @@ export class ApiTeamRunner {
     runId: string,
     agentDirectory: string,
   ): Promise<SentinelProposal> {
+    this.reportProgress({
+      role: "sentinel",
+      agentId: "sentinel-1",
+      status: "working",
+    });
     const reservation = db.reserveAgentRun(
       runId,
       "sentinel",
@@ -531,6 +572,11 @@ export class ApiTeamRunner {
       const outcome = await worker.run(input);
       if (!outcome.ok) throw new TeamAgentError("sentinel", outcome.error.code);
       db.completeAgentRun(reservation, accounting(outcome.result));
+      this.reportProgress({
+        role: "sentinel",
+        agentId: "sentinel-1",
+        status: "completed",
+      });
       return outcome.result.proposal;
     } catch (error) {
       db.releaseAgentRun(reservation, safeErrorCode(error));
@@ -551,8 +597,23 @@ export class ApiTeamRunner {
         while (!stopped) {
           const claim = db.claimNext(runId, role, agentId, this.reservationUsd);
           if (!claim) return;
+          const positionTitle = db.position(runId, claim.sourceId).scout.title;
+          this.reportProgress({
+            role,
+            agentId,
+            status: "working",
+            sourceId: claim.sourceId,
+            positionTitle,
+          });
           try {
             await execute(claim);
+            this.reportProgress({
+              role,
+              agentId,
+              status: "completed",
+              sourceId: claim.sourceId,
+              positionTitle,
+            });
           } catch (error) {
             stopped = true;
             db.releaseClaim(claim, safeErrorCode(error));
@@ -652,6 +713,14 @@ export class ApiTeamRunner {
       timeoutMs: 180_000,
       maxCostUsd: this.reservationUsd,
     };
+  }
+
+  private reportProgress(progress: ApiTeamProgress): void {
+    try {
+      this.options.onProgress?.(progress);
+    } catch {
+      // UI telemetry must never interrupt the isolated team run.
+    }
   }
 
   private async agentRuntime(

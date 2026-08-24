@@ -1,7 +1,12 @@
 # 0004 — Subscription-only: no pay-per-use API keys
 
-**Status:** Accepted
+**Status:** Superseded by [0012](./0012-desktop-setup-matrix.md)
 **Date:** 2026-04-17
+
+> Superseded on 2026-08-24. Provider subscriptions remain supported through
+> TUI agents in `tmux`, but API-backed headless agents and a managed-credit mode
+> are now explicit product paths. The cost warning below remains useful context,
+> not the current product boundary.
 
 ## Context
 

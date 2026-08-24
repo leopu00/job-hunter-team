@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { importCandidateProfile2026 } from "./candidate-profile-import.js";
 import { ApiTeamRunner } from "./team-runner.js";
+import type { ApiTeamProgress } from "./team-runner.js";
 import { SyntheticJobSource } from "./tools.js";
 
 type CliOptions = {
@@ -22,6 +23,7 @@ type CliOptions = {
 };
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+export const TEAM_PROGRESS_PREFIX = "JHT_TEAM_PROGRESS:";
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
@@ -56,6 +58,7 @@ async function main(): Promise<void> {
     targetScores: options.targetScores,
     targetReviews: options.targetReviews,
     now,
+    onProgress: emitProgress,
   }).run();
   process.stdout.write(
     `${JSON.stringify(
@@ -85,6 +88,10 @@ async function main(): Promise<void> {
       2,
     )}\n`,
   );
+}
+
+function emitProgress(progress: ApiTeamProgress): void {
+  process.stderr.write(`${TEAM_PROGRESS_PREFIX}${JSON.stringify(progress)}\n`);
 }
 
 function parseArgs(args: string[]): CliOptions {
