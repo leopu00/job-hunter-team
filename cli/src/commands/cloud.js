@@ -3374,10 +3374,22 @@ export async function handleChatSync(options = {}) {
     // del rendezvous "Sync now"): zero letture Supabase in più.
     const state = options.state || null;
     const pending = chat.chatPending(state?.chat_requested_at, state?.chat_delivered_at);
-    if (pending && channel) {
+    // Stato condiviso fra i tick dello stesso daemon. Dopo aver importato un
+    // rendezvous una volta, rileggerlo ogni 5s mentre il team e' fermo non
+    // puo' creare progresso: la riga e' gia' nella coda SQLite. Una richiesta
+    // nuova o un retry arrivato a scadenza riaprono invece il pull.
+    const cycleState = options.cycleState || null;
+    const requestAt = state?.chat_requested_at ?? null;
+    const retryBefore = chat.deliveryRetryStatus(db);
+    const deliveryAllowed = state?.is_running !== false;
+    const alreadyPulled = !!cycleState && cycleState.lastPulledRequestedAt === requestAt;
+    const retryDue = deliveryAllowed && retryBefore.queued > 0 && retryBefore.due > 0;
+    const shouldPull = pending && channel && (!alreadyPulled || retryDue);
+    if (shouldPull) {
       try {
         cloudRows = await channel.readUndeliveredUserChat({ limit: chat.CLOUD_CHAT_PULL_LIMIT });
         importedIds = chat.importCloudUserTurns(db, cloudRows, { jhtHome });
+        if (cycleState) cycleState.lastPulledRequestedAt = requestAt;
       } catch (err) {
         readError = chat.cloudRequestFailure(err);
         log('warn', `chat-sync: failed to read user turns (${readError})`);
@@ -3394,7 +3406,9 @@ export async function handleChatSync(options = {}) {
     const mirrored = chat.mirrorDbTurnsToJsonl(db, { jhtHome });
 
     // ── 4. Consegna al pane ────────────────────────────────────────────
-    const sent = await chat.deliverPendingUserTurns(db, { log, sendFn: options.sendFn });
+    const sent = deliveryAllowed
+      ? await chat.deliverPendingUserTurns(db, { log, sendFn: options.sendFn })
+      : { delivered: 0, failed: 0 };
 
     // ── 5. Push dei turni nuovi verso il cloud ─────────────────────────
     const toPush = chat.takeChatRowsToPush(db, { limit: 100 });

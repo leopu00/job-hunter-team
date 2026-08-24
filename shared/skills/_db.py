@@ -339,6 +339,19 @@ def ensure_schema(conn: sqlite3.Connection):
             ON DELETE CASCADE
     );
 
+    -- Retry locale della consegna al pane. La riga messaggio resta la coda
+    -- durevole; questa tabella conserva soltanto il pacing dopo un pane
+    -- fermo/occupato, cosi' un restart non azzera il backoff.
+    CREATE TABLE IF NOT EXISTS pending_user_message_delivery_retries (
+        message_id INTEGER PRIMARY KEY,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at_ms INTEGER NOT NULL,
+        last_code INTEGER,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (message_id) REFERENCES pending_user_messages(id)
+            ON DELETE CASCADE
+    );
+
     -- Ticket utente→team su una posizione (2026-06-18). L'utente, dalla pagina
     -- posizione, scrive una richiesta testuale libera → ticket 'open'. Il
     -- Capitano lo assegna a un agente (status 'assigned', assigned_agent) come
@@ -1781,6 +1794,17 @@ def _migrate_pending_messages_chat_turns(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE pending_user_messages ADD COLUMN cloud_legacy_id INTEGER"
         )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS pending_user_message_delivery_retries (
+            message_id INTEGER PRIMARY KEY,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            next_attempt_at_ms INTEGER NOT NULL,
+            last_code INTEGER,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (message_id) REFERENCES pending_user_messages(id)
+                ON DELETE CASCADE
+        )"""
+    )
     # Il mirror cerca "i turni che non sono ancora in chat.jsonl": indice
     # parziale, a regime quasi vuoto.
     conn.execute(

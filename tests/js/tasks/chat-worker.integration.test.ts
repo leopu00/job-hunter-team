@@ -141,6 +141,62 @@ describe("handleChatSync — worker completo", () => {
     expect({ reads, sends, acks }).toEqual({ reads: 2, sends: 1, acks: 2 });
   });
 
+  it("accoda a team fermo, non ripolla lo stesso wake e consegna allo start", async () => {
+    let reads = 0;
+    let sends = 0;
+    let acks = 0;
+    const row = {
+      id: "00000000-0000-4000-8000-000000000077",
+      legacy_id: -1785837600000,
+      agent: "capitano",
+      body: "resta in coda",
+      created_at: "2026-08-04T10:00:00Z",
+    };
+    const channel = {
+      async readUndeliveredUserChat() {
+        reads += 1;
+        return [row];
+      },
+      async acknowledgeDelivery() {
+        acks += 1;
+        return { closed: true, superseded: false };
+      },
+    };
+    const cycleState = { lastPulledRequestedAt: null as string | null };
+    const run = (requestedAt: string, isRunning: boolean) => handleChatSync({
+      silent: true,
+      config: CONFIG,
+      dbPath,
+      jhtHome: home,
+      reader: null,
+      channel,
+      cycleState,
+      state: {
+        chat_requested_at: requestedAt,
+        chat_delivered_at: null,
+        is_running: isRunning,
+      },
+      sendFn: async () => {
+        sends += 1;
+        return { ok: true, code: 0, error: "" };
+      },
+    });
+
+    await run("2026-08-04T10:00:00Z", false);
+    await run("2026-08-04T10:00:00Z", false);
+    expect({ reads, sends, acks }).toEqual({ reads: 1, sends: 0, acks: 0 });
+
+    // Un secondo messaggio suona un wake nuovo: viene importato/deduplicato,
+    // ma il team fermo continua a non generare tentativi.
+    await run("2026-08-04T10:01:00Z", false);
+    expect({ reads, sends, acks }).toEqual({ reads: 2, sends: 0, acks: 0 });
+
+    // L'UPDATE is_running via Realtime sveglia subito la stessa coda.
+    const started = await run("2026-08-04T10:01:00Z", true);
+    expect(started).toMatchObject({ delivered: 1, acked: true });
+    expect({ reads, sends, acks }).toEqual({ reads: 3, sends: 1, acks: 1 });
+  });
+
   it("limita nel tempo la pubblicazione observed su direct e fallback HTTP", async () => {
     let directSignal: AbortSignal | undefined;
     let httpSignal: AbortSignal | undefined;
