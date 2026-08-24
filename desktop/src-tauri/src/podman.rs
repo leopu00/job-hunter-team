@@ -10,6 +10,7 @@ use std::{
 const VERSION_TIMEOUT: Duration = Duration::from_secs(4);
 const INFO_TIMEOUT: Duration = Duration::from_secs(8);
 const MAX_CAPTURE_BYTES: usize = 1024 * 1024;
+const MAX_STDERR_LINE_BYTES: usize = 16 * 1024;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -145,8 +146,49 @@ fn command_inner(
 }
 
 fn read_stderr_lines(output: impl Read, callback: StderrLineCallback) {
-    for line in BufReader::new(output).lines().map_while(Result::ok) {
-        callback(&line);
+    let mut reader = BufReader::new(output);
+    let mut line = Vec::with_capacity(1024);
+    let mut overflowed = false;
+
+    loop {
+        let available = match reader.fill_buf() {
+            Ok([]) | Err(_) => {
+                if !line.is_empty() && !overflowed {
+                    if let Ok(text) = std::str::from_utf8(&line) {
+                        callback(text);
+                    }
+                }
+                break;
+            }
+            Ok(available) => available,
+        };
+        let newline = available.iter().position(|byte| *byte == b'\n');
+        let consumed = newline.map_or(available.len(), |index| index + 1);
+        let content_end = newline.unwrap_or(available.len());
+        let content = &available[..content_end];
+
+        if !overflowed {
+            if line.len().saturating_add(content.len()) > MAX_STDERR_LINE_BYTES {
+                line.clear();
+                overflowed = true;
+            } else {
+                line.extend_from_slice(content);
+            }
+        }
+        reader.consume(consumed);
+
+        if newline.is_some() {
+            if !overflowed {
+                if line.last() == Some(&b'\r') {
+                    line.pop();
+                }
+                if let Ok(text) = std::str::from_utf8(&line) {
+                    callback(text);
+                }
+            }
+            line.clear();
+            overflowed = false;
+        }
     }
 }
 
@@ -251,7 +293,11 @@ pub(crate) async fn check_podman() -> PodmanStatus {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalized_version, read_bounded_output, MAX_CAPTURE_BYTES};
+    use super::{
+        normalized_version, read_bounded_output, read_stderr_lines, MAX_CAPTURE_BYTES,
+        MAX_STDERR_LINE_BYTES,
+    };
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn normalizes_podman_version_output() {
@@ -273,5 +319,19 @@ mod tests {
             read_bounded_output(oversized.as_slice()).len(),
             MAX_CAPTURE_BYTES
         );
+    }
+
+    #[test]
+    fn drops_oversized_stderr_lines_and_keeps_following_events() {
+        let input = format!("{}\nvalid\r\n", "x".repeat(MAX_STDERR_LINE_BYTES + 1));
+        let lines = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&lines);
+
+        read_stderr_lines(
+            input.as_bytes(),
+            Box::new(move |line| captured.lock().expect("line lock").push(line.to_owned())),
+        );
+
+        assert_eq!(*lines.lock().expect("line lock"), vec!["valid"]);
     }
 }
