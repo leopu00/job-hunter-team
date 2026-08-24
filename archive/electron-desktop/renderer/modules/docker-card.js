@@ -697,4 +697,3 @@ export async function onOpenDockerDesktopAndPoll() {
     } catch (_) { /* keep polling */ }
   }, 3000)
 }
-

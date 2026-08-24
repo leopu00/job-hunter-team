@@ -358,4 +358,3 @@ test('inspectInstalledProviders reports nothing when the bin dir is missing', ()
   assert.deepEqual(installed, [])
   fs.rmSync(home, { recursive: true, force: true })
 })
-

@@ -602,4 +602,3 @@ dom.btnTerminalCopyUrl.addEventListener('click', () => {
   const url = freshUrlFromBuffer()
   if (url) window.clipboardApi.write(url).catch(() => {})
 })
-
