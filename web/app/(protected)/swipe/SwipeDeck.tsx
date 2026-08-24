@@ -41,9 +41,7 @@ import {
 //
 // Scritture — corsie ESISTENTI, nessuna route nuova:
 //   giudizio positivo   → POST /api/positions/[legacyId]/feedback
-//   giudizio negativo   → prima il MOTIVO, poi feedback OPPURE user-exclude
-// Ottimistico: la carta vola subito, le POST viaggiano dietro; su errore
-// toast non bloccante.
+//   esclusione          → prima il MOTIVO, poi user-exclude e feedback gusto
 //
 // O-77 — il «non interessante» NON è più ottimistico, ed è voluto: era
 // l'unico gesto che scriveva `less_like_this` senza sapere perché, e lo
@@ -55,10 +53,8 @@ import {
 // abbandona non resta niente, né riga né timbro (il timbro prometterebbe un
 // giudizio che nel database non c'è).
 //
-// Il confine di O-76 resta, riformulato: un GIUDIZIO non toglie di mezzo la
-// posizione. Ci arriva solo un MOTIVO fattuale (scaduta, già gestita) — e
-// quella strada non emette nessun segnale di gusto. A decidere quale delle
-// due è `negativeSignalFor`, la stessa funzione pura della pagina dettaglio.
+// Il contratto corrente è esplicito: il controllo rosso esclude sempre la
+// posizione; solo i motivi di gusto emettono anche `less_like_this`.
 
 export type SwipeCardData = {
   id: string;
@@ -826,12 +822,9 @@ export default function SwipeDeck({
     closeWhy(true);
   }, [whyBusy, closeWhy]);
 
-  // Conferma del motivo. Due strade, ed è il punto del ticket:
-  //  · motivo FATTUALE (scaduta, già gestita) → la posizione esce dal giro
-  //    con la route dell'esclusione manuale e NESSUN `less_like_this` parte;
-  //  · motivo di GUSTO → giudizio negativo, ma col motivo attaccato.
-  // La regola sta in `negativeSignalFor`, pura e testata a parte: qui resta
-  // solo l'esecuzione.
+  // Conferma del motivo. L'effetto primario è sempre l'esclusione canonica;
+  // per i motivi di gusto il feedback viene registrato dopo, senza poter
+  // trasformare un errore di esclusione in un timbro ottimistico.
   const confirmWhy = useCallback(async () => {
     if (!pendingNo || whyBusy) return;
     const card = pendingNo.card;
@@ -847,44 +840,46 @@ export default function SwipeDeck({
     }
     setWhyError(null);
     setWhyBusy(true);
-    if (signal.kind === "exclude") {
-      try {
-        const res = await fetch(
-          `/api/positions/${card.legacy_id}/user-exclude`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              reason: signal.reason,
-              ...(signal.note ? { note: signal.note } : {}),
-            }),
-          },
+    try {
+      const res = await fetch(`/api/positions/${card.legacy_id}/user-exclude`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: signal.reason,
+          ...(signal.note ? { note: signal.note } : {}),
+        }),
+      });
+      const saved = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        status?: string | null;
+        outcome?: { status?: string | null };
+      };
+      if (!res.ok || (saved.status ?? saved.outcome?.status) !== "excluded") {
+        // Il dettaglio del server va in console, non in faccia a chi cerca
+        // lavoro: `query_failed` non gli dice cosa fare (W02).
+        console.error(
+          `[swipe] user-exclude ${res.status} ${saved.error ?? ""}`,
         );
-        if (!res.ok) {
-          // Il dettaglio del server va in console, non in faccia a chi cerca
-          // lavoro: `query_failed` non gli dice cosa fare (W02).
-          const b = (await res.json().catch(() => ({}))) as { error?: string };
-          console.error(`[swipe] user-exclude ${res.status} ${b?.error ?? ""}`);
-          setWhyError(t.whySaveError);
-          setWhyBusy(false);
-          return;
-        }
-      } catch {
         setWhyError(t.whySaveError);
         setWhyBusy(false);
         return;
       }
-      setExcluded((e) => ({ ...e, [card.id]: true }));
-      closeWhy(false);
-      return;
-    }
-    const ok = await persist(card, "no", signal.comment ?? "", signal.reason);
-    if (!ok) {
+    } catch {
       setWhyError(t.whySaveError);
       setWhyBusy(false);
       return;
     }
-    setGiven((g) => ({ ...g, [card.id]: "no" }));
+    setExcluded((e) => ({ ...e, [card.id]: true }));
+    if (signal.feedback) {
+      void persist(
+        card,
+        "no",
+        signal.feedback.comment ?? "",
+        signal.feedback.reason,
+      ).then((ok) => {
+        if (ok) setGiven((g) => ({ ...g, [card.id]: "no" }));
+      });
+    }
     closeWhy(false);
   }, [
     pendingNo,

@@ -27,12 +27,12 @@ import {
 
 // Giudizio a 4 livelli dalla pagina posizione — stessa semantica della
 // pagina /swipe (event-log position_feedback, l'ultimo evento prevale):
-//   no         → dislike/1/less_like_this (solo apprendimento futuro)
+//   no         → esclusione canonica + dislike/1/less_like_this se è gusto
 //   review_low → like/2 (keep con entusiasmo basso, NIENTE esclusione)
 //   review_ok  → like/4/more_like_this
 //   top        → star/5/more_like_this
-// L'esclusione esplicita resta nell'azione ExcludeButton separata: i giudizi
-// non mutano status/user_excluded_note della posizione che li riceve (O-76).
+// Il verdetto negativo è un comando esplicito di esclusione. Gli altri tre
+// restano feedback e non mutano lo stato della posizione.
 import {
   VERDICT_ORDER,
   VERDICT_SIGNAL,
@@ -408,11 +408,26 @@ export function FeedbackButtons({
   const [note, setNote] = useState("");
   const factual = isFactualReason(reason);
 
-  // `why` accompagna il giudizio negativo: `reason` è il codice del
-  // vocabolario condiviso (lo stesso di `user_excluded_reason`), `comment` il
-  // testo che l'utente ha scritto. Il Mentor raggruppa proprio quel testo
-  // (pattern F), lo Scout legge la direction: senza motivo il segnale dice
-  // «meno cose così» e basta, e non c'è modo di sapere di cosa parlasse.
+  const postFeedback = (
+    v: Verdict,
+    why?: { reason?: string; comment?: string },
+  ) => {
+    const cfg = VERDICTS[v];
+    return fetch(`/api/positions/${legacyId}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: cfg.action,
+        score: cfg.score,
+        ...(cfg.direction ? { direction: cfg.direction } : {}),
+        ...(why?.reason ? { reason: why.reason } : {}),
+        ...(why?.comment ? { comment: why.comment } : {}),
+      }),
+    });
+  };
+
+  // I tre giudizi non negativi sono feedback puri. Il negativo usa questa
+  // stessa scrittura solo come effetto secondario, dopo l'esclusione.
   const give = async (
     v: Verdict,
     why?: { reason?: string; comment?: string },
@@ -422,19 +437,8 @@ export function FeedbackButtons({
     setError(null);
     setBusy(true);
     setVerdict(v);
-    const cfg = VERDICTS[v];
     try {
-      const res = await fetch(`/api/positions/${legacyId}/feedback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: cfg.action,
-          score: cfg.score,
-          ...(cfg.direction ? { direction: cfg.direction } : {}),
-          ...(why?.reason ? { reason: why.reason } : {}),
-          ...(why?.comment ? { comment: why.comment } : {}),
-        }),
-      });
+      const res = await postFeedback(v, why);
       if (!res.ok) throw new Error(String(res.status));
       startTransition(() => router.refresh());
       setBusy(false);
@@ -481,16 +485,9 @@ export function FeedbackButtons({
     setBusy(false);
   };
 
-  // Conferma del pannello «perché». Due strade, e la differenza è il punto
-  // del ticket:
-  //  · motivo FATTUALE (scaduta, già gestita) → non è un gusto. La posizione
-  //    esce dal giro con la stessa route dell'esclusione manuale, e NESSUN
-  //    `less_like_this` parte: `agents/scout/scout.md` deprioritizza azienda,
-  //    famiglia di ruolo e località quando lo vede, e su una posizione ottima
-  //    ma scaduta sarebbe la lezione sbagliata;
-  //  · motivo di GUSTO → giudizio negativo come prima, ma con il motivo
-  //    attaccato, così quello che arriva allo scoring dice anche di cosa
-  //    parlava.
+  // Conferma del pannello «perché». Ogni motivo esclude la posizione; quelli
+  // di gusto aggiungono il feedback solo DOPO il successo dell'esclusione,
+  // così un errore non può lasciare a schermo un falso stato «Esclusa».
   const confirmWhy = async () => {
     if (busy) return;
     // La regola sta in `negativeSignalFor`, che è pura e testata: qui resta
@@ -502,41 +499,43 @@ export function FeedbackButtons({
       );
       return;
     }
-    if (signal.kind === "exclude") {
-      setError(null);
-      setBusy(true);
-      try {
-        const res = await fetch(`/api/positions/${legacyId}/user-exclude`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reason: signal.reason,
-            ...(signal.note ? { note: signal.note } : {}),
-          }),
-        });
-        if (!res.ok) {
-          const b = (await res.json().catch(() => ({}))) as { error?: string };
-          setError(b?.error ?? `HTTP ${res.status}`);
-          setBusy(false);
-          return;
-        }
-        closeWhy();
-        startTransition(() => router.refresh());
-      } catch (e) {
-        setError(
-          e instanceof Error
-            ? `${t.networkError} (${e.message})`
-            : t.networkError,
-        );
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/positions/${legacyId}/user-exclude`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: signal.reason,
+          ...(signal.note ? { note: signal.note } : {}),
+        }),
+      });
+      const saved = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        status?: string | null;
+        outcome?: { status?: string | null };
+      };
+      if (!res.ok || (saved.status ?? saved.outcome?.status) !== "excluded") {
+        setError(saved.error ?? `HTTP ${res.status}`);
+        setBusy(false);
+        return;
       }
-      setBusy(false);
-      return;
+      if (signal.feedback) {
+        const feedback = await postFeedback("no", signal.feedback).catch(
+          () => null,
+        );
+        if (feedback?.ok) setVerdict("no");
+      }
+      closeWhy();
+      startTransition(() => router.refresh());
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? `${t.networkError} (${e.message})`
+          : t.networkError,
+      );
     }
-    const ok = await give("no", {
-      reason: signal.reason,
-      comment: signal.comment,
-    });
-    if (ok) closeWhy();
+    setBusy(false);
   };
 
   const closeWhy = () => {

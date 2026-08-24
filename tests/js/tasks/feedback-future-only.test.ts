@@ -22,8 +22,8 @@ const FEEDBACK_SURFACES = [
   "web/app/(protected)/swipe/SwipeDeck.tsx",
 ];
 
-describe("O-76 feedback future-only boundary", () => {
-  it("maps every verdict to feedback only, including dislike", () => {
+describe("exclusion and feedback boundary", () => {
+  it("keeps the preference signal explicit for the exclusion action", () => {
     expect(VERDICT_SIGNAL.no).toEqual({
       action: "dislike",
       score: 1,
@@ -34,32 +34,8 @@ describe("O-76 feedback future-only boundary", () => {
     }
   });
 
-  // Il confine di O-76 è che un GIUDIZIO non tolga di mezzo la posizione: un
-  // «non mi interessa» insegna, non cancella. Fino a #167 quel confine si
-  // leggeva come «il file non nomina la route di esclusione», che era un buon
-  // proxy finché il pulsante faceva una cosa sola.
-  //
-  // #167 lo ha reso falso per una ragione voluta: «scaduta» e «già gestita»
-  // sono FATTI sulla posizione, non gusti, e devono toglierla dal giro SENZA
-  // insegnare allo Scout a evitare quel tipo di posizione. Il pulsante quindi
-  // sceglie fra due azioni invece di farne una — e la proprietà da proteggere
-  // non è più l'assenza di una stringa, è CHI può arrivare a quella route.
-  //
-  // La regola vive in `negativeSignalFor`, pura e testata a parte: qui si
-  // verifica che il sorgente non possa raggiungere l'esclusione scavalcandola.
-  //
-  // ⚠️ Come questo caso era stato svuotato, perché non ricapiti: diceva «se
-  // il sorgente contiene /user-exclude allora deve contenere
-  // negativeSignalFor», ma il caso qui sotto pretende che TUTTE le superfici
-  // contengano `negativeSignalFor`. Con il conseguente sempre vero
-  // l'implicazione non vincola niente: un ramo futuro poteva chiamare la
-  // route scavalcando la regola con la suite verde. Una clausola falsa era
-  // stata sostituita da una tautologia.
-  //
-  // Ora si guarda il PUNTO DI CHIAMATA: uno solo per superficie, dopo la
-  // regola pura, dentro il ramo che quella regola ha scelto, e con un corpo
-  // costruito dal SEGNALE — non dal verdetto. Due punti di chiamata sono due
-  // regole, e la seconda è quella che nessuno ha letto.
+  // Il punto di chiamata dell'esclusione deve restare unico, successivo alla
+  // validazione del motivo e alimentato dal segnale validato.
   it.each(FEEDBACK_SURFACES)(
     "%s reaches the exclusion writer from one guarded call site",
     (path) => {
@@ -67,14 +43,14 @@ describe("O-76 feedback future-only boundary", () => {
       expect(source).toContain("/feedback");
       expect(source.match(/\/user-exclude/g) ?? []).toHaveLength(1);
       const rule = source.indexOf("negativeSignalFor(");
-      const guard = source.indexOf('signal.kind === "exclude"');
+      const guard = source.indexOf('signal.kind === "invalid"');
       const call = source.indexOf("/user-exclude");
       expect(rule, "la regola pura non viene nemmeno chiamata").toBeGreaterThan(
         -1,
       );
       expect(
         guard,
-        "l'esclusione non è dietro il ramo del segnale",
+        "l'esclusione non è dietro la validazione del segnale",
       ).toBeGreaterThan(rule);
       expect(call, "si scrive prima di aver deciso").toBeGreaterThan(guard);
       // Il motivo spedito è quello che la regola ha validato: prenderlo da
@@ -84,30 +60,36 @@ describe("O-76 feedback future-only boundary", () => {
     },
   );
 
-  // #172 — la clausola «lo swipe non deve nominare l'esclusione» valeva
-  // finché lo swipe non aveva un selettore: era il modo di dire «lì il
-  // giudizio è secco, quindi non può che essere un gusto». Ora il selettore
-  // c'è, chiesto DOPO il gesto, e quella formulazione vieterebbe proprio la
-  // correzione che il ticket chiedeva.
-  //
-  // La proprietà da proteggere non cambia: un VERDETTO non toglie di mezzo
-  // la posizione. Cambia chi la garantisce — non l'assenza di una stringa in
-  // un file, ma il fatto che alla route ci si arrivi solo da un MOTIVO, e
-  // solo se quel motivo è un fatto sulla posizione. Le due metà si
-  // verificano insieme: la regola pura qui sotto, e sopra (`it.each`) che
-  // nessuna delle due superfici raggiunga la route scavalcandola.
-  it("keeps every taste verdict out of the exclusion path", () => {
+  it.each(FEEDBACK_SURFACES)(
+    "%s confirms excluded before updating feedback or UI state",
+    (path) => {
+      const source = read(path);
+      const call = source.indexOf("/user-exclude");
+      const flow = source.slice(call, call + 2_500);
+      const acknowledgement = flow.indexOf('!== "excluded"');
+      const optionalFeedback = flow.indexOf("signal.feedback");
+      expect(acknowledgement).toBeGreaterThan(-1);
+      expect(optionalFeedback).toBeGreaterThan(acknowledgement);
+      if (path.includes("SwipeDeck")) {
+        expect(flow.indexOf("setExcluded")).toBeGreaterThan(acknowledgement);
+      } else {
+        expect(flow.indexOf("router.refresh")).toBeGreaterThan(acknowledgement);
+      }
+    },
+  );
+
+  it("routes every negative reason through exclusion", () => {
     for (const path of FEEDBACK_SURFACES) {
       expect(read(path)).toContain("negativeSignalFor");
     }
-    // Un verdetto resta un segnale di preferenza: se un giorno qualcuno gli
-    // attaccasse un'esclusione, VERDICT_SIGNAL lo direbbe e il primo caso
-    // sopra fallirebbe.
     for (const reason of REASON_ORDER) {
       const signal = negativeSignalFor(reason, "un testo qualsiasi");
-      expect(signal.kind, reason).toBe(
-        FACTUAL_REASONS.includes(reason) ? "exclude" : "feedback",
-      );
+      expect(signal.kind, reason).toBe("exclude");
+      if (signal.kind === "exclude") {
+        expect(Boolean(signal.feedback), reason).toBe(
+          !FACTUAL_REASONS.includes(reason),
+        );
+      }
     }
     // E il gesto che ci arriva è sempre e solo quello che ha chiesto il
     // perché: gli altri tre verdetti non hanno un motivo da valutare.
