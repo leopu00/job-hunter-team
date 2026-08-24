@@ -103,7 +103,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/py-tools-audit/SKILL.md](../agents/_skills/py-tools-audit/SKILL.md) | Audit ~weekly pacchetti Python in 2 round Dottore con state file | — | 2026-06-04 | ✅ |
 | [agents/_skills/sentinel-orders/SKILL.md](../agents/_skills/sentinel-orders/SKILL.md) | Tabella throttle 0-4 + tutti i tipi ordine Sentinella + warning timeout N+30 | — | 2026-07-28 | ✅ |
 | [agents/_skills/spawn-agent/SKILL.md](../agents/_skills/spawn-agent/SKILL.md) | Spawn agente via start-agent.sh + kick-off + verifica boot (Capitano-only) | — | 2026-07-30 | ✅ |
-| [agents/_skills/agent-emergency/SKILL.md](../agents/_skills/agent-emergency/SKILL.md) | Capitano — gestisce un agente sospettato BLOCCATO IN UN LOOP ATTIVO (vivo e che genera turni, ma ripete lo stesso… | — | 2026-07-30 | ✅ |
+| [agents/_skills/agent-emergency/SKILL.md](../agents/_skills/agent-emergency/SKILL.md) | Capitano — gestisce un agente sospettato BLOCCATO IN UN LOOP ATTIVO (vivo e che genera turni, ma ripete lo stesso… | — | 2026-08-20 | ✅ |
 | [agents/_skills/blind-review/SKILL.md](../agents/_skills/blind-review/SKILL.md) | The Critic's full review protocol — receive PDF + JD, run a blind review (no profile access), produce a… | — | 2026-08-16 | ✅ |
 | [agents/_skills/captain-diary/SKILL.md](../agents/_skills/captain-diary/SKILL.md) | Daily handoff diary for the Captain. | — | 2026-08-03 | ✅ |
 | [agents/_skills/circles-and-sources/SKILL.md](../agents/_skills/circles-and-sources/SKILL.md) | Strategy map for what to search WHERE, derived entirely from the candidate profile. | — | 2026-08-16 | ✅ |
@@ -196,16 +196,17 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/adr/README.md](./adr/README.md) | Indice ADR + convenzione di scrittura | — | 2026-08-17 | ✅ |
+| [docs/adr/README.md](./adr/README.md) | Indice ADR + convenzione di scrittura | — | 2026-08-24 | ✅ |
 | [docs/adr/0001-colima-not-docker-desktop.md](./adr/0001-colima-not-docker-desktop.md) | ADR-0001: Colima invece di Docker Desktop su macOS | — | 2026-06-20 | ✅ |
 | [docs/adr/0002-three-supported-agent-clis.md](./adr/0002-three-supported-agent-clis.md) | ADR-0002: 3 CLI supportate (Claude Code, Codex, Kimi) | — | 2026-04-28 | ✅ |
 | [docs/adr/0003-single-writer-team.md](./adr/0003-single-writer-team.md) | ADR-0003: single-writer pattern sul DB | — | 2026-06-13 | ✅ |
 | [docs/adr/0004-subscription-only-no-api-keys.md](./adr/0004-subscription-only-no-api-keys.md) | ADR-0004: solo subscription, no API key | — | 2026-04-17 | ✅ |
 | [docs/adr/0005-provider-risk-and-mitigation.md](./adr/0005-provider-risk-and-mitigation.md) | 0005 — Provider risk and mitigation — JHT runs on third-party LLM subscriptions (Claude Max, Codex Plus/Pro, Kimi Pro) consumed by autonomous agents in… | — | 2026-07-03 | ✅ |
-| [docs/adr/0006-user-choice-container-runtime-macos.md](./adr/0006-user-choice-container-runtime-macos.md) | 0006 — User chooses the container runtime on macOS (Colima or Docker Desktop) — ADR-0001 mandated Colima as the only container runtime on macOS, because | — | 2026-06-20 | ✅ |
+| [docs/adr/0006-user-choice-container-runtime-macos.md](./adr/0006-user-choice-container-runtime-macos.md) | 0006 — User chooses the container runtime on macOS (Colima or Docker Desktop) — ADR-0001 mandated Colima as the only container runtime on macOS, because | — | 2026-08-20 | ✅ |
 | [docs/adr/0007-provider-selection-is-configuration.md](./adr/0007-provider-selection-is-configuration.md) | Decisione architetturale: provider, modello, CLI e flag sono configurazione governata dal launcher canonico, mai istruzioni naturali; le direttive conservano l'intento di lavoro ma non possono selezionare il runtime. | — | 2026-08-14 | ✅ |
-| [docs/adr/0008-podman-evaluated-behind-a-shim.md](./adr/0008-podman-evaluated-behind-a-shim.md) | ADR proposto: valutare Podman dietro uno shim `docker` invece di riscrivere i punti di chiamata — estende 0006 e riapre le alternative scartate in 0001. | — | 2026-08-17 | ✅ |
+| [docs/adr/0008-podman-evaluated-behind-a-shim.md](./adr/0008-podman-evaluated-behind-a-shim.md) | ADR proposto: valutare Podman dietro uno shim `docker` invece di riscrivere i punti di chiamata — estende 0006 e riapre le alternative scartate in 0001. | — | 2026-08-20 | ✅ |
 | [docs/adr/0009-team-exposes-one-loopback-api.md](./adr/0009-team-exposes-one-loopback-api.md) | ADR proposto: il team espone UNA API di loopback e ogni client (Godot, web, CLI, TUI) diventa sottile — riprende una decisione presa di fatto ritirando la dashboard locale, che non aveva un ADR suo. | — | 2026-08-17 | ✅ |
+| [docs/adr/0010-version-api-scorer-scale.md](./adr/0010-version-api-scorer-scale.md) | Versionamento della scala API Scorer jht-100-v2 senza reinterpretare i punteggi legacy | 2026-08-24 | 2026-08-24 | 🟢 |
 
 
 ## 🧭 docs/guides
@@ -215,11 +216,11 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI | — | 2026-08-11 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali | — | 2026-08-04 | ✅ |
 | [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-08-12 | ✅ |
-| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-08-14 | ✅ |
+| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-08-20 | ✅ |
 | [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-08-11 | ✅ |
 | [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-07-25 | ✅ |
 | [docs/guides/FEEDBACK-TICKETING.md](./guides/FEEDBACK-TICKETING.md) | Runbook delle superfici correnti e dell'endpoint /api/feedback | — | 2026-08-05 | ✅ |
-| [docs/guides/QUICKSTART.md](./guides/QUICKSTART.md) | Quickstart pubblico: requisiti, app nativa, CLI, setup da agente e sorgenti | — | 2026-08-08 | ✅ |
+| [docs/guides/QUICKSTART.md](./guides/QUICKSTART.md) | Quickstart pubblico: requisiti, app nativa, CLI, setup da agente e sorgenti | — | 2026-08-20 | ✅ |
 | [docs/guides/README.md](./guides/README.md) | 📘 docs/guides — user & operator guides — How to install, run, and operate Job Hunter Team. | — | 2026-08-08 | ✅ |
 | [docs/guides/VPS-SETUP-WIZARD.md](./guides/VPS-SETUP-WIZARD.md) | VPS setup from the native office — This is the current non-terminal path for running Job Hunter Team on an | — | 2026-08-08 | ✅ |
 | [docs/guides/ADDING-A-PROVIDER.md](./guides/ADDING-A-PROVIDER.md) | Guida contributor: gate ADR-0002, touchpoint runtime/provider, evidenza live richiesta e check anti-drift | — | 2026-08-08 | ✅ |
@@ -234,7 +235,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-08-19 | ✅ |
+| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-08-20 | ✅ |
 | [docs/internal/architecture/2026-05-19-dashboard-routing-cases.md](./internal/architecture/2026-05-19-dashboard-routing-cases.md) | 🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-20-world-globe-feature.md](./internal/architecture/2026-05-20-world-globe-feature.md) | 🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-25-work-hours-design.md](./internal/architecture/2026-05-25-work-hours-design.md) | 🗓️ Work hours UI — design + monitoring settimanale — Sessione di design 2026-05-25. | — | 2026-06-13 | ✅ |
@@ -333,7 +334,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/postmortems/2026-07-27-tailwind-layer-vs-extension-css.md](./internal/postmortems/2026-07-27-tailwind-layer-vs-extension-css.md) | Postmortem 27/07: UI invisibile su Chrome — le estensioni iniettano CSS fuori da `@layer` e battono le utility Tailwind v4 | — | 2026-07-27 | ✅ |
 | [docs/internal/roadmap/2026-07-27-scorer-per-user-weights.md](./internal/roadmap/2026-07-27-scorer-per-user-weights.md) | Roadmap (TODO): pesi dello Scorer per-utente — default nel codice + override dal profilo, oggi hardcoded nello spec in 8 lingue | — | 2026-07-27 | ✅ |
 | [docs/internal/roadmap/2026-07-28-burn-on-demand-gates.md](./internal/roadmap/2026-07-28-burn-on-demand-gates.md) | Roadmap: gli automatismi di spesa non cedono all'ordine esplicito dell'utente — origine del comando `jht burn` | — | 2026-07-28 | ✅ |
-| [docs/internal/roadmap/2026-07-28-ticket-provider-cli-autoupdate.md](./internal/roadmap/2026-07-28-ticket-provider-cli-autoupdate.md) | Ticket `[PROVIDER-CLI-AUTOUPDATE]`: aggiornare la CLI del provider all'avvio — nessun componente aveva quel compito, il modello era una generazione indietro | — | 2026-07-28 | ✅ |
+| [docs/internal/roadmap/2026-07-28-ticket-provider-cli-autoupdate.md](./internal/roadmap/2026-07-28-ticket-provider-cli-autoupdate.md) | Ticket `[PROVIDER-CLI-AUTOUPDATE]`: aggiornare la CLI del provider all'avvio — nessun componente aveva quel compito, il modello era una generazione indietro | — | 2026-08-20 | ✅ |
 | [docs/internal/roadmap/2026-07-28-ticket-stepcap-throttle-resume.md](./internal/roadmap/2026-07-28-ticket-stepcap-throttle-resume.md) | Ticket `[STEPCAP-THROTTLE-RESUME]` (implementato 28/07): watchdog che riprende gli agenti fermi sul cap di step | — | 2026-07-29 | ✅ |
 | [docs/internal/roadmap/2026-07-29-ticket-doctor-unblock-and-session-ttl.md](./internal/roadmap/2026-07-29-ticket-doctor-unblock-and-session-ttl.md) | Ticket `[DOCTOR-UNBLOCK-AND-TTL]`: il Dottore deve sbloccare, e le sessioni serve abbiano un TTL di 12h — dall'incidente delle undici ore ferme | — | 2026-07-30 | ✅ |
 | [docs/internal/roadmap/2026-07-29-ticket-team-standby-zero-spend.md](./internal/roadmap/2026-07-29-ticket-team-standby-zero-spend.md) | Ticket `[TEAM-STANDBY-ZERO-SPEND]`: standby che ferma anche i ruoli core — origine del comando `jht standby` | — | 2026-07-29 | ✅ |
@@ -362,12 +363,12 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/2026-08-12-theme-cloud-sync-contract.md](./internal/2026-08-12-theme-cloud-sync-contract.md) | Contratto v1 del tema cloud autenticato: schema e RLS, cache e pending per utente, precedenza al bootstrap, gestione offline fail-closed e vettori di concorrenza. | — | 2026-08-12 | ✅ |
 | [docs/internal/architecture/2026-08-12-dialogue-i18n-contract.md](./internal/architecture/2026-08-12-dialogue-i18n-contract.md) | Contratto eseguibile per la localizzazione dei dialoghi authored: parità degli ID EN+6, resolver runtime, contesto LLM canonico e gate contro residui inglesi nelle traduzioni. | — | 2026-08-12 | ✅ |
 | [docs/internal/architecture/2026-08-12-execution-host-vocabulary-contract.md](./internal/architecture/2026-08-12-execution-host-vocabulary-contract.md) | Contratto del luogo di esecuzione: PC locale e VPS come host supportati, cloud opzionale separato dal runtime e capacità da non promettere. | — | 2026-08-12 | ✅ |
-| [docs/internal/roadmap/2026-08-17-ticket-container-runtime-podman.md](./internal/roadmap/2026-08-17-ticket-container-runtime-podman.md) | Ticket aperto, decisione non presa: cosa toglierebbe all'utente e cosa costerebbe a noi sostituire Docker con Podman. Misurato su master dbd6369d6. | — | 2026-08-17 | ✅ |
+| [docs/internal/roadmap/2026-08-17-ticket-container-runtime-podman.md](./internal/roadmap/2026-08-17-ticket-container-runtime-podman.md) | Ticket aperto, decisione non presa: cosa toglierebbe all'utente e cosa costerebbe a noi sostituire Docker con Podman. Misurato su master dbd6369d6. | — | 2026-08-20 | ✅ |
 | [docs/internal/roadmap/2026-08-17-ticket-team-api-boundary.md](./internal/roadmap/2026-08-17-ticket-team-api-boundary.md) | Ticket aperto, direzione approvata e forma tecnica da decidere misurando: una piattaforma sola su web, desktop e telefono — il problema misurato non è quale framework, è il confine caduto fra il team e i suoi client. | — | 2026-08-17 | ✅ |
 | [docs/internal/roadmap/2026-08-17-fetta1-stato-e-ripresa.md](./internal/roadmap/2026-08-17-fetta1-stato-e-ripresa.md) | Punto di ripresa della fetta 1 di JHT-TEAM-API-BOUNDARY: la forma scelta (server node:http in ESM puro nel container, zero dipendenze e zero build step), i due scostamenti dichiarati dall'ADR-0009 con il loro piano di ritiro, e la separazione fra ciò che è committato e ciò che resta da scrivere. | — | 2026-08-17 | ✅ |
-| [docs/internal/prototypes/2026-08-19-scout-api-worker-design.md](./internal/prototypes/2026-08-19-scout-api-worker-design.md) | Design del worker Scout API proposal-only, guardrail, provider e hardening web | 2026-08-20 | 2026-08-19 | 🟢 |
-| [docs/internal/prototypes/2026-08-20-standalone-scout-runtime.md](./internal/prototypes/2026-08-20-standalone-scout-runtime.md) | Stato e roadmap dello Scout standalone con coordinamento, web evidence e SQLite isolato | 2026-08-20 | — | 🟢 |
-| [docs/internal/prototypes/2026-08-20-all-agents-api-roadmap.md](./internal/prototypes/2026-08-20-all-agents-api-roadmap.md) | Roadmap dei worker API isolati per tutti i ruoli: contratti proposal-only, guardrail condivisi, canary sintetici e percorso di promozione senza effetti operativi impliciti | — | — | ✅ |
+| [docs/internal/prototypes/2026-08-19-scout-api-worker-design.md](./internal/prototypes/2026-08-19-scout-api-worker-design.md) | Design del worker Scout API proposal-only, guardrail, provider e hardening web | 2026-08-20 | 2026-08-20 | 🟢 |
+| [docs/internal/prototypes/2026-08-20-standalone-scout-runtime.md](./internal/prototypes/2026-08-20-standalone-scout-runtime.md) | Stato e roadmap dello Scout standalone con coordinamento, web evidence e SQLite isolato | 2026-08-20 | 2026-08-20 | 🟢 |
+| [docs/internal/prototypes/2026-08-20-all-agents-api-roadmap.md](./internal/prototypes/2026-08-20-all-agents-api-roadmap.md) | Roadmap e milestone full-team dei worker API isolati: contratti proposal-only, coordinamento, canary sintetici/live e percorso di promozione | 2026-08-24 | 2026-08-24 | 🟢 |
 
 
 ## 🔒 docs/security
@@ -434,7 +435,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md](../promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md) | Specifica tipografica e motion del pack overlay 9:16 per l'animatic pubblicitario: safe area, palette JHT, font, CTA e uso editoriale | — | 2026-08-05 | ✅ |
 | [docs/assets/icons/SOURCES.md](./assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale | — | 2026-08-07 | ✅ |
 | [web/public/brand/README.md](../web/public/brand/README.md) | Provenienza, integrità e vincoli d'uso degli asset social ufficiali nel footer pubblico, con Instagram attivo e TikTok mantenuto non pubblicato | — | 2026-08-10 | ✅ |
-| [api-worker/README.md](../api-worker/README.md) | Scout API standalone: confini, avvio, SSRF/DNS pinning, privacy, accounting e verifica | 2026-08-20 | 2026-08-19 | 🟢 |
+| [api-worker/README.md](../api-worker/README.md) | Prototipo API full-team isolato: ruoli, coordinamento SQLite, budget, artefatti, privacy, canary e verifica | 2026-08-24 | 2026-08-24 | 🟢 |
 
 
 ---
