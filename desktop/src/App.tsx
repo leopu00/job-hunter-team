@@ -1,4 +1,5 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { checkPodman, type PodmanStatus } from "./lib/podman";
 
 type Screen = "welcome" | "setup";
 
@@ -78,10 +79,81 @@ interface SetupPageProps {
   onBack: () => void;
 }
 
+type PodmanCheckState =
+  | { phase: "checking" }
+  | { phase: "desktop-only" }
+  | { phase: "complete"; result: PodmanStatus }
+  | { phase: "error" };
+
+function PodmanCheck({ state, onRetry }: { state: PodmanCheckState; onRetry: () => void }) {
+  const checking = state.phase === "checking";
+  let title = "Controllo di Podman…";
+  let detail = "Verifico CLI e motore container sul computer.";
+  let tone = "checking";
+
+  if (state.phase === "desktop-only") {
+    title = "Verifica disponibile nell’app desktop";
+    detail = "Il browser di sviluppo non può interrogare Podman.";
+    tone = "neutral";
+  } else if (state.phase === "error") {
+    title = "Verifica Podman non riuscita";
+    detail = "Riprova; nessuna configurazione è stata modificata.";
+    tone = "warning";
+  } else if (state.phase === "complete" && state.result.ready) {
+    title = "Podman è pronto";
+    detail = state.result.version ?? "CLI e motore container rispondono correttamente.";
+    tone = "ready";
+  } else if (
+    state.phase === "complete" &&
+    state.result.installed &&
+    state.result.issue?.startsWith("engine_")
+  ) {
+    title = "Podman è installato, ma il motore non risponde";
+    detail = "Avvia Podman (o la Podman machine) e ripeti la verifica.";
+    tone = "warning";
+  } else if (state.phase === "complete" && state.result.issue === "not_found") {
+    title = "Podman non è stato trovato";
+    detail = "Installa Podman Desktop, poi ripeti la verifica.";
+    tone = "warning";
+  } else if (state.phase === "complete") {
+    title = "Podman non ha completato la verifica";
+    detail = "Controlla l’installazione e riprova.";
+    tone = "warning";
+  }
+
+  return (
+    <div className={`podman-check podman-check--${tone}`} aria-live="polite">
+      <span className="podman-check__indicator" aria-hidden="true" />
+      <div>
+        <strong>{title}</strong>
+        <small>{detail}</small>
+      </div>
+      <button type="button" onClick={onRetry} disabled={checking}>
+        {checking ? "Attendi" : "Riprova"}
+      </button>
+    </div>
+  );
+}
+
 function SetupPage({ onBack }: SetupPageProps) {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [podmanState, setPodmanState] = useState<PodmanCheckState>({ phase: "checking" });
+
+  const runPodmanCheck = useCallback(async () => {
+    setPodmanState({ phase: "checking" });
+    try {
+      const result = await checkPodman();
+      setPodmanState(result ? { phase: "complete", result } : { phase: "desktop-only" });
+    } catch {
+      setPodmanState({ phase: "error" });
+    }
+  }, []);
+
+  useEffect(() => {
+    void runPodmanCheck();
+  }, [runPodmanCheck]);
 
   const confirmSetup = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -137,6 +209,8 @@ function SetupPage({ onBack }: SetupPageProps) {
             costi di utilizzo restano sul tuo account provider.
           </p>
 
+          <PodmanCheck state={podmanState} onRetry={() => void runPodmanCheck()} />
+
           <label htmlFor="openai-api-key">API key</label>
           <div className="secret-input">
             <input
@@ -167,8 +241,8 @@ function SetupPage({ onBack }: SetupPageProps) {
           {confirmed && (
             <div className="confirmation" role="status">
               <span aria-hidden="true">✓</span>
-              Percorso confermato. Podman e provisioning saranno collegati nel
-              prossimo step di implementazione.
+              Percorso confermato. Il provisioning dei container sarà collegato
+              nel prossimo step di implementazione.
             </div>
           )}
 

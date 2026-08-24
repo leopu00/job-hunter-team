@@ -65,7 +65,7 @@ h1 em { color: var(--accent); font-style: normal; font-weight: inherit; }
 
 .primary-button { min-height: 52px; padding: 0 21px; display: inline-flex; align-items: center; justify-content: center; gap: 30px; border: 0; border-radius: 7px; color: #11150c; background: var(--accent); font-size: 13px; font-weight: 780; cursor: pointer; box-shadow: 0 12px 35px rgba(162,220,42,.13); transition: transform .18s ease, background .18s ease, box-shadow .18s ease; }
 .primary-button:hover:not(:disabled) { transform: translateY(-2px); background: #c9ff56; box-shadow: 0 16px 40px rgba(162,220,42,.2); }
-.primary-button:focus-visible, .back-button:focus-visible, .secret-input button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.primary-button:focus-visible, .back-button:focus-visible, .secret-input button:focus-visible, .podman-check button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .primary-button:disabled { color: #777d73; background: #282d27; box-shadow: none; cursor: not-allowed; }
 .primary-button--wide { width: 100%; margin-top: auto; }
 
@@ -105,7 +105,20 @@ h1 em { color: var(--accent); font-style: normal; font-weight: inherit; }
 .provider-icon { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid #455038; border-radius: 11px; color: var(--accent); background: #1c2218; font-size: 11px; font-weight: 850; letter-spacing: .05em; }
 .card-kicker { color: var(--dim); font-size: 8px; letter-spacing: .15em; text-transform: uppercase; }
 .setup-card h2 { margin: 4px 0 0; font-size: 22px; letter-spacing: -.025em; }
-.card-description { margin: 24px 0 30px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.card-description { margin: 24px 0 18px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.podman-check { min-height: 62px; margin: 0 0 24px; padding: 11px 12px; display: grid; grid-template-columns: 9px 1fr auto; align-items: center; gap: 10px; border: 1px solid #30362f; border-radius: 8px; background: #101310; }
+.podman-check__indicator { width: 7px; height: 7px; border-radius: 50%; background: #6e756f; }
+.podman-check--checking .podman-check__indicator { background: var(--accent); box-shadow: 0 0 9px rgba(187,242,70,.5); animation: pulse 1.1s ease-in-out infinite; }
+.podman-check--ready { border-color: rgba(187,242,70,.28); background: rgba(187,242,70,.045); }
+.podman-check--ready .podman-check__indicator { background: var(--accent); box-shadow: 0 0 9px rgba(187,242,70,.45); }
+.podman-check--warning { border-color: rgba(236,178,67,.27); background: rgba(236,178,67,.04); }
+.podman-check--warning .podman-check__indicator { background: #ecb243; }
+.podman-check strong, .podman-check small { display: block; }
+.podman-check strong { color: #d8dcd5; font-size: 10px; }
+.podman-check small { margin-top: 4px; color: var(--dim); font-size: 8px; line-height: 1.4; }
+.podman-check button { padding: 7px 8px; border: 1px solid #343a33; border-radius: 5px; color: var(--muted); background: #171b17; font-size: 8px; cursor: pointer; }
+.podman-check button:hover:not(:disabled) { color: var(--ink); border-color: #4a5345; }
+.podman-check button:disabled { cursor: wait; opacity: .58; }
 .setup-card label { margin-bottom: 8px; color: #c7ccc5; font-size: 10px; font-weight: 720; letter-spacing: .08em; text-transform: uppercase; }
 .secret-input { height: 48px; display: flex; align-items: stretch; border: 1px solid #363c35; border-radius: 7px; background: #0d100e; transition: border-color .18s ease; }
 .secret-input:focus-within { border-color: var(--accent-dark); box-shadow: 0 0 0 3px rgba(187,242,70,.06); }
@@ -120,6 +133,7 @@ h1 em { color: var(--accent); font-style: normal; font-weight: inherit; }
 
 @keyframes enter-left { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes enter-right { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
 
 @media (max-width: 880px) {
   .page { padding-inline: 24px; }

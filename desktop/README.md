@@ -8,8 +8,12 @@ The current slice implements two screens:
 1. welcome;
 2. the fixed `own PC + Podman + own OpenAI API key + headless agents` setup.
 
+The setup screen asks the Tauri backend to verify that the Podman CLI is
+installed and that its engine is reachable. Both checks use fixed arguments,
+have short timeouts, and never invoke a shell.
+
 The key is intentionally kept only in React memory and cleared on confirmation.
-Native credential persistence and Podman provisioning are follow-up slices.
+Native credential persistence and container provisioning are follow-up slices.
 
 ## Development
 
