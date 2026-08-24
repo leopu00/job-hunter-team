@@ -3,6 +3,7 @@ export * from "./agent-role.js";
 export * from "./analyst-contract.js";
 export * from "./analyst-worker.js";
 export * from "./candidate-profile.js";
+export * from "./candidate-profile-import.js";
 export * from "./contract.js";
 export * from "./errors.js";
 export * from "./guardrails.js";
