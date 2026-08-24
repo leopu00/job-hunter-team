@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir, chmod, unlink, stat } from 'node:fs/promises';
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, watch } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import pc from 'picocolors';
@@ -19,7 +19,7 @@ import {
 } from '../lib/sync-rendezvous.js';
 import { clientIdentity, clientHeaderValue, cloudSyncHeaders } from '../lib/client-identity.js';
 import { summarizeOutOfRange } from '../lib/score-ranges.js';
-import { createHaltGate, guardedLane } from '../lib/halt-gate.js';
+import { coalescingGuardedLane, createHaltGate, guardedLane } from '../lib/halt-gate.js';
 import { applyAppliedBackflow } from '../lib/applied-backflow.js';
 import { createExclusiveRunner } from '../lib/exclusive-runner.js';
 import { boundedBackoffDelay } from '../lib/bounded-backoff.js';
@@ -4121,7 +4121,7 @@ async function runRealtimeLoop({ config, isRunning }) {
   // gratis, perché ogni passo di handleChatSync ha una guardia locale.
   const chatCycleState = { lastPulledRequestedAt: null };
   let latestChatState = null;
-  const runChatSync = guardedLane(haltGate, 'chat', async (_tag, state) => {
+  const runChatSync = coalescingGuardedLane(haltGate, 'chat', async (_tag, state) => {
     if (state) latestChatState = state;
     await handleChatSync({
       silent: true,
@@ -4130,11 +4130,6 @@ async function runRealtimeLoop({ config, isRunning }) {
       cycleState: chatCycleState,
     });
   }, () => console.error(pc.yellow('  chat-sync error (unexpected_failure)')));
-  const chatLocalSec = Math.max(1, parseInt(process.env.JHT_CHAT_LOCAL_SEC || '5', 10) || 5);
-  const chatTimer = setInterval(
-    () => { void runChatSync('local', latestChatState); },
-    chatLocalSec * 1000,
-  );
 
   const runEmergencyStop = guardedLane(haltGate, 'emergency-stop', async (_tag, state) => {
     const { reconcileEmergencyStop } = await import('../lib/team-state-reconciler.js');
@@ -4228,6 +4223,33 @@ async function runRealtimeLoop({ config, isRunning }) {
   // sceglie paracadute lento o backoff 5→60s a seconda della salute socket.
   scheduleFallback(250);
 
+  // Risposta agente→web: il file e' la sorgente locale autorevole. fs.watch
+  // sveglia il push appena `chat.jsonl` cambia; un paracadute lento copre gli
+  // eventi filesystem persi. Si osservano directory singole (non recursive),
+  // forma supportata sia da Linux/VPS sia da Windows/macOS.
+  const chatWatchers = [];
+  const chatAgents = ['assistente', 'capitano', 'mentor'];
+  for (const agent of chatAgents) {
+    const dir = join(JHT_HOME, 'agents', agent);
+    try {
+      await mkdir(dir, { recursive: true });
+      const watcher = watch(dir, { persistent: false }, (_event, filename) => {
+        if (String(filename || '') === 'chat.jsonl') void runChatSync('file', latestChatState);
+      });
+      chatWatchers.push(watcher);
+    } catch (e) {
+      log('warn', `chat file watcher unavailable (${agent}): ${e.message}`);
+    }
+  }
+  const chatLocalSec = Math.max(
+    30,
+    parseInt(process.env.JHT_CHAT_LOCAL_SEC || '60', 10) || 60,
+  );
+  const chatTimer = setInterval(
+    () => { void runChatSync('local-parachute', latestChatState); },
+    chatLocalSec * 1000,
+  );
+
   // ── Cadenze lente (tappe 4-5-6) ──
   // - heartbeat ~3min (tappa 5): SOTTO la soglia stale della dashboard (5min, vedi
   //   web/app/api/team-state/claim/route.ts HEARTBEAT_STALE_MS) → la VPS non sparisce mai.
@@ -4285,6 +4307,7 @@ async function runRealtimeLoop({ config, isRunning }) {
 
   clearInterval(chatTimer);
   if (fallbackTimer) clearTimeout(fallbackTimer);
+  for (const watcher of chatWatchers) { try { watcher.close(); } catch { /* ignore */ } }
   if (rt) { try { await rt.close(); } catch { /* ignore */ } }
 }
 

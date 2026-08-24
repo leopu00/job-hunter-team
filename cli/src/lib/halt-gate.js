@@ -104,3 +104,46 @@ export function guardedLane(gate, label, body, onError = () => {}) {
     }
   };
 }
+
+/**
+ * Variante per eventi che non possono essere persi. Se arriva una sveglia
+ * mentre il body lavora, conserva gli argomenti più recenti e fa esattamente
+ * un altro giro appena il precedente termina. Una raffica viene coalesciata,
+ * non accodata senza limite e non scartata.
+ */
+export function coalescingGuardedLane(gate, label, body, onError = () => {}) {
+  let busy = false;
+  let queued = null;
+
+  return async (...args) => {
+    if (busy) {
+      queued = args;
+      return false;
+    }
+    busy = true;
+    let current = args;
+    let ran = false;
+    try {
+      while (current) {
+        const tag = typeof current[0] === 'string' && current[0]
+          ? `${label}/${current[0]}`
+          : label;
+        if (gate(tag)) {
+          queued = null;
+          break;
+        }
+        try {
+          await body(...current);
+          ran = true;
+        } catch (error) {
+          onError(error);
+        }
+        current = queued;
+        queued = null;
+      }
+      return ran;
+    } finally {
+      busy = false;
+    }
+  };
+}
