@@ -90,7 +90,7 @@ export class ApiTeamRunner {
     this.targetReviews = options.targetReviews ?? 2;
     this.budgetUsd = options.budgetUsd ?? 0;
     this.reservationUsd =
-      this.profile.provider === "mock" ? 0 : (options.maxAgentCostUsd ?? 0.01);
+      this.profile.provider === "mock" ? 0 : (options.maxAgentCostUsd ?? 0.02);
     if (this.targetScores < 1 || this.targetScores > 10)
       throw new Error("targetScores must be between 1 and 10");
     if (this.targetReviews < 0 || this.targetReviews > this.targetScores)

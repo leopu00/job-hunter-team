@@ -99,7 +99,7 @@ function parseArgs(args: string[]): CliOptions {
     jobsPath: join(packageRoot, "fixtures", "jobs.synthetic.json"),
     workspaceDir: join(packageRoot, ".team"),
     budgetUsd: 0,
-    maxAgentCostUsd: 0.01,
+    maxAgentCostUsd: 0.02,
     targetScores: 5,
     targetReviews: 2,
     candidateExplicit: false,
