@@ -41,19 +41,21 @@ interface ExcludeOutcome {
   id: string;
   status: string | null;
   user_excluded_reason: string | null;
+  /** Stato da ripristinare con undo; serve anche al mirror cloud. */
+  user_excluded_prev_status: string | null;
 }
 
 type ApplyResult = StepResult<ExcludeOutcome>;
 
 // ── Path A: SQLite locale source of truth ──────────────────────────
-function applyLocal(
+export function applyLocal(
   db: Database.Database,
   legacyId: number,
   action: "exclude" | "unexclude",
   reason?: string,
   note?: string,
 ): ApplyResult {
-  {
+  return db.transaction((): ApplyResult => {
     const row = db
       .prepare<
         [number],
@@ -137,13 +139,19 @@ function applyLocal(
         id: String(legacyId),
         status: updated.status,
         user_excluded_reason: updated.user_excluded_reason,
+        user_excluded_prev_status:
+          action === "exclude"
+            ? row.status === "excluded"
+              ? (row.user_excluded_prev_status ?? "scored")
+              : row.status
+            : null,
       },
     };
-  }
+  })();
 }
 
 // ── Path B: Supabase unica source (cloud-mode) ─────────────────────
-async function applyCloud(
+export async function applyCloud(
   supabase: SupabaseClient,
   userId: string,
   legacyId: number,
@@ -177,14 +185,12 @@ async function applyCloud(
 
   let update: Record<string, unknown>;
   let nextStatus: string | null;
-  let nextReason: string | null;
   if (action === "exclude") {
     const prev =
       r.status === "excluded"
         ? (r.user_excluded_prev_status ?? "scored")
         : r.status;
     nextStatus = "excluded";
-    nextReason = reason ?? null;
     update = {
       status: "excluded",
       user_excluded_reason: reason,
@@ -195,7 +201,6 @@ async function applyCloud(
     };
   } else {
     nextStatus = r.user_excluded_prev_status ?? "scored";
-    nextReason = null;
     update = {
       status: nextStatus,
       user_excluded_reason: null,
@@ -206,11 +211,13 @@ async function applyCloud(
     };
   }
 
-  const { error: upErr } = await supabase
+  const { data: updated, error: upErr } = await supabase
     .from("positions")
     .update(update)
     .eq("user_id", userId)
-    .eq("legacy_id", legacyId);
+    .eq("legacy_id", legacyId)
+    .select("status, user_excluded_reason, user_excluded_prev_status")
+    .maybeSingle();
   if (upErr) {
     return {
       ok: false,
@@ -218,12 +225,25 @@ async function applyCloud(
       body: { error: `Supabase update failed: ${upErr.message}` },
     };
   }
+  if (!updated) {
+    return {
+      ok: false,
+      status: 404,
+      body: { error: `Posizione #${legacyId} non trovata` },
+    };
+  }
+  const saved = updated as {
+    status: string | null;
+    user_excluded_reason: string | null;
+    user_excluded_prev_status: string | null;
+  };
   return {
     ok: true,
     outcome: {
       id: String(legacyId),
-      status: nextStatus,
-      user_excluded_reason: nextReason,
+      status: saved.status,
+      user_excluded_reason: saved.user_excluded_reason,
+      user_excluded_prev_status: saved.user_excluded_prev_status,
     },
   };
 }
@@ -283,6 +303,7 @@ async function handle(
               user_excluded_reason: reason,
               user_excluded_note: note ?? null,
               user_excluded_at: new Date().toISOString(),
+              user_excluded_prev_status: outcome.user_excluded_prev_status,
               last_actor: "user",
             }
           : {
