@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JHT Desktop</title>
+    <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
+    <link rel="stylesheet" href="./styles.css" />
+    <!-- Renderer safety net. Loads BEFORE the ESM modules so it also catches a
+         module that throws at import time (which would otherwise abort the whole
+         boot and leave a frozen screen with zero feedback). On any uncaught
+         error / rejection: log it and show a dismissible banner instead of a
+         silent hang. The banner is created lazily so it works even if <body>
+         isn't parsed yet. -->
+    <script>
+      (function () {
+        function showErrorBanner(msg) {
+          try {
+            var id = 'fatal-error-banner'
+            var el = document.getElementById(id)
+            if (!el) {
+              el = document.createElement('div')
+              el.id = id
+              el.setAttribute('role', 'alert')
+              el.style.cssText =
+                'position:fixed;top:0;left:0;right:0;z-index:99999;' +
+                'background:#5c1f1f;color:#fff;font:13px/1.5 -apple-system,system-ui,sans-serif;' +
+                'padding:10px 44px 10px 16px;box-shadow:0 2px 8px rgba(0,0,0,.4);'
+              var close = document.createElement('button')
+              close.textContent = '✕'
+              close.setAttribute('aria-label', 'Chiudi')
+              close.style.cssText =
+                'position:absolute;top:6px;right:10px;background:none;border:none;' +
+                'color:#fff;font-size:16px;cursor:pointer;line-height:1;'
+              close.onclick = function () { el.remove() }
+              el.appendChild(close)
+              var text = document.createElement('span')
+              text.id = id + '-text'
+              el.appendChild(text)
+              ;(document.body || document.documentElement).appendChild(el)
+            }
+            var t = document.getElementById(id + '-text')
+            if (t) {
+              t.textContent =
+                'Si è verificato un errore imprevisto. Il setup potrebbe non essere ' +
+                'completo: riavvia l\'app se qualcosa non risponde. Dettaglio: ' + msg
+            }
+          } catch (e) { /* niente da fare se anche il DOM è rotto */ }
+        }
+        function report(kind, detail) {
+          try { window.jhtLog && window.jhtLog.scope && window.jhtLog.scope('renderer').error('fatal.' + kind, { detail: String(detail) }) } catch (e) {}
+          showErrorBanner(String(detail))
+        }
+        window.addEventListener('error', function (ev) {
+          report('error', (ev && ev.error && (ev.error.stack || ev.error.message)) || (ev && ev.message) || 'errore sconosciuto')
+        })
+        window.addEventListener('unhandledrejection', function (ev) {
+          var r = ev && ev.reason
+          report('unhandledrejection', (r && (r.stack || r.message)) || r || 'promise rifiutata')
+        })
+      })()
+    </script>
+  </head>
+  <body>
+    <main class="wizard" id="wizard">
+      <!-- Step -1: welcome intro — the very first screen on a fresh install.
+           Big title + pitch, with two entry points. "Get started" runs the
+           new-user setup; "Sign in" is the returning-user path. -->
+      <section class="step step--centered step--intro" id="step-welcome-intro" data-step="welcome-intro">
+        <!-- Language picker lives on the very first screen: switching it
+             re-renders the welcome copy live (title, pitch, buttons). -->
+        <div class="intro-lang lang-select" id="intro-lang-select">
+          <button
+            type="button"
+            class="lang-select__toggle"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+            aria-label="Language"
+          >
+            <span class="flag" data-lang-flag></span>
+            <span class="lang-select__label" data-lang-label></span>
+          </button>
+          <ul class="lang-select__menu" role="listbox" hidden></ul>
+        </div>
+        <div class="intro-hero">
+          <div class="intro-logo" aria-hidden="true">🎯</div>
+          <h1 class="intro-title" data-i18n="intro.title">JobHunter Team</h1>
+          <p class="intro-tagline" data-i18n="intro.tagline">Your AI job-hunting team</p>
+          <p class="intro-pitch" data-i18n="intro.pitch">
+            AI agents that hunt for jobs for you: they compare openings against your profile, prepare tailored CVs and cover letters, and guide you through your choices.
+          </p>
+        </div>
+        <div class="step__actions intro-actions">
+          <button class="btn btn--primary btn--large" id="btn-intro-start" data-i18n="intro.start">
+            Get started
+          </button>
+        </div>
+      </section>
+
+      <!-- Step 1: computer readiness check (pitch moved to welcome-intro).
+           Minimal technical intro before the setup steps. -->
+      <section class="step step--centered" id="step-welcome" data-step="welcome" hidden>
+        <div class="step__emoji" aria-hidden="true">🔧</div>
+        <h1 class="step__title" data-i18n="welcome.title">Let's get your computer ready</h1>
+        <p class="step__lead" data-i18n="welcome.lead">
+          Over the next steps we'll check what the team needs and set it up for you. It only takes a couple of minutes.
+        </p>
+        <p class="step__hint" data-i18n="welcome.hint" data-i18n-platform="true"></p>
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-welcome-back" data-i18n="welcome.back">
+            Back
+          </button>
+          <button class="btn btn--primary" id="btn-welcome-continue" data-i18n="welcome.continue">
+            Continue
+          </button>
+        </div>
+      </section>
+
+      <!-- Step: choose where the team lives (local vs VPS).
+           Drives wizard branching downstream. -->
+      <section class="step step--centered" id="step-location" data-step="location" hidden>
+        <div class="step__emoji" aria-hidden="true">🌍</div>
+        <h1 class="step__title" data-i18n="location.title">Where will the team live?</h1>
+        <p class="step__lead" data-i18n="location.lead">
+          JHT runs in a container. Pick where that container lives — you can change it later by reinstalling.
+        </p>
+        <div class="location-cards">
+          <button type="button" class="location-card" id="location-card-local" data-location="local">
+            <span class="location-card__icon" aria-hidden="true">💻</span>
+            <span class="location-card__title" data-i18n="location.local.title">This computer</span>
+            <span class="location-card__body" data-i18n="location.local.body">
+              Free. The team runs on this PC. Closes when you shut down.
+            </span>
+            <span class="location-card__badge" data-i18n="location.local.badge">Recommended for the beta</span>
+          </button>
+          <button type="button" class="location-card" id="location-card-vps" data-location="vps">
+            <span class="location-card__icon" aria-hidden="true">☁️</span>
+            <span class="location-card__title" data-i18n="location.vps.title">A remote server (VPS)</span>
+            <span class="location-card__body" data-i18n="location.vps.body">
+              Always on, ~€6/mo on any VPS host. We'll set it up from the desktop app (coming next).
+            </span>
+            <span class="location-card__badge location-card__badge--soon" data-i18n="location.vps.badge">Coming soon</span>
+          </button>
+        </div>
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-location-back" data-i18n="location.back">
+            Back
+          </button>
+          <button class="btn btn--primary" id="btn-location-continue" data-i18n="location.continue" disabled>
+            Continue
+          </button>
+        </div>
+      </section>
+
+      <!-- Step: Supabase OAuth.
+           Local path: opt-in (skip button visible).
+           VPS path: required (skip hidden, continue disabled until signed in). -->
+      <section class="step step--centered" id="step-supabase-login" data-step="supabase-login" hidden>
+        <div class="step__emoji" aria-hidden="true">☁️</div>
+        <h1 class="step__title" data-i18n="supabase.title">Cloud account (optional)</h1>
+        <p class="step__lead" id="supabase-hint" data-i18n="supabase.lead.local">
+          Optional sync: sign in to back up your data and check results from your phone — and never lose anything if something happens to this computer. It's entirely optional: you can stay fully local forever, and you can turn sync on later whenever you want.
+        </p>
+        <div class="supabase-actions">
+          <button type="button" class="btn btn--secondary btn--oauth" id="btn-supabase-google">
+            <span class="oauth-logo" aria-hidden="true">
+              <svg viewBox="0 0 48 48" width="18" height="18"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+            </span>
+            <span data-i18n="supabase.google">Continue with Google</span>
+          </button>
+          <button type="button" class="btn btn--secondary btn--oauth" id="btn-supabase-github">
+            <span class="oauth-logo" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="18" height="18"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            </span>
+            <span data-i18n="supabase.github">Continue with GitHub</span>
+          </button>
+        </div>
+        <div class="signin-progress" id="supabase-signin-progress" hidden>
+          <p class="step__hint" id="supabase-signin-hint" data-i18n="supabase.signin.waiting">
+            Waiting for sign-in to complete in your browser…
+          </p>
+          <p class="step__hint signin-progress__url-row" id="supabase-signin-url-row" hidden>
+            <span class="signin-progress__url" id="supabase-signin-url" title="" aria-label=""></span>
+          </p>
+          <div class="signin-progress__actions">
+            <button type="button" class="btn btn--ghost btn--small" id="btn-supabase-copy-url" data-i18n="supabase.signin.copyLink" hidden>
+              Copy sign-in link
+            </button>
+            <button type="button" class="btn btn--ghost btn--small" id="btn-supabase-cancel" data-i18n="supabase.signin.cancel">
+              Cancel sign-in
+            </button>
+          </div>
+        </div>
+        <p class="step__hint" id="supabase-status" hidden></p>
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-supabase-back" data-i18n="supabase.back">
+            Back
+          </button>
+          <div class="step__actions-group">
+            <button class="btn btn--ghost" id="btn-supabase-skip" data-i18n="supabase.skip" hidden>
+              Stay local
+            </button>
+            <button class="btn btn--ghost" id="btn-supabase-signout" data-i18n="supabase.signOut" hidden>
+              Sign out
+            </button>
+            <button class="btn btn--primary" id="btn-supabase-continue" data-i18n="supabase.continue" disabled>
+              Continue
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step: Telegram bot tokens (VPS path only).
+           Three dedicated bots (assistente/capitano/mentor) need to be
+           created on @BotFather and pasted here. Tokens validated via
+           /getMe; chat_id captured automatically when the user presses
+           Start on the deep-link. Saved on the VPS at
+           /root/.jht/jht.config.json after VPS provisioning. -->
+      <!-- Step: Telegram intro — introduces @BotFather before the user
+           is asked to do anything with it. Avoids the "ok wait what is
+           BotFather" cognitive cliff for non-tech users. -->
+      <section class="step step--centered" id="step-telegram-intro" data-step="telegram-intro" hidden>
+        <h1 class="step__title" data-i18n="telegram.intro.title">Meet @BotFather</h1>
+        <p class="step__lead" data-i18n="telegram.intro.lead">
+          BotFather is the official Telegram bot that creates other bots. We'll guide you through creating three small bots that the team will use to talk to you.
+        </p>
+        <a class="tg-intro__card" id="tg-intro-link" href="https://t.me/BotFather" target="_blank" rel="noopener">
+          <img src="./assets/botfather.jpg" alt="@BotFather" class="tg-intro__avatar" />
+          <div class="tg-intro__meta">
+            <div class="tg-intro__handle">@BotFather</div>
+            <div class="tg-intro__sub" data-i18n="telegram.intro.botfatherDesc">Telegram's official bot factory</div>
+            <div class="tg-intro__cta" data-i18n="telegram.intro.openCta">Open in Telegram →</div>
+          </div>
+        </a>
+        <p class="step__hint" data-i18n="telegram.intro.hint">
+          On the next page we'll suggest three bot usernames. Then you'll create them inside @BotFather and paste the tokens back here.
+        </p>
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-tg-intro-back" data-i18n="telegram.intro.back">Back</button>
+          <button class="btn btn--ghost" id="btn-tg-intro-skip" data-i18n="telegram.intro.skip">Skip for now</button>
+          <button class="btn btn--primary" id="btn-tg-intro-continue" data-i18n="telegram.intro.continue">Got it, continue</button>
+        </div>
+      </section>
+
+      <!-- Step: Telegram tokens (unified) — for each of the 3 bots
+           we show: a suggested display name + suggested username
+           (user copies these into BotFather), then a token field
+           that the user pastes back from BotFather. The same row
+           drives verification + chat_id polling + final ready state. -->
+      <section class="step step--centered" id="step-telegram-tokens" data-step="telegram-tokens" hidden>
+        <div class="step__emoji" aria-hidden="true">💬</div>
+        <h1 class="step__title" data-i18n="telegram.title">Telegram bots</h1>
+        <p class="step__lead" data-i18n="telegram.tokens.lead">
+          Three dedicated Telegram bots — one per user-facing agent. For each bot: copy the suggested name + username into @BotFather, then paste the token it returns here.
+        </p>
+        <div class="tg-create__usertag">
+          <label for="tg-create-usertag" class="tg-create__label" data-i18n="telegram.create.usertag.label">Your tag (lowercase, used inside bot usernames)</label>
+          <input
+            type="text"
+            id="tg-create-usertag"
+            class="tg-create__input"
+            placeholder="myname"
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+            maxlength="10"
+          />
+        </div>
+
+        <div class="tg-rows">
+          <div class="tg-row" id="tg-row-assistente" data-role="assistente" data-status="idle">
+            <div class="tg-row__head">
+              <h2 class="tg-row__title" data-i18n="telegram.agent.assistente">Assistant</h2>
+            </div>
+            <div class="tg-row__meta" id="tg-meta-assistente"></div>
+            <div class="tg-row__token">
+              <label for="tg-input-assistente" class="tg-row__token-label" data-i18n="telegram.tokens.pasteLabel">Paste the token here:</label>
+              <div class="tg-row__form">
+                <input
+                  type="text"
+                  class="tg-row__input"
+                  id="tg-input-assistente"
+                  placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                  spellcheck="false"
+                  autocomplete="off"
+                  autocapitalize="off"
+                />
+                <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-assistente" disabled>
+                  Verify
+                </button>
+              </div>
+            </div>
+            <p class="tg-row__status" id="tg-status-assistente" hidden></p>
+            <a class="tg-row__deeplink" id="tg-deeplink-assistente" href="#" target="_blank" rel="noopener" hidden></a>
+          </div>
+
+          <div class="tg-row" id="tg-row-capitano" data-role="capitano" data-status="idle">
+            <div class="tg-row__head">
+              <h2 class="tg-row__title" data-i18n="telegram.agent.capitano">Captain</h2>
+            </div>
+            <div class="tg-row__meta" id="tg-meta-capitano"></div>
+            <div class="tg-row__token">
+              <label for="tg-input-capitano" class="tg-row__token-label" data-i18n="telegram.tokens.pasteLabel">Paste the token here:</label>
+              <div class="tg-row__form">
+                <input
+                  type="text"
+                  class="tg-row__input"
+                  id="tg-input-capitano"
+                  placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                  spellcheck="false"
+                  autocomplete="off"
+                  autocapitalize="off"
+                />
+                <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-capitano" disabled>
+                  Verify
+                </button>
+              </div>
+            </div>
+            <p class="tg-row__status" id="tg-status-capitano" hidden></p>
+            <a class="tg-row__deeplink" id="tg-deeplink-capitano" href="#" target="_blank" rel="noopener" hidden></a>
+          </div>
+
+          <div class="tg-row" id="tg-row-mentor" data-role="mentor" data-status="idle">
+            <div class="tg-row__head">
+              <h2 class="tg-row__title" data-i18n="telegram.agent.mentor">Mentor</h2>
+            </div>
+            <div class="tg-row__meta" id="tg-meta-mentor"></div>
+            <div class="tg-row__token">
+              <label for="tg-input-mentor" class="tg-row__token-label" data-i18n="telegram.tokens.pasteLabel">Paste the token here:</label>
+              <div class="tg-row__form">
+                <input
+                  type="text"
+                  class="tg-row__input"
+                  id="tg-input-mentor"
+                  placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                  spellcheck="false"
+                  autocomplete="off"
+                  autocapitalize="off"
+                />
+                <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-mentor" disabled>
+                  Verify
+                </button>
+              </div>
+            </div>
+            <p class="tg-row__status" id="tg-status-mentor" hidden></p>
+            <a class="tg-row__deeplink" id="tg-deeplink-mentor" href="#" target="_blank" rel="noopener" hidden></a>
+          </div>
+        </div>
+
+        <p class="step__hint">
+          <a href="#" id="tg-create-open-botfather" data-i18n="telegram.create.openBotfather">Open @BotFather in Telegram</a>
+        </p>
+        <p class="step__hint" id="tg-save-status" hidden></p>
+
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-tg-back" data-i18n="telegram.back">Back</button>
+          <button class="btn btn--primary" id="btn-tg-continue" data-i18n="telegram.continue" disabled>Continue</button>
+        </div>
+      </section>
+
+      <!-- Step: VPS provisioning (Hetzner, manual + guided).
+           Only shown when state.location === 'vps'.
+           No Hetzner API token — user creates VPS on the portal,
+           pastes pubkey + IP back into the app. -->
+      <section class="step step--centered" id="step-vps-provision" data-step="vps-provision" hidden>
+        <div class="step__emoji" aria-hidden="true">☁️</div>
+        <h1 class="step__title" data-i18n="vps.title">Create your VPS</h1>
+        <p class="step__lead" data-i18n="vps.lead">
+          We'll guide you through creating a Hetzner server.
+        </p>
+
+        <div class="vps-step">
+          <h2 class="vps-step__title" data-i18n="vps.step1.title">1. Generate your SSH key</h2>
+          <p class="vps-step__body" data-i18n="vps.step1.body">
+            JHT keeps the private key on this PC (chmod 600), never in the cloud. It's used only for the one-shot install handshake — after that the VPS talks to JHT via HTTPS + pairing token.
+          </p>
+          <div class="vps-step__actions">
+            <button class="btn btn--secondary" id="btn-vps-generate-key" data-i18n="vps.step1.generate">
+              Generate key
+            </button>
+          </div>
+        </div>
+
+        <div class="vps-step" id="vps-step2" hidden>
+          <h2 class="vps-step__title" data-i18n="vps.step2.title">2. Create the VPS on Hetzner</h2>
+          <p class="vps-step__body" data-i18n="vps.step2.body">
+            Open the Hetzner console, pick CPX22, paste the public key.
+          </p>
+          <label class="vps-step__label" for="vps-pubkey" data-i18n="vps.step2.pubkeyLabel">Public key</label>
+          <textarea id="vps-pubkey" class="vps-step__textarea" readonly rows="3"></textarea>
+          <div class="vps-step__actions">
+            <button class="btn btn--secondary" id="btn-vps-copy-pubkey" data-i18n="vps.step2.copy">
+              Copy public key
+            </button>
+            <button class="btn btn--ghost" id="btn-vps-open-hetzner" data-i18n="vps.step2.openHetzner">
+              Open Hetzner console
+            </button>
+            <button class="btn btn--ghost" id="btn-vps-open-key-folder" data-i18n="vps.step2.openKeyFolder">
+              Open SSH key folder
+            </button>
+          </div>
+          <p class="vps-step__hint" data-i18n="vps.step2.shareKeyHint">
+            To share VPS access with a teammate or use it from another PC, send them <strong>both</strong> files from this folder (<code>jht_ed25519</code> and <code>jht_ed25519.pub</code>). They go in the recipient's <code>~/.ssh/</code> directory.
+          </p>
+        </div>
+
+        <div class="vps-step" id="vps-step3" hidden>
+          <h2 class="vps-step__title" data-i18n="vps.step3.title">3. Paste the server IP</h2>
+          <label class="vps-step__label" for="vps-ip" data-i18n="vps.step3.ipLabel">Server IPv4</label>
+          <input type="text" id="vps-ip" class="vps-step__input" data-i18n-placeholder="vps.step3.ipPlaceholder" placeholder="e.g. 192.0.2.20" inputmode="numeric" />
+          <div class="vps-step__actions">
+            <button class="btn btn--primary" id="btn-vps-connect" data-i18n="vps.step3.connect" disabled>
+              Connect & install
+            </button>
+          </div>
+          <p class="vps-step__status" id="vps-status" hidden></p>
+          <pre class="vps-step__log" id="vps-install-log" hidden></pre>
+        </div>
+
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-vps-back" data-i18n="vps.back">
+            Back
+          </button>
+          <button class="btn btn--primary" id="btn-vps-continue" data-i18n="vps.continue" disabled>
+            Continue
+          </button>
+        </div>
+      </section>
+
+      <!-- Step 2: setup / checklist -->
+      <section class="step step--centered" id="step-setup" data-step="setup" hidden>
+        <h1 class="step__title" data-i18n="setup.title">Setup</h1>
+        <p class="step__lead" id="setup-lead" data-i18n="setup.lead" data-i18n-html="true">
+          To run the team in isolation we need <strong>Docker</strong>, free. Let's check if it's already on your computer.
+        </p>
+
+        <div class="dep-card" id="docker-card">
+          <div class="dep-card__header">
+            <img class="dep-card__icon" src="./assets/docker.svg" alt="Docker" width="28" height="28" />
+            <div class="dep-card__title">
+              <span class="dep-card__name" id="docker-name">Docker</span>
+              <span class="dep-card__subtitle" id="docker-subtitle"></span>
+            </div>
+            <span class="dep-card__badge" id="docker-badge" data-i18n="setup.verifying">checking…</span>
+          </div>
+
+          <!-- macOS-only: let the user choose the container runtime
+               (Colima recommended / Docker Desktop). Populated from JS in
+               docker-card.js; hidden on Windows/Linux. See ADR-0006. -->
+          <div class="runtime-chooser" id="runtime-chooser" hidden></div>
+
+          <ol class="install-steps" id="docker-steps" hidden style="display: none">
+            <li class="install-step" id="step-homebrew" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="docker.step.homebrew">Homebrew</span>
+              <span class="install-step__hint" id="step-homebrew-hint"></span>
+            </li>
+            <li class="install-step" id="step-colima" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="docker.step.colima">Colima + Docker CLI</span>
+              <span class="install-step__hint" id="step-colima-hint"></span>
+            </li>
+            <li class="install-step" id="step-daemon" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="docker.step.daemon">Runtime attivo</span>
+              <span class="install-step__hint" id="step-daemon-hint"></span>
+            </li>
+          </ol>
+
+          <div class="dep-card__actions" id="docker-actions"></div>
+
+          <pre class="install-log" id="docker-install-log" hidden></pre>
+        </div>
+
+        <div class="dep-list" id="extra-deps"></div>
+
+        <!-- Windows-only unified requirements panel: replaces docker-card +
+             extra-deps cards above with a single 3-row checklist for
+             Docker / WSL / Git, and surfaces the "Install everything"
+             button below the list (not buried inside Docker's card). -->
+        <div class="dep-card" id="win-requirements" hidden style="display: none">
+          <div class="dep-card__header">
+            <span class="dep-card__name" data-i18n="winReq.title">Required tools</span>
+          </div>
+          <ol class="install-steps">
+            <li class="install-step" id="win-step-docker" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="winReq.docker">Docker Desktop</span>
+              <span class="install-step__action" id="win-step-docker-action"></span>
+            </li>
+            <li class="install-step" id="win-step-wsl" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="winReq.wsl">WSL2 + Ubuntu</span>
+              <span class="install-step__action"></span>
+            </li>
+            <li class="install-step" id="win-step-git" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="winReq.git">Git</span>
+              <span class="install-step__action"></span>
+            </li>
+          </ol>
+        </div>
+        <div id="win-install-actions" hidden style="display: none; margin-top: 14px; text-align: center">
+          <button class="btn btn--primary" id="btn-win-install-everything" data-i18n="docker.action.installEverything">
+            Install everything
+          </button>
+        </div>
+        <pre id="win-install-log" class="install-log" hidden style="display: none"></pre>
+
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-setup-back" data-i18n="setup.back">Back</button>
+          <button class="btn btn--primary" id="btn-setup-continue" disabled data-i18n="setup.continue">
+            Next
+          </button>
+        </div>
+      </section>
+
+      <!-- Step 2b: container prep -->
+      <section class="step step--centered" id="step-container" data-step="container" hidden>
+        <div class="step__emoji" aria-hidden="true">🏗️</div>
+        <h1 class="step__title" data-i18n="container.title">Preparing container</h1>
+        <p class="step__lead" data-i18n="container.lead">
+          Downloading the JHT container image (~1 GB). This runs once.
+        </p>
+
+        <div class="container-progress" id="container-progress">
+          <div class="progress-bar" id="container-bar" data-state="busy">
+            <div class="progress-bar__fill"></div>
+          </div>
+          <div class="container-progress__status">
+            <span class="status-icon" id="container-icon" data-state="busy"></span>
+            <span class="container-progress__message" id="container-message" data-i18n="container.status.pulling">
+              Pulling image from the registry…
+            </span>
+          </div>
+          <pre class="container-progress__log" id="container-log"></pre>
+        </div>
+
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-container-back" data-i18n="container.back">Back</button>
+          <button class="btn btn--primary" id="btn-container-retry" hidden data-i18n="container.retry">Retry</button>
+          <button class="btn btn--primary" id="btn-container-continue" disabled data-i18n="container.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2c: provider choice -->
+      <section class="step step--centered" id="step-provider-choose" data-step="provider-choose" hidden>
+        <h1 class="step__title" data-i18n="provider.title">Choose your AI provider</h1>
+        <p class="step__lead" data-i18n="provider.lead">
+          Pick which subscription you'll connect. The team spreads its budget across whatever plan you have — you just choose the provider.
+        </p>
+        <div class="provider-options" id="provider-options"></div>
+        <p class="step__hint provider-choose__tier-note" data-i18n="provider.tierNote">
+          Heads up: the entry ~$20/mo plan isn't recommended for any of the three — it isn't enough for even two agents. With that budget, use the CLI on your own rather than a team.
+        </p>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-provider-back" data-i18n="provider.back">Back</button>
+          <button class="btn btn--primary" id="btn-provider-continue" disabled data-i18n="provider.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2d: provider install -->
+      <section class="step step--centered" id="step-provider-install" data-step="provider-install" hidden>
+        <div class="step__emoji" aria-hidden="true">📦</div>
+        <h1 class="step__title" data-i18n="provider.installTitle">Installing CLI</h1>
+        <p class="step__lead" data-i18n="provider.installLead">
+          Installing the selected CLI into the container. Runs once.
+        </p>
+
+        <div class="container-progress" id="provider-progress">
+          <div class="progress-bar" id="provider-bar" data-state="busy">
+            <div class="progress-bar__fill"></div>
+          </div>
+          <div class="container-progress__status">
+            <span class="status-icon" id="provider-icon" data-state="busy"></span>
+            <span class="container-progress__message" id="provider-message"></span>
+          </div>
+          <pre class="container-progress__log" id="provider-log"></pre>
+        </div>
+
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-provider-install-back" data-i18n="provider.back">Back</button>
+          <button class="btn btn--primary" id="btn-provider-install-retry" hidden data-i18n="provider.retry">Retry</button>
+          <button class="btn btn--primary" id="btn-provider-install-continue" disabled data-i18n="provider.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2e: provider login -->
+      <section class="step step--centered" id="step-provider-login" data-step="provider-login" hidden>
+        <div class="step__emoji" aria-hidden="true">🔑</div>
+        <h1 class="step__title" data-i18n="login.title">Sign in to your providers</h1>
+        <p class="step__lead" data-i18n="login.lead">
+          Each CLI needs your active subscription. Open Login to sign in inside the app.
+        </p>
+        <div class="auth-list" id="auth-list"></div>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-login-back" data-i18n="login.back">Back</button>
+          <button class="btn btn--primary" id="btn-login-continue" disabled data-i18n="login.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2f: working hours (local path tail). Quando il team lavora;
+           fuori dalla finestra si mette in pausa per risparmiare budget. -->
+      <section class="step step--centered" id="step-working-hours" data-step="working-hours" hidden>
+        <div class="step__emoji" aria-hidden="true">⏰</div>
+        <h1 class="step__title" data-i18n="hours.title">When should the team work?</h1>
+        <p class="step__lead" data-i18n="hours.lead">
+          Pick the hours the team is active. Outside this window it pauses to save your budget. You can change this anytime later.
+        </p>
+        <div class="hours-form">
+          <label class="hours-mode">
+            <input type="radio" name="hours-mode" id="hours-mode-window" checked />
+            <span data-i18n="hours.mode.window">Set a working window</span>
+          </label>
+          <div class="hours-window" id="hours-window-fields">
+            <div class="hours-row">
+              <span class="hours-row__label" data-i18n="hours.days">Days</span>
+              <div class="hours-days" id="hours-days"></div>
+            </div>
+            <div class="hours-row">
+              <span class="hours-row__label" data-i18n="hours.from">From</span>
+              <input type="time" id="hours-start" class="hours-time" value="09:00" />
+              <span class="hours-row__label" data-i18n="hours.to">to</span>
+              <input type="time" id="hours-end" class="hours-time" value="18:00" />
+            </div>
+            <p class="step__hint" id="hours-tz" data-i18n="hours.tz">Timezone detected automatically.</p>
+          </div>
+          <label class="hours-mode">
+            <input type="radio" name="hours-mode" id="hours-mode-always" />
+            <span data-i18n="hours.mode.always">Always on (24/7)</span>
+          </label>
+        </div>
+        <p class="step__hint" id="hours-status" hidden></p>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-hours-back" data-i18n="hours.back">Back</button>
+          <button class="btn btn--primary" id="btn-hours-continue" data-i18n="hours.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2g: profile documents upload (CV obbligatorio). Sostituisce
+           l'onboarding-chat: l'Assistente costruisce il profilo dai file. -->
+      <section class="step step--centered" id="step-profile-upload" data-step="profile-upload" hidden>
+        <div class="step__emoji" aria-hidden="true">📄</div>
+        <h1 class="step__title" data-i18n="upload.title">Upload your CV</h1>
+        <p class="step__lead" data-i18n="upload.lead">
+          Add your CV (ideally a PDF) plus any notes about what you're after — target roles, locations, must-haves. The Assistant reads these to build your profile. At least one file is required to start.
+        </p>
+        <div class="upload-box">
+          <button type="button" class="btn btn--secondary" id="btn-upload-pick" data-i18n="upload.pick">
+            Choose files…
+          </button>
+          <ul class="upload-list" id="upload-list"></ul>
+          <p class="step__hint" id="upload-empty" data-i18n="upload.empty">
+            No files yet — your CV as a PDF is the most important one.
+          </p>
+        </div>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-upload-back" data-i18n="upload.back">Back</button>
+          <button class="btn btn--primary" id="btn-upload-continue" data-i18n="upload.continue" disabled>Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2h: team email inbox (obbligatorio). Casella DEDICATA che il
+           team monitora per i job alert inoltrati. Credenziali validate con
+           round-trip IMAP+SMTP prima di lasciar procedere. -->
+      <section class="step step--centered" id="step-email-setup" data-step="email-setup" hidden>
+        <div class="step__emoji" aria-hidden="true">📧</div>
+        <h1 class="step__title" data-i18n="email.title">Connect a team inbox (optional)</h1>
+        <p class="step__lead" data-i18n="email.lead">
+          Optional but recommended: connect a dedicated Gmail the team can read, then forward your job alerts to it — the team gets higher-quality leads and spends fewer tokens. You can skip this and set it up later; without it the team finds jobs on the web.
+        </p>
+        <div class="email-form">
+          <label class="email-field">
+            <span class="email-field__label" data-i18n="email.address">Gmail address</span>
+            <input type="email" id="email-address" class="email-input" placeholder="team.jht@example.com" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="email-field">
+            <span class="email-field__label" data-i18n="email.password">App password</span>
+            <input type="password" id="email-password" class="email-input" autocomplete="off" />
+            <span class="step__hint" data-i18n="email.passwordHint">Paste a Gmail app password (a 16-character code) — not your normal login password.</span>
+          </label>
+          <div class="email-gmail-help">
+            <span class="step__hint" data-i18n="email.gmailSteps">Gmail: two quick clicks on Google, then paste the code here.</span>
+            <div class="email-gmail-links">
+              <button type="button" class="btn btn--secondary btn--small" id="btn-email-2fa" data-i18n="email.enable2fa">
+                1. Turn on 2-Step Verification →
+              </button>
+              <button type="button" class="btn btn--secondary btn--small" id="btn-email-app-pw" data-i18n="email.createAppPw">
+                2. Create app password →
+              </button>
+            </div>
+            <span class="step__hint" data-i18n="email.appPwNote">Then copy the 16-character code into the field above (not your normal password).</span>
+            <button type="button" class="btn btn--ghost btn--small" id="btn-email-docs" data-i18n="email.docsLink">
+              Full guide →
+            </button>
+          </div>
+          <label class="email-dedicated">
+            <input type="checkbox" id="email-dedicated-confirm" />
+            <span data-i18n="email.dedicated">I confirm this is a dedicated inbox for the team, not my personal email.</span>
+          </label>
+          <button type="button" class="btn btn--secondary" id="btn-email-verify" data-i18n="email.verify">
+            Verify connection
+          </button>
+          <p class="step__hint" id="email-status" hidden></p>
+        </div>
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-email-back" data-i18n="email.back">Back</button>
+          <div class="step__actions-group">
+            <button class="btn btn--ghost" id="btn-email-skip" data-i18n="email.skip">Set up later</button>
+            <button class="btn btn--primary" id="btn-email-continue" data-i18n="email.continue" disabled>Continue</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 3: ready / summary -->
+      <section class="step step--centered" id="step-ready" data-step="ready" hidden>
+        <div class="step__emoji" aria-hidden="true">🚀</div>
+        <h1 class="step__title" data-i18n="ready.title">All set</h1>
+        <p class="step__lead" data-i18n="ready.lead">Everything is configured. You can start the team.</p>
+        <ul class="summary-list" id="summary-list"></ul>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-ready-manage-login" data-i18n="ready.manageLogin">
+            Manage login
+          </button>
+          <button class="btn btn--primary btn--large" id="btn-start-team" data-i18n="ready.start">
+            Start Job Hunter Team
+          </button>
+        </div>
+        <!-- Dev-mode shortcut: usa la stessa config di provider/credenziali
+             gia' validata dal flow normale, ma lancia il runtime via
+             `docker compose up` (bind-mount di web/agents/shared/.launcher)
+             + Next sull'host su :3001 con hot-reload. Visibile solo se
+             Electron gira dal sorgente (app.isPackaged=false). -->
+        <div class="step__actions step__actions--centered" id="dev-mode-actions" hidden style="margin-top: 12px;">
+          <button class="btn btn--ghost btn--small" id="btn-dev-mode">
+            🛠 Start Dev Mode (:3001, bind-mount)
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Home: post-setup dashboard. Mostrata quando Docker + container image +
+         provider + auth sono tutti OK. Il wizard sopra resta attivo solo al
+         primo avvio o se una precondizione decade (es. logout). -->
+    <div class="home" id="home" hidden>
+      <aside class="home__sidebar">
+        <div class="home__brand">
+          <span class="home__brand-mark" aria-hidden="true">
+            <svg viewBox="3 9.5 26 13" xmlns="http://www.w3.org/2000/svg">
+              <path fill="currentColor" d="M7.34 21.15Q5.8 21.15 4.9 20.3Q4 19.45 4 18H5.74Q5.74 18.76 6.16 19.19Q6.59 19.63 7.34 19.63Q8.08 19.63 8.51 19.2Q8.94 18.77 8.94 18.02V10.85H10.68V18.02Q10.68 19.47 9.78 20.31Q8.89 21.15 7.34 21.15Z M13.01 21.01V10.85H14.75V14.97H17.48V10.85H19.22V21.01H17.48V16.54H14.75V21.01Z"/>
+              <path fill="currentColor" d="M23.59 21.01V12.42H20.93V10.85H28V12.42H25.34V21.01Z"/>
+            </svg>
+          </span>
+          <span class="home__brand-name">Desktop</span>
+        </div>
+        <nav class="home__nav" role="tablist">
+          <!-- Gruppo Team: controllo e agenti -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.team">Team</div>
+            <button type="button" class="home__nav-item is-active" data-section="team" role="tab">
+              <span class="home__nav-icon">🚀</span>
+              <span class="home__nav-label" data-i18n="home.nav.team">Team</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="agents" role="tab">
+              <span class="home__nav-icon">🤖</span>
+              <span class="home__nav-label" data-i18n="home.nav.agents">Agenti</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="chat" role="tab">
+              <span class="home__nav-icon">💬</span>
+              <span class="home__nav-label" data-i18n="home.nav.chat">Chat</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="notifs" role="tab">
+              <span class="home__nav-icon">🔔</span>
+              <span class="home__nav-label" data-i18n="home.nav.notifs">Notifiche</span>
+            </button>
+          </div>
+          <!-- Gruppo Lavoro: i dati della ricerca -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.work">Lavoro</div>
+            <button type="button" class="home__nav-item" data-section="dashboard" role="tab">
+              <span class="home__nav-icon">📊</span>
+              <span class="home__nav-label" data-i18n="home.nav.dashboard">Dashboard</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="stats" role="tab">
+              <span class="home__nav-icon">📈</span>
+              <span class="home__nav-label" data-i18n="home.nav.stats">Statistiche</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="apps" role="tab">
+              <span class="home__nav-icon">📨</span>
+              <span class="home__nav-label" data-i18n="home.nav.apps">Candidature</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="map" role="tab">
+              <span class="home__nav-icon">🗺️</span>
+              <span class="home__nav-label" data-i18n="home.nav.map">Mappa</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="activity" role="tab">
+              <span class="home__nav-icon">📜</span>
+              <span class="home__nav-label" data-i18n="home.nav.activity">Attività</span>
+            </button>
+          </div>
+          <!-- Gruppo Impostazioni -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.settings">Impostazioni</div>
+            <button type="button" class="home__nav-item" data-section="profile" role="tab">
+              <span class="home__nav-icon">📝</span>
+              <span class="home__nav-label" data-i18n="home.nav.profile">Profilo</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="hours" role="tab">
+              <span class="home__nav-icon">⏰</span>
+              <span class="home__nav-label" data-i18n="home.nav.hours">Orari</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="provider" role="tab">
+              <span class="home__nav-icon">🧠</span>
+              <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="docker" role="tab">
+              <span class="home__nav-icon">🐳</span>
+              <span class="home__nav-label" data-i18n="home.nav.docker">Docker</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="account" role="tab">
+              <span class="home__nav-icon">👤</span>
+              <span class="home__nav-label" data-i18n="home.nav.account">Account</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="email" role="tab">
+              <span class="home__nav-icon">📧</span>
+              <span class="home__nav-label" data-i18n="home.nav.email">Email</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="language" role="tab">
+              <span class="home__nav-icon">🌐</span>
+              <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="advanced" role="tab">
+              <span class="home__nav-icon">⚙️</span>
+              <span class="home__nav-label" data-i18n="home.nav.advanced">Avanzate</span>
+            </button>
+          </div>
+        </nav>
+      </aside>
+
+      <section class="home__content">
+        <!-- Team: avvio/stop runtime + dashboard -->
+        <div class="home__panel is-active" data-section="team">
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.team.title">Job Hunter Team</h1>
+            <p class="home__subtitle" id="home-team-subtitle" data-i18n="home.team.subtitleStopped">
+              Il team è fermo. Avvialo per lanciare gli agenti.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__status">
+              <span class="home__status-dot" id="home-team-dot" data-state="stopped"></span>
+              <span class="home__status-label" id="home-team-status" data-i18n="home.team.statusStopped">
+                Fermo
+              </span>
+            </div>
+            <div class="home__team-info" id="home-team-info" hidden></div>
+            <div class="home__notice home__notice--warn" id="home-team-docker-warning" hidden>
+              <span class="home__notice-icon" aria-hidden="true">⚠️</span>
+              <div class="home__notice-body">
+                <div class="home__notice-title" id="home-team-docker-warning-title" data-i18n="home.team.dockerWarning.title">
+                  Docker non è in esecuzione
+                </div>
+                <div class="home__notice-text" id="home-team-docker-warning-text"></div>
+              </div>
+              <button class="btn btn--ghost" id="home-team-docker-action" hidden></button>
+            </div>
+            <div class="home__actions">
+              <button class="btn btn--primary btn--large" id="home-btn-start" data-i18n="home.team.start">
+                Avvia team
+              </button>
+              <button class="btn btn--primary" id="home-btn-open" hidden data-i18n="home.team.openDashboard">
+                Apri dashboard
+              </button>
+              <button class="btn btn--ghost" id="home-btn-stop" hidden data-i18n="home.team.stop">
+                Ferma team
+              </button>
+            </div>
+            <label class="home__autostart" id="home-team-autostart-row" hidden>
+              <input type="checkbox" id="home-team-autostart" />
+              <span data-i18n="home.team.autostart">Avvia il team automaticamente quando apro l'app</span>
+            </label>
+            <details class="advanced" id="home-team-advanced" hidden>
+              <summary data-i18n="home.team.advanced">Dettagli tecnici</summary>
+              <pre class="advanced__log" id="home-team-log"></pre>
+            </details>
+          </div>
+        </div>
+
+        <!-- Dashboard: vista NATIVA delle offerte del team [JHT-DASHBOARD-SPLIT].
+             Niente webview: dashboard-native.js fetcha i dati via window.dashboardApi
+             (IPC → main → runtime locale) e li rende con UI desktop nativa. -->
+        <div class="home__panel" data-section="dashboard" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.dashboard.title">Dashboard</h1>
+            <p class="home__subtitle" id="dash-subtitle" data-i18n="home.dashboard.subtitle">
+              Le offerte trovate dal team, con punteggio.
+            </p>
+          </header>
+          <div class="dash__filters" id="dash-filters" hidden>
+            <input type="text" id="dash-search" class="dash__search" data-i18n-ph="home.dashboard.search" placeholder="Cerca titolo o azienda…" />
+            <select id="dash-fstatus" class="dash__select">
+              <option value="">Tutti gli stati</option>
+              <option value="new">Nuove</option>
+              <option value="checked">Verificate</option>
+              <option value="scored">Valutate</option>
+              <option value="writing">In scrittura</option>
+              <option value="ready">Pronte</option>
+              <option value="applied">Inviate</option>
+              <option value="response">Risposte</option>
+              <option value="excluded">Escluse</option>
+            </select>
+            <select id="dash-fscore" class="dash__select">
+              <option value="">Tutti i punteggi</option>
+              <option value="90">90+</option>
+              <option value="75">75+</option>
+              <option value="50">50+</option>
+              <option value="unscored">Senza punteggio</option>
+            </select>
+            <span id="dash-count" class="dash__count"></span>
+          </div>
+          <div class="dash__empty" id="dash-empty" hidden>
+            <div class="step__emoji" aria-hidden="true">📊</div>
+            <p class="home__subtitle" id="dash-empty-text" data-i18n="home.dashboard.empty">
+              Avvia il team dalla sezione Team per vedere qui le offerte.
+            </p>
+          </div>
+          <div class="dash__list" id="dash-list" hidden></div>
+          <div class="dash__detail" id="dash-detail" hidden></div>
+        </div>
+
+        <!-- Chat agenti: Capitano / Assistente (nativo) -->
+        <div class="home__panel" data-section="chat" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.chat.title">Chat</h1>
+            <p class="home__subtitle" data-i18n="home.chat.subtitle">Parla con il Capitano o l’Assistente del team.</p>
+          </header>
+          <div class="chat">
+            <div class="chat__tabs">
+              <button type="button" class="chat-tab is-active" data-agent="capitano">Capitano</button>
+              <button type="button" class="chat-tab" data-agent="assistente">Assistente</button>
+            </div>
+            <div class="chat__messages" id="chat-messages"></div>
+            <div class="chat__composer">
+              <textarea id="chat-input" rows="2" data-i18n-ph="home.chat.placeholder" placeholder="Scrivi un messaggio…"></textarea>
+              <button type="button" class="btn btn--primary" id="chat-send" data-i18n="home.chat.send">Invia</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notifiche (nativo) -->
+        <div class="home__panel" data-section="notifs" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.notifs.title">Notifiche</h1>
+            <p class="home__subtitle" data-i18n="home.notifs.subtitle">Avvisi e aggiornamenti del team.</p>
+          </header>
+          <div id="dash-notifs"></div>
+        </div>
+
+        <!-- Statistiche: conteggi pipeline (nativo) -->
+        <div class="home__panel" data-section="stats" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.stats.title">Statistiche</h1>
+            <p class="home__subtitle" data-i18n="home.stats.subtitle">La pipeline del team a colpo d’occhio.</p>
+          </header>
+          <div id="dash-stats"></div>
+        </div>
+
+        <!-- Candidature (nativo) -->
+        <div class="home__panel" data-section="apps" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.apps.title">Candidature</h1>
+            <p class="home__subtitle" data-i18n="home.apps.subtitle">Le candidature inviate e il loro stato.</p>
+          </header>
+          <div id="dash-apps"></div>
+        </div>
+
+        <!-- Mappa: offerte per luogo (nativo) -->
+        <div class="home__panel" data-section="map" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.map.title">Mappa</h1>
+            <p class="home__subtitle" data-i18n="home.map.subtitle">Le offerte raggruppate per luogo.</p>
+          </header>
+          <div id="dash-map"></div>
+        </div>
+
+        <!-- Attività: timeline del team (nativo) -->
+        <div class="home__panel" data-section="activity" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.activity.title">Attività</h1>
+            <p class="home__subtitle" data-i18n="home.activity.subtitle">Le ultime azioni del team.</p>
+          </header>
+          <div id="dash-activity"></div>
+        </div>
+
+        <!-- Agenti: roster + stato live (nativo) -->
+        <div class="home__panel" data-section="agents" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.agents.title">Agenti</h1>
+            <p class="home__subtitle" data-i18n="home.agents.subtitle">Gli agenti del team e il loro stato.</p>
+          </header>
+          <div id="dash-agents"></div>
+        </div>
+
+        <!-- Profilo: vista del profilo candidato (nativo) -->
+        <div class="home__panel" data-section="profile" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.profile.title">Profilo</h1>
+            <p class="home__subtitle" data-i18n="home.profile.subtitle">Il profilo del candidato usato dal team.</p>
+          </header>
+          <div id="dash-profile"></div>
+        </div>
+
+        <!-- Orari di lavoro del team (nativo) -->
+        <div class="home__panel" data-section="hours" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.hours.title">Orari di lavoro</h1>
+            <p class="home__subtitle" data-i18n="home.hours.subtitle">Quando il team è autorizzato a lavorare.</p>
+          </header>
+          <div id="dash-hours"></div>
+        </div>
+
+        <!-- Provider: vendor + plan + login -->
+        <div class="home__panel" data-section="provider" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.provider.title">Provider AI</h1>
+            <p class="home__subtitle" data-i18n="home.provider.subtitle">
+              CLI selezionato, piano di sottoscrizione e stato del login.
+            </p>
+          </header>
+          <div class="home__card" id="home-provider-card">
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.provider.current">Provider attuale</span>
+              <span class="home__row-value" id="home-provider-name">—</span>
+            </div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.provider.plan">Piano</span>
+              <span class="home__row-value" id="home-provider-plan">—</span>
+            </div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.provider.authStatus">Stato login</span>
+              <span class="home__row-value" id="home-provider-auth">—</span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--primary" id="home-btn-provider-login" data-i18n="home.provider.manageLogin">
+                Gestisci login
+              </button>
+              <button class="btn btn--ghost" id="home-btn-provider-change" data-i18n="home.provider.change">
+                Cambia provider
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Email del team: casella job-alert dedicata -->
+        <div class="home__panel" data-section="email" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.email.title">Email del team</h1>
+            <p class="home__subtitle" data-i18n="home.email.subtitle">
+              Casella dedicata in cui inoltrare i tuoi job alert: il team la legge a inizio giornata. Opzionale ma consigliata.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.email.statusLabel">Stato</span>
+              <span class="home__row-value" id="home-email-status">—</span>
+            </div>
+            <label class="home__sync-field">
+              <span data-i18n="home.email.address">Indirizzo email</span>
+              <input type="email" id="home-email-address" autocomplete="off" spellcheck="false" placeholder="nome.jht@gmail.com" />
+            </label>
+            <label class="home__sync-field">
+              <span data-i18n="home.email.appPassword">App password</span>
+              <input type="password" id="home-email-password" autocomplete="off" placeholder="••••••••••••••••" />
+            </label>
+            <p class="home__card-hint" id="home-email-msg" hidden></p>
+            <div class="home__actions home__actions--inline">
+              <button type="button" class="btn btn--primary" id="home-btn-email-save" data-i18n="home.email.save">Salva</button>
+              <button type="button" class="btn btn--ghost" id="home-btn-email-delete" hidden data-i18n="home.email.remove">Rimuovi</button>
+              <button type="button" class="btn btn--ghost" id="home-btn-email-help" data-i18n="home.email.helpSetup">Come impostare l'inoltro</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Docker: runtime + azioni -->
+        <div class="home__panel" data-section="docker" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.docker.title">Docker</h1>
+            <p class="home__subtitle" data-i18n="home.docker.subtitle">
+              Runtime container usato per isolare gli agenti.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__card-title" data-i18n="home.docker.runtimeTitle">🐳 Runtime Docker</div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.docker.state">Stato</span>
+              <span class="home__row-value" id="home-docker-state">—</span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--ghost" id="home-btn-docker-refresh" data-i18n="home.docker.refresh">
+                Ricontrolla
+              </button>
+              <button class="btn btn--ghost" id="home-btn-docker-open" hidden data-i18n="home.docker.openDesktop">
+                Apri Docker Desktop
+              </button>
+            </div>
+          </div>
+          <div class="home__card">
+            <div class="home__card-title" data-i18n="home.docker.imageTitle">📦 Container JHT</div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.docker.image">Immagine</span>
+              <span class="home__row-value" id="home-docker-image">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-name-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageName">Nome</span>
+              <span class="home__row-value" id="home-docker-image-name">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-version-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageVersion">Versione</span>
+              <span class="home__row-value" id="home-docker-image-version">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-created-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageCreated">Data</span>
+              <span class="home__row-value" id="home-docker-image-created">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-size-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageSize">Dimensione</span>
+              <span class="home__row-value" id="home-docker-image-size">—</span>
+            </div>
+            <a href="#" class="home__card-link" id="home-docker-image-releases" data-i18n="home.docker.imageReleases">
+              Vedi tutte le release →
+            </a>
+          </div>
+        </div>
+
+        <!-- Account: OAuth Supabase sign-in (Guest vs Signed-in) -->
+        <div class="home__panel" data-section="account" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.account.title">Account</h1>
+            <p class="home__subtitle" data-i18n="home.account.subtitle">
+              Sign in to enable cloud sync and multi-device recovery.
+            </p>
+          </header>
+
+          <!-- Guest state -->
+          <div class="home__card" id="home-account-guest" hidden>
+            <p class="home__card-text" data-i18n="home.account.guestHint">
+              You're using JHT in Guest mode. Your config stays on this machine only.
+            </p>
+            <div class="home__card-actions">
+              <button type="button" class="btn btn--primary" id="home-account-signin-google">
+                <span data-i18n="home.account.signinGoogle">Sign in with Google</span>
+              </button>
+              <button type="button" class="btn btn--ghost" id="home-account-signin-github">
+                <span data-i18n="home.account.signinGitHub">Sign in with GitHub</span>
+              </button>
+            </div>
+            <p class="home__card-hint" id="home-account-error" hidden></p>
+          </div>
+
+          <!-- Signed-in state -->
+          <div class="home__card" id="home-account-signedin" hidden>
+            <div class="home__account-identity">
+              <span class="home__account-email" id="home-account-email"></span>
+              <span class="home__account-provider" id="home-account-provider"></span>
+            </div>
+            <p class="home__card-text" data-i18n="home.account.signedinHint">
+              Cloud sync and multi-device recovery are enabled for this account.
+            </p>
+            <div class="home__card-actions">
+              <button type="button" class="btn btn--ghost" id="home-account-signout">
+                <span data-i18n="home.account.signout">Sign out</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Cloud sync sub-card (visible only when signed-in) -->
+          <div class="home__card home__card--sub" id="home-sync-card" hidden>
+            <h2 class="home__card-title" data-i18n="home.sync.title">Cloud sync</h2>
+            <p class="home__card-text" id="home-sync-subtitle"></p>
+
+            <!-- State: disabled (no setup on this device) -->
+            <div id="home-sync-disabled" hidden>
+              <p class="home__card-text" data-i18n="home.sync.disabledHint">
+                Set a passphrase to encrypt your launcher config before it's uploaded. The passphrase never leaves this device.
+              </p>
+              <details class="home__sync-why">
+                <summary data-i18n="home.sync.whySummary">Why a passphrase if I'm already signed in?</summary>
+                <p data-i18n="home.sync.whyBody">
+                  Sign-in proves who you are; the passphrase encrypts the data before it leaves your computer. Without it, server admins (and anyone who dumps the database) can read your synced data. With it, only this device can. Trade-off: if you lose the passphrase, the cloud data is unrecoverable by design.
+                </p>
+              </details>
+              <label class="home__sync-field">
+                <span data-i18n="home.sync.passphraseLabel">Passphrase</span>
+                <input type="password" id="home-sync-setup-passphrase" autocomplete="new-password" minlength="8" />
+              </label>
+              <label class="home__sync-field">
+                <span data-i18n="home.sync.passphraseConfirmLabel">Confirm passphrase</span>
+                <input type="password" id="home-sync-setup-passphrase-confirm" autocomplete="new-password" minlength="8" />
+              </label>
+              <p class="home__card-hint home__sync-warning" data-i18n="home.sync.passphraseWarning">
+                Save it in your password manager NOW. If you lose it, your cloud data cannot be recovered.
+              </p>
+              <div class="home__card-actions">
+                <button type="button" class="btn btn--primary" id="home-sync-setup-btn">
+                  <span data-i18n="home.sync.setupBtn">Enable cloud sync</span>
+                </button>
+              </div>
+              <p class="home__card-hint" id="home-sync-setup-error" hidden></p>
+            </div>
+
+            <!-- State: locked (setup done but key not in memory) -->
+            <div id="home-sync-locked" hidden>
+              <p class="home__card-text" data-i18n="home.sync.lockedHint">
+                Cloud sync is set up on this device. Enter your passphrase to unlock it.
+              </p>
+              <label class="home__sync-field">
+                <span data-i18n="home.sync.passphraseLabel">Passphrase</span>
+                <input type="password" id="home-sync-unlock-passphrase" autocomplete="current-password" />
+              </label>
+              <div class="home__card-actions">
+                <button type="button" class="btn btn--primary" id="home-sync-unlock-btn">
+                  <span data-i18n="home.sync.unlockBtn">Unlock</span>
+                </button>
+                <button type="button" class="btn btn--ghost" id="home-sync-reset-btn">
+                  <span data-i18n="home.sync.resetBtn">Forgot passphrase — reset</span>
+                </button>
+              </div>
+              <p class="home__card-hint" id="home-sync-unlock-error" hidden></p>
+            </div>
+
+            <!-- State: unlocked -->
+            <div id="home-sync-unlocked" hidden>
+              <p class="home__card-text" data-i18n="home.sync.unlockedHint">
+                Cloud sync is active. Push your current config to the cloud, or pull the latest version from another device.
+              </p>
+              <p class="home__sync-meta" id="home-sync-meta"></p>
+              <div class="home__card-actions">
+                <button type="button" class="btn btn--primary" id="home-sync-push-btn">
+                  <span data-i18n="home.sync.pushBtn">Push to cloud</span>
+                </button>
+                <button type="button" class="btn btn--ghost" id="home-sync-pull-btn">
+                  <span data-i18n="home.sync.pullBtn">Pull from cloud</span>
+                </button>
+                <button type="button" class="btn btn--ghost" id="home-sync-lock-btn">
+                  <span data-i18n="home.sync.lockBtn">Lock</span>
+                </button>
+                <button type="button" class="btn btn--ghost" id="home-sync-disable-btn">
+                  <span data-i18n="home.sync.disableBtn">Disable sync</span>
+                </button>
+              </div>
+              <p class="home__card-hint" id="home-sync-action-error" hidden></p>
+              <p class="home__card-hint home__sync-success" id="home-sync-action-success" hidden></p>
+            </div>
+          </div>
+
+          <!-- Busy state -->
+          <div class="home__card" id="home-account-busy" hidden>
+            <p class="home__card-text" id="home-account-busy-message" data-i18n="home.account.busy">
+              Opening browser for sign-in…
+            </p>
+          </div>
+        </div>
+
+        <!-- Lingua -->
+        <div class="home__panel" data-section="language" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.language.title">Lingua</h1>
+            <p class="home__subtitle" data-i18n="home.language.subtitle">
+              Lingua dell'interfaccia del launcher.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="lang-select" id="home-lang-select">
+              <button
+                type="button"
+                class="lang-select__toggle"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+              >
+                <span class="flag" data-lang-flag></span>
+                <span class="lang-select__label" data-lang-label></span>
+              </button>
+              <ul class="lang-select__menu" role="listbox" hidden></ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Avanzate: reset setup -->
+        <div class="home__panel" data-section="advanced" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.advanced.title">Avanzate</h1>
+            <p class="home__subtitle" data-i18n="home.advanced.subtitle">
+              Strumenti per diagnostica e manutenzione.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__row home__row--stacked">
+              <span class="home__row-label" data-i18n="home.advanced.wizardLabel">Ripeti il setup</span>
+              <span class="home__row-hint" data-i18n="home.advanced.wizardHint">
+                Rilancia il wizard iniziale (scelta provider, login, verifica Docker).
+              </span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--ghost" id="home-btn-reopen-wizard" data-i18n="home.advanced.reopenWizard">
+                Riapri wizard
+              </button>
+            </div>
+          </div>
+
+          <!-- Dev mode: visibile solo se Electron gira da sorgente (probe
+               via launcher:dev-is-available). Avvia il container con
+               bind-mount + Next sull'host su :3001 con hot reload. -->
+          <div class="home__card" id="home-dev-card" hidden>
+            <div class="home__row home__row--stacked">
+              <span class="home__row-label" data-i18n="home.advanced.devLabel">Modalità sviluppatore</span>
+              <span class="home__row-hint" data-i18n="home.advanced.devHint">
+                Avvia il runtime con bind-mount di web/agents/.launcher e Next sull'host su :3001 con hot reload. Usa il provider già configurato.
+              </span>
+            </div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.advanced.devStatus">Stato</span>
+              <span class="home__row-value" id="home-dev-status">—</span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--primary" id="home-btn-dev-start" data-i18n="home.advanced.devStart">
+                Avvia in dev mode (:3001)
+              </button>
+              <button class="btn btn--ghost" id="home-btn-dev-open" data-i18n="home.advanced.devOpen">
+                Apri :3001
+              </button>
+              <button class="btn btn--ghost" id="home-btn-dev-stop" hidden data-i18n="home.advanced.devStop">
+                Ferma dev mode
+              </button>
+            </div>
+
+            <!-- Dev secondario: avvia un Next dev su altra porta + worktree a scelta. -->
+            <div class="home__row" style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--color-dim-border, #2a2a2a);">
+              <span class="home__row-label" data-i18n="home.advanced.devAddLabel">Dev su altra porta</span>
+              <span class="home__row-hint" data-i18n="home.advanced.devAddHint">
+                Lancia un secondo Next dev su un worktree a scelta. Riusa il container :3001, max 2 secondari oltre al primario. .next del worktree viene ricreato per evitare loop SWC.
+              </span>
+            </div>
+            <div class="home__actions home__actions--inline" style="gap: 0.5rem; flex-wrap: wrap;">
+              <select id="home-dev-add-worktree" style="padding: 0.4rem 0.6rem; background: #111; color: #ddd; border: 1px solid #333; border-radius: 4px; font-family: inherit; min-width: 280px;">
+                <option value="">— scegli worktree —</option>
+              </select>
+              <input type="number" id="home-dev-add-port" min="3000" max="9999" value="3002" style="padding: 0.4rem 0.6rem; background: #111; color: #ddd; border: 1px solid #333; border-radius: 4px; font-family: inherit; width: 90px;" />
+              <button class="btn btn--primary" id="home-btn-dev-add-start" data-i18n="home.advanced.devAddStart">Avvia secondario</button>
+            </div>
+            <div id="home-dev-add-active" style="margin-top: 0.5rem; font-size: 0.85em; color: var(--color-dim, #888);"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Terminal modal: reusable xterm host for CLI login sessions. -->
+    <div class="terminal-modal" id="terminal-modal" hidden>
+      <div class="terminal-modal__panel">
+        <div class="terminal-modal__header">
+          <span class="terminal-modal__title" id="terminal-modal-title">Login</span>
+          <div class="terminal-modal__actions">
+            <button type="button" class="btn btn--ghost btn--compact" id="terminal-modal-open-url" hidden data-i18n="login.action.openUrl">Open URL</button>
+            <button type="button" class="btn btn--ghost btn--compact" id="terminal-modal-copy-url" hidden data-i18n="login.action.copyUrl">Copy URL</button>
+            <button type="button" class="btn btn--ghost btn--compact" id="terminal-modal-paste" data-i18n="login.action.paste">Paste</button>
+            <button type="button" class="btn btn--primary btn--compact" id="terminal-modal-done" data-i18n="login.action.done">I'm done</button>
+            <button type="button" class="terminal-modal__close" id="terminal-modal-close" aria-label="Close">✕</button>
+          </div>
+        </div>
+        <div class="terminal-modal__body" id="terminal-modal-body"></div>
+      </div>
+    </div>
+
+    <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+    <script type="module" src="./renderer.js"></script>
+  </body>
+</html>

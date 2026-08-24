@@ -1,0 +1,161 @@
+// Terminal session manager for the embedded xterm login UI.
+//
+// Uses @homebridge/node-pty-prebuilt-multiarch — a node-pty fork that
+// ships prebuilt binaries for Win/Mac/Linux, so `npm install` doesn't
+// require a C++ toolchain or electron-rebuild. The public API matches
+// upstream node-pty (spawn / onData / onExit / resize / kill).
+//
+// The pty gives us a real TTY on the host side, which docker compose
+// forwards to the container via `run -it`. Interactive CLI flows that
+// depend on raw-mode input (Ink-based TUIs like Claude Code's /login)
+// then work as expected.
+
+// @lydell/node-pty ships prebuilt binaries per platform via optional
+// deps (@lydell/node-pty-win32-x64, -darwin-arm64, -linux-x64, ...).
+// No node-gyp, no VS Build Tools, no electron-rebuild needed.
+let pty
+try {
+  pty = require('@lydell/node-pty')
+} catch {
+  pty = null
+}
+
+const sessions = new Map()
+let nextId = 0
+
+function isAvailable() {
+  return pty !== null
+}
+
+function nextSessionId() {
+  nextId += 1
+  return nextId
+}
+
+function spawnSession({
+  command,
+  args = [],
+  cwd,
+  env = process.env,
+  cols = 100,
+  rows = 28,
+  onData,
+  onExit,
+}) {
+  if (!pty) throw new Error('node-pty not available')
+  const id = nextSessionId()
+  const proc = pty.spawn(command, args, {
+    name: 'xterm-256color',
+    cols,
+    rows,
+    cwd,
+    env,
+    useConpty: true,
+  })
+  sessions.set(id, proc)
+
+  proc.onData((data) => {
+    if (onData) onData(data)
+  })
+  proc.onExit((exit) => {
+    sessions.delete(id)
+    if (onExit) {
+      onExit({
+        exitCode: typeof exit.exitCode === 'number' ? exit.exitCode : -1,
+        signal: exit.signal || null,
+      })
+    }
+  })
+  return id
+}
+
+// Adotta un ChildProcess gia' avviato altrove (es. SshExec.openPty per
+// il login provider remoto in VPS mode). Lo wrappa in una "sessione"
+// che espone la stessa API .write/.resize/.kill di un node-pty proc,
+// cosi' i call site di main.js (terminal:write, terminal:resize,
+// terminal:kill) funzionano identici tra local e VPS mode.
+//
+// Nota su resize: il ChildProcess di ssh non propaga SIGWINCH al lato
+// remoto. Per resize affidabile lato VPS servirebbe un canale separato
+// (es. window-change OpenSSH protocol) che node:child_process non
+// espone. Per il flow di login (1 schermata, no full-screen TUI) e'
+// accettabile che il resize sia no-op; T3 puo' decidere di passare a
+// node-pty + ssh come comando se la UX peggiora.
+function adoptChild({ child, onData, onExit }) {
+  if (!child) throw new Error('adoptChild: child required')
+  const id = nextSessionId()
+  const proc = {
+    write: (data) => {
+      try { if (child.stdin && !child.stdin.destroyed) child.stdin.write(data) } catch { /* closed */ }
+    },
+    resize: () => { /* no-op: ssh non propaga SIGWINCH sul remote */ },
+    kill: () => {
+      try { child.kill() } catch { /* already exited */ }
+    },
+  }
+  sessions.set(id, proc)
+
+  const fwd = (chunk) => {
+    if (onData) onData(chunk.toString())
+  }
+  if (child.stdout) child.stdout.on('data', fwd)
+  if (child.stderr) child.stderr.on('data', fwd)
+
+  child.on('error', (err) => {
+    sessions.delete(id)
+    if (onExit) onExit({ exitCode: -1, signal: null, error: err.message })
+  })
+  child.on('exit', (code, signal) => {
+    sessions.delete(id)
+    if (onExit) onExit({
+      exitCode: typeof code === 'number' ? code : -1,
+      signal: signal || null,
+    })
+  })
+  return id
+}
+
+function write(id, data) {
+  const proc = sessions.get(id)
+  if (!proc) return
+  try {
+    proc.write(data)
+  } catch {
+    // pty already closed
+  }
+}
+
+function resize(id, cols, rows) {
+  const proc = sessions.get(id)
+  if (!proc) return
+  try {
+    proc.resize(Math.max(1, cols | 0), Math.max(1, rows | 0))
+  } catch {
+    // ignore resize-after-exit
+  }
+}
+
+function kill(id) {
+  const proc = sessions.get(id)
+  if (!proc) return
+  try {
+    proc.kill()
+  } catch {
+    // already exited
+  }
+  sessions.delete(id)
+}
+
+function killAll() {
+  for (const id of sessions.keys()) kill(id)
+}
+
+module.exports = {
+  isAvailable,
+  spawnSession,
+  adoptChild,
+  write,
+  resize,
+  kill,
+  killAll,
+}
