@@ -6,6 +6,7 @@ import { WELCOME_SEEN_COOKIE } from "@/lib/demo/mode";
 import {
   getDashboardStats,
   getDashboardPositions,
+  getApplicationTimelineEvents,
   getSeenPositionIds,
 } from "@/lib/queries";
 import type { DashboardPosition } from "@/lib/queries";
@@ -24,6 +25,8 @@ import {
 import OnboardingPopup from "@/app/components/OnboardingPopup";
 import DemoPickerCard from "@/app/components/demo/DemoPickerCard";
 import CloudRefreshButton from "@/app/components/CloudRefreshButton";
+import ApplicationTimeline from "@/app/components/ApplicationTimeline";
+import { buildApplicationTimeline } from "@/lib/application-timeline";
 
 const OnboardingWizard = dynamic(
   () => import("@/app/components/OnboardingWizard"),
@@ -95,17 +98,31 @@ export default async function DashboardPage() {
     : [];
   // Messaggi: niente più banner in dashboard — vivono nel drawer messenger
   // in navbar (MessagesDrawer) e nella panoramica /messages.
-  const [stats, dashPositionsRaw, rates] = demoData
+  const [stats, dashPositionsRaw, rates, applicationEvents] = demoData
     ? [
         demoData.stats,
         demoDashPositions,
         { EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92 },
+        demoDashPositions
+          .filter((p) => p.status === "applied" || p.status === "response")
+          .map((p, index) => ({
+            appliedAt: p.last_action_at,
+            response:
+              p.status === "response"
+                ? index % 3 === 0
+                  ? "rejected"
+                  : "interview"
+                : null,
+            responseAt: p.status === "response" ? p.last_action_at : null,
+          })),
       ]
     : await Promise.all([
         getDashboardStats(),
         getDashboardPositions(),
         getExchangeRates(),
+        getApplicationTimelineEvents(),
       ]);
+  const applicationTimeline = buildApplicationTimeline(applicationEvents);
 
   // Marker "nuova": overlay del set position_views dell'utente (cloud).
   // In local mode il set è vuoto e seen resta undefined → decide il
@@ -236,6 +253,31 @@ export default async function DashboardPage() {
               }}
             />
           </div>
+
+          {/* ── Candidature inviate nel tempo ─────────────────────────
+          Parte dal primo invio; oltre un mese mostra gli ultimi 30 giorni.
+          Senza candidature non viene renderizzato alcun contenitore vuoto. */}
+          {applicationTimeline && (
+            <div style={{ animation: "fade-in 0.35s ease both 0.07s" }}>
+              <ApplicationTimeline
+                timeline={applicationTimeline}
+                locale={locale}
+                labels={{
+                  title: t.application_timeline,
+                  range: t.application_timeline_range(
+                    applicationTimeline.rangeDays,
+                  ),
+                  total: t.application_timeline_total(
+                    applicationTimeline.visibleSubmitted,
+                  ),
+                  description: t.application_timeline_description,
+                  submitted: t.application_timeline_submitted,
+                  accepted: t.application_timeline_accepted,
+                  rejected: t.application_timeline_rejected,
+                }}
+              />
+            </div>
+          )}
 
           {/* ── Grafici collegati: Types + Score + Paesi + Città ─────────
           Cliccando una sezione di un grafico si filtrano gli altri

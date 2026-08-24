@@ -47,6 +47,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { join, dirname } from "node:path";
 import { cloudSyncHeaders } from "./client-identity.js";
+import { boundedBackoffDelay } from "./bounded-backoff.js";
 
 /**
  * Le tre figure con cui l'utente conversa. Il web mostra esattamente
@@ -64,6 +65,10 @@ export const MAX_DELIVER_PER_TICK = 5;
 
 /** Il pull può essere più largo della consegna, ma non implica ACK del batch. */
 export const CLOUD_CHAT_PULL_LIMIT = 50;
+
+/** Retry locale: rapido al primo inciampo, poi al massimo uno ogni 5 minuti. */
+export const CHAT_RETRY_MIN_MS = 5_000;
+export const CHAT_RETRY_MAX_MS = 300_000;
 
 /**
  * Quanto indietro può andare il mirror SQLite → `chat.jsonl`. Serve solo al
@@ -1029,6 +1034,10 @@ export async function deliverPendingUserTurns(
     sendFn = sendToPane,
     log = () => {},
     max = MAX_DELIVER_PER_TICK,
+    now = () => Date.now(),
+    random = Math.random,
+    retryMinMs = CHAT_RETRY_MIN_MS,
+    retryMaxMs = CHAT_RETRY_MAX_MS,
   } = {},
 ) {
   // L'effetto esterno (submit nel pane) non puo' stare nella stessa
@@ -1042,11 +1051,31 @@ export async function deliverPendingUserTurns(
       FOREIGN KEY (message_id) REFERENCES pending_user_messages(id) ON DELETE CASCADE
     )`,
   ).run();
+  // Il retry e' stato locale durevole, separato dal messaggio: nessuna
+  // colonna cloud e nessuna migrazione Supabase. Un restart conserva il
+  // prossimo istante utile invece di ricominciare a martellare il pane.
+  db.prepare(
+    `CREATE TABLE IF NOT EXISTS pending_user_message_delivery_retries (
+      message_id INTEGER PRIMARY KEY,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at_ms INTEGER NOT NULL,
+      last_code INTEGER,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (message_id) REFERENCES pending_user_messages(id) ON DELETE CASCADE
+    )`,
+  ).run();
   // Crash dopo il timbro ma prima del cleanup: qui l'esito e' certo e il
   // claim e' solo spazzatura. Il caso opposto (claim + delivered_at NULL) non
   // si elimina mai automaticamente: potrebbe aver gia' raggiunto il pane.
   db.prepare(
     `DELETE FROM pending_user_message_delivery_claims
+      WHERE message_id IN (
+        SELECT id FROM pending_user_messages WHERE delivered_at IS NOT NULL
+      )
+         OR message_id NOT IN (SELECT id FROM pending_user_messages)`,
+  ).run();
+  db.prepare(
+    `DELETE FROM pending_user_message_delivery_retries
       WHERE message_id IN (
         SELECT id FROM pending_user_messages WHERE delivered_at IS NOT NULL
       )
@@ -1065,9 +1094,13 @@ export async function deliverPendingUserTurns(
     : ", NULL AS source_id, NULL AS source_action";
   const rows = db
     .prepare(
-      `SELECT id, agent, body, delivered_via${directiveColumns}
+      `SELECT pending_user_messages.id, agent, body, delivered_via${directiveColumns},
+              COALESCE(r.attempts, 0) AS retry_attempts
         FROM pending_user_messages
+        LEFT JOIN pending_user_message_delivery_retries r
+          ON r.message_id = pending_user_messages.id
         WHERE author = 'user' AND delivered_at IS NULL AND agent IN (${placeholders})
+          AND (r.next_attempt_at_ms IS NULL OR r.next_attempt_at_ms <= ?)
           AND NOT EXISTS (
             SELECT 1 FROM pending_user_message_delivery_claims c
              WHERE c.message_id = pending_user_messages.id
@@ -1075,7 +1108,7 @@ export async function deliverPendingUserTurns(
         ORDER BY id ASC
         LIMIT ?`,
     )
-    .all(...agents, max);
+    .all(...agents, Math.trunc(Number(now()) || Date.now()), max);
   if (rows.length === 0) return { delivered: 0, failed: 0 };
 
   const stamp = db.prepare(
@@ -1087,6 +1120,19 @@ export async function deliverPendingUserTurns(
   );
   const release = db.prepare(
     "DELETE FROM pending_user_message_delivery_claims WHERE message_id = ?",
+  );
+  const scheduleRetry = db.prepare(
+    `INSERT INTO pending_user_message_delivery_retries
+       (message_id, attempts, next_attempt_at_ms, last_code, updated_at)
+     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(message_id) DO UPDATE SET
+       attempts = excluded.attempts,
+       next_attempt_at_ms = excluded.next_attempt_at_ms,
+       last_code = excluded.last_code,
+       updated_at = CURRENT_TIMESTAMP`,
+  );
+  const clearRetry = db.prepare(
+    "DELETE FROM pending_user_message_delivery_retries WHERE message_id = ?",
   );
   let delivered = 0;
   let failed = 0;
@@ -1112,6 +1158,13 @@ export async function deliverPendingUserTurns(
       // Il sender non ha restituito un esito: per il contratto di sendToPane
       // questo e' un errore prima della consegna e resta ritentabile.
       release.run(row.id);
+      const attempts = Math.min(31, Number(row.retry_attempts || 0) + 1);
+      const delay = boundedBackoffDelay(attempts - 1, {
+        minMs: retryMinMs,
+        maxMs: retryMaxMs,
+        random,
+      });
+      scheduleRetry.run(row.id, attempts, Math.trunc(Number(now())) + delay, -1);
       failed += 1;
       log(
         "warn",
@@ -1121,6 +1174,18 @@ export async function deliverPendingUserTurns(
     }
     if (!res.ok) {
       release.run(row.id);
+      const attempts = Math.min(31, Number(row.retry_attempts || 0) + 1);
+      const delay = boundedBackoffDelay(attempts - 1, {
+        minMs: retryMinMs,
+        maxMs: retryMaxMs,
+        random,
+      });
+      scheduleRetry.run(
+        row.id,
+        attempts,
+        Math.trunc(Number(now())) + delay,
+        Number.isFinite(Number(res.code)) ? Number(res.code) : null,
+      );
       failed += 1;
       log(
         "warn",
@@ -1134,10 +1199,49 @@ export async function deliverPendingUserTurns(
     // (e duplicare) l'effetto al riavvio. La diagnosi lo rende subito visibile.
     stamp.run(row.id);
     release.run(row.id);
+    clearRetry.run(row.id);
     delivered += 1;
   }
 
   return { delivered, failed };
+}
+
+/**
+ * Vista economica della coda per decidere se un pull cloud servirebbe davvero.
+ * Se tutte le righe locali sono in backoff, rileggere lo stesso rendezvous non
+ * puo' far avanzare nulla e produce soltanto invocazioni duplicate.
+ */
+export function deliveryRetryStatus(db, { now = Date.now() } = {}) {
+  try {
+    db.prepare(
+      `CREATE TABLE IF NOT EXISTS pending_user_message_delivery_retries (
+        message_id INTEGER PRIMARY KEY,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at_ms INTEGER NOT NULL,
+        last_code INTEGER,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (message_id) REFERENCES pending_user_messages(id) ON DELETE CASCADE
+      )`,
+    ).run();
+    const row = db.prepare(
+      `SELECT COUNT(*) AS queued,
+              SUM(CASE WHEN r.next_attempt_at_ms IS NULL OR r.next_attempt_at_ms <= ?
+                       THEN 1 ELSE 0 END) AS due,
+              MIN(r.next_attempt_at_ms) AS next_attempt_at_ms
+         FROM pending_user_messages m
+         LEFT JOIN pending_user_message_delivery_retries r ON r.message_id = m.id
+        WHERE m.author = 'user' AND m.delivered_at IS NULL`,
+    ).get(Math.trunc(Number(now) || Date.now()));
+    return {
+      queued: Number(row?.queued || 0),
+      due: Number(row?.due || 0),
+      nextAttemptAt: row?.next_attempt_at_ms == null
+        ? null
+        : Number(row.next_attempt_at_ms),
+    };
+  } catch {
+    return { queued: 0, due: 0, nextAttemptAt: null };
+  }
 }
 
 // ── Passo 6: la corsia sa dire quando NON funziona ──────────────────────

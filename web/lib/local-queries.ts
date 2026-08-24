@@ -3,6 +3,7 @@ import { resolveCityPins } from "./city-coords";
 import { salaryPreference } from "./salary-source";
 import { likePattern, parsePositionQuery } from "./position-search";
 import { publicPositionState } from "./position-state";
+import type { ApplicationTimelineEvent } from "./application-timeline";
 import {
   aggregateRoleFamilies,
   type RoleFamilyCount,
@@ -906,6 +907,34 @@ export function getDashboardPositionsLocal(ws: string) {
       critic_verdict: (r.critic_verdict as string | null) ?? null,
     };
   });
+}
+
+// ── Eventi temporali delle candidature ─────────────────────────────
+// Il workspace SQLite è già isolato per utente. `applied_at` è la fonte
+// canonica anche quando lo status avanza a response/interview/rejected.
+export function getApplicationTimelineEventsLocal(
+  ws: string,
+): ApplicationTimelineEvent[] {
+  const db = getDb(ws);
+  const rows = db
+    .prepare(
+      `
+    SELECT applied_at, response, response_at
+    FROM applications
+    WHERE applied_at IS NOT NULL
+    ORDER BY applied_at ASC, id ASC
+  `,
+    )
+    .all() as Array<{
+    applied_at: string;
+    response: string | null;
+    response_at: string | null;
+  }>;
+  return rows.map((row) => ({
+    appliedAt: row.applied_at,
+    response: row.response,
+    responseAt: row.response_at,
+  }));
 }
 
 // ── Position type distribution ──────────────────────────────────────

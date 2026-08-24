@@ -28,6 +28,7 @@ import {
   createAiSdkModel,
   normalizeAiSdkUsage,
 } from "./providers/ai-sdk-runtime.js";
+import { providerDiagnostic } from "./providers/ai-sdk.js";
 import type { ProviderStepRecord } from "./providers/provider.js";
 import { ExclusiveRunLock } from "./run-lock.js";
 
@@ -52,6 +53,8 @@ export type StructuredRoleSpec<
   outputDescription: string;
   inputSchema: z.ZodType<I>;
   outputSchema: z.ZodType<O>;
+  providerOutputSchema?: z.ZodType<unknown>;
+  parseProviderOutput?: (raw: unknown) => O;
   systemPrompt: string;
   buildPrompt(input: I): string;
   buildMockOutput(input: I): O;
@@ -90,6 +93,8 @@ export type StructuredRoleOutcome<O extends StructuredRoleProposal> =
         code: WorkerErrorCode;
         message: string;
         retryable: boolean;
+        usage?: Usage;
+        cost?: z.infer<typeof CostSchema>;
         limit?:
           | "input_tokens_per_step"
           | "output_tokens_per_step"
@@ -317,6 +322,7 @@ export class StructuredRoleApiWorker<
       );
       return { ok: true, result };
     } catch (error) {
+      writeStructuredRoleProviderDiagnostic(this.spec.role, error);
       const fault = knownFault(error);
       const partial = guard?.metrics;
       await this.writeFailureAudit(
@@ -347,6 +353,8 @@ export class StructuredRoleApiWorker<
           message: publicMessage(this.spec.role, fault.code),
           retryable: fault.retryable,
           limit: fault.limit,
+          usage: partial?.usage,
+          cost: partial?.cost,
         }),
       };
     } finally {
@@ -423,7 +431,7 @@ class AiSdkStructuredRoleProvider<
         output: Output.object({
           name: this.spec.outputName,
           description: this.spec.outputDescription,
-          schema: this.spec.outputSchema,
+          schema: this.spec.providerOutputSchema ?? this.spec.outputSchema,
         }),
         stopWhen: stepCountIs(context.input.limits.maxSteps),
         maxOutputTokens: context.input.limits.maxOutputTokensPerStep,
@@ -450,7 +458,9 @@ class AiSdkStructuredRoleProvider<
         },
       });
       return {
-        output: this.spec.outputSchema.parse(result.output),
+        output: this.spec.parseProviderOutput
+          ? this.spec.parseProviderOutput(result.output)
+          : this.spec.outputSchema.parse(result.output),
         rawStopReason: result.finishReason,
       };
     } catch (error) {
@@ -463,12 +473,23 @@ class AiSdkStructuredRoleProvider<
       );
       if (error instanceof WorkerFault) throw error;
       if (context.signal.aborted) throw timeoutFault(error);
+      writeStructuredRoleProviderDiagnostic(this.spec.role, error);
       throw new WorkerFault("PROVIDER_ERROR", {
         retryable: true,
         cause: error,
       });
     }
   }
+}
+
+export function writeStructuredRoleProviderDiagnostic(
+  role: AgentRole,
+  error: unknown,
+): void {
+  if (process.env.JHT_API_PROVIDER_DEBUG !== "1") return;
+  process.stderr.write(
+    `[api-provider-debug] ${JSON.stringify({ role, ...providerDiagnostic(error) })}\n`,
+  );
 }
 
 function makeResultSchema<O extends StructuredRoleProposal>(
@@ -505,6 +526,8 @@ function makeErrorSchema(role: AgentRole) {
     code: WorkerErrorCodeSchema,
     message: z.string().trim().min(1).max(240),
     retryable: z.boolean(),
+    usage: UsageSchema.optional(),
+    cost: CostSchema.optional(),
     limit: z
       .enum([
         "input_tokens_per_step",

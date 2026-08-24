@@ -1,8 +1,13 @@
 import { Output, generateText, stepCountIs } from "ai";
 
-import { AnalystProposalSchema } from "../analyst-contract.js";
+import {
+  AnalystProviderOutputSchema,
+  countryCodeFromScoutLocation,
+  parseAnalystProviderOutput,
+} from "../analyst-contract.js";
 import { WorkerFault } from "../errors.js";
 import { createAiSdkModel, normalizeAiSdkUsage } from "./ai-sdk-runtime.js";
+import { providerDiagnostic } from "./ai-sdk.js";
 import type {
   AnalystProviderAdapter,
   AnalystProviderContext,
@@ -26,7 +31,7 @@ export class AiSdkAnalystProvider implements AnalystProviderAdapter {
           name: "jht_analyst_proposal_v1",
           description:
             "Proposal-only verification and enrichment for one Scout candidate.",
-          schema: AnalystProposalSchema,
+          schema: AnalystProviderOutputSchema,
         }),
         stopWhen: stepCountIs(context.input.limits.maxSteps),
         maxOutputTokens: context.input.limits.maxOutputTokensPerStep,
@@ -54,7 +59,10 @@ export class AiSdkAnalystProvider implements AnalystProviderAdapter {
         },
       });
       return {
-        output: AnalystProposalSchema.parse(result.output),
+        output: parseAnalystProviderOutput(
+          result.output,
+          countryCodeFromScoutLocation(context.input.position.location),
+        ),
         rawStopReason: result.finishReason,
       };
     } catch (error) {
@@ -72,6 +80,14 @@ export class AiSdkAnalystProvider implements AnalystProviderAdapter {
           limit: "timeout_ms",
           cause: error,
         });
+      }
+      if (process.env.JHT_API_PROVIDER_DEBUG === "1") {
+        process.stderr.write(
+          `[api-provider-debug] ${JSON.stringify({ role: "analyst", ...providerDiagnostic(error) })}\n`,
+        );
+      }
+      if (error instanceof Error && error.name === "ZodError") {
+        throw new WorkerFault("OUTPUT_VALIDATION", { cause: error });
       }
       throw new WorkerFault("PROVIDER_ERROR", {
         retryable: true,

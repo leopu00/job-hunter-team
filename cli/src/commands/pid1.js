@@ -1110,9 +1110,16 @@ async function dispatch() {
   //     sulla pagina posizione + CV Preview del profilo). Poll adattivo
   //     (poll-tier, idle 30s) + indice/purge a tempo. È l'unico poller di
   //     controllo attivo di default; gli altri restano congelati.
-  // Gli altri poller ritirati sono CONGELATI (non rimossi) e ri-attivabili a
-  // runtime, senza rebuild, con JHT_CLOUD_CONTROL_POLLERS=1 (escape hatch).
+  // Gli altri poller ritirati restano disponibili come comandi diagnostici
+  // manuali, ma pid1 non li co-spawna piu': riattivarli insieme al daemon
+  // duplica i consumer e puo' ricreare il loop di polling che li ha ritirati.
+  // Il vecchio flag e' accettato solo per emettere una migrazione esplicita.
   const controlPollers = process.env.JHT_CLOUD_CONTROL_POLLERS === '1';
+  if (controlPollers) {
+    pid1Log(
+      'JHT_CLOUD_CONTROL_POLLERS is deprecated and ignored: remove it; the cloud daemon now owns realtime, team_state and chat',
+    );
+  }
 
   // Stato iniziale del cloud: se gia' paired, partono il cloud daemon (con
   // reconcile) + il file-bridge poller (download file on-demand dal web).
@@ -1121,11 +1128,6 @@ async function dispatch() {
   if (isVps && await isCloudConfigured()) {
     startDaemon();
     startFileBridge();
-    if (controlPollers) {
-      startRealtime();
-      startTeamState();
-      startUserMessages();
-    }
   } else if (isVps) {
     pid1Log('cloud sync not yet configured: watching for cloud.json (auto-start after pairing)');
   }
@@ -1147,20 +1149,11 @@ async function dispatch() {
         if (nowConfigured === lastConfigured) return;
         lastConfigured = nowConfigured;
         if (nowConfigured) {
-          // [JHT-CLOUD-INTERACTIVE-RETIRE] reconcile team_state fuso nel daemon;
-          // team-state/user-messages standalone solo con env override.
-          pid1Log(
-            controlPollers
-              ? 'cloud.json detected: starting cloud daemon (with sync) + file bridge + realtime + standalone control poller (env override)'
-              : 'cloud.json detected: starting cloud daemon (with team_state) + file-bridge poller',
-          );
+          // [JHT-CLOUD-INTERACTIVE-RETIRE] un solo owner: il daemon integra
+          // Realtime/team_state/chat. I consumer legacy non vengono duplicati.
+          pid1Log('cloud.json detected: starting cloud daemon (with realtime/team_state/chat) + file-bridge poller');
           startDaemon();
           startFileBridge();
-          if (controlPollers) {
-            startRealtime();
-            startTeamState();
-            startUserMessages();
-          }
         } else {
           stopDaemon('cloud.json removed or disabled');
         }

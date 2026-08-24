@@ -246,6 +246,8 @@ export class AnalystApiWorker {
           message: analystMessage(fault.code),
           retryable: fault.retryable,
           limit: fault.limit,
+          usage: partial?.usage,
+          cost: partial?.cost,
         },
       });
     } finally {

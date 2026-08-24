@@ -33,6 +33,6 @@ export function buildScoutPrompt(
   const method =
     mode === "web"
       ? `Run focused searches across company career pages and reputable job boards. Prefer advertisements posted in the last ${input.search.postedWithinDays} days. Search broadly enough to avoid company or city concentration.`
-      : "Use the configured catalog tools.";
+      : `Use the configured catalog tools. Your first tool call must be search_jobs with targetRole=${JSON.stringify(input.search.targetRoles[0])}, location=${JSON.stringify(input.search.locations[0])}, workMode=${JSON.stringify(input.search.workModes[0])}, postedWithinDays=${input.search.postedWithinDays}, and limit=${input.search.maxCandidates}. Read every returned sourceId, up to ${input.search.maxCandidates}, before considering another authorized lane. Do not stop after an empty lane while untried authorized lanes remain.`;
   return `Find up to ${input.search.maxCandidates} candidate listings matching this explicit search brief. ${method} Use one listing at a time and stop after enough evidenced proposals are available.\n\nSEARCH_BRIEF_JSON\n${JSON.stringify(input.search)}\n\nCANDIDATE_CONSTRAINTS_JSON\n${JSON.stringify(input.candidate ?? {})}`;
 }

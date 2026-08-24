@@ -198,7 +198,7 @@ function orderArgs(call: QueryCall) {
     .map((operation) => operation.args);
 }
 
-describe("le undici query cloud superano il tetto PostgREST", () => {
+describe("le dodici query cloud superano il tetto PostgREST", () => {
   it("getDashboardStats conta anche la riga 1001", async () => {
     await expect(queries.getDashboardStats()).resolves.toMatchObject({
       total: 1001,
@@ -258,6 +258,38 @@ describe("le undici query cloud superano il tetto PostgREST", () => {
     expectTwoPages();
     expect(orderArgs(supa.calls[0])).toEqual([
       ["found_at", { ascending: false }],
+      ["id", { ascending: true }],
+    ]);
+  });
+
+  it("getApplicationTimelineEvents include esiti e riga 1001 in ordine stabile", async () => {
+    applicationRows = rows().map((row, index) => ({
+      id: row.id,
+      position_id: row.id,
+      status: "applied",
+      applied_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+      response: null,
+      deleted_at: null,
+    }));
+
+    applicationRows[1000].response = "rejected";
+    applicationRows[1000].response_at = "2026-08-24T10:00:00.000Z";
+
+    const result = await queries.getApplicationTimelineEvents();
+
+    expect(result).toHaveLength(1001);
+    expect(result.at(-1)).toEqual({
+      appliedAt: applicationRows.at(-1)?.applied_at,
+      response: "rejected",
+      responseAt: "2026-08-24T10:00:00.000Z",
+    });
+    expectTwoPages("applications");
+    const call = supa.calls.find(
+      (candidate) => candidate.table === "applications",
+    );
+    expect(call?.columns).toBe("id, applied_at, response, response_at");
+    expect(orderArgs(call!)).toEqual([
+      ["applied_at", { ascending: true }],
       ["id", { ascending: true }],
     ]);
   });

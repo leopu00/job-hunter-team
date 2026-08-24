@@ -1,0 +1,25 @@
+{
+  "profileVersion": "1",
+  "provider": "openai",
+  "model": "gpt-5.6-luna",
+  "capabilities": {
+    "toolCalling": {
+      "supported": true,
+      "parallel": true
+    },
+    "structuredOutput": {
+      "supported": true,
+      "mode": "json_schema"
+    },
+    "webSearch": {
+      "supported": true,
+      "mode": "provider"
+    }
+  },
+  "pricing": {
+    "inputUsdPerMillionTokens": 0.2,
+    "cachedInputUsdPerMillionTokens": 0.02,
+    "cacheWriteUsdPerMillionTokens": 0.25,
+    "outputUsdPerMillionTokens": 1.2
+  }
+}

@@ -35,6 +35,15 @@ export const T = {
     cvs_written: "CV scritti",
     ready: "Pronte",
     sent: "Inviate",
+    application_timeline: "Candidature inviate",
+    application_timeline_range: (days: number) =>
+      days === 1 ? "Oggi" : `Ultimi ${days} giorni`,
+    application_timeline_total: (count: number) => `${count} inviate`,
+    application_timeline_description:
+      "Candidature inviate, accettate e rifiutate per giorno",
+    application_timeline_submitted: "Inviate",
+    application_timeline_accepted: "Accettate (colloquio)",
+    application_timeline_rejected: "Rifiutate",
 
     // Pipeline
     pipeline: "Pipeline",
@@ -138,6 +147,15 @@ export const T = {
     cvs_written: "CVs written",
     ready: "Ready",
     sent: "Sent",
+    application_timeline: "Applications sent",
+    application_timeline_range: (days: number) =>
+      days === 1 ? "Today" : `Last ${days} days`,
+    application_timeline_total: (count: number) => `${count} sent`,
+    application_timeline_description:
+      "Applications sent, accepted and rejected per day",
+    application_timeline_submitted: "Sent",
+    application_timeline_accepted: "Accepted (interview)",
+    application_timeline_rejected: "Rejected",
 
     pipeline: "Pipeline",
     pipeline_density: "Pipeline density",
@@ -237,6 +255,15 @@ export const T = {
     cvs_written: "Megírt önéletrajz",
     ready: "Kész",
     sent: "Elküldve",
+    application_timeline: "Elküldött pályázatok",
+    application_timeline_range: (days: number) =>
+      days === 1 ? "Ma" : `Utolsó ${days} nap`,
+    application_timeline_total: (count: number) => `${count} elküldve`,
+    application_timeline_description:
+      "Naponta elküldött, elfogadott és elutasított pályázatok",
+    application_timeline_submitted: "Elküldve",
+    application_timeline_accepted: "Elfogadva (interjú)",
+    application_timeline_rejected: "Elutasítva",
 
     pipeline: "Folyamat",
     pipeline_density: "Folyamat sűrűsége",
@@ -336,6 +363,15 @@ export const T = {
     cvs_written: "CVs redactados",
     ready: "Listas",
     sent: "Enviadas",
+    application_timeline: "Candidaturas enviadas",
+    application_timeline_range: (days: number) =>
+      days === 1 ? "Hoy" : `Últimos ${days} días`,
+    application_timeline_total: (count: number) => `${count} enviadas`,
+    application_timeline_description:
+      "Candidaturas enviadas, aceptadas y rechazadas por día",
+    application_timeline_submitted: "Enviadas",
+    application_timeline_accepted: "Aceptadas (entrevista)",
+    application_timeline_rejected: "Rechazadas",
 
     pipeline: "Pipeline",
     pipeline_density: "Densidad del pipeline",
@@ -432,6 +468,15 @@ export const T = {
     cvs_written: "Lebensläufe erstellt",
     ready: "Bereit",
     sent: "Gesendet",
+    application_timeline: "Gesendete Bewerbungen",
+    application_timeline_range: (days: number) =>
+      days === 1 ? "Heute" : `Letzte ${days} Tage`,
+    application_timeline_total: (count: number) => `${count} gesendet`,
+    application_timeline_description:
+      "Pro Tag gesendete, angenommene und abgelehnte Bewerbungen",
+    application_timeline_submitted: "Gesendet",
+    application_timeline_accepted: "Angenommen (Gespräch)",
+    application_timeline_rejected: "Abgelehnt",
 
     pipeline: "Pipeline",
     pipeline_density: "Pipeline-Dichte",
@@ -528,6 +573,15 @@ export const T = {
     cvs_written: "CV rédigés",
     ready: "Prêts",
     sent: "Envoyés",
+    application_timeline: "Candidatures envoyées",
+    application_timeline_range: (days: number) =>
+      days === 1 ? "Aujourd’hui" : `${days} derniers jours`,
+    application_timeline_total: (count: number) => `${count} envoyées`,
+    application_timeline_description:
+      "Candidatures envoyées, acceptées et refusées par jour",
+    application_timeline_submitted: "Envoyées",
+    application_timeline_accepted: "Acceptées (entretien)",
+    application_timeline_rejected: "Refusées",
 
     pipeline: "Pipeline",
     pipeline_density: "Densité du pipeline",
@@ -624,6 +678,15 @@ export const T = {
     cvs_written: "CVs escritos",
     ready: "Prontas",
     sent: "Enviadas",
+    application_timeline: "Candidaturas enviadas",
+    application_timeline_range: (days: number) =>
+      days === 1 ? "Hoje" : `Últimos ${days} dias`,
+    application_timeline_total: (count: number) => `${count} enviadas`,
+    application_timeline_description:
+      "Candidaturas enviadas, aceites e rejeitadas por dia",
+    application_timeline_submitted: "Enviadas",
+    application_timeline_accepted: "Aceites (entrevista)",
+    application_timeline_rejected: "Rejeitadas",
 
     pipeline: "Pipeline",
     pipeline_density: "Densidade do pipeline",

@@ -120,7 +120,29 @@ export function usePendingMessagesLive(
               if (row) cbRef.current(row, payload.eventType);
             },
           )
-          .subscribe();
+          .subscribe((status: string) => {
+            if (status !== "SUBSCRIBED" || cancelled) return;
+            // postgres_changes non riproduce gli eventi persi mentre il
+            // socket era giù. Un solo catch-up a ogni (ri)subscribe ricuce
+            // la timeline senza introdurre polling; il merge del chiamante
+            // è per id, quindi le righe già viste restano idempotenti.
+            void (async () => {
+              try {
+                const response = await fetch("/api/pending-messages", {
+                  cache: "no-store",
+                });
+                if (!response.ok || cancelled) return;
+                const snapshot = await response.json();
+                if (!Array.isArray(snapshot?.messages)) return;
+                for (const raw of snapshot.messages) {
+                  const row = toPendingMessage(raw as CloudRow);
+                  if (row && !cancelled) cbRef.current(row, "UPDATE");
+                }
+              } catch {
+                /* offline: la prossima riconnessione riprova */
+              }
+            })();
+          });
       } catch {
         channel = null;
       }

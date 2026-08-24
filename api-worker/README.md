@@ -4,7 +4,9 @@ This package is the first API-backed agent engine for Job Hunter Team. Its core
 worker remains proposal-only and is not wired into the production launcher,
 tmux, Bridge, Sentinel or `jobs.db`. A second entry point now wraps that core in
 an entirely separate standalone ecosystem with its own profile, coordination
-leases and SQLite database.
+leases and SQLite database. A full-team runner now adds an isolated task bus,
+shared budget ledger and artifact directory; it never opens the product
+`jobs.db` or invokes tmux.
 
 The architectural rationale and unchanged boundaries are recorded in
 [`docs/internal/prototypes/2026-08-19-scout-api-worker-design.md`](../docs/internal/prototypes/2026-08-19-scout-api-worker-design.md).
@@ -15,8 +17,10 @@ for the production role prompts, pacing rules, session policy or orchestration
 contracts, and no side-effect consumer is connected to them. The role workers
 share only provider, guardrail, lock and sanitized-audit infrastructure; each
 has its own strict input/output schema, prompt, runtime lock and proposal-only
-result. They do not read or write the product database, files, tmux sessions,
-mail or network tools.
+result. They do not read or write the product database, tmux sessions or mail.
+Only the explicit team coordinator may commit validated proposals to its own
+SQLite database and export requested CV/review artifacts inside its supplied
+workspace.
 
 ## Structure
 
@@ -24,6 +28,7 @@ mail or network tools.
 src/contract.ts             versioned input/result/tool/error/event schemas
 src/model-profile.ts        provider, model, capability and pricing profile
 src/candidate-profile.ts    minimal standalone candidate/search profile
+src/candidate-profile-import.ts privacy-minimizing 2026 profile bridge
 src/role/scout.ts           provider-independent Scout prompt
 src/tools.ts                narrow injected search/read tools
 src/web-job-reader.ts       public-HTTPS + Schema.org JobPosting evidence gate
@@ -41,6 +46,9 @@ src/structured-role-worker.ts guarded shared structured-output runtime
 src/standalone-db.ts        isolated coordination, dedup and positions database
 src/standalone.ts           profile-to-search-to-persistence orchestration
 src/standalone-cli.ts       one-command standalone entry point
+src/team-db.ts              claimed tasks, state machine, audit and USD ledger
+src/team-runner.ts          Captain-to-Sentinel isolated orchestration
+src/team-cli.ts             full-team offline/live E2E entry point
 fixtures/                   synthetic input, model and job catalog
 tests/                      offline automated tests
 ```
@@ -53,6 +61,7 @@ they execute the actual worker, schema, guard, lock, audit and CLI boundaries:
 ```bash
 npm run scout
 npm run analyst:demo
+npm run scorer:demo
 npm run writer:demo
 npm run critic:demo
 npm run assistant:demo
@@ -63,24 +72,98 @@ npm run doctor:demo
 npm run maintainer:demo
 ```
 
-Scorer is intentionally not exposed in this tranche. The accepted product
-contract simultaneously requires component maxima totalling 110, an exact
-component sum and a total constrained to 0–100. `shared/skills/score_ranges.py`
-marks that contradiction as known and unresolved. An ADR or equivalent product
-decision must resolve it before an API Scorer can be enabled; this package does
-not invent weights, clamp or normalize the result.
+Scorer is exposed on the versioned `jht-100-v2` proposal scale accepted in
+[ADR-0010](../docs/adr/0010-version-api-scorer-scale.md): stack 35, experience
+25, remote/location 20, salary 10 and strategic fit 10. The exact component
+ceiling is therefore 100; explicit deductions may reduce it by at most 30
+points. The existing persisted 110-point component ruler remains
+`legacy-110-v1` and is not rewritten or silently converted.
 
-The downstream roles are deliberately proposals, not production automation:
-Writer does not create documents, Critic does not save reviews, Captain and
-Sentinel do not issue commands, Doctor does not restart sessions, and
-Maintainer does not edit the repository. Writer is contract-gated to an
-explicit user request and a score of at least 50 for CV work. Critic receives
-only the CV and job description, preserving blind review.
+The Scorer input contains the original Scout evidence, the checked Analyst
+proposal and an explicit operator authorization tied to the same source ID.
+Cross-position handoffs, excluded Analyst proposals, missing authorization,
+wrong arithmetic and a decision inconsistent with the 40-point threshold fail
+closed. The authorization permits only one proposal: it does not authorize a
+database write or another agent handoff.
+
+The individual downstream roles are deliberately proposals, not production
+automation:
+Scorer does not write scores or position states, Writer does not create
+documents, Critic does not save reviews, Captain and Sentinel do not issue
+commands, Doctor does not restart sessions, and Maintainer does not edit the
+repository. Writer is contract-gated to an explicit user request and a score
+of at least 50 for CV work. Critic receives only the CV and job description,
+preserving blind review.
 
 For a paid canary, each non-Scout CLI additionally requires `--live`, explicit
 `--input` and `--profile` files, a positive `--max-cost-usd`, current non-zero
 pricing and the provider's fixed environment key. No test or demo enables that
 path implicitly.
+
+### OpenAI synthetic canary — 2026-08-24
+
+The isolated Analyst → authorized handoff → Scorer path passed live with
+`gpt-5.6-luna`: two provider requests, 3,694 tokens and projected configured
+cost of `$0.00185767` under one `$0.05` process budget. Both results remained
+`proposal_only` / `persistence: none`; their audits contained no persistence
+events. This proves transport, strict structured output, accounting and the
+handoff boundary on synthetic evidence. It is not a quality benchmark and the
+projected cost has not yet been reconciled against provider billing.
+
+The canary profile used the model ID, structured-output capability and token
+prices published in the official
+[OpenAI model documentation](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
+on that date. Pricing remains explicit runtime configuration and must be
+rechecked before future paid runs.
+
+## Full isolated API team
+
+The offline command runs the complete collaboration path against the synthetic
+catalog:
+
+```bash
+npm run team -- --workspace /absolute/path/to/isolated-team-workspace
+```
+
+Captain opens the bounded goal, Scout proposes exactly five listings, two
+Analyst and two Scorer workers claim tasks concurrently, the coordinator
+authorizes CV work for the two highest eligible scores, two Writer and two
+Critic workers produce/review the artifacts, and Sentinel checks the shared
+usage ledger. State transitions and handoffs are committed by the deterministic
+coordinator, never by model output. A run completes only after five stored score
+proposals, two CV artifacts, two Critic reviews and zero outstanding budget
+reservations are present.
+
+Live mode requires explicit candidate, model and workspace paths plus both a
+team cap and a per-agent reservation. `fixtures/openai-gpt-5.6-luna.profile.json`
+contains the pricing verified on 2026-08-24; recheck it before another paid run.
+
+```bash
+npm run team -- \
+  --live \
+  --candidate-profile /absolute/path/to/profile.json \
+  --model-profile fixtures/openai-gpt-5.6-luna.profile.json \
+  --workspace /absolute/path/to/isolated-team-workspace \
+  --max-cost-usd 0.10 \
+  --max-agent-cost-usd 0.02
+```
+
+### Full-team OpenAI E2E — 2026-08-24
+
+Run `4a4b4735-2039-4f99-b0cd-b7e70d322db4` completed live with
+`gpt-5.6-luna` and an explicitly supplied 2026 candidate profile:
+
+- five scored synthetic positions: `87`, `75`, `84`, `82`, `83`;
+- two CV Markdown artifacts and two Critic JSON reviews;
+- Critic results `8/10 pass` and `9/10 pass`;
+- 11 agent usage records, 12 role handoffs and 57 timeline events;
+- `$0.02491129` configured-price estimate under the `$0.10` shared cap;
+- zero outstanding budget reservations and no access to product `jobs.db`.
+
+The complete package verification passed immediately afterward: 18 test files,
+119 tests, TypeScript typecheck and Prettier check. The run estimate includes
+only this successful run; earlier fail-closed diagnostic canaries are separately
+audited and have not been reconciled against provider billing.
 
 > **Live-provider privacy boundary:** local audit files omit prompts and role
 > evidence, but `--live` sends the serialized role input—including any supplied

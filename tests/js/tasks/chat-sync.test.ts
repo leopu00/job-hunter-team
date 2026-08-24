@@ -43,6 +43,7 @@ import {
   cloudRequestFailure,
   deliverPendingUserTurns,
   diagnoseChatLane,
+  deliveryRetryStatus,
   fileChanged,
   importCloudUserTurns,
   ingestChatJsonl,
@@ -671,20 +672,42 @@ describe("consegna al pane tmux", () => {
     // exit 4 di jht-tmux-send = TUI occupata oltre il budget, agente VIVO.
     // Scartare qui vorrebbe dire perdere il messaggio dell'utente.
     seedUserTurn();
+    let clock = 1_000_000;
     const res = await deliverPendingUserTurns(db, {
       sendFn: async () => ({ ok: false, code: 4, error: "busy" }),
+      now: () => clock,
+      random: () => 0.5,
     });
     expect(res).toEqual({ delivered: 0, failed: 1 });
     expect(rowsOf()[0].delivered_at).toBeNull();
 
-    // Al giro dopo, con il pane libero, riparte.
+    // Il giro immediatamente successivo non ritenta: la coda e' durevole ma
+    // il pane fermo non produce un loop rapido.
+    const deferred = await deliverPendingUserTurns(db, {
+      sendFn: async () => {
+        throw new Error("non ancora dovuto");
+      },
+      now: () => clock,
+    });
+    expect(deferred).toEqual({ delivered: 0, failed: 0 });
+    expect(deliveryRetryStatus(db, { now: clock })).toMatchObject({
+      queued: 1,
+      due: 0,
+      nextAttemptAt: clock + 5_000,
+    });
+
+    // Alla scadenza, con il pane libero, riparte.
+    clock += 5_000;
     const retry = await deliverPendingUserTurns(db, {
       sendFn: async () => ({ ok: true, code: 0, error: "" }),
+      now: () => clock,
     });
     expect(retry.delivered).toBe(1);
   });
 
-  it("usa il VERO rc=4, conserva Telegram e ritenta una volta dopo restart", async () => {
+  it.skipIf(process.platform === "win32")(
+    "usa il VERO rc=4, conserva Telegram e ritenta una volta dopo restart",
+    async () => {
     const dbPath = join(home, "jobs.db");
     let persisted = new DatabaseSync(dbPath);
     persisted.exec(SCHEMA);
@@ -707,6 +730,7 @@ describe("consegna al pane tmux", () => {
     chmodSync(sender, 0o755);
     const previousPath = process.env.PATH;
     process.env.PATH = `${bin}:${previousPath}`;
+    let clock = 10_000;
     try {
       // La riga Telegram entra davvero nella cronologia che legge il gioco
       // PRIMA della consegna al pane: non basta che esista nella SQLite.
@@ -730,6 +754,8 @@ describe("consegna al pane tmux", () => {
       expect(
         await deliverPendingUserTurns(persisted, {
           log: (_level: string, message: string) => deliveryLogs.push(message),
+          now: () => clock,
+          random: () => 0.5,
         }),
       ).toEqual({
         delivered: 0,
@@ -750,7 +776,8 @@ describe("consegna al pane tmux", () => {
       writeFileSync(sender, senderScript(7));
       chmodSync(sender, 0o755);
       persisted = new DatabaseSync(dbPath);
-      expect(await deliverPendingUserTurns(persisted)).toEqual({
+      clock += 5_000;
+      expect(await deliverPendingUserTurns(persisted, { now: () => clock, random: () => 0.5 })).toEqual({
         delivered: 0,
         failed: 1,
       });
@@ -762,7 +789,8 @@ describe("consegna al pane tmux", () => {
 
       rmSync(sender);
       process.env.PATH = bin;
-      expect(await deliverPendingUserTurns(persisted)).toEqual({
+      clock += 10_000;
+      expect(await deliverPendingUserTurns(persisted, { now: () => clock, random: () => 0.5 })).toEqual({
         delivered: 0,
         failed: 1,
       });
@@ -776,7 +804,8 @@ describe("consegna al pane tmux", () => {
       // trova più il turno: nessuna seconda busta al pane.
       writeFileSync(sender, senderScript(0));
       chmodSync(sender, 0o755);
-      expect(await deliverPendingUserTurns(persisted)).toEqual({
+      clock += 20_000;
+      expect(await deliverPendingUserTurns(persisted, { now: () => clock, random: () => 0.5 })).toEqual({
         delivered: 1,
         failed: 0,
       });
@@ -806,7 +835,8 @@ describe("consegna al pane tmux", () => {
         // gia' chiuso nel percorso felice
       }
     }
-  });
+    },
+  );
 
   it("un claim atomico impedisce a due consumer di inviare la stessa riga", async () => {
     seedUserTurn("assistente", "una sola busta");
@@ -1439,7 +1469,8 @@ describe("canale della chat senza lettore diretto", () => {
     expect(src).not.toMatch(/pending\s*&&\s*reader/);
     expect(src).toContain("chat.chatChannelFor(config, reader)");
     // La guardia che tiene a zero le chiamate a chat ferma.
-    expect(src).toContain("if (pending && channel)");
+    expect(src).toContain("const shouldPull = pending && channel");
+    expect(src).toContain("if (shouldPull)");
   });
 
   it("il worker importa node:sqlite prima di aprire il DB", () => {
@@ -1466,12 +1497,10 @@ describe("canale della chat senza lettore diretto", () => {
       join(__dirname, "../../../cli/src/commands/cloud.js"),
       "utf-8",
     );
-    const chatCall = src.indexOf(
-      "await handleChatSync({ silent: true, config, state: rendezvousState })",
-    );
     const rendezvousRead = src.indexOf(
       "rendezvousState = await readRendezvousState(config, { silent: true })",
     );
+    const chatCall = src.indexOf("await handleChatSync({", rendezvousRead);
     expect(rendezvousRead).toBeGreaterThan(-1);
     // Dopo la lettura di team_state (che è già pagata dal pulsante "Sync
     // now") e prima del blocco pesante che la segue.

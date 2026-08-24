@@ -29,6 +29,7 @@ import type {
   PositionNoCoord,
 } from "@/lib/queries";
 import type { PositionCoord } from "@/lib/local-queries";
+import type { ApplicationTimelineEvent } from "@/lib/application-timeline";
 import {
   buildTeamActivity,
   resolveActivityRange,
@@ -302,6 +303,28 @@ export async function demoDashboardPositions(
       // il resto figura già visto.
       seen: Date.parse(p.found_at) < Date.now() - 24 * 3600_000,
     }));
+}
+
+export async function demoApplicationTimelineEvents(
+  key: DemoPersonaKey,
+): Promise<ApplicationTimelineEvent[]> {
+  const submitted = (await data(key))
+    .filter((p) => p.status === "applied" || p.status === "response")
+    .sort((a, b) => a.last_action_at.localeCompare(b.last_action_at));
+  let outcomeIndex = 0;
+  return submitted.map((position) => {
+    const hasOutcome = position.status === "response";
+    const response = hasOutcome
+      ? outcomeIndex++ % 3 === 0
+        ? "rejected"
+        : "interview"
+      : null;
+    return {
+      appliedAt: position.last_action_at,
+      response,
+      responseAt: hasOutcome ? position.last_action_at : null,
+    };
+  });
 }
 
 // ── Distribuzioni ───────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import { resolveCityPins } from "@/lib/city-coords";
 import { salaryPreference } from "@/lib/salary-source";
 import { parsePositionQuery } from "@/lib/position-search";
 import { publicPositionState } from "@/lib/position-state";
+import type { ApplicationTimelineEvent } from "@/lib/application-timeline";
 import {
   aggregateRoleFamilies,
   UNCATEGORIZED_LABEL,
@@ -1196,6 +1197,53 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       critic_verdict: a?.critic_verdict ?? null,
     };
   });
+}
+
+// ── Eventi temporali delle candidature ─────────────────────────────
+// Query separata dai facet della dashboard: una candidatura resta un invio
+// anche se in seguito la posizione cambia stato. In cloud la RLS limita le
+// righe all'utente autenticato; in locale il workspace è già per-utente.
+export async function getApplicationTimelineEvents(): Promise<
+  ApplicationTimelineEvent[]
+> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoApplicationTimelineEvents(dp);
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getApplicationTimelineEventsLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
+
+  const supabase = await createClient();
+  const query = supabase
+    .from("applications")
+    .select("id, applied_at, response, response_at")
+    .not("applied_at", "is", null)
+    .is("deleted_at", null)
+    .order("applied_at", { ascending: true })
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<{
+    id: string;
+    applied_at: string | null;
+    response: string | null;
+    response_at: string | null;
+  }>(query);
+  if (error || !data) return [];
+  return data.flatMap((row) =>
+    row.applied_at
+      ? [
+          {
+            appliedAt: row.applied_at,
+            response: row.response,
+            responseAt: row.response_at,
+          },
+        ]
+      : [],
+  );
 }
 
 export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
