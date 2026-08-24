@@ -1,7 +1,7 @@
 # All-agent isolated API roadmap
 
-Date: 2026-08-20
-Branch: `api-scout-worker-experiment`
+Date: 2026-08-20; updated 2026-08-24
+Branch: `api-agents`
 
 ## Objective
 
@@ -25,24 +25,29 @@ current pricing and the matching provider key.
 
 ## Role matrix
 
-| Role       | Initial API responsibility                                                         | Synthetic run               | Production side effects                 |
-| ---------- | ---------------------------------------------------------------------------------- | --------------------------- | --------------------------------------- |
-| Scout      | Discover and independently read public job evidence                                | Passed                      | Isolated SQLite only in standalone mode |
-| Analyst    | Check/exclude one Scout proposal and structure requirements                        | Passed                      | None                                    |
-| Scorer     | Resolve the contradictory 110-point component ceiling and 100-point total contract | Blocked pending product ADR | Not exposed                             |
-| Writer     | Draft a user-requested CV/letter from supplied evidence                            | Passed                      | None; no files                          |
-| Critic     | Blind, one-shot, CV-only seven-section review                                      | Passed                      | None; no review files                   |
-| Assistant  | Classify intake and propose profile/ticket routing                                 | Passed                      | None                                    |
-| Mentor     | Give sparse aggregate career guidance                                              | Passed                      | None                                    |
-| Captain    | Propose bounded coordination decisions from a snapshot                             | Passed                      | None; no agent commands                 |
-| Sentinel   | Propose usage-based continue/throttle/stop orders                                  | Passed                      | None; no controls                       |
-| Doctor     | Propose observe/diagnose/refresh interventions                                     | Passed                      | None; no session mutation               |
-| Maintainer | Turn supplied checks into maintenance recommendations                              | Passed                      | None; no repository edits               |
+| Role       | Initial API responsibility                                             | Synthetic run        | Production side effects                 |
+| ---------- | ---------------------------------------------------------------------- | -------------------- | --------------------------------------- |
+| Scout      | Discover and independently read public job evidence                    | Passed               | Isolated SQLite only in standalone mode |
+| Analyst    | Check/exclude one Scout proposal and structure requirements            | Mock + OpenAI passed | None                                    |
+| Scorer     | Score one authorized Scout → Analyst handoff on versioned `jht-100-v2` | Mock + OpenAI passed | None; no score/status writes            |
+| Writer     | Draft a user-requested CV/letter from supplied evidence                | Passed               | None; no files                          |
+| Critic     | Blind, one-shot, CV-only seven-section review                          | Passed               | None; no review files                   |
+| Assistant  | Classify intake and propose profile/ticket routing                     | Passed               | None                                    |
+| Mentor     | Give sparse aggregate career guidance                                  | Passed               | None                                    |
+| Captain    | Propose bounded coordination decisions from a snapshot                 | Passed               | None; no agent commands                 |
+| Sentinel   | Propose usage-based continue/throttle/stop orders                      | Passed               | None; no controls                       |
+| Doctor     | Propose observe/diagnose/refresh interventions                         | Passed               | None; no session mutation               |
+| Maintainer | Turn supplied checks into maintenance recommendations                  | Passed               | None; no repository edits               |
 
 All fixtures are fictional and synthetic. Downstream demos use the mock model
 but traverse the real CLI, worker, guard, provider-adapter, audit and output
-validation layers. Paid provider canaries remain operator-controlled and were
-not invoked during this phase.
+validation layers. Paid provider canaries remain operator-controlled. On
+2026-08-24 the live OpenAI `gpt-5.6-luna` Analyst → authorized handoff → Scorer
+canary passed with two requests, 3,694 tokens and `$0.00185767` projected cost
+inside a shared `$0.05` cap. No persistence event occurred. The configured
+prices came from the official
+[OpenAI model documentation](https://developers.openai.com/api/docs/models/gpt-5.6-luna);
+billing reconciliation remains open.
 
 ## Promotion path
 
@@ -53,8 +58,16 @@ separate side-effect adapter. Coordination, database writes, document writes,
 session control and repository mutation must never be inferred from a model
 proposal.
 
-The next useful slice is a product ADR resolving the Scorer scale without
-normalization or invented weights. Only after that can the Scout → Analyst →
-Scorer handoff envelope be defined with an explicit human/operator authorization point and isolated persistence. Writer
-and all operational roles should remain proposal-only until their product
-adapters have independent authorization and rollback designs.
+ADR-0010 resolves the API Scorer contract without changing historical scores:
+the new `jht-100-v2` ceilings total exactly 100, while the persisted ruler stays
+named `legacy-110-v1`. The Scout → Analyst → Scorer envelope now requires an
+explicit operator authorization tied to the exact source ID; it remains
+proposal-only and has no persistence adapter.
+
+The next useful slice is provider-billing reconciliation for the completed
+synthetic canary. After that, design an isolated proposal store and a separately
+authorized production read adapter. A
+production score/status writer remains a different decision and must include a
+legacy-scale migration and rollback plan. Writer and all operational roles stay
+proposal-only until their adapters have independent authorization and rollback
+designs.

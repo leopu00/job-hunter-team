@@ -53,6 +53,7 @@ they execute the actual worker, schema, guard, lock, audit and CLI boundaries:
 ```bash
 npm run scout
 npm run analyst:demo
+npm run scorer:demo
 npm run writer:demo
 npm run critic:demo
 npm run assistant:demo
@@ -63,24 +64,48 @@ npm run doctor:demo
 npm run maintainer:demo
 ```
 
-Scorer is intentionally not exposed in this tranche. The accepted product
-contract simultaneously requires component maxima totalling 110, an exact
-component sum and a total constrained to 0–100. `shared/skills/score_ranges.py`
-marks that contradiction as known and unresolved. An ADR or equivalent product
-decision must resolve it before an API Scorer can be enabled; this package does
-not invent weights, clamp or normalize the result.
+Scorer is exposed on the versioned `jht-100-v2` proposal scale accepted in
+[ADR-0010](../docs/adr/0010-version-api-scorer-scale.md): stack 35, experience
+25, remote/location 20, salary 10 and strategic fit 10. The exact component
+ceiling is therefore 100; explicit deductions may reduce it by at most 30
+points. The existing persisted 110-point component ruler remains
+`legacy-110-v1` and is not rewritten or silently converted.
+
+The Scorer input contains the original Scout evidence, the checked Analyst
+proposal and an explicit operator authorization tied to the same source ID.
+Cross-position handoffs, excluded Analyst proposals, missing authorization,
+wrong arithmetic and a decision inconsistent with the 40-point threshold fail
+closed. The authorization permits only one proposal: it does not authorize a
+database write or another agent handoff.
 
 The downstream roles are deliberately proposals, not production automation:
-Writer does not create documents, Critic does not save reviews, Captain and
-Sentinel do not issue commands, Doctor does not restart sessions, and
-Maintainer does not edit the repository. Writer is contract-gated to an
-explicit user request and a score of at least 50 for CV work. Critic receives
-only the CV and job description, preserving blind review.
+Scorer does not write scores or position states, Writer does not create
+documents, Critic does not save reviews, Captain and Sentinel do not issue
+commands, Doctor does not restart sessions, and Maintainer does not edit the
+repository. Writer is contract-gated to an explicit user request and a score
+of at least 50 for CV work. Critic receives only the CV and job description,
+preserving blind review.
 
 For a paid canary, each non-Scout CLI additionally requires `--live`, explicit
 `--input` and `--profile` files, a positive `--max-cost-usd`, current non-zero
 pricing and the provider's fixed environment key. No test or demo enables that
 path implicitly.
+
+### OpenAI synthetic canary — 2026-08-24
+
+The isolated Analyst → authorized handoff → Scorer path passed live with
+`gpt-5.6-luna`: two provider requests, 3,694 tokens and projected configured
+cost of `$0.00185767` under one `$0.05` process budget. Both results remained
+`proposal_only` / `persistence: none`; their audits contained no persistence
+events. This proves transport, strict structured output, accounting and the
+handoff boundary on synthetic evidence. It is not a quality benchmark and the
+projected cost has not yet been reconciled against provider billing.
+
+The canary profile used the model ID, structured-output capability and token
+prices published in the official
+[OpenAI model documentation](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
+on that date. Pricing remains explicit runtime configuration and must be
+rechecked before future paid runs.
 
 > **Live-provider privacy boundary:** local audit files omit prompts and role
 > evidence, but `--live` sends the serialized role input—including any supplied
