@@ -304,6 +304,15 @@ export async function demoDashboardPositions(
     }));
 }
 
+export async function demoApplicationSubmissionDates(
+  key: DemoPersonaKey,
+): Promise<string[]> {
+  return (await data(key))
+    .filter((p) => p.status === "applied" || p.status === "response")
+    .map((p) => p.last_action_at)
+    .sort();
+}
+
 // ── Distribuzioni ───────────────────────────────────────────────────
 export async function demoScoreDistribution(key: DemoPersonaKey) {
   const scores = (await active(key)).map((p) => p.score);
