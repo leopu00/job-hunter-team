@@ -70,8 +70,7 @@ export function buildApplicationTimeline(
 
   const applicationDays = [...counts.keys()].sort((a, b) => a - b);
   const firstApplicationEpoch = applicationDays[0];
-  const cappedStart =
-    todayEpoch - (APPLICATION_TIMELINE_MAX_DAYS - 1) * DAY_MS;
+  const cappedStart = todayEpoch - (APPLICATION_TIMELINE_MAX_DAYS - 1) * DAY_MS;
   const startEpoch = Math.max(firstApplicationEpoch, cappedStart);
   const points: ApplicationTimelinePoint[] = [];
 

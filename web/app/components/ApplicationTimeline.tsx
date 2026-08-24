@@ -28,7 +28,11 @@ function niceCeiling(value: number): number {
 
 function tickIndexes(length: number): number[] {
   if (length <= 7) return Array.from({ length }, (_, index) => index);
-  return [...new Set([0, 0.25, 0.5, 0.75, 1].map((p) => Math.round((length - 1) * p)))];
+  return [
+    ...new Set(
+      [0, 0.25, 0.5, 0.75, 1].map((p) => Math.round((length - 1) * p)),
+    ),
+  ];
 }
 
 export default function ApplicationTimeline({
@@ -47,7 +51,10 @@ export default function ApplicationTimeline({
       : PAD_LEFT + (index / (timeline.points.length - 1)) * chartW;
   const y = (count: number) => PAD_TOP + chartH - (count / maxY) * chartH;
   const line = timeline.points
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${x(index)} ${y(point.count)}`)
+    .map(
+      (point, index) =>
+        `${index === 0 ? "M" : "L"} ${x(index)} ${y(point.count)}`,
+    )
     .join(" ");
   const area = `${line} L ${x(timeline.points.length - 1)} ${PAD_TOP + chartH} L ${x(0)} ${PAD_TOP + chartH} Z`;
   const yTicks = [...new Set([0, Math.ceil(maxY / 2), maxY])];
@@ -160,9 +167,7 @@ export default function ApplicationTimeline({
             cx={x(index)}
             cy={y(point.count)}
             r={point.count > 0 ? 4 : 2.25}
-            fill={
-              point.count > 0 ? "var(--color-green)" : "var(--color-card)"
-            }
+            fill={point.count > 0 ? "var(--color-green)" : "var(--color-card)"}
             stroke="var(--color-green)"
             strokeWidth={point.count > 0 ? 1.5 : 1}
           >
@@ -173,7 +178,9 @@ export default function ApplicationTimeline({
 
       <ol className="sr-only">
         {timeline.points.map((point) => (
-          <li key={point.date}>{`${formatDate(point.date)}: ${point.count}`}</li>
+          <li
+            key={point.date}
+          >{`${formatDate(point.date)}: ${point.count}`}</li>
         ))}
       </ol>
     </section>
