@@ -1,7 +1,10 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { ResultExplorer, TeamLiveDashboard } from "./components/team-dashboard";
 import { checkPodman, type PodmanStatus } from "./lib/podman";
 import {
+  isTeamAgentActivity,
   startApiTeam,
+  type TeamAgentActivity,
   type TeamProgress,
   type TeamStartResult,
 } from "./lib/team";
@@ -27,14 +30,17 @@ function WelcomePage({ onStart }: { onStart: () => void }) {
     <main className="page page--welcome">
       <header className="topbar">
         <BrandMark />
-        <span className="status-pill"><i /> Anteprima locale</span>
+        <span className="status-pill">
+          <i /> Anteprima locale
+        </span>
       </header>
 
       <section className="welcome-grid">
         <div className="welcome-copy">
           <p className="eyebrow">La tua squadra, sul tuo computer</p>
           <h1>
-            La ricerca cambia<br />
+            La ricerca cambia
+            <br />
             quando <em>non sei più solo.</em>
           </h1>
           <p className="lede">
@@ -66,7 +72,10 @@ function WelcomePage({ onStart }: { onStart: () => void }) {
             modelli. Al resto penseremo un passo alla volta.”
           </blockquote>
           <div className="mini-team" aria-hidden="true">
-            <span>Sc</span><span>An</span><span>Cr</span><span>Me</span>
+            <span>Sc</span>
+            <span>An</span>
+            <span>Cr</span>
+            <span>Me</span>
             <b>+5 agenti</b>
           </div>
         </aside>
@@ -91,7 +100,13 @@ type PodmanCheckState =
   | { phase: "complete"; result: PodmanStatus }
   | { phase: "error" };
 
-function PodmanCheck({ state, onRetry }: { state: PodmanCheckState; onRetry: () => void }) {
+function PodmanCheck({
+  state,
+  onRetry,
+}: {
+  state: PodmanCheckState;
+  onRetry: () => void;
+}) {
   const checking = state.phase === "checking";
   let title = "Controllo di Podman…";
   let detail = "Verifico CLI e motore container sul computer.";
@@ -107,7 +122,9 @@ function PodmanCheck({ state, onRetry }: { state: PodmanCheckState; onRetry: () 
     tone = "warning";
   } else if (state.phase === "complete" && state.result.ready) {
     title = "Podman è pronto";
-    detail = state.result.version ?? "CLI e motore container rispondono correttamente.";
+    detail =
+      state.result.version ??
+      "CLI e motore container rispondono correttamente.";
     tone = "ready";
   } else if (
     state.phase === "complete" &&
@@ -152,15 +169,19 @@ const TEAM_ERROR_MESSAGES: Record<string, string> = {
   podman_not_found: "Podman non è installato su questo computer.",
   podman_machine_failed: "Non sono riuscito a inizializzare la Podman machine.",
   podman_engine_unavailable: "Il motore Podman non è raggiungibile.",
-  credential_injection_failed: "Non sono riuscito a creare la credenziale temporanea.",
+  credential_injection_failed:
+    "Non sono riuscito a creare la credenziale temporanea.",
   image_build_failed: "La preparazione dell’immagine agenti non è riuscita.",
-  image_build_timeout: "La preparazione dell’immagine ha superato il tempo massimo.",
+  image_build_timeout:
+    "La preparazione dell’immagine ha superato il tempo massimo.",
   team_already_running: "Un’esecuzione del team è già in corso.",
   team_timeout: "Il team ha superato il tempo massimo previsto.",
-  team_run_failed: "Il provider ha rifiutato la richiesta oppure il team si è fermato in sicurezza.",
+  team_run_failed:
+    "Il provider ha rifiutato la richiesta oppure il team si è fermato in sicurezza.",
   team_result_invalid: "Il team ha terminato con un risultato non leggibile.",
   storage_failed: "Non posso creare la cartella locale degli artefatti.",
-  runtime_missing: "Le risorse degli agenti non sono presenti nel bundle desktop.",
+  runtime_missing:
+    "Le risorse degli agenti non sono presenti nel bundle desktop.",
   runtime_failed: "Il runtime degli agenti si è interrotto in modo inatteso.",
 };
 
@@ -172,43 +193,24 @@ function teamErrorMessage(error: unknown): string {
   return "Avvio del team non riuscito.";
 }
 
-function TeamLaunching({ progress }: { progress: TeamProgress }) {
-  const stages: TeamProgress["stage"][] = ["podman", "credentials", "image", "team"];
-  const activeIndex = stages.indexOf(progress.stage);
-  return (
-    <div className="team-launch" aria-live="polite">
-      <div className="team-launch__spinner" aria-hidden="true" />
-      <p className="eyebrow">Avvio in corso</p>
-      <h2>La squadra si sta preparando.</h2>
-      <p>{progress.message}</p>
-      <ol>
-        {[
-          "Motore Podman",
-          "Credenziale temporanea",
-          "Immagine agenti",
-          "Primo giro del team",
-        ].map((label, index) => (
-          <li key={label} className={index <= activeIndex ? "is-active" : ""}>
-            <span>{index < activeIndex ? "✓" : index + 1}</span>{label}
-          </li>
-        ))}
-      </ol>
-      <small>La prima preparazione può richiedere alcuni minuti. Non chiudere l’app.</small>
-    </div>
-  );
-}
-
 function SetupPage({ onBack, onStarted }: SetupPageProps) {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [podmanState, setPodmanState] = useState<PodmanCheckState>({ phase: "checking" });
-  const [launchState, setLaunchState] = useState<TeamLaunchState>({ phase: "idle" });
+  const [podmanState, setPodmanState] = useState<PodmanCheckState>({
+    phase: "checking",
+  });
+  const [launchState, setLaunchState] = useState<TeamLaunchState>({
+    phase: "idle",
+  });
+  const [activity, setActivity] = useState<TeamAgentActivity[]>([]);
 
   const runPodmanCheck = useCallback(async () => {
     setPodmanState({ phase: "checking" });
     try {
       const result = await checkPodman();
-      setPodmanState(result ? { phase: "complete", result } : { phase: "desktop-only" });
+      setPodmanState(
+        result ? { phase: "complete", result } : { phase: "desktop-only" },
+      );
     } catch {
       setPodmanState({ phase: "error" });
     }
@@ -222,21 +224,49 @@ function SetupPage({ onBack, onStarted }: SetupPageProps) {
     event.preventDefault();
     if (!apiKey.trim()) return;
     const submittedKey = apiKey.trim();
+    setActivity([]);
     setApiKey("");
     setShowKey(false);
     setLaunchState({
       phase: "running",
-      progress: { stage: "podman", message: "Avvio e verifica del motore Podman" },
+      progress: {
+        stage: "podman",
+        message: "Avvio e verifica del motore Podman",
+      },
     });
     try {
       const result = await startApiTeam(submittedKey, (progress) => {
         setLaunchState({ phase: "running", progress });
+        if (isTeamAgentActivity(progress)) {
+          setActivity((events) => [...events, progress].slice(-80));
+        }
       });
       onStarted(result);
     } catch (error) {
       setLaunchState({ phase: "error", message: teamErrorMessage(error) });
     }
   };
+
+  if (launchState.phase === "running") {
+    return (
+      <main className="page page--live-team">
+        <header className="topbar">
+          <BrandMark />
+          <span className="status-pill">
+            <i /> Team in esecuzione
+          </span>
+        </header>
+        <TeamLiveDashboard
+          progress={launchState.progress}
+          activity={activity}
+        />
+        <footer className="page-footer">
+          <span>PC locale · Podman · OpenAI API</span>
+          <span>Non chiudere l’app</span>
+        </footer>
+      </main>
+    );
+  }
 
   return (
     <main className="page page--setup">
@@ -260,74 +290,89 @@ function SetupPage({ onBack, onStarted }: SetupPageProps) {
           <ol className="setup-summary">
             <li>
               <span className="summary-number">1</span>
-              <div><strong>Questo PC</strong><small>Container isolati con Podman</small></div>
+              <div>
+                <strong>Questo PC</strong>
+                <small>Container isolati con Podman</small>
+              </div>
               <span className="selected-tag">Selezionato</span>
             </li>
             <li>
               <span className="summary-number">2</span>
-              <div><strong>Agenti API headless</strong><small>Consumo sulla tua chiave OpenAI</small></div>
+              <div>
+                <strong>Agenti API headless</strong>
+                <small>Consumo sulla tua chiave OpenAI</small>
+              </div>
               <span className="selected-tag">Selezionato</span>
             </li>
           </ol>
         </div>
 
-        <form className="setup-card" onSubmit={(event) => void confirmSetup(event)} autoComplete="off">
+        <form
+          className="setup-card"
+          onSubmit={(event) => void confirmSetup(event)}
+          autoComplete="off"
+        >
           <div className="setup-card__heading">
-            <div className="provider-icon" aria-hidden="true">AI</div>
+            <div className="provider-icon" aria-hidden="true">
+              AI
+            </div>
             <div>
               <span className="card-kicker">Accesso al provider</span>
               <h2>Chiave API OpenAI</h2>
             </div>
           </div>
 
-          {launchState.phase === "running" ? (
-            <TeamLaunching progress={launchState.progress} />
-          ) : (
-            <>
-              <p className="card-description">
-                Avvierà gli agenti Node.js headless nel container locale. Il primo
-                test usa solo profilo e posizioni sintetiche, con tetto massimo di $0,10.
-              </p>
+          <p className="card-description">
+            Avvierà gli agenti Node.js headless nel container locale. Il primo
+            test usa solo profilo e posizioni sintetiche, con tetto massimo di
+            $0,10.
+          </p>
 
-              <PodmanCheck state={podmanState} onRetry={() => void runPodmanCheck()} />
+          <PodmanCheck
+            state={podmanState}
+            onRetry={() => void runPodmanCheck()}
+          />
 
-              <label htmlFor="openai-api-key">API key</label>
-              <div className="secret-input">
-                <input
-                  id="openai-api-key"
-                  type={showKey ? "text" : "password"}
-                  value={apiKey}
-                  onChange={(event) => {
-                    setApiKey(event.target.value);
-                    setLaunchState({ phase: "idle" });
-                  }}
-                  placeholder="sk-…"
-                  autoComplete="new-password"
-                  spellCheck={false}
-                  aria-describedby="key-safety-note"
-                />
-                <button type="button" onClick={() => setShowKey((value) => !value)}>
-                  {showKey ? "Nascondi" : "Mostra"}
-                </button>
-              </div>
+          <label htmlFor="openai-api-key">API key</label>
+          <div className="secret-input">
+            <input
+              id="openai-api-key"
+              type={showKey ? "text" : "password"}
+              value={apiKey}
+              onChange={(event) => {
+                setApiKey(event.target.value);
+                setLaunchState({ phase: "idle" });
+              }}
+              placeholder="sk-…"
+              autoComplete="new-password"
+              spellCheck={false}
+              aria-describedby="key-safety-note"
+            />
+            <button type="button" onClick={() => setShowKey((value) => !value)}>
+              {showKey ? "Nascondi" : "Mostra"}
+            </button>
+          </div>
 
-              <p id="key-safety-note" className="safety-note">
-                <span aria-hidden="true">◇</span>
-                La chiave non viene salvata: passa a Podman tramite un secret
-                temporaneo e viene rimossa subito dopo il run.
-              </p>
+          <p id="key-safety-note" className="safety-note">
+            <span aria-hidden="true">◇</span>
+            La chiave non viene salvata: passa a Podman tramite un secret
+            temporaneo e viene rimossa subito dopo il run.
+          </p>
 
-              {launchState.phase === "error" && (
-                <div className="launch-error" role="alert">
-                  <span aria-hidden="true">!</span>{launchState.message}
-                </div>
-              )}
-
-              <button className="primary-button primary-button--wide" type="submit" disabled={!apiKey.trim()}>
-                Avvia il team ora <ArrowIcon />
-              </button>
-            </>
+          {launchState.phase === "error" && (
+            <div className="launch-error" role="alert">
+              <span aria-hidden="true">!</span>
+              {launchState.message}
+            </div>
           )}
+
+          <button
+            className="primary-button primary-button--wide"
+            type="submit"
+            disabled={!apiKey.trim()}
+          >
+            Avvia il team ora <ArrowIcon />
+          </button>
         </form>
       </section>
 
@@ -339,50 +384,58 @@ function SetupPage({ onBack, onStarted }: SetupPageProps) {
   );
 }
 
-function TeamPage({ result, onRestart }: { result: TeamStartResult; onRestart: () => void }) {
+function TeamPage({
+  result,
+  onRestart,
+}: {
+  result: TeamStartResult;
+  onRestart: () => void;
+}) {
   return (
     <main className="page page--team">
       <header className="topbar">
         <BrandMark />
-        <span className="status-pill"><i /> Team operativo</span>
+        <span className="status-pill">
+          <i /> Team operativo
+        </span>
       </header>
 
       <section className="team-result">
         <div className="team-result__hero">
           <p className="eyebrow">Primo giro completato</p>
-          <h1>La squadra<br /><em>ha iniziato.</em></h1>
+          <h1>
+            La squadra
+            <br />
+            <em>ha iniziato.</em>
+          </h1>
           <p>
             Il runtime API headless ha completato il test con dati sintetici.
             Database e artefatti sono rimasti sul tuo computer.
           </p>
           <div className="result-metrics">
-            <div><strong>{result.agentCount}</strong><span>agenti coinvolti</span></div>
-            <div><strong>{result.scored}</strong><span>posizioni valutate</span></div>
-            <div><strong>{result.reviewed}</strong><span>CV revisionati</span></div>
-            <div><strong>${result.spentUsd.toFixed(4)}</strong><span>costo stimato</span></div>
+            <div>
+              <strong>{result.agentCount}</strong>
+              <span>agenti coinvolti</span>
+            </div>
+            <div>
+              <strong>{result.scored}</strong>
+              <span>posizioni valutate</span>
+            </div>
+            <div>
+              <strong>{result.reviewed}</strong>
+              <span>CV revisionati</span>
+            </div>
+            <div>
+              <strong>${result.spentUsd.toFixed(4)}</strong>
+              <span>costo stimato</span>
+            </div>
           </div>
           <button className="primary-button" type="button" onClick={onRestart}>
             Esegui un altro test <ArrowIcon />
           </button>
         </div>
 
-        <aside className="positions-card">
-          <div className="positions-card__heading">
-            <div><span>Output verificato</span><h2>Risultati del team</h2></div>
-            <b>{result.runId.slice(0, 8)}</b>
-          </div>
-          <ol>
-            {result.positions.map((position) => (
-              <li key={`${position.company}-${position.title}`}>
-                <div><strong>{position.title}</strong><small>{position.company}</small></div>
-                <span>{position.score}</span>
-              </li>
-            ))}
-          </ol>
-          <p className="workspace-path" title={result.workspacePath}>
-            Salvato in <code>{result.workspacePath}</code>
-          </p>
-        </aside>
+        <ResultExplorer result={result} />
       </section>
 
       <footer className="page-footer">
@@ -397,9 +450,12 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("welcome");
   const [teamResult, setTeamResult] = useState<TeamStartResult | null>(null);
 
-  if (screen === "welcome") return <WelcomePage onStart={() => setScreen("setup")} />;
+  if (screen === "welcome")
+    return <WelcomePage onStart={() => setScreen("setup")} />;
   if (screen === "team" && teamResult) {
-    return <TeamPage result={teamResult} onRestart={() => setScreen("setup")} />;
+    return (
+      <TeamPage result={teamResult} onRestart={() => setScreen("setup")} />
+    );
   }
   return (
     <SetupPage
