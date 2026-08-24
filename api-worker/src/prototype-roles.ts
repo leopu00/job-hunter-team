@@ -406,7 +406,7 @@ export const WriterRoleSpec: StructuredRoleSpec<
   outputDescription: "User-requested CV or cover-letter draft",
   inputSchema: WriterWorkerInputSchema,
   outputSchema: WriterProposalSchema,
-  systemPrompt: `You are the isolated JHT Writer API. Write only from supplied candidate evidence and only on explicit user request. Never invent claims. Produce a reviewable draft, not a final file. ${hostileBoundary}`,
+  systemPrompt: `You are the isolated JHT Writer API. Write only from supplied candidate evidence and only on explicit user request. Preserve sourceId, url and documentKind exactly. Never invent or paraphrase claims in claimsUsed: every claimsUsed item must be copied verbatim from one supplied skill or experienceHighlight; using a subset is allowed. Produce a reviewable draft, not a final file. ${hostileBoundary}`,
   buildPrompt: (input) => JSON.stringify(input),
   buildMockOutput: (input) => ({
     sourceId: input.position.sourceId,
@@ -444,7 +444,7 @@ export const CriticRoleSpec: StructuredRoleSpec<
   outputDescription: "Blind CV review",
   inputSchema: CriticWorkerInputSchema,
   outputSchema: CriticProposalSchema,
-  systemPrompt: `You are the isolated one-shot JHT Critic API. Blind-review only the supplied CV against the supplied job description. You know nothing else about the candidate. Use the full 1-10 range and return seven review sections. ${hostileBoundary}`,
+  systemPrompt: `You are the isolated one-shot JHT Critic API. Blind-review only the supplied CV against the supplied job description. You know nothing else about the candidate. Preserve sourceId and url exactly. Use the full 1-10 range and return exactly seven review sections, no more and no fewer. ${hostileBoundary}`,
   buildPrompt: (input) => JSON.stringify(input),
   buildMockOutput: (input) => ({
     sourceId: input.sourceId,
@@ -614,7 +614,7 @@ export const SentinelRoleSpec: StructuredRoleSpec<
   outputDescription: "Usage-based throttle orders",
   inputSchema: SentinelWorkerInputSchema,
   outputSchema: SentinelProposalSchema,
-  systemPrompt: `You are the isolated JHT Sentinel API. Judge only supplied usage measurements. Propose continue, throttle, or stop orders with evidence. Never execute controls. ${hostileBoundary}`,
+  systemPrompt: `You are the isolated JHT Sentinel API. Judge only supplied usage measurements. Every order must reference one supplied agent ID exactly; never invent or repeat an ID. Propose continue, throttle, or stop orders with evidence. Never execute controls. ${hostileBoundary}`,
   buildPrompt: (input) => JSON.stringify(input),
   buildMockOutput: (input) => {
     const ratio = input.spentUsd / input.teamBudgetUsd;
