@@ -3,9 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, vi } from "vitest";
 import App from "./App";
 import { checkPodman } from "./lib/podman";
+import { startApiTeam } from "./lib/team";
 
 vi.mock("./lib/podman", () => ({
   checkPodman: vi.fn(),
+}));
+
+vi.mock("./lib/team", () => ({
+  startApiTeam: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -14,6 +19,27 @@ beforeEach(() => {
     ready: true,
     version: "podman version 5.5.2",
     issue: null,
+  });
+  vi.mocked(startApiTeam).mockImplementation(async (_key, onProgress) => {
+    onProgress({ stage: "team", message: "Il team è partito" });
+    return {
+      runId: "run-test-12345678",
+      scored: 5,
+      reviewed: 2,
+      spentUsd: 0.024,
+      agentCount: 11,
+      workspacePath: "C:\\JHT\\api-team",
+      positions: [
+        {
+          title: "Agentic AI Engineer",
+          company: "Synthetic Company",
+          score: 88,
+          state: "reviewed",
+          criticScore: 9,
+          criticVerdict: "pass",
+        },
+      ],
+    };
   });
 });
 
@@ -39,7 +65,7 @@ describe("desktop first-run flow", () => {
     expect(screen.getByText("podman version 5.5.2")).toBeInTheDocument();
   });
 
-  it("requires the API key and clears it after confirming the prototype path", async () => {
+  it("requires the API key, starts the team and shows its result", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -47,7 +73,7 @@ describe("desktop first-run flow", () => {
       screen.getByRole("button", { name: /inizia la configurazione/i }),
     );
 
-    const submit = screen.getByRole("button", { name: /conferma questo setup/i });
+    const submit = screen.getByRole("button", { name: /avvia il team ora/i });
     const input = screen.getByLabelText("API key");
     expect(submit).toBeDisabled();
 
@@ -55,8 +81,15 @@ describe("desktop first-run flow", () => {
     expect(submit).toBeEnabled();
     await user.click(submit);
 
-    expect(input).toHaveValue("");
-    expect(screen.getByRole("status")).toHaveTextContent("Percorso confermato");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /la squadra ha iniziato/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("11")).toBeInTheDocument();
+    expect(screen.getByText("Agentic AI Engineer")).toBeInTheDocument();
+    expect(startApiTeam).toHaveBeenCalledWith(
+      "sk-test-only-not-a-real-key",
+      expect.any(Function),
+    );
     expect(localStorage).toHaveLength(0);
   });
 
@@ -78,5 +111,23 @@ describe("desktop first-run flow", () => {
       await screen.findByText("Podman è installato, ma il motore non risponde"),
     ).toBeInTheDocument();
     expect(screen.getByText(/avvia podman/i)).toBeInTheDocument();
+  });
+
+  it("clears the rejected key and reports a safe provider failure", async () => {
+    vi.mocked(startApiTeam).mockRejectedValue({ code: "team_run_failed" });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      screen.getByRole("button", { name: /inizia la configurazione/i }),
+    );
+    const input = screen.getByLabelText("API key");
+    await user.type(input, "sk-test-only-not-a-real-key");
+    await user.click(screen.getByRole("button", { name: /avvia il team ora/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Il provider ha rifiutato la richiesta",
+    );
+    expect(screen.getByLabelText("API key")).toHaveValue("");
   });
 });
