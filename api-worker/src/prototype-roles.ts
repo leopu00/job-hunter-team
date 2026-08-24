@@ -69,6 +69,16 @@ export const WriterProposalSchema = z.strictObject({
   ...ProposalTail,
 });
 export type WriterProposal = z.infer<typeof WriterProposalSchema>;
+export const WriterProviderOutputSchema = z.strictObject({
+  sourceId: z.string(),
+  url: z.string(),
+  documentKind: z.enum(["cv", "cover_letter"]),
+  markdown: z.string(),
+  claimsUsed: z.array(z.string()),
+  reviewStatus: z.literal("draft_for_review"),
+  disposition: z.literal("proposed"),
+  persistence: z.literal("none"),
+});
 
 export const CriticWorkerInputSchema = z.strictObject({
   ...baseInput("critic"),
@@ -90,6 +100,17 @@ export const CriticProposalSchema = z.strictObject({
   ...ProposalTail,
 });
 export type CriticProposal = z.infer<typeof CriticProposalSchema>;
+export const CriticProviderOutputSchema = z.strictObject({
+  sourceId: z.string(),
+  url: z.string(),
+  score: z.number(),
+  verdict: z.enum(["pass", "revise"]),
+  sections: z.array(z.strictObject({ name: z.string(), finding: z.string() })),
+  jdCvGaps: z.array(z.string()),
+  prioritizedActions: z.array(z.string()),
+  disposition: z.literal("proposed"),
+  persistence: z.literal("none"),
+});
 
 export const AssistantWorkerInputSchema = z.strictObject({
   ...baseInput("assistant"),
@@ -185,6 +206,22 @@ export const CaptainProposalSchema = z.strictObject({
   ...ProposalTail,
 });
 export type CaptainProposal = z.infer<typeof CaptainProposalSchema>;
+export const CaptainProviderOutputSchema = z.strictObject({
+  decisions: z
+    .array(
+      z.strictObject({
+        action: z.enum(["assign", "start", "stop", "noop"]),
+        target: z.string(),
+        agentId: z.string().nullable(),
+        reason: z.string(),
+      }),
+    )
+    .min(1)
+    .max(20),
+  priorities: z.array(z.string()),
+  disposition: z.literal("proposed"),
+  persistence: z.literal("none"),
+});
 
 const UsageAgentSchema = z.strictObject({
   id: Id,
@@ -222,6 +259,18 @@ export const SentinelProposalSchema = z.strictObject({
   ...ProposalTail,
 });
 export type SentinelProposal = z.infer<typeof SentinelProposalSchema>;
+export const SentinelProviderOutputSchema = z.strictObject({
+  budgetState: z.enum(["healthy", "warning", "critical"]),
+  orders: z.array(
+    z.strictObject({
+      agentId: z.string(),
+      action: z.enum(["continue", "throttle", "stop"]),
+      reason: z.string(),
+    }),
+  ),
+  disposition: z.literal("proposed"),
+  persistence: z.literal("none"),
+});
 
 export const DoctorWorkerInputSchema = z
   .strictObject({
@@ -390,7 +439,9 @@ export const WriterRoleSpec: StructuredRoleSpec<
   outputDescription: "User-requested CV or cover-letter draft",
   inputSchema: WriterWorkerInputSchema,
   outputSchema: WriterProposalSchema,
-  systemPrompt: `You are the isolated JHT Writer API. Write only from supplied candidate evidence and only on explicit user request. Never invent claims. Produce a reviewable draft, not a final file. ${hostileBoundary}`,
+  providerOutputSchema: WriterProviderOutputSchema,
+  parseProviderOutput: (raw) => WriterProposalSchema.parse(raw),
+  systemPrompt: `You are the isolated JHT Writer API. Write only from supplied candidate evidence and only on explicit user request. Preserve sourceId, url and documentKind exactly. Never invent or paraphrase claims in claimsUsed: every claimsUsed item must be copied verbatim from one supplied skill or experienceHighlight; using a subset is allowed. Produce a reviewable draft, not a final file. ${hostileBoundary}`,
   buildPrompt: (input) => JSON.stringify(input),
   buildMockOutput: (input) => ({
     sourceId: input.position.sourceId,
@@ -428,7 +479,9 @@ export const CriticRoleSpec: StructuredRoleSpec<
   outputDescription: "Blind CV review",
   inputSchema: CriticWorkerInputSchema,
   outputSchema: CriticProposalSchema,
-  systemPrompt: `You are the isolated one-shot JHT Critic API. Blind-review only the supplied CV against the supplied job description. You know nothing else about the candidate. Use the full 1-10 range and return seven review sections. ${hostileBoundary}`,
+  providerOutputSchema: CriticProviderOutputSchema,
+  parseProviderOutput: (raw) => CriticProposalSchema.parse(raw),
+  systemPrompt: `You are the isolated one-shot JHT Critic API. Blind-review only the supplied CV against the supplied job description. You know nothing else about the candidate. Preserve sourceId and url exactly. Use the full 1-10 range and return exactly seven review sections, no more and no fewer. ${hostileBoundary}`,
   buildPrompt: (input) => JSON.stringify(input),
   buildMockOutput: (input) => ({
     sourceId: input.sourceId,
@@ -516,8 +569,20 @@ export const CaptainRoleSpec: StructuredRoleSpec<
   outputDescription: "Bounded team coordination decisions",
   inputSchema: CaptainWorkerInputSchema,
   outputSchema: CaptainProposalSchema,
-  systemPrompt: `You are the isolated JHT Captain API. Coordinate from the supplied snapshot. User tickets precede autonomous work; workPhase OFF forbids starts. Never claim an action happened: propose decisions only. ${hostileBoundary}`,
-  buildPrompt: (input) => JSON.stringify(input),
+  providerOutputSchema: CaptainProviderOutputSchema,
+  parseProviderOutput: (raw) => {
+    const transport = CaptainProviderOutputSchema.parse(raw);
+    return CaptainProposalSchema.parse({
+      ...transport,
+      decisions: transport.decisions.map(({ agentId, ...decision }) => ({
+        ...decision,
+        ...(agentId === null ? {} : { agentId }),
+      })),
+    });
+  },
+  systemPrompt: `You are the isolated JHT Captain API. Coordinate from the supplied snapshot. User tickets precede autonomous work; workPhase OFF forbids starts. Every referenced ticket and agent must exist in the supplied snapshot and may be referenced at most once. Only assign decisions carry agentId; noop targets exactly "team". During workPhase ON, when tickets and active agents exist, return exactly one assign decision: assign the first ticket to the first active agent and list supplied ticket IDs once in priorities. Never claim an action happened: propose decisions only. ${hostileBoundary}`,
+  buildPrompt: (input) =>
+    `Apply the deterministic coordination policy exactly to this snapshot. Do not add parallel starts or extra assignments.\n\nSNAPSHOT_JSON\n${JSON.stringify(input)}`,
   buildMockOutput: (input) => ({
     decisions:
       input.workPhase === "OFF"
@@ -586,7 +651,9 @@ export const SentinelRoleSpec: StructuredRoleSpec<
   outputDescription: "Usage-based throttle orders",
   inputSchema: SentinelWorkerInputSchema,
   outputSchema: SentinelProposalSchema,
-  systemPrompt: `You are the isolated JHT Sentinel API. Judge only supplied usage measurements. Propose continue, throttle, or stop orders with evidence. Never execute controls. ${hostileBoundary}`,
+  providerOutputSchema: SentinelProviderOutputSchema,
+  parseProviderOutput: (raw) => SentinelProposalSchema.parse(raw),
+  systemPrompt: `You are the isolated JHT Sentinel API. Judge only supplied usage measurements. Every order must reference one supplied agent ID exactly; never invent or repeat an ID. Propose continue, throttle, or stop orders with evidence. Never execute controls. ${hostileBoundary}`,
   buildPrompt: (input) => JSON.stringify(input),
   buildMockOutput: (input) => {
     const ratio = input.spentUsd / input.teamBudgetUsd;

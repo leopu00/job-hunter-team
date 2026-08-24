@@ -42,5 +42,85 @@
     "postedAt": "2026-08-12T08:15:00.000Z",
     "jdText": "Harbor Fixture Studio is a fictional organization looking for a Frontend Design Engineer. The synthetic role focuses on accessible UI systems, TypeScript and component testing across a distributed EU team.",
     "requirements": ["TypeScript", "Accessible web UI", "Component testing"]
+  },
+  {
+    "sourceId": "synthetic-ai-job-001",
+    "title": "Agentic AI Engineer",
+    "company": "Orion Fixture Cloud",
+    "location": "Remote EU",
+    "remoteType": "remote",
+    "url": "https://jobs.example.invalid/orion/agentic-ai-001",
+    "source": "synthetic-ai-board",
+    "postedAt": "2026-08-22T09:00:00.000Z",
+    "jdText": "Orion Fixture Cloud is a fictional company seeking an Agentic AI Engineer for a remote EU role. The work covers Python services, orchestration of AI agents, PostgreSQL, evaluation gates and Docker delivery. This listing is synthetic test evidence only.",
+    "requirements": [
+      "Professional Python development",
+      "AI agent orchestration",
+      "PostgreSQL and Docker"
+    ]
+  },
+  {
+    "sourceId": "synthetic-ai-job-002",
+    "title": "Senior Agentic AI Engineer",
+    "company": "Polaris Sample Systems",
+    "location": "Remote EU",
+    "remoteType": "remote",
+    "url": "https://jobs.example.invalid/polaris/agentic-ai-002",
+    "source": "synthetic-ai-board",
+    "postedAt": "2026-08-22T10:00:00.000Z",
+    "jdText": "Polaris Sample Systems has a synthetic remote EU vacancy for a Senior Agentic AI Engineer. The fictional role emphasizes Python, secure AI-agent workflows, REST APIs, automated testing and human-in-the-loop controls.",
+    "requirements": [
+      "Python and REST APIs",
+      "Agent workflow guardrails",
+      "Automated testing"
+    ]
+  },
+  {
+    "sourceId": "synthetic-ai-job-003",
+    "title": "Agentic AI Platform Engineer",
+    "company": "Vega Example Technologies",
+    "location": "Remote EU",
+    "remoteType": "remote",
+    "url": "https://jobs.example.invalid/vega/agentic-platform-003",
+    "source": "synthetic-ai-board",
+    "postedAt": "2026-08-23T08:00:00.000Z",
+    "jdText": "Vega Example Technologies is a fictional organization hiring an Agentic AI Platform Engineer across the EU. The synthetic work includes Python, SQLite and PostgreSQL, containerized deployments and quality gates for collaborating agents.",
+    "requirements": [
+      "Python",
+      "Relational databases",
+      "Docker and agent quality gates"
+    ]
+  },
+  {
+    "sourceId": "synthetic-ai-job-004",
+    "title": "Agentic AI Solutions Engineer",
+    "company": "Lyra Fixture Security",
+    "location": "Remote EU",
+    "remoteType": "remote",
+    "url": "https://jobs.example.invalid/lyra/agentic-solutions-004",
+    "source": "synthetic-ai-board",
+    "postedAt": "2026-08-23T11:30:00.000Z",
+    "jdText": "Lyra Fixture Security describes a fictional remote EU role for an Agentic AI Solutions Engineer. Responsibilities cover Python prototypes, customer-facing REST integrations, application-security design and evidence-based agent verification.",
+    "requirements": [
+      "Python prototyping",
+      "REST integrations",
+      "Secure agent-system design"
+    ]
+  },
+  {
+    "sourceId": "synthetic-ai-job-005",
+    "title": "Forward Deployed Agentic AI Engineer",
+    "company": "Nova Synthetic Works",
+    "location": "Remote EU",
+    "remoteType": "remote",
+    "url": "https://jobs.example.invalid/nova/forward-agentic-005",
+    "source": "synthetic-ai-board",
+    "postedAt": "2026-08-24T07:45:00.000Z",
+    "jdText": "Nova Synthetic Works has a fictional opening for a Forward Deployed Agentic AI Engineer working remotely in the EU. The role combines Python delivery, SQL, Docker, client workflow discovery and guarded multi-agent automation.",
+    "requirements": [
+      "Python delivery",
+      "SQL and Docker",
+      "Multi-agent automation"
+    ]
   }
 ]

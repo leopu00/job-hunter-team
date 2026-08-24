@@ -7,7 +7,11 @@ import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { MemoryAuditSink, WriterApiWorker } from "../src/index.js";
+import {
+  MemoryAuditSink,
+  WriterApiWorker,
+  writeStructuredRoleProviderDiagnostic,
+} from "../src/index.js";
 import {
   providerDiagnostic,
   writeProviderDiagnostic,
@@ -44,6 +48,62 @@ describe("privacy-safe diagnostics", () => {
     expect(output).not.toContain(marker);
     expect(output).not.toContain("message");
     expect(output).not.toContain("responseBody");
+
+    vi.stubEnv("JHT_API_PROVIDER_DEBUG", "1");
+    write.mockClear();
+    writeStructuredRoleProviderDiagnostic("scorer", error);
+    const roleOutput = String(write.mock.calls[0]?.[0]);
+    expect(roleOutput).toContain('"role":"scorer"');
+    expect(roleOutput).toContain('"category":"provider_http_error"');
+    expect(roleOutput).not.toContain(marker);
+    expect(roleOutput).not.toContain("message");
+    expect(roleOutput).not.toContain("responseBody");
+  });
+
+  it("allowlists structured provider error identifiers but never its message", () => {
+    const marker = "synthetic-sensitive-openai-message";
+    const error = {
+      statusCode: 400,
+      responseBody: JSON.stringify({
+        error: {
+          message: `${marker}: 'format' is not permitted`,
+          type: "invalid_request_error",
+          code: "unsupported_parameter",
+          param: "text.format.schema",
+        },
+      }),
+    };
+
+    const diagnostic = providerDiagnostic(error);
+    expect(diagnostic).toEqual({
+      category: "provider_http_error",
+      statusCode: 400,
+      providerType: "invalid_request_error",
+      providerCode: "unsupported_parameter",
+      providerParam: "text.format.schema",
+      schemaKeyword: "format",
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain(marker);
+  });
+
+  it("reports only validation codes and sanitized schema paths", () => {
+    const marker = "synthetic-private-validation-value";
+    const diagnostic = providerDiagnostic({
+      issues: [
+        {
+          code: "too_big",
+          path: ["highlights", 4, "text"],
+          message: marker,
+          input: marker,
+        },
+      ],
+    });
+
+    expect(diagnostic).toEqual({
+      category: "output_validation",
+      validationIssues: [{ code: "too_big", path: "highlights.4.text" }],
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain(marker);
   });
 
   it("does not print the standalone database absolute path", async () => {

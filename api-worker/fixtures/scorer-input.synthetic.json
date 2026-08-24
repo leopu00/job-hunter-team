@@ -1,0 +1,90 @@
+{
+  "contractVersion": "1",
+  "runId": "55555555-5555-4555-8555-555555555555",
+  "role": "scorer",
+  "scaleVersion": "jht-100-v2",
+  "scout": {
+    "sourceId": "synthetic-job-001",
+    "title": "Platform Automation Engineer",
+    "company": "Atlas Example Labs",
+    "location": "Remote EU",
+    "remoteType": "remote",
+    "url": "https://jobs.example.invalid/atlas/platform-automation-001",
+    "source": "synthetic-ats",
+    "postedAt": "2026-08-18T09:00:00.000Z",
+    "jdText": "Atlas Example Labs is seeking a Platform Automation Engineer to improve internal deployment workflows. The role uses TypeScript, Node.js and infrastructure automation. The position is remote within the European Union and is wholly fictional synthetic evidence.",
+    "requirements": [
+      "Professional TypeScript experience",
+      "Node.js services",
+      "Infrastructure or workflow automation"
+    ],
+    "matchedCriteria": ["Remote EU", "remote", "TypeScript", "Node.js"],
+    "disposition": "proposed",
+    "persistence": "none"
+  },
+  "analyst": {
+    "sourceId": "synthetic-job-001",
+    "url": "https://jobs.example.invalid/atlas/platform-automation-001",
+    "decision": "checked",
+    "structuredRequirements": {
+      "experienceRequiredYears": 4,
+      "experienceType": "preferred",
+      "degree": "or_equivalent",
+      "languagesRequired": ["English"],
+      "seniority": "mid"
+    },
+    "mismatchTags": [],
+    "teamNote": "The fictional candidate evidence aligns with the core technical requirements.",
+    "jdSummary": "A fictional remote platform role focused on TypeScript, Node.js and workflow automation.",
+    "roleFamily": "Platform Engineering",
+    "location": {
+      "city": null,
+      "country": "European Union",
+      "countryCode": "EU",
+      "workMode": "remote"
+    },
+    "company": {
+      "name": "Atlas Example Labs",
+      "redFlags": [],
+      "cultureNotes": [],
+      "verdict": "CAUTIOUS"
+    },
+    "highlights": [{ "type": "pro", "text": "Remote EU scope is explicit." }],
+    "disposition": "proposed",
+    "persistence": "none"
+  },
+  "candidate": {
+    "profileVersion": "1",
+    "targets": {
+      "roles": ["Platform Engineer", "Backend Engineer"],
+      "locations": ["Remote EU", "Rome"],
+      "workModes": ["remote", "hybrid"]
+    },
+    "skills": ["TypeScript", "Node.js", "automation"],
+    "experienceYears": 6,
+    "languages": ["Italian C2", "English C1"],
+    "workAuthorization": ["European Union"],
+    "relocation": false,
+    "search": { "postedWithinDays": 7, "maxCandidates": 2 }
+  },
+  "authorization": {
+    "authorizationVersion": "1",
+    "authorized": true,
+    "scope": "score_position",
+    "authorizationId": "synthetic-approval-001",
+    "sourceId": "synthetic-job-001",
+    "authorizedBy": "fixture-operator",
+    "authorizedAt": "2026-08-20T12:00:00.000Z"
+  },
+  "limits": {
+    "maxInputTokensPerStep": 12000,
+    "maxOutputTokensPerStep": 3000,
+    "maxTotalOutputTokens": 3000,
+    "maxResultBytes": 100000,
+    "maxSteps": 2,
+    "maxToolCalls": 2,
+    "maxWebSearches": 1,
+    "timeoutMs": 15000,
+    "maxCostUsd": 0
+  }
+}
