@@ -1,7 +1,7 @@
 # 0011 — Use Tauri 2 with React for the desktop shell
 
-**Status:** Accepted  
-**Date:** 2026-08-24  
+**Status:** Accepted
+**Date:** 2026-08-24
 **Complements:** [ADR-0009](./0009-team-exposes-one-loopback-api.md) — the team exposes one loopback API
 
 ## Context
@@ -78,4 +78,3 @@ it is not a reason to make Python the desktop architecture.
 - [Tauri frontend configuration](https://v2.tauri.app/start/frontend/)
 - [Tauri updater](https://v2.tauri.app/plugin/updater/)
 - [Desktop migration roadmap](../internal/roadmap/2026-08-24-desktop-tauri-migration.md)
-

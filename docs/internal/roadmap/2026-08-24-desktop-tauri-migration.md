@@ -1,8 +1,8 @@
 # [JHT-DESKTOP-TAURI] — Tauri 2 + React desktop migration
 
-**Decision:** accepted on 2026-08-24  
-**Implementation:** started — welcome/setup shell in `desktop/`  
-**Working branch/worktree:** `desktop-tauri`  
+**Decision:** accepted on 2026-08-24
+**Implementation:** started — welcome/setup shell in `desktop/`
+**Working branch/worktree:** `desktop-tauri`
 **Architecture record:** [ADR-0011](../../adr/0011-tauri-desktop-shell.md)
 
 ## Outcome

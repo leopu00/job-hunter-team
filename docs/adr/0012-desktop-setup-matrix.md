@@ -1,7 +1,7 @@
 # 0012 — Separate execution host from AI authentication in desktop setup
 
-**Status:** Accepted  
-**Date:** 2026-08-24  
+**Status:** Accepted
+**Date:** 2026-08-24
 **Supersedes:** [ADR-0004](./0004-subscription-only-no-api-keys.md)
 
 ## Context
@@ -27,9 +27,12 @@ with AI billing.
    credits; JHT pays the infrastructure and provider consumption.
 6. The first implemented desktop path is customer PC + local Podman containers
    + customer OpenAI API key + Node.js headless agents.
-7. API credentials cross the native boundary into an audited operating-system
-   credential store. They are never persisted in renderer storage, plain-text
-   configuration or logs.
+7. Ephemeral API credentials cross the native boundary only for the requested
+   run, enter Podman over standard input as a temporary secret, and are removed
+   after that run. They are never persisted in renderer storage, plain-text
+   configuration, command-line arguments, image layers or logs. Any later
+   feature that persists credentials must do so at the native boundary in an
+   audited operating-system credential store.
 
 The full mode table and staged implementation scope are in
 [`2026-08-24-desktop-setup-modes.md`](../internal/architecture/2026-08-24-desktop-setup-modes.md).
@@ -42,6 +45,8 @@ The full mode table and staged implementation scope are in
   assumptions from ADR-0004 cannot be applied to headless workers.
 - Host provisioning and provider authentication can evolve independently while
   every mode still exposes the same versioned product/control API.
+- The first one-shot local run deliberately avoids credential persistence; a
+  remembered-key flow is a separate security-sensitive slice.
 - The setup UI can grow gradually without encoding a different agent protocol
   for local and remote hosts.
 - Managed credits add payment, balance and consumption-ledger responsibilities

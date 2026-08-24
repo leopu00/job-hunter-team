@@ -1,6 +1,6 @@
 # Desktop setup modes
 
-**Decision date:** 2026-08-24  
+**Decision date:** 2026-08-24
 **Implementation status:** only `own PC + own API key` is active
 
 ## Purpose
@@ -39,11 +39,18 @@ own PC
   -> user's OpenAI API key
 ```
 
-The first UI slice only selects and explains this path and accepts the key in
-memory. It does not yet provision Podman, call OpenAI, or write credentials to
-disk. Credential persistence must be implemented at the native boundary with
-an audited operating-system credential store; it must never use localStorage,
-plain files, logs or renderer-side configuration.
+The active vertical slice checks the local Podman engine, initializes its
+machine when required, builds the bundled headless worker image and runs a
+budget-capped full-team test against checked-in synthetic data. The API key is
+cleared from React state on submit, crosses the Tauri boundary for that run,
+enters Podman over standard input as a temporary secret and is removed when the
+run finishes. It is not written to renderer storage, plain files, command-line
+arguments, image layers or logs.
+
+This slice intentionally does not remember credentials. A future remembered-key
+flow must use an audited operating-system credential store at the native
+boundary; it must never use localStorage, plain files, logs or renderer-side
+configuration.
 
 ## Deferred UI and implementation
 
@@ -51,7 +58,7 @@ plain files, logs or renderer-side configuration.
 - Own-VPS IP/key validation, host-key verification, provisioning and tunnel
   lifecycle.
 - Provider-subscription selection, TUI image build and `tmux` login flow.
-- Podman detection/install, machine lifecycle and headless image provisioning.
-- Native credential storage, API-key validation and revocation/replacement.
+- Automatic Podman installation and recovery beyond machine initialization.
+- Native credential storage and remembered-key revocation/replacement.
 
 These options remain documentation-only until their vertical slice is started.
