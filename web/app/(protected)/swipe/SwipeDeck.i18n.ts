@@ -67,17 +67,18 @@ export const T: Record<
   it: {
     title: "Swipe",
     verdicts: {
-      no: "Non interessante",
+      no: "Escludi",
       review_low: "Poco interessante",
       review_ok: "Interessante",
       top: "Molto interessante",
     },
-    whyNo: "Perché non ti interessa?",
+    whyNo: "Perché vuoi escluderla?",
     whyPickPlaceholder: "Scegli un motivo…",
-    whyHintTaste: "Il team lo userà per cercarti offerte più adatte.",
+    whyHintTaste:
+      "La posizione verrà esclusa e il team userà il motivo per cercarti offerte più adatte.",
     whyHintFactual:
       "La posizione esce dal giro e basta: una scaduta non dice cosa ti piace, quindi il team non impara niente da qui.",
-    whyConfirmTaste: "Salva",
+    whyConfirmTaste: "Escludi",
     whyConfirmFactual: "Escludi",
     whySaveError: "Non è stato registrato: riprova fra un momento.",
     whyCancel: "Annulla",
@@ -132,18 +133,18 @@ export const T: Record<
   en: {
     title: "Swipe",
     verdicts: {
-      no: "Not interesting",
+      no: "Exclude",
       review_low: "Slightly interesting",
       review_ok: "Interesting",
       top: "Very interesting",
     },
-    whyNo: "Why is it not interesting?",
+    whyNo: "Why do you want to exclude it?",
     whyPickPlaceholder: "Pick a reason…",
     whyHintTaste:
-      "The team will use it to look for offers that fit you better.",
+      "The position will be excluded and the team will use the reason to find better matches.",
     whyHintFactual:
       "The position simply leaves the pipeline: an expired one says nothing about your taste, so the team learns nothing from this.",
-    whyConfirmTaste: "Save",
+    whyConfirmTaste: "Exclude",
     whyConfirmFactual: "Exclude",
     whySaveError: "It was not recorded: try again in a moment.",
     whyCancel: "Cancel",
@@ -197,18 +198,18 @@ export const T: Record<
   hu: {
     title: "Swipe",
     verdicts: {
-      no: "Nem érdekes",
+      no: "Kizárás",
       review_low: "Kevéssé érdekes",
       review_ok: "Érdekes",
       top: "Nagyon érdekes",
     },
-    whyNo: "Miért nem érdekes?",
+    whyNo: "Miért szeretnéd kizárni?",
     whyPickPlaceholder: "Válassz okot…",
     whyHintTaste:
-      "A csapat ezt használja majd, hogy hozzád jobban illő ajánlatokat keressen.",
+      "A pozíció kizárásra kerül, és a csapat az indokot jobb ajánlatok keresésére használja.",
     whyHintFactual:
       "Az állás egyszerűen kikerül a körből: egy lejárt hirdetés nem árul el semmit az ízlésedről, így a csapat nem tanul belőle.",
-    whyConfirmTaste: "Mentés",
+    whyConfirmTaste: "Kizárás",
     whyConfirmFactual: "Kizárás",
     whySaveError: "Nem lett rögzítve: próbáld újra egy pillanat múlva.",
     whyCancel: "Mégse",
@@ -263,17 +264,18 @@ export const T: Record<
   es: {
     title: "Swipe",
     verdicts: {
-      no: "No interesante",
+      no: "Excluir",
       review_low: "Poco interesante",
       review_ok: "Interesante",
       top: "Muy interesante",
     },
-    whyNo: "¿Por qué no te interesa?",
+    whyNo: "¿Por qué quieres excluirla?",
     whyPickPlaceholder: "Elige un motivo…",
-    whyHintTaste: "El equipo lo usará para buscarte ofertas que encajen mejor.",
+    whyHintTaste:
+      "La posición se excluirá y el equipo usará el motivo para buscarte ofertas mejores.",
     whyHintFactual:
       "La posición sale del circuito y ya está: una caducada no dice qué te gusta, así que el equipo no aprende nada de aquí.",
-    whyConfirmTaste: "Guardar",
+    whyConfirmTaste: "Excluir",
     whyConfirmFactual: "Excluir",
     whySaveError: "No se ha registrado: inténtalo de nuevo en un momento.",
     whyCancel: "Cancelar",
@@ -328,18 +330,18 @@ export const T: Record<
   de: {
     title: "Swipe",
     verdicts: {
-      no: "Uninteressant",
+      no: "Ausschließen",
       review_low: "Wenig interessant",
       review_ok: "Interessant",
       top: "Sehr interessant",
     },
-    whyNo: "Warum ist sie nicht interessant?",
+    whyNo: "Warum möchtest du sie ausschließen?",
     whyPickPlaceholder: "Grund auswählen…",
     whyHintTaste:
-      "Das Team nutzt ihn, um passendere Stellen für dich zu suchen.",
+      "Die Stelle wird ausgeschlossen und das Team nutzt den Grund, um passendere Stellen zu suchen.",
     whyHintFactual:
       "Die Stelle fällt einfach aus dem Umlauf: Eine abgelaufene sagt nichts über deinen Geschmack, das Team lernt hier also nichts.",
-    whyConfirmTaste: "Speichern",
+    whyConfirmTaste: "Ausschließen",
     whyConfirmFactual: "Ausschließen",
     whySaveError: "Es wurde nicht gespeichert: Bitte gleich erneut versuchen.",
     whyCancel: "Abbrechen",
@@ -393,18 +395,18 @@ export const T: Record<
   fr: {
     title: "Swipe",
     verdicts: {
-      no: "Pas intéressant",
+      no: "Exclure",
       review_low: "Peu intéressant",
       review_ok: "Intéressant",
       top: "Très intéressant",
     },
-    whyNo: "Pourquoi ne vous intéresse-t-il pas ?",
+    whyNo: "Pourquoi voulez-vous l’exclure ?",
     whyPickPlaceholder: "Choisissez un motif…",
     whyHintTaste:
-      "L'équipe s'en servira pour chercher des offres qui vous vont mieux.",
+      "Le poste sera exclu et l'équipe utilisera le motif pour chercher des offres plus adaptées.",
     whyHintFactual:
       "Le poste sort simplement du circuit : une offre expirée ne dit rien de vos goûts, l'équipe n'apprend donc rien d'ici.",
-    whyConfirmTaste: "Enregistrer",
+    whyConfirmTaste: "Exclure",
     whyConfirmFactual: "Exclure",
     whySaveError: "Rien n'a été enregistré : réessayez dans un instant.",
     whyCancel: "Annuler",
@@ -463,18 +465,18 @@ export const T: Record<
   pt: {
     title: "Swipe",
     verdicts: {
-      no: "Não interessante",
+      no: "Excluir",
       review_low: "Pouco interessante",
       review_ok: "Interessante",
       top: "Muito interessante",
     },
-    whyNo: "Porque não te interessa?",
+    whyNo: "Porque queres excluí-la?",
     whyPickPlaceholder: "Escolhe um motivo…",
     whyHintTaste:
-      "A equipa vai usá-lo para procurar ofertas que te encaixem melhor.",
+      "A vaga será excluída e a equipa usará o motivo para procurar ofertas mais adequadas.",
     whyHintFactual:
       "A vaga sai do circuito e pronto: uma vaga expirada não diz o que gostas, por isso a equipa não aprende nada daqui.",
-    whyConfirmTaste: "Guardar",
+    whyConfirmTaste: "Excluir",
     whyConfirmFactual: "Excluir",
     whySaveError: "Não foi registado: tenta novamente dentro de instantes.",
     whyCancel: "Cancelar",

@@ -1597,8 +1597,8 @@
     },
     {
       "path": "api-worker/README.md",
-      "description": "Scout API standalone: confini, avvio, SSRF/DNS pinning, privacy, accounting e verifica",
-      "last_review": "2026-08-20"
+      "description": "Prototipo API full-team isolato: ruoli, coordinamento SQLite, budget, artefatti, privacy, canary e verifica",
+      "last_review": "2026-08-24"
     },
     {
       "path": "docs/internal/prototypes/2026-08-19-scout-api-worker-design.md",
@@ -1612,8 +1612,13 @@
     },
     {
       "path": "docs/internal/prototypes/2026-08-20-all-agents-api-roadmap.md",
-      "description": "Roadmap dei worker API isolati per tutti i ruoli: contratti proposal-only, guardrail condivisi, canary sintetici e percorso di promozione senza effetti operativi impliciti",
-      "last_review": null
+      "description": "Roadmap e milestone full-team dei worker API isolati: contratti proposal-only, coordinamento, canary sintetici/live e percorso di promozione",
+      "last_review": "2026-08-24"
+    },
+    {
+      "path": "docs/adr/0010-version-api-scorer-scale.md",
+      "description": "Versionamento della scala API Scorer jht-100-v2 senza reinterpretare i punteggi legacy",
+      "last_review": "2026-08-24"
     }
   ]
 }

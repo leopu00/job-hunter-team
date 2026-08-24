@@ -1,13 +1,12 @@
 "use client";
 
 // Il selettore del motivo, uno solo per le due superfici che lo chiedono:
-// l'esclusione manuale (`ExcludeButton`) e il giudizio «Non interessante»
-// (`FeedbackButtons`). Prima esisteva solo dentro il primo, e il secondo
-// registrava un segnale negativo senza chiedere niente.
+// l'esclusione manuale (`ExcludeButton`) e l'azione rapida «Escludi»
+// (`FeedbackButtons`).
 //
 // Qui dentro non c'è nessuna decisione su COSA farne: il componente
-// raccoglie motivo e testo libero, chi lo monta decide se quel motivo
-// diventa un'esclusione o un giudizio (vedi `isFactualReason`).
+// raccoglie motivo e testo libero; `negativeSignalFor` decide se al comando
+// di esclusione va affiancato anche un segnale di preferenza.
 
 import { useLocale } from "@/lib/use-locale";
 import {

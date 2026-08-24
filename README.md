@@ -166,7 +166,7 @@ future setup matrix is documented in
 [`2026-08-24-desktop-setup-modes.md`](docs/internal/architecture/2026-08-24-desktop-setup-modes.md).
 Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
-Monorepo: [`desktop/`](desktop/) · [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`api-worker/`](api-worker/) *(headless API agents)* · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
+Monorepo: [`desktop/`](desktop/) · [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`api-worker/`](api-worker/) *(isolated full-team API pipeline)* · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
 
 ## Contributing
 
