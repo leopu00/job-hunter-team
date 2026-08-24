@@ -1,7 +1,7 @@
 // Il vocabolario dei motivi per cui una posizione non va più seguita.
 //
 // Vive qui e non dentro `ExcludeButton` perché da O-43 lo usano in due:
-// l'esclusione manuale e il giudizio «Non interessante». Due liste
+// l'esclusione manuale e l'azione rapida «Escludi». Due liste
 // separate sarebbero divergite alla prima aggiunta — e infatti erano già
 // divergenti da sé: `ReasonKey` dichiarava sette motivi e l'elenco mostrato
 // ne aveva sei, con `already_applied` definito e mai raggiungibile.
@@ -59,20 +59,21 @@ export function needsFreeText(reason: string | null | undefined): boolean {
 }
 
 /**
- * Che cosa deve succedere quando l'utente dice «non mi interessa» e sceglie
- * un motivo. È una funzione pura di proposito: la regola che separa un fatto
- * da un gusto è IL contenuto di questo ticket, e va potuta verificare senza
- * un browser.
+ * Che cosa deve succedere quando l'utente sceglie «Escludi» e indica un
+ * motivo. L'esclusione è sempre l'effetto primario: il nome del controllo e
+ * lo stato persistito non possono più raccontare due cose diverse.
  *
- *  · `exclude`  → la posizione esce dal giro (route user-exclude) e nessun
- *                 segnale di gusto viene registrato;
- *  · `feedback` → giudizio negativo con il motivo attaccato;
- *  · `invalid`  → non c'è abbastanza per registrare niente. Nessuna delle tre
- *                 strade scrive un segnale negativo senza motivo.
+ * I motivi di gusto conservano anche il feedback `less_like_this`, ma solo
+ * DOPO che l'esclusione canonica è stata confermata. I motivi fattuali non
+ * insegnano preferenze allo Scout.
  */
 export type NegativeSignal =
-  | { kind: "exclude"; reason: ReasonKey; note?: string }
-  | { kind: "feedback"; reason: ReasonKey; comment?: string }
+  | {
+      kind: "exclude";
+      reason: ReasonKey;
+      note?: string;
+      feedback?: { reason: ReasonKey; comment?: string };
+    }
   | { kind: "invalid"; missing: "reason" | "text" };
 
 export function negativeSignalFor(
@@ -88,7 +89,12 @@ export function negativeSignalFor(
   if (isFactualReason(key)) {
     return { kind: "exclude", reason: key, ...(text ? { note: text } : {}) };
   }
-  return { kind: "feedback", reason: key, ...(text ? { comment: text } : {}) };
+  return {
+    kind: "exclude",
+    reason: key,
+    ...(text ? { note: text } : {}),
+    feedback: { reason: key, ...(text ? { comment: text } : {}) },
+  };
 }
 
 export const REASON_LABELS: Record<Locale, Record<ReasonKey, string>> = {

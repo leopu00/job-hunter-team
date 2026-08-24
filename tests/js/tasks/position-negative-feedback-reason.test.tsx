@@ -1,5 +1,5 @@
 /**
- * O-43 — «Non interessante» registrava un giudizio negativo SENZA motivo.
+ * L'azione «Escludi» richiede un motivo e persiste lo stato canonico.
  *
  * Perché non è cosmetico: `agents/scout/scout.md` dice che con
  * `latest_direction='less_like_this'` lo Scout deprioritizza quella azienda,
@@ -32,7 +32,7 @@ const { renderToStaticMarkup } = webRequire("react-dom/server");
 
 const LOCALES: Locale[] = ["it", "en", "hu", "es", "de", "fr", "pt"];
 
-describe("motivo obbligatorio sul giudizio negativo", () => {
+describe("motivo obbligatorio sull'esclusione", () => {
   it("tutti e sette i motivi sono raggiungibili", () => {
     // Il difetto trovato per strada: `ReasonKey` ne dichiarava sette e
     // l'elenco mostrato ne aveva sei — `already_applied` era definito e
@@ -64,9 +64,13 @@ describe("motivo obbligatorio sul giudizio negativo", () => {
       missing: "text",
     });
     expect(negativeSignalFor("other", "cercano un profilo junior")).toEqual({
-      kind: "feedback",
+      kind: "exclude",
       reason: "other",
-      comment: "cercano un profilo junior",
+      note: "cercano un profilo junior",
+      feedback: {
+        reason: "other",
+        comment: "cercano un profilo junior",
+      },
     });
   });
 
@@ -80,7 +84,7 @@ describe("motivo obbligatorio sul giudizio negativo", () => {
     expect(FACTUAL_REASONS).toEqual(["closed", "already_applied"]);
   });
 
-  it("i motivi di gusto restano un giudizio, ma col motivo attaccato", () => {
+  it("i motivi di gusto escludono e conservano il feedback", () => {
     const taste = REASON_ORDER.filter(
       (r) => !(FACTUAL_REASONS as string[]).includes(r),
     );
@@ -93,19 +97,23 @@ describe("motivo obbligatorio sul giudizio negativo", () => {
     ]);
     for (const reason of taste) {
       const signal = negativeSignalFor(reason, "nota");
-      expect(signal.kind, `${reason} resta un giudizio`).toBe("feedback");
-      if (signal.kind === "feedback") expect(signal.reason).toBe(reason);
+      expect(signal.kind, `${reason} deve escludere`).toBe("exclude");
+      if (signal.kind === "exclude") {
+        expect(signal.reason).toBe(reason);
+        expect(signal.feedback).toEqual({ reason, comment: "nota" });
+      }
     }
   });
 
-  it("scaduta e non-interessante non arrivano allo scoring nello stesso modo", () => {
-    // Il cuore del ticket, detto come lo leggerebbe un lettore a valle:
-    // dalla scaduta non nasce nessun evento di feedback.
+  it("scaduta e non-interessante escludono entrambe, ma solo il gusto insegna", () => {
     const expired = negativeSignalFor("closed", "");
     const disliked = negativeSignalFor("not_interested", "");
-    expect(expired.kind).not.toBe(disliked.kind);
     expect(expired.kind).toBe("exclude");
-    expect(disliked.kind).toBe("feedback");
+    expect(disliked.kind).toBe("exclude");
+    if (expired.kind === "exclude") expect(expired.feedback).toBeUndefined();
+    if (disliked.kind === "exclude") {
+      expect(disliked.feedback).toEqual({ reason: "not_interested" });
+    }
   });
 });
 
