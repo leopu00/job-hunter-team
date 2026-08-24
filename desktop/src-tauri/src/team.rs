@@ -60,18 +60,56 @@ pub(crate) struct TeamStartResult {
     spent_usd: f64,
     agent_count: usize,
     positions: Vec<TeamPosition>,
+    agents: Vec<TeamAgent>,
+    timeline: Vec<TeamTimelineEvent>,
     workspace_path: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TeamPosition {
+    source_id: String,
     title: String,
     company: String,
     score: u32,
     state: String,
     critic_score: Option<f64>,
     critic_verdict: Option<String>,
+    cv_markdown: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CliTeamPosition {
+    source_id: String,
+    title: String,
+    company: String,
+    score: u32,
+    state: String,
+    critic_score: Option<f64>,
+    critic_verdict: Option<String>,
+    cv_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TeamAgent {
+    agent_id: String,
+    role: String,
+    cost_usd: f64,
+    input_tokens: u64,
+    output_tokens: u64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TeamTimelineEvent {
+    sequence: u64,
+    source_id: Option<String>,
+    actor: String,
+    event: String,
+    from: Option<String>,
+    to: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -80,8 +118,9 @@ struct CliTeamResult {
     ok: bool,
     run_id: String,
     summary: CliTeamSummary,
-    agents: Vec<serde_json::Value>,
-    positions: Vec<TeamPosition>,
+    agents: Vec<TeamAgent>,
+    positions: Vec<CliTeamPosition>,
+    timeline: Vec<TeamTimelineEvent>,
 }
 
 #[derive(Deserialize)]
@@ -335,15 +374,65 @@ fn parse_result(stdout: &[u8], workspace_dir: &Path) -> Result<TeamStartResult, 
     if !parsed.ok || parsed.summary.status != "completed" {
         return Err(failure("team_run_failed"));
     }
+    let positions = parsed
+        .positions
+        .into_iter()
+        .map(|position| {
+            let cv_markdown = position
+                .cv_path
+                .as_ref()
+                .and_then(|_| read_cv_markdown(workspace_dir, &parsed.run_id, &position.source_id));
+            TeamPosition {
+                source_id: position.source_id,
+                title: position.title,
+                company: position.company,
+                score: position.score,
+                state: position.state,
+                critic_score: position.critic_score,
+                critic_verdict: position.critic_verdict,
+                cv_markdown,
+            }
+        })
+        .collect();
     Ok(TeamStartResult {
         run_id: parsed.run_id,
         scored: parsed.summary.scored,
         reviewed: parsed.summary.reviewed,
         spent_usd: parsed.summary.spent_usd,
         agent_count: parsed.agents.len(),
-        positions: parsed.positions,
+        positions,
+        agents: parsed.agents,
+        timeline: parsed.timeline,
         workspace_path: workspace_dir.display().to_string(),
     })
+}
+
+fn read_cv_markdown(workspace_dir: &Path, run_id: &str, source_id: &str) -> Option<String> {
+    if !safe_path_component(run_id) || !safe_path_component(source_id) {
+        return None;
+    }
+    let contents = fs::read(
+        workspace_dir
+            .join("runs")
+            .join(run_id)
+            .join("artifacts")
+            .join(format!("{source_id}.cv.md")),
+    )
+    .ok()?;
+    if contents.len() > 300_000 {
+        return None;
+    }
+    String::from_utf8(contents).ok()
+}
+
+fn safe_path_component(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 120
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        && value != "."
+        && value != ".."
 }
 
 fn valid_api_key(value: &str) -> bool {
@@ -422,7 +511,7 @@ fn failure(code: &'static str) -> TeamStartError {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_agent_progress, parse_result, valid_api_key};
+    use super::{parse_agent_progress, parse_result, safe_path_component, valid_api_key};
     use std::path::Path;
 
     #[test]
@@ -435,23 +524,35 @@ mod tests {
     #[test]
     fn parses_a_completed_team_summary() {
         let result = parse_result(
-            br#"{"ok":true,"runId":"run-1","summary":{"status":"completed","scored":5,"reviewed":2,"spentUsd":0.024},"agents":[{},{}],"positions":[{"title":"Engineer","company":"Example","score":88,"state":"reviewed","criticScore":9,"criticVerdict":"pass"}]}"#,
+            br#"{"ok":true,"runId":"run-1","summary":{"status":"completed","scored":5,"reviewed":2,"spentUsd":0.024},"agents":[{"agentId":"captain-1","role":"captain","costUsd":0.001,"inputTokens":10,"outputTokens":20}],"positions":[{"sourceId":"job-1","title":"Engineer","company":"Example","score":88,"state":"reviewed","criticScore":9,"criticVerdict":"pass","cvPath":"/workspace/runs/run-1/artifacts/job-1.cv.md"}],"timeline":[{"sequence":1,"sourceId":"job-1","actor":"scout-1","event":"handoff_queued","from":"scout","to":"analyst"}]}"#,
             Path::new("workspace"),
         )
         .expect("valid result");
         assert_eq!(result.scored, 5);
         assert_eq!(result.reviewed, 2);
-        assert_eq!(result.agent_count, 2);
+        assert_eq!(result.agent_count, 1);
         assert_eq!(result.positions.len(), 1);
+        assert_eq!(result.positions[0].source_id, "job-1");
+        assert!(result.positions[0].cv_markdown.is_none());
+        assert_eq!(result.timeline.len(), 1);
     }
 
     #[test]
     fn rejects_an_incomplete_team_summary() {
         let result = parse_result(
-            br#"{"ok":true,"runId":"run-1","summary":{"status":"running","scored":1,"reviewed":0,"spentUsd":0},"agents":[],"positions":[]}"#,
+            br#"{"ok":true,"runId":"run-1","summary":{"status":"running","scored":1,"reviewed":0,"spentUsd":0},"agents":[],"positions":[],"timeline":[]}"#,
             Path::new("workspace"),
         );
         assert_eq!(result.expect_err("must reject").code, "team_run_failed");
+    }
+
+    #[test]
+    fn rejects_artifact_path_traversal_components() {
+        assert!(safe_path_component("9b4473d1-f746-45bb-981d-55ecad3b8fda"));
+        assert!(safe_path_component("job-001"));
+        assert!(!safe_path_component("../secret"));
+        assert!(!safe_path_component(".."));
+        assert!(!safe_path_component("nested/path"));
     }
 
     #[test]
